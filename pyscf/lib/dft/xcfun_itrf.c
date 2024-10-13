@@ -102,7 +102,7 @@ int XCFUN_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                         rho = rho_u;
                         err = eval_xc(fun, deriv, XC_N, np, 1, outlen, rho, output);
                 }
-// xcfun computed rho*Exc[rho] for zeroth order deriviative instead of Exc[rho]
+// xcfun computed rho*Exc[rho] for zeroth order derivative instead of Exc[rho]
                 for (i = 0; i < np; i++) {
                         output[i*outlen] /= rho_u[i] + 1e-150;
                 }

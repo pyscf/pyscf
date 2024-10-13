@@ -62,11 +62,13 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
         dm = dm0
 
     mf._coulomb_level = 'LLLL'
+    cycles = 0
     if dm0 is None and mf._coulomb_level.upper() == 'LLLL':
         scf_conv, e_tot, mo_energy, mo_coeff, mo_occ \
                 = hf.kernel(mf, 1e-2, 1e-1,
                             dump_chk, dm0=dm, callback=callback,
                             conv_check=False)
+        cycles += mf.cycles
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         mf._coulomb_level = 'SSLL'
 
@@ -77,13 +79,16 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
                     = hf.kernel(mf, 1e-3, 1e-1,
                                 dump_chk, dm0=dm, callback=callback,
                                 conv_check=False)
+            cycles += mf.cycles
             dm = mf.make_rdm1(mo_coeff, mo_occ)
         mf._coulomb_level = 'SSSS'
     else:
         mf._coulomb_level = 'SSLL'
 
-    return hf.kernel(mf, conv_tol, conv_tol_grad, dump_chk, dm0=dm,
-                     callback=callback, conv_check=conv_check)
+    out = hf.kernel(mf, conv_tol, conv_tol_grad, dump_chk, dm0=dm,
+                    callback=callback, conv_check=conv_check)
+    mf.cycles = cycles + mf.cycles
+    return out
 
 def energy_elec(mf, dm=None, h1e=None, vhf=None):
     r'''Electronic part of Dirac-Hartree-Fock energy
@@ -93,7 +98,7 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
 
     Kwargs:
         dm : 2D ndarray
-            one-partical density matrix
+            one-particle density matrix
         h1e : 2D ndarray
             Core hamiltonian
         vhf : 2D ndarray
@@ -232,6 +237,24 @@ def init_guess_by_mod_huckel(mol):
     dm = hf.init_guess_by_mod_huckel(mol)
     return _proj_dmll(mol, dm, mol)
 
+def init_guess_by_sap(mol, mf):
+    '''Generate initial guess density matrix from a superposition of
+    atomic potentials (SAP), doi:10.1021/acs.jctc.8b01089.
+    This is the Gaussian fit implementation, see doi:10.1063/5.0004046.
+
+    Args:
+        mol : MoleBase object
+            the molecule object for which the initial guess is evaluated
+        sap_basis : dict
+            SAP basis in internal format (python dictionary)
+
+    Returns:
+        dm0 : ndarray
+            SAP initial guess density matrix
+    '''
+    dm = hf.SCF.init_guess_by_sap(mf, mol)
+    return _proj_dmll(mol, dm, mol)
+
 def init_guess_by_chkfile(mol, chkfile_name, project=None):
     '''Read SCF chkfile and make the density matrix for 4C-DHF initial guess.
 
@@ -290,7 +313,7 @@ def get_init_guess(mol, key='minao', **kwargs):
 
     Kwargs:
         key : str
-            One of 'minao', 'atom', 'huckel', 'mod_huckel', 'hcore', '1e', 'chkfile'.
+            One of 'minao', 'atom', 'huckel', 'mod_huckel', 'hcore', '1e', 'sap', 'chkfile'.
     '''
     return UHF(mol).get_init_guess(mol, key, **kwargs)
 
@@ -398,7 +421,7 @@ def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
 
     charges = mol.atom_charges()
     coords  = mol.atom_coords()
-    charge_center = numpy.einsum('i,ix->x', charges, coords)
+    charge_center = numpy.einsum('i,ix->x', charges, coords) / sum(charges)
     with mol.with_common_orig(charge_center):
         ll_dip = mol.intor_symmetric('int1e_r_spinor', comp=3)
         ss_dip = mol.intor_symmetric('int1e_sprsp_spinor', comp=3)
@@ -406,7 +429,9 @@ def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
     n2c = mol.nao_2c()
     c = lib.param.LIGHT_SPEED
     dip = numpy.einsum('xij,ji->x', ll_dip, dm[:n2c,:n2c]).real
-    dip+= numpy.einsum('xij,ji->x', ss_dip, dm[n2c:,n2c:]).real * (.5/c**2)
+    dip+= numpy.einsum('xij,ji->x', ss_dip, dm[n2c:,n2c:]).real * (.5/c)**2
+
+    dip *= -1.
 
     if unit.upper() == 'DEBYE':
         dip *= nist.AU2DEBYE
@@ -453,8 +478,7 @@ class DHF(hf.SCF):
     # corrections for small component when with_ssss is set to False
     ssss_approx = getattr(__config__, 'scf_dhf_SCF_ssss_approx', 'Visscher')
 
-    _keys = {'conv_tol', 'with_ssss', 'with_gaunt',
-                 'with_breit', 'ssss_approx'}
+    _keys = {'conv_tol', 'with_ssss', 'with_gaunt', 'with_breit', 'ssss_approx'}
 
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
@@ -509,6 +533,11 @@ class DHF(hf.SCF):
         logger.info(self, '''Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089,
 employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         return init_guess_by_mod_huckel(mol)
+
+    @lib.with_doc(hf.SCF.init_guess_by_sap.__doc__)
+    def init_guess_by_sap(self, mol=None, **kwargs):
+        if mol is None: mol = self.mol
+        return init_guess_by_sap(mol, self)
 
     def init_guess_by_chkfile(self, chkfile=None, project=None):
         if chkfile is None: chkfile = self.chkfile
@@ -685,7 +714,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         self._opt = {None: None}
         return self
 
-    def stability(self, internal=None, external=None, verbose=None, return_status=False):
+    def stability(self, internal=None, external=None, verbose=None, return_status=False, **kwargs):
         '''
         DHF/DKS stability analysis.
 
@@ -707,7 +736,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
             and the second corresponds to the external stability.
         '''
         from pyscf.scf.stability import dhf_stability
-        return dhf_stability(self, verbose, return_status)
+        return dhf_stability(self, verbose, return_status, **kwargs)
 
     def to_rhf(self):
         raise RuntimeError

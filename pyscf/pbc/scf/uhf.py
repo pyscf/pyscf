@@ -107,6 +107,8 @@ get_rho = pbchf.get_rho
 class UHF(pbchf.SCF):
     '''UHF class for PBCs.
     '''
+    init_guess_breaksym = getattr(__config__, 'scf_uhf_init_guess_breaksym', 1)
+
     _keys = {"init_guess_breaksym"}
 
     init_guess_by_minao  = mol_uhf.UHF.init_guess_by_minao
@@ -125,6 +127,7 @@ class UHF(pbchf.SCF):
     analyze = mol_uhf.UHF.analyze
     mulliken_pop = mol_uhf.UHF.mulliken_pop
     mulliken_meta = mol_uhf.UHF.mulliken_meta
+    mulliken_meta_spin = mol_uhf.UHF.mulliken_meta_spin
     canonicalize = mol_uhf.UHF.canonicalize
     spin_square = mol_uhf.UHF.spin_square
     stability = mol_uhf.UHF.stability
@@ -134,7 +137,6 @@ class UHF(pbchf.SCF):
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         pbchf.SCF.__init__(self, cell, kpt, exxdiv)
         self.nelec = None
-        self.init_guess_breaksym = None
 
     @property
     def nelec(self):

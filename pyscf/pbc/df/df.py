@@ -66,7 +66,7 @@ LONGRANGE_AFT_TURNOVER_THRESHOLD = 2.5
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
     r'''Generate a cell object using the density fitting auxbasis as
-    the basis set. The normalization coeffcients of the auxiliary cell are
+    the basis set. The normalization coefficients of the auxiliary cell are
     different to the regular (square-norm) convention. To simplify the
     compensated charge algorithm, they are normalized against
     \int (r^l e^{-ar^2} r^2 dr
@@ -133,7 +133,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
     # Call _CCGDFBuilder if applicable. _CCGDFBuilder is slower than
     # _RSGDFBuilder but numerically more close to previous versions
     _prefer_ccdf = False
-    # If True, force using denisty matrix-based K-build
+    # If True, force using density matrix-based K-build
     force_dm_kbuild = False
 
     _keys = {
@@ -175,6 +175,9 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 # If _cderi is specified, the 3C-integral tensor will be read from this file
         self._cderi = None
         self._rsh_df = {}  # Range separated Coulomb DF objects
+
+    __getstate__, __setstate__ = lib.generate_pickle_methods(
+            excludes=('_cderi_to_save', '_cderi', '_rsh_df'), reset_state=True)
 
     @property
     def auxbasis(self):
@@ -365,7 +368,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                 LpqR = LpqI = None
 
         if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
-            # Truncated Coulomb operator is not postive definite. Load the
+            # Truncated Coulomb operator is not positive definite. Load the
             # CDERI tensor of negative part.
             with _load3c(self._cderi, self._dataname+'-', kpti_kptj,
                          ignore_key_error=True) as j3c:
@@ -378,7 +381,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                     LpqR = LpqI = None
 
     def get_pp(self, kpts=None):
-        '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+        '''Get the periodic pseudopotential nuc-el AO matrix, with G=0 removed.
         '''
         cell = self.cell
         kpts, is_single_kpt = _check_kpts(self, kpts)
@@ -634,12 +637,12 @@ class CDERIArray:
         if self.aosym == 's1' or kikj == kjki:
             dat = self.j3c[str(kikj)]
             nsegs = len(dat)
-            out = numpy.hstack([dat[str(i)][slices] for i in range(nsegs)])
+            out = _hstack_datasets([dat[str(i)] for i in range(nsegs)], slices)
         elif self.aosym == 's2':
             dat_ij = self.j3c[str(kikj)]
             dat_ji = self.j3c[str(kjki)]
-            tril = numpy.hstack([dat_ij[str(i)][slices] for i in range(len(dat_ij))])
-            triu = numpy.hstack([dat_ji[str(i)][slices] for i in range(len(dat_ji))])
+            tril = _hstack_datasets([dat_ij[str(i)] for i in range(len(dat_ij))], slices)
+            triu = _hstack_datasets([dat_ji[str(i)] for i in range(len(dat_ji))], slices)
             assert tril.dtype == numpy.complex128
             naux = self.naux
             nao = self.nao
@@ -804,7 +807,7 @@ class _load_and_unpack:
     def __getitem__(self, s):
         dat = self.dat
         if isinstance(dat, h5py.Group):
-            v = numpy.hstack([dat[str(i)][s] for i in range(len(dat))])
+            v = _hstack_datasets([dat[str(i)] for i in range(len(dat))], s)
         else: # For mpi4pyscf, pyscf-1.5.1 or older
             v = numpy.asarray(dat[s])
 
@@ -828,6 +831,76 @@ class _load_and_unpack:
         else: # For mpi4pyscf, pyscf-1.5.1 or older
             return dat.shape
 
+def _hstack_datasets(data_to_stack, slices=numpy.s_[:]):
+    """Faster version of the operation
+    np.hstack([x[slices] for x in data_to_stack]) for h5py datasets.
+
+    Parameters
+    ----------
+    data_to_stack : list of h5py.Dataset or np.ndarray
+        Datasets/arrays to be stacked along first axis.
+    slices: tuple or list of slices, a slice, or ().
+        The slices (or indices) to select data from each H5 dataset.
+
+    Returns
+    -------
+    numpy.ndarray
+        The stacked data, equal to numpy.hstack([dset[slices] for dset in data_to_stack])
+    """
+    # Step 1. Calculate the shape of the output array, and store it
+    # in res_shape.
+    res_shape = list(data_to_stack[0].shape)
+    dset_shapes = [x.shape for x in data_to_stack]
+
+    if not (isinstance(slices, tuple) or isinstance(slices, list)):
+        # If slices is not a tuple, we assume it is a single slice acting on axis 0 only.
+        slices = (slices,)
+
+    def len_of_slice(arraylen, s):
+        start, stop, step = s.indices(arraylen)
+        r = range(start, stop, step)
+        # Python has a very fast builtin method to get the length of a range.
+        return len(r)
+
+    for i, cur_slice in enumerate(slices):
+        if not isinstance(cur_slice, slice):
+            return numpy.hstack([dset[slices] for dset in data_to_stack])
+        if i == 1:
+            ax1widths_sliced = [len_of_slice(shp[1], cur_slice) for shp in dset_shapes]
+        else:
+            # Except along axis 1, we assume the dimensions of all datasets are the same.
+            # If they aren't, an error gets raised later.
+            res_shape[i] = len_of_slice(res_shape[i], cur_slice)
+    if len(slices) <= 1:
+        ax1widths_sliced = [shp[1] for shp in dset_shapes]
+
+    # Final dim along axis 1 is the sum of the post-slice axis 1 widths.
+    res_shape[1] = sum(ax1widths_sliced)
+
+    # Step 2. Allocate the output buffer
+    out = numpy.empty(res_shape, dtype=numpy.result_type(*[dset.dtype for dset in data_to_stack]))
+
+    # Step 3. Read data into the output buffer.
+    ax1ind = 0
+    for i, dset in enumerate(data_to_stack):
+        ax1width = ax1widths_sliced[i]
+        dest_sel = numpy.s_[:, ax1ind:ax1ind + ax1width]
+        if hasattr(dset, 'read_direct'):
+            # h5py has issues with zero-size selections, see
+            # https://github.com/h5py/h5py/issues/1455,
+            # so we check for that here.
+            if out[dest_sel].size > 0:
+                dset.read_direct(
+                    out,
+                    source_sel=slices,
+                    dest_sel=dest_sel
+                )
+        else:
+            # For array-like objects
+            out[dest_sel] = dset[slices]
+        ax1ind += ax1width
+    return out
+
 class _KPair3CLoader:
     def __init__(self, dat, ki, kj, nkpts, aosym):
         self.dat = dat
@@ -840,12 +913,12 @@ class _KPair3CLoader:
     def __getitem__(self, s):
         if self.aosym == 's1' or self.kikj == self.kjki:
             dat = self.dat[str(self.kikj)]
-            out = numpy.hstack([dat[str(i)][s] for i in range(self.nsegs)])
+            out = _hstack_datasets([dat[str(i)] for i in range(self.nsegs)], s)
         elif self.aosym == 's2':
             dat_ij = self.dat[str(self.kikj)]
             dat_ji = self.dat[str(self.kjki)]
-            tril = numpy.hstack([dat_ij[str(i)][s] for i in range(self.nsegs)])
-            triu = numpy.hstack([dat_ji[str(i)][s] for i in range(self.nsegs)])
+            tril = _hstack_datasets([dat_ij[str(i)] for i in range(self.nsegs)], s)
+            triu = _hstack_datasets([dat_ji[str(i)] for i in range(self.nsegs)], s)
             assert tril.dtype == numpy.complex128
             naux, nao_pair = tril.shape
             nao = int((nao_pair * 2)**.5)

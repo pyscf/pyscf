@@ -487,15 +487,17 @@ def _load_from_h5g(h5group, row0, row1, out=None):
         col1 = 0
         for key in range(nkeys):
             col0, col1 = col1, col1 + h5group[str(key)].shape[1]
-            h5group[str(key)].read_direct(out, dest_sel=numpy.s_[:,col0:col1],
-                                          source_sel=numpy.s_[row0:row1])
+            if col1 > col0:
+                h5group[str(key)].read_direct(out, dest_sel=numpy.s_[:,col0:col1],
+                                            source_sel=numpy.s_[row0:row1])
     else:  # multiple components
         out = numpy.ndarray((dat.shape[0], row1-row0, ncol), dat.dtype, buffer=out)
         col1 = 0
         for key in range(nkeys):
             col0, col1 = col1, col1 + h5group[str(key)].shape[2]
-            h5group[str(key)].read_direct(out, dest_sel=numpy.s_[:,:,col0:col1],
-                                          source_sel=numpy.s_[:,row0:row1])
+            if col1 > col0:
+                h5group[str(key)].read_direct(out, dest_sel=numpy.s_[:,:,col0:col1],
+                                            source_sel=numpy.s_[:,row0:row1])
     return out
 
 def _transpose_to_h5g(h5group, key, dat, blksize, chunks=None):

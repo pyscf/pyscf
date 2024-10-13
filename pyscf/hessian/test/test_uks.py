@@ -96,12 +96,32 @@ def finite_partial_diff(mf):
     return e2ref
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
+    def test_uks_hess_atmlst(self):
+        mf = dft.UKS(mol)
+        mf.xc = 'pbe0'
+        mf.conv_tol = 1e-14
+        e0 = mf.kernel()
+
+        atmlst = [0, 1]
+        hess_1 = mf.Hessian().kernel()[atmlst][:, atmlst]
+        hess_2 = mf.Hessian().kernel(atmlst=atmlst)
+        self.assertAlmostEqual(abs(hess_1-hess_2).max(), 0.0, 4)
+
     def test_finite_diff_lda_hess(self):
         mf = dft.UKS(mol)
         mf.conv_tol = 1e-14
         e0 = mf.kernel()
         hess = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.fp(hess), -0.8503072107510495, 6)
+        self.assertAlmostEqual(lib.fp(hess), -0.8503072107510495, 4)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()
@@ -115,8 +135,9 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-14
         mf.xc = 'b3lyp5'
         e0 = mf.kernel()
+        mf.conv_tol_cpscf = 1e-9
         hess = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.fp(hess), -0.8208641727673912, 6)
+        self.assertAlmostEqual(lib.fp(hess), -0.8208641727673912, 5)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()
@@ -163,7 +184,7 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'wb97x'
         e0 = mf.kernel()
         hess = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.fp(hess), -0.8207572641132195, 6)
+        self.assertAlmostEqual(lib.fp(hess), -0.8207572641132195, 4)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()

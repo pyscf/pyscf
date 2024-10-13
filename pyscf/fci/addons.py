@@ -224,7 +224,7 @@ def cylindrical_init_guess(mol, norb, nelec, orbsym, wfnsym=0, singlet=True,
                     ci_1[addr_x_a,addr_y_b] = numpy.sqrt(.5)
                     ci_1[addr_y_a,addr_x_b] =-numpy.sqrt(.5)
             else:
-                # TODO: Other direct-product to direct-sum transofromation
+                # TODO: Other direct-product to direct-sum transformation
                 # which involves CG coefficients.
                 ci_1[addra,addrb] = 1
             ci0.append(ci_1.ravel())
@@ -316,7 +316,7 @@ def guess_wfnsym(ci, norb, nelec, orbsym):
     else:
         wfnsym = [_guess_wfnsym(c, strsa, strsb, orbsym) for c in ci]
         if any(wfnsym[0] != x for x in wfnsym):
-            warnings.warn('Different wfnsym %s found in different CI vecotrs' % wfnsym)
+            warnings.warn('Different wfnsym %s found in different CI vectors' % wfnsym)
         wfnsym = wfnsym[0]
     return wfnsym
 
@@ -702,6 +702,121 @@ def transform_ci(ci, nelec, u):
     # Transform old basis to new basis for all beta-electron excitations
     ci = lib.dot(ci, trans_ci_b)
     return ci
+
+def civec_spinless_repr_generator(ci0_r, norb, nelec_r):
+    '''Put CI vectors in the spinless representation; i.e., map
+        norb -> 2 * norb
+        (neleca, nelecb) -> (neleca+nelecb, 0)
+    This permits linear combinations of CI vectors with different
+    M == neleca-nelecb at the price of higher memory cost. This function
+    does NOT change the datatype.
+
+    Args:
+        ci0_r: sequence or generator of ndarray of length nprods
+            CAS-CI vectors in the spin-pure representation
+        norb: integer
+            Number of orbitals
+        nelec_r: sequence of tuple of length (2)
+            (neleca, nelecb) for each element of ci0_r
+
+    Returns:
+        ci1_r_gen: callable that returns a generator of length nprods
+            generates spinless CAS-CI vectors
+        ss2spinless: callable
+            Put a CAS-CI vector in the spinless representation
+            Args:
+                ci0: ndarray
+                    CAS-CI vector
+                ne: tuple of length 2
+                    neleca, nelecb of target Hilbert space
+            Returns:
+                ci1: ndarray
+                    spinless CAS-CI vector
+        spinless2ss: callable
+            Perform the reverse operation on a spinless CAS-CI vector
+            Args:
+                ci2: ndarray
+                    spinless CAS-CI vector
+                ne: tuple of length 2
+                    neleca, nelecb target Hilbert space
+            Returns:
+                ci3: ndarray
+                    CAS-CI vector of ci2 in the (neleca, nelecb) Hilbert space
+    '''
+    nelec_r_tot = [sum (n) for n in nelec_r]
+    if len(set(nelec_r_tot)) > 1:
+        raise NotImplementedError("Different particle-number subspaces")
+    nelec = nelec_r_tot[0]
+    addrs = {}
+    ndet_sp = {}
+    for ne in set(nelec_r):
+        neleca, nelecb = _unpack_nelec(ne)
+        ndeta = cistring.num_strings(norb, neleca)
+        ndetb = cistring.num_strings(norb, nelecb)
+        strsa = cistring.addrs2str(norb, neleca, list(range(ndeta)))
+        strsb = cistring.addrs2str(norb, nelecb, list(range(ndetb)))
+        strs = numpy.add.outer(strsa, numpy.left_shift(strsb, norb)).ravel()
+        addrs[ne] = cistring.strs2addr(2*norb, nelec, strs)
+        ndet_sp[ne] = (ndeta,ndetb)
+    strs = strsa = strsb = None
+    ndet = cistring.num_strings(2*norb, nelec)
+    def ss2spinless(ci0, ne, buf=None):
+        if buf is None:
+            ci1 = numpy.empty(ndet, dtype=ci0.dtype)
+        else:
+            ci1 = numpy.asarray(buf).flat[:ndet]
+        ci1[:] = 0.0
+        ci1[addrs[ne]] = ci0[:,:].ravel ()
+        neleca, nelecb = _unpack_nelec (ne)
+        if abs(neleca*nelecb)%2: ci1[:] *= -1
+        # Sign comes from changing representation:
+        # ... a2' a1' a0' ... b2' b1' b0' |vac>
+        # ->
+        # ... b2' b1' b0' .. a2' a1' a0' |vac>
+        # i.e., strictly decreasing from left to right
+        # (the ordinality of spin-down is conventionally greater than spin-up)
+        return ci1[:,None]
+    def spinless2ss(ci2, ne):
+        ''' Generate the spin-separated CI vector in a particular M
+        Hilbert space from a spinless CI vector '''
+        ci3 = ci2[addrs[ne]].reshape(ndet_sp[ne])
+        neleca, nelecb = _unpack_nelec (ne)
+        if abs(neleca*nelecb)%2: ci3[:] *= -1
+        return ci3
+    def ci1_r_gen(buf=None):
+        if callable(ci0_r):
+            ci0_r_gen = ci0_r()
+        else:
+            ci0_r_gen = (c for c in ci0_r)
+        for ci0, ne in zip(ci0_r_gen, nelec_r):
+            # Doing this in two lines saves memory: ci0 is overwritten
+            ci0 = ss2spinless(ci0, ne)
+            yield ci0
+    return ci1_r_gen, ss2spinless, spinless2ss
+
+def civec_spinless_repr(ci0_r, norb, nelec_r):
+    '''Put CI vectors in the spinless representation; i.e., map
+        norb -> 2 * norb
+        (neleca, nelecb) -> (neleca+nelecb, 0)
+    This permits linear combinations of CI vectors with different
+    M == neleca-nelecb at the price of higher memory cost. This function
+    does NOT change the datatype.
+
+    Args:
+        ci0_r: sequence or generator of ndarray of length nprods
+            CAS-CI vectors in the spin-pure representation
+        norb: integer
+            Number of orbitals
+        nelec_r: sequence of tuple of length (2)
+            (neleca, nelecb) for each element of ci0_r
+
+    Returns:
+        ci1_r: ndarray of shape (nprods, ndet_spinless)
+            spinless CAS-CI vectors
+    '''
+    ci1_r_gen, *_ = civec_spinless_repr_generator(ci0_r, norb, nelec_r)
+    ci1_r = numpy.stack([x.copy() for x in ci1_r_gen()], axis=0)
+    return ci1_r
 
 
 def _unpack_nelec(nelec, spin=None):

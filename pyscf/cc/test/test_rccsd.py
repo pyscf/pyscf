@@ -64,7 +64,7 @@ class KnownValues(unittest.TestCase):
         mycc = cc.RCCSD(mf).run()
         self.assertAlmostEqual(mycc.e_tot, -76.119346385357446, 6)
 
-    def test_denisty_fit_interface(self):
+    def test_density_fit_interface(self):
         mydf = df.DF(mol)
         mycc1 = ccsd.CCSD(mf).density_fit(auxbasis='ccpvdz-ri', with_df=mydf).run()
         self.assertAlmostEqual(mycc1.e_tot, -76.119348934346789, 6)

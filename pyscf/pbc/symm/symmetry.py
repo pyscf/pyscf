@@ -146,7 +146,7 @@ class Symmetry():
         nop : int
             Length of `ops`.
         Dmats : list of 2d arrays
-            Wigner D-matries
+            Wigner D-matrices
         l_max : int
             Maximum angular momentum considered in `Dmats`
     '''
@@ -193,7 +193,7 @@ class Symmetry():
                 self.ops = ops
 
         self.nop = len(self.ops)
-        self.has_inversion = any([op.rot_is_inversion for op in self.ops])
+        self.has_inversion = any(op.rot_is_inversion for op in self.ops)
 
         l_max = None
         if 'auxcell' in kwargs:

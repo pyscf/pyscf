@@ -2633,7 +2633,7 @@ def get_rho(ni, mol, dm, grids, max_memory=2000):
 class LibXCMixin:
     libxc = libxc
 
-    omega = None  # RSH paramter
+    omega = None  # RSH parameter
 
 ####################
 # Overwrite following functions to use custom XC functional
@@ -2653,6 +2653,10 @@ class LibXCMixin:
         if omega is None: omega = self.omega
         return self.libxc.eval_xc(xc_code, rho, spin, relativity, deriv,
                                   omega, verbose)
+
+    def eval_xc1(self, xc_code, rho, spin=0, deriv=1, omega=None):
+        if omega is None: omega = self.omega
+        return self.libxc.eval_xc1(xc_code, rho, spin, deriv, omega)
 
     def eval_xc_eff(self, xc_code, rho, deriv=1, omega=None, xctype=None,
                     verbose=None):
@@ -2693,12 +2697,12 @@ class LibXCMixin:
         else:
             spin = 0
 
-        out = self.libxc.eval_xc1(xc_code, rho, spin, deriv, omega)
+        out = self.eval_xc1(xc_code, rho, spin, deriv, omega)
         evfk = [out[0]]
         for order in range(1, deriv+1):
             evfk.append(xc_deriv.transform_xc(rho, out, xctype, spin, order))
         if deriv < 3:
-            # The return has at least [e, v, f, k] terms
+            # Returns at least [e, v, f, k] terms
             evfk.extend([None] * (3 - deriv))
         return evfk
 

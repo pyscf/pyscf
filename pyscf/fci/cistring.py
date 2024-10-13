@@ -200,7 +200,7 @@ def gen_linkstr_index(orb_list, nocc, strs=None, tril=False):
     For given string str0, index[str0] is (nocc+nocc*nvir) x 4 array.
     The first nocc rows [i(:occ),i(:occ),str0,sign] are occupied-occupied
     excitations, which do not change the string. The next nocc*nvir rows
-    [a(:vir),i(:occ),str1,sign] are occupied-virtual exciations, starting from
+    [a(:vir),i(:occ),str1,sign] are occupied-virtual excitations, starting from
     str0, annihilating i, creating a, to get str1.
     '''
     if strs is None:

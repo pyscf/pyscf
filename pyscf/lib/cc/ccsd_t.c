@@ -400,7 +400,7 @@ void CCsd_t_contract(double *e_tot,
         size_t k;
         double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*3+2));
         if (cache1 == NULL) {
-                fprintf(stderr, "malloc(%zu) falied in CCsd_t_contract\n",
+                fprintf(stderr, "malloc(%zu) failed in CCsd_t_contract\n",
                         sizeof(double) * nocc*nocc*nocc*3);
                 exit(1);
         }
@@ -455,7 +455,7 @@ void QCIsd_t_contract(double *e_tot,
         size_t k;
         double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*3+2));
         if (cache1 == NULL) {
-                fprintf(stderr, "malloc(%zu) falied in QCIsd_t_contract\n",
+                fprintf(stderr, "malloc(%zu) failed in QCIsd_t_contract\n",
                         sizeof(double) * nocc*nocc*nocc*3);
                 exit(1);
         }
@@ -636,7 +636,7 @@ void CCsd_t_zcontract(double complex *e_tot,
         size_t k;
         double complex *cache1 = malloc(sizeof(double complex) * (nocc*nocc*nocc*3+2));
         if (cache1 == NULL) {
-                fprintf(stderr, "malloc(%zu) falied in CCsd_t_zcontract\n",
+                fprintf(stderr, "malloc(%zu) failed in CCsd_t_zcontract\n",
                         sizeof(double complex) * nocc*nocc*nocc*3);
                 exit(1);
         }
@@ -694,7 +694,7 @@ void QCIsd_t_zcontract(double complex *e_tot,
         size_t k;
         double complex *cache1 = malloc(sizeof(double complex) * (nocc*nocc*nocc*3+2));
         if (cache1 == NULL) {
-                fprintf(stderr, "malloc(%zu) falied in QCIsd_t_zcontract\n",
+                fprintf(stderr, "malloc(%zu) failed in QCIsd_t_zcontract\n",
                         sizeof(double complex) * nocc*nocc*nocc*3);
                 exit(1);
         }
@@ -880,7 +880,7 @@ void MPICCsd_t_contract(double *e_tot, double *mo_energy, double *t1T,
         size_t k;
         double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*3+2));
         if (cache1 == NULL) {
-                fprintf(stderr, "malloc(%zu) falied in MPICCsd_t_contract\n",
+                fprintf(stderr, "malloc(%zu) failed in MPICCsd_t_contract\n",
                         sizeof(double) * nocc*nocc*nocc*3);
                 exit(1);
         }
@@ -1113,7 +1113,7 @@ void CCsd_zcontract_t3T(double complex *t3Tw, double complex *t3Tv, double *mo_e
         size_t k;
         complex double *cache1 = malloc(sizeof(double complex) * (nocc*nocc*nocc*3+2));
         if (cache1 == NULL) {
-                fprintf(stderr, "malloc(%zu) falied in CCsd_zcontract_t3T\n",
+                fprintf(stderr, "malloc(%zu) failed in CCsd_zcontract_t3T\n",
                         sizeof(double complex) * nocc*nocc*nocc*3);
                 exit(1);
         }

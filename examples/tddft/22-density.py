@@ -22,7 +22,7 @@ mf.kernel()
 mytd = tdscf.TDA(mf).run(nstates=3)
 #mytd.analyze()
 
-def tda_denisty_matrix(td, state_id):
+def tda_density_matrix(td, state_id):
     '''
     Taking the TDA amplitudes as the CIS coefficients, calculate the density
     matrix (in AO basis) of the excited states
@@ -48,7 +48,7 @@ def tda_denisty_matrix(td, state_id):
     return dm
 
 # Density matrix for the 3rd excited state
-dm = tda_denisty_matrix(mytd, 2)
+dm = tda_density_matrix(mytd, 2)
 
 # Write to cube format
 from pyscf.tools import cubegen

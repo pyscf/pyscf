@@ -211,15 +211,12 @@ get_rho = kuhf.get_rho
 
 
 @lib.with_doc(khf.mulliken_meta.__doc__)
-def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
+def mulliken_meta(cell, dm_ao_kpts, kpts, verbose=logger.DEBUG,
                   pre_orth_method=PRE_ORTH_METHOD, s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
-
-    Note this function only computes the Mulliken population for the gamma
-    point density matrix.
     '''
     dm = dm_ao_kpts[0] + dm_ao_kpts[1]
-    return khf.mulliken_meta(cell, dm, verbose, pre_orth_method, s)
+    return khf.mulliken_meta(cell, dm, kpts, verbose, pre_orth_method, s)
 
 
 def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
@@ -362,12 +359,13 @@ class KROHF(khf.KRHF):
         if kpts is None: kpts = self.kpts
         return init_guess_by_chkfile(self.cell, chk, project, kpts)
 
-    def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,
+    def mulliken_meta(self, cell=None, dm=None, kpts=None, verbose=logger.DEBUG,
                       pre_orth_method=PRE_ORTH_METHOD, s=None):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
+        if kpts is None: kpts = self.kpts
         if s is None: s = self.get_ovlp(cell)
-        return mulliken_meta(cell, dm, s=s, verbose=verbose,
+        return mulliken_meta(cell, dm, kpts, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
     def stability(self,

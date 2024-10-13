@@ -680,7 +680,7 @@ def project_init_guess_old(casscf, init_mo, prev_mol=None):
 
 # on AO representation
 def make_rdm1(casscf, mo_coeff=None, ci=None, **kwargs):
-    '''One-particle densit matrix in AO representation
+    '''One-particle density matrix in AO representation
 
     Args:
         casscf : an :class:`CASSCF` or :class:`CASCI` object
@@ -709,7 +709,7 @@ def make_rdm1(casscf, mo_coeff=None, ci=None, **kwargs):
 
 # make both alpha and beta density matrices
 def make_rdm1s(casscf, mo_coeff=None, ci=None, **kwargs):
-    '''Alpha and beta one-particle densit matrices in AO representation
+    '''Alpha and beta one-particle density matrices in AO representation
     '''
     return casscf.make_rdm1s(mo_coeff, ci, **kwargs)
 
@@ -1364,7 +1364,7 @@ class StateAverageMixFCISolver(StateAverageFCISolver):
         ci0 = _state_args (ci0)
         link_index = _solver_args (link_index)
         nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
-        return [dm for dm in self._collect ('make_rdm1', ci0, norb, nelec, link_index=link_index, **kwargs)]
+        return list(self._collect ('make_rdm1', ci0, norb, nelec, link_index=link_index, **kwargs))
 
     def make_rdm1(self, ci0, norb, nelec, link_index=None, **kwargs):
         dm1 = self.states_make_rdm1 (ci0, norb, nelec, link_index=link_index, **kwargs)

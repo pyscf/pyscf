@@ -18,6 +18,7 @@
 
 import unittest
 import numpy
+from pyscf import dft
 from pyscf.pbc import gto as pgto
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
@@ -35,6 +36,15 @@ def get_ovlp(cell, grids=None):
 
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_becke_grids(self):
         L = 4.
         n = 61

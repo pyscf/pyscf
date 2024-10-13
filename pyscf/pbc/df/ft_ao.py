@@ -33,7 +33,7 @@ from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 from pyscf import __config__
 
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 1.0)
-# kecut=10 can rougly converge GTO with alpha=0.5
+# kecut=10 can roughly converge GTO with alpha=0.5
 KECUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_kecut_threshold', 10.0)
 
 STEEP_BASIS = 0
@@ -526,8 +526,9 @@ class _RangeSeparatedCell(pbcgto.Cell):
         assign(SMOOTH_BASIS)
         return ao_type
 
-    def decontract_basis(self, to_cart=True):
-        pcell, ctr_coeff = self.ref_cell.decontract_basis(to_cart=to_cart)
+    def decontract_basis(self, to_cart=True, aggregate=False):
+        pcell, ctr_coeff = self.ref_cell.decontract_basis(to_cart=to_cart,
+                                                          aggregate=aggregate)
         pcell = pcell.view(self.__class__)
         pcell.ref_cell = None
 

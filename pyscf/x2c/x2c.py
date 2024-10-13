@@ -577,7 +577,7 @@ class SCF(hf.SCF):
         log = logger.new_logger(mol, verbose)
 
         if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
-            # UHF denisty matrices
+            # UHF density matrices
             dm = dm[0] + dm[1]
 
         with mol.with_common_orig((0,0,0)):
@@ -774,17 +774,22 @@ class X2C1E_GSCF(_X2C_SCF):
         charges = mol.atom_charges()
         coords  = mol.atom_coords()
         nucl_dip = numpy.einsum('i,ix->x', charges, coords)
-        with mol.with_common_orig(nucl_dip):
-            r = mol.intor_symmetric('int1e_r')
-            ao_dip = numpy.array([_block_diag(x) for x in r])
+        with mol.with_common_orig((0,0,0)):
             if picture_change:
                 xmol = self.with_x2c.get_xmol()[0]
                 nao = xmol.nao
-                prp = xmol.intor_symmetric('int1e_sprsp').reshape(3,4,nao,nao)[:,0]
-                prp = numpy.array([_block_diag(x) for x in prp])
-                ao_dip = self.with_x2c.picture_change((ao_dip, prp))
+                r = xmol.intor_symmetric('int1e_r')
+                r = numpy.array([_block_diag(x) for x in r])
+                c1 = 0.5/lib.param.LIGHT_SPEED
+                prp = xmol.intor_symmetric('int1e_sprsp').reshape(3,4,nao,nao)
+                prp = numpy.array([_sigma_dot(x*c1**2) for x in prp])
+                ao_dip = self.with_x2c.picture_change((r, prp))
+            else:
+                r = mol.intor_symmetric('int1e_r')
+                ao_dip = numpy.array([_block_diag(x) for x in r])
 
-        mol_dip = -numpy.einsum('xij,ji->x', ao_dip, dm).real
+        el_dip = numpy.einsum('xij,ji->x', ao_dip, dm).real
+        mol_dip = nucl_dip - el_dip
 
         if unit.upper() == 'DEBYE':
             mol_dip *= nist.AU2DEBYE
@@ -810,8 +815,7 @@ class X2C1E_GSCF(_X2C_SCF):
 
 def _uncontract_mol(mol, xuncontract=None, exp_drop=0.2):
     '''mol._basis + uncontracted steep functions'''
-    pmol, contr_coeff = mol.decontract_basis(atoms=xuncontract)
-    contr_coeff = scipy.linalg.block_diag(*contr_coeff)
+    pmol, contr_coeff = mol.decontract_basis(atoms=xuncontract, aggregate=True)
     return pmol, contr_coeff
 
 
@@ -953,7 +957,7 @@ def _x2c1e_get_hcore(t, v, w, s, c):
 
     w, u = numpy.linalg.eigh(reduce(numpy.dot, (cl.T.conj(), s, cl)))
     idx = w > 1e-14
-    # Adopt (2) here becuase X is not appeared in Eq (2).
+    # Adopt (2) here because X is not appeared in Eq (2).
     # R[A] = u w^{1/2} u^+,  so R[A]^{-1} A^+ S in Eq (2) is
     r = reduce(numpy.dot, (u[:,idx]/numpy.sqrt(w[idx]), u[:,idx].T.conj(),
                            cl.T.conj(), s))

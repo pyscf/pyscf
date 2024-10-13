@@ -60,6 +60,9 @@ class KnownValues(unittest.TestCase):
         ci1 += 1j * fci.direct_nosym.contract_2e(h2e, ci0.imag, norb, nelec)
         self.assertTrue(numpy.allclose(ci1ref, ci1))
 
+        ci1 = fci.direct_nosym.contract_2e(h2e, ci0, norb, nelec).astype(complex)
+        self.assertAlmostEqual(abs(ci1ref - ci1).max(), 0, 12)
+
     def test_absorb_h1e(self):
         href = fci_slow.absorb_h1e(h1e, h2e, norb, nelec)
         h1 = fci.direct_nosym.absorb_h1e(h1e, h2e, norb, nelec)

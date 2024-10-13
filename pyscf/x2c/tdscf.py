@@ -290,9 +290,9 @@ class TDA(TDBase, ghf.TDA):
             mf = self._scf
         return gen_tda_hop(mf)
 
-    def init_guess(self, mf, nstates=None, wfnsym=None):
+    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         assert self.wfnsym is None
-        return ghf.TDA.init_guess(self, mf, nstates, None)
+        return ghf.TDA.init_guess(self, mf, nstates, None, return_symmetry)
 
     kernel = ghf.TDA.kernel
 
@@ -313,9 +313,9 @@ class TDHF(TDBase, ghf.TDHF):
             mf = self._scf
         return gen_tdhf_operation(mf)
 
-    def init_guess(self, mf, nstates=None, wfnsym=None):
+    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         assert self.wfnsym is None
-        return ghf.TDHF.init_guess(self, mf, nstates, None)
+        return ghf.TDHF.init_guess(self, mf, nstates, None, return_symmetry)
 
     kernel = ghf.TDHF.kernel
 

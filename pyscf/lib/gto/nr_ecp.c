@@ -5553,7 +5553,7 @@ int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         // be careful with the factor 1/2 for the spin operator  s = 1/2 Pauli matrix
         // The ECPso_cart and ECPso_sph integral code evaluates the integrals
         // <i|H^{SO}|j> as shown in NWChem ECP doc
-        //   http://www.nwchem-sw.org/index.php/ECP
+        //   https://nwchemgit.github.io/ECP.html
         // Note when calling ECPso_spinor function to evaluate the integrals in
         // spinor basis pyscf evaluates the expression like
         //      einsum('sxy,spq,xpi,yqj->ij', pauli_matrix, so_sph, ui.conj(), uj)
@@ -5872,7 +5872,8 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         for (i = 0; i < d3; i++) { rad_all[i] = 0; }
 
         for (iloc = 0; iloc < nslots; iloc++) {
-                if (ecpbas[ANG_OF+ecploc[iloc]*BAS_SLOTS] != -1) {
+                if (ecpbas[ANG_OF+ecploc[iloc]*BAS_SLOTS] != -1 ||
+                    ecpbas[SO_TYPE_OF+ecploc[iloc]*BAS_SLOTS] == 1) {
                         continue;
                 }
                 atm_id = ecpbas[ATOM_OF+ecploc[iloc]*BAS_SLOTS];

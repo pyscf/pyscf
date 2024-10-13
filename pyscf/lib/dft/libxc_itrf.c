@@ -1153,6 +1153,7 @@ void LIBXC_xc_reference(int xc_id, const char **refs)
                 }
                 refs[i] = func.info->refs[i]->ref;
         }
+	xc_func_end(&func);
 }
 
 int LIBXC_is_nlc(int xc_id)
@@ -1162,5 +1163,7 @@ int LIBXC_is_nlc(int xc_id)
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
                 raise_error -1;
         }
-        return func.info->flags & XC_FLAGS_VV10;
+	int is_nlc = func.info->flags & XC_FLAGS_VV10;
+	xc_func_end(&func);
+        return is_nlc; 
 }

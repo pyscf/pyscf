@@ -11,13 +11,16 @@ except ImportError:
     basis_set_exchange = None
 
 
-def _orbital_basis(basis):
+def _orbital_basis(basis, make_general=False):
     '''Extracts the orbital basis from the BSE format in PySCF format'''
 
     r = {}
 
-    basis = manip.make_general(basis, False, True)
-    basis = sort.sort_basis(basis, False)
+    if make_general:
+        basis = manip.make_general(basis, False, use_copy=True)
+        basis = sort.sort_basis(basis, use_copy=False)
+    else:
+        basis = sort.sort_basis(basis, use_copy=True)
 
     # Elements for which we have electron basis
     electron_elements = [k for k, v in basis['elements'].items() if 'electron_shells' in v]
@@ -40,21 +43,29 @@ def _orbital_basis(basis):
                 ncontr = len(coefficients)
                 nprim = len(exponents)
                 am = shell['angular_momentum']
-                assert len(am) == 1
-
-                shell_data = [am[0]]
-                for iprim in range(nprim):
-                    row = [float(coefficients[ic][iprim]) for ic in range(ncontr)]
-                    row.insert(0, float(exponents[iprim]))
-                    shell_data.append(row)
-                atom_shells.append(shell_data)
+                if len(am) == len(coefficients): # SP basis
+                    for l, c in zip(am, coefficients):
+                        shell_data = [l]
+                        for iprim in range(nprim):
+                            row = [float(exponents[iprim]), float(c[iprim])]
+                            shell_data.append(row)
+                        atom_shells.append(shell_data)
+                else:
+                    assert len(am) == 1
+                    shell_data = [am[0]]
+                    for iprim in range(nprim):
+                        row = [float(coefficients[ic][iprim]) for ic in range(ncontr)]
+                        row.insert(0, float(exponents[iprim]))
+                        shell_data.append(row)
+                    atom_shells.append(shell_data)
             r[sym] = atom_shells
 
             # Collect the literature references
-            for ref in data['references']:
-                for key in ref['reference_keys']:
-                    if key not in reference_list:
-                        reference_list.append(key)
+            if 'references' in data:
+                for ref in data['references']:
+                    for key in ref['reference_keys']:
+                        if key not in reference_list:
+                            reference_list.append(key)
 
     return r, reference_list
 
@@ -109,6 +120,48 @@ def _print_basis_information(basis):
     print('{} basis set, version {}'.format(name, version))
     print('Last revised on {}'.format(revision_date))
     print('Revision description: {}'.format(revision_description))
+
+def get_basis(name, elements):
+    '''
+    Obtain a basis set
+
+    Args:
+        name : str
+            Name of the basis set, case insensitive.
+        elements : str, int or list
+
+    Returns:
+        A dict of basis set in PySCF internal basis format.
+    '''
+    basis = basis_set_exchange.api.get_basis(name, elements)
+    return _orbital_basis(basis)[0]
+
+def autoaux(name, elements):
+    '''
+    Create an auxiliary basis set for the given orbital basis set using
+    the Auto-Aux algorithm.
+
+    See also: G. L. Stoychev, A. A. Auer, and F. Neese
+    Automatic Generation of Auxiliary Basis Sets
+    J. Chem. Theory Comput. 13, 554 (2017)
+    http://doi.org/10.1021/acs.jctc.6b01041
+    '''
+    obs = basis_set_exchange.api.get_basis(name, elements)
+    auxbs = manip.autoaux_basis(obs)
+    return _orbital_basis(auxbs)[0]
+
+def autoabs(name, elements):
+    '''
+    Create a Coulomb fitting basis set for the given orbital basis set.
+    See also:
+    R. Yang, A. P. Rendell, and M. J. Frisch
+    Automatically generated Coulomb fitting basis sets: Design and accuracy for systems containing H to Kr
+    J. Chem. Phys. 127, 074102 (2007)
+    http://doi.org/10.1063/1.2752807
+    '''
+    obs = basis_set_exchange.api.get_basis(name, elements)
+    auxbs = manip.autoabs_basis(obs)
+    return _orbital_basis(auxbs)[0]
 
 if __name__ == '__main__':
     from basis_set_exchange import api, references

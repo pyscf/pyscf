@@ -218,6 +218,7 @@ int PBCECPscalar_sph(double *eri_buf, int *cell0_shls, int *bvk_cells, int cutof
         int nbasp = envs_bvk->nbasp;
         int *seg_loc = envs_bvk->seg_loc;
         int *seg2sh = envs_bvk->seg2sh;
+        int *cell0_ao_loc = envs_bvk->ao_loc;
         int ish_cell0 = cell0_shls[0];
         int jsh_cell0 = cell0_shls[1];
         int cell_i = bvk_cells[0];
@@ -228,16 +229,21 @@ int PBCECPscalar_sph(double *eri_buf, int *cell0_shls, int *bvk_cells, int cutof
         int jseg0 = seg_loc[jsh_bvk];
         int ish0 = seg2sh[iseg0];
         int jsh0 = seg2sh[jseg0];
+        // Note: ish0 (and jsh0) can be wrong when there is no basis between iseg0 and iseg1
         int li = bas[ANG_OF+ish0*BAS_SLOTS];
         int lj = bas[ANG_OF+jsh0*BAS_SLOTS];
         int nci = bas[NCTR_OF+ish0*BAS_SLOTS];
         int ncj = bas[NCTR_OF+jsh0*BAS_SLOTS];
         int nfi = (li+1)*(li+2)/2;
         int nfj = (lj+1)*(lj+2)/2;
-        int di = (li*2+1);
-        int dj = (lj*2+1);
+        int i0 = cell0_ao_loc[ish_cell0];
+        int j0 = cell0_ao_loc[jsh_cell0];
+        int i1 = cell0_ao_loc[ish_cell0+1];
+        int j1 = cell0_ao_loc[jsh_cell0+1];
+        int di = i1 - i0;
+        int dj = j1 - j0;
         int comp = 1;
-        double *gcart = eri_buf + di*dj*nci*ncj * comp;
+        double *gcart = eri_buf + di*dj * comp;
         double *cache = gcart + nfi*nfj*nci*ncj * comp;
         int has_value = PBCECP_loop(ECPtype_scalar_cart,
                                     gcart, cell0_shls, bvk_cells, cutoff,
@@ -247,6 +253,7 @@ int PBCECPscalar_sph(double *eri_buf, int *cell0_shls, int *bvk_cells, int cutof
                 return has_value;
         }
 
+        dj = lj*2+1;
         int j;
         if (li < 2) {
                 for (j = 0; j < ncj * comp; j++) {

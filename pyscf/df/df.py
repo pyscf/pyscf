@@ -98,6 +98,10 @@ class DF(lib.StreamObject):
         self._vjopt = None
         self._rsh_df = {}  # Range separated Coulomb DF objects
 
+    __getstate__, __setstate__ = lib.generate_pickle_methods(
+            excludes=('_cderi_to_save', '_cderi', '_vjopt', '_rsh_df'),
+            reset_state=True)
+
     @property
     def auxbasis(self):
         return self._auxbasis
@@ -166,7 +170,7 @@ class DF(lib.StreamObject):
                                      max_memory=max_memory, verbose=log)
             else:
                 # Store DF tensor in blocks. This is to reduce the
-                # initiailzation overhead
+                # initialization overhead
                 outcore.cholesky_eri_b(mol, cderi, dataname=self._dataname,
                                        int3c=int3c, int2c=int2c, auxmol=auxmol,
                                        max_memory=max_memory, verbose=log)

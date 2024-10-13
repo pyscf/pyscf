@@ -217,22 +217,28 @@ def _get_init_guess(airreps, birreps, nroots, hdiag, nelec, orbsym, wfnsym=0):
     neleca, nelecb = _unpack_nelec(nelec)
     na = len(airreps)
     nb = len(birreps)
-    hdiag = hdiag.reshape(na,nb)
     sym_allowed = airreps[:,None] == wfnsym ^ birreps
     if neleca == nelecb and na == nb:
         idx = np.arange(na)
         sym_allowed[idx[:,None] < idx] = False
     idx_a, idx_b = np.where(sym_allowed)
 
+    hdiag = hdiag.reshape(na,nb)[idx_a,idx_b]
+    if hdiag.size <= nroots:
+        hdiag_indices = np.arange(hdiag.size)
+    else:
+        hdiag_indices = np.argpartition(hdiag, nroots-1)[:nroots]
+
     ci0 = []
-    for k in np.argpartition(hdiag[idx_a,idx_b], nroots-1)[:nroots]:
+    for k in hdiag_indices:
         addra, addrb = idx_a[k], idx_b[k]
         x = np.zeros((na, nb))
         x[addra,addrb] = 1
         ci0.append(x.ravel().view(direct_spin1.FCIvector))
 
     if len(ci0) == 0:
-        raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
+        raise lib.exceptions.WfnSymmetryError(
+            f'Initial guess for symmetry {wfnsym} not found')
     return ci0
 
 def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
@@ -248,13 +254,18 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
         return _get_init_guess(airreps, birreps, nroots, hdiag, nelec, orbsym, wfnsym)
 
     ci0 = []
-    for k in np.argpartition(hdiag, nroots-1)[:nroots]:
+    if hdiag.size <= nroots:
+        hdiag_indices = np.arange(hdiag.size)
+    else:
+        hdiag_indices = np.argpartition(hdiag, nroots-1)[:nroots]
+    for k in hdiag_indices:
         x = np.zeros_like(hdiag)
         x[k] = 1.
         ci0.append(x.ravel().view(direct_spin1.FCIvector))
 
     if len(ci0) == 0:
-        raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
+        raise lib.exceptions.WfnSymmetryError(
+            f'Initial guess for symmetry {wfnsym} not found')
     return ci0
 
 def _validate_degen_mapping(mapping, norb):
@@ -301,6 +312,13 @@ def get_init_guess_cyl_sym(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
             addra1, sign_a = _sv_associated_det(strsa[addra], degen_mapping)
             addrb1, sign_b = _sv_associated_det(strsb[addrb], degen_mapping)
             if wfnsym in (1, 4) and addra == addra1 and addrb == addrb1:
+                # Remove the A1 repr from initial guess.
+                # The product of two E reprs can produce A1, A2 and another E repr.
+                # addra == addra1 and addrb == addrb1  can be found in the A1 repr.
+                # However, this may also incorrectly remove the A2 repr, see the
+                # explanation in issue #2291.
+                # In this case, the direct_spin1_cyl_sym solver can be used to
+                # solve A2. See example mcscf/18-o2_spatial_spin_symmetry.py
                 continue
             x = ca[:,None] * cb
 
@@ -339,7 +357,8 @@ def get_init_guess_cyl_sym(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
             break
 
     if len(ci0) == 0:
-        raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
+        raise lib.exceptions.WfnSymmetryError(
+            f'Initial guess for symmetry {wfnsym} not found')
     return ci0
 
 def _cyl_sym_csf2civec(strs, addr, orbsym, degen_mapping):
@@ -500,19 +519,34 @@ def _guess_wfnsym_cyl_sym(civec, strsa, strsb, orbsym):
     if wfn_momentum == 0:
         # For A1g and A1u, CI coefficient and its sigma_v associated one have
         # the same sign
-        if (sign_a*sign_b * c_max[0,0].real * c_max[1,1].real > 1e-6 or
-            sign_a*sign_b * c_max[0,0].imag * c_max[1,1].imag > 1e-6):  # A1
+        if (sign_a*sign_b * c_max[0,0].real * c_max[1,1].real > 1e-4 or
+            sign_a*sign_b * c_max[0,0].imag * c_max[1,1].imag > 1e-4):  # A1
             if wfn_ungerade:
                 wfnsym = 5
             else:
                 wfnsym = 0
-        else:
+        elif (sign_a*sign_b * c_max[0,0].real * c_max[1,1].real < -1e-4 or
+              sign_a*sign_b * c_max[0,0].imag * c_max[1,1].imag < -1e-4):  # A2
             # For A2g and A2u, CI coefficient and its sigma_v associated one
             # have opposite signs
             if wfn_ungerade:
                 wfnsym = 4
             else:
                 wfnsym = 1
+        elif abs(c_max[0,1] - c_max[1,0]) < 1e-4: # Off-diagonal terms only
+            # (E+)(E-') + (E-)(E+') => A1
+            if wfn_ungerade:
+                wfnsym = 5
+            else:
+                wfnsym = 0
+        elif abs(c_max[0,1] + c_max[1,0]) < 1e-4:
+            # (E+)(E-') - (E-)(E+') => A2
+            if wfn_ungerade:
+                wfnsym = 4
+            else:
+                wfnsym = 1
+        else:
+            raise RuntimeError('Symmetry broken wavefunction')
 
     elif wfn_momentum % 2 == 1:
         if abs(c_max[idx_a,idx_b].real) > 1e-6:  # Ex
@@ -582,8 +616,9 @@ def guess_wfnsym(solver, norb, nelec, fcivec=None, orbsym=None, wfnsym=None, **k
                 fcivec = fcivec[0]
             wfnsym1 = _guess_wfnsym_cyl_sym(fcivec, strsa, strsb, orbsym)
             if wfnsym1 != _id_wfnsym(solver, norb, nelec, orbsym, wfnsym):
-                raise RuntimeError(f'Input wfnsym {wfnsym} is not consistent with '
-                                   f'fcivec symmetry {wfnsym1}')
+                raise lib.exceptions.WfnSymmetryError(
+                    f'Input wfnsym {wfnsym} is not consistent with '
+                    f'fcivec symmetry {wfnsym1}')
             wfnsym = wfnsym1
         else:
             na, nb = strsa.size, strsb.size
@@ -601,8 +636,8 @@ def guess_wfnsym(solver, norb, nelec, fcivec=None, orbsym=None, wfnsym=None, **k
             if isinstance(fcivec, np.ndarray) and fcivec.ndim <= 2:
                 fcivec = [fcivec]
             if all(abs(c.reshape(na, nb)[mask]).max() < 1e-5 for c in fcivec):
-                raise RuntimeError('Input wfnsym {wfnsym} is not consistent with '
-                                   'fcivec coefficients')
+                raise lib.exceptions.WfnSymmetryError(
+                    'Input wfnsym {wfnsym} is not consistent with fcivec coefficients')
     return wfnsym
 
 def sym_allowed_indices(nelec, orbsym, wfnsym):
@@ -771,7 +806,7 @@ class FCISolver(direct_spin1.FCISolver):
         logger.debug(self, 'Num symmetry allowed elements %d',
                      sum([x.size for x in self.sym_allowed_idx]))
         if s_idx.size == 0:
-            raise RuntimeError(
+            raise lib.exceptions.WfnSymmetryError(
                 f'Symmetry allowed determinants not found for wfnsym {wfnsym}')
 
         if wfnsym_ir > 7:

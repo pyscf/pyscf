@@ -324,7 +324,7 @@ class Int3cBuilder(lib.StreamObject):
         drv = libpbc.PBCfill_nr3c_drv
 
         # is_pbcintor controls whether to use memory efficient functions
-        # Only suppots int3c2e_sph, int3c2e_cart in current C library
+        # Only supports int3c2e_sph, int3c2e_cart in current C library
         is_pbcintor = intor in ('int3c2e_sph', 'int3c2e_cart') or intor[:3] == 'ECP'
         if is_pbcintor and not intor.startswith('PBC'):
             intor = 'PBC' + intor

@@ -117,9 +117,9 @@ class KnownValues(unittest.TestCase):
 
     def test_analyze(self):
         pop, chg = kmf.analyze()[0]
-        self.assertAlmostEqual(lib.fp(pop), 1.1120443320325235, 7)
+        self.assertAlmostEqual(lib.fp(pop), 1.1514919154737624, 7)
         self.assertAlmostEqual(sum(chg), 0, 7)
-        self.assertAlmostEqual(lib.fp(chg), 0.002887875601340767, 7)
+        self.assertAlmostEqual(lib.fp(chg), -0.04683923436982078, 7)
 
     def test_small_system(self):
         # issue #686

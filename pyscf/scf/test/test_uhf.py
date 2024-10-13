@@ -70,10 +70,14 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_init_guess_minao(self):
+        mf = scf.UHF(mol)
         dm1 = mf.init_guess_by_minao(mol, breaksym=False)
         self.assertAlmostEqual(abs(dm1).sum(), 13.649710173723337, 9)
         dm2 = scf.uhf.get_init_guess(mol, key='minao')
         self.assertAlmostEqual(abs(dm2).sum(), 12.913908927027279, 9)
+        mf.init_guess_breaksym = 2
+        dm1 = mf.init_guess_by_minao(mol)
+        self.assertAlmostEqual(abs(dm1).sum(), 13.649710173723337, 9)
 
     def test_init_guess_1e(self):
         dm1 = scf.uhf.init_guess_by_1e(mol, breaksym=False)
@@ -109,6 +113,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mf.kernel(), -0.46658184955727555, 9)
         mf = scf.UHF(gto.M(atom='H', spin=1, symmetry=1))
         self.assertAlmostEqual(mf.kernel(), -0.46658184955727555, 9)
+
+    def test_init_guess_sap(self):
+        dm1 = mf.init_guess_by_sap(mol, breaksym=False)
+        self.assertAlmostEqual(lib.fp(dm1), 0.9867930552338582, 7)
+        dm2 = scf.uhf.UHF(mol).get_init_guess(mol, key='sap')
+        self.assertAlmostEqual(lib.fp(dm2), 0.6440359527450615, 7)
 
     def test_get_grad(self):
         g = mf2.get_grad(mf2.mo_coeff, mf2.mo_occ)

@@ -242,7 +242,7 @@ int orth_components(double *xs_exp, int* bounds, double dx, double radius,
         }
     }
 
-    // add up contributions from all images to the referece image
+    // add up contributions from all images to the reference image
     if (ngridx >= nx_per_cell) {
         memset(xs_exp, 0, (topl+1)*nx_per_cell*sizeof(double));
         int ix, l, lb, ub, size_x;

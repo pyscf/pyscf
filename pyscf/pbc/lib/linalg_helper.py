@@ -649,7 +649,7 @@ class DavidsonZL:
                 if tmp <= self.crit_e: nconv1+=1
             if VERBOSE: print(' No. of converged eigval:',nconv1)
             if nconv1 == neig:
-                if VERBOSE: print(' Cong: all eignvalues converged ! ')
+                if VERBOSE: print(' Cong: all eigenvalues converged ! ')
             eigs = teig.copy()
 
             # Full Residuals: Res[i]=Res'[i]-w[i]*X[i]

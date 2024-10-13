@@ -42,12 +42,8 @@ def ADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
 
     if mf.istype('UHF'):
         return UADC(mf, frozen, mo_coeff, mo_occ)
-    #elif isinstance(mf, scf.rohf.ROHF):
-    #    lib.logger.warn(mf, 'RADC method does not support ROHF reference. ROHF object '
-    #                    'is converted to UHF object and UADC method is called.')
-    #    mf = mf.to_uhf(mf)
-    #    return UADC(mf, frozen, mo_coeff, mo_occ)
-    # TODO add ROHF functionality
+    elif mf.istype('ROHF'):
+        return UADC(mf, frozen, mo_coeff, mo_occ)
     elif mf.istype('RHF'):
         return RADC(mf, frozen, mo_coeff, mo_occ)
     else :
@@ -61,8 +57,7 @@ def UADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if not (frozen is None or frozen == 0):
         raise NotImplementedError
 
-    mf = mf.remove_soscf()
-    if not mf.istype('UHF'):
+    if not (mf.istype('UHF') or mf.istype('ROHF')):
         mf = mf.to_uhf()
 
     return uadc.UADC(mf, frozen, mo_coeff, mo_occ)

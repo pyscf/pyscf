@@ -54,7 +54,7 @@ def extract_orbs(mo_coeff, ncas, nelecas, ncore):
     return mo_core, mo_cas, mo_vir
 
 def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
-    '''CAS sapce one-electron hamiltonian for UHF-CASCI or UHF-CASSCF
+    '''CAS space one-electron hamiltonian for UHF-CASCI or UHF-CASSCF
 
     Args:
         casci : a U-CASSCF/U-CASCI object or UHF object

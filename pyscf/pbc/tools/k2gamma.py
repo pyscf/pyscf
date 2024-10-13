@@ -257,15 +257,18 @@ def k2gamma(kmf, kmesh=None):
     return mf
 
 
-def to_supercell_ao_integrals(cell, kpts, ao_ints):
+def to_supercell_ao_integrals(cell, kpts, ao_ints, kmesh=None, force_real=True):
     '''Transform from the unitcell k-point AO integrals to the supercell
     gamma-point AO integrals.
     '''
-    scell, phase = get_phase(cell, kpts)
+    scell, phase = get_phase(cell, kpts, kmesh=kmesh)
     NR, Nk = phase.shape
     nao = cell.nao
     scell_ints = np.einsum('Rk,kij,Sk->RiSj', phase, ao_ints, phase.conj())
-    return scell_ints.reshape(NR*nao,NR*nao).real
+    if force_real:
+        return scell_ints.reshape(NR*nao,NR*nao).real
+    else:
+        return scell_ints.reshape(NR*nao,NR*nao)
 
 
 def to_supercell_mo_integrals(kmf, mo_ints):
@@ -321,7 +324,7 @@ if __name__ == '__main__':
     mf = k2gamma(kmf, kmesh)
     c_g_ao = mf.mo_coeff
 
-    # The following is to check whether the MO is correctly coverted:
+    # The following is to check whether the MO is correctly converted:
 
     print("Supercell gamma MO in AO basis from conversion:")
     scell = tools.super_cell(cell, kmesh)

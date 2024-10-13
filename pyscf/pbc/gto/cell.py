@@ -66,6 +66,7 @@ def pack(cell):
     '''
     cldic = mole.pack(cell)
     cldic['a'] = cell.a
+    cldic['fractional'] = cell.fractional
     cldic['precision'] = cell.precision
     cldic['ke_cutoff'] = cell.ke_cutoff
     cldic['exp_to_discard'] = cell.exp_to_discard
@@ -87,8 +88,8 @@ def unpack(celldic):
 def dumps(cell):
     '''Serialize Cell object to a JSON formatted str.
     '''
-    exclude_keys = {'output', 'stdout', '_keys', 'symm_orb', 'irrep_id',
-                        'irrep_name', 'lattice_symmetry'}
+    exclude_keys = {'output', 'stdout', '_keys', '_ctx_lock',
+                    'symm_orb', 'irrep_id', 'irrep_name', 'lattice_symmetry'}
 
     celldic = dict(cell.__dict__)
     for k in exclude_keys:
@@ -497,7 +498,7 @@ def error_for_ke_cutoff(cell, ke_cutoff, omega=None):
 def get_bounding_sphere(cell, rcut):
     '''Finds all the lattice points within a sphere of radius rcut.
 
-    Defines a parallelipiped given by -N_x <= n_x <= N_x, with x in [1,3]
+    Defines a parallelepiped given by -N_x <= n_x <= N_x, with x in [1,3]
     See Martin p. 85
 
     Args:
@@ -1075,7 +1076,7 @@ class Cell(mole.MoleBase):
 
     _keys = {
         'precision', 'exp_to_discard',
-        'a', 'ke_cutoff', 'pseudo', 'dimension', 'low_dim_ft_type',
+        'a', 'ke_cutoff', 'pseudo', 'fractional', 'dimension', 'low_dim_ft_type',
         'space_group_symmetry', 'symmorphic', 'lattice_symmetry', 'mesh', 'rcut',
         'use_loose_rcut', 'use_particle_mesh_ewald',
     }
@@ -1087,6 +1088,7 @@ class Cell(mole.MoleBase):
         # of fourier components, with .5 * G**2 < ke_cutoff
         self.ke_cutoff = None
 
+        self.fractional = False
         self.dimension = 3
         # TODO: Simple hack for now; the implementation of ewald depends on the
         #       density-fitting class.  This determines how the ewald produces
@@ -1265,13 +1267,23 @@ class Cell(mole.MoleBase):
             self._mesh_from_build = _mesh_from_build
         return self
 
+    @lib.with_doc(mole.format_atom.__doc__)
+    def format_atom(self, atoms, origin=0, axes=None,
+                    unit=getattr(__config__, 'UNIT', 'Ang')):
+        if not self.fractional:
+            return mole.format_atom(atoms, origin, axes, unit)
+        _atoms = mole.format_atom(atoms, origin, axes, unit=1.)
+        _a = self.lattice_vectors()
+        c = np.array([a[1] for a in _atoms]).dot(_a)
+        return [(a[0], r) for a, r in zip(_atoms, c.tolist())]
+
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
     def build(self, dump_input=True, parse_arg=mole.ARGPARSE,
               a=None, mesh=None, ke_cutoff=None, precision=None, nimgs=None,
               h=None, dimension=None, rcut= None, low_dim_ft_type=None,
               space_group_symmetry=None, symmorphic=None,
               use_loose_rcut=None, use_particle_mesh_ewald=None,
-              *args, **kwargs):
+              fractional=None, *args, **kwargs):
         '''Setup Mole molecule and Cell and initialize some control parameters.
         Whenever you change the value of the attributes of :class:`Cell`,
         you need call this function to refresh the internal data of Cell.
@@ -1280,6 +1292,10 @@ class Cell(mole.MoleBase):
             a : (3,3) ndarray
                 The real-space cell lattice vectors. Each row represents
                 a lattice vector.
+            fractional : bool
+                Whether the atom postions are specified in fractional coordinates.
+                The default value is False, which means the coordinates are
+                interpreted as Cartesian coordinate.
             mesh : (3,) ndarray of ints
                 The number of *positive* G-vectors along each direction.
             ke_cutoff : float
@@ -1318,6 +1334,7 @@ class Cell(mole.MoleBase):
         if mesh is not None: self.mesh = mesh
         if nimgs is not None: self.nimgs = nimgs
         if dimension is not None: self.dimension = dimension
+        if fractional is not None: self.fractional = fractional
         if precision is not None: self.precision = precision
         if rcut is not None: self.rcut = rcut
         if ke_cutoff is not None: self.ke_cutoff = ke_cutoff
@@ -1331,8 +1348,11 @@ class Cell(mole.MoleBase):
         if symmorphic is not None:
             self.symmorphic = symmorphic
 
-        dump_input = dump_input and not self._built and self.verbose > logger.NOTE
-        mole.MoleBase.build(self, dump_input, parse_arg, *args, **kwargs)
+        if self.a is None:
+            raise RuntimeError('Lattice parameters not specified')
+
+        _built = self._built
+        mole.MoleBase.build(self, False, parse_arg, *args, **kwargs)
 
         exp_min = np.array([self.bas_exp(ib).min() for ib in range(self.nbas)])
         if self.exp_to_discard is None:
@@ -1409,11 +1429,6 @@ class Cell(mole.MoleBase):
                         '%d contracted functions', nprim_drop, nctr_drop)
             #logger.debug1(self, 'Old shells %s', steep_shls)
 
-        # The rest initialization requires lattice parameters.  If .a is not
-        # set, pass the rest initialization.
-        if self.a is None:
-            return self
-
         if self.rcut is None or self._rcut_from_build:
             self._rcut = estimate_rcut(self, self.precision)
             self._rcut_from_build = True
@@ -1449,7 +1464,8 @@ class Cell(mole.MoleBase):
             _check_mesh_symm = not self._mesh_from_build
             self.build_lattice_symmetry(check_mesh_symmetry=_check_mesh_symm)
 
-        if dump_input:
+        if dump_input and not _built and self.verbose > logger.NOTE:
+            self.dump_input()
             logger.info(self, 'lattice vectors  a1 [%.9f, %.9f, %.9f]', *_a[0])
             logger.info(self, '                 a2 [%.9f, %.9f, %.9f]', *_a[1])
             logger.info(self, '                 a3 [%.9f, %.9f, %.9f]', *_a[2])
@@ -1536,7 +1552,7 @@ class Cell(mole.MoleBase):
         rcut_guess = estimate_rcut(self, self.precision)
         if self.rcut > rcut_guess*1.5:
             msg = ('.nimgs is a deprecated attribute.  It is replaced by .rcut '
-                   'attribute for lattic sum cutoff radius.  The given nimgs '
+                   'attribute for lattice sum cutoff radius.  The given nimgs '
                    '%s is far over the estimated cutoff radius %s. ' %
                    (x, rcut_guess))
             warnings.warn(msg)
@@ -1742,12 +1758,14 @@ class Cell(mole.MoleBase):
         '''Return a Mole object using the same atoms and basis functions as
         the Cell object.
         '''
-        #FIXME: should cell be converted to mole object?  If cell is converted
-        # and a mole object is returned, many attributes (e.g. the GTH basis,
-        # gth-PP) will not be recognized by mole.build function.
         mol = self.view(mole.Mole)
-        delattr(mol, 'a')
-        delattr(mol, '_mesh')
+        del mol.a
+        mol.__dict__.pop('fractional', None)
+        mol.__dict__.pop('ke_cutoff', None)
+        mol.__dict__.pop('_mesh', None)
+        mol.__dict__.pop('_rcut', None)
+        mol.__dict__.pop('dimension', None)
+        mol.__dict__.pop('low_dim_ft_type', None)
         mol.enuc = None #reset nuclear energy
         if mol.symmetry:
             mol._build_symmetry()

@@ -287,7 +287,7 @@ def spin_square(mo, s=1):
     return ss, s*2+1
 
 def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
-            **kwargs):
+            origin=None, **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Dipole moment
     '''
@@ -301,7 +301,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         log.note('MO #%-3d energy= %-18.15g occ= %g', i+MO_BASE, mo_energy[i], c)
     ovlp_ao = mf.get_ovlp()
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    dip = mf.dip_moment(mf.mol, dm, verbose=log)
+    dip = mf.dip_moment(mf.mol, dm, origin=origin, verbose=log)
     if with_meta_lowdin:
         pop_and_chg = mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log)
     else:
@@ -316,7 +316,7 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     dmb = dm[nao:,nao:]
     if s is not None:
         assert (s.size == nao**2 or numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
-        s = s[:nao,:nao]
+        s = lib.asarray(s[:nao,:nao], order='C')
     return uhf.mulliken_pop(mol, (dma,dmb), s, verbose)
 
 def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG,
@@ -328,7 +328,7 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG,
     dmb = dm_ao[nao:,nao:]
     if s is not None:
         assert (s.size == nao**2 or numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
-        s = s[:nao,:nao]
+        s = lib.asarray(s[:nao,:nao], order='C')
     return uhf.mulliken_meta(mol, (dma,dmb), verbose, pre_orth_method, s)
 
 def det_ovlp(mo1, mo2, occ1, occ2, ovlp):
@@ -349,11 +349,11 @@ def det_ovlp(mo1, mo2, occ1, occ2, ovlp):
     x = numpy.dot(u/s, vt)
     return numpy.prod(s), x
 
-def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
+def dip_moment(mol, dm, unit_symbol='Debye', origin=None, verbose=logger.NOTE):
     nao = mol.nao_nr()
     dma = dm[:nao,:nao]
     dmb = dm[nao:,nao:]
-    return hf.dip_moment(mol, dma+dmb, unit_symbol, verbose)
+    return hf.dip_moment(mol, dma+dmb, unit=unit_symbol, verbose=verbose, origin=origin)
 
 canonicalize = hf.canonicalize
 
@@ -438,6 +438,12 @@ class GHF(hf.SCF):
 employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         return _from_rhf_init_dm(hf.init_guess_by_mod_huckel(mol))
 
+    @lib.with_doc(hf.SCF.init_guess_by_sap.__doc__)
+    def init_guess_by_sap(self, mol=None, **kwargs):
+        return _from_rhf_init_dm(
+            hf.SCF.init_guess_by_sap(self, mol, **kwargs)
+        )
+
     @lib.with_doc(hf.SCF.init_guess_by_chkfile.__doc__)
     def init_guess_by_chkfile(self, chkfile=None, project=None):
         if chkfile is None: chkfile = self.chkfile
@@ -504,10 +510,10 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
 
     @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, mol=None, dm=None, unit_symbol='Debye',
-                   verbose=logger.NOTE):
+                   origin=None, verbose=logger.NOTE):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        return dip_moment(mol, dm, unit_symbol, verbose=verbose)
+        return dip_moment(mol, dm, unit_symbol, origin=origin, verbose=verbose)
 
     def convert_from_(self, mf):
         '''Create GHF object based on the RHF/UHF object'''
@@ -515,9 +521,9 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         self.__dict__.update(tgt.__dict__)
         return self
 
-    def stability(self, internal=None, external=None, verbose=None, return_status=False):
+    def stability(self, internal=None, external=None, verbose=None, return_status=False, **kwargs):
         from pyscf.scf.stability import ghf_stability
-        return ghf_stability(self, verbose, return_status)
+        return ghf_stability(self, verbose, return_status, **kwargs)
 
     def nuc_grad_method(self):
         raise NotImplementedError
@@ -525,9 +531,15 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
     def x2c1e(self):
         '''X2C with spin-orbit coupling effects.
 
-        Note the difference to PySCF-1.7. In PySCF it calls spin-free X2C1E.
-        This result (mol.GHF().x2c() ) should equal to mol.X2C() although they
-        are solved in different AO basis (spherical GTO vs spinor GTO)
+        Starting from PySCF 2.1, this function (mol.GHF().x2c()) produces an X2C
+        calculation in spherical GTO bases. The results in theory are equivalent
+        to those obtained from the mol.X2C() method, which is computed in the
+        spinor GTO bases. This function called the spin-free X2C1E method in the
+        older versions.
+
+        Please note the difference from other SCF methods, such as RHF and UHF.
+        In those methods, the .x2c() method produces a scalar relativistic
+        calculation using the X2C Hamiltonian.
         '''
         from pyscf.x2c.x2c import x2c1e_ghf
         return x2c1e_ghf(self)

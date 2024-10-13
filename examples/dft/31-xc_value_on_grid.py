@@ -5,7 +5,7 @@ Evaluate the values of density, exchange-correlation functional and XC
 potential on given grid coordinates.
 '''
 
-import numpy
+import numpy as np
 from pyscf import gto, dft, lib
 from pyscf.dft import numint
 from pyscf.dft import r_numint
@@ -37,19 +37,19 @@ print(rho.shape)
 #
 ex, vx = dft.libxc.eval_xc('B88', rho)[:2]
 ec, vc = dft.libxc.eval_xc(',P86', rho)[:2]
-print('Exc = %.12f' % numpy.einsum('i,i,i->', ex+ec, rho[0], weights))
+print('Exc = %.12f' % np.einsum('i,i,i->', ex+ec, rho[0], weights))
 
 #
 # Evaluate XC functional together
 #
 exc, vxc = dft.libxc.eval_xc('B88,P86', rho)[:2]
-print('Exc = %.12f' % numpy.einsum('i,i,i->', exc, rho[0], weights))
+print('Exc = %.12f' % np.einsum('i,i,i->', exc, rho[0], weights))
 
 #
 # Evaluate XC functional for user specified functional
 #
 exc, vxc = dft.libxc.eval_xc('.2*HF + .08*SLATER + .72*B88, .81*LYP + .19*VWN', rho)[:2]
-print('Exc = %.12f  ref = -7.520014202688' % numpy.einsum('i,i,i->', exc, rho[0], weights))
+print('Exc = %.12f  ref = -7.520014202688' % np.einsum('i,i,i->', exc, rho[0], weights))
 
 #
 # For density matrix computed with GKS in spin-orbital basis, plain density in
@@ -77,8 +77,25 @@ coords = mf.grids.coords
 aoL_value = mol.eval_gto('GTOval_spinor', coords)
 # Small components
 aoS_value = 1/(2*lib.param.LIGHT_SPEED) * mol.eval_gto('GTOval_sp_spinor', coords)
-# mL, mS are the spin-magentic moment at each point
-rhoL, mL = r_numint.eval_rho(mol, aoL_value, dmLL)
-rhoS, mS = r_numint.eval_rho(mol, aoS_value, dmSS)
-rho = rhoL + rhoS
-mx, my, mz = mL + mS
+rho_m_L = r_numint.eval_rho(mol, aoL_value, dmLL)
+rho_m_S = r_numint.eval_rho(mol, aoS_value, dmSS)
+rho = rho_m_L[0] + rho_m_S[0]
+# mx, my, mz are the spin-magentic moment at each point
+mx, my, mz = rho_m_L[1:4] + rho_m_S[1:4]
+
+#
+# The values of exact exchange
+# Exx(r) = \sum_{ij} 2 (ij(r)|ji)
+#
+mf = mol.RHF().run()
+# Compute analytically v_ij(r') = \int \chi_i(r) \chi_j(r) / |r-r'| dr
+rpq = mol.intor('int1e_grids', grids=coords)
+ao = mol.eval_gto('GTOval', coords)
+nocc = np.count_nonzero(mf.mo_occ)
+occ_orb = mf.mo_coeff[:,:nocc]
+mo = ao.dot(occ_orb)
+exx = - np.einsum('rpq,ri,rj,pj,qi->r', rpq, mo, mo, occ_orb, occ_orb)
+print('Semi-numerical HFX:', exx.dot(weights))
+dm = mf.make_rdm1()
+vj, vk = mf.get_jk(dm)
+print('Analytical HFX:', -.25 * np.einsum('pq,qp->', vk, dm))

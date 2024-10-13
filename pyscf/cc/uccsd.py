@@ -398,7 +398,7 @@ def vector_to_amplitudes(vector, nmo, nocc):
     size = nov + nocc*(nocc-1)//2*nvir*(nvir-1)//2
     if vector.size == size:
         #return ccsd.vector_to_amplitudes_s4(vector, nmo, nocc)
-        raise RuntimeError('Input vector is GCCSD vecotr')
+        raise RuntimeError('Input vector is GCCSD vector')
     else:
         sizea = nocca * nvira + nocca*(nocca-1)//2*nvira*(nvira-1)//2
         sizeb = noccb * nvirb + noccb*(noccb-1)//2*nvirb*(nvirb-1)//2

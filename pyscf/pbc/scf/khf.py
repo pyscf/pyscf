@@ -35,7 +35,6 @@ from pyscf.pbc.scf import hf as pbchf
 from pyscf import lib
 from pyscf.scf import hf as mol_hf
 from pyscf.lib import logger
-from pyscf.pbc.gto import ecp
 from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile  # noqa
 from pyscf.pbc import tools
@@ -79,6 +78,7 @@ def get_hcore(mf, cell=None, kpts=None):
     else:
         nuc = lib.asarray(mf.with_df.get_nuc(kpts))
     if len(cell._ecpbas) > 0:
+        from pyscf.pbc.gto import ecp
         nuc += lib.asarray(ecp.ecp_int(cell, kpts))
     t = lib.asarray(cell.pbc_intor('int1e_kin', 1, 1, kpts))
     return nuc + t
@@ -278,31 +278,36 @@ def analyze(mf, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
         #return mf.mulliken_pop(mf.cell, dm, s=ovlp_ao, verbose=verbose)
 
 
-def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
+def _make_rdm1_meta(cell, dm_ao_kpts, kpts, pre_orth_method, s):
+    from pyscf.lo import orth
+    from pyscf.pbc.tools import k2gamma
+
+    kmesh = k2gamma.kpts_to_kmesh(cell, kpts-kpts[0])
+    nkpts, nao = dm_ao_kpts.shape[:2]
+    scell, phase = k2gamma.get_phase(cell, kpts, kmesh)
+    s_sc = k2gamma.to_supercell_ao_integrals(cell, kpts, s, kmesh=kmesh, force_real=False)
+    orth_coeff = orth.orth_ao(scell, 'meta_lowdin', pre_orth_method, s=s_sc)[:,:nao] # cell 0 only
+    c_inv = np.dot(orth_coeff.T.conj(), s_sc)
+    c_inv = lib.einsum('aRp,Rk->kap', c_inv.reshape(nao,nkpts,nao), phase)
+    dm = lib.einsum('kap,kpq,kbq->ab', c_inv, dm_ao_kpts, c_inv.conj())
+
+    return dm
+
+
+def mulliken_meta(cell, dm_ao_kpts, kpts, verbose=logger.DEBUG,
                   pre_orth_method=PRE_ORTH_METHOD, s=None):
     '''A modified Mulliken population analysis, based on meta-Lowdin AOs.
-
-    Note this function only computes the Mulliken population for the gamma
-    point density matrix.
+    The results are equivalent to the corresponding supercell calculation.
     '''
-    from pyscf.lo import orth
-    if s is None:
-        s = get_ovlp(cell)
     log = logger.new_logger(cell, verbose)
-    log.note('Analyze output for *gamma point*')
-    log.info('    To include the contributions from k-points, transform to a '
-             'supercell then run the population analysis on the supercell\n'
-             '        from pyscf.pbc.tools import k2gamma\n'
-             '        k2gamma.k2gamma(mf).mulliken_meta()')
-    log.note("KRHF mulliken_meta")
-    dm_ao_gamma = dm_ao_kpts[0,:,:].real
-    s_gamma = s[0,:,:].real
-    orth_coeff = orth.orth_ao(cell, 'meta_lowdin', pre_orth_method, s=s_gamma)
-    c_inv = np.dot(orth_coeff.T, s_gamma)
-    dm = reduce(np.dot, (c_inv, dm_ao_gamma, c_inv.T.conj()))
+
+    if s is None:
+        s = get_ovlp(None, cell=cell, kpts=kpts)
+
+    dm = _make_rdm1_meta(cell, dm_ao_kpts, kpts, pre_orth_method, s)
 
     log.note(' ** Mulliken pop on meta-lowdin orthogonal AOs **')
-    return mol_hf.mulliken_pop(cell, dm, np.eye(orth_coeff.shape[0]), log)
+    return mol_hf.mulliken_pop(cell, dm, np.eye(dm.shape[0]), log)
 
 
 def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
@@ -469,6 +474,33 @@ class KSCF(pbchf.SCF):
     def mo_occ_kpts(self):
         return self.mo_occ
 
+    def build(self, cell=None):
+        # To handle the attribute kpt or kpts loaded from chkfile
+        if 'kpts' in self.__dict__:
+            self.kpts = self.__dict__.pop('kpts')
+
+        # "vcut_ws" precomputing is triggered by pbc.tools.pbc.get_coulG
+        #if self.exxdiv == 'vcut_ws':
+        #    if self.exx_built is False:
+        #        self.precompute_exx()
+        #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
+
+        kpts = self.kpts
+        if self.rsjk:
+            if not np.all(self.rsjk.kpts == kpts):
+                self.rsjk = self.rsjk.__class__(cell, kpts)
+
+        # for GDF and MDF
+        with_df = self.with_df
+        if len(kpts) > 1 and getattr(with_df, '_j_only', False):
+            logger.warn(self, 'df.j_only cannot be used with k-point HF')
+            with_df._j_only = False
+            with_df.reset()
+
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        return self
+
     def dump_flags(self, verbose=None):
         mol_hf.SCF.dump_flags(self, verbose)
         logger.info(self, '\n')
@@ -611,9 +643,21 @@ class KSCF(pbchf.SCF):
     def from_chk(self, chk=None, project=None, kpts=None):
         return self.init_guess_by_chkfile(chk, project, kpts)
 
-    def dump_chk(self, envs):
-        if self.chkfile:
-            mol_hf.SCF.dump_chk(self, envs)
+    def dump_chk(self, envs_or_file):
+        '''Serialize the SCF object and save it to the specified chkfile.
+
+        Args:
+            envs_or_file:
+                If this argument is a file path, the serialized SCF object is
+                saved to the file specified by this argument.
+                If this attribute is a dict (created by locals()), the necessary
+                variables are saved to the file specified by the attribute mf.chkfile.
+        '''
+        mol_hf.SCF.dump_chk(self, envs_or_file)
+        if isinstance(envs_or_file, str):
+            with lib.H5FileWrap(envs_or_file, 'a') as fh5:
+                fh5['scf/kpts'] = self.kpts
+        elif self.chkfile:
             with lib.H5FileWrap(self.chkfile, 'a') as fh5:
                 fh5['scf/kpts'] = self.kpts
         return self
@@ -621,7 +665,7 @@ class KSCF(pbchf.SCF):
     def analyze(mf, verbose=None, with_meta_lowdin=WITH_META_LOWDIN, **kwargs):
         raise NotImplementedError
 
-    def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,
+    def mulliken_meta(self, cell=None, dm=None, kpts=None, verbose=logger.DEBUG,
                       pre_orth_method=PRE_ORTH_METHOD, s=None):
         raise NotImplementedError
 
@@ -726,12 +770,13 @@ class KRHF(KSCF):
         return dm_kpts
 
     @lib.with_doc(mulliken_meta.__doc__)
-    def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,
+    def mulliken_meta(self, cell=None, dm=None, kpts=None, verbose=logger.DEBUG,
                       pre_orth_method=PRE_ORTH_METHOD, s=None):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
+        if kpts is None: kpts = self.kpts
         if s is None: s = self.get_ovlp(cell)
-        return mulliken_meta(cell, dm, s=s, verbose=verbose,
+        return mulliken_meta(cell, dm, kpts, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
     def nuc_grad_method(self):

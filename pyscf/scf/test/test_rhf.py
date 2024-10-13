@@ -256,6 +256,22 @@ class KnownValues(unittest.TestCase):
         dm = scf.ROHF(mol).init_guess_by_mod_huckel()
         self.assertAlmostEqual(lib.fp(dm[0]), 3.233072986208057/2, 5)
 
+    def test_init_guess_sap(self):
+        mol = gto.M(
+            verbose = 7,
+            output = '/dev/null',
+            atom = '''
+        O     0    0        0
+        H1    0    -0.757   0.587
+        H2    0    0.757    0.587''',
+            basis = 'ccpvdz',
+        )
+        dm = scf.hf.RHF(mol).get_init_guess(mol, key='sap')
+        self.assertAlmostEqual(lib.fp(dm), 4.2267871571567195, 5)
+
+        dm = scf.ROHF(mol).get_init_guess(mol, key='sap')
+        self.assertAlmostEqual(lib.fp(dm[0]), 4.2267871571567195/2, 7)
+
     def test_1e(self):
         mf = scf.rohf.HF1e(mol)
         self.assertAlmostEqual(mf.scf(), -23.867818585778764, 9)
@@ -355,7 +371,7 @@ class KnownValues(unittest.TestCase):
     def test_scf(self):
         self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
 
-    @unittest.skipIf('dftd3' not in sys.modules, "requires the dftd3 library")
+    @unittest.skipIf('dispersion' not in sys.modules, "requires the dftd3 library")
     def test_scf_d3(self):
         mf = scf.RHF(mol)
         mf.disp = 'd3bj'
@@ -364,7 +380,7 @@ class KnownValues(unittest.TestCase):
         e_tot = mf.kernel()
         self.assertAlmostEqual(e_tot, -76.03127458778653, 9)
 
-    @unittest.skipIf('dftd4' not in sys.modules, "requires the dftd4 library")
+    @unittest.skipIf('dispersion' not in sys.modules, "requires the dftd4 library")
     def test_scf_d4(self):
         mf = scf.RHF(mol)
         mf.disp = 'd4'
@@ -669,10 +685,25 @@ H     0    0.757    0.587'''
         dip = mf.dip_moment(unit='au')
         self.assertTrue(numpy.allclose(dip, [0.00000, 0.00000, 0.80985]))
 
+    def test_rhf_quad_moment(self):
+        quad = n2mf.quad_moment(unit='au')
+        answer = numpy.array([[ 0.65040837,  0.        ,  0.        ],
+                              [ 0.        ,  0.65040837,  0.        ],
+                              [ 0.        ,  0.        , -1.30081674]])
+        self.assertTrue(numpy.allclose(quad, answer))
+
     def test_rohf_dip_moment(self):
         mf = scf.ROHF(mol).run()
         dip = mf.dip_moment(unit='au')
         self.assertTrue(numpy.allclose(dip, [0.00000, 0.00000, 0.80985]))
+
+    def test_rohf_quad_moment(self):
+        mf = scf.ROHF(n2sym).run()
+        quad = mf.quad_moment(unit='au')
+        answer = numpy.array([[ 0.65040837,  0.        ,  0.        ],
+                              [ 0.        ,  0.65040837,  0.        ],
+                              [ 0.        ,  0.        , -1.30081674]])
+        self.assertTrue(numpy.allclose(quad, answer))
 
     def test_get_wfnsym(self):
         self.assertEqual(n2mf.wfnsym, 0)

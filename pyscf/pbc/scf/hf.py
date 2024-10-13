@@ -35,7 +35,6 @@ from pyscf.lib import logger
 from pyscf.data import nist
 from pyscf.pbc import gto
 from pyscf.pbc import tools
-from pyscf.pbc.gto import ecp
 from pyscf.pbc.gto.pseudo import get_pp
 from pyscf.pbc.scf import addons
 from pyscf.pbc import df
@@ -83,6 +82,7 @@ def get_hcore(cell, kpt=np.zeros(3)):
     else:
         hcore += get_nuc(cell, kpt)
     if len(cell._ecpbas) > 0:
+        from pyscf.pbc.gto import ecp
         hcore += ecp.ecp_int(cell, kpt)
     return hcore
 
@@ -246,7 +246,7 @@ def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
     # With the optimal origin of the unti cell, the net dipole in the unit
     # cell should be strictly zero. However, the integral grids are often not
     # enough to produce the zero dipole. Errors are caused by the sub-optimal
-    # origin and the numerial integration.
+    # origin and the numerical integration.
     if origin is None:
         origin = _search_dipole_gauge_origin(cell, grids, rho, log)
 
@@ -552,28 +552,12 @@ class SCF(mol_hf.SCF):
 
     def build(self, cell=None):
         # To handle the attribute kpt or kpts loaded from chkfile
-        if 'kpts' in self.__dict__:
-            self.kpts = self.__dict__.pop('kpts')
-        elif 'kpt' in self.__dict__:
+        if 'kpt' in self.__dict__:
             self.kpt = self.__dict__.pop('kpt')
 
-        # "vcut_ws" precomputing is triggered by pbc.tools.pbc.get_coulG
-        #if self.exxdiv == 'vcut_ws':
-        #    if self.exx_built is False:
-        #        self.precompute_exx()
-        #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
-
-        kpts = self.kpts
         if self.rsjk:
             if not np.all(self.rsjk.kpts == self.kpt):
-                self.rsjk = self.rsjk.__class__(cell, kpts)
-
-        # for GDF and MDF
-        with_df = self.with_df
-        if len(kpts) > 1 and getattr(with_df, '_j_only', False):
-            logger.warn(self, 'df.j_only cannot be used with k-point HF')
-            with_df._j_only = False
-            with_df.reset()
+                self.rsjk = self.rsjk.__class__(cell, self.kpt)
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -638,6 +622,7 @@ class SCF(mol_hf.SCF):
         else:
             nuc = self.with_df.get_nuc(kpt)
         if len(cell._ecpbas) > 0:
+            from pyscf.pbc.gto import ecp
             nuc += ecp.ecp_int(cell, kpt)
         return nuc + cell.pbc_intor('int1e_kin', 1, 1, kpt)
 
@@ -680,7 +665,7 @@ class SCF(mol_hf.SCF):
 
             if with_k and self.exxdiv == 'ewald':
                 from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
-                # G=0 is not inculded in the ._eri integrals
+                # G=0 is not included in the ._eri integrals
                 _ewald_exxdiv_for_G0(self.cell, kpt, dm.reshape(-1,nao,nao),
                                      vk.reshape(-1,nao,nao))
         elif self.rsjk:
@@ -786,9 +771,21 @@ class SCF(mol_hf.SCF):
     def from_chk(self, chk=None, project=None, kpt=None):
         return self.init_guess_by_chkfile(chk, project, kpt)
 
-    def dump_chk(self, envs):
-        if self.chkfile:
-            mol_hf.SCF.dump_chk(self, envs)
+    def dump_chk(self, envs_or_file):
+        '''Serialize the SCF object and save it to the specified chkfile.
+
+        Args:
+            envs_or_file:
+                If this argument is a file path, the serialized SCF object is
+                saved to the file specified by this argument.
+                If this attribute is a dict (created by locals()), the necessary
+                variables are saved to the file specified by the attribute mf.chkfile.
+        '''
+        mol_hf.SCF.dump_chk(self, envs_or_file)
+        if isinstance(envs_or_file, str):
+            with lib.H5FileWrap(envs_or_file, 'a') as fh5:
+                fh5['scf/kpt'] = self.kpt
+        elif self.chkfile:
             with lib.H5FileWrap(self.chkfile, 'a') as fh5:
                 fh5['scf/kpt'] = self.kpt
         return self

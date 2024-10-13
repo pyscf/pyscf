@@ -19,7 +19,7 @@
 '''
 ddCOSMO TDA, TDHF, TDDFT gradients
 
-The implementaitons are based on modules
+The implementations are based on modules
 pyscf.grad.tdrhf
 pyscf.grad.tdrks
 pyscf.grad.tduhf

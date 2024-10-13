@@ -42,6 +42,10 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
     def test_gen_grid(self):
         grid = gen_grid.Grids(h2o)
         grid.prune = None
@@ -168,6 +172,36 @@ class KnownValues(unittest.TestCase):
         ref = numpy.hstack(idx)
         idx = gen_grid.arg_group_grids(mol, coords)
         self.assertTrue(abs(ref - idx).max() == 0)
+
+class TreutlerAhlrichsGrids(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = True
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
+    def test_gen_grid(self):
+        grid = gen_grid.Grids(h2o)
+        grid.prune = None
+        grid.radi_method = radi.treutler_ahlrichs
+        grid.alignment = 0
+        grid.atom_grid = {"H": (10, 50), "O": (10, 50),}
+        grid.build(with_non0tab=False)
+        self.assertAlmostEqual(lib.fp(grid.coords), 90.68472244567415, 9)
+        self.assertAlmostEqual(lib.fp(grid.weights), -72.48186431034912, 9)
+
+    def test_prune(self):
+        grid = gen_grid.Grids(h2o)
+        grid.radi_method = radi.treutler_ahlrichs
+        grid.prune = gen_grid.sg1_prune
+        grid.atom_grid = {"H": (10, 50), "O": (10, 50),}
+        grid.alignment = 0
+        grid.build(with_non0tab=False)
+        self.assertAlmostEqual(lib.fp(grid.coords), -64.2641450749045, 9)
+        self.assertAlmostEqual(lib.fp(grid.weights), -26.8795084011127, 9)
 
 
 if __name__ == "__main__":

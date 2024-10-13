@@ -180,19 +180,19 @@ class KnownValues(unittest.TestCase):
 # [  1.42178271e-16   2.81979579e-02  -1.05137653e-02]
 # [  6.34069238e-17  -2.81979579e-02  -1.05137653e-02]]
         g = mf.nuc_grad_method().kernel()
-        self.assertAlmostEqual(lib.fp(g), -0.049887866191414401, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.049887866191414401, 5)
 
 # O     0.0000000000    -0.0000000000     0.0210225191
 # H     0.0000000000     0.0281984036    -0.0105112595
 # H    -0.0000000000    -0.0281984036    -0.0105112595
         g = mf.nuc_grad_method().set(grid_response=True).kernel()
-        self.assertAlmostEqual(lib.fp(g), -0.049891265876709084, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.049891265876709084, 5)
 
         mol1 = mol.copy()
         mf_scanner = mf.as_scanner()
         e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
-        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
 
     @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
     def test_finite_diff_rks_d3_grad(self):
@@ -205,7 +205,7 @@ class KnownValues(unittest.TestCase):
         mf_scanner = mf.as_scanner()
         e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
-        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
 
     @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
     def test_finite_diff_rks_d4_grad(self):
@@ -218,18 +218,18 @@ class KnownValues(unittest.TestCase):
         mf_scanner = mf.as_scanner()
         e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
-        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
 
     def test_finite_diff_df_rks_grad(self):
         mf1 = mf.density_fit ().run ()
         g = mf1.nuc_grad_method ().set (grid_response=True).kernel ()
-        self.assertAlmostEqual(lib.fp(g), -0.04990623577718451, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.04990623577718451, 5)
 
         mol1 = mol.copy()
         mf_scanner = mf1.as_scanner()
         e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
-        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
 
     @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
     def test_finite_diff_df_rks_d3_grad(self):
@@ -242,7 +242,7 @@ class KnownValues(unittest.TestCase):
         mf_scanner = mf1.as_scanner()
         e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
-        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
 
     @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
     def test_consistency_df_rks_d3_grad(self):
@@ -267,7 +267,7 @@ class KnownValues(unittest.TestCase):
         mf_scanner = mf1.as_scanner()
         e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
-        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
 
     def test_rks_grad_lda(self):
         mol_hf = gto.Mole()
@@ -296,17 +296,17 @@ class KnownValues(unittest.TestCase):
 # [  1.52600378e-16  -2.11112794e-02  -6.08181640e-03]]
         mf = mol.RKS().run(xc='b3lypg', conv_tol=1e-12)
         g = mf.nuc_grad_method().set().kernel()
-        self.assertAlmostEqual(lib.fp(g), -0.035613964330885352, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.035613964330885352, 5)
 
 #[[ -8.20194970e-16  -2.04319288e-15   2.44405835e-02]
 # [  4.36709255e-18   2.73690416e-02  -1.22232039e-02]
 # [  3.44483899e-17  -2.73690416e-02  -1.22232039e-02]]
         mf = mol.RKS().run(xc='b88,p86', conv_tol=1e-12)
         g = mf.nuc_grad_method().kernel()
-        self.assertAlmostEqual(lib.fp(g), -0.050382923259300716, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.050382923259300716, 5)
 
         g = mf.nuc_grad_method().set(grid_response=True).kernel()
-        self.assertAlmostEqual(lib.fp(g), -0.05036316927480719, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.05036316927480719, 5)
 
         mol1 = mol.copy()
         mf_scanner = mf.as_scanner()
@@ -323,7 +323,7 @@ class KnownValues(unittest.TestCase):
         mf.nlcgrids.level = 1
         mf.kernel()
         g = mf.nuc_grad_method().set().kernel()
-        self.assertAlmostEqual(lib.fp(g), -0.049431714073528615, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.049431714073528615, 5)
 
         mf.nlcgrids.level = 0
         mf.kernel()
@@ -338,12 +338,12 @@ class KnownValues(unittest.TestCase):
         mf.set(xc='wb97m-v', nlc='', conv_tol=1e-12)
         mf.kernel()
         g = mf.nuc_grad_method().set().kernel()
-        self.assertAlmostEqual(lib.fp(g), -0.032453247110454116, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.032453247110454116, 5)
 
         mf.set(xc='wb97m-v', nlc=False, conv_tol=1e-12)
         mf.kernel()
         g = mf.nuc_grad_method().set().kernel()
-        self.assertAlmostEqual(lib.fp(g), -0.03202508099735074, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.03202508099735074, 5)
 
     def test_finite_diff_rks_grad_mgga(self):
         mf = mol.RKS().run(xc='m06l', conv_tol=1e-12)

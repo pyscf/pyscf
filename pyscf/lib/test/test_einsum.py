@@ -223,7 +223,7 @@ class KnownValues(unittest.TestCase):
             b = numpy.random.random((4,9,6))
 
             c1 = numpy.ones((9,5), dtype=numpy.complex128)
-            c0 = tblis_einsum._contract('ijk,jlk->li', a, b, out=c1, alpha=.5j, beta=.2)
+            c0 = tblis_einsum.contract('ijk,jlk->li', a, b, out=c1, alpha=.5j, beta=.2)
             c1 = numpy.ones((9,5), dtype=numpy.complex128)
             c1 = c1*.2 + numpy.einsum('ijk,jlk->li', a, b)*.5j
             self.assertTrue(abs(c0-c1).max() < 1e-13)

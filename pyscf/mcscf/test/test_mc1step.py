@@ -28,7 +28,7 @@ def setUpModule():
     global mol, molsym, m, msym, mc0
     b = 1.4
     mol = gto.M(
-    verbose = 5,
+    verbose = 0,
     output = '/dev/null',
     atom = [
         ['N',(  0.000000,  0.000000, -b/2)],
@@ -42,7 +42,7 @@ def setUpModule():
     mc0 = mcscf.CASSCF(m, 4, 4).run()
 
     molsym = gto.M(
-    verbose = 5,
+    verbose = 0,
     output = '/dev/null',
     atom = [
         ['N',(  0.000000,  0.000000, -b/2)],
@@ -86,7 +86,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mc1.e_tot, -109.02535605303684, 7)
 
     def test_0core_0virtual(self):
-        mol = gto.M(atom='He', basis='321g')
+        mol = gto.M(atom='He', basis='321g', verbose=0)
         mf = scf.RHF(mol).run()
         mc1 = mcscf.CASSCF(mf, 2, 2).run()
         self.assertAlmostEqual(mc1.e_tot, -2.850576699649737, 9)
@@ -316,14 +316,14 @@ class KnownValues(unittest.TestCase):
         mc.analyze()
         mo_coeff, civec, mo_occ = mc.cas_natorb(sort=True)
 
-        mc.kernel(mo_coeff=mo_coeff)
+        mc.kernel(mo_coeff=mo_coeff, ci0=civec)
         self.assertAlmostEqual(mc.e_states[0], -108.7506795311190, 5)
         self.assertAlmostEqual(mc.e_states[1], -108.8582272809495, 5)
         self.assertAlmostEqual(abs((civec[0]*mc.ci[0]).sum()), 1, 7)
         self.assertAlmostEqual(abs((civec[1]*mc.ci[1]).sum()), 1, 7)
 
     def test_small_system(self):
-        mol = gto.M(atom='H 0 0 0; H 0 0 .74', symmetry=True, basis='6-31g')
+        mol = gto.M(atom='H 0 0 0; H 0 0 .74', symmetry=True, basis='6-31g', verbose=0)
         mf = scf.RHF(mol).run()
         mc = mcscf.CASSCF(mf, 2, 2)
         mc.max_cycle = 5

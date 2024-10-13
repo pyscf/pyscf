@@ -47,7 +47,7 @@ There are some parameters to control the CASSCF/CASCI method.
     nelecas : tuple of int
         Active (nelec_alpha, nelec_beta)
     ncore : int or tuple of int
-        Core electron number.  In UHF-CASSCF, it's a tuple to indicate the different core eletron numbers.
+        Core electron number.  In UHF-CASSCF, it's a tuple to indicate the different core electron numbers.
     natorb : bool
         Whether to restore the natural orbital during CASSCF optimization. Default is not.
     canonicalization : bool
@@ -86,7 +86,7 @@ The Following attributes are used for CASSCF
         The step size for orbital rotation.  Small step size is prefered.
         Default is 0.02.  
         (NOTE although the default step size is small enough for many systems,
-        it happens that the orbital optimizor crosses the barriar of local
+        it happens that the orbital optimizor crosses the barrier of local
         minimum and converge to the neighbour solution, e.g. the CAS(4,4) for
         C2H4 in the test files.  In these systems, adjusting max_stepsize,
         max_ci_stepsize and max_cycle_micro and ah_start_tol may be helpful)

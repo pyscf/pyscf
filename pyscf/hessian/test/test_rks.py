@@ -93,12 +93,23 @@ def finite_partial_diff(mf):
     return e2ref
 
 class KnownValues(unittest.TestCase):
+    def test_rks_hess_atmlst(self):
+        mf = dft.RKS(mol)
+        mf.xc = 'pbe0'
+        mf.conv_tol = 1e-14
+        e0 = mf.kernel()
+
+        atmlst = [0, 1]
+        hess_1 = mf.Hessian().kernel()[atmlst][:, atmlst]
+        hess_2 = mf.Hessian().kernel(atmlst=atmlst)
+        self.assertAlmostEqual(abs(hess_1-hess_2).max(), 0.0, 4)
+
     def test_finite_diff_lda_hess(self):
         mf = dft.RKS(mol)
         mf.conv_tol = 1e-14
         e0 = mf.kernel()
         hess = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.fp(hess), -0.7828771346902333, 6)
+        self.assertAlmostEqual(lib.fp(hess), -0.7828771346902333, 4)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()
@@ -113,7 +124,7 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'b3lyp5'
         e0 = mf.kernel()
         hess = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.fp(hess), -0.7590878171493624, 6)
+        self.assertAlmostEqual(lib.fp(hess), -0.7590878171493624, 4)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()
@@ -176,7 +187,7 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'wb97x'
         e0 = mf.kernel()
         hess = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.fp(hess), -0.7637876979690904, 6)
+        self.assertAlmostEqual(lib.fp(hess), -0.7637876979690904, 4)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()

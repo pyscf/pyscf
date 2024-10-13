@@ -88,7 +88,7 @@ void GTOr4c_drv(int (*intor)(), void (*fill)(), int (*prescreen)(),
         int ish, jsh, ij;
         double *buf = malloc(sizeof(double) * cache_size);
         if (buf == NULL) {
-                fprintf(stderr, "malloc(%zu) falied in GTOr4c_drv\n",
+                fprintf(stderr, "malloc(%zu) failed in GTOr4c_drv\n",
                         sizeof(double) * cache_size);
                 exit(1);
         }

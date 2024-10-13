@@ -30,7 +30,7 @@ KPT_DIFF_TOL = getattr(__config__, 'pbc_lib_kpts_helper_kpt_diff_tol', 1e-6)
 
 def is_zero(kpt):
     return abs(np.asarray(kpt)).sum() < KPT_DIFF_TOL
-gamma_point = is_zero
+is_gamma_point = gamma_point = is_zero
 
 def round_to_fbz(kpts, wrap_around=False, tol=KPT_DIFF_TOL):
     '''
@@ -91,6 +91,7 @@ def unique(kpts):
             kpts.round(digits), return_index=True, return_inverse=True, axis=0)[1:3]
         idx = uniq_index.argsort()
         rank = idx.argsort()
+        uniq_inverse = uniq_inverse.ravel()
         return kpts[uniq_index[idx]], uniq_index[idx], rank[uniq_inverse]
     except TypeError:
         # Old numpy does not support unique of 2D array
@@ -261,7 +262,7 @@ def get_kconserv(cell, kpts):
     r'''Get the momentum conservation array for a set of k-points.
 
     Given k-point indices (k, l, m) the array kconserv[k,l,m] returns
-    the index n that satifies momentum conservation,
+    the index n that satisfies momentum conservation,
 
         (k(k) - k(l) + k(m) - k(n)) \dot a = 2n\pi
 
@@ -287,7 +288,7 @@ def get_kconserv_ria(cell, kpts):
     for a set of k-points with appropriate k-shift.
 
     Given k-point indices m the array kconserv[kshift,m] returns the index n that
-    satifies a shifted momentum conservation,
+    satisfies a shifted momentum conservation,
 
         (k(m) - k(n) - k(kshift)) \dot a = 2n\pi
 

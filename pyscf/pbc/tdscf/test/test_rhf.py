@@ -46,6 +46,7 @@ class Diamond(unittest.TestCase):
 
         cls.nstates = 5 # make sure first `nstates_test` states are converged
         cls.nstates_test = 2
+
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
@@ -54,6 +55,7 @@ class Diamond(unittest.TestCase):
     def kernel(self, TD, ref, **kwargs):
         td = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
         self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 4)
+        return td
 
     def test_tda_singlet(self):
         ref = [9.6425852906, 9.6425852906]
@@ -65,7 +67,15 @@ class Diamond(unittest.TestCase):
 
     def test_tdhf_singlet(self):
         ref = [9.2573219105, 9.2573219106]
-        self.kernel('TDHF', ref)
+        td = self.kernel('TDHF', ref)
+        a, b = td.get_ab()
+        no, nv = a.shape[:2]
+        a = a.reshape(no*nv,-1)
+        b = b.reshape(no*nv,-1)
+        h = np.block([[a, b], [-b.conj(), -a.conj()]])
+        eref = np.sort(np.linalg.eigvals(h).real)
+        eref = eref[eref > 1e-3]
+        self.assertAlmostEqual(abs(td.e[:2] - eref[:2]).max(), 0, 5)
 
     def test_tdhf_triplet(self):
         ref = [3.0396052214, 3.0396052214]
@@ -98,6 +108,7 @@ class DiamondShifted(unittest.TestCase):
 
         cls.nstates = 5 # make sure first `nstates_test` states are converged
         cls.nstates_test = 2
+
     @classmethod
     def tearDownClass(cls):
         cls.cell.stdout.close()
@@ -106,6 +117,7 @@ class DiamondShifted(unittest.TestCase):
     def kernel(self, TD, ref, **kwargs):
         td = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
         self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 4)
+        return td
 
     def test_tda_singlet(self):
         ref = [12.7166510188, 13.5460934688]
@@ -117,7 +129,15 @@ class DiamondShifted(unittest.TestCase):
 
     def test_tdhf_singlet(self):
         ref = [12.6104811733, 13.4160717812]
-        self.kernel('TDHF', ref)
+        td = self.kernel('TDHF', ref)
+        a, b = td.get_ab()
+        no, nv = a.shape[:2]
+        a = a.reshape(no*nv,-1)
+        b = b.reshape(no*nv,-1)
+        h = np.block([[a, b], [-b.conj(), -a.conj()]])
+        eref = np.sort(np.linalg.eigvals(h).real)
+        eref = eref[eref > 1e-3]
+        self.assertAlmostEqual(abs(td.e[:2] - eref[:2]).max(), 0, 5)
 
     def test_tdhf_triplet(self):
         ref = [3.8940277713, 7.9448161493]

@@ -84,7 +84,7 @@ def _parse(plines):
             for h in plines.pop(0).split():
                 hproj_p_ij.append(float(h))
         hproj_p = np.zeros((nproj[-1],nproj[-1]))
-        hproj_p[np.triu_indices(nproj[-1])] = [ h for h in hproj_p_ij ]
+        hproj_p[np.triu_indices(nproj[-1])] = list(hproj_p_ij)
         hproj_p_symm = hproj_p + hproj_p.T - np.diag(hproj_p.diagonal())
         hproj.append(hproj_p_symm.tolist())
 

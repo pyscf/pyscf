@@ -36,7 +36,7 @@ myhf.kernel()
 myhf.analyze()
 
 mymc = myhf.CASSCF(14, 2)
-# Put 3d, 4d, 4s, 4p orbtials in active space
+# Put 3d, 4d, 4s, 4p orbitals in active space
 cas_space_symmetry = {'s+0': 1,  # 4s
                       'd-2':2, 'd-1':2, 'd+0':2, 'd+1':2, 'd+2':2,  # 3d and 4d
                       'p-1':1, 'p+0':1, 'p+1':1,  # 4p
@@ -62,7 +62,7 @@ myhf = mol.RHF()
 myhf.kernel()
 myhf.analyze()
 mymc = myhf.CASSCF(14, 2)
-# Put 3d, 4d, 4s, 4p orbtials in active space
+# Put 3d, 4d, 4s, 4p orbitals in active space
 cas_space_symmetry = {'A1g': 3,  # 4s, 3d(z^2), 4d(z^2)
                       'E2gx':2, 'E2gy':2, 'E1gx':2, 'E1gy':2,  # 3d and 4d
                       'A1u':1, 'E1ux':1, 'E1uy':1,  # 4p

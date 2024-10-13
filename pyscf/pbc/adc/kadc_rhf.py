@@ -44,7 +44,7 @@ from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 import h5py
 import tempfile
 
-# Note : All interals are in Chemist's notation except for vvvv
+# Note : All integrals are in Chemist's notation except for vvvv
 #        Eg.of momentum conservation :
 #        Chemist's  oovv(ijab) : ki - kj + ka - kb
 #        Amplitudes t2(ijab)  : ki + kj - ka - kba

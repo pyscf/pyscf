@@ -242,10 +242,10 @@ def _get_epq(pindices,qindices,fac=[1.0,1.0],large_num=LARGE_DENOM):
 
     Args:
         pindices (5-list of object):
-            A list of p0, p1, kp, orbital values, and non-zero indicess for the first
+            A list of p0, p1, kp, orbital values, and non-zero indices for the first
             denominator indices.
         qindices (5-list of object):
-            A list of q0, q1, kq, orbital values, and non-zero indicess for the second
+            A list of q0, q1, kq, orbital values, and non-zero indices for the second
             denominator element.
         fac (3-list of float):
             Factors to multiply the first and second denominator elements.
@@ -255,7 +255,7 @@ def _get_epq(pindices,qindices,fac=[1.0,1.0],large_num=LARGE_DENOM):
     def get_idx(x0,x1,kx,n0_p):
         return np.logical_and(n0_p[kx] >= x0, n0_p[kx] < x1)
 
-    assert (all([len(x) == 5 for x in [pindices,qindices]]))
+    assert (all(len(x) == 5 for x in [pindices,qindices]))
     p0,p1,kp,mo_e_p,nonzero_p = pindices
     q0,q1,kq,mo_e_q,nonzero_q = qindices
     fac_p, fac_q = fac

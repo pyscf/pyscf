@@ -114,6 +114,20 @@ class KnownValues(unittest.TestCase):
         #rcut = max([cell.bas_rcut(ib, 1e-9) for ib in range(cell.nbas)])
         #self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1499, 3))
 
+    def test_fractional_coordinates(self):
+        cell = pgto.M(atom = '''
+        C 0 0 0
+        C .25 .25 .25''',
+        unit='B', basis = 'gth-dzvp', pseudo = 'gth-pade',
+        fractional=True,
+        a = '''
+        0.000000000  3.370137329  3.370137329
+        3.370137329  0.000000000  3.370137329
+        3.370137329  3.370137329  0.000000000''')
+        #[[0.         0.         0.        ]
+        #  [1.68506866 1.68506866 1.68506866]]
+        self.assertAlmostEqual(lib.fp(cell.atom_coords()), -2.2916494573514545, 14)
+
     def test_ewald(self):
         cell = pgto.Cell()
         cell.unit = 'B'
@@ -177,7 +191,8 @@ class KnownValues(unittest.TestCase):
         cell.atom = 'He 0 0 0; He 0 1 1'
         cell.unit = 'B'
         cell.mesh = [9,9,60]
-        cell.verbose = 0
+        cell.verbose = 5
+        cell.output = '/dev/null'
         cell.dimension = 2
         cell.low_dim_ft_type = 'inf_vacuum'
         cell.rcut = 3.6
@@ -191,7 +206,8 @@ class KnownValues(unittest.TestCase):
         cell.atom = 'He 0 0 0; He 0 1 1'
         cell.unit = 'B'
         cell.mesh = [9,60,60]
-        cell.verbose = 0
+        cell.verbose = 5
+        cell.output = '/dev/null'
         cell.dimension = 1
         cell.low_dim_ft_type = 'inf_vacuum'
         cell.rcut = 3.6
@@ -204,7 +220,8 @@ class KnownValues(unittest.TestCase):
         cell.atom = 'He 0 0 0; He 0 1 1'
         cell.unit = 'B'
         cell.mesh = [60] * 3
-        cell.verbose = 0
+        cell.verbose = 5
+        cell.output = '/dev/null'
         cell.dimension = 0
         cell.low_dim_ft_type = 'inf_vacuum'
         cell.build()
@@ -217,7 +234,8 @@ class KnownValues(unittest.TestCase):
         cell.atom = 'He 0 0 0; He 0 1 1'
         cell.unit = 'B'
         cell.mesh = [9,9,60]
-        cell.verbose = 0
+        cell.verbose = 5
+        cell.output = '/dev/null'
         cell.dimension = 2
         cell.rcut = 3.6
         cell.build()
@@ -326,6 +344,24 @@ class KnownValues(unittest.TestCase):
         v0 = mol.intor('ECPscalar_sph')
         self.assertAlmostEqual(abs(v0 - v1).max(), 0, 5)
         self.assertAlmostEqual(lib.fp(v1), -1.225444628445373, 8)
+
+        cell = pgto.M(a = '''0     2.445 2.445
+                     2.445 0     2.445
+                     2.445 2.445 0 ''',
+                     atom = 'U 0.0 0.0 0.0',
+                     basis = [[0, [.3, 1]], [2, [.2, 1]]],
+                     ecp = {'U': '''U nelec 60
+                            U S
+                            2   16.414038690   536.516627780
+                            U P
+                            2   9.060556060   169.544924650
+                            '''},
+                     precision = 1e-7,
+        )
+        nk = [4] * 3
+        kpts = cell.make_kpts(nk)
+        h1 = ecp.ecp_int(cell, kpts)
+        self.assertAlmostEqual(lib.fp(h1), 4.160881841456467, 7)
 
     def test_ecp_keyword_in_pseudo(self):
         cell = pgto.M(

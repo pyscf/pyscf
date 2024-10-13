@@ -16,13 +16,14 @@
 #
 
 import unittest
+import itertools
 import tempfile
-import numpy
+import numpy as np
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
 from pyscf import df
-
+from pyscf.gto.basis import bse
 
 class KnownValues(unittest.TestCase):
     def test_aug_etb(self):
@@ -33,7 +34,20 @@ class KnownValues(unittest.TestCase):
                       1     0    0.757    0.587''',
             basis = 'cc-pvdz',
         )
-        df.addons.aug_etb(mol)
+        auxbasis = df.addons.aug_etb(mol)
+        if df.addons.USE_VERSION_26_AUXBASIS:
+            self.assertEqual(len(auxbasis['O']), 36)
+            self.assertEqual(len(auxbasis['H']), 12)
+        else:
+            self.assertEqual(len(auxbasis['O']), 42)
+            self.assertEqual(len(auxbasis['H']), 13)
+
+        auxbasis = df.addons.autoaux(mol)
+        self.assertEqual(len(auxbasis['O']), 37)
+        # If basis-set-exchange pacakge is installed, this test will fail.
+        # bse-0.9 produces 13 shells due to round-off errors.
+        # The correct number of generated basis functions should be 12. 
+        self.assertEqual(len(auxbasis['H']), 12)
 
         mol = gto.M(
             verbose = 0,
@@ -43,8 +57,16 @@ class KnownValues(unittest.TestCase):
             basis = ('cc-pvdz', [[4, (1., 1.)]])
         )
         auxbasis = df.addons.aug_etb(mol)
-        self.assertEqual(len(auxbasis['O']), 36)
-        self.assertEqual(len(auxbasis['H']), 12)
+        if df.addons.USE_VERSION_26_AUXBASIS:
+            self.assertEqual(len(auxbasis['O']), 36)
+            self.assertEqual(len(auxbasis['H']), 12)
+        else:
+            self.assertEqual(len(auxbasis['O']), 59)
+            self.assertEqual(len(auxbasis['H']), 16)
+
+        auxbasis = df.addons.autoaux(mol)
+        self.assertEqual(len(auxbasis['O']), 47)
+        self.assertEqual(len(auxbasis['H']), 20)
 
     def test_make_auxbasis(self):
         mol = gto.M(
@@ -69,14 +91,43 @@ class KnownValues(unittest.TestCase):
                      'O': ('631g', [[0, 0, (1., 1.)]])}
         )
         auxbasis = df.addons.make_auxbasis(mol)
-        self.assertEqual(len(auxbasis['O']), 32)
-        self.assertEqual(len(auxbasis['H']), 3)
+        if df.addons.USE_VERSION_26_AUXBASIS:
+            self.assertEqual(len(auxbasis['O']), 32)
+            self.assertEqual(len(auxbasis['H']), 3)
+        else:
+            self.assertEqual(len(auxbasis['O']), 35)
+            self.assertEqual(len(auxbasis['H']), 3)
 
     def test_default_auxbasis(self):
         mol = gto.M(atom='He 0 0 0; O 0 0 1', basis='ccpvdz')
         auxbasis = df.addons.make_auxbasis(mol)
         self.assertTrue(auxbasis['O'] == 'cc-pvdz-jkfit')
         self.assertTrue(isinstance(auxbasis['He'], list))
+
+    @unittest.skipIf(bse.basis_set_exchange is None, "BSE library not installed.")
+    def test_auto_aux(self):
+        from pyscf.df.autoaux import autoaux, _auto_aux_element
+        ref = flatten(bse.autoaux('STO-3G', 'K')['K'])
+        mol = gto.M(atom='K', basis='STO-3G', spin=1)
+        etb = _auto_aux_element(mol.atom_charge(0), mol._basis['K'])
+        dat = flatten(gto.expand_etbs(etb))
+        dat = np.array([float(f'{x:.6e}') for x in dat])
+        self.assertAlmostEqual(abs(np.array(ref) - dat).max(), 0, 6)
+
+        for key in ['H', 'Li', 'C', 'N', 'O', 'F', 'Si']:
+            ref = flatten(bse.autoaux('cc-pVTZ', key)[key])
+            basis = bse.get_basis('cc-pVTZ', key)[key]
+            etb = _auto_aux_element(gto.charge(key), basis)
+            dat = flatten(gto.expand_etbs(etb))
+            dat = np.array([float(f'{x:.6e}') for x in dat])
+            self.assertAlmostEqual(abs(np.array(ref) - dat).max(), 0, 6)
+
+def flatten(lst):
+    if not isinstance(lst, list):
+        return [lst]
+    elif len(lst) == 0:
+        return lst
+    return list(itertools.chain(*[flatten(l) for l in lst]))
 
 
 if __name__ == "__main__":

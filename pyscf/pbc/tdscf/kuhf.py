@@ -21,20 +21,29 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.tdscf import uhf
+from pyscf.tdscf._lr_eig import eigh as lr_eigh, eig as lr_eig
 from pyscf.pbc import scf
-from pyscf.pbc.tdscf.krhf import KTDBase, _get_e_ia, purify_krlyov_heff
-from pyscf.pbc.lib.kpts_helper import gamma_point
+from pyscf.pbc.tdscf.krhf import KTDBase, _get_e_ia
+from pyscf.pbc.lib.kpts_helper import is_gamma_point, get_kconserv_ria
 from pyscf.pbc.scf import _response_functions  # noqa
 from pyscf import __config__
 
 REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_uhf_TDDFT_pick_eig_threshold', 1e-3)
 
 class TDA(KTDBase):
-    conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
 
-    def gen_vind(self, mf, kshift):
-        '''Compute Ax'''
-        kconserv = self.kconserv[kshift]
+    def get_ab(self, mf=None, kshift=0):
+        raise NotImplementedError
+
+    def gen_vind(self, mf, kshift=0):
+        '''Compute Ax
+
+        Kwargs:
+            kshift : integer
+                The index of the k-point that represents the transition between
+                k-points in the excitation coefficients.
+        '''
+        kconserv = get_kconserv_ria(mf.cell, mf.kpts)[kshift]
         mo_coeff = mf.mo_coeff
         mo_occ = mf.mo_occ
         nkpts = len(mo_occ[0])
@@ -94,7 +103,7 @@ class TDA(KTDBase):
 
         mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
-        kconserv = self.kconserv[kshift]
+        kconserv = get_kconserv_ria(mf.cell, mf.kpts)[kshift]
         e_ia_a = _get_e_ia(mo_energy[0], mo_occ[0], kconserv)
         e_ia_b = _get_e_ia(mo_energy[1], mo_occ[1], kconserv)
         e_ia = numpy.hstack([x.ravel() for x in (e_ia_a + e_ia_b)])
@@ -127,14 +136,12 @@ class TDA(KTDBase):
             return w[idx], v[:,idx], idx
 
         log = logger.Logger(self.stdout, self.verbose)
-        precision = self.cell.precision * 1e-2
-        hermi = 1
 
         self.converged = []
         self.e = []
         self.xy = []
         for i,kshift in enumerate(self.kshift_lst):
-            kconserv = self.kconserv[kshift]
+            kconserv = get_kconserv_ria(mf.cell, mf.kpts)[kshift]
 
             vind, hdiag = self.gen_vind(self._scf, kshift)
             precond = self.get_precond(hdiag)
@@ -144,15 +151,10 @@ class TDA(KTDBase):
             else:
                 x0k = x0[i]
 
-            converged, e, x1 = \
-                    lib.davidson1(vind, x0k, precond,
-                                  tol=self.conv_tol,
-                                  max_cycle=self.max_cycle,
-                                  nroots=self.nstates,
-                                  lindep=self.lindep,
-                                  max_space=self.max_space, pick=pickeig,
-                                  fill_heff=purify_krlyov_heff(precision, hermi, log),
-                                  verbose=self.verbose)
+            converged, e, x1 = lr_eigh(
+                vind, x0k, precond, tol_residual=self.conv_tol, lindep=self.lindep,
+                nroots=self.nstates, pick=pickeig, max_cycle=self.max_cycle,
+                max_memory=self.max_memory, verbose=log)
             self.converged.append( converged )
             self.e.append( e )
             self.xy.append( [(_unpack(xi, mo_occ, kconserv),  # (X_alpha, X_beta)
@@ -165,9 +167,14 @@ class TDA(KTDBase):
 CIS = KTDA = TDA
 
 
-class TDHF(TDA):
-    def gen_vind(self, mf, kshift):
-        kconserv = self.kconserv[kshift]
+class TDHF(KTDBase):
+
+    def get_ab(self, mf=None, kshift=0):
+        raise NotImplementedError
+
+    def gen_vind(self, mf, kshift=0):
+        assert kshift == 0
+
         mo_coeff = mf.mo_coeff
         mo_occ = mf.mo_occ
         nkpts = len(mo_occ[0])
@@ -178,9 +185,10 @@ class TDHF(TDA):
         viridxb = [numpy.where(mo_occ[1][k]==0)[0] for k in range(nkpts)]
         orboa = [mo_coeff[0][k][:,occidxa[k]] for k in range(nkpts)]
         orbob = [mo_coeff[1][k][:,occidxb[k]] for k in range(nkpts)]
-        orbva = [mo_coeff[0][kconserv[k]][:,viridxa[kconserv[k]]] for k in range(nkpts)]
-        orbvb = [mo_coeff[1][kconserv[k]][:,viridxb[kconserv[k]]] for k in range(nkpts)]
+        orbva = [mo_coeff[0][k][:,viridxa[k]] for k in range(nkpts)]
+        orbvb = [mo_coeff[1][k][:,viridxb[k]] for k in range(nkpts)]
 
+        kconserv = numpy.arange(nkpts)
         moe = scf.addons.mo_energy_with_exxdiv_none(mf)
         e_ia_a = _get_e_ia(moe[0], mo_occ[0], kconserv)
         e_ia_b = _get_e_ia(moe[1], mo_occ[1], kconserv)
@@ -205,10 +213,10 @@ class TDHF(TDA):
                 for k in range(nkpts):
                     dmx = reduce(numpy.dot, (orboa[k], xa[k]  , orbva[k].conj().T))
                     dmy = reduce(numpy.dot, (orbva[k], ya[k].T, orboa[k].conj().T))
-                    dmov[0,i,k] = dmx + dmy  # AX + BY
+                    dmov[0,i,k] = dmx + dmy
                     dmx = reduce(numpy.dot, (orbob[k], xb[k]  , orbvb[k].conj().T))
                     dmy = reduce(numpy.dot, (orbvb[k], yb[k].T, orbob[k].conj().T))
-                    dmov[1,i,k] = dmx + dmy  # AX + BY
+                    dmov[1,i,k] = dmx + dmy
 
             with lib.temporary_env(mf, exxdiv=None):
                 dmov = dmov.reshape(2,nz,nkpts,nao,nao)
@@ -219,23 +227,23 @@ class TDHF(TDA):
             for i in range(nz):
                 xa, xb = x1s[i]
                 ya, yb = y1s[i]
-                v1xsa = []
-                v1xsb = []
-                v1ysa = []
-                v1ysb = []
+                v1xsa = [0] * nkpts
+                v1xsb = [0] * nkpts
+                v1ysa = [0] * nkpts
+                v1ysb = [0] * nkpts
                 for k in range(nkpts):
                     v1xa = reduce(numpy.dot, (orboa[k].conj().T, v1ao[0,i,k], orbva[k]))
                     v1xb = reduce(numpy.dot, (orbob[k].conj().T, v1ao[1,i,k], orbvb[k]))
                     v1ya = reduce(numpy.dot, (orbva[k].conj().T, v1ao[0,i,k], orboa[k])).T
                     v1yb = reduce(numpy.dot, (orbvb[k].conj().T, v1ao[1,i,k], orbob[k])).T
-                    v1xa+= e_ia_a[k] * xa[k]
-                    v1xb+= e_ia_b[k] * xb[k]
-                    v1ya+= e_ia_a[k] * ya[k]
-                    v1yb+= e_ia_b[k] * yb[k]
-                    v1xsa.append(v1xa.ravel())
-                    v1xsb.append(v1xb.ravel())
-                    v1ysa.append(-v1ya.ravel())
-                    v1ysb.append(-v1yb.ravel())
+                    v1xa += e_ia_a[k] * xa[k]
+                    v1xb += e_ia_b[k] * xb[k]
+                    v1ya += e_ia_a[k].conj() * ya[k]
+                    v1yb += e_ia_b[k].conj() * yb[k]
+                    v1xsa[k] += v1xa.ravel()
+                    v1xsb[k] += v1xb.ravel()
+                    v1ysa[k] += -v1ya.ravel()
+                    v1ysb[k] += -v1yb.ravel()
                 v1s.append( numpy.concatenate(v1xsa + v1xsb + v1ysa + v1ysb) )
             return numpy.hstack(v1s).reshape(nz,-1)
 
@@ -244,7 +252,9 @@ class TDHF(TDA):
     def init_guess(self, mf, kshift, nstates=None, wfnsym=None):
         x0 = TDA.init_guess(self, mf, kshift, nstates)
         y0 = numpy.zeros_like(x0)
-        return numpy.asarray(numpy.block([[x0, y0], [y0, x0.conj()]]))
+        return numpy.hstack([x0, y0])
+
+    get_precond = uhf.TDHF.get_precond
 
     def kernel(self, x0=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
@@ -258,8 +268,11 @@ class TDHF(TDA):
         mf = self._scf
         mo_occ = mf.mo_occ
 
-        real_system = (gamma_point(self._scf.kpts) and
+        real_system = (is_gamma_point(self._scf.kpts) and
                        self._scf.mo_coeff[0][0].dtype == numpy.double)
+
+        if any(k != 0 for k in self.kshift_lst):
+            raise RuntimeError('kshift != 0 for TDHF')
 
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
@@ -267,14 +280,11 @@ class TDHF(TDA):
                                   (w.real > self.positive_eig_threshold))[0]
             return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
 
-        log = logger.Logger(self.stdout, self.verbose)
-        precision = self.cell.precision * 1e-2
-
         self.converged = []
         self.e = []
         self.xy = []
         for i,kshift in enumerate(self.kshift_lst):
-            kconserv = self.kconserv[kshift]
+            kconserv = get_kconserv_ria(mf.cell, mf.kpts)[kshift]
 
             vind, hdiag = self.gen_vind(self._scf, kshift)
             precond = self.get_precond(hdiag)
@@ -284,15 +294,10 @@ class TDHF(TDA):
             else:
                 x0k = x0[i]
 
-            converged, w, x1 = \
-                    lib.davidson_nosym1(vind, x0k, precond,
-                                        tol=self.conv_tol,
-                                        max_cycle=self.max_cycle,
-                                        nroots=self.nstates,
-                                        lindep=self.lindep,
-                                        max_space=self.max_space, pick=pickeig,
-                                        fill_heff=purify_krlyov_heff(precision, 0, log),
-                                        verbose=self.verbose)
+            converged, w, x1 = lr_eig(
+                vind, x0k, precond, tol_residual=self.conv_tol, lindep=self.lindep,
+                nroots=self.nstates, pick=pickeig, max_cycle=self.max_cycle,
+                max_memory=self.max_memory, verbose=log)
             self.converged.append( converged )
 
             e = []
@@ -336,55 +341,3 @@ def _unpack(vo, mo_occ, kconserv):
 
 scf.kuhf.KUHF.TDA  = lib.class_as_method(KTDA)
 scf.kuhf.KUHF.TDHF = lib.class_as_method(KTDHF)
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    from pyscf.pbc import scf
-    from pyscf.pbc import df
-    cell = gto.Cell()
-    cell.unit = 'B'
-    cell.atom = '''
-    C  0.          0.          0.
-    C  1.68506879  1.68506879  1.68506879
-    '''
-    cell.a = '''
-    0.          3.37013758  3.37013758
-    3.37013758  0.          3.37013758
-    3.37013758  3.37013758  0.
-    '''
-
-    cell.basis = 'gth-szv'
-    cell.pseudo = 'gth-pade'
-    cell.mesh = [37]*3
-    cell.build()
-    mf = scf.KUHF(cell, cell.make_kpts([2,1,1])).set(exxdiv=None)
-#    mf.with_df = df.DF(cell, cell.make_kpts([2,1,1]))
-#    mf.with_df.auxbasis = 'weigend'
-#    mf.with_df._cderi = 'eri3d-df.h5'
-#    mf.with_df.build(with_j3c=False)
-    mf.run()
-
-    td = TDA(mf)
-    td.verbose = 5
-    td.nstates = 5
-    print(td.kernel()[0][0] * 27.2114)
-
-    td = TDHF(mf)
-    td.verbose = 5
-    td.nstates = 5
-    print(td.kernel()[0][0] * 27.2114)
-
-    cell.spin = 2
-    mf = scf.KUHF(cell, cell.make_kpts([2,1,1])).set(exxdiv=None)
-    mf.run()
-
-    td = TDA(mf)
-    td.verbose = 5
-    td.nstates = 5
-    print(td.kernel()[0][0] * 27.2114)
-
-    td = TDHF(mf)
-    td.verbose = 5
-    td.nstates = 5
-    print(td.kernel()[0][0] * 27.2114)

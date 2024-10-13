@@ -42,7 +42,7 @@ else:
 
 
 def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
-    '''CAS sapce one-electron hamiltonian
+    '''CAS space one-electron hamiltonian
 
     Args:
         casci : a CASSCF/CASCI object or RHF object
@@ -419,7 +419,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
 def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                  cas_natorb=False, casdm1=None, verbose=logger.NOTE,
                  with_meta_lowdin=WITH_META_LOWDIN, stav_dm1=False):
-    '''Canonicalized CASCI/CASSCF orbitals of effecitive Fock matrix and
+    '''Canonicalized CASCI/CASSCF orbitals of effective Fock matrix and
     update CI coefficients accordingly.
 
     Effective Fock matrix is built with one-particle density matrix (see
@@ -448,7 +448,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             orbitals in each symmetry sector. sort=True will reorder all
             orbitals over all symmetry sectors in each subspace and the
             symmetry labels may be changed.
-        cas_natorb (bool): Whether to transform active orbitals to natual
+        cas_natorb (bool): Whether to transform active orbitals to natural
             orbitals. If enabled, the output orbitals in active space are
             transformed to natural orbitals and CI coefficients are updated
             accordingly.
@@ -556,7 +556,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     if log.verbose >= logger.DEBUG:
         for i in range(nmo):
             log.debug('i = %d  <i|F|i> = %12.8f', i+1, mo_energy[i])
-# still return ci coefficients, in case the canonicalization funciton changed
+# still return ci coefficients, in case the canonicalization function changed
 # cas orbitals, the ci coefficients should also be updated.
     return mo_coeff1, ci, mo_energy
 
@@ -583,6 +583,8 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE, envs=None):
             and "envs" pop in kernel function
     '''
     if mo_coeff is None: mo_coeff = casci.mo_coeff
+    if ci0 is None: ci0 = casci.ci
+
     log = logger.new_logger(casci, verbose)
     t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Start CASCI')
@@ -693,7 +695,7 @@ class CASBase(lib.StreamObject):
         nelecas : tuple of int
             Active (nelec_alpha, nelec_beta)
         ncore : int or tuple of int
-            Core electron number.  In UHF-CASSCF, it's a tuple to indicate the different core eletron numbers.
+            Core electron number.  In UHF-CASSCF, it's a tuple to indicate the different core electron numbers.
         natorb : bool
             Whether to transform natural orbitals in active space.
             Note: when CASCI/CASSCF are combined with DMRG solver or selected
@@ -742,7 +744,7 @@ class CASBase(lib.StreamObject):
             of MCSCF 1-particle density matrix) diagonalized within each
             subspace (core, active, external).  If natorb (natural orbitals in
             active space) is specified, the active segment of the mo_coeff is
-            natural orbitls.
+            natural orbitals.
         mo_energy : ndarray
             Diagonal elements of general Fock matrix (in mo_coeff
             representation).

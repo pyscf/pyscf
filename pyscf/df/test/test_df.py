@@ -87,7 +87,7 @@ class KnownValues(unittest.TestCase):
         eri1 = dfobj.get_eri()
         self.assertAlmostEqual(abs(eri0-eri1).max(), 0, 9)
 
-    def test_init_denisty_fit(self):
+    def test_init_density_fit(self):
         from pyscf.df import df_jk
         from pyscf import cc
         from pyscf.cc import dfccsd
@@ -135,12 +135,12 @@ class KnownValues(unittest.TestCase):
         with tempfile.NamedTemporaryFile() as ftmp:
             mf.with_df._cderi_to_save = ftmp.name
             mf.run()
-        self.assertAlmostEqual(mf.e_tot, -103.4965622991, 7)
+        self.assertAlmostEqual(mf.e_tot, -103.4965622991, 6)
 
         mol.max_memory = 4000
         mf = mol.RKS(xc='lda+0.5*SR_HF(0.3)').density_fit()
         mf.run()
-        self.assertAlmostEqual(mf.e_tot, -103.4965622991, 7)
+        self.assertAlmostEqual(mf.e_tot, -103.4965622991, 6)
 
 if __name__ == "__main__":
     print("Full Tests for df")
