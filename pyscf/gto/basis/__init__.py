@@ -647,8 +647,7 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
                     filename_or_basisname, elements=symb)
             except KeyError:
                 raise BasisNotFoundError(filename_or_basisname)
-            else:
-                return bse._orbital_basis(bse_obj)[0]
+            return bse._orbital_basis(bse_obj)[0][symb]
 
         raise BasisNotFoundError(f'Unknown basis format or basis name for {filename_or_basisname}')
 
@@ -701,8 +700,7 @@ def load_ecp(filename_or_basisname, symb):
                 filename_or_basisname, elements=symb)
         except KeyError:
             raise BasisNotFoundError(filename_or_basisname)
-        else:
-            return bse._ecp_basis(bse_obj)[0]
+        return bse._ecp_basis(bse_obj)[0][symb]
 
     raise BasisNotFoundError('Unknown ECP format or ECP name')
 

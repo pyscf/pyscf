@@ -14,6 +14,22 @@ This example illustrates how basis sets can be directly obtained from
 a local copy of the Basis Set Exchange.
 '''
 
+# PySCF has a native interface to the Basis Set Exchange, which is
+# used as a fall-through if the basis set was not found within PySCF
+# itself
+mol = gto.M(
+    atom = '''
+N          0.6683566134        0.2004327755        0.0000000000
+H          0.9668193796       -0.3441960976        0.8071193402
+H          0.9668193796       -0.3441960976       -0.8071193402
+F         -0.7347916126       -0.0467759204        0.0000000000
+''',
+    basis = 'HGBSP1-7',
+    verbose = 4
+)
+
+
+# One can also use the Basis Set Exchange in a more direct fashion
 mol = gto.M(
     atom = '''
 N          0.6683566134        0.2004327755        0.0000000000
