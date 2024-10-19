@@ -17,7 +17,6 @@
 #         Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import sys
 import numpy
 from pyscf import lib
 from pyscf.dft import numint
@@ -28,6 +27,7 @@ from pyscf.dft.gen_grid import NBINS, CUTOFF, ALIGNMENT_UNIT
 from pyscf.pbc.dft.gen_grid import make_mask, BLKSIZE
 from pyscf.pbc.lib.kpts_helper import is_zero, KPT_DIFF_TOL
 from pyscf.pbc.lib.kpts import KPoints
+from pyscf.lib import logger
 
 
 def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shls_slice=None,
@@ -77,8 +77,9 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
     '''
     if kpts is None:
         if 'kpt' in kwargs:
-            sys.stderr.write('WARN: KNumInt.eval_ao function finds keyword '
-                             'argument "kpt" and converts it to "kpts"\n')
+            logger.warn(cell,
+                        'KNumInt.eval_ao function finds keyword '
+                        'argument "kpt" and converts it to "kpts"')
             kpts = kwargs['kpt']
         else:
             kpts = numpy.zeros((1,3))
@@ -1166,8 +1167,9 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
                kpts=None, kpts_band=None, max_memory=2000, verbose=None, **kwargs):
         if kpts is None:
             if 'kpt' in kwargs:
-                sys.stderr.write('WARN: KNumInt.nr_rks function finds keyword '
-                                 'argument "kpt" and converts it to "kpts"\n')
+                logger.warn(self, 'KNumInt.nr_rks function finds '
+                                  'keyword argument "kpt" and converts it '
+                                  'to "kpts"')
                 kpts = kwargs['kpt']
             else:
                 kpts = self.kpts
@@ -1181,8 +1183,9 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
                kpts=None, kpts_band=None, max_memory=2000, verbose=None, **kwargs):
         if kpts is None:
             if 'kpt' in kwargs:
-                sys.stderr.write('WARN: KNumInt.nr_uks function finds keyword '
-                                 'argument "kpt" and converts it to "kpts"\n')
+                logger.warn(self, 'KNumInt.nr_uks function finds '
+                                  'keyword argument "kpt" and converts it '
+                                  'to "kpts"')
                 kpts = kwargs['kpt']
             else:
                 kpts = self.kpts
