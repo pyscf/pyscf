@@ -1,5 +1,7 @@
-## Loads QCSchema format json result and computes dipole moment.
-## Wavefunction info is in QCSchema json data file.
+'''
+    Loads QCSchema format json result and computes dipole moment.
+    Wavefunction info is in QCSchema json data file.
+'''
 from pyscf.lib.libqcschema import *
 from pyscf import gto, dft, lib
 import json
