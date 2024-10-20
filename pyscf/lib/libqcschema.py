@@ -1,3 +1,7 @@
+'''
+This lib loads results that are in a QCSchema format json.
+Funcs below can recreate the mol and scf objects from the info in the json.
+'''
 import json
 import numpy as np
 import pyscf
