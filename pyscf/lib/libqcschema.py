@@ -1,8 +1,16 @@
 import json
 import numpy as np
+import pyscf
 from pyscf.lib.parameters import BOHR
 
 def load_qcschema_json( file_name ):
+    '''
+    Does: loads qcschema format json into a dictionary
+    Input:
+        file_name: qcschema format json file
+
+    Returns: dict in qcschema format
+    '''
     # load qcschema output json file
     data = None
     with open(file_name,'r') as f:
@@ -10,6 +18,16 @@ def load_qcschema_json( file_name ):
     return data
 
 def load_qcschema_go_final_json( file_name ):
+    '''
+    Does: loads qcschema format geometry optimization json 
+          and returns only the optimized 'final' geometry 
+          qcschema info as a dictionary. 
+          
+    Input:
+        file_name: qcschema format json file
+
+    Returns: dict in qcschema format
+    '''
     # load qcschema GO output json file 
     # and return last 'trajectory' point's entries
     # (this is the optimized molecule)
@@ -20,65 +38,69 @@ def load_qcschema_go_final_json( file_name ):
     data = temp["trajectory"][-1]
     return data
 
-def combine_syms_coords(syms,coords,to_Angstrom = False, xyz=False):
-    # QCSchema molecules are split into symbols and coordinates,
-    #  combine them here.
-    # Optionally convert from Bohr to Angstrom.
-    # Returns: either a geometry string (default) or
-    #  optionally it can return an xyz format string.
+def load_qcschema_molecule(qcschema_dict, to_Angstrom=False, xyz=False, mol_select=1, step=0):
+    '''
+    Does: Loads molecule from qcschema format dict.
+          Molecule may be single point molecule or from a geometry optimization/trajectory.
+
+    Input:
+        syms: atom symbols (qcschema format)
+        coords: x y z coordinates (in qcschema format)
+        mol_select: specifies which molecule to load from qcschema format results. 
+                    Default loads 'molecule' from qcschema.
+                    Geometry optimizations or trajectories have mutliple geometries saved in the schema.
+                    mol_select = 1 (default) molecule from standard qcschema format
+                               = 2 initial_molecule in GO or traj qcschema
+                               = 3 final_molecule in GO or traj qcschema
+                               = 4 a specific step in the GO or traj qcschema, specify with 'step' arg.
+
+        to_Angstrom (optional): convert coordinates to Angstrom (default is Bohr)
+        xyz (optional): controls output (see below)
+
+    Returns: 
+        xyz=False (default): 'atom x y z' format string
+        xyz=True: output a string in xyz file format
+                  i.e. first line is number of atoms.
+    '''
+    if(mol_select == 1):
+        syms = np.array(qcschema_dict["molecule"]["symbols"])
+        geo = np.array(qcschema_dict["molecule"]["geometry"])
+    elif(mol_select == 2):
+        syms = np.array(qcschema_dict["initial_molecule"]["symbols"])
+        geo = np.array(qcschema_dict["initial_molecule"]["geometry"])
+    elif(mol_select == 3):
+        syms = np.array(qcschema_dict["final_molecule"]["symbols"])
+        geo = np.array(qcschema_dict["final_molecule"]["geometry"])
+    elif(mol_select == 4):
+        # for geometry or md, can load a specific geometry
+        syms = np.array(qcschema_dict["trajectory"][step]["molecule"]["symbols"])
+        geo = np.array(qcschema_dict["trajectory"][step]["molecule"]["geometry"])    
+
     if(to_Angstrom):
         # convert Bohr to Angstrom
-        coords = coords*BOHR
-        
+        geo = geo*BOHR
+
     NAtoms = len(syms)
-    geo = np.reshape(coords, (NAtoms,3))
+    geo = np.reshape(geo, (NAtoms,3))
 
-    # Concatenate the symbols and coordinates along the second axis
-    combined = np.concatenate([syms[:, np.newaxis], geo], axis=1)
-
-    # Convert the combined array to a string with spaces as separators
-    output = np.array2string(combined, separator=' ', max_line_width=np.inf, threshold=np.inf)
-
-    # Remove the brackets and quotes from the output string
-    PySCF_atoms = output.replace('[', '').replace(']', '').replace("'", '')
+    PySCF_atoms = list(zip(syms, geo))
 
     # Return as string or return as xyz-format string (i.e. top is NAtoms,blankline)
     if(xyz):
-        xyz = f'{NAtoms}\n\n'
-        PySCF_atoms = xyz+PySCF_atoms
-    
-    return PySCF_atoms
-
-def load_qcschema_molecule(qcschema_dict, to_Angstrom = False, xyz=False):
-    # Load QCSchema molecule.
-    # Optionally convert geometry to angstrom
-    # Returns: either a geometry string (default) or
-    #  optionally it can return an xyz format string.
-
-    syms = np.array(qcschema_dict["molecule"]["symbols"])
-    geo = np.array(qcschema_dict["molecule"]["geometry"])
-
-    # combine together the symbols and coordinates
-    PySCF_atoms = combine_syms_coords(syms,geo,to_Angstrom,xyz)
-
-    return PySCF_atoms
-
-def load_qcschema_final_molecule(qcschema_dict, to_Angstrom = False, xyz=False):
-    # Load final molecule in QCSchema. 
-    # In GO job this is the optimized geometry.
-    # Optionally convert geometry to angstrom
-    # Returns: either a geometry string (default) or
-    #  optionally it can return an xyz format string.
-
-    syms = np.array(qcschema_dict["final_molecule"]["symbols"])
-    geo = np.array(qcschema_dict["final_molecule"]["geometry"])
-
-    # combine together the symbols and coordinates
-    PySCF_atoms = combine_syms_coords(syms,geo,to_Angstrom,xyz)
-
+        bldstr = f'{NAtoms}\n\n'
+        for element, coordinates in PySCF_atoms:
+            bldstr += f'{element} {coordinates[0]}, {coordinates[1]}, {coordinates[2]}\n'
+            PySCF_atoms = bldstr
     return PySCF_atoms
 
 def load_qcschema_hessian(qcschema_dict):
+    '''
+    Does: loads hessian from qcschema format dictionary
+    Input:
+        qcschema_dict
+
+    Returns: hessian with format (N,N,3,3)
+    '''
     # qcschema_dict: pass in dict that has the qcschema output json loaded into it
 
     # load qcschema hessian
@@ -93,24 +115,17 @@ def load_qcschema_hessian(qcschema_dict):
     hessian = np.array(qc_h).reshape(NAtom,NAtom,3,3)
     return hessian
 
-def load_qcschema_mol_scf(qcschema_dict,save_chk=False,chkfile="output.chk",to_Angstrom=False):
-    # uses qcschema dict and re-creates PySCF mol and scf info 
-    # returns mol and scf and optionally saves to chkfile
-    # qcschema_dict: dict containing the qcschema output loaded into it
-    # save_chk: whether to save chkfile or not
-    # chkfile: the name of the chkfile we may create
-    try:
-        import pyscf
-        from pyscf.lib.chkfile import load_chkfile_key, load
-        from pyscf.lib.chkfile import dump_chkfile_key, dump, save
-        from pyscf.lib.chkfile import load_mol, save_mol
-    except ImportError:
-        raise ImportError(
-            "Missing optional 'pyscf' dependencies. \
-            To install run: pip install pyscf"
-        )
+def load_qcschema_scf_info(qcschema_dict):
+    '''
+    Does: loads scf info from qcschema format dictionary
+    Input:
+        qcschema_dict
+
+    Returns:
+        scf_dict: contains the relevent scf info only
+    '''
     
-    # Accelerated DFT service return scf_occupations_a only for R, so occ is 1 or 0.
+    # Restricted wfn has schema scf_occupations_a occ of 1 or 0.
     # Need to double if RHF/RKS/ROHF
     method = qcschema_dict["keywords"]["scf"]["method"]
     if(method == 'rks' or method == 'roks' or method == 'rhf' or method == 'rohf'):
@@ -128,8 +143,7 @@ def load_qcschema_mol_scf(qcschema_dict,save_chk=False,chkfile="output.chk",to_A
     nmo = qcschema_dict["properties"]["calcinfo_nbasis"]
     nao = nmo
 
-    ## chkfile info ##
-    # Get the 4 things that PySCF chkfile wants
+    # Get the 4 things that PySCF wants
     # ...remembering to reshape coeffs and scale occupancies.
     e_tot = float( qcschema_dict["properties"]["return_energy"] )
     mo_coeff = np.reshape(qcschema_dict["wavefunction"]["scf_orbitals_a"],(nao,nmo))
@@ -155,10 +169,23 @@ def load_qcschema_mol_scf(qcschema_dict,save_chk=False,chkfile="output.chk",to_A
                'mo_occ'   : mo_occ,
                'mo_coeff' : mo_coeff}
 
+    return scf_dic
+
+
+def recreate_mol_obj(qcschema_dict,to_Angstrom=False):
+    '''
+    Does: recreates mol object from qcschema format dictionary
+    Input:
+        qcschema_dict
+        to_Angstrom: optional bool to convert geometry to Angstrom (default is Bohr)
+
+    Returns: mol object
+    '''
+
     ## Mol info: ##
     PySCF_charge = int( qcschema_dict["molecule"]["molecular_charge"] )
     # PySCF 'spin' is number of unpaired electrons, it will be mult-1
-    PySCF_spin = int( qcschema_dict["molecule"]["molecular_multiplicity"] - 1 )
+    PySCF_spin = int( qcschema_dict["molecule"]["molecular_multiplicity"] ) - 1
     PySCF_basis = str( qcschema_dict["model"]["basis"] )
 
     # Cartesian/Pure basis
@@ -176,45 +203,50 @@ def load_qcschema_mol_scf(qcschema_dict,save_chk=False,chkfile="output.chk",to_A
     else:
         units='B'
 
-    ## Create mol and save to chkfile ##
+    ## Create mol ##
     mol = pyscf.gto.Mole(atom=PySCF_atoms,basis=PySCF_basis,ecp=PySCF_basis,charge=PySCF_charge,spin=PySCF_spin,cart=PySCF_cart,unit=units)
+    mol.build(False,False)
 
-    ## Save scf info data into chk ##
-    if(save_chk):
-        save(chkfile, 'scf', scf_dic)
-        save_mol(mol,chkfile)
+    return mol
 
-    return scf_dic, mol
+def recreate_scf_obj(qcschema_dict,mol):
+    '''
+    Does: recreates scf object from qcschema format dictionary
+    Input:
+        qcschema_dict
+        mol object
 
-import pyscf
-def recreate_scf_obj(qcschema_dict,save_chk=False,chkfile="",to_Angstrom=False):
-    # Create Pyscf Molecule
-    scf_dict, mol = load_qcschema_mol_scf(qcschema_dict,save_chk,chkfile,to_Angstrom)
-    mol.build()
+    Returns: scf object
+    '''
+    # load info from qcschema needed for scf obj
+    scf_dict = load_qcschema_scf_info(qcschema_dict)
 
-    # Create DFT (or HF) object
+    # create scf object
     method =  qcschema_dict["keywords"]["scf"]["method"]
     if(method =='rks'):
-        ks = pyscf.dft.RKS(mol)
+        ks = mol.RKS()
     elif(method =='uks'): 
-        ks = pyscf.dft.UKS(mol)
+        ks = mol.UKS()
     elif(method =='rhf'):
-        ks = pyscf.hf.RKS(mol)
+        ks = mol.RHF()
     elif(method =='uhf'):
-        ks = pyscf.hf.UHF(mol)
+        ks = mol.UHF()
+    elif(method =='gks'):
+        ks = mol.GKS()
+    elif(method =='ghf'):
+        ks = mol.GHF()
     else:
-        print("cannot determine method..exit")
+        raise RuntimeError('qcschema: cannot determine method..exit')
         return
 
-    #temp set functional...could get it from the json
-    if(method == 'rks' or method == 'uks'):
+    # get functional
+    if(method == 'rks' or method == 'uks' or method == 'gks'):
         functional = qcschema_dict["keywords"]["xcFunctional"]["name"]
-        #functional = "b3lyp"
         ks.xc = functional
 
-    # Load 4 key pieces of info we got from json into DFT object
+    # Load 4 key pieces of info we got from json into SCF object
     ks.mo_coeff = scf_dict["mo_coeff"]
     ks.mo_energy = scf_dict["mo_energy"]
     ks.mo_occ = scf_dict["mo_occ"]
     ks.e_tot = scf_dict["e_tot"]
-    return mol, ks
+    return ks
