@@ -74,11 +74,11 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
 
     if isinstance(erifile, str):
         if h5py.is_hdf5(erifile):
-            feri = h5py.File(erifile, 'a')
+            feri = lib.H5FileWrap(erifile, 'a')
             if dataname in feri:
                 del (feri[dataname])
         else:
-            feri = h5py.File(erifile, 'w')
+            feri = lib.H5FileWrap(erifile, 'w')
     else:
         assert (isinstance(erifile, h5py.Group))
         feri = erifile
@@ -214,7 +214,7 @@ def half_e1(mol, mo_coeffs, swapfile,
     log.debug('step1: (ij,kl) = (%d,%d), mem cache %.8g MB, iobuf %.8g MB',
               nij_pair, nao_pair, mem_words*16/1e6, iobuf_words*16/1e6)
 
-    fswap = h5py.File(swapfile, 'w')
+    fswap = lib.H5FileWrap(swapfile, 'w')
     for icomp in range(comp):
         fswap.create_group(str(icomp))  # for h5py old version
 

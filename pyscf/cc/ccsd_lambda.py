@@ -57,7 +57,8 @@ def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
         adiis.space = mycc.diis_space
     else:
         adiis = None
-    cput0 = log.timer('CCSD lambda initialization', *cput0)
+    name = mycc.__class__.__name__
+    cput0 = log.timer(f'{name} lambda initialization', *cput0)
 
     conv = False
     for istep in range(max_cycle):
@@ -68,7 +69,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
         l1new = l2new = None
         l1, l2 = mycc.run_diis(l1, l2, istep, normt, 0, adiis)
         log.info('cycle = %d  norm(lambda1,lambda2) = %.6g', istep+1, normt)
-        cput0 = log.timer('CCSD iter', *cput0)
+        cput0 = log.timer(f'{name} iter', *cput0)
         if normt < tol:
             conv = True
             break
@@ -363,7 +364,7 @@ def update_lambda(mycc, t1, t2, l1, l2, eris=None, imds=None):
     return l1new, l2new
 
 def _cp(a):
-    return numpy.array(a, copy=False, order='C')
+    return numpy.asarray(a, order='C')
 
 
 if __name__ == '__main__':

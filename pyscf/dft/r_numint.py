@@ -116,7 +116,7 @@ def _eval_rho_2c(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, with_lapl=Fal
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_2c()
 
-    if xctype == 'LDA':
+    if xctype == 'LDA' or xctype == 'HF':
         c0 = _dot_spinor_dm(mol, ao, dm, non0tab, shls_slice, ao_loc)
         rho_m = _contract_rho_m(ao, c0, hermi, True)
     elif xctype == 'GGA':
@@ -569,15 +569,14 @@ def r_fxc(ni, mol, grids, xc_code, dm0, dms, spin=0, relativity=1, hermi=0,
     if ni.collinear[0] not in ('c', 'm'):  # col or mcol
         raise NotImplementedError('non-collinear fxc')
 
+    if fxc is None and xctype in ('LDA', 'GGA', 'MGGA'):
+        fxc = ni.cache_xc_kernel1(mol, grids, xc_code, dm0,
+                                  max_memory=max_memory)[2]
+
     make_rho1, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi)
     with_s = (nao == n2c*2)  # 4C DM
 
-    if rho0 is None and (xctype != 'LDA' or fxc is None):
-        make_rho0 = ni._gen_rho_evaluator(mol, dm0, 1)[0]
-    else:
-        make_rho0 = None
-
-    matLL = numpy.zeros((nset,n2c,n2c), dtype=dms.dtype)
+    matLL = numpy.zeros((nset,n2c,n2c), dtype=numpy.complex128)
     matSS = numpy.zeros_like(matLL)
     if xctype in ('LDA', 'GGA', 'MGGA'):
         f_eval_mat = {
@@ -589,30 +588,13 @@ def r_fxc(ni, mol, grids, xc_code, dm0, dms, spin=0, relativity=1, hermi=0,
             ('MGGA', 'm'): (_mcol_mgga_fxc_mat , 1),
         }
         fmat, ao_deriv = f_eval_mat[(xctype, ni.collinear[0])]
-        if ni.collinear[0] == 'm':  # mcol
-            eval_xc = ni.mcfun_eval_xc_adapter(xc_code)
-        else:
-            eval_xc = ni.eval_xc_eff
-
         _rho0 = None
         p1 = 0
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory,
                                  with_s=with_s):
             p0, p1 = p1, p1 + weight.size
-            if fxc is None:
-                if rho0 is not None:
-                    if xctype == 'LDA':
-                        _rho0 = numpy.asarray(rho0[:,p0:p1], order='C')
-                    else:
-                        _rho0 = numpy.asarray(rho0[:,:,p0:p1], order='C')
-                elif make_rho0 is not None:
-                    _rho0 = make_rho0(0, ao, mask, xctype)
-
-                _fxc = eval_xc(xc_code, _rho0, deriv=2, xctype=xctype)[2]
-            else:
-                _fxc = fxc[:,:,:,:,p0:p1]
-
+            _fxc = fxc[:,:,:,:,p0:p1]
             for i in range(nset):
                 rho1 = make_rho1(i, ao, mask, xctype)
                 matLL[i] += fmat(mol, ao[:2], weight, _rho0, rho1, _fxc,
@@ -649,24 +631,23 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=1,
     '''Compute the 0th order density, Vxc and fxc.  They can be used in TDDFT,
     DFT hessian module etc.
     '''
+    dm = numpy.dot(mo_coeff * mo_occ, mo_coeff.conj().T)
+    return cache_xc_kernel1(ni, mol, grids, xc_code, dm, spin, max_memory)
+
+def cache_xc_kernel1(ni, mol, grids, xc_code, dm, spin=1, max_memory=2000):
     xctype = ni._xc_type(xc_code)
     if xctype in ('GGA', 'MGGA'):
         ao_deriv = 1
-    elif xctype == 'NLC':
-        raise NotImplementedError('NLC')
     else:
         ao_deriv = 0
 
-    # Ignore density laplacian for mcfun
-    dm = numpy.dot(mo_coeff * mo_occ, mo_coeff.conj().T)
-    hermi = 1
+    hermi = 1 # rho must be real. We need to assume dm hermitian
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, hermi)
     n2c = mol.nao_2c()
     with_s = (nao == n2c*2)  # 4C DM
     rho = []
     for ao, mask, weight, coords \
-            in ni.block_loop(mol, grids, nao, ao_deriv, max_memory,
-                             with_s=with_s):
+            in ni.block_loop(mol, grids, nao, ao_deriv, max_memory, with_s=with_s):
         rho.append(make_rho(0, ao, mask, xctype))
     rho = numpy.concatenate(rho,axis=-1)
 
@@ -690,7 +671,7 @@ def get_rho(ni, mol, dm, grids, max_memory=2000):
     return rho
 
 
-class RNumInt(numint._NumIntMixin):
+class RNumInt(lib.StreamObject, numint.LibXCMixin):
     '''NumInt for j-adapted (spinor) basis'''
 
     # collinear schemes:
@@ -704,6 +685,7 @@ class RNumInt(numint._NumIntMixin):
 
     get_rho = get_rho
     cache_xc_kernel = cache_xc_kernel
+    cache_xc_kernel1 = cache_xc_kernel1
     get_vxc = r_vxc = r_vxc
     get_fxc = r_fxc = r_fxc
 

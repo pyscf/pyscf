@@ -215,6 +215,18 @@ C     F
         mf.kernel(dm0=dm)
         self.assertTrue(mf.converged)
         self.assertAlmostEqual(mf.e_tot, ref.e_tot, 9)
+        self.assertAlmostEqual(abs(mf.dip_moment() - ref.dip_moment()).max(), 0, 9)
+
+    def test_undo_x2c(self):
+        mf = mol.RHF().x2c().density_fit()
+        self.assertEqual(mf.__class__.__name__, 'DFsfX2C1eRHF')
+        mf = mf.undo_x2c()
+        self.assertEqual(mf.__class__.__name__, 'DFRHF')
+
+        mf = mol.GHF().x2c().density_fit()
+        self.assertEqual(mf.__class__.__name__, 'DFX2C1eGHF')
+        mf = mf.undo_x2c()
+        self.assertEqual(mf.__class__.__name__, 'DFGHF')
 
 
 if __name__ == "__main__":

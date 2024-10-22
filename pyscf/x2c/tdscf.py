@@ -74,8 +74,8 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         from pyscf.dft import xc_deriv
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if getattr(mf, 'nlc', '') != '':
-            raise NotImplementedError
+        if mf.do_nlc():
+            raise NotImplementedError('X2C-TDDFT for NLC functionals')
 
         if not mf.collinear:
             raise NotImplementedError
@@ -268,7 +268,7 @@ def _contract_multipole(tdobj, ints, hermi=True, xy=None):
     raise NotImplementedError
 
 
-class TDMixin(ghf.TDMixin):
+class TDBase(ghf.TDBase):
 
     @lib.with_doc(get_ab.__doc__)
     def get_ab(self, mf=None):
@@ -283,16 +283,16 @@ class TDMixin(ghf.TDMixin):
         raise NotImplementedError
 
 
-class TDA(TDMixin, ghf.TDA):
+class TDA(TDBase, ghf.TDA):
     def gen_vind(self, mf=None):
         '''Generate function to compute Ax'''
         if mf is None:
             mf = self._scf
         return gen_tda_hop(mf)
 
-    def init_guess(self, mf, nstates=None, wfnsym=None):
+    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         assert self.wfnsym is None
-        return ghf.TDA.init_guess(self, mf, nstates, None)
+        return ghf.TDA.init_guess(self, mf, nstates, None, return_symmetry)
 
     kernel = ghf.TDA.kernel
 
@@ -306,16 +306,16 @@ def gen_tdhf_operation(mf, fock_ao=None):
     return ghf.gen_tdhf_operation(mf, fock_ao, None)
 
 
-class TDHF(TDMixin, ghf.TDHF):
+class TDHF(TDBase, ghf.TDHF):
     @lib.with_doc(gen_tdhf_operation.__doc__)
     def gen_vind(self, mf=None):
         if mf is None:
             mf = self._scf
         return gen_tdhf_operation(mf)
 
-    def init_guess(self, mf, nstates=None, wfnsym=None):
+    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         assert self.wfnsym is None
-        return ghf.TDHF.init_guess(self, mf, nstates, None)
+        return ghf.TDHF.init_guess(self, mf, nstates, None, return_symmetry)
 
     kernel = ghf.TDHF.kernel
 

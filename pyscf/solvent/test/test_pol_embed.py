@@ -18,7 +18,7 @@ import os
 import tempfile
 import numpy
 from numpy.testing import assert_allclose
-from pyscf import lib, gto, scf
+from pyscf import lib, gto, scf, dft
 
 have_pe = False
 try:
@@ -225,6 +225,15 @@ def _exec_cppe(pe, dm, elec_only=False):
 
 @unittest.skipIf(not have_pe, "CPPE library not found.")
 class TestPolEmbed(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_exec_cppe(self):
         pe = solvent.PE(mol, os.path.join(dname, "pna_6w.potential"))
         numpy.random.seed(2)

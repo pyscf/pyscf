@@ -18,13 +18,15 @@
 
 import unittest
 import numpy as np
+from pyscf import lib
 from pyscf.pbc import gto, scf, cc
 
 def setUpModule():
-    global kccref, kmf
+    global kmf, kcc
     L = 2.
     He = gto.Cell()
     He.verbose = 5
+    He.output = '/dev/null'
     He.a = np.eye(3)*L
     He.atom =[['He' , ( L/2+0., L/2+0., L/2+0.)],]
     He.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
@@ -32,31 +34,32 @@ def setUpModule():
     He.build()
 
     nk = [2,2,2]
-
-    kpts0 = He.make_kpts(nk)
-    kmf0 = scf.KRHF(He, kpts0, exxdiv=None).density_fit()
-    kmf0.kernel()
-    kccref = cc.KRCCSD(kmf0)
-    kccref.kernel()
-
     kpts = He.make_kpts(nk,space_group_symmetry=True,time_reversal_symmetry=True)
     kmf = scf.KRHF(He, kpts, exxdiv=None).density_fit()
     kmf.kernel()
+    kcc = cc.KsymAdaptedRCCSD(kmf)
+    kcc.kernel()
 
 def tearDownModule():
-    global kccref, kmf
-    del kccref, kmf
+    global kmf, kcc
+    del kmf, kcc
 
 class KnownValues(unittest.TestCase):
-    def test_krccsd(self):
-        kcc = cc.KsymAdaptedRCCSD(kmf)
-        kcc.kernel()
-        self.assertAlmostEqual(kcc.e_corr, kccref.e_corr, 8)
+    def test_krccsd_ksym(self):
+        self.assertAlmostEqual(kcc.e_corr, -0.0073791230287231875, 8)
+
+        t1 = kcc.t1.todense()
+        self.assertAlmostEqual(lib.fp(t1).max(), 0.0009185224804818333, 7)
+
+    def test_vs_krccsd(self):
+        kmf0 = kmf.to_khf()
+        kccref = cc.krccsd.KRCCSD(kmf0)
+        kccref.kernel()
 
         t1 = kcc.t1.todense()
         self.assertAlmostEqual(abs(kccref.t1 - t1).max(), 0, 6)
-        #t2 = kcc.t2.todense()
-        #self.assertAlmostEqual(abs(kccref.t2 - t2).max(), 0, 6)
+        t2 = kcc.t2.todense()
+        self.assertAlmostEqual(abs(kccref.t2 - t2).max(), 0, 6)
 
 if __name__ == '__main__':
     print("Full Tests for CCSD with k-point symmetry")

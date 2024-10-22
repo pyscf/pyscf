@@ -34,6 +34,7 @@ from functools import reduce
 from itertools import product
 import numpy
 from scipy import linalg
+from pyscf import gto
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
@@ -41,8 +42,9 @@ from pyscf.grad import casci as casci_grad
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad.mp2 import _shell_prange
 from pyscf.df.grad import rhf as dfrhf_grad
-from pyscf.df.grad.casdm2_util import solve_df_rdm2,\
-    grad_elec_dferi, grad_elec_auxresponse_dferi
+from pyscf.df.grad.casdm2_util import (solve_df_rdm2, grad_elec_dferi,
+                                       grad_elec_auxresponse_dferi)
+from pyscf.mcscf.addons import StateAverageMCSCFSolver
 
 def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
     mc = mc_grad.base
@@ -145,35 +147,39 @@ def as_scanner(mcscf_grad):
     >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
     >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
-    from pyscf import gto
-    from pyscf.mcscf.addons import StateAverageMCSCFSolver
     if isinstance(mcscf_grad, lib.GradScanner):
         return mcscf_grad
 
     logger.info(mcscf_grad, 'Create scanner for %s', mcscf_grad.__class__)
+    name = mcscf_grad.__class__.__name__ + CASSCF_GradScanner.__name_mixin__
+    return lib.set_class(CASSCF_GradScanner(mcscf_grad),
+                         (CASSCF_GradScanner, mcscf_grad.__class__), name)
 
-    class CASSCF_GradScanner(mcscf_grad.__class__, lib.GradScanner):
-        def __init__(self, g):
-            lib.GradScanner.__init__(self, g)
-        def __call__(self, mol_or_geom, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+class CASSCF_GradScanner(lib.GradScanner):
+    def __init__(self, g):
+        lib.GradScanner.__init__(self, g)
 
-            mc_scanner = self.base
-            e_tot = mc_scanner(mol)
-            if isinstance(mc_scanner, StateAverageMCSCFSolver):
-                e_tot = mc_scanner.e_average
+    def __call__(self, mol_or_geom, **kwargs):
+        if isinstance(mol_or_geom, gto.MoleBase):
+            assert mol_or_geom.__class__ == gto.Mole
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-            self.mol = mol
-            de = self.kernel(**kwargs)
-            return e_tot, de
-    return CASSCF_GradScanner(mcscf_grad)
+        mc_scanner = self.base
+        e_tot = mc_scanner(mol)
+        if isinstance(mc_scanner, StateAverageMCSCFSolver):
+            e_tot = mc_scanner.e_average
+
+        self.mol = mol
+        de = self.kernel(**kwargs)
+        return e_tot, de
 
 
 class Gradients(casci_grad.Gradients):
     '''Non-relativistic restricted Hartree-Fock gradients'''
+
+    _keys = {'with_df', 'auxbasis_response'}
 
     def __init__(self, mc):
         self.with_df = mc.with_df
@@ -218,46 +224,6 @@ class Gradients(casci_grad.Gradients):
 
     as_scanner = as_scanner
 
+    to_gpu = lib.to_gpu
+
 Grad = Gradients
-
-#from pyscf import mcscf
-#mcscf.mc1step.CASSCF.Gradients = lib.class_as_method(Gradients)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-    from pyscf import mcscf
-    from pyscf import df
-    #from pyscf.grad import numeric
-
-    mol = gto.Mole()
-    mol.atom = 'N 0 0 0; N 0 0 1.2; H 1 1 0; H 1 1 1.2'
-    mol.basis = '631g'
-    mol.build()
-    aux = df.aug_etb (mol)
-    mf = scf.RHF(mol).density_fit (auxbasis=aux).run()
-    mc = mcscf.CASSCF(mf, 4, 4).run()
-    mc.conv_tol = 1e-10
-    de = Gradients (mc).kernel()
-    #de_num = numeric.Gradients (mc).kernel ()
-    #print(lib.finger(de) - 0.019602220578635747)
-    #print(lib.finger(de) - lib.finger (de_num))
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.atom = 'N 0 0 0; N 0 0 1.2'
-    mol.basis = 'sto3g'
-    mol.build()
-    mf = scf.RHF(mol).density_fit (auxbasis=aux).run()
-    mc = mcscf.CASSCF(mf, 4, 4)
-    mc.conv_tol = 1e-10
-    mc.kernel ()
-    de = Gradients (mc).kernel()
-
-    mcs = mc.as_scanner()
-    mol.set_geom_('N 0 0 0; N 0 0 1.201')
-    e1 = mcs(mol)
-    mol.set_geom_('N 0 0 0; N 0 0 1.199')
-    e2 = mcs(mol)
-    print(de[1,2], (e1-e2)/0.002*lib.param.BOHR)

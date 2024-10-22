@@ -1204,6 +1204,12 @@ class RADCEA(kadc_rhf.RADC):
             Spectroscopic amplitudes for each EA transition.
     '''
 
+    _keys = {
+        'tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy_b',
+        't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle',
+        'kpts', 'exxdiv', 'khelper', 'cell', 'nkop_chk', 'kop_npick', 'chnk_size',
+    }
+
     def __init__(self, adc):
         self.verbose = adc.verbose
         self.stdout = adc.stdout
@@ -1243,11 +1249,6 @@ class RADCEA(kadc_rhf.RADC):
         self.mo_energy = adc.mo_energy
         self.imds = adc.imds
         self.chnk_size = adc.chnk_size
-
-        keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy_b',
-                   'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
-
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     kernel = kadc_rhf.kernel
     get_imds = get_imds

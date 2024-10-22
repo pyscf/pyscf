@@ -47,11 +47,21 @@ def tearDownModule():
     global mol, mf, myadc
     del mol, mf, myadc
 
+def rdms_test(dm):
+    r2_int = mol.intor('int1e_r2')
+    dm_ao = np.einsum('pi,ij,qj->pq', mf.mo_coeff, dm, mf.mo_coeff.conj())
+    r2 = np.einsum('pq,pq->',r2_int,dm_ao)
+    return r2
+
 class KnownValues(unittest.TestCase):
 
     def test_ip_adc2(self):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2039852016968376, 6)
+
+        dm1_gs = myadc.make_ref_rdm1()
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 19.073700043115412, 6)
 
         myadcip = adc.radc_ip.RADCIP(myadc)
         e,v,p,x = myadcip.kernel(nroots=3)
@@ -64,10 +74,19 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 1.8274312312239454, 6)
         self.assertAlmostEqual(p[2], 1.8582314560275948, 6)
 
+        dm1_exc = myadcip.make_rdm1()
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 14.495740213945693, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 14.420886528704559, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 14.222914438696922, 6)
+
     def test_ip_adc2x(self):
         myadc.method = "adc(2)-x"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2039852016968376, 6)
+
+        dm1_gs = myadc.make_ref_rdm1()
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 19.073700043115412, 6)
 
         myadcip = adc.radc_ip.RADCIP(myadc)
         e,v,p,x = myadcip.kernel(nroots=3)
@@ -80,11 +99,20 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 1.8381884804163264, 6)
         self.assertAlmostEqual(p[2], 1.8669268953278064, 6)
 
+        dm1_exc = myadcip.make_rdm1()
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 14.63435450911693, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 14.55055095791920, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 14.34027603791598, 6)
+
 
     def test_ip_adc3(self):
         myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2107769014592799, 6)
+
+        dm1_gs = myadc.make_ref_rdm1()
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 19.043496230938608, 6)
 
         myadcip = adc.radc_ip.RADCIP(myadc)
         e,v,p,x = myadcip.kernel(nroots=4)
@@ -99,6 +127,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 1.8720029748507658, 6)
         self.assertAlmostEqual(p[2], 1.8881842403480831, 6)
         self.assertAlmostEqual(p[3], 0.1651131053450, 6)
+
+        dm1_exc = myadcip.make_rdm1()
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 14.865794062106032, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 14.750656672998344, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 14.508101917384584, 6)
 
 if __name__ == "__main__":
     print("IP calculations for different ADC methods for water molecule")

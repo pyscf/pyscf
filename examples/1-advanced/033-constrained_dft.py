@@ -37,8 +37,6 @@ natural atomic orbitals.
 
 import numpy as np
 import scipy.linalg as la
-import copy
-from functools import reduce
 from pyscf import gto, scf, lo, dft, lib
 from pyscf.pbc.scf import khf
 
@@ -48,7 +46,6 @@ def get_localized_orbitals(mf, lo_method, mo=None):
         mo = mf.mo_coeff
 
     if not isinstance(mf, khf.KSCF):
-        mol = mf.mol
         s1e = mf.get_ovlp()
 
         if lo_method.lower() == 'lowdin' or lo_method.lower() == 'meta_lowdin':
@@ -96,12 +93,10 @@ def get_localized_orbitals(mf, lo_method, mo=None):
         return C_inv_spin, mo_lo
 
     else:
-        cell = mf.cell
         s1e = mf.get_ovlp()
 
         if lo_method.lower() == 'lowdin' or lo_method.lower() == 'meta_lowdin':
             nkpt = len(mf.kpts)
-            C_arr = []
             C_inv_arr = []
             for i in range(nkpt):
                 C_curr = lo.orth_ao(mf, 'meta_lowdin',s=s1e[i])
@@ -142,9 +137,10 @@ def pop_analysis(mf, mo_on_loc_ao, disp=True, full_dm=False):
         return np.einsum('...ii->...i', dm_lo)
 
 
-# get the matrix which should be added to the fock matrix, due to the lagrange multiplier V_lagr (in separate format)
 def get_fock_add_cdft(constraints, V, C_ao2lo_inv):
     '''
+    Get the matrix which should be added to the fock matrix, due to the lagrange multiplier V_lagr (in separate format)
+    
     mf is a pre-converged mf object, with NO constraints.
 
     F_ao_new=F_ao_old + C^{-1}.T * V_diag_lo * C^{-1}
@@ -186,10 +182,10 @@ def W_cdft(mf, constraints, V_c, orb_pop):
     sites_a, sites_b = constraints.unique_sites()
     N_cur = pop_a[sites_a], pop_b[sites_b]
     N_cur_sum = constraints.separated2sum(N_cur)[1]
-    return np.einsum('i,i', V_c, N_cur_sum - N_c)
+    return np.inner(V_c, N_cur_sum - N_c)
 
-# get gradient of W, as well as return the current population of selected orbitals
 def jac_cdft(mf, constraints, V_c, orb_pop):
+    '''Get gradient of W, as well as return the current population of selected orbitals'''
     if isinstance(mf, scf.hf.RHF):
         pop_a = pop_b = orb_pop * .5
     else:
@@ -197,12 +193,12 @@ def jac_cdft(mf, constraints, V_c, orb_pop):
 
     N_c = constraints.nelec_required
     sites_a, sites_b = constraints.unique_sites()
-    N_cur = np.array([pop_a[sites_a],pop_b[sites_b]]).real
+    N_cur = pop_a[sites_a].real, pop_b[sites_b].real
     N_cur_sum = constraints.separated2sum(N_cur)[1]
     return N_cur_sum - N_c, N_cur_sum
 
-# get the hessian of W, w.r.t. V_lagr
-def hess_cdft(mf, constraints, V_c, mo_on_loc_ao):
+def hess_cdft(mf, constraints, mo_on_loc_ao):
+    '''get the hessian of W, w.r.t. V_lagr'''
     mo_occ = mf.mo_occ
     mo_energy = mf.mo_energy
     de_ov_a = mo_energy[0][mo_occ[0]>0][:,None] - mo_energy[0][mo_occ[0]==0]
@@ -232,17 +228,19 @@ def hess_cdft(mf, constraints, V_c, mo_on_loc_ao):
     return hess_arr
 
 
-# main function for cdft
-# mf : pre-converged mf object
-# V_0 : initial guess of lagrange multipliers
-# orb_idx: orbital index for orbital to be constrained
-# alpha : newton step
-# lo_method: localization method, one of 'lowdin', 'meta-lowdin', 'iao', 'nao'
-# diis_pos: 3 choices: post, pre, both
-# diis_type: 3 choices: use gradient of error vectors, use subsequent diff as error vector, no DIIS
 def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
          constraints_tol=1e-3, maxiter=200, C_inv=None, verbose=4,
          diis_pos='post', diis_type=1):
+    '''
+    main function for cdft
+    mf : pre-converged mf object
+    V_0 : initial guess of lagrange multipliers
+    orb_idx: orbital index for orbital to be constrained
+    alpha : newton step
+    lo_method: localization method, one of 'lowdin', 'meta_lowdin', 'iao', 'nao'
+    diis_pos: 3 choices: post, pre, both
+    diis_type: 3 choices: use gradient of error vectors, use subsequent diff as error vector, no DIIS
+    '''
 
     mf.verbose = verbose
     mf.max_cycle = maxiter
@@ -258,7 +256,7 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
     cdft_diis = lib.diis.DIIS()
     cdft_diis.space = 8
 
-    def get_fock(h1e, s1e, vhf, dm, cycle=0, mf_diis=None):
+    def get_fock(h1e, s1e, vhf, dm, cycle=0, mf_diis=None, fock_last=None):
         fock_0 = old_get_fock(h1e, s1e, vhf, dm, cycle, None)
         V_0 = constraints._final_V
         if mf_diis is None:
@@ -278,11 +276,10 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
         fock_add = get_fock_add_cdft(constraints, V_0, C_inv)
         fock = fock_0 + fock_add #ZHC
 
-        if diis_pos == 'pre' or diis_pos == 'both':
+        def inner_loop(fock_0, V_0, C_inv, cdft_conv_flag):
             for it in range(inner_max_cycle): # TO BE MODIFIED
                 fock_add = get_fock_add_cdft(constraints, V_0, C_inv)
                 fock = fock_0 + fock_add #ZHC
-
                 mo_energy, mo_coeff = mf.eig(fock, s1e)
                 mo_occ = mf.get_occ(mo_energy, mo_coeff)
 
@@ -299,8 +296,7 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
                 orb_pop = pop_analysis(mf, mo_on_loc_ao, disp=False)
                 W_new = W_cdft(mf, constraints, V_0, orb_pop)
                 jacob, N_cur = jac_cdft(mf, constraints, V_0, orb_pop)
-                hess = hess_cdft(mf, constraints, V_0, mo_on_loc_ao)
-
+                hess = hess_cdft(mf, constraints, mo_on_loc_ao)
                 deltaV = get_newton_step_aug_hess(jacob,hess)
                 #deltaV = np.linalg.solve (hess, -jacob)
 
@@ -311,13 +307,22 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
 
                 V = V_0 + deltaV * stp
                 g_norm = np.linalg.norm(jacob)
+                V_step_size = np.linalg.norm(V-V_0)
+
                 if verbose > 3:
-                    print("  loop %4s : W: %.5e    V_c: %s     Nele: %s      g_norm: %.3e    "
-                          % (it,W_new, V_0, N_cur, g_norm))
-                if g_norm < tol and np.linalg.norm(V-V_0) < constraints_tol:
+                    print("  loop %4s : W: %.5e    V_c: %s     Nele: %s      g_norm: %.3e    V_step_size: %.3e"
+                            % (it,W_new, V_0, N_cur, g_norm, V_step_size))
+                    
+                if g_norm < tol and V_step_size < constraints_tol:
                     cdft_conv_flag = True
                     break
-                V_0 = V
+                else:
+                    V_0 = V
+
+            return fock, W_new, g_norm, cdft_conv_flag, V_0
+
+        if diis_pos == 'pre' or diis_pos == 'both':
+            fock, W_new, g_norm, cdft_conv_flag, V_0 = inner_loop(fock_0, V_0, C_inv, cdft_conv_flag)
 
         if cycle > 1:
             if diis_type == 1:
@@ -328,48 +333,12 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
             elif diis_type == 3:
                 fock = cdft_diis.update(fock, scf.diis.get_err_vec(s1e, dm, fock))
             else:
-                print("\nWARN: Unknow CDFT DIIS type, NO DIIS IS USED!!!\n")
+                print("\nWARN: Unknown CDFT DIIS type, NO DIIS IS USED!!!\n")
 
         if diis_pos == 'post' or diis_pos == 'both':
             cdft_conv_flag = False
-            fock_0 = fock - fock_add
-            for it in range(inner_max_cycle): # TO BE MODIFIED
-                fock_add = get_fock_add_cdft(constraints, V_0, C_inv)
-                fock = fock_0 + fock_add #ZHC
-
-                mo_energy, mo_coeff = mf.eig(fock, s1e)
-                mo_occ = mf.get_occ(mo_energy, mo_coeff)
-
-                # Required by hess_cdft function
-                mf.mo_energy = mo_energy
-                mf.mo_coeff = mo_coeff
-                mf.mo_occ = mo_occ
-
-                if lo_method.lower() == 'iao':
-                    mo_on_loc_ao = get_localized_orbitals(mf, lo_method, mo_coeff)[1]
-                else:
-                    mo_on_loc_ao = np.einsum('...jk,...kl->...jl', C_inv, mo_coeff)
-
-                orb_pop = pop_analysis(mf, mo_on_loc_ao, disp=False)
-                W_new = W_cdft(mf, constraints, V_0, orb_pop)
-                jacob, N_cur = jac_cdft(mf, constraints, V_0, orb_pop)
-                hess = hess_cdft(mf, constraints, V_0, mo_on_loc_ao)
-                deltaV = np.linalg.solve (hess, -jacob)
-
-                if it < 5 :
-                    stp = min(0.05, alpha*0.1)
-                else:
-                    stp = alpha
-
-                V = V_0 + deltaV * stp
-                g_norm = np.linalg.norm(jacob)
-                if verbose > 3:
-                    print("  loop %4s : W: %.5e    V_c: %s     Nele: %s      g_norm: %.3e    "
-                          % (it,W_new, V_0, N_cur, g_norm))
-                if g_norm < tol and np.linalg.norm(V-V_0) < constraints_tol:
-                    cdft_conv_flag = True
-                    break
-                V_0 = V
+            fock_0 = fock - fock_add            
+            fock, W_new, g_norm, cdft_conv_flag, V_0 = inner_loop(fock_0, V_0, C_inv, cdft_conv_flag)
 
         if verbose > 0:
             print("CDFT W: %.5e   g_norm: %.3e    "%(W_new, g_norm))
@@ -377,13 +346,15 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
         constraints._converged = cdft_conv_flag
         constraints._final_V = V_0
         return fock
-
+        
     dm0 = mf.make_rdm1()
     mf.get_fock = get_fock
     mf.kernel(dm0)
 
     mo_on_loc_ao = get_localized_orbitals(mf, lo_method, mf.mo_coeff)[1]
     orb_pop = pop_analysis(mf, mo_on_loc_ao, disp=True)
+
+    #print(f'Vc: {constraints._final_V}')
     return mf, orb_pop
 
 
@@ -406,8 +377,8 @@ class Constraints(object):
         constraints.nelec_required = [1.5 , 0.5]
 
         correspond to two constraints:
-        1. N_{alpha-MO_2} + N_{beta-MO_2} = 1.5
-        2. N_{beta-MO_3} = 0.5
+        1. N_{alpha-AO_2} + N_{beta-AO_2} = 1.5
+        2. N_{beta-AO_3} = 0.5
     '''
     def __init__(self, orbital_indices, spin_labels, nelec_required):
         self.orbital_indices = orbital_indices
@@ -480,7 +451,7 @@ def get_newton_step_aug_hess(jac,hess):
 
     eigval, eigvec = la.eigh(ah)
     idx = None
-    for i in xrange(len(eigvec)):
+    for i in range(len(eigvec)):
         if abs(eigvec[0,i]) > 0.1 and eigval[i] > 0.0:
             idx = i
             break
@@ -507,7 +478,7 @@ if __name__ == '__main__':
     h  -2.172991468538160 -1.254577209307266  0.000000000000000
     c   0.000000000000000 -1.406124906933854  0.000000000000000
     h   0.000000000000000 -2.509154418614532  0.000000000000000
-    '''
+    ''' # benzene
     mol.basis = '631g'
     mol.spin=0
     mol.build()
@@ -521,7 +492,7 @@ if __name__ == '__main__':
     mf.run()
 
     idx = mol.search_ao_label('C 2pz') # find all idx for carbon
-    # there are 4 constraints:
+    # there are 3 constraints:
     # 1. N_alpha_C0 + N_beta_C0 + N_beta_C1 = 1.5
     # 2. N_alpha_C2 = 0.5
     # 3. N_beta_C2 = 0.5
@@ -530,3 +501,5 @@ if __name__ == '__main__':
     nelec_required = [1.5, .5, .5]
     constraints = Constraints(orbital_indices, spin_labels, nelec_required)
     mf, dm_pop = cdft(mf, constraints, lo_method='lowdin', verbose=4)
+
+    #expected Vc: [-0.00142391 -0.00021137 -0.00270322]

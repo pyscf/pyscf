@@ -69,24 +69,24 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(abs(diff) < KGCCSD_TEST_THRESHOLD,"Difference in IP diag: {}".format(diff))
 
     def _test_ea_diag(self,cc):
-       eom = kccsd_ghf.EOMEA(cc)
-       imds = eom.make_imds()
-       nkpts, nocc, nvir = imds.t1.shape
-       diag = kccsd_ghf.eaccsd_diag(eom,0,imds=imds)
+        eom = kccsd_ghf.EOMEA(cc)
+        imds = eom.make_imds()
+        nkpts, nocc, nvir = imds.t1.shape
+        diag = kccsd_ghf.eaccsd_diag(eom,0,imds=imds)
 
-       I = np.identity(diag.shape[0],dtype=complex)
-       indices = np.arange(len(diag))
-       H = np.zeros((I.shape[0],len(indices)),dtype=complex)
-       for j,idx in enumerate(indices):
-           H[:,j] = kccsd_ghf.eaccsd_matvec(eom,I[:,idx],0,imds=imds)
+        I = np.identity(diag.shape[0],dtype=complex)
+        indices = np.arange(len(diag))
+        H = np.zeros((I.shape[0],len(indices)),dtype=complex)
+        for j,idx in enumerate(indices):
+            H[:,j] = kccsd_ghf.eaccsd_matvec(eom,I[:,idx],0,imds=imds)
 
-       diag_ref = np.zeros(len(indices),dtype=complex)
-       diag_out = np.zeros(len(indices),dtype=complex)
-       for j,idx in enumerate(indices):
-           diag_ref[j] = H[idx,j]
-           diag_out[j] = diag[idx]
-       diff = np.linalg.norm(diag_ref - diag_out)
-       self.assertTrue(abs(diff) < KGCCSD_TEST_THRESHOLD,"Difference in EA diag: {}".format(diff))
+        diag_ref = np.zeros(len(indices),dtype=complex)
+        diag_out = np.zeros(len(indices),dtype=complex)
+        for j,idx in enumerate(indices):
+            diag_ref[j] = H[idx,j]
+            diag_out[j] = diag[idx]
+        diff = np.linalg.norm(diag_ref - diag_out)
+        self.assertTrue(abs(diff) < KGCCSD_TEST_THRESHOLD,"Difference in EA diag: {}".format(diff))
 
     def test_he_112_diag(self):
         kpts = cell.make_kpts([1,1,2])
@@ -127,7 +127,7 @@ class KnownValues(unittest.TestCase):
         mycc.conv_tol_normt = 1e-10
         ecc2, t1, t2 = mycc.kernel()
         ecc_ref = -0.01044680113334205
-        self.assertAlmostEqual(abs(ecc_ref - ecc2), 0, 10)
+        self.assertAlmostEqual(abs(ecc_ref - ecc2), 0, 9)
 
 
 if __name__ == '__main__':

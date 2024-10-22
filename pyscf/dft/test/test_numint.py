@@ -23,52 +23,53 @@ from pyscf.dft import numint
 def setUpModule():
     numint.SWITCH_SIZE = 0
     global mol, mf, h4, mf_h4, mol1, h2o, nao, he2, mf_he2
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.atom = [('h', (0,0,i*3)) for i in range(12)]
-    mol.basis = 'ccpvtz'
-    mol.build()
-    mf = dft.RKS(mol)
-    mf.grids.atom_grid = {"H": (50, 110)}
-    mf.prune = None
-    mf.grids.build(with_non0tab=True)
-    nao = mol.nao_nr()
-    ao_loc = mol.ao_loc_nr()
+    with lib.temporary_env(dft.radi, ATOM_SPECIFIC_TREUTLER_GRIDS=False):
+        mol = gto.Mole()
+        mol.verbose = 0
+        mol.atom = [('h', (0,0,i*3)) for i in range(12)]
+        mol.basis = 'ccpvtz'
+        mol.build()
+        mf = dft.RKS(mol)
+        mf.grids.atom_grid = {"H": (50, 110)}
+        mf.prune = None
+        mf.grids.build(with_non0tab=True)
+        nao = mol.nao_nr()
+        ao_loc = mol.ao_loc_nr()
 
-    h4 = gto.Mole()
-    h4.verbose = 0
-    h4.atom = 'H 0 0 0; H 0 0 9; H 0 9 0; H 0 9 9'
-    h4.basis = 'ccpvtz'
-    h4.build()
-    mf_h4 = dft.RKS(h4)
-    mf_h4.grids.atom_grid = {"H": (50, 110)}
-    mf_h4.grids.build(with_non0tab=True)
+        h4 = gto.Mole()
+        h4.verbose = 0
+        h4.atom = 'H 0 0 0; H 0 0 9; H 0 9 0; H 0 9 9'
+        h4.basis = 'ccpvtz'
+        h4.build()
+        mf_h4 = dft.RKS(h4)
+        mf_h4.grids.atom_grid = {"H": (50, 110)}
+        mf_h4.grids.build(with_non0tab=True)
 
-    mol1 = gto.Mole()
-    mol1.verbose = 0
-    mol1.atom = [('h', (0,0,i*3)) for i in range(4)]
-    mol1.basis = 'ccpvtz'
-    mol1.build()
+        mol1 = gto.Mole()
+        mol1.verbose = 0
+        mol1.atom = [('h', (0,0,i*3)) for i in range(4)]
+        mol1.basis = 'ccpvtz'
+        mol1.build()
 
-    h2o = gto.Mole()
-    h2o.verbose = 5
-    h2o.output = '/dev/null'
-    h2o.atom = [
-        ["O" , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ]
+        h2o = gto.Mole()
+        h2o.verbose = 5
+        h2o.output = '/dev/null'
+        h2o.atom = [
+            ["O" , (0. , 0.     , 0.)],
+            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. , 0.757  , 0.587)] ]
 
-    h2o.basis = {"H": '6-31g', "O": '6-31g',}
-    h2o.build()
+        h2o.basis = {"H": '6-31g', "O": '6-31g',}
+        h2o.build()
 
-    he2 = gto.Mole()
-    he2.verbose = 0
-    he2.atom = 'He 0.0 0.0 0.0; He 0.0 0.0 20.0'
-    he2.basis = 'aug-pc-4'
-    he2.build()
-    mf_he2 = dft.RKS(he2)
-    mf_he2.grids.level = 0
-    mf_he2.grids.build(with_non0tab=True)
+        he2 = gto.Mole()
+        he2.verbose = 0
+        he2.atom = 'He 0.0 0.0 0.0; He 0.0 0.0 20.0'
+        he2.basis = 'aug-pc-4'
+        he2.build()
+        mf_he2 = dft.RKS(he2)
+        mf_he2.grids.level = 0
+        mf_he2.grids.build(with_non0tab=True)
 
 def tearDownModule():
     numint.SWITCH_SIZE = 800
@@ -92,6 +93,15 @@ def _fill_zero_blocks(mat, ao_loc, mask):
     return mat
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_dot_ao_dm(self):
         dm = mf_h4.get_init_guess(key='minao')
         ao_loc = h4.ao_loc_nr()
@@ -481,11 +491,13 @@ class KnownValues(unittest.TestCase):
     def test_nr_uks_vxc_vv10(self):
         method = dft.UKS(h2o)
         dm = method.get_init_guess()
-        dm = (dm[0], dm[0])
         grids = dft.gen_grid.Grids(h2o)
         grids.atom_grid = {'H': (20, 50), 'O': (20,50)}
-        v = dft.numint.nr_vxc(h2o, grids, 'wB97M_V__vv10', dm, spin=1, hermi=0)[2]
-        self.assertAlmostEqual(lib.fp(v), 0.02293399033256055, 8)
+        ni = dft.numint.NumInt()
+        n, e, v = dft.numint.nr_nlc_vxc(ni, h2o, grids, 'wB97M_V', dm[0]*2, hermi=0)
+        self.assertAlmostEqual(n, 9.987377839393485, 8)
+        self.assertAlmostEqual(e, 0.04237199619089385, 8)
+        self.assertAlmostEqual(lib.fp([v, v]), 0.02293399033256055, 8)
 
     def test_uks_gga_wv1(self):
         numpy.random.seed(1)
@@ -515,7 +527,7 @@ class KnownValues(unittest.TestCase):
 
     def test_complex_dm(self):
         mf = dft.RKS(h2o)
-        mf.xc = 'b3lyp'
+        mf.xc = 'b3lyp5'
         nao = h2o.nao
         numpy.random.seed(1)
         dm = (numpy.random.random((nao,nao)) +

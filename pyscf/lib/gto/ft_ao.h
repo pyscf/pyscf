@@ -32,7 +32,7 @@ typedef struct {
 
         int i_l;
         int j_l;
-        int nfi;  // number of cartesion components
+        int nfi;  // number of cartesian components
         int nfj;
         int nf;  // = nfi*nfj
         int ngrids;  // number of grids or planewaves
@@ -68,6 +68,10 @@ typedef struct {
 typedef void (*FPtr_eval_gz)(double *gzR, double *gzI, double fac, double aij,
                              double *rij, FTEnvVars *envs, double *cache);
 
+typedef int (*FPtrIntor)(double *outR, double *outI, int *shls, int *dims,
+                         FPtr_eval_gz eval_gz, double complex fac,
+                         double *Gv, double *b, int *gxyz, int *gs, int nGv, int block_size,
+                         int *atm, int natm, int *bas, int nbas, double *env, double *cache);
 
 void GTO_ft_init1e_envs(FTEnvVars *envs, int *ng, int *shls, double complex fac,
                         double *Gv, double *b, int *gxyz, int *gs,
@@ -75,7 +79,7 @@ void GTO_ft_init1e_envs(FTEnvVars *envs, int *ng, int *shls, double complex fac,
                         int *atm, int natm, int *bas, int nbas, double *env);
 
 int GTO_ft_aopair_drv(double *outR, double *outI, int *dims,
-                      FPtr_eval_gz eval_gz, void (*f_c2s)(),
+                      FPtr_eval_gz eval_gz, double *cache, void (*f_c2s)(),
                       FTEnvVars *envs);
 
 void GTO_ft_c2s_cart(double *out, double *gctr, int *dims,
@@ -85,14 +89,12 @@ void GTO_ft_c2s_sph(double *out, double *gctr, int *dims,
 
 int GTO_ft_ovlp_cart(double *outR, double *outI, int *shls, int *dims,
                      FPtr_eval_gz eval_gz, double complex fac,
-                     double *Gv, double *b, int *gxyz, int *gs, int nGv,
-                     int block_size,
-                     int *atm, int natm, int *bas, int nbas, double *env);
+                     double *Gv, double *b, int *gxyz, int *gs, int nGv, int block_size,
+                     int *atm, int natm, int *bas, int nbas, double *env, double *cache);
 int GTO_ft_ovlp_sph(double *outR, double *outI, int *shls, int *dims,
                     FPtr_eval_gz eval_gz, double complex fac,
-                    double *Gv, double *b, int *gxyz, int *gs, int nGv,
-                    int block_size,
-                    int *atm, int natm, int *bas, int nbas, double *env);
+                    double *Gv, double *b, int *gxyz, int *gs, int nGv, int block_size,
+                    int *atm, int natm, int *bas, int nbas, double *env, double *cache);
 
 #define ZMUL(outR, outI, gx, gy, gz) \
         xyR = gx##R[ix*bs+k] * gy##R[iy*bs+k] - gx##I[ix*bs+k] * gy##I[iy*bs+k]; \

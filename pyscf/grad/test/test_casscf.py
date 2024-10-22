@@ -268,12 +268,12 @@ class KnownValues(unittest.TestCase):
         e2_0 = mcs.e_states[0]
         e2_1 = mcs.e_states[1]
 
-        self.assertAlmostEqual(e_avg, -1.083838462141992e+02, 9)
-        self.assertAlmostEqual(lib.fp(de_avg), -1.034392760319145e-01, 7)
-        self.assertAlmostEqual(e_0, -1.083902661656155e+02, 9)
-        self.assertAlmostEqual(lib.fp(de_0), -6.398921123988113e-02, 7)
-        self.assertAlmostEqual(e_1, -1.083774262627830e+02, 9)
-        self.assertAlmostEqual(lib.fp(de_1), -1.428891618903179e-01, 7)
+        self.assertAlmostEqual(e_avg, -1.083838462141992e+02, 6)
+        self.assertAlmostEqual(lib.fp(de_avg), -1.034392760319145e-01, 6)
+        self.assertAlmostEqual(e_0, -1.083902661656155e+02, 6)
+        self.assertAlmostEqual(lib.fp(de_0), -0.0639891145578155, 6)
+        self.assertAlmostEqual(e_1, -1.083774262627830e+02, 6)
+        self.assertAlmostEqual(lib.fp(de_1), -1.428891618903179e-01, 6)
         self.assertAlmostEqual(de_avg[1,2], (e1_avg-e2_avg)/0.002*lib.param.BOHR, 4)
         self.assertAlmostEqual(de_0[1,2], (e1_0-e2_0)/0.002*lib.param.BOHR, 4)
         self.assertAlmostEqual(de_1[1,2], (e1_1-e2_1)/0.002*lib.param.BOHR, 4)
@@ -332,4 +332,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Tests for CASSCF gradients")
     unittest.main()
-

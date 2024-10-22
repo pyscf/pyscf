@@ -21,6 +21,7 @@ CISD analytical nuclear gradients
 '''
 
 import numpy
+from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ci import cisd
@@ -69,50 +70,6 @@ def as_scanner(grad_ci, state=0):
 
     logger.info(grad_ci, 'Create scanner for %s', grad_ci.__class__)
 
-    class CISD_GradScanner(grad_ci.__class__, lib.GradScanner):
-        def __init__(self, g):
-            lib.GradScanner.__init__(self, g)
-
-        def __call__(self, mol_or_geom, state=state, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
-
-            ci_scanner = self.base
-            if ci_scanner.nroots > 1 and state >= ci_scanner.nroots:
-                raise ValueError('State ID greater than the number of CISD roots')
-
-            mf_scanner = ci_scanner._scf
-            mf_scanner(mol)
-            ci_scanner.mo_coeff = mf_scanner.mo_coeff
-            ci_scanner.mo_occ = mf_scanner.mo_occ
-
-            if getattr(ci_scanner.ci, 'size', 0) != ci_scanner.vector_size():
-                ci_scanner.ci = None
-            eris = ci_scanner.ao2mo(ci_scanner.mo_coeff)
-            ci_scanner.kernel(ci0=ci_scanner.ci, eris=eris)
-
-# TODO: Check root flip
-            if ci_scanner.nroots > 1:
-                e_tot = ci_scanner.e_tot[state]
-                civec = ci_scanner.ci[state]
-            else:
-                e_tot = ci_scanner.e_tot
-                civec = ci_scanner.ci
-
-            self.mol = mol
-            de = self.kernel(civec, eris=eris, **kwargs)
-            return e_tot, de
-        @property
-        def converged(self):
-            ci_scanner = self.base
-            if ci_scanner.nroots > 1:
-                ci_conv = ci_scanner.converged[state]
-            else:
-                ci_conv = ci_scanner.converged
-            return all((ci_scanner._scf.converged, ci_conv))
-
     # cache eris object in CCSD base class. eris object is used many times
     # when calculating gradients
     g_ao2mo = grad_ci.base.__class__.ao2mo
@@ -121,12 +78,67 @@ def as_scanner(grad_ci, state=0):
         return self._eris
     grad_ci.base.__class__.ao2mo = _save_eris
 
-    return CISD_GradScanner(grad_ci)
+    name = grad_ci.__class__.__name__ + CISD_GradScanner.__name_mixin__
+    return lib.set_class(CISD_GradScanner(grad_ci, state),
+                         (CISD_GradScanner, grad_ci.__class__), name)
 
-class Gradients(rhf_grad.GradientsMixin):
+class CISD_GradScanner(lib.GradScanner):
+    def __init__(self, g, state):
+        lib.GradScanner.__init__(self, g)
+        if state is not None:
+            self.state = state
+
+    def __call__(self, mol_or_geom, state=None, **kwargs):
+        if isinstance(mol_or_geom, gto.MoleBase):
+            assert mol_or_geom.__class__ == gto.Mole
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+        self.reset(mol)
+
+        if state is None:
+            state = self.state
+        else:
+            self.state = state
+
+        ci_scanner = self.base
+        if ci_scanner.nroots > 1 and state >= ci_scanner.nroots:
+            raise ValueError('State ID greater than the number of CISD roots')
+
+        mf_scanner = ci_scanner._scf
+        mf_scanner(mol)
+        ci_scanner.mo_coeff = mf_scanner.mo_coeff
+        ci_scanner.mo_occ = mf_scanner.mo_occ
+
+        if getattr(ci_scanner.ci, 'size', 0) != ci_scanner.vector_size():
+            ci_scanner.ci = None
+        eris = ci_scanner.ao2mo(ci_scanner.mo_coeff)
+        ci_scanner.kernel(ci0=ci_scanner.ci, eris=eris)
+
+# TODO: Check root flip
+        if ci_scanner.nroots > 1:
+            e_tot = ci_scanner.e_tot[state]
+            civec = ci_scanner.ci[state]
+        else:
+            e_tot = ci_scanner.e_tot
+            civec = ci_scanner.ci
+
+        de = self.kernel(civec, eris=eris, **kwargs)
+        return e_tot, de
+
+    @property
+    def converged(self):
+        ci_scanner = self.base
+        if ci_scanner.nroots > 1:
+            ci_conv = ci_scanner.converged[self.state]
+        else:
+            ci_conv = ci_scanner.converged
+        return all((ci_scanner._scf.converged, ci_conv))
+
+class Gradients(rhf_grad.GradientsBase):
     def __init__(self, myci):
         self.state = 0  # of which the gradients to be computed.
-        rhf_grad.GradientsMixin.__init__(self, myci)
+        rhf_grad.GradientsBase.__init__(self, myci)
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
@@ -190,6 +202,8 @@ class Gradients(rhf_grad.GradientsMixin):
             logger.note(self, '----------------------------------------------')
 
     as_scanner = as_scanner
+
+    to_gpu = lib.to_gpu
 
 Grad = Gradients
 

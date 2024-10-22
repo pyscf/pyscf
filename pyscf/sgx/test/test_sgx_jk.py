@@ -26,6 +26,15 @@ from pyscf.sgx import sgx_jk
 import os
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = True
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_sgx_jk(self):
         mol = gto.Mole()
         mol.build(
@@ -41,6 +50,7 @@ class KnownValues(unittest.TestCase):
         #dm = dm + dm.T
         mf = scf.UHF(mol)
         dm = mf.get_init_guess()
+        vjref, vkref = scf.hf.get_jk(mol, dm)
 
         sgxobj = sgx.SGX(mol)
         sgxobj.grids = sgx_jk.get_gridss(mol, 0, 1e-10)
@@ -53,6 +63,8 @@ class KnownValues(unittest.TestCase):
             vj1, vk1 = sgx_jk.get_jk_favork(sgxobj, dm)
         self.assertAlmostEqual(abs(vj1-vj).max(), 0, 9)
         self.assertAlmostEqual(abs(vk1-vk).max(), 0, 9)
+        self.assertAlmostEqual(abs(vjref-vj).max(), 0, 2)
+        self.assertAlmostEqual(abs(vkref-vk).max(), 0, 2)
 
         with lib.temporary_env(sgxobj, debug=False):
             vj, vk = sgx_jk.get_jk_favorj(sgxobj, dm)
@@ -62,6 +74,8 @@ class KnownValues(unittest.TestCase):
             vj1, vk1 = sgx_jk.get_jk_favorj(sgxobj, dm)
         self.assertAlmostEqual(abs(vj1-vj).max(), 0, 9)
         self.assertAlmostEqual(abs(vk1-vk).max(), 0, 9)
+        self.assertAlmostEqual(abs(vjref-vj).max(), 0, 2)
+        self.assertAlmostEqual(abs(vkref-vk).max(), 0, 2)
 
     def test_dfj(self):
         mol = gto.Mole()
@@ -85,7 +99,7 @@ class KnownValues(unittest.TestCase):
         mf.build()
         vj, vk = mf.get_jk(mol, dm)
         self.assertAlmostEqual(lib.finger(vj), -19.100356543264645, 9)
-        self.assertAlmostEqual(lib.finger(vk), -16.750915356787406, 9)
+        self.assertAlmostEqual(lib.finger(vk), -16.715352176119794, 9)
 
     def test_rsh_get_jk(self):
         mol = gto.M(verbose = 0,
@@ -98,8 +112,8 @@ class KnownValues(unittest.TestCase):
         sgxobj = sgx.SGX(mol)
         sgxobj.grids = sgx_jk.get_gridss(mol, 0, 1e-7)
         vj, vk = sgxobj.get_jk(dm, hermi=0, omega=1.1)
-        self.assertAlmostEqual(lib.finger(vj), 4.78603728911563 , 9)
-        self.assertAlmostEqual(lib.finger(vk), 8.614628576953983, 9)
+        self.assertAlmostEqual(lib.finger(vj), 4.783036401049238, 9)
+        self.assertAlmostEqual(lib.finger(vk), 8.60666152195185 , 9)
 
         vj1, vk1 = scf.hf.get_jk(mol, dm, hermi=0, omega=1.1)
         self.assertAlmostEqual(abs(vj-vj1).max(), 0, 2)
@@ -107,8 +121,7 @@ class KnownValues(unittest.TestCase):
 
 
 class PJunctionScreening(unittest.TestCase):
-
-    #@unittest.skip("computationally expensive test")
+    @unittest.skip("computationally expensive test")
     def test_pjs(self):
         cwd = os.path.dirname(os.path.abspath(__file__))
         fname = os.path.join(cwd, 'a12.xyz')
@@ -142,4 +155,3 @@ class PJunctionScreening(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for sgx_jk")
     unittest.main()
-

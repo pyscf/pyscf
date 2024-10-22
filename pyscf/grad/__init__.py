@@ -62,6 +62,7 @@ try:
     from .rks import Gradients as RKS
     from .uks import Gradients as UKS
     from .roks import Gradients as ROKS
+    from . import dispersion
 
 except (ImportError, OSError):
     pass

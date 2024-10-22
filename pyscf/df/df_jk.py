@@ -16,8 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import copy
-
 import ctypes
 import numpy
 import scipy.linalg
@@ -78,78 +76,101 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
         with_df.verbose = mf.verbose
         with_df.auxbasis = auxbasis
 
-    mf_class = mf.__class__
-
     if isinstance(mf, _DFHF):
         if mf.with_df is None:
             mf.with_df = with_df
         elif getattr(mf.with_df, 'auxbasis', None) != auxbasis:
             #logger.warn(mf, 'DF might have been initialized twice.')
-            mf = copy.copy(mf)
+            mf = mf.copy()
             mf.with_df = with_df
             mf.only_dfj = only_dfj
         return mf
 
-    class DensityFitting(_DFHF, mf_class):
-        __doc__ = '''
-        Density fitting SCF class
-
-        Attributes for density-fitting SCF:
-            auxbasis : str or basis dict
-                Same format to the input attribute mol.basis.
-                The default basis 'weigend+etb' means weigend-coulomb-fit basis
-                for light elements and even-tempered basis for heavy elements.
-            with_df : DF object
-                Set mf.with_df = None to switch off density fitting mode.
-
-        See also the documents of class %s for other SCF attributes.
-        ''' % mf_class
-        def __init__(self, mf, df, only_dfj):
-            self.__dict__.update(mf.__dict__)
-            self._eri = None
-            self.with_df = df
-            self.only_dfj = only_dfj
-            self._keys = self._keys.union(['with_df', 'only_dfj'])
-
-        def reset(self, mol=None):
-            self.with_df.reset(mol)
-            return mf_class.reset(self, mol)
-
-        def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
-                   omega=None):
-            if dm is None: dm = self.make_rdm1()
-            if self.with_df and self.only_dfj:
-                vj = vk = None
-                if with_j:
-                    vj, vk = self.with_df.get_jk(dm, hermi, True, False,
-                                                 self.direct_scf_tol, omega)
-                if with_k:
-                    vk = mf_class.get_jk(self, mol, dm, hermi, False, True, omega)[1]
-            elif self.with_df:
-                vj, vk = self.with_df.get_jk(dm, hermi, with_j, with_k,
-                                             self.direct_scf_tol, omega)
-            else:
-                vj, vk = mf_class.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
-            return vj, vk
-
-        # for pyscf 1.0, 1.1 compatibility
-        @property
-        def _cderi(self):
-            naux = self.with_df.get_naoaux()
-            return next(self.with_df.loop(blksize=naux))
-        @_cderi.setter
-        def _cderi(self, x):
-            self.with_df._cderi = x
-
-        @property
-        def auxbasis(self):
-            return getattr(self.with_df, 'auxbasis', None)
-
-    return DensityFitting(mf, with_df, only_dfj)
+    dfmf = _DFHF(mf, with_df, only_dfj)
+    return lib.set_class(dfmf, (_DFHF, mf.__class__))
 
 # 1. A tag to label the derived SCF class
 # 2. A hook to register DF specific methods, such as nuc_grad_method.
-class _DFHF(object):
+class _DFHF:
+    '''
+    Density fitting SCF class
+
+    Attributes for density-fitting SCF:
+        auxbasis : str or basis dict
+            Same format to the input attribute mol.basis.
+            The default basis 'weigend+etb' means weigend-coulomb-fit basis
+            for light elements and even-tempered basis for heavy elements.
+        with_df : DF object
+            Set mf.with_df = None to switch off density fitting mode.
+
+    See also the documents of class for other SCF attributes.
+    '''
+
+    __name_mixin__ = 'DF'
+
+    _keys = {'with_df', 'only_dfj'}
+
+    def __init__(self, mf, df=None, only_dfj=None):
+        self.__dict__.update(mf.__dict__)
+        self._eri = None
+        self.with_df = df
+        self.only_dfj = only_dfj
+        # Unless DF is used only for J matrix, disable direct_scf for K build.
+        # It is more efficient to construct K matrix with MO coefficients than
+        # the incremental method in direct_scf.
+        self.direct_scf = only_dfj
+
+    def undo_df(self):
+        '''Remove the DFHF Mixin'''
+        obj = lib.view(self, lib.drop_class(self.__class__, _DFHF))
+        del obj.with_df, obj.only_dfj
+        return obj
+
+    def reset(self, mol=None):
+        self.with_df.reset(mol)
+        return super().reset(mol)
+
+    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
+               omega=None):
+        if dm is None: dm = self.make_rdm1()
+        if not self.with_df:
+            return super().get_jk(mol, dm, hermi, with_j, with_k, omega)
+
+        with_dfk = with_k and not self.only_dfj
+        if isinstance(self, scf.ghf.GHF):
+            def jkbuild(mol, dm, hermi, with_j, with_k, omega=None):
+                vj, vk = self.with_df.get_jk(dm.real, hermi, with_j, with_k,
+                                             self.direct_scf_tol, omega)
+                if dm.dtype == numpy.complex128:
+                    vjI, vkI = self.with_df.get_jk(dm.imag, hermi, with_j, with_k,
+                                                   self.direct_scf_tol, omega)
+                    if with_j:
+                        vj = vj + vjI * 1j
+                    if with_k:
+                        vk = vk + vkI * 1j
+                return vj, vk
+            vj, vk = scf.ghf.get_jk(mol, dm, hermi, with_j, with_dfk,
+                                    jkbuild, omega)
+        else:
+            vj, vk = self.with_df.get_jk(dm, hermi, with_j, with_dfk,
+                                         self.direct_scf_tol, omega)
+        if with_k and not with_dfk:
+            vk = super().get_jk(mol, dm, hermi, False, True, omega)[1]
+        return vj, vk
+
+    # for pyscf 1.0, 1.1 compatibility
+    @property
+    def _cderi(self):
+        naux = self.with_df.get_naoaux()
+        return next(self.with_df.loop(blksize=naux))
+    @_cderi.setter
+    def _cderi(self, x):
+        self.with_df._cderi = x
+
+    @property
+    def auxbasis(self):
+        return getattr(self.with_df, 'auxbasis', None)
+
     def nuc_grad_method(self):
         from pyscf.df.grad import rhf, rohf, uhf, rks, roks, uks
         if isinstance(self, scf.uhf.UHF):
@@ -179,6 +200,8 @@ class _DFHF(object):
                 return uks.Hessian(self)
             else:
                 return uhf.Hessian(self)
+        elif isinstance(self, scf.rohf.ROHF):
+            raise NotImplementedError
         elif isinstance(self, scf.rhf.RHF):
             if isinstance(self, scf.hf.KohnShamDFT):
                 return rks.Hessian(self)
@@ -204,6 +227,10 @@ class _DFHF(object):
     def CASSCF(self, ncas, nelecas, auxbasis=None, ncore=None, frozen=None):
         from pyscf import mcscf
         return mcscf.DFCASSCF(self, ncas, nelecas, auxbasis, ncore, frozen)
+
+    def to_gpu(self):
+        obj = self.undo_df().to_gpu().density_fit()
+        return lib.to_gpu(self, obj)
 
 
 def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
@@ -235,8 +262,9 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
 
     if not with_k:
         for eri1 in dfobj.loop():
-            rho = numpy.einsum('ix,px->ip', dmtril, eri1)
-            vj += numpy.einsum('ip,px->ix', rho, eri1)
+            # uses numpy.matmul
+            vj += (dmtril @ eri1.T) @ eri1
+
 
     elif getattr(dm, 'mo_coeff', None) is not None:
         #TODO: test whether dm.mo_coeff matching dm
@@ -265,9 +293,8 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
             naux, nao_pair = eri1.shape
             assert (nao_pair == nao*(nao+1)//2)
             if with_j:
-                rho = numpy.einsum('ix,px->ip', dmtril, eri1)
-                vj += numpy.einsum('ip,px->ix', rho, eri1)
-
+                # uses numpy.matmul
+                vj += (dmtril @ eri1.T) @ eri1
             for k in range(nset):
                 nocc = orbo[k].shape[1]
                 if nocc > 0:
@@ -293,8 +320,9 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
         for eri1 in dfobj.loop(blksize):
             naux, nao_pair = eri1.shape
             if with_j:
-                rho = numpy.einsum('ix,px->ip', dmtril, eri1)
-                vj += numpy.einsum('ip,px->ix', rho, eri1)
+                # uses numpy.matmul
+                vj += (dmtril @ eri1.T) @ eri1
+
 
             for k in range(nset):
                 buf1 = buf[0,:naux]
@@ -322,12 +350,12 @@ def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13):
     mol = dfobj.mol
     if dfobj._vjopt is None:
         dfobj.auxmol = auxmol = addons.make_auxmol(mol, dfobj.auxbasis)
-        opt = _vhf.VHFOpt(mol, 'int3c2e', 'CVHFnr3c2e_schwarz_cond')
-        opt.direct_scf_tol = direct_scf_tol
+        opt = _vhf._VHFOpt(mol, 'int3c2e', 'CVHFnr3c2e_schwarz_cond',
+                           dmcondname='CVHFnr_dm_cond',
+                           direct_scf_tol=direct_scf_tol)
 
         # q_cond part 1: the regular int2e (ij|ij) for mol's basis
-        opt.init_cvhf_direct(mol, 'int2e', 'CVHFsetnr_direct_scf')
-        mol_q_cond = lib.frompointer(opt._this.contents.q_cond, mol.nbas**2)
+        opt.init_cvhf_direct(mol, 'int2e', 'CVHFnr_int2e_q_cond')
 
         # Update q_cond to include the 2e-integrals (auxmol|auxmol)
         j2c = auxmol.intor('int2c2e', hermi=1)
@@ -335,10 +363,8 @@ def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13):
         aux_loc = auxmol.ao_loc
         aux_q_cond = [j2c_diag[i0:i1].max()
                       for i0, i1 in zip(aux_loc[:-1], aux_loc[1:])]
-        q_cond = numpy.hstack((mol_q_cond, aux_q_cond))
-        fsetqcond = _vhf.libcvhf.CVHFset_q_cond
-        fsetqcond(opt._this, q_cond.ctypes.data_as(ctypes.c_void_p),
-                  ctypes.c_int(q_cond.size))
+        q_cond = numpy.hstack((opt.q_cond.ravel(), aux_q_cond))
+        opt.q_cond = q_cond
 
         try:
             opt.j2c = j2c = scipy.linalg.cho_factor(j2c, lower=True)
@@ -372,8 +398,7 @@ def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13):
     nbas = mol.nbas
     nbas1 = mol.nbas + dfobj.auxmol.nbas
     shls_slice = (0, nbas, 0, nbas, nbas, nbas1, nbas1, nbas1+1)
-    with lib.temporary_env(opt, prescreen='CVHFnr3c2e_vj_pass1_prescreen',
-                           _dmcondname='CVHFsetnr_direct_scf_dm'):
+    with lib.temporary_env(opt, prescreen='CVHFnr3c2e_vj_pass1_prescreen'):
         jaux = jk.get_jk(fakemol, dm, ['ijkl,ji->kl']*n_dm, 'int3c2e',
                          aosym='s2ij', hermi=0, shls_slice=shls_slice,
                          vhfopt=opt)
@@ -392,17 +417,14 @@ def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13):
     # Next compute the Coulomb matrix
     # j3c = fauxe2(mol, auxmol)
     # vj = numpy.einsum('ijk,k->ij', j3c, rho)
+    # temporarily set "_dmcondname=None" to skip the call to set_dm method.
     with lib.temporary_env(opt, prescreen='CVHFnr3c2e_vj_pass2_prescreen',
                            _dmcondname=None):
         # CVHFnr3c2e_vj_pass2_prescreen requires custom dm_cond
         aux_loc = dfobj.auxmol.ao_loc
         dm_cond = [abs(rho[:,:,i0:i1]).max()
                    for i0, i1 in zip(aux_loc[:-1], aux_loc[1:])]
-        dm_cond = numpy.array(dm_cond)
-        fsetcond = _vhf.libcvhf.CVHFset_dm_cond
-        fsetcond(opt._this, dm_cond.ctypes.data_as(ctypes.c_void_p),
-                  ctypes.c_int(dm_cond.size))
-
+        opt.dm_cond = numpy.array(dm_cond)
         vj = jk.get_jk(fakemol, rho, ['ijkl,lk->ij']*n_dm, 'int3c2e',
                        aosym='s2ij', hermi=1, shls_slice=shls_slice,
                        vhfopt=opt)
@@ -530,7 +552,7 @@ if __name__ == '__main__':
     energy = method.scf()
     print(energy, -76.0807386770) # normal DHF energy is -76.0815679438127
 
-    method = density_fit(pyscf.scf.UKS(mol), 'weigend')
+    method = density_fit(pyscf.scf.UKS(mol), 'weigend', only_dfj = True)
     energy = method.scf()
     print(energy, -75.8547753298)
 

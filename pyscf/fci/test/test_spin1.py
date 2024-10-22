@@ -198,8 +198,18 @@ class KnownValues(unittest.TestCase):
         h = fci.direct_spin1.pspace(h1e, g2e, norb, nelec)[1]
         self.assertAlmostEqual(abs(h-h.T).max(), 0, 12)
 
+    def test_many_roots(self):
+        norb = 4
+        nelec = (2, 2)
+        nroots = 36
+        h1 = numpy.eye(norb) * -.5
+        h2 = numpy.zeros((norb, norb, norb, norb))
+        for i in range(norb):
+            h2[i,i,i,i] = .1
+        e, fcivec = fci.direct_spin1.kernel(h1, h2, norb, nelec, nroots=nroots, davidson_only=True)
+        self.assertAlmostEqual(e[0], -2, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for spin1")
     unittest.main()
-

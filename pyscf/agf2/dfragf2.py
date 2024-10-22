@@ -67,7 +67,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     nocc, nvir = gf_occ.naux, gf_vir.naux
     naux = agf2.with_df.get_naoaux()
     tol = agf2.weight_tol
-    facs = dict(os_factor=os_factor, ss_factor=ss_factor)
+    facs = {'os_factor': os_factor, 'ss_factor': ss_factor}
 
     ei, ci = gf_occ.energy, gf_occ.coupling
     ea, ca = gf_vir.energy, gf_vir.coupling
@@ -258,6 +258,8 @@ class DFRAGF2(ragf2.RAGF2):
             Auxiliaries of the Green's function
     '''
 
+    _keys = {'_with_df', 'allow_lowmem_build'}
+
     def __init__(self, mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
         ragf2.RAGF2.__init__(self, mf, frozen=frozen, mo_energy=mo_energy,
                              mo_coeff=mo_coeff, mo_occ=mo_occ)
@@ -269,8 +271,6 @@ class DFRAGF2(ragf2.RAGF2):
             self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
 
         self.allow_lowmem_build = True
-
-        self._keys.update(['_with_df', 'allow_lowmem_build'])
 
     build_se_part = build_se_part
     get_jk = get_jk
@@ -306,8 +306,7 @@ class DF(df.DF):
         if stop is None: stop = self.get_naoaux()
         if step is None: step = self.blockdim
 
-        for p0, p1 in mpi_helper.prange(start, stop, step):
-            yield p0, p1
+        yield from mpi_helper.prange(start, stop, step)
 
 
 class _ChemistsERIs(ragf2._ChemistsERIs):
@@ -336,7 +335,7 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
     qxy = np.zeros((naux, npair))
     mo = np.asarray(eris.mo_coeff, order='F')
     sij = (0, nmo, 0, nmo)
-    sym = dict(aosym='s2', mosym='s2')
+    sym = {'aosym': 's2', 'mosym': 's2'}
 
     for p0, p1 in with_df.prange():
         eri0 = with_df._cderi[p0:p1]
@@ -371,7 +370,7 @@ def _make_qmo_eris_incore(agf2, eri, coeffs):
 
     xisym, nxi, cxi, sxi = ao2mo.incore._conc_mos(cx, ci, compact=False)
     jasym, nja, cja, sja = ao2mo.incore._conc_mos(cj, ca, compact=False)
-    sym = dict(aosym='s2', mosym='s1')
+    sym = {'aosym': 's2', 'mosym': 's1'}
 
     qxi = np.zeros((naux, nxi))
     qja = np.zeros((naux, nja))

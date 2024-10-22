@@ -1,4 +1,6 @@
-import os, sys
+import os
+import sys
+import tempfile
 
 #
 # All parameters initialized before loading pyscf_conf.py will be overwritten
@@ -8,8 +10,8 @@ import os, sys
 DEBUG = False
 
 MAX_MEMORY = int(os.environ.get('PYSCF_MAX_MEMORY', 4000)) # MB
-TMPDIR = os.environ.get('TMPDIR', '.')
-TMPDIR = os.environ.get('PYSCF_TMPDIR', TMPDIR)
+TMPDIR = os.environ.get('PYSCF_TMPDIR', tempfile.gettempdir())
+ARGPARSE = bool(os.getenv('PYSCF_ARGPARSE', False))
 
 VERBOSE = 3  # default logger level (logger.NOTE)
 UNIT = 'angstrom'
@@ -26,15 +28,10 @@ else:
     conf_file = None
 
 if conf_file is not None:
-    if sys.version_info < (3,0):
-        import imp
-        imp.load_source('pyscf.__config__', conf_file)
-        del (imp)
-    else:
-        from importlib import machinery
-        machinery.SourceFileLoader('pyscf.__config__', conf_file).load_module()
-        del (machinery)
-del (os, sys)
+    with open(conf_file, 'r') as f:
+        exec(f.read())
+    del f
+del (os, sys, tempfile)
 
 #
 # All parameters initialized after loading pyscf_conf.py will be kept in the

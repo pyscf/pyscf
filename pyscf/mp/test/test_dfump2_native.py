@@ -15,7 +15,6 @@
 
 
 import unittest
-import copy
 import numpy
 from pyscf import gto
 from pyscf import scf
@@ -57,7 +56,7 @@ class KnownValues(unittest.TestCase):
 
     def setUp(self):
         self.assertTrue(mf.converged)
-        self.mf = copy.copy(mf)
+        self.mf = mf.copy()
         self.mf.mol = mf.mol.copy()
         self.mf.mo_coeff = mf.mo_coeff.copy()
         self.mf.mo_occ = mf.mo_occ.copy()
@@ -100,7 +99,7 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(natocc[8], 1.0168954406, delta=1.0e-7)
             self.assertAlmostEqual(natocc[9], 0.0478262909, delta=1.0e-7)
             self.assertAlmostEqual(natocc[27], 0.0002326288, delta=1.0e-7)
-            
+
     def test_natorbs_fc(self):
         mol = self.mf.mol
         with DFUMP2(self.mf, frozen=2) as pt:
@@ -118,7 +117,7 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(natocc[8], 1.0168965649, delta=1.0e-7)
             self.assertAlmostEqual(natocc[9], 0.0477790944, delta=1.0e-7)
             self.assertAlmostEqual(natocc[27], 0.0002307322, delta=1.0e-7)
-    
+
     def test_natorbs_fclist(self):
         self.mf.mo_coeff[0, :, [1, 3]] = self.mf.mo_coeff[0, :, [3, 1]]
         self.mf.mo_energy[0, [1, 3]] = self.mf.mo_energy[0, [3, 1]]

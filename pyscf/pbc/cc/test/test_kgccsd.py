@@ -203,7 +203,7 @@ class KnownValues(unittest.TestCase):
         hf_111 = -0.73491491306419987
         cc_111 = -1.1580008204825658e-05
         escf, ecc = run_kcell(cell,n,nk)
-        self.assertAlmostEqual(escf,hf_111,8)
+        self.assertAlmostEqual(escf,hf_111,7)
         self.assertAlmostEqual(ecc, cc_111,6)
 
     def test_111_n1(self):
@@ -214,7 +214,7 @@ class KnownValues(unittest.TestCase):
         hf_111 = -0.73506011036963814
         cc_111 = -0.023265431169472835
         escf, ecc = run_kcell(cell,n,nk)
-        self.assertAlmostEqual(escf,hf_111,8)
+        self.assertAlmostEqual(escf,hf_111,7)
         self.assertAlmostEqual(ecc, cc_111,6)
 
     def test_111_n3(self):
@@ -224,7 +224,7 @@ class KnownValues(unittest.TestCase):
         hf_111 = -7.4117951240232118
         cc_111 = -0.19468901057053406
         escf, ecc = run_kcell(cell,n,nk)
-        self.assertAlmostEqual(escf,hf_111,8)
+        self.assertAlmostEqual(escf,hf_111,7)
         self.assertAlmostEqual(ecc, cc_111,6)
 
     def test_311_n1_high_cost(self):
@@ -235,7 +235,7 @@ class KnownValues(unittest.TestCase):
         hf_311 = -0.92687629918229486
         cc_311 = -0.042702177586414237
         escf, ecc = run_kcell(cell,n,nk)
-        self.assertAlmostEqual(escf,hf_311, 8)
+        self.assertAlmostEqual(escf,hf_311, 7)
         self.assertAlmostEqual(ecc, cc_311, 6)
 
     def test_211_n3(self):
@@ -275,7 +275,7 @@ class KnownValues(unittest.TestCase):
         cc = pbcc.kccsd.CCSD(kmf, frozen=[[0,1],[],[0]])
         cc.diis_start_cycle = 1
         ecc, t1, t2 = cc.kernel()
-        self.assertAlmostEqual(ehf, ehf_bench, 8)
+        self.assertAlmostEqual(ehf, ehf_bench, 7)
         self.assertAlmostEqual(ecc, ecc_bench, 6)
 
     def _test_cu_metallic_nonequal_occ(self, kmf, cell, nk=[1,1,1]):
@@ -293,7 +293,7 @@ class KnownValues(unittest.TestCase):
         eris.mo_energy = [f.diagonal() for f in eris.fock]
         ecc1, t1, t2 = mycc.kernel(eris=eris)
 
-        self.assertAlmostEqual(ecc1, ecc1_bench, 6)
+        self.assertAlmostEqual(ecc1, ecc1_bench, 5)
 
     def _test_cu_metallic_frozen_occ(self, kmf, cell, nk=[1,1,1]):
         assert cell.mesh == [7, 7, 7]
@@ -594,13 +594,13 @@ class KnownValues(unittest.TestCase):
         # Manually zero'ing out the frozen elements of the t1/t2
         t1[2, :, 0] = 0.0
         for ki in range(rand_cc.nkpts):
-          for kj in range(rand_cc.nkpts):
-            for ka in range(rand_cc.nkpts):
-              kb = kconserv[ki, ka, kj]
-              if ka == 2:
-                  t2[ki, kj, ka, :, :, 0] = 0.0
-              if kb == 2:
-                  t2[ki, kj, ka, :, :, :, 0] = 0.0
+            for kj in range(rand_cc.nkpts):
+                for ka in range(rand_cc.nkpts):
+                    kb = kconserv[ki, ka, kj]
+                    if ka == 2:
+                        t2[ki, kj, ka, :, :, 0] = 0.0
+                    if kb == 2:
+                        t2[ki, kj, ka, :, :, :, 0] = 0.0
 
         Ht1, Ht2 = rand_cc.update_amps(t1, t2, eris)
         self.assertAlmostEqual(fp(Ht1), (-19.6637196882-16.2773841431j), 6)

@@ -126,6 +126,18 @@ dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf', fcivec0, fcivec0, norb,
 dm1, dm2, dm3 = fci.rdm.reorder_dm123(dm1, dm2, dm3)
 
 #
+# Spin-separated 3-particle density matrix
+#
+
+(dm1a, dm1b), (dm2aa, dm2ab, dm2bb), (dm3aaa, dm3aab, dm3abb, dm3bbb) = \
+        fci.direct_spin1.make_rdm123s(fcivec0, norb, (nelec_a,nelec_b))
+
+assert(numpy.allclose(dm1a+dm1b, dm1))
+assert(numpy.allclose(dm2aa+dm2bb+dm2ab+dm2ab.transpose(2,3,0,1), dm2))
+assert(numpy.allclose(dm3aaa+dm3bbb+dm3aab+dm3aab.transpose(0,1,4,5,2,3)+\
+dm3aab.transpose(4,5,0,1,2,3)+dm3abb+dm3abb.transpose(2,3,0,1,4,5)+dm3abb.transpose(2,3,4,5,0,1), dm3))
+
+#
 # Spin-traced 3-particle transition density matrix
 #
 dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_sf', fcivec0, fcivec1, norb,

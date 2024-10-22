@@ -22,6 +22,7 @@ from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.gto.pseudo import pp_int
+from pyscf.data.nist import BOHR
 
 
 def get_pp_loc_part2(cell, kpt=np.zeros(3)):
@@ -116,7 +117,7 @@ def get_pp_nl(cell, kpt=np.zeros(3)):
 
 
 def get_pp(cell, kpt=np.zeros(3)):
-    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+    '''Get the periodic pseudopotential nuc-el AO matrix, with G=0 removed.
     '''
     coords = gen_grid.gen_uniform_grids(cell)
     aoR = numint.eval_ao(cell, coords, kpt)
@@ -183,6 +184,7 @@ He
      0.32235865    2     2.25670239    -0.39677748
                                         0.93894690
                                                  ''')}
+        cell.precision = 1e-11
         cell.build()
         np.random.seed(9)
         kpt = np.random.random(3)
@@ -214,6 +216,7 @@ He
         cell.pseudo = {'C':'gth-pade'}
         cell.a = np.eye(3) * 2.5
         cell.mesh = [30] * 3
+        cell.precision = 1e-9
         cell.build()
         np.random.seed(1)
         kpt = np.random.random(3)
@@ -242,7 +245,42 @@ He
         v1 = pseudo.get_pp(cell, k)
         self.assertAlmostEqual(abs(v0-v1).max(), 0, 6)
 
+    def test_pp_nuc_grad(self):
+        cell = pbcgto.Cell()
+        cell.atom = 'H 0 0 0; Na 0 0 0.8'
+        cell.a = np.diag([6,6,6])
+        cell.basis='gth-szv'
+        cell.pseudo='gth-pade'
+        cell.ke_cutoff=200
+        cell.build()
 
+        cellp = cell.copy()
+        cellp.atom = 'H 0 0 0; Na 0 0 0.8001'
+        cellp.build()
+
+        cellm = cell.copy()
+        cellm.atom = 'H 0 0 0; Na 0 0 0.7999'
+        cellm.build()
+
+        np.random.seed(1)
+        dm = np.random.rand(cell.nao, cell.nao)
+        dm = (dm + dm.T) / 2
+
+        # local_part2
+        vp = pp_int.get_pp_loc_part2(cellp)
+        vm = pp_int.get_pp_loc_part2(cellm)
+        v_fd = (vp - vm) / (0.0002 / BOHR)
+        grad = pp_int.vpploc_part2_nuc_grad(cell, dm)[1,2]
+        grad_fd = np.einsum("ij,ij->", v_fd, dm)
+        self.assertAlmostEqual(abs(grad - grad_fd), 0, 7)
+
+        # non-local
+        vp = pp_int.get_pp_nl(cellp)
+        vm = pp_int.get_pp_nl(cellm)
+        v_fd = (vp - vm) / (0.0002 / BOHR)
+        grad = pp_int.vppnl_nuc_grad(cell, dm)[1,2]
+        grad_fd = np.einsum("ij,ij->", v_fd, dm)
+        self.assertAlmostEqual(abs(grad - grad_fd), 0, 7)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.pseudo")

@@ -37,7 +37,7 @@ init_veloc = md.distributions.MaxwellBoltzmannVelocity(mol, T=300)
 myhf = mol.RHF()
 
 # We set the initial velocity by passing to "veloc"
-myintegrator = pyscf.md.NVE(myhf, dt=5, steps=10, veloc=init_veloc)
+myintegrator = pyscf.md.NVE(myhf, dt=5, steps=10, veloc=init_veloc, data_output="NVE.md.data")
 
 myintegrator.run()
 

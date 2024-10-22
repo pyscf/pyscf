@@ -64,7 +64,7 @@ class KnownValues(unittest.TestCase):
         mycc = cc.RCCSD(mf).run()
         self.assertAlmostEqual(mycc.e_tot, -76.119346385357446, 6)
 
-    def test_denisty_fit_interface(self):
+    def test_density_fit_interface(self):
         mydf = df.DF(mol)
         mycc1 = ccsd.CCSD(mf).density_fit(auxbasis='ccpvdz-ri', with_df=mydf).run()
         self.assertAlmostEqual(mycc1.e_tot, -76.119348934346789, 6)
@@ -112,7 +112,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(eris1.vvvv.imag-eris.vvvv).max(), 0, 11)
 
     def test_dump_chk(self):
-        cc1 = copy.copy(mycc)
+        cc1 = mycc.copy()
         cc1.nmo = mf.mo_energy.size
         cc1.nocc = mol.nelectron // 2
         cc1.dump_chk()
@@ -221,7 +221,7 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(mycc.vector_size(), 860)
 
     def test_rccsd_frozen(self):
-        cc1 = copy.copy(mycc)
+        cc1 = mycc.copy()
         cc1.frozen = 1
         self.assertEqual(cc1.nmo, 12)
         self.assertEqual(cc1.nocc, 4)
@@ -383,7 +383,7 @@ class KnownValues(unittest.TestCase):
         nocc, nvir = t1.shape
         tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
         eris1 = copy.copy(eris)
-        mycc1 = copy.copy(mycc)
+        mycc1 = mycc.copy()
         ovvv = eris1.get_ovvv()
         tmp = -numpy.einsum('ijcd,ka,kdcb->ijba', tau, t1, ovvv)
         t2a = tmp + tmp.transpose(1,0,3,2)

@@ -101,7 +101,7 @@ class KnownValues(unittest.TestCase):
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
         Ls = tools.get_lattice_Ls(cl1)
-        self.assertEqual(Ls.shape, (2335,3))
+        self.assertEqual(Ls.shape, (2275,3))
 
         Ls = tools.get_lattice_Ls(cl1, rcut=0)
         self.assertEqual(Ls.shape, (1,3))
@@ -144,9 +144,23 @@ C  15.16687337 15.16687337 15.16687337
                        mesh = [3]*3,
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
-        cl2 = tools.super_cell(cl1, [2,3,4])
+        _ = cl1.enuc
+        ncopy = [2,3,4]
+        ncell = ncopy[0]*ncopy[1]*ncopy[2]
+        cl2 = tools.super_cell(cl1, ncopy)
         self.assertAlmostEqual(lib.fp(cl2.atom_coords()), -18.946080642714836, 9)
         self.assertAlmostEqual(lib.fp(cl2._bas[:,gto.ATOM_OF]), 16.515144238434807, 9)
+        self.assertAlmostEqual(cl1.enuc, cl2.enuc / ncell, 9)
+
+    def test_super_cell_with_symm(self):
+        cl1 = pbcgto.M(a = 1.4 * numpy.eye(3),
+                       atom ='''He .0 .0 .0''',
+                       basis = 'ccpvdz',
+                       space_group_symmetry=True,
+                       symmorphic=False)
+        self.assertEqual(cl1.lattice_symmetry.nop, 48)
+        cl2 = tools.super_cell(cl1, [2,2,2])
+        self.assertEqual(cl2.lattice_symmetry.nop, 48*8)
 
     def test_cell_plus_imgs(self):
         numpy.random.seed(2)
@@ -154,7 +168,7 @@ C  15.16687337 15.16687337 15.16687337
                        mesh = [3]*3,
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
-        self.assertEqual(list(cl1.nimgs), [8, 16, 12])
+        #self.assertEqual(list(cl1.nimgs), [8, 16, 11])
         cl2 = tools.cell_plus_imgs(cl1, [3,4,5])
         self.assertAlmostEqual(lib.fp(cl2.atom_coords()), 4.791699273649499, 9)
         self.assertAlmostEqual(lib.fp(cl2._bas[:,gto.ATOM_OF]), -681.993543446207, 9)

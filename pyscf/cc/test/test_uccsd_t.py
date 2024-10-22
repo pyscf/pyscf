@@ -15,13 +15,19 @@
 
 import unittest
 import numpy
-import copy
 from functools import reduce
 
 from pyscf import gto, scf, lib, symm
+from pyscf import ao2mo
 from pyscf import cc
 from pyscf.cc import uccsd_t
 from pyscf.cc import gccsd, gccsd_t
+from pyscf.cc import uccsd_t_slow
+from pyscf.cc import uccsd_t_lambda
+from pyscf.cc import uccsd_t_rdm
+from pyscf.cc import ccsd_t_lambda_slow as ccsd_t_lambda
+from pyscf.cc import ccsd_t_rdm_slow as ccsd_t_rdm
+
 
 def setUpModule():
     global mol, mol1, mf, mcc
@@ -36,7 +42,7 @@ def setUpModule():
     mol.basis = '3-21g'
     mol.symmetry = 'C2v'
     mol.build()
-    mol1 = copy.copy(mol)
+    mol1 = mol.copy()
     mol1.symmetry = False
 
     mf = scf.UHF(mol1).run(conv_tol=1e-14)
@@ -51,7 +57,7 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_uccsd_t(self):
-        mf1 = copy.copy(mf)
+        mf1 = mf.copy()
         nao, nmo = mf.mo_coeff[0].shape
         numpy.random.seed(10)
         mf1.mo_coeff = numpy.random.random((2,nao,nmo)) - .5
@@ -165,8 +171,63 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e0, e1.real, 9)
         self.assertAlmostEqual(e1, -0.056092415718338388-0.011390417704868244j, 9)
 
+    def test_uccsd_t_rdm(self):
+        mol = gto.Mole()
+        mol.atom = [
+            [8 , (0. , 0.     , 0.)],
+            [1 , (0. , -.957 , .587)],
+            [1 , (0.2,  .757 , .487)]]
+        mol.basis = '631g'
+        mol.build()
+        mf0 = mf = scf.RHF(mol).run(conv_tol=1.)
+        mf = scf.addons.convert_to_uhf(mf)
+
+        mycc0 = cc.CCSD(mf0)
+        eris0 = mycc0.ao2mo()
+        mycc0.kernel(eris=eris0)
+        t1 = mycc0.t1
+        t2 = mycc0.t2
+        imds = ccsd_t_lambda.make_intermediates(mycc0, t1, t2, eris0)
+        l1, l2 = ccsd_t_lambda.update_lambda(mycc0, t1, t2, t1, t2, eris0, imds)
+        dm1ref = ccsd_t_rdm.make_rdm1(mycc0, t1, t2, l1, l2, eris0)
+        dm2ref = ccsd_t_rdm.make_rdm2(mycc0, t1, t2, l1, l2, eris0)
+
+        t1 = (t1, t1)
+        t2aa = t2 - t2.transpose(1,0,2,3)
+        t2 = (t2aa, t2, t2aa)
+        l1 = (l1, l1)
+        l2aa = l2 - l2.transpose(1,0,2,3)
+        l2 = (l2aa, l2, l2aa)
+        mycc = cc.UCCSD(mf)
+        eris = mycc.ao2mo()
+        dm1 = uccsd_t_rdm.make_rdm1(mycc, t1, t2, l1, l2, eris)
+        dm2 = uccsd_t_rdm.make_rdm2(mycc, t1, t2, l1, l2, eris)
+        trdm1 = dm1[0] + dm1[1]
+        trdm2 = dm2[0] + dm2[1] + dm2[1].transpose(2,3,0,1) + dm2[2]
+        self.assertAlmostEqual(abs(trdm1 - dm1ref).max(), 0, 12)
+        self.assertAlmostEqual(abs(trdm2 - dm2ref).max(), 0, 12)
+
+        ecc = mycc.kernel(eris=eris)[0]
+        l1, l2 = mycc.solve_lambda(eris=eris)
+        e3ref = mycc.e_tot + mycc.ccsd_t()
+
+        nmoa, nmob = mycc.nmo
+        eri_aa = ao2mo.kernel(mf._eri, mf.mo_coeff[0], compact=False).reshape([nmoa]*4)
+        eri_bb = ao2mo.kernel(mf._eri, mf.mo_coeff[1], compact=False).reshape([nmob]*4)
+        eri_ab = ao2mo.kernel(mf._eri, [mf.mo_coeff[k] for k in (0,0,1,1)],
+                              compact=False).reshape(nmoa,nmoa,nmob,nmob)
+        dm1 = uccsd_t_rdm.make_rdm1(mycc, t1, t2, l1, l2, eris=eris)
+        dm2 = uccsd_t_rdm.make_rdm2(mycc, t1, t2, l1, l2, eris=eris)
+        h1a = reduce(numpy.dot, (mf.mo_coeff[0].T, mf.get_hcore(), mf.mo_coeff[0]))
+        h1b = reduce(numpy.dot, (mf.mo_coeff[1].T, mf.get_hcore(), mf.mo_coeff[1]))
+        e3 =(numpy.einsum('ij,ji->', h1a, dm1[0]) +
+             numpy.einsum('ij,ji->', h1b, dm1[1]) +
+             numpy.einsum('ijkl,ijkl->', eri_aa, dm2[0])*.5 +
+             numpy.einsum('ijkl,ijkl->', eri_bb, dm2[2])*.5 +
+             numpy.einsum('ijkl,ijkl->', eri_ab, dm2[1])    +
+             mf.mol.energy_nuc())
+        self.assertAlmostEqual(e3, e3ref, 9)
 
 if __name__ == "__main__":
     print("Full Tests for UCCSD(T)")
     unittest.main()
-

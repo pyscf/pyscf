@@ -16,7 +16,11 @@ mf = scf.RHF(mol)
 #
 # method 1: import the optimize function from pyscf.geomopt.geometric_solver
 mol_eq = optimize(mf)
-print(mol_eq.atom_coords())
+print(mol_eq.tostring())
+print('Atomic coordinates (Ang):')
+print(mol_eq.atom_coords(unit='Ang'))
+print('Atomic coordinates (Bohr):')
+print(mol_eq.atom_coords(unit='Bohr'))
 
 # method 2: create the optimizer from Gradients class
 mol_eq = mf.Gradients().optimizer(solver='geomeTRIC').kernel()
@@ -39,3 +43,28 @@ mol_eq = optimize(mc, **conv_params)
 
 # method 2
 mol_eq = mc.Gradients().optimizer(solver='geomeTRIC').kernel(conv_params)
+
+
+#
+# geometry optimization for DFT, MP2, CCSD
+#
+mol = gto.M(atom='''
+C       1.1879  -0.3829 0.0000
+C       0.0000  0.5526  0.0000
+O       -1.1867 -0.2472 0.0000
+H       -1.9237 0.3850  0.0000
+H       2.0985  0.2306  0.0000
+H       1.1184  -1.0093 0.8869
+H       1.1184  -1.0093 -0.8869
+H       -0.0227 1.1812  0.8852
+H       -0.0227 1.1812  -0.8852
+            ''', basis='3-21g')
+
+mf = mol.RKS(xc='pbe,')
+mol1 = optimize(mf)
+
+mymp2 = mol.MP2()
+mol1 = optimize(mymp2)
+
+mycc = mol.CCSD()
+mol1 = optimize(mycc)

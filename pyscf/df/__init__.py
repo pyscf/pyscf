@@ -34,7 +34,8 @@ Simple usage::
 from . import incore
 from . import outcore
 from . import addons
-from .addons import load, aug_etb, DEFAULT_AUXBASIS, make_auxbasis, make_auxmol
+from .addons import (load, aug_etb, autoaux, autoabs,
+                     DEFAULT_AUXBASIS, make_auxbasis, make_auxmol)
 from .df import DF, GDF, DF4C, GDF4C
 
 from . import r_incore
@@ -43,4 +44,3 @@ def density_fit(obj, *args, **kwargs):
     '''Given SCF/MCSCF or post-HF object, use density fitting technique to
     approximate the 2e integrals.'''
     return obj.density_fit(*args, **kwargs)
-

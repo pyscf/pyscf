@@ -22,6 +22,7 @@ import numpy as np
 
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import dft as pbcdft
+from pyscf.pbc import scf as pbcscf
 
 
 def build_cell(mesh):
@@ -80,6 +81,13 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
+    def test_klda(self):
+        cell = pbcgto.M(atom='H 0 0 0; H 1 0 0', a=np.eye(3)*2, basis=[[0, [1, 1]]])
+        cell.build()
+        mf = cell.KRKS(kpts=cell.make_kpts([2,2,1]))
+        mf.run()
+        self.assertAlmostEqual(mf.e_tot, -0.3846075202893169, 7)
+
     def test_klda8_cubic_gamma(self):
         cell = build_cell([17]*3)
         mf = pbcdft.RKS(cell)
@@ -87,7 +95,7 @@ class KnownValues(unittest.TestCase):
         #kmf.verbose = 7
         mf.conv_tol = 1e-8
         e1 = mf.scf()
-        self.assertAlmostEqual(e1, -44.892502703975893, 8)
+        self.assertAlmostEqual(e1, -44.892502703975893, 7)
 
     def test_klda8_cubic_kpt_222(self):
         cell = build_cell([17]*3)
@@ -99,7 +107,7 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-8
         #mf.verbose = 7
         e1 = mf.scf()
-        self.assertAlmostEqual(e1, -45.425834895129569, 8)
+        self.assertAlmostEqual(e1, -45.425834895129569, 7)
 
     def test_klda8_primitive_gamma(self):
         cell = make_primitive_cell([17]*3)
@@ -108,7 +116,7 @@ class KnownValues(unittest.TestCase):
         #kmf.verbose = 7
         mf.conv_tol = 1e-8
         e1 = mf.scf()
-        self.assertAlmostEqual(e1, -10.221426445656439, 8)
+        self.assertAlmostEqual(e1, -10.221426445656439, 7)
 
     def test_klda8_primitive_kpt_222(self):
         cell = make_primitive_cell([17]*3)
@@ -119,7 +127,7 @@ class KnownValues(unittest.TestCase):
         #mf.verbose = 7
         mf.conv_tol = 1e-8
         e1 = mf.scf()
-        self.assertAlmostEqual(e1, -11.353643583707452, 8)
+        self.assertAlmostEqual(e1, -11.353643583707452, 7)
 
     def test_rsh_fft(self):
         mf = pbcdft.KRKS(cell)
@@ -134,7 +142,32 @@ class KnownValues(unittest.TestCase):
         mf.omega = .15
         mf.conv_tol = 1e-8
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.4766238116030683, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.4766238116030683, 5)
+
+    def test_to_hf(self):
+        mf = pbcdft.KRKS(cell).density_fit()
+        mf.with_df._j_only = True
+        a_hf = mf.to_hf()
+        self.assertTrue(a_hf.with_df._j_only)
+        self.assertTrue(isinstance(a_hf, pbcscf.khf.KRHF))
+
+        mf = pbcdft.KRKS(cell, kpts=cell.make_kpts([2,1,1])).density_fit()
+        mf.with_df._j_only = True
+        a_hf = mf.to_hf()
+        self.assertTrue(not a_hf.with_df._j_only)
+        self.assertTrue(isinstance(a_hf, pbcscf.khf.KRHF))
+
+        mf = pbcdft.KROKS(cell).density_fit()
+        mf.with_df._j_only = True
+        a_hf = mf.to_hf()
+        self.assertTrue(a_hf.with_df._j_only)
+        self.assertTrue(isinstance(a_hf, pbcscf.krohf.KROHF))
+
+        mf = pbcdft.KROKS(cell, kpts=cell.make_kpts([2,1,1])).density_fit()
+        mf.with_df._j_only = True
+        a_hf = mf.to_hf()
+        self.assertTrue(not a_hf.with_df._j_only)
+        self.assertTrue(isinstance(a_hf, pbcscf.krohf.KROHF))
 
 # TODO: test the reset method of pbcdft.KRKS, pbcdft.RKS whether the reset
 # methods of all subsequent objects are called

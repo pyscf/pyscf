@@ -41,6 +41,10 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
     mol = hessobj.mol
     mf = hessobj.base
+    ni = mf._numint
+    if mf.do_nlc():
+        raise NotImplementedError('RKS Hessian for NLC functional')
+
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
@@ -50,10 +54,6 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     mocc = mo_coeff[:,mo_occ>0]
     dm0 = numpy.dot(mocc, mocc.T) * 2
 
-    if mf.nlc != '':
-        raise NotImplementedError
-
-    ni = mf._numint
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
     hybrid = ni.libxc.is_hybrid_xc(mf.xc)
     de2, ej, ek = df_rhf_hess._partial_hess_ejk(hessobj, mo_energy, mo_coeff, mo_occ,
@@ -109,21 +109,15 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
             for ia, h1, vj1, vk1 in df_rhf_hess._gen_jk(
                     hessobj, mo_coeff, mo_occ, chkfile, atmlst, verbose):
                 h1ao[ia] -= .5 * (alpha - hyb) * vk1
-
-    if chkfile is None:
-        return h1ao
-    else:
-        for ia in atmlst:
-            lib.chkfile.save(chkfile, 'scf_f1ao/%d'%ia, h1ao[ia])
-        return chkfile
+    return h1ao
 
 
 class Hessian(rks_hess.Hessian):
     '''Non-relativistic RKS hessian'''
     def __init__(self, mf):
-        self.auxbasis_response = 1
         rks_hess.Hessian.__init__(self, mf)
 
+    auxbasis_response = 1
     partial_hess_elec = partial_hess_elec
     make_h1 = make_h1
 
@@ -156,4 +150,3 @@ if __name__ == '__main__':
     hobj = Hessian(mf)
     e2 = hobj.kernel().transpose(0,2,1,3).reshape(n3,n3)
     print(lib.finger(e2) - -0.41387283263786201)
-

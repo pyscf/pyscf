@@ -44,7 +44,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
             Whether to project chkfile's orbitals to the new basis.  Note when
             the geometry of the chkfile and the given molecule are very
             different, this projection can produce very poor initial guess.
-            In PES scanning, it is recommended to swith off project.
+            In PES scanning, it is recommended to switch off project.
 
             If project is set to None, the projection is only applied when the
             basis sets of the chkfile's molecule are different to the basis
@@ -148,10 +148,10 @@ def get_jk(mol, dm, hermi=0,
 
 def get_occ(mf, mo_energy=None, mo_coeff=None):
     if mo_energy is None: mo_energy = mf.mo_energy
-    e_idx = numpy.argsort(mo_energy)
+    e_idx = numpy.argsort(mo_energy.round(9), kind='stable')
     e_sort = mo_energy[e_idx]
     nmo = mo_energy.size
-    mo_occ = numpy.zeros(nmo)
+    mo_occ = numpy.zeros_like(mo_energy)
     nocc = mf.mol.nelectron
     mo_occ[e_idx[:nocc]] = 1
     if mf.verbose >= logger.INFO and nocc < nmo:
@@ -287,7 +287,7 @@ def spin_square(mo, s=1):
     return ss, s*2+1
 
 def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
-            **kwargs):
+            origin=None, **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Dipole moment
     '''
@@ -301,7 +301,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         log.note('MO #%-3d energy= %-18.15g occ= %g', i+MO_BASE, mo_energy[i], c)
     ovlp_ao = mf.get_ovlp()
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    dip = mf.dip_moment(mf.mol, dm, verbose=log)
+    dip = mf.dip_moment(mf.mol, dm, origin=origin, verbose=log)
     if with_meta_lowdin:
         pop_and_chg = mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log)
     else:
@@ -316,7 +316,7 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     dmb = dm[nao:,nao:]
     if s is not None:
         assert (s.size == nao**2 or numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
-        s = s[:nao,:nao]
+        s = lib.asarray(s[:nao,:nao], order='C')
     return uhf.mulliken_pop(mol, (dma,dmb), s, verbose)
 
 def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG,
@@ -328,7 +328,7 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG,
     dmb = dm_ao[nao:,nao:]
     if s is not None:
         assert (s.size == nao**2 or numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
-        s = s[:nao,:nao]
+        s = lib.asarray(s[:nao,:nao], order='C')
     return uhf.mulliken_meta(mol, (dma,dmb), verbose, pre_orth_method, s)
 
 def det_ovlp(mo1, mo2, occ1, occ2, ovlp):
@@ -349,11 +349,11 @@ def det_ovlp(mo1, mo2, occ1, occ2, ovlp):
     x = numpy.dot(u/s, vt)
     return numpy.prod(s), x
 
-def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
+def dip_moment(mol, dm, unit_symbol='Debye', origin=None, verbose=logger.NOTE):
     nao = mol.nao_nr()
     dma = dm[:nao,:nao]
     dmb = dm[nao:,nao:]
-    return hf.dip_moment(mol, dma+dmb, unit_symbol, verbose)
+    return hf.dip_moment(mol, dma+dmb, unit=unit_symbol, verbose=verbose, origin=origin)
 
 canonicalize = hf.canonicalize
 
@@ -382,10 +382,13 @@ class GHF(hf.SCF):
         mo_coeff[nao:nao*2] are the coefficients of AO with beta spin.
     '''
 
-    def __init__(self, mol):
-        hf.SCF.__init__(self, mol)
-        self.with_soc = None
-        self._keys = self._keys.union(['with_soc'])
+    with_soc = None
+
+    _keys = {'with_soc'}
+
+    get_init_guess = hf.RHF.get_init_guess
+    get_occ = get_occ
+    _finalize = uhf.UHF._finalize
 
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
@@ -404,16 +407,14 @@ class GHF(hf.SCF):
         s = hf.get_ovlp(mol)
         return scipy.linalg.block_diag(s, s)
 
-    get_occ = get_occ
-
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         if fock is None:
             dm1 = self.make_rdm1(mo_coeff, mo_occ)
             fock = self.get_hcore(self.mol) + self.get_veff(self.mol, dm1)
         occidx = mo_occ > 0
         viridx = ~occidx
-        g = reduce(numpy.dot, (mo_coeff[:,occidx].T.conj(), fock,
-                               mo_coeff[:,viridx]))
+        g = mo_coeff[:,occidx].T.conj().dot(
+            fock.dot(mo_coeff[:,viridx]))
         return g.conj().T.ravel()
 
     @lib.with_doc(hf.SCF.init_guess_by_minao.__doc__)
@@ -430,6 +431,19 @@ class GHF(hf.SCF):
         logger.info(self, 'Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089.')
         return _from_rhf_init_dm(hf.init_guess_by_huckel(mol))
 
+    @lib.with_doc(hf.SCF.init_guess_by_mod_huckel.__doc__)
+    def init_guess_by_mod_huckel(self, mol=None):
+        if mol is None: mol = self.mol
+        logger.info(self, '''Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089,
+employing the updated GWH rule from doi:10.1021/ja00480a005.''')
+        return _from_rhf_init_dm(hf.init_guess_by_mod_huckel(mol))
+
+    @lib.with_doc(hf.SCF.init_guess_by_sap.__doc__)
+    def init_guess_by_sap(self, mol=None, **kwargs):
+        return _from_rhf_init_dm(
+            hf.SCF.init_guess_by_sap(self, mol, **kwargs)
+        )
+
     @lib.with_doc(hf.SCF.init_guess_by_chkfile.__doc__)
     def init_guess_by_chkfile(self, chkfile=None, project=None):
         if chkfile is None: chkfile = self.chkfile
@@ -442,20 +456,15 @@ class GHF(hf.SCF):
         if dm is None: dm = self.make_rdm1()
         nao = mol.nao
         dm = numpy.asarray(dm)
+        # nao = 0 for HF with custom Hamiltonian
+        if dm.shape[-1] != nao * 2 and nao != 0:
+            raise ValueError('Dimension inconsistent '
+                             f'dm.shape = {dm.shape}, mol.nao = {nao}')
 
         def jkbuild(mol, dm, hermi, with_j, with_k, omega=None):
-            if (not omega and
-                (self._eri is not None or mol.incore_anyway or self._is_mem_enough())):
-                if self._eri is None:
-                    self._eri = mol.intor('int2e', aosym='s8')
-                return hf.dot_eri_dm(self._eri, dm, hermi, with_j, with_k)
-            else:
-                return hf.SCF.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
+            return hf.RHF.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
 
-        if nao == dm.shape[-1]:
-            vj, vk = jkbuild(mol, dm, hermi, with_j, with_k, omega)
-        else:  # GHF density matrix, shape (2N,2N)
-            vj, vk = get_jk(mol, dm, hermi, with_j, with_k, jkbuild, omega)
+        vj, vk = get_jk(mol, dm, hermi, with_j, with_k, jkbuild, omega)
         return vj, vk
 
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
@@ -501,32 +510,20 @@ class GHF(hf.SCF):
 
     @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, mol=None, dm=None, unit_symbol='Debye',
-                   verbose=logger.NOTE):
+                   origin=None, verbose=logger.NOTE):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        return dip_moment(mol, dm, unit_symbol, verbose=verbose)
-
-    def _finalize(self):
-        ss, s = self.spin_square()
-
-        if self.converged:
-            logger.note(self, 'converged SCF energy = %.15g  '
-                        '<S^2> = %.8g  2S+1 = %.8g', self.e_tot, ss, s)
-        else:
-            logger.note(self, 'SCF not converged.')
-            logger.note(self, 'SCF energy = %.15g after %d cycles  '
-                        '<S^2> = %.8g  2S+1 = %.8g',
-                        self.e_tot, self.max_cycle, ss, s)
-        return self
+        return dip_moment(mol, dm, unit_symbol, origin=origin, verbose=verbose)
 
     def convert_from_(self, mf):
         '''Create GHF object based on the RHF/UHF object'''
-        from pyscf.scf import addons
-        return addons.convert_to_ghf(mf, out=self)
+        tgt = mf.to_ghf()
+        self.__dict__.update(tgt.__dict__)
+        return self
 
-    def stability(self, internal=None, external=None, verbose=None, return_status=False):
+    def stability(self, internal=None, external=None, verbose=None, return_status=False, **kwargs):
         from pyscf.scf.stability import ghf_stability
-        return ghf_stability(self, verbose, return_status)
+        return ghf_stability(self, verbose, return_status, **kwargs)
 
     def nuc_grad_method(self):
         raise NotImplementedError
@@ -534,13 +531,27 @@ class GHF(hf.SCF):
     def x2c1e(self):
         '''X2C with spin-orbit coupling effects.
 
-        Note the difference to PySCF-1.7. In PySCF it calls spin-free X2C1E.
-        This result (mol.GHF().x2c() ) should equal to mol.X2C() although they
-        are solved in different AO basis (spherical GTO vs spinor GTO)
+        Starting from PySCF 2.1, this function (mol.GHF().x2c()) produces an X2C
+        calculation in spherical GTO bases. The results in theory are equivalent
+        to those obtained from the mol.X2C() method, which is computed in the
+        spinor GTO bases. This function called the spin-free X2C1E method in the
+        older versions.
+
+        Please note the difference from other SCF methods, such as RHF and UHF.
+        In those methods, the .x2c() method produces a scalar relativistic
+        calculation using the X2C Hamiltonian.
         '''
         from pyscf.x2c.x2c import x2c1e_ghf
         return x2c1e_ghf(self)
     x2c = x2c1e
+
+    def to_ks(self, xc='HF'):
+        '''Convert to GKS object.
+        '''
+        from pyscf import dft
+        return self._transfer_attrs_(dft.GKS(self.mol, xc=xc))
+
+    to_gpu = lib.to_gpu
 
 def _from_rhf_init_dm(dm, breaksym=True):
     dma = dm * .5
@@ -554,29 +565,3 @@ def _from_rhf_init_dm(dm, breaksym=True):
 
 class HF1e(GHF):
     scf = hf._hf1e_scf
-
-
-del (PRE_ORTH_METHOD)
-
-
-if __name__ == '__main__':
-    mol = gto.Mole()
-    mol.verbose = 3
-    mol.atom = 'H 0 0 0; H 0 0 1; O .5 .6 .2'
-    mol.basis = 'ccpvdz'
-    mol.build()
-
-    mf = GHF(mol)
-    mf.kernel()
-
-    dm = mf.init_guess_by_1e(mol)
-    dm = dm + 0j
-    nao = mol.nao_nr()
-    numpy.random.seed(12)
-    dm[:nao,nao:] = numpy.random.random((nao,nao)) * .1j
-    dm[nao:,:nao] = dm[:nao,nao:].T.conj()
-    mf.kernel(dm)
-    mf.canonicalize(mf.mo_coeff, mf.mo_occ)
-    mf.analyze()
-    print(mf.spin_square())
-    print(mf.e_tot - -75.9125824421352)

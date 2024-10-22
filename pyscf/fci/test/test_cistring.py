@@ -18,6 +18,84 @@ import numpy
 from pyscf.fci import cistring
 
 
+def gen_cre_str_index(orb_list, nelec):
+    '''Slow version of gen_cre_str_index function'''
+    cre_strs = cistring.make_strings(orb_list, nelec+1)
+    credic = dict(zip(cre_strs,range(cre_strs.__len__())))
+    def progate1e(str0):
+        linktab = []
+        for i in orb_list:
+            if not str0 & (1 << i):
+                str1 = str0 | (1 << i)
+                linktab.append((i, 0, credic[str1], cistring.cre_sign(i, str0)))
+        return linktab
+
+    strs = cistring.make_strings(orb_list, nelec)
+    t = [progate1e(s) for s in strs.astype(numpy.int64)]
+    return numpy.array(t, dtype=numpy.int32)
+
+def gen_des_str_index(orb_list, nelec):
+    '''Slow version of gen_des_str_index function'''
+    des_strs = cistring.make_strings(orb_list, nelec-1)
+    desdic = dict(zip(des_strs,range(des_strs.__len__())))
+    def progate1e(str0):
+        linktab = []
+        for i in orb_list:
+            if str0 & (1 << i):
+                str1 = str0 ^ (1 << i)
+                linktab.append((0, i, desdic[str1], cistring.des_sign(i, str0)))
+        return linktab
+
+    strs = cistring.make_strings(orb_list, nelec)
+    t = [progate1e(s) for s in strs.astype(numpy.int64)]
+    return numpy.array(t, dtype=numpy.int32)
+
+def gen_linkstr_index(orb_list, nelec, strs=None):
+    if strs is None:
+        strs = cistring.make_strings(orb_list, nelec)
+    strdic = dict(zip(strs,range(strs.__len__())))
+    def propagate1e(str0):
+        occ = []
+        vir = []
+        for i in orb_list:
+            if str0 & (1 << i):
+                occ.append(i)
+            else:
+                vir.append(i)
+        linktab = []
+        for i in occ:
+            linktab.append((i, i, strdic[str0], 1))
+        for i in occ:
+            for a in vir:
+                str1 = str0 ^ (1 << i) | (1 << a)
+                # [cre, des, target_address, parity]
+                linktab.append((a, i, strdic[str1], cistring.cre_des_sign(a, i, str0)))
+        return linktab
+
+    t = [propagate1e(s) for s in strs.astype(numpy.int64)]
+    return numpy.array(t, dtype=numpy.int32)
+
+def addr2str(norb, nelec, addr):
+    assert cistring.num_strings(norb, nelec) > addr
+    if norb > 64:
+        raise NotImplementedError('norb > 64')
+    if addr == 0 or nelec == norb or nelec == 0:
+        return (1 << nelec) - 1   # ..0011..11
+    else:
+        for i in reversed(range(norb)):
+            addrcum = cistring.num_strings(i, nelec)
+            if addrcum <= addr:
+                return (1 << i) | addr2str(i, nelec-1, addr-addrcum)
+
+def str2addr(norb, nelec, string):
+    if norb <= nelec or nelec == 0:
+        return 0
+    elif (1<<(norb-1)) & string:  # remove the first bit
+        return cistring.num_strings(norb-1, nelec) \
+                + str2addr(norb-1, nelec-1, string^(1<<(norb-1)))
+    else:
+        return str2addr(norb-1, nelec, string)
+
 class KnownValues(unittest.TestCase):
     def test_strings4orblist(self):
         ref = ['0b1010', '0b100010', '0b101000', '0b10000010', '0b10001000',
@@ -30,12 +108,12 @@ class KnownValues(unittest.TestCase):
             self.assertEqual(bin(x), ref[i])
 
         strs = cistring.gen_strings4orblist(range(8), 4)
-        occlst = cistring._gen_occslst(range(8), 4)
+        occlst = cistring.gen_occslst(range(8), 4)
         self.assertAlmostEqual(abs(occlst - cistring._strs2occslst(strs, 8)).sum(), 0, 12)
         self.assertAlmostEqual(abs(strs - cistring._occslst2strs(occlst)).sum(), 0, 12)
 
     def test_linkstr_index(self):
-        idx1 = cistring.gen_linkstr_index_o0(range(4), 2)
+        idx1 = gen_linkstr_index(range(4), 2)
         idx2 = cistring.gen_linkstr_index(range(4), 2)
         idx23 = numpy.array([[0, 0, 3, 1],
                              [3, 3, 3, 1],
@@ -52,14 +130,14 @@ class KnownValues(unittest.TestCase):
         idx3[:,:,1] = 0
         self.assertTrue(numpy.all(idx2 == idx3))
 
-        tab1 = cistring.gen_cre_str_index_o0(range(8), 4)
-        tab2 = cistring.gen_cre_str_index_o1(range(8), 4)
+        tab1 = gen_cre_str_index(range(8), 4)
+        tab2 = cistring.gen_cre_str_index(range(8), 4)
         self.assertAlmostEqual(abs(tab1 - tab2).max(), 0, 12)
-        tab1 = cistring.gen_des_str_index_o0(range(8), 4)
-        tab2 = cistring.gen_des_str_index_o1(range(8), 4)
+        tab1 = gen_des_str_index(range(8), 4)
+        tab2 = cistring.gen_des_str_index(range(8), 4)
         self.assertAlmostEqual(abs(tab1 - tab2).max(), 0, 12)
 
-        tab1 = cistring.gen_linkstr_index_o0(range(8), 4)
+        tab1 = gen_linkstr_index(range(8), 4)
         tab2 = cistring.gen_linkstr_index(range(8), 4)
         self.assertAlmostEqual(abs(tab1 - tab2).sum(), 0, 12)
         tab3 = cistring.gen_linkstr_index_o1(range(8), 4)
@@ -70,15 +148,25 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(bin(cistring.addr2str(6, 3, 8)), '0b11010')
         self.assertEqual(bin(cistring.addr2str(7, 4, 9)), '0b110011')
 
-        self.assertEqual(cistring.addr2str_o0(6, 3, 7), cistring.addr2str(6, 3, 7))
-        self.assertEqual(cistring.addr2str_o0(6, 3, 8), cistring.addr2str(6, 3, 8))
-        self.assertEqual(cistring.addr2str_o0(7, 4, 9), cistring.addr2str(7, 4, 9))
+        self.assertEqual(addr2str(6, 3, 7), cistring.addr2str(6, 3, 7))
+        self.assertEqual(addr2str(6, 3, 8), cistring.addr2str(6, 3, 8))
+        self.assertEqual(addr2str(7, 4, 9), cistring.addr2str(7, 4, 9))
 
-        self.assertEqual(bin(cistring.addr2str_o1(6, 3, 7)), '0b11001')
-        self.assertEqual(bin(cistring.addr2str_o1(6, 3, 8)), '0b11010')
-        self.assertEqual(bin(cistring.addr2str_o1(7, 4, 9)), '0b110011')
+        self.assertEqual(bin(cistring.addr2str(6, 3, 7)), '0b11001')
+        self.assertEqual(bin(cistring.addr2str(6, 3, 8)), '0b11010')
+        self.assertEqual(bin(cistring.addr2str(7, 4, 9)), '0b110011')
+
+        # Test large address
+        string = 0b101101111101101111001110111111110111111100
+        address = cistring.str2addr(norb=63, nelec=32, string=string)
+        string2 = cistring.addr2str(norb=63, nelec=32, addr=address)
+        self.assertEqual(string, string2)
 
     def test_str2addr(self):
+        self.assertEqual(str2addr(6, 3, int('0b11001' ,2)), cistring.str2addr(6, 3, int('0b11001' ,2)))
+        self.assertEqual(str2addr(6, 3, int('0b11010' ,2)), cistring.str2addr(6, 3, int('0b11010' ,2)))
+        self.assertEqual(str2addr(7, 4, int('0b110011',2)), cistring.str2addr(7, 4, int('0b110011',2)))
+
         self.assertEqual(cistring.str2addr(6, 3, int('0b11001' ,2)), 7)
         self.assertEqual(cistring.str2addr(6, 3, int('0b11010' ,2)), 8)
         self.assertEqual(cistring.str2addr(7, 4, int('0b110011',2)), 9)
@@ -169,4 +257,3 @@ def t2strs(norb, nelec):
 if __name__ == "__main__":
     print("Full Tests for CI string")
     unittest.main()
-

@@ -115,7 +115,10 @@ def dipole_integral(mol, mo_coeff, charge_center=None):
     return dip
 
 def atomic_init_guess(mol, mo_coeff):
-    s = mol.intor_symmetric('int1e_ovlp')
+    if getattr(mol, 'pbc_intor', None):
+        s = mol.pbc_intor('int1e_ovlp', hermi=1)
+    else:
+        s = mol.intor_symmetric('int1e_ovlp')
     c = orth.orth_ao(mol, s=s)
     mo = reduce(numpy.dot, (c.conj().T, s, mo_coeff))
 # Find the AOs which have largest overlap to MOs
@@ -127,9 +130,89 @@ def atomic_init_guess(mol, mo_coeff):
     u, w, vh = numpy.linalg.svd(mo[idx])
     return lib.dot(u, vh).conj().T
 
-class Boys(ciah.CIAHOptimizer):
+class OrbitalLocalizer(lib.StreamObject, ciah.CIAHOptimizerMixin):
+
+    conv_tol = getattr(__config__, 'lo_boys_Boys_conv_tol', 1e-6)
+    conv_tol_grad = getattr(__config__, 'lo_boys_Boys_conv_tol_grad', None)
+    max_cycle = getattr(__config__, 'lo_boys_Boys_max_cycle', 100)
+    max_iters = getattr(__config__, 'lo_boys_Boys_max_iters', 20)
+    max_stepsize = getattr(__config__, 'lo_boys_Boys_max_stepsize', .05)
+    ah_trust_region = getattr(__config__, 'lo_boys_Boys_ah_trust_region', 3)
+    ah_start_tol = getattr(__config__, 'lo_boys_Boys_ah_start_tol', 1e9)
+    ah_max_cycle = getattr(__config__, 'lo_boys_Boys_ah_max_cycle', 40)
+    init_guess = getattr(__config__, 'lo_boys_Boys_init_guess', 'atomic')
+
+    _keys = {
+        'conv_tol', 'conv_tol_grad', 'max_cycle', 'max_iters',
+        'max_stepsize', 'ah_trust_region', 'ah_start_tol',
+        'ah_max_cycle', 'init_guess', 'mol', 'mo_coeff',
+    }
+
+    def __init__(self, mol, mo_coeff=None):
+        self.mol = mol
+        self.stdout = mol.stdout
+        self.verbose = mol.verbose
+        self.mo_coeff = mo_coeff
+
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
+        log.info('\n')
+        log.info('******** %s ********', self.__class__)
+        log.info('conv_tol = %s'       , self.conv_tol       )
+        log.info('conv_tol_grad = %s'  , self.conv_tol_grad  )
+        log.info('max_cycle = %s'      , self.max_cycle      )
+        log.info('max_stepsize = %s'   , self.max_stepsize   )
+        log.info('max_iters = %s'      , self.max_iters      )
+        log.info('kf_interval = %s'    , self.kf_interval    )
+        log.info('kf_trust_region = %s', self.kf_trust_region)
+        log.info('ah_start_tol = %s'   , self.ah_start_tol   )
+        log.info('ah_start_cycle = %s' , self.ah_start_cycle )
+        log.info('ah_level_shift = %s' , self.ah_level_shift )
+        log.info('ah_conv_tol = %s'    , self.ah_conv_tol    )
+        log.info('ah_lindep = %s'      , self.ah_lindep      )
+        log.info('ah_max_cycle = %s'   , self.ah_max_cycle   )
+        log.info('ah_trust_region = %s', self.ah_trust_region)
+        log.info('init_guess = %s'     , self.init_guess     )
+
+    def get_init_guess(self, key='atomic'):
+        '''Generate initial guess for localization.
+
+        Kwargs:
+            key : str or bool
+                If key is 'atomic', initial guess is based on the projected
+                atomic orbitals. False
+        '''
+        nmo = self.mo_coeff.shape[1]
+        if isinstance(key, str) and key.lower() == 'atomic':
+            u0 = atomic_init_guess(self.mol, self.mo_coeff)
+        elif isinstance(key, str) and key.lower().startswith('cho'):
+            mo_init = cholesky_mos(self.mo_coeff)
+            S = self.mol.intor_symmetric('int1e_ovlp')
+            u0 = numpy.linalg.multi_dot([self.mo_coeff.T, S, mo_init])
+        else:
+            u0 = numpy.eye(nmo)
+        if (isinstance(key, str) and key.lower().startswith('rand')
+            or numpy.linalg.norm(self.get_grad(u0)) < 1e-5):
+            # Add noise to kick initial guess out of saddle point
+            dr = numpy.cos(numpy.arange((nmo-1)*nmo//2)) * 1e-3
+            u0 = self.extract_rotation(dr)
+        return u0
+
+    def gen_g_hop(self, u):
+        raise NotImplementedError
+
+    def get_grad(self, u=None):
+        raise NotImplementedError
+
+    def cost_function(self, u=None):
+        raise NotImplementedError
+
+    kernel = kernel
+
+
+class Boys(OrbitalLocalizer):
     r'''
-    The Foster-Boys localization optimizer that maximizes the orbital dipole
+    Base class oflocalization optimizer that maximizes the orbital dipole
 
     \sum_i | <i| r |i> |^2
 
@@ -166,7 +249,7 @@ class Boys(ciah.CIAHOptimizer):
         max_iters : int
             The max. number of iterations in each macro iteration. Default 20
         max_stepsize : float
-            The step size for orbital rotation.  Small step (0.005 - 0.05) is prefered.
+            The step size for orbital rotation.  Small step (0.005 - 0.05) is preferred.
             Default 0.03.
         init_guess : str or None
             Initial guess for optimization. If set to None, orbitals defined
@@ -181,48 +264,6 @@ class Boys(ciah.CIAHOptimizer):
             Localized orbitals
 
     '''
-
-    conv_tol = getattr(__config__, 'lo_boys_Boys_conv_tol', 1e-6)
-    conv_tol_grad = getattr(__config__, 'lo_boys_Boys_conv_tol_grad', None)
-    max_cycle = getattr(__config__, 'lo_boys_Boys_max_cycle', 100)
-    max_iters = getattr(__config__, 'lo_boys_Boys_max_iters', 20)
-    max_stepsize = getattr(__config__, 'lo_boys_Boys_max_stepsize', .05)
-    ah_trust_region = getattr(__config__, 'lo_boys_Boys_ah_trust_region', 3)
-    ah_start_tol = getattr(__config__, 'lo_boys_Boys_ah_start_tol', 1e9)
-    ah_max_cycle = getattr(__config__, 'lo_boys_Boys_ah_max_cycle', 40)
-    init_guess = getattr(__config__, 'lo_boys_Boys_init_guess', 'atomic')
-
-    def __init__(self, mol, mo_coeff=None):
-        ciah.CIAHOptimizer.__init__(self)
-        self.mol = mol
-        self.stdout = mol.stdout
-        self.verbose = mol.verbose
-        self.mo_coeff = mo_coeff
-
-        keys = set(('conv_tol', 'conv_tol_grad', 'max_cycle', 'max_iters',
-                    'max_stepsize', 'ah_trust_region', 'ah_start_tol',
-                    'ah_max_cycle', 'init_guess'))
-        self._keys = set(self.__dict__.keys()).union(keys)
-
-    def dump_flags(self, verbose=None):
-        log = logger.new_logger(self, verbose)
-        log.info('\n')
-        log.info('******** %s ********', self.__class__)
-        log.info('conv_tol = %s'       , self.conv_tol       )
-        log.info('conv_tol_grad = %s'  , self.conv_tol_grad  )
-        log.info('max_cycle = %s'      , self.max_cycle      )
-        log.info('max_stepsize = %s'   , self.max_stepsize   )
-        log.info('max_iters = %s'      , self.max_iters      )
-        log.info('kf_interval = %s'    , self.kf_interval    )
-        log.info('kf_trust_region = %s', self.kf_trust_region)
-        log.info('ah_start_tol = %s'   , self.ah_start_tol   )
-        log.info('ah_start_cycle = %s' , self.ah_start_cycle )
-        log.info('ah_level_shift = %s' , self.ah_level_shift )
-        log.info('ah_conv_tol = %s'    , self.ah_conv_tol    )
-        log.info('ah_lindep = %s'      , self.ah_lindep      )
-        log.info('ah_max_cycle = %s'   , self.ah_max_cycle   )
-        log.info('ah_trust_region = %s', self.ah_trust_region)
-        log.info('init_guess = %s'     , self.init_guess     )
 
     def gen_g_hop(self, u):
         mo_coeff = lib.dot(self.mo_coeff, u)
@@ -301,32 +342,6 @@ class Boys(ciah.CIAHOptimizer):
         r2 = numpy.einsum('pi,pi->', mo_coeff, lib.dot(r2, mo_coeff))
         val = r2 - numpy.einsum('xii,xii->', dip, dip)
         return val
-
-    def get_init_guess(self, key='atomic'):
-        '''Generate initial guess for localization.
-
-        Kwargs:
-            key : str or bool
-                If key is 'atomic', initial guess is based on the projected
-                atomic orbitals. False
-        '''
-        nmo = self.mo_coeff.shape[1]
-        if isinstance(key, str) and key.lower() == 'atomic':
-            u0 = atomic_init_guess(self.mol, self.mo_coeff)
-        elif isinstance(key, str) and key.lower().startswith('cho'):
-            mo_init = cholesky_mos(self.mo_coeff)
-            S = self.mol.intor_symmetric('int1e_ovlp')
-            u0 = numpy.linalg.multi_dot([self.mo_coeff.T, S, mo_init])
-        else:
-            u0 = numpy.eye(nmo)
-        if (isinstance(key, str) and key.lower().startswith('rand')
-            or numpy.linalg.norm(self.get_grad(u0)) < 1e-5):
-            # Add noise to kick initial guess out of saddle point
-            dr = numpy.cos(numpy.arange((nmo-1)*nmo//2)) * 1e-3
-            u0 = self.extract_rotation(dr)
-        return u0
-
-    kernel = kernel
 
 FB = BF = Boys
 

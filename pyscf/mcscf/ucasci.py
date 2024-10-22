@@ -32,7 +32,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import fci
 from pyscf.mcscf import addons
-from pyscf.mcscf import casci
+from pyscf.mcscf.casci import as_scanner, CASBase
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'mcscf_analyze_with_meta_lowdin', True)
@@ -54,7 +54,7 @@ def extract_orbs(mo_coeff, ncas, nelecas, ncore):
     return mo_core, mo_cas, mo_vir
 
 def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
-    '''CAS sapce one-electron hamiltonian for UHF-CASCI or UHF-CASSCF
+    '''CAS space one-electron hamiltonian for UHF-CASCI or UHF-CASSCF
 
     Args:
         casci : a U-CASSCF/U-CASCI object or UHF object
@@ -97,7 +97,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE, envs=None):
     mo_core, mo_cas, mo_vir = extract_orbs(mo_coeff, ncas, nelecas, ncore)
 
     # 1e
-    h1eff, energy_core = casci.h1e_for_cas(mo_coeff)
+    h1eff, energy_core = casci.get_h1eff(mo_coeff)
     log.debug('core energy = %.15g', energy_core)
     t1 = log.timer('effective h1e in CAS space', *t0)
 
@@ -117,9 +117,9 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE, envs=None):
     return e_tot, e_cas, fcivec
 
 
-class UCASCI(casci.CASCI):
+class UCASBase(CASBase):
     # nelecas is tuple of (nelecas_alpha, nelecas_beta)
-    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
+    def __init__(self, mf_or_mol, ncas=0, nelecas=0, ncore=None):
         #assert ('UHF' == mf.__class__.__name__)
         if isinstance(mf_or_mol, gto.Mole):
             mf = scf.UHF(mf_or_mol)
@@ -155,8 +155,6 @@ class UCASCI(casci.CASCI):
         self.ci = None
         self.e_tot = 0
         self.e_cas = 0
-
-        self._keys = set(self.__dict__.keys())
 
     @property
     def ncore(self):
@@ -229,59 +227,7 @@ class UCASCI(casci.CASCI):
     def _eig(self, h, *args):
         return scf.hf.eig(h, None)
 
-    def get_h2cas(self, mo_coeff=None):
-        return self.ao2mo(mo_coeff)
-    def get_h2eff(self, mo_coeff=None):
-        return self.ao2mo(mo_coeff)
-    def ao2mo(self, mo_coeff=None):
-        if mo_coeff is None:
-            mo_coeff = (self.mo_coeff[0][:,self.ncore[0]:self.ncore[0]+self.ncas],
-                        self.mo_coeff[1][:,self.ncore[1]:self.ncore[1]+self.ncas])
-        nao, nmo = mo_coeff[0].shape
-        if self._scf._eri is not None and \
-           (nao*nao*nmo*nmo*12+self._scf._eri.size)*8/1e6 < self.max_memory*.95:
-            moab = numpy.hstack((mo_coeff[0], mo_coeff[1]))
-            na = mo_coeff[0].shape[1]
-            nab = moab.shape[1]
-            eri = pyscf.ao2mo.incore.full(self._scf._eri, moab)
-            eri = pyscf.ao2mo.restore(1, eri, nab)
-            eri_aa = eri[:na,:na,:na,:na].copy()
-            eri_ab = eri[:na,:na,na:,na:].copy()
-            eri_bb = eri[na:,na:,na:,na:].copy()
-        else:
-            moab = numpy.hstack((mo_coeff[0], mo_coeff[1]))
-            eri = pyscf.ao2mo.full(self.mol, moab, verbose=self.verbose)
-            na = mo_coeff[0].shape[1]
-            nab = moab.shape[1]
-            eri = pyscf.ao2mo.restore(1, eri, nab)
-            eri_aa = eri[:na,:na,:na,:na].copy()
-            eri_ab = eri[:na,:na,na:,na:].copy()
-            eri_bb = eri[na:,na:,na:,na:].copy()
-
-        return (eri_aa, eri_ab, eri_bb)
-
-    get_h1cas = h1e_for_cas = h1e_for_cas
-
-    def get_h1eff(self, mo_coeff=None, ncas=None, ncore=None):
-        return self.h1e_for_cas(mo_coeff, ncas, ncore)
-    get_h1eff.__doc__ = h1e_for_cas.__doc__
-
-    def casci(self, mo_coeff=None, ci0=None):
-        return self.kernel(mo_coeff, ci0)
-    def kernel(self, mo_coeff=None, ci0=None):
-        if mo_coeff is None:
-            mo_coeff = self.mo_coeff
-        if ci0 is None:
-            ci0 = self.ci
-
-        self.check_sanity()
-        self.dump_flags()
-
-        log = logger.Logger(self.stdout, self.verbose)
-        self.e_tot, self.e_cas, self.ci = \
-                kernel(self, mo_coeff, ci0=ci0, verbose=log)
-        self._finalize()
-        return self.e_tot, self.e_cas, self.ci
+    get_h1eff = h1e_for_cas
 
     def _finalize(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -412,7 +358,7 @@ class UCASCI(casci.CASCI):
     def spin_square(self, fcivec=None, mo_coeff=None, ovlp=None):
         return addons.spin_square(self, mo_coeff, fcivec, ovlp)
 
-    fix_spin_ = fix_spin = None
+    fix_spin_ = fix_spin = lib.invalid_method('fix_spin')
 
     @lib.with_doc(addons.sort_mo.__doc__)
     def sort_mo(self, caslst, mo_coeff=None, base=1):
@@ -444,6 +390,56 @@ class UCASCI(casci.CASCI):
                   ncore=None, **kwargs):
         dm1a,dm1b = self.make_rdm1s(mo_coeff, ci, ncas, nelecas, ncore)
         return dm1a+dm1b
+
+class UCASCI(UCASBase):
+    def get_h2eff(self, mo_coeff=None):
+        if mo_coeff is None:
+            mo_coeff = (self.mo_coeff[0][:,self.ncore[0]:self.ncore[0]+self.ncas],
+                        self.mo_coeff[1][:,self.ncore[1]:self.ncore[1]+self.ncas])
+        nao, nmo = mo_coeff[0].shape
+        if self._scf._eri is not None and \
+           (nao*nao*nmo*nmo*12+self._scf._eri.size)*8/1e6 < self.max_memory*.95:
+            moab = numpy.hstack((mo_coeff[0], mo_coeff[1]))
+            na = mo_coeff[0].shape[1]
+            nab = moab.shape[1]
+            eri = pyscf.ao2mo.incore.full(self._scf._eri, moab)
+            eri = pyscf.ao2mo.restore(1, eri, nab)
+            eri_aa = eri[:na,:na,:na,:na].copy()
+            eri_ab = eri[:na,:na,na:,na:].copy()
+            eri_bb = eri[na:,na:,na:,na:].copy()
+        else:
+            moab = numpy.hstack((mo_coeff[0], mo_coeff[1]))
+            eri = pyscf.ao2mo.full(self.mol, moab, verbose=self.verbose)
+            na = mo_coeff[0].shape[1]
+            nab = moab.shape[1]
+            eri = pyscf.ao2mo.restore(1, eri, nab)
+            eri_aa = eri[:na,:na,:na,:na].copy()
+            eri_ab = eri[:na,:na,na:,na:].copy()
+            eri_bb = eri[na:,na:,na:,na:].copy()
+
+        return (eri_aa, eri_ab, eri_bb)
+
+    def casci(self, mo_coeff=None, ci0=None):
+        return self.kernel(mo_coeff, ci0)
+    def kernel(self, mo_coeff=None, ci0=None):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        else: # overwrite self.mo_coeff because it is needed in many methods of this class
+            self.mo_coeff = mo_coeff
+
+        if ci0 is None:
+            ci0 = self.ci
+
+        self.check_sanity()
+        self.dump_flags()
+
+        log = logger.Logger(self.stdout, self.verbose)
+        self.e_tot, self.e_cas, self.ci = \
+                kernel(self, mo_coeff, ci0=ci0, verbose=log)
+        self._finalize()
+        return self.e_tot, self.e_cas, self.ci
+
+    as_scanner = as_scanner
 
 CASCI = UCASCI
 

@@ -1,4 +1,4 @@
-Copyright 2014-2021 The PySCF Developers.
+Copyright 2014-2024 The PySCF Developers.
 PySCF (www.pyscf.org) was developed by:
 
 Qiming Sun
@@ -81,7 +81,7 @@ Kyle Bystrom
 Minye Zhang
 Yusuke Kimura
 Unathi Koketso Skosana
-Matthew Hennefarth
+Matthew R Hennefarth (University of Chicago)
 Will Wheeler
 Basil Ibrahim
 Junjie Yang
@@ -98,7 +98,20 @@ Wanja Schulze
 Till Hanke
 Kevin J. Sung
 Jonathan Edward Moussa
-
+Xiaojie Wu
+Pavel Pokhilko
+Frédéric Chapoton
+Daniel King
+Jiachen Li
+Felipe S. S. Schneider
+Aniruddha Seal
+Peter Reinholdt
+Christopher Hillenbrand
+scohenjanes5
+Michal Krompiec
+Victor Yu
+James Serna (The Ohio State University)
+Brian Zhao
 
 
 ---

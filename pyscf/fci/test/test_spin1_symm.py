@@ -13,15 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
 import unittest
 import numpy
-from pyscf import gto
+from pyscf import gto, lib
 from pyscf import scf
 from pyscf import ao2mo
 from pyscf import fci
 from pyscf.fci import cistring, direct_spin1, direct_spin1_symm
-from pyscf.fci import direct_spin1_cyl_sym
-import pyscf.symm
 from pyscf import mcscf
 
 def setUpModule():
@@ -44,7 +43,7 @@ def setUpModule():
     h1e = m.mo_coeff.T.dot(scf.hf.get_hcore(mol)).dot(m.mo_coeff)
     g2e = ao2mo.incore.full(m._eri, m.mo_coeff)
     orbsym = m.orbsym
-    cis = fci.direct_spin1_symm.FCISolver(mol)
+    cis = direct_spin1_symm.FCISolver(mol)
     cis.orbsym = orbsym
 
     numpy.random.seed(15)
@@ -183,6 +182,8 @@ Li    P
         ey, ci_y = mci.kernel(wfnsym='E2uy')
         self.assertAlmostEqual(ex - ey, 0, 7)
         self.assertAlmostEqual(ex - -14.70061197088, 0, 7)
+        ss, sz = mci.spin_square(ci_x, mf.mo_energy.size, mol.nelec)
+        self.assertAlmostEqual(ss, 2, 6)
 
         swap_xy = numpy.array([
             [0, 1, 0],
@@ -197,72 +198,43 @@ Li    P
         ci1 = fci.addons.transform_ci(ci_y, (3,3), u.T)
         self.assertAlmostEqual(abs(ci1.ravel().dot(ci_y.ravel())), 1, 9)
 
-    def test_spin1_cyl_sym(self):
-        mol = gto.M(
-            atom = 'N 0 0 0; N 0 0 1.5',
-            basis = 'cc-pVDZ',
-            spin = 0,
-            symmetry = True,
-        )
-        mc = mol.RHF().run().CASCI(12, 6)
-        mc.fcisolver.wfnsym = 'E1ux'
-        mc.run()
-        e1 = mc.e_tot
-        ci1 = mc.ci
-        self.assertAlmostEqual(e1, -108.683383569227, 7)
+    def test_incomplete_orbsym(self):
+        mol = gto.Mole()
+        mol.groupname = 'Dooh'
+        sol = direct_spin1_symm.FCI(mol)
+        no, ne = 2, 2
+        h1 = numpy.ones((no,no))
+        h2 = numpy.ones((no,no,no,no))
+        orbsym = lib.tag_array(numpy.array([0,3]), degen_mapping=[0,2])
+        with self.assertRaises(lib.exceptions.PointGroupSymmetryError):
+            sol.kernel(h1, h2, no, ne, orbsym=orbsym)
 
-        mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
-        mc.fcisolver.wfnsym = 'E1ux'
-        mc.run()
-        e2 = mc.e_tot
-        self.assertAlmostEqual(e2, -108.683383569227, 7)
-        orbsym = mc.fcisolver.orbsym
-        degen_mapping = orbsym.degen_mapping
-        u = direct_spin1_symm._cyl_sym_orbital_rotation(orbsym, degen_mapping)
-        ci2 = fci.addons.transform_ci(mc.ci, (3,3), u)
-        ci2 = ci2.real / numpy.linalg.norm(ci2.real)
-        self.assertAlmostEqual(abs(ci1.ravel().dot(ci2.ravel())), 1, 6)
+    def test_many_roots(self):
+        norb = 4
+        nelec = (2, 2)
+        nroots = 36
+        h1 = numpy.eye(norb) * -.5
+        h2 = numpy.zeros((norb, norb, norb, norb))
+        orbsym = numpy.array([0, 5, 3, 2])
+        for i in range(norb):
+            h2[i,i,i,i] = .1
+        obj = direct_spin1_symm.FCI()
+        e, fcivec = obj.kernel(h1, h2, norb, nelec, nroots=nroots,
+                               davidson_only=True, orbsym=orbsym)
+        self.assertAlmostEqual(e[0], -1.8, 9)
 
-    def test_wrong_initial_guess(self):
-        mol = gto.M(
-            atom = 'H 0 0 0; H 0 0 1.2',
-            basis = [[0, [3, 1]], [1, [1, 1]]],
-            spin = 1,
-            charge = 1,
-            symmetry = True)
+    def test_guess_wfnsym_cyl_sym(self):
+        mol = gto.M(atom='C 0 0 0; C 0 0 1.5', basis='6-31g', symmetry=True)
         mf = mol.RHF().run()
-        mc = mcscf.CASCI(mf, mf.mo_energy.size, mol.nelec)
-        mc.fcisolver.wfnsym = 'A2g'
-        self.assertRaises(RuntimeError, mc.run)
-
-        mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
-        mc.fcisolver.wfnsym = 'A2g'
-        self.assertRaises(RuntimeError, mc.run)
-
-    def test_linearmole_a2(self):
-        mol = gto.M(
-            atom = 'H 0 0 0; H 0 0 1.2',
-            basis = [[0, [3, 1]], [1, [1, 1]]],
-            symmetry = True)
-        mf = mol.RHF().run()
-
-        mc = mcscf.CASCI(mf, mf.mo_energy.size, mol.nelec)
-        mc.fcisolver.wfnsym = 'A2g'
-        mc.run()
-        self.assertAlmostEqual(mc.e_tot, 2.6561956585409616, 8)
-        mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
-        mc.fcisolver.wfnsym = 'A2g'
-        mc.run()
-        self.assertAlmostEqual(mc.e_tot, 2.6561956585409616, 8)
-
-        mc = mcscf.CASCI(mf, mf.mo_energy.size, mol.nelec)
-        mc.fcisolver.wfnsym = 'A2u'
-        mc.run()
-        self.assertAlmostEqual(mc.e_tot, 2.8999951068356475, 8)
-        mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
-        mc.fcisolver.wfnsym = 'A2u'
-        mc.run()
-        self.assertAlmostEqual(mc.e_tot, 2.8999951068356475, 8)
+        mc = mcscf.CASCI(mf, 8, 4)
+        mc.fcisolver.wfnsym = 'A1g'
+        ncas = {'A1g':2, 'A1u':2, 'E1gx':1, 'E1gy':1, 'E1ux':1, 'E1uy':1}
+        mo = mcscf.sort_mo_by_irrep(mc, mf.mo_coeff, ncas)
+        na = math.comb(8, 2)
+        ci0 = numpy.zeros((na, na))
+        ci0[1,1] = ci0[2,2] = .5**.5 # corresponding to (E+)(E-') + (E-)(E+') => A1
+        mc.kernel(mo, ci0=ci0)
+        self.assertAlmostEqual(mc.e_cas, -4.205889578214524, 9)
 
 if __name__ == "__main__":
     print("Full Tests for spin1-symm")

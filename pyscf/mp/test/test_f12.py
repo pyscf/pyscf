@@ -68,4 +68,3 @@ class KnowValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for mp2-f12")
     unittest.main()
-

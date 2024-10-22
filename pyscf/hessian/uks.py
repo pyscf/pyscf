@@ -39,6 +39,10 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
     mol = hessobj.mol
     mf = hessobj.base
+    ni = mf._numint
+    if mf.do_nlc():
+        raise NotImplementedError('RKS Hessian for NLC functional')
+
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
@@ -56,9 +60,6 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     dme0 = numpy.einsum('pi,qi,i->pq', mocca, mocca, mo_ea)
     dme0+= numpy.einsum('pi,qi,i->pq', moccb, moccb, mo_eb)
 
-    if mf.nlc != '':
-        raise NotImplementedError
-    ni = mf._numint
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
     hybrid = ni.libxc.is_hybrid_xc(mf.xc)
     de2, ej, ek = uhf_hess._partial_hess_ejk(hessobj, mo_energy, mo_coeff, mo_occ,
@@ -191,14 +192,7 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
         h1aoa[ia] += h1 + veffa + veffa.transpose(0,2,1)
         h1aob[ia] += h1 + veffb + veffb.transpose(0,2,1)
 
-    if chkfile is None:
-        return h1aoa, h1aob
-    else:
-        for ia in atmlst:
-            lib.chkfile.save(chkfile, 'scf_f1ao/0/%d'%ia, h1aoa[ia])
-            lib.chkfile.save(chkfile, 'scf_f1ao/1/%d'%ia, h1aob[ia])
-        return chkfile
-
+    return h1aoa, h1aob
 
 XX, XY, XZ = 4, 5, 6
 YX, YY, YZ = 5, 7, 8
@@ -600,8 +594,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             vmatb[ia] = -vmatb[ia] - vmatb[ia].transpose(0,2,1)
 
     elif xctype == 'MGGA':
-        if grids.level < 5:
-            logger.warn(mol, 'MGGA Hessian is sensitive to dft grids.')
+        rks_hess._check_mgga_grids(grids)
         ao_deriv = 2
         vipa = numpy.zeros((3,nao,nao))
         vipb = numpy.zeros((3,nao,nao))
@@ -652,14 +645,19 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
     return vmata, vmatb
 
 
-class Hessian(uhf_hess.Hessian):
+class Hessian(rhf_hess.HessianBase):
     '''Non-relativistic UKS hessian'''
+
+    _keys = {'grids', 'grid_response'}
+
     def __init__(self, mf):
         uhf_hess.Hessian.__init__(self, mf)
         self.grids = None
         self.grid_response = False
-        self._keys = self._keys.union(['grids'])
 
+    hess_elec = uhf_hess.hess_elec
+    gen_hop = uhf_hess.gen_hop
+    solve_mo1 = uhf_hess.Hessian.solve_mo1
     partial_hess_elec = partial_hess_elec
     make_h1 = make_h1
 

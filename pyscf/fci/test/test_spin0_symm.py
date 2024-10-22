@@ -120,6 +120,8 @@ Li    P
         ey, ci_y = mci.kernel(wfnsym='E1uy')
         self.assertAlmostEqual(ex - ey, 0, 7)
         self.assertAlmostEqual(ex - -14.79681308052051, 0, 7)
+        ss, sz = mci.spin_square(ci_x, mf.mo_energy.size, mol.nelec)
+        self.assertAlmostEqual(ss, 0, 6)
 
         swap_xy = numpy.array([
             [0, 1, 0],

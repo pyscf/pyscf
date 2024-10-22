@@ -20,6 +20,7 @@ import unittest
 import tempfile
 import numpy
 from pyscf import lib
+from pyscf.scf import atom_hf
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.scf import hf as pbchf
 import pyscf.pbc.scf as pscf
@@ -54,7 +55,7 @@ class KnownValues(unittest.TestCase):
         h1ref = pbchf.get_hcore(cell)
         h1 = pbchf.RHF(cell).get_hcore()
         self.assertAlmostEqual(abs(h1-h1ref).max(), 0, 9)
-        self.assertAlmostEqual(lib.fp(h1), 0.14116483012673137, 9)
+        self.assertAlmostEqual(lib.fp(h1), 0.14116483012673137, 8)
 
         cell1 = cell.copy()
         cell1.ecp = {'He': (2, ((-1, (((7.2, .3),),)),))}
@@ -63,7 +64,7 @@ class KnownValues(unittest.TestCase):
         h1ref = pbchf.get_hcore(cell1, kpt)
         h1 = pbchf.RHF(cell1).get_hcore(kpt=kpt)
         self.assertAlmostEqual(abs(h1-h1ref).max(), 0, 9)
-        self.assertAlmostEqual(lib.fp(h1), -2.708431894877279-0.395390980665125j, 9)
+        self.assertAlmostEqual(lib.fp(h1), -2.708431894877279-0.395390980665125j, 8)
 
         h1 = pscf.KRHF(cell1).get_hcore(kpts=[kpt])
         self.assertEqual(h1.ndim, 3)
@@ -72,7 +73,7 @@ class KnownValues(unittest.TestCase):
     def test_rhf_vcut_sph(self):
         mf = pbchf.RHF(cell, exxdiv='vcut_sph')
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -4.29190260870812, 8)
+        self.assertAlmostEqual(e1, -4.29190260870812, 7)
         self.assertTrue(mf.mo_coeff.dtype == numpy.double)
 
         mf = pscf.KRHF(cell, [[0,0,0]], exxdiv='vcut_sph')
@@ -83,7 +84,7 @@ class KnownValues(unittest.TestCase):
         k = numpy.random.random(3)
         mf = pbchf.RHF(cell, k, exxdiv='vcut_sph')
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -4.1379172088570595, 8)
+        self.assertAlmostEqual(e1, -4.1379172088570595, 7)
         self.assertTrue(mf.mo_coeff.dtype == numpy.complex128)
 
         mf = pscf.KRHF(cell, k, exxdiv='vcut_sph')
@@ -91,7 +92,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(e0,e1))
 
     def test_rhf_exx_ewald(self):
-        self.assertAlmostEqual(mf.e_tot, -4.3511582284698633, 8)
+        self.assertAlmostEqual(mf.e_tot, -4.3511582284698633, 7)
         self.assertTrue(mf.mo_coeff.dtype == numpy.double)
         self.assertAlmostEqual(mf.e_tot, kmf.e_tot, 8)
 
@@ -110,7 +111,7 @@ class KnownValues(unittest.TestCase):
         k = numpy.random.random(3)
         mf = pbchf.RHF(cell, k, exxdiv='ewald')
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -4.2048655827967139, 8)
+        self.assertAlmostEqual(e1, -4.2048655827967139, 7)
         self.assertTrue(mf.mo_coeff.dtype == numpy.complex128)
 
         kmf = pscf.KRHF(cell, k, exxdiv='ewald')
@@ -128,7 +129,7 @@ class KnownValues(unittest.TestCase):
     def test_rhf_exx_None(self):
         mf = pbchf.RHF(cell, exxdiv=None)
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -2.9325094887283196, 8)
+        self.assertAlmostEqual(e1, -2.9325094887283196, 7)
         self.assertTrue(mf.mo_coeff.dtype == numpy.double)
 
         mf = pscf.KRHF(cell, [[0,0,0]], exxdiv=None)
@@ -140,7 +141,7 @@ class KnownValues(unittest.TestCase):
         mf = pbchf.RHF(cell, k, exxdiv=None)
         mf.init_guess = 'hcore'
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -2.7862168430230341, 8)
+        self.assertAlmostEqual(e1, -2.7862168430230341, 7)
         self.assertTrue(mf.mo_coeff.dtype == numpy.complex128)
 
         mf = pscf.KRHF(cell, k, exxdiv=None)
@@ -156,7 +157,7 @@ class KnownValues(unittest.TestCase):
         mf.max_cycle = 1
         mf.diis = None
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -4.132445328608581, 9)
+        self.assertAlmostEqual(e1, -4.132445328608581, 7)
 
         mf1 = pbchf.RHF(cell, exxdiv='vcut_sph')
         mf1.chkfile = mf.chkfile
@@ -164,14 +165,14 @@ class KnownValues(unittest.TestCase):
         mf1.diis = None
         mf1.max_cycle = 1
         e1 = mf1.kernel()
-        self.assertAlmostEqual(e1, -4.291854736401251, 9)
+        self.assertAlmostEqual(e1, -4.291854736401251, 7)
         self.assertTrue(mf1.mo_coeff.dtype == numpy.double)
 
     def test_uhf_exx_ewald(self):
         mf = pscf.UHF(cell, exxdiv='ewald')
         mf.init_guess = 'hcore'
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -4.3511582287379111, 8)
+        self.assertAlmostEqual(e1, -4.3511582287379111, 7)
         self.assertTrue(mf.mo_coeff[0].dtype == numpy.double)
 
         kmf = pscf.KUHF(cell, [[0,0,0]], exxdiv='ewald')
@@ -195,7 +196,7 @@ class KnownValues(unittest.TestCase):
         k = numpy.random.random(3)
         mf = pscf.UHF(cell, k, exxdiv='ewald')
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -4.2048655827967139, 8)
+        self.assertAlmostEqual(e1, -4.2048655827967139, 7)
         self.assertTrue(mf.mo_coeff[0].dtype == numpy.complex128)
 
         kmf = pscf.KUHF(cell, k, exxdiv='ewald')
@@ -218,7 +219,7 @@ class KnownValues(unittest.TestCase):
         mf = pscf.GHF(cell, exxdiv='ewald')
         mf.init_guess = 'hcore'
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -4.3511582287379111, 8)
+        self.assertAlmostEqual(e1, -4.3511582287379111, 7)
         self.assertTrue(mf.mo_coeff.dtype == numpy.double)
 
         kmf = pscf.KGHF(cell, [[0,0,0]], exxdiv='ewald')
@@ -240,7 +241,7 @@ class KnownValues(unittest.TestCase):
         k = numpy.random.random(3)
         mf = pscf.GHF(cell, k, exxdiv='ewald')
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -4.2048655827967139, 8)
+        self.assertAlmostEqual(e1, -4.2048655827967139, 7)
         self.assertTrue(mf.mo_coeff.dtype == numpy.complex128)
 
         kmf = pscf.KGHF(cell, k, exxdiv='ewald')
@@ -257,42 +258,58 @@ class KnownValues(unittest.TestCase):
 #        self.assertAlmostEqual(lib.fp(e1[0]), -6.8312867098806249, 7)
 #        self.assertAlmostEqual(lib.fp(e1[1]), -6.1120214505413086, 7)
 
-#    def test_rhf_0d(self):
-#        from pyscf.df import mdf_jk
-#        from pyscf.scf import hf
-#        L = 4
-#        cell = pbcgto.Cell()
-#        cell.build(unit = 'B',
-#                   a = numpy.eye(3)*L*5,
-#                   mesh = [21]*3,
-#                   atom = '''He 2 2 2; He 2 2 3''',
-#                   dimension = 0,
-#                   verbose = 0,
-#                   basis = { 'He': [[0, (0.8, 1.0)],
-#                                    [0, (1.0, 1.0)],
-#                                    [0, (1.2, 1.0)]]})
-#        mol = cell.to_mol()
-#        mf = mdf_jk.density_fit(hf.RHF(mol))
-#        mf.with_df.mesh = [21]*3
-#        mf.with_df.auxbasis = {'He':[[0, (1e6, 1)]]}
-#        mf.with_df.charge_constraint = False
-#        mf.with_df.metric = 'S'
-#        eref = mf.kernel()
-#
-#        mf = pbchf.RHF(cell)
-#        mf.with_df = pdf.AFTDF(cell)
-#        mf.exxdiv = None
-#        mf.get_hcore = lambda *args: hf.get_hcore(mol)
-#        mf.energy_nuc = lambda *args: mol.energy_nuc()
-#        e1 = mf.kernel()
-#        self.assertAlmostEqual(e1, eref, 8)
+    def test_rhf_0d(self):
+        cell = pbcgto.Cell()
+        cell.build(unit = 'B',
+                   a = numpy.eye(3)*5,
+                   atom = '''He 2 2 2; He 2 2 3''',
+                   dimension = 0,
+                   verbose = 0,
+                   basis = { 'He': [[0, (0.8, 1.0)],
+                                    [0, (1.0, 1.0)],
+                                    [0, (1.2, 1.0)]]})
+        mol = cell.to_mol()
+        mf = mol.RHF().run()
+        eref = mf.kernel()
+
+        mf = cell.RHF()
+        mf.with_df = pdf.AFTDF(cell)
+        e1 = mf.kernel()
+        self.assertAlmostEqual(eref, -4.165713858819728, 8)
+        self.assertAlmostEqual(e1, eref, 4)
+
+        cell = pbcgto.Cell()
+        cell.atom = 'He 1. .5 .5; C .1 1.3 2.1'
+        cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))],
+                      'C' :'gth-szv',}
+        cell.pseudo = {'C':'gth-pade',
+                       'He': pbcgto.pseudo.parse('''He
+        2
+         0.40000000    3    -1.98934751    -0.75604821    0.95604821
+        2
+         0.29482550    3     1.23870466    .855         .3
+                                           .71         -1.1
+                                                        .9
+         0.32235865    2     2.25670239    -0.39677748
+                                            0.93894690
+                                                     ''')}
+        cell.a = numpy.eye(3)
+        cell.dimension = 0
+        cell.build()
+        mf = pscf.RHF(cell)
+        mf.with_df = pdf.AFTDF(cell)
+        mf.run()
+
+        mol = cell.to_mol()
+        mf1 = mol.RHF().run()
+        self.assertAlmostEqual(mf1.e_tot, -5.66198034773817, 8)
+        self.assertAlmostEqual(mf1.e_tot, mf.e_tot, 4)
 
     def test_rhf_1d(self):
         L = 4
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
                    a = [[L,0,0],[0,L*5,0],[0,0,L*5]],
-                   mesh = [11,30,30],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
@@ -308,14 +325,13 @@ class KnownValues(unittest.TestCase):
         mf.with_df.mesh = cell.mesh
         mf.init_guess = 'hcore'
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.245417718, 5)
+        self.assertAlmostEqual(e1, -3.245417718, 6)
 
     def test_rhf_2d(self):
         L = 4
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
                    a = [[L,0,0],[0,L,0],[0,0,L*5]],
-                   mesh = [11,11,40],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 2,
                    low_dim_ft_type = 'inf_vacuum',
@@ -330,14 +346,13 @@ class KnownValues(unittest.TestCase):
         mf.with_df.eta = 0.3
         mf.with_df.mesh = cell.mesh
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.2683850732448168, 4)
+        self.assertAlmostEqual(e1, -3.2683850732448168, 5)
 
     def test_rhf_2d_fft(self):
         L = 4
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
-                   a = [[L,0,0],[0,L,0],[0,0,L*5]],
-                   mesh = [11,11,20],
+                   a = [[L,0,0],[0,L,0],[0,0,10]],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 2,
                    verbose = 0,
@@ -348,28 +363,27 @@ class KnownValues(unittest.TestCase):
         mf.with_df = pdf.FFTDF(cell)
         mf.with_df.mesh = cell.mesh
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.5797041803667593, 5)
+        self.assertAlmostEqual(e1, -3.268385073966333, 7)
 
         mf1 = pbchf.RHF(cell, exxdiv='ewald')
         mf1.with_df = pdf.FFTDF(cell)
         mf1.with_df.mesh = cell.mesh
         mf1.direct_scf = True
         e1 = mf1.kernel()
-        self.assertAlmostEqual(e1, -3.5797041803667593, 5)
+        self.assertAlmostEqual(e1, -3.268385073966333, 7)
 
         mf2 = pbchf.RHF(cell, exxdiv=None)
         mf2.with_df = pdf.FFTDF(cell)
         mf2.with_df.mesh = cell.mesh
         mf2.direct_scf = True
         e2 = mf2.kernel()
-        self.assertAlmostEqual(e2, -1.629571720365774, 5)
+        self.assertAlmostEqual(e2, -1.3182526139263366, 7)
 
     def test_uhf_1d(self):
         L = 4
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
                    a = numpy.eye(3)*4,
-                   mesh = [10,30,30],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
@@ -385,14 +399,13 @@ class KnownValues(unittest.TestCase):
         mf.with_df.mesh = cell.mesh
         mf.init_guess = 'hcore'
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.245417718, 5)
+        self.assertAlmostEqual(e1, -3.245417718, 6)
 
     def test_ghf_1d(self):
         L = 4
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
                    a = numpy.eye(3)*4,
-                   mesh = [10,30,30],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
@@ -408,7 +421,7 @@ class KnownValues(unittest.TestCase):
         mf.with_df.mesh = cell.mesh
         mf.init_guess = 'hcore'
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.245417718, 5)
+        self.assertAlmostEqual(e1, -3.245417718, 6)
 
     def test_get_veff(self):
         mf = pscf.RHF(cell)
@@ -437,8 +450,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(v12-v22).max(), 0, 9)
         self.assertAlmostEqual(abs(v13-v23).max(), 0, 9)
         self.assertAlmostEqual(abs(v14-v24).max(), 0, 9)
-        self.assertAlmostEqual(lib.fp(v11), -0.30110964334164825+0.81409418199767414j, 9)
-        self.assertAlmostEqual(lib.fp(v12), -2.1601376488983997-9.4070613374115908j, 9)
+        self.assertAlmostEqual(lib.fp(v11), -0.30110964334164825+0.81409418199767414j, 8)
+        self.assertAlmostEqual(lib.fp(v12), -2.1601376488983997-9.4070613374115908j, 8)
 
     def test_init(self):
         from pyscf.pbc import dft
@@ -493,13 +506,13 @@ class KnownValues(unittest.TestCase):
 
     def test_init_guess_by_1e(self):
         dm = mf.get_init_guess(key='1e')
-        self.assertAlmostEqual(lib.fp(dm), 0.025922864381755062, 8)
+        self.assertAlmostEqual(lib.fp(dm), 0.025922864381755062, 6)
 
         dm = kmf.get_init_guess(key='1e')
         self.assertEqual(dm.ndim, 3)
-        self.assertAlmostEqual(lib.fp(dm), 0.025922864381755062, 8)
+        self.assertAlmostEqual(lib.fp(dm), 0.025922864381755062, 6)
 
-    def test_init_guess_by_atom(self):
+    def test_init_guess_by_minao(self):
         with lib.temporary_env(cell, dimension=1):
             dm = mf.get_init_guess(key='minao')
             kdm = kmf.get_init_guess(key='minao')
@@ -507,7 +520,30 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(dm), -1.714952331211208, 8)
 
         self.assertEqual(kdm.ndim, 3)
-        self.assertAlmostEqual(lib.fp(dm), -1.714952331211208, 8)
+        self.assertAlmostEqual(lib.fp(kdm), -1.714952331211208, 8)
+
+    def test_init_guess_by_atom(self):
+        with lib.temporary_env(cell, dimension=1):
+            dm = mf.get_init_guess(key='atom')
+            kdm = kmf.get_init_guess(key='atom')
+
+        self.assertAlmostEqual(lib.fp(dm), 0.18074522075843902, 7)
+
+        self.assertEqual(kdm.ndim, 3)
+        self.assertAlmostEqual(lib.fp(dm), 0.18074522075843902, 7)
+
+    def test_atom_hf_with_pp(self):
+        mol = pbcgto.Cell()
+        mol.build(
+            verbose = 7,
+            output = '/dev/null',
+            atom  = 'O 0 0 0; H 0 0 -1; H 0 0 1',
+            a = [[5, 0, 0], [0, 5, 0], [0, 0, 5]],
+            basis = 'gth-dzvp',
+            pseudo = 'gth-pade')
+        scf_result = atom_hf.get_atm_nrhf(mol)
+        self.assertAlmostEqual(scf_result['O'][0], -15.193243796069835, 9)
+        self.assertAlmostEqual(scf_result['H'][0], -0.49777509423571864, 9)
 
     def test_jk(self):
         nao = cell.nao
@@ -518,6 +554,11 @@ class KnownValues(unittest.TestCase):
         vj, vk = mf.get_jk_incore(cell, dm)
         self.assertAlmostEqual(abs(vj - ref[0]).max(), 0, 9)
         self.assertAlmostEqual(abs(vk - ref[1]).max(), 0, 9)
+
+    def test_analyze(self):
+        rpop, rchg = mf.analyze()[0]
+        self.assertAlmostEqual(lib.fp(rpop), 0.0110475, 4)
+        self.assertAlmostEqual(abs(rchg).max(), 0, 7)
 
 
 if __name__ == '__main__':

@@ -23,11 +23,11 @@ TDA and TDHF for no-pair DKS Hamiltonian
 from functools import reduce
 import numpy
 from pyscf import lib
-from pyscf import dft
+from pyscf import scf
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.tdscf import rhf
-from pyscf.data import nist
+from pyscf.tdscf._lr_eig import eigh as lr_eigh, eig as lr_eig
 from pyscf import __config__
 
 OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_uhf_get_nto_threshold', 0.3)
@@ -50,15 +50,13 @@ def gen_tda_operation(mf, fock_ao=None):
     orbo = mo_coeff[:,occidx]
 
     if fock_ao is None:
-        #dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-        #fock_ao = mf.get_hcore() + mf.get_veff(mol, dm0)
-        foo = numpy.diag(mo_energy[occidx])
-        fvv = numpy.diag(mo_energy[viridx])
+        e_ia = hdiag = mo_energy[viridx] - mo_energy[occidx,None]
     else:
         fock = reduce(numpy.dot, (mo_coeff.conj().T, fock_ao, mo_coeff))
         foo = fock[occidx[:,None],occidx]
         fvv = fock[viridx[:,None],viridx]
-    hdiag = (fvv.diagonal() - foo.diagonal()[:,None]).ravel()
+        hdiag = fvv.diagonal() - foo.diagonal()[:,None]
+    hdiag = hdiag.ravel()
 
     mo_coeff = numpy.asarray(numpy.hstack((orbo,orbv)), order='F')
     vresp = mf.gen_response(hermi=0)
@@ -68,8 +66,11 @@ def gen_tda_operation(mf, fock_ao=None):
         dmov = lib.einsum('xov,qv,po->xpq', zs, orbv.conj(), orbo)
         v1ao = vresp(dmov)
         v1ov = lib.einsum('xpq,po,qv->xov', v1ao, orbo.conj(), orbv)
-        v1ov += lib.einsum('xqs,sp->xqp', zs, fvv)
-        v1ov -= lib.einsum('xpr,sp->xsr', zs, foo)
+        if fock_ao is None:
+            v1ov += numpy.einsum('xia,ia->xia', zs, e_ia)
+        else:
+            v1ov += lib.einsum('xqs,sp->xqp', zs, fvv)
+            v1ov -= lib.einsum('xpr,sp->xsr', zs, foo)
         return v1ov.reshape(v1ov.shape[0], -1)
 
     return vind, hdiag
@@ -119,14 +120,15 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         b = b - numpy.einsum('jaib->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * hyb
         return a, b
 
-    if isinstance(mf, dft.KohnShamDFT):
+    if isinstance(mf, scf.hf.KohnShamDFT):
         from pyscf.dft import xc_deriv
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if getattr(mf, 'nlc', '') != '':
-            raise NotImplementedError
+        if mf.do_nlc():
+            raise NotImplementedError('DKS-TDDFT for NLC functionals')
 
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
+        assert omega == 0.
 
         a, b = add_hf_(a, b, hyb)
 
@@ -379,7 +381,7 @@ def _contract_multipole(tdobj, ints, hermi=True, xy=None):
     raise NotImplementedError
 
 
-class TDMixin(rhf.TDMixin):
+class TDBase(rhf.TDBase):
 
     @lib.with_doc(get_ab.__doc__)
     def get_ab(self, mf=None):
@@ -395,7 +397,10 @@ class TDMixin(rhf.TDMixin):
 
 
 @lib.with_doc(rhf.TDA.__doc__)
-class TDA(TDMixin):
+class TDA(TDBase):
+
+    singlet = None
+
     def gen_vind(self, mf=None):
         '''Generate function to compute Ax'''
         if mf is None:
@@ -411,14 +416,12 @@ class TDA(TDMixin):
         occidx = n2c + numpy.where(mo_occ[n2c:] == 1)[0]
         viridx = n2c + numpy.where(mo_occ[n2c:] == 0)[0]
         e_ia = mo_energy[viridx] - mo_energy[occidx,None]
-        e_ia_max = e_ia.max()
 
         nov = e_ia.size
         nstates = min(nstates, nov)
         e_ia = e_ia.ravel()
-        e_threshold = min(e_ia_max, e_ia[numpy.argsort(e_ia)[nstates-1]])
-        # Handle degeneracy, include all degenerated states in initial guess
-        e_threshold += 1e-6
+        e_threshold = numpy.sort(e_ia)[nstates-1]
+        e_threshold += self.deg_eia_thresh
 
         idx = numpy.where(e_ia <= e_threshold)[0]
         x0 = numpy.zeros((idx.size, nov))
@@ -442,21 +445,17 @@ class TDA(TDMixin):
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
 
-        if x0 is None:
-            x0 = self.init_guess(self._scf, self.nstates)
-
         def pickeig(w, v, nroots, envs):
             idx = numpy.where(w > self.positive_eig_threshold)[0]
             return w[idx], v[:,idx], idx
 
-        # FIXME: Is it correct to call davidson1 for complex integrals?
-        self.converged, self.e, x1 = \
-                lib.davidson1(vind, x0, precond,
-                              tol=self.conv_tol,
-                              nroots=nstates, lindep=self.lindep,
-                              max_cycle=self.max_cycle,
-                              max_space=self.max_space, pick=pickeig,
-                              verbose=log)
+        if x0 is None:
+            x0 = self.init_guess(self._scf, self.nstates)
+
+        self.converged, self.e, x1 = lr_eigh(
+            vind, x0, precond, tol_residual=self.conv_tol, lindep=self.lindep,
+            nroots=nstates, pick=pickeig, max_cycle=self.max_cycle,
+            max_memory=self.max_memory, verbose=log)
 
         nocc = (self._scf.mo_occ>0).sum()
         nmo = self._scf.mo_occ.size
@@ -491,9 +490,8 @@ def gen_tdhf_operation(mf, fock_ao=None):
     orbv = mo_coeff[:,viridx]
     orbo = mo_coeff[:,occidx]
 
-    foo = numpy.diag(mo_energy[occidx])
-    fvv = numpy.diag(mo_energy[viridx])
-    hdiag = fvv.diagonal() - foo.diagonal()[:,None]
+    assert fock_ao is None
+    e_ia = hdiag = mo_energy[viridx] - mo_energy[occidx,None]
     hdiag = numpy.hstack((hdiag.ravel(), -hdiag.ravel())).real
 
     mo_coeff = numpy.asarray(numpy.hstack((orbo,orbv)), order='F')
@@ -502,17 +500,20 @@ def gen_tdhf_operation(mf, fock_ao=None):
     def vind(xys):
         xys = numpy.asarray(xys).reshape(-1,2,nocc,nvir)
         xs, ys = xys.transpose(1,0,2,3)
-        # dms = AX + BY
         dms  = lib.einsum('xov,qv,po->xpq', xs, orbv.conj(), orbo)
         dms += lib.einsum('xov,pv,qo->xpq', ys, orbv, orbo.conj())
-
-        v1ao = vresp(dms)
+        v1ao = vresp(dms) # = <mb||nj> Xjb + <mj||nb> Yjb
+        # A ~= <ib||aj>, B = <ij||ab>
+        # AX + BY
+        # = <ib||aj> Xjb + <ij||ab> Yjb
+        # = (<mb||nj> Xjb + <mj||nb> Yjb) Cmi* Cna
         v1ov = lib.einsum('xpq,po,qv->xov', v1ao, orbo.conj(), orbv)
+        # (B*)X + (A*)Y
+        # = <ab||ij> Xjb + <aj||ib> Yjb
+        # = (<mb||nj> Xjb + <mj||nb> Yjb) Cma* Cni
         v1vo = lib.einsum('xpq,qo,pv->xov', v1ao, orbo, orbv.conj())
-        v1ov += lib.einsum('xqs,sp->xqp', xs, fvv)  # AX
-        v1ov -= lib.einsum('xpr,sp->xsr', xs, foo)  # AX
-        v1vo += lib.einsum('xqs,sp->xqp', ys, fvv.conj())  # (A*)Y
-        v1vo -= lib.einsum('xpr,sp->xsr', ys, foo.conj())  # (A*)Y
+        v1ov += numpy.einsum('xia,ia->xia', xs, e_ia)  # AX
+        v1vo += numpy.einsum('xia,ia->xia', ys, e_ia.conj())  # (A*)Y
 
         # (AX, (-A*)Y)
         nz = xys.shape[0]
@@ -522,7 +523,10 @@ def gen_tdhf_operation(mf, fock_ao=None):
     return vind, hdiag
 
 
-class TDHF(TDMixin):
+class TDHF(TDBase):
+
+    singlet = None
+
     @lib.with_doc(gen_tdhf_operation.__doc__)
     def gen_vind(self, mf=None):
         if mf is None:
@@ -532,7 +536,9 @@ class TDHF(TDMixin):
     def init_guess(self, mf, nstates=None, wfnsym=None):
         x0 = TDA.init_guess(self, mf, nstates, wfnsym)
         y0 = numpy.zeros_like(x0)
-        return numpy.asarray(numpy.block([[x0, y0], [y0, x0.conj()]]))
+        return numpy.hstack([x0, y0])
+
+    get_precond = rhf.TDHF.get_precond
 
     def kernel(self, x0=None, nstates=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
@@ -549,8 +555,6 @@ class TDHF(TDMixin):
 
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
-        if x0 is None:
-            x0 = self.init_guess(self._scf, self.nstates)
 
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
@@ -559,13 +563,13 @@ class TDHF(TDMixin):
             return lib.linalg_helper._eigs_cmplx2real(w, v, realidx,
                                                       real_eigenvectors=False)
 
-        self.converged, w, x1 = \
-                lib.davidson_nosym1(vind, x0, precond,
-                                    tol=self.conv_tol,
-                                    nroots=nstates, lindep=self.lindep,
-                                    max_cycle=self.max_cycle,
-                                    max_space=self.max_space, pick=pickeig,
-                                    verbose=log)
+        if x0 is None:
+            x0 = self.init_guess(self._scf, self.nstates)
+
+        self.converged, w, x1 = lr_eig(
+            vind, x0, precond, tol_residual=self.conv_tol, lindep=self.lindep,
+            nroots=nstates, pick=pickeig, max_cycle=self.max_cycle,
+            max_memory=self.max_memory, verbose=log)
 
         nocc = (self._scf.mo_occ>0).sum()
         nmo = self._scf.mo_occ.size
@@ -587,7 +591,6 @@ class TDHF(TDMixin):
         self._finalize()
         return self.e, self.xy
 
-from pyscf import scf
 scf.dhf.DHF.TDA  = scf.dhf.RDHF.TDA  = lib.class_as_method(TDA)
 scf.dhf.DHF.TDHF = scf.dhf.RDHF.TDHF = lib.class_as_method(TDHF)
 

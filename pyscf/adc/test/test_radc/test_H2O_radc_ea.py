@@ -17,7 +17,7 @@
 #
 
 import unittest
-import numpy
+import numpy as np
 import math
 from pyscf import gto
 from pyscf import scf
@@ -47,11 +47,21 @@ def tearDownModule():
     global mol, mf, myadc
     del mol, mf, myadc
 
+def rdms_test(dm):
+    r2_int = mol.intor('int1e_r2')
+    dm_ao = np.einsum('pi,ij,qj->pq', mf.mo_coeff, dm, mf.mo_coeff.conj())
+    r2 = np.einsum('pq,pq->',r2_int,dm_ao)
+    return r2
+
 class KnownValues(unittest.TestCase):
 
     def test_ea_adc2(self):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2218560609876961, 6)
+
+        dm1_gs = myadc.make_ref_rdm1()
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 20.3557963972156, 6)
 
         myadcea = adc.radc_ea.RADCEA(myadc)
         e,v,p,x = myadcea.kernel(nroots=3)
@@ -64,10 +74,19 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 1.9941128865405613, 6)
         self.assertAlmostEqual(p[2], 1.9760420333383126, 6)
 
+        dm1_exc = np.array(myadcea.make_rdm1())
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 60.74982115808177, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 77.50057807557833, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 51.451460124678604, 6)
+
     def test_ea_adc2x(self):
         myadc.method = "adc(2)-x"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2218560609876961, 6)
+
+        dm1_gs = myadc.make_ref_rdm1()
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 20.3557963972156, 6)
 
         myadcea = adc.radc_ea.RADCEA(myadc)
         e,v,p,x = myadcea.kernel(nroots=3)
@@ -80,11 +99,20 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 1.9905409664546319, 6)
         self.assertAlmostEqual(p[2], 1.9593142553574816, 6)
 
+        dm1_exc = myadcea.make_rdm1()
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 60.32114764303384, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 77.23400300967357, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 52.055954747398014, 6)
+
 
     def test_ea_adc3(self):
         myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2263968409281272, 6)
+
+        dm1_gs = myadc.make_ref_rdm1()
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 20.070653779918267, 6)
 
         myadcea = adc.radc_ea.RADCEA(myadc)
         e,v,p,x = myadcea.kernel(nroots=4)
@@ -99,6 +127,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 1.9920778842193207, 6)
         self.assertAlmostEqual(p[2], 1.9676462978544356, 6)
         self.assertAlmostEqual(p[3], 1.9743650630026532, 6)
+
+        dm1_exc = myadcea.make_rdm1()
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 60.22057800411394, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 77.03749070234556, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 51.28103237617329, 6)
 
 if __name__ == "__main__":
     print("EA calculations for different RADC methods for water molecule")

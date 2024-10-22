@@ -16,7 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #         Susi Lehtola <susi.lehtola@gmail.com>
 
-import copy
 import numpy
 from pyscf import gto
 from pyscf.lib import logger
@@ -26,10 +25,10 @@ from pyscf.scf import atom_hf, ADIIS
 from pyscf.dft import rks
 
 def get_atm_nrks(mol, atomic_configuration=elements.NRSRHFS_CONFIGURATION, xc='slater', grid=(100, 434)):
-    elements = set([a[0] for a in mol._atom])
+    elements = {a[0] for a in mol._atom}
     logger.info(mol, 'Spherically averaged atomic KS for %s', elements)
 
-    atm_template = copy.copy(mol)
+    atm_template = mol.copy(deep=False)
     atm_template.charge = 0
     atm_template.symmetry = False  # TODO: enable SO3 symmetry here
     atm_template.atom = atm_template._atom = []
@@ -90,15 +89,3 @@ class AtomSphAverageRKS(rks.RKS, atom_hf.AtomSphericAverageRHF):
     get_grad = atom_hf.AtomSphericAverageRHF.get_grad
 
 AtomSphericAverageRKS = AtomSphAverageRKS
-
-if __name__ == '__main__':
-    mol = gto.Mole()
-    mol.verbose = 5
-    mol.output = None
-
-    mol.atom = [["N", (0. , 0., .5)],
-                ["N", (0. , 0.,-.5)] ]
-
-    mol.basis = {"N": '6-31g'}
-    mol.build()
-    print(get_atm_nrks(mol))

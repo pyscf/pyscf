@@ -16,7 +16,11 @@ mf = scf.RHF(mol)
 #
 # method 1: import the optimize function from pyscf.geomopt.berny_solver
 mol_eq = optimize(mf)
-print(mol_eq.atom_coords())
+print(mol_eq.tostring())
+print('Atomic coordinates (Ang):')
+print(mol_eq.atom_coords(unit='Ang'))
+print('Atomic coordinates (Bohr):')
+print(mol_eq.atom_coords(unit='Bohr'))
 
 # method 2: create the optimizer from Gradients class
 mol_eq = mf.Gradients().optimizer(solver='berny').kernel()

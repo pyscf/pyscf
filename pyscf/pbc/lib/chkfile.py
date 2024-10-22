@@ -52,4 +52,3 @@ def load_cell(chkfile):
     return cell
 
 dump_cell = save_cell = pyscf.lib.chkfile.save_mol
-

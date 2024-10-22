@@ -20,7 +20,6 @@
 Extension to numpy and scipy
 '''
 
-import string
 import ctypes
 import math
 import numpy
@@ -157,7 +156,7 @@ def _contract(subscripts, *tensors, **kwargs):
     idxBt = list(idxB)
     inner_shape = 1
     insert_B_loc = 0
-    shared_idxAB = sorted(list(shared_idxAB))
+    shared_idxAB = sorted(shared_idxAB)
     for n in shared_idxAB:
         if rangeA[n] != rangeB[n]:
             err = ('ERROR: In index string %s, the range of index %s is '
@@ -190,8 +189,8 @@ def _contract(subscripts, *tensors, **kwargs):
         print("Reshaping A as (-1,", inner_shape, ")")
         print("Reshaping B as (", inner_shape, ",-1)")
 
-    shapeCt = list()
-    idxCt = list()
+    shapeCt = []
+    idxCt = []
     for idx in idxAt:
         if idx in shared_idxAB:
             break
@@ -1046,6 +1045,7 @@ def condense(opname, a, loc_x, loc_y=None):
                 j1 = loc_y[j+1]
                 out[i,j] = op(a[i0:i1, j0:j1])
     '''
+    assert a.ndim == 2
     if loc_y is None:
         loc_y = loc_x
     loc_x = numpy.asarray(loc_x, numpy.int32)
@@ -1056,27 +1056,40 @@ def condense(opname, a, loc_x, loc_y=None):
     if opname.startswith('NP_'):
         opname = opname[3:]
 
-    if (a.dtype != numpy.double or
-        opname not in ('sum', 'max', 'min', 'abssum', 'absmax', 'absmin', 'norm')):
-        tmp = numpy.empty((nloc_x, a.shape[1]), dtype=a.dtype)
-        out = numpy.empty((nloc_x, nloc_y), dtype=a.dtype)
-        op = getattr(numpy, opname)
-        for i, (i0, i1) in enumerate(zip(loc_x[:-1], loc_x[1:])):
-            tmp[i] = op(a[i0:i1], axis=0)
-        for j, (j0, j1) in enumerate(zip(loc_y[:-1], loc_y[1:])):
-            out[:,j] = op(tmp[:,j0:j1], axis=1)
+    if (a.dtype == numpy.double and
+        opname in ('sum', 'max', 'min', 'abssum', 'absmax', 'absmin', 'norm')):
+        op = getattr(_np_helper, 'NP_' + opname)
+        if a.flags.f_contiguous:
+            a = transpose(a.T)
+        a = numpy.asarray(a, order='C')
+        out = numpy.zeros((nloc_x, nloc_y))
+        _np_helper.NPcondense(op, out.ctypes.data_as(ctypes.c_void_p),
+                              a.ctypes.data_as(ctypes.c_void_p),
+                              loc_x.ctypes.data_as(ctypes.c_void_p),
+                              loc_y.ctypes.data_as(ctypes.c_void_p),
+                              ctypes.c_int(nloc_x), ctypes.c_int(nloc_y))
         return out
 
-    op = getattr(_np_helper, 'NP_' + opname)
-    if a.flags.f_contiguous:
-        a = transpose(a.T)
-    a = numpy.asarray(a, order='C')
-    out = numpy.zeros((nloc_x, nloc_y))
-    _np_helper.NPcondense(op, out.ctypes.data_as(ctypes.c_void_p),
-                          a.ctypes.data_as(ctypes.c_void_p),
-                          loc_x.ctypes.data_as(ctypes.c_void_p),
-                          loc_y.ctypes.data_as(ctypes.c_void_p),
-                          ctypes.c_int(nloc_x), ctypes.c_int(nloc_y))
+    if a.dtype in (bool, numpy.int8) and opname in ('any', 'all'):
+        op = getattr(_np_helper, 'NP_' + opname)
+        if a.flags.f_contiguous:
+            a = transpose(a.T)
+        a = numpy.asarray(a, order='C')
+        out = numpy.zeros((nloc_x, nloc_y), dtype=a.dtype)
+        _np_helper.NPbcondense(op, out.ctypes.data_as(ctypes.c_void_p),
+                               a.ctypes.data_as(ctypes.c_void_p),
+                               loc_x.ctypes.data_as(ctypes.c_void_p),
+                               loc_y.ctypes.data_as(ctypes.c_void_p),
+                               ctypes.c_int(nloc_x), ctypes.c_int(nloc_y))
+        return out
+
+    tmp = numpy.empty((nloc_x, a.shape[1]), dtype=a.dtype)
+    out = numpy.empty((nloc_x, nloc_y), dtype=a.dtype)
+    op = getattr(numpy, opname)
+    for i, (i0, i1) in enumerate(zip(loc_x[:-1], loc_x[1:])):
+        tmp[i] = op(a[i0:i1], axis=0)
+    for j, (j0, j1) in enumerate(zip(loc_y[:-1], loc_y[1:])):
+        out[:,j] = op(tmp[:,j0:j1], axis=1)
     return out
 
 def expm(a):
@@ -1102,6 +1115,14 @@ def expm(a):
         y, buf = buf, y
     return y
 
+def ndarray_pointer_2d(array):
+    '''Return an array that contains the addresses of the first element in each
+    row of the input 2d array.
+    '''
+    assert array.ndim == 2
+    assert array.flags.c_contiguous
+    i = numpy.arange(array.shape[0])
+    return array.ctypes.data + (i * array.strides[0]).astype(numpy.uintp)
 
 class NPArrayWithTag(numpy.ndarray):
     # Initialize kwargs in function tag_array
@@ -1123,7 +1144,7 @@ class NPArrayWithTag(numpy.ndarray):
 
     # Whenever the contents of the array were modified (through ufunc), the tag
     # should be expired. Overwrite the output of ufunc to restore ndarray type.
-    def __array_wrap__(self, out, context=None):
+    def __array_wrap__(self, out, context=None, return_scalar=False):
         if out.ndim == 0:  # if ufunc returns a scalar
             return out[()]
         else:
@@ -1354,7 +1375,7 @@ def isin_1d(v, vs, return_index=False):
         v : array like
             The target vector. `v` is flattened.
         vs : array like
-            A list of vectors. The last dimenstion of `vs`
+            A list of vectors. The last dimension of `vs`
             should be the same as the size of `v`.
         return_index : bool
             Index of `v` in `vs`.

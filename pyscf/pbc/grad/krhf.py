@@ -211,9 +211,18 @@ def hcore_generator(mf, cell=None, kpts=None):
 def grad_nuc(cell, atmlst):
     '''
     Derivatives of nuclear repulsion energy wrt nuclear coordinates
+
+    Notes:
+        An optimized version of this function is available in
+        `pbc.gto.ewald_methods.ewald_nuc_grad`
     '''
-    ew_eta = cell.get_ewald_params()[0]
     chargs = cell.atom_charges()
+    ew_eta, ew_cut = cell.get_ewald_params()
+    log_precision = np.log(cell.precision / (chargs.sum()*16*np.pi**2))
+    ke_cutoff = -2*ew_eta**2*log_precision
+    mesh = cell.cutoff_to_mesh(ke_cutoff)
+    logger.debug1(cell, 'mesh for ewald %s', mesh)
+
     coords = cell.atom_coords()
     Lall = cell.get_lattice_Ls()
     natom = len(chargs)
@@ -234,18 +243,19 @@ def grad_nuc(cell, atmlst):
             ewovrl_grad[i] += np.sum(- qi * qj / r ** 2 * r1 * 2 * ew_eta / np.sqrt(np.pi) *
                                      np.exp(-ew_eta**2 * r ** 2).reshape(len(r),1), axis = 0)
 
-    mesh = gto.cell._cut_mesh_for_ewald(cell, cell.mesh)
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
     absG2 = np.einsum('gi,gi->g', Gv, Gv)
     absG2[absG2==0] = 1e200
     ewg_grad = np.zeros([natom,3])
     SI = cell.get_SI(Gv)
-    if cell.low_dim_ft_type is None or cell.dimension == 3:
+    if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
         coulG = 4*np.pi / absG2
         coulG *= weights
         ZSI = np.einsum("i,ij->j", chargs, SI)
         ZexpG2 = coulG * np.exp(-absG2/(4*ew_eta**2))
         ZexpG2_mod = ZexpG2.reshape(len(ZexpG2),1) * Gv
+    else:
+        raise NotImplementedError
     for i, qi in enumerate(chargs):
         Zfac = np.imag(ZSI * SI[i].conj()) * qi
         ewg_grad[i] = - np.sum(Zfac.reshape((len(Zfac),1)) * ZexpG2_mod, axis = 0)
@@ -279,14 +289,14 @@ def make_rdm1e(mo_energy, mo_coeff, mo_occ):
     dm1e = [molgrad.make_rdm1e(mo_energy[k], mo_coeff[k], mo_occ[k]) for k in range(nkpts)]
     return np.asarray(dm1e)
 
-class GradientsMixin(molgrad.GradientsMixin):
+class GradientsBase(molgrad.GradientsBase):
     '''
     Basic nuclear gradient functions for non-relativistic methods
     '''
     def __init__(self, method):
         self.cell = method.cell
         self.kpts = method.kpts
-        molgrad.GradientsMixin.__init__(self, method)
+        molgrad.GradientsBase.__init__(self, method)
 
     def get_hcore(self, cell=None, kpts=None):
         if cell is None: cell = self.cell
@@ -348,31 +358,34 @@ def as_scanner(mf_grad):
         return mf_grad
 
     logger.info(mf_grad, 'Create scanner for %s', mf_grad.__class__)
+    name = mf_grad.__class__.__name__ + SCF_GradScanner.__name_mixin__
+    return lib.set_class(SCF_GradScanner(mf_grad),
+                         (SCF_GradScanner, mf_grad.__class__), name)
 
-    class SCF_GradScanner(mf_grad.__class__, lib.GradScanner):
-        def __init__(self, g):
-            lib.GradScanner.__init__(self, g)
-        def __call__(self, cell_or_geom, **kwargs):
-            if isinstance(cell_or_geom, gto.Cell):
-                cell = cell_or_geom
-            else:
-                cell = self.cell.set_geom_(cell_or_geom, inplace=False)
+class SCF_GradScanner(lib.GradScanner):
+    def __init__(self, g):
+        lib.GradScanner.__init__(self, g)
 
-            mf_scanner = self.base
-            e_tot = mf_scanner(cell)
-            self.cell = cell
+    def __call__(self, cell_or_geom, **kwargs):
+        if isinstance(cell_or_geom, gto.Cell):
+            cell = cell_or_geom
+        else:
+            cell = self.cell.set_geom_(cell_or_geom, inplace=False)
 
-            # If second integration grids are created for RKS and UKS
-            # gradients
-            if getattr(self, 'grids', None):
-                self.grids.reset(cell)
+        mf_scanner = self.base
+        e_tot = mf_scanner(cell)
+        self.cell = cell
 
-            de = self.kernel(**kwargs)
-            return e_tot, de
-    return SCF_GradScanner(mf_grad)
+        # If second integration grids are created for RKS and UKS
+        # gradients
+        if getattr(self, 'grids', None):
+            self.grids.reset(cell)
+
+        de = self.kernel(**kwargs)
+        return e_tot, de
 
 
-class Gradients(GradientsMixin):
+class Gradients(GradientsBase):
     '''Non-relativistic restricted Hartree-Fock gradients'''
 
     def get_veff(self, dm=None, kpts=None):

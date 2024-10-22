@@ -25,9 +25,11 @@ from pyscf.pbc.tdscf.uhf import TDHF as TDDFT
 RPA = TDUKS = TDDFT
 
 
-class CasidaTDDFT(TDA):
+class CasidaTDDFT(TDDFT):
+    init_guess = TDA.init_guess
     _gen_vind = uks.TDDFTNoHybrid.gen_vind
     gen_vind = TDA.gen_vind
+    kernel = uks.TDDFTNoHybrid.kernel
 
 TDDFTNoHybrid = CasidaTDDFT
 
@@ -45,4 +47,3 @@ dft.uks.UKS.CasidaTDDFT   = lib.class_as_method(CasidaTDDFT)
 dft.uks.UKS.TDDFT         = tddft
 #dft.rks.RKS.dTDA          = lib.class_as_method(dTDA)
 #dft.rks.RKS.dRPA          = lib.class_as_method(dRPA)
-

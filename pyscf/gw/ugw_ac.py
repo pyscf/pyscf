@@ -21,7 +21,7 @@ Spin-unrestricted G0W0 approximation with analytic continuation
 
 This implementation has N^4 scaling, and is faster than GW-CD (N^4)
 and analytic GW (N^6) methods.
-GW-AC is recommended for valence states only, and is inaccuarate for core states.
+GW-AC is recommended for valence states only, and is inaccurate for core states.
 
 Method:
     See T. Zhu and G.K.-L. Chan, arxiv:2007.03148 (2020) for details
@@ -277,7 +277,7 @@ def _get_scaled_legendre_roots(nw):
 
 def _get_clenshaw_curtis_roots(nw):
     """
-    Clenshaw-Curtis qaudrature on [0,inf)
+    Clenshaw-Curtis quadrature on [0,inf)
     Ref: J. Chem. Phys. 132, 234114 (2010)
     Returns:
         freqs : 1D ndarray
@@ -385,6 +385,11 @@ class UGWAC(lib.StreamObject):
     # Analytic continuation: pade or twopole
     ac = getattr(__config__, 'gw_ugw_UGW_ac', 'pade')
 
+    _keys = {
+        'linearized','ac', 'mol', 'frozen', 'with_df',
+        'mo_energy', 'mo_coeff', 'mo_occ', 'sigma',
+    }
+
     def __init__(self, mf, frozen=None):
         self.mol = mf.mol
         self._scf = mf
@@ -400,7 +405,6 @@ class UGWAC(lib.StreamObject):
         else:
             self.with_df = df.DF(mf.mol)
             self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
-        self._keys.update(['with_df'])
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -411,9 +415,6 @@ class UGWAC(lib.StreamObject):
         self.mo_coeff = mf.mo_coeff
         self.mo_occ = mf.mo_occ
         self.sigma = None
-
-        keys = set(('linearized','ac'))
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)

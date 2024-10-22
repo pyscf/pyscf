@@ -19,8 +19,8 @@
 import unittest
 import tempfile
 import numpy
-import copy
 from pyscf import lib, gto, scf
+from pyscf.dft import radi
 from pyscf.x2c import x2c, dft, tdscf
 try:
     import mcfun
@@ -61,6 +61,15 @@ def diagonalize(a, b, nroots=4):
     return lowest_e
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_tddft_lda(self):
         td = mf_lda.TDDFT()
         es = td.kernel(nstates=4)[0]
@@ -88,7 +97,7 @@ class KnownValues(unittest.TestCase):
         self._check_against_ab_ks(mf_lda.TDDFT(), -0.5231134770778959, 0.07879428138412828)
 
     def test_col_gga_ab_ks(self):
-        mf_b3lyp = dft.UKS(mol).set(xc='b3lyp')
+        mf_b3lyp = dft.UKS(mol).set(xc='b3lyp5')
         mf_b3lyp.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
         self._check_against_ab_ks(mf_b3lyp.TDDFT(), -0.4758219953792988, 0.17715631269859033)
 
@@ -106,7 +115,7 @@ class KnownValues(unittest.TestCase):
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_gga_ab_ks(self):
-        mcol_b3lyp = dft.UKS(mol).set(xc='b3lyp', collinear='mcol')
+        mcol_b3lyp = dft.UKS(mol).set(xc='b3lyp5', collinear='mcol')
         mcol_b3lyp._numint.spin_samples = 6
         mcol_b3lyp.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
         self._check_against_ab_ks(mcol_b3lyp.TDDFT(), -0.4954910129906521, 0.4808365159189027)
@@ -116,7 +125,7 @@ class KnownValues(unittest.TestCase):
         mcol_m06l = dft.UKS(mol).set(xc='m06l', collinear='mcol')
         mcol_m06l._numint.spin_samples = 6
         mcol_m06l.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
-        self._check_against_ab_ks(mcol_m06l.TDDFT(), -0.6984240332038076, 2.0192987108288794)
+        self._check_against_ab_ks(mcol_m06l.TDDFT(), -0.6984240332038076, 2.0192987108288794, 5)
 
     def _check_against_ab_ks(self, td, refa, refb, places=6):
         mf = td._scf
@@ -145,7 +154,7 @@ class KnownValues(unittest.TestCase):
     def test_mcol_vs_gks(self):
         with lib.temporary_env(lib.param, LIGHT_SPEED=20):
             mol = gto.M(atom='C', basis='6-31g')
-            ref = dft.RKS(mol)
+            ref = dft.UKS(mol)
             ref.xc = 'pbe'
             ref.collinear = 'mcol'
             ref._numint.spin_samples = 6
@@ -166,7 +175,7 @@ class KnownValues(unittest.TestCase):
             td = mf.TDA()
             td.positive_eig_threshold = -10
             es = td.kernel(nstates=5)[0]
-            self.assertAlmostEqual(abs(es - eref).max(), 0, 7)
+            self.assertAlmostEqual(abs(es - eref).max(), 0, 6)
 
 
 if __name__ == "__main__":

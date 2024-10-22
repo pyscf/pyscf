@@ -242,10 +242,10 @@ def _get_epq(pindices,qindices,fac=[1.0,1.0],large_num=LARGE_DENOM):
 
     Args:
         pindices (5-list of object):
-            A list of p0, p1, kp, orbital values, and non-zero indicess for the first
+            A list of p0, p1, kp, orbital values, and non-zero indices for the first
             denominator indices.
         qindices (5-list of object):
-            A list of q0, q1, kq, orbital values, and non-zero indicess for the second
+            A list of q0, q1, kq, orbital values, and non-zero indices for the second
             denominator element.
         fac (3-list of float):
             Factors to multiply the first and second denominator elements.
@@ -255,7 +255,7 @@ def _get_epq(pindices,qindices,fac=[1.0,1.0],large_num=LARGE_DENOM):
     def get_idx(x0,x1,kx,n0_p):
         return np.logical_and(n0_p[kx] >= x0, n0_p[kx] < x1)
 
-    assert (all([len(x) == 5 for x in [pindices,qindices]]))
+    assert (all(len(x) == 5 for x in [pindices,qindices]))
     p0,p1,kp,mo_e_p,nonzero_p = pindices
     q0,q1,kq,mo_e_q,nonzero_q = qindices
     fac_p, fac_q = fac
@@ -498,6 +498,11 @@ def kconserve_pmatrix(nkpts, kconserv):
 class RCCSD(pyscf.cc.ccsd.CCSD):
     max_space = getattr(__config__, 'pbc_cc_kccsd_rhf_KRCCSD_max_space', 20)
 
+    _keys = {
+        'kpts', 'khelper', 'ip_partition', 'ea_partition', 'max_space',
+        'direct', 'keep_exxdiv',
+    }
+
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert (isinstance(mf, scf.khf.KSCF))
         # mf.to_khf converts mf to a non-symmetry object
@@ -512,11 +517,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         ##################################################
         # don't modify the following attributes, unless you know what you are doing
         self.keep_exxdiv = False
-
-        keys = set(['kpts', 'khelper', 'ip_partition',
-                    'ea_partition', 'max_space', 'direct',
-                    'keep_exxdiv'])
-        self._keys = self._keys.union(keys)
         self.__imds__ = None
 
     @property
@@ -652,6 +652,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)
+
+    to_gpu = lib.to_gpu
 
 #####################################
 # Wrapper functions for IP/EA-EOM
@@ -1199,4 +1201,3 @@ if __name__ == '__main__':
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
     print(lib.finger(Ht1) - (6.608150224325518  -0.2219476427503148j))
     print(lib.finger(Ht2) - (-23.253955060531297-137.76211601171295j))
-

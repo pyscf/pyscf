@@ -17,6 +17,7 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <complex.h>
 #include <math.h>
 #include <assert.h>
@@ -833,7 +834,11 @@ void AO2MOr_e1_drv(int (*intor)(), void (*fill)(),
 
         double complex *eri_ao = malloc(sizeof(double complex)
                                         * nao*nao*nkl*ncomp);
-        assert(eri_ao);
+        if (eri_ao == NULL) {
+                fprintf(stderr, "malloc(%zu) failed in AO2MOr_e1_drv\n",
+                        sizeof(double complex) * nao*nao*nkl*ncomp);
+                exit(1);
+        }
         int ish, kl;
         int (*fprescreen)();
         if (vhfopt != NULL) {

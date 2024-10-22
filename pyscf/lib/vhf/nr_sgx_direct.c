@@ -52,24 +52,26 @@ typedef struct {
 #define BLKSIZE         312
 
 // for grids integrals only
-int _max_cache_size_sgx(int (*intor)(), int *shls_slice, int ncenter,
-                        int *atm, int natm, int *bas, int nbas, double *env)
+size_t _max_cache_size_sgx(int (*intor)(), int *shls_slice, int ncenter,
+                           int *atm, int natm, int *bas, int nbas, double *env)
 {
-        int i, n;
+        int i;
         int i0 = shls_slice[0];
         int i1 = shls_slice[1];
         for (i = 1; i < ncenter; i++) {
                 i0 = MIN(i0, shls_slice[i*2  ]);
                 i1 = MAX(i1, shls_slice[i*2+1]);
         }
+        size_t (*f)() = (size_t (*)())intor;
+        size_t cache_size = 0;
+        size_t n;
         int shls[4];
-        int cache_size = 0;
         for (i = i0; i < i1; i++) {
                 shls[0] = i;
                 shls[1] = i;
                 shls[2] = 0;
                 shls[3] = BLKSIZE;
-                n = (*intor)(NULL, NULL, shls, atm, natm, bas, nbas, env, NULL, NULL);
+                n = (*f)(NULL, NULL, shls, atm, natm, bas, nbas, env, NULL, NULL);
                 cache_size = MAX(cache_size, n);
         }
         return cache_size;
@@ -254,18 +256,10 @@ void SGXnr_direct_drv(int (*intor)(), void (*fdot)(), SGXJKOperator **jkop,
 }
 }
 
-
-void SGXsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
-                         int *ao_loc, int *atm, int natm,
-                         int *bas, int nbas, double *env)
+void SGXnr_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
+                  int *ao_loc, int *atm, int natm,
+                  int *bas, int nbas, double *env)
 {
-        if (opt->q_cond != NULL) {
-                free(opt->q_cond);
-        }
-        nbas = opt->nbas;
-        double *q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
-        opt->q_cond = q_cond;
-
         int shls_slice[] = {0, nbas};
         int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
                                            atm, natm, bas, nbas, env);
@@ -316,21 +310,24 @@ void SGXsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
 }
 }
 
-void SGXsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
-                            int *atm, int natm, int *bas, int nbas, double *env,
-                            int ngrids)
+void SGXsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
+                         int *ao_loc, int *atm, int natm,
+                         int *bas, int nbas, double *env)
 {
-        nbas = opt->nbas;
-        if (opt->dm_cond != NULL) {
-                free(opt->dm_cond);
+        if (opt->q_cond != NULL) {
+                free(opt->q_cond);
         }
-        opt->dm_cond = (double *)malloc(sizeof(double) * nbas*ngrids);
-        // nbas in the input arguments may different to opt->nbas.
-        // Use opt->nbas because it is used in the prescreen function
-        memset(opt->dm_cond, 0, sizeof(double)*nbas*ngrids);
-        opt->ngrids = ngrids;
+        nbas = opt->nbas;
+        double *q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
+        opt->q_cond = q_cond;
+        SGXnr_q_cond(intor, cintopt, q_cond, ao_loc, atm, natm, bas, nbas, env);
+}
 
-        const size_t nao = ao_loc[nbas] - ao_loc[0];
+void SGXnr_dm_cond(double *dm_cond, double *dm, int nset, int *ao_loc,
+                   int *atm, int natm, int *bas, int nbas, double *env,
+                   int ngrids)
+{
+        size_t nao = ao_loc[nbas] - ao_loc[0];
         double dmax;
         size_t i, j, jsh, iset;
         double *pdm;
@@ -343,8 +340,31 @@ void SGXsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
                                 dmax = MAX(dmax, fabs(pdm[i*nao+j]));
                         }
                 }
-                opt->dm_cond[jsh*ngrids+i] = dmax;
+                dm_cond[jsh*ngrids+i] = dmax;
         } }
+}
+
+void SGXsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
+                            int *atm, int natm, int *bas, int nbas, double *env,
+                            int ngrids)
+{
+        nbas = opt->nbas;
+        if (opt->dm_cond != NULL) {
+                free(opt->dm_cond);
+        }
+        opt->dm_cond = (double *)malloc(sizeof(double) * nbas*ngrids);
+        if (opt->dm_cond == NULL) {
+                fprintf(stderr, "malloc(%zu) failed in SGXsetnr_direct_scf_dm\n",
+                        sizeof(double) * nbas*ngrids);
+                exit(1);
+        }
+        // nbas in the input arguments may different to opt->nbas.
+        // Use opt->nbas because it is used in the prescreen function
+        memset(opt->dm_cond, 0, sizeof(double)*nbas*ngrids);
+        opt->ngrids = ngrids;
+
+        SGXnr_dm_cond(opt->dm_cond, dm, nset, ao_loc,
+                      atm, natm, bas, nbas, env, ngrids);
 }
 
 int SGXnr_ovlp_prescreen(int *shls, CVHFOpt *opt,

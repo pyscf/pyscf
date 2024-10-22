@@ -188,4 +188,3 @@ def get_euler_angles(c1, c2):
         beta = numpy.arccos(c2[2]/norm1) - numpy.arccos(c1[2]/norm2)
 
     return alpha, beta, gamma
-

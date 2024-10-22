@@ -536,5 +536,3 @@ def MakePiSystemOrbitals(TargetName, iTargetAtomsForPlane_,
     CPiOcc = MakeOverlappingOrbSubspace("Pi", "Occ", COcc, nOccOrbExpected,   CTargetIb, S1, Fock)
     CPiVir = MakeOverlappingOrbSubspace("Pi", "Vir", CVir, nVirtOrbExpected,   CTargetIb, S1, Fock)
     return CPiOcc, CPiVir,nOccOrbExpected,nVirtOrbExpected
-
-

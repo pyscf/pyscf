@@ -19,7 +19,7 @@ from pyscf import lib
 from pyscf.fci import cistring
 from pyscf.fci.addons import _unpack_nelec
 
-librdm = lib.load_library('libfci')
+librdm = cistring.libfci
 
 ######################################################
 # Spin squared operator
@@ -68,7 +68,7 @@ def spin_square_general(dm1a, dm1b, dm2aa, dm2ab, dm2bb, mo_coeff, ovlp=1):
                          + Gamma_{i\beta k\beta ,j\beta l\beta})
                          + (n_\alpha+n_\beta)/4
 
-    Given the overlap betwen non-degenerate alpha and beta orbitals, this
+    Given the overlap between non-degenerate alpha and beta orbitals, this
     function can compute the expectation value spin square operator for
     UHF-FCI wavefunction
     '''

@@ -17,6 +17,7 @@
 #
 
 import h5py
+from pyscf.lib import H5FileWrap
 from pyscf.lib.chkfile import load_chkfile_key, load
 from pyscf.lib.chkfile import dump_chkfile_key, dump, save
 from pyscf.lib.chkfile import load_mol, save_mol
@@ -28,7 +29,7 @@ def dump_scf(mol, chkfile, e_tot, mo_energy, mo_coeff, mo_occ,
              overwrite_mol=True):
     '''save temporary results'''
     if h5py.is_hdf5(chkfile) and not overwrite_mol:
-        with h5py.File(chkfile, 'a') as fh5:
+        with H5FileWrap(chkfile, 'a') as fh5:
             if 'mol' not in fh5:
                 fh5['mol'] = mol.dumps()
     else:
@@ -39,4 +40,3 @@ def dump_scf(mol, chkfile, e_tot, mo_energy, mo_coeff, mo_occ,
                'mo_occ'   : mo_occ,
                'mo_coeff' : mo_coeff}
     save(chkfile, 'scf', scf_dic)
-

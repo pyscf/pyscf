@@ -24,6 +24,7 @@ MP2 analytical nuclear gradients
 import numpy
 from pyscf import lib
 from functools import reduce
+from pyscf import gto
 from pyscf.lib import logger
 from pyscf.grad import rhf as rhf_grad
 from pyscf.scf import cphf
@@ -41,7 +42,7 @@ def grad_elec(mp_grad, t2, atmlst=None, verbose=logger.INFO):
     doo, dvv = d1
     time1 = log.timer_debug1('rdm1 intermediates', *time0)
 
-# Set nocc, nvir for half-transformation of 2pdm.  Frozen orbitals are exculded.
+# Set nocc, nvir for half-transformation of 2pdm.  Frozen orbitals are excluded.
 # nocc, nvir should be updated to include the frozen orbitals when proceeding
 # the 1-particle quantities later.
     mol = mp_grad.mol
@@ -210,38 +211,46 @@ def as_scanner(grad_mp):
     >>> e_tot, grad = mp2_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
     >>> e_tot, grad = mp2_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
-    from pyscf import gto
     if isinstance(grad_mp, lib.GradScanner):
         return grad_mp
 
     logger.info(grad_mp, 'Create scanner for %s', grad_mp.__class__)
+    name = grad_mp.__class__.__name__ + MP2_GradScanner.__name_mixin__
+    return lib.set_class(MP2_GradScanner(grad_mp),
+                         (MP2_GradScanner, grad_mp.__class__), name)
 
-    class MP2_GradScanner(grad_mp.__class__, lib.GradScanner):
-        def __init__(self, g):
-            lib.GradScanner.__init__(self, g)
-        def __call__(self, mol_or_geom, **kwargs):
-            if isinstance(mol_or_geom, gto.Mole):
-                mol = mol_or_geom
-            else:
-                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+class MP2_GradScanner(lib.GradScanner):
+    def __init__(self, g):
+        lib.GradScanner.__init__(self, g)
 
-            mp_scanner = self.base
-            mp_scanner(mol, with_t2=True)
-            de = self.kernel(mp_scanner.t2)
-            return mp_scanner.e_tot, de
-        @property
-        def converged(self):
-            return self.base._scf.converged
-    return MP2_GradScanner(grad_mp)
+    def __call__(self, mol_or_geom, **kwargs):
+        if isinstance(mol_or_geom, gto.MoleBase):
+            assert mol_or_geom.__class__ == gto.Mole
+            mol = mol_or_geom
+        else:
+            mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+        self.reset(mol)
+
+        mp_scanner = self.base
+        mp_scanner(mol, with_t2=True)
+        de = self.kernel(mp_scanner.t2)
+        return mp_scanner.e_tot, de
+    @property
+    def converged(self):
+        return self.base._scf.converged
 
 
 def _shell_prange(mol, start, stop, blksize):
+    l = mol._bas[start:stop,gto.ANG_OF]
+    if mol.cart:
+        dims = (l+1)*(l+2)//2 * mol._bas[start:stop,gto.NCTR_OF]
+    else:
+        dims = (l*2+1) * mol._bas[start:stop,gto.NCTR_OF]
     nao = 0
     ib0 = start
-    for ib in range(start, stop):
-        now = (mol.bas_angular(ib)*2+1) * mol.bas_nctr(ib)
+    for ib, now in zip(range(start, stop), dims):
         nao += now
-        if nao > blksize and nao > now:
+        if nao > blksize:
             yield (ib0, ib, nao-now)
             ib0 = ib
             nao = now
@@ -272,14 +281,14 @@ def _index_frozen_active(frozen_mask, mo_occ):
     VF = numpy.where((~frozen_mask) & (mo_occ==0))[0] # virtual frozen orbitals
     return OA, VA, OF, VF
 
-class Gradients(rhf_grad.GradientsMixin):
+class Gradients(rhf_grad.GradientsBase):
 
     grad_elec = grad_elec
 
     def kernel(self, t2=None, atmlst=None, verbose=None):
         log = logger.new_logger(self, verbose)
         if t2 is None: t2 = self.base.t2
-        if t2 is None: t2 = self.base.kernel()
+        if t2 is None: t2 = self.base.kernel()[1]
         if atmlst is None:
             atmlst = self.atmlst
         else:
@@ -299,6 +308,8 @@ class Gradients(rhf_grad.GradientsMixin):
         return mf_grad.grad_nuc(mol, atmlst)
 
     as_scanner = as_scanner
+
+    to_gpu = lib.to_gpu
 
 Grad = Gradients
 

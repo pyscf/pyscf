@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
+# Author: Abdelrahman Ahmed <>
+#         Samragni Banerjee <samragnibanerjee4@gmail.com>
+#         James Serna <jamcar456@gmail.com>
+#         Terrence Stahl <>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
@@ -1028,7 +1031,7 @@ def get_trans_moments(adc):
         T_bb = get_trans_moments_orbital(adc,orb, spin="beta")
         T_b.append(T_bb)
 
-    cput0 = log.timer_debug1("completed spec vactor calc in ADC(3) calculation", *cput0)
+    cput0 = log.timer_debug1("completed spec vector calc in ADC(3) calculation", *cput0)
     return (T_a, T_b)
 
 
@@ -1838,7 +1841,18 @@ class UADCIP(uadc.UADC):
             Spectroscopic amplitudes for each IP transition.
     '''
 
+    _keys = {
+        'tol_residual','conv_tol', 'e_corr', 'method',
+        'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory',
+        't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle',
+        'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b', 'mo_coeff', 'mo_energy_a',
+        'mo_energy_b', 'nmo_a', 'nmo_b', 'mol', 'transform_integrals',
+        'with_df', 'spec_factor_print_tol', 'evec_print_tol',
+        'compute_properties', 'approx_trans_moments', 'E', 'U', 'P', 'X',
+    }
+
     def __init__(self, adc):
+        self.mol = adc.mol
         self.verbose = adc.verbose
         self.stdout = adc.stdout
         self.max_memory = adc.max_memory
@@ -1855,6 +1869,7 @@ class UADCIP(uadc.UADC):
         self._scf = adc._scf
         self._nocc = adc._nocc
         self._nvir = adc._nvir
+        self._nmo = adc._nmo
         self.nocc_a = adc._nocc[0]
         self.nocc_b = adc._nocc[1]
         self.nvir_a = adc._nvir[0]
@@ -1864,24 +1879,18 @@ class UADCIP(uadc.UADC):
         self.mo_energy_b = adc.mo_energy_b
         self.nmo_a = adc._nmo[0]
         self.nmo_b = adc._nmo[1]
-        self.mol = adc.mol
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
+        self.compute_properties = adc.compute_properties
+        self.approx_trans_moments = adc.approx_trans_moments
+
         self.spec_factor_print_tol = adc.spec_factor_print_tol
         self.evec_print_tol = adc.evec_print_tol
 
-        self.compute_properties = adc.compute_properties
-        self.approx_trans_moments = adc.approx_trans_moments
         self.E = adc.E
         self.U = adc.U
         self.P = adc.P
         self.X = adc.X
-
-        keys = set(('tol_residual','conv_tol', 'e_corr', 'method',
-                    'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory',
-                    't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
-
-        self._keys = set(self.__dict__.keys()).union(keys)
 
     kernel = uadc.kernel
     get_imds = get_imds

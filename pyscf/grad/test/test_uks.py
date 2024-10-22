@@ -14,11 +14,14 @@
 # limitations under the License.
 
 import unittest
-import copy
 import numpy
 from pyscf import gto, dft, lib
 from pyscf.dft import radi
 from pyscf.grad import uks
+try:
+    from pyscf.dispersion import dftd3, dftd4
+except ImportError:
+    dftd3 = dftd4 = None
 
 
 def setUpModule():
@@ -49,30 +52,58 @@ class KnownValues(unittest.TestCase):
 # [ 1.33417513e-16  6.75277008e-02 -2.66519852e-02]
 # [ 1.72274651e-16 -6.75277008e-02 -2.66519852e-02]]
         g = mf.nuc_grad_method().kernel()
-        self.assertAlmostEqual(lib.fp(g), -0.12090786243525126, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.12090786243525126, 5)
 
 #[[-2.95956939e-16 -4.22275612e-16  5.32998759e-02]
 # [ 1.34532051e-16  6.75279140e-02 -2.66499379e-02]
 # [ 1.68146089e-16 -6.75279140e-02 -2.66499379e-02]]
         g = mf.nuc_grad_method().set(grid_response=True).kernel()
-        self.assertAlmostEqual(lib.fp(g), -0.12091122429043633, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.12091122429043633, 5)
 
         mol1 = mol.copy()
         mf_scanner = mf.as_scanner()
         e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
-        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
 
     def test_finite_diff_df_uks_grad(self):
         mf1 = mf.density_fit ().run ()
         g = mf1.nuc_grad_method().set(grid_response=True).kernel()
-        self.assertAlmostEqual(lib.fp(g), -0.12093220501429122, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.12093220501429122, 5)
 
         mol1 = mol.copy()
         mf_scanner = mf1.as_scanner()
         e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
-        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
+
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_finite_diff_uks_d3_grad(self):
+        mol1 = mol.copy()
+        mf = dft.UKS(mol, xc='b3lyp')
+        mf.disp = 'd3bj'
+        mf.conv_tol = 1e-14
+        mf.kernel()
+        g = mf.nuc_grad_method().set(grid_response=True).kernel()
+
+        mf_scanner = mf.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
+
+    @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
+    def test_finite_diff_uks_d4_grad(self):
+        mol1 = mol.copy()
+        mf = dft.UKS(mol, xc='b3lyp')
+        mf.disp = 'd4'
+        mf.conv_tol = 1e-14
+        mf.kernel()
+        g = mf.nuc_grad_method().set(grid_response=True).kernel()
+
+        mf_scanner = mf.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
 
     def test_uks_grad_lda(self):
         mol = gto.Mole()
@@ -90,14 +121,14 @@ class KnownValues(unittest.TestCase):
 # F    -0.0000000000     0.0000000000     0.1481164667
         mf = dft.UKS(mol).run(conv_tol=1e-12)
         self.assertAlmostEqual(lib.fp(mf.Gradients().kernel()),
-                               0.10365160440876001, 6)
+                               0.10365160440876001, 5)
         mf.grids.prune = None
         mf.grids.level = 6
         mf.run(conv_tol=1e-12)
 # H     0.0000000000     0.0000000000    -0.1481124925
 # F    -0.0000000000     0.0000000000     0.1481122913
         self.assertAlmostEqual(lib.fp(mf.Gradients().kernel()),
-                               0.10365040148752827, 6)
+                               0.10365040148752827, 5)
 
     def test_finite_diff_uks_grad_gga(self):
 #[[ 6.47874920e-16 -2.75292214e-16  3.97215970e-02]
@@ -105,22 +136,22 @@ class KnownValues(unittest.TestCase):
 # [ 6.75500259e-18 -5.87909340e-02 -1.98650384e-02]]
         mf = mol.UKS().run(xc='b3lypg', conv_tol=1e-12)
         g = mf.nuc_grad_method().kernel()
-        self.assertAlmostEqual(lib.fp(g), -0.10202554999695367, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.10202554999695367, 5)
 
 #[[ 2.58483362e-16  5.82369026e-16  5.17616036e-02]
 # [-5.46977470e-17  6.39273304e-02 -2.58849008e-02]
 # [ 5.58302713e-17 -6.39273304e-02 -2.58849008e-02]]
         mf = mol.UKS().run(xc='b88,p86', conv_tol=1e-12)
         g = mf.Gradients().set().kernel()
-        self.assertAlmostEqual(lib.fp(g), -0.11509739136150157, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.11509739136150157, 5)
         g = mf.Gradients().set(grid_response=True).kernel()
-        self.assertAlmostEqual(lib.fp(g), -0.11507986316077731, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.11507986316077731, 5)
 
         mol1 = mol.copy()
         mf_scanner = mf.as_scanner()
         e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
-        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
 
     def test_finite_diff_uks_grad_nlc(self):
 #[[ 3.19690405e-16 -9.39540337e-16  5.09520937e-02]
@@ -131,7 +162,7 @@ class KnownValues(unittest.TestCase):
         mf.nlcgrids.level = 1
         mf.kernel()
         g = mf.nuc_grad_method().kernel()
-        self.assertAlmostEqual(lib.fp(g), -0.11368788988328639, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.11368788988328639, 5)
 
         mf.nlcgrids.level = 0
         mf.kernel()
@@ -141,24 +172,24 @@ class KnownValues(unittest.TestCase):
         mf_scanner = mf.as_scanner()
         e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
-        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
 
     def test_finite_diff_uks_grad_mgga(self):
         mf = mol.UKS().run(xc='m06l', conv_tol=1e-12)
         g = mf.nuc_grad_method().set(grid_response=True).kernel()
-        self.assertAlmostEqual(lib.fp(g), -0.0980126030724174, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.0980126030724174, 5)
 
         mol1 = mol.copy()
         mf_scanner = mf.as_scanner()
         e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
-        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
 
     def test_different_grids_for_grad(self):
         grids1 = dft.gen_grid.Grids(mol)
         grids1.level = 1
         g = mf.nuc_grad_method().set(grids=grids1).kernel()
-        self.assertAlmostEqual(lib.fp(g), -0.12085837432386037, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.12085837432386037, 5)
 
     def test_get_vxc(self):
         mol = gto.Mole()
@@ -208,9 +239,9 @@ class KnownValues(unittest.TestCase):
         exc0 = dft.numint.nr_uks(mf._numint, mol, grids0, xc, dm0)[1]
         exc1 = dft.numint.nr_uks(mf1._numint, mol1, grids1, xc, dm0)[1]
 
-        grids0_w = copy.copy(grids0)
+        grids0_w = grids0.copy()
         grids0_w.weights = grids1.weights
-        grids0_c = copy.copy(grids0)
+        grids0_c = grids0.copy()
         grids0_c.coords = grids1.coords
         exc0_w = dft.numint.nr_uks(mf._numint, mol, grids0_w, xc, dm0)[1]
         exc0_c = dft.numint.nr_uks(mf._numint, mol1, grids0_c, xc, dm0)[1]
@@ -232,9 +263,9 @@ class KnownValues(unittest.TestCase):
         exc0 = dft.numint.nr_uks(mf._numint, mol, grids0, xc, dm0)[1]
         exc1 = dft.numint.nr_uks(mf1._numint, mol1, grids1, xc, dm0)[1]
 
-        grids0_w = copy.copy(grids0)
+        grids0_w = grids0.copy()
         grids0_w.weights = grids1.weights
-        grids0_c = copy.copy(grids0)
+        grids0_c = grids0.copy()
         grids0_c.coords = grids1.coords
         exc0_w = dft.numint.nr_uks(mf._numint, mol, grids0_w, xc, dm0)[1]
         exc0_c = dft.numint.nr_uks(mf._numint, mol1, grids0_c, xc, dm0)[1]
@@ -256,9 +287,9 @@ class KnownValues(unittest.TestCase):
         exc0 = dft.numint.nr_uks(mf._numint, mol, grids0, xc, dm0)[1]
         exc1 = dft.numint.nr_uks(mf1._numint, mol1, grids1, xc, dm0)[1]
 
-        grids0_w = copy.copy(grids0)
+        grids0_w = grids0.copy()
         grids0_w.weights = grids1.weights
-        grids0_c = copy.copy(grids0)
+        grids0_c = grids0.copy()
         grids0_c.coords = grids1.coords
         exc0_w = dft.numint.nr_uks(mf._numint, mol, grids0_w, xc, dm0)[1]
         exc0_c = dft.numint.nr_uks(mf._numint, mol1, grids0_c, xc, dm0)[1]

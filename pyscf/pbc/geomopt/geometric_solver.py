@@ -25,7 +25,7 @@ import geometric.molecule
 from pyscf import lib
 from pyscf.geomopt.addons import dump_mol_geometry
 from pyscf import __config__
-from pyscf.pbc.grad.krhf import GradientsMixin
+from pyscf.pbc.grad.krhf import GradientsBase
 
 try:
     from geometric import internal, optimize, nifty, engine, molecule
@@ -53,7 +53,7 @@ class PySCFEngine(geometric.engine.Engine):
         # Molecule is the geometry parser for a bunch of formats which use
         # Angstrom for Cartesian coordinates by default.
         molecule.xyzs = [cell.atom_coords()*lib.param.BOHR]  # In Angstrom
-        super(PySCFEngine, self).__init__(molecule)
+        super().__init__(molecule)
 
         self.scanner = scanner
         self.cycle = 0
@@ -114,7 +114,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     '''
     if isinstance(method, lib.GradScanner):
         g_scanner = method
-    elif isinstance(method, GradientsMixin):
+    elif isinstance(method, GradientsBase):
         g_scanner = method.as_scanner()
     elif getattr(method, 'nuc_grad_method', None):
         g_scanner = method.nuc_grad_method().as_scanner()
@@ -133,7 +133,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     # When symmetry is enabled, the molecule may be shifted or rotated to make
     # the z-axis be the main axis. The transformation can cause inconsistency
     # between the optimization steps. The transformation is muted by setting
-    # an explict point group to the keyword mol.symmetry (see symmetry
+    # an explicit point group to the keyword mol.symmetry (see symmetry
     # detection code in Mole.build function).
 
     # geomeTRIC library on pypi requires to provide config file log.ini.

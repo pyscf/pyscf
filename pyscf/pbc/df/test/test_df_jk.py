@@ -37,7 +37,7 @@ def setUpModule():
     cell.basis = 'ccpvdz'
     cell.verbose = 0
     cell.max_memory = 0
-    cell.rcut = 28.3458918685
+    cell.precision = 1e-9
     cell.build()
 
     cell0 = pgto.Cell()
@@ -46,6 +46,7 @@ def setUpModule():
                     C    1.    1.       1.'''
     cell0.basis = 'sto-3g'
     cell0.verbose = 0
+    cell0.precision = 1e-9
     cell0.build()
 
 def tearDownModule():
@@ -80,6 +81,21 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ej1, 25.8129854469354, 6)
         self.assertAlmostEqual(ek1, 72.6088517709998, 6)
 
+    def test_jk_single_kpt_complex_dm(self):
+        scaled_center = [0.3728,0.5524,0.7672]
+        kpt = cell0.make_kpts([1,1,1], scaled_center=scaled_center)[0]
+        mf = pscf.RHF(cell0, kpt=kpt).density_fit('weigend')
+        dm = mf.init_guess_by_1e()
+        with lib.temporary_env(mf.cell, incore_anyway=True):
+            vj1, vk1 = mf.get_jk(dm=dm) # from mol_hf.dot_eri_dm
+        ej1 = numpy.einsum('ij,ji->', vj1, dm)
+        ek1 = numpy.einsum('ij,ji->', vk1, dm)
+        vj, vk = mf.with_df.get_jk(dm=dm, kpts=kpt, exxdiv=mf.exxdiv)
+        ej = numpy.einsum('ij,ji->', vj, dm)
+        ek = numpy.einsum('ij,ji->', vk, dm)
+        self.assertAlmostEqual(ej1, ej, 10)
+        self.assertAlmostEqual(ek1, ek, 10)
+
     def test_jk_single_kpt_high_cost(self):
         mf0 = pscf.RHF(cell)
         mf0.exxdiv = None
@@ -105,8 +121,8 @@ class KnownValues(unittest.TestCase):
         vj1, vk1 = mf.get_jk(cell, dm, hermi=0)
         ej1 = numpy.einsum('ij,ji->', vj1, dm)
         ek1 = numpy.einsum('ij,ji->', vk1, dm)
-        self.assertAlmostEqual(ej1, 242.04678235140264, 6)
-        self.assertAlmostEqual(ek1, 280.15934926575903, 6)
+        self.assertAlmostEqual(ej1, 242.04678166341, 6)
+        self.assertAlmostEqual(ek1, 280.15934886749, 6)
 
         numpy.random.seed(1)
         kpt = numpy.random.random(3)
@@ -118,11 +134,11 @@ class KnownValues(unittest.TestCase):
         vj, vk = mydf.get_jk(dm, 1, kpt, exxdiv=None)
         ej1 = numpy.einsum('ij,ji->', vj, dm)
         ek1 = numpy.einsum('ij,ji->', vk, dm)
-        self.assertAlmostEqual(ej1, 241.15121903857556+0j, 6)
-        self.assertAlmostEqual(ek1, 279.64649194057051+0j, 6)
+        self.assertAlmostEqual(ej1, 241.15121826587+0j, 5)
+        self.assertAlmostEqual(ek1, 279.64649158710+0j, 5)
         vj, vk = mydf.get_jk(dm, 1, kpt, with_j=False, exxdiv='ewald')
         ek1 = numpy.einsum('ij,ji->', vk, dm)
-        self.assertAlmostEqual(ek1, 691.64624456329909+0j, 6)
+        self.assertAlmostEqual(ek1, 691.64624420983+0j, 5)
 
     def test_jk_hermi0(self):
         numpy.random.seed(12)

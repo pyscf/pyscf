@@ -1,0 +1,90 @@
+# The output of pyscf.dft.xcfun.print_XC_CODES()
+XC = XC_CODES = {
+'SLATERX'       :  0,  #Slater LDA exchange
+'PW86X'         :  1,  #PW86 exchange
+'VWN3C'         :  2,  #VWN3 LDA Correlation functional
+'VWN5C'         :  3,  #VWN5 LDA Correlation functional
+'PBEC'          :  4,  #PBE correlation functional
+'PBEX'          :  5,  #PBE Exchange Functional
+'BECKEX'        :  6,  #Becke 88 exchange
+'BECKECORRX'    :  7,  #Becke 88 exchange correction
+'BECKESRX'      :  8,  #Short range Becke 88 exchange
+'BECKECAMX'     :  9,  #CAM Becke 88 exchange
+'BRX'           : 10,  #Becke-Roussells exchange with jp dependence
+'BRC'           : 11,  #Becke-Roussells correlation with jp dependence
+'BRXC'          : 12,  #Becke-Roussells correlation with jp dependence
+'LDAERFX'       : 13,  #Short-range spin-dependent LDA exchange functional
+'LDAERFC'       : 14,  #Short-range spin-dependent LDA correlation functional
+'LDAERFC_JT'    : 15,  #Short-range spin-unpolarized LDA correlation functional
+'LYPC'          : 16,  #LYP correlation
+'OPTX'          : 17,  #OPTX Handy & Cohen exchange
+'OPTXCORR'      : 18,  #OPTX Handy & Cohen exchange -- correction part only
+'REVPBEX'       : 19,  #Revised PBE Exchange Functional
+'RPBEX'         : 20,  #RPBE Exchange Functional
+'SPBEC'         : 21,  #sPBE correlation functional
+'VWN_PBEC'      : 22,  #PBE correlation functional using VWN LDA correlation.
+'KTX'           : 23,  #KT exchange GGA correction
+'TFK'           : 24,  #Thomas-Fermi Kinetic Energy Functional
+'TW'            : 25,  #von Weizsacker Kinetic Energy Functional
+'PW91X'         : 26,  #Perdew-Wang 1991 GGA Exchange Functional
+'PW91K'         : 27,  #PW91 GGA Kinetic Energy Functional
+'PW92C'         : 28,  #PW92 LDA correlation
+'M05X'          : 29,  #M05 exchange
+'M05X2X'        : 30,  #M05-2X exchange
+'M06X'          : 31,  #M06 exchange
+'M06X2X'        : 32,  #M06-2X exchange
+'M06LX'         : 33,  #M06-L exchange
+'M06HFX'        : 34,  #M06-HF exchange
+'M05X2C'        : 35,  #M05-2X Correlation
+'M05C'          : 36,  #M05 Correlation
+'M06C'          : 37,  #M06 Correlation
+'M06HFC'        : 38,  #M06-HF Correlation
+'M06LC'         : 39,  #M06-L Correlation
+'M06X2C'        : 40,  #M06-2X Correlation
+'TPSSC'         : 41,  #TPSS original correlation functional
+'TPSSX'         : 42,  #TPSS original exchange functional
+'REVTPSSC'      : 43,  #Revised TPSS correlation functional
+'REVTPSSX'      : 44,  #Reviewed TPSS exchange functional
+'SCANC'         : 45,  #SCAN correlation functional
+'SCANX'         : 46,  #SCAN exchange functional
+'RSCANC'        : 47,  #rSCAN correlation functional
+'RSCANX'        : 48,  #rSCAN exchange functional
+'RPPSCANC'      : 49,  #r++SCAN correlation functional
+'RPPSCANX'      : 50,  #r++SCAN exchange functional
+'R2SCANC'       : 51,  #r2SCAN correlation functional
+'R2SCANX'       : 52,  #r2SCAN exchange functional
+'R4SCANC'       : 53,  #r4SCAN correlation functional
+'R4SCANX'       : 54,  #r4SCAN exchange functional
+'PZ81C'         : 55,  #PZ81 LDA correlation
+'P86C'          : 56,  #P86C GGA correlation
+'P86CORRC'      : 57,  #P86C GGA correlation
+'BTK'           : 58,  #Borgoo-Tozer TS
+'VWK'           : 59,  #von Weizsaecker kinetic energy
+'B97X'          : 60,  #B97 exchange
+'B97C'          : 61,  #B97 correlation
+'B97_1X'        : 62,  #B97-1 exchange
+'B97_1C'        : 63,  #B97-1 correlation
+'B97_2X'        : 64,  #B97-2 exchange
+'B97_2C'        : 65,  #B97-2 correlation
+'CSC'           : 66,  #Colle-Salvetti correlation functional
+'APBEC'         : 67,  #APBE correlation functional.
+'APBEX'         : 68,  #APBE Exchange Functional
+'ZVPBESOLC'     : 69,  #zvPBEsol correlation Functional
+'BLOCX'         : 70,  #BLOC exchange functional
+'PBEINTC'       : 71,  #PBEint correlation Functional
+'PBEINTX'       : 72,  #PBEint Exchange Functional
+'PBELOCC'       : 73,  #PBEloc correlation functional.
+'PBESOLX'       : 74,  #PBEsol Exchange Functional
+'TPSSLOCC'      : 75,  #TPSSloc correlation functional
+'ZVPBEINTC'     : 76,  #zvPBEint correlation Functional
+'PW91C'         : 77,  #PW91 Correlation
+'SLATER'        :  0,  # SLATERX
+'LDA'           :  0,  # SLATERX
+'VWN'           :  3,  # VWN5C
+'VWN5'          :  3,  # VWN5C
+'B88'           :  6,  # BECKEX
+'LYP'           : 16,  # LYPC
+}
+LDA_IDS = [0, 2, 3, 13, 14, 15, 24, 28, 55]
+GGA_IDS = [1, 4, 5, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23, 25, 26, 27, 44, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 67, 68, 69, 71, 72, 73, 74, 76, 77]
+MGGA_IDS = [10, 11, 12, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 66, 70, 75]
