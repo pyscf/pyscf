@@ -33,13 +33,17 @@ from pyscf.lib import logger
 from pyscf.pbc.scf import newton_ah
 from pyscf.pbc.scf import _response_functions  # noqa
 
-def rhf_stability(mf, internal=True, external=False, verbose=None):
+def rhf_stability(mf, internal=True, external=False, verbose=None, return_status=False):
     mo_i = mo_e = None
+    stable_i = stable_e = None
     if internal:
-        mo_i = rhf_internal(mf, verbose=verbose)
+        mo_i, stable_i = rhf_internal(mf, verbose=verbose, return_status=True)
     if external:
-        mo_e = rhf_external(mf, verbose=verbose)
-    return mo_i, mo_e
+        mo_e, stable_e = rhf_external(mf, verbose=verbose, return_status=True)
+    if return_status:
+        return mo_i, mo_e, stable_i, stable_e
+    else:
+        return mo_i, mo_e
 
 def uhf_stability(mf, internal=True, external=False, verbose=None):
     mo_i = mo_e = None
@@ -49,7 +53,7 @@ def uhf_stability(mf, internal=True, external=False, verbose=None):
         mo_e = uhf_external(mf, verbose=verbose)
     return mo_i, mo_e
 
-def rhf_internal(mf, verbose=None):
+def rhf_internal(mf, verbose=None, return_status=False):
     log = logger.new_logger(mf, verbose)
     g, hop, hdiag = newton_ah.gen_g_hop_rhf(mf, mf.mo_coeff, mf.mo_occ)
     def precond(dx, e, x0):
@@ -67,13 +71,17 @@ def rhf_internal(mf, verbose=None):
     x0 = numpy.zeros_like(g)
     x0[g!=0] = 1. / hdiag[g!=0]
     e, v = lib.davidson(hessian_x, x0, precond, tol=1e-4, verbose=log)
-    if e < -1e-5:
-        log.log('KRHF/KRKS wavefunction has an internal instability')
-        mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
-    else:
+    stable = not (e < -1e-5)
+    if stable:
         log.log('KRHF/KRKS wavefunction is stable in the internal stability analysis')
         mo = mf.mo_coeff
-    return mo
+    else:
+        log.log('KRHF/KRKS wavefunction has an internal instability')
+        mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
+    if return_status:
+        return mo, stable
+    else:
+        return mo
 
 def _rotate_mo(mo_coeff, mo_occ, dx):
     mo = []
@@ -142,7 +150,7 @@ def _gen_hop_rhf_external(mf, verbose=None):
     return hop_rhf2uhf, hdiag
 
 
-def rhf_external(mf, verbose=None):
+def rhf_external(mf, verbose=None, return_status=False):
     log = logger.new_logger(mf, verbose)
     hop2, hdiag2 = _gen_hop_rhf_external(mf)
 
@@ -153,13 +161,17 @@ def rhf_external(mf, verbose=None):
     x0 = numpy.zeros_like(hdiag2)
     x0[hdiag2>1e-5] = 1. / hdiag2[hdiag2>1e-5]
     e3, v3 = lib.davidson(hop2, x0, precond, tol=1e-4, verbose=log)
-    if e3 < -1e-5:
-        log.log('KRHF/KRKS wavefunction has an KRHF/KRKS -> KUHF/KUKS instability.')
-        mo = (_rotate_mo(mf.mo_coeff, mf.mo_occ, v3), mf.mo_coeff)
-    else:
+    stable = not (e3 < -1e-5)
+    if stable:
         log.log('KRHF/KRKS wavefunction is stable in the KRHF/KRKS -> KUHF/KUKS stability analysis')
         mo = (mf.mo_coeff, mf.mo_coeff)
-    return mo
+    else:
+        log.log('KRHF/KRKS wavefunction has an KRHF/KRKS -> KUHF/KUKS instability.')
+        mo = (_rotate_mo(mf.mo_coeff, mf.mo_occ, v3), mf.mo_coeff)
+    if return_status:
+        return mo, stable
+    else:
+        return mo
 
 def uhf_internal(mf, verbose=None):
     log = logger.new_logger(mf, verbose)
