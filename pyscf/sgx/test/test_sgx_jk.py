@@ -121,7 +121,7 @@ class KnownValues(unittest.TestCase):
 
 
 class PJunctionScreening(unittest.TestCase):
-    @unittest.skip("computationally expensive test")
+    # @unittest.skip("computationally expensive test")
     def test_pjs(self):
         cwd = os.path.dirname(os.path.abspath(__file__))
         fname = os.path.join(cwd, 'a12.xyz')
@@ -130,24 +130,31 @@ class PJunctionScreening(unittest.TestCase):
         mf = dft.RKS(mol)
         mf.xc = 'PBE'
         mf.kernel()
+        mf.conv_tol = 1e-11
         dm = mf.make_rdm1()
 
         mf = sgx.sgx_fit(scf.RHF(mol), pjs=False)
         mf.with_df.dfj = True
         mf.with_df.grids_level_i = 1
         mf.with_df.grids_level_f = 1
-        mf.with_df.use_opt_grids = True
+        mf.with_df.use_opt_grids = False
         mf.build()
+        import time
+        t0 = time.monotonic()
         en0 = mf.energy_tot(dm=dm)
-        en0scf = mf.kernel()
+        # en0scf = mf.kernel()
+        t1 = time.monotonic()
 
         # Turn on P-junction screening. dfj must also be true.
         mf.with_df.pjs = True
-        #mf.direct_scf_tol = 1e-10
+        mf.direct_scf_tol = 1e-9
         mf.build()
+        t2 = time.monotonic()
         en1 = mf.energy_tot(dm=dm)
-        en1scf = mf.kernel()
+        # en1scf = mf.kernel()
+        t3 = time.monotonic()
 
+        print(t3 - t2, t1 - t0)
         self.assertAlmostEqual(abs(en1-en0), 0, 10)
         self.assertAlmostEqual(abs(en1scf-en0scf), 0, 10)
 

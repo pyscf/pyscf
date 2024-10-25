@@ -259,7 +259,7 @@ def _gen_batch_nuc_grad(mol):
     '''Coulomb integrals of the given points and orbital pairs'''
     cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, 'int3c2e_ip1')
     def batch_nuc(mol, grid_coords, out=None):
-    fakemol = gto.fakemol_for_charges(grid_coords)
+        fakemol = gto.fakemol_for_charges(grid_coords)
         j3c = aux_e2(mol, fakemol, intor='int3c2e_ip1', aosym='s1', cintopt=cintopt)
         return j3c.transpose(0,3,1,2)
     return batch_nuc
@@ -361,8 +361,8 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol,
 SGX_RAD_GRIDS = []
 for eps in [3.816, 4.020, 4.338, 4.871, 5.3, 5.8, 6.3, 9.0]:
     nums = []
-    for row in range(1,8):
-        nums.append(int(eps*15 - 40 + 5*row))
+    for row in range(1, 8):
+        nums.append(int(eps * 15 - 40 + 5 * row))
     SGX_RAD_GRIDS.append(nums)
 SGX_RAD_GRIDS = numpy.array(SGX_RAD_GRIDS)
 

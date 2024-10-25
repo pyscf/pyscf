@@ -50,10 +50,14 @@ class KnownValues(unittest.TestCase):
         )
         mf = sgx.sgx_fit(scf.RHF(mol), 'weigend')
         mf.with_df.dfj = True
+        mf.with_df.use_opt_grids = False
+        mf.with_df.grids_level_f = 1
         energy = mf.kernel()
         self.assertAlmostEqual(energy, -76.02686422219752, 9)
 
         mf = sgx.sgx_fit(scf.RHF(mol))
+        mf.with_df.use_opt_grids = False
+        mf.with_df.grids_level_f = 1
         energy = mf.kernel()
         self.assertAlmostEqual(energy, -76.02673747035047, 8)
 
@@ -67,6 +71,8 @@ class KnownValues(unittest.TestCase):
         )
         mf = sgx.sgx_fit(mol.RHF(), pjs=True)
         mf.with_df.dfj = True
+        mf.with_df.use_opt_grids = False
+        mf.with_df.grids_level_f = 1
         energy = mf.kernel()
         self.assertAlmostEqual(energy, -76.0267979, 6)
 
