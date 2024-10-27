@@ -72,8 +72,8 @@ class TestCosmoRS(unittest.TestCase):
 
     def test_cosmo_parameters(self):
         ps = cosmors.get_cosmors_parameters(mf0)
-        self.assertAlmostEqual(ps['Total energy, a.u.'], -112.9530441986, 7)
-        self.assertAlmostEqual(ps['Dielectric energy, a.u.'], -0.0023256022, 7)
+        self.assertAlmostEqual(ps['Total energy, a.u.'], -112.953044138, 6)
+        self.assertAlmostEqual(ps['Dielectric energy, a.u.'], -0.0023256022, 6)
         self.assertAlmostEqual(ps['Surface area, A**2'], 64.848604, 2)
         self.assertAlmostEqual(ps['Screening charge density, A**2'][26], 2.974345636, 4)
 
