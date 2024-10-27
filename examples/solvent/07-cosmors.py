@@ -43,8 +43,7 @@ mf = mf.PCM(cm)
 mf.kernel()
 
 # generate COSMO-file
-with io.StringIO() as outp: 
-#with open('formaldehyde.cosmo', 'w') as outf: # to create the actual file
+with io.StringIO() as outp: # with open('formaldehyde.cosmo', 'w') as outf:
     write_cosmo_file(outp, mf)
     print(outp.getvalue())
 
@@ -60,15 +59,15 @@ mf = mf.PCM(cm)
 mf.kernel()
 
 # try to get COSMO-file
-with io.StringIO() as outp: 
+with io.StringIO() as outp:
     try:
         write_cosmo_file(outp, mf)
         print(outp.getvalue())
     except ValueError as e:
         print(e)
 
-# overruling 
-with io.StringIO() as outp: 
+# overruling
+with io.StringIO() as outp:
     write_cosmo_file(outp, mf, ignore_low_feps=True)
     print(outp.getvalue())
 

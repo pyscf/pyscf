@@ -34,18 +34,18 @@ from pyscf.data.nist import BOHR as _BOHR
 def _get_line_atom_intersection(x, y, atom, r):
     '''Returns z-coordinates of boundaries of intersection of
     the (x,y,0) + t(0,0,1) line and vdW sphere
-    
+
     Arguments:
         x (float): x parameter of the line
         y (float): y parameter of the line
         atom (np.ndarray): xyz-coordinates of the atom
         r (float): van der Waals radii of the atom
-    
+
     Returns:
         _tp.Optional[_tp.List[float, float]]: z-coordinates
             of the line/sphere intersection, and None
             if they do not intersect
-    
+
     '''
     # check distance between line and atom
     d = _np.linalg.norm(_np.array([x,y]) - atom[:2])
@@ -54,19 +54,19 @@ def _get_line_atom_intersection(x, y, atom, r):
     # find interval
     dz = (r**2 - d**2)**0.5
     interval = [atom[2] - dz, atom[2] + dz]
-    
+
     return interval
 
 
 def _unite_intervals(intervals):
     '''Unites float intervals
-    
+
     Arguments:
         intervals (_tp.List[_tp.List[float, float]]): list of intervals
-    
+
     Returns:
         _tp.List[_tp.List[float, float]]: list of united intervals
-    
+
     '''
     united = []
     for begin, end in sorted(intervals):
@@ -74,41 +74,41 @@ def _unite_intervals(intervals):
             united[-1][1] = end
         else:
             united.append([begin, end])
-    
+
     return united
 
 
 def _get_line_sas_intersection_length(x, y, coords, radii):
     '''Finds total length of all (x,y,0) + t(0,0,1) line's intervals
     enclosed by intersections with solvent-accessible surface
-    
+
     Arguments:
         x (float): x parameter of the line
         y (float): y parameter of the line
         atoms (_np.ndarray): (n*3) array of atomic coordinates
         radii (_np.ndarray): array of vdW radii
-    
+
     Returns:
         float: total length of all line's intervals enclosed by SAS
-    
+
     '''
     intervals = [_get_line_atom_intersection(x, y, atom, r) for atom, r in zip(coords, radii)]
     intervals = _unite_intervals([_ for _ in intervals if _])
     length = sum([end - begin for begin, end in intervals])
-    
+
     return length
 
 
 def get_sas_volume(surface, step=0.2):
     '''Computes volume [A**3] of space enclosed by solvent-accessible surface
-    
+
     Arguments:
         surface (dict): dictionary containing SAS parameters (mc.with_solvent.surface)
         step (float): grid spacing parameter, [Bohr]
-    
+
     Returns:
         float: SAS-defined volume of the molecule [A**3]
-    
+
     '''
     # get parameters
     coords = surface['atom_coords']
@@ -128,9 +128,8 @@ def get_sas_volume(surface, step=0.2):
                       int(_np.ceil((bounds[1,1] - bounds[0,1])/step)) + 1)
     dxdy = (xs[1] - xs[0])*(ys[1] - ys[0])
     # integration
-    V = sum([dxdy * _get_line_sas_intersection_length(x, y, coords, radii) \
-             for x, y in _product(xs, ys)])
-    
+    V = sum([dxdy * _get_line_sas_intersection_length(x, y, coords, radii) for x, y in _product(xs, ys)])
+
     return V * _BOHR**3
 
 
@@ -139,37 +138,37 @@ def get_sas_volume(surface, step=0.2):
 
 def _check_feps(mf, ignore_low_feps):
     '''Checks f_epsilon value and raises ValueError for f_eps < 1
-    
+
     Arguments:
         mf: processed SCF with PCM solvation
         ignore_low_feps (bool): if True, does not raise ValueError if feps < 1
-    
+
     Raises:
         ValueError: if f_epsilon < 1 and ignore_low_feps flag is set to False
-    
+
     '''
     if ignore_low_feps:
         return
-    
+
     f_eps = mf.with_solvent._intermediates['f_epsilon']
     if f_eps < 1.0:
         message  = f'Low f_eps value: {f_eps}. '
         message += 'COSMO-RS requires f_epsilon=1.0 or eps=float("inf"). '
         message += 'Rerun computation with correct epsilon or use the ignore_low_feps argument.'
         raise ValueError(message)
-    
+
     return
 
 
 def _lot(mf):
     '''Returns level of theory in method-disp/basis/solvation format (raw solution)
-    
+
     Arguments:
         mf: processed SCF
-    
+
     Returns:
         str: method-dispersion/basis/solvation
-    
+
     '''
     # method
     method = mf.xc if hasattr(mf, 'xc') else None
@@ -190,23 +189,23 @@ def _lot(mf):
 
 def write_cosmo_file(fout, mf, step=0.2, ignore_low_feps=False):
     '''Saves COSMO file
-    
+
     Arguments:
         fout: writable file object
         mf: processed SCF with PCM solvation
         step (float): grid spacing parameter to compute volume, [Bohr]
         ignore_low_feps (bool): if True, does not raise ValueError if feps < 1
-    
+
     Raises:
         ValueError: if f_epsilon < 1 and ignore_low_feps flag is set to False
-    
+
     '''
     _check_feps(mf, ignore_low_feps)
 
     # qm params
     fout.write('$info\n')
     fout.write(f'PySCF v. {__version__}, {_lot(mf)}\n')
-    
+
     # cosmo data
     f_epsilon = mf.with_solvent._intermediates['f_epsilon']
     n_segments = len(mf.with_solvent._intermediates['q'])
@@ -223,8 +222,7 @@ def write_cosmo_file(fout, mf, step=0.2, ignore_low_feps=False):
     atoms = range(1, 1 + len(mf.mol.elements))
     xs, ys, zs = zip(*mf.mol.atom_coords().tolist())
     elems = [elem.lower() for elem in mf.mol.elements]
-    radii = [mf.with_solvent.surface['R_vdw'][i] \
-             for i, j in mf.with_solvent.surface['gslice_by_atom']]
+    radii = [mf.with_solvent.surface['R_vdw'][i] for i, j in mf.with_solvent.surface['gslice_by_atom']]
     # print
     fout.write('$coord_rad\n')
     fout.write('#atom   x [Bohr]           y [Bohr]           z [Bohr]      element  radius [Bohr]\n')
@@ -241,7 +239,7 @@ def write_cosmo_file(fout, mf, step=0.2, ignore_low_feps=False):
     fout.write('$cosmo_energy\n')
     fout.write(f'  Total energy [a.u.]            = {E_tot:>19.10f}\n')
     fout.write(f'  Dielectric energy [a.u.]       = {E_diel:>19.10f}\n')
-    
+
     # segments
     xs, ys, zs = zip(*mf.with_solvent.surface['grid_coords'].tolist())
     ns = range(1, len(xs) + 1)
@@ -262,7 +260,8 @@ def write_cosmo_file(fout, mf, step=0.2, ignore_low_feps=False):
     fout.write('# charge/area   - segment charge density [e/A**2]\n')
     fout.write('# potential     - solute potential on segment\n')
     fout.write('#\n')
-    fout.write('#  n   atom              position (X, Y, Z)                   charge         area        charge/area     potential\n')
+    fout.write('#  n   atom              position (X, Y, Z)                   ')
+    fout.write('charge         area        charge/area     potential\n')
     fout.write('#\n')
     fout.write('#\n')
     # print params
@@ -270,7 +269,7 @@ def write_cosmo_file(fout, mf, step=0.2, ignore_low_feps=False):
         line  = f'{n:>5d}{atom:>5d}{x:>15.9f}{y:>15.9f}{z:>15.9f}'
         line += f'{q:>15.9f}{area:>15.9f}{sigma:>15.9f}{pot:>15.9f}\n'
         fout.write(line)
-    
+
     return
 
 
@@ -281,23 +280,23 @@ def get_sigma_profile(mf, sigmas_grid, ignore_low_feps=False):
     '''Computes sigma-profile in [-0.025..0.025] e/A**2 range as in
     https://github.com/usnistgov/COSMOSAC/blob/master/profiles/to_sigma.py#L181
     https://doi.org/10.1021/acs.jctc.9b01016
-    
+
     Arguments:
         mf: processed SCF with PCM solvation
         sigmas_grid (_np.ndarray): grid of screening charge values,
             e.g. np.linspace(-0.025, 0.025, 51)
         ignore_low_feps (bool): if True, does not raise ValueError if feps < 1
-    
+
     Returns:
         _np.ndarray: array of 51 elements corresponding to the p(sigma) values for
             the screening charge values in [-0.025..0.025] e/A**2 range
-    
+
     Raises:
         ValueError: if f_epsilon < 1 and ignore_low_feps flag is set to False
-    
+
     '''
     _check_feps(mf, ignore_low_feps)
-    
+
     # prepare params
     qs = mf.with_solvent._intermediates['q']
     areas = mf.with_solvent.surface['area'] * _BOHR**2
@@ -305,7 +304,7 @@ def get_sigma_profile(mf, sigmas_grid, ignore_low_feps=False):
     step = sigmas_grid[1] - sigmas_grid[0]
     max_sigma = sigmas_grid[-1] + step
     n_bins = len(sigmas_grid)
-    
+
     # compute profile
     psigma = _np.zeros(n_bins)
     for sigma, area in zip(sigmas, areas):
@@ -328,19 +327,19 @@ def get_sigma_profile(mf, sigmas_grid, ignore_low_feps=False):
 def get_cosmors_parameters(mf, sigmas_grid=_np.linspace(-0.025, 0.025, 51),
                            step=0.2, ignore_low_feps=False):
     '''Computes main COSMO-RS parameters
-    
+
     Arguments:
         mf: processed SCF with PCM solvation
         step (float): grid spacing parameter to compute volume, [Bohr]
         ignore_low_feps (bool): if True, does not raise ValueError if feps < 1
-    
+
     Returns:
         dict: main COSMO-RS parameters, including sigma-profile, volume, surface area,
             SCF and dielectric energies
-    
+
     Raises:
         ValueError: if f_epsilon < 1 and ignore_low_feps flag is set to False
-    
+
     '''
     _check_feps(mf, ignore_low_feps)
 
@@ -361,7 +360,7 @@ def get_cosmors_parameters(mf, sigmas_grid=_np.linspace(-0.025, 0.025, 51),
               'Dielectric energy, a.u.': float(E_diel),
               'Screening charge density, A**2': psigma.tolist(),
               'Screening charge, e/A**2': sigmas_grid.tolist()}
-    
+
     return params
 
 
