@@ -15,6 +15,8 @@
 cmake_minimum_required (VERSION 3.5)
 project (pyscf)
 
+include(CheckSymbolExists)
+
 if (NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
 endif()
@@ -69,8 +71,9 @@ endif()
 if (NOT BLAS_LIBRARIES)
 #enable_language(Fortran)
 find_package(BLAS)
-check_function_exists(ffsll HAVE_FFS)
 endif()
+check_symbol_exists(ffsll "strings.h" HAVE_FFS)
+#check_function_exists(ffsll HAVE_FFS)
 
 if (NOT BLAS_LIBRARIES)
   message(FATAL_ERROR "A required library with BLAS API not found.")
