@@ -24,6 +24,7 @@ from pyscf.lib import logger
 libpbc = lib.load_library('libpbc')
 
 class _CNeighborPair(ctypes.Structure):
+    __slots__ = []
     _fields_ = [("nimgs", ctypes.c_int),
                 ("Ls_list", ctypes.POINTER(ctypes.c_int)),
                 ("q_cond", ctypes.POINTER(ctypes.c_double)),
@@ -31,6 +32,7 @@ class _CNeighborPair(ctypes.Structure):
 
 
 class _CNeighborList(ctypes.Structure):
+    __slots__ = []
     _fields_ = [("nish", ctypes.c_int),
                 ("njsh", ctypes.c_int),
                 ("nimgs", ctypes.c_int),
@@ -38,6 +40,7 @@ class _CNeighborList(ctypes.Structure):
 
 
 class _CNeighborListOpt(ctypes.Structure):
+    __slots__ = []
     _fields_ = [("nl", ctypes.POINTER(_CNeighborList)),
                 ('fprescreen', ctypes.c_void_p)]
 
