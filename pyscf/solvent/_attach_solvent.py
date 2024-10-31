@@ -93,6 +93,8 @@ class SCFWithSolvent(_Solvation):
     def get_fock(self, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1,
                  diis=None, diis_start_cycle=None,
                  level_shift_factor=None, damp_factor=None, fock_last=None):
+        if dm is None: dm = self.make_rdm1()
+
         # DIIS was called inside super().get_fock. v_solvent, as a function of
         # dm, should be extrapolated as well. To enable it, v_solvent has to be
         # added to the fock matrix before DIIS was called.
