@@ -42,7 +42,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
     if isinstance(mf, hf.KohnShamDFT):
-        from pyscf.dft import numint
+        from pyscf.pbc.dft import multigrid
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         if mf.do_nlc():
@@ -52,10 +52,8 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
         hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
-        # mf can be pbc.dft.RKS object with multigrid
-        if (not hybrid and
-            'MultiGridFFTDF' == getattr(mf, 'with_df', None).__class__.__name__):
-            from pyscf.pbc.dft import multigrid
+        # mf might be pbc.dft.RKS object with multigrid
+        if not hybrid and isinstance(getattr(mf, 'with_df', None), multigrid.MultiGridFFTDF):
             dm0 = mf.make_rdm1(mo_coeff, mo_occ)
             return multigrid._gen_rhf_response(mf, dm0, singlet, hermi)
 
@@ -153,6 +151,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
     if isinstance(mf, hf.KohnShamDFT):
+        from pyscf.pbc.dft import multigrid
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         if mf.do_nlc():
@@ -162,10 +161,8 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
         hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
-        # mf can be pbc.dft.UKS object with multigrid
-        if (not hybrid and
-            'MultiGridFFTDF' == getattr(mf, 'with_df', None).__class__.__name__):
-            from pyscf.pbc.dft import multigrid
+        # mf might be pbc.dft.RKS object with multigrid
+        if not hybrid and isinstance(getattr(mf, 'with_df', None), multigrid.MultiGridFFTDF):
             dm0 = mf.make_rdm1(mo_coeff, mo_occ)
             return multigrid._gen_uhf_response(mf, dm0, with_j, hermi)
 
@@ -224,6 +221,7 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
     if isinstance(mf, hf.KohnShamDFT):
+        from pyscf.pbc.dft import multigrid
         from pyscf.dft import numint2c, r_numint
         ni = mf._numint
         assert isinstance(ni, (numint2c.NumInt2C, r_numint.RNumInt))
@@ -233,9 +231,7 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
         hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
-        # mf can be pbc.dft.UKS object with multigrid
-        if (not hybrid and
-            'MultiGridFFTDF' == getattr(mf, 'with_df', None).__class__.__name__):
+        if not hybrid and isinstance(getattr(mf, 'with_df', None), multigrid.MultiGridFFTDF):
             raise NotImplementedError
 
         rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc, mo_coeff, mo_occ, 1)
