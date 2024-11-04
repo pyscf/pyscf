@@ -20,6 +20,7 @@ from pyscf import scf
 from pyscf.mp import mp2
 from pyscf.mp import dfmp2
 from pyscf.mp import ump2
+from pyscf.mp import dfump2
 from pyscf.mp import gmp2
 from pyscf.mp import dfgmp2
 
