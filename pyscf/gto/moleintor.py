@@ -594,7 +594,7 @@ def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
     if aosym == 's8':
         assert (shls_slice is None)
         from pyscf.scf import _vhf
-        nao = ao_loc[-1]
+        nao = int(ao_loc[-1])
         nao_pair = nao*(nao+1)//2
         out = numpy.ndarray((nao_pair*(nao_pair+1)//2), buffer=out)
         if nao_pair == 0:

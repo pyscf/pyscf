@@ -146,8 +146,8 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
     atm, bas, env = gto.mole.conc_env(mol._atm, mol._bas, mol._env,
                                       auxmol._atm, auxmol._bas, auxmol._env)
     ao_loc = gto.moleintor.make_loc(bas, int3c)
-    nao = ao_loc[mol.nbas]
-    naoaux = ao_loc[-1] - nao
+    nao = int(ao_loc[mol.nbas])
+    naoaux = int(ao_loc[-1] - nao)
     if aosym == 's1':
         nao_pair = nao * nao
         buflen = min(max(int(max_memory*.24e6/8/naoaux/comp), 1), nao_pair)
