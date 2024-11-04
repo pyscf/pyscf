@@ -116,8 +116,6 @@ class DFUMP2(dfump2.DFUMP2):
     def init_amps(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         return kernel(self, mo_energy, mo_coeff, eris, with_t2)
 
-    kernel = kernel
-
 UMP2 = DFUMP2
 
 del (WITH_T2)
