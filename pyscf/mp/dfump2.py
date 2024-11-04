@@ -33,11 +33,7 @@ from pyscf import __config__
 WITH_T2 = getattr(__config__, 'mp_dfump2_with_t2', True)
 THRESH_LINDEP = getattr(__config__, 'mp_dfump2_thresh_lindep', 1e-10)
 
-
-try:
-    libmp = lib.load_library('libmp')
-except OSError:
-    libmp = None
+libmp = dfmp2.libmp
 
 
 def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbose=None):
@@ -90,7 +86,6 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
     drv = libmp.MP2_contract_d
     for s in [0,1]:
         s_t2 = 0 if s == 0 else 2
-        moeoo = occ_energy[s][:,None] + occ_energy[s]
         moevv = lib.asarray(vir_energy[s][:,None] + vir_energy[s], order='C')
         for ibatch,(i0,i1) in enumerate(lib.prange(0,nocc[s],occ_blksize[s])):
             nocci = i1-i0
@@ -104,6 +99,8 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
                 ed = np.zeros(1, dtype=np.float64)
                 ex = np.zeros(1, dtype=np.float64)
+                moeoo_block = np.asarray(
+                    occ_energy[s][i0:i1,None] + occ_energy[s][j0:j1], order='C')
                 s2symm = 1
                 t2_ex = True
                 drv(
@@ -115,8 +112,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
                     ctypes.c_int(i0), ctypes.c_int(j0),
                     ctypes.c_int(nocci), ctypes.c_int(noccj),
                     ctypes.c_int(nocc[s]), ctypes.c_int(nvir[s]), ctypes.c_int(naux),
-                    lib.asarray(moeoo[i0:i1,j0:j1],
-                                order='C').ctypes.data_as(ctypes.c_void_p),
+                    moeoo_block.ctypes.data_as(ctypes.c_void_p),
                     moevv.ctypes.data_as(ctypes.c_void_p),
                     t2_ptr[s_t2], ctypes.c_int(t2_ex)
                 )
@@ -131,7 +127,6 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
     # opposite spin
     sa, sb = 0, 1
     drv = libmp.MP2_OS_contract_d
-    moeoo = occ_energy[sa][:,None] + occ_energy[sb]
     moevv = lib.asarray(vir_energy[sa][:,None] + vir_energy[sb], order='C')
     for ibatch,(i0,i1) in enumerate(lib.prange(0,nocc[sa],occ_blksize[sa])):
         nocci = i1-i0
@@ -141,6 +136,8 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
             jbL = eris.get_occ_blk(sb,j0,j1)
 
             ed = np.zeros(1, dtype=np.float64)
+            moeoo_block = np.asarray(
+                occ_energy[sa][i0:i1,None] + occ_energy[sb][j0:j1], order='C')
             drv(
                 ed.ctypes.data_as(ctypes.c_void_p),
                 iaL.ctypes.data_as(ctypes.c_void_p),
@@ -150,8 +147,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
                 ctypes.c_int(nocc[sa]), ctypes.c_int(nocc[sb]),
                 ctypes.c_int(nvir[sa]), ctypes.c_int(nvir[sb]),
                 ctypes.c_int(naux),
-                lib.asarray(moeoo[i0:i1,j0:j1],
-                            order='C').ctypes.data_as(ctypes.c_void_p),
+                moeoo_block.ctypes.data_as(ctypes.c_void_p),
                 moevv.ctypes.data_as(ctypes.c_void_p),
                 t2_ptr[1]
             )
@@ -171,7 +167,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
 
 class DFUMP2(dfmp2.DFMP2):
-    _keys = {'with_df', 'mo_energy'}
+    _keys = dfmp2.DFMP2._keys
 
     get_nocc = ump2.get_nocc
     get_nmo = ump2.get_nmo
@@ -342,10 +338,10 @@ class _DFOUTCOREERIS(_DFINCOREERIS):
         with_df = self.with_df
         if self._ovL is None:
             if isinstance(self._ovL_to_save, str):
-                self.feri = h5py.File(self._ovL_to_save, 'w')
+                self.feri = lib.H5FileWrap(self._ovL_to_save, 'w')
             else:
                 self.feri = lib.H5TmpFile()
-            log.info('ovL is saved to %s', self.feri.filename)
+            log.debug('ovL is saved to %s', self.feri.filename)
             if with_df._cderi is None:
                 _init_mp_df_eris_direct(with_df, self.occ_coeff, self.vir_coeff, self.max_memory,
                                         h5obj=self.feri, log=log)
@@ -355,7 +351,7 @@ class _DFOUTCOREERIS(_DFINCOREERIS):
             self.ovL = [self.feri[f'ovL{s}'] for s in [0,1]]
         elif isinstance(self._ovL, str):
             self.feri = h5py.File(self._ovL, 'r')
-            log.info('ovL is read from %s', self.feri.filename)
+            log.debug('ovL is read from %s', self.feri.filename)
             assert( 'ovL0' in self.feri and 'ovL1' in self.feri )
             self.ovL = [self.feri[f'ovL{s}'] for s in [0,1]]
         else:
@@ -568,6 +564,7 @@ def _init_mp_df_eris_direct(with_df, occ_coeff, vir_coeff, max_memory, h5obj=Non
                     scipy.linalg.solve_triangular(m2c, ovL[s].T, lower=True,
                                                   overwrite_b=True, check_finite=False).T
             else:
+                assert m2c.flags.f_contiguous
                 grpfac = 10
                 for s in [0,1]:
                     drv(
@@ -608,6 +605,7 @@ def _init_mp_df_eris_direct(with_df, occ_coeff, vir_coeff, max_memory, h5obj=Non
                         ivL = scipy.linalg.solve_triangular(m2c, ivL.T, lower=True,
                                                             overwrite_b=True, check_finite=False).T
                     else:
+                        assert m2c.flags.f_contiguous
                         grpfac = 10
                         drv(
                             m2c.ctypes.data_as(ctypes.c_void_p),

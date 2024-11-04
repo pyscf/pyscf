@@ -33,11 +33,7 @@ from pyscf import __config__
 WITH_T2 = getattr(__config__, 'mp_dfmp2_with_t2', True)
 THRESH_LINDEP = getattr(__config__, 'mp_dfmp2_thresh_lindep', 1e-10)
 
-
-try:
-    libmp = lib.load_library('libmp')
-except OSError:
-    libmp = None
+libmp = lib.load_library('libmp')
 
 
 def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbose=None):
@@ -48,7 +44,6 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
     nocc, nvir, naux = eris.nocc, eris.nvir, eris.naux
     occ_energy, vir_energy = mp.split_mo_energy()[1:3]
-    moeoo = np.asarray(occ_energy[:,None] + occ_energy, order='C')
     moevv = np.asarray(vir_energy[:,None] + vir_energy, order='C')
 
     mem_avail = mp.max_memory - lib.current_memory()[0]
@@ -94,6 +89,8 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
             ed = np.zeros(1, dtype=np.float64)
             ex = np.zeros(1, dtype=np.float64)
+            moeoo_block = np.asarray(
+                occ_energy[i0:i1,None] + occ_energy[j0:j1], order='C')
             s2symm = 1
             t2_ex = 0
             drv(
@@ -105,8 +102,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
                 ctypes.c_int(i0), ctypes.c_int(j0),
                 ctypes.c_int(nocci), ctypes.c_int(noccj),
                 ctypes.c_int(nocc), ctypes.c_int(nvir), ctypes.c_int(naux),
-                lib.asarray(moeoo[i0:i1,j0:j1],
-                            order='C').ctypes.data_as(ctypes.c_void_p),
+                moeoo_block.ctypes.data_as(ctypes.c_void_p),
                 moevv.ctypes.data_as(ctypes.c_void_p),
                 t2_ptr, ctypes.c_int(t2_ex)
             )
@@ -126,7 +122,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
 
 class DFMP2(mp2.MP2):
-    _keys = {'with_df', 'mo_energy'}
+    _keys = {'with_df', 'mo_energy', 'force_outcore'}
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None, mo_energy=None):
         mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
@@ -328,10 +324,10 @@ class _DFOUTCOREERIS(_DFINCOREERIS):
         with_df = self.with_df
         if self._ovL is None:
             if isinstance(self._ovL_to_save, str):
-                self.feri = h5py.File(self._ovL_to_save, 'w')
+                self.feri = lib.H5FileWrap(self._ovL_to_save, 'w')
             else:
                 self.feri = lib.H5TmpFile()
-            log.info('ovL is saved to %s', self.feri.filename)
+            log.debug('ovL is saved to %s', self.feri.filename)
             if with_df._cderi is None:
                 _init_mp_df_eris_direct(with_df, self.occ_coeff, self.vir_coeff, self.max_memory,
                                         h5obj=self.feri, log=log)
@@ -341,7 +337,7 @@ class _DFOUTCOREERIS(_DFINCOREERIS):
             self.ovL = self.feri['ovL']
         elif isinstance(self._ovL, str):
             self.feri = h5py.File(self._ovL, 'r')
-            log.info('ovL is read from %s', self.feri.filename)
+            log.debug('ovL is read from %s', self.feri.filename)
             assert( 'ovL' in self.feri )
             self.ovL = self.feri['ovL']
         else:
@@ -418,7 +414,6 @@ def _init_mp_df_eris_direct(with_df, occ_coeff, vir_coeff, max_memory, h5obj=Non
     from pyscf import gto
     from pyscf.df.incore import fill_2c2e
     from pyscf.ao2mo.outcore import balance_partition
-    from pyscf.ao2mo import _ao2mo
 
     if log is None: log = logger.new_logger(with_df)
 
@@ -533,6 +528,7 @@ def _init_mp_df_eris_direct(with_df, occ_coeff, vir_coeff, max_memory, h5obj=Non
                 ovL = scipy.linalg.solve_triangular(m2c, ovL.T, lower=True,
                                                     overwrite_b=True, check_finite=False).T
             else:
+                assert m2c.flags.f_contiguous
                 grpfac = 10
                 drv(
                     m2c.ctypes.data_as(ctypes.c_void_p),
@@ -568,6 +564,7 @@ def _init_mp_df_eris_direct(with_df, occ_coeff, vir_coeff, max_memory, h5obj=Non
                     ivL = scipy.linalg.solve_triangular(m2c, ivL.T, lower=True,
                                                         overwrite_b=True, check_finite=False).T
                 else:
+                    assert m2c.flags.f_contiguous
                     grpfac = 10
                     drv(
                         m2c.ctypes.data_as(ctypes.c_void_p),
