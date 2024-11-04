@@ -137,6 +137,7 @@ class _DFHF:
         if not self.with_df:
             return super().get_jk(mol, dm, hermi, with_j, with_k, omega)
 
+        vj = vk = None
         with_dfk = with_k and not self.only_dfj
         if with_j or with_dfk:
             if isinstance(self, scf.ghf.GHF):
@@ -156,8 +157,6 @@ class _DFHF:
             else:
                 vj, vk = self.with_df.get_jk(dm, hermi, with_j, with_dfk,
                                             self.direct_scf_tol, omega)
-        else:
-            vj = None
         if with_k and not with_dfk:
             vk = super().get_jk(mol, dm, hermi, False, True, omega)[1]
         return vj, vk
