@@ -25,7 +25,7 @@ if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
   # https://cmake.org/cmake/help/v3.7/variable/CMAKE_SHARED_LINKER_FLAGS_INIT.html
   # see also issue #661
   if(UNIX AND NOT APPLE AND NOT DEFINED ENV{LDFLAGS})
-    set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-as-needed")
+    set(CMAKE_SHARED_LINKER_FLAGS "-g -Wl,--no-as-needed")
   endif()
 endif()
 set(CMAKE_C_FLAGS "-Wall ${CMAKE_C_FLAGS}")

@@ -309,7 +309,7 @@ void del_task_list(TaskList** task_list)
         return;
     }
     if (tl->gridlevel_info) {
-        del_gridlevel_info(&(tl->gridlevel_info));
+        //del_gridlevel_info(&(tl->gridlevel_info));
         tl->gridlevel_info = NULL;
     }
     if (tl->tasks) {
