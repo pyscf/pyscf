@@ -186,8 +186,8 @@ def vpploc_part1_nuc_grad(mydf, dm, kpts=np.zeros((1,3)), atm_id=None, precision
         lattice_type = '_orth'
         orth = True
     else:
-        lattice_type = '_nonorth'
-        orth = False
+        #lattice_type = '_nonorth'
+        #orth = False
         raise NotImplementedError
     eval_fn = 'eval_mat_lda' + lattice_type + '_ip1'
 

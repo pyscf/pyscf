@@ -754,23 +754,21 @@ void dm_xyz_to_dm_ijk(double* dm_ijk, double* dm_xyz, double* dh, int topl)
         for (iy = 0; iy <= ly; iy++) {
         for (jy = 0; jy <= ly-iy; jy++) {
             ky = ly - iy - jy;
-            double cy = dh_pow[iy][1] * dh_pow[jy][4] * dh_pow[ky][7]
-                      * fac(ly) / (fac(iy) * fac(jy) * fac(ky)); 
-            double cxy = cx * cy;
+            double cxy = cx * dh_pow[iy][1] * dh_pow[jy][4] * dh_pow[ky][7]
+                       * fac(ly) / (fac(iy) * fac(jy) * fac(ky)); 
 
             for (lz = 0; lz <= topl - lx - ly; lz++) {
                 double dm_value = dm_xyz[lx*l1l1+ly*l1+lz];
             for (iz = 0; iz <= lz; iz++) {
             for (jz = 0; jz <= lz-iz; jz++) {
                 kz = lz - iz - jz;
-                double cz = dh_pow[iz][2] * dh_pow[jz][5] * dh_pow[kz][8]
-                          * fac(lz) / (fac(iz) * fac(jz) * fac(kz));
-                double cxyz = cxy * cz;
+                double cxyz = cxy * dh_pow[iz][2] * dh_pow[jz][5] * dh_pow[kz][8]
+                            * fac(lz) / (fac(iz) * fac(jz) * fac(kz));
 
                 int li = ix + iy + iz;
                 int lj = jx + jy + jz;
                 int lk = kx + ky + kz;
-                dm_ijk[li*l1l1+lj*l1l1+lk] += dm_value * cxyz;
+                dm_ijk[li*l1l1+lj*l1+lk] += dm_value * cxyz;
             }}}
         }}}
     }}}
@@ -810,24 +808,22 @@ void dm_ijk_to_dm_xyz(double* dm_ijk, double* dm_xyz, double* dh, int topl)
         for (iy = 0; iy <= ly; iy++) {
         for (jy = 0; jy <= ly-iy; jy++) {
             ky = ly - iy - jy;
-            double cy = dh_pow[iy][1] * dh_pow[jy][4] * dh_pow[ky][7]
-                      * fac(ly) / (fac(iy) * fac(jy) * fac(ky)); 
-            double cxy = cx * cy;
+            double cxy = cx * dh_pow[iy][1] * dh_pow[jy][4] * dh_pow[ky][7]
+                       * fac(ly) / (fac(iy) * fac(jy) * fac(ky)); 
 
             for (lz = 0; lz <= topl-lx-ly ; lz++) {
                 double *ptr_dm_xyz = dm_xyz + lx*l1l1+ly*l1+lz;
             for (iz = 0; iz <= lz; iz++) {
             for (jz = 0; jz <= lz-iz; jz++) {
                 kz = lz - iz - jz;
-                double cz = dh_pow[iz][2] * dh_pow[jz][5] * dh_pow[kz][8]
-                          * fac(lz) / (fac(iz) * fac(jz) * fac(kz));
-                double cxyz = cxy * cz;
+                double cxyz = cxy * dh_pow[iz][2] * dh_pow[jz][5] * dh_pow[kz][8]
+                            * fac(lz) / (fac(iz) * fac(jz) * fac(kz));
 
                 int li = ix + iy + iz;
                 int lj = jx + jy + jz;
                 int lk = kx + ky + kz;
 
-                *ptr_dm_xyz += dm_ijk[li*l1l1+lj*l1l1+lk] * cxyz;
+                *ptr_dm_xyz += dm_ijk[li*l1l1+lj*l1+lk] * cxyz;
             }}}
         }}}
     }}}

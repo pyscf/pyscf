@@ -178,7 +178,7 @@ def eval_rho(cell, dm, task_list, shls_slice=None, hermi=0, xctype='LDA', kpts=N
         Ls = np.zeros((1,3))
 
     if dimension == 0 or kpts is None or gamma_point(kpts):
-        nkpts, nimgs = 1, Ls.shape[0]
+        #nkpts, nimgs = 1, Ls.shape[0]
         dm = dm.reshape(-1,1,naoi,naoj)
     else:
         raise NotImplementedError
@@ -356,7 +356,7 @@ def eval_mat(cell, weights, task_list, shls_slice=None, comp=1, hermi=0, deriv=0
 
     weights = np.asarray(weights)
     if dimension == 0 or kpts is None or gamma_point(kpts):
-        nkpts, nimgs = 1, Ls.shape[0]
+        #nkpts, nimgs = 1, Ls.shape[0]
         assert weights.dtype == np.double
     else:
         raise NotImplementedError
@@ -663,7 +663,6 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
 
     See also `multigrid.nr_rks`.
     '''
-    print(dm_kpts)
     if kpts is None:
         kpts = mydf.kpts
     log = logger.new_logger(mydf, verbose)
@@ -1042,9 +1041,6 @@ class MultiGridFFTDF2(MultiGridFFTDF):
         self.rhoG = None
         if not gamma_point(kpts):
             raise NotImplementedError('MultiGridFFTDF2 only supports Gamma-point calculations.')
-        a = cell.lattice_vectors()
-        #if abs(a-np.diag(a.diagonal())).max() > 1e-12:
-        #    raise NotImplementedError('MultiGridFFTDF2 only supports orthorhombic lattices.')
 
     def reset(self, cell=None):
         self.vpplocG_part1 = None
