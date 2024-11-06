@@ -30,7 +30,6 @@ from pyscf.pbc.dft.multigrid import _backend_c as backend
 PP_WITH_RHO_CORE = getattr(__config__, 'pbc_dft_multigrid_pp_with_rho_core', True)
 
 libpbc = lib.load_library('libpbc')
-libdft = lib.load_library('libdft')
 
 def make_rho_core(cell, mesh=None, precision=None, atm_id=None):
     if mesh is None:
@@ -181,21 +180,21 @@ def vpploc_part1_nuc_grad(mydf, dm, kpts=np.zeros((1,3)), atm_id=None, precision
     bas = fakecell._bas
     env = fakecell._env
 
-    a = np.asarray(cell.lattice_vectors(), order='C', dtype=float)
+    a = cell.lattice_vectors()
+    b = np.linalg.inv(a.T)
+
     if abs(a - np.diag(a.diagonal())).max() < 1e-12:
         lattice_type = '_orth'
         orth = True
     else:
-        #lattice_type = '_nonorth'
-        #orth = False
-        raise NotImplementedError
+        lattice_type = '_nonorth'
+        orth = False
+
     eval_fn = 'eval_mat_lda' + lattice_type + '_ip1'
 
-    b = np.asarray(np.linalg.inv(a.T), order='C', dtype=float)
-    mesh = np.asarray(mydf.mesh, order='C', dtype=np.int32)
+    mesh = mydf.mesh
     ngrids = np.prod(mesh)
     comp = 3
-    grad = np.zeros((len(atm),comp), order="C", dtype=float)
 
     if mydf.rhoG is None:
         rhoG = _eval_rhoG(mydf, dm, hermi=1, kpts=kpts, deriv=0)
@@ -211,21 +210,21 @@ def vpploc_part1_nuc_grad(mydf, dm, kpts=np.zeros((1,3)), atm_id=None, precision
 
     coulG = tools.get_coulG(cell, mesh=mesh)
     vG = np.multiply(rhoG, coulG)
+    v_rs = tools.ifft(vG, mesh).real
 
-    v_rs = np.asarray(tools.ifft(vG, mesh).real, order="C")
-    libdft.int_gauss_charge_v_rs(
-        getattr(libdft, eval_fn),
-        grad.ctypes.data_as(ctypes.c_void_p),
-        v_rs.ctypes.data_as(ctypes.c_void_p),
-        ctypes.c_int(comp),
-        atm.ctypes.data_as(ctypes.c_void_p),
-        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(bas)),
-        env.ctypes.data_as(ctypes.c_void_p),
-        mesh.ctypes.data_as(ctypes.c_void_p),
-        ctypes.c_int(cell.dimension),
-        a.ctypes.data_as(ctypes.c_void_p),
-        b.ctypes.data_as(ctypes.c_void_p),
-        ctypes.c_double(max_radius)
+    grad = backend.int_gauss_charge_v_rs(
+        eval_fn,
+        v_rs,
+        comp,
+        atm,
+        bas,
+        env,
+        mesh,
+        cell.dimension,
+        a,
+        b,
+        max_radius,
+        orth
     )
     grad *= -1
     t0 = logger.timer(mydf, 'vpploc_part1_nuc_grad', *t0)

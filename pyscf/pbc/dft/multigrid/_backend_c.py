@@ -96,6 +96,48 @@ def build_core_density(
     return rho_core
 
 
+def int_gauss_charge_v_rs(
+    fn_name,
+    v_rs,
+    comp,
+    atm,
+    bas,
+    env,
+    mesh,
+    dimension,
+    a,
+    b,
+    max_radius,
+    orth,
+):
+    out = np.zeros((len(atm), comp), order='C', dtype=np.double)
+    v_rs = np.asarray(v_rs, order='C', dtype=np.double)
+    atm = np.asarray(atm, order='C', dtype=np.int32)
+    bas = np.asarray(bas, order='C', dtype=np.int32)
+    env = np.asarray(env, order='C', dtype=np.double)
+    mesh = np.asarray(mesh, order='C', dtype=np.int32)
+    a = np.asarray(a, order='C', dtype=np.double)
+    b = np.asarray(b, order='C', dtype=np.double)
+
+    libdft.int_gauss_charge_v_rs(
+        getattr(libdft, fn_name),
+        out.ctypes.data_as(ctypes.c_void_p),
+        v_rs.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(comp),
+        atm.ctypes.data_as(ctypes.c_void_p),
+        bas.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(len(bas)),
+        env.ctypes.data_as(ctypes.c_void_p),
+        mesh.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(dimension),
+        a.ctypes.data_as(ctypes.c_void_p),
+        b.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_double(max_radius),
+        ctypes.c_bool(orth)
+    )
+    return out
+
+
 def grid_collocate_drv(
     fn_name,
     rs_rho,
