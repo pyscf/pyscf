@@ -370,7 +370,6 @@ static void _orth_bounds(int* bounds, int* rp_latt, double* roff,
     roff[1] = dy * cy - ry;
     roff[2] = dz * cz - rz;
 }
-*/
 
 
 static void _nonorth_bounds(int* bounds, int* rp_latt, double* roff,
@@ -407,6 +406,76 @@ static void _nonorth_bounds(int* bounds, int* rp_latt, double* roff,
                     bounds[ia * 2] = MIN(bounds[ia * 2], (int)floor(r_frac[ia]));
                     bounds[ia * 2 + 1] = MAX(bounds[ia * 2 + 1], (int)ceil(r_frac[ia]));
                 }
+            }
+        }
+    }
+}
+*/
+
+
+static void _nonorth_bounds_tight(int* bounds, int* rp_latt, double* roff,
+                                  double* rp, double* dh, double* dh_inv, double radius)
+{
+    int i, j, ia;
+    double r_frac[3];
+
+    get_lattice_coords(r_frac, rp, dh_inv);
+    rp_latt[0] = (int)rint(r_frac[0]);
+    rp_latt[1] = (int)rint(r_frac[1]);
+    rp_latt[2] = (int)rint(r_frac[2]);
+
+    roff[0] = rp_latt[0] - r_frac[0];
+    roff[1] = rp_latt[1] - r_frac[1];
+    roff[2] = rp_latt[2] - r_frac[2];
+
+    for (i = 0; i < 6; i += 2) {
+        bounds[i] = INT_MAX;
+        bounds[i + 1] = INT_MIN;
+    }
+
+    double a_norm[3], e[3][3];
+    for (i = 0; i < 3; i++) {
+        double *a = dh + i * 3;
+        a_norm[i] = vnorm(a);
+        vscale(e[i], 1. / a_norm[i], a);
+    }
+
+    const int idx[3][2] = {{0, 1}, {1, 2}, {2, 0}};
+    for (i = 0; i < 3; i++) {
+        int i1 = idx[i][0];
+        int i2 = idx[i][1];
+        double *a1 = dh + i1 * 3;
+        double *a2 = dh + i2 * 3;
+        double theta = .5 * acos(vdot(a1, a2) / (a_norm[i1] * a_norm[i2]));
+        double r1 = radius / sin(theta);
+        double r2 = r1 * cos(theta);
+
+        double *e1 = e[i1], *e2 = e[i2];
+        double e12[3];
+        vadd(e12, e1, e2);
+        double e12_norm = vnorm(e12);
+        vscale(e12, 1. / e12_norm * r1, e12);
+
+        double rp_plus_e12[3], rp_minus_e12[3];
+        vadd(rp_plus_e12, rp, e12);
+        vsub(rp_minus_e12, rp, e12);
+
+        double e1_times_r2[3], e2_times_r2[3];
+        vscale(e1_times_r2, r2, e1);
+        vscale(e2_times_r2, r2, e2);
+
+        //four points where the polygon is tangent to the circle
+        double c[4][3];
+        vsub(c[0], rp_plus_e12, e2_times_r2);
+        vsub(c[1], rp_plus_e12, e1_times_r2);
+        vadd(c[2], rp_minus_e12, e2_times_r2);
+        vadd(c[3], rp_minus_e12, e1_times_r2);
+
+        for (j = 0; j < 4; j++) {
+            get_lattice_coords(r_frac, c[j], dh_inv);
+            for (ia = 0; ia < 3; ia++) {
+                bounds[ia * 2] = MIN(bounds[ia * 2], (int)floor(r_frac[ia]));
+                bounds[ia * 2 + 1] = MAX(bounds[ia * 2 + 1], (int)ceil(r_frac[ia]));
             }
         }
     }
@@ -591,7 +660,8 @@ size_t init_nonorth_data(double **xs_exp, double **ys_exp, double **zs_exp,
     rp[1] = (ai * ri[1] + aj * rj[1]) / ap;
     rp[2] = (ai * ri[2] + aj * rj[2]) / ap;
 
-    _nonorth_bounds(bounds, rp_latt, roff, rp, dh_inv, radius);
+    //_nonorth_bounds(bounds, rp_latt, roff, rp, dh_inv, radius);
+    _nonorth_bounds_tight(bounds, rp_latt, roff, rp, dh, dh_inv, radius);
 
     *xs_exp = cache;
     int ngridx = bounds[1] - bounds[0];

@@ -124,4 +124,40 @@ void dgemm_wrapper(const char transa, const char transb,
                    const double alpha, const double* a, const int lda,
                    const double* b, const int ldb,
                    const double beta, double* c, const int ldc);
+
+static inline void vadd(double* c, double* a, double* b)
+{
+    c[0] = a[0] + b[0];
+    c[1] = a[1] + b[1];
+    c[2] = a[2] + b[2];
+}
+
+static inline void vsub(double* c, double* a, double* b)
+{
+    c[0] = a[0] - b[0];
+    c[1] = a[1] - b[1];
+    c[2] = a[2] - b[2];
+}
+
+static inline double vdot(double* a, double* b)
+{
+    double out;
+    out = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    return out;
+}
+
+static inline void vscale(double* c, double alpha, double* a)
+{
+    c[0] = a[0] * alpha;
+    c[1] = a[1] * alpha;
+    c[2] = a[2] * alpha;
+}
+
+static inline double vnorm(double *a)
+{
+    double norm;
+    norm = sqrt(vdot(a, a));
+    return norm;
+}
+
 #endif
