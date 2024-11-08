@@ -55,7 +55,84 @@ from pyscf.scf import _vhf
 from pyscf.dft import gen_grid
 from pyscf.dft.gen_grid import LEBEDEV_ORDER, SGX_ANG_MAPPING, \
                                sgx_prune, becke_lko
-from pyscf.dft.numint import eval_ao
+from pyscf.dft.numint import eval_ao, BLKSIZE, NBINS, libdft, \
+    SWITCH_SIZE, _scale_ao, _dot_ao_dm, _dot_ao_dm_sparse, CUTOFF, \
+    _dot_ao_ao_sparse
+
+
+def _dot_ao_dm(ao, dms, non0tab, shls_slice, ao_loc, out=None):
+    '''return numpy.dot(ao, dms)'''
+    ngrids, nao = ao.shape
+    nbas = len(ao_loc) - 1
+    vms = numpy.ndarray((dms.shape[0], dms.shape[2], ngrids), dtype=ao.dtype, order='C', buffer=out)
+    #if (nao < SWITCH_SIZE or
+    #    non0tab is None or shls_slice is None or ao_loc is None):
+    #    out[:] = lib.dot(dm.T, ao.T)
+    if (non0tab is None or shls_slice is None or ao_loc is None):
+        for i in range(len(dms)):
+            lib.dot(dms[i].T, ao.T, c=vms[i])
+        return vms
+
+    if not ao.flags.f_contiguous:
+        print("TRANSPOSING")
+        ao = lib.transpose(ao)
+    if ao.dtype == dms.dtype == numpy.double:
+        print("USING SGX DOT")
+        fn = libdft.VXCsgx_ao_dm
+    else:
+        fn = libdft.VXCzdot_ao_dm
+        ao = numpy.asarray(ao, numpy.complex128)
+        dms = numpy.asarray(dms, numpy.complex128)
+
+    dms = numpy.asarray(dms, order='C')
+    for i in range(len(dms)):
+        fn(vms[i].ctypes.data_as(ctypes.c_void_p),
+        ao.ctypes.data_as(ctypes.c_void_p),
+        dms[i].ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nao), ctypes.c_int(dms.shape[2]),
+        ctypes.c_int(ngrids), ctypes.c_int(nbas),
+        non0tab.ctypes.data_as(ctypes.c_void_p),
+        (ctypes.c_int*2)(*shls_slice),
+        ao_loc.ctypes.data_as(ctypes.c_void_p))
+    return vms
+
+def _dot_ao_ao(mol, ao, gv, non0tab, shls_slice, ao_loc):
+    '''return numpy.dot(ao.T, gv.T)'''
+    ngrids, nao = ao.shape
+    #if (nao < SWITCH_SIZE or
+    #    for i in range(len(gv)):
+    #        lib.dot(ao1.conj().T, gv[i].T, c=vms[i])
+    #    return vms
+    vv = numpy.ndarray((gv.shape[0], ao.shape[1], gv.shape[1]), dtype=ao.dtype, order='C')
+    if (non0tab is None or shls_slice is None or ao_loc is None):
+        for i in range(len(gv)):
+            lib.dot(ao.conj().T, gv[i].T, c=vv[i])
+        return vv
+
+    if not ao.flags.f_contiguous:
+        print("TRANSPOSING")
+        ao = lib.transpose(ao)
+    if not gv.flags.c_contiguous:
+        print("MAKING CONTIGUOUS")
+        gv = numpy.ascontiguousarray(gv)
+    if ao.dtype == gv.dtype == numpy.double:
+        fn = libdft.VXCsgx_ao_ao
+    else:
+        fn = libdft.VXCzdot_ao_ao
+        ao = numpy.asarray(ao, numpy.complex128)
+        gv = numpy.asarray(gv, numpy.complex128)
+
+    vv = numpy.empty((len(gv),nao,nao), dtype=ao.dtype)
+    for i in range(len(gv)):
+        fn(vv[i].ctypes.data_as(ctypes.c_void_p),
+        ao.ctypes.data_as(ctypes.c_void_p),
+        gv[i].ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nao), ctypes.c_int(ngrids),
+        ctypes.c_int(mol.nbas),
+        non0tab.ctypes.data_as(ctypes.c_void_p),
+        (ctypes.c_int*2)(*shls_slice),
+        ao_loc.ctypes.data_as(ctypes.c_void_p))
+    return vv.transpose(0, 2, 1)
 
 
 def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
@@ -84,11 +161,8 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
 
     ngrids = grids.coords.shape[0]
     max_memory = sgx.max_memory - lib.current_memory()[0]
-    sblk = sgx.blockdim
-    max_memory = 4000
-    sblk = 6000
-    blksize = min(ngrids, max(4, int(min(sblk, max_memory*1e6/8/nao**2))))
-    blksize = 6000
+    # We need to store ao, wao, and fg -> 3 sets of size nao
+    blksize = min(ngrids, max(112, int(max_memory*1e6/8/(3 * nao))))
     tnuc = 0, 0
     for i0, i1 in lib.prange(0, ngrids, blksize):
         coords = grids.coords[i0:i1]
@@ -97,17 +171,7 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
         wao = ao * grids.weights[i0:i1,None]
         sn += lib.dot(ao.T, wao)
 
-        fg = lib.einsum('gi,xij->xgj', wao, dms)
-        mask = numpy.zeros(i1-i0, dtype=bool)
-        for i in range(nset):
-            mask |= numpy.any(fg[i]>gthrd, axis=1)
-            mask |= numpy.any(fg[i]<-gthrd, axis=1)
-        if not numpy.all(mask):
-            ao = ao[mask]
-            wao = wao[mask]
-            fg = fg[:,mask]
-            coords = coords[mask]
-            weights = weights[mask]
+        fg = lib.einsum('xij,ig->xjg', dms, wao.T)
 
         if sgx.debug:
             tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
@@ -116,7 +180,7 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
             if with_j:
                 jg = numpy.einsum('gij,xij->xg', gbn, dms)
             if with_k:
-                gv = lib.einsum('gvt,xgt->xgv', gbn, fg)
+                gv = lib.einsum('gvt,xtg->xvg', gbn, fg)
             gbn = None
         else:
             tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
@@ -129,11 +193,11 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
                 vj[i] += lib.einsum('gu,gv->uv', wao, xj[i])
         if with_k:
             for i in range(nset):
-                vk[i] += lib.einsum('gu,gv->uv', ao, gv[i])
+                vk[i] += lib.einsum('gu,vg->uv', ao, gv[i])
         jg = gv = None
 
     t2 = logger.timer_debug1(mol, "sgX J/K builder", *t1)
-    tdot = t2[0] - t1[0] - tnuc[0] , t2[1] - t1[1] - tnuc[1]
+    tdot = t2[0] - t1[0] - tnuc[0], t2[1] - t1[1] - tnuc[1]
     logger.debug1(sgx, '(CPU, wall) time for integrals (%.2f, %.2f); '
                   'for tensor contraction (%.2f, %.2f)',
                   tnuc[0], tnuc[1], tdot[0], tdot[1])
@@ -195,6 +259,7 @@ def get_k_only(sgx, dm, hermi=1, with_j=False, with_k=True,
                          cutoff=grids.cutoff, out=buf)
             wao = ao * weights
             sn += lib.dot(ao.T, wao)
+            sn += _dot_ao_ao_sparse(ao, wao, None, nbins, screen_index, pair_mask, ao_loc, hermi=1)
         ovlp = mol.intor_symmetric('int1e_ovlp')
         proj = scipy.linalg.solve(sn, ovlp)
         sgx._overlap_correction_matrix = proj
@@ -264,19 +329,32 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
         batch_jk = _gen_jk_direct(mol, 's2', with_j, with_k, direct_scf_tol,
                                   sgx._opt, sgx.pjs)
 
+    if mol is grids.mol:
+        non0tab = grids.non0tab
+    if non0tab is None:
+        non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
+                                dtype=numpy.uint8)
+        non0tab[:] = NBINS + 1  # Corresponding to AO value ~= 1
+    screen_index = non0tab
+    print("SPARSITY", (screen_index > 0).sum() / screen_index.size)
+
     sn = numpy.zeros((nao,nao))
     ngrids = grids.coords.shape[0]
     max_memory = sgx.max_memory - lib.current_memory()[0]
-    blksize = min(ngrids, max(112, int(max_memory*1e6/8/nao)))
+    # We need to store ao, wao, and fg -> 3 sets of size nao
+    blksize = min(ngrids, max(112, int(max_memory*1e6/8/(3 * nao))))
+    blksize = max(4, blksize // BLKSIZE) * BLKSIZE
     if sgx.fit_ovlp:
         for i0, i1 in lib.prange(0, ngrids, blksize):
+            assert i0 % BLKSIZE == 0
             coords = grids.coords[i0:i1]
             ao = mol.eval_gto('GTOval', coords)
             wao = ao * grids.weights[i0:i1,None]
+            # mask = screen_index[i0 // BLKSIZE:]
             sn += lib.dot(ao.T, wao)
-
         ovlp = mol.intor_symmetric('int1e_ovlp')
         proj = scipy.linalg.solve(sn, ovlp)
+        print("NORM", numpy.linalg.norm(proj - numpy.identity(proj.shape[0])))
         proj_dm = lib.einsum('ki,xij->xkj', proj, dms)
     else:
         proj_dm = dms.copy()
@@ -285,28 +363,22 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
     vj = numpy.zeros_like(dms)
     vk = numpy.zeros_like(dms)
     tnuc = 0, 0
+    wao = None
+    shls_slice = (0, mol.nbas)
+    ao_loc = mol.ao_loc_nr()
+    fg = None
     for i0, i1 in lib.prange(0, ngrids, blksize):
+        assert i0 % BLKSIZE == 0
         coords = grids.coords[i0:i1]
-        weights = numpy.abs(grids.weights[i0:i1,None])
-        ao = mol.eval_gto('GTOval', coords)
-        wao = ao * numpy.sqrt(weights)
+        weights = grids.weights[i0:i1]
+        ao = mol.eval_gto('GTOval', coords, non0tab=screen_index[i0 // BLKSIZE:])
+        # wao = ao * weights[:, None]
+        wao = _scale_ao(ao, weights, out=wao)
+        # fg = lib.einsum('xij,ig->xjg', proj_dm, wao.T)
+        fg = _dot_ao_dm(wao, proj_dm, screen_index[i0 // BLKSIZE:], shls_slice, ao_loc, out=fg)
 
-        fg = lib.einsum('xij,ig->xjg', proj_dm, wao.T)
-        """
-        mask = numpy.zeros(i1-i0, dtype=bool)
-        for i in range(nset):
-            mask |= numpy.any(fg[i].T>gthrd, axis=1)
-            mask |= numpy.any(fg[i].T<-gthrd, axis=1)
-        if not numpy.all(mask):
-            wao = wao[mask]
-            ao = ao[mask]
-            fg = fg[..., mask]
-            coords = coords[mask]
-            weights = weights[mask]
-        """
-            
         if with_j:
-            rhog = numpy.einsum('xug,gu->xg', fg, wao)
+            rhog = numpy.einsum('xug,gu->xg', fg, ao)
         else:
             rhog = None
 
@@ -317,7 +389,7 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
             if with_j:
                 jpart = numpy.einsum('guv,xg->xuv', gbn, rhog)
             if with_k:
-                gv = lib.einsum('gtv,xgt->xgv', gbn, fg)
+                gv = lib.einsum('gtv,xtg->xvg', gbn, fg)
             gbn = None
         else:
             tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
@@ -328,8 +400,10 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
         if with_j:
             vj += jpart
         if with_k:
-            for i in range(nset):
-                vk[i] += lib.einsum('gu,vg->uv', wao, gv[i])
+            #pass
+            #for i in range(nset):
+            #    vk[i] += lib.einsum('gu,vg->uv', ao, gv[i])
+            vk[:] += _dot_ao_ao(mol, ao, gv, screen_index[i0 // BLKSIZE:], shls_slice, ao_loc)
         jpart = gv = None
 
     t2 = logger.timer_debug1(mol, "sgX J/K builder", *t1)
@@ -363,108 +437,6 @@ def _gen_batch_nuc_grad(mol):
         return j3c.transpose(0,3,1,2)
     return batch_nuc
 
-
-import time
-def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol,
-                   sgxopt=None, pjs=False, grad=False):
-    '''Contraction between sgX Coulomb integrals and density matrices
-
-    J: einsum('guv,xg->xuv', gbn, dms) if dms == rho at grid,
-    or einsum('gij,xij->xg', gbn, dms) if dms are density matrices
-
-    K: einsum('gtv,xgt->xgv', gbn, fg)
-    '''
-    if sgxopt is None:
-        from pyscf.sgx import sgx
-        sgxopt = sgx._make_opt(mol, pjs, grad, direct_scf_tol)
-    sgxopt.direct_scf_tol = direct_scf_tol
-
-    if grad:
-        ncomp = 3
-    else:
-        ncomp = 1
-    nao = mol.nao
-    cintor = _vhf._fpointer(sgxopt._intor)
-    fdot = _vhf._fpointer('SGXdot_nrk_pscreen')
-    drv = _vhf.libcvhf.SGXnr_direct_drv
-
-    def jk_part(mol, grid_coords, dms, fg, weights):
-        t0 = time.monotonic()
-        atm, bas, env = mol._atm, mol._bas, mol._env
-        ngrids = grid_coords.shape[0]
-        env = numpy.append(env, grid_coords.ravel())
-        env[gto.NGRIDS] = ngrids
-        env[gto.PTR_GRIDS] = mol._env.size
-        if pjs:
-            sgxopt.set_dm(fg / numpy.sqrt(numpy.abs(weights[None,:])),
-                          mol._atm, mol._bas, env)
-
-        ao_loc = moleintor.make_loc(bas, sgxopt._intor)
-        shls_slice = (0, mol.nbas, 0, mol.nbas)
-
-        fg = numpy.ascontiguousarray(fg.transpose(0,2,1))
-        t1 = time.monotonic()
-
-        vj = vk = None
-        fjk = []
-        dmsptr = []
-        vjkptr = []
-        if with_j:
-            if dms[0].ndim == 1:  # the value of density at each grid
-                if grad:
-                    vj = numpy.zeros((len(dms),ncomp,nao,nao))
-                else:
-                    vj = numpy.zeros((len(dms),ncomp,nao,nao))[:,0]
-                for i, dm in enumerate(dms):
-                    dmsptr.append(dm.ctypes.data_as(ctypes.c_void_p))
-                    vjkptr.append(vj[i].ctypes.data_as(ctypes.c_void_p))
-                    fjk.append(_vhf._fpointer('SGXnr'+aosym+'_ijg_g_ij'))
-            else:
-                if grad:
-                    vj = numpy.zeros((len(dms),ncomp,ngrids))
-                else:
-                    vj = numpy.zeros((len(dms),ncomp,ngrids))[:,0]
-                for i, dm in enumerate(dms):
-                    dmsptr.append(dm.ctypes.data_as(ctypes.c_void_p))
-                    vjkptr.append(vj[i].ctypes.data_as(ctypes.c_void_p))
-                    fjk.append(_vhf._fpointer('SGXnr'+aosym+'_ijg_ji_g'))
-        if with_k:
-            if grad:
-                vk = numpy.zeros((len(fg),ncomp,nao,ngrids))
-            else:
-                vk = numpy.zeros((len(fg),ncomp,nao,ngrids))[:,0]
-            for i, dm in enumerate(fg):
-                dmsptr.append(dm.ctypes.data_as(ctypes.c_void_p))
-                vjkptr.append(vk[i].ctypes.data_as(ctypes.c_void_p))
-                fjk.append(_vhf._fpointer('SGXnr'+aosym+'_ijg_gj_gi'))
-
-        t2 = time.monotonic()
-        n_dm = len(fjk)
-        fjk = (ctypes.c_void_p*(n_dm))(*fjk)
-        dmsptr = (ctypes.c_void_p*(n_dm))(*dmsptr)
-        vjkptr = (ctypes.c_void_p*(n_dm))(*vjkptr)
-
-        drv(cintor, fdot, fjk, dmsptr, vjkptr, n_dm, ncomp,
-            (ctypes.c_int*4)(*shls_slice),
-            ao_loc.ctypes.data_as(ctypes.c_void_p),
-            sgxopt._cintopt, ctypes.byref(sgxopt._this),
-            atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
-            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-            env.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(env.shape[0]),
-            ctypes.c_int(2 if aosym == 's2' else 1))
-        #if vk is not None:
-        #    if grad:
-        #        vk = vk.transpose(0,1,3,2)
-        #    else:
-        #        vk = vk.transpose(0,2,1)
-        #    vk = numpy.ascontiguousarray(vk)
-        t3 = time.monotonic()
-        print("TIMES", t1 - t0, t2 - t1, t3 - t2)
-        return vj, vk
-    return jk_part
-
-
 def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol,
                    sgxopt=None, pjs=False, grad=False):
     '''Contraction between sgX Coulomb integrals and density matrices
@@ -490,7 +462,6 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol,
     drv = _vhf.libcvhf.SGXnr_direct_drv
 
     def jk_part(mol, grid_coords, dms, fg, weights):
-        #t0 = time.monotonic()
         atm, bas, env = mol._atm, mol._bas, mol._env
         ngrids = grid_coords.shape[0]
         env = numpy.append(env, grid_coords.ravel())
@@ -502,10 +473,8 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol,
         shls_slice = (0, mol.nbas, 0, mol.nbas)
 
         assert fg.flags.c_contiguous
-        print(fg.shape)
         assert fg.shape[-2:] == (ao_loc[-1], weights.size)
 
-        #t1 = time.monotonic()
         vj = vk = None
         fjk = []
         dmsptr = []
@@ -539,7 +508,6 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol,
                 vjkptr.append(vk[i].ctypes.data_as(ctypes.c_void_p))
                 fjk.append(_vhf._fpointer('SGXnr'+aosym+'_ijg_gj_gi'))
 
-        #t2 = time.monotonic()
         n_dm = len(fjk)
         fjk = (ctypes.c_void_p*(n_dm))(*fjk)
         dmsptr = (ctypes.c_void_p*(n_dm))(*dmsptr)
@@ -554,17 +522,8 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol,
             env.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_int(env.shape[0]),
             ctypes.c_int(2 if aosym == 's2' else 1))
-        #if vk is not None:
-        #    if grad:
-        #        vk = vk.transpose(0,1,3,2)
-        #    else:
-        #        vk = vk.transpose(0,2,1)
-        #    vk = numpy.ascontiguousarray(vk)
-        #t3 = time.monotonic()
-        #print("TIMES", t1 - t0, t2 - t1, t3 - t2)
         return vj, vk
     return jk_part
-
 
 def _gen_k_direct(mol, aosym, direct_scf_tol,
                   sgxopt=None, pjs=False, grad=False):
@@ -679,6 +638,8 @@ def get_gridss(mol, level=1, gthrd=1e-10, use_opt_grids=False):
         mask = numpy.hstack(mask)
         grids.coords = grids.coords[mask]
         grids.weights = grids.weights[mask]
+    grids.non0tab = grids.make_mask(mol, grids.coords)
+    grids.screen_index = grids.non0tab
     logger.debug(mol, 'threshold for grids screening %g', gthrd)
     logger.debug(mol, 'number of grids %d', grids.weights.size)
     logger.timer_debug1(mol, "Xg screening", *Ktime)

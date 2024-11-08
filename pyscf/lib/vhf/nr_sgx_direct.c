@@ -509,7 +509,7 @@ static void SGXJKOperator_send_##label(SGXJKArray *jkarray, int k0, int dk, doub
         if (task == JTYPE1) { \
                 for (i = 0; i < ncomp; i++) { \
                 for (k = 0; k < dk; k++) { \
-                        out[i*nk_global+k] = data[i]; \
+                        out[i*nk_global+k] = data[i*dk+k]; \
                 } } \
         } else if (task == KTYPE1) { \
                 for (icomp = 0; icomp < ncomp; icomp++) { \
