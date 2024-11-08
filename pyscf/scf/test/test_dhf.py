@@ -21,9 +21,10 @@ import unittest
 from pyscf import gto
 from pyscf import scf
 from pyscf import lib
+from pyscf.scf.dhf import Epv_molecule
 
 def setUpModule():
-    global mol, mf, h4
+    global mol, mf, h4, mf_alanine
     mol = gto.M(
         verbose = 7,
         output = '/dev/null',
@@ -65,11 +66,12 @@ def setUpModule():
     H   -2.755346 2.398021 -0.608200                                                                  
     H   0.850292 0.091697 0.064913
     ''',
-    basis = 'sto6g',
+    basis = 'sto3g',
     verbose = 3)
 
     mf_alanine = scf.DHF(mol_alanine)
     mf_alanine.conv_tol = 1e-5
+    mf_alanine.with_ssss=False
     mf_alanine.kernel()
 
 
@@ -90,7 +92,7 @@ def tearDownModule():
     global mol, mf, h4, mf_alanine
     mol.stdout.close()
     h4.stdout.close()
-    del mol, mf, h4
+    del mol, mf, h4, mf_alanine
 
 
 class KnownValues(unittest.TestCase):
@@ -134,9 +136,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, mf.e_tot, 9)
 
     def test_pv(self):
-        Epv = scf.DHF.Epv_molecule(mol, mf_alanine)
+        Epv = Epv_molecule(mol, mf_alanine)
         Epv_Oxigen = numpy.sum(Epv, axis=1)[0]
-        self.assertAlmostEqual(Epv_Oxigen, -2.506215-15, 5)
+        self.assertAlmostEqual(Epv_Oxigen, -2.745821e-21, 5)
+        self.assertAlmostEqual(mf_alanine.e_tot,-317.831176378,8)
 
     def test_get_grad(self):
         g = mf.get_grad(mf.mo_coeff, mf.mo_occ)
