@@ -1124,9 +1124,9 @@ def fromstring(string, format='poscar'):
             end = start + unique_atoms[atom_type]
             for line in lines[start:end]:
                 coords = np.fromstring(line, sep=' ')
-                if atom_position_type == 'Cartesian':
+                if atom_position_type.lower() == 'cartesian':
                     x, y, z = coords * scale
-                elif atom_position_type == 'Direct':
+                elif atom_position_type.lower() == 'direct':
                     x, y, z = np.dot(coords, lattice_vectors)
                 else:
                     raise RuntimeError('Error reading VASP geometry due to '
