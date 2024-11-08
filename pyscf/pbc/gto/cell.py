@@ -1262,7 +1262,7 @@ class Cell(mole.MoleBase):
         self.atom = atom
         self.unit = 'A'
         return self
-  
+
     @property
     def mesh(self):
         return self._mesh
