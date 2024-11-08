@@ -17,6 +17,7 @@
 #         Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
+import os
 import sys
 import json
 import ctypes
@@ -1106,9 +1107,12 @@ def fromstring(string, format='poscar'):
         lines = string.splitlines()
         scale = float(lines[1])
         a = lines[2:5]
+        lattice_vectors = np.array([np.fromstring(ax, sep=' ') for ax in a])
+        lattice_vectors *= scale
+        a = []
+        for i in range(3):
+            a.append(' '.join(str(ax) for ax in lattice_vectors[i]))
         atom_position_type = lines[7].strip()
-        if atom_position_type == 'Direct':
-            lattice_vectors = np.array([np.fromstring(ax, sep=' ') for ax in a])
         unique_atoms = dict()
         natm = 0
         for atom, count in zip(lines[5].split(), lines[6].split()):
@@ -1119,17 +1123,17 @@ def fromstring(string, format='poscar'):
         for atom_type in unique_atoms:
             end = start + unique_atoms[atom_type]
             for line in lines[start:end]:
+                coords = np.fromstring(line, sep=' ')
                 if atom_position_type == 'Cartesian':
-                    atoms.append('%s %s' % (atom_type, line))
+                    x, y, z = coords * scale
                 elif atom_position_type == 'Direct':
-                    coords = np.fromstring(line, sep=' ')
                     x, y, z = np.dot(coords, lattice_vectors)
-                    atoms.append('%s %14.5f %14.5f %14.5f'
-                        % (atom_type, x, y, z))
                 else:
                     raise RuntimeError('Error reading VASP geometry due to '
                         f'atom position type "{atom_position_type}". Atom '
                         'positions must be Direct or Cartesian.')
+                atoms.append('%s %14.5f %14.5f %14.5f'
+                    % (atom_type, x, y, z))
             start = end
         return '\n'.join(a), '\n'.join(atoms)
     elif format == 'xyz':
