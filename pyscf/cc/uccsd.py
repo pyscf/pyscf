@@ -396,12 +396,12 @@ def vector_to_amplitudes(vector, nmo, nocc):
     nvir = nvira + nvirb
     nov = nocc * nvir
     size = nov + nocc*(nocc-1)//2*nvir*(nvir-1)//2
-    if vector.size == size:
+    sizea = nocca * nvira + nocca*(nocca-1)//2*nvira*(nvira-1)//2
+    sizeb = noccb * nvirb + noccb*(noccb-1)//2*nvirb*(nvirb-1)//2
+    if vector.size == size and sizea > 0 and sizeb > 0:
         #return ccsd.vector_to_amplitudes_s4(vector, nmo, nocc)
         raise RuntimeError('Input vector is GCCSD vector')
     else:
-        sizea = nocca * nvira + nocca*(nocca-1)//2*nvira*(nvira-1)//2
-        sizeb = noccb * nvirb + noccb*(noccb-1)//2*nvirb*(nvirb-1)//2
         sections = np.cumsum([sizea, sizeb])
         veca, vecb, t2ab = np.split(vector, sections)
         t1a, t2aa = ccsd.vector_to_amplitudes_s4(veca, nmoa, nocca)

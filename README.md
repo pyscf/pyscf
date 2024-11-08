@@ -14,6 +14,7 @@ Python-based Simulations of Chemistry Framework
 * [Documentation](http://www.pyscf.org)
 * [Installation](#installation)
 * [Features](../master/FEATURES)
+* [News](https://pyscf.org/news.html): **2nd PySCF Developers Meeting!**
 
 
 # Installation

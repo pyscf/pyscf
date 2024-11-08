@@ -64,3 +64,12 @@ td.kernel()
 
 mf = mol.RHF().PCM().run()
 td = mf.TDA().run()
+
+# infinite epsilon with any PCM computations
+cm = pcm.PCM(mol)
+cm.eps = float('inf') # ideal conductor
+mf = dft.RKS(mol, xc='b3lyp')
+mf = mf.PCM(cm)
+mf.kernel()
+
+

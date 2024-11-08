@@ -4,7 +4,7 @@ import pyscf.pbc.dft as pbcdft
 
 import matplotlib.pyplot as plt
 
-from ase.lattice import bulk
+from ase.build import bulk
 from ase.dft.kpoints import sc_special_points as special_points, get_bandpath
 
 c = bulk('C', 'diamond', a=3.5668)

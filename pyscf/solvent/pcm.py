@@ -328,21 +328,21 @@ class PCM(lib.StreamObject):
 
         epsilon = self.eps
         if self.method.upper() in ['C-PCM', 'CPCM']:
-            f_epsilon = (epsilon-1.)/epsilon
+            f_epsilon = (epsilon-1.)/epsilon if epsilon != float('inf') else 1.0
             K = S
             R = -f_epsilon * numpy.eye(K.shape[0])
         elif self.method.upper() == 'COSMO':
-            f_epsilon = (epsilon - 1.0)/(epsilon + 1.0/2.0)
+            f_epsilon = (epsilon - 1.0)/(epsilon + 1.0/2.0) if epsilon != float('inf') else 1.0
             K = S
             R = -f_epsilon * numpy.eye(K.shape[0])
         elif self.method.upper() in ['IEF-PCM', 'IEFPCM']:
-            f_epsilon = (epsilon - 1.0)/(epsilon + 1.0)
+            f_epsilon = (epsilon - 1.0)/(epsilon + 1.0) if epsilon != float('inf') else 1.0
             DA = D*A
             DAS = numpy.dot(DA, S)
             K = S - f_epsilon/(2.0*PI) * DAS
             R = -f_epsilon * (numpy.eye(K.shape[0]) - 1.0/(2.0*PI)*DA)
         elif self.method.upper() == 'SS(V)PE':
-            f_epsilon = (epsilon - 1.0)/(epsilon + 1.0)
+            f_epsilon = (epsilon - 1.0)/(epsilon + 1.0) if epsilon != float('inf') else 1.0
             DA = D*A
             DAS = numpy.dot(DA, S)
             K = S - f_epsilon/(4.0*PI) * (DAS + DAS.T)

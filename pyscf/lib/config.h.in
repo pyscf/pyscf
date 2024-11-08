@@ -5,5 +5,4 @@
 #define omp_get_num_threads() 1
 #endif
 
-#cmakedefine HAVE_FFS
 #define XCFUN_MAX_DERIV_ORDER @XCFUN_MAX_ORDER@
