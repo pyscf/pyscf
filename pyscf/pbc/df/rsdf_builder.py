@@ -416,8 +416,8 @@ class _RSGDFBuilder(Int3cBuilder):
         ao_loc = cell.ao_loc
         aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)
         ish0, ish1, jsh0, jsh1, ksh0, ksh1 = shls_slice
-        i0, i1, j0, j1 = ao_loc[list(shls_slice[:4])]
-        k0, k1 = aux_loc[[ksh0, ksh1]]
+        i0, i1, j0, j1 = ao_loc[list(shls_slice[:4])].astype(np.int64)
+        k0, k1 = aux_loc[[ksh0, ksh1]].astype(np.int64)
         if aosym == 's1':
             nao_pair = (i1 - i0) * (j1 - j0)
         else:

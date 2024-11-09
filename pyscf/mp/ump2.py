@@ -632,8 +632,8 @@ def _ao2mo_ovov(mp, orbs, feri, max_memory=2000, verbose=None):
     with lib.call_in_background(ftmp.__setitem__) as save:
         for ish0, ish1, ni in sh_ranges:
             for jsh0, jsh1, nj in sh_ranges:
-                i0, i1 = ao_loc[ish0], ao_loc[ish1]
-                j0, j1 = ao_loc[jsh0], ao_loc[jsh1]
+                i0, i1 = int(ao_loc[ish0]), int(ao_loc[ish1])
+                j0, j1 = int(ao_loc[jsh0]), int(ao_loc[jsh1])
 
                 eri = fint(int2e, mol._atm, mol._bas, mol._env,
                            shls_slice=(0,nbas,ish0,ish1, jsh0,jsh1,0,nbas),

@@ -289,12 +289,12 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
 
 def _guess_shell_ranges(mol, buflen, aosym, start=0, stop=None):
     from pyscf.ao2mo.outcore import balance_partition
-    ao_loc = mol.ao_loc_nr()
+    ao_loc_long = mol.ao_loc_nr().astype(numpy.int64)
     if 's2' in aosym:
-        return balance_partition(ao_loc*(ao_loc+1)//2, buflen, start, stop)
+        return balance_partition(ao_loc_long*(ao_loc_long+1)//2, buflen, start, stop)
     else:
-        nao = ao_loc[-1]
-        return balance_partition(ao_loc*nao, buflen, start, stop)
+        nao = ao_loc_long[-1]
+        return balance_partition(ao_loc_long*nao, buflen, start, stop)
 
 def _create_h5file(erifile, dataname):
     if isinstance(getattr(erifile, 'name', None), str):
