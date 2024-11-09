@@ -18,10 +18,10 @@
 
 #include <complex.h>
 #include <math.h>
-#include "config.h"
 #include "np_helper.h"
 
 const int TILESIZE = 32;
+const int TILESIZE_CPLX = 16;
 
 /*
  * Calculate the largest integer i such that
@@ -76,9 +76,9 @@ static inline void ztranspose_scale_tile_offdiag(double complex *A,
                                                  const int ii, const int jj,
                                                  const size_t lda_w,
                                                  const double complex alpha) {
-  for (int j = jj; j < jj + TILESIZE; j++) {
+  for (int j = jj; j < jj + TILESIZE_CPLX; j++) {
 #pragma omp simd
-    for(int i = ii; i < ii + TILESIZE; i++) {
+    for(int i = ii; i < ii + TILESIZE_CPLX; i++) {
       const double complex tmp = A[i * lda_w + j];
       A[i * lda_w + j] = alpha * A[j * lda_w + i];
       A[j * lda_w + i] = alpha * tmp;
@@ -89,7 +89,7 @@ static inline void ztranspose_scale_tile_offdiag(double complex *A,
 static inline void ztranspose_scale_tile_diag(double complex *A, const int ii,
                                               const int jj, const size_t lda_w,
                                               const double complex alpha) {
-  for (int j = jj; j < jj + TILESIZE; j++) {
+  for (int j = jj; j < jj + TILESIZE_CPLX; j++) {
 #pragma omp simd
     for(int i = ii; i < j; i++) {
       const double complex tmp = A[i * lda_w + j];
@@ -102,7 +102,7 @@ static inline void ztranspose_scale_tile_diag(double complex *A, const int ii,
 
 static inline void ztranspose_tile_diag(double complex *A, const int ii,
                                        const int jj, const size_t lda_w) {
-  for (int j = jj; j < jj + TILESIZE; j++) {
+  for (int j = jj; j < jj + TILESIZE_CPLX; j++) {
 #pragma omp simd
     for(int i = ii; i < j; i++) {
       const double complex tmp = A[i * lda_w + j];
@@ -267,8 +267,8 @@ void NPomp_d_itranspose_scale(const int n, const double alpha, double *A, int ld
 void NPomp_z_itranspose_scale(const int n, const double complex *alphaptr, double complex *A, int lda)
 {
   const double complex alpha = *alphaptr;
-  const int nclean = n - n % TILESIZE;
-  const int ntiles = nclean / TILESIZE;
+  const int nclean = n - n % TILESIZE_CPLX;
+  const int ntiles = nclean / TILESIZE_CPLX;
   const size_t lda_w = (size_t) lda;
 
 #pragma omp parallel
@@ -296,17 +296,17 @@ void NPomp_z_itranspose_scale(const int n, const double complex *alphaptr, doubl
           jouter = 0;
         }
       }
-      ztranspose_scale_tile_offdiag(A, iouter * TILESIZE, jouter * TILESIZE, lda_w, alpha);
+      ztranspose_scale_tile_offdiag(A, iouter * TILESIZE_CPLX, jouter * TILESIZE_CPLX, lda_w, alpha);
     }
 
     if(alpha != 1.0) {
 #pragma omp for schedule(static) nowait
-      for(int ii = 0; ii < nclean; ii+=TILESIZE) {
+      for(int ii = 0; ii < nclean; ii+=TILESIZE_CPLX) {
         ztranspose_scale_tile_diag(A, ii, ii, lda_w, alpha);
       }
     } else {
 #pragma omp for schedule(static) nowait
-      for(int ii = 0; ii < nclean; ii+=TILESIZE) {
+      for(int ii = 0; ii < nclean; ii+=TILESIZE_CPLX) {
         ztranspose_tile_diag(A, ii, ii, lda_w);
       }
     }
