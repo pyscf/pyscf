@@ -17,12 +17,23 @@
  */
 
 #include <complex.h>
+#include <math.h>
 #include <omp.h>
 #include "np_helper.h"
 
 const int TILESIZE = 32;
 
 #define ELEM_AT(A, i, j, lda) (A)[(i) * (lda) + (j)]
+
+/*
+ * Calculate the largest integer i such that
+ *  i * (i - 1) / 2 <= ijouter.
+ */
+static int uncollapse_loop_index(ssize_t ijouter)
+{
+  return (int) floor((sqrt(0.25 + 2.0 * ijouter) + 0.5));
+}
+
 
 static inline void dtranspose_scale_tile_offdiag(double *A, const int ii, const int jj,
                                           int lda, const double alpha) {
@@ -130,11 +141,29 @@ void NPomp_d_itranspose_scale(const int n, const double alpha, double *A, int ld
  *   ----------------------------
  */
 
-#pragma omp for collapse(2) nowait
-    for(int iouter = 1; iouter < ntiles; iouter++) {
-      for(int jouter = 0; jouter < iouter; jouter++) {
-        dtranspose_scale_tile_offdiag(A, iouter * TILESIZE, jouter * TILESIZE, lda, alpha);
+/*
+ *    The following loop nest is equivalent to:
+ *    for(int iouter = 1; iouter < ntiles; iouter++)
+ *      for(int jouter = 0; jouter < iouter; jouter++)
+ *
+ *    See 10.1109/IPDPS.2017.34. 
+ */
+    int first_iteration = 1;
+    int iouter, jouter;
+#pragma omp for nowait
+    for(ssize_t ijouter = 0; ijouter < (ntiles*(ntiles-1))/2; ijouter++) {
+      if(first_iteration) {
+        iouter = uncollapse_loop_index(ijouter);
+        jouter = ijouter - iouter * (iouter - 1) / 2;
+        first_iteration = 0;
+      } else {
+        jouter++;
+        if(jouter == iouter) {
+          iouter++;
+          jouter = 0;
+        }
       }
+      dtranspose_scale_tile_offdiag(A, iouter * TILESIZE, jouter * TILESIZE, lda, alpha);
     }
 
 
@@ -239,11 +268,29 @@ void NPomp_z_itranspose_scale(const int n, const double complex *alphaptr, doubl
 #pragma omp parallel
   {
 
-#pragma omp for collapse(2) nowait
-    for(int iouter = 1; iouter < ntiles; iouter++) {
-      for(int jouter = 0; jouter < iouter; jouter++) {
-        ztranspose_scale_tile_offdiag(A, iouter * TILESIZE, jouter * TILESIZE, lda, alpha);
+/*
+ *    The following loop nest is equivalent to:
+ *    for(int iouter = 1; iouter < ntiles; iouter++)
+ *      for(int jouter = 0; jouter < iouter; jouter++)
+ *
+ *    See 10.1109/IPDPS.2017.34. 
+ */
+    int first_iteration = 1;
+    int iouter, jouter;
+#pragma omp for nowait
+    for(ssize_t ijouter = 0; ijouter < (ntiles*(ntiles-1))/2; ijouter++) {
+      if(first_iteration) {
+        iouter = uncollapse_loop_index(ijouter);
+        jouter = ijouter - iouter * (iouter - 1) / 2;
+        first_iteration = 0;
+      } else {
+        jouter++;
+        if(jouter == iouter) {
+          iouter++;
+          jouter = 0;
+        }
       }
+      ztranspose_scale_tile_offdiag(A, iouter * TILESIZE, jouter * TILESIZE, lda, alpha);
     }
 
     if(alpha != 1.0) {
