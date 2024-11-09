@@ -1058,15 +1058,15 @@ def tostring(cell, format='poscar'):
                               (symb, x, y, z))
             return '\n'.join(output)
     else:
-        raise NotImplementedError
+        raise NotImplementedError(f'format={format}')
 
 def tofile(cell, filename, format=None):
     if format is None:  # Guess format based on filename
         if filename.lower() == 'poscar':
-            string = tostring(cell, 'poscar')
+            format = 'poscar'
         else:
             format = os.path.splitext(filename)[1][1:]
-            string = tostring(cell, format)
+    string = tostring(cell, format)
     with open(filename,  'w', encoding='utf-8') as f:
         f.write(string)
         f.write('\n')
@@ -1251,16 +1251,14 @@ class Cell(mole.MoleBase):
         '''Update the Cell object based on the input geometry string'''
         a, atom = fromstring(string, format)
         self.a = a
-        self.atom = atom
-        self.unit = 'A'
+        self.set_geom_(atom, unit='Angstrom', inplace=True)
         return self
 
     def fromfile(self, filename, format=None):
         '''Update the Cell object based on the input geometry file'''
         a, atom = fromfile(filename, format)
         self.a = a
-        self.atom = atom
-        self.unit = 'A'
+        self.set_geom_(atom, unit='Angstrom', inplace=True)
         return self
 
     @property

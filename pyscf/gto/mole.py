@@ -2101,7 +2101,7 @@ def tostring(mol, format='raw'):
             output.append('%-4s   %s' % (symb, line))
         return '\n'.join(output)
     else:
-        raise NotImplementedError
+        raise NotImplementedError(f'format={format}')
 
 def tofile(mol, filename, format=None):
     '''Write molecular geometry to a file of the required format.
@@ -3069,12 +3069,11 @@ class MoleBase(lib.StreamObject):
             mol._env[ptr+0] = unit * atoms_or_coords[:,0]
             mol._env[ptr+1] = unit * atoms_or_coords[:,1]
             mol._env[ptr+2] = unit * atoms_or_coords[:,2]
+            # reset nuclear energy
+            mol.enuc = None
         else:
             mol.symmetry = symmetry
             mol.build(False, False)
-
-        # reset nuclear energy
-        mol.enuc = None
 
         if mol.verbose >= logger.INFO:
             logger.info(mol, 'New geometry')

@@ -17,6 +17,7 @@
 #
 
 import unittest
+import tempfile
 import ctypes
 import numpy
 import numpy as np
@@ -548,6 +549,22 @@ class KnownValues(unittest.TestCase):
         cell = pgto.M(a=np.eye(3)*4)
         Ls = pbctools.get_lattice_Ls(cell)
         self.assertEqual(abs(Ls-np.zeros([1,3])).max(), 0)
+
+    def test_fromstring(self):
+        ref = cl.atom_coords().copy()
+        cell = pgto.Cell()
+        cell.fromstring(cl.tostring('poscar'), 'vasp')
+        r0 = cell.atom_coords()
+        self.assertAlmostEqual(abs(ref - r0).max(), 0, 12)
+
+    def test_fromfile(self):
+        ref = cl.atom_coords().copy()
+        with tempfile.NamedTemporaryFile() as f:
+            cl.tofile(f.name, 'xyz')
+            cell = pgto.Cell()
+            cell.fromfile(f.name, 'xyz')
+            r1 = cell.atom_coords()
+            self.assertAlmostEqual(abs(ref - r1).max(), 0, 12)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")
