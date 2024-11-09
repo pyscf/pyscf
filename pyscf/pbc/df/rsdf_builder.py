@@ -959,7 +959,7 @@ class _RSGDFBuilder(Int3cBuilder):
             # nkptj for 3c-coulomb arrays plus 1 Lpq array
             buflen = min(max(int(max_memory*.3e6/16/naux/(nkptj+1)), 1), nao_pair)
             sh_ranges = _guess_shell_ranges(cell, buflen, aosym, start=ish0, stop=ish1)
-            buflen = max([x[2] for x in sh_ranges])
+            buflen = int(max([x[2] for x in sh_ranges]))
             # * 2 for the buffer used in preload
             max_memory -= buflen * naux * (nkptj+1) * 16e-6 * 2
 
