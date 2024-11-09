@@ -630,7 +630,7 @@ def shellBatchGenerator(mol, nao_max):
         if shell_stop == shell_start:
             raise BatchSizeError('empty batch')
         shell_range = (shell_start, shell_stop)
-        ao_range = (ao_loc[shell_start], ao_loc[shell_stop])
+        ao_range = (int(ao_loc[shell_start]), int(ao_loc[shell_stop]))
         yield shell_range, ao_range
         shell_start = shell_stop
 

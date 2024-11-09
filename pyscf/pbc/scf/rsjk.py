@@ -365,7 +365,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
 
         cache_size = _get_cache_size(cell, 'int2e_sph')
         cell0_dims = cell0_ao_loc[1:] - cell0_ao_loc[:-1]
-        cache_size += cell0_dims.max()**4 * comp * 2
+        cache_size += int(cell0_dims.max())**4 * comp * 2
 
         if hermi:
             fdot_suffix = 's2kl'

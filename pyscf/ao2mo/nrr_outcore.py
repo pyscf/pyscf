@@ -380,9 +380,9 @@ def _count_naopair(mol, nao):
     ao_loc = mol.ao_loc_2c()
     nao_pair = 0
     for i in range(mol.nbas):
-        di = ao_loc[i+1] - ao_loc[i]
+        di = int(ao_loc[i+1] - ao_loc[i])
         for j in range(i+1):
-            dj = ao_loc[j+1] - ao_loc[j]
+            dj = int(ao_loc[j+1] - ao_loc[j])
             nao_pair += di * dj
     return nao_pair
 
