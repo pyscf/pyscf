@@ -3,6 +3,8 @@
 #else
 #define omp_get_thread_num() 0
 #define omp_get_num_threads() 1
+#define omp_get_max_active_levels() 1
+#define omp_set_max_active_levels(n) 0
 #endif
 
 #define XCFUN_MAX_DERIV_ORDER @XCFUN_MAX_ORDER@

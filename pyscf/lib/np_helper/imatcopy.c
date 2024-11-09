@@ -18,7 +18,7 @@
 
 #include <complex.h>
 #include <math.h>
-#include <omp.h>
+#include "config.h"
 #include "np_helper.h"
 
 const int TILESIZE = 32;
