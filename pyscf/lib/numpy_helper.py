@@ -592,7 +592,7 @@ def transpose(a, axes=None, inplace=False, out=None):
             assert min(astrides) == 1
             if a.dtype == numpy.double:
                 _np_helper.NPomp_dtensor_itranspose_scale021(
-                    ctypes.c_ssize_t(a.strides[0]//a.itemsize),
+                    ctypes.c_longlong(a.strides[0]//a.itemsize),
                     ctypes.c_int(a.shape[0]),
                     ctypes.c_int(a.shape[1]),
                     ctypes.c_double(1.0),
@@ -602,7 +602,7 @@ def transpose(a, axes=None, inplace=False, out=None):
             elif a.dtype == numpy.complex128:
                 one_cplx = numpy.array([1.0], dtype=numpy.complex128)
                 _np_helper.NPomp_ztensor_itranspose_scale021(
-                    ctypes.c_ssize_t(a.strides[0]//a.itemsize),
+                    ctypes.c_longlong(a.strides[0]//a.itemsize),
                     ctypes.c_int(a.shape[0]),
                     ctypes.c_int(a.shape[1]),
                     one_cplx.ctypes.data_as(ctypes.c_void_p),

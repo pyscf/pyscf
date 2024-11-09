@@ -29,7 +29,7 @@ const int TILESIZE = 32;
  * Calculate the largest integer i such that
  *  i * (i - 1) / 2 <= ijouter.
  */
-static int uncollapse_loop_index(ssize_t ijouter)
+static int uncollapse_loop_index(long long ijouter)
 {
   return (int) floor((sqrt(0.25 + 2.0 * ijouter) + 0.5));
 }
@@ -151,7 +151,7 @@ void NPomp_d_itranspose_scale(const int n, const double alpha, double *A, int ld
     int first_iteration = 1;
     int iouter, jouter;
 #pragma omp for nowait
-    for(ssize_t ijouter = 0; ijouter < (ntiles*(ntiles-1))/2; ijouter++) {
+    for(long long ijouter = 0; ijouter < (ntiles*(ntiles-1))/2; ijouter++) {
       if(first_iteration) {
         iouter = uncollapse_loop_index(ijouter);
         jouter = ijouter - iouter * (iouter - 1) / 2;
@@ -278,7 +278,7 @@ void NPomp_z_itranspose_scale(const int n, const double complex *alphaptr, doubl
     int first_iteration = 1;
     int iouter, jouter;
 #pragma omp for nowait
-    for(ssize_t ijouter = 0; ijouter < (ntiles*(ntiles-1))/2; ijouter++) {
+    for(long long ijouter = 0; ijouter < (ntiles*(ntiles-1))/2; ijouter++) {
       if(first_iteration) {
         iouter = uncollapse_loop_index(ijouter);
         jouter = ijouter - iouter * (iouter - 1) / 2;
@@ -337,7 +337,7 @@ void NPomp_z_itranspose_scale(const int n, const double complex *alphaptr, doubl
  * Batched versions for 3D tensors
  */
 
-void NPomp_dtensor_itranspose_scale021(const ssize_t matstride, int nmat, int n, const double alpha,
+void NPomp_dtensor_itranspose_scale021(const long long matstride, int nmat, int n, const double alpha,
                                       double *A, int lda)
 {
     if (omp_get_num_threads() >= nmat) {
@@ -358,7 +358,7 @@ void NPomp_dtensor_itranspose_scale021(const ssize_t matstride, int nmat, int n,
   }
 }
 
-void NPomp_ztensor_itranspose_scale021(const ssize_t matstride, int nmat, int n, const double complex *alpha,
+void NPomp_ztensor_itranspose_scale021(const long long matstride, int nmat, int n, const double complex *alpha,
                                       double complex *A, int lda)
 {
     if (omp_get_num_threads() >= nmat) {
