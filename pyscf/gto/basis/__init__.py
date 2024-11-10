@@ -158,6 +158,8 @@ ALIAS = {
     'def2tzvppd' : 'def2-tzvppd.dat',
     'def2tzvpp'  : 'def2-tzvpp.dat' ,
     'def2tzvp'   : 'def2-tzvp.dat'  ,
+    'def2mtzvpp' : 'def2-mtzvpp.dat',
+    'def2mtzvp'  : 'def2-mtzvp.dat' ,
     'def2qzvpd'  : 'def2-qzvpd.dat' ,
     'def2qzvppd' : 'def2-qzvppd.dat',
     'def2qzvpp'  : 'def2-qzvpp.dat' ,
