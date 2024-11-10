@@ -22,7 +22,7 @@ typedef struct {
         double fac;
 } CacheJob;
 
-const double ** _gen_ptr_arr(const double *, const size_t, const size_t);
+const double **_gen_ptr_arr(const double *, const size_t, const size_t);
 size_t _MP2_gen_jobs(CacheJob *, const int, const size_t, const size_t, const size_t, const size_t);
 void MP2_contract_d(double *, double *, const int,
                     const double *, const double *,

@@ -48,6 +48,9 @@ void dsymm_(const char*, const char*, const int*, const int*,
             const double*, const double*, const int*,
             const double*, const int*,
             const double*, double*, const int*);
+void dtrsm_(const char *side, const char *uplo, const char *transa, 
+            const char *diag, const int *m, const int *n, const double *alpha,
+            double *a, const int *lda, double *b, const int *ldb);
 
 void dsyr_(const char *uplo, const int *n, const double *alpha,
            const double *x, const int *incx, double *a, const int *lda);

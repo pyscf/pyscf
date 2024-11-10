@@ -18,6 +18,7 @@
 
 #include <stdlib.h>
 #include <complex.h>
+#include <math.h>
 #include "config.h"
 #include "np_helper/np_helper.h"
 #include "vhf/fblas.h"
@@ -26,7 +27,7 @@
 
 /*  Get an array of pointers for each row of a 2D array of size n-by-m
 */
-const double ** _gen_ptr_arr(const double *p0, const size_t n, const size_t m)
+const double **_gen_ptr_arr(const double *p0, const size_t n, const size_t m)
 {
     size_t i;
     const double *p;
@@ -107,7 +108,7 @@ void MP2_contract_d(double *ed_out, double *ex_out, const int s2symm,
 
     const double **parr_iaL = _gen_ptr_arr(batch_iaL, nocci, nvx);
     const double **parr_jbL = _gen_ptr_arr(batch_jbL, noccj, nvx);
-    double **parr_t2 = NULL;
+    const double **parr_t2 = NULL;
     if (t2_out) {
         parr_t2 = _gen_ptr_arr(t2_out, nocc*nocc, nvv);
     }
@@ -214,7 +215,7 @@ void MP2_OS_contract_d(double *ed_out,
 
     const double **parr_iaL = _gen_ptr_arr(batch_iaL, nocci, nvax);
     const double **parr_jbL = _gen_ptr_arr(batch_jbL, noccj, nvbx);
-    double **parr_t2 = NULL;
+    const double **parr_t2 = NULL;
     if (t2_out) {
         parr_t2 = _gen_ptr_arr(t2_out, nocca*noccb, nvv);
     }
