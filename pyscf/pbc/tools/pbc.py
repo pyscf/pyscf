@@ -309,6 +309,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             kG[on_edge[:,2]==-1] += 2 * box_edge[2]
 
     absG2 = np.einsum('gi,gi->g', kG, kG)
+    G0_idx = []
 
     if getattr(mf, 'kpts', None) is not None:
         kpts = mf.kpts
@@ -396,17 +397,6 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             if len(G0_idx) > 0:
                 coulG[G0_idx] = -np.pi*Rc**2 * (2*np.log(Rc) - 1)
 
-        # For full-range Coulomb and long-range Coulomb,
-        # the divergent part of periodic summation of (ii|ii) integrals in
-        # Coulomb integrals were cancelled out by electron-nucleus
-        # interaction. The periodic part of (ii|ii) in exchange cannot be
-        # cancelled out by Coulomb integrals. Its leading term is calculated
-        # using Ewald probe charge (the function madelung below)
-        if omega is None:
-            omega = cell.omega
-        if omega >= 0 and cell.dimension > 0 and exxdiv == 'ewald' and len(G0_idx) > 0:
-            coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts)
-
     if equal2boundary is not None:
         coulG[equal2boundary] = 0
 
@@ -416,13 +406,27 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     # * cell.omega, which affects the ewald probe charge, is often set by
     # DFT-RSH functionals to build long-range HF-exchange for erf(omega*r12)/r12
     if omega is None:
-        omega = cell.omega
-    if omega > 0:
+        _omega = cell.omega
+    else:
+        _omega = omega
+    if _omega > 0:
         # long range part
-        coulG *= np.exp(-.25/omega**2 * absG2)
-    elif omega < 0:
+        coulG *= np.exp(-.25/_omega**2 * absG2)
+    elif _omega < 0:
         # short range part
-        coulG *= (1 - np.exp(-.25/omega**2 * absG2))
+        coulG *= (1 - np.exp(-.25/_omega**2 * absG2))
+
+    # For full-range Coulomb and long-range Coulomb,
+    # the divergent part of periodic summation of (ii|ii) integrals in
+    # Coulomb integrals were cancelled out by electron-nucleus
+    # interaction. The periodic part of (ii|ii) in exchange cannot be
+    # cancelled out by Coulomb integrals. Its leading term is calculated
+    # using Ewald probe charge (the function madelung below)
+    if cell.dimension > 2 and exxdiv == 'ewald' and len(G0_idx) > 0:
+        if omega is None: # Affects DFT-RSH
+            coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts)
+        else: # for RangeSeparatedJKBuilder
+            coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts, omega=0)
     return coulG
 
 def precompute_exx(cell, kpts):
@@ -486,7 +490,7 @@ def precompute_exx(cell, kpts):
     return ws_exx
 
 
-def madelung(cell, kpts):
+def madelung(cell, kpts, omega=None):
     Nk = get_monkhorst_pack_size(cell, kpts)
     ecell = cell.copy(deep=False)
     ecell._atm = np.array([[1, cell._env.size, 0, 0, 0, 0]])
@@ -495,7 +499,10 @@ def madelung(cell, kpts):
     #ecell.verbose = 0
     ecell.a = a = np.einsum('xi,x->xi', cell.lattice_vectors(), Nk)
 
-    if cell.omega == 0:
+    if omega is None:
+        omega = cell.omega
+
+    if omega == 0:
         return -2*ecell.ewald()
 
     else:
@@ -505,13 +512,12 @@ def madelung(cell, kpts):
         # because the Coulomb kernel 4pi/G^2*exp(-G^2/4/omega**2) decays
         # quickly.
         precision = cell.precision
-        omega = cell.omega
         Ecut = 10.
         Ecut = np.log(16*np.pi**2/(2*omega**2*(2*Ecut)**.5) / precision + 1.) * 2*omega**2
         Ecut = np.log(16*np.pi**2/(2*omega**2*(2*Ecut)**.5) / precision + 1.) * 2*omega**2
         mesh = cutoff_to_mesh(a, Ecut)
         Gv, Gvbase, weights = ecell.get_Gv_weights(mesh)
-        wcoulG = get_coulG(ecell, Gv=Gv, omega=abs(omega)) * weights
+        wcoulG = get_coulG(ecell, Gv=Gv, omega=abs(omega), exxdiv=None) * weights
         SI = ecell.get_SI(mesh=mesh)
         ZSI = SI[0]
         e_lr = (2*abs(omega)/np.pi**0.5 -

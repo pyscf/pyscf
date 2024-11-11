@@ -1444,6 +1444,11 @@ def _format_jks(v_kpts, dm_kpts, kpts_band, kpts):
             return v_kpts
 
 def _ewald_exxdiv_for_G0(cell, kpts, dms, vk, kpts_band=None):
+    # Excludes the low-dimesional systems
+    if (cell.dimension < 2 or  # 0D and 1D are computed with inf_vacuum
+        (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
+        return
+
     s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
     madelung = tools.pbc.madelung(cell, kpts)
     if kpts is None:

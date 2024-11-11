@@ -99,20 +99,20 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
             if ks.with_df._cderi is not None:
                 ks.with_df.build()
         if omega == 0:
-            vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
+            vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
             vk *= hyb
         elif alpha == 0: # LR=0, only SR exchange
-            vj = ks.get_j(cell, dm, hermi, kpt, kpts_band)
-            vk = ks.get_k(cell, dm, hermi, kpt, kpts_band, omega=-omega)
+            vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
+            vk = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=-omega)
             vk *= hyb
         elif hyb == 0: # SR=0, only LR exchange
-            vj = ks.get_j(cell, dm, hermi, kpt, kpts_band)
-            vk = ks.get_k(cell, dm, hermi, kpt, kpts_band, omega=omega)
+            vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
+            vk = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
             vk *= alpha
         else: # SR and LR exchange with different ratios
-            vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
+            vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
             vk *= hyb
-            vklr = ks.get_k(cell, dm, hermi, kpt, kpts_band, omega=omega)
+            vklr = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
             vklr *= (alpha - hyb)
             vk += vklr
         vj = vj[0] + vj[1]

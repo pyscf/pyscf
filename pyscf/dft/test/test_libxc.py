@@ -231,6 +231,25 @@ class KnownValues(unittest.TestCase):
     #    rho_b = numpy.array([[4.53272893e-06, 4.18968775e-06,-2.83034672e-06, 2.61832978e-06, 5.63360737e-06, 8.97541777e-07]]).T
     #    e, v = dft.libxc.eval_xc('tpss,', (rho_a, rho_b), spin=1, deriv=1)[:2]
 
+    @unittest.skip('Libxc has bugs in fxc on hse03 and hse06')
+    def test_hse06(self):
+        ni = dft.numint.NumInt()
+        rho = numpy.array([.235, 1.5e-9, 2e-9, 1e-9])[:,None]
+        xc = 'hse06'
+        fxc1 = ni.eval_xc_eff(xc, rho, deriv=2, xctype='GGA')[2]
+        rho = numpy.array([rho*.5]*2)
+        fxc2 = ni.eval_xc_eff(xc, rho, deriv=2, xctype='GGA')[2]
+        fxc2 = (fxc2[0,:,0] + fxc2[0,:,1])/2
+        self.assertAlmostEqual(abs(fxc2 - fxc1).max(), 0, 12)
+
+        rho = numpy.array([.235, 0, 0, 0])[:,None]
+        xc = 'hse06'
+        fxc1 = ni.eval_xc_eff(xc, rho, deriv=2, xctype='GGA')[2]
+        rho = numpy.array([rho*.5]*2)
+        fxc2 = ni.eval_xc_eff(xc, rho, deriv=2, xctype='GGA')[2]
+        fxc2 = (fxc2[0,:,0] + fxc2[0,:,1])/2
+        self.assertAlmostEqual(abs(fxc2 - fxc1).max(), 0, 12)
+
     def test_define_xc(self):
         def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=None):
             # A fictitious XC functional to demonstrate the usage

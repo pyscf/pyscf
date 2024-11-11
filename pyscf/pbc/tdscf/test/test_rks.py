@@ -33,7 +33,7 @@ def diagonalize(a, b, nroots=4):
     lowest_e = lowest_e[lowest_e > 1e-3][:nroots]
     return lowest_e
 
-class DiamondPBE(unittest.TestCase):
+class Diamond(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cell = gto.Cell()
@@ -91,6 +91,17 @@ class DiamondPBE(unittest.TestCase):
     def test_tddft_triplet(self):
         ref = [ 9.09496456, 11.53650896]
         self.kernel('TDDFT', ref, singlet=False)
+
+    def test_rsh_tda(self):
+        cls.cell = cell
+        for xc in ('camb3lyp', 'wb97', 'hse03'):
+            print(xc)
+            mf = cell.RKS(xc=xc).run()
+            td = mf.TDA().run(nstates=5)
+            a, b = td.get_ab()
+            no, nv = a.shape[:2]
+            eref = np.linalg.eigvalsh(a.reshape(no*nv,-1))
+            self.assertAlmostEqual(abs(td.e[:2] - eref[:2]).max(), 0, 9)
 
 
 class DiamondPBEShifted(unittest.TestCase):

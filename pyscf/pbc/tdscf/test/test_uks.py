@@ -101,6 +101,22 @@ class DiamondM06(unittest.TestCase):
         eref = diagonalize(a, b)
         self.assertAlmostEqual(abs(td.e[:4] - eref[:4]).max(), 0, 8)
 
+    def test_rsh_tda(self):
+        for xc in ('camb3lyp', 'wb97', 'hse03'):
+            print(xc)
+            mf = cell.UKS(xc=xc).run()
+            td = mf.TDA().run(nstates=3)
+            a, b = td.get_ab()
+            a_aa, a_ab, a_bb = a
+            nocc_a, nvir_a, nocc_b, nvir_b = a_ab.shape
+            a_aa = a_aa.reshape((nocc_a*nvir_a,nocc_a*nvir_a))
+            a_ab = a_ab.reshape((nocc_a*nvir_a,nocc_b*nvir_b))
+            a_bb = a_bb.reshape((nocc_b*nvir_b,nocc_b*nvir_b))
+            a = np.block([[ a_aa  , a_ab],
+                          [ a_ab.T, a_bb]])
+            eref = np.linalg.eigvalsh(a)
+            self.assertAlmostEqual(abs(td.e[:3] - eref[:3]).max(), 0, 8)
+
 
 class WaterBigBoxPBE(unittest.TestCase):
     ''' Match molecular CIS

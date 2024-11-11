@@ -85,12 +85,12 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                         vj, vk = mf.get_jk(mol, dm1, hermi)
                         vk *= hyb
                     elif alpha == 0: # LR=0, only SR exchange
-                        vj = ks.get_j(mol, dm1, hermi)
-                        vk = ks.get_k(mol, dm1, hermi, omega=-omega)
+                        vj = mf.get_j(mol, dm1, hermi)
+                        vk = mf.get_k(mol, dm1, hermi, omega=-omega)
                         vk *= hyb
                     elif hyb == 0: # SR=0, only LR exchange
-                        vj = ks.get_j(mol, dm1, hermi)
-                        vk = ks.get_k(mol, dm1, hermi, omega=omega)
+                        vj = mf.get_j(mol, dm1, hermi)
+                        vk = mf.get_k(mol, dm1, hermi, omega=omega)
                         vk *= alpha
                     else: # SR and LR exchange with different ratios
                         vj, vk = mf.get_jk(mol, dm1, hermi)
@@ -118,12 +118,12 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                         vj, vk = mf.get_jk(mol, dm1, hermi)
                         vk *= hyb
                     elif alpha == 0: # LR=0, only SR exchange
-                        vj = ks.get_j(mol, dm1, hermi)
-                        vk = ks.get_k(mol, dm1, hermi, omega=-omega)
+                        vj = mf.get_j(mol, dm1, hermi)
+                        vk = mf.get_k(mol, dm1, hermi, omega=-omega)
                         vk *= hyb
                     elif hyb == 0: # SR=0, only LR exchange
-                        vj = ks.get_j(mol, dm1, hermi)
-                        vk = ks.get_k(mol, dm1, hermi, omega=omega)
+                        vj = mf.get_j(mol, dm1, hermi)
+                        vk = mf.get_k(mol, dm1, hermi, omega=omega)
                         vk *= alpha
                     else: # SR and LR exchange with different ratios
                         vj, vk = mf.get_jk(mol, dm1, hermi)
@@ -149,11 +149,11 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     if omega == 0:
                         vk = mf.get_k(mol, dm1, hermi) * hyb
                     elif alpha == 0: # LR=0, only SR exchange
-                        vk = ks.get_k(mol, dm1, hermi, omega=-omega) * hyb
+                        vk = mf.get_k(mol, dm1, hermi, omega=-omega) * hyb
                     elif hyb == 0: # SR=0, only LR exchange
-                        vk = ks.get_k(mol, dm1, hermi, omega=omega) * alpha
+                        vk = mf.get_k(mol, dm1, hermi, omega=omega) * alpha
                     else: # SR and LR exchange with different ratios
-                        vk = mf.get_k(mol, dm1, hermi) * alpha
+                        vk = mf.get_k(mol, dm1, hermi) * hyb
                         vk += mf.get_k(mol, dm1, hermi, omega=omega) * (alpha-hyb)
                     v1 += -.5 * vk
                 return v1
@@ -220,13 +220,13 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
                     vk *= hyb
                 elif alpha == 0: # LR=0, only SR exchange
                     if with_j:
-                        vj = ks.get_j(mol, dm1, hermi)
-                    vk = ks.get_k(mol, dm1, hermi, omega=-omega)
+                        vj = mf.get_j(mol, dm1, hermi)
+                    vk = mf.get_k(mol, dm1, hermi, omega=-omega)
                     vk *= hyb
                 elif hyb == 0: # SR=0, only LR exchange
                     if with_j:
-                        vj = ks.get_j(mol, dm1, hermi)
-                    vk = ks.get_k(mol, dm1, hermi, omega=omega)
+                        vj = mf.get_j(mol, dm1, hermi)
+                    vk = mf.get_k(mol, dm1, hermi, omega=omega)
                     vk *= alpha
                 else: # SR and LR exchange with different ratios
                     vj, vk = mf.get_jk(mol, dm1, hermi, with_j=with_j)
@@ -297,13 +297,13 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
                     vk *= hyb
                 elif alpha == 0: # LR=0, only SR exchange
                     if with_j:
-                        vj = ks.get_j(mol, dm1, hermi)
-                    vk = ks.get_k(mol, dm1, hermi, omega=-omega)
+                        vj = mf.get_j(mol, dm1, hermi)
+                    vk = mf.get_k(mol, dm1, hermi, omega=-omega)
                     vk *= hyb
                 elif hyb == 0: # SR=0, only LR exchange
                     if with_j:
-                        vj = ks.get_j(mol, dm1, hermi)
-                    vk = ks.get_k(mol, dm1, hermi, omega=omega)
+                        vj = mf.get_j(mol, dm1, hermi)
+                    vk = mf.get_k(mol, dm1, hermi, omega=omega)
                     vk *= alpha
                 else: # SR and LR exchange with different ratios
                     vj, vk = mf.get_jk(mol, dm1, hermi, with_j=with_j)
