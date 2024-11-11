@@ -94,11 +94,17 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mol.RKS(xc='wb97').kernel(), -2.89430888240579, 9)
         self.assertAlmostEqual(mol.GKS(xc='wb97').kernel(), -2.89430888240579, 9)
         self.assertAlmostEqual(mol.UKS(xc='wb97').kernel(), -2.89430888240579, 9)
+        # The old way to compute RSH, short-range = full-range - long-range
+        xc = 'wb97 + 1e-9*HF'
+        self.assertAlmostEqual(mol.RKS(xc=xc).kernel(), -2.89430888240579, 8)
 
     def test_hse(self):
         self.assertAlmostEqual(mol.RKS(xc='hse06').kernel(), -2.88908568982727, 9)
         self.assertAlmostEqual(mol.GKS(xc='hse06').kernel(), -2.88908568982727, 9)
         self.assertAlmostEqual(mol.UKS(xc='hse06').kernel(), -2.88908568982727, 9)
+        # The old way to compute RSH, short-range = full-range - long-range
+        xc = 'hse06 + 1e-9*HF'
+        self.assertAlmostEqual(mol.RKS(xc=xc).kernel(), -2.88908568982727, 8)
 
     def test_nr_lda_1e(self):
         mf = dft.RKS(mol1).run()
