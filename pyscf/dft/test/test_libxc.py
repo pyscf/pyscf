@@ -73,18 +73,22 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(hyb, .15, 12)
 
         hyb, fn_facs = dft.libxc.parse_xc('0.6*CAM_B3LYP+0.4*B3P86V5')
-        self.assertTrue(numpy.allclose(hyb, (.08, 0, 0)))
+        self.assertTrue(numpy.allclose(hyb, (.08, .08, 0)))
         self.assertTrue(numpy.allclose(fn_facs,
                                        ((433, 0.6), (1, 0.032), (106, 0.288), (132, 0.324), (7, 0.076))))
         rsh = dft.libxc.rsh_coeff('0.6*CAM_B3LYP+0.4*B3P86V5')
-        self.assertTrue(numpy.allclose(rsh, (0.33, 0.39, -0.196)))
+        rsh1 = dft.libxc.rsh_coeff('CAM_B3LYP')
+        hyb = dft.libxc.hybrid_coeff('B3P86V5')
+        self.assertTrue(numpy.allclose(rsh, (0.33, 0.6*rsh1[1]+.4*hyb, 0.6*rsh1[2])))
 
         hyb, fn_facs = dft.libxc.parse_xc('0.4*B3P86V5+0.6*CAM_B3LYP')
-        self.assertTrue(numpy.allclose(hyb, (.08, 0, 0)))
+        self.assertTrue(numpy.allclose(hyb, (.08, .08, 0)))
         self.assertTrue(numpy.allclose(fn_facs,
                                        ((1, 0.032), (106, 0.288), (132, 0.324), (7, 0.076), (433, 0.6))))
         rsh = dft.libxc.rsh_coeff('0.4*B3P86V5+0.6*CAM_B3LYP')
-        self.assertTrue(numpy.allclose(rsh, (0.33, 0.39, -0.196)))
+        rsh1 = dft.libxc.rsh_coeff('CAM_B3LYP')
+        hyb = dft.libxc.hybrid_coeff('B3P86V5')
+        self.assertTrue(numpy.allclose(rsh, (0.33, 0.6*rsh1[1]+.4*hyb, 0.6*rsh1[2])))
 
         hyb, fn_facs = dft.libxc.parse_xc('0.5*SR-HF(0.3) + .8*HF + .22*LR_HF')
         self.assertEqual(hyb, (1.3, 1.02, 0.3))
@@ -103,8 +107,17 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(hyb, (1.3, 1.02, 0.3))
         self.assertEqual(fn_facs, ((106, 0.5), (132, 0.5)))
 
+        rsh = dft.libxc.rsh_coeff('0.5*HSE06+.001*HF')
+        self.assertTrue(numpy.allclose(rsh, (0.11, .001, 0.125)))
+
+        rsh = dft.libxc.rsh_coeff('0.5*wb97+0.001*HF')
+        self.assertTrue(numpy.allclose(rsh, (0.4, 0.501, -.5)))
+
         self.assertRaises(ValueError, dft.libxc.parse_xc, 'SR_HF(0.3) + LR_HF(.5)')
         self.assertRaises(ValueError, dft.libxc.parse_xc, 'LR-HF(0.3) + SR-HF(.5)')
+
+        hyb = dft.libxc.hybrid_coeff('0.5*B3LYP+0.2*HF')
+        self.assertAlmostEqual(hyb, .3, 12)
 
         hyb = dft.libxc.hybrid_coeff('M05')
         self.assertAlmostEqual(hyb, 0.28, 9)
@@ -119,7 +132,7 @@ class KnownValues(unittest.TestCase):
         #self.assertEqual(fn_facs, [(50, 1)])
 
         hyb, fn_facs = dft.libxc.parse_xc("9.999e-5*HF,")
-        self.assertEqual(hyb, (9.999e-5, 0, 0))
+        self.assertEqual(hyb, (9.999e-5, 9.999e-5, 0))
 
         ref = ((1, 1), (7, 1))
         self.assertEqual(dft.libxc.parse_xc_name('LDA,VWN'), (1,7))

@@ -2725,7 +2725,7 @@ class LibXCMixin:
         if self.omega is not None:
             omega = self.omega
 
-        if abs(omega) > 1e-10:
+        if omega != 0:
             hyb = alpha + beta
         else:
             hyb = self.hybrid_coeff(xc_code, spin)
