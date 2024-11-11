@@ -1274,8 +1274,8 @@ def entrywise_mul(a, b):
     ndarray
         a * b (stored in b)
     """
-    assert a.ndim == 2; assert b.ndim == 2
-    assert a.shape == b.shape; assert a.dtype == b.dtype
+    assert a.ndim == 2 and b.ndim == 2
+    assert a.shape == b.shape and a.dtype == b.dtype
     lda, _, a_cshape = leading_dimension_order(a)
     ldb, _, b_cshape = leading_dimension_order(b)
     assert a_cshape == b_cshape and a_cshape is not None
