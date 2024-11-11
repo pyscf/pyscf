@@ -674,7 +674,11 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         vjR = numpy.zeros((nset,nao,nao))
         vjI = numpy.zeros((nset,nao,nao))
     if with_k:
-        vkcoulG = mydf.weighted_coulG(kpt_allow, exxdiv, mesh)
+        # The ewald probe charge correction is added at the end of the function.
+        if exxdiv == 'ewald' or exxdiv is None:
+            vkcoulG = mydf.weighted_coulG(kpt_allow, None, mesh)
+        else:
+            vkcoulG = mydf.weighted_coulG(kpt_allow, exxdiv, mesh)
         vkR = numpy.zeros((nset,nao,nao))
         vkI = numpy.zeros((nset,nao,nao))
     dmsR = numpy.asarray(dms.real.reshape(nset,nao,nao), order='C')
@@ -751,9 +755,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
             vk = vkR + vkI * 1j
         # Add ewald_exxdiv contribution because G=0 was not included in the
         # non-uniform grids
-        if (exxdiv == 'ewald' and
-            (cell.dimension < 2 or  # 0D and 1D are computed with inf_vacuum
-             (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum'))):
+        if exxdiv == 'ewald':
             _ewald_exxdiv_for_G0(cell, kpt, dms, vk)
         vk = vk.reshape(dm.shape)
     return vj, vk

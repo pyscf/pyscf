@@ -142,6 +142,10 @@ class KnownValues(unittest.TestCase):
         kmf.kernel()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 9)
 
+        kmf.xc = 'wb97'
+        kmf.kernel()
+        self.assertAlmostEqual(kmf.e_tot, -2.504752684826571, 7)
+
     def test_lda_df(self):
         kpts0 = He.make_kpts(nk, with_gamma_point=False)
         kmf0 = krks.KRKS(He, kpts=kpts0).density_fit()
@@ -191,6 +195,10 @@ class KnownValues(unittest.TestCase):
         kmf.xc = 'camb3lyp'
         kmf.kernel()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 8)
+
+        kmf.xc = 'hse06'
+        kmf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -2.4824271111708662, 7)
 
     def test_rsh_mdf(self):
         kpts0 = He.make_kpts(nk, with_gamma_point=False)

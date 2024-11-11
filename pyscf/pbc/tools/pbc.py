@@ -396,34 +396,33 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             if len(G0_idx) > 0:
                 coulG[G0_idx] = -np.pi*Rc**2 * (2*np.log(Rc) - 1)
 
-        # The divergent part of periodic summation of (ii|ii) integrals in
+        # For full-range Coulomb and long-range Coulomb,
+        # the divergent part of periodic summation of (ii|ii) integrals in
         # Coulomb integrals were cancelled out by electron-nucleus
         # interaction. The periodic part of (ii|ii) in exchange cannot be
         # cancelled out by Coulomb integrals. Its leading term is calculated
         # using Ewald probe charge (the function madelung below)
-        if cell.dimension > 0 and exxdiv == 'ewald' and len(G0_idx) > 0:
+        if omega is None:
+            omega = cell.omega
+        if omega >= 0 and cell.dimension > 0 and exxdiv == 'ewald' and len(G0_idx) > 0:
             coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts)
 
     if equal2boundary is not None:
         coulG[equal2boundary] = 0
 
     # Scale the coulG kernel for attenuated Coulomb integrals.
-    # * omega is used by RangeSeparatedJKBuilder which requires ewald probe charge
+    # * kwarg omega is used by RangeSeparatedJKBuilder which requires ewald probe charge
     # being evaluated with regular Coulomb interaction (1/r12).
     # * cell.omega, which affects the ewald probe charge, is often set by
     # DFT-RSH functionals to build long-range HF-exchange for erf(omega*r12)/r12
-    if omega is not None:
-        if omega > 0:
-            # long range part
-            coulG *= np.exp(-.25/omega**2 * absG2)
-        elif omega < 0:
-            # short range part
-            coulG *= (1 - np.exp(-.25/omega**2 * absG2))
-    elif cell.omega > 0:
-        coulG *= np.exp(-.25/cell.omega**2 * absG2)
-    elif cell.omega < 0:
-        raise NotImplementedError
-
+    if omega is None:
+        omega = cell.omega
+    if omega > 0:
+        # long range part
+        coulG *= np.exp(-.25/omega**2 * absG2)
+    elif omega < 0:
+        # short range part
+        coulG *= (1 - np.exp(-.25/omega**2 * absG2))
     return coulG
 
 def precompute_exx(cell, kpts):
@@ -512,10 +511,16 @@ def madelung(cell, kpts):
         Ecut = np.log(16*np.pi**2/(2*omega**2*(2*Ecut)**.5) / precision + 1.) * 2*omega**2
         mesh = cutoff_to_mesh(a, Ecut)
         Gv, Gvbase, weights = ecell.get_Gv_weights(mesh)
-        wcoulG = get_coulG(ecell, Gv=Gv) * weights
+        wcoulG = get_coulG(ecell, Gv=Gv, omega=abs(omega)) * weights
         SI = ecell.get_SI(mesh=mesh)
         ZSI = SI[0]
-        return 2*omega/np.pi**0.5-np.einsum('i,i,i->', ZSI.conj(), ZSI, wcoulG).real
+        e_lr = (2*abs(omega)/np.pi**0.5 -
+                np.einsum('i,i,i->', ZSI.conj(), ZSI, wcoulG).real)
+        if omega > 0:
+            return e_lr
+        else:
+            e_fr = -2*ecell.ewald() # The full-range Coulomb
+            return e_fr - e_lr
 
 
 def get_monkhorst_pack_size(cell, kpts, tol=1e-5):
