@@ -144,9 +144,9 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, with_lapl=True,
             if hermi == 1:
                 rho[1:4] *= 2
             else:
+                c1 = _dot_ao_dm(cell, ao[0], dm.conj().T, non0tab, shls_slice, ao_loc)
                 for i in range(1, 4):
-                    c1 = _dot_ao_dm(cell, ao[i], dm, non0tab, shls_slice, ao_loc)
-                    rho[i] += dot_bra(ao[0], c1)
+                    rho[i] += dot_bra(c1, ao[i])
 
         else:
             if with_lapl:
