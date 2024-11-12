@@ -1541,5 +1541,6 @@ def to_gpu(method, out=None):
         elif hasattr(val, 'to_gpu'):
             val = val.to_gpu()
         setattr(out, key, val)
-    out.reset()
+    if hasattr(out, 'reset'):
+        out.reset()
     return out

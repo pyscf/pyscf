@@ -1089,7 +1089,9 @@ class NumInt(lib.StreamObject, numint.LibXCMixin):
         return self.eval_rho(cell, ao, dm, screen_index, xctype, hermi,
                              with_lapl, verbose)
 
-    to_gpu = lib.to_gpu
+    def to_gpu(self):
+        from gpu4pyscf.pbc.dft.numint import NumInt # type: ignore
+        return NumInt()
 
 _NumInt = NumInt
 
@@ -1310,6 +1312,8 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
     cache_xc_kernel1 = cache_xc_kernel1
     get_rho = get_rho
 
-    to_gpu = lib.to_gpu
+    def to_gpu(self):
+        from gpu4pyscf.pbc.dft.numint import KNumInt # type: ignore
+        return KNumInt()
 
 _KNumInt = KNumInt
