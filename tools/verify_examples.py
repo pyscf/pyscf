@@ -1,4 +1,55 @@
 #!/usr/bin/env python
+# Copyright 2014-2024 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""
+Verify Examples
+===============
+
+Author: Matthew R. Hennefarth
+
+Script used to automatically run and verify PySCF example codes terminate
+successfully. For any job that does not terminate normally, the stderr of the
+example will be printed to the output. This script will exit with 0 only if all
+examples terminate normally. 
+
+Initially introduced in [PR 2379](https://github.com/pyscf/pyscf/pull/2379). 
+
+Usage
+-------------
+
+From the main pyscf repository directory, the tests can be run as 
+```sh
+./tools/verify_examples.py examples
+```
+This will run all example files (which can be very long). To run only a subset
+of examples, provide instead a path to a subdirectory. For example, to run only
+the example files in `pyscf/examples/gto` the command
+```sh
+./tools/verify_examples.py examples/gto
+```
+It is also possible to run the examples in parallel using the `-j` or `--jobs`
+flag (this is similar to make). As an example, to run the jobs in parallel over
+4 threads,
+```sh
+./tools/verify_examples.py -j 8
+```
+Note that the environmental variable such as `OMP_NUM_THREADS` should be set to
+an appropriate value such that number of jobs * OMP_NUM_THREADS does not exceed
+the maximum number of cores on the computer.
+
+"""
 
 import os
 import sys
@@ -108,7 +159,7 @@ def run_examples(example_path, num_threads):
     examples = [
         y for x in os.walk(example_path) for y in glob(os.path.join(x[0], "*.py"))
     ]
-    # remove symlinks? 
+    # remove symlinks?
     # examples = list(set([os.path.realpath(e) for e in examples]))
 
     examples = sorted(examples, key=lambda e: e.split("/"))
