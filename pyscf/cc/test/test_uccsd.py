@@ -726,7 +726,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(eri_incore.OVoo - eri_outcore.OVoo).max(), 0, 12)
         self.assertAlmostEqual(abs(eri_incore.OVvo - eri_outcore.OVvo).max(), 0, 12)
         self.assertAlmostEqual(abs(eri_incore.OVvv - eri_outcore.OVvv).max(), 0, 12)
-    
+
     def test_damping(self):
         mol = gto.M(
             atom = 'H 0 0 0; F 0 0 1.1',  # in Angstrom
