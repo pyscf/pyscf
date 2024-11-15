@@ -369,9 +369,10 @@ def eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
             raise RuntimeError('Not enough eigenvalues')
 
         w, e, elast = w[:space_inc], w[:nroots], e
-        v, vlast = v[:,:space_inc], v[:,:nroots]
+        v = v[:,:space_inc]
         if not fresh_start:
             elast, conv_last = _sort_elast(elast, conv, vlast, v[:,:nroots], log)
+        vlast = v[:,:nroots]
 
         if elast is None:
             de = e
