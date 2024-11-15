@@ -76,10 +76,10 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
         normt = numpy.linalg.norm(tmpvec)
         tmpvec = None
         if mycc.iterative_damping < 1.0:
-            alpha = mycc.iterative_damping
-            t1new = (1-alpha) * t1 + alpha * t1new
+            alpha = numpy.asarray(mycc.iterative_damping)
+            t1new = (1-alpha) * numpy.asarray(t1) + alpha * numpy.asarray(t1new)
             t2new *= alpha
-            t2new += (1-alpha) * t2
+            t2new += (1-alpha) * numpy.asarray(t2)
         t1, t2 = t1new, t2new
         t1new = t2new = None
         t1, t2 = mycc.run_diis(t1, t2, istep, normt, eccsd-eold, adiis)
