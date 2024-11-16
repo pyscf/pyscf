@@ -102,6 +102,7 @@ class DiamondM06(unittest.TestCase):
         self.assertAlmostEqual(abs(td.e[:4] - eref[:4]).max(), 0, 8)
 
     def test_rsh_tda(self):
+        cell = self.cell
         for xc in ('camb3lyp', 'wb97', 'hse03'):
             print(xc)
             mf = cell.UKS(xc=xc).run()

@@ -1152,7 +1152,9 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
 
         # Add ewald_exxdiv contribution because G=0 was not included in the
         # non-uniform grids
-        if exxdiv == 'ewald':
+        if (exxdiv == 'ewald' and
+            (cell.dimension < 2 or  # 0D and 1D are computed with inf_vacuum
+             (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum'))):
             _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts)
 
         if time_reversal_symmetry:

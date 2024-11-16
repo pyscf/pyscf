@@ -238,11 +238,12 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
     '''
     raise NotImplementedError
 
-def _get_jk_kshift(mf, dm_kpts, hermi, kpts, kshift, with_j=True, with_k=True):
-    from pyscf.pbc.df.df_jk import get_j_kpts_kshift, get_k_kpts_kshift
+def _get_jk_kshift(mf, dm_kpts, hermi, kpts, kshift, with_j=True, with_k=True,
+                   omega=None):
+    from pyscf.pbc.df.df_jk import get_j_kpts, get_k_kpts_kshift
     vj = vk = None
     if with_j:
-        vj = get_j_kpts_kshift(mf.with_df, dm_kpts, kshift, hermi=hermi, kpts=kpts)
+        vj = get_j_kpts(mf.with_df, dm_kpts, hermi=hermi, kpts=kpts, kshift=kshift)
     if with_k:
         vk = get_k_kpts_kshift(mf.with_df, dm_kpts, kshift, hermi=hermi, kpts=kpts,
                                exxdiv=mf.exxdiv)
@@ -255,12 +256,14 @@ def _get_jk(mf, cell, dm1, hermi, kpts, kshift, with_j=True, with_k=True, omega=
     elif mf.rsjk is not None or not isinstance(mf.with_df, df.df.DF):
         lib.logger.error(mf, 'Non-zero kshift is only supported by GDF/RSDF.')
         raise NotImplementedError
+    elif omega is not None and omega != 0:
+        raise NotImplementedError
     else:
         return _get_jk_kshift(mf, dm1, hermi, kpts, kshift,
                               with_j=with_j, with_k=with_k, omega=omega)
 def _get_j(mf, cell, dm1, hermi, kpts, kshift, omega=None):
     return _get_jk(mf, cell, dm1, hermi, kpts, kshift, True, False, omega)[0]
-def _get_k(mf, cell, dm1, hermi, kpts, kshift):
+def _get_k(mf, cell, dm1, hermi, kpts, kshift, omega=None):
     return _get_jk(mf, cell, dm1, hermi, kpts, kshift, False, True, omega)[1]
 
 

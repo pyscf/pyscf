@@ -413,6 +413,7 @@ def rsh_coeff(xc_code):
     (hyb, alpha, omega), fn_facs = parse_xc(xc_code)
     if omega == 0:
         # SR and LR Coulomb share the same coefficients
+        # Note: this change breaks compatibility with pyscf-2.7
         assert hyb == alpha
         beta = 0.
     else:

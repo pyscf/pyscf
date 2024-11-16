@@ -66,108 +66,15 @@ def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
     return mf
 
 
-def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
-    log = logger.Logger(mydf.stdout, mydf.verbose)
-    t0 = (logger.process_clock(), logger.perf_counter())
-    if mydf._cderi is None or not mydf.has_kpts(kpts_band):
-        if mydf._cderi is not None:
-            log.warn('DF integrals for band k-points were not found %s. '
-                     'DF integrals will be rebuilt to include band k-points.',
-                     mydf._cderi)
-        mydf.build(j_only=True, kpts_band=kpts_band)
-        t0 = log.timer_debug1('Init get_j_kpts', *t0)
-
-    dm_kpts = lib.asarray(dm_kpts, order='C')
-    dms = _format_dms(dm_kpts, kpts)
-    nset, nkpts, nao = dms.shape[:3]
-    if mydf.auxcell is None:
-        # If mydf._cderi is the file that generated from another calculation,
-        # guess naux based on the contents of the integral file.
-        naux = mydf.get_naoaux()
-    else:
-        naux = mydf.auxcell.nao_nr()
-    nao_pair = nao * (nao+1) // 2
-
-    kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
-    nband = len(kpts_band)
-    j_real = gamma_point(kpts_band) and not numpy.iscomplexobj(dms)
-
-    t1 = (logger.process_clock(), logger.perf_counter())
-    dmsR = dms.real.transpose(0,1,3,2).reshape(nset,nkpts,nao**2)
-    dmsI = dms.imag.transpose(0,1,3,2).reshape(nset,nkpts,nao**2)
-    rhoR = numpy.zeros((nset,naux))
-    rhoI = numpy.zeros((nset,naux))
-    max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]))
-    for k, kpt in enumerate(kpts):
-        kptii = numpy.asarray((kpt,kpt))
-        p1 = 0
-        for LpqR, LpqI, sign in mydf.sr_loop(kptii, max_memory, False):
-            p0, p1 = p1, p1+LpqR.shape[0]
-            #:Lpq = (LpqR + LpqI*1j).reshape(-1,nao,nao)
-            #:rhoR[:,p0:p1] += numpy.einsum('Lpq,xqp->xL', Lpq, dms[:,k]).real
-            #:rhoI[:,p0:p1] += numpy.einsum('Lpq,xqp->xL', Lpq, dms[:,k]).imag
-            rhoR[:,p0:p1] += sign * numpy.einsum('Lp,xp->xL', LpqR, dmsR[:,k])
-            rhoI[:,p0:p1] += sign * numpy.einsum('Lp,xp->xL', LpqR, dmsI[:,k])
-            if LpqI is not None:
-                rhoR[:,p0:p1] -= sign * numpy.einsum('Lp,xp->xL', LpqI, dmsI[:,k])
-                rhoI[:,p0:p1] += sign * numpy.einsum('Lp,xp->xL', LpqI, dmsR[:,k])
-            LpqR = LpqI = None
-    t1 = log.timer_debug1('get_j pass 1', *t1)
-
-    weight = 1./nkpts
-    rhoR *= weight
-    rhoI *= weight
-    if hermi == 0:
-        aos2symm = False
-        vjR = numpy.zeros((nset,nband,nao**2))
-        vjI = numpy.zeros((nset,nband,nao**2))
-    else:
-        aos2symm = True
-        vjR = numpy.zeros((nset,nband,nao_pair))
-        vjI = numpy.zeros((nset,nband,nao_pair))
-    for k, kpt in enumerate(kpts_band):
-        kptii = numpy.asarray((kpt,kpt))
-        p1 = 0
-        for LpqR, LpqI, sign in mydf.sr_loop(kptii, max_memory, aos2symm):
-            p0, p1 = p1, p1+LpqR.shape[0]
-            #:Lpq = (LpqR + LpqI*1j)#.reshape(-1,nao,nao)
-            #:vjR[:,k] += numpy.dot(rho[:,p0:p1], Lpq).real
-            #:vjI[:,k] += numpy.dot(rho[:,p0:p1], Lpq).imag
-            vjR[:,k] += numpy.dot(rhoR[:,p0:p1], LpqR)
-            if not j_real:
-                vjI[:,k] += numpy.dot(rhoI[:,p0:p1], LpqR)
-                if LpqI is not None:
-                    vjR[:,k] -= numpy.dot(rhoI[:,p0:p1], LpqI)
-                    vjI[:,k] += numpy.dot(rhoR[:,p0:p1], LpqI)
-            LpqR = LpqI = None
-    t1 = log.timer_debug1('get_j pass 2', *t1)
-
-    if j_real:
-        vj_kpts = vjR
-    else:
-        vj_kpts = vjR + vjI*1j
-    if aos2symm:
-        vj_kpts = lib.unpack_tril(vj_kpts.reshape(-1,nao_pair))
-    vj_kpts = vj_kpts.reshape(nset,nband,nao,nao)
-
-    log.timer('get_j', *t0)
-
-    return _format_jks(vj_kpts, dm_kpts, input_band, kpts)
-
-
-def get_j_kpts_kshift(mydf, dm_kpts, kshift, hermi=0, kpts=numpy.zeros((1,3)), kpts_band=None):
-    r''' Math:
+def get_j_kpts(mydf, dm_kpts, hermi=0, kpts=numpy.zeros((1,3)), kpts_band=None, kshift=0):
+    r'''Math:
             J^{k1 k1'}_{pq}
                 = (1/Nk) \sum_{k2} \sum_{rs} (p k1 q k1' |r k2' s k2) D_{sr}^{k2 k2'}
         where k1' and k2' satisfies
             (k1 - k1' - kpts[kshift]) \dot a = 2n \pi
             (k2 - k2' - kpts[kshift]) \dot a = 2n \pi
-        For kshift = 0, :func:`get_j_kpts` is called.
     '''
-    if kshift == 0:
-        return get_j_kpts(mydf, dm_kpts, hermi=hermi, kpts=kpts, kpts_band=kpts_band)
-
-    if kpts_band is not None:
+    if kshift != 0 and kpts_band is not None:
         raise NotImplementedError
 
     log = logger.Logger(mydf.stdout, mydf.verbose)
@@ -177,7 +84,7 @@ def get_j_kpts_kshift(mydf, dm_kpts, kshift, hermi=0, kpts=numpy.zeros((1,3)), k
             log.warn('DF integrals for band k-points were not found %s. '
                      'DF integrals will be rebuilt to include band k-points.',
                      mydf._cderi)
-        mydf.build(kpts_band=kpts_band)
+        mydf.build(j_only=(kshift == 0), kpts_band=kpts_band)
         t0 = log.timer_debug1('Init get_j_kpts', *t0)
 
     dm_kpts = lib.asarray(dm_kpts, order='C')
@@ -193,10 +100,12 @@ def get_j_kpts_kshift(mydf, dm_kpts, kshift, hermi=0, kpts=numpy.zeros((1,3)), k
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     nband = len(kpts_band)
-    j_real = (gamma_point(kpts_band) and gamma_point(kpts[kshift]) and
-              not numpy.iscomplexobj(dms))
-
-    kconserv = get_kconserv_ria(mydf.cell, kpts)[kshift]
+    if kshift == 0:
+        j_real = gamma_point(kpts_band) and not numpy.iscomplexobj(dms)
+        kconserv = range(nkpts)
+    else:
+        j_real = gamma_point(kpts[kshift]) and not numpy.iscomplexobj(dms)
+        kconserv = get_kconserv_ria(mydf.cell, kpts)[kshift]
 
     t1 = (logger.process_clock(), logger.perf_counter())
     dmsR = dms.real.transpose(0,1,3,2).reshape(nset,nkpts,nao**2)
@@ -1444,11 +1353,6 @@ def _format_jks(v_kpts, dm_kpts, kpts_band, kpts):
             return v_kpts
 
 def _ewald_exxdiv_for_G0(cell, kpts, dms, vk, kpts_band=None):
-    # Excludes the low-dimesional systems
-    if (cell.dimension < 2 or  # 0D and 1D are computed with inf_vacuum
-        (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
-        return
-
     s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
     madelung = tools.pbc.madelung(cell, kpts)
     if kpts is None:

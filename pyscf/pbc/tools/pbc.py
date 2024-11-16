@@ -253,13 +253,14 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         omega : float
             Enable Coulomb kernel ``erf(|omega|*r12)/r12`` if omega > 0
             and ``erfc(|omega|*r12)/r12`` if omega < 0.
-            Note this parameter is slightly different to setting cell.omega
-            for the treatment of exxdiv (at G0).  cell.omega affects Ewald
-            probe charge at G0. It is used mostly by RSH functionals for
-            the long-range part of HF exchange. This parameter is used by
+            Note this parameter is slightly different to setting cell.omega for
+            exxdiv='ewald' at G0. When cell.omega is configured, the Ewald probe
+            charge correction will be computed using the LR or SR Coulomb
+            interactions. However, when this kwarg is explicitly specified, the
+            exxdiv correction is computed with the full-range Coulomb
+            interaction (1/r12). This parameter should only be specified in the
             range-separated JK builder and range-separated DF (and other
-            range-separated integral methods) which require Ewald probe charge
-            to be computed with regular Coulomb interaction (1/r12).
+            range-separated integral methods if any).
     '''
     exxdiv = exx
     if isinstance(exx, str):
@@ -413,6 +414,8 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         # long range part
         coulG *= np.exp(-.25/_omega**2 * absG2)
     elif _omega < 0:
+        if exxdiv == 'vcut_sph' or exxdiv == 'vcut_ws':
+            raise RuntimeError('SR Coulomb for exxdiv={exxdiv} is not available')
         # short range part
         coulG *= (1 - np.exp(-.25/_omega**2 * absG2))
 
@@ -422,7 +425,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     # interaction. The periodic part of (ii|ii) in exchange cannot be
     # cancelled out by Coulomb integrals. Its leading term is calculated
     # using Ewald probe charge (the function madelung below)
-    if cell.dimension > 2 and exxdiv == 'ewald' and len(G0_idx) > 0:
+    if cell.dimension > 0 and exxdiv == 'ewald' and len(G0_idx) > 0:
         if omega is None: # Affects DFT-RSH
             coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts)
         else: # for RangeSeparatedJKBuilder

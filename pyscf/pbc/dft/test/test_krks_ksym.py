@@ -198,7 +198,7 @@ class KnownValues(unittest.TestCase):
 
         kmf.xc = 'hse06'
         kmf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.4824271111708662, 7)
+        self.assertAlmostEqual(kmf.e_tot, -2.4824271111708662, 7)
 
     def test_rsh_mdf(self):
         kpts0 = He.make_kpts(nk, with_gamma_point=False)
