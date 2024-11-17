@@ -415,7 +415,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         coulG *= np.exp(-.25/_omega**2 * absG2)
     elif _omega < 0:
         if exxdiv == 'vcut_sph' or exxdiv == 'vcut_ws':
-            raise RuntimeError('SR Coulomb for exxdiv={exxdiv} is not available')
+            raise RuntimeError(f'SR Coulomb for exxdiv={exxdiv} is not available')
         # short range part
         coulG *= (1 - np.exp(-.25/_omega**2 * absG2))
 

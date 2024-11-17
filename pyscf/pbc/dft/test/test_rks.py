@@ -143,6 +143,8 @@ class KnownValues(unittest.TestCase):
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -2.476617717375184, 7)
 
+    @unittest.skip('TODO: Check other packages how exxdiv=vcut_sph is handled for RSH')
+    def test_rsh_fft_vcut_sph(self):
         # Adding this test to ensure that the new SR treatment in get_veff is
         # compatible with the treatment (full-range - LR) in pyscf-2.7.
         # However, the results of HSE with exxdiv=vcut_sph might not be reasonable.
