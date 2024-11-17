@@ -1241,25 +1241,6 @@ def omatcopy(a, out=None):
        ctypes.c_size_t(ld_out))
     return out
 
-def zeros(shape, dtype=numpy.double, order='C'):
-    """Allocate and zero an array in parallel. Useful for multi-socket systems
-       due to the first touch policy. On most systems np.zeros does not count
-       as first touch. Arrays returned by this function will (ideally) have
-       pages backing them that are distributed across the sockets.
-    """
-    dtype = numpy.dtype(dtype)
-    if dtype == numpy.double:
-        out = numpy.empty(shape, dtype=dtype, order=order)
-        _np_helper.NPomp_dset0(ctypes.c_size_t(out.size),
-                              out.ctypes.data_as(ctypes.c_void_p))
-    elif dtype == numpy.complex128:
-        out = numpy.empty(shape, dtype=dtype, order=order)
-        _np_helper.NPomp_zset0(ctypes.c_size_t(out.size),
-                              out.ctypes.data_as(ctypes.c_void_p))
-    else: # fallback
-        out = numpy.zeros(shape, dtype=dtype, order=order)
-    return out
-
 def entrywise_mul(a, b):
     """Entrywise multiplication of two matrices.
 
@@ -1284,7 +1265,8 @@ def entrywise_mul(a, b):
     elif a.dtype == numpy.complex128:
         fn = _np_helper.NPomp_zmul
     else:
-        raise NotImplementedError
+        b *= a
+        return b
     fn(ctypes.c_size_t(a_cshape[0]),
        ctypes.c_size_t(a_cshape[1]),
        a.ctypes.data_as(ctypes.c_void_p),

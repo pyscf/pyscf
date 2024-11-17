@@ -278,17 +278,6 @@ class KnownValues(unittest.TestCase):
         lib.entrywise_mul(a, b)
         self.assertTrue(numpy.allclose(b, a*bcopy))
 
-    def test_zeros(self):
-        a = lib.zeros((100,100), dtype=numpy.double)
-        self.assertTrue(numpy.all(a == 0))
-        self.assertTrue(a.dtype == numpy.double)
-        a = lib.zeros((100,100), dtype=numpy.complex128)
-        self.assertTrue(numpy.all(a == 0))
-        self.assertTrue(a.dtype == numpy.complex128)
-        a = lib.zeros((100,100), dtype=numpy.int32)
-        self.assertTrue(numpy.all(a == 0))
-        self.assertTrue(a.dtype == numpy.int32)
-
 if __name__ == "__main__":
     print("Full Tests for numpy_helper")
     unittest.main()
