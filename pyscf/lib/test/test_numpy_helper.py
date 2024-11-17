@@ -264,6 +264,17 @@ class KnownValues(unittest.TestCase):
         lib.omatcopy(a, out=b)
         self.assertTrue(numpy.all(a == b))
 
+    def test_zeros(self):
+        a = lib.zeros((100,100), dtype=numpy.double)
+        self.assertTrue(numpy.all(a == 0))
+        self.assertTrue(a.dtype == numpy.double)
+        a = lib.zeros((100,100), dtype=numpy.complex128)
+        self.assertTrue(numpy.all(a == 0))
+        self.assertTrue(a.dtype == numpy.complex128)
+        a = lib.zeros((100,100), dtype=numpy.int32)
+        self.assertTrue(numpy.all(a == 0))
+        self.assertTrue(a.dtype == numpy.int32)
+
     def test_entrywise_mul(self):
         a = numpy.random.random((101,100))
         b = numpy.random.random((101,100))
