@@ -111,13 +111,14 @@ void NPomp_zcopy(const size_t m,
 void NPomp_dmul(const size_t m,
                 const size_t n,
                 const double *__restrict a, const size_t a_stride,
-                double *__restrict b, const size_t b_stride)
+                double *__restrict b, const size_t b_stride,
+                double *__restrict out, const size_t out_stride)
 {
 #pragma omp parallel for schedule(static)
         for (size_t i = 0; i < m; i++) {
 #pragma omp simd
                 for (size_t j = 0; j < n; j++) {
-                        b[i * b_stride + j] *= a[i * a_stride + j];
+                        out[i * out_stride + j] = b[i * b_stride + j] * a[i * a_stride + j];
                 }
         }
 }
@@ -129,13 +130,14 @@ void NPomp_dmul(const size_t m,
 void NPomp_zmul(const size_t m,
                 const size_t n,
                 const double complex *__restrict a, const size_t a_stride,
-                double complex *__restrict b, const size_t b_stride)
+                double complex *__restrict b, const size_t b_stride,
+                double complex *__restrict out, const size_t out_stride)
 {
 #pragma omp parallel for schedule(static)
         for (size_t i = 0; i < m; i++) {
 #pragma omp simd
                 for (size_t j = 0; j < n; j++) {
-                        b[i * b_stride + j] *= a[i * a_stride + j];
+                        out[i * out_stride + j] = b[i * b_stride + j] * a[i * a_stride + j];
                 }
         }
 }

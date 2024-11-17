@@ -267,16 +267,17 @@ class KnownValues(unittest.TestCase):
     def test_entrywise_mul(self):
         a = numpy.random.random((101,100))
         b = numpy.random.random((101,100))
-        bcopy = b.copy()
-        lib.entrywise_mul(a, b)
-        self.assertTrue(numpy.allclose(b, a*bcopy))
+        prod = lib.entrywise_mul(a, b)
+        self.assertTrue(numpy.allclose(prod, a * b))
         a = numpy.random.random((101,100))
         b = numpy.random.random((101,100))
         a = a + a*1j
         b = b + b*1j
-        bcopy = b.copy()
-        lib.entrywise_mul(a, b)
-        self.assertTrue(numpy.allclose(b, a*bcopy))
+        prod = lib.entrywise_mul(a, b)
+        self.assertTrue(numpy.allclose(prod, a * b))
+        # inplace test
+        lib.entrywise_mul(a, b, out=b)
+        self.assertTrue(numpy.allclose(prod, b))
 
 if __name__ == "__main__":
     print("Full Tests for numpy_helper")

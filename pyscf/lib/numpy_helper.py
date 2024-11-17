@@ -1241,39 +1241,44 @@ def omatcopy(a, out=None):
        ctypes.c_size_t(ld_out))
     return out
 
-def entrywise_mul(a, b):
+def entrywise_mul(a, b, out=None):
     """Entrywise multiplication of two matrices.
 
     Parameters
     ----------
     a : ndarray
     b : ndarray
-        Overwritten with a * b.
+    out : ndarray, optional
+        Output matrix. A new one is allocated if not provided.
 
     Returns
     -------
     ndarray
-        a * b (stored in b)
+        a * b
     """
     assert a.ndim == 2 and b.ndim == 2
     assert a.shape == b.shape and a.dtype == b.dtype
     lda, _, a_cshape = leading_dimension_order(a)
     ldb, _, b_cshape = leading_dimension_order(b)
-    assert a_cshape == b_cshape and a_cshape is not None
+    if out is None:
+        out = numpy.empty_like(b)
+    ld_out, _, out_cshape = leading_dimension_order(out)
+    assert a_cshape == b_cshape and b_cshape == out_cshape and a_cshape is not None
     if a.dtype == numpy.double:
         fn = _np_helper.NPomp_dmul
     elif a.dtype == numpy.complex128:
         fn = _np_helper.NPomp_zmul
     else:
-        b *= a
-        return b
+        return numpy.multiply(a, b, out=out)
     fn(ctypes.c_size_t(a_cshape[0]),
        ctypes.c_size_t(a_cshape[1]),
        a.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_size_t(lda),
        b.ctypes.data_as(ctypes.c_void_p),
-       ctypes.c_size_t(ldb))
-    return b
+       ctypes.c_size_t(ldb),
+       out.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_size_t(ld_out))
+    return out
 
 def ndarray_pointer_2d(array):
     '''Return an array that contains the addresses of the first element in each
