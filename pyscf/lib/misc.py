@@ -1533,11 +1533,14 @@ def to_gpu(method, out=None):
     out_keys = set(out.__dict__).union(*cls_keys)
     # Only overwrite the attributes of the same name.
     keys = set(method.__dict__).intersection(out_keys)
+    # Keys that are not required to convert to cupy array
+    keep_in_nparray = {'kpt', 'kpts', 'frozen'}
 
     for key in keys:
         val = getattr(method, key)
         if isinstance(val, numpy.ndarray):
-            val = cupy.asarray(val)
+            if key not in keep_in_nparray:
+                val = cupy.asarray(val)
         elif hasattr(val, 'to_gpu'):
             val = val.to_gpu()
         setattr(out, key, val)
