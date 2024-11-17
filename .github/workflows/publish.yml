@@ -39,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
     env:
-      img: quay.io/pypa/manylinux2014_aarch64:2023-03-12-25fd859
+      img: quay.io/pypa/manylinux2014_aarch64:latest
     steps:
     - name: Checkout
       uses: actions/checkout@v4

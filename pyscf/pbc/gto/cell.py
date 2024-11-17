@@ -17,6 +17,7 @@
 #         Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
+import os
 import sys
 import json
 import ctypes
@@ -1013,6 +1014,142 @@ def rcut_by_shells(cell, precision=None, rcut=0,
         return shell_radius, pgf_radius
     return shell_radius
 
+def tostring(cell, format='poscar'):
+    '''Convert cell geometry to a string of the required format.
+
+    Supported output formats:
+        | poscar: VASP POSCAR
+        | xyz: Extended XYZ with Lattice information
+    '''
+    format = format.lower()
+    output = []
+    if format == 'poscar' or format == 'vasp' or format == 'xyz':
+        lattice_vectors = cell.lattice_vectors() * param.BOHR
+        coords = cell.atom_coords() * param.BOHR
+        if format == 'poscar' or format == 'vasp':
+            output.append('Written by PySCF, units are A')
+            output.append('1.0')
+            for lattice_vector in lattice_vectors:
+                ax, ay, az = lattice_vector
+                output.append('%14.5f %14.5f %14.5f' % (ax, ay, az))
+            unique_atoms = dict()
+            for atom in cell.elements:
+                if atom not in unique_atoms:
+                    unique_atoms[atom] = 1
+                else:
+                    unique_atoms[atom] += 1
+            output.append(' '.join(unique_atoms))
+            output.append(' '.join(str(count) for count in unique_atoms.values()))
+            output.append('Cartesian')
+            for atom_type in unique_atoms:
+                for atom, coord in zip(cell.elements, coords):
+                    if atom == atom_type:
+                        x, y, z = coord
+                        output.append('%14.5f %14.5f %14.5f' % (x, y, z))
+            return '\n'.join(output)
+        elif format == 'xyz':
+            output.append('%d' % cell.natm)
+            output.append('Lattice="'+' '.join(f'{ax:14.5f}' for ax in lattice_vectors.ravel())
+                +'" Properties=species:S:1:pos:R:3')
+            for i in range(cell.natm):
+                symb = cell.atom_pure_symbol(i)
+                x, y, z = coords[i]
+                output.append('%-4s %14.5f %14.5f %14.5f' %
+                              (symb, x, y, z))
+            return '\n'.join(output)
+    else:
+        raise NotImplementedError(f'format={format}')
+
+def tofile(cell, filename, format=None):
+    if format is None:  # Guess format based on filename
+        if filename.lower() == 'poscar':
+            format = 'poscar'
+        else:
+            format = os.path.splitext(filename)[1][1:]
+    string = tostring(cell, format)
+    with open(filename,  'w', encoding='utf-8') as f:
+        f.write(string)
+        f.write('\n')
+    return string
+
+def fromfile(filename, format=None):
+    '''Read cell geometry from a file
+    (in testing)
+
+    Supported formats:
+        | poscar: VASP POSCAR file format
+        | xyz: Extended XYZ with Lattice information
+    '''
+    if format is None:  # Guess format based on filename
+        if filename.lower() == 'poscar':
+            format = 'poscar'
+        else:
+            format = os.path.splitext(filename)[1][1:].lower()
+        if format not in ('poscar', 'vasp', 'xyz'):
+            format = 'raw'
+    with open(filename, 'r') as f:
+        return fromstring(f.read(), format)
+
+def fromstring(string, format='poscar'):
+    '''Convert the string of the specified format to internal format
+    (in testing)
+
+    Supported formats:
+        | poscar: VASP POSCAR file format
+        | xyz: Extended XYZ with Lattice information
+
+    Returns:
+        a: Lattice vectors
+        atom: Atomic elements and xyz coordinates
+    '''
+    format = format.lower()
+    if format == 'poscar' or format == 'vasp':
+        lines = string.splitlines()
+        scale = float(lines[1])
+        a = lines[2:5]
+        lattice_vectors = np.array([np.fromstring(ax, sep=' ') for ax in a])
+        lattice_vectors *= scale
+        a = []
+        for i in range(3):
+            a.append(' '.join(str(ax) for ax in lattice_vectors[i]))
+        atom_position_type = lines[7].strip()
+        unique_atoms = dict()
+        natm = 0
+        for atom, count in zip(lines[5].split(), lines[6].split()):
+            unique_atoms[atom] = int(count)
+            natm += int(count)
+        atoms = []
+        start = 8
+        for atom_type in unique_atoms:
+            end = start + unique_atoms[atom_type]
+            for line in lines[start:end]:
+                coords = np.fromstring(line, sep=' ')
+                if atom_position_type.lower() == 'cartesian':
+                    x, y, z = coords * scale
+                elif atom_position_type.lower() == 'direct':
+                    x, y, z = np.dot(coords, lattice_vectors)
+                else:
+                    raise RuntimeError('Error reading VASP geometry due to '
+                        f'atom position type "{atom_position_type}". Atom '
+                        'positions must be Direct or Cartesian.')
+                atoms.append('%s %14.5f %14.5f %14.5f'
+                    % (atom_type, x, y, z))
+            start = end
+        return '\n'.join(a), '\n'.join(atoms)
+    elif format == 'xyz':
+        lines = string.splitlines()
+        natm = int(lines[0])
+        lattice_vectors = lines[1].split('Lattice=')[1].split('"')[1].split()
+        a = []
+        for i in range(3):
+            a.append(" ".join(lattice_vectors[3*i:3*i+3]))
+        return '\n'.join(a), '\n'.join(lines[2:natm+2])
+    elif format == 'raw':
+        lines = string.splitlines()
+        return '\n'.join(lines[:3]), '\n'.join(lines[4:])
+    else:
+        raise NotImplementedError
+
 
 class Cell(mole.MoleBase):
     '''A Cell object holds the basic information of a crystal.
@@ -1081,6 +1218,9 @@ class Cell(mole.MoleBase):
         'use_loose_rcut', 'use_particle_mesh_ewald',
     }
 
+    tostring = tostring
+    tofile = tofile
+
     def __init__(self, **kwargs):
         mole.MoleBase.__init__(self)
         self.a = None # lattice vectors, (a1,a2,a3)
@@ -1106,6 +1246,20 @@ class Cell(mole.MoleBase):
         self.rcut = None
         for key, val in kwargs.items():
             setattr(self, key, val)
+
+    def fromstring(self, string, format='poscar'):
+        '''Update the Cell object based on the input geometry string'''
+        a, atom = fromstring(string, format)
+        self.a = a
+        self.set_geom_(atom, unit='Angstrom', inplace=True)
+        return self
+
+    def fromfile(self, filename, format=None):
+        '''Update the Cell object based on the input geometry file'''
+        a, atom = fromfile(filename, format)
+        self.a = a
+        self.set_geom_(atom, unit='Angstrom', inplace=True)
+        return self
 
     @property
     def mesh(self):

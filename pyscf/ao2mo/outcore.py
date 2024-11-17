@@ -710,8 +710,8 @@ def guess_shell_ranges(mol, aosym, max_iobuf, max_aobuf=None, ao_loc=None,
                        compress_diag=True):
     if ao_loc is None: ao_loc = mol.ao_loc_nr()
     max_iobuf = max(1, max_iobuf)
-
-    dims = ao_loc[1:] - ao_loc[:-1]
+    ao_loc_long = ao_loc.astype(numpy.int64)
+    dims = ao_loc_long[1:] - ao_loc_long[:-1]
     dijs = (dims.reshape(-1,1) * dims)
     nbas = dijs.shape[0]
 
@@ -773,7 +773,7 @@ def balance_partition(ao_loc, blksize, start_id=0, stop_id=None):
     displs = [i+start_id for i in displs]
     tasks = []
     for i0, i1 in zip(displs[:-1],displs[1:]):
-        tasks.append((i0, i1, ao_loc[i1]-ao_loc[i0]))
+        tasks.append((i0, i1, int(ao_loc[i1]-ao_loc[i0])))
     return tasks
 
 del (MAX_MEMORY)

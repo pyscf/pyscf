@@ -16,6 +16,7 @@
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
+#include <stdlib.h>
 #include <complex.h>
 
 #define BLOCK_DIM    104
@@ -45,6 +46,13 @@ void NPdtranspose(int n, int m, double *a, double *at);
 void NPztranspose(int n, int m, double complex *a, double complex *at);
 void NPdtranspose_021(int *shape, double *a, double *at);
 void NPztranspose_021(int *shape, double complex *a, double complex *at);
+
+void NPomp_d_itranspose_scale(const int n, const double alpha, double *A, int lda);
+void NPomp_z_itranspose_scale(const int n, const double complex *alphaptr, double complex *A, int lda);
+void NPomp_dtensor_itranspose_scale021(const long long matstride, int nmat, int n, const double alpha,
+                                      double *A, int lda);
+void NPomp_ztensor_itranspose_scale021(const long long matstride, int nmat, int n, const double complex *alpha,
+                                      double complex *A, int lda);
 
 void NPdunpack_tril_2d(int count, int n, double *tril, double *mat, int hermi);
 void NPzunpack_tril_2d(int count, int n,

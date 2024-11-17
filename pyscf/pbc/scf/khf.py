@@ -786,9 +786,10 @@ class KRHF(KSCF):
     def stability(self,
                   internal=getattr(__config__, 'pbc_scf_KSCF_stability_internal', True),
                   external=getattr(__config__, 'pbc_scf_KSCF_stability_external', False),
-                  verbose=None):
+                  verbose=None,
+                  return_status=False):
         from pyscf.pbc.scf.stability import rhf_stability
-        return rhf_stability(self, internal, external, verbose)
+        return rhf_stability(self, internal, external, verbose, return_status)
 
     def to_ks(self, xc='HF'):
         '''Convert to RKS object.
