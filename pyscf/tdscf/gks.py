@@ -78,19 +78,19 @@ class CasidaTDDFT(TDDFT, TDA):
                 zs = numpy.copy(zs)
                 zs[:,sym_forbid] = 0
 
-            dmov = lib.einsum('xov,qv,po->xpq', zs*d_ia, orbv, orbo)
+            dms = lib.einsum('xov,pv,qo->xpq', zs*d_ia, orbv, orbo)
             # +cc for A+B because K_{ai,jb} in A == K_{ai,bj} in B
-            dmov = dmov + dmov.transpose(0,2,1)
+            dms = dms + dms.transpose(0,2,1)
 
-            v1ao = vresp(dmov)
-            v1ov = lib.einsum('xpq,po,qv->xov', v1ao, orbo, orbv)
+            v1ao = vresp(dms)
+            v1mo = lib.einsum('xpq,qo,pv->xov', v1ao, orbo, orbv)
 
-            # numpy.sqrt(e_ia) * (e_ia*d_ia*z + v1ov)
-            v1ov += numpy.einsum('xov,ov->xov', zs, ed_ia)
-            v1ov *= d_ia
+            # numpy.sqrt(e_ia) * (e_ia*d_ia*z + v1mo)
+            v1mo += numpy.einsum('xov,ov->xov', zs, ed_ia)
+            v1mo *= d_ia
             if wfnsym is not None and mol.symmetry:
-                v1ov[:,sym_forbid] = 0
-            return v1ov.reshape(v1ov.shape[0],-1)
+                v1mo[:,sym_forbid] = 0
+            return v1mo.reshape(v1mo.shape[0],-1)
 
         return vind, hdiag
 
@@ -144,7 +144,9 @@ class CasidaTDDFT(TDDFT, TDA):
             x = (zp + zm) * .5
             y = (zp - zm) * .5
             norm = lib.norm(x)**2 - lib.norm(y)**2
-            norm = numpy.sqrt(1./norm)
+            if norm < 0:
+                log.warn('TDDFT amplitudes |X| smaller than |Y|')
+            norm = abs(norm)**-.5
             return (x*norm, y*norm)
 
         idx = numpy.where(w2 > self.positive_eig_threshold)[0]
