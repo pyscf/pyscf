@@ -532,5 +532,5 @@ def _unpack(vo, mo_occ, kconserv):
 
 scf.khf.KRHF.TDA  = lib.class_as_method(KTDA)
 scf.khf.KRHF.TDHF = lib.class_as_method(KTDHF)
-scf.krohf.KROHF.TDA  = None
-scf.krohf.KROHF.TDHF = None
+scf.krohf.KROHF.TDA  = NotImplemented
+scf.krohf.KROHF.TDHF = NotImplemented

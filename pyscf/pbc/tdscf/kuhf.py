@@ -265,7 +265,6 @@ class TDA(KTDBase):
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
         vresp = mf.gen_response(hermi=0, max_memory=max_memory)
-        vr_ref=mf.to_rhf().TDA().gen_vind(kshift=kshift)[0]
 
         def vind(zs):
             nz = len(zs)
