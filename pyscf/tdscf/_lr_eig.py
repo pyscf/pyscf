@@ -298,6 +298,7 @@ def eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
     heff = None
     e = None
     v = None
+    vlast = None
     conv_last = conv = np.zeros(nroots, dtype=bool)
 
     if x0sym is not None:
@@ -353,12 +354,12 @@ def eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
         heff[row0*2+1:row1*2:2, 1:row1*2:2] = -h11.conj()
 
         if x0sym is None:
-            w, c = scipy.linalg.eig(heff[:row1*2,:row1*2])
+            w, v = scipy.linalg.eig(heff[:row1*2,:row1*2])
         else:
             # Diagonalize within eash symmetry sectors
             xs_ir2 = np.repeat(xs_ir, 2)
             w = np.empty(row1*2, dtype=np.complex128)
-            c = np.zeros((row1*2, row1*2), dtype=np.complex128)
+            v = np.zeros((row1*2, row1*2), dtype=np.complex128)
             v_ir = []
             i1 = 0
             for ir in set(xs_ir):
@@ -366,20 +367,21 @@ def eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
                 i0, i1 = i1, i1 + idx.size
                 w_sub, v_sub = scipy.linalg.eig(heff[idx[:,None],idx])
                 w[i0:i1] = w_sub
-                c[idx,i0:i1] = v_sub
+                v[idx,i0:i1] = v_sub
                 v_ir.append([ir] * idx.size)
             v_ir = np.hstack(v_ir)
 
-        w, c, idx = pick(w, c, nroots, locals())
+        w, v, idx = pick(w, v, nroots, locals())
         if x0sym is not None:
             v_ir = v_ir[idx]
         if len(w) == 0:
             raise RuntimeError('Not enough eigenvalues')
 
         w, e, elast = w[:space_inc], w[:nroots], e
-        v, vlast = c[:,:space_inc], v[:,:nroots]
+        v = v[:,:space_inc]
         if not fresh_start:
             elast, conv_last = _sort_elast(elast, conv, vlast, v[:,:nroots], log)
+        vlast = v[:,:nroots]
 
         if elast is None:
             de = e
