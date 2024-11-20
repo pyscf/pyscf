@@ -80,8 +80,12 @@ def eigh(aop, x0, precond, tol_residual=1e-5, lindep=1e-12, nroots=1,
         x0 = x0[None,:]
     x0 = np.asarray(x0)
 
-    space_inc = nroots if MAX_SPACE_INC is None else MAX_SPACE_INC
     x0_size = x0.shape[1]
+    if MAX_SPACE_INC is None:
+        space_inc = nroots
+    else:
+        # Adding too many trial bases in each iteration may cause larger errors
+        space_inc = max(nroots, min(MAX_SPACE_INC, x0_size//5))
     max_space = int(max_memory*1e6/8/x0_size / 2 - nroots - space_inc)
     if max_space < nroots * 2 < x0_size:
         log.warn('Not enough memory to store trial space in _lr_eig.eigh')
@@ -276,9 +280,13 @@ def eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
     if isinstance(x0, np.ndarray) and x0.ndim == 1:
         x0 = x0[None,:]
     x0 = np.asarray(x0)
-    space_inc = nroots + 2
-
     x0_size = x0.shape[1]
+    if MAX_SPACE_INC is None:
+        space_inc = nroots
+    else:
+        # Adding too many trial bases in each iteration may introduce more errors
+        space_inc = max(nroots, min(MAX_SPACE_INC, x0_size//5))
+
     max_space = int(max_memory*1e6/8/(2*x0_size) / 2 - space_inc)
     if max_space < nroots * 2 < x0_size:
         log.warn('Not enough memory to store trial space in _lr_eig.eig')
@@ -345,12 +353,12 @@ def eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
         heff[row0*2+1:row1*2:2, 1:row1*2:2] = -h11.conj()
 
         if x0sym is None:
-            w, v = scipy.linalg.eig(heff[:row1*2,:row1*2])
+            w, c = scipy.linalg.eig(heff[:row1*2,:row1*2])
         else:
             # Diagonalize within eash symmetry sectors
             xs_ir2 = np.repeat(xs_ir, 2)
             w = np.empty(row1*2, dtype=np.complex128)
-            v = np.zeros((row1*2, row1*2), dtype=np.complex128)
+            c = np.zeros((row1*2, row1*2), dtype=np.complex128)
             v_ir = []
             i1 = 0
             for ir in set(xs_ir):
@@ -358,18 +366,18 @@ def eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
                 i0, i1 = i1, i1 + idx.size
                 w_sub, v_sub = scipy.linalg.eig(heff[idx[:,None],idx])
                 w[i0:i1] = w_sub
-                v[idx,i0:i1] = v_sub
+                c[idx,i0:i1] = v_sub
                 v_ir.append([ir] * idx.size)
             v_ir = np.hstack(v_ir)
 
-        w, v, idx = pick(w, v, nroots, locals())
+        w, c, idx = pick(w, c, nroots, locals())
         if x0sym is not None:
             v_ir = v_ir[idx]
         if len(w) == 0:
             raise RuntimeError('Not enough eigenvalues')
 
         w, e, elast = w[:space_inc], w[:nroots], e
-        v, vlast = v[:,:space_inc], v[:,:nroots]
+        v, vlast = c[:,:space_inc], v[:,:nroots]
         if not fresh_start:
             elast, conv_last = _sort_elast(elast, conv, vlast, v[:,:nroots], log)
 
@@ -387,7 +395,8 @@ def eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
         xt -= w[:,None] * x0
         ax0 = None
         if x0sym is not None:
-            xt_ir = x0_ir = v_ir[:space_inc]
+            xt_ir = v_ir[:space_inc]
+            x0_ir = v_ir[:nroots]
 
         dx_norm = np.linalg.norm(xt, axis=1)
         max_dx_norm = max(dx_norm[:nroots])
@@ -427,7 +436,7 @@ def eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
         if x0sym is not None:
             xt_ir = xt_ir[remaining]
         norm_min = xt_norm[remaining].min()
-        log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
+        log.debug('lr_eig %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                   icyc, len(xs), max_dx_norm, e, de[ide], norm_min)
 
         fresh_start = len(xs)+space_inc > max_space
@@ -481,25 +490,55 @@ def _qr(xs, lindep=1e-14):
     return xs[:nv], idx
 
 def _symmetric_orth(xt, lindep=1e-6):
+    '''
+    Symmetric orthogonalization for xt = {[X, Y]},
+    and its dual basis vectors {[Y, X]}
+    '''
     xt = np.asarray(xt)
-    n, m = xt.shape
-    if n == 0:
-        raise RuntimeError('Linear dependency in trial bases')
-    m = m // 2
-    # The conjugated basis np.hstack([xt[:,m:], xt[:,:m]]).conj()
     s11 = xt.conj().dot(xt.T)
     s21 = _conj_dot(xt, xt)
-    s = np.block([[s11, s21.conj().T],
-                  [s21, s11.conj()  ]])
-    e, c = scipy.linalg.eigh(s)
-    if e[0] < lindep:
-        if n == 1:
-            return xt
-        return _symmetric_orth(xt[:-1], lindep)
+    # Symmetric orthogonalize s, where
+    # s = [[s11, s21.conj().T],
+    #      [s21, s11.conj()  ]]
+    e, c = np.linalg.eigh(s11)
+    mask = e > lindep**2
+    if not np.any(mask):
+        raise RuntimeError('Linear dependency in trial bases')
+    c = c[:,mask] * e[mask]**-.5
 
-    c_orth = (c * e**-.5).dot(c[:n].conj().T)
-    x_orth = c_orth[:n].T.dot(xt)
+    # c22 = c.conj()
+    # s21 -> c22.conj().T.dot(s21).dot(c11)
+    s21 = c.T.dot(s21).dot(c)
+
+    if s21.dtype == np.float64:
+        # s21 is symmetric for real vectors
+        w, u = np.linalg.eigh(s21)
+        mask = 1 - abs(w) > lindep
+    else:
+        # svd(s[:n,n:]) => svd(s21.conj().T) => u, w
+        w2, u = np.linalg.eigh(s21.conj().T.dot(s21))
+        mask = 1 - w2**.5 > lindep
+        if not np.any(mask):
+            raise RuntimeError('Linear dependency in trial bases')
+        w = np.einsum('pi,pi->i', u.conj(), s21.dot(u))
+    w = w[mask]
+    u = u[:,mask]
+
+    # Symmetric diagonalize
+    # [1 w] => c = [a b]
+    # [w 1]        [b a]
+    # where
+    # a = ((1+w)**-.5 + (1-w)**-.5)/2
+    # b = ((1+w)**-.5 - (1-w)**-.5)/2
+    a1 = (1 + w)**-.5
+    a2 = (1 - w)**-.5
+    a = (a1 + a2) / 2
+    b = (a1 - a2) / 2
+
+    m = xt.shape[1] // 2
+    c_orth = c.dot(u)
+    x_orth = (c_orth * a).T.dot(xt)
     # Contribution from the conjugated basis
-    x_orth[:,:m] += c_orth[n:].T.dot(xt[:,m:].conj())
-    x_orth[:,m:] += c_orth[n:].T.dot(xt[:,:m].conj())
+    x_orth[:,:m] += (c_orth * b).T.dot(xt[:,m:].conj())
+    x_orth[:,m:] += (c_orth * b).T.dot(xt[:,:m].conj())
     return x_orth
