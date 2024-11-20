@@ -34,7 +34,7 @@ from pyscf.lib import logger
 from pyscf.scf import hf_symm
 from pyscf.scf import _response_functions # noqa
 from pyscf.data import nist
-from pyscf.tdscf._lr_eig import eigh as lr_eigh, eig as lr_eig
+from pyscf.tdscf._lr_eig import eigh as lr_eigh, eig as lr_eig, real_eig
 from pyscf import __config__
 
 OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_rhf_get_nto_threshold', 0.3)
@@ -916,7 +916,8 @@ class TDA(TDBase):
 CIS = TDA
 
 
-def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
+def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None,
+                       real_eig_solver=True):
     '''Generate function to compute
 
     [ A   B ][X]
@@ -946,10 +947,41 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     e_ia = hdiag = mo_energy[viridx] - mo_energy[occidx,None]
     if wfnsym is not None and mol.symmetry:
         hdiag[sym_forbid] = 0
-    hdiag = numpy.hstack((hdiag.ravel(), -hdiag.ravel()))
 
-    mo_coeff = numpy.asarray(numpy.hstack((orbo,orbv)), order='F')
-    vresp = mf.gen_response(singlet=singlet, hermi=0)
+    mem_now = lib.current_memory()[0]
+    max_memory = max(2000, mf.max_memory*.8-mem_now)
+    vresp = mf.gen_response(singlet=singlet, hermi=0, max_memory=max_memory)
+
+    if real_eig_solver:
+        def vind(xs, ys):
+            nz = len(xs)
+            xs = numpy.asarray(xs).reshape(nz,nocc,nvir)
+            ys = numpy.asarray(ys).reshape(nz,nocc,nvir)
+            if wfnsym is not None and mol.symmetry:
+                xs[:,sym_forbid] = 0
+                ys[:,sym_forbid] = 0
+
+            # *2 for double occupancy
+            dms  = lib.einsum('xov,pv,qo->xpq', xs, orbv, orbo.conj()*2)
+            dms += lib.einsum('xov,qv,po->xpq', ys, orbv.conj(), orbo*2)
+            v1ao = vresp(dms) # = <mj||nb> Xjb + <mb||nj> Yjb
+            # A ~= <aj||ib>, B = <ab||ij>
+            # AX + BY
+            # = <aj||ib> Xjb + <ab||ij> Yjb
+            # = (<mj||nb> Xjb + <mb||nj> Yjb) Cma* Cni
+            v1_top = lib.einsum('xpq,qo,pv->xov', v1ao, orbo, orbv.conj())
+            # (B*)X + (A*)Y
+            # = <ij||ab> Xjb + <ib||aj> Yjb
+            # = (<mj||nb> Xjb + <mb||nj> Yjb) Cmi* Cna
+            v1_bot = lib.einsum('xpq,po,qv->xov', v1ao, orbo.conj(), orbv)
+            v1_top += numpy.einsum('xia,ia->xia', xs, e_ia)  # AX
+            v1_bot += numpy.einsum('xia,ia->xia', ys, e_ia)  # (A*)Y
+
+            if wfnsym is not None and mol.symmetry:
+                v1_top[:,sym_forbid] = 0
+                v1_bot[:,sym_forbid] = 0
+            return v1_top.reshape(nz,nocc*nvir), v1_bot.reshape(nz,nocc*nvir)
+        return vind, hdiag.ravel()
 
     def vind(xys):
         xys = numpy.asarray(xys).reshape(-1,2,nocc,nvir)
@@ -984,6 +1016,8 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         hx = numpy.hstack((v1ov.reshape(nz,-1), -v1vo.reshape(nz,-1)))
         return hx
 
+    hdiag = numpy.hstack((hdiag.ravel(), -hdiag.ravel()))
+
     return vind, hdiag
 
 
@@ -1010,24 +1044,53 @@ class TDHF(TDBase):
     '''
 
     @lib.with_doc(gen_tdhf_operation.__doc__)
-    def gen_vind(self, mf=None):
+    def gen_vind(self, mf=None, real_eig_solver=True):
         if mf is None:
             mf = self._scf
-        return gen_tdhf_operation(mf, singlet=self.singlet, wfnsym=self.wfnsym)
+        return gen_tdhf_operation(mf, None, self.singlet, self.wfnsym,
+                                  real_eig_solver)
 
-    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
+    def get_precond(self, hdiag, real_eig_solver=True):
+        if real_eig_solver:
+            def precond(x, y, e):
+                '''preconditioners for each corresponding residual (state)'''
+                diagd = hdiag - (e[0]-self.level_shift)
+                diagd[abs(diagd)<1e-8] = 1e-8
+                X_new = x / diagd[:,None]
+                Y_new = y / diagd[:,None]
+                return X_new, Y_new
+        else:
+            def precond(x, e, *args):
+                diagd = hdiag - (e-self.level_shift)
+                diagd[abs(diagd)<1e-8] = 1e-8
+                return x/diagd
+        return precond
+
+    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False,
+                   real_eig_solver=True):
+        '''
+        Kwargs:
+            real_eig_solver : bool
+                Create initial guess for _lr_eig.real_eig . It contains two
+                arrays, X and Y, than a single vector.
+        '''
         if return_symmetry:
             x0, x0sym = TDA.init_guess(self, mf, nstates, wfnsym, return_symmetry)
             y0 = numpy.zeros_like(x0)
+            if real_eig_solver:
+                return (x0, y0), x0sym
             return numpy.hstack([x0, y0]), x0sym
         else:
             x0 = TDA.init_guess(self, mf, nstates, wfnsym, return_symmetry)
             y0 = numpy.zeros_like(x0)
+            if real_eig_solver:
+                return x0, y0
             return numpy.hstack([x0, y0])
 
     def kernel(self, x0=None, nstates=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
         '''
+        log = logger.new_logger(self)
         cpu0 = (logger.process_clock(), logger.perf_counter())
         self.check_sanity()
         self.dump_flags()
@@ -1037,58 +1100,67 @@ class TDHF(TDBase):
             self.nstates = nstates
         mol = self.mol
 
-        log = logger.Logger(self.stdout, self.verbose)
-
-        vind, hdiag = self.gen_vind(self._scf)
-        precond = self.get_precond(hdiag)
-
+        real_system = self._scf.mo_coeff[0].dtype == numpy.double
         # handle single kpt PBC SCF
         if getattr(self._scf, 'kpt', None) is not None:
             from pyscf.pbc.lib.kpts_helper import gamma_point
-            real_system = (gamma_point(self._scf.kpt) and
-                           self._scf.mo_coeff[0].dtype == numpy.double)
-        else:
-            real_system = True
+            real_system &= gamma_point(self._scf.kpt)
 
-        # We only need positive eigenvalues
-        def pickeig(w, v, nroots, envs):
-            realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
-                                  (w.real > self.positive_eig_threshold))[0]
-            # If the complex eigenvalue has small imaginary part, both the
-            # real part and the imaginary part of the eigenvector can
-            # approximately be used as the "real" eigen solutions.
-            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
+        vind, hdiag = self.gen_vind(self._scf, real_system)
+        precond = self.get_precond(hdiag, real_system)
+        if real_system:
+            pickeig = None
+        else:
+            # We only need positive eigenvalues
+            def pickeig(w, v, nroots, envs):
+                realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
+                                      (w.real > self.positive_eig_threshold))[0]
+                # If the complex eigenvalue has small imaginary part, both the
+                # real part and the imaginary part of the eigenvector can
+                # approximately be used as the "real" eigen solutions.
+                return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
 
         x0sym = None
         if x0 is None:
             x0, x0sym = self.init_guess(
-                self._scf, self.nstates, return_symmetry=True)
+                self._scf, self.nstates, return_symmetry=True,
+                real_eig_solver=real_system)
         elif mol.symmetry:
             x_sym = y_sym = _get_x_sym_table(self._scf).ravel()
             x_sym = numpy.append(x_sym, y_sym)
             x0sym = [_guess_wfnsym_id(self, x_sym, x) for x in x0]
 
-        self.converged, w, x1 = lr_eig(
-            vind, x0, precond, tol_residual=self.conv_tol, lindep=self.lindep,
-            nroots=nstates, x0sym=x0sym, pick=pickeig, max_cycle=self.max_cycle,
-            max_memory=self.max_memory, verbose=log)
-
-        nocc = (self._scf.mo_occ>0).sum()
+        nocc = numpy.count_nonzero(self._scf.mo_occ)
         nmo = self._scf.mo_occ.size
         nvir = nmo - nocc
-        self.e = w
-        def norm_xy(z):
-            x, y = z.reshape(2,nocc,nvir)
+
+        if real_system:
+            self.converged, self.e, x1 = real_eig(
+                vind, x0, precond, tol_residual=self.conv_tol, lindep=self.lindep,
+                nroots=nstates, x0sym=x0sym, pick=pickeig, max_cycle=self.max_cycle,
+                max_memory=self.max_memory, verbose=log)
+            x1 = zip(*x1)
+
+        else:
+            self.converged, self.e, x1 = lr_eig(
+                vind, x0, precond, tol_residual=self.conv_tol, lindep=self.lindep,
+                nroots=nstates, x0sym=x0sym, pick=pickeig, max_cycle=self.max_cycle,
+                max_memory=self.max_memory, verbose=log)
+            x1 = [z.reshape(2,-1) for z in x1]
+
+        def norm_xy(x, y):
             norm = lib.norm(x)**2 - lib.norm(y)**2
-            norm = numpy.sqrt(.5/norm)  # normalize to 0.5 for alpha spin
-            return x*norm, y*norm
-        self.xy = [norm_xy(z) for z in x1]
+            if norm < 0:
+                log.warn('TDDFT amplitudes |X| smaller than |Y|')
+            norm = abs(.5/norm) ** .5 # normalize to 0.5 for alpha spin
+            return x.reshape(nocc,nvir)*norm, y.reshape(nocc,nvir)*norm
+        self.xy = [norm_xy(x, y) for x, y in x1]
 
         if self.chkfile:
             lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
 
-        log.timer('TDDFT', *cpu0)
+        log.timer('TDHF/TDDFT', *cpu0)
         self._finalize()
         return self.e, self.xy
 
