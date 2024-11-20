@@ -64,7 +64,6 @@ def becke(n, charge, *args, **kwargs):
     # Change of variables to map the domain to [0, inf)
     r = (1+t)/(1-t) * rm
     w *= 2/(1-t)**2 * rm
-    
     return r, w
 
 # scale rad and rad_weight if necessary
