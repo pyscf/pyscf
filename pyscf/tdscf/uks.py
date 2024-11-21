@@ -45,6 +45,7 @@ class CasidaTDDFT(TDDFT, TDA):
     '''
 
     init_guess = TDA.init_guess
+    get_precond = TDA.get_precond
 
     def gen_vind(self, mf=None):
         if mf is None:

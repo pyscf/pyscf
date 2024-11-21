@@ -731,8 +731,7 @@ class TDA(TDBase):
 CIS = TDA
 
 
-def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None,
-                       real_eig_solver=True):
+def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     '''Generate function to compute
 
     [ A   B ][X]
@@ -772,39 +771,6 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None,
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
     vresp = mf.gen_response(hermi=0, max_memory=max_memory)
-
-    if real_eig_solver:
-        def vind(xs, ys):
-            nz = len(xs)
-            if wfnsym is not None and mol.symmetry:
-                xs[:,sym_forbid] = 0
-                ys[:,sym_forbid] = 0
-
-            xa = xs[:,:nocca*nvira].reshape(nz,nocca,nvira)
-            xb = xs[:,nocca*nvira:].reshape(nz,noccb,nvirb)
-            ya = ys[:,:nocca*nvira].reshape(nz,nocca,nvira)
-            yb = ys[:,nocca*nvira:].reshape(nz,noccb,nvirb)
-            dmsa  = lib.einsum('xov,pv,qo->xpq', xa, orbva, orboa.conj())
-            dmsb  = lib.einsum('xov,pv,qo->xpq', xb, orbvb, orbob.conj())
-            dmsa += lib.einsum('xov,qv,po->xpq', ya, orbva.conj(), orboa)
-            dmsb += lib.einsum('xov,qv,po->xpq', yb, orbvb.conj(), orbob)
-            v1ao = vresp(numpy.asarray((dmsa,dmsb)))
-            v1a_top = lib.einsum('xpq,qo,pv->xov', v1ao[0], orboa, orbva.conj())
-            v1b_top = lib.einsum('xpq,qo,pv->xov', v1ao[1], orbob, orbvb.conj())
-            v1a_bot = lib.einsum('xpq,po,qv->xov', v1ao[0], orboa.conj(), orbva)
-            v1b_bot = lib.einsum('xpq,po,qv->xov', v1ao[1], orbob.conj(), orbvb)
-
-            v1_top = xs * e_ia  # AX
-            v1_bot = ys * e_ia  # AY
-            v1_top[:,:nocca*nvira] += v1a_top.reshape(nz,-1)
-            v1_bot[:,:nocca*nvira] += v1a_bot.reshape(nz,-1)
-            v1_top[:,nocca*nvira:] += v1b_top.reshape(nz,-1)
-            v1_bot[:,nocca*nvira:] += v1b_bot.reshape(nz,-1)
-            if wfnsym is not None and mol.symmetry:
-                v1_top[:,sym_forbid] = 0
-                v1_bot[:,sym_forbid] = 0
-            return v1_top, v1_bot
-        return vind, hdiag
 
     def vind(xys):
         nz = len(xys)
@@ -850,28 +816,20 @@ class TDHF(TDBase):
     singlet = None
 
     @lib.with_doc(gen_tdhf_operation.__doc__)
-    def gen_vind(self, mf=None, real_eig_solver=True):
+    def gen_vind(self, mf=None):
         if mf is None:
             mf = self._scf
-        return gen_tdhf_operation(mf, None, self.singlet, self.wfnsym,
-                                  real_eig_solver)
+        return gen_tdhf_operation(mf, None, self.singlet, self.wfnsym)
 
-    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False,
-                   real_eig_solver=True):
+    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         if return_symmetry:
             x0, x0sym = TDA.init_guess(self, mf, nstates, wfnsym, return_symmetry)
             y0 = numpy.zeros_like(x0)
-            if real_eig_solver:
-                return (x0, y0), x0sym
             return numpy.hstack([x0, y0]), x0sym
         else:
             x0 = TDA.init_guess(self, mf, nstates, wfnsym, return_symmetry)
             y0 = numpy.zeros_like(x0)
-            if real_eig_solver:
-                return x0, y0
             return numpy.hstack([x0, y0])
-
-    get_precond = rhf.TDHF.get_precond
 
     def kernel(self, x0=None, nstates=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
@@ -895,11 +853,13 @@ class TDHF(TDBase):
 
         real_eig_solver = real_system
 
-        vind, hdiag = self.gen_vind(self._scf, real_eig_solver)
-        precond = self.get_precond(hdiag, real_eig_solver)
+        vind, hdiag = self.gen_vind(self._scf)
+        precond = self.get_precond(hdiag)
         if real_eig_solver:
+            eig = real_eig
             pickeig = None
         else:
+            eig = lr_eig
             # We only need positive eigenvalues
             def pickeig(w, v, nroots, envs):
                 realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
@@ -909,33 +869,25 @@ class TDHF(TDBase):
         x0sym = None
         if x0 is None:
             x0, x0sym = self.init_guess(
-                self._scf, self.nstates, return_symmetry=True,
-                real_eig_solver=real_eig_solver)
+                self._scf, self.nstates, return_symmetry=True)
         elif mol.symmetry:
             x_sym_a, x_sym_b = _get_x_sym_table(self._scf)
             x_sym = y_sym = numpy.append(x_sym_a.ravel(), x_sym_b.ravel())
             x_sym = numpy.append(x_sym, y_sym)
             x0sym = [rhf._guess_wfnsym_id(self, x_sym, x) for x in x0]
 
+        self.converged, self.e, x1 = eig(
+            vind, x0, precond, tol_residual=self.conv_tol, lindep=self.lindep,
+            nroots=nstates, x0sym=x0sym, pick=pickeig, max_cycle=self.max_cycle,
+            max_memory=self.max_memory, verbose=log)
+
         nmo = self._scf.mo_occ[0].size
         nocca, noccb = self._scf.nelec
         nvira = nmo - nocca
         nvirb = nmo - noccb
-        if real_eig_solver:
-            self.converged, self.e, x1 = real_eig(
-                vind, x0, precond, tol_residual=self.conv_tol, lindep=self.lindep,
-                nroots=nstates, x0sym=x0sym, pick=pickeig, max_cycle=self.max_cycle,
-                max_memory=self.max_memory, verbose=log)
-            x1 = zip(*x1)
-        else:
-            self.converged, self.e, x1 = lr_eig(
-                vind, x0, precond, tol_residual=self.conv_tol, lindep=self.lindep,
-                nroots=nstates, x0sym=x0sym, pick=pickeig, max_cycle=self.max_cycle,
-                max_memory=self.max_memory, verbose=log)
-            x1 = [z.reshape(2,-1) for z in x1]
-
         xy = []
-        for i, (x, y) in enumerate(x1):
+        for i, z in enumerate(x1):
+            x, y = z.reshape(2, -1)
             norm = lib.norm(x)**2 - lib.norm(y)**2
             if norm < 0:
                 log.warn('TDDFT amplitudes |X| smaller than |Y|')

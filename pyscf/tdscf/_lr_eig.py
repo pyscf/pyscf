@@ -89,9 +89,9 @@ def eigh(aop, x0, precond, tol_residual=1e-5, lindep=1e-12, nroots=1,
         space_inc = max(nroots, min(MAX_SPACE_INC, x0_size//2))
 
     max_space = int(max_memory*1e6/8/x0_size / 2 - nroots - space_inc)
-    if max_space < nroots * 2 < x0_size:
+    if max_space < nroots * 4 < x0_size:
         log.warn('Not enough memory to store trial space in _lr_eig.eigh')
-    max_space = max(max_space, nroots * 2)
+    max_space = max(max_space, nroots * 4)
     max_space = min(max_space, x0_size)
     log.debug(f'Set max_space {max_space}, space_inc {space_inc}')
 
@@ -271,6 +271,8 @@ def eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
             Allowed memory in MB.
 
     Returns:
+        conv : list of booleans
+            Whether each root is converged.
         e : list of floats
             Eigenvalues.
         c : list of 1D arrays
@@ -296,10 +298,10 @@ def eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
         space_inc = max(nroots, min(MAX_SPACE_INC, x0_size//4))
 
     max_space = int(max_memory*1e6/8/(2*x0_size) / 2 - space_inc)
-    if max_space < nroots * 2 < x0_size:
+    if max_space < nroots * 4 < x0_size:
         log.warn('Not enough memory to store trial space in _lr_eig.eig')
         max_space = space_inc * 2
-    max_space = max(max_space, nroots * 2)
+    max_space = max(max_space, nroots * 4)
     max_space = min(max_space, x0_size)
     log.debug(f'Set max_space {max_space}, space_inc {space_inc}')
 
@@ -473,7 +475,7 @@ def eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
 
     return conv[:nroots], e[:nroots], x0[:nroots]
 
-def real_eig(matvec, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
+def real_eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
              max_cycle=50, max_memory=MAX_MEMORY, lindep=1e-12, verbose=logger.WARN):
     '''
     Solve linear response eigenvalues for real A and B matrices
@@ -484,14 +486,11 @@ def real_eig(matvec, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=
     algorithm implemented in https://github.com/John-zzh/improved-Davidson-Algorithm
 
     Args:
-        matvec : function(x, y) => (array_like_x, array_like_y)
-            The matrix-vector product operator to perform.
-            [ A  B] [X]
-            [-B -A] [Y]
-            The shape of x is [nroots,nocc,nvir].
-        x0 : (X_array, Y_array)
+        aop : function(x) => array_like_x
+            The matrix-vector product operator.
+        x0 : 1D array or a list of 1D array
             Initial guess.
-        precond : function(x, y, e) => (array_like_x, array_like_y)
+        precond : function(dx, e) => array_like_dx
             Preconditioner to generate new trial vector.
 
     Kwargs:
@@ -515,7 +514,7 @@ def real_eig(matvec, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=
             Whether each root is converged.
         e : list of floats
             Eigenvalues.
-        c : (X_array, Y_array)
+        c : list of 1D arrays
             Eigenvectors.
     '''
 
@@ -527,9 +526,11 @@ def real_eig(matvec, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=
     else:
         log = logger.Logger(sys.stdout, verbose)
 
-    V, W = x0
-    assert V.ndim == 2 and W.ndim == 2
-    A_size = V.shape[1]
+    assert x0.ndim == 2
+    A_size = x0.shape[1] // 2
+    V = x0[:,:A_size]
+    W = x0[:,A_size:]
+    x0 = (V, W)
     if MAX_SPACE_INC is None:
         space_inc = nroots
     else:
@@ -537,10 +538,10 @@ def real_eig(matvec, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=
         space_inc = max(nroots, min(MAX_SPACE_INC, A_size//2))
 
     max_space = int(max_memory*1e6/8/(4*A_size) / 2 - space_inc)
-    if max_space < nroots * 2 < A_size:
+    if max_space < nroots * 4 < A_size:
         log.warn('Not enough memory to store trial space in _lr_eig.eig')
         max_space = space_inc * 2
-    max_space = max(max_space, nroots * 2)
+    max_space = max(max_space, nroots * 4)
     max_space = min(max_space, A_size)
     log.debug(f'Set max_space {max_space}, space_inc {space_inc}')
 
@@ -571,7 +572,9 @@ def real_eig(matvec, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=
             if x0sym is not None:
                 xs_ir = xt_ir = x0_ir
 
-        U1, U2 = matvec(V, W)
+        axt = aop(np.hstack([V, W]))
+        U1 =  axt[:,:A_size]
+        U2 = -axt[:,A_size:]
         m0, m1 = m1, m1+len(U1)
         V_holder [:,m0:m1] = V.T
         W_holder [:,m0:m1] = W.T
@@ -689,7 +692,9 @@ def real_eig(matvec, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=
             break
 
         r_index = r_norms > tol_residual
-        X_new, Y_new = precond(R_x[:,r_index], R_y[:,r_index], w[r_index])
+        XY_new = precond(np.vstack([R_x[:,r_index], R_y[:,r_index]]).T, w[r_index])
+        X_new = XY_new[:,:A_size].T
+        Y_new = XY_new[:,A_size:].T
         if x0sym is None:
             V, W = VW_Gram_Schmidt_fill_holder(
                 V_holder[:,:m1], W_holder[:,:m1], X_new, Y_new)
@@ -731,7 +736,7 @@ def real_eig(matvec, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=
     if len(x0[0]) < min(A_size, nroots):
         log.warn(f'Not enough eigenvectors (len(x0)={len(x0[0])}, nroots={nroots})')
 
-    return conv[:nroots], e[:nroots], x0
+    return conv[:nroots], e[:nroots], np.hstack(x0)
 
 def _gen_x0(v, xs):
     out = _outprod_to_subspace(v[::2], xs)
