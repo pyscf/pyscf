@@ -29,6 +29,7 @@ import scipy.linalg
 from pyscf.lib import logger
 from pyscf.lib import numpy_helper
 from pyscf.lib import misc
+from pyscf.lib.exceptions import LinearDependencyError
 from pyscf import __config__
 
 SAFE_EIGH_LINDEP = getattr(__config__, 'lib_linalg_helper_safe_eigh_lindep', 1e-15)
@@ -1506,9 +1507,7 @@ def _normalize_xt_(xt, xs, threshold, dot):
     return out, norm_min
 
 
-class LinearDependenceError(RuntimeError):
-    pass
-
+LinearDependenceError = LinearDependencyError
 
 class _Xlist(list):
     def __init__(self):

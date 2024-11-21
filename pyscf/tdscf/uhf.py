@@ -893,9 +893,11 @@ class TDHF(TDBase):
             real_system = (gamma_point(self._scf.kpt) and
                            self._scf.mo_coeff[0].dtype == numpy.double)
 
-        vind, hdiag = self.gen_vind(self._scf, real_system)
-        precond = self.get_precond(hdiag, real_system)
-        if real_system:
+        real_eig_solver = real_system
+
+        vind, hdiag = self.gen_vind(self._scf, real_eig_solver)
+        precond = self.get_precond(hdiag, real_eig_solver)
+        if real_eig_solver:
             pickeig = None
         else:
             # We only need positive eigenvalues
@@ -908,7 +910,7 @@ class TDHF(TDBase):
         if x0 is None:
             x0, x0sym = self.init_guess(
                 self._scf, self.nstates, return_symmetry=True,
-                real_eig_solver=real_system)
+                real_eig_solver=real_eig_solver)
         elif mol.symmetry:
             x_sym_a, x_sym_b = _get_x_sym_table(self._scf)
             x_sym = y_sym = numpy.append(x_sym_a.ravel(), x_sym_b.ravel())
@@ -919,7 +921,7 @@ class TDHF(TDBase):
         nocca, noccb = self._scf.nelec
         nvira = nmo - nocca
         nvirb = nmo - noccb
-        if real_system:
+        if real_eig_solver:
             self.converged, self.e, x1 = real_eig(
                 vind, x0, precond, tol_residual=self.conv_tol, lindep=self.lindep,
                 nroots=nstates, x0sym=x0sym, pick=pickeig, max_cycle=self.max_cycle,

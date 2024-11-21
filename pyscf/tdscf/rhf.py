@@ -1106,9 +1106,11 @@ class TDHF(TDBase):
             from pyscf.pbc.lib.kpts_helper import gamma_point
             real_system &= gamma_point(self._scf.kpt)
 
-        vind, hdiag = self.gen_vind(self._scf, real_system)
-        precond = self.get_precond(hdiag, real_system)
-        if real_system:
+        real_eig_solver = real_system
+
+        vind, hdiag = self.gen_vind(self._scf, real_eig_solver)
+        precond = self.get_precond(hdiag, real_eig_solver)
+        if real_eig_solver:
             pickeig = None
         else:
             # We only need positive eigenvalues
@@ -1124,7 +1126,7 @@ class TDHF(TDBase):
         if x0 is None:
             x0, x0sym = self.init_guess(
                 self._scf, self.nstates, return_symmetry=True,
-                real_eig_solver=real_system)
+                real_eig_solver=real_eig_solver)
         elif mol.symmetry:
             x_sym = y_sym = _get_x_sym_table(self._scf).ravel()
             x_sym = numpy.append(x_sym, y_sym)
@@ -1134,7 +1136,7 @@ class TDHF(TDBase):
         nmo = self._scf.mo_occ.size
         nvir = nmo - nocc
 
-        if real_system:
+        if real_eig_solver:
             self.converged, self.e, x1 = real_eig(
                 vind, x0, precond, tol_residual=self.conv_tol, lindep=self.lindep,
                 nroots=nstates, x0sym=x0sym, pick=pickeig, max_cycle=self.max_cycle,
