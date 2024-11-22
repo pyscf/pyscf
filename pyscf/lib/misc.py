@@ -1534,7 +1534,7 @@ def to_gpu(method, out=None):
     # Only overwrite the attributes of the same name.
     keys = set(method.__dict__).intersection(out_keys)
     # Keys that are not required to convert to cupy array
-    keep_in_nparray = {'kpt', 'kpts', 'frozen'}
+    keep_in_nparray = {'kpt', 'kpts', 'mesh', 'frozen'}
 
     for key in keys:
         val = getattr(method, key)
