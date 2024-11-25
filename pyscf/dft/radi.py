@@ -47,14 +47,21 @@ SG1RADII = numpy.array((
 def murray(n, *args, **kwargs):
     raise RuntimeError('Not implemented')
 
-# Gauss-Chebyshev of the first kind,  and the transformed interval [0,\infty)
 def becke(n, charge, *args, **kwargs):
     '''Becke, JCP 88, 2547 (1988); DOI:10.1063/1.454033'''
     if charge == 1:
         rm = BRAGG_RADII[charge]
     else:
         rm = BRAGG_RADII[charge] * .5
-    t, w = numpy.polynomial.chebyshev.chebgauss(n)
+
+    # Points and weights for Gauss-Chebyshev quadrature points of the second kind
+    # The weights are adjusted to integrate a function on the interval [-1, 1] with uniform weighting
+    # instead of weighted by sqrt(1 - t^2) = sin(i pi / (n+1)).
+    i = numpy.arange(n) + 1
+    t = numpy.cos(i * numpy.pi / (n + 1))
+    w = numpy.pi / (n + 1) * numpy.sin(i * numpy.pi / (n + 1))
+
+    # Change of variables to map the domain to [0, inf)
     r = (1+t)/(1-t) * rm
     w *= 2/(1-t)**2 * rm
     return r, w
