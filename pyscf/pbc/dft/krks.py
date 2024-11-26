@@ -117,7 +117,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
             exc -= np.einsum('Kij,Kji', dm, vk).real * .5 * .5 * weight
 
     if ground_state:
-        ecoul = np.einsum('Kij,Kji', dm, vj).real * .5 * weight
+        ecoul = np.einsum('Kij,Kji', dm, vj) * .5 * weight
     else:
         ecoul = None
 
@@ -146,16 +146,17 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
     weight = 1./len(h1e_kpts)
     e1 = weight * np.einsum('kij,kji', h1e_kpts, dm_kpts)
     ecoul = vhf.ecoul
-    tot_e = e1 + ecoul + vhf.exc
+    exc = vhf.exc
+    tot_e = e1 + ecoul + exc
     mf.scf_summary['e1'] = e1.real
     mf.scf_summary['coul'] = ecoul.real
-    mf.scf_summary['exc'] = vhf.exc.real
-    logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s', e1, ecoul, vhf.exc)
-    if khf.CHECK_COULOMB_IMAG and abs(ecoul.imag > mf.cell.precision*10):
+    mf.scf_summary['exc'] = exc.real
+    logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s', e1, ecoul, exc)
+    if khf.CHECK_COULOMB_IMAG and abs(ecoul.imag) > mf.cell.precision*10:
         logger.warn(mf, "Coulomb energy has imaginary part %s. "
                     "Coulomb integrals (e-e, e-N) may not converge !",
                     ecoul.imag)
-    return tot_e.real, vhf.ecoul + vhf.exc
+    return tot_e.real, ecoul.real + exc.real
 
 class KRKS(rks.KohnShamDFT, khf.KRHF):
     '''RKS class adapted for PBCs with k-point sampling.
