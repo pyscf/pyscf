@@ -77,6 +77,34 @@ size_t _max_cache_size_sgx(int (*intor)(), int *shls_slice, int ncenter,
         return cache_size;
 }
 
+int SGXreturn_blksize() { return BLKSIZE; }
+
+void SGXmake_screen_norm(double *norms, double *wao, int ngrids, int nbas, int *ao_loc)
+{
+#pragma omp parallel
+{
+        int ish, iblk, g, i, g0, g1;
+        double t1, t2;
+        int bblk = (ngrids + BLKSIZE - 1) / BLKSIZE;
+#pragma omp for
+        for (iblk = 0; iblk < bblk; iblk++) {
+                g0 = iblk * BLKSIZE;
+                g1 = MIN(g0 + BLKSIZE, ngrids);
+                for (ish = 0; ish < nbas; ish++) {
+                        t1 = 0;
+                        for (i = ao_loc[ish]; i < ao_loc[ish + 1]; i++) {
+                                t2 = 0;
+                                for (g = g0; g < g1; g++) {
+                                        t2 += fabs(wao[i*ngrids+g]);
+                                }
+                                t1 = (MAX(t1, t2) * BLKSIZE) / (g1 - g0);
+                        }
+                        norms[iblk * nbas + ish] = sqrt(t1);
+                }
+        }
+}
+}
+
 #define DECLARE_ALL \
         int *atm = envs->atm; \
         int *bas = envs->bas; \
@@ -148,6 +176,22 @@ int SGXnr_pj_screen_otf(double **dms, CVHFOpt *opt, SGXJKArray **vjk,
         return opt->q_cond[i * opt->nbas + j] * max_i * max_j > opt->direct_scf_cutoff;
 }
 
+static int SGXnr_pj_screen_v2(int *shls, CVHFOpt *opt,
+                              int *atm, int *bas, double *env,
+                              double cutoff, double *shl_maxs)
+{
+        if (opt == NULL) {
+                return 1;
+        }
+        int i = shls[0];
+        int j = shls[1];
+        int n = opt->nbas;
+        assert(opt->q_cond);
+        assert(i < n);
+        assert(j < n);
+        return opt->q_cond[i*n+j] * MAX(shl_maxs[i], shl_maxs[j]) > cutoff;
+}
+
 void SGXdot_nrk_no_pscreen(int (*intor)(), SGXJKOperator **jkop, SGXJKArray **vjk,
                 double **dms, double *buf, double *cache, int n_dm, int* shls,
                 CVHFOpt *vhfopt, IntorEnvs *envs,
@@ -217,7 +261,7 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
                       int *shls_slice, int *ao_loc,
                       CINTOpt *cintopt, CVHFOpt *vhfopt,
                       int *atm, int natm, int *bas, int nbas, double *env,
-                      int env_size, int aosym)
+                      int env_size, int aosym, double *ncond)
 {
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
@@ -250,7 +294,7 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
 {
         int ig0, ig1, dg;
         int ish, jsh, ij, jmax;
-        int i0, i1, j0, j1, idm;
+        int i0, i1, j0, j1, idm, i, k;
         int shls[4];
         IntorEnvs envs = {natm, nbas, atm, bas, env, shls_slice, ao_loc, NULL,
                           cintopt, ncomp};
@@ -260,6 +304,12 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
         }
         double *buf = calloc(sizeof(double), BLKSIZE*di*di*ncomp);
         double *cache = malloc(sizeof(double) * cache_size);
+        double *shl_maxs;
+        if (ncond == NULL) {
+                shl_maxs = NULL;
+        } else {
+                shl_maxs = malloc(sizeof(double) * nbas);
+        }
         int *sj_shells = malloc(sizeof(int) * nish);
         int num_sj_shells;
         int sj_index;
@@ -272,6 +322,21 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
                 for (idm = 0; idm < n_dm; idm++) {
                         jkop[idm]->set0(v_priv[idm], dg);
                 }
+                if (shl_maxs != NULL) {
+                        for (ish = 0; ish < nbas; ish++) {
+                                shl_maxs[ish] = 0;
+                                i0 = ao_loc[ish] - ioff;
+                                i1 = ao_loc[ish + 1] - ioff;
+                                for (idm = 0; idm < n_dm; idm++) {
+                                for (i = i0; i < i1; i++) {
+                                for (k = ig0; k < ig1; k++) {
+                                        shl_maxs[ish] = MAX(
+                                                fabs(dms[idm][i*tot_ngrids+k]),
+                                                shl_maxs[ish]
+                                        );
+                                } } }
+                        }
+                }
                 for (ish = 0; ish < nbas; ish++) {
                         if (aosym == 2) {
                                 jmax = ish + 1;
@@ -282,12 +347,20 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
                         for (jsh = 0; jsh < jmax; jsh++) {
                                 shls[0] = ish + ish0;
                                 shls[1] = jsh + jsh0;
-                                if ((*fprescreen)(shls, vhfopt, atm, bas, env))
-                                {
+                                if ((*fprescreen)(shls, vhfopt, atm, bas, env)) {
+                                if (ncond == NULL || SGXnr_pj_screen_v2(
+                                        shls, vhfopt, atm, bas, env, ncond[ibatch], shl_maxs
+                                )) {
                                         sj_shells[num_sj_shells] = jsh;
                                         num_sj_shells++;
                                         _usc++;
-                                }
+                                } }
+                                /*if ((*fprescreen)(shls, vhfopt, atm, bas, env)) {
+                                        sj_shells[num_sj_shells] = jsh;
+                                        num_sj_shells++;
+                                        _usc++;
+                                }*/
+
                         }
                         for (sj_index = 0; sj_index < num_sj_shells; sj_index++) {
                                 jsh = sj_shells[sj_index];
@@ -322,6 +395,9 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
         free(buf);
         free(cache);
         free(sj_shells);
+        if (shl_maxs != NULL) {
+                free(shl_maxs);
+        }
 #pragma omp critical
 {
         usc += _usc;

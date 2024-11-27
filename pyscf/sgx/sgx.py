@@ -292,9 +292,14 @@ class SGX(lib.StreamObject):
         # compute J matrix using DF and K matrix using SGX. It's identical to
         # the RIJCOSX method in ORCA
         self.dfj = False
+        self.optk = False
         self.direct_j = False
         self._auxbasis = auxbasis
         self.pjs = pjs
+
+        self.use_dm_screening = False
+        # TODO set this to standard direct_scf_tol by default
+        self.sgx_tol_potential = 1e-13
 
         # debug=True generates a dense tensor of the Coulomb integrals at each
         # grids. debug=False utilizes the sparsity of the integral tensor and
@@ -308,6 +313,8 @@ class SGX(lib.StreamObject):
         self._opt = None
         self._last_dm = 0
         self._rsh_df = {}  # Range separated Coulomb DF objects
+        self._overlap_correction_matrix = None
+        self._ao_block_cond = None
 
     @property
     def auxbasis(self):
@@ -364,6 +371,7 @@ class SGX(lib.StreamObject):
         self._opt = None
         self._last_dm = 0
         self._rsh_df = {}
+        self._overlap_correction_matrix = None
         return self
 
     def get_jk(self, dm, hermi=1, vhfopt=None, with_j=True, with_k=True,
@@ -390,7 +398,10 @@ class SGX(lib.StreamObject):
         if with_j and self.dfj:
             vj = df_jk.get_j(self, dm, hermi, direct_scf_tol)
             if with_k:
-                vk = sgx_jk.get_jk(self, dm, hermi, False, with_k, direct_scf_tol)[1]
+                if self.optk:
+                    vk = sgx_jk.get_k_only(self, dm, hermi, direct_scf_tol)
+                else:
+                    vk = sgx_jk.get_jk(self, dm, hermi, False, with_k, direct_scf_tol)[1]
             else:
                 vk = None
         elif with_j and self.direct_j:
