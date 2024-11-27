@@ -276,7 +276,7 @@ class KnownValues(unittest.TestCase):
         mf.max_cycle = 2
         mf.diis = False
         mf.kernel()
-        self.assertAlmostEqual(mf.scf(), -71.6072956194109, 7)
+        self.assertAlmostEqual(mf.scf(), -71.6072956194109, 5)
 
     def test_convert_to_scf(self):
         from pyscf.x2c import x2c

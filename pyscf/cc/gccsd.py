@@ -128,8 +128,8 @@ class GCCSD(ccsd.CCSDBase):
         eijab = lib.direct_sum('ia,jb->ijab', eia, eia)
         t1 = eris.fock[:nocc,nocc:] / eia
         eris_oovv = np.array(eris.oovv)
-        t2 = eris_oovv / eijab
-        self.emp2 = 0.25*einsum('ijab,ijab', t2, eris_oovv.conj()).real
+        t2 = eris_oovv.conj() / eijab
+        self.emp2 = 0.25*einsum('ijab,ijab', t2, eris_oovv).real
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
         return self.emp2, t1, t2
 

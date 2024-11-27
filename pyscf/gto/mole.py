@@ -1377,9 +1377,9 @@ def npgto_nr(mol, cart=None):
         cart = mol.cart
     l = mol._bas[:,ANG_OF]
     if cart:
-        return ((l+1)*(l+2)//2 * mol._bas[:,NPRIM_OF]).sum()
+        return int(((l+1)*(l+2)//2 * mol._bas[:,NPRIM_OF]).sum())
     else:
-        return ((l*2+1) * mol._bas[:,NPRIM_OF]).sum()
+        return int(((l*2+1) * mol._bas[:,NPRIM_OF]).sum())
 def nao_nr(mol, cart=None):
     '''Total number of contracted GTOs for the given :class:`Mole` object'''
     if cart is None:
@@ -1387,11 +1387,11 @@ def nao_nr(mol, cart=None):
     if cart:
         return nao_cart(mol)
     else:
-        return ((mol._bas[:,ANG_OF]*2+1) * mol._bas[:,NCTR_OF]).sum()
+        return int(((mol._bas[:,ANG_OF]*2+1) * mol._bas[:,NCTR_OF]).sum())
 def nao_cart(mol):
     '''Total number of contracted cartesian GTOs for the given :class:`Mole` object'''
     l = mol._bas[:,ANG_OF]
-    return ((l+1)*(l+2)//2 * mol._bas[:,NCTR_OF]).sum()
+    return int(((l+1)*(l+2)//2 * mol._bas[:,NCTR_OF]).sum())
 
 # nao_id0:nao_id1 corresponding to bas_id0:bas_id1
 def nao_nr_range(mol, bas_id0, bas_id1):
@@ -1416,8 +1416,8 @@ def nao_nr_range(mol, bas_id0, bas_id1):
     (2, 6)
     '''
     ao_loc = moleintor.make_loc(mol._bas[:bas_id1], 'sph')
-    nao_id0 = ao_loc[bas_id0]
-    nao_id1 = ao_loc[-1]
+    nao_id0 = int(ao_loc[bas_id0])
+    nao_id1 = int(ao_loc[-1])
     return nao_id0, nao_id1
 
 def nao_2c(mol):
@@ -1427,7 +1427,7 @@ def nao_2c(mol):
     dims = (l*4+2) * mol._bas[:,NCTR_OF]
     dims[kappa<0] = (l[kappa<0] * 2 + 2) * mol._bas[kappa<0,NCTR_OF]
     dims[kappa>0] = (l[kappa>0] * 2) * mol._bas[kappa>0,NCTR_OF]
-    return dims.sum()
+    return int(dims.sum())
 
 # nao_id0:nao_id1 corresponding to bas_id0:bas_id1
 def nao_2c_range(mol, bas_id0, bas_id1):
@@ -1452,8 +1452,8 @@ def nao_2c_range(mol, bas_id0, bas_id1):
     (4, 12)
     '''
     ao_loc = moleintor.make_loc(mol._bas[:bas_id1], '')
-    nao_id0 = ao_loc[bas_id0]
-    nao_id1 = ao_loc[-1]
+    nao_id0 = int(ao_loc[bas_id0])
+    nao_id1 = int(ao_loc[-1])
     return nao_id0, nao_id1
 
 def ao_loc_nr(mol, cart=None):
@@ -2101,7 +2101,7 @@ def tostring(mol, format='raw'):
             output.append('%-4s   %s' % (symb, line))
         return '\n'.join(output)
     else:
-        raise NotImplementedError
+        raise NotImplementedError(f'format={format}')
 
 def tofile(mol, filename, format=None):
     '''Write molecular geometry to a file of the required format.
@@ -3069,12 +3069,11 @@ class MoleBase(lib.StreamObject):
             mol._env[ptr+0] = unit * atoms_or_coords[:,0]
             mol._env[ptr+1] = unit * atoms_or_coords[:,1]
             mol._env[ptr+2] = unit * atoms_or_coords[:,2]
+            # reset nuclear energy
+            mol.enuc = None
         else:
             mol.symmetry = symmetry
             mol.build(False, False)
-
-        # reset nuclear energy
-        mol.enuc = None
 
         if mol.verbose >= logger.INFO:
             logger.info(mol, 'New geometry')
@@ -3157,7 +3156,7 @@ class MoleBase(lib.StreamObject):
         '''
         if self._atm[atm_id,NUC_MOD_OF] != NUC_FRAC_CHARGE:
             # regular QM atoms
-            return self._atm[atm_id,CHARGE_OF]
+            return int(self._atm[atm_id,CHARGE_OF])
         else:
             # MM atoms with fractional charges
             return self._env[self._atm[atm_id,PTR_FRAC_CHARGE]]
@@ -3221,7 +3220,7 @@ class MoleBase(lib.StreamObject):
         >>> mol.atom_nshells(1)
         5
         '''
-        return (self._bas[:,ATOM_OF] == atm_id).sum()
+        return int((self._bas[:,ATOM_OF] == atm_id).sum())
 
     def atom_shell_ids(self, atm_id):
         r'''A list of the shell-ids of the given atom
@@ -3268,7 +3267,7 @@ class MoleBase(lib.StreamObject):
         >>> mol.bas_atom(7)
         1
         '''
-        return self._bas[bas_id,ATOM_OF].copy()
+        return int(self._bas[bas_id,ATOM_OF])
 
     def bas_angular(self, bas_id):
         r'''The angular momentum associated with the given basis
@@ -3283,7 +3282,7 @@ class MoleBase(lib.StreamObject):
         >>> mol.bas_atom(7)
         2
         '''
-        return self._bas[bas_id,ANG_OF].copy()
+        return int(self._bas[bas_id,ANG_OF])
 
     def bas_nctr(self, bas_id):
         r'''The number of contracted GTOs for the given shell
@@ -3298,7 +3297,7 @@ class MoleBase(lib.StreamObject):
         >>> mol.bas_atom(3)
         3
         '''
-        return self._bas[bas_id,NCTR_OF].copy()
+        return int(self._bas[bas_id,NCTR_OF])
 
     def bas_nprim(self, bas_id):
         r'''The number of primitive GTOs for the given shell
@@ -3313,7 +3312,7 @@ class MoleBase(lib.StreamObject):
         >>> mol.bas_atom(3)
         11
         '''
-        return self._bas[bas_id,NPRIM_OF].copy()
+        return int(self._bas[bas_id,NPRIM_OF])
 
     def bas_kappa(self, bas_id):
         r'''Kappa (if l < j, -l-1, else l) of the given shell
@@ -3328,7 +3327,7 @@ class MoleBase(lib.StreamObject):
         >>> mol.bas_kappa(3)
         0
         '''
-        return self._bas[bas_id,KAPPA_OF].copy()
+        return int(self._bas[bas_id,KAPPA_OF])
 
     def bas_exp(self, bas_id):
         r'''exponents (ndarray) of the given shell

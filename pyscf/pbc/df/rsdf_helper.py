@@ -1073,11 +1073,11 @@ def _aux_e2_nospltbas(cell, auxcell_or_auxbasis, omega, erifile,
 
     ao_loc = cell.ao_loc_nr()
     aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)[:shls_slice[5]+1]
-    ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
-    nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
+    ni = int(ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]])
+    nj = int(ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]])
     nkptij = len(kptij_lst)
 
-    nii = (ao_loc[shls_slice[1]]*(ao_loc[shls_slice[1]]+1)//2 -
+    nii = int(ao_loc[shls_slice[1]]*(ao_loc[shls_slice[1]]+1)//2 -
            ao_loc[shls_slice[0]]*(ao_loc[shls_slice[0]]+1)//2)
     nij = ni * nj
 

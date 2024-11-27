@@ -65,7 +65,7 @@ mol = gto.M(
 mol = gto.M(
     atom = '''O 0 0 0; H1 0 1 0; H2 0 0 1''',
     basis = {'O': gto.parse('''
-# Parse NWChem format basis string (see https://bse.pnl.gov/bse/portal).
+# Parse NWChem format basis string (see https://www.basissetexchange.org/).
 # Comment lines are ignored
 #BASIS SET: (6s,3p) -> [2s,1p]
 O    S
