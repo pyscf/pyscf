@@ -57,7 +57,7 @@ def load_qcschema_molecule(qcschema_dict, to_Angstrom=False, xyz=False, mol_sele
                                = 2 initial_molecule in GO or traj qcschema
                                = 3 final_molecule in GO or traj qcschema
                                = 4 a specific step in the GO or traj qcschema, specify with 'step' arg.
-        step: for geometry optimization or trajectory, which have mutliple molecules in a qcschema output.
+        step: for geometry optimization or trajectory, which have multiple molecules in a qcschema output.
               This specifies which step to load the molecule from.
         to_Angstrom (optional): convert coordinates to Angstrom (default is Bohr)
         xyz (optional): controls output (see below)
