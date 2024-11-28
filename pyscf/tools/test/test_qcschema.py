@@ -2,7 +2,7 @@
     Loads QCSchema format json result and computes dipole moment.
     Wavefunction info is in QCSchema json data file.
 '''
-from pyscf.lib.libqcschema import *
+from pyscf.tools.qcschema import *
 from pyscf import gto, dft, lib
 import json
 import numpy as np
@@ -10,7 +10,7 @@ import unittest
 import tempfile
 
 class KnownValues(unittest.TestCase):
-    def test_libqcschema_dipole(self):
+    def test_qcschema_dipole(self):
         chkfile = ""
         qcschema_json = "qcschema_result.json"
 
@@ -18,7 +18,8 @@ class KnownValues(unittest.TestCase):
         qcschema_dict = load_qcschema_json(qcschema_json)
 
         # Create DFT object
-        mol, ks = recreate_scf_obj(qcschema_dict)
+        mol = recreate_mol_obj(qcschema_dict)
+        ks = recreate_scf_obj(qcschema_dict,mol)
 
         #### Compute Molecular Dipole Moment ####
         # First compute density matrix
@@ -34,5 +35,5 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(known_dipole[i],DipMom[i],delta=1e-4)
 
 if __name__ == "__main__":
-    print("Full Tests for libqcschema")
+    print("Full Tests for qcschema")
     unittest.main()

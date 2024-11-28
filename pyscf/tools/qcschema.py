@@ -57,7 +57,8 @@ def load_qcschema_molecule(qcschema_dict, to_Angstrom=False, xyz=False, mol_sele
                                = 2 initial_molecule in GO or traj qcschema
                                = 3 final_molecule in GO or traj qcschema
                                = 4 a specific step in the GO or traj qcschema, specify with 'step' arg.
-
+        step: for geometry optimization or trajectory, which have mutliple molecules in a qcschema output.
+              This specifies which step to load the molecule from.
         to_Angstrom (optional): convert coordinates to Angstrom (default is Bohr)
         xyz (optional): controls output (see below)
 
@@ -130,7 +131,7 @@ def load_qcschema_scf_info(qcschema_dict):
     '''
     
     # Restricted wfn has schema scf_occupations_a occ of 1 or 0.
-    # Need to double if RHF/RKS/ROHF
+    # Need to double if rhf/rks/rohf
     method = qcschema_dict["keywords"]["scf"]["method"]
     if(method == 'rks' or method == 'roks' or method == 'rhf' or method == 'rohf'):
         OccFactor = 2.0
@@ -141,13 +142,23 @@ def load_qcschema_scf_info(qcschema_dict):
     elif(method == 'gks' or method == 'ghf'):
         OccFactor = 1.0
         have_beta = False
+    else:
+        raise RuntimeError('qcschema: cannot determine method..exit')
+        return
 
-    # Need to reshape MO coefficients for PySCF shape.
-    # NOTE: assumes NMO=NAO which isn't the case if linear dependencies etc. 
-    nmo = qcschema_dict["properties"]["calcinfo_nbasis"]
-    nao = nmo
+    # need to reshape MO coefficients for PySCF shape.
+    nao = qcschema_dict["properties"]["calcinfo_nbasis"]
+    # nmo info often missing
+    try:
+        nmo = qcschema_dict["properties"]["calcinfo_nmo"]
+    except:
+        # key not provided..so we make an assumption
+        # note: assumes nmo=nao which isn't the case if linear dependencies etc.
+        # ..so may give error when reading coeffs
+        nmo = nao
+    assert nmo == nao
 
-    # Get the 4 things that PySCF wants
+    # get the 4 things that PySCF wants
     # ...remembering to reshape coeffs and scale occupancies.
     e_tot = float( qcschema_dict["properties"]["return_energy"] )
     mo_coeff = np.reshape(qcschema_dict["wavefunction"]["scf_orbitals_a"],(nao,nmo))
@@ -167,7 +178,7 @@ def load_qcschema_scf_info(qcschema_dict):
         mo_energy = np.vstack( (mo_energy, mo_energy_beta) )
         # etot obviously doesn't need manipulation
 
-    # Convert to dictionary for PySCF
+    # convert to dictionary for PySCF
     scf_dic = {'e_tot'    : e_tot,
                'mo_energy': mo_energy,
                'mo_occ'   : mo_occ,
