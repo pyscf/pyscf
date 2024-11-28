@@ -50,7 +50,7 @@ _white_list = {
 
 # These xc functionals are not supported yet
 _black_list = {
-    'wb97x-d', 'wb97x-d3',
+    'wb97x-d', 'wb97x-d3', 'wb97x_d', 'wb97x_d3',
     'wb97m-d3bj2b', 'wb97m-d3bjatm',
     'b97m-d3bj2b', 'b97m-d3bjatm',
 }

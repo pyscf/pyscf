@@ -70,6 +70,24 @@ void NPzset0(double complex *p, const size_t n);
 void NPdcopy(double *out, const double *in, const size_t n);
 void NPzcopy(double complex *out, const double complex *in, const size_t n);
 
+void NPomp_dset0(const size_t n, double *out);
+void NPomp_zset0(const size_t n, double complex *out);
+
+void NPomp_dcopy(const size_t m, const size_t n,
+                 const double *in, const size_t in_stride,
+                 double *out, const size_t out_stride);
+void NPomp_zcopy(const size_t m, const size_t n,
+                 const double complex *in, const size_t in_stride,
+                 double complex *out, const size_t out_stride);
+void NPomp_dmul(const size_t m, const size_t n,
+                const double *a, const size_t a_stride,
+                double *b, const size_t b_stride,
+                double *out, const size_t out_stride);
+void NPomp_zmul(const size_t m, const size_t n,
+                const double complex *a, const size_t a_stride,
+                double complex *b, const size_t b_stride,
+                double complex *out, const size_t out_stride);
+
 void NPdgemm(const char trans_a, const char trans_b,
              const int m, const int n, const int k,
              const int lda, const int ldb, const int ldc,
