@@ -26,6 +26,7 @@ from pyscf import ao2mo
 from pyscf import symm
 from pyscf import __config__
 
+#Suggested new float_foramt and tolerance to match with MRCC and CFOUR
 DEFAULT_FLOAT_FORMAT = getattr(__config__, 'fcidump_float_format', ' %.16g')
 TOL = getattr(__config__, 'fcidump_write_tol', 1e-15)
 
@@ -65,6 +66,7 @@ ORBSYM_MAP = {
 }
 
 def write_head(fout, nmo, nelec, ms=0, orbsym=None):
+    is_uhf = isinstance(nelec, (list, tuple)) and len(nelec) == 2 and nelec[0] != nelec[1]
     if not isinstance(nelec, (int, numpy.number)):
         ms = abs(nelec[0] - nelec[1])
         nelec = nelec[0] + nelec[1]
@@ -74,12 +76,75 @@ def write_head(fout, nmo, nelec, ms=0, orbsym=None):
     else:
         fout.write('  ORBSYM=%s\n' % ('1,' * nmo))
     fout.write('  ISYM=1,\n')
+    if is_uhf:
+        fout.write('  IUHF=1,\n')
     fout.write(' &END\n')
 
+# dump the integrals in fort.55 file format
+def write_head55(fout, nmo, nelec, ms=0, orbsym=None):
+    if not isinstance(nelec, (int, numpy.number)):
+        ms = abs(nelec[0] - nelec[1])
+        nelec = nelec[0] + nelec[1]
+    fout.write(f"{nmo:1d} {nelec:1d}\n")
+    if orbsym is not None and len(orbsym) > 0:
+        orbsym = [x + 1 for x in orbsym]
+        fout.write(f"{' '.join([str(x) for x in orbsym])}\n")
+    else:
+        fout.write(f"{' 1' * nmo}\n")
+    fout.write(' 150000\n')
+    
+def compute_mo_irreps(mol, mo_coeff):
+    """Determine irreps for molecular orbitals."""
+    symm_orbs = mol.symm_orb  # Symmetry-adapted AO basis
+    irrep_labels = mol.irrep_name  # Irrep labels
+    mo_irreps = []
+    for mo in mo_coeff.T:  # Loop over molecular orbitals
+        projections = [numpy.linalg.norm(symm_orbs[i].T @ mo) for i in range(len(symm_orbs))]
+        irrep_idx = numpy.argmax(projections)  # Irrep with largest projection
+        mo_irreps.append(irrep_labels[irrep_idx])
+    return mo_irreps
+
+def align_beta_orbitals_to_alpha(mol, mo_coeff):
+    """
+    Aligns the beta orbitals to match the symmetry irreps of the alpha orbitals in UHF type of calculations.
+    Parameters:
+        mol (Mole): PySCF Mole object with symmetry enabled.
+        orbs (tuple): Tuple of two 2D arrays, (alpha_orbs, beta_orbs), each of shape (n_ao, n_mo).
+    Returns:
+        tuple: (unaltered_alpha_orbs, reordered_beta_orbs).
+    """
+    alpha_orbs, beta_orbs = mo_coeff[0], mo_coeff[1]
+    # Get irreps for alpha and beta orbitals
+    alpha_irreps = compute_mo_irreps(mol, mo_coeff[0])
+    beta_irreps = compute_mo_irreps(mol, mo_coeff[1])
+    # Map beta orbitals to alpha irreps
+    beta_orbs_sorted = []
+    used_indices = set()
+    for target_irrep in alpha_irreps:
+        # Find the first beta orbital with the matching irrep
+        for idx, beta_irrep in enumerate(beta_irreps):
+            if beta_irrep == target_irrep and idx not in used_indices:
+                beta_orbs_sorted.append(beta_orbs[:, idx])
+                used_indices.add(idx)
+                break
+        else:
+            raise ValueError(f"No matching beta orbital found for alpha irrep: {target_irrep}")
+    # Stack the sorted beta orbitals into a new 2D array
+    beta_orbs_sorted = numpy.column_stack(beta_orbs_sorted)
+    return alpha_orbs, beta_orbs_sorted
+'''
+!Example Usage
+orbs = mf.mo_coeff  # (alpha_orbs, beta_orbs)
+!Align the beta orbitals to match the alpha orbitals
+aligned_alpha_orbs, aligned_beta_orbs = align_beta_orbitals_to_alpha(mol, orbs)
+!Verify the shapes
+print("Alpha orbitals shape (unaltered):", aligned_alpha_orbs.shape)
+print("Beta orbitals shape (reordered):", aligned_beta_orbs.shape)
+'''
 
 def write_eri(fout, eri, nmo, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
     npair = nmo*(nmo+1)//2
-    output_format = float_format + ' %4d %4d %4d %4d\n'
+    output_format = float_format + ' %5d %5d %5d %5d\n'
     if eri.size == nmo**4:
         eri = ao2mo.restore(8, eri, nmo)
 
@@ -111,14 +176,71 @@ def write_eri(fout, eri, nmo, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
                         kl += 1
                 ij += 1
 
+#Remember to add some documentation 
+def write_eri_uhf(fout, eri_a, eri_b, eri_ab, nmo, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
+    npair = nmo*(nmo+1)//2
+    output_format = float_format + ' %5d %5d %5d %5d\n'
+    indx = [i+1 for i in range(nmo)]
+    if all(x.ndim == 2 for x in (eri_a, eri_b, eri_ab)): # 4-fold symmetry
+        assert all(x.ndim == 2 and x.size == npair**2 for x in (eri_a, eri_b, eri_ab))
+        kl = 0
+        for l in range(nmo):
+            for k in range(0, l+1):
+                ij = 0
+                for i in range(0, nmo):
+                    for j in range(0, i+1):
+                        if i >= k:
+                            if abs(eri_a[ij,kl]) > tol:
+                                fout.write(output_format % (eri_a[ij,kl], indx[i], indx[j], indx[k], indx[l]))
+                        ij += 1
+                kl += 1
+        fout.write(' 0.00000000000000000000E+00' + '     0     0     0     0\n')
+        kl = 0
+        for l in range(nmo):
+            for k in range(0, l+1):
+                ij = 0
+                for i in range(0, nmo):
+                    for j in range(0, i+1):
+                        if i >= k:
+                            if abs(eri_b[ij,kl]) > tol:
+                                fout.write(output_format % (eri_b[ij,kl], indx[i], indx[j], indx[k], indx[l]))
+                        ij += 1
+                kl += 1
+        fout.write(' 0.00000000000000000000E+00' + '     0     0     0     0\n')
+        ij = 0
+        for j in range(nmo):
+            for i in range(0, j+1):
+                kl = 0
+                for k in range(nmo):
+                    for l in range(0, k+1):
+                        if abs(eri_ab[ij,kl]) > tol:
+                            fout.write(output_format % (eri_ab[ij,kl], indx[i], indx[j], indx[k], indx[l]))
+                        kl += 1
+                ij +=1
+        fout.write(' 0.00000000000000000000E+00' + '     0     0     0     0\n')
+
 def write_hcore(fout, h, nmo, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
     h = h.reshape(nmo,nmo)
-    output_format = float_format + ' %4d %4d  0  0\n'
+    output_format = float_format + ' %5d %5d     0     0\n'
     for i in range(nmo):
         for j in range(0, i+1):
             if abs(h[i,j]) > tol:
                 fout.write(output_format % (h[i,j], i+1, j+1))
 
+#Remember to add some documentation
+def write_hcore_uhf(fout, h1e_a, h1e_b, nmo, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
+    h1e_a = h1e_a.reshape(nmo,nmo)
+    h1e_b = h1e_b.reshape(nmo,nmo)
+    indx = [i+1 for i in range(nmo)]
+    output_format = float_format + ' %5d %5d     0     0\n'
+    for i in range(nmo):
+        for j in range(nmo):
+            fout.write(output_format % (h1e_a[i,j], indx[i], indx[j]))
+    fout.write(' 0.00000000000000000000E+00' + '     0     0     0     0\n')
+    for i in range(nmo):
+        for j in range(nmo):
+            fout.write(output_format % (h1e_b[i,j], indx[i], indx[j]))
+    fout.write(' 0.00000000000000000000E+00' + '     0     0     0     0\n')
 
 def from_chkfile(filename, chkfile, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
                  molpro_orbsym=MOLPRO_ORBSYM, orbsym=None):
@@ -147,14 +269,58 @@ def from_chkfile(filename, chkfile, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
             float_format=float_format, molpro_orbsym=molpro_orbsym,
             ms=mol.spin)
 
+def from_chkfile_uhf(filename, chkfile, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
+                     molpro_orbsym=MOLPRO_ORBSYM, orbsym=None):
+    '''Read SCF results from PySCF chkfile and transform 1-electron,
+    2-electron integrals using the SCF orbitals.  The transformed integrals is
+    written to FCIDUMP
+
+    Kwargs:
+        molpro_orbsym (bool): Whether to dump the orbsym in Molpro orbsym
+            convention as documented in
+            https://www.molpro.net/info/current/doc/manual/node36.html
+    '''
+    mol, scf_rec = scf.chkfile.load_scf(chkfile)
+    mo_coeff = numpy.array(scf_rec['mo_coeff'])
+    nmo = mo_coeff.shape[1]
+
+    s = reduce(numpy.dot, (mo_coeff[0].conj().T, mol.intor_symmetric('int1e_ovlp'), mo_coeff[0]))
+    if abs(s - numpy.eye(nmo)).max() > 1e-6:
+        # Not support the chkfile from pbc calculation
+        raise RuntimeError('Non-orthogonal orbitals found in chkfile')
+
+    if mol.symmetry:
+        orbsym = symm.label_orb_symm(mol, mol.irrep_id,
+                                     mol.symm_orb, mo_coeff[0], check=False)
+    from_mo_uhf(mol, filename, mo_coeff, orbsym=orbsym, tol=tol,
+                float_format=float_format, molpro_orbsym=molpro_orbsym,
+                ms=mol.spin) 
+
+
 def from_integrals(filename, h1e, h2e, nmo, nelec, nuc=0, ms=0, orbsym=None,
                    tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
     '''Convert the given 1-electron and 2-electron integrals to FCIDUMP format'''
     with open(filename, 'w') as fout:
-        write_head(fout, nmo, nelec, ms, orbsym)
+        if filename == 'fort.55':
+            write_head55(fout, nmo, nelec, ms, orbsym)
+        else:
+            write_head(fout, nmo, nelec, ms, orbsym)
         write_eri(fout, h2e, nmo, tol=tol, float_format=float_format)
         write_hcore(fout, h1e, nmo, tol=tol, float_format=float_format)
-        output_format = float_format + '  0  0  0  0\n'
+        output_format = float_format + '     0     0     0     0\n'
+        fout.write(output_format % nuc)
+
+def from_integrals_uhf(filename, h1e_a, h1e_b, eri_a, eri_b, eri_ab, nmo, nelec, nuc=0, ms=0, orbsym=None,
+                       tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
+    '''Convert the given 1-electron and 2-electron integrals to FCIDUMP format'''
+    with open(filename, 'w') as fout:
+        if filename == 'fort.55':
+            write_head55(fout, nmo, nelec, ms, orbsym)
+        else:
+            write_head(fout, nmo, nelec, ms, orbsym)
+        write_eri_uhf(fout, eri_a, eri_b, eri_ab, nmo, tol=tol, float_format=float_format)
+        write_hcore_uhf(fout, h1e_a, h1e_b, nmo, tol=tol, float_format=float_format)
+        output_format = float_format + '     0     0     0     0\n'
         fout.write(output_format % nuc)
 
 def from_mo(mol, filename, mo_coeff, orbsym=None,
@@ -180,6 +346,37 @@ def from_mo(mol, filename, mo_coeff, orbsym=None,
     eri = ao2mo.full(mol, mo_coeff, verbose=0)
     nuc = mol.energy_nuc()
     from_integrals(filename, h1e, eri, h1e.shape[0], mol.nelec, nuc, ms, orbsym,
+                   tol, float_format)
+
+def from_mo_uhf(mol, filename, mo_coeff, orbsym=None,
+                tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
+                molpro_orbsym=MOLPRO_ORBSYM, ms=0):
+    '''Use the given MOs to transform the 1-electron and 2-electron integrals
+    then dump them to FCIDUMP.
+
+    Kwargs:
+        molpro_orbsym (bool): Whether to dump the orbsym in Molpro orbsym
+            convention as documented in
+            https://www.molpro.net/info/current/doc/manual/node36.html
+    '''
+    
+    if getattr(mol, '_mesh', None):
+        raise NotImplementedError('PBC system')
+
+    if orbsym is None:
+        orbsym = getattr(mo_coeff, 'orbsym', None)
+        if molpro_orbsym and orbsym is not None:
+            orbsym = [ORBSYM_MAP[mol.groupname][i] for i in orbsym]
+    h1ao = scf.hf.get_hcore(mol)
+    eri = mol.intor('int2e_sph', aosym='s8')
+    mo_coeff[0], mo_coeff[1] = align_beta_orbitals_to_alpha(mol, mo_coeff)
+    h1e_a = reduce(numpy.dot, (mo_coeff[0].T, h1ao, mo_coeff[0]))
+    h1e_b = reduce(numpy.dot, (mo_coeff[1].T, h1ao, mo_coeff[1]))
+    eri_a  = ao2mo.restore(4,ao2mo.incore.general(eri, (mo_coeff[0],mo_coeff[0],mo_coeff[0],mo_coeff[0]), compact=False),h1e_a.shape[0])
+    eri_b  = ao2mo.restore(4,ao2mo.incore.general(eri, (mo_coeff[1],mo_coeff[1],mo_coeff[1],mo_coeff[1]), compact=False),h1e_a.shape[0])
+    eri_ab = ao2mo.restore(4,ao2mo.incore.general(eri, (mo_coeff[0],mo_coeff[0],mo_coeff[1],mo_coeff[1]), compact=False),h1e_a.shape[0])
+    nuc = mol.energy_nuc()
+    from_integrals_uhf(filename, h1e_a, h1e_b, eri_a, eri_b, eri_ab, h1e_a.shape[0], mol.nelec, nuc, ms, orbsym,
                    tol, float_format)
 
 def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
@@ -211,6 +408,44 @@ def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
     from_integrals(filename, h1e, eri, h1e.shape[0], mf.mol.nelec, nuc, 0, orbsym,
                    tol, float_format)
 
+def from_scf_uhf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
+                 molpro_orbsym=MOLPRO_ORBSYM):
+    '''Use the given SCF object to transform the 1-electron and 2-electron
+    integrals then dump them to FCIDUMP.
+
+    Kwargs:
+        molpro_orbsym (bool): Whether to dump the orbsym in Molpro orbsym
+            convention as documented in
+            https://www.molpro.net/info/current/doc/manual/node36.html
+    '''
+    mol = mf.mol
+    assert mf.mo_coeff[0].dtype == numpy.double and mf.mo_coeff[1].dtype == numpy.double
+    mo_coeff_a, mo_coeff_b = align_beta_orbitals_to_alpha(mol, mf.mo_coeff)
+    h1e_a = reduce(numpy.dot, (mo_coeff_a.T, mf.get_hcore(), mo_coeff_a))
+    h1e_b = reduce(numpy.dot, (mo_coeff_b.T, mf.get_hcore(), mo_coeff_b))
+    if mf._eri is None:
+        if getattr(mf, 'exxdiv', None):  # PBC system, this part could raise an error, needs to do some testing
+            eri = mf.with_df.ao2mo(mf.mo_coeff)
+            eri_a  = ao2mo.restore(4,ao2mo.incore.general(eri, (mo_coeff_a, mo_coeff_a, mo_coeff_a, mo_coeff_a), compact=False),h1e_a.shape[0])
+            eri_b  = ao2mo.restore(4,ao2mo.incore.general(eri, (mo_coeff_b, mo_coeff_b, mo_coeff_b, mo_coeff_b), compact=False),h1e_a.shape[0])
+            eri_ab = ao2mo.restore(4,ao2mo.incore.general(eri, (mo_coeff_a, mo_coeff_a, mo_coeff_b, mo_coeff_b), compact=False),h1e_a.shape[0])
+        else:
+            eri = ao2mo.full(mf.mol, mf.mo_coeff)
+            eri_a  = ao2mo.restore(4,ao2mo.incore.general(eri, (mo_coeff_a, mo_coeff_a, mo_coeff_a, mo_coeff_a), compact=False),h1e_a.shape[0])
+            eri_b  = ao2mo.restore(4,ao2mo.incore.general(eri, (mo_coeff_b, mo_coeff_b, mo_coeff_b, mo_coeff_b), compact=False),h1e_a.shape[0])
+            eri_ab = ao2mo.restore(4,ao2mo.incore.general(eri, (mo_coeff_a, mo_coeff_a, mo_coeff_b, mo_coeff_b), compact=False),h1e_a.shape[0])
+    else:  # Handle cached integrals or customized systems
+        eri = mol.intor('int2e_sph', aosym='s8')
+        eri_a  = ao2mo.restore(4,ao2mo.incore.general(eri, (mo_coeff_a, mo_coeff_a, mo_coeff_a, mo_coeff_a), compact=False),h1e_a.shape[0])
+        eri_b  = ao2mo.restore(4,ao2mo.incore.general(eri, (mo_coeff_b, mo_coeff_b, mo_coeff_b, mo_coeff_b), compact=False),h1e_a.shape[0])
+        eri_ab = ao2mo.restore(4,ao2mo.incore.general(eri, (mo_coeff_a, mo_coeff_a, mo_coeff_b, mo_coeff_b), compact=False),h1e_a.shape[0])
+    orbsym = getattr(mo_coeff_a, 'orbsym', None)
+    if molpro_orbsym and orbsym is not None:
+        orbsym = [ORBSYM_MAP[mol.groupname][i] for i in orbsym]
+    nuc = mf.energy_nuc()
+    from_integrals_uhf(filename, h1e_a, h1e_b, eri_a, eri_b, eri_ab, h1e_a.shape[0], mf.mol.nelec, nuc, 0, orbsym,
+                   tol, float_format)
+
 def from_mcscf(mc, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
                molpro_orbsym=MOLPRO_ORBSYM):
     '''Use the given MCSCF object to obtain the CAS 1-electron and 2-electron
@@ -239,6 +474,7 @@ def from_mcscf(mc, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
     from_integrals(filename, h1eff, h2eff, mc.ncas, nelecas, nuc=ecore, ms=ms,
                    orbsym=orbsym, tol=tol, float_format=float_format)
 
+# Need to implement a similar function for reading FCIDUMP from UHF reference 
 def read(filename, molpro_orbsym=MOLPRO_ORBSYM, verbose=True):
     '''Parse FCIDUMP.  Return a dictionary to hold the integrals and
     parameters with keys:  H1, H2, ECORE, NORB, NELEC, MS, ORBSYM, ISYM
