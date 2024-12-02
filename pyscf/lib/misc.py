@@ -417,8 +417,8 @@ def tril_product(*iterables, **kwds):
     .. math:: i[tril_idx[0]] >= i[tril_idx[1]] >= ... >= i[tril_idx[len(tril_idx)-1]]
 
     Args:
-        *iterables: Variable length argument list of indices for the cartesian product
-        **kwds: Arbitrary keyword arguments.  Acceptable keywords include:
+        ``*iterables``: Variable length argument list of indices for the cartesian product
+        ``**kwds``: Arbitrary keyword arguments.  Acceptable keywords include:
             repeat (int): Number of times to repeat the iterables
             tril_idx (array_like): Indices to put into lower-triangular form.
 
@@ -664,7 +664,7 @@ class StreamObject:
 
     def apply(self, fn, *args, **kwargs):
         '''
-        Apply the fn to rest arguments:  return fn(*args, **kwargs).  The
+        Apply the fn to rest arguments:  return ``fn(*args, **kwargs)``.  The
         return value of method set is the object itself.  This allows a series
         of functions/methods to be executed in pipe.
         '''
@@ -878,8 +878,10 @@ def make_class(bases, name=None, attrs=None):
     '''
     Construct a class
 
-    class {name}(*bases):
-        __dict__ = attrs
+    .. code-block:: python
+
+        class {name}(*bases):
+            __dict__ = attrs
     '''
     if name is None:
         name = ''.join(getattr(x, '__name_mixin__', x.__name__) for x in bases)
