@@ -314,7 +314,7 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
             No effects.
         kpts : (3,) ndarray or (nkpts,3) ndarray
             Single or multiple k-points sampled for the DM.  Default is gamma point.
-        kpts_band : (3,) ndarray or (*,3) ndarray
+        kpts_band : ``(3,)`` ndarray or ``(*,3)`` ndarray
             A list of arbitrary "band" k-points at which to evaluate the XC matrix.
 
     Returns:
@@ -414,7 +414,7 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=1,
             No effects.
         kpts : (3,) ndarray or (nkpts,3) ndarray
             Single or multiple k-points sampled for the DM.  Default is gamma point.
-            kpts_band : (3,) ndarray or (*,3) ndarray
+            kpts_band : ``(3,)`` ndarray or ``(*,3)`` ndarray
             A list of arbitrary "band" k-points at which to evaluate the XC matrix.
 
     Returns:
