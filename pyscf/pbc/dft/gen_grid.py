@@ -157,8 +157,11 @@ def get_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
         dimension = cell.dimension
     else:
         dimension = 3
-    rcut = pbc_eval_gto._estimate_rcut(cell)
-    Ls = pbc_eval_gto.get_lattice_Ls(cell, rcut=rcut.max())
+    if cell.rcut is None: 
+      rcut = pbc_eval_gto._estimate_rcut(cell).max()
+    else: 
+      rcut = cell.rcut 
+    Ls = pbc_eval_gto.get_lattice_Ls(cell, rcut=rcut)
 
     atm_coords = Ls.reshape(-1,1,3) + cell.atom_coords()
     atom_grids_tab = gen_atomic_grids(cell, atom_grid, radi_method, level, prune)
