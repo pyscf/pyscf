@@ -129,7 +129,7 @@ def load_qcschema_scf_info(qcschema_dict):
     Returns:
         scf_dict: contains the relevent scf info only
     '''
- 
+
     # Restricted wfn has schema scf_occupations_a occ of 1 or 0.
     # Need to double if rhf/rks/rohf
     method = qcschema_dict["keywords"]["scf"]["method"]
