@@ -23,9 +23,7 @@ cell = gto.M(
     verbose = 4,
 )
 
-mf = scf.RHF(cell).density_fit()
-mf.with_df.mesh = [10]*3
-mf.kernel()
+mf = scf.RHF(cell).density_fit().run()
 
 #
 # Import CC, TDDFT module from the molecular implementations

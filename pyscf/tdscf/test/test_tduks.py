@@ -67,16 +67,17 @@ def setUpModule():
     mf_uhf = scf.UHF(mol).run()
     td_hf = tdscf.TDHF(mf_uhf).run(conv_tol=1e-6)
 
-    mf_lda = dft.UKS(mol).set(xc='lda', conv_tol=1e-12)
-    mf_lda.grids.prune = None
-    mf_lda = mf_lda.newton().run()
-    mf_bp86 = dft.UKS(mol).set(xc='b88,p86', conv_tol=1e-12)
-    mf_bp86.grids.prune = None
-    mf_bp86 = mf_bp86.newton().run()
-    mf_b3lyp = dft.UKS(mol).set(xc='b3lyp5', conv_tol=1e-12)
-    mf_b3lyp.grids.prune = None
-    mf_b3lyp = mf_b3lyp.newton().run()
-    mf_m06l = dft.UKS(mol).run(xc='m06l')
+    with lib.temporary_env(dft.radi, ATOM_SPECIFIC_TREUTLER_GRIDS=False):
+        mf_lda = dft.UKS(mol).set(xc='lda', conv_tol=1e-12)
+        mf_lda.grids.prune = None
+        mf_lda = mf_lda.newton().run()
+        mf_bp86 = dft.UKS(mol).set(xc='b88,p86', conv_tol=1e-12)
+        mf_bp86.grids.prune = None
+        mf_bp86 = mf_bp86.newton().run()
+        mf_b3lyp = dft.UKS(mol).set(xc='b3lyp5', conv_tol=1e-12)
+        mf_b3lyp.grids.prune = None
+        mf_b3lyp = mf_b3lyp.newton().run()
+        mf_m06l = dft.UKS(mol).run(xc='m06l')
 
 def tearDownModule():
     global mol, mol1, mf_uhf, td_hf, mf_lda, mf_bp86, mf_b3lyp, mf_m06l
@@ -166,6 +167,23 @@ class KnownValues(unittest.TestCase):
         es = td.kernel()[0] * 27.2114
         ref = [6.88046608, 7.58244885, 8.49961771, 9.30209259, 9.53368005]
         self.assertAlmostEqual(abs(es - ref).max(), 0, 4)
+
+    def test_tda_rsh(self):
+        mol = gto.M(atom='H 0 0 0.6; H 0 0 0', basis = "6-31g")
+        mf = dft.UKS(mol)
+        mf.xc = 'wb97'
+        e = mf.kernel()
+        self.assertAlmostEqual(e, -1.14670613191817, 8)
+        e_td = mf.TDA().set(nstates=5).kernel()[0]
+        ref = [0.51100114, 0.59718449, 0.86558547, 1.02667323, 1.57231767]
+        self.assertAlmostEqual(abs(e_td - ref).max(), 0, 6)
+
+        mf.xc = 'hse06'
+        e = mf.kernel()
+        self.assertAlmostEqual(e, -1.1447666793407982, 8)
+        e_td = mf.TDA().set(nstates=5).kernel()[0]
+        ref = [0.47713861, 0.60314354, 0.83949946, 1.03802547, 1.55472339]
+        self.assertAlmostEqual(abs(e_td - ref).max(), 0, 6)
 
     def test_tda_m06l(self):
         td = mf_m06l.TDA()

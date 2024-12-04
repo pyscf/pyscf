@@ -81,12 +81,21 @@ C, 0.8917,  2.6751,  2.6751'''
 
     def test_rsh_fft(self):
         mf = pbcdft.KUKS(cell)
+        mf.xc = 'hse06'
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -2.482418296326724, 7)
+
+        mf = pbcdft.KUKS(cell)
         mf.xc = 'camb3lyp'
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -2.4745140703871877, 7)
 
     def test_rsh_df(self):
         mf = pbcdft.KUKS(cell).density_fit()
+        mf.xc = 'wb97'
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -2.4916945546399165, 6)
+
         mf.xc = 'camb3lyp'
         mf.omega = .15
         mf.kernel()

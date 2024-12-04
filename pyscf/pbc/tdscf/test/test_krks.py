@@ -19,6 +19,7 @@ import numpy as np
 from pyscf import __config__
 from pyscf.pbc import gto, scf, tdscf, cc
 from pyscf import gto as molgto, scf as molscf, tdscf as moltdscf
+from pyscf.dft import radi
 from pyscf.pbc.cc.eom_kccsd_rhf import EOMEESinglet
 from pyscf.data.nist import HARTREE2EV as unitev
 
@@ -37,6 +38,9 @@ def diagonalize(a, b, nroots=4):
 class DiamondPBE(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.original_grids = radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
         cell = gto.Cell()
         cell.verbose = 4
         cell.output = '/dev/null'
@@ -67,6 +71,7 @@ class DiamondPBE(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
         cls.cell.stdout.close()
         del cls.cell, cls.mf
 
@@ -106,6 +111,9 @@ class DiamondPBE(unittest.TestCase):
 class DiamondPBE0(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.original_grids = radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
         cell = gto.Cell()
         cell.verbose = 4
         cell.output = '/dev/null'
@@ -130,8 +138,10 @@ class DiamondPBE0(unittest.TestCase):
 
         cls.nstates = 5 # make sure first `nstates_test` states are converged
         cls.nstates_test = 2
+
     @classmethod
     def tearDownClass(cls):
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
         cls.cell.stdout.close()
         del cls.cell, cls.mf
 

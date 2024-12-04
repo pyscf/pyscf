@@ -63,7 +63,12 @@ def get_ab(mf):
 
         add_hf_(a, b, hyb)
         if omega != 0:  # For RSH
-            raise NotImplementedError
+            with mf.with_df.range_coulomb(omega) as rsh_df:
+                eri = rsh_df.ao2mo([orbo,mo,mo,mo], kpt, compact=False)
+                eri = eri.reshape(nocc,nmo,nmo,nmo)
+                k_fac = alpha - hyb
+                a -= np.einsum('ijba->iajb', eri[:nocc,:nocc,nocc:,nocc:]) * k_fac
+                b -= np.einsum('ibja->iajb', eri[:nocc,nocc:,:nocc,nocc:]) * k_fac
 
         xctype = ni._xc_type(mf.xc)
         dm0 = mf.make_rdm1(mo, mo_occ)
