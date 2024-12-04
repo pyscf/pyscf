@@ -701,6 +701,11 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
 
         self.build()
         self.dump_flags()
+
+        if dm0 is None and self.mo_coeff is not None and self.mo_occ is not None:
+            # Initial guess from existing wavefunction
+            dm0 = self.make_rdm1()
+
         self.converged, self.e_tot, \
                 self.mo_energy, self.mo_coeff, self.mo_occ \
                 = kernel(self, self.conv_tol, self.conv_tol_grad,

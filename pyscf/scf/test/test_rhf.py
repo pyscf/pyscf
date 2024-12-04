@@ -307,9 +307,8 @@ class KnownValues(unittest.TestCase):
         e1 = mf1.kernel()
         self.assertAlmostEqual(e1, -75.987815719969291, 9)
 
-        dm = mf1.make_rdm1()
         mf1.max_cycle = 3
-        e2 = mf1.kernel(dm)
+        e2 = mf1.kernel()
         self.assertAlmostEqual(e2, eref, 9)
 
     def test_energy_tot(self):
