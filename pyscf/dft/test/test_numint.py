@@ -177,10 +177,20 @@ class KnownValues(unittest.TestCase):
         ao = dft.numint.eval_ao(mol, mf.grids.coords, deriv=1)
         nao = ao.shape[1]
         ao_loc = mol.ao_loc_nr()
+        cutoff = mf.grids.cutoff * 1e2
+        cutoff2 = numint.CUTOFF * 1e2
+        nbins = numint.NBINS * 2 - int(numint.NBINS * numpy.log(cutoff)
+                                       / numpy.log(mf.grids.cutoff))
+        pair_mask = mol.get_overlap_cond() < -numpy.log(cutoff2)
+        wv = numpy.ones(ao.shape[1])
         res0 = lib.dot(ao[0].T, ao[1])
         res1 = dft.numint._dot_ao_ao(mol, ao[0], ao[1], non0tab,
                                      shls_slice=(0,mol.nbas), ao_loc=ao_loc)
+        res2 = dft.numint._dot_ao_ao_sparse(ao[0], ao[1], wv, nbins,
+                                            non0tab, pair_mask, ao_loc,
+                                            hermi=0)
         self.assertAlmostEqual(abs(res0 - res1).max(), 0, 9)
+        self.assertAlmostEqual(abs(res0 - res2).max(), 0, 9)
 
     def test_eval_rho(self):
         numpy.random.seed(10)
