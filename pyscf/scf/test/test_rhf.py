@@ -302,14 +302,14 @@ class KnownValues(unittest.TestCase):
         mf1.max_cycle = 4
         eref = mf1.kernel()
 
+        mf1 = scf.RHF(mol)
         mf1.diis = adiis
         mf1.max_cycle = 1
         e1 = mf1.kernel()
         self.assertAlmostEqual(e1, -75.987815719969291, 9)
 
-        dm = mf1.make_rdm1()
         mf1.max_cycle = 3
-        e2 = mf1.kernel(dm)
+        e2 = mf1.kernel()
         self.assertAlmostEqual(e2, eref, 9)
 
     def test_energy_tot(self):
@@ -809,7 +809,7 @@ H     0    0.757    0.587'''
         self.assertAlmostEqual(abs(f1 + f1.T).max(), 0, 12)
 
     def test_check_convergence(self):
-        mf1 = n2mf.copy()
+        mf1 = scf.RHF(n2sym)
         mf1.diis = False
         count = [0]
         def check_convergence(envs):

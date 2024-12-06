@@ -58,12 +58,12 @@ dm = mf.make_rdm1(mo_coeff, mo_occ)
 mf.kernel(dm)
 
 # 4. Last method can be simplified.  Calling .__dict__.update function to
-# upgrade the SCF object which assign mf.mo_coeff and mf.mo_occ etc. default
-# values. Then calling make_rdm1 function to generate a density matrix.
+# upgrade the SCF objec. Attributes such as mf.mo_coeff and mf.mo_occ etc. are
+# assigned by this function. These attributes will be used to construct an
+# initial guess automatically.
 mf = scf.RHF(mol)
 mf.__dict__.update(scf.chkfile.load('h2o.chk', 'scf'))
-dm = mf.make_rdm1()
-mf.kernel(dm)
+mf.kernel()
 
 
 #
