@@ -740,6 +740,9 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         from pyscf.x2c import x2c
         x2chf = x2c.UHF(self.mol)
         x2chf.__dict__.update(self.__dict__)
+        x2chf.mo_energy = None
+        x2chf.mo_coeff = None
+        x2chf.mo_occ = None
         return x2chf
     x2c = x2c1e
 
