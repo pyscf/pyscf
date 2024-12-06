@@ -1497,6 +1497,10 @@ omniobj._built = True
 omniobj.mol = omniobj
 omniobj._scf = omniobj
 omniobj.base = omniobj
+omniobj.precision = 1e-8 # utilized by several pbc modules
+
+# Attributes that are kept in np.ndarray during the to_gpu conversion
+_ATTRIBUTES_IN_NPARRAY = {'kpt', 'kpts', 'kpts_band', 'mesh', 'frozen'}
 
 def to_gpu(method, out=None):
     '''Convert a method to its corresponding GPU variant, and recursively
@@ -1539,9 +1543,11 @@ def to_gpu(method, out=None):
     for key in keys:
         val = getattr(method, key)
         if isinstance(val, numpy.ndarray):
-            val = cupy.asarray(val)
+            if key not in _ATTRIBUTES_IN_NPARRAY:
+                val = cupy.asarray(val)
         elif hasattr(val, 'to_gpu'):
             val = val.to_gpu()
         setattr(out, key, val)
-    out.reset()
+    if hasattr(out, 'reset'):
+        out.reset()
     return out

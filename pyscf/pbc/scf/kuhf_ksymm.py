@@ -102,7 +102,7 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     mf.scf_summary['e1'] = e1.real
     mf.scf_summary['e2'] = e_coul.real
     logger.debug(mf, 'E1 = %s  E_coul = %s', e1, e_coul)
-    if kuhf.CHECK_COULOMB_IMAG and abs(e_coul.imag > mf.cell.precision*10):
+    if kuhf.CHECK_COULOMB_IMAG and abs(e_coul.imag) > mf.cell.precision*10:
         logger.warn(mf, "Coulomb energy has imaginary part %s. "
                     "Coulomb integrals (e-e, e-N) may not converge !",
                     e_coul.imag)

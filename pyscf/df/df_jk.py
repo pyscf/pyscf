@@ -236,7 +236,7 @@ class _DFHF:
         return lib.to_gpu(self, obj)
 
 
-def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
+def get_jk(dfobj, dm, hermi=0, with_j=True, with_k=True, direct_scf_tol=1e-13):
     assert (with_j or with_k)
     if (not with_k and not dfobj.mol.incore_anyway and
         # 3-center integral tensor is not initialized
@@ -266,8 +266,7 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
     if not with_k:
         for eri1 in dfobj.loop():
             # uses numpy.matmul
-            vj += (dmtril @ eri1.T) @ eri1
-
+            vj += dmtril.dot(eri1.T).dot(eri1)
 
     elif getattr(dm, 'mo_coeff', None) is not None:
         #TODO: test whether dm.mo_coeff matching dm
@@ -297,7 +296,8 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
             assert (nao_pair == nao*(nao+1)//2)
             if with_j:
                 # uses numpy.matmul
-                vj += (dmtril @ eri1.T) @ eri1
+                vj += dmtril.dot(eri1.T).dot(eri1)
+
             for k in range(nset):
                 nocc = orbo[k].shape[1]
                 if nocc > 0:
@@ -324,8 +324,7 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
             naux, nao_pair = eri1.shape
             if with_j:
                 # uses numpy.matmul
-                vj += (dmtril @ eri1.T) @ eri1
-
+                vj += dmtril.dot(eri1.T).dot(eri1)
 
             for k in range(nset):
                 buf1 = buf[0,:naux]
@@ -344,7 +343,7 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
     logger.timer(dfobj, 'df vj and vk', *t0)
     return vj, vk
 
-def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13):
+def get_j(dfobj, dm, hermi=0, direct_scf_tol=1e-13):
     from pyscf.scf import _vhf
     from pyscf.scf import jk
     from pyscf.df import addons
@@ -437,7 +436,7 @@ def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13):
     return numpy.asarray(vj).reshape(dm_shape)
 
 
-def r_get_jk(dfobj, dms, hermi=1, with_j=True, with_k=True):
+def r_get_jk(dfobj, dms, hermi=0, with_j=True, with_k=True):
     '''Relativistic density fitting JK'''
     t0 = (logger.process_clock(), logger.perf_counter())
     mol = dfobj.mol
