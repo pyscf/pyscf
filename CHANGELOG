@@ -366,6 +366,7 @@ PySCF 1.7.6 (2021-03-28)
   - Auxiliary second-order Green's function perturbation theory (AGF2)
   - Smearing for molecules
   - Visscher small component correction approximation for DHF
+  - DFT+U
 * Improved
   - Threading safety in Mole temporary context
   - Basis parser to support arithmetic expressions in basis data

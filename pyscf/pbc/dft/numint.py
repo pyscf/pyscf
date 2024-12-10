@@ -144,9 +144,9 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, with_lapl=True,
             if hermi == 1:
                 rho[1:4] *= 2
             else:
+                c1 = _dot_ao_dm(cell, ao[0], dm.conj().T, non0tab, shls_slice, ao_loc)
                 for i in range(1, 4):
-                    c1 = _dot_ao_dm(cell, ao[i], dm, non0tab, shls_slice, ao_loc)
-                    rho[i] += dot_bra(ao[0], c1)
+                    rho[i] += dot_bra(c1, ao[i])
 
         else:
             if with_lapl:
@@ -314,7 +314,7 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
             No effects.
         kpts : (3,) ndarray or (nkpts,3) ndarray
             Single or multiple k-points sampled for the DM.  Default is gamma point.
-        kpts_band : (3,) ndarray or (*,3) ndarray
+        kpts_band : ``(3,)`` ndarray or ``(*,3)`` ndarray
             A list of arbitrary "band" k-points at which to evaluate the XC matrix.
 
     Returns:
@@ -340,7 +340,7 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
     elif xctype == 'HF':
         ao_deriv = 0
     else:
-        raise NotImplementedError(f'r_vxc for functional {xc_code}')
+        raise NotImplementedError(f'nr_rks for functional {xc_code}')
 
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms, hermi, False)
 
@@ -414,7 +414,7 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=1,
             No effects.
         kpts : (3,) ndarray or (nkpts,3) ndarray
             Single or multiple k-points sampled for the DM.  Default is gamma point.
-            kpts_band : (3,) ndarray or (*,3) ndarray
+            kpts_band : ``(3,)`` ndarray or ``(*,3)`` ndarray
             A list of arbitrary "band" k-points at which to evaluate the XC matrix.
 
     Returns:
@@ -440,7 +440,7 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=1,
     elif xctype == 'HF':
         ao_deriv = 0
     else:
-        raise NotImplementedError(f'r_vxc for functional {xc_code}')
+        raise NotImplementedError(f'nr_uks for functional {xc_code}')
 
     dma, dmb = _format_uks_dm(dms)
     nao = dma.shape[-1]
@@ -626,7 +626,7 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     elif xctype == 'HF':
         ao_deriv = 0
     else:
-        raise NotImplementedError(f'r_vxc for functional {xc_code}')
+        raise NotImplementedError(f'nr_rks_fxc for functional {xc_code}')
 
     if fxc is None and xctype in ('LDA', 'GGA', 'MGGA'):
         spin = 0
@@ -749,7 +749,7 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     elif xctype == 'HF':
         ao_deriv = 0
     else:
-        raise NotImplementedError(f'r_vxc for functional {xc_code}')
+        raise NotImplementedError(f'nr_uks_fxc for functional {xc_code}')
 
     if fxc is None and xctype in ('LDA', 'GGA', 'MGGA'):
         spin = 1
@@ -1089,7 +1089,9 @@ class NumInt(lib.StreamObject, numint.LibXCMixin):
         return self.eval_rho(cell, ao, dm, screen_index, xctype, hermi,
                              with_lapl, verbose)
 
-    to_gpu = lib.to_gpu
+    def to_gpu(self):
+        from gpu4pyscf.pbc.dft.numint import NumInt # type: ignore
+        return NumInt()
 
 _NumInt = NumInt
 
@@ -1211,6 +1213,18 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
                               ao_loc, hermi)
         return mat
 
+    @lib.with_doc(nr_rks_fxc.__doc__)
+    def nr_fxc(self, cell, grids, xc_code, dm0, dms, spin=0, relativity=0, hermi=0,
+               rho0=None, vxc=None, fxc=None, kpts=None, max_memory=2000,
+               verbose=None):
+        if spin == 0:
+            return self.nr_rks_fxc(cell, grids, xc_code, dm0, dms, relativity,
+                                   hermi, rho0, vxc, fxc, kpts, max_memory, verbose)
+        else:
+            return self.nr_uks_fxc(cell, grids, xc_code, dm0, dms, relativity,
+                                   hermi, rho0, vxc, fxc, kpts, max_memory, verbose)
+    get_fxc = nr_fxc
+
     def block_loop(self, cell, grids, nao=None, deriv=0, kpts=None,
                    kpts_band=None, max_memory=2000, non0tab=None, blksize=None):
         '''Define this macro to loop over grids by blocks.
@@ -1298,6 +1312,8 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
     cache_xc_kernel1 = cache_xc_kernel1
     get_rho = get_rho
 
-    to_gpu = lib.to_gpu
+    def to_gpu(self):
+        from gpu4pyscf.pbc.dft.numint import KNumInt # type: ignore
+        return KNumInt()
 
 _KNumInt = KNumInt

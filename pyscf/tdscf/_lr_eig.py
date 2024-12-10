@@ -290,7 +290,6 @@ def eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
     heff = None
     e = None
     v = None
-    conv_last = conv = np.zeros(nroots, dtype=bool)
 
     if x0sym is not None:
         x0_ir = np.asarray(x0sym)
@@ -299,6 +298,8 @@ def eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
     fresh_start = True
     for icyc in range(max_cycle):
         if fresh_start:
+            vlast = None
+            conv_last = conv = np.zeros(nroots, dtype=bool)
             xs = np.zeros((0, x0_size))
             ax = np.zeros((0, x0_size))
             row1 = 0
@@ -369,9 +370,10 @@ def eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
             raise RuntimeError('Not enough eigenvalues')
 
         w, e, elast = w[:space_inc], w[:nroots], e
-        v, vlast = v[:,:space_inc], v[:,:nroots]
-        if not fresh_start:
+        v = v[:,:space_inc]
+        if not fresh_start and vlast is not None:
             elast, conv_last = _sort_elast(elast, conv, vlast, v[:,:nroots], log)
+        vlast = v[:,:nroots]
 
         if elast is None:
             de = e

@@ -6,18 +6,21 @@ from pyscf.dft import KS
 '''
 D3 and D4 Dispersion.
 
-This is a simplified dispersion interface to
-d3 (https://github.com/dftd3/simple-dftd3) and
-d4 (https://github.com/dftd4/dftd4) libraries.
-This interface can automatically configure the necessary settings including
-dispersion, xc, and nlc attributes of PySCF mean-field objects. However,
-advanced features of d3 and d4 program are not available.
+This example shows the functionality of the pyscf-dispersion extension, which
+implements a simplified interface to d3 (https://github.com/dftd3/simple-dftd3)
+and d4 (https://github.com/dftd4/dftd4) libraries. This interface can
+automatically configure the necessary settings including dispersion, xc, and nlc
+attributes of PySCF mean-field objects. However, advanced features of d3 and d4
+program are not available. To execute the code in this example, you would need
+to install the pyscf-dispersion extension:
+
+pip install pyscf-dispersion
 
 If you need to access more features d3 and d4 libraries, such as overwriting the
 dispersion parameters, you can use the wrapper provided by the simple-dftd3 and
-dftd4 libraries. When using these libraries, please disable the .disp attribute
-of the underlying mean-field object, and properly set the .xc and .nlc attributes
-following this example.
+dftd4 libraries. When accessing dispersion through the APIs of these libraries,
+please disable the .disp attribute of the mean-field object, and properly set
+the .xc and .nlc attributes as shown in this example.
 '''
 
 mol = pyscf.M(
@@ -134,7 +137,7 @@ mf.xc = 'wb97m-d3bj'
 mf.disp = 'd4'
 mf.kernel() # Crash
 
-# Please note, not every xc functional can be used for D3/D4 corrections.
+# Please note, NOT every xc functional can be used for D3/D4 corrections.
 # For the valid xc and D3/D4 combinations, please refer to
 # https://github.com/dftd3/simple-dftd3/blob/main/assets/parameters.toml
 # https://github.com/dftd4/dftd4/blob/main/assets/parameters.toml

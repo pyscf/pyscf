@@ -322,6 +322,9 @@ class KohnShamDFT:
 
     _keys = {'xc', 'nlc', 'grids', 'disp', 'nlcgrids', 'small_rho_cutoff'}
 
+    # Use rho to filter grids
+    small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
+
     def __init__(self, xc='LDA,VWN'):
         # By default, self.nlc = '' and self.disp = None
         self.xc = xc
@@ -333,9 +336,6 @@ class KohnShamDFT:
         self.nlcgrids = gen_grid.Grids(self.mol)
         self.nlcgrids.level = getattr(
             __config__, 'dft_rks_RKS_nlcgrids_level', self.nlcgrids.level)
-        # Use rho to filter grids
-        self.small_rho_cutoff = getattr(
-            __config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
 ##################################################
 # don't modify the following attributes, they are not input options
         self._numint = numint.NumInt()
