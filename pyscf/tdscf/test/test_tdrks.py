@@ -256,8 +256,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ab_hf(self):
         a, b = rhf.get_ab(mf)
-        fock = mf.get_hcore() + mf.get_veff()
-        ftda = rhf.gen_tda_operation(mf, fock, singlet=True)[0]
+        ftda = rhf.gen_tda_operation(mf, singlet=True)[0]
         ftdhf = rhf.gen_tdhf_operation(mf, singlet=True)[0]
         nocc = numpy.count_nonzero(mf.mo_occ == 2)
         nvir = numpy.count_nonzero(mf.mo_occ == 0)

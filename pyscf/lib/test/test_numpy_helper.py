@@ -22,6 +22,30 @@ import itertools
 from pyscf import lib
 
 class KnownValues(unittest.TestCase):
+    def test_inplace_transpose_scale(self):
+        a = numpy.random.random((5,5))
+        acopy = a.copy()
+        with lib.with_omp_threads(4):
+            lib.transpose(a, inplace=True)
+        self.assertAlmostEqual(abs(a.T - acopy).max(), 0, 12)
+
+        a = numpy.random.random((405,405))-1j
+        acopy = a.copy()
+        lib.transpose(a, inplace=True)
+        self.assertAlmostEqual(abs(a.T - acopy).max(), 0, 12)
+        a[:] = acopy
+        lib.inplace_transpose_scale(a, 1.5)
+        self.assertAlmostEqual(abs(a.T - acopy*1.5).max(), 0, 12)
+        a = numpy.random.random((2, 405, 405))
+        acopy = a.copy()
+        with lib.with_omp_threads(1):
+            lib.transpose(a, axes=(0,2,1), inplace=True)
+        self.assertAlmostEqual(abs(a - acopy.transpose(0,2,1)).max(), 0, 12)
+        a[:] = acopy
+        with lib.with_omp_threads(4):
+            lib.transpose(a, axes=(0,2,1), inplace=True)
+        self.assertAlmostEqual(abs(a - acopy.transpose(0,2,1)).max(), 0, 12)
+
     def test_transpose(self):
         a = numpy.random.random((400,900))
         self.assertAlmostEqual(abs(a.T - lib.transpose(a)).max(), 0, 12)
@@ -229,6 +253,42 @@ class KnownValues(unittest.TestCase):
         a = numpy.eye(3)
         addr = lib.ndarray_pointer_2d(a)
         self.assertTrue(all(addr == a.ctypes.data + numpy.array([0, 24, 48])))
+
+    def test_omatcopy(self):
+        a = numpy.random.random((5,5))
+        b = numpy.empty_like(a)
+        lib.omatcopy(a, out=b)
+        self.assertTrue(numpy.all(a == b))
+        a = numpy.random.random((403,410)).T
+        b = numpy.empty_like(a)
+        lib.omatcopy(a, out=b)
+        self.assertTrue(numpy.all(a == b))
+
+    def test_zeros(self):
+        a = lib.zeros((100,100), dtype=numpy.double)
+        self.assertTrue(numpy.all(a == 0))
+        self.assertTrue(a.dtype == numpy.double)
+        a = lib.zeros((100,100), dtype=numpy.complex128)
+        self.assertTrue(numpy.all(a == 0))
+        self.assertTrue(a.dtype == numpy.complex128)
+        a = lib.zeros((100,100), dtype=numpy.int32)
+        self.assertTrue(numpy.all(a == 0))
+        self.assertTrue(a.dtype == numpy.int32)
+
+    def test_entrywise_mul(self):
+        a = numpy.random.random((101,100))
+        b = numpy.random.random((101,100))
+        prod = lib.entrywise_mul(a, b)
+        self.assertTrue(numpy.allclose(prod, a * b))
+        a = numpy.random.random((101,100))
+        b = numpy.random.random((101,100))
+        a = a + a*1j
+        b = b + b*1j
+        prod = lib.entrywise_mul(a, b)
+        self.assertTrue(numpy.allclose(prod, a * b))
+        # inplace test
+        lib.entrywise_mul(a, b, out=b)
+        self.assertTrue(numpy.allclose(prod, b))
 
 if __name__ == "__main__":
     print("Full Tests for numpy_helper")

@@ -158,7 +158,7 @@ def _get_refuniq_map(cell):
         shl "Ish".
         uniq_atms: a list of unique atom symbols.
         uniq_bas: concatenate basis for all uniq atomsm, i.e.,
-                    [*cell._basis[atm] for atm in uniq_atms]
+                    ``[*cell._basis[atm] for atm in uniq_atms]``
         uniq_bas_loc: uniq bas loc by uniq atoms (similar to cell.ao_loc)
     """
 # get uniq atoms that respect the order it appears in cell
@@ -988,7 +988,7 @@ def _aux_e2_nospltbas(cell, auxcell_or_auxbasis, omega, erifile,
     _make_j3c**
 
     Args:
-        kptij_lst : (*,2,3) array
+        kptij_lst : ``(*,2,3)`` array
             A list of (kpti, kptj)
         estimator (str; default: "ME"):
             The integral estimator used for screening. Options are

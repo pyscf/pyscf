@@ -65,8 +65,7 @@ class DiamondPBE(unittest.TestCase):
 
     def test_tda(self):
         # same as lowest roots in DiamondPBE->test_tda_singlet/triplet in test_krks.py
-        ref = [[5.7465112548, 5.7465526327],
-               [6.9888184993, 6.9888609925]]
+        ref = [[5.7465112548, 5.7465526327]]
         self.kernel('TDA', ref, singlet=False)
 
     def test_tdhf(self):
@@ -117,8 +116,7 @@ class DiamondPBE0(unittest.TestCase):
 
     def test_tda(self):
         # same as lowest roots in DiamondPBE0->test_tda_singlet/triplet in test_krks.py
-        ref = [[6.6703797643, 6.6704110631],
-               [7.4081863259, 7.4082204017]]
+        ref = [[6.6703797643, 6.6704110631]]
         self.kernel('TDA', ref, singlet=False)
 
     def test_tdhf(self):

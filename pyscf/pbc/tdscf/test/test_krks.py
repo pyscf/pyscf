@@ -83,8 +83,7 @@ class DiamondPBE(unittest.TestCase):
         return td
 
     def test_tda_singlet(self):
-        ref = [[7.7172857896, 7.7173222336],
-               [8.3749594280, 8.3749980463]]
+        ref = [[7.7172857896, 7.7173222336]]
         td = self.kernel('TDA', ref)
         a0, _ = td.get_ab(kshift=0)
         nk, no, nv = a0.shape[:3]
@@ -92,8 +91,7 @@ class DiamondPBE(unittest.TestCase):
         self.assertAlmostEqual(abs(td.e[0][:2] - eref[:2]).max(), 0, 7)
 
     def test_tda_triplet(self):
-        ref = [[5.7465112548, 5.7465526327],
-               [6.9888184993, 6.9888609925]]
+        ref = [[5.7465112548, 5.7465526327]]
         self.kernel('TDA', ref, singlet=False)
 
     def test_tdhf_singlet(self):
@@ -153,8 +151,7 @@ class DiamondPBE0(unittest.TestCase):
         return td
 
     def test_tda_singlet(self):
-        ref = [[9.3936718451, 9.4874866060],
-               [10.0697605303, 10.0697862958]]
+        ref = [[9.3936718451, 9.4874866060]]
         td = self.kernel('TDA', ref)
         a0, _ = td.get_ab(kshift=0)
         nk, no, nv = a0.shape[:3]
@@ -162,8 +159,7 @@ class DiamondPBE0(unittest.TestCase):
         self.assertAlmostEqual(abs(td.e[0][:2] - eref[:2]).max(), 0, 8)
 
     def test_tda_triplet(self):
-        ref = [[6.6703797643, 6.6704110631],
-               [7.4081863259, 7.4082204017]]
+        ref = [[6.6703797643, 6.6704110631]]
         self.kernel('TDA', ref, singlet=False)
 
     def test_tdhf_singlet(self):

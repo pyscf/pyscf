@@ -54,7 +54,7 @@ def build_neighbor_list_for_shlpairs(cell, cell1=None, Ls=None,
         cell1 : :class:`pbc.gto.cell.Cell`, optional
             The :class:`Cell` instance for the ket basis functions.
             If not given, both bra and ket basis functions come from cell.
-        Ls : (*,3) array, optional
+        Ls : ``(*,3)`` array, optional
             The cartesian coordinates of the periodic images.
             Default is calculated by :func:`cell.get_lattice_Ls`.
         ish_rcut : (nish,) array, optional
