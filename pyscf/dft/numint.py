@@ -2850,7 +2850,7 @@ class NumInt(lib.StreamObject, LibXCMixin):
                 pair_mask = ovlp_cond < -numpy.log(self.cutoff)
             pair_mask = numpy.asarray(pair_mask, dtype=numpy.uint8)
 
-        if mo_occ is not None:
+        if (mo_occ is not None) and (grids is not None):
             # eval_rho2 is more efficient unless we have a very large system
             # for which the pair_mask is significantly sparser than the
             # ratio of occupied to total molecular orbitals. So we use this ratio
