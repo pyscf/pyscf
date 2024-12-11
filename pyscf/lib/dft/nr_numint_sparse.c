@@ -568,8 +568,8 @@ void VXCdot_aow_ao_dense(double *out, double *bra, double *ket, double *wv,
 {
         const size_t Nao = nao;
         const size_t Ngrids = ngrids;
-        const int nao_blksize = BOXSIZE1_N * 4;
-        const int ngrids_blksize = BOXSIZE1_M;
+        const int nao_blksize = 64;
+        const int ngrids_blksize = 256;
         const char TRANS_T = 'T';
         const char TRANS_N = 'N';
         const double D1 = 1;
