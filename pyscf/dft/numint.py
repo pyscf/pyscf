@@ -312,7 +312,7 @@ def eval_rho1(mol, ao, dm, screen_index=None, xctype='LDA', hermi=0,
 
         rho[tau_idx] = 0
         for i in range(1, 4):
-            c1 = _dot_ao_dm_sparse(ao[i], dm.T, nbins, screen_index, pair_mask, ao_loc)
+            c1 = _dot_ao_dm_sparse(ao[i], dm, nbins, screen_index, pair_mask, ao_loc)
             rho[tau_idx] += _contract_rho_sparse(ao[i], c1, screen_index, ao_loc)
 
             rho[i] = _contract_rho_sparse(ao[i], c0, screen_index, ao_loc)
@@ -2868,9 +2868,9 @@ class NumInt(lib.StreamObject, LibXCMixin):
             if xctype == "GGA":
                 # GGA has to do more contractions using rho2 compared to rho1,
                 # so the threshold for switching to rho1 is less strict.
-                is_sparse = rho1_rho2_ratio < 1
+                is_sparse = rho1_rho2_ratio < 4
             else:
-                is_sparse = rho1_rho2_ratio < 0.25
+                is_sparse = rho1_rho2_ratio < 1
             if has_screening and (not has_mo or is_sparse):
                 return self.eval_rho1(mol, ao, dms[idm], sindex, xctype, hermi,
                                       with_lapl, cutoff=self.cutoff,
