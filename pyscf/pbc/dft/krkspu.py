@@ -55,7 +55,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
             A density matrix or a list of density matrices
 
     Returns:
-        Veff : (nkpts, nao, nao) or (*, nkpts, nao, nao) ndarray
+        Veff : ``(nkpts, nao, nao)`` or ``(*, nkpts, nao, nao)`` ndarray
         Veff = J + Vxc + V_U.
     """
     if cell is None: cell = ks.cell
@@ -280,32 +280,3 @@ class KRKSpU(krks.KRKS):
 
     def nuc_grad_method(self):
         raise NotImplementedError
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    np.set_printoptions(3, linewidth=1000, suppress=True)
-    cell = gto.Cell()
-    cell.unit = 'A'
-    cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
-    cell.a = '''0.      1.7834  1.7834
-                1.7834  0.      1.7834
-                1.7834  1.7834  0.    '''
-
-    cell.basis = 'gth-dzvp'
-    cell.pseudo = 'gth-pade'
-    cell.verbose = 7
-    cell.build()
-    kmesh = [2, 2, 2]
-    kpts = cell.make_kpts(kmesh, wrap_around=True)
-    #U_idx = ["2p", "2s"]
-    #U_val = [5.0, 2.0]
-    U_idx = ["1 C 2p"]
-    U_val = [5.0]
-
-    mf = KRKSpU(cell, kpts, U_idx=U_idx, U_val=U_val, C_ao_lo='minao',
-                minao_ref='gth-szv')
-    mf.conv_tol = 1e-10
-    print (mf.U_idx)
-    print (mf.U_val)
-    print (mf.C_ao_lo.shape)
-    print (mf.kernel())

@@ -38,8 +38,8 @@ gen_tda_hop = gen_tda_operation
 def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
     r'''A and B matrices for TDDFT response function.
 
-    A[i,a,j,b] = \delta_{ab}\delta_{ij}(E_a - E_i) + (ia||bj)
-    B[i,a,j,b] = (ia||jb)
+    A[i,a,j,b] = \delta_{ab}\delta_{ij}(E_a - E_i) + (ai||jb)
+    B[i,a,j,b] = (ai||bj)
     '''
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_coeff is None: mo_coeff = mf.mo_coeff
@@ -56,7 +56,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
     nmo = nocc + nvir
     mo = numpy.hstack((orbo, orbv))
 
-    e_ia = lib.direct_sum('a-i->ia', mo_energy[viridx], mo_energy[occidx])
+    e_ia = mo_energy[viridx] - mo_energy[occidx,None]
     a = numpy.diag(e_ia.ravel()).reshape(nocc,nvir,nocc,nvir)
     b = numpy.zeros_like(a)
 
@@ -64,10 +64,10 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         eri_mo = ao2mo.kernel(mol, [orbo, mo, mo, mo], intor='int2e_spinor')
         eri_mo = eri_mo.reshape(nocc,nmo,nmo,nmo)
 
-        a = a + numpy.einsum('iabj->iajb', eri_mo[:nocc,nocc:,nocc:,:nocc])
-        a = a - numpy.einsum('ijba->iajb', eri_mo[:nocc,:nocc,nocc:,nocc:]) * hyb
-        b = b + numpy.einsum('iajb->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:])
-        b = b - numpy.einsum('jaib->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * hyb
+        a = a + numpy.einsum('iabj->iajb', eri_mo[:nocc,nocc:,nocc:,:nocc].conj())
+        a = a - numpy.einsum('ijba->iajb', eri_mo[:nocc,:nocc,nocc:,nocc:].conj()) * hyb
+        b = b + numpy.einsum('iajb->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:].conj())
+        b = b - numpy.einsum('jaib->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:].conj()) * hyb
         return a, b
 
     if isinstance(mf, dft.KohnShamDFT):
@@ -123,9 +123,9 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                     rho_ov_bb = numpy.einsum('ri,ra->ria', mo_ob.conj(), mo_vb)
                     rho_ov = ud2tm(rho_ov_aa, rho_ov_ab, rho_ov_ba, rho_ov_bb)
                     rho_vo = rho_ov.conj()
-                    w_ov = numpy.einsum('tsr,tria->sria', wfxc, rho_ov)
-                    a += lib.einsum('sria,srjb->iajb', w_ov, rho_vo)
-                    b += lib.einsum('sria,srjb->iajb', w_ov, rho_ov)
+                    w_vo = numpy.einsum('tsr,tria->sria', wfxc, rho_vo)
+                    a += lib.einsum('sria,srjb->iajb', w_vo, rho_ov)
+                    b += lib.einsum('sria,srjb->iajb', w_vo, rho_vo)
                 elif ni.collinear[0] == 'c':
                     rho = ni.eval_rho(mol, ao, dm0, mask, xctype, hermi=1)
                     fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2)[2]
@@ -135,13 +135,13 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                     rho_ov_b = numpy.einsum('ri,ra->ria', mo_ob.conj(), mo_vb)
                     rho_vo_a = rho_ov_a.conj()
                     rho_vo_b = rho_ov_b.conj()
-                    w_ov  = wv_a[:,:,None,None] * rho_ov_a
-                    w_ov += wv_b[:,:,None,None] * rho_ov_b
-                    wa_ov, wb_ov = w_ov
-                    a += lib.einsum('ria,rjb->iajb', wa_ov, rho_vo_a)
-                    a += lib.einsum('ria,rjb->iajb', wb_ov, rho_vo_b)
-                    b += lib.einsum('ria,rjb->iajb', wa_ov, rho_ov_a)
-                    b += lib.einsum('ria,rjb->iajb', wb_ov, rho_ov_b)
+                    w_vo  = wv_a[:,:,None,None] * rho_vo_a
+                    w_vo += wv_b[:,:,None,None] * rho_vo_b
+                    wa_vo, wb_vo = w_vo
+                    a += lib.einsum('ria,rjb->iajb', wa_vo, rho_ov_a)
+                    a += lib.einsum('ria,rjb->iajb', wb_vo, rho_ov_b)
+                    b += lib.einsum('ria,rjb->iajb', wa_vo, rho_vo_a)
+                    b += lib.einsum('ria,rjb->iajb', wb_vo, rho_vo_b)
                 else:
                     raise NotImplementedError(ni.collinear)
 
@@ -166,9 +166,9 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                     rho_ov_bb[1:4] += numpy.einsum('xri,ra->xria', mo_ob[1:4].conj(), mo_vb[0])
                     rho_ov = ud2tm(rho_ov_aa, rho_ov_ab, rho_ov_ba, rho_ov_bb)
                     rho_vo = rho_ov.conj()
-                    w_ov = numpy.einsum('txsyr,txria->syria', wfxc, rho_ov)
-                    a += lib.einsum('syria,syrjb->iajb', w_ov, rho_vo)
-                    b += lib.einsum('syria,syrjb->iajb', w_ov, rho_ov)
+                    w_vo = numpy.einsum('txsyr,txria->syria', wfxc, rho_vo)
+                    a += lib.einsum('syria,syrjb->iajb', w_vo, rho_ov)
+                    b += lib.einsum('syria,syrjb->iajb', w_vo, rho_vo)
                 elif ni.collinear[0] == 'c':
                     rho = ni.eval_rho(mol, ao, dm0, mask, xctype, hermi=1)
                     fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2)[2]
@@ -180,13 +180,13 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                     rho_ov_b[1:4] += numpy.einsum('ri,xra->xria', mo_ob[0].conj(), mo_vb[1:4])
                     rho_vo_a = rho_ov_a.conj()
                     rho_vo_b = rho_ov_b.conj()
-                    w_ov  = numpy.einsum('xsyr,xria->syria', wv_a, rho_ov_a)
-                    w_ov += numpy.einsum('xsyr,xria->syria', wv_b, rho_ov_b)
-                    wa_ov, wb_ov = w_ov
-                    a += lib.einsum('xria,xrjb->iajb', wa_ov, rho_vo_a)
-                    a += lib.einsum('xria,xrjb->iajb', wb_ov, rho_vo_b)
-                    b += lib.einsum('xria,xrjb->iajb', wa_ov, rho_ov_a)
-                    b += lib.einsum('xria,xrjb->iajb', wb_ov, rho_ov_b)
+                    w_vo  = numpy.einsum('xsyr,xria->syria', wv_a, rho_vo_a)
+                    w_vo += numpy.einsum('xsyr,xria->syria', wv_b, rho_vo_b)
+                    wa_vo, wb_vo = w_vo
+                    a += lib.einsum('xria,xrjb->iajb', wa_vo, rho_ov_a)
+                    a += lib.einsum('xria,xrjb->iajb', wb_vo, rho_ov_b)
+                    b += lib.einsum('xria,xrjb->iajb', wa_vo, rho_vo_a)
+                    b += lib.einsum('xria,xrjb->iajb', wb_vo, rho_vo_b)
                 else:
                     raise NotImplementedError(ni.collinear)
 
@@ -225,9 +225,9 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                     rho_ov_bb = numpy.vstack([rho_ov_bb, tau_ov_bb[numpy.newaxis]])
                     rho_ov = ud2tm(rho_ov_aa, rho_ov_ab, rho_ov_ba, rho_ov_bb)
                     rho_vo = rho_ov.conj()
-                    w_ov = numpy.einsum('txsyr,txria->syria', wfxc, rho_ov)
-                    a += lib.einsum('syria,syrjb->iajb', w_ov, rho_vo)
-                    b += lib.einsum('syria,syrjb->iajb', w_ov, rho_ov)
+                    w_vo = numpy.einsum('txsyr,txria->syria', wfxc, rho_vo)
+                    a += lib.einsum('syria,syrjb->iajb', w_vo, rho_ov)
+                    b += lib.einsum('syria,syrjb->iajb', w_vo, rho_vo)
                 elif ni.collinear[0] == 'c':
                     rho = ni.eval_rho(mol, ao, dm0, mask, xctype, hermi=1, with_lapl=False)
                     fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2)[2]
@@ -243,13 +243,13 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                     rho_ov_b = numpy.vstack([rho_ov_b, tau_ov_b[numpy.newaxis]])
                     rho_vo_a = rho_ov_a.conj()
                     rho_vo_b = rho_ov_b.conj()
-                    w_ov  = numpy.einsum('xsyr,xria->syria', wv_a, rho_ov_a)
-                    w_ov += numpy.einsum('xsyr,xria->syria', wv_b, rho_ov_b)
-                    wa_ov, wb_ov = w_ov
-                    a += lib.einsum('xria,xrjb->iajb', wa_ov, rho_vo_a)
-                    a += lib.einsum('xria,xrjb->iajb', wb_ov, rho_vo_b)
-                    b += lib.einsum('xria,xrjb->iajb', wa_ov, rho_ov_a)
-                    b += lib.einsum('xria,xrjb->iajb', wb_ov, rho_ov_b)
+                    w_vo  = numpy.einsum('xsyr,xria->syria', wv_a, rho_vo_a)
+                    w_vo += numpy.einsum('xsyr,xria->syria', wv_b, rho_vo_b)
+                    wa_vo, wb_vo = w_vo
+                    a += lib.einsum('xria,xrjb->iajb', wa_vo, rho_ov_a)
+                    a += lib.einsum('xria,xrjb->iajb', wb_vo, rho_ov_b)
+                    b += lib.einsum('xria,xrjb->iajb', wa_vo, rho_vo_a)
+                    b += lib.einsum('xria,xrjb->iajb', wb_vo, rho_vo_b)
                 else:
                     raise NotImplementedError(ni.collinear)
 

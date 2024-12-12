@@ -35,7 +35,7 @@ def aux_e1(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', co
     integral tensor (kptij_idx, comp, naux, nao_pair) are stored on disk.
 
     Args:
-        kptij_lst : (*,2,3) array
+        kptij_lst : ``(*,2,3)`` array
             A list of (kpti, kptj)
     '''
     if isinstance(auxcell_or_auxbasis, gto.MoleBase):
@@ -156,7 +156,7 @@ def _aux_e2(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', c
     _make_j3c**
 
     Args:
-        kptij_lst : (*,2,3) array
+        kptij_lst : ``(*,2,3)`` array
             A list of (kpti, kptj)
     '''
     if isinstance(auxcell_or_auxbasis, gto.MoleBase):

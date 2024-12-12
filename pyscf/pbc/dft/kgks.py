@@ -50,7 +50,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
             A density matrix or a list of density matrices
 
     Returns:
-        Veff : (nkpts, 2*nao, 2*nao) or (*, nkpts, 2*nao, 2*nao) ndarray
+        Veff : ``(nkpts, 2*nao, 2*nao)`` or ``(*, nkpts, 2*nao, 2*nao)`` ndarray
         Veff = J + Vxc.
     '''
     if cell is None: cell = ks.cell
