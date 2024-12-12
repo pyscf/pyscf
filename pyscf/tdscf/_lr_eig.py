@@ -14,7 +14,6 @@
 # limitations under the License.
 #
 
-import sys
 import numpy as np
 import scipy.linalg
 from pyscf.lib.parameters import MAX_MEMORY
@@ -71,10 +70,7 @@ def eigh(aop, x0, precond, tol_residual=1e-5, lindep=1e-12, nroots=1,
     assert callable(pick)
     assert callable(precond)
 
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(sys.stdout, verbose)
+    log = logger.new_logger(verbose)
 
     if isinstance(x0, np.ndarray) and x0.ndim == 1:
         x0 = x0[None,:]
@@ -268,10 +264,7 @@ def eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
     assert callable(pick)
     assert callable(precond)
 
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(sys.stdout, verbose)
+    log = logger.new_logger(verbose)
 
     if isinstance(x0, np.ndarray) and x0.ndim == 1:
         x0 = x0[None,:]
