@@ -234,7 +234,7 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
 
     # grids with wrap_around: grids_edge ~ [-.5, .5]
     # regular grids: grids_edge ~ [0, 1]
-    grids_edge = lib.cartesian_prod([[-.5, 1.]] * 3).dot(a[:dimension])
+    grids_edge = lib.cartesian_prod([[-.5, 1.]] * 3).dot(a)
     edge_lb = grids_edge.min(axis=0)
     edge_ub = grids_edge.max(axis=0)
 
