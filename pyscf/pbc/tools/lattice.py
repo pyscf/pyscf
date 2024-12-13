@@ -57,7 +57,7 @@ def get_ase_wurtzite(A='Zn', B='O'):
     # citation at this point? en.wikipedia.org/wiki/Lattice_constant)
     assert A in ['Zn']
     assert B in ['O']
-    from ase.lattice import bulk
+    from ase.build import bulk
     if A=='Zn' and B=='O':
         ase_atom = bulk('ZnO', 'wurtzite', a=3.25*A2B, c=5.2*A2B)
     else:
@@ -84,7 +84,7 @@ def get_ase_zincblende(A='Ga', B='As'):
     # Lattice constants from Shishkin and Kresse, PRB 75, 235102 (2007)
     assert A in ['Si', 'Ga', 'Cd', 'Zn', 'B', 'Al']
     assert B in ['C', 'As', 'S', 'O', 'N', 'P']
-    from ase.lattice import bulk
+    from ase.build import bulk
     if A=='Si' and B=='C':
         ase_atom = bulk('SiC', 'zincblende', a=4.350*A2B)
     elif A=='Ga' and B=='As':
@@ -112,7 +112,7 @@ def get_ase_rocksalt(A='Li', B='Cl'):
     # Add Na, K
     assert B in ['H', 'F', 'Cl', 'O']
     # Add Br, I
-    from ase.lattice import bulk
+    from ase.build import bulk
     if A=='Li':
         if B=='H':
             ase_atom = bulk('LiH', 'rocksalt', a=4.0834*A2B)

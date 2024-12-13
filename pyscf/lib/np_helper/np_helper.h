@@ -16,6 +16,7 @@
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
+#include <stdlib.h>
 #include <complex.h>
 
 #define BLOCK_DIM    104
@@ -46,6 +47,13 @@ void NPztranspose(int n, int m, double complex *a, double complex *at);
 void NPdtranspose_021(int *shape, double *a, double *at);
 void NPztranspose_021(int *shape, double complex *a, double complex *at);
 
+void NPomp_d_itranspose_scale(const int n, const double alpha, double *A, int lda);
+void NPomp_z_itranspose_scale(const int n, const double complex *alphaptr, double complex *A, int lda);
+void NPomp_dtensor_itranspose_scale021(const long long matstride, int nmat, int n, const double alpha,
+                                      double *A, int lda);
+void NPomp_ztensor_itranspose_scale021(const long long matstride, int nmat, int n, const double complex *alpha,
+                                      double complex *A, int lda);
+
 void NPdunpack_tril_2d(int count, int n, double *tril, double *mat, int hermi);
 void NPzunpack_tril_2d(int count, int n,
                        double complex *tril, double complex *mat, int hermi);
@@ -61,6 +69,24 @@ void NPdset0(double *p, const size_t n);
 void NPzset0(double complex *p, const size_t n);
 void NPdcopy(double *out, const double *in, const size_t n);
 void NPzcopy(double complex *out, const double complex *in, const size_t n);
+
+void NPomp_dset0(const size_t n, double *out);
+void NPomp_zset0(const size_t n, double complex *out);
+
+void NPomp_dcopy(const size_t m, const size_t n,
+                 const double *in, const size_t in_stride,
+                 double *out, const size_t out_stride);
+void NPomp_zcopy(const size_t m, const size_t n,
+                 const double complex *in, const size_t in_stride,
+                 double complex *out, const size_t out_stride);
+void NPomp_dmul(const size_t m, const size_t n,
+                const double *a, const size_t a_stride,
+                double *b, const size_t b_stride,
+                double *out, const size_t out_stride);
+void NPomp_zmul(const size_t m, const size_t n,
+                const double complex *a, const size_t a_stride,
+                double complex *b, const size_t b_stride,
+                double complex *out, const size_t out_stride);
 
 void NPdgemm(const char trans_a, const char trans_b,
              const int m, const int n, const int k,

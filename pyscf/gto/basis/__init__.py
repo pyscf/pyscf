@@ -158,6 +158,8 @@ ALIAS = {
     'def2tzvppd' : 'def2-tzvppd.dat',
     'def2tzvpp'  : 'def2-tzvpp.dat' ,
     'def2tzvp'   : 'def2-tzvp.dat'  ,
+    'def2mtzvpp' : 'def2-mtzvpp.dat',
+    'def2mtzvp'  : 'def2-mtzvp.dat' ,
     'def2qzvpd'  : 'def2-qzvpd.dat' ,
     'def2qzvppd' : 'def2-qzvppd.dat',
     'def2qzvpp'  : 'def2-qzvpp.dat' ,
@@ -183,6 +185,12 @@ ALIAS = {
     'def2qzvpri'     : 'def2-qzvp-ri.dat'    ,
     'def2qzvppri'    : 'def2-qzvpp-ri.dat'   ,
     'def2qzvppdri'   : 'def2-qzvppd-ri.dat'  ,
+    'madef2svpp'   : 'ma-def2-svpp.dat'  ,
+    'madef2svp'    : 'ma-def2-svp.dat'   ,
+    'madef2tzvpp'  : 'ma-def2-tzvpp.dat' ,
+    'madef2tzvp'   : 'ma-def2-tzvp.dat'  ,
+    'madef2qzvpp'  : 'ma-def2-qzvpp.dat' ,
+    'madef2qzvp'   : 'ma-def2-qzvp.dat'  ,
     'tzv'        : 'tzv.dat'        ,
     'weigend'     : 'def2-universal-jfit.dat',
     'weigend+etb' : 'def2-universal-jfit.dat',
@@ -647,8 +655,7 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
                     filename_or_basisname, elements=symb)
             except KeyError:
                 raise BasisNotFoundError(filename_or_basisname)
-            else:
-                return bse._orbital_basis(bse_obj)[0]
+            return bse._orbital_basis(bse_obj)[0][symb]
 
         raise BasisNotFoundError(f'Unknown basis format or basis name for {filename_or_basisname}')
 
@@ -701,8 +708,7 @@ def load_ecp(filename_or_basisname, symb):
                 filename_or_basisname, elements=symb)
         except KeyError:
             raise BasisNotFoundError(filename_or_basisname)
-        else:
-            return bse._ecp_basis(bse_obj)[0]
+        return bse._ecp_basis(bse_obj)[0][symb]
 
     raise BasisNotFoundError('Unknown ECP format or ECP name')
 

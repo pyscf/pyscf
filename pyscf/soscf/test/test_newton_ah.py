@@ -143,6 +143,15 @@ class KnownValues(unittest.TestCase):
         nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), -75.58051984397145, 9)
 
+        nr1 = scf.newton(mf)
+        nr1.max_cycle = 0 # Should reproduce energy of the initial guess
+        nr1.kernel()
+        self.assertAlmostEqual(nr1.e_tot, mf.e_tot, 10)
+
+        nr1.max_cycle = 2
+        nr1.kernel()
+        self.assertAlmostEqual(nr1.e_tot, nr.e_tot, 10)
+
     def test_nr_uhf_cart(self):
         mol = h2o_z1.copy()
         mol.cart = True

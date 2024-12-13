@@ -64,6 +64,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 if hermi == 2:
                     v1 = numpy.zeros_like(dm1)
                 else:
+                    assert kshift == 0
                     v1 = ni.nr_rks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                        rho0, vxc, fxc, kpts, max_memory=max_memory)
                 if hybrid:
@@ -81,6 +82,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 if hermi == 2:
                     v1 = numpy.zeros_like(dm1)
                 else:
+                    assert kshift == 0
                     # nr_rks_fxc_st requires alpha of dm1
                     v1 = numint.nr_rks_fxc_st(ni, cell, mf.grids, mf.xc, dm0, dm1, 0,
                                               True, rho0, vxc, fxc, kpts,
@@ -100,6 +102,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 if hermi == 2:
                     v1 = numpy.zeros_like(dm1)
                 else:
+                    assert kshift == 0
                     # nr_rks_fxc_st requires alpha of dm1
                     v1 = numint.nr_rks_fxc_st(ni, cell, mf.grids, mf.xc, dm0, dm1, 0,
                                               False, rho0, vxc, fxc, kpts,
@@ -154,6 +157,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
             if hermi == 2:
                 v1 = numpy.zeros_like(dm1)
             else:
+                assert kshift == 0
                 v1 = ni.nr_uks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                    rho0, vxc, fxc, kpts, max_memory=max_memory)
             if not hybrid:

@@ -161,6 +161,9 @@ class FFTDF(lib.StreamObject):
     '''Density expansion on plane waves
     '''
 
+    # to mimic molecular DF object
+    blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
+
     _keys = {
         'cell', 'kpts', 'grids', 'mesh', 'blockdim', 'exxdiv',
     }
@@ -184,9 +187,6 @@ class FFTDF(lib.StreamObject):
         # This is a first order error, same to the error estimation for nuclear
         # attraction.
         self.mesh = cell.mesh
-
-        # to mimic molecular DF object
-        self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
 
         # The following attributes are not input options.
         # self.exxdiv has no effects. It was set in the get_k_kpts function to

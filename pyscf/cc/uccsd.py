@@ -396,12 +396,12 @@ def vector_to_amplitudes(vector, nmo, nocc):
     nvir = nvira + nvirb
     nov = nocc * nvir
     size = nov + nocc*(nocc-1)//2*nvir*(nvir-1)//2
-    if vector.size == size:
+    sizea = nocca * nvira + nocca*(nocca-1)//2*nvira*(nvira-1)//2
+    sizeb = noccb * nvirb + noccb*(noccb-1)//2*nvirb*(nvirb-1)//2
+    if vector.size == size and sizea > 0 and sizeb > 0:
         #return ccsd.vector_to_amplitudes_s4(vector, nmo, nocc)
         raise RuntimeError('Input vector is GCCSD vector')
     else:
-        sizea = nocca * nvira + nocca*(nocca-1)//2*nvira*(nvira-1)//2
-        sizeb = noccb * nvirb + noccb*(noccb-1)//2*nvirb*(nvirb-1)//2
         sections = np.cumsum([sizea, sizeb])
         veca, vecb, t2ab = np.split(vector, sections)
         t1a, t2aa = ccsd.vector_to_amplitudes_s4(veca, nmoa, nocca)
@@ -574,9 +574,9 @@ class UCCSD(ccsd.CCSDBase):
         eris_ovov = np.asarray(eris.ovov)
         eris_OVOV = np.asarray(eris.OVOV)
         eris_ovOV = np.asarray(eris.ovOV)
-        t2aa = eris_ovov.transpose(0,2,1,3) / lib.direct_sum('ia+jb->ijab', eia_a, eia_a)
-        t2ab = eris_ovOV.transpose(0,2,1,3) / lib.direct_sum('ia+jb->ijab', eia_a, eia_b)
-        t2bb = eris_OVOV.transpose(0,2,1,3) / lib.direct_sum('ia+jb->ijab', eia_b, eia_b)
+        t2aa = eris_ovov.transpose(0,2,1,3).conj() / lib.direct_sum('ia+jb->ijab', eia_a, eia_a)
+        t2ab = eris_ovOV.transpose(0,2,1,3).conj() / lib.direct_sum('ia+jb->ijab', eia_a, eia_b)
+        t2bb = eris_OVOV.transpose(0,2,1,3).conj() / lib.direct_sum('ia+jb->ijab', eia_b, eia_b)
         t2aa = t2aa - t2aa.transpose(0,1,3,2)
         t2bb = t2bb - t2bb.transpose(0,1,3,2)
         e  =      np.einsum('iJaB,iaJB', t2ab, eris_ovOV)

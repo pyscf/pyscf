@@ -499,7 +499,7 @@ for (n = 0; n < ALIGNMENT; n++) {
 
 for (jsh = jsh0; jsh < jsh1; jsh++) {
         si_j = screen_index[gblk0 * nbas + jsh];
-        if (si_j >= nbins_j && pair_mask[ish+nbas+jsh]) {
+        if (si_j >= nbins_j && pair_mask[ish*nbas+jsh]) {
                 j0 = ao_loc[jsh];
                 j1 = ao_loc[jsh+1];
                 ij = (i - ioff) * nj - joff;

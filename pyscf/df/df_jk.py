@@ -132,28 +132,31 @@ class _DFHF:
 
     def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
                omega=None):
+        assert (with_j or with_k)
         if dm is None: dm = self.make_rdm1()
         if not self.with_df:
             return super().get_jk(mol, dm, hermi, with_j, with_k, omega)
 
+        vj = vk = None
         with_dfk = with_k and not self.only_dfj
-        if isinstance(self, scf.ghf.GHF):
-            def jkbuild(mol, dm, hermi, with_j, with_k, omega=None):
-                vj, vk = self.with_df.get_jk(dm.real, hermi, with_j, with_k,
-                                             self.direct_scf_tol, omega)
-                if dm.dtype == numpy.complex128:
-                    vjI, vkI = self.with_df.get_jk(dm.imag, hermi, with_j, with_k,
-                                                   self.direct_scf_tol, omega)
-                    if with_j:
-                        vj = vj + vjI * 1j
-                    if with_k:
-                        vk = vk + vkI * 1j
-                return vj, vk
-            vj, vk = scf.ghf.get_jk(mol, dm, hermi, with_j, with_dfk,
-                                    jkbuild, omega)
-        else:
-            vj, vk = self.with_df.get_jk(dm, hermi, with_j, with_dfk,
-                                         self.direct_scf_tol, omega)
+        if with_j or with_dfk:
+            if isinstance(self, scf.ghf.GHF):
+                def jkbuild(mol, dm, hermi, with_j, with_k, omega=None):
+                    vj, vk = self.with_df.get_jk(dm.real, hermi, with_j, with_k,
+                                                self.direct_scf_tol, omega)
+                    if dm.dtype == numpy.complex128:
+                        vjI, vkI = self.with_df.get_jk(dm.imag, hermi, with_j, with_k,
+                                                    self.direct_scf_tol, omega)
+                        if with_j:
+                            vj = vj + vjI * 1j
+                        if with_k:
+                            vk = vk + vkI * 1j
+                    return vj, vk
+                vj, vk = scf.ghf.get_jk(mol, dm, hermi, with_j, with_dfk,
+                                        jkbuild, omega)
+            else:
+                vj, vk = self.with_df.get_jk(dm, hermi, with_j, with_dfk,
+                                            self.direct_scf_tol, omega)
         if with_k and not with_dfk:
             vk = super().get_jk(mol, dm, hermi, False, True, omega)[1]
         return vj, vk
@@ -233,7 +236,7 @@ class _DFHF:
         return lib.to_gpu(self, obj)
 
 
-def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
+def get_jk(dfobj, dm, hermi=0, with_j=True, with_k=True, direct_scf_tol=1e-13):
     assert (with_j or with_k)
     if (not with_k and not dfobj.mol.incore_anyway and
         # 3-center integral tensor is not initialized
@@ -263,8 +266,7 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
     if not with_k:
         for eri1 in dfobj.loop():
             # uses numpy.matmul
-            vj += (dmtril @ eri1.T) @ eri1
-
+            vj += dmtril.dot(eri1.T).dot(eri1)
 
     elif getattr(dm, 'mo_coeff', None) is not None:
         #TODO: test whether dm.mo_coeff matching dm
@@ -294,7 +296,8 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
             assert (nao_pair == nao*(nao+1)//2)
             if with_j:
                 # uses numpy.matmul
-                vj += (dmtril @ eri1.T) @ eri1
+                vj += dmtril.dot(eri1.T).dot(eri1)
+
             for k in range(nset):
                 nocc = orbo[k].shape[1]
                 if nocc > 0:
@@ -321,8 +324,7 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
             naux, nao_pair = eri1.shape
             if with_j:
                 # uses numpy.matmul
-                vj += (dmtril @ eri1.T) @ eri1
-
+                vj += dmtril.dot(eri1.T).dot(eri1)
 
             for k in range(nset):
                 buf1 = buf[0,:naux]
@@ -341,7 +343,7 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
     logger.timer(dfobj, 'df vj and vk', *t0)
     return vj, vk
 
-def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13):
+def get_j(dfobj, dm, hermi=0, direct_scf_tol=1e-13):
     from pyscf.scf import _vhf
     from pyscf.scf import jk
     from pyscf.df import addons
@@ -434,7 +436,7 @@ def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13):
     return numpy.asarray(vj).reshape(dm_shape)
 
 
-def r_get_jk(dfobj, dms, hermi=1, with_j=True, with_k=True):
+def r_get_jk(dfobj, dms, hermi=0, with_j=True, with_k=True):
     '''Relativistic density fitting JK'''
     t0 = (logger.process_clock(), logger.perf_counter())
     mol = dfobj.mol

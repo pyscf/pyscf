@@ -39,22 +39,23 @@ def setUpModule():
     mf = scf.RHF(mol).run()
     td_hf = tdscf.TDHF(mf).run(conv_tol=1e-6)
 
-    mf_lda = dft.RKS(mol)
-    mf_lda.xc = 'lda, vwn'
-    mf_lda.grids.prune = None
-    mf_lda.run(conv_tol=1e-10)
+    with lib.temporary_env(dft.radi, ATOM_SPECIFIC_TREUTLER_GRIDS=False):
+        mf_lda = dft.RKS(mol)
+        mf_lda.xc = 'lda, vwn'
+        mf_lda.grids.prune = None
+        mf_lda.run(conv_tol=1e-10)
 
-    mf_bp86 = dft.RKS(mol)
-    mf_bp86.xc = 'b88,p86'
-    mf_bp86.grids.prune = None
-    mf_bp86.run(conv_tol=1e-10)
+        mf_bp86 = dft.RKS(mol)
+        mf_bp86.xc = 'b88,p86'
+        mf_bp86.grids.prune = None
+        mf_bp86.run(conv_tol=1e-10)
 
-    mf_b3lyp = dft.RKS(mol)
-    mf_b3lyp.xc = 'b3lyp5'
-    mf_b3lyp.grids.prune = None
-    mf_b3lyp.run(conv_tol=1e-10)
+        mf_b3lyp = dft.RKS(mol)
+        mf_b3lyp.xc = 'b3lyp5'
+        mf_b3lyp.grids.prune = None
+        mf_b3lyp.run(conv_tol=1e-10)
 
-    mf_m06l = dft.RKS(mol).run(xc='m06l', conv_tol=1e-10)
+        mf_m06l = dft.RKS(mol).run(xc='m06l', conv_tol=1e-10)
 
 def tearDownModule():
     global mol, mf, td_hf, mf_lda, mf_bp86, mf_b3lyp, mf_m06l
@@ -229,8 +230,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ab_hf(self):
         a, b = rhf.get_ab(mf)
-        fock = mf.get_hcore() + mf.get_veff()
-        ftda = rhf.gen_tda_operation(mf, fock, singlet=True)[0]
+        ftda = rhf.gen_tda_operation(mf, singlet=True)[0]
         ftdhf = rhf.gen_tdhf_operation(mf, singlet=True)[0]
         nocc = numpy.count_nonzero(mf.mo_occ == 2)
         nvir = numpy.count_nonzero(mf.mo_occ == 0)

@@ -15,6 +15,8 @@
 cmake_minimum_required (VERSION 3.5)
 project (pyscf)
 
+include(CheckSymbolExists)
+
 if (NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
 endif()
@@ -69,8 +71,9 @@ endif()
 if (NOT BLAS_LIBRARIES)
 #enable_language(Fortran)
 find_package(BLAS)
-check_function_exists(ffsll HAVE_FFS)
 endif()
+check_symbol_exists(ffsll "strings.h" HAVE_FFS)
+#check_function_exists(ffsll HAVE_FFS)
 
 if (NOT BLAS_LIBRARIES)
   message(FATAL_ERROR "A required library with BLAS API not found.")
@@ -145,6 +148,7 @@ add_subdirectory(vhf)
 add_subdirectory(ao2mo)
 add_subdirectory(mcscf)
 add_subdirectory(cc)
+add_subdirectory(mp)
 add_subdirectory(ri)
 #add_subdirectory(localizer)
 add_subdirectory(pbc)
@@ -219,7 +223,7 @@ if(ENABLE_LIBXC AND BUILD_LIBXC)
   ExternalProject_Add(libxc
     #GIT_REPOSITORY https://gitlab.com/libxc/libxc.git
     #GIT_TAG master
-    URL https://gitlab.com/libxc/libxc/-/archive/6.1.0/libxc-6.1.0.tar.gz
+    URL https://gitlab.com/libxc/libxc/-/archive/7.0.0/libxc-7.0.0.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1

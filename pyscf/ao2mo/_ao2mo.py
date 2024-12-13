@@ -73,7 +73,7 @@ def nr_e1fill(intor, sh_range, atm, bas, env,
     natm = ctypes.c_int(c_atm.shape[0])
     nbas = ctypes.c_int(c_bas.shape[0])
     ao_loc = make_loc(bas, intor)
-    nao = ao_loc[-1]
+    nao = int(ao_loc[-1])
 
     klsh0, klsh1, nkl = sh_range
 
