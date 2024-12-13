@@ -137,6 +137,9 @@ def nr_e1(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None):
     if out.size == 0:
         return out
 
+    if eri.dtype != numpy.double:
+        raise TypeError('_ao2mo.nr_e1 is for double precision only')
+
     fdrv = getattr(libao2mo, 'AO2MOnr_e2_drv')
     pao_loc = ctypes.POINTER(ctypes.c_void_p)()
     c_nbas = ctypes.c_int(0)
@@ -183,6 +186,9 @@ def nr_e2(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None,
     out = numpy.ndarray((nrow,kl_count), buffer=out)
     if out.size == 0:
         return out
+
+    if eri.dtype != numpy.double:
+        raise TypeError('_ao2mo.nr_e2 is for double precision only')
 
     if ao_loc is None:
         pao_loc = ctypes.POINTER(ctypes.c_void_p)()
@@ -282,6 +288,9 @@ def r_e2(eri, mo_coeff, orbs_slice, tao, ao_loc, aosym='s1', out=None):
     out = numpy.ndarray((nrow,kl_count), dtype=numpy.complex128, buffer=out)
     if out.size == 0:
         return out
+
+    if eri.dtype != numpy.complex128:
+        raise TypeError('_ao2mo.r_e2 is for complex double precision only')
 
     tao = numpy.asarray(tao, dtype=numpy.int32)
     if ao_loc is None:
