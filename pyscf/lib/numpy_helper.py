@@ -552,12 +552,10 @@ def inplace_transpose_scale(a, alpha=1.0):
     alpha : float, optional
         scaling factor, by default 1.0
     """
-    assert a.ndim == 2
+    lda, order, _ = leading_dimension_order(a)
     assert a.shape[0] == a.shape[1]
     n = a.shape[0]
-    astrides = [s // a.itemsize for s in a.strides]
-    lda = max(astrides)
-    assert min(astrides) == 1
+    assert order in ('C', 'F')
     if a.dtype == numpy.double:
         _np_helper.NPomp_d_itranspose_scale(
             ctypes.c_int(n), ctypes.c_double(alpha),
@@ -974,6 +972,37 @@ def frompointer(pointer, count, dtype=float):
     a = numpy.ndarray(count, dtype=numpy.int8, buffer=buf)
     return a.view(dtype)
 
+def leading_dimension_order(a):
+    """Return the leading dimension and the order of a matrix.
+
+    Parameters
+    ----------
+    a : ndarray
+        2D array.
+
+    Returns
+    -------
+    lda : int
+        Leading dimension of the array -- the stride between rows or columns.
+    order : str
+        'F' for col major, 'C' for row major, 'G' for neither.
+    a_cshape : tuple
+        If a is row major, a.shape; if a is col major, a.T.shape; otherwise None.
+    """
+    assert a.ndim == 2
+    astrides = [s//a.itemsize for s in a.strides]
+    lda = max(astrides)
+    if astrides[0] == 1:
+        order = 'F'
+        a_cshape = a.T.shape
+    elif astrides[1] == 1:
+        order = 'C'
+        a_cshape = a.shape
+    else:
+        order = 'G'
+        a_cshape = None
+    return lda, order, a_cshape
+
 norm = numpy.linalg.norm
 
 def cond(x, p=None):
@@ -1176,6 +1205,99 @@ def expm(a):
         ddot(y, y, 1, buf, 0)
         y, buf = buf, y
     return y
+
+def omatcopy(a, out=None):
+    """Copies a matrix.
+
+    Parameters
+    ----------
+    a : ndarray
+        Matrix to be copied. The order of the matrix is preserved.
+        a can be either row or column major.
+    out : ndarray, optional
+        Matrix to be overwritten. A new one is allocated if not provided.
+
+    Returns
+    -------
+    out : ndarray
+        Copy of a with the same order.
+    """
+    lda, _, a_cshape = leading_dimension_order(a)
+    if out is None:
+        out = numpy.empty_like(a)
+    ld_out, _, out_cshape = leading_dimension_order(out)
+    assert out_cshape == a_cshape and a_cshape is not None
+    if a.dtype == numpy.double:
+        fn = _np_helper.NPomp_dcopy
+    elif a.dtype == numpy.complex128:
+        fn = _np_helper.NPomp_zcopy
+    else:
+        raise NotImplementedError
+    fn(ctypes.c_size_t(a_cshape[0]),
+       ctypes.c_size_t(a_cshape[1]),
+       a.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_size_t(lda),
+       out.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_size_t(ld_out))
+    return out
+
+def zeros(shape, dtype=numpy.double, order='C'):
+    """Allocate and zero an array in parallel. Useful for multi-socket systems
+       due to the first touch policy. On most systems np.zeros does not count
+       as first touch. Arrays returned by this function will (ideally) have
+       pages backing them that are distributed across the sockets.
+    """
+    dtype = numpy.dtype(dtype)
+    if dtype == numpy.double:
+        out = numpy.empty(shape, dtype=dtype, order=order)
+        _np_helper.NPomp_dset0(ctypes.c_size_t(out.size),
+                              out.ctypes.data_as(ctypes.c_void_p))
+    elif dtype == numpy.complex128:
+        out = numpy.empty(shape, dtype=dtype, order=order)
+        _np_helper.NPomp_zset0(ctypes.c_size_t(out.size),
+                              out.ctypes.data_as(ctypes.c_void_p))
+    else: # fallback
+        out = numpy.zeros(shape, dtype=dtype, order=order)
+    return out
+
+def entrywise_mul(a, b, out=None):
+    """Entrywise multiplication of two matrices.
+
+    Parameters
+    ----------
+    a : ndarray
+    b : ndarray
+    out : ndarray, optional
+        Output matrix. A new one is allocated if not provided.
+
+    Returns
+    -------
+    ndarray
+        a * b
+    """
+    assert a.ndim == 2 and b.ndim == 2
+    assert a.shape == b.shape and a.dtype == b.dtype
+    lda, _, a_cshape = leading_dimension_order(a)
+    ldb, _, b_cshape = leading_dimension_order(b)
+    if out is None:
+        out = numpy.empty_like(b)
+    ld_out, _, out_cshape = leading_dimension_order(out)
+    assert a_cshape == b_cshape and b_cshape == out_cshape and a_cshape is not None
+    if a.dtype == numpy.double:
+        fn = _np_helper.NPomp_dmul
+    elif a.dtype == numpy.complex128:
+        fn = _np_helper.NPomp_zmul
+    else:
+        return numpy.multiply(a, b, out=out)
+    fn(ctypes.c_size_t(a_cshape[0]),
+       ctypes.c_size_t(a_cshape[1]),
+       a.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_size_t(lda),
+       b.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_size_t(ldb),
+       out.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_size_t(ld_out))
+    return out
 
 def ndarray_pointer_2d(array):
     '''Return an array that contains the addresses of the first element in each

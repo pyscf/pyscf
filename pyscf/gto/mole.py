@@ -1257,16 +1257,12 @@ def dumps(mol):
     exclude_keys = {'output', 'stdout', '_keys', '_ctx_lock',
                     # Constructing in function loads
                     'symm_orb', 'irrep_id', 'irrep_name'}
-    # FIXME: nparray and kpts for cell objects may need to be excluded
-    nparray_keys = {'_atm', '_bas', '_env', '_ecpbas',
-                    '_symm_orig', '_symm_axes'}
-
     moldic = dict(mol.__dict__)
     for k in exclude_keys:
         if k in moldic:
             del (moldic[k])
-    for k in nparray_keys:
-        if isinstance(moldic[k], numpy.ndarray):
+    for k in moldic:
+        if isinstance(moldic[k], (numpy.ndarray, numpy.generic)):
             moldic[k] = moldic[k].tolist()
     moldic['atom'] = repr(mol.atom)
     moldic['basis']= repr(mol.basis)
@@ -1288,6 +1284,8 @@ def dumps(mol):
                     dic1[k] = list(v)
                 elif isinstance(v, dict):
                     dic1[k] = skip_value(v)
+                elif isinstance(v, np.generic):
+                    dic1[k] = v.tolist()
                 else:
                     msg =('Function mol.dumps drops attribute %s because '
                           'it is not JSON-serializable' % k)

@@ -112,7 +112,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                     np.einsum('K,Kij,Kji', weight, dm[1], vk[1])).real * .5
 
     if ground_state:
-        ecoul = np.einsum('K,Kij,Kji', weight, dm[0]+dm[1], vj).real * .5
+        ecoul = np.einsum('K,Kij,Kji', weight, dm[0]+dm[1], vj) * .5
     else:
         ecoul = None
 
@@ -166,16 +166,17 @@ class KsymAdaptedKUKS(kuks.KUKS, kuhf_ksymm.KUHF):
         weight = self.kpts.weights_ibz
         e1 = np.einsum('k,kij,kji', weight, h1e_kpts, dm_kpts[0]+dm_kpts[1])
         ecoul = vhf.ecoul
-        tot_e = e1 + ecoul + vhf.exc
+        exc = vhf.exc
+        tot_e = e1 + ecoul + exc
         self.scf_summary['e1'] = e1.real
         self.scf_summary['coul'] = ecoul.real
-        self.scf_summary['exc'] = vhf.exc.real
-        logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, ecoul, vhf.exc)
-        if khf.CHECK_COULOMB_IMAG and abs(ecoul.imag > self.cell.precision*10):
+        self.scf_summary['exc'] = exc.real
+        logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, ecoul, exc)
+        if khf.CHECK_COULOMB_IMAG and abs(ecoul.imag) > self.cell.precision*10:
             logger.warn(self, "Coulomb energy has imaginary part %s. "
                         "Coulomb integrals (e-e, e-N) may not converge !",
                         ecoul.imag)
-        return tot_e.real, vhf.ecoul + vhf.exc
+        return tot_e.real, ecoul.real + exc.real
 
     def to_hf(self):
         '''Convert to KRHF object.'''

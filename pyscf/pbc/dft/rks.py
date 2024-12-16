@@ -170,6 +170,8 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
     '''PBC-KS'''
 
     _keys = {'xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'}
+    # Use rho to filter grids
+    small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
 
     get_rho = get_rho
 
@@ -182,9 +184,6 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
         self.grids = gen_grid.UniformGrids(self.cell)
         self.nlc = ''
         self.nlcgrids = gen_grid.UniformGrids(self.cell)
-        # Use rho to filter grids
-        self.small_rho_cutoff = getattr(
-            __config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
 ##################################################
 # don't modify the following attributes, they are not input options
         # Note Do not refer to .with_df._numint because mesh/coords may be different
