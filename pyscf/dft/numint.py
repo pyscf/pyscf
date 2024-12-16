@@ -176,9 +176,9 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0,
         if hermi:
             rho[1:4] *= 2  # *2 for + einsum('pi,ij,pj->p', ao[i], dm, ao[0])
         else:
+            c1 = _dot_ao_dm(mol, ao[0], dm.conj().T, non0tab, shls_slice, ao_loc)
             for i in range(1, 4):
-                c1 = _dot_ao_dm(mol, ao[i], dm, non0tab, shls_slice, ao_loc)
-                rho[i] += _contract_rho(c1, ao[0])
+                rho[i] += _contract_rho(c1, ao[i])
     else: # meta-GGA
         if with_lapl:
             # rho[4] = \nabla^2 rho, rho[5] = 1/2 |nabla f|^2

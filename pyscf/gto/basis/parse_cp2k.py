@@ -53,12 +53,14 @@ def parse(string, symb=None, optimize=False):
     '''
     if symb is not None:
         raw_data = list(filter(None, re.split(BASIS_SET_DELIMITER, string)))
-        string = _search_basis_block(raw_data, symb)
-        if not string:
+        line_data = _search_basis_block(raw_data, symb)
+        if not line_data:
             raise BasisNotFoundError(f'Basis not found for {symb}')
+    else:
+        line_data = string.splitlines()
 
     bastxt = []
-    for dat in string.splitlines():
+    for dat in line_data:
         x = dat.split('#')[0].strip()
         if (x and not x.startswith('END') and not x.startswith('BASIS')):
             bastxt.append(x)
@@ -122,8 +124,7 @@ BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n')
 def search_seg(basisfile, symb):
     with open(basisfile, 'r') as fin:
         fdata = re.split(BASIS_SET_DELIMITER, fin.read())
-    raw_basis = _search_basis_block(fdata[1:], symb)
-    if not raw_basis:
+    line_data = _search_basis_block(fdata[1:], symb)
+    if not line_data:
         raise BasisNotFoundError(f'Basis for {symb} not found in {basisfile}')
-    return [x.strip() for x in raw_basis.splitlines()
-            if x.strip() and 'END' not in x]
+    return [x for x in line_data if x and 'END' not in x]

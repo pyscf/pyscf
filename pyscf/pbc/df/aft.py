@@ -569,6 +569,9 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
         'cell', 'mesh', 'kpts', 'time_reversal_symmetry', 'blockdim',
     }
 
+    # to mimic molecular DF object
+    blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
+
     def __init__(self, cell, kpts=np.zeros((1,3))):
         self.cell = cell
         self.stdout = cell.stdout
@@ -577,9 +580,6 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
         self.mesh = cell.mesh
         self.kpts = kpts
         self.time_reversal_symmetry = True
-
-        # to mimic molecular DF object
-        self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
 
         # The following attributes are not input options.
         self._rsh_df = {}  # Range separated Coulomb DF objects

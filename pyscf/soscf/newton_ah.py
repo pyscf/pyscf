@@ -508,10 +508,14 @@ def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
     # Save mo_coeff and mo_occ because they are needed by function rotate_mo
     mf.mo_coeff, mf.mo_occ = mo_coeff, mo_occ
 
+    scf_conv = False
     e_tot = mf._scf.energy_tot(dm, h1e, vhf)
     fock = mf.get_fock(h1e, s1e, vhf, dm, level_shift_factor=0)
     log.info('Initial guess E= %.15g  |g|= %g', e_tot,
              numpy.linalg.norm(mf._scf.get_grad(mo_coeff, mo_occ, fock)))
+
+    if mf.max_cycle <= 0:
+        return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
 
     if dump_chk and mf.chkfile:
         chkfile.save_mol(mol, mf.chkfile)
@@ -525,7 +529,6 @@ def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
     next(rotaiter)  # start the iterator
     kftot = jktot = 0
     norm_gorb = 0.
-    scf_conv = False
     cput1 = log.timer('initializing second order scf', *cput0)
 
     for imacro in range(max_cycle):
