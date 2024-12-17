@@ -440,9 +440,17 @@ def eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
         xt[:,:half_size] -= c.T.dot(xs[:,half_size:].conj())
         xt[:,half_size:] -= c.T.dot(xs[:,:half_size].conj())
 
+        # Remove quasi linearly dependent bases, as they cause more numerical
+        # errors in _symmetric_orth
+        xt_norm = np.linalg.norm(xt, axis=1)
+        xt_to_keep = (dx_norm > tol_residual) & (xt_norm > max(lindep**.5, tol_residual))
+        xt = xt[xt_to_keep]
+        xt /= xt_norm[xt_to_keep, None]
+
         if x0sym is None:
             xt = _symmetric_orth(xt)
         else:
+            xt_ir = xt_ir[xt_to_keep]
             xt_orth = []
             xt_orth_ir = []
             for ir in set(xt_ir):
