@@ -250,17 +250,19 @@ def smd_radii(alpha):
     radii_table[53] = 2.74
     return radii_table/radii.BOHR
 
-import sys
 import ctypes
 from pyscf.lib import load_library
 try:
     libsolvent = load_library('libsolvent')
 except (IOError, NameError):
-    sys.stderr.write('SMD module is not available. '
-                     'You can compile this module with cmake option "-DENABLE_SMD=ON"')
     libsolvent = None
 
 def get_cds_legacy(smdobj):
+    if libsolvent is None:
+        raise RuntimeError(
+            'SMD module is not available. '
+            'You can compile this module with cmake option "-DENABLE_SMD=ON"')
+
     mol = smdobj.mol
     natm = mol.natm
     soln, _, sola, solb, solg, _, solc, solh = smdobj.solvent_descriptors
