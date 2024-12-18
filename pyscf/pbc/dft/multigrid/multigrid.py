@@ -32,6 +32,7 @@ from pyscf.pbc import gto
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.gto.pseudo import pp_int
 from pyscf.pbc.dft import numint, gen_grid
+from pyscf.pbc.scf.khf import KSCF
 from pyscf.pbc.df.df_jk import (
     _format_dms,
     _format_kpts_band,
@@ -1497,7 +1498,7 @@ def _gen_rhf_response(mf, dm0, singlet=None, hermi=0):
     '''multigrid version of function pbc.scf.newton_ah._gen_rhf_response
     '''
     #assert (isinstance(mf, dft.krks.KRKS))
-    if getattr(mf, 'kpts', None) is not None:
+    if isinstance(mf, KSCF):
         kpts = mf.kpts
     else:
         kpts = mf.kpt.reshape(1,3)
@@ -1528,7 +1529,7 @@ def _gen_uhf_response(mf, dm0, with_j=True, hermi=0):
     '''multigrid version of function pbc.scf.newton_ah._gen_uhf_response
     '''
     #assert (isinstance(mf, dft.kuks.KUKS))
-    if getattr(mf, 'kpts', None) is not None:
+    if isinstance(mf, KSCF):
         kpts = mf.kpts
     else:
         kpts = mf.kpt.reshape(1,3)

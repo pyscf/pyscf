@@ -540,7 +540,7 @@ class SCF(mol_hf.SCF):
 
     @property
     def kpts(self):
-        raise DeprecationWarning
+        return self.with_df.kpts
 
     def build(self, cell=None):
         # To handle the attribute kpt or kpts loaded from chkfile
