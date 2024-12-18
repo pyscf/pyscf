@@ -94,7 +94,10 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True,
     dm_tril[:,idx] *= .5
 
     # For k
-    orbol, orbor = _decompose_rdm1_svd (mf_grad, mol, dm)
+    if hermi == 1:
+        orbol, orbor = _decompose_rdm1 (mf_grad, mol, dm)
+    else:
+        orbol, orbor = _decompose_rdm1_svd (mf_grad, mol, dm)
     nocc = [o.shape[-1] for o in orbor]
 
     # Coulomb: (P|Q) D_Q = (P|uv) D_uv for D_Q ("rhoj")
@@ -321,9 +324,7 @@ def _int3c_wrapper(mol, auxmol, intor, aosym):
     return get_int3c
 
 def _decompose_rdm1_svd (mf_grad, mol, dm):
-    '''Decompose dms as U.Vh using SVD, where
-    U = orbol = eigenvectors
-    V = orbor = U * eigenvalues
+    '''Decompose dms as U.Vh using SVD
 
     Args:
         mf_grad : instance of :class:`Gradients`
@@ -339,7 +340,6 @@ def _decompose_rdm1_svd (mf_grad, mol, dm):
     '''
     nao = mol.nao
     dms = numpy.asarray(dm).reshape (-1,nao,nao)
-    nset = dms.shape[0]
     orbor = []
     orbol = []
     for dm in dms:
