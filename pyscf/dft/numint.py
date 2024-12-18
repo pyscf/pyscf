@@ -319,7 +319,7 @@ def eval_rho1(mol, ao, dm, screen_index=None, xctype='LDA', hermi=0,
             if hermi:
                 rho[i] *= 2
             else:
-                rho[i] += _contract_rho_sparse(c1, ao[0], screen_index, ao_loc)
+                rho[i] += _contract_rho_sparse(ao[0], c1, screen_index, ao_loc)
 
         # tau = 1/2 (\nabla f)^2
         rho[tau_idx] *= .5
