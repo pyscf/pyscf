@@ -100,7 +100,7 @@ class DiamondM06(unittest.TestCase):
 
     def test_tdhf(self):
         ref = [9.09165361, 11.51362009]
-        td = self.kernel('TDDFT', ref)
+        td = self.kernel('TDDFT', ref, conv_tol=1e-8)
         a, b = td.get_ab()
         eref = diagonalize(a, b)
         self.assertAlmostEqual(abs(td.e[:4] - eref[:4]).max(), 0, 8)
