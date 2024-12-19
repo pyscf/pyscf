@@ -118,7 +118,8 @@ class Diamond(unittest.TestCase):
         self.check_rsh_tda('hse03')
 
     def test_hse06_tda(self):
-        self.check_rsh_tda('hse06')
+        # reducing tol, as larger numerical uncertainties found in fxc when using libxc-7
+        self.check_rsh_tda('hse06', place=3)
 
 
 class DiamondPBEShifted(unittest.TestCase):
