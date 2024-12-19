@@ -113,8 +113,12 @@ class Diamond(unittest.TestCase):
     def test_wb97_tda(self):
         self.check_rsh_tda('wb97')
 
+    @unittest.skip('HSE03 differs significantly between libxc-6.0 and 7.0, causing errors')
     def test_hse03_tda(self):
         self.check_rsh_tda('hse03')
+
+    def test_hse06_tda(self):
+        self.check_rsh_tda('hse06')
 
 
 class DiamondPBEShifted(unittest.TestCase):
