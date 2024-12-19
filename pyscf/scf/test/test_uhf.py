@@ -462,8 +462,7 @@ H     0    0.757    0.587'''
         mf.kernel(dm)
         self.assertAlmostEqual(mf.e_tot, -75.799022820714526, 9)
 
-        dm = mf.make_rdm1()
-        mf.kernel(dm)
+        mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -75.983602246415373, 9)
 
     def test_custom_h1e(self):
