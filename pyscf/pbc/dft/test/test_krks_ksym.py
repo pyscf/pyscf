@@ -20,6 +20,7 @@ import unittest
 import numpy as np
 
 from pyscf.lib import finger
+from pyscf.dft import radi
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pscf
 from pyscf.pbc.scf import chkfile
@@ -62,6 +63,15 @@ def tearDownModule():
     del cell, He, nk
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_krks_gamma_center(self):
         kpts0 = cell.make_kpts(nk, with_gamma_point=True)
         kmf0 = krks.KRKS(cell, kpts=kpts0)
@@ -142,6 +152,10 @@ class KnownValues(unittest.TestCase):
         kmf.kernel()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 9)
 
+        kmf.xc = 'wb97'
+        kmf.kernel()
+        self.assertAlmostEqual(kmf.e_tot, -2.504752684826571, 7)
+
     def test_lda_df(self):
         kpts0 = He.make_kpts(nk, with_gamma_point=False)
         kmf0 = krks.KRKS(He, kpts=kpts0).density_fit()
@@ -192,7 +206,14 @@ class KnownValues(unittest.TestCase):
         kmf.kernel()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 8)
 
-    def test_rsh_mdf(self):
+        kmf.xc = 'hse06'
+        kmf.kernel()
+        # Different to pyscf-2.7 since SR part was computed as DF_FR - DF_LR. A
+        # direct DF_SR would lead to smaller HF exchange. The total energy is
+        # slightly lower.
+        self.assertAlmostEqual(kmf.e_tot, -2.4973700806518035, 5)
+
+    def test_rsh_mdf_high_cost(self):
         kpts0 = He.make_kpts(nk, with_gamma_point=False)
         kmf0 = krks.KRKS(He, kpts=kpts0).mix_density_fit()
         kmf0.xc = 'camb3lyp'

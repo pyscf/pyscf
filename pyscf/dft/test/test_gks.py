@@ -60,7 +60,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(eks4, -75.883375491657, 6)
 
         mf = mol.GKS()
-        mf.xc = 'lda + .2*HF'
+        mf.xc = 'lda + .2*SR_HF(0.3)'
         mf.collinear = 'ncol'
         mf.omega = .5
         eks4 = mf.kernel()

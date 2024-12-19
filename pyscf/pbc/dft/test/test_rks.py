@@ -134,20 +134,33 @@ class KnownValues(unittest.TestCase):
 
     def test_rsh_fft(self):
         mf = pbcdft.RKS(cell)
-        mf.xc = 'camb3lyp'
+        mf.xc = 'hse06'
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.4745140703871877, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.482418296326724, 7)
 
+        mf.xc = 'camb3lyp'
         mf.omega = .15
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -2.476617717375184, 7)
 
+    @unittest.skip('TODO: Check other packages how exxdiv=vcut_sph is handled for RSH')
+    def test_rsh_fft_vcut_sph(self):
+        # Adding this test to ensure that the new SR treatment in get_veff is
+        # compatible with the treatment (full-range - LR) in pyscf-2.7.
+        # However, the results of HSE with exxdiv=vcut_sph might not be reasonable.
+        mf = pbcdft.RKS(cell)
+        mf.xc = 'hse06'
+        mf.exxdiv = 'vcut_sph'
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -2.4319699945616375, 7)
+
     def test_custom_rsh_df(self):
         mf = pbcdft.RKS(cell).density_fit()
-        mf.xc = 'camb3lyp'
+        mf.xc = 'wb97'
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.474520122522153, 6)
+        self.assertAlmostEqual(mf.e_tot, -2.4916945546399165, 6)
 
+        mf.xc = 'camb3lyp'
         mf.omega = .15
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -2.4766238116030683, 6)
