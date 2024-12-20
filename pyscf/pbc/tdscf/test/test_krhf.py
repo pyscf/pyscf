@@ -163,10 +163,7 @@ class WaterBigBox(unittest.TestCase):
         cls.cell = cell
         cls.mf = mf
 
-        mol = molgto.Mole()
-        for key in ['verbose','output','atom','basis']:
-            setattr(mol, key, getattr(cell, key))
-        mol.build()
+        mol = cell.to_mol()
         molmf = molscf.RHF(mol).density_fit(auxbasis=mf.with_df.auxbasis).run()
         cls.mol = mol
         cls.molmf = molmf
