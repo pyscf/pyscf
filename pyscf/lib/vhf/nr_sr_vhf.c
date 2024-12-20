@@ -888,9 +888,9 @@ void CVHFnr_sr_int2e_q_cond(int (*intor)(), CINTOpt *cintopt, float *q_cond,
         float fac_guess = .5f - logf(omega2)/4;
         int ish, jsh, li, lj;
         int ij, i, j, di, dj, dij, di2, dj2;
-        float ai, aj, fi, fj, aij, a1, ci, cj;
+        float ai, aj, aij, ai_aij, a1, ci, cj;
         float xi, yi, zi, xj, yj, zj, xij, yij, zij;
-        float dx, dy, dz, r2, r, dri, drj, v, log_fac, r_guess, theta, theta_r;
+        float dx, dy, dz, r2, v, log_fac, r_guess, theta, theta_r;
         double qtmp, tmp;
         float log_qmax;
         int shls[4];
@@ -924,12 +924,11 @@ void CVHFnr_sr_int2e_q_cond(int (*intor)(), CINTOpt *cintopt, float *q_cond,
                         dy = yj - yi;
                         dz = zj - zi;
                         aij = ai + aj;
-                        fi = ai / aij;
-                        fj = aj / aij;
-                        a1 = fi * aj;
-                        xij = xi + fj * dx;
-                        yij = yi + fj * dy;
-                        zij = zi + fj * dz;
+                        ai_aij = ai / aij;
+                        a1 = ai_aij * aj;
+                        xij = xi + ai_aij * dx;
+                        yij = yi + ai_aij * dy;
+                        zij = zi + ai_aij * dz;
 
                         theta = omega2/(omega2+aij);
                         r_guess = R_GUESS_FAC / sqrtf(aij * theta);
@@ -938,10 +937,7 @@ void CVHFnr_sr_int2e_q_cond(int (*intor)(), CINTOpt *cintopt, float *q_cond,
                         log_fac = logf(ci*cj * sqrtf((2*li+1.f)*(2*lj+1.f))/(4*M_PI))
                                 + 1.5f*logf(M_PI/aij) + fac_guess;
                         r2 = dx * dx + dy * dy + dz * dz;
-                        r = sqrtf(r2);
-                        dri = fj * r + theta_r;
-                        drj = fi * r + theta_r;
-                        v = li*logf(dri) + lj*logf(drj) - a1*r2 + log_fac;
+                        v = (li+lj)*logf(MAX(theta_r, 1.f)) - a1*r2 + log_fac;
                         s_index[ish*Nbas+jsh] = v;
                         s_index[jsh*Nbas+ish] = v;
                         xij_cond[ish*Nbas+jsh] = xij;

@@ -61,6 +61,7 @@ class PBCOpt:
             pass
 
 class _CPBCOpt(ctypes.Structure):
+    __slots__ = []
     _fields_ = [('rrcut', ctypes.c_void_p),
                 ('rcut', ctypes.c_void_p),
                 ('fprescreen', ctypes.c_void_p)]

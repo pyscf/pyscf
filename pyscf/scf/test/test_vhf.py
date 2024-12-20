@@ -208,7 +208,7 @@ class _VHFOpt(_vhf._VHFOpt):
         with mol.with_short_range_coulomb(omega):
             _vhf._VHFOpt.__init__(self, mol, intor, prescreen, qcondname, dmcondname)
         self.omega = omega
-        self._this.direct_scf_cutoff = numpy.log(direct_scf_tol)
+        self._this.direct_scf_tol = numpy.log(direct_scf_tol)
 
     def init_cvhf_direct(self, mol, intor=None, qcondname=None):
         nbas = mol.nbas
