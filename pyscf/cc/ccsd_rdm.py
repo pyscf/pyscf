@@ -377,8 +377,13 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True, ao_repr=False):
 
 
 def _rdm2_mo2ao(dm2, mo):
+    '''
+    Back transform the two-particle density matrices to AO representation, where
+    the dm2 is defined in accordance with the chemist's ERI notation:
+    E = einsum('pqrs,pqrs', eri, rdm2)
+    '''
     mo_C = mo.conj()
-    return lib.einsum('ijkl,pi,qj,rk,sl->pqrs', dm2, mo, mo_C, mo, mo_C)
+    return lib.einsum('ijkl,pi,qj,rk,sl->pqrs', dm2, mo_C, mo, mo_C, mo)
 
 
 if __name__ == '__main__':
