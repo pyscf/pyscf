@@ -44,7 +44,12 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
 
     def test_gen_grid(self):
         grid = gen_grid.Grids(h2o)
