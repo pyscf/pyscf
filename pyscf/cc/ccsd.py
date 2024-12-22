@@ -942,7 +942,7 @@ class CCSDBase(lib.StreamObject):
         'async_io', 'incore_complete', 'cc2', 'callback',
         'mol', 'verbose', 'stdout', 'frozen', 'level_shift',
         'mo_coeff', 'mo_occ', 'cycles', 'converged_lambda', 'emp2', 'e_hf',
-        'e_corr', 't1', 't2', 'l1', 'l2', 'chkfile',
+        'converged', 'e_corr', 't1', 't2', 'l1', 'l2', 'chkfile',
     }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
