@@ -73,7 +73,7 @@ def grad_elec(cc_grad, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=Non
     nocc = numpy.count_nonzero(mycc.mo_occ > 0)
     with_frozen = not ((mycc.frozen is None)
                        or (isinstance(mycc.frozen, (int, numpy.integer)) and mycc.frozen == 0)
-                       or (len(mycc.frozen) == 0))
+                       or (hasattr(mycc.frozen, '__len__') and len(mycc.frozen) == 0))
     OA, VA, OF, VF = _index_frozen_active(mycc.get_frozen_mask(), mycc.mo_occ)
 
     log.debug('symmetrized rdm2 and MO->AO transformation')
