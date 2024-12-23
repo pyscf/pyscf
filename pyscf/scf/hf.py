@@ -1996,6 +1996,10 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         self.dump_flags()
         self.build(self.mol)
 
+        if dm0 is None and self.mo_coeff is not None and self.mo_occ is not None:
+            # Initial guess from existing wavefunction
+            dm0 = self.make_rdm1()
+
         if self.max_cycle > 0 or self.mo_coeff is None:
             self.converged, self.e_tot, \
                     self.mo_energy, self.mo_coeff, self.mo_occ = \

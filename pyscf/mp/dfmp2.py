@@ -203,7 +203,7 @@ def get_mo_energy(mf, mo_coeff, mo_occ, mo_energy=None):
 
     # rebuild fock
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    vhf = mf.get_veff(dm)
+    vhf = mf.get_veff(dm=dm)
     fockao = mf.get_fock(vhf=vhf, dm=dm)
     if np.asarray(dm).ndim == 2:    # RHF
         return np.diag(reduce(lib.dot, (mo_coeff.T.conj(), fockao, mo_coeff))).real

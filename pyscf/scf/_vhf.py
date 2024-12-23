@@ -300,6 +300,7 @@ class SGXOpt(_VHFOpt):
 
 
 class _CVHFOpt(ctypes.Structure):
+    __slots__ = []
     _fields_ = [('nbas', ctypes.c_int),
                 ('ngrids', ctypes.c_int),
                 ('direct_scf_tol', ctypes.c_double),
