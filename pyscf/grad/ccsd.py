@@ -269,7 +269,7 @@ def _response_dm1(mycc, Xvo, eris=None):
     nmo = nocc + nvir
     with_frozen = not ((mycc.frozen is None)
                        or (isinstance(mycc.frozen, (int, numpy.integer)) and mycc.frozen == 0)
-                       or (len(mycc.frozen) == 0))
+                       or (hasattr(mycc.frozen, '__len__') and len(mycc.frozen) == 0))
     if eris is None or with_frozen:
         mo_energy = mycc._scf.mo_energy
         mo_occ = mycc.mo_occ
