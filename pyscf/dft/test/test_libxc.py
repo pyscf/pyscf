@@ -218,7 +218,7 @@ class KnownValues(unittest.TestCase):
     #    rho_b = numpy.array([[4.53272893e-06, 4.18968775e-06,-2.83034672e-06, 2.61832978e-06, 5.63360737e-06, 8.97541777e-07]]).T
     #    e, v = dft.libxc.eval_xc('tpss,', (rho_a, rho_b), spin=1, deriv=1)[:2]
 
-    def test_define_xc(self):
+    def test_define_xc_gga(self):
         def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=None):
             # A fictitious XC functional to demonstrate the usage
             rho0, dx, dy, dz = rho[:4]
@@ -242,10 +242,18 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(vxc[0]), 0.0065565189784811129, 9)
         self.assertAlmostEqual(lib.fp(vxc[1]), 0.0049270110162854116, 9)
 
+        with self.assertRaises(AssertionError):
+            ni.eval_xc_eff(None, rho, deriv=2)
+
+        # Ensure the xc_code in the input has no impact to the result.
         n, exc, vxc = ni.nr_rks(mol, mf.grids, 'm06x', dm)
         self.assertAlmostEqual(n, 4, 5)
         self.assertAlmostEqual(lib.fp(exc), 0.01197588220700074, 6)
         self.assertAlmostEqual(lib.fp(vxc), -0.043974912389152986, 6)
+
+        ni = dft.libxc.define_xc(ni, eval_xc, 'MGGA')
+        with self.assertRaises(AssertionError):
+            ni.eval_xc_eff(None, rho, deriv=1)
 
         mf = mf.define_xc_('0.5*B3LYP+0.5*B3LYP')
         exc0, vxc0 = mf._numint.eval_xc(None, rho, 0, deriv=1)[:2]
@@ -262,6 +270,33 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 9)
         self.assertAlmostEqual(abs(vxc0[0]-vxc1[0]).max(), 0, 9)
         self.assertAlmostEqual(abs(vxc0[1]-vxc1[1]).max(), 0, 9)
+
+    def test_define_xc_mgga(self):
+        def eval_mgga_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=None):
+            # A fictitious XC functional to demonstrate the usage
+            rho0, dx, dy, dz, tau = rho
+            gamma = (dx**2 + dy**2 + dz**2)
+            exc = .01 * rho0**2 + .02 * (gamma+.001)**.5 + .01 * tau**2
+            vrho = .01 * 2 * rho0
+            vgamma = .02 * .5 * (gamma+.001)**(-.5)
+            vtau = .02 * tau
+            vxc = (vrho, vgamma, vtau)
+            zeros = numpy.zeros_like(rho0)
+            fxc = (zeros, zeros, zeros)
+            kxc = None  # 3rd order functional derivative
+            return exc, vxc, fxc, kxc
+
+        mf = dft.RKS(mol)
+        ni = dft.libxc.define_xc(mf._numint, eval_mgga_xc, 'MGGA')
+        numpy.random.seed(1)
+        rho = numpy.random.random((5,10))
+        exc, vxc = ni.eval_xc(None, rho, 0, deriv=1)[:2]
+        self.assertAlmostEqual(lib.fp(exc), 0.016353861820705, 9)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 0.0065565189784811129, 9)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 0.0049270110162854116, 9)
+
+        with self.assertRaises(AssertionError):
+            ni.eval_xc_eff(None, rho, deriv=2)
 
     def test_m05x(self):
         rho =(numpy.array([1., 1., 0., 0., 0., 0.165 ]).reshape(-1,1),
