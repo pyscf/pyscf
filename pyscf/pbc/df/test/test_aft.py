@@ -352,7 +352,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(v0 - v3).max(), 0, 8)
         self.assertAlmostEqual(lib.fp(v0) - (-5.7070290795125445-0.00038722541238732697j), 0, 8)
 
-        # issue 2575
+    # issue 2575
+    def test_aft_get_pp1(self):
         cell = pgto.M(atom='Cu .0 .0 .0', a=np.eye(3)*3, spin=1,
                basis=[[1, [1, 1]]], pseudo='''Cu
 1    0   10
