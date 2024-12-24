@@ -36,7 +36,8 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     if not isinstance(dm, numpy.ndarray):
         dm = numpy.asarray(dm)
     if dm.ndim == 2:  # RHF DM
-        dm = numpy.asarray((dm*.5,dm*.5))
+        logger.warn(ks, 'Incompatible dm dimension. Treat dm as RHF density matrix.')
+        dm = numpy.repeat(dm[None]*.5, 2, axis=0)
     ks.initialize_grids(mol, dm)
 
     t0 = (logger.process_clock(), logger.perf_counter())
@@ -67,7 +68,10 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         vk = None
         if (ks._eri is None and ks.direct_scf and
             getattr(vhf_last, 'vj', None) is not None):
-            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
+            dm_last = numpy.asarray(dm_last)
+            dm = numpy.asarray(dm)
+            assert dm_last.ndim == 0 or dm_last.ndim == dm.ndim
+            ddm = dm - dm_last
             vj = ks.get_j(mol, ddm[0]+ddm[1], hermi)
             vj += vhf_last.vj
         else:
@@ -77,7 +81,10 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
         if (ks._eri is None and ks.direct_scf and
             getattr(vhf_last, 'vk', None) is not None):
-            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
+            dm_last = numpy.asarray(dm_last)
+            dm = numpy.asarray(dm)
+            assert dm_last.ndim == 0 or dm_last.ndim == dm.ndim
+            ddm = dm - dm_last
             vj, vk = ks.get_jk(mol, ddm, hermi)
             vk *= hyb
             if omega != 0:
@@ -178,7 +185,8 @@ class UKS(rks.KohnShamDFT, uhf.UHF):
         ground_state = (isinstance(dm, numpy.ndarray)
                         and dm.ndim == 3 and dm.shape[0] == 2)
         if ground_state:
-            super().initialize_grids(mol, dm[0]+dm[1])
+            dm = numpy.asarray(dm[0] + dm[1])
+            super().initialize_grids(mol, dm)
         else:
             super().initialize_grids(mol)
         return self

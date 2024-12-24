@@ -25,7 +25,7 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.scf import uhf_symm
 from pyscf.tdscf import rhf
-from pyscf.tdscf._lr_eig import eigh as lr_eigh, eig as lr_eig
+from pyscf.tdscf._lr_eig import eigh as lr_eigh, eig as lr_eig, real_eig
 from pyscf.data import nist
 from pyscf import __config__
 
@@ -769,7 +769,6 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     e_ia = hdiag = numpy.hstack((e_ia_a.ravel(), e_ia_b.ravel()))
     if wfnsym is not None and mol.symmetry:
         hdiag[sym_forbid] = 0
-    hdiag = numpy.hstack((hdiag, -hdiag))
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
@@ -810,6 +809,7 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         hx = numpy.hstack((v1_top, -v1_bot))
         return hx
 
+    hdiag = numpy.hstack((hdiag, -hdiag))
     return vind, hdiag
 
 
@@ -821,7 +821,7 @@ class TDHF(TDBase):
     def gen_vind(self, mf=None):
         if mf is None:
             mf = self._scf
-        return gen_tdhf_operation(mf, singlet=self.singlet, wfnsym=self.wfnsym)
+        return gen_tdhf_operation(mf, None, self.singlet, self.wfnsym)
 
     def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         if return_symmetry:
@@ -833,11 +833,10 @@ class TDHF(TDBase):
             y0 = numpy.zeros_like(x0)
             return numpy.hstack([x0, y0])
 
-    get_precond = rhf.TDHF.get_precond
-
     def kernel(self, x0=None, nstates=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
         '''
+        log = logger.new_logger(self)
         cpu0 = (logger.process_clock(), logger.perf_counter())
         self.check_sanity()
         self.dump_flags()
@@ -847,24 +846,27 @@ class TDHF(TDBase):
             self.nstates = nstates
         mol = self.mol
 
-        log = logger.Logger(self.stdout, self.verbose)
-
-        vind, hdiag = self.gen_vind(self._scf)
-        precond = self.get_precond(hdiag)
-
+        real_system = True
         # handle single kpt PBC SCF
         if getattr(self._scf, 'kpt', None) is not None:
             from pyscf.pbc.lib.kpts_helper import gamma_point
             real_system = (gamma_point(self._scf.kpt) and
                            self._scf.mo_coeff[0].dtype == numpy.double)
-        else:
-            real_system = True
 
-        # We only need positive eigenvalues
-        def pickeig(w, v, nroots, envs):
-            realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
-                                  (w.real > self.positive_eig_threshold))[0]
-            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
+        real_eig_solver = real_system
+
+        vind, hdiag = self.gen_vind(self._scf)
+        precond = self.get_precond(hdiag)
+        if real_eig_solver:
+            eig = real_eig
+            pickeig = None
+        else:
+            eig = lr_eig
+            # We only need positive eigenvalues
+            def pickeig(w, v, nroots, envs):
+                realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
+                                      (w.real > self.positive_eig_threshold))[0]
+                return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
 
         x0sym = None
         if x0 is None:
@@ -876,37 +878,33 @@ class TDHF(TDBase):
             x_sym = numpy.append(x_sym, y_sym)
             x0sym = [rhf._guess_wfnsym_id(self, x_sym, x) for x in x0]
 
-        self.converged, w, x1 = lr_eig(
+        self.converged, self.e, x1 = eig(
             vind, x0, precond, tol_residual=self.conv_tol, lindep=self.lindep,
             nroots=nstates, x0sym=x0sym, pick=pickeig, max_cycle=self.max_cycle,
             max_memory=self.max_memory, verbose=log)
 
         nmo = self._scf.mo_occ[0].size
-        nocca = (self._scf.mo_occ[0]>0).sum()
-        noccb = (self._scf.mo_occ[1]>0).sum()
+        nocca, noccb = self._scf.nelec
         nvira = nmo - nocca
         nvirb = nmo - noccb
-        e = []
         xy = []
         for i, z in enumerate(x1):
-            x, y = z.reshape(2,-1)
+            x, y = z.reshape(2, -1)
             norm = lib.norm(x)**2 - lib.norm(y)**2
             if norm < 0:
                 log.warn('TDDFT amplitudes |X| smaller than |Y|')
             norm = abs(norm)**-.5
-            e.append(w[i])
             xy.append(((x[:nocca*nvira].reshape(nocca,nvira) * norm,  # X_alpha
                         x[nocca*nvira:].reshape(noccb,nvirb) * norm), # X_beta
                        (y[:nocca*nvira].reshape(nocca,nvira) * norm,  # Y_alpha
                         y[nocca*nvira:].reshape(noccb,nvirb) * norm)))# Y_beta
-        self.e = numpy.array(e)
         self.xy = xy
 
         if self.chkfile:
             lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
 
-        log.timer('TDDFT', *cpu0)
+        log.timer('TDHF/TDDFT', *cpu0)
         self._finalize()
         return self.e, self.xy
 

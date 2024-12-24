@@ -230,10 +230,11 @@ def new_logger(rec=None, verbose=None):
     if isinstance(verbose, Logger):
         log = verbose
     elif isinstance(verbose, int):
+        from pyscf.lib.misc import StreamObject
         if getattr(rec, 'stdout', None):
             log = Logger(rec.stdout, verbose)
         else:
-            log = Logger(sys.stdout, verbose)
+            log = Logger(StreamObject.stdout, verbose)
     else:
         log = Logger(rec.stdout, rec.verbose)
     return log
