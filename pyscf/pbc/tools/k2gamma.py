@@ -27,6 +27,7 @@ https://github.com/zhcui/local-orbital-and-cdft/blob/master/k2gamma.py
 
 from functools import reduce
 from fractions import Fraction
+import itertools
 import numpy as np
 import scipy.linalg
 from pyscf import lib
@@ -36,7 +37,7 @@ from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import group_by_conj_pairs
 
 
-def kpts_to_kmesh(cell, kpts, precision=None):
+def kpts_to_kmesh(cell, kpts, precision=None, max_images=10000):
     '''Find the minimal k-points mesh to include all input kpts'''
     scaled_kpts = cell.get_scaled_kpts(kpts)
     logger.debug3(cell, '    scaled_kpts kpts %s', scaled_kpts)
@@ -49,7 +50,7 @@ def kpts_to_kmesh(cell, kpts, precision=None):
         uniq_floats_idx = np.unique(floats.round(6), return_index=True)[1]
         uniq_floats = floats[uniq_floats_idx]
         # Limit the number of images to 30 in each direction
-        fracs = [Fraction(x).limit_denominator(30) for x in uniq_floats]
+        fracs = [Fraction(x).limit_denominator(int(kmesh[i])) for x in uniq_floats]
         denominators = np.unique([x.denominator for x in fracs])
         common_denominator = reduce(np.lcm, denominators)
         fs = common_denominator * uniq_floats
@@ -60,6 +61,16 @@ def kpts_to_kmesh(cell, kpts, precision=None):
                           i, common_denominator, abs(fs - np.rint(fs)).max())
             logger.debug3(cell, '    unique kpts %s', uniq_floats)
             logger.debug3(cell, '    frac kpts %s', fracs)
+
+    assert max_images > 0
+    if np.prod(kmesh) > max_images:
+        kmesh_raw = kmesh.copy()
+        for i in itertools.cycle(np.argsort(kmesh)[::-1]):
+            kmesh[i] = int(kmesh[i] * .8)
+            if np.prod(kmesh) < max_images:
+                break
+        logger.warn(cell, 'kmesh (%s) exceeds max_images (%d); reduced to %s',
+                    kmesh_raw, max_images, kmesh)
     return kmesh
 
 def translation_vectors_for_kmesh(cell, kmesh, wrap_around=False):

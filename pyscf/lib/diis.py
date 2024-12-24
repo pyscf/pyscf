@@ -104,7 +104,7 @@ class DIIS:
             self.stdout = dev.stdout
         else:
             self.verbose = logger.INFO
-            self.stdout = sys.stdout
+            self.stdout = misc.StreamObject.stdout
         self.space = 6
         self.min_space = 1
         self.incore = incore

@@ -16,8 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import sys
-
 import numpy
 import scipy.linalg
 from pyscf import lib
@@ -77,10 +75,7 @@ class CIAHOptimizerMixin:
 
 def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
     t2m = (logger.process_clock(), logger.perf_counter())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(sys.stdout, verbose)
+    log = logger.new_logger(verbose=verbose)
 
     if conv_tol_grad is None:
         conv_tol_grad = iah.conv_tol_grad
@@ -211,10 +206,7 @@ def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
 def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
                 max_cycle=30, lindep=1e-14, dot=numpy.dot, verbose=logger.WARN):
 
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(sys.stdout, verbose)
+    log = logger.new_logger(verbose=verbose)
 
     toloose = numpy.sqrt(tol)
     # the first trial vector is (1,0,0,...), which is not included in xs
