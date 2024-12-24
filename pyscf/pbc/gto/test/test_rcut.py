@@ -56,7 +56,7 @@ class KnownValues(unittest.TestCase):
 
     # For atoms out of the rcut on the non-periodic directions. See issue #2460
     def test_lattice_Ls_low_dim(self):
-        cell = gto.M(atom='H 0 9 9', a=np.diag([1.,2.,2.]), dimension=1)
+        cell = gto.M(atom='H 0 9 9', a=numpy.diag([1.,2.,2.]), dimension=1)
         Ls = eval_gto.get_lattice_Ls(cell)
         self.assertTrue(len(Ls) > 15)
 
