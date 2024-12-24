@@ -321,7 +321,7 @@ class KnownValues(unittest.TestCase):
 
         e1 = numpy.einsum('ij,ji', hcore, dm1)
         e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
-        self.assertAlmostEqual(e1- mycc.e_tot, 6)
+        self.assertAlmostEqual(e1, mycc.e_tot, 6)
 
         self.assertAlmostEqual(abs(dm2-dm2.transpose(1,0,3,2).conj()).max(), 0, 9)
         self.assertAlmostEqual(abs(dm2-dm2.transpose(2,3,0,1)       ).max(), 0, 9)
