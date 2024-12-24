@@ -227,8 +227,10 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     (3, 2, 2)
     '''
     dm = numpy.asarray(dm)
+    dm_last = numpy.asarray(dm_last)
+    assert dm_last.ndim == 0 or dm_last.ndim == dm.ndim
     nao = dm.shape[-1]
-    ddm = dm - numpy.asarray(dm_last)
+    ddm = dm - dm_last
     # dm.reshape(-1,nao,nao) to remove first dim, compress (dma,dmb)
     vj, vk = hf.get_jk(mol, ddm.reshape(-1,nao,nao), hermi=hermi, vhfopt=vhfopt)
     vj = vj.reshape(dm.shape)
@@ -971,12 +973,16 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-            dm = numpy.asarray((dm*.5,dm*.5))
+            logger.warn(self, 'Incompatible dm dimension. Treat dm as RHF density matrix.')
+            dm = numpy.repeat(dm[None]*.5, 2, axis=0)
         if self._eri is not None or not self.direct_scf:
             vj, vk = self.get_jk(mol, dm, hermi)
             vhf = vj[0] + vj[1] - vk
         else:
-            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
+            dm_last = numpy.asarray(dm_last)
+            dm = numpy.asarray(dm)
+            assert dm_last.ndim == 0 or dm_last.ndim == dm.ndim
+            ddm = dm - dm_last
             vj, vk = self.get_jk(mol, ddm, hermi)
             vhf = vj[0] + vj[1] - vk
             vhf += numpy.asarray(vhf_last)

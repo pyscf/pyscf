@@ -374,7 +374,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
-        log = logger.Logger(sys.stdout, verbose)
+        log = logger.Logger(misc.StreamObject.stdout, verbose)
 
     if tol_residual is None:
         toloose = numpy.sqrt(tol)
@@ -748,7 +748,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
-        log = logger.Logger(sys.stdout, verbose)
+        log = logger.Logger(misc.StreamObject.stdout, verbose)
 
     if tol_residual is None:
         toloose = numpy.sqrt(tol)
@@ -1059,7 +1059,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
-        log = logger.Logger(sys.stdout, verbose)
+        log = logger.Logger(misc.StreamObject.stdout, verbose)
 
     if tol_residual is None:
         toloose = numpy.sqrt(tol) * 1e-2

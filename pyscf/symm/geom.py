@@ -36,7 +36,6 @@
 # method (point group detection flowchart) to detect the point group.
 #
 
-import sys
 import re
 import numpy
 import scipy.linalg
@@ -166,10 +165,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
 
     Return group name, charge center, and nex_axis (three rows for x,y,z)
     '''
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(sys.stdout, verbose)
+    log = logger.new_logger(verbose=verbose)
 
     tol = TOLERANCE / numpy.sqrt(1+len(atoms))
     decimals = int(-numpy.log10(tol))

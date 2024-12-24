@@ -36,7 +36,8 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     if not isinstance(dm, numpy.ndarray):
         dm = numpy.asarray(dm)
     if dm.ndim == 2:  # RHF DM
-        dm = numpy.asarray((dm*.5,dm*.5))
+        logger.warn(ks, 'Incompatible dm dimension. Treat dm as RHF density matrix.')
+        dm = numpy.repeat(dm[None]*.5, 2, axis=0)
     ks.initialize_grids(mol, dm)
 
     t0 = (logger.process_clock(), logger.perf_counter())
@@ -66,7 +67,10 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     incremental_jk = (ks._eri is None and ks.direct_scf and
                       getattr(vhf_last, 'vj', None) is not None)
     if incremental_jk:
-        _dm = numpy.asarray(dm) - numpy.asarray(dm_last)
+        dm_last = numpy.asarray(dm_last)
+        dm = numpy.asarray(dm)
+        assert dm_last.ndim == 0 or dm_last.ndim == dm.ndim
+        _dm = dm - dm_last
     else:
         _dm = dm
     if not ni.libxc.is_hybrid_xc(ks.xc):
@@ -182,7 +186,8 @@ class UKS(rks.KohnShamDFT, uhf.UHF):
         ground_state = (isinstance(dm, numpy.ndarray)
                         and dm.ndim == 3 and dm.shape[0] == 2)
         if ground_state:
-            super().initialize_grids(mol, dm[0]+dm[1])
+            dm = numpy.asarray(dm[0] + dm[1])
+            super().initialize_grids(mol, dm)
         else:
             super().initialize_grids(mol)
         return self

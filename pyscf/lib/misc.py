@@ -1480,7 +1480,7 @@ class _OmniObject:
     '''
     verbose = 0
     max_memory = param.MAX_MEMORY
-    stdout = sys.stdout
+    stdout = StreamObject.stdout
 
     def __init__(self, default_factory=None):
         self._default = default_factory

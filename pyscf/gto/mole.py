@@ -97,6 +97,7 @@ BASE = getattr(__config__, 'BASE', 0)
 NORMALIZE_GTO = getattr(__config__, 'NORMALIZE_GTO', True)
 DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
 ARGPARSE = getattr(__config__, 'ARGPARSE', False)
+DUMPINPUT = getattr(__config__, 'DUMPINPUT', True)
 
 def M(*args, **kwargs):
     r'''This is a shortcut to build up Mole object.
@@ -2341,7 +2342,6 @@ class MoleBase(lib.StreamObject):
         self._env = numpy.zeros(PTR_ENV_START)
         self._ecpbas = numpy.zeros((0,8), dtype=numpy.int32)
 
-        self.stdout = sys.stdout
         self.groupname = 'C1'
         self.topgroup = 'C1'
         self.symm_orb = None
@@ -2460,7 +2460,7 @@ class MoleBase(lib.StreamObject):
     __getstate__ = dumps
     __setstate__ = loads_
 
-    def build(self, dump_input=True, parse_arg=ARGPARSE,
+    def build(self, dump_input=DUMPINPUT, parse_arg=ARGPARSE,
               verbose=None, output=None, max_memory=None,
               atom=None, basis=None, unit=None, nucmod=None, ecp=None, pseudo=None,
               charge=None, spin=0, symmetry=None, symmetry_subgroup=None,

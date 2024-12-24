@@ -30,12 +30,18 @@ from pyscf.dft import uks
 
 @lib.with_doc(uks.get_veff.__doc__)
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-    if getattr(dm, 'mo_coeff', None) is not None:
+    if dm is None:
+        dm = ks.make_rdm1()
+    elif getattr(dm, 'mo_coeff', None) is not None:
         mo_coeff = dm.mo_coeff
         mo_occ_a = (dm.mo_occ > 0).astype(numpy.double)
         mo_occ_b = (dm.mo_occ ==2).astype(numpy.double)
+        if dm.ndim == 2:  # RHF DM
+            dm = numpy.repeat(dm[None]*.5, 2, axis=0)
         dm = lib.tag_array(dm, mo_coeff=(mo_coeff,mo_coeff),
                            mo_occ=(mo_occ_a,mo_occ_b))
+    elif dm.ndim == 2:  # RHF DM
+        dm = numpy.repeat(dm[None]*.5, 2, axis=0)
     return uks.get_veff(ks, mol, dm, dm_last, vhf_last, hermi)
 
 
