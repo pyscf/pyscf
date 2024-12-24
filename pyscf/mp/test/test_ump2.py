@@ -53,7 +53,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(pt.e_corr_os, -0.12312431898078077, 8)
 
         pt.max_memory = 1
-        pt.frozen = None
+        pt.frozen = []
         emp2, t2 = pt.kernel()
         self.assertAlmostEqual(emp2, -0.16575150552336643, 8)
         self.assertAlmostEqual(pt.e_corr_ss, -0.042627186675330754, 8)
@@ -167,6 +167,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ump2_ao2mo_ovov(self):
         pt = mp.UMP2(mf)
+        pt.frozen = 0
         nocca, noccb = mol.nelec
         orboa = mf.mo_coeff[0][:,:nocca]
         orbva = mf.mo_coeff[0][:,nocca:]

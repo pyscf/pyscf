@@ -16,7 +16,7 @@ from pyscf.scf import cphf
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import casci as casci_grad
 from pyscf.grad import ccsd as ccsd_grad
-from pyscf.grad.mp2 import _shell_prange
+from pyscf.grad.mp2 import _shell_prange, has_frozen_orbitals
 
 
 def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
@@ -215,9 +215,7 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
 def _response_dm1(mycc, Xvo, eris=None):
     nvir, nocc = Xvo.shape
     nmo = nocc + nvir
-    with_frozen = not ((mycc.frozen is None)
-                       or (isinstance(mycc.frozen, (int, numpy.integer)) and mycc.frozen == 0)
-                       or (len(mycc.frozen) == 0))
+    with_frozen = has_frozen_orbitals(mycc)
     if eris is None or with_frozen:
         mo_energy = mycc._scf.mo_energy
         mo_occ = mycc.mo_occ
