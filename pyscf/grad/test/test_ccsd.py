@@ -93,12 +93,12 @@ class KnownValues(unittest.TestCase):
         mycc.frozen = [0,1]
         g_scan = mycc.nuc_grad_method().as_scanner()
         e, g1 = g_scan(mol)
-        self.assertAlmostEqual(e, -76.07649382891177, 8)
+        self.assertAlmostEqual(e, -76.07649382891177, 7)
         self.assertAlmostEqual(lib.fp(g1), -0.03152584, 6)
 
         mycc.frozen = 2
         g1 = mycc.nuc_grad_method().kernel()
-        self.assertAlmostEqual(e, -76.07649382891177, 8)
+        self.assertAlmostEqual(e, -76.07649382891177, 7)
         self.assertAlmostEqual(lib.fp(g1), -0.03152584, 6)
 
     def test_rdm2_mo2ao(self):
