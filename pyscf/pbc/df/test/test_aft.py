@@ -352,6 +352,20 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(v0 - v3).max(), 0, 8)
         self.assertAlmostEqual(lib.fp(v0) - (-5.7070290795125445-0.00038722541238732697j), 0, 8)
 
+    # issue 2575
+    def test_aft_get_pp1(self):
+        cell = pgto.M(atom='Cu .0 .0 .0', a=np.eye(3)*3, spin=1,
+               basis=[[1, [1, 1]]], pseudo='''Cu
+1    0   10
+0.53    0
+1
+0.26    1   1.8''')
+        kpts = cell.make_kpts([2,1,1])
+        ref = fft.FFTDF(cell, kpts).get_pp()
+        v = aft.AFTDF(cell, kpts).get_pp()
+        self.assertAlmostEqual(abs(v - ref).max(), 0, 8)
+        self.assertAlmostEqual(lib.fp(v), 0.37494551685809624, 8)
+
     def test_aft_get_nuc(self):
         v0 = fft.FFTDF(cell, kpts[0]).get_nuc()
         v1 = aft.AFTDF(cell, kpts[0]).get_nuc()

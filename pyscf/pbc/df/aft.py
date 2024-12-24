@@ -329,7 +329,8 @@ class _IntPPBuilder(Int3cBuilder):
             else:
                 lib.logger.warn(cell, 'cell.pseudo was specified but its elements %s '
                                 'were not found in the system.', cell._pseudo.keys())
-            vpploc = [0] * nkpts
+            nao = cell.nao
+            vpploc = np.zeros((nkpts, nao, nao))
             return vpploc
 
         rcut = self._estimate_rcut_3c1e(rs_cell, fake_cells)
