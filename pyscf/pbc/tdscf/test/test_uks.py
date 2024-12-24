@@ -24,25 +24,29 @@ from pyscf.data.nist import HARTREE2EV as unitev
 
 
 def diagonalize(a, b, nroots=4):
-    a_aa, a_ab, a_bb = a
-    b_aa, b_ab, b_bb = b
-    nocc_a, nvir_a, nocc_b, nvir_b = a_ab.shape
-    a_aa = a_aa.reshape((nocc_a*nvir_a,nocc_a*nvir_a))
-    a_ab = a_ab.reshape((nocc_a*nvir_a,nocc_b*nvir_b))
-    a_bb = a_bb.reshape((nocc_b*nvir_b,nocc_b*nvir_b))
-    b_aa = b_aa.reshape((nocc_a*nvir_a,nocc_a*nvir_a))
-    b_ab = b_ab.reshape((nocc_a*nvir_a,nocc_b*nvir_b))
-    b_bb = b_bb.reshape((nocc_b*nvir_b,nocc_b*nvir_b))
-    a = np.block([[ a_aa         , a_ab],
-                  [ a_ab.T.conj(), a_bb]])
-    b = np.block([[ b_aa         , b_ab],
-                  [ b_ab.T.conj(), b_bb]])
+    a = spin_orbital_block(a)
+    b = spin_orbital_block(b, True)
     abba = np.block([[a        , b       ],
                      [-b.conj(),-a.conj()]])
     e = np.linalg.eig(abba)[0]
     lowest_e = np.sort(e[e.real > 0].real)
     lowest_e = lowest_e[lowest_e > 1e-3][:nroots]
     return lowest_e
+
+def spin_orbital_block(a, symmetric=False):
+    a_aa, a_ab, a_bb = a
+    nocc_a, nvir_a, nocc_b, nvir_b = a_ab.shape
+    a_aa = a_aa.reshape((nocc_a*nvir_a,nocc_a*nvir_a))
+    a_ab = a_ab.reshape((nocc_a*nvir_a,nocc_b*nvir_b))
+    if symmetric:
+        a_ba = a_ab.T
+    else:
+        a_ba = a_ab.conj().T
+    a_bb = a_bb.reshape((nocc_b*nvir_b,nocc_b*nvir_b))
+    a = np.block([[a_aa, a_ab],
+                  [a_ba, a_bb]])
+    return a
+
 
 class DiamondM06(unittest.TestCase):
     ''' Reproduce RKS-TDSCF results
@@ -90,13 +94,7 @@ class DiamondM06(unittest.TestCase):
         ref = [11.09731427, 11.57079413]
         td = self.kernel('TDA', ref)
         a, b = td.get_ab()
-        a_aa, a_ab, a_bb = a
-        nocc_a, nvir_a, nocc_b, nvir_b = a_ab.shape
-        a_aa = a_aa.reshape((nocc_a*nvir_a,nocc_a*nvir_a))
-        a_ab = a_ab.reshape((nocc_a*nvir_a,nocc_b*nvir_b))
-        a_bb = a_bb.reshape((nocc_b*nvir_b,nocc_b*nvir_b))
-        a = np.block([[ a_aa  , a_ab],
-                      [ a_ab.T, a_bb]])
+        a = spin_orbital_block(a)
         eref = np.linalg.eigvalsh(a)
         self.assertAlmostEqual(abs(td.e[:4] - eref[:4]).max(), 0, 8)
 
@@ -106,6 +104,24 @@ class DiamondM06(unittest.TestCase):
         a, b = td.get_ab()
         eref = diagonalize(a, b)
         self.assertAlmostEqual(abs(td.e[:4] - eref[:4]).max(), 0, 8)
+
+    def check_rsh_tda(self, xc, place=6):
+        cell = self.cell
+        mf = cell.UKS(xc=xc).run()
+        td = mf.TDA().run(nstates=3, conv_tol=1e-7)
+        a, b = td.get_ab()
+        a = spin_orbital_block(a)
+        eref = np.linalg.eigvalsh(a)
+        self.assertAlmostEqual(abs(td.e[:3] - eref[:3]).max(), 0, place)
+
+    def test_camb3lyp_tda(self):
+        self.check_rsh_tda('camb3lyp')
+
+    def test_wb97_tda(self):
+        self.check_rsh_tda('wb97')
+
+    def test_hse03_tda(self):
+        self.check_rsh_tda('hse03')
 
 
 class WaterBigBoxPBE(unittest.TestCase):
@@ -215,13 +231,7 @@ class DiamondPBE0(unittest.TestCase):
         ref = [5.37745381, 5.37745449]
         td = self.kernel('TDA', ref)
         a, b = td.get_ab()
-        a_aa, a_ab, a_bb = a
-        nocc_a, nvir_a, nocc_b, nvir_b = a_ab.shape
-        a_aa = a_aa.reshape((nocc_a*nvir_a,nocc_a*nvir_a))
-        a_ab = a_ab.reshape((nocc_a*nvir_a,nocc_b*nvir_b))
-        a_bb = a_bb.reshape((nocc_b*nvir_b,nocc_b*nvir_b))
-        a = np.block([[ a_aa  , a_ab],
-                      [ a_ab.T, a_bb]])
+        a = spin_orbital_block(a)
         eref = np.linalg.eigvalsh(a)
         self.assertAlmostEqual(abs(td.e[:2] - eref[:2]).max(), 0, 8)
 
