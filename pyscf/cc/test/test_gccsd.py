@@ -285,6 +285,7 @@ class KnownValues(unittest.TestCase):
         eri = eri + eri.transpose(1,0,3,2).conj()
         eri = eri + eri.transpose(2,3,0,1)
         eri *= .1
+        mf._eri = eri
 
         def get_jk(mol, dm, *args,**kwargs):
             vj = numpy.einsum('ijkl,lk->ij', eri, dm)
@@ -294,17 +295,19 @@ class KnownValues(unittest.TestCase):
             vj, vk = get_jk(mol, dm)
             return vj - vk
         def ao2mofn(mos):
-            return eri
+            c = mos
+            return lib.einsum('pqrs,pi,qj,rk,sl->ijkl', eri, c.conj(), c, c.conj(), c)
 
         mf.get_jk = get_jk
         mf.get_veff = get_veff
         hcore = numpy.random.random((nmo,nmo)) * .2 + numpy.random.random((nmo,nmo))* .2j
-        hcore = hcore + hcore.T.conj() + numpy.diag(range(nmo))*2
+        hcore = hcore + hcore.T.conj() + numpy.diag(numpy.arange(nmo)*2)
         mf.get_hcore = lambda *args: hcore
         mf.get_ovlp = lambda *args: numpy.eye(nmo)
         orbspin = numpy.zeros(nmo, dtype=int)
         orbspin[1::2] = 1
-        mf.mo_coeff = lib.tag_array(numpy.eye(nmo) + 0j, orbspin=orbspin)
+        u = numpy.linalg.eigh(hcore)[1]
+        mf.mo_coeff = lib.tag_array(u, orbspin=orbspin)
         mf.mo_occ = numpy.zeros(nmo)
         mf.mo_occ[:nocc] = 1
 
@@ -313,8 +316,8 @@ class KnownValues(unittest.TestCase):
         mycc.ao2mo = lambda *args, **kwargs: eris
         mycc.kernel(eris=eris)
         mycc.solve_lambda(eris=eris)
-        dm1 = mycc.make_rdm1()
-        dm2 = mycc.make_rdm2()
+        dm1 = mycc.make_rdm1(ao_repr=True)
+        dm2 = mycc.make_rdm2(ao_repr=True)
 
         e1 = numpy.einsum('ij,ji', hcore, dm1)
         e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
