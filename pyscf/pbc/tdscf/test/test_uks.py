@@ -18,6 +18,7 @@ import unittest
 import numpy as np
 from pyscf import __config__
 from pyscf import gto as molgto, scf as molscf, tdscf as moltdscf
+from pyscf.dft import radi
 from pyscf.pbc import gto, scf, tdscf
 from pyscf.data.nist import HARTREE2EV as unitev
 
@@ -32,10 +33,10 @@ def diagonalize(a, b, nroots=4):
     b_aa = b_aa.reshape((nocc_a*nvir_a,nocc_a*nvir_a))
     b_ab = b_ab.reshape((nocc_a*nvir_a,nocc_b*nvir_b))
     b_bb = b_bb.reshape((nocc_b*nvir_b,nocc_b*nvir_b))
-    a = np.block([[ a_aa  , a_ab],
-                  [ a_ab.T, a_bb]])
-    b = np.block([[ b_aa  , b_ab],
-                  [ b_ab.T, b_bb]])
+    a = np.block([[ a_aa         , a_ab],
+                  [ a_ab.T.conj(), a_bb]])
+    b = np.block([[ b_aa         , b_ab],
+                  [ b_ab.T.conj(), b_bb]])
     abba = np.block([[a        , b       ],
                      [-b.conj(),-a.conj()]])
     e = np.linalg.eig(abba)[0]
@@ -48,6 +49,9 @@ class DiamondM06(unittest.TestCase):
     '''
     @classmethod
     def setUpClass(cls):
+        cls.original_grids = radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
         cell = gto.Cell()
         cell.verbose = 4
         cell.output = '/dev/null'
@@ -70,8 +74,10 @@ class DiamondM06(unittest.TestCase):
 
         cls.nstates = 5 # make sure first `nstates_test` states are converged
         cls.nstates_test = 2
+
     @classmethod
     def tearDownClass(cls):
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
         cls.cell.stdout.close()
         del cls.cell, cls.mf
 
@@ -96,7 +102,7 @@ class DiamondM06(unittest.TestCase):
 
     def test_tdhf(self):
         ref = [9.09165361, 11.51362009]
-        td = self.kernel('TDDFT', ref)
+        td = self.kernel('TDDFT', ref, conv_tol=1e-8)
         a, b = td.get_ab()
         eref = diagonalize(a, b)
         self.assertAlmostEqual(abs(td.e[:4] - eref[:4]).max(), 0, 8)
@@ -107,6 +113,9 @@ class WaterBigBoxPBE(unittest.TestCase):
     '''
     @classmethod
     def setUpClass(cls):
+        cls.original_grids = radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
         cell = gto.Cell()
         cell.verbose = 4
         cell.output = '/dev/null'
@@ -140,6 +149,7 @@ class WaterBigBoxPBE(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
         cls.cell.stdout.close()
         cls.mol.stdout.close()
         del cls.cell, cls.mf
@@ -163,6 +173,9 @@ class DiamondPBE0(unittest.TestCase):
     '''
     @classmethod
     def setUpClass(cls):
+        cls.original_grids = radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
         cell = gto.Cell()
         cell.verbose = 4
         cell.output = '/dev/null'
@@ -189,6 +202,7 @@ class DiamondPBE0(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
         cls.cell.stdout.close()
         del cls.cell, cls.mf
 
@@ -225,6 +239,9 @@ class WaterBigBoxPBE0(unittest.TestCase):
     '''
     @classmethod
     def setUpClass(cls):
+        cls.original_grids = radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
         cell = gto.Cell()
         cell.verbose = 4
         cell.output = '/dev/null'
@@ -258,6 +275,7 @@ class WaterBigBoxPBE0(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
         cls.cell.stdout.close()
         cls.mol.stdout.close()
         del cls.cell, cls.mf

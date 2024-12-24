@@ -97,15 +97,12 @@ def dumps(cell):
         if k in celldic:
             del (celldic[k])
     for k in celldic:
-        if isinstance(celldic[k], np.ndarray):
+        if isinstance(celldic[k], (np.ndarray, np.generic)):
             celldic[k] = celldic[k].tolist()
     celldic['atom'] = repr(cell.atom)
     celldic['basis']= repr(cell.basis)
     celldic['pseudo'] = repr(cell.pseudo)
     celldic['ecp'] = repr(cell.ecp)
-    # Explicitly convert mesh because it is often created as numpy array
-    if isinstance(cell.mesh, np.ndarray):
-        celldic['mesh'] = cell.mesh.tolist()
 
     try:
         return json.dumps(celldic)
@@ -122,6 +119,8 @@ def dumps(cell):
                     dic1[k] = list(v)
                 elif isinstance(v, dict):
                     dic1[k] = skip_value(v)
+                elif isinstance(v, np.generic):
+                    dic1[k] = v.tolist()
                 else:
                     msg =('Function cell.dumps drops attribute %s because '
                           'it is not JSON-serializable' % k)

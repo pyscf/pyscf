@@ -67,16 +67,17 @@ def setUpModule():
     mf_uhf = scf.UHF(mol).run()
     td_hf = tdscf.TDHF(mf_uhf).run(conv_tol=1e-6)
 
-    mf_lda = dft.UKS(mol).set(xc='lda', conv_tol=1e-12)
-    mf_lda.grids.prune = None
-    mf_lda = mf_lda.newton().run()
-    mf_bp86 = dft.UKS(mol).set(xc='b88,p86', conv_tol=1e-12)
-    mf_bp86.grids.prune = None
-    mf_bp86 = mf_bp86.newton().run()
-    mf_b3lyp = dft.UKS(mol).set(xc='b3lyp5', conv_tol=1e-12)
-    mf_b3lyp.grids.prune = None
-    mf_b3lyp = mf_b3lyp.newton().run()
-    mf_m06l = dft.UKS(mol).run(xc='m06l')
+    with lib.temporary_env(dft.radi, ATOM_SPECIFIC_TREUTLER_GRIDS=False):
+        mf_lda = dft.UKS(mol).set(xc='lda', conv_tol=1e-12)
+        mf_lda.grids.prune = None
+        mf_lda = mf_lda.newton().run()
+        mf_bp86 = dft.UKS(mol).set(xc='b88,p86', conv_tol=1e-12)
+        mf_bp86.grids.prune = None
+        mf_bp86 = mf_bp86.newton().run()
+        mf_b3lyp = dft.UKS(mol).set(xc='b3lyp5', conv_tol=1e-12)
+        mf_b3lyp.grids.prune = None
+        mf_b3lyp = mf_b3lyp.newton().run()
+        mf_m06l = dft.UKS(mol).run(xc='m06l')
 
 def tearDownModule():
     global mol, mol1, mf_uhf, td_hf, mf_lda, mf_bp86, mf_b3lyp, mf_m06l

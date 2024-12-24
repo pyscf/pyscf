@@ -83,6 +83,7 @@ class GridLevel_Info(ctypes.Structure):
     '''
     Info about the grid levels.
     '''
+    __slots__ = []
     _fields_ = [("nlevels", ctypes.c_int), # number of grid levels
                 ("rel_cutoff", ctypes.c_double),
                 ("cutoff", ctypes.POINTER(ctypes.c_double)),
@@ -92,6 +93,7 @@ class RS_Grid(ctypes.Structure):
     '''
     Values on real space multigrid.
     '''
+    __slots__ = []
     _fields_ = [("nlevels", ctypes.c_int),
                 ("gridlevel_info", ctypes.POINTER(GridLevel_Info)),
                 ("comp", ctypes.c_int),
@@ -102,6 +104,7 @@ class PGFPair(ctypes.Structure):
     '''
     A primitive Gaussian function pair.
     '''
+    __slots__ = []
     _fields_ = [("ish", ctypes.c_int),
                 ("ipgf", ctypes.c_int),
                 ("jsh", ctypes.c_int),
@@ -114,6 +117,7 @@ class Task(ctypes.Structure):
     '''
     A single task.
     '''
+    __slots__ = []
     _fields_ = [("buf_size", ctypes.c_size_t),
                 ("ntasks", ctypes.c_size_t),
                 ("pgfpairs", ctypes.POINTER(ctypes.POINTER(PGFPair))),
@@ -124,6 +128,7 @@ class TaskList(ctypes.Structure):
     '''
     A task list.
     '''
+    __slots__ = []
     _fields_ = [("nlevels", ctypes.c_int),
                 ("hermi", ctypes.c_int),
                 ("gridlevel_info", ctypes.POINTER(GridLevel_Info)),
@@ -249,7 +254,7 @@ def build_task_list(cell, gridlevel_info, cell1=None, Ls=None, hermi=0, precisio
         cell1 : :class:`pbc.gto.cell.Cell`, optional
             The :class:`Cell` instance for the ket basis functions.
             If not given, both bra and ket basis functions come from cell.
-        Ls : (*,3) array, optional
+        Ls : ``(*,3)`` array, optional
             The cartesian coordinates of the periodic images.
             Default is calculated by :func:`cell.get_lattice_Ls`.
         hermi : int, optional

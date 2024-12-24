@@ -775,7 +775,6 @@ class FCIBase(lib.StreamObject):
 
     def __init__(self, mol=None):
         if mol is None:
-            self.stdout = sys.stdout
             self.verbose = logger.NOTE
             self.max_memory = lib.param.MAX_MEMORY
         else:

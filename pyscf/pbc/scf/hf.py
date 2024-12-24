@@ -540,15 +540,7 @@ class SCF(mol_hf.SCF):
 
     @property
     def kpts(self):
-        if 'kpts' in self.__dict__:
-            # To handle the attribute kpt loaded from chkfile
-            self.kpts = self.__dict__.pop('kpts')
         return self.with_df.kpts
-    @kpts.setter
-    def kpts(self, x):
-        self.with_df.kpts = np.reshape(x, (-1,3))
-        if self.rsjk:
-            self.rsjk.kpts = self.with_df.kpts
 
     def build(self, cell=None):
         # To handle the attribute kpt or kpts loaded from chkfile

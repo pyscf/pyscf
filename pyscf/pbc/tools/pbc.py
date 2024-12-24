@@ -310,10 +310,9 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
 
     absG2 = np.einsum('gi,gi->g', kG, kG)
 
-    if getattr(mf, 'kpts', None) is not None:
+    kpts = k.reshape(1,3)
+    if hasattr(mf, 'kpts'):
         kpts = mf.kpts
-    else:
-        kpts = k.reshape(1,3)
     Nk = len(kpts)
 
     if exxdiv == 'vcut_sph':  # PRB 77 193110

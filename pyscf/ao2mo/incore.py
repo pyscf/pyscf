@@ -202,6 +202,9 @@ def half_e1(eri_ao, mo_coeffs, compact=True):
     if nij_pair == 0:
         return eri1
 
+    if eri_ao.dtype != numpy.double:
+        raise TypeError('ao2mo.incore.half_e1 is for double precision only')
+
     if eri_ao.size == nao_pair**2: # 4-fold symmetry
         # half_e1 first transforms the indices which are contiguous in memory
         # transpose the 4-fold integrals to make ij the contiguous indices

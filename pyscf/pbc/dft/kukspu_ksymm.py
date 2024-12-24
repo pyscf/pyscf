@@ -38,33 +38,3 @@ class KsymAdaptedKUKSpU(kuks_ksymm.KUKS):
                                minao_ref=minao_ref, **kwargs)
 
 KUKSpU = KsymAdaptedKUKSpU
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    np.set_printoptions(3, linewidth=1000, suppress=True)
-    cell = gto.Cell()
-    cell.unit = 'A'
-    cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
-    cell.a = '''0.      1.7834  1.7834
-                1.7834  0.      1.7834
-                1.7834  1.7834  0.    '''
-
-    cell.basis = 'gth-dzvp'
-    cell.pseudo = 'gth-pade'
-    cell.verbose = 7
-    cell.build()
-    kmesh = [2, 2, 2]
-    kpts = cell.make_kpts(kmesh, wrap_around=True,
-                          space_group_symmetry=True, time_reversal_symmetry=True)
-    #U_idx = ["2p", "2s"]
-    #U_val = [5.0, 2.0]
-    U_idx = ["1 C 2p"]
-    U_val = [5.0]
-
-    mf = KUKSpU(cell, kpts, U_idx=U_idx, U_val=U_val, C_ao_lo='minao',
-                minao_ref='gth-szv')
-    mf.conv_tol = 1e-10
-    print (mf.U_idx)
-    print (mf.U_val)
-    print (mf.C_ao_lo.shape)
-    print (mf.kernel())
