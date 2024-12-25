@@ -524,10 +524,7 @@ def real_eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=Non
     assert pick is None
     assert callable(precond)
 
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(sys.stdout, verbose)
+    log = logger.new_logger(verbose)
 
     assert x0.ndim == 2
     A_size = x0.shape[1] // 2
