@@ -853,6 +853,16 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
 def make_rdm2(mo_coeff, mo_occ, **kwargs):
     '''Two-particle density matrix in AO representation
 
+    NOTE the indices of the two-particle density matrix is ordered to
+
+    dm2[p,q,r,s] = <q^+ s^+ r p>.
+
+    HF energy can be computed
+    E = einsum('pq,qp', hcore, 1pdm) + einsum('pqrs,pqrs', eri, 2pdm) / 2
+    where h1[p,q] = <p|h|q> and eri[p,q,r,s] = (pq|rs)
+to make the density matrix consistent with the density matrix obtained
+    from post-HF methods,
+
     Args:
         mo_coeff : 2D ndarray
             Orbital coefficients. Each column is one orbital.
