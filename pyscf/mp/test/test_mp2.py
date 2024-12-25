@@ -66,7 +66,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(t2 - t2ref0).max(), 0, 8)
 
         pt.max_memory = 1
-        pt.frozen = None
+        pt.frozen = []
         emp2, t2 = pt.kernel()
         self.assertAlmostEqual(emp2, -0.204019967288338, 8)
         self.assertAlmostEqual(pt.e_corr_ss, -0.05153088565639835, 8)
@@ -129,6 +129,7 @@ class KnownValues(unittest.TestCase):
         nmo = mf.mo_energy.size
 
         pt = mp.mp2.MP2(mf)
+        pt.frozen = 0
         emp2, t2 = pt.kernel()
         eri = ao2mo.restore(1, ao2mo.kernel(mf._eri, mf.mo_coeff), nmo)
         hcore = mf.get_hcore()
