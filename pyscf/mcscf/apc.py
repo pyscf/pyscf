@@ -33,6 +33,11 @@ class Chooser():
             Active space size constraint.
             If tuple, interpreted as (nelecas,ncas)
             If int, interpreted as max # of orbitals
+        fixed: bool
+            If true, the active space will be selected as exactly the size specified by max_size,
+            choosing from among the highest-entropy orbitals (as opposed to dynamic selection if False).
+            Using this setting is suggested for applications where orbital consistency is important,
+            such as applications in reactivity.
 
     Returns:
         active-space-size, #-active-electrons, orbital-initial-guess, chosen-active-orbital-indices
@@ -51,7 +56,7 @@ class Chooser():
     >>> mc = mcscf.CASSCF(mf, ncas, nelecas).run(casorbs)
     """
 
-    def __init__(self,orbs,occ,entropies,max_size=(8,8),verbose=4):
+    def __init__(self,orbs,occ,entropies,max_size=(8,8),fixed=False,verbose=4):
         #Check that we have a full set of orbitals:
         assert(orbs.shape[0] == orbs.shape[1])
         assert(len(occ) == len(entropies))
@@ -63,6 +68,11 @@ class Chooser():
         self.entropies = np.asarray(entropies)
         self.max_size = max_size
         self.verbose = verbose
+
+        #Fixed size only supported with tuple
+        if fixed:
+            assert(not isinstance(max_size,int))
+        self.fixed = fixed
 
     def _ncsf(self,nactel,norbs):
         """
@@ -137,66 +147,89 @@ class Chooser():
             max_size = self.max_size
             as_size = len(active_idx)
 
-        nactel = int(np.sum(np.array(occ)[active_idx]))
-        nactorbs = len(active_idx)
-        log.debug(f"Initial active space of ({nactel},{nactorbs}) has size {as_size}")
-        log.debug(f"Maximum active space size set to {max_size}")
+        if self.fixed:
+            #Fixed selection of (nactel,nactorbs) space using highest-entropy orbitals
+            #Recommended for cases when orbital consistency is important (e.g., reactivity)
+            nactel,norbs = self.max_size
+            log.info(f"Fixed selection of AS size ({nactel},{norbs})...")
+            os_idx = np.where(occ == 1)[0]
+            docc_idx = np.where(occ == 2)[0]
+            virt_idx = np.where(occ == 0)[0]
 
-        #Drop orbitals until size constraint is satisfied:
-        while as_size > max_size:
+            nactos = len(os_idx)
+            nactdocc = int((nactel - nactos)/2)
+            nactvirt = int((norbs - nactdocc - nactos))
+
+            actdocc_idx = docc_idx[np.argsort(entropies[docc_idx])[-nactdocc:]]
+            actvirt_idx = virt_idx[np.argsort(entropies[virt_idx])[-nactvirt:]]
+            active_idx = np.hstack([actdocc_idx,os_idx,actvirt_idx])
+
+            inactive_idx = np.setdiff1d(docc_idx,actdocc_idx)
+            secondary_idx = np.setdiff1d(virt_idx,actvirt_idx)
+
+            assert(self._as_is_reasonable(active_idx))
+            as_size = self._calc_ncsf(active_idx)
+        else:
+            #Dynamic selection: drop orbitals until size constraint is satisfied
             nactel = int(np.sum(np.array(occ)[active_idx]))
             nactorbs = len(active_idx)
-            log.debug(f"Active space of ({nactel},{nactorbs}) has size {as_size} larger than {max_size}")
-            log.debug("Dropping lowest entropy orbital...")
+            log.debug(f"Initial active space of ({nactel},{nactorbs}) has size {as_size}")
+            log.debug(f"Maximum active space size set to {max_size}")
 
-            #Get active orbital entropies
-            active_entropies = entropies[active_idx]
-            ranked_active_idx = [active_idx[i] for i in np.argsort(active_entropies)]
+            while as_size > max_size:
+                nactel = int(np.sum(np.array(occ)[active_idx]))
+                nactorbs = len(active_idx)
+                log.debug(f"Active space of ({nactel},{nactorbs}) has size {as_size} larger than {max_size}")
+                log.debug("Dropping lowest entropy orbital...")
 
-            #Drop lowest orbital in succession, checking for reasonability:
-            active_space_is_reasonable = False
-            tries = 0
+                #Get active orbital entropies
+                active_entropies = entropies[active_idx]
+                ranked_active_idx = [active_idx[i] for i in np.argsort(active_entropies)]
 
-            while not active_space_is_reasonable:
-                try:
-                    dropped_idx = ranked_active_idx[tries] #Move to next possibility
-                    dropped_idx_entropy = np.round(entropies[dropped_idx],4)
-                    dropped_idx_occ = int(occ[dropped_idx])
-                except IndexError:
-                    log.error("Not enough orbitals to choose a reasonable active space!")
-                    raise RuntimeError("Not enough orbitals to choose a reasonable active space!")
+                #Drop lowest orbital in succession, checking for reasonability:
+                active_space_is_reasonable = False
+                tries = 0
 
-                new_inactive_idx = inactive_idx.copy()
-                new_active_idx = active_idx.copy()
-                new_secondary_idx = secondary_idx.copy()
+                while not active_space_is_reasonable:
+                    try:
+                        dropped_idx = ranked_active_idx[tries] #Move to next possibility
+                        dropped_idx_entropy = np.round(entropies[dropped_idx],4)
+                        dropped_idx_occ = int(occ[dropped_idx])
+                    except IndexError:
+                        log.error("Not enough orbitals to choose a reasonable active space!")
+                        raise RuntimeError("Not enough orbitals to choose a reasonable active space!")
 
-                if dropped_idx_occ > 0:
-                    new_active_idx.remove(dropped_idx)
-                    new_inactive_idx += [dropped_idx]
+                    new_inactive_idx = inactive_idx.copy()
+                    new_active_idx = active_idx.copy()
+                    new_secondary_idx = secondary_idx.copy()
+
+                    if dropped_idx_occ > 0:
+                        new_active_idx.remove(dropped_idx)
+                        new_inactive_idx += [dropped_idx]
+                    else:
+                        new_active_idx.remove(dropped_idx)
+                        new_secondary_idx += [dropped_idx]
+
+                    log.debug(f"Attempting to drop orbital {dropped_idx} \
+                    (occ={dropped_idx_occ}, S={dropped_idx_entropy})...")
+                    active_space_is_reasonable = self._as_is_reasonable(new_active_idx)
+                    if active_space_is_reasonable:
+                        log.debug("Orbital has been dropped")
+                    else:
+                        log.debug("Active space becomes unreasonable if this orbital is dropped, trying next option...")
+
+                    tries += 1
+
+                inactive_idx = new_inactive_idx
+                active_idx = new_active_idx
+                secondary_idx = new_secondary_idx
+
+                #Calculate new NCSFs:
+                if isinstance(self.max_size,tuple):
+                    nactel,norbs = self.max_size
+                    as_size = self._calc_ncsf(active_idx)
                 else:
-                    new_active_idx.remove(dropped_idx)
-                    new_secondary_idx += [dropped_idx]
-
-                log.debug(f"Attempting to drop orbital {dropped_idx} \
-                (occ={dropped_idx_occ}, S={dropped_idx_entropy})...")
-                active_space_is_reasonable = self._as_is_reasonable(new_active_idx)
-                if active_space_is_reasonable:
-                    log.debug("Orbital has been dropped")
-                else:
-                    log.debug("Active space becomes unreasonable if this orbital is dropped, trying next option...")
-
-                tries += 1
-
-            inactive_idx = new_inactive_idx
-            active_idx = new_active_idx
-            secondary_idx = new_secondary_idx
-
-            #Calculate new NCSFs:
-            if isinstance(self.max_size,tuple):
-                nactel,norbs = self.max_size
-                as_size = self._calc_ncsf(active_idx)
-            else:
-                as_size = len(active_idx)
+                    as_size = len(active_idx)
 
         #Final checks:
         assert(len(active_idx) <= len(entropies))
@@ -240,6 +273,11 @@ class APC():
         n: Int
             Number of times to remove highest-entropy virtual orbitals in entropy calculation.
             A higher value will tend to select active spaces with less doubly occupied orbitals.
+        fixed: bool
+            If true, the active space will be selected as exactly the size specified by max_size,
+            choosing from among the highest-entropy orbitals (as opposed to dynamic selection if False).
+            Using this setting is suggested for applications where orbital consistency is important,
+            such as applications in reactivity.
 
     Kwargs:
         eps: Float
@@ -259,7 +297,7 @@ class APC():
     >>> mc = mcscf.CASSCF(mf, ncas, nelecas).run(casorbs)
     """
 
-    def __init__(self,mf,max_size=(8,8),n=2,eps=1e-3,verbose=4):
+    def __init__(self,mf,max_size=(8,8),n=2,fixed=False,eps=1e-3,verbose=4):
         self.log = logger.new_logger(lib.StreamObject,verbose)
         self.mf = mf
         self.n = n
@@ -267,6 +305,12 @@ class APC():
         assert(eps > 0) #Check that eps > 0
         self.max_size = max_size
         self.verbose = verbose
+        self.fixed = fixed
+
+        #Sanity check -- assert that n < # of virtual orbitals
+        if n >= (mf.mo_occ == 0).sum():
+            self.log.debug("N equals or exceeds number of virtual orbitals in mf")
+            assert(n < (mf.mo_occ == 0).sum())
 
     def _apc(self,orbs,occ,f_mo,k_mo):
         """
@@ -422,7 +466,7 @@ class APC():
 
         max_size = self.max_size
         log.info(f"Choosing active space with ranked orbital approach (max_size = {max_size})...")
-        chooser = Chooser(orbs,occ,entropies,max_size,verbose=self.verbose)
+        chooser = Chooser(orbs,occ,entropies,max_size,fixed=self.fixed,verbose=self.verbose)
         nactorbs, nactel, casorbs, active_idx = chooser.kernel()
         self.active_idx = active_idx
         return nactorbs, nactel, casorbs
