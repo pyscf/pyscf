@@ -214,6 +214,12 @@ class GMP2(mp2.MP2):
     def init_amps(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         return kernel(self, mo_energy, mo_coeff, eris, with_t2)
 
+    def _finalize(self):
+        log = logger.new_logger(self)
+        log.note('E(%s) = %.15g  E_corr = %.15g',
+                 self.__class__.__name__, self.e_tot, self.e_corr)
+        return self
+
     to_gpu = lib.to_gpu
 
 MP2 = GMP2
@@ -371,50 +377,3 @@ def _make_eris_outcore(mp, mo_coeff=None, verbose=None):
     return eris
 
 del (WITH_T2)
-
-
-if __name__ == '__main__':
-    from functools import reduce
-    from pyscf import scf
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.atom = [['O', (0.,   0., 0.)],
-                ['O', (1.21, 0., 0.)]]
-    mol.basis = 'cc-pvdz'
-    mol.spin = 2
-    mol.build()
-    mf = scf.UHF(mol).run()
-    mf = scf.addons.convert_to_ghf(mf)
-
-    frozen = [0,1,2,3]
-    pt = GMP2(mf, frozen=frozen)
-    emp2, t2 = pt.kernel()
-    print(emp2 - -0.345306881488508)
-
-    pt.max_memory = 1
-    emp2, t2 = pt.kernel()
-    print(emp2 - -0.345306881488508)
-
-    dm1 = pt.make_rdm1(t2)
-    dm2 = pt.make_rdm2(t2)
-    nao = mol.nao_nr()
-    mo_a = mf.mo_coeff[:nao]
-    mo_b = mf.mo_coeff[nao:]
-    nmo = mo_a.shape[1]
-    eri = ao2mo.kernel(mf._eri, mo_a+mo_b, compact=False).reshape([nmo]*4)
-    orbspin = mf.mo_coeff.orbspin
-    sym_forbid = (orbspin[:,None] != orbspin)
-    eri[sym_forbid,:,:] = 0
-    eri[:,:,sym_forbid] = 0
-    hcore = scf.RHF(mol).get_hcore()
-    h1 = reduce(numpy.dot, (mo_a.T.conj(), hcore, mo_a))
-    h1+= reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
-    e1 = numpy.einsum('ij,ji', h1, dm1)
-    e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
-    e1+= mol.energy_nuc()
-    print(e1 - pt.e_tot)
-
-    mf = scf.UHF(mol).run(max_cycle=1)
-    mf = scf.addons.convert_to_ghf(mf)
-    pt = GMP2(mf)
-    print(pt.kernel()[0] - -0.371240143556976)
