@@ -98,7 +98,20 @@ def get_ab(mf):
 
         add_hf_(a, b, hyb)
         if omega != 0:  # For RSH
-            raise NotImplementedError
+            with mf.with_df.range_coulomb(omega) as rsh_df:
+                eri_aa = rsh_df.ao2mo([orbo_a,mo_a,mo_a,mo_a], kpt, compact=False)
+                eri_ab = rsh_df.ao2mo([orbo_a,mo_a,mo_b,mo_b], kpt, compact=False)
+                eri_bb = rsh_df.ao2mo([orbo_b,mo_b,mo_b,mo_b], kpt, compact=False)
+                eri_aa = eri_aa.reshape(nocc_a,nmo_a,nmo_a,nmo_a)
+                eri_ab = eri_ab.reshape(nocc_a,nmo_a,nmo_b,nmo_b)
+                eri_bb = eri_bb.reshape(nocc_b,nmo_b,nmo_b,nmo_b)
+                a_aa, a_ab, a_bb = a
+                b_aa, b_ab, b_bb = b
+                k_fac = alpha - hyb
+                a_aa -= np.einsum('ijba->iajb', eri_aa[:nocc_a,:nocc_a,nocc_a:,nocc_a:]) * k_fac
+                b_aa -= np.einsum('jaib->iajb', eri_aa[:nocc_a,nocc_a:,:nocc_a,nocc_a:]) * k_fac
+                a_bb -= np.einsum('ijba->iajb', eri_bb[:nocc_b,:nocc_b,nocc_b:,nocc_b:]) * k_fac
+                b_bb -= np.einsum('jaib->iajb', eri_bb[:nocc_b,nocc_b:,:nocc_b,nocc_b:]) * k_fac
 
         xctype = ni._xc_type(mf.xc)
         dm0 = mf.make_rdm1(mo, mo_occ)

@@ -18,7 +18,7 @@
 
 import unittest
 import numpy as np
-
+from pyscf.dft import radi
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pscf
 from pyscf.pbc.scf import khf,kuhf
@@ -71,6 +71,15 @@ def tearDownModule():
     del cell, He, nk, kmf0, kumf0, kmf_ksymm, kumf_ksymm
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_krhf_gamma_center(self):
         self.assertAlmostEqual(kmf_ksymm.e_tot, kmf0.e_tot, 7)
 
@@ -128,7 +137,7 @@ class KnownValues(unittest.TestCase):
         kmf = pscf.KRHF(He, kpts=kpts).density_fit().run()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 7)
 
-    def test_krhf_mdf(self):
+    def test_krhf_mdf_high_cost(self):
         kpts0 = He.make_kpts(nk)
         kmf0 = khf.KRHF(He, kpts=kpts0).mix_density_fit().run()
 
@@ -144,7 +153,7 @@ class KnownValues(unittest.TestCase):
         kmf = pscf.KUHF(He, kpts=kpts).density_fit().run()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 7)
 
-    def test_kuhf_mdf(self):
+    def test_kuhf_mdf_high_cost(self):
         kpts0 = He.make_kpts(nk)
         kmf0 = kuhf.KUHF(He, kpts=kpts0).mix_density_fit().run()
 

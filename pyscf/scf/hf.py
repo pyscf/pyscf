@@ -971,9 +971,11 @@ def get_jk(mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True, omega=None):
             Whether to compute K matrices
 
         omega : float
-            Parameter of range-separated Coulomb operator: erf( omega * r12 ) / r12.
-            If specified, integration are evaluated based on the long-range
-            part of the range-separated Coulomb operator.
+            Parameter of range-separated Coulomb operator.
+            When omega is 0 (or None), integrals are computed with the full-range Coulomb potential.
+            When it is larger than zero, integrals are evaluated with the long-range
+            Coulomb potential erf( omega * r12 ) / r12. When omega is smaller
+            than 0, short-range Coulomb potential erfc( omega * r12 ) / r12 is applied.
 
     Returns:
         Depending on the given dm, the function returns one J and one K matrix,
