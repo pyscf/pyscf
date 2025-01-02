@@ -539,7 +539,7 @@ class CASSCF_Scanner(lib.SinglePointScanner):
         self.__dict__.update(mc.__dict__)
         self._scf = mc._scf.as_scanner()
 
-    def __call__(self, mol_or_geom, **kwargs):
+    def __call__(self, mol_or_geom, mo_coeff=None, ci0=None):
         from pyscf.mcscf.addons import project_init_guess
         if isinstance(mol_or_geom, gto.MoleBase):
             mol = mol_or_geom
@@ -560,12 +560,16 @@ class CASSCF_Scanner(lib.SinglePointScanner):
         mf_scanner = self._scf
         mf_scanner(mol)
         self.mol = mol
-        if self.mo_coeff is None:
-            mo = mf_scanner.mo_coeff
+
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        if mo_coeff is None:
+            mo_coeff = mf_scanner.mo_coeff
         else:
-            mo = self.mo_coeff
-        mo = project_init_guess(self, mo)
-        e_tot = self.kernel(mo, self.ci)[0]
+            mo_coeff = project_init_guess(self, mo_coeff)
+        if ci0 is None:
+            ci0 = self.ci
+        e_tot = self.kernel(mo_coeff, ci0)[0]
         return e_tot
 
 def max_stepsize_scheduler(casscf, envs):

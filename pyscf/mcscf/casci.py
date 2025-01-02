@@ -656,7 +656,11 @@ class CASCI_Scanner(lib.SinglePointScanner):
         else:
             mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-        self.reset (mol)
+        self.reset(mol)
+        for key in ('with_df', 'with_x2c', 'with_solvent', 'with_dftd3'):
+            sub_mod = getattr(self, key, None)
+            if sub_mod:
+                sub_mod.reset(mol)
 
         if mo_coeff is None:
             mf_scanner = self._scf
