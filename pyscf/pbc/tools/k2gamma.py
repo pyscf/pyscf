@@ -42,7 +42,7 @@ def kpts_to_kmesh(cell, kpts, precision=None, max_images=10000):
     scaled_kpts = cell.get_scaled_kpts(kpts)
     logger.debug3(cell, '    scaled_kpts kpts %s', scaled_kpts)
     # cell.nimgs are the upper limits for kmesh
-    kmesh = np.asarray(cell.nimgs) * 2 + 1
+    kmesh = np.asarray(cell.get_nimgs()) * 2 + 1
     if precision is None:
         precision = cell.precision * 1e2
     for i in range(3):
