@@ -1335,6 +1335,7 @@ def _sep_real_imag(a, ncolmax, order):
     aR[:,:ncol] = numpy.asarray(a.real, order=order)
     aI[:,:ncol] = numpy.asarray(a.imag, order=order)
     return aR, aI
+
 def _format_mo(mo_coeff, mo_occ, shape=None, order='F', precision=DM2MO_PREC):
     mos = [mo[:,mocc>precision]*mocc[mocc>precision]**0.5
            for mo,mocc in zip(mo_coeff,mo_occ)]
@@ -1348,6 +1349,7 @@ def _format_mo(mo_coeff, mo_occ, shape=None, order='F', precision=DM2MO_PREC):
         moRs = moRs.reshape(*shape)
         moIs = moIs.reshape(*shape)
     return moRs, moIs
+
 def _mo_from_dm(dms, method='eigh', shape=None, order='C', precision=DM2MO_PREC):
     import scipy.linalg
     nkpts = len(dms)

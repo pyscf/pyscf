@@ -98,6 +98,29 @@ class Diamond(unittest.TestCase):
         ref = [ 9.09496456, 11.53650896]
         self.kernel('TDDFT', ref, singlet=False)
 
+    def check_rsh_tda(self, xc, place=6):
+        cell = self.cell
+        mf = cell.RKS(xc=xc).run()
+        td = mf.TDA().run(nstates=5, conv_tol=1e-7)
+        a, b = td.get_ab()
+        no, nv = a.shape[:2]
+        eref = np.linalg.eigvalsh(a.reshape(no*nv,-1))
+        self.assertAlmostEqual(abs(td.e[:2] - eref[:2]).max(), 0, place)
+
+    def test_camb3lyp_tda(self):
+        self.check_rsh_tda('camb3lyp')
+
+    def test_wb97_tda(self):
+        self.check_rsh_tda('wb97')
+
+    @unittest.skip('HSE03 differs significantly between libxc-6.0 and 7.0, causing errors')
+    def test_hse03_tda(self):
+        self.check_rsh_tda('hse03')
+
+    def test_hse06_tda(self):
+        # reducing tol, as larger numerical uncertainties found in fxc when using libxc-7
+        self.check_rsh_tda('hse06', place=3)
+
 
 class DiamondPBEShifted(unittest.TestCase):
     @classmethod

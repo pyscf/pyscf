@@ -39,7 +39,6 @@ def setUpModule():
     mol.build()
     mf = dft.UKS(mol)
     mf.conv_tol = 1e-14
-    mf.kernel()
 
 def tearDownModule():
     global mol, mf
@@ -47,6 +46,16 @@ def tearDownModule():
     del mol, mf
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+        mf.kernel()
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_finite_diff_uks_grad(self):
 #[[-5.23195019e-16 -5.70291415e-16  5.32918387e-02]
 # [ 1.33417513e-16  6.75277008e-02 -2.66519852e-02]

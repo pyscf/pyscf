@@ -15,6 +15,7 @@
 import unittest
 import numpy
 from pyscf import lib
+from pyscf.dft import radi
 from pyscf.pbc import gto, scf, df
 
 def setUpModule():
@@ -29,6 +30,15 @@ def tearDownModule():
     del cell
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_fft_band(self):
         mf = scf.RHF(cell)
         mf.kernel()

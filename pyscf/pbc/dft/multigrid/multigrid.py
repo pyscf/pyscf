@@ -39,7 +39,7 @@ from pyscf.pbc.df.df_jk import (
     _format_jks,
 )
 from pyscf.pbc.lib.kpts_helper import gamma_point
-from pyscf.pbc.df import fft, ft_ao
+from pyscf.pbc.df import fft, ft_ao, aft
 from pyscf.pbc.dft.multigrid.utils import (
     _take_4d,
     _take_5d,
@@ -1863,7 +1863,12 @@ class MultiGridFFTDF(fft.FFTDF):
     get_nuc = get_nuc
 
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
-               with_j=True, with_k=True, exxdiv='ewald', **kwargs):
+               with_j=True, with_k=True, omega=None, exxdiv='ewald'):
+        if omega is not None:  # J/K for RSH functionals
+            with self.range_coulomb(omega) as rsh_df:
+                return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
+                                     omega=None, exxdiv=exxdiv)
+
         from pyscf.pbc.df import fft_jk
         if with_k:
             logger.warn(self, 'MultiGridFFTDF does not support HFX. '
@@ -1893,6 +1898,10 @@ class MultiGridFFTDF(fft.FFTDF):
         return vj, vk
 
     get_rho = get_rho
+
+    range_coulomb = aft.AFTDF.range_coulomb
+
+    to_gpu = lib.to_gpu
 
 
 def multigrid_fftdf(mf):

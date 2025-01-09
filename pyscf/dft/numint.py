@@ -2717,9 +2717,12 @@ class LibXCMixin:
         '''
         omega, alpha, beta = self.rsh_coeff(xc_code)
         if self.omega is not None:
+            if omega == 0 and self.omega != 0:
+                raise RuntimeError(f'Not support assigning omega={self.omega}. '
+                                   f'{xc_code} is not a RSH functional')
             omega = self.omega
 
-        if abs(omega) > 1e-10:
+        if omega != 0:
             hyb = alpha + beta
         else:
             hyb = self.hybrid_coeff(xc_code, spin)
