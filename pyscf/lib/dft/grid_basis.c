@@ -106,8 +106,9 @@ void VXCgen_grid(double *out, double *coords, double *atm_coords,
 inline double _lko_sat_func(double x) {
     int m;
     double tot = 0;
+    x = x / RCUT_LKO;
     for (m = 1; m <= MC_LKO; m++) {
-        tot += pow(x / RCUT_LKO, m) / m;
+        tot += pow(x, m) / m;
     }
     return RCUT_LKO * (1 - exp(-tot));
 }
@@ -116,9 +117,10 @@ inline double _lko_sat_deriv(double x) {
     int m;
     double tot = 0;
     double dtot = 0;
+    x = x / RCUT_LKO;
     for (m = 1; m <= MC_LKO; m++) {
-        tot += pow(x / RCUT_LKO, m) / m;
-        dtot += pow(x / RCUT_LKO, m-1);
+        tot += pow(x, m) / m;
+        dtot += pow(x, m-1);
     }
     return exp(-tot) * dtot;
 }
@@ -131,14 +133,24 @@ void VXCgen_grid_lko(double *out, double *coords, double *atm_coords,
     int i, j;
     double dx, dy, dz;
     double *atom_dist = malloc(sizeof(double) * natm*natm);
-    for (i = 0; i < natm; i++) {
-        for (j = 0; j < i; j++) {
+#pragma omp parallel private(i, j, dx, dy, dz)
+{
+    int ij;
+    const int num_ij = natm * (natm + 1) / 2;
+#pragma omp for nowait schedule(static)
+    for (ij = 0; ij < num_ij; ij++) {
+
+    //for (i = 0; i < natm; i++) {
+        //for (j = 0; j < i; j++) {
+            i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
+            j = ij - i*(i+1)/2;
             dx = atm_coords[i*3+0] - atm_coords[j*3+0];
             dy = atm_coords[i*3+1] - atm_coords[j*3+1];
             dz = atm_coords[i*3+2] - atm_coords[j*3+2];
             atom_dist[i*natm+j] = 1 / _lko_sat_func(sqrt(dx*dx + dy*dy + dz*dz));
-        }
+        //}
     }
+}
 
 #pragma omp parallel private(i, j, dx, dy, dz)
 {
@@ -148,7 +160,7 @@ void VXCgen_grid_lko(double *out, double *coords, double *atm_coords,
     double *min_dist_n = malloc(sizeof(double) * GRIDS_BLOCK);
     double *g = malloc(sizeof(double) * GRIDS_BLOCK);
     size_t ig0, n, ngs;
-    double fac;
+    double fac, s;
     double max_min_dist;
 #pragma omp for nowait schedule(static)
     for (ig0 = 0; ig0 < Ngrids; ig0 += GRIDS_BLOCK) {
@@ -158,6 +170,7 @@ void VXCgen_grid_lko(double *out, double *coords, double *atm_coords,
         }
         for (i = 0; i < natm; i++) {
             min_dist_i[i] = 1e10;
+            // this loop cannot be done with ivdep because of min_dist_i
             for (n = 0; n < ngs; n++) {
                 dx = coords[0*Ngrids+ig0+n] - atm_coords[i*3+0];
                 dy = coords[1*Ngrids+ig0+n] - atm_coords[i*3+1];
@@ -182,6 +195,7 @@ void VXCgen_grid_lko(double *out, double *coords, double *atm_coords,
                 continue;
             }
             fac = atom_dist[i*natm+j];
+#pragma GCC ivdep
             for (n = 0; n < ngs; n++) {
                 g[n] = (grid_dist[i*GRIDS_BLOCK+n] -
                     grid_dist[j*GRIDS_BLOCK+n]) * fac;
@@ -190,11 +204,12 @@ void VXCgen_grid_lko(double *out, double *coords, double *atm_coords,
             }
             if (radii_table != NULL) {
                 fac = radii_table[i*natm+j];
+#pragma GCC ivdep
                 for (n = 0; n < ngs; n++) {
                     g[n] += fac * (1 - g[n]*g[n]);
                 }
             }
-            for (n = 0; n < ngs; n++) {
+            /*for (n = 0; n < ngs; n++) {
                 g[n] = (3 - g[n]*g[n]) * g[n] * .5;
             }
             for (n = 0; n < ngs; n++) {
@@ -206,6 +221,15 @@ void VXCgen_grid_lko(double *out, double *coords, double *atm_coords,
             for (n = 0; n < ngs; n++) {
                 buf[i*GRIDS_BLOCK+n] *= .5 - g[n];
                 buf[j*GRIDS_BLOCK+n] *= .5 + g[n];
+            }*/
+#pragma GCC ivdep
+            for (n = 0; n < ngs; n++) {
+                s = g[n];
+                s = (3 - s*s) * s * .5;
+                s = (3 - s*s) * s * .5;
+                s = ((3 - s*s) * s * .5) * .5;
+                buf[i*GRIDS_BLOCK+n] *= .5 - s;
+                buf[j*GRIDS_BLOCK+n] *= .5 + s;
             }
         } }
 
@@ -236,6 +260,9 @@ void VXCgen_grid_lko_deriv(double *out, double *dw, double *coords, double *atm_
     double *outx = out + 1*natm*ngrids;
     double *outy = out + 2*natm*ngrids;
     double *outz = out + 3*natm*ngrids;
+#pragma omp parallel private(i, j, dx, dy, dz, dr, sat_deriv)
+{   
+#pragma omp for
     for (i = 0; i < natm; i++) {
         for (j = 0; j < i; j++) {
             dx = atm_coords[i*3+0] - atm_coords[j*3+0];
@@ -249,6 +276,7 @@ void VXCgen_grid_lko_deriv(double *out, double *dw, double *coords, double *atm_
             dadz[i*natm+j] = -dz * sat_deriv;
         }
     }
+}
 
 #pragma omp parallel private(i, j, dx, dy, dz, dr)
 {

@@ -146,7 +146,8 @@ static void sgx_ao_dm(double *vm, double *ao, double *dm,
         const double D1 = 1;
         const double beta = 1.0;
 
-        int ish, blen, i, j;
+        int ish, blen;
+        size_t i, j;
         size_t b0;
 
         for (i = 0; i < nocc; i++) {

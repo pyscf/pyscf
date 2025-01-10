@@ -412,7 +412,11 @@ class SGX(lib.StreamObject):
             else:
                 vk = None
         else:
-            vj, vk = sgx_jk.get_jk(self, dm, hermi, with_j, with_k, direct_scf_tol)
+            if with_k and self.optk:
+                vj = None
+                vk = sgx_jk.get_k_only(self, dm, hermi, direct_scf_tol)
+            else:
+                vj, vk = sgx_jk.get_jk(self, dm, hermi, with_j, with_k, direct_scf_tol)
         return vj, vk
 
     to_gpu = lib.to_gpu

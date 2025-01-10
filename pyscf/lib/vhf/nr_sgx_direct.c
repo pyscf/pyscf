@@ -79,13 +79,14 @@ size_t _max_cache_size_sgx(int (*intor)(), int *shls_slice, int ncenter,
 
 int SGXreturn_blksize() { return BLKSIZE; }
 
-void SGXmake_screen_norm(double *norms, double *wao, int ngrids, int nbas, int *ao_loc)
+void SGXmake_screen_norm(double *norms, double *ao, int ngrids, int nbas, int *ao_loc)
 {
 #pragma omp parallel
 {
         int ish, iblk, g, i, g0, g1;
         double t1, t2;
         int bblk = (ngrids + BLKSIZE - 1) / BLKSIZE;
+        const size_t Ngrids = ngrids;
 #pragma omp for
         for (iblk = 0; iblk < bblk; iblk++) {
                 g0 = iblk * BLKSIZE;
@@ -95,11 +96,37 @@ void SGXmake_screen_norm(double *norms, double *wao, int ngrids, int nbas, int *
                         for (i = ao_loc[ish]; i < ao_loc[ish + 1]; i++) {
                                 t2 = 0;
                                 for (g = g0; g < g1; g++) {
-                                        t2 += fabs(wao[i*ngrids+g]);
+                                        t2 += fabs(ao[i*Ngrids+g]);
                                 }
                                 t1 = (MAX(t1, t2) * BLKSIZE) / (g1 - g0);
                         }
                         norms[iblk * nbas + ish] = sqrt(t1);
+                }
+        }
+}
+}
+
+void SGXmake_screen_q_cond(double *norms, double *ao, int ngrids, int nbas, int *ao_loc) {
+#pragma omp parallel
+{
+        int ish, iblk, g, i, g0, g1;
+        double t1, t2;
+        int bblk = (ngrids + BLKSIZE - 1) / BLKSIZE;
+        const size_t Ngrids = ngrids;
+#pragma omp for
+        for (iblk = 0; iblk < bblk; iblk++) {
+                g0 = iblk * BLKSIZE;
+                g1 = MIN(g0 + BLKSIZE, ngrids);
+                for (ish = 0; ish < nbas; ish++) {
+                        t1 = 0;
+                        for (i = ao_loc[ish]; i < ao_loc[ish + 1]; i++) {
+                                t2 = 0;
+                                for (g = g0; g < g1; g++) {
+                                        t2 = MAX(t2, fabs(ao[i*Ngrids+g]));
+                                }
+                                t1 = MAX(t1, t2);
+                        }
+                        norms[iblk * nbas + ish] = t1;
                 }
         }
 }
@@ -287,9 +314,10 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
                 fprescreen = CVHFnoscreen;
         }
         const int tot_ngrids = (int) env[NGRIDS];
+        const size_t Tot_Ngrids = tot_ngrids;
         const double* all_grids = env+(size_t)env[PTR_GRIDS];
         const int nbatch = (tot_ngrids + BLKSIZE - 1) / BLKSIZE;
-        int usc = 0;
+        double usc = 0;
 #pragma omp parallel
 {
         int ig0, ig1, dg;
@@ -305,6 +333,7 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
         double *buf = calloc(sizeof(double), BLKSIZE*di*di*ncomp);
         double *cache = malloc(sizeof(double) * cache_size);
         double *shl_maxs;
+        double shl_max_sum;
         if (ncond == NULL) {
                 shl_maxs = NULL;
         } else {
@@ -313,7 +342,7 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
         int *sj_shells = malloc(sizeof(int) * nish);
         int num_sj_shells;
         int sj_index;
-        int _usc = 0;
+        double _usc = 0;
 #pragma omp for nowait schedule(dynamic, 1)
         for (int ibatch = 0; ibatch < nbatch; ibatch++) {
                 ig0 = ibatch * BLKSIZE;
@@ -323,6 +352,7 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
                         jkop[idm]->set0(v_priv[idm], dg);
                 }
                 if (shl_maxs != NULL) {
+                        shl_max_sum = 0;
                         for (ish = 0; ish < nbas; ish++) {
                                 shl_maxs[ish] = 0;
                                 i0 = ao_loc[ish] - ioff;
@@ -331,10 +361,14 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
                                 for (i = i0; i < i1; i++) {
                                 for (k = ig0; k < ig1; k++) {
                                         shl_maxs[ish] = MAX(
-                                                fabs(dms[idm][i*tot_ngrids+k]),
+                                                fabs(dms[idm][i*Tot_Ngrids+k]),
                                                 shl_maxs[ish]
                                         );
                                 } } }
+                                shl_max_sum += pow(shl_maxs[ish], 0.05);
+                        }
+                        for (ish = 0; ish < nbas; ish++) {
+                                shl_maxs[ish] = pow(shl_maxs[ish], 0.95) * shl_max_sum;
                         }
                 }
                 for (ish = 0; ish < nbas; ish++) {
@@ -353,7 +387,7 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
                                 )) {
                                         sj_shells[num_sj_shells] = jsh;
                                         num_sj_shells++;
-                                        _usc++;
+                                        _usc += 1;
                                 } }
                                 /*if ((*fprescreen)(shls, vhfopt, atm, bas, env)) {
                                         sj_shells[num_sj_shells] = jsh;
@@ -378,7 +412,7 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
                                          env, cintopt, cache);
                                 for (idm = 0; idm < n_dm; idm++) {
                                         jkop[idm]->contract(buf, dms[idm], v_priv[idm],
-                                                        i0, i1, j0, j1, ig0, dg);
+                                                            i0, i1, j0, j1, ig0, dg);
                                 }
                         }
                 }
@@ -403,7 +437,7 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
         usc += _usc;
 }
 }
-        printf("unscreened: %d\n", usc);
+        printf("unscreened: %lf\n", usc);
 }
 
 void SGXnr_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
@@ -457,6 +491,37 @@ void SGXnr_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
                 q_cond[jsh*nbas+ish] = qtmp;
         }
         free(cache);
+}
+}
+
+void SGXmake_rinv_ubound(double *q_cond, double *ovlp_abs, double *bas_max,
+                         int *ao_loc, int nbas, int nao, int nblk) {
+        int shls_slice[] = {0, nbas};
+        // 2pi(3/4pi)^(2/3)
+        double fac = 2.4179879310247046;
+#pragma omp parallel
+{
+        int ij, i, j, ish, jsh;
+        double maxnorm, maxprod;
+        double tmp;
+#pragma omp for schedule(dynamic, 4)
+        for (ij = 0; ij < nbas*(nbas+1)/2; ij++) {
+                ish = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
+                jsh = ij - ish*(ish+1)/2;
+                maxprod = 0;
+                for (int iblk = 0; iblk < nblk; iblk++) {
+                        tmp = bas_max[iblk * nbas + ish] * bas_max[iblk * nbas + jsh];
+                        maxprod = MAX(tmp, maxprod);
+                }
+                maxnorm = 0;
+                for (i = ao_loc[ish]; i < ao_loc[ish + 1]; i++) {
+                for (j = ao_loc[jsh]; j < ao_loc[jsh + 1]; j++) {
+                        maxnorm = MAX(maxnorm, ovlp_abs[i * nao + j]);
+                } }
+                maxnorm = fac * pow(maxnorm, 2.0 / 3) * pow(maxprod, 1.0 / 3);
+                q_cond[ish*nbas+jsh] = maxnorm;
+                q_cond[jsh*nbas+ish] = maxnorm;
+        }
 }
 }
 
@@ -577,10 +642,10 @@ static void SGXJKOperator_set0_##label(SGXJKArray *jkarray, int dk) \
 static void SGXJKOperator_send_##label(SGXJKArray *jkarray, int k0, int dk, double *out) \
 { \
         int ncomp = jkarray->ncomp; \
-        int i, k, icomp; \
+        size_t i, k, icomp; \
         double *data = jkarray->data; \
-        int ni = jkarray->v_dims[0]; \
-        int nk_global = jkarray->v_dims[2]; \
+        const size_t ni = jkarray->v_dims[0]; \
+        const size_t nk_global = jkarray->v_dims[2]; \
         out = out + k0; \
         if (task == JTYPE1) { \
                 for (i = 0; i < ncomp; i++) { \
@@ -639,7 +704,7 @@ static void nrs1_ijg_ji_g(double *eri, double *dm, SGXJKArray *out,
                           int i0, int i1, int j0, int j1,
                           const int k0, const int dk)
 {
-        const int ncol = out->v_dims[0];
+        const size_t ncol = out->v_dims[0];
         int i, j, k, icomp;
         double *data = out->data;
 
@@ -663,7 +728,7 @@ static void nrs2_ijg_ji_g(double *eri, double *dm, SGXJKArray *out,
                 return nrs1_ijg_ji_g(eri, dm, out, i0, i1, j0, j1, k0, dk);
         }
 
-        const int ncol = out->v_dims[0];
+        const size_t ncol = out->v_dims[0];
         int i, j, k, icomp;
         double *data = out->data;
 
@@ -683,8 +748,8 @@ static void nrs1_ijg_g_ij(double *eri, double *dm, SGXJKArray *out,
                           int i0, int i1, int j0, int j1,
                           const int k0, const int dk)
 {
-        int ni = out->v_dims[0];
-        int nj = out->v_dims[1];
+        const size_t ni = out->v_dims[0];
+        const size_t nj = out->v_dims[1];
         int i, j, k, icomp;
         double *data = out->data;
         dm = dm + k0;
@@ -713,7 +778,7 @@ static void nrs1_ijg_gj_gi(double *eri, double *dm, SGXJKArray *out,
         double *data = out->data;
         dm = dm + k0;
         int i, j, k, icomp;
-        const int nk_global = out->v_dims[2];
+        const size_t nk_global = out->v_dims[2];
 
         int ij = 0;
         for (icomp = 0; icomp < out->ncomp; icomp++) {
@@ -737,7 +802,7 @@ static void nrs2_ijg_gj_gi(double *eri, double *dm, SGXJKArray *out,
 
         double *data = out->data;
         dm = dm + k0;
-        const int nk_global = out->v_dims[2];
+        const size_t nk_global = out->v_dims[2];
         int i, j, k, icomp;
 
         int ij = 0;
