@@ -166,6 +166,20 @@ class KsymAdaptedKSCF(khf.KSCF):
         self.with_df.kpts = np.reshape(kpts_bz, (-1,3))
         self._kpts = kpts
 
+    @property
+    def kmesh(self):
+        from pyscf.pbc.tools.k2gamma import kpts_to_kmesh
+        kpts_bz = self._kpts.kpts
+        kmesh = kpts_to_kmesh(kpts_bz)
+        if len(kpts_bz) != np.prod(kmesh):
+            logger.WARN(self, 'K-points specified in %s are not Monkhorst-Pack %s grids',
+                        self, kmesh)
+        return kmesh
+
+    @kmesh.setter
+    def kmesh(self, x):
+        self.kpts = self.cell.make_kpts(x)
+
     def dump_flags(self, verbose=None):
         mol_hf.SCF.dump_flags(self, verbose)
         logger.info(self, '\n')

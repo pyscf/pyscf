@@ -359,7 +359,7 @@ def get_nocc(mp):
         nocc = numpy.count_nonzero(mp.mo_occ > 0) - mp.frozen
         assert (nocc > 0)
         return nocc
-    elif isinstance(mp.frozen[0], (int, numpy.integer)):
+    elif hasattr(mp.frozen, '__len__'):
         occ_idx = mp.mo_occ > 0
         occ_idx[list(mp.frozen)] = False
         nocc = numpy.count_nonzero(occ_idx)
@@ -375,7 +375,7 @@ def get_nmo(mp):
         return len(mp.mo_occ)
     elif isinstance(mp.frozen, (int, numpy.integer)):
         return len(mp.mo_occ) - mp.frozen
-    elif isinstance(mp.frozen[0], (int, numpy.integer)):
+    elif hasattr(mp.frozen, '__len__'):
         return len(mp.mo_occ) - len(set(mp.frozen))
     else:
         raise NotImplementedError
@@ -393,7 +393,7 @@ def get_frozen_mask(mp):
         pass
     elif isinstance(mp.frozen, (int, numpy.integer)):
         moidx[:mp.frozen] = False
-    elif len(mp.frozen) > 0:
+    elif hasattr(mp.frozen, '__len__'):
         moidx[list(mp.frozen)] = False
     else:
         raise NotImplementedError

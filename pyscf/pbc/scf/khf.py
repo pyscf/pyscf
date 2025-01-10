@@ -474,6 +474,34 @@ class KSCF(pbchf.SCF):
     def mo_occ_kpts(self):
         return self.mo_occ
 
+    @property
+    def kpts(self):
+        if 'kpts' in self.__dict__:
+            # To handle the attribute kpt loaded from chkfile
+            self.kpts = self.__dict__.pop('kpts')
+        return self.with_df.kpts
+
+    @kpts.setter
+    def kpts(self, x):
+        self.with_df.kpts = np.reshape(x, (-1,3))
+        if self.rsjk:
+            self.rsjk.kpts = self.with_df.kpts
+
+    @property
+    def kmesh(self):
+        '''The number of k-points along each axis in the first Brillouin zone'''
+        from pyscf.pbc.tools.k2gamma import kpts_to_kmesh
+        kpts = self.kpts
+        kmesh = kpts_to_kmesh(kpts)
+        if len(kpts) != np.prod(kmesh):
+            logger.WARN(self, 'K-points specified in %s are not Monkhorst-Pack %s grids',
+                        self, kmesh)
+        return kmesh
+
+    @kmesh.setter
+    def kmesh(self, x):
+        self.kpts = self.cell.make_kpts(x)
+
     def build(self, cell=None):
         # To handle the attribute kpt or kpts loaded from chkfile
         if 'kpts' in self.__dict__:

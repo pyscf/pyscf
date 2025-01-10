@@ -72,6 +72,7 @@ class KnownValues(unittest.TestCase):
         mycc1= cc.ccsd.CCSD(mf1).run(conv_tol=1e-10)
         mol.set_geom_('H 0 0 0; H 0 0 1.705', unit='Bohr')
         mycc2 = cc.ccsd.CCSD(scf.RHF(mol))
+        mycc2.frozen = [] # test has_frozen_orbitals
         g_scanner = mycc2.nuc_grad_method().as_scanner().as_scanner()
         g1 = g_scanner(mol)[1]
         self.assertTrue(g_scanner.converged)
@@ -87,6 +88,18 @@ class KnownValues(unittest.TestCase):
 # [  1.73095055e-16  -7.94568837e-02  -6.02077699e-03]
 # [ -9.49844615e-17   7.94568837e-02  -6.02077699e-03]]
         self.assertAlmostEqual(lib.fp(g1), 0.10599503839207361, 6)
+
+        mycc = mf.CCSD()
+        mycc.frozen = [0,1]
+        g_scan = mycc.nuc_grad_method().as_scanner()
+        e, g1 = g_scan(mol)
+        self.assertAlmostEqual(e, -76.07649382891177, 7)
+        self.assertAlmostEqual(lib.fp(g1), -0.03152584, 6)
+
+        mycc.frozen = 2
+        g1 = mycc.nuc_grad_method().kernel()
+        self.assertAlmostEqual(e, -76.07649382891177, 7)
+        self.assertAlmostEqual(lib.fp(g1), -0.03152584, 6)
 
     def test_rdm2_mo2ao(self):
         mycc = cc.ccsd.CCSD(mf)

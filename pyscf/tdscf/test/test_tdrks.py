@@ -128,6 +128,16 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 7)
         self.assertAlmostEqual(lib.fp(es[:3]*27.2114), 9.0054057603534, 4)
 
+    def test_tddft_hse06(self):
+        mf = mol.RKS(xc='hse06').run()
+        td = mf.TDDFT()
+        td.conv_tol = 1e-5
+        es = td.kernel(nstates=4)[0]
+        a,b = td.get_ab()
+        e_ref = diagonalize(a, b, 5)
+        self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 7)
+        self.assertAlmostEqual(lib.fp(es[:3]), 0.34554352587555387, 6)
+
     def test_tda_b3lypg(self):
         mf = dft.RKS(mol)
         mf.xc = 'b3lypg'
@@ -218,8 +228,24 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -1.14670613191817, 8)
 
         e_td = mf.TDA().set(nstates=5).kernel()[0]
-        ref = [16.25021865, 27.93720198, 49.4665691]
-        self.assertAlmostEqual(abs(e_td*nist.HARTREE2EV - ref).max(), 0, 4)
+        ref = [0.59718453, 1.02667324, 1.81786290]
+        self.assertAlmostEqual(abs(e_td - ref).max(), 0, 6)
+
+        mf.xc = 'wb97 + 1e-9*HF'
+        ref = mf.TDA().set(nstates=5).kernel()[0]
+        self.assertAlmostEqual(abs(e_td - ref).max(), 0, 8)
+
+        mf.xc = 'hse06'
+        e = mf.kernel()
+        self.assertAlmostEqual(e, -1.1447666793407982, 8)
+
+        e_td = mf.TDA().set(nstates=5).kernel()[0]
+        ref = [0.60314386, 1.03802565, 1.82757364]
+        self.assertAlmostEqual(abs(e_td - ref).max(), 0, 6)
+
+        mf.xc = 'hse06 + 1e-9*HF'
+        ref = mf.TDA().set(nstates=5).kernel()[0]
+        self.assertAlmostEqual(abs(e_td - ref).max(), 0, 8)
 
     def test_tda_m06l_singlet(self):
         td = mf_m06l.TDA()

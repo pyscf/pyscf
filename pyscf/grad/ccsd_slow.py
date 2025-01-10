@@ -29,6 +29,7 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.cc import ccsd_rdm
 from pyscf.grad import ccsd as ccsd_grad
+from pyscf.grad.mp2 import has_frozen_orbitals
 
 def kernel(cc, t1, t2, l1, l2, eris=None):
     if eris is None:
@@ -40,9 +41,7 @@ def kernel(cc, t1, t2, l1, l2, eris=None):
     nocc = numpy.count_nonzero(cc.mo_occ > 0)
     mo_e_o = mo_energy[:nocc]
     mo_e_v = mo_energy[nocc:]
-    with_frozen = not ((cc.frozen is None)
-                       or (isinstance(cc.frozen, (int, numpy.integer)) and cc.frozen == 0)
-                       or (len(cc.frozen) == 0))
+    with_frozen = has_frozen_orbitals(cc)
 
     d1 = _gamma1_intermediates(cc, t1, t2, l1, l2)
     d2 = _gamma2_intermediates(cc, t1, t2, l1, l2)

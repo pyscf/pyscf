@@ -410,9 +410,14 @@ def rsh_coeff(xc_code):
         if 'SR_HF' in xc_code or 'LR_HF' in xc_code or 'RSH(' in xc_code:
             check_omega = False
 
-    hyb, fn_facs = parse_xc(xc_code)
-    hyb, alpha, omega = hyb
-    beta = hyb - alpha
+    (hyb, alpha, omega), fn_facs = parse_xc(xc_code)
+    if omega == 0:
+        # SR and LR Coulomb share the same coefficients
+        # Note: this change breaks compatibility with pyscf-2.7
+        assert hyb == alpha
+        beta = 0.
+    else:
+        beta = hyb - alpha
     rsh_pars = [omega, alpha, beta]
     rsh_tmp = (ctypes.c_double*3)()
     for xid, fac in fn_facs:
@@ -639,8 +644,6 @@ def parse_xc(description):
             # dftd3 cannot be used in a custom xc description
             assert '-d3' not in token
             parse_token(token, 'compound XC', search_xc_alias=True)
-    if hyb[2] == 0: # No omega is assigned. LR_HF is 0 for normal Coulomb operator
-        hyb[1] = 0
     return tuple(hyb), tuple(remove_dup(fn_facs))
 
 _NAME_WITH_DASH = {'SR-HF'    : 'SR_HF',
@@ -770,7 +773,7 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=Non
           | vtau[:,2]   = (u, d)
 
         * fxc for restricted case:
-          (v2rho2, v2rhosigma, v2sigma2, v2lapl2, vtau2, v2rholapl, v2rhotau, v2lapltau, v2sigmalapl, v2sigmatau)
+          (v2rho2, v2rhosigma, v2sigma2, v2lapl2, v2tau2, v2rholapl, v2rhotau, v2lapltau, v2sigmalapl, v2sigmatau)
 
         * fxc for unrestricted case:
           | v2rho2[:,3]     = (u_u, u_d, d_d)
@@ -1186,16 +1189,33 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
         outlen = lib.comb(xlen+deriv, deriv)
         exc, vxc, fxc, kxc = libxc_out[:4]
         out = [exc]
-        if vxc is not None:
+        if deriv > 0:
+            assert vxc is not None
             out.extend([x for x in vxc if x is not None])
-        if fxc is not None:
-            out.extend([fxc[i] for i in [0, 1, 2, 6, 4, 9]])
-        if kxc is not None:
+        if deriv > 1:
+            assert fxc is not None
+            if xctype == 'GGA':
+                assert len(fxc) == 3, 'fxc for GGA should be arranged as (v2rho2, v2rhosigma, v2sigma2)'
+            elif xctype == 'MGGA':
+                if len(fxc) == 10:
+                    fxc = [fxc[i] for i in [0, 1, 2, 6, 4, 9]]
+                else:
+                    assert len(fxc) == 6, (
+                        'fxc for MGGA should be arranged as\n'
+                        '(v2rho2, v2rhosigma, v2sigma2, v2tau2, v2rhotau, v2sigmatau)\nor\n'
+                        '(v2rho2, v2rhosigma, v2sigma2, v2lapl2, v2tau2, '
+                        'v2rholapl, v2rhotau, v2lapltau, v2sigmalapl, v2sigmatau)')
+            assert all(x is not None for x in fxc)
+            out.extend(fxc)
+        if deriv > 2:
+            assert kxc is not None
             out.extend([x for x in kxc if x is not None])
+
         if spin == 1:
             # Returns of eval_xc are structured as [grid_id,deriv_component]
             # for each term in libxc_out. Change the shape to [deriv_comp, grid_id]
             out = [x.T for x in out]
+
         out = numpy.vstack(out)[:outlen]
         assert len(out) == outlen
         idx = _libxc_to_xcfun_indices(xctype, spin, deriv)

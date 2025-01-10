@@ -215,12 +215,10 @@ def get_nuc(mydf, kpts=None):
 
 
 def weighted_coulG(mydf, kpt=np.zeros(3), exx=False, mesh=None, omega=None):
-    '''Weighted regular Coulomb kernel, applying cell.omega by default'''
+    '''Weighted regular Coulomb kernel'''
     cell = mydf.cell
     if mesh is None:
         mesh = mydf.mesh
-    if omega is None:
-        omega = cell.omega
     Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
     coulG = tools.get_coulG(cell, kpt, exx, mydf, mesh, Gv, omega=omega)
     coulG *= kws
@@ -329,7 +327,8 @@ class _IntPPBuilder(Int3cBuilder):
             else:
                 lib.logger.warn(cell, 'cell.pseudo was specified but its elements %s '
                                 'were not found in the system.', cell._pseudo.keys())
-            vpploc = [0] * nkpts
+            nao = cell.nao
+            vpploc = np.zeros((nkpts, nao, nao))
             return vpploc
 
         rcut = self._estimate_rcut_3c1e(rs_cell, fake_cells)

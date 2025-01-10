@@ -207,7 +207,6 @@ def setUpModule():
     mol.build()
     mf = dft.RKS(mol)
     mf.conv_tol = 1e-14
-    mf.kernel()
 
     mf2 = dft.RKS(mol)
     mf2.grids.becke_scheme = gen_grid.becke_lko
@@ -220,6 +219,16 @@ def tearDownModule():
     del mol, mf, mf2
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+        mf.kernel()
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+
     def test_finite_diff_rks_grad(self):
 #[[ -4.20040265e-16  -6.59462771e-16   2.10150467e-02]
 # [  1.42178271e-16   2.81979579e-02  -1.05137653e-02]

@@ -853,6 +853,16 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
 def make_rdm2(mo_coeff, mo_occ, **kwargs):
     '''Two-particle density matrix in AO representation
 
+    NOTE the indices of the two-particle density matrix is ordered to
+
+    dm2[p,q,r,s] = <q^+ s^+ r p>.
+
+    HF energy can be computed
+    E = einsum('pq,qp', hcore, 1pdm) + einsum('pqrs,pqrs', eri, 2pdm) / 2
+    where h1[p,q] = <p|h|q> and eri[p,q,r,s] = (pq|rs)
+to make the density matrix consistent with the density matrix obtained
+    from post-HF methods,
+
     Args:
         mo_coeff : 2D ndarray
             Orbital coefficients. Each column is one orbital.
@@ -961,9 +971,11 @@ def get_jk(mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True, omega=None):
             Whether to compute K matrices
 
         omega : float
-            Parameter of range-separated Coulomb operator: erf( omega * r12 ) / r12.
-            If specified, integration are evaluated based on the long-range
-            part of the range-separated Coulomb operator.
+            Parameter of range-separated Coulomb operator.
+            When omega is 0 (or None), integrals are computed with the full-range Coulomb potential.
+            When it is larger than zero, integrals are evaluated with the long-range
+            Coulomb potential erf( omega * r12 ) / r12. When omega is smaller
+            than 0, short-range Coulomb potential erfc( omega * r12 ) / r12 is applied.
 
     Returns:
         Depending on the given dm, the function returns one J and one K matrix,
@@ -1993,6 +2005,10 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
 
         self.dump_flags()
         self.build(self.mol)
+
+        if dm0 is None and self.mo_coeff is not None and self.mo_occ is not None:
+            # Initial guess from existing wavefunction
+            dm0 = self.make_rdm1()
 
         if self.max_cycle > 0 or self.mo_coeff is None:
             self.converged, self.e_tot, \

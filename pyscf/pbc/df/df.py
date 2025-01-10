@@ -428,7 +428,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             # * The sparse mesh is not appropriate for low dimensional systems
             #   with infinity vacuum since the ERI may require large mesh to
             #   sample density in vacuum.
-            if (omega < LONGRANGE_AFT_TURNOVER_THRESHOLD and
+            if (abs(omega) < LONGRANGE_AFT_TURNOVER_THRESHOLD and
                 cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'):
                 mydf = aft.AFTDF(cell, self.kpts)
                 ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
