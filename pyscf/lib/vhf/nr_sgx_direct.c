@@ -365,10 +365,10 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
                                                 shl_maxs[ish]
                                         );
                                 } } }
-                                shl_max_sum += pow(shl_maxs[ish], 0.05);
+                                shl_max_sum += (i1 - i0) * pow(shl_maxs[ish], 0.1);
                         }
                         for (ish = 0; ish < nbas; ish++) {
-                                shl_maxs[ish] = pow(shl_maxs[ish], 0.95) * shl_max_sum;
+                                shl_maxs[ish] = pow(shl_maxs[ish], 0.9) * shl_max_sum;
                         }
                 }
                 for (ish = 0; ish < nbas; ish++) {

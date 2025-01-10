@@ -56,7 +56,8 @@ from pyscf.dft import gen_grid
 from pyscf.dft.gen_grid import LEBEDEV_ORDER, SGX_ANG_MAPPING, \
                                sgx_prune, becke_lko
 from pyscf.dft.numint import eval_ao, BLKSIZE, NBINS, libdft, \
-    SWITCH_SIZE, _scale_ao, _dot_ao_ao_sparse, _dot_ao_ao
+    SWITCH_SIZE, _scale_ao, _dot_ao_ao_sparse, _dot_ao_dm_sparse, \
+    _scale_ao_sparse
 
 
 libdft.SGXreturn_blksize.restype = int
@@ -81,6 +82,7 @@ def _sgxdot_ao_dm(ao, dms, non0tab, shls_slice, ao_loc, out=None):
         ao = lib.transpose(ao)
     if ao.dtype == dms.dtype == numpy.double:
         fn = libdft.VXCsgx_ao_dm
+        # fn = libdft.VXCdot_ao_dm
     else:
         # TODO implement this
         raise NotImplementedError("Complex sgxdot")
@@ -264,6 +266,10 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     blksize = max(112, int(max_memory*1e6/8/((2+nset)*nao)))
     blksize = min(ngrids, max(1, blksize // SGX_BLKSIZE) * SGX_BLKSIZE)
 
+    cutoff = grids.cutoff * 1e2
+    nbins = NBINS * 2 - int(NBINS * numpy.log(cutoff) / numpy.log(grids.cutoff))
+    pair_mask = mol.get_overlap_cond() < -numpy.log(cutoff)
+
     if sgx._overlap_correction_matrix is None:
         if sgx.fit_ovlp:
             sn = numpy.zeros((nao, nao))
@@ -272,11 +278,11 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
                 coords = grids.coords[i0:i1]
                 mask = screen_index[i0 // BLKSIZE:]
                 ao = mol.eval_gto('GTOval', coords, non0tab=mask)
-                # _dot_ao_ao_sparse(ao, ao, grids.weights[i0:i1], nbins, mask,
-                #                   pair_mask, ao_loc, hermi=hermi, out=sn)
-                wao = _scale_ao(ao, grids.weights[i0:i1])
-                sn[:] += _dot_ao_ao(mol, ao, wao, mask, (0, mol.nbas),
-                                    ao_loc, hermi=hermi)
+                _dot_ao_ao_sparse(ao, ao, grids.weights[i0:i1], nbins, mask,
+                                  pair_mask, ao_loc, hermi=hermi, out=sn)
+                # wao = _scale_ao(ao, grids.weights[i0:i1])
+                # sn[:] += _dot_ao_ao(mol, ao, wao, mask, (0, mol.nbas),
+                #                     ao_loc, hermi=hermi)
             ovlp = mol.intor_symmetric('int1e_ovlp')
             proj = scipy.linalg.solve(sn, ovlp)
             sgx._overlap_correction_matrix = proj
@@ -317,11 +323,11 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
             )
             ao[:] = numpy.abs(ao)
             wao[:] = numpy.abs(wao)
-            # _dot_ao_ao_sparse(ao, ao, grids.weights[i0:i1], nbins, mask,
-            #                   pair_mask, ao_loc, hermi=hermi, out=asn)
-            print("DOT")
-            asn[:] += _dot_ao_ao(mol, ao, wao, mask, (0, mol.nbas),
-                                 ao_loc, hermi=hermi)
+            _dot_ao_ao_sparse(ao, ao, grids.weights[i0:i1], nbins, mask,
+                              pair_mask, ao_loc, hermi=hermi, out=asn)
+            # print("DOT")
+            # asn[:] += _dot_ao_ao(mol, ao, wao, mask, (0, mol.nbas),
+            #                      ao_loc, hermi=hermi)
         norm_sum = ao_cond.sum(axis=0)
         ao_cond *= norm_sum
         ncond = sgx.sgx_tol_potential / (numpy.max(ao_cond, axis=1) + 1e-10)
@@ -357,8 +363,12 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
         # fg = lib.einsum('xij,ig->xjg', proj_dm, wao.T)
         print("DOT 1")
         wao = _scale_ao(ao, weights, out=wao)
-        print("SCALE")
         fg = _sgxdot_ao_dm(ao, proj_dm, mask, shls_slice, ao_loc, out=fg)
+        #wao = _scale_ao_sparse(ao, weights, mask, ao_loc, out=wao)
+        #fg = [
+        #    _dot_ao_dm_sparse(ao, proj_dm[i], nbins, mask, pair_mask, ao_loc).T
+        #    for i in range(nset)
+        #]
         print("INTEGRALS")
         tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
         if ncond is None:
@@ -623,7 +633,7 @@ def _gen_k_direct(mol, aosym, direct_scf_tol,
     cintor = _vhf._fpointer(sgxopt._intor)
     drv = _vhf.libcvhf.SGXnr_direct_drv
 
-    def jk_part(mol, grid_coords, fg, weights, ncond=None):
+    def k_part(mol, grid_coords, fg, weights, ncond=None):
         if ncond is None:
             ncond = lib.c_null_ptr()
         else:
@@ -635,9 +645,6 @@ def _gen_k_direct(mol, aosym, direct_scf_tol,
         env[gto.PTR_GRIDS] = mol._env.size
         shls_slice = (0, mol.nbas, 0, mol.nbas)
 
-        assert fg.flags.c_contiguous
-        assert fg.shape[-2:] == (ao_loc[-1], weights.size)
-
         vk = None
         fjk = []
         dmsptr = []
@@ -647,6 +654,8 @@ def _gen_k_direct(mol, aosym, direct_scf_tol,
         else:
             vk = numpy.zeros((len(fg),ncomp,nao,ngrids))[:,0]
         for i, dm in enumerate(fg):
+            assert fg[i].flags.c_contiguous
+            assert fg[i].shape == (ao_loc[-1], weights.size)
             dmsptr.append(dm.ctypes.data_as(ctypes.c_void_p))
             vjkptr.append(vk[i].ctypes.data_as(ctypes.c_void_p))
             fjk.append(_vhf._fpointer('SGXnr'+aosym+'_ijg_gj_gi'))
@@ -667,7 +676,7 @@ def _gen_k_direct(mol, aosym, direct_scf_tol,
             ctypes.c_int(2 if aosym == 's2' else 1),
             ncond)
         return vk
-    return jk_part
+    return k_part
 
 
 SGX_RAD_GRIDS = []
