@@ -250,7 +250,7 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=None, hermi=0,
       [ 0.          0.        ]]
      [[ 0.10289944  0.48176097]
       [-0.48176097 -0.10289944]]]
-    '''
+    ''' # noqa: E501
     intor_name, comp = _get_intor_and_comp(intor_name, comp)
     if any(bas[:,ANG_OF] > 12):
         raise NotImplementedError('cint library does not support high angular (l>12) GTOs')
