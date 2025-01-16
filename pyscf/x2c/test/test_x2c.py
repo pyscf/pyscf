@@ -228,6 +228,23 @@ C     F
         mf = mf.undo_x2c()
         self.assertEqual(mf.__class__.__name__, 'DFGHF')
 
+    # issue 2605
+    def test_kappa_spinor(self):
+        mol = gto.M(
+            atom='''He 0.   0.7  .1
+                    He 0.5 -0.2 -.1''',
+            basis=[[0, [0.5547, 1.]],
+                   [1, [11., 0.94, .31], [4.68, 0.22, .80]],
+                   [1, -2, [1.9, 1.]],
+                   [1, 1, [1.53, 1.]],
+                   [1, 0, [0.53, 1.]]],
+        )
+        pmol, c = x2c.SpinorX2CHelper(mol).get_xmol()
+        self.assertEqual(c.shape, (pmol.nao_2c(), mol.nao_2c()))
+        ref = mol.intor('int1e_ovlp_spinor')
+        dat = c.T.dot(pmol.intor('int1e_ovlp_spinor')).dot(c)
+        self.assertAlmostEqual(abs(ref - dat).max(), 0, 12)
+
 
 if __name__ == "__main__":
     print("Full Tests for x2c")

@@ -41,7 +41,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     mf = hessobj.base
     ni = mf._numint
     if mf.do_nlc():
-        raise NotImplementedError('RKS Hessian for NLC functional')
+        raise NotImplementedError('UKS Hessian for NLC functional')
 
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
