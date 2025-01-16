@@ -229,7 +229,7 @@ C     F
         self.assertEqual(mf.__class__.__name__, 'DFGHF')
 
     # issue 2605
-    def test_kappa_spinor(self)
+    def test_kappa_spinor(self):
         mol = gto.M(
             atom='''He 0.   0.7  .1
                     He 0.5 -0.2 -.1''',
