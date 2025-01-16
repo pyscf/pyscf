@@ -201,7 +201,8 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=None, hermi=0,
             rinv         :math:`|\vec{r} - \vec{R}_{(\texttt{env[PTR_RINV_ORIG]})}|^{-1}`
             nuc          :math:`\sum_N Z_N |\vec{r} - \vec{R}_N|^{-1}`
             nabla-rinv   :math:`\nabla |\vec{r} - \vec{R}_{(\texttt{env[PTR_RINV_ORIG]})}|^{-1}`
-            gaunt        :math:`\alpha_i \cdot \alpha_j  / |\vec{r}_i - \vec{r}_j|` , note the minus sign in Gaunt is not included
+            gaunt        :math:`\alpha_i \cdot \alpha_j  / |\vec{r}_i - \vec{r}_j|`, \
+                         note the minus sign in Gaunt is not included
             breit        :math:`-(\alpha_i \cdot \alpha_j)/(2 |\vec{r}_i - \vec{r}_j|) \
                          - ((\alpha_i \cdot r_{ij})  (\alpha_j \cdot r_{ij})) / \
                          (2|\vec{r}_i - \vec{r}_j|^3)`
@@ -250,7 +251,7 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=None, hermi=0,
       [ 0.          0.        ]]
      [[ 0.10289944  0.48176097]
       [-0.48176097 -0.10289944]]]
-    ''' # noqa: E501
+    '''
     intor_name, comp = _get_intor_and_comp(intor_name, comp)
     if any(bas[:,ANG_OF] > 12):
         raise NotImplementedError('cint library does not support high angular (l>12) GTOs')
