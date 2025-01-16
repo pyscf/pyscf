@@ -334,6 +334,7 @@ class SpinOrbitalX2CHelper(X2CHelperBase):
             c = _block_diag(lib.cho_solve(s22, s21))
             h1 = reduce(lib.dot, (c.T, h1, c))
         if self.xuncontract and contr_coeff is not None:
+            contr_coeff = _block_diag(contr_coeff)
             h1 = reduce(lib.dot, (contr_coeff.T, h1, contr_coeff))
         return h1
 
