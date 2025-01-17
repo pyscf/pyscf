@@ -62,18 +62,13 @@ mf.kernel()
 with io.StringIO() as outp:
     try:
         write_cosmo_file(outp, mf)
-<<<<<<< HEAD
         print(outp.getvalue()[:188])
-=======
-        print(outp.getvalue())
->>>>>>> dfba79593ad5142ceeba1e2f5979d35cdaec0007
     except ValueError as e:
         print(e)
 
 # overruling
 with io.StringIO() as outp:
     write_cosmo_file(outp, mf, ignore_low_feps=True)
-<<<<<<< HEAD
     print(outp.getvalue()[:188])
 
 
@@ -98,9 +93,6 @@ with io.StringIO() as outp: # with open('formaldehyde.cosmo', 'w') as outf:
 with io.StringIO() as outp: # with open('formaldehyde.cosmo', 'w') as outf:
     write_cosmo_file(outp, mf, volume=1234.56)
     print(outp.getvalue()[:187])
-=======
-    print(outp.getvalue())
->>>>>>> dfba79593ad5142ceeba1e2f5979d35cdaec0007
 
 
 # The molecular volume is computed for the solvent-accessible surface generated
