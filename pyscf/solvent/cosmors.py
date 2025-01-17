@@ -187,12 +187,23 @@ def _lot(mf):
     return lot
 
 
+<<<<<<< HEAD
+def write_cosmo_file(fout, mf, lot=None, volume=None, step=0.2,
+                     ignore_low_feps=False):
+=======
 def write_cosmo_file(fout, mf, step=0.2, ignore_low_feps=False):
+>>>>>>> dfba79593ad5142ceeba1e2f5979d35cdaec0007
     '''Saves COSMO file
 
     Arguments:
         fout: writable file object
         mf: processed SCF with PCM solvation
+<<<<<<< HEAD
+        lot (str): custom level of theory string to use in COSMO-file
+        volume (float): uses given value (Bohr^3) as molecular volume
+            instead of the computed one
+=======
+>>>>>>> dfba79593ad5142ceeba1e2f5979d35cdaec0007
         step (float): grid spacing parameter to compute volume, [Bohr]
         ignore_low_feps (bool): if True, does not raise ValueError if feps < 1
 
@@ -204,13 +215,22 @@ def write_cosmo_file(fout, mf, step=0.2, ignore_low_feps=False):
 
     # qm params
     fout.write('$info\n')
+<<<<<<< HEAD
+    fout.write(f'PySCF v. {__version__}, {_lot(mf) if lot is None else lot}\n')
+=======
     fout.write(f'PySCF v. {__version__}, {_lot(mf)}\n')
+>>>>>>> dfba79593ad5142ceeba1e2f5979d35cdaec0007
 
     # cosmo data
     f_epsilon = mf.with_solvent._intermediates['f_epsilon']
     n_segments = len(mf.with_solvent._intermediates['q'])
     area = sum(mf.with_solvent.surface['area'])
+<<<<<<< HEAD
+    if volume is None:
+        volume = get_sas_volume(mf.with_solvent.surface, step) /  _BOHR**3
+=======
     volume = get_sas_volume(mf.with_solvent.surface, step) /  _BOHR**3
+>>>>>>> dfba79593ad5142ceeba1e2f5979d35cdaec0007
     # print
     fout.write('$cosmo_data\n')
     fout.write(f'  fepsi  = {f_epsilon:>.8f}\n')
@@ -330,6 +350,10 @@ def get_cosmors_parameters(mf, sigmas_grid=_np.linspace(-0.025, 0.025, 51),
 
     Arguments:
         mf: processed SCF with PCM solvation
+<<<<<<< HEAD
+        sigmas_grid (list): list of charge density values for sigma-profile
+=======
+>>>>>>> dfba79593ad5142ceeba1e2f5979d35cdaec0007
         step (float): grid spacing parameter to compute volume, [Bohr]
         ignore_low_feps (bool): if True, does not raise ValueError if feps < 1
 

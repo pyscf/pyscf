@@ -62,14 +62,45 @@ mf.kernel()
 with io.StringIO() as outp:
     try:
         write_cosmo_file(outp, mf)
+<<<<<<< HEAD
+        print(outp.getvalue()[:188])
+=======
         print(outp.getvalue())
+>>>>>>> dfba79593ad5142ceeba1e2f5979d35cdaec0007
     except ValueError as e:
         print(e)
 
 # overruling
 with io.StringIO() as outp:
     write_cosmo_file(outp, mf, ignore_low_feps=True)
+<<<<<<< HEAD
+    print(outp.getvalue()[:188])
+
+
+# by default the write_cosmo_file function tries to extract level of theory from
+# the computation object, however, it could be specified manually via the "lot" argument:
+
+# run DFT SCF
+cm = pcm.PCM(mol)
+cm.eps = float('inf')
+mf = dft.RKS(mol, xc='b3lyp')
+mf = mf.PCM(cm)
+mf.kernel()
+
+# generate COSMO-file with custom level of theory
+with io.StringIO() as outp: # with open('formaldehyde.cosmo', 'w') as outf:
+    write_cosmo_file(outp, mf, lot='B3LYP/6-31G** with the C-PCM model')
+    print(outp.getvalue()[:203])
+
+
+# same substitution is available for molecular volume (for example, user prefers
+# RDKit molecular volumes). Please note, that volume values must be given in Bohr^3
+with io.StringIO() as outp: # with open('formaldehyde.cosmo', 'w') as outf:
+    write_cosmo_file(outp, mf, volume=1234.56)
+    print(outp.getvalue()[:187])
+=======
     print(outp.getvalue())
+>>>>>>> dfba79593ad5142ceeba1e2f5979d35cdaec0007
 
 
 # The molecular volume is computed for the solvent-accessible surface generated

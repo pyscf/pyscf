@@ -64,11 +64,19 @@ class TestCosmoRS(unittest.TestCase):
         self.assertRaises(ValueError, cosmors.get_cosmors_parameters, mf1)
 
     def test_cosmo_file(self):
+<<<<<<< HEAD
+        with io.StringIO() as outp: 
+            cosmors.write_cosmo_file(outp, mf0)
+            text = outp.getvalue()
+        E_diel = float(re.search('Dielectric energy \[a.u.\] += +(-*\d+\.\d+)', text).group(1))
+        self.assertAlmostEqual(E_diel, -0.0023256022, 5)
+=======
         with io.StringIO() as outp:
             cosmors.write_cosmo_file(outp, mf0)
             text = outp.getvalue()
         E_diel = float(re.search(r'Dielectric energy \[a.u.\] += +(-*\d+\.\d+)', text).group(1))
         self.assertAlmostEqual(E_diel, -0.0023256022, 8)
+>>>>>>> dfba79593ad5142ceeba1e2f5979d35cdaec0007
 
     def test_cosmo_parameters(self):
         ps = cosmors.get_cosmors_parameters(mf0)
