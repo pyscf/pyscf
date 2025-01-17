@@ -77,14 +77,14 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         logger.info(self, 'j2c_eig_always = %s', self.j2c_eig_always)
         return self
 
-    def build(self):
+    def build(self, j_only=False):
         cpu0 = logger.process_clock(), logger.perf_counter()
         log = logger.new_logger(self)
         cell = self.cell
         auxcell = self.auxcell
         kpts = self.kpts
 
-        self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
+        self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts, bvk=j_only)
         log.debug('kmesh for bvk-cell = %s', kmesh)
 
         if self.eta is None:

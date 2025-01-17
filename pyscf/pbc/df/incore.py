@@ -180,12 +180,12 @@ class Int3cBuilder(lib.StreamObject):
         self.direct_scf_tol = None
         return self
 
-    def build(self):
+    def build(self, j_only=False):
         log = logger.new_logger(self)
         cell = self.cell
         kpts = self.kpts
 
-        self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
+        self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts, bvk=j_only)
         log.debug('kmesh for bvk-cell = %s', kmesh)
 
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(

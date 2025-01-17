@@ -302,7 +302,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         if label is None:
             label = self._dataname
         if self._cderi is None:
-            self.build()
+            self.build(j_only=self._j_only)
         return CDERIArray(self._cderi, label)
 
     def has_kpts(self, kpts):
@@ -320,7 +320,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                 compact=True, blksize=None, aux_slice=None):
         '''Short range part'''
         if self._cderi is None:
-            self.build()
+            self.build(j_only=self._j_only)
         cell = self.cell
         kpti, kptj = kpti_kptj
         unpack = is_zero(kpti-kptj) and not compact
@@ -494,7 +494,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 # determine naoaux with self._cderi, because DF object may be used as CD
 # object when self._cderi is provided.
         if self._cderi is None:
-            self.build()
+            self.build(j_only=self._j_only)
 
         cell = self.cell
         if isinstance(self._cderi, numpy.ndarray):

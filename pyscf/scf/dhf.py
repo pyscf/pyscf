@@ -820,6 +820,8 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
 
     to_gpu = lib.to_gpu
 
+    density_fit = RaiseError
+
 UHF = UDHF = DHF
 
 

@@ -124,14 +124,14 @@ class _RSGDFBuilder(Int3cBuilder):
         logger.info(self, 'has_long_range = %s', self.has_long_range())
         return self
 
-    def build(self, omega=None):
+    def build(self, omega=None, j_only=False):
         cpu0 = logger.process_clock(), logger.perf_counter()
         log = logger.new_logger(self)
         cell = self.cell
         auxcell = self.auxcell
         kpts = self.kpts
 
-        self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
+        self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts, bvk=j_only)
         log.debug('kmesh for bvk-cell = %s', kmesh)
 
         if omega is not None:
@@ -896,7 +896,7 @@ class _RSGDFBuilder(Int3cBuilder):
     def make_j3c(self, cderi_file, intor='int3c2e', aosym='s2', comp=None,
                  j_only=False, dataname='j3c', shls_slice=None, kptij_lst=None):
         if self.rs_cell is None:
-            self.build()
+            self.build(j_only=j_only)
         log = logger.new_logger(self)
         cpu0 = logger.process_clock(), logger.perf_counter()
 
