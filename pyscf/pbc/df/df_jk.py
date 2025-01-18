@@ -61,9 +61,8 @@ def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
         if mesh is not None:
             with_df.mesh = mesh
 
-    mf = mf.copy()
+    mf = mf.copy().reset()
     mf.with_df = with_df
-    mf._eri = None
     return mf
 
 
