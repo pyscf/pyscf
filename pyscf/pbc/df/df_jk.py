@@ -652,7 +652,9 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         vk_kpts = vkR + vkI * 1j
     vk_kpts *= 1./nkpts
 
-    if exxdiv == 'ewald':
+    if exxdiv == 'ewald' and cell.dimension != 0:
+        # Integrals are computed analytically in GDF and RSJK.
+        # Finite size correction for exx is not needed.
         _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts_band)
 
     log.timer('get_k_kpts', *t0)
@@ -1048,7 +1050,9 @@ def get_k_kpts_kshift(mydf, dm_kpts, kshift, hermi=0, kpts=numpy.zeros((1,3)), k
         vk_kpts = vkR + vkI * 1j
     vk_kpts *= 1./nkpts
 
-    if exxdiv == 'ewald':
+    if exxdiv == 'ewald' and cell.dimension != 0:
+        # Integrals are computed analytically in GDF and RSJK.
+        # Finite size correction for exx is not needed.
         _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts_band)
 
     log.timer('get_k_kpts', *t0)
@@ -1319,7 +1323,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
             vk = vkR
         else:
             vk = vkR + vkI * 1j
-        if exxdiv == 'ewald':
+        if exxdiv == 'ewald' and cell.dimension != 0:
             _ewald_exxdiv_for_G0(cell, kpt, dms, vk)
         vk = vk.reshape(dm.shape)
 

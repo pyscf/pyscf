@@ -655,7 +655,7 @@ class SCF(mol_hf.SCF):
                 self._eri = self.with_df.get_ao_eri(kpt, compact=True)
             vj, vk = mol_hf.dot_eri_dm(self._eri, dm, hermi, with_j, with_k)
 
-            if with_k and self.exxdiv == 'ewald':
+            if with_k and self.exxdiv == 'ewald' and cell.dimension != 0:
                 from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
                 # G=0 is not included in the ._eri integrals
                 _ewald_exxdiv_for_G0(self.cell, kpt, dm.reshape(-1,nao,nao),
@@ -723,7 +723,14 @@ class SCF(mol_hf.SCF):
         return self.get_jk(cell, dm, hermi, kpt)
 
     def energy_nuc(self):
-        return self.cell.enuc
+        cell = self.cell
+        if (cell.dimension == 0 and
+            # Integrals in GDF and RSJK are all computed in real space.
+            # Nuclear repulsion should be computed in real space.
+            not isinstance(self.with_df, (df.FFTDF, df.AFTDF))):
+            from pyscf.gto.mole import classical_coulomb_energy
+            return classical_coulomb_energy(cell)
+        return cell.enuc
 
     @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,

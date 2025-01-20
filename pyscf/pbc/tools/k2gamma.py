@@ -42,6 +42,7 @@ def kpts_to_kmesh(cell, kpts, bvk=True, precision=None, max_images=10000):
     is required, the minimal BvK mesh will be generated, which is not larger
     than the size provided by cell.nimgs
     '''
+    kpts = np.asarray(kpts)
     assert kpts.ndim == 2
     scaled_kpts = cell.get_scaled_kpts(kpts)
     logger.debug3(cell, '    scaled_kpts kpts %s', scaled_kpts)
