@@ -247,7 +247,11 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
         eri1 = ao2mofn(eris.mo_coeff).reshape([nmo]*4)
     else:
         eri1 = ao2mo.incore.full(mycc._scf._eri, eris.mo_coeff)
-        eri1 = ao2mo.restore(1, eri1, nmo)
+        if mycc._scf._eri.size == nmo**4:
+            # The N^4-sized full integral tensor.
+            eri1 = eri1.reshape([nmo]*4)
+        else:
+            eri1 = ao2mo.restore(1, eri1, nmo)
     eris.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
     eris.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
     eris.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
