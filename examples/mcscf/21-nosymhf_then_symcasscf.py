@@ -14,8 +14,7 @@ We can switch on symmetry for CASSCF solver even the Hartree-Fock is not
 optimized with symmetry.
 '''
 
-mol = gto.Mole()
-mol.build(
+mol = gto.M(
     atom = [['O' , (0. , 0.     , 0.)],
             [1   , (0. , -0.757 , 0.587)],
             [1   , (0. , 0.757  , 0.587)]],
@@ -25,5 +24,10 @@ mf = scf.RHF(mol)
 mf.kernel()
 
 mol.build(0, 0, symmetry = 'C2v')
+# Transfer the SCF instance to the symmetry adapted HF object.
+print(mf)
+mf = mf.view(mol.RHF().__class__)
+print(mf)
 mc = mcscf.CASSCF(mf, 6, 8)
+print(mc)
 mc.kernel()
