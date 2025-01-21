@@ -62,9 +62,7 @@ def kpts_to_kmesh(cell, kpts, bvk=True, precision=None, max_images=10000):
         denominators = np.unique([x.denominator for x in fracs])
         common_denominator = reduce(np.lcm, denominators)
         fs = common_denominator * uniq_floats
-        if bvk and abs(uniq_floats - np.rint(fs)/common_denominator).max() < precision:
-            kmesh[i] = min(kmesh[i], common_denominator)
-        else:
+        if abs(uniq_floats - np.rint(fs)/common_denominator).max() < precision:
             kmesh[i] = common_denominator
         if cell.verbose >= logger.DEBUG3:
             logger.debug3(cell, 'dim=%d common_denominator %d  error %g',
