@@ -18,7 +18,7 @@
  *          Xing Zhang <zhangxing.nju@gmail.com>
  *
  * libxc from
- * http://www.tddft.org/programs/octopus/wiki/index.php/Libxc:manual
+ * https://libxc.gitlab.io
  */
 
 #include <stdio.h>
