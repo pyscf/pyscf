@@ -104,6 +104,48 @@ def _sgxdot_ao_dm(ao, dms, non0tab, shls_slice, ao_loc, out=None):
         )
     return vms
 
+def _sgxdot_ao_dm2(ao, dms, mask, pair_mask, ao_loc, out=None):
+    '''return numpy.dot(ao, dms)'''
+    ngrids, nao = ao.shape
+    nbas = len(ao_loc) - 1
+    shls_slice = (0, nbas)
+    vms = numpy.ndarray((dms.shape[0], dms.shape[2], ngrids), dtype=ao.dtype, order='C', buffer=out)
+    # TODO don't need sparsity for small systems
+    #if (nao < SWITCH_SIZE or
+    #    non0tab is None or shls_slice is None or ao_loc is None):
+    #    out[:] = lib.dot(dm.T, ao.T)
+    if (mask is None or shls_slice is None or ao_loc is None):
+        for i in range(len(dms)):
+            lib.dot(dms[i].T, ao.T, c=vms[i])
+        return vms
+
+    if not ao.flags.f_contiguous:
+        ao = lib.transpose(ao)
+    if ao.dtype == dms.dtype == numpy.double:
+        fn = _vhf.libcvhf.SGXdot_ao_dm_sparse
+        # fn = libdft.VXCdot_ao_dm
+    else:
+        # TODO implement this
+        raise NotImplementedError("Complex sgxdot")
+        fn = libdft.VXCzdot_ao_dm
+        ao = numpy.asarray(ao, numpy.complex128)
+        dms = numpy.asarray(dms, numpy.complex128)
+
+    dms = numpy.asarray(dms, order='C')
+    for i in range(len(dms)):
+        fn(
+            vms[i].ctypes.data_as(ctypes.c_void_p),
+            ao.ctypes.data_as(ctypes.c_void_p),
+            dms[i].ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nao),
+            ctypes.c_int(ngrids),
+            ctypes.c_int(nbas),
+            mask.ctypes.data_as(ctypes.c_void_p),
+            pair_mask.ctypes.data_as(ctypes.c_void_p),
+            ao_loc.ctypes.data_as(ctypes.c_void_p)
+        )
+    return vms
+
 def _sgxdot_ao_gv(ao, gv, non0tab, shls_slice, ao_loc):
     '''return numpy.dot(ao.T, gv.T)'''
     ngrids, nao = ao.shape
@@ -146,6 +188,80 @@ def _sgxdot_ao_gv(ao, gv, non0tab, shls_slice, ao_loc):
         )
     return vv.transpose(0, 2, 1)
 
+def _sgxdot_ao_gv2(ao, gv, wt, mask1, mask2, shls_slice, ao_loc):
+    ngrids, nao = ao.shape
+    # TODO don't need sparsity for small systems
+    #if (nao < SWITCH_SIZE or
+    #    for i in range(len(gv)):
+    #        lib.dot(ao1.conj().T, gv[i].T, c=vms[i])
+    #    return vms
+    vv = numpy.ndarray((gv.shape[0], ao.shape[1], gv.shape[1]), dtype=ao.dtype, order='C')
+    #if (non0tab is None or shls_slice is None or ao_loc is None):
+    #    for i in range(len(gv)):
+    #        lib.dot(ao.conj().T, gv[i].T, c=vv[i])
+    #    return vv
+    # nbas = non0tab.shape[1]
+    nbas = mask1.shape[1]
+    # assert mask1.shape == mask2.shape
+
+    if not ao.flags.f_contiguous:
+        ao = lib.transpose(ao)
+    if not gv.flags.c_contiguous:
+        gv = numpy.ascontiguousarray(gv)
+
+    fn = _vhf.libcvhf.SGXdot_ao_ao_sparse
+    for i in range(len(gv)):
+        fn(
+            vv[i].ctypes.data_as(ctypes.c_void_p),
+            ao.ctypes.data_as(ctypes.c_void_p),
+            gv[i].ctypes.data_as(ctypes.c_void_p),
+            wt.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nao),
+            ctypes.c_int(ngrids),
+            ctypes.c_int(nbas),
+            ctypes.c_int(0),
+            mask1.ctypes.data_as(ctypes.c_void_p),
+            mask2.ctypes.data_as(ctypes.c_void_p),
+            ao_loc.ctypes.data_as(ctypes.c_void_p),
+        )
+    return vv.transpose(0, 2, 1)
+
+def _get_shell_norms(dms, weights, ao_loc, buffer=None):
+    nao, ngrids = dms[0].shape
+    ndm = len(dms)
+    nbas = len(ao_loc) - 1
+    _dms = [dm.ctypes.data_as(ctypes.c_void_p) for dm in dms]
+    nblk = (ngrids + BLKSIZE - 1) // BLKSIZE
+    shell_norms = numpy.ndarray((nblk, nbas), buffer=buffer)
+    _vhf.libcvhf.SGXget_shell_norms(
+        (ctypes.c_void_p * ndm)(*_dms),
+        shell_norms.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(ndm),
+        ao_loc.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nbas),
+        ctypes.c_int(ngrids),
+        weights.ctypes.data_as(ctypes.c_void_p),
+    )
+    return shell_norms
+
+def _reduce_dft_mask(dft_mask, ngrids, buffer=None):
+    dft_nblk, nbas = dft_mask.shape
+    dft_nblk = (ngrids + BLKSIZE - 1) // BLKSIZE
+    ratio = SGX_BLKSIZE // BLKSIZE
+    sgx_nblk = (dft_nblk + ratio - 1) // ratio
+    assert dft_mask.dtype == numpy.uint8
+    assert dft_mask.flags.c_contiguous
+    sgx_mask = numpy.ndarray(
+        (sgx_nblk, nbas), dtype=numpy.uint8, buffer=buffer
+    )
+    _vhf.libcvhf.SGXreduce_dft_mask(
+        sgx_mask.ctypes.data_as(ctypes.c_void_p),
+        dft_mask.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(dft_nblk),
+        ctypes.c_int(nbas),
+        ctypes.c_int(ratio),
+    )
+    return sgx_mask
 
 def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
                   direct_scf_tol=1e-13):
@@ -290,7 +406,10 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
             sgx._overlap_correction_matrix = numpy.identity(nao)
     proj = sgx._overlap_correction_matrix
 
+    ta = logger.perf_counter()
     proj_dm = lib.einsum('ki,xij->xkj', proj, dms)
+    tb = logger.perf_counter()
+    print("MATMUL", tb - ta)
 
     print("SCREEN?", sgx.use_dm_screening)
     if sgx.use_dm_screening and sgx._ao_block_cond is None:
@@ -344,42 +463,102 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
         )
         sgx._ao_block_cond = ncond
         sgx._rinv_bound = rinv_bound
+        rinv = numpy.sqrt(rinv_bound)
+        sgx._rinv_mask = numpy.max(rinv * numpy.sum(rinv, axis=1), axis=1)
+        shl_sn = numpy.empty((mol.nbas, mol.nbas))
+        _vhf.libcvhf.SGXmake_shl_op(
+            asn.ctypes.data_as(ctypes.c_void_p),
+            shl_sn.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nao),
+            ctypes.c_int(mol.nbas),
+            ao_loc.ctypes.data_as(ctypes.c_void_p),
+        )
+        delta = 0.1
+        norm = shl_sn**delta * numpy.sum(shl_sn**(1 - delta), axis=1)
+        sgx._norm_mask = numpy.max(norm, axis=1)
     elif sgx.use_dm_screening:
         ncond = sgx._ao_block_cond
     else:
         ncond = None
     print("DONE WITH SETUP")
 
+    ta = logger.perf_counter()
+    shl_dm = numpy.empty((nset, mol.nbas, mol.nbas))
+    for i in range(nset):
+        _vhf.libcvhf.SGXmake_shl_dm(
+            dms[i].ctypes.data_as(ctypes.c_void_p),
+            shl_dm[i].ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nao),
+            ctypes.c_int(mol.nbas),
+            ao_loc.ctypes.data_as(ctypes.c_void_p),
+        )
+    shl_dm = shl_dm.sum(axis=0)
+    dm_mask = shl_dm * sgx._norm_mask[:, None] * sgx._rinv_mask > sgx.sgx_tol_potential
+    print(dm_mask.sum() / dm_mask.size)
+    tb = logger.perf_counter()
+    print("OTHER SETUP", tb - ta)
+
     batch_k = _gen_k_direct(mol, 's2', direct_scf_tol, sgx._opt)
+
+    t_setup = logger.perf_counter()
+    print("AFTER_SETUP", t_setup - t0[1])
+
+    ao = None
     wao = None
     fg = None
+    t_ao = 0
+    t_scale = 0
+    t_ao_dm = 0
+    t_ao_ao = 0
+    t_int = 0
     for i0, i1 in lib.prange(0, ngrids, blksize):
         assert i0 % SGX_BLKSIZE == 0
         coords = grids.coords[i0:i1]
         weights = grids.weights[i0:i1]
         mask = screen_index[i0 // BLKSIZE:]
-        ao = mol.eval_gto('GTOval', coords, non0tab=mask)
+        ta = logger.perf_counter()
+        ao = mol.eval_gto('GTOval', coords, non0tab=mask, out=ao)
+        tb = logger.perf_counter()
         # wao = ao * weights[:, None]
         # fg = lib.einsum('xij,ig->xjg', proj_dm, wao.T)
         print("DOT 1")
-        wao = _scale_ao(ao, weights, out=wao)
-        fg = _sgxdot_ao_dm(ao, proj_dm, mask, shls_slice, ao_loc, out=fg)
+        tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
+        wao = _scale_ao_sparse(ao, weights, mask, ao_loc, out=wao)
+        tc = logger.perf_counter()
+        mask1 = _reduce_dft_mask(mask, weights.size)
+        td = logger.perf_counter()
+        if sgx.use_dm_screening:
+            fg = _sgxdot_ao_dm2(ao, proj_dm, mask, dm_mask, ao_loc, out=fg)
+        else:
+            fg = _sgxdot_ao_dm(ao, proj_dm, mask, shls_slice, ao_loc, out=fg)
+        te = logger.perf_counter()
         #wao = _scale_ao_sparse(ao, weights, mask, ao_loc, out=wao)
         #fg = [
         #    _dot_ao_dm_sparse(ao, proj_dm[i], nbins, mask, pair_mask, ao_loc).T
         #    for i in range(nset)
         #]
         print("INTEGRALS")
-        tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
+        
         if ncond is None:
             gv = batch_k(mol, coords, fg, weights)
         else:
             gv = batch_k(mol, coords, fg, weights, ncond[i0 // SGX_BLKSIZE:])
+        tf = logger.perf_counter()
         tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
         print("DOT 2")
-        vk[:] += _sgxdot_ao_gv(wao, gv, mask, shls_slice, ao_loc)
+        shl_norms = _get_shell_norms(gv, weights, ao_loc)
+        mask2 = shl_norms > sgx.sgx_tol_potential
+        # vk[:] += _sgxdot_ao_gv(wao, gv, mask, shls_slice, ao_loc)
+        vk[:] += _sgxdot_ao_gv2(ao, gv, weights, mask, mask2, shls_slice, ao_loc)
+        tg = logger.perf_counter()
         gv = None
         print("FINISHED 1 ITERATION")
+        t_ao += tb - ta
+        t_scale += tc - tb
+        t_ao_dm += te - tc
+        t_int += tf - te
+        t_ao_ao += tg - tf
+    print("Times", t_ao, t_scale, t_ao_dm, t_int, t_ao_ao)
 
     t2 = logger.timer_debug1(mol, "sgX J/K builder", *t1)
     tdot = t2[0] - t1[0] - tnuc[0] , t2[1] - t1[1] - tnuc[1]

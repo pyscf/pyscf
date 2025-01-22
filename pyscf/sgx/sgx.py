@@ -162,6 +162,7 @@ class _SGXHF:
 
     def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
                omega=None):
+        print("DM SUM", numpy.sum(numpy.abs(dm)))
         if dm is None: dm = self.make_rdm1()
         with_df = self.with_df
         if not with_df:
@@ -173,8 +174,8 @@ class _SGXHF:
         vhfopt = self._opt.get(omega)
 
         if self._in_scf and not self.direct_scf:
-            if numpy.linalg.norm(dm - self._last_dm) < with_df.grids_switch_thrd \
-                    and with_df.grids_level_f != with_df.grids_level_i:
+            if with_df.grids_level_f != with_df.grids_level_i \
+                    and numpy.linalg.norm(dm - self._last_dm) < with_df.grids_switch_thrd:
                 # only reset if grids_level_f and grids_level_i differ
                 logger.debug(self, 'Switching SGX grids')
                 with_df.build(level=with_df.grids_level_f)
