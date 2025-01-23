@@ -107,8 +107,11 @@ inline double _lko_sat_func(double x) {
     int m;
     double tot = 0;
     x = x / RCUT_LKO;
+    double xm = 1;
     for (m = 1; m <= MC_LKO; m++) {
-        tot += pow(x, m) / m;
+        // tot += pow(x, m) / m;
+        xm *= x;
+        tot += xm / m;
     }
     return RCUT_LKO * (1 - exp(-tot));
 }
@@ -118,9 +121,13 @@ inline double _lko_sat_deriv(double x) {
     double tot = 0;
     double dtot = 0;
     x = x / RCUT_LKO;
+    double xm = 1;
     for (m = 1; m <= MC_LKO; m++) {
-        tot += pow(x, m) / m;
-        dtot += pow(x, m-1);
+        // tot += pow(x, m) / m;
+        // dtot += pow(x, m-1);
+        dtot += xm;
+        xm *= x;
+        tot += xm / m;
     }
     return exp(-tot) * dtot;
 }
@@ -154,6 +161,8 @@ void VXCgen_grid_lko(double *out, double *coords, double *atm_coords,
 
 #pragma omp parallel private(i, j, dx, dy, dz)
 {
+    size_t ig_start, ig_end;
+    NPomp_split(&ig_start, &ig_end, (size_t)ngrids);
     double *grid_dist = malloc(sizeof(double) * natm*GRIDS_BLOCK);
     double *buf = malloc(sizeof(double) * natm*GRIDS_BLOCK);
     double *min_dist_i = malloc(sizeof(double) * natm);
@@ -162,9 +171,9 @@ void VXCgen_grid_lko(double *out, double *coords, double *atm_coords,
     size_t ig0, n, ngs;
     double fac, s;
     double max_min_dist;
-#pragma omp for nowait schedule(static)
-    for (ig0 = 0; ig0 < Ngrids; ig0 += GRIDS_BLOCK) {
-        ngs = MIN(Ngrids-ig0, GRIDS_BLOCK);
+// #pragma omp for nowait schedule(static)
+    for (ig0 = ig_start; ig0 < ig_end; ig0 += GRIDS_BLOCK) {
+        ngs = MIN(ig0 + GRIDS_BLOCK, ig_end) - ig0;
         for (n = 0; n < ngs; n++) {
             min_dist_n[n] = 1e10;
         }
@@ -242,6 +251,8 @@ void VXCgen_grid_lko(double *out, double *coords, double *atm_coords,
     free(g);
     free(buf);
     free(grid_dist);
+    free(min_dist_i);
+    free(min_dist_n);
 }
     free(atom_dist);
 }
@@ -418,9 +429,18 @@ void VXCgen_grid_lko_deriv(double *out, double *dw, double *coords, double *atm_
         }
     }
     free(g);
+    free(dg);
     free(buf);
     free(grid_dist);
+    free(bufx);
+    free(bufy);
+    free(bufz);
+    free(min_dist_i);
+    free(min_dist_n);
 }
     free(atom_dist);
+    free(dadx);
+    free(dady);
+    free(dadz);
 }
 
