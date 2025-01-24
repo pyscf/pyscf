@@ -183,6 +183,31 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=None, hermi=0,
             "ECPso_spinor"                    < | sigam dot Spin-orbit ECP | >
             ================================  =============
 
+            ==========   =============
+            Symbol       Meaning
+            ==========   =============
+            p            :math:`-i \nabla`
+            ip           :math:`\nabla`
+            r0           :math:`\vec{r} - (0,0,0)`
+            rc           :math:`\vec{r} - \vec{R}_{(\texttt{env[PTR_COMMON_ORIG]})}`
+            ri           :math:`\vec{r} - \vec{R}_i`
+            rj           :math:`\vec{r} - \vec{R}_j`
+            rk           :math:`\vec{r} - \vec{R}_k`
+            rl           :math:`\vec{r} - \vec{R}_l`
+            r            can be ri/rj/rk/rl; associate with the basis it operates
+            g            :math:`(i/2) (\vec{R}_{bra} - \vec{R}_{ket}) \times \vec{r}`
+            sigma        three pauli matrices
+            dot, cross   can be used to combine operator-bra or operator-ket
+            rinv         :math:`|\vec{r} - \vec{R}_{(\texttt{env[PTR_RINV_ORIG]})}|^{-1}`
+            nuc          :math:`\sum_N Z_N |\vec{r} - \vec{R}_N|^{-1}`
+            nabla-rinv   :math:`\nabla |\vec{r} - \vec{R}_{(\texttt{env[PTR_RINV_ORIG]})}|^{-1}`
+            gaunt        :math:`\alpha_i \cdot \alpha_j  / |\vec{r}_i - \vec{r}_j|`, \
+                         note the minus sign in Gaunt is not included
+            breit        :math:`-(\alpha_i \cdot \alpha_j)/(2 |\vec{r}_i - \vec{r}_j|) \
+                         - ((\alpha_i \cdot r_{ij})  (\alpha_j \cdot r_{ij})) / \
+                         (2|\vec{r}_i - \vec{r}_j|^3)`
+            ==========   =============
+
         atm : int32 ndarray
             libcint integral function argument
         bas : int32 ndarray
