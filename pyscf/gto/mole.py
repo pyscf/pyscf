@@ -3127,7 +3127,7 @@ class MoleBase(lib.StreamObject):
         Examples:
 
         >>> mol.build(atom='H^2 0 0 0; H 0 0 1.1')
-        >>> mol.atom_symbol(0)
+        >>> mol.atom_pure_symbol(0)
         H
         '''
         return _std_symbol(self._atom[atm_id][0])
