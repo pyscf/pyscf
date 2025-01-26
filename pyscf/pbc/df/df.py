@@ -57,10 +57,9 @@ from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import (is_zero, gamma_point, member, unique,
                                        KPT_DIFF_TOL)
 from pyscf.pbc.df.gdf_builder import libpbc, _CCGDFBuilder, _CCNucBuilder
-from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder, _RSNucBuilder
+from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder, _RSNucBuilder, LINEAR_DEP_THR
 from pyscf import __config__
 
-LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-9)
 LONGRANGE_AFT_TURNOVER_THRESHOLD = 2.5
 
 
