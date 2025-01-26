@@ -357,6 +357,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                     LpqI = lib.unpack_tril(LpqI, lib.ANTIHERMI).reshape(naux,nao**2)
             return LpqR, LpqI
 
+        print(kpti_kptj)
         with _load3c(self._cderi, self._dataname, kpti_kptj) as j3c:
             if aux_slice is None:
                 slices = lib.prange(0, j3c.shape[0], blksize)

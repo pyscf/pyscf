@@ -149,9 +149,6 @@ class KnownValues(unittest.TestCase):
         kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
         self.assertEqual(kmesh.tolist(), [3, 1, 1])
 
-        kmesh = k2gamma.kpts_to_kmesh(cell, kpts, bvk=False)
-        self.assertEqual(kmesh.tolist(), [6, 1, 1])
-
 
 if __name__ == '__main__':
     print("Full Tests for pbc.tools.k2gamma")

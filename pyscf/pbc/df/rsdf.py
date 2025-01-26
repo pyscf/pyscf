@@ -347,12 +347,12 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
         self.j2c_eig_always = False
         self.linear_dep_threshold = rsdf_builder.LINEAR_DEP_THR
 
-    def build(self, omega=None, j_only=False):
+    def build(self, omega=None):
         log = logger.new_logger(self)
         cell = self.cell
         kpts = self.kpts
 
-        self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts, bvk=j_only)
+        self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
         log.debug('kmesh for bvk-cell = %s', kmesh)
 
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
@@ -524,7 +524,7 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
         cpu1 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
         if self.rs_cell is None:
-            self.build(j_only=j_only)
+            self.build()
 
         cell = self.cell
         kpts = self.kpts
