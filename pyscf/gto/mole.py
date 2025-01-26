@@ -3127,7 +3127,7 @@ class MoleBase(lib.StreamObject):
         Examples:
 
         >>> mol.build(atom='H^2 0 0 0; H 0 0 1.1')
-        >>> mol.atom_symbol(0)
+        >>> mol.atom_pure_symbol(0)
         H
         '''
         return _std_symbol(self._atom[atm_id][0])
@@ -3277,7 +3277,7 @@ class MoleBase(lib.StreamObject):
         Examples:
 
         >>> mol.build(atom='H 0 0 0; Cl 0 0 1.1', basis='cc-pvdz')
-        >>> mol.bas_atom(7)
+        >>> mol.bas_angular(7)
         2
         '''
         return int(self._bas[bas_id,ANG_OF])
@@ -3292,7 +3292,7 @@ class MoleBase(lib.StreamObject):
         Examples:
 
         >>> mol.build(atom='H 0 0 0; Cl 0 0 1.1', basis='cc-pvdz')
-        >>> mol.bas_atom(3)
+        >>> mol.bas_nctr(3)
         3
         '''
         return int(self._bas[bas_id,NCTR_OF])
@@ -3307,7 +3307,7 @@ class MoleBase(lib.StreamObject):
         Examples:
 
         >>> mol.build(atom='H 0 0 0; Cl 0 0 1.1', basis='cc-pvdz')
-        >>> mol.bas_atom(3)
+        >>> mol.bas_nprim(3)
         11
         '''
         return int(self._bas[bas_id,NPRIM_OF])
@@ -3337,7 +3337,7 @@ class MoleBase(lib.StreamObject):
         Examples:
 
         >>> mol.build(atom='H 0 0 0; Cl 0 0 1.1', basis='cc-pvdz')
-        >>> mol.bas_kappa(0)
+        >>> mol.bas_exp(0)
         [ 13.01     1.962    0.4446]
         '''
         nprim = self.bas_nprim(bas_id)
