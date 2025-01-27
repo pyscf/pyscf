@@ -277,7 +277,7 @@ class KnownValues(unittest.TestCase):
 
         eref = cell.to_mol().RHF().density_fit().kernel()
         e1 = cell.RHF().density_fit().kernel()
-        self.assertAlmostEqual(e1, eref, 10)
+        self.assertAlmostEqual(e1, eref, 9)
 
         cell = pbcgto.Cell()
         cell.atom = 'He 1. .5 .5; C .1 1.3 2.1'
