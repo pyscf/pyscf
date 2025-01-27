@@ -194,6 +194,18 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(vj0-vj1).max(), 0, 12)
         self.assertAlmostEqual(lib.fp(vj0), -194.15910890730052, 9)
 
+    def test_df_jk_complex_dm(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 1')
+        mf = mol.RHF().run()
+        dm = mf.make_rdm1() + 0j
+        dm[0,:] += .1j
+        dm[:,0] -= .1j
+        mf.kernel(dm)
+        self.assertTrue(mf.mo_coeff.dtype == numpy.complex128)
+        dfmf = mf.density_fit()
+        self.assertAlmostEqual(dfmf.energy_tot(), -1.0661355663696201, 9)
+        self.assertAlmostEqual(dfmf.energy_tot(), mf.e_tot, 3)
+
 
 if __name__ == "__main__":
     print("Full Tests for df")
