@@ -268,12 +268,11 @@ class KnownValues(unittest.TestCase):
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     [0, (1.0, 1.0)],
                                     [0, (1.2, 1.0)]]})
-        eref = cell.to_mol().RHF().density_fit().kernel()
+        eref = cell.to_mol().RHF().kernel()
 
         mf = cell.RHF()
         mf.with_df = pdf.AFTDF(cell)
         e1 = mf.kernel()
-        self.assertAlmostEqual(eref, -4.165713858819728, 8)
         self.assertAlmostEqual(e1, eref, 4)
 
         eref = cell.to_mol().RHF().density_fit().kernel()

@@ -120,6 +120,11 @@ class PBCX2CHelper(x2c.X2C):
         self.cell = cell
         x2c.X2C.__init__(self, cell)
 
+    def reset(self, cell=None):
+        if cell is not None:
+            self.cell = cell
+        return self
+
 class SpinFreeX2CHelper(PBCX2CHelper):
     '''1-component X2c Foldy-Wouthuysen (FW Hamiltonian  (spin-free part only)
     '''
