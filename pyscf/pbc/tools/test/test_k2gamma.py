@@ -144,6 +144,11 @@ class KnownValues(unittest.TestCase):
         kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
         self.assertEqual(kmesh.tolist(), [2, 4, 11])
 
+        cell = gto.M(atom='He 0 0 0', basis=[[0, (2.3, 1)]], a=np.eye(3)*3, verbose=0)
+        kpts = cell.make_kpts([6,1,1])
+        kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
+        self.assertEqual(kmesh.tolist(), [3, 1, 1])
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.tools.k2gamma")

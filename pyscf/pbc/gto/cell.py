@@ -518,7 +518,7 @@ def get_bounding_sphere(cell, rcut):
     nimgs = np.ceil(rcut*heights_inv).astype(int)
 
     for i in range(cell.dimension, 3):
-        nimgs[i] = 1
+        nimgs[i] = 0
     return nimgs
 
 def get_Gv(cell, mesh=None, **kwargs):

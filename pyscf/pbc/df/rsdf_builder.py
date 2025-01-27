@@ -51,7 +51,7 @@ from pyscf import __config__
 
 OMEGA_MIN = 0.08
 INDEX_MIN = -10000
-LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-9)
+LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-10)
 # Threshold of steep bases and local bases
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 1.0)
 
