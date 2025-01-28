@@ -64,6 +64,10 @@ libdft.SGXreturn_blksize.restype = int
 SGX_BLKSIZE = libdft.SGXreturn_blksize()
 assert SGX_BLKSIZE % BLKSIZE == 0
 
+SGX_DELTA_1 = 0.1
+SGX_DELTA_2 = 0.9
+SGX_DELTA_3 = 0.5
+
 def _sgxdot_ao_dm(ao, dms, non0tab, shls_slice, ao_loc, out=None):
     '''return numpy.dot(ao, dms)'''
     ngrids, nao = ao.shape
@@ -263,6 +267,62 @@ def _reduce_dft_mask(dft_mask, ngrids, buffer=None):
     )
     return sgx_mask
 
+def _sgx_update_masks_(asn, basmax, ao_cond, ao, weights,
+                       nbins, mask, pair_mask,
+                       ao_loc, hermi=0):
+    wt = numpy.abs(numpy.sqrt(weights))
+    ngrids = wt.size
+    nbas = len(ao_loc) - 1
+    assert ao_cond.flags.c_contiguous
+    assert basmax.flags.c_contiguous
+    assert ao.flags.f_contiguous
+    assert ao.shape == (ngrids, ao_loc[-1])
+    libdft.SGXmake_screen_q_cond(
+        basmax.ctypes.data_as(ctypes.c_void_p),
+        ao.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(ngrids),
+        ctypes.c_int(nbas),
+        ao_loc.ctypes.data_as(ctypes.c_void_p),
+    )
+    wao = _scale_ao_sparse(ao, wt, mask, ao_loc, out=ao)
+    libdft.SGXmake_screen_norm(
+        ao_cond.ctypes.data_as(ctypes.c_void_p),
+        wao.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(ngrids),
+        ctypes.c_int(nbas),
+        ao_loc.ctypes.data_as(ctypes.c_void_p),
+    )
+    _dot_ao_ao_sparse(wao, wao, None, nbins, mask,
+                      pair_mask, ao_loc, hermi=hermi, out=asn)
+    
+
+def _sgx_create_masks(asn, basmax, ao_loc):
+    nao = ao_loc[-1]
+    nblk, nbas = basmax.shape
+    rinv_bound = numpy.empty((nbas, nbas))
+    libdft.SGXmake_rinv_ubound(
+        rinv_bound.ctypes.data_as(ctypes.c_void_p),
+        asn.ctypes.data_as(ctypes.c_void_p),
+        basmax.ctypes.data_as(ctypes.c_void_p),
+        ao_loc.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nbas),
+        ctypes.c_int(nao),
+        ctypes.c_int(nblk),
+    )
+    shl_sn = numpy.empty((nbas, nbas))
+    _vhf.libcvhf.SGXmake_shl_op(
+        asn.ctypes.data_as(ctypes.c_void_p),
+        shl_sn.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nao),
+        ctypes.c_int(nbas),
+        ao_loc.ctypes.data_as(ctypes.c_void_p),
+    )
+    delta = 0.1
+    norm = shl_sn**delta * numpy.sum(shl_sn**(1 - delta), axis=1)
+    norm_mask = numpy.max(norm, axis=1)
+    return rinv_bound, norm_mask
+
+
 def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
                   direct_scf_tol=1e-13):
     t0 = logger.process_clock(), logger.perf_counter()
@@ -411,76 +471,39 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     tb = logger.perf_counter()
     print("MATMUL", tb - ta)
 
-    print("SCREEN?", sgx.use_dm_screening)
     if sgx.use_dm_screening and sgx._ao_block_cond is None:
         nblk = (grids.weights.size + SGX_BLKSIZE - 1) // SGX_BLKSIZE
         ao_cond = numpy.empty((nblk, mol.nbas), dtype=numpy.float64)
         basmax = numpy.empty((nblk, mol.nbas), dtype=numpy.float64)
         asn = numpy.zeros((nao, nao))
+        ao = None
         for i0, i1 in lib.prange(0, ngrids, blksize):
             assert i0 % SGX_BLKSIZE == 0
             coords = grids.coords[i0:i1]
             mask = screen_index[i0 // BLKSIZE:]
-            ao = mol.eval_gto('GTOval', coords, non0tab=mask)
-            print("QCOND")
-            libdft.SGXmake_screen_q_cond(
-                basmax[i0 // SGX_BLKSIZE:].ctypes.data_as(ctypes.c_void_p),
-                ao.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(i1 - i0),
-                ctypes.c_int(mol.nbas),
-                ao_loc.ctypes.data_as(ctypes.c_void_p),
-            )
-            print("SCALE")
-            wao = _scale_ao(ao, grids.weights[i0:i1])
-            print("SCREEN NORM")
-            libdft.SGXmake_screen_norm(
-                ao_cond[i0 // SGX_BLKSIZE:].ctypes.data_as(ctypes.c_void_p),
-                wao.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(i1 - i0),
-                ctypes.c_int(mol.nbas),
-                ao_loc.ctypes.data_as(ctypes.c_void_p),
-            )
-            ao[:] = numpy.abs(ao)
-            wao[:] = numpy.abs(wao)
-            _dot_ao_ao_sparse(ao, ao, grids.weights[i0:i1], nbins, mask,
-                              pair_mask, ao_loc, hermi=hermi, out=asn)
-            # print("DOT")
-            # asn[:] += _dot_ao_ao(mol, ao, wao, mask, (0, mol.nbas),
-            #                      ao_loc, hermi=hermi)
-        norm_sum = ao_cond.sum(axis=0)
-        ao_cond *= norm_sum
-        ncond = sgx.sgx_tol_potential / (numpy.max(ao_cond, axis=1) + 1e-10)
-        rinv_bound = numpy.empty((mol.nbas, mol.nbas))
-        print("RINV")
-        libdft.SGXmake_rinv_ubound(
-            rinv_bound.ctypes.data_as(ctypes.c_void_p),
-            asn.ctypes.data_as(ctypes.c_void_p),
-            basmax.ctypes.data_as(ctypes.c_void_p),
-            ao_loc.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(mol.nbas),
-            ctypes.c_int(nao),
-            ctypes.c_int(nblk),
-        )
+            ao = mol.eval_gto('GTOval', coords, non0tab=mask, out=ao)
+            _sgx_update_masks_(asn, basmax[i0 // SGX_BLKSIZE:],
+                               ao_cond[i0 // SGX_BLKSIZE:], ao,
+                               grids.weights[i0:i1], nbins, mask, pair_mask,
+                               ao_loc, hermi=hermi)
+        norm_sum = (ao_cond**SGX_DELTA_2).sum(axis=0)
+        ao_cond2 = ao_cond**(1 - SGX_DELTA_2)
+        ao_cond2[:] *= norm_sum
+        ncond = sgx.sgx_tol_potential / (numpy.max(ao_cond2, axis=1) + 1e-10)
+        rinv_bound, norm_mask = _sgx_create_masks(asn, basmax, ao_loc)
         sgx._ao_block_cond = ncond
         sgx._rinv_bound = rinv_bound
-        rinv = numpy.sqrt(rinv_bound)
-        sgx._rinv_mask = numpy.max(rinv * numpy.sum(rinv, axis=1), axis=1)
-        shl_sn = numpy.empty((mol.nbas, mol.nbas))
-        _vhf.libcvhf.SGXmake_shl_op(
-            asn.ctypes.data_as(ctypes.c_void_p),
-            shl_sn.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(nao),
-            ctypes.c_int(mol.nbas),
-            ao_loc.ctypes.data_as(ctypes.c_void_p),
+        rinv = rinv_bound**(1 - SGX_DELTA_3)
+        sgx._rinv_mask = numpy.max(
+            rinv_bound**SGX_DELTA_3 * numpy.sum(rinv, axis=1),
+            axis=1
         )
-        delta = 0.1
-        norm = shl_sn**delta * numpy.sum(shl_sn**(1 - delta), axis=1)
-        sgx._norm_mask = numpy.max(norm, axis=1)
+        sgx._ao_block_norm = ao_cond
+        sgx._norm_mask = norm_mask
     elif sgx.use_dm_screening:
         ncond = sgx._ao_block_cond
     else:
         ncond = None
-    print("DONE WITH SETUP")
 
     ta = logger.perf_counter()
     shl_dm = numpy.empty((nset, mol.nbas, mol.nbas))
@@ -504,7 +527,6 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     print("AFTER_SETUP", t_setup - t0[1])
 
     ao = None
-    wao = None
     fg = None
     t_ao = 0
     t_scale = 0
@@ -519,36 +541,26 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
         ta = logger.perf_counter()
         ao = mol.eval_gto('GTOval', coords, non0tab=mask, out=ao)
         tb = logger.perf_counter()
-        # wao = ao * weights[:, None]
-        # fg = lib.einsum('xij,ig->xjg', proj_dm, wao.T)
         print("DOT 1")
         tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
-        wao = _scale_ao_sparse(ao, weights, mask, ao_loc, out=wao)
         tc = logger.perf_counter()
-        mask1 = _reduce_dft_mask(mask, weights.size)
-        td = logger.perf_counter()
         if sgx.use_dm_screening:
             fg = _sgxdot_ao_dm2(ao, proj_dm, mask, dm_mask, ao_loc, out=fg)
         else:
+            # fg = lib.einsum('xij,ig->xjg', proj_dm, wao.T)
             fg = _sgxdot_ao_dm(ao, proj_dm, mask, shls_slice, ao_loc, out=fg)
         te = logger.perf_counter()
-        #wao = _scale_ao_sparse(ao, weights, mask, ao_loc, out=wao)
-        #fg = [
-        #    _dot_ao_dm_sparse(ao, proj_dm[i], nbins, mask, pair_mask, ao_loc).T
-        #    for i in range(nset)
-        #]
         print("INTEGRALS")
         
         if ncond is None:
             gv = batch_k(mol, coords, fg, weights)
         else:
-            gv = batch_k(mol, coords, fg, weights, ncond[i0 // SGX_BLKSIZE:])
+            gv = batch_k(mol, coords, fg, weights, ncond[i0 // SGX_BLKSIZE :])
         tf = logger.perf_counter()
         tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
         print("DOT 2")
         shl_norms = _get_shell_norms(gv, weights, ao_loc)
         mask2 = shl_norms > sgx.sgx_tol_potential
-        # vk[:] += _sgxdot_ao_gv(wao, gv, mask, shls_slice, ao_loc)
         vk[:] += _sgxdot_ao_gv2(ao, gv, weights, mask, mask2, shls_slice, ao_loc)
         tg = logger.perf_counter()
         gv = None
@@ -784,7 +796,8 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol,
             env.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_int(env.shape[0]),
             ctypes.c_int(2 if aosym == 's2' else 1),
-            ncond)
+            ncond,
+            weights.ctypes.data_as(ctypes.c_void_p))
         return vj, vk
     return jk_part
 
@@ -853,7 +866,8 @@ def _gen_k_direct(mol, aosym, direct_scf_tol,
             env.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_int(env.shape[0]),
             ctypes.c_int(2 if aosym == 's2' else 1),
-            ncond)
+            ncond,
+            weights.ctypes.data_as(ctypes.c_void_p))
         return vk
     return k_part
 
