@@ -162,7 +162,6 @@ class _SGXHF:
 
     def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
                omega=None):
-        print("DM SUM", numpy.sum(numpy.abs(dm)))
         if dm is None: dm = self.make_rdm1()
         with_df = self.with_df
         if not with_df:
@@ -315,7 +314,7 @@ class SGX(lib.StreamObject):
         self._last_dm = 0
         self._rsh_df = {}  # Range separated Coulomb DF objects
         self._overlap_correction_matrix = None
-        self._ao_block_cond = None
+        self._sgx_block_cond = None
 
     @property
     def auxbasis(self):
@@ -396,20 +395,17 @@ class SGX(lib.StreamObject):
                 return rsh_df.get_jk(dm, hermi, with_j, with_k,
                                      direct_scf_tol)
 
-        if with_j and self.dfj:
-            vj = df_jk.get_j(self, dm, hermi, direct_scf_tol)
+        if with_j and (self.dfj or self.direct_j):
+            if self.dfj:
+                vj = df_jk.get_j(self, dm, hermi, direct_scf_tol)
+            else:
+                vj, _ = _vhf.direct(dm, self.mol._atm, self.mol._bas, self.mol._env,
+                                    vhfopt, hermi, self.mol.cart, True, False)
             if with_k:
                 if self.optk:
                     vk = sgx_jk.get_k_only(self, dm, hermi, direct_scf_tol)
                 else:
                     vk = sgx_jk.get_jk(self, dm, hermi, False, with_k, direct_scf_tol)[1]
-            else:
-                vk = None
-        elif with_j and self.direct_j:
-            vj, _ = _vhf.direct(dm, self.mol._atm, self.mol._bas, self.mol._env,
-                                vhfopt, hermi, self.mol.cart, True, False)
-            if with_k:
-                vk = sgx_jk.get_jk(self, dm, hermi, False, with_k, direct_scf_tol)[1]
             else:
                 vk = None
         else:

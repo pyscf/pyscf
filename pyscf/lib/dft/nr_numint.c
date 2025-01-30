@@ -229,11 +229,11 @@ void VXCsgx_ao_ao(double *vv, double *ao1, double *ao2,
 {
         size_t Nao = nao;
         size_t Ngrids = ngrids;
-        NPdset0(vv, Nao * Nao);
         const char TRANS_T = 'T';
         const char TRANS_N = 'N';
         const double D1 = 1;
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
+        NPdset0(vv, Nao * Nao);
 
 #pragma omp parallel
 {

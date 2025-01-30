@@ -502,18 +502,20 @@ _dot_ao_dm_l1(out, ao, dm, nao, ngrids, nbas, ig0, ig1,
 
 int SGXreturn_blksize() { return SGX_BLKSIZE; }
 
-void SGXmake_screen_norm(double *norms, double *aao, int ngrids, int nbas, int *ao_loc)
+void SGXmake_screen_norm(double *norms, double *aao, int ngrids, int nbas,
+                         int *ao_loc, int blksize)
 {
 #pragma omp parallel
 {
+        const size_t Blksize = blksize;
         int ish, iblk, g, i, g0, g1;
         double t1, t2;
-        int bblk = (ngrids + SGX_BLKSIZE - 1) / SGX_BLKSIZE;
+        int bblk = (ngrids + Blksize - 1) / Blksize;
         const size_t Ngrids = ngrids;
 #pragma omp for
         for (iblk = 0; iblk < bblk; iblk++) {
-                g0 = iblk * SGX_BLKSIZE;
-                g1 = MIN(g0 + SGX_BLKSIZE, ngrids);
+                g0 = iblk * Blksize;
+                g1 = MIN(g0 + Blksize, ngrids);
                 for (ish = 0; ish < nbas; ish++) {
                         t1 = 0;
                         for (i = ao_loc[ish]; i < ao_loc[ish + 1]; i++) {
@@ -522,7 +524,7 @@ void SGXmake_screen_norm(double *norms, double *aao, int ngrids, int nbas, int *
                                         aao[i*Ngrids+g] = fabs(aao[i*Ngrids+g]);
                                         t2 += aao[i*Ngrids+g] * aao[i*Ngrids+g];
                                 }
-                                t1 = (MAX(t1, t2) * SGX_BLKSIZE) / (g1 - g0);
+                                t1 = (MAX(t1, t2) * Blksize) / (g1 - g0);
                         }
                         norms[iblk * nbas + ish] = sqrt(t1);
                 }
@@ -554,6 +556,29 @@ void SGXmake_screen_q_cond(double *norms, double *ao, int ngrids, int nbas, int 
                 }
         }
 }
+}
+
+void SGXreduce_screen(double *ncond, double *norms, int nblk, int nbas, double delta) {
+        double *sums = malloc(nbas * sizeof(double));
+        const size_t Nbas = nbas;
+#pragma omp parallel for
+        for (int ish = 0; ish < nbas; ish++) {
+                sums[ish] = 0;
+                int ib;
+                for (ib = 0; ib < nblk; ib++) {
+                        sums[ish] += pow(norms[ib * Nbas + ish], delta);
+                }
+        }
+#pragma omp parallel for
+        for (int ib = 0; ib < nblk; ib++) {
+                ncond[ib] = 0;
+                int ish;
+                for (ish = 0; ish < nbas; ish++) {
+                       ncond[ib] = MAX(pow(norms[ib * Nbas + ish], 1 - delta) * sums[ish],
+                                       ncond[ib]);
+                }
+        }
+        free(sums);
 }
 
 #define DECLARE_ALL \
@@ -754,9 +779,10 @@ void SGXget_shell_norms(double **dms, double *shell_norms, int n_dm,
                         } } }
                         shell_norms[ib * nbas + ish] = sqrt(tot);
                 }*/
-               _get_shell_norms(dms, shell_norms + ib * Nbas, weights,
-                                ao_loc, n_dm, ig0, ig1, nbas, Ngrids);
+                _get_shell_norms(dms, shell_norms + ib * Nbas, weights,
+                                 ao_loc, n_dm, ig0, ig1, nbas, Ngrids);
         }
+        /*
 #pragma omp for schedule(static)
         for (ish = 0; ish < nbas; ish++) {
                 tot = 0;
@@ -768,6 +794,7 @@ void SGXget_shell_norms(double **dms, double *shell_norms, int n_dm,
                                 pow(shell_norms[ib * nbas + ish], 0.9) * tot;
                 }
         }
+        */
 }
 }
 
@@ -869,6 +896,8 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
                                          ig0, ig1, nbas, Tot_Ngrids);
                         shl_max_sum = 0;
                         for (ish = 0; ish < nbas; ish++) {
+                                shl_maxs[ish] *= SGX_BLKSIZE;
+                                shl_maxs[ish] /= ig1 - ig0;
                                 shl_max_sum += pow(shl_maxs[ish], 0.1);
                         }
                         for (ish = 0; ish < nbas; ish++) {

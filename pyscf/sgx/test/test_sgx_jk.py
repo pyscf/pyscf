@@ -25,6 +25,20 @@ from pyscf.sgx import sgx
 from pyscf.sgx import sgx_jk
 import os
 
+
+WATER_CLUSTER = """
+O       89.814000000   100.835000000   101.232000000
+H       89.329200000    99.976800000   101.063000000
+H       89.151600000   101.561000000   101.414000000
+O       98.804000000    98.512200000    97.758100000
+H       99.782100000    98.646900000    97.916700000
+H       98.421800000    99.326500000    97.321300000
+O      108.070300000    98.516900000   100.438000000
+H      107.172800000    98.878600000   100.690000000
+H      108.194000000    98.592200000    99.448100000
+"""
+
+
 class KnownValues(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -118,6 +132,74 @@ class KnownValues(unittest.TestCase):
         vj1, vk1 = scf.hf.get_jk(mol, dm, hermi=0, omega=1.1)
         self.assertAlmostEqual(abs(vj-vj1).max(), 0, 2)
         self.assertAlmostEqual(abs(vk-vk1).max(), 0, 2)
+
+    def test_sgx_dot(self):
+        """
+        The purpose of this test is to call the SGX dot functions
+        with both localized and random density matrices and make
+        sure they work in comparison to lib.einsum
+        """
+        mol = gto.Mole()
+        mol.build(
+            verbose=0,
+            atom=WATER_CLUSTER,
+            basis="ccpvdz",
+        )
+        ao_loc = mol.ao_loc_nr()
+        sgxobj = sgx.SGX(mol)
+        sgxobj.grids = sgx_jk.get_gridss(mol, 0, 1e-7)
+        grids = sgxobj.grids
+        ao = gto.eval_gto(mol, "GTOval", grids.coords)
+        wao = ao * grids.weights[:, None]
+        nao = mol.nao_nr()
+        numpy.random.seed(1)
+        dmr = numpy.random.random((nao, nao))
+        dmr = numpy.abs(dmr)
+        dmr = dmr + dmr.T
+        dmr = dmr[None, :]
+        sgxobj.get_jk(dmr)
+        mf = scf.UHF(mol)
+        dm0 = mf.get_init_guess()
+        ib = (grids.weights.size // 2) // sgx_jk.BLKSIZE
+        im = ib * sgx_jk.BLKSIZE
+        shls_slice = (0, mol.nbas)
+        mask = grids.non0tab
+        tmp_switch = sgx_jk.SWITCH_SIZE
+        sgx_jk.SWITCH_SIZE = 0
+        for dm in [dm0, dmr]:
+            print("HI")
+            pair_mask = sgx_jk._get_sgx_dm_mask(sgxobj, dm, ao_loc)
+            outr = lib.einsum("gu,xuv->xvg", wao, dm)
+            out = sgx_jk._sgxdot_ao_dm(wao, dm, mask, shls_slice, ao_loc)
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+            out = sgx_jk._sgxdot_ao_dm(wao, dm, None, shls_slice, ao_loc)
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+            out = numpy.empty_like(out)
+            sgx_jk._sgxdot_ao_dm(wao, dm, mask, shls_slice, ao_loc, out)
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+            out = sgx_jk._sgxdot_ao_dm_sparse(wao, dm, mask, pair_mask, ao_loc)
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+            out = sgx_jk._sgxdot_ao_dm_sparse(wao, dm, mask, None, ao_loc)
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+            out = sgx_jk._sgxdot_ao_dm_sparse(wao, dm, None, None, ao_loc)
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+            out = numpy.empty_like(out)
+            out = sgx_jk._sgxdot_ao_dm_sparse(wao, dm, mask, pair_mask, ao_loc)
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+
+            gv = lib.einsum("xuv,gv->xug", dm, ao)
+            outr = lib.einsum("gu,xvg->xuv", wao, gv)
+            out = sgx_jk._sgxdot_ao_gv(wao, gv, mask, shls_slice, ao_loc)
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+            sgx_jk._sgxdot_ao_gv(wao, gv, mask, shls_slice, ao_loc, out=out)
+            out[:] *= 0.5
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+            out = sgx_jk._sgxdot_ao_gv_sparse(ao, gv, grids.weights, mask, None, ao_loc)
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+            sgx_jk._sgxdot_ao_gv_sparse(ao, gv, grids.weights, mask, None, ao_loc, out=out)
+            out[:] *= 0.5
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+        sgx_jk.SWITCH_SIZE = tmp_switch
 
 
 class PJunctionScreening(unittest.TestCase):

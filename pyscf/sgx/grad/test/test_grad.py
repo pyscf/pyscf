@@ -3,7 +3,7 @@ from pyscf import gto, scf, lib
 import unittest
 
 def setUpModule():
-    global mol, mf1, mf2, mf3
+    global mol, mf1, mf2, mf3, mf4, mf5
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = '/dev/null'
@@ -32,20 +32,36 @@ def setUpModule():
     mf3 = sgx_fit(scf.UKS(mol).set(xc='PBE0'))
     mf3.with_df.grids_level_f = 2
     mf3.with_df.dfj = True
-    mf3.with_df.fit_ovlp = False
+    mf3.with_df.optk = True
+    mf3.with_df.fit_ovlp = True
     mf3.conv_tol = 1e-14
     mf3.kernel()
 
+    mf4 = sgx_fit(scf.RKS(mol).set(xc='HSE06'))
+    mf4.with_df.grids_level_f = 2
+    mf4.with_df.dfj = True
+    mf4.with_df.fit_ovlp = False
+    mf4.conv_tol = 1e-14
+    mf4.kernel()
+
+    mf5 = sgx_fit(scf.RKS(mol).set(xc='wB97X'))
+    mf5.with_df.grids_level_f = 2
+    mf5.with_df.dfj = True
+    mf5.with_df.fit_ovlp = False
+    mf5.conv_tol = 1e-14
+    mf5.kernel()
+
 def tearDownModule():
-    global mol, mf1, mf2, mf3
+    global mol, mf1, mf2, mf3, mf4, mf5
     mol.stdout.close()
-    del mol, mf1, mf2, mf3
+    del mol, mf1, mf2, mf3, mf4, mf5
 
 
 class KnownValues(unittest.TestCase):
 
     def test_finite_diff_grad(self):
-        for mf, order in zip([mf1, mf2, mf3], [6, 5, 6]):
+        for mf, order in zip([mf1, mf2, mf3, mf4, mf5], [6, 5, 6, 6, 6]):
+            print("MF", mf, mf.with_df.dfj)
             g = mf.nuc_grad_method().set(sgx_grid_response=True, grid_response=True).kernel()
             mol1 = mol.copy()
             mf_scanner = mf.as_scanner()
