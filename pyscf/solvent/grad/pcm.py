@@ -37,13 +37,6 @@ def grad_switch_h(x):
     dy[x>1] = 0.0
     return dy
 
-def gradgrad_switch_h(x):
-    ''' 2nd derivative of h(x) '''
-    ddy = 60.0*x - 180.0*x**2 + 120*x**3
-    ddy[x<0] = 0.0
-    ddy[x>1] = 0.0
-    return ddy
-
 def get_dF_dA(surface):
     '''
     J. Chem. Phys. 133, 244111 (2010), Appendix C
@@ -61,10 +54,9 @@ def get_dF_dA(surface):
     dF = numpy.zeros([ngrids, natom, 3])
     dA = numpy.zeros([ngrids, natom, 3])
 
-    for ia in range(atom_coords.shape[0]):
+    for ia in range(natom):
         p0,p1 = surface['gslice_by_atom'][ia]
         coords = grid_coords[p0:p1]
-        p1 = p0 + coords.shape[0]
         ri_rJ = numpy.expand_dims(coords, axis=1) - atom_coords
         riJ = numpy.linalg.norm(ri_rJ, axis=-1)
         diJ = (riJ - R_in_J) / R_sw_J
@@ -138,7 +130,7 @@ def get_dD_dS(surface, dF, with_S=True, with_D=False):
 
     return dD, dS, dSii
 
-def grad_nuc(pcmobj, dm):
+def grad_nuc(pcmobj, dm, q_sym = None):
     mol = pcmobj.mol
     log = logger.new_logger(mol, mol.verbose)
     t1 = (logger.process_clock(), logger.perf_counter())
@@ -151,7 +143,8 @@ def grad_nuc(pcmobj, dm):
         pcmobj._get_vind(dm)
 
     mol = pcmobj.mol
-    q_sym        = pcmobj._intermediates['q_sym']
+    if q_sym is None:
+        q_sym = pcmobj._intermediates['q_sym']
     gridslice    = pcmobj.surface['gslice_by_atom']
     grid_coords  = pcmobj.surface['grid_coords']
     exponents    = pcmobj.surface['charge_exp']
@@ -177,7 +170,7 @@ def grad_nuc(pcmobj, dm):
     t1 = log.timer_debug1('grad nuc', *t1)
     return de
 
-def grad_qv(pcmobj, dm):
+def grad_qv(pcmobj, dm, q_sym = None):
     '''
     contributions due to integrals
     '''
@@ -193,7 +186,8 @@ def grad_qv(pcmobj, dm):
     log = logger.new_logger(mol, mol.verbose)
     t1 = (logger.process_clock(), logger.perf_counter())
     gridslice    = pcmobj.surface['gslice_by_atom']
-    q_sym        = pcmobj._intermediates['q_sym']
+    if q_sym is None:
+        q_sym = pcmobj._intermediates['q_sym']
     grid_coords  = pcmobj.surface['grid_coords']
     exponents    = pcmobj.surface['charge_exp']
 
