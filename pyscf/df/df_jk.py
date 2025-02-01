@@ -258,7 +258,7 @@ def get_jk(dfobj, dm, hermi=0, with_j=True, with_k=True, direct_scf_tol=1e-13):
     vj = 0
     vk = numpy.zeros_like(dms)
 
-    if dms.dtype != numpy.float64:
+    if numpy.iscomplexobj(dms):
         if with_j:
             vj = numpy.zeros_like(dms)
         max_memory = dfobj.max_memory - lib.current_memory()[0]
