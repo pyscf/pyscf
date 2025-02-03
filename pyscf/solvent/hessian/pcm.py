@@ -90,10 +90,14 @@ def get_d2F_d2A(surface):
         d2A[p0:p1, :, :, :, :] += numpy.einsum('q,qABdD->qABdD', Ai, d2fiJK)
 
         d2fiJK_grid_atom_offdiagonal = -numpy.einsum('qABdD->qAdD', d2fiJK)
-        d2F[p0:p1, i_grid_atom, :, :, :] = numpy.einsum('q,qAdD->qAdD', Fi, d2fiJK_grid_atom_offdiagonal.transpose(0,1,3,2))
-        d2F[p0:p1, :, i_grid_atom, :, :] = numpy.einsum('q,qAdD->qAdD', Fi, d2fiJK_grid_atom_offdiagonal)
-        d2A[p0:p1, i_grid_atom, :, :, :] = numpy.einsum('q,qAdD->qAdD', Ai, d2fiJK_grid_atom_offdiagonal.transpose(0,1,3,2))
-        d2A[p0:p1, :, i_grid_atom, :, :] = numpy.einsum('q,qAdD->qAdD', Ai, d2fiJK_grid_atom_offdiagonal)
+        d2F[p0:p1, i_grid_atom, :, :, :] = \
+            numpy.einsum('q,qAdD->qAdD', Fi, d2fiJK_grid_atom_offdiagonal.transpose(0,1,3,2))
+        d2F[p0:p1, :, i_grid_atom, :, :] = \
+            numpy.einsum('q,qAdD->qAdD', Fi, d2fiJK_grid_atom_offdiagonal)
+        d2A[p0:p1, i_grid_atom, :, :, :] = \
+            numpy.einsum('q,qAdD->qAdD', Ai, d2fiJK_grid_atom_offdiagonal.transpose(0,1,3,2))
+        d2A[p0:p1, :, i_grid_atom, :, :] = \
+            numpy.einsum('q,qAdD->qAdD', Ai, d2fiJK_grid_atom_offdiagonal)
 
         d2fiJK_grid_atom_diagonal = -numpy.einsum('qAdD->qdD', d2fiJK_grid_atom_offdiagonal)
         d2F[p0:p1, i_grid_atom, i_grid_atom, :, :] = numpy.einsum('q,qdD->qdD', Fi, d2fiJK_grid_atom_diagonal)
@@ -156,8 +160,8 @@ def get_d2D_d2S(surface, with_S=True, with_D=False, stream=None):
         return None, d2S
 
     nj_rij = numpy.einsum('ijd,jd->ij', ri_rj, norm_vec)
-    D_direct_product_prefactor = (-two_eij_over_sqrt_pi_exp_minus_eij2_rij2 \
-                                  * (15 * rij_1**6 + 10 * eij**2 * rij_1**4 + 4 * eij**4 * rij_1**2) \
+    D_direct_product_prefactor = (-two_eij_over_sqrt_pi_exp_minus_eij2_rij2
+                                  * (15 * rij_1**6 + 10 * eij**2 * rij_1**4 + 4 * eij**4 * rij_1**2)
                                   + 15 * rij_1**7 * erf_eij_rij) \
                                  * nj_rij
 
@@ -166,7 +170,8 @@ def get_d2D_d2S(surface, with_S=True, with_D=False, stream=None):
 
     nj_rij_direct_product = ri_rj[:, :, numpy.newaxis, :] * norm_vec[numpy.newaxis, :, :, numpy.newaxis]
     rij_nj_direct_product = nj_rij_direct_product.transpose(0,1,3,2)
-    d2D -= (nj_rij_direct_product + rij_nj_direct_product) * S_direct_product_prefactor[:, :, numpy.newaxis, numpy.newaxis]
+    d2D -= (nj_rij_direct_product + rij_nj_direct_product) \
+            * S_direct_product_prefactor[:, :, numpy.newaxis, numpy.newaxis]
     d2D[:,:,0,0] -= S_direct_product_prefactor * nj_rij
     d2D[:,:,1,1] -= S_direct_product_prefactor * nj_rij
     d2D[:,:,2,2] -= S_direct_product_prefactor * nj_rij
@@ -206,15 +211,19 @@ def analytical_hess_nuc(pcmobj, dm, verbose=None):
     d2I_dAdC = d2I_dAdC.reshape(3, 3, mol.natm, ngrids)
     for i_atom in range(mol.natm):
         g0,g1 = gridslice[i_atom]
-        d2e_from_d2I[:, i_atom, :, :] += numpy.einsum('A,dDAq,q->AdD', atom_charges, d2I_dAdC[:, :, :, g0:g1], q_sym[g0:g1])
-        d2e_from_d2I[i_atom, :, :, :] += numpy.einsum('A,dDAq,q->AdD', atom_charges, d2I_dAdC[:, :, :, g0:g1], q_sym[g0:g1])
+        d2e_from_d2I[:, i_atom, :, :] += \
+            numpy.einsum('A,dDAq,q->AdD', atom_charges, d2I_dAdC[:, :, :, g0:g1], q_sym[g0:g1])
+        d2e_from_d2I[i_atom, :, :, :] += \
+            numpy.einsum('A,dDAq,q->AdD', atom_charges, d2I_dAdC[:, :, :, g0:g1], q_sym[g0:g1])
 
     int2c2e_ipip1 = mol._add_suffix('int2c2e_ipip1')
     # # Some explanations here:
     # # Why can we use the ip1ip2 here? Because of the translational invariance
     # # $\frac{\partial^2 I_{AC}}{\partial A^2} + \frac{\partial^2 I_{AC}}{\partial A \partial C} = 0$
-    # # Why not using the ipip1 here? Because the nuclei, a point charge, is handled as a Gaussian charge with exponent = 1e16
-    # # This causes severe numerical problem in function int2c2e_ip1ip2, and make the main diagonal of hessian garbage.
+    # # Why not using the ipip1 here? Because the nuclei, a point charge,
+    # # is handled as a Gaussian charge with exponent = 1e16.
+    # # This causes severe numerical problem in function int2c2e_ip1ip2,
+    # # and make the main diagonal of hessian garbage.
     # d2I_dA2 = gto.mole.intor_cross(int2c2e_ipip1, fakemol_nuc, fakemol)
     d2I_dA2 = -gto.mole.intor_cross(int2c2e_ip1ip2, fakemol_nuc, fakemol)
     d2I_dA2 = d2I_dA2 @ q_sym
@@ -277,8 +286,10 @@ def analytical_hess_qv(pcmobj, dm, verbose=None):
     d2I_dA2 = d2I_dA2.reshape([3, 3, nao, nao])
     for i_atom in range(mol.natm):
         p0,p1 = aoslice[i_atom, 2:]
-        d2e_from_d2I[i_atom, i_atom, :, :] += numpy.einsum('ij,dDij->dD', dm[p0:p1, :], d2I_dA2[:, :, p0:p1, :])
-        d2e_from_d2I[i_atom, i_atom, :, :] += numpy.einsum('ij,dDij->dD', dm[:, p0:p1], d2I_dA2[:, :, p0:p1, :].transpose(0,1,3,2))
+        d2e_from_d2I[i_atom, i_atom, :, :] += \
+            numpy.einsum('ij,dDij->dD', dm[p0:p1, :], d2I_dA2[:, :, p0:p1, :])
+        d2e_from_d2I[i_atom, i_atom, :, :] += \
+            numpy.einsum('ij,dDij->dD', dm[:, p0:p1], d2I_dA2[:, :, p0:p1, :].transpose(0,1,3,2))
     d2I_dA2 = None
 
     int3c2e_ipvip1 = mol._add_suffix('int3c2e_ipvip1')
@@ -293,8 +304,10 @@ def analytical_hess_qv(pcmobj, dm, verbose=None):
         pi0,pi1 = aoslice[i_atom, 2:]
         for j_atom in range(mol.natm):
             pj0,pj1 = aoslice[j_atom, 2:]
-            d2e_from_d2I[i_atom, j_atom, :, :] += numpy.einsum('ij,dDij->dD', dm[pi0:pi1, pj0:pj1], d2I_dAdB[:, :, pi0:pi1, pj0:pj1])
-            d2e_from_d2I[i_atom, j_atom, :, :] += numpy.einsum('ij,dDij->dD', dm[pj0:pj1, pi0:pi1], d2I_dAdB[:, :, pi0:pi1, pj0:pj1].transpose(0,1,3,2))
+            d2e_from_d2I[i_atom, j_atom, :, :] += \
+                numpy.einsum('ij,dDij->dD', dm[pi0:pi1, pj0:pj1], d2I_dAdB[:, :, pi0:pi1, pj0:pj1])
+            d2e_from_d2I[i_atom, j_atom, :, :] += \
+                numpy.einsum('ij,dDij->dD', dm[pj0:pj1, pi0:pi1], d2I_dAdB[:, :, pi0:pi1, pj0:pj1].transpose(0,1,3,2))
     d2I_dAdB = None
 
     for j_atom in range(mol.natm):
@@ -308,11 +321,15 @@ def analytical_hess_qv(pcmobj, dm, verbose=None):
 
         for i_atom in range(mol.natm):
             p0,p1 = aoslice[i_atom, 2:]
-            d2e_from_d2I[i_atom, j_atom, :, :] += numpy.einsum('ij,dDij->dD', dm[p0:p1, :], d2I_dAdC[:, :, p0:p1, :])
-            d2e_from_d2I[i_atom, j_atom, :, :] += numpy.einsum('ij,dDij->dD', dm[:, p0:p1], d2I_dAdC[:, :, p0:p1, :].transpose(0,1,3,2))
+            d2e_from_d2I[i_atom, j_atom, :, :] += \
+                numpy.einsum('ij,dDij->dD', dm[p0:p1, :], d2I_dAdC[:, :, p0:p1, :])
+            d2e_from_d2I[i_atom, j_atom, :, :] += \
+                numpy.einsum('ij,dDij->dD', dm[:, p0:p1], d2I_dAdC[:, :, p0:p1, :].transpose(0,1,3,2))
 
-            d2e_from_d2I[j_atom, i_atom, :, :] += numpy.einsum('ij,dDij->dD', dm[p0:p1, :], d2I_dAdC[:, :, p0:p1, :].transpose(1,0,2,3))
-            d2e_from_d2I[j_atom, i_atom, :, :] += numpy.einsum('ij,dDij->dD', dm[:, p0:p1], d2I_dAdC[:, :, p0:p1, :].transpose(1,0,3,2))
+            d2e_from_d2I[j_atom, i_atom, :, :] += \
+                numpy.einsum('ij,dDij->dD', dm[p0:p1, :], d2I_dAdC[:, :, p0:p1, :].transpose(1,0,2,3))
+            d2e_from_d2I[j_atom, i_atom, :, :] += \
+                numpy.einsum('ij,dDij->dD', dm[:, p0:p1], d2I_dAdC[:, :, p0:p1, :].transpose(1,0,3,2))
     d2I_dAdC = None
 
     int3c2e_ipip2 = mol._add_suffix('int3c2e_ipip2')
@@ -474,8 +491,10 @@ def analytical_hess_solver(pcmobj, dm, verbose=None):
         # dK = dS - f_eps/(2*pi) * (dD*A*S + D*dA*S + D*A*dS)
 
         # d2R = f_eps/(2*pi) * (d2D*A + dD*dA + dD*dA + D*d2A)
-        # d2K = d2S - f_eps/(2*pi) * (d2D*A*S + D*d2A*S + D*A*d2S + dD*dA*S + dD*dA*S + dD*A*dS + dD*A*dS + D*dA*dS + D*dA*dS)
-        # The terms showing up twice on equation above (dD*dA + dD*dA for example) refer to dD/dx * dA/dy + dD/dy * dA/dx,
+        # d2K = d2S - f_eps/(2*pi) * (d2D*A*S + D*d2A*S + D*A*d2S
+        #                             + dD*dA*S + dD*dA*S + dD*A*dS + dD*A*dS + D*dA*dS + D*dA*dS)
+        # The terms showing up twice on equation above (dD*dA + dD*dA for example)
+        # refer to dD/dx * dA/dy + dD/dy * dA/dx,
         # since D is not symmetric, they are not the same.
 
         # d(K-1 R) = - K-1 dK K-1 R + K-1 dR
@@ -575,8 +594,11 @@ def analytical_hess_solver(pcmobj, dm, verbose=None):
         # dK = dS - f_eps/(4*pi) * (dD*A*S + D*dA*S + D*A*dS + dST*AT*DT + ST*dAT*DT + ST*AT*dDT)
 
         # d2R = f_eps/(2*pi) * (d2D*A + dD*dA + dD*dA + D*d2A)
-        # d2K = d2S - f_eps/(4*pi) * (d2D*A*S + D*d2A*S + D*A*d2S + dD*dA*S + dD*dA*S + dD*A*dS + dD*A*dS + D*dA*dS + D*dA*dS
-        #                           + d2ST*AT*DT + ST*d2AT*DT + ST*AT*d2DT + dST*dAT*DT + dST*dAT*DT + dST*AT*dDT + dST*AT*dDT + ST*dAT*dDT + ST*dAT*dDT)
+        # d2K = d2S - f_eps/(4*pi)
+        #             * (d2D*A*S + D*d2A*S + D*A*d2S
+        #                + dD*dA*S + dD*dA*S + dD*A*dS + dD*A*dS + D*dA*dS + D*dA*dS
+        #                + d2ST*AT*DT + ST*d2AT*DT + ST*AT*d2DT
+        #                + dST*dAT*DT + dST*dAT*DT + dST*AT*dDT + dST*AT*dDT + ST*dAT*dDT + ST*dAT*dDT)
         f_eps_over_2pi = f_epsilon/(2.0*PI)
         f_eps_over_4pi = f_epsilon/(4.0*PI)
 
