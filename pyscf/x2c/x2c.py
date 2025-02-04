@@ -271,9 +271,10 @@ class X2CHelperBase(lib.StreamObject):
         s1 = s + reduce(numpy.dot, (x.conj().T, t, x)) * (.5/c**2)
         return _get_r(s, s1)
 
-    def reset(self, mol):
+    def reset(self, mol=None):
         '''Reset mol and clean up relevant attributes for scanner mode'''
-        self.mol = mol
+        if mol is not None:
+            self.mol = mol
         return self
 
 class SpinorX2CHelper(X2CHelperBase):
@@ -732,7 +733,7 @@ class _X2C_SCF:
             self.with_x2c.dump_flags(verbose)
         return self
 
-    def reset(self, mol):
+    def reset(self, mol=None):
         self.with_x2c.reset(mol)
         return super().reset(mol)
 
