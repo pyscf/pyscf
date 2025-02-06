@@ -537,6 +537,7 @@ class Grids(lib.StreamObject):
         self.screen_index = None
         self.coords  = None
         self.weights = None
+        self.ialist = None
 
     @property
     def size(self):
@@ -562,7 +563,8 @@ class Grids(lib.StreamObject):
             logger.info(self, 'User specified grid scheme %s', str(self.atom_grid))
         return self
 
-    def build(self, mol=None, with_non0tab=False, sort_grids=True, **kwargs):
+    def build(self, mol=None, with_non0tab=False, sort_grids=True,
+              with_ialist=False, **kwargs):
         import time
         t0 = time.monotonic()
         if mol is None: mol = self.mol
@@ -572,11 +574,19 @@ class Grids(lib.StreamObject):
             mol, self.atom_grid, self.radi_method, self.level, self.prune, **kwargs)
         self.coords, self.weights = self.get_partition(
             mol, atom_grids_tab, self.radii_adjust, self.atomic_radii, self.becke_scheme)
+        if with_ialist:
+            ialist = []
+            for ia in range(mol.natm):
+                ncoord = atom_grids_tab[mol.atom_symbol(ia)][1].size
+                ialist.append(numpy.repeat(numpy.int32(ia), ncoord))
+            self.ialist = numpy.hstack(ialist)
 
         if sort_grids:
             idx = arg_group_grids(mol, self.coords)
             self.coords = self.coords[idx]
             self.weights = self.weights[idx]
+            if with_ialist:
+                self.ialist = self.ialist[idx]
 
         if self.alignment > 1:
             padding = _padding_size(self.size, self.alignment)
@@ -585,6 +595,8 @@ class Grids(lib.StreamObject):
                 self.coords = numpy.vstack(
                     [self.coords, numpy.repeat([[1e-4]*3], padding, axis=0)])
                 self.weights = numpy.hstack([self.weights, numpy.zeros(padding)])
+                if with_ialist:
+                    self.ialist = numpy.hstack([self.ialist, numpy.repeat(-1, padding)])
 
         if with_non0tab:
             self.non0tab = self.make_mask(mol, self.coords)
@@ -608,6 +620,7 @@ class Grids(lib.StreamObject):
         self.weights = None
         self.non0tab = None
         self.screen_index = None
+        self.ialist = None
         return self
 
     gen_atomic_grids = lib.module_method(

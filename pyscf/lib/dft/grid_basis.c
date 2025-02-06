@@ -258,7 +258,7 @@ void VXCgen_grid_lko(double *out, double *coords, double *atm_coords,
 }
 
 void VXCgen_grid_lko_deriv(double *out, double *dw, double *coords, double *atm_coords,
-                           double *radii_table, int natm, int ngrids, int ia_p)
+                           double *radii_table, int natm, int ngrids, int *ialist)
 {
     const size_t Ngrids = ngrids;
     int i, j;
@@ -303,6 +303,7 @@ void VXCgen_grid_lko_deriv(double *out, double *dw, double *coords, double *atm_
     size_t ig0, n, ngs;
     double fac, dfacx, dfacy, dfacz, tmp;
     double max_min_dist;
+    int ia_p;
 #pragma omp for nowait schedule(static)
     for (ig0 = 0; ig0 < Ngrids; ig0 += GRIDS_BLOCK) {
         ngs = MIN(Ngrids-ig0, GRIDS_BLOCK);
@@ -372,6 +373,7 @@ void VXCgen_grid_lko_deriv(double *out, double *dw, double *coords, double *atm_
             dfacy = dady[i*natm+j];
             dfacz = dadz[i*natm+j];
             for (n = 0; n < ngs; n++) {
+                ia_p = ialist[ig0 + n];
                 tmp = dw[j*Ngrids+ig0+n] * dg[n] / (.5 + g[n] + 1e-200);
                 tmp-= dw[i*Ngrids+ig0+n] * dg[n] / (.5 - g[n] + 1e-200);
                 tmp *= (grid_dist[i*GRIDS_BLOCK+n] -

@@ -468,9 +468,12 @@ def run_k_only_setup(sgx, dms, hermi):
     nao = dms.shape[-1]
     nset = dms.shape[0]
     ao_loc = mol.ao_loc_nr()
+    t0 = logger.perf_counter()
+    print("START SETUP")
 
-    if grids.coords is None or grids.non0tab is None:
-        grids.build(with_non0tab=True)
+    if grids.coords is None or grids.non0tab is None or grids.ialist is None:
+        grids.build(with_non0tab=True, with_ialist=True)
+        sgx._sgx_block_cond = None
 
     if mol is grids.mol:
         non0tab = grids.non0tab
@@ -513,6 +516,7 @@ def run_k_only_setup(sgx, dms, hermi):
     proj_dm = lib.einsum('ki,xij->xkj', proj, dms)
 
     if sgx.use_dm_screening and sgx._sgx_block_cond is None:
+        ta = logger.perf_counter()
         nblk = (grids.weights.size + SGX_BLKSIZE - 1) // SGX_BLKSIZE
         nblk_ni = (grids.weights.size + BLKSIZE - 1) // BLKSIZE
         ao_cond_sgx = numpy.empty((nblk, mol.nbas), dtype=numpy.float64)
@@ -530,6 +534,7 @@ def run_k_only_setup(sgx, dms, hermi):
                                ao_cond_ni[i0 // BLKSIZE:],
                                ao, grids.weights[i0:i1], nbins,
                                mask, pair_mask, ao_loc, hermi=hermi)
+        tb = logger.perf_counter()
         ncond = _get_ao_block_cond(sgx, ao_cond_sgx)
         ncond_ni = _get_ao_block_cond(sgx, ao_cond_ni)
         rinv_bound, norm_mask = _sgx_create_masks(asn, basmax, ao_loc)
@@ -543,6 +548,8 @@ def run_k_only_setup(sgx, dms, hermi):
         )
         sgx._ao_block_norm = ao_cond_sgx
         sgx._norm_mask = norm_mask
+        tc = logger.perf_counter()
+        print("SETUP TOOK", ta - t0, tb - ta, tc - tb)
     elif sgx.use_dm_screening:
         ncond = sgx._sgx_block_cond
         ncond_ni = sgx._ni_block_cond
@@ -550,7 +557,10 @@ def run_k_only_setup(sgx, dms, hermi):
         ncond = None
         ncond_ni = None
 
-    dm_mask = _get_sgx_dm_mask(sgx, dms, ao_loc)
+    if sgx.use_dm_screening:
+        dm_mask = _get_sgx_dm_mask(sgx, dms, ao_loc)
+    else:
+        dm_mask = None
 
     return blksize, screen_index, proj_dm, dm_mask, ncond, ncond_ni, ao_loc
 
@@ -573,90 +583,6 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     vk = numpy.zeros_like(dms)
     tnuc = 0, 0
     shls_slice = (0, mol.nbas)
-    """
-    nset = dms.shape[0]
-    ao_loc = mol.ao_loc_nr()
-
-    if mol is grids.mol:
-        non0tab = grids.non0tab
-    if non0tab is None:
-        non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                                dtype=numpy.uint8)
-        non0tab[:] = NBINS + 1  # Corresponding to AO value ~= 1
-    screen_index = non0tab
-
-    ngrids = grids.coords.shape[0]
-    max_memory = sgx.max_memory - lib.current_memory()[0]
-    # We need to store ao, wao, and fg -> 2 + nset sets of size nao
-    blksize = max(112, int(max_memory*1e6/8/((2+nset)*nao)))
-    blksize = min(ngrids, max(1, blksize // SGX_BLKSIZE) * SGX_BLKSIZE)
-
-    if sgx._overlap_correction_matrix is None:
-        sn = numpy.zeros((nao,nao))
-        cutoff = grids.cutoff * 1e2
-        nbins = NBINS * 2 - int(NBINS * numpy.log(cutoff) / numpy.log(grids.cutoff))
-        pair_mask = mol.get_overlap_cond() < -numpy.log(cutoff)
-        if sgx.fit_ovlp:
-            sn = numpy.zeros((nao, nao))
-            for i0, i1 in lib.prange(0, ngrids, blksize):
-                assert i0 % SGX_BLKSIZE == 0
-                coords = grids.coords[i0:i1]
-                mask = screen_index[i0 // BLKSIZE:]
-                ao = mol.eval_gto('GTOval', coords, non0tab=mask)
-                _dot_ao_ao_sparse(ao, ao, grids.weights[i0:i1], nbins, mask,
-                                  pair_mask, ao_loc, hermi=hermi, out=sn)
-                # wao = _scale_ao(ao, grids.weights[i0:i1])
-                # sn[:] += _dot_ao_ao(mol, ao, wao, mask, (0, mol.nbas),
-                #                     ao_loc, hermi=hermi)
-            ovlp = mol.intor_symmetric('int1e_ovlp')
-            proj = scipy.linalg.solve(sn, ovlp)
-            sgx._overlap_correction_matrix = proj
-            print("PROJ", numpy.max(numpy.abs(proj - proj.T)))
-        else:
-            sgx._overlap_correction_matrix = numpy.identity(nao)
-    proj = sgx._overlap_correction_matrix
-    proj_dm = lib.einsum('ki,xij->xkj', proj, dms)
-
-    if sgx.use_dm_screening and sgx._sgx_block_cond is None:
-        nblk = (grids.weights.size + SGX_BLKSIZE - 1) // SGX_BLKSIZE
-        nblk_ni = (grids.weights.size + BLKSIZE - 1) // BLKSIZE
-        ao_cond_sgx = numpy.empty((nblk, mol.nbas), dtype=numpy.float64)
-        ao_cond_ni = numpy.empty((nblk_ni, mol.nbas), dtype=numpy.float64)
-        basmax = numpy.empty((nblk, mol.nbas), dtype=numpy.float64)
-        asn = numpy.zeros((nao, nao))
-        ao = None
-        for i0, i1 in lib.prange(0, ngrids, blksize):
-            assert i0 % SGX_BLKSIZE == 0
-            coords = grids.coords[i0:i1]
-            mask = screen_index[i0 // BLKSIZE:]
-            ao = mol.eval_gto('GTOval', coords, non0tab=mask, out=ao)
-            _sgx_update_masks_(asn, basmax[i0 // SGX_BLKSIZE:],
-                               ao_cond_sgx[i0 // SGX_BLKSIZE:],
-                               ao_cond_ni[i0 // BLKSIZE:],
-                               ao, grids.weights[i0:i1], nbins,
-                               mask, pair_mask, ao_loc, hermi=hermi)
-        ncond = _get_ao_block_cond(sgx, ao_cond_sgx)
-        ncond_ni = _get_ao_block_cond(sgx, ao_cond_ni)
-        rinv_bound, norm_mask = _sgx_create_masks(asn, basmax, ao_loc)
-        sgx._sgx_block_cond = ncond
-        sgx._ni_block_cond = ncond_ni
-        sgx._rinv_bound = rinv_bound
-        rinv = rinv_bound**(1 - SGX_DELTA_3)
-        sgx._rinv_mask = numpy.max(
-            rinv_bound**SGX_DELTA_3 * numpy.sum(rinv, axis=1),
-            axis=1
-        )
-        sgx._ao_block_norm = ao_cond_sgx
-        sgx._norm_mask = norm_mask
-    elif sgx.use_dm_screening:
-        ncond = sgx._sgx_block_cond
-        ncond_ni = sgx._ni_block_cond
-    else:
-        ncond = None
-        ncond_ni = None
-
-    dm_mask = _get_sgx_dm_mask(sgx, dms, ao_loc)
-    """
     sgx_data = run_k_only_setup(sgx, dms, hermi)
     ngrids = grids.weights.size
     blksize, screen_index, proj_dm, dm_mask, ncond, ncond_ni, ao_loc = sgx_data
@@ -841,6 +767,7 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
     logger.timer(mol, "vj and vk", *t0)
     return vj.reshape(dm_shape), vk.reshape(dm_shape)
 
+
 def _gen_batch_nuc(mol):
     '''Coulomb integrals of the given points and orbital pairs'''
     cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, 'int3c2e')
@@ -850,6 +777,7 @@ def _gen_batch_nuc(mol):
         return lib.unpack_tril(j3c.T, out=out)
     return batch_nuc
 
+
 def _gen_batch_nuc_grad(mol):
     '''Coulomb integrals of the given points and orbital pairs'''
     cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, 'int3c2e_ip1')
@@ -858,6 +786,7 @@ def _gen_batch_nuc_grad(mol):
         j3c = aux_e2(mol, fakemol, intor='int3c2e_ip1', aosym='s1', cintopt=cintopt)
         return j3c.transpose(0,3,1,2)
     return batch_nuc
+
 
 def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol,
                    sgxopt=None, grad=False):
@@ -945,6 +874,7 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol,
             weights.ctypes.data_as(ctypes.c_void_p))
         return vj, vk
     return jk_part
+
 
 def _gen_k_direct(mol, aosym, direct_scf_tol,
                   sgxopt=None, grad=False):

@@ -560,9 +560,7 @@ def grids_response_becke(grids):
         yield coords, w0, w1
 
 
-def get_dw_partition(mol, ia, atom_grids_tab,
-                     radii_adjust=None, atomic_radii=radi.BRAGG_RADII,
-                     concat=True, wtonly=False):
+def _get_lko_partition_functions(mol, ia, radii_adjust, atomic_radii):
     if callable(radii_adjust) and atomic_radii is not None:
         f_radii_adjust = radii_adjust(mol, atomic_radii)
     else:
@@ -591,6 +589,11 @@ def get_dw_partition(mol, ia, atom_grids_tab,
         return pbecke
 
     def gen_grid_deriv(coords, dbecke):
+        if isinstance(ia, int):
+            ialist = numpy.repeat(numpy.int32(ia), coords.shape[0])
+        else:
+            assert isinstance(ia, numpy.ndarray)
+            ialist = ia.astype(numpy.int32, order="C", copy=False)
         coords = numpy.asarray(coords, order='F')
         ngrids = coords.shape[0]
         pbecke = numpy.empty((4,mol.natm,ngrids))
@@ -600,23 +603,48 @@ def get_dw_partition(mol, ia, atom_grids_tab,
                      atm_coords.ctypes.data_as(ctypes.c_void_p),
                      p_radii_table,
                      ctypes.c_int(mol.natm), ctypes.c_int(ngrids),
-                     ctypes.c_int(ia))
+                     ialist.ctypes.data_as(ctypes.c_void_p))
         return pbecke[1:]
 
+    return gen_grid_partition, gen_grid_deriv, atm_coords
+
+
+def get_dw_partition(mol, ia, atom_grids_tab,
+                     radii_adjust=None, atomic_radii=radi.BRAGG_RADII,
+                     concat=True, wtonly=False):
+    gen_grid_partition, gen_grid_deriv, atm_coords = _get_lko_partition_functions(
+        mol, ia, radii_adjust, atomic_radii
+    )
     coords, vol = atom_grids_tab[mol.atom_symbol(ia)]
     coords = coords + atm_coords[ia]
     pbecke = gen_grid_partition(coords)
     invsum = (1./pbecke.sum(axis=0))
     weights = vol * pbecke[ia] * invsum
-    dbecke = numpy.empty_like(pbecke)
     if wtonly:
         return coords, weights
     else:
-        dbecke = -pbecke * pbecke[ia] * vol * invsum**2
-        dbecke[ia,:] += pbecke[ia] * invsum * vol
+        dbecke = -pbecke * weights * invsum
+        dbecke[ia, :] += weights
         dbecke = numpy.ascontiguousarray(dbecke)
         weights1 = gen_grid_deriv(coords, dbecke)
         return coords, weights, weights1
+
+
+def get_dw_partition_sorted(mol, ialist, coords, weights,
+                            radii_adjust=None, atomic_radii=radi.BRAGG_RADII,
+                            concat=True, wtonly=False):
+    gen_grid_partition, gen_grid_deriv = _get_lko_partition_functions(
+        mol, ialist, radii_adjust, atomic_radii
+    )[:2]
+    pbecke = gen_grid_partition(coords)
+    invsum = (1./pbecke.sum(axis=0))
+    dbecke = -pbecke * weights * invsum
+    for ia in range(mol.natm):
+        cond = (ialist == ia)
+        dbecke[ia, cond] += weights[cond]
+    dbecke = numpy.ascontiguousarray(dbecke)
+    weights1 = gen_grid_deriv(coords, dbecke)
+    return weights1
 
 
 def grids_response_lko(grids):

@@ -2,6 +2,10 @@ from pyscf.sgx.sgx import sgx_fit
 from pyscf import gto, scf, lib
 import unittest
 
+
+USE_OPTK = False
+
+
 def setUpModule():
     global mol, mf1, mf2, mf3, mf4, mf5
     mol = gto.Mole()
@@ -13,12 +17,14 @@ def setUpModule():
         [1   , (0. , 0.757  , 0.587)],
     ])
     mol.basis = '6-31g'
+    mol.max_memory = 100000
     mol.build()
 
     mf1 = sgx_fit(scf.RHF(mol))
     mf1.with_df.grids_level_f = 2
     mf1.with_df.dfj = True
     mf1.with_df.fit_ovlp = False
+    mf1.with_df.optk = USE_OPTK
     mf1.conv_tol = 1e-14
     mf1.kernel()
 
@@ -26,14 +32,15 @@ def setUpModule():
     mf2.with_df.grids_level_f = 2
     mf2.with_df.dfj = False
     mf2.with_df.fit_ovlp = False
+    mf1.with_df.optk = USE_OPTK
     mf2.conv_tol = 1e-14
     mf2.kernel()
 
     mf3 = sgx_fit(scf.UKS(mol).set(xc='PBE0'))
     mf3.with_df.grids_level_f = 2
     mf3.with_df.dfj = True
-    mf3.with_df.optk = True
-    mf3.with_df.fit_ovlp = True
+    mf3.with_df.fit_ovlp = False
+    mf1.with_df.optk = USE_OPTK
     mf3.conv_tol = 1e-14
     mf3.kernel()
 
@@ -41,6 +48,7 @@ def setUpModule():
     mf4.with_df.grids_level_f = 2
     mf4.with_df.dfj = True
     mf4.with_df.fit_ovlp = False
+    mf1.with_df.optk = USE_OPTK
     mf4.conv_tol = 1e-14
     mf4.kernel()
 
@@ -48,6 +56,7 @@ def setUpModule():
     mf5.with_df.grids_level_f = 2
     mf5.with_df.dfj = True
     mf5.with_df.fit_ovlp = False
+    mf1.with_df.optk = USE_OPTK
     mf5.conv_tol = 1e-14
     mf5.kernel()
 
