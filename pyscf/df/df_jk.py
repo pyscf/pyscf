@@ -258,6 +258,33 @@ def get_jk(dfobj, dm, hermi=0, with_j=True, with_k=True, direct_scf_tol=1e-13):
     vj = 0
     vk = numpy.zeros_like(dms)
 
+    if numpy.iscomplexobj(dms):
+        if with_j:
+            vj = numpy.zeros_like(dms)
+        max_memory = dfobj.max_memory - lib.current_memory()[0]
+        blksize = max(4, int(min(dfobj.blockdim, max_memory*.22e6/8/nao**2)))
+        buf = numpy.empty((blksize,nao,nao))
+        buf1 = numpy.empty((nao,blksize,nao))
+        for eri1 in dfobj.loop(blksize):
+            naux, nao_pair = eri1.shape
+            eri1 = lib.unpack_tril(eri1, out=buf)
+            if with_j:
+                tmp = numpy.einsum('pij,nji->pn', eri1, dms.real)
+                vj.real += numpy.einsum('pn,pij->nij', tmp, eri1)
+                tmp = numpy.einsum('pij,nji->pn', eri1, dms.imag)
+                vj.imag += numpy.einsum('pn,pij->nij', tmp, eri1)
+            buf2 = numpy.ndarray((nao,naux,nao), buffer=buf1)
+            for k in range(nset):
+                buf2[:] = lib.einsum('pij,jk->ipk', eri1, dms[k].real)
+                vk[k].real += lib.einsum('ipk,pkj->ij', buf2, eri1)
+                buf2[:] = lib.einsum('pij,jk->ipk', eri1, dms[k].imag)
+                vk[k].imag += lib.einsum('ipk,pkj->ij', buf2, eri1)
+            t1 = log.timer_debug1('jk', *t1)
+        if with_j: vj = vj.reshape(dm_shape)
+        if with_k: vk = vk.reshape(dm_shape)
+        logger.timer(dfobj, 'df vj and vk', *t0)
+        return vj, vk
+
     if with_j:
         idx = numpy.arange(nao)
         dmtril = lib.pack_tril(dms + dms.conj().transpose(0,2,1))
@@ -322,6 +349,7 @@ def get_jk(dfobj, dm, hermi=0, with_j=True, with_k=True, direct_scf_tol=1e-13):
         buf = numpy.empty((2,blksize,nao,nao))
         for eri1 in dfobj.loop(blksize):
             naux, nao_pair = eri1.shape
+            assert (nao_pair == nao*(nao+1)//2)
             if with_j:
                 # uses numpy.matmul
                 vj += dmtril.dot(eri1.T).dot(eri1)
@@ -388,6 +416,7 @@ def get_j(dfobj, dm, hermi=0, direct_scf_tol=1e-13):
     opt = dfobj._vjopt
     fakemol = opt.fakemol
     dm = numpy.asarray(dm, order='C')
+    assert dm.dtype == numpy.float64
     dm_shape = dm.shape
     nao = dm_shape[-1]
     dm = dm.reshape(-1,nao,nao)
