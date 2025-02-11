@@ -3,7 +3,7 @@ from pyscf import gto, scf, lib
 import unittest
 
 
-USE_OPTK = False
+USE_OPTK = True
 
 
 def setUpModule():

@@ -21,6 +21,8 @@ Pseudo-spectral methods (COSX, PS, SN-K)
 '''
 
 import numpy
+import contextlib
+import threading
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
@@ -89,6 +91,7 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
     dfmf = _SGXHF(mf, with_df, auxbasis)
     return lib.set_class(dfmf, (_SGXHF, mf.__class__))
 
+
 # A tag to label the derived SCF class
 class _SGXHF:
 
@@ -119,6 +122,7 @@ class _SGXHF:
         self._last_vj = 0
         self._last_vk = 0
         self._in_scf = False
+        self._ctx_lock = None
 
     def undo_sgx(self):
         obj = lib.view(self, lib.drop_class(self.__class__, _SGXHF))
@@ -130,15 +134,12 @@ class _SGXHF:
         return obj
 
     def build(self, mol=None, **kwargs):
+        self._nsteps_direct = 0
+        self._last_dm = 0
         if self.direct_scf_sgx:
-            self._nsteps_direct = 0
-            self._last_dm = 0
             self._last_vj = 0
             self._last_vk = 0
-        if self.direct_scf:
-            self.with_df.build(level=self.with_df.grids_level_f)
-        else:
-            self.with_df.build(level=self.with_df.grids_level_i)
+        self.with_df.build(level=self.with_df.grids_level_i)
         if self.with_df.pjs:
             if not self.with_df.dfj:
                 import warnings
@@ -156,7 +157,7 @@ class _SGXHF:
         return super().reset(mol)
 
     def pre_kernel(self, envs):
-        self.direct_scf = False # should always be False
+        # self.direct_scf = False # should always be False
         if self.with_df.grids_level_i != self.with_df.grids_level_f:
             self._in_scf = True
 
@@ -172,11 +173,24 @@ class _SGXHF:
                 self._opt[omega] = self.init_direct_scf(mol)
         vhfopt = self._opt.get(omega)
 
-        if self._in_scf and not self.direct_scf:
-            if with_df.grids_level_f != with_df.grids_level_i \
+        # if self._in_scf and not self.direct_scf:
+        if self._in_scf:
+            if self.direct_scf and with_df.grids_level_f != with_df.grids_level_i \
+                    and self._grids_reset:
+                # only reset if grids_level_f and grids_level_i differ
+                logger.debug(self, 'Switching SGX grids')
+                print('Switching SGX grids')
+                with_df.build(level=with_df.grids_level_f)
+                self._nsteps_direct = 0
+                self._in_scf = False
+                self._last_dm = 0
+                self._last_vj = 0
+                self._last_vk = 0
+            elif with_df.grids_level_f != with_df.grids_level_i \
                     and numpy.linalg.norm(dm - self._last_dm) < with_df.grids_switch_thrd:
                 # only reset if grids_level_f and grids_level_i differ
                 logger.debug(self, 'Switching SGX grids')
+                print('Switching SGX grids')
                 with_df.build(level=with_df.grids_level_f)
                 self._nsteps_direct = 0
                 self._in_scf = False
@@ -202,11 +216,57 @@ class _SGXHF:
                 self._last_vj = 0
                 self._last_vk = 0
         else:
-            self._last_dm = numpy.asarray(dm)
+            self._last_dm = self.with_df._full_dm
             vj, vk = with_df.get_jk(dm, hermi, vhfopt, with_j, with_k,
                                     self.direct_scf_tol, omega)
+            self._nsteps_direct += 1
+            if self.rebuild_nsteps > 0 and self._nsteps_direct >= self.rebuild_nsteps:
+                self._nsteps_direct = 0
 
         return vj, vk
+
+    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
+        with self.with_full_dm(dm, dm_last) as will_reset:
+            if will_reset:
+                dm_last = 0
+                vhf_last = 0
+            veff = super().get_veff(
+                mol=mol, dm=dm, dm_last=dm_last, vhf_last=vhf_last, hermi=hermi
+            )
+        return veff
+
+    @contextlib.contextmanager
+    def with_full_dm(self, dm, dm_last):
+        '''
+        This context manager yields whether the density matrix should
+        be reset, and it also saves the full density matrix dm
+        to the SGX object so it can be used for energy screening
+        if needed.
+        '''
+        haslock = self._ctx_lock
+        sgx = self.with_df
+        if haslock is None:
+            self._ctx_lock = threading.RLock()
+
+        with self._ctx_lock:
+            sgx._full_dm = dm
+            try:
+                will_reset = False
+                self._grids_reset = False
+                if self.direct_scf_sgx:
+                    will_reset = False
+                elif self._nsteps_direct == 0:
+                    will_reset = True
+                elif sgx.grids_level_f != sgx.grids_level_i \
+                        and numpy.linalg.norm(dm - dm_last) < sgx.grids_switch_thrd \
+                        and self._in_scf:
+                    self._grids_reset = True
+                    will_reset = True
+                yield will_reset
+            finally:
+                sgx._full_dm = None
+                if haslock is None:
+                    self._ctx_lock = None
 
     def post_kernel(self, envs):
         self._in_scf = False
@@ -247,6 +307,7 @@ class _SGXHF:
     CCSD = method_not_implemented
     CASCI = method_not_implemented
     CASSCF = method_not_implemented
+
 
 scf.hf.SCF.COSX = sgx_fit
 mcscf.casci.CASBase.COSX = sgx_fit
@@ -344,6 +405,8 @@ class SGX(lib.StreamObject):
         return self.grids
 
     def build(self, level=None):
+        self._overlap_correction_matrix = None
+        self._sgx_block_cond = None
         if level is None:
             level = self.grids_level_f
         self.grids = sgx_jk.get_gridss(
@@ -369,9 +432,9 @@ class SGX(lib.StreamObject):
         self.auxmol = None
         self._vjopt = None
         self._opt = None
-        self._last_dm = 0
         self._rsh_df = {}
         self._overlap_correction_matrix = None
+        self._sgx_block_cond = None
         return self
 
     def get_jk(self, dm, hermi=1, vhfopt=None, with_j=True, with_k=True,

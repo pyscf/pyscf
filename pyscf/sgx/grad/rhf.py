@@ -265,10 +265,11 @@ def scalable_grids_response_cc(grids, blksize):
 
 
 def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
+    t00 = logger.process_clock(), logger.perf_counter()
+    t0 = t00[1]
     if sgx.debug:
         raise NotImplementedError("debug mode for accelerated K matrix")
 
-    t0 = logger.process_clock(), logger.perf_counter()
     mol = sgx.mol
     grids = sgx.grids
     include_grid_response = sgx.grid_response
@@ -282,10 +283,6 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     nao = dm_shape[-1]
     dms = dms.reshape(-1,nao,nao)
     nset = dms.shape[0]
-
-    # batch_jk = _gen_jk_direct(mol, 's2', False, True, direct_scf_tol, sgx._opt)
-    t1 = logger.timer_debug1(mol, "sgX initialization", *t0)
-    tnuc = 0, 0
     shls_slice = (0, mol.nbas)
     sgx_data = run_k_only_setup(sgx, dms, hermi)
     ngrids = grids.weights.size
@@ -294,13 +291,15 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     vk = numpy.zeros_like(dms)
     dvk = numpy.zeros((dms.shape[0], 3,) + dms.shape[1:])
     dek = numpy.zeros((mol.natm, 3)) # derivs wrt atom positions
-    tnuc = 0, 0
     xed = numpy.zeros((nset, grids.weights.size)) # works if grids are not screened initially
 
-    batch_k = sgx_jk._gen_k_direct(mol, 's1', direct_scf_tol, sgx._opt)
+    batch_k = sgx_jk._gen_k_direct(mol, 's2', direct_scf_tol, sgx._opt)
     if include_grid_response:
         batch_k_grad = sgx_jk._gen_k_direct(mol, 's1', direct_scf_tol, None, grad=True)
+    t1 = logger.perf_counter()
 
+    t2, t3 = 0, 0
+    t4 = -logger.perf_counter()
     fg = None
     for i0, i1, ialist, coords, weights, weights1, mask in scalable_grids_response_cc(grids, blksize):
         # iatoms is an array shape (ngrids,)
@@ -315,9 +314,12 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
         dao = _ao[1:4]
         wao = ao * weights[:, None]
         wdao = dao * weights[:, None]
+        ta = logger.perf_counter()
         if sgx.use_dm_screening:
             fg = sgx_jk._sgxdot_ao_dm_sparse(ao, proj_dm, mask, dm_mask, ao_loc, out=fg)
             gv = batch_k(mol, coords, fg, weights, ncond[i0 // SGX_BLKSIZE :])
+            if include_grid_response:
+                dgv = batch_k_grad(mol, coords, fg, weights, ncond[i0 // SGX_BLKSIZE :])
             shl_norms = sgx_jk._get_shell_norms(gv, weights, ao_loc)
             mask2 = shl_norms > ncond_ni[i0 // BLKSIZE : i0 // BLKSIZE + shl_norms.shape[0], None]
         else:
@@ -327,6 +329,7 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
                 dgv = batch_k_grad(mol, coords, fg, weights)
             mask2 = None
         sgx_jk._sgxdot_ao_gv_sparse(ao, gv, weights, mask, mask2, ao_loc, out=vk)
+        tb = logger.perf_counter()
 
         dxed = 0
         for i in range(nset):
@@ -348,16 +351,15 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
                 for ia in range(mol.natm):
                     cond = (ialist == ia)
                     dek[ia] -= 4 * numpy.sum(dxed[:, cond], axis=1)  # GRID RESPONSE PART 2
-
-    t2 = logger.timer_debug1(mol, "sgX J/K builder", *t1)
-    tdot = t2[0] - t1[0] - tnuc[0] , t2[1] - t1[1] - tnuc[1]
-    logger.debug1(sgx, '(CPU, wall) time for integrals (%.2f, %.2f); '
-                  'for tensor contraction (%.2f, %.2f)',
-                  tnuc[0], tnuc[1], tdot[0], tdot[1])
+        tc = logger.perf_counter()
+        t2 += tb - ta
+        t3 += tc - tb
+    t4 += logger.perf_counter()
+    print("TIMES", t1 - t0, t2, t3, t4 - t3 - t2)
 
     # TODO don't need to compute vk
     vk = dvk
-    logger.timer(mol, "vk", *t0)
+    logger.timer(mol, "vk", *t00)
     dm_shape = (nset, 3) + dms.shape[1:]
     vk = vk.reshape(dm_shape)
     if restricted:
@@ -370,7 +372,7 @@ def _get_jk(sgx, dm, hermi, with_j, with_k, direct_scf_tol):
     if with_j and sgx.dfj:
         vj = None
         if with_k:
-            if sgx.optk:
+            if sgx.optk and sgx.grids.becke_scheme == gen_grid.becke_lko:
                 vk = get_k_grad_only(sgx, dm, hermi, direct_scf_tol)
             else:
                 vk = get_jk_grad(sgx, dm, hermi, False, with_k, direct_scf_tol)[1]

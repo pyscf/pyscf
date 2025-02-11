@@ -517,6 +517,9 @@ def run_k_only_setup(sgx, dms, hermi):
 
     if sgx.use_dm_screening and sgx._sgx_block_cond is None:
         ta = logger.perf_counter()
+        cutoff = grids.cutoff * 1e2
+        nbins = NBINS * 2 - int(NBINS * numpy.log(cutoff) / numpy.log(grids.cutoff))
+        pair_mask = mol.get_overlap_cond() < -numpy.log(cutoff)
         nblk = (grids.weights.size + SGX_BLKSIZE - 1) // SGX_BLKSIZE
         nblk_ni = (grids.weights.size + BLKSIZE - 1) // BLKSIZE
         ao_cond_sgx = numpy.empty((nblk, mol.nbas), dtype=numpy.float64)
