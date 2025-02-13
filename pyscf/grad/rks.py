@@ -86,7 +86,27 @@ def get_veff(ks_grad, mol=None, dm=None):
         if omega != 0:
             vk += ks_grad.get_k(mol, dm, omega=omega) * (alpha - hyb)
         vxc += vj - vk * .5
-
+        """
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks_grad.xc, spin=mol.spin)
+        if omega == 0:
+            vj, vk = ks_grad.get_jk(mol, dm)
+            vk *= hyb
+        elif alpha == 0: # LR=0, only SR exchange
+            vj = ks_grad.get_j(mol, dm)
+            vk = ks_grad.get_k(mol, dm, omega=-omega)
+            vk *= hyb
+        elif hyb == 0: # SR=0, only LR exchange
+            vj = ks_grad.get_j(mol, dm)
+            vk = ks_grad.get_k(mol, dm, omega=omega)
+            vk *= alpha
+        else: # SR and LR exchange with different ratios
+            vj, vk = ks_grad.get_jk(mol, dm)
+            vk *= hyb
+            vklr = ks_grad.get_k(mol, dm, omega=omega)
+            vklr *= (alpha - hyb)
+            vk += vklr
+        """
+            
     return lib.tag_array(vxc, exc1_grid=exc)
 
 def _initialize_grids(ks_grad):

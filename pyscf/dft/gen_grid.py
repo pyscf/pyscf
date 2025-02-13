@@ -520,6 +520,7 @@ class Grids(lib.StreamObject):
         'atomic_radii', 'radii_adjust', 'radi_method', 'becke_scheme',
         'prune', 'level', 'alignment', 'cutoff', 'mol', 'symmetry',
         'atom_grid', 'non0tab', 'screen_index', 'coords', 'weights',
+        'ialist'
     }
 
     def __init__(self, mol):

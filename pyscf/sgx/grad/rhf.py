@@ -285,8 +285,7 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     nset = dms.shape[0]
     shls_slice = (0, mol.nbas)
     sgx_data = run_k_only_setup(sgx, dms, hermi)
-    ngrids = grids.weights.size
-    blksize, screen_index, proj_dm, dm_mask, ncond, ncond_ni, ao_loc = sgx_data
+    blksize, screen_index, proj, dm_mask, ncond, ncond_ni, ao_loc = sgx_data
 
     vk = numpy.zeros_like(dms)
     dvk = numpy.zeros((dms.shape[0], 3,) + dms.shape[1:])
@@ -301,11 +300,27 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     t2, t3 = 0, 0
     t4 = -logger.perf_counter()
     fg = None
-    for i0, i1, ialist, coords, weights, weights1, mask in scalable_grids_response_cc(grids, blksize):
+    if sgx.fit_ovlp and include_grid_response:
+        sn = numpy.zeros((nao, nao))
+        proj_dm = lib.einsum('ki,xij->xkj', proj, dms)
+        if sgx._symm_ovlp_fit:
+            other_dm = proj_dm
+            # dvk1 = numpy.zeros_like(dvk)
+            dvk1 = numpy.zeros((3, nao))
+        else:
+            other_dm = dms
+            dvk1 = None
+    else:
+        sn = None
+        proj_dm = lib.einsum('ki,xij->xkj', proj, dms)
+        other_dm = dms
+        dvk1 = None
+    for items in scalable_grids_response_cc(grids, blksize):
         # iatoms is an array shape (ngrids,)
         # coords is an array shape (ngrids, 3)
         # weights is an array shape (ngrids)
         # weights1 is an array shape (natm, 3, ngrids)
+        i0, i1, ialist, coords, weights, weights1, mask = items
         if mol.cart:
             _ao = mol.eval_gto('GTOval_cart_deriv1', coords, non0tab=mask)
         else:
@@ -331,31 +346,91 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
         sgx_jk._sgxdot_ao_gv_sparse(ao, gv, weights, mask, mask2, ao_loc, out=vk)
         tb = logger.perf_counter()
 
+        if sgx.fit_ovlp and include_grid_response:
+            sn += lib.einsum("gu,gv->uv", ao, wao)
+
         dxed = 0
         for i in range(nset):
             if not include_grid_response:
                 dvk[i] -= lib.einsum('xgu,gv->xuv', wdao, gv[i].T) # ORBITAL RESPONSE
             else:
                 dvk[i] -= 0.5 * lib.einsum('xgu,gv->xuv', wdao, gv[i].T) # ORBITAL RESPONSE
-                dvk[i] -= 0.5 * lib.einsum('xug,gv->xuv', dgv[i], wao) # INTEGRAL RESPONSE
+                if sgx.fit_ovlp and sgx._symm_ovlp_fit:
+                    # dvk1[i] -= 0.5 * lib.einsum('xug,gv->xuv', dgv[i], wao) # INTEGRAL RESPONSE
+                    dvk1[:] -= 0.5 * lib.einsum('xug,ug,g->xu', dgv[i], fg[i], weights) # INTEGRAL RESPONSE
+                else:
+                    dvk[i] -= 0.5 * lib.einsum('xug,gv->xuv', dgv[i], wao) # INTEGRAL RESPONSE
                 xed = lib.einsum('ug,ug->g', fg[i], gv[i])
                 dxed += lib.einsum('ug,xug->xg', fg[i], dgv[i]) # INTEGRAL RESPONSE
-                tmp = lib.einsum("vg,vu->ug", gv[i], dms[i])
+                tmp = lib.einsum("vg,uv->ug", gv[i], other_dm[i])
                 dxed += lib.einsum("ug,xgu->xg", tmp, dao)
                 dek[:, :] += numpy.dot(weights1, xed) # GRID RESPONSE PART 1
         dxed *= -0.5 * weights
 
         if include_grid_response:
-            for i in range(nset):
-                # dek[ia] -= 4 * (dvk_tmp[i] * dms[i]).sum(axis=(1,2)) # GRID RESPONSE PART 2
-                for ia in range(mol.natm):
-                    cond = (ialist == ia)
-                    dek[ia] -= 4 * numpy.sum(dxed[:, cond], axis=1)  # GRID RESPONSE PART 2
+            for ia in range(mol.natm):
+                cond = (ialist == ia)
+                dek[ia] -= 4 * numpy.sum(dxed[:, cond], axis=1)  # GRID RESPONSE PART 2
+
         tc = logger.perf_counter()
         t2 += tb - ta
         t3 += tc - tb
     t4 += logger.perf_counter()
     print("TIMES", t1 - t0, t2, t3, t4 - t3 - t2)
+
+    if sgx.fit_ovlp and include_grid_response:
+        aoslices = mol.aoslice_by_atom()
+        if sgx._symm_ovlp_fit:
+            # dvk = lib.einsum('ik,...ij->...kj', proj, dvk)
+            # dvk = lib.einsum('kj,...ij->...ik', proj, dvk)
+            ovlp = mol.intor_symmetric("int1e_ovlp")
+            proj = numpy.linalg.solve(sn, ovlp)
+        # ovlp = mol.intor_symmetric("int1e_ovlp")
+        # proj = numpy.linalg.solve(sn, ovlp)
+        # (xyz, moving atom, stationary atom)
+        grad_ovlp = mol.intor("int1e_ipovlp", comp=3)
+        Cmat = 0
+        for i in range(nset):
+            Cmat += lib.dot(vk[i], dms[i])
+        Cmat = numpy.linalg.solve(sn, Cmat)
+        for x in range(3):
+            for ia in range(mol.natm):
+                p0, p1 = aoslices[ia, 2:]
+                dek[ia, x] -= lib.einsum("uv,vu->", grad_ovlp[x, p0 : p1], Cmat[:, p0 : p1])
+                dek[ia, x] -= lib.einsum("uv,uv->", grad_ovlp[x, p0 : p1], Cmat[p0 : p1, :])
+        Cmat = lib.dot(Cmat, proj.T)
+        Cmat = Cmat + Cmat.T
+        mat = 0
+        for items in scalable_grids_response_cc(grids, blksize):
+            i0, i1, ialist, coords, weights, weights1, mask = items
+            if mol.cart:
+                _ao = mol.eval_gto('GTOval_cart_deriv1', coords, non0tab=mask)
+            else:
+                _ao = mol.eval_gto('GTOval_sph_deriv1', coords, non0tab=mask)
+            ao = _ao[0]
+            dao = _ao[1:4]
+            wdao = dao * weights[:, None]
+            ca = lib.einsum("uv,gu->gv", Cmat, ao)
+            xed = lib.einsum("gv,gv->g", ca, ao)
+            dxed = lib.einsum("gv,xgv->xg", ca, wdao)
+            mat += lib.einsum("xgu,gv->xuv", wdao, ao)
+            # negative because d sn^-1 / dR = -sn^-1 (dsn/dR) sn^-1
+            dek[:, :] -= 0.5 * numpy.dot(weights1, xed)  # GRID RESPONSE PART 1
+            for ia in range(mol.natm):
+                cond = (ialist == ia)
+                dek[ia] -= numpy.sum(dxed[:, cond], axis=1)  # GRID RESPONSE PART 2
+        for x in range(3):
+            for ia in range(mol.natm):
+                p0, p1 = aoslices[ia, 2:]
+                dek[ia, x] += lib.einsum("uv,uv->", mat[x, p0 : p1], Cmat[p0 : p1])
+        if sgx._symm_ovlp_fit:
+            for x in range(3):
+                for ia in range(mol.natm):
+                    p0, p1 = aoslices[ia, 2:]
+                    dek[ia, x] += 4 * lib.einsum("iuv,iuv->", dvk[:, x, p0 : p1], proj_dm[:, p0 : p1])
+                    # dek[ia, x] += 4 * lib.einsum("iuv,ivu->", dvk1[:, x, p0 : p1], proj_dm[:, :, p0 : p1])
+                    dek[ia, x] += numpy.sum(4 * dvk1[:, p0 : p1])
+            dvk[:] = 0
 
     # TODO don't need to compute vk
     vk = dvk
@@ -369,17 +444,22 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
 
 
 def _get_jk(sgx, dm, hermi, with_j, with_k, direct_scf_tol):
+    is_opt = sgx.optk and (sgx.grids.becke_scheme == gen_grid.becke_lko)
     if with_j and sgx.dfj:
         vj = None
         if with_k:
-            if sgx.optk and sgx.grids.becke_scheme == gen_grid.becke_lko:
+            if is_opt:
                 vk = get_k_grad_only(sgx, dm, hermi, direct_scf_tol)
             else:
                 vk = get_jk_grad(sgx, dm, hermi, False, with_k, direct_scf_tol)[1]
         else:
             vk = None
     else:
-        vj, vk = get_jk_grad(sgx, dm, hermi, with_j, with_k, direct_scf_tol)
+        if (not with_j) and is_opt:
+            vj = None
+            vk = get_k_grad_only(sgx, dm, hermi, direct_scf_tol)
+        else:
+            vj, vk = get_jk_grad(sgx, dm, hermi, with_j, with_k, direct_scf_tol)
     return vj, vk
 
 
@@ -405,6 +485,8 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=1, vhfopt=None, with_j=True, with_k
             # Not all attributes need to be reset. Resetting _vjopt
             # because it is used by get_j method of regular DF object.
             rsh_df._vjopt = None
+            rsh_df._overlap_correction_matrix = None
+            rsh_df.build()
             sgx._rsh_df[key] = rsh_df
             logger.info(sgx, 'Create RSH-SGX object %s for omega=%s', rsh_df, omega)
 
@@ -420,20 +502,25 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=1, vhfopt=None, with_j=True, with_k
     return vj, vk
 
 
-class Gradients(dfrhf_grad.Gradients):
-    '''Restricted SGX Hartree-Fock gradients. Note: sgx_grid_response determines
-    whether full grid response for SGX terms is computed.'''
+class _GradientsMixin:
+    _keys = {'sgx_grid_response'}
+
     def __init__(self, mf):
         # Whether to include the response of DF auxiliary basis when computing
         # nuclear gradients of J/K matrices
         self.sgx_grid_response = True
         if mf.with_df.direct_j:
             raise ValueError("direct_j setting not supported for gradients")
-        dfrhf_grad.Gradients.__init__(self, mf)
+        super().__init__(mf)
 
     def check_sanity(self):
         assert isinstance(self.base, sgx._SGXHF)
 
+
+class Gradients(_GradientsMixin, dfrhf_grad.Gradients):
+    '''Restricted SGX Hartree-Fock gradients. Note: sgx_grid_response determines
+    whether full grid response for SGX terms is computed.'''
     get_jk = get_jk
+
 
 Grad = Gradients

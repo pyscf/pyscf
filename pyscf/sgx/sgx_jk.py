@@ -185,7 +185,6 @@ def _sgxdot_ao_gv(ao, gv, non0tab, shls_slice, ao_loc, out=None):
 
     vv = numpy.empty(outshape, dtype=ao.dtype, order='C')
     for i in range(len(gv)):
-        print(shls_slice, ao_loc)
         fn(
             vv[i].ctypes.data_as(ctypes.c_void_p),
             ao.ctypes.data_as(ctypes.c_void_p),
@@ -205,6 +204,9 @@ def _sgxdot_ao_gv(ao, gv, non0tab, shls_slice, ao_loc, out=None):
 
 
 def _sgxdot_ao_gv_sparse(ao, gv, wt, mask1, mask2, ao_loc, out=None):
+    # ao is F-order, gv is C-order
+    # gu,ivg->iuv
+    # in C-order, the operation is ug,ivg->iuv
     ngrids, nao = ao.shape
     nbas = mask1.shape[1]
     assert gv.shape[1:] == ao.shape[::-1]
@@ -469,7 +471,6 @@ def run_k_only_setup(sgx, dms, hermi):
     nset = dms.shape[0]
     ao_loc = mol.ao_loc_nr()
     t0 = logger.perf_counter()
-    print("START SETUP")
 
     if grids.coords is None or grids.non0tab is None or grids.ialist is None:
         grids.build(with_non0tab=True, with_ialist=True)
@@ -508,12 +509,12 @@ def run_k_only_setup(sgx, dms, hermi):
                 #                     ao_loc, hermi=hermi)
             ovlp = mol.intor_symmetric('int1e_ovlp')
             proj = scipy.linalg.solve(sn, ovlp)
+            if sgx._symm_ovlp_fit:
+                proj = 0.5 * (proj + numpy.identity(nao))
             sgx._overlap_correction_matrix = proj
-            print("PROJ", numpy.max(numpy.abs(proj - proj.T)))
         else:
             sgx._overlap_correction_matrix = numpy.identity(nao)
     proj = sgx._overlap_correction_matrix
-    proj_dm = lib.einsum('ki,xij->xkj', proj, dms)
 
     if sgx.use_dm_screening and sgx._sgx_block_cond is None:
         ta = logger.perf_counter()
@@ -565,7 +566,7 @@ def run_k_only_setup(sgx, dms, hermi):
     else:
         dm_mask = None
 
-    return blksize, screen_index, proj_dm, dm_mask, ncond, ncond_ni, ao_loc
+    return blksize, screen_index, proj, dm_mask, ncond, ncond_ni, ao_loc
 
 
 def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
@@ -588,7 +589,8 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     shls_slice = (0, mol.nbas)
     sgx_data = run_k_only_setup(sgx, dms, hermi)
     ngrids = grids.weights.size
-    blksize, screen_index, proj_dm, dm_mask, ncond, ncond_ni, ao_loc = sgx_data
+    blksize, screen_index, proj, dm_mask, ncond, ncond_ni, ao_loc = sgx_data
+    proj_dm = lib.einsum('ki,xij->xkj', proj, dms)
 
     batch_k = _gen_k_direct(mol, 's2', direct_scf_tol, sgx._opt)
 
@@ -602,6 +604,7 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     t_ao_dm = 0
     t_ao_ao = 0
     t_int = 0
+    sn = 0
     print("LEFTOVER", ngrids % SGX_BLKSIZE)
     for i0, i1 in lib.prange(0, ngrids, blksize):
         assert i0 % SGX_BLKSIZE == 0
@@ -611,7 +614,6 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
         ta = logger.perf_counter()
         ao = mol.eval_gto('GTOval', coords, non0tab=mask, out=ao)
         tb = logger.perf_counter()
-        print("DOT 1")
         tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
         tc = logger.perf_counter()
         if sgx.use_dm_screening:
@@ -620,7 +622,6 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
             # fg = lib.einsum('xij,ig->xjg', proj_dm, wao.T)
             fg = _sgxdot_ao_dm(ao, proj_dm, mask, shls_slice, ao_loc, out=fg)
         te = logger.perf_counter()
-        print("INTEGRALS")
         
         if ncond is None:
             gv = batch_k(mol, coords, fg, weights)
@@ -628,7 +629,6 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
             gv = batch_k(mol, coords, fg, weights, ncond[i0 // SGX_BLKSIZE :])
         tf = logger.perf_counter()
         tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
-        print("DOT 2")
         if sgx.use_dm_screening:
             shl_norms = _get_shell_norms(gv, weights, ao_loc)
             mask2 = shl_norms > ncond_ni[i0 // BLKSIZE : i0 // BLKSIZE + shl_norms.shape[0], None]
@@ -637,13 +637,14 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
             _sgxdot_ao_gv_sparse(ao, gv, weights, mask, None, ao_loc, out=vk)
         tg = logger.perf_counter()
         gv = None
-        print("FINISHED 1 ITERATION")
         t_ao += tb - ta
         t_scale += tc - tb
         t_ao_dm += te - tc
         t_int += tf - te
         t_ao_ao += tg - tf
     print("Times", t_ao, t_scale, t_ao_dm, t_int, t_ao_ao)
+    if sgx._symm_ovlp_fit:
+        vk = lib.einsum('ik,xij->xkj', proj, vk)
 
     t2 = logger.timer_debug1(mol, "sgX J/K builder", *t1)
     tdot = t2[0] - t1[0] - tnuc[0] , t2[1] - t1[1] - tnuc[1]
@@ -802,7 +803,7 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol,
     '''
     if sgxopt is None:
         from pyscf.sgx import sgx
-        sgxopt = sgx._make_opt(mol, False, grad, direct_scf_tol)
+        sgxopt = sgx._make_opt(mol, grad, direct_scf_tol)
     sgxopt.direct_scf_tol = direct_scf_tol
 
     ao_loc = moleintor.make_loc(mol._bas, sgxopt._intor)
@@ -890,7 +891,7 @@ def _gen_k_direct(mol, aosym, direct_scf_tol,
     '''
     if sgxopt is None:
         from pyscf.sgx import sgx
-        sgxopt = sgx._make_opt(mol, False, grad, direct_scf_tol)
+        sgxopt = sgx._make_opt(mol, grad, direct_scf_tol)
     sgxopt.direct_scf_tol = direct_scf_tol
 
     ao_loc = moleintor.make_loc(mol._bas, sgxopt._intor)
