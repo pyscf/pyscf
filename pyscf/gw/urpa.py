@@ -86,8 +86,12 @@ class URPA(dfump2.DFUMP2):
         split_mo_energy = self.split_mo_energy()
         e_ov = [(split_mo_energy[s][1][:,None] - split_mo_energy[s][2]).ravel() for s in [0,1]]
 
-        gap = [-e_ov[s].max() for s in [0,1]]
-        log.info('Lowest orbital energy difference: (% 6.4e, % 6.4e)', gap[0], gap[1])
+        if self.nocc[1] > 0:
+            gap = [-e_ov[s].max() for s in [0,1]]
+            log.info('Lowest orbital energy difference: (% 6.4e, % 6.4e)', gap[0], gap[1])
+        else:
+            gap = (-e_ov[0].max(), )
+            log.info('Lowest orbital energy difference: % 6.4e', np.min(gap))
 
         if (np.min(gap) < 1e-3):
             log.warn('RPA code is not well-defined for degenerate systems!')
