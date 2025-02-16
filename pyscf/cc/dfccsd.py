@@ -51,7 +51,7 @@ class RCCSD(ccsd.CCSD):
     to_gpu = lib.to_gpu
 
 
-def _contract_vvvv_t2(mycc, mol, vvL, t2, out=None, verbose=None):
+def _contract_vvvv_t2(mycc, mol, vvL, VVL, t2, out=None, verbose=None):
     '''Ht2 = numpy.einsum('ijcd,acdb->ijab', t2, vvvv)
 
     Args:
@@ -103,7 +103,7 @@ def _contract_vvvv_t2(mycc, mol, vvL, t2, out=None, verbose=None):
             ijL = vvL0[tril2sq[i0:i1,j0:j1] - off0].reshape(-1,naux)
             eri = numpy.ndarray(((i1-i0)*(j1-j0),nvir_pair), buffer=eribuf)
             for p0, p1 in lib.prange(0, nvir_pair, vvblk):
-                vvL1 = _cp(vvL[p0:p1])
+                vvL1 = _cp(VVL[p0:p1])
                 eri[:,p0:p1] = lib.ddot(ijL, vvL1.T)
                 vvL1 = None
 
@@ -120,7 +120,7 @@ def _contract_vvvv_t2(mycc, mol, vvL, t2, out=None, verbose=None):
 class _ChemistsERIs(ccsd._ChemistsERIs):
     def _contract_vvvv_t2(self, mycc, t2, direct=False, out=None, verbose=None):
         assert (not direct)
-        return _contract_vvvv_t2(mycc, self.mol, self.vvL, t2, out, verbose)
+        return _contract_vvvv_t2(mycc, self.mol, self.vvL, self.vvL, t2, out, verbose)
 
 def _make_df_eris(cc, mo_coeff=None):
     assert cc._scf.istype('RHF')
