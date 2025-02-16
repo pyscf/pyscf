@@ -268,15 +268,16 @@ class KnownValues(unittest.TestCase):
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     [0, (1.0, 1.0)],
                                     [0, (1.2, 1.0)]]})
-        mol = cell.to_mol()
-        mf = mol.RHF().run()
-        eref = mf.kernel()
+        eref = cell.to_mol().RHF().kernel()
 
         mf = cell.RHF()
         mf.with_df = pdf.AFTDF(cell)
         e1 = mf.kernel()
-        self.assertAlmostEqual(eref, -4.165713858819728, 8)
         self.assertAlmostEqual(e1, eref, 4)
+
+        eref = cell.to_mol().RHF().density_fit().kernel()
+        e1 = cell.RHF().density_fit().kernel()
+        self.assertAlmostEqual(e1, eref, 9)
 
         cell = pbcgto.Cell()
         cell.atom = 'He 1. .5 .5; C .1 1.3 2.1'

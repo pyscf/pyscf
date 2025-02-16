@@ -3198,7 +3198,7 @@ class MoleBase(lib.StreamObject):
     def atom_coords(self, unit='Bohr'):
         '''np.asarray([mol.atom_coord(i) for i in range(mol.natm)])'''
         ptr = self._atm[:,PTR_COORD]
-        c = self._env[numpy.vstack((ptr,ptr+1,ptr+2)).T].copy()
+        c = self._env[ptr[:,None] + np.arange(3)]
         if not is_au(unit):
             c *= param.BOHR
         return c

@@ -39,6 +39,8 @@ from pyscf.pbc.lib.kpts_helper import group_by_conj_pairs
 
 def kpts_to_kmesh(cell, kpts, precision=None, max_images=10000):
     '''Find the minimal k-points mesh to include all input kpts'''
+    kpts = np.asarray(kpts)
+    assert kpts.ndim == 2
     scaled_kpts = cell.get_scaled_kpts(kpts)
     logger.debug3(cell, '    scaled_kpts kpts %s', scaled_kpts)
     # cell.nimgs are the upper limits for kmesh
@@ -49,7 +51,6 @@ def kpts_to_kmesh(cell, kpts, precision=None, max_images=10000):
         floats = scaled_kpts[:,i]
         uniq_floats_idx = np.unique(floats.round(6), return_index=True)[1]
         uniq_floats = floats[uniq_floats_idx]
-        # Limit the number of images to 30 in each direction
         fracs = [Fraction(x).limit_denominator(int(kmesh[i])) for x in uniq_floats]
         denominators = np.unique([x.denominator for x in fracs])
         common_denominator = reduce(np.lcm, denominators)

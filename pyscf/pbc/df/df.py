@@ -57,10 +57,9 @@ from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import (is_zero, gamma_point, member, unique,
                                        KPT_DIFF_TOL)
 from pyscf.pbc.df.gdf_builder import libpbc, _CCGDFBuilder, _CCNucBuilder
-from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder, _RSNucBuilder
+from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder, _RSNucBuilder, LINEAR_DEP_THR
 from pyscf import __config__
 
-LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-9)
 LONGRANGE_AFT_TURNOVER_THRESHOLD = 2.5
 
 
@@ -302,7 +301,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         if label is None:
             label = self._dataname
         if self._cderi is None:
-            self.build()
+            self.build(j_only=self._j_only)
         return CDERIArray(self._cderi, label)
 
     def has_kpts(self, kpts):
@@ -320,7 +319,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                 compact=True, blksize=None, aux_slice=None):
         '''Short range part'''
         if self._cderi is None:
-            self.build()
+            self.build(j_only=self._j_only)
         cell = self.cell
         kpti, kptj = kpti_kptj
         unpack = is_zero(kpti-kptj) and not compact
@@ -494,7 +493,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 # determine naoaux with self._cderi, because DF object may be used as CD
 # object when self._cderi is provided.
         if self._cderi is None:
-            self.build()
+            self.build(j_only=self._j_only)
 
         cell = self.cell
         if isinstance(self._cderi, numpy.ndarray):
