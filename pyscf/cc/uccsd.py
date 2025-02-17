@@ -236,8 +236,8 @@ def update_amps(cc, t1, t2, eris):
     u1a -= np.einsum('imea,me->ia', t2aa, Fova)
     u1a += np.einsum('iMaE,ME->ia', t2ab, Fovb)
     u1b += fovb.conj()
-    u1b += np.einsum('ie,ae->ia',t1b,Fvvb)
-    u1b -= np.einsum('ma,mi->ia',t1b,Foob)
+    u1b += np.einsum('ie,ae->ia', t1b, Fvvb)
+    u1b -= np.einsum('ma,mi->ia', t1b, Foob)
     u1b -= np.einsum('imea,me->ia', t2bb, Fovb)
     u1b += np.einsum('mIeA,me->IA', t2ab, Fova)
 
@@ -246,8 +246,8 @@ def update_amps(cc, t1, t2, eris):
     wovvo -= eris_oovv.transpose(0,2,3,1)
     wovvo += eris_ovvo.transpose(0,2,1,3)
     oovv = eris_oovv - eris_ovvo.transpose(0,3,2,1)
-    u1a-= np.einsum('nf,niaf->ia', t1a,      oovv)
-    tmp1aa = lib.einsum('ie,mjbe->mbij', t1a,      oovv)
+    u1a-= np.einsum('nf,niaf->ia', t1a, oovv)
+    tmp1aa = lib.einsum('ie,mjbe->mbij', t1a, oovv)
     u2aa += 2*lib.einsum('ma,mbij->ijab', t1a, tmp1aa)
     eris_ovvo = eris_oovv = oovv = tmp1aa = None
 
@@ -256,8 +256,8 @@ def update_amps(cc, t1, t2, eris):
     wOVVO -= eris_OOVV.transpose(0,2,3,1)
     wOVVO += eris_OVVO.transpose(0,2,1,3)
     OOVV = eris_OOVV - eris_OVVO.transpose(0,3,2,1)
-    u1b-= np.einsum('nf,niaf->ia', t1b,      OOVV)
-    tmp1bb = lib.einsum('ie,mjbe->mbij', t1b,      OOVV)
+    u1b-= np.einsum('nf,niaf->ia', t1b, OOVV)
+    tmp1bb = lib.einsum('ie,mjbe->mbij', t1b, OOVV)
     u2bb += 2*lib.einsum('ma,mbij->ijab', t1b, tmp1bb)
     eris_OVVO = eris_OOVV = OOVV = None
 
@@ -356,16 +356,16 @@ def energy(cc, t1=None, t2=None, eris=None):
     fovb = eris.fockb[:noccb,noccb:]
     e  = np.einsum('ia,ia', fova, t1a)
     e += np.einsum('ia,ia', fovb, t1b)
-    e += 0.25*np.einsum('ijab,iajb',t2aa,eris_ovov)
-    e -= 0.25*np.einsum('ijab,ibja',t2aa,eris_ovov)
-    e += 0.25*np.einsum('ijab,iajb',t2bb,eris_OVOV)
-    e -= 0.25*np.einsum('ijab,ibja',t2bb,eris_OVOV)
-    e +=      np.einsum('iJaB,iaJB',t2ab,eris_ovOV)
-    e += 0.5*np.einsum('ia,jb,iajb',t1a,t1a,eris_ovov)
-    e -= 0.5*np.einsum('ia,jb,ibja',t1a,t1a,eris_ovov)
-    e += 0.5*np.einsum('ia,jb,iajb',t1b,t1b,eris_OVOV)
-    e -= 0.5*np.einsum('ia,jb,ibja',t1b,t1b,eris_OVOV)
-    e +=     np.einsum('ia,jb,iajb',t1a,t1b,eris_ovOV)
+    e += 0.25*np.einsum('ijab,iajb',t2aa, eris_ovov)
+    e -= 0.25*np.einsum('ijab,ibja',t2aa, eris_ovov)
+    e += 0.25*np.einsum('ijab,iajb',t2bb, eris_OVOV)
+    e -= 0.25*np.einsum('ijab,ibja',t2bb, eris_OVOV)
+    e +=      np.einsum('iJaB,iaJB',t2ab, eris_ovOV)
+    e += 0.5*lib.einsum('ia,jb,iajb',t1a, t1a, eris_ovov)
+    e -= 0.5*lib.einsum('ia,jb,ibja',t1a, t1a, eris_ovov)
+    e += 0.5*lib.einsum('ia,jb,iajb',t1b, t1b, eris_OVOV)
+    e -= 0.5*lib.einsum('ia,jb,ibja',t1b, t1b, eris_OVOV)
+    e +=     lib.einsum('ia,jb,iajb',t1a, t1b, eris_ovOV)
     if abs(e.imag) > 1e-4:
         logger.warn(cc, 'Non-zero imaginary part found in UCCSD energy %s', e)
     return e.real
@@ -687,11 +687,10 @@ class UCCSD(ccsd.CCSDBase):
             return _make_eris_incore(self, mo_coeff)
 
         elif getattr(self._scf, 'with_df', None):
-            # TODO: Uncomment once there is an unrestricted DF-CCSD implementation
-            #logger.warn(self, 'UCCSD detected DF being used in the HF object. '
-            #            'MO integrals are computed based on the DF 3-index tensors.\n'
-            #            'It\'s recommended to use dfccsd.CCSD for the '
-            #            'DF-CCSD calculations')
+            logger.warn(self, 'UCCSD detected DF being used in the HF object. '
+                       'MO integrals are computed based on the DF 3-index tensors.\n'
+                       'It\'s recommended to use dfuccsd.UCCSD for the '
+                       'DF-UCCSD calculations')
             return _make_df_eris_outcore(self, mo_coeff)
         else:
             return _make_eris_outcore(self, mo_coeff)
@@ -731,6 +730,16 @@ class UCCSD(ccsd.CCSDBase):
     def eomee_method(self):
         from pyscf.cc import eom_uccsd
         return eom_uccsd.EOMEE(self)
+
+    def density_fit(self, auxbasis=None, with_df=None):
+        from pyscf.cc import dfuccsd
+        mycc = dfuccsd.UCCSD(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
+        if with_df is not None:
+            mycc.with_df = with_df
+        if mycc.with_df.auxbasis != auxbasis:
+            mycc.with_df = mycc.with_df.copy()
+            mycc.with_df.auxbasis = auxbasis
+        return mycc
 
     def nuc_grad_method(self):
         from pyscf.grad import uccsd

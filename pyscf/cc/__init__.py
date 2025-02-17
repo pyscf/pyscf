@@ -120,15 +120,14 @@ RCCSD.__doc__ = ccsd.CCSD.__doc__
 
 def UCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     from pyscf.df.df_jk import _DFHF
+    from pyscf.cc import dfuccsd
 
     mf = mf.remove_soscf()
     if not mf.istype('UHF'):
         mf = mf.to_uhf()
 
     if isinstance(mf, _DFHF) and mf.with_df:
-        # TODO: DF-UCCSD with memory-efficient particle-particle ladder,
-        # similar to dfccsd.RCCSD
-        return uccsd.UCCSD(mf, frozen, mo_coeff, mo_occ)
+        return dfuccsd.UCCSD(mf, frozen, mo_coeff, mo_occ)
     else:
         return uccsd.UCCSD(mf, frozen, mo_coeff, mo_occ)
 UCCSD.__doc__ = uccsd.UCCSD.__doc__
