@@ -741,7 +741,7 @@ O    SP
             basis='aug-cc-pvdz',
             symmetry='SO3'
         )
-        self.assertEqual(mol.groupname, 'SO3')
+        self.assertEqual(mol1.groupname, 'SO3')
 
     def test_symm_orb(self):
         rs = numpy.array([[.1, -.3, -.2],
