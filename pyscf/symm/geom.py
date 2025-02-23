@@ -566,8 +566,8 @@ def is_identical_geometry(coords1, coords2, weights):
     if coords1.shape != coords2.shape:
         return False
     for order in range(1, 4):
-        if abs(casimir_tensors(coords1[lst], weights, order) -
-               casimir_tensors(coords2[lst], weights, order)).max() > TOLERANCE:
+        if abs(casimir_tensors(coords1, weights, order) -
+               casimir_tensors(coords2, weights, order)).max() > TOLERANCE:
             return False
     return True
 
