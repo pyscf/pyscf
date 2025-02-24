@@ -56,7 +56,7 @@ def parallel_vectors(v1, v2, tol=TOLERANCE):
         cos = numpy.dot(_normalize(v1), _normalize(v2))
         return (abs(cos-1) < TOLERANCE) | (abs(cos+1) < TOLERANCE)
 
-def argsort_coords(coords, decimals=None):
+def argsort_coords(coords, decimals=None, tol=TOLERANCE):
     # * np.round for decimal places can lead to more errors than the actual
     # difference between two numbers. For example,
     # np.round([0.1249999999,0.1250000001], 2) => [0.124, 0.125]
@@ -66,16 +66,16 @@ def argsort_coords(coords, decimals=None):
     # * Using the power of two as the factor can reduce such errors, although not
     # faithfully rounding to the required decimals.
     if decimals is None:
-        fac = 2**int(-numpy.log2(TOLERANCE)+.5)
+        fac = 2**int(-numpy.log2(tol) + .5)
     else:
         fac = 2**int(3.3219281 * decimals + .5)
     coords = numpy.around(coords*fac)
     idx = numpy.lexsort((coords[:,2], coords[:,1], coords[:,0]))
     return idx
 
-def sort_coords(coords, decimals=None):
+def sort_coords(coords, decimals=None, tol=TOLERANCE):
     if decimals is None:
-        decimals = int(-numpy.log10(TOLERANCE)) - 1
+        decimals = int(-numpy.log10(tol)) - 1
     coords = numpy.asarray(coords)
     idx = argsort_coords(coords, decimals=decimals)
     return coords[idx]
@@ -490,8 +490,8 @@ def symm_identical_atoms(gpname, atoms):
     dup_atom_ids = []
     for op in ops:
         newc = numpy.dot(coords, op)
-        idx = argsort_coords(newc)
-        if not numpy.allclose(coords0, newc[idx], atol=TOLERANCE):
+        idx = argsort_coords(newc, tol=TOLERANCE*5)
+        if not numpy.allclose(coords0, newc[idx], atol=TOLERANCE*5):
             raise PointGroupSymmetryError(
                 'Symmetry identical atoms not found. This may be due to '
                 'the strict setting of the threshold symm.geom.TOLERANCE. '
@@ -538,8 +538,9 @@ def check_symm(gpname, atoms, basis=None):
 
     # A fast check using Casimir tensors
     coords = rawsys.atoms[:,1:]
+    weights = rawsys.atoms[:,0]
     for op in ops:
-        if not is_identical_geometry(coords, coords.dot(op), rawsys.weights):
+        if not is_identical_geometry(coords, coords.dot(op), weights):
             return False
 
     for lst in rawsys.atomtypes.values():
@@ -614,7 +615,6 @@ class SymmSys:
                 fake_chgs.append([mole.charge(ksymb)] * len(lst))
         coords = numpy.array(numpy.vstack(coords), dtype=float)
         fake_chgs = numpy.hstack(fake_chgs)
-        self.weights = fake_chgs
         self.charge_center = numpy.einsum('i,ij->j', fake_chgs, coords)/fake_chgs.sum()
         coords = coords - self.charge_center
 
