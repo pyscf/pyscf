@@ -270,7 +270,7 @@ class SGX(lib.StreamObject):
         'mol', 'grids_thrd', 'grids_level_i', 'grids_level_f',
         'grids_switch_thrd', 'dfj', 'direct_j', 'debug', 'grids',
         'blockdim', 'auxmol', 'use_dm_screening', 'sgx_tol_potential',
-        'use_opt_grids', 'fit_ovlp'
+        'sgx_tol_energy', 'use_opt_grids', 'fit_ovlp'
     }
 
     def __init__(self, mol, auxbasis=None):
@@ -296,6 +296,7 @@ class SGX(lib.StreamObject):
         self.use_dm_screening = False
         # TODO set this to standard direct_scf_tol by default
         self.sgx_tol_potential = 1e-13
+        self.sgx_tol_energy = 1e-13
 
         # debug=True generates a dense tensor of the Coulomb integrals at each
         # grids. debug=False utilizes the sparsity of the integral tensor and
