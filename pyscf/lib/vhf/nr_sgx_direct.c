@@ -798,6 +798,142 @@ void SGXget_shell_norms(double **dms, double *shell_norms, int n_dm,
 }
 }
 
+void SGXsetup_int_screen(int (*intor)(), double *blkdist_ba, double *sorted_coords,
+                         double *maxi_ij, double *maxri_ij,
+                         double *coords, double *atm_coords, int *ialist,
+                         int *ao_loc, CINTOpt *cintopt, CVHFOpt *vhfopt,
+                         int *atm, int natm, int *bas, int nbas, double *env,
+                         int ngrids) {
+        int a, g, gp;
+        int *ncoord_a = malloc(natm * sizeof(int));
+        int *gloc_a = malloc(natm * sizeof(int));
+        int *gcount_a = malloc(natm * sizeof(int));
+        for (a = 0; a < natm; a++) {
+                ncoord_a[a] = 0;
+        }
+        for (g = 0; g < ngrids; g++) {
+                if (ialist[g] >= 0) {
+                        ncoord_a[ialist[g]]++;
+                }
+        }
+        int tot = 0;
+        int max_count = 0;
+        for (a = 0; a < natm; a++) {
+                printf("%d %d\n", tot, ncoord_a[a]);
+                gloc_a[a] = tot;
+                tot += ncoord_a[a];
+                gcount_a[a] = 0;
+                max_count = MAX(max_count, ncoord_a[a]);
+        }
+        gloc_a[natm] = tot;
+        for (g = 0; g < ngrids; g++) {
+                a = ialist[g];
+                if (a < 0) {
+                        continue;
+                }
+                gp = gloc_a[a] + gcount_a[a];
+                sorted_coords[3*gp+0] = coords[3*g+0];
+                sorted_coords[3*gp+1] = coords[3*g+1];
+                sorted_coords[3*gp+2] = coords[3*g+2];
+                gcount_a[a]++;
+        }
+        int shls_slice[] = {0, nbas, 0, nbas};
+        int di = GTOmax_shell_dim(ao_loc, shls_slice, 2);
+        int cache_size = _max_cache_size_sgx(intor, shls_slice, 2,
+                                             atm, natm, bas, nbas, env);
+#pragma omp parallel private(a, g, gp)
+{
+        int ig0, ig1, ib, ig00, ig01;
+        int ish, jsh, ij;
+        double mindist, dx, dy, dz;
+        int shls[4];
+        double maxint, maxrint, refdist, my_int;
+        double *buf = calloc(sizeof(double), SGX_BLKSIZE*di*di);
+        double *cache = malloc(sizeof(double) * cache_size);
+        double *dists = malloc(sizeof(double) * max_count);
+#pragma omp for schedule(static)
+        for (ig0 = 0; ig0 < ngrids; ig0 += SGX_BLKSIZE) {
+                ib = ig0 / SGX_BLKSIZE;
+                ig1 = MIN(ig0 + SGX_BLKSIZE, ngrids);
+                for (a = 0; a < natm; a++) {
+                        mindist = 1e100;
+                        for (g = ig0; g < ig1; g++) {
+                                dx = coords[3*g+0] - atm_coords[3*a+0];
+                                dy = coords[3*g+1] - atm_coords[3*a+1];
+                                dz = coords[3*g+2] - atm_coords[3*a+2];
+                                mindist = MIN(mindist, dx * dx + dy * dy + dz * dz);
+                        }
+                        blkdist_ba[ib * natm + a] = sqrt(mindist + 1e-10);
+                }
+        }
+#pragma omp for
+        for (ish = 0; ish < nbas; ish++) {
+                a = bas(ATOM_OF,ish);
+                // ig0 = 0;
+                // ig1 = ngrids;
+                ig0 = gloc_a[a];
+                ig1 = gloc_a[a + 1];
+                for (g = ig0; g < ig1; g++) {
+                        dx = sorted_coords[3*g+0] - atm_coords[3*a+0];
+                        dy = sorted_coords[3*g+1] - atm_coords[3*a+1];
+                        dz = sorted_coords[3*g+2] - atm_coords[3*a+2];
+                        dists[g - ig0] = sqrt(dx * dx + dy * dy + dz * dz);
+                        // printf("%lf\n", dists[g - ig0]);
+                }
+                for (jsh = 0; jsh < nbas; jsh++) {
+                        maxint = 0;
+                        maxrint = 0;
+                        refdist = 0;
+                        for (ig00 = ig0; ig00 < ig1; ig00 += SGX_BLKSIZE) {
+                                ig01 = MIN(ig00 + SGX_BLKSIZE, ig1);
+                                shls[0] = ish;
+                                shls[1] = jsh;
+                                shls[2] = ig00;
+                                shls[3] = ig01;
+                                const int dims[] = {ao_loc[ish+1]-ao_loc[ish],
+                                                    ao_loc[jsh+1]-ao_loc[jsh],
+                                                    ig01 - ig00};
+                                (*intor)(buf, dims, shls, atm, natm, bas, nbas,
+                                         env, cintopt, cache);
+                                for (ij = 0; ij < dims[0] * dims[1]; ij++) {
+                                        for (g = 0; g < dims[2]; g++) {
+                                                my_int = fabs(buf[ij * dims[2] + g]);
+                                                maxint = MAX(maxint, my_int);
+                                                // TODO confusing indexing
+                                                my_int *= dists[g + ig00 - ig0];
+                                                if (my_int > maxrint) {
+                                                        maxrint = my_int;
+                                                        refdist = dists[g];
+                                                }
+                                        }
+                                }
+                        }
+                        maxi_ij[ish * nbas + jsh] = maxint;
+                        maxri_ij[ish * nbas + jsh] = maxrint;
+                }
+        }
+        free(buf);
+        free(cache);
+        free(dists);
+}
+#pragma omp parallel for
+        for (size_t ish = 0; ish < nbas; ish++) {
+                for (size_t jsh = ish + 1; jsh < nbas; jsh++) {
+                        size_t ind1 = ish * nbas + jsh;
+                        size_t ind2 = jsh * nbas + ish;
+                        double tmp = MAX(maxi_ij[ind1], maxi_ij[ind2]);
+                        maxi_ij[ind1] = tmp;
+                        maxi_ij[ind2] = tmp;
+                        tmp = MAX(maxri_ij[ind1], maxri_ij[ind2]);
+                        maxri_ij[ind1] = tmp;
+                        maxri_ij[ind2] = tmp;
+                }
+        }
+        free(ncoord_a);
+        free(gcount_a);
+        free(gloc_a);
+}
+
 void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
                       double **dms, double **vjk, int n_dm, int ncomp,
                       int *shls_slice, int *ao_loc,
