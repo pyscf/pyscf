@@ -597,7 +597,7 @@ class Grids(lib.StreamObject):
                     [self.coords, numpy.repeat([[1e-4]*3], padding, axis=0)])
                 self.weights = numpy.hstack([self.weights, numpy.zeros(padding)])
                 if with_ialist:
-                    self.ialist = numpy.hstack([self.ialist, numpy.repeat(-1, padding)])
+                    self.ialist = numpy.hstack([self.ialist, numpy.repeat(numpy.int32(-1), padding)])
 
         if with_non0tab:
             self.non0tab = self.make_mask(mol, self.coords)
