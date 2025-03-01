@@ -517,6 +517,9 @@ def check_symm(gpname, atoms, basis=None):
     elif gpname == 'Coov':
         coords = numpy.array([a[1] for a in atoms], dtype=float)
         return numpy.allclose(coords[:,:2], 0, atol=TOLERANCE)
+    elif gpname == 'SO3':
+        coords = numpy.array([a[1] for a in atoms], dtype=float)
+        return abs(coords).max() < TOLERANCE
 
     opdic = symm_ops(gpname)
     ops = [opdic[op] for op in OPERATOR_TABLE[gpname]]
