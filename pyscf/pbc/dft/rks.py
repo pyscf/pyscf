@@ -145,7 +145,7 @@ def _patch_df_beckegrids(density_fit):
                                  mf.grids.level)
         mf.nlcgrids = gen_grid.BeckeGrids(self.cell)
         mf.nlcgrids.level = getattr(__config__, 'dft_rks_RKS_nlcgrids_level',
-                                    mf.grids.level)
+                                    mf.nlcgrids.level)
         return mf
     return new_df
 

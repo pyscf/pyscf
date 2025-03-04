@@ -673,7 +673,7 @@ class CASSCF(mc1step.CASSCF):
             Max number of iterations allowd in AH solver.  Default is 30.
         ah_lindep : float, for AH solver.
             Linear dependence threshold for AH solver.  Default is 1e-14.
-        ah_start_tol : flat, for AH solver.
+        ah_start_tol : float, for AH solver.
             In AH solver, the orbital rotation is started without completely solving the AH problem.
             This value is to control the start point. Default is 0.2.
         ah_start_cycle : int, for AH solver.

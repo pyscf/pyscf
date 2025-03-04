@@ -19,7 +19,7 @@
 
 '''
 XC functional, the interface to libxc
-(http://www.tddft.org/programs/octopus/wiki/index.php/Libxc)
+(https://libxc.gitlab.io)
 '''
 
 import sys

@@ -26,43 +26,6 @@ from pyscf.solvent.grad import pcm as pcm_grad
 from pyscf.solvent.hessian import pcm as pcm_hess
 from pyscf.lib import logger
 
-def hess_elec(smdobj, dm, verbose=None):
-    '''
-    slow version with finite difference
-    TODO: use analytical hess_nuc
-    '''
-    log = logger.new_logger(smdobj, verbose)
-    t1 = (logger.process_clock(), logger.perf_counter())
-    pmol = smdobj.mol.copy()
-    mol = pmol.copy()
-    coords = mol.atom_coords(unit='Bohr')
-
-    def smd_grad_scanner(mol):
-        # TODO: use more analytical forms
-        smdobj.reset(mol)
-        smdobj._get_vind(dm)
-        grad = pcm_grad.grad_nuc(smdobj, dm)
-        grad+= smd_grad.grad_solver(smdobj, dm)
-        grad+= pcm_grad.grad_qv(smdobj, dm)
-        return grad
-
-    mol.verbose = 0
-    de = np.zeros([mol.natm, mol.natm, 3, 3])
-    eps = 1e-3
-    for ia in range(mol.natm):
-        for ix in range(3):
-            dv = np.zeros_like(coords)
-            dv[ia,ix] = eps
-            mol.set_geom_(coords + dv, unit='Bohr')
-            g0 = smd_grad_scanner(mol)
-
-            mol.set_geom_(coords - dv, unit='Bohr')
-            g1 = smd_grad_scanner(mol)
-            de[ia,:,ix] = (g0 - g1)/2.0/eps
-    t1 = log.timer_debug1('solvent energy', *t1)
-    smdobj.reset(pmol)
-    return de
-
 def get_cds(smdobj):
     mol = smdobj.mol
     solvent = smdobj.solvent
@@ -135,7 +98,9 @@ class WithSolventHess:
             dm = dm[0] + dm[1]
         is_equilibrium = self.base.with_solvent.equilibrium_solvation
         self.base.with_solvent.equilibrium_solvation = True
-        self.de_solvent = hess_elec(self.base.with_solvent, dm, verbose=self.verbose)
+        self.de_solvent  =    pcm_hess.analytical_hess_nuc(self.base.with_solvent, dm, verbose=self.verbose)
+        self.de_solvent +=     pcm_hess.analytical_hess_qv(self.base.with_solvent, dm, verbose=self.verbose)
+        self.de_solvent += pcm_hess.analytical_hess_solver(self.base.with_solvent, dm, verbose=self.verbose)
         self.de_solute = super().kernel(*args, **kwargs)
         self.de_cds = get_cds(self.base.with_solvent)
         self.de = self.de_solute + self.de_solvent + self.de_cds
@@ -148,7 +113,7 @@ class WithSolventHess:
         h1ao = super().make_h1(mo_coeff, mo_occ, atmlst=atmlst, verbose=verbose)
         if isinstance(self.base, scf.hf.RHF):
             dm = self.base.make_rdm1(ao_repr=True)
-            dv = pcm_hess.fd_grad_vmat(self.base.with_solvent, dm, mo_coeff, mo_occ, atmlst=atmlst, verbose=verbose)
+            dv = pcm_hess.analytical_grad_vmat(self.base.with_solvent, dm, atmlst=atmlst, verbose=verbose)
             for i0, ia in enumerate(atmlst):
                 h1ao[i0] += dv[i0]
             return h1ao
@@ -157,11 +122,10 @@ class WithSolventHess:
             solvent = self.base.with_solvent
             dm = self.base.make_rdm1(ao_repr=True)
             dm = dm[0] + dm[1]
-            dva = pcm_hess.fd_grad_vmat(solvent, dm, mo_coeff[0], mo_occ[0], atmlst=atmlst, verbose=verbose)
-            dvb = pcm_hess.fd_grad_vmat(solvent, dm, mo_coeff[1], mo_occ[1], atmlst=atmlst, verbose=verbose)
+            dv = pcm_hess.analytical_grad_vmat(solvent, dm, atmlst=atmlst, verbose=verbose)
             for i0, ia in enumerate(atmlst):
-                h1aoa[i0] += dva[i0]
-                h1aob[i0] += dvb[i0]
+                h1aoa[i0] += dv[i0]
+                h1aob[i0] += dv[i0]
             return h1aoa, h1aob
         else:
             raise NotImplementedError('Base object is not supported')

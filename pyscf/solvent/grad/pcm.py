@@ -37,13 +37,6 @@ def grad_switch_h(x):
     dy[x>1] = 0.0
     return dy
 
-def gradgrad_switch_h(x):
-    ''' 2nd derivative of h(x) '''
-    ddy = 60.0*x - 180.0*x**2 + 120*x**3
-    ddy[x<0] = 0.0
-    ddy[x>1] = 0.0
-    return ddy
-
 def get_dF_dA(surface):
     '''
     J. Chem. Phys. 133, 244111 (2010), Appendix C
@@ -61,10 +54,9 @@ def get_dF_dA(surface):
     dF = numpy.zeros([ngrids, natom, 3])
     dA = numpy.zeros([ngrids, natom, 3])
 
-    for ia in range(atom_coords.shape[0]):
+    for ia in range(natom):
         p0,p1 = surface['gslice_by_atom'][ia]
         coords = grid_coords[p0:p1]
-        p1 = p0 + coords.shape[0]
         ri_rJ = numpy.expand_dims(coords, axis=1) - atom_coords
         riJ = numpy.linalg.norm(ri_rJ, axis=-1)
         diJ = (riJ - R_in_J) / R_sw_J
@@ -138,7 +130,7 @@ def get_dD_dS(surface, dF, with_S=True, with_D=False):
 
     return dD, dS, dSii
 
-def grad_nuc(pcmobj, dm):
+def grad_nuc(pcmobj, dm, q_sym = None):
     mol = pcmobj.mol
     log = logger.new_logger(mol, mol.verbose)
     t1 = (logger.process_clock(), logger.perf_counter())
@@ -151,7 +143,8 @@ def grad_nuc(pcmobj, dm):
         pcmobj._get_vind(dm)
 
     mol = pcmobj.mol
-    q_sym        = pcmobj._intermediates['q_sym']
+    if q_sym is None:
+        q_sym = pcmobj._intermediates['q_sym']
     gridslice    = pcmobj.surface['gslice_by_atom']
     grid_coords  = pcmobj.surface['grid_coords']
     exponents    = pcmobj.surface['charge_exp']
@@ -177,7 +170,7 @@ def grad_nuc(pcmobj, dm):
     t1 = log.timer_debug1('grad nuc', *t1)
     return de
 
-def grad_qv(pcmobj, dm):
+def grad_qv(pcmobj, dm, q_sym = None):
     '''
     contributions due to integrals
     '''
@@ -193,7 +186,8 @@ def grad_qv(pcmobj, dm):
     log = logger.new_logger(mol, mol.verbose)
     t1 = (logger.process_clock(), logger.perf_counter())
     gridslice    = pcmobj.surface['gslice_by_atom']
-    q_sym        = pcmobj._intermediates['q_sym']
+    if q_sym is None:
+        q_sym = pcmobj._intermediates['q_sym']
     grid_coords  = pcmobj.surface['grid_coords']
     exponents    = pcmobj.surface['charge_exp']
 
@@ -269,18 +263,18 @@ def grad_solver(pcmobj, dm):
         dSii = dSii.transpose([2,0,1])
 
         # dR = 0, dK = dS
-        de_dS = (vK_1 * dS.dot(q)).T                  # numpy.einsum('i,xij,j->ix', vK_1, dS, q)
+        de_dS  = 0.5*(vK_1 * dS.dot(q)).T # numpy.einsum('i,xij,j->ix', vK_1, dS, q)
+        de_dS -= 0.5*numpy.einsum('i,xij,j->jx', vK_1, dS, q)
         de -= numpy.asarray([numpy.sum(de_dS[p0:p1], axis=0) for p0,p1, in gridslice])
         de -= 0.5*numpy.einsum('i,xij->jx', vK_1*q, dSii) # 0.5*numpy.einsum('i,xij,i->jx', vK_1, dSii, q)
 
-    elif pcmobj.method.upper() in ['IEF-PCM', 'IEFPCM', 'SS(V)PE']:
+    elif pcmobj.method.upper() in ['IEF-PCM', 'IEFPCM']:
         dD = dD.transpose([2,0,1])
         dS = dS.transpose([2,0,1])
         dSii = dSii.transpose([2,0,1])
         dA = dA.transpose([2,0,1])
 
-        # IEF-PCM and SS(V)PE formally are the same in gradient calculation
-        # dR = f_eps/(2*pi) * (dD*A + D*dA),
+        # dR = f_eps/(2*pi) * (dD*A + D*dA)
         # dK = dS - f_eps/(2*pi) * (dD*A*S + D*dA*S + D*A*dS)
         f_epsilon = (epsilon - 1.0)/(epsilon + 1.0)
         fac = f_epsilon/(2.0*PI)
@@ -315,11 +309,73 @@ def grad_solver(pcmobj, dm):
         de_dD -= 0.5*numpy.einsum('i,xij,j->jx', vK_1, dD, ASq)
         de_dD  = numpy.asarray([numpy.sum(de_dD[p0:p1], axis=0) for p0,p1 in gridslice])
 
-        vK_1_D = numpy.dot(vK_1, D)
-        de_dA = 0.5*numpy.einsum('j,xjn->nx', vK_1_D*Sq, dA)   # 0.5*numpy.einsum('j,xjn,j->nx', vK_1_D, dA, Sq)
+        de_dA = 0.5*numpy.einsum('j,xjn->nx', vK_1_D*Sq, dA)
 
         de_dK = de_dS0 - fac * (de_dD + de_dA + de_dS1)
         de += de_dR - de_dK
+
+    elif pcmobj.method.upper() in ['SS(V)PE']:
+        dD = dD.transpose([2,0,1])
+        dS = dS.transpose([2,0,1])
+        dSii = dSii.transpose([2,0,1])
+        dA = dA.transpose([2,0,1])
+
+        # dR = f_eps/(2*pi) * (dD*A + D*dA),
+        # dK = dS - f_eps/(4*pi) * (dD*A*S + D*dA*S + D*A*dS + dS*A*DT + S*dA*DT + S*A*dDT)
+        f_epsilon = (epsilon - 1.0)/(epsilon + 1.0)
+        fac_R = f_epsilon/(2.0*PI)
+
+        Av = A*v_grids
+        de_dR  = 0.5*fac_R * numpy.einsum('i,xij,j->ix', vK_1, dD, Av)
+        de_dR -= 0.5*fac_R * numpy.einsum('i,xij,j->jx', vK_1, dD, Av)
+        de_dR  = numpy.asarray([numpy.sum(de_dR[p0:p1], axis=0) for p0,p1 in gridslice])
+
+        vK_1_D = vK_1.dot(D)
+        vK_1_Dv = vK_1_D * v_grids
+        de_dR += 0.5*fac_R * numpy.einsum('j,xjn->nx', vK_1_Dv, dA)
+
+        de_dS0  = 0.5*numpy.einsum('i,xij,j->ix', vK_1, dS, q)
+        de_dS0 -= 0.5*numpy.einsum('i,xij,j->jx', vK_1, dS, q)
+        de_dS0  = numpy.asarray([numpy.sum(de_dS0[p0:p1], axis=0) for p0,p1 in gridslice])
+
+        vK_1_q = vK_1 * q
+        de_dS0 += 0.5*numpy.einsum('i,xin->nx', vK_1_q, dSii)
+
+        vK_1_DA = numpy.dot(vK_1, DA)
+        de_dS1  = 0.5*numpy.einsum('i,xij,j->ix', vK_1_DA, dS, q)
+        de_dS1 -= 0.5*numpy.einsum('i,xij,j->jx', vK_1_DA, dS, q)
+        de_dS1  = numpy.asarray([numpy.sum(de_dS1[p0:p1], axis=0) for p0,p1 in gridslice])
+        vK_1_DAq = vK_1_DA*q
+        de_dS1 += 0.5*numpy.einsum('j,xjn->nx', vK_1_DAq, dSii)
+
+        DT_q = numpy.dot(D.T, q)
+        ADT_q = A * DT_q
+        de_dS1_T  = 0.5*numpy.einsum('i,xij,j->ix', vK_1, dS, ADT_q)
+        de_dS1_T -= 0.5*numpy.einsum('i,xij,j->jx', vK_1, dS, ADT_q)
+        de_dS1_T  = numpy.asarray([numpy.sum(de_dS1_T[p0:p1], axis=0) for p0,p1 in gridslice])
+        vK_1_ADT_q = vK_1 * ADT_q
+        de_dS1_T += 0.5*numpy.einsum('j,xjn->nx', vK_1_ADT_q, dSii)
+
+        Sq = numpy.dot(S,q)
+        ASq = A*Sq
+        de_dD  = 0.5*numpy.einsum('i,xij,j->ix', vK_1, dD, ASq)
+        de_dD -= 0.5*numpy.einsum('i,xij,j->jx', vK_1, dD, ASq)
+        de_dD  = numpy.asarray([numpy.sum(de_dD[p0:p1], axis=0) for p0,p1 in gridslice])
+
+        vK_1_S = numpy.dot(vK_1, S)
+        vK_1_SA = vK_1_S * A
+        de_dD_T  = 0.5*numpy.einsum('i,xij,j->ix', vK_1_SA, -dD.transpose(0,2,1), q)
+        de_dD_T -= 0.5*numpy.einsum('i,xij,j->jx', vK_1_SA, -dD.transpose(0,2,1), q)
+        de_dD_T  = numpy.asarray([numpy.sum(de_dD_T[p0:p1], axis=0) for p0,p1 in gridslice])
+
+        de_dA = 0.5*numpy.einsum('j,xjn->nx', vK_1_D*Sq, dA)
+
+        de_dA_T = 0.5*numpy.einsum('j,xjn->nx', vK_1_S*DT_q, dA)
+
+        fac_K = f_epsilon/(4.0*PI)
+        de_dK = de_dS0 - fac_K * (de_dD + de_dA + de_dS1 + de_dD_T + de_dA_T + de_dS1_T)
+        de += de_dR - de_dK
+
     else:
         raise RuntimeError(f"Unknown implicit solvent model: {pcmobj.method}")
     t1 = log.timer_debug1('grad solver', *t1)
