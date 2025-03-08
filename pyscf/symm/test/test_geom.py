@@ -886,6 +886,16 @@ H   2.041481  -0.080642  -0.024174''')
         self.assertEqual(l, 'C2v')
         self.assertAlmostEqual(abs(axes - numpy.diag(axes.diagonal())).max(), 0, 9)
 
+    def test_geometry_small_discrepancy(self):
+        # issue 2713
+        mol = gto.M(
+            atom='''
+                O        0.000000    0.000000    0.900000
+                H        0.000000    0.000000    0.000000
+                H        0.914864    0.000000    1.249646
+                H       -0.498887    0.766869    1.249646''',
+            charge=1, symmetry=True)
+        self.assertEqual(mol.groupname, 'Cs')
 
 def ring(n, start=0):
     r = 1. / numpy.sin(numpy.pi/n)

@@ -141,6 +141,11 @@ class KnowValues(unittest.TestCase):
         self.assertEqual(get_so(atoms,basis)[0], 220)
 
     def test_symm_orb_c3v_as_cs(self):
+        # This molecule has an approximate C3v symmetry for TOLERANCE>1e-5
+        # When using its subgroup cs, a mirror perpedicular to [-.5, -.866, 0]
+        # will be adopted as the mirror. This mirror leads to more errors in
+        # atomic coordinates than the yz-mirror. In this case, one can adjust
+        # TOLERANCE to pass the check_symm or symm_identical_atoms functions.
         atoms = [['Fe', ( 0.000000  , 0.000000  , 0.015198 )],
                  ['C',  ( 0.000000  , 0.000000  , -1.938396)],
                  ['C',  ( 0.000000  , -1.394127 , -1.614155)],
