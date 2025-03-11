@@ -86,7 +86,7 @@ class TestCosmoRS(unittest.TestCase):
     def test_sas_volume(self):
         V1 = cosmors.get_sas_volume(mf0.with_solvent.surface, step = 0.2) * _BOHR**3
         self.assertAlmostEqual(V1, 46.391962, 3)
-        V2 = cosmors.get_sas_volume(mf0.with_solvent.surface, step = 0.05)
+        V2 = cosmors.get_sas_volume(mf0.with_solvent.surface, step = 0.05) * _BOHR**3
         self.assertAlmostEqual(V2, 46.497054, 3)
 
 
