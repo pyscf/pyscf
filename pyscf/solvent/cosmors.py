@@ -181,6 +181,7 @@ def _lot(mf):
 def get_pcm_parameters(mf, step=0.2):
     '''Returns a dictionary containing the main PCM computation parameters.
     All physical parameters are expressed in atomic units (a.u.).
+    Please also note, that outlying charge correction is not implemented yet.
 
     Arguments:
         mf: processed SCF with PCM solvation
@@ -265,7 +266,8 @@ def get_pcm_parameters(mf, step=0.2):
 
 
 def write_cosmo_file(fout, mf, step=0.2, volume=None):
-    '''Saves COSMO file in Turbomole format
+    '''Saves COSMO file in Turbomole format. Please note, that outlying charge
+    correction is not implemented yet
 
     Arguments:
         fout: writable file object

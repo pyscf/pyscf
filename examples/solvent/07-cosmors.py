@@ -36,6 +36,8 @@ cm.lebedev_order = 29 # lebedev grids on the cavity surface, lebedev_order=29  <
 
 #%% COSMO-files
 
+# Please note, that outlying charge correction is not implemented yet
+
 # run DFT SCF (any level of theory is OK, though DFT is optimal)
 mf = dft.RKS(mol, xc='b3lyp')
 mf = mf.PCM(cm)
