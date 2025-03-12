@@ -56,7 +56,7 @@ def parallel_vectors(v1, v2, tol=TOLERANCE):
         cos = numpy.dot(_normalize(v1), _normalize(v2))
         return (abs(cos-1) < TOLERANCE) | (abs(cos+1) < TOLERANCE)
 
-def argsort_coords(coords, decimals=None, tol=TOLERANCE):
+def argsort_coords(coords, decimals=None, tol=0.05):
     # * np.round for decimal places can lead to more errors than the actual
     # difference between two numbers. For example,
     # np.round([0.1249999999,0.1250000001], 2) => [0.124, 0.125]
@@ -65,19 +65,24 @@ def argsort_coords(coords, decimals=None, tol=TOLERANCE):
     # the coordinates might look more different.
     # * Using the power of two as the factor can reduce such errors, although not
     # faithfully rounding to the required decimals.
+    # * For normal molecules, tol~=0.1 in coordinates is enough to distinguish
+    # atoms in molecule. A very tight threshold is not appropriate here. With
+    # tight threshold, small differences in coordinates may lead to different
+    # arg orders.
     if decimals is None:
-        fac = 2**int(-numpy.log2(tol) + .5)
+        fac = 2**int(-numpy.log2(tol))
     else:
-        fac = 2**int(3.3219281 * decimals + .5)
-    coords = numpy.around(coords*fac)
+        fac = 2**int(3.3219281 * decimals)
+    # +.5 for rounding to the nearest integer
+    coords = (coords*fac + .5).astype(int)
     idx = numpy.lexsort((coords[:,2], coords[:,1], coords[:,0]))
     return idx
 
-def sort_coords(coords, decimals=None, tol=TOLERANCE):
+def sort_coords(coords, decimals=None, tol=0.05):
     if decimals is None:
         decimals = int(-numpy.log10(tol)) - 1
     coords = numpy.asarray(coords)
-    idx = argsort_coords(coords, decimals=decimals)
+    idx = argsort_coords(coords, decimals)
     return coords[idx]
 
 # ref. http://en.wikipedia.org/wiki/Rotation_matrix
@@ -490,8 +495,8 @@ def symm_identical_atoms(gpname, atoms):
     dup_atom_ids = []
     for op in ops:
         newc = numpy.dot(coords, op)
-        idx = argsort_coords(newc, tol=TOLERANCE*5)
-        if not numpy.allclose(coords0, newc[idx], atol=TOLERANCE*5):
+        idx = argsort_coords(newc)
+        if not numpy.allclose(coords0, newc[idx], atol=TOLERANCE):
             raise PointGroupSymmetryError(
                 'Symmetry identical atoms not found. This may be due to '
                 'the strict setting of the threshold symm.geom.TOLERANCE. '

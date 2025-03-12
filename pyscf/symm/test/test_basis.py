@@ -163,6 +163,10 @@ class KnowValues(unittest.TestCase):
                  ['O',  ( 0.000000  , 2.572496  , 1.441607 )],
                  ['O',  ( 2.227847  , -1.286248 , 1.441607 )],
                  ['O',  ( -2.227847 , -1.286248 , 1.441607 )],]
+        numpy.random.seed(2)
+        u = numpy.linalg.svd(numpy.random.rand(3,3))[0]
+        r = numpy.array([a[1] for a in atoms])
+        atoms = [[a[0], x] for a, x in zip(atoms, r.dot(u))]
         basis = {'Fe':gto.basis.load('def2svp', 'C'),
                  'C': gto.basis.load('def2svp', 'C'),
                  'H': gto.basis.load('def2svp', 'C'),
