@@ -62,7 +62,7 @@ def aux_e2(mol, auxmol_or_auxbasis, intor='int3c2e', aosym='s1', comp=None, out=
                       mol.nbas, mol.nbas+auxmol.nbas)
     else:
         assert len(shls_slice) == 6
-        assert shls_slice[5] < auxmol.nbas
+        assert shls_slice[5] <= auxmol.nbas
         shls_slice = list(shls_slice)
         shls_slice[4] += mol.nbas
         shls_slice[5] += mol.nbas
