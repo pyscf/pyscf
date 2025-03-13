@@ -79,10 +79,8 @@ def argsort_coords(coords, decimals=None, tol=0.05):
     return idx
 
 def sort_coords(coords, decimals=None, tol=0.05):
-    if decimals is None:
-        decimals = int(-numpy.log10(tol)) - 1
     coords = numpy.asarray(coords)
-    idx = argsort_coords(coords, decimals)
+    idx = argsort_coords(coords, tol=tol)
     return coords[idx]
 
 # ref. http://en.wikipedia.org/wiki/Rotation_matrix
