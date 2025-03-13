@@ -984,7 +984,6 @@ def VW_Gram_Schmidt_fill_holder(V_holder, W_holder, X_new, Y_new, lindep=1e-12):
         c *= e**-.5
         c_orth = c_orth.dot(c)
         csc = c_orth.T.dot(s21).dot(c_orth)
-        wlast = w
         w, u = np.linalg.eigh(csc)
 
         mask = 1 - abs(w) > lindep_sqrt
