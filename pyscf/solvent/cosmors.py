@@ -202,14 +202,14 @@ def get_pcm_parameters(mf, step=0.2):
     E_diel = float(mf.scf_summary['e_solvent'])
 
     # atoms
-    atom_idxs = list(range(1, 1 + len(mf.mol.elements)))
-    a_xs, a_ys, a_zs = zip(*mf.mol.atom_coords().tolist())
+    atom_idxs = list(range(1, 1 + mf.mol.natm))
+    a_xs, a_ys, a_zs = mf.mol.atom_coords().T.tolist()
     elems = [elem.lower() for elem in mf.mol.elements]
     radii = [mf.with_solvent.surface['R_vdw'][i] for i, j in mf.with_solvent.surface['gslice_by_atom']]
 
     # segments
-    segment_idxs = list(range(1, len(a_xs) + 1))
     s_xs, s_ys, s_zs = zip(*mf.with_solvent.surface['grid_coords'].tolist())
+    segment_idxs = list(range(1, len(s_xs) + 1))
     atom_segment_idxs = []
     for idx, (start, end) in enumerate(mf.with_solvent.surface['gslice_by_atom']):
         atom_segment_idxs += [idx + 1] * (end - start)
@@ -234,9 +234,9 @@ def get_pcm_parameters(mf, step=0.2):
         },
         'energies': {
             'e_tot': float(E_tot),
-            'e_tot_corr': float(E_tot),
+            'e_tot_corr': float(E_tot), # TODO: implement OCC
             'e_diel': float(E_diel),
-            'e_diel_corr': float(E_diel)
+            'e_diel_corr': float(E_diel) # TODO: implement OCC
         },
         'atoms': {
             'atom_index': atom_idxs,
@@ -253,10 +253,10 @@ def get_pcm_parameters(mf, step=0.2):
             'y': s_ys,
             'z': s_zs,
             'charge': charges.tolist(),
-            'charge_corr': charges.tolist(),
+            'charge_corr': charges.tolist(), # TODO: implement OCC
             'area': areas.tolist(),
             'sigma': (charges / areas).tolist(),
-            'sigma_corr': (charges / areas).tolist(),
+            'sigma_corr': (charges / areas).tolist(), # TODO: implement OCC
             'potential': potentials.tolist(),
         }
     }

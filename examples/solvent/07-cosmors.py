@@ -78,7 +78,7 @@ plt.show()
 
 with io.StringIO() as outp:
     write_cosmo_file(outp, mf, volume=1234.56)
-    print(outp.getvalue()[:219])
+    print(outp.getvalue()[:219]) # slicing truncates the COSMO-file up to the volume line
 
 
 #%% F_epsilon
@@ -96,7 +96,7 @@ mf.kernel()
 with io.StringIO() as outp:
     try:
         write_cosmo_file(outp, mf)
-        print(outp.getvalue()[:188])
+        print(outp.getvalue())
     except ValueError as e:
         print(e)
 
