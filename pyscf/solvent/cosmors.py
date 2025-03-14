@@ -11,10 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Author: Ivan Chernyshov <ivan.chernyshov@gmail.com>
+#
 
 '''
-Provides functionality to generate COSMO files and sigma-profiles
-for the further use in COSMO-RS/COSMO-SAC computations and/or ML
+Provides functionality to generate COSMO-files for COSMO-RS computations
 '''
 
 #%% Imports
@@ -100,14 +102,14 @@ def _get_line_sas_intersection_length(x, y, coords, radii):
 
 
 def get_sas_volume(surface, step=0.2):
-    '''Computes volume [A**3] of space enclosed by solvent-accessible surface
+    '''Computes volume [a.u.] of space enclosed by solvent-accessible surface
 
     Arguments:
         surface (dict): dictionary containing SAS parameters (mc.with_solvent.surface)
         step (float): grid spacing parameter, [Bohr]
 
     Returns:
-        float: SAS-defined volume of the molecule [A**3]
+        float: SAS-defined volume of the molecule [a.u.]
 
     '''
     # get parameters
@@ -130,35 +132,11 @@ def get_sas_volume(surface, step=0.2):
     # integration
     V = sum([dxdy * _get_line_sas_intersection_length(x, y, coords, radii) for x, y in _product(xs, ys)])
 
-    return V * _BOHR**3
+    return V
 
 
 
 #%% COSMO-files
-
-def _check_feps(mf, ignore_low_feps):
-    '''Checks f_epsilon value and raises ValueError for f_eps < 1
-
-    Arguments:
-        mf: processed SCF with PCM solvation
-        ignore_low_feps (bool): if True, does not raise ValueError if feps < 1
-
-    Raises:
-        ValueError: if f_epsilon < 1 and ignore_low_feps flag is set to False
-
-    '''
-    if ignore_low_feps:
-        return
-
-    f_eps = mf.with_solvent._intermediates['f_epsilon']
-    if f_eps < 1.0:
-        message  = f'Low f_eps value: {f_eps}. '
-        message += 'COSMO-RS requires f_epsilon=1.0 or eps=float("inf"). '
-        message += 'Rerun computation with correct epsilon or use the ignore_low_feps argument.'
-        raise ValueError(message)
-
-    return
-
 
 def _lot(mf):
     '''Returns level of theory in method-disp/basis/solvation format (raw solution)
@@ -170,197 +148,231 @@ def _lot(mf):
         str: method-dispersion/basis/solvation
 
     '''
+    lot = {
+        'method': None,
+        'basis': None,
+        'dispersion': None,
+        'solvation_model': None
+    }
+
     # method
     method = mf.xc if hasattr(mf, 'xc') else None
     if method is None:
         match = _re.search('HF|MP2|CCSD', str(type(mf)))
-        method = match.group(0) if match else '???'
+        method = match.group(0) if match else None
+    lot['method'] = method
+
+    # basis
+    lot['basis'] = mf.mol.basis
+
     # dispersion
     match = _re.search('D3|D4', str(type(mf)))
-    disp = '-' + match.group(0) if match else ''
-    # other
-    basis = mf.mol.basis
-    solv = '/' + mf.with_solvent.method if hasattr(mf, 'with_solvent') else ''
-    # approx
-    lot = f'{method}{disp}/{basis}{solv}'.lower()
+    disp = match.group(0) if match else None
+    lot['dispersion'] = disp
+
+    # solvation
+    solv = mf.with_solvent.method if hasattr(mf, 'with_solvent') else ''
+    lot['solvation_model'] = solv
 
     return lot
 
 
-def write_cosmo_file(fout, mf, step=0.2, ignore_low_feps=False):
-    '''Saves COSMO file
+
+def get_pcm_parameters(mf, step=0.2):
+    '''Returns a dictionary containing the main PCM computation parameters.
+    All physical parameters are expressed in atomic units (a.u.).
+    Please also note, that outlying charge correction is not implemented yet.
+
+    Arguments:
+        mf: processed SCF with PCM solvation
+        step (float): grid spacing parameter to compute volume, [Bohr]
+
+    Returns:
+        dict: main PCM parameters, including dielectric energy and parameters
+            of surface segments
+
+    '''
+    # get params
+    lot = _lot(mf)
+    f_epsilon = mf.with_solvent._intermediates['f_epsilon']
+    n_segments = len(mf.with_solvent._intermediates['q'])
+    area = float(sum(mf.with_solvent.surface['area'])) # np.float is not json-seriazable
+    volume = float(get_sas_volume(mf.with_solvent.surface, step))
+    E_tot = float(sum(mf.scf_summary.values()))
+    E_diel = float(mf.scf_summary['e_solvent'])
+
+    # atoms
+    atom_idxs = list(range(1, 1 + mf.mol.natm))
+    a_xs, a_ys, a_zs = mf.mol.atom_coords().T.tolist()
+    elems = [elem.lower() for elem in mf.mol.elements]
+    radii = [mf.with_solvent.surface['R_vdw'][i] for i, j in mf.with_solvent.surface['gslice_by_atom']]
+
+    # segments
+    s_xs, s_ys, s_zs = zip(*mf.with_solvent.surface['grid_coords'].tolist())
+    segment_idxs = list(range(1, len(s_xs) + 1))
+    atom_segment_idxs = []
+    for idx, (start, end) in enumerate(mf.with_solvent.surface['gslice_by_atom']):
+        atom_segment_idxs += [idx + 1] * (end - start)
+    charges = mf.with_solvent._intermediates['q']
+    areas = mf.with_solvent.surface['area']
+    potentials = mf.with_solvent._intermediates['v_grids']
+
+    # output
+    params = {
+        'pyscf_version': __version__,
+        'approximation': lot,
+        'pcm_data': {
+            'f_eps': f_epsilon,
+            'n_segments': n_segments,
+            'area': float(area),
+            'volume': float(volume),
+        },
+        'screening_charge': {
+            'cosmo': float(sum(charges)),
+            'correction': 0.0,
+            'total': float(sum(charges))
+        },
+        'energies': {
+            'e_tot': float(E_tot),
+            'e_tot_corr': float(E_tot), # TODO: implement OCC
+            'e_diel': float(E_diel),
+            'e_diel_corr': float(E_diel) # TODO: implement OCC
+        },
+        'atoms': {
+            'atom_index': atom_idxs,
+            'x': a_xs,
+            'y': a_ys,
+            'z': a_zs,
+            'element': elems,
+            'radius': radii
+        },
+        'segments': {
+            'segment_index': segment_idxs,
+            'atom_index': atom_segment_idxs,
+            'x': s_xs,
+            'y': s_ys,
+            'z': s_zs,
+            'charge': charges.tolist(),
+            'charge_corr': charges.tolist(), # TODO: implement OCC
+            'area': areas.tolist(),
+            'sigma': (charges / areas).tolist(),
+            'sigma_corr': (charges / areas).tolist(), # TODO: implement OCC
+            'potential': potentials.tolist(),
+        }
+    }
+
+    return params
+
+
+
+def write_cosmo_file(fout, mf, step=0.2, volume=None):
+    '''Saves COSMO file in Turbomole format. Please note, that outlying charge
+    correction is not implemented yet
 
     Arguments:
         fout: writable file object
         mf: processed SCF with PCM solvation
         step (float): grid spacing parameter to compute volume, [Bohr]
-        ignore_low_feps (bool): if True, does not raise ValueError if feps < 1
+        volume (float): uses given value (Bohr^3) as molecular volume
+            instead of the computed one
 
     Raises:
-        ValueError: if f_epsilon < 1 and ignore_low_feps flag is set to False
+        ValueError: if f_epsilon < 1
 
     '''
-    _check_feps(mf, ignore_low_feps)
+    # extract PCM parameters
+    ps = get_pcm_parameters(mf, step)
+
+    # check F_epsilon
+    f_eps = ps['pcm_data']['f_eps']
+    if f_eps < 1.0:
+        message  = f'Low f_eps value: {f_eps}. '
+        message += 'COSMO-RS requires f_epsilon=1.0 or eps=float("inf"). '
+        message += 'Rerun computation with the correct epsilon value.'
+        raise ValueError(message)
 
     # qm params
     fout.write('$info\n')
-    fout.write(f'PySCF v. {__version__}, {_lot(mf)}\n')
+    info = [
+        f'program: PySCF, version {ps["pyscf_version"]}',
+        f'solvation model: {ps["approximation"]["solvation_model"]}',
+        f'dispersion: {ps["approximation"]["dispersion"]}',
+        f'{ps["approximation"]["method"]}',
+        f'{ps["approximation"]["basis"]}'
+    ]
+    fout.write(';'.join(info) + '\n')
 
     # cosmo data
-    f_epsilon = mf.with_solvent._intermediates['f_epsilon']
-    n_segments = len(mf.with_solvent._intermediates['q'])
-    area = sum(mf.with_solvent.surface['area'])
-    volume = get_sas_volume(mf.with_solvent.surface, step) /  _BOHR**3
+    n_segments = ps['pcm_data']['n_segments']
+    area = ps['pcm_data']['area']
+    if volume is None:
+        volume = ps['pcm_data']['volume']
     # print
     fout.write('$cosmo_data\n')
-    fout.write(f'  fepsi  = {f_epsilon:>.8f}\n')
+    fout.write(f'  fepsi  = {f_eps:>.8f}\n')
     fout.write(f'  nps    = {n_segments:>10d}\n')
-    fout.write(f'  area   = {area:>10.2f}       # [Bohr**2]\n')
-    fout.write(f'  volume = {volume:>10.2f}       # [Bohr**3]\n')
+    fout.write(f'  area   = {area:>10.2f}       # [a.u.]\n')
+    fout.write(f'  volume = {volume:>10.2f}       # [a.u.]\n')
 
     # atomic coordinates
-    atoms = range(1, 1 + len(mf.mol.elements))
-    xs, ys, zs = zip(*mf.mol.atom_coords().tolist())
-    elems = [elem.lower() for elem in mf.mol.elements]
-    radii = [mf.with_solvent.surface['R_vdw'][i] for i, j in mf.with_solvent.surface['gslice_by_atom']]
+    atoms = ps['atoms']['atom_index']
+    xs, ys, zs = (ps['atoms'][ax] for ax in 'xyz')
+    elems = ps['atoms']['element']
+    radii = [r * _BOHR for r in ps['atoms']['radius']]
     # print
     fout.write('$coord_rad\n')
-    fout.write('#atom   x [Bohr]           y [Bohr]           z [Bohr]      element  radius [Bohr]\n')
+    fout.write('#atom   x [a.u.]           y [a.u.]           z [a.u.]      element  radius [A]\n')
     for atom, x, y, z, elem, r in zip(atoms, xs, ys, zs, elems, radii):
         fout.write(f'{atom:>4d}{x:>19.14f}{y:>19.14f}{z:>19.14f}  {elem:<2}{r:>12.5f}\n')
 
-    # cosmo parameters
-    screening_charge = sum(mf.with_solvent._intermediates['q'])
-    E_tot = sum(mf.scf_summary.values())
-    E_diel = mf.scf_summary['e_solvent']
+    # screening charges
+    charge_cosmo = ps['screening_charge']['cosmo']
+    charge_correction = ps['screening_charge']['correction']
+    charge_total = ps['screening_charge']['total']
     # print
     fout.write('$screening_charge\n')
-    fout.write(f'  cosmo                          = {screening_charge:>15.6f}\n')
+    fout.write(f'  cosmo      = {charge_cosmo:>10.6f}\n')
+    fout.write(f'  correction = {charge_correction:>10.6f}\n')
+    fout.write(f'  total      = {charge_total:>10.6f}\n')
+
+    # energies
+    E_tot = ps['energies']['e_tot']
+    E_tot_corr = ps['energies']['e_tot_corr']
+    E_diel = ps['energies']['e_diel']
+    E_diel_corr = ps['energies']['e_diel_corr']
     fout.write('$cosmo_energy\n')
     fout.write(f'  Total energy [a.u.]            = {E_tot:>19.10f}\n')
+    fout.write(f'  Total energy + OC corr. [a.u.] = {E_tot_corr:>19.10f}\n')
+    fout.write(f'  Total energy corrected [a.u.]  = {E_tot_corr:>19.10f}\n')
     fout.write(f'  Dielectric energy [a.u.]       = {E_diel:>19.10f}\n')
+    fout.write(f'  Diel. energy + OC corr. [a.u.] = {E_diel_corr:>19.10f}\n')
 
     # segments
-    xs, ys, zs = zip(*mf.with_solvent.surface['grid_coords'].tolist())
-    ns = range(1, len(xs) + 1)
-    atoms = []
-    for idx, (start, end) in enumerate(mf.with_solvent.surface['gslice_by_atom']):
-        atoms += [idx + 1] * (end - start)
-    qs = mf.with_solvent._intermediates['q']
-    areas = mf.with_solvent.surface['area'] * _BOHR**2
-    sigmas = qs / areas
-    pots = mf.with_solvent._intermediates['v_grids']
+    ns = ps['segments']['segment_index']
+    atoms = ps['segments']['atom_index']
+    xs, ys, zs = (ps['segments'][ax] for ax in 'xyz')
+    qs = ps['segments']['charge_corr']
+    areas = [a * _BOHR**2 for a in ps['segments']['area']]
+    pots = [p / _BOHR for p in ps['segments']['potential']]
     # print legend
     fout.write('$segment_information\n')
     fout.write('# n             - segment number\n')
     fout.write('# atom          - atom associated with segment n\n')
-    fout.write('# x, y, z       - segment coordinates, [Bohr]\n')
-    fout.write('# charge        - segment charge\n')
+    fout.write('# position      - segment coordinates, [a.u.]\n')
+    fout.write('# charge        - segment charge (corrected)\n')
     fout.write('# area          - segment area [A**2]\n')
-    fout.write('# charge/area   - segment charge density [e/A**2]\n')
-    fout.write('# potential     - solute potential on segment\n')
+    fout.write('# potential     - solute potential on segment (A length scale)\n')
     fout.write('#\n')
     fout.write('#  n   atom              position (X, Y, Z)                   ')
     fout.write('charge         area        charge/area     potential\n')
     fout.write('#\n')
     fout.write('#\n')
     # print params
-    for n, x, y, z, atom, q, area, sigma, pot in zip(ns, xs, ys, zs, atoms, qs, areas, sigmas, pots):
+    for n, x, y, z, atom, q, area, pot in zip(ns, xs, ys, zs, atoms, qs, areas, pots):
         line  = f'{n:>5d}{atom:>5d}{x:>15.9f}{y:>15.9f}{z:>15.9f}'
-        line += f'{q:>15.9f}{area:>15.9f}{sigma:>15.9f}{pot:>15.9f}\n'
+        line += f'{q:>15.9f}{area:>15.9f}{q/area:>15.9f}{pot:>15.9f}\n'
         fout.write(line)
 
     return
-
-
-
-#%% Sigma-profile
-
-def get_sigma_profile(mf, sigmas_grid, ignore_low_feps=False):
-    '''Computes sigma-profile in [-0.025..0.025] e/A**2 range as in
-    https://github.com/usnistgov/COSMOSAC/blob/master/profiles/to_sigma.py#L181
-    https://doi.org/10.1021/acs.jctc.9b01016
-
-    Arguments:
-        mf: processed SCF with PCM solvation
-        sigmas_grid (_np.ndarray): grid of screening charge values,
-            e.g. np.linspace(-0.025, 0.025, 51)
-        ignore_low_feps (bool): if True, does not raise ValueError if feps < 1
-
-    Returns:
-        _np.ndarray: array of 51 elements corresponding to the p(sigma) values for
-            the screening charge values in [-0.025..0.025] e/A**2 range
-
-    Raises:
-        ValueError: if f_epsilon < 1 and ignore_low_feps flag is set to False
-
-    '''
-    _check_feps(mf, ignore_low_feps)
-
-    # prepare params
-    qs = mf.with_solvent._intermediates['q']
-    areas = mf.with_solvent.surface['area'] * _BOHR**2
-    sigmas = qs / areas
-    step = sigmas_grid[1] - sigmas_grid[0]
-    max_sigma = sigmas_grid[-1] + step
-    n_bins = len(sigmas_grid)
-
-    # compute profile
-    psigma = _np.zeros(n_bins)
-    for sigma, area in zip(sigmas, areas):
-        # get index of left sigma grid value
-        left = int(_np.floor((sigma - sigmas_grid[0]) / step))
-        if left < -1 or left > n_bins - 1:
-            continue
-        # get impact of the segment to the left bin
-        val_right = sigmas_grid[left+1] if left < n_bins - 1 else max_sigma
-        w_left = (val_right - sigma) / step
-        # add areas to p(sigma)
-        if left > -1:
-            psigma[left] += area * w_left
-        if left < n_bins - 1:
-            psigma[left+1] += area * (1 - w_left)
-
-    return psigma
-
-
-def get_cosmors_parameters(mf, sigmas_grid=_np.linspace(-0.025, 0.025, 51),
-                           step=0.2, ignore_low_feps=False):
-    '''Computes main COSMO-RS parameters
-
-    Arguments:
-        mf: processed SCF with PCM solvation
-        step (float): grid spacing parameter to compute volume, [Bohr]
-        ignore_low_feps (bool): if True, does not raise ValueError if feps < 1
-
-    Returns:
-        dict: main COSMO-RS parameters, including sigma-profile, volume, surface area,
-            SCF and dielectric energies
-
-    Raises:
-        ValueError: if f_epsilon < 1 and ignore_low_feps flag is set to False
-
-    '''
-    _check_feps(mf, ignore_low_feps)
-
-    # get params
-    lot = _lot(mf)
-    area = sum(mf.with_solvent.surface['area']) * _BOHR**2
-    volume = get_sas_volume(mf.with_solvent.surface, step)
-    psigma = get_sigma_profile(mf, sigmas_grid, ignore_low_feps=True)
-    E_tot = sum(mf.scf_summary.values())
-    E_diel = mf.scf_summary['e_solvent']
-
-    # output
-    params = {'PySCF version': __version__,
-              'Level of theory': lot,
-              'Surface area, A**2': float(area), # since np.float is not json-seriazable
-              'Volume, A**3': float(volume),
-              'Total energy, a.u.': float(E_tot),
-              'Dielectric energy, a.u.': float(E_diel),
-              'Screening charge density, A**2': psigma.tolist(),
-              'Screening charge, e/A**2': sigmas_grid.tolist()}
-
-    return params
 
 
