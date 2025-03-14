@@ -697,7 +697,7 @@ def real_eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=Non
         Y_new = XY_new[:,A_size:].T
         if x0sym is None:
             V, W = VW_Gram_Schmidt_fill_holder(
-                V_holder[:,:m1], W_holder[:,:m1], X_new, Y_new)
+                V_holder[:,:m1], W_holder[:,:m1], X_new, Y_new, lindep)
         else:
             xt_ir = xt_ir[r_index]
             xt_orth_ir = []
@@ -706,7 +706,7 @@ def real_eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=Non
             for ir in set(xt_ir):
                 idx = np.nonzero(xt_ir == ir)[0]
                 _V, _W = VW_Gram_Schmidt_fill_holder(
-                    V_holder[:,:m1], W_holder[:,:m1], X_new[:,idx], Y_new[:,idx])
+                    V_holder[:,:m1], W_holder[:,:m1], X_new[:,idx], Y_new[:,idx], lindep)
                 V.append(_V)
                 W.append(_W)
                 xt_orth_ir.append([ir] * len(_V))
@@ -932,7 +932,7 @@ def TDDFT_subspace_eigen_solver(a, b, sigma, pi, nroots):
     y = x_p_y - x
     return omega, x, y
 
-def VW_Gram_Schmidt_fill_holder(V_holder, W_holder, X_new, Y_new, lindep=1e-6):
+def VW_Gram_Schmidt_fill_holder(V_holder, W_holder, X_new, Y_new, lindep=1e-12):
     '''
     QR orthogonalization for (X_new, Y_new) basis vectors, then apply symmetric
     orthogonalization for {[X, Y]}, and its dual basis vectors {[Y, X]}
@@ -953,7 +953,7 @@ def VW_Gram_Schmidt_fill_holder(V_holder, W_holder, X_new, Y_new, lindep=1e-6):
     s21  = X_new.T.dot(Y_new)
     s21 += Y_new.T.dot(X_new)
     e, c = np.linalg.eigh(s11)
-    mask = e > lindep**2
+    mask = e > lindep
     e = e[mask]
     if e.size == 0:
         return (np.zeros([0, x0_size], dtype=X_new.dtype),
@@ -962,9 +962,10 @@ def VW_Gram_Schmidt_fill_holder(V_holder, W_holder, X_new, Y_new, lindep=1e-6):
 
     csc = c.T.dot(s21).dot(c)
     n = csc.shape[0]
+    lindep_sqrt = lindep**.5
     for i in range(n):
         w, u = np.linalg.eigh(csc[i:,i:])
-        mask = 1 - abs(w) > lindep
+        mask = 1 - abs(w) > lindep_sqrt
         if np.any(mask):
             c = c[:,i:]
             break
@@ -975,13 +976,19 @@ def VW_Gram_Schmidt_fill_holder(V_holder, W_holder, X_new, Y_new, lindep=1e-6):
     u = u[:,mask]
     c_orth = c.dot(u)
 
-    if e[0] < 1e-6 or 1-abs(w[0]) < 1e-3:
-        # Rerun the orthogonalization to reduce numerical errors
+    if e[0] < lindep_sqrt or any(abs(w)> 1-1e-3):
+        # Rerun the orthogonalization to reduce numerical errors.
+        # When w~=1-1e-3, errors in the orthogonalization (off-diagonal terms)
+        # is near 1e-6.
         e, c = np.linalg.eigh(c_orth.T.dot(s11).dot(c_orth))
         c *= e**-.5
         c_orth = c_orth.dot(c)
         csc = c_orth.T.dot(s21).dot(c_orth)
         w, u = np.linalg.eigh(csc)
+
+        mask = 1 - abs(w) > lindep_sqrt
+        w = w[mask]
+        u = u[:,mask]
         c_orth = c_orth.dot(u)
 
     # Symmetric diagonalize
