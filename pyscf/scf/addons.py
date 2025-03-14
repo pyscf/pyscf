@@ -85,13 +85,32 @@ def _smearing_optimize(f_occ, mo_es, nocc, sigma):
         mo_occ = f_occ(m, mo_es, sigma)
         return (mo_occ.sum() - nocc)**2
 
-    fermi = _get_fermi(mo_es, nocc)
+    mu0 = _init_guess_mu(f_occ, mo_es, nocc, sigma)
     res = scipy.optimize.minimize(
-        nelec_cost_fn, fermi, method='Powell',
+        nelec_cost_fn, mu0, method='Powell',
         options={'xtol': 1e-5, 'ftol': 1e-5, 'maxiter': 10000})
     mu = res.x
     mo_occs = f_occ(mu, mo_es, sigma)
     return mu, mo_occs
+
+def _init_guess_mu(f_occ, mo_es, nocc, sigma, box=[-1.,1.], step=1e-3):
+    ''' Generate an initial guess for `mu` by manually minimizing the nocc error on a grid
+        around `fermi`. The grid is constructed as:
+
+            mus = fermi + numpy.arange(*box, step) / 27.211399
+
+        By default, `box = [-1, 1]` and `step = 1e-3`, which corresponds to searching
+        within a +/-1 eV window around `fermi` with a resolution of 1 meV (resulting
+        in 2000 grid points).
+
+        Return:
+            mu0 : float
+                Best initial guess within the searching window
+    '''
+    fermi = _get_fermi(mo_es, nocc)
+    mus = fermi + numpy.arange(*box, step)/27.211399
+    noccs = numpy.asarray([f_occ(m, mo_es, sigma).sum() for m in mus])
+    return mus[abs(noccs-nocc).argmin()]
 
 def _get_fermi(mo_energy, nocc):
     mo_e_sorted = numpy.sort(mo_energy)
