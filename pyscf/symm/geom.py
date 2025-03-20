@@ -56,18 +56,31 @@ def parallel_vectors(v1, v2, tol=TOLERANCE):
         cos = numpy.dot(_normalize(v1), _normalize(v2))
         return (abs(cos-1) < TOLERANCE) | (abs(cos+1) < TOLERANCE)
 
-def argsort_coords(coords, decimals=None):
+def argsort_coords(coords, decimals=None, tol=0.05):
+    # * np.round for decimal places can lead to more errors than the actual
+    # difference between two numbers. For example,
+    # np.round([0.1249999999,0.1250000001], 2) => [0.12, 0.13]
+    # np.round([0.1249999999,0.1250000001], 3) => [0.125, 0.125]
+    # When loosen tolerance is used, compared to the more strict tolerance,
+    # the coordinates might look more different.
+    # * Using the power of two as the factor can reduce such errors, although not
+    # faithfully rounding to the required decimals.
+    # * For normal molecules, tol~=0.1 in coordinates is enough to distinguish
+    # atoms in molecule. A very tight threshold is not appropriate here. With
+    # tight threshold, small differences in coordinates may lead to different
+    # arg orders.
     if decimals is None:
-        decimals = int(-numpy.log10(TOLERANCE)) - 1
-    coords = numpy.around(coords, decimals=decimals)
+        fac = 2**int(-numpy.log2(tol))
+    else:
+        fac = 2**int(3.3219281 * decimals)
+    # +.5 for rounding to the nearest integer
+    coords = (coords*fac + .5).astype(int)
     idx = numpy.lexsort((coords[:,2], coords[:,1], coords[:,0]))
     return idx
 
-def sort_coords(coords, decimals=None):
-    if decimals is None:
-        decimals = int(-numpy.log10(TOLERANCE)) - 1
+def sort_coords(coords, decimals=None, tol=0.05):
     coords = numpy.asarray(coords)
-    idx = argsort_coords(coords, decimals=decimals)
+    idx = argsort_coords(coords, tol=tol)
     return coords[idx]
 
 # ref. http://en.wikipedia.org/wiki/Rotation_matrix
@@ -482,7 +495,11 @@ def symm_identical_atoms(gpname, atoms):
         newc = numpy.dot(coords, op)
         idx = argsort_coords(newc)
         if not numpy.allclose(coords0, newc[idx], atol=TOLERANCE):
-            raise PointGroupSymmetryError('Symmetry identical atoms not found')
+            raise PointGroupSymmetryError(
+                'Symmetry identical atoms not found. This may be due to '
+                'the strict setting of the threshold symm.geom.TOLERANCE. '
+                'Consider adjusting the tolerance.')
+
         dup_atom_ids.append(idx)
 
     dup_atom_ids = numpy.sort(dup_atom_ids, axis=0).T
@@ -524,6 +541,14 @@ def check_symm(gpname, atoms, basis=None):
     opdic = symm_ops(gpname)
     ops = [opdic[op] for op in OPERATOR_TABLE[gpname]]
     rawsys = SymmSys(atoms, basis)
+
+    # A fast check using Casimir tensors
+    coords = rawsys.atoms[:,1:]
+    weights = rawsys.atoms[:,0]
+    for op in ops:
+        if not is_identical_geometry(coords, coords.dot(op), weights):
+            return False
+
     for lst in rawsys.atomtypes.values():
         coords = rawsys.atoms[lst,1:]
         idx = argsort_coords(coords)
@@ -542,6 +567,27 @@ def shift_atom(atoms, orig, axis):
     c = numpy.array([a[1] for a in atoms])
     c = numpy.dot(c - orig, numpy.array(axis).T)
     return [[atoms[i][0], c[i]] for i in range(len(atoms))]
+
+def is_identical_geometry(coords1, coords2, weights):
+    '''A fast check to compare the geometry of two molecules using Casimir tensors'''
+    if coords1.shape != coords2.shape:
+        return False
+    for order in range(1, 4):
+        if abs(casimir_tensors(coords1, weights, order) -
+               casimir_tensors(coords2, weights, order)).max() > TOLERANCE:
+            return False
+    return True
+
+def casimir_tensors(r, q, order=1):
+    if order == 1:
+        return q.dot(r)
+    elif order == 2:
+        return numpy.einsum('i,ix,iy->xy', q, r, r)
+    elif order == 3:
+        return numpy.einsum('i,ix,iy,iz->xyz', q, r, r, r)
+    else:
+        raise NotImplementedError
+
 
 class RotationAxisNotFound(PointGroupSymmetryError):
     pass
