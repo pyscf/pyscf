@@ -736,6 +736,13 @@ O    SP
         mol1.build()
         self.assertAlmostEqual(abs(mol1._symm_axes - numpy.eye(3)[[1,2,0]]).max(), 0, 9)
 
+        mol1 = gto.M(
+            atom='He 0 0 0',
+            basis='aug-cc-pvdz',
+            symmetry='SO3'
+        )
+        self.assertEqual(mol1.groupname, 'SO3')
+
     def test_symm_orb(self):
         rs = numpy.array([[.1, -.3, -.2],
                           [.3,  .1,  .8]])
