@@ -59,7 +59,7 @@ def parallel_vectors(v1, v2, tol=TOLERANCE):
 def argsort_coords(coords, decimals=None, tol=0.05):
     # * np.round for decimal places can lead to more errors than the actual
     # difference between two numbers. For example,
-    # np.round([0.1249999999,0.1250000001], 2) => [0.124, 0.125]
+    # np.round([0.1249999999,0.1250000001], 2) => [0.12, 0.13]
     # np.round([0.1249999999,0.1250000001], 3) => [0.125, 0.125]
     # When loosen tolerance is used, compared to the more strict tolerance,
     # the coordinates might look more different.
