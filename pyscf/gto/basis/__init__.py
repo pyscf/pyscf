@@ -315,7 +315,7 @@ ALIAS = {
     'pobtzvp'       :  'pob-tzvp.dat',
     'pobtzvpp'      :  'pob-tzvpp.dat',
     'crystalccpvdz' :  'crystal-cc-pvdz.dat',
-# ccECP 
+# ccECP
     'ccecp'         : join('ccecp-basis', 'ccECP', 'ccECP.dat'   ),
     'ccecpccpvdz'   : join('ccecp-basis', 'ccECP', 'ccECP_cc-pVDZ.dat'),
     'ccecpccpvtz'   : join('ccecp-basis', 'ccECP', 'ccECP_cc-pVTZ.dat'),
@@ -327,7 +327,7 @@ ALIAS = {
     'ccecpaugccpvqz': join('ccecp-basis', 'ccECP', 'ccECP_aug-cc-pVQZ.dat'),
     'ccecpaugccpv5z': join('ccecp-basis', 'ccECP', 'ccECP_aug-cc-pV5Z.dat'),
     'ccecpaugccpv6z': join('ccecp-basis', 'ccECP', 'ccECP_aug-cc-pV6Z.dat'),
-# ccECP_He_core 
+# ccECP_He_core
     'ccecphe'         : join('ccecp-basis', 'ccECP_He_core', 'ccECP.dat'   ),
     'ccecpheccpvdz'   : join('ccecp-basis', 'ccECP_He_core', 'ccECP_cc-pVDZ.dat'),
     'ccecpheccpvtz'   : join('ccecp-basis', 'ccECP_He_core', 'ccECP_cc-pVTZ.dat'),
@@ -708,7 +708,11 @@ def load_ecp(filename_or_basisname, symb):
                 filename_or_basisname, elements=symb)
         except KeyError:
             raise BasisNotFoundError(filename_or_basisname)
-        return bse._ecp_basis(bse_obj)[0][symb]
+        ecp_basis = bse._ecp_basis(bse_obj)
+        if len(ecp_basis) > 0:
+            return ecp_basis[symb]
+        else:
+            return {}
 
     raise BasisNotFoundError('Unknown ECP format or ECP name')
 
