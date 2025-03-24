@@ -259,13 +259,13 @@ def read(filename, molpro_orbsym=MOLPRO_ORBSYM, verbose=True):
     for i in range(10):
         line = finp.readline().upper()
         data.append(line)
-        if '&END' in line:
+        if '&END' in line or '/' in line:
             break
     else:
         raise RuntimeError('Problematic FCIDUMP header')
 
     result = {}
-    tokens = ','.join(data).replace('&FCI', '').replace('&END', '')
+    tokens = ','.join(data).replace('&FCI', '').replace('&END', '').replace('/', '')
     tokens = tokens.replace(' ', '').replace('\n', '').replace(',,', ',')
     for token in re.split(',(?=[a-zA-Z])', tokens):
         key, val = token.split('=')
