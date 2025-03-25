@@ -231,7 +231,7 @@ def _make_df_eris(mp, mo_coeff=None, ovL=None, ovL_to_save=None, verbose=None):
     # determine incore or outcore
     nocc = occ_coeff.shape[1]
     nvir = vir_coeff.shape[1]
-    naux = with_df.auxmol.nao_nr()
+    naux = with_df.get_naoaux()
 
     if ovL is not None:
         if isinstance(ovL, np.ndarray):
