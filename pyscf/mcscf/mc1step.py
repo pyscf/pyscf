@@ -850,7 +850,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
             active space CI energy,
             the active space FCI wavefunction coefficients or DMRG wavefunction ID,
             the MCSCF canonical orbital coefficients,
-            the MCSCF canonical orbital coefficients.
+            the MCSCF canonical orbital energies (diagonal elements of general Fock matrix).
 
         They are attributes of mcscf object, which can be accessed by
         .e_tot, .e_cas, .ci, .mo_coeff, .mo_energy
