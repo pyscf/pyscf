@@ -46,7 +46,7 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(len(auxbasis['O']), 37)
         # If basis-set-exchange pacakge is installed, this test will fail.
         # bse-0.9 produces 13 shells due to round-off errors.
-        # The correct number of generated basis functions should be 12. 
+        # The correct number of generated basis functions should be 12.
         self.assertEqual(len(auxbasis['H']), 12)
 
         mol = gto.M(
@@ -69,6 +69,31 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(len(auxbasis['H']), 20)
 
     def test_make_auxbasis(self):
+        mol = gto.M(
+            verbose = 0,
+            atom = '''O     0    0.       0.
+                      H     0    -0.757   0.587
+                      H     0    0.757    0.587
+                GHOST-H     0    0.       0.587''',
+            basis = 'cc-pvdz'
+        )
+        auxbasis = df.addons.make_auxbasis(mol)
+        self.assertEqual(auxbasis['O'], 'cc-pvdz-jkfit')
+        self.assertEqual(auxbasis['H'], 'cc-pvdz-jkfit')
+        self.assertEqual(auxbasis['GHOST-H'], 'cc-pvdz-jkfit')
+        self.assertEqual(len(auxbasis['GHOST-H']), len(auxbasis['H']))
+
+        mol = gto.M(
+            verbose = 0,
+            atom = '''O     0    0.       0.
+                      H     0    -0.757   0.587
+                      H     0    0.757    0.587''',
+            basis = {'O':'cc-pvdz', 'H':'cc-pvtz'}
+        )
+        auxbasis = df.addons.make_auxbasis(mol)
+        self.assertEqual(auxbasis['O'], 'cc-pvdz-jkfit')
+        self.assertEqual(auxbasis['H'], 'cc-pvtz-jkfit')
+
         mol = gto.M(
             verbose = 0,
             atom = '''O     0    0.       0.

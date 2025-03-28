@@ -55,17 +55,17 @@ class KnownValues(unittest.TestCase):
         # incore
         mmp = mp.dfmp2.DFMP2(mf)
         mmp.kernel()
-        self.assertAlmostEqual(mmp.e_corr, -0.2040090597718413, 8)
+        self.assertAlmostEqual(mmp.e_corr, -0.20400482102770082, 8)
 
         # outcore
         mmp = mp.dfmp2.DFMP2(mf).set(force_outcore=True)
         mmp.kernel()
-        self.assertAlmostEqual(mmp.e_corr, -0.2040090597718413, 8)
+        self.assertAlmostEqual(mmp.e_corr, -0.20400482102770082, 8)
 
     def test_dfmp2_frozen(self):
         mmp = mp.dfmp2.DFMP2(mf, frozen=[0,1,5])
         mmp.kernel()
-        self.assertAlmostEqual(mmp.e_corr, -0.13844448336139464, 8)
+        self.assertAlmostEqual(mmp.e_corr, -0.13844381496025246, 8)
 
     def test_dfmp2_mf_with_df(self):
         mmpref = mp.mp2.MP2(dfmf)
@@ -110,7 +110,7 @@ class KnownValues(unittest.TestCase):
         # incore
         mmp = dfmp2_slow.DFMP2(mf)
         mmp.kernel()
-        self.assertAlmostEqual(mmp.e_corr, -0.2040090597718413, 8)
+        self.assertAlmostEqual(mmp.e_corr, -0.20400482102770082, 8)
 
 
 
