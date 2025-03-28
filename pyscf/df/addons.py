@@ -171,14 +171,14 @@ def make_auxbasis(mol, mp2fit=False):
     uniq_atoms = {a[0] for a in mol._atom}
     if isinstance(mol.basis, str):
         _basis = {a: mol.basis for a in uniq_atoms}
-    elif (isinstance(mol.basis, dict) and
-        all([isinstance(basis, str) for basis in mol.basis.values()])):
-        _basis = {a: mol.basis[a] for a in uniq_atoms}
     elif 'default' in mol.basis:
         default_basis = mol.basis['default']
         _basis = {a: default_basis for a in uniq_atoms}
         _basis.update(mol.basis)
         del (_basis['default'])
+    elif (isinstance(mol.basis, dict) and
+            all([isinstance(basis, str) for basis in mol.basis.values()])):
+        _basis = {a: mol.basis[a] for a in uniq_atoms}
     else:
         _basis = mol._basis or {}
 
