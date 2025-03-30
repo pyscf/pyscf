@@ -290,7 +290,6 @@ def _assert(condition):
         comm.Abort()
 
 def register_for(obj):
-    global _registry
     key = id(obj)
     # Keep track of the object in a global registry.  On slave nodes, the
     # object can be accessed from global registry.
