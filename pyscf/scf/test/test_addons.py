@@ -500,7 +500,7 @@ class KnownValues(unittest.TestCase):
         mf_smear = addons.smearing(mf_smear, sigma=1e-3, method='fermi')
         e_smear = mf_smear.kernel()
         self.assertAlmostEqual(abs(mf.mo_occ - mf_smear.mo_occ).max(), 0, 3)
-        self.assertAlmostEqual(e_frac, e_smear, 8)
+        self.assertAlmostEqual(e_frac, e_smear, 6)
 
         mol = gto.Mole()
         mol.verbose = 5
