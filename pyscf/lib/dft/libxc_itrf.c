@@ -1024,8 +1024,9 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                 if (omega[i] != 0) {
                         // skip if func is not a RSH functional
 #if XC_MAJOR_VERSION <= 7
-                        if (func.cam_omega != 0) {
-                                func.cam_omega = omega[i];
+                        if (1) {
+                                xc_func_set_ext_params_name(&func, "_omega", omega[i]);
+                                //func.cam_omega = omega[i];
                         }
 #else
                         if (func.hyb_omega != NULL && func.hyb_omega[0] != 0) {
