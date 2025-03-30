@@ -176,6 +176,9 @@ def make_auxbasis(mol, mp2fit=False):
         _basis = {a: default_basis for a in uniq_atoms}
         _basis.update(mol.basis)
         del (_basis['default'])
+    elif (isinstance(mol.basis, dict) and
+            all([isinstance(basis, str) for basis in mol.basis.values()])):
+        _basis = {a: mol.basis[a] for a in uniq_atoms}
     else:
         _basis = mol._basis or {}
 
@@ -193,7 +196,7 @@ def make_auxbasis(mol, mp2fit=False):
                 if auxb is not None:
                     try:
                         # Test if basis auxb for element k is available
-                        gto.basis.load(auxb, k)
+                        gto.basis.load(auxb, elements._std_symbol_without_ghost(k))
                     except BasisNotFoundError:
                         pass
                     else:

@@ -191,7 +191,7 @@ class KnownValues(unittest.TestCase):
         mc1.max_cycle_micro = 6
         mc1.fcisolver.pspace_size = 0
         mc1.kernel(mo)
-        self.assertAlmostEqual(mc1.e_tot, -105.82833244029327, 6)
+        self.assertAlmostEqual(mc1.e_tot, -105.82833497389831, 6)
 
     # FIXME: How to test ci_response_space? The test below seems numerical instable
     #def test_ci_response_space(self):
