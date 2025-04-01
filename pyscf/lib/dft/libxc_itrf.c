@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <xc.h>
+#include <string.h>
 #include "config.h"
 #define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
 #define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
@@ -32,6 +33,19 @@
 
 // TODO: register python signal
 #define raise_error     return
+
+
+static int
+xc_func_find_ext_params_name(const xc_func_type *p, const char *name) {
+  int ii;
+  assert(p != NULL && p->info->ext_params.n > 0);
+  for(ii=0; ii<p->info->ext_params.n; ii++){
+    if(strcmp(p->info->ext_params.names[ii], name) == 0) {
+      return ii;
+    }
+  }
+  return -1;
+}
 
 /* Extracted from comments of libxc:gga.c
 
@@ -1024,7 +1038,8 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                 if (omega[i] != 0) {
                         // skip if func is not a RSH functional
 #if XC_MAJOR_VERSION <= 7
-                        if (1) {
+                        if ( xc_func_find_ext_params_name(&func, "_omega") >= 0 ) {
+                                //fprintf(stdout, "change omega to %f", omega[i]);
                                 xc_func_set_ext_params_name(&func, "_omega", omega[i]);
                                 //func.cam_omega = omega[i];
                         }
