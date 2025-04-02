@@ -34,7 +34,9 @@
 // TODO: register python signal
 #define raise_error     return
 
-
+/* Extracted from libxc:functionals.c since this function is not exposed
+ * currently. See issue #2756.
+ */
 static int
 xc_func_find_ext_params_name(const xc_func_type *p, const char *name) {
   int ii;
@@ -1037,29 +1039,15 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                 // set the range-separated parameter
                 if (omega[i] != 0) {
                         // skip if func is not a RSH functional
-#if XC_MAJOR_VERSION <= 7
                         if ( xc_func_find_ext_params_name(&func, "_omega") >= 0 ) {
-                                //fprintf(stdout, "change omega to %f", omega[i]);
                                 xc_func_set_ext_params_name(&func, "_omega", omega[i]);
-                                //func.cam_omega = omega[i];
                         }
-#else
-                        if (func.hyb_omega != NULL && func.hyb_omega[0] != 0) {
-                                func.hyb_omega[0] = omega[i];
-                        }
-#endif
                         // Recursively set the sub-functionals if they are RSH
                         // functionals
                         for (j = 0; j < func.n_func_aux; j++) {
-#if XC_MAJOR_VERSION <= 7
-                                if (func.func_aux[j]->cam_omega != 0) {
-                                        func.func_aux[j]->cam_omega = omega[i];
+                                if ( xc_func_find_ext_params_name(func.func_aux[j], "_omega") >= 0 ) {
+                                        xc_func_set_ext_params_name(func.func_aux[j], "_omega", omega[i]);
                                 }
-#else
-                                if (func.func_aux[j]->hyb_omega != NULL && func.func_aux[j]->hyb_omega[0] != 0) {
-                                        func.func_aux[j]->hyb_omega[0] = omega[i];
-                                }
-#endif
                         }
                 }
 

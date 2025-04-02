@@ -1055,7 +1055,6 @@ def _eval_xc(xc_code, rho, spin=0, deriv=1, omega=None):
         omega = [hyb[2]] * len(facs)
     else:
         omega = [0] * len(facs)
-    print(fn_ids, facs, omega)
     fn_ids_set = set(fn_ids)
     if fn_ids_set.intersection(PROBLEMATIC_XC):
         problem_xc = [PROBLEMATIC_XC[k]

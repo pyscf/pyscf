@@ -373,6 +373,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(float(vxc[1][0]), -0.003911167644579979, 7)
         self.assertEqual(dft.libxc.rsh_coeff('ityh,'), (0.2, 0.0, 0.0))
 
+    def test_lcwpbe(self):
+        rho = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc('LC_wPBE', rho, 0, deriv=1)
+        exc1, vxc1, fxc1, kxc1 = dft.libxc.eval_xc('RSH(0.4,1.0,-1.0)+wpbeh,pbe', rho, 0, deriv=1)
+        self.assertAlmostEqual(float(exc[0]), float(exc1[0]), 7)
+        self.assertAlmostEqual(float(vxc[0][0]), float(vxc1[0][0]), 7)
+        self.assertAlmostEqual(float(vxc[1][0]), float(vxc1[1][0]), 7)
+
     def test_deriv_order(self):
         self.assertTrue(dft.libxc.test_deriv_order('lda', 3, raise_error=False))
         self.assertTrue(dft.libxc.test_deriv_order('m05', 2, raise_error=False))
