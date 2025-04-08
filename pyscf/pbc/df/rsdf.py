@@ -295,6 +295,7 @@ cell.dimension=3 with large vacuum.""")
             kpts_union = unique(np.vstack([self.kpts, self.kpts_band]))[0]
         dfbuilder = _RSGDFBuilder(cell, auxcell, kpts_union)
         dfbuilder.__dict__.update(self.__dict__)
+        dfbuilder.kpts = kpts_union
         j_only = self._j_only or len(kpts_union) == 1
         dfbuilder.make_j3c(cderi_file, j_only=j_only, dataname=self._dataname,
                            kptij_lst=kptij_lst)
