@@ -58,6 +58,14 @@ class KnownValues(unittest.TestCase):
         mf.kernel()
         self.assertAlmostEqual(lib.fp(mf.get_bands(kband[0])[0]), 1.992205011752425, 7)
 
+    def test_rsdf_band(self):
+        mf = scf.RHF(cell)
+        mf.with_df = df.RSDF(cell).set(auxbasis='weigend')
+        mf.with_df.exp_to_discard = 0.518490303352116
+        mf.with_df.kpts_band = kband[0]
+        mf.kernel()
+        self.assertAlmostEqual(lib.fp(mf.get_bands(kband[0])[0]), 1.992205011752425, 7)
+
     def test_mdf_band(self):
         mf = scf.RHF(cell)
         mf.with_df = df.MDF(cell).set(auxbasis='weigend')
@@ -83,6 +91,16 @@ class KnownValues(unittest.TestCase):
     def test_df_bands(self):
         mf = scf.KRHF(cell)
         mf.with_df = df.DF(cell).set(auxbasis='weigend')
+        mf.with_df.kpts_band = kband
+        mf.with_df.exp_to_discard = 0.518490303352116
+        mf.kpts = cell.make_kpts([2,1,1])
+        mf.kernel()
+        self.assertAlmostEqual(lib.fp(mf.get_bands(kband[0])[0]), 1.9648945030342437, 7)
+        self.assertAlmostEqual(lib.fp(mf.get_bands(kband)[0]), 1.0455025876245683, 7)
+
+    def test_rsdf_bands(self):
+        mf = scf.KRHF(cell)
+        mf.with_df = df.RSDF(cell).set(auxbasis='weigend')
         mf.with_df.kpts_band = kband
         mf.with_df.exp_to_discard = 0.518490303352116
         mf.kpts = cell.make_kpts([2,1,1])
