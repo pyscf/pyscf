@@ -556,6 +556,9 @@ class KnownValues(unittest.TestCase):
         cell.fromstring(cl.tostring('poscar'), 'vasp')
         r0 = cell.atom_coords()
         self.assertAlmostEqual(abs(ref - r0).max(), 0, 12)
+        cell.fromstring(cl.tostring('xyz'), 'xyz')
+        r0 = cell.atom_coords()
+        self.assertAlmostEqual(abs(ref - r0).max(), 0, 12)
 
     def test_fromfile(self):
         ref = cl.atom_coords().copy()
