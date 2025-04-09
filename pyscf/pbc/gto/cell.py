@@ -1022,6 +1022,7 @@ def tostring(cell, format='poscar'):
     '''
     format = format.lower()
     output = []
+    atmfmt = '%17.8f %17.8f %17.8f'
     if format == 'poscar' or format == 'vasp' or format == 'xyz':
         lattice_vectors = cell.lattice_vectors() * param.BOHR
         coords = cell.atom_coords() * param.BOHR
@@ -1030,7 +1031,7 @@ def tostring(cell, format='poscar'):
             output.append('1.0')
             for lattice_vector in lattice_vectors:
                 ax, ay, az = lattice_vector
-                output.append('%14.5f %14.5f %14.5f' % (ax, ay, az))
+                output.append(atmfmt % (ax, ay, az))
             unique_atoms = dict()
             for atom in cell.elements:
                 if atom not in unique_atoms:
@@ -1044,16 +1045,16 @@ def tostring(cell, format='poscar'):
                 for atom, coord in zip(cell.elements, coords):
                     if atom == atom_type:
                         x, y, z = coord
-                        output.append('%14.5f %14.5f %14.5f' % (x, y, z))
+                        output.append(atmfmt % (x, y, z))
             return '\n'.join(output)
         elif format == 'xyz':
             output.append('%d' % cell.natm)
-            output.append('Lattice="'+' '.join(f'{ax:14.5f}' for ax in lattice_vectors.ravel())
+            output.append('Lattice="'+' '.join(f'{ax:17.8f}' for ax in lattice_vectors.ravel())
                 +'" Properties=species:S:1:pos:R:3')
             for i in range(cell.natm):
                 symb = cell.atom_pure_symbol(i)
                 x, y, z = coords[i]
-                output.append('%-4s %14.5f %14.5f %14.5f' %
+                output.append(('%-4s ' + atmfmt) %
                               (symb, x, y, z))
             return '\n'.join(output)
     else:
@@ -1131,7 +1132,7 @@ def fromstring(string, format='poscar'):
                     raise RuntimeError('Error reading VASP geometry due to '
                         f'atom position type "{atom_position_type}". Atom '
                         'positions must be Direct or Cartesian.')
-                atoms.append('%s %14.5f %14.5f %14.5f'
+                atoms.append('%s %17.8f %17.8f %17.8f'
                     % (atom_type, x, y, z))
             start = end
         return '\n'.join(a), '\n'.join(atoms)
@@ -1392,6 +1393,17 @@ class Cell(mole.MoleBase):
                                                              return_mesh=True)
         if np.prod(mesh1) != np.prod(mesh):
             logger.debug(self, 'mesh %s is symmetrized as %s', mesh, mesh1)
+        m1size = np.prod(mesh1)
+        msize = np.prod(mesh)
+        if m1size > 8 * msize and m1size > 1000 + msize:
+            wstr = ('''WARNING!
+  Symmetrization significantly increased the mesh size,
+  from {} to {}. This might indicate a nearly symmetric input
+  structure, and it might cause memory issues. Consider symmetrizing your
+  structure, increasing the symmetry tolerance `pbc_symm_space_group_symprec`,
+  or turning off symmetry.\n\n''')
+            wstr = wstr.format(mesh, mesh1)
+            sys.stderr.write(wstr)
         return mesh1
 
     def build_lattice_symmetry(self, check_mesh_symmetry=True):
