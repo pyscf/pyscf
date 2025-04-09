@@ -1,3 +1,24 @@
+PySCF 2.9.0 (2025-04-11)
+------------------------
+* Added
+  - Analytical PCM Hessian
+  - Density fitting UCCSD
+* Improved
+  - Assign default auxiliary basis for def2-mtzvp and def2-mtzvpp
+  - Better initial guess for smearing
+  - libxc interface for passing omega in composite functionals
+  - The tolerance in geometry when identifying point group symmetry
+  - Adjust PBC GDF eigenvalue decomposition accuracy
+  - Special treatment in PBC GDF for dimension=0 systems
+* Fixes
+  - Dimension bug in spinor X2C code
+  - C-PCM and SS(V)PE gradients
+  - Complex density matrices for DFHF
+  - Fixes COSMO-RS functionality
+  - DF auxiliary basis assignment for ghost atoms
+  - Lattice sum range issue for low-dimensional systems
+
+
 PySCF 2.8.0 (2025-01-14)
 ------------------------
 * Added
