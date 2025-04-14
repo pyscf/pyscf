@@ -37,6 +37,7 @@ from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.dft import rks as mol_ks
 from pyscf.pbc.dft import multigrid
+from pyscf.pbc.df.df import GDF
 from pyscf.pbc.lib.kpts import KPoints
 from pyscf import __config__
 
@@ -136,19 +137,6 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
     return vxc
 
-def _patch_df_beckegrids(density_fit):
-    def new_df(self, auxbasis=None, with_df=None, *args, **kwargs):
-        mf = density_fit(self, auxbasis, with_df, *args, **kwargs)
-        mf.with_df._j_only = not self._numint.libxc.is_hybrid_xc(self.xc)
-        mf.grids = gen_grid.BeckeGrids(self.cell)
-        mf.grids.level = getattr(__config__, 'dft_rks_RKS_grids_level',
-                                 mf.grids.level)
-        mf.nlcgrids = gen_grid.BeckeGrids(self.cell)
-        mf.nlcgrids.level = getattr(__config__, 'dft_rks_RKS_nlcgrids_level',
-                                    mf.nlcgrids.level)
-        return mf
-    return new_df
-
 NELEC_ERROR_TOL = getattr(__config__, 'pbc_dft_rks_prune_error_tol', 0.02)
 def prune_small_rho_grids_(ks, cell, dm, grids, kpts):
     rho = ks.get_rho(dm, grids, kpts)
@@ -185,10 +173,6 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
     small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
 
     get_rho = get_rho
-
-    density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
-    rs_density_fit = _patch_df_beckegrids(pbchf.RHF.rs_density_fit)
-    mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)
 
     def __init__(self, xc='LDA,VWN'):
         self.xc = xc
@@ -232,11 +216,22 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
 
         # for GDF and MDF
         with_df = self.with_df
-        if (self._numint.libxc.is_hybrid_xc(self.xc) and
+        if (isinstance(with_df, GDF) and
+            self._numint.libxc.is_hybrid_xc(self.xc) and
             len(kpts) > 1 and getattr(with_df, '_j_only', False)):
             logger.warn(self, 'df.j_only cannot be used with hybrid functional')
             self.with_df._j_only = False
             self.with_df.reset()
+
+        if isinstance(with_df, GDF):
+            mesh = cell.mesh
+            #log.warn('''
+            #mf.grids = gen_grid.BeckeGrids(self.cell)
+            #mf.grids.level = getattr(__config__, 'dft_rks_RKS_grids_level',
+            #                         mf.grids.level)
+            #mf.nlcgrids = gen_grid.BeckeGrids(self.cell)
+            #mf.nlcgrids.level = getattr(__config__, 'dft_rks_RKS_nlcgrids_level',
+            #                            mf.nlcgrids.level)''')
 
         if self.verbose >= logger.WARN:
             self.check_sanity()

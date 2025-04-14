@@ -579,6 +579,9 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
         self.mesh = cell.mesh
+        if cell.omega > 0:
+            ke_cutoff = estimate_ke_cutoff_for_omega(cell, cell.omega)
+            self.mesh = cell.cutoff_to_mesh(ke_cutoff)
         self.kpts = kpts
         self.time_reversal_symmetry = True
 
