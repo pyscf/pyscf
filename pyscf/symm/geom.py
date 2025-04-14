@@ -36,6 +36,18 @@
 # method (point group detection flowchart) to detect the point group.
 #
 
+'''
+References:
+
+[1] SOFI. M. Gunde, et. al. arXiv:2408.06131.
+
+[2] libmsym. M. Johansson and V. Veryazov, J. Cheminformatics 9, 8 (2017).
+
+[3] SymMol. T. Pilati and A. Forni, J. Appl. Crystallogr. 31, 503-504 (1998).
+
+[4] R. J. Largent, W. F. Polik, and J. R. Schmidt, J. Comput. Chem. 33, 1637-1642 (2012),
+'''
+
 import re
 import numpy
 import scipy.linalg

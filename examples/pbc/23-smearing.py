@@ -34,12 +34,12 @@ print('Zero temperature energy = %s' % ((mf.e_tot+mf.e_free)/2))
 #mf.method = 'gauss'
 #mf.max_cycle = 1
 #mf.kernel()
-mf.sigma = .1
+mf.sigma = .01
 mf.smearing_method = 'gauss'
 mf.max_cycle = 2
 mf.kernel()
 
-mf.sigma = .05
+mf.sigma = .005
 mf.smearing_method = 'fermi'
 mf.max_cycle = 50
 mf.kernel()
