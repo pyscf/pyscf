@@ -2088,7 +2088,7 @@ def tostring(mol, format='raw'):
         for i in range(mol.natm):
             symb = mol.atom_pure_symbol(i)
             x, y, z = coords[i]
-            output.append('%-4s %14.5f %14.5f %14.5f' %
+            output.append('%-4s %17.8f %17.8f %17.8f' %
                           (symb, x, y, z))
         return '\n'.join(output)
     elif format == 'zmat':
