@@ -26,11 +26,13 @@ class KnownValues(unittest.TestCase):
         mol = pyscf.M(atom='H 0 0 0; H 0 0 1', verbose=0)
         geom_ref = mol.atom_coords()
         mf = mol.RHF().run()
+        e_ref = mf.e_tot
         ref = mf.Gradients().kernel()
         dat = finite_diff.kernel(mol.RHF(), .5e-2)
         assert abs(dat - ref).max() < 1e-4
         # Ensure geometry is restored
         assert abs(mol.atom_coords() - geom_ref).max() < 1e-9
+        assert mf.e_tot == e_ref
 
     def test_hessian_scanner(self):
         mol = pyscf.M(atom='H 0 0 0; H 0 0 1', verbose=0)
@@ -76,6 +78,36 @@ class KnownValues(unittest.TestCase):
             dat = finite_diff.kernel(fake_mf, .5e-2)
         # Ensure geometry is restored
         assert abs(mol.atom_coords() - geom_ref).max() < 1e-9
+
+    def test_Gradients_class(self):
+        mol = pyscf.M(atom='H 0 0 0; H 0 0 1', verbose=0)
+        mf = mol.RHF().run()
+        ref = mf.Gradients().kernel()
+        grad_obj = finite_diff.Gradients(mf)
+        grad_obj.displacement = .5e-2
+        dat = grad_obj.kernel()
+        assert abs(dat - ref).max() < 1e-4
+
+    def test_Hessian_class(self):
+        mol = pyscf.M(atom='H 0 0 0; H 0 0 1', verbose=0)
+        mf = mol.RHF().run()
+        ref = mf.Hessian().kernel()
+        mf_g = mol.RHF().Gradients()
+        hess_obj = finite_diff.Hessian(mf_g)
+        hess_obj.displacement = .5e-2
+        dat = hess_obj.kernel()
+        assert abs(dat - ref).max() < 1e-4
+
+    def test_grad_as_scanner(self):
+        mol = pyscf.M(atom='H 0 0 0; H 0 0 1', verbose=0)
+        mf = mol.RHF().run()
+        e_ref = mf.e_tot
+        ref = mf.Gradients().kernel()
+        g_scan = finite_diff.Gradients(mf).as_scanner()
+        g_scan.displacement = .5e-2
+        e, g = g_scan(mol)
+        assert abs(g - ref).max() < 1e-4
+        assert abs(e - e_ref) < 1e-9
 
 if __name__ == "__main__":
     print("Full Tests for finite_diff")
