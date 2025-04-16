@@ -35,7 +35,6 @@ print(H)
 print('Analytical Hessian:')
 print(mol.RHF().run().Hessian().kernel())
 
-polish comments in a python module
 #
 # Finite difference Gradients as a PySCF builtin Gradients object
 #
