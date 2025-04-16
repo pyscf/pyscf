@@ -76,7 +76,7 @@ def kernel(h1e, eri, norb, nelec, ecore=0, nroots=1, verbose=3):
 
 
 # dm_pq = <|p^+ q|>
-def make_rdm1(fcivec, norb, nelec, link_index=None):
+def make_rdm1_slow(fcivec, norb, nelec, link_index=None):
     if link_index is None:
         link_index = cistring.gen_linkstr_index(range(norb), nelec)
     rdm1 = numpy.zeros((norb, norb), dtype=fcivec.dtype)
@@ -84,6 +84,20 @@ def make_rdm1(fcivec, norb, nelec, link_index=None):
         for a, i, str1, sign in tab:
             rdm1[a, i] += sign * numpy.dot(fcivec[str1].conj(), fcivec[str0])
     return rdm1
+
+
+# dm_pq = <|p^+ q|>
+def make_rdm1(fcivec, norb, nelec, link_index=None):
+    if nelec == 0:
+        return numpy.zeros((norb, norb), dtype=fcivec.dtype)
+    nd = cistring.num_strings(norb, nelec - 1)
+    index_d = cistring.gen_des_str_index(range(norb), nelec)
+    dci = numpy.zeros((nd, norb), dtype=fcivec.dtype)
+    for str0, tab in enumerate(index_d):
+        for _, i, str1, sign in tab:
+            dci[str1, i] += sign * fcivec[str0]
+    return dci.conj().T @ dci
+
 
 # dm_pq,rs = <|p^+ q r^+ s|>
 def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
