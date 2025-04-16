@@ -37,6 +37,7 @@ from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.dft import rks as mol_ks
 from pyscf.pbc.dft import multigrid
+from pyscf.pbc.df.df import GDF
 from pyscf.pbc.lib.kpts import KPoints
 from pyscf import __config__
 
@@ -232,7 +233,8 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
 
         # for GDF and MDF
         with_df = self.with_df
-        if (self._numint.libxc.is_hybrid_xc(self.xc) and
+        if (isinstance(with_df, GDF) and
+            self._numint.libxc.is_hybrid_xc(self.xc) and
             len(kpts) > 1 and getattr(with_df, '_j_only', False)):
             logger.warn(self, 'df.j_only cannot be used with hybrid functional')
             self.with_df._j_only = False
