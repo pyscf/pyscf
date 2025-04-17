@@ -70,6 +70,8 @@ class KnownValues(unittest.TestCase):
 
     def test_rdm1(self):
         dm1 = fci.fci_dhf_slow.make_rdm1(ci0, norb, nelec)
+        dm1_slow = fci.fci_dhf_slow.make_rdm1_slow(ci0, norb, nelec)
+        self.assertAlmostEqual(numpy.linalg.norm(dm1 - dm1_slow), 0.0, 12)
         self.assertAlmostEqual(abs(lib.fp(dm1)), 0.23702307574649528, 8)
 
     def test_rdm12(self):
