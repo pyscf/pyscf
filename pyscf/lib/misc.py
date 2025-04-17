@@ -417,8 +417,8 @@ def tril_product(*iterables, **kwds):
     .. math:: i[tril_idx[0]] >= i[tril_idx[1]] >= ... >= i[tril_idx[len(tril_idx)-1]]
 
     Args:
-        *iterables: Variable length argument list of indices for the cartesian product
-        **kwds: Arbitrary keyword arguments.  Acceptable keywords include:
+        ``*iterables``: Variable length argument list of indices for the cartesian product
+        ``**kwds``: Arbitrary keyword arguments.  Acceptable keywords include:
             repeat (int): Number of times to repeat the iterables
             tril_idx (array_like): Indices to put into lower-triangular form.
 
@@ -664,7 +664,7 @@ class StreamObject:
 
     def apply(self, fn, *args, **kwargs):
         '''
-        Apply the fn to rest arguments:  return fn(*args, **kwargs).  The
+        Apply the fn to rest arguments:  return ``fn(*args, **kwargs)``.  The
         return value of method set is the object itself.  This allows a series
         of functions/methods to be executed in pipe.
         '''
@@ -878,8 +878,10 @@ def make_class(bases, name=None, attrs=None):
     '''
     Construct a class
 
-    class {name}(*bases):
-        __dict__ = attrs
+    .. code-block:: python
+
+        class {name}(*bases):
+            __dict__ = attrs
     '''
     if name is None:
         name = ''.join(getattr(x, '__name_mixin__', x.__name__) for x in bases)
@@ -1478,7 +1480,7 @@ class _OmniObject:
     '''
     verbose = 0
     max_memory = param.MAX_MEMORY
-    stdout = sys.stdout
+    stdout = StreamObject.stdout
 
     def __init__(self, default_factory=None):
         self._default = default_factory
@@ -1495,6 +1497,10 @@ omniobj._built = True
 omniobj.mol = omniobj
 omniobj._scf = omniobj
 omniobj.base = omniobj
+omniobj.precision = 1e-8 # utilized by several pbc modules
+
+# Attributes that are kept in np.ndarray during the to_gpu conversion
+_ATTRIBUTES_IN_NPARRAY = {'kpt', 'kpts', 'kpts_band', 'mesh', 'frozen'}
 
 def to_gpu(method, out=None):
     '''Convert a method to its corresponding GPU variant, and recursively
@@ -1537,9 +1543,11 @@ def to_gpu(method, out=None):
     for key in keys:
         val = getattr(method, key)
         if isinstance(val, numpy.ndarray):
-            val = cupy.asarray(val)
+            if key not in _ATTRIBUTES_IN_NPARRAY:
+                val = cupy.asarray(val)
         elif hasattr(val, 'to_gpu'):
             val = val.to_gpu()
         setattr(out, key, val)
-    out.reset()
+    if hasattr(out, 'reset'):
+        out.reset()
     return out

@@ -36,7 +36,8 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     if not isinstance(dm, numpy.ndarray):
         dm = numpy.asarray(dm)
     if dm.ndim == 2:  # RHF DM
-        dm = numpy.asarray((dm*.5,dm*.5))
+        logger.warn(ks, 'Incompatible dm dimension. Treat dm as RHF density matrix.')
+        dm = numpy.repeat(dm[None]*.5, 2, axis=0)
     ks.initialize_grids(mol, dm)
 
     t0 = (logger.process_clock(), logger.perf_counter())
@@ -63,37 +64,44 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             logger.debug(ks, 'nelec with nlc grids = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
+    incremental_jk = (ks._eri is None and ks.direct_scf and
+                      getattr(vhf_last, 'vj', None) is not None)
+    if incremental_jk:
+        dm_last = numpy.asarray(dm_last)
+        dm = numpy.asarray(dm)
+        assert dm_last.ndim == 0 or dm_last.ndim == dm.ndim
+        _dm = dm - dm_last
+    else:
+        _dm = dm
     if not ni.libxc.is_hybrid_xc(ks.xc):
         vk = None
-        if (ks._eri is None and ks.direct_scf and
-            getattr(vhf_last, 'vj', None) is not None):
-            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
-            vj = ks.get_j(mol, ddm[0]+ddm[1], hermi)
+        vj = ks.get_j(mol, _dm[0]+_dm[1], hermi)
+        if incremental_jk:
             vj += vhf_last.vj
-        else:
-            vj = ks.get_j(mol, dm[0]+dm[1], hermi)
         vxc += vj
     else:
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
-        if (ks._eri is None and ks.direct_scf and
-            getattr(vhf_last, 'vk', None) is not None):
-            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
-            vj, vk = ks.get_jk(mol, ddm, hermi)
+        if omega == 0:
+            vj, vk = ks.get_jk(mol, _dm, hermi)
             vk *= hyb
-            if omega != 0:
-                vklr = ks.get_k(mol, ddm, hermi, omega)
-                vklr *= (alpha - hyb)
-                vk += vklr
-            vj = vj[0] + vj[1] + vhf_last.vj
+        elif alpha == 0: # LR=0, only SR exchange
+            vj = ks.get_j(mol, _dm, hermi)
+            vk = ks.get_k(mol, _dm, hermi, omega=-omega)
+            vk *= hyb
+        elif hyb == 0: # SR=0, only LR exchange
+            vj = ks.get_j(mol, _dm, hermi)
+            vk = ks.get_k(mol, _dm, hermi, omega=omega)
+            vk *= alpha
+        else: # SR and LR exchange with different ratios
+            vj, vk = ks.get_jk(mol, _dm, hermi)
+            vk *= hyb
+            vklr = ks.get_k(mol, _dm, hermi, omega=omega)
+            vklr *= (alpha - hyb)
+            vk += vklr
+        vj = vj[0] + vj[1]
+        if incremental_jk:
+            vj += vhf_last.vj
             vk += vhf_last.vk
-        else:
-            vj, vk = ks.get_jk(mol, dm, hermi)
-            vj = vj[0] + vj[1]
-            vk *= hyb
-            if omega != 0:
-                vklr = ks.get_k(mol, dm, hermi, omega)
-                vklr *= (alpha - hyb)
-                vk += vklr
         vxc += vj - vk
 
         if ground_state:
@@ -178,7 +186,8 @@ class UKS(rks.KohnShamDFT, uhf.UHF):
         ground_state = (isinstance(dm, numpy.ndarray)
                         and dm.ndim == 3 and dm.shape[0] == 2)
         if ground_state:
-            super().initialize_grids(mol, dm[0]+dm[1])
+            dm = numpy.asarray(dm[0] + dm[1])
+            super().initialize_grids(mol, dm)
         else:
             super().initialize_grids(mol)
         return self

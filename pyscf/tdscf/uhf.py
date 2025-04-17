@@ -25,7 +25,7 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.scf import uhf_symm
 from pyscf.tdscf import rhf
-from pyscf.tdscf._lr_eig import eigh as lr_eigh, eig as lr_eig
+from pyscf.tdscf._lr_eig import eigh as lr_eigh, eig as lr_eig, real_eig
 from pyscf.data import nist
 from pyscf import __config__
 
@@ -41,6 +41,7 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
         wfnsym : int or str
             Point group symmetry irrep symbol or ID for excited CIS wavefunction.
     '''
+    assert fock_ao is None
     mol = mf.mol
     mo_coeff = mf.mo_coeff
     assert (mo_coeff[0].dtype == numpy.double)
@@ -87,13 +88,13 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
 
         za = zs[:,:nocca*nvira].reshape(nz,nocca,nvira)
         zb = zs[:,nocca*nvira:].reshape(nz,noccb,nvirb)
-        dmova = lib.einsum('xov,qv,po->xpq', za, orbva.conj(), orboa)
-        dmovb = lib.einsum('xov,qv,po->xpq', zb, orbvb.conj(), orbob)
+        dmsa = lib.einsum('xov,pv,qo->xpq', za, orbva, orboa.conj())
+        dmsb = lib.einsum('xov,pv,qo->xpq', zb, orbvb, orbob.conj())
 
-        v1ao = vresp(numpy.asarray((dmova,dmovb)))
+        v1ao = vresp(numpy.asarray((dmsa,dmsb)))
 
-        v1a = lib.einsum('xpq,po,qv->xov', v1ao[0], orboa.conj(), orbva)
-        v1b = lib.einsum('xpq,po,qv->xov', v1ao[1], orbob.conj(), orbvb)
+        v1a = lib.einsum('xpq,qo,pv->xov', v1ao[0], orboa, orbva.conj())
+        v1b = lib.einsum('xpq,qo,pv->xov', v1ao[1], orbob, orbvb.conj())
         v1a += numpy.einsum('xia,ia->xia', za, e_ia_a)
         v1b += numpy.einsum('xia,ia->xia', zb, e_ia_b)
 
@@ -119,8 +120,8 @@ def _get_x_sym_table(mf):
 def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
     r'''A and B matrices for TDDFT response function.
 
-    A[i,a,j,b] = \delta_{ab}\delta_{ij}(E_a - E_i) + (ia||bj)
-    B[i,a,j,b] = (ia||jb)
+    A[i,a,j,b] = \delta_{ab}\delta_{ij}(E_a - E_i) + (ai||jb)
+    B[i,a,j,b] = (ai||bj)
 
     Spin symmetry is considered in the returned A, B lists.  List A has three
     items: (A_aaaa, A_aabb, A_bbbb). A_bbaa = A_aabb.transpose(2,3,0,1).
@@ -131,6 +132,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
 
+    assert mo_coeff[0].dtype == numpy.float64
     mol = mf.mol
     nao = mol.nao_nr()
     occidx_a = numpy.where(mo_occ[0]==1)[0]
@@ -583,8 +585,8 @@ def _contract_multipole(tdobj, ints, hermi=True, xy=None):
     orbo_b = mo_coeff[1][:,mo_occ[1]==1]
     orbv_b = mo_coeff[1][:,mo_occ[1]==0]
 
-    ints_a = numpy.einsum('...pq,pi,qj->...ij', ints, orbo_a.conj(), orbv_a)
-    ints_b = numpy.einsum('...pq,pi,qj->...ij', ints, orbo_b.conj(), orbv_b)
+    ints_a = numpy.einsum('...pq,pi,qj->...ij', ints, orbo_a, orbv_a.conj())
+    ints_b = numpy.einsum('...pq,pi,qj->...ij', ints, orbo_b, orbv_b.conj())
     pol = [(numpy.einsum('...ij,ij->...', ints_a, x[0]) +
             numpy.einsum('...ij,ij->...', ints_b, x[1])) for x,y in xy]
     pol = numpy.array(pol)
@@ -767,7 +769,6 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     e_ia = hdiag = numpy.hstack((e_ia_a.ravel(), e_ia_b.ravel()))
     if wfnsym is not None and mol.symmetry:
         hdiag[sym_forbid] = 0
-    hdiag = numpy.hstack((hdiag, -hdiag))
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
@@ -786,28 +787,29 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         xb = xs[:,nocca*nvira:].reshape(nz,noccb,nvirb)
         ya = ys[:,:nocca*nvira].reshape(nz,nocca,nvira)
         yb = ys[:,nocca*nvira:].reshape(nz,noccb,nvirb)
-        dmsa  = lib.einsum('xov,qv,po->xpq', xa, orbva.conj(), orboa)
-        dmsb  = lib.einsum('xov,qv,po->xpq', xb, orbvb.conj(), orbob)
-        dmsa += lib.einsum('xov,pv,qo->xpq', ya, orbva, orboa.conj())
-        dmsb += lib.einsum('xov,pv,qo->xpq', yb, orbvb, orbob.conj())
+        dmsa  = lib.einsum('xov,pv,qo->xpq', xa, orbva, orboa.conj())
+        dmsb  = lib.einsum('xov,pv,qo->xpq', xb, orbvb, orbob.conj())
+        dmsa += lib.einsum('xov,qv,po->xpq', ya, orbva.conj(), orboa)
+        dmsb += lib.einsum('xov,qv,po->xpq', yb, orbvb.conj(), orbob)
         v1ao = vresp(numpy.asarray((dmsa,dmsb)))
-        v1aov = lib.einsum('xpq,po,qv->xov', v1ao[0], orboa.conj(), orbva)
-        v1bov = lib.einsum('xpq,po,qv->xov', v1ao[1], orbob.conj(), orbvb)
-        v1avo = lib.einsum('xpq,qo,pv->xov', v1ao[0], orboa, orbva.conj())
-        v1bvo = lib.einsum('xpq,qo,pv->xov', v1ao[1], orbob, orbvb.conj())
+        v1a_top = lib.einsum('xpq,qo,pv->xov', v1ao[0], orboa, orbva.conj())
+        v1b_top = lib.einsum('xpq,qo,pv->xov', v1ao[1], orbob, orbvb.conj())
+        v1a_bot = lib.einsum('xpq,po,qv->xov', v1ao[0], orboa.conj(), orbva)
+        v1b_bot = lib.einsum('xpq,po,qv->xov', v1ao[1], orbob.conj(), orbvb)
 
-        v1ov = xs * e_ia  # AX
-        v1vo = ys * e_ia  # AY
-        v1ov[:,:nocca*nvira] += v1aov.reshape(nz,-1)
-        v1vo[:,:nocca*nvira] += v1avo.reshape(nz,-1)
-        v1ov[:,nocca*nvira:] += v1bov.reshape(nz,-1)
-        v1vo[:,nocca*nvira:] += v1bvo.reshape(nz,-1)
+        v1_top = xs * e_ia  # AX
+        v1_bot = ys * e_ia  # AY
+        v1_top[:,:nocca*nvira] += v1a_top.reshape(nz,-1)
+        v1_bot[:,:nocca*nvira] += v1a_bot.reshape(nz,-1)
+        v1_top[:,nocca*nvira:] += v1b_top.reshape(nz,-1)
+        v1_bot[:,nocca*nvira:] += v1b_bot.reshape(nz,-1)
         if wfnsym is not None and mol.symmetry:
-            v1ov[:,sym_forbid] = 0
-            v1vo[:,sym_forbid] = 0
-        hx = numpy.hstack((v1ov, -v1vo))
+            v1_top[:,sym_forbid] = 0
+            v1_bot[:,sym_forbid] = 0
+        hx = numpy.hstack((v1_top, -v1_bot))
         return hx
 
+    hdiag = numpy.hstack((hdiag, -hdiag))
     return vind, hdiag
 
 
@@ -819,7 +821,7 @@ class TDHF(TDBase):
     def gen_vind(self, mf=None):
         if mf is None:
             mf = self._scf
-        return gen_tdhf_operation(mf, singlet=self.singlet, wfnsym=self.wfnsym)
+        return gen_tdhf_operation(mf, None, self.singlet, self.wfnsym)
 
     def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         if return_symmetry:
@@ -831,11 +833,10 @@ class TDHF(TDBase):
             y0 = numpy.zeros_like(x0)
             return numpy.hstack([x0, y0])
 
-    get_precond = rhf.TDHF.get_precond
-
     def kernel(self, x0=None, nstates=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
         '''
+        log = logger.new_logger(self)
         cpu0 = (logger.process_clock(), logger.perf_counter())
         self.check_sanity()
         self.dump_flags()
@@ -845,24 +846,27 @@ class TDHF(TDBase):
             self.nstates = nstates
         mol = self.mol
 
-        log = logger.Logger(self.stdout, self.verbose)
-
-        vind, hdiag = self.gen_vind(self._scf)
-        precond = self.get_precond(hdiag)
-
+        real_system = True
         # handle single kpt PBC SCF
         if getattr(self._scf, 'kpt', None) is not None:
             from pyscf.pbc.lib.kpts_helper import gamma_point
             real_system = (gamma_point(self._scf.kpt) and
                            self._scf.mo_coeff[0].dtype == numpy.double)
-        else:
-            real_system = True
 
-        # We only need positive eigenvalues
-        def pickeig(w, v, nroots, envs):
-            realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
-                                  (w.real > self.positive_eig_threshold))[0]
-            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
+        real_eig_solver = real_system
+
+        vind, hdiag = self.gen_vind(self._scf)
+        precond = self.get_precond(hdiag)
+        if real_eig_solver:
+            eig = real_eig
+            pickeig = None
+        else:
+            eig = lr_eig
+            # We only need positive eigenvalues
+            def pickeig(w, v, nroots, envs):
+                realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
+                                      (w.real > self.positive_eig_threshold))[0]
+                return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
 
         x0sym = None
         if x0 is None:
@@ -874,36 +878,33 @@ class TDHF(TDBase):
             x_sym = numpy.append(x_sym, y_sym)
             x0sym = [rhf._guess_wfnsym_id(self, x_sym, x) for x in x0]
 
-        self.converged, w, x1 = lr_eig(
+        self.converged, self.e, x1 = eig(
             vind, x0, precond, tol_residual=self.conv_tol, lindep=self.lindep,
             nroots=nstates, x0sym=x0sym, pick=pickeig, max_cycle=self.max_cycle,
             max_memory=self.max_memory, verbose=log)
 
         nmo = self._scf.mo_occ[0].size
-        nocca = (self._scf.mo_occ[0]>0).sum()
-        noccb = (self._scf.mo_occ[1]>0).sum()
+        nocca, noccb = self._scf.nelec
         nvira = nmo - nocca
         nvirb = nmo - noccb
-        e = []
         xy = []
         for i, z in enumerate(x1):
-            x, y = z.reshape(2,-1)
+            x, y = z.reshape(2, -1)
             norm = lib.norm(x)**2 - lib.norm(y)**2
-            if norm > 0:
-                norm = 1/numpy.sqrt(norm)
-                e.append(w[i])
-                xy.append(((x[:nocca*nvira].reshape(nocca,nvira) * norm,  # X_alpha
-                            x[nocca*nvira:].reshape(noccb,nvirb) * norm), # X_beta
-                           (y[:nocca*nvira].reshape(nocca,nvira) * norm,  # Y_alpha
-                            y[nocca*nvira:].reshape(noccb,nvirb) * norm)))# Y_beta
-        self.e = numpy.array(e)
+            if norm < 0:
+                log.warn('TDDFT amplitudes |X| smaller than |Y|')
+            norm = abs(norm)**-.5
+            xy.append(((x[:nocca*nvira].reshape(nocca,nvira) * norm,  # X_alpha
+                        x[nocca*nvira:].reshape(noccb,nvirb) * norm), # X_beta
+                       (y[:nocca*nvira].reshape(nocca,nvira) * norm,  # Y_alpha
+                        y[nocca*nvira:].reshape(noccb,nvirb) * norm)))# Y_beta
         self.xy = xy
 
         if self.chkfile:
             lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
 
-        log.timer('TDDFT', *cpu0)
+        log.timer('TDHF/TDDFT', *cpu0)
         self._finalize()
         return self.e, self.xy
 

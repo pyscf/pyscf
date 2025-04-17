@@ -47,6 +47,7 @@ class CasidaTDDFT(TDDFT, TDA):
     '''
 
     init_guess = TDA.init_guess
+    get_precond = TDA.get_precond
 
     def gen_vind(self, mf=None):
         if mf is None:
@@ -85,17 +86,17 @@ class CasidaTDDFT(TDDFT, TDA):
         def vind(zs):
             zs = numpy.asarray(zs).reshape(-1,nocc,nvir)
             # *2 for double occupancy
-            dmov = lib.einsum('xov,ov,po,qv->xpq', zs, d_ia*2, orbo, orbv.conj())
+            dms = lib.einsum('xov,pv,qo->xpq', zs * (d_ia*2), orbv, orbo)
             # +cc for A+B and K_{ai,jb} in A == K_{ai,bj} in B
-            dmov = dmov + dmov.conj().transpose(0,2,1)
+            dms = dms + dms.transpose(0,2,1)
 
-            v1ao = vresp(dmov)
-            v1ov = lib.einsum('xpq,po,qv->xov', v1ao, orbo.conj(), orbv)
+            v1ao = vresp(dms)
+            v1mo = lib.einsum('xpq,qo,pv->xov', v1ao, orbo, orbv)
 
-            # numpy.sqrt(e_ia) * (e_ia*d_ia*z + v1ov)
-            v1ov += numpy.einsum('xov,ov->xov', zs, ed_ia)
-            v1ov *= d_ia
-            return v1ov.reshape(v1ov.shape[0],-1)
+            # numpy.sqrt(e_ia) * (e_ia*d_ia*z + v1mo)
+            v1mo += numpy.einsum('xov,ov->xov', zs, ed_ia)
+            v1mo *= d_ia
+            return v1mo.reshape(v1mo.shape[0],-1)
 
         return vind, hdiag
 
@@ -149,7 +150,9 @@ class CasidaTDDFT(TDDFT, TDA):
             x = (zp + zm) * .5
             y = (zp - zm) * .5
             norm = lib.norm(x)**2 - lib.norm(y)**2
-            norm = numpy.sqrt(.5/norm)  # normalize to 0.5 for alpha spin
+            if norm < 0:
+                log.warn('TDDFT amplitudes |X| smaller than |Y|')
+            norm = abs(.5/norm)**.5  # normalize to 0.5 for alpha spin
             return (x*norm, y*norm)
 
         idx = numpy.where(w2 > self.positive_eig_threshold)[0]

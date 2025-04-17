@@ -176,9 +176,9 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0,
         if hermi:
             rho[1:4] *= 2  # *2 for + einsum('pi,ij,pj->p', ao[i], dm, ao[0])
         else:
+            c1 = _dot_ao_dm(mol, ao[0], dm.conj().T, non0tab, shls_slice, ao_loc)
             for i in range(1, 4):
-                c1 = _dot_ao_dm(mol, ao[i], dm, non0tab, shls_slice, ao_loc)
-                rho[i] += _contract_rho(c1, ao[0])
+                rho[i] += _contract_rho(c1, ao[i])
     else: # meta-GGA
         if with_lapl:
             # rho[4] = \nabla^2 rho, rho[5] = 1/2 |nabla f|^2
@@ -312,14 +312,14 @@ def eval_rho1(mol, ao, dm, screen_index=None, xctype='LDA', hermi=0,
 
         rho[tau_idx] = 0
         for i in range(1, 4):
-            c1 = _dot_ao_dm_sparse(ao[i], dm.T, nbins, screen_index, pair_mask, ao_loc)
+            c1 = _dot_ao_dm_sparse(ao[i], dm, nbins, screen_index, pair_mask, ao_loc)
             rho[tau_idx] += _contract_rho_sparse(ao[i], c1, screen_index, ao_loc)
 
             rho[i] = _contract_rho_sparse(ao[i], c0, screen_index, ao_loc)
             if hermi:
                 rho[i] *= 2
             else:
-                rho[i] += _contract_rho_sparse(c1, ao[0], screen_index, ao_loc)
+                rho[i] += _contract_rho_sparse(ao[0], c1, screen_index, ao_loc)
 
         # tau = 1/2 (\nabla f)^2
         rho[tau_idx] *= .5
@@ -812,9 +812,8 @@ def _tau_dot(mol, bra, ket, wv, mask, shls_slice, ao_loc):
     mat += _dot_ao_ao(mol, bra[3], aow, mask, shls_slice, ao_loc)
     return mat
 
-def _sparse_enough(screen_index):
+def _sparse_enough(screen_index, threshold=0.5):
     # TODO: improve the turnover threshold
-    threshold = 0.5
     return numpy.count_nonzero(screen_index) < screen_index.size * threshold
 
 def _dot_ao_ao_dense(ao1, ao2, wv, out=None):
@@ -831,13 +830,8 @@ def _dot_ao_ao_dense(ao1, ao2, wv, out=None):
         return lib.ddot(ao1.T, ao2, 1, out, 1)
     else:
         assert wv.dtype == numpy.double
-        libdft.VXCdot_aow_ao_dense(
-            out.ctypes.data_as(ctypes.c_void_p),
-            ao1.ctypes.data_as(ctypes.c_void_p),
-            ao2.ctypes.data_as(ctypes.c_void_p),
-            wv.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(nao), ctypes.c_int(ngrids))
-    return out
+        ao1 = _scale_ao(ao1, wv.ravel())
+        return lib.ddot(ao1.T, ao2, 1, out, 1)
 
 def _dot_ao_ao_sparse(ao1, ao2, wv, nbins, screen_index, pair_mask, ao_loc,
                       hermi=0, out=None):
@@ -2723,9 +2717,12 @@ class LibXCMixin:
         '''
         omega, alpha, beta = self.rsh_coeff(xc_code)
         if self.omega is not None:
+            if omega == 0 and self.omega != 0:
+                raise RuntimeError(f'Not support assigning omega={self.omega}. '
+                                   f'{xc_code} is not a RSH functional')
             omega = self.omega
 
-        if abs(omega) > 1e-10:
+        if omega != 0:
             hyb = alpha + beta
         else:
             hyb = self.hybrid_coeff(xc_code, spin)
@@ -2856,12 +2853,32 @@ class NumInt(lib.StreamObject, LibXCMixin):
                 pair_mask = ovlp_cond < -numpy.log(self.cutoff)
             pair_mask = numpy.asarray(pair_mask, dtype=numpy.uint8)
 
+        if (mo_occ is not None) and (grids is not None):
+            # eval_rho2 is more efficient unless we have a very large system
+            # for which the pair_mask is significantly sparser than the
+            # ratio of occupied to total molecular orbitals. So we use this ratio
+            # to switch between eval_rho1 and eval_rho2.
+            mo_ao_sparsity = max(0.5 * numpy.sum(mo_occ) / nao, 1e-8)
+            wts = mol.ao_loc_nr()
+            wts = (wts[1:] - wts[:-1]) / wts[-1]
+            rho1_rho2_ratio = numpy.dot(wts, pair_mask).dot(wts) / mo_ao_sparsity
+        else:
+            rho1_rho2_ratio = 0.0
+
         def make_rho(idm, ao, sindex, xctype):
-            if sindex is not None and grids is not None:
+            has_screening = sindex is not None and grids is not None
+            has_mo = mo_coeff is not None
+            if xctype == "GGA":
+                # GGA has to do more contractions using rho2 compared to rho1,
+                # so the threshold for switching to rho1 is less strict.
+                is_sparse = rho1_rho2_ratio < 4
+            else:
+                is_sparse = rho1_rho2_ratio < 1
+            if has_screening and (not has_mo or is_sparse):
                 return self.eval_rho1(mol, ao, dms[idm], sindex, xctype, hermi,
                                       with_lapl, cutoff=self.cutoff,
                                       ao_cutoff=grids.cutoff, pair_mask=pair_mask)
-            elif mo_coeff is not None:
+            elif has_mo:
                 return self.eval_rho2(mol, ao, mo_coeff[idm], mo_occ[idm],
                                       sindex, xctype, with_lapl)
             else:

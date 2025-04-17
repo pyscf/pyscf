@@ -131,6 +131,10 @@ class KnownValues(unittest.TestCase):
 
     def test_rsh_fft(self):
         mf = pbcdft.KRKS(cell)
+        mf.xc = 'hse06'
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -2.482418296326724, 7)
+
         mf.xc = 'camb3lyp'
         mf.conv_tol = 1e-8
         mf.kernel()
@@ -138,6 +142,10 @@ class KnownValues(unittest.TestCase):
 
     def test_rsh_df(self):
         mf = pbcdft.KRKS(cell).density_fit()
+        mf.xc = 'wb97'
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -2.4916945546399165, 6)
+
         mf.xc = 'camb3lyp'
         mf.omega = .15
         mf.conv_tol = 1e-8

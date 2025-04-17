@@ -21,20 +21,20 @@ mol = gto.M(atom='''
             ecp = {'Na': gto.basis.parse_ecp('''
 Na nelec 10
 Na ul
-0      2.0000000              6.0000000        
-1    175.5502590            -10.0000000        
-2      2.3365719             -6.0637782        
-2      0.7799867             -0.7299393        
+0      2.0000000              6.0000000
+1    175.5502590            -10.0000000
+2      2.3365719             -6.0637782
+2      0.7799867             -0.7299393
 Na S
-0    243.3605846              3.0000000        
-1     41.5764759             36.2847626        
-2     13.2649167             72.9304880        
-2      0.9764209              6.0123861        
+0    243.3605846              3.0000000
+1     41.5764759             36.2847626
+2     13.2649167             72.9304880
+2      0.9764209              6.0123861
 Na P
-0   1257.2650682              5.0000000        
-1    189.6248810            117.4495683        
-2     54.5247759            423.3986704        
-2      0.9461106              7.1241813        
+0   1257.2650682              5.0000000
+1    189.6248810            117.4495683
+2     54.5247759            423.3986704
+2      0.9461106              7.1241813
 ''')})
 
 #
@@ -76,7 +76,7 @@ mol = gto.M(atom='Na 0. 0. 0.; H 0 0 2.',
 #
 # Input SOC-ECP parameters
 # See also relevant introductions in
-#  https://people.clarkson.edu/~pchristi/reps.html 
+#  https://people.clarkson.edu/~pchristi/reps.html
 #  http://www.nwchem-sw.org/index.php/ECP
 #
 # Note the SOC factor 2/(2l+1) has been multiplied in the SO coefficients
@@ -106,3 +106,11 @@ Cu P
 1     14.67029953            -5.66128206           -1.483716
 0     30.43350029             5.39882612             .073914
 '''})
+
+
+#
+# Input ECP and basis set from basis set exchange
+#
+mol = gto.M(atom='O 0. 0. 0.; S 0 0 2.',
+            basis='Grimme vDZP',
+            ecp = 'Grimme vDZP')

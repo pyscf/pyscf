@@ -44,7 +44,12 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+
+    @classmethod
+    def tearDownClass(cls):
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
 
     def test_gen_grid(self):
         grid = gen_grid.Grids(h2o)
@@ -91,7 +96,7 @@ class KnownValues(unittest.TestCase):
 
         grid.radi_method = radi.becke
         grid.build(with_non0tab=False)
-        self.assertAlmostEqual(lib.fp(grid.weights), 818061.875131255, 7)
+        self.assertAlmostEqual(lib.fp(grid.weights), 780.7183109298, 9)
 
     def test_prune(self):
         grid = gen_grid.Grids(h2o)

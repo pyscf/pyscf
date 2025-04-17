@@ -3,10 +3,6 @@
 '''
 Gamma point Hartree-Fock/DFT for all-electron calculation
 
-The default FFT-based 2-electron integrals may not be accurate enough for
-all-electron calculation.  It's recommended to use MDF (mixed density fitting)
-technique to improve the accuracy.
-
 See also
 examples/df/00-with_df.py
 examples/df/01-auxbasis.py
@@ -31,11 +27,6 @@ cell = gto.M(
 )
 
 mf = scf.RHF(cell).density_fit()
-mf.kernel()
-
-# Mixed density fitting is another option for all-electron calculations
-mf = scf.RHF(cell).mix_density_fit()
-mf.with_df.mesh = [10]*3  # Tune #PWs in MDF for performance/accuracy balance
 mf.kernel()
 
 # Or use even-tempered Gaussian basis as auxiliary fitting functions.

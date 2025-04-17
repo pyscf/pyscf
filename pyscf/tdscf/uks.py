@@ -45,6 +45,7 @@ class CasidaTDDFT(TDDFT, TDA):
     '''
 
     init_guess = TDA.init_guess
+    get_precond = TDA.get_precond
 
     def gen_vind(self, mf=None):
         if mf is None:
@@ -97,15 +98,15 @@ class CasidaTDDFT(TDDFT, TDA):
 
             dmsa = (zs[:,:nocca*nvira] * d_ia[:nocca*nvira]).reshape(nz,nocca,nvira)
             dmsb = (zs[:,nocca*nvira:] * d_ia[nocca*nvira:]).reshape(nz,noccb,nvirb)
-            dmsa = lib.einsum('xov,po,qv->xpq', dmsa, orboa, orbva.conj())
-            dmsb = lib.einsum('xov,po,qv->xpq', dmsb, orbob, orbvb.conj())
-            dmsa = dmsa + dmsa.conj().transpose(0,2,1)
-            dmsb = dmsb + dmsb.conj().transpose(0,2,1)
+            dmsa = lib.einsum('xov,pv,qo->xpq', dmsa, orbva, orboa)
+            dmsb = lib.einsum('xov,pv,qo->xpq', dmsb, orbvb, orbob)
+            dmsa = dmsa + dmsa.transpose(0,2,1)
+            dmsb = dmsb + dmsb.transpose(0,2,1)
 
             v1ao = vresp(numpy.asarray((dmsa,dmsb)))
 
-            v1a = lib.einsum('xpq,po,qv->xov', v1ao[0], orboa.conj(), orbva)
-            v1b = lib.einsum('xpq,po,qv->xov', v1ao[1], orbob.conj(), orbvb)
+            v1a = lib.einsum('xpq,qo,pv->xov', v1ao[0], orboa, orbva)
+            v1b = lib.einsum('xpq,qo,pv->xov', v1ao[1], orbob, orbvb)
 
             hx = numpy.hstack((v1a.reshape(nz,-1), v1b.reshape(nz,-1)))
             hx += ed_ia * zs
@@ -178,13 +179,14 @@ class CasidaTDDFT(TDDFT, TDA):
             x = (zp + zm) * .5
             y = (zp - zm) * .5
             norm = lib.norm(x)**2 - lib.norm(y)**2
-            if norm > 0:
-                norm = 1/numpy.sqrt(norm)
-                e.append(w)
-                xy.append(((x[:nocca*nvira].reshape(nocca,nvira) * norm,  # X_alpha
-                            x[nocca*nvira:].reshape(noccb,nvirb) * norm), # X_beta
-                           (y[:nocca*nvira].reshape(nocca,nvira) * norm,  # Y_alpha
-                            y[nocca*nvira:].reshape(noccb,nvirb) * norm)))# Y_beta
+            if norm < 0:
+                log.warn('TDDFT amplitudes |X| smaller than |Y|')
+            norm = abs(norm)**-.5
+            e.append(w)
+            xy.append(((x[:nocca*nvira].reshape(nocca,nvira) * norm,  # X_alpha
+                        x[nocca*nvira:].reshape(noccb,nvirb) * norm), # X_beta
+                       (y[:nocca*nvira].reshape(nocca,nvira) * norm,  # Y_alpha
+                        y[nocca*nvira:].reshape(noccb,nvirb) * norm)))# Y_beta
         self.e = numpy.array(e)
         self.xy = xy
 

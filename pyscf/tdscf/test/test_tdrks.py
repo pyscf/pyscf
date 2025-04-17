@@ -39,22 +39,23 @@ def setUpModule():
     mf = scf.RHF(mol).run()
     td_hf = tdscf.TDHF(mf).run(conv_tol=1e-6)
 
-    mf_lda = dft.RKS(mol)
-    mf_lda.xc = 'lda, vwn'
-    mf_lda.grids.prune = None
-    mf_lda.run(conv_tol=1e-10)
+    with lib.temporary_env(dft.radi, ATOM_SPECIFIC_TREUTLER_GRIDS=False):
+        mf_lda = dft.RKS(mol)
+        mf_lda.xc = 'lda, vwn'
+        mf_lda.grids.prune = None
+        mf_lda.run(conv_tol=1e-10)
 
-    mf_bp86 = dft.RKS(mol)
-    mf_bp86.xc = 'b88,p86'
-    mf_bp86.grids.prune = None
-    mf_bp86.run(conv_tol=1e-10)
+        mf_bp86 = dft.RKS(mol)
+        mf_bp86.xc = 'b88,p86'
+        mf_bp86.grids.prune = None
+        mf_bp86.run(conv_tol=1e-10)
 
-    mf_b3lyp = dft.RKS(mol)
-    mf_b3lyp.xc = 'b3lyp5'
-    mf_b3lyp.grids.prune = None
-    mf_b3lyp.run(conv_tol=1e-10)
+        mf_b3lyp = dft.RKS(mol)
+        mf_b3lyp.xc = 'b3lyp5'
+        mf_b3lyp.grids.prune = None
+        mf_b3lyp.run(conv_tol=1e-10)
 
-    mf_m06l = dft.RKS(mol).run(xc='m06l', conv_tol=1e-10)
+        mf_m06l = dft.RKS(mol).run(xc='m06l', conv_tol=1e-10)
 
 def tearDownModule():
     global mol, mf, td_hf, mf_lda, mf_bp86, mf_b3lyp, mf_m06l
@@ -126,6 +127,16 @@ class KnownValues(unittest.TestCase):
         e_ref = diagonalize(a, b, 5)
         self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 7)
         self.assertAlmostEqual(lib.fp(es[:3]*27.2114), 9.0054057603534, 4)
+
+    def test_tddft_hse06(self):
+        mf = mol.RKS(xc='hse06').run()
+        td = mf.TDDFT()
+        td.conv_tol = 1e-5
+        es = td.kernel(nstates=4)[0]
+        a,b = td.get_ab()
+        e_ref = diagonalize(a, b, 5)
+        self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 7)
+        self.assertAlmostEqual(lib.fp(es[:3]), 0.34554352587555387, 6)
 
     def test_tda_b3lypg(self):
         mf = dft.RKS(mol)
@@ -217,8 +228,24 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -1.14670613191817, 8)
 
         e_td = mf.TDA().set(nstates=5).kernel()[0]
-        ref = [16.25021865, 27.93720198, 49.4665691]
-        self.assertAlmostEqual(abs(e_td*nist.HARTREE2EV - ref).max(), 0, 4)
+        ref = [0.59718453, 1.02667324, 1.81786290]
+        self.assertAlmostEqual(abs(e_td - ref).max(), 0, 6)
+
+        mf.xc = 'wb97 + 1e-9*HF'
+        ref = mf.TDA().set(nstates=5).kernel()[0]
+        self.assertAlmostEqual(abs(e_td - ref).max(), 0, 8)
+
+        mf.xc = 'hse06'
+        e = mf.kernel()
+        self.assertAlmostEqual(e, -1.1447666793407982, 8)
+
+        e_td = mf.TDA().set(nstates=5).kernel()[0]
+        ref = [0.60314386, 1.03802565, 1.82757364]
+        self.assertAlmostEqual(abs(e_td - ref).max(), 0, 6)
+
+        mf.xc = 'hse06 + 1e-9*HF'
+        ref = mf.TDA().set(nstates=5).kernel()[0]
+        self.assertAlmostEqual(abs(e_td - ref).max(), 0, 8)
 
     def test_tda_m06l_singlet(self):
         td = mf_m06l.TDA()
@@ -229,8 +256,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ab_hf(self):
         a, b = rhf.get_ab(mf)
-        fock = mf.get_hcore() + mf.get_veff()
-        ftda = rhf.gen_tda_operation(mf, fock, singlet=True)[0]
+        ftda = rhf.gen_tda_operation(mf, singlet=True)[0]
         ftdhf = rhf.gen_tdhf_operation(mf, singlet=True)[0]
         nocc = numpy.count_nonzero(mf.mo_occ == 2)
         nvir = numpy.count_nonzero(mf.mo_occ == 0)

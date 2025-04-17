@@ -94,7 +94,10 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True,
     dm_tril[:,idx] *= .5
 
     # For k
-    orbol, orbor = _decompose_rdm1 (mf_grad, mol, dm)
+    if hermi == 1:
+        orbol, orbor = _decompose_rdm1 (mf_grad, mol, dm)
+    else:
+        orbol, orbor = _decompose_rdm1_svd (mf_grad, mol, dm)
     nocc = [o.shape[-1] for o in orbor]
 
     # Coulomb: (P|Q) D_Q = (P|uv) D_uv for D_Q ("rhoj")
@@ -319,6 +322,33 @@ def _int3c_wrapper(mol, auxmol, intor, aosym):
         return getints(intor, pmol._atm, pmol._bas, pmol._env, shls_slice,
                        aosym=aosym, cintopt=opt)
     return get_int3c
+
+def _decompose_rdm1_svd (mf_grad, mol, dm):
+    '''Decompose dms as U.Vh using SVD
+
+    Args:
+        mf_grad : instance of :class:`Gradients`
+        mol : instance of :class:`gto.Mole`
+        dm : ndarray or sequence of ndarrays of shape (nao,nao)
+            Density matrices
+
+    Returns:
+        orbol : list of ndarrays of shape (nao,*)
+            Contains non-null eigenvectors of density matrix
+        orbor : list of ndarrays of shape (nao,*)
+            Contains orbol * eigenvalues (occupancies)
+    '''
+    nao = mol.nao
+    dms = numpy.asarray(dm).reshape (-1,nao,nao)
+    orbor = []
+    orbol = []
+    for dm in dms:
+        u, s, vh = numpy.linalg.svd (dm)
+        idx = numpy.abs (s)>1e-8
+        orbol.append (numpy.asfortranarray (u[:,idx]))
+        orbor.append (numpy.asfortranarray (lib.einsum('i,ip->pi', s[idx], vh[idx])))
+
+    return orbol, orbor
 
 def _decompose_rdm1 (mf_grad, mol, dm):
     '''Decompose dms as U.Vh, where

@@ -41,7 +41,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
         kpts : (nkpts, 3) ndarray
 
     Kwargs:
-        kpts_band : (3,) ndarray or (*,3) ndarray
+        kpts_band : ``(3,)`` ndarray or ``(*,3)`` ndarray
             A list of arbitrary "band" k-points at which to evalute the matrix.
 
     Returns:
@@ -194,7 +194,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
             | 0 : not hermitian and not symmetric
             | 1 : hermitian
 
-        kpts_band : (3,) ndarray or (*,3) ndarray
+        kpts_band : ``(3,)`` ndarray or ``(*,3)`` ndarray
             A list of arbitrary "band" k-points at which to evalute the matrix.
 
     Returns:
@@ -270,7 +270,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
             # If we have an ewald exxdiv, we add the G=0 correction near the
             # end of the function to bypass any discretization errors
             # that arise from the FFT.
-            if exxdiv == 'ewald' or exxdiv is None:
+            if exxdiv == 'ewald':
                 coulG = tools.get_coulG(cell, kpt2-kpt1, False, mydf, mesh)
             else:
                 coulG = tools.get_coulG(cell, kpt2-kpt1, exxdiv, mydf, mesh)
@@ -384,7 +384,7 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
             # If we have an ewald exxdiv, we add the G=0 correction near the
             # end of the function to bypass any discretization errors
             # that arise from the FFT.
-            if exxdiv == 'ewald' or exxdiv is None:
+            if exxdiv == 'ewald':
                 coulG = tools.get_coulG(cell, kpt2-kpt1, False, mydf, mesh)
             else:
                 coulG = tools.get_coulG(cell, kpt2-kpt1, exxdiv, mydf, mesh)
@@ -436,7 +436,7 @@ def get_jk(mydf, dm, hermi=1, kpt=np.zeros(3), kpts_band=None,
         kpt : (3,) ndarray
             The "inner" dummy k-point at which the DM was evaluated (or
             sampled).
-        kpts_band : (3,) ndarray or (*,3) ndarray
+        kpts_band : ``(3,)`` ndarray or ``(*,3)`` ndarray
             The "outer" primary k-point at which J and K are evaluated.
 
     Returns:
@@ -467,7 +467,7 @@ def get_j(mydf, dm, hermi=1, kpt=np.zeros(3), kpts_band=None):
         kpt : (3,) ndarray
             The "inner" dummy k-point at which the DM was evaluated (or
             sampled).
-        kpts_band : (3,) ndarray or (*,3) ndarray
+        kpts_band : ``(3,)`` ndarray or ``(*,3)`` ndarray
             The "outer" primary k-point at which J and K are evaluated.
 
     Returns:
@@ -501,7 +501,7 @@ def get_k(mydf, dm, hermi=1, kpt=np.zeros(3), kpts_band=None, exxdiv=None):
         kpt : (3,) ndarray
             The "inner" dummy k-point at which the DM was evaluated (or
             sampled).
-        kpts_band : (3,) ndarray or (*,3) ndarray
+        kpts_band : ``(3,)`` ndarray or ``(*,3)`` ndarray
             The "outer" primary k-point at which J and K are evaluated.
 
     Returns:

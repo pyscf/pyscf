@@ -35,7 +35,7 @@ def aux_e1(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', co
     integral tensor (kptij_idx, comp, naux, nao_pair) are stored on disk.
 
     Args:
-        kptij_lst : (*,2,3) array
+        kptij_lst : ``(*,2,3)`` array
             A list of (kpti, kptj)
     '''
     if isinstance(auxcell_or_auxbasis, gto.MoleBase):
@@ -65,12 +65,12 @@ def aux_e1(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', co
 
     ao_loc = cell.ao_loc_nr()
     aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)[:shls_slice[5]+1]
-    ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
-    nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
-    naux = aux_loc[shls_slice[5]] - aux_loc[shls_slice[4]]
+    ni = int(ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]])
+    nj = int(ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]])
+    naux = int(aux_loc[shls_slice[5]] - aux_loc[shls_slice[4]])
     nkptij = len(kptij_lst)
 
-    nii = (ao_loc[shls_slice[1]]*(ao_loc[shls_slice[1]]+1)//2 -
+    nii = int(ao_loc[shls_slice[1]]*(ao_loc[shls_slice[1]]+1)//2 -
            ao_loc[shls_slice[0]]*(ao_loc[shls_slice[0]]+1)//2)
     nij = ni * nj
 
@@ -156,7 +156,7 @@ def _aux_e2(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', c
     _make_j3c**
 
     Args:
-        kptij_lst : (*,2,3) array
+        kptij_lst : ``(*,2,3)`` array
             A list of (kpti, kptj)
     '''
     if isinstance(auxcell_or_auxbasis, gto.MoleBase):
@@ -186,11 +186,11 @@ def _aux_e2(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', c
 
     ao_loc = cell.ao_loc_nr()
     aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)[:shls_slice[5]+1]
-    ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
-    nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
+    ni = int(ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]])
+    nj = int(ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]])
     nkptij = len(kptij_lst)
 
-    nii = (ao_loc[shls_slice[1]]*(ao_loc[shls_slice[1]]+1)//2 -
+    nii = int(ao_loc[shls_slice[1]]*(ao_loc[shls_slice[1]]+1)//2 -
            ao_loc[shls_slice[0]]*(ao_loc[shls_slice[0]]+1)//2)
     nij = ni * nj
 
@@ -208,7 +208,7 @@ def _aux_e2(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', c
         nao_pair = nij
 
     buflen = max(8, int(max_memory*.47e6/16/(nkptij*ni*nj*comp)))
-    auxdims = aux_loc[shls_slice[4]+1:shls_slice[5]+1] - aux_loc[shls_slice[4]:shls_slice[5]]
+    auxdims = int(aux_loc[shls_slice[4]+1:shls_slice[5]+1] - aux_loc[shls_slice[4]:shls_slice[5]])
     auxranges = balance_segs(auxdims, buflen)
     buflen = max([x[2] for x in auxranges])
     int3c = wrap_int3c(cell, auxcell, intor, 's1', comp, kptij_lst)

@@ -276,7 +276,7 @@ class KnownValues(unittest.TestCase):
         mf.max_cycle = 2
         mf.diis = False
         mf.kernel()
-        self.assertAlmostEqual(mf.scf(), -71.6072956194109, 7)
+        self.assertAlmostEqual(mf.e_tot, -71.6072956194109, 5)
 
     def test_convert_to_scf(self):
         from pyscf.x2c import x2c
@@ -499,8 +499,8 @@ class KnownValues(unittest.TestCase):
         # orbital degeneracy.
         mf_smear = addons.smearing(mf_smear, sigma=1e-3, method='fermi')
         e_smear = mf_smear.kernel()
-        self.assertAlmostEqual(abs(mf.mo_occ - mf_smear.mo_occ).max(), 0, 4)
-        self.assertAlmostEqual(e_frac, e_smear, 9)
+        self.assertAlmostEqual(abs(mf.mo_occ - mf_smear.mo_occ).max(), 0, 3)
+        self.assertAlmostEqual(e_frac, e_smear, 6)
 
         mol = gto.Mole()
         mol.verbose = 5

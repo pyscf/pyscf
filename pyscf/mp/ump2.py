@@ -179,14 +179,15 @@ def get_nocc(mp):
         nocca = numpy.count_nonzero(mp.mo_occ[0] > 0) - frozen
         noccb = numpy.count_nonzero(mp.mo_occ[1] > 0) - frozen
         #assert (nocca > 0 and noccb > 0)
-    elif isinstance(frozen[0], (int, numpy.integer, list, numpy.ndarray)):
-        if len(frozen) > 0 and isinstance(frozen[0], (int, numpy.integer)):
-            # The same frozen orbital indices for alpha and beta orbitals
-            frozen = [frozen, frozen]
+    elif hasattr(mp.frozen, '__len__'):
         occidxa = mp.mo_occ[0] > 0
-        occidxa[list(frozen[0])] = False
         occidxb = mp.mo_occ[1] > 0
-        occidxb[list(frozen[1])] = False
+        if len(frozen) > 0:
+            if isinstance(frozen[0], (int, numpy.integer)):
+                # The same frozen orbital indices for alpha and beta orbitals
+                frozen = [frozen, frozen]
+            occidxa[list(frozen[0])] = False
+            occidxb[list(frozen[1])] = False
         nocca = numpy.count_nonzero(occidxa)
         noccb = numpy.count_nonzero(occidxb)
     else:
@@ -203,11 +204,14 @@ def get_nmo(mp):
     elif isinstance(frozen, (int, numpy.integer)):
         nmoa = mp.mo_occ[0].size - frozen
         nmob = mp.mo_occ[1].size - frozen
-    elif isinstance(frozen[0], (int, numpy.integer, list, numpy.ndarray)):
-        if isinstance(frozen[0], (int, numpy.integer)):
-            frozen = (frozen, frozen)
-        nmoa = len(mp.mo_occ[0]) - len(set(frozen[0]))
-        nmob = len(mp.mo_occ[1]) - len(set(frozen[1]))
+    elif hasattr(mp.frozen, '__len__'):
+        nmoa = mp.mo_occ[0].size
+        nmob = mp.mo_occ[1].size
+        if len(frozen) > 0:
+            if isinstance(frozen[0], (int, numpy.integer)):
+                frozen = (frozen, frozen)
+            nmoa -= len(set(frozen[0]))
+            nmob -= len(set(frozen[1]))
     else:
         raise NotImplementedError
     return nmoa, nmob
@@ -231,11 +235,12 @@ def get_frozen_mask(mp):
     elif isinstance(frozen, (int, numpy.integer)):
         moidxa[:frozen] = False
         moidxb[:frozen] = False
-    elif isinstance(frozen[0], (int, numpy.integer, list, numpy.ndarray)):
-        if isinstance(frozen[0], (int, numpy.integer)):
-            frozen = (frozen, frozen)
-        moidxa[list(frozen[0])] = False
-        moidxb[list(frozen[1])] = False
+    elif hasattr(mp.frozen, '__len__'):
+        if len(frozen) > 0:
+            if isinstance(frozen[0], (int, numpy.integer)):
+                frozen = (frozen, frozen)
+            moidxa[list(frozen[0])] = False
+            moidxb[list(frozen[1])] = False
     else:
         raise NotImplementedError
     return moidxa,moidxb
@@ -632,8 +637,8 @@ def _ao2mo_ovov(mp, orbs, feri, max_memory=2000, verbose=None):
     with lib.call_in_background(ftmp.__setitem__) as save:
         for ish0, ish1, ni in sh_ranges:
             for jsh0, jsh1, nj in sh_ranges:
-                i0, i1 = ao_loc[ish0], ao_loc[ish1]
-                j0, j1 = ao_loc[jsh0], ao_loc[jsh1]
+                i0, i1 = int(ao_loc[ish0]), int(ao_loc[ish1])
+                j0, j1 = int(ao_loc[jsh0]), int(ao_loc[jsh1])
 
                 eri = fint(int2e, mol._atm, mol._bas, mol._env,
                            shls_slice=(0,nbas,ish0,ish1, jsh0,jsh1,0,nbas),

@@ -121,7 +121,7 @@ def eval_gto(mol, eval_name, coords, comp=None, shls_slice=None, non0tab=None,
     if shls_slice is None:
         shls_slice = (0, nbas)
     sh0, sh1 = shls_slice
-    nao = ao_loc[sh1] - ao_loc[sh0]
+    nao = int(ao_loc[sh1] - ao_loc[sh0])
     if 'spinor' in eval_name:
         ao = numpy.ndarray((2,comp,nao,ngrids), dtype=numpy.complex128,
                            buffer=out).transpose(0,1,3,2)

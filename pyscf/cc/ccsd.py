@@ -76,10 +76,16 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
         normt = numpy.linalg.norm(tmpvec)
         tmpvec = None
         if mycc.iterative_damping < 1.0:
-            alpha = mycc.iterative_damping
-            t1new = (1-alpha) * t1 + alpha * t1new
-            t2new *= alpha
-            t2new += (1-alpha) * t2
+            alpha = numpy.asarray(mycc.iterative_damping)
+            if isinstance(t1, tuple): # e.g. UCCSD
+                t1new = tuple((1-alpha) * numpy.asarray(t1_part) + alpha * numpy.asarray(t1new_part)
+                    for t1_part, t1new_part in zip(t1, t1new))
+                t2new = tuple((1-alpha) * numpy.asarray(t2_part) + alpha * numpy.asarray(t2new_part)
+                    for t2_part, t2new_part in zip(t2, t2new))
+            else:
+                t1new = (1-alpha) * numpy.asarray(t1) + alpha * numpy.asarray(t1new)
+                t2new *= alpha
+                t2new += (1-alpha) * numpy.asarray(t2)
         t1, t2 = t1new, t2new
         t1new = t2new = None
         t1, t2 = mycc.run_diis(t1, t2, istep, normt, eccsd-eold, adiis)
@@ -611,6 +617,8 @@ def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
     # vvvv == None means AO-direct CCSD. It should redirect to
     # _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out, verbose)
     assert (vvvv is not None)
+    if t2.size == 0:
+        return numpy.zeros_like(t2)
 
     time0 = logger.process_clock(), logger.perf_counter()
     log = logger.new_logger(mycc, verbose)
@@ -934,7 +942,7 @@ class CCSDBase(lib.StreamObject):
         'async_io', 'incore_complete', 'cc2', 'callback',
         'mol', 'verbose', 'stdout', 'frozen', 'level_shift',
         'mo_coeff', 'mo_occ', 'cycles', 'converged_lambda', 'emp2', 'e_hf',
-        'e_corr', 't1', 't2', 'l1', 'l2', 'chkfile',
+        'converged', 'e_corr', 't1', 't2', 'l1', 'l2', 'chkfile',
     }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 '''
-DF-CCSD and DF-IP/EA-EOM-CCSD for RHF is available
+DF-CCSD and DF-IP/EA-EOM-CCSD for RHF/UHF is available
 
 To use DF-RCCSD object, density fitting should be enabled at SCF level.
 DFCCSD uses the same auxiliary basis as the DF-SCF method.  It does not

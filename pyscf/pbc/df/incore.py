@@ -275,7 +275,7 @@ class Int3cBuilder(lib.StreamObject):
         cache_size = max(_get_cache_size(cell, intor),
                          _get_cache_size(rs_auxcell, intor))
         cell0_dims = cell0_ao_loc[1:] - cell0_ao_loc[:-1]
-        dijk = cell0_dims[:nbasp].max()**2 * cell0_dims[nbasp:].max() * comp
+        dijk = int(cell0_dims[:nbasp].max())**2 * int(cell0_dims[nbasp:].max()) * comp
 
         aosym = aosym[:2]
         gamma_point_only = is_zero(kpts)

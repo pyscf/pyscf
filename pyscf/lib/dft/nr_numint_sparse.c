@@ -499,7 +499,7 @@ for (n = 0; n < ALIGNMENT; n++) {
 
 for (jsh = jsh0; jsh < jsh1; jsh++) {
         si_j = screen_index[gblk0 * nbas + jsh];
-        if (si_j >= nbins_j && pair_mask[ish+nbas+jsh]) {
+        if (si_j >= nbins_j && pair_mask[ish*nbas+jsh]) {
                 j0 = ao_loc[jsh];
                 j1 = ao_loc[jsh+1];
                 ij = (i - ioff) * nj - joff;
@@ -568,8 +568,8 @@ void VXCdot_aow_ao_dense(double *out, double *bra, double *ket, double *wv,
 {
         const size_t Nao = nao;
         const size_t Ngrids = ngrids;
-        const int nao_blksize = BOXSIZE1_N * 4;
-        const int ngrids_blksize = BOXSIZE1_M;
+        const int nao_blksize = 64;
+        const int ngrids_blksize = 256;
         const char TRANS_T = 'T';
         const char TRANS_N = 'N';
         const double D1 = 1;

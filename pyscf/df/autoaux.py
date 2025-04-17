@@ -24,6 +24,7 @@ Ref:
 from math import factorial
 import numpy as np
 from pyscf import gto
+from pyscf.lib import logger
 
 F_LAUX   = np.array([20 , 7.0, 4.0, 4.0, 3.5, 2.5, 2.0, 2.0])
 BETA_BIG = np.array([1.8, 2.0, 2.2, 2.2, 2.2, 2.3, 3.0, 3.0])
@@ -136,6 +137,9 @@ def autoaux(mol):
         Z = gto.charge(symb)
         etb = _auto_aux_element(Z, mol._basis[symb])
         if etb:
+            for l, n, emin, beta in etb:
+                logger.info(mol, 'ETB for %s: l = %d, exps = %s * %g^n , n = 0..%d',
+                            symb, l, emin, beta, n-1)
             return gto.expand_etbs(etb)
         raise RuntimeError(f'Failed to generate even-tempered auxbasis for {symb}')
 

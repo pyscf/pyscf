@@ -83,3 +83,7 @@ tmp/
 # IDEs
 .idea/
 .vscode/
+
+# mypy
+.mypy_cache/
+

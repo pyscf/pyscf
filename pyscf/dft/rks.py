@@ -92,36 +92,40 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             logger.debug(ks, 'nelec with nlc grids = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
+    incremental_jk = (ks._eri is None and ks.direct_scf and
+                      getattr(vhf_last, 'vj', None) is not None)
+    if incremental_jk:
+        _dm = numpy.asarray(dm) - numpy.asarray(dm_last)
+    else:
+        _dm = dm
     if not ni.libxc.is_hybrid_xc(ks.xc):
         vk = None
-        if (ks._eri is None and ks.direct_scf and
-            getattr(vhf_last, 'vj', None) is not None):
-            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
-            vj = ks.get_j(mol, ddm, hermi)
+        vj = ks.get_j(mol, _dm, hermi)
+        if incremental_jk:
             vj += vhf_last.vj
-        else:
-            vj = ks.get_j(mol, dm, hermi)
         vxc += vj
     else:
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
-        if (ks._eri is None and ks.direct_scf and
-            getattr(vhf_last, 'vk', None) is not None):
-            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
-            vj, vk = ks.get_jk(mol, ddm, hermi)
+        if omega == 0:
+            vj, vk = ks.get_jk(mol, _dm, hermi)
             vk *= hyb
-            if omega != 0:  # For range separated Coulomb
-                vklr = ks.get_k(mol, ddm, hermi, omega=omega)
-                vklr *= (alpha - hyb)
-                vk += vklr
+        elif alpha == 0: # LR=0, only SR exchange
+            vj = ks.get_j(mol, _dm, hermi)
+            vk = ks.get_k(mol, _dm, hermi, omega=-omega)
+            vk *= hyb
+        elif hyb == 0: # SR=0, only LR exchange
+            vj = ks.get_j(mol, _dm, hermi)
+            vk = ks.get_k(mol, _dm, hermi, omega=omega)
+            vk *= alpha
+        else: # SR and LR exchange with different ratios
+            vj, vk = ks.get_jk(mol, _dm, hermi)
+            vk *= hyb
+            vklr = ks.get_k(mol, _dm, hermi, omega=omega)
+            vklr *= (alpha - hyb)
+            vk += vklr
+        if incremental_jk:
             vj += vhf_last.vj
             vk += vhf_last.vk
-        else:
-            vj, vk = ks.get_jk(mol, dm, hermi)
-            vk *= hyb
-            if omega != 0:
-                vklr = ks.get_k(mol, dm, hermi, omega=omega)
-                vklr *= (alpha - hyb)
-                vk += vklr
         vxc += vj - vk * .5
 
         if ground_state:
@@ -322,6 +326,9 @@ class KohnShamDFT:
 
     _keys = {'xc', 'nlc', 'grids', 'disp', 'nlcgrids', 'small_rho_cutoff'}
 
+    # Use rho to filter grids
+    small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
+
     def __init__(self, xc='LDA,VWN'):
         # By default, self.nlc = '' and self.disp = None
         self.xc = xc
@@ -333,9 +340,6 @@ class KohnShamDFT:
         self.nlcgrids = gen_grid.Grids(self.mol)
         self.nlcgrids.level = getattr(
             __config__, 'dft_rks_RKS_nlcgrids_level', self.nlcgrids.level)
-        # Use rho to filter grids
-        self.small_rho_cutoff = getattr(
-            __config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
 ##################################################
 # don't modify the following attributes, they are not input options
         self._numint = numint.NumInt()

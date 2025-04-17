@@ -24,22 +24,18 @@ jobs:
         run: |
           ls ${{ github.workspace }}/linux-wheels
       - name: Publish to PyPI
-        # if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          user: __token__
-          #password: ${{ secrets.PYPI_TEST_API_TOKEN }}
-          #repository_url: https://test.pypi.org/legacy/
-          password: ${{ secrets.PYPI_API_TOKEN }}
-          packages-dir: ${{ github.workspace }}/linux-wheels
-          verbose: true
+        run: |
+            pip3 install twine==6.0.1
+            export TWINE_USERNAME=__token__
+            export TWINE_PASSWORD="${{ secrets.PYPI_API_TOKEN }}"
+            twine upload --verbose linux-wheels/*
 
   release-pypi-aarch64:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
     env:
-      img: quay.io/pypa/manylinux2014_aarch64:2023-03-12-25fd859
+      img: quay.io/pypa/manylinux2014_aarch64:latest
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -67,67 +63,65 @@ jobs:
       run: |
         ls ${{ github.workspace }}/linux-wheels
     - name: Publish to PyPI
-      # if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
-      uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        user: __token__
-        #password: ${{ secrets.PYPI_TEST_API_TOKEN }}
-        #repository_url: https://test.pypi.org/legacy/
-        password: ${{ secrets.PYPI_API_TOKEN }}
-        packages-dir: ${{ github.workspace }}/linux-wheels
-        verbose: true
+      run: |
+          pip3 install twine==6.0.1
+          export TWINE_USERNAME=__token__
+          export TWINE_PASSWORD="${{ secrets.PYPI_API_TOKEN }}"
+          twine upload --verbose linux-wheels/*
 
   release-pypi-macos-x86:
-    name: Build wheels for macos
-    runs-on: macos-12
+    name: Build wheels for macos Intel chips
+    runs-on: macos-13
     steps:
-      - uses: fortran-lang/setup-fortran@v1
-        with:
-          compiler: gcc
-          version: 11
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.14.1
         env:
           CIBW_BUILD: cp311-macosx_x86_64
-          CIBW_BUILD_VERBOSITY: "1"
-          CMAKE_CONFIGURE_ARGS: "-DWITH_F12=OFF -DENABLE_SMD=ON"
+          CIBW_BUILD_VERBOSITY: "3"
+          CMAKE_CONFIGURE_ARGS: "-DWITH_F12=OFF -DENABLE_SMD=OFF"
           CMAKE_BUILD_PARALLEL_LEVEL: "4"
-        with:
-          output-dir: mac-wheels
+        run: python -m cibuildwheel --output-dir mac-wheels
       - name: List available wheels
         run: |
             ls mac-wheels
       - name: Publish to PyPI
         run: |
-            pip3 install twine
+            python -m venv ci-env
+            source ci-env/bin/activate
+            python -m pip install twine=6.0.1
             export TWINE_USERNAME=__token__
             export TWINE_PASSWORD="${{ secrets.PYPI_API_TOKEN }}"
             twine upload --verbose mac-wheels/*
 
   release-pypi-macos-arm64:
     name: Build wheels for Apple M chips
-    runs-on: macos-12
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.14.1
         env:
           CIBW_BUILD: cp311-macosx_arm64
-          CIBW_BUILD_VERBOSITY: "1"
+          CIBW_BUILD_VERBOSITY: "3"
           # Cross-platform build for arm64 wheels on x86 platform
           CIBW_ARCHS_MACOS: "x86_64 universal2 arm64"
           CMAKE_CONFIGURE_ARGS: "-DWITH_F12=OFF -DENABLE_SMD=OFF"
           CMAKE_BUILD_PARALLEL_LEVEL: "4"
           CMAKE_OSX_ARCHITECTURES: arm64
-        with:
-          output-dir: mac-wheels
+        run: python -m cibuildwheel --output-dir mac-wheels
       - name: List available wheels
         run: |
             ls mac-wheels
       - name: Publish to PyPI
         run: |
-            pip3 install twine
+            python -m venv ci-env
+            source ci-env/bin/activate
+            python -m pip install twine==6.0.1
             export TWINE_USERNAME=__token__
             export TWINE_PASSWORD="${{ secrets.PYPI_API_TOKEN }}"
             twine upload --verbose mac-wheels/*
@@ -136,8 +130,6 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - release-pypi-linux
-      - release-pypi-aarch64
-      - release-pypi-macos-x86
     steps:
       - uses: actions/checkout@v4
       - name: Build sdist
@@ -148,15 +140,11 @@ jobs:
         run: |
           ls ${{ github.workspace }}/dist
       - name: Publish to PyPI
-        # if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          user: __token__
-          #password: ${{ secrets.PYPI_TEST_API_TOKEN }}
-          #repository_url: https://test.pypi.org/legacy/
-          password: ${{ secrets.PYPI_API_TOKEN }}
-          packages-dir: ${{ github.workspace }}/dist
-          verbose: true
+        run: |
+            pip3 install twine==6.0.1
+            export TWINE_USERNAME=__token__
+            export TWINE_PASSWORD="${{ secrets.PYPI_API_TOKEN }}"
+            twine upload --verbose dist/*
 
   release-conda-linux:
     runs-on: ubuntu-latest
@@ -165,7 +153,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Setup conda
-        uses: s-weigand/setup-conda@v1
+        uses: s-weigand/setup-conda@v1.2.3
         with:
           update-conda: true
           conda-channels: conda-forge

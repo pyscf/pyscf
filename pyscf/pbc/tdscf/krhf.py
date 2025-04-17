@@ -41,8 +41,8 @@ REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_pick_eig_threshold
 def get_ab(mf, kshift=0):
     r'''A and B matrices for TDDFT response function.
 
-    A[i,a,j,b] = \delta_{ab}\delta_{ij}(E_a - E_i) + (ia||bj)
-    B[i,a,j,b] = (ia||jb)
+    A[i,a,j,b] = \delta_{ab}\delta_{ij}(E_a - E_i) + (ai||jb)
+    B[i,a,j,b] = (ai||bj)
 
     Ref: Chem Phys Lett, 256, 454
 
@@ -71,20 +71,19 @@ def get_ab(mf, kshift=0):
     weight = 1./nkpts
 
     def add_hf_(a, b, hyb=1):
-        eri = mf.with_df.ao2mo_7d([orbo,mo,mo,mo], kpts)
+        eri = mf.with_df.ao2mo_7d([mo,orbo,mo,mo], kpts)
         eri *= weight
-        eri = eri.reshape(nkpts,nkpts,nkpts,nocc,nmo,nmo,nmo)
+        eri = eri.reshape(nkpts,nkpts,nkpts,nmo,nocc,nmo,nmo)
         for ki, ka in enumerate(kconserv):
             for kj, kb in enumerate(kconserv):
-                a[ki,:,:,kj] += numpy.einsum('iabj->iajb', eri[ki,ka,kb,:nocc,nocc:,nocc:,:nocc]) * 2
-                a[ki,:,:,kj] -= numpy.einsum('ijba->iajb', eri[ki,kj,kb,:nocc,:nocc,nocc:,nocc:]) * hyb
+                a[ki,:,:,kj] += numpy.einsum('aijb->iajb', eri[ka,ki,kj,nocc:,:,:nocc,nocc:]) * 2
+                a[ki,:,:,kj] -= numpy.einsum('jiab->iajb', eri[kj,ki,ka,:nocc,:,nocc:,nocc:]) * hyb
 
             for kb, kj in enumerate(kconserv):
-                b[ki,:,:,kj] += numpy.einsum('iajb->iajb', eri[ki,ka,kj,:nocc,nocc:,:nocc,nocc:]) * 2
-                b[ki,:,:,kj] -= numpy.einsum('ibja->iajb', eri[ki,kb,kj,:nocc,nocc:,:nocc,nocc:]) * hyb
+                b[ki,:,:,kj] += numpy.einsum('aibj->iajb', eri[ka,ki,kb,nocc:,:,nocc:,:nocc]) * 2
+                b[ki,:,:,kj] -= numpy.einsum('ajbi->iajb', eri[ka,kj,kb,nocc:,:,nocc:,:nocc]) * hyb
 
     if isinstance(mf, scf.hf.KohnShamDFT):
-        assert kshift == 0
         ni = mf._numint
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, cell.spin)
 
@@ -110,10 +109,10 @@ def get_ab(mf, kshift=0):
                 rho_o = lib.einsum('krp,kpi->kri', ao, orbo)
                 rho_v = lib.einsum('krp,kpi->kri', ao, orbv)
                 rho_ov = numpy.einsum('kri,kra->kria', rho_o, rho_v)
-                w_ov = numpy.einsum('kria,r->kria', rho_ov, wfxc) * (2/nkpts)
                 rho_vo = rho_ov.conj()[cmap]
-                a += lib.einsum('kria,lrjb->kialjb', w_ov, rho_vo)
-                b += lib.einsum('kria,lrjb->kialjb', w_ov, rho_ov)
+                w_vo = numpy.einsum('kria,r->kria', rho_vo, wfxc) * (2/nkpts)
+                a += lib.einsum('kria,lrjb->kialjb', w_vo, rho_ov)
+                b += lib.einsum('kria,lrjb->kialjb', w_vo, rho_vo)
 
         elif xctype == 'GGA':
             ao_deriv = 1
@@ -126,10 +125,10 @@ def get_ab(mf, kshift=0):
                 rho_v = lib.einsum('kxrp,kpi->kxri', ao, orbv)
                 rho_ov = numpy.einsum('kxri,kra->kxria', rho_o, rho_v[:,0])
                 rho_ov[:,1:4] += numpy.einsum('kri,kxra->kxria', rho_o[:,0], rho_v[:,1:4])
-                w_ov = numpy.einsum('xyr,kxria->kyria', wfxc, rho_ov) * (2/nkpts)
                 rho_vo = rho_ov.conj()[cmap]
-                a += lib.einsum('kxria,lxrjb->kialjb', w_ov, rho_vo)
-                b += lib.einsum('kxria,lxrjb->kialjb', w_ov, rho_ov)
+                w_vo = numpy.einsum('xyr,kxria->kyria', wfxc, rho_vo) * (2/nkpts)
+                a += lib.einsum('kxria,lxrjb->kialjb', w_vo, rho_ov)
+                b += lib.einsum('kxria,lxrjb->kialjb', w_vo, rho_vo)
 
         elif xctype == 'HF':
             pass
@@ -150,10 +149,10 @@ def get_ab(mf, kshift=0):
                 rho_ov[:,1:4] += numpy.einsum('kri,kxra->kxria', rho_o[:,0], rho_v[:,1:4])
                 tau_ov = numpy.einsum('kxri,kxra->kria', rho_o[:,1:4], rho_v[:,1:4]) * .5
                 rho_ov = numpy.concatenate([rho_ov, tau_ov[:,numpy.newaxis]], axis=1)
-                w_ov = numpy.einsum('xyr,kxria->kyria', wfxc, rho_ov) * (2/nkpts)
                 rho_vo = rho_ov.conj()[cmap]
-                a += lib.einsum('kxria,lxrjb->kialjb', w_ov, rho_vo)
-                b += lib.einsum('kxria,lxrjb->kialjb', w_ov, rho_ov)
+                w_vo = numpy.einsum('xyr,kxria->kyria', wfxc, rho_vo) * (2/nkpts)
+                a += lib.einsum('kxria,lxrjb->kialjb', w_vo, rho_ov)
+                b += lib.einsum('kxria,lxrjb->kialjb', w_vo, rho_vo)
     else:
         add_hf_(a, b)
 
@@ -165,7 +164,8 @@ class KTDBase(TDBase):
         kshift_lst : list of integers
             Each element in the list is the index of the k-point that
             represents the transition between k-points in the excitation
-            coefficients.
+            coefficients. For excitation amplitude T_{ai}[k] at point k,
+            the kshift connects orbital i at k and orbital a at k+kshift
     '''
 
     conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-4)
@@ -233,7 +233,7 @@ class TDA(KTDBase):
         if mf is None: mf = self._scf
         return get_ab(mf, kshift)
 
-    def gen_vind(self, mf, kshift=0):
+    def gen_vind(self, mf=None, kshift=0):
         '''Compute Ax
 
         Kwargs:
@@ -241,6 +241,8 @@ class TDA(KTDBase):
                 The index of the k-point that represents the transition between
                 k-points in the excitation coefficients.
         '''
+        if mf is None:
+            mf = self._scf
         singlet = self.singlet
         kconserv = get_kconserv_ria(mf.cell, mf.kpts)[kshift]
 
@@ -248,10 +250,11 @@ class TDA(KTDBase):
         mo_occ = mf.mo_occ
         nkpts = len(mo_occ)
         nao, nmo = mo_coeff[0].shape
-        occidx = [numpy.where(mo_occ[k]==2)[0] for k in range(nkpts)]
-        viridx = [numpy.where(mo_occ[k]==0)[0] for k in range(nkpts)]
+        occidx = [mo_occ[k]==2 for k in range(nkpts)]
+        viridx = [mo_occ[k]==0 for k in range(nkpts)]
         orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpts)]
         orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpts)]
+        dtype = numpy.result_type(*mo_coeff)
         e_ia = _get_e_ia(scf.addons.mo_energy_with_exxdiv_none(mf), mo_occ, kconserv)
         hdiag = numpy.hstack([x.ravel() for x in e_ia])
 
@@ -262,25 +265,25 @@ class TDA(KTDBase):
         def vind(zs):
             nz = len(zs)
             z1s = [_unpack(z, mo_occ, kconserv) for z in zs]
-            dmov = numpy.empty((nz,nkpts,nao,nao), dtype=numpy.complex128)
+            dms = numpy.empty((nz,nkpts,nao,nao), dtype=dtype)
             for i in range(nz):
                 for k, kp in enumerate(kconserv):
                     # *2 for double occupancy
                     dm1 = z1s[i][k] * 2
-                    dmov[i,k] = reduce(numpy.dot, (orbo[k], dm1, orbv[kp].conj().T))
+                    dms[i,kp] = lib.einsum('ov,pv,qo->pq', dm1, orbv[kp], orbo[k].conj())
 
             with lib.temporary_env(mf, exxdiv=None):
-                v1ao = vresp(dmov, kshift)
+                v1ao = vresp(dms, kshift)
             v1s = []
             for i in range(nz):
                 dm1 = z1s[i]
-                v1 = []
+                v1 = [None] * nkpts
                 for k, kp in enumerate(kconserv):
-                    v1vo = reduce(numpy.dot, (orbo[k].conj().T, v1ao[i,k], orbv[kp]))
-                    v1vo += e_ia[k] * dm1[k]
-                    v1.append(v1vo.ravel())
+                    v1mo = lib.einsum('pq,qo,pv->ov', v1ao[i,kp], orbo[k], orbv[kp].conj())
+                    v1mo += e_ia[k] * dm1[k]
+                    v1[k] = v1mo.ravel()
                 v1s.append( numpy.concatenate(v1) )
-            return lib.asarray(v1s).reshape(nz,-1)
+            return numpy.stack(v1s)
         return vind, hdiag
 
     def init_guess(self, mf, kshift, nstates=None):
@@ -357,10 +360,7 @@ CIS = KTDA = TDA
 
 class TDHF(KTDBase):
 
-    @lib.with_doc(get_ab.__doc__)
-    def get_ab(self, mf=None, kshift=0):
-        if mf is None: mf = self._scf
-        return get_ab(mf, kshift)
+    get_ab = TDA.get_ab
 
     def gen_vind(self, mf, kshift=0):
         '''
@@ -375,10 +375,11 @@ class TDHF(KTDBase):
         mo_occ = mf.mo_occ
         nkpts = len(mo_occ)
         nao, nmo = mo_coeff[0].shape
-        occidx = [numpy.where(mo_occ[k]==2)[0] for k in range(nkpts)]
-        viridx = [numpy.where(mo_occ[k]==0)[0] for k in range(nkpts)]
+        occidx = [mo_occ[k]==2 for k in range(nkpts)]
+        viridx = [mo_occ[k]==0 for k in range(nkpts)]
         orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpts)]
         orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpts)]
+        dtype = numpy.result_type(*mo_coeff)
 
         kconserv = numpy.arange(nkpts)
         e_ia = _get_e_ia(scf.addons.mo_energy_with_exxdiv_none(mf), mo_occ, kconserv)
@@ -394,17 +395,17 @@ class TDHF(KTDBase):
             nz = len(xys)
             z1xs = [_unpack(xy[:tot_x], mo_occ, kconserv) for xy in xys]
             z1ys = [_unpack(xy[tot_x:], mo_occ, kconserv) for xy in xys]
-            dmov = numpy.zeros((nz,nkpts,nao,nao), dtype=numpy.complex128)
+            dms = numpy.zeros((nz,nkpts,nao,nao), dtype=dtype)
             for i in range(nz):
                 for k in range(nkpts):
                     # *2 for double occupancy
                     dmx = z1xs[i][k] * 2
                     dmy = z1ys[i][k] * 2
-                    dmov[i,k] += reduce(numpy.dot, (orbo[k], dmx  , orbv[k].T.conj()))
-                    dmov[i,k] += reduce(numpy.dot, (orbv[k], dmy.T, orbo[k].T.conj()))
+                    dms[i,k] += lib.einsum('ov,pv,qo->pq', dmx, orbv[k], orbo[k].conj())
+                    dms[i,k] += lib.einsum('ov,qv,po->pq', dmy, orbv[k].conj(), orbo[k])
 
             with lib.temporary_env(mf, exxdiv=None):
-                v1ao = vresp(dmov, kshift) # = <mb||nj> Xjb + <mj||nb> Yjb
+                v1ao = vresp(dms, kshift) # = <mb||nj> Xjb + <mj||nb> Yjb
             v1s = []
             for i in range(nz):
                 dmx = z1xs[i]
@@ -413,19 +414,19 @@ class TDHF(KTDBase):
                 v1ys = [0] * nkpts
                 for k in range(nkpts):
                     # AX + BY
-                    # = <ib||aj> Xjb + <ij||ab> Yjb
-                    # = (<mb||nj> Xjb + <mj||nb> Yjb) Cmi* Cna
-                    v1x = reduce(numpy.dot, (orbo[k].T.conj(), v1ao[i,k], orbv[k]))
+                    # = <aj||ib> Xjb + <ab||ij> Yjb
+                    # = (<mj||nb> Xjb + <mb||nj> Yjb) Cma* Cni
+                    v1x = lib.einsum('pq,qo,pv->ov', v1ao[i,k], orbo[k], orbv[k].conj())
                     # (B*)X + (A*)Y
-                    # = <ab||ij> Xjb + <aj||ib> Yjb
-                    # = (<mb||nj> Xjb + <mj||nb> Yjb) Cma* Cni
-                    v1y = reduce(numpy.dot, (orbv[k].T.conj(), v1ao[i,k], orbo[k])).T
+                    # = <ij||ab> Xjb + <ib||aj> Yjb
+                    # = (<mj||nb> Xjb + <mb||nj> Yjb) Cmi* Cna
+                    v1y = lib.einsum('pq,po,qv->ov', v1ao[i,k], orbo[k].conj(), orbv[k])
                     v1x += e_ia[k] * dmx[k]
-                    v1y += e_ia[k].conj() * dmy[k]
+                    v1y += e_ia[k] * dmy[k]
                     v1xs[k] += v1x.ravel()
                     v1ys[k] -= v1y.ravel()
                 v1s.append( numpy.concatenate(v1xs + v1ys) )
-            return lib.asarray(v1s).reshape(nz,-1)
+            return numpy.stack(v1s)
         return vind, hdiag
 
     def init_guess(self, mf, kshift, nstates=None):
@@ -472,8 +473,10 @@ class TDHF(KTDBase):
 
         def norm_xy(z, kconserv):
             x, y = z.reshape(2,-1)
-            norm = 2*(lib.norm(x)**2 - lib.norm(y)**2)
-            norm = 1/numpy.sqrt(norm)
+            norm = lib.norm(x)**2 - lib.norm(y)**2
+            if norm < 0:
+                log.warn('TDDFT amplitudes |X| smaller than |Y|')
+            norm = abs(.5/norm)**.5
             x *= norm
             y *= norm
             return _unpack(x, mo_occ, kconserv), _unpack(y, mo_occ, kconserv)
@@ -506,14 +509,13 @@ class TDHF(KTDBase):
 RPA = KTDHF = TDHF
 
 def _get_e_ia(mo_energy, mo_occ, kconserv=None):
-    e_ia = []
     nkpts = len(mo_occ)
+    e_ia = [None] * nkpts
     if kconserv is None: kconserv = numpy.arange(nkpts)
-    for k in range(nkpts):
-        kp = kconserv[k]
+    for k, kp in enumerate(kconserv):
         moeocc = mo_energy[k][mo_occ[k] > 1e-6]
         moevir = mo_energy[kp][mo_occ[kp] < 1e-6]
-        e_ia.append( -moeocc[:,None] + moevir )
+        e_ia[k] = -moeocc[:,None] + moevir
     return e_ia
 
 def _unpack(vo, mo_occ, kconserv):
@@ -530,5 +532,5 @@ def _unpack(vo, mo_occ, kconserv):
 
 scf.khf.KRHF.TDA  = lib.class_as_method(KTDA)
 scf.khf.KRHF.TDHF = lib.class_as_method(KTDHF)
-scf.krohf.KROHF.TDA  = None
-scf.krohf.KROHF.TDHF = None
+scf.krohf.KROHF.TDA  = NotImplemented
+scf.krohf.KROHF.TDHF = NotImplemented

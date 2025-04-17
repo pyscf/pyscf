@@ -625,8 +625,8 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True, ao_repr=False):
 
 
 def _dm2ab_mo2ao(dm2, mo_a, mo_b):
-    return lib.einsum('ijkl,pi,qj,rk,sl->pqrs', dm2, mo_a, mo_a.conj(),
-                      mo_b, mo_b.conj())
+    return lib.einsum('ijkl,pi,qj,rk,sl->pqrs', dm2, mo_a.conj(), mo_a,
+                      mo_b.conj(), mo_b)
 
 
 if __name__ == '__main__':

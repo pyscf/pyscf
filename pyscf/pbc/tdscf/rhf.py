@@ -29,8 +29,8 @@ from pyscf import __config__
 def get_ab(mf):
     r'''A and B matrices for TDDFT response function.
 
-    A[i,a,j,b] = \delta_{ab}\delta_{ij}(E_a - E_i) + (ia||bj)
-    B[i,a,j,b] = (ia||jb)
+    A[i,a,j,b] = \delta_{ab}\delta_{ij}(E_a - E_i) + (ai||jb)
+    B[i,a,j,b] = (ai||bj)
 
     Ref: Chem Phys Lett, 256, 454
     '''
@@ -63,7 +63,12 @@ def get_ab(mf):
 
         add_hf_(a, b, hyb)
         if omega != 0:  # For RSH
-            raise NotImplementedError
+            with mf.with_df.range_coulomb(omega) as rsh_df:
+                eri = rsh_df.ao2mo([orbo,mo,mo,mo], kpt, compact=False)
+                eri = eri.reshape(nocc,nmo,nmo,nmo)
+                k_fac = alpha - hyb
+                a -= np.einsum('ijba->iajb', eri[:nocc,:nocc,nocc:,nocc:]) * k_fac
+                b -= np.einsum('ibja->iajb', eri[:nocc,nocc:,:nocc,nocc:]) * k_fac
 
         xctype = ni._xc_type(mf.xc)
         dm0 = mf.make_rdm1(mo, mo_occ)
@@ -82,10 +87,10 @@ def get_ab(mf):
                 rho_o = lib.einsum('rp,pi->ri', ao, orbo)
                 rho_v = lib.einsum('rp,pi->ri', ao, orbv)
                 rho_ov = np.einsum('ri,ra->ria', rho_o, rho_v)
-                w_ov = np.einsum('ria,r->ria', rho_ov, wfxc) * 2
                 rho_vo = rho_ov.conj()
-                a += lib.einsum('ria,rjb->iajb', w_ov, rho_vo)
-                b += lib.einsum('ria,rjb->iajb', w_ov, rho_ov)
+                w_vo = np.einsum('ria,r->ria', rho_vo, wfxc) * 2
+                a += lib.einsum('ria,rjb->iajb', w_vo, rho_ov)
+                b += lib.einsum('ria,rjb->iajb', w_vo, rho_vo)
 
         elif xctype == 'GGA':
             ao_deriv = 1
@@ -98,10 +103,10 @@ def get_ab(mf):
                 rho_v = lib.einsum('xrp,pi->xri', ao, orbv)
                 rho_ov = np.einsum('xri,ra->xria', rho_o, rho_v[0])
                 rho_ov[1:4] += np.einsum('ri,xra->xria', rho_o[0], rho_v[1:4])
-                w_ov = np.einsum('xyr,xria->yria', wfxc, rho_ov) * 2
                 rho_vo = rho_ov.conj()
-                a += lib.einsum('xria,xrjb->iajb', w_ov, rho_vo)
-                b += lib.einsum('xria,xrjb->iajb', w_ov, rho_ov)
+                w_vo = np.einsum('xyr,xria->yria', wfxc, rho_vo) * 2
+                a += lib.einsum('xria,xrjb->iajb', w_vo, rho_ov)
+                b += lib.einsum('xria,xrjb->iajb', w_vo, rho_vo)
 
         elif xctype == 'HF':
             pass
@@ -122,10 +127,10 @@ def get_ab(mf):
                 rho_ov[1:4] += np.einsum('ri,xra->xria', rho_o[0], rho_v[1:4])
                 tau_ov = np.einsum('xri,xra->ria', rho_o[1:4], rho_v[1:4]) * .5
                 rho_ov = np.vstack([rho_ov, tau_ov[np.newaxis]])
-                w_ov = np.einsum('xyr,xria->yria', wfxc, rho_ov) * 2
                 rho_vo = rho_ov.conj()
-                a += lib.einsum('xria,xrjb->iajb', w_ov, rho_vo)
-                b += lib.einsum('xria,xrjb->iajb', w_ov, rho_ov)
+                w_vo = np.einsum('xyr,xria->yria', wfxc, rho_vo) * 2
+                a += lib.einsum('xria,xrjb->iajb', w_vo, rho_ov)
+                b += lib.einsum('xria,xrjb->iajb', w_vo, rho_vo)
     else:
         add_hf_(a, b)
 

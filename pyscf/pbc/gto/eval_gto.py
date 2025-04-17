@@ -248,6 +248,6 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
     grids2atm[~edge_filter2[:,:,1],1] -= edge_ub[1]
     grids2atm[~edge_filter2[:,:,2],2] -= edge_ub[2]
     grids2atm[edge_filter1 & edge_filter2] = 0.
-    Ls_mask = (np.linalg.norm(grids2atm, axis=2) < rcut).any(axis=0)
+    Ls_mask = (np.linalg.norm(grids2atm[:,:,:dimension], axis=2) < rcut).any(axis=0)
     Ls = Ls[Ls_mask]
     return np.asarray(Ls, order='C')

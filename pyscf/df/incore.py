@@ -62,7 +62,7 @@ def aux_e2(mol, auxmol_or_auxbasis, intor='int3c2e', aosym='s1', comp=None, out=
                       mol.nbas, mol.nbas+auxmol.nbas)
     else:
         assert len(shls_slice) == 6
-        assert shls_slice[5] < auxmol.nbas
+        assert shls_slice[5] <= auxmol.nbas
         shls_slice = list(shls_slice)
         shls_slice[4] += mol.nbas
         shls_slice[5] += mol.nbas
@@ -155,7 +155,7 @@ def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
     atm, bas, env = gto.mole.conc_env(mol._atm, mol._bas, mol._env,
                                       auxmol._atm, auxmol._bas, auxmol._env)
     ao_loc = gto.moleintor.make_loc(bas, int3c)
-    nao = ao_loc[mol.nbas]
+    nao = int(ao_loc[mol.nbas])
 
     if aosym == 's1':
         nao_pair = nao * nao

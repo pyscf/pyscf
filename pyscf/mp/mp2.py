@@ -359,7 +359,7 @@ def get_nocc(mp):
         nocc = numpy.count_nonzero(mp.mo_occ > 0) - mp.frozen
         assert (nocc > 0)
         return nocc
-    elif isinstance(mp.frozen[0], (int, numpy.integer)):
+    elif hasattr(mp.frozen, '__len__'):
         occ_idx = mp.mo_occ > 0
         occ_idx[list(mp.frozen)] = False
         nocc = numpy.count_nonzero(occ_idx)
@@ -375,7 +375,7 @@ def get_nmo(mp):
         return len(mp.mo_occ)
     elif isinstance(mp.frozen, (int, numpy.integer)):
         return len(mp.mo_occ) - mp.frozen
-    elif isinstance(mp.frozen[0], (int, numpy.integer)):
+    elif hasattr(mp.frozen, '__len__'):
         return len(mp.mo_occ) - len(set(mp.frozen))
     else:
         raise NotImplementedError
@@ -393,7 +393,7 @@ def get_frozen_mask(mp):
         pass
     elif isinstance(mp.frozen, (int, numpy.integer)):
         moidx[:mp.frozen] = False
-    elif len(mp.frozen) > 0:
+    elif hasattr(mp.frozen, '__len__'):
         moidx[list(mp.frozen)] = False
     else:
         raise NotImplementedError
@@ -403,6 +403,8 @@ def get_e_hf(mp, mo_coeff=None):
     # Get HF energy, which is needed for total MP2 energy.
     if mo_coeff is None:
         mo_coeff = mp.mo_coeff
+    if mo_coeff is mp._scf.mo_coeff and mp._scf.converged:
+        return mp._scf.e_tot
     dm = mp._scf.make_rdm1(mo_coeff, mp.mo_occ)
     vhf = mp._scf.get_veff(mp._scf.mol, dm)
     return mp._scf.energy_tot(dm=dm, vhf=vhf)
@@ -614,21 +616,33 @@ class MP2(lib.StreamObject):
         if self.verbose >= logger.WARN:
             self.check_sanity()
 
+        log = logger.new_logger(self)
+
+        cput0 = cput1 = (logger.process_clock(), logger.perf_counter())
+
         self.dump_flags()
 
         self.e_hf = self.get_e_hf(mo_coeff=mo_coeff)
 
+        cput1 = log.timer('ehf', *cput1)
+
         if eris is None:
             eris = self.ao2mo(mo_coeff)
+
+        cput1 = log.timer('ao2mo', *cput1)
 
         if self._scf.converged:
             self.e_corr, self.t2 = self.init_amps(mo_energy, mo_coeff, eris, with_t2)
         else:
             self.converged, self.e_corr, self.t2 = _iterative_kernel(self, eris)
 
+        cput1 = log.timer('kernel', *cput1)
+
         self.e_corr_ss = getattr(self.e_corr, 'e_corr_ss', 0)
         self.e_corr_os = getattr(self.e_corr, 'e_corr_os', 0)
         self.e_corr = float(self.e_corr)
+
+        log.timer(self.__class__.__name__, *cput0)
 
         self._finalize()
         return self.e_corr, self.t2
@@ -823,8 +837,8 @@ def _ao2mo_ovov(mp, orbo, orbv, feri, max_memory=2000, verbose=None):
     with lib.call_in_background(ftmp.__setitem__) as save:
         for ip, (ish0, ish1, ni) in enumerate(sh_ranges):
             for jsh0, jsh1, nj in sh_ranges[:ip+1]:
-                i0, i1 = ao_loc[ish0], ao_loc[ish1]
-                j0, j1 = ao_loc[jsh0], ao_loc[jsh1]
+                i0, i1 = int(ao_loc[ish0]), int(ao_loc[ish1])
+                j0, j1 = int(ao_loc[jsh0]), int(ao_loc[jsh1])
                 jk_blk_slices.append((i0,i1,j0,j1))
 
                 eri = fint(int2e, mol._atm, mol._bas, mol._env,

@@ -37,7 +37,6 @@ class KnownValues(unittest.TestCase):
         self.assertRaises(KeyError, gto.basis._parse_pople_basis, '631g++', 'C')
 
     def test_basis_load(self):
-        self.assertRaises(BasisNotFoundError, gto.basis.load, __file__, 'H')
         self.assertRaises(BasisNotFoundError, gto.basis.load, 'abas', 'H')
 
         self.assertEqual(len(gto.basis.load('631++g**', 'C')), 8)
@@ -93,6 +92,30 @@ C    SP
         self.assertRaises(BasisNotFoundError, gto.basis.parse_nwchem.parse, basis_str, 'O')
         basis_dat = gto.basis.parse_nwchem.parse(basis_str)
         self.assertEqual(len(basis_dat), 3)
+
+        basis_str = '''
+#BASIS SET: (3s) -> [1s]
+H    S
+     18.7311370     0.03349460
+      2.8253937     0.23472695
+      0.6401217     0.81375733
+#BASIS SET:
+#C    S
+#     1.5   1.
+C    SP
+      0.25  1.  1.'''
+        basis_dat = gto.basis.parse_nwchem.parse(basis_str, 'C')
+        self.assertEqual(len(basis_dat), 2)
+
+        bas = gto.parse(r'''
+#        C    S
+#              0.2222899             1.
+        C    S
+              2.9412494             0.15591627
+              0.6834831             0.60768372
+              0.2222899             0.39195739''',
+                        'C')
+        self.assertEqual(len(bas), 1)
 
     def test_parse_ecp(self):
         ecp_str = '''

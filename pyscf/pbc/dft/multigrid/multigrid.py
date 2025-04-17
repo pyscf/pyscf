@@ -32,13 +32,14 @@ from pyscf.pbc import gto
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.gto.pseudo import pp_int
 from pyscf.pbc.dft import numint, gen_grid
+from pyscf.pbc.scf.khf import KSCF
 from pyscf.pbc.df.df_jk import (
     _format_dms,
     _format_kpts_band,
     _format_jks,
 )
 from pyscf.pbc.lib.kpts_helper import gamma_point
-from pyscf.pbc.df import fft, ft_ao
+from pyscf.pbc.df import fft, ft_ao, aft
 from pyscf.pbc.dft.multigrid.utils import (
     _take_4d,
     _take_5d,
@@ -508,7 +509,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
         kpts : (nkpts, 3) ndarray
 
     Kwargs:
-        kpts_band : (3,) ndarray or (*,3) ndarray
+        kpts_band : ``(3,)`` ndarray or ``(*,3)`` ndarray
             A list of arbitrary "band" k-points at which to evalute the matrix.
 
     Returns:
@@ -1047,7 +1048,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         kpts : (nkpts, 3) ndarray
 
     Kwargs:
-        kpts_band : (3,) ndarray or (*,3) ndarray
+        kpts_band : ``(3,)`` ndarray or ``(*,3)`` ndarray
             A list of arbitrary "band" k-points at which to evalute the matrix.
 
     Returns:
@@ -1153,7 +1154,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         kpts : (nkpts, 3) ndarray
 
     Kwargs:
-        kpts_band : (3,) ndarray or (*,3) ndarray
+        kpts_band : ``(3,)`` ndarray or ``(*,3)`` ndarray
             A list of arbitrary "band" k-points at which to evalute the matrix.
 
     Returns:
@@ -1497,7 +1498,7 @@ def _gen_rhf_response(mf, dm0, singlet=None, hermi=0):
     '''multigrid version of function pbc.scf.newton_ah._gen_rhf_response
     '''
     #assert (isinstance(mf, dft.krks.KRKS))
-    if getattr(mf, 'kpts', None) is not None:
+    if isinstance(mf, KSCF):
         kpts = mf.kpts
     else:
         kpts = mf.kpt.reshape(1,3)
@@ -1528,7 +1529,7 @@ def _gen_uhf_response(mf, dm0, with_j=True, hermi=0):
     '''multigrid version of function pbc.scf.newton_ah._gen_uhf_response
     '''
     #assert (isinstance(mf, dft.kuks.KUKS))
-    if getattr(mf, 'kpts', None) is not None:
+    if isinstance(mf, KSCF):
         kpts = mf.kpts
     else:
         kpts = mf.kpt.reshape(1,3)
@@ -1862,7 +1863,12 @@ class MultiGridFFTDF(fft.FFTDF):
     get_nuc = get_nuc
 
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
-               with_j=True, with_k=True, exxdiv='ewald', **kwargs):
+               with_j=True, with_k=True, omega=None, exxdiv='ewald'):
+        if omega is not None:  # J/K for RSH functionals
+            with self.range_coulomb(omega) as rsh_df:
+                return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
+                                     omega=None, exxdiv=exxdiv)
+
         from pyscf.pbc.df import fft_jk
         if with_k:
             logger.warn(self, 'MultiGridFFTDF does not support HFX. '
@@ -1892,6 +1898,10 @@ class MultiGridFFTDF(fft.FFTDF):
         return vj, vk
 
     get_rho = get_rho
+
+    range_coulomb = aft.AFTDF.range_coulomb
+
+    to_gpu = lib.to_gpu
 
 
 def multigrid_fftdf(mf):

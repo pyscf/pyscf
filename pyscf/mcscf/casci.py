@@ -656,7 +656,11 @@ class CASCI_Scanner(lib.SinglePointScanner):
         else:
             mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
-        self.reset (mol)
+        self.reset(mol)
+        for key in ('with_df', 'with_x2c', 'with_solvent', 'with_dftd3'):
+            sub_mod = getattr(self, key, None)
+            if sub_mod:
+                sub_mod.reset(mol)
 
         if mo_coeff is None:
             mf_scanner = self._scf
@@ -939,7 +943,7 @@ To enable the solvent model for CASCI, the following code needs to be called
             active space CI energy,
             the active space FCI wavefunction coefficients or DMRG wavefunction ID,
             the MCSCF canonical orbital coefficients,
-            the MCSCF canonical orbital coefficients.
+            the MCSCF canonical orbital energies (diagonal elements of general Fock matrix).
 
         They are attributes of mcscf object, which can be accessed by
         .e_tot, .e_cas, .ci, .mo_coeff, .mo_energy
@@ -1123,7 +1127,7 @@ class CASCI(CASBase):
             active space CI energy,
             the active space FCI wavefunction coefficients or DMRG wavefunction ID,
             the MCSCF canonical orbital coefficients,
-            the MCSCF canonical orbital coefficients.
+            the MCSCF canonical orbital energies (diagonal elements of general Fock matrix).
 
         They are attributes of mcscf object, which can be accessed by
         .e_tot, .e_cas, .ci, .mo_coeff, .mo_energy

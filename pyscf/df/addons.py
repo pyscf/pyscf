@@ -52,8 +52,10 @@ DEFAULT_AUXBASIS = {
     'def2svp'     : ('def2-svp-jkfit'         , 'def2-svp-ri'        ),
     'def2svpd'    : ('def2-svp-jkfit'         , 'def2-svpd-ri'       ),
     'def2tzvp'    : ('def2-tzvp-jkfit'        , 'def2-tzvp-ri'       ),
+    'def2mtzvp'   : ('def2-tzvp-jkfit'        , 'def2-tzvp-ri'       ),
     'def2tzvpd'   : ('def2-tzvp-jkfit'        , 'def2-tzvpd-ri'      ),
     'def2tzvpp'   : ('def2-tzvpp-jkfit'       , 'def2-tzvpp-ri'      ),
+    'def2mtzvpp'  : ('def2-tzvpp-jkfit'       , 'def2-tzvpp-ri'      ),
     'def2tzvppd'  : ('def2-tzvpp-jkfit'       , 'def2-tzvppd-ri'     ),
     'def2qzvp'    : ('def2-qzvp-jkfit'        , 'def2-qzvp-ri'       ),
     'def2qzvpd'   : ('def2-qzvp-jkfit'        , None                 ),
@@ -151,8 +153,8 @@ def aug_etb_for_dfbasis(mol, dfbasis=DFBASIS, beta=ETB_BETA,
             if etb:
                 newbasis[symb] = gto.expand_etbs(etb)
                 for l, n, emin, beta in etb:
-                    logger.info(mol, 'l = %d, exps = %s * %g^n for n = 0..%d',
-                                l, emin, beta, n-1)
+                    logger.info(mol, 'ETB for %s: l = %d, exps = %s * %g^n , n = 0..%d',
+                                symb, l, emin, beta, n-1)
             else:
                 raise RuntimeError(f'Failed to generate even-tempered auxbasis for {symb}')
 
@@ -174,6 +176,9 @@ def make_auxbasis(mol, mp2fit=False):
         _basis = {a: default_basis for a in uniq_atoms}
         _basis.update(mol.basis)
         del (_basis['default'])
+    elif (isinstance(mol.basis, dict) and
+            all([isinstance(basis, str) for basis in mol.basis.values()])):
+        _basis = {a: mol.basis[a] for a in uniq_atoms}
     else:
         _basis = mol._basis or {}
 
@@ -191,7 +196,7 @@ def make_auxbasis(mol, mp2fit=False):
                 if auxb is not None:
                     try:
                         # Test if basis auxb for element k is available
-                        gto.basis.load(auxb, k)
+                        gto.basis.load(auxb, elements._std_symbol_without_ghost(k))
                     except BasisNotFoundError:
                         pass
                     else:

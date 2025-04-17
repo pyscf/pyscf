@@ -64,34 +64,64 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 if hermi == 2:
                     v1 = numpy.zeros_like(dm1)
                 else:
+                    assert kshift == 0
                     v1 = ni.nr_rks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                        rho0, vxc, fxc, kpts, max_memory=max_memory)
                 if hybrid:
-                    if hermi != 2:
+                    if omega == 0:
                         vj, vk = _get_jk(mf, cell, dm1, hermi, kpts, kshift)
-                        v1 += vj - .5 * hyb * vk
+                        vk *= hyb
+                    elif alpha == 0: # LR=0, only SR exchange
+                        vj = _get_j(mf, cell, dm1, hermi, kpts, kshift)
+                        vk = _get_k(mf, cell, dm1, hermi, kpts, kshift, omega=-omega)
+                        vk *= hyb
+                    elif hyb == 0: # SR=0, only LR exchange
+                        vj = _get_j(mf, cell, dm1, hermi, kpts, kshift)
+                        vk = _get_k(mf, cell, dm1, hermi, kpts, kshift, omega=omega)
+                        vk *= alpha
+                    else: # SR and LR exchange with different ratios
+                        vj, vk = _get_jk(mf, cell, dm1, hermi, kpts, kshift)
+                        vk *= hyb
+                        vk += _get_k(mf, cell, dm1, hermi, kpts, kshift, omega=omega) * (alpha-hyb)
+                    if hermi != 2:
+                        v1 += vj - .5 * vk
                     else:
-                        v1 -= .5 * hyb * _get_k(mf, cell, dm1, hermi, kpts, kshift)
+                        v1 += -.5 * vk
                 elif hermi != 2:
                     v1 += _get_j(mf, cell, dm1, hermi, kpts, kshift)
                 return v1
 
         elif singlet:
+            fxc *= .5
             def vind(dm1, kshift=0):
                 if hermi == 2:
                     v1 = numpy.zeros_like(dm1)
                 else:
+                    assert kshift == 0
                     # nr_rks_fxc_st requires alpha of dm1
                     v1 = numint.nr_rks_fxc_st(ni, cell, mf.grids, mf.xc, dm0, dm1, 0,
                                               True, rho0, vxc, fxc, kpts,
                                               max_memory=max_memory)
-                    v1 *= .5
                 if hybrid:
-                    if hermi != 2:
+                    if omega == 0:
                         vj, vk = _get_jk(mf, cell, dm1, hermi, kpts, kshift)
-                        v1 += vj - .5 * hyb * vk
+                        vk *= hyb
+                    elif alpha == 0: # LR=0, only SR exchange
+                        vj = _get_j(mf, cell, dm1, hermi, kpts, kshift)
+                        vk = _get_k(mf, cell, dm1, hermi, kpts, kshift, omega=-omega)
+                        vk *= hyb
+                    elif hyb == 0: # SR=0, only LR exchange
+                        vj = _get_j(mf, cell, dm1, hermi, kpts, kshift)
+                        vk = _get_k(mf, cell, dm1, hermi, kpts, kshift, omega=omega)
+                        vk *= alpha
+                    else: # SR and LR exchange with different ratios
+                        vj, vk = _get_jk(mf, cell, dm1, hermi, kpts, kshift)
+                        vk *= hyb
+                        vk += _get_k(mf, cell, dm1, hermi, kpts, kshift, omega=omega) * (alpha-hyb)
+                    if hermi != 2:
+                        v1 += vj - .5 * vk
                     else:
-                        v1 -= .5 * hyb * _get_k(mf, cell, dm1, hermi, kpts, kshift)
+                        v1 += -.5 * vk
                 elif hermi != 2:
                     v1 += _get_j(mf, cell, dm1, hermi, kpts, kshift)
                 return v1
@@ -100,13 +130,23 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 if hermi == 2:
                     v1 = numpy.zeros_like(dm1)
                 else:
+                    assert kshift == 0
                     # nr_rks_fxc_st requires alpha of dm1
                     v1 = numint.nr_rks_fxc_st(ni, cell, mf.grids, mf.xc, dm0, dm1, 0,
                                               False, rho0, vxc, fxc, kpts,
                                               max_memory=max_memory)
                     v1 *= .5
                 if hybrid:
-                    v1 += -.5 * hyb * _get_k(mf, cell, dm1, hermi, kpts, kshift)
+                    if omega == 0:
+                        vk = _get_k(mf, cell, dm1, hermi, kpts, kshift) * hyb
+                    elif alpha == 0: # LR=0, only SR exchange
+                        vk = _get_k(mf, cell, dm1, hermi, kpts, kshift, omega=-omega) * hyb
+                    elif hyb == 0: # SR=0, only LR exchange
+                        vk = _get_k(mf, cell, dm1, hermi, kpts, kshift, omega=omega) * alpha
+                    else: # SR and LR exchange with different ratios
+                        vk = _get_k(mf, cell, dm1, hermi, kpts, kshift) * hyb
+                        vk += _get_k(mf, cell, dm1, hermi, kpts, kshift, omega=omega) * (alpha-hyb)
+                    v1 += -.5 * vk
                 return v1
 
     else:  # HF
@@ -154,6 +194,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
             if hermi == 2:
                 v1 = numpy.zeros_like(dm1)
             else:
+                assert kshift == 0
                 v1 = ni.nr_uks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                    rho0, vxc, fxc, kpts, max_memory=max_memory)
             if not hybrid:
@@ -161,11 +202,25 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
                     vj = _get_j(mf, cell, dm1, hermi, kpts, kshift)
                     v1 += vj[0] + vj[1]
             else:
-                if with_j:
+                if omega == 0:
                     vj, vk = _get_jk(mf, cell, dm1, hermi, kpts, kshift)
-                    v1 += vj[0] + vj[1] - vk * hyb
+                    vk *= hyb
+                elif alpha == 0: # LR=0, only SR exchange
+                    vj = _get_j(mf, cell, dm1, hermi, kpts, kshift)
+                    vk = _get_k(mf, cell, dm1, hermi, kpts, kshift, omega=-omega)
+                    vk *= hyb
+                elif hyb == 0: # SR=0, only LR exchange
+                    vj = _get_j(mf, cell, dm1, hermi, kpts, kshift)
+                    vk = _get_k(mf, cell, dm1, hermi, kpts, kshift, omega=omega)
+                    vk *= alpha
+                else: # SR and LR exchange with different ratios
+                    vj, vk = _get_jk(mf, cell, dm1, hermi, kpts, kshift)
+                    vk *= hyb
+                    vk += _get_k(mf, cell, dm1, hermi, kpts, kshift, omega=omega) * (alpha-hyb)
+                if with_j:
+                    v1 += vj[0] + vj[1] - vk
                 else:
-                    v1 -= hyb * _get_k(mf, cell, dm1, hermi, kpts, kshift)
+                    v1 -= vk
             return v1
 
     elif with_j:
@@ -187,7 +242,8 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
     '''
     raise NotImplementedError
 
-def _get_jk_kshift(mf, dm_kpts, hermi, kpts, kshift, with_j=True, with_k=True):
+def _get_jk_kshift(mf, dm_kpts, hermi, kpts, kshift, with_j=True, with_k=True,
+                   omega=None):
     from pyscf.pbc.df.df_jk import get_j_kpts_kshift, get_k_kpts_kshift
     vj = vk = None
     if with_j:
@@ -196,19 +252,23 @@ def _get_jk_kshift(mf, dm_kpts, hermi, kpts, kshift, with_j=True, with_k=True):
         vk = get_k_kpts_kshift(mf.with_df, dm_kpts, kshift, hermi=hermi, kpts=kpts,
                                exxdiv=mf.exxdiv)
     return vj, vk
-def _get_jk(mf, cell, dm1, hermi, kpts, kshift, with_j=True, with_k=True):
+def _get_jk(mf, cell, dm1, hermi, kpts, kshift, with_j=True, with_k=True, omega=None):
     from pyscf.pbc import df
     if kshift == 0:
-        return mf.get_jk(cell, dm1, hermi=hermi, kpts=kpts, with_j=with_j, with_k=with_k)
+        return mf.get_jk(cell, dm1, hermi=hermi, kpts=kpts,
+                         with_j=with_j, with_k=with_k, omega=omega)
+    elif omega is not None and omega != 0:
+        raise NotImplementedError
     elif mf.rsjk is not None or not isinstance(mf.with_df, df.df.DF):
         lib.logger.error(mf, 'Non-zero kshift is only supported by GDF/RSDF.')
         raise NotImplementedError
     else:
-        return _get_jk_kshift(mf, dm1, hermi, kpts, kshift, with_j=with_j, with_k=with_k)
-def _get_j(mf, cell, dm1, hermi, kpts, kshift):
-    return _get_jk(mf, cell, dm1, hermi, kpts, kshift, True, False)[0]
-def _get_k(mf, cell, dm1, hermi, kpts, kshift):
-    return _get_jk(mf, cell, dm1, hermi, kpts, kshift, False, True)[1]
+        return _get_jk_kshift(mf, dm1, hermi, kpts, kshift,
+                              with_j=with_j, with_k=with_k, omega=omega)
+def _get_j(mf, cell, dm1, hermi, kpts, kshift, omega=None):
+    return _get_jk(mf, cell, dm1, hermi, kpts, kshift, True, False, omega)[0]
+def _get_k(mf, cell, dm1, hermi, kpts, kshift, omega=None):
+    return _get_jk(mf, cell, dm1, hermi, kpts, kshift, False, True, omega)[1]
 
 
 khf.KRHF.gen_response = _gen_rhf_response
@@ -233,8 +293,6 @@ def _gen_rhf_response_gam(mf, mo_coeff=None, mo_occ=None,
 
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=cell.spin)
         hybrid = ni.libxc.is_hybrid_xc(mf.xc)
-        if omega != 0:  # For range separated Coulomb
-            raise NotImplementedError
 
         if not hybrid and isinstance(mf.with_df, multigrid.MultiGridFFTDF):
             dm0 = mf.make_rdm1(mo_coeff, mo_occ)
@@ -261,16 +319,31 @@ def _gen_rhf_response_gam(mf, mo_coeff=None, mo_occ=None,
                     v1 = ni.nr_rks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                        rho0, vxc, fxc, kpt, max_memory=max_memory)
                 if hybrid:
+                    if omega == 0:
+                        vj, vk = mf.get_jk(cell, dm1, hermi, kpt=kpt)
+                        vk *= hyb
+                    elif alpha == 0: # LR=0, only SR exchange
+                        vj = mf.get_j(cell, dm1, hermi, kpt=kpt)
+                        vk = mf.get_k(cell, dm1, hermi, kpt=kpt, omega=-omega)
+                        vk *= hyb
+                    elif hyb == 0: # SR=0, only LR exchange
+                        vj = mf.get_j(cell, dm1, hermi, kpt=kpt)
+                        vk = mf.get_k(cell, dm1, hermi, kpt=kpt, omega=omega)
+                        vk *= alpha
+                    else: # SR and LR exchange with different ratios
+                        vj, vk = mf.get_jk(cell, dm1, hermi, kpt=kpt)
+                        vk *= hyb
+                        vk += mf.get_k(cell, dm1, hermi, kpt=kpt, omega=omega) * (alpha-hyb)
                     if hermi != 2:
-                        vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpt=kpt)
-                        v1 += vj - .5 * hyb * vk
+                        v1 += vj - .5 * vk
                     else:
-                        v1 -= .5 * hyb * mf.get_k(cell, dm1, hermi=hermi, kpt=kpt)
+                        v1 += -.5 * vk
                 elif hermi != 2:
                     v1 += mf.get_j(cell, dm1, hermi=hermi, kpt=kpt)
                 return v1
 
         elif singlet:
+            fxc *= .5
             def vind(dm1):
                 if hermi == 2:
                     v1 = numpy.zeros_like(dm1)
@@ -279,13 +352,26 @@ def _gen_rhf_response_gam(mf, mo_coeff=None, mo_occ=None,
                     v1 = numint.nr_rks_fxc_st(ni, cell, mf.grids, mf.xc, dm0, dm1, 0,
                                               True, rho0, vxc, fxc, kpt,
                                               max_memory=max_memory)
-                    v1 *= .5
                 if hybrid:
+                    if omega == 0:
+                        vj, vk = mf.get_jk(cell, dm1, hermi, kpt=kpt)
+                        vk *= hyb
+                    elif alpha == 0: # LR=0, only SR exchange
+                        vj = mf.get_j(cell, dm1, hermi, kpt=kpt)
+                        vk = mf.get_k(cell, dm1, hermi, kpt=kpt, omega=-omega)
+                        vk *= hyb
+                    elif hyb == 0: # SR=0, only LR exchange
+                        vj = mf.get_j(cell, dm1, hermi, kpt=kpt)
+                        vk = mf.get_k(cell, dm1, hermi, kpt=kpt, omega=omega)
+                        vk *= alpha
+                    else: # SR and LR exchange with different ratios
+                        vj, vk = mf.get_jk(cell, dm1, hermi, kpt=kpt)
+                        vk *= hyb
+                        vk += mf.get_k(cell, dm1, hermi, kpt=kpt, omega=omega) * (alpha-hyb)
                     if hermi != 2:
-                        vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpt=kpt)
-                        v1 += vj - .5 * hyb * vk
+                        v1 += vj - .5 * vk
                     else:
-                        v1 -= .5 * hyb * mf.get_k(cell, dm1, hermi=hermi, kpt=kpt)
+                        v1 += -.5 * vk
                 elif hermi != 2:
                     v1 += mf.get_j(cell, dm1, hermi=hermi, kpt=kpt)
                 return v1
@@ -300,7 +386,16 @@ def _gen_rhf_response_gam(mf, mo_coeff=None, mo_occ=None,
                                               max_memory=max_memory)
                     v1 *= .5
                 if hybrid:
-                    v1 += -.5 * hyb * mf.get_k(cell, dm1, hermi=hermi, kpt=kpt)
+                    if omega == 0:
+                        vk = mf.get_k(cell, dm1, hermi, kpt=kpt) * hyb
+                    elif alpha == 0: # LR=0, only SR exchange
+                        vk = mf.get_k(cell, dm1, hermi, kpt=kpt, omega=-omega) * hyb
+                    elif hyb == 0: # SR=0, only LR exchange
+                        vk = mf.get_k(cell, dm1, hermi, kpt=kpt, omega=omega) * alpha
+                    else: # SR and LR exchange with different ratios
+                        vk = mf.get_k(cell, dm1, hermi, kpt=kpt) * hyb
+                        vk += mf.get_k(cell, dm1, hermi, kpt=kpt, omega=omega) * (alpha-hyb)
+                    v1 += -.5 * vk
                 return v1
 
     else:  # HF
@@ -329,8 +424,6 @@ def _gen_uhf_response_gam(mf, mo_coeff=None, mo_occ=None,
 
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=cell.spin)
         hybrid = ni.libxc.is_hybrid_xc(mf.xc)
-        if omega != 0:  # For range separated Coulomb
-            raise NotImplementedError
 
         if not hybrid and isinstance(mf.with_df, multigrid.MultiGridFFTDF):
             dm0 = mf.make_rdm1(mo_coeff, mo_occ)
@@ -355,11 +448,25 @@ def _gen_uhf_response_gam(mf, mo_coeff=None, mo_occ=None,
                     vj = mf.get_j(cell, dm1, hermi=hermi, kpt=kpt)
                     v1 += vj[0] + vj[1]
             else:
+                if omega == 0:
+                    vj, vk = mf.get_jk(cell, dm1, hermi, kpt=kpt)
+                    vk *= hyb
+                elif alpha == 0: # LR=0, only SR exchange
+                    vj = mf.get_j(cell, dm1, hermi, kpt=kpt)
+                    vk = mf.get_k(cell, dm1, hermi, kpt=kpt, omega=-omega)
+                    vk *= hyb
+                elif hyb == 0: # SR=0, only LR exchange
+                    vj = mf.get_j(cell, dm1, hermi, kpt=kpt)
+                    vk = mf.get_k(cell, dm1, hermi, kpt=kpt, omega=omega)
+                    vk *= alpha
+                else: # SR and LR exchange with different ratios
+                    vj, vk = mf.get_jk(cell, dm1, hermi, kpt=kpt)
+                    vk *= hyb
+                    vk += mf.get_k(cell, dm1, hermi, kpt=kpt, omega=omega) * (alpha-hyb)
                 if with_j:
-                    vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpt=kpt)
-                    v1 += vj[0] + vj[1] - vk * hyb
+                    v1 += vj[0] + vj[1] - vk
                 else:
-                    v1 -= hyb * mf.get_k(cell, dm1, hermi=hermi, kpt=kpt)
+                    v1 -= vk
             return v1
 
     elif with_j:

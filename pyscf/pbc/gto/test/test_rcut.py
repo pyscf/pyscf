@@ -15,6 +15,7 @@
 import unittest
 import numpy
 from pyscf.pbc import gto, scf
+from pyscf.pbc.gto import eval_gto
 
 def setUpModule():
     global cell
@@ -52,6 +53,12 @@ class KnownValues(unittest.TestCase):
             print(prec, 'error = ', abs(t1-t0).max(), abs(s1-s0).max())
             self.assertTrue(abs(t1-t0).max() < prec*1e-0)
             self.assertTrue(abs(s1-s0).max() < prec*1e-1)
+
+    # For atoms out of the rcut on the non-periodic directions. See issue #2460
+    def test_lattice_Ls_low_dim(self):
+        cell = gto.M(atom='H 0 9 9', a=numpy.diag([1.,2.,2.]), dimension=1)
+        Ls = eval_gto.get_lattice_Ls(cell)
+        self.assertTrue(len(Ls) > 15)
 
 if __name__ == '__main__':
     print("Test rcut and the errorsin pbc.gto.cell")

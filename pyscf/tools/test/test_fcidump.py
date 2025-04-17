@@ -95,6 +95,15 @@ ORBSYM=1,2,3,4,
         self.assertTrue(abs(mf1.e_tot - mf.e_tot).max() < 1e-9)
         self.assertTrue(numpy.array_equal(mf.orbsym, mf1.orbsym))
 
+    def test_to_scf_with_symmetry(self):
+        with tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR) as tmpfcidump:
+            mol = gto.M(atom='H 0 0 0; H 1 0 0', symmetry=True)
+            mf = mol.RHF(mol).run()
+            fcidump.from_scf(mf, tmpfcidump.name)
+            mf = fcidump.to_scf(tmpfcidump.name)
+            self.assertEqual(mf.mol.groupname, 'D2h')
+
+
 if __name__ == "__main__":
     print("Full Tests for fcidump")
     unittest.main()

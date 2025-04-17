@@ -76,7 +76,7 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     mf.scf_summary['e1'] = e1.real
     mf.scf_summary['e2'] = e_coul.real
     logger.debug(mf, 'E1 = %s  E_coul = %s', e1, e_coul)
-    if khf.CHECK_COULOMB_IMAG and abs(e_coul.imag > mf.cell.precision*10):
+    if khf.CHECK_COULOMB_IMAG and abs(e_coul.imag) > mf.cell.precision*10:
         logger.warn(mf, "Coulomb energy has imaginary part %s. "
                     "Coulomb integrals (e-e, e-N) may not converge !",
                     e_coul.imag)
@@ -165,6 +165,20 @@ class KsymAdaptedKSCF(khf.KSCF):
         kpts_bz = kpts.kpts
         self.with_df.kpts = np.reshape(kpts_bz, (-1,3))
         self._kpts = kpts
+
+    @property
+    def kmesh(self):
+        from pyscf.pbc.tools.k2gamma import kpts_to_kmesh
+        kpts_bz = self._kpts.kpts
+        kmesh = kpts_to_kmesh(kpts_bz)
+        if len(kpts_bz) != np.prod(kmesh):
+            logger.WARN(self, 'K-points specified in %s are not Monkhorst-Pack %s grids',
+                        self, kmesh)
+        return kmesh
+
+    @kmesh.setter
+    def kmesh(self, x):
+        self.kpts = self.cell.make_kpts(x)
 
     def dump_flags(self, verbose=None):
         mol_hf.SCF.dump_flags(self, verbose)

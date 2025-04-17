@@ -37,6 +37,7 @@ from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.dft import rks as mol_ks
 from pyscf.pbc.dft import multigrid
+from pyscf.pbc.df.df import GDF
 from pyscf.pbc.lib.kpts import KPoints
 from pyscf import __config__
 
@@ -106,9 +107,20 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         vxc += vj
     else:
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-        vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
-        vk *= hyb
-        if omega != 0:
+        if omega == 0:
+            vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
+            vk *= hyb
+        elif alpha == 0: # LR=0, only SR exchange
+            vj = ks.get_j(cell, dm, hermi, kpt, kpts_band)
+            vk = ks.get_k(cell, dm, hermi, kpt, kpts_band, omega=-omega)
+            vk *= hyb
+        elif hyb == 0: # SR=0, only LR exchange
+            vj = ks.get_j(cell, dm, hermi, kpt, kpts_band)
+            vk = ks.get_k(cell, dm, hermi, kpt, kpts_band, omega=omega)
+            vk *= alpha
+        else: # SR and LR exchange with different ratios
+            vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
+            vk *= hyb
             vklr = ks.get_k(cell, dm, hermi, kpt, kpts_band, omega=omega)
             vklr *= (alpha - hyb)
             vk += vklr
@@ -134,7 +146,7 @@ def _patch_df_beckegrids(density_fit):
                                  mf.grids.level)
         mf.nlcgrids = gen_grid.BeckeGrids(self.cell)
         mf.nlcgrids.level = getattr(__config__, 'dft_rks_RKS_nlcgrids_level',
-                                    mf.grids.level)
+                                    mf.nlcgrids.level)
         return mf
     return new_df
 
@@ -170,6 +182,8 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
     '''PBC-KS'''
 
     _keys = {'xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'}
+    # Use rho to filter grids
+    small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
 
     get_rho = get_rho
 
@@ -182,9 +196,6 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
         self.grids = gen_grid.UniformGrids(self.cell)
         self.nlc = ''
         self.nlcgrids = gen_grid.UniformGrids(self.cell)
-        # Use rho to filter grids
-        self.small_rho_cutoff = getattr(
-            __config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
 ##################################################
 # don't modify the following attributes, they are not input options
         # Note Do not refer to .with_df._numint because mesh/coords may be different
@@ -222,7 +233,8 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
 
         # for GDF and MDF
         with_df = self.with_df
-        if (self._numint.libxc.is_hybrid_xc(self.xc) and
+        if (isinstance(with_df, GDF) and
+            self._numint.libxc.is_hybrid_xc(self.xc) and
             len(kpts) > 1 and getattr(with_df, '_j_only', False)):
             logger.warn(self, 'df.j_only cannot be used with hybrid functional')
             self.with_df._j_only = False
@@ -346,21 +358,3 @@ class RKS(KohnShamDFT, pbchf.RHF):
         return self._transfer_attrs_(scf.RHF(self.cell, self.kpt))
 
     to_gpu = lib.to_gpu
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    cell = gto.Cell()
-    cell.unit = 'A'
-    cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
-    cell.a = '''0.      1.7834  1.7834
-                1.7834  0.      1.7834
-                1.7834  1.7834  0.    '''
-
-    cell.basis = 'gth-szv'
-    cell.pseudo = 'gth-pade'
-    cell.verbose = 7
-    cell.output = '/dev/null'
-    cell.build()
-    mf = RKS(cell)
-    print(mf.kernel())

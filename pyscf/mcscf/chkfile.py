@@ -59,8 +59,6 @@ def dump_mcscf(
         mo_coeff = mc.mo_coeff
     if mo_occ is None:
         mo_occ = mc.mo_occ
-    if mo_energy is None:
-        mo_energy = mc.mo_energy
     # if ci_vector is None: ci_vector = mc.ci
 
     if h5py.is_hdf5(chkfile):
@@ -93,7 +91,8 @@ def dump_mcscf(
         store("ncore", ncore)
         store("ncas", ncas)
         store("mo_occ", mo_occ)
-        store("mo_energy", mo_energy)
+        if mo_energy is not None:
+            store("mo_energy", mo_energy)
         store("casdm1", casdm1)
 
         if not mixed_ci:

@@ -17,11 +17,10 @@
 #
 
 '''
-Non-relativistic Restricted Kohn-Sham for periodic systems with k-point sampling
+Unrestricted Kohn-Sham for periodic systems with k-point sampling
 
 See Also:
-    pyscf.pbc.dft.rks.py : Non-relativistic Restricted Kohn-Sham for periodic
-                           systems at a single k-point
+    pyscf.pbc.dft.uks.py : PBC-UKS at a single k-point
 '''
 
 
@@ -90,13 +89,30 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         vxc += vj
     else:
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-        vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
-        vj = vj[0] + vj[1]
-        vk *= hyb
-        if omega != 0:
+        if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
+            logger.warn(ks, 'df.j_only cannot be used with hybrid functional')
+            ks.with_df._j_only = False
+            # Rebuild df object due to the change of parameter _j_only
+            if ks.with_df._cderi is not None:
+                ks.with_df.build()
+        if omega == 0:
+            vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
+            vk *= hyb
+        elif alpha == 0: # LR=0, only SR exchange
+            vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
+            vk = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=-omega)
+            vk *= hyb
+        elif hyb == 0: # SR=0, only LR exchange
+            vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
+            vk = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
+            vk *= alpha
+        else: # SR and LR exchange with different ratios
+            vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
+            vk *= hyb
             vklr = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
             vklr *= (alpha - hyb)
             vk += vklr
+        vj = vj[0] + vj[1]
         vxc += vj - vk
 
         if ground_state:
@@ -104,7 +120,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                     np.einsum('Kij,Kji', dm[1], vk[1])).real * .5 * weight
 
     if ground_state:
-        ecoul = np.einsum('Kij,Kji', dm[0]+dm[1], vj).real * .5 * weight
+        ecoul = np.einsum('Kij,Kji', dm[0]+dm[1], vj) * .5 * weight
     else:
         ecoul = None
 
@@ -121,16 +137,17 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
     e1 = weight *(np.einsum('kij,kji', h1e_kpts, dm_kpts[0]) +
                   np.einsum('kij,kji', h1e_kpts, dm_kpts[1]))
     ecoul = vhf.ecoul
-    tot_e = e1 + ecoul + vhf.exc
+    exc = vhf.exc
+    tot_e = e1 + ecoul + exc
     mf.scf_summary['e1'] = e1.real
     mf.scf_summary['coul'] = ecoul.real
-    mf.scf_summary['exc'] = vhf.exc.real
-    logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s', e1, ecoul, vhf.exc)
-    if khf.CHECK_COULOMB_IMAG and abs(ecoul.imag > mf.cell.precision*10):
+    mf.scf_summary['exc'] = exc.real
+    logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s', e1, ecoul, exc)
+    if khf.CHECK_COULOMB_IMAG and abs(ecoul.imag) > mf.cell.precision*10:
         logger.warn(mf, "Coulomb energy has imaginary part %s. "
                     "Coulomb integrals (e-e, e-N) may not converge !",
                     ecoul.imag)
-    return tot_e.real, vhf.ecoul + vhf.exc
+    return tot_e.real, ecoul.real + exc.real
 
 
 class KUKS(rks.KohnShamDFT, kuhf.KUHF):

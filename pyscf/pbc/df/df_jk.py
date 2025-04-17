@@ -46,8 +46,9 @@ def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
         with_df : DF object
     '''
     from pyscf.pbc.df import df
+    from pyscf.pbc.scf.khf import KSCF
     if with_df is None:
-        if getattr(mf, 'kpts', None) is not None:
+        if isinstance(mf, KSCF):
             kpts = mf.kpts
         else:
             kpts = numpy.reshape(mf.kpt, (1,3))
@@ -60,9 +61,8 @@ def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
         if mesh is not None:
             with_df.mesh = mesh
 
-    mf = mf.copy()
+    mf = mf.copy().reset()
     mf.with_df = with_df
-    mf._eri = None
     return mf
 
 
@@ -652,7 +652,9 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         vk_kpts = vkR + vkI * 1j
     vk_kpts *= 1./nkpts
 
-    if exxdiv == 'ewald':
+    if exxdiv == 'ewald' and cell.dimension != 0:
+        # Integrals are computed analytically in GDF and RSJK.
+        # Finite size correction for exx is not needed.
         _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts_band)
 
     log.timer('get_k_kpts', *t0)
@@ -1048,7 +1050,9 @@ def get_k_kpts_kshift(mydf, dm_kpts, kshift, hermi=0, kpts=numpy.zeros((1,3)), k
         vk_kpts = vkR + vkI * 1j
     vk_kpts *= 1./nkpts
 
-    if exxdiv == 'ewald':
+    if exxdiv == 'ewald' and cell.dimension != 0:
+        # Integrals are computed analytically in GDF and RSJK.
+        # Finite size correction for exx is not needed.
         _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts_band)
 
     log.timer('get_k_kpts', *t0)
@@ -1319,7 +1323,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
             vk = vkR
         else:
             vk = vkR + vkI * 1j
-        if exxdiv == 'ewald':
+        if exxdiv == 'ewald' and cell.dimension != 0:
             _ewald_exxdiv_for_G0(cell, kpt, dms, vk)
         vk = vk.reshape(dm.shape)
 
@@ -1334,6 +1338,7 @@ def _sep_real_imag(a, ncolmax, order):
     aR[:,:ncol] = numpy.asarray(a.real, order=order)
     aI[:,:ncol] = numpy.asarray(a.imag, order=order)
     return aR, aI
+
 def _format_mo(mo_coeff, mo_occ, shape=None, order='F', precision=DM2MO_PREC):
     mos = [mo[:,mocc>precision]*mocc[mocc>precision]**0.5
            for mo,mocc in zip(mo_coeff,mo_occ)]
@@ -1347,6 +1352,7 @@ def _format_mo(mo_coeff, mo_occ, shape=None, order='F', precision=DM2MO_PREC):
         moRs = moRs.reshape(*shape)
         moIs = moIs.reshape(*shape)
     return moRs, moIs
+
 def _mo_from_dm(dms, method='eigh', shape=None, order='C', precision=DM2MO_PREC):
     import scipy.linalg
     nkpts = len(dms)

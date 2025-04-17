@@ -60,7 +60,7 @@ class KnownValues(unittest.TestCase):
         dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
 
     def test_tda_singlet_lda(self):
-        td = tdscf.TDA(mf_lda).run(nstates=nstates)
+        td = tdscf.TDA(mf_lda).run(conv_tol=1e-6, nstates=nstates)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(td.xy[2])
         self.assertAlmostEqual(g1[0,2], -9.23916667e-02, 6)
@@ -78,7 +78,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs((e1[2]-e2[2])/.002 - g1[0,2]).max(), 0, 4)
 
     def test_tda_singlet_b88(self):
-        td = tdscf.TDA(mf_gga).run(nstates=nstates)
+        td = tdscf.TDA(mf_gga).run(conv_tol=1e-6, nstates=nstates)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
         self.assertAlmostEqual(g1[0,2], -9.32506535e-02, 6)

@@ -26,8 +26,8 @@ from pyscf.pbc.tdscf.rhf import TDBase
 def get_ab(mf):
     r'''A and B matrices for TDDFT response function.
 
-    A[i,a,j,b] = \delta_{ab}\delta_{ij}(E_a - E_i) + (ia||bj)
-    B[i,a,j,b] = (ia||jb)
+    A[i,a,j,b] = \delta_{ab}\delta_{ij}(E_a - E_i) + (ai||jb)
+    B[i,a,j,b] = (ai||bj)
 
     Spin symmetry is considered in the returned A, B lists.  List A has three
     items: (A_aaaa, A_aabb, A_bbbb). A_bbaa = A_aabb.transpose(2,3,0,1).
@@ -58,8 +58,8 @@ def get_ab(mf):
     nmo_a = nocc_a + nvir_a
     nmo_b = nocc_b + nvir_b
 
-    e_ia_a = (mo_energy[0][viridx_a,None] - mo_energy[0][occidx_a]).T
-    e_ia_b = (mo_energy[1][viridx_b,None] - mo_energy[1][occidx_b]).T
+    e_ia_a = mo_energy[0][viridx_a] - mo_energy[0][occidx_a,None]
+    e_ia_b = mo_energy[1][viridx_b] - mo_energy[1][occidx_b,None]
     a_aa = np.diag(e_ia_a.ravel()).reshape(nocc_a,nvir_a,nocc_a,nvir_a)
     a_bb = np.diag(e_ia_b.ravel()).reshape(nocc_b,nvir_b,nocc_b,nvir_b)
     a_ab = np.zeros((nocc_a,nvir_a,nocc_b,nvir_b))
@@ -98,7 +98,20 @@ def get_ab(mf):
 
         add_hf_(a, b, hyb)
         if omega != 0:  # For RSH
-            raise NotImplementedError
+            with mf.with_df.range_coulomb(omega) as rsh_df:
+                eri_aa = rsh_df.ao2mo([orbo_a,mo_a,mo_a,mo_a], kpt, compact=False)
+                eri_ab = rsh_df.ao2mo([orbo_a,mo_a,mo_b,mo_b], kpt, compact=False)
+                eri_bb = rsh_df.ao2mo([orbo_b,mo_b,mo_b,mo_b], kpt, compact=False)
+                eri_aa = eri_aa.reshape(nocc_a,nmo_a,nmo_a,nmo_a)
+                eri_ab = eri_ab.reshape(nocc_a,nmo_a,nmo_b,nmo_b)
+                eri_bb = eri_bb.reshape(nocc_b,nmo_b,nmo_b,nmo_b)
+                a_aa, a_ab, a_bb = a
+                b_aa, b_ab, b_bb = b
+                k_fac = alpha - hyb
+                a_aa -= np.einsum('ijba->iajb', eri_aa[:nocc_a,:nocc_a,nocc_a:,nocc_a:]) * k_fac
+                b_aa -= np.einsum('jaib->iajb', eri_aa[:nocc_a,nocc_a:,:nocc_a,nocc_a:]) * k_fac
+                a_bb -= np.einsum('ijba->iajb', eri_bb[:nocc_b,:nocc_b,nocc_b:,nocc_b:]) * k_fac
+                b_bb -= np.einsum('jaib->iajb', eri_bb[:nocc_b,nocc_b:,:nocc_b,nocc_b:]) * k_fac
 
         xctype = ni._xc_type(mf.xc)
         dm0 = mf.make_rdm1(mo, mo_occ)
@@ -124,18 +137,18 @@ def get_ab(mf):
                 rho_ov_b = np.einsum('ri,ra->ria', rho_o_b, rho_v_b)
                 rho_vo_a = rho_ov_a.conj()
                 rho_vo_b = rho_ov_b.conj()
-                w_ov_aa = np.einsum('ria,r->ria', rho_ov_a, wfxc[0,0])
-                w_ov_ab = np.einsum('ria,r->ria', rho_ov_a, wfxc[0,1])
-                w_ov_bb = np.einsum('ria,r->ria', rho_ov_b, wfxc[1,1])
+                w_vo_aa = np.einsum('ria,r->ria', rho_vo_a, wfxc[0,0])
+                w_vo_ab = np.einsum('ria,r->ria', rho_vo_a, wfxc[0,1])
+                w_vo_bb = np.einsum('ria,r->ria', rho_vo_b, wfxc[1,1])
 
-                a_aa += lib.einsum('ria,rjb->iajb', w_ov_aa, rho_vo_a)
-                b_aa += lib.einsum('ria,rjb->iajb', w_ov_aa, rho_ov_a)
+                a_aa += lib.einsum('ria,rjb->iajb', w_vo_aa, rho_ov_a)
+                b_aa += lib.einsum('ria,rjb->iajb', w_vo_aa, rho_vo_a)
 
-                a_ab += lib.einsum('ria,rjb->iajb', w_ov_ab, rho_vo_b)
-                b_ab += lib.einsum('ria,rjb->iajb', w_ov_ab, rho_ov_b)
+                a_ab += lib.einsum('ria,rjb->iajb', w_vo_ab, rho_ov_b)
+                b_ab += lib.einsum('ria,rjb->iajb', w_vo_ab, rho_vo_b)
 
-                a_bb += lib.einsum('ria,rjb->iajb', w_ov_bb, rho_vo_b)
-                b_bb += lib.einsum('ria,rjb->iajb', w_ov_bb, rho_ov_b)
+                a_bb += lib.einsum('ria,rjb->iajb', w_vo_bb, rho_ov_b)
+                b_bb += lib.einsum('ria,rjb->iajb', w_vo_bb, rho_vo_b)
 
         elif xctype == 'GGA':
             ao_deriv = 1
@@ -156,18 +169,18 @@ def get_ab(mf):
                 rho_ov_b[1:4] += np.einsum('ri,xra->xria', rho_o_b[0], rho_v_b[1:4])
                 rho_vo_a = rho_ov_a.conj()
                 rho_vo_b = rho_ov_b.conj()
-                w_ov_aa = np.einsum('xyr,xria->yria', wfxc[0,:,0], rho_ov_a)
-                w_ov_ab = np.einsum('xyr,xria->yria', wfxc[0,:,1], rho_ov_a)
-                w_ov_bb = np.einsum('xyr,xria->yria', wfxc[1,:,1], rho_ov_b)
+                w_vo_aa = np.einsum('xyr,xria->yria', wfxc[0,:,0], rho_vo_a)
+                w_vo_ab = np.einsum('xyr,xria->yria', wfxc[0,:,1], rho_vo_a)
+                w_vo_bb = np.einsum('xyr,xria->yria', wfxc[1,:,1], rho_vo_b)
 
-                a_aa += lib.einsum('xria,xrjb->iajb', w_ov_aa, rho_vo_a)
-                b_aa += lib.einsum('xria,xrjb->iajb', w_ov_aa, rho_ov_a)
+                a_aa += lib.einsum('xria,xrjb->iajb', w_vo_aa, rho_ov_a)
+                b_aa += lib.einsum('xria,xrjb->iajb', w_vo_aa, rho_vo_a)
 
-                a_ab += lib.einsum('xria,xrjb->iajb', w_ov_ab, rho_vo_b)
-                b_ab += lib.einsum('xria,xrjb->iajb', w_ov_ab, rho_ov_b)
+                a_ab += lib.einsum('xria,xrjb->iajb', w_vo_ab, rho_ov_b)
+                b_ab += lib.einsum('xria,xrjb->iajb', w_vo_ab, rho_vo_b)
 
-                a_bb += lib.einsum('xria,xrjb->iajb', w_ov_bb, rho_vo_b)
-                b_bb += lib.einsum('xria,xrjb->iajb', w_ov_bb, rho_ov_b)
+                a_bb += lib.einsum('xria,xrjb->iajb', w_vo_bb, rho_ov_b)
+                b_bb += lib.einsum('xria,xrjb->iajb', w_vo_bb, rho_vo_b)
 
         elif xctype == 'HF':
             pass
@@ -198,18 +211,18 @@ def get_ab(mf):
                 rho_ov_b = np.vstack([rho_ov_b, tau_ov_b[np.newaxis]])
                 rho_vo_a = rho_ov_a.conj()
                 rho_vo_b = rho_ov_b.conj()
-                w_ov_aa = np.einsum('xyr,xria->yria', wfxc[0,:,0], rho_ov_a)
-                w_ov_ab = np.einsum('xyr,xria->yria', wfxc[0,:,1], rho_ov_a)
-                w_ov_bb = np.einsum('xyr,xria->yria', wfxc[1,:,1], rho_ov_b)
+                w_vo_aa = np.einsum('xyr,xria->yria', wfxc[0,:,0], rho_vo_a)
+                w_vo_ab = np.einsum('xyr,xria->yria', wfxc[0,:,1], rho_vo_a)
+                w_vo_bb = np.einsum('xyr,xria->yria', wfxc[1,:,1], rho_vo_b)
 
-                a_aa += lib.einsum('xria,xrjb->iajb', w_ov_aa, rho_vo_a)
-                b_aa += lib.einsum('xria,xrjb->iajb', w_ov_aa, rho_ov_a)
+                a_aa += lib.einsum('xria,xrjb->iajb', w_vo_aa, rho_ov_a)
+                b_aa += lib.einsum('xria,xrjb->iajb', w_vo_aa, rho_vo_a)
 
-                a_ab += lib.einsum('xria,xrjb->iajb', w_ov_ab, rho_vo_b)
-                b_ab += lib.einsum('xria,xrjb->iajb', w_ov_ab, rho_ov_b)
+                a_ab += lib.einsum('xria,xrjb->iajb', w_vo_ab, rho_ov_b)
+                b_ab += lib.einsum('xria,xrjb->iajb', w_vo_ab, rho_vo_b)
 
-                a_bb += lib.einsum('xria,xrjb->iajb', w_ov_bb, rho_vo_b)
-                b_bb += lib.einsum('xria,xrjb->iajb', w_ov_bb, rho_ov_b)
+                a_bb += lib.einsum('xria,xrjb->iajb', w_vo_bb, rho_ov_b)
+                b_bb += lib.einsum('xria,xrjb->iajb', w_vo_bb, rho_vo_b)
 
     else:
         add_hf_(a, b)
@@ -234,9 +247,7 @@ CIS = TDA
 
 class TDHF(TDBase):
 
-    def get_ab(self, mf=None):
-        if mf is None: mf = self._scf
-        return get_ab(mf)
+    get_ab = TDA.get_ab
 
     singlet = None
 
