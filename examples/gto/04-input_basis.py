@@ -8,11 +8,12 @@ This example covers different ways to input basis
 4. Default basis for all elements, except the given basis of specific element.
 5. gto.basis.parse and gto.basis.load functions to input user-specified basis.
 6. Reading the basis set from a given file.
-7. Uncontracted basis with prefix "unc-".
-8. Basis truncation and a subset of a basis set with notation "@".
-9. Even tempered gaussian basis.
-10. Combining multiple basis sets into one basis set.
-11. Internal format (not recommended)
+7. Defining custom aliases for basis sets stored in files.
+8. Uncontracted basis with prefix "unc-".
+9. Basis truncation and a subset of a basis set with notation "@".
+10. Even tempered gaussian basis.
+11. Combining multiple basis sets into one basis set.
+12. Internal format (not recommended)
 '''
 
 import os
