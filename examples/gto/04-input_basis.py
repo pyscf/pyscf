@@ -83,6 +83,25 @@ O    SP
 )
 
 #
+# You can define custom aliases for basis sets defined in files.
+# The variables USER_BASIS_DIR and USER_BASIS_ALIAS should be defined
+# in your PySCF configuration file (e.g. ~/.pyscf_conf.py) like this:
+
+USER_BASIS_DIR = dirnow
+USER_BASIS_ALIAS = {'customsto3g' : 'h_sto3g.dat'}
+
+# We need to override USER_BASIS_DIR and USER_BASIS_ALIAS so that the example can run.
+# Don't actually use the next two lines in your code.
+gto.basis.USER_BASIS_DIR = USER_BASIS_DIR
+gto.basis.USER_BASIS_ALIAS = USER_BASIS_ALIAS
+
+mol = gto.M(
+    atom = '''H 0 0 0; H 0 0 1''',
+    basis = 'customsto3g'
+)
+
+
+#
 # Uncontracted basis, decontracting basis.
 #
 mol = gto.M(
