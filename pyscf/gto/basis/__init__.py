@@ -383,6 +383,13 @@ ALIAS = {
     'dyallv4z' : 'dyall-basis.dyall_v4z',
 }
 
+USER_BASIS_DIR = getattr(__config__, 'USER_BASIS_DIR', '')
+USER_BASIS_ALIAS = getattr(__config__, 'USER_BASIS_ALIAS', {})
+USER_GTH_ALIAS = getattr(__config__, 'USER_GTH_ALIAS', {})
+
+if USER_BASIS_ALIAS.keys() & ALIAS.keys():
+    raise KeyError('USER_BASIS_ALIAS keys conflict with predefined basis sets')
+
 GTH_ALIAS = {
     'gthaugdzvp'  : 'gth-aug-dzvp.dat',
     'gthaugqzv2p' : 'gth-aug-qzv2p.dat',
@@ -406,6 +413,9 @@ GTH_ALIAS = {
     'gthszvmoloptsr'    : 'gth-szv-molopt-sr.dat',
     'gthdzvpmoloptsr'   : 'gth-dzvp-molopt-sr.dat',
 }
+
+if USER_GTH_ALIAS.keys() & GTH_ALIAS.keys():
+    raise KeyError('USER_GTH_ALIAS keys conflict with predefined GTH basis sets')
 
 PP_ALIAS = {
     'gthblyp'    : 'gth-blyp.dat'   ,
@@ -610,10 +620,17 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
     basis_dir = _BASIS_DIR
     if name in ALIAS:
         basmod = ALIAS[name]
+    elif name in USER_BASIS_ALIAS:
+        basmod = USER_BASIS_ALIAS[name]
+        basis_dir = USER_BASIS_DIR
     elif name in GTH_ALIAS:
         basmod = GTH_ALIAS[name]
         fload = parse_cp2k.load
         basis_dir = _GTH_BASIS_DIR
+    elif name in USER_GTH_ALIAS:
+        basmod = USER_GTH_ALIAS[name]
+        fload = parse_cp2k.load
+        basis_dir = USER_BASIS_DIR
     elif _is_pople_basis(name):
         basmod = _parse_pople_basis(name, symb)
     elif name in SAP_ALIAS:
