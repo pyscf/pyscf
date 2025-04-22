@@ -91,7 +91,7 @@ jobs:
         run: |
             python -m venv ci-env
             source ci-env/bin/activate
-            python -m pip install twine=6.0.1
+            python -m pip install twine==6.0.1
             export TWINE_USERNAME=__token__
             export TWINE_PASSWORD="${{ secrets.PYPI_API_TOKEN }}"
             twine upload --verbose mac-wheels/*
@@ -153,7 +153,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Setup conda
-        uses: s-weigand/setup-conda@v1.2.3
+        uses: s-weigand/setup-conda@v1.2.4
         with:
           update-conda: true
           conda-channels: conda-forge
