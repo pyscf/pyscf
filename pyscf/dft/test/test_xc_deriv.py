@@ -567,6 +567,28 @@ class KnownValues(unittest.TestCase):
             kxc1 = xc_deriv.transform_xc(rhop, xcp, xctype, spin, deriv-1)
             self.assertAlmostEqual(abs((kxc0-kxc1)/delta - lxc[t]).max(), 0, 7)
 
+    def test_diagonal_indices(self):
+        nabla_idx = [1, 2, 3]
+        len_idx = 3
+
+        # case of order = 2, corresponds to 4th/5th xc derivative
+        order = 2
+        indices = xc_deriv._diagonal_indices(nabla_idx, order)
+        trans_dims = [(0, 1), (1, 0)]
+        for o, trans in zip(range(order), trans_dims):
+            self.assertTrue((indices[2 * o] == indices[2 * o + 1]).all())
+            ref = np.repeat(nabla_idx, len_idx**(order - 1)).reshape([len_idx] * order).transpose(trans).reshape(-1)
+            self.assertTrue((indices[2 * o] == ref).all())
+
+        # case of order = 4, corresponds to 8th/9th xc derivative
+        order = 4
+        indices = xc_deriv._diagonal_indices(nabla_idx, order)
+        trans_dims = [(0, 1, 2, 3), (1, 0, 2, 3), (2, 1, 0, 3), (3, 2, 1, 0)]
+        for o, trans in zip(range(order), trans_dims):
+            self.assertTrue((indices[2 * o] == indices[2 * o + 1]).all())
+            ref = np.repeat(nabla_idx, len_idx**(order - 1)).reshape([len_idx] * order).transpose(trans).reshape(-1)
+            self.assertTrue((indices[2 * o] == ref).all())
+
 if __name__ == "__main__":
     print("Test xc_deriv")
     unittest.main()
