@@ -521,7 +521,7 @@ def _diagonal_indices(idx, order):
     diag_idx = [np.asarray(idx)]
     for i in range(1, order):
         last_dim = diag_idx[-1]
-        diag_idx = [np.repeat(idx, n) for x in diag_idx]
+        diag_idx = [np.repeat(x, n) for x in diag_idx]
         diag_idx.append(np.tile(last_dim, n))
     # repeat(diag_idx, 2)
     return tuple(x for x in diag_idx for i in range(2))
