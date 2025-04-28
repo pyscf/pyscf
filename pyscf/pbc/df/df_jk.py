@@ -60,7 +60,7 @@ def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
                 xc = mf.xc
             else:
                 xc = 'HF'
-            auxbasis = make_auxbasis(mol.basis, xc=xc)
+            auxbasis = make_auxbasis(mf.cell.basis, xc=xc)
         with_df = df.DF(mf.cell, kpts)
         with_df.max_memory = mf.max_memory
         with_df.stdout = mf.stdout
