@@ -167,11 +167,13 @@ def make_auxbasis(mol, *, xc='HF', mp2fit=False):
     '''Depending on the orbital basis, generating even-tempered Gaussians or
     the optimized auxiliary basis defined in DEFAULT_AUXBASIS
     '''
-    uniq_atoms = {a[0] for a in mol._atom}
     if isinstance(mol.basis, str):
         auxbasis = bse_predefined_auxbasis(mol.basis, xc, mp2fit)
         if auxbasis:
             return auxbasis
+
+    uniq_atoms = {a[0] for a in mol._atom}
+    if isinstance(mol.basis, str):
         _basis = {a: mol.basis for a in uniq_atoms}
     elif isinstance(mol.basis, dict) and 'default' in mol.basis:
         default_basis = mol.basis['default']
@@ -276,6 +278,7 @@ def bse_predefined_auxbasis(mol, basis, xc='HF', mp2fit=False):
     '''
     if not isinstance(basis, str):
         return None
+
     try:
         from pyscf.dft.libxc import is_hybrid_xc
     except ImportError:

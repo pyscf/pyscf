@@ -74,7 +74,7 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
                 xc = mf.xc
             else:
                 xc = 'HF'
-            auxbasis = make_auxbasis(mol.basis, xc=xc)
+            auxbasis = make_auxbasis(mol, xc=xc)
         if isinstance(mf, dhf.UHF):
             with_df = df.DF4C(mol, auxbasis)
         else:
