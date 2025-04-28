@@ -45,6 +45,8 @@ def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
             number of grids in each direction
         with_df : DF object
     '''
+    from pyscf.pbc.scf.hf import KohnShamDFT
+    from pyscf.df.addons import make_auxbasis
     from pyscf.pbc.df import df
     from pyscf.pbc.scf.khf import KSCF
     if with_df is None:
@@ -53,6 +55,12 @@ def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
         else:
             kpts = numpy.reshape(mf.kpt, (1,3))
 
+        if auxbasis is None:
+            if isinstance(mf, KohnShamDFT):
+                xc = mf.xc
+            else:
+                xc = 'HF'
+            auxbasis = make_auxbasis(mol.basis, xc=xc)
         with_df = df.DF(mf.cell, kpts)
         with_df.max_memory = mf.max_memory
         with_df.stdout = mf.stdout

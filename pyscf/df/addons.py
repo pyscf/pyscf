@@ -42,7 +42,6 @@ DEFAULT_AUXBASIS = {
     # AO basis       JK-fit                     MP2-fit
     'ccpvdz'      : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
     'augccpvdz'   : ('aug-cc-pvdz-jkfit'      , 'aug-cc-pvdz-ri'     ),
-    'augccpvdpdz' : ('aug-cc-pvdz-jkfit'      , 'aug-cc-pvdz-ri'     ),
     'ccpvtz'      : ('cc-pvtz-jkfit'          , 'cc-pvtz-ri'         ),
     'augccpvtz'   : ('aug-cc-pvtz-jkfit'      , 'aug-cc-pvtz-ri'     ),
     'ccpvqz'      : ('cc-pvqz-jkfit'          , 'cc-pvqz-ri'         ),
@@ -164,45 +163,55 @@ def aug_etb(mol, beta=ETB_BETA):
     '''To generate the even-tempered auxiliary Gaussian basis'''
     return aug_etb_for_dfbasis(mol, beta=beta, start_at=0)
 
-def make_auxbasis(mol, mp2fit=False):
+def make_auxbasis(mol, *, xc='HF', mp2fit=False):
     '''Depending on the orbital basis, generating even-tempered Gaussians or
     the optimized auxiliary basis defined in DEFAULT_AUXBASIS
     '''
     uniq_atoms = {a[0] for a in mol._atom}
     if isinstance(mol.basis, str):
+        auxbasis = bse_predefined_auxbasis(mol.basis, xc, mp2fit)
+        if auxbasis:
+            return auxbasis
         _basis = {a: mol.basis for a in uniq_atoms}
-    elif 'default' in mol.basis:
+    elif isinstance(mol.basis, dict) and 'default' in mol.basis:
         default_basis = mol.basis['default']
         _basis = {a: default_basis for a in uniq_atoms}
         _basis.update(mol.basis)
-        del (_basis['default'])
+        del _basis['default']
     elif (isinstance(mol.basis, dict) and
-            all([isinstance(basis, str) for basis in mol.basis.values()])):
+          all(isinstance(basis, str) for basis in mol.basis.values())):
         _basis = {a: mol.basis[a] for a in uniq_atoms}
     else:
         _basis = mol._basis or {}
 
     auxbasis = {}
-    for k in _basis:
-        if isinstance(_basis[k], str):
-            balias = _format_basis_name(_basis[k])
-            if gto.basis._is_pople_basis(balias):
-                balias = balias.split('g')[0] + 'g'
-            if balias in DEFAULT_AUXBASIS:
-                if mp2fit:
-                    auxb = DEFAULT_AUXBASIS[balias][1]
+    for k, obs in _basis.items():
+        if not isinstance(obs, str):
+            continue
+
+        balias = _format_basis_name(obs)
+        if gto.basis._is_pople_basis(balias):
+            balias = balias.split('g')[0] + 'g'
+        if xc.upper() == 'HF' and balias in DEFAULT_AUXBASIS:
+            if mp2fit:
+                auxb = DEFAULT_AUXBASIS[balias][1]
+            else:
+                auxb = DEFAULT_AUXBASIS[balias][0]
+            if auxb is not None:
+                try:
+                    # Test if basis auxb for element k is available
+                    gto.basis.load(auxb, elements._std_symbol_without_ghost(k))
+                except BasisNotFoundError:
+                    pass
                 else:
-                    auxb = DEFAULT_AUXBASIS[balias][0]
-                if auxb is not None:
-                    try:
-                        # Test if basis auxb for element k is available
-                        gto.basis.load(auxb, elements._std_symbol_without_ghost(k))
-                    except BasisNotFoundError:
-                        pass
-                    else:
-                        auxbasis[k] = auxb
-                        logger.info(mol, 'Default auxbasis %s is used for %s %s',
-                                    auxb, k, _basis[k])
+                    auxbasis[k] = auxb
+                    logger.info(mol, 'Default auxbasis %s is used for %s %s',
+                                auxb, k, obs)
+        else:
+            auxb = bse_predefined_auxbasis(obs, xc, mp2fit)
+            if auxb is not None:
+                auxbasis[k] = auxb
+                logger.info(mol, 'Assign BSE predefined auxbasis %s for %s', auxb, k)
 
     if len(auxbasis) != len(_basis):
         # Some AO basis not found in DEFAULT_AUXBASIS
@@ -262,7 +271,7 @@ def make_auxmol(mol, auxbasis=None):
                  pmol.nbas, pmol.nao_nr())
     return pmol
 
-def bse_predefined_auxbasis(mol, basis, xc='HF', mp2=False):
+def bse_predefined_auxbasis(mol, basis, xc='HF', mp2fit=False):
     '''Find auxiliary basis sets for XC functionals from BSE database
     '''
     if not isinstance(basis, str):
@@ -276,7 +285,11 @@ def bse_predefined_auxbasis(mol, basis, xc='HF', mp2=False):
     auxbasis = None
     if basis_meta:
         auxiliaries = basis_meta[2]
-        if xc == 'HF' or is_hybrid_xc(xc):
+        if mp2fit:
+            auxbasis = auxiliaries.get('rifit')
+            if auxbasis:
+                logger.debug(mol, f'Predefined RIFIT basis set {auxbasis} for {xc}')
+        elif xc.upper() == 'HF' or is_hybrid_xc(xc):
             auxbasis = auxiliaries.get('jkfit')
             if auxbasis:
                 logger.debug(mol, f'Predefined JKFIT basis set {auxbasis} for {xc}')
@@ -284,6 +297,8 @@ def bse_predefined_auxbasis(mol, basis, xc='HF', mp2=False):
             auxbasis = auxiliaries.get('jfit')
             if auxbasis is None:
                 auxbasis = auxiliaries.get('dftjfit')
+            if auxbasis is None:
+                auxbasis = auxiliaries.get('jkfit')
             if auxbasis:
                 logger.debug(mol, f'Predefined JFIT basis set {auxbasis} for {xc}')
     return auxbasis
