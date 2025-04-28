@@ -21,6 +21,7 @@ import sys
 import numpy
 from pyscf.lib import logger
 from pyscf import gto
+from pyscf.gto.basis import _format_basis_name
 from pyscf import ao2mo
 from pyscf.data import elements
 from pyscf.lib.exceptions import BasisNotFoundError
@@ -40,7 +41,6 @@ USE_VERSION_26_AUXBASIS = True
 DEFAULT_AUXBASIS = {
     # AO basis       JK-fit                     MP2-fit
     'ccpvdz'      : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
-    'ccpvdpdz'    : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
     'augccpvdz'   : ('aug-cc-pvdz-jkfit'      , 'aug-cc-pvdz-ri'     ),
     'augccpvdpdz' : ('aug-cc-pvdz-jkfit'      , 'aug-cc-pvdz-ri'     ),
     'ccpvtz'      : ('cc-pvtz-jkfit'          , 'cc-pvtz-ri'         ),
@@ -58,7 +58,7 @@ DEFAULT_AUXBASIS = {
     'def2mtzvpp'  : ('def2-tzvpp-jkfit'       , 'def2-tzvpp-ri'      ),
     'def2tzvppd'  : ('def2-tzvpp-jkfit'       , 'def2-tzvppd-ri'     ),
     'def2qzvp'    : ('def2-qzvp-jkfit'        , 'def2-qzvp-ri'       ),
-    'def2qzvpd'   : ('def2-qzvp-jkfit'        , None                 ),
+    #'def2qzvpd'   : ('def2-qzvp-jkfit'        , None                 ),
     'def2qzvpp'   : ('def2-qzvpp-jkfit'       , 'def2-qzvpp-ri'      ),
     'def2qzvppd'  : ('def2-qzvpp-jkfit'       , 'def2-qzvppd-ri'     ),
     'sto3g'       : ('def2-svp-jkfit'         , 'def2-svp-ri'        ),
@@ -185,7 +185,7 @@ def make_auxbasis(mol, mp2fit=False):
     auxbasis = {}
     for k in _basis:
         if isinstance(_basis[k], str):
-            balias = gto.basis._format_basis_name(_basis[k])
+            balias = _format_basis_name(_basis[k])
             if gto.basis._is_pople_basis(balias):
                 balias = balias.split('g')[0] + 'g'
             if balias in DEFAULT_AUXBASIS:
@@ -261,5 +261,31 @@ def make_auxmol(mol, auxbasis=None):
     logger.debug(mol, 'num shells = %d, num cGTOs = %d',
                  pmol.nbas, pmol.nao_nr())
     return pmol
+
+def bse_predefined_auxbasis(mol, basis, xc='HF', mp2=False):
+    '''Find auxiliary basis sets for XC functionals from BSE database
+    '''
+    if not isinstance(basis, str):
+        return None
+    try:
+        from pyscf.dft.libxc import is_hybrid_xc
+    except ImportError:
+        from pyscf.dft.xcfun import is_hybrid_xc
+    pyscf_basis_alias = _format_basis_name(basis).lower()
+    basis_meta = gto.mole.BSE_META.get(pyscf_basis_alias)
+    auxbasis = None
+    if basis_meta:
+        auxiliaries = basis_meta[2]
+        if xc == 'HF' or is_hybrid_xc(xc):
+            auxbasis = auxiliaries.get('jkfit')
+            if auxbasis:
+                logger.debug(mol, f'Predefined JKFIT basis set {auxbasis} for {xc}')
+        else:
+            auxbasis = auxiliaries.get('jfit')
+            if auxbasis is None:
+                auxbasis = auxiliaries.get('dftjfit')
+            if auxbasis:
+                logger.debug(mol, f'Predefined JFIT basis set {auxbasis} for {xc}')
+    return auxbasis
 
 del (DFBASIS, ETB_BETA, FIRST_ETB_ELEMENT)

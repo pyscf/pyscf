@@ -99,6 +99,10 @@ DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
 ARGPARSE = getattr(__config__, 'ARGPARSE', False)
 DUMPINPUT = getattr(__config__, 'DUMPINPUT', True)
 
+with open(os.path.abspath(os.path.join(__file__, '..', 'basis', 'bse_meta.json')), 'r') as f:
+    BSE_META = json.load(f)
+del f
+
 def M(*args, **kwargs):
     r'''This is a shortcut to build up Mole object.
 
@@ -2148,9 +2152,8 @@ def fromstring(string, format='xyz'):
     if format == 'zmat':
         return from_zmatrix(string)
     elif format == 'xyz':
-        dat = string.splitlines()
-        natm = int(dat[0])
-        return '\n'.join(dat[2:natm+2])
+        line, title, geom = string.split('\n', 2)
+        return geom
     elif format == 'sdf':
         raw = string.splitlines()
         natoms, nbonds = raw[3].split()[:2]
@@ -2541,9 +2544,6 @@ class MoleBase(lib.StreamObject):
             else:
                 self.stdout = open(self.output, 'w', encoding='utf-8')
 
-        if self.verbose >= logger.WARN:
-            self.check_sanity()
-
         if self.atom:
             self._atom = self.format_atom(self.atom, unit=self.unit)
         uniq_atoms = {a[0] for a in self._atom}
@@ -2613,6 +2613,9 @@ class MoleBase(lib.StreamObject):
         if dump_input and not self._built and self.verbose > logger.NOTE:
             self.dump_input()
 
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+
         if self.verbose >= logger.DEBUG3:
             logger.debug3(self, 'arg.atm = %s', self._atm)
             logger.debug3(self, 'arg.bas = %s', self._bas)
@@ -2622,6 +2625,26 @@ class MoleBase(lib.StreamObject):
         self._built = True
         return self
     kernel = build
+
+    def check_sanity(self):
+        if isinstance(self.ecp, str):
+            return self
+
+        if isinstance(self.basis, str) and not self.ecp:
+            elements = [x for x, _ in self._atom]
+            ecp, ecp_atoms = bse_predefined_ecp(self.basis, elements)
+            if ecp_atoms:
+                logger.warn(self, f'ECP not specified. The basis set {self.basis} '
+                            f'include an ECP. Recommended ECP: {ecp}.')
+        elif isinstance(self.basis, dict) and isinstance(self.ecp, dict):
+            for element, basname in self.basis.items():
+                if isinstance(basname, str) and not self.ecp.get(element):
+                    ecp, ecp_atoms = bse_predefined_ecp(basname, element)
+                    if ecp_atoms:
+                        logger.warn(self, f'ECP for {element} not specified. '
+                                    f'The basis set {basname} include an ECP. '
+                                    f'Recommended ECP: {ecp}.')
+        return self
 
     def _build_symmetry(self, *args, **kwargs):
         '''
@@ -4171,3 +4194,22 @@ def classify_ecp_pseudo(mol, ecp, pp):
             ecp_as_pp.update(pp_left)
         pp = ecp_as_pp
     return ecp, pp
+
+def bse_predefined_ecp(basis_name, elements):
+    '''Find ECP names for a given list of atoms from BSE database
+    '''
+    ecp = ecp_atoms = None
+    if not isinstance(basis_name, str):
+        return ecp, ecp_atoms
+    pyscf_basis_alias = basis._format_basis_name(basis_name).lower()
+    basis_meta = BSE_META.get(pyscf_basis_alias)
+    if basis_meta:
+        if isinstance(elements, str):
+            elements = [elements]
+        ecp_elements = basis_meta[1]
+        if ecp_elements:
+            unique_atoms = {charge(a) for a in set(elements)}
+            ecp_atoms = unique_atoms.intersection(ecp_elements)
+            if ecp_atoms:
+                ecp = basis_meta[0] # standard format basis set name
+    return ecp, ecp_atoms
