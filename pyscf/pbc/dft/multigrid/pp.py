@@ -29,7 +29,6 @@ from pyscf.pbc.dft.multigrid import _backend_c as backend
 
 PP_WITH_RHO_CORE = getattr(__config__, 'pbc_dft_multigrid_pp_with_rho_core', True)
 
-libpbc = lib.load_library('libpbc')
 
 def make_rho_core(cell, mesh=None, precision=None, atm_id=None):
     if mesh is None:
@@ -38,16 +37,8 @@ def make_rho_core(cell, mesh=None, precision=None, atm_id=None):
 
     a = cell.lattice_vectors()
     b = np.linalg.inv(a.T)
-    if abs(a - np.diag(a.diagonal())).max() < 1e-12:
-        lattice_type = '_orth'
-        orth = True
-    else:
-        lattice_type = '_nonorth'
-        orth = False
-    eval_fn = 'make_rho_lda' + lattice_type
 
     rho_core = backend.build_core_density(
-        eval_fn,
         fakecell._atm,
         fakecell._bas,
         fakecell._env,
@@ -56,7 +47,6 @@ def make_rho_core(cell, mesh=None, precision=None, atm_id=None):
         a,
         b,
         max_radius,
-        orth
     )
     logger.debug(cell, 'Number of core electrons: %.9f',
                  -np.sum(rho_core) * cell.vol / np.prod(mesh))
@@ -91,16 +81,13 @@ def get_pp_loc_part1_gs(cell, Gv):
     coulG = tools.get_coulG(cell, Gv=Gv)
     G2 = np.einsum('ix,ix->i', Gv, Gv)
     G0idx = np.where(G2==0)[0][0]
-    ngrid = len(G2)
-    Gv = np.asarray(Gv, order='C', dtype=np.double)
-    coulG = np.asarray(coulG, order='C', dtype=np.double)
-    G2 = np.asarray(G2, order='C', dtype=np.double)
 
     coords = cell.atom_coords()
-    coords = np.asarray(coords, order='C', dtype=np.double)
-    Z = np.empty([cell.natm,], order='C', dtype=np.double)
-    rloc = np.empty([cell.natm,], order='C', dtype=np.double)
-    for ia in range(cell.natm):
+
+    natm = cell.natm
+    Z = np.empty(natm)
+    rloc = np.empty(natm)
+    for ia in range(natm):
         Z[ia] = cell.atom_charge(ia)
         symb = cell.atom_symbol(ia)
         if symb in cell._pseudo:
@@ -108,20 +95,9 @@ def get_pp_loc_part1_gs(cell, Gv):
         else:
             rloc[ia] = -999
 
-    out = np.empty((ngrid,), order='C', dtype=np.complex128)
-    fn = getattr(libpbc, "pp_loc_part1_gs", None)
-    try:
-        fn(out.ctypes.data_as(ctypes.c_void_p),
-           coulG.ctypes.data_as(ctypes.c_void_p),
-           Gv.ctypes.data_as(ctypes.c_void_p),
-           G2.ctypes.data_as(ctypes.c_void_p),
-           ctypes.c_int(G0idx), ctypes.c_int(ngrid),
-           Z.ctypes.data_as(ctypes.c_void_p),
-           coords.ctypes.data_as(ctypes.c_void_p),
-           rloc.ctypes.data_as(ctypes.c_void_p),
-           ctypes.c_int(cell.natm))
-    except Exception as e:
-        raise RuntimeError("Failed to get vlocG part1. %s" % e)
+    out = backend.pp_loc_part1_gs(
+            coulG, Gv, G2, G0idx,
+            Z, coords, rloc)
     return out
 
 
@@ -183,15 +159,6 @@ def vpploc_part1_nuc_grad(mydf, dm, kpts=np.zeros((1,3)), atm_id=None, precision
     a = cell.lattice_vectors()
     b = np.linalg.inv(a.T)
 
-    if abs(a - np.diag(a.diagonal())).max() < 1e-12:
-        lattice_type = '_orth'
-        orth = True
-    else:
-        lattice_type = '_nonorth'
-        orth = False
-
-    eval_fn = 'eval_mat_lda' + lattice_type + '_ip1'
-
     mesh = mydf.mesh
     ngrids = np.prod(mesh)
     comp = 3
@@ -213,7 +180,6 @@ def vpploc_part1_nuc_grad(mydf, dm, kpts=np.zeros((1,3)), atm_id=None, precision
     v_rs = tools.ifft(vG, mesh).real
 
     grad = backend.int_gauss_charge_v_rs(
-        eval_fn,
         v_rs,
         comp,
         atm,
@@ -224,7 +190,6 @@ def vpploc_part1_nuc_grad(mydf, dm, kpts=np.zeros((1,3)), atm_id=None, precision
         a,
         b,
         max_radius,
-        orth
     )
     grad *= -1
     t0 = logger.timer(mydf, 'vpploc_part1_nuc_grad', *t0)
@@ -233,7 +198,7 @@ def vpploc_part1_nuc_grad(mydf, dm, kpts=np.zeros((1,3)), atm_id=None, precision
 
 def fake_cell_vloc_part1(cell, atm_id=None, precision=None):
     '''
-    Generate fakecell for the non-local term of the local part of
+    Generate fakecell for the long-range term of the local part of
     the GTH pseudo-potential. Also stores the atomic radii.
     Differs from pp_int.fake_cell_vloc(cell, cn=0) in the normalization factors.
     '''

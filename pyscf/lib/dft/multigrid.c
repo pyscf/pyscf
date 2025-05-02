@@ -414,12 +414,12 @@ void build_task_list(TaskList** task_list, NeighborList** neighbor_list,
     int ilevel;
     int nlevels = gl_info->nlevels;
     init_task_list(task_list, gl_info, nlevels, hermi);
-    double max_radius[nlevels];
+    double* max_radius = calloc(nlevels, sizeof(double));
     NeighborList *nl0 = *neighbor_list;
 
 #pragma omp parallel private(ilevel)
 {
-    double max_radius_loc[nlevels];
+    double* max_radius_loc = calloc(nlevels, sizeof(double));
     TaskList** task_list_loc = (TaskList**) malloc(sizeof(TaskList*));
     init_task_list(task_list_loc, gl_info, nlevels, hermi);
     NeighborPair *np0_ij;
@@ -490,21 +490,27 @@ void build_task_list(TaskList** task_list, NeighborList** neighbor_list,
     }
 
     #pragma omp critical
-    merge_task_list(task_list, task_list_loc);
+    {
+        merge_task_list(task_list, task_list_loc);
+    }
 
     nullify_task_list(task_list_loc);
     free(task_list_loc);
 
-    #pragma omp critical
     for (ilevel = 0; ilevel < nlevels; ilevel++) {
-        max_radius[ilevel] = MAX(max_radius[ilevel], max_radius_loc[ilevel]);
+        #pragma omp critical
+        {
+            max_radius[ilevel] = MAX(max_radius[ilevel], max_radius_loc[ilevel]);
+        }
     }
+    free(max_radius_loc);
 }
 
     for (ilevel = 0; ilevel < nlevels; ilevel++) {
         Task *t0 = ((*task_list)->tasks)[ilevel];
         t0->radius = max_radius[ilevel];
     }
+    free(max_radius);
 }
 
 

@@ -67,8 +67,9 @@ def multi_grids_tasks(cell, ke_cutoff=None, hermi=0,
     cutoff.reverse()
     a = cell.lattice_vectors()
     mesh = []
-    for ke in cutoff:
+    for ke in cutoff[:-1]:
         mesh.append(tools.cutoff_to_mesh(a, ke))
+    mesh.append(cell.mesh)
     logger.info(cell, 'ke_cutoff for multigrid tasks:\n%s', cutoff)
     logger.info(cell, 'meshes for multigrid tasks:\n%s', mesh)
     gridlevel_info = backend.GridLevel_Info(cutoff, rel_cutoff, mesh)
@@ -178,7 +179,6 @@ def eval_rho(cell, dm, task_list, shls_slice=None, hermi=0, xctype='LDA', kpts=N
         Ls = np.zeros((1,3))
 
     if dimension == 0 or kpts is None or gamma_point(kpts):
-        #nkpts, nimgs = 1, Ls.shape[0]
         dm = dm.reshape(-1,1,naoi,naoj)
     else:
         raise NotImplementedError
@@ -192,37 +192,18 @@ def eval_rho(cell, dm, task_list, shls_slice=None, hermi=0, xctype='LDA', kpts=N
                 raise RuntimeError('The two cell objects must have the same lattice vectors.')
     b = np.linalg.inv(a.T)
 
-    if abs(a-np.diag(a.diagonal())).max() < 1e-12:
-        lattice_type = '_orth'
-        orth = True
-    else:
-        lattice_type = '_nonorth'
-        orth = False
-
-    xctype = xctype.upper()
-    if xctype == 'LDA':
-        comp = 1
-    else:
-        raise NotImplementedError
-
-    eval_fn = 'make_rho_' + xctype.lower() + lattice_type
-
-    def make_rho_(rs_rho, dm):
-        return backend.grid_collocate_drv(
-                    eval_fn, rs_rho, dm,
-                    task_list, comp, hermi,
+    rho = []
+    for i, dm_i in enumerate(dm):
+        rho_i = backend.grid_collocate(
+                    xctype, dm_i,
+                    task_list, hermi,
                     (i0, i1, j0, j1),
                     ao_loc0, ao_loc1, dimension,
                     Ls, a, b,
                     ish_atm, ish_bas, ish_env,
                     jsh_atm, jsh_bas, jsh_env,
-                    cell0.cart, orth)
-
-    gridlevel_info = task_list.gridlevel_info
-    rho = []
-    for i, dm_i in enumerate(dm):
-        rs_rho = backend.RS_Grid(gridlevel_info, comp)
-        rho.append(make_rho_(rs_rho, dm_i))
+                    cell0.cart)
+        rho.append(rho_i)
 
     if n_dm == 1:
         rho = rho[0]
@@ -258,10 +239,15 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), deriv=0,
 
     ignore_imag = (hermi == 1)
 
+    nx, ny, nz = mydf.mesh
+    mem_avail = mydf.max_memory - lib.current_memory()[0]
+    mem_needed = rhodim * nx * ny * nz * lib.num_threads() * 8 / 1e6
+    if mem_needed > mem_avail:
+        logger.warn(mydf, f'At least {mem_needed} MB of memory is needed for eval_rho. '
+                    f'Currently {mem_avail} MB of memory is available.')
     rs_rho = eval_rho(cell, dms, task_list, hermi=hermi, xctype=xctype, kpts=kpts,
                       ignore_imag=ignore_imag)
 
-    nx, ny, nz = mydf.mesh
     rhoG = np.zeros((nset*rhodim,nx,ny,nz), dtype=np.complex128)
     for ilevel, mesh in enumerate(task_list.gridlevel_info.mesh):
         ngrids = np.prod(mesh)
@@ -298,6 +284,12 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), deriv=0,
 def eval_mat(cell, weights, task_list, shls_slice=None, comp=1, hermi=0, deriv=0,
              xctype='LDA', kpts=None, grid_level=None, dimension=None, mesh=None,
              cell1=None, shls_slice1=None, Ls=None, a=None):
+    if deriv == 1:
+        assert comp == 3
+        assert hermi == 0
+    elif deriv > 1:
+        raise NotImplementedError
+
     cell0 = cell
     shls_slice0 = shls_slice
     if cell1 is None:
@@ -337,13 +329,11 @@ def eval_mat(cell, weights, task_list, shls_slice=None, comp=1, hermi=0, deriv=0
 
     key0 = 'cart' if cell0.cart else 'sph'
     ao_loc0 = moleintor.make_loc(ish_bas, key0)
-    naoi = ao_loc0[i1] - ao_loc0[i0]
     if hermi == 1:
         ao_loc1 = ao_loc0
     else:
         key1 = 'cart' if cell1.cart else 'sph'
         ao_loc1 = moleintor.make_loc(jsh_bas, key1)
-    naoj = ao_loc1[j1] - ao_loc1[j0]
 
     if dimension is None:
         dimension = cell0.dimension
@@ -356,7 +346,6 @@ def eval_mat(cell, weights, task_list, shls_slice=None, comp=1, hermi=0, deriv=0
 
     weights = np.asarray(weights)
     if dimension == 0 or kpts is None or gamma_point(kpts):
-        #nkpts, nimgs = 1, Ls.shape[0]
         assert weights.dtype == np.double
     else:
         raise NotImplementedError
@@ -368,13 +357,6 @@ def eval_mat(cell, weights, task_list, shls_slice=None, comp=1, hermi=0, deriv=0
             if abs(a-a1).max() > 1e-12:
                 raise RuntimeError('The two cell objects must have the same lattice vectors.')
     b = np.linalg.inv(a.T)
-
-    if abs(a-np.diag(a.diagonal())).max() < 1e-12:
-        lattice_type = '_orth'
-        orth = True
-    else:
-        lattice_type = '_nonorth'
-        orth = False
 
     xctype = xctype.upper()
     n_mat = None
@@ -391,34 +373,18 @@ def eval_mat(cell, weights, task_list, shls_slice=None, comp=1, hermi=0, deriv=0
     else:
         raise NotImplementedError
 
-    eval_fn = 'eval_mat_' + xctype.lower() + lattice_type
-    if deriv > 0:
-        if deriv == 1:
-            assert comp == 3
-            assert hermi == 0
-            eval_fn += '_ip1'
-        else:
-            raise NotImplementedError
-
-    def make_mat(wv):
-        if comp == 1:
-            mat = np.zeros((naoi, naoj))
-        else:
-            mat = np.zeros((comp, naoi, naoj))
-
-        return backend.grid_integrate_drv(
-                    eval_fn, mat, wv,
-                    task_list, comp, hermi, grid_level,
-                    (i0, i1, j0, j1),
-                    ao_loc0, ao_loc1, dimension,
-                    Ls, a, b,
-                    ish_atm, ish_bas, ish_env,
-                    jsh_atm, jsh_bas, jsh_env,
-                    cell0.cart, orth)
-
     out = []
     for wv in weights:
-        out.append(make_mat(wv))
+        mat = backend.grid_integrate(
+                xctype, wv,
+                task_list, comp, hermi, grid_level,
+                (i0, i1, j0, j1),
+                ao_loc0, ao_loc1, dimension,
+                Ls, a, b,
+                ish_atm, ish_bas, ish_env,
+                jsh_atm, jsh_bas, jsh_env,
+                cell0.cart)
+        out.append(mat)
 
     if n_mat is None:
         out = out[0]
@@ -1060,17 +1026,36 @@ class MultiGridFFTDF2(MultiGridFFTDF):
                           kpts=kpts, kpts_band=kpts_band, spin=spin)
         return vj
 
-    def get_pp(self, kpts=None):
-        '''Compute the GTH pseudopotential matrix, which includes
+    def get_pp(self, kpts=None, return_full=False):
+        '''Return the GTH pseudopotential (PP) matrix in AO basis,
+        with contribution from G=0 removed.
+
+        By default, the returned PP includes
         the short-range part of the local potential and the non-local potential.
         The long-range part of the local potential is cached as `vpplocG_part1`,
         which is the reciprocal space representation, to be added to the electron
         density for computing the Coulomb matrix.
-        In order to get the full PP matrix, the potential due to `vpplocG_part1`
-        needs to be added.
+        In order to get the full PP matrix, set return_full to True.
+
+        Kwargs:
+            return_full: bool
+                If True, the returned PP also contains the long-range part.
+                Default is False.
         '''
         self.vpplocG_part1 = _get_vpplocG_part1(self, with_rho_core=True)
-        return _get_pp_without_erf(self, kpts)
+
+        vpp = _get_pp_without_erf(self, kpts)
+        if return_full:
+            if kpts is None:
+                kpts_lst = np.zeros((1,3))
+            else:
+                kpts_lst = np.reshape(kpts, (-1,3))
+            vpp1 = _get_j_pass2(self, self.vpplocG_part1, kpts_lst)
+            if kpts is None or np.shape(kpts) == (3,):
+                vpp1 = vpp1[0]
+            vpp += vpp1
+
+        return vpp
 
     vpploc_part1_nuc_grad = vpploc_part1_nuc_grad
 

@@ -118,6 +118,7 @@ void get_dm_pgfpair(double* dm_pgf, double* dm_cart,
                     PGFPair* pgfpair, int* ish_bas, int* jsh_bas, int hermi);
 int get_max_num_grid_orth(double* dh, double radius);
 int get_max_num_grid_nonorth(double* dh_inv, double radius);
+int get_max_num_grid_nonorth_tight(double* dh, double* dh_inv, double radius);
 
 void dgemm_wrapper(const char transa, const char transb,
                    const int m, const int n, const int k,

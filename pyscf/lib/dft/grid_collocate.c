@@ -394,16 +394,17 @@ static size_t _orth_rho_cache_size(int l, int nprim, int nctr, int* mesh, double
         size_orth_rho = l1l1*mesh[2] + l1*mesh[1]*mesh[2] + mesh_size;
     }
     size += MAX(size_orth_rho, size_orth_components);
-    size += 1000000;
+    //size += 1000000;
     //printf("Memory allocated per thread for make_rho: %ld MB.\n", (size+mesh_size)*sizeof(double) / 1000000);
     return size;
 }
 
 
-static size_t _nonorth_rho_cache_size(int l, int nprim, int nctr, int* mesh, double radius, double* dh_inv)
+static size_t _nonorth_rho_cache_size(int l, int nprim, int nctr, int* mesh, double radius, double*dh, double* dh_inv)
 {
     size_t size = 0;
-    size_t nmx = get_max_num_grid_nonorth(dh_inv, radius);
+    //size_t nmx = get_max_num_grid_nonorth(dh_inv, radius);
+    size_t nmx = get_max_num_grid_nonorth_tight(dh, dh_inv, radius);
     size_t nmx2 = nmx * nmx;
     int l1 = 2 * l + 1;
     int l1l1 = l1 * l1;
@@ -431,7 +432,7 @@ static size_t _rho_cache_size(int l, int nprim, int nctr, int* mesh, double radi
     if (orth) {
         return _orth_rho_cache_size(l, nprim, nctr, mesh, radius, dh);
     } else {
-        return _nonorth_rho_cache_size(l, nprim, nctr, mesh, radius, dh_inv);
+        return _nonorth_rho_cache_size(l, nprim, nctr, mesh, radius, dh, dh_inv);
     }
 }
 
@@ -461,10 +462,11 @@ static size_t _orth_rho_core_cache_size(int* mesh, double radius, double* dh)
 }
 
 
-static size_t _nonorth_rho_core_cache_size(int* mesh, double radius, double* dh_inv)
+static size_t _nonorth_rho_core_cache_size(int* mesh, double radius, double* dh, double* dh_inv)
 {
     size_t size = 0;
-    size_t nmx = get_max_num_grid_nonorth(dh_inv, radius);
+    //size_t nmx = get_max_num_grid_nonorth(dh_inv, radius);
+    size_t nmx = get_max_num_grid_nonorth_tight(dh, dh_inv, radius);
     size_t nmx2 = nmx * nmx;
     int l = 0;
     int l1 = 1;
@@ -486,7 +488,7 @@ static size_t _rho_core_cache_size(int* mesh, double radius, double* dh, double*
     if (orth) {
         return _orth_rho_core_cache_size(mesh, radius, dh);
     } else {
-        return _nonorth_rho_core_cache_size(mesh, radius, dh_inv);
+        return _nonorth_rho_core_cache_size(mesh, radius, dh, dh_inv);
     }
 }
 
@@ -550,6 +552,7 @@ void grid_collocate_drv(void (*eval_rho)(), RS_Grid** rs_rho, double* dm, TaskLi
     Task* task;
     size_t ntasks;
     PGFPair** pgfpairs;
+    double dh[9], dh_inv[9];
     for (ilevel = 0; ilevel < nlevels; ilevel++) {
         task = (tl->tasks)[ilevel];
         ntasks = task->ntasks;
@@ -562,7 +565,6 @@ void grid_collocate_drv(void (*eval_rho)(), RS_Grid** rs_rho, double* dm, TaskLi
         rho = (*rs_rho)->data[ilevel];
         mesh = gridlevel_info->mesh + ilevel*3;
 
-        double dh[9], dh_inv[9];
         get_grid_spacing(dh, dh_inv, a, b, mesh);
 
         int *task_loc;
@@ -581,7 +583,7 @@ void grid_collocate_drv(void (*eval_rho)(), RS_Grid** rs_rho, double* dm, TaskLi
     double *ptr_gto_norm_i, *ptr_gto_norm_j;
     double *cache0 = malloc(sizeof(double) * cache_size);
     double *dm_cart = cache0;
-    double *dm_pgf = cache0 + ish_nprim_max*_LEN_CART[ish_lmax]*jsh_nprim_max*_LEN_CART[jsh_lmax];
+    double *dm_pgf = dm_cart + ish_nprim_max*_LEN_CART[ish_lmax]*jsh_nprim_max*_LEN_CART[jsh_lmax];
     double *cache = dm_pgf + _LEN_CART[ish_lmax]*_LEN_CART[jsh_lmax]; 
 
     int thread_id = omp_get_thread_num();

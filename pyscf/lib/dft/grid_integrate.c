@@ -1106,6 +1106,49 @@ int eval_mat_lda_orth_ip1(double *weights, double *out, int comp,
 }
 
 
+int eval_mat_lda_nonorth_ip1(double *weights, double *out, int comp,
+                             int li, int lj, double ai, double aj,
+                             double *ri, double *rj, double fac, double cutoff,
+                             int dimension, double* dh, double *dh_inv,
+                             int *mesh, double *cache)
+{
+    int dij = _LEN_CART[li] * _LEN_CART[lj];
+    int topl = li + lj + 1;
+    int l1 = topl+1;
+    int l1l1l1 = l1*l1*l1;
+    int grid_slice[6];
+    double *xs_exp, *ys_exp, *zs_exp, *exp_corr;
+    size_t data_size = init_nonorth_data(&xs_exp, &ys_exp, &zs_exp, &exp_corr,
+                                         grid_slice, dh, dh_inv, mesh, topl, cutoff,
+                                         ai, aj, ri, rj, cache);
+    if (data_size == 0) {
+            return 0;
+    }
+    cache += data_size;
+
+    double *mat_xyz = cache;
+    double *mat_ijk = mat_xyz + l1l1l1;
+    cache = mat_ijk + l1l1l1;
+
+    memset(mat_xyz, 0, l1l1l1*sizeof(double));
+    memset(mat_ijk, 0, l1l1l1*sizeof(double));
+
+    _nonorth_ints(mat_ijk, weights, topl, fac, xs_exp, ys_exp, zs_exp, exp_corr,
+                  grid_slice, mesh, cache);
+
+    dm_ijk_to_dm_xyz(mat_ijk, mat_xyz, dh, topl);
+
+    cache = mat_xyz + l1l1l1;
+    double *pout_x = out;
+    double *pout_y = pout_x + dij;
+    double *pout_z = pout_y + dij;
+    _v1_xyz_to_v1(_vrho_loop_ip1_x, mat_xyz, pout_x, li, lj, ai, aj, ri, rj, cache);
+    _v1_xyz_to_v1(_vrho_loop_ip1_y, mat_xyz, pout_y, li, lj, ai, aj, ri, rj, cache);
+    _v1_xyz_to_v1(_vrho_loop_ip1_z, mat_xyz, pout_z, li, lj, ai, aj, ri, rj, cache);
+    return 1;
+}
+
+
 int eval_mat_gga_orth(double *weights, double *out, int comp,
                       int li, int lj, double ai, double aj,
                       double *ri, double *rj, double fac, double cutoff,
@@ -1337,11 +1380,13 @@ static size_t _orth_ints_cache_size(int l, int nprim, int nctr, int* mesh, doubl
 }
 
 
-static size_t _nonorth_ints_cache_size(int l, int nprim, int nctr, int* mesh, double radius, double* dh_inv, int comp)
+static size_t _nonorth_ints_cache_size(int l, int nprim, int nctr, int* mesh, double radius,
+                                       double* dh, double* dh_inv, int comp)
 {
     size_t size = 0;
 
-    size_t nmx = get_max_num_grid_nonorth(dh_inv, radius);
+    //size_t nmx = get_max_num_grid_nonorth(dh_inv, radius);
+    size_t nmx = get_max_num_grid_nonorth_tight(dh, dh_inv, radius);
     size_t nmx2 = nmx * nmx;
     int l1 = 2 * l + 1;
     if (comp == 3) {
@@ -1375,7 +1420,7 @@ static size_t _ints_cache_size(int l, int nprim, int nctr, int* mesh, double rad
     if (orth) {
         return _orth_ints_cache_size(l, nprim, nctr, mesh, radius, dh, comp);
     } else {
-        return _nonorth_ints_cache_size(l, nprim, nctr, mesh, radius, dh_inv, comp);
+        return _nonorth_ints_cache_size(l, nprim, nctr, mesh, radius, dh, dh_inv, comp);
     }
 }
 
@@ -1408,10 +1453,11 @@ static size_t _orth_ints_core_cache_size(int* mesh, double radius, double* dh, i
 }
 
 
-static size_t _nonorth_ints_core_cache_size(int* mesh, double radius, double* dh_inv, int comp)
+static size_t _nonorth_ints_core_cache_size(int* mesh, double radius, double* dh, double* dh_inv, int comp)
 {
     size_t size = 0;
-    size_t nmx = get_max_num_grid_nonorth(dh_inv, radius);
+    //size_t nmx = get_max_num_grid_nonorth(dh_inv, radius);
+    size_t nmx = get_max_num_grid_nonorth_tight(dh, dh_inv, radius);
     size_t nmx2 = nmx * nmx;
     const int l = 0;
     int l1 = l + 1;
@@ -1441,7 +1487,7 @@ static size_t _ints_core_cache_size(int* mesh, double radius, double* dh, double
     if (orth) {
         return _orth_ints_core_cache_size(mesh, radius, dh, comp);
     } else {
-        return _nonorth_ints_core_cache_size(mesh, radius, dh_inv, comp);
+        return _nonorth_ints_core_cache_size(mesh, radius, dh, dh_inv, comp);
     }
 }
 

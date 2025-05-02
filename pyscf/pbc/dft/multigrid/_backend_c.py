@@ -58,9 +58,33 @@ def get_gga_vrho_gs(v, v1, Gv, weight, ngrid):
     )
     return v
 
+def pp_loc_part1_gs(coulG, Gv, G2, G0idx, Z, coords, rloc):
+    libpbc = lib.load_library('libpbc')
+    coulG = np.asarray(coulG, order='C', dtype=np.double)
+    Gv = np.asarray(Gv, order='C', dtype=np.double)
+    G2 = np.asarray(G2, order='C', dtype=np.double)
+    ngrid = len(G2)
+
+    coords = np.asarray(coords, order='C', dtype=np.double)
+    Z = np.asarray(Z, order='C', dtype=np.double)
+    rloc = np.asarray(rloc, order='C', dtype=np.double)
+    natm = len(Z)
+
+    out = np.empty(ngrid, dtype=np.complex128)
+    libpbc.pp_loc_part1_gs(
+        out.ctypes.data_as(ctypes.c_void_p),
+        coulG.ctypes.data_as(ctypes.c_void_p),
+        Gv.ctypes.data_as(ctypes.c_void_p),
+        G2.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(G0idx),
+        ctypes.c_int(ngrid),
+        Z.ctypes.data_as(ctypes.c_void_p),
+        coords.ctypes.data_as(ctypes.c_void_p),
+        rloc.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(natm))
+    return out
 
 def build_core_density(
-    fn_name,
     atm,
     bas,
     env,
@@ -69,8 +93,15 @@ def build_core_density(
     a,
     b,
     max_radius,
-    orth,
 ):
+    if abs(a - np.diag(a.diagonal())).max() < 1e-12:
+        lattice_type = '_orth'
+        orth = True
+    else:
+        lattice_type = '_nonorth'
+        orth = False
+    fn_name = 'make_rho_lda' + lattice_type
+
     atm = np.asarray(atm, order='C', dtype=np.int32)
     bas = np.asarray(bas, order='C', dtype=np.int32)
     env = np.asarray(env, order='C', dtype=np.double)
@@ -97,7 +128,6 @@ def build_core_density(
 
 
 def int_gauss_charge_v_rs(
-    fn_name,
     v_rs,
     comp,
     atm,
@@ -108,8 +138,20 @@ def int_gauss_charge_v_rs(
     a,
     b,
     max_radius,
-    orth,
 ):
+    if abs(a - np.diag(a.diagonal())).max() < 1e-12:
+        lattice_type = '_orth'
+        orth = True
+    else:
+        lattice_type = '_nonorth'
+        orth = False
+
+    fn_name = 'eval_mat_lda' + lattice_type
+    if comp == 3:
+        fn_name += '_ip1'
+    elif comp != 1:
+        raise NotImplementedError
+
     out = np.zeros((len(atm), comp), order='C', dtype=np.double)
     v_rs = np.asarray(v_rs, order='C', dtype=np.double)
     atm = np.asarray(atm, order='C', dtype=np.int32)
@@ -138,12 +180,10 @@ def int_gauss_charge_v_rs(
     return out
 
 
-def grid_collocate_drv(
-    fn_name,
-    rs_rho,
+def grid_collocate(
+    xctype,
     dm,
     task_list,
-    comp,
     hermi,
     shls_slice,
     ao_loc0,
@@ -159,8 +199,22 @@ def grid_collocate_drv(
     jsh_bas,
     jsh_env,
     cart,
-    orth,
 ):
+    if abs(a-np.diag(a.diagonal())).max() < 1e-12:
+        lattice_type = '_orth'
+        orth = True
+    else:
+        lattice_type = '_nonorth'
+        orth = False
+
+    if xctype.upper() == 'LDA':
+        comp = 1
+    else:
+        raise NotImplementedError
+
+    fn_name = 'make_rho_' + xctype.lower() + lattice_type
+
+    rs_rho = RS_Grid(task_list.gridlevel_info, comp)
     dm = np.asarray(dm, order='C', dtype=np.double)
     i0, i1, j0, j1 = shls_slice
     ao_loc0 = np.asarray(ao_loc0, order='C', dtype=np.int32)
@@ -200,9 +254,8 @@ def grid_collocate_drv(
     )
     return rs_rho
 
-def grid_integrate_drv(
-    fn_name,
-    mat,
+def grid_integrate(
+    xctype,
     wv,
     task_list,
     comp,
@@ -222,13 +275,31 @@ def grid_integrate_drv(
     jsh_bas,
     jsh_env,
     cart,
-    orth,
 ):
-    mat = np.asarray(mat, order='C', dtype=np.double)
-    wv = np.asarray(wv, order='C', dtype=np.double)
+    if abs(a-np.diag(a.diagonal())).max() < 1e-12:
+        lattice_type = '_orth'
+        orth = True
+    else:
+        lattice_type = '_nonorth'
+        orth = False
+
+    fn_name = 'eval_mat_' + xctype.lower() + lattice_type
+    if comp == 3:
+        fn_name += '_ip1'
+    elif comp != 1:
+        raise NotImplementedError
+
     i0, i1, j0, j1 = shls_slice
     ao_loc0 = np.asarray(ao_loc0, order='C', dtype=np.int32)
     ao_loc1 = np.asarray(ao_loc1, order='C', dtype=np.int32)
+    naoi = ao_loc0[i1] - ao_loc0[i0]
+    naoj = ao_loc1[j1] - ao_loc1[j0]
+    if comp == 1:
+        mat = np.zeros((naoi, naoj))
+    else:
+        mat = np.zeros((comp, naoi, naoj))
+
+    wv = np.asarray(wv, order='C', dtype=np.double)
     Ls = np.asarray(Ls, order='C', dtype=np.double)
     a = np.asarray(a, order='C', dtype=np.double)
     b = np.asarray(b, order='C', dtype=np.double)
@@ -468,6 +539,10 @@ class TaskList:
             ctypes.c_double(precision),
             ctypes.c_int(hermi)
         )
+
+    @property
+    def ntasks(self):
+        return [self._this.contents.tasks[i].contents.ntasks for i in range(self.nlevels)]
 
     def __del__(self):
         try:

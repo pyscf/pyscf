@@ -242,8 +242,10 @@ static int _orth_components(double *xs_exp, int* bounds, double dx, double radiu
     double _x0dx = -2 * aij * x0xij * dx;
     double exp_dxdx = exp(_dxdx);
     double exp_2dxdx = exp_dxdx * exp_dxdx;
-    double exp_x0dx = exp(_x0dx + _dxdx);
-    double exp_x0x0 = exp(_x0x0);
+    double exp_x0dx_cache = exp(_x0dx);
+    double exp_x0dx = exp_dxdx * exp_x0dx_cache;
+    double exp_x0x0_cache = exp(_x0x0);
+    double exp_x0x0 = exp_x0x0_cache;
 
     int i;
     int istart = xij_latt - x0_latt;
@@ -253,8 +255,8 @@ static int _orth_components(double *xs_exp, int* bounds, double dx, double radiu
         exp_x0dx *= exp_2dxdx;
     }
 
-    exp_x0dx = exp(_dxdx - _x0dx);
-    exp_x0x0 = exp(_x0x0);
+    exp_x0dx = exp_dxdx / exp_x0dx_cache;
+    exp_x0x0 = exp_x0x0_cache;
     for (i = istart-1; i >= 0; i--) {
         exp_x0x0 *= exp_x0dx;
         exp_x0dx *= exp_2dxdx;
@@ -482,6 +484,23 @@ static void _nonorth_bounds_tight(int* bounds, int* rp_latt, double* roff,
 }
 
 
+int get_max_num_grid_nonorth_tight(double*dh, double* dh_inv, double radius)
+{
+    int bounds[6];
+    int rp_latt[3];
+    double roff[3];
+    double rp[3] = {0};
+
+    _nonorth_bounds_tight(bounds, rp_latt, roff, rp, dh, dh_inv, radius);
+
+    int nx = bounds[1] - bounds[0];
+    int ny = bounds[3] - bounds[2];
+    int nz = bounds[5] - bounds[4];
+    int nmax = MAX(MAX(nx, ny), nz) + 1;
+    return nmax;
+}
+
+
 static void _poly_exp(double *xs_all, int* bounds, double dx,
                       double xi, double xoff, int xp_latt, double ap,
                       int topl, double *cache)
@@ -495,8 +514,10 @@ static void _poly_exp(double *xs_all, int* bounds, double dx,
     double _x0dx = -2 * ap * xoff * dx;
     double exp_dxdx = exp(_dxdx);
     double exp_2dxdx = exp_dxdx * exp_dxdx;
-    double exp_x0dx = exp(_x0dx + _dxdx);
-    double exp_x0x0 = exp(_x0x0);
+    double exp_x0dx_cache = exp(_x0dx);
+    double exp_x0dx = exp_x0dx_cache * exp_dxdx;
+    double exp_x0x0_cache = exp(_x0x0);
+    double exp_x0x0 = exp_x0x0_cache;
 
     int i;
     int istart = xp_latt - x0_latt;
@@ -506,8 +527,8 @@ static void _poly_exp(double *xs_all, int* bounds, double dx,
         exp_x0dx *= exp_2dxdx;
     }
 
-    exp_x0dx = exp(_dxdx - _x0dx);
-    exp_x0x0 = exp(_x0x0);
+    exp_x0dx = exp_dxdx / exp_x0dx_cache;
+    exp_x0x0 = exp_x0x0_cache;
     for (i = istart-1; i >= 0; i--) {
         exp_x0x0 *= exp_x0dx;
         exp_x0dx *= exp_2dxdx;
