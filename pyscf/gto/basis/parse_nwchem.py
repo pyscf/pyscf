@@ -83,7 +83,7 @@ def parse(string, symb=None, optimize=True):
         symb = _std_symbol(symb)
         line_data = _search_basis_block(re.split(BASIS_SET_DELIMITER, string), symb)
         if not line_data:
-            raise BasisNotFoundError('Basis not found for %s' % symb)
+            raise BasisNotFoundError('Basis set not found for %s' % symb)
     else:
         line_data = string.splitlines()
 
@@ -98,6 +98,8 @@ def parse(string, symb=None, optimize=True):
 def load(basisfile, symb, optimize=True):
     '''Load basis for atom of symb from file'''
     raw_basis = search_seg(basisfile, symb)
+    if not raw_basis:
+        raise BasisNotFoundError('Basis set not found for %s' % symb)
     return _parse(raw_basis, optimize)
 
 def _parse(raw_basis, optimize=True):

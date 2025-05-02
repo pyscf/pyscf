@@ -171,15 +171,18 @@ def make_auxbasis(mol, *, xc='HF', mp2fit=False):
     auxbasis = {}
     if isinstance(mol.basis, str):
         _basis = {a: mol.basis for a in uniq_atoms}
-        _auxbasis = predefined_auxbasis(mol, mol.basis, xc, mp2fit)
-        if _auxbasis:
-            auxbasis = {a: _auxbasis for a in uniq_atoms}
-            logger.info(mol, 'Default auxbasis %s is applied universally', _auxbasis)
-    elif isinstance(mol.basis, dict) and 'default' in mol.basis:
-        default_basis = mol.basis['default']
-        _basis = {a: default_basis for a in uniq_atoms}
-        _basis.update(mol.basis)
-        del _basis['default']
+        default_auxbasis = predefined_auxbasis(mol, mol.basis, xc, mp2fit)
+        if default_auxbasis:
+            auxbasis = {a: default_auxbasis for a in uniq_atoms}
+            logger.debug(mol, 'Default auxbasis %s is applied universally', default_auxbasis)
+    elif isinstance(mol.basis, dict):
+        if 'default' in mol.basis:
+            default_basis = mol.basis['default']
+            _basis = {a: default_basis for a in uniq_atoms}
+            _basis.update(mol.basis)
+            del _basis['default']
+        else:
+            _basis = mol.basis
     else:
         _basis = mol._basis or {}
 
@@ -254,7 +257,22 @@ def make_auxmol(mol, auxbasis=None):
         else:
             _basis = auxbasis
 
-    pmol._basis = pmol.format_basis(_basis)
+    try:
+        pmol._basis = pmol.format_basis(_basis)
+    except BasisNotFoundError:
+        if isinstance(auxbasis, str):
+            print(f'''
+Some elements are not found in the specified auxiliary basis set {auxbasis}.
+To proceed, you can generate even-tempered Gaussian (ETB) functions for the missing elements.
+Three routines are available for this system:
+1. PySCF's built-in basis generation function
+    mf.with_df.auxbasis = pyscf.df.make_auxbasis(mol)
+2. ORCA recommended AutoAux ETB
+    mf.with_df.auxbasis = pyscf.df.autoaux(mol)
+3. Gaussian package recommended ETB
+    mf.with_df.auxbasis = pyscf.df.autoabs(mol)
+''')
+        raise
 
     # Note: To pass parameters like gauge origin, rsh-omega to auxmol,
     # mol._env[:PTR_ENV_START] must be copied to auxmol._env

@@ -21,6 +21,7 @@ from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pbcscf
 import pyscf.pbc.mp
 import pyscf.pbc.mp.kmp2
+from pyscf.df import make_auxbasis
 
 
 def build_cell(space_group_symmetry=False):
@@ -40,7 +41,7 @@ def build_cell(space_group_symmetry=False):
 class KnownValues(unittest.TestCase):
     def test_mp2(self):
         cell = build_cell()
-        mf = pbcscf.RHF(cell).density_fit()
+        mf = pbcscf.RHF(cell).density_fit(auxbasis=make_auxbasis(cell))
         mf.conv_tol = 1e-10
         mf.kernel()
         pt = pyscf.pbc.mp.mp2.RMP2(mf).run()
@@ -52,7 +53,7 @@ class KnownValues(unittest.TestCase):
     def test_kmp2(self):
         def run_k(cell, kmesh):
             kpts = cell.make_kpts(kmesh)
-            mf = pbcscf.KRHF(cell, kpts).density_fit()
+            mf = pbcscf.KRHF(cell, kpts).density_fit(auxbasis=make_auxbasis(cell))
             mf.conv_tol = 1e-10
             mf.kernel()
             pt = pyscf.pbc.mp.kmp2.KMP2(mf).run()
@@ -73,7 +74,7 @@ class KnownValues(unittest.TestCase):
     def test_ksymm(self):
         def run_k(cell, kmesh):
             kpts = cell.make_kpts(kmesh, space_group_symmetry=True)
-            mf = pbcscf.KRHF(cell, kpts).density_fit()
+            mf = pbcscf.KRHF(cell, kpts).density_fit(auxbasis=make_auxbasis(cell))
             mf.conv_tol = 1e-10
             mf.kernel()
             pt = pyscf.pbc.mp.kmp2_ksymm.KMP2(mf).run()
