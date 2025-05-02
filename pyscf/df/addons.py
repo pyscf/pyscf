@@ -26,6 +26,10 @@ from pyscf import ao2mo
 from pyscf.data import elements
 from pyscf.lib.exceptions import BasisNotFoundError
 from pyscf.df.autoaux import autoaux, autoabs
+try:
+    from pyscf.dft.libxc import is_hybrid_xc
+except ImportError:
+    from pyscf.dft.xcfun import is_hybrid_xc
 from pyscf import __config__
 
 DFBASIS = getattr(__config__, 'df_addons_aug_etb_beta', 'weigend')
@@ -168,7 +172,7 @@ def make_auxbasis(mol, *, xc='HF', mp2fit=False):
     the optimized auxiliary basis defined in DEFAULT_AUXBASIS
     '''
     if isinstance(mol.basis, str):
-        auxbasis = bse_predefined_auxbasis(mol.basis, xc, mp2fit)
+        auxbasis = bse_predefined_auxbasis(mol, mol.basis, xc, mp2fit)
         if auxbasis:
             return auxbasis
 
@@ -194,26 +198,10 @@ def make_auxbasis(mol, *, xc='HF', mp2fit=False):
         balias = _format_basis_name(obs)
         if gto.basis._is_pople_basis(balias):
             balias = balias.split('g')[0] + 'g'
-        if xc.upper() == 'HF' and balias in DEFAULT_AUXBASIS:
-            if mp2fit:
-                auxb = DEFAULT_AUXBASIS[balias][1]
-            else:
-                auxb = DEFAULT_AUXBASIS[balias][0]
-            if auxb is not None:
-                try:
-                    # Test if basis auxb for element k is available
-                    gto.basis.load(auxb, elements._std_symbol_without_ghost(k))
-                except BasisNotFoundError:
-                    pass
-                else:
-                    auxbasis[k] = auxb
-                    logger.info(mol, 'Default auxbasis %s is used for %s %s',
-                                auxb, k, obs)
-        else:
-            auxb = bse_predefined_auxbasis(obs, xc, mp2fit)
-            if auxb is not None:
-                auxbasis[k] = auxb
-                logger.info(mol, 'Assign BSE predefined auxbasis %s for %s', auxb, k)
+        auxb = predefined_auxbasis(mol, balias, xc, mp2fit)
+        if auxb is not None:
+            auxbasis[k] = auxb
+            logger.info(mol, 'Default auxbasis %s is used for %s %s', auxb, k, obs)
 
     if len(auxbasis) != len(_basis):
         # Some AO basis not found in DEFAULT_AUXBASIS
@@ -274,15 +262,12 @@ def make_auxmol(mol, auxbasis=None):
     return pmol
 
 def bse_predefined_auxbasis(mol, basis, xc='HF', mp2fit=False):
-    '''Find auxiliary basis sets for XC functionals from BSE database
+    '''Find auxiliary basis sets for XC functionals from BSE database.
+    If no matching basis set is found, the function returns None.
     '''
     if not isinstance(basis, str):
         return None
 
-    try:
-        from pyscf.dft.libxc import is_hybrid_xc
-    except ImportError:
-        from pyscf.dft.xcfun import is_hybrid_xc
     pyscf_basis_alias = _format_basis_name(basis).lower()
     basis_meta = gto.mole.BSE_META.get(pyscf_basis_alias)
     auxbasis = None
@@ -291,11 +276,11 @@ def bse_predefined_auxbasis(mol, basis, xc='HF', mp2fit=False):
         if mp2fit:
             auxbasis = auxiliaries.get('rifit')
             if auxbasis:
-                logger.debug(mol, f'Predefined RIFIT basis set {auxbasis} for {xc}')
-        elif xc.upper() == 'HF' or is_hybrid_xc(xc):
+                logger.debug(mol, f'BSE predefined RIFIT basis set {auxbasis} for mp2fit')
+        elif is_hybrid_xc(xc):
             auxbasis = auxiliaries.get('jkfit')
             if auxbasis:
-                logger.debug(mol, f'Predefined JKFIT basis set {auxbasis} for {xc}')
+                logger.debug(mol, f'BSE predefined JKFIT basis set {auxbasis} for {xc}')
         else:
             auxbasis = auxiliaries.get('jfit')
             if auxbasis is None:
@@ -303,7 +288,27 @@ def bse_predefined_auxbasis(mol, basis, xc='HF', mp2fit=False):
             if auxbasis is None:
                 auxbasis = auxiliaries.get('jkfit')
             if auxbasis:
-                logger.debug(mol, f'Predefined JFIT basis set {auxbasis} for {xc}')
+                logger.debug(mol, f'BSE predefined JFIT basis set {auxbasis} for {xc}')
     return auxbasis
+
+def predefined_auxbasis(mol, basis, xc='HF', mp2fit=False):
+    '''Predefined auxiliary basis sets for the specified orbital basis set and
+    XC functional. The searching starts from the Psi4 recommendation. If not
+    found, the record in BSE database will be used. If no matching basis set is
+    found, the function returns None.
+    '''
+    if not isinstance(basis, str):
+        return None
+    pyscf_basis_alias = _format_basis_name(basis).lower()
+    if pyscf_basis_alias in DEFAULT_AUXBASIS:
+        if mp2fit:
+            auxbasis = DEFAULT_AUXBASIS[pyscf_basis_alias][1]
+            logger.debug(mol, f'Psi4 predefined RIFIT basis set {auxbasis} for mp2fit')
+            return auxbasis
+        elif is_hybrid_xc(xc):
+            auxbasis = DEFAULT_AUXBASIS[pyscf_basis_alias][0]
+            logger.debug(mol, f'Psi4 predefined JKFIT basis set {auxbasis} for {xc}')
+            return auxbasis
+    return bse_predefined_auxbasis(mol, basis, xc, mp2fit)
 
 del (DFBASIS, ETB_BETA, FIRST_ETB_ELEMENT)

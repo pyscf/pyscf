@@ -46,7 +46,7 @@ def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
         with_df : DF object
     '''
     from pyscf.pbc.scf.hf import KohnShamDFT
-    from pyscf.df.addons import make_auxbasis
+    from pyscf.df.addons import predefined_auxbasis
     from pyscf.pbc.df import df
     from pyscf.pbc.scf.khf import KSCF
     if with_df is None:
@@ -55,13 +55,19 @@ def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
         else:
             kpts = numpy.reshape(mf.kpt, (1,3))
 
-        if auxbasis is None:
+        cell = mf.cell
+        if auxbasis is None and isinstance(cell.basis, str):
             if isinstance(mf, KohnShamDFT):
                 xc = mf.xc
             else:
                 xc = 'HF'
-            auxbasis = make_auxbasis(mf.cell, xc=xc)
-        with_df = df.DF(mf.cell, kpts)
+            if xc == 'LDA,VWN':
+                # This is likely the default xc setting of a KS instance.
+                # Postpone the auxbasis assignment to with_df.build().
+                auxbasis = None
+            else:
+                auxbasis = predefined_auxbasis(cell, cell.basis, xc)
+        with_df = df.DF(cell, kpts)
         with_df.max_memory = mf.max_memory
         with_df.stdout = mf.stdout
         with_df.verbose = mf.verbose

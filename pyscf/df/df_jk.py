@@ -64,17 +64,22 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
     '''
     from pyscf import df
     from pyscf.scf import dhf
-    from pyscf.df.addons import make_auxbasis
+    from pyscf.df.addons import predefined_auxbasis
     assert (isinstance(mf, scf.hf.SCF))
 
     if with_df is None:
         mol = mf.mol
-        if auxbasis is None:
+        if auxbasis is None and isinstance(mol.basis, str):
             if isinstance(mf, scf.hf.KohnShamDFT):
                 xc = mf.xc
             else:
                 xc = 'HF'
-            auxbasis = make_auxbasis(mol, xc=xc)
+            if xc == 'LDA,VWN':
+                # This is likely the default xc setting of a KS instance.
+                # Postpone the auxbasis assignment to with_df.build().
+                auxbasis = None
+            else:
+                auxbasis = predefined_auxbasis(mol, mol.basis, xc)
         if isinstance(mf, dhf.UHF):
             with_df = df.DF4C(mol, auxbasis)
         else:

@@ -68,22 +68,30 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
     >>> mf.scf()
     -100.00978770951018
     '''
+    from pyscf.df.addons import predefined_auxbasis
     assert (isinstance(mf, scf.hf.SCF))
 
     if with_df is None:
-        with_df = SGX(mf.mol, pjs=pjs)
+        mol = mf.mol
+        if auxbasis is None:
+            if isinstance(mf, scf.hf.KohnShamDFT):
+                xc = mf.xc
+            else:
+                xc = 'HF'
+            if xc == 'LDA,VWN':
+                # This is likely the default xc setting of a KS instance.
+                # Postpone the auxbasis assignment to with_df.build().
+                auxbasis = None
+            else:
+                auxbasis = predefined_auxbasis(mol, mol.basis, xc)
+        with_df = SGX(mol, auxbasis=auxbasis, pjs=pjs)
         with_df.max_memory = mf.max_memory
         with_df.stdout = mf.stdout
         with_df.verbose = mf.verbose
-        with_df.auxbasis = auxbasis
 
     if isinstance(mf, _SGXHF):
-        if mf.with_df is None:
-            mf.with_df = with_df
-        elif mf.with_df.auxbasis != auxbasis:
-            #logger.warn(mf, 'DF might have been initialized twice.')
-            mf = mf.copy()
-            mf.with_df = with_df
+        mf = mf.copy()
+        mf.with_df = with_df
         return mf
 
     dfmf = _SGXHF(mf, with_df, auxbasis)
