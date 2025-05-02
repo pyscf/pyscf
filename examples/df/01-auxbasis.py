@@ -71,7 +71,7 @@ mf = scf.RHF(mol).density_fit()
 mf.with_df.auxbasis = df.autoaux(mol)
 mf.kernel()
 
-# The automatic generation of auxiliary basis set proposed by Lethola (10.1021/acs.jctc.3c00670)
+# The automatic generation of auxiliary basis set (see also 10.1021/acs.jctc.3c00670)
 mf = scf.RHF(mol).density_fit()
 mf.with_df.auxbasis = df.autoabs(mol)
 mf.kernel()
