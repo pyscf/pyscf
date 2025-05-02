@@ -80,7 +80,7 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     dme0 = numpy.einsum('pi,qi,i->pq', mocc, mocc, mo_energy[mo_occ>0]) * 2
 
     with_df = hessobj.base.with_df
-    with_df.auxmol
+    auxmol = with_df.auxmol
     if auxmol is None:
         auxmol = df.addons.make_auxmol(with_df.mol, with_df.auxbasis)
     naux = auxmol.nao

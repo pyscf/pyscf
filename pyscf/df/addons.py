@@ -26,10 +26,6 @@ from pyscf import ao2mo
 from pyscf.data import elements
 from pyscf.lib.exceptions import BasisNotFoundError
 from pyscf.df.autoaux import autoaux, autoabs
-try:
-    from pyscf.dft.libxc import is_hybrid_xc
-except ImportError:
-    from pyscf.dft.xcfun import is_hybrid_xc
 from pyscf import __config__
 
 DFBASIS = getattr(__config__, 'df_addons_aug_etb_beta', 'weigend')
@@ -171,37 +167,45 @@ def make_auxbasis(mol, *, xc='HF', mp2fit=False):
     '''Depending on the orbital basis, generating even-tempered Gaussians or
     the optimized auxiliary basis defined in DEFAULT_AUXBASIS
     '''
-    if isinstance(mol.basis, str):
-        auxbasis = bse_predefined_auxbasis(mol, mol.basis, xc, mp2fit)
-        if auxbasis:
-            return auxbasis
-
     uniq_atoms = {a[0] for a in mol._atom}
+    auxbasis = {}
     if isinstance(mol.basis, str):
         _basis = {a: mol.basis for a in uniq_atoms}
+        _auxbasis = predefined_auxbasis(mol, mol.basis, xc, mp2fit)
+        if _auxbasis:
+            auxbasis = {a: _auxbasis for a in uniq_atoms}
+            logger.info(mol, 'Default auxbasis %s is applied universally', _auxbasis)
     elif isinstance(mol.basis, dict) and 'default' in mol.basis:
         default_basis = mol.basis['default']
         _basis = {a: default_basis for a in uniq_atoms}
         _basis.update(mol.basis)
         del _basis['default']
-    elif (isinstance(mol.basis, dict) and
-          all(isinstance(basis, str) for basis in mol.basis.values())):
-        _basis = {a: mol.basis[a] for a in uniq_atoms}
     else:
         _basis = mol._basis or {}
 
-    auxbasis = {}
     for k, obs in _basis.items():
         if not isinstance(obs, str):
             continue
-
-        balias = _format_basis_name(obs)
-        if gto.basis._is_pople_basis(balias):
-            balias = balias.split('g')[0] + 'g'
-        auxb = predefined_auxbasis(mol, balias, xc, mp2fit)
-        if auxb is not None:
-            auxbasis[k] = auxb
-            logger.info(mol, 'Default auxbasis %s is used for %s %s', auxb, k, obs)
+        if k in auxbasis:
+            auxb = auxbasis[k]
+            try:
+                # Test if basis auxb for element k is available
+                gto.basis.load(auxb, elements._std_symbol_without_ghost(k))
+            except BasisNotFoundError:
+                del auxbasis[k]
+        else:
+            balias = _format_basis_name(obs)
+            if gto.basis._is_pople_basis(balias):
+                balias = balias.split('g')[0] + 'g'
+            auxb = predefined_auxbasis(mol, balias, xc, mp2fit)
+            if auxb is not None:
+                try:
+                    gto.basis.load(auxb, elements._std_symbol_without_ghost(k))
+                except BasisNotFoundError:
+                    continue
+                auxbasis[k] = auxb
+                logger.info(mol, 'Default auxbasis %s is used for %s %s',
+                            auxb, k, obs)
 
     if len(auxbasis) != len(_basis):
         # Some AO basis not found in DEFAULT_AUXBASIS
@@ -268,6 +272,10 @@ def bse_predefined_auxbasis(mol, basis, xc='HF', mp2fit=False):
     if not isinstance(basis, str):
         return None
 
+    try:
+        from pyscf.dft.libxc import is_hybrid_xc
+    except ImportError:
+        from pyscf.dft.xcfun import is_hybrid_xc
     pyscf_basis_alias = _format_basis_name(basis).lower()
     basis_meta = gto.mole.BSE_META.get(pyscf_basis_alias)
     auxbasis = None
@@ -299,6 +307,11 @@ def predefined_auxbasis(mol, basis, xc='HF', mp2fit=False):
     '''
     if not isinstance(basis, str):
         return None
+
+    try:
+        from pyscf.dft.libxc import is_hybrid_xc
+    except ImportError:
+        from pyscf.dft.xcfun import is_hybrid_xc
     pyscf_basis_alias = _format_basis_name(basis).lower()
     if pyscf_basis_alias in DEFAULT_AUXBASIS:
         if mp2fit:
