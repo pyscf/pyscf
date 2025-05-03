@@ -37,7 +37,6 @@ from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.dft import rks as mol_ks
 from pyscf.pbc.dft import multigrid
-from pyscf.pbc.df.df import GDF
 from pyscf.pbc.lib.kpts import KPoints
 from pyscf import __config__
 
@@ -111,13 +110,13 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
             vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
             vk *= hyb
         elif alpha == 0: # LR=0, only SR exchange
-            vj = ks.get_j(cell, dm, hermi, kpt, kpts_band)
             vk = ks.get_k(cell, dm, hermi, kpt, kpts_band, omega=-omega)
             vk *= hyb
-        elif hyb == 0: # SR=0, only LR exchange
             vj = ks.get_j(cell, dm, hermi, kpt, kpts_band)
+        elif hyb == 0: # SR=0, only LR exchange
             vk = ks.get_k(cell, dm, hermi, kpt, kpts_band, omega=omega)
             vk *= alpha
+            vj = ks.get_j(cell, dm, hermi, kpt, kpts_band)
         else: # SR and LR exchange with different ratios
             vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
             vk *= hyb
@@ -230,15 +229,6 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
         if self.rsjk:
             if not numpy.all(self.rsjk.kpts == self.kpt):
                 self.rsjk = self.rsjk.__class__(cell, kpts)
-
-        # for GDF and MDF
-        with_df = self.with_df
-        if (isinstance(with_df, GDF) and
-            self._numint.libxc.is_hybrid_xc(self.xc) and
-            len(kpts) > 1 and getattr(with_df, '_j_only', False)):
-            logger.warn(self, 'df.j_only cannot be used with hybrid functional')
-            self.with_df._j_only = False
-            self.with_df.reset()
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
