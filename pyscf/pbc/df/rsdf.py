@@ -563,7 +563,7 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
 
         # TODO: Store rs_density_fit cderi tensor in v1 format for the moment.
         # It should be changed to 'v2' format in the future.
-        data_version == 'v1'
+        data_version = 'v1'
         if h5py.is_hdf5(cderi_file):
             feri = lib.H5FileWrap(cderi_file, 'a')
             if 'kpts' in feri:
