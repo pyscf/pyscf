@@ -2303,6 +2303,9 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         '''This helper function transfers attributes from one SCF object to
         another SCF object. It is invoked by to_ks and to_hf methods.
         '''
+        if hasattr(self, 'with_df') and not hasattr(dst, 'with_df'):
+            # Handle DF_SCF instances for to_xxx methods
+            dst = dst.density_fit(auxbasis=self.with_df.auxbasis)
         # Search for all tracked attributes, including those in base classes
         cls_keys = [getattr(cls, '_keys', ()) for cls in dst.__class__.__mro__[:-1]]
         dst_keys = set(dst.__dict__).union(*cls_keys)
