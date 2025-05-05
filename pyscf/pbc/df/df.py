@@ -425,7 +425,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             #   with infinity vacuum since the ERI may require large mesh to
             #   sample density in vacuum.
             if (omega > 0 and
-                (cell.dimension >= 2 or cell.low_dim_ft_type != 'inf_vacuum')):
+                cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'):
                 mydf = aft.AFTDF(cell, self.kpts)
                 ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
                 mydf.mesh = cell.cutoff_to_mesh(ke_cutoff)
@@ -473,7 +473,10 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         '''Creates a temporary density fitting object for RSH-DF integrals.
         In this context, only LR or SR integrals for mol and auxmol are computed.
         '''
-        assert omega < 0
+        cell = self.cell
+        if cell.dimension != 0:
+            assert omega < 0
+
         key = '%.6f' % omega
         if key in self._rsh_df:
             rsh_df = self._rsh_df[key]
@@ -482,7 +485,6 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             rsh_df._dataname = f'{self._dataname}-sr/{key}'
             logger.info(self, 'Create RSH-DF object %s for omega=%s', rsh_df, omega)
 
-        cell = self.cell
         auxcell = getattr(self, 'auxcell', None)
 
         cell_omega = cell.omega

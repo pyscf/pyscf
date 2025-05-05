@@ -15,6 +15,7 @@
 import unittest
 import tempfile
 import numpy
+import numpy as np
 from pyscf import lib
 import pyscf.pbc
 from pyscf import ao2mo, gto
