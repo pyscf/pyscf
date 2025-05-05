@@ -319,7 +319,6 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     # inactive orbitals, the 0th order Hamiltonian of MRPT methods can be
     # strongly affected. Numerical uncertainty may be found in the perturbed
     # correlation energy.
-    # See issue https://github.com/pyscf/pyscf/issues/1041
     occ2_idx = numpy.where(2 - cas_occ < FRAC_OCC_THRESHOLD)[0]
     occ0_idx = numpy.where(cas_occ < FRAC_OCC_THRESHOLD)[0]
     if occ2_idx.size > 0 or occ0_idx.size > 0:
