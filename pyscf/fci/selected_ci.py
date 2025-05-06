@@ -749,6 +749,11 @@ class SelectedCI(direct_spin1.FCISolver):
         direct_spin1.FCISolver.dump_flags(self, verbose)
         logger.info(self, 'ci_coeff_cutoff %g', self.ci_coeff_cutoff)
         logger.info(self, 'select_cutoff   %g', self.select_cutoff)
+        logger.warn(self, '''
+This is an inefficient dialect of Selected CI using the same structure as
+determinant based FCI algorithm. For the efficient Selected CI programs,
+it is recommended to use the Dice program (https://github.com/sanshar/Dice.git).''')
+
 
     def contract_2e(self, eri, civec_strs, norb, nelec, link_index=None, **kwargs):
         # The argument civec_strs is a CI vector in function FCISolver.contract_2e.
