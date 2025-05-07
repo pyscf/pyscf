@@ -46,7 +46,8 @@ from pyscf.dft import rks_symm
 from pyscf.dft import uks_symm
 from pyscf.dft import gks_symm
 from pyscf.dft import dks
-from pyscf.dft import gen_grid as grid
+from pyscf.dft import gen_grid
+grid = gen_grid
 from pyscf.dft import radi
 from pyscf.dft import numint
 from pyscf.df import density_fit

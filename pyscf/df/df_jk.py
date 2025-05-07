@@ -64,26 +64,34 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
     '''
     from pyscf import df
     from pyscf.scf import dhf
+    from pyscf.df.addons import predefined_auxbasis
     assert (isinstance(mf, scf.hf.SCF))
 
     if with_df is None:
+        mol = mf.mol
+        if auxbasis is None and isinstance(mol.basis, str):
+            if isinstance(mf, scf.hf.KohnShamDFT):
+                xc = mf.xc
+            else:
+                xc = 'HF'
+            if xc == 'LDA,VWN':
+                # This is likely the default xc setting of a KS instance.
+                # Postpone the auxbasis assignment to with_df.build().
+                auxbasis = None
+            else:
+                auxbasis = predefined_auxbasis(mol, mol.basis, xc)
         if isinstance(mf, dhf.UHF):
-            with_df = df.DF4C(mf.mol)
+            with_df = df.DF4C(mol, auxbasis)
         else:
-            with_df = df.DF(mf.mol)
+            with_df = df.DF(mol, auxbasis)
         with_df.max_memory = mf.max_memory
         with_df.stdout = mf.stdout
         with_df.verbose = mf.verbose
-        with_df.auxbasis = auxbasis
 
     if isinstance(mf, _DFHF):
-        if mf.with_df is None:
-            mf.with_df = with_df
-        elif getattr(mf.with_df, 'auxbasis', None) != auxbasis:
-            #logger.warn(mf, 'DF might have been initialized twice.')
-            mf = mf.copy()
-            mf.with_df = with_df
-            mf.only_dfj = only_dfj
+        mf = mf.copy()
+        mf.with_df = with_df
+        mf.only_dfj = only_dfj
         return mf
 
     dfmf = _DFHF(mf, with_df, only_dfj)

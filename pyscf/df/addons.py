@@ -21,6 +21,7 @@ import sys
 import numpy
 from pyscf.lib import logger
 from pyscf import gto
+from pyscf.gto.basis import _format_basis_name
 from pyscf import ao2mo
 from pyscf.data import elements
 from pyscf.lib.exceptions import BasisNotFoundError
@@ -40,9 +41,7 @@ USE_VERSION_26_AUXBASIS = True
 DEFAULT_AUXBASIS = {
     # AO basis       JK-fit                     MP2-fit
     'ccpvdz'      : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
-    'ccpvdpdz'    : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
     'augccpvdz'   : ('aug-cc-pvdz-jkfit'      , 'aug-cc-pvdz-ri'     ),
-    'augccpvdpdz' : ('aug-cc-pvdz-jkfit'      , 'aug-cc-pvdz-ri'     ),
     'ccpvtz'      : ('cc-pvtz-jkfit'          , 'cc-pvtz-ri'         ),
     'augccpvtz'   : ('aug-cc-pvtz-jkfit'      , 'aug-cc-pvtz-ri'     ),
     'ccpvqz'      : ('cc-pvqz-jkfit'          , 'cc-pvqz-ri'         ),
@@ -58,7 +57,7 @@ DEFAULT_AUXBASIS = {
     'def2mtzvpp'  : ('def2-tzvpp-jkfit'       , 'def2-tzvpp-ri'      ),
     'def2tzvppd'  : ('def2-tzvpp-jkfit'       , 'def2-tzvppd-ri'     ),
     'def2qzvp'    : ('def2-qzvp-jkfit'        , 'def2-qzvp-ri'       ),
-    'def2qzvpd'   : ('def2-qzvp-jkfit'        , None                 ),
+    #'def2qzvpd'   : ('def2-qzvp-jkfit'        , None                 ),
     'def2qzvpp'   : ('def2-qzvpp-jkfit'       , 'def2-qzvpp-ri'      ),
     'def2qzvppd'  : ('def2-qzvpp-jkfit'       , 'def2-qzvppd-ri'     ),
     'sto3g'       : ('def2-svp-jkfit'         , 'def2-svp-ri'        ),
@@ -164,45 +163,52 @@ def aug_etb(mol, beta=ETB_BETA):
     '''To generate the even-tempered auxiliary Gaussian basis'''
     return aug_etb_for_dfbasis(mol, beta=beta, start_at=0)
 
-def make_auxbasis(mol, mp2fit=False):
+def make_auxbasis(mol, *, xc='HF', mp2fit=False):
     '''Depending on the orbital basis, generating even-tempered Gaussians or
     the optimized auxiliary basis defined in DEFAULT_AUXBASIS
     '''
     uniq_atoms = {a[0] for a in mol._atom}
+    auxbasis = {}
     if isinstance(mol.basis, str):
         _basis = {a: mol.basis for a in uniq_atoms}
-    elif 'default' in mol.basis:
-        default_basis = mol.basis['default']
-        _basis = {a: default_basis for a in uniq_atoms}
-        _basis.update(mol.basis)
-        del (_basis['default'])
-    elif (isinstance(mol.basis, dict) and
-            all([isinstance(basis, str) for basis in mol.basis.values()])):
-        _basis = {a: mol.basis[a] for a in uniq_atoms}
+        default_auxbasis = predefined_auxbasis(mol, mol.basis, xc, mp2fit)
+        if default_auxbasis:
+            auxbasis = {a: default_auxbasis for a in uniq_atoms}
+            logger.debug(mol, 'Default auxbasis %s is applied universally', default_auxbasis)
+    elif isinstance(mol.basis, dict):
+        if 'default' in mol.basis:
+            default_basis = mol.basis['default']
+            _basis = {a: default_basis for a in uniq_atoms}
+            _basis.update(mol.basis)
+            del _basis['default']
+        else:
+            _basis = mol.basis
     else:
         _basis = mol._basis or {}
 
-    auxbasis = {}
-    for k in _basis:
-        if isinstance(_basis[k], str):
-            balias = gto.basis._format_basis_name(_basis[k])
+    for k, obs in _basis.items():
+        if not isinstance(obs, str):
+            continue
+        if k in auxbasis:
+            auxb = auxbasis[k]
+            try:
+                # Test if basis auxb for element k is available
+                gto.basis.load(auxb, elements._std_symbol_without_ghost(k))
+            except BasisNotFoundError:
+                del auxbasis[k]
+        else:
+            balias = _format_basis_name(obs)
             if gto.basis._is_pople_basis(balias):
                 balias = balias.split('g')[0] + 'g'
-            if balias in DEFAULT_AUXBASIS:
-                if mp2fit:
-                    auxb = DEFAULT_AUXBASIS[balias][1]
-                else:
-                    auxb = DEFAULT_AUXBASIS[balias][0]
-                if auxb is not None:
-                    try:
-                        # Test if basis auxb for element k is available
-                        gto.basis.load(auxb, elements._std_symbol_without_ghost(k))
-                    except BasisNotFoundError:
-                        pass
-                    else:
-                        auxbasis[k] = auxb
-                        logger.info(mol, 'Default auxbasis %s is used for %s %s',
-                                    auxb, k, _basis[k])
+            auxb = predefined_auxbasis(mol, balias, xc, mp2fit)
+            if auxb is not None:
+                try:
+                    gto.basis.load(auxb, elements._std_symbol_without_ghost(k))
+                except BasisNotFoundError:
+                    continue
+                auxbasis[k] = auxb
+                logger.info(mol, 'Default auxbasis %s is used for %s %s',
+                            auxb, k, obs)
 
     if len(auxbasis) != len(_basis):
         # Some AO basis not found in DEFAULT_AUXBASIS
@@ -251,7 +257,22 @@ def make_auxmol(mol, auxbasis=None):
         else:
             _basis = auxbasis
 
-    pmol._basis = pmol.format_basis(_basis)
+    try:
+        pmol._basis = pmol.format_basis(_basis)
+    except BasisNotFoundError:
+        if isinstance(auxbasis, str):
+            print(f'''
+Some elements are not found in the specified auxiliary basis set {auxbasis}.
+To proceed, you can generate even-tempered Gaussian (ETB) functions for the missing elements.
+Three routines are available for this system:
+1. PySCF's built-in basis generation function
+    mf.with_df.auxbasis = pyscf.df.make_auxbasis(mol)
+2. ORCA recommended AutoAux ETB
+    mf.with_df.auxbasis = pyscf.df.autoaux(mol)
+3. Gaussian package recommended ETB
+    mf.with_df.auxbasis = pyscf.df.autoabs(mol)
+''')
+        raise
 
     # Note: To pass parameters like gauge origin, rsh-omega to auxmol,
     # mol._env[:PTR_ENV_START] must be copied to auxmol._env
@@ -261,5 +282,64 @@ def make_auxmol(mol, auxbasis=None):
     logger.debug(mol, 'num shells = %d, num cGTOs = %d',
                  pmol.nbas, pmol.nao_nr())
     return pmol
+
+def bse_predefined_auxbasis(mol, basis, xc='HF', mp2fit=False):
+    '''Find auxiliary basis sets for XC functionals from BSE database.
+    If no matching basis set is found, the function returns None.
+    '''
+    if not isinstance(basis, str):
+        return None
+
+    try:
+        from pyscf.dft.libxc import is_hybrid_xc
+    except ImportError:
+        from pyscf.dft.xcfun import is_hybrid_xc
+    pyscf_basis_alias = _format_basis_name(basis).lower()
+    basis_meta = gto.mole.BSE_META.get(pyscf_basis_alias)
+    auxbasis = None
+    if basis_meta:
+        auxiliaries = basis_meta[2]
+        if mp2fit:
+            auxbasis = auxiliaries.get('rifit')
+            if auxbasis:
+                logger.debug(mol, f'BSE predefined RIFIT basis set {auxbasis} for mp2fit')
+        elif is_hybrid_xc(xc):
+            auxbasis = auxiliaries.get('jkfit')
+            if auxbasis:
+                logger.debug(mol, f'BSE predefined JKFIT basis set {auxbasis} for {xc}')
+        else:
+            auxbasis = auxiliaries.get('jfit')
+            if auxbasis is None:
+                auxbasis = auxiliaries.get('dftjfit')
+            if auxbasis is None:
+                auxbasis = auxiliaries.get('jkfit')
+            if auxbasis:
+                logger.debug(mol, f'BSE predefined JFIT basis set {auxbasis} for {xc}')
+    return auxbasis
+
+def predefined_auxbasis(mol, basis, xc='HF', mp2fit=False):
+    '''Predefined auxiliary basis sets for the specified orbital basis set and
+    XC functional. The searching starts from the Psi4 recommendation. If not
+    found, the record in BSE database will be used. If no matching basis set is
+    found, the function returns None.
+    '''
+    if not isinstance(basis, str):
+        return None
+
+    try:
+        from pyscf.dft.libxc import is_hybrid_xc
+    except ImportError:
+        from pyscf.dft.xcfun import is_hybrid_xc
+    pyscf_basis_alias = _format_basis_name(basis).lower()
+    if pyscf_basis_alias in DEFAULT_AUXBASIS:
+        if mp2fit:
+            auxbasis = DEFAULT_AUXBASIS[pyscf_basis_alias][1]
+            logger.debug(mol, f'Psi4 predefined RIFIT basis set {auxbasis} for mp2fit')
+            return auxbasis
+        elif is_hybrid_xc(xc):
+            auxbasis = DEFAULT_AUXBASIS[pyscf_basis_alias][0]
+            logger.debug(mol, f'Psi4 predefined JKFIT basis set {auxbasis} for {xc}')
+            return auxbasis
+    return bse_predefined_auxbasis(mol, basis, xc, mp2fit)
 
 del (DFBASIS, ETB_BETA, FIRST_ETB_ELEMENT)

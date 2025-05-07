@@ -47,7 +47,10 @@ class KnownValues(unittest.TestCase):
         # If basis-set-exchange pacakge is installed, this test will fail.
         # bse-0.9 produces 13 shells due to round-off errors.
         # The correct number of generated basis functions should be 12.
-        self.assertEqual(len(auxbasis['H']), 12)
+        if bse.basis_set_exchange:
+            self.assertEqual(len(auxbasis['H']), 13)
+        else:
+            self.assertEqual(len(auxbasis['H']), 12)
 
         mol = gto.M(
             verbose = 0,

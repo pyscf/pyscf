@@ -12,6 +12,7 @@ include pyscf/lib/deps/lib*/libxc.*.dylib
 include pyscf/lib/deps/lib*/libxcfun.[2-9].dylib
 
 include pyscf/geomopt/log.ini
+include pyscf/gto/basis/bse_meta.json
 
 # source code
 recursive-include pyscf/lib *.c *.h CMakeLists.txt
