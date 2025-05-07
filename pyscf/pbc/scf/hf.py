@@ -881,6 +881,9 @@ class SCF(mol_hf.SCF):
     def to_gpu(self):
         raise NotImplementedError
 
+    def nuc_grad_method(self):
+        raise NotImplementedError
+
 
 class KohnShamDFT:
     '''A mock DFT base class
@@ -898,9 +901,6 @@ class RHF(SCF):
     spin_square = mol_hf.RHF.spin_square
     stability = mol_hf.RHF.stability
     to_gpu = lib.to_gpu
-
-    def nuc_grad_method(self):
-        raise NotImplementedError
 
     def to_ks(self, xc='HF'):
         '''Convert to RKS object.
