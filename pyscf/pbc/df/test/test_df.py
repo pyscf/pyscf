@@ -15,6 +15,7 @@
 import unittest
 import tempfile
 import numpy
+import numpy as np
 from pyscf import lib
 import pyscf.pbc
 from pyscf import ao2mo, gto
@@ -265,6 +266,23 @@ Li  P
 
         mydf = mdf.MDF(cell, kpts=kpts)
         assert mydf.kpts.shape == (8,3)
+
+    # issue 2790: build full-range J and SR K separately
+    def test_rsh_df(self):
+        cell = pgto.M(
+            a = np.eye(3) * 3,
+            atom = '''H 0.0000 0.0000 0.0000; H 1.3575 1.3575 1.3575''',
+            basis = [[0, [.5, 1]]],
+        )
+        kpts = cell.make_kpts([2,1,1])
+        kmf = cell.KRKS(kpts=kpts, xc='hse06').density_fit().run()
+        assert abs(kmf.e_tot - -0.687018457218418) < 1e-8
+
+        kmf = cell.KRKS(kpts=kpts, xc='camb3lyp').density_fit().run()
+        assert abs(kmf.e_tot - -0.674692142275221) < 1e-8
+
+        kmf = cell.KRKS(kpts=kpts, xc='wb97').density_fit().run()
+        assert abs(kmf.e_tot - -0.678851816639354) < 1e-8
 
 if __name__ == '__main__':
     print("Full Tests for df")
