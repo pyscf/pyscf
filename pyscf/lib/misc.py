@@ -871,7 +871,6 @@ def invalid_method(name):
     return fn
 
 _registered_classes = {}
-
 def make_class(bases, name=None, attrs=None):
     '''
     Construct a class
@@ -881,7 +880,7 @@ def make_class(bases, name=None, attrs=None):
         class {name}(*bases):
             __dict__ = attrs
     '''
-    global _registered_classes
+    _registered_classes
     if name is None:
         name = ''.join(getattr(x, '__name_mixin__', x.__name__) for x in bases)
 
@@ -889,7 +888,9 @@ def make_class(bases, name=None, attrs=None):
     if cls is None:
         if attrs is None:
             attrs = {}
-        _registered_classes[name, bases] = cls = type(name, bases, attrs)
+        cls = type(name, bases, attrs)
+        cls.__name_mixin__ = name
+        _registered_classes[name, bases] = cls
     return cls
 
 def set_class(obj, bases, name=None, attrs=None):
