@@ -97,7 +97,6 @@ def print_XC_CODES():
     for name, func_id in xc_codes.items():
         refs = xc_reference(func_id)
         key = f"'{name}'"
-        print(key, func_id)
         print(f'{key:<31s}: {func_id:<3d}, # {refs[0]}')
         for r in refs[1:]:
             print(f"                                      # {r}")
