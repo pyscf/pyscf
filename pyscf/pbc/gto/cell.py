@@ -590,13 +590,14 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
     rx = np.asarray(rx, order='C')
     ry = np.asarray(ry, order='C')
     rz = np.asarray(rz, order='C')
-    fn = libpbc.get_Gv
-    fn(Gv.ctypes.data_as(ctypes.c_void_p),
-       rx.ctypes.data_as(ctypes.c_void_p),
-       ry.ctypes.data_as(ctypes.c_void_p),
-       rz.ctypes.data_as(ctypes.c_void_p),
-       mesh.ctypes.data_as(ctypes.c_void_p),
-       b.ctypes.data_as(ctypes.c_void_p))
+    libpbc.get_Gv(
+        Gv.ctypes.data_as(ctypes.c_void_p),
+        rx.ctypes.data_as(ctypes.c_void_p),
+        ry.ctypes.data_as(ctypes.c_void_p),
+        rz.ctypes.data_as(ctypes.c_void_p),
+        mesh.ctypes.data_as(ctypes.c_void_p),
+        b.ctypes.data_as(ctypes.c_void_p),
+    )
     Gv = Gv.reshape(-1, 3)
 
     # 1/cell.vol == det(b)/(2pi)^3
@@ -999,16 +1000,15 @@ def rcut_by_shells(cell, precision=None, rcut=0,
         ptr_pgf_radius = lib.ndarray_pointer_2d(pgf_radius).ctypes
     else:
         ptr_pgf_radius = lib.c_null_ptr()
-    fn = getattr(libpbc, 'rcut_by_shells', None)
-    try:
-        fn(shell_radius.ctypes.data_as(ctypes.c_void_p),
-           ptr_pgf_radius,
-           bas.ctypes.data_as(ctypes.c_void_p),
-           env.ctypes.data_as(ctypes.c_void_p),
-           ctypes.c_int(nbas), ctypes.c_double(rcut),
-           ctypes.c_double(precision))
-    except Exception as e:
-        raise RuntimeError(f'Failed to get shell radii.\n{e}')
+    libpbc.rcut_by_shells(
+        shell_radius.ctypes.data_as(ctypes.c_void_p),
+        ptr_pgf_radius,
+        bas.ctypes.data_as(ctypes.c_void_p),
+        env.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nbas),
+        ctypes.c_double(rcut),
+        ctypes.c_double(precision),
+    )
     if return_pgf_radius:
         return shell_radius, pgf_radius
     return shell_radius
