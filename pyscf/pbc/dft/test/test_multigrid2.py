@@ -112,7 +112,33 @@ def _test_veff(cell, xc, dm, spin=0, tol=1e-7):
     assert vxc.shape == ref.shape
     assert abs(ref-vxc).max() < tol
 
+def with_grid_level_method(method):
+    from contextlib import contextmanager
+    from pyscf.pbc.dft.multigrid import _backend_c as backend
+
+    @contextmanager
+    def _ContextManager():
+        try:
+            backend.TaskList.grid_level_method = method
+            yield
+        finally:
+            backend.TaskList.grid_level_method = "pyscf"
+    return _ContextManager()
+
 class KnownValues(unittest.TestCase):
+    def test_ntasks(self):
+        from pyscf.pbc.dft.multigrid.multigrid_pair import multi_grids_tasks
+        with with_grid_level_method("cp2k"):
+            task_list = multi_grids_tasks(He_orth, hermi=1, ngrids=2)
+            assert task_list.ntasks == [930, 220]
+            task_list = multi_grids_tasks(He_nonorth, hermi=1, ngrids=2)
+            assert task_list.ntasks == [2771, 732]
+        with with_grid_level_method("pyscf"):
+            task_list = multi_grids_tasks(He_orth, hermi=1, ngrids=2)
+            assert task_list.ntasks == [1068, 82]
+            task_list = multi_grids_tasks(He_nonorth, hermi=1, ngrids=2)
+            assert task_list.ntasks == [3249, 254]
+
     def test_orth_get_pp(self):
         ref = df.FFTDF(cell_orth).get_pp()
         out = multigrid.MultiGridFFTDF2(cell_orth).get_pp(return_full=True)
@@ -127,23 +153,23 @@ class KnownValues(unittest.TestCase):
 
     def test_orth_lda_veff(self):
         xc = 'lda, vwn'
-        _test_veff(cell_orth, xc, dm, spin=0, tol=1e-7)
-        _test_veff(cell_orth, xc, dm1, spin=1, tol=1e-7)
+        _test_veff(cell_orth, xc, dm, spin=0)
+        _test_veff(cell_orth, xc, dm1, spin=1)
 
     def test_orth_gga_veff(self):
         xc = 'pbe, pbe'
-        _test_veff(cell_orth, xc, dm, spin=0, tol=1e-7)
-        _test_veff(cell_orth, xc, dm1, spin=1, tol=1e-7)
+        _test_veff(cell_orth, xc, dm, spin=0)
+        _test_veff(cell_orth, xc, dm1, spin=1)
 
     def test_nonorth_lda_veff(self):
         xc = 'lda, vwn'
-        _test_veff(cell_nonorth, xc, dm, spin=0, tol=1e-7)
-        _test_veff(cell_nonorth, xc, dm1, spin=1, tol=1e-7)
+        _test_veff(cell_nonorth, xc, dm, spin=0)
+        _test_veff(cell_nonorth, xc, dm1, spin=1)
 
     def test_nonorth_gga_veff(self):
         xc = 'pbe, pbe'
-        _test_veff(cell_nonorth, xc, dm, spin=0, tol=1e-7)
-        _test_veff(cell_nonorth, xc, dm1, spin=1, tol=1e-7)
+        _test_veff(cell_nonorth, xc, dm, spin=0)
+        _test_veff(cell_nonorth, xc, dm1, spin=1)
 
     def test_orth_lda_dft(self):
         xc = 'lda, vwn'

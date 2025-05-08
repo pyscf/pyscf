@@ -18,6 +18,7 @@
 
 import ctypes
 import numpy as np
+from pyscf import __config__
 from pyscf import lib
 from pyscf.lib import logger
 
@@ -444,6 +445,8 @@ class _CTaskList(ctypes.Structure):
 class TaskList:
     '''Task list for multigrid DFT calculations.
     '''
+    grid_level_method = getattr(__config__, "pbc_dft_multigrid_grid_level_method", "pyscf")
+
     def __init__(self, cell, gridlevel_info,
                  cell1=None, Ls=None, hermi=0, precision=None):
         '''Build a task list.
@@ -520,10 +523,16 @@ class TaskList:
                                               ish_rcut=ish_rcut, jsh_rcut=jsh_rcut,
                                               hermi=hermi)
 
+        if self.grid_level_method.lower() == "cp2k":
+            fn_name = "get_grid_level_cp2k"
+        else:
+            fn_name = "get_grid_level"
+
         libdft.build_task_list(
             ctypes.byref(self._this),
             ctypes.byref(nl),
             ctypes.byref(gridlevel_info._this),
+            getattr(libdft, fn_name),
             ish_atm.ctypes.data_as(ctypes.c_void_p),
             ish_bas.ctypes.data_as(ctypes.c_void_p),
             ish_env.ctypes.data_as(ctypes.c_void_p),

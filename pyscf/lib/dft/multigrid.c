@@ -1,4 +1,4 @@
-/* Copyright 2021- The PySCF Developers. All Rights Reserved.
+/* Copyright 2021-2025 The PySCF Developers. All Rights Reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -386,12 +386,34 @@ void merge_task_list(TaskList** task_list, TaskList** task_list_loc)
 }
 
 
-int get_grid_level(GridLevel_Info* gridlevel_info, double alpha)
+int get_grid_level_cp2k(GridLevel_Info* gridlevel_info,
+                        double alpha, double beta, double precision)
 {
     int i;
     int nlevels = gridlevel_info->nlevels;
     int grid_level = nlevels - 1; //default use the most dense grid
-    double needed_cutoff = alpha * gridlevel_info->rel_cutoff;
+    double needed_cutoff = (alpha + beta) * gridlevel_info->rel_cutoff;
+    for (i = 0; i < nlevels; i++) {
+        if ((gridlevel_info->cutoff)[i] >= needed_cutoff) {
+            grid_level = i;
+            break;
+        }
+    }
+    return grid_level;
+}
+
+
+int get_grid_level(GridLevel_Info* gridlevel_info,
+                   double alpha, double beta, double precision)
+{
+    int i;
+    int nlevels = gridlevel_info->nlevels;
+    int grid_level = nlevels - 1; //default use the most dense grid
+
+    double ap = alpha + beta;
+    double tmp = alpha * beta / (ap * ap);
+    double fac = 2.8284271247461903 * pow(tmp, 0.75) / precision;
+    double needed_cutoff = log(fac) * 2 * ap / pow(gridlevel_info->rel_cutoff, 0.25);
     for (i = 0; i < nlevels; i++) {
         if ((gridlevel_info->cutoff)[i] >= needed_cutoff) {
             grid_level = i;
@@ -404,6 +426,7 @@ int get_grid_level(GridLevel_Info* gridlevel_info, double alpha)
 
 void build_task_list(TaskList** task_list, NeighborList** neighbor_list,
                      GridLevel_Info** gridlevel_info,
+                     int (*fn_get_grid_level)(),
                      int* ish_atm, int* ish_bas, double* ish_env, 
                      double* ish_rcut, double** ipgf_rcut,
                      int* jsh_atm, int* jsh_bas, double* jsh_env, 
@@ -475,7 +498,7 @@ void build_task_list(TaskList** task_list, NeighborList** neighbor_list,
                                 continue;
                             }
                             jpgf_alpha = jsh_env[jsh_alpha_of+jpgf]; 
-                            ilevel = get_grid_level(gl_info, ipgf_alpha+jpgf_alpha);
+                            ilevel = fn_get_grid_level(gl_info, ipgf_alpha, jpgf_alpha, precision);
                             radius = pgfpair_radius(li, lj, ipgf_alpha, jpgf_alpha, ish_ratm, rij, precision);
                             if (radius < RZERO) {
                                 continue;
