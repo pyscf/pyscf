@@ -2303,7 +2303,7 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         '''This helper function transfers attributes from one SCF object to
         another SCF object. It is invoked by to_ks and to_hf methods.
         '''
-        from pyscf.df.df import _DFHF
+        from pyscf.df.df_jk import _DFHF
         if isinstance(self, _DFHF) and not hasattr(dst, 'with_df'):
             # * Handle DF_SCF instances for to_xxx methods.
             # * Only the molecular SCF methods need to be explicitly converted.
