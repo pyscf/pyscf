@@ -467,7 +467,7 @@ def _get_j_pass2_ip1(mydf, vG, kpts=np.zeros((1,3)), hermi=0, deriv=1, verbose=N
         mat = eval_mat(cell, vR, task_list, comp=comp, hermi=hermi, deriv=deriv,
                        xctype='LDA', kpts=kpts, grid_level=ilevel, mesh=mesh)
         mat = np.asarray(mat).reshape(nset,-1,comp,nao,nao)
-        vj_kpts = np.add(vj_kpts, mat, out=vj_kpts)
+        vj_kpts += mat
 
     if nset == 1:
         vj_kpts = vj_kpts[0]
@@ -505,7 +505,7 @@ def _get_gga_pass2(mydf, vG, kpts=np.zeros((1,3)), hermi=1, verbose=None):
         mat = eval_mat(cell, wv, task_list, comp=1, hermi=hermi,
                        xctype='GGA', kpts=kpts, grid_level=ilevel, mesh=mesh)
         mat = np.asarray(mat).reshape(nset,-1,nao,nao)
-        veff = np.add(veff, mat, out=veff)
+        veff += mat
 
     if nset == 1:
         veff = veff[0]
@@ -557,7 +557,7 @@ def _rks_gga_wv0(rho, vxc, weight):
     vrho, vgamma = vxc[:2]
     ngrid = vrho.size
     wv = np.empty((4,ngrid))
-    wv[0]  = np.multiply(weight, vrho, out=wv[0])
+    wv[0] = np.multiply(weight, vrho, out=wv[0])
     for i in range(1, 4):
         wv[i] = np.multiply(weight * 2, np.multiply(vgamma, rho[i], out=wv[i]), out=wv[i])
     return wv
@@ -640,10 +640,12 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
 
     ni = mydf._numint
     xctype = ni._xc_type(xc_code)
-    if xctype == 'LDA':
+    if xctype in (None, 'LDA', 'HF'):
         deriv = 0
     elif xctype == 'GGA':
         deriv = 1
+    else:
+        raise NotImplementedError
     rhoG = _eval_rhoG(mydf, dm_kpts, hermi, kpts, deriv)
 
     mesh = mydf.mesh
@@ -659,8 +661,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
 
     if mydf.vpplocG_part1 is not None:
         for i in range(nset):
-            #:vG[i] += mydf.vpplocG_part1 * 2
-            vG[i] = np.add(vG[i], np.multiply(2., mydf.vpplocG_part1), out=vG[i])
+            vG[i] += mydf.vpplocG_part1 * 2
 
     #:ecoul = .5 * np.einsum('ng,ng->n', rhoG[:,0].real, vG.real)
     #:ecoul+= .5 * np.einsum('ng,ng->n', rhoG[:,0].imag, vG.imag)
@@ -673,8 +674,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
 
     if mydf.vpplocG_part1 is not None:
         for i in range(nset):
-            #:vG[i] -= mydf.vpplocG_part1
-            vG[i] = np.subtract(vG[i], mydf.vpplocG_part1, out=vG[i])
+            vG[i] -= mydf.vpplocG_part1
 
     weight = cell.vol / ngrids
     # *(1./weight) because rhoR is scaled by weight in _eval_rhoG.  When
@@ -687,7 +687,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     for i in range(nset):
         exc, vxc = ni.eval_xc(xc_code, rhoR[i], spin=0, deriv=1)[:2]
         if xctype == 'LDA':
-            wv = np.multiply(weight, vxc[0])
+            wv = weight * vxc[0]
             wv_freq.append(tools.fft(wv, mesh))
             wv = None
         elif xctype == 'GGA':
@@ -697,11 +697,13 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
                 wv = _rks_gga_wv0(rhoR[i], vxc, weight)
                 wv_freq.append(tools.fft(wv, mesh))
                 wv = None
+        elif vxc is None:
+            wv_freq.append(np.zeros((1,*mesh), dtype=np.complex128))
         else:
             raise NotImplementedError
 
         nelec[i]  += np.sum(rhoR[i,0]) * weight
-        excsum[i] += np.sum(np.multiply(rhoR[i,0], exc)) * weight
+        excsum[i] += np.sum(rhoR[i,0] * exc) * weight
         exc = vxc = None
 
     rhoR = rhoG = None
@@ -718,18 +720,19 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     log.debug('Multigrid exc %s  nelec %s', excsum, nelec)
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
-    if xctype == 'LDA':
+    if xctype in (None, 'LDA', 'HF'):
         if with_j:
             wv_freq[:,0] += vG.reshape(nset,*mesh)
         veff = _get_j_pass2(mydf, wv_freq, kpts_band, verbose=log)
     elif xctype == 'GGA':
         if with_j:
-            #:wv_freq[:,0] += vG.reshape(nset,*mesh)
-            wv_freq[:,0] = np.add(wv_freq[:,0], vG.reshape(nset,*mesh), out=wv_freq[:,0])
+            wv_freq[:,0] += vG.reshape(nset,*mesh)
         if GGA_METHOD.upper() == 'FFT':
             veff = _get_j_pass2(mydf, wv_freq, kpts_band, verbose=log)
         else:
             veff = _get_gga_pass2(mydf, wv_freq, kpts_band, hermi=hermi, verbose=log)
+    else:
+        raise NotImplementedError
     wv_freq = None
     veff = _format_jks(veff, dm_kpts, input_band, kpts)
 
@@ -758,10 +761,12 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     ngrids = np.prod(mesh)
     ni = mydf._numint
     xctype = ni._xc_type(xc_code)
-    if xctype == 'LDA':
+    if xctype in (None, 'LDA', 'HF'):
         deriv = 0
     elif xctype == 'GGA':
         deriv = 1
+    else:
+        raise NotImplementedError
 
     rhoG = _eval_rhoG(mydf, dm_kpts, hermi, kpts, deriv)
     rhoG = rhoG.reshape(nset,2,-1,ngrids)
@@ -770,25 +775,23 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     #:vG = np.einsum('nsg,g->ng', rhoG[:,:,0], coulG)
     vG = np.empty((nset,ngrids), dtype=np.result_type(rhoG[:,:,0], coulG))
     for i, rhoG_i in enumerate(rhoG[:,:,0]):
-        vG[i] = np.multiply(np.add(rhoG_i[0], rhoG_i[1]), coulG, out=vG[i])
+        vG[i] = np.multiply(rhoG_i[0] + rhoG_i[1], coulG, out=vG[i])
     coulG = None
 
     if mydf.vpplocG_part1 is not None:
         for i in range(nset):
-            #:vG[i] += mydf.vpplocG_part1 * 2
-            vG[i] = np.add(vG[i], np.multiply(2., mydf.vpplocG_part1), out=vG[i])
+            vG[i] += mydf.vpplocG_part1 * 2
 
     ecoul = np.zeros(nset)
     for i in range(nset):
-        ecoul[i] = .5 * np.vdot(np.add(rhoG[i,0,0], rhoG[i,1,0]), vG[i]).real
+        ecoul[i] = .5 * np.vdot(rhoG[i,0,0] + rhoG[i,1,0], vG[i]).real
 
     ecoul /= cell.vol
     log.debug('Multigrid Coulomb energy %s', ecoul)
 
     if mydf.vpplocG_part1 is not None:
         for i in range(nset):
-            #:vG[i] -= mydf.vpplocG_part1
-            vG[i] = np.subtract(vG[i], mydf.vpplocG_part1, out=vG[i])
+            vG[i] -= mydf.vpplocG_part1
 
     weight = cell.vol / ngrids
     # *(1./weight) because rhoR is scaled by weight in _eval_rhoG.  When
@@ -801,7 +804,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     for i in range(nset):
         exc, vxc = ni.eval_xc(xc_code, rhoR[i], spin=1, deriv=1)[:2]
         if xctype == 'LDA':
-            wv = np.multiply(weight, vxc[0].T)
+            wv = weight * vxc[0].T
             wv_freq.append(tools.fft(wv, mesh))
             wv = None
         elif xctype == 'GGA':
@@ -811,11 +814,13 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
                 wv = _uks_gga_wv0(rhoR[i], vxc, weight)
                 wv_freq.append(tools.fft(wv.reshape(-1,*mesh), mesh))
                 wv = None
+        elif vxc is None:
+            wv_freq.append(np.zeros((2,1,*mesh), dtype=np.complex128))
         else:
             raise NotImplementedError
 
-        nelec[i]  += np.sum(rhoR[i,:,0]).sum() * weight
-        excsum[i] += np.sum(np.multiply(np.add(rhoR[i,0,0],rhoR[i,1,0]), exc)) * weight
+        nelec[i]  += np.sum(rhoR[i,:,0]) * weight
+        excsum[i] += np.sum((rhoR[i,0,0] + rhoR[i,1,0]) * exc) * weight
         exc = vxc = None
 
     rhoR = rhoG = None
@@ -832,7 +837,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     log.debug('Multigrid exc %s  nelec %s', excsum, nelec)
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
-    if xctype == 'LDA':
+    if xctype in (None, 'LDA', 'HF'):
         if with_j:
             for s in range(2):
                 wv_freq[:,s,0] += vG.reshape(nset,*mesh)
@@ -841,11 +846,14 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         if with_j:
             #:wv_freq[:,:,0] += vG.reshape(nset,*mesh)
             for s in range(2):
-                wv_freq[:,s,0] = np.add(wv_freq[:,s,0], vG.reshape(nset,*mesh), out=wv_freq[:,s,0])
+                wv_freq[:,s,0] += vG.reshape(nset,*mesh)
         if GGA_METHOD.upper() == 'FFT':
             veff = _get_j_pass2(mydf, wv_freq, kpts_band, verbose=log)
         else:
             veff = _get_gga_pass2(mydf, wv_freq, kpts_band, hermi=hermi, verbose=log)
+    else:
+        raise NotImplementedError
+
     wv_freq = None
     veff = _format_jks(veff, dm_kpts, input_band, kpts)
 
@@ -872,10 +880,12 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
     ngrids = np.prod(mesh)
     ni = mydf._numint
     xctype = ni._xc_type(xc_code)
-    if xctype == 'LDA':
+    if xctype in (None, 'LDA', 'HF'):
         deriv = 0
     elif xctype == 'GGA':
         deriv = 1
+    else:
+        raise NotImplementedError
     rhoG = _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=kpts_band, deriv=deriv)
     if spin == 1:
         rhoG = rhoG.reshape(nset,2,-1,ngrids)
@@ -888,12 +898,12 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
         if spin == 0:
             vG[i] = np.multiply(rhoG[i,0], coulG, out=vG[i])
         elif spin == 1:
-            tmp = np.add(rhoG[i,0,0], rhoG[i,1,0])
+            tmp = rhoG[i,0,0] + rhoG[i,1,0]
             vG[i] = np.multiply(tmp, coulG, out=vG[i])
 
     if mydf.vpplocG_part1 is not None:
         for i in range(nset):
-            vG[i] = np.add(vG[i], mydf.vpplocG_part1, out=vG[i])
+            vG[i] += mydf.vpplocG_part1
 
     weight = cell.vol / ngrids
 
@@ -919,6 +929,8 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
                 else:
                     wv = _rks_gga_wv0(rhoR[i], vxc, weight)
                     wv_freq.append(tools.fft(wv, mesh))
+            elif vxc is None:
+                wv_freq.append(np.zeros((1,*mesh), dtype=np.complex128))
             else:
                 raise NotImplementedError
         elif spin == 1:
@@ -933,6 +945,8 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
                     wv = _uks_gga_wv0(rhoR[i], vxc, weight)
                     wv_freq.append(tools.fft(wv.reshape(-1,*mesh), mesh))
                 wv = None
+            elif vxc is None:
+                wv_freq.append(np.zeros((2,1,*mesh), dtype=np.complex128))
             else:
                 raise NotImplementedError
 
@@ -950,12 +964,12 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
 
     for i in range(nset):
         if spin == 0:
-            wv_freq[i,0] = np.add(wv_freq[i,0], vG[i].reshape(*mesh), out=wv_freq[i,0])
+            wv_freq[i,0] += vG[i].reshape(*mesh)
         elif spin == 1:
             for s in range(2):
-                wv_freq[i,s,0] = np.add(wv_freq[i,s,0], vG[i].reshape(*mesh), out=wv_freq[i,s,0])
+                wv_freq[i,s,0] += vG[i].reshape(*mesh)
 
-    if xctype == 'LDA':
+    if xctype in (None, 'LDA', 'HF'):
         vj_kpts = _get_j_pass2_ip1(mydf, wv_freq, kpts_band, hermi=0, deriv=1)
     elif xctype == 'GGA':
         if GGA_METHOD.upper() == 'FFT':

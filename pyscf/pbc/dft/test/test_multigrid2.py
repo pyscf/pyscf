@@ -211,6 +211,26 @@ class KnownValues(unittest.TestCase):
         assert abs(g-g0).max() < 1e-7
         assert abs(g1-g0).max() < 1e-7
 
+    def test_orth_j_dft(self):
+        xc = ''
+        e0, g0 = _fftdf_energy_grad(He_orth, xc)
+        e,  g  = _multigrid2_energy_grad(He_orth, xc, 0)
+        e1, g1 = _multigrid2_energy_grad(He_orth, xc, 1)
+        assert abs(e-e0) < 1e-6
+        assert abs(e1-e0) < 1e-6
+        assert abs(g-g0).max() < 1e-6
+        assert abs(g1-g0).max() < 1e-6
+
+    def test_nonorth_j_dft(self):
+        xc = ''
+        e0, g0 = _fftdf_energy_grad(He_nonorth, xc)
+        e,  g  = _multigrid2_energy_grad(He_nonorth, xc, 0)
+        e1, g1 = _multigrid2_energy_grad(He_nonorth, xc, 1)
+        assert abs(e-e0) < 1e-7
+        assert abs(e1-e0) < 1e-7
+        assert abs(g-g0).max() < 1e-7
+        assert abs(g1-g0).max() < 1e-7
+
 if __name__ == '__main__':
     print("Full Tests for multigrid2")
     unittest.main()

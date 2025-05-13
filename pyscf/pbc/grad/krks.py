@@ -72,7 +72,7 @@ def get_vxc(ni, cell, grids, xc_code, dms, kpts, kpts_band=None, relativity=0, h
     ao_loc = cell.ao_loc_nr()
     nkpts = len(kpts)
     vmat = np.zeros((3,nset,nkpts,nao,nao), dtype=dms.dtype)
-    if xctype == 'LDA':
+    if xctype in (None, 'LDA', 'HF'):
         ao_deriv = 1
         for ao_k1, ao_k2, mask, weight, coords \
                 in ni.block_loop(cell, grids, nao, ao_deriv, kpts, kpts_band, max_memory):
@@ -81,6 +81,8 @@ def get_vxc(ni, cell, grids, xc_code, dms, kpts, kpts_band=None, relativity=0, h
             for i in range(nset):
                 rho = make_rho(i, ao_k2[:,0], mask, xctype)
                 vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1)[1]
+                if vxc is None:
+                    vxc = np.zeros_like(rho)
                 vrho = vxc[0]
                 aow = np.einsum('xpi,p->xpi', ao_k1[:,0], weight*vrho)
                 for kn in range(nkpts):
