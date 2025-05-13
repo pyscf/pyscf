@@ -398,7 +398,7 @@ class TDA(TDBase):
             mf = self._scf
         return gen_tda_hop(mf)
 
-    def init_guess(self, mf, nstates=None, wfnsym=None):
+    def get_init_guess(self, mf, nstates=None, wfnsym=None):
         if nstates is None: nstates = self.nstates
         mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
@@ -441,7 +441,7 @@ class TDA(TDBase):
             return w[idx], v[:,idx], idx
 
         if x0 is None:
-            x0 = self.init_guess(self._scf, self.nstates)
+            x0 = self.get_init_guess(self._scf, self.nstates)
 
         self.converged, self.e, x1 = lr_eigh(
             vind, x0, precond, tol_residual=self.conv_tol, lindep=self.lindep,
@@ -524,8 +524,8 @@ class TDHF(TDBase):
             mf = self._scf
         return gen_tdhf_operation(mf)
 
-    def init_guess(self, mf, nstates=None, wfnsym=None):
-        x0 = TDA.init_guess(self, mf, nstates, wfnsym)
+    def get_init_guess(self, mf, nstates=None, wfnsym=None):
+        x0 = TDA.get_init_guess(self, mf, nstates, wfnsym)
         y0 = numpy.zeros_like(x0)
         return numpy.hstack([x0, y0])
 
@@ -555,7 +555,7 @@ class TDHF(TDBase):
                                                       real_eigenvectors=False)
 
         if x0 is None:
-            x0 = self.init_guess(self._scf, self.nstates)
+            x0 = self.get_init_guess(self._scf, self.nstates)
 
         self.converged, w, x1 = lr_eig(
             vind, x0, precond, tol_residual=self.conv_tol, lindep=self.lindep,

@@ -286,7 +286,7 @@ class TDA(KTDBase):
             return numpy.stack(v1s)
         return vind, hdiag
 
-    def init_guess(self, mf, kshift, nstates=None):
+    def get_init_guess(self, mf, kshift, nstates=None):
         if nstates is None: nstates = self.nstates
 
         mo_energy = mf.mo_energy
@@ -339,7 +339,7 @@ class TDA(KTDBase):
             precond = self.get_precond(hdiag)
 
             if x0 is None:
-                x0k = self.init_guess(self._scf, kshift, self.nstates)
+                x0k = self.get_init_guess(self._scf, kshift, self.nstates)
             else:
                 x0k = x0[i]
 
@@ -429,8 +429,8 @@ class TDHF(KTDBase):
             return numpy.stack(v1s)
         return vind, hdiag
 
-    def init_guess(self, mf, kshift, nstates=None):
-        x0 = TDA.init_guess(self, mf, kshift, nstates)
+    def get_init_guess(self, mf, kshift, nstates=None):
+        x0 = TDA.get_init_guess(self, mf, kshift, nstates)
         y0 = numpy.zeros_like(x0)
         return numpy.hstack([x0, y0])
 
@@ -491,7 +491,7 @@ class TDHF(KTDBase):
             precond = self.get_precond(hdiag)
 
             if x0 is None:
-                x0k = self.init_guess(self._scf, kshift, self.nstates)
+                x0k = self.get_init_guess(self._scf, kshift, self.nstates)
             else:
                 x0k = x0[i]
 
