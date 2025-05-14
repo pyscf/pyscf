@@ -229,7 +229,7 @@ mf=pbcdft.RKS(cell)
 mf.xc = "PBE,PBE"
 mf.init_guess = 'atom' # atom guess is fast
 mf.with_df = multigrid.MultiGridFFTDF2(cell)
-mf.with_df.ngrids = 4 # number of sets of grid points
+mf.with_df.ntasks = 4 # number of sets of grid points
 mf.kernel()
 
 # Nuclear Gradients
