@@ -819,6 +819,10 @@ class SCF(mol_hf.SCF):
         from pyscf.pbc.df import mdf_jk
         return mdf_jk.density_fit(self, auxbasis, with_df=with_df)
 
+    def multigrid_numint(self, mesh=None):
+        '''Apply the MultiGrid algorithm for XC numerical integartion'''
+        raise NotImplementedError
+
     def sfx2c1e(self):
         from pyscf.pbc.x2c import sfx2c1e
         return sfx2c1e.sfx2c1e(self)

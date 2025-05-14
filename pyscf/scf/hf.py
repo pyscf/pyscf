@@ -2151,6 +2151,23 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         import pyscf.df.df_jk
         return pyscf.df.df_jk.density_fit(self, auxbasis, with_df, only_dfj)
 
+    def multigrid_numint(self, margin=None, mesh=None):
+        '''Apply the MultiGrid algorithm for XC numerical integartion.
+
+        Kwargs:
+            margin: 
+                A box will be created to enclose the molecule, with the molecule
+                positioned at the center. "margin" specifies the distance from
+                the edge of the molecule to the edge of the box. If not provided,
+                a default margin is estimated, which ensures that the electron
+                density decays to approximately 1e-7 at the boundary of the box.
+            mesh: (3,) array
+                The number of mesh grids along each axis. If not specified, the
+                number of mesh grids will be estimated based on the basis sets
+                and the margin.
+        '''
+        raise NotImplementedError
+
     def sfx2c1e(self):
         import pyscf.x2c.sfx2c1e
         return pyscf.x2c.sfx2c1e.sfx2c1e(self)
