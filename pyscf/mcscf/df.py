@@ -55,16 +55,19 @@ def density_fit(casscf, auxbasis=None, with_df=None):
     >>> mc = DFCASSCF(mf, 4, 4)
     -100.05994191570504
     '''
+    from pyscf.df.addons import predefined_auxbasis
     if with_df is None:
         if (getattr(casscf._scf, 'with_df', None) and
             (auxbasis is None or auxbasis == casscf._scf.with_df.auxbasis)):
             with_df = casscf._scf.with_df
         else:
-            with_df = df.DF(casscf.mol)
+            mol = casscf.mol
+            if auxbasis is None and isinstance(mol.basis, str):
+                auxbasis = predefined_auxbasis(mol, mol.basis, xc)
+            with_df = df.DF(mol, auxbasis)
             with_df.max_memory = casscf.max_memory
             with_df.stdout = casscf.stdout
             with_df.verbose = casscf.verbose
-            with_df.auxbasis = auxbasis
 
     if isinstance(casscf, _DFCAS):
         if casscf.with_df is None:
