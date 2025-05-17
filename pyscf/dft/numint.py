@@ -1174,7 +1174,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     elif xctype == 'HF':
         pass
     else:
-        raise NotImplementedError(f'numint.nr_uks for functional {xc_code}')
+        raise NotImplementedError(f'numint.nr_rks for functional {xc_code}')
 
     if nset == 1:
         nelec = nelec[0]
