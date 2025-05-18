@@ -511,10 +511,23 @@ class Grids(lib.StreamObject):
         self.coords, self.weights = self.get_partition(
             mol, atom_grids_tab, self.radii_adjust, self.atomic_radii, self.becke_scheme)
 
+        atm_idx = numpy.empty(self.coords.shape[0], dtype=numpy.int32)
+        quadrature_weights = numpy.empty(self.coords.shape[0])
+        p0 = p1 = 0
+        for ia in range(mol.natm):
+            r, vol = atom_grids_tab[mol.atom_symbol(ia)]
+            p0, p1 = p1, p1 + vol.size
+            atm_idx[p0:p1] = ia
+            quadrature_weights[p0:p1] = vol
+        self.atm_idx = atm_idx
+        self.quadrature_weights = quadrature_weights
+
         if sort_grids:
             idx = arg_group_grids(mol, self.coords)
             self.coords = self.coords[idx]
             self.weights = self.weights[idx]
+            self.atm_idx = self.atm_idx[idx]
+            self.quadrature_weights = self.quadrature_weights[idx]
 
         if self.alignment > 1:
             padding = _padding_size(self.size, self.alignment)
@@ -523,6 +536,8 @@ class Grids(lib.StreamObject):
                 self.coords = numpy.vstack(
                     [self.coords, numpy.repeat([[1e-4]*3], padding, axis=0)])
                 self.weights = numpy.hstack([self.weights, numpy.zeros(padding)])
+                self.atm_idx = numpy.hstack([self.atm_idx, numpy.full(padding, -1, dtype=numpy.int32)])
+                self.quadrature_weights = numpy.hstack([self.quadrature_weights, numpy.zeros(padding)])
 
         if with_non0tab:
             self.non0tab = self.make_mask(mol, self.coords)
@@ -576,6 +591,8 @@ class Grids(lib.StreamObject):
                          self.weights.size - numpy.count_nonzero(idx))
             self.coords  = numpy.asarray(self.coords [idx], order='C')
             self.weights = numpy.asarray(self.weights[idx], order='C')
+            self.atm_idx = numpy.asarray(self.atm_idx[idx], order='C')
+            self.quadrature_weights = numpy.asarray(self.quadrature_weights[idx], order='C')
             if self.alignment > 1:
                 padding = _padding_size(self.size, self.alignment)
                 logger.debug(self, 'prune_by_density_: %d padding grids', padding)
@@ -583,6 +600,8 @@ class Grids(lib.StreamObject):
                     self.coords = numpy.vstack(
                         [self.coords, numpy.repeat([[1e-4]*3], padding, axis=0)])
                     self.weights = numpy.hstack([self.weights, numpy.zeros(padding)])
+                    self.atm_idx = numpy.hstack([self.atm_idx, numpy.full(padding, -1, dtype=numpy.int32)])
+                    self.quadrature_weights = numpy.hstack([self.quadrature_weights, numpy.zeros(padding)])
             self.non0tab = self.make_mask(mol, self.coords)
             self.screen_index = self.non0tab
         return self

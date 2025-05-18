@@ -45,10 +45,6 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
         from pyscf.pbc.dft import multigrid
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if mf.do_nlc():
-            logger.warn(mf, 'NLC functional found in DFT object.  Its second '
-                        'derivative is not available. Its contribution is '
-                        'not included in the response function.')
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
         hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
@@ -78,6 +74,9 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 else:
                     v1 = ni.nr_rks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                        rho0, vxc, fxc, max_memory=max_memory)
+                    if mf.do_nlc():
+                        from pyscf.hessian.rks import get_vnlc_resp # Cannot import at the top due to circular dependency
+                        v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1, max_memory)
                 if hybrid:
                     if omega == 0:
                         vj, vk = mf.get_jk(mol, dm1, hermi)
@@ -111,6 +110,9 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     # nr_rks_fxc_st requires alpha of dm1, dm1*.5 should be scaled
                     v1 = ni.nr_rks_fxc_st(mol, mf.grids, mf.xc, dm0, dm1, 0, True,
                                           rho0, vxc, fxc, max_memory=max_memory)
+                    if mf.do_nlc():
+                        from pyscf.hessian.rks import get_vnlc_resp # Cannot import at the top due to circular dependency
+                        v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1, max_memory)
                 if hybrid:
                     if omega == 0:
                         vj, vk = mf.get_jk(mol, dm1, hermi)
@@ -143,6 +145,8 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     # nr_rks_fxc_st requires alpha of dm1, dm1*.5 should be scaled
                     v1 = ni.nr_rks_fxc_st(mol, mf.grids, mf.xc, dm0, dm1, 0, False,
                                           rho0, vxc, fxc, max_memory=max_memory)
+                    if mf.do_nlc():
+                        pass # fxc = 0, do nothing
                 if hybrid:
                     if omega == 0:
                         vk = mf.get_k(mol, dm1, hermi) * hyb
@@ -181,10 +185,6 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
         from pyscf.pbc.dft import multigrid
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if mf.do_nlc():
-            logger.warn(mf, 'NLC functional found in DFT object.  Its second '
-                        'derivative is not available. Its contribution is '
-                        'not included in the response function.')
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
         hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
@@ -207,6 +207,9 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
             else:
                 v1 = ni.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                    rho0, vxc, fxc, max_memory=max_memory)
+                if mf.do_nlc():
+                    from pyscf.hessian.rks import get_vnlc_resp # Cannot import at the top due to circular dependency
+                    v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1[0] + dm1[1], max_memory)
             if not hybrid:
                 if with_j:
                     vj = mf.get_j(mol, dm1, hermi=hermi)
