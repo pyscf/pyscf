@@ -75,7 +75,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     v1 = ni.nr_rks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                        rho0, vxc, fxc, max_memory=max_memory)
                     if mf.do_nlc():
-                        from pyscf.hessian.rks import get_vnlc_resp # Cannot import at the top due to circular dependency
+                        from pyscf.hessian.rks import get_vnlc_resp # Cannot import at top due to circular dependency
                         v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1, max_memory)
                 if hybrid:
                     if omega == 0:
@@ -111,7 +111,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     v1 = ni.nr_rks_fxc_st(mol, mf.grids, mf.xc, dm0, dm1, 0, True,
                                           rho0, vxc, fxc, max_memory=max_memory)
                     if mf.do_nlc():
-                        from pyscf.hessian.rks import get_vnlc_resp # Cannot import at the top due to circular dependency
+                        from pyscf.hessian.rks import get_vnlc_resp # Cannot import at top due to circular dependency
                         v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1, max_memory)
                 if hybrid:
                     if omega == 0:
@@ -208,7 +208,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
                 v1 = ni.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                    rho0, vxc, fxc, max_memory=max_memory)
                 if mf.do_nlc():
-                    from pyscf.hessian.rks import get_vnlc_resp # Cannot import at the top due to circular dependency
+                    from pyscf.hessian.rks import get_vnlc_resp # Cannot import at top due to circular dependency
                     v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1[0] + dm1[1], max_memory)
             if not hybrid:
                 if with_j:
