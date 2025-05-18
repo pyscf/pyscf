@@ -417,9 +417,11 @@ void VXC_vv10nlc_hessian_eval_f_t(double* __restrict__ f_rho_t, double* __restri
                                   const double* __restrict__ rho_t, const double* __restrict__ gamma_t,
                                   const int ngrids, const int ntrial)
 {
+    const int n_trial_per_thread = 6;
+
     #pragma omp parallel for schedule(static) collapse(2)
     for (int i = 0; i < ngrids; i++) {
-        for (int i_trial = 0; i_trial < ntrial; i_trial++) {
+        for (int i_trial_start = 0; i_trial_start < ntrial; i_trial_start += n_trial_per_thread) {
             const double omega_i = omega[i];
             const double kappa_i = kappa[i];
             const double3 r_i = { grid_coord[i * 3 + 0], grid_coord[i * 3 + 1], grid_coord[i * 3 + 2] };
@@ -429,8 +431,13 @@ void VXC_vv10nlc_hessian_eval_f_t(double* __restrict__ f_rho_t, double* __restri
             const double domega_dgamma_i = domega_dgamma[i];
             const double dkappa_drho_i = dkappa_drho[i];
 
-            double f_rho_t_i = 0;
-            double f_gamma_t_i = 0;
+            double f_rho_t_i[n_trial_per_thread];
+            double f_gamma_t_i[n_trial_per_thread];
+            #pragma GCC ivdep
+            for (int i_trial = 0; i_trial < n_trial_per_thread; i_trial++) {
+                f_rho_t_i  [i_trial] = 0;
+                f_gamma_t_i[i_trial] = 0;
+            }
 
             for (int j = 0; j < ngrids; j++) {
                 const double omega_j = omega[j];
@@ -463,10 +470,14 @@ void VXC_vv10nlc_hessian_eval_f_t(double* __restrict__ f_rho_t, double* __restri
 
                 const double weight_j = grid_weight[j];
 
-                const double   rho_t_j =   rho_t[i_trial * ngrids + j];
-                const double gamma_t_j = gamma_t[i_trial * ngrids + j];
-                f_rho_t_i   += weight_j * (  f_rho_rho_ij * rho_t_j +   f_rho_gamma_ij * gamma_t_j);
-                f_gamma_t_i += weight_j * (f_gamma_rho_ij * rho_t_j + f_gamma_gamma_ij * gamma_t_j);
+                #pragma GCC ivdep
+                for (int i_trial = 0; i_trial < n_trial_per_thread; i_trial++) {
+                    if (i_trial + i_trial_start >= ntrial) continue;
+                    const double   rho_t_j =   rho_t[(i_trial + i_trial_start) * ngrids + j];
+                    const double gamma_t_j = gamma_t[(i_trial + i_trial_start) * ngrids + j];
+                    f_rho_t_i  [i_trial] += weight_j * (  f_rho_rho_ij * rho_t_j +   f_rho_gamma_ij * gamma_t_j);
+                    f_gamma_t_i[i_trial] += weight_j * (f_gamma_rho_ij * rho_t_j + f_gamma_gamma_ij * gamma_t_j);
+                }
             }
 
             const double U_i = U[i];
@@ -487,13 +498,17 @@ void VXC_vv10nlc_hessian_eval_f_t(double* __restrict__ f_rho_t, double* __restri
             const double f_rho_gamma_ii = f_gamma_rho_ii;
             const double f_gamma_gamma_ii = rho_i * (d2omega_dgamma2_i * W_i + domega_dgamma_i * domega_dgamma_i * C_i);
 
-            const double rho_t_i   =   rho_t[i_trial * ngrids + i];
-            const double gamma_t_i = gamma_t[i_trial * ngrids + i];
-            f_rho_t_i   += (  f_rho_rho_ii * rho_t_i +   f_rho_gamma_ii * gamma_t_i);
-            f_gamma_t_i += (f_gamma_rho_ii * rho_t_i + f_gamma_gamma_ii * gamma_t_i);
+            #pragma GCC ivdep
+            for (int i_trial = 0; i_trial < n_trial_per_thread; i_trial++) {
+                if (i_trial + i_trial_start >= ntrial) continue;
+                const double rho_t_i   =   rho_t[(i_trial + i_trial_start) * ngrids + i];
+                const double gamma_t_i = gamma_t[(i_trial + i_trial_start) * ngrids + i];
+                f_rho_t_i  [i_trial] += (  f_rho_rho_ii * rho_t_i +   f_rho_gamma_ii * gamma_t_i);
+                f_gamma_t_i[i_trial] += (f_gamma_rho_ii * rho_t_i + f_gamma_gamma_ii * gamma_t_i);
 
-            f_rho_t  [i_trial * ngrids + i] = f_rho_t_i;
-            f_gamma_t[i_trial * ngrids + i] = f_gamma_t_i;
+                f_rho_t  [(i_trial + i_trial_start) * ngrids + i] = f_rho_t_i  [i_trial];
+                f_gamma_t[(i_trial + i_trial_start) * ngrids + i] = f_gamma_t_i[i_trial];
+            }
         }
     }
 }
