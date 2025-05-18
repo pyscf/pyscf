@@ -284,12 +284,19 @@ class KnownValues(unittest.TestCase):
     def test_init_mp2(self):
         mf0 = mf
         mf1 = scf.RHF(gto.M(atom='H', spin=1))
+        dfmf0 = mf0.density_fit()
+        dfmf1 = mf1.density_fit()
         self.assertTrue(isinstance(mp.MP2(mf0), mp.mp2.RMP2))
         self.assertTrue(isinstance(mp.MP2(mf1), mp.ump2.UMP2))
-        self.assertTrue(isinstance(mp.MP2(mf0.density_fit()), mp.dfmp2.DFMP2))
-        #self.assertTrue(isinstance(mp.MP2(mf1.density_fit()), mp.dfmp2.DFUMP2))
+        self.assertTrue(isinstance(mp.MP2(dfmf0), mp.dfmp2.DFMP2))
+        self.assertTrue(isinstance(mp.MP2(dfmf1), mp.dfump2.DFUMP2))
         self.assertTrue(isinstance(mp.MP2(mf0.newton()), mp.mp2.RMP2))
         self.assertTrue(isinstance(mp.MP2(mf1.newton()), mp.ump2.UMP2))
+
+        self.assertTrue(isinstance(dfmf0.MP2(), mp.dfmp2.DFMP2))
+        self.assertTrue(isinstance(dfmf1.MP2(), mp.dfump2.DFUMP2))
+        dfmf2 = dfmf0.to_ghf()
+        self.assertTrue(isinstance(dfmf2.MP2(), mp.dfgmp2.DFGMP2))
 
     def test_mp2_scanner(self):
         pt_scanner = mp.MP2(mf).as_scanner()

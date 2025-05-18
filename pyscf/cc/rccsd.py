@@ -162,7 +162,7 @@ def energy(cc, t1=None, t2=None, eris=None):
     return e.real
 
 
-class RCCSD(ccsd.CCSD):
+class RCCSD(ccsd.CCSDBase):
     '''restricted CCSD with IP-EOM, EA-EOM, EE-EOM, and SF-EOM capabilities
 
     Ground-state CCSD is performed in optimized ccsd.CCSD and EOM is performed here.

@@ -642,24 +642,3 @@ def solve_cphf_uhf(mf, Lvo, max_cycle, tol, logger):
                       max_cycle=max_cycle, tol=tol, verbose=cphf_verbose)[0]
     logger.info('CPHF iterations finished')
     return zvo
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-
-    mol = gto.Mole()
-    mol.atom = [['O', (0.,   0., 0.)],
-                ['O', (1.21, 0., 0.)]]
-    mol.spin = 2
-    mol.basis = 'def2-SVP'
-    mol.verbose = lib.logger.INFO
-    mol.build()
-
-    mf = scf.UHF(mol)
-    mf.kernel()
-
-    with DFUMP2(mf) as pt:
-        pt.kernel()
-        natocc, _ = pt.make_natorbs()
-        print()
-        print(natocc)

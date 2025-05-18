@@ -18,6 +18,7 @@ import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import df
+from pyscf.df.addons import predefined_auxbasis
 from pyscf.cc import uccsd
 from pyscf.cc import ccsd
 from pyscf.cc import dfccsd
@@ -34,7 +35,7 @@ class UCCSD(uccsd.UCCSD):
             self.with_df = mf.with_df
         else:
             self.with_df = df.DF(mf.mol)
-            self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
+            self.with_df.auxbasis = predefined_auxbasis(mf.mol, basis, mp2fit=True)
 
     def reset(self, mol=None):
         self.with_df.reset(mol)
@@ -51,7 +52,10 @@ class UCCSD(uccsd.UCCSD):
         assert (not self.direct)
         return uccsd.UCCSD._add_vvVV(self, t1, t2, eris, out)
 
-    to_gpu = lib.to_gpu
+DFCCSD = DFUCCSD = UCCSD
+
+from pyscf import scf
+scf.uhf.UHF.DFCCSD = lib.class_as_method(DFCCSD)
 
 class _ChemistsERIs(uccsd._ChemistsERIs):
     def _contract_vvvv_t2(self, mycc, t2, direct=False, out=None, verbose=None):
