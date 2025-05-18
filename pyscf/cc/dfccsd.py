@@ -20,7 +20,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf import df
-from pyscf.df.addons import predefined_auxbasis
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 from pyscf import __config__
@@ -36,7 +35,7 @@ class RCCSD(ccsd.CCSD):
             self.with_df = mf.with_df
         else:
             self.with_df = df.DF(mf.mol)
-            self.with_df.auxbasis = predefined_auxbasis(mf.mol, basis, mp2fit=True)
+            self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
 
     def reset(self, mol=None):
         self.with_df.reset(mol)

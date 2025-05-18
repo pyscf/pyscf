@@ -26,7 +26,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf import df
-from pyscf.df.addons import predefined_auxbasis
 from pyscf.mp import mp2
 from pyscf.mp.mp2 import make_rdm1, make_rdm2, _mo_splitter
 from pyscf import __config__
@@ -134,12 +133,12 @@ class DFRMP2(mp2.RMP2):
             self.with_df = mf.with_df
         else:
             self.with_df = df.DF(mf.mol)
-            self.with_df.auxbasis = predefined_auxbasis(mf.mol, basis, mp2fit=True)
+            self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
 
         # DEBUG:
         self.force_outcore = False
 
-    kernel = kernel
+    kernel = mp2.RMP2.kernel
 
     def split_mo_coeff(self, mo_coeff=None):
         if mo_coeff is None: mo_coeff = self.mo_coeff

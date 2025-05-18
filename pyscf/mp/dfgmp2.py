@@ -88,7 +88,7 @@ class DFGMP2(gmp2.GMP2):
 
     __init__ = dfmp2.DFRMP2.__init__
 
-    kernel = kernel
+    kernel = gmp2.GMP2.kernel
 
     split_mo_energy = dfmp2.DFRMP2.split_mo_energy
     split_mo_coeff = dfmp2.DFRMP2.split_mo_coeff

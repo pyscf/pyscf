@@ -25,7 +25,7 @@ from pyscf.cc import ccsd
 from pyscf.cc import uccsd
 from pyscf.cc import gccsd
 from pyscf.cc import rccsd
-from pyscf.cc import dfccsd
+from pyscf.cc import dfccsd, dfuccsd
 
 def setUpModule():
     global mol, mf
@@ -198,8 +198,8 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(not isinstance(cc.CCSD(umf.newton().density_fit()), dfuccsd.UCCSD))
         self.assertTrue(isinstance(cc.CCSD(dfumf.newton().density_fit()), dfuccsd.UCCSD))
 
-        self.assertTrue(isinstance(dfmf.CCSD, dfccsd.CCSD))
-        self.assertTrue(isinstance(dfumf.CCSD, dfuccsd.UCCSD))
+        self.assertTrue(isinstance(dfmf.CCSD(), dfccsd.RCCSD))
+        self.assertTrue(isinstance(dfumf.CCSD(), dfuccsd.UCCSD))
 
         self.assertTrue(isinstance(cc.CCSD(mf, mo_coeff=mf.mo_coeff*1j), rccsd.RCCSD))
 

@@ -175,7 +175,7 @@ class DFUMP2(ump2.UMP2):
     get_nmo = ump2.get_nmo
     get_frozen_mask = ump2.get_frozen_mask
 
-    kernel = kernel
+    kernel = ump2.UMP2.kernel
 
     make_fno = ump2.make_fno
     make_rdm1 = make_rdm1
@@ -216,8 +216,7 @@ class DFUMP2(ump2.UMP2):
 MP2 = UMP2 = DFUMP2
 
 from pyscf import scf
-scf.uhf.UHF.DFMP2 = DFUMP2
-
+scf.uhf.UHF.DFMP2 = lib.class_as_method(DFUMP2)
 del (WITH_T2)
 
 

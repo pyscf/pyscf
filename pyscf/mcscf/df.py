@@ -63,7 +63,7 @@ def density_fit(casscf, auxbasis=None, with_df=None):
         else:
             mol = casscf.mol
             if auxbasis is None and isinstance(mol.basis, str):
-                auxbasis = predefined_auxbasis(mol, mol.basis, xc)
+                auxbasis = predefined_auxbasis(mol, mol.basis, xc='HF')
             with_df = df.DF(mol, auxbasis)
             with_df.max_memory = casscf.max_memory
             with_df.stdout = casscf.stdout
