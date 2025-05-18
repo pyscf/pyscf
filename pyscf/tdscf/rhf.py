@@ -144,10 +144,6 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
     if isinstance(mf, scf.hf.KohnShamDFT):
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if mf.do_nlc():
-            logger.warn(mf, 'NLC functional found in DFT object.  Its second '
-                        'derivative is not available. Its contribution is '
-                        'not included in the response function.')
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
 
         add_hf_(a, b, hyb)
@@ -201,7 +197,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
             pass
 
         elif xctype == 'NLC':
-            raise NotImplementedError('NLC')
+            pass # Processed later
 
         elif xctype == 'MGGA':
             ao_deriv = 1
@@ -221,6 +217,10 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                 a += iajb
                 b += iajb
 
+        if mf.do_nlc():
+            raise NotImplementedError('vv10 nlc not implemented in get_ab(). '
+                                      'However the nlc contribution is small in TDDFT, '
+                                      'so feel free to take the risk and comment out this line.')
     else:
         add_hf_(a, b)
 
