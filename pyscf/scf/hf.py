@@ -2155,13 +2155,13 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         '''Apply the MultiGrid algorithm for XC numerical integartion.
 
         Kwargs:
-            margin: 
+            margin : float
                 A box will be created to enclose the molecule, with the molecule
                 positioned at the center. "margin" specifies the distance from
                 the edge of the molecule to the edge of the box. If not provided,
                 a default margin is estimated, which ensures that the electron
                 density decays to approximately 1e-7 at the boundary of the box.
-            mesh: (3,) array
+            mesh : (3,) ndarray
                 The number of mesh grids along each axis. If not specified, the
                 number of mesh grids will be estimated based on the basis sets
                 and the margin.
