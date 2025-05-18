@@ -15,7 +15,7 @@
 import unittest
 import numpy as np
 import pyscf
-from gpu4pyscf.dft import rks, uks
+from pyscf.dft import rks, uks
 
 def setUpModule():
     global mol, unrestricted_mol, excitation_energy_threshold, dipole_threshold, oscillator_strength_threshold
@@ -51,7 +51,7 @@ def make_mf(mol, restricted = True):
     mf.grids.atom_grid = (99,590)
     mf.nlcgrids.atom_grid = (50,194)
 
-    mf.conv_tol = 1e-15
+    mf.conv_tol = 1e-13
     mf.direct_scf_tol = 1e-16
     # if density_fitting:
     #     mf = mf.density_fit(auxbasis = "def2-universal-jkfit")
