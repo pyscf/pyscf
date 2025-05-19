@@ -1210,6 +1210,18 @@ class Cell(mole.MoleBase):
     precision = getattr(__config__, 'pbc_gto_cell_Cell_precision', 1e-8)
     exp_to_discard = getattr(__config__, 'pbc_gto_cell_Cell_exp_to_discard', None)
 
+    fractional = False
+    dimension = 3
+    # TODO: Simple hack for now; the implementation of ewald depends on the
+    #       density-fitting class.  This determines how the ewald produces
+    #       its energy.
+    low_dim_ft_type = None
+    use_loose_rcut = False
+    use_particle_mesh_ewald = False
+    space_group_symmetry = False
+    symmorphic = False
+    lattice_symmetry = None
+
     _keys = {
         'precision', 'exp_to_discard',
         'a', 'ke_cutoff', 'pseudo', 'fractional', 'dimension', 'low_dim_ft_type',
@@ -1226,18 +1238,6 @@ class Cell(mole.MoleBase):
         # if set, defines a spherical cutoff
         # of fourier components, with .5 * G**2 < ke_cutoff
         self.ke_cutoff = None
-
-        self.fractional = False
-        self.dimension = 3
-        # TODO: Simple hack for now; the implementation of ewald depends on the
-        #       density-fitting class.  This determines how the ewald produces
-        #       its energy.
-        self.low_dim_ft_type = None
-        self.use_loose_rcut = False
-        self.use_particle_mesh_ewald = False
-        self.space_group_symmetry = False
-        self.symmorphic = False
-        self.lattice_symmetry = None
 
 ##################################################
 # These attributes are initialized by build function if not specified
