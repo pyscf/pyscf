@@ -746,7 +746,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     # where
     #   ZS_I(G) = \sum_a Z_a exp (i G.R_a)
 
-    if cell.dimension == 3 or cell.low_dim_ft_type == 'inf_vacuum':
+    if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
         Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
         absG2 = np.einsum('gi,gi->g', Gv, Gv)
         absG2[absG2==0] = 1e200
