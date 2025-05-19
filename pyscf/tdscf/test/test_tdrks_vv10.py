@@ -85,6 +85,7 @@ class KnownValues(unittest.TestCase):
 
         mf = make_mf(mol)
         tddft = mf.TDDFT()
+        tddft.exclude_nlc = False
         test_excitation_energy, test_state_vector = tddft.kernel(nstates = len(reference_excited_state_energy))
 
         assert np.linalg.norm(test_excitation_energy - reference_excitation_energy) < excitation_energy_threshold
@@ -115,6 +116,7 @@ class KnownValues(unittest.TestCase):
 
         mf = make_mf(mol)
         tda = mf.TDA()
+        tddft.exclude_nlc = False
         test_excitation_energy, test_state_vector = tda.kernel(nstates = len(reference_excited_state_energy))
 
         assert np.linalg.norm(test_excitation_energy - reference_excitation_energy) < excitation_energy_threshold
@@ -162,6 +164,7 @@ class KnownValues(unittest.TestCase):
         mf = make_mf(mol)
         tddft = mf.TDDFT()
         tddft.singlet = False
+        tddft.exclude_nlc = False
         test_excitation_energy, test_state_vector = tddft.kernel(nstates = len(reference_excited_state_energy))
 
         assert np.linalg.norm(test_excitation_energy - reference_excitation_energy) < excitation_energy_threshold
@@ -175,6 +178,7 @@ class KnownValues(unittest.TestCase):
         mf = make_mf(mol)
         tda = mf.TDA()
         tda.singlet = False
+        tddft.exclude_nlc = False
         test_excitation_energy, test_state_vector = tda.kernel(nstates = len(reference_excited_state_energy))
 
         assert np.linalg.norm(test_excitation_energy - reference_excitation_energy) < excitation_energy_threshold
@@ -205,6 +209,7 @@ class KnownValues(unittest.TestCase):
 
         mf = make_mf(unrestricted_mol, restricted = False)
         tddft = mf.TDDFT()
+        tddft.exclude_nlc = False
         test_excitation_energy, test_state_vector = tddft.kernel(nstates = len(reference_excited_state_energy))
 
         assert np.linalg.norm(test_excitation_energy - reference_excitation_energy) < excitation_energy_threshold
@@ -235,6 +240,7 @@ class KnownValues(unittest.TestCase):
 
         mf = make_mf(unrestricted_mol, restricted = False)
         tda = mf.TDA()
+        tddft.exclude_nlc = False
         test_excitation_energy, test_state_vector = tda.kernel(nstates = len(reference_excited_state_energy))
 
         assert np.linalg.norm(test_excitation_energy - reference_excitation_energy) < excitation_energy_threshold
