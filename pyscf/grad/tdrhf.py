@@ -82,7 +82,8 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
     wvo += numpy.einsum('ac,ai->ci', veff0mom[nocc:,nocc:], xmy) * 2
 
     # set singlet=None, generate function for CPHF type response kernel
-    vresp = mf.gen_response(singlet=None, hermi=1)
+    vresp = mf.gen_response(singlet=None, hermi=1,
+                            with_nlc=not td_grad.base.exclude_nlc)
     def fvind(x):  # For singlet, closed shell ground state
         dm = reduce(numpy.dot, (orbv, x.reshape(nvir,nocc)*2, orbo.T))
         v1ao = vresp(dm+dm.T)

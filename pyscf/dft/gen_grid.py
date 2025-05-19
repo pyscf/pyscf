@@ -460,6 +460,7 @@ class Grids(lib.StreamObject):
         'atomic_radii', 'radii_adjust', 'radi_method', 'becke_scheme',
         'prune', 'level', 'alignment', 'cutoff', 'mol', 'symmetry',
         'atom_grid', 'non0tab', 'screen_index', 'coords', 'weights',
+        'atm_idx', 'quadrature_weights',
     }
 
     def __init__(self, mol):
@@ -477,6 +478,12 @@ class Grids(lib.StreamObject):
         self.screen_index = None
         self.coords  = None
         self.weights = None
+        # Atom Id for each grid. This information is required by the grid
+        # response code
+        self.atm_idx = None
+        # Volume of each grid not scaled by the Becke partition. This
+        # information is required by the grid response code
+        self.quadrature_weights = None
 
     @property
     def size(self):
@@ -559,6 +566,8 @@ class Grids(lib.StreamObject):
         self.weights = None
         self.non0tab = None
         self.screen_index = None
+        self.atm_idx = None
+        self.quadrature_weights = None
         return self
 
     gen_atomic_grids = lib.module_method(

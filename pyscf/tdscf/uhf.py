@@ -34,7 +34,7 @@ REAL_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_pick_eig_threshold', 1
 MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 
-def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
+def gen_tda_operation(mf, fock_ao=None, wfnsym=None, with_nlc=True):
     '''A x
 
     Kwargs:
@@ -77,7 +77,7 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
-    vresp = mf.gen_response(hermi=0, max_memory=max_memory)
+    vresp = mf.gen_response(hermi=0, max_memory=max_memory, with_nlc=with_nlc)
 
     def vind(zs):
         nz = len(zs)
@@ -626,7 +626,7 @@ class TDA(TDBase):
         '''Generate function to compute Ax'''
         if mf is None:
             mf = self._scf
-        return gen_tda_hop(mf, wfnsym=self.wfnsym)
+        return gen_tda_hop(mf, wfnsym=self.wfnsym, with_nlc=not self.exclude_nlc)
 
     def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         if nstates is None: nstates = self.nstates
@@ -733,7 +733,8 @@ class TDA(TDBase):
 CIS = TDA
 
 
-def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
+def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None,
+                       with_nlc=True):
     '''Generate function to compute
 
     [ A   B ][X]
@@ -772,7 +773,7 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
-    vresp = mf.gen_response(hermi=0, max_memory=max_memory)
+    vresp = mf.gen_response(hermi=0, max_memory=max_memory, with_nlc=with_nlc)
 
     def vind(xys):
         nz = len(xys)
@@ -821,7 +822,8 @@ class TDHF(TDBase):
     def gen_vind(self, mf=None):
         if mf is None:
             mf = self._scf
-        return gen_tdhf_operation(mf, None, self.singlet, self.wfnsym)
+        return gen_tdhf_operation(mf, None, self.singlet, self.wfnsym,
+                                  with_nlc=not self.exclude_nlc)
 
     def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         if return_symmetry:

@@ -27,7 +27,7 @@ from pyscf.lib import logger
 from pyscf.scf import hf, rohf, uhf, ghf, dhf
 
 def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
-                      singlet=None, hermi=0, max_memory=None):
+                      singlet=None, hermi=0, max_memory=None, with_nlc=True):
     '''Generate a function to compute the product of RHF response function and
     RHF density matrices.
 
@@ -35,6 +35,8 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
         singlet (None or boolean) : If singlet is None, response function for
             orbital hessian or CPHF will be generated. If singlet is boolean,
             it is used in TDDFT response kernel.
+        with_nlc (boolean) : NLC contribution is typically very small. This flag
+        allows to skip NLC contribution.
     '''
     assert isinstance(mf, hf.RHF) and not isinstance(mf, (uhf.UHF, rohf.ROHF))
 
@@ -74,7 +76,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 else:
                     v1 = ni.nr_rks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                        rho0, vxc, fxc, max_memory=max_memory)
-                    if mf.do_nlc():
+                    if with_nlc and mf.do_nlc():
                         from pyscf.hessian.rks import get_vnlc_resp # Cannot import at top due to circular dependency
                         v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1, max_memory)
                 if hybrid:
@@ -110,7 +112,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     # nr_rks_fxc_st requires alpha of dm1, dm1*.5 should be scaled
                     v1 = ni.nr_rks_fxc_st(mol, mf.grids, mf.xc, dm0, dm1, 0, True,
                                           rho0, vxc, fxc, max_memory=max_memory)
-                    if mf.do_nlc():
+                    if with_nlc and mf.do_nlc():
                         from pyscf.hessian.rks import get_vnlc_resp # Cannot import at top due to circular dependency
                         v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1, max_memory)
                 if hybrid:
@@ -145,7 +147,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     # nr_rks_fxc_st requires alpha of dm1, dm1*.5 should be scaled
                     v1 = ni.nr_rks_fxc_st(mol, mf.grids, mf.xc, dm0, dm1, 0, False,
                                           rho0, vxc, fxc, max_memory=max_memory)
-                    if mf.do_nlc():
+                    if with_nlc and mf.do_nlc():
                         pass # fxc = 0, do nothing
                 if hybrid:
                     if omega == 0:
@@ -173,7 +175,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
 
 
 def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
-                      with_j=True, hermi=0, max_memory=None):
+                      with_j=True, hermi=0, max_memory=None, with_nlc=True):
     '''Generate a function to compute the product of UHF response function and
     UHF density matrices.
     '''
@@ -207,7 +209,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
             else:
                 v1 = ni.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                    rho0, vxc, fxc, max_memory=max_memory)
-                if mf.do_nlc():
+                if with_nlc and mf.do_nlc():
                     from pyscf.hessian.rks import get_vnlc_resp # Cannot import at top due to circular dependency
                     v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1[0] + dm1[1], max_memory)
             if not hybrid:
@@ -252,7 +254,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
 
 
 def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
-                      with_j=True, hermi=0, max_memory=None):
+                      with_j=True, hermi=0, max_memory=None, with_nlc=True):
     '''Generate a function to compute the product of GHF response function and
     GHF density matrices.
     '''
@@ -265,7 +267,7 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
         ni = mf._numint
         assert isinstance(ni, (numint2c.NumInt2C, r_numint.RNumInt))
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if mf.do_nlc():
+        if with_nlc and mf.do_nlc():
             raise NotImplementedError('NLC')
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
         hybrid = ni.libxc.is_hybrid_xc(mf.xc)
@@ -327,7 +329,7 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
 
 
 def _gen_dhf_response(mf, mo_coeff=None, mo_occ=None,
-                      with_j=True, hermi=0, max_memory=None):
+                      with_j=True, hermi=0, max_memory=None, with_nlc=True):
     '''Generate a function to compute the product of DHF response function and
     DHF density matrices.
     '''
