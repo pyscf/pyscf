@@ -714,6 +714,10 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         from pyscf.pbc.gto import ewald_methods
         return ewald_methods.particle_mesh_ewald(cell, ew_eta, ew_cut)
 
+    if cell.dimension == 0:
+        from pyscf.gto.mole import classical_coulomb_energy
+        return classical_coulomb_energy(cell)
+
     chargs = cell.atom_charges()
 
     if ew_eta is None or ew_cut is None:
@@ -746,7 +750,8 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     # where
     #   ZS_I(G) = \sum_a Z_a exp (i G.R_a)
 
-    if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
+    if (cell.dimension == 3 or
+        (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
         Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
         absG2 = np.einsum('gi,gi->g', Gv, Gv)
         absG2[absG2==0] = 1e200

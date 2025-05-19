@@ -312,6 +312,17 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     absG2 = np.einsum('gi,gi->g', kG, kG)
     G0_idx = []
 
+    if cell.dimension == 0 and cell.low_dim_ft_type != 'inf_vacuum':
+        assert omega is None
+        absG2[0] = 1e200
+        a = cell.lattice_vectors()
+        assert abs(np.eye(3)*a[0,0] - a).max() < 1e-6, \
+                'Must be cubic box for cell.dimension=0'
+        Rc = a[0,0]
+        # have relatively large error
+        coulG = 4*np.pi/absG2*(1. - np.cos(np.sqrt(absG2)*Rc))
+        return coulG
+
     kpts = k.reshape(1,3)
     if hasattr(mf, 'kpts'):
         kpts = mf.kpts
