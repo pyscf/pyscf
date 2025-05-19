@@ -463,7 +463,7 @@ class TDA(TDBase):
         return self.e, self.xy
 
 
-def gen_tdhf_operation(mf, fock_ao=None, with_nlc=with_nlc):
+def gen_tdhf_operation(mf, fock_ao=None, with_nlc=True):
     '''Generate function to compute
 
     [ A   B ][X]
