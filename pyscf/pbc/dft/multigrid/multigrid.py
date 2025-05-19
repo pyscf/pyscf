@@ -20,6 +20,7 @@
 
 import ctypes
 import numpy
+import numpy as np
 import scipy.linalg
 
 from pyscf import __config__
@@ -366,8 +367,16 @@ def get_nuc(mydf, kpts=None):
     mesh = mydf.mesh
     charge = -cell.atom_charges()
     Gv = cell.get_Gv(mesh)
-    SI = cell.get_SI(Gv)
-    rhoG = numpy.dot(charge, SI)
+    #:SI = cell.get_SI(Gv)
+    #:rhoG = numpy.dot(charge, SI)
+
+    basex, basey, basez = cell.get_Gv_weights(mesh)[1]
+    b = cell.reciprocal_vectors()
+    rb = np.dot(cell.atom_coords(), b.T)
+    SIx = np.exp(-1j*np.einsum('z,g->zg', rb[:,0], basex))
+    SIy = np.exp(-1j*np.einsum('z,g->zg', rb[:,1], basey))
+    SIz = np.exp(-1j*np.einsum('z,g->zg', rb[:,2], basez))
+    rhoG = np.einsum('i,ix,iy,iz->xyz', charge, SIx, SIy, SIz).ravel()
 
     coulG = tools.get_coulG(cell, mesh=mesh, Gv=Gv)
     vneG = rhoG * coulG

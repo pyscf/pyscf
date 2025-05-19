@@ -514,7 +514,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(dm), 0.025922864381755062, 6)
 
     def test_init_guess_by_minao(self):
-        with lib.temporary_env(cell, dimension=1):
+        with lib.temporary_env(cell, dimension=1, low_dim_ft_type='inf_vacuum'):
             dm = mf.get_init_guess(key='minao')
             kdm = kmf.get_init_guess(key='minao')
 
@@ -524,7 +524,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(kdm), -1.714952331211208, 8)
 
     def test_init_guess_by_atom(self):
-        with lib.temporary_env(cell, dimension=1):
+        with lib.temporary_env(cell, dimension=1, low_dim_ft_type='inf_vacuum'):
             dm = mf.get_init_guess(key='atom')
             kdm = kmf.get_init_guess(key='atom')
 

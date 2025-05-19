@@ -42,7 +42,7 @@ def get_nuc(mydf, kpts=None):
     kpts, is_single_kpt = _check_kpts(mydf, kpts)
     cell = mydf.cell
     assert cell.low_dim_ft_type != 'inf_vacuum'
-    assert cell.dimension > 1
+    assert cell.dimension != 1
     mesh = mydf.mesh
     charge = -cell.atom_charges()
     Gv = cell.get_Gv(mesh)
@@ -71,7 +71,7 @@ def get_pp(mydf, kpts=None):
     kpts, is_single_kpt = _check_kpts(mydf, kpts)
     cell = mydf.cell
     assert cell.low_dim_ft_type != 'inf_vacuum'
-    assert cell.dimension > 1
+    assert cell.dimension != 1
     mesh = mydf.mesh
     Gv = cell.get_Gv(mesh)
     SI = cell.get_SI(mesh=mesh)
@@ -262,8 +262,7 @@ class FFTDF(lib.StreamObject):
         if kpts is None: kpts = self.kpts
         kpts = numpy.asarray(kpts)
 
-        if (cell.dimension < 2 or
-            (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
+        if cell.dimension <= 2 and cell.low_dim_ft_type == 'inf_vacuum':
             raise RuntimeError('FFTDF method does not support low-dimension '
                                'PBC system.  DF, MDF or AFTDF methods should '
                                'be used.\nSee also examples/pbc/31-low_dimensional_pbc.py')
