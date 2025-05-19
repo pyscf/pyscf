@@ -372,7 +372,7 @@ def get_nuc(mydf, kpts=None):
 
     basex, basey, basez = cell.get_Gv_weights(mesh)[1]
     b = cell.reciprocal_vectors()
-    rb = np.dot(coords, b.T)
+    rb = np.dot(cell.atom_coords(), b.T)
     SIx = np.exp(-1j*np.einsum('z,g->zg', rb[:,0], basex))
     SIy = np.exp(-1j*np.einsum('z,g->zg', rb[:,1], basey))
     SIz = np.exp(-1j*np.einsum('z,g->zg', rb[:,2], basez))
