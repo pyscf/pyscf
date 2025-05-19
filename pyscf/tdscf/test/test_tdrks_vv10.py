@@ -60,7 +60,7 @@ def make_mf(mol, restricted = True):
     return mf
 
 class KnownValues(unittest.TestCase):
-    def test_wb97xv_tddft(self):
+    def test_wb97xv_tddft_high_cost(self):
         ### Q-Chem input
         # $rem
         # JOBTYPE       sp
@@ -137,7 +137,7 @@ class KnownValues(unittest.TestCase):
 
         assert np.linalg.norm(test_oscillator_strength - reference_oscillator_strength) < oscillator_strength_threshold
 
-    def test_wb97xv_tddft_triplet(self):
+    def test_wb97xv_tddft_triplet_high_cost(self):
         ### Q-Chem input
         # $rem
         # JOBTYPE       sp
@@ -179,7 +179,7 @@ class KnownValues(unittest.TestCase):
 
         assert np.linalg.norm(test_excitation_energy - reference_excitation_energy) < excitation_energy_threshold
 
-    def test_wb97xv_unrestricted_tddft(self):
+    def test_wb97xv_unrestricted_tddft_high_cost(self):
         ### Q-Chem input
         # $rem
         # JOBTYPE       sp

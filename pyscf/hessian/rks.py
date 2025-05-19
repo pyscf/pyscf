@@ -630,7 +630,7 @@ def get_d2rho_dAdr_grid_response(d2mu_dr2, dmu_dr, mu, dm0, atom_to_grid_index_m
             d2rho_dAdr_response += contract('dig,Dig->dDg', dmu_dr[:, :, associated_grid_index], dm_dot_dmu_and_dnu)
             dm_dot_dmu_and_dnu = None
 
-            d2rho_dAdr_grid_response[i_atom,:, :, associated_grid_index] = d2rho_dAdr_response
+            d2rho_dAdr_grid_response[i_atom][:, :, associated_grid_index] = d2rho_dAdr_response
     else:
         assert atom_to_grid_index_map is None
 
@@ -715,7 +715,7 @@ def get_drhodA_dgammadA_grid_response(d2mu_dr2, dmu_dr, mu, drho_dr, dm0, atom_t
             #     dmu_dr[:, :, associated_grid_index], mu[:, associated_grid_index], dm0.T)
             dm_dot_mu_and_nu = (dm0 + dm0.T) @ mu[:, associated_grid_index]
             rho_response = contract('dig,ig->dg', dmu_dr[:, :, associated_grid_index], dm_dot_mu_and_nu)
-            drho_dA_grid_response[i_atom,:, associated_grid_index] = rho_response
+            drho_dA_grid_response[i_atom][:, associated_grid_index] = rho_response
             rho_response = None
 
             # gamma_response  = numpy.einsum('dDig,jg,Dg,ij->dg',
@@ -742,7 +742,7 @@ def get_drhodA_dgammadA_grid_response(d2mu_dr2, dmu_dr, mu, drho_dr, dm0, atom_t
             gamma_response += contract('dig,ig->dg', dm_dot_dmu_and_dnu, dmudr_dot_drhodr)
             dmudr_dot_drhodr = None
             dm_dot_dmu_and_dnu = None
-            dgamma_dA_grid_response[i_atom,:, associated_grid_index] = gamma_response
+            dgamma_dA_grid_response[i_atom][:, associated_grid_index] = gamma_response
             gamma_response = None
     else:
         assert atom_to_grid_index_map is None
@@ -1479,8 +1479,8 @@ def _get_vnlc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
                 drho_dA_grid_response  [:, g0:g1] =   split_drho_dA_grid_response
                 dgamma_dA_grid_response[:, g0:g1] = split_dgamma_dA_grid_response
 
-            drho_dA  [i_atom,:, associated_grid_index] += drho_dA_grid_response
-            dgamma_dA[i_atom,:, associated_grid_index] += dgamma_dA_grid_response
+            drho_dA  [i_atom][:, associated_grid_index] += drho_dA_grid_response
+            dgamma_dA[i_atom][:, associated_grid_index] += dgamma_dA_grid_response
             drho_dA_grid_response   = None
             dgamma_dA_grid_response = None
 
