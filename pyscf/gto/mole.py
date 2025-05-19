@@ -3855,7 +3855,7 @@ class Mole(MoleBase):
                 of the box.
         '''
         from pyscf.pbc.gto import Cell, rcut_by_shells
-        cell = mol.view(Cell)
+        cell = self.view(Cell)
         if box is None:
             # Place molecule in a big box for dimension=0
             dimension = 0
