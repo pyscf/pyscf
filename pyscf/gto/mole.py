@@ -3849,14 +3849,13 @@ class Mole(MoleBase):
             dimension : integer
                 PBC dimensions
             margin: float
-                The distance from the edge of the molecule to the edge of the box. 
+                The distance from the edge of the molecule to the edge of the box.
                 If not provided, a default margin will be estimated, to ensure
                 that the electron density decays to approximately 1e-7 outside
                 of the box.
         '''
         from pyscf.pbc.gto import Cell, rcut_by_shells
-        cell = Cell()
-        cell.__dict__.update(self.__dict__)
+        cell = mol.view(Cell)
         if box is None:
             # Place molecule in a big box for dimension=0
             dimension = 0

@@ -746,25 +746,22 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     # where
     #   ZS_I(G) = \sum_a Z_a exp (i G.R_a)
 
-    Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
-    absG2 = np.einsum('gi,gi->g', Gv, Gv)
-    absG2[absG2==0] = 1e200
+    if cell.dimension == 3 or cell.low_dim_ft_type == 'inf_vacuum':
+        Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
+        absG2 = np.einsum('gi,gi->g', Gv, Gv)
+        absG2[absG2==0] = 1e200
 
-    if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
-        # TODO: truncated Coulomb for 0D. The non-uniform grids for inf-vacuum
-        # have relatively large error
         coulG = 4*np.pi / absG2
         coulG *= weights
 
         #:ZSI = np.einsum('i,ij->j', chargs, cell.get_SI(Gv))
-        ngrids = len(Gv)
-        ZSI = np.empty((ngrids,), dtype=np.complex128)
-        mem_avail = cell.max_memory - lib.current_memory()[0]
-        blksize = int((mem_avail*1e6 - cell.natm*24)/((3+cell.natm*2)*8))
-        blksize = min(ngrids, max(mesh[2], blksize))
-        for ig0, ig1 in lib.prange(0, ngrids, blksize):
-            np.einsum('i,ij->j', chargs, cell.get_SI(Gv[ig0:ig1]), out=ZSI[ig0:ig1])
-
+        basex, basey, basez = cell.get_Gv_weights(mesh)[1]
+        b = cell.reciprocal_vectors()
+        rb = np.dot(coords, b.T)
+        SIx = np.exp(-1j*np.einsum('z,g->zg', rb[:,0], basex))
+        SIy = np.exp(-1j*np.einsum('z,g->zg', rb[:,1], basey))
+        SIz = np.exp(-1j*np.einsum('z,g->zg', rb[:,2], basez))
+        ZSI = np.einsum('i,ix,iy,iz->xyz', chargs, SIx, SIy, SIz).ravel()
         ZexpG2 = ZSI * np.exp(-absG2/(4*ew_eta**2))
         ewg = .5 * np.einsum('i,i,i', ZSI.conj(), ZexpG2, coulG).real
 
@@ -789,6 +786,8 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         inv_area = np.linalg.norm(np.cross(b[0], b[1]))/(2*np.pi)**2
         # Perform the reciprocal space summation over  all reciprocal vectors
         # within the x,y plane.
+        Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
+        absG2 = np.einsum('gi,gi->g', Gv, Gv)
         planarG2_idx = np.logical_and(Gv[:,2] == 0, absG2 > 0.0)
         Gv = Gv[planarG2_idx]
         absG2 = absG2[planarG2_idx]
