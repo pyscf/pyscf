@@ -42,12 +42,14 @@ REAL_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_pick_eig_threshold', 1
 MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 
-def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
+def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None, with_nlc=True):
     '''Generate function to compute A x
 
     Kwargs:
         wfnsym : int or str
             Point group symmetry irrep symbol or ID for excited CIS wavefunction.
+        with_nlc : boolean
+            Whether to skip the NLC contribution
     '''
     assert fock_ao is None
     mol = mf.mol
@@ -76,7 +78,7 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     hdiag = hdiag.ravel()
 
     mo_coeff = numpy.asarray(numpy.hstack((orbo,orbv)), order='F')
-    vresp = mf.gen_response(singlet=singlet, hermi=0)
+    vresp = mf.gen_response(singlet=singlet, hermi=0, with_nlc=with_nlc)
 
     def vind(zs):
         zs = numpy.asarray(zs).reshape(-1,nocc,nvir)
@@ -144,10 +146,6 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
     if isinstance(mf, scf.hf.KohnShamDFT):
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if mf.do_nlc():
-            logger.warn(mf, 'NLC functional found in DFT object.  Its second '
-                        'derivative is not available. Its contribution is '
-                        'not included in the response function.')
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
 
         add_hf_(a, b, hyb)
@@ -201,7 +199,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
             pass
 
         elif xctype == 'NLC':
-            raise NotImplementedError('NLC')
+            pass # Processed later
 
         elif xctype == 'MGGA':
             ao_deriv = 1
@@ -221,6 +219,10 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                 a += iajb
                 b += iajb
 
+        if mf.do_nlc():
+            raise NotImplementedError('vv10 nlc not implemented in get_ab(). '
+                                      'However the nlc contribution is small in TDDFT, '
+                                      'so feel free to take the risk and comment out this line.')
     else:
         add_hf_(a, b)
 
@@ -660,6 +662,8 @@ class TDBase(lib.StreamObject):
     positive_eig_threshold = getattr(__config__, 'tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
     # Threshold to handle degeneracy in init guess
     deg_eia_thresh = getattr(__config__, 'tdscf_rhf_TDDFT_deg_eia_thresh', 1e-3)
+    # Whether to skip computing NLC response in TDDFT
+    exclude_nlc = True
 
     _keys = {
         'conv_tol', 'nstates', 'singlet', 'lindep', 'level_shift',
@@ -803,7 +807,8 @@ class TDA(TDBase):
         '''Generate function to compute Ax'''
         if mf is None:
             mf = self._scf
-        return gen_tda_hop(mf, singlet=self.singlet, wfnsym=self.wfnsym)
+        return gen_tda_hop(mf, singlet=self.singlet, wfnsym=self.wfnsym,
+                           with_nlc=not self.exclude_nlc)
 
     def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         '''
@@ -909,7 +914,8 @@ class TDA(TDBase):
 CIS = TDA
 
 
-def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
+def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None,
+                       with_nlc=True):
     '''Generate function to compute
 
     [ A   B ][X]
@@ -942,7 +948,8 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
-    vresp = mf.gen_response(singlet=singlet, hermi=0, max_memory=max_memory)
+    vresp = mf.gen_response(singlet=singlet, hermi=0, max_memory=max_memory,
+                            with_nlc=with_nlc)
 
     def vind(xys):
         xys = numpy.asarray(xys).reshape(-1,2,nocc,nvir)
@@ -1008,7 +1015,8 @@ class TDHF(TDBase):
     def gen_vind(self, mf=None):
         if mf is None:
             mf = self._scf
-        return gen_tdhf_operation(mf, None, self.singlet, self.wfnsym)
+        return gen_tdhf_operation(mf, None, self.singlet, self.wfnsym,
+                                  with_nlc=not self.exclude_nlc)
 
     def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         if return_symmetry:

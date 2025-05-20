@@ -29,10 +29,10 @@ from pyscf import __config__
 OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_uhf_get_nto_threshold', 0.3)
 REAL_EIG_THRESHOLD = getattr(__config__, 'tdscf_uhf_TDDFT_pick_eig_threshold', 1e-4)
 
-def gen_tda_operation(mf, fock_ao=None):
+def gen_tda_operation(mf, fock_ao=None, with_nlc=True):
     '''A x
     '''
-    return ghf.gen_tda_operation(mf, fock_ao, None)
+    return ghf.gen_tda_operation(mf, fock_ao, None, with_nlc=with_nlc)
 gen_tda_hop = gen_tda_operation
 
 def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
@@ -288,7 +288,7 @@ class TDA(TDBase, ghf.TDA):
         '''Generate function to compute Ax'''
         if mf is None:
             mf = self._scf
-        return gen_tda_hop(mf)
+        return gen_tda_hop(mf, with_nlc=not self.exclude_nlc)
 
     def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         assert self.wfnsym is None
@@ -297,13 +297,13 @@ class TDA(TDBase, ghf.TDA):
     kernel = ghf.TDA.kernel
 
 
-def gen_tdhf_operation(mf, fock_ao=None):
+def gen_tdhf_operation(mf, fock_ao=None, with_nlc=True):
     '''Generate function to compute
 
     [ A  B][X]
     [-B -A][Y]
     '''
-    return ghf.gen_tdhf_operation(mf, fock_ao, None)
+    return ghf.gen_tdhf_operation(mf, fock_ao, None, with_nlc=with_nlc)
 
 
 class TDHF(TDBase, ghf.TDHF):
@@ -311,7 +311,7 @@ class TDHF(TDBase, ghf.TDHF):
     def gen_vind(self, mf=None):
         if mf is None:
             mf = self._scf
-        return gen_tdhf_operation(mf)
+        return gen_tdhf_operation(mf, with_nlc=not self.exclude_nlc)
 
     def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         assert self.wfnsym is None

@@ -33,7 +33,7 @@ from pyscf import __config__
 OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_uhf_get_nto_threshold', 0.3)
 REAL_EIG_THRESHOLD = getattr(__config__, 'tdscf_uhf_TDDFT_pick_eig_threshold', 1e-4)
 
-def gen_tda_operation(mf, fock_ao=None):
+def gen_tda_operation(mf, fock_ao=None, with_nlc=True):
     '''A x
     '''
     assert fock_ao is None
@@ -54,7 +54,7 @@ def gen_tda_operation(mf, fock_ao=None):
     hdiag = hdiag.ravel()
 
     mo_coeff = numpy.asarray(numpy.hstack((orbo,orbv)), order='F')
-    vresp = mf.gen_response(hermi=0)
+    vresp = mf.gen_response(hermi=0, with_nlc=with_nlc)
 
     def vind(zs):
         zs = numpy.asarray(zs).reshape(-1,nocc,nvir)
@@ -396,7 +396,7 @@ class TDA(TDBase):
         '''Generate function to compute Ax'''
         if mf is None:
             mf = self._scf
-        return gen_tda_hop(mf)
+        return gen_tda_hop(mf, with_nlc=not self.exclude_nlc)
 
     def init_guess(self, mf, nstates=None, wfnsym=None):
         if nstates is None: nstates = self.nstates
@@ -463,7 +463,7 @@ class TDA(TDBase):
         return self.e, self.xy
 
 
-def gen_tdhf_operation(mf, fock_ao=None):
+def gen_tdhf_operation(mf, fock_ao=None, with_nlc=True):
     '''Generate function to compute
 
     [ A   B ][X]
@@ -486,7 +486,7 @@ def gen_tdhf_operation(mf, fock_ao=None):
     hdiag = numpy.hstack((hdiag.ravel(), -hdiag.ravel())).real
 
     mo_coeff = numpy.asarray(numpy.hstack((orbo,orbv)), order='F')
-    vresp = mf.gen_response(hermi=0)
+    vresp = mf.gen_response(hermi=0, with_nlc=with_nlc)
 
     def vind(xys):
         xys = numpy.asarray(xys).reshape(-1,2,nocc,nvir)
@@ -522,7 +522,7 @@ class TDHF(TDBase):
     def gen_vind(self, mf=None):
         if mf is None:
             mf = self._scf
-        return gen_tdhf_operation(mf)
+        return gen_tdhf_operation(mf, with_nlc=not self.exclude_nlc)
 
     def init_guess(self, mf, nstates=None, wfnsym=None):
         x0 = TDA.init_guess(self, mf, nstates, wfnsym)

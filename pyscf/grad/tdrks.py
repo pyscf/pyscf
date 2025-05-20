@@ -113,7 +113,8 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
         veff0mom = numpy.zeros((nmo,nmo))
 
     # set singlet=None, generate function for CPHF type response kernel
-    vresp = mf.gen_response(singlet=None, hermi=1)
+    vresp = mf.gen_response(singlet=None, hermi=1,
+                            with_nlc=not td_grad.base.exclude_nlc)
     def fvind(x):
         dm = reduce(numpy.dot, (orbv, x.reshape(nvir,nocc)*2, orbo.T))
         v1ao = vresp(dm+dm.T)
@@ -267,6 +268,11 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
         logger.warn(td_grad, 'TDRKS-MGGA Gradients may be inaccurate due to grids response')
     else:
         raise NotImplementedError(f'td-rks for functional {xc_code}')
+
+    if mf.do_nlc():
+        raise NotImplementedError("TDDFT gradient with NLC contribution is not supported yet. "
+                                  "Please set exclude_nlc field of tdscf object to True, "
+                                  "which will turn off NLC contribution in the whole TDDFT calculation.")
 
     if singlet:
         for ao, mask, weight, coords \
