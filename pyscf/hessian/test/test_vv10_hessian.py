@@ -488,7 +488,7 @@ class KnownValues(unittest.TestCase):
 
         test_hessian = analytical_d2enlc(mf)
 
-        assert np.linalg.norm(test_hessian - reference_hessian) < 6e-3
+        assert abs(test_hessian - reference_hessian).max() < 6e-3
 
     def test_vv10_only_hessian_density_fitting(self):
         mf = make_mf(mol, nlcgrid=(6, 50), vv10_only = True, density_fitting = True)
