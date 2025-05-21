@@ -54,6 +54,20 @@ class KnownValues(unittest.TestCase):
             self.assertTrue(abs(t1-t0).max() < prec*1e-0)
             self.assertTrue(abs(s1-s0).max() < prec*1e-1)
 
+    def test_loose_rcut(self):
+        from pyscf.gto.mole import ANG_OF
+        from pyscf.pbc.gto.cell import _extract_pgto_params
+        cell1 = cell.copy()
+        cell1.use_loose_rcut = True
+        for i in range(1, 10):
+            cell1.precision = prec = 1e-13 * 10**i
+            cell1.build()
+            exps, cs = _extract_pgto_params(cell, 'min')
+            ls = cell._bas[:,ANG_OF]
+            r = cell1.rcut
+            val = cs * r**(ls+2) * numpy.exp(-exps * r**2)
+            self.assertTrue(abs(val - prec).max() < prec * 1.01)
+
     # For atoms out of the rcut on the non-periodic directions. See issue #2460
     def test_lattice_Ls_low_dim(self):
         cell = gto.M(atom='H 0 9 9', a=numpy.diag([1.,2.,2.]), dimension=1)
