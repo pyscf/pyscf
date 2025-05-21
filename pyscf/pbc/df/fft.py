@@ -262,8 +262,7 @@ class FFTDF(lib.StreamObject):
         if kpts is None: kpts = self.kpts
         kpts = numpy.asarray(kpts)
 
-        if (cell.dimension < 2 or
-            (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
+        if cell.dimension <= 2 and cell.low_dim_ft_type == 'inf_vacuum':
             raise RuntimeError('FFTDF method does not support low-dimension '
                                'PBC system.  DF, MDF or AFTDF methods should '
                                'be used.\nSee also examples/pbc/31-low_dimensional_pbc.py')

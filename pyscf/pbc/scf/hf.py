@@ -728,12 +728,6 @@ class SCF(mol_hf.SCF):
 
     def energy_nuc(self):
         cell = self.cell
-        if (cell.dimension == 0 and
-            # Integrals in GDF and RSJK are all computed in real space.
-            # Nuclear repulsion should be computed in real space.
-            not isinstance(self.with_df, df.AFTDF)):
-            from pyscf.gto.mole import classical_coulomb_energy
-            return classical_coulomb_energy(cell)
         return cell.enuc
 
     @lib.with_doc(dip_moment.__doc__)
