@@ -3836,7 +3836,7 @@ class Mole(MoleBase):
         from pyscf import ao2mo
         return ao2mo.kernel(self, mo_coeffs, erifile, dataname, intor, **kwargs)
 
-    def to_cell(self, box=None, dimension=None, margin=None):
+    def to_cell(self, box=None, dimension=3, margin=None):
         '''This function places a molecule in a three-dimensiontal box with
         periodic boundary conditions.
 
@@ -3855,11 +3855,11 @@ class Mole(MoleBase):
                 of the box.
         '''
         from pyscf.pbc.gto import Cell, rcut_by_shells
+        assert dimension <= 3
         cell = Cell()
         cell.__dict__.update(self.__dict__)
         if box is None:
-            # Place molecule in a big box for dimension=0
-            dimension = 0
+            # Place molecule in a big box
             atom_coords = self.atom_coords()
             if margin is None:
                 # when the basis value converges to ~1e-4, the density value
@@ -3874,11 +3874,6 @@ class Mole(MoleBase):
                 atom_coords = self.atom_coords()
                 size = atom_coords.max(axis=0) - atom_coords.min(axis=0)
                 box = numpy.eye(3) * (size+margin*2)
-        else:
-            if dimension is None:
-                dimension = 3
-            else:
-                assert dimension <= 3
         cell.a = box
         cell.dimension = dimension
         cell.build(False, False)
