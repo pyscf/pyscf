@@ -16,4 +16,3 @@ mol = pyscf.M(
 mf = mol.RHF().run()
 
 mf.MP2().run()
-

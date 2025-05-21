@@ -48,8 +48,11 @@ class RCCSD(ccsd.CCSD):
         assert (not self.direct)
         return ccsd.CCSD._add_vvvv(self, t1, t2, eris, out, with_ovvv, t2sym)
 
-    to_gpu = lib.to_gpu
+DFCCSD = DFRCCSD = RCCSD
 
+from pyscf import scf
+scf.hf.RHF.DFCCSD = lib.class_as_method(DFCCSD)
+scf.rohf.ROHF.DFCCSD = NotImplemented
 
 def _contract_vvvv_t2(mycc, mol, vvL, VVL, t2, out=None, verbose=None):
     '''Ht2 = numpy.einsum('ijcd,acdb->ijab', t2, vvvv)

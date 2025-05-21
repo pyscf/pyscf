@@ -258,6 +258,7 @@ def make_rdm1(mp, t2=None, ao_repr=False, with_frozen=True):
     '''
     from pyscf.cc import uccsd_rdm
     if t2 is None: t2 = mp.t2
+    assert t2 is not None
     doo, dvv = _gamma1_intermediates(mp, t2)
     nocca, noccb, nvira, nvirb = t2[1].shape
     dov = numpy.zeros((nocca,nvira))
@@ -375,6 +376,7 @@ def make_rdm2(mp, t2=None, ao_repr=False):
     eri_bb[p,q,r,s] = ( p_beta q_beta | r_beta s_beta )
     '''
     if t2 is None: t2 = mp.t2
+    assert t2 is not None
     nmoa, nmob = nmoa0, nmob0 = mp.nmo
     nocca, noccb = nocca0, noccb0 = mp.nocc
     t2aa, t2ab, t2bb = t2
@@ -461,7 +463,7 @@ def make_rdm2(mp, t2=None, ao_repr=False):
     return dm2aa, dm2ab, dm2bb
 
 
-class UMP2(mp2.MP2):
+class UMP2(mp2.MP2Base):
 
     get_nocc = get_nocc
     get_nmo = get_nmo
@@ -482,10 +484,19 @@ class UMP2(mp2.MP2):
     # For non-canonical MP2
     energy = energy
     update_amps = update_amps
+
     def init_amps(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         return kernel(self, mo_energy, mo_coeff, eris, with_t2)
 
-    to_gpu = lib.to_gpu
+    def density_fit(self, auxbasis=None, with_df=None):
+        from pyscf.mp import dfump2
+        mymp = dfump2.DFUMP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
+        if with_df is not None:
+            mymp.with_df = with_df
+        if mymp.with_df.auxbasis != auxbasis:
+            mymp.with_df = mymp.with_df.copy()
+            mymp.with_df.auxbasis = auxbasis
+        return mymp
 
 MP2 = UMP2
 

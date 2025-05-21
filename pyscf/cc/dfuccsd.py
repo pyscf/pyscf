@@ -51,7 +51,10 @@ class UCCSD(uccsd.UCCSD):
         assert (not self.direct)
         return uccsd.UCCSD._add_vvVV(self, t1, t2, eris, out)
 
-    to_gpu = lib.to_gpu
+DFCCSD = DFUCCSD = UCCSD
+
+from pyscf import scf
+scf.uhf.UHF.DFCCSD = lib.class_as_method(DFCCSD)
 
 class _ChemistsERIs(uccsd._ChemistsERIs):
     def _contract_vvvv_t2(self, mycc, t2, direct=False, out=None, verbose=None):

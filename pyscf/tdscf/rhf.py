@@ -810,7 +810,7 @@ class TDA(TDBase):
         return gen_tda_hop(mf, singlet=self.singlet, wfnsym=self.wfnsym,
                            with_nlc=not self.exclude_nlc)
 
-    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
+    def get_init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         '''
         Generate initial guess for TDA
 
@@ -861,6 +861,10 @@ class TDA(TDBase):
         else:
             return x0
 
+    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
+        logger.warn('TDDFT.init_guess method is deprecated. Please use get_init_guess instead.')
+        return self.get_init_guess(mf, nstates, wfnsym, return_symmetry)
+
     def kernel(self, x0=None, nstates=None):
         '''TDA diagonalization solver
         '''
@@ -884,7 +888,7 @@ class TDA(TDBase):
 
         x0sym = None
         if x0 is None:
-            x0, x0sym = self.init_guess(
+            x0, x0sym = self.get_init_guess(
                 self._scf, self.nstates, return_symmetry=True)
         elif mol.symmetry:
             x_sym = _get_x_sym_table(self._scf).ravel()
@@ -1018,13 +1022,13 @@ class TDHF(TDBase):
         return gen_tdhf_operation(mf, None, self.singlet, self.wfnsym,
                                   with_nlc=not self.exclude_nlc)
 
-    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
+    def get_init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         if return_symmetry:
-            x0, x0sym = TDA.init_guess(self, mf, nstates, wfnsym, return_symmetry)
+            x0, x0sym = TDA.get_init_guess(self, mf, nstates, wfnsym, return_symmetry)
             y0 = numpy.zeros_like(x0)
             return numpy.hstack([x0, y0]), x0sym
         else:
-            x0 = TDA.init_guess(self, mf, nstates, wfnsym, return_symmetry)
+            x0 = TDA.get_init_guess(self, mf, nstates, wfnsym, return_symmetry)
             y0 = numpy.zeros_like(x0)
             return numpy.hstack([x0, y0])
 
@@ -1067,7 +1071,7 @@ class TDHF(TDBase):
 
         x0sym = None
         if x0 is None:
-            x0, x0sym = self.init_guess(
+            x0, x0sym = self.get_init_guess(
                 self._scf, self.nstates, return_symmetry=True)
         elif mol.symmetry:
             x_sym = y_sym = _get_x_sym_table(self._scf).ravel()

@@ -43,7 +43,7 @@ from pyscf.pbc.dft.multigrid.utils import (
 )
 from pyscf.pbc.dft.multigrid.multigrid import MultiGridFFTDF
 
-NGRIDS = getattr(__config__, 'pbc_dft_multigrid_ngrids', 4)
+NTASKS = getattr(__config__, 'pbc_dft_multigrid_ntasks', 4)
 KE_RATIO = getattr(__config__, 'pbc_dft_multigrid_ke_ratio', 3.0)
 REL_CUTOFF = getattr(__config__, 'pbc_dft_multigrid_rel_cutoff', 20.0)
 GGA_METHOD = getattr(__config__, 'pbc_dft_multigrid_gga_method', 'FFT')
@@ -136,14 +136,14 @@ class TaskList(ctypes.Structure):
 
 
 def multi_grids_tasks(cell, ke_cutoff=None, hermi=0,
-                      ngrids=NGRIDS, ke_ratio=KE_RATIO, rel_cutoff=REL_CUTOFF):
+                      ntasks=NTASKS, ke_ratio=KE_RATIO, rel_cutoff=REL_CUTOFF):
     if ke_cutoff is None:
         ke_cutoff = cell.ke_cutoff
     if ke_cutoff is None:
         raise ValueError("cell.ke_cutoff is not set.")
     ke1 = ke_cutoff
     cutoff = [ke1,]
-    for i in range(ngrids-1):
+    for i in range(ntasks-1):
         ke1 /= ke_ratio
         cutoff.append(ke1)
     cutoff.reverse()
@@ -158,13 +158,13 @@ def multi_grids_tasks(cell, ke_cutoff=None, hermi=0,
     return task_list
 
 
-def _update_task_list(mydf, hermi=0, ngrids=None, ke_ratio=None, rel_cutoff=None):
+def _update_task_list(mydf, hermi=0, ntasks=None, ke_ratio=None, rel_cutoff=None):
     '''
     Update :attr:`task_list` if necessary.
     '''
     cell = mydf.cell
-    if ngrids is None:
-        ngrids = mydf.ngrids
+    if ntasks is None:
+        ntasks = mydf.ntasks
     if ke_ratio is None:
         ke_ratio = mydf.ke_ratio
     if rel_cutoff is None:
@@ -180,14 +180,14 @@ def _update_task_list(mydf, hermi=0, ngrids=None, ke_ratio=None, rel_cutoff=None
         rel_cutoff_orig = task_list.contents.gridlevel_info.contents.rel_cutoff
         #TODO also need to check kinetic energy cutoff change
         if (hermi_orig > hermi or
-                nlevels != ngrids or
+                nlevels != ntasks or
                 abs(rel_cutoff_orig-rel_cutoff) > 1e-12):
             need_update = True
 
     if need_update:
         if task_list is not None:
             free_task_list(task_list)
-        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=ngrids,
+        task_list = multi_grids_tasks(cell, hermi=hermi, ntasks=ntasks,
                                       ke_ratio=ke_ratio, rel_cutoff=rel_cutoff)
         mydf.task_list = task_list
     return task_list
@@ -494,7 +494,7 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), deriv=0,
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
 
-    task_list = _update_task_list(mydf, hermi=hermi, ngrids=mydf.ngrids,
+    task_list = _update_task_list(mydf, hermi=hermi, ntasks=mydf.ntasks,
                                   ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
 
     gga_high_order = False
@@ -718,7 +718,7 @@ def _get_j_pass2(mydf, vG, kpts=np.zeros((1,3)), hermi=1, verbose=None):
     vG = vG.reshape(-1,nx,ny,nz)
     nset = vG.shape[0]
 
-    task_list = _update_task_list(mydf, hermi=hermi, ngrids=mydf.ngrids,
+    task_list = _update_task_list(mydf, hermi=hermi, ntasks=mydf.ntasks,
                                   ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
 
     at_gamma_point = gamma_point(kpts)
@@ -770,7 +770,7 @@ def _get_j_pass2_ip1(mydf, vG, kpts=np.zeros((1,3)), hermi=0, deriv=1, verbose=N
     vG = vG.reshape(-1,nx,ny,nz)
     nset = vG.shape[0]
 
-    task_list = _update_task_list(mydf, hermi=hermi, ngrids=mydf.ngrids,
+    task_list = _update_task_list(mydf, hermi=hermi, ntasks=mydf.ntasks,
                                   ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
 
     at_gamma_point = gamma_point(kpts)
@@ -816,7 +816,7 @@ def _get_gga_pass2(mydf, vG, kpts=np.zeros((1,3)), hermi=1, verbose=None):
     vG = vG.reshape(-1,4,nx,ny,nz)
     nset = vG.shape[0]
 
-    task_list = _update_task_list(mydf, hermi=hermi, ngrids=mydf.ngrids,
+    task_list = _update_task_list(mydf, hermi=hermi, ntasks=mydf.ntasks,
                                   ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
 
     if gamma_point(kpts):
@@ -864,7 +864,7 @@ def _get_gga_pass2_ip1(mydf, vG, kpts=np.zeros((1,3)), hermi=0, deriv=1, verbose
     vG = vG.reshape(-1,4,nx,ny,nz)
     nset = vG.shape[0]
 
-    task_list = _update_task_list(mydf, hermi=hermi, ngrids=mydf.ngrids,
+    task_list = _update_task_list(mydf, hermi=hermi, ntasks=mydf.ntasks,
                                   ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
 
     at_gamma_point = gamma_point(kpts)
@@ -1356,10 +1356,10 @@ class MultiGridFFTDF2(MultiGridFFTDF):
             Electronic density represented in the reciprocal space.
             It is cached in nuclear gradient calculations to reduce cost.
     '''
-    ngrids = getattr(__config__, 'pbc_dft_multigrid_ngrids', 4)
+    ntasks = getattr(__config__, 'pbc_dft_multigrid_ntasks', 4)
     ke_ratio = getattr(__config__, 'pbc_dft_multigrid_ke_ratio', 3.0)
     rel_cutoff = getattr(__config__, 'pbc_dft_multigrid_rel_cutoff', 20.0)
-    _keys = {'ngrids', 'ke_ratio', 'rel_cutoff',
+    _keys = {'ntasks', 'ke_ratio', 'rel_cutoff',
              'task_list', 'vpplocG_part1', 'rhoG'}
 
     def __init__(self, cell, kpts=np.zeros((1,3))):
@@ -1380,6 +1380,15 @@ class MultiGridFFTDF2(MultiGridFFTDF):
             free_task_list(self.task_list)
             self.task_list = None
         fft.FFTDF.reset(self, cell=cell)
+
+    @property
+    def ngrids(self):
+        return np.prod(self.mesh)
+
+    @ngrids.setter
+    def ngrids(self, x):
+        raise AttributeError('The MultiGridNumInt attribute .ngrids is deprecated. '
+                             'It is replaced by the attribute .ntasks.')
 
     def __del__(self):
         self.reset()

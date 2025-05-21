@@ -767,8 +767,6 @@ class UCCSD(ccsd.CCSDBase):
     def amplitudes_from_rccsd(self, t1, t2):
         return amplitudes_from_rccsd(t1, t2)
 
-    to_gpu = lib.to_gpu
-
 CCSD = UCCSD
 
 

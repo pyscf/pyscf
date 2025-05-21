@@ -166,15 +166,22 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
     return emp2, t2
 
 
-class DFUMP2(dfmp2.DFMP2):
-    _keys = dfmp2.DFMP2._keys
+class DFUMP2(ump2.UMP2):
+    _keys = dfmp2.DFRMP2._keys
+
+    __init__ = dfmp2.DFRMP2.__init__
 
     get_nocc = ump2.get_nocc
     get_nmo = ump2.get_nmo
     get_frozen_mask = ump2.get_frozen_mask
 
-    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None, mo_energy=None):
-        dfmp2.DFMP2.__init__(self, mf, frozen, mo_coeff, mo_occ, mo_energy)
+    kernel = ump2.UMP2.kernel
+
+    make_fno = ump2.make_fno
+    make_rdm1 = make_rdm1
+    make_rdm2 = make_rdm2
+
+    reset = dfmp2.DFRMP2.reset
 
     def split_mo_coeff(self, mo_coeff=None):
         if mo_coeff is None: mo_coeff = self.mo_coeff
@@ -194,18 +201,6 @@ class DFUMP2(dfmp2.DFMP2):
     def ao2mo(self, mo_coeff=None, ovL=None, ovL_to_save=None):
         return _make_df_eris(self, mo_coeff, ovL, ovL_to_save)
 
-    def make_rdm1(self, t2=None, ao_repr=False, with_frozen=True):
-        if t2 is None:
-            t2 = self.t2
-        assert t2 is not None
-        return make_rdm1(self, t2, ao_repr=ao_repr, with_frozen=with_frozen)
-
-    def make_rdm2(self, t2=None, ao_repr=False):
-        if t2 is None:
-            t2 = self.t2
-        assert t2 is not None
-        return make_rdm2(self, t2, ao_repr=ao_repr)
-
     def nuc_grad_method(self):
         raise NotImplementedError
 
@@ -216,11 +211,12 @@ class DFUMP2(dfmp2.DFMP2):
     def init_amps(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         return kernel(self, mo_energy, mo_coeff, eris, with_t2)
 
-UMP2 = DFUMP2
+    Gradients = NotImplemented
+
+MP2 = UMP2 = DFUMP2
 
 from pyscf import scf
-scf.uhf.UHF.DFMP2 = DFUMP2
-
+scf.uhf.UHF.DFMP2 = lib.class_as_method(DFUMP2)
 del (WITH_T2)
 
 
@@ -630,43 +626,3 @@ def _init_mp_df_eris_direct(with_df, occ_coeff, vir_coeff, max_memory, h5obj=Non
     log.info('')
 
     return ovL
-
-
-if __name__ == '__main__':
-    from pyscf import scf
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.atom = [
-        [8 , (0. , 0.     , 0.)],
-        [1 , (0. , -0.757 , 0.587)],
-        [1 , (0. , 0.757  , 0.587)]]
-
-    mol.basis = 'cc-pvdz'
-    mol.charge = 1
-    mol.spin = 1
-    mol.build()
-    mf = scf.UHF(mol).run()
-    pt = DFUMP2(mf)
-    emp2, t2 = pt.kernel()
-    print(emp2 - -0.15321910988237386)
-
-    pt.with_df = df.DF(mol)
-    pt.with_df.auxbasis = 'weigend'
-    emp2, t2 = pt.kernel()
-    print(emp2 - -0.15345631939967935)
-
-    mf = scf.density_fit(scf.UHF(mol), 'weigend')
-    mf.kernel()
-    pt = DFUMP2(mf)
-    emp2, t2 = pt.kernel()
-    print(emp2 - -0.15325911974166384)
-
-    pt.with_df = df.DF(mol)
-    pt.with_df.auxbasis = df.make_auxbasis(mol, mp2fit=True)
-    emp2, t2 = pt.kernel()
-    print(emp2 - -0.15302393704336487)
-
-    pt.frozen = 2
-    emp2, t2 = pt.kernel()
-    print(emp2 - -0.09563606544882836)

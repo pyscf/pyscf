@@ -121,11 +121,11 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
     return emp2, t2
 
 
-class DFMP2(mp2.MP2):
+class DFRMP2(mp2.RMP2):
     _keys = {'with_df', 'mo_energy', 'force_outcore'}
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None, mo_energy=None):
-        mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
+        mp2.MP2Base.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
         self.mo_energy = get_mo_energy(mf, self.mo_coeff, self.mo_occ, mo_energy)
 
@@ -138,8 +138,7 @@ class DFMP2(mp2.MP2):
         # DEBUG:
         self.force_outcore = False
 
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
-        return mp2.MP2.kernel(self, mo_energy, mo_coeff, eris, with_t2)
+    kernel = mp2.RMP2.kernel
 
     def split_mo_coeff(self, mo_coeff=None):
         if mo_coeff is None: mo_coeff = self.mo_coeff
@@ -185,12 +184,13 @@ class DFMP2(mp2.MP2):
     def init_amps(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         return kernel(self, mo_energy, mo_coeff, eris, with_t2)
 
-MP2 = DFMP2
+    Gradients = NotImplemented
+
+MP2 = DFMP2 = DFRMP2
 
 from pyscf import scf
 scf.hf.RHF.DFMP2 = lib.class_as_method(DFMP2)
-scf.rohf.ROHF.DFMP2 = None
-scf.uhf.UHF.DFMP2 = None
+scf.rohf.ROHF.DFMP2 = NotImplemented
 
 del (WITH_T2)
 
@@ -587,41 +587,3 @@ def _init_mp_df_eris_direct(with_df, occ_coeff, vir_coeff, max_memory, h5obj=Non
     log.info('')
 
     return ovL
-
-
-if __name__ == '__main__':
-    from pyscf import scf
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.atom = [
-        [8 , (0. , 0.     , 0.)],
-        [1 , (0. , -0.757 , 0.587)],
-        [1 , (0. , 0.757  , 0.587)]]
-
-    mol.basis = 'cc-pvdz'
-    mol.build()
-    mf = scf.RHF(mol).run()
-    pt = DFMP2(mf)
-    emp2, t2 = pt.kernel()
-    print(emp2 - -0.204004830285)
-
-    pt.with_df = df.DF(mol)
-    pt.with_df.auxbasis = 'weigend'
-    emp2, t2 = pt.kernel()
-    print(emp2 - -0.204254500453)
-
-    mf = scf.density_fit(scf.RHF(mol), 'weigend')
-    mf.kernel()
-    pt = DFMP2(mf)
-    emp2, t2 = pt.kernel()
-    print(emp2 - -0.203986171133)
-
-    pt.with_df = df.DF(mol)
-    pt.with_df.auxbasis = df.make_auxbasis(mol, mp2fit=True)
-    emp2, t2 = pt.kernel()
-    print(emp2 - -0.203738031827)
-
-    pt.frozen = 2
-    emp2, t2 = pt.kernel()
-    print(emp2 - -0.14433975122418313)
