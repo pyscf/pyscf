@@ -217,7 +217,7 @@ def _make_hessian(g_scanner, hessian_option, tmpdir):
         h = method.Hessian().kernel()
     except (TypeError, NotImplementedError):
         logger.warn(g_scanner, 'Analytical hessian for %s is not available', method)
-        hessian_option = False
+        hessian_option = None
     else:
         h = h.transpose(0,2,1,3).reshape(3*natm, 3*natm)
         numpy.savetxt(hessian_file, h)

@@ -290,6 +290,8 @@ class Gradients(rhf_grad.GradientsBase):
                             'Gradients of ground state is computed.')
                 return self.base._scf.nuc_grad_method().kernel(atmlst=atmlst)
 
+            if self.base.xy is None:
+                self.base.run()
             xy = self.base.xy[state-1]
 
         if singlet is None: singlet = self.base.singlet

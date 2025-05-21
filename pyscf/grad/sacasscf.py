@@ -564,13 +564,16 @@ class Gradients (lagrange.Gradients):
 
     def kernel (self, state=None, atmlst=None, verbose=None, mo=None, ci=None, eris=None,
                 mf_grad=None, e_states=None, level_shift=None, **kwargs):
+        if eris is None:
+            eris = self.eris = self.base.ao2mo (mo)
+        if ci is None:
+            if self.base.ci is None:
+                self.base.run()
+            ci = self.base.ci
         if state is None: state = self.state
         if atmlst is None: atmlst = self.atmlst
         if verbose is None: verbose = self.verbose
         if mo is None: mo = self.base.mo_coeff
-        if ci is None: ci = self.base.ci
-        if eris is None:
-            eris = self.eris = self.base.ao2mo (mo)
         if mf_grad is None: mf_grad = self.base._scf.nuc_grad_method ()
         if state is None:
             return casscf_grad.Gradients (self.base).kernel (
