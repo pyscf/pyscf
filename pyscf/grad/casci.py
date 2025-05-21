@@ -288,7 +288,10 @@ class Gradients(rhf_grad.GradientsBase):
     def kernel(self, mo_coeff=None, ci=None, atmlst=None,
                state=None, verbose=None):
         log = logger.new_logger(self, verbose)
-        if ci is None: ci = self.base.ci
+        if ci is None:
+            if self.base.ci is None:
+                self.base.ci.run()
+            ci = self.base.ci
         if self.state is None:  # state average MCSCF calculations
             assert (state is None)
         elif isinstance(ci, (list, tuple, RANGE_TYPE)):

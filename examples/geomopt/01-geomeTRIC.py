@@ -44,6 +44,11 @@ mol_eq = optimize(mc, **conv_params)
 # method 2
 mol_eq = mc.Gradients().optimizer(solver='geomeTRIC').kernel(conv_params)
 
+# The geomeTRIC library supports to use initial hessian from quantum chemistry
+# calculations. This feature can be activated by setting hessian=True in the
+# conv_params. E.g.
+params = {**conv_params, 'hessian': True}
+mol_eq = optimization(mf, **conv_params)
 
 #
 # geometry optimization for DFT, MP2, CCSD

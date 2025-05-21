@@ -422,7 +422,10 @@ class Gradients(rhf_grad.GradientsBase):
                atmlst=None, verbose=None):
         log = logger.new_logger(self, verbose)
         mycc = self.base
-        if t1 is None: t1 = mycc.t1
+        if t1 is None:
+            if mycc.t1 is None:
+                mycc.run()
+            t1 = mycc.t1
         if t2 is None: t2 = mycc.t2
         if l1 is None: l1 = mycc.l1
         if l2 is None: l2 = mycc.l2

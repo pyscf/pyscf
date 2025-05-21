@@ -158,8 +158,10 @@ class Gradients(rhf_grad.GradientsBase):
                verbose=None):
         log = logger.new_logger(self, verbose)
         myci = self.base
-        if civec is None: civec = myci.ci
-        if civec is None: civec = myci.kernel(eris=eris)
+        if civec is None:
+            if myci.ci is None:
+                myci.kernel(eris=eris)
+            civec = myci.ci
         if (isinstance(civec, (list, tuple)) or
             (isinstance(civec, numpy.ndarray) and civec.ndim > 1)):
             if state is None:
