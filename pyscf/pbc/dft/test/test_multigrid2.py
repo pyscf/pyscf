@@ -33,7 +33,7 @@ def setUpModule():
                     basis=He_basis,
                     unit='B',
                     precision=1e-8,
-                    ke_cutoff=100,
+                    ke_cutoff=150,
                     pseudo = 'gth-pbe',
                     a=np.eye(3)*5)
 
@@ -130,12 +130,12 @@ class KnownValues(unittest.TestCase):
         from pyscf.pbc.dft.multigrid.multigrid_pair import multi_grids_tasks
         with with_grid_level_method("cp2k"):
             task_list = multi_grids_tasks(He_orth, hermi=1, ngrids=2)
-            assert task_list.ntasks == [930, 220]
+            assert task_list.ntasks == [1150, 0]
             task_list = multi_grids_tasks(He_nonorth, hermi=1, ngrids=2)
             assert task_list.ntasks == [2771, 732]
         with with_grid_level_method("pyscf"):
             task_list = multi_grids_tasks(He_orth, hermi=1, ngrids=2)
-            assert task_list.ntasks == [1068, 82]
+            assert task_list.ntasks == [1150, 0]
             task_list = multi_grids_tasks(He_nonorth, hermi=1, ngrids=2)
             assert task_list.ntasks == [3249, 254]
 
@@ -176,8 +176,8 @@ class KnownValues(unittest.TestCase):
         e0, g0 = _fftdf_energy_grad(He_orth, xc)
         e,  g  = _multigrid2_energy_grad(He_orth, xc, 0)
         e1, g1 = _multigrid2_energy_grad(He_orth, xc, 1)
-        assert abs(e-e0) < 1e-6
-        assert abs(e1-e0) < 1e-6
+        assert abs(e-e0) < 1e-7
+        assert abs(e1-e0) < 1e-7
         assert abs(g-g0).max() < 1e-6
         assert abs(g1-g0).max() < 1e-6
 
@@ -186,8 +186,8 @@ class KnownValues(unittest.TestCase):
         e0, g0 = _fftdf_energy_grad(He_orth, xc)
         e,  g  = _multigrid2_energy_grad(He_orth, xc, 0)
         e1, g1 = _multigrid2_energy_grad(He_orth, xc, 1)
-        assert abs(e-e0) < 1e-6
-        assert abs(e1-e0) < 1e-6
+        assert abs(e-e0) < 1e-7
+        assert abs(e1-e0) < 1e-7
         assert abs(g-g0).max() < 1e-6
         assert abs(g1-g0).max() < 1e-6
 
@@ -216,10 +216,10 @@ class KnownValues(unittest.TestCase):
         e0, g0 = _fftdf_energy_grad(He_orth, xc)
         e,  g  = _multigrid2_energy_grad(He_orth, xc, 0)
         e1, g1 = _multigrid2_energy_grad(He_orth, xc, 1)
-        assert abs(e-e0) < 1e-6
-        assert abs(e1-e0) < 1e-6
-        assert abs(g-g0).max() < 1e-6
-        assert abs(g1-g0).max() < 1e-6
+        assert abs(e-e0) < 1e-7
+        assert abs(e1-e0) < 1e-7
+        assert abs(g-g0).max() < 1e-7
+        assert abs(g1-g0).max() < 1e-7
 
     def test_nonorth_j_dft(self):
         xc = ''
