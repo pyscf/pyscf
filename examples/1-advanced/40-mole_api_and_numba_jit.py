@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 
-Polish docstring:
 '''
 This example demonstrates some APIs of the Mole class and utilizes Numba JIT
-compilation to compute integrals. The evaluated integrals are the ovelap of
+compilation to compute integrals. The evaluated integrals are the overlap of
 absolute value of Cartesian GTOs.
 
 The overlap integral between the absolute values of Cartesian GTOs can be
