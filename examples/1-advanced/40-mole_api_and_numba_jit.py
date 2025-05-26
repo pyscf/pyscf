@@ -1,51 +1,85 @@
 #!/usr/bin/env python
 
 '''
+Calculates the overlap integral between the absolute values of Cartesian GTOs.
+
 This example demonstrates some APIs of the Mole class and utilizes Numba JIT
-compilation to compute integrals. The evaluated integrals are the overlap of
-absolute value of Cartesian GTOs.
+compilation to compute integrals.
 
-The overlap integral between the absolute values of Cartesian GTOs can be
-computed as the square root of the overlap of four orbitals: sqrt(<ii|jj>) .
+This overlap integral is computed as the product of the Gaussian integrals of
+the three components along the three Cartesian directions. Note, these
+integrals cannot be transformed to spherical GTOs.
 
-This trick can only be applied to Cartesian orbitals. These functions cannot be
-transformed to spherical basis.
+In each component, the integrals are approximately evaluated using
+Gauss-Hermite quadrature. The absolute value of the polynomial part is
+continuous but not analytical. It cannot be expanded using a limited number of
+polynomials. A large number of quadrature roots are required to accurately
+evaluate the integrals. In the current implementation, the error is estimated
+around ~1e-3.
 
-See relevant discussions in https://github.com/pyscf/pyscf/issues/2805
+This example is created to provide an implementation for issue 
+https://github.com/pyscf/pyscf/issues/2805
+
+For more technical discussions, please refer to:
+"Enhancing the Productivity of Quantum Chemistry Simulations in PySCF," arXiv:xxxx.xxxx.
+This example provides a complete implementation of the code discussed in that paper.
 '''
 
 import numpy as np
 import numba
+from scipy.special import roots_hermite
+from pyscf import gto
 
-@numba.njit(cache=True)
-def primitive_overlap(li, lj, ai, aj, ci, cj, Ra, Rb) -> np.ndarray:
-    norm_fac = (np.pi/(ai+aj))**1.5 * ci * cj
+@numba.njit(cache=True, fastmath=True)
+def primitive_overlap(li, lj, ai, aj, ci, cj, Ra, Rb, roots, weights) -> np.ndarray:
+    norm_fac = ci * cj
     # Unconventional normalization for Cartesian functions in PySCF
     if li <= 1: norm_fac *= ((li*2+1)/(4*np.pi))**.5
     if lj <= 1: norm_fac *= ((lj*2+1)/(4*np.pi))**.5
 
-    # Mapping chi^2 to one orbital r^(l*2)*exp(-2*alpha r^2)
-    ai = ai * 2
-    aj = aj * 2
     aij = ai + aj
     Rab = Ra - Rb
     Rp = (ai * Ra + aj * Rb) / aij
-    Rpa = Rp - Ra
     theta_ij = ai * aj / aij
-    lij = li + lj
-    # Three Cartesian components of the intermediates: Ix, Iy, Iz
-    I = np.empty((lij*2+1, lj*2+1, 3))
-    I[0,0] = np.exp(-theta_ij * Rab**2)
-    # VRR
-    for i in range(lij*2):
-        if i == 0: I[1,0] = Rpa * I[0,0]
-        else: I[i+1,0] = Rpa * I[i,0] + i/(2*aij) * I[i-1,0]
-    # HRR
-    for j in range(1, lj*2+1):
-        for i in range(lij*2+1-j):
-            I[i,j] = Rab * I[i,j-1] + I[i+1,j-1]
-    # sqrt(<ii|jj>)
-    I = I[::2,::2]**.5
+    scale = 1./np.sqrt(aij)
+    norm_fac *= scale**3 * np.exp(-theta_ij * Rab.dot(Rab))
+    x = roots * scale + Rp[:,None]
+    xa = x - Ra[:,None]
+    xb = x - Rb[:,None]
+
+    # Build mu = xa ** np.arange(li+1)[:,None,None]
+    # Build nu = xb ** np.arange(lj+1)[:,None,None]
+    nroots = len(weights)
+    mu = np.empty((li+1,3,nroots))
+    nu = np.empty((lj+1,3,nroots))
+    for n in range(nroots):
+        powx = 1.
+        powy = 1.
+        powz = 1.
+        mu[0,0,n] = 1.
+        mu[0,1,n] = 1.
+        mu[0,2,n] = 1.
+        for i in range(1, li+1):
+            powx = powx * xa[0,n]
+            powy = powy * xa[1,n]
+            powz = powz * xa[2,n]
+            mu[i,0,n] = powx
+            mu[i,1,n] = powy
+            mu[i,2,n] = powz
+
+        powx = 1.
+        powy = 1.
+        powz = 1.
+        nu[0,0,n] = 1.
+        nu[0,1,n] = 1.
+        nu[0,2,n] = 1.
+        for i in range(1, lj+1):
+            powx = powx * xb[0,n]
+            powy = powy * xb[1,n]
+            powz = powz * xb[2,n]
+            nu[i,0,n] = powx
+            nu[i,1,n] = powy
+            nu[i,2,n] = powz
 
     nfi = (li+1)*(li+2)//2
     nfj = (lj+1)*(lj+2)//2
@@ -58,13 +92,20 @@ def primitive_overlap(li, lj, ai, aj, ci, cj, Ra, Rb) -> np.ndarray:
             for jx in range(lj, -1, -1):
                 for jy in range(lj-jx, -1, -1):
                     jz = lj - jx - jy
-                    s[i,j] = I[ix,jx,0] * I[iy,jy,1] * I[iz,jz,2] * norm_fac
+                    Ix = 0
+                    Iy = 0
+                    Iz = 0
+                    for n in range(nroots):
+                        Ix += mu[ix,0,n] * nu[jx,0,n] * weights[n]
+                        Iy += mu[iy,1,n] * nu[jy,1,n] * weights[n]
+                        Iz += mu[iz,2,n] * nu[jz,2,n] * weights[n]
+                    s[i,j] = Ix * Iy * Iz * norm_fac
                     j += 1
             i += 1
     return s
 
 @numba.njit(cache=True)
-def primitive_overlap_matrix(ls, exps, norm_coef, bas_coords):
+def primitive_overlap_matrix(ls, exps, norm_coef, bas_coords, roots, weights):
     nbas = len(ls)
     dims = [(l + 1) * (l + 2) // 2 for l in ls]
     nao = sum(dims)
@@ -75,7 +116,7 @@ def primitive_overlap_matrix(ls, exps, norm_coef, bas_coords):
         for j in range(i+1):
             s = primitive_overlap(ls[i], ls[j], exps[i], exps[j],
                                   norm_coef[i], norm_coef[j],
-                                  bas_coords[i], bas_coords[j])
+                                  bas_coords[i], bas_coords[j], roots, weights)
             smat[i0:i0+dims[i], j0:j0+dims[j]] = s
             # smat is a symmetric matrix
             if i != j: smat[j0:j0+dims[j], i0:i0+dims[i]] = s.T
@@ -83,7 +124,7 @@ def primitive_overlap_matrix(ls, exps, norm_coef, bas_coords):
         i0 += dims[i]
     return smat
 
-def absolute_overlap_matrix(mol):
+def absolute_overlap_matrix(mol, nroots=500):
     assert mol.cart
     # Integrals are computed using primitive GTOs. ctr_mat transforms the
     # primitive GTOs to the contracted GTOs.
@@ -96,13 +137,23 @@ def absolute_overlap_matrix(mol):
     norm_coef = gto.gto_norm(ls, exps)
     # Position for each shell
     bas_coords = np.array([pmol.bas_coord(i) for i in range(pmol.nbas)])
-    s = primitive_overlap_matrix(ls, exps, norm_coef, bas_coords)
+    r, w = roots_hermite(nroots)
+    s = primitive_overlap_matrix(ls, exps, norm_coef, bas_coords, r, w)
     return ctr_mat.T.dot(s).dot(ctr_mat)
+
+def find_instr(func, keyword, sig=0, limit=5):
+    count = 0
+    for l in func.inspect_asm(func.signatures[sig]).split('\n'):
+        if keyword in l:
+            count += 1
+            print(l)
+            if count >= limit:
+                break
+    if count == 0:
+        print('No instructions found')
 
 if __name__ == '__main__':
     import pyscf
-    from pyscf import gto
-    mol = pyscf.M(atom='H 0 0 0; H 0 0 1', basis='def2-svp')
+    mol = pyscf.M(atom='H 0 0 0; H 0 0 1', basis='def2-svp', cart=True)
     pmol, ctr_mat = mol.decontract_basis(to_cart=True, aggregate=True)
-    print(absolute_overlap_matrix(mol))
-    print(mol.intor('int1e_ovlp'))
+    absolute_overlap_matrix(mol)
