@@ -57,6 +57,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -19.32160357236596, 8)
         self.assertAlmostEqual(abs(lib.fp(c)), 0.44753770280929384, 8)
 
+    def test_solver(self):
+        sol = fci.fci_dhf_slow.FCI()
+        e, c = sol.kernel(h1e, eri, norb, nelec)
+        self.assertAlmostEqual(e, -19.32160357236596, 8)
+        self.assertAlmostEqual(abs(lib.fp(c)), 0.44753770280929384, 8)
+
     def test_hdiag(self):
         hdiag = fci.fci_dhf_slow.make_hdiag(h1e, eri, norb, nelec)
         h2e = fci.fci_dhf_slow.absorb_h1e(h1e, eri, norb, nelec, 0.5)

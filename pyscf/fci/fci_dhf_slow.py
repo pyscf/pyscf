@@ -65,12 +65,10 @@ def make_hdiag(h1e, eri, norb, nelec, opt=None):
 
 def kernel(h1e, eri, norb, nelec, ecore=0, nroots=1, verbose=3):
     h2e = absorb_h1e(h1e, eri, norb, nelec, 0.5)
-    na = cistring.num_strings(norb, nelec)
-    ci0 = numpy.zeros((na, ), dtype=eri.dtype)
-    ci0[0] = 1
     hop = lambda c: contract_2e(h2e, c, norb, nelec)
     hdiag = make_hdiag(h1e, eri, norb, nelec)
     precond = lambda x, e, *args: x / (hdiag - e + 1e-4)
+    ci0 = get_init_guess(norb, nelec, nroots, hdiag)
     e, c = lib.davidson(hop, ci0, precond, verbose=verbose, nroots=nroots)
     return e + ecore, c
 
@@ -124,6 +122,26 @@ def reorder_rdm(rdm1, rdm2, inplace=True):
     return rdm1, rdm2
 
 
+def get_init_guess(norb, nelec, nroots, hdiag):
+    '''Initial guess is the single Slater determinant
+    '''
+    na = cistring.num_strings(norb, nelec)
+    ci0 = []
+    if hdiag.size <= nroots:
+        addrs = numpy.arange(hdiag.size)
+    else:
+        addrs = numpy.argpartition(hdiag, nroots-1)[:nroots]
+    for addr in addrs:
+        x = numpy.zeros((na, ), dtype=hdiag.dtype)
+        x[addr] = 1
+        ci0.append(x)
+
+    # Add noise
+    ci0[0][0 ] += 1e-5 + 1e-6j if ci0[0].dtype == complex else 1e-5
+    ci0[0][-1] -= 1e-5 + 1e-6j if ci0[0].dtype == complex else 1e-5
+    return ci0
+
+
 def kernel_dhf(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None,
@@ -144,14 +162,19 @@ def kernel_dhf(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     def hop(c):
         return fci.contract_2e(h2e, c, norb, nelec, link_index)
 
-    if ci0 is None:
-        def ci0():  # lazy initialization to reduce memory footprint
+    def init_guess():
+        if callable(getattr(fci, 'get_init_guess', None)):
+            return fci.get_init_guess(norb, nelec, nroots, hdiag)
+        else:
             x0 = []
             for i in range(nroots):
                 x = numpy.zeros(na, dtype=eri.dtype)
                 x[i] = 1
                 x0.append(x)
             return x0
+
+    if ci0 is None:
+        ci0 = init_guess  # lazy initialization to reduce memory footprint
     elif not callable(ci0):
         if len(ci0) < nroots:
             for i in range(len(ci0), nroots):
@@ -213,6 +236,9 @@ class FCISolver(direct_spin1.FCISolver):
         h2e = self.absorb_h1e(h1e, eri, norb, nelec, 0.5)
         ci1 = self.contract_2e(h2e, fcivec, norb, nelec, link_index)
         return numpy.dot(fcivec.conj(), ci1)
+
+    def get_init_guess(self, norb, nelec, nroots, hdiag):
+        return get_init_guess(norb, nelec, nroots, hdiag)
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
