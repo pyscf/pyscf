@@ -261,7 +261,7 @@ class Int3cBuilder(lib.StreamObject):
             # Add penalty 1e-2 to reduce the screening error
             log_cutoff = int(np.log(cutoff*1e-2) * LOG_ADJUST)
         else:
-            cintopt = _vhf.make_cintopt(supmol._atm, supmol._bas, supmol._env, intor)
+            cintopt = _vhf.make_cintopt(atm, bas, env, intor)
 
         sindex = self.get_q_cond(supmol)
         ovlp_mask = sindex > log_cutoff
