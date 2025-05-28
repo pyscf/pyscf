@@ -475,7 +475,12 @@ def make_rdm1234s(fcivec, norb, nelec, link_index=None, reorder=True):
     #     + rdm4abbb.transpose(2, 3, 4, 5, 6, 7, 0, 1),
     #     rdm4,
     # )
-    return (rdm1a, rdm1b), (rdm2aa, rdm2ab, rdm2bb), (rdm3aaa, rdm3aab, rdm3abb, rdm3bbb), (rdm4aaaa, rdm4aaab, rdm4aabb, rdm4abbb, rdm4bbbb)
+    return (
+        (rdm1a, rdm1b),
+        (rdm2aa, rdm2ab, rdm2bb),
+        (rdm3aaa, rdm3aab, rdm3abb, rdm3bbb),
+        (rdm4aaaa, rdm4aaab, rdm4aabb, rdm4abbb, rdm4bbbb),
+    )
 
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
     r'''Spin separated transition 1-particle density matrices.
