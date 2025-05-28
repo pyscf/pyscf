@@ -111,30 +111,26 @@ def build_neighbor_list_for_shlpairs(cell, cell1=None, Ls=None,
     assert njsh == len(jsh_rcut)
 
     nl = ctypes.POINTER(_CNeighborList)()
-    func = getattr(libpbc, "build_neighbor_list", None)
-    try:
-        func(ctypes.byref(nl),
-             ish_atm.ctypes.data_as(ctypes.c_void_p),
-             ish_bas.ctypes.data_as(ctypes.c_void_p),
-             ish_env.ctypes.data_as(ctypes.c_void_p),
-             ish_rcut.ctypes.data_as(ctypes.c_void_p),
-             jsh_atm.ctypes.data_as(ctypes.c_void_p),
-             jsh_bas.ctypes.data_as(ctypes.c_void_p),
-             jsh_env.ctypes.data_as(ctypes.c_void_p),
-             jsh_rcut.ctypes.data_as(ctypes.c_void_p),
-             ctypes.c_int(nish), ctypes.c_int(njsh),
-             Ls.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nimgs),
-             ctypes.c_int(hermi))
-    except Exception as e:
-        raise RuntimeError(f"Failed to build neighbor list for shell pairs.\n{e}")
+    libpbc.build_neighbor_list(
+        ctypes.byref(nl),
+        ish_atm.ctypes.data_as(ctypes.c_void_p),
+        ish_bas.ctypes.data_as(ctypes.c_void_p),
+        ish_env.ctypes.data_as(ctypes.c_void_p),
+        ish_rcut.ctypes.data_as(ctypes.c_void_p),
+        jsh_atm.ctypes.data_as(ctypes.c_void_p),
+        jsh_bas.ctypes.data_as(ctypes.c_void_p),
+        jsh_env.ctypes.data_as(ctypes.c_void_p),
+        jsh_rcut.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nish),
+        ctypes.c_int(njsh),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nimgs),
+        ctypes.c_int(hermi),
+    )
     return nl
 
 def free_neighbor_list(nl):
-    func = getattr(libpbc, "del_neighbor_list", None)
-    try:
-        func(ctypes.byref(nl))
-    except Exception as e:
-        raise RuntimeError(f"Failed to free neighbor list.\n{e}")
+    libpbc.del_neighbor_list(ctypes.byref(nl))
 
 def neighbor_list_to_ndarray(cell, cell1, nl):
     '''

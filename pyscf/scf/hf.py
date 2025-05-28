@@ -244,7 +244,7 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     r'''Electronic part of Hartree-Fock energy, for given core hamiltonian and
     HF potential
 
-    ... math::
+    .. math::
 
         E = \sum_{ij}h_{ij} \gamma_{ji}
           + \frac{1}{2}\sum_{ijkl} \gamma_{ji}\gamma_{lk} \langle ik||jl\rangle
