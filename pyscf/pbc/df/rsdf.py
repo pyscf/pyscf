@@ -561,6 +561,20 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
             ijlst_mapping[kpti_idx * nkpts + kptj_idx] = np.arange(len(kptij_lst))
             kk_idx = kpti_idx * nkpts + kptj_idx
 
+        # TODO: Store rs_density_fit cderi tensor in v1 format for the moment.
+        # It should be changed to 'v2' format in the future.
+        data_version = 'v1'
+        if h5py.is_hdf5(cderi_file):
+            feri = lib.H5FileWrap(cderi_file, 'a')
+            if 'kpts' in feri:
+                del feri['j3c-kptij']
+            if dataname in feri:
+                log.warn(f'Overwritting {dataname} in {cderi_file}.')
+                del feri[dataname]
+        else:
+            feri = lib.H5FileWrap(cderi_file, 'w')
+        feri['j3c-kptij'] = kptij_lst
+
         fswap = self.outcore_auxe2(cderi_file, intor, aosym, comp,
                                    kptij_lst, j_only, 'j3c-junk', shls_slice)
         cpu1 = log.timer_debug1('3c2e', *cpu1)
@@ -577,16 +591,6 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
         # Add (1) short-range G=0 (i.e., charge) part and (2) long-range part
         tspans = np.zeros((3,2))    # lr, j2c_inv, j2c_cntr
         tspannames = ["ftaop+pw", "j2c_inv", "j2c_cntr"]
-        feri = lib.H5FileWrap(cderi_file, 'w')
-
-        # TODO: Store rs_density_fit cderi tensor in v1 format for the moment.
-        # It should be changed to 'v2' format in the future.
-        data_version = 'v1'
-        if data_version == 'v1':
-            feri['j3c-kptij'] = kptij_lst
-        else:
-            feri['kpts'] = kpts
-            ijlst_mapping = None
         def make_cderi(kpt, kpt_ij_idx, j2c):
             log.debug1('make_cderi for %s', kpt)
             kptjs = kpts[kpt_ij_idx % nkpts]

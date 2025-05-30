@@ -294,8 +294,12 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
             log.warn('DF integrals for band k-points were not found %s. '
                      'DF integrals will be rebuilt to include band k-points.',
                      mydf._cderi)
-        mydf.build(kpts_band=kpts_band)
+        mydf.build(j_only=False, kpts_band=kpts_band)
         t0 = log.timer_debug1('Init get_k_kpts', *t0)
+    elif mydf._j_only:
+        log.warn('DF integrals for HF exchange were not initialized. '
+                 'df.j_only cannot be used with hybrid functional. DF integrals will be rebuilt.')
+        mydf.build(j_only=False, kpts_band=kpts_band)
 
     mo_coeff = getattr(dm_kpts, 'mo_coeff', None)
     if mo_coeff is not None:
