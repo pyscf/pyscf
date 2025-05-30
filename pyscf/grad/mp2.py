@@ -296,8 +296,11 @@ class Gradients(rhf_grad.GradientsBase):
 
     def kernel(self, t2=None, atmlst=None, verbose=None):
         log = logger.new_logger(self, verbose)
-        if t2 is None: t2 = self.base.t2
-        if t2 is None: t2 = self.base.kernel()[1]
+        if t2 is None:
+            if self.base.t2 is None:
+                t2 = self.base.kernel()[1]
+            else:
+                t2 = self.base.t2
         if atmlst is None:
             atmlst = self.atmlst
         else:

@@ -194,6 +194,11 @@ class Gradients(casci_grad.Gradients):
 
     def kernel(self, mo_coeff=None, ci=None, atmlst=None, verbose=None):
         log = logger.new_logger(self, verbose)
+        if ci is None:
+            if self.base.ci is None:
+                self.base.ci.run()
+            ci = self.base.ci
+
         if atmlst is None:
             atmlst = self.atmlst
         else:

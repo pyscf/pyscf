@@ -68,6 +68,12 @@ class KnownValues(unittest.TestCase):
         sol.kernel()
         self.assertTrue(sol.converged)
 
+    def test_optimize_with_hessian(self):
+        mol = gto.M(atom='O 0 0 0; H 0 .75 .58; H 0 -.75 .58', basis='def2-svp')
+        mf = mol.RHF()
+        conv, mol_eq = geometric_solver.kernel(mf, hessian=True)
+        self.assertTrue(conv)
+
 if __name__ == "__main__":
     print("Tests for geometric_solver")
     unittest.main()
