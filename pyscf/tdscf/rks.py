@@ -81,7 +81,8 @@ class CasidaTDDFT(TDDFT, TDA):
         ed_ia = e_ia * d_ia
         hdiag = e_ia.ravel() ** 2
 
-        vresp = mf.gen_response(singlet=singlet, hermi=1)
+        vresp = mf.gen_response(singlet=singlet, hermi=1,
+                                with_nlc=not self.exclude_nlc)
 
         def vind(zs):
             zs = numpy.asarray(zs).reshape(-1,nocc,nvir)

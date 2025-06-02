@@ -244,7 +244,7 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     r'''Electronic part of Hartree-Fock energy, for given core hamiltonian and
     HF potential
 
-    ... math::
+    .. math::
 
         E = \sum_{ij}h_{ij} \gamma_{ji}
           + \frac{1}{2}\sum_{ijkl} \gamma_{ji}\gamma_{lk} \langle ik||jl\rangle
@@ -2320,6 +2320,13 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         '''This helper function transfers attributes from one SCF object to
         another SCF object. It is invoked by to_ks and to_hf methods.
         '''
+        from pyscf.df.df_jk import _DFHF
+        if isinstance(self, _DFHF) and not hasattr(dst, 'with_df'):
+            # * Handle DF_SCF instances for to_xxx methods.
+            # * Only the molecular SCF methods need to be explicitly converted.
+            #   For PBC SCF methods, DF is enabled by default. calling density_fit()
+            #   may alter the DF class. Conversion should be avoided here.
+            dst = dst.density_fit(auxbasis=self.with_df.auxbasis)
         # Search for all tracked attributes, including those in base classes
         cls_keys = [getattr(cls, '_keys', ()) for cls in dst.__class__.__mro__[:-1]]
         dst_keys = set(dst.__dict__).union(*cls_keys)
