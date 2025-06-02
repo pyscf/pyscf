@@ -23,7 +23,6 @@ Based on KRHF routine.
 Refs: PRB, 1998, 57, 1505.
 """
 
-import copy
 import itertools as it
 import numpy as np
 import scipy.linalg as la
@@ -158,16 +157,21 @@ def set_U(ks, U_idx, U_val):
                 ks.U_idx.append(list(list(zip(*idxj))[0]))
                 ks.U_val.append(U_val[i])
         else:
-            ks.U_idx.append(copy.deepcopy(idx))
+            ks.U_idx.append(idx)
             ks.U_val.append(U_val[i])
+
     ks.U_val = np.asarray(ks.U_val) / HARTREE2EV
-    logger.info(ks, "-" * 79)
-    logger.debug(ks, 'U indices and values: ')
+
     for idx, val in zip(ks.U_idx, ks.U_val):
         ks.U_lab.append(lo_labels[idx])
-        logger.debug(ks, '%6s [%.6g eV] ==> %-100s', format_idx(idx),
-                     val * HARTREE2EV, "".join(lo_labels[idx]))
-    logger.info(ks, "-" * 79)
+
+    if ks.verbose >= logger.INFO:
+        logger.info(ks, "-" * 79)
+        logger.debug(ks, 'U indices and values: ')
+        for idx, val, lab in zip(ks.U_idx, ks.U_val, Ks.U_lab):
+            logger.debug(ks, '%6s [%.6g eV] ==> %-100s', format_idx(idx),
+                         val * HARTREE2EV, "".join(lab))
+        logger.info(ks, "-" * 79)
 
 def make_minao_lo(ks, minao_ref):
     """
@@ -182,7 +186,6 @@ def make_minao_lo(ks, minao_ref):
                                      return_labels=True)
     for k in range(nkpts):
         C_ao_minao[k] = lo.vec_lowdin(C_ao_minao[k], ovlp[k])
-    labels = np.asarray(labels)
 
     C_ao_lo = np.zeros((nkpts, nao, nao), dtype=np.complex128)
     for idx, lab in zip(ks.U_idx, ks.U_lab):
@@ -280,3 +283,40 @@ class KRKSpU(krks.KRKS):
 
     def nuc_grad_method(self):
         raise NotImplementedError
+
+def linear_response_u(U_idx):
+    h1 = np.eye(n) #at U_idx
+    fx = _response_functions
+    mo1, e1 = cphf.solve(fx, mo_energy, mo_occ, h1vo, s1vo,
+                         max_cycle=max_cycle, level_shift=level_shift, tol=tol)
+    return u
+
+
+if __name__ == '__main__':
+    import pyscf
+    from pyscf.pbc import dft as pdft
+    cell = pyscf.M(
+         atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917',
+         a = '''0.      1.7834  1.7834
+                1.7834  0.      1.7834
+                1.7834  1.7834  0.    ''',
+         basis = 'gth-dzvp',
+         pseudo = 'gth-pade',
+         mesh = [29]*3,
+    )
+    kmesh = [1, 1, 1]
+    kpts = cell.make_kpts(kmesh, wrap_around=True)
+    U_idx = ["1 C 2p"]
+    U_val = [5.0]
+    cell.verbose=4
+
+    mf = pdft.KRKSpU(cell,
+        xc='svwn', kpts=kpts, U_idx=U_idx, U_val=U_val, C_ao_lo='minao', minao_ref='gth-szv')
+    mf.conv_tol = 1e-10
+    e1 = mf.kernel()
+
+    U_idx = []
+    mf = pdft.KRKSpU(cell,
+        xc='svwn', kpts=kpts, U_idx=U_idx, U_val=U_val, C_ao_lo='minao', minao_ref='gth-szv')
+    mf.conv_tol = 1e-10
+    e2 = mf.kernel()
