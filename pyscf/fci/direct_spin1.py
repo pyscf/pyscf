@@ -410,6 +410,77 @@ def make_rdm123s(fcivec, norb, nelec, link_index=None, reorder=True):
     # rdm3aab.transpose(4,5,0,1,2,3)+rdm3abb+rdm3abb.transpose(2,3,0,1,4,5)+rdm3abb.transpose(2,3,4,5,0,1), rdm3)
     return (rdm1a, rdm1b), (rdm2aa, rdm2ab, rdm2bb), (rdm3aaa, rdm3aab, rdm3abb, rdm3bbb)
 
+def make_rdm1234(fcivec, norb, nelec, link_index=None, reorder=True):
+    '''Spin traced 1-, 2-, 3, 4-particle density matrices.'''
+    dm1, dm2, dm3, dm4 = rdm.make_dm1234('FCI4pdm_kern_sf', fcivec, fcivec, norb, nelec)
+    if reorder:
+        dm1, dm2, dm3, dm4 = rdm.reorder_dm1234(dm1, dm2, dm3, dm4, inplace=True)
+    return dm1, dm2, dm3, dm4
+
+def make_rdm1234s(fcivec, norb, nelec, link_index=None, reorder=True):
+    r'''Spin separated 1-, 2-, 3, 4-particle density matrices.
+
+    1pdm[p,q] = :math:`\langle q_\alpha^\dagger p_\alpha \rangle +
+                       \langle q_\beta^\dagger  p_\beta \rangle`;
+    2pdm[p,q,r,s] = :math:`\langle p_\alpha^\dagger r_\alpha^\dagger s_\alpha q_\alpha\rangle +
+                           \langle p_\beta^\dagger  r_\alpha^\dagger s_\alpha q_\beta\rangle +
+                           \langle p_\alpha^\dagger r_\beta^\dagger  s_\beta  q_\alpha\rangle +
+                           \langle p_\beta^\dagger  r_\beta^\dagger  s_\beta  q_\beta\rangle`.
+    '''
+    if (not reorder):
+        raise NotImplementedError('reorder=False not currently supported')
+    ci_spinless = civec_spinless_repr([fcivec,], norb, [nelec,])
+    rdm1, rdm2, rdm3, rdm4 = make_rdm1234(ci_spinless, norb*2, (nelec[0]+nelec[1],0))
+
+    # define slices
+    alpha = slice(0, norb)
+    beta = slice(norb, None)
+
+    rdm1a = rdm1[alpha, alpha]
+    rdm1b = rdm1[beta, beta]
+    # assert np.allclose(rdm1a+rdm1b, rdm1)
+
+    rdm2aa = rdm2[alpha, alpha, alpha, alpha]
+    rdm2ab = rdm2[alpha, alpha, beta, beta]
+    rdm2bb = rdm2[beta, beta, beta, beta]
+    # assert np.allclose(rdm2aa+rdm2bb+rdm2ab+rdm2ab.transpose(2,3,0,1), rdm2)
+
+    rdm3aaa = rdm3[alpha, alpha, alpha, alpha, alpha, alpha]
+    rdm3aab = rdm3[alpha, alpha, alpha, alpha, beta, beta]
+    rdm3abb = rdm3[alpha, alpha, beta, beta, beta, beta]
+    rdm3bbb = rdm3[beta, beta, beta, beta, beta, beta]
+    # assert np.allclose(rdm3aaa+rdm3bbb+rdm3aab+rdm3aab.transpose(0,1,4,5,2,3)+\
+    # rdm3aab.transpose(4,5,0,1,2,3)+rdm3abb+rdm3abb.transpose(2,3,0,1,4,5)+rdm3abb.transpose(2,3,4,5,0,1), rdm3)
+
+    rdm4aaaa = rdm4[alpha, alpha, alpha, alpha, alpha, alpha, alpha, alpha]
+    rdm4aaab = rdm4[alpha, alpha, alpha, alpha, alpha, alpha, beta, beta]
+    rdm4aabb = rdm4[alpha, alpha, alpha, alpha, beta, beta, beta, beta]
+    rdm4abbb = rdm4[alpha, alpha, beta, beta, beta, beta, beta, beta]
+    rdm4bbbb = rdm4[beta, beta, beta, beta, beta, beta, beta, beta]
+    # assert numpy.allclose(
+    #     rdm4aaaa
+    #     + rdm4bbbb
+    #     + rdm4aaab
+    #     + rdm4aaab.transpose(0, 1, 2, 3, 6, 7, 4, 5)
+    #     + rdm4aaab.transpose(0, 1, 6, 7, 2, 3, 4, 5)
+    #     + rdm4aaab.transpose(6, 7, 0, 1, 2, 3, 4, 5)
+    #     + rdm4aabb
+    #     + rdm4aabb.transpose(0, 1, 4, 5, 2, 3, 6, 7)
+    #     + rdm4aabb.transpose(0, 1, 4, 5, 6, 7, 2, 3)
+    #     + rdm4aabb.transpose(4, 5, 2, 3, 0, 1, 6, 7)
+    #     + rdm4aabb.transpose(4, 5, 2, 3, 6, 7, 0, 1)
+    #     + rdm4abbb
+    #     + rdm4abbb.transpose(2, 3, 0, 1, 4, 5, 6, 7)
+    #     + rdm4abbb.transpose(2, 3, 4, 5, 0, 1, 6, 7)
+    #     + rdm4abbb.transpose(2, 3, 4, 5, 6, 7, 0, 1),
+    #     rdm4,
+    # )
+    return (
+        (rdm1a, rdm1b),
+        (rdm2aa, rdm2ab, rdm2bb),
+        (rdm3aaa, rdm3aab, rdm3abb, rdm3bbb),
+        (rdm4aaaa, rdm4aaab, rdm4aabb, rdm4abbb, rdm4bbbb),
+    )
 
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
     r'''Spin separated transition 1-particle density matrices.
@@ -938,6 +1009,16 @@ class FCIBase(lib.StreamObject):
     def make_rdm123(self, fcivec, norb, nelec, link_index=None, reorder=True):
         nelec = _unpack_nelec(nelec, self.spin)
         return make_rdm123(fcivec, norb, nelec, link_index, reorder)
+
+    @lib.with_doc(make_rdm1234s.__doc__)
+    def make_rdm1234s(self, fcivec, norb, nelec, link_index=None, reorder=True):
+        nelec = _unpack_nelec(nelec, self.spin)
+        return make_rdm1234s(fcivec, norb, nelec, link_index, reorder)
+
+    @lib.with_doc(make_rdm1234.__doc__)
+    def make_rdm1234(self, fcivec, norb, nelec, link_index=None, reorder=True):
+        nelec = _unpack_nelec(nelec, self.spin)
+        return make_rdm1234(fcivec, norb, nelec, link_index, reorder)
 
     def make_rdm2(self, fcivec, norb, nelec, link_index=None, reorder=True):
         r'''Spin traced 2-particle density matrice
