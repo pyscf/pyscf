@@ -31,7 +31,7 @@ from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import rks as rks_grad
 from pyscf.solvent import ddcosmo
 from pyscf.solvent.grad import ddcosmo_grad
-from pyscf.solvent import _ddcosmo_tdscf_grad
+from pyscf.solvent.grad import ddcosmo_tdscf_grad
 from pyscf.symm import sph
 
 def tda_grad(td, z):
@@ -943,7 +943,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(vmat-vref).max(), 0, 14)
 
         dm1 = numpy.random.random((2,nao,nao))
-        de = _ddcosmo_tdscf_grad._grad_ne(pcm, dm1, r_vdw, ui, ylm_1sph, cached_pol, L)
+        de = ddcosmo_tdscf_grad._grad_ne(pcm, dm1, r_vdw, ui, ylm_1sph, cached_pol, L)
         ref = numpy.einsum('azij,nij->naz', dvmat, dm1)
         self.assertAlmostEqual(abs(de - ref).max(), 0, 12)
 
@@ -996,7 +996,7 @@ class KnownValues(unittest.TestCase):
         v = B1_dot_x(pcm, dm, r_vdw, ui, ylm_1sph, cached_pol, L)
         self.assertAlmostEqual(abs(v-ref[0]).max(), 0, 12)
 
-        de = _ddcosmo_tdscf_grad._grad_ee(pcm, dm1, dm2, r_vdw, ui, ylm_1sph, cached_pol, L)
+        de = ddcosmo_tdscf_grad._grad_ee(pcm, dm1, dm2, r_vdw, ui, ylm_1sph, cached_pol, L)
         ref = numpy.einsum('nazij,nij->naz', ref, dm2)
         self.assertAlmostEqual(abs(de - ref).max(), 0, 12)
 
@@ -1009,9 +1009,9 @@ class KnownValues(unittest.TestCase):
             f_epsilon = (dielectric-1.)/dielectric
         else:
             f_epsilon = 1
-        de = _ddcosmo_tdscf_grad._grad_nn(pcm, r_vdw, ui, ylm_1sph, cached_pol, L)
-        de+= _ddcosmo_tdscf_grad._grad_ne(pcm, dm, r_vdw, ui, ylm_1sph, cached_pol, L)
-        de+= .5*_ddcosmo_tdscf_grad._grad_ee(pcm, dm, dm, r_vdw, ui, ylm_1sph, cached_pol, L)
+        de = ddcosmo_tdscf_grad._grad_nn(pcm, r_vdw, ui, ylm_1sph, cached_pol, L)
+        de+= ddcosmo_tdscf_grad._grad_ne(pcm, dm, r_vdw, ui, ylm_1sph, cached_pol, L)
+        de+= .5*ddcosmo_tdscf_grad._grad_ee(pcm, dm, dm, r_vdw, ui, ylm_1sph, cached_pol, L)
         de *= .5 * f_epsilon
         self.assertAlmostEqual(abs(de-ref).max(), 0, 12)
 

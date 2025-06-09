@@ -242,22 +242,24 @@ class KnownValues(unittest.TestCase):
 
     def test_scanner(self):
         mol = gto.M(atom='H 0 0 0; F .1 0 2.1', verbose=0, unit='B')
-        ref = solvent.ddCOSMO(tdscf.TDA(solvent.ddCOSMO(
-            mol.RHF()).run())).run().Gradients().kernel()
+        td_ref = solvent.ddCOSMO(tdscf.TDA(solvent.ddCOSMO(mol.RHF()).run())).run()
+        ref = td_ref.Gradients().kernel()
         td = mol0.RHF().ddCOSMO().run().TDA().Gradients()
         scan = td.as_scanner()
         e, de = scan('H 0 0 0; F .1 0 2.1')
-        self.assertAlmostEqual(e, -98.5508954953191, 8)
+        self.assertAlmostEqual(e, -98.20621584470253, 8)
+        self.assertAlmostEqual(e, td_ref._scf.e_tot + td_ref.e[0], 7)
         self.assertAlmostEqual(de[0,0], 0.011053185, 5)
         self.assertAlmostEqual(abs(ref - de).max(), 0, 5)
 
         mol = gto.M(atom='H 0 0 0; F .1 0 2.1', verbose=0, unit='B')
-        ref = solvent.ddPCM(tdscf.TDA(solvent.ddPCM(
-            mol.RHF()).run())).run().Gradients().kernel()
+        td_ref = solvent.ddPCM(tdscf.TDA(solvent.ddPCM(mol.RHF()).run())).run()
+        ref = td_ref.Gradients().kernel()
         td = mol0.RHF().ddPCM().run().TDA().Gradients()
         scan = td.as_scanner()
         e, de = scan('H 0 0 0; F .1 0 2.1')
         self.assertAlmostEqual(e, -98.20641861937548, 8)
+        self.assertAlmostEqual(e, td_ref._scf.e_tot + td_ref.e[0], 7)
         self.assertAlmostEqual(de[0,0], 0.0110476148, 5)
         self.assertAlmostEqual(abs(ref - de).max(), 0, 5)
 
