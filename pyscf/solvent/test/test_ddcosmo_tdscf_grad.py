@@ -19,6 +19,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import dft
 from pyscf import solvent
+from pyscf import tdscf
 
 def setUpModule():
     global mol0, mol1, mol2
@@ -239,6 +240,26 @@ class KnownValues(unittest.TestCase):
         td2 = mf.TDA().ddCOSMO().run()
         self.assertAlmostEqual((td2.e_tot[0]-td1.e_tot[0])/0.002, g1[0,2], 3)
 
+    def test_scanner(self):
+        mol = gto.M(atom='H 0 0 0; F .1 0 2.1', verbose=0, unit='B')
+        ref = solvent.ddCOSMO(tdscf.TDA(solvent.ddCOSMO(
+            mol.RHF()).run())).run().Gradients().kernel()
+        td = mol0.RHF().ddCOSMO().run().TDA().Gradients()
+        scan = td.as_scanner()
+        e, de = scan('H 0 0 0; F .1 0 2.1')
+        self.assertAlmostEqual(e, -98.5508954953191, 8)
+        self.assertAlmostEqual(de[0,0], 0.011053185, 5)
+        self.assertAlmostEqual(abs(ref - de).max(), 0, 5)
+
+        mol = gto.M(atom='H 0 0 0; F .1 0 2.1', verbose=0, unit='B')
+        ref = solvent.ddPCM(tdscf.TDA(solvent.ddPCM(
+            mol.RHF()).run())).run().Gradients().kernel()
+        td = mol0.RHF().ddPCM().run().TDA().Gradients()
+        scan = td.as_scanner()
+        e, de = scan('H 0 0 0; F .1 0 2.1')
+        self.assertAlmostEqual(e, -98.20641861937548, 8)
+        self.assertAlmostEqual(de[0,0], 0.0110476148, 5)
+        self.assertAlmostEqual(abs(ref - de).max(), 0, 5)
 
 if __name__ == "__main__":
     print("Full Tests for ddcosmo TDDFT gradients")

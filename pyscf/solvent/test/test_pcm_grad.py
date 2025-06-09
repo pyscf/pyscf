@@ -236,6 +236,19 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual((e2-e1)/dx, de[0,2], 3)
 
+    @unittest.skip('PCM-TDDFT gradients not available')
+    def test_scanner(self):
+        mol = gto.M(atom='H 0 0 0; F .1 0 2.1', verbose=0, unit='B')
+        ref = solvent.PCM(tdscf.TDA(solvent.PCM(
+            mol.RHF()).run())).run().Gradients().kernel()
+        mol0 = gto.M(atom='H  0.  0.  1.804; F  0.  0.  0.', verbose=0, unit='B')
+        td = mol0.RHF().PCM().run().TDA().Gradients()
+        scan = td.as_scanner()
+        e, de = scan('H 0 0 0; F .1 0 2.1')
+        self.assertAlmostEqual(e, -98.20641861937548, 8)
+        self.assertAlmostEqual(de[0,0], 0.0110476148, 5)
+        self.assertAlmostEqual(abs(ref - de).max(), 0, 5)
+
 if __name__ == "__main__":
     print("Full Tests for Gradient of PCMs")
     unittest.main()

@@ -25,10 +25,8 @@ import scipy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto, df
-from pyscf.solvent.pcm import PI, switch_h
+from pyscf.solvent.pcm import PI, switch_h, PCM
 from pyscf.grad import rhf as rhf_grad
-
-libdft = lib.load_library('libdft')
 
 def grad_switch_h(x):
     ''' first derivative of h(x)'''
@@ -381,8 +379,15 @@ def grad_solver(pcmobj, dm):
     t1 = log.timer_debug1('grad solver', *t1)
     return de
 
+# TODO: Define attribute grad_method.base to point to the class of the 0th
+# order calculation for all gradients class. Then this function can be
+# extended and used as the general interface to initialize solvent gradients.
 def make_grad_object(grad_method):
     '''For grad_method in vacuum, add nuclear gradients of solvent pcmobj'''
+    from pyscf.solvent._attach_solvent import _Solvation
+
+    # Zeroth order method object must be a solvation-enabled method
+    assert isinstance(grad_method.base, _Solvation)
     if grad_method.base.with_solvent.frozen:
         raise RuntimeError('Frozen solvent model is not avialbe for energy gradients')
 
@@ -408,21 +413,21 @@ class WithSolventGrad:
         return obj
 
     def to_gpu(self):
-        from gpu4pyscf.solvent.grad import pcm    # type: ignore
-        grad_method = self.undo_solvent().to_gpu()
-        return pcm.make_grad_object(grad_method)
+        from gpu4pyscf.solvent.hessian import pcm    # type: ignore
+        from pyscf.tdscf.rhf import TDBase
+        if isinstance(self, TDBase):
+            raise NotImplementedError('.to_gpu() for PCM-TDDFT')
+        # ground state methods
+        return self.undo_solvent().to_gpu().Gradients()
 
     def kernel(self, *args, dm=None, atmlst=None, **kwargs):
-        dm = kwargs.pop('dm', None)
         if dm is None:
             dm = self.base.make_rdm1(ao_repr=True)
         if dm.ndim == 3:
             dm = dm[0] + dm[1]
 
+        self.de_solvent = self.base.with_solvent.grad(dm)
         self.de_solute = super().kernel(*args, **kwargs)
-        self.de_solvent = grad_qv(self.base.with_solvent, dm)
-        self.de_solvent+= grad_nuc(self.base.with_solvent, dm)
-        self.de_solvent+= grad_solver(self.base.with_solvent, dm)
         self.de = self.de_solute + self.de_solvent
 
         if self.verbose >= logger.NOTE:

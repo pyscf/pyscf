@@ -132,14 +132,14 @@ class SCFWithSolvent(_Solvation):
         return e_tot, e_coul
 
     def nuc_grad_method(self):
-        grad_method = super().nuc_grad_method()
-        return self.with_solvent.nuc_grad_method(grad_method)
+        from pyscf.solvent.grad.pcm import make_grad_object
+        return make_grad_object(super().nuc_grad_method())
 
     Gradients = nuc_grad_method
 
     def Hessian(self):
-        hess_method = super().Hessian()
-        return self.with_solvent.Hessian(hess_method)
+        from pyscf.solvent.hessian.pcm import make_hess_object
+        return make_hess_object(super().Hessian())
 
     def gen_response(self, *args, **kwargs):
         vind = super().gen_response(*args, **kwargs)
@@ -184,6 +184,49 @@ class SCFWithSolvent(_Solvation):
         solvent_obj = self.with_solvent.to_gpu()
         obj = _attach_solvent._for_scf(self.undo_solvent().to_gpu(), solvent_obj)
         return obj
+
+    def TDA(self):
+        solvent_model = _dispatch_solvent_model(self.with_solvent)
+        return solvent_model(super().TDA())
+
+    def TDHF(self):
+        solvent_model = _dispatch_solvent_model(self.with_solvent)
+        return solvent_model(super().TDHF())
+
+    def TDDFT(self):
+        solvent_model = _dispatch_solvent_model(self.with_solvent)
+        return solvent_model(super().TDDFT())
+
+    def MP2(self):
+        solvent_model = _dispatch_solvent_model(self.with_solvent)
+        # Note the super().MP2 might actually point to the DFMP2
+        return solvent_model(super().MP2())
+
+    def CISD(self):
+        solvent_model = _dispatch_solvent_model(self.with_solvent)
+        return solvent_model(super().CISD())
+
+    def CCSD(self):
+        solvent_model = _dispatch_solvent_model(self.with_solvent)
+        # Note the super().CCSD might actually point to the DFCCSD
+        return solvent_model(super().CCSD())
+
+    def CASCI(self, ncas, nelecas, **kwargs):
+        solvent_model = _dispatch_solvent_model(self.with_solvent)
+        return solvent_model(super().CASCI(ncas, nelecas, **kwargs))
+
+    def CASSCF(self, ncas, nelecas, **kwargs):
+        solvent_model = _dispatch_solvent_model(self.with_solvent)
+        return solvent_model(super().CASSCF(ncas, nelecas, **kwargs))
+
+def _dispatch_solvent_model(solvent_obj):
+    from pyscf import solvent
+    solvent_name = solvent_obj.__class__.__name__
+    if solvent_name in ('PCM', 'ddCOSMO', 'ddPCM', 'SMD'):
+        return getattr(solvent, solvent_name)
+    if solvent_name == 'PolEmbed':
+        return solvent.PE
+    raise RuntimeError(f'Unknown solvent model {solvent}')
 
 def _for_casscf(mc, solvent_obj, dm=None):
     '''Add solvent model to CASSCF method.
@@ -317,8 +360,8 @@ Approximate gradients are evaluated here. A small error may be expected in the
 gradients which corresponds to the contribution of
 MCSCF_DM * V_solvent[d/dX MCSCF_DM] + V_solvent[MCSCF_DM] * d/dX MCSCF_DM
 ''')
-        grad_method = super().nuc_grad_method()
-        return self.with_solvent.nuc_grad_method(grad_method)
+        from pyscf.solvent.grad.pcm import make_grad_object
+        return make_grad_object(super().nuc_grad_method())
 
     Gradients = nuc_grad_method
 
@@ -459,8 +502,8 @@ Approximate gradients are evaluated here. A small error may be expected in the
 gradients which corresponds to the contribution of
 MCSCF_DM * V_solvent[d/dX MCSCF_DM] + V_solvent[MCSCF_DM] * d/dX MCSCF_DM
 ''')
-        grad_method = super().nuc_grad_method()
-        return self.with_solvent.nuc_grad_method(grad_method)
+        from pyscf.solvent.grad.pcm import make_grad_object
+        return make_grad_object(super().nuc_grad_method())
 
     Gradients = nuc_grad_method
 
@@ -595,8 +638,8 @@ Approximate gradients are evaluated here. A small error may be expected in the
 gradients which corresponds to the contribution of
 DM * V_solvent[d/dX DM] + V_solvent[DM] * d/dX DM
 ''')
-        grad_method = super().nuc_grad_method()
-        return self.with_solvent.nuc_grad_method(grad_method)
+        from pyscf.solvent.grad.pcm import make_grad_object
+        return make_grad_object(super().nuc_grad_method())
 
     Gradients = nuc_grad_method
 
@@ -681,8 +724,13 @@ class TDSCFWithSolvent(_Solvation):
             raise NotImplementedError
 
     def nuc_grad_method(self):
-        grad_method = super().nuc_grad_method()
-        return self.with_solvent.nuc_grad_method(grad_method)
+        from pyscf.solvent.pcm import PCM
+        from pyscf.solvent.grad.ddcosmo_tdscf_grad import make_grad_object
+        if isinstance(self.with_solvent, PCM):
+            raise NotImplementedError('PCM-TDDFT Gradients')
+        return make_grad_object(super().nuc_grad_method())
+
+    Gradients = nuc_grad_method
 
     def to_gpu(self):
         obj = self.undo_solvent().to_gpu()

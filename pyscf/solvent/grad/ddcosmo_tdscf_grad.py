@@ -88,7 +88,7 @@ class WithSolventGrad:
         if dm is None:
             dm = self.base._scf.make_rdm1(ao_repr=True)
 
-        self.de_solvent = ddcosmo_grad.kernel(self.base.with_solvent, dm)
+        self.de_solvent = self.base.with_solvent.grad(dm)
         self.de_solute = super().kernel(*args, **kwargs)
         self.de = self.de_solute + self.de_solvent
 
@@ -1260,45 +1260,3 @@ def _grad_ee(pcmobj, dm1, dm2, r_vdw, ui, ylm_1sph, cached_pol, L):
     if is_single_dm:
         de = de[0]
     return de
-
-
-if __name__ == '__main__':
-    mol0 = gto.M(atom='H  0.  0.  1.804; F  0.  0.  0.', verbose=0, unit='B')
-    mol1 = gto.M(atom='H  0.  0.  1.803; F  0.  0.  0.', verbose=0, unit='B')
-    mol2 = gto.M(atom='H  0.  0.  1.805; F  0.  0.  0.', verbose=0, unit='B')
-
-    # TDA with equilibrium_solvation
-    mf = mol0.RHF().ddCOSMO().run()
-    td = mf.TDA().ddCOSMO().run(equilibrium_solvation=True)
-    g1 = td.nuc_grad_method().kernel() # 0  0  -0.5116214042
-
-    mf = mol1.RHF().ddCOSMO().run()
-    td1 = mf.TDA().ddCOSMO().run(equilibrium_solvation=True)
-    mf = mol2.RHF().ddCOSMO().run()
-    td2 = mf.TDA().ddCOSMO().run(equilibrium_solvation=True)
-    print((td2.e_tot[0]-td1.e_tot[0])/0.002, g1[0,2])
-    print((td2.e_tot[0]-td1.e_tot[0])/0.002 - g1[0,2])
-
-    # TDA without equilibrium_solvation
-    mf = mol0.RHF().ddCOSMO().run()
-    td = mf.TDA().ddCOSMO().run()
-    g1 = td.nuc_grad_method().kernel()
-
-    mf = mol1.RHF().ddCOSMO().run()
-    td1 = mf.TDA().ddCOSMO().run()
-    mf = mol2.RHF().ddCOSMO().run()
-    td2 = mf.TDA().ddCOSMO().run()
-    print((td2.e_tot[0]-td1.e_tot[0])/0.002, g1[0,2])
-    print((td2.e_tot[0]-td1.e_tot[0])/0.002 - g1[0,2])
-
-    # TDA lda with equilibrium_solvation
-    mf = mol0.RKS().ddCOSMO().run(xc='svwn')
-    td = mf.TDA().ddCOSMO().run(equilibrium_solvation=True)
-    g1 = td.nuc_grad_method().kernel()
-
-    mf = mol1.RKS().ddCOSMO().run(xc='svwn')
-    td1 = mf.TDA().ddCOSMO().run(equilibrium_solvation=True)
-    mf = mol2.RKS().ddCOSMO().run(xc='svwn')
-    td2 = mf.TDA().ddCOSMO().run(equilibrium_solvation=True)
-    print((td2.e_tot[0]-td1.e_tot[0])/0.002, g1[0,2])
-    print((td2.e_tot[0]-td1.e_tot[0])/0.002 - g1[0,2])

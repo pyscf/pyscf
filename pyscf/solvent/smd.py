@@ -410,24 +410,38 @@ class SMD(pcm.PCM):
         return get_cds_legacy(self)[0]
 
     def nuc_grad_method(self, grad_method):
-        from pyscf.solvent.grad import smd as smd_grad
-        if self.frozen:
-            raise RuntimeError('Frozen solvent model is not supported')
-        from pyscf import scf
-        if isinstance(grad_method.base, (scf.hf.RHF, scf.uhf.UHF)):
-            return smd_grad.make_grad_object(grad_method)
-        else:
-            raise RuntimeError('Only SCF gradient is supported')
+        raise DeprecationWarning('Use the make_grad_object function from '
+                                 'pyscf.solvent.grad.smd instead.')
+
+    def grad(self, dm, verbose=None):
+        '''Computes the Jacobian for the energy associated with the solvent,
+        including the derivatives of the solvent itsself and the interactions
+        between the solvent and the charge density of the solute.
+        '''
+        from pyscf.solvent.grad.pcm import grad_qv, grad_nuc
+        from pyscf.solvent.grad.smd import grad_solver, get_cds
+        de_solvent = grad_qv(self.base.with_solvent, dm)
+        de_solvent+= grad_solver(self.base.with_solvent, dm)
+        de_solvent+= grad_nuc(self.base.with_solvent, dm)
+        #de_cds     = get_cds(self.base.with_solvent)
+        de_cds     = get_cds_legacy(self.base.with_solvent)[1]
+        logger.info('Cavitation, Dispersion and Solvent structure contribution %g', de_cds)
+        return de_solvent + de_cds
 
     def Hessian(self, hess_method):
-        from pyscf.solvent.hessian import smd as smd_hess
-        if self.frozen:
-            raise RuntimeError('Frozen solvent model is not supported')
-        from pyscf import scf
-        if isinstance(hess_method.base, (scf.hf.RHF, scf.uhf.UHF)):
-            return smd_hess.make_hess_object(hess_method)
-        else:
-            raise RuntimeError('Only SCF gradient is supported')
+        raise DeprecationWarning('Use the make_hess_object function from '
+                                 'pyscf.solvent.hessian.smd instead.')
+
+    def hess(self, dm):
+        from pyscf.solvent.hessian.pcm import (
+            analytical_hess_nuc, analytical_hess_qv, analytical_hess_solver)
+        from pyscf.solvent.hessian.smd import get_cds
+        de_solvent  =    analytical_hess_nuc(self, dm, verbose=self.verbose)
+        de_solvent +=     analytical_hess_qv(self, dm, verbose=self.verbose)
+        de_solvent += analytical_hess_solver(self, dm, verbose=self.verbose)
+        de_cds = get_cds(self.base.with_solvent)
+        logger.info('Cavitation, Dispersion and Solvent structure contribution %g', de_cds)
+        return de_solvent + de_cds
 
     def reset(self, mol=None):
         super().reset(mol)
