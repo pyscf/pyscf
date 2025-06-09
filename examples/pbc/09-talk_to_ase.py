@@ -15,7 +15,7 @@ import ase
 import ase.lattice
 from ase.lattice.cubic import Diamond
 from ase.units import kJ
-from ase.utils.eos import EquationOfState
+from ase.eos import EquationOfState
 
 
 ase_atom=Diamond(symbol='C', latticeconstant=3.5668)
