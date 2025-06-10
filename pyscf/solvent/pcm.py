@@ -79,7 +79,7 @@ def pcm_for_tdscf(method, solvent_obj=None, dm=None):
         logger.info(method, 'Setting PCM.eps to 1.78 for TDDFT')
         solvent_obj.eps = 1.78
     else:
-        assert isinstance(scf_solvent, PCM)
+        assert isinstance(solvent_obj, PCM)
     return _attach_solvent._for_tdscf(method, solvent_obj, dm)
 
 
