@@ -142,29 +142,30 @@ class SCFWithSolvent(_Solvation):
         return make_hess_object(super().Hessian())
 
     def gen_response(self, *args, **kwargs):
+        # The response function consists of two parts: the gas-phase and the
+        # solvent response. The "vind=super().gen_response" computes the
+        # gas-phase response. equilibrium_solvation controls whether to add the
+        # solvents response.
+        # equilibrium_solvation=True corresponds to a slow process where the
+        # solvents are fully relaxed wrt the first order electron density.
+        # Vertical excitations in TDDFT are typically a fast process where the
+        # solvent does not relax against the first order density, (corresponding
+        # to equilibrium_solvation=False). However, some programs (such as
+        # QChem) use a customized solvent model that allows the solvent being
+        # partially relaxed to the first order electron density. TDDFT are
+        # separately handled in the TDSCFWithSolvent class. This function
+        # handles all other response calculations (such as stability analysis,
+        # SOSCF, polarizability and Hessian).
         vind = super().gen_response(*args, **kwargs)
         is_uhf = isinstance(self, scf.uhf.UHF)
-        # * singlet=None is orbital hessian or CPHF type response function.
-        # Except TDDFT, this is the default case for all response calculations
-        # (such as stability analysis, SOSCF, polarizability and Hessian).
-        # * In TDDFT, this setting only affect RHF wfn. The UHF wfn does not
-        # depend on the setting of "singlet".
-        # * For RHF reference, the triplet excitation does not change the total
-        # electron density, thus does not lead to solvent response.
-        singlet = kwargs.get('singlet', True)
-        singlet = singlet or singlet is None
         def vind_with_solvent(dm1):
             v = vind(dm1)
             if self.with_solvent.equilibrium_solvation:
                 if is_uhf:
                     v_solvent = self.with_solvent._B_dot_x(dm1)
                     v += v_solvent[0] + v_solvent[1]
-                elif singlet:
-                    v += self.with_solvent._B_dot_x(dm1)
                 else:
-                    # The response of electron density should be strictly zero
-                    # for TDDFT triplet
-                    pass
+                    v += self.with_solvent._B_dot_x(dm1)
             return v
         return vind_with_solvent
 
@@ -670,21 +671,20 @@ def _for_tdscf(method, solvent_obj, dm=None):
         scf_with_solvent = _for_scf(method._scf, solvent_obj, dm).run()
 
     if dm is not None:
-        solvent_obj = scf_with_solvent.with_solvent
         solvent_obj.e, solvent_obj.v = solvent_obj.kernel(dm)
         solvent_obj.frozen = True
 
-    sol_td = TDSCFWithSolvent(method, scf_with_solvent)
+    sol_td = TDSCFWithSolvent(method, scf_with_solvent, solvent_obj)
     name = solvent_obj.__class__.__name__ + method.__class__.__name__
     return lib.set_class(sol_td, (TDSCFWithSolvent, method.__class__), name)
 
 class TDSCFWithSolvent(_Solvation):
     _keys = {'with_solvent'}
 
-    def __init__(self, method, scf_with_solvent=None):
+    def __init__(self, method, scf_with_solvent, solvent_obj):
         self.__dict__.update(method.__dict__)
         self._scf = scf_with_solvent
-        self.with_solvent = self._scf.with_solvent
+        self.with_solvent = solvent_obj
 
     def undo_solvent(self):
         cls = self.__class__
@@ -702,11 +702,12 @@ class TDSCFWithSolvent(_Solvation):
     @equilibrium_solvation.setter
     def equilibrium_solvation(self, val):
         if val and self.with_solvent.frozen:
-            logger.warn(self, 'Solvent model was set to be frozen in the '
-                        'ground state SCF calculation. It may conflict to '
-                        'the assumption of equilibrium solvation.\n'
-                        'You may set _scf.with_solvent.frozen = False and '
-                        'rerun the ground state calculation _scf.run().')
+            raise RuntimeError(
+                '"frozen" Solvent model was set in the '
+                'ground state SCF calculation. It conflicts to '
+                'the assumption of equilibrium solvation.\n'
+                'You can set _scf.with_solvent.frozen = False and '
+                'rerun the ground state calculation _scf.run().')
         self.with_solvent.equilibrium_solvation = val
 
     def dump_flags(self, verbose=None):
@@ -719,11 +720,48 @@ class TDSCFWithSolvent(_Solvation):
         self.with_solvent.reset(mol)
         return super().reset(mol)
 
+    def gen_response(self, *args, **kwargs):
+        from pyscf.solvent.pcm import PCM
+        # The response function consists of two parts: the gas-phase and the
+        # solvent response. The "vind=super().gen_response" computes the
+        # gas-phase response. Except for PCM, equilibrium_solvation controls
+        # whether to add the solvents response.
+        # * equilibrium_solvation=True corresponds to a slow process where the
+        # solvents are fully relaxed wrt the first order electron density.
+        # Vertical excitations in TDDFT are typically a fast process where the
+        # solvent does not relax against the first order density, (corresponding
+        # to equilibrium_solvation=False).
+        # * For PCM, a custom eps with smaller value is used to effectively
+        # reduce the solvent response. When eps=1, the solvent does not respond
+        # to the first-order electron density, thus identitical to the setting
+        # of equilibrium_solvation=False
+        vind = super().gen_response(*args, **kwargs)
+        if isinstance(self.with_solvent, PCM):
+            # Note: PCM solvent assumes slow solvent with "screened" eps
+            slow_solvent = True and self.with_solvent.eps != 1
+        else:
+            slow_solvent = self.with_solvent.equilibrium_solvation
+        is_uhf = isinstance(self, scf.uhf.UHF)
+        singlet = kwargs.get('singlet', True)
+        def vind_with_solvent(dm1):
+            v = vind(dm1)
+            if slow_solvent:
+                if is_uhf:
+                    v_solvent = self.with_solvent._B_dot_x(dm1)
+                    v += v_solvent[0] + v_solvent[1]
+                elif singlet:
+                    v += self.with_solvent._B_dot_x(dm1)
+                else:
+                    # The triplet excitation does not change the total electron
+                    # density, thus does not lead to solvent response.
+                    pass
+            return v
+        return vind_with_solvent
+
     def get_ab(self, mf=None):
-        #if mf is None: mf = self._scf
-        #a, b = get_ab(mf)
         if self.equilibrium_solvation:
             raise NotImplementedError
+        return super().get_ab(mf)
 
     def nuc_grad_method(self):
         from pyscf.solvent.pcm import PCM

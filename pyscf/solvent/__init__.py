@@ -83,7 +83,7 @@ def ddPCM(method_or_mol, solvent_obj=None, dm=None):
     raise RuntimeError(f'ddPCM for {method} not available')
 DDPCM = ddPCM
 
-def PE(method_or_mol, solvent_obj, dm=None):
+def PE(method_or_mol, solvent_obj=None, dm=None):
     '''Initialize polarizable embedding model.
 
     Args:
@@ -111,8 +111,12 @@ def PE(method_or_mol, solvent_obj, dm=None):
 
     method = method_or_mol
     if isinstance(method, scf.hf.SCF):
+        assert solvent_obj is not None
         return pol_embed.pe_for_scf(method, solvent_obj, dm)
-    elif isinstance(method, mcscf.casci.CASBase):
+
+    if solvent_obj is None:
+        solvent_obj = method._scf.with_solvent
+    if isinstance(method, mcscf.casci.CASBase):
         if isinstance(method, mcscf.mc1step.CASSCF):
             return pol_embed.pe_for_casscf(method, solvent_obj, dm)
         elif isinstance(method, mcscf.casci.CASCI):

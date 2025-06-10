@@ -51,7 +51,14 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None, with_nlc=True
         with_nlc : boolean
             Whether to skip the NLC contribution
     '''
+    td = TDA(mf)
+    td.exclude_nlc = not with_nlc
+    return _gen_tda_operation(td, fock_ao, singlet, wfnsym)
+gen_tda_hop = gen_tda_operation
+
+def _gen_tda_operation(td, fock_ao=None, singlet=True, wfnsym=None):
     assert fock_ao is None
+    mf = td._scf
     mol = mf.mol
     mo_coeff = mf.mo_coeff
     # assert (mo_coeff.dtype == numpy.double)
@@ -78,7 +85,7 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None, with_nlc=True
     hdiag = hdiag.ravel()
 
     mo_coeff = numpy.asarray(numpy.hstack((orbo,orbv)), order='F')
-    vresp = mf.gen_response(singlet=singlet, hermi=0, with_nlc=with_nlc)
+    vresp = td.gen_response(singlet=singlet, hermi=0)
 
     def vind(zs):
         zs = numpy.asarray(zs).reshape(-1,nocc,nvir)
@@ -96,7 +103,6 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None, with_nlc=True
         return v1mo.reshape(v1mo.shape[0],-1)
 
     return vind, hdiag
-gen_tda_hop = gen_tda_operation
 
 def _get_x_sym_table(mf):
     '''Irrep (up to D2h symmetry) of each coefficient in X[nocc,nvir]'''
@@ -736,6 +742,16 @@ class TDBase(lib.StreamObject):
     def gen_vind(self, mf=None):
         raise NotImplementedError
 
+    def gen_response(self, singlet=True, hermi=0, **kwargs):
+        '''Generate linear response function to compute A*x'''
+        mf = self._scf
+        if (self.exclude_nlc and
+            isinstance(mf, scf.hf.KohnShamDFT) and mf.do_nlc()):
+            logger.warn(self, 'NLC functional found in the DFT object. Its contribution is '
+                        'excluded from the TDDFT response function.')
+        return mf.gen_response(singlet=singlet, hermi=hermi,
+                               with_nlc=not self.exclude_nlc, **kwargs)
+
     @lib.with_doc(get_ab.__doc__)
     def get_ab(self, mf=None):
         if mf is None: mf = self._scf
@@ -805,10 +821,9 @@ class TDA(TDBase):
 
     def gen_vind(self, mf=None):
         '''Generate function to compute Ax'''
-        if mf is None:
-            mf = self._scf
-        return gen_tda_hop(mf, singlet=self.singlet, wfnsym=self.wfnsym,
-                           with_nlc=not self.exclude_nlc)
+        assert mf is None or mf is self._scf
+        # TODO: remove the _gen_tda_operation, merge it to this gen_vind
+        return _gen_tda_operation(self, singlet=self.singlet, wfnsym=self.wfnsym)
 
     def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         '''
@@ -921,6 +936,12 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None,
     [ A   B ][X]
     [-B* -A*][Y]
     '''
+    td = TDHF(mf)
+    td.exclude_nlc = not with_nlc
+    return _gen_tdhf_operation(td, fock_ao, singlet, wfnsym)
+
+def _gen_tdhf_operation(td, fock_ao=None, singlet=True, wfnsym=None):
+    mf = td._scf
     mol = mf.mol
     mo_coeff = mf.mo_coeff
     # assert (mo_coeff.dtype == numpy.double)
@@ -948,8 +969,7 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None,
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
-    vresp = mf.gen_response(singlet=singlet, hermi=0, max_memory=max_memory,
-                            with_nlc=with_nlc)
+    vresp = td.gen_response(singlet=singlet, hermi=0, max_memory=max_memory)
 
     def vind(xys):
         xys = numpy.asarray(xys).reshape(-1,2,nocc,nvir)
@@ -1013,10 +1033,9 @@ class TDHF(TDBase):
 
     @lib.with_doc(gen_tdhf_operation.__doc__)
     def gen_vind(self, mf=None):
-        if mf is None:
-            mf = self._scf
-        return gen_tdhf_operation(mf, None, self.singlet, self.wfnsym,
-                                  with_nlc=not self.exclude_nlc)
+        assert mf is None or mf is self._scf
+        # TODO: remove the _gen_tdhf_operation, merge it to this gen_vind
+        return _gen_tdhf_operation(self, None, self.singlet, self.wfnsym)
 
     def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         if return_symmetry:

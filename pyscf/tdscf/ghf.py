@@ -45,7 +45,14 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None, with_nlc=True):
         wfnsym : int or str
             Point group symmetry irrep symbol or ID for excited CIS wavefunction.
     '''
+    td = TDA(mf)
+    td.exclude_nlc = not with_nlc
+    return _gen_tda_operation(td, fock_ao, wfnsym)
+gen_tda_hop = gen_tda_operation
+
+def _gen_tda_operation(td, fock_ao=None, wfnsym=None):
     assert fock_ao is None
+    mf = td._scf
     mol = mf.mol
     mo_coeff = mf.mo_coeff
     mo_energy = mf.mo_energy
@@ -70,7 +77,7 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None, with_nlc=True):
     hdiag = hdiag.ravel().real
 
     mo_coeff = numpy.asarray(numpy.hstack((orbo,orbv)), order='F')
-    vresp = mf.gen_response(hermi=0, with_nlc=with_nlc)
+    vresp = td.gen_response(hermi=0)
 
     def vind(zs):
         zs = numpy.asarray(zs).reshape(-1,nocc,nvir)
@@ -87,7 +94,6 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None, with_nlc=True):
         return v1mo.reshape(v1mo.shape[0],-1)
 
     return vind, hdiag
-gen_tda_hop = gen_tda_operation
 
 def _get_x_sym_table(mf):
     '''Irrep (up to D2h symmetry) of each coefficient in X[nocc,nvir]'''
@@ -370,10 +376,8 @@ class TDA(TDBase):
 
     def gen_vind(self, mf=None):
         '''Generate function to compute Ax'''
-        if mf is None:
-            mf = self._scf
-        return gen_tda_hop(mf, wfnsym=self.wfnsym,
-                           with_nlc=not self.exclude_nlc)
+        assert mf is None or mf is self._scf
+        return _gen_tda_operation(self, wfnsym=self.wfnsym)
 
     def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         if nstates is None: nstates = self.nstates
@@ -470,6 +474,12 @@ def gen_tdhf_operation(mf, fock_ao=None, wfnsym=None, with_nlc=True):
     [ A   B ][X]
     [-B* -A*][Y]
     '''
+    td = TDHF(mf)
+    td.exclude_nlc = not with_nlc
+    return _gen_tdhf_operation(td, fock_ao, wfnsym)
+
+def _gen_tdhf_operation(td, fock_ao=None, wfnsym=None):
+    mf = td._scf
     mol = mf.mol
     mo_coeff = mf.mo_coeff
     mo_energy = mf.mo_energy
@@ -496,7 +506,7 @@ def gen_tdhf_operation(mf, fock_ao=None, wfnsym=None, with_nlc=True):
     hdiag = numpy.hstack((hdiag.ravel(), -hdiag.ravel())).real
 
     mo_coeff = numpy.asarray(numpy.hstack((orbo,orbv)), order='F')
-    vresp = mf.gen_response(hermi=0, with_nlc=with_nlc)
+    vresp = td.gen_response(hermi=0)
 
     def vind(xys):
         xys = numpy.asarray(xys).reshape(-1,2,nocc,nvir)
@@ -539,10 +549,8 @@ class TDHF(TDBase):
 
     @lib.with_doc(gen_tdhf_operation.__doc__)
     def gen_vind(self, mf=None):
-        if mf is None:
-            mf = self._scf
-        return gen_tdhf_operation(mf, wfnsym=self.wfnsym,
-                                  with_nlc=not self.exclude_nlc)
+        assert mf is None or mf is self._scf
+        return _gen_tdhf_operation(self, wfnsym=self.wfnsym)
 
     def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         if return_symmetry:

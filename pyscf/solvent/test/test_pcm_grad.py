@@ -246,7 +246,7 @@ class KnownValues(unittest.TestCase):
         scan = td.as_scanner()
         e, de = scan('H 0 0 0; F .1 0 2.1')
         self.assertAlmostEqual(e, -98.20641861937548, 8)
-        self.assertAlmostEqual(e, td_ref._scf.e_tot + td_ref.e[0], 7)
+        self.assertAlmostEqual(e, td_ref.e_tot[0], 7)
         self.assertAlmostEqual(de[0,0], 0.0110476148, 5)
         self.assertAlmostEqual(abs(ref - de).max(), 0, 5)
 

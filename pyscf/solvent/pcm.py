@@ -65,11 +65,21 @@ def pcm_for_post_scf(method, solvent_obj=None, dm=None):
 
 @lib.with_doc(_attach_solvent._for_tdscf.__doc__)
 def pcm_for_tdscf(method, solvent_obj=None, dm=None):
-    scf_solvent = getattr(method._scf, 'with_solvent', None)
-    assert scf_solvent is None or isinstance(scf_solvent, PCM)
-
+    # PCM always enables equilibrium_solvation. However, its eps is customized
+    # to a value that is typically smaller than the optical eps. This reduced
+    # eps can lead to a weak interaction between the solute and solvents.
+    # Effectively, this makes the solvent not rapidly respond to the change in
+    # the electron density. If eps=1, the interactions are completely muted,
+    # which is equivalent to setting equilibrium_solvation=False (the fast process).
     if solvent_obj is None:
         solvent_obj = PCM(method.mol)
+        # equilibrium_solvation has no effect in the case of LR-PCM TDDFT
+        solvent_obj.equilibrium_solvation = False
+        # Set this effective eps to align with QChem's default setting
+        logger.info(method, 'Setting PCM.eps to 1.78 for TDDFT')
+        solvent_obj.eps = 1.78
+    else:
+        assert isinstance(scf_solvent, PCM)
     return _attach_solvent._for_tdscf(method, solvent_obj, dm)
 
 
@@ -292,7 +302,7 @@ class PCM(lib.StreamObject):
                     self.lebedev_order, gen_grid.LEBEDEV_ORDER[self.lebedev_order])
         logger.info(self, 'eps = %s'          , self.eps)
         logger.info(self, 'frozen = %s'       , self.frozen)
-        logger.info(self, 'equilibrium_solvation = %s', self.equilibrium_solvation)
+        #logger.info(self, 'equilibrium_solvation = %s', self.equilibrium_solvation)
         logger.debug2(self, 'radii_table %s', self.radii_table)
         if self.atom_radii:
             logger.info(self, 'User specified atomic radii %s', str(self.atom_radii))

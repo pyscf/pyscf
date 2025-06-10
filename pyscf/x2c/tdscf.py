@@ -284,11 +284,7 @@ class TDBase(ghf.TDBase):
 
 
 class TDA(TDBase, ghf.TDA):
-    def gen_vind(self, mf=None):
-        '''Generate function to compute Ax'''
-        if mf is None:
-            mf = self._scf
-        return gen_tda_hop(mf, with_nlc=not self.exclude_nlc)
+    gen_vind = ghf.TDA.gen_vind
 
     def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         assert self.wfnsym is None
@@ -307,11 +303,7 @@ def gen_tdhf_operation(mf, fock_ao=None, with_nlc=True):
 
 
 class TDHF(TDBase, ghf.TDHF):
-    @lib.with_doc(gen_tdhf_operation.__doc__)
-    def gen_vind(self, mf=None):
-        if mf is None:
-            mf = self._scf
-        return gen_tdhf_operation(mf, with_nlc=not self.exclude_nlc)
+    gen_vind = ghf.TDHF.gen_vind
 
     def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         assert self.wfnsym is None
