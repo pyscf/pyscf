@@ -79,6 +79,9 @@ class SCFWithSolvent(_Solvation):
     # SCF.get_hcore may lead error.
 
     def get_veff(self, mol=None, dm=None, *args, **kwargs):
+        # FIXME: super() here and after might be problematic and need to be
+        # fixed in the future. Consider the combination of solvent and QM/MM.
+        # Strictly, vhf = self.undo_solvent().get_veff()
         vhf = super().get_veff(mol, dm, *args, **kwargs)
         with_solvent = self.with_solvent
         if not with_solvent.frozen:
@@ -133,6 +136,10 @@ class SCFWithSolvent(_Solvation):
 
     def nuc_grad_method(self):
         from pyscf.solvent.grad.pcm import make_grad_object
+        # FIXME: when applying DF after solvent:
+        #    mf = mol.RKS().PCM().density_fit().run()
+        # The df.grad.rhf.Gradients.kernel is called. The
+        # grad.pcm.WithSolventGrad.kernel is not executed.
         return make_grad_object(super().nuc_grad_method())
 
     Gradients = nuc_grad_method
@@ -143,9 +150,9 @@ class SCFWithSolvent(_Solvation):
 
     def gen_response(self, *args, **kwargs):
         # The response function consists of two parts: the gas-phase and the
-        # solvent response. The "vind=super().gen_response" computes the
-        # gas-phase response. equilibrium_solvation controls whether to add the
-        # solvents response.
+        # solvent response. The "vind" computes the gas-phase response.
+        # equilibrium_solvation controls whether to add the solvents response.
+        #
         # equilibrium_solvation=True corresponds to a slow process where the
         # solvents are fully relaxed wrt the first order electron density.
         # Vertical excitations in TDDFT are typically a fast process where the
@@ -156,7 +163,7 @@ class SCFWithSolvent(_Solvation):
         # separately handled in the TDSCFWithSolvent class. This function
         # handles all other response calculations (such as stability analysis,
         # SOSCF, polarizability and Hessian).
-        vind = super().gen_response(*args, **kwargs)
+        vind = self.undo_solvent().gen_response(*args, **kwargs)
         is_uhf = isinstance(self, scf.uhf.UHF)
         def vind_with_solvent(dm1):
             v = vind(dm1)
@@ -723,29 +730,32 @@ class TDSCFWithSolvent(_Solvation):
     def gen_response(self, *args, **kwargs):
         from pyscf.solvent.pcm import PCM
         # The response function consists of two parts: the gas-phase and the
-        # solvent response. The "vind=super().gen_response" computes the
-        # gas-phase response. Except for PCM, equilibrium_solvation controls
-        # whether to add the solvents response.
+        # solvent response. The "vind" computes the gas-phase response. Except
+        # for PCM, equilibrium_solvation controls whether to add the solvents
+        # response.
         # * equilibrium_solvation=True corresponds to a slow process where the
         # solvents are fully relaxed wrt the first order electron density.
         # Vertical excitations in TDDFT are typically a fast process where the
         # solvent does not relax against the first order density, (corresponding
         # to equilibrium_solvation=False).
-        # * For PCM, a custom eps with smaller value is used to effectively
-        # reduce the solvent response. When eps=1, the solvent does not respond
-        # to the first-order electron density, thus identitical to the setting
-        # of equilibrium_solvation=False
-        vind = super().gen_response(*args, **kwargs)
+        # * For PCM, "equilibrium_solvation" is controlled in a different way.
+        # A custom eps with smaller value is used to effectively reduce the
+        # solvent response. When eps=1, the solvent does not respond to the
+        # first-order electron density, identitical to the setting of
+        # "equilibrium_solvation=False"
+        vind = self._scf.undo_solvent().gen_response(
+            *args, with_nlc=not self.exclude_nlc, **kwargs)
         if isinstance(self.with_solvent, PCM):
             # Note: PCM solvent assumes slow solvent with "screened" eps
-            slow_solvent = True and self.with_solvent.eps != 1
+            solvent_response = True and self.with_solvent.eps != 1
         else:
-            slow_solvent = self.with_solvent.equilibrium_solvation
+            solvent_response = self.with_solvent.equilibrium_solvation
         is_uhf = isinstance(self, scf.uhf.UHF)
         singlet = kwargs.get('singlet', True)
+        singlet = singlet or singlet is None
         def vind_with_solvent(dm1):
             v = vind(dm1)
-            if slow_solvent:
+            if solvent_response:
                 if is_uhf:
                     v_solvent = self.with_solvent._B_dot_x(dm1)
                     v += v_solvent[0] + v_solvent[1]

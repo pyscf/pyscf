@@ -2149,6 +2149,11 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
 
     def density_fit(self, auxbasis=None, with_df=None, only_dfj=False):
         import pyscf.df.df_jk
+        if self.istype('_Solvation'):
+            logger.warn(
+                'It is recommended to call density_fit() before applying a solvent model. '
+                'Calling density_fit() after the solvent model may result in '
+                'incorrect nuclear gradients, TDDFT and other methods.')
         return pyscf.df.df_jk.density_fit(self, auxbasis, with_df, only_dfj)
 
     def sfx2c1e(self):

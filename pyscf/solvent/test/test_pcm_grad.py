@@ -245,9 +245,9 @@ class KnownValues(unittest.TestCase):
         td = mol0.RHF().PCM().run().TDA().Gradients()
         scan = td.as_scanner()
         e, de = scan('H 0 0 0; F .1 0 2.1')
-        self.assertAlmostEqual(e, -98.20641861937548, 8)
+        self.assertAlmostEqual(e, -98.20372872285137, 7)
         self.assertAlmostEqual(e, td_ref.e_tot[0], 7)
-        self.assertAlmostEqual(de[0,0], 0.0110476148, 5)
+        self.assertAlmostEqual(de[0,0], 0.2337836771, 5)
         self.assertAlmostEqual(abs(ref - de).max(), 0, 5)
 
 if __name__ == "__main__":

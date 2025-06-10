@@ -427,7 +427,9 @@ class WithSolventGrad:
         if dm.ndim == 3:
             dm = dm[0] + dm[1]
 
+        log.debug('Compute gradients from solvents')
         self.de_solvent = self.base.with_solvent.grad(dm)
+        log.debug('Compute gradients from solutes')
         self.de_solute = super().kernel(*args, **kwargs)
         self.de = self.de_solute + self.de_solvent
 
@@ -443,4 +445,3 @@ class WithSolventGrad:
         # disable _finalize. It is called in grad_method.kernel method
         # where self.de was not yet initialized.
         pass
-

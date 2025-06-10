@@ -509,6 +509,13 @@ class KnownValues(unittest.TestCase):
         ref = numpy.array([0.301421953639, 0.358782851661, 0.400409174628])
         self.assertAlmostEqual(abs(ref - td.e).max(), 0, 7)
 
+    def test_df_pcm(self):
+        mol = pyscf.M(atom='H 0 0 0 ; H 0 0 1')
+        auxbasis = [[0, [1, 1]]]
+        mf1 = mol.RHF().density_fit(auxbasis=auxbasis).ddCOSMO().run()
+        mf2 = mol.RHF().ddCOSMO().density_fit(auxbasis=auxbasis).run()
+        assert abs(mf1.e_tot - mf2.e_tot) < 1e-12
+
 # TODO: add tests for direct-scf, ROHF, ROKS, .newton(), and their mixes
 
 

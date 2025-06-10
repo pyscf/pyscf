@@ -72,14 +72,14 @@ def pcm_for_tdscf(method, solvent_obj=None, dm=None):
     # the electron density. If eps=1, the interactions are completely muted,
     # which is equivalent to setting equilibrium_solvation=False (the fast process).
     if solvent_obj is None:
-        solvent_obj = PCM(method.mol)
+        assert hasattr(method._scf, 'with_solvent')
+        solvent_obj = method._scf.with_solvent.copy().reset()
         # equilibrium_solvation has no effect in the case of LR-PCM TDDFT
         solvent_obj.equilibrium_solvation = False
         # Set this effective eps to align with QChem's default setting
         logger.info(method, 'Setting PCM.eps to 1.78 for TDDFT')
         solvent_obj.eps = 1.78
-    else:
-        assert isinstance(solvent_obj, PCM)
+    assert isinstance(solvent_obj, PCM)
     return _attach_solvent._for_tdscf(method, solvent_obj, dm)
 
 

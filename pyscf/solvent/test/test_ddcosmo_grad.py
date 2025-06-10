@@ -1025,6 +1025,17 @@ class KnownValues(unittest.TestCase):
         L_2 = ddcosmo.regularize_xt(t+1e-4, eta)
         self.assertAlmostEqual(abs((L_2-L_1)/2e-4 - L1).max(), 0, 6)
 
+    @unittest.skip('Buggy when density_fit is applied after ddCOSMO')
+    def test_df_pcm(self):
+        mol = pyscf.M(atom='H 0 0 0 ; H 0 0 1')
+        auxbasis = [[0, [1, 1]]]
+        mf1 = mol.RHF().density_fit(auxbasis=auxbasis).ddCOSMO().run()
+        mf2 = mol.RHF().ddCOSMO().density_fit(auxbasis=auxbasis).run()
+        assert abs(mf1.e_tot - mf2.e_tot) < 1e-12
+        g1 = mf1.Gradients().kernel().de
+        g2 = mf2.Gradients().kernel().de
+        assert abs(g1 - g2).max() < 1e-7
+
 if __name__ == "__main__":
     print("Full Tests for ddcosmo gradients")
     unittest.main()

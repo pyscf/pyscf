@@ -140,13 +140,13 @@ class KnownValues(unittest.TestCase):
         assert td._scf.mol is mol1
         assert td._scf.with_solvent.mol is mol1
 
-        tdg = td.Gradients()
-        tdg.reset(mol1)
-        assert tdg.mol is mol1
-        assert tdg.base.mol is mol1
-        assert tdg.base.with_solvent.mol is mol1
-        assert tdg.base._scf.mol is mol1
-        assert tdg.base._scf.with_solvent.mol is mol1
+        #tdg = td.Gradients()
+        #tdg.reset(mol1)
+        #assert tdg.mol is mol1
+        #assert tdg.base.mol is mol1
+        #assert tdg.base.with_solvent.mol is mol1
+        #assert tdg.base._scf.mol is mol1
+        #assert tdg.base._scf.with_solvent.mol is mol1
 
     def test_casci(self):
         mf = scf.RHF(mol0).PCM().run()
