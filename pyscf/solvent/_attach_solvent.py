@@ -193,6 +193,8 @@ class SCFWithSolvent(_Solvation):
         solvent_model = _dispatch_solvent_model(self.with_solvent)
         return solvent_model(super().TDHF())
 
+    CasidaTDDFT = NotImplemented
+
     def TDDFT(self):
         solvent_model = _dispatch_solvent_model(self.with_solvent)
         return solvent_model(super().TDDFT())

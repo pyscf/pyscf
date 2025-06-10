@@ -863,13 +863,16 @@ class ddCOSMO(lib.StreamObject):
                                  'pyscf.solvent.grad.ddcosmo_grad or '
                                  'pyscf.solvent._ddcosmo_tdscf_grad instead.')
 
-    def grad(self, dm, verbose=None):
+    def grad(self, dm):
         '''Computes the Jacobian for the energy associated with the solvent,
         including the derivatives of the solvent itsself and the interactions
         between the solvent and the charge density of the solute.
         '''
         from pyscf.solvent.grad import ddcosmo_grad
-        return ddcosmo_grad.kernel(self, dm, verbose)
+        return ddcosmo_grad.kernel(self, dm, self.verbose)
+
+    def hess(self, dm):
+        raise NotImplementedError
 
     to_gpu = lib.to_gpu
 

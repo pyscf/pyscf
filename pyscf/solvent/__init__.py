@@ -68,7 +68,7 @@ def ddPCM(method_or_mol, solvent_obj=None, dm=None):
     if isinstance(method_or_mol, gto.mole.Mole):
         return ddpcm.DDPCM(method_or_mol)
 
-    method = method
+    method = method_or_mol
     if isinstance(method, scf.hf.SCF):
         return ddpcm.ddpcm_for_scf(method, solvent_obj, dm)
     elif isinstance(method, mcscf.casci.CASBase):

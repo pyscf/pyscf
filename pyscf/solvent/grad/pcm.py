@@ -418,7 +418,8 @@ class WithSolventGrad:
         if isinstance(self, TDBase):
             raise NotImplementedError('.to_gpu() for PCM-TDDFT')
         # ground state methods
-        return self.undo_solvent().to_gpu().Gradients()
+        assert isinstance(self.with_solvent, PCM)
+        return self.base.to_gpu().PCM().Gradients()
 
     def kernel(self, *args, dm=None, atmlst=None, **kwargs):
         if dm is None:

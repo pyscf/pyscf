@@ -41,6 +41,7 @@ from pyscf.dft import gen_grid, numint
 from pyscf.symm import sph
 from pyscf.solvent import ddcosmo
 from pyscf.solvent._attach_solvent import _Solvation
+from pyscf.solvent.grad.pcm import make_grad_object
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import rks as rks_grad
 from pyscf.grad import tdrhf as tdrhf_grad  # noqa
