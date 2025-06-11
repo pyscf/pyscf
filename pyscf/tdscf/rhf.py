@@ -742,15 +742,14 @@ class TDBase(lib.StreamObject):
     def gen_vind(self, mf=None):
         raise NotImplementedError
 
-    def gen_response(self, singlet=True, hermi=0, **kwargs):
+    def gen_response(self, **kwargs):
         '''Generate linear response function to compute A*x'''
         mf = self._scf
         if (self.exclude_nlc and
             isinstance(mf, scf.hf.KohnShamDFT) and mf.do_nlc()):
             logger.warn(self, 'NLC functional found in the DFT object. Its contribution is '
                         'excluded from the TDDFT response function.')
-        return mf.gen_response(singlet=singlet, hermi=hermi,
-                               with_nlc=not self.exclude_nlc, **kwargs)
+        return mf.gen_response(with_nlc=not self.exclude_nlc, **kwargs)
 
     @lib.with_doc(get_ab.__doc__)
     def get_ab(self, mf=None):

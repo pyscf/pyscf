@@ -274,15 +274,7 @@ def ddcosmo_for_post_scf(method, solvent_obj=None, dm=None):
             solvent_obj = DDCOSMO(method.mol)
     return _attach_solvent._for_post_scf(method, solvent_obj, dm)
 
-@lib.with_doc(_attach_solvent._for_tdscf.__doc__)
-def ddcosmo_for_tdscf(method, solvent_obj=None, dm=None):
-    # TODO: custom eps for TD as that in pcm
-    scf_solvent = getattr(method._scf, 'with_solvent', None)
-    assert scf_solvent is None or isinstance(scf_solvent, DDCOSMO)
-
-    if solvent_obj is None:
-        solvent_obj = DDCOSMO(method.mol)
-    return _attach_solvent._for_tdscf(method, solvent_obj, dm)
+ddcosmo_for_tdscf = _attach_solvent._for_tdscf
 
 
 # Inject ddCOSMO into other methods

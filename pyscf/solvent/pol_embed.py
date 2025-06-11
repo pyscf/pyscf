@@ -84,14 +84,7 @@ def pe_for_post_scf(method, solvent_obj, dm=None):
         solvent_obj = PolEmbed(method.mol, solvent_obj)
     return _attach_solvent._for_post_scf(method, solvent_obj, dm)
 
-@lib.with_doc(_attach_solvent._for_tdscf.__doc__)
-def pe_for_tdscf(method, solvent_obj, dm=None):
-    scf_solvent = getattr(method._scf, 'with_solvent', None)
-    assert scf_solvent is None or isinstance(scf_solvent, PolEmbed)
-
-    if not isinstance(solvent_obj, PolEmbed):
-        solvent_obj = PolEmbed(method.mol, solvent_obj)
-    return _attach_solvent._for_tdscf(method, solvent_obj, dm)
+pe_for_tdscf = _attach_solvent._for_tdscf
 
 
 # data from https://doi.org/10.1021/acs.jctc.9b01162

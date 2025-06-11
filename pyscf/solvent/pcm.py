@@ -63,24 +63,7 @@ def pcm_for_post_scf(method, solvent_obj=None, dm=None):
             solvent_obj = PCM(method.mol)
     return _attach_solvent._for_post_scf(method, solvent_obj, dm)
 
-@lib.with_doc(_attach_solvent._for_tdscf.__doc__)
-def pcm_for_tdscf(method, solvent_obj=None, dm=None):
-    # PCM always enables equilibrium_solvation. However, its eps is customized
-    # to a value that is typically smaller than the optical eps. This reduced
-    # eps can lead to a weak interaction between the solute and solvents.
-    # Effectively, this makes the solvent not rapidly respond to the change in
-    # the electron density. If eps=1, the interactions are completely muted,
-    # which is equivalent to setting equilibrium_solvation=False (the fast process).
-    if solvent_obj is None:
-        assert hasattr(method._scf, 'with_solvent')
-        solvent_obj = method._scf.with_solvent.copy().reset()
-        # equilibrium_solvation has no effect in the case of LR-PCM TDDFT
-        solvent_obj.equilibrium_solvation = False
-        # Set this effective eps to align with QChem's default setting
-        logger.info(method, 'Setting PCM.eps to 1.78 for TDDFT')
-        solvent_obj.eps = 1.78
-    assert isinstance(solvent_obj, PCM)
-    return _attach_solvent._for_tdscf(method, solvent_obj, dm)
+pcm_for_tdscf = _attach_solvent._for_tdscf
 
 
 # Inject PCM to other methods

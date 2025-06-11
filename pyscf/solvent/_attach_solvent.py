@@ -151,26 +151,25 @@ class SCFWithSolvent(_Solvation):
     def gen_response(self, *args, **kwargs):
         # The response function consists of two parts: the gas-phase and the
         # solvent response. The "vind" computes the gas-phase response.
-        # equilibrium_solvation controls whether to add the solvents response.
+        # The attribute .equilibrium_solvation controls whether to add the
+        # solvents response.
         #
-        # equilibrium_solvation=True corresponds to a slow process where the
+        # "equilibrium_solvation=True" corresponds to a slow process where the
         # solvents are fully relaxed wrt the first order electron density.
         # Vertical excitations in TDDFT are typically a fast process where the
-        # solvent does not relax against the first order density, (corresponding
-        # to equilibrium_solvation=False). However, some programs (such as
-        # QChem) use a customized solvent model that allows the solvent being
-        # partially relaxed to the first order electron density. TDDFT are
-        # separately handled in the TDSCFWithSolvent class. This function
-        # handles all other response calculations (such as stability analysis,
-        # SOSCF, polarizability and Hessian).
+        # solvation is non-equilibrium. The solvent does not fully relax against
+        # the first order density, (corresponding to equilibrium_solvation=False).
+        #
+        # TDDFT are separately handled in the TDSCFWithSolvent class. This
+        # response function handles all other response calculations (such as
+        # stability analysis, SOSCF, polarizability and Hessian).
         vind = self.undo_solvent().gen_response(*args, **kwargs)
         is_uhf = isinstance(self, scf.uhf.UHF)
         def vind_with_solvent(dm1):
             v = vind(dm1)
             if self.with_solvent.equilibrium_solvation:
                 if is_uhf:
-                    v_solvent = self.with_solvent._B_dot_x(dm1)
-                    v += v_solvent[0] + v_solvent[1]
+                    v += self.with_solvent._B_dot_x(dm1[0]+dm1[1])
                 else:
                     v += self.with_solvent._B_dot_x(dm1)
             return v
@@ -193,19 +192,16 @@ class SCFWithSolvent(_Solvation):
         obj = _attach_solvent._for_scf(self.undo_solvent().to_gpu(), solvent_obj)
         return obj
 
-    def TDA(self):
-        solvent_model = _dispatch_solvent_model(self.with_solvent)
-        return solvent_model(super().TDA())
+    def TDA(self, equilibrium_solvation=False):
+        return _for_tdscf(super().TDA(), equilibrium_solvation=equilibrium_solvation)
 
-    def TDHF(self):
-        solvent_model = _dispatch_solvent_model(self.with_solvent)
-        return solvent_model(super().TDHF())
+    def TDHF(self, equilibrium_solvation=False):
+        return _for_tdscf(super().TDHF(), equilibrium_solvation=equilibrium_solvation)
 
     CasidaTDDFT = NotImplemented
 
-    def TDDFT(self):
-        solvent_model = _dispatch_solvent_model(self.with_solvent)
-        return solvent_model(super().TDDFT())
+    def TDDFT(self, equilibrium_solvation=False):
+        return _for_tdscf(super().TDDFT(), equilibrium_solvation=equilibrium_solvation)
 
     def MP2(self):
         solvent_model = _dispatch_solvent_model(self.with_solvent)
@@ -659,38 +655,54 @@ DM * V_solvent[d/dX DM] + V_solvent[DM] * d/dX DM
         return lib.to_gpu(self, obj)
 
 
-def _for_tdscf(method, solvent_obj, dm=None):
+def _for_tdscf(method, solvent_obj=None, dm=None, equilibrium_solvation=False):
     '''Add solvent model in TDDFT calculations.
 
     Kwargs:
         dm : if given, solvent does not respond to the change of density
             matrix. A frozen ddCOSMO potential is added to the results.
     '''
-    if isinstance(method, _Solvation):
-        method.with_solvent = solvent_obj
-        method._scf.with_solvent = solvent_obj
-        return method
+    assert hasattr(method._scf, 'with_solvent')
+    if solvent_obj is None:
+        if isinstance(method, _Solvation):
+            return method
 
-    # Ensure that the underlying _scf object has solvent model enabled
-    if getattr(method._scf, 'with_solvent', None):
-        scf_with_solvent = method._scf
-    else:
-        scf_with_solvent = _for_scf(method._scf, solvent_obj, dm).run()
+        solvent_obj = method._scf.with_solvent.copy()
+        solvent_obj.equilibrium_solvation = equilibrium_solvation
+        if not equilibrium_solvation:
+            # The vertical excitation is a fast process, applying non-equilibrium
+            # solvation with optical dielectric constant eps=1.78
+            # TODO: reset() can be skipped. Most intermeidates can be reused.
+            solvent_obj.reset()
+            solvent_obj.eps = 1.78
+            solvent_obj.build()
+
+    if isinstance(method, _Solvation):
+        method = method.copy()
+        method.with_solvent = solvent_obj
+        return method
 
     if dm is not None:
         solvent_obj.e, solvent_obj.v = solvent_obj.kernel(dm)
         solvent_obj.frozen = True
+        if solvent_obj.equilibrium_solvation:
+            raise RuntimeError(
+                '"frozen" solvent model conflicts to the assumption of equilibrium solvation.')
 
-    sol_td = TDSCFWithSolvent(method, scf_with_solvent, solvent_obj)
+    sol_td = TDSCFWithSolvent(method, solvent_obj)
     name = solvent_obj.__class__.__name__ + method.__class__.__name__
     return lib.set_class(sol_td, (TDSCFWithSolvent, method.__class__), name)
 
 class TDSCFWithSolvent(_Solvation):
+    '''LR Solvent for TDDFT.
+
+    Note: This class does not support the state-specific excited state solvent.
+    '''
+
     _keys = {'with_solvent'}
 
-    def __init__(self, method, scf_with_solvent, solvent_obj):
+    def __init__(self, method, solvent_obj):
         self.__dict__.update(method.__dict__)
-        self._scf = scf_with_solvent
         self.with_solvent = solvent_obj
 
     def undo_solvent(self):
@@ -728,43 +740,45 @@ class TDSCFWithSolvent(_Solvation):
         return super().reset(mol)
 
     def gen_response(self, *args, **kwargs):
-        from pyscf.solvent.pcm import PCM
-        # The response function consists of two parts: the gas-phase and the
-        # solvent response. The "vind" computes the gas-phase response. Except
-        # for PCM, equilibrium_solvation controls whether to add the solvents
-        # response.
-        # * equilibrium_solvation=True corresponds to a slow process where the
-        # solvents are fully relaxed wrt the first order electron density.
-        # Vertical excitations in TDDFT are typically a fast process where the
-        # solvent does not relax against the first order density, (corresponding
-        # to equilibrium_solvation=False).
-        # * For PCM, "equilibrium_solvation" is controlled in a different way.
-        # A custom eps with smaller value is used to effectively reduce the
-        # solvent response. When eps=1, the solvent does not respond to the
-        # first-order electron density, identitical to the setting of
-        # "equilibrium_solvation=False"
+        # The contribution of the solvent to an excited state include the fast
+        # and the slow response parts. In the process of fast vertical excitation,
+        # only the fast part is able to respond to changes of the solute
+        # wavefunction. This process is described by the non-equilibrium
+        # solvation. In the excited Hamiltonian, the potential from the slow part is
+        # omitted. Changes of the solute electron density would lead to a
+        # redistribution of the surface charge (due to the fast part).
+        # The redistributed surface charge is computed by solving
+        #     K^{-1} R (dm_response)
+        # using a different dielectric constant. The optical dielectric constant
+        # (eps=1.78, see QChem manual) is a suitable choice for the excited state.
+        if not self.with_solvent.equilibrium_solvation:
+            # Solvent with optical dielectric constant, for evaluating the
+            # response of the fast solvent part
+            with_solvent = self.with_solvent
+            logger.info(self, 'TDDFT non-equilibrium solvation with eps=%g', with_solvent.eps)
+        else:
+            # Solvent with zero-frequency dielectric constant. The ground state
+            # solvent is utilized to ensure the same eps are used in the
+            # gradients of excited state.
+            with_solvent = self._scf.with_solvent
+            logger.info(self, 'TDDFT equilibrium solvation with eps=%g', with_solvent.eps)
+
+        # vind computes the response in gas-phase
         vind = self._scf.undo_solvent().gen_response(
             *args, with_nlc=not self.exclude_nlc, **kwargs)
-        if isinstance(self.with_solvent, PCM):
-            # Note: PCM solvent assumes slow solvent with "screened" eps
-            solvent_response = True and self.with_solvent.eps != 1
-        else:
-            solvent_response = self.with_solvent.equilibrium_solvation
-        is_uhf = isinstance(self, scf.uhf.UHF)
+        is_uhf = isinstance(self._scf, scf.uhf.UHF)
         singlet = kwargs.get('singlet', True)
         singlet = singlet or singlet is None
         def vind_with_solvent(dm1):
             v = vind(dm1)
-            if solvent_response:
-                if is_uhf:
-                    v_solvent = self.with_solvent._B_dot_x(dm1)
-                    v += v_solvent[0] + v_solvent[1]
-                elif singlet:
-                    v += self.with_solvent._B_dot_x(dm1)
-                else:
-                    # The triplet excitation does not change the total electron
-                    # density, thus does not lead to solvent response.
-                    pass
+            if is_uhf:
+                v += with_solvent._B_dot_x(dm1[0]+dm1[1])
+            elif singlet:
+                v += with_solvent._B_dot_x(dm1)
+            else:
+                # The triplet excitation does not change the total electron
+                # density, thus does not lead to solvent response.
+                pass
             return v
         return vind_with_solvent
 

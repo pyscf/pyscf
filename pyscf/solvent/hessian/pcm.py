@@ -1042,9 +1042,11 @@ class WithSolventHess:
         if dm.ndim == 3:
             dm = dm[0] + dm[1]
         with lib.temporary_env(self.base.with_solvent, equilibrium_solvation=True):
+            log.debug('Compute Hessian from solvents')
             self.de_solvent = self.base.with_solvent.hess(dm)
-            self.de_solute = super().kernel(*args, **kwargs)
-            self.de = self.de_solute + self.de_solvent
+        log.debug('Compute Hessian from solutes')
+        self.de_solute = super().kernel(*args, **kwargs)
+        self.de = self.de_solute + self.de_solvent
         return self.de
 
     def make_h1(self, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
