@@ -257,14 +257,21 @@ C    SP
 
     def test_atom_as_file(self):
         ftmp = tempfile.NamedTemporaryFile('w')
-        # file in xyz format
+        # file in raw format
         ftmp.write('He 0 0 0\nHe 0 0 1\n')
         ftmp.flush()
         mol1 = gto.M(atom=ftmp.name)
         self.assertEqual(mol1.natm, 2)
 
+        # file in xyz format
+        ftmp = tempfile.NamedTemporaryFile('w', suffix='.xyz')
+        ftmp.write('2\n\nHe 0 0 0\nHe 0 0 1\n')
+        ftmp.flush()
+        mol1 = gto.M(atom=ftmp.name)
+        self.assertEqual(mol1.natm, 2)
+
         # file in zmatrix format
-        ftmp = tempfile.NamedTemporaryFile('w')
+        ftmp = tempfile.NamedTemporaryFile('w', suffix='.zmat')
         ftmp.write('He\nHe 1 1.5\n')
         ftmp.flush()
         mol1 = gto.M(atom=ftmp.name)
