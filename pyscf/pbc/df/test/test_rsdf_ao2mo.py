@@ -120,13 +120,13 @@ class KnownValues(unittest.TestCase):
         with_df.kpts = kpts
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)
-        with lib.temporary_env(cell, dimension = 1):
+        with lib.temporary_env(cell, dimension=1, low_dim_ft_type='inf_vacuum'):
             eri = with_df.get_eri(kpts).reshape((nao,)*4)
         eri0 = numpy.einsum('pjkl,pi->ijkl', eri , mo.conj())
         eri0 = numpy.einsum('ipkl,pj->ijkl', eri0, mo       )
         eri0 = numpy.einsum('ijpl,pk->ijkl', eri0, mo.conj())
         eri0 = numpy.einsum('ijkp,pl->ijkl', eri0, mo       )
-        with lib.temporary_env(cell, dimension = 1):
+        with lib.temporary_env(cell, dimension=1, low_dim_ft_type='inf_vacuum'):
             eri1 = with_df.ao2mo(mo, kpts)
         self.assertAlmostEqual(abs(eri1.reshape(eri0.shape)-eri0).sum(), 0, 9)
 

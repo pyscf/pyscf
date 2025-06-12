@@ -420,7 +420,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
                 coulG[G0_idx] = -np.pi*Rc**2 * (2*np.log(Rc) - 1)
         else:
             raise NotImplementedError(f'dimension={cell.dimension} with '
-                                      f'low_dim_ft_type={low_dim_ft_type} is not supported')
+                                      f'low_dim_ft_type={cell.low_dim_ft_type} is not supported')
 
     if equal2boundary is not None:
         coulG[equal2boundary] = 0

@@ -219,6 +219,7 @@ class KnownValues(unittest.TestCase):
         cell = pgto.M(atom='He 0 0 0; He 0.9 0 0',
                       basis=basis,
                       a=np.eye(3) * 2.8,
+                      low_dim_ft_type='inf_vacuum',
                       dimension=1)
         auxcell = df.make_auxcell(cell, auxbasis)
         dfbuilder = rsdf_builder._RSGDFBuilder(cell, auxcell).build()
@@ -227,7 +228,6 @@ class KnownValues(unittest.TestCase):
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 1.7171973261620863, 5)
 
-    @unittest.skip('_RSGDFBuilder for dimension=0 not accurate')
     def test_make_j3c_gamma_0d(self):
         from pyscf.df.incore import cholesky_eri
         cell = pgto.M(atom='He 0 0 0; He 0.9 0 0',

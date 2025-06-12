@@ -25,6 +25,7 @@ For GTH/HGH PPs, see:
 
 import ctypes
 import numpy
+import numpy as np
 import scipy.special
 from pyscf import lib
 from pyscf import gto
@@ -56,7 +57,7 @@ def get_gth_vlocG_part1(cell, Gv):
     G2 = numpy.einsum('ix,ix->i', Gv, Gv)
     G0idx = numpy.where(G2==0)[0]
 
-    if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
+    if cell.dimension == 3 or cell.dimension == 0 or cell.low_dim_ft_type == 'inf_vacuum':
         vlocG = numpy.zeros((cell.natm, len(G2)))
         for ia in range(cell.natm):
             Zia = cell.atom_charge(ia)
@@ -68,7 +69,7 @@ def get_gth_vlocG_part1(cell, Gv):
                 rloc, nexp, cexp = pp[1:3+1]
                 vlocG[ia] *= numpy.exp(-0.5*rloc**2 * G2)
                 # alpha parameters from the non-divergent Hartree+Vloc G=0 term.
-                vlocG[ia,G0idx] = -2*numpy.pi*Zia*rloc**2
+                vlocG[ia,G0idx] += -2*numpy.pi*Zia*rloc**2
 
     elif cell.dimension == 2:
         # The following 2D ewald summation is taken from:
