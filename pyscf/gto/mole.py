@@ -2152,7 +2152,7 @@ def fromstring(string, format='xyz'):
     '''
     format = format.lower()
     if format == 'zmat':
-        return from_zmatrix(string)
+        return string
     elif format == 'xyz':
         line, title, geom = string.split('\n', 2)
         return geom
