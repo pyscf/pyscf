@@ -14,7 +14,6 @@
 
 import unittest
 import numpy as np
-import cupy as cp
 from pyscf import lib, gto
 from pyscf.tdscf import rhf, rks
 
