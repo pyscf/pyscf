@@ -25,10 +25,10 @@ def diagonalize_tda(a, nroots=5):
     a = a.reshape(nov, nov)
     e, xy = np.linalg.eig(np.asarray(a))
     sorted_indices = np.argsort(e)
-    
+
     e_sorted = e[sorted_indices]
     xy_sorted = xy[:, sorted_indices]
-    
+
     e_sorted_final = e_sorted[e_sorted > 1e-3]
     xy_sorted = xy_sorted[:, e_sorted > 1e-3]
     return e_sorted_final[:nroots], xy_sorted[:, :nroots]
@@ -43,10 +43,10 @@ def diagonalize(a, b, nroots=5):
                      [-b.conj(),-a.conj()]])
     e, xy = np.linalg.eig(np.asarray(h))
     sorted_indices = np.argsort(e)
-    
+
     e_sorted = e[sorted_indices]
     xy_sorted = xy[:, sorted_indices]
-    
+
     e_sorted_final = e_sorted[e_sorted > 1e-3]
     xy_sorted = xy_sorted[:, e_sorted > 1e-3]
     return e_sorted_final[:nroots], xy_sorted[:, :nroots]
@@ -70,10 +70,10 @@ def diagonalize_u(a, b, nroots=5):
                                       [-b.conj(),-a.conj()]]))
     e, xy = np.linalg.eig(abba)
     sorted_indices = np.argsort(e)
-    
+
     e_sorted = e[sorted_indices]
     xy_sorted = xy[:, sorted_indices]
-    
+
     e_sorted_final = e_sorted[e_sorted > 1e-3]
     xy_sorted = xy_sorted[:, e_sorted > 1e-3]
     return e_sorted_final[:nroots], xy_sorted[:, :nroots]
@@ -147,14 +147,14 @@ class KnownValues(unittest.TestCase):
     def test_hf_CPCM(self):
         """
         $rem
-        JOBTYPE              sp          
-        METHOD               hf     
-        BASIS                def2-svp             
-        CIS_N_ROOTS          5       
-        CIS_SINGLETS         TRUE        
-        CIS_TRIPLETS         FALSE       
-        SYMMETRY             FALSE       
-        SYM_IGNORE           TRUE   
+        JOBTYPE              sp
+        METHOD               hf
+        BASIS                def2-svp
+        CIS_N_ROOTS          5
+        CIS_SINGLETS         TRUE
+        CIS_TRIPLETS         FALSE
+        SYMMETRY             FALSE
+        SYM_IGNORE           TRUE
         ! RPA 2               # whether tddft or tda
         BASIS_LIN_DEP_THRESH 12
         SOLVENT_METHOD PCM
