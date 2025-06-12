@@ -189,13 +189,6 @@ class KnownValues(unittest.TestCase):
         ref = np.array([-75.61072291, -75.54419399, -75.51949191, -75.45219025, -75.40975027])
         assert abs(es_gound - ref).max() < 1e-6
 
-        td = mf.TDHF()
-        td.with_solvent.eps = 1.
-        es = td.kernel(nstates=5)[0]
-        a, b = td.get_ab()
-        es_get_ab = diagonalize(a, b)[0]
-        assert abs(es_get_ab - es).max() < 1e-8
-
 if __name__ == "__main__":
     print("Full Tests for PCMs")
     unittest.main()

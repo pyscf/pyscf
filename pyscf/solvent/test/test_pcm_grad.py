@@ -238,17 +238,24 @@ class KnownValues(unittest.TestCase):
 
     @unittest.skip('PCM-TDDFT gradients not available')
     def test_scanner(self):
-        mol = gto.M(atom='H 0 0 0; F .1 0 2.1', verbose=0, unit='B')
-        td_ref = solvent.PCM(tdscf.TDA(solvent.PCM(mol.RHF()).run())).run()
-        ref = td_ref.Gradients().kernel()
-        mol0 = gto.M(atom='H  0.  0.  1.804; F  0.  0.  0.', verbose=0, unit='B')
-        td = mol0.RHF().PCM().run().TDA().Gradients()
+        mol = gto.M(atom='H  0.  0.  1.804; F  0.  0.  0.', verbose=0, unit='B')
+        td = mol.RHF().PCM().TDA(equilibrium_solvation=True).Gradients()
         scan = td.as_scanner()
         e, de = scan('H 0 0 0; F .1 0 2.1')
-        self.assertAlmostEqual(e, -98.20372872285137, 7)
-        self.assertAlmostEqual(e, td_ref.e_tot[0], 7)
-        self.assertAlmostEqual(de[0,0], 0.2337836771, 5)
-        self.assertAlmostEqual(abs(ref - de).max(), 0, 5)
+
+        mol0 = gto.M(atom='H 0 0 0; F .1 0 2.1', verbose=0, unit='B')
+        td_ref = mol0.RHF().PCM().run(conf_tol=1e-12).TDA(equilibrium_solvation=True).run(conf_tol=1e-10)
+        ref = td_ref.Gradients().kernel()
+        assert abs(e - -98.20379057832794) < 1e-8
+        assert abs(e - td_ref.e_tot[0]) < 1e-8
+        assert abs(de[0,0] - 0.011132973) < 1e-5
+        assert abs(abs(ref - de).max()) < 1e-5
+
+        mol1 = gto.M(atom='H 0 0 -0.001; F .1 0 2.1', verbose=0, unit='B')
+        td1 = mol1.RHF().PCM().run(conf_tol=1e-12).TDA(equilibrium_solvation=True).run(conf_tol=1e-10)
+        mol2 = gto.M(atom='H 0 0  0.001; F .1 0 2.1', verbose=0, unit='B')
+        td2 = mol2.RHF().PCM().run(conf_tol=1e-12).TDA(equilibrium_solvation=True).run(conf_tol=1e-10)
+        assert abs((td2.e_tot[0]-td1.e_tot[0])/0.002- de[0,2]) < 1e-5
 
 if __name__ == "__main__":
     print("Full Tests for Gradient of PCMs")

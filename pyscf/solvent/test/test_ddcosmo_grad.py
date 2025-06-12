@@ -1036,6 +1036,26 @@ class KnownValues(unittest.TestCase):
         g2 = mf2.Gradients().kernel().de
         assert abs(g1 - g2).max() < 1e-7
 
+    def test_vs_finite_difference(self):
+        mol = gto.M(atom='H 0 0 0; H 0 1 1.2; H 1. .1 0; H .5 .5 1', unit='B')
+        mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol))
+        mf.kernel()
+        de = mf.nuc_grad_method().kernel()
+        de_cosmo = kernel(mf.with_solvent, mf.make_rdm1())
+        dm1 = mf.make_rdm1()
+
+        mol = gto.M(atom='H 0 0 -0.001; H 0 1 1.2; H 1. .1 0; H .5 .5 1', unit='B')
+        mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol))
+        e1 = mf.kernel()
+        e1_cosmo = mf.with_solvent.energy(dm1)
+
+        mol = gto.M(atom='H 0 0 0.001; H 0 1 1.2; H 1. .1 0; H .5 .5 1', unit='B')
+        mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol))
+        e2 = mf.kernel()
+        e2_cosmo = mf.with_solvent.energy(dm1)
+        assert abs((e2-e1)/0.002 - de[0,2]).max() < 1e-6
+        assert abs((e2_cosmo-e1_cosmo)/0.002 - de_cosmo[0,2]).max() < 1e-6
+
 if __name__ == "__main__":
     print("Full Tests for ddcosmo gradients")
     unittest.main()

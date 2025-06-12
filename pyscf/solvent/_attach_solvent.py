@@ -140,7 +140,7 @@ class SCFWithSolvent(_Solvation):
         #    mf = mol.RKS().PCM().density_fit().run()
         # The df.grad.rhf.Gradients.kernel is called. The
         # grad.pcm.WithSolventGrad.kernel is not executed.
-        return make_grad_object(super().nuc_grad_method())
+        return make_grad_object(self)
 
     Gradients = nuc_grad_method
 
@@ -367,7 +367,7 @@ gradients which corresponds to the contribution of
 MCSCF_DM * V_solvent[d/dX MCSCF_DM] + V_solvent[MCSCF_DM] * d/dX MCSCF_DM
 ''')
         from pyscf.solvent.grad.pcm import make_grad_object
-        return make_grad_object(super().nuc_grad_method())
+        return make_grad_object(self)
 
     Gradients = nuc_grad_method
 
@@ -509,7 +509,7 @@ gradients which corresponds to the contribution of
 MCSCF_DM * V_solvent[d/dX MCSCF_DM] + V_solvent[MCSCF_DM] * d/dX MCSCF_DM
 ''')
         from pyscf.solvent.grad.pcm import make_grad_object
-        return make_grad_object(super().nuc_grad_method())
+        return make_grad_object(self)
 
     Gradients = nuc_grad_method
 
@@ -645,7 +645,7 @@ gradients which corresponds to the contribution of
 DM * V_solvent[d/dX DM] + V_solvent[DM] * d/dX DM
 ''')
         from pyscf.solvent.grad.pcm import make_grad_object
-        return make_grad_object(super().nuc_grad_method())
+        return make_grad_object(self)
 
     Gradients = nuc_grad_method
 
@@ -783,16 +783,14 @@ class TDSCFWithSolvent(_Solvation):
         return vind_with_solvent
 
     def get_ab(self, mf=None):
-        if self.equilibrium_solvation:
-            raise NotImplementedError
-        return super().get_ab(mf)
+        raise NotImplementedError
 
     def nuc_grad_method(self):
         from pyscf.solvent.pcm import PCM
         from pyscf.solvent.grad.ddcosmo_tdscf_grad import make_grad_object
         if isinstance(self.with_solvent, PCM):
             raise NotImplementedError('PCM-TDDFT Gradients')
-        return make_grad_object(super().nuc_grad_method())
+        return make_grad_object(self)
 
     Gradients = nuc_grad_method
 

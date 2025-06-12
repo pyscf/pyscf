@@ -312,25 +312,3 @@ def make_e_psi1(pcmobj, dm, r_vdw, ui, ylm_1sph, cached_pol, Xvec, L):
         shl0, shl1, p0, p1 = aoslices[ia]
         psi1[ia] += numpy.einsum('xij,ij->x', vmat[:,p0:p1], dm[p0:p1]) * 2
     return psi1
-
-
-if __name__ == '__main__':
-    from pyscf import scf
-    mol = gto.M(atom='H 0 0 0; H 0 1 1.2; H 1. .1 0; H .5 .5 1', unit='B')
-    mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol))
-    mf.kernel()
-    de = mf.nuc_grad_method().kernel()
-    de_cosmo = kernel(mf.with_solvent, mf.make_rdm1())
-    dm1 = mf.make_rdm1()
-
-    mol = gto.M(atom='H 0 0 -0.001; H 0 1 1.2; H 1. .1 0; H .5 .5 1', unit='B')
-    mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol))
-    e1 = mf.kernel()
-    e1_cosmo = mf.with_solvent.energy(dm1)
-
-    mol = gto.M(atom='H 0 0 0.001; H 0 1 1.2; H 1. .1 0; H .5 .5 1', unit='B')
-    mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol))
-    e2 = mf.kernel()
-    e2_cosmo = mf.with_solvent.energy(dm1)
-    print(abs((e2-e1)/0.002 - de[0,2]).max())
-    print(abs((e2_cosmo-e1_cosmo)/0.002 - de_cosmo[0,2]).max())

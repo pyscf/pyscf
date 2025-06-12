@@ -302,6 +302,8 @@ def get_cds_legacy(smdobj):
                     ctypes.byref(gcds), ctypes.byref(areacds), dcds)
     return gcds.value / hartree2kcal, dcds
 
+# Note: in various places, SMD instance is not explictly tested. It is checked
+# by the statement "isinstance(solvent, PCM)"
 class SMD(pcm.PCM):
     _keys = {
         'intopt', 'method', 'e_cds', 'solvent_descriptors', 'r_probe', 'sasa_ng'

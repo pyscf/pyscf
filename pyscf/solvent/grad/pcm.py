@@ -379,22 +379,32 @@ def grad_solver(pcmobj, dm):
     t1 = log.timer_debug1('grad solver', *t1)
     return de
 
-# TODO: Define attribute grad_method.base to point to the class of the 0th
-# order calculation for all gradients class. Then this function can be
-# extended and used as the general interface to initialize solvent gradients.
-def make_grad_object(grad_method):
-    '''For grad_method in vacuum, add nuclear gradients of solvent pcmobj'''
+def make_grad_object(base_method):
+    '''Create nuclear gradients object with solvent contributions for the given
+    solvent-attached method based on its gradients method in vaccum
+    '''
     from pyscf.solvent._attach_solvent import _Solvation
+    if isinstance(base_method, rhf_grad.GradientsBase):
+        # For backward compatibility. The input argument is a gradient object in
+        # previous implementations.
+        base_method = base_method.base
 
-    # Zeroth order method object must be a solvation-enabled method
-    assert isinstance(grad_method.base, _Solvation)
-    if grad_method.base.with_solvent.frozen:
+    # Must be a solvent-attached method
+    assert isinstance(base_method, _Solvation)
+    with_solvent = base_method.with_solvent
+    if with_solvent.frozen:
         raise RuntimeError('Frozen solvent model is not avialbe for energy gradients')
 
-    name = (grad_method.base.with_solvent.__class__.__name__
-            + grad_method.__class__.__name__)
-    return lib.set_class(WithSolventGrad(grad_method),
-                         (WithSolventGrad, grad_method.__class__), name)
+    # create the Gradients in vacuum. Cannot call super().Gradients() here
+    # because other dynamic corrections might be applied to the base_method.
+    # Calling super().Gradients might discard these corrections.
+    vac_grad = base_method.undo_solvent().Gradients()
+    # The base method for vac_grad discards the with_solvent. Change its base to
+    # the solvent-attached base method
+    vac_grad.base = base_method
+    name = with_solvent.__class__.__name__ + vac_grad.__class__.__name__
+    return lib.set_class(WithSolventGrad(vac_grad),
+                         (WithSolventGrad, vac_grad.__class__), name)
 
 class WithSolventGrad:
     _keys = {'de_solvent', 'de_solute'}
@@ -415,10 +425,12 @@ class WithSolventGrad:
     def to_gpu(self):
         from gpu4pyscf.solvent.hessian import pcm    # type: ignore
         from pyscf.tdscf.rhf import TDBase
+        # Only PCM and SMD are available on GPU.
+        # FIXME: The SMD class is a child class of PCM now. Additional check for
+        # SMD should be made if SMD is refactored as an independent class
+        assert isinstance(self.with_solvent, PCM)
         if isinstance(self, TDBase):
             raise NotImplementedError('.to_gpu() for PCM-TDDFT')
-        # ground state methods
-        assert isinstance(self.with_solvent, PCM)
         return self.base.to_gpu().PCM().Gradients()
 
     def kernel(self, *args, dm=None, atmlst=None, **kwargs):
@@ -427,9 +439,9 @@ class WithSolventGrad:
         if dm.ndim == 3:
             dm = dm[0] + dm[1]
 
-        log.debug('Compute gradients from solvents')
+        logger.debug(self, 'Compute gradients from solvents')
         self.de_solvent = self.base.with_solvent.grad(dm)
-        log.debug('Compute gradients from solutes')
+        logger.debug(self, 'Compute gradients from solutes')
         self.de_solute = super().kernel(*args, **kwargs)
         self.de = self.de_solute + self.de_solvent
 
