@@ -881,18 +881,18 @@ class KnownValues(unittest.TestCase):
         mol1 = gto.M(atom='H 0 0 -.001; H .5 .5 .1', unit='B', basis='321g')
         mol2 = gto.M(atom='H 0 0 0.001; H .5 .5 .1', unit='B', basis='321g')
         mf = scf.RHF(mol0).ddCOSMO().run()
-        td = solvent.ddCOSMO(tdscf.TDA(mf)).run(equilibrium_solvation=True)
+        td = mf.TDA(equilibrium_solvation=True).run()
         ref = tda_grad(td, td.xy[0]) + mf.nuc_grad_method().kernel()
 
         e, de = td.nuc_grad_method().as_scanner(state=1)(mol0)
         de = td.nuc_grad_method().kernel()
         self.assertAlmostEqual(abs(ref - de).max(), 0, 12)
 
-        td1 = mol1.RHF().ddCOSMO().run().TDA().ddCOSMO().run(equilibrium_solvation=True)
-        td2 = mol2.RHF().ddCOSMO().run().TDA().ddCOSMO().run(equilibrium_solvation=True)
+        td1 = mol1.RHF().ddCOSMO().run().TDA(equilibrium_solvation=True).run()
+        td2 = mol2.RHF().ddCOSMO().run().TDA(equilibrium_solvation=True).run()
         e1 = td1.e_tot[0]
         e2 = td2.e_tot[0]
-        self.assertAlmostEqual((e2-e1)/0.002, de[0,2], 5)
+        self.assertAlmostEqual((e2-e1)/0.002, de[0,2], 6)
 
     def test_solvent_nuc(self):
         def get_nuc(mol):
@@ -1041,7 +1041,7 @@ class KnownValues(unittest.TestCase):
         mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol))
         mf.kernel()
         de = mf.nuc_grad_method().kernel()
-        de_cosmo = kernel(mf.with_solvent, mf.make_rdm1())
+        de_cosmo = ddcosmo_grad.kernel(mf.with_solvent, mf.make_rdm1())
         dm1 = mf.make_rdm1()
 
         mol = gto.M(atom='H 0 0 -0.001; H 0 1 1.2; H 1. .1 0; H .5 .5 1', unit='B')

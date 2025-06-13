@@ -146,7 +146,7 @@ class SCFWithSolvent(_Solvation):
 
     def Hessian(self):
         from pyscf.solvent.hessian.pcm import make_hess_object
-        return make_hess_object(super().Hessian())
+        return make_hess_object(self)
 
     def gen_response(self, *args, **kwargs):
         # The response function consists of two parts: the gas-phase and the

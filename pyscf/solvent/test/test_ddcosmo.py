@@ -498,19 +498,19 @@ class KnownValues(unittest.TestCase):
     def test_rhf_tda(self):
         # TDA with equilibrium_solvation
         mf = mol.RHF().ddCOSMO().run(conv_tol=1e-12)
-        td = mf.TDA().ddCOSMO().run(equilibrium_solvation=True, conv_tol=1e-10)
+        td = mf.TDA(equilibrium_solvation=True).run(conv_tol=1e-10)
         ref = numpy.array([0.30125788456, 0.358731044210, 0.39502266389])
-        self.assertAlmostEqual(abs(ref - td.e).max(), 0, 6)
+        self.assertAlmostEqual(abs(ref - td.e).max(), 0, 7)
         self.assertEqual(td.undo_solvent().__class__.__name__, 'TDA')
 
         # TDA without equilibrium_solvation
         mf = mol.RHF().ddCOSMO().run(conv_tol=1e-10)
-        td = mf.TDA().ddCOSMO().run()
+        td = mf.TDA().run()
         ref = numpy.array([0.301354470812, 0.358764482083, 0.398123841665])
         self.assertAlmostEqual(abs(ref - td.e).max(), 0, 7)
 
-    def test_df_pcm(self):
-        mol = pyscf.M(atom='H 0 0 0 ; H 0 0 1')
+    def test_df_cosmo(self):
+        mol = gto.M(atom='H 0 0 0 ; H 0 0 1')
         auxbasis = [[0, [1, 1]]]
         mf1 = mol.RHF().density_fit(auxbasis=auxbasis).ddCOSMO().run()
         mf2 = mol.RHF().ddCOSMO().density_fit(auxbasis=auxbasis).run()
