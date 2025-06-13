@@ -210,6 +210,10 @@ class PolEmbed(lib.StreamObject):
         self.v = None
         self._dm = None
 
+    def build(self):
+        # To make API compatible with the implementations of other solvent models
+        return self
+
     def dump_flags(self, verbose=None):
         logger.info(self, '******** %s flags ********', self.__class__)
         options = self.cppe_state.options
