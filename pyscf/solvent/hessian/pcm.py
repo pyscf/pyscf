@@ -1003,14 +1003,25 @@ def analytical_grad_vmat(pcmobj, dm, atmlst=None, verbose=None):
     t1 = log.timer_debug1('computing solvent grad veff', *t1)
     return dV_on_molecule_dx
 
-def make_hess_object(hess_method):
-    if hess_method.base.with_solvent.frozen:
+def make_hess_object(base_method):
+    from pyscf.solvent._attach_solvent import _Solvation
+    from pyscf.hessian.rhf import HessianBase
+    if isinstance(base_method, HessianBase):
+        # For backward compatibility. The input argument is a gradient object in
+        # previous implementations.
+        base_method = base_method.base
+
+    # Must be a solvent-attached method
+    assert isinstance(base_method, _Solvation)
+    with_solvent = base_method.with_solvent
+    if with_solvent.frozen:
         raise RuntimeError('Frozen solvent model is not avialbe for energy hessian')
 
-    name = (hess_method.base.with_solvent.__class__.__name__
-            + hess_method.__class__.__name__)
-    return lib.set_class(WithSolventHess(hess_method),
-                         (WithSolventHess, hess_method.__class__), name)
+    vac_hess = base_method.undo_solvent().Hessian()
+    vac_hess.base = base_method
+    name = with_solvent.__class__.__name__ + vac_hess.__class__.__name__
+    return lib.set_class(WithSolventHess(vac_hess),
+                         (WithSolventHess, vac_hess.__class__), name)
 
 class WithSolventHess:
     _keys = {'de_solvent', 'de_solute'}
@@ -1042,10 +1053,10 @@ class WithSolventHess:
         if dm.ndim == 3:
             dm = dm[0] + dm[1]
         with lib.temporary_env(self.base.with_solvent, equilibrium_solvation=True):
-            logger.debug(self, 'Compute Hessian from solvents')
-            self.de_solvent = self.base.with_solvent.hess(dm)
-        logger.debug(self, 'Compute Hessian from solutes')
-        self.de_solute = super().kernel(*args, **kwargs)
+            logger.debug(self, 'Compute Hessian from solutes')
+            self.de_solute = super().kernel(*args, **kwargs)
+        logger.debug(self, 'Compute Hessian from solvents')
+        self.de_solvent = self.base.with_solvent.hess(dm)
         self.de = self.de_solute + self.de_solvent
         return self.de
 

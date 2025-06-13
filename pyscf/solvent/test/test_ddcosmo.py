@@ -495,6 +495,14 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(mf._scf.with_df.mol is mol1)
         self.assertTrue(mf._scf.with_solvent.mol is mol1)
 
+    def test_df_cosmo(self):
+        mol = gto.M(atom='H 0 0 0 ; H 0 0 1')
+        auxbasis = [[0, [1, 1]]]
+        mf1 = mol.RHF().density_fit(auxbasis=auxbasis).ddCOSMO().run()
+        mf2 = mol.RHF().ddCOSMO().density_fit(auxbasis=auxbasis).run()
+        assert abs(mf1.e_tot - mf2.e_tot) < 1e-12
+
+class SolventWithDefaultGrids(unittest.TestCase):
     def test_rhf_tda(self):
         # TDA with equilibrium_solvation
         mf = mol.RHF().ddCOSMO().run(conv_tol=1e-12)
@@ -508,13 +516,6 @@ class KnownValues(unittest.TestCase):
         td = mf.TDA().run()
         ref = numpy.array([0.301354470812, 0.358764482083, 0.398123841665])
         self.assertAlmostEqual(abs(ref - td.e).max(), 0, 7)
-
-    def test_df_cosmo(self):
-        mol = gto.M(atom='H 0 0 0 ; H 0 0 1')
-        auxbasis = [[0, [1, 1]]]
-        mf1 = mol.RHF().density_fit(auxbasis=auxbasis).ddCOSMO().run()
-        mf2 = mol.RHF().ddCOSMO().density_fit(auxbasis=auxbasis).run()
-        assert abs(mf1.e_tot - mf2.e_tot) < 1e-12
 
 # TODO: add tests for direct-scf, ROHF, ROKS, .newton(), and their mixes
 
