@@ -50,6 +50,11 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='j3c', tmpdir=No
     if auxmol is None:
         auxmol = make_auxmol(mol, auxbasis)
 
+    if not mol.cart and auxmol.cart:
+        raise NotImplementedError('Interface for int3c2e_ssc')
+    elif mol.cart and not auxmol.cart:
+        raise RuntimeError('Cartesian orbitals for mol and spherical orbitals for auxmol not supported')
+
     if tmpdir is None:
         tmpdir = lib.param.TMPDIR
     swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
@@ -125,6 +130,12 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
 
     if auxmol is None:
         auxmol = make_auxmol(mol, auxbasis)
+
+    if not mol.cart and auxmol.cart:
+        raise NotImplementedError('Interface for int3c2e_ssc')
+    elif mol.cart and not auxmol.cart:
+        raise RuntimeError('Cartesian orbitals for mol and spherical orbitals for auxmol not supported')
+
     j2c = auxmol.intor(int2c, hermi=1)
     log.debug('size of aux basis %d', j2c.shape[0])
     time1 = log.timer('2c2e', *time0)

@@ -460,7 +460,7 @@ class MP2_Scanner(lib.SinglePointScanner):
         return self.e_tot
 
 
-class MP2(lib.StreamObject):
+class MP2Base(lib.StreamObject):
     '''restricted MP2 with canonical HF and non-canonical HF reference
 
     Attributes:
@@ -574,8 +574,8 @@ class MP2(lib.StreamObject):
 
     def set_frozen(self, method='auto', window=(-1000.0, 1000.0)):
         from pyscf import mp
-        is_gmp = isinstance(self, mp.gmp2.GMP2)
         from pyscf.cc.ccsd import set_frozen
+        is_gmp = isinstance(self, mp.gmp2.GMP2)
         return set_frozen(self, method=method, window=window, is_gcc=is_gmp)
 
     def dump_flags(self, verbose=None):
@@ -658,14 +658,52 @@ class MP2(lib.StreamObject):
         log.info('E_corr(oppo-spin) = %.15g', self.e_corr_os)
         return self
 
-    def ao2mo(self, mo_coeff=None):
-        return _make_eris(self, mo_coeff, verbose=self.verbose)
+    ao2mo = NotImplemented
+
+    def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None):
+        raise NotImplementedError
+
+    def make_rdm1(mp, t2=None, eris=None, ao_repr=False, with_frozen=True):
+        raise NotImplementedError
+
+    def make_rdm2(mp, t2=None, eris=None, ao_repr=False):
+        raise NotImplementedError
+
+    as_scanner = as_scanner
+
+    def energy(self, t2, eris):
+        raise NotImplementedError
+
+    def nuc_grad_method(self):
+        raise NotImplementedError
+
+    def init_amps(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
+        raise NotImplementedError
+
+    # For non-canonical MP2
+    def update_amps(self, t2, eris):
+        raise NotImplementedError
+
+    def density_fit(self, auxbasis=None, with_df=None):
+        raise NotImplementedError
+
+    to_gpu = lib.to_gpu
+
+class RMP2(MP2Base):
 
     make_rdm1 = make_rdm1
     make_fno = make_fno
     make_rdm2 = make_rdm2
 
-    as_scanner = as_scanner
+    update_amps = update_amps
+
+    # For non-canonical MP2
+    energy = energy
+    def init_amps(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
+        return kernel(self, mo_energy, mo_coeff, eris, with_t2)
+
+    def ao2mo(self, mo_coeff=None):
+        return _make_eris(self, mo_coeff, verbose=self.verbose)
 
     def density_fit(self, auxbasis=None, with_df=None):
         from pyscf.mp import dfmp2
@@ -681,22 +719,7 @@ class MP2(lib.StreamObject):
         from pyscf.grad import mp2
         return mp2.Gradients(self)
 
-    # For non-canonical MP2
-    energy = energy
-    update_amps = update_amps
-    def init_amps(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
-        return kernel(self, mo_energy, mo_coeff, eris, with_t2)
-
-    # to_gpu can be reused only when __init__ still takes mf
-    def to_gpu(self):
-        mf = self._scf.to_gpu()
-        from importlib import import_module
-        mod = import_module(self.__module__.replace('pyscf', 'gpu4pyscf'))
-        cls = getattr(mod, self.__class__.__name__)
-        obj = cls(mf)
-        return obj
-
-RMP2 = MP2
+MP2 = RMP2
 
 from pyscf import scf
 scf.hf.RHF.MP2 = lib.class_as_method(MP2)

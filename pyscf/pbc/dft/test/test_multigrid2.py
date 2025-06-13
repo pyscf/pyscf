@@ -91,7 +91,7 @@ def _multigrid2_energy_grad(cell, xc, spin=0):
         mf = dft.UKS(cell)
     mf.xc =  xc
     mf.with_df = multigrid.MultiGridFFTDF2(cell)
-    mf.with_df.ngrids = 2
+    mf.with_df.ntasks = 2
     e = mf.kernel()
     if spin == 0:
         g = rks_grad.Gradients(mf).kernel()
@@ -129,14 +129,14 @@ class KnownValues(unittest.TestCase):
     def test_ntasks(self):
         from pyscf.pbc.dft.multigrid.multigrid_pair import multi_grids_tasks
         with with_grid_level_method("cp2k"):
-            task_list = multi_grids_tasks(He_orth, hermi=1, ngrids=2)
+            task_list = multi_grids_tasks(He_orth, hermi=1, ntasks=2)
             assert task_list.ntasks == [1150, 0]
-            task_list = multi_grids_tasks(He_nonorth, hermi=1, ngrids=2)
+            task_list = multi_grids_tasks(He_nonorth, hermi=1, ntasks=2)
             assert task_list.ntasks == [2771, 732]
         with with_grid_level_method("pyscf"):
-            task_list = multi_grids_tasks(He_orth, hermi=1, ngrids=2)
+            task_list = multi_grids_tasks(He_orth, hermi=1, ntasks=2)
             assert task_list.ntasks == [1150, 0]
-            task_list = multi_grids_tasks(He_nonorth, hermi=1, ngrids=2)
+            task_list = multi_grids_tasks(He_nonorth, hermi=1, ntasks=2)
             assert task_list.ntasks == [3249, 254]
 
     def test_orth_get_pp(self):
