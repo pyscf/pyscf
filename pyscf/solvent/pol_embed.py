@@ -237,7 +237,7 @@ class PolEmbed(lib.StreamObject):
         '''Reset mol and clean up relevant attributes for scanner mode'''
         if mol is not None:
             self.mol = mol
-        self.cppe_state = self._create_cppe_state(mol)
+        self.cppe_state = self._create_cppe_state(self.mol)
         self.potentials = self.cppe_state.potentials
         self.V_es = None
         return self
