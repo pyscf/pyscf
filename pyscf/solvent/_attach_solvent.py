@@ -663,6 +663,11 @@ def _for_tdscf(method, solvent_obj=None, dm=None, equilibrium_solvation=False):
             matrix. A frozen ddCOSMO potential is added to the results.
     '''
     assert hasattr(method._scf, 'with_solvent')
+    if method._scf.with_solvent.__class__.__name__ == 'PolEmbed':
+        # PolEmbed is currently not compatible with the implicit solvent implementation
+        from pyscf.solvent.pol_embed import pe_for_tdscf
+        return pe_for_tdscf(method, solvent_obj, dm, equilibrium_solvation)
+
     if solvent_obj is None:
         if isinstance(method, _Solvation):
             return method
@@ -731,6 +736,8 @@ class TDSCFWithSolvent(_Solvation):
 
     def dump_flags(self, verbose=None):
         super().dump_flags(verbose)
+        log = logger.new_logger(self, verbose)
+        log.info('Solvent model for TDDFT:')
         self.with_solvent.check_sanity()
         self.with_solvent.dump_flags(verbose)
         return self
@@ -740,6 +747,10 @@ class TDSCFWithSolvent(_Solvation):
         return super().reset(mol)
 
     def gen_response(self, *args, **kwargs):
+        # vind computes the response in gas-phase
+        vind = self._scf.undo_solvent().gen_response(
+            *args, with_nlc=not self.exclude_nlc, **kwargs)
+
         # The contribution of the solvent to an excited state include the fast
         # and the slow response parts. In the process of fast vertical excitation,
         # only the fast part is able to respond to changes of the solute
@@ -763,9 +774,6 @@ class TDSCFWithSolvent(_Solvation):
             with_solvent = self._scf.with_solvent
             logger.info(self, 'TDDFT equilibrium solvation with eps=%g', with_solvent.eps)
 
-        # vind computes the response in gas-phase
-        vind = self._scf.undo_solvent().gen_response(
-            *args, with_nlc=not self.exclude_nlc, **kwargs)
         is_uhf = isinstance(self._scf, scf.uhf.UHF)
         singlet = kwargs.get('singlet', True)
         singlet = singlet or singlet is None
