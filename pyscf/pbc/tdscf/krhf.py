@@ -241,8 +241,7 @@ class TDA(KTDBase):
                 The index of the k-point that represents the transition between
                 k-points in the excitation coefficients.
         '''
-        if mf is None:
-            mf = self._scf
+        assert mf is self._scf
         singlet = self.singlet
         kconserv = get_kconserv_ria(mf.cell, mf.kpts)[kshift]
 
@@ -260,7 +259,7 @@ class TDA(KTDBase):
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
-        vresp = mf.gen_response(singlet=singlet, hermi=0, max_memory=max_memory)
+        vresp = self.gen_response(singlet=singlet, hermi=0, max_memory=max_memory)
 
         def vind(zs):
             nz = len(zs)
@@ -367,6 +366,7 @@ class TDHF(KTDBase):
         [ A   B ][X]
         [-B* -A*][Y]
         '''
+        assert mf is self._scf
         assert kshift == 0
 
         singlet = self.singlet
@@ -389,7 +389,7 @@ class TDHF(KTDBase):
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
-        vresp = mf.gen_response(singlet=singlet, hermi=0, max_memory=max_memory)
+        vresp = self.gen_response(singlet=singlet, hermi=0, max_memory=max_memory)
 
         def vind(xys):
             nz = len(xys)

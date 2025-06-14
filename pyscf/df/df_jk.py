@@ -184,6 +184,12 @@ class _DFHF:
 
     def nuc_grad_method(self):
         from pyscf.df.grad import rhf, rohf, uhf, rks, roks, uks
+        if self.istype('_Solvation'):
+            raise NotImplementedError(
+                'Gradients of solvent are not computed. '
+                'Solvent must be applied after density fitting method, e.g.\n'
+                'mf = mol.RKS().density_fit().PCM()'
+            )
         if isinstance(self, scf.uhf.UHF):
             if isinstance(self, scf.hf.KohnShamDFT):
                 return uks.Gradients(self)
@@ -206,6 +212,12 @@ class _DFHF:
 
     def Hessian(self):
         from pyscf.df.hessian import rhf, uhf, rks, uks
+        if self.istype('_Solvation'):
+            raise NotImplementedError(
+                'Hessian of solvent are not computed. '
+                'Solvent must be applied after density fitting method, e.g.\n'
+                'mf = mol.RKS().density_fit().PCM()'
+            )
         if isinstance(self, (scf.uhf.UHF, scf.rohf.ROHF)):
             if isinstance(self, scf.hf.KohnShamDFT):
                 return uks.Hessian(self)

@@ -256,6 +256,9 @@ class Gradients(rhf_grad.GradientsBase):
         self.atmlst = None
         self.de = None
 
+        if getattr(td._scf, 'with_df', None):
+            raise NotImplementedError('Nuclear Gradients for DF-TDDFT')
+
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
         log.info('\n')
