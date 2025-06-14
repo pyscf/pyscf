@@ -162,6 +162,7 @@ class _DFCASSCF(_DFCAS):
     get_h2eff = _DFCASCI.get_h2eff
 
     def ao2mo(self, mo_coeff=None):
+        if mo_coeff is None: mo_coeff = self.mo_coeff
         if self.with_df:
             return _ERIS(self, mo_coeff, self.with_df)
         else:

@@ -117,6 +117,11 @@ def kernel(method, assert_convergence=ASSERT_CONV,
         opt = geometric_solver.GeometryOptimizer(method)
         opt.params = conv_params
         opt.kernel()
+
+    Other geomeTRIC parameters, such as hessian and transition settings, can be
+    specified through `kwargs`. For more details of the geomeTRIC options, please
+    refer to the geomeTRIC documentation:
+    https://geometric.readthedocs.io/en/latest/options.html
     '''
     if isinstance(method, lib.GradScanner):
         g_scanner = method
@@ -195,11 +200,16 @@ def _make_hessian(g_scanner, hessian_option, tmpdir):
     file:/path/to/hessian_file
     '''
     if not isinstance(hessian_option, str):
-        hessian_option = os.path.join(tmpdir, str(uuid.uuid4()))
-    if ':' in hessian_option:
+        if not hessian_option:
+            # "None" disables vibrational analysis in geomeTRIC
+            return None
+        hessian_file = os.path.join(tmpdir, str(uuid.uuid4()))
+        hessian_option = f'file:{hessian_file}'
+    elif ':' in hessian_option:
         hessian_file = hessian_option.split(':', 1)[1]
     else:
-        hessian_file, hessian_option = hessian_option, f'first:{hessian_file}'
+        logger.info(g_scanner, 'hessian={hessian_option} is configured for vibrational analysis')
+        return hessian_option
 
     method = g_scanner.base
     natm = method.mol.natm
@@ -207,7 +217,7 @@ def _make_hessian(g_scanner, hessian_option, tmpdir):
         h = method.Hessian().kernel()
     except (TypeError, NotImplementedError):
         logger.warn(g_scanner, 'Analytical hessian for %s is not available', method)
-        hessian_option = False
+        hessian_option = None
     else:
         h = h.transpose(0,2,1,3).reshape(3*natm, 3*natm)
         numpy.savetxt(hessian_file, h)
