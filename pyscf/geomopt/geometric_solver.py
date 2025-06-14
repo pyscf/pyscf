@@ -33,6 +33,7 @@ from pyscf.grad.rhf import GradientsBase
 
 try:
     from geometric import internal, optimize, nifty, engine, molecule
+    from geometric.errors import GeomOptNotConvergedError
 except ImportError:
     msg = ('Geometry optimizer geomeTRIC not found.\ngeomeTRIC library '
            'can be found on github https://github.com/leeping/geomeTRIC.\n'
@@ -63,14 +64,9 @@ class PySCFEngine(geometric.engine.Engine):
         self.cycle = 0
         self.e_last = 0
         self.callback = None
-        self.maxsteps = 100
         self.assert_convergence = False
 
     def calc_new(self, coords, dirname):
-        if self.cycle >= self.maxsteps:
-            raise NotConvergedError('Geometry optimization is not converged in '
-                                    '%d iterations' % self.maxsteps)
-
         g_scanner = self.scanner
         mol = self.mol
         self.cycle += 1
@@ -136,7 +132,6 @@ def kernel(method, assert_convergence=ASSERT_CONV,
 
     engine = PySCFEngine(g_scanner)
     engine.callback = callback
-    engine.maxsteps = maxsteps
     # To avoid overwriting method.mol
     engine.mol = g_scanner.mol.copy()
 
@@ -154,6 +149,8 @@ def kernel(method, assert_convergence=ASSERT_CONV,
             os.path.join(geometric.optimize.__file__, '..', 'log.ini'))) and kwargs.get('logIni') is None:
         kwargs['logIni'] = os.path.abspath(os.path.join(__file__, '..', 'log.ini'))
 
+    kwargs['maxiter'] = maxsteps
+
     with tempfile.TemporaryDirectory(dir=lib.param.TMPDIR) as tmpdir:
         tmpf = os.path.join(tmpdir, str(uuid.uuid4()))
 
@@ -161,14 +158,14 @@ def kernel(method, assert_convergence=ASSERT_CONV,
             kwargs['hessian'] = _make_hessian(g_scanner, kwargs['hessian'], tmpdir)
             logger.debug(g_scanner, 'Analytical hessian saved in %s', kwargs['hessian'])
 
-        try:
-            geometric.optimize.run_optimizer(customengine=engine, input=tmpf,
-                                             constraints=constraints, **kwargs)
-            conv = True
-            # method.mol.set_geom_(m.xyzs[-1], unit='Angstrom')
-        except NotConvergedError as e:
-            logger.note(method, str(e))
-            conv = False
+    try:
+        geometric.optimize.run_optimizer(customengine=engine, input=tmpf,
+                                         constraints=constraints, **kwargs)
+        conv = True
+        # method.mol should be still in its original geometry
+    except GeomOptNotConvergedError:
+        logger.note(method, 'Geometry optimization failed to converge in %d iterations', maxsteps)
+        conv = False
     return conv, engine.mol
 
 def optimize(method, assert_convergence=ASSERT_CONV,
