@@ -158,14 +158,14 @@ def kernel(method, assert_convergence=ASSERT_CONV,
             kwargs['hessian'] = _make_hessian(g_scanner, kwargs['hessian'], tmpdir)
             logger.debug(g_scanner, 'Analytical hessian saved in %s', kwargs['hessian'])
 
-    try:
-        geometric.optimize.run_optimizer(customengine=engine, input=tmpf,
-                                         constraints=constraints, **kwargs)
-        conv = True
-        # method.mol should be still in its original geometry
-    except GeomOptNotConvergedError:
-        logger.note(method, 'Geometry optimization failed to converge in %d iterations', maxsteps)
-        conv = False
+        try:
+            geometric.optimize.run_optimizer(customengine=engine, input=tmpf,
+                                             constraints=constraints, **kwargs)
+            conv = True
+            # method.mol should be still in its original geometry
+        except GeomOptNotConvergedError:
+            logger.note(method, 'Geometry optimization failed to converge in %d iterations', maxsteps)
+            conv = False
     return conv, engine.mol
 
 def optimize(method, assert_convergence=ASSERT_CONV,
