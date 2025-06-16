@@ -222,6 +222,13 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
         xs.append(x0)
         ax.append(h_op(x0))
     else:
+        # Note, the subspace H must be real even for Hessian of complex orbitals.
+        # See https://doi.org/10.1063/1.5036594 .
+        # In the case of complex orbitals, the subspace H should be constructed as
+        # a 2N x 2N real matrix, where N is the number of parameters in rotation.
+        # The extended space corresponds to the t^dagger for rotation parameters.
+        # This function only constructs one diagonal block of the Hessian matrix.
+        # This is an effective approximation to the solution from the standard Hessian.
         for i in range(1, nx+1):
             for j in range(1, i+1):
                 heff[i,j] = dot(xs[i-1].conj(), ax[j-1]).real
