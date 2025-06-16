@@ -17,6 +17,7 @@ import unittest
 import tempfile
 from functools import reduce
 import numpy
+import numpy as np
 import scipy.linalg
 from pyscf import gto
 from pyscf import lib
@@ -1082,6 +1083,24 @@ H    P
         v0 = u.T.dot(mol.intor('int1e_nuc')).dot(u)
         v1 = mol1.intor('int1e_nuc')
         self.assertAlmostEqual(abs(v0 - v1).max(), 0, 12)
+
+    def test_to_cell(self):
+        from pyscf.dft import numint
+        mol = gto.M(atom='''
+            O   0.   0.       0.
+            H   0.   -0.757   0.587
+            H   0.   0.757    0.587''', basis='ccpvdz')
+        cell = mol.to_cell()
+        mf = mol.RHF().run()
+        dm = mf.make_rdm1()
+        a = cell.lattice_vectors()
+        edge_grids = np.vstack([
+            a * -.5,
+            a * .5,
+        ])
+        ao = numint.eval_ao(mol, edge_grids)
+        rho = numint.eval_rho(mol, ao, dm)
+        self.assertTrue(all(abs(rho) < 1e-7))
 
 if __name__ == "__main__":
     print("test mole.py")

@@ -38,7 +38,7 @@ class CasidaTDDFT(TDDFT, TDA):
     '''Solve the Casida TDDFT formula (A-B)(A+B)(X+Y) = (X+Y)w^2
     '''
 
-    init_guess = TDA.init_guess
+    get_init_guess = TDA.get_init_guess
 
     def gen_vind(self, mf=None):
         if mf is None:
@@ -121,7 +121,7 @@ class CasidaTDDFT(TDDFT, TDA):
 
         x0sym = None
         if x0 is None:
-            x0, x0sym = self.init_guess(
+            x0, x0sym = self.get_init_guess(
                 self._scf, self.nstates, return_symmetry=True)
         elif mol.symmetry:
             x_sym = ghf._get_x_sym_table(self._scf).ravel()

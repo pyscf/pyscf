@@ -239,9 +239,21 @@ class _DFHF:
     NSR = method_not_implemented
     Polarizability = method_not_implemented
     RotationalGTensor = method_not_implemented
-    MP2 = method_not_implemented
+
+    def MP2(self, frozen=None, auxbasis=None):
+        mp_obj = self.DFMP2()
+        if auxbasis is not None:
+            mp_obj.with_df.auxbasis = auxbasis
+        return mp_obj
+
     CISD = method_not_implemented
-    CCSD = method_not_implemented
+
+    def CCSD(self, frozen=None, auxbasis=None):
+        from pyscf.cc import dfccsd, dfuccsd
+        cc_obj = self.DFCCSD(frozen)
+        if auxbasis is not None:
+            cc_obj.with_df.auxbasis = auxbasis
+        return cc_obj
 
     def CASCI(self, ncas, nelecas, auxbasis=None, ncore=None):
         from pyscf import mcscf

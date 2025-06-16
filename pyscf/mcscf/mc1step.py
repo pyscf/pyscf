@@ -1290,6 +1290,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
         self.max_cycle_macro = x
 
     def approx_hessian(self, auxbasis=None, with_df=None):
+        '''Approximate the orbital Hessian using density fitting integrals.'''
         from pyscf.mcscf import df
         return df.approx_hessian(self, auxbasis, with_df)
 

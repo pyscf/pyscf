@@ -67,6 +67,11 @@ def aux_e2(mol, auxmol_or_auxbasis, intor='int3c2e', aosym='s1', comp=None, out=
         shls_slice[4] += mol.nbas
         shls_slice[5] += mol.nbas
 
+    if not mol.cart and auxmol.cart:
+        raise NotImplementedError('Interface for int3c2e_ssc')
+    elif mol.cart and not auxmol.cart:
+        raise RuntimeError('Cartesian orbitals for mol and spherical orbitals for auxmol not supported')
+
     # Extract the call of the two lines below
     #  pmol = gto.mole.conc_mol(mol, auxmol)
     #  return pmol.intor(intor, comp, aosym=aosym, shls_slice=shls_slice, out=out)
@@ -135,6 +140,11 @@ def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
     log = logger.new_logger(mol, verbose)
     if auxmol is None:
         auxmol = addons.make_auxmol(mol, auxbasis)
+
+    if not mol.cart and auxmol.cart:
+        raise NotImplementedError('Interface for int3c2e_ssc')
+    elif mol.cart and not auxmol.cart:
+        raise RuntimeError('Cartesian orbitals for mol and spherical orbitals for auxmol not supported')
 
     j2c = auxmol.intor(int2c, hermi=1)
     if decompose_j2c == 'eig':

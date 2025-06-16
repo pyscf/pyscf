@@ -633,7 +633,7 @@ class TDA(TDBase):
         assert mf is None or mf is self._scf
         return _gen_tda_operation(self, wfnsym=self.wfnsym)
 
-    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
+    def get_init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         if nstates is None: nstates = self.nstates
         if wfnsym is None: wfnsym = self.wfnsym
 
@@ -703,7 +703,7 @@ class TDA(TDBase):
 
         x0sym = None
         if x0 is None:
-            x0, x0sym = self.init_guess(
+            x0, x0sym = self.get_init_guess(
                 self._scf, self.nstates, return_symmetry=True)
         elif mol.symmetry:
             x_sym_a, x_sym_b = _get_x_sym_table(self._scf)
@@ -833,13 +833,13 @@ class TDHF(TDBase):
         assert mf is None or mf is self._scf
         return _gen_tdhf_operation(self, None, self.wfnsym)
 
-    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
+    def get_init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         if return_symmetry:
-            x0, x0sym = TDA.init_guess(self, mf, nstates, wfnsym, return_symmetry)
+            x0, x0sym = TDA.get_init_guess(self, mf, nstates, wfnsym, return_symmetry)
             y0 = numpy.zeros_like(x0)
             return numpy.hstack([x0, y0]), x0sym
         else:
-            x0 = TDA.init_guess(self, mf, nstates, wfnsym, return_symmetry)
+            x0 = TDA.get_init_guess(self, mf, nstates, wfnsym, return_symmetry)
             y0 = numpy.zeros_like(x0)
             return numpy.hstack([x0, y0])
 
@@ -880,7 +880,7 @@ class TDHF(TDBase):
 
         x0sym = None
         if x0 is None:
-            x0, x0sym = self.init_guess(
+            x0, x0sym = self.get_init_guess(
                 self._scf, self.nstates, return_symmetry=True)
         elif mol.symmetry:
             x_sym_a, x_sym_b = _get_x_sym_table(self._scf)

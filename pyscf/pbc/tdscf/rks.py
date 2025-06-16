@@ -25,7 +25,7 @@ from pyscf.pbc.lib.kpts_helper import gamma_point
 RPA = TDRKS = TDDFT = rhf.TDHF
 
 class CasidaTDDFT(TDDFT):
-    init_guess = rhf.TDA.init_guess
+    get_init_guess = rhf.TDA.get_init_guess
     _gen_vind = rks.TDDFTNoHybrid.gen_vind
     gen_vind = rhf.TDA.gen_vind
     kernel = rks.TDDFTNoHybrid.kernel

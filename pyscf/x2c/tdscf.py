@@ -286,9 +286,9 @@ class TDBase(ghf.TDBase):
 class TDA(TDBase, ghf.TDA):
     gen_vind = ghf.TDA.gen_vind
 
-    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
+    def get_init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         assert self.wfnsym is None
-        return ghf.TDA.init_guess(self, mf, nstates, None, return_symmetry)
+        return ghf.TDA.get_init_guess(self, mf, nstates, None, return_symmetry)
 
     kernel = ghf.TDA.kernel
 
@@ -305,9 +305,9 @@ def gen_tdhf_operation(mf, fock_ao=None, with_nlc=True):
 class TDHF(TDBase, ghf.TDHF):
     gen_vind = ghf.TDHF.gen_vind
 
-    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
+    def get_init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         assert self.wfnsym is None
-        return ghf.TDHF.init_guess(self, mf, nstates, None, return_symmetry)
+        return ghf.TDHF.get_init_guess(self, mf, nstates, None, return_symmetry)
 
     kernel = ghf.TDHF.kernel
 
