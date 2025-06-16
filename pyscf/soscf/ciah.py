@@ -224,19 +224,19 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
     else:
         for i in range(1, nx+1):
             for j in range(1, i+1):
-                heff[i,j] = dot(xs[i-1].conj(), ax[j-1])
-                ovlp[i,j] = dot(xs[i-1].conj(), xs[j-1])
-            heff[1:i,i] = heff[i,1:i].conj()
-            ovlp[1:i,i] = ovlp[i,1:i].conj()
+                heff[i,j] = dot(xs[i-1].conj(), ax[j-1]).real
+                ovlp[i,j] = dot(xs[i-1].conj(), xs[j-1]).real
+            heff[1:i,i] = heff[i,1:i]
+            ovlp[1:i,i] = ovlp[i,1:i]
 
     w_t = 0
     for istep in range(max_cycle):
         g = g_op()
         nx = len(xs)
         for i in range(nx):
-            heff[i+1,0] = dot(xs[i].conj(), g)
-            heff[nx,i+1] = dot(xs[nx-1].conj(), ax[i])
-            ovlp[nx,i+1] = dot(xs[nx-1].conj(), xs[i])
+            heff[i+1,0] = dot(xs[i].conj(), g).real
+            heff[nx,i+1] = dot(xs[nx-1].conj(), ax[i]).real
+            ovlp[nx,i+1] = dot(xs[nx-1].conj(), xs[i]).real
         heff[0,:nx+1] = heff[:nx+1,0].conj()
         heff[1:nx,nx] = heff[nx,1:nx].conj()
         ovlp[1:nx,nx] = ovlp[nx,1:nx].conj()
