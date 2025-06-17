@@ -22,7 +22,7 @@ See also the pbc.dft.krkspu and pbc.dft.kukspu module
 import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf import __config__
+from pyscf.data.nist import HARTREE2EV
 from pyscf.dft import uks
 from pyscf.dft.rkspu import set_U, make_minao_lo
 
@@ -34,8 +34,8 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     if dm is None: dm = ks.make_rdm1()
 
     # J + V_xc
-    vxc = super(ks.__class__, ks).get_veff(
-        mol, dm, dm_last=dm_last, vhf_last=vhf_last, hermi=hermi)
+    vxc = uks.get_veff(ks, mol, dm, dm_last=dm_last, vhf_last=vhf_last,
+                       hermi=hermi)
 
     # V_U
     C_ao_lo = ks.C_ao_lo
@@ -131,5 +131,84 @@ class UKSpU(uks.UKS):
             self.C_ao_lo = np.asarray(C_ao_lo)
         assert self.C_ao_lo.ndim == 2
 
+    def dump_flags(self, verbose=None):
+        super().dump_flags(verbose)
+        log = logger.new_logger(self, verbose)
+        if log.verbose >= logger.INFO:
+            from pyscf.pbc.dft.krkspu import format_idx
+            log.info("-" * 79)
+            log.info('U indices and values: ')
+            for idx, val, lab in zip(self.U_idx, self.U_val, self.U_lab):
+                log.info('%6s [%.6g eV] ==> %-100s', format_idx(idx),
+                            val * HARTREE2EV, "".join(lab))
+            log.info("-" * 79)
+        return self
+
     def nuc_grad_method(self):
         raise NotImplementedError
+
+def linear_response_u(mf_plus_u, alphalist=(0.02, 0.05, 0.08)):
+    '''
+    Refs:
+        [1] M. Cococcioni and S. de Gironcoli, Phys. Rev. B 71, 035105 (2005)
+        [2] H. J. Kulik, M. Cococcioni, D. A. Scherlis, and N. Marzari, Phys. Rev. Lett. 97, 103001 (2006)
+        [3] Heather J. Kulik, J. Chem. Phys. 142, 240901 (2015)
+        [4] https://hjkgrp.mit.edu/tutorials/2011-05-31-calculating-hubbard-u/
+        [5] https://hjkgrp.mit.edu/tutorials/2011-06-28-hubbard-u-multiple-sites/
+
+    Args:
+        alphalist :
+            alpha parameters (in eV) are the displacements for the linear
+            response calculations. For each alpha in this list, the DFT+U with
+            U=u0+alpha, U=u0-alpha are evaluated. u0 is the U value from the
+            reference mf_plus_u object, which will be treated as a standard DFT
+            functional.
+    '''
+    assert isinstance(mf_plus_u, UKSpU)
+    if not mf_plus_u.converged:
+        mf_plus_u.run()
+    # The bare density matrix without adding U
+    bare_dm = mf_plus_u.make_rdm1()
+
+    mf = mf_plus_u.copy()
+    mol = mf.mol
+    log = logger.new_logger(mf)
+
+    alphalist = np.asarray(alphalist)
+    alphalist = np.append(-alphalist[::-1], alphalist)
+    u0 = np.asarray(mf.U_val)
+
+    C_ao_lo = mf.C_ao_lo
+    ovlp = mf.get_ovlp()
+    C_inv = [C_ao_lo[:,local_idx].conj().T.dot(ovlp) for local_idx in mf.U_idx]
+
+    bare_occupancies = []
+    final_occupancies = []
+    for alpha in alphalist:
+        mf.U_val = u0 + alpha/HARTREE2EV
+        mf.kernel(dm0=bare_dm)
+        local_occ = 0
+        for c in C_inv:
+            C_on_site = [c.dot(mf.mo_coeff[0]), c.dot(mf.mo_coeff[1])]
+            rdm1_lo = mf.make_rdm1(C_on_site, mf.mo_occ)
+            local_occ += rdm1_lo[0].trace() + rdm1_lo[1].trace()
+        final_occupancies.append(local_occ)
+
+        # The first iteration of SCF
+        fock = mf.get_fock(dm=bare_dm)
+        e, mo = mf.eig(fock, ovlp)
+        for c in C_inv:
+            C_on_site = [c.dot(mo[0]), c.dot(mo[1])]
+            rdm1_lo = mf.make_rdm1(C_on_site, mf.mo_occ)
+            local_occ += rdm1_lo[0].trace() + rdm1_lo[1].trace()
+        bare_occupancies.append(local_occ)
+        log.info('alpha=%f bare_occ=%g final_occ=%g',
+                 alpha, bare_occupancies[-1], final_occupancies[-1])
+
+    chi0, occ0 = np.polyfit(alphalist, bare_occupancies, deg=1)
+    chif, occf = np.polyfit(alphalist, final_occupancies, deg=1)
+    log.info('Line fitting chi0 = %f x + %f', chi0, occ0)
+    log.info('Line fitting chif = %f x + %f', chif, occf)
+    Uresp = 1./chi0 - 1./chif
+    log.note('Uresp = %f, chi0 = %f, chif = %f', Uresp, chi0, chif)
+    return Uresp

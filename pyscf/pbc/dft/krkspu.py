@@ -62,9 +62,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpts is None: kpts = ks.kpts
 
     # J + V_xc
-    vxc = super(ks.__class__, ks).get_veff(cell, dm, dm_last=dm_last,
-                                           vhf_last=vhf_last, hermi=hermi, kpts=kpts,
-                                           kpts_band=kpts_band)
+    vxc = krks.get_veff(ks, cell, dm, dm_last=dm_last, vhf_last=vhf_last,
+                        hermi=hermi, kpts=kpts, kpts_band=kpts_band)
 
     # V_U
     C_ao_lo = ks.C_ao_lo
@@ -77,12 +76,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         C_inv = np.dot(C_ao_lo[k].conj().T, ovlp[k])
         rdm1_lo[k] = mdot(C_inv, dm[k], C_inv.conj().T)
 
-    is_ibz = hasattr(kpts, "kpts_ibz")
-    if is_ibz:
-        rdm1_lo_0 = kpts.dm_at_ref_cell(rdm1_lo)
-
     E_U = 0.0
-    weight = getattr(kpts, "weights_ibz", np.repeat(1.0/nkpts, nkpts))
+    weight = 1.0/nkpts
     logger.info(ks, "-" * 79)
     with np.printoptions(precision=5, suppress=True, linewidth=1000):
         for idx, val, lab in zip(ks.U_idx, ks.U_val, ks.U_lab):
@@ -101,13 +96,9 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                 SC = np.dot(S_k, C_k)
                 vxc[k] += mdot(SC, (np.eye(P_k.shape[-1]) - P_k)
                                * (val * 0.5), SC.conj().T).astype(vxc[k].dtype,copy=False)
-                E_U += weight[k] * (val * 0.5) * (P_k.trace() - np.dot(P_k, P_k).trace() * 0.5)
-                if not is_ibz:
-                    P_loc += P_k
-            if is_ibz:
-                P_loc = rdm1_lo_0[U_mesh].real
-            else:
-                P_loc = P_loc.real / nkpts
+                E_U += weight * (val * 0.5) * (P_k.trace() - np.dot(P_k, P_k).trace() * 0.5)
+                P_loc += P_k
+            P_loc = P_loc.real / nkpts
             logger.info(ks, "%s\n%s", lab_string, P_loc)
             logger.info(ks, "-" * 79)
 
@@ -164,14 +155,6 @@ def set_U(ks, U_idx, U_val):
 
     for idx, val in zip(ks.U_idx, ks.U_val):
         ks.U_lab.append(lo_labels[idx])
-
-    if ks.verbose >= logger.INFO:
-        logger.info(ks, "-" * 79)
-        logger.debug(ks, 'U indices and values: ')
-        for idx, val, lab in zip(ks.U_idx, ks.U_val, Ks.U_lab):
-            logger.debug(ks, '%6s [%.6g eV] ==> %-100s', format_idx(idx),
-                         val * HARTREE2EV, "".join(lab))
-        logger.info(ks, "-" * 79)
 
 def make_minao_lo(ks, minao_ref):
     """
@@ -281,42 +264,17 @@ class KRKSpU(krks.KRKS):
         if self.C_ao_lo.ndim == 4:
             self.C_ao_lo = self.C_ao_lo[0]
 
+    def dump_flags(self, verbose=None):
+        super().dump_flags(verbose)
+        log = logger.new_logger(self, verbose)
+        if log.verbose >= logger.INFO:
+            log.info("-" * 79)
+            log.info('U indices and values: ')
+            for idx, val, lab in zip(self.U_idx, self.U_val, self.U_lab):
+                log.info('%6s [%.6g eV] ==> %-100s', format_idx(idx),
+                            val * HARTREE2EV, "".join(lab))
+            log.info("-" * 79)
+        return self
+
     def nuc_grad_method(self):
         raise NotImplementedError
-
-def linear_response_u(U_idx):
-    h1 = np.eye(n) #at U_idx
-    fx = _response_functions
-    mo1, e1 = cphf.solve(fx, mo_energy, mo_occ, h1vo, s1vo,
-                         max_cycle=max_cycle, level_shift=level_shift, tol=tol)
-    return u
-
-
-if __name__ == '__main__':
-    import pyscf
-    from pyscf.pbc import dft as pdft
-    cell = pyscf.M(
-         atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917',
-         a = '''0.      1.7834  1.7834
-                1.7834  0.      1.7834
-                1.7834  1.7834  0.    ''',
-         basis = 'gth-dzvp',
-         pseudo = 'gth-pade',
-         mesh = [29]*3,
-    )
-    kmesh = [1, 1, 1]
-    kpts = cell.make_kpts(kmesh, wrap_around=True)
-    U_idx = ["1 C 2p"]
-    U_val = [5.0]
-    cell.verbose=4
-
-    mf = pdft.KRKSpU(cell,
-        xc='svwn', kpts=kpts, U_idx=U_idx, U_val=U_val, C_ao_lo='minao', minao_ref='gth-szv')
-    mf.conv_tol = 1e-10
-    e1 = mf.kernel()
-
-    U_idx = []
-    mf = pdft.KRKSpU(cell,
-        xc='svwn', kpts=kpts, U_idx=U_idx, U_val=U_val, C_ao_lo='minao', minao_ref='gth-szv')
-    mf.conv_tol = 1e-10
-    e2 = mf.kernel()

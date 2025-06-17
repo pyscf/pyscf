@@ -29,7 +29,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import __config__
 from pyscf.pbc.dft import kuks
-from pyscf.pbc.dft.krkspu import set_U, make_minao_lo, mdot
+from pyscf.pbc.dft.krkspu import set_U, make_minao_lo, mdot, KRKSpU
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
              kpts=None, kpts_band=None):
@@ -41,9 +41,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpts is None: kpts = ks.kpts
 
     # J + V_xc
-    vxc = super(ks.__class__, ks).get_veff(cell, dm, dm_last=dm_last,
-                                           vhf_last=vhf_last, hermi=hermi, kpts=kpts,
-                                           kpts_band=kpts_band)
+    vxc = kuks.get_veff(ks, cell, dm, dm_last=dm_last, vhf_last=vhf_last,
+                        hermi=hermi, kpts=kpts, kpts_band=kpts_band)
 
     # V_U
     C_ao_lo = ks.C_ao_lo
@@ -57,12 +56,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
             C_inv = np.dot(C_ao_lo[s, k].conj().T, ovlp[k])
             rdm1_lo[s, k] = mdot(C_inv, dm[s][k], C_inv.conj().T)
 
-    is_ibz = hasattr(kpts, "kpts_ibz")
-    if is_ibz:
-        rdm1_lo_0 = kpts.dm_at_ref_cell(rdm1_lo)
-
     E_U = 0.0
-    weight = getattr(kpts, "weights_ibz", np.repeat(1.0/nkpts, nkpts))
+    weight = 1.0/nkpts
     logger.info(ks, "-" * 79)
     with np.printoptions(precision=5, suppress=True, linewidth=1000):
         for idx, val, lab in zip(ks.U_idx, ks.U_val, ks.U_lab):
@@ -82,13 +77,9 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                     SC = np.dot(S_k, C_k)
                     vxc[s][k] += mdot(SC, (np.eye(P_k.shape[-1]) - P_k * 2.0)
                                       * (val * 0.5), SC.conj().T).astype(vxc[s][k].dtype,copy=False)
-                    E_U += weight[k] * (val * 0.5) * (P_k.trace() - np.dot(P_k, P_k).trace())
-                    if not is_ibz:
-                        P_loc += P_k
-                if is_ibz:
-                    P_loc = rdm1_lo_0[s][U_mesh].real
-                else:
-                    P_loc = P_loc.real / nkpts
+                    E_U += weight * (val * 0.5) * (P_k.trace() - np.dot(P_k, P_k).trace())
+                    P_loc += P_k
+                P_loc = P_loc.real / nkpts
                 logger.info(ks, "spin %s\n%s\n%s", s, lab_string, P_loc)
             logger.info(ks, "-" * 79)
 
@@ -169,6 +160,18 @@ class KUKSpU(kuks.KUKS):
             assert self.C_ao_lo.shape[0] == 2
         else:
             raise ValueError
+
+    def dump_flags(self, verbose=None):
+        super().dump_flags(verbose)
+        log = logger.new_logger(self, verbose)
+        if log.verbose >= logger.INFO:
+            log.info("-" * 79)
+            log.info('U indices and values: ')
+            for idx, val, lab in zip(self.U_idx, self.U_val, self.U_lab):
+                log.info('%6s [%.6g eV] ==> %-100s', format_idx(idx),
+                            val * HARTREE2EV, "".join(lab))
+            log.info("-" * 79)
+        return self
 
     def nuc_grad_method(self):
         raise NotImplementedError

@@ -22,10 +22,80 @@ from pyscf import lib
 from pyscf.pbc.dft import krkspu, krks_ksymm
 from pyscf.pbc.lib import kpts as libkpts
 
+def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+             kpts=None, kpts_band=None):
+    """
+    Coulomb + XC functional + Hubbard U terms.
+
+    .. note::
+        This is a replica of pyscf.dft.rks.get_veff with kpts added.
+        This function will change the ks object.
+
+    Args:
+        ks : an instance of :class:`RKS`
+            XC functional are controlled by ks.xc attribute.  Attribute
+            ks.grids might be initialized.
+        dm : ndarray or list of ndarrays
+            A density matrix or a list of density matrices
+
+    Returns:
+        Veff : ``(nkpts, nao, nao)`` or ``(*, nkpts, nao, nao)`` ndarray
+        Veff = J + Vxc + V_U.
+    """
+    if cell is None: cell = ks.cell
+    if dm is None: dm = ks.make_rdm1()
+    if kpts is None: kpts = ks.kpts
+
+    # J + V_xc
+    vxc = krks_ksymm.get_veff(ks, cell, dm, dm_last=dm_last, vhf_last=vhf_last,
+                              hermi=hermi, kpts=kpts, kpts_band=kpts_band)
+
+    # V_U
+    C_ao_lo = ks.C_ao_lo
+    ovlp = ks.get_ovlp()
+    nkpts = len(kpts)
+    nlo = C_ao_lo.shape[-1]
+
+    rdm1_lo  = np.zeros((nkpts, nlo, nlo), dtype=np.complex128)
+    for k in range(nkpts):
+        C_inv = np.dot(C_ao_lo[k].conj().T, ovlp[k])
+        rdm1_lo[k] = mdot(C_inv, dm[k], C_inv.conj().T)
+    rdm1_lo_0 = kpts.dm_at_ref_cell(rdm1_lo)
+
+    E_U = 0.0
+    weight = kpts.weights_ibz
+    logger.info(ks, "-" * 79)
+    with np.printoptions(precision=5, suppress=True, linewidth=1000):
+        for idx, val, lab in zip(ks.U_idx, ks.U_val, ks.U_lab):
+            lab_string = " "
+            for l in lab:
+                lab_string += "%9s" %(l.split()[-1])
+            lab_sp = lab[0].split()
+            logger.info(ks, "local rdm1 of atom %s: ",
+                        " ".join(lab_sp[:2]) + " " + lab_sp[2][:2])
+            U_mesh = np.ix_(idx, idx)
+            P_loc = 0.0
+            for k in range(nkpts):
+                S_k = ovlp[k]
+                C_k = C_ao_lo[k][:, idx]
+                P_k = rdm1_lo[k][U_mesh]
+                SC = np.dot(S_k, C_k)
+                vxc[k] += mdot(SC, (np.eye(P_k.shape[-1]) - P_k)
+                               * (val * 0.5), SC.conj().T).astype(vxc[k].dtype,copy=False)
+                E_U += weight[k] * (val * 0.5) * (P_k.trace() - np.dot(P_k, P_k).trace() * 0.5)
+            P_loc = rdm1_lo_0[U_mesh].real
+            logger.info(ks, "%s\n%s", lab_string, P_loc)
+            logger.info(ks, "-" * 79)
+
+    if E_U.real < 0.0 and all(np.asarray(ks.U_val) > 0):
+        logger.warn(ks, "E_U (%s) is negative...", E_U.real)
+    vxc = lib.tag_array(vxc, E_U=E_U)
+    return vxc
+
 @lib.with_doc(krkspu.KRKSpU.__doc__)
 class KsymAdaptedKRKSpU(krks_ksymm.KRKS):
 
-    get_veff = krkspu.get_veff
+    get_veff = get_veff
     energy_elec = krkspu.energy_elec
     to_hf = lib.invalid_method('to_hf')
 
