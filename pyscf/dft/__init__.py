@@ -118,3 +118,11 @@ def X2C(mol, *args):
     else:
         return dft.UKS(mol, *args)
 X2C_KS = X2C
+
+def RKSpU(mol, xc='LDA,VWN', **kwargs):
+    from pyscf.dft import rkspu
+    return rkspu.RKSpU(mol, xc=xc, **kwargs)
+
+def UKSpU(mol, xc='LDA,VWN', **kwargs):
+    from pyscf.dft import ukspu
+    return ukspu.UKSpU(mol, xc=xc, **kwargs)
