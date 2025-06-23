@@ -224,6 +224,6 @@ def run(tasks=None, output_file=None, print_summary=False):
 
     with open(output_file, 'w') as f:
         json.dump({
-            'sys_info': get_sys_info(),
+            'metadata': get_sys_info(),
             'timing': results
         }, f)
