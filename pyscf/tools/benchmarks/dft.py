@@ -14,9 +14,9 @@
 
 '''
 Benchmark tests for DFT and density fitting DFT methods. This module can be
-executed fromm cli
+executed fromm cli:
 
-python -m pyscf.tools.benchmarks.dft --save-json=pyscf-2.9-dft.json --print-summary=True
+    python -m pyscf.tools.benchmarks.dft --save-json=pyscf-2.9-dft.json --print-summary=True
 '''
 
 import os
@@ -74,7 +74,8 @@ def benchmark_rks_gradients():
                 mol_name = xyz_file.rsplit('.', 1)[0]
                 benchmark(
                     lambda: run_rks(xyz_file, basis, xc, with_grad=True),
-                    label=f'RKS {mol_name} {xc}/{basis} Gradients')
+                    label=f'RKS {mol_name} {xc}/{basis} Gradients',
+                    tags=['slow'])
 
 def main():
     parser = cli_parser()
