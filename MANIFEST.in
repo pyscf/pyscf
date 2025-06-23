@@ -18,5 +18,8 @@ include pyscf/gto/basis/bse_meta.json
 recursive-include pyscf/lib *.c *.h CMakeLists.txt
 recursive-exclude pyscf/lib *.cl
 
+# Benchmarks data
+recursive-include pyscf/tools/benchmarks *
+
 global-exclude *.py[cod]
 prune pyscf/lib/build
