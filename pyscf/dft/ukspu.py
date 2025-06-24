@@ -44,10 +44,14 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     rdm1_lo = [C_inv.dot(dm[0]).dot(C_inv.conj().T),
                C_inv.dot(dm[1]).dot(C_inv.conj().T)]
 
+    alphas = ks.alpha
+    if not hasattr(alphas, '__len__'): # not a list or tuple
+        alphas = [alphas] * len(ks.U_idx)
+
     E_U = 0.0
     logger.info(ks, "-" * 79)
     with np.printoptions(precision=5, suppress=True, linewidth=1000):
-        for idx, val, lab in zip(ks.U_idx, ks.U_val, ks.U_lab):
+        for idx, val, lab, alpha in zip(ks.U_idx, ks.U_val, ks.U_lab, alphas):
             lab_string = " "
             for l in lab:
                 lab_string += "%9s" %(l.split()[-1])
@@ -58,7 +62,12 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
                 P = rdm1_lo[s][idx[:,None], idx]
                 SC = np.dot(ovlp, C_ao_lo[:, idx])
                 loc_sites = P.shape[-1]
-                vxc[s] += SC.dot((np.eye(loc_sites) - P * 2.0) * (val * 0.5)).dot(SC.conj().T)
+                vhub_loc = (np.eye(loc_sites) - P * 2.0) * (val * 0.5)
+                if alpha is not None:
+                    # LR-cDFT perturbation for Hubbard U
+                    E_U += alpha * P.trace()
+                    vhub_loc += np.eye(loc_sites) * alpha
+                vxc[s] += SC.dot(vhub_loc).dot(SC.conj().T)
                 E_U += (val * 0.5) * (P.trace() - np.dot(P, P).trace())
                 logger.info(ks, "spin %s\n%s\n%s", s, lab_string, P)
             logger.info(ks, "-" * 79)
@@ -94,7 +103,7 @@ class UKSpU(uks.UKS):
     UKSpU class adapted for PBCs with k-point sampling.
     """
 
-    _keys = {"U_idx", "U_val", "C_ao_lo", "U_lab"}
+    _keys = {"U_idx", "U_val", "C_ao_lo", "U_lab", 'alpha'}
 
     get_veff = get_veff
     energy_elec = energy_elec
@@ -117,6 +126,13 @@ class UKSpU(uks.UKS):
                      np.array, shape ((spin,), nao, nlo),
                      string, in 'minao'.
             minao_ref: reference for minao orbitals, default is 'MINAO'.
+
+        Attributes:
+            U_idx: same as the input.
+            U_val: effectiv U-J [in AU]
+            C_ao_loc: np.array
+            alpha: the perturbation [in AU] used to compute U in LR-cDFT.
+                Refs: Cococcioni and de Gironcoli, PRB 71, 035105 (2005)
         """
         super(self.__class__, self).__init__(mol, xc=xc)
 
@@ -130,17 +146,23 @@ class UKSpU(uks.UKS):
         else:
             self.C_ao_lo = np.asarray(C_ao_lo)
         assert self.C_ao_lo.ndim == 2
+        self.alpha = None
 
     def dump_flags(self, verbose=None):
         super().dump_flags(verbose)
         log = logger.new_logger(self, verbose)
         if log.verbose >= logger.INFO:
             from pyscf.pbc.dft.krkspu import format_idx
+            alphas = self.alpha
+            if not hasattr(alphas, '__len__'): # not a list or tuple
+                alphas = [alphas] * len(self.U_idx)
             log.info("-" * 79)
             log.info('U indices and values: ')
-            for idx, val, lab in zip(self.U_idx, self.U_val, self.U_lab):
+            for idx, val, lab, alpha in zip(self.U_idx, self.U_val, self.U_lab, alphas):
                 log.info('%6s [%.6g eV] ==> %-100s', format_idx(idx),
                             val * HARTREE2EV, "".join(lab))
+                if alpha is not None:
+                    log.info('alpha for LR-cDFT %s (eV)', alpha*HARTREE2EV)
             log.info("-" * 79)
         return self
 
@@ -185,7 +207,7 @@ def linear_response_u(mf_plus_u, alphalist=(0.02, 0.05, 0.08)):
     bare_occupancies = []
     final_occupancies = []
     for alpha in alphalist:
-        mf.U_val = u0 + alpha/HARTREE2EV
+        mf.alpha = alpha / HARTREE2EV
         mf.kernel(dm0=bare_dm)
         local_occ = 0
         for c in C_inv:
