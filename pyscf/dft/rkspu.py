@@ -288,12 +288,10 @@ def linear_response_u(mf_plus_u, alphalist=(0.02, 0.05, 0.08)):
     bare_dm = mf_plus_u.make_rdm1()
 
     mf = mf_plus_u.copy()
-    mol = mf.mol
     log = logger.new_logger(mf)
 
     alphalist = np.asarray(alphalist)
     alphalist = np.append(-alphalist[::-1], alphalist)
-    u0 = np.asarray(mf.U_val)
 
     C_ao_lo = mf.C_ao_lo
     ovlp = mf.get_ovlp()

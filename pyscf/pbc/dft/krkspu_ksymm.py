@@ -19,6 +19,7 @@
 import numpy as np
 from pyscf import __config__
 from pyscf import lib
+from pyscf.lib import logger
 from pyscf.pbc.dft import krkspu, krks_ksymm
 from pyscf.pbc.lib import kpts as libkpts
 
@@ -59,7 +60,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     rdm1_lo  = np.zeros((nkpts, nlo, nlo), dtype=np.complex128)
     for k in range(nkpts):
         C_inv = np.dot(C_ao_lo[k].conj().T, ovlp[k])
-        rdm1_lo[k] = mdot(C_inv, dm[k], C_inv.conj().T)
+        rdm1_lo[k] = C_inv.dot(dm[k]).dot(C_inv.conj().T)
     rdm1_lo_0 = kpts.dm_at_ref_cell(rdm1_lo)
 
     E_U = 0.0
@@ -80,8 +81,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                 C_k = C_ao_lo[k][:, idx]
                 P_k = rdm1_lo[k][U_mesh]
                 SC = np.dot(S_k, C_k)
-                vxc[k] += mdot(SC, (np.eye(P_k.shape[-1]) - P_k)
-                               * (val * 0.5), SC.conj().T).astype(vxc[k].dtype,copy=False)
+                vhub_loc = (np.eye(P_k.shape[-1]) - P_k) * (val * 0.5)
+                vxc[k] += SC.dot(vhub_loc).dot(SC.conj().T).astype(vxc[k].dtype,copy=False)
                 E_U += weight[k] * (val * 0.5) * (P_k.trace() - np.dot(P_k, P_k).trace() * 0.5)
             P_loc = rdm1_lo_0[U_mesh].real
             logger.info(ks, "%s\n%s", lab_string, P_loc)

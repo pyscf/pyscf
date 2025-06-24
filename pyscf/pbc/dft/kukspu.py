@@ -30,6 +30,7 @@ from pyscf.lib import logger
 from pyscf import __config__
 from pyscf.pbc.dft import kuks
 from pyscf.pbc.dft.krkspu import set_U, make_minao_lo, mdot, KRKSpU
+from pyscf.data.nist import HARTREE2EV
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
              kpts=None, kpts_band=None):
@@ -165,6 +166,7 @@ class KUKSpU(kuks.KUKS):
         super().dump_flags(verbose)
         log = logger.new_logger(self, verbose)
         if log.verbose >= logger.INFO:
+            from pyscf.pbc.dft.krkspu import format_idx
             log.info("-" * 79)
             log.info('U indices and values: ')
             for idx, val, lab in zip(self.U_idx, self.U_val, self.U_lab):
