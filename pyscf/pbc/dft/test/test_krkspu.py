@@ -22,6 +22,7 @@ import numpy as np
 from pyscf import lib
 from pyscf.pbc import gto as pgto
 from pyscf.pbc import dft as pdft
+from pyscf.pbc.dft import krkspu
 
 def setUpModule():
     global cell
@@ -91,6 +92,34 @@ class KnownValues(unittest.TestCase):
         vxc = mf.get_veff(cell, dm)
         self.assertAlmostEqual(vxc.E_U, 0.07587726255165786, 11)
         self.assertAlmostEqual(lib.fp(vxc), 12.77643098220399, 8)
+
+    def test_KRKSpU_linear_response(self):
+        cell = pgto.Cell()
+        cell.unit = 'A'
+        cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
+        cell.a = '''0.      1.7834  1.7834
+                    1.7834  0.      1.7834
+                    1.7834  1.7834  0.    '''
+
+        cell.basis = 'gth-szv'
+        cell.pseudo = 'gth-pade'
+        cell.verbose = 7
+        cell.output = '/dev/null'
+        cell.mesh = [29]*3
+        cell.build()
+        kmesh = [2, 1, 1]
+        kpts = cell.make_kpts(kmesh, wrap_around=True)
+        U_idx = ["1 C 2p"]
+        U_val = [5.0]
+
+        mf = pdft.KRKSpU(cell, kpts, U_idx=U_idx, U_val=U_val, C_ao_lo='minao',
+                minao_ref='gth-szv')
+        mf.conv_tol = 1e-10
+        e_tot = mf.kernel()
+        self.assertAlmostEqual(e_tot, -10.6191452297714, 8)
+
+        uresp = krkspu.linear_response_u(mf, (0.03, 0.08))
+        self.assertAlmostEqual(uresp, 6.279179, 2)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.krkspu")

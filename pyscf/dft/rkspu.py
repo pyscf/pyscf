@@ -247,18 +247,8 @@ class RKSpU(rks.RKS):
         super().dump_flags(verbose)
         log = logger.new_logger(self, verbose)
         if log.verbose >= logger.INFO:
-            from pyscf.pbc.dft.krkspu import format_idx
-            alphas = self.alpha
-            if not hasattr(alphas, '__len__'): # not a list or tuple
-                alphas = [alphas] * len(self.U_idx)
-            log.info("-" * 79)
-            log.info('U indices and values: ')
-            for idx, val, lab, alpha in zip(self.U_idx, self.U_val, self.U_lab, alphas):
-                log.info('%6s [%.6g eV] ==> %-100s', format_idx(idx),
-                            val * HARTREE2EV, "".join(lab))
-                if alpha is not None:
-                    log.info('alpha for LR-cDFT %s (eV)', alpha*HARTREE2EV)
-            log.info("-" * 79)
+            from pyscf.pbc.dft.krkspu import _print_U_info
+            _print_U_info(self, log)
         return self
 
     def nuc_grad_method(self):
@@ -284,6 +274,7 @@ def linear_response_u(mf_plus_u, alphalist=(0.02, 0.05, 0.08)):
     assert isinstance(mf_plus_u, RKSpU)
     if not mf_plus_u.converged:
         mf_plus_u.run()
+    assert mf_plus_u.converged
     # The bare density matrix without adding U
     bare_dm = mf_plus_u.make_rdm1()
 
