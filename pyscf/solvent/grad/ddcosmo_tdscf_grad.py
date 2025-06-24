@@ -39,24 +39,41 @@ from pyscf.dft import numint
 from pyscf.solvent import ddcosmo
 from pyscf.solvent.grad import ddcosmo_grad
 from pyscf.solvent._attach_solvent import _Solvation
+from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import rks as rks_grad
 from pyscf.grad import tdrks as tdrks_grad
 from pyscf.grad import tduks as tduks_grad
 from pyscf.scf import cphf, ucphf
 
 
-def make_grad_object(grad_method):
-    '''For grad_method in vacuum, add nuclear gradients of solvent pcmobj'''
-
+def make_grad_object(td_base_method):
+    '''For td_method in vacuum, add td of solvent pcmobj'''
     # Zeroth order method object must be a solvation-enabled method
-    assert isinstance(grad_method.base, _Solvation)
-    if grad_method.base.with_solvent.frozen:
+    if isinstance(td_base_method, rhf_grad.GradientsBase):
+        # For backward compatibility. The input argument is a gradient object in
+        # previous implementations.
+        td_base_method = td_base_method.base
+
+    assert isinstance(td_base_method, _Solvation)
+    if td_base_method.with_solvent.frozen:
         raise RuntimeError('Frozen solvent model is not avialbe for energy gradients')
 
-    name = (grad_method.base.with_solvent.__class__.__name__
-            + grad_method.__class__.__name__)
-    return lib.set_class(WithSolventGrad(grad_method),
-                         (WithSolventGrad, grad_method.__class__), name)
+    # The nuclear gradients of stable exited states should correspond to a
+    # fully relaxed solvent. Strictly, the TDDFT exited states should be
+    # solved using state-specific solvent model. Even if running LR-PCM for
+    # the zeroth order TDDFT, the wavefunction should be comptued using the
+    # same dielectric constant as the ground state (the zero-frequency eps).
+    with_solvent = td_base_method.with_solvent
+    if not with_solvent.equilibrium_solvation:
+        raise RuntimeError(
+            'When computing gradients of PCM-TDDFT, equilibrium solvation should '
+            'be employed. The PCM TDDFT should be initialized as\n'
+            '    mf.TDDFT(equilibrium_solvation=True)')
+    td_grad = td_base_method.undo_solvent().Gradients()
+    td_grad.base = td_base_method
+    name = with_solvent.__class__.__name__ + td_grad.__class__.__name__
+    return lib.set_class(WithSolventGrad(td_grad),
+                         (WithSolventGrad, td_grad.__class__), name)
 
 class WithSolventGrad:
     _keys = {'de_solvent', 'de_solute'}
@@ -88,8 +105,8 @@ class WithSolventGrad:
         if dm is None:
             dm = self.base._scf.make_rdm1(ao_repr=True)
 
-        self.de_solvent = ddcosmo_grad.kernel(self.base.with_solvent, dm)
         self.de_solute = super().kernel(*args, **kwargs)
+        self.de_solvent = self.base.with_solvent.grad(dm)
         self.de = self.de_solute + self.de_solvent
 
         if self.verbose >= logger.NOTE:
@@ -161,7 +178,8 @@ def tdrhf_grad_elec(td_grad, x_y, singlet=True, atmlst=None,
 
     with lib.temporary_env(mf.with_solvent, equilibrium_solvation=True):
         # set singlet=None, generate function for CPHF type response kernel
-        vresp = mf.gen_response(singlet=None, hermi=1)
+        vresp = mf.gen_response(singlet=None, hermi=1,
+                                with_nlc=not td_grad.base.exclude_nlc)
         def fvind(x):  # For singlet, closed shell ground state
             dm = reduce(numpy.dot, (orbv, x.reshape(nvir,nocc)*2, orbo.T))
             v1ao = vresp(dm+dm.T)
@@ -332,7 +350,8 @@ def tdrks_grad_elec(td_grad, x_y, singlet=True, atmlst=None,
 
     with lib.temporary_env(mf.with_solvent, equilibrium_solvation=True):
         # set singlet=None, generate function for CPHF type response kernel
-        vresp = mf.gen_response(singlet=None, hermi=1)
+        vresp = mf.gen_response(singlet=None, hermi=1,
+                                with_nlc=not td_grad.base.exclude_nlc)
         def fvind(x):
             dm = reduce(numpy.dot, (orbv, x.reshape(nvir,nocc)*2, orbo.T))
             v1ao = vresp(dm+dm.T)
@@ -513,7 +532,7 @@ def tduhf_grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.I
     wvob += numpy.einsum('ac,ai->ci', veff0momb[noccb:,noccb:], xmyb) * 2
 
     with lib.temporary_env(mf.with_solvent, equilibrium_solvation=True):
-        vresp = mf.gen_response(hermi=1)
+        vresp = mf.gen_response(hermi=1, with_nlc=not td_grad.base.exclude_nlc)
         def fvind(x):
             dm1 = numpy.empty((2,nao,nao))
             xa = x[0,:nvira*nocca].reshape(nvira,nocca)
@@ -754,7 +773,7 @@ def tduks_grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.I
         veff0momb = numpy.zeros((nmob,nmob))
 
     with lib.temporary_env(mf.with_solvent, equilibrium_solvation=True):
-        vresp = mf.gen_response(hermi=1)
+        vresp = mf.gen_response(hermi=1, with_nlc=not td_grad.base.exclude_nlc)
         def fvind(x):
             dm1 = numpy.empty((2,nao,nao))
             xa = x[0,:nvira*nocca].reshape(nvira,nocca)
@@ -898,6 +917,8 @@ def tduks_grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.I
 
 def _grad_solvent(pcmobj, dm0, dmz1doo, dmxpy, singlet=True):
     '''Energy derivatives associated to derivatives of B tensor'''
+    if pcmobj._intermediates is None:
+        pcmobj.build()
     dielectric = pcmobj.eps
     if dielectric > 0:
         f_epsilon = (dielectric-1.)/dielectric
@@ -1258,45 +1279,3 @@ def _grad_ee(pcmobj, dm1, dm2, r_vdw, ui, ylm_1sph, cached_pol, L):
     if is_single_dm:
         de = de[0]
     return de
-
-
-if __name__ == '__main__':
-    mol0 = gto.M(atom='H  0.  0.  1.804; F  0.  0.  0.', verbose=0, unit='B')
-    mol1 = gto.M(atom='H  0.  0.  1.803; F  0.  0.  0.', verbose=0, unit='B')
-    mol2 = gto.M(atom='H  0.  0.  1.805; F  0.  0.  0.', verbose=0, unit='B')
-
-    # TDA with equilibrium_solvation
-    mf = mol0.RHF().ddCOSMO().run()
-    td = mf.TDA().ddCOSMO().run(equilibrium_solvation=True)
-    g1 = td.nuc_grad_method().kernel() # 0  0  -0.5116214042
-
-    mf = mol1.RHF().ddCOSMO().run()
-    td1 = mf.TDA().ddCOSMO().run(equilibrium_solvation=True)
-    mf = mol2.RHF().ddCOSMO().run()
-    td2 = mf.TDA().ddCOSMO().run(equilibrium_solvation=True)
-    print((td2.e_tot[0]-td1.e_tot[0])/0.002, g1[0,2])
-    print((td2.e_tot[0]-td1.e_tot[0])/0.002 - g1[0,2])
-
-    # TDA without equilibrium_solvation
-    mf = mol0.RHF().ddCOSMO().run()
-    td = mf.TDA().ddCOSMO().run()
-    g1 = td.nuc_grad_method().kernel()
-
-    mf = mol1.RHF().ddCOSMO().run()
-    td1 = mf.TDA().ddCOSMO().run()
-    mf = mol2.RHF().ddCOSMO().run()
-    td2 = mf.TDA().ddCOSMO().run()
-    print((td2.e_tot[0]-td1.e_tot[0])/0.002, g1[0,2])
-    print((td2.e_tot[0]-td1.e_tot[0])/0.002 - g1[0,2])
-
-    # TDA lda with equilibrium_solvation
-    mf = mol0.RKS().ddCOSMO().run(xc='svwn')
-    td = mf.TDA().ddCOSMO().run(equilibrium_solvation=True)
-    g1 = td.nuc_grad_method().kernel()
-
-    mf = mol1.RKS().ddCOSMO().run(xc='svwn')
-    td1 = mf.TDA().ddCOSMO().run(equilibrium_solvation=True)
-    mf = mol2.RKS().ddCOSMO().run(xc='svwn')
-    td2 = mf.TDA().ddCOSMO().run(equilibrium_solvation=True)
-    print((td2.e_tot[0]-td1.e_tot[0])/0.002, g1[0,2])
-    print((td2.e_tot[0]-td1.e_tot[0])/0.002 - g1[0,2])

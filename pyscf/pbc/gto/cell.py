@@ -590,13 +590,14 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
     rx = np.asarray(rx, order='C')
     ry = np.asarray(ry, order='C')
     rz = np.asarray(rz, order='C')
-    fn = libpbc.get_Gv
-    fn(Gv.ctypes.data_as(ctypes.c_void_p),
-       rx.ctypes.data_as(ctypes.c_void_p),
-       ry.ctypes.data_as(ctypes.c_void_p),
-       rz.ctypes.data_as(ctypes.c_void_p),
-       mesh.ctypes.data_as(ctypes.c_void_p),
-       b.ctypes.data_as(ctypes.c_void_p))
+    libpbc.get_Gv(
+        Gv.ctypes.data_as(ctypes.c_void_p),
+        rx.ctypes.data_as(ctypes.c_void_p),
+        ry.ctypes.data_as(ctypes.c_void_p),
+        rz.ctypes.data_as(ctypes.c_void_p),
+        mesh.ctypes.data_as(ctypes.c_void_p),
+        b.ctypes.data_as(ctypes.c_void_p),
+    )
     Gv = Gv.reshape(-1, 3)
 
     # 1/cell.vol == det(b)/(2pi)^3
@@ -746,25 +747,22 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     # where
     #   ZS_I(G) = \sum_a Z_a exp (i G.R_a)
 
-    Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
-    absG2 = np.einsum('gi,gi->g', Gv, Gv)
-    absG2[absG2==0] = 1e200
-
     if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
-        # TODO: truncated Coulomb for 0D. The non-uniform grids for inf-vacuum
-        # have relatively large error
+        Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
+        absG2 = np.einsum('gi,gi->g', Gv, Gv)
+        absG2[absG2==0] = 1e200
+
         coulG = 4*np.pi / absG2
         coulG *= weights
 
         #:ZSI = np.einsum('i,ij->j', chargs, cell.get_SI(Gv))
-        ngrids = len(Gv)
-        ZSI = np.empty((ngrids,), dtype=np.complex128)
-        mem_avail = cell.max_memory - lib.current_memory()[0]
-        blksize = int((mem_avail*1e6 - cell.natm*24)/((3+cell.natm*2)*8))
-        blksize = min(ngrids, max(mesh[2], blksize))
-        for ig0, ig1 in lib.prange(0, ngrids, blksize):
-            np.einsum('i,ij->j', chargs, cell.get_SI(Gv[ig0:ig1]), out=ZSI[ig0:ig1])
-
+        basex, basey, basez = cell.get_Gv_weights(mesh)[1]
+        b = cell.reciprocal_vectors()
+        rb = np.dot(coords, b.T)
+        SIx = np.exp(-1j*np.einsum('z,g->zg', rb[:,0], basex))
+        SIy = np.exp(-1j*np.einsum('z,g->zg', rb[:,1], basey))
+        SIz = np.exp(-1j*np.einsum('z,g->zg', rb[:,2], basez))
+        ZSI = np.einsum('i,ix,iy,iz->xyz', chargs, SIx, SIy, SIz).ravel()
         ZexpG2 = ZSI * np.exp(-absG2/(4*ew_eta**2))
         ewg = .5 * np.einsum('i,i,i', ZSI.conj(), ZexpG2, coulG).real
 
@@ -789,6 +787,8 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         inv_area = np.linalg.norm(np.cross(b[0], b[1]))/(2*np.pi)**2
         # Perform the reciprocal space summation over  all reciprocal vectors
         # within the x,y plane.
+        Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
+        absG2 = np.einsum('gi,gi->g', Gv, Gv)
         planarG2_idx = np.logical_and(Gv[:,2] == 0, absG2 > 0.0)
         Gv = Gv[planarG2_idx]
         absG2 = absG2[planarG2_idx]
@@ -999,16 +999,15 @@ def rcut_by_shells(cell, precision=None, rcut=0,
         ptr_pgf_radius = lib.ndarray_pointer_2d(pgf_radius).ctypes
     else:
         ptr_pgf_radius = lib.c_null_ptr()
-    fn = getattr(libpbc, 'rcut_by_shells', None)
-    try:
-        fn(shell_radius.ctypes.data_as(ctypes.c_void_p),
-           ptr_pgf_radius,
-           bas.ctypes.data_as(ctypes.c_void_p),
-           env.ctypes.data_as(ctypes.c_void_p),
-           ctypes.c_int(nbas), ctypes.c_double(rcut),
-           ctypes.c_double(precision))
-    except Exception as e:
-        raise RuntimeError(f'Failed to get shell radii.\n{e}')
+    libpbc.rcut_by_shells(
+        shell_radius.ctypes.data_as(ctypes.c_void_p),
+        ptr_pgf_radius,
+        bas.ctypes.data_as(ctypes.c_void_p),
+        env.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nbas),
+        ctypes.c_double(rcut),
+        ctypes.c_double(precision),
+    )
     if return_pgf_radius:
         return shell_radius, pgf_radius
     return shell_radius
@@ -1211,6 +1210,18 @@ class Cell(mole.MoleBase):
     precision = getattr(__config__, 'pbc_gto_cell_Cell_precision', 1e-8)
     exp_to_discard = getattr(__config__, 'pbc_gto_cell_Cell_exp_to_discard', None)
 
+    fractional = False
+    dimension = 3
+    # TODO: Simple hack for now; the implementation of ewald depends on the
+    #       density-fitting class.  This determines how the ewald produces
+    #       its energy.
+    low_dim_ft_type = None
+    use_loose_rcut = False
+    use_particle_mesh_ewald = False
+    space_group_symmetry = False
+    symmorphic = False
+    lattice_symmetry = None
+
     _keys = {
         'precision', 'exp_to_discard',
         'a', 'ke_cutoff', 'pseudo', 'fractional', 'dimension', 'low_dim_ft_type',
@@ -1227,18 +1238,6 @@ class Cell(mole.MoleBase):
         # if set, defines a spherical cutoff
         # of fourier components, with .5 * G**2 < ke_cutoff
         self.ke_cutoff = None
-
-        self.fractional = False
-        self.dimension = 3
-        # TODO: Simple hack for now; the implementation of ewald depends on the
-        #       density-fitting class.  This determines how the ewald produces
-        #       its energy.
-        self.low_dim_ft_type = None
-        self.use_loose_rcut = False
-        self.use_particle_mesh_ewald = False
-        self.space_group_symmetry = False
-        self.symmorphic = False
-        self.lattice_symmetry = None
 
 ##################################################
 # These attributes are initialized by build function if not specified

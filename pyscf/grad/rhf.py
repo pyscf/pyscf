@@ -259,13 +259,6 @@ class SCF_GradScanner(lib.GradScanner):
         self.reset(mol)
         mf_scanner = self.base
         e_tot = mf_scanner(mol)
-
-        if isinstance(mf_scanner, hf.KohnShamDFT):
-            if getattr(self, 'grids', None):
-                self.grids.reset(mol)
-            if getattr(self, 'nlcgrids', None):
-                self.nlcgrids.reset(mol)
-
         de = self.kernel(**kwargs)
         return e_tot, de
 
@@ -399,7 +392,10 @@ class GradientsBase(lib.StreamObject):
 
     def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
         cput0 = (logger.process_clock(), logger.perf_counter())
-        if mo_energy is None: mo_energy = self.base.mo_energy
+        if mo_energy is None:
+            if self.base.mo_energy is None:
+                self.base.run()
+            mo_energy = self.base.mo_energy
         if mo_coeff is None: mo_coeff = self.base.mo_coeff
         if mo_occ is None: mo_occ = self.base.mo_occ
         if atmlst is None:

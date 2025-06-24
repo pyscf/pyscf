@@ -34,16 +34,19 @@ def ddCOSMO(method_or_mol, solvent_obj=None, dm=None):
     if isinstance(method_or_mol, gto.mole.Mole):
         return ddcosmo.DDCOSMO(method_or_mol)
 
-    elif isinstance(method_or_mol, scf.hf.SCF):
-        return ddcosmo.ddcosmo_for_scf(method_or_mol, solvent_obj, dm)
-    elif isinstance(method_or_mol, mcscf.mc1step.CASSCF):
-        return ddcosmo.ddcosmo_for_casscf(method_or_mol, solvent_obj, dm)
-    elif isinstance(method_or_mol, mcscf.casci.CASCI):
-        return ddcosmo.ddcosmo_for_casci(method_or_mol, solvent_obj, dm)
-    elif isinstance(method_or_mol, (tdscf.rhf.TDA, tdscf.rhf.TDHF)):
-        return ddcosmo.ddcosmo_for_tdscf(method_or_mol, solvent_obj, dm)
-    else:
-        return ddcosmo.ddcosmo_for_post_scf(method_or_mol, solvent_obj, dm)
+    method = method_or_mol
+    if isinstance(method, scf.hf.SCF):
+        return ddcosmo.ddcosmo_for_scf(method, solvent_obj, dm)
+    elif isinstance(method, mcscf.casci.CASBase):
+        if isinstance(method, mcscf.mc1step.CASSCF):
+            return ddcosmo.ddcosmo_for_casscf(method, solvent_obj, dm)
+        elif isinstance(method, mcscf.casci.CASCI):
+            return ddcosmo.ddcosmo_for_casci(method, solvent_obj, dm)
+    elif isinstance(method, tdscf.rhf.TDBase):
+        return ddcosmo.ddcosmo_for_tdscf(method, solvent_obj, dm)
+    elif hasattr(method, '_scf'):
+        return ddcosmo.ddcosmo_for_post_scf(method, solvent_obj, dm)
+    raise RuntimeError(f'ddCOSMO for {method} not available')
 DDCOSMO = ddCOSMO
 
 def ddPCM(method_or_mol, solvent_obj=None, dm=None):
@@ -65,19 +68,22 @@ def ddPCM(method_or_mol, solvent_obj=None, dm=None):
     if isinstance(method_or_mol, gto.mole.Mole):
         return ddpcm.DDPCM(method_or_mol)
 
-    elif isinstance(method_or_mol, scf.hf.SCF):
-        return ddpcm.ddpcm_for_scf(method_or_mol, solvent_obj, dm)
-    elif isinstance(method_or_mol, mcscf.mc1step.CASSCF):
-        return ddpcm.ddpcm_for_casscf(method_or_mol, solvent_obj, dm)
-    elif isinstance(method_or_mol, mcscf.casci.CASCI):
-        return ddpcm.ddpcm_for_casci(method_or_mol, solvent_obj, dm)
-    elif isinstance(method_or_mol, (tdscf.rhf.TDA, tdscf.rhf.TDHF)):
-        return ddpcm.ddpcm_for_tdscf(method_or_mol, solvent_obj, dm)
-    else:
-        return ddpcm.ddpcm_for_post_scf(method_or_mol, solvent_obj, dm)
+    method = method_or_mol
+    if isinstance(method, scf.hf.SCF):
+        return ddpcm.ddpcm_for_scf(method, solvent_obj, dm)
+    elif isinstance(method, mcscf.casci.CASBase):
+        if isinstance(method, mcscf.mc1step.CASSCF):
+            return ddpcm.ddpcm_for_casscf(method, solvent_obj, dm)
+        elif isinstance(method, mcscf.casci.CASCI):
+            return ddpcm.ddpcm_for_casci(method, solvent_obj, dm)
+    elif isinstance(method, tdscf.rhf.TDBase):
+        return ddpcm.ddpcm_for_tdscf(method, solvent_obj, dm)
+    elif hasattr(method, '_scf'):
+        return ddpcm.ddpcm_for_post_scf(method, solvent_obj, dm)
+    raise RuntimeError(f'ddPCM for {method} not available')
 DDPCM = ddPCM
 
-def PE(method_or_mol, solvent_obj, dm=None):
+def PE(method_or_mol, solvent_obj=None, dm=None):
     '''Initialize polarizable embedding model.
 
     Args:
@@ -103,16 +109,23 @@ def PE(method_or_mol, solvent_obj, dm=None):
     if isinstance(method_or_mol, gto.mole.Mole):
         return pol_embed.PolEmbed(method_or_mol, solvent_obj)
 
-    elif isinstance(method_or_mol, scf.hf.SCF):
-        return pol_embed.pe_for_scf(method_or_mol, solvent_obj, dm)
-    elif isinstance(method_or_mol, mcscf.mc1step.CASSCF):
-        return pol_embed.pe_for_casscf(method_or_mol, solvent_obj, dm)
-    elif isinstance(method_or_mol, mcscf.casci.CASCI):
-        return pol_embed.pe_for_casci(method_or_mol, solvent_obj, dm)
-    elif isinstance(method_or_mol, (tdscf.rhf.TDA, tdscf.rhf.TDHF)):
-        return pol_embed.pe_for_tdscf(method_or_mol, solvent_obj, dm)
-    else:
-        return pol_embed.pe_for_post_scf(method_or_mol, solvent_obj, dm)
+    method = method_or_mol
+    if isinstance(method, scf.hf.SCF):
+        assert solvent_obj is not None
+        return pol_embed.pe_for_scf(method, solvent_obj, dm)
+
+    if solvent_obj is None:
+        solvent_obj = method._scf.with_solvent
+    if isinstance(method, mcscf.casci.CASBase):
+        if isinstance(method, mcscf.mc1step.CASSCF):
+            return pol_embed.pe_for_casscf(method, solvent_obj, dm)
+        elif isinstance(method, mcscf.casci.CASCI):
+            return pol_embed.pe_for_casci(method, solvent_obj, dm)
+    elif isinstance(method, tdscf.rhf.TDBase):
+        return pol_embed.pe_for_tdscf(method, solvent_obj, dm)
+    elif hasattr(method, '_scf'):
+        return pol_embed.pe_for_post_scf(method, solvent_obj, dm)
+    raise RuntimeError(f'PolEmbed for {method} not available')
 
 def PCM(method_or_mol, solvent_obj=None, dm=None):
     '''Initialize PCM model.
@@ -132,16 +145,19 @@ def PCM(method_or_mol, solvent_obj=None, dm=None):
     if isinstance(method_or_mol, gto.mole.Mole):
         return pcm.PCM(method_or_mol)
 
-    elif isinstance(method_or_mol, scf.hf.SCF):
-        return pcm.pcm_for_scf(method_or_mol, solvent_obj, dm)
-    elif isinstance(method_or_mol, mcscf.mc1step.CASSCF):
-        return pcm.pcm_for_casscf(method_or_mol, solvent_obj, dm)
-    elif isinstance(method_or_mol, mcscf.casci.CASCI):
-        return pcm.pcm_for_casci(method_or_mol, solvent_obj, dm)
-    elif isinstance(method_or_mol, (tdscf.rhf.TDA, tdscf.rhf.TDHF)):
-        return pcm.pcm_for_tdscf(method_or_mol, solvent_obj, dm)
-    else:
-        return pcm.pcm_for_post_scf(method_or_mol, solvent_obj, dm)
+    method = method_or_mol
+    if isinstance(method, scf.hf.SCF):
+        return pcm.pcm_for_scf(method, solvent_obj, dm)
+    elif isinstance(method, mcscf.casci.CASBase):
+        if isinstance(method, mcscf.mc1step.CASSCF):
+            return pcm.pcm_for_casscf(method, solvent_obj, dm)
+        elif isinstance(method, mcscf.casci.CASCI):
+            return pcm.pcm_for_casci(method, solvent_obj, dm)
+    elif isinstance(method, tdscf.rhf.TDBase):
+        return pcm.pcm_for_tdscf(method, solvent_obj, dm)
+    elif hasattr(method, '_scf'):
+        return pcm.pcm_for_post_scf(method, solvent_obj, dm)
+    raise RuntimeError(f'PCM for {method} not available')
 
 PCM = PCM
 
@@ -159,11 +175,11 @@ def SMD(method_or_mol, solvent_obj=None, dm=None):
     from pyscf import gto
     from pyscf import scf
 
-    if isinstance(method_or_mol, gto.mole.Mole):
-        return smd.SMD(method_or_mol)
-    elif isinstance(method_or_mol, scf.hf.SCF):
-        return smd.smd_for_scf(method_or_mol, solvent_obj, dm)
-    else:
-        raise NotImplementedError
+    method = method_or_mol
+    if isinstance(method, gto.mole.Mole):
+        return smd.SMD(method)
+    elif isinstance(method, scf.hf.SCF):
+        return smd.smd_for_scf(method, solvent_obj, dm)
+    raise RuntimeError(f'SMD for {method} not available')
 
 SMD = SMD

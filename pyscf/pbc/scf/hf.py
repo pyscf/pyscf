@@ -819,6 +819,10 @@ class SCF(mol_hf.SCF):
         from pyscf.pbc.df import mdf_jk
         return mdf_jk.density_fit(self, auxbasis, with_df=with_df)
 
+    def multigrid_numint(self, mesh=None):
+        '''Apply the MultiGrid algorithm for XC numerical integartion'''
+        raise NotImplementedError
+
     def sfx2c1e(self):
         from pyscf.pbc.x2c import sfx2c1e
         return sfx2c1e.sfx2c1e(self)
@@ -881,6 +885,9 @@ class SCF(mol_hf.SCF):
     def to_gpu(self):
         raise NotImplementedError
 
+    def nuc_grad_method(self):
+        raise NotImplementedError
+
 
 class KohnShamDFT:
     '''A mock DFT base class
@@ -898,9 +905,6 @@ class RHF(SCF):
     spin_square = mol_hf.RHF.spin_square
     stability = mol_hf.RHF.stability
     to_gpu = lib.to_gpu
-
-    def nuc_grad_method(self):
-        raise NotImplementedError
 
     def to_ks(self, xc='HF'):
         '''Convert to RKS object.

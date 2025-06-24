@@ -244,7 +244,7 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     r'''Electronic part of Hartree-Fock energy, for given core hamiltonian and
     HF potential
 
-    ... math::
+    .. math::
 
         E = \sum_{ij}h_{ij} \gamma_{ji}
           + \frac{1}{2}\sum_{ijkl} \gamma_{ji}\gamma_{lk} \langle ik||jl\rangle
@@ -2149,7 +2149,29 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
 
     def density_fit(self, auxbasis=None, with_df=None, only_dfj=False):
         import pyscf.df.df_jk
+        if self.istype('_Solvation'):
+            logger.warn(self,
+                'It is recommended to call density_fit() before applying a solvent model. '
+                'Calling density_fit() after the solvent model may result in '
+                'incorrect nuclear gradients, TDDFT and other methods.')
         return pyscf.df.df_jk.density_fit(self, auxbasis, with_df, only_dfj)
+
+    def multigrid_numint(self, margin=None, mesh=None):
+        '''Apply the MultiGrid algorithm for XC numerical integartion.
+
+        Kwargs:
+            margin : float
+                A box will be created to enclose the molecule, with the molecule
+                positioned at the center. "margin" specifies the distance from
+                the edge of the molecule to the edge of the box. If not provided,
+                a default margin is estimated, which ensures that the electron
+                density decays to approximately 1e-7 at the boundary of the box.
+            mesh : (3,) ndarray
+                The number of mesh grids along each axis. If not specified, the
+                number of mesh grids will be estimated based on the basis sets
+                and the margin.
+        '''
+        raise NotImplementedError
 
     def sfx2c1e(self):
         import pyscf.x2c.sfx2c1e

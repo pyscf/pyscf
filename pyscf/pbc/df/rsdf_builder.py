@@ -924,13 +924,22 @@ class _RSGDFBuilder(Int3cBuilder):
         else:
             kk_idx = None
 
+        if h5py.is_hdf5(cderi_file):
+            feri = lib.H5FileWrap(cderi_file, 'a')
+            if 'kpts' in feri:
+                del feri['kpts']
+                del feri['aosym']
+            if dataname in feri:
+                log.warn(f'Overwritting {dataname} in {cderi_file}.')
+                del feri[dataname]
+        else:
+            feri = lib.H5FileWrap(cderi_file, 'w')
+        feri['kpts'] = kpts
+        feri['aosym'] = aosym
+
         fswap = self.outcore_auxe2(cderi_file, intor, aosym, comp, j_only,
                                    'j3c', shls_slice, kk_idx=kk_idx)
         cpu1 = log.timer('pass1: real space int3c2e', *cpu0)
-
-        feri = lib.H5FileWrap(cderi_file, 'w')
-        feri['kpts'] = kpts
-        feri['aosym'] = aosym
 
         if aosym == 's2':
             nao_pair = nao*(nao+1)//2

@@ -34,14 +34,21 @@ REAL_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_pick_eig_threshold', 1
 MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 
-def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
+def gen_tda_operation(mf, fock_ao=None, wfnsym=None, with_nlc=True):
     '''A x
 
     Kwargs:
         wfnsym : int or str
             Point group symmetry irrep symbol or ID for excited CIS wavefunction.
     '''
+    td = TDA(mf)
+    td.exclude_nlc = not with_nlc
+    return _gen_tda_operation(td, fock_ao, wfnsym)
+gen_tda_hop = gen_tda_operation
+
+def _gen_tda_operation(td, fock_ao=None, wfnsym=None):
     assert fock_ao is None
+    mf = td._scf
     mol = mf.mol
     mo_coeff = mf.mo_coeff
     assert (mo_coeff[0].dtype == numpy.double)
@@ -77,7 +84,7 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
-    vresp = mf.gen_response(hermi=0, max_memory=max_memory)
+    vresp = td.gen_response(hermi=0, max_memory=max_memory)
 
     def vind(zs):
         nz = len(zs)
@@ -104,7 +111,6 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
         return hx
 
     return vind, hdiag
-gen_tda_hop = gen_tda_operation
 
 def _get_x_sym_table(mf):
     '''Irrep (up to D2h symmetry) of each coefficient in X amplitude'''
@@ -190,10 +196,6 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         from pyscf.dft import xc_deriv
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if mf.do_nlc():
-            logger.warn(mf, 'NLC functional found in DFT object.  Its second '
-                        'derivative is not available. Its contribution is '
-                        'not included in the response function.')
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
 
         add_hf_(a, b, hyb)
@@ -286,7 +288,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
             pass
 
         elif xctype == 'NLC':
-            raise NotImplementedError('NLC')
+            pass # Processed later
 
         elif xctype == 'MGGA':
             ao_deriv = 1
@@ -325,6 +327,10 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                 a_ab += iajb
                 b_ab += iajb
 
+        if mf.do_nlc():
+            raise NotImplementedError('vv10 nlc not implemented in get_ab(). '
+                                      'However the nlc contribution is small in TDDFT, '
+                                      'so feel free to take the risk and comment out this line.')
     else:
         add_hf_(a, b)
 
@@ -624,11 +630,10 @@ class TDA(TDBase):
 
     def gen_vind(self, mf=None):
         '''Generate function to compute Ax'''
-        if mf is None:
-            mf = self._scf
-        return gen_tda_hop(mf, wfnsym=self.wfnsym)
+        assert mf is None or mf is self._scf
+        return _gen_tda_operation(self, wfnsym=self.wfnsym)
 
-    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
+    def get_init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         if nstates is None: nstates = self.nstates
         if wfnsym is None: wfnsym = self.wfnsym
 
@@ -698,7 +703,7 @@ class TDA(TDBase):
 
         x0sym = None
         if x0 is None:
-            x0, x0sym = self.init_guess(
+            x0, x0sym = self.get_init_guess(
                 self._scf, self.nstates, return_symmetry=True)
         elif mol.symmetry:
             x_sym_a, x_sym_b = _get_x_sym_table(self._scf)
@@ -733,12 +738,18 @@ class TDA(TDBase):
 CIS = TDA
 
 
-def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
+def gen_tdhf_operation(mf, fock_ao=None, wfnsym=None, with_nlc=True):
     '''Generate function to compute
 
     [ A   B ][X]
     [-B* -A*][Y]
     '''
+    td = TDHF(mf)
+    td.exclude_nlc = not with_nlc
+    return _gen_tdhf_operation(td, fock_ao, wfnsym)
+
+def _gen_tdhf_operation(td, fock_ao=None, wfnsym=None):
+    mf = td._scf
     mol = mf.mol
     mo_coeff = mf.mo_coeff
     mo_energy = mf.mo_energy
@@ -772,7 +783,7 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
-    vresp = mf.gen_response(hermi=0, max_memory=max_memory)
+    vresp = td.gen_response(hermi=0, max_memory=max_memory)
 
     def vind(xys):
         nz = len(xys)
@@ -819,17 +830,16 @@ class TDHF(TDBase):
 
     @lib.with_doc(gen_tdhf_operation.__doc__)
     def gen_vind(self, mf=None):
-        if mf is None:
-            mf = self._scf
-        return gen_tdhf_operation(mf, None, self.singlet, self.wfnsym)
+        assert mf is None or mf is self._scf
+        return _gen_tdhf_operation(self, None, self.wfnsym)
 
-    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
+    def get_init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         if return_symmetry:
-            x0, x0sym = TDA.init_guess(self, mf, nstates, wfnsym, return_symmetry)
+            x0, x0sym = TDA.get_init_guess(self, mf, nstates, wfnsym, return_symmetry)
             y0 = numpy.zeros_like(x0)
             return numpy.hstack([x0, y0]), x0sym
         else:
-            x0 = TDA.init_guess(self, mf, nstates, wfnsym, return_symmetry)
+            x0 = TDA.get_init_guess(self, mf, nstates, wfnsym, return_symmetry)
             y0 = numpy.zeros_like(x0)
             return numpy.hstack([x0, y0])
 
@@ -870,7 +880,7 @@ class TDHF(TDBase):
 
         x0sym = None
         if x0 is None:
-            x0, x0sym = self.init_guess(
+            x0, x0sym = self.get_init_guess(
                 self._scf, self.nstates, return_symmetry=True)
         elif mol.symmetry:
             x_sym_a, x_sym_b = _get_x_sym_table(self._scf)

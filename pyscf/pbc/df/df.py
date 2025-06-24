@@ -60,8 +60,6 @@ from pyscf.pbc.df.gdf_builder import libpbc, _CCGDFBuilder, _CCNucBuilder
 from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder, _RSNucBuilder, LINEAR_DEP_THR
 from pyscf import __config__
 
-LONGRANGE_AFT_TURNOVER_THRESHOLD = 2.5
-
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
     r'''Generate a cell object using the density fitting auxbasis as
@@ -259,6 +257,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                 if self._cderi == cderi and os.path.isfile(cderi):
                     logger.warn(self, 'File %s (specified by ._cderi) is '
                                 'overwritten by GDF initialization.', cderi)
+                    os.remove(cderi)
                 else:
                     logger.warn(self, 'Value of ._cderi is ignored. '
                                 'DF integrals will be saved in file %s .', cderi)
@@ -416,18 +415,16 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
     # post-HF methods.
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, omega=None, exxdiv=None):
-        if omega is not None:  # J/K for RSH functionals
+        if omega is not None and omega != 0:  # J/K for RSH functionals
             cell = self.cell
             # * AFT is computationally more efficient than GDF if the Coulomb
             #   attenuation tends to the long-range role (i.e. small omega).
             # * Note: changing to AFT integrator may cause small difference to
-            #   the GDF integrator. If a very strict GDF result is desired,
-            #   we can disable this trick by setting
-            #   LONGRANGE_AFT_TURNOVER_THRESHOLD to 0.
+            #   the GDF integrator.
             # * The sparse mesh is not appropriate for low dimensional systems
             #   with infinity vacuum since the ERI may require large mesh to
             #   sample density in vacuum.
-            if (abs(omega) < LONGRANGE_AFT_TURNOVER_THRESHOLD and
+            if (omega > 0 and
                 cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'):
                 mydf = aft.AFTDF(cell, self.kpts)
                 ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
@@ -470,6 +467,43 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         scope of AFTDF/GDF/MDF.
         '''
         return lib.prange(start, stop, step)
+
+    @contextlib.contextmanager
+    def range_coulomb(self, omega):
+        '''Creates a temporary density fitting object for RSH-DF integrals.
+        In this context, only LR or SR integrals for mol and auxmol are computed.
+        '''
+        cell = self.cell
+        if cell.dimension != 0:
+            assert omega < 0
+
+        key = '%.6f' % omega
+        if key in self._rsh_df:
+            rsh_df = self._rsh_df[key]
+        else:
+            rsh_df = self._rsh_df[key] = self.copy().reset()
+            rsh_df._dataname = f'{self._dataname}-sr/{key}'
+            logger.info(self, 'Create RSH-DF object %s for omega=%s', rsh_df, omega)
+
+        auxcell = getattr(self, 'auxcell', None)
+
+        cell_omega = cell.omega
+        cell.omega = omega
+        auxcell_omega = None
+        if auxcell is not None:
+            auxcell_omega = auxcell.omega
+            auxcell.omega = omega
+
+        assert rsh_df.cell.omega == omega
+        if getattr(rsh_df, 'auxcell', None) is not None:
+            assert rsh_df.auxcell.omega == omega
+
+        try:
+            yield rsh_df
+        finally:
+            cell.omega = cell_omega
+            if auxcell_omega is not None:
+                auxcell.omega = auxcell_omega
 
 ################################################################################
 # With this function to mimic the molecular DF.loop function, the pbc gamma

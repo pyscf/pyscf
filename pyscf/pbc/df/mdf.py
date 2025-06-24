@@ -153,14 +153,12 @@ class MDF(df.GDF):
             # * AFT is computationally more efficient than MDF if the Coulomb
             #   attenuation tends to the long-range role (i.e. small omega).
             # * Note: changing to AFT integrator may cause small difference to
-            #   the MDF integrator. If a very strict MDF result is desired,
-            #   we can disable this trick by setting
-            #   LONGRANGE_AFT_TURNOVER_THRESHOLD to 0.
+            #   the MDF integrator.
             # * The sparse mesh is not appropriate for low dimensional systems
             #   with infinity vacuum since the ERI may require large mesh to
             #   sample density in vacuum.
-            if (omega < df.LONGRANGE_AFT_TURNOVER_THRESHOLD and
-                cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'):
+            if (omega > 0 and
+                (cell.dimension >= 2 or cell.low_dim_ft_type != 'inf_vacuum')):
                 mydf = aft.AFTDF(cell, self.kpts)
                 ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
                 mydf.mesh = cell.cutoff_to_mesh(ke_cutoff)

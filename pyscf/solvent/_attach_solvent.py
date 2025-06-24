@@ -79,6 +79,9 @@ class SCFWithSolvent(_Solvation):
     # SCF.get_hcore may lead error.
 
     def get_veff(self, mol=None, dm=None, *args, **kwargs):
+        # FIXME: super() here and after might be problematic and need to be
+        # fixed in the future. Consider the combination of solvent and QM/MM.
+        # Strictly, vhf = self.undo_solvent().get_veff()
         vhf = super().get_veff(mol, dm, *args, **kwargs)
         with_solvent = self.with_solvent
         if not with_solvent.frozen:
@@ -132,39 +135,43 @@ class SCFWithSolvent(_Solvation):
         return e_tot, e_coul
 
     def nuc_grad_method(self):
-        grad_method = super().nuc_grad_method()
-        return self.with_solvent.nuc_grad_method(grad_method)
+        from pyscf.solvent.grad.pcm import make_grad_object
+        # FIXME: when applying DF after solvent:
+        #    mf = mol.RKS().PCM().density_fit().run()
+        # The df.grad.rhf.Gradients.kernel is called. The
+        # grad.pcm.WithSolventGrad.kernel is not executed.
+        return make_grad_object(self)
 
     Gradients = nuc_grad_method
 
     def Hessian(self):
-        hess_method = super().Hessian()
-        return self.with_solvent.Hessian(hess_method)
+        from pyscf.solvent.hessian.pcm import make_hess_object
+        return make_hess_object(self)
 
     def gen_response(self, *args, **kwargs):
-        vind = super().gen_response(*args, **kwargs)
+        # The response function consists of two parts: the gas-phase and the
+        # solvent response. The "vind" computes the gas-phase response.
+        # The attribute .equilibrium_solvation controls whether to add the
+        # solvents response.
+        #
+        # "equilibrium_solvation=True" corresponds to a slow process where the
+        # solvents are fully relaxed wrt the first order electron density.
+        # Vertical excitations in TDDFT are typically a fast process where the
+        # solvation is non-equilibrium. The solvent does not fully relax against
+        # the first order density, (corresponding to equilibrium_solvation=False).
+        #
+        # TDDFT are separately handled in the TDSCFWithSolvent class. This
+        # response function handles all other response calculations (such as
+        # stability analysis, SOSCF, polarizability and Hessian).
+        vind = self.undo_solvent().gen_response(*args, **kwargs)
         is_uhf = isinstance(self, scf.uhf.UHF)
-        # * singlet=None is orbital hessian or CPHF type response function.
-        # Except TDDFT, this is the default case for all response calculations
-        # (such as stability analysis, SOSCF, polarizability and Hessian).
-        # * In TDDFT, this setting only affect RHF wfn. The UHF wfn does not
-        # depend on the setting of "singlet".
-        # * For RHF reference, the triplet excitation does not change the total
-        # electron density, thus does not lead to solvent response.
-        singlet = kwargs.get('singlet', True)
-        singlet = singlet or singlet is None
         def vind_with_solvent(dm1):
             v = vind(dm1)
             if self.with_solvent.equilibrium_solvation:
                 if is_uhf:
-                    v_solvent = self.with_solvent._B_dot_x(dm1)
-                    v += v_solvent[0] + v_solvent[1]
-                elif singlet:
-                    v += self.with_solvent._B_dot_x(dm1)
+                    v += self.with_solvent._B_dot_x(dm1[0]+dm1[1])
                 else:
-                    # The response of electron density should be strictly zero
-                    # for TDDFT triplet
-                    pass
+                    v += self.with_solvent._B_dot_x(dm1)
             return v
         return vind_with_solvent
 
@@ -184,6 +191,48 @@ class SCFWithSolvent(_Solvation):
         solvent_obj = self.with_solvent.to_gpu()
         obj = _attach_solvent._for_scf(self.undo_solvent().to_gpu(), solvent_obj)
         return obj
+
+    def TDA(self, equilibrium_solvation=False):
+        return _for_tdscf(super().TDA(), equilibrium_solvation=equilibrium_solvation)
+
+    def TDHF(self, equilibrium_solvation=False):
+        return _for_tdscf(super().TDHF(), equilibrium_solvation=equilibrium_solvation)
+
+    CasidaTDDFT = NotImplemented
+
+    def TDDFT(self, equilibrium_solvation=False):
+        return _for_tdscf(super().TDDFT(), equilibrium_solvation=equilibrium_solvation)
+
+    def MP2(self):
+        solvent_model = _dispatch_solvent_model(self.with_solvent)
+        # Note the super().MP2 might actually point to the DFMP2
+        return solvent_model(super().MP2())
+
+    def CISD(self):
+        solvent_model = _dispatch_solvent_model(self.with_solvent)
+        return solvent_model(super().CISD())
+
+    def CCSD(self):
+        solvent_model = _dispatch_solvent_model(self.with_solvent)
+        # Note the super().CCSD might actually point to the DFCCSD
+        return solvent_model(super().CCSD())
+
+    def CASCI(self, ncas, nelecas, **kwargs):
+        solvent_model = _dispatch_solvent_model(self.with_solvent)
+        return solvent_model(super().CASCI(ncas, nelecas, **kwargs))
+
+    def CASSCF(self, ncas, nelecas, **kwargs):
+        solvent_model = _dispatch_solvent_model(self.with_solvent)
+        return solvent_model(super().CASSCF(ncas, nelecas, **kwargs))
+
+def _dispatch_solvent_model(solvent_obj):
+    from pyscf import solvent
+    solvent_name = solvent_obj.__class__.__name__
+    if solvent_name in ('PCM', 'ddCOSMO', 'ddPCM', 'SMD'):
+        return getattr(solvent, solvent_name)
+    if solvent_name == 'PolEmbed':
+        return solvent.PE
+    raise RuntimeError(f'Unknown solvent model {solvent}')
 
 def _for_casscf(mc, solvent_obj, dm=None):
     '''Add solvent model to CASSCF method.
@@ -317,8 +366,8 @@ Approximate gradients are evaluated here. A small error may be expected in the
 gradients which corresponds to the contribution of
 MCSCF_DM * V_solvent[d/dX MCSCF_DM] + V_solvent[MCSCF_DM] * d/dX MCSCF_DM
 ''')
-        grad_method = super().nuc_grad_method()
-        return self.with_solvent.nuc_grad_method(grad_method)
+        from pyscf.solvent.grad.pcm import make_grad_object
+        return make_grad_object(self)
 
     Gradients = nuc_grad_method
 
@@ -459,8 +508,8 @@ Approximate gradients are evaluated here. A small error may be expected in the
 gradients which corresponds to the contribution of
 MCSCF_DM * V_solvent[d/dX MCSCF_DM] + V_solvent[MCSCF_DM] * d/dX MCSCF_DM
 ''')
-        grad_method = super().nuc_grad_method()
-        return self.with_solvent.nuc_grad_method(grad_method)
+        from pyscf.solvent.grad.pcm import make_grad_object
+        return make_grad_object(self)
 
     Gradients = nuc_grad_method
 
@@ -595,8 +644,8 @@ Approximate gradients are evaluated here. A small error may be expected in the
 gradients which corresponds to the contribution of
 DM * V_solvent[d/dX DM] + V_solvent[DM] * d/dX DM
 ''')
-        grad_method = super().nuc_grad_method()
-        return self.with_solvent.nuc_grad_method(grad_method)
+        from pyscf.solvent.grad.pcm import make_grad_object
+        return make_grad_object(self)
 
     Gradients = nuc_grad_method
 
@@ -606,40 +655,60 @@ DM * V_solvent[d/dX DM] + V_solvent[DM] * d/dX DM
         return lib.to_gpu(self, obj)
 
 
-def _for_tdscf(method, solvent_obj, dm=None):
+def _for_tdscf(method, solvent_obj=None, dm=None, equilibrium_solvation=False):
     '''Add solvent model in TDDFT calculations.
 
     Kwargs:
         dm : if given, solvent does not respond to the change of density
             matrix. A frozen ddCOSMO potential is added to the results.
     '''
+    assert hasattr(method._scf, 'with_solvent')
+    if method._scf.with_solvent.__class__.__name__ == 'PolEmbed':
+        # PolEmbed is currently not compatible with the implicit solvent implementation
+        from pyscf.solvent.pol_embed import pe_for_tdscf
+        return pe_for_tdscf(method, solvent_obj, dm, equilibrium_solvation)
+
+    if solvent_obj is None:
+        if isinstance(method, _Solvation):
+            return method
+
+        solvent_obj = method._scf.with_solvent.copy()
+        solvent_obj.equilibrium_solvation = equilibrium_solvation
+        if not equilibrium_solvation:
+            # The vertical excitation is a fast process, applying non-equilibrium
+            # solvation with optical dielectric constant eps=1.78
+            # TODO: reset() can be skipped. Most intermeidates can be reused.
+            solvent_obj.reset()
+            solvent_obj.eps = 1.78
+            solvent_obj.build()
+
     if isinstance(method, _Solvation):
+        method = method.copy()
         method.with_solvent = solvent_obj
-        method._scf.with_solvent = solvent_obj
         return method
 
-    # Ensure that the underlying _scf object has solvent model enabled
-    if getattr(method._scf, 'with_solvent', None):
-        scf_with_solvent = method._scf
-    else:
-        scf_with_solvent = _for_scf(method._scf, solvent_obj, dm).run()
-
     if dm is not None:
-        solvent_obj = scf_with_solvent.with_solvent
         solvent_obj.e, solvent_obj.v = solvent_obj.kernel(dm)
         solvent_obj.frozen = True
+        if solvent_obj.equilibrium_solvation:
+            raise RuntimeError(
+                '"frozen" solvent model conflicts to the assumption of equilibrium solvation.')
 
-    sol_td = TDSCFWithSolvent(method, scf_with_solvent)
+    sol_td = TDSCFWithSolvent(method, solvent_obj)
     name = solvent_obj.__class__.__name__ + method.__class__.__name__
     return lib.set_class(sol_td, (TDSCFWithSolvent, method.__class__), name)
 
 class TDSCFWithSolvent(_Solvation):
+    '''LR Solvent for TDDFT.
+
+    Note: This class does not support the state-specific excited state solvent.
+    '''
+
     _keys = {'with_solvent'}
 
-    def __init__(self, method, scf_with_solvent=None):
+    def __init__(self, method, solvent_obj):
         self.__dict__.update(method.__dict__)
-        self._scf = scf_with_solvent
-        self.with_solvent = self._scf.with_solvent
+        self.with_solvent = solvent_obj
 
     def undo_solvent(self):
         cls = self.__class__
@@ -657,15 +726,18 @@ class TDSCFWithSolvent(_Solvation):
     @equilibrium_solvation.setter
     def equilibrium_solvation(self, val):
         if val and self.with_solvent.frozen:
-            logger.warn(self, 'Solvent model was set to be frozen in the '
-                        'ground state SCF calculation. It may conflict to '
-                        'the assumption of equilibrium solvation.\n'
-                        'You may set _scf.with_solvent.frozen = False and '
-                        'rerun the ground state calculation _scf.run().')
+            raise RuntimeError(
+                '"frozen" Solvent model was set in the '
+                'ground state SCF calculation. It conflicts to '
+                'the assumption of equilibrium solvation.\n'
+                'You can set _scf.with_solvent.frozen = False and '
+                'rerun the ground state calculation _scf.run().')
         self.with_solvent.equilibrium_solvation = val
 
     def dump_flags(self, verbose=None):
         super().dump_flags(verbose)
+        log = logger.new_logger(self, verbose)
+        log.info('Solvent model for TDDFT:')
         self.with_solvent.check_sanity()
         self.with_solvent.dump_flags(verbose)
         return self
@@ -674,15 +746,61 @@ class TDSCFWithSolvent(_Solvation):
         self.with_solvent.reset(mol)
         return super().reset(mol)
 
+    def gen_response(self, *args, **kwargs):
+        # vind computes the response in gas-phase
+        vind = self._scf.undo_solvent().gen_response(
+            *args, with_nlc=not self.exclude_nlc, **kwargs)
+
+        # The contribution of the solvent to an excited state include the fast
+        # and the slow response parts. In the process of fast vertical excitation,
+        # only the fast part is able to respond to changes of the solute
+        # wavefunction. This process is described by the non-equilibrium
+        # solvation. In the excited Hamiltonian, the potential from the slow part is
+        # omitted. Changes of the solute electron density would lead to a
+        # redistribution of the surface charge (due to the fast part).
+        # The redistributed surface charge is computed by solving
+        #     K^{-1} R (dm_response)
+        # using a different dielectric constant. The optical dielectric constant
+        # (eps=1.78, see QChem manual) is a suitable choice for the excited state.
+        if not self.with_solvent.equilibrium_solvation:
+            # Solvent with optical dielectric constant, for evaluating the
+            # response of the fast solvent part
+            with_solvent = self.with_solvent
+            logger.info(self, 'TDDFT non-equilibrium solvation with eps=%g', with_solvent.eps)
+        else:
+            # Solvent with zero-frequency dielectric constant. The ground state
+            # solvent is utilized to ensure the same eps are used in the
+            # gradients of excited state.
+            with_solvent = self._scf.with_solvent
+            logger.info(self, 'TDDFT equilibrium solvation with eps=%g', with_solvent.eps)
+
+        is_uhf = isinstance(self._scf, scf.uhf.UHF)
+        singlet = kwargs.get('singlet', True)
+        singlet = singlet or singlet is None
+        def vind_with_solvent(dm1):
+            v = vind(dm1)
+            if is_uhf:
+                v += with_solvent._B_dot_x(dm1[0]+dm1[1])
+            elif singlet:
+                v += with_solvent._B_dot_x(dm1)
+            else:
+                # The triplet excitation does not change the total electron
+                # density, thus does not lead to solvent response.
+                pass
+            return v
+        return vind_with_solvent
+
     def get_ab(self, mf=None):
-        #if mf is None: mf = self._scf
-        #a, b = get_ab(mf)
-        if self.equilibrium_solvation:
-            raise NotImplementedError
+        raise NotImplementedError
 
     def nuc_grad_method(self):
-        grad_method = super().nuc_grad_method()
-        return self.with_solvent.nuc_grad_method(grad_method)
+        from pyscf.solvent.pcm import PCM
+        from pyscf.solvent.grad.ddcosmo_tdscf_grad import make_grad_object
+        if isinstance(self.with_solvent, PCM):
+            raise NotImplementedError('PCM-TDDFT Gradients')
+        return make_grad_object(self)
+
+    Gradients = nuc_grad_method
 
     def to_gpu(self):
         obj = self.undo_solvent().to_gpu()

@@ -237,7 +237,6 @@ from pyscf import gto
 from pyscf import df
 from pyscf.dft import gen_grid, numint
 from pyscf.data import radii
-from pyscf.solvent.grad import ddcosmo_grad
 from pyscf.symm import sph
 
 from pyscf.solvent import _attach_solvent
@@ -275,14 +274,7 @@ def ddcosmo_for_post_scf(method, solvent_obj=None, dm=None):
             solvent_obj = DDCOSMO(method.mol)
     return _attach_solvent._for_post_scf(method, solvent_obj, dm)
 
-@lib.with_doc(_attach_solvent._for_tdscf.__doc__)
-def ddcosmo_for_tdscf(method, solvent_obj=None, dm=None):
-    scf_solvent = getattr(method._scf, 'with_solvent', None)
-    assert scf_solvent is None or isinstance(scf_solvent, DDCOSMO)
-
-    if solvent_obj is None:
-        solvent_obj = DDCOSMO(method.mol)
-    return _attach_solvent._for_tdscf(method, solvent_obj, dm)
+ddcosmo_for_tdscf = _attach_solvent._for_tdscf
 
 
 # Inject ddCOSMO into other methods
@@ -860,15 +852,20 @@ class ddCOSMO(lib.StreamObject):
     def nuc_grad_method(self, grad_method):
         '''For grad_method in vacuum, add nuclear gradients of solvent
         '''
-        from pyscf import tdscf
-        from pyscf.solvent import _ddcosmo_tdscf_grad
-        if self.frozen:
-            raise RuntimeError('Frozen solvent model is not supported for '
-                               'energy gradients')
-        if isinstance(grad_method.base, tdscf.rhf.TDBase):
-            return _ddcosmo_tdscf_grad.make_grad_object(grad_method)
-        else:
-            return ddcosmo_grad.make_grad_object(grad_method)
+        raise DeprecationWarning('Use the make_grad_object function from '
+                                 'pyscf.solvent.grad.ddcosmo_grad or '
+                                 'pyscf.solvent._ddcosmo_tdscf_grad instead.')
+
+    def grad(self, dm):
+        '''Computes the Jacobian for the energy associated with the solvent,
+        including the derivatives of the solvent itsself and the interactions
+        between the solvent and the charge density of the solute.
+        '''
+        from pyscf.solvent.grad import ddcosmo_grad
+        return ddcosmo_grad.kernel(self, dm, self.verbose)
+
+    def hess(self, dm):
+        raise NotImplementedError
 
     to_gpu = lib.to_gpu
 

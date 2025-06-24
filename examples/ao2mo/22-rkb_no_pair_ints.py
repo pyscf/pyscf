@@ -10,6 +10,8 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import lib
 from pyscf.ao2mo import r_outcore
+import tempfile
+import os
 
 mol = gto.M(
     atom = '''
@@ -40,29 +42,47 @@ def no_pair_ovov(mol, mo_coeff, erifile):
     Sv = mo_pos_s[:,nocc:]
 
     dataname = 'dhf_ovov'
-    def run(mos, intor):
-        r_outcore.general(mol, mos, erifile,
-                          dataname='tmp', intor=intor)
-        blksize = 400
-        nij = mos[0].shape[1] * mos[1].shape[1]
-        with h5py.File(erifile) as feri:
-            for i0, i1 in lib.prange(0, nij, blksize):
-                buf = feri[dataname][i0:i1]
-                buf += feri['tmp'][i0:i1]
-                feri[dataname][i0:i1] = buf
 
-    r_outcore.general(mol, (Lo, Lv, Lo, Lv), erifile,
-                      dataname=dataname, intor='int2e_spinor')
-    run((So, Sv, So, Sv), 'int2e_spsp1spsp2_spinor')
-    run((So, Sv, Lo, Lv), 'int2e_spsp1_spinor'     )
-    run((Lo, Lv, So, Sv), 'int2e_spsp2_spinor'     )
+    # Remove the file if it already exists to ensure a clean start
+    if os.path.exists(erifile):
+        os.remove(erifile)
+
+    with h5py.File(erifile, 'w') as feri:
+        # Initial write with the first set of integrals, creating the dataset
+        r_outcore.general(mol, (Lo, Lv, Lo, Lv), feri,
+                          dataname=dataname, intor='int2e_spinor')
+
+        def run_and_add(mol, mos, erifile, dataname_main, intor):
+            # Use a temporary file for the intermediate integrals
+            with tempfile.NamedTemporaryFile(suffix=".h5", delete=False) as tmpfile:
+                tmp_erifile = tmpfile.name
+
+            try:
+                # Write intermediate integrals to the temporary file
+                r_outcore.general(mol, mos, tmp_erifile,
+                                  dataname='tmp', intor=intor)
+
+                # Read the temporary data and add it to the main dataset
+                with h5py.File(erifile, 'a') as main_feri, h5py.File(tmp_erifile, 'r') as tmp_feri:
+                     main_dataset = main_feri[dataname_main]
+                     tmp_dataset = tmp_feri['tmp']
+                     main_dataset[:] += tmp_dataset[:]
+
+            finally:
+                # Clean up the temporary file
+                os.remove(tmp_erifile)
+
+
+        # Subsequent writes that update the dataset by adding to it
+        run_and_add(mol, (So, Sv, So, Sv), erifile, dataname, 'int2e_spsp1spsp2_spinor')
+        run_and_add(mol, (So, Sv, Lo, Lv), erifile, dataname, 'int2e_spsp1_spinor'     )
+        run_and_add(mol, (Lo, Lv, So, Sv), erifile, dataname, 'int2e_spsp2_spinor'     )
+
 
 no_pair_ovov(mol, mf.mo_coeff, 'dhf_ovov.h5')
 with h5py.File('dhf_ovov.h5', 'r') as f:
     nocc = mol.nelectron
-    nvir = mol.nao * 2 - nocc
+    nvir = nmo // 2 - nocc
     print('Number of DHF occupied orbitals %s' % nocc)
     print('Number of DHF virtual orbitals in positive states %s' % nvir)
     print('No-pair MO integrals (ov|ov) have shape %s' % str(f['dhf_ovov'].shape))
-
-

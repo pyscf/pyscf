@@ -777,23 +777,3 @@ def solve_cphf_rhf(mf, Lvo, max_cycle, tol, logger):
                      max_cycle=max_cycle, tol=tol, verbose=cphf_verbose)[0]
     logger.info('CPHF iterations finished')
     return zvo
-
-
-if __name__ == '__main__':
-    mol = gto.Mole()
-    mol.atom = [
-        ['O' , (0. ,  0.    , 0.   )],
-        ['H' , (0. , -0.757 , 0.587)],
-        ['H' , (0. ,  0.757 , 0.587)]]
-    mol.basis = 'def2-SVP'
-    mol.verbose = lib.logger.INFO
-    mol.build()
-
-    mf = scf.RHF(mol)
-    mf.kernel()
-
-    with DFMP2(mf) as pt:
-        pt.kernel()
-        natocc, _ = pt.make_natorbs()
-        print()
-        print(natocc)

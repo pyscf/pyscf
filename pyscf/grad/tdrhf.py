@@ -82,7 +82,8 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
     wvo += numpy.einsum('ac,ai->ci', veff0mom[nocc:,nocc:], xmy) * 2
 
     # set singlet=None, generate function for CPHF type response kernel
-    vresp = mf.gen_response(singlet=None, hermi=1)
+    vresp = mf.gen_response(singlet=None, hermi=1,
+                            with_nlc=not td_grad.base.exclude_nlc)
     def fvind(x):  # For singlet, closed shell ground state
         dm = reduce(numpy.dot, (orbv, x.reshape(nvir,nocc)*2, orbo.T))
         v1ao = vresp(dm+dm.T)
@@ -255,6 +256,9 @@ class Gradients(rhf_grad.GradientsBase):
         self.atmlst = None
         self.de = None
 
+        if getattr(td._scf, 'with_df', None):
+            raise NotImplementedError('Nuclear Gradients for DF-TDDFT')
+
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
         log.info('\n')
@@ -290,6 +294,8 @@ class Gradients(rhf_grad.GradientsBase):
                             'Gradients of ground state is computed.')
                 return self.base._scf.nuc_grad_method().kernel(atmlst=atmlst)
 
+            if self.base.xy is None:
+                self.base.run()
             xy = self.base.xy[state-1]
 
         if singlet is None: singlet = self.base.singlet

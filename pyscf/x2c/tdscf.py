@@ -29,10 +29,10 @@ from pyscf import __config__
 OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_uhf_get_nto_threshold', 0.3)
 REAL_EIG_THRESHOLD = getattr(__config__, 'tdscf_uhf_TDDFT_pick_eig_threshold', 1e-4)
 
-def gen_tda_operation(mf, fock_ao=None):
+def gen_tda_operation(mf, fock_ao=None, with_nlc=True):
     '''A x
     '''
-    return ghf.gen_tda_operation(mf, fock_ao, None)
+    return ghf.gen_tda_operation(mf, fock_ao, None, with_nlc=with_nlc)
 gen_tda_hop = gen_tda_operation
 
 def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
@@ -284,38 +284,30 @@ class TDBase(ghf.TDBase):
 
 
 class TDA(TDBase, ghf.TDA):
-    def gen_vind(self, mf=None):
-        '''Generate function to compute Ax'''
-        if mf is None:
-            mf = self._scf
-        return gen_tda_hop(mf)
+    gen_vind = ghf.TDA.gen_vind
 
-    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
+    def get_init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         assert self.wfnsym is None
-        return ghf.TDA.init_guess(self, mf, nstates, None, return_symmetry)
+        return ghf.TDA.get_init_guess(self, mf, nstates, None, return_symmetry)
 
     kernel = ghf.TDA.kernel
 
 
-def gen_tdhf_operation(mf, fock_ao=None):
+def gen_tdhf_operation(mf, fock_ao=None, with_nlc=True):
     '''Generate function to compute
 
     [ A  B][X]
     [-B -A][Y]
     '''
-    return ghf.gen_tdhf_operation(mf, fock_ao, None)
+    return ghf.gen_tdhf_operation(mf, fock_ao, None, with_nlc=with_nlc)
 
 
 class TDHF(TDBase, ghf.TDHF):
-    @lib.with_doc(gen_tdhf_operation.__doc__)
-    def gen_vind(self, mf=None):
-        if mf is None:
-            mf = self._scf
-        return gen_tdhf_operation(mf)
+    gen_vind = ghf.TDHF.gen_vind
 
-    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
+    def get_init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         assert self.wfnsym is None
-        return ghf.TDHF.init_guess(self, mf, nstates, None, return_symmetry)
+        return ghf.TDHF.get_init_guess(self, mf, nstates, None, return_symmetry)
 
     kernel = ghf.TDHF.kernel
 

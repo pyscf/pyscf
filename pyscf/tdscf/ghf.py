@@ -38,14 +38,21 @@ OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_rhf_get_nto_threshold', 0.3)
 REAL_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_pick_eig_threshold', 1e-4)
 
 
-def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
+def gen_tda_operation(mf, fock_ao=None, wfnsym=None, with_nlc=True):
     '''A x
 
     Kwargs:
         wfnsym : int or str
             Point group symmetry irrep symbol or ID for excited CIS wavefunction.
     '''
+    td = TDA(mf)
+    td.exclude_nlc = not with_nlc
+    return _gen_tda_operation(td, fock_ao, wfnsym)
+gen_tda_hop = gen_tda_operation
+
+def _gen_tda_operation(td, fock_ao=None, wfnsym=None):
     assert fock_ao is None
+    mf = td._scf
     mol = mf.mol
     mo_coeff = mf.mo_coeff
     mo_energy = mf.mo_energy
@@ -70,7 +77,7 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
     hdiag = hdiag.ravel().real
 
     mo_coeff = numpy.asarray(numpy.hstack((orbo,orbv)), order='F')
-    vresp = mf.gen_response(hermi=0)
+    vresp = td.gen_response(hermi=0)
 
     def vind(zs):
         zs = numpy.asarray(zs).reshape(-1,nocc,nvir)
@@ -87,7 +94,6 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
         return v1mo.reshape(v1mo.shape[0],-1)
 
     return vind, hdiag
-gen_tda_hop = gen_tda_operation
 
 def _get_x_sym_table(mf):
     '''Irrep (up to D2h symmetry) of each coefficient in X[nocc,nvir]'''
@@ -370,11 +376,10 @@ class TDA(TDBase):
 
     def gen_vind(self, mf=None):
         '''Generate function to compute Ax'''
-        if mf is None:
-            mf = self._scf
-        return gen_tda_hop(mf, wfnsym=self.wfnsym)
+        assert mf is None or mf is self._scf
+        return _gen_tda_operation(self, wfnsym=self.wfnsym)
 
-    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
+    def get_init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         if nstates is None: nstates = self.nstates
         if wfnsym is None: wfnsym = self.wfnsym
 
@@ -436,7 +441,7 @@ class TDA(TDBase):
 
         x0sym = None
         if x0 is None:
-            x0, x0sym = self.init_guess(
+            x0, x0sym = self.get_init_guess(
                 self._scf, self.nstates, return_symmetry=True)
         elif mol.symmetry:
             x_sym = _get_x_sym_table(self._scf).ravel()
@@ -463,12 +468,18 @@ class TDA(TDBase):
 CIS = TDA
 
 
-def gen_tdhf_operation(mf, fock_ao=None, wfnsym=None):
+def gen_tdhf_operation(mf, fock_ao=None, wfnsym=None, with_nlc=True):
     '''Generate function to compute
 
     [ A   B ][X]
     [-B* -A*][Y]
     '''
+    td = TDHF(mf)
+    td.exclude_nlc = not with_nlc
+    return _gen_tdhf_operation(td, fock_ao, wfnsym)
+
+def _gen_tdhf_operation(td, fock_ao=None, wfnsym=None):
+    mf = td._scf
     mol = mf.mol
     mo_coeff = mf.mo_coeff
     mo_energy = mf.mo_energy
@@ -495,7 +506,7 @@ def gen_tdhf_operation(mf, fock_ao=None, wfnsym=None):
     hdiag = numpy.hstack((hdiag.ravel(), -hdiag.ravel())).real
 
     mo_coeff = numpy.asarray(numpy.hstack((orbo,orbv)), order='F')
-    vresp = mf.gen_response(hermi=0)
+    vresp = td.gen_response(hermi=0)
 
     def vind(xys):
         xys = numpy.asarray(xys).reshape(-1,2,nocc,nvir)
@@ -538,17 +549,16 @@ class TDHF(TDBase):
 
     @lib.with_doc(gen_tdhf_operation.__doc__)
     def gen_vind(self, mf=None):
-        if mf is None:
-            mf = self._scf
-        return gen_tdhf_operation(mf, wfnsym=self.wfnsym)
+        assert mf is None or mf is self._scf
+        return _gen_tdhf_operation(self, wfnsym=self.wfnsym)
 
-    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
+    def get_init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         if return_symmetry:
-            x0, x0sym = TDA.init_guess(self, mf, nstates, wfnsym, return_symmetry)
+            x0, x0sym = TDA.get_init_guess(self, mf, nstates, wfnsym, return_symmetry)
             y0 = numpy.zeros_like(x0)
             return numpy.hstack([x0, y0]), x0sym
         else:
-            x0 = TDA.init_guess(self, mf, nstates, wfnsym, return_symmetry)
+            x0 = TDA.get_init_guess(self, mf, nstates, wfnsym, return_symmetry)
             y0 = numpy.zeros_like(x0)
             return numpy.hstack([x0, y0])
 
@@ -578,7 +588,7 @@ class TDHF(TDBase):
 
         x0sym = None
         if x0 is None:
-            x0, x0sym = self.init_guess(
+            x0, x0sym = self.get_init_guess(
                 self._scf, self.nstates, return_symmetry=True)
         elif mol.symmetry:
             x_sym = y_sym = _get_x_sym_table(self._scf).ravel()

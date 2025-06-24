@@ -1238,7 +1238,9 @@ def pack(mol):
             'basis'   : mol.basis,
             'charge'  : mol.charge,
             'spin'    : mol.spin,
+            'cart'    : mol.cart,
             'symmetry': mol.symmetry,
+            'symmetry_subgroup': mol.symmetry_subgroup,
             'nucmod'  : mol.nucmod,
             'nucprop' : mol.nucprop,
             'ecp'     : mol.ecp,
@@ -2150,7 +2152,7 @@ def fromstring(string, format='xyz'):
     '''
     format = format.lower()
     if format == 'zmat':
-        return from_zmatrix(string)
+        return string
     elif format == 'xyz':
         line, title, geom = string.split('\n', 2)
         return geom
@@ -3834,16 +3836,45 @@ class Mole(MoleBase):
         from pyscf import ao2mo
         return ao2mo.kernel(self, mo_coeffs, erifile, dataname, intor, **kwargs)
 
-    def to_cell(self, a, dimension=3):
-        '''Put a molecule in a cell with periodic boundary conditions
+    def to_cell(self, box=None, dimension=3, margin=None):
+        '''This function places a molecule in a three-dimensiontal box with
+        periodic boundary conditions.
+
+        If the `box` parameter is not specified, the molecule will positioned in
+        a zero-dimensional box with margin from edges.
 
         Args:
-            a : (3,3) ndarray
-                Lattice primitive vectors. Each row is a lattice vector
+            box : (3,3) ndarray
+                Lattice primitive vectors. Each row corresponds a lattice vector
+            dimension : integer
+                PBC dimensions
+            margin: float
+                The distance from the edge of the molecule to the edge of the box.
+                If not provided, a default margin will be estimated, to ensure
+                that the electron density decays to approximately 1e-7 outside
+                of the box.
         '''
-        from pyscf.pbc.gto import Cell
+        from pyscf.pbc.gto import Cell, rcut_by_shells
+        assert dimension <= 3
         cell = Cell()
         cell.__dict__.update(self.__dict__)
+        if box is None:
+            # Place molecule in a big box
+            atom_coords = self.atom_coords()
+            if margin is None:
+                # when the basis value converges to ~1e-4, the density value
+                # ~psi^2 is approximately ~1e-8
+                shell_radius = rcut_by_shells(self, precision=1e-4)
+                bas_coords = atom_coords[self._bas[:,ATOM_OF]]
+                upper_bound = (bas_coords + shell_radius[:,None]).max(axis=0)
+                lower_bound = (bas_coords - shell_radius[:,None]).min(axis=0)
+                box_size = upper_bound - lower_bound
+                box = numpy.diag(box_size)
+            else:
+                atom_coords = self.atom_coords()
+                size = atom_coords.max(axis=0) - atom_coords.min(axis=0)
+                box = numpy.eye(3) * (size+margin*2)
+        cell.a = box
         cell.dimension = dimension
         cell.build(False, False)
         return cell

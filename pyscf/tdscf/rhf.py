@@ -42,14 +42,23 @@ REAL_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_pick_eig_threshold', 1
 MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 
-def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
+def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None, with_nlc=True):
     '''Generate function to compute A x
 
     Kwargs:
         wfnsym : int or str
             Point group symmetry irrep symbol or ID for excited CIS wavefunction.
+        with_nlc : boolean
+            Whether to skip the NLC contribution
     '''
+    td = TDA(mf)
+    td.exclude_nlc = not with_nlc
+    return _gen_tda_operation(td, fock_ao, singlet, wfnsym)
+gen_tda_hop = gen_tda_operation
+
+def _gen_tda_operation(td, fock_ao=None, singlet=True, wfnsym=None):
     assert fock_ao is None
+    mf = td._scf
     mol = mf.mol
     mo_coeff = mf.mo_coeff
     # assert (mo_coeff.dtype == numpy.double)
@@ -76,7 +85,7 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     hdiag = hdiag.ravel()
 
     mo_coeff = numpy.asarray(numpy.hstack((orbo,orbv)), order='F')
-    vresp = mf.gen_response(singlet=singlet, hermi=0)
+    vresp = td.gen_response(singlet=singlet, hermi=0)
 
     def vind(zs):
         zs = numpy.asarray(zs).reshape(-1,nocc,nvir)
@@ -94,7 +103,6 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         return v1mo.reshape(v1mo.shape[0],-1)
 
     return vind, hdiag
-gen_tda_hop = gen_tda_operation
 
 def _get_x_sym_table(mf):
     '''Irrep (up to D2h symmetry) of each coefficient in X[nocc,nvir]'''
@@ -144,10 +152,6 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
     if isinstance(mf, scf.hf.KohnShamDFT):
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if mf.do_nlc():
-            logger.warn(mf, 'NLC functional found in DFT object.  Its second '
-                        'derivative is not available. Its contribution is '
-                        'not included in the response function.')
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
 
         add_hf_(a, b, hyb)
@@ -201,7 +205,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
             pass
 
         elif xctype == 'NLC':
-            raise NotImplementedError('NLC')
+            pass # Processed later
 
         elif xctype == 'MGGA':
             ao_deriv = 1
@@ -221,6 +225,10 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                 a += iajb
                 b += iajb
 
+        if mf.do_nlc():
+            raise NotImplementedError('vv10 nlc not implemented in get_ab(). '
+                                      'However the nlc contribution is small in TDDFT, '
+                                      'so feel free to take the risk and comment out this line.')
     else:
         add_hf_(a, b)
 
@@ -660,6 +668,8 @@ class TDBase(lib.StreamObject):
     positive_eig_threshold = getattr(__config__, 'tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
     # Threshold to handle degeneracy in init guess
     deg_eia_thresh = getattr(__config__, 'tdscf_rhf_TDDFT_deg_eia_thresh', 1e-3)
+    # Whether to skip computing NLC response in TDDFT
+    exclude_nlc = True
 
     _keys = {
         'conv_tol', 'nstates', 'singlet', 'lindep', 'level_shift',
@@ -732,6 +742,15 @@ class TDBase(lib.StreamObject):
     def gen_vind(self, mf=None):
         raise NotImplementedError
 
+    def gen_response(self, *args, **kwargs):
+        '''Generate linear response function to compute A*x'''
+        mf = self._scf
+        if (self.exclude_nlc and
+            isinstance(mf, scf.hf.KohnShamDFT) and mf.do_nlc()):
+            logger.warn(self, 'NLC functional found in the DFT object. Its contribution is '
+                        'excluded from the TDDFT response function.')
+        return mf.gen_response(*args, with_nlc=not self.exclude_nlc, **kwargs)
+
     @lib.with_doc(get_ab.__doc__)
     def get_ab(self, mf=None):
         if mf is None: mf = self._scf
@@ -801,11 +820,11 @@ class TDA(TDBase):
 
     def gen_vind(self, mf=None):
         '''Generate function to compute Ax'''
-        if mf is None:
-            mf = self._scf
-        return gen_tda_hop(mf, singlet=self.singlet, wfnsym=self.wfnsym)
+        assert mf is None or mf is self._scf
+        # TODO: remove the _gen_tda_operation, merge it to this gen_vind
+        return _gen_tda_operation(self, singlet=self.singlet, wfnsym=self.wfnsym)
 
-    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
+    def get_init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         '''
         Generate initial guess for TDA
 
@@ -856,6 +875,10 @@ class TDA(TDBase):
         else:
             return x0
 
+    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
+        logger.warn('TDDFT.init_guess method is deprecated. Please use get_init_guess instead.')
+        return self.get_init_guess(mf, nstates, wfnsym, return_symmetry)
+
     def kernel(self, x0=None, nstates=None):
         '''TDA diagonalization solver
         '''
@@ -879,7 +902,7 @@ class TDA(TDBase):
 
         x0sym = None
         if x0 is None:
-            x0, x0sym = self.init_guess(
+            x0, x0sym = self.get_init_guess(
                 self._scf, self.nstates, return_symmetry=True)
         elif mol.symmetry:
             x_sym = _get_x_sym_table(self._scf).ravel()
@@ -909,12 +932,19 @@ class TDA(TDBase):
 CIS = TDA
 
 
-def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
+def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None,
+                       with_nlc=True):
     '''Generate function to compute
 
     [ A   B ][X]
     [-B* -A*][Y]
     '''
+    td = TDHF(mf)
+    td.exclude_nlc = not with_nlc
+    return _gen_tdhf_operation(td, fock_ao, singlet, wfnsym)
+
+def _gen_tdhf_operation(td, fock_ao=None, singlet=True, wfnsym=None):
+    mf = td._scf
     mol = mf.mol
     mo_coeff = mf.mo_coeff
     # assert (mo_coeff.dtype == numpy.double)
@@ -942,7 +972,7 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)
-    vresp = mf.gen_response(singlet=singlet, hermi=0, max_memory=max_memory)
+    vresp = td.gen_response(singlet=singlet, hermi=0, max_memory=max_memory)
 
     def vind(xys):
         xys = numpy.asarray(xys).reshape(-1,2,nocc,nvir)
@@ -1006,17 +1036,17 @@ class TDHF(TDBase):
 
     @lib.with_doc(gen_tdhf_operation.__doc__)
     def gen_vind(self, mf=None):
-        if mf is None:
-            mf = self._scf
-        return gen_tdhf_operation(mf, None, self.singlet, self.wfnsym)
+        assert mf is None or mf is self._scf
+        # TODO: remove the _gen_tdhf_operation, merge it to this gen_vind
+        return _gen_tdhf_operation(self, None, self.singlet, self.wfnsym)
 
-    def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
+    def get_init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
         if return_symmetry:
-            x0, x0sym = TDA.init_guess(self, mf, nstates, wfnsym, return_symmetry)
+            x0, x0sym = TDA.get_init_guess(self, mf, nstates, wfnsym, return_symmetry)
             y0 = numpy.zeros_like(x0)
             return numpy.hstack([x0, y0]), x0sym
         else:
-            x0 = TDA.init_guess(self, mf, nstates, wfnsym, return_symmetry)
+            x0 = TDA.get_init_guess(self, mf, nstates, wfnsym, return_symmetry)
             y0 = numpy.zeros_like(x0)
             return numpy.hstack([x0, y0])
 
@@ -1059,7 +1089,7 @@ class TDHF(TDBase):
 
         x0sym = None
         if x0 is None:
-            x0, x0sym = self.init_guess(
+            x0, x0sym = self.get_init_guess(
                 self._scf, self.nstates, return_symmetry=True)
         elif mol.symmetry:
             x_sym = y_sym = _get_x_sym_table(self._scf).ravel()

@@ -30,8 +30,6 @@ from pyscf.data import radii
 from pyscf.solvent import ddcosmo
 from pyscf.solvent import _attach_solvent
 
-libdft = lib.load_library('libdft')
-
 @lib.with_doc(_attach_solvent._for_scf.__doc__)
 def pcm_for_scf(mf, solvent_obj=None, dm=None):
     if solvent_obj is None:
@@ -65,14 +63,7 @@ def pcm_for_post_scf(method, solvent_obj=None, dm=None):
             solvent_obj = PCM(method.mol)
     return _attach_solvent._for_post_scf(method, solvent_obj, dm)
 
-@lib.with_doc(_attach_solvent._for_tdscf.__doc__)
-def pcm_for_tdscf(method, solvent_obj=None, dm=None):
-    scf_solvent = getattr(method._scf, 'with_solvent', None)
-    assert scf_solvent is None or isinstance(scf_solvent, PCM)
-
-    if solvent_obj is None:
-        solvent_obj = PCM(method.mol)
-    return _attach_solvent._for_tdscf(method, solvent_obj, dm)
+pcm_for_tdscf = _attach_solvent._for_tdscf
 
 
 # Inject PCM to other methods
@@ -294,7 +285,7 @@ class PCM(lib.StreamObject):
                     self.lebedev_order, gen_grid.LEBEDEV_ORDER[self.lebedev_order])
         logger.info(self, 'eps = %s'          , self.eps)
         logger.info(self, 'frozen = %s'       , self.frozen)
-        logger.info(self, 'equilibrium_solvation = %s', self.equilibrium_solvation)
+        #logger.info(self, 'equilibrium_solvation = %s', self.equilibrium_solvation)
         logger.debug2(self, 'radii_table %s', self.radii_table)
         if self.atom_radii:
             logger.info(self, 'User specified atomic radii %s', str(self.atom_radii))
@@ -446,25 +437,36 @@ class PCM(lib.StreamObject):
         return vmat
 
     def nuc_grad_method(self, grad_method):
-        from pyscf.solvent.grad import pcm as pcm_grad
-        if self.frozen:
-            raise RuntimeError('Frozen solvent model is not supported')
-        from pyscf import scf
-        from pyscf.solvent import _ddcosmo_tdscf_grad
-        if isinstance(grad_method.base, tdscf.rhf.TDBase):
-            return _ddcosmo_tdscf_grad.make_grad_object(grad_method)
-        else:
-            return pcm_grad.make_grad_object(grad_method)
+        raise DeprecationWarning('Use the make_grad_object function from '
+                                 'pyscf.solvent.grad.pcm or '
+                                 'pyscf.solvent._ddcosmo_tdscf_grad instead.')
+
+    def grad(self, dm):
+        '''Computes the Jacobian for the energy associated with the solvent,
+        including the derivatives of the solvent itsself and the interactions
+        between the solvent and the charge density of the solute.
+        '''
+        from pyscf.solvent.grad.pcm import grad_qv, grad_nuc, grad_solver
+        de_solvent = grad_qv(self, dm)
+        de_solvent+= grad_nuc(self, dm)
+        de_solvent+= grad_solver(self, dm)
+        return de_solvent
 
     def Hessian(self, hess_method):
-        from pyscf.solvent.hessian import pcm as pcm_hess
-        if self.frozen:
-            raise RuntimeError('Frozen solvent model is not supported')
-        from pyscf import scf
-        if isinstance(hess_method.base, (scf.hf.RHF, scf.uhf.UHF)):
-            return pcm_hess.make_hess_object(hess_method)
-        else:
-            raise RuntimeError('Only SCF gradient is supported')
+        raise DeprecationWarning('Use the make_hessian_object function from '
+                                 'pyscf.solvent.hessian.pcm instead.')
+
+    def hess(self, dm):
+        '''Computes the Hessian for the energy associated with the solvent,
+        including the derivatives of the solvent itsself and the interactions
+        between the solvent and the charge density of the solute.
+        '''
+        from pyscf.solvent.hessian.pcm import (
+            analytical_hess_nuc, analytical_hess_qv, analytical_hess_solver)
+        de_solvent  =    analytical_hess_nuc(self, dm, verbose=self.verbose)
+        de_solvent +=     analytical_hess_qv(self, dm, verbose=self.verbose)
+        de_solvent += analytical_hess_solver(self, dm, verbose=self.verbose)
+        return de_solvent
 
     def _B_dot_x(self, dms):
         if not self._intermediates:

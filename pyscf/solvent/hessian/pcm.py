@@ -1003,14 +1003,25 @@ def analytical_grad_vmat(pcmobj, dm, atmlst=None, verbose=None):
     t1 = log.timer_debug1('computing solvent grad veff', *t1)
     return dV_on_molecule_dx
 
-def make_hess_object(hess_method):
-    if hess_method.base.with_solvent.frozen:
+def make_hess_object(base_method):
+    from pyscf.solvent._attach_solvent import _Solvation
+    from pyscf.hessian.rhf import HessianBase
+    if isinstance(base_method, HessianBase):
+        # For backward compatibility. The input argument is a gradient object in
+        # previous implementations.
+        base_method = base_method.base
+
+    # Must be a solvent-attached method
+    assert isinstance(base_method, _Solvation)
+    with_solvent = base_method.with_solvent
+    if with_solvent.frozen:
         raise RuntimeError('Frozen solvent model is not avialbe for energy hessian')
 
-    name = (hess_method.base.with_solvent.__class__.__name__
-            + hess_method.__class__.__name__)
-    return lib.set_class(WithSolventHess(hess_method),
-                         (WithSolventHess, hess_method.__class__), name)
+    vac_hess = base_method.undo_solvent().Hessian()
+    vac_hess.base = base_method
+    name = with_solvent.__class__.__name__ + vac_hess.__class__.__name__
+    return lib.set_class(WithSolventHess(vac_hess),
+                         (WithSolventHess, vac_hess.__class__), name)
 
 class WithSolventHess:
     _keys = {'de_solvent', 'de_solute'}
@@ -1030,23 +1041,23 @@ class WithSolventHess:
 
     def to_gpu(self):
         from gpu4pyscf.solvent.hessian import pcm    # type: ignore
-        hess_method = self.undo_solvent().to_gpu()
-        return pcm.make_hess_object(hess_method)
+        from pyscf.tdscf.rhf import TDBase
+        if isinstance(self, TDBase):
+            raise NotImplementedError('.to_gpu() for PCM-TDDFT')
+        # ground state methods
+        return self.undo_solvent().to_gpu().Hessian()
 
     def kernel(self, *args, dm=None, atmlst=None, **kwargs):
-        dm = kwargs.pop('dm', None)
         if dm is None:
             dm = self.base.make_rdm1(ao_repr=True)
         if dm.ndim == 3:
             dm = dm[0] + dm[1]
-        is_equilibrium = self.base.with_solvent.equilibrium_solvation
-        self.base.with_solvent.equilibrium_solvation = True
-        self.de_solvent  =    analytical_hess_nuc(self.base.with_solvent, dm, verbose=self.verbose)
-        self.de_solvent +=     analytical_hess_qv(self.base.with_solvent, dm, verbose=self.verbose)
-        self.de_solvent += analytical_hess_solver(self.base.with_solvent, dm, verbose=self.verbose)
-        self.de_solute = super().kernel(*args, **kwargs)
+        with lib.temporary_env(self.base.with_solvent, equilibrium_solvation=True):
+            logger.debug(self, 'Compute Hessian from solutes')
+            self.de_solute = super().kernel(*args, **kwargs)
+        logger.debug(self, 'Compute Hessian from solvents')
+        self.de_solvent = self.base.with_solvent.hess(dm)
         self.de = self.de_solute + self.de_solvent
-        self.base.with_solvent.equilibrium_solvation = is_equilibrium
         return self.de
 
     def make_h1(self, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
@@ -1071,6 +1082,7 @@ class WithSolventHess:
             return h1aoa, h1aob
         else:
             raise NotImplementedError('Base object is not supported')
+
     def _finalize(self):
         # disable _finalize. It is called in grad_method.kernel method
         # where self.de was not yet initialized.

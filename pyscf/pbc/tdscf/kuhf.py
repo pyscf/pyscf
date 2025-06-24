@@ -241,6 +241,7 @@ class TDA(KTDBase):
                 The index of the k-point that represents the transition between
                 k-points in the excitation coefficients.
         '''
+        assert mf is self._scf
         kconserv = get_kconserv_ria(mf.cell, mf.kpts)[kshift]
 
         mo_coeff = mf.mo_coeff
@@ -264,7 +265,7 @@ class TDA(KTDBase):
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
-        vresp = mf.gen_response(hermi=0, max_memory=max_memory)
+        vresp = self.gen_response(hermi=0, max_memory=max_memory)
 
         def vind(zs):
             nz = len(zs)
@@ -297,7 +298,7 @@ class TDA(KTDBase):
 
         return vind, hdiag
 
-    def init_guess(self, mf, kshift, nstates=None):
+    def get_init_guess(self, mf, kshift, nstates=None):
         if nstates is None: nstates = self.nstates
 
         mo_energy = mf.mo_energy
@@ -346,7 +347,7 @@ class TDA(KTDBase):
             precond = self.get_precond(hdiag)
 
             if x0 is None:
-                x0k = self.init_guess(self._scf, kshift, self.nstates)
+                x0k = self.get_init_guess(self._scf, kshift, self.nstates)
             else:
                 x0k = x0[i]
 
@@ -371,6 +372,7 @@ class TDHF(KTDBase):
     get_ab = TDA.get_ab
 
     def gen_vind(self, mf, kshift=0):
+        assert mf is self._scf
         assert kshift == 0
 
         mo_coeff = mf.mo_coeff
@@ -397,7 +399,7 @@ class TDHF(KTDBase):
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
-        vresp = mf.gen_response(hermi=0, max_memory=max_memory)
+        vresp = self.gen_response(hermi=0, max_memory=max_memory)
 
         def vind(xys):
             nz = len(xys)
@@ -443,8 +445,8 @@ class TDHF(KTDBase):
 
         return vind, hdiag
 
-    def init_guess(self, mf, kshift, nstates=None, wfnsym=None):
-        x0 = TDA.init_guess(self, mf, kshift, nstates)
+    def get_init_guess(self, mf, kshift, nstates=None, wfnsym=None):
+        x0 = TDA.get_init_guess(self, mf, kshift, nstates)
         y0 = np.zeros_like(x0)
         return np.hstack([x0, y0])
 
@@ -484,7 +486,7 @@ class TDHF(KTDBase):
             precond = self.get_precond(hdiag)
 
             if x0 is None:
-                x0k = self.init_guess(self._scf, kshift, self.nstates)
+                x0k = self.get_init_guess(self._scf, kshift, self.nstates)
             else:
                 x0k = x0[i]
 
