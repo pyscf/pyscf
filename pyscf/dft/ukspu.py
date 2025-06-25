@@ -177,6 +177,7 @@ def linear_response_u(mf_plus_u, alphalist=(0.02, 0.05, 0.08)):
             functional.
     '''
     assert isinstance(mf_plus_u, UKSpU)
+    assert len(mf_plus_u.U_idx) > 0
     if not mf_plus_u.converged:
         mf_plus_u.run()
     assert mf_plus_u.converged

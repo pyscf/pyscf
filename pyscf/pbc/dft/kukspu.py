@@ -138,7 +138,7 @@ class KUKSpU(kuks.KUKS):
     UKSpU class adapted for PBCs with k-point sampling.
     """
 
-    _keys = {"U_idx", "U_val", "C_ao_lo", "U_lab"}
+    _keys = {"U_idx", "U_val", "C_ao_lo", "U_lab", 'alpha'}
 
     get_veff = get_veff
     energy_elec = energy_elec
@@ -226,6 +226,7 @@ def linear_response_u(mf_plus_u, alphalist=(0.02, 0.05, 0.08)):
         raise NotImplementedError
 
     assert isinstance(mf_plus_u, KUKSpU)
+    assert len(mf_plus_u.U_idx) > 0
     if not mf_plus_u.converged:
         mf_plus_u.run()
     assert mf_plus_u.converged

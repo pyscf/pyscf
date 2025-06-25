@@ -150,6 +150,10 @@ def set_U(ks, U_idx, U_val):
     for idx, val in zip(ks.U_idx, ks.U_val):
         ks.U_lab.append(lo_labels[idx])
 
+    if len(ks.U_idx) == 0:
+        logger.warn(ks, "No sites specified for Hubbard U. '
+                    'Please check if 'U_idx' is correctly specified")
+
 def groupby(inp, labels):
     _, where, counts = np.unique(labels, return_index=True, return_counts=True)
     return [inp[start:start+count] for start, count in zip(where, counts)]
@@ -272,6 +276,7 @@ def linear_response_u(mf_plus_u, alphalist=(0.02, 0.05, 0.08)):
             functional.
     '''
     assert isinstance(mf_plus_u, RKSpU)
+    assert len(mf_plus_u.U_idx) > 0
     if not mf_plus_u.converged:
         mf_plus_u.run()
     assert mf_plus_u.converged
