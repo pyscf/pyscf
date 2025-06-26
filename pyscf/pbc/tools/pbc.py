@@ -283,20 +283,51 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         _omega = omega
 
     if cell.dimension == 0 and cell.low_dim_ft_type != 'inf_vacuum':
-        if _omega != 0:
-            raise NotImplementedError('coulG kernel for range-separated Coulomb potential')
         a = cell.lattice_vectors()
         assert abs(np.eye(3)*a[0,0] - a).max() < 1e-6, \
                 'Must be cubic box for cell.dimension=0'
         # ensure the sphere is completely inside the box
         Rc = a[0,0] / 2
+
+        # The truncated Coulomb kernel is
+        #    \int_0^R e^{-iG dot r} 1/r dr^3 = 4pi/G \int_0^R sin(G r) dr
+        #        = 4pi/G^2 (1 - cos(G R))
+        # When R->infinity, the truncated Coulomb becomes the full-range
+        # Coulomb. Its kernel is 4pi/G^2. Comparing the two integrals, the
+        # divergentintegral
+        #    4pi/G^2 \int_R^\inf sin(G R) dr = \int_0^\inf - \int_R^\inf ...
+        # would give a regularized value
+        #    4pi/G^2 cos (G R)
+        # The long-range truncated Coulomb kernel
+        #    \int_0^R erf(omega r)/r dr^3 = \int_0^\inf - \int_R^\inf ...
+        #        = 4pi/G^2 exp(-G^2/(4 omega^2)) - 4pi/G \int_R^\inf erf(omega r) sin(G r) dr
+        # If erf(omega R) ~= 1 for sufficient large R, the second term is
+        # simplified to the sin(G r) regularized integral. The long range
+        # truncated Coulomb is then given by
+        #    4pi/G^2 (exp(-G^2/(4 omega^2) - cos(G R))
+        # The short range part is
+        #    4pi/G^2 (1 - exp(-G^2/(4 omega^2))
+        if (_omega != 0 and
+            abs(_omega) * Rc < 2.0): # typically, error of \int erf(omega r) sin (G r) < 1e-5
+            raise RuntimeError(
+                'In sufficient box size for the truncated range-separated '
+                'Coulomb potential in 0D case')
+
         absG = np.linalg.norm(Gv, axis=1)
         with np.errstate(divide='ignore',invalid='ignore'):
-            coulG = 4*np.pi/absG**2 * (1. - np.cos(absG*Rc))
-        coulG[0] = 0.
-        # G=0 term carries the charge. This special term supports the charged
-        # system for dimension=0.
-        coulG[0] = 2*np.pi*Rc**2
+            coulG = 4*np.pi/absG**2
+            coulG[0] = 0
+        if _omega == 0:
+            coulG *= 1. - np.cos(absG*Rc)
+            # G=0 term carries the charge. This special term supports the charged
+            # system for dimension=0.
+            coulG[0] = 2*np.pi*Rc**2
+        elif _omega > 0:
+            coulG *= np.exp(-.25/_omega**2 * absG**2) - np.cos(absG*Rc)
+            coulG[0] = 2*np.pi*Rc**2 - np.pi / _omega**2
+        else:
+            coulG *= 1 - np.exp(-.25/_omega**2 * absG**2)
+            coulG[0] = np.pi / _omega**2
         return coulG
 
     if abs(k).sum() > 1e-9:
