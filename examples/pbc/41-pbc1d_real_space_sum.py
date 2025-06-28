@@ -118,5 +118,5 @@ if __name__ == '__main__':
 
     from pyscf.pbc import gto, scf, tools, df
     cell = gto.M(atom='H 0 0 0; H 1.8 0 0', a=numpy.eye(3)*R, unit='bohr',
-                 dimension=1)#, basis='321g')
+                 dimension=1, low_dim_ft_type='inf_vacuum')#, basis='321g')
     mf = scf.KRHF(cell, cell.make_kpts([1,1,1])).density_fit().run()

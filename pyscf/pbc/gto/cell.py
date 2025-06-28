@@ -556,8 +556,7 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
     b = cell.reciprocal_vectors()
     weights = abs(np.linalg.det(b))
 
-    if (cell.dimension < 2 or
-        (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
+    if cell.dimension <= 2 and cell.low_dim_ft_type == 'inf_vacuum':
         if cell.dimension == 0:
             rx, wx = _non_uniform_Gv_base(mesh[0]//2)
             ry, wy = _non_uniform_Gv_base(mesh[1]//2)
@@ -673,8 +672,11 @@ def get_ewald_params(cell, precision=None, mesh=None):
     if precision is None:
         precision = cell.precision
 
-    if (cell.dimension < 2 or
-          (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
+    if (cell.dimension == 3 or
+        (cell.dimension == 0 and cell.low_dim_ft_type != 'inf_vacuum')):
+        ew_eta = 1./cell.vol**(1./6)
+        ew_cut = _estimate_rcut(ew_eta**2, 0, 1., precision)
+    elif cell.dimension <= 2 and cell.low_dim_ft_type == 'inf_vacuum':
         # Non-uniform PW grids are used for low-dimensional ewald summation.  The cutoff
         # estimation for long range part based on exp(G^2/(4*eta^2)) does not work for
         # non-uniform grids.  Smooth model density is preferred.
@@ -686,9 +688,8 @@ def get_ewald_params(cell, precision=None, mesh=None):
         # ewovrl ~ erfc(eta*rcut) / rcut ~ e^{(-eta**2 rcut*2)} < precision
         log_precision = np.log(precision / (cell.atom_charges().sum()*16*np.pi**2))
         ew_eta = (-log_precision)**.5 / ew_cut
-    else:  # dimension == 3
-        ew_eta = 1./cell.vol**(1./6)
-        ew_cut = _estimate_rcut(ew_eta**2, 0, 1., precision)
+    else:
+        raise RuntimeError(f'dimension={cell.dimension} not supported')
     return ew_eta, ew_cut
 
 def ewald(cell, ew_eta=None, ew_cut=None):
@@ -714,6 +715,9 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     if cell.dimension == 3 and cell.use_particle_mesh_ewald:
         from pyscf.pbc.gto import ewald_methods
         return ewald_methods.particle_mesh_ewald(cell, ew_eta, ew_cut)
+
+    if cell.dimension == 0 and cell.low_dim_ft_type != 'inf_vacuum':
+        return mole.classical_coulomb_energy(cell)
 
     chargs = cell.atom_charges()
 
@@ -747,16 +751,15 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     # where
     #   ZS_I(G) = \sum_a Z_a exp (i G.R_a)
 
-    if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
+    if cell.dimension == 3 or cell.low_dim_ft_type == 'inf_vacuum':
         Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
         absG2 = np.einsum('gi,gi->g', Gv, Gv)
         absG2[absG2==0] = 1e200
-
         coulG = 4*np.pi / absG2
         coulG *= weights
 
         #:ZSI = np.einsum('i,ij->j', chargs, cell.get_SI(Gv))
-        basex, basey, basez = cell.get_Gv_weights(mesh)[1]
+        basex, basey, basez = Gvbase
         b = cell.reciprocal_vectors()
         rb = np.dot(coords, b.T)
         SIx = np.exp(-1j*np.einsum('z,g->zg', rb[:,0], basex))
@@ -801,6 +804,13 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         # Performing the G == 0 summation.
         ewg += np.einsum('i,j,ij->', chargs, chargs, gn0(ew_eta,rij[:,:,2]))
         ewg *= inv_area*0.5
+
+    elif cell.dimension == 0:
+        # The truncted Coulomb kernel 4*pi/G^2(1-cos(G*Rc)) should work for the
+        # ewg term. However, large errors may be introduced in ewovrl or ewself.
+        # For dimesion=0 with truncated Coulomb, the nuclear energy can be
+        # computed directly using the mole.classical_coulomb_energy function.
+        raise RuntimeError('Ewald with truncated Coulomb')
 
     else:
         logger.warn(cell, 'No method for PBC dimension %s, dim-type %s.'
@@ -1515,6 +1525,9 @@ class Cell(mole.MoleBase):
         if self.a is None:
             raise RuntimeError('Lattice parameters not specified')
 
+        if self.dimension == 1 and self.low_dim_ft_type != 'inf_vacuum':
+            raise RuntimeError('Uniform grids for dimension=1 not supported')
+
         _built = self._built
         mole.MoleBase.build(self, False, parse_arg, *args, **kwargs)
 
@@ -1603,7 +1616,7 @@ class Cell(mole.MoleBase):
   Lattice are not in right-handed coordinate system. This can cause wrong value for some integrals.
   It's recommended to resort the lattice vectors to\na = %s\n\n''' % _a[[0,2,1]])
 
-        if self.dimension == 2 and self.low_dim_ft_type != 'inf_vacuum':
+        if self.dimension <= 2 and self.low_dim_ft_type != 'inf_vacuum':
             # check vacuum size. See Fig 1 of PRB, 73, 2015119
             #Lz_guess = self.rcut*(1+np.sqrt(2))
             Lz_guess = self.rcut * 2
@@ -1619,8 +1632,7 @@ class Cell(mole.MoleBase):
                 ke_cutoff = self.ke_cutoff
             self._mesh = pbctools.cutoff_to_mesh(_a, ke_cutoff)
 
-            if (self.dimension < 2 or
-                (self.dimension == 2 and self.low_dim_ft_type == 'inf_vacuum')):
+            if self.dimension <= 2 and self.low_dim_ft_type == 'inf_vacuum':
                 self._mesh[self.dimension:] = _mesh_inf_vaccum(self)
             self._mesh_from_build = True
 

@@ -88,6 +88,7 @@ cell.build(unit = 'B',
            mesh = [10,20,20],
            atom = 'H 0 0 0; H 0 0 1.8',
            dimension=1,
+           low_dim_ft_type='inf_vacuum', # This setting must be specified for 1D system
            verbose = 0,
            basis='sto3g')
 mf = pbchf.KRHF(cell)

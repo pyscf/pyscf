@@ -28,6 +28,7 @@ def setUpModule():
     cell.basis = 'sto-3g'
     cell.a = [[2.82, 0, 0], [0, 2.82, 0], [0, 0, 2.82]]
     cell.dimension = 1
+    cell.low_dim_ft_type = 'inf_vacuum'
     cell.output = '/dev/null'
     cell.build()
 
