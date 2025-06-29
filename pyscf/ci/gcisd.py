@@ -197,7 +197,7 @@ def from_fcivec(ci0, nelec, orbspin, frozen=None):
              numpy.count_nonzero(orbspin[:nelec] == 1))
     ucisdvec = ucisd.from_fcivec(ci0, norb//2, nelec, frozen)
     nocc = numpy.count_nonzero(~frozen_mask[:sum(nelec)])
-    return from_ucisdvec(ucisdvec, nocc, orbspin[~frozen_mask])
+    return from_ucisdvec(ucisdvec, int(nocc), orbspin[~frozen_mask])
 
 
 def make_rdm1(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
