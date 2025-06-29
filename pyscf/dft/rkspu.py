@@ -151,8 +151,8 @@ def set_U(ks, U_idx, U_val):
         ks.U_lab.append(lo_labels[idx])
 
     if len(ks.U_idx) == 0:
-        logger.warn(ks, "No sites specified for Hubbard U. '
-                    'Please check if 'U_idx' is correctly specified")
+        logger.warn(ks, "No sites specified for Hubbard U. "
+                    "Please check if 'U_idx' is correctly specified")
 
 def groupby(inp, labels):
     _, where, counts = np.unique(labels, return_index=True, return_counts=True)
