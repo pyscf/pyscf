@@ -21,7 +21,8 @@ This example is created to provide an implementation for issue
 https://github.com/pyscf/pyscf/issues/2805
 
 For more technical discussions, please refer to:
-"Enhancing the Productivity of Quantum Chemistry Simulations in PySCF," arXiv:xxxx.xxxx.
+"Enhancing PySCF-based Quantum Chemistry Simulations with Modern Hardware,
+Algorithms, and Python Tools", arXiv:2506.06661.
 This example provides a complete implementation of the code discussed in that paper.
 '''
 
