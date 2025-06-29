@@ -250,11 +250,17 @@ class KnownValues(unittest.TestCase):
         n4c = erig.shape[0]
         numpy.random.seed(1)
         dm = numpy.random.random((2,n4c,n4c))+numpy.random.random((2,n4c,n4c))*1j
+        c1 = .5 / lib.param.LIGHT_SPEED
+        vj0 = -numpy.einsum('ijkl,xlk->xij', erig, dm) * c1**2
+        vk0 = -numpy.einsum('ijkl,xjk->xil', erig, dm) * c1**2
+        vj1, vk1 = scf.dhf._call_veff_gaunt_breit(h4, dm, hermi=0)
+        self.assertAlmostEqual(abs(vj0 - vj1).max(), 0, 12)
+        self.assertAlmostEqual(abs(vk0 - vk1).max(), 0, 12)
+
         dm = dm + dm.transpose(0,2,1).conj()
         c1 = .5 / lib.param.LIGHT_SPEED
         vj0 = -numpy.einsum('ijkl,xlk->xij', erig, dm) * c1**2
         vk0 = -numpy.einsum('ijkl,xjk->xil', erig, dm) * c1**2
-
         vj1, vk1 = scf.dhf._call_veff_gaunt_breit(h4, dm)
         self.assertTrue(numpy.allclose(vj0, vj1))
         self.assertTrue(numpy.allclose(vk0, vk1))
@@ -279,11 +285,17 @@ class KnownValues(unittest.TestCase):
         n4c = erig.shape[0]
         numpy.random.seed(1)
         dm = numpy.random.random((n4c,n4c))+numpy.random.random((n4c,n4c))*1j
+        c1 = .5 / lib.param.LIGHT_SPEED
+        vj0 = -numpy.einsum('ijkl,xlk->xij', erig, dm) * c1**2
+        vk0 = -numpy.einsum('ijkl,xjk->xil', erig, dm) * c1**2
+        vj1, vk1 = scf.dhf._call_veff_gaunt_breit(h4, dm, hermi=0)
+        self.assertAlmostEqual(abs(vj0 - vj1).max(), 0, 12)
+        self.assertAlmostEqual(abs(vk0 - vk1).max(), 0, 12)
+
         dm = dm + dm.T.conj()
         c1 = .5 / lib.param.LIGHT_SPEED
         vj0 = numpy.einsum('ijkl,lk->ij', erig, dm) * c1**2
         vk0 = numpy.einsum('ijkl,jk->il', erig, dm) * c1**2
-
         vj1, vk1 = scf.dhf._call_veff_gaunt_breit(h4, dm, with_breit=True)
         self.assertTrue(numpy.allclose(vj0, vj1))
         self.assertTrue(numpy.allclose(vk0, vk1))
@@ -325,23 +337,22 @@ def _fill_gaunt(mol, erig):
     eri0 = numpy.zeros((n4c,n4c,n4c,n4c), dtype=numpy.complex128)
     eri0[:n2c,n2c:,:n2c,n2c:] = erig # ssp1ssp2
 
-    eri2 = erig.take(idx,axis=0).take(idx,axis=1) # sps1ssp2
+    eri2 = erig[idx[:,None],idx] # sps1ssp2
     eri2[sign_mask,:] *= -1
     eri2[:,sign_mask] *= -1
     eri2 = -eri2.transpose(1,0,2,3)
     eri0[n2c:,:n2c,:n2c,n2c:] = eri2
 
-    eri2 = erig.take(idx,axis=2).take(idx,axis=3) # ssp1sps2
+    eri2 = erig[:,:,idx[:,None],idx] # ssp1sps2
     eri2[:,:,sign_mask,:] *= -1
     eri2[:,:,:,sign_mask] *= -1
     eri2 = -eri2.transpose(0,1,3,2)
     #self.assertTrue(numpy.allclose(eri0, eri2))
     eri0[:n2c,n2c:,n2c:,:n2c] = eri2
 
-    eri2 = erig.take(idx,axis=0).take(idx,axis=1)
-    eri2 = eri2.take(idx,axis=2).take(idx,axis=3) # sps1sps2
-    eri2 = eri2.transpose(1,0,2,3)
-    eri2 = eri2.transpose(0,1,3,2)
+    eri2 = erig[idx[:,None],idx]
+    eri2 = eri2[:,:,idx[:,None],idx] # sps1sps2
+    eri2 = eri2.transpose(1,0,3,2)
     eri2[sign_mask,:] *= -1
     eri2[:,sign_mask] *= -1
     eri2[:,:,sign_mask,:] *= -1
