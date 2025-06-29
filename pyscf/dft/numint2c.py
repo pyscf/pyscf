@@ -679,8 +679,8 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
         n, exc, v = ni.nr_nlc_vxc(mol, grids, xc_code, dm_a+dm_b, relativity,
                                   hermi, max_memory, verbose)
         vmat = np.zeros_like(dm)
-        vmat[:nao,:nao] = v[0]
-        vmat[nao:,nao:] = v[1]
+        vmat[:nao,:nao] = v
+        vmat[nao:,nao:] = v
         return n, exc, vmat
 
     @lib.with_doc(numint.nr_rks_fxc.__doc__)
