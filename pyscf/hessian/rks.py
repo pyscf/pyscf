@@ -1849,19 +1849,20 @@ def get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1s, max_memory):
 
         TODO: check the effect of different grid, using mf.nlcgrids right now
     """
-    if mo_coeff.ndim == 2:
+    if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
         mocc = mo_coeff[:,mo_occ>0]
         mo_occ = mo_occ[mo_occ > 0]
         dm0 = (mocc * mo_occ) @ mocc.T
     else:
-        assert mo_coeff.ndim == 3 # unrestricted case
-        assert mo_coeff.shape[0] == 2
-        assert mo_occ.shape[0] == 2
+        assert mo_coeff[0].ndim == 2 # unrestricted case
+        assert len(mo_coeff) == 2
+        assert len(mo_occ) == 2
         mocc_a = mo_coeff[0][:, mo_occ[0] > 0]
         mocc_b = mo_coeff[1][:, mo_occ[1] > 0]
-        mo_occ_a = mo_occ[0, mo_occ[0] > 0]
-        mo_occ_b = mo_occ[1, mo_occ[1] > 0]
+        mo_occ_a = mo_occ[0][mo_occ[0] > 0]
+        mo_occ_b = mo_occ[1][mo_occ[1] > 0]
         dm0 = (mocc_a * mo_occ_a) @ mocc_a.T + (mocc_b * mo_occ_b) @ mocc_b.T
+    dm0 = numpy.asarray(dm0.real, order='C')
 
     output_in_2d = False
     if dm1s.ndim == 2:

@@ -267,8 +267,6 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
         ni = mf._numint
         assert isinstance(ni, (numint2c.NumInt2C, r_numint.RNumInt))
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if with_nlc and mf.do_nlc():
-            raise NotImplementedError('NLC')
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
         hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
@@ -288,6 +286,20 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
             else:
                 v1 = ni.get_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, 0, hermi,
                                 rho0, vxc, fxc, max_memory=max_memory)
+                if with_nlc and mf.do_nlc():
+                    from pyscf.hessian.rks import get_vnlc_resp
+                    nao = mo_coeff.shape[0] // 2
+                    dm1_sf = dm1[...,:nao,:nao] + dm1[...,nao:,nao:]
+                    mo_uks = [mo_coeff[:nao], mo_coeff[nao:]]
+                    mo_occ_uks = [mo_occ, mo_occ]
+                    # The get_vnlc_resp function uses mf._numint and explicitly
+                    # calls the NumInt functions for mf._numint
+                    ni1c = mf._numint._to_numint1c()
+                    with lib.temporary_env(mf, _numint=ni1c):
+                        vxc_nlc = get_vnlc_resp(mf, mol, mo_uks, mo_occ_uks,
+                                                dm1_sf.real, max_memory)
+                        v1[...,:nao,:nao] += vxc_nlc
+                        v1[...,nao:,nao:] += vxc_nlc
             if not hybrid:
                 if with_j:
                     vj = mf.get_j(mol, dm1, hermi=hermi)
