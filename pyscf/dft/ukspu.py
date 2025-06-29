@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2025 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,65 +12,43 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Authors: Zhi-Hao Cui <zhcui0408@gmail.com>
-#
 
-"""
-Unrestricted DFT+U with kpoint sampling.
-Based on KUHF routine.
+'''
+DFT+U on molecules
 
-Refs: PRB, 1998, 57, 1505.
-"""
+See also the pbc.dft.krkspu and pbc.dft.kukspu module
+'''
 
 import numpy as np
-
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf import __config__
-from pyscf.pbc.dft import kuks
-from pyscf.pbc.dft.krkspu import set_U, make_minao_lo, mdot, KRKSpU
 from pyscf.data.nist import HARTREE2EV
+from pyscf.dft import uks
+from pyscf.dft.rkspu import set_U, make_minao_lo
 
-def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
-             kpts=None, kpts_band=None):
+def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     """
-    Coulomb + XC functional + (Hubbard - double counting) for KUKSpU.
+    Coulomb + XC functional + (Hubbard - double counting) for UKS+U.
     """
-    if cell is None: cell = ks.cell
+    if mol is None: mol = ks.mol
     if dm is None: dm = ks.make_rdm1()
-    if kpts is None: kpts = ks.kpts
 
     # J + V_xc
-    vxc = kuks.get_veff(ks, cell, dm, dm_last=dm_last, vhf_last=vhf_last,
-                        hermi=hermi, kpts=kpts, kpts_band=kpts_band)
-    vxc = _add_Vhubbard(vxc, ks, dm, kpts)
-    return vxc
+    vxc = uks.get_veff(ks, mol, dm, dm_last=dm_last, vhf_last=vhf_last,
+                       hermi=hermi)
 
-def _add_Vhubbard(vxc, ks, dm, kpts):
-    '''Add Hubbard U to Vxc matrix inplace.
-    '''
+    # V_U
     C_ao_lo = ks.C_ao_lo
     ovlp = ks.get_ovlp()
-    nkpts = len(kpts)
-    nlo = C_ao_lo.shape[-1]
-
-    rdm1_lo  = np.zeros((2, nkpts, nlo, nlo), dtype=np.complex128)
-    for s in range(2):
-        for k in range(nkpts):
-            C_inv = np.dot(C_ao_lo[s, k].conj().T, ovlp[k])
-            rdm1_lo[s, k] = mdot(C_inv, dm[s][k], C_inv.conj().T)
-
-    is_ibz = hasattr(kpts, "kpts_ibz")
-    if is_ibz:
-        rdm1_lo_0 = kpts.dm_at_ref_cell(rdm1_lo)
+    C_inv = np.dot(C_ao_lo.conj().T, ovlp)
+    rdm1_lo = [C_inv.dot(dm[0]).dot(C_inv.conj().T),
+               C_inv.dot(dm[1]).dot(C_inv.conj().T)]
 
     alphas = ks.alpha
     if not hasattr(alphas, '__len__'): # not a list or tuple
         alphas = [alphas] * len(ks.U_idx)
 
     E_U = 0.0
-    weight = getattr(kpts, "weights_ibz", np.repeat(1.0/nkpts, nkpts))
     logger.info(ks, "-" * 79)
     with np.printoptions(precision=5, suppress=True, linewidth=1000):
         for idx, val, lab, alpha in zip(ks.U_idx, ks.U_val, ks.U_lab, alphas):
@@ -80,49 +58,36 @@ def _add_Vhubbard(vxc, ks, dm, kpts):
             lab_sp = lab[0].split()
             logger.info(ks, "local rdm1 of atom %s: ",
                         " ".join(lab_sp[:2]) + " " + lab_sp[2][:2])
-            U_mesh = np.ix_(idx, idx)
             for s in range(2):
-                P_loc = 0.0
-                for k in range(nkpts):
-                    S_k = ovlp[k]
-                    C_k = C_ao_lo[s, k][:, idx]
-                    P_k = rdm1_lo[s, k][U_mesh]
-                    E_U += weight[k] * (val * 0.5) * (P_k.trace() - np.dot(P_k, P_k).trace())
-                    vhub_loc = (np.eye(P_k.shape[-1]) - P_k * 2.0) * (val * 0.5)
-                    if alpha is not None:
-                        # The alpha perturbation is only applied to the linear term of
-                        # the local density.
-                        E_U += weight[k] * alpha * P_k.trace()
-                        vhub_loc += np.eye(P_k.shape[-1]) * alpha
-                    SC = np.dot(S_k, C_k)
-                    vxc[s,k] += SC.dot(vhub_loc).dot(SC.conj().T).astype(vxc[s,k].dtype,copy=False)
-                    if not is_ibz:
-                        P_loc += P_k
-                if is_ibz:
-                    P_loc = rdm1_lo_0[s][U_mesh].real
-                else:
-                    P_loc = P_loc.real / nkpts
-                logger.info(ks, "spin %s\n%s\n%s", s, lab_string, P_loc)
+                P = rdm1_lo[s][idx[:,None], idx]
+                SC = np.dot(ovlp, C_ao_lo[:, idx])
+                loc_sites = P.shape[-1]
+                vhub_loc = (np.eye(loc_sites) - P * 2.0) * (val * 0.5)
+                if alpha is not None:
+                    # LR-cDFT perturbation for Hubbard U
+                    E_U += alpha * P.trace()
+                    vhub_loc += np.eye(loc_sites) * alpha
+                vxc[s] += SC.dot(vhub_loc).dot(SC.conj().T)
+                E_U += (val * 0.5) * (P.trace() - np.dot(P, P).trace())
+                logger.info(ks, "spin %s\n%s\n%s", s, lab_string, P)
             logger.info(ks, "-" * 79)
 
     if E_U.real < 0.0 and all(np.asarray(ks.U_val) > 0):
-        logger.warn(ks, "E_U (%g) is negative...", E_U.real)
+        logger.warn(ks, "E_U (%s) is negative...", E_U.real)
     vxc = lib.tag_array(vxc, E_U=E_U.real)
     return vxc
 
-def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
+def energy_elec(mf, dm=None, h1e=None, vhf=None):
     """
-    Electronic energy for KUKSpU.
+    Electronic energy for UKSpU.
     """
-    if h1e_kpts is None: h1e_kpts = mf.get_hcore(mf.cell, mf.kpts)
-    if dm_kpts is None: dm_kpts = mf.make_rdm1()
+    if h1e is None: h1e = mf.get_hcore()
+    if dm is None: dm = mf.make_rdm1()
     if vhf is None or getattr(vhf, 'ecoul', None) is None:
-        vhf = mf.get_veff(mf.cell, dm_kpts)
+        vhf = mf.get_veff(mf.mol, dm)
 
-    weight = getattr(mf.kpts, "weights_ibz",
-                     np.array([1.0/len(h1e_kpts),]*len(h1e_kpts)))
-    e1 = (np.einsum('k,kij,kji', weight, h1e_kpts, dm_kpts[0]) +
-          np.einsum('k,kij,kji', weight, h1e_kpts, dm_kpts[1]))
+    e1 = (np.einsum('ij,ji->', h1e, dm[0]) +
+          np.einsum('ij,ji->', h1e, dm[1]))
     tot_e = e1 + vhf.ecoul + vhf.exc + vhf.E_U
     mf.scf_summary['e1'] = e1.real
     mf.scf_summary['coul'] = vhf.ecoul.real
@@ -133,7 +98,7 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
                  e1, vhf.ecoul, vhf.exc, vhf.E_U)
     return tot_e.real, vhf.ecoul + vhf.exc + vhf.E_U
 
-class KUKSpU(kuks.KUKS):
+class UKSpU(uks.UKS):
     """
     UKSpU class adapted for PBCs with k-point sampling.
     """
@@ -144,9 +109,8 @@ class KUKSpU(kuks.KUKS):
     energy_elec = energy_elec
     to_hf = lib.invalid_method('to_hf')
 
-    def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
-                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'),
-                 U_idx=[], U_val=[], C_ao_lo='minao', minao_ref='MINAO', **kwargs):
+    def __init__(self, mol, xc='LDA,VWN',
+                 U_idx=[], U_val=[], C_ao_lo='minao', minao_ref='MINAO'):
         """
         DFT+U args:
             U_idx: can be
@@ -159,7 +123,7 @@ class KUKSpU(kuks.KUKS):
                    each U corresponds to one kind of LO orbitals, should have
                    the same length as U_idx.
             C_ao_lo: LO coefficients, can be
-                     np.array, shape ((spin,), nkpts, nao, nlo),
+                     np.array, shape ((spin,), nao, nlo),
                      string, in 'minao'.
             minao_ref: reference for minao orbitals, default is 'MINAO'.
 
@@ -170,7 +134,7 @@ class KUKSpU(kuks.KUKS):
             alpha: the perturbation [in AU] used to compute U in LR-cDFT.
                 Refs: Cococcioni and de Gironcoli, PRB 71, 035105 (2005)
         """
-        super(self.__class__, self).__init__(cell, kpts, xc=xc, exxdiv=exxdiv, **kwargs)
+        super(self.__class__, self).__init__(mol, xc=xc)
 
         set_U(self, U_idx, U_val)
 
@@ -181,16 +145,7 @@ class KUKSpU(kuks.KUKS):
                 raise NotImplementedError
         else:
             self.C_ao_lo = np.asarray(C_ao_lo)
-        if self.C_ao_lo.ndim == 3:
-            self.C_ao_lo = np.asarray((self.C_ao_lo, self.C_ao_lo))
-        elif self.C_ao_lo.ndim == 4:
-            if self.C_ao_lo.shape[0] == 1:
-                self.C_ao_lo = np.asarray((self.C_ao_lo[0], self.C_ao_lo[0]))
-            assert self.C_ao_lo.shape[0] == 2
-        else:
-            raise ValueError
-
-        # The perturbation (eV) used to compute U in LR-cDFT.
+        assert self.C_ao_lo.ndim == 2
         self.alpha = None
 
     def dump_flags(self, verbose=None):
@@ -221,11 +176,7 @@ def linear_response_u(mf_plus_u, alphalist=(0.02, 0.05, 0.08)):
             reference mf_plus_u object, which will be treated as a standard DFT
             functional.
     '''
-    is_ibz = hasattr(mf_plus_u.kpts, "kpts_ibz")
-    if is_ibz:
-        raise NotImplementedError
-
-    assert isinstance(mf_plus_u, KUKSpU)
+    assert isinstance(mf_plus_u, UKSpU)
     assert len(mf_plus_u.U_idx) > 0
     if not mf_plus_u.converged:
         mf_plus_u.run()
@@ -239,14 +190,9 @@ def linear_response_u(mf_plus_u, alphalist=(0.02, 0.05, 0.08)):
     alphalist = np.asarray(alphalist)
     alphalist = np.append(-alphalist[::-1], alphalist)
 
-    nkpts = len(mf.kpts)
     C_ao_lo = mf.C_ao_lo
     ovlp = mf.get_ovlp()
-    C_inv = []
-    for local_idx in mf.U_idx:
-        C_inv.append(
-            [[C_ao_lo[0,k][:,local_idx].conj().T.dot(ovlp[k]) for k in range(nkpts)],
-             [C_ao_lo[1,k][:,local_idx].conj().T.dot(ovlp[k]) for k in range(nkpts)]])
+    C_inv = [C_ao_lo[:,local_idx].conj().T.dot(ovlp) for local_idx in mf.U_idx]
 
     bare_occupancies = []
     final_occupancies = []
@@ -255,24 +201,18 @@ def linear_response_u(mf_plus_u, alphalist=(0.02, 0.05, 0.08)):
         mf.kernel(dm0=bare_dm)
         local_occ = 0
         for c in C_inv:
-            C_on_site = [[c[0][k].dot(mf.mo_coeff[0][k]) for k in range(nkpts)],
-                         [c[1][k].dot(mf.mo_coeff[1][k]) for k in range(nkpts)]]
+            C_on_site = [c.dot(mf.mo_coeff[0]), c.dot(mf.mo_coeff[1])]
             rdm1_lo = mf.make_rdm1(C_on_site, mf.mo_occ)
-            local_occ += sum(x.trace().real for x in rdm1_lo[0])
-            local_occ += sum(x.trace().real for x in rdm1_lo[1])
-        local_occ /= nkpts
+            local_occ += rdm1_lo[0].trace() + rdm1_lo[1].trace()
         final_occupancies.append(local_occ)
 
         # The first iteration of SCF
         fock = mf.get_fock(dm=bare_dm)
         e, mo = mf.eig(fock, ovlp)
         for c in C_inv:
-            C_on_site = [[c[0][k].dot(mf.mo_coeff[0][k]) for k in range(nkpts)],
-                         [c[1][k].dot(mf.mo_coeff[1][k]) for k in range(nkpts)]]
+            C_on_site = [c.dot(mo[0]), c.dot(mo[1])]
             rdm1_lo = mf.make_rdm1(C_on_site, mf.mo_occ)
-            local_occ += sum(x.trace().real for x in rdm1_lo[0])
-            local_occ += sum(x.trace().real for x in rdm1_lo[1])
-        local_occ /= nkpts
+            local_occ += rdm1_lo[0].trace() + rdm1_lo[1].trace()
         bare_occupancies.append(local_occ)
         log.info('alpha=%f bare_occ=%g final_occ=%g',
                  alpha, bare_occupancies[-1], final_occupancies[-1])

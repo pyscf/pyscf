@@ -167,21 +167,13 @@ def solve_df_eri (mc_or_mc_grad, mo_cas=None, compact=True):
     naux, ncore, ncas = auxmol.nao, mc.ncore, mc.ncas
     nocc = ncore + ncas
     if mo_cas is None: mo_cas = mc.mo_coeff[:,ncore:nocc]
-    if isinstance (mo_cas, np.ndarray) and mo_cas.ndim == 2:
-        nmo = (mo_cas.shape[1], mo_cas.shape[1])
-    else:
-        nmo = (mo_cas[0].shape[1], mo_cas[1].shape[1])
 
     # (P|Q) and (P|ij)
     int2c = linalg.cho_factor(auxmol.intor('int2c2e', aosym='s1'))
     int3c = get_int3c_mo (mol, auxmol, mo_cas, compact=compact, max_memory=mc_or_mc_grad.max_memory)
 
     # Solve (P|Q) g_Qij = (P|ij)
-    dferi = linalg.cho_solve (int2c, int3c)
-    if int3c.ndim == 2:
-        dferi = dferi.reshape (naux, -1)
-    else:
-        dferi = dferi.reshape (naux, nmo[0], nmo[1])
+    dferi = linalg.cho_solve (int2c, int3c.reshape(naux, -1)).reshape(int3c.shape)
     return dferi
 
 
