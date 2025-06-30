@@ -410,6 +410,19 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
     ni = numint.KNumInt()
     return ni.get_rho(mf.cell, dm, grids, kpts, mf.max_memory)
 
+def gen_response(mf, mo_coeff=None, mo_occ=None,
+                 singlet=None, hermi=0, max_memory=None, with_nlc=True):
+    from pyscf.pbc.scf._response_functions import _get_jk, _get_k
+    cell = mf.cell
+    kpts = mf.kpts
+    if (singlet is None or singlet) and hermi != 2:
+        def vind(dm1, kshift=0):
+            vj, vk = _get_jk(mf, cell, dm1, hermi, kpts, kshift)
+            return vj - .5 * vk
+    else:
+        def vind(dm1, kshift=0):
+            return -.5 * _get_k(mf, cell, dm1, hermi, kpts, kshift)
+    return vind
 
 class KSCF(pbchf.SCF):
     '''SCF base class with k-point sampling.
@@ -760,6 +773,7 @@ class KRHF(KSCF):
 
     analyze = analyze
     spin_square = mol_hf.RHF.spin_square
+    gen_response = gen_response
     to_gpu = lib.to_gpu
 
     def check_sanity(self):

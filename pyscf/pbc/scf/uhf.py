@@ -104,6 +104,20 @@ def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
 
 get_rho = pbchf.get_rho
 
+def gen_response(mf, mo_coeff=None, mo_occ=None,
+                 with_j=True, hermi=0, max_memory=None, with_nlc=True):
+    cell = mf.cell
+    kpt = mf.kpt
+    if with_j:
+        def vind(dm1):
+            vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpt=kpt)
+            v1 = vj[0] + vj[1] - vk
+            return v1
+    else:
+        def vind(dm1):
+            return -mf.get_k(cell, dm1, hermi=hermi, kpt=kpt)
+    return vind
+
 class UHF(pbchf.SCF):
     '''UHF class for PBCs.
     '''
@@ -131,6 +145,7 @@ class UHF(pbchf.SCF):
     canonicalize = mol_uhf.UHF.canonicalize
     spin_square = mol_uhf.UHF.spin_square
     stability = mol_uhf.UHF.stability
+    gen_response = gen_response
     to_gpu = lib.to_gpu
 
     def __init__(self, cell, kpt=np.zeros(3),

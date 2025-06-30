@@ -26,7 +26,7 @@ from pyscf import __config__
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.gto import ATOM_OF, ANG_OF, NPRIM_OF, PTR_EXP, PTR_COEFF
-from pyscf.dft.numint import libdft, BLKSIZE, MGGA_DENSITY_LAPL
+from pyscf.dft.numint import libdft, BLKSIZE, MGGA_DENSITY_LAPL, LibXCMixin
 from pyscf.pbc import tools
 from pyscf.pbc import gto
 from pyscf.pbc.gto import pseudo
@@ -39,6 +39,7 @@ from pyscf.pbc.df.df_jk import (
     _format_jks,
 )
 from pyscf.pbc.lib.kpts_helper import gamma_point
+from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.df import fft, ft_ao, aft
 from pyscf.pbc.dft.multigrid.utils import (
     _take_4d,
@@ -1276,13 +1277,12 @@ def nr_rks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
         raise NotImplementedError
 
     weight = cell.vol / ngrids
-    if rho0 is None:
-        rhoG = _eval_rhoG(mydf, dm0, hermi, kpts, deriv)
-        rho0 = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
-        if xctype == 'LDA':
-            rho0 = rho0.reshape(ngrids)
-
     if fxc is None:
+        if rho0 is None:
+            rhoG = _eval_rhoG(mydf, dm0, hermi, kpts, deriv)
+            rho0 = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
+            if xctype == 'LDA':
+                rho0 = rho0.reshape(ngrids)
         fxc = ni.eval_xc_eff(xc_code, rho0, deriv=2, xctype=xctype)[2]
 
     rhoG = _eval_rhoG(mydf, dms, hermi, kpts, deriv)
@@ -1313,72 +1313,25 @@ def nr_rks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
 
 
 def nr_rks_fxc_st(mydf, xc_code, dm0, dms_alpha, singlet=True,
-                  rho0=None, vxc=None, fxc=None, kpts=None, verbose=None):
+                  rho0=None, vxc=None, fxc=None, kpts=None, with_j=False,
+                  verbose=None):
     '''multigrid version of function pbc.dft.numint.nr_rks_fxc_st
     '''
-    if kpts is None:
-        kpts = numpy.zeros((1,3))
-    log = logger.new_logger(mydf, verbose)
-    cell = mydf.cell
-    mesh = mydf.mesh
-    ngrids = numpy.prod(mesh)
+    if fxc is None:
+        fxc = cache_xc_kernel1(mydf, xc_code, dm0, spin=1, kpts=kpts)
+    if singlet:
+        fxc = fxc[0,:,0] + fxc[0,:,1]
+    else:
+        fxc = fxc[0,:,0] - fxc[0,:,1]
 
-    dm_kpts = lib.asarray(dms_alpha, order='C')
-    dms = _format_dms(dm_kpts, kpts)
-    nset, nkpts, nao = dms.shape[:3]
-
-    ni = mydf._numint
-    xctype = ni._xc_type(xc_code)
-    if xctype == 'LDA':
-        deriv = 0
-    elif xctype == 'GGA':
-        deriv = 1
-    elif xctype == 'MGGA':
-        deriv = 2 if MGGA_DENSITY_LAPL else 1
-        raise NotImplementedError
-
-    weight = cell.vol / ngrids
-    if rho0 is None:
-        rhoG = _eval_rhoG(mydf, dm0, 1, kpts, deriv)
-        # *.5 to get alpha density
-        rho0 = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (.5/weight)
-        if xctype == 'LDA':
-            rho0 = rho0.reshape(ngrids)
-        rho0 = numpy.stack((rho0, rho0))
-
-    if gamma_point(kpts):
+    if kpts is None or gamma_point(kpts):
         # implies real orbitals and real matrix, thus K_{ia,bj} = K_{ia,jb}
         # The output matrix v = K*x_{ia} is symmetric
         hermi = 1
     else:
         hermi = 0
-
-    if fxc is None:
-        fxc = ni.eval_xc_eff(xc_code, rho0, deriv=2, xctype=xctype)[2]
-    if singlet:
-        fxc = fxc[0,:,0] + fxc[0,:,1]
-    else:
-        fxc = fxc[0,:,0] - fxc[0,:,1]
-    rhoG = _eval_rhoG(mydf, dms, hermi, kpts, deriv)
-    rho1 = tools.ifft(rhoG.reshape(-1,ngrids), mesh)
-    if hermi == 1:
-        rho1 = rho1.real
-    rho1 *= (1./weight)
-    rho1 = rho1.reshape(nset,-1,ngrids)
-    wv = numpy.einsum('nxg,xyg->nyg', rho1, fxc)
-    wv *= weight
-    wv = tools.fft(wv.reshape(-1,ngrids), mesh).reshape(nset,-1,*mesh)
-
-    if xctype == 'LDA':
-        veff = _get_j_pass2(mydf, wv, hermi, kpts, verbose=log)
-
-    elif xctype == 'GGA':
-        # *.5 because v+v.T is always called in _get_gga_pass2
-        wv[:,0] *= .5
-        veff = _get_gga_pass2(mydf, wv, hermi, kpts, verbose=log)
-
-    return veff.reshape(dm_kpts.shape)
-
+    return nr_rks_fxc(mydf, xc_code, dm0, dms_alpha, hermi=hermi, with_j=with_j,
+                      fxc=fxc, kpts=kpts, verbose=verbose)
 
 def nr_uks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
                rho0=None, vxc=None, fxc=None, kpts=None, verbose=None):
@@ -1446,7 +1399,16 @@ def nr_uks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
 
 
 def cache_xc_kernel(mydf, xc_code, mo_coeff, mo_occ, spin=0, kpts=None):
-    raise NotImplementedError
+    if mo_occ[0][0].ndim == 1: # KUHF/KUKS
+        dm = []
+        for spin in range(len(mo_occ)):
+            dm.append([(c*o).dot(c.conj().T)
+                       for c, o in zip(mo_coeff[spin], mo_occ[spin])])
+    elif mo_occ[0].ndim == 1: # UHF/UKS or KRHF/KRKS
+        dm = [(c*o).dot(c.conj().T) for c, o in zip(mo_coeff, mo_occ)]
+    else: # RHF/RKS
+        dm = (mo_coeff*mo_occ).dot(mo_coeff.conj().T)
+    return cache_xc_kernel1(mydf, xc_code, dm, spin, kpts)
 
 def cache_xc_kernel1(mydf, xc_code, dm, spin=0, kpts=None):
     '''Compute the 0th order density, Vxc and fxc.  They can be used in TDDFT,
@@ -1493,59 +1455,6 @@ def cache_xc_kernel1(mydf, xc_code, dm, spin=0, kpts=None):
 
     vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype)[1:3]
     return rho, vxc, fxc
-
-def _gen_rhf_response(mf, dm0, singlet=None, hermi=0):
-    '''multigrid version of function pbc.scf.newton_ah._gen_rhf_response
-    '''
-    #assert (isinstance(mf, dft.krks.KRKS))
-    if isinstance(mf, KSCF):
-        kpts = mf.kpts
-    else:
-        kpts = mf.kpt.reshape(1,3)
-
-    if singlet is None:  # for newton solver
-        rho0, vxc, fxc = cache_xc_kernel1(mf.with_df, mf.xc, dm0, 0, kpts)
-    else:
-        rho0, vxc, fxc = cache_xc_kernel1(mf.with_df, mf.xc, dm0, 1, kpts)
-    dm0 = None
-
-    def vind(dm1):
-        if hermi == 2:
-            return numpy.zeros_like(dm1)
-
-        if singlet is None:  # Without specify singlet, general case
-            v1 = nr_rks_fxc(mf.with_df, mf.xc, dm0, dm1, hermi,
-                            True, rho0, vxc, fxc, kpts)
-        elif singlet:
-            v1 = nr_rks_fxc_st(mf.with_df, mf.xc, dm0, dm1, singlet,
-                               rho0, vxc, fxc, kpts)
-        else:
-            v1 = nr_rks_fxc_st(mf.with_df, mf.xc, dm0, dm1, singlet,
-                               rho0, vxc, fxc, kpts)
-        return v1
-    return vind
-
-def _gen_uhf_response(mf, dm0, with_j=True, hermi=0):
-    '''multigrid version of function pbc.scf.newton_ah._gen_uhf_response
-    '''
-    #assert (isinstance(mf, dft.kuks.KUKS))
-    if isinstance(mf, KSCF):
-        kpts = mf.kpts
-    else:
-        kpts = mf.kpt.reshape(1,3)
-
-    rho0, vxc, fxc = cache_xc_kernel1(mf.with_df, mf.xc, dm0, 1, kpts)
-    dm0 = None
-
-    def vind(dm1):
-        if hermi == 2:
-            return numpy.zeros_like(dm1)
-
-        v1 = nr_uks_fxc(mf.with_df, mf.xc, dm0, dm1, hermi,
-                        with_j, rho0, vxc, fxc, kpts)
-        return v1
-    return vind
-
 
 def get_rho(mydf, dm, kpts=numpy.zeros((1,3))):
     '''Density in real space
@@ -1844,12 +1753,21 @@ def _primitive_gto_cutoff(cell, precision=None):
     return rcut, ke_cutoff
 
 
-class MultiGridFFTDF(fft.FFTDF):
-    _keys = {'tasks'}
+class MultiGridNumInt(lib.StreamObject, LibXCMixin):
+    _keys = {'cell', 'mesh', 'kpts', 'xc_with_j', 'tasks'}
 
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
-        fft.FFTDF.__init__(self, cell, kpts)
+        self.cell = cell
+        self.mesh = cell.mesh
+        if isinstance(kpts, KPoints):
+            kpts = kpts.kpts
+        self.kpts = kpts
+        self.stdout = cell.stdout
+        self.verbose = cell.verbose
+        self.max_memory = cell.max_memory
+        self.xc_with_j = True # Whether to include Coulomb matrix in Vxc matrix
         self.tasks = None
+        self._rsh_df = {}
 
     def build(self):
         self.tasks = multi_grids_tasks(self.cell, self.mesh, self.verbose)
@@ -1857,6 +1775,7 @@ class MultiGridFFTDF(fft.FFTDF):
 
     def reset(self, cell=None):
         self.tasks = None
+        self._rsh_df = {}
         return fft.FFTDF.reset(cell)
 
     get_pp = get_pp
@@ -1871,7 +1790,7 @@ class MultiGridFFTDF(fft.FFTDF):
 
         from pyscf.pbc.df import fft_jk
         if with_k:
-            logger.warn(self, 'MultiGridFFTDF does not support HFX. '
+            logger.warn(self, 'MultiGridNumInt does not support HFX. '
                         'HFX is computed by FFTDF.get_k_kpts function.')
 
         if kpts is None:
@@ -1897,7 +1816,75 @@ class MultiGridFFTDF(fft.FFTDF):
                 vj = get_j_kpts(self, dm, hermi, kpts, kpts_band)
         return vj, vk
 
-    get_rho = get_rho
+    def get_j(self, dm, hermi=1, kpts=None, kpts_band=None, omega=None):
+        if omega is not None:  # J/K for RSH functionals
+            with self.range_coulomb(omega) as rsh_df:
+                return rsh_df.get_j(dm, hermi, kpts, kpts_band, omega=None)
+
+        if kpts is None:
+            kpts = self.kpts
+        else:
+            kpts = numpy.asarray(kpts)
+
+        vj = get_j_kpts(self, dm, hermi, kpts.reshape(1,3), kpts_band)
+        if kpts.ndim == 1 and kpts_band is None:
+            vj = vj[...,0,:,:]
+        return vj
+
+    def nr_vxc(self, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
+               kpts=None, kpts_band=None, max_memory=2000,
+               with_j=False, return_j=False, verbose=None):
+        '''Evaluate RKS/UKS XC functional and potential matrix.
+        See :func:`nr_rks` and :func:`nr_uks` for more details.
+        '''
+        if spin == 0:
+            return self.nr_rks(cell, grids, xc_code, dms, hermi, relativity, kpts,
+                               kpts_band, max_memory, with_j, return_j, verbose)
+        else:
+            return self.nr_uks(cell, grids, xc_code, dms, hermi, relativity, kpts,
+                               kpts_band, max_memory, with_j, return_j, verbose)
+    get_vxc = nr_vxc
+
+    def nr_rks(self, cell, grids, xc_code, dm_kpts, relativity=0, hermi=1,
+               kpts=None, kpts_band=None, max_memory=2000, verbose=None):
+        return_j = False
+        return nr_rks(self, xc_code, dm_kpts, hermi, kpts, kpts_band,
+                      self.xc_with_j, return_j, verbose)
+
+    def nr_uks(self, cell, grids, xc_code, dm_kpts, relativity=0, hermi=1,
+               kpts=None, kpts_band=None, max_memory=2000, verbose=None):
+        return_j = False
+        return nr_uks(self, xc_code, dm_kpts, hermi, kpts, kpts_band,
+                      self.xc_with_j, return_j, verbose)
+
+    def nr_rks_fxc(self, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
+                   rho0=None, vxc=None, fxc=None, kpts=None, max_memory=2000,
+                   verbose=None):
+        return nr_rks_fxc(self, xc_code, dm0, dms, hermi, self.xc_with_j,
+                          rho0, vxc, fxc, kpts, verbose)
+
+    def nr_uks_fxc(self, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
+                   rho0=None, vxc=None, fxc=None, kpts=None, max_memory=2000,
+                   verbose=None):
+        return nr_uks_fxc(self, xc_code, dm0, dms, hermi, self.xc_with_j,
+                          rho0, vxc, fxc, kpts, verbose)
+
+    def nr_rks_fxc_st(self, cell, grids, xc_code, dm0, dms_alpha, relativity=0, singlet=True,
+                      rho0=None, vxc=None, fxc=None, kpts=None, max_memory=2000,
+                      verbose=None):
+        return nr_rks_fxc_st(self, xc_code, dm0, dms_alpha, singlet,
+                             rho0, vxc, fxc, kpts, self.xc_with_j, verbose)
+
+    def cache_xc_kernel(self, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
+                        kpts=None, max_memory=2000):
+        return cache_xc_kernel(self, xc_code, mo_coeff, mo_occ, spin, kpts)
+
+    def cache_xc_kernel1(self, cell, grids, xc_code, dm, spin=0,
+                         kpts=None, max_memory=2000):
+        return cache_xc_kernel1(self, xc_code, dm, spin, kpts)
+
+    def get_rho(self, cell, dm, grids, kpts=numpy.zeros((1,3)), max_memory=2000):
+        return get_rho(self, dm, kpts)
 
     range_coulomb = aft.AFTDF.range_coulomb
 
@@ -1905,12 +1892,12 @@ class MultiGridFFTDF(fft.FFTDF):
 
 
 def multigrid_fftdf(mf):
-    '''Use MultiGridFFTDF to replace the default FFTDF integration method in
+    '''Use MultiGridNumInt to replace the default FFTDF integration method in
     the DFT object.
     '''
-    mf.with_df, old_df = MultiGridFFTDF(mf.cell), mf.with_df
-    mf.with_df.__dict__.update(old_df.__dict__)
-    return mf
+    logger.warn(mf, 'multigrid.multigrid_fftdf is deprecated and will be removed '
+                'in a future release. Please call mf.multigrid_numint() instead.')
+    return mf.multigrid_numint()
 
 multigrid = multigrid_fftdf # for backward compatibility
 

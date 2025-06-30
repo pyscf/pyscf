@@ -29,21 +29,9 @@ mf = dft.UKS(cell)
 mf.xc = 'lda,vwn'
 
 #
-# There are two ways to enable multigrid numerical integration
+# Call the multigrid_numint() method to enable multigrid integration.
 #
-# Method 1: use multigrid.multigrid_fftdf function to update SCF object
-#
-mf = multigrid.multigrid_fftdf(mf)
-mf.kernel()
-
-#
-# Method 2: MultiGridFFTDF is a DF object.  It can be enabled by overwriting
-# the default with_df object.
-#
-kpts = cell.make_kpts([4,4,4])
-mf = dft.KRKS(cell, kpts)
-mf.xc = 'lda,vwn'
-mf.with_df = multigrid.MultiGridFFTDF(cell, kpts)
+mf = mf.multigrid_numint()
 mf.kernel()
 
 #

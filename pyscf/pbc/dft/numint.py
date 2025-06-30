@@ -694,7 +694,14 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
         fxc = fxc[0,:,0] + fxc[0,:,1]
     else:
         fxc = fxc[0,:,0] - fxc[0,:,1]
-    return ni.nr_rks_fxc(cell, grids, xc_code, dm0, dms_alpha, hermi=0, fxc=fxc,
+
+    if kpts is None or is_zero(kpts):
+        # For real orbitals and real matrix, K_{ia,bj} = K_{ia,jb}.
+        # The output matrix v = K*x_{ia} is symmetric
+        hermi = 1
+    else:
+        hermi = 0
+    return ni.nr_rks_fxc(cell, grids, xc_code, dm0, dms_alpha, hermi=hermi, fxc=fxc,
                          kpts=kpts, max_memory=max_memory)
 
 def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
@@ -1156,10 +1163,10 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
         See :func:`nr_rks` and :func:`nr_uks` for more details.
         '''
         if spin == 0:
-            return self.nr_rks(cell, grids, xc_code, dms, hermi,
+            return self.nr_rks(cell, grids, xc_code, dms, relativity, hermi,
                                kpts, kpts_band, max_memory, verbose)
         else:
-            return self.nr_uks(cell, grids, xc_code, dms, hermi,
+            return self.nr_uks(cell, grids, xc_code, dms, relativity, hermi,
                                kpts, kpts_band, max_memory, verbose)
     get_vxc = nr_vxc
 

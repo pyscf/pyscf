@@ -328,6 +328,12 @@ class KnownValues(unittest.TestCase):
         kmf1.kernel(kmf1.make_rdm1())
         self.assertAlmostEqual(kmf1.e_tot, kmf.e_tot, 9)
 
+    def test_khf_newton(self):
+        raise NotImplementedError
+
+    def test_kuhf_newton(self):
+        raise NotImplementedError
+
 if __name__ == '__main__':
     print("Full Tests for HF with k-point symmetry")
     unittest.main()

@@ -40,7 +40,7 @@ from pyscf.pbc.dft.multigrid.utils import (
     _takebak_4d,
     _takebak_5d,
 )
-from pyscf.pbc.dft.multigrid.multigrid import MultiGridFFTDF
+from pyscf.pbc.dft.multigrid.multigrid import MultiGridNumInt as MultiGridNumInt_v1
 from pyscf.pbc.dft.multigrid import _backend_c as backend
 
 NTASKS = getattr(__config__, 'pbc_dft_multigrid_ntasks', 4)
@@ -994,7 +994,7 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
     return vj_kpts
 
 
-class MultiGridFFTDF2(MultiGridFFTDF):
+class MultiGridNumInt(MultiGridNumInt_v1):
     '''Base class for multigrid DFT (version 2).
 
     Attributes:
@@ -1015,19 +1015,20 @@ class MultiGridFFTDF2(MultiGridFFTDF):
              'task_list', 'vpplocG_part1', 'rhoG'}
 
     def __init__(self, cell, kpts=np.zeros((1,3))):
-        fft.FFTDF.__init__(self, cell, kpts)
+        if not gamma_point(kpts):
+            raise NotImplementedError('MultiGridNumInt2 only supports Gamma-point calculations.')
+        MultiGridNumInt_v1.__init__(self, cell, kpts)
         self.task_list = None
         self.vpplocG_part1 = None
         self.rhoG = None
-        if not gamma_point(kpts):
-            raise NotImplementedError('MultiGridFFTDF2 only supports Gamma-point calculations.')
 
     def reset(self, cell=None):
         self.vpplocG_part1 = None
         self.rhoG = None
         if self.task_list is not None:
             self.task_list = None
-        fft.FFTDF.reset(self, cell=cell)
+        MultiGridNumInt_v1.reset(self, cell=cell)
+        return self
 
     @property
     def ngrids(self):
@@ -1037,9 +1038,6 @@ class MultiGridFFTDF2(MultiGridFFTDF):
     def ngrids(self, x):
         raise AttributeError('The MultiGridNumInt attribute .ngrids is deprecated. '
                              'It is replaced by the attribute .ntasks.')
-
-    def __del__(self):
-        self.reset()
 
     def get_veff_ip1(self, dm, xc_code=None, kpts=None, kpts_band=None, spin=0):
         if kpts is None:
@@ -1085,3 +1083,20 @@ class MultiGridFFTDF2(MultiGridFFTDF):
 
     vpploc_part1_nuc_grad = vpploc_part1_nuc_grad
 
+    def nr_rks(self, cell, grids, xc_code, dm_kpts, relativity=0, hermi=1,
+               kpts=None, kpts_band=None, max_memory=2000, verbose=None):
+        return_j = False
+        return nr_rks(self, xc_code, dm_kpts, hermi, kpts, kpts_band, self.xc_with_j,
+                      return_j, verbose)
+
+    def nr_uks(self, cell, grids, xc_code, dm_kpts, relativity=0, hermi=1,
+               kpts=None, kpts_band=None, max_memory=2000, verbose=None):
+        return_j = False
+        return nr_uks(self, xc_code, dm_kpts, hermi, kpts, kpts_band, self.xc_with_j,
+                      return_j, verbose)
+
+    nr_rks_fxc = NotImplemented
+    nr_uks_fxc = NotImplemented
+    nr_rks_fxc_st = NotImplemented
+    cache_xc_kernel = NotImplemented
+    cache_xc_kernel1 = NotImplemented

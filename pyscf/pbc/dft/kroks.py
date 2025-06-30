@@ -70,4 +70,6 @@ class KROKS(rks.KohnShamDFT, krohf.KROHF):
             out.with_df.reset()
         return out
 
+    multigrid_numint = kuks.KUKS.multigrid_numint
+
     to_gpu = lib.to_gpu

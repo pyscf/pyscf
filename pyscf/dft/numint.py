@@ -1545,7 +1545,9 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
         fxc = fxc[0,:,0] + fxc[0,:,1]
     else:
         fxc = fxc[0,:,0] - fxc[0,:,1]
-    return ni.nr_rks_fxc(mol, grids, xc_code, dm0, dms_alpha, hermi=0, fxc=fxc,
+    # For real orbitals, K_{ia,bj} = K_{ia,jb}. The output v = K*x_{ia} is symmetric
+    hermi = 1
+    return ni.nr_rks_fxc(mol, grids, xc_code, dm0, dms_alpha, hermi=hermi, fxc=fxc,
                          max_memory=max_memory)
 
 def _rks_gga_wv0(rho, vxc, weight):

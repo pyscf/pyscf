@@ -38,10 +38,6 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
     ni = ks._numint
 
-    # ndim = 3 : dm.shape = (nkpts, nao, nao)
-    ground_state = (isinstance(dm, np.ndarray) and dm.ndim == 3 and
-                    kpts_band is None)
-
     if kpts_band is None:
         kpts_band = kpts.kpts_ibz
 
@@ -52,24 +48,47 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     dm_bz = kpts.transform_dm(dm)
 
     hybrid = ni.libxc.is_hybrid_xc(ks.xc)
+    weight = kpts.weights_ibz
 
-    if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
+    if isinstance(ks.with_df, multigrid.MultiGridNumInt):
         if ks.do_nlc():
             raise NotImplementedError(f'MultiGrid for NLC functional {ks.xc} + {ks.nlc}')
-        n, exc, vxc = multigrid.nr_rks(ks.with_df, ks.xc, dm_bz, hermi,
-                                       kpts.kpts, kpts_band,
-                                       with_j=True, return_j=False)
+        n, exc, vxc = ni.nr_rks(cell, ks.grids, ks.xc, dm_bz, 0, hermi,
+                                kpts.kpts, kpts_band, with_j=True, return_j=False)
         logger.info(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
+        if hybrid:
+            omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
+            if omega == 0:
+                vk = ks.get_k(cell, dm, hermi, kpts, kpts_band)
+                vk *= hyb
+            elif alpha == 0: # LR=0, only SR exchange
+                vk = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=-omega)
+                vk *= hyb
+            elif hyb == 0: # SR=0, only LR exchange
+                vk = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
+                vk *= alpha
+            else: # SR and LR exchange with different ratios
+                vk = ks.get_k(cell, dm, hermi, kpts, kpts_band)
+                vk *= hyb
+                vklr = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
+                vklr *= (alpha - hyb)
+                vk += vklr
+            vxc -= vk * .5
+            exc -= np.einsum('K,Kij,Kji', weight, dm, vk).real * .5 * .5
+        logger.timer(ks, 'veff', *t0)
         return vxc
 
+    # ndim = 3 : dm.shape = (nkpts, nao, nao)
+    ground_state = (isinstance(dm, np.ndarray) and dm.ndim == 3 and
+                    kpts_band is None)
     ks.initialize_grids(cell, dm_bz, kpts.kpts, ground_state)
 
     if hermi == 2:  # because rho = 0
         n, exc, vxc = 0, 0, 0
     else:
         max_memory = ks.max_memory - lib.current_memory()[0]
-        n, exc, vxc = ni.nr_rks(cell, ks.grids, ks.xc, dm_bz,
+        n, exc, vxc = ni.nr_rks(cell, ks.grids, ks.xc, dm_bz, 0, hermi,
                                 kpts=kpts.kpts, kpts_band=kpts_band,
                                 max_memory=max_memory)
         logger.info(ks, 'nelec by numeric integration = %s', n)
@@ -86,7 +105,6 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
             logger.info(ks, 'nelec with nlc grids = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    weight = kpts.weights_ibz
     if not hybrid:
         vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
         vxc += vj
@@ -96,13 +114,13 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
             vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
             vk *= hyb
         elif alpha == 0: # LR=0, only SR exchange
-            vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
             vk = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=-omega)
             vk *= hyb
-        elif hyb == 0: # SR=0, only LR exchange
             vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
+        elif hyb == 0: # SR=0, only LR exchange
             vk = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
             vk *= alpha
+            vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
         else: # SR and LR exchange with different ratios
             vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
             vk *= hyb
@@ -120,6 +138,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         ecoul = None
 
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
+    logger.timer(ks, 'veff', *t0)
     return vxc
 
 def get_rho(mf, dm=None, grids=None, kpts=None):

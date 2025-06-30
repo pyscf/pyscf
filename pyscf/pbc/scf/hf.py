@@ -486,6 +486,18 @@ def makov_payne_correction(mf):
               (de_mono[2], de_dip   , de_quad   , de[2]))
     return de
 
+def gen_response(mf, mo_coeff=None, mo_occ=None,
+                 singlet=None, hermi=0, max_memory=None, with_nlc=True):
+    cell = mf.cell
+    kpt = mf.kpt
+    if (singlet is None or singlet) and hermi != 2:
+        def vind(dm1):
+            vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpt=kpt)
+            return vj - .5 * vk
+    else:
+        def vind(dm1):
+            return -.5 * mf.get_k(cell, dm1, hermi=hermi, kpt=kpt)
+    return vind
 
 class SCF(mol_hf.SCF):
     '''SCF base class adapted for PBCs.
@@ -888,6 +900,9 @@ class SCF(mol_hf.SCF):
     def nuc_grad_method(self):
         raise NotImplementedError
 
+    def gen_response(mf, mo_coeff=None, mo_occ=None, **kwargs):
+        raise NotImplementedError
+
 
 class KohnShamDFT:
     '''A mock DFT base class
@@ -904,6 +919,7 @@ class RHF(SCF):
     analyze = mol_hf.RHF.analyze
     spin_square = mol_hf.RHF.spin_square
     stability = mol_hf.RHF.stability
+    gen_response = gen_response
     to_gpu = lib.to_gpu
 
     def to_ks(self, xc='HF'):
@@ -916,7 +932,6 @@ class RHF(SCF):
         '''Convert given mean-field object to RHF/ROHF'''
         addons.convert_to_rhf(mf, self)
         return self
-
 
 def _format_jks(vj, dm, kpts_band):
     if kpts_band is None:
