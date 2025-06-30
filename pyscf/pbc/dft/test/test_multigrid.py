@@ -81,52 +81,52 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_orth_get_pp(self):
         ref = df.FFTDF(cell_orth).get_pp()
-        out = multigrid.MultiGridFFTDF(cell_orth).get_pp()
+        out = multigrid.MultiGridNumInt(cell_orth).get_pp()
         self.assertEqual(out.shape, ref.shape)
         self.assertAlmostEqual(abs(ref-out).max(), 0, 8)
 
         # test small memory
-        mydf = multigrid.MultiGridFFTDF(cell_orth)
+        mydf = multigrid.MultiGridNumInt(cell_orth)
         mydf.max_memory = 10
         out = mydf.get_pp(max_memory=2)
         self.assertAlmostEqual(abs(ref-out).max(), 0, 8)
 
     def test_nonorth_get_pp(self):
         ref = df.FFTDF(cell_nonorth).get_pp()
-        out = multigrid.MultiGridFFTDF(cell_nonorth).get_pp()
+        out = multigrid.MultiGridNumInt(cell_nonorth).get_pp()
         self.assertEqual(out.shape, ref.shape)
         self.assertAlmostEqual(abs(ref-out).max(), 0, 8)
 
         # test small memory
-        mydf = multigrid.MultiGridFFTDF(cell_nonorth)
+        mydf = multigrid.MultiGridNumInt(cell_nonorth)
         mydf.max_memory = 10
         out = mydf.get_pp(max_memory=2)
         self.assertAlmostEqual(abs(ref-out).max(), 0, 8)
 
     def test_orth_get_nuc_kpts(self):
         ref = df.FFTDF(cell_orth).get_nuc(kpts)
-        out = multigrid.MultiGridFFTDF(cell_orth).get_nuc(kpts)
+        out = multigrid.MultiGridNumInt(cell_orth).get_nuc(kpts)
         self.assertEqual(out.shape, ref.shape)
         self.assertAlmostEqual(abs(ref-out).max(), 0, 8)
 
     def test_orth_get_j_kpts(self):
         ref = df.FFTDF(cell_orth).get_jk(dm, kpts=kpts, with_k=False)[0]
-        out = multigrid.MultiGridFFTDF(cell_orth).get_jk(dm, kpts=kpts)[0]
+        out = multigrid.MultiGridNumInt(cell_orth).get_jk(dm, kpts=kpts)[0]
         self.assertEqual(out.shape, ref.shape)
         self.assertAlmostEqual(abs(ref-out).max(), 0, 8)
 
-#        mydf = multigrid.MultiGridFFTDF(cell_orth)
+#        mydf = multigrid.MultiGridNumInt(cell_orth)
 #        self.assertRaises(ValueError, mydf.get_jk, dm1, hermi=0, kpts=kpts, with_k=False)
 
     def test_nonorth_get_j_kpts(self):
         ref = df.FFTDF(cell_nonorth).get_jk(dm, kpts=kpts, with_k=False)[0]
-        out = multigrid.MultiGridFFTDF(cell_nonorth, kpts=kpts).get_jk(dm)[0]
+        out = multigrid.MultiGridNumInt(cell_nonorth, kpts=kpts).get_jk(dm)[0]
         self.assertEqual(out.shape, ref.shape)
         self.assertAlmostEqual(abs(ref-out).max(), 0, 8)
 
     def test_nonorth_get_j(self):
         ref = df.FFTDF(cell_nonorth).get_jk(dm[0], with_k=False)[0]
-        out = multigrid.MultiGridFFTDF(cell_nonorth).get_jk(dm)[0]
+        out = multigrid.MultiGridNumInt(cell_nonorth).get_jk(dm)[0]
         self.assertEqual(out.shape, ref.shape)
         self.assertAlmostEqual(abs(ref-out).max(), 0, 8)
 
@@ -135,7 +135,7 @@ class KnownValues(unittest.TestCase):
         mydf = df.FFTDF(cell_orth)
         ni = dft.numint.KNumInt()
         n, exc0, ref = ni.nr_rks(cell_orth, mydf.grids, xc, dm, 1, kpts=kpts)
-        mydf = multigrid.MultiGridFFTDF(cell_orth)
+        mydf = multigrid.MultiGridNumInt(cell_orth)
         n, exc1, vxc = multigrid.nr_rks(mydf, xc, dm, kpts=kpts)
         self.assertEqual(vxc.shape, ref.shape)
         self.assertAlmostEqual(abs(ref-vxc).max(), 0, 7)
@@ -219,7 +219,7 @@ class KnownValues(unittest.TestCase):
         ni = dft.numint.KNumInt()
         n, exc0, ref = ni.nr_rks(cell_orth, mydf.grids, xc, dm, hermi=1, kpts=kpts)
         ref += mydf.get_jk(dm, hermi=1, with_k=False, kpts=kpts)[0]
-        mydf = multigrid.MultiGridFFTDF(cell_orth)
+        mydf = multigrid.MultiGridNumInt(cell_orth)
         n, exc1, vxc = multigrid.nr_rks(mydf, xc, dm, hermi=1, kpts=kpts, with_j=True)
         self.assertEqual(vxc.shape, ref.shape)
         self.assertAlmostEqual(abs(ref-vxc).max(), 0, 7)
@@ -229,7 +229,7 @@ class KnownValues(unittest.TestCase):
     def test_eval_rhoG_orth_kpts(self):
         numpy.random.seed(9)
         dm = numpy.random.random(dm1.shape) + numpy.random.random(dm1.shape) * 1j
-        mydf = multigrid.MultiGridFFTDF(cell_orth)
+        mydf = multigrid.MultiGridNumInt(cell_orth)
         rhoG = multigrid.multigrid._eval_rhoG(mydf, dm, hermi=0, kpts=kpts, deriv=0,
                                               rhog_high_order=True)
         self.assertTrue(rhoG.dtype == numpy.complex128)
@@ -243,7 +243,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 8)
 
     def test_eval_rhoG_orth_gga(self):
-        mydf = multigrid.MultiGridFFTDF(cell_orth)
+        mydf = multigrid.MultiGridNumInt(cell_orth)
         rhoG = multigrid.multigrid._eval_rhoG(mydf, dm, hermi=1, kpts=kpts, deriv=1,
                                               rhog_high_order=True)
 
@@ -256,7 +256,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 8)
 
     def test_eval_rhoG_nonorth_gga(self):
-        mydf = multigrid.MultiGridFFTDF(cell_nonorth)
+        mydf = multigrid.MultiGridNumInt(cell_nonorth)
         rhoG = multigrid.multigrid._eval_rhoG(mydf, dm, hermi=1, kpts=kpts, deriv=1,
                                               rhog_high_order=True)
 
@@ -277,7 +277,7 @@ class KnownValues(unittest.TestCase):
         ni = dft.numint.KNumInt()
 
         mf = dft.KRKS(cell_he)
-        mf.with_df = multigrid.MultiGridFFTDF(cell_he)
+        mf._numint = multigrid.MultiGridNumInt(cell_he)
         mf.kpts = kpts
 
         mf.xc = 'lda,'
@@ -305,7 +305,7 @@ class KnownValues(unittest.TestCase):
         dm1 = dm1 + dm1.transpose(0,2,1)
         mydf = df.FFTDF(cell_he)
         ni = dft.numint.NumInt()
-        mg_df = multigrid.MultiGridFFTDF(cell_he)
+        mg_df = multigrid.MultiGridNumInt(cell_he)
 
         xc = 'lda,'
         ref = dft.numint.nr_rks_fxc(ni, cell_he, mydf.grids, xc, dm_he[0], dm1,
@@ -328,7 +328,7 @@ class KnownValues(unittest.TestCase):
         dm1 = numpy.random.random(dm_he.shape) + numpy.random.random(dm_he.shape)*1j
         mydf = df.FFTDF(cell_he)
         ni = dft.numint.NumInt()
-        mg_df = multigrid.MultiGridFFTDF(cell_he)
+        mg_df = multigrid.MultiGridNumInt(cell_he)
 
         xc = 'lda,'
         ref = dft.numint.nr_rks_fxc(ni, cell_he, mydf.grids, xc, dm_he[0], dm1, hermi=0)
@@ -351,7 +351,7 @@ class KnownValues(unittest.TestCase):
         dm1[1] = dm1[0]
         mydf = df.FFTDF(cell_he)
         ni = dft.numint.KNumInt()
-        mg_df = multigrid.MultiGridFFTDF(cell_he)
+        mg_df = multigrid.MultiGridNumInt(cell_he)
 
         mf = dft.KRKS(cell_he)
         mf.with_df = mg_df
@@ -397,7 +397,7 @@ class KnownValues(unittest.TestCase):
         ni = dft.numint.NumInt()
 
         mf = dft.UKS(cell_he)
-        mf.with_df = multigrid.MultiGridFFTDF(cell_he)
+        mf._numint = multigrid.MultiGridNumInt(cell_he)
 
         mf.xc = 'lda,'
         ref = dft.numint.nr_uks_fxc(ni, cell_he, mydf.grids, mf.xc, dm_he, dm1, hermi=1)
@@ -423,7 +423,7 @@ class KnownValues(unittest.TestCase):
         dm1 = dm1 + dm1.transpose(0,2,1)
         mydf = df.FFTDF(cell_he)
         ni = dft.numint.KNumInt()
-        mg_df = multigrid.MultiGridFFTDF(cell_he)
+        mg_df = multigrid.MultiGridNumInt(cell_he)
 
         xc = 'lda,'
         ref = dft.numint.nr_uks_fxc(ni, cell_he, mydf.grids, xc,
@@ -446,7 +446,7 @@ class KnownValues(unittest.TestCase):
         dm1 = numpy.random.random(dm_he.shape) + numpy.random.random(dm_he.shape)*1j
         mydf = df.FFTDF(cell_he)
         ni = dft.numint.KNumInt()
-        mg_df = multigrid.MultiGridFFTDF(cell_he)
+        mg_df = multigrid.MultiGridNumInt(cell_he)
 
         xc = 'lda,'
         ref = dft.numint.nr_uks_fxc(ni, cell_he, mydf.grids, xc,
@@ -467,11 +467,11 @@ class KnownValues(unittest.TestCase):
     def test_rcut_vs_ke_cut(self):
         xc = 'lda,'
         with lib.temporary_env(multigrid.multigrid, TASKS_TYPE='rcut'):
-            mg_df = multigrid.MultiGridFFTDF(cell_orth)
+            mg_df = multigrid.MultiGridNumInt(cell_orth)
             n1, exc1, v1 = multigrid.nr_rks(mg_df, xc, dm1, kpts=kpts)
             self.assertEqual(len(mg_df.tasks), 3)
         with lib.temporary_env(multigrid.multigrid, TASKS_TYPE='ke_cut'):
-            mg_df = multigrid.MultiGridFFTDF(cell_orth)
+            mg_df = multigrid.MultiGridNumInt(cell_orth)
             n2, exc2, v2 = multigrid.nr_rks(mg_df, xc, dm1, kpts=kpts)
             self.assertEqual(len(mg_df.tasks), 6)
         self.assertAlmostEqual(n1, n2, 6)

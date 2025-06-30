@@ -242,7 +242,7 @@ class KnownValues(unittest.TestCase):
         error = np.amax(np.absolute(rho - rho0))
         self.assertAlmostEqual(error, 0., 7)
 
-        kmf.with_df = multigrid.MultiGridFFTDF(cell, kpts)
+        kmf._numint = multigrid.MultiGridNumInt(cell, kpts)
         kmf.kernel()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 7)
         rho = kmf.get_rho()
@@ -266,7 +266,7 @@ class KnownValues(unittest.TestCase):
         error = np.amax(np.absolute(rho - rho0))
         self.assertAlmostEqual(error, 0., 7)
 
-        kmf.with_df = multigrid.MultiGridFFTDF(cell, kpts)
+        kmf._numint = multigrid.MultiGridNumInt(cell, kpts)
         kmf.kernel()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 7)
         rho = kmf.get_rho()
