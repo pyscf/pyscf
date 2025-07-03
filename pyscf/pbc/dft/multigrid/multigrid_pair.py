@@ -1038,10 +1038,11 @@ def get_nuc_nuc_grad(mydf, dm, kpts=None):
     charge = -cell.atom_charges()
     grad = np.zeros((cell.natm,3))
     # TODO improve performance
+    rhoG = _eval_rhoG(mydf, dms, hermi=1, kpts=kpts).ravel()
     for ia in range(cell.natm):
-        vG = -1j * np.exp(-1j * np.dot(Gv, coords[ia])) * charge[ia] * coulG * Gv.T
-        v1 = _get_j_pass2(mydf, vG, kpts=kpts, hermi=1)
-        grad[ia] = np.einsum("xkpq,nkpq->x", v1, dms).real
+        vG = 1j * np.exp(1j * np.dot(Gv, coords[ia])) * charge[ia] * coulG * Gv.T
+        grad[ia] = np.dot(vG, rhoG).real
+    grad *= 1 / cell.vol
     return grad
 
 class MultiGridFFTDF2(MultiGridFFTDF):
