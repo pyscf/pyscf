@@ -38,6 +38,8 @@ def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
                               verbose, make_intermediates, update_lambda)
 
 def make_intermediates(mycc, t1, t2, eris):
+    log = logger.Logger(mycc.stdout, mycc.verbose)
+
     if numpy.iscomplexobj(t1) or numpy.iscomplexobj(t2) or numpy.iscomplexobj(eris):
         raise ValueError("make_intermediates does not support complex-valued inputs (t1, t2, or eris)")
 
@@ -60,11 +62,13 @@ def make_intermediates(mycc, t1, t2, eris):
     if blksize < nvir:
         blksize = min(blksize, (nvir + 1) // 2)
         blksize = max(blksize, 1)
-    print('blksize', blksize)
+    log.debug1('ccsd_t lambda make_intermediates: max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
+               max_memory, nocc, nvir, blksize)
 
     w_blk = numpy.empty((blksize, blksize, blksize, nocc, nocc, nocc), dtype=t1.dtype)
     v_blk = numpy.empty((blksize, blksize, blksize, nocc, nocc, nocc), dtype=t1.dtype)
 
+    time2 = logger.process_clock(), logger.perf_counter()
     for c0, c1 in lib.prange(0, nvir, blksize):
         bc = c1 - c0
         for b0, b1 in lib.prange(0, nvir, blksize):
@@ -129,6 +133,8 @@ def make_intermediates(mycc, t1, t2, eris):
                 t3_symm_ip_py(w_blk, blksize**3, nocc, "2-1000-1", 0.5, 0.0)
                 joovv[:, :, a0:a1, b0:b1] += lib.einsum('kc,abcijk->ijab',
                     eris.fock[:nocc, nocc + c0:nocc + c1], w_blk[:ba, :bb, :bc, :, :, :])
+
+        time2 = log.timer_debug1('ccsd_t lambda make_intermediates [%d:%d]'%(c0, c1), *time2)
 
     w_blk = None
     v_blk = None

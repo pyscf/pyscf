@@ -20,9 +20,11 @@
 import ctypes
 import numpy
 from pyscf import lib
+from pyscf.lib import logger
 from pyscf.cc import ccsd_rdm, _ccsd
 
 def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
+    log = logger.Logger(mycc.stdout, mycc.verbose)
 
     if (numpy.iscomplexobj(t1) or numpy.iscomplexobj(t2) or numpy.iscomplexobj(eris)
         or numpy.iscomplexobj(l1) or numpy.iscomplexobj(l2)):
@@ -45,12 +47,14 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
     if blksize < nvir:
         blksize = min(blksize, (nvir + 1) // 2)
         blksize = max(blksize, 1)
-    print('blksize', blksize)
+    log.debug1('ccsd_t rdm _gamma1_intermediates: max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
+               max_memory, nocc, nvir, blksize)
 
     goo = numpy.zeros((nocc, nocc), dtype=t1.dtype)
     w_blk = numpy.empty((blksize, blksize, blksize, nocc, nocc, nocc), dtype=t1.dtype)
     v_blk = numpy.empty((blksize, blksize, blksize, nocc, nocc, nocc), dtype=t1.dtype)
 
+    time2 = logger.process_clock(), logger.perf_counter()
     for a0, a1 in lib.prange(0, nvir, blksize):
         ba = a1 - a0
         for b0, b1 in lib.prange(0, nvir, blksize):
@@ -106,6 +110,8 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
                 goo[:, :] += lib.einsum('abcikl,abcjkl->ij',
                     v_blk[:ba, :bb, :bc, :, :, :], w_blk[:ba, :bb, :bc, :, :, :])
 
+        time2 = log.timer_debug1('ccsd_t rdm _gamma1_intermediates pass1 [%d:%d]'%(a0, a1), *time2)
+
     w_blk = None
     v_blk = None
 
@@ -115,12 +121,14 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
     if blksize < nocc:
         blksize = min(blksize, (nocc + 1) // 2)
         blksize = max(blksize, 1)
-    print('blksize', blksize)
+    log.debug1('ccsd_t rdm _gamma1_intermediates: max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
+               max_memory, nocc, nvir, blksize)
 
     gvv = numpy.zeros((nvir, nvir), dtype=t1.dtype)
     w_blk = numpy.empty((blksize, blksize, blksize, nvir, nvir, nvir), dtype=t1.dtype)
     v_blk = numpy.empty((blksize, blksize, blksize, nvir, nvir, nvir), dtype=t1.dtype)
 
+    time2 = logger.process_clock(), logger.perf_counter()
     for k0, k1 in lib.prange(0, nocc, blksize):
         bk = k1 - k0
         for j0, j1 in lib.prange(0, nocc, blksize):
@@ -179,6 +187,8 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
                 dvo[:, k0:k1] += 0.5 * lib.einsum('ijab,ijkabc->ck',
                     t2[i0:i1, j0:j1, :, :], w_blk[:bi, :bj, :bk, :, :, :])
 
+        time2 = log.timer_debug1('ccsd_t rdm _gamma1_intermediates pass2 [%d:%d]'%(k0, k1), *time2)
+
     w_blk = None
     v_blk = None
 
@@ -202,6 +212,7 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
                           compress_vvvv=False):
     '''intermediates tensors for gamma2 are sorted in Chemist's notation
     '''
+    log = logger.Logger(mycc.stdout, mycc.verbose)
 
     if (numpy.iscomplexobj(t1) or numpy.iscomplexobj(t2) or numpy.iscomplexobj(eris)
         or numpy.iscomplexobj(l1) or numpy.iscomplexobj(l2)):
@@ -225,11 +236,13 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
     if blksize < nvir:
         blksize = min(blksize, (nvir + 1) // 2)
         blksize = max(blksize, 1)
-    print('blksize', blksize)
+    log.debug1('ccsd_t rdm _gamma2_intermediates: max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
+               max_memory, nocc, nvir, blksize)
 
     w_blk = numpy.empty((blksize, blksize, blksize, nocc, nocc, nocc), dtype=t1.dtype)
     v_blk = numpy.empty((blksize, blksize, blksize, nocc, nocc, nocc), dtype=t1.dtype)
 
+    time2 = logger.process_clock(), logger.perf_counter()
     for c0, c1 in lib.prange(0, nvir, blksize):
         bc = c1 - c0
         for b0, b1 in lib.prange(0, nvir, blksize):
@@ -289,6 +302,8 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
                     t2[:, :, b0:b1, c0:c1], v_blk[:ba, :bb, :bc, :, :, :])
                 dovvv[:, a0:a1, :, b0:b1] += lib.einsum('kjcf,abcijk->iafb',
                     t2[:, :, c0:c1, :], v_blk[:ba, :bb, :bc, :, :, :])
+
+        time2 = log.timer_debug1('ccsd_t rdm _gamma2_intermediates [%d:%d]'%(c0, c1), *time2)
 
     w_blk = None
     v_blk = None
