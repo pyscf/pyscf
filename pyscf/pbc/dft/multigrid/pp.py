@@ -131,7 +131,6 @@ def _get_vpplocG_part1(mydf, with_rho_core=PP_WITH_RHO_CORE):
 
 def get_vpploc_part1_ip1(mydf, kpts=np.zeros((1,3))):
     from .multigrid_pair import _get_j_pass2_ip1
-    mesh = mydf.mesh
     vG = mydf.vpplocG_part1
     if vG is None:
         vG = _get_vpplocG_part1(mydf)
