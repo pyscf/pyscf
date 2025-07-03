@@ -633,7 +633,8 @@ class CDERIArray:
 
             k_slices = slices[:2]
             a_slices = slices[2:]
-            if isinstance(k_slices[0], int) and isinstance(k_slices[1], int):
+            if (isinstance(k_slices[0], (int, numpy.integer)) and
+                isinstance(k_slices[1], (int, numpy.integer))):
                 return self._load_one(k_slices[0], k_slices[1], ())
         else:
             k_slices = slices

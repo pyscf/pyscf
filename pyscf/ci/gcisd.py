@@ -123,7 +123,7 @@ def from_ucisdvec(civec, nocc, orbspin):
     coefficient vector'''
     nmoa = numpy.count_nonzero(orbspin == 0)
     nmob = numpy.count_nonzero(orbspin == 1)
-    if isinstance(nocc, int):
+    if isinstance(nocc, (int, numpy.integer)):
         nocca = numpy.count_nonzero(orbspin[:nocc] == 0)
         noccb = numpy.count_nonzero(orbspin[:nocc] == 1)
     else:

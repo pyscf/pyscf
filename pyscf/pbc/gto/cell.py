@@ -1532,7 +1532,7 @@ class Cell(mole.MoleBase):
                 basis_add = []
                 for b in basis_now:
                     l = b[0]
-                    if isinstance(b[1], int):
+                    if isinstance(b[1], (int, np.integer)):
                         kappa = b[1]
                         b_coeff = np.array(b[2:])
                     else:
