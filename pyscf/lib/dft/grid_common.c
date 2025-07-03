@@ -255,7 +255,7 @@ static int _orth_components(double *xs_exp, int* bounds, double dx, double radiu
         exp_x0dx *= exp_2dxdx;
     }
 
-    exp_x0dx = exp_dxdx / exp_x0dx_cache;
+    exp_x0dx = exp(_dxdx - _x0dx);
     exp_x0x0 = exp_x0x0_cache;
     for (i = istart-1; i >= 0; i--) {
         exp_x0x0 *= exp_x0dx;
@@ -527,7 +527,7 @@ static void _poly_exp(double *xs_all, int* bounds, double dx,
         exp_x0dx *= exp_2dxdx;
     }
 
-    exp_x0dx = exp_dxdx / exp_x0dx_cache;
+    exp_x0dx = exp(_dxdx - _x0dx);
     exp_x0x0 = exp_x0x0_cache;
     for (i = istart-1; i >= 0; i--) {
         exp_x0x0 *= exp_x0dx;
