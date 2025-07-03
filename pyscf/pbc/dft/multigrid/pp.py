@@ -121,10 +121,9 @@ def _get_vpplocG_part1(mydf, with_rho_core=PP_WITH_RHO_CORE):
         rhoG_core = coulG = None
         # G = 0 contribution
         chargs = cell.atom_charges()
-        rloc = []
-        for ia in range(cell.natm):
-            symb = cell.atom_symbol(ia)
-            rloc.append(cell._pseudo[symb][1])
+        symbs = map(cell.atom_symbol, range(cell.natm))
+        rloc = [cell._pseudo[symb][1] if symb in cell._pseudo else 0.
+                for symb in symbs]
         rloc = np.asarray(rloc)
         vpplocG_part1[0] += 2. * np.pi * np.sum(rloc * rloc * chargs)
     return vpplocG_part1
@@ -132,11 +131,10 @@ def _get_vpplocG_part1(mydf, with_rho_core=PP_WITH_RHO_CORE):
 
 def get_vpploc_part1_ip1(mydf, kpts=np.zeros((1,3))):
     from .multigrid_pair import _get_j_pass2_ip1
-    if mydf.pp_with_erf:
-        return 0
-
     mesh = mydf.mesh
     vG = mydf.vpplocG_part1
+    if vG is None:
+        vG = _get_vpplocG_part1(mydf)
     vG.reshape(-1,*mesh)
 
     vpp_kpts = _get_j_pass2_ip1(mydf, vG, kpts, hermi=0, deriv=1)

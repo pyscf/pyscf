@@ -33,6 +33,7 @@ from pyscf.pbc.dft.multigrid.pp import (
     _get_vpplocG_part1,
     _get_pp_without_erf,
     vpploc_part1_nuc_grad,
+    get_vpploc_part1_ip1,
 )
 from pyscf.pbc.dft.multigrid.utils import (
     _take_4d,
@@ -993,6 +994,55 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
         vj_kpts = vj_kpts[0]
     return vj_kpts
 
+def get_nuc(mydf, kpts=None, deriv=0):
+    kpts, is_single_kpt = fft._check_kpts(mydf, kpts)
+    cell = mydf.cell
+    mesh = mydf.mesh
+    charge = -cell.atom_charges()
+
+    Gv, Gvbase, _ = cell.get_Gv_weights(mesh)
+    basex, basey, basez = Gvbase
+    b = cell.reciprocal_vectors()
+    rb = np.dot(cell.atom_coords(), b.T)
+    SIx = np.exp(-1j*np.einsum('z,g->zg', rb[:,0], basex))
+    SIy = np.exp(-1j*np.einsum('z,g->zg', rb[:,1], basey))
+    SIz = np.exp(-1j*np.einsum('z,g->zg', rb[:,2], basez))
+    rhoG = np.einsum('i,ix,iy,iz->xyz', charge, SIx, SIy, SIz).ravel()
+
+    coulG = tools.get_coulG(cell, mesh=mesh, Gv=Gv)
+    vneG = rhoG * coulG
+    if deriv == 0:
+        vne = _get_j_pass2(mydf, vneG, kpts=kpts, hermi=1)
+    elif deriv == 1: # ip1
+        vne = _get_j_pass2_ip1(mydf, vneG, kpts=kpts, hermi=0, deriv=deriv)
+    else:
+        raise NotImplementedError
+
+    if is_single_kpt:
+        vne = vne[0]
+    return np.asarray(vne)
+
+def get_nuc_ip1(mydf, kpts=None):
+    return get_nuc(mydf, kpts=kpts, deriv=1)
+
+def get_nuc_nuc_grad(mydf, dm, kpts=None):
+    # < p | d/dR (-Z / |r-R|) | q > D_{pq}
+    kpts, is_single_kpt = fft._check_kpts(mydf, kpts)
+    cell = mydf.cell
+    mesh = mydf.mesh
+    dms = _format_dms(dm, kpts)
+
+    Gv = cell.get_Gv(mesh)
+    coulG = tools.get_coulG(cell, mesh=mesh, Gv=Gv)
+    coords = cell.atom_coords()
+    charge = -cell.atom_charges()
+    grad = np.zeros((cell.natm,3))
+    # TODO improve performance
+    for ia in range(cell.natm):
+        vG = -1j * np.exp(-1j * np.dot(Gv, coords[ia])) * charge[ia] * coulG * Gv.T
+        v1 = _get_j_pass2(mydf, vG, kpts=kpts, hermi=1)
+        grad[ia] = np.einsum("xkpq,nkpq->x", v1, dms).real
+    return grad
 
 class MultiGridFFTDF2(MultiGridFFTDF):
     '''Base class for multigrid DFT (version 2).
@@ -1060,7 +1110,7 @@ class MultiGridFFTDF2(MultiGridFFTDF):
         the short-range part of the local potential and the non-local potential.
         The long-range part of the local potential is cached as `vpplocG_part1`,
         which is the reciprocal space representation, to be added to the electron
-        density for computing the Coulomb matrix.
+        density Coulomb potential for computing the Coulomb matrix.
         In order to get the full PP matrix, set return_full to True.
 
         Kwargs:
@@ -1072,16 +1122,16 @@ class MultiGridFFTDF2(MultiGridFFTDF):
 
         vpp = _get_pp_without_erf(self, kpts)
         if return_full:
-            if kpts is None:
-                kpts_lst = np.zeros((1,3))
-            else:
-                kpts_lst = np.reshape(kpts, (-1,3))
-            vpp1 = _get_j_pass2(self, self.vpplocG_part1, kpts_lst)
-            if kpts is None or np.shape(kpts) == (3,):
+            kpts, is_single_kpt = fft._check_kpts(self, kpts)
+            vpp1 = _get_j_pass2(self, self.vpplocG_part1, kpts)
+            if is_single_kpt:
                 vpp1 = vpp1[0]
             vpp += vpp1
 
         return vpp
 
+    get_nuc = get_nuc
+    get_nuc_ip1 = get_nuc_ip1
+    get_nuc_nuc_grad = get_nuc_nuc_grad
     vpploc_part1_nuc_grad = vpploc_part1_nuc_grad
-
+    get_vpploc_part1_ip1 = get_vpploc_part1_ip1

@@ -673,8 +673,10 @@ void build_core_density(void (*eval_rho)(), double* rho,
         r0 = env + atm[ia*ATM_SLOTS+PTR_COORD];
         fac = -charge * coeff;
         rad = env[atm[ia*ATM_SLOTS+PTR_RADIUS]];
-        eval_rho(rho_priv, dm, 1, 0, 0, alpha, 0., r0, r0,
-                 fac, rad, dimension, dh, dh_inv, mesh, cache);
+        if (rad > 1e-15) {
+            eval_rho(rho_priv, dm, 1, 0, 0, alpha, 0., r0, r0,
+                     fac, rad, dimension, dh, dh_inv, mesh, cache);
+        }
     }
     free(cache);
 
