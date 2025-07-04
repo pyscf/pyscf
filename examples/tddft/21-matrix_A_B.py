@@ -43,6 +43,24 @@ a, b = tddft.TDDFT(mf).get_ab()
 print('Direct diagoanlization:', diagonalize(a, b))
 print('Reference:', tddft.TDDFT(mf).kernel(nstates=5)[0])
 
+#
+# with frozen orbitals
+#
+frozen = 1
+mf = scf.RHF(mol).run()
+a, b = tddft.TDHF(mf, frozen).get_ab()
+print('Direct diagoanlization:', diagonalize(a, b))
+print('Reference:', tddft.TDHF(mf, frozen).kernel(nstates=5)[0])
+
+mf = dft.RKS(mol).run(xc='lda,vwn')
+a, b = tddft.TDDFT(mf, frozen).get_ab()
+print('Direct diagoanlization:', diagonalize(a, b))
+print('Reference:', tddft.TDDFT(mf, frozen).kernel(nstates=5)[0])
+
+mf = dft.RKS(mol).run(xc='b3lyp')
+a, b = tddft.TDDFT(mf, frozen).get_ab()
+print('Direct diagoanlization:', diagonalize(a, b))
+print('Reference:', tddft.TDDFT(mf, frozen).kernel(nstates=5)[0])
 
 #
 # UHF/UKS-TDDFT
@@ -81,3 +99,22 @@ mf = dft.UKS(mol).run(xc='b3lyp')
 a, b = tddft.TDDFT(mf).get_ab()
 print('Direct diagoanlization:', diagonalize(a, b))
 print('Reference:', tddft.TDDFT(mf).kernel(nstates=4)[0])
+
+#
+# with frozen orbitals
+#
+frozen = 1
+mf = scf.UHF(mol).run()
+a, b = tddft.TDHF(mf, frozen).get_ab()
+print('Direct diagoanlization:', diagonalize(a, b))
+print('Reference:', tddft.TDHF(mf, frozen).kernel(nstates=4)[0])
+
+mf = dft.UKS(mol).run(xc='lda,vwn')
+a, b = tddft.TDDFT(mf, frozen).get_ab()
+print('Direct diagoanlization:', diagonalize(a, b))
+print('Reference:', tddft.TDDFT(mf, frozen).kernel(nstates=4)[0])
+
+mf = dft.UKS(mol).run(xc='b3lyp')
+a, b = tddft.TDDFT(mf, frozen).get_ab()
+print('Direct diagoanlization:', diagonalize(a, b))
+print('Reference:', tddft.TDDFT(mf, frozen).kernel(nstates=4)[0])

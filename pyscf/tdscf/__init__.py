@@ -37,53 +37,53 @@ except (ImportError, IOError):
     pass
 
 
-def TDHF(mf):
+def TDHF(mf, frozen=None):
     if isinstance(mf, scf.hf.KohnShamDFT):
         raise RuntimeError('TDHF does not support DFT object %s' % mf)
     mf = mf.remove_soscf()
     if isinstance(mf, scf.rohf.ROHF):
         # Is it correct to call TDUHF for ROHF?
         mf = mf.to_uhf()
-    return mf.TDHF()
+    return mf.TDHF(frozen)
 
-def TDA(mf):
+def TDA(mf, frozen=None):
     mf = mf.remove_soscf()
     if isinstance(mf, scf.rohf.ROHF):
         if isinstance(mf, KohnShamDFT):
             mf = mf.to_uks()
         else:
             mf = mf.to_uhf()
-    return mf.TDA()
+    return mf.TDA(frozen)
 
-def TDDFT(mf):
+def TDDFT(mf, frozen=None):
     if isinstance(mf, KohnShamDFT):
         mf = mf.remove_soscf()
         if isinstance(mf, scf.rohf.ROHF):
             mf = mf.to_uks()
-        return mf.TDDFT()
+        return mf.TDDFT(frozen)
     else:
-        return TDHF(mf)
+        return TDHF(mf, frozen)
 
 TD = TDDFT
 
 
-def RPA(mf):
-    return TDDFT(mf)
+def RPA(mf, frozen=None):
+    return TDDFT(mf, frozen)
 
-def dRPA(mf):
+def dRPA(mf, frozen=None):
     mf = mf.remove_soscf()
     if isinstance(mf, scf.rohf.ROHF):
         if isinstance(mf, KohnShamDFT):
             mf = mf.to_uks()
         else:
             mf = mf.to_uhf()
-    return mf.dRPA()
+    return mf.dRPA(frozen)
 
-def dTDA(mf):
+def dTDA(mf, frozen=None):
     mf = mf.remove_soscf()
     if isinstance(mf, scf.rohf.ROHF):
         if isinstance(mf, KohnShamDFT):
             mf = mf.to_uks()
         else:
             mf = mf.to_uhf()
-    return mf.dTDA()
+    return mf.dTDA(frozen)
