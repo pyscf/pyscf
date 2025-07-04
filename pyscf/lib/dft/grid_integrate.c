@@ -1638,8 +1638,10 @@ void int_gauss_charge_v_rs(int (*eval_ints)(), double* out, double* v_rs, int co
         r0 = env + atm[ia*ATM_SLOTS+PTR_COORD];
         fac = -charge * coeff;
         rad = env[atm[ia*ATM_SLOTS+PTR_RADIUS]];
-        (*eval_ints)(v_rs, out+ia*comp, comp, 0, 0, alpha, 0.0, r0, r0, 
-                     fac, rad, dimension, dh, dh_inv, mesh, cache);
+        if (rad > 1e-15) {
+            (*eval_ints)(v_rs, out+ia*comp, comp, 0, 0, alpha, 0.0, r0, r0,
+                         fac, rad, dimension, dh, dh_inv, mesh, cache);
+        }
     }
     free(cache);
 }
