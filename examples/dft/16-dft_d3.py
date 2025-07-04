@@ -101,7 +101,8 @@ mf = mol.HF()
 mf.disp = 'd3bj'
 mf.kernel()
 
-# If you wish to configure everythin by your self ___________________
+# If you wish to customize the dispersion by your self, the (xc, nlc, disp) can
+# be configured indvidually to manage the NLC and dispersion contributions.
 # The combination of (xc, nlc, disp) typically falls into the following categories:
 # 1. mf.xc, mf.nlc, mf.disp = 'xc-keyword-d3', '', None
 #   nlc and disp are default values. NLC as well as dispersion computation is
