@@ -30,6 +30,7 @@
 #if defined(HAVE_LIBXSMM)
     #include "libxsmm.h"
 #endif
+#define EXPMIN          -700
 
 int get_lmax(int ish0, int ish1, int* bas)
 {
@@ -231,6 +232,9 @@ static int _orth_components(double *xs_exp, int* bounds, double dx, double radiu
     double base_x = dx * xij_latt;
     double x0xij = base_x - xij;
     double _x0x0 = -aij * x0xij * x0xij;
+    if (_x0x0 < EXPMIN) {
+        return 0;
+    }
 
     double *gridx = cache;
     double *xs_all = xs_exp;
@@ -242,8 +246,7 @@ static int _orth_components(double *xs_exp, int* bounds, double dx, double radiu
     double _x0dx = -2 * aij * x0xij * dx;
     double exp_dxdx = exp(_dxdx);
     double exp_2dxdx = exp_dxdx * exp_dxdx;
-    double exp_x0dx_cache = exp(_x0dx);
-    double exp_x0dx = exp_dxdx * exp_x0dx_cache;
+    double exp_x0dx = exp(_dxdx + _x0dx);
     double exp_x0x0_cache = exp(_x0x0);
     double exp_x0x0 = exp_x0x0_cache;
 
@@ -510,12 +513,15 @@ static void _poly_exp(double *xs_all, int* bounds, double dx,
     int ngridx = x1_latt - x0_latt;
 
     double _x0x0 = -ap * xoff * xoff;
+    if (_x0x0 < EXPMIN) {
+        return;
+    }
+
     double _dxdx = -ap * dx * dx;
     double _x0dx = -2 * ap * xoff * dx;
     double exp_dxdx = exp(_dxdx);
     double exp_2dxdx = exp_dxdx * exp_dxdx;
-    double exp_x0dx_cache = exp(_x0dx);
-    double exp_x0dx = exp_x0dx_cache * exp_dxdx;
+    double exp_x0dx = exp(_dxdx + _x0dx);
     double exp_x0x0_cache = exp(_x0x0);
     double exp_x0x0 = exp_x0x0_cache;
 
