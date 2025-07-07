@@ -134,8 +134,8 @@ def gen_response(mf, mo_coeff=None, mo_occ=None,
             assert kshift == 0
             v1 = ni.nr_uks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                rho0, vxc, fxc, kpts, max_memory=max_memory)
-        vj, vk = rks._get_jk(mf, cell, dm1, hermi, kpts, with_j=not j_in_xc,
-                             kshift=kshift)
+        vj, vk = krks._get_jk(mf, cell, dm1, hermi, kpts, with_j=not j_in_xc,
+                              kshift=kshift)
         if not j_in_xc:
             v1 += vj[0] + vj[1]
         if hybrid:

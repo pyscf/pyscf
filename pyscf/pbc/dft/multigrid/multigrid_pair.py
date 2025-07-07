@@ -24,6 +24,7 @@ from pyscf.gto import moleintor
 from pyscf.pbc import tools
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf.pbc.df import fft
+from pyscf.pbc import tools as pbctools
 from pyscf.pbc.df.df_jk import (
     _format_dms,
     _format_kpts_band,
@@ -57,15 +58,15 @@ def multi_grids_tasks(cell, ke_cutoff=None, hermi=0,
                       ntasks=NTASKS, ke_ratio=KE_RATIO, rel_cutoff=REL_CUTOFF):
     if ke_cutoff is None:
         ke_cutoff = cell.ke_cutoff
+    a = cell.lattice_vectors()
     if ke_cutoff is None:
-        raise ValueError("cell.ke_cutoff is not set.")
+        ke_cutoff = pbctools.mesh_to_cutoff(a, cell.mesh).max()
     ke1 = ke_cutoff
     cutoff = [ke1,]
     for i in range(ntasks-1):
         ke1 /= ke_ratio
         cutoff.append(ke1)
     cutoff.reverse()
-    a = cell.lattice_vectors()
     mesh = []
     for ke in cutoff[:-1]:
         mesh.append(tools.cutoff_to_mesh(a, ke))
@@ -93,6 +94,10 @@ def _update_task_list(mydf, hermi=0, ntasks=None, ke_ratio=None, rel_cutoff=None
     if task_list is None:
         need_update = True
     else:
+        ke_cutoff = cell.ke_cutoff
+        if ke_cutoff is None:
+            a = cell.lattice_vectors()
+            ke_cutoff = pbctools.mesh_to_cutoff(a, cell.mesh).max()
         hermi_orig = task_list.hermi
         nlevels = task_list.nlevels
         rel_cutoff_orig = task_list.gridlevel_info.rel_cutoff
@@ -100,7 +105,7 @@ def _update_task_list(mydf, hermi=0, ntasks=None, ke_ratio=None, rel_cutoff=None
         if (hermi_orig > hermi or
                 nlevels != ntasks or
                 abs(rel_cutoff_orig-rel_cutoff) > 1e-12 or
-                abs(ke_cutoff_orig - cell.ke_cutoff) > 1e-12):
+                abs(ke_cutoff_orig - ke_cutoff) > 1e-12):
             need_update = True
             logger.debug(mydf, 'Hermiticity or cutoffs changed; will update the task list!')
 
@@ -1058,3 +1063,4 @@ class MultiGridNumInt(MultiGridNumInt_v1):
     nr_rks_fxc_st = NotImplemented
     cache_xc_kernel = NotImplemented
     cache_xc_kernel1 = NotImplemented
+    get_rho = NotImplemented

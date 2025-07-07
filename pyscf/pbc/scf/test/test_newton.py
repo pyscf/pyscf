@@ -118,7 +118,7 @@ class KnowValues(unittest.TestCase):
         mf = mf.newton()
         mf.conv_tol_grad = 1e-4
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -9.9355341416893559, 8)
+        self.assertAlmostEqual(mf.e_tot, -10.346325245581905, 8)
 
     def test_nr_krhf(self):
         mf = scf.KRHF(cell, cell.make_kpts([2,1,1]))
