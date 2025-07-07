@@ -61,7 +61,7 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
         frozen = gw.frozen
 
     # only support frozen core
-    assert (isinstance(frozen, int))
+    assert (isinstance(frozen, (int, np.integer)))
     assert (frozen < gw.nocc)
 
     if Lpq is None:

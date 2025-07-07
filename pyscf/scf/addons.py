@@ -114,7 +114,7 @@ def _init_guess_mu(f_occ, mo_es, nocc, sigma, box=[-1.,1.], step=1e-3):
 
 def _get_fermi(mo_energy, nocc):
     mo_e_sorted = numpy.sort(mo_energy)
-    if isinstance(nocc, int):
+    if isinstance(nocc, (int, numpy.integer)):
         return mo_e_sorted[nocc-1]
     else: # nocc = ?.5 or nocc = ?.0
         return mo_e_sorted[numpy.ceil(nocc).astype(int) - 1]
