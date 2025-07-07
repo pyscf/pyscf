@@ -104,7 +104,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     v1 = numpy.zeros_like(dm1)
                 else:
                     # nr_rks_fxc_st requires alpha of dm1, dm1*.5 should be scaled
-                    v1 = ni.nr_rks_fxc_st(mol, mf.grids, mf.xc, dm0, dm1, 0, True,
+                    v1 = ni.nr_rks_fxc_st(mol, mf.grids, mf.xc, dm0, dm1, hermi, True,
                                           rho0, vxc, fxc, max_memory=max_memory)
                     if with_nlc and mf.do_nlc():
                         from pyscf.hessian.rks import get_vnlc_resp # Cannot import at top due to circular dependency
@@ -139,7 +139,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     v1 = numpy.zeros_like(dm1)
                 else:
                     # nr_rks_fxc_st requires alpha of dm1, dm1*.5 should be scaled
-                    v1 = ni.nr_rks_fxc_st(mol, mf.grids, mf.xc, dm0, dm1, 0, False,
+                    v1 = ni.nr_rks_fxc_st(mol, mf.grids, mf.xc, dm0, dm1, hermi, False,
                                           rho0, vxc, fxc, max_memory=max_memory)
                     if with_nlc and mf.do_nlc():
                         pass # fxc = 0, do nothing

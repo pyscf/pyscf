@@ -186,7 +186,7 @@ def gen_response(mf, mo_coeff=None, mo_occ=None, singlet=None, hermi=0,
             else:
                 assert kshift == 0
                 # nr_rks_fxc_st requires alpha of dm1
-                v1 = ni.nr_rks_fxc_st(cell, mf.grids, mf.xc, dm0, dm1, 0,
+                v1 = ni.nr_rks_fxc_st(cell, mf.grids, mf.xc, dm0, dm1, hermi,
                                       True, rho0, vxc, fxc, kpts,
                                       max_memory=max_memory)
             vj, vk = _get_jk(mf, cell, dm1, hermi, kpts, with_j=not j_in_xc,
@@ -204,7 +204,7 @@ def gen_response(mf, mo_coeff=None, mo_occ=None, singlet=None, hermi=0,
             else:
                 assert kshift == 0
                 # nr_rks_fxc_st requires alpha of dm1
-                v1 = ni.nr_rks_fxc_st(cell, mf.grids, mf.xc, dm0, dm1, 0,
+                v1 = ni.nr_rks_fxc_st(cell, mf.grids, mf.xc, dm0, dm1, hermi,
                                       False, rho0, vxc, fxc, kpts,
                                       max_memory=max_memory)
             vk = _get_jk(mf, cell, dm1, hermi, kpts, with_j=False, kshift=kshift)[1]

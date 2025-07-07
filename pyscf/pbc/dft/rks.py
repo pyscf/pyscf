@@ -190,9 +190,9 @@ def gen_response(mf, mo_coeff=None, mo_occ=None,
                 v1 = numpy.zeros_like(dm1)
             else:
                 # nr_rks_fxc_st requires alpha of dm1
-                v1 = numint.nr_rks_fxc_st(ni, cell, mf.grids, mf.xc, dm0, dm1, 0,
-                                          True, rho0, vxc, fxc, kpt,
-                                          max_memory=max_memory)
+                v1 = ni.nr_rks_fxc_st(cell, mf.grids, mf.xc, dm0, dm1, hermi,
+                                      True, rho0, vxc, fxc, kpt,
+                                      max_memory=max_memory)
             vj, vk = _get_jk(mf, cell, dm1, hermi, kpt, with_j=not j_in_xc)
             if not j_in_xc:
                 v1 += vj
@@ -206,9 +206,9 @@ def gen_response(mf, mo_coeff=None, mo_occ=None,
                 v1 = numpy.zeros_like(dm1)
             else:
                 # nr_rks_fxc_st requires alpha of dm1
-                v1 = ni.nr_rks_fxc_st(cell, mf.grids, mf.xc, dm0, dm1, 0,
-                                          False, rho0, vxc, fxc, kpt,
-                                          max_memory=max_memory)
+                v1 = ni.nr_rks_fxc_st(cell, mf.grids, mf.xc, dm0, dm1, hermi,
+                                      False, rho0, vxc, fxc, kpt,
+                                      max_memory=max_memory)
             vk = _get_jk(mf, cell, dm1, hermi, kpt, with_j=False)[1]
             if hybrid:
                 v1 -= .5 * vk

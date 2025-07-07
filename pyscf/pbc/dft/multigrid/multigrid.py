@@ -1306,7 +1306,7 @@ def nr_rks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
     return veff.reshape(dm_kpts.shape)
 
 
-def nr_rks_fxc_st(mydf, xc_code, dm0, dms_alpha, singlet=True,
+def nr_rks_fxc_st(mydf, xc_code, dm0, dms_alpha, hermi=0, singlet=True,
                   rho0=None, vxc=None, fxc=None, kpts=None, with_j=False,
                   verbose=None):
     '''multigrid version of function pbc.dft.numint.nr_rks_fxc_st
@@ -1322,9 +1322,9 @@ def nr_rks_fxc_st(mydf, xc_code, dm0, dms_alpha, singlet=True,
         # implies real orbitals and real matrix, thus K_{ia,bj} = K_{ia,jb}
         # The input dms_alpha must symmetric
         # The output matrix v = K*x_{ia} is symmetric
-        hermi = 1
+        pass
     else:
-        hermi = 0
+        assert hermi == 0
     return nr_rks_fxc(mydf, xc_code, dm0, dms_alpha, hermi=hermi, with_j=with_j,
                       fxc=fxc, kpts=kpts, verbose=verbose)
 

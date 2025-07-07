@@ -676,7 +676,7 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         vmat = 0
     return vmat
 
-def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, singlet=True,
+def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, hermi=0, singlet=True,
                   rho0=None, vxc=None, fxc=None, kpts=None, max_memory=2000,
                   verbose=None):
     '''Associated to singlet or triplet Hessian
@@ -699,9 +699,9 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
         # For real orbitals and real matrix, K_{ia,bj} = K_{ia,jb}.
         # The input dms_alpha must symmetric
         # The output matrix v = K*x_{ia} is symmetric
-        hermi = 1
+        pass
     else:
-        hermi = 0
+        assert hermi == 0
     return ni.nr_rks_fxc(cell, grids, xc_code, dm0, dms_alpha, hermi=hermi, fxc=fxc,
                          kpts=kpts, max_memory=max_memory)
 

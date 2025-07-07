@@ -1529,7 +1529,7 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         vmat = numpy.asarray(vmat, dtype=dtype)
     return vmat
 
-def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet=True,
+def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, hermi=0, singlet=True,
                   rho0=None, vxc=None, fxc=None, max_memory=2000, verbose=None):
     '''Associated to singlet or triplet Hessian
     Note the difference to nr_rks_fxc, dms_alpha is the response density
@@ -1545,8 +1545,6 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
         fxc = fxc[0,:,0] + fxc[0,:,1]
     else:
         fxc = fxc[0,:,0] - fxc[0,:,1]
-    # For real orbitals, K_{ia,bj} = K_{ia,jb}. The output v = K*x_{ia} is symmetric
-    hermi = 1
     return ni.nr_rks_fxc(mol, grids, xc_code, dm0, dms_alpha, hermi=hermi, fxc=fxc,
                          max_memory=max_memory)
 
