@@ -1108,7 +1108,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
 
     cell = mydf.cell
     dm = numpy.asarray(dm, order='C')
-    dms = _format_dms(dm, [kpt])
+    dms = _format_dms(dm, kpt.reshape(1, 3))
     nset, _, nao = dms.shape[:3]
     dms = dms.reshape(nset,nao,nao)
     j_real = gamma_point(kpt)
@@ -1452,7 +1452,7 @@ def _format_jks(v_kpts, dm_kpts, kpts_band, kpts):
     if kpts_band is kpts or kpts_band is None:
         return v_kpts.reshape(dm_kpts.shape)
     else:
-        if nkpts is None or nkpts.ndim == 1:
+        if kpts is None or kpts.ndim == 1:
             nkpts = 1
         else:
             nkpts = len(kpts)

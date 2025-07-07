@@ -79,16 +79,20 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         logger.info(ks, 'nelec with nlc grids = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
 
+    ground_state = kpts_band is None
     vj, vk = rks._get_jk(ks, cell, dm, hermi, kpt, kpts_band, with_j=not j_in_xc)
     if j_in_xc:
         ecoul = vxc.ecoul
     else:
         vj = vj[0] + vj[1]
         vxc += vj
-        ecoul = numpy.einsum('nij,ji->', dm, vj).real * .5
+        ecoul = None
+        if ground_state:
+            ecoul = numpy.einsum('nij,ji->', dm, vj).real * .5
     if ni.libxc.is_hybrid_xc(ks.xc):
         vxc -= vk
-        exc -= numpy.einsum('nij,nji->', dm, vk).real * .5
+        if ground_state:
+            exc -= numpy.einsum('nij,nji->', dm, vk).real * .5
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
     logger.timer(ks, 'veff', *t0)
     return vxc
@@ -156,6 +160,13 @@ class UKS(rks.KohnShamDFT, pbcuhf.UHF):
         '''Convert to UHF object.'''
         from pyscf.pbc import scf
         return self._transfer_attrs_(scf.UHF(self.cell, self.kpt))
+
+    def Gradients(self):
+        from pyscf.pbc.grad import uks
+        from pyscf.pbc.dft.multigrid import MultiGridNumInt2
+        if not isinstance(self._numint, MultiGridNumInt2):
+            raise NotImplementedError('pbc-UKS must be computed with MultiGridNumInt2')
+        return uks.Gradients(self)
 
     multigrid_numint = rks.RKS.multigrid_numint
 

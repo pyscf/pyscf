@@ -71,6 +71,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         logger.info(ks, 'nelec with nlc grids = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
 
+    ground_state = kpts_band is None
     nkpts = len(kpts)
     weight = 1. / nkpts
     vj, vk = krks._get_jk(ks, cell, dm, hermi, kpts, kpts_band, with_j=not j_in_xc)
@@ -79,10 +80,13 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     else:
         vj = vj[0] + vj[1]
         vxc += vj
-        ecoul = np.einsum('nKij,Kji->', dm, vj).real * .5 * weight
+        ecoul = None
+        if ground_state:
+            ecoul = np.einsum('nKij,Kji->', dm, vj).real * .5 * weight
     if ni.libxc.is_hybrid_xc(ks.xc):
         vxc -= vk
-        exc -= np.einsum('nKij,nKji->', dm, vk).real * .5 * weight
+        if ground_state:
+            exc -= np.einsum('nKij,nKji->', dm, vk).real * .5 * weight
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
     logger.timer(ks, 'veff', *t0)
     return vxc
@@ -162,7 +166,7 @@ class KUKS(rks.KohnShamDFT, kuhf.KUHF):
         rks.KohnShamDFT.dump_flags(self, verbose)
         return self
 
-    def nuc_grad_method(self):
+    def Gradients(self):
         from pyscf.pbc.grad import kuks
         return kuks.Gradients(self)
 

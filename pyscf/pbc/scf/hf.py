@@ -898,8 +898,11 @@ class SCF(mol_hf.SCF):
     def to_gpu(self):
         raise NotImplementedError
 
-    def nuc_grad_method(self):
+    def Gradients(self):
         raise NotImplementedError
+
+    def nuc_grad_method(self):
+        return self.Gradients()
 
     def gen_response(mf, mo_coeff=None, mo_occ=None, **kwargs):
         raise NotImplementedError
@@ -933,6 +936,13 @@ class RHF(SCF):
         '''Convert given mean-field object to RHF/ROHF'''
         addons.convert_to_rhf(mf, self)
         return self
+
+    def Gradients(self):
+        from pyscf.pbc.grad import rhf
+        from pyscf.pbc.dft.multigrid import MultiGridNumInt2
+        if not (hasattr(self, '_numint') and isinstance(self._numint, MultiGridNumInt2)):
+            raise NotImplementedError('pbc-RHF must be computed with MultiGridNumInt2')
+        return rhf.Gradients(self)
 
 def _format_jks(vj, dm, kpts_band):
     if kpts_band is None:

@@ -61,7 +61,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None,
         de += pp_int.vppnl_nuc_grad(mol, dm0)
         h1ao = -mol.pbc_intor('int1e_ipkin', kpt=kpt)
         if getattr(mf._numint, 'vpplocG_part1', None) is None:
-            raise NotImplementedError
+            raise NotImplementedError('System without PP')
         de += _contract_vhf_dm(mf_grad, np.add(h1ao, vhf), dm0) * 2
         de += _contract_vhf_dm(mf_grad, s1, dme0) * -2
         h1ao = s1 = vhf = dm0 = dme0 = None

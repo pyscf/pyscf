@@ -828,7 +828,7 @@ class KRHF(KSCF):
         return mulliken_meta(cell, dm, kpts, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
-    def nuc_grad_method(self):
+    def Gradients(self):
         from pyscf.pbc.grad import krhf
         return krhf.Gradients(self)
 

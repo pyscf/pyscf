@@ -551,16 +551,13 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0,
     #hermi = hermi and abs(dms - dms.transpose(0,1,3,2).conj()).max() < 1e-9
     gga_high_order = False
     if deriv == 0:
-        xctype = 'LDA'
         rhodim = 1
 
     elif deriv == 1:
         if rhog_high_order:
-            xctype = 'GGA'
             rhodim = 4
         else:  # approximate high order derivatives in reciprocal space
             gga_high_order = True
-            xctype = 'LDA'
             rhodim = 1
             deriv = 0
         #if hermi != 1 and not gamma_point(kpts):

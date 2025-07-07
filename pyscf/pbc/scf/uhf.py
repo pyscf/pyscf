@@ -279,3 +279,10 @@ class UHF(pbchf.SCF):
         '''Convert given mean-field object to UHF'''
         addons.convert_to_uhf(mf, self)
         return self
+
+    def Gradients(self):
+        from pyscf.pbc.grad import uhf
+        from pyscf.pbc.dft.multigrid import MultiGridNumInt2
+        if not (hasattr(self, '_numint') and isinstance(self._numint, MultiGridNumInt2)):
+            raise NotImplementedError('pbc-UHF must be computed with MultiGridNumInt2')
+        return uhf.Gradients(self)

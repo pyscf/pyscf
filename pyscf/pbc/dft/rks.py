@@ -90,15 +90,19 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         logger.info(ks, 'nelec with nlc grids = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
 
+    ground_state = kpts_band is None
     vj, vk = _get_jk(ks, cell, dm, hermi, kpt, kpts_band, with_j=not j_in_xc)
     if j_in_xc:
         ecoul = vxc.ecoul
     else:
         vxc += vj
-        ecoul = numpy.einsum('ij,ji', dm, vj).real * .5
+        ecoul = None
+        if ground_state:
+            ecoul = numpy.einsum('ij,ji', dm, vj).real * .5
     if ni.libxc.is_hybrid_xc(ks.xc):
         vxc -= .5 * vk
-        exc -= numpy.einsum('ij,ji->', dm, vk).real * .25
+        if ground_state:
+            exc -= numpy.einsum('ij,ji->', dm, vk).real * .25
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
     logger.timer(ks, 'veff', *t0)
     return vxc
@@ -423,12 +427,17 @@ class RKS(KohnShamDFT, pbchf.RHF):
 
     def multigrid_numint(self, mesh=None):
         '''Apply the MultiGrid algorithm for XC numerical integartion'''
-        # For gamma point, use MultiGridNumInt version 2 as it supports nuclear
-        # Gradients calculations.
         mf = self.copy()
-        mf._numint = multigrid.MultiGridNumInt2(self.cell)
+        mf._numint = multigrid.MultiGridNumInt(self.cell)
         if mesh is not None:
             mf._numint.mesh = mesh
         return mf
+
+    def Gradients(self):
+        from pyscf.pbc.grad import rks
+        from pyscf.pbc.dft.multigrid import MultiGridNumInt2
+        if not isinstance(self._numint, MultiGridNumInt2):
+            raise NotImplementedError('pbc-RKS must be computed with MultiGridNumInt2')
+        return rks.Gradients(self)
 
     to_gpu = lib.to_gpu

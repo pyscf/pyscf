@@ -36,6 +36,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
     t0 = (logger.process_clock(), logger.perf_counter())
 
+    ground_state = kpts_band is None
     if kpts_band is None:
         kpts_band = kpts.kpts_ibz
 
@@ -78,10 +79,13 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         ecoul = vxc.ecoul
     else:
         vxc += vj
-        ecoul = np.einsum('K,Kij,Kji', weight, dm, vj) * .5
+        ecoul = None
+        if ground_state:
+            ecoul = np.einsum('K,Kij,Kji', weight, dm, vj) * .5
     if ni.libxc.is_hybrid_xc(ks.xc):
         vxc -= .5 * vk
-        exc -= np.einsum('K,Kij,Kji', weight, dm, vk).real * .25
+        if ground_state:
+            exc -= np.einsum('K,Kij,Kji', weight, dm, vk).real * .25
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
     logger.timer(ks, 'veff', *t0)
     return vxc

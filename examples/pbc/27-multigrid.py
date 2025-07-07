@@ -19,10 +19,8 @@ cell = gto.M(
               C     2.6751  0.8917  2.6751
               C     0.      1.7834  1.7834
               C     0.8917  2.6751  2.6751''',
-    basis = 'sto3g',
-    #basis = 'ccpvdz',
-    #basis = 'gth-dzvp',
-    #pseudo = 'gth-pade'
+    basis = 'gth-dzvp',
+    pseudo = 'gth-pade'
 )
 
 mf = dft.UKS(cell)
@@ -40,13 +38,16 @@ mf.xc = 'lda,vwn'
 mf = mf.multigrid_numint()
 mf.kernel()
 
-#
-# MultiGridFFTDF can be used for linear response calculations, such as
-# second-order SCF and TDDFT methods. However, in the current version,
-# the default multigrid implementation does not support linear response
-# features. To enable these methods, you can manually assign the following
-# MultiGridNumInt instance to the ._numint attribute.
-#
-mf._numint = multigrid.MultiGridNumInt(cell)
 mf = mf.newton()
 mf.kernel()
+
+#
+# The default multigrid implementation does not support the compution of nuclear
+# gradients features. To enable nuclear gradients, you can manually assign the
+# MultiGridNumInt2 instance to the ._numint attribute.
+#
+mf = dft.RKS(cell)
+mf.xc = 'pbe'
+mf._numint = multigrid.MultiGridNumInt2(cell)
+mf.kernel()
+mf.Gradients().run()

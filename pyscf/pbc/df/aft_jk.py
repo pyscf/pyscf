@@ -659,7 +659,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     t1 = (logger.process_clock(), logger.perf_counter())
 
     dm = numpy.asarray(dm, order='C')
-    dms = _format_dms(dm, [kpt])
+    dms = _format_dms(dm, kpt.reshape(1, 3))
     nset, _, nao = dms.shape[:3]
     dms = dms.reshape(nset,nao,nao)
     j_real = is_zero(kpt)

@@ -611,7 +611,7 @@ class KUHF(khf.KSCF):
         from pyscf.pbc.scf.stability import uhf_stability
         return uhf_stability(self, internal, external, verbose)
 
-    def nuc_grad_method(self):
+    def Gradients(self):
         from pyscf.pbc.grad import kuhf
         return kuhf.Gradients(self)
 

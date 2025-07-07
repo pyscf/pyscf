@@ -23,7 +23,7 @@ from pyscf.lib import logger
 from pyscf.pbc.lib import kpts as libkpts
 from pyscf.pbc.scf import khf, khf_ksymm, kuhf_ksymm
 from pyscf.pbc.dft import gen_grid, multigrid
-from pyscf.pbc.dft import rks, kuks
+from pyscf.pbc.dft import rks, krks, kuks
 
 @lib.with_doc(kuks.get_veff.__doc__)
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -36,6 +36,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
     t0 = (logger.process_clock(), logger.perf_counter())
 
+    ground_state = kpts_band is None
     if kpts_band is None:
         kpts_band = kpts.kpts_ibz
 
@@ -79,10 +80,13 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     else:
         vj = vj[0] + vj[1]
         vxc += vj
-        ecoul = np.einsum('K,nKij,Kji->', weight, dm, vj) * .5
+        ecoul = None
+        if ground_state:
+            ecoul = np.einsum('K,nKij,Kji->', weight, dm, vj) * .5
     if ni.libxc.is_hybrid_xc(ks.xc):
         vxc -= vk
-        exc -= np.einsum('K,nKij,nKji->', weight, dm, vk).real * .5
+        if ground_state:
+            exc -= np.einsum('K,nKij,nKji->', weight, dm, vk).real * .5
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
     logger.timer(ks, 'veff', *t0)
     return vxc
