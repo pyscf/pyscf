@@ -228,10 +228,10 @@ mf=pbcdft.RKS(cell)
 #mf.xc = "LDA, VWN"
 mf.xc = "PBE,PBE"
 mf.init_guess = 'atom' # atom guess is fast
-mf = mf.multigrid_numint()
 # MultiGrid attribute is assigned to the ._numint attribute of DFT classes.
 # The computational cost can be adjusted by setting the ntasks of the MultiGrid
 # instance.
+mf._numint = multigrid.MultiGridNumInt2(cell)
 mf._numint.ntasks = 4
 mf.kernel()
 
