@@ -458,7 +458,7 @@ class KSCF(pbchf.SCF):
     _finalize = pbchf.SCF._finalize
     canonicalize = canonicalize
 
-    def __init__(self, cell, kpts=np.zeros((1,3)),
+    def __init__(self, cell, kpts=None,
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
@@ -470,7 +470,8 @@ class KSCF(pbchf.SCF):
         self.rsjk = None
 
         self.exxdiv = exxdiv
-        self.kpts = kpts
+        if kpts is not None:
+            self.kpts = kpts
         self.conv_tol = max(cell.precision * 10, 1e-8)
 
         self.exx_built = False
@@ -490,15 +491,16 @@ class KSCF(pbchf.SCF):
     @property
     def kpts(self):
         if 'kpts' in self.__dict__:
-            # To handle the attribute kpt loaded from chkfile
+            # To handle the attribute kpts loaded from chkfile
             self.kpts = self.__dict__.pop('kpts')
         return self.with_df.kpts
 
     @kpts.setter
     def kpts(self, x):
-        self.with_df.kpts = np.reshape(x, (-1,3))
+        kpts = np.reshape(x, (-1,3))
+        self.with_df.kpts = kpts
         if self.rsjk:
-            self.rsjk.kpts = self.with_df.kpts
+            self.rsjk.kpts = kpts
 
     @property
     def kmesh(self):

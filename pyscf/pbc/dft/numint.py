@@ -697,6 +697,7 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
 
     if kpts is None or is_zero(kpts):
         # For real orbitals and real matrix, K_{ia,bj} = K_{ia,jb}.
+        # The input dms_alpha must symmetric
         # The output matrix v = K*x_{ia} is symmetric
         hermi = 1
     else:

@@ -68,10 +68,10 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if isinstance(ni, multigrid.MultiGridNumInt):
         if ks.do_nlc():
             raise NotImplementedError(f'MultiGrid for NLC functional {ks.xc} + {ks.nlc}')
-        xc_with_j = ni.xc_with_j
+        j_in_xc = ni.xc_with_j
     else:
         ks.initialize_grids(cell, dm, kpt)
-        xc_with_j = False
+        j_in_xc = False
 
     max_memory = ks.max_memory - lib.current_memory()[0]
     n, exc, vxc = ni.nr_rks(cell, ks.grids, ks.xc, dm, 0, hermi,
@@ -90,8 +90,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         logger.info(ks, 'nelec with nlc grids = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
 
-    vj, vk = _get_jk(ks, cell, dm, hermi, kpt, kpts_band, with_j=xc_with_j)
-    if xc_with_j:
+    vj, vk = _get_jk(ks, cell, dm, hermi, kpt, kpts_band, with_j=not j_in_xc)
+    if j_in_xc:
         ecoul = vxc.ecoul
     else:
         vxc += vj
@@ -216,12 +216,13 @@ def _get_jk(mf, cell, dm, hermi, kpt, kpts_band=None, with_j=True):
     ni = mf._numint
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=cell.spin)
     hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+    vj = vk = None
     if not hybrid:
         if hermi == 2 or not with_j:
             vj = 0
         else:
             vj = mf.get_j(cell, dm, hermi, kpt, kpts_band)
-        return vj, 0
+        return vj, vk
 
     if omega == 0:
         if hermi == 2 or not with_j:
@@ -260,6 +261,7 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
     density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
     rs_density_fit = _patch_df_beckegrids(pbchf.RHF.rs_density_fit)
     mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)
+    gen_response = NotImplemented
 
     def __init__(self, xc='LDA,VWN'):
         self.xc = xc
@@ -402,6 +404,7 @@ class RKS(KohnShamDFT, pbchf.RHF):
     init_guess_by_vsap = mol_ks.init_guess_by_vsap
     get_veff = get_veff
     energy_elec = mol_ks.energy_elec
+    gen_response = gen_response
 
     def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
@@ -423,7 +426,7 @@ class RKS(KohnShamDFT, pbchf.RHF):
         # For gamma point, use MultiGridNumInt version 2 as it supports nuclear
         # Gradients calculations.
         mf = self.copy()
-        mf._numint = multigrid.MultiGridNumInt2(self.cell, mf.kpts)
+        mf._numint = multigrid.MultiGridNumInt2(self.cell)
         if mesh is not None:
             mf._numint.mesh = mesh
         return mf

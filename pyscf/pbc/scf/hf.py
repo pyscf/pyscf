@@ -523,7 +523,7 @@ class SCF(mol_hf.SCF):
     get_bands = get_bands
     get_rho = get_rho
 
-    def __init__(self, cell, kpt=np.zeros(3),
+    def __init__(self, cell, kpt=None,
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
@@ -535,7 +535,8 @@ class SCF(mol_hf.SCF):
         self.rsjk = None
 
         self.exxdiv = exxdiv
-        self.kpt = kpt
+        if kpt is not None:
+            self.kpt = kpt
         self.conv_tol = max(cell.precision * 10, 1e-8)
 
     @property
@@ -546,9 +547,10 @@ class SCF(mol_hf.SCF):
         return self.with_df.kpts.reshape(3)
     @kpt.setter
     def kpt(self, x):
-        self.with_df.kpts = np.reshape(x, (1, 3))
+        kpts = np.reshape(x, (1, 3))
+        self.with_df.kpts = kpts
         if self.rsjk:
-            self.rsjk.kpts = self.with_df.kpts
+            self.rsjk.kpts = kpts
 
     @property
     def kpts(self):
@@ -572,6 +574,8 @@ class SCF(mol_hf.SCF):
         if cell is not None:
             self.cell = cell
         self.with_df.reset(cell)
+        if self.rsjk is not None:
+            self.rsjk.reset(cell)
         return self
 
     # used by hf kernel

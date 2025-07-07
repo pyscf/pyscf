@@ -36,8 +36,6 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
     t0 = (logger.process_clock(), logger.perf_counter())
 
-    ni = ks._numint
-
     if kpts_band is None:
         kpts_band = kpts.kpts_ibz
 
@@ -47,98 +45,44 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                        f'{len(dm[0])} vs {kpts.nkpts_ibz}.')
     dm_bz = kpts.transform_dm(dm)
 
-    hybrid = ni.libxc.is_hybrid_xc(ks.xc)
-    weight = kpts.weights_ibz
-
-    if isinstance(ks.with_df, multigrid.MultiGridNumInt):
+    ni = ks._numint
+    if isinstance(ni, multigrid.MultiGridNumInt):
         if ks.do_nlc():
             raise NotImplementedError(f'MultiGrid for NLC functional {ks.xc} + {ks.nlc}')
-        n, exc, vxc = ni.nr_uks(cell, ks.grids, ks.xc, dm_bz, 0, hermi,
-                                kpts.kpts, kpts_band, with_j=True, return_j=False)
-        logger.info(ks, 'nelec by numeric integration = %s', n)
-        t0 = logger.timer(ks, 'vxc', *t0)
-        if hybrid:
-            omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-            if omega == 0:
-                vk = ks.get_k(cell, dm, hermi, kpts, kpts_band)
-                vk *= hyb
-            elif alpha == 0: # LR=0, only SR exchange
-                vk = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=-omega)
-                vk *= hyb
-            elif hyb == 0: # SR=0, only LR exchange
-                vk = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
-                vk *= alpha
-            else: # SR and LR exchange with different ratios
-                vk = ks.get_k(cell, dm, hermi, kpts, kpts_band)
-                vk *= hyb
-                vklr = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
-                vklr *= (alpha - hyb)
-                vk += vklr
-            vxc -= vk
-            exc -= (np.einsum('K,Kij,Kji', weight, dm[0], vk[0]) +
-                    np.einsum('K,Kij,Kji', weight, dm[1], vk[1])).real * .5
-        logger.timer(ks, 'veff', *t0)
-        return vxc
-
-    # ndim = 4 : dm.shape = ([alpha,beta], nkpts, nao, nao)
-    ground_state = (dm.ndim == 4 and dm.shape[0] == 2 and kpts_band is None)
-    ks.initialize_grids(cell, dm_bz, kpts.kpts, ground_state)
-
-    if hermi == 2:  # because rho = 0
-        n, exc, vxc = (0,0), 0, 0
+        j_in_xc = ni.xc_with_j
     else:
-        max_memory = ks.max_memory - lib.current_memory()[0]
-        n, exc, vxc = ni.nr_uks(cell, ks.grids, ks.xc, dm_bz, 0, hermi,
-                                kpts=kpts.kpts, kpts_band=kpts_band,
-                                max_memory=max_memory)
-        logger.info(ks, 'nelec by numeric integration = %s', n)
-        if ks.do_nlc():
-            if ni.libxc.is_nlc(ks.xc):
-                xc = ks.xc
-            else:
-                assert ni.libxc.is_nlc(ks.nlc)
-                xc = ks.nlc
-            n, enlc, vnlc = ni.nr_nlc_vxc(cell, ks.nlcgrids, xc, dm_bz[0]+dm_bz[1],
-                                          0, hermi, kpts.kpts, max_memory=max_memory)
-            exc += enlc
-            vxc += vnlc
-            logger.info(ks, 'nelec with nlc grids = %s', n)
-        t0 = logger.timer(ks, 'vxc', *t0)
+        ks.initialize_grids(cell, dm, kpts)
+        j_in_xc = False
 
-    if not hybrid:
-        vj = ks.get_j(cell, dm[0]+dm[1], hermi, kpts, kpts_band)
-        vxc += vj
+    max_memory = ks.max_memory - lib.current_memory()[0]
+    n, exc, vxc = ni.nr_uks(cell, ks.grids, ks.xc, dm_bz, 0, hermi,
+                            kpts=kpts.kpts, kpts_band=kpts_band,
+                            max_memory=max_memory)
+    logger.info(ks, 'nelec by numeric integration = %s', n)
+    if ks.do_nlc():
+        if ni.libxc.is_nlc(ks.xc):
+            xc = ks.xc
+        else:
+            assert ni.libxc.is_nlc(ks.nlc)
+            xc = ks.nlc
+        n, enlc, vnlc = ni.nr_nlc_vxc(cell, ks.nlcgrids, xc, dm_bz[0]+dm_bz[1],
+                                      0, hermi, kpts.kpts, max_memory=max_memory)
+        exc += enlc
+        vxc += vnlc
+        logger.info(ks, 'nelec with nlc grids = %s', n)
+    t0 = logger.timer(ks, 'vxc', *t0)
+
+    weight = kpts.weights_ibz
+    vj, vk = krks._get_jk(ks, cell, dm, hermi, kpts, kpts_band, with_j=not j_in_xc)
+    if j_in_xc:
+        ecoul = vxc.ecoul
     else:
-        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-        if omega == 0:
-            vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
-            vk *= hyb
-        elif alpha == 0: # LR=0, only SR exchange
-            vk = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=-omega)
-            vk *= hyb
-            vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
-        elif hyb == 0: # SR=0, only LR exchange
-            vk = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
-            vk *= alpha
-            vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
-        else: # SR and LR exchange with different ratios
-            vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
-            vk *= hyb
-            vklr = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
-            vklr *= (alpha - hyb)
-            vk += vklr
         vj = vj[0] + vj[1]
-        vxc += vj - vk
-
-        if ground_state:
-            exc -= (np.einsum('K,Kij,Kji', weight, dm[0], vk[0]) +
-                    np.einsum('K,Kij,Kji', weight, dm[1], vk[1])).real * .5
-
-    if ground_state:
-        ecoul = np.einsum('K,Kij,Kji', weight, dm[0]+dm[1], vj) * .5
-    else:
-        ecoul = None
-
+        vxc += vj
+        ecoul = np.einsum('K,nKij,Kji->', weight, dm, vj) * .5
+    if ni.libxc.is_hybrid_xc(ks.xc):
+        vxc -= vk
+        exc -= np.einsum('K,nKij,nKji->', weight, dm, vk).real * .5
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
     logger.timer(ks, 'veff', *t0)
     return vxc

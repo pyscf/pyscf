@@ -290,31 +290,33 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         # answers to agree
         b = cell.reciprocal_vectors()
         box_edge = np.einsum('i,ij->ij', np.asarray(mesh)//2+0.5, b)
-        assert (all(np.linalg.solve(box_edge.T, k).round(9).astype(int)==0))
-        reduced_coords = np.linalg.solve(box_edge.T, kG.T).T.round(9)
-        on_edge = reduced_coords.astype(int)
+        assert (all(np.linalg.solve(box_edge.T, k).astype(int)==0))
+        reduced_coords = np.linalg.solve(box_edge.T, kG.T).T
+        on_edge_p1 = abs(reduced_coords - 1) < 1e-9
+        on_edge_m1 = abs(reduced_coords + 1) < 1e-9
         if cell.dimension >= 1:
-            equal2boundary |= reduced_coords[:,0] == 1
-            equal2boundary |= reduced_coords[:,0] ==-1
-            kG[on_edge[:,0]== 1] -= 2 * box_edge[0]
-            kG[on_edge[:,0]==-1] += 2 * box_edge[0]
+            equal2boundary |= on_edge_p1[:,0]
+            equal2boundary |= on_edge_m1[:,0]
+            kG[on_edge_p1[:,0]] -= 2 * box_edge[0]
+            kG[on_edge_m1[:,0]] += 2 * box_edge[0]
         if cell.dimension >= 2:
-            equal2boundary |= reduced_coords[:,1] == 1
-            equal2boundary |= reduced_coords[:,1] ==-1
-            kG[on_edge[:,1]== 1] -= 2 * box_edge[1]
-            kG[on_edge[:,1]==-1] += 2 * box_edge[1]
+            equal2boundary |= on_edge_p1[:,1]
+            equal2boundary |= on_edge_m1[:,1]
+            kG[on_edge_p1[:,1]] -= 2 * box_edge[1]
+            kG[on_edge_m1[:,1]] += 2 * box_edge[1]
         if cell.dimension == 3:
-            equal2boundary |= reduced_coords[:,2] == 1
-            equal2boundary |= reduced_coords[:,2] ==-1
-            kG[on_edge[:,2]== 1] -= 2 * box_edge[2]
-            kG[on_edge[:,2]==-1] += 2 * box_edge[2]
+            equal2boundary |= on_edge_p1[:,2]
+            equal2boundary |= on_edge_m1[:,2]
+            kG[on_edge_p1[:,2]] -= 2 * box_edge[2]
+            kG[on_edge_m1[:,2]] += 2 * box_edge[2]
 
     absG2 = np.einsum('gi,gi->g', kG, kG)
     G0_idx = []
 
-    kpts = k.reshape(1,3)
     if hasattr(mf, 'kpts'):
         kpts = mf.kpts
+    else:
+        kpts = k.reshape(1,3)
     Nk = len(kpts)
 
     if exxdiv == 'vcut_sph':  # PRB 77 193110

@@ -57,10 +57,10 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if isinstance(ni, multigrid.MultiGridNumInt):
         if ks.do_nlc():
             raise NotImplementedError(f'MultiGrid for NLC functional {ks.xc} + {ks.nlc}')
-        xc_with_j = ni.xc_with_j
+        j_in_xc = ni.xc_with_j
     else:
         ks.initialize_grids(cell, dm, kpt)
-        xc_with_j = False
+        j_in_xc = False
 
     max_memory = ks.max_memory - lib.current_memory()[0]
     n, exc, vxc = ni.nr_uks(cell, ks.grids, ks.xc, dm, 0, hermi,
@@ -79,11 +79,12 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         logger.info(ks, 'nelec with nlc grids = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
 
-    vj, vk = rks._get_jk(ks, cell, dm, hermi, kpt, kpts_band, with_j=xc_with_j)
-    if xc_with_j:
+    vj, vk = rks._get_jk(ks, cell, dm, hermi, kpt, kpts_band, with_j=not j_in_xc)
+    if j_in_xc:
         ecoul = vxc.ecoul
     else:
-        vxc += vj[0] + vj[1]
+        vj = vj[0] + vj[1]
+        vxc += vj
         ecoul = numpy.einsum('nij,ji->', dm, vj).real * .5
     if ni.libxc.is_hybrid_xc(ks.xc):
         vxc -= vk
@@ -139,6 +140,7 @@ class UKS(rks.KohnShamDFT, pbcuhf.UHF):
     init_guess_by_vsap = mol_uks.UKS.init_guess_by_vsap
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec
+    gen_response = gen_response
 
     def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
