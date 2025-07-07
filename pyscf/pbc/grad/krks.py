@@ -121,6 +121,11 @@ class Gradients(rhf_grad.Gradients):
         self.grids = None
         self.grid_response = False
 
+    def reset(self, cell=None):
+        if self.grids is not None:
+            self.grids.reset(cell)
+        return rhf_grad.Gradients.reset(cell)
+
     def dump_flags(self, verbose=None):
         rhf_grad.Gradients.dump_flags(self, verbose)
         logger.info(self, 'grid_response = %s', self.grid_response)
