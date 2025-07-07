@@ -91,7 +91,7 @@ def _multigrid2_energy_grad(cell, xc, spin=0):
         mf = dft.UKS(cell)
     mf.xc =  xc
     mf._numint = multigrid.MultiGridNumInt2(cell)
-    mf.with_df.ntasks = 2
+    mf._numint.ntasks = 2
     e = mf.kernel()
     if spin == 0:
         g = rks_grad.Gradients(mf).kernel()

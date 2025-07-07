@@ -76,15 +76,7 @@ def get_ovlp(cell, kpt=np.zeros(3)):
 def get_hcore(cell, kpt=np.zeros(3)):
     '''Get the core Hamiltonian AO matrix.
     '''
-    hcore = get_t(cell, kpt)
-    if cell.pseudo:
-        hcore += get_pp(cell, kpt)
-    else:
-        hcore += get_nuc(cell, kpt)
-    if len(cell._ecpbas) > 0:
-        from pyscf.pbc.gto import ecp
-        hcore += ecp.ecp_int(cell, kpt)
-    return hcore
+    return SCF(cell).get_hcore(kpt=kpt)
 
 
 def get_t(cell, kpt=np.zeros(3)):
@@ -623,12 +615,17 @@ class SCF(mol_hf.SCF):
         return self
 
     def get_hcore(self, cell=None, kpt=None):
+        from pyscf.pbc.dft.multigrid import MultiGridNumInt
         if cell is None: cell = self.cell
         if kpt is None: kpt = self.kpt
-        if cell.pseudo:
-            nuc = self.with_df.get_pp(kpt)
+        if hasattr(self, '_numint') and isinstance(self._numint, MultiGridNumInt):
+            ni = self._numint
         else:
-            nuc = self.with_df.get_nuc(kpt)
+            ni = self.with_df
+        if cell.pseudo:
+            nuc = ni.get_pp(kpt)
+        else:
+            nuc = ni.get_nuc(kpt)
         if len(cell._ecpbas) > 0:
             from pyscf.pbc.gto import ecp
             nuc += ecp.ecp_int(cell, kpt)

@@ -51,12 +51,12 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None, 
 
     de = 0
     if gamma_point(kpt):
-        de  = mf.with_df.vpploc_part1_nuc_grad(dm0_sf, kpts=kpt.reshape(-1,3))
+        de  = mf._numint.vpploc_part1_nuc_grad(dm0_sf, kpts=kpt.reshape(-1,3))
         de += pp_int.vpploc_part2_nuc_grad(mol, dm0_sf)
         de += pp_int.vppnl_nuc_grad(mol, dm0_sf)
         h1ao = -mol.pbc_intor('int1e_ipkin', kpt=kpt)
-        if getattr(mf.with_df, 'vpplocG_part1', None) is None:
-            h1ao += -mf.with_df.get_vpploc_part1_ip1(kpts=kpt.reshape(-1,3))
+        if getattr(mf._numint, 'vpplocG_part1', None) is None:
+            raise NotImplementedError
         de += rhf_grad._contract_vhf_dm(mf_grad, h1ao, dm0_sf) * 2
         for s in range(2):
             de += rhf_grad._contract_vhf_dm(mf_grad, vhf[s], dm0[s]) * 2
@@ -76,10 +76,9 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None, 
 
 def get_veff(mf_grad, mol, dm, kpt=np.zeros(3)):
     mf = mf_grad.base
-    mydf = mf.with_df
     xc_code = getattr(mf, 'xc', None)
     kpts = kpt.reshape(-1,3)
-    return -mydf.get_veff_ip1(dm, xc_code=xc_code, kpts=kpts, spin=1)
+    return -mf._numint.get_veff_ip1(dm, xc_code=xc_code, kpts=kpts, spin=1)
 
 class Gradients(rhf_grad.GradientsBase):
     '''Non-relativistic Gamma-point restricted Hartree-Fock gradients'''

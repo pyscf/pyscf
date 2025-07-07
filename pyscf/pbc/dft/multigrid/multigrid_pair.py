@@ -675,23 +675,22 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     # computing rhoR with IFFT, the weight factor is not needed.
     rhoR = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
     rhoR = rhoR.reshape(-1,ngrids)
+    exc, vxc = ni.eval_xc(xc_code, rhoR, spin=0, deriv=1)[:2]
     if xctype == 'LDA':
-        exc, vxc = ni.eval_xc(xc_code, rhoR[0], spin=0, deriv=1)[:2]
         wv = weight * vxc[0]
-        wv_freq = tools.fft(wv, mesh)
+        wv_freq = tools.fft(wv, mesh).reshape(1,ngrids)
         wv = None
     elif xctype == 'GGA':
-        exc, vxc = ni.eval_xc(xc_code, rhoR, spin=0, deriv=1)[:2]
         if GGA_METHOD.upper() == 'FFT':
             wv_freq = _rks_gga_wv0_pw(cell, rhoR, vxc, weight, mesh).reshape(1,ngrids)
         else:
             wv = _rks_gga_wv0(rhoR, vxc, weight)
-            wv_freq = tools.fft(wv, mesh)
+            wv_freq = tools.fft(wv, mesh).reshape(1,ngrids)
             wv = None
     elif vxc is None:
-        wv_freq = np.zeros((1,*mesh), dtype=np.complex128)
+        wv_freq = np.zeros((1,ngrids), dtype=np.complex128)
     else:
-        raise NotImplementedError
+        raise NotImplementedError(xctype)
 
     nelec = np.sum(rhoR[0]) * weight
     excsum = np.dot(rhoR[0], exc) * weight
@@ -753,13 +752,13 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     rhoG_sf = rhoG[0,0] + rhoG[1,0]
 
     coulG = tools.get_coulG(cell, mesh=mesh)
-    vG = rhoG_sf.dot(coulG)
+    vG = rhoG_sf * coulG
     coulG = None
 
     if mydf.vpplocG_part1 is not None:
         vG += mydf.vpplocG_part1 * 2
 
-    ecoul = .5 * rhoG_sf.dot(vG).real
+    ecoul = .5 * np.vdot(rhoG_sf, vG).real
 
     ecoul /= cell.vol
     log.debug('Multigrid Coulomb energy %s', ecoul)
@@ -796,7 +795,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
 
     rhoR = rhoG = None
 
-    wv_freq = wv_freq.reshape(2,-1,*mesh)
+    wv_freq = wv_freq.reshape(2,-1,ngrids)
     log.debug('Multigrid exc %s  nelec %s', excsum, nelec)
 
     if with_j:
@@ -837,7 +836,7 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
 
     mesh = mydf.mesh
     ngrids = np.prod(mesh)
-    ni = mydf._numint
+    ni = mydf
     xctype = ni._xc_type(xc_code)
     if xctype in (None, 'LDA', 'HF'):
         deriv = 0
@@ -1027,11 +1026,10 @@ class MultiGridNumInt(MultiGridNumInt_v1):
         vpp = _get_pp_without_erf(self, kpts)
         if return_full:
             if kpts is None:
-                kpts_lst = np.zeros((1,3))
-            else:
-                kpts_lst = np.reshape(kpts, (-1,3))
-            vpp1 = _get_j_pass2(self, self.vpplocG_part1, kpts_lst)
-            if kpts is None or np.shape(kpts) == (3,):
+                kpts = np.zeros((1,3))
+            kpts, is_single_kpt = fft._check_kpts(self, kpts)
+            vpp1 = _get_j_pass2(self, self.vpplocG_part1, kpts)
+            if is_single_kpt:
                 vpp1 = vpp1[0]
             vpp += vpp1
 

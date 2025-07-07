@@ -1092,9 +1092,8 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     mesh = mydf.mesh
     ngrids = numpy.prod(mesh)
     coulG = tools.get_coulG(cell, mesh=mesh)
-    vG = numpy.einsum('g,g->g', rhoG[0,0], coulG)
-    ecoul = .5 * numpy.einsum('g,g->', rhoG[0,0].real, vG.real)
-    ecoul+= .5 * numpy.einsum('g,g->', rhoG[0,0].imag, vG.imag)
+    vG = rhoG[0,0] * coulG
+    ecoul = .5 * numpy.vdot(rhoG[0,0], vG).real
     ecoul /= cell.vol
     log.debug('Multigrid Coulomb energy %s', ecoul)
 
@@ -1197,9 +1196,8 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     rhoG = rhoG.reshape(2,-1,ngrids)
     rhoG_sf = rhoG[0,0] + rhoG[1,0]
     coulG = tools.get_coulG(cell, mesh=mesh)
-    vG = numpy.einsum('g,g->g', rhoG_sf, coulG)
-    ecoul = .5 * numpy.einsum('g,g->', rhoG_sf.real, vG.real)
-    ecoul+= .5 * numpy.einsum('g,g->', rhoG_sf.imag, vG.imag)
+    vG = rhoG_sf * coulG
+    ecoul = .5 * numpy.vdot(rhoG_sf, vG).real
     ecoul /= cell.vol
     log.debug('Multigrid Coulomb energy %s', ecoul)
 

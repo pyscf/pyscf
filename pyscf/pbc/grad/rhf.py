@@ -25,6 +25,8 @@ from pyscf.grad import rhf as mol_rhf
 from pyscf.grad.rhf import _write
 from pyscf.pbc.gto.pseudo import pp_int
 from pyscf.pbc.lib.kpts_helper import gamma_point
+from pyscf.pbc.dft.multigrid import MultiGridNumInt2
+from pyscf.pbc.dft.multigrid.pp import get_vpploc_part1_ip1
 
 SCREEN_VHF_DM_CONTRA = getattr(__config__, 'pbc_rhf_grad_screen_vhf_dm_contract', True)
 libpbc = lib.load_library('libpbc')
@@ -32,6 +34,7 @@ libpbc = lib.load_library('libpbc')
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None,
               atmlst=None, kpt=np.zeros(3)):
     mf = mf_grad.base
+    assert isinstance(mf._numint, MultiGridNumInt2)
     mol = mf_grad.mol
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
@@ -53,12 +56,12 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None,
 
     de = 0
     if gamma_point(kpt):
-        de  = mf.with_df.vpploc_part1_nuc_grad(dm0, kpts=kpt.reshape(-1,3))
+        de  = mf._numint.vpploc_part1_nuc_grad(dm0, kpts=kpt.reshape(-1,3))
         de += pp_int.vpploc_part2_nuc_grad(mol, dm0)
         de += pp_int.vppnl_nuc_grad(mol, dm0)
         h1ao = -mol.pbc_intor('int1e_ipkin', kpt=kpt)
-        if getattr(mf.with_df, 'vpplocG_part1', None) is None:
-            h1ao += -mf.with_df.get_vpploc_part1_ip1(kpts=kpt.reshape(-1,3))
+        if getattr(mf._numint, 'vpplocG_part1', None) is None:
+            raise NotImplementedError
         de += _contract_vhf_dm(mf_grad, np.add(h1ao, vhf), dm0) * 2
         de += _contract_vhf_dm(mf_grad, s1, dme0) * -2
         h1ao = s1 = vhf = dm0 = dme0 = None
@@ -125,10 +128,9 @@ def get_ovlp(cell, kpt=np.zeros(3)):
 
 def get_veff(mf_grad, mol, dm, kpt=np.zeros(3)):
     mf = mf_grad.base
-    mydf = mf.with_df
     xc_code = getattr(mf, 'xc', None)
     kpts = kpt.reshape(-1,3)
-    return -mydf.get_veff_ip1(dm, xc_code=xc_code, kpts=kpts)
+    return -mf._numint.get_veff_ip1(dm, xc_code=xc_code, kpts=kpts)
 
 
 def grad_nuc(cell, atmlst=None, ew_eta=None, ew_cut=None):

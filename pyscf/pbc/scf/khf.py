@@ -71,12 +71,17 @@ def get_hcore(mf, cell=None, kpts=None):
     Returns:
         hcore : (nkpts, nao, nao) ndarray
     '''
+    from pyscf.pbc.dft.multigrid import MultiGridNumInt
     if cell is None: cell = mf.cell
     if kpts is None: kpts = mf.kpts
-    if cell.pseudo:
-        nuc = lib.asarray(mf.with_df.get_pp(kpts))
+    if hasattr(mf, '_numint') and isinstance(mf._numint, MultiGridNumInt):
+        ni = mf._numint
     else:
-        nuc = lib.asarray(mf.with_df.get_nuc(kpts))
+        ni = mf.with_df
+    if cell.pseudo:
+        nuc = ni.get_pp(kpts)
+    else:
+        nuc = ni.get_nuc(kpts)
     if len(cell._ecpbas) > 0:
         from pyscf.pbc.gto import ecp
         nuc += lib.asarray(ecp.ecp_int(cell, kpts))
