@@ -139,8 +139,8 @@ def get_ab(mf):
 class TDBase(rhf.TDBase):
     _keys = {'cell'}
 
-    def __init__(self, mf):
-        rhf.TDBase.__init__(self, mf)
+    def __init__(self, mf, frozen=None):
+        rhf.TDBase.__init__(self, mf, frozen)
         self.cell = mf.cell
 
     def get_ab(self, mf=None):
