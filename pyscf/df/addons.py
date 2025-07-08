@@ -86,7 +86,7 @@ def _aug_etb_element(nuc_charge, basis, beta):
     emax_by_l = [0] * (l_max+1)
     for b in basis:
         l = b[0]
-        if isinstance(b[1], int):
+        if isinstance(b[1], (int, numpy.integer)):
             e_c = numpy.array(b[2:])
         else:
             e_c = numpy.array(b[1:])

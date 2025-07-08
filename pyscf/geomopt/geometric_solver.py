@@ -54,7 +54,7 @@ class PySCFEngine(geometric.engine.Engine):
     def __init__(self, scanner):
         molecule = geometric.molecule.Molecule()
         self.mol = mol = scanner.mol
-        molecule.elem = [mol.atom_symbol(i) for i in range(mol.natm)]
+        molecule.elem = [mol.atom_pure_symbol(i) for i in range(mol.natm)]
         # Molecule is the geometry parser for a bunch of formats which use
         # Angstrom for Cartesian coordinates by default.
         molecule.xyzs = [mol.atom_coords()*lib.param.BOHR]  # In Angstrom

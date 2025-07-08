@@ -836,7 +836,7 @@ class CASBase(lib.StreamObject):
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
         log.info('')
-        log.info('******** CASCI flags ********')
+        log.info('******** %s ********', self.__class__)
         ncore = self.ncore
         ncas = self.ncas
         nvir = self.mo_coeff.shape[1] - ncore - ncas
@@ -849,7 +849,8 @@ class CASBase(lib.StreamObject):
         log.info('natorb = %s', self.natorb)
         log.info('canonicalization = %s', self.canonicalization)
         log.info('sorting_mo_energy = %s', self.sorting_mo_energy)
-        log.info('max_memory %d (MB)', self.max_memory)
+        log.info('max_memory %d MB (current use %d MB)',
+                 self.max_memory, lib.current_memory()[0])
         if getattr(self.fcisolver, 'dump_flags', None):
             self.fcisolver.dump_flags(log.verbose)
         if self.mo_coeff is None:

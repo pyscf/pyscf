@@ -129,7 +129,8 @@ def dump_agf2(agf2, chkfile=None, key='agf2',
 
     if isinstance(gf, (tuple, list)):
         if frozen is not None:
-            if isinstance(frozen, int) or isinstance(frozen[0], int):
+            if (isinstance(frozen, (int, np.integer)) or
+                isinstance(frozen[0], (int, np.integer))):
                 frozen = [frozen, frozen]
 
     if h5py.is_hdf5(chkfile):

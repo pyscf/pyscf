@@ -38,7 +38,7 @@ def _primitive_emin_emax(basis):
 
     for b in basis:
         l = b[0]
-        if isinstance(b[1], int):
+        if isinstance(b[1], (int, np.integer)):
             e_c = np.array(b[2:])
         else:
             e_c = np.array(b[1:])

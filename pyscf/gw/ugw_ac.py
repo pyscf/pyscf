@@ -62,7 +62,7 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
     else:
         frozen = gw.frozen
 
-    assert (isinstance(frozen, int))
+    assert (isinstance(frozen, (int, np.integer)))
 
     nocca, noccb = gw.nocc
     nmoa, nmob = gw.nmo
