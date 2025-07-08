@@ -1223,7 +1223,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         #wv_freq[:,0] *= .5
         #veff = _get_gga_pass2(mydf, wv_freq, hermi, kpts_band, verbose=log)
         Gv = cell.get_Gv(ni.mesh)
-        wv_freq[:,0] -= numpy.einsum('nxp,px->np', 1j*wv_freq[:,1:4], Gv)
+        wv_freq[:,0] -= numpy.einsum('nxp,px->np', wv_freq[:,1:4], 1j*Gv)
         veff = _get_j_pass2(mydf, wv_freq[:,0], hermi, kpts_band, verbose=log)
     veff = _format_jks(veff, dm_kpts, input_band, kpts)
     veff = veff.reshape(2, len(kpts_band), nao, nao)
@@ -1300,7 +1300,7 @@ def nr_rks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
         #wv[:,0] *= .5
         #veff = _get_gga_pass2(mydf, wv, hermi, kpts, verbose=log)
         Gv = cell.get_Gv(ni.mesh)
-        wv[:,0] -= numpy.einsum('nxp,px->np', 1j*wv[:,1:4], Gv)
+        wv[:,0] -= numpy.einsum('nxp,px->np', wv[:,1:4], 1j*Gv)
         veff = _get_j_pass2(mydf, wv[:,0], hermi, kpts, verbose=log)
 
     return veff.reshape(dm_kpts.shape)

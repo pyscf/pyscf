@@ -357,7 +357,7 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
                                  max_memory):
             for i in range(nset):
                 rho = make_rho(i, ao_k2, mask, xctype).real
-                exc, vxc = ni.eval_xc_eff(xc_code, rho, deriv, xctype=xctype)[:2]
+                exc, vxc = ni.eval_xc_eff(xc_code, rho, deriv, xctype=xctype, spin=0)[:2]
                 if xctype == 'LDA':
                     den = rho*weight
                 else:
@@ -463,7 +463,7 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=1,
                 rho_a = make_rhoa(i, ao_k2, mask, xctype).real
                 rho_b = make_rhob(i, ao_k2, mask, xctype).real
                 rho = (rho_a, rho_b)
-                exc, vxc = ni.eval_xc_eff(xc_code, rho, deriv, xctype=xctype)[:2]
+                exc, vxc = ni.eval_xc_eff(xc_code, rho, deriv, xctype=xctype, spin=1)[:2]
                 if xctype == 'LDA':
                     dena = rho_a * weight
                     denb = rho_b * weight
@@ -883,7 +883,7 @@ def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
             rhoa.append(ni.eval_rho2(cell, ao_k1, mo_coeff[0], mo_occ[0], mask, xctype, with_lapl))
             rhob.append(ni.eval_rho2(cell, ao_k1, mo_coeff[1], mo_occ[1], mask, xctype, with_lapl))
         rho = numpy.stack([numpy.hstack(rhoa), numpy.hstack(rhob)])
-    vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype)[1:3]
+    vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype, spin=spin)[1:3]
     return rho, vxc, fxc
 
 def cache_xc_kernel1(ni, cell, grids, xc_code, dm, spin=0,
@@ -930,7 +930,7 @@ def cache_xc_kernel1(ni, cell, grids, xc_code, dm, spin=0,
             rhoa.append(ni.eval_rho1(cell, ao_k1, dm[0], mask, xctype, hermi, with_lapl))
             rhob.append(ni.eval_rho1(cell, ao_k1, dm[1], mask, xctype, hermi, with_lapl))
         rho = numpy.stack([numpy.hstack(rhoa), numpy.hstack(rhob)])
-    vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype)[1:3]
+    vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype, spin=spin)[1:3]
     return rho, vxc, fxc
 
 
