@@ -297,18 +297,18 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         if cell.dimension >= 1:
             equal2boundary |= on_edge_p1[:,0]
             equal2boundary |= on_edge_m1[:,0]
-            kG[on_edge_p1[:,0]] -= 2 * box_edge[0]
-            kG[on_edge_m1[:,0]] += 2 * box_edge[0]
+            kG[reduced_coords[:,0]> 1] -= 2 * box_edge[0]
+            kG[reduced_coords[:,0]<-1] += 2 * box_edge[0]
         if cell.dimension >= 2:
             equal2boundary |= on_edge_p1[:,1]
             equal2boundary |= on_edge_m1[:,1]
-            kG[on_edge_p1[:,1]] -= 2 * box_edge[1]
-            kG[on_edge_m1[:,1]] += 2 * box_edge[1]
+            kG[reduced_coords[:,1]> 1] -= 2 * box_edge[1]
+            kG[reduced_coords[:,1]<-1] += 2 * box_edge[1]
         if cell.dimension == 3:
             equal2boundary |= on_edge_p1[:,2]
             equal2boundary |= on_edge_m1[:,2]
-            kG[on_edge_p1[:,2]] -= 2 * box_edge[2]
-            kG[on_edge_m1[:,2]] += 2 * box_edge[2]
+            kG[reduced_coords[:,2]> 1] -= 2 * box_edge[2]
+            kG[reduced_coords[:,2]<-1] += 2 * box_edge[2]
 
     absG2 = np.einsum('gi,gi->g', kG, kG)
     G0_idx = []

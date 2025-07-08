@@ -683,7 +683,6 @@ class SCF(mol_hf.SCF):
         else:
             vj, vk = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi, kpt, kpts_band,
                                          with_j, with_k, omega, exxdiv=self.exxdiv)
-
         if with_j:
             vj = _format_jks(vj, dm, kpts_band)
         if with_k:
