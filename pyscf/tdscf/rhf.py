@@ -960,7 +960,7 @@ class TDA(TDBase):
             nroots=nstates, x0sym=x0sym, pick=pickeig, max_cycle=self.max_cycle,
             max_memory=self.max_memory, verbose=log)
 
-        mo_occ = self._scf.mo_mocc[self.get_frozen_mask()]
+        mo_occ = self._scf.mo_occ[self.get_frozen_mask()]
         nocc = (mo_occ>0).sum()
         nmo = mo_occ.size
         nvir = nmo - nocc
