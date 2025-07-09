@@ -123,7 +123,7 @@ def from_ucisdvec(civec, nocc, orbspin):
     coefficient vector'''
     nmoa = numpy.count_nonzero(orbspin == 0)
     nmob = numpy.count_nonzero(orbspin == 1)
-    if isinstance(nocc, int):
+    if isinstance(nocc, (int, numpy.integer)):
         nocca = numpy.count_nonzero(orbspin[:nocc] == 0)
         noccb = numpy.count_nonzero(orbspin[:nocc] == 1)
     else:
@@ -197,7 +197,7 @@ def from_fcivec(ci0, nelec, orbspin, frozen=None):
              numpy.count_nonzero(orbspin[:nelec] == 1))
     ucisdvec = ucisd.from_fcivec(ci0, norb//2, nelec, frozen)
     nocc = numpy.count_nonzero(~frozen_mask[:sum(nelec)])
-    return from_ucisdvec(ucisdvec, nocc, orbspin[~frozen_mask])
+    return from_ucisdvec(ucisdvec, int(nocc), orbspin[~frozen_mask])
 
 
 def make_rdm1(myci, civec=None, nmo=None, nocc=None, ao_repr=False):

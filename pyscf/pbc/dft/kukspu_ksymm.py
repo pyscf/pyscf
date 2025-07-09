@@ -19,13 +19,30 @@
 import numpy as np
 from pyscf import __config__
 from pyscf import lib
+from pyscf.lib import logger
 from pyscf.pbc.dft import kukspu, kuks_ksymm
 from pyscf.pbc.lib import kpts as libkpts
+
+def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+             kpts=None, kpts_band=None):
+    """
+    Coulomb + XC functional + (Hubbard - double counting) for KUKSpU.
+    """
+    if cell is None: cell = ks.cell
+    if dm is None: dm = ks.make_rdm1()
+    if kpts is None: kpts = ks.kpts
+    if isinstance(kpts, np.ndarray):
+        return kukspu.get_veff(ks, cell, dm, dm_last, vhf_last, hermi, kpts, kpts_band)
+
+    # J + V_xc
+    vxc = kuks_ksymm.get_veff(ks, cell, dm, dm_last=dm_last, vhf_last=vhf_last,
+                              hermi=hermi, kpts=kpts, kpts_band=kpts_band)
+    return kukspu._add_Vhubbard(vxc, ks, dm, kpts)
 
 @lib.with_doc(kukspu.KUKSpU.__doc__)
 class KsymAdaptedKUKSpU(kuks_ksymm.KUKS):
 
-    get_veff = kukspu.get_veff
+    get_veff = get_veff
     energy_elec = kukspu.energy_elec
     to_hf = lib.invalid_method('to_hf')
 
