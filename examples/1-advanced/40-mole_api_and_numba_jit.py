@@ -110,7 +110,7 @@ def primitive_overlap(li, lj, ai, aj, ci, cj, Ra, Rb, roots, weights) -> np.ndar
 @njit(cache=True, parallel=True)
 def primitive_overlap_matrix(ls, exps, norm_coef, bas_coords, roots, weights):
     nbas = len(ls)
-    dims = [(l + 1) * (l + 2) // 2 for l in ls]
+    dims = [(ls[k] + 1) * (ls[k] + 2) // 2 for k in range(nbas)]
     nao = sum(dims)
     smat = np.zeros((nao, nao))
 
@@ -119,15 +119,14 @@ def primitive_overlap_matrix(ls, exps, norm_coef, bas_coords, roots, weights):
     for idx in prange(npairs):
         i, j = unravel_symmetric(idx)
 
-        li, lj = ls[i], ls[j]
-        ai, aj = exps[i], exps[j]
-        ci, cj = norm_coef[i], norm_coef[j]
-        Ri, Rj = bas_coords[i], bas_coords[j]
+        i0 = sum(dims[:i])
+        j0 = sum(dims[:j])
+        ni = dims[i]
+        nj = dims[j]
 
-        i0, j0 = sum(dims[:i]), sum(dims[:j])
-        ni, nj = dims[i], dims[j]
-
-        s = primitive_overlap(li, lj, ai, aj, ci, cj, Ri, Rj, roots, weights)
+        s = primitive_overlap(
+            ls[i], ls[j], exps[i], exps[j], norm_coef[i], norm_coef[j], bas_coords[i], bas_coords[j], roots, weights
+        )
         smat[i0 : i0 + ni, j0 : j0 + nj] = s
         if i != j:
             smat[j0 : j0 + nj, i0 : i0 + ni] = s.T
