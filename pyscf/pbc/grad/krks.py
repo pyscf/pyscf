@@ -85,7 +85,7 @@ def get_vxc(ni, cell, grids, xc_code, dms, kpts, kpts_band=None, relativity=0, h
                 aow = np.einsum('xpi,p->xpi', ao_k1[:,0], wv[0])
                 for kn in range(nkpts):
                     rks_grad._d1_dot_(vmat[:,i,kn], cell, ao_k1[kn,1:4], aow[kn], mask, ao_loc, True)
-                rho = vrho = aow = None
+                rho = aow = None
 
     elif xctype == 'GGA':
         ao_deriv = 2

@@ -610,7 +610,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     # computing rhoR with IFFT, the weight factor is not needed.
     rhoR = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
     rhoR = rhoR.reshape(-1,ngrids)
-    exc, vxc = ni.eval_xc_eff(xc_code, rhoR, deriv=1, xctype=xctype):2]
+    exc, vxc = ni.eval_xc_eff(xc_code, rhoR, deriv=1, xctype=xctype)[:2]
     wv = weight * vxc
     wv_freq = tools.fft(wv, mesh).reshape(-1,ngrids)
     if xctype == 'GGA' and GGA_METHOD.upper() == 'FFT':
@@ -697,7 +697,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     # computing rhoR with IFFT, the weight factor is not needed.
     rhoR = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
     rhoR = rhoR.reshape(2,-1,ngrids)
-    exc, vxc = ni.eval_xc_eff(xc_code, rhoR, deriv=1, xctype=xctype):2]
+    exc, vxc = ni.eval_xc_eff(xc_code, rhoR, deriv=1, xctype=xctype)[:2]
     wv = weight * vxc
     wv_freq = tools.fft(wv.reshape(-1,ngrids), mesh).reshape(2,-1,ngrids)
     if xctype == 'GGA' and GGA_METHOD.upper() == 'FFT':

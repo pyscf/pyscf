@@ -68,7 +68,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
 
     if log.verbose > logger.DEBUG:
         log.debug('gradients of electronic part')
-        mf_grad._write(log, cell, de, atmlst)
+        mf_grad._write(cell, de, atmlst)
     return de
 
 def _make_fakemol():

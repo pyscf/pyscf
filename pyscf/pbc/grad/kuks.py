@@ -110,7 +110,7 @@ def get_vxc(ni, cell, grids, xc_code, dms, kpts, kpts_band=None, relativity=0, h
             for kn in range(nkpts):
                 rks_grad._gga_grad_sum_(vmat[:,0,kn], cell, ao_k1[kn], wv[0], mask, ao_loc)
                 rks_grad._gga_grad_sum_(vmat[:,1,kn], cell, ao_k1[kn], wv[1], mask, ao_loc)
-            ao_k1 = wva = wvb = None
+            ao_k1 = None
 
     elif xctype=='NLC':
         raise NotImplementedError("NLC")
