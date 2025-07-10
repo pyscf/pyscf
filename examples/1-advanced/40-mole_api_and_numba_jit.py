@@ -110,7 +110,7 @@ def primitive_overlap(li, lj, ai, aj, ci, cj, Ra, Rb, roots, weights) -> np.ndar
 @njit(cache=True, parallel=True)
 def primitive_overlap_matrix(ls, exps, norm_coef, bas_coords, roots, weights):
     nbas = len(ls)
-    dims = [(ls[k] + 1) * (ls[k] + 2) // 2 for k in range(nbas)]
+    dims = [(l + 1) * (l + 2) // 2 for l in ls]
     nao = sum(dims)
     smat = np.zeros((nao, nao))
 
