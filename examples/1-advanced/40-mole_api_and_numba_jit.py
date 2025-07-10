@@ -17,7 +17,7 @@ polynomials. A large number of quadrature roots are required to accurately
 evaluate the integrals. In the current implementation, the error is estimated
 around ~1e-3.
 
-This example is created to provide an implementation for issue 
+This example is created to provide an implementation for issue
 https://github.com/pyscf/pyscf/issues/2805
 
 For more technical discussions, please refer to:
@@ -97,9 +97,9 @@ def primitive_overlap(li, lj, ai, aj, ci, cj, Ra, Rb, roots, weights) -> np.ndar
                     Iy = 0
                     Iz = 0
                     for n in range(nroots):
-                        Ix += mu[ix,0,n] * nu[jx,0,n] * weights[n]
-                        Iy += mu[iy,1,n] * nu[jy,1,n] * weights[n]
-                        Iz += mu[iz,2,n] * nu[jz,2,n] * weights[n]
+                        Ix += abs(mu[ix,0,n] * nu[jx,0,n] * weights[n])
+                        Iy += abs(mu[iy,1,n] * nu[jy,1,n] * weights[n])
+                        Iz += abs(mu[iz,2,n] * nu[jz,2,n] * weights[n])
                     s[i,j] = Ix * Iy * Iz * norm_fac
                     j += 1
             i += 1
