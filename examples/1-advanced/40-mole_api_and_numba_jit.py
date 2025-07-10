@@ -51,6 +51,7 @@ def unravel_symmetric(i: int) -> tuple[int, int]:
 @njit(cache=True, fastmath=True, nogil=True)
 def primitive_overlap(li, lj, ai, aj, ci, cj, Ra, Rb, roots, weights) -> np.ndarray:
     norm_fac = ci * cj
+    # Unconventional normalization for Cartesian functions in PySCF
     if li <= 1:
         norm_fac *= ((2 * li + 1) / (4 * np.pi)) ** 0.5
     if lj <= 1:
