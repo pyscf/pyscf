@@ -34,12 +34,18 @@ libpbc = lib.load_library('libpbc')
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None,
               atmlst=None, kpt=np.zeros(3)):
     mf = mf_grad.base
-    assert isinstance(mf._numint, MultiGridNumInt2)
     mol = mf_grad.mol
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
     log = logger.Logger(mf_grad.stdout, mf_grad.verbose)
+
+    if hasattr(mf, '_numint'):
+        ni = mf._numint
+        assert isinstance(ni, MultiGridNumInt2)
+    else:
+        ni = mf.with_df
+        raise NotImplementedError
 
     s1 = mf_grad.get_ovlp(mol, kpt)
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
@@ -57,15 +63,15 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None,
     if gamma_point(kpt):
         h1ao = -mol.pbc_intor('int1e_ipkin', kpt=kpt)
         if mol._pseudo:
-            de  = mf.with_df.vpploc_part1_nuc_grad(dm0, kpts=kpt.reshape(-1,3))
+            de  = ni.vpploc_part1_nuc_grad(dm0, kpts=kpt.reshape(-1,3))
             de += pp_int.vpploc_part2_nuc_grad(mol, dm0)
             de += pp_int.vppnl_nuc_grad(mol, dm0)
-            if hasattr(mf.with_df, 'vpplocG_part1'):
-                if mf.with_df.vpplocG_part1 is None:
-                    h1ao -= mf.with_df.get_vpploc_part1_ip1(kpts=kpt.reshape(-1,3))
+            if hasattr(ni, 'vpplocG_part1'):
+                if ni.vpplocG_part1 is None:
+                    h1ao -= ni.get_vpploc_part1_ip1(kpts=kpt.reshape(-1,3))
         else:
-            de = mf.with_df.get_nuc_nuc_grad(dm0, kpts=kpt)
-            h1ao -= mf.with_df.get_nuc_ip1(kpts=kpt)
+            de = ni.get_nuc_nuc_grad(dm0, kpts=kpt)
+            h1ao -= ni.get_nuc_ip1(kpts=kpt)
         de += _contract_vhf_dm(mf_grad, np.add(h1ao, vhf), dm0) * 2
         de += _contract_vhf_dm(mf_grad, s1, dme0) * -2
         h1ao = s1 = vhf = dm0 = dme0 = None
