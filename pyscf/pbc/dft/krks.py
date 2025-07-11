@@ -32,7 +32,6 @@ from pyscf.lib import logger
 from pyscf.pbc.scf import khf
 from pyscf.pbc.dft import gen_grid, multigrid
 from pyscf.pbc.dft import rks
-from pyscf.pbc.lib.kpts import KPoints
 from pyscf import __config__
 
 
@@ -149,8 +148,6 @@ def gen_response(mf, mo_coeff=None, mo_occ=None, singlet=None, hermi=0,
 
     if with_nlc and mf.do_nlc():
         raise NotImplementedError
-    if isinstance(kpts, KPoints):
-        raise NotImplementedError(f'Response function for {mf}')
 
     if singlet is None:  # for newton solver
         spin = 0

@@ -23,6 +23,7 @@ from pyscf.lib import logger
 from pyscf.gto import moleintor
 from pyscf.pbc import tools
 from pyscf.pbc.lib.kpts_helper import gamma_point
+from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.df import fft
 from pyscf.pbc import tools as pbctools
 from pyscf.pbc.df.df_jk import (
@@ -565,7 +566,12 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
 
     See also `multigrid.nr_rks`.
     '''
-    if kpts is None: kpts = np.zeros((1, 3))
+    if kpts is None:
+        kpts = np.zeros((1, 3))
+    elif isinstance(kpts, KPoints):
+        if kpts.kpts.size > 3: # multiple k points
+            dm_kpts = kpts.transform_dm(dm_kpts)
+        kpts = kpts.kpts
     log = logger.new_logger(mydf, verbose)
     cell = mydf.cell
     dm_kpts = np.asarray(dm_kpts, order='C')
@@ -653,7 +659,12 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
 
 def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
            kpts_band=None, with_j=False, return_j=False, verbose=None):
-    if kpts is None: kpts = np.zeros((1, 3))
+    if kpts is None:
+        kpts = np.zeros((1, 3))
+    elif isinstance(kpts, KPoints):
+        if kpts.kpts.size > 3: # multiple k points
+            dm_kpts = kpts.transform_dm(dm_kpts)
+        kpts = kpts.kpts
     log = logger.new_logger(mydf, verbose)
     cell = mydf.cell
     dm_kpts = np.asarray(dm_kpts, order='C')
@@ -741,6 +752,9 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     return nelec, excsum, veff
 
 def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=None, spin=0):
+    if isinstance(kpts, KPoints):
+        raise NotImplementedError
+
     cell = mydf.cell
     dm_kpts = np.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
@@ -850,6 +864,10 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
     return vj_kpts
 
 def get_nuc(mydf, kpts=None, deriv=0):
+    if kpts is None:
+        kpts = np.zeros((1, 3))
+    elif isinstance(kpts, KPoints):
+        kpts = kpts.kpts_ibz
     kpts, is_single_kpt = fft._check_kpts(mydf, kpts)
     cell = mydf.cell
     mesh = mydf.mesh
@@ -882,6 +900,12 @@ def get_nuc_ip1(mydf, kpts=None):
 
 def get_nuc_nuc_grad(mydf, dm, kpts=None):
     # < p | d/dR (-Z / |r-R|) | q > D_{pq}
+    if kpts is None:
+        kpts = np.zeros((1, 3))
+    elif isinstance(kpts, KPoints):
+        if kpts.kpts.size > 3: # multiple k points
+            dm = kpts.transform_dm(dm)
+        kpts = kpts.kpts
     kpts, is_single_kpt = fft._check_kpts(mydf, kpts)
     cell = mydf.cell
     mesh = mydf.mesh

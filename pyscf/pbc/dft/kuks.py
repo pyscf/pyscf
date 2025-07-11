@@ -32,7 +32,6 @@ from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import rks, krks
 from pyscf.pbc.dft.krks import get_rho
 from pyscf.pbc.dft import multigrid
-from pyscf.pbc.lib.kpts import KPoints
 from pyscf import __config__
 
 
@@ -126,8 +125,6 @@ def gen_response(mf, mo_coeff=None, mo_occ=None,
 
     if with_nlc and mf.do_nlc():
         raise NotImplementedError
-    if isinstance(kpts, KPoints):
-        raise NotImplementedError(f'Response function for {mf}')
 
     rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc,
                                         mo_coeff, mo_occ, 1, kpts)

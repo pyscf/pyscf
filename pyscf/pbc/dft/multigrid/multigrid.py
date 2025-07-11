@@ -39,6 +39,7 @@ from pyscf.pbc.df.df_jk import (
     _format_jks,
 )
 from pyscf.pbc.lib.kpts_helper import gamma_point
+from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.df import fft, ft_ao, aft
 from pyscf.pbc.dft.multigrid.utils import (
     _take_4d,
@@ -1069,6 +1070,12 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     '''
     if kpts is None:
         kpts = numpy.zeros((1, 3))
+    elif isinstance(kpts, KPoints):
+        if kpts.kpts.size > 3: # multiple k points
+            dm_kpts = kpts.transform_dm(dm_kpts)
+        kpts = kpts.kpts
+    kpts = kpts.reshape(-1,3)
+
     log = logger.new_logger(mydf, verbose)
     cell = mydf.cell
     kpts = kpts.reshape(-1, 3)
@@ -1170,6 +1177,12 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     '''
     if kpts is None:
         kpts = numpy.zeros((1, 3))
+    elif isinstance(kpts, KPoints):
+        if kpts.kpts.size > 3: # multiple k points
+            dm_kpts = kpts.transform_dm(dm_kpts)
+        kpts = kpts.kpts
+    kpts = kpts.reshape(-1,3)
+
     log = logger.new_logger(mydf, verbose)
     cell = mydf.cell
     kpts = kpts.reshape(-1, 3)
@@ -1250,17 +1263,10 @@ def nr_rks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
                rho0=None, vxc=None, fxc=None, kpts=None, verbose=None):
     '''multigrid version of function pbc.dft.numint.nr_rks_fxc
     '''
-    if kpts is None:
-        kpts = numpy.zeros((1,3))
     log = logger.new_logger(mydf, verbose)
     cell = mydf.cell
     mesh = mydf.mesh
     ngrids = numpy.prod(mesh)
-
-    kpts = kpts.reshape(-1, 3)
-    dm_kpts = lib.asarray(dms, order='C')
-    dms = _format_dms(dm_kpts, kpts)
-    nset, nkpts, nao = dms.shape[:3]
 
     ni = mydf
     xctype = ni._xc_type(xc_code)
@@ -1272,19 +1278,24 @@ def nr_rks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
         deriv = 2 if MGGA_DENSITY_LAPL else 1
         raise NotImplementedError
 
-    weight = cell.vol / ngrids
     if fxc is None:
-        if rho0 is None:
-            rhoG = _eval_rhoG(mydf, dm0, hermi, kpts, deriv)
-            rho0 = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
-            if xctype == 'LDA':
-                rho0 = rho0.reshape(ngrids)
-        fxc = ni.eval_xc_eff(xc_code, rho0, deriv=2, xctype=xctype)[2]
+        fxc = cache_xc_kernel1(mydf, xc_code, dm0, spin=0, kpts=kpts)[2]
+
+    if kpts is None:
+        kpts = numpy.zeros((1,3))
+    elif isinstance(kpts, KPoints):
+        kpts = kpts.kpts_ibz
+    kpts = kpts.reshape(-1, 3)
+
+    dm_kpts = lib.asarray(dms, order='C')
+    dms = _format_dms(dm_kpts, kpts)
+    nset, nkpts, nao = dms.shape[:3]
 
     rhoG = _eval_rhoG(mydf, dms, hermi, kpts, deriv)
     rho1 = tools.ifft(rhoG.reshape(-1,ngrids), mesh)
     if hermi == 1:
         rho1 = rho1.real
+    weight = cell.vol / ngrids
     rho1 *= (1./weight)
     rho1 = rho1.reshape(nset,-1,ngrids)
     wv = numpy.einsum('nxg,xyg->nyg', rho1, fxc)
@@ -1328,18 +1339,10 @@ def nr_uks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
                rho0=None, vxc=None, fxc=None, kpts=None, verbose=None):
     '''multigrid version of function pbc.dft.numint.nr_uks_fxc
     '''
-    if kpts is None:
-        kpts = numpy.zeros((1,3))
     log = logger.new_logger(mydf, verbose)
     cell = mydf.cell
     mesh = mydf.mesh
     ngrids = numpy.prod(mesh)
-
-    kpts = kpts.reshape(-1, 3)
-    dm_kpts = lib.asarray(dms, order='C')
-    dms = _format_dms(dm_kpts, kpts)
-    nset, nkpts, nao = dms.shape[:3]
-    nstates = nset // 2
 
     ni = mydf
     xctype = ni._xc_type(xc_code)
@@ -1351,22 +1354,25 @@ def nr_uks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
         deriv = 2 if MGGA_DENSITY_LAPL else 1
         raise NotImplementedError
 
-    weight = cell.vol / ngrids
-    if rho0 is None:
-        rhoG = _eval_rhoG(mydf, dm0, hermi, kpts, deriv)
-        rho0 = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
-        if xctype == 'LDA':
-            rho0 = rho0.reshape(2,ngrids)
-        else:
-            rho0 = rho0.reshape(2,-1,ngrids)
-
     if fxc is None:
-        fxc = ni.eval_xc_eff(xc_code, rho0, deriv=2, xctype=xctype)[2]
+        fxc = cache_xc_kernel1(mydf, xc_code, dm0, spin=1, kpts=kpts)[2]
+
+    if kpts is None:
+        kpts = numpy.zeros((1,3))
+    elif isinstance(kpts, KPoints):
+        kpts = kpts.kpts_ibz
+    kpts = kpts.reshape(-1, 3)
+
+    dm_kpts = lib.asarray(dms, order='C')
+    dms = _format_dms(dm_kpts, kpts)
+    nset, nkpts, nao = dms.shape[:3]
+    nstates = nset // 2
 
     rhoG = _eval_rhoG(mydf, dms, hermi, kpts, deriv)
     rho1 = tools.ifft(rhoG.reshape(-1,ngrids), mesh)
     if hermi == 1:
         rho1 = rho1.real
+    weight = cell.vol / ngrids
     rho1 *= (1./weight)
     # rho1 = (rho1a, rho1b); rho1.shape = (2, nstates, nvar, ngrids)
     rho1 = rho1.reshape(2,nstates,-1,ngrids)
@@ -1411,6 +1417,12 @@ def cache_xc_kernel1(mydf, xc_code, dm, spin=0, kpts=None):
     '''
     if kpts is None:
         kpts = numpy.zeros((1,3))
+    elif isinstance(kpts, KPoints):
+        if kpts.kpts.size > 3: # multiple k points
+            dm = kpts.transform_dm(dm)
+        kpts = kpts.kpts
+    kpts = kpts.reshape(-1,3)
+
     cell = mydf.cell
     mesh = mydf.mesh
     ngrids = numpy.prod(mesh)
@@ -1451,9 +1463,17 @@ def cache_xc_kernel1(mydf, xc_code, dm, spin=0, kpts=None):
     vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype)[1:3]
     return rho, vxc, fxc
 
-def get_rho(mydf, dm, kpts=numpy.zeros((1,3))):
+def get_rho(mydf, dm, kpts=None):
     '''Density in real space
     '''
+    if kpts is None:
+        kpts = numpy.zeros((1,3))
+    elif isinstance(kpts, KPoints):
+        if kpts.kpts.size > 3: # multiple k points
+            dm = kpts.transform_dm(dm)
+        kpts = kpts.kpts
+    kpts = kpts.reshape(-1,3)
+
     cell = mydf.cell
     hermi = 1
     rhoG = _eval_rhoG(mydf, numpy.asarray(dm), hermi, kpts, deriv=0)

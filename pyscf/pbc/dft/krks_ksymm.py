@@ -40,12 +40,6 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpts_band is None:
         kpts_band = kpts.kpts_ibz
 
-    if len(dm) != kpts.nkpts_ibz:
-        raise KeyError('Shape of the input density matrix does not '
-                       'match the number of IBZ k-points: '
-                       f'{len(dm)} vs {kpts.nkpts_ibz}.')
-    dm_bz = kpts.transform_dm(dm)
-
     ni = ks._numint
     if isinstance(ni, multigrid.MultiGridNumInt):
         if ks.do_nlc():
@@ -56,8 +50,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         j_in_xc = False
 
     max_memory = ks.max_memory - lib.current_memory()[0]
-    n, exc, vxc = ni.nr_rks(cell, ks.grids, ks.xc, dm_bz, 0, hermi,
-                            kpts=kpts.kpts, kpts_band=kpts_band,
+    n, exc, vxc = ni.nr_rks(cell, ks.grids, ks.xc, dm, 0, hermi,
+                            kpts=kpts, kpts_band=kpts_band,
                             max_memory=max_memory)
     logger.info(ks, 'nelec by numeric integration = %s', n)
     if ks.do_nlc():
@@ -66,8 +60,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         else:
             assert ni.libxc.is_nlc(ks.nlc)
             xc = ks.nlc
-        n, enlc, vnlc = ni.nr_nlc_vxc(cell, ks.nlcgrids, xc, dm_bz,
-                                      0, hermi, kpts.kpts, max_memory=max_memory)
+        n, enlc, vnlc = ni.nr_nlc_vxc(cell, ks.nlcgrids, xc, dm,
+                                      0, hermi, kpts, max_memory=max_memory)
         exc += enlc
         vxc += vnlc
         logger.info(ks, 'nelec with nlc grids = %s', n)
@@ -90,24 +84,10 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     logger.timer(ks, 'veff', *t0)
     return vxc
 
-def get_rho(mf, dm=None, grids=None, kpts=None):
-    if kpts is None: kpts = mf.kpts
-    if isinstance(kpts, libkpts.KPoints):
-        if dm is None:
-            dm = mf.make_rdm1()
-        if len(dm) != kpts.nkpts_ibz:
-            raise RuntimeError(
-                'Number of input density matrices does not match the number of '
-                f'IBZ kpts: {len(dm)} vs {kpts.nkpts_ibz}.')
-        dm = kpts.transform_dm(dm)
-        kpts = kpts.kpts
-    return krks.get_rho(mf, dm, grids, kpts)
-
 
 class KsymAdaptedKRKS(krks.KRKS, khf_ksymm.KRHF):
 
     get_veff = get_veff
-    get_rho = get_rho
 
     kpts = khf_ksymm.KsymAdaptedKSCF.kpts
     get_ovlp = khf_ksymm.KsymAdaptedKSCF.get_ovlp
@@ -121,8 +101,6 @@ class KsymAdaptedKRKS(krks.KRKS, khf_ksymm.KRHF):
     orbsym = khf_ksymm.KsymAdaptedKSCF.orbsym
     _finalize = khf_ksymm.KsymAdaptedKSCF._finalize
     get_init_guess = khf_ksymm.KRHF.get_init_guess
-
-    gen_response = NotImplemented
 
     def __init__(self, cell, kpts=libkpts.KPoints(), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'),

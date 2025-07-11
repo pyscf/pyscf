@@ -326,7 +326,10 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
     if kpts is None:
         kpts = numpy.zeros((1,3))
     elif isinstance(kpts, KPoints):
+        if kpts.kpts.size > 3: # multiple k points
+            dms = kpts.transform_dm(dms)
         kpts = kpts.kpts
+    kpts = kpts.reshape(-1,3)
 
     xctype = ni._xc_type(xc_code)
     if xctype == 'LDA':
@@ -426,7 +429,10 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=1,
     if kpts is None:
         kpts = numpy.zeros((1,3))
     elif isinstance(kpts, KPoints):
+        if kpts.kpts.size > 3: # multiple k points
+            dms = kpts.transform_dm(dms)
         kpts = kpts.kpts
+    kpts = kpts.reshape(-1,3)
 
     xctype = ni._xc_type(xc_code)
     if xctype == 'LDA':
@@ -636,6 +642,7 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         kpts = numpy.zeros((1,3))
     elif isinstance(kpts, KPoints):
         kpts = kpts.kpts_ibz
+    kpts = kpts.reshape(-1, 3)
 
     v_hermi = 0
     if is_zero(kpts):
@@ -767,6 +774,7 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         kpts = numpy.zeros((1,3))
     elif isinstance(kpts, KPoints):
         kpts = kpts.kpts_ibz
+    kpts = kpts.reshape(-1, 3)
 
     dma, dmb = _format_uks_dm(dms)
     v_hermi = 0
@@ -894,6 +902,8 @@ def cache_xc_kernel1(ni, cell, grids, xc_code, dm, spin=0,
     if kpts is None:
         kpts = numpy.zeros((1,3))
     elif isinstance(kpts, KPoints):
+        if kpts.kpts.size > 3: # multiple k points
+            dm = kpts.transform_dm(dm)
         kpts = kpts.kpts
     xctype = ni._xc_type(xc_code)
     if xctype == 'GGA':
@@ -934,9 +944,17 @@ def cache_xc_kernel1(ni, cell, grids, xc_code, dm, spin=0,
     return rho, vxc, fxc
 
 
-def get_rho(ni, cell, dm, grids, kpts=numpy.zeros((1,3)), max_memory=2000):
+def get_rho(ni, cell, dm, grids, kpts=None, max_memory=2000):
     '''Density in real space
     '''
+    if kpts is None:
+        kpts = numpy.zeros((1,3))
+    elif isinstance(kpts, KPoints):
+        if kpts.kpts.size > 3: # multiple k points
+            dm = kpts.transform_dm(dm)
+        kpts = kpts.kpts
+    kpts = kpts.reshape(-1,3)
+
     hermi = 1
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dm, hermi, False)
     assert nset == 1
@@ -1181,8 +1199,6 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
                 kpts = kwargs['kpt']
             else:
                 kpts = self.kpts
-        kpts = kpts.reshape(-1,3)
-
         return nr_rks(self, cell, grids, xc_code, dms, 0, 0,
                       hermi, kpts, kpts_band, max_memory, verbose)
 
@@ -1196,8 +1212,6 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
                 kpts = kwargs['kpt']
             else:
                 kpts = self.kpts
-        kpts = kpts.reshape(-1,3)
-
         return nr_uks(self, cell, grids, xc_code, dms, 1, 0,
                       hermi, kpts, kpts_band, max_memory, verbose)
 
