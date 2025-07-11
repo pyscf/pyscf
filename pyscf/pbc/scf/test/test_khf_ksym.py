@@ -329,12 +329,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(kmf1.e_tot, kmf.e_tot, 9)
 
     def test_khf_newton(self):
-        kpts = cell.make_kpts(nk, with_gamma_point=False,space_group_symmetry=True,time_reversal_symmetry=True)
+        kpts = cell.make_kpts(nk,space_group_symmetry=True,time_reversal_symmetry=True)
         kmf = pscf.KRHF(cell, kpts=kpts).newton().run()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 6)
 
     def test_kuhf_newton(self):
-        kpts = cell.make_kpts(nk, with_gamma_point=False,space_group_symmetry=True,time_reversal_symmetry=True)
+        kpts = cell.make_kpts(nk,space_group_symmetry=True,time_reversal_symmetry=True)
         kmf = pscf.KUHF(cell, kpts=kpts).newton().run()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 6)
 

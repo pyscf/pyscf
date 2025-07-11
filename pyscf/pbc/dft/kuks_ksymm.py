@@ -118,6 +118,8 @@ class KsymAdaptedKUKS(kuks.KUKS, kuhf_ksymm.KUHF):
     orbsym = kuhf_ksymm.KUHF.orbsym
     _finalize = kuhf_ksymm.KUHF._finalize
 
+    gen_response = NotImplemented
+
     def __init__(self, cell, kpts=libkpts.KPoints(), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'),
                  **kwargs):

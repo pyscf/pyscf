@@ -22,7 +22,7 @@ from pyscf import lib
 from pyscf.gto import moleintor
 from pyscf.gto.eval_gto import _get_intor_and_comp, BLKSIZE
 from pyscf.pbc.gto import _pbcintor
-from pyscf.gto.mole import extract_pgto_params
+from pyscf.gto.mole import extract_pgto_params, ANG_OF
 from pyscf import __config__
 
 EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-2)

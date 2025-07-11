@@ -249,7 +249,7 @@ class KnownValues(unittest.TestCase):
         error = np.amax(np.absolute(rho - rho0))
         self.assertAlmostEqual(error, 0., 7)
 
-    def test_multigrid_kuks_high_cost(self):
+    def test_multigrid_kuks(self):
         kmf0 = pscf.KUKS(cell, kpts=cell.make_kpts(nk))
         kmf0.xc = 'lda'
         kmf0._numint = multigrid.MultiGridNumInt(cell)
@@ -266,7 +266,7 @@ class KnownValues(unittest.TestCase):
         error = np.amax(np.absolute(rho - rho0))
         self.assertAlmostEqual(error, 0., 7)
 
-        kmf._numint = multigrid.MultiGridNumInt(cell, kpts)
+        kmf._numint = multigrid.MultiGridNumInt(cell)
         kmf.kernel()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 7)
         rho = kmf.get_rho()
@@ -343,6 +343,20 @@ class KnownValues(unittest.TestCase):
         E_F = kmf.get_fermi()
         self.assertAlmostEqual(finger(np.asarray(E_nk)), 0.5575755379561839, 6)
         self.assertAlmostEqual(E_F, 0.3093399745201863, 6)
+
+    @unittest.skip('nr_rks_fxc does not support ksym')
+    def test_krks_newton(self):
+        kpts = cell.make_kpts(nk,space_group_symmetry=True,time_reversal_symmetry=True)
+        kmf = pscf.KRKS(cell, kpts=kpts).multigrid_numint().newton().run()
+        kmf0 = krks.KRKS(cell, kpts=kpts.kpts)
+        self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 6)
+
+    @unittest.skip('nr_uks_fxc does not support ksym')
+    def test_kuks_newton(self):
+        kpts = cell.make_kpts(nk,space_group_symmetry=True,time_reversal_symmetry=True)
+        kmf = pscf.KUKS(cell, kpts=kpts).multigrid_numint().newton().run()
+        kmf0 = krks.KRKS(cell, kpts=kpts.kpts)
+        self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 6)
 
 if __name__ == '__main__':
     print("Full Tests for DFT with k-point symmetry")

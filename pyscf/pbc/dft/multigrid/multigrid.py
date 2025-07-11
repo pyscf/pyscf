@@ -551,13 +551,16 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0,
     #hermi = hermi and abs(dms - dms.transpose(0,1,3,2).conj()).max() < 1e-9
     gga_high_order = False
     if deriv == 0:
+        xctype = 'LDA'
         rhodim = 1
 
     elif deriv == 1:
         if rhog_high_order:
+            xctype = 'GGA'
             rhodim = 4
         else:  # approximate high order derivatives in reciprocal space
             gga_high_order = True
+            xctype = 'LDA'
             rhodim = 1
             deriv = 0
         #if hermi != 1 and not gamma_point(kpts):
@@ -577,25 +580,26 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0,
         log.debug('mesh %s  rcut %g', mesh, h_cell.rcut)
 
         if grids_sparse is None:
-            # The first pass handles all diffused functions
+            # The first pass handles all diffused functions using the regular
+            # matrix multiplication code.
+            rho = numpy.zeros((nset,rhodim,ngrids), dtype=numpy.complex128)
             idx_h = grids_dense.ao_idx
             dms_hh = numpy.asarray(dms[:,:,idx_h[:,None],idx_h], order='C')
-            h_pcell, h_coeff = h_cell.decontract_basis(to_cart=True, aggregate=True)
-            nshells_h = _pgto_shells(h_cell)
-            if deriv == 0:
-                pgto_dms = lib.einsum('nkij,pi,qj->nkpq', dms_hh, h_coeff, h_coeff)
-                rho = _eval_rho_bra(h_pcell, pgto_dms, None, 0,
-                                    'LDA', kpts, grids_dense, ignore_imag, log)
-            elif deriv == 1:
-                pgto_dms = lib.einsum('nkij,pi,qj->nkpq', dms_hh, h_coeff, h_coeff)
-                rho = _eval_rho_bra(h_pcell, pgto_dms, None, 0, 'GGA',
-                                    kpts, grids_dense, ignore_imag, log)
-                if hermi == 1:
-                    # \nabla \chi_i DM(i,j) \chi_j was computed above.
-                    # *2 for \chi_i DM(i,j) \nabla \chi_j
-                    rho[:,1:4] *= 2
-                else:
-                    raise NotImplementedError
+            fftdf = fft.FFTDF(cell, kpts=kpts)
+            for ao_h_etc, p0, p1 in fftdf.aoR_loop(grids_dense, kpts, deriv):
+                ao_h, mask = ao_h_etc[0], ao_h_etc[2]
+                for k in range(nkpts):
+                    for i in range(nset):
+                        if xctype == 'LDA':
+                            ao_dm = lib.dot(ao_h[k], dms_hh[i,k])
+                            rho_sub = numpy.einsum('xi,xi->x', ao_dm, ao_h[k].conj())
+                        else:
+                            rho_sub = numint.eval_rho(h_cell, ao_h[k], dms_hh[i,k],
+                                                      mask, xctype, hermi)
+                        rho[i,:,p0:p1] += rho_sub
+                ao_h = ao_h_etc = ao_dm = None
+            if ignore_imag:
+                rho = rho.real
         else:
             idx_h = grids_dense.ao_idx
             idx_l = grids_sparse.ao_idx
@@ -1306,7 +1310,7 @@ def nr_rks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
     return veff.reshape(dm_kpts.shape)
 
 
-def nr_rks_fxc_st(mydf, xc_code, dm0, dms_alpha, hermi=0, singlet=True,
+def nr_rks_fxc_st(mydf, xc_code, dm0, dms_alpha, hermi=1, singlet=True,
                   rho0=None, vxc=None, fxc=None, kpts=None, with_j=False,
                   verbose=None):
     '''multigrid version of function pbc.dft.numint.nr_rks_fxc_st
@@ -1317,14 +1321,6 @@ def nr_rks_fxc_st(mydf, xc_code, dm0, dms_alpha, hermi=0, singlet=True,
         fxc = fxc[0,:,0] + fxc[0,:,1]
     else:
         fxc = fxc[0,:,0] - fxc[0,:,1]
-
-    if kpts is None or gamma_point(kpts):
-        # implies real orbitals and real matrix, thus K_{ia,bj} = K_{ia,jb}
-        # The input dms_alpha must symmetric
-        # The output matrix v = K*x_{ia} is symmetric
-        pass
-    else:
-        assert hermi == 0
     return nr_rks_fxc(mydf, xc_code, dm0, dms_alpha, hermi=hermi, with_j=with_j,
                       fxc=fxc, kpts=kpts, verbose=verbose)
 
@@ -1869,12 +1865,12 @@ class MultiGridNumInt(lib.StreamObject, LibXCMixin):
         return nr_uks_fxc(self, xc_code, dm0, dms, hermi, self.xc_with_j,
                           rho0, vxc, fxc, kpts, verbose)
 
-    def nr_rks_fxc_st(self, cell, grids, xc_code, dm0, dms_alpha, relativity=0, singlet=True,
+    def nr_rks_fxc_st(self, cell, grids, xc_code, dm0, dms_alpha, hermi=1, singlet=True,
                       rho0=None, vxc=None, fxc=None, kpts=None, max_memory=2000,
                       verbose=None):
         assert cell is self.cell
         with_j = singlet and self.xc_with_j
-        return nr_rks_fxc_st(self, xc_code, dm0, dms_alpha, singlet,
+        return nr_rks_fxc_st(self, xc_code, dm0, dms_alpha, hermi, singlet,
                              rho0, vxc, fxc, kpts, with_j, verbose)
 
     def cache_xc_kernel(self, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,

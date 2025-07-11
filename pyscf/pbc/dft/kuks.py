@@ -123,6 +123,11 @@ def gen_response(mf, mo_coeff=None, mo_occ=None,
     hybrid = ni.libxc.is_hybrid_xc(mf.xc)
     j_in_xc = getattr(ni, 'xc_with_j', False)
 
+    if with_nlc and mf.do_nlc():
+        raise NotImplementedError
+    if isinstance(kpts, KPoints):
+        raise NotImplementedError(f'Response function for {mf}')
+
     rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc,
                                         mo_coeff, mo_occ, 1, kpts)
     dm0 = None

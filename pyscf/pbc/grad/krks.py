@@ -95,8 +95,10 @@ def get_vxc(ni, cell, grids, xc_code, dms, kpts, kpts_band=None, relativity=0, h
             ao_k2 = np.asarray(ao_k2)
             for i in range(nset):
                 rho = make_rho(i, ao_k2[:,:4], mask, xctype)
-                vxc = ni.eval_xc_eff(xc_code, rho, deriv=1, xctype=xctype)[1]
+                vxc = ni.eval_xc_eff(xc_code, rho, deriv=1, xctype=xctype,
+                                     spin=0)[1]
                 wv = vxc * weight
+                wv[0] *= .5
                 for kn in range(nkpts):
                     rks_grad._gga_grad_sum_(vmat[:,i,kn], cell, ao_k1[kn], wv, mask, ao_loc)
                 rho = vxc = wv = None

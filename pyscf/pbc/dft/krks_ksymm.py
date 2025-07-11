@@ -47,7 +47,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     dm_bz = kpts.transform_dm(dm)
 
     ni = ks._numint
-    if isinstance(ks.with_df, multigrid.MultiGridNumInt):
+    if isinstance(ni, multigrid.MultiGridNumInt):
         if ks.do_nlc():
             raise NotImplementedError(f'MultiGrid for NLC functional {ks.xc} + {ks.nlc}')
         j_in_xc = ni.xc_with_j
@@ -120,8 +120,9 @@ class KsymAdaptedKRKS(krks.KRKS, khf_ksymm.KRHF):
     get_orbsym = khf_ksymm.KsymAdaptedKSCF.get_orbsym
     orbsym = khf_ksymm.KsymAdaptedKSCF.orbsym
     _finalize = khf_ksymm.KsymAdaptedKSCF._finalize
-
     get_init_guess = khf_ksymm.KRHF.get_init_guess
+
+    gen_response = NotImplemented
 
     def __init__(self, cell, kpts=libkpts.KPoints(), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'),
