@@ -32,6 +32,7 @@ from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import rks, krks
 from pyscf.pbc.dft.krks import get_rho
 from pyscf.pbc.dft import multigrid
+from pyscf.pbc.lib.kpts import KPoints
 from pyscf import __config__
 
 
