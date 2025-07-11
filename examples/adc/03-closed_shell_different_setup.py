@@ -40,3 +40,8 @@ myadcea.analyze()
 eip,vip,pip,xip,adc_es = myadc.ip_adc()
 eea,vea,pea,xea,adc_es = myadc.ea_adc()
 
+#EE-RADC(3) for 3 roots
+myadc.method = "adc(3)"
+myadc.method_type = "ee"
+myadc.ee_adc(nroots=3)
+

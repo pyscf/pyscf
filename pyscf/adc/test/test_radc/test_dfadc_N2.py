@@ -35,8 +35,9 @@ def setUpModule():
     mol.build()
     mf = scf.RHF(mol).density_fit(auxbasis='cc-pvdz-jkfit')
     mf.kernel()
-    myadc = adc.ADC(mf)
     myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
+    myadc.conv_tol = 1e-12
+    myadc.tol_residual = 1e-6
 
 def tearDownModule():
     global mol, mf, myadc
@@ -60,6 +61,8 @@ class KnownValues(unittest.TestCase):
     def test_dfadc3_ip(self):
 
         myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
+        myadc.conv_tol = 1e-12
+        myadc.tol_residual = 1e-6
         myadc.max_memory = 2
         myadc.method = "adc(3)"
         myadc.method_type = "ip"
@@ -100,6 +103,8 @@ class KnownValues(unittest.TestCase):
 
         mf = scf.RHF(mol).run()
         myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
+        myadc.conv_tol = 1e-12
+        myadc.tol_residual = 1e-6
         myadc.max_memory = 20
         myadc.method = "adc(2)"
         myadc.method_type = "ea"

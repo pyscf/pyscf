@@ -30,8 +30,6 @@ from pyscf.adc import uadc
 from pyscf.adc import uadc_ao2mo
 from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
-from pyscf import __config__
-from pyscf import df
 
 
 def get_imds(adc, eris=None):
@@ -1955,6 +1953,7 @@ class UADCEA(uadc.UADC):
         'mo_energy_b', 'nmo_a', 'nmo_b', 'mol', 'transform_integrals',
         'with_df', 'spec_factor_print_tol', 'evec_print_tol',
         'compute_properties', 'approx_trans_moments', 'E', 'U', 'P', 'X',
+        'compute_spin_square'
     }
 
     def __init__(self, adc):
@@ -1992,6 +1991,8 @@ class UADCEA(uadc.UADC):
 
         self.spec_factor_print_tol = adc.spec_factor_print_tol
         self.evec_print_tol = adc.evec_print_tol
+
+        self.compute_spin_square = False
 
         self.E = adc.E
         self.U = adc.U

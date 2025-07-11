@@ -44,3 +44,8 @@ eea,vea,pea,xea,ea_es= myadc.ea_adc(nroots=4)
 
 #Compute EA properties
 ea_es.analyze()
+
+#EE-UADC(3) for 4 roots
+myadc.method = "adc(3)"
+myadc.kernel_gs()
+myadc.ee_adc(nroots=4)

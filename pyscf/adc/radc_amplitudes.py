@@ -23,14 +23,10 @@
 Restricted algebraic diagrammatic construction
 '''
 import numpy as np
-import pyscf.ao2mo as ao2mo
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
-from pyscf import __config__
-from pyscf import df
-from pyscf import symm
 import h5py
 import tempfile
 
