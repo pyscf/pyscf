@@ -740,6 +740,12 @@ class TDBase(lib.StreamObject):
     def nroots(self, x):
         self.nstates = x
 
+    def set_frozen(self, method='auto', window=(-1000.0, 1000.0)):
+        from pyscf.cc.ccsd import set_frozen
+        from pyscf.tdscf import ghf, dhf
+        is_ghf = isinstance(self, (ghf.TDA, ghf.TDHF, dhf.TDA, dhf.TDHF))
+        return set_frozen(self, method=method, window=window, is_gcc=is_ghf)
+
     @property
     def e_tot(self):
         '''Excited state energies'''

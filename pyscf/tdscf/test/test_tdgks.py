@@ -205,6 +205,18 @@ class KnownValues(unittest.TestCase):
         es = td.kernel()[0]
         self.assertAlmostEqual(lib.fp(es), 0.45050838461527387, 6)
 
+    def test_set_frozen(self):
+        td = mf_bp86.TDA()
+        td.frozen = 4
+        mask = td.get_frozen_mask()
+        self.assertEqual(mask.sum(), 22)
+        td.set_frozen()
+        mask = td.get_frozen_mask()
+        self.assertEqual(mask.sum(), 24)
+        td.frozen = [0,1]
+        mask = td.get_frozen_mask()
+        self.assertEqual(mask.sum(), 24)
+
 
 if __name__ == "__main__":
     print("Full Tests for TD-GKS")
