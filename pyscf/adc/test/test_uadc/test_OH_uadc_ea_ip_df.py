@@ -40,6 +40,8 @@ def setUpModule():
     mf.conv_tol = 1e-12
     mf.kernel()
     myadc = adc.ADC(mf)
+    myadc.conv_tol = 1e-12
+    myadc.tol_residual = 1e-6
 
 def tearDownModule():
     global mol, mf, myadc
@@ -52,6 +54,8 @@ class KnownValues(unittest.TestCase):
 
         mf = scf.UHF(mol).run()
         myadc = adc.ADC(mf)
+        myadc.conv_tol = 1e-12
+        myadc.tol_residual = 1e-6
         myadc.with_df = df.DF(mol, auxbasis='cc-pvdz-ri')
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.150979874, 6)
@@ -112,6 +116,8 @@ class KnownValues(unittest.TestCase):
 
         mf = scf.UHF(mol).run()
         myadc = adc.ADC(mf)
+        myadc.conv_tol = 1e-12
+        myadc.tol_residual = 1e-6
         myadc.with_df = df.DF(mol, auxbasis='aug-cc-pvdz-ri')
         myadc.method = "adc(3)"
 

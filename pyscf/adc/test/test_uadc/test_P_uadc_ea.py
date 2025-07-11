@@ -37,6 +37,8 @@ def setUpModule():
     mf.irrep_nelec = {'A1g':(3,3),'E1ux':(2,1),'E1uy':(2,1),'A1u':(2,1)}
     mf.kernel()
     myadc = adc.ADC(mf)
+    myadc.conv_tol = 1e-12
+    myadc.tol_residual = 1e-6
 
 def tearDownModule():
     global mol, mf, myadc

@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
+# Author: Terrence Stahl <terrencestahl1@@gmail.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
 import unittest
-import numpy
+import numpy as np
 import math
 from pyscf import gto
 from pyscf import scf
@@ -42,66 +42,72 @@ def setUpModule():
     mf.conv_tol = 1e-12
     mf.kernel()
     myadc = adc.ADC(mf)
-    myadc.conv_tol = 1e-12
-    myadc.tol_residual = 1e-6
 
 def tearDownModule():
     global mol, mf, myadc
     del mol, mf, myadc
 
+def rdms_test(dm):
+    r2_int = mol.intor('int1e_r2')
+    dm_ao = np.einsum('pi,ij,qj->pq', mf.mo_coeff, dm, mf.mo_coeff.conj())
+    r2 = np.einsum('pq,pq->',r2_int,dm_ao)
+    return r2
+
 class KnownValues(unittest.TestCase):
 
-    def test_ip_cvs_adc2(self):
+    def test_ee_adc2(self):
         myadc.method = "adc(2)"
-        myadc.method_type = "ip"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2039852016968376, 6)
 
-        myadcipcvs = adc.radc_ip_cvs.RADCIPCVS(myadc)
-        myadcipcvs.ncvs = 1
-        e,v,p,x = myadcipcvs.kernel(nroots=3)
+        dm1_gs = myadc.make_ref_rdm1()
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 19.073700043115412, 6)
 
-        self.assertAlmostEqual(e[0], 19.83739019952255, 6)
+        myadc.method_type = "ee"
+        e,v,p,x = myadc.kernel(nroots=4)
 
-        self.assertAlmostEqual(p[0], 1.54937962073732, 6)
+        self.assertAlmostEqual(e[0],0.2971167095 , 6)
+        self.assertAlmostEqual(e[1],0.3724791374 , 6)
+        self.assertAlmostEqual(e[2],0.3935563988 , 6)
+        self.assertAlmostEqual(e[3],0.4709279042 , 6)
 
-    def test_ip_adc2x(self):
 
+    def test_ee_adc2x(self):
         myadc.method = "adc(2)-x"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2039852016968376, 6)
 
-        myadcipcvs = adc.radc_ip_cvs.RADCIPCVS(myadc)
-        myadcipcvs.ncvs = 1
-        e,v,p,x = myadcipcvs.kernel(nroots=3)
+        dm1_gs = myadc.make_ref_rdm1()
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 19.073700043115412, 6)
 
-        self.assertAlmostEqual(e[0], 19.86256087818720, 6)
-        self.assertAlmostEqual(e[1], 21.24443090401234, 6)
-        self.assertAlmostEqual(e[2], 21.27391652329249, 6)
+        myadcee = adc.radc_ee.RADCEE(myadc)
+        e,v,p,x = myadcee.kernel(nroots=4)
 
-        self.assertAlmostEqual(p[0], 1.57448682772367, 6)
-        self.assertAlmostEqual(p[1], 0.00000138285407, 6)
-        self.assertAlmostEqual(p[2], 0.00000284749463, 6)
+        self.assertAlmostEqual(e[0],0.2794713515, 6)
+        self.assertAlmostEqual(e[1],0.3563942404, 6)
+        self.assertAlmostEqual(e[2],0.3757585048, 6)
+        self.assertAlmostEqual(e[3],0.4551913585, 6)
 
 
-    def test_ip_adc3(self):
-
+    def test_ee_adc3(self):
         myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2107769014592799, 6)
 
-        myadcipcvs = adc.radc_ip_cvs.RADCIPCVS(myadc)
-        myadcipcvs.ncvs = 1
-        e,v,p,x = myadcipcvs.kernel(nroots=3)
+        dm1_gs = myadc.make_ref_rdm1()
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 19.043496230938608, 6)
 
-        self.assertAlmostEqual(e[0], 20.09352653091772, 6)
-        self.assertAlmostEqual(e[1], 21.24443090413907, 6)
-        self.assertAlmostEqual(e[2], 21.27391652292367, 6)
+        myadcee = adc.radc_ee.RADCEE(myadc)
+        e,v,p,x = myadcee.kernel(nroots=4)
 
-        self.assertAlmostEqual(p[0], 1.66994015437000, 6)
-        self.assertAlmostEqual(p[1], 0.00000138285406, 6)
-        self.assertAlmostEqual(p[2], 0.00000284749466, 6)
+        self.assertAlmostEqual(e[0],0.3053164039, 6)
+        self.assertAlmostEqual(e[1],0.3790532845, 6)
+        self.assertAlmostEqual(e[2],0.4019531805, 6)
+        self.assertAlmostEqual(e[3],0.4772033490, 6)
 
 if __name__ == "__main__":
-    print("IP-CVS calculations for different ADC methods for water molecule")
+    print("EE calculations for different ADC methods for water molecule")
     unittest.main()

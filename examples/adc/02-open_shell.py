@@ -40,3 +40,11 @@ eea,vea,pea,xea = myadc.kernel(nroots=4)
 
 #Compute EA-UADC(3) properties
 myadc.analyze()
+
+#EE-UADC(2) for 4 roots with properties and spin square expectation values
+myadc.method = "adc(2)"
+myadc.method_type = "ee"
+myadc.compute_properties = True
+myadc.compute_spin_square = True
+eea,vea,pea,xea = myadc.kernel(nroots=4)
+
