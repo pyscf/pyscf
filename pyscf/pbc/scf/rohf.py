@@ -62,6 +62,7 @@ class ROHF(pbchf.RHF):
     spin_square = mol_rohf.ROHF.spin_square
     stability = mol_rohf.ROHF.stability
     dip_moment = pbchf.SCF.dip_moment
+    gen_response = pbcuhf.gen_response
     to_gpu = lib.to_gpu
 
     def __init__(self, cell, kpt=np.zeros(3),

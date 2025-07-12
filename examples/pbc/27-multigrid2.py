@@ -228,8 +228,11 @@ mf=pbcdft.RKS(cell)
 #mf.xc = "LDA, VWN"
 mf.xc = "PBE,PBE"
 mf.init_guess = 'atom' # atom guess is fast
-mf.with_df = multigrid.MultiGridFFTDF2(cell)
-mf.with_df.ntasks = 4 # number of sets of grid points
+# MultiGrid attribute is assigned to the ._numint attribute of DFT classes.
+# The computational cost can be adjusted by setting the ntasks of the MultiGrid
+# instance.
+mf._numint = multigrid.MultiGridNumInt2(cell)
+mf._numint.ntasks = 4
 mf.kernel()
 
 # Nuclear Gradients

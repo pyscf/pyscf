@@ -35,7 +35,7 @@ def make_primitive_cell(mesh, spin=0):
     cell.pseudo = 'gth-pade'
     cell.mesh = mesh
     cell.spin = spin
-    cell.verbose = 0
+    cell.verbose = 6
     cell.output = '/dev/null'
     cell.space_group_symmetry = True
     cell.build()
@@ -327,6 +327,16 @@ class KnownValues(unittest.TestCase):
         kmf1.max_cycle=1
         kmf1.kernel(kmf1.make_rdm1())
         self.assertAlmostEqual(kmf1.e_tot, kmf.e_tot, 9)
+
+    def test_khf_newton(self):
+        kpts = cell.make_kpts(nk,space_group_symmetry=True,time_reversal_symmetry=True)
+        kmf = pscf.KRHF(cell, kpts=kpts).newton().run()
+        self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 6)
+
+    def test_kuhf_newton(self):
+        kpts = cell.make_kpts(nk,space_group_symmetry=True,time_reversal_symmetry=True)
+        kmf = pscf.KUHF(cell, kpts=kpts).newton().run()
+        self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 6)
 
 if __name__ == '__main__':
     print("Full Tests for HF with k-point symmetry")

@@ -29,7 +29,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import khf, kuhf
 from pyscf.pbc.dft import gen_grid
-from pyscf.pbc.dft import rks
+from pyscf.pbc.dft import rks, krks
 from pyscf.pbc.dft.krks import get_rho
 from pyscf.pbc.dft import multigrid
 from pyscf import __config__
@@ -46,79 +46,49 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     t0 = (logger.process_clock(), logger.perf_counter())
 
     ni = ks._numint
-    hybrid = ni.libxc.is_hybrid_xc(ks.xc)
-
-    if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
+    if isinstance(ni, multigrid.MultiGridNumInt):
         if ks.do_nlc():
             raise NotImplementedError(f'MultiGrid for NLC functional {ks.xc} + {ks.nlc}')
-        n, exc, vxc = multigrid.nr_uks(ks.with_df, ks.xc, dm, hermi,
-                                       kpts, kpts_band,
-                                       with_j=True, return_j=False)
-        logger.info(ks, 'nelec by numeric integration = %s', n)
-        t0 = logger.timer(ks, 'vxc', *t0)
-        return vxc
-
-    # ndim = 4 : dm.shape = ([alpha,beta], nkpts, nao, nao)
-    ground_state = (dm.ndim == 4 and dm.shape[0] == 2 and kpts_band is None)
-    ks.initialize_grids(cell, dm, kpts, ground_state)
-
-    if hermi == 2:  # because rho = 0
-        n, exc, vxc = (0,0), 0, 0
+        j_in_xc = ni.xc_with_j
     else:
-        max_memory = ks.max_memory - lib.current_memory()[0]
-        n, exc, vxc = ni.nr_uks(cell, ks.grids, ks.xc, dm, 0, hermi,
-                                kpts, kpts_band, max_memory=max_memory)
-        if ks.do_nlc():
-            if ni.libxc.is_nlc(ks.xc):
-                xc = ks.xc
-            else:
-                assert ni.libxc.is_nlc(ks.nlc)
-                xc = ks.nlc
-            n, enlc, vnlc = ni.nr_nlc_vxc(cell, ks.nlcgrids, xc, dm[0]+dm[1],
-                                          0, hermi, kpts, max_memory=max_memory)
-            exc += enlc
-            vxc += vnlc
-        logger.info(ks, 'nelec by numeric integration = %s', n)
-        t0 = logger.timer(ks, 'vxc', *t0)
+        ks.initialize_grids(cell, dm, kpts)
+        j_in_xc = False
 
+    max_memory = ks.max_memory - lib.current_memory()[0]
+    n, exc, vxc = ni.nr_uks(cell, ks.grids, ks.xc, dm, 0, hermi,
+                            kpts, kpts_band, max_memory=max_memory)
+    logger.info(ks, 'nelec by numeric integration = %s', n)
+    if ks.do_nlc():
+        if ni.libxc.is_nlc(ks.xc):
+            xc = ks.xc
+        else:
+            assert ni.libxc.is_nlc(ks.nlc)
+            xc = ks.nlc
+        n, enlc, vnlc = ni.nr_nlc_vxc(cell, ks.nlcgrids, xc, dm[0]+dm[1],
+                                      0, hermi, kpts, max_memory=max_memory)
+        exc += enlc
+        vxc += vnlc
+        logger.info(ks, 'nelec with nlc grids = %s', n)
+    t0 = logger.timer(ks, 'vxc', *t0)
+
+    ground_state = kpts_band is None
     nkpts = len(kpts)
     weight = 1. / nkpts
-
-    if not hybrid:
-        vj = ks.get_j(cell, dm[0]+dm[1], hermi, kpts, kpts_band)
-        vxc += vj
+    vj, vk = krks._get_jk(ks, cell, dm, hermi, kpts, kpts_band, with_j=not j_in_xc)
+    if j_in_xc:
+        ecoul = vxc.ecoul
     else:
-        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-        if omega == 0:
-            vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
-            vk *= hyb
-        elif alpha == 0: # LR=0, only SR exchange
-            vk = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=-omega)
-            vk *= hyb
-            vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
-        elif hyb == 0: # SR=0, only LR exchange
-            vk = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
-            vk *= alpha
-            vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
-        else: # SR and LR exchange with different ratios
-            vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
-            vk *= hyb
-            vklr = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
-            vklr *= (alpha - hyb)
-            vk += vklr
         vj = vj[0] + vj[1]
-        vxc += vj - vk
-
-        if ground_state:
-            exc -= (np.einsum('Kij,Kji', dm[0], vk[0]) +
-                    np.einsum('Kij,Kji', dm[1], vk[1])).real * .5 * weight
-
-    if ground_state:
-        ecoul = np.einsum('Kij,Kji', dm[0]+dm[1], vj) * .5 * weight
-    else:
+        vxc += vj
         ecoul = None
-
+        if ground_state:
+            ecoul = np.einsum('nKij,Kji->', dm, vj).real * .5 * weight
+    if ni.libxc.is_hybrid_xc(ks.xc):
+        vxc -= vk
+        if ground_state:
+            exc -= np.einsum('nKij,nKji->', dm, vk).real * .5 * weight
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
+    logger.timer(ks, 'veff', *t0)
     return vxc
 
 def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
@@ -143,6 +113,42 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
                     ecoul.imag)
     return tot_e.real, ecoul.real + exc.real
 
+def gen_response(mf, mo_coeff=None, mo_occ=None,
+                 with_j=True, hermi=0, max_memory=None, with_nlc=True):
+    if mo_coeff is None: mo_coeff = mf.mo_coeff
+    if mo_occ is None: mo_occ = mf.mo_occ
+    cell = mf.cell
+    kpts = mf.kpts
+    ni = mf._numint
+    hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+    j_in_xc = getattr(ni, 'xc_with_j', False)
+
+    if with_nlc and mf.do_nlc():
+        raise NotImplementedError
+
+    rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc,
+                                        mo_coeff, mo_occ, 1, kpts)
+    dm0 = None
+
+    if max_memory is None:
+        mem_now = lib.current_memory()[0]
+        max_memory = max(2000, mf.max_memory*.8-mem_now)
+
+    def vind(dm1, kshift=0):
+        if hermi == 2:
+            v1 = np.zeros_like(dm1)
+        else:
+            assert kshift == 0
+            v1 = ni.nr_uks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, hermi,
+                               rho0, vxc, fxc, kpts, max_memory=max_memory)
+        vj, vk = krks._get_jk(mf, cell, dm1, hermi, kpts, with_j=not j_in_xc,
+                              kshift=kshift)
+        if not j_in_xc:
+            v1 += vj[0] + vj[1]
+        if hybrid:
+            v1 -= vk
+        return v1
+    return vind
 
 class KUKS(rks.KohnShamDFT, kuhf.KUHF):
     '''UKS class adapted for PBCs with k-point sampling.
@@ -151,6 +157,7 @@ class KUKS(rks.KohnShamDFT, kuhf.KUHF):
     get_veff = get_veff
     energy_elec = energy_elec
     get_rho = get_rho
+    gen_response = gen_response
 
     def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
@@ -162,7 +169,7 @@ class KUKS(rks.KohnShamDFT, kuhf.KUHF):
         rks.KohnShamDFT.dump_flags(self, verbose)
         return self
 
-    def nuc_grad_method(self):
+    def Gradients(self):
         from pyscf.pbc.grad import kuks
         return kuks.Gradients(self)
 
@@ -176,5 +183,7 @@ class KUKS(rks.KohnShamDFT, kuhf.KUHF):
             out.with_df._j_only = False
             out.with_df.reset()
         return out
+
+    multigrid_numint = krks.KRKS.multigrid_numint
 
     to_gpu = lib.to_gpu

@@ -95,7 +95,10 @@ def _add_Vhubbard(vxc, ks, dm, kpts):
                         E_U += weight[k] * alpha * P_k.trace()
                         vhub_loc += np.eye(P_k.shape[-1]) * alpha
                     SC = np.dot(S_k, C_k)
-                    vxc[s,k] += SC.dot(vhub_loc).dot(SC.conj().T).astype(vxc[s,k].dtype,copy=False)
+                    vhub_loc = SC.dot(vhub_loc).dot(SC.conj().T)
+                    if vxc.dtype == np.float64:
+                        vhub_loc = vhub_loc.real
+                    vxc[s,k] += vhub_loc
                     if not is_ibz:
                         P_loc += P_k
                 if is_ibz:
