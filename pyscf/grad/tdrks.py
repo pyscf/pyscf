@@ -49,6 +49,8 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
     log = logger.new_logger(td_grad, verbose)
     time0 = logger.process_clock(), logger.perf_counter()
 
+    assert td_grad.base.frozen is None
+
     mol = td_grad.mol
     mf = td_grad.base._scf
     mo_coeff = mf.mo_coeff

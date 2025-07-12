@@ -96,6 +96,21 @@ class KnownValues(unittest.TestCase):
         wfnsym = tdscf.rhf._analyze_wfnsym(td, x_sym, td.xy[0][0])
         self.assertEqual(wfnsym, 'A1u')
 
+    def test_set_frozen(self):
+        td = mf.TDA()
+        td.frozen = 1
+        mask = td.get_frozen_mask()
+        self.assertEqual(mask.sum(), 10)
+        td.set_frozen()
+        mask = td.get_frozen_mask()
+        self.assertEqual(mask.sum(), 10)
+        td.frozen = [0,1]
+        mask = td.get_frozen_mask()
+        self.assertEqual(mask.sum(), 9)
+        td.frozen = [1,9]
+        mask = td.get_frozen_mask()
+        self.assertEqual(mask.sum(), 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for rhf-TDA and rhf-TDHF")
