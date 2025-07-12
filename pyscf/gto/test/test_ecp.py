@@ -203,6 +203,7 @@ class KnownValues(unittest.TestCase):
         from pyscf.pbc import gto as pbcgto
         from pyscf.pbc import scf as pbcscf
         from pyscf.pbc import df
+        from pyscf.gto import pp_int
         cell = pbcgto.Cell()
         cell.atom = 'He 1. .5 .5; C .1 1.3 2.1'
         cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))],
@@ -218,8 +219,9 @@ class KnownValues(unittest.TestCase):
          0.32235865    2     2.25670239    -0.39677748
                                             0.93894690
                                                      ''')}
-        cell.a = numpy.eye(3)
+        cell.a = numpy.eye(3) * 10
         cell.dimension = 0
+        cell.low_dim_ft_type = 'inf_vacuum'
         cell.build()
         mol = cell.to_mol()
 
@@ -236,6 +238,13 @@ class KnownValues(unittest.TestCase):
 
         e_tot = scf.RHF(mol).run().e_tot
         self.assertAlmostEqual(abs(e_ref-e_tot).max(), 0, 5)
+
+        cell.low_dim_ft_type = None
+        cell.build(False, False)
+        dat = pp_int.get_gth_pp(mol)
+        mydf = df.FFTDF(cell)
+        ref = mydf.get_pp()
+        self.assertAlmostEqual(abs(dat-ref).max(), 0, 2)
 
     def test_scalar_vs_int1e_rinv(self):
         mol = gto.M(atom='''

@@ -729,9 +729,10 @@ class SCF(mol_hf.SCF):
     def energy_nuc(self):
         cell = self.cell
         if (cell.dimension == 0 and
-            # Integrals in GDF and RSJK are all computed in real space.
-            # Nuclear repulsion should be computed in real space.
-            not isinstance(self.with_df, df.AFTDF)):
+            # When computing CDERI for GDF (also RSJK), the LR part is not
+            # evaluated. CDERI is constructed with full-range Coulomb directly.
+            # Nuclear repulsion should be computed the same way.
+            isinstance(self.with_df, df.GDF) or self.rsjk is not None):
             from pyscf.gto.mole import classical_coulomb_energy
             return classical_coulomb_energy(cell)
         return cell.enuc

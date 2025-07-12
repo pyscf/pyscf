@@ -258,12 +258,13 @@ class KnownValues(unittest.TestCase):
 #        self.assertAlmostEqual(lib.fp(e1[0]), -6.8312867098806249, 7)
 #        self.assertAlmostEqual(lib.fp(e1[1]), -6.1120214505413086, 7)
 
-    def test_rhf_0d(self):
+    def test_rhf_0d_inf_vacuum(self):
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
                    a = numpy.eye(3)*5,
                    atom = '''He 2 2 2; He 2 2 3''',
                    dimension = 0,
+                   low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     [0, (1.0, 1.0)],
@@ -296,6 +297,7 @@ class KnownValues(unittest.TestCase):
                                                      ''')}
         cell.a = numpy.eye(3)
         cell.dimension = 0
+        cell.low_dim_ft_type = 'inf_vacuum'
         cell.build()
         mf = pscf.RHF(cell)
         mf.with_df = pdf.AFTDF(cell)
@@ -305,6 +307,30 @@ class KnownValues(unittest.TestCase):
         mf1 = mol.RHF().run()
         self.assertAlmostEqual(mf1.e_tot, -5.66198034773817, 8)
         self.assertAlmostEqual(mf1.e_tot, mf.e_tot, 4)
+
+    def test_rhf_0d(self):
+        cell = pbcgto.Cell()
+        cell.build(unit = 'B',
+                   a = numpy.eye(3)*15,
+                   atom = '''He 2 2 2; He 2 2 3''',
+                   dimension = 0,
+                   verbose = 0,
+                   basis = { 'He': [[0, (0.8, 1.0)],
+                                    [0, (1.0, 1.0)],
+                                    [0, (1.2, 1.0)]]})
+        eref = cell.to_mol().RHF().kernel()
+        mf = cell.RHF()
+        e1 = mf.kernel()
+        self.assertAlmostEqual(e1, eref, 7)
+
+        mf = cell.RHF()
+        mf.with_df = pdf.AFTDF(cell)
+        e1 = mf.kernel()
+        self.assertAlmostEqual(e1, eref, 7)
+
+        eref = cell.to_mol().RHF().density_fit().kernel()
+        e1 = cell.RHF().density_fit().kernel()
+        self.assertAlmostEqual(e1, eref, 8)
 
     def test_rhf_1d(self):
         L = 4
@@ -514,7 +540,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(dm), 0.025922864381755062, 6)
 
     def test_init_guess_by_minao(self):
-        with lib.temporary_env(cell, dimension=1):
+        with lib.temporary_env(cell, dimension=1, low_dim_ft_type='inf_vacuum'):
             dm = mf.get_init_guess(key='minao')
             kdm = kmf.get_init_guess(key='minao')
 
@@ -524,7 +550,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(kdm), -1.714952331211208, 8)
 
     def test_init_guess_by_atom(self):
-        with lib.temporary_env(cell, dimension=1):
+        with lib.temporary_env(cell, dimension=1, low_dim_ft_type='inf_vacuum'):
             dm = mf.get_init_guess(key='atom')
             kdm = kmf.get_init_guess(key='atom')
 

@@ -102,6 +102,7 @@ class KnownValues(unittest.TestCase):
     def test_get_init_guess(self):
         cell1 = cell.copy()
         cell1.dimension = 1
+        cell1.low_dim_ft_type = 'inf_vacuum'
         cell1.build(0, 0)
         mf = pscf.ROHF(cell1)
         dm = mf.get_init_guess(key='minao')
