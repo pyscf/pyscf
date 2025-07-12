@@ -18,6 +18,7 @@
 
 import unittest
 import numpy as np
+import math
 from pyscf import gto
 from pyscf import scf
 from pyscf import adc
@@ -57,6 +58,8 @@ class KnownValues(unittest.TestCase):
         myadc.method = "adc(2)"
 
         myadc.method_type = "ee"
+        myadc.max_memory = 20
+        myadc.incore_complete = False
         e,v,p,x = myadc.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0],0.3956243465, 6)
@@ -71,8 +74,11 @@ class KnownValues(unittest.TestCase):
 
     def test_ee_adc2x(self):
         myadc.method = "adc(2)-x"
+        myadc.max_memory = 20
+        myadc.incore_complete = False
 
-        e,v,p,x = myadc.kernel(nroots=4)
+        myadcee = adc.uadc_ee.UADCEE(myadc)
+        e,v,p,x = myadcee.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0],0.3739861956, 6)
         self.assertAlmostEqual(e[1],0.3739861956, 6)
@@ -86,8 +92,11 @@ class KnownValues(unittest.TestCase):
 
     def test_ee_adc3(self):
         myadc.method = "adc(3)"
+        myadc.max_memory = 20
+        myadc.incore_complete = False
 
-        e,v,p,x = myadc.kernel(nroots=4)
+        myadcee = adc.uadc_ee.UADCEE(myadc)
+        e,v,p,x = myadcee.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0],0.3884663487, 6)
         self.assertAlmostEqual(e[1],0.3884663487, 6)

@@ -729,9 +729,7 @@ def get_imds(adc, eris=None):
             a = 0
             temp_1 = np.zeros((nocc_a, nvir_a, nocc_a, nvir_a))
 
-            interm = np.zeros((nocc_a, nocc_a, nvir_a, nvir_a))
-            interm[:, :, ab_ind_a[0], ab_ind_a[1]] = adc.imds.t2_1_vvvv[0][:]
-            interm[:, :, ab_ind_a[1], ab_ind_a[0]] = -adc.imds.t2_1_vvvv[0][:]
+            interm = adc.imds.t2_1_vvvv[0][:]
             interm = 2.0 * interm
 
             t_v_con[occ_list_a,
@@ -823,9 +821,7 @@ def get_imds(adc, eris=None):
 
             a = 0
 
-            interm = np.zeros((nocc_b, nocc_b, nvir_b, nvir_b))
-            interm[:, :, ab_ind_b[0], ab_ind_b[1]] = adc.imds.t2_1_vvvv[2][:]
-            interm[:, :, ab_ind_b[1], ab_ind_b[0]] = -adc.imds.t2_1_vvvv[2][:]
+            interm = adc.imds.t2_1_vvvv[2][:]
             interm = 2.0 * interm
 
             t_v_con[occ_list_b,
@@ -1090,22 +1086,7 @@ def get_imds(adc, eris=None):
             del interm
 
         t_v_con = np.zeros((nocc_a, nvir_a, nocc_b, nvir_b))
-        if isinstance(eris.vvvv_p, list):
-
-            interm = np.zeros((nocc_a, nocc_a, nvir_a, nvir_a))
-            interm[:, :, ab_ind_a[0], ab_ind_a[1]] = adc.imds.t2_1_vvvv[0][:]
-            interm[:, :, ab_ind_a[1], ab_ind_a[0]] = -adc.imds.t2_1_vvvv[0][:]
-            interm = 2.0 * interm
-
-            t_v_con = 1 / 2 * \
-                lib.einsum('ilba,IiDb->IDla', t1_ccee_abab, interm, optimize=einsum_type)
-
-            M_030_aabb = t_v_con
-            del t_v_con
-            del interm
-
-        t_v_con = np.zeros((nocc_a, nvir_a, nocc_b, nvir_b))
-        if isinstance(eris.vvvv_p, type(None)):
+        if isinstance(eris.vvvv_p, type(None)) or isinstance(eris.vvvv_p, list):
 
             interm = 2.0 * adc.imds.t2_1_vvvv[0][:]
 
@@ -1117,21 +1098,7 @@ def get_imds(adc, eris=None):
             del interm
 
         t_v_con = np.zeros((nocc_a, nvir_a, nocc_b, nvir_b))
-        if isinstance(eris.VVVV_p, list):
-
-            interm = np.zeros((nocc_b, nocc_b, nvir_b, nvir_b))
-            interm[:, :, ab_ind_b[0], ab_ind_b[1]] = adc.imds.t2_1_vvvv[2][:]
-            interm[:, :, ab_ind_b[1], ab_ind_b[0]] = -adc.imds.t2_1_vvvv[2][:]
-            interm = 2.0 * interm
-            t_v_con = 1 / 2 * \
-                lib.einsum('IiDb,liab->IDla', t1_ccee_abab, interm, optimize=einsum_type)
-
-            M_030_aabb += t_v_con
-            del t_v_con
-            del interm
-
-        t_v_con = np.zeros((nocc_a, nvir_a, nocc_b, nvir_b))
-        if isinstance(eris.vvvv_p, type(None)):
+        if isinstance(eris.VVVV_p, type(None)) or isinstance(eris.VVVV_p, list):
             interm = 2.0 * adc.imds.t2_1_vvvv[2][:]
             t_v_con = 1 / 2 * \
                 lib.einsum('IiDb,liab->IDla', t1_ccee_abab, interm, optimize=einsum_type)
@@ -24283,7 +24250,7 @@ class UADCEE(uadc.UADC):
         method : string
             nth-order ADC method. Options are : ADC(2), ADC(2)-X, ADC(3). Default is ADC(2).
         conv_tol : float
-            Convergence threshold for Davidson iterations.  Default is 1e-12.
+            Convergence threshold for Davidson iterations.  Default is 1e-8.
         max_cycle : int
             Number of Davidson iterations.  Default is 50.
         max_space : int

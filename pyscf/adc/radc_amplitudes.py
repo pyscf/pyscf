@@ -131,6 +131,7 @@ def compute_amplitudes(myadc, eris):
             eris_vvvv = eris.vvvv
             temp = t2_1.reshape(nocc*nocc,nvir*nvir)
             t2_1_vvvv = np.dot(temp,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
+            del temp
         elif isinstance(eris.vvvv, list):
             t2_1_vvvv = contract_ladder(myadc,t2_1[:],eris.vvvv)
         else:

@@ -30,3 +30,9 @@ myadc.max_memory = 20
 myadc.method = "adc(3)"
 myadc.method_type = "ea"
 eea,vea,pea,xea = myadc.kernel(nroots = 3)
+
+#EE-RADC(3) for 3 roots
+myadc.max_memory = 1
+myadc.method = "adc(3)"
+myadc.method_type = "ee"
+eea,vea,pea,xea = myadc.kernel(nroots = 3)

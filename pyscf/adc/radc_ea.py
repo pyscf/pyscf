@@ -1449,7 +1449,7 @@ class RADCEA(radc.RADC):
         method : string
             nth-order ADC method. Options are : ADC(2), ADC(2)-X, ADC(3). Default is ADC(2).
         conv_tol : float
-            Convergence threshold for Davidson iterations.  Default is 1e-12.
+            Convergence threshold for Davidson iterations.  Default is 1e-8.
         max_cycle : int
             Number of Davidson iterations.  Default is 50.
         max_space : int

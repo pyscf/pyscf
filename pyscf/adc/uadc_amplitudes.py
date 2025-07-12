@@ -294,7 +294,6 @@ def compute_amplitudes(myadc, eris):
         or (myadc.method == "adc(3)")):
 
         # Compute second-order doubles t2 (tijab)
-
         eris_oooo = eris.oooo
         eris_OOOO = eris.OOOO
         eris_ooOO = eris.ooOO

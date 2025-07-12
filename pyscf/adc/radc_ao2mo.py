@@ -84,7 +84,7 @@ def transform_integrals_outcore(myadc):
         'ovvo', (nocc,nvir,nvir,nocc), 'f8', chunks=(nocc,1,nvir,nocc))
     eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvpair), 'f8')
 
-    eris.vvvv = []
+    eris.vvvv = None
 
     def save_occ_frac(p0, p1, eri):
         eri = eri.reshape(p1-p0,nocc,nmo,nmo)
@@ -118,6 +118,7 @@ def transform_integrals_outcore(myadc):
     fload = ao2mo.outcore._load_from_h5g
     buf = np.empty((blksize*nocc,nao_pair))
     buf_prefetch = np.empty_like(buf)
+
     def load(buf_prefetch, p0, rowmax):
         if p0 < rowmax:
             p1 = min(rowmax, p0+blksize)
@@ -152,9 +153,11 @@ def transform_integrals_outcore(myadc):
 
     ############### forming eris_vvvv ########################################
 
-    if ((myadc.method == "adc(2)" and myadc.method_type == "ee" and myadc.approx_trans_moments is False)
-        or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False)
+    if ((myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False)
         or (myadc.method == "adc(3)")):
+
+        eris.vvvv = []
+
         cput3 = logger.process_clock(), logger.perf_counter()
         avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5
         chnk_size = calculate_chunk_size(myadc)

@@ -66,6 +66,9 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     if adc.compute_properties:
         adc.P,adc.X = adc.get_properties(nroots)
+    else:
+        adc.P = None
+        adc.X = None
 
     nfalse = np.shape(conv)[0] - np.sum(conv)
 
