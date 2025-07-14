@@ -9,6 +9,7 @@ PySCF 2.10.0 (2025-07-15)
   - DFT+U for molecules and a linear-response method for determining U
   - Add multigrid_numint method to setup the multigrid algorithm in DFT instances.
   - Frozen orbitals for TDDFT
+  - EE-ADC for spin-conserved electronic excitations
 * Improved
   - Checks and warnings for missing ECP input on heavy elements
   - Auxiliary basis set assignment based on BSE database
@@ -20,6 +21,7 @@ PySCF 2.10.0 (2025-07-15)
     with FFTDF, AFTDF, GDF, Multigrid integrals now.
   - Breit and Gaunt integrals for non-hermitian density matrices, supporting the
     TDDFT computation with Breit and Gaunt interactions.
+  - Low-Memory and Efficient Implementation of RCCSD(T) lambda-equation and RDM Intermediates
 * Fixes
   - transform_xc for 6th order XC derivatives
   - Subgroups of C2h

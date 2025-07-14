@@ -110,8 +110,8 @@
 
 * ADC
 
-  - Restricted and unrestricted ADC
-  - EA/IP-ADC for extended systems with PBC
+  - Restricted and unrestricted ADC for extended systems with PBC
+  - EA/IP/EE-ADC for electronic excitations
   - ADC density matrices
 
 
