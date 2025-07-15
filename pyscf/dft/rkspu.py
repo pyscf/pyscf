@@ -22,6 +22,7 @@ Refs:
     Heather J. Kulik, J. Chem. Phys. 142, 240901 (2015)
 '''
 
+import itertools
 import numpy as np
 import scipy.linalg as la
 from pyscf import lib
@@ -30,7 +31,7 @@ from pyscf import gto
 from pyscf.dft import rks
 from pyscf.data.nist import HARTREE2EV
 from pyscf import lo
-from pyscf.lo import iao
+from pyscf.lo.iao import reference_mol
 
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     """
@@ -58,27 +59,39 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
                        hermi=hermi)
 
     # V_U
-    C_ao_lo = ks.C_ao_lo
-    ovlp = ks.get_ovlp()
-    C_inv = np.dot(C_ao_lo.conj().T, ovlp)
-    rdm1_lo = C_inv.dot(dm).dot(C_inv.conj().T)
+
+    ovlp = mol.intor('int1e_ovlp', hermi=1)
+    if ks.C_ao_lo is None:
+        # Construct orthogonal minao local orbitals.
+        if not all(isinstance(x, str) for x in ks.U_idx):
+            NotImplementedError(
+                'Mixing labels and indices for U is not supported')
+        pmol = reference_mol(mol, ks.minao_ref)
+        C_ao_lo = _make_minao_lo(mol, pmol)
+        U_idx, U_val, U_lab = _set_U(pmol, ks.U_idx, ks.U_val)
+    else:
+        U_idx, U_val, U_lab = _set_U(mol, ks.U_idx, ks.U_val)
+        C_ao_lo = ks.C_ao_lo
 
     alphas = ks.alpha
     if not hasattr(alphas, '__len__'): # not a list or tuple
-        alphas = [alphas] * len(ks.U_idx)
+        alphas = [alphas] * len(U_idx)
 
     E_U = 0.0
     logger.info(ks, "-" * 79)
+    lab_string = " "
     with np.printoptions(precision=5, suppress=True, linewidth=1000):
-        for idx, val, lab, alpha in zip(ks.U_idx, ks.U_val, ks.U_lab, alphas):
-            lab_string = " "
-            for l in lab:
-                lab_string += "%9s" %(l.split()[-1])
-            lab_sp = lab[0].split()
-            logger.info(ks, "local rdm1 of atom %s: ",
-                        " ".join(lab_sp[:2]) + " " + lab_sp[2][:2])
-            P = rdm1_lo[idx[:,None], idx]
-            SC = np.dot(ovlp, C_ao_lo[:, idx])
+        for idx, val, lab, alpha in zip(U_idx, U_val, U_lab, alphas):
+            if ks.verbose >= logger.INFO:
+                lab_string = " "
+                for l in lab:
+                    lab_string += "%9s" %(l.split()[-1])
+                lab_sp = lab[0].split()
+                logger.info(ks, "local rdm1 of atom %s: ",
+                            " ".join(lab_sp[:2]) + " " + lab_sp[2][:2])
+            C_loc = C_ao_lo[:,idx]
+            SC = np.dot(ovlp, C_loc) # ~ C^{-1}
+            P = SC.conj().T.dot(dm).dot(SC)
             loc_sites = P.shape[-1]
             vhub_loc = (np.eye(loc_sites) - P) * (val * 0.5)
             if alpha is not None:
@@ -93,7 +106,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             logger.info(ks, "%s\n%s", lab_string, P)
             logger.info(ks, "-" * 79)
 
-    if E_U.real < 0.0 and all(np.asarray(ks.U_val) > 0):
+    if E_U.real < 0.0 and all(U_val > 0):
         logger.warn(ks, "E_U (%s) is negative...", E_U.real)
     vxc = lib.tag_array(vxc, E_U=E_U)
     return vxc
@@ -117,98 +130,102 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
                  vhf.exc, vhf.E_U)
     return tot_e.real, vhf.ecoul + vhf.exc + vhf.E_U
 
-def set_U(ks, U_idx, U_val):
+def _groupby(inp, labels):
+    _, where, counts = np.unique(labels, return_index=True, return_counts=True)
+    return [inp[start:start+count] for start, count in zip(where, counts)]
+
+def _set_U(mol, U_idx, U_val):
     """
     Regularize the U_idx and U_val to each atom,
-    and set ks.U_idx, ks.U_val, ks.U_lab.
     """
     assert len(U_idx) == len(U_val)
-    ks.U_val = []
-    ks.U_idx = []
-    ks.U_lab = []
-    mol = ks.mol
 
     ao_loc = mol.ao_loc_nr()
     dims = ao_loc[1:] - ao_loc[:-1]
     # atm_ids labels the atom Id for each function
     atm_ids = np.repeat(mol._bas[:,gto.ATOM_OF], dims)
 
-    lo_labels = np.asarray(mol.ao_labels())
+    U_indices = []
+    U_values = []
     for i, idx in enumerate(U_idx):
         if isinstance(idx, str):
             lab_idx = mol.search_ao_label(idx)
             # Group basis functions centered on the same atom
-            for idxj in groupby(lab_idx, atm_ids[lab_idx]):
-                ks.U_idx.append(idxj)
-                ks.U_val.append(U_val[i])
+            for idxj in _groupby(lab_idx, atm_ids[lab_idx]):
+                U_indices.append(idxj)
+                U_values.append(U_val[i])
         else:
-            ks.U_idx.append(idx)
-            ks.U_val.append(U_val[i])
+            U_indices.append(idx)
+            U_values.append(U_val[i])
 
-    ks.U_val = np.asarray(ks.U_val) / HARTREE2EV
-
-    for idx, val in zip(ks.U_idx, ks.U_val):
-        ks.U_lab.append(lo_labels[idx])
-
-    if len(ks.U_idx) == 0:
-        logger.warn(ks, "No sites specified for Hubbard U. "
+    if len(U_indices) == 0:
+        logger.warn(mol, "No sites specified for Hubbard U. "
                     "Please check if 'U_idx' is correctly specified")
 
-def groupby(inp, labels):
-    _, where, counts = np.unique(labels, return_index=True, return_counts=True)
-    return [inp[start:start+count] for start, count in zip(where, counts)]
+    U_values = np.asarray(U_values) / HARTREE2EV
 
-def make_minao_lo(ks, minao_ref):
-    """
-    Construct minao local orbitals.
-    """
-    mol = ks.mol
-    nao = mol.nao
-    ovlp = ks.get_ovlp()
-    C_ao_minao, labels = proj_ref_ao(mol, minao=minao_ref, return_labels=True)
-    C_ao_minao = lo.vec_lowdin(C_ao_minao, ovlp)
+    lo_labels = np.asarray(mol.ao_labels())
+    U_labels = [lo_labels[idx] for idx in U_indices]
+    return U_indices, U_values, U_labels
 
-    C_ao_lo = np.zeros((nao, nao))
-    for idx, lab in zip(ks.U_idx, ks.U_lab):
-        idx_minao = [i for i, l in enumerate(labels) if l in lab]
-        assert len(idx_minao) == len(idx)
-        C_ao_sub = C_ao_minao[:, idx_minao]
-        C_ao_lo[:, idx] = C_ao_sub
-    return C_ao_lo
-
-def proj_ref_ao(mol, minao='minao', return_labels=False):
-    """
-    Get a set of reference AO spanned by the calculation basis.
-    Not orthogonalized.
-
-    Args:
-        return_labels: if True, return the labels as well.
-    """
-    pmol = iao.reference_mol(mol, minao)
-    s1 = mol.intor('int1e_ovlp', hermi=1)
-    s12 = gto.intor_cross('int1e_ovlp', mol, pmol)
-    s1cd = la.cho_factor(s1)
-    C_ao_lo = la.cho_solve(s1cd, s12)
-
-    if return_labels:
-        labels = pmol.ao_labels()
-        return C_ao_lo, labels
+def _make_minao_lo(mol, minao_ref='minao'):
+    '''
+    Construct orthogonal minao local orbitals.
+    '''
+    if isinstance(minao_ref, str):
+        minao_mol = reference_mol(mol, minao_ref)
     else:
-        return C_ao_lo
+        minao_mol = minao_ref
+    ovlp = mol.intor('int1e_ovlp', hermi=1)
+    s12 = gto.intor_cross('int1e_ovlp', mol, minao_mol)
+    s1cd = la.cho_factor(ovlp)
+    C_minao = la.cho_solve(s1cd, s12)
+    C_minao = lo.vec_lowdin(C_minao, ovlp)
+    return C_minao
+
+def _format_idx(idx_list):
+    string = ''
+    for k, g in itertools.groupby(enumerate(idx_list), lambda ix: ix[0] - ix[1]):
+        g = list(g)
+        if len(g) > 1:
+            string += '%d-%d, '%(g[0][1], g[-1][1])
+        else:
+            string += '%d, '%(g[0][1])
+    return string[:-2]
+
+def _print_U_info(mf, log):
+    mol = mf.mol
+    if mf.C_ao_lo is None:
+        pmol = reference_mol(mol, mf.minao_ref)
+        U_idx, U_val, U_lab = _set_U(pmol, mf.U_idx, mf.U_val)
+    else:
+        U_idx, U_val, U_lab = _set_U(mol, mf.U_idx, mf.U_val)
+    alphas = mf.alpha
+    if not hasattr(alphas, '__len__'): # not a list or tuple
+        alphas = [alphas] * len(U_idx)
+    log.info("-" * 79)
+    log.info('U indices and values: ')
+    for idx, val, lab, alpha in zip(U_idx, U_val, U_lab, alphas):
+        log.info('%6s [%.6g eV] ==> %-100s', _format_idx(idx),
+                    val * HARTREE2EV, "".join(lab))
+        if alpha is not None:
+            log.info('              alpha for LR-cDFT %s (eV)',
+                     alpha * HARTREE2EV)
+    log.info("-" * 79)
 
 class RKSpU(rks.RKS):
     """
     DFT+U for RKS
     """
 
-    _keys = {"U_idx", "U_val", "C_ao_lo", "U_lab", 'alpha'}
+    _keys = {"U_idx", "U_val", "C_ao_lo", 'minao_ref', "U_lab", 'alpha'}
 
     get_veff = get_veff
     energy_elec = energy_elec
     to_hf = lib.invalid_method('to_hf')
 
     def __init__(self, mol, xc='LDA,VWN',
-                 U_idx=[], U_val=[], C_ao_lo='minao', minao_ref='MINAO'):
+                 U_idx=[], U_val=[], C_ao_lo=None, minao_ref='MINAO'):
         """
         Args:
             U_idx: can be
@@ -220,9 +237,8 @@ class RKSpU(rks.RKS):
             U_val: a list of effective U [in eV], i.e. U-J in Dudarev's DFT+U.
                    each U corresponds to one kind of LO orbitals, should have
                    the same length as U_idx.
-            C_ao_lo: LO coefficients, can be
+            C_ao_lo: Customized LO coefficients, can be
                      np.array, shape ((spin,), nao, nlo),
-                     string, in 'minao'.
             minao_ref: reference for minao orbitals, default is 'MINAO'.
 
         Attributes:
@@ -234,29 +250,26 @@ class RKSpU(rks.RKS):
         """
         super().__init__(mol, xc=xc)
 
-        set_U(self, U_idx, U_val)
-
-        if isinstance(C_ao_lo, str):
-            if C_ao_lo.upper() == 'MINAO':
-                self.C_ao_lo = make_minao_lo(self, minao_ref)
-            else:
-                raise NotImplementedError
-        else:
-            self.C_ao_lo = np.asarray(C_ao_lo)
-
+        self.U_idx = U_idx
+        self.U_val = U_val
+        self.C_ao_lo = C_ao_lo
+        self.minao_ref = minao_ref
         # The perturbation (eV) used to compute U in LR-cDFT.
         self.alpha = None
 
     def dump_flags(self, verbose=None):
-        super().dump_flags(verbose)
         log = logger.new_logger(self, verbose)
+        super().dump_flags(log)
         if log.verbose >= logger.INFO:
-            from pyscf.pbc.dft.krkspu import _print_U_info
             _print_U_info(self, log)
         return self
 
+    def Gradients(self):
+        from pyscf.grad.rkspu import Gradients
+        return Gradients(self)
+
     def nuc_grad_method(self):
-        raise NotImplementedError
+        return self.Gradients()
 
 def linear_response_u(mf_plus_u, alphalist=(0.02, 0.05, 0.08)):
     '''
@@ -289,9 +302,20 @@ def linear_response_u(mf_plus_u, alphalist=(0.02, 0.05, 0.08)):
     alphalist = np.asarray(alphalist)
     alphalist = np.append(-alphalist[::-1], alphalist)
 
-    C_ao_lo = mf.C_ao_lo
-    ovlp = mf.get_ovlp()
-    C_inv = [C_ao_lo[:,local_idx].conj().T.dot(ovlp) for local_idx in mf.U_idx]
+    mol = mf.mol
+    if mf.C_ao_lo is None:
+        # Construct orthogonal minao local orbitals.
+        pmol = reference_mol(mol, mf.minao_ref)
+        C_ao_lo = _make_minao_lo(mol, pmol)
+        U_idx = _set_U(pmol, mf.U_idx, mf.U_val)[0]
+    else:
+        U_idx = _set_U(mol, mf.U_idx, mf.U_val)[0]
+        C_ao_lo = mf.C_ao_lo
+    ovlp = mol.intor('int1e_ovlp', hermi=1)
+    C_inv = []
+    for idx in U_idx:
+        c = C_ao_lo[:,idx]
+        C_inv.append(c.conj().T.dot(ovlp))
 
     bare_occupancies = []
     final_occupancies = []
