@@ -23,6 +23,7 @@ Foster-Boys localization
 
 import numpy
 from functools import reduce
+from scipy.stats import ortho_group
 
 from pyscf import lib
 from pyscf.lib import logger
@@ -196,6 +197,7 @@ class OrbitalLocalizer(lib.StreamObject, ciah.CIAHOptimizerMixin):
             # Add noise to kick initial guess out of saddle point
             dr = numpy.cos(numpy.arange((nmo-1)*nmo//2)) * 1e-3
             u0 = self.extract_rotation(dr)
+            u0 = ortho_group.rvs(nmo)
         return u0
 
     def gen_g_hop(self, u):
