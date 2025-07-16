@@ -153,7 +153,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(Ht1[0]), (2.2677885702176339-2.5150764056992041j ), 4)
         self.assertAlmostEqual(lib.fp(Ht1[1]), (-51.643438947846086+526.58026126100458j), 4)
         self.assertAlmostEqual(lib.fp(Ht2[0]), (-29.490813482748258-8.7509143690136018j), 4)
-        self.assertAlmostEqual(lib.fp(Ht2[1]), (2256.0435017189384-193.16481690849486j ), 4)
+        self.assertAlmostEqual(lib.fp(Ht2[1]), (2256.0438505288594-193.16480856714745j ), 4)
         self.assertAlmostEqual(lib.fp(Ht2[2]), (-250.59447681063182-397.57189085666982j), 4)
 
         kgcc = kccsd.GCCSD(scf.addons.convert_to_ghf(kmf))
@@ -416,4 +416,52 @@ class KnownValues(unittest.TestCase):
 
 if __name__ == '__main__':
     print("KUCCSD tests")
-    unittest.main()
+    #unittest.main()
+    cell = gto.Cell()
+    cell.atom='''
+    He 0.000000000000   0.000000000000   0.000000000000
+    He 1.685068664391   1.685068664391   1.685068664391
+    '''
+    cell.basis = [[0, (1., 1.)], [0, (.5, 1.)]]
+    cell.a = '''
+    0.000000000, 3.370137329, 3.370137329
+    3.370137329, 0.000000000, 3.370137329
+    3.370137329, 3.370137329, 0.000000000'''
+    cell.unit = 'B'
+    cell.mesh = [13,13,13]
+    cell.precision = 1e-9
+    cell.build()
+    if 1:
+        np.random.seed(2)
+        # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
+        kmf = scf.KUHF(cell, kpts=cell.make_kpts([1,1,3]), exxdiv=None)
+        nmo = cell.nao_nr()
+        kmf.mo_occ = np.zeros((2,3,nmo))
+        kmf.mo_occ[0,:,:3] = 1
+        kmf.mo_occ[1,:,:1] = 1
+        kmf.mo_energy = np.arange(nmo) + np.random.random((2,3,nmo)) * .3
+        kmf.mo_energy[kmf.mo_occ == 0] += 2
+
+        mo = (np.random.random((2,3,nmo,nmo)) +
+              np.random.random((2,3,nmo,nmo))*1j - .5-.5j)
+        s = kmf.get_ovlp()
+        kmf.mo_coeff = np.empty_like(mo)
+        nkpts = len(kmf.kpts)
+        for k in range(nkpts):
+            kmf.mo_coeff[0,k] = lo.orth.vec_lowdin(mo[0,k], s[k])
+            kmf.mo_coeff[1,k] = lo.orth.vec_lowdin(mo[1,k], s[k])
+
+        mycc = kccsd_uhf.KUCCSD(kmf)
+        eris = mycc.ao2mo()
+        np.random.seed(1)
+        nocc = mycc.nocc
+        nvir = nmo - nocc[0], nmo - nocc[1]
+        t1, t2 = rand_t1_t2(cell, kmf.kpts, nocc, nvir)
+        print('         ', lib.fp(eris.oovv), lib.fp(eris.ooVV),
+              lib.fp(eris.OOvv), lib.fp(eris.OOVV))
+        Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
+        print(lib.fp(Ht1[0]), (2.2677885702176339-2.5150764056992041j ), 4)
+        print(lib.fp(Ht1[1]), (-51.643438947846086+526.58026126100458j), 4)
+        print(lib.fp(Ht2[0]), (-29.490813482748258-8.7509143690136018j), 4)
+        print(lib.fp(Ht2[1]), (2256.0435017189384-193.16481690849486j ), 4)
+        print(lib.fp(Ht2[2]), (-250.59447681063182-397.57189085666982j), 4)

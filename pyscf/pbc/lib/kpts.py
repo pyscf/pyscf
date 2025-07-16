@@ -471,9 +471,15 @@ def transform_mo_coeff(kpts, mo_coeff_ibz):
 
     if isinstance(mo_coeff_ibz[0][0], np.ndarray) and mo_coeff_ibz[0][0].ndim == 2:
         # KUHF
+        if kpts.nkpts_ibz != len(mo_coeff_ibz[0]):
+            raise KeyError('Shape of mo_coeff does not match the number of IBZ k-points: '
+                           f'{len(mo_coeff_ibz[0])} vs {kpts.nkpts_ibz}.')
         mos = [[_transform(kpts, mo_coeff_ibz[0], k) for k in range(kpts.nkpts)],
                [_transform(kpts, mo_coeff_ibz[1], k) for k in range(kpts.nkpts)]]
     else:
+        if kpts.nkpts_ibz != len(mo_coeff_ibz):
+            raise KeyError('Shape of mo_coeff does not match the number of IBZ k-points: '
+                           f'{len(mo_coeff_ibz)} vs {kpts.nkpts_ibz}.')
         mos = [_transform(kpts, mo_coeff_ibz, k) for k in range(kpts.nkpts)]
     return mos
 
@@ -520,6 +526,16 @@ def transform_mo_occ(kpts, mo_occ_ibz):
     if isinstance(mo_occ_ibz[0][0], np.ndarray) and mo_occ_ibz[0][0].ndim == 1:
         is_uhf = True
         occ = [[],[]]
+
+    if is_uhf:
+        if kpts.nkpts_ibz != len(mo_occ_ibz[0]):
+            raise KeyError('Shape of mo_occ does not match the number of IBZ k-points: '
+                           f'{len(mo_occ_ibz[0])} vs {kpts.nkpts_ibz}.')
+    else:
+        if kpts.nkpts_ibz != len(mo_occ_ibz):
+            raise KeyError('Shape of mo_occ does not match the number of IBZ k-points: '
+                           f'{len(mo_occ_ibz)} vs {kpts.nkpts_ibz}.')
+
     for k in range(kpts.nkpts):
         ibz_k_idx = kpts.bz2ibz[k]
         if is_uhf:
@@ -549,43 +565,51 @@ def transform_dm(kpts, dm_ibz):
         mo_coeff = kpts.transform_mo_coeff(dm_ibz.mo_coeff)
         mo_occ = kpts.transform_mo_occ(dm_ibz.mo_occ)
 
+    def _transform(dm_ibz, k):
+        ibz_k_idx = kpts.bz2ibz[k]
+        ibz_kpt_scaled = kpts.kpts_scaled_ibz[ibz_k_idx]
+        iop = kpts.stars_ops_bz[k]
+        op = kpts.ops[iop]
+        time_reversal = kpts.time_reversal_symm_bz[k]
+        if op.is_eye:
+            dm_bz = dm_ibz[ibz_k_idx]
+        else:
+            dm_bz = symm.transform_dm(kpts.cell, ibz_kpt_scaled,
+                                      dm_ibz[ibz_k_idx], op, kpts.Dmats[iop])
+        if time_reversal:
+            dm_bz = dm_bz.conj()
+        return dm_bz
+
     dms = []
     is_uhf = False
     if (isinstance(dm_ibz, np.ndarray) and dm_ibz.ndim == 4) or \
        (isinstance(dm_ibz[0][0], np.ndarray) and dm_ibz[0][0].ndim == 2):
         is_uhf = True
         dms = [[],[]]
-    for k in range(kpts.nkpts):
-        ibz_k_idx = kpts.bz2ibz[k]
-        ibz_kpt_scaled = kpts.kpts_scaled_ibz[ibz_k_idx]
-        iop = kpts.stars_ops_bz[k]
-        op = kpts.ops[iop]
-        time_reversal = kpts.time_reversal_symm_bz[k]
 
-        def _transform(dm_ibz, iop, op):
-            if op.is_eye:
-                dm_bz = dm_ibz
-            else:
-                dm_bz = symm.transform_dm(kpts.cell, ibz_kpt_scaled, dm_ibz, op, kpts.Dmats[iop])
-            if time_reversal:
-                dm_bz = dm_bz.conj()
-            return dm_bz
-
-        if is_uhf:
-            dm_a = dm_ibz[0][ibz_k_idx]
-            dms[0].append(_transform(dm_a, iop, op))
-            dm_b = dm_ibz[1][ibz_k_idx]
-            dms[1].append(_transform(dm_b, iop, op))
-        else:
-            dm = dm_ibz[ibz_k_idx]
-            dms.append(_transform(dm, iop, op))
     if is_uhf:
+        if kpts.nkpts_ibz != len(dm_ibz[0]):
+            raise KeyError('Shape of the input density matrix does not '
+                           'match the number of IBZ k-points: '
+                           f'{len(dm_ibz[0])} vs {kpts.nkpts_ibz}.')
+        for k in range(kpts.nkpts):
+            dms[0].append(_transform(dm_ibz[0], k))
+            dms[1].append(_transform(dm_ibz[1], k))
         nkpts = len(dms[0])
         nao = dms[0][0].shape[0]
         dms = lib.asarray(dms).reshape(2,nkpts,nao,nao)
     else:
+        if kpts.nkpts_ibz != len(dm_ibz):
+            raise KeyError('Shape of the input density matrix does not '
+                           'match the number of IBZ k-points: '
+                           f'{len(dm_ibz)} vs {kpts.nkpts_ibz}.')
+        for k in range(kpts.nkpts):
+            dms.append(_transform(dm_ibz, k))
         dms = lib.asarray(dms)
-    return lib.tag_array(dms, mo_coeff=mo_coeff, mo_occ=mo_occ)
+
+    if getattr(dm_ibz, "mo_coeff", None) is not None:
+        dms = lib.tag_array(dms, mo_coeff=mo_coeff, mo_occ=mo_occ)
+    return dms
 
 def dm_at_ref_cell(kpts, dm_ibz):
     """

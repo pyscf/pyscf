@@ -112,6 +112,14 @@ class KnowValues(unittest.TestCase):
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -9.9355341416893559, 8)
 
+    def test_nr_uks_rsh(self):
+        mf = dft.UKS(cell)
+        mf.xc = 'camb3lyp'
+        mf = mf.newton()
+        mf.conv_tol_grad = 1e-4
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -10.346325245581905, 8)
+
     def test_nr_krhf(self):
         mf = scf.KRHF(cell, cell.make_kpts([2,1,1]))
         mf = scf.newton(mf)
@@ -163,6 +171,14 @@ class KnowValues(unittest.TestCase):
         mf.conv_tol_grad = 1e-4
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -10.446717855794008, 8)
+
+    def test_nr_krks_rsh(self):
+        mf = dft.KRKS(cell, cell.make_kpts([2,1,1]))
+        mf.xc = 'camb3lyp'
+        mf = mf.newton()
+        mf.conv_tol_grad = 1e-4
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -10.810601144955786, 8)
 
     def test_rks_gen_g_hop(self):
         mf = dft.KRKS(cell, cell.make_kpts([2,1,1]))

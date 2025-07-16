@@ -22,6 +22,7 @@ from pyscf import lib
 from pyscf.gto import moleintor
 from pyscf.gto.eval_gto import _get_intor_and_comp, BLKSIZE
 from pyscf.pbc.gto import _pbcintor
+from pyscf.gto.mole import extract_pgto_params, ANG_OF
 from pyscf import __config__
 
 EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-2)
@@ -130,7 +131,8 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
     coords = np.asarray(coords, order='F')
 
     if rcut is None:
-        rcut = _estimate_rcut(cell)
+        deriv = eval_name.count('ip')
+        rcut = _estimate_rcut(cell, deriv)
     if Ls is None:
         Ls = get_lattice_Ls(cell, rcut=rcut.max())
         Ls = Ls[np.argsort(lib.norm(Ls, axis=1), kind='stable')]
@@ -166,24 +168,26 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
 
 pbc_eval_gto = eval_gto
 
-def _estimate_rcut(cell):
+def _estimate_rcut(cell, deriv=0):
     '''Cutoff radius, above which each shell decays to a value less than the
     required precision'''
+    es, cs = extract_pgto_params(cell, 'diffused')
+    ls = cell._bas[:,ANG_OF]
+
     vol = cell.vol
     weight_penalty = vol # ~ V[r] * (vol/ngrids) * ngrids
-    precision = cell.precision / max(weight_penalty, 1)
-    rcut = []
-    for ib in range(cell.nbas):
-        l = cell.bas_angular(ib)
-        es = cell.bas_exp(ib)
-        cs = abs(cell._libcint_ctr_coeff(ib)).max(axis=1)
-        norm_ang = ((2*l+1)/(4*np.pi))**.5
-        fac = 2*np.pi/vol * cs*norm_ang/es / precision
-        r = cell.rcut
-        r = (np.log(fac * r**(l+1) + 1.) / es)**.5
-        r = (np.log(fac * r**(l+1) + 1.) / es)**.5
-        rcut.append(r.max())
-    return np.array(rcut)
+    rad = vol**(-1./3) * cell.rcut + 1
+    surface = 4*np.pi * rad**2
+    lattice_sum_factor = surface
+    precision = cell.precision / max(weight_penalty*lattice_sum_factor, 1)
+
+    norm_ang = ((2*ls+1)/(4*np.pi))**.5
+    fac = 2*np.pi/vol * cs*norm_ang/es / precision
+
+    r = cell.rcut
+    r = (np.log(fac * r**(ls+1)*(2*es*r)**deriv + 1.) / es)**.5
+    r = (np.log(fac * r**(ls+1)*(2*es*r)**deriv + 1.) / es)**.5
+    return r
 
 def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
     '''Get lattice-sum vectors for eval_gto

@@ -36,15 +36,18 @@ from pyscf.pbc import tools
 from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import group_by_conj_pairs
 
-
-def kpts_to_kmesh(cell, kpts, precision=None, max_images=10000):
+def kpts_to_kmesh(cell, kpts, precision=None, rcut=None):
     '''Find the minimal k-points mesh to include all input kpts'''
     kpts = np.asarray(kpts)
     assert kpts.ndim == 2
     scaled_kpts = cell.get_scaled_kpts(kpts)
     logger.debug3(cell, '    scaled_kpts kpts %s', scaled_kpts)
     # cell.nimgs are the upper limits for kmesh
-    kmesh = np.asarray(cell.nimgs) * 2 + 1
+    if rcut is None:
+        kmesh = np.asarray(cell.nimgs) * 2 + 1
+    else:
+        nimgs = cell.get_bounding_sphere(rcut)
+        kmesh = nimgs * 2 + 1
     if precision is None:
         precision = cell.precision * 1e2
     for i in range(3):
@@ -62,16 +65,6 @@ def kpts_to_kmesh(cell, kpts, precision=None, max_images=10000):
                           i, common_denominator, abs(fs - np.rint(fs)).max())
             logger.debug3(cell, '    unique kpts %s', uniq_floats)
             logger.debug3(cell, '    frac kpts %s', fracs)
-
-    assert max_images > 0
-    if np.prod(kmesh) > max_images:
-        kmesh_raw = kmesh.copy()
-        for i in itertools.cycle(np.argsort(kmesh)[::-1]):
-            kmesh[i] = int(kmesh[i] * .8)
-            if np.prod(kmesh) < max_images:
-                break
-        logger.warn(cell, 'kmesh (%s) exceeds max_images (%d); reduced to %s',
-                    kmesh_raw, max_images, kmesh)
     return kmesh
 
 def translation_vectors_for_kmesh(cell, kmesh, wrap_around=False):

@@ -209,15 +209,13 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(vmat), 0.42538491159934377+0.14139753327162483j, 8)
 
         ni = numint.KNumInt()
-        with lib.temporary_env(pbcgto.eval_gto, EXTRA_PREC=1e-5):
-            ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms, hermi=1, kpts=kpts)
+        ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms, hermi=1, kpts=kpts)
         self.assertAlmostEqual(ne, 6.0923292346269742, 8)
         self.assertAlmostEqual(exc, -3.9899423803106466, 8)
         self.assertAlmostEqual(lib.fp(vmat[0]), -2348.9577179701278-60.733087913116719j, 5)
         self.assertAlmostEqual(lib.fp(vmat[1]), -2353.0350086740673-117.74811536967495j, 5)
 
-        with lib.temporary_env(pbcgto.eval_gto, EXTRA_PREC=1e-5):
-            ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', [dms,dms], hermi=1, kpts=kpts)
+        ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', [dms,dms], hermi=1, kpts=kpts)
         self.assertAlmostEqual(ne[1], 6.0923292346269742, 8)
         self.assertAlmostEqual(exc[1], -3.9899423803106466, 8)
         self.assertAlmostEqual(lib.fp(vmat[1][0]), -2348.9577179701278-60.733087913116719j, 5)
@@ -233,7 +231,7 @@ class KnownValues(unittest.TestCase):
         cell.pseudo = 'gth-pbe'
         cell.basis = {'C': [[0, (0.8, 1.0)],
                             [1, (1.0, 1.0)]]}
-        cell.precision = 1e-10
+        cell.mesh = [27] * 3
         cell.build()
         nao = cell.nao
         grids = gen_grid.UniformGrids(cell)

@@ -165,10 +165,10 @@ def _get_pp_loc_part1(mydf, kpts=None, with_pseudo=True):
 def _check_kpts(mydf, kpts):
     '''Check if the argument kpts is a single k-point'''
     if kpts is None:
-        kpts = np.asarray(mydf.kpts)
-        # mydf.kpts is initialized to np.zeros((1,3)). Here is only a guess
-        # based on the value of mydf.kpts.
-        is_single_kpt = kpts.ndim == 1 or is_zero(kpts)
+        kpts = mydf.kpts
+    if kpts is None:
+        kpts = np.zeros((1, 3))
+        is_single_kpt = True
     else:
         kpts = np.asarray(kpts)
         is_single_kpt = kpts.ndim == 1

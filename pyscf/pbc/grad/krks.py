@@ -72,7 +72,7 @@ def get_vxc(ni, cell, grids, xc_code, dms, kpts, kpts_band=None, relativity=0, h
     ao_loc = cell.ao_loc_nr()
     nkpts = len(kpts)
     vmat = np.zeros((3,nset,nkpts,nao,nao), dtype=dms.dtype)
-    if xctype in (None, 'LDA', 'HF'):
+    if xctype == 'LDA':
         ao_deriv = 1
         for ao_k1, ao_k2, mask, weight, coords \
                 in ni.block_loop(cell, grids, nao, ao_deriv, kpts, kpts_band, max_memory):
@@ -80,16 +80,14 @@ def get_vxc(ni, cell, grids, xc_code, dms, kpts, kpts_band=None, relativity=0, h
             ao_k2 = np.asarray(ao_k2)
             for i in range(nset):
                 rho = make_rho(i, ao_k2[:,0], mask, xctype)
-                vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1)[1]
-                if vxc is None:
-                    vxc = np.zeros_like(rho)
-                vrho = vxc[0]
-                aow = np.einsum('xpi,p->xpi', ao_k1[:,0], weight*vrho)
+                vxc = ni.eval_xc_eff(xc_code, rho, deriv=1, xctype=xctype)[1]
+                wv = vxc * weight
+                aow = np.einsum('xpi,p->xpi', ao_k1[:,0], wv[0])
                 for kn in range(nkpts):
                     rks_grad._d1_dot_(vmat[:,i,kn], cell, ao_k1[kn,1:4], aow[kn], mask, ao_loc, True)
-                rho = vrho = aow = None
+                rho = aow = None
 
-    elif xctype=='GGA':
+    elif xctype == 'GGA':
         ao_deriv = 2
         for ao_k1, ao_k2, mask, weight, coords \
                 in ni.block_loop(cell, grids, nao, ao_deriv, kpts, kpts_band, max_memory):
@@ -97,11 +95,16 @@ def get_vxc(ni, cell, grids, xc_code, dms, kpts, kpts_band=None, relativity=0, h
             ao_k2 = np.asarray(ao_k2)
             for i in range(nset):
                 rho = make_rho(i, ao_k2[:,:4], mask, xctype)
-                vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1, verbose=verbose)[1]
-                wv = numint._rks_gga_wv0(rho, vxc, weight)
+                vxc = ni.eval_xc_eff(xc_code, rho, deriv=1, xctype=xctype,
+                                     spin=0)[1]
+                wv = vxc * weight
+                wv[0] *= .5
                 for kn in range(nkpts):
                     rks_grad._gga_grad_sum_(vmat[:,i,kn], cell, ao_k1[kn], wv, mask, ao_loc)
                 rho = vxc = wv = None
+
+    elif xctype == 'HF':
+        pass
 
     elif xctype=='NLC':
         raise NotImplementedError("NLC")
@@ -120,6 +123,11 @@ class Gradients(rhf_grad.Gradients):
         rhf_grad.Gradients.__init__(self, mf)
         self.grids = None
         self.grid_response = False
+
+    def reset(self, cell=None):
+        if self.grids is not None:
+            self.grids.reset(cell)
+        return rhf_grad.Gradients.reset(cell)
 
     def dump_flags(self, verbose=None):
         rhf_grad.Gradients.dump_flags(self, verbose)

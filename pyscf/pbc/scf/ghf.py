@@ -120,6 +120,7 @@ class GHF(pbchf.SCF):
     mulliken_meta = mol_ghf.GHF.mulliken_meta
     spin_square = mol_ghf.GHF.spin_square
     stability = mol_ghf.GHF.stability
+    gen_response = NotImplemented
 
     def get_hcore(self, cell=None, kpt=None):
         hcore = pbchf.SCF.get_hcore(self, cell, kpt)

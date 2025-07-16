@@ -76,15 +76,7 @@ def get_ovlp(cell, kpt=np.zeros(3)):
 def get_hcore(cell, kpt=np.zeros(3)):
     '''Get the core Hamiltonian AO matrix.
     '''
-    hcore = get_t(cell, kpt)
-    if cell.pseudo:
-        hcore += get_pp(cell, kpt)
-    else:
-        hcore += get_nuc(cell, kpt)
-    if len(cell._ecpbas) > 0:
-        from pyscf.pbc.gto import ecp
-        hcore += ecp.ecp_int(cell, kpt)
-    return hcore
+    return SCF(cell).get_hcore(kpt=kpt)
 
 
 def get_t(cell, kpt=np.zeros(3)):
@@ -486,6 +478,18 @@ def makov_payne_correction(mf):
               (de_mono[2], de_dip   , de_quad   , de[2]))
     return de
 
+def gen_response(mf, mo_coeff=None, mo_occ=None,
+                 singlet=None, hermi=0, max_memory=None, with_nlc=True):
+    cell = mf.cell
+    kpt = mf.kpt
+    if (singlet is None or singlet) and hermi != 2:
+        def vind(dm1):
+            vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpt=kpt)
+            return vj - .5 * vk
+    else:
+        def vind(dm1):
+            return -.5 * mf.get_k(cell, dm1, hermi=hermi, kpt=kpt)
+    return vind
 
 class SCF(mol_hf.SCF):
     '''SCF base class adapted for PBCs.
@@ -511,7 +515,7 @@ class SCF(mol_hf.SCF):
     get_bands = get_bands
     get_rho = get_rho
 
-    def __init__(self, cell, kpt=np.zeros(3),
+    def __init__(self, cell, kpt=None,
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
@@ -523,7 +527,8 @@ class SCF(mol_hf.SCF):
         self.rsjk = None
 
         self.exxdiv = exxdiv
-        self.kpt = kpt
+        if kpt is not None:
+            self.kpt = kpt
         self.conv_tol = max(cell.precision * 10, 1e-8)
 
     @property
@@ -534,9 +539,10 @@ class SCF(mol_hf.SCF):
         return self.with_df.kpts.reshape(3)
     @kpt.setter
     def kpt(self, x):
-        self.with_df.kpts = np.reshape(x, (1, 3))
+        kpts = np.reshape(x, (1, 3))
+        self.with_df.kpts = kpts
         if self.rsjk:
-            self.rsjk.kpts = self.with_df.kpts
+            self.rsjk.kpts = kpts
 
     @property
     def kpts(self):
@@ -560,6 +566,8 @@ class SCF(mol_hf.SCF):
         if cell is not None:
             self.cell = cell
         self.with_df.reset(cell)
+        if self.rsjk is not None:
+            self.rsjk.reset(cell)
         return self
 
     # used by hf kernel
@@ -607,12 +615,17 @@ class SCF(mol_hf.SCF):
         return self
 
     def get_hcore(self, cell=None, kpt=None):
+        from pyscf.pbc.dft.multigrid import MultiGridNumInt
         if cell is None: cell = self.cell
         if kpt is None: kpt = self.kpt
-        if cell.pseudo:
-            nuc = self.with_df.get_pp(kpt)
+        if hasattr(self, '_numint') and isinstance(self._numint, MultiGridNumInt):
+            ni = self._numint
         else:
-            nuc = self.with_df.get_nuc(kpt)
+            ni = self.with_df
+        if cell.pseudo:
+            nuc = ni.get_pp(kpt)
+        else:
+            nuc = ni.get_nuc(kpt)
         if len(cell._ecpbas) > 0:
             from pyscf.pbc.gto import ecp
             nuc += ecp.ecp_int(cell, kpt)
@@ -670,7 +683,6 @@ class SCF(mol_hf.SCF):
         else:
             vj, vk = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi, kpt, kpts_band,
                                          with_j, with_k, omega, exxdiv=self.exxdiv)
-
         if with_j:
             vj = _format_jks(vj, dm, kpts_band)
         if with_k:
@@ -886,7 +898,13 @@ class SCF(mol_hf.SCF):
     def to_gpu(self):
         raise NotImplementedError
 
+    def Gradients(self):
+        raise NotImplementedError
+
     def nuc_grad_method(self):
+        return self.Gradients()
+
+    def gen_response(mf, mo_coeff=None, mo_occ=None, **kwargs):
         raise NotImplementedError
 
 
@@ -905,6 +923,7 @@ class RHF(SCF):
     analyze = mol_hf.RHF.analyze
     spin_square = mol_hf.RHF.spin_square
     stability = mol_hf.RHF.stability
+    gen_response = gen_response
     to_gpu = lib.to_gpu
 
     def to_ks(self, xc='HF'):
@@ -918,6 +937,12 @@ class RHF(SCF):
         addons.convert_to_rhf(mf, self)
         return self
 
+    def Gradients(self):
+        from pyscf.pbc.grad import rhf
+        from pyscf.pbc.dft.multigrid import MultiGridNumInt2
+        if not (hasattr(self, '_numint') and isinstance(self._numint, MultiGridNumInt2)):
+            raise NotImplementedError('pbc-RHF must be computed with MultiGridNumInt2')
+        return rhf.Gradients(self)
 
 def _format_jks(vj, dm, kpts_band):
     if kpts_band is None:
