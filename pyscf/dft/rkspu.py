@@ -141,8 +141,8 @@ def _set_U(mol, minao_mol, U_idx, U_val):
     # atm_ids labels the atom Id for each function
     atm_ids = np.repeat(minao_mol._bas[:,gto.ATOM_OF], dims)
 
-    ao_labels = np.asarray(mol.ao_labels())
-    minao_labels = np.asarray(minao_mol.ao_labels())
+    ao_labels = mol.ao_labels()
+    minao_labels = minao_mol.ao_labels()
 
     U_indices = []
     U_values = []
@@ -165,8 +165,7 @@ def _set_U(mol, minao_mol, U_idx, U_val):
 
     U_values = np.asarray(U_values) / HARTREE2EV
 
-    lo_labels = np.asarray(minao_labels)
-    U_labels = [lo_labels[idx] for idx in U_indices]
+    U_labels = [[minao_labels[i] for i in idx] for idx in U_indices]
     return U_indices, U_values, U_labels
 
 def _make_minao_lo(mol, minao_ref='minao'):

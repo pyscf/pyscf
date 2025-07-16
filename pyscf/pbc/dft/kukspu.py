@@ -50,15 +50,17 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 def _add_Vhubbard(vxc, ks, dm, kpts):
     '''Add Hubbard U to Vxc matrix inplace.
     '''
+    cell = ks.cell
+    pcell = reference_mol(cell, ks.minao_ref)
+
     is_ibz = hasattr(kpts, "kpts_ibz")
+    kpts_input = kpts
     if is_ibz:
         kpts = kpts.kpts_ibz
     kpts = kpts.reshape(-1, 3)
     nkpts = len(kpts)
-    cell = ks.cell
 
     ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
-    pcell = reference_mol(cell, ks.minao_ref)
     U_idx, U_val, U_lab = _set_U(cell, pcell, ks.U_idx, ks.U_val)
     if ks.C_ao_lo is None:
         C_ao_lo = _make_minao_lo(cell, pcell, kpts)
@@ -73,7 +75,7 @@ def _add_Vhubbard(vxc, ks, dm, kpts):
         alphas = [alphas] * len(U_idx)
 
     E_U = 0.0
-    weight = getattr(kpts, "weights_ibz", np.repeat(1.0/nkpts, nkpts))
+    weight = getattr(kpts_input, "weights_ibz", np.repeat(1.0/nkpts, nkpts))
     logger.info(ks, "-" * 79)
     lab_string = " "
     with np.printoptions(precision=5, suppress=True, linewidth=1000):
@@ -105,10 +107,10 @@ def _add_Vhubbard(vxc, ks, dm, kpts):
                     P_loc.append(P_k)
                 if ks.verbose >= logger.INFO:
                     if is_ibz:
-                        P_loc = kpts.dm_at_ref_cell(P_loc).real
+                        pass
                     else:
                         P_loc = sum(P_loc).real / nkpts
-                    logger.info(ks, "spin %s\n%s\n%s", s, lab_string, P_loc)
+                        logger.info(ks, "spin %s\n%s\n%s", s, lab_string, P_loc)
             logger.info(ks, "-" * 79)
 
     if E_U.real < 0.0 and all(np.asarray(U_val) > 0):
@@ -257,7 +259,7 @@ def linear_response_u(mf_plus_u, alphalist=(0.02, 0.05, 0.08)):
                 [[C_k[:,local_idx].conj().T.dot(S_k) for C_k, S_k in zip(C_ao_lo[0], ovlp)],
                  [C_k[:,local_idx].conj().T.dot(S_k) for C_k, S_k in zip(C_ao_lo[1], ovlp)]])
         else:
-            tmp = [C_k[:,local_idx].conj().T.dot(S_k) for C_k, S_k in zip(C_ao_lo[0], ovlp)]
+            tmp = [C_k[:,local_idx].conj().T.dot(S_k) for C_k, S_k in zip(C_ao_lo, ovlp)]
             C_inv.append([tmp, tmp])
 
     bare_occupancies = []

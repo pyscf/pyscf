@@ -70,15 +70,17 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 def _add_Vhubbard(vxc, ks, dm, kpts):
     '''Add Hubbard U to Vxc matrix inplace.
     '''
+    cell = ks.cell
+    pcell = reference_mol(cell, ks.minao_ref)
+
     is_ibz = hasattr(kpts, "kpts_ibz")
+    kpts_input = kpts
     if is_ibz:
         kpts = kpts.kpts_ibz
     kpts = kpts.reshape(-1, 3)
     nkpts = len(kpts)
-    cell = ks.cell
 
     ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
-    pcell = reference_mol(cell, ks.minao_ref)
     U_idx, U_val, U_lab = _set_U(cell, pcell, ks.U_idx, ks.U_val)
     if ks.C_ao_lo is None:
         C_ao_lo = _make_minao_lo(cell, pcell, kpts)
@@ -90,7 +92,7 @@ def _add_Vhubbard(vxc, ks, dm, kpts):
         alphas = [alphas] * len(U_idx)
 
     E_U = 0.0
-    weight = getattr(kpts, "weights_ibz", np.repeat(1.0/nkpts, nkpts))
+    weight = getattr(kpts_input, "weights_ibz", np.repeat(1.0/nkpts, nkpts))
     logger.info(ks, "-" * 79)
     lab_string = " "
     with np.printoptions(precision=5, suppress=True, linewidth=1000):
@@ -123,10 +125,14 @@ def _add_Vhubbard(vxc, ks, dm, kpts):
                 P_loc.append(P_k)
             if ks.verbose >= logger.INFO:
                 if is_ibz:
-                    P_loc = kpts.dm_at_ref_cell(P_loc).real
+                    # FIXME: P_loc is represented in the reference AO basis.
+                    # The dm_at_ref_cell function can only transform the density
+                    # matrices for cell.
+                    # sym_kpts_obj.dm_at_ref_cell(P_loc)
+                    pass
                 else:
                     P_loc = sum(P_loc).real / nkpts
-                logger.info(ks, "%s\n%s", lab_string, P_loc)
+                    logger.info(ks, "%s\n%s", lab_string, P_loc)
                 logger.info(ks, "-" * 79)
 
     if E_U.real < 0.0 and all(np.asarray(U_val) > 0):
