@@ -14,8 +14,8 @@
 # limitations under the License.
 #
 from pyscf import gto, scf
-from pyscf.dft2.libxc import XC_KEYS, XC_ALIAS, hybrid_coeff, rsh_coeff
-from pyscf.dft2.libxc import parse_xc, is_nlc, needs_laplacian
+from pyscf.dft.libxc import XC_KEYS, XC_ALIAS, hybrid_coeff, rsh_coeff
+from pyscf.dft.libxc import parse_xc, is_nlc, needs_laplacian
 from pyscf import mcpdft
 from pyscf.mcpdft.otfnal import make_hybrid_fnal
 import unittest

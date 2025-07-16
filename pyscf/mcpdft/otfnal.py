@@ -19,7 +19,7 @@ import copy
 from scipy import linalg
 from pyscf import lib, dft
 from pyscf.lib import logger
-from pyscf.dft2 import libxc
+from pyscf.dft import libxc
 from pyscf.dft.gen_grid import Grids
 from pyscf.dft.numint import _NumInt, NumInt
 from pyscf.mcpdft import pdft_veff, tfnal_derivs, _libxc, _dms, pdft_feff, pdft_eff

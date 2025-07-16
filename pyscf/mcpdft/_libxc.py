@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-from pyscf.dft2.libxc import XC_ALIAS, XC_CODES, XC_KEYS
-from pyscf.dft2.libxc import hybrid_coeff, rsh_coeff
+from pyscf.dft.libxc import XC_ALIAS, XC_CODES, XC_KEYS
+from pyscf.dft.libxc import hybrid_coeff, rsh_coeff
 from pyscf import lib
 
 XC_ALIAS_KEYS = set (XC_ALIAS.keys ())
