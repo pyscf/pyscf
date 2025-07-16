@@ -61,16 +61,12 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     # V_U
 
     ovlp = mol.intor('int1e_ovlp', hermi=1)
+    pmol = reference_mol(mol, ks.minao_ref)
+    U_idx, U_val, U_lab = _set_U(mol, pmol, ks.U_idx, ks.U_val)
     if ks.C_ao_lo is None:
         # Construct orthogonal minao local orbitals.
-        if not all(isinstance(x, str) for x in ks.U_idx):
-            NotImplementedError(
-                'Mixing labels and indices for U is not supported')
-        pmol = reference_mol(mol, ks.minao_ref)
         C_ao_lo = _make_minao_lo(mol, pmol)
-        U_idx, U_val, U_lab = _set_U(pmol, ks.U_idx, ks.U_val)
     else:
-        U_idx, U_val, U_lab = _set_U(mol, ks.U_idx, ks.U_val)
         C_ao_lo = ks.C_ao_lo
 
     alphas = ks.alpha
@@ -106,7 +102,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             logger.info(ks, "%s\n%s", lab_string, P)
             logger.info(ks, "-" * 79)
 
-    if E_U.real < 0.0 and all(U_val > 0):
+    if E_U.real < 0.0 and all(np.asarray(U_val) > 0):
         logger.warn(ks, "E_U (%s) is negative...", E_U.real)
     vxc = lib.tag_array(vxc, E_U=E_U)
     return vxc
@@ -134,28 +130,33 @@ def _groupby(inp, labels):
     _, where, counts = np.unique(labels, return_index=True, return_counts=True)
     return [inp[start:start+count] for start, count in zip(where, counts)]
 
-def _set_U(mol, U_idx, U_val):
+def _set_U(mol, minao_mol, U_idx, U_val):
     """
     Regularize the U_idx and U_val to each atom,
     """
     assert len(U_idx) == len(U_val)
 
-    ao_loc = mol.ao_loc_nr()
+    ao_loc = minao_mol.ao_loc_nr()
     dims = ao_loc[1:] - ao_loc[:-1]
     # atm_ids labels the atom Id for each function
-    atm_ids = np.repeat(mol._bas[:,gto.ATOM_OF], dims)
+    atm_ids = np.repeat(minao_mol._bas[:,gto.ATOM_OF], dims)
+
+    ao_labels = np.asarray(mol.ao_labels())
+    minao_labels = np.asarray(minao_mol.ao_labels())
 
     U_indices = []
     U_values = []
     for i, idx in enumerate(U_idx):
         if isinstance(idx, str):
-            lab_idx = mol.search_ao_label(idx)
+            lab_idx = minao_mol.search_ao_label(idx)
             # Group basis functions centered on the same atom
             for idxj in _groupby(lab_idx, atm_ids[lab_idx]):
                 U_indices.append(idxj)
                 U_values.append(U_val[i])
         else:
-            U_indices.append(idx)
+            # Map to MINAO indices
+            idx_minao = [minao_labels.index(ao_labels[i]) for i in idx]
+            U_indices.append(idx_minao)
             U_values.append(U_val[i])
 
     if len(U_indices) == 0:
@@ -164,7 +165,7 @@ def _set_U(mol, U_idx, U_val):
 
     U_values = np.asarray(U_values) / HARTREE2EV
 
-    lo_labels = np.asarray(mol.ao_labels())
+    lo_labels = np.asarray(minao_labels)
     U_labels = [lo_labels[idx] for idx in U_indices]
     return U_indices, U_values, U_labels
 
@@ -195,11 +196,8 @@ def _format_idx(idx_list):
 
 def _print_U_info(mf, log):
     mol = mf.mol
-    if mf.C_ao_lo is None:
-        pmol = reference_mol(mol, mf.minao_ref)
-        U_idx, U_val, U_lab = _set_U(pmol, mf.U_idx, mf.U_val)
-    else:
-        U_idx, U_val, U_lab = _set_U(mol, mf.U_idx, mf.U_val)
+    pmol = reference_mol(mol, mf.minao_ref)
+    U_idx, U_val, U_lab = _set_U(mol, pmol, mf.U_idx, mf.U_val)
     alphas = mf.alpha
     if not hasattr(alphas, '__len__'): # not a list or tuple
         alphas = [alphas] * len(U_idx)
@@ -218,7 +216,7 @@ class RKSpU(rks.RKS):
     DFT+U for RKS
     """
 
-    _keys = {"U_idx", "U_val", "C_ao_lo", 'minao_ref', "U_lab", 'alpha'}
+    _keys = {"U_idx", "U_val", "C_ao_lo", "U_lab", 'minao_ref', 'alpha'}
 
     get_veff = get_veff
     energy_elec = energy_elec
@@ -229,10 +227,10 @@ class RKSpU(rks.RKS):
         """
         Args:
             U_idx: can be
-                   list of list: each sublist is a set of LO indices to add U.
+                   list of list: each sublist is a set indices for AO orbitals
+                                 (indcies corresponding to the large-basis-set mol).
                    list of string: each string is one kind of LO orbitals,
-                                   e.g. ['Ni 3d', '1 O 2pz'], in this case,
-                                   LO should be aranged as ao_labels order.
+                                   e.g. ['Ni 3d', '1 O 2pz'].
                    or a combination of these two.
             U_val: a list of effective U [in eV], i.e. U-J in Dudarev's DFT+U.
                    each U corresponds to one kind of LO orbitals, should have
@@ -252,6 +250,9 @@ class RKSpU(rks.RKS):
 
         self.U_idx = U_idx
         self.U_val = U_val
+        if isinstance(C_ao_lo, str):
+            assert C_ao_lo.upper() == 'MINAO'
+            C_ao_lo = None # API backward compatibility
         self.C_ao_lo = C_ao_lo
         self.minao_ref = minao_ref
         # The perturbation (eV) used to compute U in LR-cDFT.
@@ -303,14 +304,13 @@ def linear_response_u(mf_plus_u, alphalist=(0.02, 0.05, 0.08)):
     alphalist = np.append(-alphalist[::-1], alphalist)
 
     mol = mf.mol
-    if mf.C_ao_lo is None:
+    pmol = reference_mol(mol, ks.minao_ref)
+    U_idx, U_val, U_lab = _set_U(mol, pmol, ks.U_idx, ks.U_val)
+    if ks.C_ao_lo is None:
         # Construct orthogonal minao local orbitals.
-        pmol = reference_mol(mol, mf.minao_ref)
         C_ao_lo = _make_minao_lo(mol, pmol)
-        U_idx = _set_U(pmol, mf.U_idx, mf.U_val)[0]
     else:
-        U_idx = _set_U(mol, mf.U_idx, mf.U_val)[0]
-        C_ao_lo = mf.C_ao_lo
+        C_ao_lo = ks.C_ao_lo
     ovlp = mol.intor('int1e_ovlp', hermi=1)
     C_inv = []
     for idx in U_idx:

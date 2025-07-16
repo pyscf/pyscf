@@ -35,7 +35,7 @@ def _hubbard_U_deriv1(mf, dm=None):
     # Construct orthogonal minao local orbitals.
     pmol = reference_mol(mol, mf.minao_ref)
     C_ao_lo = _make_minao_lo(mol, pmol)
-    U_idx, U_val = _set_U(pmol, mf.U_idx, mf.U_val)[:2]
+    U_idx, U_val = _set_U(mol, pmol, mf.U_idx, mf.U_val)[:2]
     C0 = C_ao_lo[:,np.hstack(U_idx)]
 
     ovlp0 = mf.get_ovlp()
@@ -43,7 +43,7 @@ def _hubbard_U_deriv1(mf, dm=None):
     dm_deriv0 = [C_inv.dot(dm[0]).dot(C_inv.conj().T),
                  C_inv.dot(dm[1]).dot(C_inv.conj().T)]
     ovlp1 = mol.intor('int1e_ipovlp')
-    f_local_ao = generate_first_order_local_orbitals(mol)
+    f_local_ao = generate_first_order_local_orbitals(mol, pmol)
 
     ao_slices = mol.aoslice_by_atom()
     natm = mol.natm

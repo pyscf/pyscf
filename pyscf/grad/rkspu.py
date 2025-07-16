@@ -24,8 +24,11 @@ from pyscf import gto
 from pyscf.grad import rks as rks_grad
 from pyscf.dft.rkspu import _set_U, _make_minao_lo, reference_mol
 
-def generate_first_order_local_orbitals(mol, minao='MINAO'):
-    pmol = reference_mol(mol, minao)
+def generate_first_order_local_orbitals(mol, minao_ref='MINAO'):
+    if isinstance(minao_ref, str):
+        pmol = reference_mol(mol, minao_ref)
+    else:
+        pmol = minao_ref
     sAA = mol.intor('int1e_ovlp', hermi=1)
     sAB = gto.intor_cross('int1e_ovlp', mol, pmol)
     sAA_cd = la.cho_factor(sAA)
@@ -89,14 +92,14 @@ def _hubbard_U_deriv1(mf, dm=None):
     # Construct orthogonal minao local orbitals.
     pmol = reference_mol(mol, mf.minao_ref)
     C_ao_lo = _make_minao_lo(mol, pmol)
-    U_idx, U_val = _set_U(pmol, mf.U_idx, mf.U_val)[:2]
+    U_idx, U_val = _set_U(mol, pmol, mf.U_idx, mf.U_val)[:2]
     C0 = C_ao_lo[:,np.hstack(U_idx)]
 
     ovlp0 = mf.get_ovlp()
     C_inv = np.dot(C0.conj().T, ovlp0)
     dm_deriv0 = C_inv.dot(dm).dot(C_inv.conj().T)
     ovlp1 = mol.intor('int1e_ipovlp')
-    f_local_ao = generate_first_order_local_orbitals(mol)
+    f_local_ao = generate_first_order_local_orbitals(mol, pmol)
 
     ao_slices = mol.aoslice_by_atom()
     natm = mol.natm

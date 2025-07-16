@@ -41,16 +41,12 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     # V_U
 
     ovlp = mol.intor('int1e_ovlp', hermi=1)
+    pmol = reference_mol(mol, ks.minao_ref)
+    U_idx, U_val, U_lab = _set_U(mol, pmol, ks.U_idx, ks.U_val)
     if ks.C_ao_lo is None:
         # Construct orthogonal minao local orbitals.
-        if not all(isinstance(x, str) for x in ks.U_idx):
-            NotImplementedError(
-                'Mixing labels and indices for U is not supported')
-        pmol = reference_mol(mol, ks.minao_ref)
         C_ao_lo = _make_minao_lo(mol, pmol)
-        U_idx, U_val, U_lab = _set_U(pmol, ks.U_idx, ks.U_val)
     else:
-        U_idx, U_val, U_lab = _set_U(mol, ks.U_idx, ks.U_val)
         C_ao_lo = ks.C_ao_lo
 
     alphas = ks.alpha
@@ -84,7 +80,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
                 logger.info(ks, "spin %s\n%s\n%s", s, lab_string, P)
             logger.info(ks, "-" * 79)
 
-    if E_U.real < 0.0 and all(U_val > 0):
+    if E_U.real < 0.0 and all(np.asarray(U_val) > 0):
         logger.warn(ks, "E_U (%s) is negative...", E_U.real)
     vxc = lib.tag_array(vxc, E_U=E_U.real)
     return vxc
@@ -115,7 +111,7 @@ class UKSpU(uks.UKS):
     UKSpU class adapted for PBCs with k-point sampling.
     """
 
-    _keys = {"U_idx", "U_val", "C_ao_lo", "U_lab", 'alpha'}
+    _keys = {"U_idx", "U_val", "C_ao_lo", "U_lab", 'minao_ref', 'alpha'}
 
     get_veff = get_veff
     energy_elec = energy_elec
@@ -126,10 +122,10 @@ class UKSpU(uks.UKS):
         """
         DFT+U args:
             U_idx: can be
-                   list of list: each sublist is a set of LO indices to add U.
+                   list of list: each sublist is a set indices for AO orbitals
+                                 (indcies corresponding to the large-basis-set mol).
                    list of string: each string is one kind of LO orbitals,
-                                   e.g. ['Ni 3d', '1 O 2pz'], in this case,
-                                   LO should be aranged as ao_labels order.
+                                   e.g. ['Ni 3d', '1 O 2pz'].
                    or a combination of these two.
             U_val: a list of effective U [in eV], i.e. U-J in Dudarev's DFT+U.
                    each U corresponds to one kind of LO orbitals, should have
@@ -149,6 +145,9 @@ class UKSpU(uks.UKS):
         super(self.__class__, self).__init__(mol, xc=xc)
         self.U_idx = U_idx
         self.U_val = U_val
+        if isinstance(C_ao_lo, str):
+            assert C_ao_lo.upper() == 'MINAO'
+            C_ao_lo = None # API backward compatibility
         self.C_ao_lo = C_ao_lo
         self.minao_ref = minao_ref
         self.alpha = None
@@ -200,14 +199,13 @@ def linear_response_u(mf_plus_u, alphalist=(0.02, 0.05, 0.08)):
     alphalist = np.append(-alphalist[::-1], alphalist)
 
     mol = mf.mol
-    if mf.C_ao_lo is None:
+    pmol = reference_mol(mol, ks.minao_ref)
+    U_idx, U_val, U_lab = _set_U(pmol, ks.U_idx, ks.U_val)
+    if ks.C_ao_lo is None:
         # Construct orthogonal minao local orbitals.
-        pmol = reference_mol(mol, mf.minao_ref)
         C_ao_lo = _make_minao_lo(mol, pmol)
-        U_idx = _set_U(pmol, mf.U_idx, mf.U_val)[0]
     else:
-        U_idx = _set_U(mol, mf.U_idx, mf.U_val)[0]
-        C_ao_lo = mf.C_ao_lo
+        C_ao_lo = ks.C_ao_lo
     ovlp = mol.intor('int1e_ovlp', hermi=1)
     C_inv = []
     for idx in U_idx:

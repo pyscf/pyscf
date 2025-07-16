@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2015 The PySCF Developers. All Rights Reserved.
+# Copyright 2025 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -56,10 +56,10 @@ class KnownValues(unittest.TestCase):
         mol = gto.M(atom='C 0 1.6 0; O 0 0 1', basis='ccpvdz', unit='B', verbose=0)
         U_idx = ["C 2p"]
         U_val = [5.0]
-        mf = rkspu.RKSpU(mol, xc='pbe0', U_idx=U_idx, U_val=U_val)
+        mf = rkspu.RKSpU(mol, xc='pbe', U_idx=U_idx, U_val=U_val)
         e, g = mf.nuc_grad_method().as_scanner()(mol)
-        self.assertAlmostEqual(e, -113.01722280006267, 8)
-        self.assertAlmostEqual(lib.fp(g), -0.7373209069549, 5)
+        self.assertAlmostEqual(e, -113.0468869772191, 8)
+        self.assertAlmostEqual(lib.fp(g), -0.7728822285688215, 5)
 
         mol1 = mol.copy()
         mf_scanner = mf.as_scanner()
