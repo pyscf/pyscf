@@ -219,6 +219,10 @@ endif()
 if(NOT DISABLE_DFT)
 add_subdirectory(dft)
 
+if(ENABLE_LIBXC)
+  add_subdirectory(pdft)
+endif() # ENABLE_LIBXC
+
 if(ENABLE_LIBXC AND BUILD_LIBXC)
   ExternalProject_Add(libxc
     #GIT_REPOSITORY https://gitlab.com/libxc/libxc.git
@@ -236,6 +240,7 @@ if(ENABLE_LIBXC AND BUILD_LIBXC)
   )
   add_dependencies(xc_itrf libxc)
   add_dependencies(dft libxc)
+  add_dependencies(pdft libxc)
 endif() # ENABLE_LIBXC
 
 if(ENABLE_XCFUN AND BUILD_XCFUN)
