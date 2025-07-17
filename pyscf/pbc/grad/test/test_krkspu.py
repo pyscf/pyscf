@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import unittest
-import numpy
 import pyscf
 from pyscf import lib
 from pyscf.pbc.dft import krkspu

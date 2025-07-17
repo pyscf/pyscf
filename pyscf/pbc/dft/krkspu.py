@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2025 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,10 +23,8 @@ Based on KRHF routine.
 Refs: PRB, 1998, 57, 1505.
 """
 
-import itertools as it
 import numpy as np
 import scipy.linalg as la
-from functools import reduce
 
 from pyscf import lib
 from pyscf.lib import logger

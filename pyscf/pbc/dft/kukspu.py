@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2025 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -282,8 +282,8 @@ def linear_response_u(mf_plus_u, alphalist=(0.02, 0.05, 0.08)):
         e, mo = mf.eig(fock, ovlp)
         local_occ = 0
         for c in C_inv:
-            C_on_site = [[c[0][k].dot(mf.mo_coeff[0][k]) for k in range(nkpts)],
-                         [c[1][k].dot(mf.mo_coeff[1][k]) for k in range(nkpts)]]
+            C_on_site = [[c[0][k].dot(mo[0][k]) for k in range(nkpts)],
+                         [c[1][k].dot(mo[1][k]) for k in range(nkpts)]]
             rdm1_lo = mf.make_rdm1(C_on_site, mf.mo_occ)
             local_occ += sum(x.trace().real for x in rdm1_lo[0])
             local_occ += sum(x.trace().real for x in rdm1_lo[1])
