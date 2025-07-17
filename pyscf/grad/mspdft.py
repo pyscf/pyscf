@@ -31,7 +31,7 @@ from itertools import product
 # PySCF-Forge installation check
 try:
     from pyscf.csf_fci.csf import CSFFCISolver
-except ModuleNotFoundError as e:
+except ModuleNotFoundError:
     class CSFFCISolver:
         pass
 
