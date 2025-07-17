@@ -199,13 +199,13 @@ def linear_response_u(mf_plus_u, alphalist=(0.02, 0.05, 0.08)):
     alphalist = np.append(-alphalist[::-1], alphalist)
 
     mol = mf.mol
-    pmol = reference_mol(mol, ks.minao_ref)
-    U_idx, U_val, U_lab = _set_U(pmol, ks.U_idx, ks.U_val)
-    if ks.C_ao_lo is None:
+    pmol = reference_mol(mol, mf.minao_ref)
+    U_idx, U_val, U_lab = _set_U(mol, pmol, mf.U_idx, mf.U_val)
+    if mf.C_ao_lo is None:
         # Construct orthogonal minao local orbitals.
         C_ao_lo = _make_minao_lo(mol, pmol)
     else:
-        C_ao_lo = ks.C_ao_lo
+        C_ao_lo = mf.C_ao_lo
     ovlp = mol.intor('int1e_ovlp', hermi=1)
     C_inv = []
     for idx in U_idx:
