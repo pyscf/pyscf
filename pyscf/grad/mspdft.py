@@ -22,12 +22,18 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.fci import direct_spin1
 from pyscf.mcscf import mc1step, newton_casscf
-from pyscf.csf_fci.csf import CSFFCISolver
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import casscf as casscf_grad
 from pyscf.grad import sacasscf as sacasscf_grad
 from pyscf import __config__
 from itertools import product
+
+# PySCF-Forge installation check
+try:
+    from pyscf.csf_fci.csf import CSFFCISolver
+except ModuleNotFoundError as e:
+    class CSFFCISolver:
+        pass
 
 CONV_TOL_DIABATIZE = getattr(__config__, 'mcpdft_mspdft_conv_tol_diabatize', 1e-8)
 SING_TOL_DIABATIZE = getattr(__config__, 'mcpdft_mspdft_sing_tol_diabatize', 1e-8)
