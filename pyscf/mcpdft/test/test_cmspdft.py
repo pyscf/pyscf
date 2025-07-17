@@ -152,24 +152,25 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(mc2.converged)
         self.assertAlmostEqual(lib.fp(mc1.e_states), lib.fp(mc2.e_states), 6)
 
-    #def test_lih_cms2mc2322(self):
-    #    mc = get_lih(1.5, fnal="MC23")
-    #    e_mcscf_avg = np.dot(mc.e_mcscf, mc.weights)
-    #    hcoup = abs(mc.heff_mcscf[0, 1])
-    #    ct_mcscf = abs(mc.si_mcscf[0, 0])
-    #    ct_pdft = abs(mc.si_pdft[0, 0])
+    @unittest.skip("MC23 fnal requires PySCF-Forge dft2 libxc interface")
+    def test_lih_cms2mc2322(self):
+        mc = get_lih(1.5, fnal="MC23")
+        e_mcscf_avg = np.dot(mc.e_mcscf, mc.weights)
+        hcoup = abs(mc.heff_mcscf[0, 1])
+        ct_mcscf = abs(mc.si_mcscf[0, 0])
+        ct_pdft = abs(mc.si_pdft[0, 0])
 
-    #    HCOUP_EXPECTED = 0.03508667
-    #    E_MCSCF_AVG_EXPECTED = -7.789021830554006
-    #    E_STATES_EXPECTED = [-7.93513351, -7.77927879]
-    #    CT_MCSCF_EXPECTED = 0.9626004825617019
-    #    CT_PDFT = 0.9728574801328089
+        HCOUP_EXPECTED = 0.03508667
+        E_MCSCF_AVG_EXPECTED = -7.789021830554006
+        E_STATES_EXPECTED = [-7.93513351, -7.77927879]
+        CT_MCSCF_EXPECTED = 0.9626004825617019
+        CT_PDFT = 0.9728574801328089
 
-    #    self.assertAlmostEqual(e_mcscf_avg, E_MCSCF_AVG_EXPECTED, 8)
-    #    self.assertAlmostEqual(lib.fp(mc.e_states), lib.fp(E_STATES_EXPECTED), 8)
-    #    self.assertAlmostEqual(hcoup, HCOUP_EXPECTED, 8)
-    #    self.assertAlmostEqual(ct_mcscf, CT_MCSCF_EXPECTED, 8)
-    #    self.assertAlmostEqual(ct_pdft, CT_PDFT, 8)
+        self.assertAlmostEqual(e_mcscf_avg, E_MCSCF_AVG_EXPECTED, 8)
+        self.assertAlmostEqual(lib.fp(mc.e_states), lib.fp(E_STATES_EXPECTED), 8)
+        self.assertAlmostEqual(hcoup, HCOUP_EXPECTED, 8)
+        self.assertAlmostEqual(ct_mcscf, CT_MCSCF_EXPECTED, 8)
+        self.assertAlmostEqual(ct_pdft, CT_PDFT, 8)
 
 
 if __name__ == "__main__":
