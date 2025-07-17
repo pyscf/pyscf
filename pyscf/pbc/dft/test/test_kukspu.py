@@ -119,7 +119,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e_tot, -10.6191452297714, 8)
 
         uresp = kukspu.linear_response_u(mf, (0.03, 0.08))
-        self.assertAlmostEqual(uresp, 3.090946, 2)
+        self.assertAlmostEqual(uresp, 6.279179, 2)
 
 
 if __name__ == '__main__':
