@@ -93,7 +93,8 @@ def _hubbard_U_deriv1(mf, dm=None):
     pmol = reference_mol(mol, mf.minao_ref)
     C_ao_lo = _make_minao_lo(mol, pmol)
     U_idx, U_val = _set_U(mol, pmol, mf.U_idx, mf.U_val)[:2]
-    C0 = C_ao_lo[:,np.hstack(U_idx)]
+    U_idx_stack = np.hstack(U_idx)
+    C0 = C_ao_lo[:,U_idx_stack]
 
     ovlp0 = mf.get_ovlp()
     C_inv = np.dot(C0.conj().T, ovlp0)
@@ -105,7 +106,7 @@ def _hubbard_U_deriv1(mf, dm=None):
     natm = mol.natm
     dE_U = np.zeros((natm, 3))
     for atm_id, (p0, p1) in enumerate(ao_slices[:,2:]):
-        C1 = f_local_ao(atm_id)[:,:,np.hstack(U_idx)]
+        C1 = f_local_ao(atm_id)[:,:,U_idx_stack]
         SC1 = lib.einsum('pq,xqi->xpi', ovlp0, C1)
         SC1 -= lib.einsum('xqp,qi->xpi', ovlp1[:,p0:p1], C0[p0:p1])
         SC1[:,p0:p1] -= lib.einsum('xpq,qi->xpi', ovlp1[:,p0:p1], C0)
