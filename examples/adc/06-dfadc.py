@@ -46,3 +46,11 @@ eea,vea,pea,xea = myadc.kernel(nroots = 3)
 # Compute properties
 myadc.compute_properties = True
 myadc.analyze()
+
+# Using different auxiliary basis for EE-ADC 
+mf = scf.RHF(mol).density_fit('aug-cc-pvdz-jkfit').run()
+myadc = adc.ADC(mf).density_fit('aug-cc-pvdz-ri')
+myadc.method = "adc(3)"
+myadc.method_type = "ee"
+myadc.verbose = 6
+eip,vip,pip,xip = myadc.kernel(nroots = 3)

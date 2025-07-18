@@ -15,7 +15,7 @@
 # Author: Abdelrahman Ahmed <>
 #         Samragni Banerjee <samragnibanerjee4@gmail.com>
 #         James Serna <jamcar456@gmail.com>
-#         Terrence Stahl <>
+#         Terrence Stahl <terrencestahl1@gmail.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 
 '''
@@ -23,12 +23,10 @@ Unrestricted algebraic diagrammatic construction
 '''
 
 import numpy as np
-from pyscf import lib, symm
+import pyscf.lib as lib
 from pyscf.lib import logger
 from pyscf.adc import uadc_ao2mo
 from pyscf.adc import uadc_amplitudes
-from pyscf.adc import radc_ao2mo
-from pyscf.adc import dfadc
 from pyscf import __config__
 from pyscf import df
 from pyscf import scf
@@ -54,6 +52,21 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     if eris is None:
         eris = adc.transform_integrals()
 
+    if adc.approx_trans_moments:
+        if adc.method in ("adc(2)", "adc(2)-x"):
+            logger.warn(
+                adc,
+                "Approximations for transition moments are requested...\n"
+                + adc.method
+                + " transition properties will neglect second-order amplitudes...")
+        else:
+            logger.warn(
+                adc,
+                "Approximations for transition moments are requested...\n"
+                + adc.method
+                + " transition properties will neglect third-order amplitudes...")
+
+
     imds = adc.get_imds(eris)
     matvec, diag = adc.gen_matvec(imds, eris)
 
@@ -61,17 +74,24 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     conv, adc.E, U = lib.linalg_helper.davidson1(
         lambda xs : [matvec(x) for x in xs],
-        guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol,
+        guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_memory=adc.max_memory,
         max_cycle=adc.max_cycle, max_space=adc.max_space, tol_residual=adc.tol_residual)
 
     adc.U = np.array(U).T.copy()
 
     if adc.compute_properties:
         adc.P,adc.X = adc.get_properties(nroots)
+    else:
+        adc.P = None
+        adc.X = None
+
     nfalse = np.shape(conv)[0] - np.sum(conv)
 
+    if adc.compute_spin_square:
+        spin_square, evec_ne = adc.get_spin_square()
+
     header = ("\n*************************************************************"
-              "\n            ADC calculation summary"
+              "\n                   ADC calculation summary"
               "\n*************************************************************")
     logger.info(adc, header)
 
@@ -79,7 +99,12 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
         print_string = ('%s root %d  |  Energy (Eh) = %14.10f  |  Energy (eV) = %12.8f  ' %
                         (adc.method, n, adc.E[n], adc.E[n]*27.2114))
         if adc.compute_properties:
-            print_string += ("|  Spec. factor = %10.8f  " % adc.P[n])
+            if (adc.method_type == "ee"):
+                print_string += ("|  Osc. strength = %10.8f  " % adc.P[n])
+                if (adc.compute_spin_square is True):
+                    print_string += ("|  S^2 = %10.8f  " % spin_square[n])
+            else:
+                print_string += ("|  Spec. factor = %10.8f  " % adc.P[n])
         print_string += ("|  conv = %s" % conv[n])
         logger.info(adc, print_string)
 
@@ -126,11 +151,10 @@ class UADC(lib.StreamObject):
         'max_space', 'mo_occ', 'max_cycle', 'imds', 'with_df', 'compute_properties',
         'approx_trans_moments', 'evec_print_tol', 'spec_factor_print_tol',
         'E', 'U', 'P', 'X', 'ncvs', 'dip_mom', 'dip_mom_nuc',
-        'spin_c', 'f_ov'
+        'compute_spin_square', 'f_ov'
     }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
-        from pyscf import gto
 
         if 'dft' in str(mf.__module__):
             raise NotImplementedError('DFT reference for UADC')
@@ -146,10 +170,10 @@ class UADC(lib.StreamObject):
         self.stdout = self.mol.stdout
         self.max_memory = mf.max_memory
 
-        self.max_space = getattr(__config__, 'adc_uadc_UADC_max_space', 12)
+        self.max_space = getattr(__config__, 'adc_uadc_UADC_max_space', 200)
         self.max_cycle = getattr(__config__, 'adc_uadc_UADC_max_cycle', 50)
-        self.conv_tol = getattr(__config__, 'adc_uadc_UADC_conv_tol', 1e-12)
-        self.tol_residual = getattr(__config__, 'adc_uadc_UADC_tol_residual', 1e-6)
+        self.conv_tol = getattr(__config__, 'adc_uadc_UADC_conv_tol', 1e-8)
+        self.tol_residual = getattr(__config__, 'adc_uadc_UADC_tol_residual', 1e-5)
         self.scf_energy = mf.e_tot
 
         self.frozen = frozen
@@ -183,18 +207,17 @@ class UADC(lib.StreamObject):
             fock_b = np.dot(mo_a.T,np.dot(fock_b, mo_a))
 
             # Semicanonicalize Ca using fock_a, nocc_a -> Ca, mo_energy_a, U_a, f_ov_a
-            mo_a, mo_energy_a, f_ov_a, f_aa = self.semi_canonicalize_orbitals(
+            mo_a_coeff, mo_energy_a, f_ov_a, f_aa = self.semi_canonicalize_orbitals(
                 fock_a, ndocc + nsocc, mo_a)
 
             # Semicanonicalize Cb using fock_b, nocc_b -> Cb, mo_energy_b, U_b, f_ov_b
-            mo_b, mo_energy_b, f_ov_b, f_bb = self.semi_canonicalize_orbitals(fock_b, ndocc, mo_a)
+            mo_b_coeff, mo_energy_b, f_ov_b, f_bb = self.semi_canonicalize_orbitals(fock_b, ndocc, mo_a)
 
-            mo_coeff = [mo_a, mo_b]
+            mo_coeff = [mo_a_coeff, mo_b_coeff]
 
             f_ov = [f_ov_a, f_ov_b]
 
             self.f_ov = f_ov
-            self.spin_c = True
             self.mo_energy_a = mo_energy_a.copy()
             self.mo_energy_b = mo_energy_b.copy()
 
@@ -226,7 +249,7 @@ class UADC(lib.StreamObject):
         self.P = None
         self.X = (None,)
 
-        self.spin_c = False
+        self.compute_spin_square = False
 
         dip_ints = -self.mol.intor('int1e_r',comp=3)
         dip_mom_a = np.zeros((dip_ints.shape[0], self._nmo[0], self._nmo[0]))
@@ -375,6 +398,9 @@ class UADC(lib.StreamObject):
         if (self.method_type == "ea"):
             e_exc, v_exc, spec_fac, X, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
 
+        elif (self.method_type == "ee"):
+            e_exc, v_exc, spec_fac, X, adc_es = self.ee_adc(nroots=nroots, guess=guess, eris=eris)
+
         elif(self.method_type == "ip"):
 
             if not isinstance(self.ncvs, type(None)) and self.ncvs > 0:
@@ -398,6 +424,12 @@ class UADC(lib.StreamObject):
     def ea_adc(self, nroots=1, guess=None, eris=None):
         from pyscf.adc import uadc_ea
         adc_es = uadc_ea.UADCEA(self)
+        e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
+        return e_exc, v_exc, spec_fac, x, adc_es
+
+    def ee_adc(self, nroots=1, guess=None, eris=None):
+        from pyscf.adc import uadc_ee
+        adc_es = uadc_ee.UADCEE(self)
         e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
         return e_exc, v_exc, spec_fac, x, adc_es
 
@@ -435,6 +467,7 @@ class UADC(lib.StreamObject):
 
     def make_rdm1(self):
         return self._adc_es.make_rdm1()
+
 
 if __name__ == '__main__':
     from pyscf import gto

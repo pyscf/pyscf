@@ -40,3 +40,9 @@ myadc.method_type = "ea"
 eea,vea,pea,xea = myadc.kernel(nroots = 3)
 myadc.analyze()
 
+#EE-RADC(2) for 3 roots
+myadc.compute_properties = False
+myadc.method = "adc(2)"
+myadc.method_type = "ee"
+eea,vea,pea,xea = myadc.kernel(nroots = 3)
+

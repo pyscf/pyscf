@@ -23,7 +23,6 @@ import numpy as np
 import pyscf.ao2mo as ao2mo
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.adc import radc_ao2mo
 
 ### Integral transformation for integrals in Chemists' notation###
 def transform_integrals_incore(myadc):
@@ -67,8 +66,15 @@ def transform_integrals_incore(myadc):
     eris.OOvv = ao2mo.general(myadc._scf._eri, (occ_b, occ_b, vir_a, vir_a), compact=False).reshape(nocc_b, nocc_b, nvir_a, nvir_a).copy()  # noqa: E501
     eris.OVvo = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, vir_a, occ_a), compact=False).reshape(nocc_b, nvir_b, nvir_a, nocc_a).copy()  # noqa: E501
     eris.OVvv = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, vir_a, vir_a), compact=True).reshape(nocc_b, nvir_b, -1).copy()  # noqa: E501
+    eris.vvvv_p = None
+    eris.VVVV_p = None
+    eris.vVvV_p = None
+    eris.VvVv_p = None
 
-    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)"):
+    if ((myadc.method == "adc(2)" and myadc.method_type == "ee" and myadc.approx_trans_moments is False)
+        or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False)
+        or (myadc.method == "adc(2)-x" and myadc.method_type == "ee")
+        or (myadc.method == "adc(3)")):
 
         eris.vvvv_p = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_a, vir_a),
                                     compact=False).reshape(nvir_a, nvir_a, nvir_a, nvir_a)
@@ -209,7 +215,15 @@ def transform_integrals_outcore(myadc):
 
     ############### forming eris_vvvv ########################################
 
-    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)"):
+    eris.vvvv_p = None
+    eris.VVVV_p = None
+    eris.vVvV_p = None
+    eris.VvVv_p = None
+
+    if ((myadc.method == "adc(2)" and myadc.method_type == "ee" and myadc.approx_trans_moments is False)
+        or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False)
+        or (myadc.method == "adc(2)-x" and myadc.method_type == "ee")
+        or (myadc.method == "adc(3)")):
 
         cput2 = logger.process_clock(), logger.perf_counter()
 
