@@ -152,6 +152,17 @@ C  15.16687337 15.16687337 15.16687337
         r_discard = tools.check_lattice_sum_range(cell, Ls)
         self.assertTrue(r_discard > cell.rcut)
 
+    def test_get_lattice_Ls3(self):
+        numpy.random.seed(2)
+        cl1 = pbcgto.M(a = numpy.random.random((3,3))*3,
+                       mesh = [3]*3,
+                       atom ='''He .1 .0 .0''')
+        cl2 = tools.super_cell(cl1, [2,3,4])
+        rcut = 12
+        Ls = tools.get_lattice_Ls(cl2, rcut=rcut, discard=True)
+        r_discard = tools.check_lattice_sum_range(cl2, Ls)
+        self.assertTrue(r_discard > rcut)
+
     def test_super_cell(self):
         numpy.random.seed(2)
         cl1 = pbcgto.M(a = numpy.random.random((3,3))*3,
