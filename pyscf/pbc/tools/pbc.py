@@ -22,6 +22,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.gto import ATM_SLOTS, BAS_SLOTS, ATOM_OF, PTR_COORD
 from pyscf.pbc.lib.kpts_helper import get_kconserv, get_kconserv3  # noqa
+from pyscf.pbc.lib.kpts_helper import intersection
 from pyscf import __config__
 
 FFT_ENGINE = getattr(__config__, 'pbc_tools_pbc_fft_engine', 'NUMPY+BLAS')
@@ -626,9 +627,6 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
     scaled_atom_coords = cell.get_scaled_atom_coords()
     atom_boundary_max = scaled_atom_coords[:,:dimension].max(axis=0)
     atom_boundary_min = scaled_atom_coords[:,:dimension].min(axis=0)
-    if (np.any(atom_boundary_max > 1) or np.any(atom_boundary_min < -1)):
-        atom_boundary_max[atom_boundary_max > 1] = 1
-        atom_boundary_min[atom_boundary_min <-1] = -1
     ovlp_penalty = atom_boundary_max - atom_boundary_min
     dR = ovlp_penalty.dot(a[:dimension])
     dR_basis = np.diag(dR)
@@ -658,14 +656,28 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
                              np.arange(-bounds[2], bounds[2]+1)))
     Ls = np.dot(Ts[:,:dimension], a[:dimension])
 
-    if discard:
-        ovlp_penalty += 1e-200  # avoid /0
-        Ts_scaled = (Ts[:,:dimension] + 1e-200) / ovlp_penalty
-        ovlp_penalty_fac = 1. / abs(Ts_scaled).min(axis=1)
-        Ls_mask = np.linalg.norm(Ls, axis=1) * (1-ovlp_penalty_fac) < rcut
+    if discard and len(Ls) > 1:
+        r = cell.atom_coords()
+        rr = r[:,None] - r
+        dist_max = np.linalg.norm(rr, axis=2).max()
+        Ls_mask = np.linalg.norm(Ls, axis=1) < rcut + dist_max
         Ls = Ls[Ls_mask]
     return np.asarray(Ls, order='C')
 
+def check_lattice_sum_range(cell, Ls):
+    '''
+    Evaluates whether the lattice summation range is sufficient.
+
+    This function calculates the minimum distance between atoms in the primary
+    unit cell and atoms in lattice images *not* included in the specified
+    lattice sum vectors (Ls).
+    '''
+    Ls_full = get_lattice_Ls(cell, rcut=cell.rcut*1.5, discard=False)
+    Ls_idx = intersection(Ls_full, Ls)
+    Ls_remaining = np.setdiff1d(np.arange(len(Ls_full)), Ls_idx)
+    atom_coords = cell.atom_coords()
+    atoms_outside = (Ls_full[Ls_remaining,None] + atom_coords).reshape(-1, 3)
+    return np.linalg.norm(atoms_outside[:,None] - atom_coords, axis=2).min()
 
 def super_cell(cell, ncopy, wrap_around=False):
     '''Create an ncopy[0] x ncopy[1] x ncopy[2] supercell of the input cell

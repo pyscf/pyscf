@@ -14,6 +14,7 @@
 
 import unittest
 import numpy
+import numpy as np
 from pyscf import gto
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import tools
@@ -101,7 +102,8 @@ class KnownValues(unittest.TestCase):
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
         Ls = tools.get_lattice_Ls(cl1)
-        self.assertEqual(Ls.shape, (2275,3))
+        r_discard = tools.check_lattice_sum_range(cl1, Ls)
+        self.assertTrue(r_discard > cl1.rcut)
 
         Ls = tools.get_lattice_Ls(cl1, rcut=0)
         self.assertEqual(Ls.shape, (1,3))
@@ -130,13 +132,36 @@ C  15.16687337 15.16687337 15.16687337
         cell.precision = 1e-10
         cell.build()
         Ls = cell.get_lattice_Ls()
-        self.assertTrue(Ls.shape[0] > 140)
+        r_discard = tools.check_lattice_sum_range(cell, Ls)
+        self.assertTrue(r_discard > cell.rcut)
 
         S = cell.pbc_intor('int1e_ovlp')
         w, v = numpy.linalg.eigh(S)
         self.assertTrue(w.min() > 0)
         self.assertAlmostEqual(abs(S - S.T.conj()).max(), 0, 13)
         self.assertAlmostEqual(w.min(), 0.0007176363230, 8)
+
+    def test_get_lattice_Ls2(self):
+        cell = pbcgto.Cell()
+        cell.unit = 'B'
+        cell.atom = 'He 0.,  0.,  0.; He 0.99    ,  0.    ,  0.    '
+        cell.a = np.diag([10, 10, 2])
+        cell.rcut = 2.01
+        cell.build()
+        Ls = tools.get_lattice_Ls(cell, discard=True)
+        r_discard = tools.check_lattice_sum_range(cell, Ls)
+        self.assertTrue(r_discard > cell.rcut)
+
+    def test_get_lattice_Ls3(self):
+        numpy.random.seed(2)
+        cl1 = pbcgto.M(a = numpy.random.random((3,3))*3,
+                       mesh = [3]*3,
+                       atom ='''He .1 .0 .0''')
+        cl2 = tools.super_cell(cl1, [2,3,4])
+        rcut = 12
+        Ls = tools.get_lattice_Ls(cl2, rcut=rcut, discard=True)
+        r_discard = tools.check_lattice_sum_range(cl2, Ls)
+        self.assertTrue(r_discard > rcut)
 
     def test_super_cell(self):
         numpy.random.seed(2)
