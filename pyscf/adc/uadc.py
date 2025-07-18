@@ -52,6 +52,21 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     if eris is None:
         eris = adc.transform_integrals()
 
+    if adc.approx_trans_moments:
+        if adc.method in ("adc(2)", "adc(2)-x"):
+            logger.warn(
+                adc,
+                "Approximations for transition moments are requested...\n"
+                + adc.method
+                + " transition properties will neglect second-order amplitudes...")
+        else:
+            logger.warn(
+                adc,
+                "Approximations for transition moments are requested...\n"
+                + adc.method
+                + " transition properties will neglect third-order amplitudes...")
+
+
     imds = adc.get_imds(eris)
     matvec, diag = adc.gen_matvec(imds, eris)
 
@@ -74,10 +89,9 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     if adc.compute_spin_square:
         spin_square, evec_ne = adc.get_spin_square()
-        evec_ne_na, evec_ne_nb = evec_ne
 
     header = ("\n*************************************************************"
-              "\n            ADC calculation summary"
+              "\n                   ADC calculation summary"
               "\n*************************************************************")
     logger.info(adc, header)
 
@@ -89,8 +103,6 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
                 print_string += ("|  Osc. strength = %10.8f  " % adc.P[n])
                 if (adc.compute_spin_square is True):
                     print_string += ("|  S^2 = %10.8f  " % spin_square[n])
-                    print_string += ("|  na = %5.3f  " % evec_ne_na[n])
-                    print_string += ("|  nb = %5.3f  " % evec_ne_nb[n])
             else:
                 print_string += ("|  Spec. factor = %10.8f  " % adc.P[n])
         print_string += ("|  conv = %s" % conv[n])
@@ -143,7 +155,6 @@ class UADC(lib.StreamObject):
     }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
-        from pyscf import gto
 
         if 'dft' in str(mf.__module__):
             raise NotImplementedError('DFT reference for UADC')
@@ -456,6 +467,7 @@ class UADC(lib.StreamObject):
 
     def make_rdm1(self):
         return self._adc_es.make_rdm1()
+
 
 if __name__ == '__main__':
     from pyscf import gto

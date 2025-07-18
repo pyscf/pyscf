@@ -47,6 +47,20 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     if eris is None:
         eris = adc.transform_integrals()
 
+    if adc.approx_trans_moments:
+        if adc.method in ("adc(2)", "adc(2)-x"):
+            logger.warn(
+                adc,
+                "Approximations for transition moments are requested...\n"
+                + adc.method
+                + " transition properties will neglect second-order amplitudes...")
+        else:
+            logger.warn(
+                adc,
+                "Approximations for transition moments are requested...\n"
+                + adc.method
+                + " transition properties will neglect third-order amplitudes...")
+
     imds = adc.get_imds(eris)
     matvec, diag = adc.gen_matvec(imds, eris)
 
@@ -67,8 +81,14 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     nfalse = np.shape(conv)[0] - np.sum(conv)
 
+    spin_mult = None
+    if adc.method_type in ("ip", "ea"):
+        spin_mult = "doublet"
+    else:
+        spin_mult = "singlet"
+
     header = ("\n*************************************************************"
-              "\n            ADC calculation summary"
+              "\n        ADC calculation summary (" + spin_mult + " states only)"
               "\n*************************************************************")
     logger.info(adc, header)
 

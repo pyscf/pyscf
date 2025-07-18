@@ -72,7 +72,7 @@ class KnownValues(unittest.TestCase):
         mf = scf.UHF(mol).density_fit(auxbasis='cc-pvdz-jkfit')
         mf.kernel()
         myadc.with_df = df.DF(mol, auxbasis='cc-pvdz-ri')
-        myadc.max_memory = 20
+        myadc.max_memory = 1
         myadc.method = "adc(3)"
         myadc.method_type = "ea"
 
@@ -94,7 +94,7 @@ class KnownValues(unittest.TestCase):
         mf = scf.UHF(mol).density_fit(auxbasis='cc-pvdz-jkfit')
         mf.kernel()
         myadc.with_df = df.DF(mol, auxbasis='aug-cc-pvdz-ri')
-        myadc.max_memory = 2
+        myadc.max_memory = 1
         myadc.method = "adc(3)"
         myadc.method_type = "ip"
 

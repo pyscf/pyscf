@@ -17,7 +17,6 @@
 #
 
 import unittest
-import numpy
 from pyscf import gto
 from pyscf import scf
 from pyscf import adc
@@ -47,7 +46,6 @@ class KnownValues(unittest.TestCase):
 
     def test_df_gs(self):
 
-        mf = scf.RHF(mol).run()
         myadc.with_df = df.DF(mol, auxbasis='cc-pvdz-ri')
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.31081009625, 6)
@@ -63,7 +61,7 @@ class KnownValues(unittest.TestCase):
         myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
         myadc.conv_tol = 1e-12
         myadc.tol_residual = 1e-6
-        myadc.max_memory = 2
+        myadc.max_memory = 1
         myadc.method = "adc(3)"
         myadc.method_type = "ip"
 
@@ -82,7 +80,7 @@ class KnownValues(unittest.TestCase):
 
     def test_dfhf_dfadc2_ea(self):
 
-        myadc.max_memory = 20
+        myadc.max_memory = 1
         myadc.method = "adc(2)"
         myadc.method_type = "ea"
 
@@ -105,7 +103,7 @@ class KnownValues(unittest.TestCase):
         myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
         myadc.conv_tol = 1e-12
         myadc.tol_residual = 1e-6
-        myadc.max_memory = 20
+        myadc.max_memory = 1
         myadc.method = "adc(2)"
         myadc.method_type = "ea"
 

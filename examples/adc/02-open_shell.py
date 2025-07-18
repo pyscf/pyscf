@@ -13,7 +13,7 @@ mol.atom = [
     ['H', ( 0., 0.    ,  r/2)],]
 mol.basis = {'O':'aug-cc-pvdz',
              'H':'aug-cc-pvdz'}
-mol.verbose = 0
+mol.verbose = 4
 mol.symmetry = False
 mol.spin  = 1
 mol.build()
@@ -47,4 +47,4 @@ myadc.method_type = "ee"
 myadc.compute_properties = True
 myadc.compute_spin_square = True
 eea,vea,pea,xea = myadc.kernel(nroots=4)
-
+myadc.analyze()

@@ -52,8 +52,9 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
 
     def test_ea_adc2(self):
+        myadc.method = "adc(2)"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
-        self.assertAlmostEqual(e, -0.2218560609876961, 6)
+        self.assertAlmostEqual(e, -0.22185606131601238, 6)
 
         myadcea = adc.radc_ea.RADCEA(myadc)
         myadcea.approx_trans_moments = True
@@ -68,25 +69,26 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2],1.975969169959369 , 6)
 
 
-    def test_ip_adc3(self):
-        myadc.method = "adc(3)"
+    def test_ip_adc2(self):
+        myadc.method = "adc(2)"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
-        self.assertAlmostEqual(e, -0.2263968409281272, 6)
+        self.assertAlmostEqual(e, -0.22185606131601238, 6)
 
         myadcip = adc.radc_ip.RADCIP(myadc)
         myadcip.approx_trans_moments = True
         e,v,p,x = myadcip.kernel(nroots=4)
         myadcip.analyze()
 
-        self.assertAlmostEqual(e[0], 0.4777266119748338, 6)
-        self.assertAlmostEqual(e[1], 0.5619000725247504, 6)
-        self.assertAlmostEqual(e[2], 0.7119986982840371, 6)
-        self.assertAlmostEqual(e[3], 1.1184438337100486, 6)
+        self.assertAlmostEqual(e[0], 0.4133257511, 6)
+        self.assertAlmostEqual(e[1], 0.4978545288, 6)
+        self.assertAlmostEqual(e[2], 0.6607769739, 6)
+        self.assertAlmostEqual(e[3], 1.0540027121, 6)
 
-        self.assertAlmostEqual(p[0], 1.8489784284385662, 6)
-        self.assertAlmostEqual(p[1], 1.8506484180294713, 6)
-        self.assertAlmostEqual(p[2], 1.8657624547603837, 6)
-        self.assertAlmostEqual(p[3], 0.1250466175471465, 6)
+        self.assertAlmostEqual(p[0], 1.76836736, 6)
+        self.assertAlmostEqual(p[1], 1.77319945, 6)
+        self.assertAlmostEqual(p[2], 1.80354103, 6)
+        self.assertAlmostEqual(p[3], 0.00396362, 6)
+
 
 if __name__ == "__main__":
     print("Approximate transition moments calculations for different RADC methods for water molecule")

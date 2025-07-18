@@ -38,6 +38,7 @@ def setUpModule():
     mf.conv_tol = 1e-12
     mf.kernel()
     myadc = adc.ADC(mf).density_fit('cc-pvdz-ri')
+    myadc.max_memory = 1
 
 def tearDownModule():
     global mol, mf, myadc
