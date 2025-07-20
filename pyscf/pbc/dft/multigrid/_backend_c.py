@@ -480,10 +480,6 @@ class TaskList:
         if cell1 is None:
             cell1 = cell
 
-        if Ls is None:
-            Ls = cell.get_lattice_Ls()
-        Ls = np.asarray(Ls, order='C', dtype=np.double)
-
         if precision is None:
             precision = cell.precision
 
@@ -518,6 +514,10 @@ class TaskList:
             ptr_jpgf_rcut = lib.ndarray_pointer_2d(jpgf_rcut)
         njsh = len(jsh_bas)
         assert njsh == len(jsh_rcut)
+
+        if Ls is None:
+            Ls = cell.get_lattice_Ls(rcut=ish_rcut.max()+jsh_rcut.max())
+        Ls = np.asarray(Ls, order='C', dtype=np.double)
 
         nl = build_neighbor_list_for_shlpairs(cell, cell1, Ls=Ls,
                                               ish_rcut=ish_rcut, jsh_rcut=jsh_rcut,
