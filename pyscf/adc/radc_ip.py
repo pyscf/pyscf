@@ -22,14 +22,11 @@
 Restricted algebraic diagrammatic construction
 '''
 import numpy as np
-import pyscf.ao2mo as ao2mo
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.adc import radc
 from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
-from pyscf import __config__
-from pyscf import df
 from pyscf import symm
 
 
@@ -391,21 +388,18 @@ def matvec(adc, M_ij=None, eris=None):
 
             if isinstance(eris.ovvv, type(None)):
                 chnk_size = radc_ao2mo.calculate_chunk_size(adc)
-                a = 0
-                for p in range(0,nocc,chnk_size):
+                for a,b in lib.prange(0,nocc,chnk_size):
                     eris_ovvv = dfadc.get_ovvv_df(
-                        adc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir,nvir,nvir)
-                    k = eris_ovvv.shape[0]
-                    temp_singles[a:a+k] += lib.einsum('abc,icab->i',temp, eris_ovvv, optimize=True)
-                    temp_singles[a:a+k] -= lib.einsum('abc,ibac->i',temp, eris_ovvv, optimize=True)
-                    temp_singles[a:a+k] += lib.einsum('abc,icab->i',
+                        adc, eris.Lov, eris.Lvv, a, chnk_size).reshape(-1,nvir,nvir,nvir)
+                    temp_singles[a:b] += lib.einsum('abc,icab->i',temp, eris_ovvv, optimize=True)
+                    temp_singles[a:b] -= lib.einsum('abc,ibac->i',temp, eris_ovvv, optimize=True)
+                    temp_singles[a:b] += lib.einsum('abc,icab->i',
                                                       temp_1, eris_ovvv, optimize=True)
-                    temp_doubles = lib.einsum('i,icab->cba',r1[a:a+k],eris_ovvv,optimize=True)
+                    temp_doubles = lib.einsum('i,icab->cba',r1[a:b],eris_ovvv,optimize=True)
                     s[s2:f2] += lib.einsum('cba,kjcb->ajk',temp_doubles,
                                            t2_1, optimize=True).reshape(-1)
                     del eris_ovvv
                     del temp_doubles
-                    a += k
             else :
                 eris_ovvv = radc_ao2mo.unpack_eri_1(eris.ovvv, nvir)
 
@@ -653,8 +647,8 @@ def analyze_eigenvector(adc):
 
             iter_num += 1
 
-        logger.info(adc, '%s | root %d | norm(1h)  = %6.4f | norm(2h1p) = %6.4f ',
-                    adc.method ,I, U1dotU1, U2dotU2)
+        logger.info(adc,'%s | root %d | Energy (eV) = %12.8f | norm(1h)  = %6.4f | norm(2h1p) = %6.4f ',
+                    adc.method, I, adc.E[I]*27.2114, U1dotU1, U2dotU2)
 
         if singles_val:
             logger.info(adc, "\n1h block: ")
@@ -671,7 +665,8 @@ def analyze_eigenvector(adc):
                 logger.info(adc, '  %4d  %4d  %4d     %7.4f',
                             print_doubles[1], print_doubles[2], print_doubles[0], doubles_val[idx])
 
-        logger.info(adc, "\n*************************************************************\n")
+        logger.info(adc,
+            "***************************************************************************************\n")
 
 
 def analyze_spec_factor(adc):
@@ -702,7 +697,8 @@ def analyze_spec_factor(adc):
         if np.sum(spec_Contribution) == 0.0:
             continue
 
-        logger.info(adc,'%s | root %d \n',adc.method ,i)
+        logger.info(adc, '%s | root %d | Energy (eV) = %12.8f \n',
+                adc.method, i, adc.E[i]*27.2114)
         logger.info(adc, "     HF MO     Spec. Contribution     Orbital symmetry")
         logger.info(adc, "-----------------------------------------------------------")
 
@@ -711,7 +707,8 @@ def analyze_spec_factor(adc):
                         index_mo[c], spec_Contribution[c], sym[c])
 
         logger.info(adc, '\nPartial spec. factor sum = %10.8f', np.sum(spec_Contribution))
-        logger.info(adc, "\n*************************************************************\n")
+        logger.info(adc,
+        "***********************************************************\n")
 
 
 def renormalize_eigenvectors(adc, nroots=1):
@@ -1325,7 +1322,7 @@ class RADCIP(radc.RADC):
         method : string
             nth-order ADC method. Options are : ADC(2), ADC(2)-X, ADC(3). Default is ADC(2).
         conv_tol : float
-            Convergence threshold for Davidson iterations.  Default is 1e-12.
+            Convergence threshold for Davidson iterations.  Default is 1e-8.
         max_cycle : int
             Number of Davidson iterations.  Default is 50.
         max_space : int
@@ -1336,7 +1333,7 @@ class RADCIP(radc.RADC):
             Number of roots (eigenvalues) requested. Default value is 1.
 
             >>> myadc = adc.RADC(mf).run()
-            >>> myadcip = adc.RADC(myadc).run()
+            >>> myadcip = adc.RADCIP(myadc).run()
 
     Saved results
 
@@ -1347,6 +1344,8 @@ class RADCIP(radc.RADC):
         v_ip : array
             Eigenvectors for each IP transition.
         p_ip : float
+            Spectroscopic factor for each IP transition.
+        x_ip : float
             Spectroscopic amplitudes for each IP transition.
     '''
 
