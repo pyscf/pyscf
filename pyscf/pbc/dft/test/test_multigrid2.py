@@ -143,12 +143,12 @@ class KnownValues(unittest.TestCase):
             task_list = multi_grids_tasks(He_orth, hermi=1, ntasks=2)
             assert task_list.ntasks == [1150, 0]
             task_list = multi_grids_tasks(He_nonorth, hermi=1, ntasks=2)
-            assert task_list.ntasks == [2771, 732]
+            assert task_list.ntasks == [2806, 732]
         with with_grid_level_method("pyscf"):
             task_list = multi_grids_tasks(He_orth, hermi=1, ntasks=2)
             assert task_list.ntasks == [1150, 0]
             task_list = multi_grids_tasks(He_nonorth, hermi=1, ntasks=2)
-            assert task_list.ntasks == [3249, 254]
+            assert task_list.ntasks == [3284, 254]
 
     def test_orth_get_pp(self):
         ref = df.FFTDF(cell_orth).get_pp()

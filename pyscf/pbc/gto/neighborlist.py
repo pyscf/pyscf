@@ -107,7 +107,8 @@ def build_neighbor_list_for_shlpairs(cell, cell1=None, Ls=None,
     assert njsh == len(jsh_rcut)
 
     if Ls is None:
-        Ls = cell.get_lattice_Ls(rcut=ish_rcut.max()+jsh_rcut.max())
+        rcut = ish_rcut.max(initial=0) + jsh_rcut.max(initial=0)
+        Ls = cell.get_lattice_Ls(rcut=rcut)
     Ls = np.asarray(Ls, order='C', dtype=float)
     nimgs = len(Ls)
 

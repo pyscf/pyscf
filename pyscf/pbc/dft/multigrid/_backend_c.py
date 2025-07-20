@@ -190,7 +190,6 @@ def grid_collocate(
     ao_loc0,
     ao_loc1,
     dimension,
-    Ls,
     a,
     b,
     ish_atm,
@@ -220,7 +219,7 @@ def grid_collocate(
     i0, i1, j0, j1 = shls_slice
     ao_loc0 = np.asarray(ao_loc0, order='C', dtype=np.int32)
     ao_loc1 = np.asarray(ao_loc1, order='C', dtype=np.int32)
-    Ls = np.asarray(Ls, order='C', dtype=np.double)
+    Ls = np.asarray(task_list.Ls, order='C', dtype=np.double)
     a = np.asarray(a, order='C', dtype=np.double)
     b = np.asarray(b, order='C', dtype=np.double)
     ish_atm = np.asarray(ish_atm, order='C', dtype=np.int32)
@@ -266,7 +265,6 @@ def grid_integrate(
     ao_loc0,
     ao_loc1,
     dimension,
-    Ls,
     a,
     b,
     ish_atm,
@@ -301,7 +299,7 @@ def grid_integrate(
         mat = np.zeros((comp, naoi, naoj))
 
     wv = np.asarray(wv, order='C', dtype=np.double)
-    Ls = np.asarray(Ls, order='C', dtype=np.double)
+    Ls = np.asarray(task_list.Ls, order='C', dtype=np.double)
     a = np.asarray(a, order='C', dtype=np.double)
     b = np.asarray(b, order='C', dtype=np.double)
     ish_atm = np.asarray(ish_atm, order='C', dtype=np.int32)
@@ -516,7 +514,13 @@ class TaskList:
         assert njsh == len(jsh_rcut)
 
         if Ls is None:
-            Ls = cell.get_lattice_Ls(rcut=ish_rcut.max()+jsh_rcut.max())
+            # The default cell.rcut might be insufficient to include all
+            # significant pairs
+            rcut = ish_rcut.max(initial=0) + jsh_rcut.max(initial=0)
+            Ls = cell.get_lattice_Ls(rcut=rcut)
+        # The lattice sum vectors must be consistent with the neighbor_list in
+        # the backend functions
+        self.Ls = Ls
         Ls = np.asarray(Ls, order='C', dtype=np.double)
 
         nl = build_neighbor_list_for_shlpairs(cell, cell1, Ls=Ls,
