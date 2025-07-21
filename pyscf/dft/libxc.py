@@ -16,6 +16,17 @@
 #
 # Authors: Qiming Sun <osirpt.sun@gmail.com>
 #          Susi Lehtola <susi.lehtola@gmail.com>
+#          Dayou Zhang <dayouzhang@outlook.com>
+# This file is adapted from `dft/libxc.py` of the PySCF core module
+# commit 25eaa9572977b903de24d5c11ad345cecd744728
+#
+# Implemented functions register_custom_functional_, update_custom_functional_,
+# and unregister_custom_functional_. To make this new functionality possible,
+# and to improve the memory management of the LibXC data structure, interface
+# functions which originally took arguments of type c_int were modified to take
+# arguments of type xc_func_type from LibXC. The LibXC data structure are cached
+# and managed in the python layer to avoid construction and destruction at every
+# API call.
 
 '''
 XC functional, the interface to libxc
@@ -27,50 +38,78 @@ import warnings
 import ctypes
 import math
 import numpy
-from functools import lru_cache
+from functools import lru_cache, cached_property
 from pyscf import lib
 from pyscf.dft.xc.utils import remove_dup, format_xc_code
 from pyscf.dft import xc_deriv
+from pyscf.dft.libxc import XC_CODES, XC, PROBLEMATIC_XC, XC_KEYS, XC_ALIAS, _NAME_WITH_DASH
 from pyscf import __config__
 
-_itrf = lib.load_library('libxc_itrf')
+_itrf = lib.load_library('libxc_itrf2')
 _itrf.LIBXC_is_lda.restype = ctypes.c_int
 _itrf.LIBXC_is_gga.restype = ctypes.c_int
 _itrf.LIBXC_is_meta_gga.restype = ctypes.c_int
+_itrf.LIBXC_needs_laplacian.argtypes = (ctypes.c_int, ctypes.c_void_p)
 _itrf.LIBXC_needs_laplacian.restype = ctypes.c_int
-_itrf.LIBXC_needs_laplacian.argtypes = [ctypes.c_int]
 _itrf.LIBXC_is_hybrid.restype = ctypes.c_int
+_itrf.LIBXC_is_nlc.argtypes = (ctypes.c_int, ctypes.c_void_p)
 _itrf.LIBXC_is_nlc.restype = ctypes.c_int
+_itrf.LIBXC_is_cam_rsh.argtypes = (ctypes.c_int, ctypes.c_void_p)
 _itrf.LIBXC_is_cam_rsh.restype = ctypes.c_int
+_itrf.LIBXC_xc_type.argtypes = (ctypes.c_int, ctypes.c_void_p)
+_itrf.LIBXC_xc_type.restype = ctypes.c_int
+_itrf.LIBXC_max_deriv_order.argtypes = (ctypes.c_int, ctypes.c_void_p)
 _itrf.LIBXC_max_deriv_order.restype = ctypes.c_int
-_itrf.LIBXC_number_of_functionals.restype = ctypes.c_int
-_itrf.LIBXC_functional_numbers.argtypes = (numpy.ctypeslib.ndpointer(dtype=numpy.intc, ndim=1, flags=("W", "C", "A")), )
-_itrf.LIBXC_functional_name.argtypes = [ctypes.c_int]
-_itrf.LIBXC_functional_name.restype = ctypes.c_char_p
-_itrf.LIBXC_hybrid_coeff.argtypes = [ctypes.c_int]
+_itrf.LIBXC_hybrid_coeff.argtypes = (ctypes.c_void_p, )
 _itrf.LIBXC_hybrid_coeff.restype = ctypes.c_double
-_itrf.LIBXC_nlc_coeff.argtypes = [ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
-_itrf.LIBXC_rsh_coeff.argtypes = [ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
+_itrf.LIBXC_nlc_coeff.argtypes = (ctypes.c_void_p, ctypes.POINTER(ctypes.c_double))
+_itrf.LIBXC_rsh_coeff.argtypes = (ctypes.c_void_p, ctypes.POINTER(ctypes.c_double))
 
-_itrf.LIBXC_version.restype = ctypes.c_char_p
-_itrf.LIBXC_reference.restype = ctypes.c_char_p
-_itrf.LIBXC_reference_doi.restype = ctypes.c_char_p
-_itrf.LIBXC_xc_reference.argtypes = [ctypes.c_int, (ctypes.c_char_p * 8)]
+_itrf.LIBXC_xc_reference.argtypes = (ctypes.c_int, ctypes.c_void_p, ctypes.POINTER(ctypes.c_char_p))
 
+_itrf.LIBXC_xc_func_init.restype = ctypes.c_void_p
+_itrf.LIBXC_xc_func_end.argtypes = (ctypes.c_int, ctypes.c_void_p)
+_itrf.LIBXC_xc_func_type_size.restype = ctypes.c_size_t
+_itrf.LIBXC_eval_xc.argtypes = (ctypes.c_int, ctypes.c_void_p,
+                                ctypes.POINTER(ctypes.c_double),
+                                ctypes.c_int, ctypes.c_int,
+                                ctypes.c_int, ctypes.c_int,
+                                ctypes.c_int,
+                                ctypes.c_void_p,
+                                ctypes.c_void_p)
+_itrf.LIBXC_xc_func_set_params.argtypes = (ctypes.c_int, ctypes.c_void_p,
+                                           ctypes.POINTER(ctypes.c_double),
+                                           ctypes.c_double)
+
+_itrf.xc_version_string.restype = ctypes.c_char_p
+_itrf.xc_reference.restype = ctypes.c_char_p
+_itrf.xc_reference_doi.restype = ctypes.c_char_p
+_itrf.xc_number_of_functionals.restype = ctypes.c_int
+_itrf.xc_available_functional_numbers.argtypes = (numpy.ctypeslib.ndpointer(dtype=numpy.intc,
+                                                                            ndim=1, flags=("W", "C", "A")), )
+_itrf.xc_functional_get_name.argtypes = (ctypes.c_int, )
+_itrf.xc_functional_get_name.restype = ctypes.c_char_p
 _itrf.xc_functional_get_number.argtypes = (ctypes.c_char_p, )
 _itrf.xc_functional_get_number.restype = ctypes.c_int
+_itrf.xc_func_get_info.argtypes = (ctypes.c_void_p, )
+_itrf.xc_func_get_info.restype = ctypes.c_void_p
+_itrf.xc_func_info_get_n_ext_params.argtypes = (ctypes.c_void_p, )
+_itrf.xc_func_info_get_n_ext_params.restype = ctypes.c_int
+_itrf.xc_func_set_ext_params.argtypes = (ctypes.c_void_p, ctypes.POINTER(ctypes.c_double))
+
+_XC_FUNC_TYPE_SIZE = _itrf.LIBXC_xc_func_type_size()
 
 def libxc_version():
     '''Returns the version of libxc'''
-    return _itrf.LIBXC_version().decode("UTF-8")
+    return _itrf.xc_version_string().decode("UTF-8")
 
 def libxc_reference():
     '''Returns the reference to libxc'''
-    return _itrf.LIBXC_reference().decode("UTF-8")
+    return _itrf.xc_reference().decode("UTF-8")
 
 def libxc_reference_doi():
     '''Returns the reference to libxc'''
-    return _itrf.LIBXC_reference_doi().decode("UTF-8")
+    return _itrf.xc_reference_doi().decode("UTF-8")
 
 __version__ = libxc_version()
 __reference__ = libxc_reference()
@@ -78,268 +117,102 @@ __reference_doi__ = libxc_reference_doi()
 
 def available_libxc_functionals():
     # Number of functionals is
-    nfunc = _itrf.LIBXC_number_of_functionals()
+    nfunc = _itrf.xc_number_of_functionals()
     # Get functional numbers
     func_ids = numpy.zeros(nfunc, dtype=numpy.intc)
-    _itrf.LIBXC_functional_numbers(func_ids)
+    _itrf.xc_available_functional_numbers(func_ids)
     # Returned array
-    return {_itrf.LIBXC_functional_name(x).decode("UTF-8").upper() : x for x in func_ids}
-
-XC = XC_CODES = available_libxc_functionals()
-PROBLEMATIC_XC = {}
-
-def print_XC_CODES():
-    '''
-    Dump the built-in libxc XC_CODES along with their references in a readable format.
-    '''
-    xc_codes = available_libxc_functionals()
-    print('XC = XC_CODES = {')
-    for name, func_id in xc_codes.items():
-        refs = xc_reference(func_id)
-        key = f"'{name}'"
-        print(f'{key:<31s}: {func_id:<3d}, # {refs[0]}')
-        for r in refs[1:]:
-            print(f"                                      # {r}")
-    print('}')
-
-def _xc_key_without_underscore(xc_keys):
-    new_xc = []
-    for key, xc_id in xc_keys.items():
-        for delimiter in ('_XC_', '_X_', '_C_', '_K_'):
-            if delimiter in key:
-                key0, key1 = key.split(delimiter)
-                new_key1 = key1.replace('_', '').replace('-', '')
-                if key1 != new_key1:
-                    new_xc.append((key0+delimiter+new_key1, xc_id))
-                break
-    return new_xc
-XC_CODES.update(_xc_key_without_underscore(XC_CODES))
-del (_xc_key_without_underscore)
-
-#
-# alias
-#
-XC_CODES.update({
-    'GGA_C_BCGP'    : 'GGA_C_ACGGA',
-    'LDA'           : 1 ,
-    'SLATER'        : 1 ,
-    'VWN3'          : 8,
-    'VWNRPA'        : 8,
-    'VWN5'          : 7,
-    'B88'           : 106,
-    'PBE0'          : 406,
-    'PBE1PBE'       : 406,
-    'OPTXCORR'      : '0.7344536875999693*SLATER - 0.6984752285760186*OPTX,',
-    'B3LYP'         : 402,
-    'B3LYPG'        : 402,  # used by Gaussian
-    'B3LYP5'        : '.2*HF + .08*SLATER + .72*B88, .81*LYP + .19*VWN', # VWN5 version
-    'B3P86'         : 403,
-    'B3P86G'        : 403,  # used by Gaussian
-    'B3P86V5'       : '.2*HF + .08*SLATER + .72*B88, .81*P86 + .19*VWN', # VWN5 version
-    #'O3LYP5'        : '.1161*HF + .9262*SLATER + .8133*OPTXCORR, .81*LYP + .19*VWN5',
-    #'O3LYPG'        : '.1161*HF + .9262*SLATER + .8133*OPTXCORR, .81*LYP + .19*VWNRPA',
-    'O3LYP'         : 404, # in libxc == '.1161*HF + 0.071006917*SLATER + .8133*OPTX, .81*LYP + .19*VWN5', may be erroreous
-    'MPW3PW'        : 'MPW3PW5',  # VWN5 version
-    'MPW3PW5'       : '.2*HF + .08*SLATER + .72*MPW91, .81*PW91 + .19*VWN',
-    'MPW3PWG'       : 415,  # used by Gaussian
-    'MPW3LYP'       : 'MPW3LYP5',  # VWN5 version
-    'MPW3LYP5'      : '.218*HF + .073*SLATER + .709*MPW91, .871*LYP + .129*VWN',
-    'MPW3LYPG'      : 419,  # used by Gaussian
-    'REVB3LYP'      : 'REVB3LYP5',  # VWN5 version
-    'REVB3LYP5'     : '.2*HF + .13*SLATER + .67*B88, .84*LYP + .16*VWN',
-    'REVB3LYPG'     : 454,  # used by Gaussian
-    'X3LYP'         : 411,
-    'X3LYPG'        : 411,  # used by Gaussian
-    'X3LYP5'        : '.218*HF + .073*SLATER + .542385*B88 + .166615*PW91, .871*LYP + .129*VWN',
-    'CAMB3LYP'      : 'HYB_GGA_XC_CAM_B3LYP',
-    'CAMYBLYP'      : 'HYB_GGA_XC_CAMY_BLYP',
-    'CAMYB3LYP'     : 'HYB_GGA_XC_CAMY_B3LYP',
-    'B5050LYP'      : '.5*HF + .08*SLATER + .42*B88, .81*LYP + .19*VWN',
-    'MPW1LYP'       : '.25*HF + .75*MPW91, LYP',
-    'MPW1PBE'       : '.25*HF + .75*MPW91, PBE',
-    'PBE50'         : '.5*HF + .5*PBE, PBE',
-    'REVPBE0'       : '.25*HF + .75*PBE_R, PBE',
-    'B1B95'         : 440,
-    'TPSS0'         : '.25*HF + .75*TPSS, TPSS',
-})  # noqa: E501
-
-if getattr(__config__, 'B3LYP_WITH_VWN5', False):
-    XC_CODES['B3P86' ] = 'B3P86V5'
-    XC_CODES['B3LYP' ] = 'B3LYP5'
-    XC_CODES['X3LYP' ] = 'X3LYP5'
-
-XC_KEYS = set(XC_CODES.keys())
-
-# Some XC functionals have conventional name, like M06-L means M06-L for X
-# functional and M06-L for C functional, PBE mean PBE-X plus PBE-C. If the
-# conventional name was placed in the XC_CODES, it may lead to recursive
-# reference when parsing the xc description.  These names (as exceptions of
-# XC_CODES) are listed in XC_ALIAS below and they should be treated as a
-# shortcut for XC functional.
-XC_ALIAS = {
-    # Conventional name : name in XC_CODES
-    'BLYP'              : 'B88,LYP',
-    'BP86'              : 'B88,P86',
-    'PW91'              : 'PW91,PW91',
-    'PBE'               : 'PBE,PBE',
-    'REVPBE'            : 'PBE_R,PBE',
-    'PBESOL'            : 'PBE_SOL,PBE_SOL',
-    'PKZB'              : 'PKZB,PKZB',
-    'TPSS'              : 'TPSS,TPSS',
-    'REVTPSS'           : 'REVTPSS,REVTPSS',
-    'SCAN'              : 'SCAN,SCAN',
-    'RSCAN'             : 'RSCAN,RSCAN',
-    'R2SCAN'            : 'R2SCAN,R2SCAN',
-    'SCANL'             : 'SCANL,SCANL',
-    'R2SCANL'           : 'R2SCANL,R2SCANL',
-    'SOGGA'             : 'SOGGA,PBE',
-    'BLOC'              : 'BLOC,TPSSLOC',
-    'OLYP'              : 'OPTX,LYP',
-    'OPBE'              : 'OPTX,PBE',
-    'RPBE'              : 'RPBE,PBE',
-    'BPBE'              : 'B88,PBE',
-    'MPW91'             : 'MPW91,PW91',
-    'HFLYP'             : 'HF,LYP',
-    'HFPW92'            : 'HF,PW_MOD',
-    'SPW92'             : 'SLATER,PW_MOD',
-    'SVWN'              : 'SLATER,VWN',
-    'MS0'               : 'MS0,REGTPSS',
-    'MS1'               : 'MS1,REGTPSS',
-    'MS2'               : 'MS2,REGTPSS',
-    'MS2H'              : 'MS2H,REGTPSS',
-    'MVS'               : 'MVS,REGTPSS',
-    'MVSH'              : 'MVSH,REGTPSS',
-    'SOGGA11'           : 'SOGGA11,SOGGA11',
-    'SOGGA11_X'         : 'SOGGA11_X,SOGGA11_X',
-    'KT1'               : 'KT1,VWN',
-    'KT2'               : 'GGA_XC_KT2',
-    'KT3'               : 'GGA_XC_KT3',
-    'DLDF'              : 'DLDF,DLDF',
-    'GAM'               : 'GAM,GAM',
-    'M06_L'             : 'M06_L,M06_L',
-    'M06_SX'            : 'M06_SX,M06_SX',
-    'M11_L'             : 'M11_L,M11_L',
-    'MN12_L'            : 'MN12_L,MN12_L',
-    'MN15_L'            : 'MN15_L,MN15_L',
-    'N12'               : 'N12,N12',
-    'N12_SX'            : 'N12_SX,N12_SX',
-    'MN12_SX'           : 'MN12_SX,MN12_SX',
-    'MN15'              : 'MN15,MN15',
-    'MBEEF'             : 'MBEEF,PBE_SOL',
-    'SCAN0'             : 'SCAN0,SCAN',
-    'PBEOP'             : 'PBE,OP_PBE',
-    'BOP'               : 'B88,OP_B88',
-    # new in libxc-4.2.3
-    'REVSCAN'           : 'MGGA_X_REVSCAN,MGGA_C_REVSCAN',
-    'REVSCAN_VV10'      : 'MGGA_X_REVSCAN,MGGA_C_REVSCAN_VV10',
-    'SCAN_VV10'         : 'MGGA_X_SCAN,MGGA_C_SCAN_VV10',
-    'SCAN_RVV10'        : 'MGGA_X_SCAN,MGGA_C_SCAN_RVV10',
-    'M05'               : 'HYB_MGGA_X_M05,MGGA_C_M05',
-    'M06'               : 'HYB_MGGA_X_M06,MGGA_C_M06',
-    'M05_2X'            : 'HYB_MGGA_X_M05_2X,MGGA_C_M05_2X',
-    'M06_2X'            : 'HYB_MGGA_X_M06_2X,MGGA_C_M06_2X',
-    # extra aliases
-    'SOGGA11X'          : 'SOGGA11_X',
-    'M06L'              : 'M06_L',
-    'M11L'              : 'M11_L',
-    'MN12L'             : 'MN12_L',
-    'MN15L'             : 'MN15_L',
-    'N12SX'             : 'N12_SX',
-    'MN12SX'            : 'MN12_SX',
-    'M052X'             : 'M05_2X',
-    'M062X'             : 'M06_2X',
-}  # noqa: E122
-XC_ALIAS.update([(key.replace('-',''), XC_ALIAS[key])
-                 for key in XC_ALIAS if '-' in key])
+    return {_itrf.xc_functional_get_name(x).decode("UTF-8").upper() : x for x in func_ids}
 
 def xc_reference(xc_code):
     '''Returns the reference to the individual XC functional'''
-    hyb, fn_facs = parse_xc(xc_code)
+    xc = _get_xc(xc_code)
+    return _xc_reference(xc.nfunc, xc.xc_arr)
+
+def _xc_reference(nfunc, xc_arr):
     refs = []
-    c_refs = (ctypes.c_char_p * 8)()
-    for xid, fac in fn_facs:
-        _itrf.LIBXC_xc_reference(xid, c_refs)
-        for ref in c_refs:
-            if ref:
-                refs.append(ref.decode("UTF-8"))
+    c_refs = (8 * nfunc * ctypes.c_char_p)()
+    _itrf.LIBXC_xc_reference(nfunc, xc_arr, c_refs)
+    for ref in c_refs:
+        if ref:
+            refs.append(ref.decode("UTF-8"))
     return refs
 
-@lru_cache(100)
 def xc_type(xc_code):
-    if xc_code is None:
-        return None
-    elif isinstance(xc_code, str):
-        if '__VV10' in xc_code:
-            raise RuntimeError('Deprecated notation for NLC functional.')
-        hyb, fn_facs = parse_xc(xc_code)
-    else:
-        assert numpy.issubdtype(type(xc_code), numpy.integer)
-        fn_facs = [(xc_code, 1)]  # mimic fn_facs
+    '''Returns the type of a functional as a str
+    '''
+    xc = _get_xc(xc_code)
+    return xc.xc_type
 
-    if not fn_facs:
+def _xc_type(nfunc, xc_arr):
+    if nfunc == 0:
         return 'HF'
-    elif all(_itrf.LIBXC_is_lda(ctypes.c_int(xid)) for xid, fac in fn_facs):
-        return 'LDA'
-    elif any(_itrf.LIBXC_is_meta_gga(ctypes.c_int(xid)) for xid, fac in fn_facs):
-        return 'MGGA'
     else:
-        # any(_itrf.LIBXC_is_gga(ctypes.c_int(xid)) for xid, fac in fn_facs)
-        # include hybrid_xc
-        return 'GGA'
+        t = _itrf.LIBXC_xc_type(nfunc, xc_arr)
+        return ('LDA', 'GGA', 'MGGA', 'UNKNOWN')[t]
 
 def is_lda(xc_code):
     return xc_type(xc_code) == 'LDA'
 
-@lru_cache(100)
 def is_hybrid_xc(xc_code):
     if xc_code is None:
         return False
     elif isinstance(xc_code, str):
-        if xc_code.isdigit():
-            return _itrf.LIBXC_is_hybrid(ctypes.c_int(int(xc_code)))
-        else:
-            if 'HF' in xc_code:
-                return True
-            if hybrid_coeff(xc_code) != 0:
-                return True
-            if rsh_coeff(xc_code) != (0, 0, 0):
-                return True
-            return False
+        if 'HF' in xc_code:
+            return True
+        xc = _get_xc(xc_code)
+        return _is_hybrid_xc(xc.xc_objs, xc.hyb, xc.facs, xc_code)
     elif numpy.issubdtype(type(xc_code), numpy.integer):
-        return _itrf.LIBXC_is_hybrid(ctypes.c_int(xc_code))
+        xc = _get_xc(xc_code)
+        return _is_hybrid_xc(xc.xc_objs, xc.hyb, xc.facs, xc_code)
     else:
         return any((is_hybrid_xc(x) for x in xc_code))
 
+def _is_hybrid_xc(xc_objs, hyb, facs, xc_code):
+    if _hybrid_coeff(xc_objs, hyb, facs) != 0:
+        return True
+    if _rsh_coeff(xc_objs, hyb, facs, xc_code) != (0, 0, 0):
+        return True
+    return False
+
 def is_meta_gga(xc_code):
+    '''Returns True if a functional is a meta GGA
+    '''
     return xc_type(xc_code) == 'MGGA'
 
 def is_gga(xc_code):
+    '''Returns True if a functional is a GGA
+    '''
     return xc_type(xc_code) == 'GGA'
 
-@lru_cache(100)
 def is_nlc(xc_code):
     # identify nlc by xc_code itself if enable_nlc is None
-    if isinstance(xc_code, str):
-        if xc_code.isdigit():
-            return _itrf.LIBXC_is_nlc(ctypes.c_int(int(xc_code)))
-        else:
-            fn_facs = parse_xc(xc_code)[1]
-            return any(_itrf.LIBXC_is_nlc(ctypes.c_int(xid)) for xid, fac in fn_facs)
-    elif numpy.issubdtype(type(xc_code), numpy.integer):
-        return _itrf.LIBXC_is_nlc(ctypes.c_int(xc_code))
+    if isinstance(xc_code, str) or \
+            numpy.issubdtype(type(xc_code), numpy.integer):
+        xc = _get_xc(xc_code)
+        return xc.is_nlc
     else:
         return any((is_nlc(x) for x in xc_code))
 
-def needs_laplacian(xc_code):
-    return _itrf.LIBXC_needs_laplacian(xc_code) != 0
+def _is_nlc(nfunc, xc_arr):
+    return _itrf.LIBXC_is_nlc(nfunc, xc_arr)
 
-@lru_cache(100)
+def needs_laplacian(xc_code):
+    xc = _get_xc(xc_code)
+    return xc.needs_laplacian
+
+def _needs_laplacian(nfunc, xc_arr):
+    return _itrf.LIBXC_needs_laplacian(nfunc, xc_arr) != 0
+
 def max_deriv_order(xc_code):
-    hyb, fn_facs = parse_xc(xc_code)
-    if fn_facs:
-        return min(_itrf.LIBXC_max_deriv_order(ctypes.c_int(xid)) for xid, fac in fn_facs)
-    else:
+    xc = _get_xc(xc_code)
+    return xc.max_deriv_order
+
+def _max_deriv_order(nfunc, xc_arr):
+    if nfunc == 0:
         return 3
+    else:
+        return _itrf.LIBXC_max_deriv_order(nfunc, xc_arr)
 
 def test_deriv_order(xc_code, deriv, raise_error=False):
     support = deriv <= max_deriv_order(xc_code)
@@ -363,28 +236,31 @@ def test_deriv_order(xc_code, deriv, raise_error=False):
             raise e
     return support
 
-@lru_cache(100)
 def hybrid_coeff(xc_code, spin=0):
     '''Support recursively defining hybrid functional
     '''
-    hyb, fn_facs = parse_xc(xc_code)
-    hybs = [fac * _itrf.LIBXC_hybrid_coeff(ctypes.c_int(xid)) for xid, fac in fn_facs]
+    xc = _get_xc(xc_code, spin=spin)
+    return xc.hybrid_coeff
+
+def _hybrid_coeff(xc_objs, hyb, facs):
+    hybs = (fac * _itrf.LIBXC_hybrid_coeff(xc) for fac, xc in zip(facs, xc_objs))
     return hyb[0] + sum(hybs)
 
-@lru_cache(100)
 def nlc_coeff(xc_code):
     '''Get NLC coefficients
     '''
-    hyb, fn_facs = parse_xc(xc_code)
+    xc = _get_xc(xc_code)
+    return xc.nlc_coeff
+
+def _nlc_coeff(xc_objs, hyb, facs):
     nlc_pars = []
     nlc_tmp = (ctypes.c_double*2)()
-    for xid, fac in fn_facs:
-        if _itrf.LIBXC_is_nlc(ctypes.c_int(xid)):
-            _itrf.LIBXC_nlc_coeff(xid, nlc_tmp)
+    for fac, xc in zip(facs, xc_objs):
+        if _itrf.LIBXC_is_nlc(ctypes.c_int(1), xc):
+            _itrf.LIBXC_nlc_coeff(xc, nlc_tmp)
             nlc_pars.append((tuple(nlc_tmp), fac))
     return tuple(nlc_pars)
 
-@lru_cache(100)
 def rsh_coeff(xc_code):
     '''Range-separated parameter and HF exchange components: omega, alpha, beta
 
@@ -400,6 +276,10 @@ def rsh_coeff(xc_code):
     if xc_code is None:
         return 0, 0, 0
 
+    xc = _get_xc(xc_code)
+    return xc.rsh_coeff
+
+def _rsh_coeff(xc_objs, hyb, facs, xc_code):
     check_omega = True
     if isinstance(xc_code, str) and ',' in xc_code:
         # Parse only X part for the RSH coefficients.  This is to handle
@@ -409,7 +289,7 @@ def rsh_coeff(xc_code):
         if 'SR_HF' in xc_code or 'LR_HF' in xc_code or 'RSH(' in xc_code:
             check_omega = False
 
-    (hyb, alpha, omega), fn_facs = parse_xc(xc_code)
+    hyb, alpha, omega = hyb
     if omega == 0:
         # SR and LR Coulomb share the same coefficients
         # Note: this change breaks compatibility with pyscf-2.7
@@ -419,15 +299,15 @@ def rsh_coeff(xc_code):
         beta = hyb - alpha
     rsh_pars = [omega, alpha, beta]
     rsh_tmp = (ctypes.c_double*3)()
-    for xid, fac in fn_facs:
-        _itrf.LIBXC_rsh_coeff(xid, rsh_tmp)
+    for fac, xc in zip(facs, xc_objs):
+        _itrf.LIBXC_rsh_coeff(xc, rsh_tmp)
         if rsh_pars[0] == 0:
             rsh_pars[0] = rsh_tmp[0]
         elif check_omega:
             # Check functional is actually a CAM functional
-            if rsh_tmp[0] != 0 and not _itrf.LIBXC_is_cam_rsh(ctypes.c_int(xid)):
+            if rsh_tmp[0] != 0 and not _itrf.LIBXC_is_cam_rsh(xc):
                 raise KeyError('Libxc functional %i employs a range separation '
-                               'kernel that is not supported in PySCF' % xid)
+                               'kernel that is not supported in PySCF' % xc.xc_code)
             # Check omega
             if (rsh_tmp[0] != 0 and rsh_pars[0] != rsh_tmp[0]):
                 raise ValueError('Different values of omega found for RSH functionals')
@@ -441,7 +321,6 @@ def parse_xc_name(xc_name='LDA,VWN'):
     fn_facs = parse_xc(xc_name)[1]
     return fn_facs[0][0], fn_facs[1][0]
 
-@lru_cache(100)
 def parse_xc(description):
     r'''Rules to input functional description:
 
@@ -644,41 +523,6 @@ def parse_xc(description):
             assert '-d3' not in token
             parse_token(token, 'compound XC', search_xc_alias=True)
     return tuple(hyb), tuple(remove_dup(fn_facs))
-
-_NAME_WITH_DASH = {'SR-HF'    : 'SR_HF',
-                   'LR-HF'    : 'LR_HF',
-                   'OTPSS-D'  : 'OTPSS_D',
-                   'B97-1'    : 'B97_1',
-                   'B97-2'    : 'B97_2',
-                   'B97-3'    : 'B97_3',
-                   'B97-K'    : 'B97_K',
-                   'B97-D'    : 'B97_D',
-                   'HCTH-93'  : 'HCTH_93',
-                   'HCTH-120' : 'HCTH_120',
-                   'HCTH-147' : 'HCTH_147',
-                   'HCTH-407' : 'HCTH_407',
-                   'WB97X-D'  : 'WB97X_D',
-                   'WB97X-V'  : 'WB97X_V',
-                   'WB97M-V'  : 'WB97M_V',
-                   'WB97X-D3' : 'WB97X_D3',
-                   'B97M-V'   : 'B97M_V',
-                   'M05-2X'   : 'M05_2X',
-                   'M06-L'    : 'M06_L',
-                   'M06-HF'   : 'M06_HF',
-                   'M06-2X'   : 'M06_2X',
-                   'M08-HX'   : 'M08_HX',
-                   'M08-SO'   : 'M08_SO',
-                   'M11-L'    : 'M11_L',
-                   'MN12-L'   : 'MN12_L',
-                   'MN15-L'   : 'MN15_L',
-                   'MN12-SX'  : 'MN12_SX',
-                   'N12-SX'   : 'N12_SX',
-                   'LRC-WPBE' : 'LRC_WPBE',
-                   'LRC-WPBEH': 'LRC_WPBEH',
-                   'LC-VV10'  : 'LC_VV10',
-                   'CAM-B3LYP': 'CAM_B3LYP',
-                   'E-'       : 'E_'} # For scientific notation
-
 
 def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=None):
     r'''Interface to call libxc library to evaluate XC functional, potential
@@ -1034,34 +878,16 @@ def _libxc_to_xcfun_indices(xctype, spin=0, deriv=1):
     return numpy.hstack(idx)
 
 def _eval_xc(xc_code, rho, spin=0, deriv=1, omega=None):
-    assert deriv <= max_deriv_order(xc_code)
-    xctype = xc_type(xc_code)
+    xc = _get_xc(xc_code, spin, omega)
+    assert deriv <= xc.max_deriv_order
+    xctype = xc.xc_type
     assert xctype in ('HF', 'LDA', 'GGA', 'MGGA')
 
     rho = numpy.asarray(rho, order='C', dtype=numpy.double)
     if xctype == 'MGGA' and rho.shape[-2] == 6:
         rho = numpy.asarray(rho[...,[0,1,2,3,5],:], order='C')
 
-    hyb, fn_facs = parse_xc(xc_code)
-    if omega is not None:
-        hyb = hyb[:2] + (float(omega),)
-
-    fn_ids = [x[0] for x in fn_facs]
-    facs   = [x[1] for x in fn_facs]
-    if hyb[2] != 0:
-        # Current implementation does not support different omegas for
-        # different RSH functionals if there are multiple RSHs
-        omega = [hyb[2]] * len(facs)
-    else:
-        omega = [0] * len(facs)
-    fn_ids_set = set(fn_ids)
-    if fn_ids_set.intersection(PROBLEMATIC_XC):
-        problem_xc = [PROBLEMATIC_XC[k]
-                      for k in fn_ids_set.intersection(PROBLEMATIC_XC)]
-        warnings.warn('Libxc functionals %s may have discrepancy to xcfun '
-                      'library.\n' % problem_xc)
-
-    if any(needs_laplacian(fid) for fid in fn_ids):
+    if xc.needs_laplacian:
         raise NotImplementedError('laplacian in meta-GGA method')
 
     nvar, xlen = xc_deriv._XC_NVAR[xctype, spin]
@@ -1069,19 +895,16 @@ def _eval_xc(xc_code, rho, spin=0, deriv=1, omega=None):
     rho = rho.reshape(spin+1,nvar,ngrids)
     outlen = lib.comb(xlen+deriv, deriv)
     out = numpy.zeros((outlen,ngrids))
-    n = len(fn_ids)
+    n = xc.nfunc
     if n > 0:
-        density_threshold = 0
-        _itrf.LIBXC_eval_xc(ctypes.c_int(n),
-                            (ctypes.c_int*n)(*fn_ids),
-                            (ctypes.c_double*n)(*facs),
-                            (ctypes.c_double*n)(*omega),
-                            ctypes.c_int(spin), ctypes.c_int(deriv),
-                            ctypes.c_int(nvar), ctypes.c_int(ngrids),
-                            ctypes.c_int(outlen),
-                            rho.ctypes.data_as(ctypes.c_void_p),
-                            out.ctypes.data_as(ctypes.c_void_p),
-                            ctypes.c_double(density_threshold))
+        _itrf.LIBXC_eval_xc(n,
+                            xc.xc_arr,
+                            (ctypes.c_double*n)(*xc.facs),
+                            spin, deriv,
+                            nvar, ngrids,
+                            outlen,
+                            rho.ctypes,
+                            out.ctypes)
     return out
 
 def eval_xc_eff(xc_code, rho, deriv=1, omega=None):
@@ -1209,12 +1032,10 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
         if deriv > 2:
             assert kxc is not None
             out.extend([x for x in kxc if x is not None])
-
         if spin == 1:
             # Returns of eval_xc are structured as [grid_id,deriv_component]
             # for each term in libxc_out. Change the shape to [deriv_comp, grid_id]
             out = [x.T for x in out]
-
         out = numpy.vstack(out)[:outlen]
         assert len(out) == outlen
         idx = _libxc_to_xcfun_indices(xctype, spin, deriv)
@@ -1225,3 +1046,288 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
 def define_xc(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     return define_xc_(ni.copy(), description, xctype, hyb, rsh)
 define_xc.__doc__ = define_xc_.__doc__
+
+class XCFunctionalCache:
+    '''
+    Data structure for caching LibXC C data structures
+
+    Attributes for XCFunctionalCache:
+        xc_code : str
+            A string to describe the XC functional. See `parse_xc` for details.
+        spin : int
+            spin polarized if spin > 0
+        xc_arr : ctypes array containing all `xc_func_type` struct of each
+            functional component
+        xc_objs : list of ctypes pointers of the `xc_func_type` struct of each
+            functional component. The objects point to the same memory address
+            in `xc_arr`
+        nfunc : int
+            number of LibXC functional components
+        hyb : hybrid coefficients as produced by `parse_xc()`
+        fn_ids : tuple of int
+            LibXC ID of each functional component
+        facs : tuple of float
+            factor of each functional component
+
+    '''
+    def __init__(self, xc_code, spin=0, omega=None, density_threshold=None):
+        if isinstance(xc_code, str) and '__VV10' in xc_code:
+            raise RuntimeError('Deprecated notation for NLC functional.')
+        self.xc_code = xc_code
+        self.spin = spin
+        self.hyb, fn_facs = parse_xc(xc_code)
+        if fn_facs:
+            self.fn_ids, self.facs = zip(*fn_facs)
+        else:
+            self.fn_ids = tuple()
+            self.facs = tuple()
+        self.nfunc = len(self.facs)
+        if omega is not None:
+            self.hyb = self.hyb[:2] + (float(omega),)
+        if self.hyb[2] != 0:
+            # Current implementation does not support different omegas for
+            # different RSH functionals if there are multiple RSHs
+            omega = [self.hyb[2]] * len(self.facs)
+        else:
+            omega = [0] * len(self.facs)
+        fn_ids_ctypes = (ctypes.c_int * self.nfunc)(*self.fn_ids)
+        problem_xc = set(self.fn_ids).intersection(PROBLEMATIC_XC)
+        if problem_xc:
+            problem_xc = [PROBLEMATIC_XC[k] for k in problem_xc]
+            warnings.warn('Libxc functionals %s may have discrepancy to xcfun '
+                          'library.\n' % problem_xc)
+
+        self.xc_arr = _itrf.LIBXC_xc_func_init(self.nfunc, fn_ids_ctypes, spin)
+
+        if self.xc_arr is None:
+            del self.xc_arr
+            raise ValueError(f"{xc_code} is not a valid functional")
+        if density_threshold or any(omega):
+            self._set_omega_density_threshold_(omega, density_threshold)
+        self.xc_objs = [ctypes.cast(self.xc_arr + _XC_FUNC_TYPE_SIZE * i, ctypes.c_void_p)
+                        for i in range(self.nfunc)]
+
+    @cached_property
+    def xc_type(self):
+        return _xc_type(self.nfunc, self.xc_arr)
+
+    @cached_property
+    def is_nlc(self):
+        return _is_nlc(self.nfunc, self.xc_arr)
+
+    @cached_property
+    def needs_laplacian(self):
+        return _needs_laplacian(self.nfunc, self.xc_arr)
+
+    @cached_property
+    def max_deriv_order(self):
+        return _max_deriv_order(self.nfunc, self.xc_arr)
+
+    @cached_property
+    def hybrid_coeff(self):
+        return _hybrid_coeff(self.xc_objs, self.hyb, self.facs)
+
+    @cached_property
+    def nlc_coeff(self):
+        return _nlc_coeff(self.xc_objs, self.hyb, self.facs)
+
+    @cached_property
+    def rsh_coeff(self):
+        return _rsh_coeff(self.xc_objs, self.hyb, self.facs, self.xc_code)
+
+    def customize_(self, ext_params=None, omega=None, hyb=None, facs=None,
+                   density_threshold=None, callback=None, clear=True):
+        '''
+        Customize the functional in place. See `register_custom_functional_` for
+        a detailed description of the arguments.
+
+        Additional argument:
+            clear: bool
+                If True, clear all cached properties. Set to False may have a slight performace
+                gain, but one must manually clear cached properties that might change prior to
+                any productive calculations, preferably in the callback.
+        '''
+        obj_by_id = self.obj_by_id()
+        if density_threshold or (omega and any(omega)):
+            self._set_omega_density_threshold_(omega, density_threshold)
+        if hyb is not None:
+            self.hyb = hyb
+        if facs is not None:
+            self.facs = facs
+        if ext_params is not None:
+            for xid, param in ext_params.items():
+                param = numpy.asarray(param, dtype=numpy.double)
+                func = obj_by_id[xid]
+                info = _itrf.xc_func_get_info(func)
+                n = _itrf.xc_func_info_get_n_ext_params(info)
+                assert param.size == n, \
+                    f"""Unexpected size of external parameters for functional {xid}.
+Expected {n} but {param.size} provided."""
+                _itrf.xc_func_set_ext_params(func, param.ctypes.data_as(ctypes.POINTER(ctypes.c_double)))
+        if callable(callback):
+            callback(self, obj_by_id, self.spin)
+
+        if clear:
+            # clear all cached properties
+            self._clear_cached_property('xc_type')
+            self._clear_cached_property('is_nlc')
+            self._clear_cached_property('needs_laplacian')
+            self._clear_cached_property('max_deriv_order')
+            self._clear_cached_property('hybrid_coeff')
+            self._clear_cached_property('nlc_coeff')
+            self._clear_cached_property('rsh_coeff')
+
+    def _clear_cached_property(self, key):
+        try:
+            delattr(self, key)
+        except AttributeError:
+            pass
+
+    def _set_omega_density_threshold_(self, omega, density_threshold):
+        if density_threshold is None:
+            density_threshold = 0.
+        _itrf.LIBXC_xc_func_set_params(self.nfunc, self.xc_arr,
+                                       (ctypes.c_double * self.nfunc)(*omega),
+                                       density_threshold)
+
+    def __del__(self):
+        try:
+            _itrf.LIBXC_xc_func_end(self.nfunc, self.xc_arr)
+        except AttributeError:
+            # skip destructor call when XC failed to initialize
+            pass
+
+    def obj_by_id(self):
+        '''
+        Returns a dict where LibXC functional IDs are used as the key,
+        and the corresponding ctypes void pointer of the `xc_func_type`
+        structs are used as the value.  This dict is useful for users who
+        wish to perform low-level operations on the underlying LibXC data
+        structure.
+        '''
+        return {xid: func for xid, func in zip(self.fn_ids, self.xc_objs)}
+
+_CUSTOM_FUNC_R = {}
+_CUSTOM_FUNC_U = {}
+
+@lru_cache(100)
+def _get_system_xc(xc_code, spin, omega=None):
+    return XCFunctionalCache(xc_code, spin, omega)
+
+def _get_xc(xc_code, spin=0, omega=None):
+    if omega is not None:
+        return _get_system_xc(xc_code, spin, omega)
+    try:
+        if spin > 0:
+            return _CUSTOM_FUNC_U[xc_code]
+        else:
+            return _CUSTOM_FUNC_R[xc_code]
+    except KeyError:
+        return _get_system_xc(xc_code, spin)
+
+def register_custom_functional_(new_xc_code, based_on_xc_code, ext_params=None, omega=None,
+                                hyb=None, facs=None, density_threshold=None, callback=None,
+                                restricted=True, unrestricted=True):
+    '''
+    Register a custom functional with name `new_xc_code` based on an existing LibXC
+    functional with xc_code `based_on_xc_code`. When this function is called, the
+    functional with xc_code `based_on_xc_code` will be constructed first. Then users can
+    perform customization to the functional by setting the respective keyword arguments.
+    Common customization include setting functional external parameters, adjust mixing
+    factors of each functional components, and adjusting hybrid coefficients. Users can
+    also use a callback function to perform more advanced modification to the LibXC data
+    structure using ctypes or modify the parameters in XCFunctionalCache. Once registered,
+    users may use the custom functional by passing `new_xc_code` to any PySCF module that
+    uses LibXC. If `new_xc_code` has previously been registered, the older functional will
+    be replaced with the new definition. In this case, however, users are encouraged to use
+    `update_custom_functional_` instead to avoid reconstructing the LibXC C data structure.
+
+    Args:
+    new_xc_code : str
+        The string identifier of the customized functional
+    based_on_xc_code : str
+        The string identifier of the parent functional
+    ext_params : dict, with LibXC functional integer ID as key, and an array-like
+        object containing the functional parameters as value.
+        If not None, set the external parameters of the functional componet from
+        the dict using the xc_func_set_ext_params API.
+    omega : float
+        If not None, set the omega value in self.hyb. If hyb argument is set,
+        this argument is ignored.
+    hyb : tuple of float
+        If not None, set the hybrid coefficients self.hyb
+    facs : tuple of float
+        If not None, set the factors of each functional component self.facs
+    callback : callable
+        Callback function to perform more advanced customization.
+        The function takes 3 parameters:
+            xc: a XCFunctionalCache instance of the functional
+            obj_by_id: a dict constructed through xc.obj_by_id, used to access
+                underlying LibXC C data structure
+            spin: 0 for restricted and 1 for unrestricted
+        The callback function will make inplace modifications to xc object or
+        the underlying LibXC C data structure. Depending on the `restricted`
+        and `unrestricted` arguments, the callback may be called more than once.
+    restricted : bool
+        If True, create the spin-restricted version of the custom functional
+    unrestricted : bool
+        If True, create the spin-unrestricted version of the custom functional
+    '''
+    def build(spin):
+        xc = XCFunctionalCache(based_on_xc_code, spin)
+        xc.xc_code = new_xc_code
+        xc.customize_(ext_params, omega, hyb, facs, density_threshold, callback, False)
+        return xc
+
+    try:
+        parse_xc(new_xc_code)
+        warnings.warn('Attempting to register a custom functional with xc_code '
+                      f'"{new_xc_code}", which is a valid built-in xc_code. '
+                      'Consider using a different xc_code to avoid confusion.')
+    except Exception:
+        pass
+
+    if restricted:
+        _CUSTOM_FUNC_R[new_xc_code] = build(0)
+    if unrestricted:
+        _CUSTOM_FUNC_U[new_xc_code] = build(1)
+
+def update_custom_functional_(xc_code, ext_params=None, omega=None,
+                              hyb=None, facs=None, density_threshold=None, callback=None,
+                              restricted=True, unrestricted=True, clear=True):
+    '''
+    Update the custom functional with name `xc_code` that was previously registered
+    through `register_custom_functional_`. See `register_custom_functional_` for
+    a detailed description of the keyword arguments.
+
+    Additional keyword argument:
+        clear: bool
+            If True, clear all cached properties. Clearing cached properties are
+            required if one or more cached properties (such as hybrid_coeff) are
+            changed after the update. Set to False allows users to manually handle
+            cache; one can clear only the properties that are expected to change
+            for a slight performace gain.
+    '''
+    def update(xc):
+        xc.customize_(ext_params, omega, hyb, facs, density_threshold, callback, clear)
+
+    if restricted:
+        update(_CUSTOM_FUNC_R[xc_code])
+    if unrestricted:
+        update(_CUSTOM_FUNC_U[xc_code])
+
+def unregister_custom_functional_(xc_code):
+    '''
+    Unregister a custom functional with name `xc_code` that was previously registered
+    through `register_custom_functional_`.
+    '''
+    try:
+        del _CUSTOM_FUNC_R[xc_code]
+    except KeyError:
+        pass
+
+    try:
+        del _CUSTOM_FUNC_U[xc_code]
+    except KeyError:
+        pass
+
