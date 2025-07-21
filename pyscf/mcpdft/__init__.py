@@ -109,5 +109,5 @@ try:
         from pyscf import prop
     prop.__path__.append(myproppath)
     prop.__path__ = list(set(prop.__path__))
-except ModuleNotFoundError:
+except (ModuleNotFoundError,ImportError):
     pass
