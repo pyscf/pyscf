@@ -21,8 +21,7 @@ import ctypes
 import unittest
 import numpy
 from pyscf import gto, scf
-from pyscf import dft2 as dft
-from pyscf import dft as dft1
+from pyscf import dft
 from pyscf import lib
 
 def setUpModule():
@@ -35,14 +34,14 @@ def setUpModule():
     mol.build()
     #dm = scf.RHF(mol).run(conv_tol=1e-14).make_rdm1()
     dm = numpy.load(os.path.realpath(os.path.join(__file__, '..', 'dm_h4.npy')))
-    with lib.temporary_env(dft1.radi, ATOM_SPECIFIC_TREUTLER_GRIDS=False):
-        mf = dft1.RKS(mol)
+    with lib.temporary_env(dft.radi, ATOM_SPECIFIC_TREUTLER_GRIDS=False):
+        mf = dft.RKS(mol)
         mf.grids.atom_grid = {"H": (50, 110)}
         mf.prune = None
         mf.grids.build(with_non0tab=False)
         nao = mol.nao_nr()
-        ao = dft1.numint.eval_ao(mol, mf.grids.coords, deriv=1)
-        rho = dft1.numint.eval_rho(mol, ao, dm, xctype='GGA')
+        ao = dft.numint.eval_ao(mol, mf.grids.coords, deriv=1)
+        rho = dft.numint.eval_rho(mol, ao, dm, xctype='GGA')
 
 def tearDownModule():
     global mol, mf, ao, rho
@@ -51,12 +50,12 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.original_grids = dft1.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
-        dft1.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
 
     @classmethod
     def tearDownClass(cls):
-        dft1.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
 
     def test_parse_xc(self):
         hyb, fn_facs = dft.libxc.parse_xc('.5*HF+.5*B3LYP5,VWN*.5')
@@ -269,7 +268,7 @@ class KnownValues(unittest.TestCase):
             kxc = None  # 3rd order functional derivative
             return exc, vxc, fxc, kxc
 
-        mf = dft1.RKS(mol)
+        mf = dft.RKS(mol)
         ni = dft.libxc.define_xc(mf._numint, eval_xc, 'GGA', hyb=0.2)
         numpy.random.seed(1)
         rho = numpy.random.random((4,10))
@@ -322,7 +321,7 @@ class KnownValues(unittest.TestCase):
             kxc = None  # 3rd order functional derivative
             return exc, vxc, fxc, kxc
 
-        mf = dft1.RKS(mol)
+        mf = dft.RKS(mol)
         ni = dft.libxc.define_xc(mf._numint, eval_mgga_xc, 'MGGA')
         numpy.random.seed(1)
         rho = numpy.random.random((5,10))
