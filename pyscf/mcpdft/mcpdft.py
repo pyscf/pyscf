@@ -728,19 +728,6 @@ class _PDFT:
             raise NotImplementedError("PDFT dipole moments with frozen orbitals")
         elif isinstance(self, _DFCASSCF):
             raise NotImplementedError("PDFT dipole moments with density-fitting ERIs")
-        # Monkeypatch for double prop folders
-        # TODO: more elegant solution
-        import os
-        mypath = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        myproppath = os.path.join(mypath, 'prop')
-        # suppress irrelevant warnings when 'properties' ext mod installed
-        import warnings
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", message="Module.*is under testing")
-            from pyscf import prop
-        prop.__path__.append(myproppath)
-        prop.__path__ = list(set(prop.__path__))
         from pyscf.prop.dip_moment.mcpdft import ElectricDipole
         dip_obj = ElectricDipole(self)
         mol_dipole = dip_obj.kernel(state=state, unit=unit, origin=origin)
