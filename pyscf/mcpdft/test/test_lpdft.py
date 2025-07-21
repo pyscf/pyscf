@@ -97,7 +97,7 @@ def setUpModule():
     lih_4 = get_lih(1.5, n_states=4, basis="6-31G")
     lih_tpbe = get_lih(1.5, functional="tPBE")
     lih_tpbe0 = get_lih(1.5, functional="tPBE0")
-    lih_mc23 = None #get_lih(1.5, functional="MC23")
+    lih_mc23 = get_lih(1.5, functional="MC23")
     water = get_water()
     t_water = get_water_triplet()
 
@@ -108,6 +108,7 @@ def tearDownModule():
     lih_4.mol.stdout.close()
     lih_tpbe0.mol.stdout.close()
     lih_tpbe.mol.stdout.close()
+    lih_mc23.mol.stdout.close()
     water.mol.stdout.close()
     t_water.mol.stdout.close()
     del lih, lih_4, lih_tpbe0, lih_tpbe, t_water, water, original_grids, lih_mc23
@@ -184,7 +185,6 @@ class KnownValues(unittest.TestCase):
         self.assertListAlmostEqual(lih_tpbe0.e_states, e_hlpdft, 9)
         self.assertListAlmostEqual(hlpdft_ham.flatten(), lih_tpbe0.lpdft_ham.flatten(), 9)
 
-    @unittest.skip("MC23 fnal requires PySCF-Forge dft2 libxc interface")
     def test_lih_mc23_adiabat(self):
         e_mcscf_mc23_avg = np.dot(lih_mc23.e_mcscf, lih_mc23.weights)
         hcoup = abs(lih_mc23.lpdft_ham[1,0])

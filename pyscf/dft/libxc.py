@@ -42,10 +42,9 @@ from functools import lru_cache, cached_property
 from pyscf import lib
 from pyscf.dft.xc.utils import remove_dup, format_xc_code
 from pyscf.dft import xc_deriv
-from pyscf.dft.libxc import XC_CODES, XC, PROBLEMATIC_XC, XC_KEYS, XC_ALIAS, _NAME_WITH_DASH
 from pyscf import __config__
 
-_itrf = lib.load_library('libxc_itrf2')
+_itrf = lib.load_library('libxc_itrf')
 _itrf.LIBXC_is_lda.restype = ctypes.c_int
 _itrf.LIBXC_is_gga.restype = ctypes.c_int
 _itrf.LIBXC_is_meta_gga.restype = ctypes.c_int
@@ -123,6 +122,173 @@ def available_libxc_functionals():
     _itrf.xc_available_functional_numbers(func_ids)
     # Returned array
     return {_itrf.xc_functional_get_name(x).decode("UTF-8").upper() : x for x in func_ids}
+
+XC = XC_CODES = available_libxc_functionals()
+PROBLEMATIC_XC = {}
+
+def print_XC_CODES():
+    '''
+    Dump the built-in libxc XC_CODES along with their references in a readable format.
+    '''
+    xc_codes = available_libxc_functionals()
+    print('XC = XC_CODES = {')
+    for name, func_id in xc_codes.items():
+        refs = xc_reference(func_id)
+        key = f"'{name}'"
+        print(f'{key:<31s}: {func_id:<3d}, # {refs[0]}')
+        for r in refs[1:]:
+            print(f"                                      # {r}")
+    print('}')
+
+def _xc_key_without_underscore(xc_keys):
+    new_xc = []
+    for key, xc_id in xc_keys.items():
+        for delimiter in ('_XC_', '_X_', '_C_', '_K_'):
+            if delimiter in key:
+                key0, key1 = key.split(delimiter)
+                new_key1 = key1.replace('_', '').replace('-', '')
+                if key1 != new_key1:
+                    new_xc.append((key0+delimiter+new_key1, xc_id))
+                break
+    return new_xc
+XC_CODES.update(_xc_key_without_underscore(XC_CODES))
+del (_xc_key_without_underscore)
+
+#
+# alias
+#
+XC_CODES.update({
+    'GGA_C_BCGP'    : 'GGA_C_ACGGA',
+    'LDA'           : 1 ,
+    'SLATER'        : 1 ,
+    'VWN3'          : 8,
+    'VWNRPA'        : 8,
+    'VWN5'          : 7,
+    'B88'           : 106,
+    'PBE0'          : 406,
+    'PBE1PBE'       : 406,
+    'OPTXCORR'      : '0.7344536875999693*SLATER - 0.6984752285760186*OPTX,',
+    'B3LYP'         : 402,
+    'B3LYPG'        : 402,  # used by Gaussian
+    'B3LYP5'        : '.2*HF + .08*SLATER + .72*B88, .81*LYP + .19*VWN', # VWN5 version
+    'B3P86'         : 403,
+    'B3P86G'        : 403,  # used by Gaussian
+    'B3P86V5'       : '.2*HF + .08*SLATER + .72*B88, .81*P86 + .19*VWN', # VWN5 version
+    #'O3LYP5'        : '.1161*HF + .9262*SLATER + .8133*OPTXCORR, .81*LYP + .19*VWN5',
+    #'O3LYPG'        : '.1161*HF + .9262*SLATER + .8133*OPTXCORR, .81*LYP + .19*VWNRPA',
+    'O3LYP'         : 404, # in libxc == '.1161*HF + 0.071006917*SLATER + .8133*OPTX, .81*LYP + .19*VWN5', may be erroreous
+    'MPW3PW'        : 'MPW3PW5',  # VWN5 version
+    'MPW3PW5'       : '.2*HF + .08*SLATER + .72*MPW91, .81*PW91 + .19*VWN',
+    'MPW3PWG'       : 415,  # used by Gaussian
+    'MPW3LYP'       : 'MPW3LYP5',  # VWN5 version
+    'MPW3LYP5'      : '.218*HF + .073*SLATER + .709*MPW91, .871*LYP + .129*VWN',
+    'MPW3LYPG'      : 419,  # used by Gaussian
+    'REVB3LYP'      : 'REVB3LYP5',  # VWN5 version
+    'REVB3LYP5'     : '.2*HF + .13*SLATER + .67*B88, .84*LYP + .16*VWN',
+    'REVB3LYPG'     : 454,  # used by Gaussian
+    'X3LYP'         : 411,
+    'X3LYPG'        : 411,  # used by Gaussian
+    'X3LYP5'        : '.218*HF + .073*SLATER + .542385*B88 + .166615*PW91, .871*LYP + .129*VWN',
+    'CAMB3LYP'      : 'HYB_GGA_XC_CAM_B3LYP',
+    'CAMYBLYP'      : 'HYB_GGA_XC_CAMY_BLYP',
+    'CAMYB3LYP'     : 'HYB_GGA_XC_CAMY_B3LYP',
+    'B5050LYP'      : '.5*HF + .08*SLATER + .42*B88, .81*LYP + .19*VWN',
+    'MPW1LYP'       : '.25*HF + .75*MPW91, LYP',
+    'MPW1PBE'       : '.25*HF + .75*MPW91, PBE',
+    'PBE50'         : '.5*HF + .5*PBE, PBE',
+    'REVPBE0'       : '.25*HF + .75*PBE_R, PBE',
+    'B1B95'         : 440,
+    'TPSS0'         : '.25*HF + .75*TPSS, TPSS',
+})  # noqa: E501
+
+if getattr(__config__, 'B3LYP_WITH_VWN5', False):
+    XC_CODES['B3P86' ] = 'B3P86V5'
+    XC_CODES['B3LYP' ] = 'B3LYP5'
+    XC_CODES['X3LYP' ] = 'X3LYP5'
+
+XC_KEYS = set(XC_CODES.keys())
+
+# Some XC functionals have conventional name, like M06-L means M06-L for X
+# functional and M06-L for C functional, PBE mean PBE-X plus PBE-C. If the
+# conventional name was placed in the XC_CODES, it may lead to recursive
+# reference when parsing the xc description.  These names (as exceptions of
+# XC_CODES) are listed in XC_ALIAS below and they should be treated as a
+# shortcut for XC functional.
+XC_ALIAS = {
+    # Conventional name : name in XC_CODES
+    'BLYP'              : 'B88,LYP',
+    'BP86'              : 'B88,P86',
+    'PW91'              : 'PW91,PW91',
+    'PBE'               : 'PBE,PBE',
+    'REVPBE'            : 'PBE_R,PBE',
+    'PBESOL'            : 'PBE_SOL,PBE_SOL',
+    'PKZB'              : 'PKZB,PKZB',
+    'TPSS'              : 'TPSS,TPSS',
+    'REVTPSS'           : 'REVTPSS,REVTPSS',
+    'SCAN'              : 'SCAN,SCAN',
+    'RSCAN'             : 'RSCAN,RSCAN',
+    'R2SCAN'            : 'R2SCAN,R2SCAN',
+    'SCANL'             : 'SCANL,SCANL',
+    'R2SCANL'           : 'R2SCANL,R2SCANL',
+    'SOGGA'             : 'SOGGA,PBE',
+    'BLOC'              : 'BLOC,TPSSLOC',
+    'OLYP'              : 'OPTX,LYP',
+    'OPBE'              : 'OPTX,PBE',
+    'RPBE'              : 'RPBE,PBE',
+    'BPBE'              : 'B88,PBE',
+    'MPW91'             : 'MPW91,PW91',
+    'HFLYP'             : 'HF,LYP',
+    'HFPW92'            : 'HF,PW_MOD',
+    'SPW92'             : 'SLATER,PW_MOD',
+    'SVWN'              : 'SLATER,VWN',
+    'MS0'               : 'MS0,REGTPSS',
+    'MS1'               : 'MS1,REGTPSS',
+    'MS2'               : 'MS2,REGTPSS',
+    'MS2H'              : 'MS2H,REGTPSS',
+    'MVS'               : 'MVS,REGTPSS',
+    'MVSH'              : 'MVSH,REGTPSS',
+    'SOGGA11'           : 'SOGGA11,SOGGA11',
+    'SOGGA11_X'         : 'SOGGA11_X,SOGGA11_X',
+    'KT1'               : 'KT1,VWN',
+    'KT2'               : 'GGA_XC_KT2',
+    'KT3'               : 'GGA_XC_KT3',
+    'DLDF'              : 'DLDF,DLDF',
+    'GAM'               : 'GAM,GAM',
+    'M06_L'             : 'M06_L,M06_L',
+    'M06_SX'            : 'M06_SX,M06_SX',
+    'M11_L'             : 'M11_L,M11_L',
+    'MN12_L'            : 'MN12_L,MN12_L',
+    'MN15_L'            : 'MN15_L,MN15_L',
+    'N12'               : 'N12,N12',
+    'N12_SX'            : 'N12_SX,N12_SX',
+    'MN12_SX'           : 'MN12_SX,MN12_SX',
+    'MN15'              : 'MN15,MN15',
+    'MBEEF'             : 'MBEEF,PBE_SOL',
+    'SCAN0'             : 'SCAN0,SCAN',
+    'PBEOP'             : 'PBE,OP_PBE',
+    'BOP'               : 'B88,OP_B88',
+    # new in libxc-4.2.3
+    'REVSCAN'           : 'MGGA_X_REVSCAN,MGGA_C_REVSCAN',
+    'REVSCAN_VV10'      : 'MGGA_X_REVSCAN,MGGA_C_REVSCAN_VV10',
+    'SCAN_VV10'         : 'MGGA_X_SCAN,MGGA_C_SCAN_VV10',
+    'SCAN_RVV10'        : 'MGGA_X_SCAN,MGGA_C_SCAN_RVV10',
+    'M05'               : 'HYB_MGGA_X_M05,MGGA_C_M05',
+    'M06'               : 'HYB_MGGA_X_M06,MGGA_C_M06',
+    'M05_2X'            : 'HYB_MGGA_X_M05_2X,MGGA_C_M05_2X',
+    'M06_2X'            : 'HYB_MGGA_X_M06_2X,MGGA_C_M06_2X',
+    # extra aliases
+    'SOGGA11X'          : 'SOGGA11_X',
+    'M06L'              : 'M06_L',
+    'M11L'              : 'M11_L',
+    'MN12L'             : 'MN12_L',
+    'MN15L'             : 'MN15_L',
+    'N12SX'             : 'N12_SX',
+    'MN12SX'            : 'MN12_SX',
+    'M052X'             : 'M05_2X',
+    'M062X'             : 'M06_2X',
+}  # noqa: E122
+XC_ALIAS.update([(key.replace('-',''), XC_ALIAS[key])
+                 for key in XC_ALIAS if '-' in key])
 
 def xc_reference(xc_code):
     '''Returns the reference to the individual XC functional'''
@@ -523,6 +689,41 @@ def parse_xc(description):
             assert '-d3' not in token
             parse_token(token, 'compound XC', search_xc_alias=True)
     return tuple(hyb), tuple(remove_dup(fn_facs))
+
+_NAME_WITH_DASH = {'SR-HF'    : 'SR_HF',
+                   'LR-HF'    : 'LR_HF',
+                   'OTPSS-D'  : 'OTPSS_D',
+                   'B97-1'    : 'B97_1',
+                   'B97-2'    : 'B97_2',
+                   'B97-3'    : 'B97_3',
+                   'B97-K'    : 'B97_K',
+                   'B97-D'    : 'B97_D',
+                   'HCTH-93'  : 'HCTH_93',
+                   'HCTH-120' : 'HCTH_120',
+                   'HCTH-147' : 'HCTH_147',
+                   'HCTH-407' : 'HCTH_407',
+                   'WB97X-D'  : 'WB97X_D',
+                   'WB97X-V'  : 'WB97X_V',
+                   'WB97M-V'  : 'WB97M_V',
+                   'WB97X-D3' : 'WB97X_D3',
+                   'B97M-V'   : 'B97M_V',
+                   'M05-2X'   : 'M05_2X',
+                   'M06-L'    : 'M06_L',
+                   'M06-HF'   : 'M06_HF',
+                   'M06-2X'   : 'M06_2X',
+                   'M08-HX'   : 'M08_HX',
+                   'M08-SO'   : 'M08_SO',
+                   'M11-L'    : 'M11_L',
+                   'MN12-L'   : 'MN12_L',
+                   'MN15-L'   : 'MN15_L',
+                   'MN12-SX'  : 'MN12_SX',
+                   'N12-SX'   : 'N12_SX',
+                   'LRC-WPBE' : 'LRC_WPBE',
+                   'LRC-WPBEH': 'LRC_WPBEH',
+                   'LC-VV10'  : 'LC_VV10',
+                   'CAM-B3LYP': 'CAM_B3LYP',
+                   'E-'       : 'E_'} # For scientific notation
+
 
 def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=None):
     r'''Interface to call libxc library to evaluate XC functional, potential
