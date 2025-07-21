@@ -98,9 +98,9 @@ def primitive_overlap(li, lj, ai, aj, ci, cj, Ra, Rb, roots, weights) -> np.ndar
                     Iz = 0.0
                     for n in range(nroots):
                         w = weights[n]
-                        Ix += abs(mu[ix, 0, n] * nu[jx, 0, n] * w)
-                        Iy += abs(mu[iy, 1, n] * nu[jy, 1, n] * w)
-                        Iz += abs(mu[iz, 2, n] * nu[jz, 2, n] * w)
+                        Ix += abs(mu[ix, 0, n] * nu[jx, 0, n]) * w
+                        Iy += abs(mu[iy, 1, n] * nu[jy, 1, n]) * w
+                        Iz += abs(mu[iz, 2, n] * nu[jz, 2, n]) * w
 
                     s[i, j] = Ix * Iy * Iz * norm_fac
                     j += 1
