@@ -13,12 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# This file is adapted from `dft/test/test_libxc.py` of the PySCF core module
+# commit 25eaa9572977b903de24d5c11ad345cecd744728
+
 import os
 import ctypes
 import unittest
 import numpy
 from pyscf import gto, scf
-from pyscf import dft
+from pyscf import dft2 as dft
+from pyscf import dft as dft1
 from pyscf import lib
 
 def setUpModule():
@@ -31,14 +35,14 @@ def setUpModule():
     mol.build()
     #dm = scf.RHF(mol).run(conv_tol=1e-14).make_rdm1()
     dm = numpy.load(os.path.realpath(os.path.join(__file__, '..', 'dm_h4.npy')))
-    with lib.temporary_env(dft.radi, ATOM_SPECIFIC_TREUTLER_GRIDS=False):
-        mf = dft.RKS(mol)
+    with lib.temporary_env(dft1.radi, ATOM_SPECIFIC_TREUTLER_GRIDS=False):
+        mf = dft1.RKS(mol)
         mf.grids.atom_grid = {"H": (50, 110)}
         mf.prune = None
         mf.grids.build(with_non0tab=False)
         nao = mol.nao_nr()
-        ao = dft.numint.eval_ao(mol, mf.grids.coords, deriv=1)
-        rho = dft.numint.eval_rho(mol, ao, dm, xctype='GGA')
+        ao = dft1.numint.eval_ao(mol, mf.grids.coords, deriv=1)
+        rho = dft1.numint.eval_rho(mol, ao, dm, xctype='GGA')
 
 def tearDownModule():
     global mol, mf, ao, rho
@@ -47,12 +51,12 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.original_grids = dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
-        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
+        cls.original_grids = dft1.radi.ATOM_SPECIFIC_TREUTLER_GRIDS
+        dft1.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = False
 
     @classmethod
     def tearDownClass(cls):
-        dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
+        dft1.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
 
     def test_parse_xc(self):
         hyb, fn_facs = dft.libxc.parse_xc('.5*HF+.5*B3LYP5,VWN*.5')
@@ -179,18 +183,17 @@ class KnownValues(unittest.TestCase):
         self.assertTrue (dft.libxc.is_nlc(('402', 'b97mv')))
 
     def test_libxc_cam_beta(self):
-        rsh_tmp = (ctypes.c_double*3)()
-        dft.libxc._itrf.LIBXC_rsh_coeff(1, rsh_tmp)
+        rsh_tmp = dft.libxc.rsh_coeff(1)
         beta = rsh_tmp[2]
         self.assertEqual(beta, 0)
 
-        dft.libxc._itrf.LIBXC_rsh_coeff(433, rsh_tmp)
-        dft.libxc._itrf.LIBXC_rsh_coeff(1, rsh_tmp)
+        rsh_tmp = dft.libxc.rsh_coeff(433)
+        rsh_tmp = dft.libxc.rsh_coeff(1)
         beta = rsh_tmp[2]
         self.assertEqual(beta, 0)
 
-        dft.libxc._itrf.LIBXC_is_hybrid(1)
-        dft.libxc._itrf.LIBXC_rsh_coeff(1, rsh_tmp)
+        dft.libxc.is_hybrid_xc(1)
+        rsh_tmp = dft.libxc.rsh_coeff(1)
         beta = rsh_tmp[2]
         self.assertEqual(beta, 0)
 
@@ -266,7 +269,7 @@ class KnownValues(unittest.TestCase):
             kxc = None  # 3rd order functional derivative
             return exc, vxc, fxc, kxc
 
-        mf = dft.RKS(mol)
+        mf = dft1.RKS(mol)
         ni = dft.libxc.define_xc(mf._numint, eval_xc, 'GGA', hyb=0.2)
         numpy.random.seed(1)
         rho = numpy.random.random((4,10))
@@ -319,7 +322,7 @@ class KnownValues(unittest.TestCase):
             kxc = None  # 3rd order functional derivative
             return exc, vxc, fxc, kxc
 
-        mf = dft.RKS(mol)
+        mf = dft1.RKS(mol)
         ni = dft.libxc.define_xc(mf._numint, eval_mgga_xc, 'MGGA')
         numpy.random.seed(1)
         rho = numpy.random.random((5,10))
@@ -444,6 +447,54 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(parse_dft('b3lyp-d3zerom'), ('b3lyp', '', 'd3zerom'))
         self.assertEqual(parse_dft('wb97x-d3bj'), ('wb97x-v', False, 'd3bj'))
         self.assertEqual(parse_dft('wb97x-d3zero2b'), ('wb97x', '', 'd3zero2b'))
+
+    def test_set_param(self):
+        XC_ID_B97_2 = 410
+
+        param_b97_1 = numpy.array([0.789518, 0.573805, 0.660975, 0.0, 0.0,
+                                   0.0820011, 2.71681, -2.87103, 0.0, 0.0,
+                                   0.955689, 0.788552, -5.47869, 0.0, 0.0,
+                                   0.21
+        ])
+
+        param_b97_3 = numpy.array([0.7334648, 0.292527, 3.338789, -10.51158, 10.60907,
+                                   0.5623649, -1.32298, 6.359191, -7.464002, 1.827082,
+                                   1.13383, -2.811967, 7.431302, -1.969342, -11.74423,
+                                   2.692880E-01
+        ])
+
+        e1, v1, f1 = dft.libxc.eval_xc('B97-1', rho, 0, deriv=2)[:3]
+
+        e3, v3, f3 = dft.libxc.eval_xc('B97-3', rho, 0, deriv=2)[:3]
+
+        dft.libxc.register_custom_functional_('myfunc1', 'B97-2',
+                                              ext_params={XC_ID_B97_2: param_b97_1})
+        self.assertAlmostEqual(dft.libxc.hybrid_coeff('myfunc1'), 0.21, 10)
+        e, v, f = dft.libxc.eval_xc('myfunc1', rho, 0, deriv=2)[:3]
+        self.assertTrue(numpy.allclose(e, e1, 1e-7))
+        self.assertTrue(numpy.allclose(v, v1, 1e-7))
+        self.assertTrue(numpy.allclose(f, f1, 1e-7))
+
+        dft.libxc.register_custom_functional_('myfunc2', 'B97-2',
+                                              ext_params={XC_ID_B97_2: param_b97_3})
+        self.assertAlmostEqual(dft.libxc.hybrid_coeff('myfunc2'), 2.692880E-01, 10)
+        e, v, f = dft.libxc.eval_xc('myfunc2', rho, 0, deriv=2)[:3]
+        self.assertTrue(numpy.allclose(e, e3, 1e-7))
+        self.assertTrue(numpy.allclose(v, v3, 1e-7))
+        self.assertTrue(numpy.allclose(f, f3, 1e-7))
+
+        dft.libxc.update_custom_functional_('myfunc1',
+                                            ext_params={XC_ID_B97_2: param_b97_3})
+        self.assertAlmostEqual(dft.libxc.hybrid_coeff('myfunc1'), 2.692880E-01, 10)
+        e, v, f = dft.libxc.eval_xc('myfunc1', rho, 0, deriv=2)[:3]
+        self.assertTrue(numpy.allclose(e, e3, 1e-7))
+        self.assertTrue(numpy.allclose(v, v3, 1e-7))
+        self.assertTrue(numpy.allclose(f, f3, 1e-7))
+
+        dft.libxc.unregister_custom_functional_('myfunc1')
+        dft.libxc.unregister_custom_functional_('myfunc2')
+        self.assertRaises(KeyError, dft.libxc.xc_type, 'myfunc1')
+        self.assertRaises(KeyError, dft.libxc.xc_type, 'myfunc2')
 
 if __name__ == "__main__":
     print("Test libxc")
