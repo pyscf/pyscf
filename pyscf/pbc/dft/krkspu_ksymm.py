@@ -55,6 +55,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 @lib.with_doc(krkspu.KRKSpU.__doc__)
 class KsymAdaptedKRKSpU(krks_ksymm.KRKS):
 
+    _keys = {"U_idx", "U_val", "C_ao_lo", "U_lab", 'minao_ref', 'alpha'}
+
     get_veff = get_veff
     energy_elec = krkspu.energy_elec
     to_hf = lib.invalid_method('to_hf')

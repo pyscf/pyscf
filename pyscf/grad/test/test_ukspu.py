@@ -36,13 +36,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(de[1,2], (e1 - e2)/2e-3, 6)
 
     def test_finite_diff_ukspu_grad(self):
-        mol = gto.M(atom='C 0 1.6 0; O 0 0 1', spin=2, basis='ccpvdz', unit='B', verbose=0)
+        mol = gto.M(atom='C 0 0 0; O 1 2 1', basis='ccpvdz', unit='B', verbose=0)
         U_idx = ["C 2p"]
         U_val = [5.0]
         mf = ukspu.UKSpU(mol, xc='pbe', U_idx=U_idx, U_val=U_val)
+        mol = gto.M(atom='C 0 1.6 0; O 0 0 1', spin=2, basis='ccpvdz', unit='B', verbose=0)
         e, g = mf.nuc_grad_method().as_scanner()(mol)
-        self.assertAlmostEqual(e, -112.7869835493314, 8)
-        self.assertAlmostEqual(lib.fp(g), -1.0489136822191656, 5)
+        self.assertAlmostEqual(e, -112.76620903336628, 8)
+        self.assertAlmostEqual(lib.fp(g), -1.0568299810814519, 5)
 
         mol1 = mol.copy()
         mf_scanner = mf.as_scanner()

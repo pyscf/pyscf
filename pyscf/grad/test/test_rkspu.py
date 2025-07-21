@@ -53,13 +53,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(de[1,2], (e1 - e2)/2e-3, 6)
 
     def test_finite_diff_rkspu_grad(self):
-        mol = gto.M(atom='C 0 1.6 0; O 0 0 1', basis='ccpvdz', unit='B', verbose=0)
+        mol = gto.M(atom='C 0 0 0; O 1 2 1', basis='ccpvdz', unit='B', verbose=0)
         U_idx = ["C 2p"]
         U_val = [5.0]
         mf = rkspu.RKSpU(mol, xc='pbe', U_idx=U_idx, U_val=U_val)
+        mol = gto.M(atom='C 0 1.6 0; O 0 0 1', basis='ccpvdz', unit='B', verbose=0)
         e, g = mf.nuc_grad_method().as_scanner()(mol)
-        self.assertAlmostEqual(e, -113.0468869772191, 8)
-        self.assertAlmostEqual(lib.fp(g), -0.7728822285688215, 5)
+        self.assertAlmostEqual(e, -113.00924201782233, 8)
+        self.assertAlmostEqual(lib.fp(g), -0.7753406769593958, 5)
 
         mol1 = mol.copy()
         mf_scanner = mf.as_scanner()
