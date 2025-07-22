@@ -271,6 +271,7 @@ class KROHF(khf.KRHF):
     analyze = khf.analyze
     spin_square = pbcrohf.ROHF.spin_square
     canonicalize = canonicalize
+    gen_response = kuhf.gen_response
     to_gpu = lib.to_gpu
 
     def __init__(self, cell, kpts=np.zeros((1,3)),

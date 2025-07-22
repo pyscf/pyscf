@@ -82,15 +82,18 @@ def get_vxc(ni, cell, grids, xc_code, dms, kpts, kpts_band=None, relativity=0, h
             ao_k2 = np.asarray(ao_k2)
             rho_a = make_rho(0, ao_k2[:,0], mask, xctype)
             rho_b = make_rho(1, ao_k2[:,0], mask, xctype)
-            vxc = ni.eval_xc(xc_code, (rho_a, rho_b), 1, relativity, 1)[1]
-            vrho = vxc[0]
-            aowa = np.einsum('xpi,p->xpi', ao_k1[:,0], weight*vrho[:,0])
-            aowb = np.einsum('xpi,p->xpi', ao_k1[:,0], weight*vrho[:,1])
+            vxc = ni.eval_xc_eff(xc_code, (rho_a, rho_b), deriv=1, xctype=xctype)[1]
+            wv = vxc[:,0] * weight
+            aowa = np.einsum('xpi,p->xpi', ao_k1[:,0], wv[0])
+            aowb = np.einsum('xpi,p->xpi', ao_k1[:,0], wv[1])
             ao_k2 = rho_a = rho_b = vxc = None
             for kn in range(nkpts):
                 rks_grad._d1_dot_(vmat[:,0,kn], cell, ao_k1[kn,1:4], aowa[kn], mask, ao_loc, True)
                 rks_grad._d1_dot_(vmat[:,1,kn], cell, ao_k1[kn,1:4], aowb[kn], mask, ao_loc, True)
             ao_k1 = aowa = aowb = None
+
+    elif xctype == 'HF':
+        pass
 
     elif xctype=='GGA':
         ao_deriv = 2
@@ -100,13 +103,14 @@ def get_vxc(ni, cell, grids, xc_code, dms, kpts, kpts_band=None, relativity=0, h
             ao_k2 = np.asarray(ao_k2)
             rho_a = make_rho(0, ao_k2[:,:4], mask, xctype)
             rho_b = make_rho(1, ao_k2[:,:4], mask, xctype)
-            vxc = ni.eval_xc(xc_code, (rho_a, rho_b), 1, relativity, 1)[1]
-            wva, wvb = numint._uks_gga_wv0((rho_a, rho_b), vxc, weight)
+            vxc = ni.eval_xc_eff(xc_code, (rho_a, rho_b), deriv=1, xctype=xctype)[1]
+            wv = vxc * weight
+            wv[:,0] *= .5
             ao_k2 = rho_a = rho_b = vxc = None
             for kn in range(nkpts):
-                rks_grad._gga_grad_sum_(vmat[:,0,kn], cell, ao_k1[kn], wva, mask, ao_loc)
-                rks_grad._gga_grad_sum_(vmat[:,1,kn], cell, ao_k1[kn], wvb, mask, ao_loc)
-            ao_k1 = wva = wvb = None
+                rks_grad._gga_grad_sum_(vmat[:,0,kn], cell, ao_k1[kn], wv[0], mask, ao_loc)
+                rks_grad._gga_grad_sum_(vmat[:,1,kn], cell, ao_k1[kn], wv[1], mask, ao_loc)
+            ao_k1 = None
 
     elif xctype=='NLC':
         raise NotImplementedError("NLC")

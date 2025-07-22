@@ -169,7 +169,6 @@ class FFTDF(lib.StreamObject):
     }
 
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
-        from pyscf.pbc.dft import gen_grid
         from pyscf.pbc.dft import numint
         self.cell = cell
         self.stdout = cell.stdout
@@ -179,8 +178,6 @@ class FFTDF(lib.StreamObject):
         if isinstance(kpts, KPoints):
             kpts = kpts.kpts
         self.kpts = kpts
-
-        self.grids = gen_grid.UniformGrids(cell)
         # FFT from real space density distributes error to every rho_ij(G) than
         # the one with largest Gaussian exponent. Therefore the error for FFT-ERI
         # ~ Nele * error[rho(Ecut)] while in AFT the error is ~ error[rho(Ecut)]^2.
@@ -196,16 +193,15 @@ class FFTDF(lib.StreamObject):
         self._rsh_df = {}  # Range separated Coulomb DF objects
 
     @property
-    def mesh(self):
-        return self.grids.mesh
-    @mesh.setter
-    def mesh(self, mesh):
-        self.grids.mesh = mesh
+    def grids(self):
+        from pyscf.pbc.dft import gen_grid
+        grids = gen_grid.UniformGrids(self.cell)
+        grids.mesh = self.mesh
+        return grids
 
     def reset(self, cell=None):
         if cell is not None:
             self.cell = cell
-        self.grids.reset(cell)
         self._rsh_df = {}
         return self
 

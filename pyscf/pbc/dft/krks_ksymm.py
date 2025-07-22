@@ -36,110 +36,58 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
     t0 = (logger.process_clock(), logger.perf_counter())
 
-    ni = ks._numint
-
-    # ndim = 3 : dm.shape = (nkpts, nao, nao)
-    ground_state = (isinstance(dm, np.ndarray) and dm.ndim == 3 and
-                    kpts_band is None)
-
+    ground_state = kpts_band is None
     if kpts_band is None:
         kpts_band = kpts.kpts_ibz
 
-    if len(dm) != kpts.nkpts_ibz:
-        raise KeyError('Shape of the input density matrix does not '
-                       'match the number of IBZ k-points: '
-                       f'{len(dm)} vs {kpts.nkpts_ibz}.')
-    dm_bz = kpts.transform_dm(dm)
-
-    hybrid = ni.libxc.is_hybrid_xc(ks.xc)
-
-    if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
+    ni = ks._numint
+    if isinstance(ni, multigrid.MultiGridNumInt):
         if ks.do_nlc():
             raise NotImplementedError(f'MultiGrid for NLC functional {ks.xc} + {ks.nlc}')
-        n, exc, vxc = multigrid.nr_rks(ks.with_df, ks.xc, dm_bz, hermi,
-                                       kpts.kpts, kpts_band,
-                                       with_j=True, return_j=False)
-        logger.info(ks, 'nelec by numeric integration = %s', n)
-        t0 = logger.timer(ks, 'vxc', *t0)
-        return vxc
-
-    ks.initialize_grids(cell, dm_bz, kpts.kpts, ground_state)
-
-    if hermi == 2:  # because rho = 0
-        n, exc, vxc = 0, 0, 0
+        j_in_xc = ni.xc_with_j
     else:
-        max_memory = ks.max_memory - lib.current_memory()[0]
-        n, exc, vxc = ni.nr_rks(cell, ks.grids, ks.xc, dm_bz,
-                                kpts=kpts.kpts, kpts_band=kpts_band,
-                                max_memory=max_memory)
-        logger.info(ks, 'nelec by numeric integration = %s', n)
-        if ks.do_nlc():
-            if ni.libxc.is_nlc(ks.xc):
-                xc = ks.xc
-            else:
-                assert ni.libxc.is_nlc(ks.nlc)
-                xc = ks.nlc
-            n, enlc, vnlc = ni.nr_nlc_vxc(cell, ks.nlcgrids, xc, dm_bz,
-                                          0, hermi, kpts.kpts, max_memory=max_memory)
-            exc += enlc
-            vxc += vnlc
-            logger.info(ks, 'nelec with nlc grids = %s', n)
-        t0 = logger.timer(ks, 'vxc', *t0)
+        ks.initialize_grids(cell, dm, kpts)
+        j_in_xc = False
+
+    max_memory = ks.max_memory - lib.current_memory()[0]
+    n, exc, vxc = ni.nr_rks(cell, ks.grids, ks.xc, dm, 0, hermi,
+                            kpts=kpts, kpts_band=kpts_band,
+                            max_memory=max_memory)
+    logger.info(ks, 'nelec by numeric integration = %s', n)
+    if ks.do_nlc():
+        if ni.libxc.is_nlc(ks.xc):
+            xc = ks.xc
+        else:
+            assert ni.libxc.is_nlc(ks.nlc)
+            xc = ks.nlc
+        n, enlc, vnlc = ni.nr_nlc_vxc(cell, ks.nlcgrids, xc, dm,
+                                      0, hermi, kpts, max_memory=max_memory)
+        exc += enlc
+        vxc += vnlc
+        logger.info(ks, 'nelec with nlc grids = %s', n)
+    t0 = logger.timer(ks, 'vxc', *t0)
 
     weight = kpts.weights_ibz
-    if not hybrid:
-        vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
+    vj, vk = krks._get_jk(ks, cell, dm, hermi, kpts, kpts_band, with_j=not j_in_xc)
+    if j_in_xc:
+        ecoul = vxc.ecoul
+    else:
         vxc += vj
-    else:
-        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-        if omega == 0:
-            vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
-            vk *= hyb
-        elif alpha == 0: # LR=0, only SR exchange
-            vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
-            vk = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=-omega)
-            vk *= hyb
-        elif hyb == 0: # SR=0, only LR exchange
-            vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
-            vk = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
-            vk *= alpha
-        else: # SR and LR exchange with different ratios
-            vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
-            vk *= hyb
-            vklr = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
-            vklr *= (alpha - hyb)
-            vk += vklr
-        vxc += vj - vk * .5
-
-        if ground_state:
-            exc -= np.einsum('K,Kij,Kji', weight, dm, vk).real * .5 * .5
-
-    if ground_state:
-        ecoul = np.einsum('K,Kij,Kji', weight, dm, vj) * .5
-    else:
         ecoul = None
-
+        if ground_state:
+            ecoul = np.einsum('K,Kij,Kji', weight, dm, vj) * .5
+    if ni.libxc.is_hybrid_xc(ks.xc):
+        vxc -= .5 * vk
+        if ground_state:
+            exc -= np.einsum('K,Kij,Kji', weight, dm, vk).real * .25
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
+    logger.timer(ks, 'veff', *t0)
     return vxc
-
-def get_rho(mf, dm=None, grids=None, kpts=None):
-    if kpts is None: kpts = mf.kpts
-    if isinstance(kpts, libkpts.KPoints):
-        if dm is None:
-            dm = mf.make_rdm1()
-        if len(dm) != kpts.nkpts_ibz:
-            raise RuntimeError(
-                'Number of input density matrices does not match the number of '
-                f'IBZ kpts: {len(dm)} vs {kpts.nkpts_ibz}.')
-        dm = kpts.transform_dm(dm)
-        kpts = kpts.kpts
-    return krks.get_rho(mf, dm, grids, kpts)
 
 
 class KsymAdaptedKRKS(krks.KRKS, khf_ksymm.KRHF):
 
     get_veff = get_veff
-    get_rho = get_rho
 
     kpts = khf_ksymm.KsymAdaptedKSCF.kpts
     get_ovlp = khf_ksymm.KsymAdaptedKSCF.get_ovlp
@@ -152,7 +100,6 @@ class KsymAdaptedKRKS(krks.KRKS, khf_ksymm.KRHF):
     get_orbsym = khf_ksymm.KsymAdaptedKSCF.get_orbsym
     orbsym = khf_ksymm.KsymAdaptedKSCF.orbsym
     _finalize = khf_ksymm.KsymAdaptedKSCF._finalize
-
     get_init_guess = khf_ksymm.KRHF.get_init_guess
 
     def __init__(self, cell, kpts=libkpts.KPoints(), xc='LDA,VWN',

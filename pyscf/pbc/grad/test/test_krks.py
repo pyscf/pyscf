@@ -34,7 +34,7 @@ def setUpModule():
     cell.build()
 
     kpts = cell.make_kpts([1,1,3])
-    disp = 1e-5
+    disp = 1e-3
 
 def tearDownModule():
     global cell
