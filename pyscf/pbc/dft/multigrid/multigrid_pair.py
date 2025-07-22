@@ -113,7 +113,7 @@ def _update_task_list(mydf, hermi=0, ntasks=None, ke_ratio=None, rel_cutoff=None
 
 
 def eval_rho(cell, dm, task_list, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
-             dimension=None, cell1=None, shls_slice1=None, Ls=None,
+             dimension=None, cell1=None, shls_slice1=None,
              a=None, ignore_imag=False):
     '''Collocate density (and gradients) on the real-space grid.
 
@@ -174,11 +174,6 @@ def eval_rho(cell, dm, task_list, shls_slice=None, hermi=0, xctype='LDA', kpts=N
         dimension = cell0.dimension
     assert dimension == getattr(cell1, "dimension", None)
 
-    if Ls is None and dimension > 0:
-        Ls = cell0.get_lattice_Ls()
-    elif Ls is None and dimension == 0:
-        Ls = np.zeros((1,3))
-
     if dimension == 0 or kpts is None or gamma_point(kpts):
         dm = dm.reshape(-1,1,naoi,naoj)
     else:
@@ -200,7 +195,7 @@ def eval_rho(cell, dm, task_list, shls_slice=None, hermi=0, xctype='LDA', kpts=N
                     task_list, hermi,
                     (i0, i1, j0, j1),
                     ao_loc0, ao_loc1, dimension,
-                    Ls, a, b,
+                    a, b,
                     ish_atm, ish_bas, ish_env,
                     jsh_atm, jsh_bas, jsh_env,
                     cell0.cart)
@@ -284,7 +279,7 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), deriv=0,
 
 def eval_mat(cell, weights, task_list, shls_slice=None, comp=1, hermi=0, deriv=0,
              xctype='LDA', kpts=None, grid_level=None, dimension=None, mesh=None,
-             cell1=None, shls_slice1=None, Ls=None, a=None):
+             cell1=None, shls_slice1=None, a=None):
     if deriv == 1:
         assert comp == 3
         assert hermi == 0
@@ -340,11 +335,6 @@ def eval_mat(cell, weights, task_list, shls_slice=None, comp=1, hermi=0, deriv=0
         dimension = cell0.dimension
     assert dimension == getattr(cell1, "dimension", None)
 
-    if Ls is None and dimension > 0:
-        Ls = cell0.get_lattice_Ls()
-    elif Ls is None and dimension == 0:
-        Ls = np.zeros((1,3))
-
     weights = np.asarray(weights)
     if dimension == 0 or kpts is None or gamma_point(kpts):
         assert weights.dtype == np.double
@@ -381,7 +371,7 @@ def eval_mat(cell, weights, task_list, shls_slice=None, comp=1, hermi=0, deriv=0
                 task_list, comp, hermi, grid_level,
                 (i0, i1, j0, j1),
                 ao_loc0, ao_loc1, dimension,
-                Ls, a, b,
+                a, b,
                 ish_atm, ish_bas, ish_env,
                 jsh_atm, jsh_bas, jsh_env,
                 cell0.cart)

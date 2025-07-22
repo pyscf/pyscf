@@ -77,10 +77,6 @@ def build_neighbor_list_for_shlpairs(cell, cell1=None, Ls=None,
     '''
     if cell1 is None:
         cell1 = cell
-    if Ls is None:
-        Ls = cell.get_lattice_Ls()
-    Ls = np.asarray(Ls, order='C', dtype=float)
-    nimgs = len(Ls)
 
     if hermi == 1 and cell1 is not cell:
         logger.warn(cell,
@@ -109,6 +105,12 @@ def build_neighbor_list_for_shlpairs(cell, cell1=None, Ls=None,
             jsh_rcut = cell1.rcut_by_shells(precision=precision)
     njsh = len(jsh_bas)
     assert njsh == len(jsh_rcut)
+
+    if Ls is None:
+        rcut = ish_rcut.max(initial=0) + jsh_rcut.max(initial=0)
+        Ls = cell.get_lattice_Ls(rcut=rcut)
+    Ls = np.asarray(Ls, order='C', dtype=float)
+    nimgs = len(Ls)
 
     nl = ctypes.POINTER(_CNeighborList)()
     libpbc.build_neighbor_list(

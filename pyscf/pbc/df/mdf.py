@@ -36,7 +36,7 @@ from pyscf.pbc.df import df
 from pyscf.pbc.df import aft
 from pyscf.pbc.df.aft import _check_kpts
 from pyscf.pbc.df.gdf_builder import _CCGDFBuilder
-from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder
+from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder, estimate_rs_2c2e_rcut
 from pyscf.pbc.df.incore import libpbc, make_auxcell
 from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import is_zero, member, unique
@@ -228,9 +228,11 @@ class _RSMDFBuilder(_RSGDFBuilder):
         #    <g|g> - 2 <g|G><G|g> + <g|G><G|G><G|g> = <g|g> - <g|G><G|g>
         auxcell = self.auxcell
         omega = self.omega
-        rs_auxcell = self.rs_auxcell
+        rs_auxcell = self.rs_auxcell.copy()
         auxcell_c = rs_auxcell.compact_basis_cell()
+
         if auxcell_c.nbas > 0:
+            auxcell_c.rcut = estimate_rs_2c2e_rcut(auxcell_c, omega)
             with auxcell_c.with_short_range_coulomb(omega):
                 sr_j2c = list(auxcell_c.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts))
 
