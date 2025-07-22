@@ -45,7 +45,11 @@ def gradient_gs(f_gs, Gv):
     )
     return out
 
-def get_gga_vrho_gs(v, v1, Gv, weight, ngrid):
+def get_gga_vrho_gs(v, v1, Gv, weight, ngrid, fac=2.):
+    '''Update v inplace
+    v -= fac * 1j * np.einsum('px,xp->p', Gv, v1)
+    v *= weight
+    '''
     v = np.asarray(v, order='C', dtype=np.complex128)
     v1 = np.asarray(v1, order='C', dtype=np.complex128)
     Gv = np.asarray(Gv, order='C', dtype=np.double)
@@ -54,6 +58,7 @@ def get_gga_vrho_gs(v, v1, Gv, weight, ngrid):
         v.ctypes.data_as(ctypes.c_void_p),
         v1.ctypes.data_as(ctypes.c_void_p),
         Gv.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_double(fac),
         ctypes.c_double(weight),
         ctypes.c_int(ngrid)
     )

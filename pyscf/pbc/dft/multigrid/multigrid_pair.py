@@ -618,12 +618,13 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     rhoR = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
     rhoR = rhoR.reshape(-1,ngrids)
     exc, vxc = ni.eval_xc_eff(xc_code, rhoR, deriv=1, xctype=xctype)[:2]
-    wv = weight * vxc
-    wv_freq = tools.fft(wv, mesh).reshape(-1,ngrids)
+    wv_freq = tools.fft(vxc, mesh).reshape(-1,ngrids)
     if xctype == 'GGA' and GGA_METHOD.upper() == 'FFT':
+        #:wv_freq = (wv_freq[0] - 1j * np.einsum('px,xp->p', Gv, wv_freq[1:4])) * weight
         Gv = cell.get_Gv(ni.mesh)
-        wv_freq[0] -= np.einsum('xp,px->p', 1j*wv_freq[1:4], Gv)
-        wv_freq = wv_freq[:1]
+        wv_freq = backend.get_gga_vrho_gs(wv_freq[:1], wv_freq[1:4], Gv, weight, ngrids, 1.)
+    else:
+        wv_freq *= weight
 
     nelec = np.sum(rhoR[0]) * weight
     excsum = np.dot(rhoR[0], exc) * weight
@@ -710,12 +711,15 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     rhoR = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
     rhoR = rhoR.reshape(2,-1,ngrids)
     exc, vxc = ni.eval_xc_eff(xc_code, rhoR, deriv=1, xctype=xctype)[:2]
-    wv = weight * vxc
-    wv_freq = tools.fft(wv.reshape(-1,ngrids), mesh).reshape(2,-1,ngrids)
+    wv_freq = tools.fft(vxc.reshape(-1,ngrids), mesh).reshape(2,-1,ngrids)
     if xctype == 'GGA' and GGA_METHOD.upper() == 'FFT':
+        #:wv_freq = (wv_freq[:,0] - 1j * np.einsum('px,nxp->np', Gv, wv_freq[:,1:4])) * weight
         Gv = cell.get_Gv(ni.mesh)
-        wv_freq[:,0] -= np.einsum('nxp,px->np', 1j*wv_freq[:,1:4], Gv)
+        backend.get_gga_vrho_gs(wv_freq[0,:1], wv_freq[0,1:4], Gv, weight, ngrids, 1.)
+        backend.get_gga_vrho_gs(wv_freq[1,:1], wv_freq[1,1:4], Gv, weight, ngrids, 1.)
         wv_freq = wv_freq[:,:1]
+    else:
+        wv_freq *= weight
 
     nelec = rhoR[:,0].sum(axis=1) * weight
     excsum = (rhoR[0,0] + rhoR[1,0]).dot(exc) * weight

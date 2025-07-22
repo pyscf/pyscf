@@ -141,7 +141,6 @@ def get_vpploc_part1_ip1(mydf, kpts=np.zeros((1,3))):
         vG = _get_vpplocG_part1(mydf)
 
     vpp_kpts = _get_j_pass2_ip1(mydf, vG, kpts, hermi=0, deriv=1)
-    vpp_kpts += _get_pp_without_erf(mydf, kpts)
     if gamma_point(kpts):
         vpp_kpts = vpp_kpts.real
     if len(kpts) == 1:

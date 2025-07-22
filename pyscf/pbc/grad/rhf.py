@@ -26,7 +26,6 @@ from pyscf.grad.rhf import _write
 from pyscf.pbc.gto.pseudo import pp_int
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf.pbc.dft.multigrid import MultiGridNumInt2
-from pyscf.pbc.dft.multigrid.pp import get_vpploc_part1_ip1
 
 SCREEN_VHF_DM_CONTRA = getattr(__config__, 'pbc_rhf_grad_screen_vhf_dm_contract', True)
 libpbc = lib.load_library('libpbc')
