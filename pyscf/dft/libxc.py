@@ -549,16 +549,6 @@ def parse_xc(description):
         description, _, _ = parse_dft(description)
         description = description.upper()
 
-    if (description in ('B3P86', 'B3LYP', 'X3LYP') and
-        not getattr(parse_xc, 'b3lyp5_warned', False) and
-        not hasattr(__config__, 'B3LYP_WITH_VWN5')):
-        parse_xc.b3lyp5_warned = True
-        warnings.warn('Since PySCF-2.3, B3LYP (and B3P86) are changed to the VWN-RPA variant, '
-                      'corresponding to the original definition by Stephens et al. (issue 1480) '
-                      'and the same as the B3LYP functional in Gaussian. '
-                      'To restore the VWN5 definition, you can put the setting '
-                      '"B3LYP_WITH_VWN5 = True" in pyscf_conf.py')
-
     def assign_omega(omega, hyb_or_sr, lr=0):
         if hyb[2] == omega or omega == 0:
             hyb[0] += hyb_or_sr
