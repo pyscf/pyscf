@@ -17,14 +17,14 @@ mc = mcpdft.CASCI(mf, 'tM06L', 6, 8).run ()
 tM06L0 = 't' + mcpdft.hyb('M06L',0.25, hyb_type='average')
 mc = mcpdft.CASCI(mf, tM06L0, 6, 8).run ()
 
-## MC23: meta-hybrid on-top functional [PNAS, 122, 1, 2025, e2419413121; https://doi.org/10.1073/pnas.2419413121]
-#
-## State-Specific
-#mc = mcpdft.CASCI(mf, 'MC23', 6, 8)
-#mc.kernel()
-#
-## State-average
-#nroots=2
-#mc = mcpdft.CASCI(mf, 'MC23', 6, 8)
-#mc.fcisolver.nroots=nroots
-#mc.kernel()[0]
+# MC23: meta-hybrid on-top functional [PNAS, 122, 1, 2025, e2419413121; https://doi.org/10.1073/pnas.2419413121]
+
+# State-Specific
+mc = mcpdft.CASCI(mf, 'MC23', 6, 8)
+mc.kernel()
+
+# State-average
+nroots=2
+mc = mcpdft.CASCI(mf, 'MC23', 6, 8)
+mc.fcisolver.nroots=nroots
+mc.kernel()[0]
