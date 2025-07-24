@@ -95,19 +95,19 @@ class MultiStateMCPDFTSolver :
     # tag
 
 
-# Monkeypatch for double grad folders
+# Monkeypatch for double prop folders
 # TODO: more elegant solution
-import os
-mypath = os.path.dirname (os.path.dirname (os.path.abspath (__file__)))
-mygradpath = os.path.join (mypath, 'grad')
-from pyscf import grad
-grad.__path__.append (mygradpath)
-grad.__path__=list(set(grad.__path__))
-mydfgradpath = os.path.join (os.path.join (mypath, 'df'), 'grad')
-from pyscf.df import grad as df_grad
-df_grad.__path__.append (mydfgradpath)
-df_grad.__path__=list(set(df_grad.__path__))
-mynacpath = os.path.join(mypath, "nac")
-from pyscf import nac
-nac.__path__.append(mynacpath)
-nac.__path__ = list(set(nac.__path__))
+import os, warnings
+# Search for PySCF-Forge via mcdcft
+try:
+    from pyscf import mcdcft
+    mypath = os.path.dirname (os.path.dirname (os.path.abspath (mcdcft.__file__)))
+    myproppath = os.path.join (mypath, 'prop')
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message="Module.*is under testing")
+        from pyscf import prop
+    prop.__path__.append(myproppath)
+    prop.__path__ = list(set(prop.__path__))
+except (ModuleNotFoundError,ImportError):
+    pass
