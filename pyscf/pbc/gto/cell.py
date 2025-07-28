@@ -1947,4 +1947,27 @@ class Cell(mole.MoleBase):
             mol._build_symmetry()
         return mol
 
+    def set_geom_(self, atoms_or_coords=None, unit=None, symmetry=None,
+                  a=None, inplace=True):
+        '''Update geometry and lattice parameters'''
+        if inplace:
+            cell = self
+        else:
+            cell = self.copy(deep=False)
+            cell._env = cell._env.copy()
+        if a is not None:
+            logger.info(self, 'Set lattice vectors')
+            cell.a = a
+            if self._mesh_from_build:
+                cell.mesh = None
+            if self._rcut_from_build:
+                cell.rcut = None
+            cell._built = False
+
+        if atoms_or_coords is not None:
+            cell = mole.MoleBase.set_geom_(cell, atoms_or_coords, unit, symmetry)
+        if not cell._built:
+            cell.build(False, False)
+        return cell
+
 del (INTEGRAL_PRECISION, WRAP_AROUND, WITH_GAMMA, EXP_DELIMITER)
