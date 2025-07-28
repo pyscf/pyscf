@@ -30,7 +30,7 @@ import numpy as np
 from numba import njit, prange
 from scipy.special import roots_hermite
 
-from pyscf import gto
+from pyscf import gto, M
 
 
 @njit(cache=True, nogil=True)
