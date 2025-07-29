@@ -106,10 +106,30 @@ def _get_weight_strain_derivatives(cell, ngrids):
     weight_1 = np.eye(3) * weight_0
     return weight_0, weight_1
 
-def _eval_ao_strain_derivatives(cell, coords):
-    pass
+def _eval_ao_strain_derivatives(cell, coords, kpts=None, deriv=0,
+                                shls_slice=None, non0tab=None, cutoff=None, out=None):
+    '''
+    Returns:
+        ao_kpts: (nkpts, 3x3xcomp, ngrids, nao) ndarray
+            AO values at each k-point
+    '''
+    comp = (deriv+1)*(deriv+2)*(deriv+3)//6
+    comp_3x3 = comp * 9
+    if cell.cart:
+        feval = 'GTOval_cart_deriv%d_strain_tensor' % deriv
+    else:
+        feval = 'GTOval_sph_deriv%d_strain_tensor' % deriv
+    out = cell.pbc_eval_gto(feval, coords, comp_3x3, kpts, shls_slice=shls_slice,
+                            non0tab=non0tab, cutoff=cutoff, out=out)
+    ngrids = len(coords)
+    if isinstance(out, np.ndarray):
+        out = out.reshape(3,3,comp,ngrids,-1)
+    else:
+        nkpts = len(out)
+        out = [x.reshape(3,3,comp,ngrids,-1) for x in out]
+    return out
 
-def get_veff():
+def get_veff(cell, dm, kpts=None):
     '''Strain derivatives for Coulomb and XC at gamma point
     '''
     mesh = mydf.mesh
@@ -118,25 +138,48 @@ def get_veff():
     assert is_zero(kpts)
     #assert Uniform grids
 
+    xctype = ni._xc_type(xc_code)
+    make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms, hermi)
+
+    coords = grids.coords
     ngrids = np.prod(mesh)
     Gv = cell.get_Gv(mesh)
     coulG_0, coulG_1 = _get_weight_strain_derivatives(cell, Gv)
-    weight_0, weight_1 = _get_weight_strain_derivatives(cell, ngrids)
+    weights_0, weights_1 = _get_weight_strain_derivatives(cell, ngrids)
+    a = cell.lattice_vectors()
+    b = np.linalg.inv(a.T)
 
-    block_size = 2000
-    for p0, p1 in lib.prange(0, ngrids, block_size):
-        ao = None
-        ao_strain = None
-        ao_ks, mask = ao_ks_etc[0], ao_ks_etc[2]
-        rhoR[i,p0:p1] += make_rho(i, ao_ks, mask, 'LDA').real
-        rho0 = None
+    if xctype == 'LDA':
+        deriv = 0
+    elif xctype == 'GGA' or xctype == 'MGGA':
+        deriv = 1
+
+    p1 = 0
+    for ao, _, mask, weight, coords \
+            in ni.block_loop(cell, grids, nao, deriv, kpts, None):
+        p0, p1 = p1, p1 + weight.size
+        ao_strain = _eval_ao_strain_derivatives(cell, coords, kpts, deriv)
+        rho = make_rho(i, ao[:,0], mask, xctype)
+        # d lattice / d strain = einsum('ix,xb,ya->abiy', a, eye(3), eye(3))
+        # d coords / d strain = grids_frac.dot( d lattice / d strain)
+        #       = einsum('gi,ix,xb,ya->abgy', grids_frac, a, eye(3), eye(3))
+        #       = eye(3)[:,None,None] * coords.T[:,:,None]
+        if xctype == 'LDA':
+            ao[1:4] * grids_frac
+        else:
+            ao[4:10] * grids_frac
+
+
+    def eval_rho(self, cell, ao_kpts, dm_kpts, non0tab=None, xctype='LDA',
+                 hermi=0, with_lapl=True, verbose=None):
         rho1 = None
 
+    vxc1 += vR1 * weight_0 + vR0 * weight_1
+
+    for p0, p1 in lib.prange(0, ngrids, block_size):
         rhoG = pbctools.fft(rhoR[i], mesh)
         vG = coulG * rhoG
         vR = pbctools.ifft(vG, mesh).real
-
-        vxc1 += vR1 * weight_0 + vR0 * weight_1
 
         aow = np.einsum('xi,x->xi', ao[0], vR[i,p0:p1])
         vj_kpts[:,i,k] -= lib.einsum('axi,xj->aij', ao[1:].conj(), aow)

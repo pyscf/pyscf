@@ -118,6 +118,148 @@ class KnownValues(unittest.TestCase):
         cell1, cell2 = _finite_diff_cells(cell, 0, 1, disp=1e-5)
         assert abs(coulG1[0,1] - (pbc.get_coulG(cell1) - pbc.get_coulG(cell2)) / 2e-5).max() < 1e-9
 
+    def test_eval_ao_cart(self):
+        a = np.eye(3) * 5
+        np.random.seed(5)
+        a += np.random.rand(3, 3) - .5
+        cell = gto.M(atom='He 1 1 1; He 2 1.5 2.4',
+                     basis=[[0, [.5, 1]],
+                            [1, [1.5, 1], [.5, 1]],
+                            [2, [.8, 1]]], a=a, unit='Bohr', cart=True)
+        coords = np.random.rand(10, 3)
+        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords)
+        for (i, j) in [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)]:
+            cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-5)
+            ao1 = dft.numint.eval_ao(cell1, coords)
+            ao2 = dft.numint.eval_ao(cell2, coords)
+            assert abs(ao_value[i,j,0] - (ao1 - ao2) / 2e-5).max() < 1e-9
+
+    def test_eval_ao_sph(self):
+        a = np.eye(3) * 5
+        np.random.seed(5)
+        a += np.random.rand(3, 3) - .5
+        cell = gto.M(atom='He 1 1 1; He 2 1.5 2.4',
+                     basis=[[0, [.5, 1]],
+                            [1, [1.5, 1], [.5, 1]],
+                            [2, [.8, 1]]], a=a, unit='Bohr')
+        coords = np.random.rand(10, 3)
+        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords)
+        for (i, j) in [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)]:
+            cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-5)
+            ao1 = dft.numint.eval_ao(cell1, coords)
+            ao2 = dft.numint.eval_ao(cell2, coords)
+            assert abs(ao_value[i,j,0] - (ao1 - ao2) / 2e-5).max() < 1e-9
+
+    def test_eval_ao_deriv1_cart(self):
+        a = np.eye(3) * 5
+        np.random.seed(5)
+        a += np.random.rand(3, 3) - .5
+        cell = gto.M(atom='He 1 1 1; He 2 1.5 2.4',
+                     basis=[[0, [.5, 1]],
+                            [1, [1.5, 1], [.5, 1]],
+                            [2, [.8, 1]]], a=a, unit='Bohr', cart=True)
+        coords = np.random.rand(10, 3)
+        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords, deriv=1)
+        for (i, j) in [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)]:
+            cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-5)
+            ao1 = dft.numint.eval_ao(cell1, coords, deriv=1)
+            ao2 = dft.numint.eval_ao(cell2, coords, deriv=1)
+            assert abs(ao_value[i,j] - (ao1 - ao2) / 2e-5).max() < 1e-9
+
+    def test_eval_ao_deriv1_sph(self):
+        a = np.eye(3) * 5
+        np.random.seed(5)
+        a += np.random.rand(3, 3) - .5
+        cell = gto.M(atom='He 1 1 1; He 2 1.5 2.4',
+                     basis=[[0, [.5, 1]],
+                            [1, [1.5, 1], [.5, 1]],
+                            [2, [.8, 1]]], a=a, unit='Bohr')
+        coords = np.random.rand(10, 3)
+        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords, deriv=1)
+        for (i, j) in [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)]:
+            cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-5)
+            ao1 = dft.numint.eval_ao(cell1, coords, deriv=1)
+            ao2 = dft.numint.eval_ao(cell2, coords, deriv=1)
+            assert abs(ao_value[i,j] - (ao1 - ao2) / 2e-5).max() < 1e-9
+
+    def test_eval_ao_kpts(self):
+        a = np.eye(3) * 5
+        np.random.seed(5)
+        a += np.random.rand(3, 3) - .5
+        cell = gto.M(atom='He 1 1 1; He 2 1.5 2.4',
+                     basis=[[0, [.5, 1]],
+                            [1, [1.5, 1], [.5, 1]],
+                            [2, [.8, 1]]], a=a, unit='Bohr')
+        kmesh = [3, 1, 1]
+        kpts = cell.make_kpts(kmesh)
+        coords = np.random.rand(10, 3)
+        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords, kpts)
+        for (i, j) in [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)]:
+            cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-5)
+            ao1 = dft.numint.eval_ao_kpts(cell1, coords, cell1.make_kpts(kmesh))
+            ao2 = dft.numint.eval_ao_kpts(cell2, coords, cell2.make_kpts(kmesh))
+            assert abs(ao_value[0][i,j,0] - (ao1[0] - ao2[0]) / 2e-5).max() < 1e-9
+            assert abs(ao_value[1][i,j,0] - (ao1[1] - ao2[1]) / 2e-5).max() < 1e-9
+            assert abs(ao_value[2][i,j,0] - (ao1[2] - ao2[2]) / 2e-5).max() < 1e-9
+
+    def test_eval_ao_deriv1_cart_kpts(self):
+        a = np.eye(3) * 5
+        np.random.seed(5)
+        a += np.random.rand(3, 3) - .5
+        cell = gto.M(atom='He 1 1 1; He 2 1.5 2.4',
+                     basis=[[0, [.5, 1]],
+                            [1, [1.5, 1], [.5, 1]],
+                            [2, [.8, 1]]], a=a, unit='Bohr', cart=True)
+        kmesh = [3, 1, 1]
+        kpts = cell.make_kpts(kmesh)
+        coords = np.random.rand(10, 3)
+        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords, kpts, deriv=1)
+        for (i, j) in [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)]:
+            cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-5)
+            ao1 = dft.numint.eval_ao_kpts(cell1, coords, cell1.make_kpts(kmesh), deriv=1)
+            ao2 = dft.numint.eval_ao_kpts(cell2, coords, cell2.make_kpts(kmesh), deriv=1)
+            assert abs(ao_value[0][i,j] - (ao1[0] - ao2[0]) / 2e-5).max() < 1e-9
+            assert abs(ao_value[1][i,j] - (ao1[1] - ao2[1]) / 2e-5).max() < 1e-9
+            assert abs(ao_value[2][i,j] - (ao1[2] - ao2[2]) / 2e-5).max() < 1e-9
+
+    def test_eval_ao_deriv1_sph_kpts(self):
+        a = np.eye(3) * 5
+        np.random.seed(5)
+        a += np.random.rand(3, 3) - .5
+        cell = gto.M(atom='He 1 1 1; He 2 1.5 2.4',
+                     basis=[[0, [.5, 1]],
+                            [1, [1.5, 1], [.5, 1]],
+                            [2, [.8, 1]]], a=a, unit='Bohr')
+        kmesh = [3, 1, 1]
+        kpts = cell.make_kpts(kmesh)
+        coords = np.random.rand(10, 3)
+        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords, kpts, deriv=1)
+        for (i, j) in [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)]:
+            cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-5)
+            ao1 = dft.numint.eval_ao_kpts(cell1, coords, cell1.make_kpts(kmesh), deriv=1)
+            ao2 = dft.numint.eval_ao_kpts(cell2, coords, cell2.make_kpts(kmesh), deriv=1)
+            assert abs(ao_value[0][i,j] - (ao1[0] - ao2[0]) / 2e-5).max() < 1e-9
+            assert abs(ao_value[1][i,j] - (ao1[1] - ao2[1]) / 2e-5).max() < 1e-9
+            assert abs(ao_value[2][i,j] - (ao1[2] - ao2[2]) / 2e-5).max() < 1e-9
+
+    def test_lattice_vector_derivatives(self):
+        a = np.eye(3) * 5
+        np.random.seed(5)
+        a += np.random.rand(3, 3) - .5
+        cell = gto.M(atom='He 1 1 1; He 2 1.5 2.4',
+                     basis=[[0, [.5, 1]]], a=a, unit='Bohr')
+        ref = np.zeros((3,3,3,3))
+        for i in range(3):
+            for j in range(3):
+                ref[i,j,:,i] = a[:,j]
+        a1 = np.eye(3)[:,None,None] * a.T[:,:,None]
+        assert abs(ref - a1).max() < 1e-9
+        for i in range(3):
+            for j in range(3):
+                cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-5)
+                assert abs(a1[i,j] - (cell1.lattice_vectors() -
+                                      cell2.lattice_vectors())/2e-5).max() < 1e-9
+
 if __name__ == "__main__":
     print("Full Tests for RKS Stress tensor")
     unittest.main()
