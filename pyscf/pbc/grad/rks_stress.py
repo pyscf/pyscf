@@ -2,8 +2,10 @@ import numpy as np
 import pyscf
 from pyscf import lib
 from pyscf import gto
+from pyscf.pbc.dft.gen_grid import UniformGrids
 from pyscf.pbc.tools import pbc as pbctools
 from pyscf.pbc.lib.kpts_helper import is_zero
+from pyscf.dft.numint import _scale_ao, _contract_rho
 
 '''
 Stress tensor is defined as the energy derivatives for the strain tensor e_ij
@@ -101,7 +103,8 @@ def _get_coulG_strain_derivatives(cell, Gv):
     coulG_1 *= coulG_0
     return coulG_0, coulG_1
 
-def _get_weight_strain_derivatives(cell, ngrids):
+def _get_weight_strain_derivatives(cell, grids):
+    ngrids = grids.size
     weight_0 = cell.vol / ngrids
     weight_1 = np.eye(3) * weight_0
     return weight_0, weight_1
@@ -129,67 +132,145 @@ def _eval_ao_strain_derivatives(cell, coords, kpts=None, deriv=0,
         out = [x.reshape(3,3,comp,ngrids,-1) for x in out]
     return out
 
-def get_veff(cell, dm, kpts=None):
+def get_veff(ks_grad, cell, dm, kpts=None):
     '''Strain derivatives for Coulomb and XC at gamma point
     '''
-    mesh = mydf.mesh
+    mf = ks_grad.base
+    cell = mf.cell
+    if dm is None: dm = mf.make_rdm1()
+    if kpts is None: kpts = mf.kpts
+    assert kpts is None or is_zero(kpts)
     assert cell.low_dim_ft_type != 'inf_vacuum'
     assert cell.dimension != 1
     assert is_zero(kpts)
-    #assert Uniform grids
 
+    ni = mf._numint
+    if ks_grad.grids is not None:
+        grids = ks_grad.grids
+    else:
+        grids = mf.grids
+    assert isinstance(grids, UniformGrids)
+
+    xc_code = mf.xc
     xctype = ni._xc_type(xc_code)
-    make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms, hermi)
-
-    coords = grids.coords
-    ngrids = np.prod(mesh)
-    Gv = cell.get_Gv(mesh)
-    coulG_0, coulG_1 = _get_weight_strain_derivatives(cell, Gv)
-    weights_0, weights_1 = _get_weight_strain_derivatives(cell, ngrids)
-    a = cell.lattice_vectors()
-    b = np.linalg.inv(a.T)
-
     if xctype == 'LDA':
         deriv = 0
-    elif xctype == 'GGA' or xctype == 'MGGA':
+        nvar = 1
+    elif xctype == 'GGA':
         deriv = 1
+        nvar = 4
+    elif xctype == 'MGGA':
+        deriv = 1
+        nvar = 5
+    else:
+        raise NotImplementedError
 
+    assert dm.ndim == 2
+    nao = dm.shape[-1]
+
+    coords = grids.coords
+    ngrids = len(coords)
+    mesh = grids.mesh
+    Gv = cell.get_Gv(mesh)
+    coulG_0, coulG_1 = _get_coulG_strain_derivatives(cell, Gv)
+    weight_0, weight_1 = _get_weight_strain_derivatives(cell, grids)
+    out = np.zeros((3,3))
+    rho0 = np.empty((nvar, ngrids))
+    rho1 = np.empty((3,3, nvar, ngrids))
+
+    XY, YY, ZY, XZ, YZ, ZZ = 5, 7, 8, 6, 8, 9
     p1 = 0
     for ao, _, mask, weight, coords \
-            in ni.block_loop(cell, grids, nao, deriv, kpts, None):
+            in ni.block_loop(cell, grids, nao, deriv+1, kpts, None):
         p0, p1 = p1, p1 + weight.size
         ao_strain = _eval_ao_strain_derivatives(cell, coords, kpts, deriv)
-        rho = make_rho(i, ao[:,0], mask, xctype)
-        # d lattice / d strain = einsum('ix,xb,ya->abiy', a, eye(3), eye(3))
-        # d coords / d strain = grids_frac.dot( d lattice / d strain)
-        #       = einsum('gi,ix,xb,ya->abgy', grids_frac, a, eye(3), eye(3))
-        #       = eye(3)[:,None,None] * coords.T[:,:,None]
+        ao_strain = ao_strain[0] # gamma point only
         if xctype == 'LDA':
-            ao[1:4] * grids_frac
-        else:
-            ao[4:10] * grids_frac
+            ao1 = ao_strain[:,:,0]
+            # Adding the response of the grids
+            ao1 += np.einsum('xgi,gy->xygi', ao[1:4], coords)
+            c0 = ao[0].dot(dm)
+            rho0[0,p0:p1] = _contract_rho(ao[0], c0).real
+            rho1[:,:,0,p0:p1] = np.einsum('xygi,gi->xyg', ao1, c0.conj()).real
+            rho1[:,:,0,p0:p1] *= 2
 
+            exc, vxc = ni.eval_xc_eff(xc_code, rho0[0,p0:p1], 1, xctype=xctype, spin=0)[:2]
+            out += np.einsum('xyg,g->xy', rho1[:,:,0,p0:p1], vxc[0]).real * weight_0
+            out += np.einsum('g,g->', rho0[0,p0:p1], exc).real * weight_1
+        elif xctype == 'GGA':
+            ao_strain[:,:,0] += np.einsum('xgi,gy->xygi', ao[1:4], coords)
+            ao_strain[:,:,1] += np.einsum('xgi,gy->xygi', ao[4:7], coords)
+            ao_strain[0,:,2] += np.einsum('gi,gy->ygi', ao[XY], coords)
+            ao_strain[1,:,2] += np.einsum('gi,gy->ygi', ao[YY], coords)
+            ao_strain[2,:,2] += np.einsum('gi,gy->ygi', ao[ZY], coords)
+            ao_strain[0,:,3] += np.einsum('gi,gy->ygi', ao[XZ], coords)
+            ao_strain[1,:,3] += np.einsum('gi,gy->ygi', ao[YZ], coords)
+            ao_strain[2,:,3] += np.einsum('gi,gy->ygi', ao[ZZ], coords)
+            c0 = lib.einsum('xgi,ij->xgj', ao[:4], dm)
+            for i in range(4):
+                rho0[i,p0:p1] = _contract_rho(ao[0], c0[i]).real
+            rho0[1:4,p0:p1] *= 2 # dm should be hermitian
+            rho1[:,:, : ,p0:p1]  = np.einsum('xyngi,gi->xyng', ao_strain, c0[0].conj()).real
+            rho1[:,:,1:4,p0:p1] += np.einsum('xygi,ngi->xyng', ao_strain[:,:,0], c0[1:4].conj()).real
+            rho1[:,:,:,p0:p1] *= 2
 
-    def eval_rho(self, cell, ao_kpts, dm_kpts, non0tab=None, xctype='LDA',
-                 hermi=0, with_lapl=True, verbose=None):
-        rho1 = None
+            exc, vxc = ni.eval_xc_eff(xc_code, rho0[:,p0:p1], 1, xctype=xctype, spin=0)[:2]
+            out += np.einsum('xyng,ng->xy', rho1[:,:,:,p0:p1], vxc).real * weight_0
+            out += np.einsum('g,g->', rho0[0,p0:p1], exc).real * weight_1
+        else: # MGGA
+            ao_strain[:,:,0] += np.einsum('xgi,gy->xygi', ao[1:4], coords)
+            ao_strain[:,:,1] += np.einsum('xgi,gy->xygi', ao[4:7], coords)
+            ao_strain[0,:,2] += np.einsum('gi,gy->ygi', ao[XY], coords)
+            ao_strain[1,:,2] += np.einsum('gi,gy->ygi', ao[YY], coords)
+            ao_strain[2,:,2] += np.einsum('gi,gy->ygi', ao[ZY], coords)
+            ao_strain[0,:,3] += np.einsum('gi,gy->ygi', ao[XZ], coords)
+            ao_strain[1,:,3] += np.einsum('gi,gy->ygi', ao[YZ], coords)
+            ao_strain[2,:,3] += np.einsum('gi,gy->ygi', ao[ZZ], coords)
+            c0 = lib.einsum('xgi,ij->xgj', ao[:4], dm)
+            for i in range(4):
+                rho0[i,p0:p1] = _contract_rho(ao[0], c0[i]).real
+            rho0[4,p0:p1]  = _contract_rho(ao[1], c0[1]).real
+            rho0[4,p0:p1] += _contract_rho(ao[2], c0[2]).real
+            rho0[4,p0:p1] += _contract_rho(ao[3], c0[3]).real
+            rho0[4,p0:p1] *= .5
+            rho0[1:4,p0:p1] *= 2 # dm should be hermitian
+            rho1[:,:, :4,p0:p1]  = np.einsum('xyngi,gi->xyng', ao_strain, c0[0].conj()).real
+            rho1[:,:,1:4,p0:p1] += np.einsum('xygi,ngi->xyng', ao_strain[:,:,0], c0[1:4].conj()).real
+            rho1[:,:,4,p0:p1] = np.einsum('xyngi,ngi->xyg', ao_strain[:,:,1:4], c0[1:4].conj()).real
+            rho1[:,:,4,p0:p1] *= .5
+            rho1[:,:,:,p0:p1] *= 2
 
-    vxc1 += vR1 * weight_0 + vR0 * weight_1
+            exc, vxc = ni.eval_xc_eff(xc_code, rho0[:,p0:p1], 1, xctype=xctype, spin=0)[:2]
+            out += np.einsum('xyng,ng->xy', rho1[:,:,:,p0:p1], vxc).real * weight_0
+            out += np.einsum('g,g->', rho0[0,p0:p1], exc).real * weight_1
 
-    for p0, p1 in lib.prange(0, ngrids, block_size):
-        rhoG = pbctools.fft(rhoR[i], mesh)
-        vG = coulG * rhoG
-        vR = pbctools.ifft(vG, mesh).real
+    rhoG = pbctools.fft(rho0[0], mesh)
+    vG = rhoG * coulG_0
+    vR = pbctools.ifft(vG, mesh)
+    EJ = np.einsum('xyg,g->xy', rho1[:,:,0], vR).real * weight_0 * 2
+    EJ += np.einsum('g,g->', rho0[0], vR).real * weight_1
+    EJ += np.einsum('g,xyg,g->xy', rhoG, coulG_1, rhoG.conj()).real * (weight_0/ngrids)
+    out += .5 * EJ
+    return out
 
-        aow = np.einsum('xi,x->xi', ao[0], vR[i,p0:p1])
-        vj_kpts[:,i,k] -= lib.einsum('axi,xj->aij', ao[1:].conj(), aow)
-        ao = ao_strain = None
-    return de
+def get_pp(cell, kpts=None):
+    disp = max(1e-5, cell.precision**.5)
+    out = []
+    for x in range(3):
+        for y in range(3):
+            cell1, cell2 = _finite_diff_cells(cell, x, y, disp)
+            v1 = np.array(get_pp(cell1, kpts))
+            v2 = np.array(get_pp(cell2, kpts))
+            out.append((v1 - v2) / (2*disp))
+    return out
 
-def get_pp():
-    # increase cell.precision call finite difference
-    pass
-
-def ewald():
-    # increase cell.precision call finite difference
-    pass
+def ewald(cell, ew_eta=None, ew_cut=None):
+    disp = max(1e-5, (cell.precision*.1)**.5)
+    out = np.empty((3, 3))
+    for i in range(3):
+        for j in range(3):
+            cell1, cell2 = _finite_diff_cells(cell, i, j, disp)
+            e1 = cell1.ewald()
+            e2 = cell2.ewald()
+            out[i,j] = (e1 - e2) / (2*disp)
+    return out

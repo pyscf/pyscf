@@ -19,7 +19,10 @@ from pyscf import lib
 from pyscf.gto import ATOM_OF, intor_cross
 from pyscf.pbc import dft, gto, grad
 from pyscf.pbc.tools import pbc
-from pyscf.pbc.grad import rks_stress
+from pyscf.pbc.df import FFTDF
+from pyscf.pbc.dft.numint import NumInt
+from pyscf.pbc.dft.gen_grid import UniformGrids
+from pyscf.pbc.grad import rks_stress, rks
 from pyscf.pbc.grad.rks_stress import _finite_diff_cells
 
 def setUpModule():
@@ -242,6 +245,52 @@ class KnownValues(unittest.TestCase):
             assert abs(ao_value[1][i,j] - (ao1[1] - ao2[1]) / 2e-5).max() < 1e-9
             assert abs(ao_value[2][i,j] - (ao1[2] - ao2[2]) / 2e-5).max() < 1e-9
 
+    def test_eval_ao_grid_response(self):
+        a = np.eye(3) * 5
+        np.random.seed(5)
+        a += np.random.rand(3, 3) - .5
+        cell = gto.M(atom='He 1 1 1; He 2 1.5 2.4',
+                     basis=[[0, [.5, 1]],
+                            [1, [1.5, 1], [.5, 1]],
+                            [2, [.8, 1]]], a=a, unit='Bohr', cart=True)
+
+        mesh = [6,5,4]
+        coords = cell.get_uniform_grids(mesh)
+        ao = dft.numint.eval_ao(cell, coords, deriv=1)
+        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords)
+        ao_value[:,:,0] += np.einsum('xgi,gy->xygi', ao[1:4], coords)
+        for (i, j) in [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)]:
+            cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-5)
+            ao1 = dft.numint.eval_ao(cell1, cell1.get_uniform_grids(mesh))
+            ao2 = dft.numint.eval_ao(cell2, cell2.get_uniform_grids(mesh))
+            assert abs(ao_value[i,j,0] - (ao1 - ao2) / 2e-5).max() < 1e-9
+
+        a = np.eye(3) * 5
+        np.random.seed(5)
+        a += np.random.rand(3, 3) - .5
+        cell = gto.M(atom='He 1 1 1; He 2 1.5 2.4',
+                     basis=[[0, [.5, 1]],
+                            [1, [1.5, 1], [.5, 1]],
+                            [2, [.8, 1]]], a=a, unit='Bohr')
+
+        mesh = [6,5,4]
+        coords = cell.get_uniform_grids(mesh)
+        ao = dft.numint.eval_ao(cell, coords, deriv=2)
+        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords, deriv=1)
+        ao_value[:,:,0] += np.einsum('xgi,gy->xygi', ao[1:4], coords)
+        ao_value[:,:,1] += np.einsum('xgi,gy->xygi', ao[4:7], coords)
+        ao_value[0,:,2] += np.einsum('gi,gy->ygi', ao[5], coords) # YX
+        ao_value[1,:,2] += np.einsum('gi,gy->ygi', ao[7], coords) # YY
+        ao_value[2,:,2] += np.einsum('gi,gy->ygi', ao[8], coords) # YZ
+        ao_value[0,:,3] += np.einsum('gi,gy->ygi', ao[6], coords) # ZX
+        ao_value[1,:,3] += np.einsum('gi,gy->ygi', ao[8], coords) # ZY
+        ao_value[2,:,3] += np.einsum('gi,gy->ygi', ao[9], coords) # ZZ
+        for (i, j) in [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)]:
+            cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-5)
+            ao1 = dft.numint.eval_ao(cell1, cell1.get_uniform_grids(mesh), deriv=1)
+            ao2 = dft.numint.eval_ao(cell2, cell2.get_uniform_grids(mesh), deriv=1)
+            assert abs(ao_value[i,j] - (ao1 - ao2) / 2e-5).max() < 1e-9
+
     def test_lattice_vector_derivatives(self):
         a = np.eye(3) * 5
         np.random.seed(5)
@@ -259,6 +308,90 @@ class KnownValues(unittest.TestCase):
                 cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-5)
                 assert abs(a1[i,j] - (cell1.lattice_vectors() -
                                       cell2.lattice_vectors())/2e-5).max() < 1e-9
+
+    def test_get_veff_lda(self):
+        a = np.eye(3) * 5
+        np.random.seed(5)
+        a += np.random.rand(3, 3) - .5
+        cell = gto.M(atom='He 1 1 1; He 2 1.5 2.4',
+                     basis=[[0, [.5, 1]],
+                            [1, [1.5, 1], [.5, 1]],
+                            [2, [.8, 1]]
+                           ], a=a, unit='Bohr')
+        nao = cell.nao
+        dm = np.random.rand(nao, nao) - .5
+        dm = dm.dot(dm.T) * .2
+        xc = 'lda,'
+        mf_grad = rks.Gradients(cell.RKS(xc=xc))
+        dat = rks_stress.get_veff(mf_grad, cell, dm)
+        ni = NumInt()
+        for (i, j) in [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)]:
+            cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-5)
+            vj1 = FFTDF(cell1).get_jk(dm, with_k=False)[0]
+            vj1 *= .5
+            exc1 = ni.nr_rks(cell1, UniformGrids(cell1), xc, dm)[1]
+            vj2 = FFTDF(cell2).get_jk(dm, with_k=False)[0]
+            vj2 *= .5
+            exc2 = ni.nr_rks(cell2, UniformGrids(cell2), xc, dm)[1]
+            de = np.einsum('ij,ji', dm, (vj1-vj2))
+            de += exc1 - exc2
+            assert abs(dat[i,j] - de/2e-5).max() < 1e-9
+
+    def test_get_veff_gga(self):
+        a = np.eye(3) * 5
+        np.random.seed(5)
+        a += np.random.rand(3, 3) - .5
+        cell = gto.M(atom='He 1 1 1; He 2 1.5 2.4',
+                     basis=[[0, [.5, 1]],
+                            [1, [1.5, 1], [.5, 1]],
+                            [2, [.8, 1]]
+                           ], a=a, unit='Bohr')
+        nao = cell.nao
+        dm = np.random.rand(nao, nao) - .5
+        dm = dm.dot(dm.T) * .2
+        xc = 'pbe,'
+        mf_grad = rks.Gradients(cell.RKS(xc=xc))
+        dat = rks_stress.get_veff(mf_grad, cell, dm)
+        ni = NumInt()
+        for (i, j) in [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)]:
+            cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-5)
+            vj1 = FFTDF(cell1).get_jk(dm, with_k=False)[0]
+            vj1 *= .5
+            exc1 = ni.nr_rks(cell1, UniformGrids(cell1), xc, dm)[1]
+            vj2 = FFTDF(cell2).get_jk(dm, with_k=False)[0]
+            vj2 *= .5
+            exc2 = ni.nr_rks(cell2, UniformGrids(cell2), xc, dm)[1]
+            de = np.einsum('ij,ji', dm, (vj1-vj2))
+            de += exc1 - exc2
+            assert abs(dat[i,j] - de/2e-5).max() < 1e-9
+
+    def test_get_veff_mgga(self):
+        a = np.eye(3) * 5
+        np.random.seed(5)
+        a += np.random.rand(3, 3) - .5
+        cell = gto.M(atom='He 1 1 1; He 2 1.5 2.4',
+                     basis=[[0, [.5, 1]],
+                            [1, [1.5, 1], [.5, 1]],
+                            [2, [.8, 1]]
+                           ], a=a, unit='Bohr')
+        nao = cell.nao
+        dm = np.random.rand(nao, nao) - .5
+        dm = dm.dot(dm.T) * .2
+        xc = 'm06,'
+        mf_grad = rks.Gradients(cell.RKS(xc=xc))
+        dat = rks_stress.get_veff(mf_grad, cell, dm)
+        ni = NumInt()
+        for (i, j) in [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)]:
+            cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-5)
+            vj1 = FFTDF(cell1).get_jk(dm, with_k=False)[0]
+            vj1 *= .5
+            exc1 = ni.nr_rks(cell1, UniformGrids(cell1), xc, dm)[1]
+            vj2 = FFTDF(cell2).get_jk(dm, with_k=False)[0]
+            vj2 *= .5
+            exc2 = ni.nr_rks(cell2, UniformGrids(cell2), xc, dm)[1]
+            de = np.einsum('ij,ji', dm, (vj1-vj2))
+            de += exc1 - exc2
+            assert abs(dat[i,j] - de/2e-5).max() < 1e-9
 
 if __name__ == "__main__":
     print("Full Tests for RKS Stress tensor")
