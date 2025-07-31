@@ -23,3 +23,7 @@ class Gradients(rhf.Gradients):
     '''Non-relativistic Gamma-point restricted Kohn-Sham DFT gradients'''
 
     grids = None
+
+    def get_stress(self):
+        from pyscf.pbc.grad import rks_stress
+        return rks_stress.kernel(self)

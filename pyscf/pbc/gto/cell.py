@@ -1956,7 +1956,8 @@ class Cell(mole.MoleBase):
             cell = self.copy(deep=False)
             cell._env = cell._env.copy()
         if a is not None:
-            logger.info(self, 'Set lattice vectors')
+            logger.info(self, 'Set new lattice vectors')
+            logger.info(self, '%s', a)
             cell.a = a
             if self._mesh_from_build:
                 cell.mesh = None
