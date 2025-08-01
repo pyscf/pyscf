@@ -280,7 +280,7 @@ class PipekMezey(boys.OrbitalLocalizer):
             logger.error(self, 'PM with IAO scheme should include an scf '
                          'object when creating PM object.\n    PM(mol, mf=scf_object)')
             raise ValueError('PM attribute method is not valid')
-        
+
         if method.lower() == "becke" and not hasattr(self, "charge_matrices"):
             self.charge_matrices = becke_charge_matrices(mol)
 
