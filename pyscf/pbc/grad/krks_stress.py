@@ -159,54 +159,60 @@ def get_vxc(ks_grad, cell, dm_kpts, kpts, with_j=False, with_nuc=False):
     rho0 = np.zeros((nvar, ngrids))
     rho1 = np.zeros((3,3, nvar, ngrids))
 
+    def partial_dot(bra, ket):
+        '''conj(ig),ig->g'''
+        # Adapt to the _contract_rho function
+        return _contract_rho(bra.T, ket.T)
+
     XY, YY, ZY, XZ, YZ, ZZ = 5, 7, 8, 6, 8, 9
     p1 = 0
     for ao_ks, _, mask, weight, coords \
             in ni.block_loop(cell, grids, nao, deriv+1, kpts=kpts):
         p0, p1 = p1, p1 + weight.size
         ao_ks_strain = _eval_ao_strain_derivatives(cell, coords, kpts, deriv=deriv)
+        coordsT = np.asarray(coords.T, order='C')
         for k, dm in enumerate(dm_kpts):
-            ao = ao_ks[k]
-            ao_strain = ao_ks_strain[k]
+            ao = ao_ks[k].transpose(0,2,1)
+            ao_strain = ao_ks_strain[k].transpose(0,1,2,4,3)
             if xctype == 'LDA':
                 ao1 = ao_strain[:,:,0]
                 # Adding grids' response
-                ao1 += np.einsum('xgi,gy->xygi', ao[1:4], coords)
-                c0 = ao[0].dot(dm)
-                rho0[0,p0:p1] += _contract_rho(ao[0], c0).real
-                rho1[:,:,0,p0:p1] += np.einsum('xygi,gi->xyg', ao1, c0.conj()).real
+                ao1 += np.einsum('xig,yg->xyig', ao[1:4], coordsT)
+                c0 = dm.T.dot(ao[0])
+                rho0[0,p0:p1] += partial_dot(ao[0], c0).real
+                rho1[:,:,0,p0:p1] += np.einsum('xyig,ig->xyg', ao1, c0.conj()).real
             elif xctype == 'GGA':
-                ao_strain[:,:,0] += np.einsum('xgi,gy->xygi', ao[1:4], coords)
-                ao_strain[:,:,1] += np.einsum('xgi,gy->xygi', ao[4:7], coords)
-                ao_strain[0,:,2] += np.einsum('gi,gy->ygi', ao[XY], coords)
-                ao_strain[1,:,2] += np.einsum('gi,gy->ygi', ao[YY], coords)
-                ao_strain[2,:,2] += np.einsum('gi,gy->ygi', ao[ZY], coords)
-                ao_strain[0,:,3] += np.einsum('gi,gy->ygi', ao[XZ], coords)
-                ao_strain[1,:,3] += np.einsum('gi,gy->ygi', ao[YZ], coords)
-                ao_strain[2,:,3] += np.einsum('gi,gy->ygi', ao[ZZ], coords)
-                c0 = lib.einsum('xgi,ij->xgj', ao[:4], dm)
+                ao_strain[:,:,0] += np.einsum('xig,yg->xyig', ao[1:4], coordsT)
+                ao_strain[:,:,1] += np.einsum('xig,yg->xyig', ao[4:7], coordsT)
+                ao_strain[0,:,2] += np.einsum('ig,yg->yig', ao[XY], coordsT)
+                ao_strain[1,:,2] += np.einsum('ig,yg->yig', ao[YY], coordsT)
+                ao_strain[2,:,2] += np.einsum('ig,yg->yig', ao[ZY], coordsT)
+                ao_strain[0,:,3] += np.einsum('ig,yg->yig', ao[XZ], coordsT)
+                ao_strain[1,:,3] += np.einsum('ig,yg->yig', ao[YZ], coordsT)
+                ao_strain[2,:,3] += np.einsum('ig,yg->yig', ao[ZZ], coordsT)
+                c0 = lib.einsum('xig,ij->xjg', ao[:4], dm)
                 for i in range(4):
-                    rho0[i,p0:p1] += _contract_rho(ao[0], c0[i]).real
-                rho1[:,:, : ,p0:p1] += np.einsum('xyngi,gi->xyng', ao_strain, c0[0].conj()).real
-                rho1[:,:,1:4,p0:p1] += np.einsum('xygi,ngi->xyng', ao_strain[:,:,0], c0[1:4].conj()).real
+                    rho0[i,p0:p1] += partial_dot(ao[0], c0[i]).real
+                rho1[:,:, : ,p0:p1] += np.einsum('xynig,ig->xyng', ao_strain, c0[0].conj()).real
+                rho1[:,:,1:4,p0:p1] += np.einsum('xyig,nig->xyng', ao_strain[:,:,0], c0[1:4].conj()).real
             else: # MGGA
-                ao_strain[:,:,0] += np.einsum('xgi,gy->xygi', ao[1:4], coords)
-                ao_strain[:,:,1] += np.einsum('xgi,gy->xygi', ao[4:7], coords)
-                ao_strain[0,:,2] += np.einsum('gi,gy->ygi', ao[XY], coords)
-                ao_strain[1,:,2] += np.einsum('gi,gy->ygi', ao[YY], coords)
-                ao_strain[2,:,2] += np.einsum('gi,gy->ygi', ao[ZY], coords)
-                ao_strain[0,:,3] += np.einsum('gi,gy->ygi', ao[XZ], coords)
-                ao_strain[1,:,3] += np.einsum('gi,gy->ygi', ao[YZ], coords)
-                ao_strain[2,:,3] += np.einsum('gi,gy->ygi', ao[ZZ], coords)
-                c0 = lib.einsum('xgi,ij->xgj', ao[:4], dm)
+                ao_strain[:,:,0] += np.einsum('xig,yg->xyig', ao[1:4], coordsT)
+                ao_strain[:,:,1] += np.einsum('xig,yg->xyig', ao[4:7], coordsT)
+                ao_strain[0,:,2] += np.einsum('ig,yg->yig', ao[XY], coordsT)
+                ao_strain[1,:,2] += np.einsum('ig,yg->yig', ao[YY], coordsT)
+                ao_strain[2,:,2] += np.einsum('ig,yg->yig', ao[ZY], coordsT)
+                ao_strain[0,:,3] += np.einsum('ig,yg->yig', ao[XZ], coordsT)
+                ao_strain[1,:,3] += np.einsum('ig,yg->yig', ao[YZ], coordsT)
+                ao_strain[2,:,3] += np.einsum('ig,yg->yig', ao[ZZ], coordsT)
+                c0 = lib.einsum('xig,ij->xjg', ao[:4], dm)
                 for i in range(4):
-                    rho0[i,p0:p1] += _contract_rho(ao[0], c0[i]).real
-                rho0[4,p0:p1] += _contract_rho(ao[1], c0[1]).real
-                rho0[4,p0:p1] += _contract_rho(ao[2], c0[2]).real
-                rho0[4,p0:p1] += _contract_rho(ao[3], c0[3]).real
-                rho1[:,:, :4,p0:p1] += np.einsum('xyngi,gi->xyng', ao_strain, c0[0].conj()).real
-                rho1[:,:,1:4,p0:p1] += np.einsum('xygi,ngi->xyng', ao_strain[:,:,0], c0[1:4].conj()).real
-                rho1[:,:,4,p0:p1] += np.einsum('xyngi,ngi->xyg', ao_strain[:,:,1:4], c0[1:4].conj()).real
+                    rho0[i,p0:p1] += partial_dot(ao[0], c0[i]).real
+                rho0[4,p0:p1] += partial_dot(ao[1], c0[1]).real
+                rho0[4,p0:p1] += partial_dot(ao[2], c0[2]).real
+                rho0[4,p0:p1] += partial_dot(ao[3], c0[3]).real
+                rho1[:,:, :4,p0:p1] += np.einsum('xynig,ig->xyng', ao_strain, c0[0].conj()).real
+                rho1[:,:,1:4,p0:p1] += np.einsum('xyig,nig->xyng', ao_strain[:,:,0], c0[1:4].conj()).real
+                rho1[:,:,4,p0:p1] += np.einsum('xynig,nig->xyg', ao_strain[:,:,1:4], c0[1:4].conj()).real
 
     if xctype == 'LDA':
         pass

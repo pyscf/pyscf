@@ -131,7 +131,7 @@ class KnownValues(unittest.TestCase):
                             [1, [1.5, 1], [.5, 1]],
                             [2, [.8, 1]]], a=a, unit='Bohr', cart=True)
         coords = np.random.rand(10, 3)
-        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords)
+        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords)[0]
         for (i, j) in [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)]:
             cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-5)
             ao1 = dft.numint.eval_ao(cell1, coords)
@@ -147,7 +147,7 @@ class KnownValues(unittest.TestCase):
                             [1, [1.5, 1], [.5, 1]],
                             [2, [.8, 1]]], a=a, unit='Bohr')
         coords = np.random.rand(10, 3)
-        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords)
+        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords)[0]
         for (i, j) in [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)]:
             cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-5)
             ao1 = dft.numint.eval_ao(cell1, coords)
@@ -163,7 +163,7 @@ class KnownValues(unittest.TestCase):
                             [1, [1.5, 1], [.5, 1]],
                             [2, [.8, 1]]], a=a, unit='Bohr', cart=True)
         coords = np.random.rand(10, 3)
-        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords, deriv=1)
+        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords, deriv=1)[0]
         for (i, j) in [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)]:
             cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-5)
             ao1 = dft.numint.eval_ao(cell1, coords, deriv=1)
@@ -179,7 +179,7 @@ class KnownValues(unittest.TestCase):
                             [1, [1.5, 1], [.5, 1]],
                             [2, [.8, 1]]], a=a, unit='Bohr')
         coords = np.random.rand(10, 3)
-        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords, deriv=1)
+        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords, deriv=1)[0]
         for (i, j) in [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)]:
             cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-5)
             ao1 = dft.numint.eval_ao(cell1, coords, deriv=1)
@@ -198,7 +198,7 @@ class KnownValues(unittest.TestCase):
         mesh = [6,5,4]
         coords = cell.get_uniform_grids(mesh)
         ao = dft.numint.eval_ao(cell, coords, deriv=1)
-        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords)
+        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords)[0]
         ao_value[:,:,0] += np.einsum('xgi,gy->xygi', ao[1:4], coords)
         for (i, j) in [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)]:
             cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-5)
@@ -217,7 +217,7 @@ class KnownValues(unittest.TestCase):
         mesh = [6,5,4]
         coords = cell.get_uniform_grids(mesh)
         ao = dft.numint.eval_ao(cell, coords, deriv=2)
-        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords, deriv=1)
+        ao_value = rks_stress._eval_ao_strain_derivatives(cell, coords, deriv=1)[0]
         ao_value[:,:,0] += np.einsum('xgi,gy->xygi', ao[1:4], coords)
         ao_value[:,:,1] += np.einsum('xgi,gy->xygi', ao[4:7], coords)
         ao_value[0,:,2] += np.einsum('gi,gy->ygi', ao[5], coords) # YX
@@ -255,9 +255,7 @@ class KnownValues(unittest.TestCase):
         np.random.seed(5)
         a += np.random.rand(3, 3) - .5
         cell = gto.M(atom='He 1 1 1; He 2 1.5 2.4',
-                     basis=[[0, [.5, 1]],
-                            [1, [.8, 1]]
-                           ], a=a, unit='Bohr')
+                     basis=[[0, [.5, 1]], [1, [.8, 1]]], a=a, unit='Bohr')
         nao = cell.nao
         dm = np.random.rand(nao, nao) - .5
         dm = dm.dot(dm.T)
@@ -276,9 +274,7 @@ class KnownValues(unittest.TestCase):
         np.random.seed(5)
         a += np.random.rand(3, 3) - .5
         cell = gto.M(atom='He 1 1 1; He 2 1.5 2.4',
-                     basis=[[0, [.5, 1]],
-                            [1, [.8, 1]]
-                           ], a=a, unit='Bohr')
+                     basis=[[0, [.5, 1]], [1, [.8, 1]]], a=a, unit='Bohr')
         nao = cell.nao
         dm = np.random.rand(nao, nao) - .5
         dm = dm.dot(dm.T)
@@ -297,9 +293,7 @@ class KnownValues(unittest.TestCase):
         np.random.seed(5)
         a += np.random.rand(3, 3) - .5
         cell = gto.M(atom='He 1 1 1; He 2 1.5 2.4',
-                     basis=[[0, [.5, 1]],
-                            [1, [.8, 1]]
-                           ], a=a, unit='Bohr')
+                     basis=[[0, [.5, 1]], [1, [.8, 1]]], a=a, unit='Bohr')
         nao = cell.nao
         dm = np.random.rand(nao, nao) - .5
         dm = dm.dot(dm.T)
@@ -318,9 +312,7 @@ class KnownValues(unittest.TestCase):
         np.random.seed(5)
         a += np.random.rand(3, 3) - .5
         cell = gto.M(atom='He 1 1 1; He 2 1.5 2.4',
-                     basis=[[0, [.5, 1]],
-                            [1, [.8, 1]]
-                           ], a=a, unit='Bohr')
+                     basis=[[0, [.5, 1]], [1, [.8, 1]]], a=a, unit='Bohr')
         nao = cell.nao
         dm = np.random.rand(nao, nao) - .5
         dm = dm.dot(dm.T)
@@ -396,7 +388,7 @@ class KnownValues(unittest.TestCase):
                      a=a, unit='Bohr', verbose=0)
         mf = cell.RKS(xc='svwn').run()
         mf_grad = rks.Gradients(mf)
-        dat = rks_stress.kernel(mf_grad)
+        dat = mf_grad.get_stress()
         mf_scanner = mf.as_scanner()
         vol = cell.vol
         for (i, j) in [(0, 0), (0, 1), (0, 2), (1, 0), (2, 2)]:
@@ -414,7 +406,7 @@ class KnownValues(unittest.TestCase):
                      pseudo='gth-pade', a=a, unit='Bohr', verbose=0)
         mf = cell.RKS(xc='pbe').run()
         mf_grad = rks.Gradients(mf)
-        dat = rks_stress.kernel(mf_grad)
+        dat = mf_grad.get_stress()
         mf_scanner = mf.as_scanner()
         vol = cell.vol
         for (i, j) in [(0, 0), (0, 1), (0, 2), (2, 1), (2, 2)]:
@@ -432,7 +424,7 @@ class KnownValues(unittest.TestCase):
                      a=a, unit='Bohr', verbose=0)
         mf = cell.RKS(xc='rscan').run()
         mf_grad = rks.Gradients(mf)
-        dat = rks_stress.kernel(mf_grad)
+        dat = mf_grad.get_stress()
         mf_scanner = mf.as_scanner()
         vol = cell.vol
         for (i, j) in [(0, 0), (0, 1), (0, 2), (2, 1), (2, 2)]:
