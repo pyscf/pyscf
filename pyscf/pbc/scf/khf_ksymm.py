@@ -180,6 +180,9 @@ class KsymAdaptedKSCF(khf.KSCF):
     def kmesh(self, x):
         self.kpts = self.cell.make_kpts(x)
 
+    def reset(self, cell=None):
+        raise NotImplementedError
+
     def dump_flags(self, verbose=None):
         mol_hf.SCF.dump_flags(self, verbose)
         logger.info(self, '\n')

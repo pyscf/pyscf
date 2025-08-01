@@ -1,14 +1,17 @@
-import numpy as np
-import pyscf
-from pyscf import lib
-from pyscf import gto
-from pyscf.lib import logger
-from pyscf.pbc.tools import pbc as pbctools
-from pyscf.pbc.lib.kpts_helper import is_zero
-from pyscf.pbc.dft.gen_grid import UniformGrids
-from pyscf.pbc.gto import pseudo
-from pyscf.pbc.df import FFTDF, ft_ao
-from pyscf.dft.numint import _scale_ao, _contract_rho
+#!/usr/bin/env python
+# Copyright 2025 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 r'''
 The energy derivatives for the strain tensor e_ij is
@@ -56,6 +59,18 @@ transformed from the asymmetric stress tensor sigma_ij
 See K. Doll, Mol Phys (2010), 108, 223
 '''
 
+import numpy as np
+from pyscf import lib
+from pyscf import gto
+from pyscf.lib import logger
+from pyscf.pbc.tools import pbc as pbctools
+from pyscf.pbc.lib.kpts_helper import is_zero
+from pyscf.pbc.dft.gen_grid import UniformGrids
+from pyscf.pbc.gto import pseudo
+from pyscf.pbc.df import FFTDF, ft_ao
+from pyscf.pbc.dft.numint import NumInt, _contract_rho
+from pyscf.pbc.grad import rks as rks_grad
+
 def strain_tensor_dispalcement(x, y, disp):
     E_strain = np.eye(3)
     E_strain[x,y] += disp
@@ -74,25 +89,29 @@ def _finite_diff_cells(cell, x, y, disp=1e-4, precision=None):
     cell2 = cell.set_geom_(r.dot(e_strain.T), a=a.dot(e_strain.T), unit='AU', inplace=False)
     return cell1, cell2
 
-def get_ovlp(cell, kpts=None):
+def get_ovlp(cell):
+    '''Strain derivatives for overlap matrix
+    '''
     disp = 1e-5
     s = []
     for x in range(3):
         for y in range(3):
             cell1, cell2 = _finite_diff_cells(cell, x, y, disp)
-            s1 = np.asarray(cell1.pbc_intor('int1e_ovlp', kpts=kpts))
-            s2 = np.asarray(cell2.pbc_intor('int1e_ovlp', kpts=kpts))
+            s1 = cell1.pbc_intor('int1e_ovlp')
+            s2 = cell2.pbc_intor('int1e_ovlp')
             s.append((s1 - s2) / (2*disp))
     return s
 
-def get_kin(cell, kpts=None):
+def get_kin(cell):
+    '''Strain derivatives for kinetic matrix
+    '''
     disp = 1e-5
     t = []
     for x in range(3):
         for y in range(3):
             cell1, cell2 = _finite_diff_cells(cell, x, y, disp)
-            t1 = np.asarray(cell1.pbc_intor('int1e_kin', kpts=kpts))
-            t2 = np.asarray(cell2.pbc_intor('int1e_kin', kpts=kpts))
+            t1 = cell1.pbc_intor('int1e_kin')
+            t2 = cell2.pbc_intor('int1e_kin')
             t.append((t1 - t2) / (2*disp))
     return t
 
@@ -131,18 +150,15 @@ def _eval_ao_strain_derivatives(cell, coords, kpts=None, deriv=0, out=None):
         out = [x.reshape(3,3,comp,ngrids,-1) for x in out]
     return out
 
-def get_vxc(ks_grad, cell, dm, kpt=None, with_j=False, with_nuc=False):
+def get_vxc(ks_grad, cell, dm, with_j=False, with_nuc=False):
     '''Strain derivatives for Coulomb and XC at gamma point
 
     Kwargs:
         with_j : Whether to include the electron-electron Coulomb interactions
         with_nuc : Whether to include the electron-nuclear Coulomb interactions
     '''
-    from pyscf.pbc.dft.numint import NumInt
     mf = ks_grad.base
     if dm is None: dm = mf.make_rdm1()
-    if kpt is None: kpt = mf.kpt
-    assert kpt is None or is_zero(kpt)
     assert cell.low_dim_ft_type != 'inf_vacuum'
     assert cell.dimension != 1
 
@@ -185,7 +201,6 @@ def get_vxc(ks_grad, cell, dm, kpt=None, with_j=False, with_nuc=False):
             in ni.block_loop(cell, grids, nao, deriv+1):
         p0, p1 = p1, p1 + weight.size
         ao_strain = _eval_ao_strain_derivatives(cell, coords, deriv=deriv)
-        ao_strain = ao_strain
         if xctype == 'LDA':
             ao1 = ao_strain[:,:,0]
             # Adding the response of the grids
@@ -194,10 +209,6 @@ def get_vxc(ks_grad, cell, dm, kpt=None, with_j=False, with_nuc=False):
             rho0[0,p0:p1] = _contract_rho(ao[0], c0).real
             rho1[:,:,0,p0:p1] = np.einsum('xygi,gi->xyg', ao1, c0.conj()).real
             rho1[:,:,0,p0:p1] *= 2
-
-            exc, vxc = ni.eval_xc_eff(xc_code, rho0[0,p0:p1], 1, xctype=xctype, spin=0)[:2]
-            out += np.einsum('xyg,g->xy', rho1[:,:,0,p0:p1], vxc[0]).real * weight_0
-            out += np.einsum('g,g->', rho0[0,p0:p1], exc).real * weight_1
         elif xctype == 'GGA':
             ao_strain[:,:,0] += np.einsum('xgi,gy->xygi', ao[1:4], coords)
             ao_strain[:,:,1] += np.einsum('xgi,gy->xygi', ao[4:7], coords)
@@ -214,10 +225,6 @@ def get_vxc(ks_grad, cell, dm, kpt=None, with_j=False, with_nuc=False):
             rho1[:,:, : ,p0:p1]  = np.einsum('xyngi,gi->xyng', ao_strain, c0[0].conj()).real
             rho1[:,:,1:4,p0:p1] += np.einsum('xygi,ngi->xyng', ao_strain[:,:,0], c0[1:4].conj()).real
             rho1[:,:,:,p0:p1] *= 2
-
-            exc, vxc = ni.eval_xc_eff(xc_code, rho0[:,p0:p1], 1, xctype=xctype, spin=0)[:2]
-            out += np.einsum('xyng,ng->xy', rho1[:,:,:,p0:p1], vxc).real * weight_0
-            out += np.einsum('g,g->', rho0[0,p0:p1], exc).real * weight_1
         else: # MGGA
             ao_strain[:,:,0] += np.einsum('xgi,gy->xygi', ao[1:4], coords)
             ao_strain[:,:,1] += np.einsum('xgi,gy->xygi', ao[4:7], coords)
@@ -241,9 +248,9 @@ def get_vxc(ks_grad, cell, dm, kpt=None, with_j=False, with_nuc=False):
             rho1[:,:,4,p0:p1] *= .5
             rho1[:,:,:,p0:p1] *= 2
 
-            exc, vxc = ni.eval_xc_eff(xc_code, rho0[:,p0:p1], 1, xctype=xctype, spin=0)[:2]
-            out += np.einsum('xyng,ng->xy', rho1[:,:,:,p0:p1], vxc).real * weight_0
-            out += np.einsum('g,g->', rho0[0,p0:p1], exc).real * weight_1
+    exc, vxc = ni.eval_xc_eff(xc_code, rho0, 1, xctype=xctype, spin=0)[:2]
+    out += np.einsum('xyng,ng->xy', rho1, vxc).real * weight_0
+    out += np.einsum('g,g->', rho0[0], exc).real * weight_1
 
     Gv = cell.get_Gv(mesh)
     coulG_0, coulG_1 = _get_coulG_strain_derivatives(cell, Gv)
@@ -269,7 +276,7 @@ def get_vxc(ks_grad, cell, dm, kpt=None, with_j=False, with_nuc=False):
             # transformation
             SI = cell.get_SI(mesh=mesh)
             ZG = np.dot(charge, SI)
-            vR = pbctools.ifft(ZG * coulG_0, mesh)
+            vR = pbctools.ifft(ZG * coulG_0, mesh).real
             Ene = np.einsum('xyg,g->xy', rho1[:,:,0], vR).real
             Ene += np.einsum('g,xyg,g->xy', rhoG.conj(), coulG_1, ZG).real * (1./ngrids)
         out += Ene
@@ -292,9 +299,11 @@ def _get_vpplocG_strain_derivatives(cell, mesh):
     v0 = -np.einsum('ij,ij->j', SI, vpplocG)
     return v0, v1
 
-def _get_pp_nonloc_strain_derivatives(cell, mesh, dm, kpts=None):
-    assert dm.ndim == 2
-    dm = dm[None,:,:]
+def _get_pp_nonloc_strain_derivatives(cell, mesh, dm_kpts, kpts=None):
+    if kpts is None:
+        assert dm_kpts.ndim == 2
+        dm_kpts = dm_kpts[None,:,:]
+        kpts = np.zeros((1, 3))
     fakemol = gto.Mole()
     fakemol._atm = np.zeros((1,gto.ATM_SLOTS), dtype=np.int32)
     fakemol._bas = np.zeros((1,gto.BAS_SLOTS), dtype=np.int32)
@@ -307,10 +316,6 @@ def _get_pp_nonloc_strain_derivatives(cell, mesh, dm, kpts=None):
 
     ngrids = np.prod(mesh)
     buf = np.empty((48,ngrids), dtype=np.complex128)
-    if kpts is None:
-        kpts = np.zeros((1, 3))
-    else:
-        kpts = kpts.reshape((-1, 3))
     scaled_kpts = kpts.dot(cell.lattice_vectors().T)
     nkpts = len(kpts)
 
@@ -321,8 +326,8 @@ def _get_pp_nonloc_strain_derivatives(cell, mesh, dm, kpts=None):
         SI = cell.get_SI(mesh=mesh)
         # buf for SPG_lmi upto l=0..3 and nl=3
         vppnl = 0
-        for k, kpt in enumerate(scaled_kpts):
-            kpt = kpt.dot(b)
+        for k, dm in enumerate(dm_kpts):
+            kpt = scaled_kpts[k].dot(b)
             Gk = Gv + kpt
             G_rad = lib.norm(Gk, axis=1)
             aokG = ft_ao.ft_ao(cell, Gv, kpt=kpt) * (1/vol)**.5
@@ -350,7 +355,7 @@ def _get_pp_nonloc_strain_derivatives(cell, mesh, dm, kpts=None):
                     SPG_lmi = buf[:p1]
                     SPG_lmi *= SI[ia].conj()
                     SPG_lm_aoGs = SPG_lmi.dot(aokG)
-                    rho = SPG_lm_aoGs.dot(dm[k]).dot(SPG_lm_aoGs.conj().T).real
+                    rho = SPG_lm_aoGs.dot(dm).dot(SPG_lm_aoGs.conj().T).real
                     p1 = 0
                     for l, proj in enumerate(pp[5:]):
                         rl, nl, hl = proj
@@ -374,11 +379,11 @@ def ewald(cell):
     disp = max(1e-5, (cell.precision*.1)**.5)
     out = np.empty((3, 3))
     for i in range(3):
-        for j in range(3):
+        for j in range(i+1):
             cell1, cell2 = _finite_diff_cells(cell, i, j, disp)
             e1 = cell1.ewald()
             e2 = cell2.ewald()
-            out[i,j] = (e1 - e2) / (2*disp)
+            out[j,i] = out[i,j] = (e1 - e2) / (2*disp)
     return out
 
 def kernel(mf_grad):
@@ -400,11 +405,14 @@ def kernel(mf_grad):
 
     See K. Doll, Mol Phys (2010), 108, 223
     '''
+    assert isinstance(mf_grad, rks_grad.Gradients)
     mf = mf_grad.base
-    kpt = mf.kpt
-    assert is_zero(kpt)
+    assert is_zero(mf.kpt)
     with_df = mf.with_df
     assert isinstance(with_df, FFTDF)
+    ni = mf._numint
+    if ni.libxc.is_hybrid_xc(mf.xc):
+        raise NotImplementedError('Stress tensor for hybrid DFT')
     if hasattr(mf, 'U_idx'):
         raise NotImplementedError('Stress tensor for DFT+U')
 

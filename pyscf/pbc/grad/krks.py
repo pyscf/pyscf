@@ -136,6 +136,10 @@ class Gradients(rhf_grad.Gradients):
 
     get_veff = get_veff
 
+    def get_stress(self):
+        from pyscf.pbc.grad import krks_stress
+        return krks_stress.kernel(self)
+
 if __name__=='__main__':
     from pyscf.pbc import dft, gto, scf
     cell = gto.Cell()

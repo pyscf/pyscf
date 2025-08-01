@@ -1964,6 +1964,7 @@ class Cell(mole.MoleBase):
             if self._rcut_from_build:
                 cell.rcut = None
             cell._built = False
+        cell.enuc = None
 
         if atoms_or_coords is not None:
             cell = mole.MoleBase.set_geom_(cell, atoms_or_coords, unit, symmetry)
