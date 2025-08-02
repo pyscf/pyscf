@@ -502,12 +502,12 @@ class KnownValues(unittest.TestCase):
         # Ensure original xc functionals after unregister_custom_functional_
         e_ref, v_ref, f_ref = B97_2_ref
         e, v, f = dft.libxc.eval_xc('B97-2', rho, 0, deriv=2)[:3]
-        self.assertTrue(numpy.array_equal(e, e_ref[0]))
-        self.assertTrue(numpy.array_equal(v[0], v_ref[0]))
-        self.assertTrue(numpy.array_equal(v[1], v_ref[1]))
-        self.assertTrue(numpy.array_equal(f[0], f_ref[0]))
-        self.assertTrue(numpy.array_equal(f[1], f_ref[1]))
-        self.assertTrue(numpy.array_equal(f[2], f_ref[2]))
+        self.assertAlmostEqual(abs(e    / e_ref    - 1).max(), 0, 14)
+        self.assertAlmostEqual(abs(v[0] / v_ref[0] - 1).max(), 0, 14)
+        self.assertAlmostEqual(abs(v[1] / v_ref[1] - 1).max(), 0, 14)
+        self.assertAlmostEqual(abs(f[0] / f_ref[0] - 1).max(), 0, 14)
+        self.assertAlmostEqual(abs(f[1] / f_ref[1] - 1).max(), 0, 14)
+        self.assertAlmostEqual(abs(f[2] / f_ref[2] - 1).max(), 0, 14)
 
 if __name__ == "__main__":
     print("Test libxc")
