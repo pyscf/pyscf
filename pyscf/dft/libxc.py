@@ -1416,15 +1416,13 @@ def _get_system_xc(xc_code, spin, omega=None):
     return XCFunctionalCache(xc_code, spin, omega)
 
 def _get_xc(xc_code, spin=0, omega=None):
-    if omega is not None:
-        return _get_system_xc(xc_code, spin, omega)
-    try:
-        if spin > 0:
+    if spin > 0:
+        if xc_code in _CUSTOM_FUNC_U:
             return _CUSTOM_FUNC_U[xc_code]
-        else:
+    else:
+        if xc_code in _CUSTOM_FUNC_R:
             return _CUSTOM_FUNC_R[xc_code]
-    except KeyError:
-        return _get_system_xc(xc_code, spin)
+    return _get_system_xc(xc_code, spin, omega)
 
 def register_custom_functional_(new_xc_code, based_on_xc_code, ext_params=None, omega=None,
                                 hyb=None, facs=None, density_threshold=None, callback=None,

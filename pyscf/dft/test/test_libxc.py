@@ -450,6 +450,8 @@ class KnownValues(unittest.TestCase):
     def test_set_param(self):
         XC_ID_B97_2 = 410
 
+        B97_2_ref = dft.libxc.eval_xc('B97-2', rho, 0, deriv=2)[:3]
+
         param_b97_1 = numpy.array([0.789518, 0.573805, 0.660975, 0.0, 0.0,
                                    0.0820011, 2.71681, -2.87103, 0.0, 0.0,
                                    0.955689, 0.788552, -5.47869, 0.0, 0.0,
@@ -490,10 +492,22 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(v, v3, 1e-7))
         self.assertTrue(numpy.allclose(f, f3, 1e-7))
 
+        self.assertEqual(dft.libxc.xc_type('myfunc1'), 'GGA')
+
         dft.libxc.unregister_custom_functional_('myfunc1')
         dft.libxc.unregister_custom_functional_('myfunc2')
         self.assertRaises(KeyError, dft.libxc.xc_type, 'myfunc1')
         self.assertRaises(KeyError, dft.libxc.xc_type, 'myfunc2')
+
+        # Ensure original xc functionals after unregister_custom_functional_
+        e_ref, v_ref, f_ref = B97_2_ref
+        e, v, f = dft.libxc.eval_xc('B97-2', rho, 0, deriv=2)[:3]
+        self.assertTrue(numpy.array_equal(e, e_ref[0]))
+        self.assertTrue(numpy.array_equal(v[0], v_ref[0]))
+        self.assertTrue(numpy.array_equal(v[1], v_ref[1]))
+        self.assertTrue(numpy.array_equal(f[0], f_ref[0]))
+        self.assertTrue(numpy.array_equal(f[1], f_ref[1]))
+        self.assertTrue(numpy.array_equal(f[2], f_ref[2]))
 
 if __name__ == "__main__":
     print("Test libxc")
