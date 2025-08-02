@@ -152,7 +152,6 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(mc2.converged)
         self.assertAlmostEqual(lib.fp(mc1.e_states), lib.fp(mc2.e_states), 6)
 
-    @unittest.skip("MC23 fnal requires PySCF-Forge dft2 libxc interface")
     def test_lih_cms2mc2322(self):
         mc = get_lih(1.5, fnal="MC23")
         e_mcscf_avg = np.dot(mc.e_mcscf, mc.weights)
