@@ -281,10 +281,10 @@ class PipekMezey(boys.OrbitalLocalizer):
                          'object when creating PM object.\n    PM(mol, mf=scf_object)')
             raise ValueError('PM attribute method is not valid')
 
-        if not hasattr(self, "charge_matrices"):
-            self.charge_matrices = becke_charge_matrices(mol) if method.lower() == "becke" else None
+        if not hasattr(self, "_charge_matrices"):
+            self._charge_matrices = becke_charge_matrices(mol) if method.lower() == "becke" else None
 
-        return atomic_pops(mol, mo_coeff, method, self._scf, s=s, charge_matrices=self.charge_matrices)
+        return atomic_pops(mol, mo_coeff, method, self._scf, s=s, charge_matrices=self._charge_matrices)
 
     def stability_jacobi(self):
         return pipek_jacobi.PipekMezey_stability_jacobi(self)
