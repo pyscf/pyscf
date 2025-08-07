@@ -1380,18 +1380,23 @@ class Cell(mole.MoleBase):
             if mf_xc is not None:
                 assert 'xc' not in kwargs
                 kwargs['xc'] = mf_xc
-            if post_mf_key is None:
-                print(mf_method)
-                return mf_method(self, *args, **kwargs)
 
-            mf_kw = {k: v for k, v in kwargs.items() if k in SCF_KW}
+            mf_kw = {}
+            remaining_kw = {}
+            for k, v in kwargs.items():
+                if k in SCF_KW:
+                    mf_kw[k] = v
+                else:
+                    remaining_kw[k] = v
             mf = mf_method(self, *args, **mf_kw)
 
-            post_mf_kw = {k: v for k, v in kwargs.items() if k not in SCF_KW}
+            if post_mf_key is None:
+                return mf.set(**remaining_kw)
+
             post_mf = getattr(mf, post_mf_key)
             if self.nelectron != 0:
                 mf.run()
-            return post_mf(**post_mf_kw)
+            return post_mf(**remaining_kw)
         return fn
 
     tot_electrons = tot_electrons

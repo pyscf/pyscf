@@ -3785,18 +3785,24 @@ class Mole(MoleBase):
             if mf_xc is not None:
                 assert 'xc' not in kwargs
                 kwargs['xc'] = mf_xc
-            if post_mf_key is None:
-                return mf_method(self, *args, **kwargs)
 
-            mf_kw = {k: v for k, v in kwargs.items() if k in SCF_KW}
+            mf_kw = {}
+            remaining_kw = {}
+            for k, v in kwargs.items():
+                if k in SCF_KW:
+                    mf_kw[k] = v
+                else:
+                    remaining_kw[k] = v
             mf = mf_method(self, *args, **mf_kw)
 
-            post_mf_kw = {k: v for k, v in kwargs.items() if k not in SCF_KW}
+            if post_mf_key is None:
+                return mf.set(**remaining_kw)
+
             post_mf = getattr(mf, post_mf_key)
             # Initialize SCF object for post-SCF methods if applicable
             if self.nelectron != 0:
                 mf.run()
-            return post_mf(**post_mf_kw)
+            return post_mf(**remaining_kw)
         return fn
 
     def ao2mo(self, mo_coeffs, erifile=None, dataname='eri_mo', intor='int2e',
