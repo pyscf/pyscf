@@ -3757,31 +3757,47 @@ class Mole(MoleBase):
         from pyscf import __all__  # noqa
         from pyscf import scf, dft
 
-        for mod in (scf, dft):
-            method = getattr(mod, key, None)
-            if callable(method):
-                return method(self)
-
-        if 'TD' in key[:3]:
-            if key in ('TDHF', 'TDA'):
-                mf = scf.HF(self)
-            else:
-                mf = dft.KS(self)
-                xc = key.split('TD', 1)[1]
-                if xc in dft.XC:
-                    mf.xc = xc
-                    key = 'TDDFT'
-        elif 'CI' in key or 'CC' in key or 'CAS' in key or 'MP' in key:
-            mf = scf.HF(self)
+        mf_xc = None
+        for mod in (dft, scf):
+            mf_method = getattr(mod, key, None)
+            if callable(mf_method):
+                key = None
+                break
         else:
-            return object.__getattribute__(self, key)
+            if 'TD' in key[:3]:
+                if key in ('TDHF', 'TDA'):
+                    mf_method = scf.HF
+                else:
+                    mf_method = dft.KS
+                    xc = key.split('TD', 1)[1]
+                    if xc in dft.XC:
+                        mf_xc = xc
+                        key = 'TDDFT'
+            elif 'CI' in key or 'CC' in key or 'CAS' in key or 'MP' in key:
+                mf_method = scf.HF
+            else:
+                return object.__getattribute__(self, key)
 
-        method = getattr(mf, key)
+        post_mf_key = key
+        SCF_KW = {'xc', 'U_idx', 'U_val', 'C_ao_lo', 'minao_ref'}
 
-        # Initialize SCF object for post-SCF methods if applicable
-        if self.nelectron != 0:
-            mf.run()
-        return method
+        def fn(*args, **kwargs):
+            if mf_xc is not None:
+                assert 'xc' not in kwargs
+                kwargs['xc'] = mf_xc
+            if post_mf_key is None:
+                return mf_method(self, *args, **kwargs)
+
+            mf_kw = {k: v for k, v in kwargs.items() if k in SCF_KW}
+            mf = mf_method(self, *args, **mf_kw)
+
+            post_mf_kw = {k: v for k, v in kwargs.items() if k not in SCF_KW}
+            post_mf = getattr(mf, post_mf_key)
+            # Initialize SCF object for post-SCF methods if applicable
+            if self.nelectron != 0:
+                mf.run()
+            return post_mf(**post_mf_kw)
+        return fn
 
     def ao2mo(self, mo_coeffs, erifile=None, dataname='eri_mo', intor='int2e',
               **kwargs):

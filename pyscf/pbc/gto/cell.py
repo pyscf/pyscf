@@ -1334,47 +1334,65 @@ class Cell(mole.MoleBase):
         from pyscf.pbc import scf, dft
         from pyscf.dft import XC
 
-        for mod in (scf, dft):
-            method = getattr(mod, key, None)
-            if callable(method):
-                return method(self)
-
-        if key[0] == 'K':  # with k-point sampling
-            if 'TD' in key[:4]:
-                if key in ('KTDHF', 'KTDA'):
-                    mf = scf.KHF(self)
-                else:
-                    mf = dft.KKS(self)
-                    xc = key.split('TD', 1)[1]
-                    if xc in XC:
-                        mf.xc = xc
-                        key = 'KTDDFT'
-            elif 'CI' in key or 'CC' in key or 'MP' in key:
-                mf = scf.KHF(self)
-            else:
-                return object.__getattribute__(self, key)
-            # Remove prefix 'K' because methods are registered without the leading 'K'
-            key = key[1:]
+        mf_xc = None
+        for mod in (dft, scf):
+            mf_method = getattr(mod, key, None)
+            if callable(mf_method):
+                key = None
+                break
         else:
-            if 'TD' in key[:3]:
-                if key in ('TDHF', 'TDA'):
-                    mf = scf.HF(self)
+            if key[0] == 'K':  # with k-point sampling
+                if 'TD' in key[:4]:
+                    if key in ('KTDHF', 'KTDA'):
+                        mf_method = scf.KHF
+                    else:
+                        mf_method = dft.KKS
+                        xc = key.split('TD', 1)[1]
+                        if xc in XC:
+                            mf_xc = xc
+                            key = 'KTDDFT'
+                elif 'CI' in key or 'CC' in key or 'MP' in key:
+                    mf_method = scf.KHF
                 else:
-                    mf = dft.KS(self)
-                    xc = key.split('TD', 1)[1]
-                    if xc in XC:
-                        mf.xc = xc
-                        key = 'TDDFT'
-            elif 'CI' in key or 'CC' in key or 'MP' in key:
-                mf = scf.HF(self)
+                    return object.__getattribute__(self, key)
+                # Remove prefix 'K' because methods are registered without the leading 'K'
+                key = key[1:]
             else:
-                return object.__getattribute__(self, key)
+                if 'TD' in key[:3]:
+                    if key in ('TDHF', 'TDA'):
+                        mf_method = scf.HF
+                    else:
+                        mf_method = dft.KS
+                        xc = key.split('TD', 1)[1]
+                        if xc in XC:
+                            mf_xc = xc
+                            key = 'TDDFT'
+                elif 'CI' in key or 'CC' in key or 'MP' in key:
+                    mf_method = scf.HF
+                else:
+                    return object.__getattribute__(self, key)
 
-        method = getattr(mf, key)
+        post_mf_key = key
+        SCF_KW = {'kpt', 'kpts', 'xc', 'exxdiv',
+                  'U_idx', 'U_val', 'C_ao_lo', 'minao_ref'}
 
-        if self.nelectron != 0:
-            mf.run()
-        return method
+        def fn(*args, **kwargs):
+            if mf_xc is not None:
+                assert 'xc' not in kwargs
+                kwargs['xc'] = mf_xc
+            if post_mf_key is None:
+                print(mf_method)
+                return mf_method(self, *args, **kwargs)
+
+            mf_kw = {k: v for k, v in kwargs.items() if k in SCF_KW}
+            mf = mf_method(self, *args, **mf_kw)
+
+            post_mf_kw = {k: v for k, v in kwargs.items() if k not in SCF_KW}
+            post_mf = getattr(mf, post_mf_key)
+            if self.nelectron != 0:
+                mf.run()
+            return post_mf(**post_mf_kw)
+        return fn
 
     tot_electrons = tot_electrons
 
