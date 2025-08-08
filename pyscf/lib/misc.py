@@ -1491,17 +1491,6 @@ class _OmniObject:
     def __getattr__(self, key):
         return self._default
 
-# Many methods requires a mol or mf object in initialization.
-# These objects can be as the default arguments for these methods.
-# Then class can be instantiated easily like cls(omniobj) in the following
-# to_gpu function.
-omniobj = _OmniObject()
-omniobj._built = True
-omniobj.mol = omniobj
-omniobj._scf = omniobj
-omniobj.base = omniobj
-omniobj.precision = 1e-8 # utilized by several pbc modules
-
 # Attributes that are kept in np.ndarray during the to_gpu conversion
 _ATTRIBUTES_IN_NPARRAY = {'kpt', 'kpts', 'kpts_band', 'mesh', 'frozen'}
 
@@ -1535,11 +1524,14 @@ def to_gpu(method, out=None):
         cls = getattr(mod, method.__class__.__name__)
         # A temporary GPU instance. This ensures to initialize private
         # attributes that are only available for GPU code.
-        out = cls(omniobj)
-        if hasattr(method, 'mol'):
-            out = cls(method.mol)
+        if hasattr(method, 'base'):
+            out = cls(method.base)
+        elif hasattr(method, '_scf'):
+            out = cls(method._scf)
         elif hasattr(method, 'cell'):
             out = cls(method.cell)
+        elif hasattr(method, 'mol'):
+            out = cls(method.mol)
         else:
             raise TypeError('Conversion for class {cls} not supported')
 

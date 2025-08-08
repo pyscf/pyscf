@@ -165,7 +165,7 @@ class FFTDF(lib.StreamObject):
     blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
 
     _keys = {
-        'cell', 'kpts', 'grids', 'mesh', 'blockdim', 'exxdiv',
+        'cell', 'kpts', 'mesh', 'blockdim', 'exxdiv',
     }
 
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
