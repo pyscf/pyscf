@@ -444,7 +444,7 @@ def get_jk(mydf, dm, hermi=1, kpt=np.zeros(3), kpts_band=None,
         density matrix (both order and shape).
     '''
     if getattr(dm, "mo_coeff", None) is not None:
-        dm = lib.tag_array(np.asarray(dm, order='C'), mo_coeff=dm.mo_coeff, 
+        dm = lib.tag_array(np.asarray(dm, order='C'), mo_coeff=dm.mo_coeff,
                            mo_occ=dm.mo_occ)
     else:
         dm = np.asarray(dm, order='C')
