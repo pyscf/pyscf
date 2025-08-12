@@ -1439,6 +1439,10 @@ class Cell(mole.MoleBase):
             _mesh_from_build = self._mesh_from_build
             self.mesh = self.symmetrize_mesh()
             self._mesh_from_build = _mesh_from_build
+        # lattice_symmetry introduces circular dependency to cell
+        del self.lattice_symmetry.cell
+        if self.lattice_symmetry.spacegroup is not None:
+            del self.lattice_symmetry.spacegroup.cell
         return self
 
     @lib.with_doc(mole.format_atom.__doc__)

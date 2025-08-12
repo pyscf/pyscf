@@ -293,6 +293,7 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
         pbchf.SCF.reset(self, cell)
         self.grids.reset(cell)
         self.nlcgrids.reset(cell)
+        self._numint.reset(cell)
         return self
 
     def build(self, cell=None):
