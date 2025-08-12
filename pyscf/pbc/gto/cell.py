@@ -1953,12 +1953,45 @@ class Cell(mole.MoleBase):
 
     def set_geom_(self, atoms_or_coords=None, unit=None, symmetry=None,
                   a=None, inplace=True):
-        '''Update geometry and lattice parameters'''
+        '''Update geometry and lattice parameters
+
+        Kwargs:
+            atoms_or_coords : list, str, or numpy.ndarray
+                When specified in list or str, it is processed as the Mole.atom
+                attribute. If inputing a (N, 3) numpy array, this array
+                represents the coordinates of the atoms in the molecule.
+            a : list, str, or numpy.ndarray
+                If specified, it is assigned to the cell.a attribute. Its data
+                format should be the same to cell.a
+            unit : str
+                The unit for the input `atoms_or_coords` and `a`. If specified,
+                cell.unit will be updated to this value. If not provided, the
+                current cell.unit will be used for the two inputs.
+            symmetry : bool
+                Whether to enable space_group_symmetry. It is a reserved input
+                argument. This functionality is not supported yet.
+            inplace : bool
+                Whether to overwrite the existing Mole object.
+        '''
         if inplace:
             cell = self
         else:
             cell = self.copy(deep=False)
             cell._env = cell._env.copy()
+
+        if unit is not None and cell.unit != unit:
+            if isinstance(unit, str):
+                if is_au(unit):
+                    _unit = 1.
+                else:
+                    _unit = param.BOHR
+            else:
+                _unit = unit
+            if a is None:
+                a = self.lattice_vectors() * _unit
+            if atoms_or_coords is None:
+                atoms_or_coords = self.atom_coords() * _unit
+
         if a is not None:
             logger.info(self, 'Set new lattice vectors')
             logger.info(self, '%s', a)
@@ -1972,6 +2005,7 @@ class Cell(mole.MoleBase):
 
         if atoms_or_coords is not None:
             cell = mole.MoleBase.set_geom_(cell, atoms_or_coords, unit, symmetry)
+
         if not cell._built:
             cell.build(False, False)
         return cell

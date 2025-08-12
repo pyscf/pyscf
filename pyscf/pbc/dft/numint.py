@@ -1129,6 +1129,10 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
     '''Generalization of pyscf's NumInt class for k-point sampling and
     periodic images.
     '''
+    def __init__(self, *args, **kwargs):
+        # define this anonymous __init__ for backward compatibility
+        pass
+
     def reset(self, cell=None):
         return self
 
