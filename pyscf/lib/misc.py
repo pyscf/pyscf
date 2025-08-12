@@ -1491,6 +1491,17 @@ class _OmniObject:
     def __getattr__(self, key):
         return self._default
 
+# Many methods requires a mol or mf object in initialization.
+# These objects can be as the default arguments for these methods.
+# Then class can be instantiated easily like cls(omniobj) in the following
+# to_gpu function.
+omniobj = _OmniObject()
+omniobj._built = True
+omniobj.mol = omniobj
+omniobj._scf = omniobj
+omniobj.base = omniobj
+omniobj.precision = 1e-8 # utilized by several pbc modules
+
 # Attributes that are kept in np.ndarray during the to_gpu conversion
 _ATTRIBUTES_IN_NPARRAY = {'kpt', 'kpts', 'kpts_band', 'mesh', 'frozen'}
 
