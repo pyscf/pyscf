@@ -385,6 +385,23 @@ def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
 
 get_rho = khf.get_rho
 
+def gen_response(mf, mo_coeff=None, mo_occ=None,
+                 with_j=True, hermi=0, max_memory=None, with_nlc=True):
+    from pyscf.pbc.scf._response_functions import _get_jk, _get_k
+    if mo_coeff is None: mo_coeff = mf.mo_coeff
+    if mo_occ is None: mo_occ = mf.mo_occ
+    cell = mf.cell
+    kpts = mf.kpts
+    if with_j:
+        def vind(dm1, kshift=0):
+            vj, vk = _get_jk(mf, cell, dm1, hermi, kpts, kshift)
+            v1 = vj[0] + vj[1] - vk
+            return v1
+    else:
+        def vind(dm1, kshift=0):
+            return -_get_k(mf, cell, dm1, hermi, kpts, kshift)
+    return vind
+
 class KUHF(khf.KSCF):
     '''UHF class with k-point sampling.
     '''
@@ -405,6 +422,7 @@ class KUHF(khf.KSCF):
     get_rho = get_rho
     analyze = khf.analyze
     canonicalize = canonicalize
+    gen_response = gen_response
     to_gpu = lib.to_gpu
 
     def __init__(self, cell, kpts=np.zeros((1,3)),
@@ -593,7 +611,7 @@ class KUHF(khf.KSCF):
         from pyscf.pbc.scf.stability import uhf_stability
         return uhf_stability(self, internal, external, verbose)
 
-    def nuc_grad_method(self):
+    def Gradients(self):
         from pyscf.pbc.grad import kuhf
         return kuhf.Gradients(self)
 

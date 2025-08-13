@@ -345,7 +345,10 @@ def dump_thermo(mol, results):
 def dump_normal_mode(mol, results):
     dump = mol.stdout.write
     freq_wn = results['freq_wavenumber']
-    idx = freq_wn.real > 0
+    if numpy.iscomplexobj(freq_wn):
+        assert numpy.all(numpy.logical_or(abs(freq_wn.real) < 1e-10, abs(freq_wn.imag) < 1e-10))
+        freq_wn = freq_wn.real - abs(freq_wn.imag)
+    idx = range(len(freq_wn)) # freq_wn.real > 0
     freq_wn = freq_wn.real[idx]
     nfreq = freq_wn.size
 

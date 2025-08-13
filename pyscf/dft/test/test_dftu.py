@@ -31,13 +31,14 @@ class KnownValues(unittest.TestCase):
         assert abs(u0 - 5.8926) < 1e-2
 
     def test_UKSpU_linear_response(self):
-        mol = gto.M(atom='Mn 0 0 0; O 0 0 1.6',
-                    basis='ccpvdz',
-                    spin=5)
-        mf = ukspu.UKSpU(mol, xc='pbe', U_idx=['Mn 3d'], U_val=[4.5])
+        mol = gto.M(atom='''
+        O  0.   0.       0.
+        H  0.   -0.757   0.587
+        H  0.   0.757    0.587''', basis='6-31g')
+        mf = ukspu.UKSpU(mol, xc='pbe', U_idx=['O 2p'], U_val=[3.5])
         mf.run()
         u0 = ukspu.linear_response_u(mf)
-        assert abs(u0 - 4.8337) < 1e-2
+        assert abs(u0 - 5.8926) < 1e-2
 
 if __name__ == '__main__':
     print("Full Tests for dft+U")

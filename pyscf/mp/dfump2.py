@@ -227,11 +227,18 @@ def _make_df_eris(mp, mo_coeff=None, ovL=None, ovL_to_save=None, verbose=None):
     assert( with_df is not None )
 
     if with_df._cderi is None:
-        log.debug('Caching ovL-type integrals directly')
-        if with_df.auxmol is None:
-            with_df.auxmol = df.addons.make_auxmol(with_df.mol, with_df.auxbasis)
+        if getattr(with_df, 'cell', None) is not None:  # PBC
+            log.warn('PBC mean-field does not support direct DFMP2. Caching AO 3c integrals now.')
+            with_df.build()
+            naux = with_df.get_naoaux()
+        else:
+            log.debug('Caching ovL-type integrals directly')
+            if with_df.auxmol is None:
+                with_df.auxmol = df.addons.make_auxmol(with_df.mol, with_df.auxbasis)
+            naux = with_df.auxmol.nao_nr()
     else:
         log.debug('Caching ovL-type integrals by transforming saved AO 3c integrals.')
+        naux = with_df.get_naoaux()
 
     if mo_coeff is None: mo_coeff = mp.mo_coeff
     split_mo_coeff = mp.split_mo_coeff()
@@ -241,7 +248,6 @@ def _make_df_eris(mp, mo_coeff=None, ovL=None, ovL_to_save=None, verbose=None):
     # determine incore or outcore
     nocc = np.asarray([x.shape[1] for x in occ_coeff])
     nvir = np.asarray([x.shape[1] for x in vir_coeff])
-    naux = with_df.get_naoaux()
 
     if ovL is not None:
         if isinstance(ovL, (np.ndarray,list,tuple)):

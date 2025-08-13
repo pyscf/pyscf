@@ -95,7 +95,10 @@ def _add_Vhubbard(vxc, ks, dm, kpts):
                         E_U += weight[k] * alpha * P_k.trace()
                         vhub_loc += np.eye(P_k.shape[-1]) * alpha
                     SC = np.dot(S_k, C_k)
-                    vxc[s,k] += SC.dot(vhub_loc).dot(SC.conj().T).astype(vxc[s,k].dtype,copy=False)
+                    vhub_loc = SC.dot(vhub_loc).dot(SC.conj().T)
+                    if vxc.dtype == np.float64:
+                        vhub_loc = vhub_loc.real
+                    vxc[s,k] += vhub_loc
                     if not is_ibz:
                         P_loc += P_k
                 if is_ibz:
@@ -266,9 +269,10 @@ def linear_response_u(mf_plus_u, alphalist=(0.02, 0.05, 0.08)):
         # The first iteration of SCF
         fock = mf.get_fock(dm=bare_dm)
         e, mo = mf.eig(fock, ovlp)
+        local_occ = 0
         for c in C_inv:
-            C_on_site = [[c[0][k].dot(mf.mo_coeff[0][k]) for k in range(nkpts)],
-                         [c[1][k].dot(mf.mo_coeff[1][k]) for k in range(nkpts)]]
+            C_on_site = [[c[0][k].dot(mo[0][k]) for k in range(nkpts)],
+                         [c[1][k].dot(mo[1][k]) for k in range(nkpts)]]
             rdm1_lo = mf.make_rdm1(C_on_site, mf.mo_occ)
             local_occ += sum(x.trace().real for x in rdm1_lo[0])
             local_occ += sum(x.trace().real for x in rdm1_lo[1])

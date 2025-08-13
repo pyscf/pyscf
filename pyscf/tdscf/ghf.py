@@ -54,9 +54,10 @@ def _gen_tda_operation(td, fock_ao=None, wfnsym=None):
     assert fock_ao is None
     mf = td._scf
     mol = mf.mol
-    mo_coeff = mf.mo_coeff
-    mo_energy = mf.mo_energy
-    mo_occ = mf.mo_occ
+    mask = td.get_frozen_mask()
+    mo_coeff = mf.mo_coeff[:, mask]
+    mo_energy = mf.mo_energy[mask]
+    mo_occ = mf.mo_occ[mask]
     nao, nmo = mo_coeff.shape
     occidx = numpy.where(mo_occ == 1)[0]
     viridx = numpy.where(mo_occ == 0)[0]
@@ -69,7 +70,7 @@ def _gen_tda_operation(td, fock_ao=None, wfnsym=None):
         if isinstance(wfnsym, str):
             wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
         wfnsym = wfnsym % 10  # convert to D2h subgroup
-        sym_forbid = _get_x_sym_table(mf) != wfnsym
+        sym_forbid = _get_x_sym_table(td) != wfnsym
 
     e_ia = hdiag = mo_energy[viridx] - mo_energy[occidx,None]
     if wfnsym is not None and mol.symmetry:
@@ -95,15 +96,17 @@ def _gen_tda_operation(td, fock_ao=None, wfnsym=None):
 
     return vind, hdiag
 
-def _get_x_sym_table(mf):
+def _get_x_sym_table(td):
     '''Irrep (up to D2h symmetry) of each coefficient in X[nocc,nvir]'''
+    mf = td._scf
     mol = mf.mol
-    mo_occ = mf.mo_occ
-    orbsym = ghf_symm.get_orbsym(mol, mf.mo_coeff)
+    mask = td.get_frozen_mask()
+    mo_occ = mf.mo_occ[mask]
+    orbsym = ghf_symm.get_orbsym(mol, mf.mo_coeff[:, mask])
     orbsym = numpy.asarray(orbsym) % 10  # convert to D2h irreps
     return orbsym[mo_occ==1,None] ^ orbsym[mo_occ==0]
 
-def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
+def get_ab(mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
     r'''A and B matrices for TDDFT response function.
 
     A[i,a,j,b] = \delta_{ab}\delta_{ij}(E_a - E_i) + (ai||jb)
@@ -112,6 +115,22 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
+
+    mo_coeff0 = numpy.copy(mo_coeff)
+    mo_occ0 = numpy.copy(mo_occ)
+
+    if frozen is not None:
+        # see get_frozen_mask()
+        moidx = numpy.ones(mf.mo_occ.size, dtype=bool)
+        if isinstance(frozen, (int, numpy.integer)):
+            moidx[:frozen] = False
+        elif hasattr(frozen, '__len__'):
+            moidx[list(frozen)] = False
+        else:
+            raise NotImplementedError
+        mo_energy = mo_energy[moidx]
+        mo_coeff = mo_coeff[:, moidx]
+        mo_occ = mo_occ[moidx]
 
     mol = mf.mol
     nmo = mo_occ.size
@@ -172,7 +191,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
             b = b.astype(numpy.complex128)
 
         xctype = ni._xc_type(mf.xc)
-        dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+        dm0 = mf.make_rdm1(mo_coeff0, mo_occ0)
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, mf.max_memory*.8-mem_now)
 
@@ -383,8 +402,9 @@ class TDA(TDBase):
         if nstates is None: nstates = self.nstates
         if wfnsym is None: wfnsym = self.wfnsym
 
-        mo_energy = mf.mo_energy
-        mo_occ = mf.mo_occ
+        mask = self.get_frozen_mask()
+        mo_energy = mf.mo_energy[mask]
+        mo_occ = mf.mo_occ[mask]
         occidx = numpy.where(mo_occ==1)[0]
         viridx = numpy.where(mo_occ==0)[0]
         e_ia = (mo_energy[viridx] - mo_energy[occidx,None]).ravel()
@@ -392,7 +412,7 @@ class TDA(TDBase):
         nstates = min(nstates, nov)
 
         if (wfnsym is not None or return_symmetry) and mf.mol.symmetry:
-            x_sym = _get_x_sym_table(mf).ravel()
+            x_sym = _get_x_sym_table(self).ravel()
             if wfnsym is not None:
                 if isinstance(wfnsym, str):
                     wfnsym = symm.irrep_name2id(mf.mol.groupname, wfnsym)
@@ -444,7 +464,7 @@ class TDA(TDBase):
             x0, x0sym = self.get_init_guess(
                 self._scf, self.nstates, return_symmetry=True)
         elif mol.symmetry:
-            x_sym = _get_x_sym_table(self._scf).ravel()
+            x_sym = _get_x_sym_table(self).ravel()
             x0sym = [rhf._guess_wfnsym_id(self, x_sym, x) for x in x0]
 
         self.converged, self.e, x1 = lr_eigh(
@@ -452,8 +472,9 @@ class TDA(TDBase):
             nroots=nstates, x0sym=x0sym, pick=pickeig, max_cycle=self.max_cycle,
             max_memory=self.max_memory, verbose=log)
 
-        nocc = (self._scf.mo_occ>0).sum()
-        nmo = self._scf.mo_occ.size
+        mo_occ = self._scf.mo_occ[self.get_frozen_mask()]
+        nocc = (mo_occ>0).sum()
+        nmo = mo_occ.size
         nvir = nmo - nocc
         self.xy = [(xi.reshape(nocc,nvir), 0) for xi in x1]
 
@@ -481,9 +502,10 @@ def gen_tdhf_operation(mf, fock_ao=None, wfnsym=None, with_nlc=True):
 def _gen_tdhf_operation(td, fock_ao=None, wfnsym=None):
     mf = td._scf
     mol = mf.mol
-    mo_coeff = mf.mo_coeff
-    mo_energy = mf.mo_energy
-    mo_occ = mf.mo_occ
+    mask = td.get_frozen_mask()
+    mo_coeff = mf.mo_coeff[:, mask]
+    mo_energy = mf.mo_energy[mask]
+    mo_occ = mf.mo_occ[mask]
     nao, nmo = mo_coeff.shape
     occidx = numpy.where(mo_occ == 1)[0]
     viridx = numpy.where(mo_occ == 0)[0]
@@ -496,7 +518,7 @@ def _gen_tdhf_operation(td, fock_ao=None, wfnsym=None):
         if isinstance(wfnsym, str):
             wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
         wfnsym = wfnsym % 10  # convert to D2h subgroup
-        sym_forbid = _get_x_sym_table(mf) != wfnsym
+        sym_forbid = _get_x_sym_table(td) != wfnsym
 
     assert fock_ao is None
 
@@ -591,7 +613,7 @@ class TDHF(TDBase):
             x0, x0sym = self.get_init_guess(
                 self._scf, self.nstates, return_symmetry=True)
         elif mol.symmetry:
-            x_sym = y_sym = _get_x_sym_table(self._scf).ravel()
+            x_sym = y_sym = _get_x_sym_table(self).ravel()
             x_sym = numpy.append(x_sym, y_sym)
             x0sym = [rhf._guess_wfnsym_id(self, x_sym, x) for x in x0]
 
@@ -600,8 +622,9 @@ class TDHF(TDBase):
             nroots=nstates, x0sym=x0sym, pick=pickeig, max_cycle=self.max_cycle,
             max_memory=self.max_memory, verbose=log)
 
-        nocc = (self._scf.mo_occ>0).sum()
-        nmo = self._scf.mo_occ.size
+        mo_occ = self._scf.mo_occ[self.get_frozen_mask()]
+        nocc = (mo_occ>0).sum()
+        nmo = mo_occ.size
         nvir = nmo - nocc
         self.e = w
         def norm_xy(z):

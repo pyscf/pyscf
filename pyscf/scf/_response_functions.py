@@ -44,16 +44,10 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
     if isinstance(mf, hf.KohnShamDFT):
-        from pyscf.pbc.dft import multigrid
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
         hybrid = ni.libxc.is_hybrid_xc(mf.xc)
-
-        # mf might be pbc.dft.RKS object with multigrid
-        if not hybrid and isinstance(getattr(mf, 'with_df', None), multigrid.MultiGridFFTDF):
-            dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-            return multigrid._gen_rhf_response(mf, dm0, singlet, hermi)
 
         if singlet is None: # for ground state orbital hessian
             spin = 0
@@ -110,7 +104,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     v1 = numpy.zeros_like(dm1)
                 else:
                     # nr_rks_fxc_st requires alpha of dm1, dm1*.5 should be scaled
-                    v1 = ni.nr_rks_fxc_st(mol, mf.grids, mf.xc, dm0, dm1, 0, True,
+                    v1 = ni.nr_rks_fxc_st(mol, mf.grids, mf.xc, dm0, dm1, hermi, True,
                                           rho0, vxc, fxc, max_memory=max_memory)
                     if with_nlc and mf.do_nlc():
                         from pyscf.hessian.rks import get_vnlc_resp # Cannot import at top due to circular dependency
@@ -145,7 +139,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     v1 = numpy.zeros_like(dm1)
                 else:
                     # nr_rks_fxc_st requires alpha of dm1, dm1*.5 should be scaled
-                    v1 = ni.nr_rks_fxc_st(mol, mf.grids, mf.xc, dm0, dm1, 0, False,
+                    v1 = ni.nr_rks_fxc_st(mol, mf.grids, mf.xc, dm0, dm1, hermi, False,
                                           rho0, vxc, fxc, max_memory=max_memory)
                     if with_nlc and mf.do_nlc():
                         pass # fxc = 0, do nothing
@@ -184,16 +178,10 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
     if isinstance(mf, hf.KohnShamDFT):
-        from pyscf.pbc.dft import multigrid
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
         hybrid = ni.libxc.is_hybrid_xc(mf.xc)
-
-        # mf might be pbc.dft.RKS object with multigrid
-        if not hybrid and isinstance(getattr(mf, 'with_df', None), multigrid.MultiGridFFTDF):
-            dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-            return multigrid._gen_uhf_response(mf, dm0, with_j, hermi)
 
         rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
                                             mo_coeff, mo_occ, 1)
@@ -262,18 +250,12 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
     if isinstance(mf, hf.KohnShamDFT):
-        from pyscf.pbc.dft import multigrid
         from pyscf.dft import numint2c, r_numint
         ni = mf._numint
         assert isinstance(ni, (numint2c.NumInt2C, r_numint.RNumInt))
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
-        if with_nlc and mf.do_nlc():
-            raise NotImplementedError('NLC')
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
         hybrid = ni.libxc.is_hybrid_xc(mf.xc)
-
-        if not hybrid and isinstance(getattr(mf, 'with_df', None), multigrid.MultiGridFFTDF):
-            raise NotImplementedError
 
         rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc, mo_coeff, mo_occ, 1)
         dm0 = None
@@ -288,6 +270,20 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
             else:
                 v1 = ni.get_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, 0, hermi,
                                 rho0, vxc, fxc, max_memory=max_memory)
+                if with_nlc and mf.do_nlc():
+                    from pyscf.hessian.rks import get_vnlc_resp
+                    nao = mo_coeff.shape[0] // 2
+                    dm1_sf = dm1[...,:nao,:nao] + dm1[...,nao:,nao:]
+                    mo_uks = [mo_coeff[:nao], mo_coeff[nao:]]
+                    mo_occ_uks = [mo_occ, mo_occ]
+                    # The get_vnlc_resp function uses mf._numint and explicitly
+                    # calls the NumInt functions for mf._numint
+                    ni1c = mf._numint._to_numint1c()
+                    with lib.temporary_env(mf, _numint=ni1c):
+                        vxc_nlc = get_vnlc_resp(mf, mol, mo_uks, mo_occ_uks,
+                                                dm1_sf.real, max_memory)
+                        v1[...,:nao,:nao] += vxc_nlc
+                        v1[...,nao:,nao:] += vxc_nlc
             if not hybrid:
                 if with_j:
                     vj = mf.get_j(mol, dm1, hermi=hermi)

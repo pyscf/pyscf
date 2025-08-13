@@ -101,8 +101,8 @@ def _multigrid2_energy_grad(cell, xc, spin=0):
     elif spin == 1:
         mf = dft.UKS(cell)
     mf.xc =  xc
-    mf.with_df = multigrid.MultiGridFFTDF2(cell)
-    mf.with_df.ntasks = 2
+    mf._numint = multigrid.MultiGridNumInt2(cell)
+    mf._numint.ntasks = 2
     e = mf.kernel()
     if spin == 0:
         g = rks_grad.Gradients(mf).kernel()
@@ -118,7 +118,7 @@ def _test_veff(cell, xc, dm, spin=0, tol=1e-7):
     mf.xc = xc
     ref = mf.get_veff(dm=dm)
 
-    mf.with_df = multigrid.MultiGridFFTDF2(cell)
+    mf._numint = multigrid.MultiGridNumInt2(cell)
     vxc = mf.get_veff(dm=dm)
     assert vxc.shape == ref.shape
     assert abs(ref-vxc).max() < tol
@@ -143,22 +143,22 @@ class KnownValues(unittest.TestCase):
             task_list = multi_grids_tasks(He_orth, hermi=1, ntasks=2)
             assert task_list.ntasks == [1150, 0]
             task_list = multi_grids_tasks(He_nonorth, hermi=1, ntasks=2)
-            assert task_list.ntasks == [2771, 732]
+            assert task_list.ntasks == [2806, 732]
         with with_grid_level_method("pyscf"):
             task_list = multi_grids_tasks(He_orth, hermi=1, ntasks=2)
             assert task_list.ntasks == [1150, 0]
             task_list = multi_grids_tasks(He_nonorth, hermi=1, ntasks=2)
-            assert task_list.ntasks == [3249, 254]
+            assert task_list.ntasks == [3284, 254]
 
     def test_orth_get_pp(self):
         ref = df.FFTDF(cell_orth).get_pp()
-        out = multigrid.MultiGridFFTDF2(cell_orth).get_pp(return_full=True)
+        out = multigrid.MultiGridNumInt2(cell_orth).get_pp(return_full=True)
         assert out.shape == ref.shape
         assert abs(ref-out).max() < 1e-7
 
     def test_nonorth_get_pp(self):
         ref = df.FFTDF(cell_nonorth).get_pp()
-        out = multigrid.MultiGridFFTDF2(cell_nonorth).get_pp(return_full=True)
+        out = multigrid.MultiGridNumInt2(cell_nonorth).get_pp(return_full=True)
         assert out.shape == ref.shape
         assert abs(ref-out).max() < 1e-7
 
@@ -245,14 +245,14 @@ class KnownValues(unittest.TestCase):
     # https://github.com/pyscf/pyscf/issues/2882
     def test_nopp_vpploc_part1_nuc_grad(self):
         mf = dft.RKS(mol, xc='lda,vwn')
-        mf.with_df = multigrid.MultiGridFFTDF2(mol)
+        mf._numint = multigrid.MultiGridNumInt2(mol)
         mf.run()
-        g = vpploc_part1_nuc_grad(mf.with_df, mf.make_rdm1())
+        g = vpploc_part1_nuc_grad(mf._numint, mf.make_rdm1())
         assert abs(g).max() < 1e-8
 
     def test_mol_rks(self):
         mf = dft.RKS(mol, xc='lda,vwn')
-        mf.with_df = multigrid.MultiGridFFTDF2(mol)
+        mf._numint = multigrid.MultiGridNumInt2(mol)
         mf.run()
         assert abs(mf.e_tot - -2.937753) < 1e-6
 
@@ -262,7 +262,7 @@ class KnownValues(unittest.TestCase):
 
     def test_mol_uks(self):
         mf = dft.UKS(mol, xc='lda,vwn')
-        mf.with_df = multigrid.MultiGridFFTDF2(mol)
+        mf._numint = multigrid.MultiGridNumInt2(mol)
         mf.run()
         assert abs(mf.e_tot - -2.937753) < 1e-6
 

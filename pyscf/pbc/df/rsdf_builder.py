@@ -270,15 +270,8 @@ class _RSGDFBuilder(Int3cBuilder):
         rs_auxcell = self.rs_auxcell
         auxcell_c = rs_auxcell.compact_basis_cell()
         if auxcell_c.nbas > 0:
-            aux_exp = np.hstack(auxcell_c.bas_exps()).min()
-            if omega == 0:
-                theta = aux_exp / 2
-            else:
-                theta = 1./(2./aux_exp + omega**-2)
-            fac = 2*np.pi**3.5/auxcell.vol * aux_exp**-3 * theta**-1.5
-            rcut_sr = (np.log(fac / auxcell_c.rcut / precision + 1.) / theta)**.5
-            auxcell_c.rcut = rcut_sr
-            logger.debug1(self, 'auxcell_c  rcut_sr = %g', rcut_sr)
+            auxcell_c.rcut = estimate_rs_2c2e_rcut(auxcell_c, omega, precision)
+            logger.debug1(self, 'auxcell_c  rcut_sr = %g', auxcell_c.rcut)
             with auxcell_c.with_short_range_coulomb(omega):
                 sr_j2c = list(auxcell_c.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts))
             recontract_1d = rs_auxcell.recontract()
@@ -1625,3 +1618,14 @@ def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
     log_rest = np.log(precision / (16*np.pi**2 * kmax**lmax))
     omega = (-.5 * ke_cutoff / log_rest)**.5
     return omega
+
+def estimate_rs_2c2e_rcut(auxcell, omega, precision=None):
+    if precision is None:
+        precision = auxcell.precision
+    aux_exp = np.hstack(auxcell.bas_exps()).min()
+    if omega == 0:
+        theta = aux_exp / 2
+    else:
+        theta = 1./(2./aux_exp + omega**-2)
+    fac = 2*np.pi**3.5/auxcell.vol * aux_exp**-3 * theta**-1.5
+    return (np.log(fac / auxcell.rcut / precision + 1.) / theta)**.5

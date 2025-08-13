@@ -1,3 +1,36 @@
+PySCF 2.10.0 (2025-07-15)
+-------------------------
+* Added
+  - Analytical hessian for vv10 functional
+  - vv10 response contributions in TDDFT
+  - vv10 functionals for GKS
+  - Spin-seperated 4-particle density matrix for FCI
+  - TDDFT with C-PCM/IEF-PCM solvents and the corresponding TDDFT analytic gradients
+  - DFT+U for molecules and a linear-response method for determining U
+  - Add multigrid_numint method to setup the multigrid algorithm in DFT instances.
+  - Frozen orbitals for TDDFT
+  - EE-ADC for spin-conserved electronic excitations
+* Improved
+  - Checks and warnings for missing ECP input on heavy elements
+  - Auxiliary basis set assignment based on BSE database
+  - Support for user-defined basis set aliases
+  - Multigrid performance for non-orthogonal lattice
+  - Multigrid APIs now follow the NumInt module; multigrid is decoupled from the
+    FFTDF implementation, supporting mixing of GDF and multigrid
+  - The treatment of dimension=0 under PBC; the PBC dimension=0 can be called
+    with FFTDF, AFTDF, GDF, Multigrid integrals now.
+  - Breit and Gaunt integrals for non-hermitian density matrices, supporting the
+    TDDFT computation with Breit and Gaunt interactions.
+  - Low-Memory and Efficient Implementation of RCCSD(T) lambda-equation and RDM Intermediates
+* Fixes
+  - transform_xc for 6th order XC derivatives
+  - Subgroups of C2h
+  - EXX integral computation in RSH functionals for PBC DFT with AFTDF
+  - Application order of solvent models and density fitting
+  - Slow convergence in GHF SOSCF
+  - Bugs in the geomeTRIC interface: max iteration, convergence check, and non-standard element symbols
+
+
 PySCF 2.9.0 (2025-04-20)
 ------------------------
 * Added

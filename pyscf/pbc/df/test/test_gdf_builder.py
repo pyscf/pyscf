@@ -179,6 +179,7 @@ class KnownValues(unittest.TestCase):
         cell = pgto.M(atom='He 0 0 0; He 0.9 0 0',
                       basis=basis,
                       a=np.eye(3) * 2.8,
+                      low_dim_ft_type='inf_vacuum',
                       dimension=1)
         auxcell = df.make_auxcell(cell, auxbasis)
         dfbuilder = gdf_builder._CCGDFBuilder(cell, auxcell).build()

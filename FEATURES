@@ -11,6 +11,7 @@
   - DIIS, EDIIS, ADIIS and second order solver
   - SCF wavefunction (RHF, UHF, GHF) stability analysis
   - Generalized Hartree-Fock (GHF)
+  - M3SOSCF (Markovian Multiagent Monte-Carlo second order SCF) method
 
 
 * DFT
@@ -22,34 +23,35 @@
   - General XC functional evaluator (for Libxc or XcFun)
   - Multi-collinear functional
   - General AO evaluator
-  - VV10 NLC functional for finite size systems
-  - range-separated hybrid features for RKS and UKS, including
-    > Analytical nuclear gradients
-    > Second order SCF
-    > Hessian and frequency
-    > TDDFT
-    > TDDFT nuclear gradients
-    > NMR
+  - VV10 NLC functionals
+  - range-separated hybrid features for RKS and UKS for energy, gradients and
+    Hessian computation
 
 
 * TDSCF/TDDFT
 
-  - TDA (and density-fitting TDA) for RHF, UHF, RKS and UKS methods
+  - TDA (and density-fitting TDA) for RHF, UHF, RKS, UKS, GKS and DKS methods
   - TDHF (and density-fitting TDHF) for RHF and UHF methods
   - TDDFT (and density-fitting TDDFT) for RKS and UKS methods
   - TDA nuclear gradients for RHF, UHF, RKS and UKS methods
   - TDHF nuclear gradients for RHF and UHF methods
   - TDDFT nuclear gradients for RKS and UKS methods
   - Natural transition orbital analysis
-  - direct-RPA (no exchange, aka TDH)
   - direct-TDA (TDA without exchange)
+  - Non-adiabatic Coupling vectors
+  - Spin-flip TDA using multi-collinear functionals
+  - TDDFT-ris
 
 
-* GW methods
-  - G0W0 approximation
+* RPA and GW methods
+  - Spin-restricted and spin-unrestricted G0W0 approximation with analytic continuation
+  - G0W0 approximation with contour deformation
+  - G0W0 approximation with exact frequency integration
+  - Spin-restricted and spin-unrestricted direct RPA
+  - Particle-particle random phase approximation (ppRPA)
 
 
-* General CASCI/CASSCF solver (up to ~3000 basis)
+* Multi-configuration post-HF methods
 
   - State-average CASCI/CASSCF
   - State-specific CASCI/CASSCF for excited states
@@ -61,9 +63,29 @@
   - Density-fitting CASSCF
   - DMET-CAS and AVAS active space constructor
   - CASCI and CASSCF analytical nuclear gradients
+  - DSRG
+  - DSRG-PT2
+  - Strongly contracted NEVPT2 (SC-NEVPT2)
+  - DMRG-NEVPT2
+  - IC-MPS-PT2
 
 
-* MP2 (up to ~200 occupied, ~2000 virtual orbitals)
+* Multi-configuration and multi-state DFT
+  - CMS-PDFT (Compressed Multiconfiguration Pair-Density Functional Theory) energy and analytical nuclear gradients
+  - L-PDFT (Linearized PDFT) energy and analytical nuclear gradients
+  - MC-PDFT energy and analytical nuclear gradients
+  - XMS-PDFT energy
+  - Non-adiabatic couplings between states using CMS-PDFT method
+  - MC-DCFT (Multiconfiguration Density-Coherence Functional Theory) method
+  - MC-PDFT and CMS-PDFT dipole moment
+  - CMS-PDFT transition dipole moment
+  - MC-PDFT energy decomposition analysis
+  - LRDF (Long-Range Density Fitting) for energy and analytical nuclear gradients and Hessian
+  - MSDFT
+  - SF-NOCI
+
+
+* MP2
 
   - Canonical RMP2, UMP2, GMP2
   - Density-fitting RMP2
@@ -71,7 +93,7 @@
   - RMP2 and UMP2 nuclear gradients
 
 
-* CCSD (up to ~100 occupied, ~1500 virtual orbitals)
+* Coupled Clusers
 
   - canonical RCCSD, UCCSD
   - canonical RCCSD, UCCSD lambda solver
@@ -81,13 +103,16 @@
   - RCC2
   - Density-fitting RCCSD
   - BCCD
-
-
-* CCSD(T)
-
   - RCCSD(T) and UCCSD(T)
   - RCCSD(T), UCCSD(T) and GCCSD(T) 1- and 2-particle density matrices
   - RCCSD(T) and UCCSD(T) analytical nuclear gradients
+
+
+* ADC
+
+  - Restricted and unrestricted ADC for extended systems with PBC
+  - EA/IP/EE-ADC for electronic excitations
+  - ADC density matrices
 
 
 * CI
@@ -127,7 +152,6 @@
   - Non-relativistic TDA, TDHF and TDDFT nuclear gradients
   - Non-relativistic nuclear gradients with SF-X2C-1e correction
   - ECP nuclear gradients
-  - nuclear gradients for solvent model ddCOSMO
   - Frozen orbitals for MP2, CISD, CCSD, CCSD(T), CASCI, CASSCF nuclear gradients
 
 
@@ -137,6 +161,7 @@
   - Non-relativistic DFT nuclear hessian
   - Non-relativistic nuclear hessian with SF-X2C-1e correction
   - ECP nuclear hessian
+  - Analytical nuclear hessian with implicit solvent models (PCM)
 
 
 * Properties
@@ -153,12 +178,7 @@
   - Molecular electrostatic potential (MEP)
   - EFG and Mossbauer spectroscopy
   - Non-relativistic RHF, UHF, RKS, UKS magnetizability
-
-* MRPT
-
-  - Strongly contracted NEVPT2 (SC-NEVPT2)
-  - DMRG-NEVPT2
-  - IC-MPS-PT2
+  - Parity Violating contributions to energy
 
 
 * Extended systems with periodic boundary condition
@@ -178,16 +198,16 @@
   - Smearing for mean-field methods
   - Low-dimensional (0D, 1D, 2D) PBC systems
   - (restricted and unrestricted) TDA, TDHF and TDDFT with k-point sampling
-  - Multigrid DFT
   - EFG and Mossbauer spectroscopy
+  - Staggered KHF
 
 
 * Relativistic effects
 
   - 4-component HF with Dirac-Coulomb Hamiltonian (DHF)
   - 4-component DHF with Gaunt and Breit corrections
-  - 2-component X2C HF
-  - 4-component and 2-component Kohn-Sham DFT (LDA only)
+  - 2-component X2C HF, DFT and TDDFT
+  - 4-component and 2-component Kohn-Sham DFT
 
 
 * AO integrals
@@ -245,6 +265,8 @@
   - ddCOSMO analytical nuclear gradients
   - SMD, and its nuclear gradients and hessian
   - PCM, and its nuclear gradients and hessian
+  - SS(V)PE and its nuclear gradients
+  - COSMO-RS
 
 
 * Tools
@@ -255,4 +277,5 @@
   - Molpro XML reader
   - (GAMESS-format) wfn writer
   - Vasp CHGCAR-format writer
-
+  - TrexIO interface
+  - Qcscheme interface

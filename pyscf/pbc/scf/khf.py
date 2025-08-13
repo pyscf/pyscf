@@ -71,12 +71,17 @@ def get_hcore(mf, cell=None, kpts=None):
     Returns:
         hcore : (nkpts, nao, nao) ndarray
     '''
+    from pyscf.pbc.dft.multigrid import MultiGridNumInt
     if cell is None: cell = mf.cell
     if kpts is None: kpts = mf.kpts
-    if cell.pseudo:
-        nuc = lib.asarray(mf.with_df.get_pp(kpts))
+    if hasattr(mf, '_numint') and isinstance(mf._numint, MultiGridNumInt):
+        ni = mf._numint
     else:
-        nuc = lib.asarray(mf.with_df.get_nuc(kpts))
+        ni = mf.with_df
+    if cell.pseudo:
+        nuc = ni.get_pp(kpts)
+    else:
+        nuc = ni.get_nuc(kpts)
     if len(cell._ecpbas) > 0:
         from pyscf.pbc.gto import ecp
         nuc += lib.asarray(ecp.ecp_int(cell, kpts))
@@ -410,6 +415,19 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
     ni = numint.KNumInt()
     return ni.get_rho(mf.cell, dm, grids, kpts, mf.max_memory)
 
+def gen_response(mf, mo_coeff=None, mo_occ=None,
+                 singlet=None, hermi=0, max_memory=None, with_nlc=True):
+    from pyscf.pbc.scf._response_functions import _get_jk, _get_k
+    cell = mf.cell
+    kpts = mf.kpts
+    if (singlet is None or singlet) and hermi != 2:
+        def vind(dm1, kshift=0):
+            vj, vk = _get_jk(mf, cell, dm1, hermi, kpts, kshift)
+            return vj - .5 * vk
+    else:
+        def vind(dm1, kshift=0):
+            return -.5 * _get_k(mf, cell, dm1, hermi, kpts, kshift)
+    return vind
 
 class KSCF(pbchf.SCF):
     '''SCF base class with k-point sampling.
@@ -445,7 +463,7 @@ class KSCF(pbchf.SCF):
     _finalize = pbchf.SCF._finalize
     canonicalize = canonicalize
 
-    def __init__(self, cell, kpts=np.zeros((1,3)),
+    def __init__(self, cell, kpts=None,
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
@@ -457,7 +475,8 @@ class KSCF(pbchf.SCF):
         self.rsjk = None
 
         self.exxdiv = exxdiv
-        self.kpts = kpts
+        if kpts is not None:
+            self.kpts = kpts
         self.conv_tol = max(cell.precision * 10, 1e-8)
 
         self.exx_built = False
@@ -477,15 +496,16 @@ class KSCF(pbchf.SCF):
     @property
     def kpts(self):
         if 'kpts' in self.__dict__:
-            # To handle the attribute kpt loaded from chkfile
+            # To handle the attribute kpts loaded from chkfile
             self.kpts = self.__dict__.pop('kpts')
         return self.with_df.kpts
 
     @kpts.setter
     def kpts(self, x):
-        self.with_df.kpts = np.reshape(x, (-1,3))
+        kpts = np.reshape(x, (-1,3))
+        self.with_df.kpts = kpts
         if self.rsjk:
-            self.rsjk.kpts = self.with_df.kpts
+            self.rsjk.kpts = kpts
 
     @property
     def kmesh(self):
@@ -760,6 +780,7 @@ class KRHF(KSCF):
 
     analyze = analyze
     spin_square = mol_hf.RHF.spin_square
+    gen_response = gen_response
     to_gpu = lib.to_gpu
 
     def check_sanity(self):
@@ -807,7 +828,7 @@ class KRHF(KSCF):
         return mulliken_meta(cell, dm, kpts, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
-    def nuc_grad_method(self):
+    def Gradients(self):
         from pyscf.pbc.grad import krhf
         return krhf.Gradients(self)
 

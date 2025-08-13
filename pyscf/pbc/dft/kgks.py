@@ -70,7 +70,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         raise NotImplementedError
 
     # TODO GKS with multigrid method
-    if isinstance(ks.with_df, multigrid.MultiGridFFTDF):
+    if isinstance(ks._numint, multigrid.MultiGridNumInt):
         raise NotImplementedError
 
     # ndim = 3 : dm.shape = (nkpts, nao, nao)

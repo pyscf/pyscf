@@ -22,6 +22,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.gto import ATM_SLOTS, BAS_SLOTS, ATOM_OF, PTR_COORD
 from pyscf.pbc.lib.kpts_helper import get_kconserv, get_kconserv3  # noqa
+from pyscf.pbc.lib.kpts_helper import intersection
 from pyscf import __config__
 
 FFT_ENGINE = getattr(__config__, 'pbc_tools_pbc_fft_engine', 'NUMPY+BLAS')
@@ -277,6 +278,59 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     if Gv is None:
         Gv = cell.get_Gv(mesh)
 
+    if omega is None:
+        _omega = cell.omega
+    else:
+        _omega = omega
+
+    if cell.dimension == 0 and cell.low_dim_ft_type != 'inf_vacuum':
+        a = cell.lattice_vectors()
+        assert abs(np.eye(3)*a[0,0] - a).max() < 1e-6, \
+                'Must be cubic box for cell.dimension=0'
+        # ensure the sphere is completely inside the box
+        Rc = a[0,0] / 2
+
+        # The truncated Coulomb kernel is
+        #    \int_0^R e^{-iG dot r} 1/r dr^3 = 4pi/G \int_0^R sin(G r) dr
+        #        = 4pi/G^2 (1 - cos(G R))
+        # When R->infinity, the truncated Coulomb becomes the full-range
+        # Coulomb. Its kernel is 4pi/G^2. Comparing the two integrals, the
+        # divergentintegral
+        #    4pi/G^2 \int_R^\inf sin(G R) dr = \int_0^\inf - \int_R^\inf ...
+        # would give a regularized value
+        #    4pi/G^2 cos (G R)
+        # The long-range truncated Coulomb kernel
+        #    \int_0^R erf(omega r)/r dr^3 = \int_0^\inf - \int_R^\inf ...
+        #        = 4pi/G^2 exp(-G^2/(4 omega^2)) - 4pi/G \int_R^\inf erf(omega r) sin(G r) dr
+        # If erf(omega R) ~= 1 for sufficient large R, the second term is
+        # simplified to the sin(G r) regularized integral. The long range
+        # truncated Coulomb is then given by
+        #    4pi/G^2 (exp(-G^2/(4 omega^2) - cos(G R))
+        # The short range part is
+        #    4pi/G^2 (1 - exp(-G^2/(4 omega^2))
+        if (_omega != 0 and
+            abs(_omega) * Rc < 2.0): # typically, error of \int erf(omega r) sin (G r) < 1e-5
+            raise RuntimeError(
+                'In sufficient box size for the truncated range-separated '
+                'Coulomb potential in 0D case')
+
+        absG = np.linalg.norm(Gv, axis=1)
+        with np.errstate(divide='ignore',invalid='ignore'):
+            coulG = 4*np.pi/absG**2
+            coulG[0] = 0
+        if _omega == 0:
+            coulG *= 1. - np.cos(absG*Rc)
+            # G=0 term carries the charge. This special term supports the charged
+            # system for dimension=0.
+            coulG[0] = 2*np.pi*Rc**2
+        elif _omega > 0:
+            coulG *= np.exp(-.25/_omega**2 * absG**2) - np.cos(absG*Rc)
+            coulG[0] = 2*np.pi*Rc**2 - np.pi / _omega**2
+        else:
+            coulG *= 1 - np.exp(-.25/_omega**2 * absG**2)
+            coulG[0] = np.pi / _omega**2
+        return coulG
+
     if abs(k).sum() > 1e-9:
         kG = k + Gv
     else:
@@ -290,31 +344,33 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         # answers to agree
         b = cell.reciprocal_vectors()
         box_edge = np.einsum('i,ij->ij', np.asarray(mesh)//2+0.5, b)
-        assert (all(np.linalg.solve(box_edge.T, k).round(9).astype(int)==0))
-        reduced_coords = np.linalg.solve(box_edge.T, kG.T).T.round(9)
-        on_edge = reduced_coords.astype(int)
+        assert (all(np.linalg.solve(box_edge.T, k).astype(int)==0))
+        reduced_coords = np.linalg.solve(box_edge.T, kG.T).T
+        on_edge_p1 = abs(reduced_coords - 1) < 1e-9
+        on_edge_m1 = abs(reduced_coords + 1) < 1e-9
         if cell.dimension >= 1:
-            equal2boundary |= reduced_coords[:,0] == 1
-            equal2boundary |= reduced_coords[:,0] ==-1
-            kG[on_edge[:,0]== 1] -= 2 * box_edge[0]
-            kG[on_edge[:,0]==-1] += 2 * box_edge[0]
+            equal2boundary |= on_edge_p1[:,0]
+            equal2boundary |= on_edge_m1[:,0]
+            kG[reduced_coords[:,0]> 1] -= 2 * box_edge[0]
+            kG[reduced_coords[:,0]<-1] += 2 * box_edge[0]
         if cell.dimension >= 2:
-            equal2boundary |= reduced_coords[:,1] == 1
-            equal2boundary |= reduced_coords[:,1] ==-1
-            kG[on_edge[:,1]== 1] -= 2 * box_edge[1]
-            kG[on_edge[:,1]==-1] += 2 * box_edge[1]
+            equal2boundary |= on_edge_p1[:,1]
+            equal2boundary |= on_edge_m1[:,1]
+            kG[reduced_coords[:,1]> 1] -= 2 * box_edge[1]
+            kG[reduced_coords[:,1]<-1] += 2 * box_edge[1]
         if cell.dimension == 3:
-            equal2boundary |= reduced_coords[:,2] == 1
-            equal2boundary |= reduced_coords[:,2] ==-1
-            kG[on_edge[:,2]== 1] -= 2 * box_edge[2]
-            kG[on_edge[:,2]==-1] += 2 * box_edge[2]
+            equal2boundary |= on_edge_p1[:,2]
+            equal2boundary |= on_edge_m1[:,2]
+            kG[reduced_coords[:,2]> 1] -= 2 * box_edge[2]
+            kG[reduced_coords[:,2]<-1] += 2 * box_edge[2]
 
     absG2 = np.einsum('gi,gi->g', kG, kG)
     G0_idx = []
 
-    kpts = k.reshape(1,3)
     if hasattr(mf, 'kpts'):
         kpts = mf.kpts
+    else:
+        kpts = k.reshape(1,3)
     Nk = len(kpts)
 
     if exxdiv == 'vcut_sph':  # PRB 77 193110
@@ -358,7 +414,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         # error in exchange integrals
 
         G0_idx = np.where(absG2==0)[0]
-        if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
+        if cell.dimension == 3 or cell.low_dim_ft_type == 'inf_vacuum':
             with np.errstate(divide='ignore'):
                 coulG = 4*np.pi/absG2
                 coulG[G0_idx] = 0
@@ -380,7 +436,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             logger.warn(cell, 'No method for PBC dimension 1, dim-type %s.'
                         '  cell.low_dim_ft_type="inf_vacuum"  should be set.',
                         cell.low_dim_ft_type)
-            raise NotImplementedError
+            raise NotImplementedError('truncated coulG for dimension=1 is numerically inaccurate')
 
             # Carlo A. Rozzi, PRB 73, 205119 (2006)
             a = cell.lattice_vectors()
@@ -396,6 +452,9 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
                 # coulG[Gx==0] = -4*np.pi * (dr * r * scipy.special.j0(Gp*r) * np.log(r)).sum()
             if len(G0_idx) > 0:
                 coulG[G0_idx] = -np.pi*Rc**2 * (2*np.log(Rc) - 1)
+        else:
+            raise NotImplementedError(f'dimension={cell.dimension} with '
+                                      f'low_dim_ft_type={cell.low_dim_ft_type} is not supported')
 
     if equal2boundary is not None:
         coulG[equal2boundary] = 0
@@ -405,10 +464,9 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     # being evaluated with regular Coulomb interaction (1/r12).
     # * cell.omega, which affects the ewald probe charge, is often set by
     # DFT-RSH functionals to build long-range HF-exchange for erf(omega*r12)/r12
-    if omega is None:
-        _omega = cell.omega
-    else:
-        _omega = omega
+    if _omega != 0 and cell.dimension != 3:
+        logger.warn(cell, 'The coulG kernel for range-separated Coulomb potential '
+                    f'for PBC {cell.dimension} is inaccurate.')
     if _omega > 0:
         # long range part
         coulG *= np.exp(-.25/_omega**2 * absG2)
@@ -571,9 +629,6 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
     scaled_atom_coords = cell.get_scaled_atom_coords()
     atom_boundary_max = scaled_atom_coords[:,:dimension].max(axis=0)
     atom_boundary_min = scaled_atom_coords[:,:dimension].min(axis=0)
-    if (np.any(atom_boundary_max > 1) or np.any(atom_boundary_min < -1)):
-        atom_boundary_max[atom_boundary_max > 1] = 1
-        atom_boundary_min[atom_boundary_min <-1] = -1
     ovlp_penalty = atom_boundary_max - atom_boundary_min
     dR = ovlp_penalty.dot(a[:dimension])
     dR_basis = np.diag(dR)
@@ -603,14 +658,28 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
                              np.arange(-bounds[2], bounds[2]+1)))
     Ls = np.dot(Ts[:,:dimension], a[:dimension])
 
-    if discard:
-        ovlp_penalty += 1e-200  # avoid /0
-        Ts_scaled = (Ts[:,:dimension] + 1e-200) / ovlp_penalty
-        ovlp_penalty_fac = 1. / abs(Ts_scaled).min(axis=1)
-        Ls_mask = np.linalg.norm(Ls, axis=1) * (1-ovlp_penalty_fac) < rcut
+    if discard and len(Ls) > 1:
+        r = cell.atom_coords()
+        rr = r[:,None] - r
+        dist_max = np.linalg.norm(rr, axis=2).max()
+        Ls_mask = np.linalg.norm(Ls, axis=1) < rcut + dist_max
         Ls = Ls[Ls_mask]
     return np.asarray(Ls, order='C')
 
+def check_lattice_sum_range(cell, Ls):
+    '''
+    Evaluates whether the lattice summation range is sufficient.
+
+    This function calculates the minimum distance between atoms in the primary
+    unit cell and atoms in lattice images *not* included in the specified
+    lattice sum vectors (Ls).
+    '''
+    Ls_full = get_lattice_Ls(cell, rcut=cell.rcut*1.5, discard=False)
+    Ls_idx = intersection(Ls_full, Ls)
+    Ls_remaining = np.setdiff1d(np.arange(len(Ls_full)), Ls_idx)
+    atom_coords = cell.atom_coords()
+    atoms_outside = (Ls_full[Ls_remaining,None] + atom_coords).reshape(-1, 3)
+    return np.linalg.norm(atoms_outside[:,None] - atom_coords, axis=2).min()
 
 def super_cell(cell, ncopy, wrap_around=False):
     '''Create an ncopy[0] x ncopy[1] x ncopy[2] supercell of the input cell
