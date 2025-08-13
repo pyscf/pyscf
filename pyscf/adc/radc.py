@@ -29,6 +29,7 @@ from pyscf.adc import radc_ao2mo
 from pyscf.adc import radc_amplitudes
 from pyscf import __config__
 from pyscf import df
+from pyscf.mp import mp2
 
 
 # Excited-state kernel
@@ -177,6 +178,45 @@ def make_ref_rdm1(adc):
 
     return 2 * OPDM
 
+def get_fno_ref(myadc,nroots,ref_state):
+    adc2_ref = RADC(myadc._scf,myadc.frozen).set(verbose = 0,method_type = myadc.method_type,with_df = myadc.with_df,if_naf = myadc.if_naf,thresh_naf = myadc.thresh_naf)
+    myadc.e2_ref,myadc.v2_ref,myadc.p2_ref,myadc.x2_ref = adc2_ref.kernel(nroots)
+    rdm1_gs = adc2_ref.make_ref_rdm1()
+    if ref_state is not None:
+        rdm1_ref = adc2_ref.make_rdm1()[ref_state - 1]
+        myadc.rdm1_ss = rdm1_ref + rdm1_gs
+    else:
+        myadc.rdm1_ss = rdm1_gs
+
+def make_fno(myadc, rdm1_ss, mf, thresh):
+    import numpy
+    from pyscf.mp import mp2
+    nocc = myadc._nocc
+    masks = mp2._mo_splitter(myadc)
+    
+    n,V = numpy.linalg.eigh(rdm1_ss[nocc:,nocc:])
+    idx = numpy.argsort(n)[::-1]
+    n,V = n[idx], V[:,idx]
+    T = n > thresh
+    n_fro_vir = numpy.sum(T == 0)
+    T = numpy.diag(T)
+    V_trunc = V.dot(T)
+    n_keep = V_trunc.shape[0]-n_fro_vir
+
+    moeoccfrz0, moeocc, moevir, moevirfrz0 = [mf.mo_energy[m] for m in masks]
+    orboccfrz0, orbocc, orbvir, orbvirfrz0 = [mf.mo_coeff[:,m] for m in masks]
+    F_can =  numpy.diag(moevir)
+    F_na_trunc = V_trunc.T.dot(F_can).dot(V_trunc)
+    _,Z_na_trunc = numpy.linalg.eigh(F_na_trunc[:n_keep,:n_keep])
+    U_vir_act = orbvir.dot(V_trunc[:,:n_keep]).dot(Z_na_trunc)
+    U_vir_fro = orbvir.dot(V_trunc[:,n_keep:]) 
+    no_comp = (orboccfrz0,orbocc,U_vir_act,U_vir_fro,orbvirfrz0)
+    no_coeff = numpy.hstack(no_comp)
+    nocc_loc = numpy.cumsum([0]+[x.shape[1] for x in no_comp]).astype(int)
+    no_frozen = numpy.hstack((numpy.arange(nocc_loc[0], nocc_loc[1]),
+                              numpy.arange(nocc_loc[3], nocc_loc[5]))).astype(int)
+    return no_coeff,no_frozen
+
 
 class RADC(lib.StreamObject):
     '''Ground state calculations
@@ -215,10 +255,12 @@ class RADC(lib.StreamObject):
         'scf_energy', 'e_tot', 't1', 't2', 'frozen', 'chkfile',
         'max_space', 'mo_occ', 'max_cycle', 'imds', 'with_df', 'compute_properties',
         'approx_trans_moments', 'evec_print_tol', 'spec_factor_print_tol',
-        'E', 'U', 'P', 'X', 'ncvs', 'dip_mom', 'dip_mom_nuc'
+        'E', 'U', 'P', 'X', 'ncvs', 'dip_mom', 'dip_mom_nuc', 'if_naf', 'thresh_naf', 
+        'naux', 'if_heri_eris'
     }
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+        import numpy
 
         if 'dft' in str(mf.__module__):
             raise NotImplementedError('DFT reference for UADC')
@@ -238,21 +280,47 @@ class RADC(lib.StreamObject):
         self.max_cycle = getattr(__config__, 'adc_radc_RADC_max_cycle', 50)
         self.conv_tol = getattr(__config__, 'adc_radc_RADC_conv_tol', 1e-8)
         self.tol_residual = getattr(__config__, 'adc_radc_RADC_tol_residual', 1e-5)
-        self.scf_energy = mf.e_tot
 
         self.frozen = frozen
         self.incore_complete = self.incore_complete or self.mol.incore_anyway
 
-        self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
         self.e_corr = None
         self.t1 = None
         self.t2 = None
         self.imds = lambda:None
         self._nocc = mf.mol.nelectron//2
-        self._nmo = mo_coeff.shape[1]
-        self._nvir = self._nmo - self._nocc
+        self.mo_coeff = mo_coeff
         self.mo_energy = mf.mo_energy
+#NOTE:update_start
+        self.naux = None
+        self.if_naf = False
+        self.thresh_naf = 1e-2
+        self.if_heri_eris = False
+        self._nmo = None
+        #fno modify
+        if frozen is None:
+            self._nmo = mo_coeff.shape[1]
+        elif isinstance(frozen, (int, numpy.integer)):
+            self._nmo = mo_coeff.shape[1]-frozen
+        elif hasattr(frozen, '__len__'):
+            self._nmo = mo_coeff.shape[1]-len(frozen)
+        else:
+            raise NotImplementedError
+        self._nvir = self._nmo - self._nocc
+        mask = self.get_frozen_mask()
+        self.mo_coeff = mo_coeff[:,mask]
+        if self.mo_coeff is self._scf.mo_coeff and self._scf.converged:
+            self.mo_energy = self.mo_energy[mask]
+            self.scf_energy = self._scf.e_tot
+        else:
+            dm = self._scf.make_rdm1(mo_coeff, self.mo_occ)
+            vhf = self._scf.get_veff(self.mol, dm)
+            fockao = self._scf.get_fock(vhf=vhf, dm=dm)
+            fock = self.mo_coeff.conj().T.dot(fockao).dot(self.mo_coeff)
+            self.mo_energy = fock.diagonal().real
+            self.scf_energy = self._scf.energy_tot(dm=dm, vhf=vhf)
+#NOTE:update_end
         self.chkfile = mf.chkfile
         self.method = "adc(2)"
         self.method_type = "ip"
@@ -268,12 +336,13 @@ class RADC(lib.StreamObject):
         self.P = None
         self.X = None
 
+#TODO:check if needs complete coefficient
         dip_ints = -self.mol.intor('int1e_r',comp=3)
         dip_mom = np.zeros((dip_ints.shape[0], self._nmo, self._nmo))
 
         for i in range(dip_ints.shape[0]):
             dip = dip_ints[i,:,:]
-            dip_mom[i,:,:] = np.dot(mo_coeff.T, np.dot(dip, mo_coeff))
+            dip_mom[i,:,:] = np.dot(self.mo_coeff.T, np.dot(dip, self.mo_coeff))
 
         self.dip_mom = dip_mom
 
@@ -285,6 +354,7 @@ class RADC(lib.StreamObject):
     compute_energy = radc_amplitudes.compute_energy
     transform_integrals = radc_ao2mo.transform_integrals_incore
     make_ref_rdm1 = make_ref_rdm1
+    get_frozen_mask = mp2.get_frozen_mask
 
     def dump_flags(self, verbose=None):
         logger.info(self, '')
@@ -364,22 +434,23 @@ class RADC(lib.StreamObject):
         mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
 
-        if getattr(self, 'with_df', None) or getattr(self._scf, 'with_df', None):
-            if getattr(self, 'with_df', None):
-                self.with_df = self.with_df
-            else:
-                self.with_df = self._scf.with_df
+        if eris is None:
+            if getattr(self, 'with_df', None) or getattr(self._scf, 'with_df', None):
+                if getattr(self, 'with_df', None):
+                    self.with_df = self.with_df
+                else:
+                    self.with_df = self._scf.with_df
 
-            def df_transform():
-                return radc_ao2mo.transform_integrals_df(self)
-            self.transform_integrals = df_transform
-        elif (self._scf._eri is None or
-              (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
-            def outcore_transform():
-                return radc_ao2mo.transform_integrals_outcore(self)
-            self.transform_integrals = outcore_transform
+                def df_transform():
+                    return radc_ao2mo.transform_integrals_df(self)
+                self.transform_integrals = df_transform
+            elif (self._scf._eri is None or
+                (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
+                def outcore_transform():
+                    return radc_ao2mo.transform_integrals_outcore(self)
+                self.transform_integrals = outcore_transform
 
-        eris = self.transform_integrals()
+            eris = self.transform_integrals()
 
         self.e_corr, self.t1, self.t2 = radc_amplitudes.compute_amplitudes_energy(
             self, eris=eris, verbose=self.verbose)
@@ -402,7 +473,14 @@ class RADC(lib.StreamObject):
         else:
             raise NotImplementedError(self.method_type)
         self._adc_es = adc_es
-        return e_exc, v_exc, spec_fac, x
+        if self.if_heri_eris:
+            if self.if_naf:
+                return e_exc, v_exc, spec_fac, x, eris, self.naux
+            else:
+                eris.vvvv = None
+                return e_exc, v_exc, spec_fac, x, eris
+        else:
+            return e_exc, v_exc, spec_fac, x
 
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''
@@ -456,6 +534,75 @@ class RADC(lib.StreamObject):
 
     def make_rdm1(self):
         return self._adc_es.make_rdm1()
+
+class RFNOADC3(RADC):
+    #J. Chem. Phys. 159, 084113 (2023)
+    _keys = RADC._keys | {'delta_e','delta_v','delta_p','delta_x',
+                          'e2_ref','v2_ref','p2_ref','x2_ref',
+                          'rdm1_ss','correction','frozen_core','ref_state'
+                          }
+
+    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None, correction=True):
+        import copy
+        super().__init__(mf, frozen, mo_coeff, mo_occ)
+        self.delta_e = None
+        self.delta_v = None
+        self.delta_p = None
+        self.delta_x = None
+        self.method = "adc(3)"
+        self.correction = correction
+        self.e2_ref = None
+        self.v2_ref = None
+        self.p2_ref = None
+        self.x2_ref = None
+        self.rdm1_ss = None
+        self.ref_state = None
+        self.if_naf = True
+        self.frozen_core = copy.deepcopy(self.frozen)
+
+    def compute_correction(self, mf, frozen, nroots, eris):
+        adc2_ssfno = RADC(mf, frozen, self.mo_coeff).set(verbose = 0,method_type = self.method_type,\
+                                                         with_df = self.with_df,if_naf = self.if_naf,thresh_naf = self.thresh_naf,naux = self.naux)
+        e2_ssfno,v2_ssfno,p2_ssfno,x2_ssfno = adc2_ssfno.kernel(nroots, eris = eris)
+        self.delta_e = self.e2_ref - e2_ssfno
+        #self.delta_v = self.v2_ref - v2_ssfno
+        #self.delta_p = self.p2_ref - p2_ssfno
+        #self.delta_x = self.x2_ref - x2_ssfno
+
+    def kernel(self, nroots=1, guess=None, eris=None, thresh = 1e-4, ref_state = None):
+        import copy
+        self.frozen = copy.deepcopy(self.frozen_core)
+        self.ref_state = ref_state
+        self.naux = None
+        if ref_state is None:
+            print("Do fnoadc3 calculation")
+            self.if_naf = False
+        elif isinstance(ref_state, int) and 0<ref_state<=nroots:
+            print(f"Do ss-fno adc3 calculation, the specic state is {ref_state}")
+            if self.with_df == None:
+                self.if_naf = False
+        else:
+            raise ValueError("ref_state should be an int type and in (0,nroots]")
+        
+        get_fno_ref(self, nroots, self.ref_state)
+        self.mo_coeff,self.frozen = make_fno(self, self.rdm1_ss, self._scf, thresh)
+        adc3_ssfno = RADC(self._scf, self.frozen, self.mo_coeff).set(verbose = self.verbose,method_type = self.method_type,method = "adc(3)",\
+                                                         with_df = self.with_df,if_naf = self.if_naf,thresh_naf = self.thresh_naf,\
+                                                            if_heri_eris = self.if_heri_eris)
+        if not self.correction or self.if_heri_eris is False:
+            e_exc, v_exc, spec_fac, x = adc3_ssfno.kernel(nroots, guess, eris)
+        elif self.if_naf:
+            e_exc, v_exc, spec_fac, x, eris, self.naux = adc3_ssfno.kernel(nroots, guess, eris)
+            self.compute_correction(self._scf, self.frozen, nroots, eris)
+            e_exc = e_exc + self.delta_e
+        else:
+            e_exc, v_exc, spec_fac, x, eris = adc3_ssfno.kernel(nroots, guess, eris)
+            self.compute_correction(self._scf, self.frozen, nroots, eris)
+            e_exc = e_exc + self.delta_e
+        v_exc = v_exc# + self.delta_v
+        spec_fac = spec_fac# + self.delta_p
+        x = x# + self.delta_x
+        return e_exc, v_exc, spec_fac, x
 
 
 if __name__ == '__main__':

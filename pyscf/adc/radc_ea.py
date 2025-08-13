@@ -1469,7 +1469,7 @@ class RADCEA(radc.RADC):
     _keys = {
         'tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff',
         'mo_energy', 't1', 'max_space', 't2', 'max_cycle',
-        'nmo', 'transform_integrals', 'with_df', 'compute_properties',
+        'nmo', 'transform_integrals', 'with_df', 'if_naf', 'naux', 'compute_properties',
         'approx_trans_moments', 'E', 'U', 'P', 'X',
         'evec_print_tol', 'spec_factor_print_tol',
     }
@@ -1503,6 +1503,9 @@ class RADCEA(radc.RADC):
 
         self.evec_print_tol = adc.evec_print_tol
         self.spec_factor_print_tol = adc.spec_factor_print_tol
+
+        self.if_naf = adc.if_naf
+        self.naux = adc.naux
 
         self.E = adc.E
         self.U = adc.U

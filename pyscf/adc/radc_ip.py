@@ -1353,7 +1353,7 @@ class RADCIP(radc.RADC):
         'tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff',
         'mo_energy_b', 't1', 'mo_energy_a',
         'max_space', 't2', 'max_cycle',
-        'nmo', 'transform_integrals', 'with_df', 'compute_properties',
+        'nmo', 'transform_integrals', 'with_df', 'if_naf', 'naux','compute_properties',
         'approx_trans_moments', 'E', 'U', 'P', 'X',
         'evec_print_tol', 'spec_factor_print_tol',
     }
@@ -1384,6 +1384,8 @@ class RADCIP(radc.RADC):
         self.with_df = adc.with_df
         self.compute_properties = adc.compute_properties
         self.approx_trans_moments = adc.approx_trans_moments
+        self.if_naf = adc.if_naf
+        self.naux = adc.naux
 
         self.evec_print_tol = adc.evec_print_tol
         self.spec_factor_print_tol = adc.spec_factor_print_tol
