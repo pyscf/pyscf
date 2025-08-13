@@ -294,7 +294,7 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None,
 def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
     cell = mydf.cell
     if kpts is None:
-        kpts = mydf.kpts
+        kpts = np.zeros((1, 3))
     nkpts = len(kpts)
 
     if isinstance(mo_coeff_kpts, numpy.ndarray) and mo_coeff_kpts.ndim == 3:

@@ -206,11 +206,17 @@ class FFTDF(lib.StreamObject):
         return self
 
     def dump_flags(self, verbose=None):
-        logger.info(self, '\n')
-        logger.info(self, '******** %s ********', self.__class__)
-        logger.info(self, 'mesh = %s (%d PWs)', self.mesh, numpy.prod(self.mesh))
-        logger.info(self, 'len(kpts) = %d', len(self.kpts))
-        logger.debug1(self, '    kpts = %s', self.kpts)
+        log = logger.new_logger(self, verbose)
+        if log.verbose < logger.INFO:
+            return self
+        log.info('\n')
+        log.info('******** %s ********', self.__class__)
+        log.info('mesh = %s (%d PWs)', self.mesh, numpy.prod(self.mesh))
+        kpts = self.kpts
+        if isinstance(kpts, KPoints):
+            kpts = kpts.kpts
+        log.info('len(kpts) = %d', len(kpts))
+        log.debug1('    kpts = %s', kpts)
         return self
 
     def check_sanity(self):
@@ -254,9 +260,6 @@ class FFTDF(lib.StreamObject):
             cell = grids.cell
         if grids.non0tab is None:
             grids.build(with_non0tab=True)
-
-        if kpts is None: kpts = self.kpts
-        kpts = numpy.asarray(kpts)
 
         if cell.dimension <= 2 and cell.low_dim_ft_type == 'inf_vacuum':
             raise RuntimeError('FFTDF method does not support low-dimension '

@@ -29,6 +29,7 @@ from pyscf.pbc.gto import pseudo, error_for_ke_cutoff
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.gto.pseudo import pp_int
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
+from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import aft_ao2mo
@@ -170,7 +171,10 @@ def _check_kpts(mydf, kpts):
         kpts = np.zeros((1, 3))
         is_single_kpt = True
     else:
-        kpts = np.asarray(kpts)
+        if isinstance(kpts, KPoints):
+            raise NotImplementedError('DF for symmetry-adapted Kpoints is not supported')
+        else:
+            kpts = np.asarray(kpts)
         is_single_kpt = kpts.ndim == 1
     kpts = kpts.reshape(-1,3)
     return kpts, is_single_kpt
@@ -485,9 +489,9 @@ class AFTDFMixin:
             mesh = self.mesh
         if kpts is None:
             assert (is_zero(q))
-            kpts = self.kpts
-        kpts = np.asarray(kpts)
-        nkpts = len(kpts)
+            nkpts = 1
+        else:
+            nkpts = len(kpts)
 
         ao_loc = cell.ao_loc_nr()
         Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
@@ -507,7 +511,10 @@ class AFTDFMixin:
             nij = ni*nj
 
         if bvk_kmesh is None:
-            bvk_kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
+            if kpts is None:
+                bvk_kmesh = [1, 1, 1]
+            else:
+                bvk_kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
         #TODO:
         # ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh)
         # rs_cell = ft_ao._RangeSeparatedCell.from_cell(cell, ke_cutoff, ft_ao.RCUT_THRESHOLD)
@@ -587,11 +594,17 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
         self._rsh_df = {}  # Range separated Coulomb DF objects
 
     def dump_flags(self, verbose=None):
-        logger.info(self, '\n')
-        logger.info(self, '******** %s ********', self.__class__)
-        logger.info(self, 'mesh = %s (%d PWs)', self.mesh, np.prod(self.mesh))
-        logger.info(self, 'len(kpts) = %d', len(self.kpts))
-        logger.debug1(self, '    kpts = %s', self.kpts)
+        log = logger.new_logger(self, verbose)
+        if log.verbose < logger.INFO:
+            return self
+        log.info('\n')
+        log.info('******** %s ********', self.__class__)
+        log.info('mesh = %s (%d PWs)', self.mesh, np.prod(self.mesh))
+        kpts = self.kpts
+        if isinstance(kpts, KPoints):
+            kpts = kpts.kpts
+        log.info('len(kpts) = %d', len(kpts))
+        log.debug1('    kpts = %s', kpts)
         return self
 
     def reset(self, cell=None):
