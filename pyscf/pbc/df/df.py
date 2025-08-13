@@ -387,6 +387,17 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 
     def get_pp(self, kpts=None):
         '''Get the periodic pseudopotential nuc-el AO matrix, with G=0 removed.
+
+        The output of this function depends on the input `kpts`. Generally, the
+        output is a (Nk, Nao, Nao) array, where Nk is the number of k-points in the
+        provided `kpts`. If `kpts` is a (3,) array, corresponding to a single
+        k-point, the output will be a (Nao, Nao) matrix. If the optional input
+        `kpts` is not specified, this function will read the GDF.kpts for the
+        k-mesh and return a (Nk, Nao, Nao) array.
+
+        Note: This API has changed since PySCF-2.10. In PySCF 2.9 (or older), if
+        `kpts` is not specified, this funciton may return a (Nao, Nao) matrix for
+        the gamma point and a (Nk, Nao, Nao) array for other k-points.
         '''
         cell = self.cell
         kpts, is_single_kpt = _check_kpts(self, kpts)
@@ -402,6 +413,17 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 
     def get_nuc(self, kpts=None):
         '''Get the periodic nuc-el AO matrix, with G=0 removed.
+
+        The output of this function depends on the input `kpts`. Generally, the
+        output is a (Nk, Nao, Nao) array, where Nk is the number of k-points in the
+        provided `kpts`. If `kpts` is a (3,) array, corresponding to a single
+        k-point, the output will be a (Nao, Nao) matrix. If the optional input
+        `kpts` is not specified, this function will read the GDF.kpts for the
+        k-mesh and return a (Nk, Nao, Nao) array.
+
+        Note: This API has changed since PySCF-2.10. In PySCF 2.9 (or older), if
+        `kpts` is not specified, this funciton may return a (Nao, Nao) matrix for
+        the gamma point and a (Nk, Nao, Nao) array for other k-points.
         '''
         cell = self.cell
         kpts, is_single_kpt = _check_kpts(self, kpts)

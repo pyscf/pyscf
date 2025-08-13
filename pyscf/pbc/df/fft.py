@@ -38,6 +38,20 @@ KE_SCALING = getattr(__config__, 'pbc_df_aft_ke_cutoff_scaling', 0.75)
 
 
 def get_nuc(mydf, kpts=None):
+    r'''
+    Compute integrals for the nuclear attraction term.
+
+    The output of this function depends on the input `kpts`. Generally, the
+    output is a (Nk, Nao, Nao) array, where Nk is the number of k-points in the
+    provided `kpts`. If `kpts` is a (3,) array, corresponding to a single
+    k-point, the output will be a (Nao, Nao) matrix. If the optional input
+    `kpts` is not specified, this function will read the FFTDF.kpts for the
+    k-mesh and return a (Nk, Nao, Nao) array.
+
+    Note: This API has changed since PySCF-2.10. In PySCF 2.9 (or older), if
+    `kpts` is not specified, this funciton may return a (Nao, Nao) matrix for
+    the gamma point and a (Nk, Nao, Nao) array for other k-points.
+    '''
     from pyscf.pbc.dft import gen_grid
     kpts, is_single_kpt = _check_kpts(mydf, kpts)
     cell = mydf.cell
@@ -66,6 +80,17 @@ def get_nuc(mydf, kpts=None):
 
 def get_pp(mydf, kpts=None):
     '''Get the periodic pseudopotential nuc-el AO matrix, with G=0 removed.
+
+    The output of this function depends on the input `kpts`. Generally, the
+    output is a (Nk, Nao, Nao) array, where Nk is the number of k-points in the
+    provided `kpts`. If `kpts` is a (3,) array, corresponding to a single
+    k-point, the output will be a (Nao, Nao) matrix. If the optional input
+    `kpts` is not specified, this function will read the FFTDF.kpts for the
+    k-mesh and return a (Nk, Nao, Nao) array.
+
+    Note: This API has changed since PySCF-2.10. In PySCF 2.9 (or older), if
+    `kpts` is not specified, this funciton may return a (Nao, Nao) matrix for
+    the gamma point and a (Nk, Nao, Nao) array for other k-points.
     '''
     from pyscf.pbc.dft import gen_grid
     kpts, is_single_kpt = _check_kpts(mydf, kpts)
