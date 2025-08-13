@@ -929,7 +929,7 @@ class TDA(TDBase):
             return x0
 
     def init_guess(self, mf, nstates=None, wfnsym=None, return_symmetry=False):
-        logger.warn('TDDFT.init_guess method is deprecated. Please use get_init_guess instead.')
+        logger.warn(self, 'TDDFT.init_guess method is deprecated. Please use get_init_guess instead.')
         return self.get_init_guess(mf, nstates, wfnsym, return_symmetry)
 
     def kernel(self, x0=None, nstates=None):
