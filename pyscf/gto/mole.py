@@ -3757,6 +3757,7 @@ class Mole(MoleBase):
         from pyscf import __all__  # noqa
         from pyscf import scf, dft
 
+        attr_name = key
         mf_xc = None
         for mod in (dft, scf):
             mf_method = getattr(mod, key, None)
@@ -3803,7 +3804,7 @@ class Mole(MoleBase):
             if self.nelectron != 0:
                 mf.run()
             return post_mf(**remaining_kw)
-        return fn
+        return _MoleLazyCallAdapter(fn, attr_name)
 
     def ao2mo(self, mo_coeffs, erifile=None, dataname='eri_mo', intor='int2e',
               **kwargs):
@@ -4300,3 +4301,21 @@ def extract_pgto_params(mol, op='diffused'):
         _, idx = np.unique(basis_id[ke_order], return_index=True)
         idx = ke_order[idx]
     return e[idx], c[idx]
+
+class _MoleLazyCallAdapter:
+    '''Adapter for API updates. Should be removed in future'''
+    def __init__(self, fn, name):
+        self.fn = fn
+        self.name = name
+
+    def __call__(self, *args, **kwargs):
+        return self.fn(*args, **kwargs)
+
+    def __getattr__(self, key):
+        warnings.warn(
+            f'The API mol.{self.name}.{key} is deprecated and will be '
+            f'removed in a future release. Please use mol.{self.name}().{key} instead.',
+            lib.exceptions.DeprecationWarning,
+        stacklevel=1)
+        out = self.fn()
+        return getattr(out, key)

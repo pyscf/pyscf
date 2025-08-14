@@ -26,3 +26,6 @@ class WfnSymmetryError(RuntimeError):
 
 class LinearDependencyError(RuntimeError):
     pass
+
+class DeprecationWarning(UserWarning):
+    pass

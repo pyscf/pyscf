@@ -1334,6 +1334,7 @@ class Cell(mole.MoleBase):
         from pyscf.pbc import scf, dft
         from pyscf.dft import XC
 
+        attr_name = key
         mf_xc = None
         for mod in (dft, scf):
             mf_method = getattr(mod, key, None)
@@ -1397,7 +1398,7 @@ class Cell(mole.MoleBase):
             if self.nelectron != 0:
                 mf.run()
             return post_mf(**remaining_kw)
-        return fn
+        return mole._MoleLazyCallAdapter(fn, attr_name)
 
     tot_electrons = tot_electrons
 
