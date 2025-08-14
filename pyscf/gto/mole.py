@@ -4315,7 +4315,6 @@ class _MoleLazyCallAdapter:
         warnings.warn(
             f'The API mol.{self.name}.{key} is deprecated and will be '
             f'removed in a future release. Please use mol.{self.name}().{key} instead.',
-            lib.exceptions.DeprecationWarning,
-        stacklevel=1)
+            lib.exceptions.DeprecationWarning, stacklevel=1)
         out = self.fn()
         return getattr(out, key)
