@@ -1010,32 +1010,57 @@ def _call_veff_gaunt_breit(mol, dm, hermi=1, mf_opt=None, with_breit=False):
     vj = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex128)
     vk = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex128)
 
-    jks = ('lk->s1ij', 'jk->s1il')
-    vj_ls, vk_ls = _vhf.rdirect_mapdm(intor_prefix+'ssp1ssp2_spinor', 's1', jks, dms[:n_dm], 1,
-                            mol._atm, mol._bas, mol._env, opt_gaunt_lsls)
-    vj[:,:n2c,n2c:] = vj_ls
-    vk[:,:n2c,n2c:] = vk_ls
-    t0 = log.timer_debug1('LSLS contribution', *t0)
+    if hermi != 0:
+        jks = ('lk->s1ij', 'jk->s1il')
+        vj_ls, vk_ls = _vhf.rdirect_mapdm(
+            intor_prefix+'ssp1ssp2_spinor', 's1', jks, dms[:n_dm], 1,
+            mol._atm, mol._bas, mol._env, opt_gaunt_lsls)
+        vj[:,:n2c,n2c:] = vj_ls
+        vk[:,:n2c,n2c:] = vk_ls
+        t0 = log.timer_debug1('LSLS contribution', *t0)
 
-    jks = ('lk->s1ij',) * n_dm \
-        + ('li->s1kj',) * n_dm \
-        + ('jk->s1il',) * n_dm
-    vx = _vhf.rdirect_bindm(intor_prefix+'ssp1sps2_spinor', 's1', jks, dms[n_dm:], 1,
-                            mol._atm, mol._bas, mol._env, opt_gaunt_lssl)
+        jks = (('lk->s1ij',) * n_dm +
+               ('li->s1kj',) * n_dm +
+               ('jk->s1il',) * n_dm)
+        vx = _vhf.rdirect_bindm(
+            intor_prefix+'ssp1sps2_spinor', 's1', jks, dms[n_dm:], 1,
+            mol._atm, mol._bas, mol._env, opt_gaunt_lssl)
+        vj[:,:n2c,n2c:]+= vx[      :n_dm  ,:,:]
+        vk[:,n2c:,n2c:] = vx[n_dm  :n_dm*2,:,:]
+        vk[:,:n2c,:n2c] = vx[n_dm*2:      ,:,:]
+        t0 = log.timer_debug1('LSSL contribution', *t0)
 
-    t0 = log.timer_debug1('LSSL contribution', *t0)
-    vj[:,:n2c,n2c:]+= vx[      :n_dm  ,:,:]
-    vk[:,n2c:,n2c:] = vx[n_dm  :n_dm*2,:,:]
-    vk[:,:n2c,:n2c] = vx[n_dm*2:      ,:,:]
-
-    if hermi == 1:
-        vj[:,n2c:,:n2c] = vj[:,:n2c,n2c:].transpose(0,2,1).conj()
-        vk[:,n2c:,:n2c] = vk[:,:n2c,n2c:].transpose(0,2,1).conj()
-    elif hermi == 2:
-        vj[:,n2c:,:n2c] = -vj[:,:n2c,n2c:].transpose(0,2,1).conj()
-        vk[:,n2c:,:n2c] = -vk[:,:n2c,n2c:].transpose(0,2,1).conj()
+        if hermi == 1:
+            vj[:,n2c:,:n2c] = vj[:,:n2c,n2c:].transpose(0,2,1).conj()
+            vk[:,n2c:,:n2c] = vk[:,:n2c,n2c:].transpose(0,2,1).conj()
+        elif hermi == 2:
+            vj[:,n2c:,:n2c] = -vj[:,:n2c,n2c:].transpose(0,2,1).conj()
+            vk[:,n2c:,:n2c] = -vk[:,:n2c,n2c:].transpose(0,2,1).conj()
     else:
-        raise NotImplementedError
+        jks = ('lk->s1ij', 'jk->s1il')
+        subj, subk = _vhf.rdirect_mapdm(
+            intor_prefix+'ssp1ssp2_spinor', 's1', jks,
+            (dms[:n_dm] + [x.conj().T for x in dms[n_dm:n_dm*2]]), 1,
+            mol._atm, mol._bas, mol._env, opt_gaunt_lsls)
+        vj[:,:n2c,n2c:] = subj[      :n_dm  ,:,:]
+        vj[:,n2c:,:n2c] = subj[n_dm  :n_dm*2,:,:].conj().transpose(0,2,1)
+        vk[:,:n2c,n2c:] = subk[      :n_dm  ,:,:]
+        vk[:,n2c:,:n2c] = subk[n_dm  :n_dm*2,:,:].conj().transpose(0,2,1)
+        t0 = log.timer_debug1('LSLS contribution', *t0)
+
+        jks = (('ji->s1kl',) * n_dm +
+               ('lk->s1ij',) * n_dm +
+               ('li->s1kj',) * n_dm +
+               ('jk->s1il',) * n_dm)
+        vx = _vhf.rdirect_bindm(
+            intor_prefix+'ssp1sps2_spinor', 's1', jks, dms, 1,
+            mol._atm, mol._bas, mol._env, opt_gaunt_lssl)
+        vj[:,n2c:,:n2c]+= vx[      :n_dm  ,:,:]
+        vj[:,:n2c,n2c:]+= vx[n_dm  :n_dm*2,:,:]
+        vk[:,n2c:,n2c:] = vx[n_dm*2:n_dm*3,:,:]
+        vk[:,:n2c,:n2c] = vx[n_dm*3:n_dm*4,:,:]
+        t0 = log.timer_debug1('LSSL contribution', *t0)
+
     vj = vj.reshape(dm.shape)
     vk = vk.reshape(dm.shape)
     c1 = .5 / lib.param.LIGHT_SPEED

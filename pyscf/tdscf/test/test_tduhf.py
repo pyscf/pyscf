@@ -90,6 +90,29 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(wfnsyma, 'A1u')
         self.assertAlmostEqual(wfnsymb, 'A1u')
 
+    def test_set_frozen(self):
+        td = mf.TDA()
+        td.frozen = 1
+        mask = td.get_frozen_mask()
+        self.assertEqual(mask[0].sum(), 10)
+        self.assertEqual(mask[1].sum(), 10)
+        td.set_frozen()
+        mask = td.get_frozen_mask()
+        self.assertEqual(mask[0].sum(), 10)
+        self.assertEqual(mask[1].sum(), 10)
+        td.frozen = [0,1]
+        mask = td.get_frozen_mask()
+        self.assertEqual(mask[0].sum(), 9)
+        self.assertEqual(mask[1].sum(), 9)
+        td.frozen = [1,9]
+        mask = td.get_frozen_mask()
+        self.assertEqual(mask[0].sum(), 9)
+        self.assertEqual(mask[1].sum(), 9)
+        td.frozen = [[0],[1,2]]
+        mask = td.get_frozen_mask()
+        self.assertEqual(mask[0].sum(), 10)
+        self.assertEqual(mask[1].sum(), 9)
+
 if __name__ == "__main__":
     print("Full Tests for uhf-TDA and uhf-TDHF")
     unittest.main()

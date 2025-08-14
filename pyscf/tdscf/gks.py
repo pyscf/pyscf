@@ -45,10 +45,11 @@ class CasidaTDDFT(TDDFT, TDA):
             mf = self._scf
         wfnsym = self.wfnsym
         mol = mf.mol
-        mo_coeff = mf.mo_coeff
+        mask = self.get_frozen_mask()
+        mo_coeff = mf.mo_coeff[:, mask]
         assert mo_coeff.dtype == numpy.double
-        mo_energy = mf.mo_energy
-        mo_occ = mf.mo_occ
+        mo_energy = mf.mo_energy[mask]
+        mo_occ = mf.mo_occ[mask]
         nao, nmo = mo_coeff.shape
         occidx = numpy.where(mo_occ==1)[0]
         viridx = numpy.where(mo_occ==0)[0]
@@ -61,7 +62,7 @@ class CasidaTDDFT(TDDFT, TDA):
             if isinstance(wfnsym, str):
                 wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
             wfnsym = wfnsym % 10  # convert to D2h subgroup
-            sym_forbid = ghf._get_x_sym_table(mf) != wfnsym
+            sym_forbid = ghf._get_x_sym_table(self) != wfnsym
 
         e_ia = (mo_energy[viridx].reshape(-1,1) - mo_energy[occidx]).T
         if wfnsym is not None and mol.symmetry:
@@ -124,7 +125,7 @@ class CasidaTDDFT(TDDFT, TDA):
             x0, x0sym = self.get_init_guess(
                 self._scf, self.nstates, return_symmetry=True)
         elif mol.symmetry:
-            x_sym = ghf._get_x_sym_table(self._scf).ravel()
+            x_sym = ghf._get_x_sym_table(self).ravel()
             x0sym = [rhf._guess_wfnsym_id(self, x_sym, x) for x in x0]
 
         self.converged, w2, x1 = lr_eigh(
@@ -132,8 +133,9 @@ class CasidaTDDFT(TDDFT, TDA):
             nroots=nstates, x0sym=x0sym, pick=pickeig, max_cycle=self.max_cycle,
             max_memory=self.max_memory, verbose=log)
 
-        mo_energy = self._scf.mo_energy
-        mo_occ = self._scf.mo_occ
+        mask = self.get_frozen_mask()
+        mo_energy = self._scf.mo_energy[mask]
+        mo_occ = self._scf.mo_occ[mask]
         occidx = numpy.where(mo_occ==1)[0]
         viridx = numpy.where(mo_occ==0)[0]
         e_ia = (mo_energy[viridx,None] - mo_energy[occidx]).T
@@ -167,14 +169,14 @@ class CasidaTDDFT(TDDFT, TDA):
 TDDFTNoHybrid = CasidaTDDFT
 
 
-def tddft(mf):
+def tddft(mf, frozen=None):
     '''Driver to create TDDFT or CasidaTDDFT object'''
     if (not mf._numint.libxc.is_hybrid_xc(mf.xc) and
         # Casida formula can be applied for real orbitals only
         mf.mo_coeff.dtype == numpy.double and mf.collinear[0] != 'm'):
-        return CasidaTDDFT(mf)
+        return CasidaTDDFT(mf, frozen)
     else:
-        return TDDFT(mf)
+        return TDDFT(mf, frozen)
 
 from pyscf import dft
 dft.gks.GKS.TDA           = dft.gks_symm.GKS.TDA           = lib.class_as_method(TDA)

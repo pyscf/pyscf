@@ -32,7 +32,7 @@ from pyscf.lo import boys
 from pyscf.lo import pipek_jacobi
 from pyscf import __config__
 
-def atomic_pops(mol, mo_coeff, method='meta_lowdin', mf=None, s=None):
+def atomic_pops(mol, mo_coeff, method='meta_lowdin', mf=None, s=None, charge_matrices=None):
     '''
     Kwargs:
         method : string
@@ -61,24 +61,11 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin', mf=None, s=None):
             s = mol.intor_symmetric('int1e_ovlp')
 
     if method == 'becke':
-        from pyscf.dft import gen_grid
-        if not (getattr(mf, 'grids', None) and getattr(mf, '_numint', None)):
-            # Call DFT to initialize grids and numint objects
-            mf = mol.RKS()
-        grids = mf.grids
-        ni = mf._numint
-
-        if not isinstance(grids, gen_grid.Grids):
-            raise NotImplementedError('PM becke scheme for PBC systems')
-
-        # The atom-wise Becke grids (without concatenated to a vector of grids)
-        coords, weights = grids.get_partition(mol, concat=False)
+        if charge_matrices is None:
+            charge_matrices = becke_charge_matrices(mol)
 
         for i in range(mol.natm):
-            ao = ni.eval_ao(mol, coords[i], deriv=0)
-            aow = numpy.einsum('pi,p->pi', ao, weights[i])
-            charge_matrix = lib.dot(aow.conj().T, ao)
-            proj[i] = reduce(lib.dot, (mo_coeff.conj().T, charge_matrix, mo_coeff))
+            proj[i] = reduce(lib.dot, (mo_coeff.conj().T, charge_matrices[i], mo_coeff))
 
     elif method == 'mulliken':
         for i, (b0, b1, p0, p1) in enumerate(mol.offset_nr_by_atom()):
@@ -116,6 +103,28 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin', mf=None, s=None):
         raise KeyError('method = %s' % method)
 
     return proj
+
+
+def becke_charge_matrices(mol):
+    from pyscf.dft import gen_grid
+    # Call DFT to initialize grids and numint objects
+    mf = mol.RKS()
+    grids = mf.grids
+    ni = mf._numint
+
+    if not isinstance(grids, gen_grid.Grids):
+        raise NotImplementedError('PM becke scheme for PBC systems')
+
+    # The atom-wise Becke grids (without concatenated to a vector of grids)
+    coords, weights = grids.get_partition(mol, concat=False)
+
+    charge_matrices = []
+    for i in range(mol.natm):
+        ao = ni.eval_ao(mol, coords[i], deriv=0)
+        aow = numpy.einsum('pi,p->pi', ao, weights[i])
+        charge_matrices.append(lib.dot(aow.conj().T, ao))
+
+    return charge_matrices
 
 
 class PipekMezey(boys.OrbitalLocalizer):
@@ -271,7 +280,11 @@ class PipekMezey(boys.OrbitalLocalizer):
             logger.error(self, 'PM with IAO scheme should include an scf '
                          'object when creating PM object.\n    PM(mol, mf=scf_object)')
             raise ValueError('PM attribute method is not valid')
-        return atomic_pops(mol, mo_coeff, method, self._scf, s=s)
+
+        if not hasattr(self, "_charge_matrices"):
+            self._charge_matrices = becke_charge_matrices(mol) if method.lower() == "becke" else None
+
+        return atomic_pops(mol, mo_coeff, method, self._scf, s=s, charge_matrices=self._charge_matrices)
 
     def stability_jacobi(self):
         return pipek_jacobi.PipekMezey_stability_jacobi(self)

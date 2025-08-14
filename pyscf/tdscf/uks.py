@@ -53,10 +53,11 @@ class CasidaTDDFT(TDDFT, TDA):
         wfnsym = self.wfnsym
 
         mol = mf.mol
-        mo_coeff = mf.mo_coeff
-        assert mo_coeff[0].dtype == numpy.double
-        mo_energy = mf.mo_energy
-        mo_occ = mf.mo_occ
+        maska, maskb = self.get_frozen_mask()
+        mo_coeff = (mf.mo_coeff[0][:, maska], mf.mo_coeff[1][:, maskb])
+        assert (mo_coeff[0].dtype == numpy.double)
+        mo_energy = (mf.mo_energy[0][maska], mf.mo_energy[1][maskb])
+        mo_occ = (mf.mo_occ[0][maska], mf.mo_occ[1][maskb])
         nao, nmo = mo_coeff[0].shape
         occidxa = numpy.where(mo_occ[0]>0)[0]
         occidxb = numpy.where(mo_occ[1]>0)[0]
@@ -75,7 +76,7 @@ class CasidaTDDFT(TDDFT, TDA):
             if isinstance(wfnsym, str):
                 wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
             wfnsym = wfnsym % 10  # convert to D2h subgroup
-            x_sym_a, x_sym_b = uhf._get_x_sym_table(mf)
+            x_sym_a, x_sym_b = uhf._get_x_sym_table(self)
             sym_forbid = numpy.append(x_sym_a.ravel(), x_sym_b.ravel()) != wfnsym
 
         e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
@@ -144,7 +145,7 @@ class CasidaTDDFT(TDDFT, TDA):
             x0, x0sym = self.get_init_guess(
                 self._scf, self.nstates, return_symmetry=True)
         elif mol.symmetry:
-            x_sym_a, x_sym_b = uhf._get_x_sym_table(self._scf)
+            x_sym_a, x_sym_b = uhf._get_x_sym_table(self)
             x_sym = numpy.append(x_sym_a.ravel(), x_sym_b.ravel())
             x0sym = [rhf._guess_wfnsym_id(self, x_sym, x) for x in x0]
 
@@ -153,8 +154,9 @@ class CasidaTDDFT(TDDFT, TDA):
             nroots=nstates, x0sym=x0sym, pick=pickeig, max_cycle=self.max_cycle,
             max_memory=self.max_memory, verbose=log)
 
-        mo_energy = self._scf.mo_energy
-        mo_occ = self._scf.mo_occ
+        maska, maskb = self.get_frozen_mask()
+        mo_energy = (self._scf.mo_energy[0][maska], self._scf.mo_energy[1][maskb])
+        mo_occ = (self._scf.mo_occ[0][maska], self._scf.mo_occ[1][maskb])
         occidxa = numpy.where(mo_occ[0]>0)[0]
         occidxb = numpy.where(mo_occ[1]>0)[0]
         viridxa = numpy.where(mo_occ[0]==0)[0]
@@ -206,30 +208,30 @@ TDDFTNoHybrid = CasidaTDDFT
 
 
 class dRPA(TDDFTNoHybrid):
-    def __init__(self, mf):
+    def __init__(self, mf, frozen=None):
         if not isinstance(mf, KohnShamDFT):
             raise RuntimeError("direct RPA can only be applied with DFT; for HF+dRPA, use .xc='hf'")
         mf = mf.to_uks()
         mf.xc = ''
-        TDDFTNoHybrid.__init__(self, mf)
+        TDDFTNoHybrid.__init__(self, mf, frozen)
 
 TDH = dRPA
 
 class dTDA(TDA):
-    def __init__(self, mf):
+    def __init__(self, mf, frozen=None):
         if not isinstance(mf, KohnShamDFT):
             raise RuntimeError("direct TDA can only be applied with DFT; for HF+dTDA, use .xc='hf'")
         mf = mf.to_uks()
         mf.xc = ''
-        TDA.__init__(self, mf)
+        TDA.__init__(self, mf, frozen)
 
 
-def tddft(mf):
+def tddft(mf, frozen=None):
     '''Driver to create TDDFT or CasidaTDDFT object'''
     if mf._numint.libxc.is_hybrid_xc(mf.xc):
-        return TDDFT(mf)
+        return TDDFT(mf, frozen)
     else:
-        return CasidaTDDFT(mf)
+        return CasidaTDDFT(mf, frozen)
 
 from pyscf import dft
 dft.uks.UKS.TDA           = dft.uks_symm.UKS.TDA           = lib.class_as_method(TDA)

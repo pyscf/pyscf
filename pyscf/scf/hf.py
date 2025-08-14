@@ -229,6 +229,8 @@ Keyword argument "init_dm" is replaced by "dm0"''')
             scf_conv = mf.check_convergence(locals())
         elif abs(e_tot-last_hf_e) < conv_tol or norm_gorb < conv_tol_grad:
             scf_conv = True
+        else:
+            scf_conv = False
         logger.info(mf, 'Extra cycle  E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
                     e_tot, e_tot-last_hf_e, norm_gorb, norm_ddm)
         if dump_chk and mf.chkfile:

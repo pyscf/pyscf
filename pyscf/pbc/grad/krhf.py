@@ -68,7 +68,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
 
     if log.verbose > logger.DEBUG:
         log.debug('gradients of electronic part')
-        mf_grad._write(log, cell, de, atmlst)
+        mf_grad._write(cell, de, atmlst)
     return de
 
 def _make_fakemol():
@@ -141,10 +141,10 @@ def get_hcore(cell, kpts):
 def get_ovlp(cell, kpts):
     return -np.asarray(cell.pbc_intor('int1e_ipovlp', kpts=kpts))
 
-def hcore_generator(mf, cell=None, kpts=None):
-    if cell is None: cell = mf.cell
-    if kpts is None: kpts = mf.kpts
-    h1 = get_hcore(cell, kpts)
+def hcore_generator(mf_grad, cell=None, kpts=None):
+    if cell is None: cell = mf_grad.cell
+    if kpts is None: kpts = mf_grad.kpts
+    h1 = mf_grad.get_hcore(cell, kpts)
     dtype = h1.dtype
 
     aoslices = cell.aoslice_by_atom()
@@ -295,8 +295,17 @@ class GradientsBase(molgrad.GradientsBase):
     '''
     def __init__(self, method):
         self.cell = method.cell
-        self.kpts = method.kpts
         molgrad.GradientsBase.__init__(self, method)
+
+    @property
+    def kpts(self):
+        return self.base.kpts
+
+    def reset(self, cell=None):
+        if cell is not None:
+            self.cell = cell
+        self.base.reset(cell)
+        return self
 
     def get_hcore(self, cell=None, kpts=None):
         if cell is None: cell = self.cell

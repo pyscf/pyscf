@@ -45,7 +45,11 @@ def gradient_gs(f_gs, Gv):
     )
     return out
 
-def get_gga_vrho_gs(v, v1, Gv, weight, ngrid):
+def get_gga_vrho_gs(v, v1, Gv, weight, ngrid, fac=2.):
+    '''Update v inplace
+    v -= fac * 1j * np.einsum('px,xp->p', Gv, v1)
+    v *= weight
+    '''
     v = np.asarray(v, order='C', dtype=np.complex128)
     v1 = np.asarray(v1, order='C', dtype=np.complex128)
     Gv = np.asarray(Gv, order='C', dtype=np.double)
@@ -54,6 +58,7 @@ def get_gga_vrho_gs(v, v1, Gv, weight, ngrid):
         v.ctypes.data_as(ctypes.c_void_p),
         v1.ctypes.data_as(ctypes.c_void_p),
         Gv.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_double(fac),
         ctypes.c_double(weight),
         ctypes.c_int(ngrid)
     )
@@ -190,7 +195,6 @@ def grid_collocate(
     ao_loc0,
     ao_loc1,
     dimension,
-    Ls,
     a,
     b,
     ish_atm,
@@ -220,7 +224,7 @@ def grid_collocate(
     i0, i1, j0, j1 = shls_slice
     ao_loc0 = np.asarray(ao_loc0, order='C', dtype=np.int32)
     ao_loc1 = np.asarray(ao_loc1, order='C', dtype=np.int32)
-    Ls = np.asarray(Ls, order='C', dtype=np.double)
+    Ls = np.asarray(task_list.Ls, order='C', dtype=np.double)
     a = np.asarray(a, order='C', dtype=np.double)
     b = np.asarray(b, order='C', dtype=np.double)
     ish_atm = np.asarray(ish_atm, order='C', dtype=np.int32)
@@ -266,7 +270,6 @@ def grid_integrate(
     ao_loc0,
     ao_loc1,
     dimension,
-    Ls,
     a,
     b,
     ish_atm,
@@ -301,7 +304,7 @@ def grid_integrate(
         mat = np.zeros((comp, naoi, naoj))
 
     wv = np.asarray(wv, order='C', dtype=np.double)
-    Ls = np.asarray(Ls, order='C', dtype=np.double)
+    Ls = np.asarray(task_list.Ls, order='C', dtype=np.double)
     a = np.asarray(a, order='C', dtype=np.double)
     b = np.asarray(b, order='C', dtype=np.double)
     ish_atm = np.asarray(ish_atm, order='C', dtype=np.int32)
@@ -480,10 +483,6 @@ class TaskList:
         if cell1 is None:
             cell1 = cell
 
-        if Ls is None:
-            Ls = cell.get_lattice_Ls()
-        Ls = np.asarray(Ls, order='C', dtype=np.double)
-
         if precision is None:
             precision = cell.precision
 
@@ -518,6 +517,16 @@ class TaskList:
             ptr_jpgf_rcut = lib.ndarray_pointer_2d(jpgf_rcut)
         njsh = len(jsh_bas)
         assert njsh == len(jsh_rcut)
+
+        if Ls is None:
+            # The default cell.rcut might be insufficient to include all
+            # significant pairs
+            rcut = ish_rcut.max(initial=0) + jsh_rcut.max(initial=0)
+            Ls = cell.get_lattice_Ls(rcut=rcut)
+        # The lattice sum vectors must be consistent with the neighbor_list in
+        # the backend functions
+        self.Ls = Ls
+        Ls = np.asarray(Ls, order='C', dtype=np.double)
 
         nl = build_neighbor_list_for_shlpairs(cell, cell1, Ls=Ls,
                                               ish_rcut=ish_rcut, jsh_rcut=jsh_rcut,

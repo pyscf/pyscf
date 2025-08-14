@@ -1051,11 +1051,11 @@ void dgemm_wrapper(const char transa, const char transb,
 
 
 void get_gga_vrho_gs(double complex *vrho_gs, double complex *vsigma1_gs,
-                     double *Gv, double weight, int ngrid)
+                     double *Gv, double fac, double weight, int ngrid)
 {
     int i;
     int ngrid2 = 2 * ngrid;
-    double complex fac = -2. * _Complex_I;
+    double complex zfac = -fac * _Complex_I;
 #pragma omp parallel
 {
     double complex v;
@@ -1063,7 +1063,7 @@ void get_gga_vrho_gs(double complex *vrho_gs, double complex *vsigma1_gs,
     for (i = 0; i < ngrid; i++) {
         v = ( Gv[i*3]   * vsigma1_gs[i]
              +Gv[i*3+1] * vsigma1_gs[i+ngrid]
-             +Gv[i*3+2] * vsigma1_gs[i+ngrid2]) * fac;
+             +Gv[i*3+2] * vsigma1_gs[i+ngrid2]) * zfac;
         vrho_gs[i] += v;
         vrho_gs[i] *= weight;
     }

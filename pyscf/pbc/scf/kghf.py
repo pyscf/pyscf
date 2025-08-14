@@ -204,6 +204,7 @@ class KGHF(khf.KSCF):
     get_occ = get_occ
     analyze = khf.analyze
     convert_from_ = pbcghf.GHF.convert_from_
+    gen_response = NotImplemented
 
     to_gpu = lib.to_gpu
 

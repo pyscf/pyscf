@@ -235,7 +235,7 @@ def _ncol_lda_vxc_mat(mol, ao, weight, rho, vxc, mask, shls_slice, ao_loc, hermi
     return mat
 
 def _eval_xc_eff(ni, xc_code, rho, deriv=1, omega=None, xctype=None,
-                 verbose=None):
+                 verbose=None, spin=None):
     r'''Returns the derivative tensor against the density parameters
 
     [[density_a, (nabla_x)_a, (nabla_y)_a, (nabla_z)_a, tau_a],
@@ -275,6 +275,7 @@ def _eval_xc_eff(ni, xc_code, rho, deriv=1, omega=None, xctype=None,
     if xctype == 'MGGA' and rho.shape[1] == 6:
         rho = np.asarray(rho[:,[0,1,2,3,5],:], order='C')
 
+    assert spin is None or spin == 1
     spin = 1
 
     out = ni.libxc.eval_xc1(xc_code, rho, spin, deriv, omega)
@@ -307,7 +308,7 @@ def mcfun_eval_xc_adapter(ni, xc_code):
     fn_eval_xc = functools.partial(__mcfun_fn_eval_xc, ni, xc_code, xctype)
     nproc = lib.num_threads()
     def eval_xc_eff(xc_code, rho, deriv=1, omega=None, xctype=None,
-                    verbose=None):
+                    verbose=None, spin=None):
         return mcfun.eval_xc_eff(
             fn_eval_xc, rho, deriv, spin_samples=ni.spin_samples,
             collinear_threshold=ni.collinear_thrd,
@@ -679,8 +680,8 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
         n, exc, v = ni.nr_nlc_vxc(mol, grids, xc_code, dm_a+dm_b, relativity,
                                   hermi, max_memory, verbose)
         vmat = np.zeros_like(dm)
-        vmat[:nao,:nao] = v[0]
-        vmat[nao:,nao:] = v[1]
+        vmat[:nao,:nao] = v
+        vmat[nao:,nao:] = v
         return n, exc, vmat
 
     @lib.with_doc(numint.nr_rks_fxc.__doc__)

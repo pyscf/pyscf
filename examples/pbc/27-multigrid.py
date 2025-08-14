@@ -19,35 +19,35 @@ cell = gto.M(
               C     2.6751  0.8917  2.6751
               C     0.      1.7834  1.7834
               C     0.8917  2.6751  2.6751''',
-    basis = 'sto3g',
-    #basis = 'ccpvdz',
-    #basis = 'gth-dzvp',
-    #pseudo = 'gth-pade'
+    basis = 'gth-dzvp',
+    pseudo = 'gth-pade'
 )
 
 mf = dft.UKS(cell)
 mf.xc = 'lda,vwn'
 
 #
-# There are two ways to enable multigrid numerical integration
+# Call the multigrid_numint() method to enable multigrid integration.
 #
-# Method 1: use multigrid.multigrid_fftdf function to update SCF object
-#
-mf = multigrid.multigrid_fftdf(mf)
+mf = mf.multigrid_numint()
 mf.kernel()
 
-#
-# Method 2: MultiGridFFTDF is a DF object.  It can be enabled by overwriting
-# the default with_df object.
-#
 kpts = cell.make_kpts([4,4,4])
 mf = dft.KRKS(cell, kpts)
 mf.xc = 'lda,vwn'
-mf.with_df = multigrid.MultiGridFFTDF(cell, kpts)
+mf = mf.multigrid_numint()
+mf.kernel()
+
+mf = mf.newton()
 mf.kernel()
 
 #
-# MultiGridFFTDF can be used with second order SCF solver.
+# The default multigrid implementation does not support the compution of nuclear
+# gradients features. To enable nuclear gradients, you can manually assign the
+# MultiGridNumInt2 instance to the ._numint attribute.
 #
-mf = mf.newton()
+mf = dft.RKS(cell)
+mf.xc = 'pbe'
+mf._numint = multigrid.MultiGridNumInt2(cell)
 mf.kernel()
+mf.Gradients().run()

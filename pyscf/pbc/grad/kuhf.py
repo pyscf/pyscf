@@ -22,7 +22,7 @@ Non-relativistic analytical nuclear gradients for unrestricted Hartree Fock with
 
 import numpy as np
 from pyscf.lib import logger
-from pyscf.pbc.grad import krhf as rhf_grad
+from pyscf.pbc.grad import krhf as krhf_grad
 from pyscf.pbc import gto
 
 
@@ -66,7 +66,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
 
     if log.verbose > logger.DEBUG:
         log.debug('gradients of electronic part')
-        mf_grad._write(log, cell, de, atmlst)
+        mf_grad._write(cell, de, atmlst)
     return de
 
 
@@ -78,11 +78,11 @@ def get_veff(mf_grad, dm, kpts):
 
 def make_rdm1e(mo_energy, mo_coeff, mo_occ):
     '''Energy weighted density matrix'''
-    dm1ea = rhf_grad.make_rdm1e(mo_energy[0], mo_coeff[0], mo_occ[0])
-    dm1eb = rhf_grad.make_rdm1e(mo_energy[1], mo_coeff[1], mo_occ[1])
+    dm1ea = krhf_grad.make_rdm1e(mo_energy[0], mo_coeff[0], mo_occ[0])
+    dm1eb = krhf_grad.make_rdm1e(mo_energy[1], mo_coeff[1], mo_occ[1])
     return np.stack((dm1ea,dm1eb), axis=0)
 
-class Gradients(rhf_grad.Gradients):
+class Gradients(krhf_grad.GradientsBase):
     '''Non-relativistic restricted Hartree-Fock gradients'''
 
     def get_veff(self, dm=None, kpts=None):
@@ -97,6 +97,11 @@ class Gradients(rhf_grad.Gradients):
         return make_rdm1e(mo_energy, mo_coeff, mo_occ)
 
     grad_elec = grad_elec
+    extra_force = krhf_grad.Gradients.extra_force
+    as_scanner = krhf_grad.Gradients.as_scanner
+    _finalize = krhf_grad.Gradients._finalize
+    kernel = krhf_grad.Gradients.kernel
+
 
 
 if __name__=='__main__':

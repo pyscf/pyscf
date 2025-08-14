@@ -1108,7 +1108,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
 
     cell = mydf.cell
     dm = numpy.asarray(dm, order='C')
-    dms = _format_dms(dm, [kpt])
+    dms = _format_dms(dm, kpt.reshape(1, 3))
     nset, _, nao = dms.shape[:3]
     dms = dms.reshape(nset,nao,nao)
     j_real = gamma_point(kpt)
@@ -1431,7 +1431,10 @@ def _mo_from_dm(dms, method='eigh', shape=None, order='C', precision=DM2MO_PREC)
         raise RuntimeError('Unknown method %s' % method)
 
 def _format_dms(dm_kpts, kpts):
-    nkpts = len(kpts)
+    if kpts is None or kpts.ndim == 1:
+        nkpts = 1
+    else:
+        nkpts = len(kpts)
     nao = dm_kpts.shape[-1]
     dms = dm_kpts.reshape(-1,nkpts,nao,nao)
     if dms.dtype not in (numpy.double, numpy.complex128):
@@ -1449,6 +1452,10 @@ def _format_jks(v_kpts, dm_kpts, kpts_band, kpts):
     if kpts_band is kpts or kpts_band is None:
         return v_kpts.reshape(dm_kpts.shape)
     else:
+        if kpts is None or kpts.ndim == 1:
+            nkpts = 1
+        else:
+            nkpts = len(kpts)
         if getattr(kpts_band, 'ndim', None) == 1:
             v_kpts = v_kpts[:,0]
 # A temporary solution for issue 242. Looking for better ways to sort out the
@@ -1460,7 +1467,7 @@ def _format_jks(v_kpts, dm_kpts, kpts_band, kpts):
 # (Ndm,Nk,Nao,Nao)  (Nk,3)         Ndm
         if dm_kpts.ndim < 3:     # nset=None
             return v_kpts[0]
-        elif dm_kpts.ndim == 3 and dm_kpts.shape[0] == kpts.shape[0]:
+        elif dm_kpts.ndim == 3 and len(dm_kpts) == nkpts:
             return v_kpts[0]
         else:  # dm_kpts.ndim == 4 or kpts.shape[0] == 1:  # nset=Ndm
             return v_kpts

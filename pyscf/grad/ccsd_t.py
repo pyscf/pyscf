@@ -17,7 +17,7 @@
 #
 
 from pyscf import lib
-from pyscf.cc import ccsd_t_rdm_slow as ccsd_t_rdm
+from pyscf.cc import ccsd_t_rdm as ccsd_t_rdm
 from pyscf.grad import ccsd as ccsd_grad
 
 # Only works with canonical orbitals
@@ -48,7 +48,7 @@ if __name__ == '__main__':
     from pyscf import scf
     from pyscf import cc
     from pyscf.cc import ccsd_t
-    from pyscf.cc import ccsd_t_lambda_slow as ccsd_t_lambda
+    from pyscf.cc import ccsd_t_lambda as ccsd_t_lambda
 
     mol = gto.M(
         verbose = 0,

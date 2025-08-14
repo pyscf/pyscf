@@ -15,6 +15,7 @@
 
 import unittest
 import numpy
+import scipy.linalg
 from pyscf import gto
 from pyscf import lib
 from pyscf.dft import numint, numint2c, libxc, radi

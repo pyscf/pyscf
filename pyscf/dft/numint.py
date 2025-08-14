@@ -1129,7 +1129,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             for i in range(nset):
                 rho = make_rho(i, ao, mask, xctype)
-                exc, vxc = ni.eval_xc_eff(xc_code, rho, deriv=1, xctype=xctype)[:2]
+                exc, vxc = ni.eval_xc_eff(xc_code, rho, deriv=1, xctype=xctype, spin=0)[:2]
                 if xctype == 'LDA':
                     den = rho * weight
                 else:
@@ -1251,7 +1251,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 rho_a = make_rhoa(i, ao, mask, xctype)
                 rho_b = make_rhob(i, ao, mask, xctype)
                 rho = (rho_a, rho_b)
-                exc, vxc = ni.eval_xc_eff(xc_code, rho, deriv=1, xctype=xctype)[:2]
+                exc, vxc = ni.eval_xc_eff(xc_code, rho, deriv=1, xctype=xctype, spin=1)[:2]
                 if xctype == 'LDA':
                     den_a = rho_a * weight
                     den_b = rho_b * weight
@@ -1529,7 +1529,7 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         vmat = numpy.asarray(vmat, dtype=dtype)
     return vmat
 
-def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet=True,
+def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, hermi=0, singlet=True,
                   rho0=None, vxc=None, fxc=None, max_memory=2000, verbose=None):
     '''Associated to singlet or triplet Hessian
     Note the difference to nr_rks_fxc, dms_alpha is the response density
@@ -1545,7 +1545,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
         fxc = fxc[0,:,0] + fxc[0,:,1]
     else:
         fxc = fxc[0,:,0] - fxc[0,:,1]
-    return ni.nr_rks_fxc(mol, grids, xc_code, dm0, dms_alpha, hermi=0, fxc=fxc,
+    return ni.nr_rks_fxc(mol, grids, xc_code, dm0, dms_alpha, hermi=hermi, fxc=fxc,
                          max_memory=max_memory)
 
 def _rks_gga_wv0(rho, vxc, weight):
@@ -2570,7 +2570,7 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
             rhoa.append(ni.eval_rho2(mol, ao, mo_coeff[0], mo_occ[0], mask, xctype, with_lapl))
             rhob.append(ni.eval_rho2(mol, ao, mo_coeff[1], mo_occ[1], mask, xctype, with_lapl))
         rho = (numpy.hstack(rhoa), numpy.hstack(rhob))
-    vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype)[1:3]
+    vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype, spin=spin)[1:3]
     return rho, vxc, fxc
 
 def cache_xc_kernel1(ni, mol, grids, xc_code, dm, spin=0, max_memory=2000):
@@ -2607,7 +2607,7 @@ def cache_xc_kernel1(ni, mol, grids, xc_code, dm, spin=0, max_memory=2000):
             rhoa.append(make_rho(0, ao, mask, xctype))
             rhob.append(make_rho(1, ao, mask, xctype))
         rho = (numpy.hstack(rhoa), numpy.hstack(rhob))
-    vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype)[1:3]
+    vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype, spin=spin)[1:3]
     return rho, vxc, fxc
 
 def get_rho(ni, mol, dm, grids, max_memory=2000):
@@ -2653,7 +2653,7 @@ class LibXCMixin:
         return self.libxc.eval_xc1(xc_code, rho, spin, deriv, omega)
 
     def eval_xc_eff(self, xc_code, rho, deriv=1, omega=None, xctype=None,
-                    verbose=None):
+                    verbose=None, spin=None):
         r'''Returns the derivative tensor against the density parameters
 
         [density_a, (nabla_x)_a, (nabla_y)_a, (nabla_z)_a, tau_a]
@@ -2677,6 +2677,8 @@ class LibXCMixin:
                 derivative orders
             omega: float
                 define the exponent in the attenuated Coulomb for RSH functional
+            spin : int
+                spin polarized if spin > 0
         '''
         if omega is None: omega = self.omega
         if xctype is None: xctype = self._xc_type(xc_code)
@@ -2685,11 +2687,12 @@ class LibXCMixin:
         if xctype == 'MGGA' and rho.shape[-2] == 6:
             rho = numpy.asarray(rho[...,[0,1,2,3,5],:], order='C')
 
-        spin_polarized = rho.ndim >= 2 and rho.shape[0] == 2
-        if spin_polarized:
-            spin = 1
-        else:
-            spin = 0
+        if spin is None:
+            spin_polarized = rho.ndim >= 2 and rho.shape[0] == 2
+            if spin_polarized:
+                spin = 1
+            else:
+                spin = 0
 
         out = self.eval_xc1(xc_code, rho, spin, deriv, omega)
         evfk = [out[0]]
