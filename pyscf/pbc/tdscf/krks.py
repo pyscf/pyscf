@@ -28,6 +28,8 @@ from pyscf.pbc.tdscf import krhf
 
 class TDA(krhf.TDA):
     def kernel(self, x0=None):
+        if hasattr(self._scf, 'U_idx'):
+            raise NotImplementedError('TDDFT for DFT+U')
         _rebuild_df(self)
         return krhf.TDA.kernel(self, x0=x0)
 
@@ -35,6 +37,8 @@ KTDA = TDA
 
 class TDDFT(krhf.TDHF):
     def kernel(self, x0=None):
+        if hasattr(self._scf, 'U_idx'):
+            raise NotImplementedError('TDDFT for DFT+U')
         _rebuild_df(self)
         return krhf.TDHF.kernel(self, x0=x0)
 

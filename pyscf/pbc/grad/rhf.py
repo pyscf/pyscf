@@ -166,6 +166,9 @@ class GradientsBase(mol_rhf.GradientsBase):
             mol = self.mol
         return get_ovlp(mol, kpt)
 
+    def optimizer(self):
+        raise NotImplementedError
+
 
 class Gradients(GradientsBase):
     '''Non-relativistic Gamma-point restricted Hartree-Fock gradients'''
