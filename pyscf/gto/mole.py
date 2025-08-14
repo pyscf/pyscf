@@ -3797,6 +3797,9 @@ class Mole(MoleBase):
             mf = mf_method(self, **mf_kw)
 
             if post_mf_key is None:
+                if args:
+                    raise RuntimeError(
+                        f'mol.{attr_name} function does not support positional arguments')
                 return mf.set(**remaining_kw)
 
             post_mf = getattr(mf, post_mf_key)
