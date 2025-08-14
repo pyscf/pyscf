@@ -22,6 +22,7 @@ from pyscf.pbc.tools import pbc
 from pyscf.pbc.df import FFTDF
 from pyscf.pbc.dft.numint import KNumInt
 from pyscf.pbc.dft.gen_grid import UniformGrids
+from pyscf.pbc.dft import krkspu
 from pyscf.pbc.grad import krks_stress, krks
 from pyscf.pbc.grad.krks_stress import _finite_diff_cells
 
@@ -178,7 +179,7 @@ class KnownValues(unittest.TestCase):
                      basis=[[0, [.5, 1]], [1, [.8, 1]]], a=a, unit='Bohr')
         kmesh = [3, 1, 1]
         nao = cell.nao
-        dm = np.random.rand(len(kmesh), nao, nao) - (.5+.2j)
+        dm = np.random.rand(np.prod(kmesh), nao, nao) - (.5+.1j)
         dm = np.einsum('kpi,kqi->kpq', dm, dm.conj())
         xc = 'lda,'
         kmesh = [3, 1, 1]
@@ -219,7 +220,7 @@ class KnownValues(unittest.TestCase):
                      basis=[[0, [.5, 1]], [1, [.8, 1]]], a=a, unit='Bohr')
         kmesh = [3, 1, 1]
         nao = cell.nao
-        dm = np.random.rand(len(kmesh), nao, nao) - (.5+.2j)
+        dm = np.random.rand(np.prod(kmesh), nao, nao) - (.5+.1j)
         dm = np.einsum('kpi,kqi->kpq', dm, dm.conj())
         xc = 'm06,'
         mf_grad = krks.Gradients(cell.KRKS(xc=xc, kpts=cell.make_kpts(kmesh)))
@@ -239,7 +240,7 @@ class KnownValues(unittest.TestCase):
                      basis=[[0, [.5, 1]], [1, [.8, 1]]], a=a, unit='Bohr')
         kmesh = [3, 1, 1]
         nao = cell.nao
-        dm = np.random.rand(len(kmesh), nao, nao) - (.5+.2j)
+        dm = np.random.rand(np.prod(kmesh), nao, nao) - (.5+.1j)
         dm = np.einsum('kpi,kqi->kpq', dm, dm.conj())
         xc = 'lda,'
         kpts = cell.make_kpts(kmesh)
@@ -292,7 +293,7 @@ class KnownValues(unittest.TestCase):
                      pseudo='gth-pade', a=a, unit='Bohr')
         kmesh = [3, 1, 1]
         nao = cell.nao
-        dm = np.random.rand(len(kmesh), nao, nao) - (.5+.2j)
+        dm = np.random.rand(len(kmesh), nao, nao) - (.5+.1j)
         dm = np.einsum('kpi,kqi->kpq', dm, dm.conj())
         xc = 'lda,'
         kpts = cell.make_kpts(kmesh)
@@ -365,6 +366,57 @@ class KnownValues(unittest.TestCase):
             e1 = cell1.KRKS(xc=xc, kpts=cell1.make_kpts(kmesh)).kernel()
             e2 = cell2.KRKS(xc=xc, kpts=cell2.make_kpts(kmesh)).kernel()
             assert abs(dat[i,j] - (e1-e2)/2e-3/vol) < 1e-6
+
+    def test_hubbard_U(self):
+        cell = gto.M(
+            unit = 'A',
+            atom = 'C 0.,  0.,  0.; O 0.5,  0.8,  1.1',
+            a = '''0.      1.7834  1.7834
+                   1.7834  0.      1.7834
+                   1.7834  1.7834  0.    ''',
+            basis = [[0, [1.3, 1]], [1, [0.8, 1]]],
+            pseudo = 'gth-pbe')
+        kmesh = [3,1,1]
+        kpts = cell.make_kpts(kmesh)
+        minao = 'gth-szv'
+
+        U_idx = ['C 2p']
+        U_val = [5]
+        mf = krkspu.KRKSpU(cell, kpts=kpts, U_idx=U_idx, U_val=U_val, minao_ref=minao)
+        mf.__dict__.update(cell.KRKS(kpts=kpts).run(max_cycle=1).__dict__)
+        sigma = krks_stress._hubbard_U_deriv1(mf)
+
+        for (i, j) in [(1, 0), (2, 2)]:
+            cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-4)
+            mf.reset(cell1)
+            e1 = mf.get_veff().E_U.real
+            mf.reset(cell2)
+            e2 = mf.get_veff().E_U.real
+            assert abs(sigma[i,j] - (e1 - e2) / 2e-4) < 1e-8
+
+    def test_krkspu_finite_diff_high_cost(self):
+        cell = gto.M(
+            unit = 'A',
+            atom = 'C 0.,  0.,  0.; O 0.5,  0.8,  1.1',
+            a = '''0.      1.7834  1.7834
+                   1.7834  0.      1.7834
+                   1.7834  1.7834  0.    ''',
+            basis = [[0, [1.3, 1]], [1, [0.8, 1]]],
+            pseudo = 'gth-pbe')
+        kmesh = [3,1,1]
+        kpts = cell.make_kpts(kmesh)
+        minao = 'gth-szv'
+
+        U_idx = ['C 2p']
+        U_val = [5]
+        mf = krkspu.KRKSpU(cell, kpts=kpts, U_idx=U_idx, U_val=U_val, minao_ref=minao).run()
+        sigma = mf.Gradients().get_stress()
+        mf_scanner = mf.as_scanner()
+
+        cell1, cell2 = _finite_diff_cells(cell, 0, 0, disp=1e-3)
+        e1 = mf_scanner(cell1)
+        e2 = mf_scanner(cell2)
+        assert abs(sigma[0,0] - (e1 - e2)/2e-3/cell.vol) < 1e-6
 
 if __name__ == "__main__":
     print("Full Tests for KRKS Stress tensor")

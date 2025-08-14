@@ -25,13 +25,14 @@ in the crystal
 
     \sum_j [\deta_ij + e_ij] R_j  [for j = x, y, z]
 
-The strain tensor is generally not a symmetric tensor. Symmetrization
+Due to numerical errors, the strain tensor may slightly break the symmetry
+within the stress tensor. The 6 independent components of the stress tensor
 
     [e1   e6/2 e5/2]
     [e6/2 e2   e4/2]
     [e5/2 e4/2 e3  ]
 
-is applied to form 6 independent component.
+is constructed by symmetrizing the strain tensor as follows:
 
     e1 = e_11
     e2 = e_22
@@ -39,22 +40,6 @@ is applied to form 6 independent component.
     e6 = e_12 + e_21
     e5 = e_13 + e_31
     e4 = e_32 + e_23
-
-The 6 component strain is then used to define the symmetric stress tensor.
-
-               1  d E
-    sigma_i = --- ------  for i = 1 .. 6
-               V  d e_i
-
-The symmetric stress tensor represented in the 6 Voigt notation can be
-transformed from the asymmetric stress tensor sigma_ij
-
-    sigma1 = sigma_11
-    sigma2 = sigma_22
-    sigma3 = sigma_33
-    sigma6 = (sigma_12 + sigma_21)/2
-    sigma5 = (sigma_13 + sigma_31)/2
-    sigma4 = (sigma_23 + sigma_32)/2
 
 See K. Doll, Mol Phys (2010), 108, 223
 '''
@@ -82,11 +67,20 @@ def _finite_diff_cells(cell, x, y, disp=1e-4, precision=None):
         cell.precision = precision
     a = cell.lattice_vectors()
     r = cell.atom_coords()
+    if not gto.mole.is_au(cell.unit):
+        a *= lib.param.BOHR
+        r *= lib.param.BOHR
     e_strain = strain_tensor_dispalcement(x, y, disp)
-    cell1 = cell.set_geom_(r.dot(e_strain.T), a=a.dot(e_strain.T), unit='AU', inplace=False)
+    cell1 = cell.set_geom_(r.dot(e_strain.T), inplace=False)
+    cell1.a = a.dot(e_strain.T)
 
     e_strain = strain_tensor_dispalcement(x, y, -disp)
-    cell2 = cell.set_geom_(r.dot(e_strain.T), a=a.dot(e_strain.T), unit='AU', inplace=False)
+    cell2 = cell.set_geom_(r.dot(e_strain.T), inplace=False)
+    cell2.a = a.dot(e_strain.T)
+
+    if cell.space_group_symmetry:
+        cell1.build(False, False)
+        cell2.build(False, False)
     return cell1, cell2
 
 def get_ovlp(cell):
@@ -120,8 +114,8 @@ def _get_coulG_strain_derivatives(cell, Gv):
     G2 = np.einsum('gx,gx->g', Gv, Gv)
     G2[0] = np.inf
     coulG_0 = 4 * np.pi / G2
-    coulG_1 = np.einsum('g,gx,gy->xyg', 2/G2, Gv, Gv)
-    coulG_1 *= coulG_0
+    coulG_1 = np.einsum('gx,gy->xyg', Gv, Gv)
+    coulG_1 *= coulG_0 * 2/G2
     return coulG_0, coulG_1
 
 def _get_weight_strain_derivatives(cell, grids):
@@ -144,6 +138,7 @@ def _eval_ao_strain_derivatives(cell, coords, kpts=None, deriv=0, out=None):
         feval = 'GTOval_sph_deriv%d_strain_tensor' % deriv
     out = cell.pbc_eval_gto(feval, coords, comp_3x3, kpts, out=out)
     ngrids = len(coords)
+
     if isinstance(out, np.ndarray):
         out = [out.reshape(3,3,comp,ngrids,-1)]
     else:
@@ -372,9 +367,11 @@ def _get_pp_nonloc_strain_derivatives(cell, mesh, dm_kpts, kpts=None):
                     for l, proj in enumerate(pp[5:]):
                         rl, nl, hl = proj
                         if nl > 0:
-                            p0, p1 = p1, p1+nl*(l*2+1)
+                            nf = l * 2 + 1
+                            p0, p1 = p1, p1+nl*nf
                             hl = np.asarray(hl)
-                            vppnl += np.einsum('ij,ji->', hl, rho[p0:p1,p0:p1])
+                            rho_sub = rho[p0:p1,p0:p1].reshape(nl, nf, nl, nf)
+                            vppnl += np.einsum('ij,jmim->', hl, rho_sub)
         return vppnl / (nkpts*vol)
 
     disp = max(1e-5, (cell.precision*.1)**.5)
@@ -451,7 +448,6 @@ def kernel(mf_grad):
             s1 = np.einsum('ij,ji->', s1, dme0)
             s2 = np.einsum('ij,ji->', s2, dme0)
             sigma[x,y] -= (s1 - s2) / (2*disp)
-
     t0 = log.timer_debug1('hcore derivatives', *t0)
 
     sigma += get_vxc(mf_grad, cell, dm0, with_j=True, with_nuc=True)

@@ -21,4 +21,9 @@ from pyscf.pbc.grad import uhf
 
 class Gradients(uhf.Gradients):
     '''Non-relativistic Gamma-point unrestricted Kohn-Sham DFT gradients'''
-    pass
+
+    grids = None
+
+    def get_stress(self):
+        from pyscf.pbc.grad import uks_stress
+        return uks_stress.kernel(self)

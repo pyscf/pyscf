@@ -2173,7 +2173,7 @@ def fromstring(string, format='xyz'):
 def is_au(unit):
     '''Return whether the unit is recognized as A.U. or not
     '''
-    return unit.upper().startswith(('B', 'AU'))
+    return isinstance(unit, str) and unit.upper().startswith(('B', 'AU'))
 
 #
 # MoleBase handles three layers of basis data: input, internal format, libcint arguments.
