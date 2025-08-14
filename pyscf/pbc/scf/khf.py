@@ -777,6 +777,8 @@ class KSCF(pbchf.SCF):
         raise NotImplementedError
 
 class KRHF(KSCF):
+    '''RHF class with k-point sampling (default: gamma point).
+    '''
 
     analyze = analyze
     spin_square = mol_hf.RHF.spin_square

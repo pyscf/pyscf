@@ -322,11 +322,12 @@ class KnownValues(unittest.TestCase):
         mf = cell.KRKS(xc=xc, kpts=cell.make_kpts(kmesh)).run()
         mf_grad = krks.Gradients(mf)
         dat = mf_grad.get_stress()
+        mf_scanner = mf.as_scanner()
         vol = cell.vol
         for (i, j) in [(0, 0), (0, 1), (0, 2), (1, 0), (2, 2)]:
             cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-3)
-            e1 = cell1.KRKS(xc=xc, kpts=cell1.make_kpts(kmesh)).kernel()
-            e2 = cell2.KRKS(xc=xc, kpts=cell2.make_kpts(kmesh)).kernel()
+            e1 = mf_scanner(cell1)
+            e2 = mf_scanner(cell2)
             assert abs(dat[i,j] - (e1-e2)/2e-3/vol) < 1e-6
 
     def test_gga_vs_finite_difference(self):
@@ -341,11 +342,12 @@ class KnownValues(unittest.TestCase):
         mf = cell.KRKS(xc=xc, kpts=cell.make_kpts(kmesh)).run()
         mf_grad = krks.Gradients(mf)
         dat = mf_grad.get_stress()
+        mf_scanner = mf.as_scanner()
         vol = cell.vol
         for (i, j) in [(0, 0), (0, 1), (0, 2), (1, 0), (2, 2)]:
             cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-3)
-            e1 = cell1.KRKS(xc=xc, kpts=cell1.make_kpts(kmesh)).kernel()
-            e2 = cell2.KRKS(xc=xc, kpts=cell2.make_kpts(kmesh)).kernel()
+            e1 = mf_scanner(cell1)
+            e2 = mf_scanner(cell2)
             assert abs(dat[i,j] - (e1-e2)/2e-3/vol) < 1e-6
 
     def test_mgga_vs_finite_difference_high_cost(self):
@@ -360,11 +362,12 @@ class KnownValues(unittest.TestCase):
         mf = cell.KRKS(xc=xc, kpts=cell.make_kpts(kmesh)).run()
         mf_grad = krks.Gradients(mf)
         dat = mf_grad.get_stress()
+        mf_scanner = mf.as_scanner()
         vol = cell.vol
         for (i, j) in [(0, 0), (0, 1), (0, 2), (1, 0), (2, 2)]:
             cell1, cell2 = _finite_diff_cells(cell, i, j, disp=1e-3)
-            e1 = cell1.KRKS(xc=xc, kpts=cell1.make_kpts(kmesh)).kernel()
-            e2 = cell2.KRKS(xc=xc, kpts=cell2.make_kpts(kmesh)).kernel()
+            e1 = mf_scanner(cell1)
+            e2 = mf_scanner(cell2)
             assert abs(dat[i,j] - (e1-e2)/2e-3/vol) < 1e-6
 
     def test_hubbard_U(self):

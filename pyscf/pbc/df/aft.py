@@ -29,6 +29,7 @@ from pyscf.pbc.gto import pseudo, error_for_ke_cutoff
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.gto.pseudo import pp_int
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
+from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import aft_ao2mo
@@ -571,7 +572,7 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
     # to mimic molecular DF object
     blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
 
-    def __init__(self, cell, kpts=np.zeros((1,3))):
+    def __init__(self, cell, kpts=None):
         self.cell = cell
         self.stdout = cell.stdout
         self.verbose = cell.verbose
@@ -586,6 +587,22 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
         # The following attributes are not input options.
         self._rsh_df = {}  # Range separated Coulomb DF objects
 
+    @property
+    def kpts(self):
+        if isinstance(self._kpts, KPoints):
+            return self._kpts
+        else:
+            return self.cell.get_abs_kpts(self._kpts)
+
+    @kpts.setter
+    def kpts(self, val):
+        if val is None:
+            self._kpts = np.zeros((1, 3))
+        elif isinstance(val, KPoints):
+            self._kpts = val
+        else:
+            self._kpts = self.cell.get_scaled_kpts(val)
+
     def dump_flags(self, verbose=None):
         logger.info(self, '\n')
         logger.info(self, '******** %s ********', self.__class__)
@@ -596,6 +613,8 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
 
     def reset(self, cell=None):
         if cell is not None:
+            if isinstance(self._kpts, KPoints):
+                self.kpts.reset(cell)
             self.cell = cell
         self._rsh_df = {}
         return self

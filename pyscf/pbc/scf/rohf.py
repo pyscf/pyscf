@@ -41,7 +41,7 @@ dip_moment = pbcuhf.dip_moment
 get_rho = pbcuhf.get_rho
 
 class ROHF(pbchf.RHF):
-    '''ROHF class for PBCs.
+    '''ROHF class for PBCs at a single point (default: gamma point).
     '''
 
     get_init_guess = pbcuhf.UHF.get_init_guess
@@ -65,7 +65,7 @@ class ROHF(pbchf.RHF):
     gen_response = pbcuhf.gen_response
     to_gpu = lib.to_gpu
 
-    def __init__(self, cell, kpt=np.zeros(3),
+    def __init__(self, cell, kpt=None,
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         pbchf.SCF.__init__(self, cell, kpt, exxdiv)
         self.nelec = None

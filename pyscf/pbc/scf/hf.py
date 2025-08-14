@@ -920,6 +920,8 @@ class KohnShamDFT:
 
 
 class RHF(SCF):
+    '''PBC RHF at a single point (default: gamma point).
+    '''
 
     analyze = mol_hf.RHF.analyze
     spin_square = mol_hf.RHF.spin_square

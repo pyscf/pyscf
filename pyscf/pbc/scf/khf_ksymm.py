@@ -118,7 +118,6 @@ def eig(kmf, h_kpts, s_kpts):
     return eig_kpts, mo_coeff_kpts
 
 def ksymm_scf_common_init(kmf, cell, kpts, use_ao_symmetry=True):
-    kmf._kpts = None
     kmf.use_ao_symmetry = (cell.dimension == 3 and
                            use_ao_symmetry and
                            not kpts.time_reversal and
@@ -151,9 +150,9 @@ class KsymAdaptedKSCF(khf.KSCF):
         if 'kpts' in self.__dict__:
             # To handle the attribute kpt loaded from chkfile
             kpts_ibz = self.__dict__.pop('kpts')
-            if len(kpts_ibz) != self._kpts.nkpts_ibz:
+            if len(kpts_ibz) != self.kpts.nkpts_ibz:
                 raise RuntimeError("chkfile is not consistent with the current system.")
-        return self._kpts
+        return self.with_df.kpts
 
     @kpts.setter
     def kpts(self, kpts):
@@ -162,14 +161,12 @@ class KsymAdaptedKSCF(khf.KSCF):
             kpts = libkpts.make_kpts(self.cell, kpts=kpts)
         elif not isinstance(kpts, libkpts.KPoints):
             raise TypeError("Input kpts have wrong type: %s" % type(kpts))
-        kpts_bz = kpts.kpts
-        self.with_df.kpts = np.reshape(kpts_bz, (-1,3))
-        self._kpts = kpts
+        self.with_df.kpts = kpts
 
     @property
     def kmesh(self):
         from pyscf.pbc.tools.k2gamma import kpts_to_kmesh
-        kpts_bz = self._kpts.kpts
+        kpts_bz = self.kpts.kpts
         kmesh = kpts_to_kmesh(kpts_bz)
         if len(kpts_bz) != np.prod(kmesh):
             logger.WARN(self, 'K-points specified in %s are not Monkhorst-Pack %s grids',
@@ -178,7 +175,7 @@ class KsymAdaptedKSCF(khf.KSCF):
 
     @kmesh.setter
     def kmesh(self, x):
-        self.kpts = self.cell.make_kpts(x)
+        self.kpts = self.cell.make_kpts(x, space_group_symmetry=True)
 
     def reset(self, cell=None):
         raise NotImplementedError
