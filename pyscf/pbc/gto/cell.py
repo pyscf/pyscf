@@ -1389,7 +1389,7 @@ class Cell(mole.MoleBase):
                     mf_kw[k] = v
                 else:
                     remaining_kw[k] = v
-            mf = mf_method(self, *args, **mf_kw)
+            mf = mf_method(self, **mf_kw)
 
             if post_mf_key is None:
                 return mf.set(**remaining_kw)
@@ -1397,7 +1397,7 @@ class Cell(mole.MoleBase):
             post_mf = getattr(mf, post_mf_key)
             if self.nelectron != 0:
                 mf.run()
-            return post_mf(**remaining_kw)
+            return post_mf(*args, **remaining_kw)
         return mole._MoleLazyCallAdapter(fn, attr_name)
 
     tot_electrons = tot_electrons

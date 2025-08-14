@@ -3794,7 +3794,7 @@ class Mole(MoleBase):
                     mf_kw[k] = v
                 else:
                     remaining_kw[k] = v
-            mf = mf_method(self, *args, **mf_kw)
+            mf = mf_method(self, **mf_kw)
 
             if post_mf_key is None:
                 return mf.set(**remaining_kw)
@@ -3803,7 +3803,7 @@ class Mole(MoleBase):
             # Initialize SCF object for post-SCF methods if applicable
             if self.nelectron != 0:
                 mf.run()
-            return post_mf(**remaining_kw)
+            return post_mf(*args, **remaining_kw)
         return _MoleLazyCallAdapter(fn, attr_name)
 
     def ao2mo(self, mo_coeffs, erifile=None, dataname='eri_mo', intor='int2e',
