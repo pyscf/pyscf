@@ -177,8 +177,109 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(not a_hf.with_df._j_only)
         self.assertTrue(isinstance(a_hf, pbcscf.krohf.KROHF))
 
-# TODO: test the reset method of pbcdft.KRKS, pbcdft.RKS whether the reset
-# methods of all subsequent objects are called
+    def test_reset(self):
+        cell = pbcgto.Cell()
+        cell.unit = 'A'
+        cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
+        cell.a = '''0.      1.7834  1.7834
+                    1.7834  0.      1.7834
+                    1.7834  1.7834  0.    '''
+        cell.basis = 'gth-dzvp'
+        cell.pseudo = 'gth-pade'
+        cell.verbose = 7
+        cell.output = '/dev/null'
+        cell.build()
+        kpts0 = cell.make_kpts([3,1,1])
+        mf = cell.KRKS(kpts=kpts0)
+
+        cell1 = pbcgto.Cell()
+        cell1.atom = 'C 0.,  0.,  0.; C 0.95,  0.95,  0.95'
+        cell1.a = '''0.   1.9  1.9
+                     1.9  0.   1.9
+                     1.9  1.9  0.    '''
+        cell1.basis = 'gth-dzvp'
+        cell1.pseudo = 'gth-pade'
+        cell1.verbose = 7
+        cell1.output = '/dev/null'
+        cell1.build()
+        mf.reset(cell1)
+        assert abs(mf.kpts - kpts0).sum() > 0.1
+        ref = cell1.make_kpts([3,1,1])
+        assert abs(mf.kpts - ref).max() < 1e-9
+
+        cell1.set_geom_(a='''0.   2.0  2.0
+                             2.0  0.   2.0
+                             2.0  2.0  0.    ''')
+        ref = cell1.make_kpts([3,1,1])
+        mf.reset(cell1)
+        assert abs(mf.kpts - kpts0).sum() > 0.1
+        assert abs(mf.kpts - ref).max() < 1e-9
+
+    def test_reset_ksym(self):
+        cell = pbcgto.Cell()
+        cell.unit = 'A'
+        cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
+        cell.a = '''0.      1.7834  1.7834
+                    1.7834  0.      1.7834
+                    1.7834  1.7834  0.    '''
+        cell.basis = 'gth-dzvp'
+        cell.space_group_symmetry = True
+        cell.pseudo = 'gth-pade'
+        cell.verbose = 7
+        cell.output = '/dev/null'
+        cell.build()
+        kpts0 = cell.make_kpts([3,1,1], space_group_symmetry=True)
+        mf = pbcdft.KRKS(cell, kpts=kpts0)
+
+        ref = pbcgto.M(
+            unit = 'A',
+            atom = 'C 0.,  0.,  0.; C 0.95,  0.95,  0.95',
+            a = '''0.   1.9  1.9
+                   1.9  0.   1.9
+                   1.9  1.9  0. ''',
+            basis = 'gth-dzvp',
+            space_group_symmetry = True,
+            pseudo = 'gth-pade',
+            verbose = 0).make_kpts([3,1,1], space_group_symmetry=True)
+        cell.set_geom_(
+            'C 0.,  0.,  0.; C 0.95,  0.95,  0.95',
+            a = '''0.   1.9  1.9
+                   1.9  0.   1.9
+                   1.9  1.9  0. ''')
+        mf.reset(cell)
+        assert abs(mf.kpts.kpts_ibz - ref.kpts_ibz).max() < 1e-9
+
+        ref = pbcgto.M(
+            unit = 'A',
+            atom = 'C 0.,  0.,  0.; C 0.95,  0.95,  0.95',
+            a = '''0.   2.0  2.0
+                   2.0  0.   2.0
+                   2.0  2.0  0. ''',
+            basis = 'gth-dzvp',
+            space_group_symmetry = True,
+            pseudo = 'gth-pade',
+            verbose = 0).make_kpts([3,1,1], space_group_symmetry=True)
+        cell.set_geom_(a='''0.   2.0  2.0
+                            2.0  0.   2.0
+                            2.0  2.0  0. ''')
+        ref = cell.make_kpts([3,1,1], space_group_symmetry=True)
+        mf.reset(cell)
+        assert abs(mf.kpts.kpts_ibz - ref.kpts_ibz).max() < 1e-9
+
+        ref = pbcgto.M(
+            unit = 'A',
+            atom = 'C 0.,  0.,  0.; C 1.,  1.,  1.',
+            a = '''0.   2.0  2.0
+                   2.0  0.   2.0
+                   2.0  2.0  0. ''',
+            basis = 'gth-dzvp',
+            space_group_symmetry = True,
+            pseudo = 'gth-pade',
+            verbose = 0).make_kpts([3,1,1], space_group_symmetry=True)
+        cell.set_geom_(
+            'C 0.,  0.,  0.; C 1.,  1.,  1.')
+        mf.reset(cell)
+        assert abs(mf.kpts.kpts_ibz - ref.kpts_ibz).max() < 1e-9
 
 
 if __name__ == '__main__':

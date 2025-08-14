@@ -126,7 +126,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     return vxc
 
 class KGKS(rks.KohnShamDFT, kghf.KGHF):
-    '''GKS class adapted for PBCs with k-point sampling.
+    '''GKS class adapted for PBCs with k-point sampling (default: gamma point).
     '''
 
     collinear = mol_ks.GKS.collinear
@@ -135,7 +135,7 @@ class KGKS(rks.KohnShamDFT, kghf.KGHF):
     energy_elec = krks.energy_elec
     get_rho = krks.get_rho
 
-    def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
+    def __init__(self, cell, kpts=None, xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         kghf.KGHF.__init__(self, cell, kpts, exxdiv=exxdiv)
         rks.KohnShamDFT.__init__(self, xc)
