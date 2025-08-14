@@ -346,7 +346,7 @@ def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
     assert cell.low_dim_ft_type != 'inf_vacuum'
     assert cell.dimension > 1
     if kpts is None:
-        kpts = np.zeros((1, 3))
+        kpts = numpy.zeros((1, 3))
     nkpts = len(kpts)
 
     if isinstance(mo_coeff_kpts, numpy.ndarray) and mo_coeff_kpts.ndim == 3:
