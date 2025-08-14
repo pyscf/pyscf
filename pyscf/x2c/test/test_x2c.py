@@ -204,13 +204,26 @@ C     F
         self.assertAlmostEqual(abs(h1 - ref).max(), 0, 12)
 
     def test_ghf(self):
-        # Test whether the result of .X2C() is a solution of .GHF().x2c()
+        # Test whether the result of spinor X2C is a solution of .GHF().x2c()
         mol = gto.M(atom='C', basis='ccpvdz-dk')
-        ref = mol.X2C().run()
+        ref = mol.DHF().x2c().run()
         c = numpy.vstack(mol.sph2spinor_coeff())
         mo1 = c.dot(ref.mo_coeff)
         dm = ref.make_rdm1(mo1, ref.mo_occ)
         mf = mol.GHF().x2c1e()
+        mf.max_cycle = 1
+        mf.kernel(dm0=dm)
+        self.assertTrue(mf.converged)
+        self.assertAlmostEqual(mf.e_tot, ref.e_tot, 9)
+        self.assertAlmostEqual(abs(mf.dip_moment() - ref.dip_moment()).max(), 0, 9)
+
+    def test_gks(self):
+        mol = gto.M(atom='C', basis='ccpvdz-dk')
+        ref = mol.DKS(xc='b3lyp').x2c().run()
+        c = numpy.vstack(mol.sph2spinor_coeff())
+        mo1 = c.dot(ref.mo_coeff)
+        dm = ref.make_rdm1(mo1, ref.mo_occ)
+        mf = mol.GKS(xc='b3lyp').x2c1e()
         mf.max_cycle = 1
         mf.kernel(dm0=dm)
         self.assertTrue(mf.converged)
