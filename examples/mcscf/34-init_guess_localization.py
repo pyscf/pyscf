@@ -6,7 +6,7 @@ An example of constructing CASSCF initial guess with the localized orbitals
 
 import numpy
 from pyscf import gto, scf, mcscf, lo
-from pyscf import mo_mapping
+from pyscf.tools import mo_mapping
 
 mol = gto.Mole(
     verbose=4,
