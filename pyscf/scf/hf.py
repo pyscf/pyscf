@@ -2486,26 +2486,10 @@ def _hf1e_scf(mf, *args):
     mf.mo_energy, mf.mo_coeff = mf.eig(h1e, s1e)
     mf.mo_occ = mf.get_occ(mf.mo_energy, mf.mo_coeff)
     mf.e_tot = mf.mo_energy[mf.mo_occ>0][0].real + mf.mol.energy_nuc()
+    if mf.chkfile:
+        mf.dump_chk(mf.chkfile)
     mf._finalize()
     return mf.e_tot
 
 
 del (WITH_META_LOWDIN, PRE_ORTH_METHOD)
-
-
-if __name__ == '__main__':
-    from pyscf import scf
-    mol = gto.Mole()
-    mol.verbose = 5
-    mol.output = None
-
-    mol.atom = [['He', (0, 0, 0)], ]
-    mol.basis = 'ccpvdz'
-    mol.build(0, 0)
-
-##############
-# SCF result
-    method = scf.RHF(mol).x2c().density_fit().newton()
-    method.init_guess = '1e'
-    energy = method.scf()
-    print(energy)
