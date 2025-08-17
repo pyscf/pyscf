@@ -2641,10 +2641,9 @@ class MoleBase(lib.StreamObject):
                             f'include an ECP. Recommended ECP: {ecp}.')
         elif isinstance(self.basis, dict) and isinstance(self.ecp, dict):
             _basis = self.basis
-            if any(str(key).upper() == 'DEFAULT' for key in _basis.keys()):
-                basis = {atm: _basis[next(k for k in _basis.keys() if k.upper() == 'DEFAULT')]
-                        for atm in [self.atom_symbol(atm_id)
-                            for atm_id in range(self.natm)]}
+            if 'default' in _basis:
+                uniq_atoms = {a[0] for a in self._atom}
+                basis = _parse_default_basis(_basis, uniq_atoms)
             else:
                 basis = _basis
             for element, basname in basis.items():
