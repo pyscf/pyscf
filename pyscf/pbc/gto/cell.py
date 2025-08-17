@@ -1531,14 +1531,7 @@ class Cell(mole.MoleBase):
         _built = self._built
         mole.MoleBase.build(self, False, parse_arg, *args, **kwargs)
 
-        exp_min = np.array([self.bas_exp(ib).min() for ib in range(self.nbas)])
-        if self.exp_to_discard is None:
-            if np.any(exp_min < 0.1):
-                sys.stderr.write('''WARNING!
-  Very diffused basis functions are found in the basis set. They may lead to severe
-  linear dependence and numerical instability.  You can set  cell.exp_to_discard=0.1
-  to remove the diffused Gaussians whose exponents are less than 0.1.\n\n''')
-        elif np.any(exp_min < self.exp_to_discard):
+        if self.exp_to_discard is not None:
             # Discard functions of small exponents in basis
             _basis = {}
             for symb, basis_now in self._basis.items():
