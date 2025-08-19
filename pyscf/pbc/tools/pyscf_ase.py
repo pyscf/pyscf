@@ -22,8 +22,12 @@ ASE package interface
 '''
 
 import numpy as np
-from ase.calculators.calculator import Calculator
-import ase.dft.kpoints
+from ase.calculators.calculator import Calculator, all_properties
+from ase.units import Debye
+from pyscf import lib
+from pyscf.data.nist import BOHR, HARTREE2EV
+from pyscf.gto.mole import charge
+from pyscf.pbc.gto.cell import Cell
 
 def pyscf_to_ase_atoms(cell):
     '''
@@ -49,11 +53,25 @@ def ase_atoms_to_pyscf(ase_atoms):
     return [[atom.symbol, atom.position] for atom in ase_atoms]
 atoms_from_ase = ase_atoms_to_pyscf
 
+def cell_from_ase(ase_atoms):
+    '''Convert ASE atoms to PySCF Cell instance. The lattice vectors and atomic
+    positions are defined in the Cell instance. It does not have any basis sets
+    or pseudopotentials assigned. The Cell instance is not initialized with 'build()'.
+    '''
+    cell = Cell()
+    cell.atom = ase_atoms_to_pyscf(ase_atoms)
+    cell.a = ase_atoms.cell
+    return cell
+
 class PySCF(Calculator):
-    implemented_properties = ['energy']
+    implemented_properties = ['energy', 'forces', 'stress',
+                              'dipole', 'magmom']
+
+    default_parameters = {}
 
     def __init__(self, restart=None, ignore_bad_restart_file=False,
-                 label='PySCF', atoms=None, scratch=None, **kwargs):
+                 label='PySCF', atoms=None, directory='.', method=None,
+                 **kwargs):
         """Construct PySCF-calculator object.
 
         Parameters
@@ -62,26 +80,27 @@ class PySCF(Calculator):
             Prefix to use for filenames (label.in, label.txt, ...).
             Default is 'PySCF'.
 
-        mfclass: PySCF mean-field class
-        molcell: PySCF :Mole: or :Cell:
+        method: A PySCF method class
         """
-        Calculator.__init__(self, restart=None, ignore_bad_restart_file=False,
-                            label='PySCF', atoms=None, scratch=None, **kwargs)
+        Calculator.__init__(self, restart, ignore_bad_restart_file,
+                            label, atoms, directory=directory, **kwargs)
 
-        # TODO
-        # This explicitly refers to "cell". How to refer
-        # to both cell and mol together?
+        if not isinstance(method, lib.StreamObject):
+            raise RuntimeError(f'{method} must be an instance of a PySCF method')
 
-        self.mf=None
-        self.initialize(**kwargs)
-
-    def initialize(self, molcell, mf_class, mf_dict):
-        if not molcell.unit.startswith(('A','a')):
+        self.method = method
+        self.pbc = hasattr(method, 'cell')
+        if self.pbc:
+            mol = method.cell
+        else:
+            mol = method.mol
+        if not mol.unit.startswith(('A','a')):
             raise RuntimeError("PySCF unit must be A to work with ASE")
-
-        self.molcell=molcell
-        self.mf_class=mf_class
-        self.mf_dict=mf_dict
+        self.mol = mol
+        self.method_scan = None
+        if hasattr(method, 'as_scanner'):
+            # Scanner can utilize the initial guess from previous calculations
+            self.method_scan = method.as_scanner()
 
     def set(self, **kwargs):
         changed_parameters = Calculator.set(self, **kwargs)
@@ -89,21 +108,58 @@ class PySCF(Calculator):
             self.reset()
 
     def calculate(self, atoms=None, properties=['energy'],
-                  system_changes=['positions', 'numbers', 'cell',
-                                  'pbc', 'charges','magmoms']):
-
+                  system_changes=all_properties):
         Calculator.calculate(self, atoms)
 
-        calc_molcell = self.molcell.copy()
-        calc_molcell.atom = ase_atoms_to_pyscf(atoms)
-        calc_molcell.a = np.asarray(atoms.cell)
-        calc_molcell.build(None,None)
-        self.mf = self.mf_class(calc_molcell)
-        for key in self.mf_dict:
-            self.mf.__dict__[key] = self.mf_dict[key]
+        positions = atoms.get_positions()
+        atomic_numbers = atoms.get_atomic_numbers()
+        Z = np.array([charge(x) for x in self.mol.elements])
+        if all(Z == atomic_numbers):
+            _atoms = positions
+        else:
+            _atoms = list(zip(atomic_numbers, positions))
 
-        self.results['energy']=self.mf.scf()
-        self.results['mf']=self.mf
+        if self.pbc:
+            self.mol.set_geom_(_atoms, a=atoms.cell)
+        else:
+            self.mol.set_geom_(_atoms)
+
+        if 'energy' in properties:
+            if self.method_scan is None:
+                self.mol.set_geom_(atoms)
+                self.method.reset(self.mol).run()
+                e_tot = self.method.e_tot
+                if not getattr(self.method, 'converged', True):
+                    raise RuntimeError(f'{self.method} not converged')
+            else:
+                e_tot = self.method_scan(self.mol)
+                if not self.method_scan.converged:
+                    raise RuntimeError(f'{self.method} not converged')
+            self.results['energy'] = e_tot * HARTREE2EV
+
+        if self.method_scan is None:
+            base_method = self.method
+        else:
+            base_method = self.method_scan
+
+        if 'forces' in properties or 'stress' in properties:
+            grad_obj = base_method.Gradients()
+
+        if 'forces' in properties:
+            forces = -grad_obj.kernel()
+            self.results['forces'] = forces * (HARTREE2EV / BOHR)
+
+        if 'stress' in properties:
+            stress = grad_obj.get_stress()
+            self.results['stress'] = stress * (HARTREE2EV / BOHR)
+
+        if 'dipole' in properties:
+            # in Gaussian cgs unit
+            self.results['dipole'] = base_method.dip_moment() * Debye
+
+        if 'magmom' in properties:
+            magmom = self.mol.spin
+            self.results['magmom'] = magmom
 
 def make_kpts(cell, nks):
     raise DeprecationWarning('Use cell.make_kpts(nks) instead.')
