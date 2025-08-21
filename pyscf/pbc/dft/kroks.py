@@ -42,14 +42,14 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
 
 class KROKS(rks.KohnShamDFT, krohf.KROHF):
-    '''RKS class adapted for PBCs with k-point sampling.
+    '''PBC-KRKS with k-point sampling (default: gamma point).
     '''
 
     get_veff = get_veff
     energy_elec = energy_elec
     get_rho = kuks.get_rho
 
-    def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
+    def __init__(self, cell, kpts=None, xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         krohf.KROHF.__init__(self, cell, kpts, exxdiv=exxdiv)
         rks.KohnShamDFT.__init__(self, xc)
