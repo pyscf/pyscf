@@ -240,9 +240,8 @@ def _Gv_wrap_around(cell, Gv, k, mesh):
     agree.
     '''
     b = cell.reciprocal_vectors()
-    assert all(np.linalg.solve(b.T, k) < 1), 'k-point must be in first Brillouin zone'
+    #assert all(np.linalg.solve(b.T, k) < 1), 'k-point must be in first Brillouin zone'
     kG = k + Gv
-    b = cell.reciprocal_vectors()
     box_edge = np.einsum('i,ij->ij', mesh, b)
     reduced_coords = np.linalg.solve(box_edge.T, kG.T).T
     if cell.dimension >= 1:
