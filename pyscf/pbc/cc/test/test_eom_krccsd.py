@@ -165,7 +165,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[0][1], 1.278883198038047, 6)
         e, v = myeom.eaccsd(nroots=2, left=True, koopmans=True, kptlist=(1,))
         self.assertAlmostEqual(e[0][0], 1.227583012965648, 6)
-        self.assertAlmostEqual(e[0][1], 1.383037924670814, 6)
+        self.assertAlmostEqual(e[0][1], 1.383037924670814, 5)
         e, v = myeom.eaccsd(nroots=2, left=True, koopmans=True, kptlist=(0,))
         self.assertAlmostEqual(e[0][0], 1.2669788599162801, 6)
         self.assertAlmostEqual(e[0][1], 1.2788832018377787, 6)

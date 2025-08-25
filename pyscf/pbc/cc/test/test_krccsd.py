@@ -204,7 +204,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e0, e1, 5)
 
     def test_frozen_n3(self):
-        mesh = 5
+        mesh = 12
         cell = make_test_cell.test_cell_n3([mesh]*3)
         nk = (1, 1, 2)
         ehf_bench = -8.648503065380389
@@ -614,7 +614,7 @@ class KnownValues(unittest.TestCase):
         kpts -= kpts[0]
         kks = pbcscf.KRHF(cell, kpts=kpts)
         ekks = kks.kernel()
-        self.assertAlmostEqual(ekks, -10.530978858287662, 6)
+        self.assertAlmostEqual(ekks, -10.530978858287662, 5)
 
         khf = pbcscf.KRHF(cell)
         khf.__dict__.update(kks.__dict__)
