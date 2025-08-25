@@ -2640,13 +2640,20 @@ class MoleBase(lib.StreamObject):
                 logger.warn(self, f'ECP not specified. The basis set {self.basis} '
                             f'include an ECP. Recommended ECP: {ecp}.')
         elif isinstance(self.basis, dict) and isinstance(self.ecp, dict):
-            for element, basname in self.basis.items():
+            _basis = self.basis
+            if 'default' in _basis:
+                uniq_atoms = {a[0] for a in self._atom}
+                basis = _parse_default_basis(_basis, uniq_atoms)
+            else:
+                basis = _basis
+            for element, basname in basis.items():
                 if isinstance(basname, str) and not self.ecp.get(element):
                     ecp, ecp_atoms = bse_predefined_ecp(basname, element)
                     if ecp_atoms:
                         logger.warn(self, f'ECP for {element} not specified. '
                                     f'The basis set {basname} include an ECP. '
                                     f'Recommended ECP: {ecp}.')
+            basis = None
         return self
 
     def _build_symmetry(self, *args, **kwargs):
