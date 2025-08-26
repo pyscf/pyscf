@@ -22848,6 +22848,194 @@ def get_trans_moments(adc):
     return TY
 
 
+def analyze_eigenvector(adc):
+
+    nocc_a = adc.nocc_a
+    nocc_b = adc.nocc_b
+    nvir_a = adc.nvir_a
+    nvir_b = adc.nvir_b
+    evec_print_tol = adc.evec_print_tol
+
+    logger.info(adc, "Number of alpha occupied orbitals = %d", nocc_a)
+    logger.info(adc, "Number of beta occupied orbitals = %d", nocc_b)
+    logger.info(adc, "Number of alpha virtual orbitals =  %d", nvir_a)
+    logger.info(adc, "Number of beta virtual orbitals =  %d", nvir_b)
+    logger.info(adc, "Print eigenvector elements > %f\n", evec_print_tol)
+    ij_a = np.tril_indices(nocc_a, k=-1)
+    ij_b = np.tril_indices(nocc_b, k=-1)
+    ab_a = np.tril_indices(nvir_a, k=-1)
+    ab_b = np.tril_indices(nvir_b, k=-1)
+
+    n_singles_aa = nocc_a * nvir_a
+    n_singles_bb = nocc_b * nvir_b
+    n_doubles_aaaa = nvir_a* (nvir_a - 1)* nocc_a* (nocc_a-1) // 4
+    n_doubles_ab = nocc_a * nocc_b * nvir_a * nvir_b
+    n_doubles_bbbb = nvir_b* (nvir_b - 1)* nocc_b* (nocc_b-1) // 4
+
+    s_aa = 0
+    f_aa = n_singles_aa
+    s_bb = f_aa
+    f_bb = s_bb + n_singles_bb
+    s_aaaa = f_bb
+    f_aaaa = s_aaaa + n_doubles_aaaa
+    s_ab = f_aaaa
+    f_ab = s_ab + n_doubles_ab
+    s_bbbb = f_ab
+    f_bbbb = s_bbbb + n_doubles_bbbb
+
+    U = adc.U
+
+    for I in range(U.shape[1]):
+        U1 = U[:f_bb, I]
+        U2 = U[f_bb:, I]
+        U1dotU1 = np.dot(U1, U1)
+        U2dotU2 = np.dot(U2, U2)
+
+        temp_vv_aaaa = np.zeros((int((nocc_a * (nocc_a - 1)) / 2), nvir_a, nvir_a))
+        temp_vv_aaaa[:, ab_a[0], ab_a[1]] = U[s_aaaa:f_aaaa,I].reshape(
+            int((nocc_a * (nocc_a - 1)) / 2), int((nvir_a * (nvir_a - 1)) / 2))
+        temp_vv_aaaa[:, ab_a[1], ab_a[0]] = -U[s_aaaa:f_aaaa,I].reshape(
+            int((nocc_a * (nocc_a - 1)) / 2), int((nvir_a * (nvir_a - 1)) / 2))
+        temp_aaaa = np.zeros((nocc_a, nocc_a, nvir_a, nvir_a))
+        temp_aaaa[ij_a[0],ij_a[1], :, :] =  temp_vv_aaaa
+        temp_aaaa[ij_a[1],ij_a[0], :, :] = -temp_vv_aaaa
+        U_aaaa = temp_aaaa.reshape(-1).copy()
+        print(temp_vv_aaaa)
+
+        temp_vv_bbbb = np.zeros((int((nocc_b * (nocc_b - 1)) / 2), nvir_b, nvir_b))
+        temp_vv_bbbb[:, ab_b[0], ab_b[1]] = U[s_bbbb:f_bbbb,I].reshape(
+            int((nocc_b * (nocc_b - 1)) / 2), int((nvir_b * (nvir_b - 1)) / 2))
+        temp_vv_bbbb[:, ab_b[1], ab_b[0]] = -U[s_bbbb:f_bbbb,I].reshape(
+            int((nocc_b * (nocc_b - 1)) / 2), int((nvir_b * (nvir_b - 1)) / 2))
+        temp_bbbb = np.zeros((nocc_b, nocc_b, nvir_b, nvir_b))
+        temp_bbbb[ij_b[0],ij_b[1], :, :] =  temp_vv_bbbb
+        temp_bbbb[ij_b[1],ij_b[0], :, :] = -temp_vv_bbbb
+        U_bbbb = temp_bbbb.reshape(-1).copy()
+
+        U_sq = U[:,I].copy()**2
+        ind_idx = np.argsort(-U_sq)
+        U_sq = U_sq[ind_idx]
+        U_sorted = U[ind_idx,I].copy()
+
+        U_sq_aaaa = U_aaaa.copy()**2
+        U_sq_bbbb = U_bbbb.copy()**2
+        ind_idx_aaaa = np.argsort(-U_sq_aaaa)
+        ind_idx_bbbb = np.argsort(-U_sq_bbbb)
+        U_sq_aaaa = U_sq_aaaa[ind_idx_aaaa]
+        U_sq_bbbb = U_sq_bbbb[ind_idx_bbbb]
+        U_sorted_aaaa = U_aaaa[ind_idx_aaaa].copy()
+        U_sorted_bbbb = U_bbbb[ind_idx_bbbb].copy()
+
+        U_sorted = U_sorted[U_sq > evec_print_tol**2]
+        ind_idx = ind_idx[U_sq > evec_print_tol**2]
+        U_sorted_aaaa = U_sorted_aaaa[U_sq_aaaa > evec_print_tol**2]
+        U_sorted_bbbb = U_sorted_bbbb[U_sq_bbbb > evec_print_tol**2]
+        ind_idx_aaaa = ind_idx_aaaa[U_sq_aaaa > evec_print_tol**2]
+        ind_idx_bbbb = ind_idx_bbbb[U_sq_bbbb > evec_print_tol**2]
+
+        singles_aa_idx = []
+        singles_bb_idx = []
+        doubles_aaaa_idx = []
+        doubles_ab_idx = []
+        doubles_bbbb_idx = []
+        singles_aa_val = []
+        singles_bb_val = []
+        doubles_ab_val = []
+        iter_idx = 0
+        for orb_idx in ind_idx:
+
+            if orb_idx in range(s_aa,f_aa):
+                i_idx = orb_idx//nvir_a
+                a_idx = orb_idx % nvir_a
+                singles_aa_idx.append((i_idx + 1, a_idx + 1 + nocc_a))
+                singles_aa_val.append(U_sorted[iter_idx])
+
+            if orb_idx in range(s_bb,f_bb):
+                ia_idx = orb_idx - s_bb
+                i_idx = ia_idx//nvir_b
+                a_idx = ia_idx % nvir_b
+                singles_bb_idx.append((i_idx + 1, a_idx + 1 + nocc_b))
+                singles_bb_val.append(U_sorted[iter_idx])
+
+            if orb_idx in range(s_ab,f_ab):
+                ijab_idx = orb_idx - s_ab
+                ab_rem = ijab_idx % (nvir_b*nvir_a)
+                ij_rem = ijab_idx//(nvir_b*nvir_a)
+                i_idx = ij_rem//nocc_a
+                j_idx = ij_rem % nocc_a
+                a_idx = ab_rem//nvir_a
+                b_idx = ab_rem % nvir_a
+                doubles_ab_idx.append((i_idx + 1, j_idx + 1, a_idx + 1 + nocc_a, b_idx + 1 + nocc_b))
+                doubles_ab_val.append(U_sorted[iter_idx])
+
+            iter_idx += 1
+
+        for orb_aaaa in ind_idx_aaaa:
+            ab_rem = orb_aaaa % (nvir_a*nvir_a)
+            ij_rem = orb_aaaa//(nvir_a*nvir_a)
+            i_idx = ij_rem//nocc_a
+            j_idx = ij_rem % nocc_a
+            a_idx = ab_rem//nvir_a
+            b_idx = ab_rem % nvir_a
+            doubles_aaaa_idx.append((i_idx + 1, j_idx + 1, a_idx + 1 + nocc_a, b_idx + 1 + nocc_a))
+
+        for orb_bbbb in ind_idx_bbbb:
+            ab_rem = orb_bbbb % (nvir_b*nvir_b)
+            ij_rem = orb_bbbb//(nvir_b*nvir_b)
+            i_idx = ij_rem//nocc_b
+            j_idx = ij_rem % nocc_b
+            a_idx = ab_rem//nvir_b
+            b_idx = ab_rem % nvir_b
+            doubles_bbbb_idx.append((i_idx + 1, j_idx + 1, a_idx + 1 + nocc_b, b_idx + 1 + nocc_b))
+
+        doubles_aaaa_val = list(U_sorted_aaaa)
+        doubles_bbbb_val = list(U_sorted_bbbb)
+
+        logger.info(adc, '%s | root %d | Energy (eV) = %12.8f | norm(1p1h)  = %6.4f | norm(2p2h) = %6.4f ',
+                    adc.method, I, adc.E[I]*27.2114, U1dotU1, U2dotU2)
+
+        if singles_aa_val:
+            logger.info(adc, "\n1p1h(alpha|alpha) block: ")
+            logger.info(adc, "     i     a     U(i,a)")
+            logger.info(adc, "-----------------------")
+            for idx, print_singles in enumerate(singles_aa_idx):
+                logger.info(adc, '  %4d  %4d %7.4f', print_singles[0], print_singles[1], singles_aa_val[idx])
+
+        if singles_bb_val:
+            logger.info(adc, "\n1p1h(beta|beta) block: ")
+            logger.info(adc, "     i     a     U(i,a)")
+            logger.info(adc, "-----------------------")
+            for idx, print_singles in enumerate(singles_bb_idx):
+                logger.info(adc, '  %4d  %4d %7.4f', print_singles[0], print_singles[1], singles_bb_val[idx])
+
+        if doubles_aaaa_val:
+            logger.info(adc, "\n2p2h(alpha|alpha|alpha|alpha) block: ")
+            logger.info(adc, "     i     j     a     b     U(i,j,a,b)")
+            logger.info(adc, "---------------------------------------")
+            for idx, print_doubles in enumerate(doubles_aaaa_idx):
+                logger.info(adc, '  %4d  %4d  %4d  %4d  %7.4f',
+                            print_doubles[0], print_doubles[1], print_doubles[2], print_doubles[3], doubles_aaaa_val[idx])
+
+        if doubles_ab_val:
+            logger.info(adc, "\n2p2h(alpha|beta|alpha|beta) block: ")
+            logger.info(adc, "     i     j     a     b     U(i,j,a,b)")
+            logger.info(adc, "---------------------------------------")
+            for idx, print_doubles in enumerate(doubles_ab_idx):
+                logger.info(adc, '  %4d  %4d  %4d  %4d  %7.4f',
+                            print_doubles[0], print_doubles[1], print_doubles[2], print_doubles[3], doubles_ab_val[idx])
+
+        if doubles_bbbb_val:
+            logger.info(adc, "\n2p2h(beta|beta|beta|beta) block: ")
+            logger.info(adc, "     i     j     a     b     U(i,j,a,b)")
+            logger.info(adc, "---------------------------------------")
+            for idx, print_doubles in enumerate(doubles_bbbb_idx):
+                logger.info(adc, '  %4d  %4d  %4d  %4d  %7.4f',
+                            print_doubles[0], print_doubles[1], print_doubles[2], print_doubles[3], doubles_bbbb_val[idx])
+
+        logger.info(adc,
+            "***************************************************************************************\n")
+
+            
 def analyze_spec_factor(adc):
     X_aa, X_bb = adc.X
 
@@ -23001,6 +23189,13 @@ def get_properties(adc, nroots=1):
 
 def analyze(myadc):
 
+    header = ("\n*************************************************************"
+              "\n           Eigenvector analysis summary"
+              "\n*************************************************************")
+    logger.info(myadc, header)
+
+    myadc.analyze_eigenvector()
+
     if myadc.compute_properties:
 
         header = (
@@ -23115,26 +23310,83 @@ class UADCEE(uadc.UADC):
     get_spin_square = get_spin_square
     make_rdm1 = make_rdm1
     get_properties = get_properties
+    analyze_eigenvector = analyze_eigenvector
 
     analyze_spec_factor = analyze_spec_factor
     analyze = analyze
 
-    def get_init_guess(self, nroots=1, diag=None, ascending=True):
-        if diag is None:
-            diag = self.get_diag()
-        idx = None
-        if ascending:
-            idx = np.argsort(diag)
+    def get_init_guess(self, nroots=1, diag=None, ascending=True, type=None, eris=None):
+        if type == "cis":
+            nocc_a = self.nocc_a
+            nocc_b = self.nocc_b
+            nvir_a = self.nvir_a
+            nvir_b = self.nvir_b
+            n_singles_a = nocc_a * nvir_a
+            dim_a = int(n_singles_a)
+            n_singles_b = nocc_b * nvir_b
+            dim_b = int(n_singles_b)
+            n_doubles_aaaa = nocc_a * (nocc_a - 1) * nvir_a * (nvir_a - 1) // 4
+            n_doubles_abab = nocc_a * nocc_b * nvir_a * nvir_b
+            n_doubles_bbbb = nocc_b * (nocc_b - 1) * nvir_b * (nvir_b - 1) // 4
+            dim = int(n_singles_a + n_singles_b + n_doubles_aaaa + n_doubles_abab + n_doubles_bbbb)
+
+            M_ia_jb_a = np.zeros((dim_a, dim_a))
+            M_ia_jb_b = np.zeros((dim_b, dim_b))
+            s_aa = 0
+            f_aa = dim_a
+            s_bb = f_aa
+            f_bb = dim_b + s_bb
+
+            if eris is None:
+                eris = self.transform_integrals()
+
+            d_ai_a = self.mo_energy_a[nocc_a:][:, None] - self.mo_energy_a[:nocc_a]
+            np.fill_diagonal(M_ia_jb_a, d_ai_a.transpose().reshape(-1))
+            M_ia_jb_a = M_ia_jb_a.reshape(nocc_a, nvir_a, nocc_a, nvir_a).copy()
+
+            d_ai_b = self.mo_energy_b[nocc_b:][:, None] - self.mo_energy_b[:nocc_b]
+            np.fill_diagonal(M_ia_jb_b, d_ai_b.transpose().reshape(-1))
+
+            M_ia_jb_b = M_ia_jb_b.reshape(nocc_b, nvir_b, nocc_b, nvir_b).copy()
+            M_ia_jb_a -= lib.einsum('ijba->iajb', eris.oovv, optimize=True).copy()
+            M_ia_jb_a += lib.einsum('jbai->iajb', eris.ovvo, optimize=True)
+            M_ia_jb_b -= lib.einsum('ijba->iajb', eris.OOVV, optimize=True).copy()
+            M_ia_jb_b += lib.einsum('jbai->iajb', eris.OVVO, optimize=True)
+            M_aabb = lib.einsum('jbai->iajb', eris.OVvo, optimize=True).copy()
+            M_ia_jb_a = M_ia_jb_a.reshape(n_singles_a, n_singles_a)
+            M_ia_jb_b = M_ia_jb_b.reshape(n_singles_b, n_singles_b)
+            M_aabb = M_aabb.reshape(n_singles_a, n_singles_b)
+
+            M_f = np.zeros((dim_a + dim_b, dim_a + dim_b))
+            M_f[s_aa:f_aa, s_aa:f_aa] = M_ia_jb_a
+            M_f[s_bb:f_bb, s_bb:f_bb] = M_ia_jb_b
+            M_f[s_aa:f_aa, s_bb:f_bb] = M_aabb
+            M_f[s_bb:f_bb, s_aa:f_aa] = M_aabb.T
+
+            from scipy.linalg import eigh
+            uu, vecs = eigh(M_f)
+            vecs=vecs[:,:nroots]
+            if not ascending:
+                vecs = vecs[:, ::-1]
+            g = np.vstack([vecs, np.zeros((dim-dim_a-dim_b, vecs.shape[1]), dtype=vecs.dtype)])
         else:
-            idx = np.argsort(diag)[::-1]
-        guess = np.zeros((diag.shape[0], nroots))
-        min_shape = min(diag.shape[0], nroots)
-        guess[:min_shape, :min_shape] = np.identity(min_shape)
-        g = np.zeros((diag.shape[0], nroots))
-        g[idx] = guess.copy()
+            if diag is None:
+                diag = self.get_diag()
+            idx = None
+            if ascending:
+                idx = np.argsort(diag)
+            else:
+                idx = np.argsort(diag)[::-1]
+            guess = np.zeros((diag.shape[0], nroots))
+            min_shape = min(diag.shape[0], nroots)
+            guess[:min_shape, :min_shape] = np.identity(min_shape)
+            g = np.zeros((diag.shape[0], nroots))
+            g[idx] = guess.copy()
+        
         guess = []
         for p in range(g.shape[1]):
             guess.append(g[:, p])
+
         return guess
 
     def gen_matvec(self, imds=None, eris=None):

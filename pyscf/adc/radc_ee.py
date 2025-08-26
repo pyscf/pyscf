@@ -1092,7 +1092,291 @@ def matvec(adc, M_ab=None, eris=None):
 
     return sigma_
 
+
+def get_trans_moments(adc):
+
+    nmo  = adc.nmo
+    T = []
+    for orb in range(nmo):
+
+        T_a = get_trans_moments_orbital(adc,orb)
+        T.append(T_a)
+
+    T = np.array(T)
+    return T
+
+
+def get_trans_moments_orbital(adc, orb):
+
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+        raise NotImplementedError(adc.method)
+
+    method = adc.method
+
+    t2_1 = adc.t2[0][:]
+    if (adc.approx_trans_moments is False or adc.method == "adc(3)"):
+        t1_2 = adc.t1[0][:]
+
+    nocc = adc._nocc
+    nvir = adc._nvir
+
+    n_singles = nvir
+    n_doubles = nocc * nvir * nvir
+
+    dim = n_singles + n_doubles
+
+    idn_vir = np.identity(nvir)
+
+    s1 = 0
+    f1 = n_singles
+    s2 = f1
+    f2 = s2 + n_doubles
+
+    T = np.zeros((dim))
+
+######## ADC(2) part  ############################################
+
+    if orb < nocc:
+
+        if (adc.approx_trans_moments is False or adc.method == "adc(3)"):
+            T[s1:f1] = -t1_2[orb,:]
+
+        t2_1_t = -t2_1.transpose(1,0,2,3)
+
+        T[s2:f2] += t2_1_t[:,orb,:,:].reshape(-1)
+
+    else:
+
+        T[s1:f1] += idn_vir[(orb-nocc), :]
+        T[s1:f1] -= 0.25*lib.einsum('klc,klac->a',t2_1[:,:,(orb-nocc),:], t2_1, optimize=True)
+        T[s1:f1] -= 0.25*lib.einsum('lkc,lkac->a',t2_1[:,:,(orb-nocc),:], t2_1, optimize=True)
+
+        T[s1:f1] -= 0.25*lib.einsum('klc,klac->a',t2_1[:,:,(orb-nocc),:], t2_1, optimize=True)
+        T[s1:f1] += 0.25*lib.einsum('lkc,klac->a',t2_1[:,:,(orb-nocc),:], t2_1, optimize=True)
+        T[s1:f1] += 0.25*lib.einsum('klc,lkac->a',t2_1[:,:,(orb-nocc),:], t2_1, optimize=True)
+        T[s1:f1] -= 0.25*lib.einsum('lkc,lkac->a',t2_1[:,:,(orb-nocc),:], t2_1, optimize=True)
+
+######### ADC(3) 2p-1h  part  ############################################
+
+    if (adc.method == "adc(2)-x" and adc.approx_trans_moments is False) or (adc.method == "adc(3)"):
+
+        t2_2 = adc.t2[1][:]
+
+        if orb < nocc:
+
+            t2_2_t = -t2_2.transpose(1,0,2,3)
+
+            T[s2:f2] += t2_2_t[:,orb,:,:].reshape(-1)
+
+########### ADC(3) 1p part  ############################################
+
+    if (method=='adc(3)'):
+
+        t2_2 = adc.t2[1][:]
+        if (adc.approx_trans_moments is False):
+            t1_3 = adc.t1[1]
+
+        if orb < nocc:
+            T[s1:f1] += 0.5*lib.einsum('kac,ck->a',t2_1[:,orb,:,:], t1_2.T,optimize=True)
+            T[s1:f1] -= 0.5*lib.einsum('kac,ck->a',t2_1[orb,:,:,:], t1_2.T,optimize=True)
+            T[s1:f1] -= 0.5*lib.einsum('kac,ck->a',t2_1[orb,:,:,:], t1_2.T,optimize=True)
+            if (adc.approx_trans_moments is False):
+                T[s1:f1] -= t1_3[orb,:]
+
+        else:
+
+            T[s1:f1] -= 0.25*lib.einsum('klc,klac->a',t2_1[:,:,(orb-nocc),:], t2_2, optimize=True)
+            T[s1:f1] -= 0.25*lib.einsum('lkc,lkac->a',t2_1[:,:,(orb-nocc),:], t2_2, optimize=True)
+
+            T[s1:f1] -= 0.25*lib.einsum('klac,klc->a',t2_1, t2_2[:,:,(orb-nocc),:],optimize=True)
+            T[s1:f1] -= 0.25*lib.einsum('lkac,lkc->a',t2_1, t2_2[:,:,(orb-nocc),:],optimize=True)
+
+            T[s1:f1] -= 0.25*lib.einsum('klc,klac->a',t2_1[:,:,(orb-nocc),:], t2_2, optimize=True)
+            T[s1:f1] += 0.25*lib.einsum('klc,lkac->a',t2_1[:,:,(orb-nocc),:], t2_2, optimize=True)
+            T[s1:f1] += 0.25*lib.einsum('lkc,klac->a',t2_1[:,:,(orb-nocc),:], t2_2, optimize=True)
+            T[s1:f1] -= 0.25*lib.einsum('lkc,lkac->a',t2_1[:,:,(orb-nocc),:], t2_2, optimize=True)
+
+            T[s1:f1] -= 0.25*lib.einsum('klac,klc->a',t2_1, t2_2[:,:,(orb-nocc),:],optimize=True)
+            T[s1:f1] += 0.25*lib.einsum('klac,lkc->a',t2_1, t2_2[:,:,(orb-nocc),:],optimize=True)
+            T[s1:f1] += 0.25*lib.einsum('lkac,klc->a',t2_1, t2_2[:,:,(orb-nocc),:],optimize=True)
+            T[s1:f1] -= 0.25*lib.einsum('lkac,lkc->a',t2_1, t2_2[:,:,(orb-nocc),:],optimize=True)
+
+        del t2_2
+    del t2_1
+
+    T_aaa = T[n_singles:].reshape(nocc,nvir,nvir).copy()
+    T_aaa = T_aaa - T_aaa.transpose(0,2,1)
+    T[n_singles:] += T_aaa.reshape(-1)
+
+    return T
+
+
+def analyze_eigenvector(adc):
+
+    nocc = adc._nocc
+    nvir = adc._nvir
+
+    n_singles = nocc*nvir
+    evec_print_tol = adc.evec_print_tol
+    U = adc.U
+
+    logger.info(adc, "Number of occupied orbitals = %d", nocc)
+    logger.info(adc, "Number of virtual orbitals =  %d", nvir)
+    logger.info(adc, "Print eigenvector elements > %f\n", evec_print_tol)
+
+    for I in range(U.shape[1]):
+        U1 = U[:n_singles,I]
+        U2 = U[n_singles:,I].reshape(nocc,nocc,nvir,nvir)
+        U1dotU1 = np.dot(U1, U1)
+        U2dotU2 =  0.75*np.dot(U2.ravel(), U2.ravel()) - \
+        0.25*np.dot(U2.ravel(), U2.transpose(0,1,3,2).ravel())- \
+        0.25*np.dot(U2.ravel(), U2.transpose(1,0,2,3).ravel()) + \
+        0.25 * np.dot(U2.ravel(), U2.transpose(1,0,3,2).ravel())
+
+        U_sq = U[:,I].copy()**2
+        ind_idx = np.argsort(-U_sq)
+        U_sq = U_sq[ind_idx]
+        U_sorted = U[ind_idx,I].copy()
+
+        U_sorted = U_sorted[U_sq > evec_print_tol**2]
+        ind_idx = ind_idx[U_sq > evec_print_tol**2]
+
+        singles_idx = []
+        doubles_idx = []
+        singles_val = []
+        doubles_val = []
+        iter_num = 0
+
+        for orb_idx in ind_idx:
+
+            if orb_idx < n_singles:
+                i_idx = orb_idx//nvir
+                a_idx = orb_idx % nvir
+                singles_idx.append((i_idx + 1, a_idx + 1))
+                singles_val.append(U_sorted[iter_num])
+
+            if orb_idx >= n_singles:
+                ijab_idx = orb_idx - n_singles
+                ab_rem = ijab_idx % (nvir*nvir)
+                ij_idx = ijab_idx//(nvir*nvir)
+                a_idx = ab_rem//nvir
+                b_idx = ab_rem % nvir
+                i_idx = ij_idx//nocc
+                j_idx = ij_idx % nocc
+                doubles_idx.append((i_idx + 1, j_idx + 1, a_idx + 1 + nocc, b_idx + 1 + nocc))
+                doubles_val.append(U_sorted[iter_num])
+
+            iter_num += 1
+
+        logger.info(adc,'%s | root %d | Energy (eV) = %12.8f | norm(1p1h)  = %6.4f | norm(2p2h) = %6.4f ',
+                    adc.method, I, adc.E[I]*27.2114, U1dotU1, U2dotU2)
+
+        if singles_val:
+            logger.info(adc, "\n1p1h block: ")
+            logger.info(adc, "     i     a     U(i,a)")
+            logger.info(adc, "------------------")
+            for idx, print_singles in enumerate(singles_idx):
+                logger.info(adc, '  %4d   %4d   %7.4f', print_singles[0], print_singles[1], singles_val[idx])
+
+        if doubles_val:
+            logger.info(adc, "\n2p2h block: ")
+            logger.info(adc, "     i     j     a     b     U(i,j,a,b)")
+            logger.info(adc, "-------------------------------")
+            for idx, print_doubles in enumerate(doubles_idx):
+                logger.info(adc, '  %4d  %4d  %4d  %4d  %7.4f',
+                            print_doubles[0], print_doubles[1], print_doubles[2], print_doubles[3], doubles_val[idx])
+
+        logger.info(adc,
+            "***************************************************************************************\n")
+
+
+def analyze_spec_factor(adc):
+
+    X = adc.X
+    X_2 = (X.copy()**2)*2
+    thresh = adc.spec_factor_print_tol
+
+    logger.info(adc, "Print spectroscopic factors > %E\n", adc.spec_factor_print_tol)
+
+    for i in range(X_2.shape[1]):
+
+        sort = np.argsort(-X_2[:,i])
+        X_2_row = X_2[:,i]
+        X_2_row = X_2_row[sort]
+
+        if not adc.mol.symmetry:
+            sym = np.repeat(['A'], X_2_row.shape[0])
+        else:
+            sym = [symm.irrep_id2name(adc.mol.groupname, x) for x in adc._scf.mo_coeff.orbsym]
+            sym = np.array(sym)
+
+            sym = sym[sort]
+
+        spec_Contribution = X_2_row[X_2_row > thresh]
+        index_mo = sort[X_2_row > thresh]+1
+
+        if np.sum(spec_Contribution) == 0.0:
+            continue
+
+        logger.info(adc, '%s | root %d | Energy (eV) = %12.8f \n',
+                adc.method, i, adc.E[i]*27.2114)
+        logger.info(adc, "     HF MO     Spec. Contribution     Orbital symmetry")
+        logger.info(adc, "-----------------------------------------------------------")
+
+        for c in range(index_mo.shape[0]):
+            logger.info(adc, '     %3.d          %10.8f                %s',
+                        index_mo[c], spec_Contribution[c], sym[c])
+
+        logger.info(adc, '\nPartial spec. factor sum = %10.8f', np.sum(spec_Contribution))
+        logger.info(adc,
+        "***********************************************************\n")
+
+
+def renormalize_eigenvectors(adc, nroots=1):
+
+    nocc = adc._nocc
+    nvir = adc._nvir
+
+    n_singles = nocc*nvir
+
+    U = adc.U
+
+    for I in range(U.shape[1]):
+        U1 = U[:n_singles,I]
+        U2 = U[n_singles:,I].reshape(nocc,nocc,nvir,nvir)
+        UdotU = np.dot(U1, U1) + 0.75*np.dot(U2.ravel(), U2.ravel()) - \
+            0.25*np.dot(U2.ravel(), U2.transpose(0,1,3,2).ravel())- \
+            0.25*np.dot(U2.ravel(), U2.transpose(1,0,2,3).ravel()) + \
+            0.25 * np.dot(U2.ravel(), U2.transpose(1,0,3,2).ravel())
+        U[:,I] /= np.sqrt(UdotU)
+        print(f"UdotU is {UdotU}")
+
+    return U
+
+
+def get_properties(adc, nroots=1):
+
+    #Transition moments
+    T = adc.get_trans_moments()
+
+    #Spectroscopic amplitudes
+    U = adc.renormalize_eigenvectors(nroots)
+    X = np.dot(T, U).reshape(-1, nroots)
+
+    #Spectroscopic factors
+    P = 2.0*lib.einsum("pi,pi->i", X, X)
+
+    return P,X
+
+
 def analyze(myadc):
+
+    header = ("\n*************************************************************"
+              "\n           Eigenvector analysis summary"
+              "\n*************************************************************")
+    logger.info(myadc, header)
+
+    myadc.analyze_eigenvector()
 
     if myadc.compute_properties:
 
@@ -1102,6 +1386,177 @@ def analyze(myadc):
             "\n*************************************************************")
         logger.info(myadc, header)
 
+        myadc.analyze_spec_factor()
+
+def make_rdm1(adc):
+    cput0 = (logger.process_clock(), logger.perf_counter())
+    log = logger.Logger(adc.stdout, adc.verbose)
+
+    nroots = adc.U.shape[1]
+    #U = adc.U
+    U = adc.renormalize_eigenvectors(nroots)
+
+    list_rdm1 = []
+
+    for i in range(U.shape[1]):
+        rdm1 = make_rdm1_eigenvectors(adc, U[:,i], U[:,i])
+        list_rdm1.append(rdm1)
+
+    cput0 = log.timer_debug1("completed OPDM calculation", *cput0)
+    return list_rdm1
+
+
+def make_rdm1_eigenvectors(adc, L, R):
+
+    L = np.array(L).ravel()
+    R = np.array(R).ravel()
+
+    t2_ce = adc.t1[0][:]
+    t1_ccee = adc.t2[0][:]
+
+    einsum = lib.einsum
+    einsum_type = True
+
+    nocc = adc._nocc
+    nvir = adc._nvir
+    nmo = nocc + nvir
+
+    n_singles = nocc * nvir
+    n_doubles = nocc * nocc * nvir * nvir
+
+    s1 = 0
+    f1 = n_singles
+    s2 = f1
+    f2 = s2 + n_doubles
+
+    rdm1  = np.zeros((nmo,nmo))
+    ncore = nocc
+
+    L1 = L[s1:f1]
+    L2 = L[s2:f2]
+    R1 = R[s1:f1]
+    R2 = R[s2:f2]
+
+    L1 = L1.reshape(nocc,nvir)
+    R1 = R1.reshape(nocc,nvir)
+    L2 = L2.reshape(nocc,nocc,nvir,nvir)
+    R2 = R2.reshape(nocc,nocc,nvir,nvir)
+
+############# block- ij
+    ### 000 ###
+    rdm1[:nocc, :nocc] =- einsum('Ja,Ia->IJ', L1, R1, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += 2 * einsum('ia,ia,IJ->IJ', L1, R1, np.identity(ncore), optimize = einsum_type)
+    
+    ### 101 ###
+    rdm1[:nocc, :nocc] -= 1/2 * einsum('Jiab,Iiab->IJ', L2, R2, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += 1/2 * einsum('ijab,ijab,IJ->IJ', L2, R2, np.identity(ncore), optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= einsum('Jiab,Iiab->IJ', L2, R2, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += einsum('ijab,ijab,IJ->IJ', L2, R2, np.identity(ncore), optimize = einsum_type)
+    '''
+    ### 101/2 ###
+    rdm1[:nocc, :nocc] -= einsum('Jiab,Iiab->IJ', L2, R2, optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= einsum('Jiab,iIba->IJ', L2, R2, optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= einsum('iJab,Iiba->IJ', L2, R2, optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= einsum('iJab,iIab->IJ', L2, R2, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += 2 * einsum('ijab,ijab,IJ->IJ', L2, R2, np.identity(ncore), optimize = einsum_type)
+    rdm1[:nocc, :nocc] += 2 * einsum('ijab,jiba,IJ->IJ', L2, R2, np.identity(ncore), optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= 1/2 * einsum('Jiab,Iiab->IJ', L2, R2, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += 1/2 * einsum('ijab,ijab,IJ->IJ', L2, R2, np.identity(ncore), optimize = einsum_type)
+    '''
+    ### 020 ###
+    rdm1[:nocc, :nocc] += einsum('Ja,ia,ijbc,Ijbc->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= 1/2 * einsum('Ja,ia,ijbc,Ijcb->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= 2 * einsum('Ja,ib,Ijac,ijbc->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += einsum('Ja,ib,Ijac,ijcb->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += einsum('Ja,ib,Ijca,ijbc->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= 1/2 * einsum('Ja,ib,Ijca,ijcb->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += einsum('ia,Ia,ijbc,Jjbc->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= 1/2 * einsum('ia,Ia,ijbc,Jjcb->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= 2 * einsum('ia,Ib,ijac,Jjbc->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += einsum('ia,Ib,ijac,Jjcb->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += einsum('ia,Ib,ijca,Jjbc->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= 1/2 * einsum('ia,Ib,ijca,Jjcb->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= 4 * einsum('ia,ia,Ijbc,Jjbc->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += 2 * einsum('ia,ia,Ijbc,Jjcb->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += 2 * einsum('ia,ib,Ijac,Jjbc->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= einsum('ia,ib,Ijac,Jjcb->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= einsum('ia,ib,Ijca,Jjbc->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += 2 * einsum('ia,ib,Ijca,Jjcb->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += 2 * einsum('ia,ja,Iibc,Jjbc->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= einsum('ia,ja,Iibc,Jjcb->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= einsum('ia,jb,Iiac,Jjbc->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += 2 * einsum('ia,jb,Iiac,Jjcb->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] += 2 * einsum('ia,jb,Iica,Jjbc->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, :nocc] -= 4 * einsum('ia,jb,Iica,Jjcb->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+
+
+############# block- ab
+    ### 000 ###
+    rdm1[nocc:, nocc:]  = einsum('iA,iB->AB', L1, R1, optimize = einsum_type)
+    
+    ### 101 ###
+    rdm1[nocc:, nocc:] += 1/2 * einsum('ijAa,ijBa->AB', L2, R2, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += einsum('ijAa,ijBa->AB', L2, R2, optimize = einsum_type)
+    '''
+    ### 101/2 ###
+    rdm1[nocc:, nocc:] += einsum('ijAa,ijBa->AB', L2, R2, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += einsum('ijAa,jiaB->AB', L2, R2, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += einsum('ijaA,ijaB->AB', L2, R2, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += einsum('ijaA,jiBa->AB', L2, R2, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += 1/2 * einsum('ijAa,ijBa->AB', L2, R2, optimize = einsum_type)
+    '''
+    ### 020 ###
+    rdm1[nocc:, nocc:] -= einsum('iA,ia,jkab,jkBb->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += 1/2 * einsum('iA,ia,jkab,kjBb->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += 2 * einsum('iA,ja,ikBb,jkab->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] -= einsum('iA,ja,ikBb,jkba->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] -= einsum('iA,ja,kiBb,jkab->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += 1/2 * einsum('iA,ja,kiBb,jkba->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] -= einsum('ia,iB,jkab,jkAb->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += 1/2 * einsum('ia,iB,jkab,kjAb->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += 4 * einsum('ia,ia,jkAb,jkBb->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] -= 2 * einsum('ia,ia,jkAb,kjBb->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] -= 2 * einsum('ia,ib,jkBa,jkAb->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += einsum('ia,ib,jkBa,kjAb->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += 2 * einsum('ia,jB,ikab,jkAb->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] -= einsum('ia,jB,ikab,kjAb->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] -= einsum('ia,jB,ikba,jkAb->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += 1/2 * einsum('ia,jB,ikba,kjAb->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] -= 2 * einsum('ia,ja,ikBb,jkAb->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += einsum('ia,ja,ikBb,kjAb->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += einsum('ia,ja,kiBb,jkAb->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] -= 2 * einsum('ia,ja,kiBb,kjAb->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += einsum('ia,jb,ikBa,jkAb->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] -= 2 * einsum('ia,jb,ikBa,kjAb->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] -= 2 * einsum('ia,jb,kiBa,jkAb->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += 4 * einsum('ia,jb,kiBa,kjAb->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+
+
+############# block- ia
+    ### 100 & 001 ###
+    rdm1[:nocc, nocc:]  = einsum('ia,IiAa->IA', L1, R2, optimize = einsum_type)
+    rdm1[:nocc, nocc:] += einsum('ia,IiAa->IA', L1, R2, optimize = einsum_type)
+    ### 110 & 011 ###
+    rdm1[:nocc, nocc:] -= einsum('ijab,Ia,ijAb->IA', L2, R1, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, nocc:] -= einsum('ijab,iA,Ijab->IA', L2, R1, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, nocc:] += einsum('ijab,ia,IjAb->IA', L2, R1, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, nocc:] += einsum('ijab,jb,IiAa->IA', L2, R1, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, nocc:] -= einsum('ijab,jb,iIAa->IA', L2, R1, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, nocc:] -= einsum('ijab,Ia,ijAb->IA', L2, R1, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, nocc:] -= einsum('ijab,iA,Ijab->IA', L2, R1, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, nocc:] += 2 * einsum('ijab,ia,IjAb->IA', L2, R1, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc, nocc:] -= einsum('ijab,ia,jIAb->IA', L2, R1, t1_ccee, optimize = einsum_type)
+    ### 020 ###
+    rdm1[:nocc, nocc:] -= einsum('ia,Ia,iA->IA', L1, R1, t2_ce, optimize = einsum_type)
+    rdm1[:nocc, nocc:] -= einsum('ia,iA,Ia->IA', L1, R1, t2_ce, optimize = einsum_type)
+    rdm1[:nocc, nocc:] += 2 * einsum('ia,ia,IA->IA', L1, R1, t2_ce, optimize = einsum_type)
+
+############# block- ai
+    rdm1[nocc:,:nocc] = rdm1[:nocc,nocc:].T
+
+    return rdm1
+
+    
 class RADCEE(radc.RADC):
     '''restricted ADC for EE energies and spectroscopic amplitudes
 
@@ -1192,24 +1647,69 @@ class RADCEE(radc.RADC):
     matvec = matvec
     get_diag = get_diag
 
+    renormalize_eigenvectors = renormalize_eigenvectors
     analyze = analyze
+    make_rdm1 = make_rdm1
+    analyze_eigenvector = analyze_eigenvector
+    analyze_spec_factor = analyze_spec_factor
+    get_properties = get_properties
 
-    def get_init_guess(self, nroots=1, diag=None, ascending = True):
-        if diag is None :
-            diag = self.get_diag()
-        idx = None
-        if ascending:
-            idx = np.argsort(diag)
+    def get_init_guess(self, nroots=1, diag=None, ascending=True, type=None, eris=None):
+        if (type=="cis"):
+            print("Generating CIS initial guess for eigenvector")
+            
+            ncore = self._nocc
+            nextern = self._nvir
+            n_singles = ncore * nextern
+            n_doubles = ncore * ncore * nextern * nextern
+
+            einsum = lib.einsum
+            einsum_type = True
+
+            if eris is None:
+                eris = self.transform_integrals()
+
+            v_ccee = eris.oovv
+            v_ceec = eris.ovvo
+
+            M_ab = np.zeros((ncore*nextern, ncore*nextern))
+
+            ####000#####################
+            d_ai_a = self.mo_energy[ncore:][:,None] - self.mo_energy[:ncore]
+            np.fill_diagonal(M_ab, d_ai_a.transpose().reshape(-1))
+            M_ab = M_ab.reshape(ncore,nextern,ncore,nextern).copy()
+
+            ####010#####################
+            M_ab -= einsum('ILAD->IDLA', v_ccee, optimize = einsum_type).copy()
+            M_ab += einsum('LADI->IDLA', v_ceec, optimize = einsum_type).copy()
+
+            M_ab += einsum('LADI->IDLA', v_ceec, optimize = einsum_type).copy()
+
+            M_ab = M_ab.reshape(n_singles, n_singles)
+            from scipy.linalg import eigh
+            uu, vecs = eigh(M_ab)
+            vecs=vecs[:,:nroots]
+            if not ascending:
+                vecs = vecs[:, ::-1]
+            g = np.vstack([vecs, np.zeros((n_doubles, vecs.shape[1]), dtype=vecs.dtype)])
         else:
-            idx = np.argsort(diag)[::-1]
-        guess = np.zeros((diag.shape[0], nroots))
-        min_shape = min(diag.shape[0], nroots)
-        guess[:min_shape,:min_shape] = np.identity(min_shape)
-        g = np.zeros((diag.shape[0], nroots))
-        g[idx] = guess.copy()
+            if diag is None :
+                diag = self.get_diag()
+            idx = None
+            if ascending:
+                idx = np.argsort(diag)
+            else:
+                idx = np.argsort(diag)[::-1]
+            guess = np.zeros((diag.shape[0], nroots))
+            min_shape = min(diag.shape[0], nroots)
+            guess[:min_shape,:min_shape] = np.identity(min_shape)
+            g = np.zeros((diag.shape[0], nroots))
+            g[idx] = guess.copy()
+
         guess = []
         for p in range(g.shape[1]):
             guess.append(g[:,p])
+
         return guess
 
 

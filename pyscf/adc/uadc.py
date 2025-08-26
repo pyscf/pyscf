@@ -70,7 +70,12 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     imds = adc.get_imds(eris)
     matvec, diag = adc.gen_matvec(imds, eris)
 
-    guess = adc.get_init_guess(nroots, diag, ascending = True)
+    if guess is None:
+        guess = adc.get_init_guess(nroots, diag, ascending = True)
+    elif guess=="cis" and adc.method_type == "ee":
+        guess = adc.get_init_guess(nroots, diag, ascending = True, type="cis", eris=eris)
+    else:
+        raise NotImplementedError("Guess type not implemented")
 
     conv, adc.E, U = lib.linalg_helper.davidson1(
         lambda xs : [matvec(x) for x in xs],
