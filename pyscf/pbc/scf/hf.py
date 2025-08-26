@@ -563,6 +563,7 @@ class SCF(mol_hf.SCF):
 
     def reset(self, cell=None):
         '''Reset cell and relevant attributes associated to the old cell object'''
+        mol_hf.SCF.reset(self, cell)
         if cell is not None:
             self.cell = cell
         self.with_df.reset(cell)
@@ -931,6 +932,8 @@ class KohnShamDFT:
 
 
 class RHF(SCF):
+    '''PBC RHF at a single point (default: gamma point).
+    '''
 
     analyze = mol_hf.RHF.analyze
     spin_square = mol_hf.RHF.spin_square

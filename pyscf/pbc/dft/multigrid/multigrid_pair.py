@@ -945,11 +945,10 @@ class MultiGridNumInt(MultiGridNumInt_v1):
         self.rhoG = None
 
     def reset(self, cell=None):
+        MultiGridNumInt_v1.reset(self, cell)
+        self.task_list = None
         self.vpplocG_part1 = None
         self.rhoG = None
-        if self.task_list is not None:
-            self.task_list = None
-        MultiGridNumInt_v1.reset(self, cell=cell)
         return self
 
     @property
