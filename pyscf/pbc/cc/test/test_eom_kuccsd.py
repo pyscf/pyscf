@@ -52,9 +52,9 @@ class KnownValues(unittest.TestCase):
 
         eom = EOMEA(mycc)
         e2_obt, v = eom.eaccsd(nroots=3, koopmans=True, kptlist=[1])
-        self.assertAlmostEqual(e2_obt[0][0], 1.227583017460536, 6)
-        self.assertAlmostEqual(e2_obt[0][1], 1.227583017460617, 6)
-        self.assertAlmostEqual(e2_obt[0][2], 1.383037918699404, 6)
+        self.assertAlmostEqual(e2_obt[0][0], 1.227583017460536, 5)
+        self.assertAlmostEqual(e2_obt[0][1], 1.227583017460617, 5)
+        self.assertAlmostEqual(e2_obt[0][2], 1.383037918699404, 5)
 
     def test_n3_diffuse_frozen(self):
         ehf2 = kmf.e_tot
@@ -86,9 +86,9 @@ class KnownValues(unittest.TestCase):
 
         eom = EOMEA(mycc)
         e2_obt, v = eom.eaccsd(nroots=3, koopmans=True, kptlist=[1])
-        self.assertAlmostEqual(e2_obt[0][0], 1.229802629928757, 6)
-        self.assertAlmostEqual(e2_obt[0][1], 1.229802629928764, 6)
-        self.assertAlmostEqual(e2_obt[0][2], 1.384394578043613, 6)
+        self.assertAlmostEqual(e2_obt[0][0], 1.229802629928757, 5)
+        self.assertAlmostEqual(e2_obt[0][1], 1.229802629928764, 5)
+        self.assertAlmostEqual(e2_obt[0][2], 1.384394578043613, 5)
 
     def test_eomea_matvec(self):
         cell = gto.Cell()

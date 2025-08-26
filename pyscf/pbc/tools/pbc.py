@@ -234,6 +234,26 @@ def ifftk(g, mesh, expikr):
     '''
     return ifft(g, mesh) * expikr
 
+def _Gv_wrap_around(cell, Gv, k, mesh):
+    '''wrap around the high frequency k+G vectors into their lower frequency
+    counterparts. Important if you want the gamma point and k-point answers to
+    agree.
+    '''
+    b = cell.reciprocal_vectors()
+    #assert all(np.linalg.solve(b.T, k) < 1), 'k-point must be in first Brillouin zone'
+    kG = k + Gv
+    box_edge = np.einsum('i,ij->ij', mesh, b)
+    reduced_coords = np.linalg.solve(box_edge.T, kG.T).T
+    if cell.dimension >= 1:
+        kG[reduced_coords[:,0]> .5] -= box_edge[0]
+        kG[reduced_coords[:,0]<-.5] += box_edge[0]
+    if cell.dimension >= 2:
+        kG[reduced_coords[:,1]> .5] -= box_edge[1]
+        kG[reduced_coords[:,1]<-.5] += box_edge[1]
+    if cell.dimension == 3:
+        kG[reduced_coords[:,2]> .5] -= box_edge[2]
+        kG[reduced_coords[:,2]<-.5] += box_edge[2]
+    return kG
 
 def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
               wrap_around=True, omega=None, **kwargs):
@@ -332,37 +352,15 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         return coulG
 
     if abs(k).sum() > 1e-9:
-        kG = k + Gv
+        if wrap_around:
+            # Here we 'wrap around' the high frequency k+G vectors into their lower
+            # frequency counterparts.  Important if you want the gamma point and k-point
+            # answers to agree
+            kG = _Gv_wrap_around(cell, Gv, k, mesh)
+        else:
+            kG = k + Gv
     else:
         kG = Gv
-
-    equal2boundary = None
-    if wrap_around and abs(k).sum() > 1e-9:
-        equal2boundary = np.zeros(Gv.shape[0], dtype=bool)
-        # Here we 'wrap around' the high frequency k+G vectors into their lower
-        # frequency counterparts.  Important if you want the gamma point and k-point
-        # answers to agree
-        b = cell.reciprocal_vectors()
-        box_edge = np.einsum('i,ij->ij', np.asarray(mesh)//2+0.5, b)
-        assert (all(np.linalg.solve(box_edge.T, k).astype(int)==0))
-        reduced_coords = np.linalg.solve(box_edge.T, kG.T).T
-        on_edge_p1 = abs(reduced_coords - 1) < 1e-9
-        on_edge_m1 = abs(reduced_coords + 1) < 1e-9
-        if cell.dimension >= 1:
-            equal2boundary |= on_edge_p1[:,0]
-            equal2boundary |= on_edge_m1[:,0]
-            kG[reduced_coords[:,0]> 1] -= 2 * box_edge[0]
-            kG[reduced_coords[:,0]<-1] += 2 * box_edge[0]
-        if cell.dimension >= 2:
-            equal2boundary |= on_edge_p1[:,1]
-            equal2boundary |= on_edge_m1[:,1]
-            kG[reduced_coords[:,1]> 1] -= 2 * box_edge[1]
-            kG[reduced_coords[:,1]<-1] += 2 * box_edge[1]
-        if cell.dimension == 3:
-            equal2boundary |= on_edge_p1[:,2]
-            equal2boundary |= on_edge_m1[:,2]
-            kG[reduced_coords[:,2]> 1] -= 2 * box_edge[2]
-            kG[reduced_coords[:,2]<-1] += 2 * box_edge[2]
 
     absG2 = np.einsum('gi,gi->g', kG, kG)
     G0_idx = []
@@ -455,9 +453,6 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         else:
             raise NotImplementedError(f'dimension={cell.dimension} with '
                                       f'low_dim_ft_type={cell.low_dim_ft_type} is not supported')
-
-    if equal2boundary is not None:
-        coulG[equal2boundary] = 0
 
     # Scale the coulG kernel for attenuated Coulomb integrals.
     # * kwarg omega is used by RangeSeparatedJKBuilder which requires ewald probe charge
@@ -719,8 +714,7 @@ def super_cell(cell, ncopy, wrap_around=False):
     Ls = np.dot(Ts, a)
     supcell = cell.copy(deep=False)
     supcell.a = np.einsum('i,ij->ij', ncopy, a)
-    mesh = np.asarray(ncopy) * np.asarray(cell.mesh)
-    supcell.mesh = (mesh // 2) * 2 + 1
+    supcell.mesh = np.asarray(ncopy) * np.asarray(cell.mesh)
     if isinstance(cell.magmom, np.ndarray):
         supcell.magmom = cell.magmom.tolist() * np.prod(ncopy)
     else:

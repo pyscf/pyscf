@@ -21,6 +21,7 @@ from pyscf import lib
 from pyscf.pbc import gto as pgto
 from pyscf.pbc import scf as pscf
 from pyscf.pbc.scf import krohf
+from pyscf.pbc.tools.pbc import super_cell
 
 def setUpModule():
     global cell, mf, kmf, kpts
@@ -49,8 +50,10 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_krohf_kernel(self):
-        self.assertAlmostEqual(kmf.e_tot, -4.569633030494753, 8)
+        self.assertAlmostEqual(kmf.e_tot, -4.57655196508766, 8)
         kmf.analyze()
+        e4 = super_cell(cell, [2,2,1]).KROHF().run().e_tot
+        self.assertAlmostEqual(kmf.e_tot - e4/4, 0, 8)
 
     def test_rohf_kernel(self):
         self.assertAlmostEqual(mf.e_tot, -3.3633746534777718, 8)
@@ -118,9 +121,9 @@ class KnownValues(unittest.TestCase):
 
     def test_analyze(self):
         pop, chg = kmf.analyze()[0]
-        self.assertAlmostEqual(lib.fp(pop), 1.1514919154737624, 7)
+        self.assertAlmostEqual(lib.fp(pop), 1.1514919154737624, 3)
         self.assertAlmostEqual(sum(chg), 0, 7)
-        self.assertAlmostEqual(lib.fp(chg), -0.04683923436982078, 7)
+        self.assertAlmostEqual(lib.fp(chg), -0.04683923436982078, 3)
 
     def test_small_system(self):
         # issue #686

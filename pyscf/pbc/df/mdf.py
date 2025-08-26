@@ -138,6 +138,36 @@ class MDF(df.GDF):
         # mdf.mesh must be the mesh to generate cderi
         self.mesh = dfbuilder.mesh
 
+    def weighted_coulG(self, kpt=np.zeros(3), exx=False, mesh=None, omega=None):
+        # In PySCF-2.10 and earlier versions, certain contributions at the edges
+        # +/-Gmax +/- 0.5 were removed to restore symmetry between the PW bases
+        # in the MDF. Asymmetric PWs can introduce imaginary parts in the
+        # Coulomb energy terms. This error becomes larger when the energy cutoff
+        # for PWs is insufficient. The PW bases used in MDF typically cannot
+        # converge the Coulomb energy alone, leading to more significant errors
+        # for the asymmetric PWs. The screening of asymmetric PWs at the edges
+        # was implemented in the pbc.tools.pbc.get_coulG function. However, this
+        # treatment could cause inconsistency between supercell gamma point and
+        # k-point sampled calculations, and has been removed from get_coulG. It
+        # is exclusively applied within the MDF context here.
+        wcoulG = aft.weighted_coulG(self, kpt, exx, mesh, omega)
+        if abs(kpt).max() < 1e-9:
+            return wcoulG
+        cell = self.cell
+        b = cell.reciprocal_vectors()
+        scaled_kpt = np.linalg.solve(b.T, kpt)
+        wcoulG = wcoulG.reshape(mesh)
+        for n in range(cell.dimension):
+            if abs(scaled_kpt[n] + 0.5) < 1e-12:
+                # when k = -.5, -Gmax-.5 lies on the edge. They were removed in
+                # previous versions.
+                wcoulG[(slice(None),)*n + (mesh[n]//2+1,)] = 0
+            elif abs(scaled_kpt[n] - 0.5) < 1e-12 and mesh[n] % 2 == 1:
+                # when k = .5, Gmax+.5 lies on the edge. They were removed in
+                # previous versions.
+                wcoulG[(slice(None),)*n + (mesh[n]//2,)] = 0
+        return wcoulG.ravel()
+
     get_pp = df.GDF.get_pp
     get_nuc = df.GDF.get_nuc
 
@@ -204,7 +234,6 @@ class MDF(df.GDF):
 
     def get_naoaux(self):
         return df.DF.get_naoaux(self) + aft.AFTDF.get_naoaux(self)
-
 
 class _RSMDFBuilder(_RSGDFBuilder):
     '''
@@ -319,6 +348,8 @@ class _RSMDFBuilder(_RSGDFBuilder):
         GauxI = np.asarray(Gaux.imag, order='C')
         return GauxR, GauxI
 
+    weighted_coulG = MDF.weighted_coulG
+
 
 class _CCMDFBuilder(_CCGDFBuilder):
     '''
@@ -367,7 +398,6 @@ class _CCMDFBuilder(_CCGDFBuilder):
                 auxG = None
             j2c[k] = j2c_k
         return j2c
-
 
     def outcore_auxe2(self, cderi_file, intor='int3c2e', aosym='s2', comp=None,
                       j_only=False, dataname='j3c', shls_slice=None,
@@ -426,3 +456,5 @@ class _CCMDFBuilder(_CCGDFBuilder):
         else:
             cderi_negative = None
         return cderi, cderi_negative
+
+    weighted_coulG = MDF.weighted_coulG

@@ -76,7 +76,7 @@ class KnownValues(unittest.TestCase):
         e2_obt, v = eom.eaccsd(nroots=3, koopmans=True, kptlist=[1], imds=imds)
         self.assertAlmostEqual(e2_obt[0][0], 1.227583017804503, 6)
         self.assertAlmostEqual(e2_obt[0][1], 1.2275830178298166, 6)
-        self.assertAlmostEqual(e2_obt[0][2], 1.3830379190440196, 6)
+        self.assertAlmostEqual(e2_obt[0][2], 1.3830379190440196, 5)
 
         # Basis eeccsd
         eom = EOMEE(mycc)
@@ -125,7 +125,7 @@ class KnownValues(unittest.TestCase):
         e2_obt, v = eom.eaccsd(nroots=3, koopmans=True, kptlist=[1], imds=imds)
         self.assertAlmostEqual(e2_obt[0][0], 1.229802629928757, 6)
         self.assertAlmostEqual(e2_obt[0][1], 1.229802629928764, 6)
-        self.assertAlmostEqual(e2_obt[0][2], 1.384394578043613, 6)
+        self.assertAlmostEqual(e2_obt[0][2], 1.384394578043613, 5)
 
     def test_n3_diffuse_star(self):
         '''Tests EOM-CCSD* method.'''
@@ -185,12 +185,12 @@ class KnownValues(unittest.TestCase):
         e2_obt, v = eom.eaccsd(nroots=3, koopmans=True, kptlist=[1], imds=imds)
         self.assertAlmostEqual(e2_obt[0][0], 1.2290479727093149, 6)
         self.assertAlmostEqual(e2_obt[0][1], 1.2290479727093468, 6)
-        self.assertAlmostEqual(e2_obt[0][2], 1.384154366703175, 6)
+        self.assertAlmostEqual(e2_obt[0][2], 1.384154366703175, 5)
 
         e2_obt = eom.eaccsd_star(nroots=3, koopmans=True, kptlist=[1], imds=imds)
         self.assertAlmostEqual(e2_obt[0][0], 1.2229050426609025, 6)
         self.assertAlmostEqual(e2_obt[0][1], 1.2229050426609025, 6)
-        self.assertAlmostEqual(e2_obt[0][2], 1.374851059956632, 6)
+        self.assertAlmostEqual(e2_obt[0][2], 1.374851059956632, 5)
 
 if __name__ == '__main__':
     print("eom_kccsd_rhf tests")

@@ -21,6 +21,7 @@ from pyscf import lib
 from pyscf.pbc import gto as pgto
 from pyscf.pbc import scf as pscf
 from pyscf.pbc.scf import kuhf
+from pyscf.pbc.tools.pbc import super_cell
 
 def setUpModule():
     global cell, mf, kmf, kpts
@@ -48,7 +49,9 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_kuhf_kernel(self):
-        self.assertAlmostEqual(kmf.e_tot, -4.586720023431593, 8)
+        self.assertAlmostEqual(kmf.e_tot, -4.594854184081046, 8)
+        e4 = super_cell(cell, [2,2,1]).KUHF().run().e_tot
+        self.assertAlmostEqual(kmf.e_tot - e4/4, 0, 8)
         kmf.analyze()
 
     def test_uhf_kernel(self):
@@ -102,17 +105,17 @@ class KnownValues(unittest.TestCase):
 
     def test_spin_square(self):
         ss = kmf.spin_square()[0]
-        self.assertAlmostEqual(ss, 2.077383024287556, 4)
+        self.assertAlmostEqual(ss, 2.0836508842313273, 4)
 
     def test_bands(self):
         np.random.seed(1)
         kpts_bands = np.random.random((1,3))
 
         e = mf.get_bands(kpts_bands)[0]
-        self.assertAlmostEqual(lib.fp(e), 0.9038555558945438, 6)
+        self.assertAlmostEqual(lib.fp(e), 0.8857024, 5)
 
         e = kmf.get_bands(kpts_bands)[0]
-        self.assertAlmostEqual(lib.fp(e), -0.3020614, 5)
+        self.assertAlmostEqual(lib.fp(e), -0.309626, 5)
 
     def test_small_system(self):
         mol = pgto.Cell(

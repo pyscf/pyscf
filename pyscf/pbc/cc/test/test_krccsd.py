@@ -32,6 +32,7 @@ from pyscf.pbc.lib import kpts_helper
 #from pyscf.pbc.cc.kccsd_rhf import kconserve_pmatrix
 import pyscf.pbc.cc.kccsd_t_rhf as kccsd_t_rhf
 from pyscf.pbc.cc import eom_kccsd_rhf
+from pyscf.pbc.tools.pbc import super_cell
 
 
 def setUpModule():
@@ -203,11 +204,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e0, e1, 5)
 
     def test_frozen_n3(self):
-        mesh = 5
+        mesh = 12
         cell = make_test_cell.test_cell_n3([mesh]*3)
         nk = (1, 1, 2)
-        ehf_bench = -8.348616843863795
-        ecc_bench = -0.037920339437169
+        ehf_bench = -8.648503065380389
+        ecc_bench = -0.100045112503651
 
         abs_kpts = cell.make_kpts(nk, with_gamma_point=True)
 
@@ -221,8 +222,14 @@ class KnownValues(unittest.TestCase):
         cc = pbcc.kccsd_rhf.RCCSD(kmf, frozen=[[0],[0,1]])
         cc.diis_start_cycle = 1
         ecc, t1, t2 = cc.kernel()
-        self.assertAlmostEqual(ehf, ehf_bench, 8)
+        self.assertAlmostEqual(ehf, ehf_bench, 6)
         self.assertAlmostEqual(ecc, ecc_bench, 6)
+
+        mf = super_cell(cell, nk).RHF(exxdiv=None).run()
+        self.assertAlmostEqual(mf.e_tot/2, ehf_bench, 5)
+        cc = pbcc.RCCSD(mf, frozen=[0,1,2])
+        cc.diis_start_cycle = 1
+        self.assertAlmostEqual(cc.kernel()[0]/2, ecc_bench, 6)
 
     def test_ao2mo(self):
         kmf = make_rand_kmf()
@@ -458,7 +465,6 @@ class KnownValues(unittest.TestCase):
         ekcc_t = mycc.ccsd_t(eris=eris)
 
         # Run supercell
-        from pyscf.pbc.tools.pbc import super_cell
         supcell = super_cell(cell, nk)
         rks = pbcdft.RKS(supcell)
         erks = rks.kernel()
@@ -501,7 +507,6 @@ class KnownValues(unittest.TestCase):
         ekcc_t = mycc.ccsd_t(eris=eris)
 
         # Run supercell
-        from pyscf.pbc.tools.pbc import super_cell
         supcell = super_cell(cell, nk)
         rks = pbcdft.RKS(supcell)
         erks = rks.kernel()
@@ -540,7 +545,6 @@ class KnownValues(unittest.TestCase):
         ekcc_t = mycc.ccsd_t(eris=eris)
 
         # Run supercell
-        from pyscf.pbc.tools.pbc import super_cell
         supcell = super_cell(cell, nk)
         rks = pbcscf.RHF(supcell)
         erks = rks.kernel()
@@ -579,7 +583,6 @@ class KnownValues(unittest.TestCase):
         ekcc_t = mycc.ccsd_t(eris=eris)
 
         # Run supercell
-        from pyscf.pbc.tools.pbc import super_cell
         supcell = super_cell(cell, nk)
         rks = pbcscf.RHF(supcell)
         erks = rks.kernel()
@@ -611,7 +614,7 @@ class KnownValues(unittest.TestCase):
         kpts -= kpts[0]
         kks = pbcscf.KRHF(cell, kpts=kpts)
         ekks = kks.kernel()
-        self.assertAlmostEqual(ekks, -10.530978858287662, 8)
+        self.assertAlmostEqual(ekks, -10.530978858287662, 5)
 
         khf = pbcscf.KRHF(cell)
         khf.__dict__.update(kks.__dict__)

@@ -697,6 +697,12 @@ class StreamObject:
 
     __getstate__, __setstate__ = generate_pickle_methods()
 
+    def reset(self):
+        '''
+        Clean up intermediates
+        '''
+        return self
+
 
 _warn_once_registry = {}
 def check_sanity(obj, keysref, stdout=sys.stdout):
