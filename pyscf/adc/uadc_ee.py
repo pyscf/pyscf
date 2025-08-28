@@ -22900,7 +22900,6 @@ def analyze_eigenvector(adc):
         temp_aaaa[ij_a[0],ij_a[1], :, :] =  temp_vv_aaaa
         temp_aaaa[ij_a[1],ij_a[0], :, :] = -temp_vv_aaaa
         U_aaaa = temp_aaaa.reshape(-1).copy()
-        print(temp_vv_aaaa)
 
         temp_vv_bbbb = np.zeros((int((nocc_b * (nocc_b - 1)) / 2), nvir_b, nvir_b))
         temp_vv_bbbb[:, ab_b[0], ab_b[1]] = U[s_bbbb:f_bbbb,I].reshape(

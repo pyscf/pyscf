@@ -1095,6 +1095,7 @@ def matvec(adc, M_ab=None, eris=None):
 
 def get_trans_moments(adc):
 
+    '''
     nmo  = adc.nmo
     T = []
     for orb in range(nmo):
@@ -1103,112 +1104,13 @@ def get_trans_moments(adc):
         T.append(T_a)
 
     T = np.array(T)
-    return T
+    '''
+    return None
 
 
 def get_trans_moments_orbital(adc, orb):
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
-        raise NotImplementedError(adc.method)
-
-    method = adc.method
-
-    t2_1 = adc.t2[0][:]
-    if (adc.approx_trans_moments is False or adc.method == "adc(3)"):
-        t1_2 = adc.t1[0][:]
-
-    nocc = adc._nocc
-    nvir = adc._nvir
-
-    n_singles = nvir
-    n_doubles = nocc * nvir * nvir
-
-    dim = n_singles + n_doubles
-
-    idn_vir = np.identity(nvir)
-
-    s1 = 0
-    f1 = n_singles
-    s2 = f1
-    f2 = s2 + n_doubles
-
-    T = np.zeros((dim))
-
-######## ADC(2) part  ############################################
-
-    if orb < nocc:
-
-        if (adc.approx_trans_moments is False or adc.method == "adc(3)"):
-            T[s1:f1] = -t1_2[orb,:]
-
-        t2_1_t = -t2_1.transpose(1,0,2,3)
-
-        T[s2:f2] += t2_1_t[:,orb,:,:].reshape(-1)
-
-    else:
-
-        T[s1:f1] += idn_vir[(orb-nocc), :]
-        T[s1:f1] -= 0.25*lib.einsum('klc,klac->a',t2_1[:,:,(orb-nocc),:], t2_1, optimize=True)
-        T[s1:f1] -= 0.25*lib.einsum('lkc,lkac->a',t2_1[:,:,(orb-nocc),:], t2_1, optimize=True)
-
-        T[s1:f1] -= 0.25*lib.einsum('klc,klac->a',t2_1[:,:,(orb-nocc),:], t2_1, optimize=True)
-        T[s1:f1] += 0.25*lib.einsum('lkc,klac->a',t2_1[:,:,(orb-nocc),:], t2_1, optimize=True)
-        T[s1:f1] += 0.25*lib.einsum('klc,lkac->a',t2_1[:,:,(orb-nocc),:], t2_1, optimize=True)
-        T[s1:f1] -= 0.25*lib.einsum('lkc,lkac->a',t2_1[:,:,(orb-nocc),:], t2_1, optimize=True)
-
-######### ADC(3) 2p-1h  part  ############################################
-
-    if (adc.method == "adc(2)-x" and adc.approx_trans_moments is False) or (adc.method == "adc(3)"):
-
-        t2_2 = adc.t2[1][:]
-
-        if orb < nocc:
-
-            t2_2_t = -t2_2.transpose(1,0,2,3)
-
-            T[s2:f2] += t2_2_t[:,orb,:,:].reshape(-1)
-
-########### ADC(3) 1p part  ############################################
-
-    if (method=='adc(3)'):
-
-        t2_2 = adc.t2[1][:]
-        if (adc.approx_trans_moments is False):
-            t1_3 = adc.t1[1]
-
-        if orb < nocc:
-            T[s1:f1] += 0.5*lib.einsum('kac,ck->a',t2_1[:,orb,:,:], t1_2.T,optimize=True)
-            T[s1:f1] -= 0.5*lib.einsum('kac,ck->a',t2_1[orb,:,:,:], t1_2.T,optimize=True)
-            T[s1:f1] -= 0.5*lib.einsum('kac,ck->a',t2_1[orb,:,:,:], t1_2.T,optimize=True)
-            if (adc.approx_trans_moments is False):
-                T[s1:f1] -= t1_3[orb,:]
-
-        else:
-
-            T[s1:f1] -= 0.25*lib.einsum('klc,klac->a',t2_1[:,:,(orb-nocc),:], t2_2, optimize=True)
-            T[s1:f1] -= 0.25*lib.einsum('lkc,lkac->a',t2_1[:,:,(orb-nocc),:], t2_2, optimize=True)
-
-            T[s1:f1] -= 0.25*lib.einsum('klac,klc->a',t2_1, t2_2[:,:,(orb-nocc),:],optimize=True)
-            T[s1:f1] -= 0.25*lib.einsum('lkac,lkc->a',t2_1, t2_2[:,:,(orb-nocc),:],optimize=True)
-
-            T[s1:f1] -= 0.25*lib.einsum('klc,klac->a',t2_1[:,:,(orb-nocc),:], t2_2, optimize=True)
-            T[s1:f1] += 0.25*lib.einsum('klc,lkac->a',t2_1[:,:,(orb-nocc),:], t2_2, optimize=True)
-            T[s1:f1] += 0.25*lib.einsum('lkc,klac->a',t2_1[:,:,(orb-nocc),:], t2_2, optimize=True)
-            T[s1:f1] -= 0.25*lib.einsum('lkc,lkac->a',t2_1[:,:,(orb-nocc),:], t2_2, optimize=True)
-
-            T[s1:f1] -= 0.25*lib.einsum('klac,klc->a',t2_1, t2_2[:,:,(orb-nocc),:],optimize=True)
-            T[s1:f1] += 0.25*lib.einsum('klac,lkc->a',t2_1, t2_2[:,:,(orb-nocc),:],optimize=True)
-            T[s1:f1] += 0.25*lib.einsum('lkac,klc->a',t2_1, t2_2[:,:,(orb-nocc),:],optimize=True)
-            T[s1:f1] -= 0.25*lib.einsum('lkac,lkc->a',t2_1, t2_2[:,:,(orb-nocc),:],optimize=True)
-
-        del t2_2
-    del t2_1
-
-    T_aaa = T[n_singles:].reshape(nocc,nvir,nvir).copy()
-    T_aaa = T_aaa - T_aaa.transpose(0,2,1)
-    T[n_singles:] += T_aaa.reshape(-1)
-
-    return T
+    return None
 
 
 def analyze_eigenvector(adc):
@@ -1361,10 +1263,12 @@ def get_properties(adc, nroots=1):
 
     #Spectroscopic amplitudes
     U = adc.renormalize_eigenvectors(nroots)
-    X = np.dot(T, U).reshape(-1, nroots)
+    #X = np.dot(T, U).reshape(-1, nroots)
+    X = None
 
     #Spectroscopic factors
-    P = 2.0*lib.einsum("pi,pi->i", X, X)
+    #P = 2.0*lib.einsum("pi,pi->i", X, X)
+    P = None
 
     return P,X
 
@@ -1386,7 +1290,7 @@ def analyze(myadc):
             "\n*************************************************************")
         logger.info(myadc, header)
 
-        myadc.analyze_spec_factor()
+        #myadc.analyze_spec_factor()
 
 def make_rdm1(adc):
     cput0 = (logger.process_clock(), logger.perf_counter())
