@@ -23274,10 +23274,10 @@ class UADCEE(uadc.UADC):
         self._scf = adc._scf
         self._nocc = adc._nocc
         self._nvir = adc._nvir
-        self.nocc_a = adc._nocc[0]
-        self.nocc_b = adc._nocc[1]
-        self.nvir_a = adc._nvir[0]
-        self.nvir_b = adc._nvir[1]
+        self.nocc_a = adc.nocc_a
+        self.nocc_b = adc.nocc_b
+        self.nvir_a = adc.nvir_a
+        self.nvir_b = adc.nvir_b
         self.mo_coeff = adc.mo_coeff
         self.mo_energy_a = adc.mo_energy_a
         self.mo_energy_b = adc.mo_energy_b
@@ -23364,6 +23364,7 @@ class UADCEE(uadc.UADC):
 
             from scipy.linalg import eigh
             uu, vecs = eigh(M_f)
+            print(vecs)
             vecs=vecs[:,:nroots]
             if not ascending:
                 vecs = vecs[:, ::-1]

@@ -135,10 +135,10 @@ def make_ref_rdm1(adc):
 
     ######################
     einsum_type = True
-    nocc_a = adc._nocc[0]
-    nocc_b = adc._nocc[1]
-    nvir_a = adc._nvir[0]
-    nvir_b = adc._nvir[1]
+    nocc_a = adc.nocc_a
+    nocc_b = adc.nocc_b
+    nvir_a = adc.nvir_a
+    nvir_b = adc.nvir_b
     nmo_a = nocc_a + nvir_a
     nmo_b = nocc_b + nvir_b
 
@@ -315,39 +315,124 @@ def get_fno_ref(myadc,nroots,ref_state):
     myadc.e2_ref,myadc.v2_ref,myadc.p2_ref,myadc.x2_ref = adc2_ref.kernel(nroots)
     rdm1_gs = adc2_ref.make_ref_rdm1()
     if ref_state is not None:
-        rdm1_ref = adc2_ref.make_rdm1()[ref_state - 1]
-        myadc.rdm1_ss = rdm1_ref + rdm1_gs
+        rdm1_gs_a = rdm1_gs[0]
+        rdm1_gs_b = rdm1_gs[1]
+        rdm1_ref_a = adc2_ref.make_rdm1()[0][ref_state - 1]
+        rdm1_ref_b = adc2_ref.make_rdm1()[1][ref_state - 1]
+        myadc.rdm1_ss = (rdm1_ref_a + rdm1_gs_a, rdm1_ref_b + rdm1_gs_b)
     else:
         myadc.rdm1_ss = rdm1_gs
 
 def make_fno(myadc, rdm1_ss, mf, thresh):
-    import numpy
-    from pyscf.mp import mp2
-    nocc = myadc._nocc
-    masks = mp2._mo_splitter(myadc)
-    
-    n,V = numpy.linalg.eigh(rdm1_ss[nocc:,nocc:])
-    idx = numpy.argsort(n)[::-1]
-    n,V = n[idx], V[:,idx]
-    T = n > thresh
-    n_fro_vir = numpy.sum(T == 0)
-    T = numpy.diag(T)
-    V_trunc = V.dot(T)
-    n_keep = V_trunc.shape[0]-n_fro_vir
+    nocc_a = myadc.nocc_a
+    nocc_b = myadc.nocc_b
+    nvir_a = myadc.nvir_a
+    nvir_b = myadc.nvir_b
+    mo_energy_a = myadc.mo_energy_a
+    mo_energy_b = myadc.mo_energy_b
+    mo_a_coeff = myadc.mo_coeff[0]
+    mo_b_coeff = myadc.mo_coeff[1]
+    masks = myadc._mo_splitter()
+    mask_a = masks[0]
+    mask_b = masks[1]
+    rdm1_ss_a = rdm1_ss[0]
+    rdm1_ss_b = rdm1_ss[1]
 
-    moeoccfrz0, moeocc, moevir, moevirfrz0 = [mf.mo_energy[m] for m in masks]
-    orboccfrz0, orbocc, orbvir, orbvirfrz0 = [mf.mo_coeff[:,m] for m in masks]
-    F_can =  numpy.diag(moevir)
-    F_na_trunc = V_trunc.T.dot(F_can).dot(V_trunc)
-    _,Z_na_trunc = numpy.linalg.eigh(F_na_trunc[:n_keep,:n_keep])
-    U_vir_act = orbvir.dot(V_trunc[:,:n_keep]).dot(Z_na_trunc)
-    U_vir_fro = orbvir.dot(V_trunc[:,n_keep:]) 
-    no_comp = (orboccfrz0,orbocc,U_vir_act,U_vir_fro,orbvirfrz0)
-    no_coeff = numpy.hstack(no_comp)
-    nocc_loc = numpy.cumsum([0]+[x.shape[1] for x in no_comp]).astype(int)
-    no_frozen = numpy.hstack((numpy.arange(nocc_loc[0], nocc_loc[1]),
-                              numpy.arange(nocc_loc[3], nocc_loc[5]))).astype(int)
+    n_a,V_a = np.linalg.eigh(rdm1_ss_a[nocc_a:,nocc_a:])
+    idx = np.argsort(n_a)[::-1]
+    n_a,V_a = n_a[idx], V_a[:,idx]
+    T_a = n_a > thresh
+    n_fro_vir_a = np.sum(T_a == 0)
+    T_a = np.diag(T_a)
+    V_trunc_a = V_a.dot(T_a)
+    n_keep_a = V_trunc_a.shape[0]-n_fro_vir_a
+
+    n_b,V_b = np.linalg.eigh(rdm1_ss_b[nocc_b:,nocc_b:])
+    idx = np.argsort(n_b)[::-1]
+    n_b,V_b = n_b[idx], V_b[:,idx]
+    T_b = n_b > thresh
+    n_fro_vir_b = np.sum(T_b == 0)
+    T_b = np.diag(T_b)
+    V_trunc_b = V_b.dot(T_b)
+    n_keep_b = V_trunc_b.shape[0]-n_fro_vir_b
+
+    moeoccfrz0_a, moeocc_a, moevir_a, moevirfrz0_a = [mo_energy_a[m] for m in mask_a]
+    orboccfrz0_a, orbocc_a, orbvir_a, orbvirfrz0_a = [mo_a_coeff[:,m] for m in mask_a]
+    F_can_a =  np.diag(moevir_a)
+    F_na_trunc_a = V_trunc_a.T.dot(F_can_a).dot(V_trunc_a)
+    _,Z_na_trunc_a = np.linalg.eigh(F_na_trunc_a[:n_keep_a,:n_keep_a])
+    U_vir_act_a = orbvir_a.dot(V_trunc_a[:,:n_keep_a]).dot(Z_na_trunc_a)
+    U_vir_fro_a = orbvir_a.dot(V_trunc_a[:,n_keep_a:])
+
+    moeoccfrz0_b, moeocc_b, moevir_b, moevirfrz0_b = [mo_energy_b[m] for m in mask_b]
+    orboccfrz0_b, orbocc_b, orbvir_b, orbvirfrz0_b = [mo_b_coeff[:,m] for m in mask_b]
+    F_can_b =  np.diag(moevir_b)
+    F_na_trunc_b = V_trunc_b.T.dot(F_can_b).dot(V_trunc_b)
+    _,Z_na_trunc_b = np.linalg.eigh(F_na_trunc_b[:n_keep_b,:n_keep_b])
+    U_vir_act_b = orbvir_b.dot(V_trunc_b[:,:n_keep_b]).dot(Z_na_trunc_b)
+    U_vir_fro_b = orbvir_b.dot(V_trunc_b[:,n_keep_b:])
+
+    no_comp_a = (orboccfrz0_a,orbocc_a,U_vir_act_a,U_vir_fro_a,orbvirfrz0_a)
+    no_coeff_a = np.hstack(no_comp_a)
+    nocc_loc_a = np.cumsum([0]+[x.shape[1] for x in no_comp_a]).astype(int)
+    no_frozen_a = np.hstack((np.arange(nocc_loc_a[0], nocc_loc_a[1]),
+                              np.arange(nocc_loc_a[3], nocc_loc_a[5]))).astype(int)
+
+    no_comp_b = (orboccfrz0_b,orbocc_b,U_vir_act_b,U_vir_fro_b,orbvirfrz0_b)
+    no_coeff_b = np.hstack(no_comp_b)
+    nocc_loc_b = np.cumsum([0]+[x.shape[1] for x in no_comp_b]).astype(int)
+    no_frozen_b = np.hstack((np.arange(nocc_loc_b[0], nocc_loc_b[1]),
+                              np.arange(nocc_loc_b[3], nocc_loc_b[5]))).astype(int)
+
+    no_coeff = np.array([no_coeff_a,no_coeff_b])
+    no_frozen = (no_frozen_a,no_frozen_b)
+
     return no_coeff,no_frozen
+
+def get_frozen_mask(myadc):
+    moidx = (np.ones(myadc.mo_occ[0].size, dtype=bool),np.ones(myadc.mo_occ[1].size, dtype=bool))
+    if myadc.frozen is None:
+        pass
+    elif isinstance(myadc.frozen, tuple) and len(myadc.frozen) == 2:
+        if myadc.frozen[0] is None:
+            pass
+        elif isinstance(myadc.frozen[0], (int, np.integer)):
+            moidx[0][:myadc.frozen[0]] = False
+        elif hasattr(myadc.frozen[0], '__len__'):
+            moidx[0][list(myadc.frozen[0])] = False
+        else:
+            raise NotImplementedError
+        if myadc.frozen[1] is None:
+            pass
+        elif isinstance(myadc.frozen[1], (int, np.integer)):
+            moidx[1][:myadc.frozen[1]] = False
+        elif hasattr(myadc.frozen[1], '__len__'):
+            moidx[1][list(myadc.frozen[1])] = False
+        else:
+            raise NotImplementedError
+    else:
+        raise NotImplementedError
+    return moidx
+
+def _mo_splitter(myadc):
+    maskact = myadc.get_frozen_mask()
+    maskact_a = maskact[0]
+    maskact_b = maskact[1]
+    maskocc_a = myadc.mo_occ[0]>1e-6
+    maskocc_b = myadc.mo_occ[1]>1e-6
+    masks_a = [
+        maskocc_a & ~maskact_a,    # frz occ
+        maskocc_a &  maskact_a,    # act occ
+        ~maskocc_a &  maskact_a,    # act vir
+        ~maskocc_a & ~maskact_a,    # frz vir
+    ]
+    masks_b = [
+        maskocc_b & ~maskact_b,    # frz occ
+        maskocc_b &  maskact_b,    # act occ
+        ~maskocc_b &  maskact_b,    # act vir
+        ~maskocc_b & ~maskact_b,    # frz vir
+    ]
+    return (masks_a, masks_b)
 
 class UADC(lib.StreamObject):
     '''Ground state calculations
@@ -384,7 +469,9 @@ class UADC(lib.StreamObject):
         'max_space', 'mo_occ', 'max_cycle', 'imds', 'with_df', 'compute_properties',
         'approx_trans_moments', 'evec_print_tol', 'spec_factor_print_tol',
         'E', 'U', 'P', 'X', 'ncvs', 'dip_mom', 'dip_mom_nuc',
-        'compute_spin_square', 'f_ov'
+        'compute_spin_square', 'f_ov',
+        'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b',
+        'if_heri_eris'
     }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
@@ -465,8 +552,59 @@ class UADC(lib.StreamObject):
         self.t2 = None
         self.imds = lambda:None
         self._nocc = mf.nelec
-        self._nmo = (mo_coeff[0].shape[1], mo_coeff[1].shape[1])
+#NOTE:update start        
+        self.if_heri_eris = False
+        self._nmo = None
+        if frozen is None:
+            self._nmo = (mo_coeff[0].shape[1], mo_coeff[1].shape[1])
+        elif isinstance(frozen, tuple) and len(frozen) == 2:
+            if frozen[0] is None:
+                nmo_a = mo_coeff[0].shape[1]
+            elif isinstance(frozen[0], (int, np.integer)):
+                nmo_a = mo_coeff[0].shape[1]-frozen[0]
+            elif hasattr(frozen[0], '__len__'):
+                nmo_a = mo_coeff[0].shape[1]-len(frozen[0])
+            else:
+                raise NotImplementedError
+            if frozen[1] is None:
+                nmo_b = mo_coeff[1].shape[1]
+            elif isinstance(frozen[1], (int, np.integer)):
+                nmo_b = mo_coeff[1].shape[1]-frozen[1]
+            elif hasattr(frozen[1], '__len__'):
+                nmo_b = mo_coeff[1].shape[1]-len(frozen[1])
+            else:
+                raise NotImplementedError
+            self._nmo = (nmo_a, nmo_b)
+        else:
+            raise NotImplementedError("frozen should be announced as None or a tuple with two elements")
+
+        (mask_a,mask_b) = self.get_frozen_mask()
+        if frozen is not None:
+            maskocc_a = mf.mo_occ[0]>1e-6
+            maskocc_b = mf.mo_occ[1]>1e-6
+            occ_a = maskocc_a & mask_a
+            occ_b = maskocc_b & mask_b
+            self._nocc = (int(occ_a.sum()), int(occ_b.sum()))
+            self.mo_coeff = np.array([mo_coeff[0][:,mask_a], mo_coeff[1][:,mask_b]])
+            if self._nocc[0] == 0 or self._nocc[1] == 0:
+                raise ValueError("No occupied alpha or beta orbitals found")
+
+        if self.mo_coeff is self._scf.mo_coeff and self._scf.converged:
+            self.mo_energy_a = self.mo_energy_a[mask_a]
+            self.mo_energy_b = self.mo_energy_b[mask_b]
+        else:
+            dm = self._scf.make_rdm1(mo_coeff, self.mo_occ)
+            vhf = self._scf.get_veff(self.mol, dm)
+            fockao = self._scf.get_fock(vhf=vhf, dm=dm)
+            fock = self.mo_coeff.conj().T.dot(fockao).dot(self.mo_coeff)
+            (self.mo_energy_a,self.mo_energy_b) = fock.diagonal().real
+            self.scf_energy = self._scf.energy_tot(dm=dm, vhf=vhf)
+#NOTE:update end
         self._nvir = (self._nmo[0] - self._nocc[0], self._nmo[1] - self._nocc[1])
+        self.nocc_a = self._nocc[0]
+        self.nocc_b = self._nocc[1]
+        self.nvir_a = self._nvir[0]
+        self.nvir_b = self._nvir[1]
         self.chkfile = mf.chkfile
         self.method = "adc(2)"
         self.method_type = "ip"
@@ -505,6 +643,9 @@ class UADC(lib.StreamObject):
     compute_energy = uadc_amplitudes.compute_energy
     transform_integrals = uadc_ao2mo.transform_integrals_incore
     make_ref_rdm1 = make_ref_rdm1
+    get_frozen_mask = get_frozen_mask
+    _mo_splitter = _mo_splitter
+
 
     def semi_canonicalize_orbitals(self, f, nocc, C):
 
@@ -702,6 +843,74 @@ class UADC(lib.StreamObject):
     def make_rdm1(self):
         return self._adc_es.make_rdm1()
 
+class UFNOADC3(UADC):
+    #J. Chem. Phys. 159, 084113 (2023)
+    _keys = UADC._keys | {'delta_e','delta_v','delta_p','delta_x',
+                          'e2_ref','v2_ref','p2_ref','x2_ref',
+                          'rdm1_ss','correction','frozen_core','ref_state'
+                          }
+
+    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None, correction=True):
+        import copy
+        super().__init__(mf, frozen, mo_coeff, mo_occ)
+        self.delta_e = None
+        self.delta_v = None
+        self.delta_p = None
+        self.delta_x = None
+        self.method = "adc(3)"
+        self.correction = correction
+        self.e2_ref = None
+        self.v2_ref = None
+        self.p2_ref = None
+        self.x2_ref = None
+        self.rdm1_ss = None
+        self.ref_state = None
+        self.if_naf = True
+        self.frozen_core = copy.deepcopy(self.frozen)
+
+    def compute_correction(self, mf, frozen, nroots, eris):
+        adc2_ssfno = UADC(mf, frozen, self.mo_coeff).set(verbose = 0,method_type = self.method_type)#,\
+                                                         #with_df = self.with_df,if_naf = self.if_naf,thresh_naf = self.thresh_naf,naux = self.naux)
+        e2_ssfno,v2_ssfno,p2_ssfno,x2_ssfno = adc2_ssfno.kernel(nroots, eris = eris)
+        self.delta_e = self.e2_ref - e2_ssfno
+        #self.delta_v = self.v2_ref - v2_ssfno
+        #self.delta_p = self.p2_ref - p2_ssfno
+        #self.delta_x = self.x2_ref - x2_ssfno
+
+    def kernel(self, nroots=1, guess=None, eris=None, thresh = 1e-4, ref_state = None):
+        import copy
+        self.frozen = copy.deepcopy(self.frozen_core)
+        self.ref_state = ref_state
+        self.naux = None
+        if ref_state is None:
+            print("Do fnoadc3 calculation")
+            self.if_naf = False
+        elif isinstance(ref_state, int) and 0<ref_state<=nroots:
+            print(f"Do ss-fno adc3 calculation, the specic state is {ref_state}")
+            if self.with_df == None:
+                self.if_naf = False
+        else:
+            raise ValueError("ref_state should be an int type and in (0,nroots]")
+        
+        get_fno_ref(self, nroots, self.ref_state)
+        self.mo_coeff,self.frozen = make_fno(self, self.rdm1_ss, self._scf, thresh)
+        adc3_ssfno = UADC(self._scf, self.frozen, self.mo_coeff).set(verbose = self.verbose,method_type = self.method_type,method = "adc(3)",\
+                                                         with_df = self.with_df,if_naf = self.if_naf,thresh_naf = self.thresh_naf,\
+                                                            if_heri_eris = self.if_heri_eris)
+        if not self.correction or self.if_heri_eris is False:
+            e_exc, v_exc, spec_fac, x = adc3_ssfno.kernel(nroots, guess, eris)
+        elif self.if_naf:
+            e_exc, v_exc, spec_fac, x, eris, self.naux = adc3_ssfno.kernel(nroots, guess, eris)
+            self.compute_correction(self._scf, self.frozen, nroots, eris)
+            e_exc = e_exc + self.delta_e
+        else:
+            e_exc, v_exc, spec_fac, x, eris = adc3_ssfno.kernel(nroots, guess, eris)
+            self.compute_correction(self._scf, self.frozen, nroots, eris)
+            e_exc = e_exc + self.delta_e
+        v_exc = v_exc# + self.delta_v
+        spec_fac = spec_fac# + self.delta_p
+        x = x# + self.delta_x
+        return e_exc, v_exc, spec_fac, x
 
 if __name__ == '__main__':
     from pyscf import gto

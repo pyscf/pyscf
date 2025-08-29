@@ -828,7 +828,6 @@ def make_rdm1_eigenvectors(adc, L, R):
     L2 = L2.reshape(nvir,nocc,nocc)
     R2 = R2.reshape(nvir,nocc,nocc)
     einsum_type = True
-    print(L2[0][:][:]-L2[0][:][:].T)
 
 #####G^000#### block- ij
     rdm1[:nocc,:nocc] =  2*einsum('ij,m,m->ij',kd_oc,L1,R1,optimize=True)

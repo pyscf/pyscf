@@ -81,8 +81,7 @@ def FNOADC3(mf, frozen=None, mo_coeff=None, mo_occ=None, correction=True):
 
     import numpy
     if mf.istype('UHF'):
-        raise NotImplementedError
-        #return uadc.UFNOADC3(mf, frozen, mo_coeff, mo_occ, correction)
+        return uadc.UFNOADC3(mf, frozen, mo_coeff, mo_occ, correction)
     elif mf.istype('ROHF'):
         raise NotImplementedError
     elif mf.istype('RHF'):

@@ -184,7 +184,9 @@ def make_ref_rdm1(adc):
     return 2 * OPDM
 
 def get_fno_ref(myadc,nroots,ref_state):
-    adc2_ref = RADC(myadc._scf,myadc.frozen).set(verbose = 0,method_type = myadc.method_type,with_df = myadc.with_df,if_naf = myadc.if_naf,thresh_naf = myadc.thresh_naf)
+    adc2_ref = RADC(myadc._scf).set(verbose = 0,method_type = myadc.method_type,\
+                                    with_df = myadc.with_df,if_naf = myadc.if_naf,thresh_naf = myadc.thresh_naf,\
+                                    ncvs = myadc.ncvs)
     myadc.e2_ref,myadc.v2_ref,myadc.p2_ref,myadc.x2_ref = adc2_ref.kernel(nroots)
     rdm1_gs = adc2_ref.make_ref_rdm1()
     if ref_state is not None:
@@ -196,8 +198,11 @@ def get_fno_ref(myadc,nroots,ref_state):
 def make_fno(myadc, rdm1_ss, mf, thresh):
     import numpy
     from pyscf.mp import mp2
-    nocc = myadc._nocc
+    nocc = mf.mol.nelectron//2
+    nmo = myadc._nmo
+    myadc._nmo = None
     masks = mp2._mo_splitter(myadc)
+    myadc._nmo = nmo
     
     n,V = numpy.linalg.eigh(rdm1_ss[nocc:,nocc:])
     idx = numpy.argsort(n)[::-1]
@@ -264,7 +269,7 @@ class RADC(lib.StreamObject):
         'naux', 'if_heri_eris'
     }
 
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         import numpy
 
         if 'dft' in str(mf.__module__):
@@ -304,6 +309,7 @@ class RADC(lib.StreamObject):
         self.if_heri_eris = False
         self._nmo = None
         #fno modify
+        mask = self.get_frozen_mask()
         if frozen is None:
             self._nmo = mo_coeff.shape[1]
         elif isinstance(frozen, (int, numpy.integer)):
@@ -312,9 +318,14 @@ class RADC(lib.StreamObject):
             self._nmo = mo_coeff.shape[1]-len(frozen)
         else:
             raise NotImplementedError
+        if frozen is not None:
+            maskocc = mf.mo_occ>1e-6
+            occ = maskocc & mask
+            self._nocc = int(occ.sum())
+            self.mo_coeff = mo_coeff[:,mask]
+            if self._nocc == 0:
+                raise ValueError("No occupied orbitals found")
         self._nvir = self._nmo - self._nocc
-        mask = self.get_frozen_mask()
-        self.mo_coeff = mo_coeff[:,mask]
         if self.mo_coeff is self._scf.mo_coeff and self._scf.converged:
             self.mo_energy = self.mo_energy[mask]
             self.scf_energy = self._scf.e_tot
@@ -567,7 +578,8 @@ class RFNOADC3(RADC):
 
     def compute_correction(self, mf, frozen, nroots, eris):
         adc2_ssfno = RADC(mf, frozen, self.mo_coeff).set(verbose = 0,method_type = self.method_type,\
-                                                         with_df = self.with_df,if_naf = self.if_naf,thresh_naf = self.thresh_naf,naux = self.naux)
+                                                         with_df = self.with_df,if_naf = self.if_naf,thresh_naf = self.thresh_naf,naux = self.naux,\
+                                                         ncvs = self.ncvs)
         e2_ssfno,v2_ssfno,p2_ssfno,x2_ssfno = adc2_ssfno.kernel(nroots, eris = eris)
         self.delta_e = self.e2_ref - e2_ssfno
         #self.delta_v = self.v2_ref - v2_ssfno
@@ -593,7 +605,7 @@ class RFNOADC3(RADC):
         self.mo_coeff,self.frozen = make_fno(self, self.rdm1_ss, self._scf, thresh)
         adc3_ssfno = RADC(self._scf, self.frozen, self.mo_coeff).set(verbose = self.verbose,method_type = self.method_type,method = "adc(3)",\
                                                          with_df = self.with_df,if_naf = self.if_naf,thresh_naf = self.thresh_naf,\
-                                                            if_heri_eris = self.if_heri_eris)
+                                                            if_heri_eris = self.if_heri_eris,ncvs = self.ncvs)
         if not self.correction or self.if_heri_eris is False:
             e_exc, v_exc, spec_fac, x = adc3_ssfno.kernel(nroots, guess, eris)
         elif self.if_naf:

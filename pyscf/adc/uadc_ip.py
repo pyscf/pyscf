@@ -1836,8 +1836,8 @@ class UADCIP(uadc.UADC):
         'tol_residual','conv_tol', 'e_corr', 'method',
         'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory',
         't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle',
-        'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b', 'mo_coeff', 'mo_energy_a',
-        'mo_energy_b', 'nmo_a', 'nmo_b', 'mol', 'transform_integrals',
+        'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b', 'mo_coeff', 
+        'nmo_a', 'nmo_b', 'mol', 'transform_integrals',
         'with_df', 'spec_factor_print_tol', 'evec_print_tol',
         'compute_properties', 'approx_trans_moments', 'E', 'U', 'P', 'X',
         'compute_spin_square'
@@ -1862,10 +1862,10 @@ class UADCIP(uadc.UADC):
         self._nocc = adc._nocc
         self._nvir = adc._nvir
         self._nmo = adc._nmo
-        self.nocc_a = adc._nocc[0]
-        self.nocc_b = adc._nocc[1]
-        self.nvir_a = adc._nvir[0]
-        self.nvir_b = adc._nvir[1]
+        self.nocc_a = adc.nocc_a
+        self.nocc_b = adc.nocc_b
+        self.nvir_a = adc.nvir_a
+        self.nvir_b = adc.nvir_b
         self.mo_coeff = adc.mo_coeff
         self.mo_energy_a = adc.mo_energy_a
         self.mo_energy_b = adc.mo_energy_b

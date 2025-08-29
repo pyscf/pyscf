@@ -944,6 +944,7 @@ class RADCIPCVS(radc.RADC):
         'nmo', 'transform_integrals', 'with_df', 'compute_properties',
         'approx_trans_moments', 'E', 'U', 'P', 'X',
         'evec_print_tol', 'spec_factor_print_tol', 'ncvs',
+        'if_naf','naux'
     }
 
     def __init__(self, adc):
@@ -979,6 +980,8 @@ class RADCIPCVS(radc.RADC):
         self.evec_print_tol = adc.evec_print_tol
         self.spec_factor_print_tol = adc.spec_factor_print_tol
         self.ncvs = adc.ncvs
+        self.if_naf = adc.if_naf
+        self.naux = adc.naux
 
     kernel = radc.kernel
     get_imds = get_imds
