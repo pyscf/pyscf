@@ -407,6 +407,28 @@ def transform_integrals_df(myadc):
         eris.Lce = eris.Lce.reshape(naux,ncvs*nvir_a)
         eris.LCE = eris.LCE.reshape(naux,ncvs*nvir_b)
 
+    if myadc.if_naf:
+        eris.Lvv = eris.Lvv.reshape(naux,nvir_a*nvir_a)
+        eris.LVV = eris.LVV.reshape(naux,nvir_b*nvir_b)
+        W_a = lib.ddot(Loo, Loo.T) + lib.ddot(eris.Lov,eris.Lov.T) + lib.ddot(Lvo,Lvo.T) + lib.ddot(eris.Lvv,eris.Lvv.T)
+        W_b = lib.ddot(LOO, LOO.T) + lib.ddot(eris.LOV,eris.LOV.T) + lib.ddot(LVO,LVO.T) + lib.ddot(eris.LVV,eris.LVV.T)
+        W = (W_a + W_b)/2
+        n,N = np.linalg.eigh(W)
+        N_trunc = N[:,n>myadc.thresh_naf].T
+        myadc.naux = N_trunc.shape[0]
+        print(f"naux is {myadc.naux}")
+        Loo = lib.ddot(N_trunc,Loo)
+        eris.Lov = lib.ddot(N_trunc,eris.Lov)
+        Lvo = lib.ddot(N_trunc,Lvo)
+        eris.Lvv = lib.ddot(N_trunc,eris.Lvv)
+        LOO = lib.ddot(N_trunc,LOO)
+        eris.LOV = lib.ddot(N_trunc,eris.LOV)
+        LVO = lib.ddot(N_trunc,LVO)
+        eris.LVV = lib.ddot(N_trunc,eris.LVV)
+
+        eris.Lvv = eris.Lvv.reshape(myadc.naux,nvir_a,nvir_a)
+        eris.LVV = eris.LVV.reshape(myadc.naux,nvir_b,nvir_b)
+    
     eris.Lee_p = Lvv_p = lib.pack_tril(eris.Lvv)
     eris.LEE_p = LVV_p = lib.pack_tril(eris.LVV)
 
@@ -477,10 +499,16 @@ def transform_integrals_df(myadc):
     eris.OVoo[:] = lib.ddot(eris.LOV.T, Loo).reshape(nocc_b,nvir_b,nocc_a,nocc_a)
     eris.OVvo[:] = lib.ddot(eris.LOV.T, Lvo).reshape(nocc_b,nvir_b,nvir_a,nocc_a)
 
-    eris.Lov = eris.Lov.reshape(naux,nocc_a,nvir_a)
-    eris.LOV = eris.LOV.reshape(naux,nocc_b,nvir_b)
-    eris.Lvv = eris.Lvv.reshape(naux,nvir_a,nvir_a)
-    eris.LVV = eris.LVV.reshape(naux,nvir_b,nvir_b)
+    if not myadc.if_naf:
+        eris.Lov = eris.Lov.reshape(naux,nocc_a,nvir_a)
+        eris.LOV = eris.LOV.reshape(naux,nocc_b,nvir_b)
+        eris.Lvv = eris.Lvv.reshape(naux,nvir_a,nvir_a)
+        eris.LVV = eris.LVV.reshape(naux,nvir_b,nvir_b)
+    else:
+        eris.Lov = eris.Lov.reshape(myadc.naux,nocc_a,nvir_a)
+        eris.LOV = eris.LOV.reshape(myadc.naux,nocc_b,nvir_b)
+        #eris.Lvv = eris.Lvv.reshape(naux,nvir_a,nvir_a)
+        #eris.LVV = eris.LVV.reshape(naux,nvir_b,nvir_b)
 
     log.timer('DF-ADC integral transformation', *cput0)
 

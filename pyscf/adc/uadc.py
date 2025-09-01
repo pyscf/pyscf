@@ -311,7 +311,7 @@ def make_ref_rdm1(adc):
     return (rdm1_a, rdm1_b)
 
 def get_fno_ref(myadc,nroots,ref_state):
-    adc2_ref = UADC(myadc._scf,myadc.frozen).set(verbose = 0,method_type = myadc.method_type)#,with_df = myadc.with_df,if_naf = myadc.if_naf,thresh_naf = myadc.thresh_naf)
+    adc2_ref = UADC(myadc._scf,myadc.frozen).set(verbose = 0,method_type = myadc.method_type,with_df = myadc.with_df,if_naf = myadc.if_naf,thresh_naf = myadc.thresh_naf)
     myadc.e2_ref,myadc.v2_ref,myadc.p2_ref,myadc.x2_ref = adc2_ref.kernel(nroots)
     rdm1_gs = adc2_ref.make_ref_rdm1()
     if ref_state is not None:
@@ -384,7 +384,7 @@ def make_fno(myadc, rdm1_ss, mf, thresh):
     no_frozen_b = np.hstack((np.arange(nocc_loc_b[0], nocc_loc_b[1]),
                               np.arange(nocc_loc_b[3], nocc_loc_b[5]))).astype(int)
 
-    no_coeff = np.array([no_coeff_a,no_coeff_b])
+    no_coeff = (no_coeff_a,no_coeff_b)
     no_frozen = (no_frozen_a,no_frozen_b)
 
     return no_coeff,no_frozen
@@ -471,7 +471,7 @@ class UADC(lib.StreamObject):
         'E', 'U', 'P', 'X', 'ncvs', 'dip_mom', 'dip_mom_nuc',
         'compute_spin_square', 'f_ov',
         'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b',
-        'if_heri_eris'
+        'if_heri_eris', 'if_naf', 'thresh_naf', 'naux'
     }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
@@ -552,7 +552,10 @@ class UADC(lib.StreamObject):
         self.t2 = None
         self.imds = lambda:None
         self._nocc = mf.nelec
-#NOTE:update start        
+#NOTE:update start
+        self.naux = None
+        self.if_naf = False
+        self.thresh_naf = 1e-2        
         self.if_heri_eris = False
         self._nmo = None
         if frozen is None:
@@ -585,7 +588,7 @@ class UADC(lib.StreamObject):
             occ_a = maskocc_a & mask_a
             occ_b = maskocc_b & mask_b
             self._nocc = (int(occ_a.sum()), int(occ_b.sum()))
-            self.mo_coeff = np.array([mo_coeff[0][:,mask_a], mo_coeff[1][:,mask_b]])
+            self.mo_coeff = (mo_coeff[0][:,mask_a], mo_coeff[1][:,mask_b])
             if self._nocc[0] == 0 or self._nocc[1] == 0:
                 raise ValueError("No occupied alpha or beta orbitals found")
 
@@ -595,9 +598,10 @@ class UADC(lib.StreamObject):
         else:
             dm = self._scf.make_rdm1(mo_coeff, self.mo_occ)
             vhf = self._scf.get_veff(self.mol, dm)
-            fockao = self._scf.get_fock(vhf=vhf, dm=dm)
-            fock = self.mo_coeff.conj().T.dot(fockao).dot(self.mo_coeff)
-            (self.mo_energy_a,self.mo_energy_b) = fock.diagonal().real
+            fockao_a, fockao_b = self._scf.get_fock(vhf=vhf, dm=dm)
+            fock_a = self.mo_coeff[0].conj().T.dot(fockao_a).dot(self.mo_coeff[0])
+            fock_b = self.mo_coeff[1].conj().T.dot(fockao_b).dot(self.mo_coeff[1])
+            (self.mo_energy_a,self.mo_energy_b) = (fock_a.diagonal().real,fock_b.diagonal().real)
             self.scf_energy = self._scf.energy_tot(dm=dm, vhf=vhf)
 #NOTE:update end
         self._nvir = (self._nmo[0] - self._nocc[0], self._nmo[1] - self._nocc[1])
@@ -628,8 +632,8 @@ class UADC(lib.StreamObject):
 
         for i in range(dip_ints.shape[0]):
             dip = dip_ints[i,:,:]
-            dip_mom_a[i,:,:] = np.dot(mo_coeff[0].T, np.dot(dip, mo_coeff[0]))
-            dip_mom_b[i,:,:] = np.dot(mo_coeff[1].T, np.dot(dip, mo_coeff[1]))
+            dip_mom_a[i,:,:] = np.dot(self.mo_coeff[0].T, np.dot(dip, self.mo_coeff[0]))
+            dip_mom_b[i,:,:] = np.dot(self.mo_coeff[1].T, np.dot(dip, self.mo_coeff[1]))
 
         self.dip_mom = []
         self.dip_mom.append(dip_mom_a)
@@ -788,7 +792,14 @@ class UADC(lib.StreamObject):
             raise NotImplementedError(self.method_type)
 
         self._adc_es = adc_es
-        return e_exc, v_exc, spec_fac, X
+        if self.if_heri_eris:
+            if self.if_naf:
+                return e_exc, v_exc, spec_fac, X, eris, self.naux
+            else:
+                eris.vvvv = None
+                return e_exc, v_exc, spec_fac, X, eris
+        else:
+            return e_exc, v_exc, spec_fac, X
 
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''
@@ -869,8 +880,8 @@ class UFNOADC3(UADC):
         self.frozen_core = copy.deepcopy(self.frozen)
 
     def compute_correction(self, mf, frozen, nroots, eris):
-        adc2_ssfno = UADC(mf, frozen, self.mo_coeff).set(verbose = 0,method_type = self.method_type)#,\
-                                                         #with_df = self.with_df,if_naf = self.if_naf,thresh_naf = self.thresh_naf,naux = self.naux)
+        adc2_ssfno = UADC(mf, frozen, self.mo_coeff).set(verbose = 0,method_type = self.method_type,\
+                                                         with_df = self.with_df,if_naf = self.if_naf,thresh_naf = self.thresh_naf,naux = self.naux)
         e2_ssfno,v2_ssfno,p2_ssfno,x2_ssfno = adc2_ssfno.kernel(nroots, eris = eris)
         self.delta_e = self.e2_ref - e2_ssfno
         #self.delta_v = self.v2_ref - v2_ssfno
