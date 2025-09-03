@@ -32,7 +32,10 @@ FT_A = getattr(__config__, 'mcpdft_otfnal_ftransfnal_A', -475.60656009)
 FT_B = getattr(__config__, 'mcpdft_otfnal_ftransfnal_B', -379.47331922)
 FT_C = getattr(__config__, 'mcpdft_otfnal_ftransfnal_C', -85.38149682)
 
-OT_ALIAS = {'MC23': 'tMC23'}
+OT_ALIAS = {
+    'MC23': 'tMC23',
+    'MC25': 'tMC25',
+}
 OT_HYB_ALIAS = {'PBE0' : '0.25*HF + 0.75*PBE, 0.25*HF + 0.75*PBE',
                 }
 
@@ -41,9 +44,13 @@ REG_OT_FUNCTIONALS={}
 # ALIAS for the preset on-top functional
 OT_PRESET={
     # Reparametrized-M06L: rep-M06L
-    # MC23 = { '0.2952*HF + (1-0.2952)*rep-M06L, 0.2952*HF + (1-0.2952)*rep-M06L'}}
     # XC_ID_MGGA_C_M06_L = 233
     # XC_ID_MGGA_X_M06_L = 203
+
+    # MC23 = { '0.2952*HF + (1-0.2952)*rep-M06L, 0.2952*HF + (1-0.2952)*rep-M06L'}}
+    # J. J. Bao, D. Zhang, S. Zhang, L. Gagliardi, and D. G. Truhlar
+    # Proc. Natl. Acad. Sci. U.S.A. 122, e2419413121/1-8 (2025).
+    # https://doi.org/10.1073/pnas.2419413121
     'MC23':{
         'xc_base':'M06L',
         'ext_params':{203: np.array([3.352197, 6.332929e-01, -9.469553e-01, 2.030835e-01,
@@ -56,8 +63,30 @@ OT_PRESET={
                                        -3.485860e-03, -5.811240e-04, 6.668814e-04, 0.0, 2.669169e-01,
                                        -7.563289e-02, 7.036292e-02, 3.493904e-04, 6.360837e-04, 0.0, 1e-10])},
         'hyb':(0.2952,0.2952,0),
-        'facs':(0.7048,0.7048)}
-        }
+        'facs':(0.7048,0.7048)},
+
+    # MC25 = { '0.28*HF + (1-0.28)*rep-M06L, 0.28*HF + (1-0.28)*rep-M06L'}}
+    # D. Zhang, Y. Kim, M. Hennefarth, L. Gagliardi, and D. G. Truhlar
+    # Under review
+    'MC25': {
+        'xc_base': 'M06L',
+        'ext_params': {
+            203: np.array([3.465030e+00, 5.375447e-01, -7.191629e-01, -9.915646e-01,
+                           2.229138e+00, 5.404209e+00, -4.004898e+00, -5.983860e+00,
+                           -2.086931e+00, -8.878196e-01, 4.888665e+00, 2.868958e+00,
+                           -2.499939e+00, -9.852771e-03, 8.596984e-03, -1.220706e-05,
+                           -1.336275e-05, 0.0]),
+            233: np.array([0.06, 0.0031, 0.00515088, 0.00304966, 1.489435e+00,
+                           2.942442e+00, -6.297330e+00, -2.062505e+00, 1.634904e+00,
+                           1.608843e+00, -1.233955e+00, -1.964674e+00, -2.471985e+00,
+                           -5.392796e-01, -1.509794e+00, 2.794569e-02, 1.061909e-01,
+                           5.095118e-04, -2.927055e-03, 0.0, 9.690385e-01, -4.546714e-02,
+                           4.151718e-02, 1.789189e-04, 1.024388e-03, 0.0, 1e-10])
+        },
+        'hyb': (0.28, 0.28, 0),
+        'facs': (0.72, 0.72)
+    },
+}
 
 def register_otfnal(xc_code, preset):
     '''
