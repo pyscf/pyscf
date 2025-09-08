@@ -1778,6 +1778,24 @@ def _primitive_gto_cutoff(cell, precision=None):
 
 
 class MultiGridNumInt(lib.StreamObject, LibXCMixin):
+    '''
+    Multigrid Numerical Integration Class for DFT XC-related numerical integration
+    using the multigrid algorithm. This class follows the APIs of the numint.NumInt class.
+
+    Input Attributes:
+        mesh : list
+            Specifies the number of grids along each axis.
+        xc_with_j : bool
+            Indicates whether to compute and include the Coulomb matrix in the
+            Vxc matrix.
+
+    Intermediate Attributes (These attributes are generated during computations
+    and should not be modified. Furthermore, they may not be compatible between
+    GPU and CPU implementations):
+        - tasks
+        - _rsh_df
+    '''
+
     _keys = {'cell', 'mesh', 'xc_with_j', 'tasks'}
 
     def __init__(self, cell):

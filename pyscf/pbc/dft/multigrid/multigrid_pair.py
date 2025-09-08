@@ -921,7 +921,9 @@ def get_nuc_nuc_grad(mydf, dm, kpts=None):
 class MultiGridNumInt(MultiGridNumInt_v1):
     '''Base class for multigrid DFT (version 2).
 
-    Attributes:
+    Intermediate Attributes (These attributes are generated during computations
+    and should not be modified. Furthermore, they may not be compatible between
+    GPU and CPU implementations):
         task_list : `TaskList` instance
             Task list recording which primitive basis function pairs
             need to be considered.
