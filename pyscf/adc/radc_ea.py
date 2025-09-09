@@ -863,7 +863,6 @@ def renormalize_eigenvectors(adc, nroots=1):
         UdotU = np.dot(U1, U1) + 2.*np.dot(U2.ravel(), U2.ravel()) - \
                        np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
         U[:,I] /= np.sqrt(UdotU)
-        print(f"UdotU is {UdotU}")
 
 
     return U

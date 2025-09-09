@@ -127,14 +127,82 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
 
     return evals, evecs, P, X
 
+def make_ref_rdm1(adc):
+
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+        raise NotImplementedError(adc.method)
+
+    t1 = adc.t1
+    t2 = adc.t2
+    t2_ce = t1[0]
+    t1_ccee = t2[0]
+
+    ######################
+    einsum_type = True
+    nocc = adc.nocc
+    nmo = adc.nmo
+    nkpts = adc.nkpts
+
+    OPDM = np.zeros((nkpts,nmo,nmo), dtype=np.complex128)
+    OPDM[:, :nocc, :nocc] += np.identity(nocc)
+
+    ####### ADC(2) SPIN ADAPTED REF OPDM with SQA ################
+    for ki in range(nkpts):
+        for kj in range(nkpts):
+            for ka in range(nkpts):
+                kb = adc.khelper.kconserv[ki, ka, kj]
+                ### OCC-OCC ###
+                OPDM[ki][:nocc, :nocc] -= 2 * lib.einsum('Iiab,Jiab->IJ', t1_ccee[ki][kj][ka].conj(), t1_ccee[ki][kj][ka], optimize = einsum_type)
+                OPDM[ki][:nocc, :nocc] += lib.einsum('Iiab,Jiba->IJ', t1_ccee[ki][kj][ka].conj(), t1_ccee[ki][kj][kb], optimize = einsum_type)
+                ### VIR-VIR ###
+                OPDM[ka][nocc:, nocc:] += 2 * lib.einsum('ijAa,ijBa->AB', t1_ccee[ki][kj][ka].conj(), t1_ccee[ki][kj][ka], optimize = einsum_type)
+                OPDM[ka][nocc:, nocc:] -= lib.einsum('ijAa,jiBa->AB', t1_ccee[ki][kj][ka].conj(), t1_ccee[kj][ki][ka], optimize = einsum_type)
+
+    ####### ADC(2)-x SPIN ADAPTED REF OPDM WITH SQA ################    
+    if adc.method == "adc(3)" or adc.method == "adc(2)-x":
+        ### OCC-VIR ###
+        OPDM[ki][:nocc, nocc:] += lib.einsum('IA->IA', t2_ce[ki], optimize = einsum_type).copy()
+        ### VIR-OCC ###
+        OPDM[ki][nocc:, :nocc] = OPDM[ki][:nocc, nocc:].conj().T
+    
+    ####### ADC(3) SPIN ADAPTED REF OPDM WITH SQA ################
+    if adc.method == "adc(3)":
+        t2_ccee = t2[1]
+
+        for ki in range(nkpts):
+            for kj in range(nkpts):
+                for ka in range(nkpts):
+                    kb = adc.khelper.kconserv[ki, ka, kj]
+                    #### OCC-OCC ###
+                    OPDM[ki][:nocc, :nocc] -= 2 * lib.einsum('Iiab,Jiab->IJ',
+                                        t1_ccee[ki][kj][ka].conj(), t2_ccee[ki][kj][ka], optimize = einsum_type)
+                    OPDM[ki][:nocc, :nocc] += lib.einsum('Iiab,Jiba->IJ', t1_ccee[ki][kj][ka].conj(), t2_ccee[ki][kj][kb], optimize = einsum_type)
+                    OPDM[ki][:nocc, :nocc] -= 2 * lib.einsum('Jiab,Iiab->IJ',
+                                                        t1_ccee[ki][kj][ka].conj(), t2_ccee[ki][kj][ka], optimize = einsum_type)
+                    OPDM[ki][:nocc, :nocc] += lib.einsum('Jiab,Iiba->IJ', t1_ccee[ki][kj][ka].conj(), t2_ccee[ki][kj][kb], optimize = einsum_type)
+                    ##### OCC-VIR ### ####
+                    OPDM[ki][:nocc, nocc:] +=  lib.einsum('IiAa,ia->IA', t1_ccee[ki][kj][ka], t2_ce[kj].conj(), optimize = einsum_type)
+                    OPDM[ki][:nocc, nocc:] -= 1/2 * \
+                        lib.einsum('iIAa,ia->IA', t1_ccee[kj][ki][ka], t2_ce[kj].conj(), optimize = einsum_type)
+                    ###### VIR-OCC ###
+                    OPDM[ki][nocc:, :nocc] = OPDM[ki][:nocc, nocc:].conj().T
+                    ##### VIR-VIR ###
+                    OPDM[ka][nocc:, nocc:] += 2 * lib.einsum('ijAa,ijBa->AB',
+                                             t1_ccee[ki][kj][ka].conj(), t2_ccee[ki][kj][ka], optimize = einsum_type)
+                    OPDM[ka][nocc:, nocc:] -= lib.einsum('ijAa,jiBa->AB', t1_ccee[ki][kj][ka].conj(), t2_ccee[kj][ki][ka], optimize = einsum_type)
+                    OPDM[ka][nocc:, nocc:] += 2 * lib.einsum('ijBa,ijAa->AB',
+                                                        t1_ccee[ki][kj][ka].conj(), t2_ccee[ki][kj][ka], optimize = einsum_type)
+                    OPDM[ka][nocc:, nocc:] -= lib.einsum('ijBa,jiAa->AB', t1_ccee[ki][kj][ka].conj(), t2_ccee[kj][ki][ka], optimize = einsum_type)
+
+    for ki in range(nkpts):
+        OPDM[ki] += OPDM[ki].conj().T
+    return OPDM
+
 
 class RADC(pyscf.adc.radc.RADC):
-    _keys = {
-        'tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff',
-        'mol', 'mo_energy', 'incore_complete',
-        'scf_energy', 'e_tot', 't1', 'frozen', 'chkfile',
-        'max_space', 't2', 'mo_occ', 'max_cycle','kpts', 'khelper',
-        'exxdiv', 'cell', 'nkop_chk', 'kop_npick', 'chnk_size', 'keep_exxdiv',
+    _keys = pyscf.adc.radc.RADC._keys | {
+        'kpts', 'khelper','exxdiv', 'cell', 
+        'nkop_chk', 'kop_npick', 'chnk_size', 'keep_exxdiv',
     }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
@@ -183,7 +251,8 @@ class RADC(pyscf.adc.radc.RADC):
 
         self.keep_exxdiv = False
         self.mo_energy = mf.mo_energy
-
+    
+    make_ref_rdm1 = make_ref_rdm1
     transform_integrals = kadc_ao2mo.transform_integrals_incore
     compute_amplitudes = kadc_rhf_amplitudes.compute_amplitudes
     compute_energy = kadc_rhf_amplitudes.compute_energy

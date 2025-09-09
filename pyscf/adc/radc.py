@@ -576,7 +576,7 @@ class RFNOADC3(RADC):
         self.if_naf = True
         self.frozen_core = copy.deepcopy(self.frozen)
 
-    def compute_correction(self, mf, frozen, nroots, eris):
+    def compute_correction(self, mf, frozen, nroots, eris=None):
         adc2_ssfno = RADC(mf, frozen, self.mo_coeff).set(verbose = 0,method_type = self.method_type,\
                                                          with_df = self.with_df,if_naf = self.if_naf,thresh_naf = self.thresh_naf,naux = self.naux,\
                                                          ncvs = self.ncvs)
@@ -608,6 +608,9 @@ class RFNOADC3(RADC):
                                                             if_heri_eris = self.if_heri_eris,ncvs = self.ncvs)
         if not self.correction or self.if_heri_eris is False:
             e_exc, v_exc, spec_fac, x = adc3_ssfno.kernel(nroots, guess, eris)
+            if self.correction:
+                self.compute_correction(self._scf, self.frozen, nroots)
+                e_exc = e_exc + self.delta_e
         elif self.if_naf:
             e_exc, v_exc, spec_fac, x, eris, self.naux = adc3_ssfno.kernel(nroots, guess, eris)
             self.compute_correction(self._scf, self.frozen, nroots, eris)

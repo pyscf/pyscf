@@ -38,7 +38,7 @@ def transform_integrals_incore(myadc):
     nvir = nmo - nocc
     dtype = myadc.mo_coeff[0].dtype
 
-    mo_coeff = myadc.mo_coeff = padded_mo_coeff(myadc, myadc.mo_coeff)
+    mo_coeff = padded_mo_coeff(myadc, myadc.mo_coeff)
 
     fao2mo = myadc._scf.with_df.ao2mo
 
@@ -94,7 +94,7 @@ def transform_integrals_outcore(myadc):
 
     dtype = myadc.mo_coeff[0].dtype
 
-    mo_coeff = myadc.mo_coeff = padded_mo_coeff(myadc, myadc.mo_coeff)
+    mo_coeff = padded_mo_coeff(myadc, myadc.mo_coeff)
 
     fao2mo = myadc._scf.with_df.ao2mo
 
@@ -209,7 +209,7 @@ def transform_integrals_df(myadc):
         myadc._scf.with_df.build()
     dtype = myadc.mo_coeff[0].dtype
 
-    mo_coeff = myadc.mo_coeff = padded_mo_coeff(myadc, myadc.mo_coeff)
+    mo_coeff = padded_mo_coeff(myadc, myadc.mo_coeff)
 
     kconserv = myadc.khelper.kconserv
 

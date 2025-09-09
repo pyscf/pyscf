@@ -22733,7 +22733,6 @@ class UADCEE(uadc.UADC):
 
             from scipy.linalg import eigh
             uu, vecs = eigh(M_f)
-            print(vecs)
             vecs=vecs[:,:nroots]
             if not ascending:
                 vecs = vecs[:, ::-1]
