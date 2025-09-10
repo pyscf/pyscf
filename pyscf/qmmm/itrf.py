@@ -350,6 +350,10 @@ class QMMMGrad:
         charges = mm_mol.atom_charges()
         expnts = mm_mol.get_zetas()
 
+        if type(expnts) is float:
+            expnts = numpy.zeros(charges.shape) + expnts
+        assert type(expnts) is numpy.ndarray and expnts.shape == charges.shape
+
         intor = 'int3c2e_ip2'
         nao = mol.nao
         max_memory = self.max_memory - lib.current_memory()[0]
