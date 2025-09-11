@@ -668,6 +668,23 @@ static int SGXnr_pj_screen_v2(int *shls, CVHFOpt *opt,
         return opt->q_cond[i*n+j] * MAX(shl_maxs[i], shl_maxs[j]) > cutoff;
 }
 
+static int SGXnr_pj_escreen(int *shls, CVHFOpt *opt,
+                            int *atm, int *bas, double *env,
+                            double *econd, double *shl_maxs,
+                            double etol)
+{
+        if (opt == NULL) {
+                return 1;
+        }
+        int i = shls[0];
+        int j = shls[1];
+        int n = opt->nbas;
+        assert(opt->q_cond);
+        assert(i < n);
+        assert(j < n);
+        return opt->q_cond[i*n+j] * MAX(shl_maxs[i] * econd[j], shl_maxs[j] * econd[i]) > etol;
+}
+
 void SGXdot_nrk_no_pscreen(int (*intor)(), SGXJKOperator **jkop, SGXJKArray **vjk,
                 double **dms, double *buf, double *cache, int n_dm, int* shls,
                 CVHFOpt *vhfopt, IntorEnvs *envs,
@@ -940,7 +957,7 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
                       CINTOpt *cintopt, CVHFOpt *vhfopt,
                       int *atm, int natm, int *bas, int nbas, double *env,
                       int env_size, int aosym, double *ncond,
-                      double *weights)
+                      double *weights, double etol, double *econd)
 {
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
@@ -1053,6 +1070,8 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
                                 if ((*fprescreen)(shls, vhfopt, atm, bas, env)) {
                                 if (ncond == NULL || SGXnr_pj_screen_v2(
                                         shls, vhfopt, atm, bas, env, ncond[ibatch], shl_maxs
+                                ) || SGXnr_pj_escreen(
+                                        shls, vhfopt, atm, bas, env, econd + ibatch * nbas, shl_maxs, etol
                                 )) {
                                         sj_shells[num_sj_shells] = jsh;
                                         num_sj_shells++;

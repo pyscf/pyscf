@@ -384,6 +384,25 @@ def _get_sgx_dm_mask(sgx, dms, ao_loc):
         return None
 
 
+def _get_block_fg(sgx, dms, ao_loc, ao_block_norm):
+    mol = sgx.mol
+    nao = mol.nao_nr()
+    nset = dms.shape[0]
+    ta = logger.perf_counter()
+    shl_dm = numpy.empty((nset, mol.nbas, mol.nbas))
+    for i in range(nset):
+        _vhf.libcvhf.SGXmake_shl_dm(
+            dms[i].ctypes.data_as(ctypes.c_void_p),
+            shl_dm[i].ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nao),
+            ctypes.c_int(mol.nbas),
+            ao_loc.ctypes.data_as(ctypes.c_void_p),
+        )
+    shl_dm = shl_dm.sum(axis=0)
+    block_fg = lib.dot(ao_block_norm, shl_dm)
+    return block_fg
+
+
 def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
                   direct_scf_tol=1e-13):
     t0 = logger.process_clock(), logger.perf_counter()
@@ -569,7 +588,7 @@ def run_k_only_setup(sgx, dms, hermi):
     return blksize, screen_index, proj, dm_mask, ncond, ncond_ni, ao_loc
 
 
-def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
+def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13, full_dm=None):
     if sgx.debug:
         raise NotImplementedError("debug mode for accelerated K matrix")
 
@@ -581,8 +600,6 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     dm_shape = dms.shape
     nao = dm_shape[-1]
     dms = dms.reshape(-1,nao,nao)
-
-    # batch_jk = _gen_jk_direct(mol, 's2', False, True, direct_scf_tol, sgx._opt)
     t1 = logger.timer_debug1(mol, "sgX initialization", *t0)
     vk = numpy.zeros_like(dms)
     tnuc = 0, 0
@@ -594,6 +611,16 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
 
     batch_k = _gen_k_direct(mol, 's2', direct_scf_tol, sgx._opt)
 
+    if full_dm is None:
+        full_dm = dms
+    else:
+        full_dm = numpy.asarray(full_dm)
+        full_dm = full_dm.reshape(-1,nao,nao)
+    sgx._block_fg = _get_block_fg(sgx, full_dm, ao_loc, sgx._ao_block_norm)
+    # divide by the number of blocks to get effective energy tolerance,
+    # since we are going to sum over blocks
+    sgx._etol = sgx.sgx_tol_energy / sgx._block_fg.shape[0]
+
     t_setup = logger.perf_counter()
     print("AFTER_SETUP", t_setup - t0[1])
 
@@ -604,7 +631,6 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     t_ao_dm = 0
     t_ao_ao = 0
     t_int = 0
-    sn = 0
     print("LEFTOVER", ngrids % SGX_BLKSIZE)
     for i0, i1 in lib.prange(0, ngrids, blksize):
         assert i0 % SGX_BLKSIZE == 0
@@ -626,7 +652,8 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
         if ncond is None:
             gv = batch_k(mol, coords, fg, weights)
         else:
-            gv = batch_k(mol, coords, fg, weights, ncond[i0 // SGX_BLKSIZE :])
+            gv = batch_k(mol, coords, fg, weights, ncond[i0 // SGX_BLKSIZE :],
+                         econd=sgx._block_fg[i0 // SGX_BLKSIZE], etol=sgx._etol)
         tf = logger.perf_counter()
         tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
         if sgx.use_dm_screening:
@@ -754,7 +781,6 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
             vj += jpart
         if with_k:
             # vk[:] += lib.einsum('gu,xvg->xuv', ao, gv)
-            # vk[:] += _sgxdot_ao_gv(ao, gv, mask, shls_slice, ao_loc)
             _sgxdot_ao_gv(ao, gv, mask, shls_slice, ao_loc, out=vk)
         jpart = gv = None
 
@@ -904,7 +930,8 @@ def _gen_k_direct(mol, aosym, direct_scf_tol,
     cintor = _vhf._fpointer(sgxopt._intor)
     drv = _vhf.libcvhf.SGXnr_direct_drv
 
-    def k_part(mol, grid_coords, fg, weights, ncond=None):
+    def k_part(mol, grid_coords, fg, weights, ncond=None,
+               econd=None, etol=None):
         if ncond is None:
             ncond = lib.c_null_ptr()
         else:
@@ -946,7 +973,9 @@ def _gen_k_direct(mol, aosym, direct_scf_tol,
             ctypes.c_int(env.shape[0]),
             ctypes.c_int(2 if aosym == 's2' else 1),
             ncond,
-            weights.ctypes.data_as(ctypes.c_void_p))
+            weights.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_double(etol),
+            econd.ctypes.data_as(ctypes.c_void_p))
         return vk
     return k_part
 
