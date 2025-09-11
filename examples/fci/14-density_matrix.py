@@ -159,6 +159,37 @@ dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf', fcivec0, fcivec0, no
 dm1, dm2, dm3, dm4 = fci.rdm.reorder_dm1234(dm1, dm2, dm3, dm4)
 
 #
+# Spin-separated 4-particle density matrix
+#
+
+(dm1a, dm1b), (dm2aa, dm2ab, dm2bb), (dm3aaa, dm3aab, dm3abb, dm3bbb), (dm4aaaa, dm4aaab, dm4aabb, dm4abbb, dm4bbbb) = (
+    fci.direct_spin1.make_rdm1234s(fcivec0, norb, (nelec_a, nelec_b))
+)
+assert(numpy.allclose(dm1a+dm1b, dm1))
+assert(numpy.allclose(dm2aa+dm2bb+dm2ab+dm2ab.transpose(2,3,0,1), dm2))
+assert(numpy.allclose(dm3aaa+dm3bbb+dm3aab+dm3aab.transpose(0,1,4,5,2,3)+\
+dm3aab.transpose(4,5,0,1,2,3)+dm3abb+dm3abb.transpose(2,3,0,1,4,5)+dm3abb.transpose(2,3,4,5,0,1), dm3))
+assert(numpy.allclose(
+    dm4aaaa
+    + dm4bbbb
+    + dm4aaab
+    + dm4aaab.transpose(0, 1, 2, 3, 6, 7, 4, 5)
+    + dm4aaab.transpose(0, 1, 6, 7, 2, 3, 4, 5)
+    + dm4aaab.transpose(6, 7, 0, 1, 2, 3, 4, 5)
+    + dm4aabb
+    + dm4aabb.transpose(0, 1, 4, 5, 2, 3, 6, 7)
+    + dm4aabb.transpose(4, 5, 0, 1, 2, 3, 6, 7)
+    + dm4aabb.transpose(0, 1, 4, 5, 6, 7, 2, 3)
+    + dm4aabb.transpose(4, 5, 0, 1, 6, 7, 2, 3)
+    + dm4aabb.transpose(4, 5, 6, 7, 0, 1, 2, 3)
+    + dm4abbb
+    + dm4abbb.transpose(2, 3, 0, 1, 4, 5, 6, 7)
+    + dm4abbb.transpose(2, 3, 4, 5, 0, 1, 6, 7)
+    + dm4abbb.transpose(2, 3, 4, 5, 6, 7, 0, 1),
+    dm4,
+))
+
+#
 # Spin-traced 4-particle transition density matrix
 #
 dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf', fcivec0, fcivec1, norb,

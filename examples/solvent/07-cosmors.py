@@ -5,16 +5,15 @@ An example of using COSMO-RS functionality.
 
 #%% Imports
 
-import io
+import io, json
 
-import numpy as np
 import matplotlib.pyplot as plt
 
 from pyscf import gto, dft
 from pyscf.solvent import pcm
 from pyscf.solvent.cosmors import get_sas_volume
 from pyscf.solvent.cosmors import write_cosmo_file
-from pyscf.solvent.cosmors import get_cosmors_parameters
+from pyscf.solvent.cosmors import get_pcm_parameters
 
 
 #%% Set parameters
@@ -37,40 +36,25 @@ cm.lebedev_order = 29 # lebedev grids on the cavity surface, lebedev_order=29  <
 
 #%% COSMO-files
 
+# Please note, that outlying charge correction is not implemented yet
+
 # run DFT SCF (any level of theory is OK, though DFT is optimal)
 mf = dft.RKS(mol, xc='b3lyp')
 mf = mf.PCM(cm)
 mf.kernel()
 
 # generate COSMO-file
-with io.StringIO() as outp: # with open('formaldehyde.cosmo', 'w') as outf:
+with io.StringIO() as outp:
     write_cosmo_file(outp, mf)
     print(outp.getvalue())
+    print()
+
+# the corresponding parameters can be extracted as JSON-formatted dictionary
+params = get_pcm_parameters(mf)
+print(json.dumps(params, indent = '  '))
 
 
-# if PCM DFT were computed with fepsilon < 1 <=> eps != inf the ValueError will be raised
-# use ignore_low_feps=True to overrule it, but please be sure you know what you're doing
-
-# run DFT SCF
-cm = pcm.PCM(mol)
-cm.eps = 32.613 # methanol
-mf = dft.RKS(mol, xc='b3lyp')
-mf = mf.PCM(cm)
-mf.kernel()
-
-# try to get COSMO-file
-with io.StringIO() as outp:
-    try:
-        write_cosmo_file(outp, mf)
-        print(outp.getvalue())
-    except ValueError as e:
-        print(e)
-
-# overruling
-with io.StringIO() as outp:
-    write_cosmo_file(outp, mf, ignore_low_feps=True)
-    print(outp.getvalue())
-
+#%% Volumes
 
 # The molecular volume is computed for the solvent-accessible surface generated
 # within pcm.PCM object. Please note that r_sol is assumed to be equal to zero,
@@ -88,28 +72,32 @@ ax.set_xticks(range(len(steps)))
 _ = ax.set_xticklabels(steps)
 plt.show()
 
+# If user prefers other algorithm to compute molecular volumes (e.g. RDKit),
+# then it can be specified manually via the "volume" argument. Please note,
+# that volume values must be given in [a.u.]
 
-#%% Sigma-profiles
+with io.StringIO() as outp:
+    write_cosmo_file(outp, mf, volume=1234.56)
+    print(outp.getvalue()[:219]) # slicing truncates the COSMO-file up to the volume line
 
-# compute SCF PCM
+
+#%% F_epsilon
+
+# if PCM DFT were computed with fepsilon < 1 <=> eps != inf, the ValueError will be raised
+
+# run DFT SCF
 cm = pcm.PCM(mol)
-cm.eps = float('inf')
+cm.eps = 32.613 # methanol
 mf = dft.RKS(mol, xc='b3lyp')
 mf = mf.PCM(cm)
 mf.kernel()
 
-# compute sigma-profile and related parameters
-params = get_cosmors_parameters(mf)
-print(params)
-plt.plot(params['Screening charge, e/A**2'],
-         params['Screening charge density, A**2'])
-plt.show()
-
-# custom sigma grid
-sigmas_grid = np.linspace(-0.025, 0.025, 101)
-params = get_cosmors_parameters(mf, sigmas_grid)
-plt.plot(params['Screening charge, e/A**2'],
-         params['Screening charge density, A**2'])
-plt.show()
+# try to get COSMO-file
+with io.StringIO() as outp:
+    try:
+        write_cosmo_file(outp, mf)
+        print(outp.getvalue())
+    except ValueError as e:
+        print(e)
 
 

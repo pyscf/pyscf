@@ -8,11 +8,12 @@ This example covers different ways to input basis
 4. Default basis for all elements, except the given basis of specific element.
 5. gto.basis.parse and gto.basis.load functions to input user-specified basis.
 6. Reading the basis set from a given file.
-7. Uncontracted basis with prefix "unc-".
-8. Basis truncation and a subset of a basis set with notation "@".
-9. Even tempered gaussian basis.
-10. Combining multiple basis sets into one basis set.
-11. Internal format (not recommended)
+7. Defining custom aliases for basis sets stored in files.
+8. Uncontracted basis with prefix "unc-".
+9. Basis truncation and a subset of a basis set with notation "@".
+10. Even tempered gaussian basis.
+11. Combining multiple basis sets into one basis set.
+12. Internal format (not recommended)
 '''
 
 import os
@@ -81,6 +82,25 @@ O    SP
              'H2': gto.load('sto-3g', 'He')  # or use basis of another atom
             }
 )
+
+#
+# You can define custom aliases for basis sets defined in files.
+# The variables USER_BASIS_DIR and USER_BASIS_ALIAS should be defined
+# in your PySCF configuration file (e.g. ~/.pyscf_conf.py) like this:
+
+USER_BASIS_DIR = dirnow
+USER_BASIS_ALIAS = {'customsto3g' : 'h_sto3g.dat'}
+
+# We need to override USER_BASIS_DIR and USER_BASIS_ALIAS so that the example can run.
+# Don't actually use the next two lines in your code.
+gto.basis.USER_BASIS_DIR = USER_BASIS_DIR
+gto.basis.USER_BASIS_ALIAS = USER_BASIS_ALIAS
+
+mol = gto.M(
+    atom = '''H 0 0 0; H 0 0 1''',
+    basis = 'customsto3g'
+)
+
 
 #
 # Uncontracted basis, decontracting basis.

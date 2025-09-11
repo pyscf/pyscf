@@ -19,6 +19,7 @@ mol.atom = [
 mol.basis = 'cc-pvdz'
 mol.unit = 'B'
 mol.symmetry = True
+mol.verbose = 4
 mol.build()
 mf = scf.RHF(mol)
 mf.irrep_nelec = {'A1g': 4, 'E1gx': 0, 'E1gy': 0, 'A1u': 4,

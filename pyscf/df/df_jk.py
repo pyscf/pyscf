@@ -64,26 +64,34 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
     '''
     from pyscf import df
     from pyscf.scf import dhf
+    from pyscf.df.addons import predefined_auxbasis
     assert (isinstance(mf, scf.hf.SCF))
 
     if with_df is None:
+        mol = mf.mol
+        if auxbasis is None and isinstance(mol.basis, str):
+            if isinstance(mf, scf.hf.KohnShamDFT):
+                xc = mf.xc
+            else:
+                xc = 'HF'
+            if xc == 'LDA,VWN':
+                # This is likely the default xc setting of a KS instance.
+                # Postpone the auxbasis assignment to with_df.build().
+                auxbasis = None
+            else:
+                auxbasis = predefined_auxbasis(mol, mol.basis, xc)
         if isinstance(mf, dhf.UHF):
-            with_df = df.DF4C(mf.mol)
+            with_df = df.DF4C(mol, auxbasis)
         else:
-            with_df = df.DF(mf.mol)
+            with_df = df.DF(mol, auxbasis)
         with_df.max_memory = mf.max_memory
         with_df.stdout = mf.stdout
         with_df.verbose = mf.verbose
-        with_df.auxbasis = auxbasis
 
     if isinstance(mf, _DFHF):
-        if mf.with_df is None:
-            mf.with_df = with_df
-        elif getattr(mf.with_df, 'auxbasis', None) != auxbasis:
-            #logger.warn(mf, 'DF might have been initialized twice.')
-            mf = mf.copy()
-            mf.with_df = with_df
-            mf.only_dfj = only_dfj
+        mf = mf.copy()
+        mf.with_df = with_df
+        mf.only_dfj = only_dfj
         return mf
 
     dfmf = _DFHF(mf, with_df, only_dfj)
@@ -176,6 +184,12 @@ class _DFHF:
 
     def nuc_grad_method(self):
         from pyscf.df.grad import rhf, rohf, uhf, rks, roks, uks
+        if self.istype('_Solvation'):
+            raise NotImplementedError(
+                'Gradients of solvent are not computed. '
+                'Solvent must be applied after density fitting method, e.g.\n'
+                'mf = mol.RKS().density_fit().PCM()'
+            )
         if isinstance(self, scf.uhf.UHF):
             if isinstance(self, scf.hf.KohnShamDFT):
                 return uks.Gradients(self)
@@ -198,6 +212,12 @@ class _DFHF:
 
     def Hessian(self):
         from pyscf.df.hessian import rhf, uhf, rks, uks
+        if self.istype('_Solvation'):
+            raise NotImplementedError(
+                'Hessian of solvent are not computed. '
+                'Solvent must be applied after density fitting method, e.g.\n'
+                'mf = mol.RKS().density_fit().PCM()'
+            )
         if isinstance(self, (scf.uhf.UHF, scf.rohf.ROHF)):
             if isinstance(self, scf.hf.KohnShamDFT):
                 return uks.Hessian(self)
@@ -219,9 +239,21 @@ class _DFHF:
     NSR = method_not_implemented
     Polarizability = method_not_implemented
     RotationalGTensor = method_not_implemented
-    MP2 = method_not_implemented
+
+    def MP2(self, frozen=None, auxbasis=None):
+        mp_obj = self.DFMP2()
+        if auxbasis is not None:
+            mp_obj.with_df.auxbasis = auxbasis
+        return mp_obj
+
     CISD = method_not_implemented
-    CCSD = method_not_implemented
+
+    def CCSD(self, frozen=None, auxbasis=None):
+        from pyscf.cc import dfccsd, dfuccsd
+        cc_obj = self.DFCCSD(frozen)
+        if auxbasis is not None:
+            cc_obj.with_df.auxbasis = auxbasis
+        return cc_obj
 
     def CASCI(self, ncas, nelecas, auxbasis=None, ncore=None):
         from pyscf import mcscf

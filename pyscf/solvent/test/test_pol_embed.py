@@ -315,13 +315,13 @@ class TestPolEmbed(unittest.TestCase):
     def test_rhf_tda(self):
         # TDA with equilibrium_solvation
         mf = solvent.PE(mol.RHF(), potfile).run(conv_tol=1e-10)
-        td = solvent.PE(mf.TDA(), potfile).run(equilibrium_solvation=True)
+        td = mf.TDA(equilibrium_solvation=True).run()
         ref = numpy.array([0.1506426609354755, 0.338251407831332, 0.4471267328974609])
         self.assertAlmostEqual(abs(ref - td.e).max(), 0, 7)
 
         # TDA without equilibrium_solvation
         mf = solvent.PE(mol.RHF(), potfile).run(conv_tol=1e-10)
-        td = solvent.PE(mf.TDA(), potfile).run()
+        td = mf.TDA().run()
         ref = numpy.array([0.1506431269137912, 0.338254809044639, 0.4471487090255076])
         self.assertAlmostEqual(abs(ref - td.e).max(), 0, 7)
 

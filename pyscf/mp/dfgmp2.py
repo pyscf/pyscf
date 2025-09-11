@@ -83,7 +83,19 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
     return emp2.real, t2
 
 
-class DFGMP2(dfmp2.DFMP2):
+class DFGMP2(gmp2.GMP2):
+    _keys = dfmp2.DFRMP2._keys
+
+    __init__ = dfmp2.DFRMP2.__init__
+
+    kernel = gmp2.GMP2.kernel
+
+    split_mo_energy = dfmp2.DFRMP2.split_mo_energy
+    split_mo_coeff = dfmp2.DFRMP2.split_mo_coeff
+    split_mo_occ = dfmp2.DFRMP2.split_mo_occ
+
+    reset = dfmp2.DFRMP2.reset
+
     def loop_ao2mo(self, mo_coeff, nocc, orbspin):
         assert self._scf.istype('GHF')
         nao, nmo = mo_coeff.shape
@@ -162,39 +174,21 @@ class DFGMP2(dfmp2.DFMP2):
         assert t2 is not None
         return make_rdm2(self, t2, ao_repr=ao_repr)
 
+    def nuc_grad_method(self):
+        raise NotImplementedError
+
+    # For non-canonical MP2
+    def update_amps(self, t2, eris):
+        raise NotImplementedError
+
     def init_amps(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         return kernel(self, mo_energy, mo_coeff, eris, with_t2)
 
+    Gradients = NotImplemented
 
-if __name__ == "__main__":
-    from pyscf import gto, scf, mp
-    mol = gto.Mole()
-    mol.atom = [
-        ['Li', (0., 0., 0.)],
-        ['H', (1., 0., 0.)]]
-    mol.basis = 'cc-pvdz'
-    mol.build()
+MP2 = DFMP2 = DFGMP2
 
-    mf = scf.GHF(mol).run()
-    mymp = DFGMP2(mf)
-    mymp.kernel()
+from pyscf import scf
+scf.ghf.GHF.DFMP2 = lib.class_as_method(DFMP2)
 
-    mf = scf.RHF(mol).run()
-    mf = mf.to_ghf()
-    mymp = DFGMP2(mf)
-    mymp.kernel()
-
-    mymp = mp.GMP2(mf).density_fit()
-    mymp.kernel()
-
-    mf = scf.RHF(mol).density_fit().run()
-    mymp = mp.GMP2(mf)
-    mymp.kernel()
-
-    mf = scf.GHF(mol)
-    dm = mf.get_init_guess() + 0j
-    dm[0,:] += .1j
-    dm[:,0] -= .1j
-    mf.kernel(dm0=dm)
-    mymp = DFGMP2(mf)
-    mymp.kernel()
+del (WITH_T2)

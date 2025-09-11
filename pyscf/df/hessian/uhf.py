@@ -33,6 +33,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
+from pyscf import df
 from pyscf.hessian import rhf as rhf_hess
 from pyscf.hessian import uhf as uhf_hess
 from pyscf.df.hessian.rhf import _load_dim0, _pinv
@@ -72,7 +73,10 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     dme0 = numpy.einsum('pi,qi,i->pq', mocca, mocca, mo_ea)
     dme0+= numpy.einsum('pi,qi,i->pq', moccb, moccb, mo_eb)
 
-    auxmol = hessobj.base.with_df.auxmol
+    with_df = hessobj.base.with_df
+    auxmol = with_df.auxmol
+    if auxmol is None:
+        auxmol = df.addons.make_auxmol(with_df.mol, with_df.auxbasis)
     naux = auxmol.nao
     nbas = mol.nbas
     auxslices = auxmol.aoslice_by_atom()
@@ -408,7 +412,10 @@ def _gen_jk(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None,
     if atmlst is None:
         atmlst = range(mol.natm)
 
-    auxmol = hessobj.base.with_df.auxmol
+    with_df = hessobj.base.with_df
+    auxmol = with_df.auxmol
+    if auxmol is None:
+        auxmol = df.addons.make_auxmol(with_df.mol, with_df.auxbasis)
     nbas = mol.nbas
     auxslices = auxmol.aoslice_by_atom()
     aux_loc = auxmol.ao_loc
@@ -465,9 +472,9 @@ def _gen_jk(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None,
             vj1_buf[i] += np.einsum('xp,pij->xij', wj1, coef3c)
         if with_k:
             rhok0_PlJ = lib.einsum('plj,Jj->plJ', rhok0a_Pl_[p0:p1], mocca)
-            vk1a_buf += lib.einsum('xijp,plj->xil', int3c_ip1, rhok0_PlJ[p0:p1])
+            vk1a_buf += lib.einsum('xijp,plj->xil', int3c_ip1, rhok0_PlJ)
             rhok0_PlJ = lib.einsum('plj,Jj->plJ', rhok0b_Pl_[p0:p1], moccb)
-            vk1b_buf += lib.einsum('xijp,plj->xil', int3c_ip1, rhok0_PlJ[p0:p1])
+            vk1b_buf += lib.einsum('xijp,plj->xil', int3c_ip1, rhok0_PlJ)
         int3c_ip1 = None
     vj1_buf = ftmp['vj1_buf'] = vj1_buf
 

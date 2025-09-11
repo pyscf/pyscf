@@ -221,47 +221,44 @@ def scalable_grids_response_setup(grids, mol=None):
         mol, grids.atom_grid, grids.radi_method, grids.level, grids.prune
     )
     coords_all = []
-    ialist = []
+    atm_idx = []
     for ia in range(mol.natm):
         coords, vol = atom_grids_tab[mol.atom_symbol(ia)]
         coords_all.append(coords)
-        ialist.append(numpy.repeat(numpy.int32(ia), vol.size))
+        atm_idx.append(numpy.repeat(numpy.int32(ia), vol.size))
     coords_all = numpy.vstack(coords_all)
-    ialist = numpy.hstack(ialist)
+    atm_idx = numpy.hstack(atm_idx)
     idx = gen_grid.arg_group_grids(mol, coords)
     coords = coords[idx]
-    ialist = ialist[idx]
+    atm_idx = atm_idx[idx]
     if grids.alignment > 1:
         padding = gen_grid._padding_size(grids.size, grids.alignment)
         logger.debug(grids, 'Padding %d grids', padding)
         if padding > 0:
             coords = numpy.vstack(
                 [coords, numpy.repeat([[1e-4]*3], padding, axis=0)])
-            ialist = numpy.hstack([ialist, numpy.repeat(-1, padding)])
-    return coords, ialist
+            atm_idx = numpy.hstack([atm_idx, numpy.repeat(-1, padding)])
+    return coords, atm_idx
 
 
 def scalable_grids_response_cc(grids, blksize):
-    assert grids.ialist is not None
-    # if grids.coords is None or grids.non0tab is None or grids.ialist is None:
-    #     grids.build(with_non0tab=True, with_ialist=True)
-    #     sgx._sgx_block_cond = None
+    assert grids.atm_idx is not None
     mol = grids.mol
     ngrids = grids.weights.size
     assert blksize % BLKSIZE == 0 or blksize == grids.weights.size
     for i0, i1 in lib.prange(0, ngrids, blksize):
         coords = grids.coords[i0:i1]
         weights = grids.weights[i0:i1]
-        ialist = grids.ialist[i0:i1]
+        atm_idx = grids.atm_idx[i0:i1]
         mask = grids.screen_index[i0 // BLKSIZE :]
-        weights1 = get_dw_partition_sorted(mol, ialist, coords, weights,
+        weights1 = get_dw_partition_sorted(mol, atm_idx, coords, weights,
                                            grids.radii_adjust,
                                            grids.atomic_radii)
-        atom_mask = (ialist == -1)
+        atom_mask = (atm_idx == -1)
         # make sure weights are zero in the padded region
         weights[atom_mask] = 0
         weights1[..., atom_mask] = 0
-        yield i0, i1, ialist, coords, weights, weights1.transpose(1, 0, 2), mask
+        yield i0, i1, atm_idx, coords, weights, weights1.transpose(1, 0, 2), mask
 
 
 def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
@@ -320,7 +317,7 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
         # coords is an array shape (ngrids, 3)
         # weights is an array shape (ngrids)
         # weights1 is an array shape (natm, 3, ngrids)
-        i0, i1, ialist, coords, weights, weights1, mask = items
+        i0, i1, atm_idx, coords, weights, weights1, mask = items
         if mol.cart:
             _ao = mol.eval_gto('GTOval_cart_deriv1', coords, non0tab=mask)
         else:
@@ -369,7 +366,7 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
 
         if include_grid_response:
             for ia in range(mol.natm):
-                cond = (ialist == ia)
+                cond = (atm_idx == ia)
                 dek[ia] -= 4 * numpy.sum(dxed[:, cond], axis=1)  # GRID RESPONSE PART 2
 
         tc = logger.perf_counter()
@@ -402,7 +399,7 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
         Cmat = Cmat + Cmat.T
         mat = 0
         for items in scalable_grids_response_cc(grids, blksize):
-            i0, i1, ialist, coords, weights, weights1, mask = items
+            i0, i1, atm_idx, coords, weights, weights1, mask = items
             if mol.cart:
                 _ao = mol.eval_gto('GTOval_cart_deriv1', coords, non0tab=mask)
             else:
@@ -417,7 +414,7 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
             # negative because d sn^-1 / dR = -sn^-1 (dsn/dR) sn^-1
             dek[:, :] -= 0.5 * numpy.dot(weights1, xed)  # GRID RESPONSE PART 1
             for ia in range(mol.natm):
-                cond = (ialist == ia)
+                cond = (atm_idx == ia)
                 dek[ia] -= numpy.sum(dxed[:, cond], axis=1)  # GRID RESPONSE PART 2
         for x in range(3):
             for ia in range(mol.natm):

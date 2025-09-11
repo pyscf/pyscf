@@ -102,6 +102,7 @@ def make_rdm1(mp, t2=None, ao_repr=False, with_frozen=True):
     '''
     from pyscf.cc import gccsd_rdm
     if t2 is None: t2 = mp.t2
+    assert t2 is not None
     doo, dvv = _gamma1_intermediates(mp, t2)
     nocc, nvir = t2.shape[1:3]
     dov = numpy.zeros((nocc,nvir))
@@ -126,6 +127,7 @@ def make_rdm2(mp, t2=None, ao_repr=False):
     E = einsum('pqrs,pqrs', eri, rdm2)
     '''
     if t2 is None: t2 = mp.t2
+    assert t2 is not None
     nmo0 = mp.nmo
     nocc = nocc0 = mp.nocc
 
@@ -173,7 +175,7 @@ def make_rdm2(mp, t2=None, ao_repr=False):
     return dm2
 
 
-class GMP2(mp2.MP2):
+class GMP2(mp2.MP2Base):
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
@@ -219,8 +221,6 @@ class GMP2(mp2.MP2):
         log.note('E(%s) = %.15g  E_corr = %.15g',
                  self.__class__.__name__, self.e_tot, self.e_corr)
         return self
-
-    to_gpu = lib.to_gpu
 
 MP2 = GMP2
 

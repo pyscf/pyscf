@@ -143,7 +143,7 @@ def grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
         veff0moma = numpy.zeros((nmoa,nmoa))
         veff0momb = numpy.zeros((nmob,nmob))
 
-    vresp = mf.gen_response(hermi=1)
+    vresp = mf.gen_response(hermi=1, with_nlc=not td_grad.base.exclude_nlc)
     def fvind(x):
         dm1 = numpy.empty((2,nao,nao))
         xa = x[0,:nvira*nocca].reshape(nvira,nocca)
@@ -330,6 +330,11 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
         logger.warn(td_grad, 'TDUKS-MGGA Gradients may be inaccurate due to grids response')
     else:
         raise NotImplementedError(f'td-uks for functional {xc_code}')
+
+    if mf.do_nlc():
+        raise NotImplementedError("TDDFT gradient with NLC contribution is not supported yet. "
+                                  "Please set exclude_nlc field of tdscf object to True, "
+                                  "which will turn off NLC contribution in the whole TDDFT calculation.")
 
     for ao, mask, weight, coords \
             in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):

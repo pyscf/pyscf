@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04]
+        os: [ubuntu-latest]
         python-version: ["3.8", "3.12"]
     steps:
       - uses: actions/checkout@v3
@@ -46,7 +46,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-20.04]
+        os: [ubuntu-latest]
         pyver: [cp39-cp39]
     env:
       img: quay.io/pypa/manylinux2014_aarch64

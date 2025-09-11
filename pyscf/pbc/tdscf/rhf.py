@@ -139,8 +139,8 @@ def get_ab(mf):
 class TDBase(rhf.TDBase):
     _keys = {'cell'}
 
-    def __init__(self, mf):
-        rhf.TDBase.__init__(self, mf)
+    def __init__(self, mf, frozen=None):
+        rhf.TDBase.__init__(self, mf, frozen)
         self.cell = mf.cell
 
     def get_ab(self, mf=None):
@@ -165,7 +165,7 @@ class TDBase(rhf.TDBase):
 
 class TDA(TDBase):
 
-    init_guess = rhf.TDA.init_guess
+    get_init_guess = rhf.TDA.get_init_guess
     kernel = rhf.TDA.kernel
     _gen_vind = rhf.TDA.gen_vind
 
@@ -184,7 +184,7 @@ CIS = TDA
 
 class TDHF(TDBase):
 
-    init_guess = rhf.TDHF.init_guess
+    get_init_guess = rhf.TDHF.get_init_guess
     kernel = rhf.TDHF.kernel
     _gen_vind = rhf.TDHF.gen_vind
     gen_vind = TDA.gen_vind

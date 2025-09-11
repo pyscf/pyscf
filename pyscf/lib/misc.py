@@ -870,10 +870,7 @@ def invalid_method(name):
     fn.__name__ = name
     return fn
 
-@functools.lru_cache(None)
-def _define_class(name, bases):
-    return type(name, bases, {})
-
+_registered_classes = {}
 def make_class(bases, name=None, attrs=None):
     '''
     Construct a class
@@ -883,14 +880,17 @@ def make_class(bases, name=None, attrs=None):
         class {name}(*bases):
             __dict__ = attrs
     '''
+    _registered_classes
     if name is None:
         name = ''.join(getattr(x, '__name_mixin__', x.__name__) for x in bases)
 
-    cls = _define_class(name, bases)
-    cls.__name_mixin__ = name
-    if attrs is not None:
-        for key, val in attrs.items():
-            setattr(cls, key, val)
+    cls = _registered_classes.get((name, bases))
+    if cls is None:
+        if attrs is None:
+            attrs = {}
+        cls = type(name, bases, attrs)
+        cls.__name_mixin__ = name
+        _registered_classes[name, bases] = cls
     return cls
 
 def set_class(obj, bases, name=None, attrs=None):
@@ -929,7 +929,8 @@ def drop_class(cls, base_cls, name_mixin=None):
 
     # rebuild the dynamic_mixin class
     attrs = {**cls.__dict__, '__name_mixin__': cls_name}
-    cls_undressed = type(cls_name, tuple(filter_bases), attrs)
+    cls_undressed = make_class(tuple(filter_bases), cls_name, attrs)
+    cls_undressed.__module__ = cls.__module__
     return cls_undressed
 
 def replace_class(cls, old_cls, new_cls):
@@ -951,7 +952,9 @@ def replace_class(cls, old_cls, new_cls):
 
     name = cls.__name__.replace(old_cls.__name__, new_cls.__name__)
     attrs = {**cls.__dict__, '__name_mixin__': name}
-    return type(name, tuple(bases), attrs)
+    _cls = make_class(tuple(bases), name, attrs)
+    _cls.__module__ = cls.__module__
+    return _cls
 
 def overwrite_mro(obj, mro):
     '''A hacky function to overwrite the __mro__ attribute'''

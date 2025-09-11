@@ -41,9 +41,14 @@ class KnownValues(unittest.TestCase):
             'convergence_grms': 1e-5,
             'convergence_gmax': 1e-5,
         }
-        mol1 = scf.RHF(mol).Gradients().optimizer(solver='geometric').kernel(params=conv_params)
+        orig_coords = mol.atom_coords()
+        mf = scf.RHF(mol)
+        g = mf.Gradients()
+        mol1 = g.optimizer(solver='geometric').kernel(params=conv_params)
         self.assertAlmostEqual(lib.fp(mol1.atom_coords()), 2.19943732625887, 3)
         self.assertEqual(mol1.symmetry, 'C2v')
+        self.assertTrue(abs(orig_coords - mf.mol.atom_coords()).max() == 0)
+        self.assertTrue(abs(orig_coords - g.mol.atom_coords()).max() == 0)
 
     def test_optimize_high_cost(self):
         mol = gto.M(
@@ -67,6 +72,17 @@ class KnownValues(unittest.TestCase):
         sol.max_cycle = 5
         sol.kernel()
         self.assertTrue(sol.converged)
+
+    def test_optimize_with_hessian(self):
+        mol = gto.M(atom='O 0 0 0; H 0 .75 .58; H 0 -.75 .58')
+        mf = mol.RHF()
+        conv, mol_eq = geometric_solver.kernel(mf, hessian=True)
+        self.assertTrue(conv)
+
+    def test_convergence_fail(self):
+        mol = gto.M(atom='O 0 0 0; H 0 .75 .58; H 0 -.75 .58')
+        mf_opt = mol.RHF().Gradients().optimizer().run(max_cycle=1)
+        self.assertTrue(not mf_opt.converged)
 
 if __name__ == "__main__":
     print("Tests for geometric_solver")

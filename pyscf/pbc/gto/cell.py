@@ -518,7 +518,7 @@ def get_bounding_sphere(cell, rcut):
     nimgs = np.ceil(rcut*heights_inv).astype(int)
 
     for i in range(cell.dimension, 3):
-        nimgs[i] = 1
+        nimgs[i] = 0
     return nimgs
 
 def get_Gv(cell, mesh=None, **kwargs):
@@ -556,8 +556,7 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
     b = cell.reciprocal_vectors()
     weights = abs(np.linalg.det(b))
 
-    if (cell.dimension < 2 or
-        (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
+    if cell.dimension <= 2 and cell.low_dim_ft_type == 'inf_vacuum':
         if cell.dimension == 0:
             rx, wx = _non_uniform_Gv_base(mesh[0]//2)
             ry, wy = _non_uniform_Gv_base(mesh[1]//2)
@@ -590,13 +589,14 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
     rx = np.asarray(rx, order='C')
     ry = np.asarray(ry, order='C')
     rz = np.asarray(rz, order='C')
-    fn = libpbc.get_Gv
-    fn(Gv.ctypes.data_as(ctypes.c_void_p),
-       rx.ctypes.data_as(ctypes.c_void_p),
-       ry.ctypes.data_as(ctypes.c_void_p),
-       rz.ctypes.data_as(ctypes.c_void_p),
-       mesh.ctypes.data_as(ctypes.c_void_p),
-       b.ctypes.data_as(ctypes.c_void_p))
+    libpbc.get_Gv(
+        Gv.ctypes.data_as(ctypes.c_void_p),
+        rx.ctypes.data_as(ctypes.c_void_p),
+        ry.ctypes.data_as(ctypes.c_void_p),
+        rz.ctypes.data_as(ctypes.c_void_p),
+        mesh.ctypes.data_as(ctypes.c_void_p),
+        b.ctypes.data_as(ctypes.c_void_p),
+    )
     Gv = Gv.reshape(-1, 3)
 
     # 1/cell.vol == det(b)/(2pi)^3
@@ -672,8 +672,11 @@ def get_ewald_params(cell, precision=None, mesh=None):
     if precision is None:
         precision = cell.precision
 
-    if (cell.dimension < 2 or
-          (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
+    if (cell.dimension == 3 or
+        (cell.dimension == 0 and cell.low_dim_ft_type != 'inf_vacuum')):
+        ew_eta = 1./cell.vol**(1./6)
+        ew_cut = _estimate_rcut(ew_eta**2, 0, 1., precision)
+    elif cell.dimension <= 2 and cell.low_dim_ft_type == 'inf_vacuum':
         # Non-uniform PW grids are used for low-dimensional ewald summation.  The cutoff
         # estimation for long range part based on exp(G^2/(4*eta^2)) does not work for
         # non-uniform grids.  Smooth model density is preferred.
@@ -685,9 +688,8 @@ def get_ewald_params(cell, precision=None, mesh=None):
         # ewovrl ~ erfc(eta*rcut) / rcut ~ e^{(-eta**2 rcut*2)} < precision
         log_precision = np.log(precision / (cell.atom_charges().sum()*16*np.pi**2))
         ew_eta = (-log_precision)**.5 / ew_cut
-    else:  # dimension == 3
-        ew_eta = 1./cell.vol**(1./6)
-        ew_cut = _estimate_rcut(ew_eta**2, 0, 1., precision)
+    else:
+        raise RuntimeError(f'dimension={cell.dimension} not supported')
     return ew_eta, ew_cut
 
 def ewald(cell, ew_eta=None, ew_cut=None):
@@ -713,6 +715,9 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     if cell.dimension == 3 and cell.use_particle_mesh_ewald:
         from pyscf.pbc.gto import ewald_methods
         return ewald_methods.particle_mesh_ewald(cell, ew_eta, ew_cut)
+
+    if cell.dimension == 0 and cell.low_dim_ft_type != 'inf_vacuum':
+        return mole.classical_coulomb_energy(cell)
 
     chargs = cell.atom_charges()
 
@@ -746,25 +751,21 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     # where
     #   ZS_I(G) = \sum_a Z_a exp (i G.R_a)
 
-    Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
-    absG2 = np.einsum('gi,gi->g', Gv, Gv)
-    absG2[absG2==0] = 1e200
-
-    if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
-        # TODO: truncated Coulomb for 0D. The non-uniform grids for inf-vacuum
-        # have relatively large error
+    if cell.dimension == 3 or cell.low_dim_ft_type == 'inf_vacuum':
+        Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
+        absG2 = np.einsum('gi,gi->g', Gv, Gv)
+        absG2[absG2==0] = 1e200
         coulG = 4*np.pi / absG2
         coulG *= weights
 
         #:ZSI = np.einsum('i,ij->j', chargs, cell.get_SI(Gv))
-        ngrids = len(Gv)
-        ZSI = np.empty((ngrids,), dtype=np.complex128)
-        mem_avail = cell.max_memory - lib.current_memory()[0]
-        blksize = int((mem_avail*1e6 - cell.natm*24)/((3+cell.natm*2)*8))
-        blksize = min(ngrids, max(mesh[2], blksize))
-        for ig0, ig1 in lib.prange(0, ngrids, blksize):
-            np.einsum('i,ij->j', chargs, cell.get_SI(Gv[ig0:ig1]), out=ZSI[ig0:ig1])
-
+        basex, basey, basez = Gvbase
+        b = cell.reciprocal_vectors()
+        rb = np.dot(coords, b.T)
+        SIx = np.exp(-1j*np.einsum('z,g->zg', rb[:,0], basex))
+        SIy = np.exp(-1j*np.einsum('z,g->zg', rb[:,1], basey))
+        SIz = np.exp(-1j*np.einsum('z,g->zg', rb[:,2], basez))
+        ZSI = np.einsum('i,ix,iy,iz->xyz', chargs, SIx, SIy, SIz).ravel()
         ZexpG2 = ZSI * np.exp(-absG2/(4*ew_eta**2))
         ewg = .5 * np.einsum('i,i,i', ZSI.conj(), ZexpG2, coulG).real
 
@@ -789,6 +790,8 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         inv_area = np.linalg.norm(np.cross(b[0], b[1]))/(2*np.pi)**2
         # Perform the reciprocal space summation over  all reciprocal vectors
         # within the x,y plane.
+        Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
+        absG2 = np.einsum('gi,gi->g', Gv, Gv)
         planarG2_idx = np.logical_and(Gv[:,2] == 0, absG2 > 0.0)
         Gv = Gv[planarG2_idx]
         absG2 = absG2[planarG2_idx]
@@ -801,6 +804,13 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         # Performing the G == 0 summation.
         ewg += np.einsum('i,j,ij->', chargs, chargs, gn0(ew_eta,rij[:,:,2]))
         ewg *= inv_area*0.5
+
+    elif cell.dimension == 0:
+        # The truncted Coulomb kernel 4*pi/G^2(1-cos(G*Rc)) should work for the
+        # ewg term. However, large errors may be introduced in ewovrl or ewself.
+        # For dimesion=0 with truncated Coulomb, the nuclear energy can be
+        # computed directly using the mole.classical_coulomb_energy function.
+        raise RuntimeError('Ewald with truncated Coulomb')
 
     else:
         logger.warn(cell, 'No method for PBC dimension %s, dim-type %s.'
@@ -999,16 +1009,15 @@ def rcut_by_shells(cell, precision=None, rcut=0,
         ptr_pgf_radius = lib.ndarray_pointer_2d(pgf_radius).ctypes
     else:
         ptr_pgf_radius = lib.c_null_ptr()
-    fn = getattr(libpbc, 'rcut_by_shells', None)
-    try:
-        fn(shell_radius.ctypes.data_as(ctypes.c_void_p),
-           ptr_pgf_radius,
-           bas.ctypes.data_as(ctypes.c_void_p),
-           env.ctypes.data_as(ctypes.c_void_p),
-           ctypes.c_int(nbas), ctypes.c_double(rcut),
-           ctypes.c_double(precision))
-    except Exception as e:
-        raise RuntimeError(f'Failed to get shell radii.\n{e}')
+    libpbc.rcut_by_shells(
+        shell_radius.ctypes.data_as(ctypes.c_void_p),
+        ptr_pgf_radius,
+        bas.ctypes.data_as(ctypes.c_void_p),
+        env.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nbas),
+        ctypes.c_double(rcut),
+        ctypes.c_double(precision),
+    )
     if return_pgf_radius:
         return shell_radius, pgf_radius
     return shell_radius
@@ -1022,6 +1031,7 @@ def tostring(cell, format='poscar'):
     '''
     format = format.lower()
     output = []
+    atmfmt = '%17.8f %17.8f %17.8f'
     if format == 'poscar' or format == 'vasp' or format == 'xyz':
         lattice_vectors = cell.lattice_vectors() * param.BOHR
         coords = cell.atom_coords() * param.BOHR
@@ -1030,7 +1040,7 @@ def tostring(cell, format='poscar'):
             output.append('1.0')
             for lattice_vector in lattice_vectors:
                 ax, ay, az = lattice_vector
-                output.append('%14.5f %14.5f %14.5f' % (ax, ay, az))
+                output.append(atmfmt % (ax, ay, az))
             unique_atoms = dict()
             for atom in cell.elements:
                 if atom not in unique_atoms:
@@ -1044,16 +1054,16 @@ def tostring(cell, format='poscar'):
                 for atom, coord in zip(cell.elements, coords):
                     if atom == atom_type:
                         x, y, z = coord
-                        output.append('%14.5f %14.5f %14.5f' % (x, y, z))
+                        output.append(atmfmt % (x, y, z))
             return '\n'.join(output)
         elif format == 'xyz':
             output.append('%d' % cell.natm)
-            output.append('Lattice="'+' '.join(f'{ax:14.5f}' for ax in lattice_vectors.ravel())
+            output.append('Lattice="'+' '.join(f'{ax:17.8f}' for ax in lattice_vectors.ravel())
                 +'" Properties=species:S:1:pos:R:3')
             for i in range(cell.natm):
                 symb = cell.atom_pure_symbol(i)
                 x, y, z = coords[i]
-                output.append('%-4s %14.5f %14.5f %14.5f' %
+                output.append(('%-4s ' + atmfmt) %
                               (symb, x, y, z))
             return '\n'.join(output)
     else:
@@ -1131,7 +1141,7 @@ def fromstring(string, format='poscar'):
                     raise RuntimeError('Error reading VASP geometry due to '
                         f'atom position type "{atom_position_type}". Atom '
                         'positions must be Direct or Cartesian.')
-                atoms.append('%s %14.5f %14.5f %14.5f'
+                atoms.append('%s %17.8f %17.8f %17.8f'
                     % (atom_type, x, y, z))
             start = end
         return '\n'.join(a), '\n'.join(atoms)
@@ -1210,6 +1220,18 @@ class Cell(mole.MoleBase):
     precision = getattr(__config__, 'pbc_gto_cell_Cell_precision', 1e-8)
     exp_to_discard = getattr(__config__, 'pbc_gto_cell_Cell_exp_to_discard', None)
 
+    fractional = False
+    dimension = 3
+    # TODO: Simple hack for now; the implementation of ewald depends on the
+    #       density-fitting class.  This determines how the ewald produces
+    #       its energy.
+    low_dim_ft_type = None
+    use_loose_rcut = False
+    use_particle_mesh_ewald = False
+    space_group_symmetry = False
+    symmorphic = False
+    lattice_symmetry = None
+
     _keys = {
         'precision', 'exp_to_discard',
         'a', 'ke_cutoff', 'pseudo', 'fractional', 'dimension', 'low_dim_ft_type',
@@ -1226,18 +1248,6 @@ class Cell(mole.MoleBase):
         # if set, defines a spherical cutoff
         # of fourier components, with .5 * G**2 < ke_cutoff
         self.ke_cutoff = None
-
-        self.fractional = False
-        self.dimension = 3
-        # TODO: Simple hack for now; the implementation of ewald depends on the
-        #       density-fitting class.  This determines how the ewald produces
-        #       its energy.
-        self.low_dim_ft_type = None
-        self.use_loose_rcut = False
-        self.use_particle_mesh_ewald = False
-        self.space_group_symmetry = False
-        self.symmorphic = False
-        self.lattice_symmetry = None
 
 ##################################################
 # These attributes are initialized by build function if not specified
@@ -1392,6 +1402,17 @@ class Cell(mole.MoleBase):
                                                              return_mesh=True)
         if np.prod(mesh1) != np.prod(mesh):
             logger.debug(self, 'mesh %s is symmetrized as %s', mesh, mesh1)
+        m1size = np.prod(mesh1)
+        msize = np.prod(mesh)
+        if m1size > 8 * msize and m1size > 1000 + msize:
+            wstr = ('''WARNING!
+  Symmetrization significantly increased the mesh size,
+  from {} to {}. This might indicate a nearly symmetric input
+  structure, and it might cause memory issues. Consider symmetrizing your
+  structure, increasing the symmetry tolerance `pbc_symm_space_group_symprec`,
+  or turning off symmetry.\n\n''')
+            wstr = wstr.format(mesh, mesh1)
+            sys.stderr.write(wstr)
         return mesh1
 
     def build_lattice_symmetry(self, check_mesh_symmetry=True):
@@ -1504,24 +1525,20 @@ class Cell(mole.MoleBase):
         if self.a is None:
             raise RuntimeError('Lattice parameters not specified')
 
+        if self.dimension == 1 and self.low_dim_ft_type != 'inf_vacuum':
+            raise RuntimeError('Uniform grids for dimension=1 not supported')
+
         _built = self._built
         mole.MoleBase.build(self, False, parse_arg, *args, **kwargs)
 
-        exp_min = np.array([self.bas_exp(ib).min() for ib in range(self.nbas)])
-        if self.exp_to_discard is None:
-            if np.any(exp_min < 0.1):
-                sys.stderr.write('''WARNING!
-  Very diffused basis functions are found in the basis set. They may lead to severe
-  linear dependence and numerical instability.  You can set  cell.exp_to_discard=0.1
-  to remove the diffused Gaussians whose exponents are less than 0.1.\n\n''')
-        elif np.any(exp_min < self.exp_to_discard):
+        if self.exp_to_discard is not None:
             # Discard functions of small exponents in basis
             _basis = {}
             for symb, basis_now in self._basis.items():
                 basis_add = []
                 for b in basis_now:
                     l = b[0]
-                    if isinstance(b[1], int):
+                    if isinstance(b[1], (int, np.integer)):
                         kappa = b[1]
                         b_coeff = np.array(b[2:])
                     else:
@@ -1592,7 +1609,7 @@ class Cell(mole.MoleBase):
   Lattice are not in right-handed coordinate system. This can cause wrong value for some integrals.
   It's recommended to resort the lattice vectors to\na = %s\n\n''' % _a[[0,2,1]])
 
-        if self.dimension == 2 and self.low_dim_ft_type != 'inf_vacuum':
+        if self.dimension <= 2 and self.low_dim_ft_type != 'inf_vacuum':
             # check vacuum size. See Fig 1 of PRB, 73, 2015119
             #Lz_guess = self.rcut*(1+np.sqrt(2))
             Lz_guess = self.rcut * 2
@@ -1608,8 +1625,7 @@ class Cell(mole.MoleBase):
                 ke_cutoff = self.ke_cutoff
             self._mesh = pbctools.cutoff_to_mesh(_a, ke_cutoff)
 
-            if (self.dimension < 2 or
-                (self.dimension == 2 and self.low_dim_ft_type == 'inf_vacuum')):
+            if self.dimension <= 2 and self.low_dim_ft_type == 'inf_vacuum':
                 self._mesh[self.dimension:] = _mesh_inf_vaccum(self)
             self._mesh_from_build = True
 

@@ -87,19 +87,27 @@ def _ecp_basis(basis):
             data = basis['elements'][z]
             sym = lut.element_sym_from_Z(z, True)
 
-            # Sort lowest->highest
-            ecp_list = sorted(data['ecp_potentials'], key=lambda x: x['angular_momentum'])
+            ecp_list = data['ecp_potentials']
 
             # List of ECP
-            atom_ecp = [data['ecp_electrons'], []]
+            atom_ecp = []
+            first_entry = True
             for ir, pot in enumerate(ecp_list):
                 rexponents = pot['r_exponents']
                 gexponents = pot['gaussian_exponents']
                 coefficients = pot['coefficients']
-                am = pot['angular_momentum']
+                am = pot['angular_momentum'][0]
                 nprim = len(rexponents)
 
-                shell_data = [am[0], []]
+                # Handle the ECP UL.
+                # The first entry is the UL part of ECP. Its angular_momentum in
+                # BSE format is a number larger than 0. Converting it to PySCF
+                # convention
+                if first_entry and am > 0:
+                    am = -1
+                first_entry = False
+
+                shell_data = [am, []]
                 # PySCF wants the data in order of rexp=0, 1, 2, ..
                 for rexpval in range(max(rexponents) + 1):
                     rcontr = []
@@ -107,8 +115,9 @@ def _ecp_basis(basis):
                         if rexponents[i] == rexpval:
                             rcontr.append([float(gexponents[i]), float(coefficients[0][i])])
                     shell_data[1].append(rcontr)
-                atom_ecp[1].append(shell_data)
-            r[sym] = atom_ecp
+                atom_ecp.append(shell_data)
+            atom_ecp = sorted(atom_ecp, key=lambda shell: shell[0])
+            r[sym] = [data['ecp_electrons'], atom_ecp]
 
     return r
 

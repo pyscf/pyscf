@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cmake_minimum_required (VERSION 3.5)
+cmake_minimum_required (VERSION 3.22)
 project (pyscf)
 
 include(CheckSymbolExists)
@@ -172,10 +172,10 @@ option(USE_QCINT "Using the qcint library (optimized for x86-64) for gaussian in
 
 if(BUILD_LIBCINT)
   set(LIBCINT_GIT https://github.com/sunqm/libcint.git) # libcint is a portable, cross-platform implementation
-  set(LIBCINT_VERSION v6.1.1)
+  set(LIBCINT_VERSION v6.1.3)
   if (USE_QCINT)
     set(LIBCINT_GIT https://github.com/sunqm/qcint.git) # qcint is an optimized implementation for x86-64 architecture
-    set(LIBCINT_VERSION v6.1.2)
+    set(LIBCINT_VERSION v6.1.3)
     if(NOT BUILD_MARCH_NATIVE)
       message(WARNING "The BUILD_MARCH_NATIVE option is not specified! qcint may not compile unless you explicitly pass compiler flags that turn on vectorization!")
     endif()
@@ -192,12 +192,12 @@ if(BUILD_LIBCINT)
         -DWITH_RANGE_COULOMB:STRING=1
         -DWITH_FORTRAN:STRING=0
         -DWITH_CINT2_INTERFACE:STRING=0
+        -DWITH_4C1E:STRING=1
         -DMIN_EXPCUTOFF:STRING=20
         -DKEEP_GOING:STRING=1
         -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
         -DCMAKE_INSTALL_LIBDIR:PATH=lib
         -DCMAKE_C_COMPILER:STRING=${CMAKE_C_COMPILER}
-        -DBLAS_LIBRARIES:STRING=${BLAS_LIBRARIES}
         -DCMAKE_C_CREATE_SHARED_LIBRARY:STRING=${C_LINK_TEMPLATE}
         -DBUILD_MARCH_NATIVE:STRING=${BUILD_MARCH_NATIVE}
   )
@@ -219,6 +219,10 @@ endif()
 if(NOT DISABLE_DFT)
 add_subdirectory(dft)
 
+if(ENABLE_LIBXC)
+  add_subdirectory(pdft)
+endif() # ENABLE_LIBXC
+
 if(ENABLE_LIBXC AND BUILD_LIBXC)
   ExternalProject_Add(libxc
     #GIT_REPOSITORY https://gitlab.com/libxc/libxc.git
@@ -236,6 +240,7 @@ if(ENABLE_LIBXC AND BUILD_LIBXC)
   )
   add_dependencies(xc_itrf libxc)
   add_dependencies(dft libxc)
+  add_dependencies(pdft libxc)
 endif() # ENABLE_LIBXC
 
 if(ENABLE_XCFUN AND BUILD_XCFUN)

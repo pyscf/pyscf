@@ -17,6 +17,7 @@ import unittest
 import tempfile
 from functools import reduce
 import numpy
+import numpy as np
 import scipy.linalg
 from pyscf import gto
 from pyscf import lib
@@ -257,14 +258,21 @@ C    SP
 
     def test_atom_as_file(self):
         ftmp = tempfile.NamedTemporaryFile('w')
-        # file in xyz format
+        # file in raw format
         ftmp.write('He 0 0 0\nHe 0 0 1\n')
         ftmp.flush()
         mol1 = gto.M(atom=ftmp.name)
         self.assertEqual(mol1.natm, 2)
 
+        # file in xyz format
+        ftmp = tempfile.NamedTemporaryFile('w', suffix='.xyz')
+        ftmp.write('2\n\nHe 0 0 0\nHe 0 0 1\n')
+        ftmp.flush()
+        mol1 = gto.M(atom=ftmp.name)
+        self.assertEqual(mol1.natm, 2)
+
         # file in zmatrix format
-        ftmp = tempfile.NamedTemporaryFile('w')
+        ftmp = tempfile.NamedTemporaryFile('w', suffix='.zmat')
         ftmp.write('He\nHe 1 1.5\n')
         ftmp.flush()
         mol1 = gto.M(atom=ftmp.name)
@@ -736,6 +744,13 @@ O    SP
         mol1.build()
         self.assertAlmostEqual(abs(mol1._symm_axes - numpy.eye(3)[[1,2,0]]).max(), 0, 9)
 
+        mol1 = gto.M(
+            atom='He 0 0 0',
+            basis='aug-cc-pvdz',
+            symmetry='SO3'
+        )
+        self.assertEqual(mol1.groupname, 'SO3')
+
     def test_symm_orb(self):
         rs = numpy.array([[.1, -.3, -.2],
                           [.3,  .1,  .8]])
@@ -949,9 +964,9 @@ O    SP
         out1 = mol.tofile(tmpfile.name, format='xyz')
         ref = '''3
 XYZ from PySCF
-H           0.00000        1.00000        1.00000
-O           0.00000        0.00000        0.00000
-H           1.00000        1.00000        0.00000
+H           0.00000000        1.00000000        1.00000000
+O           0.00000000        0.00000000        0.00000000
+H           1.00000000        1.00000000        0.00000000
 '''
         with open(tmpfile.name, 'r') as f:
             self.assertEqual(f.read(), ref)
@@ -1068,6 +1083,24 @@ H    P
         v0 = u.T.dot(mol.intor('int1e_nuc')).dot(u)
         v1 = mol1.intor('int1e_nuc')
         self.assertAlmostEqual(abs(v0 - v1).max(), 0, 12)
+
+    def test_to_cell(self):
+        from pyscf.dft import numint
+        mol = gto.M(atom='''
+            O   0.   0.       0.
+            H   0.   -0.757   0.587
+            H   0.   0.757    0.587''', basis='ccpvdz')
+        cell = mol.to_cell()
+        mf = mol.RHF().run()
+        dm = mf.make_rdm1()
+        a = cell.lattice_vectors()
+        edge_grids = np.vstack([
+            a * -.5,
+            a * .5,
+        ])
+        ao = numint.eval_ao(mol, edge_grids)
+        rho = numint.eval_rho(mol, ao, dm)
+        self.assertTrue(all(abs(rho) < 1e-7))
 
 if __name__ == "__main__":
     print("test mole.py")

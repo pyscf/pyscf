@@ -23,6 +23,10 @@ from pyscf.gto.basis import parse_molpro
 from pyscf.gto.basis import parse_gaussian
 from pyscf.gto.basis import parse_cp2k, parse_cp2k_pp
 from pyscf.lib.exceptions import BasisNotFoundError
+try:
+    import basis_set_exchange
+except ImportError:
+    basis_set_exchange = None
 
 class KnownValues(unittest.TestCase):
     def test_parse_pople(self):
@@ -550,6 +554,17 @@ ECP,I,46,4,3;
         pp1 = parse_cp2k_pp.parse(pp_str, 'C')
         ref = gto.basis.load_pseudo('gth-pade', 'C')
         self.assertEqual(ref, pp1)
+
+    # issue 2880
+    @unittest.skipIf(basis_set_exchange is None, 'BSE not installed')
+    def test_parse_bse_ecp(self):
+        from pyscf.gto.basis import bse
+        ecp = bse._ecp_basis(basis_set_exchange.get_basis('crenbs', 'Fe'))
+        mol = gto.M(atom='Fe', ecp=ecp)
+        dat1 = mol.intor('ECPscalar')
+        mol = gto.M(atom='Fe', ecp='crenbs')
+        dat2 = mol.intor('ECPscalar')
+        self.assertAlmostEqual(abs(dat1 - dat2).max(), 0, 14)
 
 if __name__ == "__main__":
     print("test basis module")

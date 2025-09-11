@@ -111,9 +111,9 @@ class KnownValues(unittest.TestCase):
         3.370137329  3.370137329  0.000000000''',
         mesh = [15]*3)
         rcut = max([cell.bas_rcut(ib, 1e-8) for ib in range(cell.nbas)])
-        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1439, 3))
-        #rcut = max([cell.bas_rcut(ib, 1e-9) for ib in range(cell.nbas)])
-        #self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1499, 3))
+        Ls = cell.get_lattice_Ls(rcut=rcut)
+        r = pbctools.check_lattice_sum_range(cell, Ls)
+        self.assertTrue(r > rcut)
 
     def test_fractional_coordinates(self):
         cell = pgto.M(atom = '''
@@ -554,6 +554,9 @@ class KnownValues(unittest.TestCase):
         ref = cl.atom_coords().copy()
         cell = pgto.Cell()
         cell.fromstring(cl.tostring('poscar'), 'vasp')
+        r0 = cell.atom_coords()
+        self.assertAlmostEqual(abs(ref - r0).max(), 0, 12)
+        cell.fromstring(cl.tostring('xyz'), 'xyz')
         r0 = cell.atom_coords()
         self.assertAlmostEqual(abs(ref - r0).max(), 0, 12)
 

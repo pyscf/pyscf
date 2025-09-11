@@ -51,7 +51,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
     cell = mydf.cell
     mesh = mydf.mesh
     assert cell.low_dim_ft_type != 'inf_vacuum'
-    assert cell.dimension > 1
+    assert cell.dimension != 1
 
     ni = mydf._numint
     dm_kpts = lib.asarray(dm_kpts, order='C')
@@ -117,7 +117,7 @@ def get_j_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None):
     cell = mydf.cell
     mesh = mydf.mesh
     assert cell.low_dim_ft_type != 'inf_vacuum'
-    assert cell.dimension > 1
+    assert cell.dimension != 1
 
     ni = mydf._numint
     dm_kpts = lib.asarray(dm_kpts, order='C')
@@ -205,7 +205,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     cell = mydf.cell
     mesh = mydf.mesh
     assert cell.low_dim_ft_type != 'inf_vacuum'
-    assert cell.dimension > 1
+    assert cell.dimension != 1
     coords = cell.gen_uniform_grids(mesh)
     ngrids = coords.shape[0]
 
@@ -302,7 +302,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     # different for 1D/2D and 3D systems.  The special treatments for 1D and 2D
     # can only be used with AFTDF/GDF/MDF method.  In the FFTDF method, 1D, 2D
     # and 3D should use the ewald probe charge correction.
-    if exxdiv == 'ewald':
+    if exxdiv == 'ewald' and cell.dimension != 0:
         _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts_band=kpts_band)
 
     return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
@@ -315,7 +315,7 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
     cell = mydf.cell
     mesh = mydf.mesh
     assert cell.low_dim_ft_type != 'inf_vacuum'
-    assert cell.dimension > 1
+    assert cell.dimension != 1
     coords = cell.gen_uniform_grids(mesh)
     ngrids = coords.shape[0]
 
@@ -443,7 +443,11 @@ def get_jk(mydf, dm, hermi=1, kpt=np.zeros(3), kpts_band=None,
         The function returns one J and one K matrix, corresponding to the input
         density matrix (both order and shape).
     '''
-    dm = np.asarray(dm, order='C')
+    if getattr(dm, "mo_coeff", None) is not None:
+        dm = lib.tag_array(np.asarray(dm, order='C'), mo_coeff=dm.mo_coeff,
+                           mo_occ=dm.mo_occ)
+    else:
+        dm = np.asarray(dm, order='C')
     vj = vk = None
     if with_j:
         vj = get_j(mydf, dm, hermi, kpt, kpts_band)
@@ -508,9 +512,17 @@ def get_k(mydf, dm, hermi=1, kpt=np.zeros(3), kpts_band=None, exxdiv=None):
         The function returns one J and one K matrix, corresponding to the input
         density matrix (both order and shape).
     '''
+    if getattr(dm, "mo_coeff", None) is not None:
+        mo_coeff = dm.mo_coeff
+        mo_occ = dm.mo_occ
+    else:
+        mo_coeff = None
+        mo_occ = None
+
     dm = np.asarray(dm, order='C')
     nao = dm.shape[-1]
     dm_kpts = dm.reshape(-1,1,nao,nao)
+    dm_kpts = lib.tag_array(dm_kpts, mo_coeff=mo_coeff, mo_occ=mo_occ)
     vk = get_k_kpts(mydf, dm_kpts, hermi, kpt.reshape(1,3), kpts_band, exxdiv)
     if kpts_band is None:
         vk = vk[:,0,:,:]

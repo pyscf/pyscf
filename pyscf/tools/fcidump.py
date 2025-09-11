@@ -20,6 +20,7 @@ FCIDUMP functions (write, read) for real Hamiltonian
 import re
 from functools import reduce
 import numpy
+from pyscf import lib
 from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
@@ -173,8 +174,7 @@ def from_mo(mol, filename, mo_coeff, orbsym=None,
 
     if orbsym is None:
         orbsym = getattr(mo_coeff, 'orbsym', None)
-        if molpro_orbsym and orbsym is not None:
-            orbsym = [ORBSYM_MAP[mol.groupname][i] for i in orbsym]
+        orbsym = _convert_orbsym(mol, orbsym, molpro_orbsym)
     h1ao = scf.hf.get_hcore(mol)
     h1e = reduce(numpy.dot, (mo_coeff.T, h1ao, mo_coeff))
     eri = ao2mo.full(mol, mo_coeff, verbose=0)
@@ -205,8 +205,7 @@ def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
     else:  # Handle cached integrals or customized systems
         eri = ao2mo.full(mf._eri, mo_coeff)
     orbsym = getattr(mo_coeff, 'orbsym', None)
-    if molpro_orbsym and orbsym is not None:
-        orbsym = [ORBSYM_MAP[mol.groupname][i] for i in orbsym]
+    orbsym = _convert_orbsym(mol, orbsym, molpro_orbsym)
     nuc = mf.energy_nuc()
     from_integrals(filename, h1e, eri, h1e.shape[0], mf.mol.nelec, nuc, 0, orbsym,
                    tol, float_format)
@@ -232,8 +231,7 @@ def from_mcscf(mc, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
     orbsym = getattr(mo_coeff, 'orbsym', None)
     if orbsym is not None:
         orbsym = orbsym[mc.ncore:mc.ncore + mc.ncas]
-    if molpro_orbsym and orbsym is not None:
-        orbsym = [ORBSYM_MAP[mol.groupname][i] for i in orbsym]
+        orbsym = _convert_orbsym(mol, orbsym, molpro_orbsym)
     nelecas = mc.nelecas[0] + mc.nelecas[1]
     ms = abs(mc.nelecas[0] - mc.nelecas[1])
     from_integrals(filename, h1eff, h2eff, mc.ncas, nelecas, nuc=ecore, ms=ms,
@@ -261,13 +259,13 @@ def read(filename, molpro_orbsym=MOLPRO_ORBSYM, verbose=True):
     for i in range(10):
         line = finp.readline().upper()
         data.append(line)
-        if '&END' in line:
+        if '&END' in line or '/' in line:
             break
     else:
         raise RuntimeError('Problematic FCIDUMP header')
 
     result = {}
-    tokens = ','.join(data).replace('&FCI', '').replace('&END', '')
+    tokens = ','.join(data).replace('&FCI', '').replace('&END', '').replace('/', '')
     tokens = tokens.replace(' ', '').replace('\n', '').replace(',,', ',')
     for token in re.split(',(?=[a-zA-Z])', tokens):
         key, val = token.split('=')
@@ -350,8 +348,18 @@ def to_scf(filename, molpro_orbsym=MOLPRO_ORBSYM, mf=None, **kwargs):
 
     if 'ORBSYM' in ctx:
         mol.symmetry = True
-        mol.groupname = 'N/A'
         orbsym = numpy.asarray(ctx['ORBSYM'])
+        # Guess the point group symmetry. See issue 2586.
+        # These guesses may be different to the symmetry of the molecule for FCIDUMP.
+        # They are created to guarantee the symmetry-adapted methods working.
+        if orbsym.max() >= 4:
+            mol.groupname = 'D2h'
+        elif orbsym.max() >= 2:
+            mol.groupname = 'C2v'
+        elif orbsym.max() >= 1:
+            mol.groupname = 'C2'
+        else:
+            mol.groupname = 'C1'
         mol.irrep_id = list(set(orbsym))
         mol.irrep_name = [('IR%d' % ir) for ir in mol.irrep_id]
         so = numpy.eye(norb)
@@ -383,6 +391,25 @@ def scf_from_fcidump(mf, filename, molpro_orbsym=MOLPRO_ORBSYM):
     return to_scf(filename, molpro_orbsym, mf)
 
 scf.hf.SCF.from_fcidump = scf_from_fcidump
+
+def _convert_orbsym(mol, orbsym, molpro_orbsym):
+    if orbsym is None:
+        return orbsym
+
+    groupname = mol.groupname
+    if groupname not in ORBSYM_MAP:
+        if groupname == 'Dooh':
+            groupname = 'D2h'
+        elif groupname == 'Coov':
+            groupname = 'D2h'
+        else:
+            raise RuntimeError(f'Unsupported point group symmetry {mol.groupname}')
+        lib.logger.warn(mol, 'FCIDUMP does not support point group symmetry %s. '
+                        'Converting to its subgroup %s.', mol.groupname, groupname)
+        orbsym = orbsym % 10
+    if molpro_orbsym:
+        orbsym = [ORBSYM_MAP[groupname][i] for i in orbsym]
+    return orbsym
 
 if __name__ == '__main__':
     import argparse

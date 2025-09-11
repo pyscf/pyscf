@@ -534,6 +534,7 @@ class KnownValues(unittest.TestCase):
         cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
         cell.a = np.eye(3) * 2.5
         cell.dimension = 1
+        cell.low_dim_ft_type = 'inf_vacuum'
         cell.mesh = [3, 3, 3]
         cell.build()
         f = aft.AFTDF(cell)

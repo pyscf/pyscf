@@ -1123,6 +1123,8 @@ def _hf1e_scf(mf, *args):
     mf.mo_energy, mf.mo_coeff = mf.eig(h1e, s1e)
     mf.mo_occ = mf.get_occ(mf.mo_energy, mf.mo_coeff)
     mf.e_tot = mf.mo_energy[mf.mo_occ>0][0].real + mf.mol.energy_nuc()
+    if mf.chkfile:
+        mf.dump_chk(mf.chkfile)
     mf._finalize()
     return mf.e_tot
 

@@ -68,22 +68,6 @@ class ROKS(rks.KohnShamDFT, rohf.ROHF):
         from pyscf.pbc import scf
         return self._transfer_attrs_(scf.ROHF(self.cell, self.kpt))
 
+    multigrid_numint = rks.RKS.multigrid_numint
+
     to_gpu = lib.to_gpu
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    cell = gto.Cell()
-    cell.unit = 'A'
-    cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
-    cell.a = '''0.      1.7834  1.7834
-                1.7834  0.      1.7834
-                1.7834  1.7834  0.    '''
-
-    cell.basis = 'gth-szv'
-    cell.pseudo = 'gth-pade'
-    cell.verbose = 7
-    cell.output = '/dev/null'
-    cell.build()
-    mf = ROKS(cell)
-    print(mf.kernel())

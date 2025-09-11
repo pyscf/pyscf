@@ -59,8 +59,7 @@ def UMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
         mf = mf.to_uhf()
 
     if getattr(mf, 'with_df', None):
-        #raise NotImplementedError('DF-UMP2')
-        return ump2.UMP2(mf, frozen, mo_coeff, mo_occ)
+        return dfump2.DFUMP2(mf, frozen, mo_coeff, mo_occ)
     else:
         return ump2.UMP2(mf, frozen, mo_coeff, mo_occ)
 UMP2.__doc__ = ump2.UMP2.__doc__

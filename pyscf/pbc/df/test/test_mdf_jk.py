@@ -338,14 +338,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(vj0), 0.08265798268352553, 9)
         self.assertAlmostEqual(lib.fp(vk0), 0.2375705823780625 , 9)
         vj1, vk1 = pbcdf.GDF(cell).get_jk(dm, hermi=0, omega=0.5, exxdiv=None)
-        vj2, vk2 = pbcdf.MDF(cell).get_jk(dm, hermi=0, omega=0.5, exxdiv=None)
-        vj3, vk3 = pbcdf.AFTDF(cell).get_jk(dm, hermi=0, omega=0.5, exxdiv=None)
-        self.assertAlmostEqual(abs(vj0-vj1).max(), 0, 3)
-        self.assertAlmostEqual(abs(vj0-vj2).max(), 0, 3)
-        self.assertAlmostEqual(abs(vj0-vj3).max(), 0, 3)
-        self.assertAlmostEqual(abs(vk0-vk1).max(), 0, 3)
-        self.assertAlmostEqual(abs(vk0-vk2).max(), 0, 3)
-        self.assertAlmostEqual(abs(vk0-vk3).max(), 0, 3)
+        self.assertAlmostEqual(abs(vj0-vj1).max(), 0, 9)
+        self.assertAlmostEqual(abs(vk0-vk1).max(), 0, 9)
+        # The previous implementation of LR Coulomb kernel for dimension=0 is incorrect
+        #vj2, vk2 = pbcdf.MDF(cell).get_jk(dm, hermi=0, omega=0.5, exxdiv=None)
+        #vj3, vk3 = pbcdf.AFTDF(cell).get_jk(dm, hermi=0, omega=0.5, exxdiv=None)
+        #self.assertAlmostEqual(abs(vj0-vj2).max(), 0, 3)
+        #self.assertAlmostEqual(abs(vj0-vj3).max(), 0, 3)
+        #self.assertAlmostEqual(abs(vk0-vk2).max(), 0, 3)
+        #self.assertAlmostEqual(abs(vk0-vk3).max(), 0, 3)
 
 
 if __name__ == '__main__':

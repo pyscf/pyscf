@@ -46,7 +46,7 @@ class CasidaTDDFT(TDDFT, TDA):
     '''Solve the Casida TDDFT formula (A-B)(A+B)(X+Y) = (X+Y)w^2
     '''
 
-    init_guess = TDA.init_guess
+    get_init_guess = TDA.get_init_guess
     get_precond = TDA.get_precond
 
     def gen_vind(self, mf=None):
@@ -56,10 +56,11 @@ class CasidaTDDFT(TDDFT, TDA):
         singlet = self.singlet
 
         mol = mf.mol
-        mo_coeff = mf.mo_coeff
+        mask = self.get_frozen_mask()
+        mo_coeff = mf.mo_coeff[:, mask]
         assert mo_coeff.dtype == numpy.double
-        mo_energy = mf.mo_energy
-        mo_occ = mf.mo_occ
+        mo_energy = mf.mo_energy[mask]
+        mo_occ = mf.mo_occ[mask]
         nao, nmo = mo_coeff.shape
         occidx = numpy.where(mo_occ==2)[0]
         viridx = numpy.where(mo_occ==0)[0]
@@ -72,7 +73,7 @@ class CasidaTDDFT(TDDFT, TDA):
             if isinstance(wfnsym, str):
                 wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
             wfnsym = wfnsym % 10  # convert to D2h subgroup
-            sym_forbid = rhf._get_x_sym_table(mf) != wfnsym
+            sym_forbid = rhf._get_x_sym_table(self) != wfnsym
 
         e_ia = (mo_energy[viridx].reshape(-1,1) - mo_energy[occidx]).T
         if wfnsym is not None and mol.symmetry:
@@ -81,7 +82,7 @@ class CasidaTDDFT(TDDFT, TDA):
         ed_ia = e_ia * d_ia
         hdiag = e_ia.ravel() ** 2
 
-        vresp = mf.gen_response(singlet=singlet, hermi=1)
+        vresp = self.gen_response(singlet=singlet, hermi=1)
 
         def vind(zs):
             zs = numpy.asarray(zs).reshape(-1,nocc,nvir)
@@ -127,10 +128,10 @@ class CasidaTDDFT(TDDFT, TDA):
 
         x0sym = None
         if x0 is None:
-            x0, x0sym = self.init_guess(
+            x0, x0sym = self.get_init_guess(
                 self._scf, self.nstates, return_symmetry=True)
         elif mol.symmetry:
-            x_sym = rhf._get_x_sym_table(mf).ravel()
+            x_sym = rhf._get_x_sym_table(self).ravel()
             x0sym = [rhf._guess_wfnsym_id(self, x_sym, x) for x in x0]
 
         self.converged, w2, x1 = lr_eigh(
@@ -138,8 +139,9 @@ class CasidaTDDFT(TDDFT, TDA):
             nroots=nstates, x0sym=x0sym, pick=pickeig, max_cycle=self.max_cycle,
             max_memory=self.max_memory, verbose=log)
 
-        mo_energy = self._scf.mo_energy
-        mo_occ = self._scf.mo_occ
+        mask = self.get_frozen_mask()
+        mo_energy = self._scf.mo_energy[mask]
+        mo_occ = self._scf.mo_occ[mask]
         occidx = numpy.where(mo_occ==2)[0]
         viridx = numpy.where(mo_occ==0)[0]
         e_ia = (mo_energy[viridx,None] - mo_energy[occidx]).T
@@ -174,7 +176,7 @@ class CasidaTDDFT(TDDFT, TDA):
 TDDFTNoHybrid = CasidaTDDFT
 
 class dRPA(TDDFTNoHybrid):
-    def __init__(self, mf):
+    def __init__(self, mf, frozen=None):
         if not isinstance(mf, KohnShamDFT):
             raise RuntimeError("direct RPA can only be applied with DFT; for HF+dRPA, use .xc='hf'")
         mf = mf.to_rks()
@@ -182,12 +184,12 @@ class dRPA(TDDFTNoHybrid):
         # xc='0*LDA' is equivalent to xc=''
         #mf.xc = '0.0*LDA'
         mf.xc = ''
-        TDDFTNoHybrid.__init__(self, mf)
+        TDDFTNoHybrid.__init__(self, mf, frozen)
 
 TDH = dRPA
 
 class dTDA(TDA):
-    def __init__(self, mf):
+    def __init__(self, mf, frozen=None):
         if not isinstance(mf, KohnShamDFT):
             raise RuntimeError("direct TDA can only be applied with DFT; for HF+dTDA, use .xc='hf'")
         mf = mf.to_rks()
@@ -195,15 +197,15 @@ class dTDA(TDA):
         # xc='0*LDA' is equivalent to xc=''
         #mf.xc = '0.0*LDA'
         mf.xc = ''
-        TDA.__init__(self, mf)
+        TDA.__init__(self, mf, frozen)
 
 
-def tddft(mf):
+def tddft(mf, frozen=None):
     '''Driver to create TDDFT or CasidaTDDFT object'''
     if mf._numint.libxc.is_hybrid_xc(mf.xc):
-        return TDDFT(mf)
+        return TDDFT(mf, frozen)
     else:
-        return CasidaTDDFT(mf)
+        return CasidaTDDFT(mf, frozen)
 
 from pyscf import dft
 dft.rks.RKS.TDA           = dft.rks_symm.RKS.TDA           = lib.class_as_method(TDA)

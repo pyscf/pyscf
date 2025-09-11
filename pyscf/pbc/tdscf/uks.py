@@ -26,19 +26,19 @@ RPA = TDUKS = TDDFT
 
 
 class CasidaTDDFT(TDDFT):
-    init_guess = TDA.init_guess
+    get_init_guess = TDA.get_init_guess
     _gen_vind = uks.TDDFTNoHybrid.gen_vind
     gen_vind = TDA.gen_vind
     kernel = uks.TDDFTNoHybrid.kernel
 
 TDDFTNoHybrid = CasidaTDDFT
 
-def tddft(mf):
+def tddft(mf, frozen=None):
     '''Driver to create TDDFT or CasidaTDDFT object'''
     if mf._numint.libxc.is_hybrid_xc(mf.xc):
-        return TDDFT(mf)
+        return TDDFT(mf, frozen)
     else:
-        return CasidaTDDFT(mf)
+        return CasidaTDDFT(mf, frozen)
 
 dft.uks.UKS.TDA           = lib.class_as_method(TDA)
 dft.uks.UKS.TDHF          = None

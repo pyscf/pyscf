@@ -89,7 +89,8 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     if with_symmetry and mol.symmetry:
         g[sym_forbid] = 0
         h_diag[sym_forbid] = 0
-    vind = mf.gen_response(mo_coeff, mo_occ, singlet=None, hermi=1)
+    vind = mf.gen_response(mo_coeff, mo_occ, singlet=None, hermi=1,
+                           with_nlc=False)
 
     def h_op(x):
         x = x.reshape(nvir,nocc)
@@ -202,7 +203,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         g[sym_forbid] = 0
         h_diag[sym_forbid] = 0
 
-    vind = mf.gen_response(mo_coeff, mo_occ, hermi=1)
+    vind = mf.gen_response(mo_coeff, mo_occ, hermi=1, with_nlc=False)
 
     def h_op(x):
         if with_symmetry and mol.symmetry:
@@ -258,7 +259,7 @@ def gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         g[sym_forbid] = 0
         h_diag[sym_forbid] = 0
 
-    vind = mf.gen_response(mo_coeff, mo_occ, hermi=1)
+    vind = mf.gen_response(mo_coeff, mo_occ, hermi=1, with_nlc=False)
 
     def h_op(x):
         x = x.reshape(nvir,nocc)
@@ -802,6 +803,21 @@ class _CIAH_SOSCF:
             log.debug('Overlap to last step, SVD = %s',
                       _effective_svd(u[idx][:,idx], 1e-5))
         return mo
+
+    def density_fit(self, auxbasis=None, with_df=None, only_dfj=False):
+        '''Approximate the orbital Hessian using density fitting integrals.
+
+        This method applies the density fitting approximation to the SOSCF
+        accelerator rather than the mean-field instance itself. It specifically
+        affects the computation of the orbital Hessian.
+        '''
+        return self.approx_hessian(auxbasis, with_df, only_dfj)
+
+    def approx_hessian(self, auxbasis=None, with_df=None, only_dfj=False):
+        '''Approximate the orbital Hessian using density fitting integrals.'''
+        import pyscf.df.df_jk
+        logger.debug(self, 'Approximate the orbital hessian using DF integrals')
+        return pyscf.df.df_jk.density_fit(self, auxbasis, with_df, only_dfj)
 
     def to_gpu(self):
         return self.undo_soscf().to_gpu()

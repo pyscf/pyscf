@@ -155,8 +155,6 @@ def get_roothaan_fock(focka_fockb, dma_dmb, s):
 
 def get_occ(mf, mo_energy=None, mo_coeff=None):
     '''Label the occupancies for each orbital.
-    NOTE the occupancies are not assigned based on the orbital energy ordering.
-    The first N orbitals are assigned to be occupied orbitals.
 
     Examples:
 
@@ -164,7 +162,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     >>> mf = scf.hf.SCF(mol)
     >>> energy = numpy.array([-10., -1., 1, -2., 0, -3])
     >>> mf.get_occ(energy)
-    array([2, 2, 2, 2, 1, 0])
+    array([2, 2, 0, 2, 1, 2])
     '''
 
     if mo_energy is None: mo_energy = mf.mo_energy

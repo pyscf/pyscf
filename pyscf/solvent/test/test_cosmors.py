@@ -12,11 +12,15 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Author: Ivan Chernyshov <ivan.chernyshov@gmail.com>
+#
 
 import unittest
 import io, re
 from pyscf import gto, dft
 from pyscf.solvent import pcm, cosmors
+from pyscf.data.nist import BOHR as _BOHR
 
 def setUpModule():
     global mol, cm0, cm1, mf0
@@ -61,26 +65,28 @@ class TestCosmoRS(unittest.TestCase):
     def test_finite_epsilon(self):
         mf1 = dft.RKS(mol, xc='b3lyp').PCM(cm1)
         mf1.kernel()
-        self.assertRaises(ValueError, cosmors.get_cosmors_parameters, mf1)
+        def save_cosmo_file(mf):
+            with io.StringIO() as outp:
+                cosmors.write_cosmo_file(outp, mf)
+        self.assertRaises(ValueError, save_cosmo_file, mf1)
 
     def test_cosmo_file(self):
-        with io.StringIO() as outp:
+        with io.StringIO() as outp: 
             cosmors.write_cosmo_file(outp, mf0)
             text = outp.getvalue()
-        E_diel = float(re.search(r'Dielectric energy \[a.u.\] += +(-*\d+\.\d+)', text).group(1))
-        self.assertAlmostEqual(E_diel, -0.0023256022, 8)
+        E_diel = float(re.search('Dielectric energy \[a.u.\] += +(-*\d+\.\d+)', text).group(1))
+        self.assertAlmostEqual(E_diel, -0.0023256022, 5)
 
-    def test_cosmo_parameters(self):
-        ps = cosmors.get_cosmors_parameters(mf0)
-        self.assertAlmostEqual(ps['Total energy, a.u.'], -112.953044138, 5)
-        self.assertAlmostEqual(ps['Dielectric energy, a.u.'], -0.0023256022, 5)
-        self.assertAlmostEqual(ps['Surface area, A**2'], 64.848604, 2)
-        self.assertAlmostEqual(ps['Screening charge density, A**2'][26], 2.974345636, 4)
+    def test_pcm_parameters(self):
+        ps = cosmors.get_pcm_parameters(mf0)
+        self.assertAlmostEqual(ps['energies']['e_tot'], -112.953044138, 5)
+        self.assertAlmostEqual(ps['energies']['e_diel'], -0.0023256022, 5)
+        self.assertAlmostEqual(ps['pcm_data']['area'] * _BOHR**2, 64.848604, 2)
 
     def test_sas_volume(self):
-        V1 = cosmors.get_sas_volume(mf0.with_solvent.surface, step = 0.2)
+        V1 = cosmors.get_sas_volume(mf0.with_solvent.surface, step = 0.2) * _BOHR**3
         self.assertAlmostEqual(V1, 46.391962, 3)
-        V2 = cosmors.get_sas_volume(mf0.with_solvent.surface, step = 0.05)
+        V2 = cosmors.get_sas_volume(mf0.with_solvent.surface, step = 0.05) * _BOHR**3
         self.assertAlmostEqual(V2, 46.497054, 3)
 
 

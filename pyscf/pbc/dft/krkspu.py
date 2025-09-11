@@ -23,7 +23,6 @@ Based on KRHF routine.
 Refs: PRB, 1998, 57, 1505.
 """
 
-import copy
 import itertools as it
 import numpy as np
 import scipy.linalg as la
@@ -63,11 +62,14 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpts is None: kpts = ks.kpts
 
     # J + V_xc
-    vxc = super(ks.__class__, ks).get_veff(cell, dm, dm_last=dm_last,
-                                           vhf_last=vhf_last, hermi=hermi, kpts=kpts,
-                                           kpts_band=kpts_band)
+    vxc = krks.get_veff(ks, cell, dm, dm_last=dm_last, vhf_last=vhf_last,
+                        hermi=hermi, kpts=kpts, kpts_band=kpts_band)
+    vxc = _add_Vhubbard(vxc, ks, dm, kpts)
+    return vxc
 
-    # V_U
+def _add_Vhubbard(vxc, ks, dm, kpts):
+    '''Add Hubbard U to Vxc matrix inplace.
+    '''
     C_ao_lo = ks.C_ao_lo
     ovlp = ks.get_ovlp()
     nkpts = len(kpts)
@@ -82,11 +84,15 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if is_ibz:
         rdm1_lo_0 = kpts.dm_at_ref_cell(rdm1_lo)
 
+    alphas = ks.alpha
+    if not hasattr(alphas, '__len__'): # not a list or tuple
+        alphas = [alphas] * len(ks.U_idx)
+
     E_U = 0.0
     weight = getattr(kpts, "weights_ibz", np.repeat(1.0/nkpts, nkpts))
     logger.info(ks, "-" * 79)
     with np.printoptions(precision=5, suppress=True, linewidth=1000):
-        for idx, val, lab in zip(ks.U_idx, ks.U_val, ks.U_lab):
+        for idx, val, lab, alpha in zip(ks.U_idx, ks.U_val, ks.U_lab, alphas):
             lab_string = " "
             for l in lab:
                 lab_string += "%9s" %(l.split()[-1])
@@ -99,10 +105,18 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                 S_k = ovlp[k]
                 C_k = C_ao_lo[k][:, idx]
                 P_k = rdm1_lo[k][U_mesh]
-                SC = np.dot(S_k, C_k)
-                vxc[k] += mdot(SC, (np.eye(P_k.shape[-1]) - P_k)
-                               * (val * 0.5), SC.conj().T).astype(vxc[k].dtype,copy=False)
                 E_U += weight[k] * (val * 0.5) * (P_k.trace() - np.dot(P_k, P_k).trace() * 0.5)
+                vhub_loc = (np.eye(P_k.shape[-1]) - P_k) * (val * 0.5)
+                if alpha is not None:
+                    # The alpha perturbation is only applied to the linear term of
+                    # the local density.
+                    E_U += weight[k] * alpha * P_k.trace()
+                    vhub_loc += np.eye(P_k.shape[-1]) * alpha
+                SC = np.dot(S_k, C_k)
+                vhub_loc = SC.dot(vhub_loc).dot(SC.conj().T)
+                if vxc.dtype == np.float64:
+                    vhub_loc = vhub_loc.real
+                vxc[k] += vhub_loc
                 if not is_ibz:
                     P_loc += P_k
             if is_ibz:
@@ -113,7 +127,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
             logger.info(ks, "-" * 79)
 
     if E_U.real < 0.0 and all(np.asarray(ks.U_val) > 0):
-        logger.warn(ks, "E_U (%s) is negative...", E_U.real)
+        logger.warn(ks, "E_U (%g) is negative...", E_U.real)
     vxc = lib.tag_array(vxc, E_U=E_U)
     return vxc
 
@@ -158,16 +172,17 @@ def set_U(ks, U_idx, U_val):
                 ks.U_idx.append(list(list(zip(*idxj))[0]))
                 ks.U_val.append(U_val[i])
         else:
-            ks.U_idx.append(copy.deepcopy(idx))
+            ks.U_idx.append(idx)
             ks.U_val.append(U_val[i])
+
     ks.U_val = np.asarray(ks.U_val) / HARTREE2EV
-    logger.info(ks, "-" * 79)
-    logger.debug(ks, 'U indices and values: ')
+
     for idx, val in zip(ks.U_idx, ks.U_val):
         ks.U_lab.append(lo_labels[idx])
-        logger.debug(ks, '%6s [%.6g eV] ==> %-100s', format_idx(idx),
-                     val * HARTREE2EV, "".join(lo_labels[idx]))
-    logger.info(ks, "-" * 79)
+
+    if len(ks.U_idx) == 0:
+        logger.warn(ks, "No sites specified for Hubbard U. "
+                    "Please check if 'U_idx' is correctly specified")
 
 def make_minao_lo(ks, minao_ref):
     """
@@ -182,7 +197,6 @@ def make_minao_lo(ks, minao_ref):
                                      return_labels=True)
     for k in range(nkpts):
         C_ao_minao[k] = lo.vec_lowdin(C_ao_minao[k], ovlp[k])
-    labels = np.asarray(labels)
 
     C_ao_lo = np.zeros((nkpts, nao, nao), dtype=np.complex128)
     for idx, lab in zip(ks.U_idx, ks.U_lab):
@@ -239,7 +253,7 @@ class KRKSpU(krks.KRKS):
     RKSpU class adapted for PBCs with k-point sampling.
     """
 
-    _keys = {"U_idx", "U_val", "C_ao_lo", "U_lab"}
+    _keys = {"U_idx", "U_val", "C_ao_lo", "U_lab", 'alpha'}
 
     get_veff = get_veff
     energy_elec = energy_elec
@@ -263,6 +277,13 @@ class KRKSpU(krks.KRKS):
                      np.array, shape ((spin,), nkpts, nao, nlo),
                      string, in 'minao'.
             minao_ref: reference for minao orbitals, default is 'MINAO'.
+
+        Attributes:
+            U_idx: same as the input.
+            U_val: effectiv U-J [in AU]
+            C_ao_loc: np.array
+            alpha: the perturbation [in AU] used to compute U in LR-cDFT.
+                Refs: Cococcioni and de Gironcoli, PRB 71, 035105 (2005)
         """
         super(self.__class__, self).__init__(cell, kpts, xc=xc, exxdiv=exxdiv, **kwargs)
 
@@ -278,5 +299,104 @@ class KRKSpU(krks.KRKS):
         if self.C_ao_lo.ndim == 4:
             self.C_ao_lo = self.C_ao_lo[0]
 
+        # The perturbation (eV) used to compute U in LR-cDFT.
+        self.alpha = None
+
+    def dump_flags(self, verbose=None):
+        super().dump_flags(verbose)
+        log = logger.new_logger(self, verbose)
+        if log.verbose >= logger.INFO:
+            _print_U_info(self, log)
+        return self
+
     def nuc_grad_method(self):
         raise NotImplementedError
+
+def _print_U_info(mf, log):
+    alphas = mf.alpha
+    if not hasattr(alphas, '__len__'): # not a list or tuple
+        alphas = [alphas] * len(mf.U_idx)
+    log.info("-" * 79)
+    log.info('U indices and values: ')
+    for idx, val, lab, alpha in zip(mf.U_idx, mf.U_val, mf.U_lab, alphas):
+        log.info('%6s [%.6g eV] ==> %-100s', format_idx(idx),
+                    val * HARTREE2EV, "".join(lab))
+        if alpha is not None:
+            log.info('alpha for LR-cDFT %s (eV)', alpha*HARTREE2EV)
+    log.info("-" * 79)
+
+def linear_response_u(mf_plus_u, alphalist=(0.02, 0.05, 0.08)):
+    '''
+    Refs:
+        [1] M. Cococcioni and S. de Gironcoli, Phys. Rev. B 71, 035105 (2005)
+        [2] H. J. Kulik, M. Cococcioni, D. A. Scherlis, and N. Marzari, Phys. Rev. Lett. 97, 103001 (2006)
+        [3] Heather J. Kulik, J. Chem. Phys. 142, 240901 (2015)
+        [4] https://hjkgrp.mit.edu/tutorials/2011-05-31-calculating-hubbard-u/
+        [5] https://hjkgrp.mit.edu/tutorials/2011-06-28-hubbard-u-multiple-sites/
+
+    Args:
+        alphalist :
+            alpha parameters (in eV) are the displacements for the linear
+            response calculations. For each alpha in this list, the DFT+U with
+            U=u0+alpha, U=u0-alpha are evaluated. u0 is the U value from the
+            reference mf_plus_u object, which will be treated as a standard DFT
+            functional.
+    '''
+    is_ibz = hasattr(mf_plus_u.kpts, "kpts_ibz")
+    if is_ibz:
+        raise NotImplementedError
+
+    assert isinstance(mf_plus_u, KRKSpU)
+    assert len(mf_plus_u.U_idx) > 0
+    if not mf_plus_u.converged:
+        mf_plus_u.run()
+    assert mf_plus_u.converged
+    # The bare density matrix without adding U
+    bare_dm = mf_plus_u.make_rdm1()
+
+    mf = mf_plus_u.copy()
+    log = logger.new_logger(mf)
+
+    alphalist = np.asarray(alphalist)
+    alphalist = np.append(-alphalist[::-1], alphalist)
+
+    nkpts = len(mf.kpts)
+    C_ao_lo = mf.C_ao_lo
+    ovlp = mf.get_ovlp()
+    C_inv = [[C_ao_lo[k][:,local_idx].conj().T.dot(ovlp[k]) for k in range(nkpts)]
+             for local_idx in mf.U_idx]
+
+    bare_occupancies = []
+    final_occupancies = []
+    for alpha in alphalist:
+        # All in atomic unit
+        mf.alpha = alpha / HARTREE2EV
+        mf.kernel(dm0=bare_dm)
+        local_occ = 0
+        for c in C_inv:
+            C_on_site = [c[k].dot(mf.mo_coeff[k]) for k in range(nkpts)]
+            rdm1_lo = mf.make_rdm1(C_on_site, mf.mo_occ)
+            local_occ += sum(x.trace().real for x in rdm1_lo)
+        local_occ /= nkpts
+        final_occupancies.append(local_occ)
+
+        # The first iteration of SCF
+        fock = mf.get_fock(dm=bare_dm)
+        e, mo = mf.eig(fock, ovlp)
+        local_occ = 0
+        for c in C_inv:
+            C_on_site = [c[k].dot(mo[k]) for k in range(nkpts)]
+            rdm1_lo = mf.make_rdm1(C_on_site, mf.mo_occ)
+            local_occ += sum(x.trace().real for x in rdm1_lo)
+        local_occ /= nkpts
+        bare_occupancies.append(local_occ)
+        log.info('alpha=%f bare_occ=%g final_occ=%g',
+                 alpha, bare_occupancies[-1], final_occupancies[-1])
+
+    chi0, occ0 = np.polyfit(alphalist, bare_occupancies, deg=1)
+    chif, occf = np.polyfit(alphalist, final_occupancies, deg=1)
+    log.info('Line fitting chi0 = %f x + %f', chi0, occ0)
+    log.info('Line fitting chif = %f x + %f', chif, occf)
+    Uresp = 1./chi0 - 1./chif
+    log.note('Uresp = %f, chi0 = %f, chif = %f', Uresp, chi0, chif)
+    return Uresp

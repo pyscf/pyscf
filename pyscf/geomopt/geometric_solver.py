@@ -33,6 +33,7 @@ from pyscf.grad.rhf import GradientsBase
 
 try:
     from geometric import internal, optimize, nifty, engine, molecule
+    from geometric.errors import GeomOptNotConvergedError
 except ImportError:
     msg = ('Geometry optimizer geomeTRIC not found.\ngeomeTRIC library '
            'can be found on github https://github.com/leeping/geomeTRIC.\n'
@@ -53,7 +54,7 @@ class PySCFEngine(geometric.engine.Engine):
     def __init__(self, scanner):
         molecule = geometric.molecule.Molecule()
         self.mol = mol = scanner.mol
-        molecule.elem = [mol.atom_symbol(i) for i in range(mol.natm)]
+        molecule.elem = [mol.atom_pure_symbol(i) for i in range(mol.natm)]
         # Molecule is the geometry parser for a bunch of formats which use
         # Angstrom for Cartesian coordinates by default.
         molecule.xyzs = [mol.atom_coords()*lib.param.BOHR]  # In Angstrom
@@ -63,14 +64,9 @@ class PySCFEngine(geometric.engine.Engine):
         self.cycle = 0
         self.e_last = 0
         self.callback = None
-        self.maxsteps = 100
         self.assert_convergence = False
 
     def calc_new(self, coords, dirname):
-        if self.cycle >= self.maxsteps:
-            raise NotConvergedError('Geometry optimization is not converged in '
-                                    '%d iterations' % self.maxsteps)
-
         g_scanner = self.scanner
         mol = self.mol
         self.cycle += 1
@@ -117,6 +113,11 @@ def kernel(method, assert_convergence=ASSERT_CONV,
         opt = geometric_solver.GeometryOptimizer(method)
         opt.params = conv_params
         opt.kernel()
+
+    Other geomeTRIC parameters, such as hessian and transition settings, can be
+    specified through `kwargs`. For more details of the geomeTRIC options, please
+    refer to the geomeTRIC documentation:
+    https://geometric.readthedocs.io/en/latest/options.html
     '''
     if isinstance(method, lib.GradScanner):
         g_scanner = method
@@ -131,7 +132,6 @@ def kernel(method, assert_convergence=ASSERT_CONV,
 
     engine = PySCFEngine(g_scanner)
     engine.callback = callback
-    engine.maxsteps = maxsteps
     # To avoid overwriting method.mol
     engine.mol = g_scanner.mol.copy()
 
@@ -149,6 +149,8 @@ def kernel(method, assert_convergence=ASSERT_CONV,
             os.path.join(geometric.optimize.__file__, '..', 'log.ini'))) and kwargs.get('logIni') is None:
         kwargs['logIni'] = os.path.abspath(os.path.join(__file__, '..', 'log.ini'))
 
+    kwargs['maxiter'] = maxsteps
+
     with tempfile.TemporaryDirectory(dir=lib.param.TMPDIR) as tmpdir:
         tmpf = os.path.join(tmpdir, str(uuid.uuid4()))
 
@@ -160,9 +162,9 @@ def kernel(method, assert_convergence=ASSERT_CONV,
             geometric.optimize.run_optimizer(customengine=engine, input=tmpf,
                                              constraints=constraints, **kwargs)
             conv = True
-            # method.mol.set_geom_(m.xyzs[-1], unit='Angstrom')
-        except NotConvergedError as e:
-            logger.note(method, str(e))
+            # method.mol should be still in its original geometry
+        except GeomOptNotConvergedError:
+            logger.note(method, 'Geometry optimization failed to converge in %d iterations', maxsteps)
             conv = False
     return conv, engine.mol
 
@@ -195,11 +197,16 @@ def _make_hessian(g_scanner, hessian_option, tmpdir):
     file:/path/to/hessian_file
     '''
     if not isinstance(hessian_option, str):
-        hessian_option = os.path.join(tmpdir, str(uuid.uuid4()))
-    if ':' in hessian_option:
+        if not hessian_option:
+            # "None" disables vibrational analysis in geomeTRIC
+            return None
+        hessian_file = os.path.join(tmpdir, str(uuid.uuid4()))
+        hessian_option = f'file:{hessian_file}'
+    elif ':' in hessian_option:
         hessian_file = hessian_option.split(':', 1)[1]
     else:
-        hessian_file, hessian_option = hessian_option, f'first:{hessian_file}'
+        logger.info(g_scanner, 'hessian={hessian_option} is configured for vibrational analysis')
+        return hessian_option
 
     method = g_scanner.base
     natm = method.mol.natm
@@ -207,7 +214,7 @@ def _make_hessian(g_scanner, hessian_option, tmpdir):
         h = method.Hessian().kernel()
     except (TypeError, NotImplementedError):
         logger.warn(g_scanner, 'Analytical hessian for %s is not available', method)
-        hessian_option = False
+        hessian_option = None
     else:
         h = h.transpose(0,2,1,3).reshape(3*natm, 3*natm)
         numpy.savetxt(hessian_file, h)

@@ -99,6 +99,10 @@ DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
 ARGPARSE = getattr(__config__, 'ARGPARSE', False)
 DUMPINPUT = getattr(__config__, 'DUMPINPUT', True)
 
+with open(os.path.abspath(os.path.join(__file__, '..', 'basis', 'bse_meta.json')), 'r') as f:
+    BSE_META = json.load(f)
+del f
+
 def M(*args, **kwargs):
     r'''This is a shortcut to build up Mole object.
 
@@ -525,12 +529,12 @@ def uncontracted_basis(_basis):
     for b in _basis:
         angl = b[0]
         kappa = b[1]
-        if isinstance(kappa, int):
+        if isinstance(kappa, (int, np.integer)):
             coeffs = b[2:]
         else:
             coeffs = b[1:]
 
-        if isinstance(kappa, int) and kappa != 0:
+        if isinstance(kappa, (int, np.integer)) and kappa != 0:
             warnings.warn('For basis with kappa != 0, the uncontract basis might be wrong. '
                           'Please double check the resultant attribute mol._basis')
             for p in coeffs:
@@ -876,6 +880,7 @@ def conc_mol(mol1, mol2):
 
     mol3.verbose = mol1.verbose
     mol3.output = mol1.output
+    mol3.stdout = mol1.stdout
     mol3.max_memory = mol1.max_memory
     mol3.charge = mol1.charge + mol2.charge
     mol3.spin = abs(mol1.spin - mol2.spin)
@@ -998,7 +1003,7 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
             sys.stderr.write('Warning: integral library does not support basis '
                              'with angular momentum > 14\n')
 
-        if isinstance(b[1], int):
+        if isinstance(b[1], (int, np.integer)):
             kappa = b[1]
             b_coeff = numpy.array(sorted(b[2:], reverse=True))
         else:
@@ -1234,7 +1239,9 @@ def pack(mol):
             'basis'   : mol.basis,
             'charge'  : mol.charge,
             'spin'    : mol.spin,
+            'cart'    : mol.cart,
             'symmetry': mol.symmetry,
+            'symmetry_subgroup': mol.symmetry_subgroup,
             'nucmod'  : mol.nucmod,
             'nucprop' : mol.nucprop,
             'ecp'     : mol.ecp,
@@ -2088,7 +2095,7 @@ def tostring(mol, format='raw'):
         for i in range(mol.natm):
             symb = mol.atom_pure_symbol(i)
             x, y, z = coords[i]
-            output.append('%-4s %14.5f %14.5f %14.5f' %
+            output.append('%-4s %17.8f %17.8f %17.8f' %
                           (symb, x, y, z))
         return '\n'.join(output)
     elif format == 'zmat':
@@ -2146,11 +2153,10 @@ def fromstring(string, format='xyz'):
     '''
     format = format.lower()
     if format == 'zmat':
-        return from_zmatrix(string)
+        return string
     elif format == 'xyz':
-        dat = string.splitlines()
-        natm = int(dat[0])
-        return '\n'.join(dat[2:natm+2])
+        line, title, geom = string.split('\n', 2)
+        return geom
     elif format == 'sdf':
         raw = string.splitlines()
         natoms, nbonds = raw[3].split()[:2]
@@ -2541,9 +2547,6 @@ class MoleBase(lib.StreamObject):
             else:
                 self.stdout = open(self.output, 'w', encoding='utf-8')
 
-        if self.verbose >= logger.WARN:
-            self.check_sanity()
-
         if self.atom:
             self._atom = self.format_atom(self.atom, unit=self.unit)
         uniq_atoms = {a[0] for a in self._atom}
@@ -2613,6 +2616,9 @@ class MoleBase(lib.StreamObject):
         if dump_input and not self._built and self.verbose > logger.NOTE:
             self.dump_input()
 
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+
         if self.verbose >= logger.DEBUG3:
             logger.debug3(self, 'arg.atm = %s', self._atm)
             logger.debug3(self, 'arg.bas = %s', self._bas)
@@ -2622,6 +2628,33 @@ class MoleBase(lib.StreamObject):
         self._built = True
         return self
     kernel = build
+
+    def check_sanity(self):
+        if isinstance(self.ecp, str):
+            return self
+
+        if isinstance(self.basis, str) and not self.ecp:
+            elements = [x for x, _ in self._atom]
+            ecp, ecp_atoms = bse_predefined_ecp(self.basis, elements)
+            if ecp_atoms:
+                logger.warn(self, f'ECP not specified. The basis set {self.basis} '
+                            f'include an ECP. Recommended ECP: {ecp}.')
+        elif isinstance(self.basis, dict) and isinstance(self.ecp, dict):
+            _basis = self.basis
+            if 'default' in _basis:
+                uniq_atoms = {a[0] for a in self._atom}
+                basis = _parse_default_basis(_basis, uniq_atoms)
+            else:
+                basis = _basis
+            for element, basname in basis.items():
+                if isinstance(basname, str) and not self.ecp.get(element):
+                    ecp, ecp_atoms = bse_predefined_ecp(basname, element)
+                    if ecp_atoms:
+                        logger.warn(self, f'ECP for {element} not specified. '
+                                    f'The basis set {basname} include an ECP. '
+                                    f'Recommended ECP: {ecp}.')
+            basis = None
+        return self
 
     def _build_symmetry(self, *args, **kwargs):
         '''
@@ -2781,7 +2814,7 @@ class MoleBase(lib.StreamObject):
             for atom, basis_set in self._basis.items():
                 self.stdout.write('[INPUT] %s\n' % atom)
                 for b in basis_set:
-                    if isinstance(b[1], int):
+                    if isinstance(b[1], (int, np.integer)):
                         kappa = b[1]
                         b_coeff = b[2:]
                     else:
@@ -3198,7 +3231,7 @@ class MoleBase(lib.StreamObject):
     def atom_coords(self, unit='Bohr'):
         '''np.asarray([mol.atom_coord(i) for i in range(mol.natm)])'''
         ptr = self._atm[:,PTR_COORD]
-        c = self._env[numpy.vstack((ptr,ptr+1,ptr+2)).T].copy()
+        c = self._env[ptr[:,None] + np.arange(3)]
         if not is_au(unit):
             c *= param.BOHR
         return c
@@ -3811,16 +3844,45 @@ class Mole(MoleBase):
         from pyscf import ao2mo
         return ao2mo.kernel(self, mo_coeffs, erifile, dataname, intor, **kwargs)
 
-    def to_cell(self, a, dimension=3):
-        '''Put a molecule in a cell with periodic boundary conditions
+    def to_cell(self, box=None, dimension=3, margin=None):
+        '''This function places a molecule in a three-dimensiontal box with
+        periodic boundary conditions.
+
+        If the `box` parameter is not specified, the molecule will positioned in
+        a zero-dimensional box with margin from edges.
 
         Args:
-            a : (3,3) ndarray
-                Lattice primitive vectors. Each row is a lattice vector
+            box : (3,3) ndarray
+                Lattice primitive vectors. Each row corresponds a lattice vector
+            dimension : integer
+                PBC dimensions
+            margin: float
+                The distance from the edge of the molecule to the edge of the box.
+                If not provided, a default margin will be estimated, to ensure
+                that the electron density decays to approximately 1e-7 outside
+                of the box.
         '''
-        from pyscf.pbc.gto import Cell
+        from pyscf.pbc.gto import Cell, rcut_by_shells
+        assert dimension <= 3
         cell = Cell()
         cell.__dict__.update(self.__dict__)
+        if box is None:
+            # Place molecule in a big box
+            atom_coords = self.atom_coords()
+            if margin is None:
+                # when the basis value converges to ~1e-4, the density value
+                # ~psi^2 is approximately ~1e-8
+                shell_radius = rcut_by_shells(self, precision=1e-4)
+                bas_coords = atom_coords[self._bas[:,ATOM_OF]]
+                upper_bound = (bas_coords + shell_radius[:,None]).max(axis=0)
+                lower_bound = (bas_coords - shell_radius[:,None]).min(axis=0)
+                box_size = upper_bound - lower_bound
+                box = numpy.diag(box_size)
+            else:
+                atom_coords = self.atom_coords()
+                size = atom_coords.max(axis=0) - atom_coords.min(axis=0)
+                box = numpy.eye(3) * (size+margin*2)
+        cell.a = box
         cell.dimension = dimension
         cell.build(False, False)
         return cell
@@ -4171,3 +4233,55 @@ def classify_ecp_pseudo(mol, ecp, pp):
             ecp_as_pp.update(pp_left)
         pp = ecp_as_pp
     return ecp, pp
+
+def bse_predefined_ecp(basis_name, elements):
+    '''Find ECP names for a given list of atoms from BSE database
+    '''
+    ecp = ecp_atoms = None
+    if not isinstance(basis_name, str):
+        return ecp, ecp_atoms
+    pyscf_basis_alias = basis._format_basis_name(basis_name).lower()
+    basis_meta = BSE_META.get(pyscf_basis_alias)
+    if basis_meta:
+        if isinstance(elements, str):
+            elements = [elements]
+        ecp_elements = basis_meta[1]
+        if ecp_elements:
+            unique_atoms = {charge(a) for a in set(elements)}
+            ecp_atoms = unique_atoms.intersection(ecp_elements)
+            if ecp_atoms:
+                ecp = basis_meta[0] # standard format basis set name
+    return ecp, ecp_atoms
+
+def extract_pgto_params(mol, op='diffused'):
+    '''A helper function to extract exponents and contraction coefficients of
+    the most diffused or compact primitive GTOs for each shell. These exponents
+    and coefficients are typically used in estimating rcut and Ecut for PBC
+    methods.
+    '''
+    if op != 'diffused' and op != 'compact':
+        raise RuntimeError(f'Unsupported operation {op}')
+
+    e = np.hstack(mol.bas_exps())
+    c = np.hstack([abs(mol._libcint_ctr_coeff(i)).max(axis=1)
+                   for i in range(mol.nbas)])
+    l = np.repeat(mol._bas[:,ANG_OF], mol._bas[:,NPRIM_OF])
+    basis_id = np.repeat(np.arange(mol.nbas), mol._bas[:,NPRIM_OF])
+    precision = 1e-8
+    if op == 'diffused':
+        # A quick estimation for the radius that each primitive GTO decays to the
+        # value smaller than the required precision
+        r2 = np.log(c**2/precision * 10**l + 1e-200) / e
+        # groupby.argmin()
+        r2_order = np.argsort(-r2)
+        _, idx = np.unique(basis_id[r2_order], return_index=True)
+        idx = r2_order[idx]
+    else:
+        # A quick estimation for the resolution of planewaves that each
+        # primitive GTO requires
+        ke = np.log(c**2 / precision * 50**l + 1e-200) * e
+        # groupby.argmax()
+        ke_order = np.argsort(-ke)
+        _, idx = np.unique(basis_id[ke_order], return_index=True)
+        idx = ke_order[idx]
+    return e[idx], c[idx]

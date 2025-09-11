@@ -5,6 +5,7 @@ __pycache__/
 # C extensions
 *.so
 *.dylib
+*.o
 
 # Distribution / packaging
 .Python
@@ -83,3 +84,7 @@ tmp/
 # IDEs
 .idea/
 .vscode/
+
+# mypy
+.mypy_cache/
+

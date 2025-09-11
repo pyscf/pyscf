@@ -237,10 +237,12 @@ class TDA(TDBase):
 
     singlet = None
 
-    init_guess = uhf.TDA.init_guess
+    get_init_guess = uhf.TDA.get_init_guess
     kernel = uhf.TDA.kernel
     _gen_vind = uhf.TDA.gen_vind
     gen_vind = td_rhf.TDA.gen_vind
+
+    get_frozen_mask = uhf.TDA.get_frozen_mask
 
 CIS = TDA
 
@@ -251,10 +253,12 @@ class TDHF(TDBase):
 
     singlet = None
 
-    init_guess = uhf.TDHF.init_guess
+    get_init_guess = uhf.TDHF.get_init_guess
     kernel = uhf.TDHF.kernel
     _gen_vind = uhf.TDHF.gen_vind
     gen_vind = td_rhf.TDA.gen_vind
+
+    get_frozen_mask = uhf.TDHF.get_frozen_mask
 
 RPA = TDUHF = TDHF
 

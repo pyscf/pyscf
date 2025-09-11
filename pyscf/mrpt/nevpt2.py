@@ -711,9 +711,20 @@ example examples/dmrg/32-dmrg_casscf_nevpt2_for_FeS.py''')
         self.for_dmrg()
         return self
 
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
+        log.info('')
+        log.info('******** %s ********', self.__class__)
+        ncore = self.ncore
+        ncas = self.ncas
+        nvir = self.mo_coeff.shape[1] - ncore - ncas
+        log.info('NEVPT2 (%de+%de, %do), ncore = %d, nvir = %d',
+                 self.nelecas[0], self.nelecas[1], ncas, ncore, nvir)
+        log.info('root = %d', self.root)
 
 
     def kernel(self):
+        self.dump_flags()
         from pyscf.mcscf.addons import StateAverageFCISolver
         if isinstance(self.fcisolver, StateAverageFCISolver):
             raise RuntimeError('State-average FCI solver object cannot be used '

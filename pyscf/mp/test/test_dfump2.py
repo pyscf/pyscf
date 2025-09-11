@@ -57,17 +57,17 @@ class KnownValues(unittest.TestCase):
         # incore
         mmp = mp.dfump2.DFUMP2(mf)
         mmp.kernel()
-        self.assertAlmostEqual(mmp.e_corr, -0.15323136917179633, 8)
+        self.assertAlmostEqual(mmp.e_corr, -0.15321910903780497, 8)
 
         # outcore
         mmp = mp.dfump2.DFUMP2(mf).set(force_outcore=True)
         mmp.kernel()
-        self.assertAlmostEqual(mmp.e_corr, -0.15323136917179633, 8)
+        self.assertAlmostEqual(mmp.e_corr, -0.15321910903780497, 8)
 
     def test_dfmp2_frozen(self):
         mmp = mp.dfump2.DFUMP2(mf, frozen=[[0,1,5], [1]])
         mmp.kernel()
-        self.assertAlmostEqual(mmp.e_corr, -0.09397465616240533, 8)
+        self.assertAlmostEqual(mmp.e_corr, -0.09397152054462676, 8)
 
     def test_dfmp2_mf_with_df(self):
         mmpref = mp.ump2.UMP2(dfmf)
@@ -114,7 +114,45 @@ class KnownValues(unittest.TestCase):
         # incore
         mmp = dfump2_slow.DFUMP2(mf)
         mmp.kernel()
-        self.assertAlmostEqual(mmp.e_corr, -0.15323136917179633, 8)
+        self.assertAlmostEqual(mmp.e_corr, -0.15321910903780497, 8)
+
+    def test_dfmp2_pbc(self):
+        from pyscf.pbc import gto, scf
+        cell = gto.Cell()
+        cell.verbose = 7
+        cell.output = '/dev/null'
+        cell.atom = [
+            [8 , (0. , 0.     , 0.)],
+            [1 , (0. , -0.757 , 0.587)],
+            [1 , (0. , 0.757  , 0.587)]]
+        cell.a = numpy.eye(3) * 5
+        cell.spin = 1
+        cell.charge = 1
+
+        cell.basis = {'H': 'cc-pvdz',
+                     'O': 'cc-pvdz',}
+        cell.build()
+        mf = scf.UHF(cell).density_fit()
+        mf.conv_tol = 1e-12
+        mf.scf()
+
+        # incore using pre-cached CDERI
+        mmp = mp.dfump2.DFUMP2(mf)
+        mmp.kernel()
+        eref = mmp.e_corr
+
+        # direct MP2 starts here
+        mf.with_df._cderi = None
+
+        # incore
+        mmp = mp.dfump2.DFUMP2(mf)
+        mmp.kernel()
+        self.assertAlmostEqual(mmp.e_corr, eref, 8)
+
+        # outcore
+        mmp = mp.dfump2.DFUMP2(mf).set(force_outcore=True)
+        mmp.kernel()
+        self.assertAlmostEqual(mmp.e_corr, eref, 8)
 
 
 if __name__ == "__main__":

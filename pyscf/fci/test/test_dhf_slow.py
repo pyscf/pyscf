@@ -57,6 +57,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -19.32160357236596, 8)
         self.assertAlmostEqual(abs(lib.fp(c)), 0.44753770280929384, 8)
 
+    def test_solver(self):
+        sol = fci.fci_dhf_slow.FCI()
+        e, c = sol.kernel(h1e, eri, norb, nelec)
+        self.assertAlmostEqual(e, -19.32160357236596, 8)
+        self.assertAlmostEqual(abs(lib.fp(c)), 0.44753770280929384, 8)
+
     def test_hdiag(self):
         hdiag = fci.fci_dhf_slow.make_hdiag(h1e, eri, norb, nelec)
         h2e = fci.fci_dhf_slow.absorb_h1e(h1e, eri, norb, nelec, 0.5)
@@ -70,6 +76,8 @@ class KnownValues(unittest.TestCase):
 
     def test_rdm1(self):
         dm1 = fci.fci_dhf_slow.make_rdm1(ci0, norb, nelec)
+        dm1_slow = fci.fci_dhf_slow.make_rdm1_slow(ci0, norb, nelec)
+        self.assertAlmostEqual(numpy.linalg.norm(dm1 - dm1_slow), 0.0, 12)
         self.assertAlmostEqual(abs(lib.fp(dm1)), 0.23702307574649528, 8)
 
     def test_rdm12(self):

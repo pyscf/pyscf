@@ -51,7 +51,7 @@ from pyscf import __config__
 
 OMEGA_MIN = 0.08
 INDEX_MIN = -10000
-LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-9)
+LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-10)
 # Threshold of steep bases and local bases
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 1.0)
 
@@ -270,15 +270,8 @@ class _RSGDFBuilder(Int3cBuilder):
         rs_auxcell = self.rs_auxcell
         auxcell_c = rs_auxcell.compact_basis_cell()
         if auxcell_c.nbas > 0:
-            aux_exp = np.hstack(auxcell_c.bas_exps()).min()
-            if omega == 0:
-                theta = aux_exp / 2
-            else:
-                theta = 1./(2./aux_exp + omega**-2)
-            fac = 2*np.pi**3.5/auxcell.vol * aux_exp**-3 * theta**-1.5
-            rcut_sr = (np.log(fac / auxcell_c.rcut / precision + 1.) / theta)**.5
-            auxcell_c.rcut = rcut_sr
-            logger.debug1(self, 'auxcell_c  rcut_sr = %g', rcut_sr)
+            auxcell_c.rcut = estimate_rs_2c2e_rcut(auxcell_c, omega, precision)
+            logger.debug1(self, 'auxcell_c  rcut_sr = %g', auxcell_c.rcut)
             with auxcell_c.with_short_range_coulomb(omega):
                 sr_j2c = list(auxcell_c.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts))
             recontract_1d = rs_auxcell.recontract()
@@ -924,13 +917,22 @@ class _RSGDFBuilder(Int3cBuilder):
         else:
             kk_idx = None
 
+        if h5py.is_hdf5(cderi_file):
+            feri = lib.H5FileWrap(cderi_file, 'a')
+            if 'kpts' in feri:
+                del feri['kpts']
+                del feri['aosym']
+            if dataname in feri:
+                log.warn(f'Overwritting {dataname} in {cderi_file}.')
+                del feri[dataname]
+        else:
+            feri = lib.H5FileWrap(cderi_file, 'w')
+        feri['kpts'] = kpts
+        feri['aosym'] = aosym
+
         fswap = self.outcore_auxe2(cderi_file, intor, aosym, comp, j_only,
                                    'j3c', shls_slice, kk_idx=kk_idx)
         cpu1 = log.timer('pass1: real space int3c2e', *cpu0)
-
-        feri = lib.H5FileWrap(cderi_file, 'w')
-        feri['kpts'] = kpts
-        feri['aosym'] = aosym
 
         if aosym == 's2':
             nao_pair = nao*(nao+1)//2
@@ -1616,3 +1618,14 @@ def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
     log_rest = np.log(precision / (16*np.pi**2 * kmax**lmax))
     omega = (-.5 * ke_cutoff / log_rest)**.5
     return omega
+
+def estimate_rs_2c2e_rcut(auxcell, omega, precision=None):
+    if precision is None:
+        precision = auxcell.precision
+    aux_exp = np.hstack(auxcell.bas_exps()).min()
+    if omega == 0:
+        theta = aux_exp / 2
+    else:
+        theta = 1./(2./aux_exp + omega**-2)
+    fac = 2*np.pi**3.5/auxcell.vol * aux_exp**-3 * theta**-1.5
+    return (np.log(fac / auxcell.rcut / precision + 1.) / theta)**.5

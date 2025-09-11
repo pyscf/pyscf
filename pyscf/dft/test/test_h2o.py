@@ -15,9 +15,11 @@
 
 import unittest
 import numpy
+import scipy.linalg
 from pyscf import gto
 from pyscf import lib
 from pyscf import dft
+from pyscf import scf
 try:
     from pyscf.dispersion import dftd3, dftd4
 except ImportError:
@@ -370,32 +372,34 @@ class KnownValues(unittest.TestCase):
         method = dft.RKS(h2o)
         dm = method.get_init_guess()
         method.xc = 'wB97M_V'
+        method.nlcgrids.level = 0
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.fp(vxc), 22.767792068559917, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 22.767790354129247, 8)
 
         method.xc = 'B97M_V'
         vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.fp(vxc), 23.067046560473408, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 23.06704484604275, 8)
 
         method.nlc = False
         assert method.do_nlc() == False
         vxc = method.get_veff(h2o, dm, dm, vxc)
         self.assertAlmostEqual(lib.fp(vxc), 23.05881308880983, 8)
 
-    def test_nr_rks_nlc_small_memory_high_cost(self):
+    def test_nr_rks_nlc_small_memory(self):
         method = dft.RKS(h2o)
         dm = method.get_init_guess()
         method._eri = None
         method.max_memory = 0
         method.xc = 'wB97M_V'
+        method.nlcgrids.level = 0
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.fp(vxc), 22.767792068559917, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 22.767790354129247, 8)
 
         method._eri = None
         method.max_memory = 0
         method.xc = 'B97M_V'
         vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.fp(vxc), 23.067046560473408, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 23.06704484604275, 8)
 
     def test_nr_rks_rsh_cart_high_cost(self):
         mol1 = h2o.copy()
@@ -416,37 +420,39 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(vxc[0]), 23.16975737295899, 8)
         self.assertAlmostEqual(lib.fp(vxc[1]), 23.16975737295899, 8)
 
-    def test_nr_uks_nlc_high_cost(self):
+    def test_nr_uks_nlc(self):
         method = dft.UKS(h2o)
         dm = method.get_init_guess()
         dm = (dm[0], dm[0])
         method.xc = 'wB97M_V'
+        method.nlcgrids.level = 0
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.fp(vxc[0]), 22.767792068559917, 8)
-        self.assertAlmostEqual(lib.fp(vxc[1]), 22.767792068559917, 8)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 22.767790354129247, 8)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 22.767790354129247, 8)
 
         method.xc = 'B97M_V'
         vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.fp(vxc[0]), 23.067046560473408, 8)
-        self.assertAlmostEqual(lib.fp(vxc[1]), 23.067046560473408, 8)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 23.06704484604275, 8)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 23.06704484604275, 8)
 
-    def test_nr_uks_nlc_small_memory_high_cost(self):
+    def test_nr_uks_nlc_small_memory(self):
         method = dft.UKS(h2o)
         dm = method.get_init_guess()
         dm = (dm[0], dm[0])
         method._eri = None
         method.max_memory = 0
         method.xc = 'wB97M_V'
+        method.nlcgrids.level = 0
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.fp(vxc[0]), 22.767792068559917, 8)
-        self.assertAlmostEqual(lib.fp(vxc[1]), 22.767792068559917, 8)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 22.767790354129247, 8)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 22.767790354129247, 8)
 
         method._eri = None
         method.max_memory = 0
         method.xc = 'B97M_V'
         vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.fp(vxc[0]), 23.067046560473408, 8)
-        self.assertAlmostEqual(lib.fp(vxc[1]), 23.067046560473408, 8)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 23.06704484604275, 8)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 23.06704484604275, 8)
 
     def test_nr_gks_rsh(self):
         method = dft.GKS(h2o)
@@ -457,35 +463,26 @@ class KnownValues(unittest.TestCase):
         vxc = method.get_veff(h2o, dm)
         self.assertAlmostEqual(lib.fp(vxc), 5.115622298912124+0j, 8)
 
-    def test_nr_gks_nlc_high_cost(self):
+    def test_nr_gks_nlc(self):
         method = dft.GKS(h2o)
         dm = method.get_init_guess()
         dm = dm + numpy.sin(dm)*.02j
         dm = dm + dm.conj().T
         method.xc = 'wB97M_V'
+        method.nlcgrids.level = 0
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.fp(vxc), 3.172920887028461+0j, 8)
-
+        self.assertAlmostEqual(lib.fp(vxc), 3.17466829111814+0j, 8)
         method.xc = 'B97M_V'
         vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.fp(vxc), 2.0041673361905317+0j, 8)
+        self.assertAlmostEqual(lib.fp(vxc), 2.00591474028017+0j, 8)
 
-    def test_nr_gks_nlc_small_memory_high_cost(self):
-        method = dft.GKS(h2o)
-        dm = method.get_init_guess()
-        dm = dm + numpy.sin(dm)*.02j
-        dm = dm + dm.conj().T
-        method._eri = None
-        method.max_memory = 0
-        method.xc = 'wB97M_V'
-        vxc = method.get_veff(h2o, dm)
-        self.assertAlmostEqual(lib.fp(vxc), 3.172920887028461+0j, 8)
-
-        method._eri = None
-        method.max_memory = 0
-        method.xc = 'B97M_V'
-        vxc = method.get_veff(h2o, dm, dm, vxc)
-        self.assertAlmostEqual(lib.fp(vxc), 2.0041673361905317+0j, 8)
+        mf = h2o_cation.UKS(xc='wb97mv')
+        mf.nlcgrids.level = 0
+        dm = mf.get_init_guess()
+        ref = scipy.linalg.block_diag(*mf.get_veff(h2o_cation, dm))
+        mf_gks = mf.to_gks()
+        vxc = mf_gks.get_veff(h2o_cation, scipy.linalg.block_diag(*dm))
+        self.assertAlmostEqual(abs(vxc - ref).max(), 0, 12)
 
     def test_nr_rks_vv10_high_cost(self):
         method = dft.RKS(h2o)
@@ -638,6 +635,88 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(mol_u.KS(), dft.uks.UKS))
         self.assertTrue(isinstance(mol_u.DKS(), dft.dks.UDKS))
         #TODO: self.assertTrue(isinstance(dft.X2C(mol_r), x2c.dft.UKS))
+
+    def test_to_hf(self):
+        self.assertEqual(dft.RKS(h2o).to_rhf().__class__, scf.rhf.RHF)
+        self.assertEqual(dft.RKS(h2o).to_uhf().__class__, scf.uhf.UHF)
+        self.assertEqual(dft.RKS(h2o).to_ghf().__class__, scf.ghf.GHF)
+        self.assertEqual(dft.RKS(h2o).to_hf() .__class__, scf.rhf.RHF)
+        self.assertEqual(dft.RKS(h2o).to_rks().__class__, dft.rks.RKS)
+        self.assertEqual(dft.RKS(h2o).to_uks().__class__, dft.uks.UKS)
+        self.assertEqual(dft.RKS(h2o).to_gks().__class__, dft.gks.GKS)
+
+        self.assertEqual(dft.UKS(h2o).to_rhf().__class__, scf.rhf.RHF)
+        self.assertEqual(dft.UKS(h2o).to_uhf().__class__, scf.uhf.UHF)
+        self.assertEqual(dft.UKS(h2o).to_ghf().__class__, scf.ghf.GHF)
+        self.assertEqual(dft.UKS(h2o).to_hf() .__class__, scf.uhf.UHF)
+        self.assertEqual(dft.UKS(h2o).to_rks().__class__, dft.rks.RKS)
+        self.assertEqual(dft.UKS(h2o).to_uks().__class__, dft.uks.UKS)
+        self.assertEqual(dft.UKS(h2o).to_gks().__class__, dft.gks.GKS)
+
+        self.assertEqual(dft.GKS(h2o).to_ghf().__class__, scf.ghf.GHF)
+        self.assertEqual(dft.GKS(h2o).to_hf() .__class__, scf.ghf.GHF)
+        self.assertEqual(dft.GKS(h2o).to_gks().__class__, dft.gks.GKS)
+
+        self.assertEqual(dft.RKS(h2o).density_fit().to_rhf().__class__, scf.rhf.RHF(h2o).density_fit().__class__)
+        self.assertEqual(dft.RKS(h2o).density_fit().to_uhf().__class__, scf.uhf.UHF(h2o).density_fit().__class__)
+        self.assertEqual(dft.RKS(h2o).density_fit().to_ghf().__class__, scf.ghf.GHF(h2o).density_fit().__class__)
+        self.assertEqual(dft.RKS(h2o).density_fit().to_hf() .__class__, scf.rhf.RHF(h2o).density_fit().__class__)
+        self.assertEqual(dft.RKS(h2o).density_fit().to_rks().__class__, dft.rks.RKS(h2o).density_fit().__class__)
+        self.assertEqual(dft.RKS(h2o).density_fit().to_uks().__class__, dft.uks.UKS(h2o).density_fit().__class__)
+        self.assertEqual(dft.RKS(h2o).density_fit().to_gks().__class__, dft.gks.GKS(h2o).density_fit().__class__)
+
+        self.assertEqual(dft.UKS(h2o).density_fit().to_rhf().__class__, scf.rhf.RHF(h2o).density_fit().__class__)
+        self.assertEqual(dft.UKS(h2o).density_fit().to_uhf().__class__, scf.uhf.UHF(h2o).density_fit().__class__)
+        self.assertEqual(dft.UKS(h2o).density_fit().to_ghf().__class__, scf.ghf.GHF(h2o).density_fit().__class__)
+        self.assertEqual(dft.UKS(h2o).density_fit().to_hf() .__class__, scf.uhf.UHF(h2o).density_fit().__class__)
+        self.assertEqual(dft.UKS(h2o).density_fit().to_rks().__class__, dft.rks.RKS(h2o).density_fit().__class__)
+        self.assertEqual(dft.UKS(h2o).density_fit().to_uks().__class__, dft.uks.UKS(h2o).density_fit().__class__)
+        self.assertEqual(dft.UKS(h2o).density_fit().to_gks().__class__, dft.gks.GKS(h2o).density_fit().__class__)
+
+        self.assertEqual(dft.GKS(h2o).density_fit().to_ghf().__class__, scf.ghf.GHF(h2o).density_fit().__class__)
+        self.assertEqual(dft.GKS(h2o).density_fit().to_hf() .__class__, scf.ghf.GHF(h2o).density_fit().__class__)
+        self.assertEqual(dft.GKS(h2o).density_fit().to_gks().__class__, dft.gks.GKS(h2o).density_fit().__class__)
+
+    def test_to_ks(self):
+        self.assertEqual(scf.RHF(h2o).to_rhf().__class__, scf.rhf.RHF)
+        self.assertEqual(scf.RHF(h2o).to_uhf().__class__, scf.uhf.UHF)
+        self.assertEqual(scf.RHF(h2o).to_ghf().__class__, scf.ghf.GHF)
+        self.assertEqual(scf.RHF(h2o).to_ks() .__class__, dft.rks.RKS)
+        self.assertEqual(scf.RHF(h2o).to_rks().__class__, dft.rks.RKS)
+        self.assertEqual(scf.RHF(h2o).to_uks().__class__, dft.uks.UKS)
+        self.assertEqual(scf.RHF(h2o).to_gks().__class__, dft.gks.GKS)
+
+        self.assertEqual(scf.UHF(h2o).to_rhf().__class__, scf.rhf.RHF)
+        self.assertEqual(scf.UHF(h2o).to_uhf().__class__, scf.uhf.UHF)
+        self.assertEqual(scf.UHF(h2o).to_ghf().__class__, scf.ghf.GHF)
+        self.assertEqual(scf.UHF(h2o).to_ks() .__class__, dft.uks.UKS)
+        self.assertEqual(scf.UHF(h2o).to_rks().__class__, dft.rks.RKS)
+        self.assertEqual(scf.UHF(h2o).to_uks().__class__, dft.uks.UKS)
+        self.assertEqual(scf.UHF(h2o).to_gks().__class__, dft.gks.GKS)
+
+        self.assertEqual(scf.GHF(h2o).to_ghf().__class__, scf.ghf.GHF)
+        self.assertEqual(scf.GHF(h2o).to_ks() .__class__, dft.gks.GKS)
+        self.assertEqual(scf.GHF(h2o).to_gks().__class__, dft.gks.GKS)
+
+        self.assertEqual(scf.RHF(h2o).density_fit().to_rhf().__class__, scf.rhf.RHF(h2o).density_fit().__class__)
+        self.assertEqual(scf.RHF(h2o).density_fit().to_uhf().__class__, scf.uhf.UHF(h2o).density_fit().__class__)
+        self.assertEqual(scf.RHF(h2o).density_fit().to_ghf().__class__, scf.ghf.GHF(h2o).density_fit().__class__)
+        self.assertEqual(scf.RHF(h2o).density_fit().to_ks() .__class__, dft.rks.RKS(h2o).density_fit().__class__)
+        self.assertEqual(scf.RHF(h2o).density_fit().to_rks().__class__, dft.rks.RKS(h2o).density_fit().__class__)
+        self.assertEqual(scf.RHF(h2o).density_fit().to_uks().__class__, dft.uks.UKS(h2o).density_fit().__class__)
+        self.assertEqual(scf.RHF(h2o).density_fit().to_gks().__class__, dft.gks.GKS(h2o).density_fit().__class__)
+
+        self.assertEqual(scf.UHF(h2o).density_fit().to_rhf().__class__, scf.rhf.RHF(h2o).density_fit().__class__)
+        self.assertEqual(scf.UHF(h2o).density_fit().to_uhf().__class__, scf.uhf.UHF(h2o).density_fit().__class__)
+        self.assertEqual(scf.UHF(h2o).density_fit().to_ghf().__class__, scf.ghf.GHF(h2o).density_fit().__class__)
+        self.assertEqual(scf.UHF(h2o).density_fit().to_ks() .__class__, dft.uks.UKS(h2o).density_fit().__class__)
+        self.assertEqual(scf.UHF(h2o).density_fit().to_rks().__class__, dft.rks.RKS(h2o).density_fit().__class__)
+        self.assertEqual(scf.UHF(h2o).density_fit().to_uks().__class__, dft.uks.UKS(h2o).density_fit().__class__)
+        self.assertEqual(scf.UHF(h2o).density_fit().to_gks().__class__, dft.gks.GKS(h2o).density_fit().__class__)
+
+        self.assertEqual(scf.GHF(h2o).density_fit().to_ghf().__class__, scf.ghf.GHF(h2o).density_fit().__class__)
+        self.assertEqual(scf.GHF(h2o).density_fit().to_ks() .__class__, dft.gks.GKS(h2o).density_fit().__class__)
+        self.assertEqual(scf.GHF(h2o).density_fit().to_gks().__class__, dft.gks.GKS(h2o).density_fit().__class__)
 
 if __name__ == "__main__":
     print("Full Tests for H2O")
