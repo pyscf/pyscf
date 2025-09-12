@@ -388,7 +388,7 @@ void VXCgen_grid_lko(double *out, double *coords, double *atm_coords,
 }
 
 void VXCgen_grid_lko_deriv(double *out, double *dw, double *coords, double *atm_coords,
-                           double *radii_table, int natm, int ngrids, int *ialist)
+                           double *radii_table, int natm, int ngrids, int *atm_idx)
 {
     const size_t Ngrids = ngrids;
     int i, j;
@@ -503,7 +503,7 @@ void VXCgen_grid_lko_deriv(double *out, double *dw, double *coords, double *atm_
             dfacy = dady[i*natm+j];
             dfacz = dadz[i*natm+j];
             for (n = 0; n < ngs; n++) {
-                ia_p = ialist[ig0 + n];
+                ia_p = atm_idx[ig0 + n];
                 tmp = dw[j*Ngrids+ig0+n] * dg[n] / (.5 + g[n] + 1e-200);
                 tmp-= dw[i*Ngrids+ig0+n] * dg[n] / (.5 - g[n] + 1e-200);
                 tmp *= (grid_dist[i*GRIDS_BLOCK+n] -

@@ -491,7 +491,7 @@ def run_k_only_setup(sgx, dms, hermi):
     ao_loc = mol.ao_loc_nr()
     t0 = logger.perf_counter()
 
-    if grids.coords is None or grids.non0tab is None or grids.ialist is None:
+    if grids.coords is None or grids.non0tab is None or grids.atm_idx is None:
         grids.build(with_non0tab=True, with_ialist=True)
         sgx._sgx_block_cond = None
 
@@ -648,7 +648,7 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13, full_dm=None):
             # fg = lib.einsum('xij,ig->xjg', proj_dm, wao.T)
             fg = _sgxdot_ao_dm(ao, proj_dm, mask, shls_slice, ao_loc, out=fg)
         te = logger.perf_counter()
-        
+
         if ncond is None:
             gv = batch_k(mol, coords, fg, weights)
         else:

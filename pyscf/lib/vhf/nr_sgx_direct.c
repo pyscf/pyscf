@@ -817,7 +817,7 @@ void SGXget_shell_norms(double **dms, double *shell_norms, int n_dm,
 
 void SGXsetup_int_screen(int (*intor)(), double *blkdist_ba, double *sorted_coords,
                          double *maxi_ij, double *maxri_ij,
-                         double *coords, double *atm_coords, int *ialist,
+                         double *coords, double *atm_coords, int *atm_idx,
                          int *ao_loc, CINTOpt *cintopt, CVHFOpt *vhfopt,
                          int *atm, int natm, int *bas, int nbas, double *env,
                          int ngrids) {
@@ -829,8 +829,8 @@ void SGXsetup_int_screen(int (*intor)(), double *blkdist_ba, double *sorted_coor
                 ncoord_a[a] = 0;
         }
         for (g = 0; g < ngrids; g++) {
-                if (ialist[g] >= 0) {
-                        ncoord_a[ialist[g]]++;
+                if (atm_idx[g] >= 0) {
+                        ncoord_a[atm_idx[g]]++;
                 }
         }
         int tot = 0;
@@ -844,7 +844,7 @@ void SGXsetup_int_screen(int (*intor)(), double *blkdist_ba, double *sorted_coor
         }
         gloc_a[natm] = tot;
         for (g = 0; g < ngrids; g++) {
-                a = ialist[g];
+                a = atm_idx[g];
                 if (a < 0) {
                         continue;
                 }
@@ -1071,7 +1071,8 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
                                 if (ncond == NULL || SGXnr_pj_screen_v2(
                                         shls, vhfopt, atm, bas, env, ncond[ibatch], shl_maxs
                                 ) || SGXnr_pj_escreen(
-                                        shls, vhfopt, atm, bas, env, econd + ibatch * nbas, shl_maxs, etol
+                                        shls, vhfopt, atm, bas, env,
+                                        econd + ibatch * nbas, shl_maxs, etol
                                 )) {
                                         sj_shells[num_sj_shells] = jsh;
                                         num_sj_shells++;
