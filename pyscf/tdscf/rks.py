@@ -23,6 +23,7 @@
 
 import numpy
 from pyscf import lib
+from pyscf.lib import logger
 from pyscf import symm
 from pyscf.tdscf import rhf
 from pyscf.tdscf._lr_eig import eigh as lr_eigh
