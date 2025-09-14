@@ -20,6 +20,7 @@ from pyscf import lib
 from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
+from pyscf import cc
 from pyscf import grad
 from pyscf.qmmm import itrf
 
@@ -130,6 +131,41 @@ class KnowValues(unittest.TestCase):
         mc = itrf.add_mm_charges(mcscf.CASSCF(mf, 4, 4), coords, charges).run()
         self.assertAlmostEqual(mc.e_tot, -76.0461574155984, 7)
 
+    def test_ccsd(self):
+        mol = gto.Mole()
+        mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
+                       H                 -0.00000000   -0.84695236    0.59109389
+                       H                 -0.00000000    0.89830571    0.52404783 '''
+        mol.basis = 'cc-pvdz'
+        mol.build()
+
+        coords = [(0.5,0.6,0.8)]
+        charges = [-0.5]
+        mf = itrf.mm_charge(scf.RHF(mol), coords, charges).run()
+
+        g = mf.nuc_grad_method().kernel()
+        mfs = mf.as_scanner()
+        e1 = mfs(''' O                  0.00000000    0.00000000   -0.10981188
+                 H                 -0.00000000   -0.84695236    0.59109389
+                 H                 -0.00000000    0.89830571    0.52404783 ''')
+        e2 = mfs(''' O                 -0.00000000    0.00000000   -0.11181188
+                 H                 -0.00000000   -0.84695236    0.59109389
+                 H                 -0.00000000    0.89830571    0.52404783 ''')
+        self.assertAlmostEqual(g[0,2], (e1 - e2)/0.002 * lib.param.BOHR, 5)
+
+        mycc = cc.ccsd.CCSD(mf)
+        mycc.conv_tol = 1e-8
+        ecc, t1, t2 = mycc.kernel()
+
+        g = mycc.nuc_grad_method().kernel()
+        ccs = mycc.as_scanner()
+        e1 = ccs(''' O                  0.00000000    0.00000000   -0.10981188
+                 H                 -0.00000000   -0.84695236    0.59109389
+                 H                 -0.00000000    0.89830571    0.52404783 ''')
+        e2 = ccs(''' O                 -0.00000000    0.00000000   -0.11181188
+                 H                 -0.00000000   -0.84695236    0.59109389
+                 H                 -0.00000000    0.89830571    0.52404783 ''')
+        self.assertAlmostEqual(g[0,2], (e1 - e2)/0.002 * lib.param.BOHR, 5)
 
 
 if __name__ == "__main__":
