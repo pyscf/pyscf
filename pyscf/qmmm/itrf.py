@@ -179,6 +179,7 @@ class QMMMSCF(QMMM):
 
     def energy_nuc(self):
         # interactions between QM nuclei and MM particles
+        assert self.mm_mol.charge_model == 'point' # TODO: support Gaussian charge, same as the one in PCM
         nuc = self.mol.energy_nuc()
         coords = self.mm_mol.atom_coords()
         charges = self.mm_mol.atom_charges()
@@ -370,6 +371,7 @@ class QMMMGrad:
 
     def grad_nuc(self, mol=None, atmlst=None):
         if mol is None: mol = self.mol
+        assert self.base.mm_mol.charge_model == 'point' # TODO: support Gaussian charge, same as the one in PCM
         coords = self.base.mm_mol.atom_coords()
         charges = self.base.mm_mol.atom_charges()
 
