@@ -151,7 +151,7 @@ def gen_response(mf, mo_coeff=None, mo_occ=None,
     return vind
 
 class KUKS(rks.KohnShamDFT, kuhf.KUHF):
-    '''UKS class adapted for PBCs with k-point sampling.
+    '''UKS class adapted for PBCs with k-point sampling (default: gamma point).
     '''
 
     get_veff = get_veff
@@ -159,7 +159,7 @@ class KUKS(rks.KohnShamDFT, kuhf.KUHF):
     get_rho = get_rho
     gen_response = gen_response
 
-    def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
+    def __init__(self, cell, kpts=None, xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         kuhf.KUHF.__init__(self, cell, kpts, exxdiv=exxdiv)
         rks.KohnShamDFT.__init__(self, xc)

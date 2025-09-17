@@ -42,10 +42,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
 
 class ROKS(rks.KohnShamDFT, rohf.ROHF):
-    '''UKS class adapted for PBCs.
-
-    This is a literal duplication of the molecular UKS class with some `mol`
-    variables replaced by `cell`.
+    '''PBC-ROKS at a single k-point (default: gamma point).
     '''
 
     get_vsap = rks.RKS.get_vsap
@@ -53,7 +50,7 @@ class ROKS(rks.KohnShamDFT, rohf.ROHF):
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec
 
-    def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN',
+    def __init__(self, cell, kpt=None, xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         rohf.ROHF.__init__(self, cell, kpt, exxdiv=exxdiv)
         rks.KohnShamDFT.__init__(self, xc)

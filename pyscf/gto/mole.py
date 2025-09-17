@@ -2173,7 +2173,7 @@ def fromstring(string, format='xyz'):
 def is_au(unit):
     '''Return whether the unit is recognized as A.U. or not
     '''
-    return unit.upper().startswith(('B', 'AU'))
+    return isinstance(unit, str) and unit.upper().startswith(('B', 'AU'))
 
 #
 # MoleBase handles three layers of basis data: input, internal format, libcint arguments.
@@ -3066,16 +3066,36 @@ class MoleBase(lib.StreamObject):
     def set_geom_(self, atoms_or_coords, unit=None, symmetry=None,
                   inplace=True):
         '''Update geometry
+
+        Args:
+            atoms_or_coords : list, str, or numpy.ndarray
+                When specified in list or str, it is processed as the Mole.atom
+                attribute. If inputing a (N, 3) numpy array, this array
+                represents the coordinates of the atoms in the molecule.
+
+        Kwargs:
+            unit : str
+                The unit for the input `atoms_or_coords`. If specified, mol.unit
+                will be updated to this value. If not provided, the current
+                mol.unit will be used for the input `atoms_or_coords`.
+            symmetry : bool
+                Whether to enable point group symmetry. If not specified, the
+                current mol.symmetry setting will be used.
+            inplace : bool
+                Whether to overwrite the existing Mole object.
         '''
         if inplace:
             mol = self
         else:
             mol = self.copy(deep=False)
             mol._env = mol._env.copy()
-        if unit is None:
-            unit = mol.unit
-        else:
+
+        if unit is not None and self.unit != unit:
+            logger.warn(mol, 'Mole.unit (%s) is changed to %s', self.unit, unit)
             mol.unit = unit
+        else:
+            unit = mol.unit
+
         if symmetry is None:
             symmetry = mol.symmetry
 

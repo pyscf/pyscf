@@ -136,58 +136,6 @@ class Gradients(rhf_grad.Gradients):
 
     get_veff = get_veff
 
-if __name__=='__main__':
-    from pyscf.pbc import dft, gto, scf
-    cell = gto.Cell()
-    cell.atom = [['He', [0.0, 0.0, 0.0]], ['He', [1, 1.1, 1.2]]]
-    cell.basis = 'gth-dzv'
-    cell.a = np.eye(3) * 3
-    #cell.mesh = [19,19,19]
-    cell.unit='bohr'
-    cell.pseudo='gth-pade'
-    cell.verbose=5
-    cell.build()
-
-    nmp = [1,1,5]
-    kpts = cell.make_kpts(nmp)
-    kmf = dft.KRKS(cell, kpts)
-    kmf.exxdiv = None
-    kmf.xc = 'b3lyp'
-    kmf.kernel()
-    mygrad = Gradients(kmf)
-    ana = mygrad.kernel()
-
-    disp = 1e-5
-    cell1 = gto.Cell()
-    cell1.atom = [['He', [0.0, 0.0, 0.0]], ['He', [1, 1.1, 1.2+disp/2.]]]
-    cell1.basis = 'gth-dzv'
-    cell1.a = np.eye(3) * 3
-    #cell1.mesh = [19,19,19]
-    cell1.unit='bohr'
-    cell1.pseudo='gth-pade'
-    cell1.verbose=1
-    cell1.build()
-
-    cell2 = gto.Cell()
-    cell2.atom = [['He', [0.0, 0.0, 0.0]], ['He', [1, 1.1, 1.2-disp/2.]]]
-    cell2.basis = 'gth-dzv'
-    cell2.a = np.eye(3) * 3
-    #cell2.mesh = [19,19,19]
-    cell2.unit='bohr'
-    cell2.pseudo='gth-pade'
-    cell2.verbose=1
-    cell2.build()
-
-
-    kmf1 = dft.KRKS(cell1, kpts)
-    kmf1.exxdiv = None
-    kmf1.xc = 'b3lyp'
-    ep = kmf1.kernel()
-
-    kmf2 = dft.KRKS(cell2, kpts)
-    kmf2.exxdiv = None
-    kmf2.xc = 'b3lyp'
-    em = kmf2.kernel()
-
-    fin = (ep-em) / disp
-    print(fin, ana)
+    def get_stress(self):
+        from pyscf.pbc.grad import krks_stress
+        return krks_stress.kernel(self)
