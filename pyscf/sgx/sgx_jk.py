@@ -53,11 +53,15 @@ from pyscf.df.incore import aux_e2
 from pyscf.gto import moleintor
 from pyscf.scf import _vhf
 from pyscf.dft import gen_grid
+from pyscf.data.elements import _std_symbol_without_ghost, NUC
+from pyscf.data.radii import BRAGG
+from pyscf.dft.radi import treutler_ahlrichs
 from pyscf.dft.gen_grid import LEBEDEV_ORDER, SGX_ANG_MAPPING, \
                                sgx_prune, becke_lko
 from pyscf.dft.numint import eval_ao, BLKSIZE, NBINS, libdft, \
     SWITCH_SIZE, _scale_ao, _dot_ao_ao_sparse, _dot_ao_dm_sparse, \
     _scale_ao_sparse
+import time
 
 
 libdft.SGXreturn_blksize.restype = int
@@ -67,6 +71,10 @@ assert SGX_BLKSIZE % BLKSIZE == 0
 SGX_DELTA_1 = 0.1
 SGX_DELTA_2 = 0.9
 SGX_DELTA_3 = 0.5
+
+_SGX_DELTA_1 = 0.99
+_SGX_DELTA_2 = 0.1
+_SGX_DELTA_3 = 0.1
 
 
 def _sgxdot_ao_dm(ao, dms, non0tab, shls_slice, ao_loc, out=None):
@@ -483,6 +491,401 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
     return vj.reshape(dm_shape), vk.reshape(dm_shape)
 
 
+class SGXData:
+    def __init__(self, mol, grids, k_only=False,
+                 fit_ovlp=True, sym_ovlp=False,
+                 max_memory=2000, hermi=0,
+                 integral_bound="sample",
+                 sgxopt=None):
+        # integral bound can be "ovlp", "strict", "sample"
+        self.mol = mol
+        self.grids = grids
+        self.k_only = k_only
+        self.fit_ovlp = fit_ovlp
+        self.sym_ovlp = sym_ovlp
+        self.max_memory = max_memory
+        self.hermi = hermi
+        self._loop_data = None
+        self._nquad = 200
+        self._nrad = 32
+        self._rcmul = 2.0
+        self.integral_bound = integral_bound
+        self._opt = sgxopt
+        self.use_dm_screening = True  # TODO set
+        self.reset()
+
+    def _get_loop_data(self, nset=1):
+        mol = self.mol
+        grids = self.grids
+        nao = mol.nao_nr()
+        ao_loc = mol.ao_loc_nr()
+        if (grids.coords is None or grids.non0tab is None
+                or grids.atm_idx is None):
+            grids.build(with_non0tab=True, with_ialist=True)
+        self._sgx_block_cond = None
+        if mol is grids.mol:
+            non0tab = grids.non0tab
+        if non0tab is None:
+            non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
+                                    dtype=numpy.uint8)
+            non0tab[:] = NBINS + 1  # Corresponding to AO value ~= 1
+        screen_index = non0tab
+        ngrids = grids.coords.shape[0]
+        max_memory = self.max_memory - lib.current_memory()[0]
+        # We need to store ao, wao, and fg -> 2 + nset sets of size nao
+        blksize = max(112, int(max_memory*1e6/8/((2+nset)*nao)))
+        blksize = min(ngrids, max(1, blksize // SGX_BLKSIZE) * SGX_BLKSIZE)
+        cutoff = grids.cutoff * 1e2
+        nbins = NBINS * 2 - int(NBINS * numpy.log(cutoff) / numpy.log(grids.cutoff))
+        pair_mask = mol.get_overlap_cond() < -numpy.log(cutoff)
+        self._loop_data = [
+            nbins, screen_index, pair_mask, ao_loc, blksize
+        ]
+
+    @property
+    def loop_data(self):
+        if self._loop_data is None:
+            self._get_loop_data()
+        return self._loop_data
+
+    def _build_integral_bounds(self):
+        mol = self.mol
+        mbar_ij = numpy.zeros((mol.nbas, mol.nbas))
+        drv = _vhf.libcvhf.SGXsample_ints
+        atm_coords = numpy.ascontiguousarray(
+            mol.atom_coords(unit='Bohr')
+        )
+        ao_loc = mol.ao_loc_nr().astype(numpy.int32)
+        if self._opt is None:
+            from pyscf.sgx.sgx import _make_opt
+            sgxopt = _make_opt(mol, False, 1e-16)
+        else:
+            sgxopt = self._opt
+        cintor = _vhf._fpointer(sgxopt._intor)
+        atm, bas, env = mol._atm, mol._bas, mol._env
+        ngmax = self._nquad + self._nrad + 2
+        env = numpy.append(env, numpy.zeros(3 * ngmax))
+        env[gto.NGRIDS] = ngmax
+        env[gto.PTR_GRIDS] = mol._env.size
+        rs = {}
+        radii = {}
+        elements = [x for x, _ in mol._atom]
+        for el in set(elements):
+            a = _std_symbol_without_ghost(el)
+            z = NUC[a]
+            radii[el] = BRAGG[z]
+            rs[el] = treutler_ahlrichs(self._nrad, z)[0]
+        radii = numpy.asarray(
+            [radii[el] for el in elements], order="C", dtype=numpy.float64
+        )
+        rs = numpy.asarray(
+            [rs[el] for el in elements], order="C", dtype=numpy.float64
+        )
+        self._check_arr(mbar_ij, dtype=numpy.float64)
+        self._check_arr(radii, dtype=numpy.float64)
+        self._check_arr(atm_coords, dtype=numpy.float64)
+        self._check_arr(rs, dtype=numpy.float64)
+        self._check_arr(ao_loc, dtype=numpy.int32)
+        assert sgxopt._cintopt is not None
+        self._check_arr(atm, dtype=numpy.int32)
+        self._check_arr(bas, dtype=numpy.int32)
+        self._check_arr(env, dtype=numpy.float64)
+        #print(sgxopt._intor)
+        #vals = locals()
+        #for term in ["mbar_ij", "radii", "atm_coords", "rs", "ao_loc", "atm", "bas", "env"]:
+        #    numpy.save(term + ".npy", vals[term])
+        drv(
+            cintor, mbar_ij.ctypes, None, radii.ctypes,
+            ctypes.c_int(self._nquad), ctypes.c_int(self._nrad),
+            ctypes.c_double(self._rcmul), atm_coords.ctypes,
+            rs.ctypes, ao_loc.ctypes, sgxopt._cintopt,
+            atm.ctypes, ctypes.c_int(mol.natm), bas.ctypes,
+            ctypes.c_int(mol.nbas), env.ctypes, ctypes.c_int(env.size)
+        )
+        self._mbar_ij = mbar_ij
+        self._opt.q_cond = mbar_ij
+
+    def _build_ovlp_fit(self):
+        mol = self.mol
+        grids = self.grids
+        nao = mol.nao_nr()
+        sn = numpy.zeros((nao,nao))
+        nbins, screen_index, pair_mask, ao_loc, blksize = self.loop_data
+        ngrids = grids.weights.size
+        if self.fit_ovlp:
+            sn = numpy.zeros((nao, nao))
+            for i0, i1 in lib.prange(0, ngrids, blksize):
+                assert i0 % SGX_BLKSIZE == 0
+                coords = grids.coords[i0:i1]
+                mask = screen_index[i0 // BLKSIZE:]
+                ao = mol.eval_gto('GTOval', coords, non0tab=mask)
+                _dot_ao_ao_sparse(ao, ao, grids.weights[i0:i1], nbins, mask,
+                                  pair_mask, ao_loc, hermi=self.hermi, out=sn)
+                # wao = _scale_ao(ao, grids.weights[i0:i1])
+                # sn[:] += _dot_ao_ao(mol, ao, wao, mask, (0, mol.nbas),
+                #                     ao_loc, hermi=hermi)
+            ovlp = mol.intor_symmetric('int1e_ovlp')
+            proj = scipy.linalg.solve(sn, ovlp)
+            if self.fit_ovlp:
+                proj = 0.5 * (proj + numpy.identity(nao))
+            self._overlap_correction_matrix = proj
+        else:
+            self._overlap_correction_matrix = numpy.identity(nao)
+
+    def _check_arr(self, x, order="C", dtype=None):
+        if dtype is not None:
+            assert x.dtype == dtype
+        if order == "C":
+            assert x.flags.c_contiguous
+        elif order == "F":
+            assert x.flags.f_contiguous
+        else:
+            raise ValueError
+
+    def _make_shl_mat(self, x_gu, x_bi, rlocs, clocs, wt=None):
+        self._check_arr(x_gu, dtype=numpy.float64)
+        self._check_arr(x_bi, dtype=numpy.float64)
+        self._check_arr(rlocs, dtype=numpy.int32)
+        self._check_arr(clocs, dtype=numpy.int32)
+        assert x_gu.shape[-2:] == (rlocs[-1], clocs[-1])
+        assert x_bi.shape == (rlocs.size - 1, clocs.size - 1)
+        args = [
+            x_gu.ctypes,
+            x_bi.ctypes,
+            ctypes.c_int(rlocs.size - 1),
+            ctypes.c_int(clocs.size - 1),
+            rlocs.ctypes,
+            clocs.ctypes,
+        ]
+        if wt is None:
+            fn = _vhf.libcvhf.SGXmake_shl_mat
+            assert x_gu.ndim == 2
+        else:
+            if x_gu.ndim == 2:
+                ncomp = 1
+            else:
+                assert x_gu.ndim == 3
+                ncomp = x_gu.shape[0]
+            self._check_arr(wt, dtype=numpy.float64)
+            args.append(wt.ctypes)
+            args.append(ncomp)
+            fn = _vhf.libcvhf.SGXmake_shl_mat_wt
+        fn(*args)
+
+    def _pow_screen(self, xbar_ij, delta):
+        # sum is over outer index here
+        # This is done in-place
+        self._check_arr(xbar_ij, dtype=numpy.float64)
+        n, m = xbar_ij.shape
+        _vhf.libcvhf.SGXpow_screen(
+            xbar_ij.ctypes,
+            ctypes.c_int(n),
+            ctypes.c_int(m),
+            ctypes.c_double(delta),
+        )
+
+    def _sqrt_screen(self, xbar_ij, eps):
+        # sum is over outer index here
+        # This is done in-place
+        self._check_arr(xbar_ij, dtype=numpy.float64)
+        n, m = xbar_ij.shape
+        _vhf.libcvhf.switch_screen(
+            xbar_ij.ctypes,
+            ctypes.c_int(n),
+            ctypes.c_int(m),
+            ctypes.c_double(eps),
+        )
+
+    def _einmin(self, out, mat0, mat1):
+        # double *res, double *mat0, double *mat1, int m, int n, int k
+        m, n = out.shape
+        k = mat0.shape[1]
+        assert mat0.shape == (m, k)
+        assert mat1.shape == (n, k)
+        self._check_arr(out, dtype=numpy.float64)
+        self._check_arr(mat0, dtype=numpy.float64)
+        self._check_arr(mat1, dtype=numpy.float64)
+        _vhf.libcvhf.SGXeinmin(
+            out.ctypes,
+            mat0.ctypes,
+            mat1.ctypes,
+            ctypes.c_int(m),
+            ctypes.c_int(n),
+            ctypes.c_int(k),
+        )
+
+    def _build_dm_screen(self):
+        ta = logger.perf_counter()
+        mol = self.mol
+        grids = self.grids
+        ngrids = grids.weights.size
+        nao = mol.nao_nr()
+        nbins, screen_index, pair_mask, ao_loc, blksize = self.loop_data
+        nblk = (grids.weights.size + SGX_BLKSIZE - 1) // SGX_BLKSIZE
+        nblk_ni = (grids.weights.size + BLKSIZE - 1) // BLKSIZE
+        xsgx_bi = numpy.empty((nblk, mol.nbas), dtype=numpy.float64)
+        xni_bi = numpy.empty((nblk_ni, mol.nbas), dtype=numpy.float64)
+        ao = None
+        dft_locs = BLKSIZE * numpy.arange(nblk_ni, dtype=numpy.int32)
+        if grids.weights.size >= 2**31:
+            raise ValueError("Too many grids for signed int32")
+        dft_locs[-1] = grids.weights.size
+        dft_per_sgx = SGX_BLKSIZE // BLKSIZE
+        ovlp = mol.intor_symmetric("int1e_ovlp")
+        if not ovlp.flags.c_contiguous:
+            ovlp = ovlp.T
+        stilde_ij = numpy.zeros((mol.nbas, mol.nbas))
+        self._make_shl_mat(
+            ovlp, stilde_ij, ao_loc, ao_loc,
+        )
+        self._pow_screen(stilde_ij, _SGX_DELTA_2)
+        self._stilde_ij = stilde_ij
+        self._mtilde_ij = self._mbar_ij.copy()
+        self._pow_screen(self._mtilde_ij, _SGX_DELTA_2)
+        for i0, i1 in lib.prange(0, ngrids, blksize):
+            assert i0 % SGX_BLKSIZE == 0
+            nblk_ni_curr = (i1 - i0 + BLKSIZE - 1) // BLKSIZE
+            ni_locs = BLKSIZE * numpy.arange(
+                nblk_ni_curr + 1, dtype=numpy.int32
+            )
+            ni_locs[-1] = i1 - i0
+            coords = grids.coords[i0:i1]
+            mask = screen_index[i0 // BLKSIZE:]
+            ao = mol.eval_gto('GTOval', coords, non0tab=mask, out=ao)
+            rtwt = numpy.sqrt(numpy.abs(grids.weights[i0:i1]))
+            x_gu = _scale_ao_sparse(ao, rtwt, mask, ao_loc)   # ao * rtwt[:, None]  # TODO scale ao
+            print(x_gu.shape, ao.shape, rtwt.shape)
+            print(x_gu.flags.c_contiguous, ao.flags.c_contiguous)
+            x_gu = numpy.ascontiguousarray(x_gu)
+            print(x_gu.shape, xni_bi[i0 // BLKSIZE:].shape, ni_locs.shape,
+                  ao_loc.shape, ni_locs[-1], ao_loc[-1])
+            ao_loc = ao_loc.astype(numpy.int32)
+            xtmp_bi = numpy.empty((nblk_ni_curr, mol.nbas))
+            self._make_shl_mat(x_gu, xtmp_bi, ni_locs, ao_loc)
+            b0 = i0 // BLKSIZE
+            xni_bi[b0:b0 + nblk_ni_curr] = xtmp_bi
+        locs = dft_per_sgx * numpy.arange(nblk + 1, dtype=numpy.int32)
+        locs[-1] = xni_bi.shape[0]
+        ones = numpy.arange(mol.nbas + 1, dtype=numpy.int32)
+        print(xsgx_bi.shape, locs.size, ones.size)
+        self._make_shl_mat(xni_bi, xsgx_bi, locs, ones)
+        self._pow_screen(xni_bi, _SGX_DELTA_3)
+        self._pow_screen(xsgx_bi, _SGX_DELTA_3)
+        self._buf = xni_bi
+        self._xni_b = numpy.min(xni_bi, axis=1)
+        self._xsgx_b = numpy.min(xsgx_bi, axis=1)
+        tc = logger.perf_counter()
+        print("SETUP TOOK", tc - ta)
+
+    def reset(self):
+        self._ovlp_proj = numpy.identity(self.mol.nao_nr())
+        self._mbar_ij = None
+        self._stilde_ij = None
+        self._mtilde_ij = None
+        self._mbar_ij = None
+        self._xni_b = None
+        self._xsgx_b = None
+
+    def build(self):
+        self._build_integral_bounds()
+        if self.fit_ovlp:
+            self._ovlp_proj = self._build_ovlp_fit()
+        if self.use_dm_screening:
+            self._build_dm_screen()
+
+    def get_dm_threshold_matrix(self, dm, dv, de):
+        mol = self.mol
+        dm_ij = numpy.zeros((mol.nbas, mol.nbas))
+        if dm.ndim == 3:
+            dm = dm.sum(axis=0)
+        ao_loc = mol.ao_loc_nr()
+        self._make_shl_mat(dm, dm_ij, ao_loc, ao_loc)
+        tmp = lib.einsum("lk,jk->lj", self._stilde_ij, dm_ij)
+        Z_il = lib.einsum("ij,lj->il", self._mtilde_ij, tmp) + 1e-200
+        thresh_ij = de / Z_il
+        Y_il = numpy.max(self._mtilde_ij, axis=1)
+        Y_il = Y_il * numpy.max(self._stilde_ij, axis=1)[:, None]
+        Y_il = numpy.maximum(Y_il, Y_il.T) + 1e-200
+        thresh_ij = numpy.minimum(dv / Y_il, thresh_ij)
+        return dm_ij > thresh_ij
+
+    def _get_g_thresh(self, f_ug, b0, dv, de, wt, blksize, x_b):
+        t0 = time.monotonic()
+        assert f_ug.flags.c_contiguous
+        nao, ng = f_ug.shape[-2:]
+        b1 = (ng + blksize - 1) // blksize + b0
+        thresh = dv * x_b[b0:b1]
+        fbar_ib = numpy.ndarray((self.mol.nbas, b1 - b0), buffer=self._buf)
+        # ao_loc = self.mol.ao_loc_nr()
+        ao_loc = self._loop_data[3]
+        assert nao == ao_loc[-1]
+        blk_loc = blksize * numpy.arange(b1 - b0 + 1, dtype=numpy.int32)
+        blk_loc[-1] = ng
+        t1 = time.monotonic()
+        self._make_shl_mat(f_ug, fbar_ib, ao_loc, blk_loc, wt=wt)
+        t2 = time.monotonic()
+        # TODO this should switch back to being done after the _pow_screen
+        # bni_bi = numpy.minimum(thresh[:, None], (de / x_b.size) / fbar_ib.T)
+        ftmp = fbar_ib.copy()  # TODO remove
+        self._pow_screen(fbar_ib, _SGX_DELTA_1)
+        # self._sqrt_screen(fbar_ib, 1e-10)
+        ind = 10
+        maxi_mij = numpy.max(self._mbar_ij, axis=1)[:, None]
+        # _ftmp = numpy.sort(maxi_mij * ftmp, axis=0)
+        _ftmp2 = numpy.ascontiguousarray(
+            (self._mbar_ij.dot(ftmp) * ftmp).T
+        )
+        _ftmp3 = _ftmp2.copy()
+        _ftmp4 = _ftmp2.copy()
+        _ftmp = numpy.sort(_ftmp2.T, axis=0)
+        _vhf.libcvhf.SGXsort_lists(
+            _ftmp2.ctypes,
+            _ftmp3.ctypes,
+            ctypes.c_int(_ftmp2.shape[0]),
+            ctypes.c_int(_ftmp2.shape[1]),
+        )
+        print(numpy.abs(_ftmp4 - _ftmp3).sum(), numpy.abs(_ftmp4 - _ftmp2).sum(), _ftmp3.sum(), _ftmp2.sum(), numpy.abs(_ftmp - _ftmp2.T).sum())
+        print((_ftmp < thresh / x_b.size).sum(0).mean())
+        _ftmp = numpy.cumsum(_ftmp, axis=0)
+        print("HI2", dv, thresh.mean())
+        # count = (_ftmp < thresh).sum(0).mean()
+        count = (_ftmp < de / x_b.size).sum(0).mean()
+        print(ftmp[:, ind], ftmp[:, ind].sum(), (ftmp[:, ind]**.01).sum(), ftmp[:, ind].size, count)
+        # print(ftmp[:, ind] * fbar_ib[:, ind])
+        t3 = time.monotonic()
+        fbar_bi = numpy.ascontiguousarray(fbar_ib.T)
+        bni_bi = numpy.minimum(thresh[:, None], (de / x_b.size) * fbar_bi)
+        bni_bi = numpy.ascontiguousarray(bni_bi)
+        t4 = time.monotonic()
+        print("GTIMES", t1 - t0, t2 - t1, t3 - t2, t4 - t3)
+        return fbar_bi, bni_bi
+
+    def get_g_threshold(self, f_ug, b0, dv, de, wt):
+        ftilde_bi, bsgx_bi = self._get_g_thresh(
+            f_ug, b0, dv, de, wt, SGX_BLKSIZE, self._xsgx_b
+        )
+        _, bni_bi = self._get_g_thresh(
+            f_ug, b0 * SGX_BLKSIZE // BLKSIZE, dv, de, wt, BLKSIZE, self._xni_b
+        )
+        return bni_bi, bsgx_bi, ftilde_bi
+        b0 *= SGX_BLKSIZE // BLKSIZE
+        if f_ug.ndim == 3:
+            f_ug = f_ug.sum(0)
+        assert f_ug.flags.c_contiguous
+        nao, ng = f_ug.shape
+        b1 = (ng + BLKSIZE - 1) // BLKSIZE + b0
+        thresh = dv * self._xni_b[b0:b1]
+        fbar_ib = numpy.empty((self.mol.nbas, b1 - b0))
+        ao_loc = self.mol.ao_loc_nr()
+        assert nao == ao_loc[-1]
+        blk_loc = BLKSIZE * numpy.arange(b1 - b0 + 1, dtype=numpy.int32)
+        blk_loc[-1] = ng
+        self._make_shl_mat(f_ug, fbar_ib, ao_loc, blk_loc, wt=wt)
+        self._pow_screen(fbar_ib, _SGX_DELTA_3)
+        fbar_ib[:] /= self._xni_b.size
+        bni_bi = numpy.minimum(thresh[:, None], de * fbar_ib.T)
+        return numpy.ascontiguousarray(bni_bi), None
+
 def run_k_only_setup(sgx, dms, hermi):
     mol = sgx.mol
     grids = sgx.grids
@@ -611,6 +1014,27 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13, full_dm=None):
 
     batch_k = _gen_k_direct(mol, 's2', direct_scf_tol, sgx._opt)
 
+    if True:
+        assert sgx._opt is not None
+        if not hasattr(sgx, "_pjs_data") or sgx._pjs_data is None:
+            sgx._pjs_data = SGXData(
+                mol,
+                grids,
+                k_only=True,
+                fit_ovlp=True,
+                sym_ovlp=False,
+                max_memory=sgx.max_memory,
+                hermi=1,
+                integral_bound="sample",
+                sgxopt=sgx._opt,
+            )
+            print("BUILD IT")
+            sgx._pjs_data.build()
+        dm_mask = sgx._pjs_data.get_dm_threshold_matrix(
+            dms, sgx.sgx_tol_potential, sgx.sgx_tol_energy
+        )
+        print("MADE IT HERE")
+
     if full_dm is None:
         full_dm = dms
     else:
@@ -623,6 +1047,8 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13, full_dm=None):
 
     t_setup = logger.perf_counter()
     print("AFTER_SETUP", t_setup - t0[1])
+
+    v2 = True
 
     ao = None
     fg = None
@@ -642,14 +1068,21 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13, full_dm=None):
         tb = logger.perf_counter()
         tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
         tc = logger.perf_counter()
-        if sgx.use_dm_screening:
+        if sgx.use_dm_screening and v2:  # TODO remove the "and v2"
             fg = _sgxdot_ao_dm_sparse(ao, proj_dm, mask, dm_mask, ao_loc, out=fg)
+            if v2:
+                bni_bi, bsgx_bi, ftilde_bi = sgx._pjs_data.get_g_threshold(
+                    fg, i0 // SGX_BLKSIZE, sgx.sgx_tol_potential,
+                    sgx.sgx_tol_energy, weights
+                )
         else:
             # fg = lib.einsum('xij,ig->xjg', proj_dm, wao.T)
             fg = _sgxdot_ao_dm(ao, proj_dm, mask, shls_slice, ao_loc, out=fg)
         te = logger.perf_counter()
 
-        if ncond is None:
+        if v2:
+            gv = batch_k(mol, coords, fg, weights=(ftilde_bi, bsgx_bi), v2=True)
+        elif ncond is None:
             gv = batch_k(mol, coords, fg, weights)
         else:
             gv = batch_k(mol, coords, fg, weights, ncond[i0 // SGX_BLKSIZE :],
@@ -657,8 +1090,21 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13, full_dm=None):
         tf = logger.perf_counter()
         tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
         if sgx.use_dm_screening:
-            shl_norms = _get_shell_norms(gv, weights, ao_loc)
-            mask2 = shl_norms > ncond_ni[i0 // BLKSIZE : i0 // BLKSIZE + shl_norms.shape[0], None]
+            if v2:
+                assert gv.shape[2] == weights.size
+                b0 = i0 // BLKSIZE
+                b1 = b0 + (weights.size + BLKSIZE - 1) // BLKSIZE
+                assert sgx._pjs_data._xni_b.shape[0] >= b1
+                clocs = BLKSIZE * numpy.arange(b1 - b0 + 1, dtype=numpy.int32)
+                clocs[-1] = gv.shape[2]
+                g_ib = numpy.empty((mol.nbas, b1 - b0))
+                print(gv.shape, gv.flags.c_contiguous)
+                sgx._pjs_data._make_shl_mat(gv, g_ib, ao_loc, clocs, wt=weights)
+                mask2 = g_ib.T > bni_bi
+            else:
+                shl_norms = _get_shell_norms(gv, weights, ao_loc)
+                mask2 = shl_norms > ncond_ni[i0 // BLKSIZE : i0 // BLKSIZE + shl_norms.shape[0], None]
+                mask2 = None  # TODO remove
             _sgxdot_ao_gv_sparse(ao, gv, weights, mask, mask2, ao_loc, out=vk)
         else:
             _sgxdot_ao_gv_sparse(ao, gv, weights, mask, None, ao_loc, out=vk)
@@ -931,7 +1377,7 @@ def _gen_k_direct(mol, aosym, direct_scf_tol,
     drv = _vhf.libcvhf.SGXnr_direct_drv
 
     def k_part(mol, grid_coords, fg, weights, ncond=None,
-               econd=None, etol=None):
+               econd=None, etol=None, v2=False):
         if ncond is None:
             ncond = lib.c_null_ptr()
         else:
@@ -953,7 +1399,7 @@ def _gen_k_direct(mol, aosym, direct_scf_tol,
             vk = numpy.zeros((len(fg),ncomp,nao,ngrids))[:,0]
         for i, dm in enumerate(fg):
             assert fg[i].flags.c_contiguous
-            assert fg[i].shape == (ao_loc[-1], weights.size)
+            assert fg[i].shape == (ao_loc[-1], ngrids)
             dmsptr.append(dm.ctypes.data_as(ctypes.c_void_p))
             vjkptr.append(vk[i].ctypes.data_as(ctypes.c_void_p))
             fjk.append(_vhf._fpointer('SGXnr'+aosym+'_ijg_gj_gi'))
@@ -963,19 +1409,35 @@ def _gen_k_direct(mol, aosym, direct_scf_tol,
         dmsptr = (ctypes.c_void_p*(n_dm))(*dmsptr)
         vjkptr = (ctypes.c_void_p*(n_dm))(*vjkptr)
 
-        drv(cintor, fjk, dmsptr, vjkptr, n_dm, ncomp,
-            (ctypes.c_int*4)(*shls_slice),
-            ao_loc.ctypes.data_as(ctypes.c_void_p),
-            sgxopt._cintopt, ctypes.byref(sgxopt._this),
-            atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
-            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-            env.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(env.shape[0]),
-            ctypes.c_int(2 if aosym == 's2' else 1),
-            ncond,
-            weights.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_double(etol),
-            econd.ctypes.data_as(ctypes.c_void_p))
+        if v2:
+            ftilde_bi = weights[0]
+            bscreen_bi = weights[1]
+            _vhf.libcvhf.SGXnr_direct_drv2(
+                cintor, fjk, dmsptr, vjkptr, n_dm, ncomp,
+                (ctypes.c_int*4)(*shls_slice),
+                ao_loc.ctypes.data_as(ctypes.c_void_p),
+                sgxopt._cintopt, ctypes.byref(sgxopt._this),
+                atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
+                bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
+                env.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(2 if aosym == 's2' else 1),
+                ftilde_bi.ctypes.data_as(ctypes.c_void_p),
+                bscreen_bi.ctypes.data_as(ctypes.c_void_p),
+            )
+        else:
+            drv(cintor, fjk, dmsptr, vjkptr, n_dm, ncomp,
+                (ctypes.c_int*4)(*shls_slice),
+                ao_loc.ctypes.data_as(ctypes.c_void_p),
+                sgxopt._cintopt, ctypes.byref(sgxopt._this),
+                atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
+                bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
+                env.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(env.shape[0]),
+                ctypes.c_int(2 if aosym == 's2' else 1),
+                ncond,
+                weights.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_double(etol),
+                econd.ctypes.data_as(ctypes.c_void_p))
         return vk
     return k_part
 
