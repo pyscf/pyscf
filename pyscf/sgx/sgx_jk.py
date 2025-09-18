@@ -809,6 +809,31 @@ class SGXData:
         thresh_ij = numpy.minimum(dv / Y_il, thresh_ij)
         return dm_ij > thresh_ij
 
+    def _argsort(self, f):
+        assert f.ndim == 2
+        self._check_arr(f, dtype=numpy.float64)
+        _inds = numpy.empty_like(f, dtype=numpy.int32)
+        _vhf.libcvhf.SGXargsort_lists(
+            _inds.ctypes,
+            f.ctypes,
+            ctypes.c_int(f.shape[0]),
+            ctypes.c_int(f.shape[1]),
+        )
+        return _inds
+
+    def _cumsum(self, f, inds):
+        assert f.ndim == 2
+        self._check_arr(f, dtype=numpy.float64)
+        out = numpy.empty_like(f)
+        _vhf.libcvhf.SGXcumsum_lists(
+            out.ctypes,
+            f.ctypes,
+            inds.ctypes,
+            ctypes.c_int(f.shape[0]),
+            ctypes.c_int(f.shape[1]),
+        )
+        return out
+
     def _get_g_thresh(self, f_ug, b0, dv, de, wt, blksize, x_b):
         t0 = time.monotonic()
         assert f_ug.flags.c_contiguous
@@ -824,41 +849,34 @@ class SGXData:
         t1 = time.monotonic()
         self._make_shl_mat(f_ug, fbar_ib, ao_loc, blk_loc, wt=wt)
         t2 = time.monotonic()
-        # TODO this should switch back to being done after the _pow_screen
-        # bni_bi = numpy.minimum(thresh[:, None], (de / x_b.size) / fbar_ib.T)
-        ftmp = fbar_ib.copy()  # TODO remove
+        _ftmp_bi = fbar_ib.T.copy()
         self._pow_screen(fbar_ib, _SGX_DELTA_1)
-        # self._sqrt_screen(fbar_ib, 1e-10)
-        ind = 10
-        maxi_mij = numpy.max(self._mbar_ij, axis=1)[:, None]
-        # _ftmp = numpy.sort(maxi_mij * ftmp, axis=0)
-        _ftmp2 = numpy.ascontiguousarray(
-            (self._mbar_ij.dot(ftmp) * ftmp).T
-        )
-        _ftmp3 = _ftmp2.copy()
-        _ftmp4 = _ftmp2.copy()
-        _ftmp = numpy.sort(_ftmp2.T, axis=0)
-        _vhf.libcvhf.SGXsort_lists(
-            _ftmp2.ctypes,
-            _ftmp3.ctypes,
-            ctypes.c_int(_ftmp2.shape[0]),
-            ctypes.c_int(_ftmp2.shape[1]),
-        )
-        print(numpy.abs(_ftmp4 - _ftmp3).sum(), numpy.abs(_ftmp4 - _ftmp2).sum(), _ftmp3.sum(), _ftmp2.sum(), numpy.abs(_ftmp - _ftmp2.T).sum())
-        print((_ftmp < thresh / x_b.size).sum(0).mean())
-        _ftmp = numpy.cumsum(_ftmp, axis=0)
-        print("HI2", dv, thresh.mean())
-        # count = (_ftmp < thresh).sum(0).mean()
-        count = (_ftmp < de / x_b.size).sum(0).mean()
-        print(ftmp[:, ind], ftmp[:, ind].sum(), (ftmp[:, ind]**.01).sum(), ftmp[:, ind].size, count)
-        # print(ftmp[:, ind] * fbar_ib[:, ind])
+        _inds1_bi = self._argsort(_ftmp_bi * numpy.max(self._mbar_ij, axis=1))
+        _fm_bi = _ftmp_bi.dot(self._mbar_ij)
+        _fmf_bi = _fm_bi * _ftmp_bi
+        _inds3_bi = self._argsort(_fmf_bi)
+        _sum1_bi = self._cumsum(_ftmp_bi, _inds1_bi)
+        _sum3_bi = self._cumsum(_fmf_bi, _inds3_bi)
+        cond1 = _sum1_bi > thresh[:, None]
+        cond2 = _fm_bi > thresh[:, None]
+        cond3 = _sum3_bi > de / x_b.size
+        #cond1 = _ftmp_bi > thresh[:, None] / numpy.max(self._mbar_ij, axis=1) / self.mol.nbas
+        #cond2 = _fm_bi > thresh[:, None]
+        #cond3 = _fmf_bi > de / x_b.size / self.mol.nbas
+        cond4 = numpy.logical_and(cond1, cond2)
+        cond5 = numpy.logical_or(cond1, cond3)
+        cond6 = (self._mbar_ij.dot(1.0 / fbar_ib) > de * fbar_ib / x_b.size).T
+        print("RESULTS", cond1.shape)
+        print([cond.sum(1).mean() for cond in [cond1, cond2, cond3, cond4, cond5, cond6]])
         t3 = time.monotonic()
         fbar_bi = numpy.ascontiguousarray(fbar_ib.T)
-        bni_bi = numpy.minimum(thresh[:, None], (de / x_b.size) * fbar_bi)
+        # bni_bi = numpy.minimum(thresh[:, None], (de / x_b.size) * fbar_bi)
+        bni_bi = numpy.minimum(thresh[:, None], (de / cond3.sum(1))[:, None] * fbar_bi)
         bni_bi = numpy.ascontiguousarray(bni_bi)
         t4 = time.monotonic()
         print("GTIMES", t1 - t0, t2 - t1, t3 - t2, t4 - t3)
-        return fbar_bi, bni_bi
+        # return fbar_bi, bni_bi
+        return _ftmp_bi, bni_bi
 
     def get_g_threshold(self, f_ug, b0, dv, de, wt):
         ftilde_bi, bsgx_bi = self._get_g_thresh(

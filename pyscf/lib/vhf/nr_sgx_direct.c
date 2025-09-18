@@ -1138,12 +1138,10 @@ void SGXsample_ints(int (*intor)(), double *m_ij, double *r_ij, double *radii,
         int ish, jsh, ij;
         int shls[4];
         double maxint, my_int, my_den;
-        // size_t buffer_size = SGX_BLKSIZE;
         double *buf = calloc(sizeof(double), buffer_size*di*di);
         double *buf2 = calloc(sizeof(double), buffer_size*di*di);
         double *buf3 = calloc(sizeof(double), buffer_size*di*di);
         double *cache = malloc(sizeof(double) * cache_size);
-        //double *grids = malloc(sizeof(double) * 3 * (nquad + nrad + 2));
         // env[NGRIDS] must be at least nquad + nrad + 2
         double *env = (double*) malloc(env_size * sizeof(double));
         memcpy(env, _env, env_size * sizeof(double));
@@ -1454,6 +1452,120 @@ static int SGXnr_dm_screen(int *shls, CVHFOpt *opt,
                                         ftilde_i[j] * b_i[i]);
 }
 
+static inline void _bottom_up_merge(double *a, int *aind, int il, int ir,
+                                    int ie, double *b, int *bind)
+{
+        int i = il;
+        int j = ir;
+        int k;
+        for (k = il; k < ie; k++) {
+                if (i < ir && (j >= ie || a[i] <= a[j])) {
+                        b[k] = a[i];
+                        bind[k] = aind[i];
+                        i++;
+                } else {
+                        b[k] = a[j];
+                        bind[k] = aind[j];
+                        j++;
+                }
+        }
+}
+
+// a is input/output (overwritten), b is buffer/work array
+// based on wikipedia merge sort
+static void _merge_sort(double *a, int *aind, double *b,
+                        int *bind, const int n) {
+        int width;
+        int i;
+        for (width = 1; width < n; width = width * 2) {
+                for (i = 0; i < n; i = i + 2 * width) {
+                        _bottom_up_merge(a, aind, i, MIN(i + width, n),
+                                         MIN(i + 2 * width, n), b, bind);
+                }
+                memcpy(a, b, sizeof(double) * n);
+                memcpy(aind, bind, sizeof(int) * n);
+        }
+}
+
+void SGXsort_lists(double *out, double *in, const int num_lists,
+                   const int list_size)
+{
+#pragma omp parallel
+{
+        size_t ilist, i;
+        double *buf = malloc(list_size * sizeof(double));
+        int *aind = malloc(list_size * sizeof(int));
+        int *bind = malloc(list_size * sizeof(int));
+#pragma omp for
+        for (ilist = 0; ilist < num_lists; ilist++) {
+                for (i = 0; i < list_size; i++) {
+                        out[ilist * list_size + i] = in[ilist * list_size + i];
+                        aind[i] = i;
+                }
+                _merge_sort(out + ilist * list_size, aind,
+                            buf, bind, list_size);
+        }
+        free(buf);
+        free(aind);
+        free(bind);
+}
+}
+
+void SGXargsort_lists(int *aind, double *in, const int num_lists,
+                      const int list_size)
+{
+#pragma omp parallel
+{
+        size_t ilist, i;
+        double *buf = malloc(list_size * sizeof(double));
+        double *out = malloc(list_size * sizeof(double));
+        int *bind = malloc(list_size * sizeof(int));
+#pragma omp for
+        for (ilist = 0; ilist < num_lists; ilist++) {
+                for (i = 0; i < list_size; i++) {
+                        out[i] = in[ilist * list_size + i];
+                        aind[ilist * list_size + i] = i;
+                }
+                _merge_sort(out, aind + ilist * list_size,
+                            buf, bind, list_size);
+        }
+        free(buf);
+        free(out);
+        free(bind);
+}
+}
+
+static void _cumsum(double *out, double *in, int *inds, int list_size)
+{
+        out[inds[0]] = in[inds[0]];
+        for (int i = 1; i < list_size; i++) {
+                out[inds[i]] = out[inds[i - 1]] + in[inds[i]];
+        }
+}
+
+void SGXcumsum_lists(double *out_lists, double *in_lists, int *index_lists,
+                     const int num_lists, const int list_size)
+{
+#pragma omp parallel
+{
+        size_t ilist;
+        //size_t i;
+        double *out, *in;
+        int *inds;
+#pragma omp for
+        for (ilist = 0; ilist < num_lists; ilist++) {
+                out = out_lists + ilist * list_size;
+                in = in_lists + ilist * list_size;
+                inds = index_lists + ilist * list_size;
+                _cumsum(out, in, inds, list_size);
+                //out[inds[0]] = in[inds[0]];
+                //for (i = 1; i < list_size; i++) {
+                //        out[inds[i]] = out[inds[i - 1]] + in[inds[i]];
+                //}
+        }
+}
+}
+
 void SGXnr_direct_drv2(int (*intor)(), SGXJKOperator **jkop,
                        double **dms, double **vjk, int n_dm, int ncomp,
                        int *shls_slice, int *ao_loc,
@@ -1464,11 +1576,11 @@ void SGXnr_direct_drv2(int (*intor)(), SGXJKOperator **jkop,
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
-        int nish = ish1 - ish0;
-        int di = GTOmax_shell_dim(ao_loc, shls_slice, 2);
-        int cache_size = _max_cache_size_sgx(intor, shls_slice, 2,
-                                             atm, natm, bas, nbas, env,
-                                             SGX_BLKSIZE);
+        const int nish = ish1 - ish0;
+        const int di = GTOmax_shell_dim(ao_loc, shls_slice, 2);
+        const int cache_size = _max_cache_size_sgx(intor, shls_slice, 2,
+                                                   atm, natm, bas, nbas, env,
+                                                   SGX_BLKSIZE);
 
         const int ioff = ao_loc[ish0];
         const int joff = ao_loc[jsh0];
@@ -1497,6 +1609,11 @@ void SGXnr_direct_drv2(int (*intor)(), SGXJKOperator **jkop,
         double *ftilde_i;
         double *bscreen_i;
         int *sj_shells = malloc(sizeof(int) * nish);
+        int *sort_inds = malloc(sizeof(int) * nish);
+        int *index_buf = malloc(sizeof(int) * nish);
+        double *qcond_row = malloc(sizeof(double) * nish);
+        double *qcond_row2 = malloc(sizeof(double) * nish);
+        double *qcond_buf = malloc(sizeof(double) * nish);
         int num_sj_shells;
         int sj_index;
         double _usc = 0;
@@ -1516,12 +1633,28 @@ void SGXnr_direct_drv2(int (*intor)(), SGXJKOperator **jkop,
                         } else {
                                 jmax = nish;
                         }
+                        for (jsh = 0; jsh < nish; jsh++) {
+                                qcond_row[jsh] = vhfopt->q_cond[ish * nbas + jsh];
+                                qcond_row[jsh] *= ftilde_i[jsh];
+                                qcond_row2[jsh] = qcond_row[jsh];
+                                sort_inds[jsh] = jsh;
+                        }
+                        _merge_sort(qcond_row, sort_inds, qcond_buf,
+                                    index_buf, nish);
+                        _cumsum(qcond_row, qcond_row2, sort_inds, nish);
                         num_sj_shells = 0;
                         for (jsh = 0; jsh < jmax; jsh++) {
                                 shls[0] = ish + ish0;
                                 shls[1] = jsh + jsh0;
+                                //if ((*fprescreen)(shls, vhfopt, atm, bas, env)) {
+                                //if (SGXnr_dm_screen(shls, vhfopt, ftilde_i, bscreen_i)) {
+                                //        sj_shells[num_sj_shells] = jsh;
+                                //        num_sj_shells++;
+                                //        _usc += 1;
+                                //} }
                                 if ((*fprescreen)(shls, vhfopt, atm, bas, env)) {
-                                if (SGXnr_dm_screen(shls, vhfopt, ftilde_i, bscreen_i)) {
+                                if (qcond_row[jsh] > bscreen_i[jsh]) {
+                                //if (qcond_row[jsh] > 1e-10) {
                                         sj_shells[num_sj_shells] = jsh;
                                         num_sj_shells++;
                                         _usc += 1;
@@ -1619,110 +1752,6 @@ void SGXnr_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
                 q_cond[jsh*nbas+ish] = qtmp;
         }
         free(cache);
-}
-}
-
-static inline void _bottom_up_merge(double *a, int *aind, int il, int ir,
-                                    int ie, double *b, int *bind)
-{
-        int i = il;
-        int j = ir;
-        int k;
-        for (k = il; k < ie; k++) {
-                if (i < ir && (j >= ie || a[i] <= a[j])) {
-                        b[k] = a[i];
-                        bind[k] = aind[i];
-                        i++;
-                } else {
-                        b[k] = a[j];
-                        bind[k] = aind[j];
-                        j++;
-                }
-        }
-}
-
-// a is input/output (overwritten), b is buffer/work array
-// based on wikipedia merge sort
-static void _merge_sort(double *a, int *aind, double *b,
-                        int *bind, const int n) {
-        int width;
-        int i;
-        for (width = 1; width < n; width = width * 2) {
-                for (i = 0; i < n; i = i + 2 * width) {
-                        _bottom_up_merge(a, aind, i, MIN(i + width, n),
-                                         MIN(i + 2 * width, n), b, bind);
-                }
-                memcpy(a, b, sizeof(double) * n);
-                memcpy(aind, bind, sizeof(int) * n);
-        }
-}
-
-void SGXsort_lists(double *out, double *in, const int num_lists,
-                   const int list_size)
-{
-#pragma omp parallel
-{
-        size_t ilist, i;
-        double *buf = malloc(list_size * sizeof(double));
-        int *aind = malloc(list_size * sizeof(int));
-        int *bind = malloc(list_size * sizeof(int));
-#pragma omp for
-        for (ilist = 0; ilist < num_lists; ilist++) {
-                for (i = 0; i < list_size; i++) {
-                        out[ilist * list_size + i] = in[ilist * list_size + i];
-                        aind[i] = i;
-                }
-                _merge_sort(out + ilist * list_size, aind,
-                            buf, bind, list_size);
-        }
-        free(buf);
-        free(aind);
-        free(bind);
-}
-}
-
-void SGXargsort_lists(int *aind, double *in, const int num_lists,
-                      const int list_size)
-{
-#pragma omp parallel
-{
-        size_t ilist, i;
-        double *buf = malloc(list_size * sizeof(double));
-        double *out = malloc(list_size * sizeof(double));
-        int *bind = malloc(list_size * sizeof(int));
-#pragma omp for
-        for (ilist = 0; ilist < num_lists; ilist++) {
-                for (i = 0; i < list_size; i++) {
-                        out[i] = in[ilist * list_size + i];
-                        aind[ilist * list_size + i] = i;
-                }
-                _merge_sort(out, aind + ilist * list_size,
-                            buf, bind, list_size);
-        }
-        free(buf);
-        free(out);
-        free(bind);
-}
-}
-
-void SGXcumsum_lists(double *out_lists, double *in_lists, int *index_lists,
-                     const int num_lists, const int list_size)
-{
-#pragma omp parallel
-{
-        size_t ilist, i;
-        double *out, *in;
-        int *inds;
-#pragma omp for
-        for (ilist = 0; ilist < num_lists; ilist++) {
-                out = out_lists + ilist * list_size;
-                in = in_lists + ilist * list_size;
-                inds = index_lists + ilist * list_size;
-                out[inds[0]] = in[inds[0]];
-                for (i = 1; i < list_size; i++) {
-                        out[inds[i]] = out[inds[i - 1]] + in[inds[i]];
-                }
-        }
 }
 }
 
