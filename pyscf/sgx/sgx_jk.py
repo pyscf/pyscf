@@ -876,16 +876,17 @@ class SGXData:
         t4 = time.monotonic()
         print("GTIMES", t1 - t0, t2 - t1, t3 - t2, t4 - t3)
         # return fbar_bi, bni_bi
-        return _ftmp_bi, bni_bi
+        print("TYPE", cond5.flags.c_contiguous, cond5.shape, cond5.dtype)
+        return _ftmp_bi, bni_bi, cond5
 
     def get_g_threshold(self, f_ug, b0, dv, de, wt):
-        ftilde_bi, bsgx_bi = self._get_g_thresh(
+        ftilde_bi, bsgx_bi, shl_screen = self._get_g_thresh(
             f_ug, b0, dv, de, wt, SGX_BLKSIZE, self._xsgx_b
         )
-        _, bni_bi = self._get_g_thresh(
+        _, bni_bi, _ = self._get_g_thresh(
             f_ug, b0 * SGX_BLKSIZE // BLKSIZE, dv, de, wt, BLKSIZE, self._xni_b
         )
-        return bni_bi, bsgx_bi, ftilde_bi
+        return bni_bi, bsgx_bi, ftilde_bi, shl_screen
         b0 *= SGX_BLKSIZE // BLKSIZE
         if f_ug.ndim == 3:
             f_ug = f_ug.sum(0)
@@ -1089,7 +1090,7 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13, full_dm=None):
         if sgx.use_dm_screening and v2:  # TODO remove the "and v2"
             fg = _sgxdot_ao_dm_sparse(ao, proj_dm, mask, dm_mask, ao_loc, out=fg)
             if v2:
-                bni_bi, bsgx_bi, ftilde_bi = sgx._pjs_data.get_g_threshold(
+                bni_bi, bsgx_bi, ftilde_bi, shl_screen = sgx._pjs_data.get_g_threshold(
                     fg, i0 // SGX_BLKSIZE, sgx.sgx_tol_potential,
                     sgx.sgx_tol_energy, weights
                 )
@@ -1099,7 +1100,7 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13, full_dm=None):
         te = logger.perf_counter()
 
         if v2:
-            gv = batch_k(mol, coords, fg, weights=(ftilde_bi, bsgx_bi), v2=True)
+            gv = batch_k(mol, coords, fg, weights=(ftilde_bi, bsgx_bi, shl_screen), v2=True)
         elif ncond is None:
             gv = batch_k(mol, coords, fg, weights)
         else:
@@ -1430,7 +1431,7 @@ def _gen_k_direct(mol, aosym, direct_scf_tol,
         if v2:
             ftilde_bi = weights[0]
             bscreen_bi = weights[1]
-            _vhf.libcvhf.SGXnr_direct_drv2(
+            args = [
                 cintor, fjk, dmsptr, vjkptr, n_dm, ncomp,
                 (ctypes.c_int*4)(*shls_slice),
                 ao_loc.ctypes.data_as(ctypes.c_void_p),
@@ -1441,7 +1442,13 @@ def _gen_k_direct(mol, aosym, direct_scf_tol,
                 ctypes.c_int(2 if aosym == 's2' else 1),
                 ftilde_bi.ctypes.data_as(ctypes.c_void_p),
                 bscreen_bi.ctypes.data_as(ctypes.c_void_p),
-            )
+            ]
+            if len(weights) == 2:
+                fn = _vhf.libcvhf.SGXnr_direct_drv2
+            else:
+                fn = _vhf.libcvhf.SGXnr_direct_drv3
+                args.append(weights[2].ctypes)
+            fn(*args)
         else:
             drv(cintor, fjk, dmsptr, vjkptr, n_dm, ncomp,
                 (ctypes.c_int*4)(*shls_slice),
