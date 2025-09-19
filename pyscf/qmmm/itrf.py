@@ -179,6 +179,7 @@ class QMMMSCF(QMMM):
 
     def energy_nuc(self):
         # interactions between QM nuclei and MM particles
+        assert self.mm_mol.charge_model != 'gaussian' # TODO: support Gaussian charge, same as the one in PCM
         nuc = self.mol.energy_nuc()
         coords = self.mm_mol.atom_coords()
         charges = self.mm_mol.atom_charges()
@@ -370,6 +371,7 @@ class QMMMGrad:
 
     def grad_nuc(self, mol=None, atmlst=None):
         if mol is None: mol = self.mol
+        assert self.base.mm_mol.charge_model != 'gaussian' # TODO: support Gaussian charge, same as the one in PCM
         coords = self.base.mm_mol.atom_coords()
         charges = self.base.mm_mol.atom_charges()
 
@@ -414,41 +416,3 @@ _QMMMGrad = QMMMGrad
 scf.hf.SCF.QMMM = mm_charge
 mcscf.casci.CASBase.QMMM = mm_charge
 grad.rhf.Gradients.QMMM = mm_charge_grad
-
-if __name__ == '__main__':
-    from pyscf import scf, cc, grad
-    mol = gto.Mole()
-    mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
-                   H                 -0.00000000   -0.84695236    0.59109389
-                   H                 -0.00000000    0.89830571    0.52404783 '''
-    mol.basis = 'cc-pvdz'
-    mol.build()
-
-    coords = [(0.5,0.6,0.8)]
-    #coords = [(0.0,0.0,0.0)]
-    charges = [-0.5]
-    mf = mm_charge(scf.RHF(mol), coords, charges)
-    print(mf.kernel()) # -76.3206550372
-
-    g = mf.nuc_grad_method().kernel()
-    mfs = mf.as_scanner()
-    e1 = mfs(''' O                  0.00100000    0.00000000   -0.11081188
-             H                 -0.00000000   -0.84695236    0.59109389
-             H                 -0.00000000    0.89830571    0.52404783 ''')
-    e2 = mfs(''' O                 -0.00100000    0.00000000   -0.11081188
-             H                 -0.00000000   -0.84695236    0.59109389
-             H                 -0.00000000    0.89830571    0.52404783 ''')
-    print((e1 - e2)/0.002 * lib.param.BOHR, g[0,0])
-
-    mycc = cc.ccsd.CCSD(mf)
-    ecc, t1, t2 = mycc.kernel() # ecc = -0.228939687075
-
-    g = mycc.nuc_grad_method().kernel()
-    ccs = mycc.as_scanner()
-    e1 = ccs(''' O                  0.00100000    0.00000000   -0.11081188
-             H                 -0.00000000   -0.84695236    0.59109389
-             H                 -0.00000000    0.89830571    0.52404783 ''')
-    e2 = ccs(''' O                 -0.00100000    0.00000000   -0.11081188
-             H                 -0.00000000   -0.84695236    0.59109389
-             H                 -0.00000000    0.89830571    0.52404783 ''')
-    print((e1 - e2)/0.002 * lib.param.BOHR, g[0,0])
