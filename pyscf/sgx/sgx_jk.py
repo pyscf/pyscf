@@ -738,6 +738,7 @@ class SGXData:
         self._make_shl_mat(
             ovlp, stilde_ij, ao_loc, ao_loc,
         )
+        self._sbar_ij = stilde_ij.copy()
         self._pow_screen(stilde_ij, _SGX_DELTA_2)
         self._stilde_ij = stilde_ij
         self._mtilde_ij = self._mbar_ij.copy()
@@ -808,6 +809,32 @@ class SGXData:
         Y_il = numpy.maximum(Y_il, Y_il.T) + 1e-200
         thresh_ij = numpy.minimum(dv / Y_il, thresh_ij)
         return dm_ij > thresh_ij
+    
+    def get_dm_threshold_matrix2(self, dm, dv, de):
+        mol = self.mol
+        dm_ij = numpy.zeros((mol.nbas, mol.nbas))
+        if dm.ndim == 3:
+            dm = dm.sum(axis=0)
+        ao_loc = mol.ao_loc_nr()
+        self._make_shl_mat(dm, dm_ij, ao_loc, ao_loc)
+        inds = self._argsort(dm_ij)
+        sdm_ij = self._cumsum(dm_ij, inds)
+        sdm_ij = 0.5 * (sdm_ij + sdm_ij.T)
+        tmp = lib.einsum("lk,jk->lj", self._sbar_ij, dm_ij)
+        Z_il = lib.einsum("ij,lj->il", self._mbar_ij, tmp) + 1e-200
+        PZ = sdm_ij * Z_il
+        PY = sdm_ij * numpy.max(self._mbar_ij, axis=1) * numpy.max(self._sbar_ij, axis=1)[:, None]
+        SPZ = self._cumsum(PZ, self._argsort(PZ))
+        SPY = self._cumsum(PY, self._argsort(PY))
+        SPZ = 0.5 * (SPZ + SPZ.T)
+        SPY = 0.5 * (SPY + SPY.T)
+        return numpy.logical_or(SPZ > de / mol.nbas, SPY > dv / mol.nbas)
+        thresh_ij = de / Z_il
+        Y_il = numpy.max(self._mbar_ij, axis=1)
+        Y_il = Y_il * numpy.max(self._sbar_ij, axis=1)[:, None]
+        Y_il = numpy.maximum(Y_il, Y_il.T) + 1e-200
+        thresh_ij = numpy.minimum(dv / Y_il, thresh_ij)
+        return sdm_ij > thresh_ij
 
     def _argsort(self, f):
         assert f.ndim == 2
@@ -834,6 +861,7 @@ class SGXData:
         )
         return out
 
+    """
     def _get_g_thresh(self, f_ug, b0, dv, de, wt, blksize, x_b):
         t0 = time.monotonic()
         assert f_ug.flags.c_contiguous
@@ -887,23 +915,69 @@ class SGXData:
             f_ug, b0 * SGX_BLKSIZE // BLKSIZE, dv, de, wt, BLKSIZE, self._xni_b
         )
         return bni_bi, bsgx_bi, ftilde_bi, shl_screen
-        b0 *= SGX_BLKSIZE // BLKSIZE
-        if f_ug.ndim == 3:
-            f_ug = f_ug.sum(0)
+    """
+    
+    def _sgx_thresh(self, f_ug, b0, dv, de, wt, blksize, x_b):
+        t0 = time.monotonic()
         assert f_ug.flags.c_contiguous
-        nao, ng = f_ug.shape
-        b1 = (ng + BLKSIZE - 1) // BLKSIZE + b0
-        thresh = dv * self._xni_b[b0:b1]
-        fbar_ib = numpy.empty((self.mol.nbas, b1 - b0))
-        ao_loc = self.mol.ao_loc_nr()
+        nao, ng = f_ug.shape[-2:]
+        b1 = (ng + blksize - 1) // blksize + b0
+        thresh = dv * x_b[b0:b1]
+        fbar_ib = numpy.ndarray((self.mol.nbas, b1 - b0), buffer=self._buf)
+        ao_loc = self._loop_data[3]
         assert nao == ao_loc[-1]
-        blk_loc = BLKSIZE * numpy.arange(b1 - b0 + 1, dtype=numpy.int32)
+        blk_loc = blksize * numpy.arange(b1 - b0 + 1, dtype=numpy.int32)
+        blk_loc[-1] = ng
+        t1 = time.monotonic()
+        self._make_shl_mat(f_ug, fbar_ib, ao_loc, blk_loc, wt=wt)
+        t2 = time.monotonic()
+        fbar_bi = numpy.ascontiguousarray(fbar_ib.T)
+        inds1_bi = self._argsort(fbar_bi * numpy.max(self._mbar_ij, axis=1))
+        fmf_bi = lib.dot(fbar_bi, self._mbar_ij)
+        fmf_bi[:] *= fbar_bi
+        inds2_bi = self._argsort(fmf_bi)
+        sum1_bi = self._cumsum(fbar_bi, inds1_bi)
+        sum2_bi = self._cumsum(fmf_bi, inds2_bi)
+        cond = sum1_bi > thresh[:, None]
+        cond = numpy.logical_or(sum2_bi > de / x_b.size, cond)
+        print("RESULTS", cond.shape)
+        print(cond.sum(1).mean())
+        t3 = time.monotonic()
+        denom = x_b.size * cond.sum(1)
+        b_bi = numpy.minimum(thresh[:, None], (de / denom)[:, None] / (fbar_bi + 1e-200))
+        b_bi = numpy.ascontiguousarray(b_bi)
+        t4 = time.monotonic()
+        print("GTIMES", t1 - t0, t2 - t1, t3 - t2, t4 - t3)
+        return fbar_bi, b_bi, cond
+    
+    def _ni_thresh(self, f_ug, b0, dv, de, wt, blksize, x_b):
+        assert f_ug.flags.c_contiguous
+        nao, ng = f_ug.shape[-2:]
+        b1 = (ng + blksize - 1) // blksize + b0
+        thresh = dv * x_b[b0:b1]
+        fbar_ib = numpy.ndarray((self.mol.nbas, b1 - b0), buffer=self._buf)
+        ao_loc = self._loop_data[3]
+        assert nao == ao_loc[-1]
+        blk_loc = blksize * numpy.arange(b1 - b0 + 1, dtype=numpy.int32)
         blk_loc[-1] = ng
         self._make_shl_mat(f_ug, fbar_ib, ao_loc, blk_loc, wt=wt)
-        self._pow_screen(fbar_ib, _SGX_DELTA_3)
-        fbar_ib[:] /= self._xni_b.size
-        bni_bi = numpy.minimum(thresh[:, None], de * fbar_ib.T)
-        return numpy.ascontiguousarray(bni_bi), None
+        fbar_bi = numpy.ascontiguousarray(fbar_ib.T)
+        inds_bi = self._argsort(fbar_bi)
+        sum_bi = self._cumsum(fbar_bi, inds_bi)
+        b_bi = numpy.minimum(thresh[:, None], de / (x_b.size * sum_bi + 1e-64))
+        return b_bi
+
+    def get_g_threshold(self, f_ug, b0, dv, de, wt):
+        t0 = time.monotonic()
+        fbar_bi, bsgx_bi, shl_screen = self._sgx_thresh(
+            f_ug, b0, dv, de, wt, SGX_BLKSIZE, self._xsgx_b
+        )
+        bni_bi = self._ni_thresh(
+            f_ug, b0 * (SGX_BLKSIZE // BLKSIZE), dv, de, wt, BLKSIZE, self._xni_b
+        )
+        t1 = time.monotonic()
+        print("TOTAL GTIME", t1 - t0)
+        return bni_bi, bsgx_bi, fbar_bi, shl_screen
 
 def run_k_only_setup(sgx, dms, hermi):
     mol = sgx.mol
@@ -1047,12 +1121,10 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13, full_dm=None):
                 integral_bound="sample",
                 sgxopt=sgx._opt,
             )
-            print("BUILD IT")
             sgx._pjs_data.build()
-        dm_mask = sgx._pjs_data.get_dm_threshold_matrix(
+        dm_mask = sgx._pjs_data.get_dm_threshold_matrix2(
             dms, sgx.sgx_tol_potential, sgx.sgx_tol_energy
         )
-        print("MADE IT HERE")
 
     if full_dm is None:
         full_dm = dms
@@ -1087,46 +1159,36 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13, full_dm=None):
         tb = logger.perf_counter()
         tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
         tc = logger.perf_counter()
-        if sgx.use_dm_screening and v2:  # TODO remove the "and v2"
+        if sgx.use_dm_screening:
             fg = _sgxdot_ao_dm_sparse(ao, proj_dm, mask, dm_mask, ao_loc, out=fg)
-            if v2:
-                bni_bi, bsgx_bi, ftilde_bi, shl_screen = sgx._pjs_data.get_g_threshold(
-                    fg, i0 // SGX_BLKSIZE, sgx.sgx_tol_potential,
-                    sgx.sgx_tol_energy, weights
-                )
+            bni_bi, bsgx_bi, fbar_bi, shl_screen = sgx._pjs_data.get_g_threshold(
+                fg, i0 // SGX_BLKSIZE, sgx.sgx_tol_potential,
+                sgx.sgx_tol_energy, weights
+            )
         else:
             # fg = lib.einsum('xij,ig->xjg', proj_dm, wao.T)
             fg = _sgxdot_ao_dm(ao, proj_dm, mask, shls_slice, ao_loc, out=fg)
         te = logger.perf_counter()
 
-        if v2:
-            gv = batch_k(mol, coords, fg, weights=(ftilde_bi, bsgx_bi, shl_screen), v2=True)
-        elif ncond is None:
-            gv = batch_k(mol, coords, fg, weights)
+        if sgx.use_dm_screening:
+            gv = batch_k(mol, coords, fg, weights=(fbar_bi, bsgx_bi, shl_screen), v2=True)
         else:
-            gv = batch_k(mol, coords, fg, weights, ncond[i0 // SGX_BLKSIZE :],
-                         econd=sgx._block_fg[i0 // SGX_BLKSIZE], etol=sgx._etol)
-        tf = logger.perf_counter()
+            gv = batch_k(mol, coords, fg, weights)
         tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
         if sgx.use_dm_screening:
-            if v2:
-                assert gv.shape[2] == weights.size
-                b0 = i0 // BLKSIZE
-                b1 = b0 + (weights.size + BLKSIZE - 1) // BLKSIZE
-                assert sgx._pjs_data._xni_b.shape[0] >= b1
-                clocs = BLKSIZE * numpy.arange(b1 - b0 + 1, dtype=numpy.int32)
-                clocs[-1] = gv.shape[2]
-                g_ib = numpy.empty((mol.nbas, b1 - b0))
-                print(gv.shape, gv.flags.c_contiguous)
-                sgx._pjs_data._make_shl_mat(gv, g_ib, ao_loc, clocs, wt=weights)
-                mask2 = g_ib.T > bni_bi
-            else:
-                shl_norms = _get_shell_norms(gv, weights, ao_loc)
-                mask2 = shl_norms > ncond_ni[i0 // BLKSIZE : i0 // BLKSIZE + shl_norms.shape[0], None]
-                mask2 = None  # TODO remove
-            _sgxdot_ao_gv_sparse(ao, gv, weights, mask, mask2, ao_loc, out=vk)
+            assert gv.shape[2] == weights.size
+            b0 = i0 // BLKSIZE
+            b1 = b0 + (weights.size + BLKSIZE - 1) // BLKSIZE
+            assert sgx._pjs_data._xni_b.shape[0] >= b1
+            clocs = BLKSIZE * numpy.arange(b1 - b0 + 1, dtype=numpy.int32)
+            clocs[-1] = gv.shape[2]
+            g_ib = numpy.empty((mol.nbas, b1 - b0))
+            sgx._pjs_data._make_shl_mat(gv, g_ib, ao_loc, clocs, wt=weights)
+            mask2 = g_ib.T > bni_bi
         else:
-            _sgxdot_ao_gv_sparse(ao, gv, weights, mask, None, ao_loc, out=vk)
+            mask2 = None
+        tf = logger.perf_counter()
+        _sgxdot_ao_gv_sparse(ao, gv, weights, mask, mask2, ao_loc, out=vk)
         tg = logger.perf_counter()
         gv = None
         t_ao += tb - ta
@@ -1399,6 +1461,8 @@ def _gen_k_direct(mol, aosym, direct_scf_tol,
                econd=None, etol=None, v2=False):
         if ncond is None:
             ncond = lib.c_null_ptr()
+            etol = 0
+            econd = numpy.empty((1,1))
         else:
             ncond = ncond.ctypes.data_as(ctypes.c_void_p)
         atm, bas, env = mol._atm, mol._bas, mol._env

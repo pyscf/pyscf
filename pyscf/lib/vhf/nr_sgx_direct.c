@@ -1797,12 +1797,11 @@ void SGXnr_direct_drv3(int (*intor)(), SGXJKOperator **jkop,
                                 if (select_inds[jsh] == jc) {
                                         shls[0] = ish + ish0;
                                         shls[1] = jsh + jsh0;
-                                        //if ((*fprescreen)(shls, vhfopt, atm, bas, env)) {
                                         if (qcond_row[jc] > bscreen_i[jsh]) {
                                                 sj_shells[num_sj_shells] = jsh;
                                                 num_sj_shells++;
                                                 _usc += 1;
-                                        } //}
+                                        }
                                         jc++;
                                 } }
                                 for (sj_index = 0; sj_index < num_sj_shells; sj_index++) {
@@ -1821,7 +1820,7 @@ void SGXnr_direct_drv3(int (*intor)(), SGXJKOperator **jkop,
                                                 env, cintopt, cache);
                                         for (idm = 0; idm < n_dm; idm++) {
                                                 jkop[idm]->contract(buf, dms[idm], v_priv[idm],
-                                                                i0, i1, j0, j1, ig0, dg);
+                                                                    i0, i1, j0, j1, ig0, dg);
                                         }
                                 }
                         }
