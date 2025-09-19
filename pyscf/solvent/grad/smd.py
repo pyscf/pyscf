@@ -114,3 +114,5 @@ def grad_solver(pcmobj, dm):
 
 def get_cds(smdobj):
     return smd.get_cds_legacy(smdobj)[1]
+
+make_grad_object = pcm_grad.make_grad_object

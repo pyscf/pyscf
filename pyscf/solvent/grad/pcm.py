@@ -423,12 +423,12 @@ class WithSolventGrad:
         return obj
 
     def to_gpu(self):
-        from gpu4pyscf.solvent.hessian import pcm    # type: ignore
+        from gpu4pyscf.solvent.grad import pcm    # type: ignore
         from pyscf.tdscf.rhf import TDBase
         # Only PCM and SMD are available on GPU.
         # FIXME: The SMD class is a child class of PCM now. Additional check for
         # SMD should be made if SMD is refactored as an independent class
-        assert isinstance(self.with_solvent, PCM)
+        assert isinstance(self.base.with_solvent, PCM)
         if isinstance(self, TDBase):
             raise NotImplementedError('.to_gpu() for PCM-TDDFT')
         return self.base.to_gpu().PCM().Gradients()
