@@ -1024,6 +1024,13 @@ To enable the solvent model for CASCI, the following code needs to be called
     def state_average(self, weights=(0.5,0.5), wfnsym=None):
         return addons.state_average(self, weights, wfnsym)
 
+    def state_average_mix(self, fcisolvers=None, weights=(0.5, 0.5)):
+        return addons.state_average_mix(self, fcisolvers, weights)
+
+    def state_average_mix_(self, fcisolvers=None, weights=(0.5, 0.5)):
+        addons.state_average_mix_(self, fcisolvers, weights)
+        return self
+
     @lib.with_doc(addons.state_specific_.__doc__)
     def state_specific_(self, state=1):
         addons.state_specific(self, state)

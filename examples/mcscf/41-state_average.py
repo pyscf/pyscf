@@ -73,5 +73,6 @@ solver2.wfnsym= 'A2'
 solver2.spin = 0
 
 mc = mcscf.CASSCF(mf, 4, 4)
-mcscf.state_average_mix_(mc, [solver1, solver2], weights)
+# method attribute is also available
+mc.state_average_mix_([solver1, solver2], weights)
 mc.kernel()
