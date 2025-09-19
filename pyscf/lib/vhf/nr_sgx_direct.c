@@ -1772,17 +1772,19 @@ void SGXnr_direct_drv3(int (*intor)(), SGXJKOperator **jkop,
                         }
                         int jc = 0;
                         for (jsh = 0; jsh < nish; jsh++) {
-                                if (shl_screen[ibatch * nbas + jsh] || shl_screen[ibatch * nbas + ish]) {
+                                shls[0] = ish + ish0;
+                                shls[1] = jsh + jsh0;
+                                if ((shl_screen[ibatch * nbas + jsh]
+                                    || shl_screen[ibatch * nbas + ish])
+                                    && (*fprescreen)(shls, vhfopt, atm, bas, env)) {
                                         shls[0] = ish + ish0;
                                         shls[1] = jsh + jsh0;
-                                        if ((*fprescreen)(shls, vhfopt, atm, bas, env)) {
-                                                qcond_row[jc] = vhfopt->q_cond[ish * nbas + jsh];
-                                                qcond_row[jc] *= ftilde_i[jsh];
-                                                qcond_row2[jc] = qcond_row[jc];
-                                                sort_inds[jc] = jc;
-                                                select_inds[jsh] = jc;
-                                                jc++;
-                                        }
+                                        qcond_row[jc] = vhfopt->q_cond[ish * nbas + jsh];
+                                        qcond_row[jc] *= ftilde_i[jsh];
+                                        qcond_row2[jc] = qcond_row[jc];
+                                        sort_inds[jc] = jc;
+                                        select_inds[jsh] = jc;
+                                        jc++;
                                 } else {
                                         select_inds[jsh] = -1;
                                 }
@@ -1795,8 +1797,6 @@ void SGXnr_direct_drv3(int (*intor)(), SGXJKOperator **jkop,
                                 jc = 0;
                                 for (int jsh = 0; jsh < jmax; jsh++) {
                                 if (select_inds[jsh] == jc) {
-                                        shls[0] = ish + ish0;
-                                        shls[1] = jsh + jsh0;
                                         if (qcond_row[jc] > bscreen_i[jsh]) {
                                                 sj_shells[num_sj_shells] = jsh;
                                                 num_sj_shells++;
