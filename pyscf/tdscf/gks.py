@@ -163,9 +163,6 @@ class CasidaTDDFT(TDDFT, TDA):
         self._finalize()
         return self.e, self.xy
 
-    def nuc_grad_method(self):
-        raise NotImplementedError
-
 TDDFTNoHybrid = CasidaTDDFT
 
 

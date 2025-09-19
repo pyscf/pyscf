@@ -833,9 +833,11 @@ class TDBase(lib.StreamObject):
 
     as_scanner = as_scanner
 
+    def Gradients(self):
+        raise NotImplementedError
+
     def nuc_grad_method(self):
-        from pyscf.grad import tdrhf
-        return tdrhf.Gradients(self)
+        return self.Gradients()
 
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''
@@ -980,6 +982,13 @@ class TDA(TDBase):
         log.timer('TDA', *cpu0)
         self._finalize()
         return self.e, self.xy
+
+    def Gradients(self):
+        if getattr(self._scf, 'with_df', None):
+            logger.warn(self, 'TDDFT Gradients with DF approximation is not available. '
+                        'TDDFT Gradients are computed using exact integrals')
+        from pyscf.grad import tdrhf
+        return tdrhf.Gradients(self)
 
     to_gpu = lib.to_gpu
 
@@ -1178,9 +1187,7 @@ class TDHF(TDBase):
         self._finalize()
         return self.e, self.xy
 
-    def nuc_grad_method(self):
-        from pyscf.grad import tdrhf
-        return tdrhf.Gradients(self)
+    Gradients = TDA.Gradients
 
     to_gpu = lib.to_gpu
 
