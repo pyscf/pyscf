@@ -587,6 +587,11 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_get_nuc(self):
+        v0 = get_nuc(cell)
+        v1 = fft.FFTDF(cell).get_nuc()
+        self.assertTrue(v1.ndim == 3)
+        self.assertAlmostEqual(abs(v0 - v1[0]).max(), 0, 9)
+
         v0 = get_nuc(cell, kpts[0])
         v1 = fft.FFTDF(cell).get_nuc(kpts)
         self.assertTrue(np.allclose(v0, v1[0], atol=1e-9, rtol=1e-9))
@@ -859,6 +864,7 @@ class KnownValues(unittest.TestCase):
 
         mc = mcscf.CASSCF(mf, 2, 0).run()
         self.assertAlmostEqual(mc.e_tot, ehf, 8)
+
 
 if __name__ == '__main__':
     print("Full Tests for fft JK and ao2mo etc")

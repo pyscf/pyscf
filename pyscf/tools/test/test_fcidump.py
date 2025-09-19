@@ -98,7 +98,7 @@ ORBSYM=1,2,3,4,
     def test_to_scf_with_symmetry(self):
         with tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR) as tmpfcidump:
             mol = gto.M(atom='H 0 0 0; H 1 0 0', symmetry=True)
-            mf = mol.RHF(mol).run()
+            mf = mol.RHF().run()
             fcidump.from_scf(mf, tmpfcidump.name)
             mf = fcidump.to_scf(tmpfcidump.name)
             self.assertEqual(mf.mol.groupname, 'D2h')
