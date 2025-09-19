@@ -21,6 +21,7 @@ QM/MM helper functions that modify the QM methods.
 '''
 
 import numpy
+import scipy.special
 import pyscf
 from pyscf import lib
 from pyscf import gto
@@ -178,14 +179,26 @@ class QMMMSCF(QMMM):
         return h1e
 
     def energy_nuc(self):
-        # interactions between QM nuclei and MM particles
-        nuc = self.mol.energy_nuc()
-        coords = self.mm_mol.atom_coords()
-        charges = self.mm_mol.atom_charges()
-        for j in range(self.mol.natm):
-            q2, r2 = self.mol.atom_charge(j), self.mol.atom_coord(j)
-            r = lib.norm(r2-coords, axis=1)
-            nuc += q2*(charges/r).sum()
+        '''interactions between QM nuclei and MM particles'''
+        mol = self.mol
+        mm_mol = self.mm_mol
+        nuc = mol.energy_nuc()
+        coords = mm_mol.atom_coords()
+        charges = mm_mol.atom_charges()
+        if mm_mol.charge_model == 'gaussian':
+            # * MM paritcles may be defined as a spreaded distribution. The
+            # charge distribution may overlap to QM atoms and slightly affect
+            # the interaction.
+            zetas = mm_mol.get_zetas()
+            for j in range(mol.natm):
+                q2, r2 = mol.atom_charge(j), mol.atom_coord(j)
+                r = lib.norm(r2-coords, axis=1)
+                nuc += q2*(charges/r*scipy.special.erf(zetas**.5*r)).sum()
+        else:
+            for j in range(mol.natm):
+                q2, r2 = mol.atom_charge(j), mol.atom_coord(j)
+                r = lib.norm(r2-coords, axis=1)
+                nuc += q2*(charges/r).sum()
         return nuc
 
     def to_gpu(self):
@@ -348,7 +361,7 @@ class QMMMGrad:
 
         coords = mm_mol.atom_coords()
         charges = mm_mol.atom_charges()
-        expnts = mm_mol.get_zetas()
+        expnts = mm_mol.get_zetas() + numpy.zeros_like(charges)
 
         intor = 'int3c2e_ip2'
         nao = mol.nao
@@ -369,21 +382,32 @@ class QMMMGrad:
     contract_hcore_mm = grad_hcore_mm # for backward compatibility
 
     def grad_nuc(self, mol=None, atmlst=None):
+        '''Nuclear gradients of the QM-MM nuclear energy wrt QM atoms
+        '''
         if mol is None: mol = self.mol
-        coords = self.base.mm_mol.atom_coords()
-        charges = self.base.mm_mol.atom_charges()
+        assert atmlst is None or len(atmlst) == mol.natm
+        g_qm = super().grad_nuc(mol)
 
-        g_qm = super().grad_nuc(mol, atmlst)
-# nuclei lattice interaction
-        g_mm = numpy.empty((mol.natm,3))
-        for i in range(mol.natm):
-            q1 = mol.atom_charge(i)
-            r1 = mol.atom_coord(i)
-            r = lib.norm(r1-coords, axis=1)
-            g_mm[i] = -q1 * numpy.einsum('i,ix,i->x', charges, r1-coords, 1/r**3)
-        if atmlst is not None:
-            g_mm = g_mm[atmlst]
-        return g_qm + g_mm
+        mm_mol = self.base.mm_mol
+        coords = mm_mol.atom_coords()
+        charges = mm_mol.atom_charges()
+        if mm_mol.charge_model == 'gaussian':
+            expnts = mm_mol.get_zetas()
+            fake_mm = gto.fakemol_for_charges(coords, expnts)
+            fake_mol = gto.fakemol_for_charges(mol.atom_coords())
+            Znuc = mol.atom_charges()
+            j2c = gto.mole.intor_cross('int2c2e_ip1', fake_mm, fake_mol)
+            g_qm += numpy.einsum('k,xki,i->ix', charges, j2c, Znuc)
+        else:
+            # nuclei lattice interaction
+            g_mm = numpy.empty((mol.natm,3))
+            for i in range(mol.natm):
+                q1 = mol.atom_charge(i)
+                r1 = mol.atom_coord(i)
+                r = lib.norm(r1-coords, axis=1)
+                g_mm[i] = -q1 * numpy.einsum('i,ix,i->x', charges, r1-coords, 1/r**3)
+            g_qm += g_mm
+        return g_qm
 
     def grad_nuc_mm(self, mol=None):
         '''Nuclear gradients of the QM-MM nuclear energy
@@ -395,12 +419,20 @@ class QMMMGrad:
         mm_mol = self.base.mm_mol
         coords = mm_mol.atom_coords()
         charges = mm_mol.atom_charges()
-        g_mm = numpy.zeros_like(coords)
-        for i in range(mol.natm):
-            q1 = mol.atom_charge(i)
-            r1 = mol.atom_coord(i)
-            r = lib.norm(r1-coords, axis=1)
-            g_mm += q1 * numpy.einsum('i,ix,i->ix', charges, r1-coords, 1/r**3)
+        if mm_mol.charge_model == 'gaussian':
+            expnts = mm_mol.get_zetas()
+            fake_mm = gto.fakemol_for_charges(coords, expnts)
+            fake_mol = gto.fakemol_for_charges(mol.atom_coords())
+            Znuc = mol.atom_charges()
+            j2c = gto.mole.intor_cross('int2c2e_ip1', fake_mm, fake_mol)
+            g_mm = -numpy.einsum('k,xki,i->kx', charges, j2c, Znuc)
+        else:
+            g_mm = numpy.zeros_like(coords)
+            for i in range(mol.natm):
+                q1 = mol.atom_charge(i)
+                r1 = mol.atom_coord(i)
+                r = lib.norm(r1-coords, axis=1)
+                g_mm += q1 * numpy.einsum('i,ix,i->ix', charges, r1-coords, 1/r**3)
         return g_mm
 
     def to_gpu(self):
