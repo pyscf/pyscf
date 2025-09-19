@@ -642,13 +642,17 @@ class SGXData:
         else:
             raise ValueError
 
-    def _make_shl_mat(self, x_gu, x_bi, rlocs, clocs, wt=None):
+    def _make_shl_mat(self, x_gu, x_bi, rlocs, clocs, wt=None, tr=False):
         self._check_arr(x_gu, dtype=numpy.float64)
         self._check_arr(x_bi, dtype=numpy.float64)
         self._check_arr(rlocs, dtype=numpy.int32)
         self._check_arr(clocs, dtype=numpy.int32)
         assert x_gu.shape[-2:] == (rlocs[-1], clocs[-1])
-        assert x_bi.shape == (rlocs.size - 1, clocs.size - 1)
+        if tr:
+            assert wt is not None
+            assert x_bi.shape == (clocs.size - 1, rlocs.size - 1)
+        else:
+            assert x_bi.shape == (rlocs.size - 1, clocs.size - 1)
         args = [
             x_gu.ctypes,
             x_bi.ctypes,
@@ -669,7 +673,10 @@ class SGXData:
             self._check_arr(wt, dtype=numpy.float64)
             args.append(wt.ctypes)
             args.append(ncomp)
-            fn = _vhf.libcvhf.SGXmake_shl_mat_wt
+            if tr:
+                fn = _vhf.libcvhf.SGXmake_shl_mat_wt_tr
+            else:
+                fn = _vhf.libcvhf.SGXmake_shl_mat_wt
         fn(*args)
 
     def _pow_screen(self, xbar_ij, delta):
@@ -860,62 +867,6 @@ class SGXData:
             ctypes.c_int(f.shape[1]),
         )
         return out
-
-    """
-    def _get_g_thresh(self, f_ug, b0, dv, de, wt, blksize, x_b):
-        t0 = time.monotonic()
-        assert f_ug.flags.c_contiguous
-        nao, ng = f_ug.shape[-2:]
-        b1 = (ng + blksize - 1) // blksize + b0
-        thresh = dv * x_b[b0:b1]
-        fbar_ib = numpy.ndarray((self.mol.nbas, b1 - b0), buffer=self._buf)
-        # ao_loc = self.mol.ao_loc_nr()
-        ao_loc = self._loop_data[3]
-        assert nao == ao_loc[-1]
-        blk_loc = blksize * numpy.arange(b1 - b0 + 1, dtype=numpy.int32)
-        blk_loc[-1] = ng
-        t1 = time.monotonic()
-        self._make_shl_mat(f_ug, fbar_ib, ao_loc, blk_loc, wt=wt)
-        t2 = time.monotonic()
-        _ftmp_bi = fbar_ib.T.copy()
-        self._pow_screen(fbar_ib, _SGX_DELTA_1)
-        _inds1_bi = self._argsort(_ftmp_bi * numpy.max(self._mbar_ij, axis=1))
-        _fm_bi = _ftmp_bi.dot(self._mbar_ij)
-        _fmf_bi = _fm_bi * _ftmp_bi
-        _inds3_bi = self._argsort(_fmf_bi)
-        _sum1_bi = self._cumsum(_ftmp_bi, _inds1_bi)
-        _sum3_bi = self._cumsum(_fmf_bi, _inds3_bi)
-        cond1 = _sum1_bi > thresh[:, None]
-        cond2 = _fm_bi > thresh[:, None]
-        cond3 = _sum3_bi > de / x_b.size
-        #cond1 = _ftmp_bi > thresh[:, None] / numpy.max(self._mbar_ij, axis=1) / self.mol.nbas
-        #cond2 = _fm_bi > thresh[:, None]
-        #cond3 = _fmf_bi > de / x_b.size / self.mol.nbas
-        cond4 = numpy.logical_and(cond1, cond2)
-        cond5 = numpy.logical_or(cond1, cond3)
-        cond6 = (self._mbar_ij.dot(1.0 / fbar_ib) > de * fbar_ib / x_b.size).T
-        print("RESULTS", cond1.shape)
-        print([cond.sum(1).mean() for cond in [cond1, cond2, cond3, cond4, cond5, cond6]])
-        t3 = time.monotonic()
-        fbar_bi = numpy.ascontiguousarray(fbar_ib.T)
-        # bni_bi = numpy.minimum(thresh[:, None], (de / x_b.size) * fbar_bi)
-        bni_bi = numpy.minimum(thresh[:, None], (de / cond3.sum(1))[:, None] * fbar_bi)
-        bni_bi = numpy.ascontiguousarray(bni_bi)
-        t4 = time.monotonic()
-        print("GTIMES", t1 - t0, t2 - t1, t3 - t2, t4 - t3)
-        # return fbar_bi, bni_bi
-        print("TYPE", cond5.flags.c_contiguous, cond5.shape, cond5.dtype)
-        return _ftmp_bi, bni_bi, cond5
-
-    def get_g_threshold(self, f_ug, b0, dv, de, wt):
-        ftilde_bi, bsgx_bi, shl_screen = self._get_g_thresh(
-            f_ug, b0, dv, de, wt, SGX_BLKSIZE, self._xsgx_b
-        )
-        _, bni_bi, _ = self._get_g_thresh(
-            f_ug, b0 * SGX_BLKSIZE // BLKSIZE, dv, de, wt, BLKSIZE, self._xni_b
-        )
-        return bni_bi, bsgx_bi, ftilde_bi, shl_screen
-    """
     
     def _sgx_thresh(self, f_ug, b0, dv, de, wt, blksize, x_b):
         t0 = time.monotonic()
@@ -923,48 +874,51 @@ class SGXData:
         nao, ng = f_ug.shape[-2:]
         b1 = (ng + blksize - 1) // blksize + b0
         thresh = dv * x_b[b0:b1]
-        fbar_ib = numpy.ndarray((self.mol.nbas, b1 - b0), buffer=self._buf)
         ao_loc = self._loop_data[3]
         assert nao == ao_loc[-1]
         blk_loc = blksize * numpy.arange(b1 - b0 + 1, dtype=numpy.int32)
         blk_loc[-1] = ng
-        t1 = time.monotonic()
-        self._make_shl_mat(f_ug, fbar_ib, ao_loc, blk_loc, wt=wt)
+        fmf_bi = numpy.ndarray(
+            (b1 - b0, self.mol.nbas), buffer=self._buf, order="C"
+        )
+        fbar_bi = numpy.empty_like(fmf_bi)
+        self._make_shl_mat(f_ug, fbar_bi, ao_loc, blk_loc, wt=wt, tr=True)
         t2 = time.monotonic()
-        fbar_bi = numpy.ascontiguousarray(fbar_ib.T)
-        inds1_bi = self._argsort(fbar_bi * numpy.max(self._mbar_ij, axis=1))
-        fmf_bi = lib.dot(fbar_bi, self._mbar_ij)
+        fmf_bi = lib.dot(fbar_bi, self._mbar_ij, c=fmf_bi)
+        t3 = time.monotonic()
+        cond = fmf_bi > thresh[:, None]
         fmf_bi[:] *= fbar_bi
         inds2_bi = self._argsort(fmf_bi)
-        sum1_bi = self._cumsum(fbar_bi, inds1_bi)
         sum2_bi = self._cumsum(fmf_bi, inds2_bi)
-        cond = sum1_bi > thresh[:, None]
         cond = numpy.logical_or(sum2_bi > de / x_b.size, cond)
         print("RESULTS", cond.shape)
         print(cond.sum(1).mean())
-        t3 = time.monotonic()
         denom = x_b.size * cond.sum(1)
         b_bi = numpy.minimum(thresh[:, None], (de / denom)[:, None] / (fbar_bi + 1e-200))
         b_bi = numpy.ascontiguousarray(b_bi)
         t4 = time.monotonic()
-        print("GTIMES", t1 - t0, t2 - t1, t3 - t2, t4 - t3)
+        print("GTIMES", t2 - t0, t3 - t2, t4 - t3)
         return fbar_bi, b_bi, cond
     
     def _ni_thresh(self, f_ug, b0, dv, de, wt, blksize, x_b):
+        t0 = time.monotonic()
         assert f_ug.flags.c_contiguous
         nao, ng = f_ug.shape[-2:]
         b1 = (ng + blksize - 1) // blksize + b0
         thresh = dv * x_b[b0:b1]
-        fbar_ib = numpy.ndarray((self.mol.nbas, b1 - b0), buffer=self._buf)
+        fbar_bi = numpy.ndarray((b1 - b0, self.mol.nbas), buffer=self._buf)
         ao_loc = self._loop_data[3]
         assert nao == ao_loc[-1]
         blk_loc = blksize * numpy.arange(b1 - b0 + 1, dtype=numpy.int32)
         blk_loc[-1] = ng
-        self._make_shl_mat(f_ug, fbar_ib, ao_loc, blk_loc, wt=wt)
-        fbar_bi = numpy.ascontiguousarray(fbar_ib.T)
+        self._make_shl_mat(f_ug, fbar_bi, ao_loc, blk_loc, wt=wt, tr=True)
+        t1 = time.monotonic()
         inds_bi = self._argsort(fbar_bi)
         sum_bi = self._cumsum(fbar_bi, inds_bi)
+        t2 = time.monotonic()
         b_bi = numpy.minimum(thresh[:, None], de / (x_b.size * sum_bi + 1e-64))
+        t3 = time.monotonic()
+        print("GTIMES", t1 - t0, t2 - t1, t3 - t2)
         return b_bi
 
     def get_g_threshold(self, f_ug, b0, dv, de, wt):

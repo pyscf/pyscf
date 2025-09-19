@@ -163,10 +163,38 @@ void SGXmake_shl_mat_wt(double *mat, double *shl_mat, int row_nblk,
         size_t ind;
         size_t stride = col_nelem * row_loc[row_nblk];
         int c;
-#pragma omp for
+#pragma omp for collapse(2)
         for (ish = 0; ish < row_nblk; ish++) {
         for (jsh = 0; jsh < col_nblk; jsh++) {
                 shl_ind = ish * col_nblk + jsh;
+                shl_mat[shl_ind] = 0;
+                for (c = 0; c < ncomp; c++) {
+                for (i = row_loc[ish]; i < row_loc[ish + 1]; i++) {
+                for (j = col_loc[jsh]; j < col_loc[jsh + 1]; j++) {
+                        ind = c * stride + i * col_nelem + j;
+                        shl_mat[shl_ind] += mat[ind] * mat[ind] * fabs(wt[j]);
+                } } }
+                shl_mat[shl_ind] = sqrt(shl_mat[shl_ind]);
+        }
+        }
+}
+}
+
+void SGXmake_shl_mat_wt_tr(double *mat, double *shl_mat, int row_nblk,
+                           int col_nblk, int *row_loc, int *col_loc,
+                           double *wt, int ncomp) {
+#pragma omp parallel
+{
+        size_t ish, jsh, i, j;
+        const size_t col_nelem = col_loc[col_nblk];
+        size_t shl_ind;
+        size_t ind;
+        size_t stride = col_nelem * row_loc[row_nblk];
+        int c;
+#pragma omp for collapse(2)
+        for (ish = 0; ish < row_nblk; ish++) {
+        for (jsh = 0; jsh < col_nblk; jsh++) {
+                shl_ind = jsh * row_nblk + ish;
                 shl_mat[shl_ind] = 0;
                 for (c = 0; c < ncomp; c++) {
                 for (i = row_loc[ish]; i < row_loc[ish + 1]; i++) {

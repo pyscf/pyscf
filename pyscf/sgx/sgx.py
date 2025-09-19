@@ -297,7 +297,10 @@ class SGX(lib.StreamObject):
         # compute J matrix using DF and K matrix using SGX. It's identical to
         # the RIJCOSX method in ORCA
         self.dfj = False
+        # Turn on optimization for evaluating the K-matrix with SGX.
+        # Only has an effect is dfj is True
         self.optk = False
+        # For debugging only. Run the calculation with direct integral J-matrix.
         self.direct_j = False
         self._auxbasis = auxbasis
 
