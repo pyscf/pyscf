@@ -82,7 +82,7 @@ class Mole(gto.Mole):
         if self.charge_model == 'gaussian':
             return self._env[self._atm[:,gto.PTR_ZETA]]
         else:
-            return 1e16
+            return numpy.full(self.natm, 1e16)
 
 def create_mm_mol(atoms_or_coords, charges=None, radii=None, unit='Angstrom'):
     '''Create an MM object based on the given coordinates and charges of MM
