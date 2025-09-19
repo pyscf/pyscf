@@ -349,6 +349,9 @@ class GradientsBase(molgrad.GradientsBase):
         if cell is None: cell = self.cell
         return grad_nuc(cell, atmlst)
 
+    def optimizer(self):
+        raise NotImplementedError
+
 def as_scanner(mf_grad):
     '''Generating a nuclear gradients scanner/solver (for geometry optimizer).
 
