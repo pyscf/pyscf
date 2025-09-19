@@ -126,6 +126,36 @@ void SGXmake_shl_dm(double *dm, double *shl_dm, int nao,
 }
 }
 
+static inline double _shl_mat_elem(double *mat, int i0, int i1, int j0, int j1, size_t ncol)
+{
+        double res = 0;
+        int i, j;
+        size_t ind;
+        for (i = i0; i < i1; i++) {
+        for (j = j0; j < j1; j++) {
+                ind = i * ncol + j;
+                res += mat[ind] * mat[ind];
+        }
+        }
+        return sqrt(res);
+}
+
+static inline double _shl_mat_elem_wt(double *mat, double *wt, int i0, int i1,
+                                      int j0, int j1, int ncomp, size_t ncol,
+                                      size_t stride)
+{
+        double res = 0;
+        int i, j, c;
+        size_t ind;
+        for (c = 0; c < ncomp; c++) {
+        for (i = i0; i < i1; i++) {
+        for (j = j0; j < j1; j++) {
+                ind = c * stride + i * ncol + j;
+                res += mat[ind] * mat[ind] * fabs(wt[j]);
+        } } }
+        return sqrt(res);
+}
+
 void SGXmake_shl_mat(double *mat, double *shl_mat, int row_nblk,
                      int col_nblk, int *row_loc, int *col_loc) {
 #pragma omp parallel
@@ -138,14 +168,9 @@ void SGXmake_shl_mat(double *mat, double *shl_mat, int row_nblk,
         for (ish = 0; ish < row_nblk; ish++) {
         for (jsh = 0; jsh < col_nblk; jsh++) {
                 shl_ind = ish * col_nblk + jsh;
-                shl_mat[shl_ind] = 0;
-                for (i = row_loc[ish]; i < row_loc[ish + 1]; i++) {
-                for (j = col_loc[jsh]; j < col_loc[jsh + 1]; j++) {
-                        ind = i * col_nelem + j;
-                        shl_mat[shl_ind] += mat[ind] * mat[ind];
-                }
-                }
-                shl_mat[shl_ind] = sqrt(shl_mat[shl_ind]);
+                shl_mat[shl_ind] = _shl_mat_elem(mat, row_loc[ish], row_loc[ish + 1],
+                                                 col_loc[jsh], col_loc[jsh + 1],
+                                                 col_nelem);
         }
         }
 }
@@ -167,14 +192,10 @@ void SGXmake_shl_mat_wt(double *mat, double *shl_mat, int row_nblk,
         for (ish = 0; ish < row_nblk; ish++) {
         for (jsh = 0; jsh < col_nblk; jsh++) {
                 shl_ind = ish * col_nblk + jsh;
-                shl_mat[shl_ind] = 0;
-                for (c = 0; c < ncomp; c++) {
-                for (i = row_loc[ish]; i < row_loc[ish + 1]; i++) {
-                for (j = col_loc[jsh]; j < col_loc[jsh + 1]; j++) {
-                        ind = c * stride + i * col_nelem + j;
-                        shl_mat[shl_ind] += mat[ind] * mat[ind] * fabs(wt[j]);
-                } } }
-                shl_mat[shl_ind] = sqrt(shl_mat[shl_ind]);
+                shl_mat[shl_ind] = _shl_mat_elem_wt(mat, wt,
+                                                    row_loc[ish], row_loc[ish + 1],
+                                                    col_loc[jsh], col_loc[jsh + 1],
+                                                    ncomp, col_nelem, stride);
         }
         }
 }
@@ -195,14 +216,10 @@ void SGXmake_shl_mat_wt_tr(double *mat, double *shl_mat, int row_nblk,
         for (ish = 0; ish < row_nblk; ish++) {
         for (jsh = 0; jsh < col_nblk; jsh++) {
                 shl_ind = jsh * row_nblk + ish;
-                shl_mat[shl_ind] = 0;
-                for (c = 0; c < ncomp; c++) {
-                for (i = row_loc[ish]; i < row_loc[ish + 1]; i++) {
-                for (j = col_loc[jsh]; j < col_loc[jsh + 1]; j++) {
-                        ind = c * stride + i * col_nelem + j;
-                        shl_mat[shl_ind] += mat[ind] * mat[ind] * fabs(wt[j]);
-                } } }
-                shl_mat[shl_ind] = sqrt(shl_mat[shl_ind]);
+                shl_mat[shl_ind] = _shl_mat_elem_wt(mat, wt,
+                                                    row_loc[ish], row_loc[ish + 1],
+                                                    col_loc[jsh], col_loc[jsh + 1],
+                                                    ncomp, col_nelem, stride);
         }
         }
 }
@@ -1729,6 +1746,56 @@ void SGXnr_direct_drv2(int (*intor)(), SGXJKOperator **jkop,
         printf("unscreened: %lf\n", usc);
 }
 
+static void _get_screening_v3(double *f_ug, double *wt, double *mbar_ij,
+                       int *ao_loc, int *njc_i, int *c2sh, int n_dm,
+                       int nbas, int nish, int dg, int ng, double dv, double de,
+                       double *fbar_i, double *bscreen_i, uint8_t *shlscreen_i,
+                       double *buf)
+{
+        double *fmf_i = buf;
+        double *sum_fmf_i = buf + 1 * nbas;
+        double *tmpf_i = buf + 3 * nbas;
+        int *inds_i = (int*) (buf + 5 * nbas);
+        int *tmpinds_i = inds_i + nbas;
+        int ish;
+        int onei = 1;
+        double zerod = 0;
+        double oned = 1;
+        char ntrans = 'N';
+        for (ish = 0; ish < nish; ish++) {
+                fbar_i[ish] = _shl_mat_elem_wt(f_ug, wt, ao_loc[ish], ao_loc[ish+1], 0, dg, n_dm, ng, ao_loc[nbas] * ng);
+        }
+        // trans, m, n, alpha, a, lda, x, incx, beta, y, incy
+        dgemv_(&ntrans, &nish, &nish, &oned, mbar_ij, &nish, fbar_i,
+               &onei, &zerod, sum_fmf_i, &onei);
+        for (ish = 0; ish < nish; ish++) {
+                // TODO use this to get quadratic scaling
+                //for (int jc = 0; jc < njc_i[ish]; jc++) {
+                //        sum_fmf_i[ish] += mbar_ij[ish * nbas + jc] * fbar_i[c2sh[ish * nbas + jc]];
+                //}
+                //sum_fmf_i[ish] = 0.0;
+                //for (int jsh = 0; jsh < nish; jsh++) {
+                //        sum_fmf_i[ish] += mbar_ij[jsh] * fbar_i[jsh];
+                //}
+                //mbar_ij = mbar_ij + nbas;
+                shlscreen_i[ish] = sum_fmf_i[ish] > dv;
+                sum_fmf_i[ish] *= fbar_i[ish];
+                fmf_i[ish] = sum_fmf_i[ish];
+                inds_i[ish] = ish;
+        }
+        _merge_sort(sum_fmf_i, inds_i, tmpf_i, tmpinds_i, nish);
+        _cumsum(sum_fmf_i, fmf_i, inds_i, nish);
+        int count = 0;
+        for (ish = 0; ish < nish; ish++) {
+                shlscreen_i[ish] = shlscreen_i[ish] || (sum_fmf_i[ish] > de);
+                count += shlscreen_i[ish];
+        }
+        count = MAX(count, 1);
+        for (ish = 0; ish < nish; ish++) {
+                bscreen_i[ish] = MIN(dv, de / (fbar_i[ish] * count + 1e-32));
+        }
+}
+
 void SGXnr_direct_drv3(int (*intor)(), SGXJKOperator **jkop,
                        double **dms, double **vjk, int n_dm, int ncomp,
                        int *shls_slice, int *ao_loc,
@@ -1825,7 +1892,7 @@ void SGXnr_direct_drv3(int (*intor)(), SGXJKOperator **jkop,
                                 jc = 0;
                                 for (int jsh = 0; jsh < jmax; jsh++) {
                                 if (select_inds[jsh] == jc) {
-                                        if (qcond_row[jc] > bscreen_i[jsh]) {
+                                        if (qcond_row[jc] > bscreen_i[ish]) {
                                                 sj_shells[num_sj_shells] = jsh;
                                                 num_sj_shells++;
                                                 _usc += 1;
@@ -1872,6 +1939,166 @@ void SGXnr_direct_drv3(int (*intor)(), SGXJKOperator **jkop,
         free(qcond_buf);
         free(qcond_row);
         free(qcond_row2);
+#pragma omp critical
+{
+        usc += _usc;
+}
+}
+        printf("unscreened: %lf\n", usc);
+}
+
+void SGXnr_direct_drv4(int (*intor)(), SGXJKOperator **jkop,
+                       double **dms, double **vjk, int n_dm, int ncomp,
+                       int *shls_slice, int *ao_loc,
+                       CINTOpt *cintopt, CVHFOpt *vhfopt,
+                       int *atm, int natm, int *bas, int nbas, double *env,
+                       int aosym, double *wt, double *mbar_ij, double *dv,
+                       double de)
+{
+        const int ish0 = shls_slice[0];
+        const int ish1 = shls_slice[1];
+        const int jsh0 = shls_slice[2];
+        const int nish = ish1 - ish0;
+        const int di = GTOmax_shell_dim(ao_loc, shls_slice, 2);
+        const int cache_size = _max_cache_size_sgx(intor, shls_slice, 2,
+                                                   atm, natm, bas, nbas, env,
+                                                   SGX_BLKSIZE);
+
+        const int ioff = ao_loc[ish0];
+        const int joff = ao_loc[jsh0];
+
+        int (*fprescreen)();
+        if (vhfopt != NULL) {
+                fprescreen = vhfopt->fprescreen;
+        } else {
+                fprescreen = CVHFnoscreen;
+        }
+        const int tot_ngrids = (int) env[NGRIDS];
+        const int nbatch = (tot_ngrids + SGX_BLKSIZE - 1) / SGX_BLKSIZE;
+        double usc = 0;
+#pragma omp parallel
+{
+        int ig0, ig1, dg;
+        int ish, jsh, jmax;
+        int i0, i1, j0, j1, idm;
+        int shls[4];
+        SGXJKArray *v_priv[n_dm];
+        for (idm = 0; idm < n_dm; idm++) {
+                v_priv[idm] = jkop[idm]->allocate(shls_slice, ao_loc, ncomp, tot_ngrids);
+        }
+        double *buf = calloc(sizeof(double), SGX_BLKSIZE*di*di*ncomp);
+        double *cache = malloc(sizeof(double) * cache_size);
+        double *fbar_i = malloc(sizeof(double) * nbas);
+        double *bscreen_i = malloc(sizeof(double) * nbas);
+        uint8_t *shlscreen_i = malloc(sizeof(uint8_t) * nbas);
+        double **_dms = malloc(n_dm * sizeof(double*));
+        int *sj_shells = malloc(sizeof(int) * nish);
+        int *sort_inds = malloc(sizeof(int) * nish);
+        int *select_inds = malloc(sizeof(int) * nish);
+        int *index_buf = malloc(sizeof(int) * nish);
+        double *screen_buf = malloc((sizeof(int) * 2 + sizeof(double) * 5) * nbas);
+        double *qcond_row = malloc(sizeof(double) * nish);
+        double *qcond_row2 = malloc(sizeof(double) * nish);
+        double *qcond_buf = malloc(sizeof(double) * nish);
+        int num_sj_shells;
+        int sj_index;
+        double _usc = 0;
+#pragma omp for nowait schedule(dynamic, 1)
+        for (int ibatch = 0; ibatch < nbatch; ibatch++) {
+                ig0 = ibatch * SGX_BLKSIZE;
+                ig1 = MIN(ig0 + SGX_BLKSIZE, tot_ngrids);
+                dg = ig1 - ig0;
+                _get_screening_v3(dms[0] + ibatch * SGX_BLKSIZE, wt + ibatch * SGX_BLKSIZE,
+                                  mbar_ij, ao_loc,
+                                  NULL, NULL, n_dm, nbas, nish, dg, tot_ngrids, dv[ibatch],
+                                  de, fbar_i, bscreen_i, shlscreen_i, screen_buf);
+                for (idm = 0; idm < n_dm; idm++) {
+                        jkop[idm]->set0(v_priv[idm], dg);
+                }
+                for (ish = 0; ish < nbas; ish++) {
+                        if (aosym == 2) {
+                                jmax = ish + 1;
+                        } else {
+                                jmax = nish;
+                        }
+                        int jc = 0;
+                        for (jsh = 0; jsh < nish; jsh++) {
+                                shls[0] = ish + ish0;
+                                shls[1] = jsh + jsh0;
+                                if ((shlscreen_i[jsh]
+                                    || shlscreen_i[ish])
+                                    && (*fprescreen)(shls, vhfopt, atm, bas, env)) {
+                                        shls[0] = ish + ish0;
+                                        shls[1] = jsh + jsh0;
+                                        qcond_row[jc] = vhfopt->q_cond[ish * nbas + jsh];
+                                        qcond_row[jc] *= fbar_i[jsh];
+                                        qcond_row2[jc] = qcond_row[jc];
+                                        sort_inds[jc] = jc;
+                                        select_inds[jsh] = jc;
+                                        jc++;
+                                } else {
+                                        select_inds[jsh] = -1;
+                                }
+                        }
+                        if (jc > 0) {
+                                _merge_sort(qcond_row, sort_inds, qcond_buf,
+                                            index_buf, jc);
+                                _cumsum(qcond_row, qcond_row2, sort_inds, jc);
+                                num_sj_shells = 0;
+                                jc = 0;
+                                for (int jsh = 0; jsh < jmax; jsh++) {
+                                if (select_inds[jsh] == jc) {
+                                        if (qcond_row[jc] > bscreen_i[ish]) {
+                                                sj_shells[num_sj_shells] = jsh;
+                                                num_sj_shells++;
+                                                _usc += 1;
+                                        }
+                                        jc++;
+                                } }
+                                for (sj_index = 0; sj_index < num_sj_shells; sj_index++) {
+                                        jsh = sj_shells[sj_index];
+                                        shls[0] = ish + ish0;
+                                        shls[1] = jsh + jsh0;
+                                        i0 = ao_loc[ish  ] - ioff;
+                                        j0 = ao_loc[jsh  ] - joff;
+                                        i1 = ao_loc[ish+1] - ioff;
+                                        j1 = ao_loc[jsh+1] - joff;
+                                        const int dims[] = {ao_loc[ish+1]-ao_loc[ish],
+                                                        ao_loc[jsh+1]-ao_loc[jsh], dg};
+                                        shls[2] = ig0;
+                                        shls[3] = ig1;
+                                        (*intor)(buf, dims, shls, atm, natm, bas, nbas,
+                                                env, cintopt, cache);
+                                        for (idm = 0; idm < n_dm; idm++) {
+                                                jkop[idm]->contract(buf, dms[idm], v_priv[idm],
+                                                                    i0, i1, j0, j1, ig0, dg);
+                                        }
+                                }
+                        }
+                }
+                for (idm = 0; idm < n_dm; idm++) {
+                        jkop[idm]->send(v_priv[idm], ig0, dg, vjk[idm]);
+                }
+        }
+#pragma omp critical
+{
+        for (idm = 0; idm < n_dm; idm++) {
+                jkop[idm]->finalize(v_priv[idm], vjk[idm]);
+        }
+}
+        free(buf);
+        free(cache);
+        free(sj_shells);
+        free(fbar_i);
+        free(bscreen_i);
+        free(shlscreen_i);
+        free(select_inds);
+        free(sort_inds);
+        free(index_buf);
+        free(qcond_buf);
+        free(qcond_row);
+        free(qcond_row2);
+        free(screen_buf);
 #pragma omp critical
 {
         usc += _usc;

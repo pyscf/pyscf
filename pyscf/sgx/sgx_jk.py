@@ -923,15 +923,15 @@ class SGXData:
 
     def get_g_threshold(self, f_ug, b0, dv, de, wt):
         t0 = time.monotonic()
-        fbar_bi, bsgx_bi, shl_screen = self._sgx_thresh(
-            f_ug, b0, dv, de, wt, SGX_BLKSIZE, self._xsgx_b
-        )
+        #fbar_bi, bsgx_bi, shl_screen = self._sgx_thresh(
+        #    f_ug, b0, dv, de, wt, SGX_BLKSIZE, self._xsgx_b
+        #)
         bni_bi = self._ni_thresh(
             f_ug, b0 * (SGX_BLKSIZE // BLKSIZE), dv, de, wt, BLKSIZE, self._xni_b
         )
         t1 = time.monotonic()
         print("TOTAL GTIME", t1 - t0)
-        return bni_bi, bsgx_bi, fbar_bi, shl_screen
+        return bni_bi  # , bsgx_bi, fbar_bi, shl_screen
 
 def run_k_only_setup(sgx, dms, hermi):
     mol = sgx.mol
@@ -1115,7 +1115,11 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13, full_dm=None):
         tc = logger.perf_counter()
         if sgx.use_dm_screening:
             fg = _sgxdot_ao_dm_sparse(ao, proj_dm, mask, dm_mask, ao_loc, out=fg)
-            bni_bi, bsgx_bi, fbar_bi, shl_screen = sgx._pjs_data.get_g_threshold(
+            #bni_bi, bsgx_bi, fbar_bi, shl_screen = sgx._pjs_data.get_g_threshold(
+            #    fg, i0 // SGX_BLKSIZE, sgx.sgx_tol_potential,
+            #    sgx.sgx_tol_energy, weights
+            #)
+            bni_bi = sgx._pjs_data.get_g_threshold(
                 fg, i0 // SGX_BLKSIZE, sgx.sgx_tol_potential,
                 sgx.sgx_tol_energy, weights
             )
@@ -1125,7 +1129,11 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13, full_dm=None):
         te = logger.perf_counter()
 
         if sgx.use_dm_screening:
-            gv = batch_k(mol, coords, fg, weights=(fbar_bi, bsgx_bi, shl_screen), v2=True)
+            #wt_input = (fbar_bi, bsgx_bi, shl_screen)
+            wt_input = (weights, sgx._pjs_data._mbar_ij,
+                        sgx.sgx_tol_potential * sgx._pjs_data._xsgx_b[i0 // SGX_BLKSIZE:],
+                        sgx.sgx_tol_energy / sgx._pjs_data._xsgx_b.size)
+            gv = batch_k(mol, coords, fg, weights=wt_input, v2=True)
         else:
             gv = batch_k(mol, coords, fg, weights)
         tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
@@ -1434,6 +1442,7 @@ def _gen_k_direct(mol, aosym, direct_scf_tol,
             vk = numpy.zeros((len(fg),ncomp,nao,ngrids))
         else:
             vk = numpy.zeros((len(fg),ncomp,nao,ngrids))[:,0]
+        assert fg.flags.c_contiguous
         for i, dm in enumerate(fg):
             assert fg[i].flags.c_contiguous
             assert fg[i].shape == (ao_loc[-1], ngrids)
@@ -1447,8 +1456,6 @@ def _gen_k_direct(mol, aosym, direct_scf_tol,
         vjkptr = (ctypes.c_void_p*(n_dm))(*vjkptr)
 
         if v2:
-            ftilde_bi = weights[0]
-            bscreen_bi = weights[1]
             args = [
                 cintor, fjk, dmsptr, vjkptr, n_dm, ncomp,
                 (ctypes.c_int*4)(*shls_slice),
@@ -1458,14 +1465,18 @@ def _gen_k_direct(mol, aosym, direct_scf_tol,
                 bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
                 env.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(2 if aosym == 's2' else 1),
-                ftilde_bi.ctypes.data_as(ctypes.c_void_p),
-                bscreen_bi.ctypes.data_as(ctypes.c_void_p),
             ]
             if len(weights) == 2:
+                args = args + [weights[0].ctypes, weights[1].ctypes]
                 fn = _vhf.libcvhf.SGXnr_direct_drv2
-            else:
+            elif len(weights) == 3:
+                args = args + [weights[0].ctypes, weights[1].ctypes, weights[2].ctypes]
                 fn = _vhf.libcvhf.SGXnr_direct_drv3
-                args.append(weights[2].ctypes)
+            else:
+                assert len(weights) == 4
+                args = args + [weights[0].ctypes, weights[1].ctypes,
+                               weights[2].ctypes, ctypes.c_double(weights[3])]
+                fn = _vhf.libcvhf.SGXnr_direct_drv4
             fn(*args)
         else:
             drv(cintor, fjk, dmsptr, vjkptr, n_dm, ncomp,
