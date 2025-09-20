@@ -1796,6 +1796,56 @@ static void _get_screening_v3(double *f_ug, double *wt, double *mbar_ij,
         }
 }
 
+void SGXbuild_gv_threshold(double *f_ug, double *g_ug, int *ao_loc, double *dv, double de,
+                           double *wt, int ncomp, int nbas, int ngrids, uint8_t *thresh)
+{
+        const int nbatch = (ngrids + NI_BLKSIZE - 1) / NI_BLKSIZE;
+        const size_t Nao = ao_loc[nbas];
+        const size_t Nbas = nbas;
+        const size_t Ngrids = ngrids;
+        const size_t Nbatch = nbatch;
+        int *col_loc = malloc((nbatch + 1) * sizeof(int));
+        double *f_bi = malloc(Nbas * nbatch * sizeof(double));
+        double *g_bi = malloc(Nbas * nbatch * sizeof(double));
+        for (int ibatch = 0; ibatch < nbatch + 1; ibatch++) {
+            col_loc[ibatch] = MIN(ibatch * NI_BLKSIZE, ngrids);
+        }
+        SGXmake_shl_mat_wt_tr(f_ug, f_bi, nbas, nbatch, ao_loc,
+                              col_loc, wt, ncomp);
+        SGXmake_shl_mat_wt(g_ug, g_bi, nbas, nbatch, ao_loc,
+                              col_loc, wt, ncomp);
+#pragma omp parallel
+{
+        double g, di;
+        int ibatch, ish;
+        int *inds = malloc(sizeof(int) * nbas);
+        int *wkinds = malloc(sizeof(int) * nbas);
+        double *sumfbar_i = malloc(sizeof(double) * nbas);
+        double *wk = malloc(sizeof(double) * nbas);
+#pragma omp for
+        for (ibatch = 0; ibatch < nbatch; ibatch++) {
+                for (ish = 0; ish < nbas; ish++) {
+                        sumfbar_i[ish] = f_bi[ibatch * Nbas + ish];
+                        inds[ish] = ish;
+                }
+                _merge_sort(sumfbar_i, inds, wk, wkinds, nbas);
+                _cumsum(sumfbar_i, f_bi + Nbas * ibatch, inds, nbas);
+                for (ish = 0; ish < nbas; ish++) {
+                        di = de / (sumfbar_i[ish] + 1e-32);
+                        //thresh[ibatch * Nbas + ish] = g_bi[ibatch * Nbas + ish] > MIN(dv[ibatch], di);
+                        thresh[ibatch * Nbas + ish] = g_bi[ish * Nbatch + ibatch] > MIN(dv[ibatch], di);
+                }
+        }
+        free(inds);
+        free(wkinds);
+        free(sumfbar_i);
+        free(wk);
+}
+        free(col_loc);
+        free(f_bi);
+        free(g_bi);
+}
+
 void SGXnr_direct_drv3(int (*intor)(), SGXJKOperator **jkop,
                        double **dms, double **vjk, int n_dm, int ncomp,
                        int *shls_slice, int *ao_loc,

@@ -933,6 +933,34 @@ class SGXData:
         print("TOTAL GTIME", t1 - t0)
         return bni_bi  # , bsgx_bi, fbar_bi, shl_screen
 
+    def get_g_thresh2(self, f_ug, g_ug, i0, dv, de, wt):
+        t0 = time.monotonic()
+        b0 = i0 // BLKSIZE
+        ao_loc = self._loop_data[3]
+        assert f_ug.flags.c_contiguous
+        ndm, nao, ngrids = f_ug.shape
+        assert g_ug.flags.c_contiguous
+        assert g_ug.shape == f_ug.shape
+        assert nao == ao_loc[-1]
+        b1 = (ngrids + BLKSIZE - 1) // BLKSIZE + b0
+        thresh = dv * self._xni_b[b0:b1]
+        cond = numpy.empty((b1 - b0, self.mol.nbas), dtype=numpy.uint8)
+        _vhf.libcvhf.SGXbuild_gv_threshold(
+            f_ug.ctypes,
+            g_ug.ctypes,
+            self._loop_data[3].ctypes,
+            thresh.ctypes,
+            ctypes.c_double(de / self._xni_b.size),
+            wt.ctypes,
+            ctypes.c_int(ndm),
+            ctypes.c_int(self.mol.nbas),
+            ctypes.c_int(ngrids),
+            cond.ctypes,
+        )
+        t1 = time.monotonic()
+        print("TOTAL GTIME", t1 - t0)
+        return cond
+
 def run_k_only_setup(sgx, dms, hermi):
     mol = sgx.mol
     grids = sgx.grids
@@ -1119,10 +1147,10 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13, full_dm=None):
             #    fg, i0 // SGX_BLKSIZE, sgx.sgx_tol_potential,
             #    sgx.sgx_tol_energy, weights
             #)
-            bni_bi = sgx._pjs_data.get_g_threshold(
-                fg, i0 // SGX_BLKSIZE, sgx.sgx_tol_potential,
-                sgx.sgx_tol_energy, weights
-            )
+            #bni_bi = sgx._pjs_data.get_g_threshold(
+            #    fg, i0 // SGX_BLKSIZE, sgx.sgx_tol_potential,
+            #    sgx.sgx_tol_energy, weights
+            #)
         else:
             # fg = lib.einsum('xij,ig->xjg', proj_dm, wao.T)
             fg = _sgxdot_ao_dm(ao, proj_dm, mask, shls_slice, ao_loc, out=fg)
@@ -1138,6 +1166,7 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13, full_dm=None):
             gv = batch_k(mol, coords, fg, weights)
         tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
         if sgx.use_dm_screening:
+            """
             assert gv.shape[2] == weights.size
             b0 = i0 // BLKSIZE
             b1 = b0 + (weights.size + BLKSIZE - 1) // BLKSIZE
@@ -1147,6 +1176,10 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13, full_dm=None):
             g_ib = numpy.empty((mol.nbas, b1 - b0))
             sgx._pjs_data._make_shl_mat(gv, g_ib, ao_loc, clocs, wt=weights)
             mask2 = g_ib.T > bni_bi
+            """
+            mask2 = sgx._pjs_data.get_g_thresh2(
+                fg, gv, i0, sgx.sgx_tol_potential, sgx.sgx_tol_energy, weights
+            )
         else:
             mask2 = None
         tf = logger.perf_counter()
