@@ -24,15 +24,22 @@ from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
 from pyscf.df.incore import aux_e2
-from pyscf.gto import moleintor
-from pyscf.scf import _vhf
 from pyscf.dft import gen_grid
 from pyscf.df.grad import rhf as dfrhf_grad
 from pyscf import __config__
 from pyscf.sgx import sgx, sgx_jk
-from pyscf.sgx.sgx_jk import _gen_jk_direct, run_k_only_setup, BLKSIZE, SGX_BLKSIZE
-from pyscf.sgx.sgx_jk import _gen_batch_nuc, _gen_batch_nuc_grad
+from pyscf.sgx.sgx_jk import BLKSIZE, SGX_BLKSIZE
 from pyscf.grad.rks import grids_response_cc, get_dw_partition_sorted
+
+
+def _gen_batch_nuc_grad(mol):
+    '''Coulomb integrals of the given points and orbital pairs'''
+    cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, 'int3c2e_ip1')
+    def batch_nuc(mol, grid_coords, out=None):
+        fakemol = gto.fakemol_for_charges(grid_coords)
+        j3c = aux_e2(mol, fakemol, intor='int3c2e_ip1', aosym='s1', cintopt=cintopt)
+        return j3c.transpose(0,3,1,2)
+    return batch_nuc
 
 
 def get_jk_grad(sgx, dm, hermi=1, with_j=True, with_k=True,
@@ -56,20 +63,23 @@ def get_jk_grad(sgx, dm, hermi=1, with_j=True, with_k=True,
         raise ValueError('Cannot handle multiple DMs for grid response')
 
     if sgx.debug:
-        batch_nuc = _gen_batch_nuc(mol)
+        batch_nuc = sgx_jk._gen_batch_nuc(mol)
     else:
-        batch_jk = _gen_jk_direct(mol, 's2', with_j, with_k, direct_scf_tol,
-                                  sgx._opt)
+        batch_jk = sgx_jk._gen_jk_direct(
+            mol, 's2', with_j, with_k, direct_scf_tol, sgx._opt
+        )
 
     if include_grid_response:
         if sgx.debug:
             batch_nuc_grad = _gen_batch_nuc_grad(mol)
         else:
-            batch_jk_grad = _gen_jk_direct(mol, 's1', with_j, with_k, direct_scf_tol,
-                                           None, grad=True)
+            batch_jk_grad = sgx_jk._gen_jk_direct(
+                mol, 's1', with_j, with_k, direct_scf_tol, None, grad=True
+            )
             if with_j:
-                batch_jonly = _gen_jk_direct(mol, 's1', True, False, direct_scf_tol,
-                                             None, grad=True)
+                batch_jonly = sgx_jk._gen_jk_direct(
+                    mol, 's1', True, False, direct_scf_tol, None, grad=True
+                )
 
     dej = numpy.zeros((mol.natm, 3)) # derivs wrt atom positions
     dek = numpy.zeros((mol.natm, 3)) # derivs wrt atom positions
@@ -281,7 +291,7 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     dms = dms.reshape(-1,nao,nao)
     nset = dms.shape[0]
     shls_slice = (0, mol.nbas)
-    sgx_data = run_k_only_setup(sgx, dms, hermi)
+    sgx_data = sgx_jk.run_k_only_setup(sgx, dms, hermi)
     blksize, screen_index, proj, dm_mask, ncond, ncond_ni, ao_loc = sgx_data
 
     vk = numpy.zeros_like(dms)
