@@ -27,6 +27,7 @@
 #include "nr_direct.h"
 #include "gto/gto.h"
 #include "fblas.h"
+#include "nr_sgx_direct.h"
 
 #define MAX(I,J)        ((I) > (J) ? (I) : (J))
 #define MIN(I,J)        ((I) < (J) ? (I) : (J))
@@ -1371,16 +1372,24 @@ static void _get_screening_v3(double *f_ug, double *wt, double *mbar_ij,
         }
 }
 
-/*
-void SGXscreen_grid_v3(CSGXOpt *sgxopt, double *f_ug, double *wt,
-                       int dg, int ng, int n_dm, int nish, double dv)
+
+void SGXscreen_grid_v3(CSGXOpt *sgxopt, double *f_ug, int ibatch,
+                       int n_dm, int nish, void *shl_info, void *buf)
 {
-        double *fmf_i = sgxopt->buf[0];
-        double *sum_fmf_i = sgxopt->buf[1];
-        double *tmpf_i = sgxopt->buf[2];
-        int *inds_i = sgxopt->buf[3];
-        int *tmpinds_i = sgxopt->buf[4];
         int nbas = sgxopt->nbas;
+        double *fmf_i = (double*) buf;
+        double *sum_fmf_i = fmf_i + nbas;
+        double *tmpf_i = fmf_i + 2 * nbas;
+        int *inds_i = (int*) (fmf_i + 3 * nbas);
+        int *tmpinds_i = inds_i + nbas;
+
+        double *fbar_i = (double*) shl_info;
+        double *bscreen_i = shl_info + nbas;
+        uint8_t *shlscreen_i = (uint8_t*) (bscreen_i + nbas);
+        double dv = sgxopt->vtol[ibatch];
+        double *wt = sgxopt->wt + ibatch * SGX_BLKSIZE;
+        int dg = MAX(0, MIN(SGX_BLKSIZE, sgxopt->ngrids - ibatch * SGX_BLKSIZE));
+
         int *ao_loc = sgxopt->ao_loc;
         int ish;
         int onei = 1;
@@ -1388,16 +1397,16 @@ void SGXscreen_grid_v3(CSGXOpt *sgxopt, double *f_ug, double *wt,
         double oned = 1;
         char ntrans = 'N';
         for (ish = 0; ish < nish; ish++) {
-                sgxopt->fbar_i[ish] = _shl_mat_elem_wt(
+                fbar_i[ish] = _shl_mat_elem_wt(
                         f_ug, wt, ao_loc[ish], ao_loc[ish+1], 0, dg,
-                        n_dm, ng, ao_loc[nbas] * ng);
+                        n_dm, sgxopt->ngrids, ao_loc[nbas] * sgxopt->ngrids);
         }
         // trans, m, n, alpha, a, lda, x, incx, beta, y, incy
         dgemv_(&ntrans, &nish, &nish, &oned, sgxopt->mbar_ij, &nish,
-               sgxopt->fbar_i, &onei, &zerod, sum_fmf_i, &onei);
+               fbar_i, &onei, &zerod, sum_fmf_i, &onei);
         for (ish = 0; ish < nish; ish++) {
-                sgxopt->shlscreen_i[ish] = sum_fmf_i[ish] > dv;
-                sum_fmf_i[ish] *= sgxopt->fbar_i[ish];
+                shlscreen_i[ish] = sum_fmf_i[ish] > dv;
+                sum_fmf_i[ish] *= fbar_i[ish];
                 fmf_i[ish] = sum_fmf_i[ish];
                 inds_i[ish] = ish;
         }
@@ -1405,37 +1414,44 @@ void SGXscreen_grid_v3(CSGXOpt *sgxopt, double *f_ug, double *wt,
         _cumsum(sum_fmf_i, fmf_i, inds_i, nish);
         int count = 0;
         for (ish = 0; ish < nish; ish++) {
-                sgxopt->shlscreen_i[ish] = sgxopt->shlscreen_i[ish]
+                shlscreen_i[ish] = shlscreen_i[ish]
                                            || (sum_fmf_i[ish] > sgxopt->etol);
-                count += sgxopt->shlscreen_i[ish];
+                count += shlscreen_i[ish];
         }
         count = MAX(count, 1);
         for (ish = 0; ish < nish; ish++) {
-                oned = sgxopt->etol / (sgxopt->fbar_i[ish] * count + 1e-32);
-                sgxopt->bscreen_i[ish] = MIN(dv, oned);
+                oned = sgxopt->etol / (fbar_i[ish] * count + 1e-32);
+                bscreen_i[ish] = MIN(dv, oned);
         }
 }
 
-void SGXscreen_grid_v4(CSGXOpt *sgxopt, double *f_ug, double *wt,
-                       int dg, int ng, int n_dm, int nish, double dv)
+void SGXscreen_grid_v4(CSGXOpt *sgxopt, double *f_ug, int ibatch,
+                       int n_dm, int nish, void *shl_info, void *buf)
 {
         int nbas = sgxopt->nbas;
-        int *ao_loc = sgxopt->ao_loc;
-        double *mfbar_i = sgxopt->buf[0];
-        double *smfbar_i = sgxopt->buf[1];
-        double *sfbar2_i = sgxopt->buf[2];
-        double *tmpf_i = sgxopt->buf[3];
-        double *fbar2_i = sgxopt->buf[4];
+        double *mfbar_i = (double*) buf;
+        double *smfbar_i = mfbar_i + nbas;
+        double *sfbar2_i = mfbar_i + 2 * nbas;
+        double *tmpf_i = mfbar_i + 3 * nbas;
+        double *fbar2_i = mfbar_i + 4 * nbas;
+        int *inds_i = (int*) (fbar2_i + nbas);
+        int *tmpinds_i = inds_i + nbas;
+
         double *mbar_sum = sgxopt->msum_i;
         double *mbar_max = sgxopt->mmax_i;
-        double *fbar_i = sgxopt->fbar_i;
-        int *inds_i = sgxopt->buf[5];
-        int *tmpinds_i = sgxopt->buf[6];
+        double *fbar_i = (double*) shl_info;
+        double *bscreen_i = shl_info + nbas;
+        uint8_t *shlscreen_i = (uint8_t*) (bscreen_i + nbas);
+        double dv = sgxopt->vtol[ibatch];
+        double *wt = sgxopt->wt + ibatch * SGX_BLKSIZE;
+        int dg = MAX(0, MIN(SGX_BLKSIZE, sgxopt->ngrids - ibatch * SGX_BLKSIZE));
+
+        int *ao_loc = sgxopt->ao_loc;
         int ish;
         for (ish = 0; ish < nish; ish++) {
                 fbar_i[ish] = _shl_mat_elem_wt(
                         f_ug, wt, ao_loc[ish], ao_loc[ish+1], 0, dg,
-                        n_dm, ng, ao_loc[nbas] * ng);
+                        n_dm, sgxopt->ngrids, ao_loc[nbas] * sgxopt->ngrids);
                 fbar2_i[ish] = fbar_i[ish] * fbar_i[ish] * mbar_sum[ish];
                 smfbar_i[ish] = fbar_i[ish] * mbar_max[ish];
                 mfbar_i[ish] = fbar_i[ish] * mbar_max[ish];
@@ -1448,20 +1464,24 @@ void SGXscreen_grid_v4(CSGXOpt *sgxopt, double *f_ug, double *wt,
         _cumsum(sfbar2_i, sfbar2_i, inds_i, nish);
         int count = 0;
         for (ish = 0; ish < nish; ish++) {
-                sgxopt->shlscreen_i[ish] = smfbar_i[ish] > dv || (sfbar2_i[ish] > sgxopt->etol);
-                count += sgxopt->shlscreen_i[ish];
+                shlscreen_i[ish] = smfbar_i[ish] > dv || (sfbar2_i[ish] > sgxopt->etol);
+                count += shlscreen_i[ish];
         }
         count = MAX(count, 1);
         for (ish = 0; ish < nish; ish++) {
                 fbar_i[ish] *= count;
-                sgxopt->bscreen_i[ish] = MIN(dv, sgxopt->etol / (fbar_i[ish] + 1e-32));
+                bscreen_i[ish] = MIN(dv, sgxopt->etol / (fbar_i[ish] + 1e-32));
         }
 }
 
+inline static int _simple_prescreen(int i, int j, CSGXOpt *opt)
+{
+        return opt->mbar_ij[i * opt->nbas + j] > opt->direct_scf_cutoff;
+}
+
 int SGXscreen_shells_simple(CSGXOpt *sgxopt, int jmax, int ish,
-                            int nish, int ish0, int jsh0,
-                            int (*fprescreen)(), CVHFOpt *vhfopt,
-                            int *atm, int *bas, double *env)
+                            int nish, int ish0, int jsh0, void *shl_info,
+                            void *buf, int *shl_inds)
 {
         int jsh;
         int shls[2];
@@ -1469,8 +1489,8 @@ int SGXscreen_shells_simple(CSGXOpt *sgxopt, int jmax, int ish,
         for (jsh = 0; jsh < nish; jsh++) {
                 shls[0] = ish + ish0;
                 shls[1] = jsh + jsh0;
-                if ((*fprescreen)(shls, vhfopt, atm, bas, env)) {
-                        sgxopt->sj_shells[num_sj_shells] = jsh;
+                if (_simple_prescreen(shls[0], shls[1], sgxopt)) {
+                        shl_inds[num_sj_shells] = jsh;
                         num_sj_shells++;
                 }
         }
@@ -1478,17 +1498,20 @@ int SGXscreen_shells_simple(CSGXOpt *sgxopt, int jmax, int ish,
 }
 
 int SGXscreen_shells_sorted(CSGXOpt *sgxopt, int jmax, int ish,
-                            int nish, int ish0, int jsh0,
-                            int (*fprescreen)(), CVHFOpt *vhfopt,
-                            int *atm, int *bas, double *env)
+                            int nish, int ish0, int jsh0, void *shl_info,
+                            void *buf, int *shl_inds)
 {
         int nbas = sgxopt->nbas;
-        double *qcond_row = sgxopt->buf[0];
-        double *qcond_row2 = sgxopt->buf[1];
-        double *qcond_buf = sgxopt->buf[2];
-        int *sort_inds = sgxopt->buf[3];
-        int *select_inds = sgxopt->buf[4];
-        int *index_buf = sgxopt->buf[5];
+        double *qcond_row = (double*) buf;
+        double *qcond_row2 = qcond_row + nbas;
+        double *qcond_buf = qcond_row + 2 * nbas;
+        int *sort_inds = (int*) (qcond_buf + nbas);
+        int *select_inds = sort_inds + nbas;
+        int *index_buf = sort_inds + 2 * nbas;
+
+        double *fbar_i = (double*) shl_info;
+        double *bscreen_i = shl_info + nbas;
+        uint8_t *shlscreen_i = (uint8_t*) (bscreen_i + nbas);
         int jc = 0;
         int jsh;
         int shls[2];
@@ -1496,13 +1519,10 @@ int SGXscreen_shells_sorted(CSGXOpt *sgxopt, int jmax, int ish,
         for (jsh = 0; jsh < nish; jsh++) {
                 shls[0] = ish + ish0;
                 shls[1] = jsh + jsh0;
-                if ((sgxopt->shlscreen_i[jsh]
-                     || sgxopt->shlscreen_i[ish])
-                    && (*fprescreen)(shls, vhfopt, atm, bas, env)) {
-                        shls[0] = ish + ish0;
-                        shls[1] = jsh + jsh0;
+                if ((shlscreen_i[jsh] || shlscreen_i[ish])
+                    && _simple_prescreen(shls[0], shls[1], sgxopt)) {
                         qcond_row[jc] = sgxopt->mbar_ij[ish * nbas + jsh];
-                        qcond_row[jc] *= sgxopt->fbar_i[jsh];
+                        qcond_row[jc] *= fbar_i[jsh];
                         qcond_row2[jc] = qcond_row[jc];
                         sort_inds[jc] = jc;
                         select_inds[jsh] = jc;
@@ -1518,8 +1538,8 @@ int SGXscreen_shells_sorted(CSGXOpt *sgxopt, int jmax, int ish,
                 jc = 0;
                 for (int jsh = 0; jsh < jmax; jsh++) {
                 if (select_inds[jsh] == jc) {
-                        if (qcond_row[jc] > sgxopt->bscreen_i[ish]) {
-                                sgxopt->sj_shells[num_sj_shells] = jsh;
+                        if (qcond_row[jc] > bscreen_i[ish]) {
+                                shl_inds[num_sj_shells] = jsh;
                                 num_sj_shells++;
                         }
                         jc++;
@@ -1527,7 +1547,7 @@ int SGXscreen_shells_sorted(CSGXOpt *sgxopt, int jmax, int ish,
         }
         return num_sj_shells;
 }
-*/
+
 
 void SGXbuild_gv_threshold(double *f_ug, double *g_ug, int *ao_loc, double *dv, double de,
                            double *wt, int ncomp, int nbas, int ngrids, uint8_t *thresh)
@@ -1563,7 +1583,6 @@ void SGXbuild_gv_threshold(double *f_ug, double *g_ug, int *ao_loc, double *dv, 
                 _cumsum(sumfbar_i, f_bi + Nbas * ibatch, inds, nbas);
                 for (ish = 0; ish < nbas; ish++) {
                         di = de / (sumfbar_i[ish] + 1e-32);
-                        //thresh[ibatch * Nbas + ish] = g_bi[ibatch * Nbas + ish] > MIN(dv[ibatch], di);
                         thresh[ibatch * Nbas + ish] = g_bi[ish * Nbatch + ibatch] > MIN(dv[ibatch], di);
                 }
         }
