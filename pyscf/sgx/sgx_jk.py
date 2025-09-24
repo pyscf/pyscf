@@ -325,6 +325,10 @@ class SGXData:
         self.use_dm_screening = True  # TODO set
         self._this = _CSGXOpt()
 
+    @property
+    def _cintopt(self):
+        return self._opt._cintopt
+
     def reset(self):
         self._ovlp_proj = numpy.identity(self.mol.nao_nr())
         self._stilde_ij = None
@@ -336,7 +340,6 @@ class SGXData:
         self._mbar_ij = None
         self._etol_per_sgx_block = None
         self._vtol_arr = None
-        self._mbar_ij = None
         self._mmax_i = None
         self._msum_i = None
         self._rbar_ij = None
@@ -348,7 +351,9 @@ class SGXData:
     @mol.setter
     def mol(self, mol):
         self._mol = mol
-        self._ao_loc = self.mol.ao_loc_nr()
+        self._ao_loc = numpy.ascontiguousarray(
+            self.mol.ao_loc_nr().astype(numpy.int32)
+        )
         self.reset()
 
     @property
@@ -366,7 +371,8 @@ class SGXData:
         self._this.ao_loc = _arr2c(self._ao_loc)
         self._this.etol = self._etol_per_sgx_block
         self._this.vtol = _arr2c(self._vtol_arr)
-        self._this.wt = _arr2c(self.grids.weights)
+        self._wt = numpy.ascontiguousarray(self.grids.weights)
+        self._this.wt = _arr2c(self._wt)
         self._this.mbar_ij = _arr2c(self._mbar_ij)
         self._this.mmax_i = _arr2c(self._mmax_i)
         self._this.msum_i = _arr2c(self._msum_i)
@@ -393,9 +399,15 @@ class SGXData:
         sisb = bsize + 2 * dsize
         if self.upper_bound_algo == "fullsort":
             sisb += dsize * self.mol.nbas
+        self._this.direct_scf_tol = 1e-13
         self._this.shl_info_size_bytes = sisb
-        self._this.fscreen_grid = None  # TODO _vhf._fpointer(...)
-        self._this.fscreen_shl = None  # TODO _vhf._fpointer(...)
+        # self._this.fscreen_grid = _vhf.libcvhf.SGXscreen_grid_v4
+        self._this.fscreen_grid = _vhf._fpointer("SGXscreen_grid_v4")
+        # self._this.fscreen_shl = _vhf.libcvhf.SGXscreen_shells_sorted
+        # self._this.fscreen_shl = _vhf._fpointer("SGXscreen_shells_simple")
+        self._this.fscreen_shl = _vhf._fpointer("SGXscreen_shells_sorted")
+        # TODO need to make this modifiable
+        self._intor = "int1e_grids_sph"
 
     def get_loop_data(self, nset=1, with_pair_mask=True):
         mol = self.mol
@@ -423,7 +435,6 @@ class SGXData:
             pair_mask = mol.get_overlap_cond() < -numpy.log(cutoff)
         else:
             pair_mask = None
-        self._ao_loc = ao_loc
         return nbins, screen_index, pair_mask, ao_loc, blksize
 
     def _build_integral_bounds(self):
@@ -908,7 +919,8 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13, full_dm=None):
         dms, sgx.sgx_tol_potential, sgx.sgx_tol_energy
     )
 
-    batch_k = _gen_k_direct(mol, 's2', direct_scf_tol, sgx._opt)
+    # batch_k = _gen_k_direct(mol, 's2', direct_scf_tol, sgx._opt)
+    batch_k = _gen_k_direct(mol, 's2', direct_scf_tol, sgx._pjs_data)
 
     if full_dm is None:
         full_dm = dms

@@ -35,9 +35,9 @@ typedef struct CSGXOpt_struct {
     // screening functions
     // frscreen_grid sets up the screening process for all
     // shell pairs in a batch
-    int (*fscreen_grid)(struct CSGXOpt_struct *opt, double *f_ug,
-                        int ibatch, int n_dm, int nish, void *shl_info,
-                        void *buf);
+    void (*fscreen_grid)(struct CSGXOpt_struct *opt, double *f_ug,
+                         int ibatch, int n_dm, int nish, void *shl_info,
+                         void *buf);
     int (*fscreen_shl)(struct CSGXOpt_struct *opt, int jmax, int ish,
                        int nish, int ish0, int jsh0, void *shl_info,
                        void *buf, int *shl_inds);
