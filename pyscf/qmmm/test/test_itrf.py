@@ -46,6 +46,19 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(mf.kernel(), 2.0042702433049024, 9)
         self.assertEqual(mf.undo_qmmm().__class__.__name__, 'RHF')
 
+        radii = [1e-30]
+        mf = itrf.mm_charge(scf.RHF(mol), coords, charges, radii=radii)
+        self.assertAlmostEqual(mf.kernel(), 2.0042702433049024, 9)
+
+        radii = [1.00]
+        mf = itrf.mm_charge(scf.RHF(mol), coords, charges, radii=radii)
+        self.assertAlmostEqual(mf.kernel(), -1.6382613373942227, 9)
+
+        radii = [1e30]
+        charges = [1e30]
+        mf = itrf.mm_charge(scf.RHF(mol), coords, charges, radii=radii)
+        self.assertAlmostEqual(mf.kernel(), scf.RHF(mol).kernel(), 9)
+
     def test_grad(self):
         coords = [(0.0,0.1,0.0)]
         charges = [1.00]
@@ -75,6 +88,26 @@ class KnowValues(unittest.TestCase):
         v = hfg.get_hcore()
         self.assertAlmostEqual(abs(ref-v).max(), 0, 12)
         pyscf.DEBUG = bak
+
+        radii = [1.00]
+        mf = itrf.mm_charge(scf.RHF(mol), coords, charges, radii=radii).run(conv_tol=1e-10)
+        hfg = itrf.mm_charge_grad(grad.RHF(mf), coords, charges, radii=radii).run()
+        self.assertAlmostEqual(numpy.linalg.norm(hfg.de), 0.287026393860105, 6)
+
+        mfs = mf.as_scanner()
+        e1 = mfs('''
+                 H              -0.00000000   -0.000    0.001
+                 H                 -0.00000000   -0.000    1.
+                 H                 -0.00000000   -0.82    0.
+                 H                 -0.91000000   -0.020    0.
+                 ''')
+        e2 = mfs('''
+                 H              -0.00000000   -0.000   -0.001
+                 H                 -0.00000000   -0.000    1.
+                 H                 -0.00000000   -0.82    0.
+                 H                 -0.91000000   -0.020    0.
+                 ''')
+        self.assertAlmostEqual((e1 - e2)/0.002*lib.param.BOHR, hfg.de[0,2], 5)
 
     def test_hcore_cart(self):
         coords = [(0.0,0.1,0.0)]
