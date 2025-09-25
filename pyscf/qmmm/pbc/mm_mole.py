@@ -45,7 +45,7 @@ class Cell(qmmm.mm_mole.Mole, pbc.gto.Cell):
             rho(r) = charge * Norm * exp(-zeta * r^2)
 
     '''
-    def __init__(self, atoms, a, 
+    def __init__(self, atoms, a,
             rcut_ewald=None, rcut_hcore=None,
             charges=None, zeta=None):
         pbc.gto.Cell.__init__(self)
@@ -149,14 +149,14 @@ class Cell(qmmm.mm_mole.Mole, pbc.gto.Cell):
             ewovrl1 = np.zeros((len(coords1), 3))
             ewovrl2 = np.zeros((len(coords1), 3, 3))
         else:
-            ewovrl00 = np.zeros((len(coords1), len(coords1))) 
-            ewovrl01 = np.zeros((len(coords1), len(coords1), 3)) 
-            ewovrl11 = np.zeros((len(coords1), len(coords1), 3, 3)) 
-            ewovrl02 = np.zeros((len(coords1), len(coords1), 3, 3)) 
-            ewself00 = np.zeros((len(coords1), len(coords1))) 
-            ewself01 = np.zeros((len(coords1), len(coords1), 3)) 
-            ewself11 = np.zeros((len(coords1), len(coords1), 3, 3)) 
-            ewself02 = np.zeros((len(coords1), len(coords1), 3, 3)) 
+            ewovrl00 = np.zeros((len(coords1), len(coords1)))
+            ewovrl01 = np.zeros((len(coords1), len(coords1), 3))
+            ewovrl11 = np.zeros((len(coords1), len(coords1), 3, 3))
+            ewovrl02 = np.zeros((len(coords1), len(coords1), 3, 3))
+            ewself00 = np.zeros((len(coords1), len(coords1)))
+            ewself01 = np.zeros((len(coords1), len(coords1), 3))
+            ewself11 = np.zeros((len(coords1), len(coords1), 3, 3))
+            ewself02 = np.zeros((len(coords1), len(coords1), 3, 3))
 
         mem_avail = self.max_memory - lib.current_memory()[0] # in MB
         blksize = int(mem_avail/81/(8e-6*len(all_coords2)))
@@ -174,7 +174,7 @@ class Cell(qmmm.mm_mole.Mole, pbc.gto.Cell):
             Tij = 1 / r[:,mask]
             Rij = R[:,mask]
             Tija = -lib.einsum('ijx,ij->ijx', Rij, Tij**3)
-            Tijab  = 3 * lib.einsum('ija,ijb->ijab', Rij, Rij) 
+            Tijab  = 3 * lib.einsum('ija,ijb->ijab', Rij, Rij)
             Tijab  = lib.einsum('ijab,ij->ijab', Tijab, Tij**5)
             Tijab -= lib.einsum('ij,ab->ijab', Tij**3, np.eye(3))
             if all_charges2 is not None:
@@ -337,7 +337,7 @@ class Cell(qmmm.mm_mole.Mole, pbc.gto.Cell):
                    ewovrl11 + ewself11 + ewg11, \
                    ewovrl02 + ewself02 + ewg02
 
-def create_mm_mol(atoms_or_coords, a, charges=None, radii=None, 
+def create_mm_mol(atoms_or_coords, a, charges=None, radii=None,
         rcut_ewald=None, rcut_hcore=None, unit='Angstrom'):
     '''Create an MM object based on the given coordinates and charges of MM
     particles.
