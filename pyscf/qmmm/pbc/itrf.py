@@ -783,7 +783,7 @@ class QMMMGrad:
         # ---------------------------------------------- #
         # ---------- Ewald k-space gradient ------------ #
         # ---------------------------------------------- #
-        
+
         mesh = cell.mesh
         Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
         absG2 = lib.einsum('gi,gi->g', Gv, Gv)
@@ -858,7 +858,7 @@ class QMMMGrad:
         p = ['einsum_path', (4, 6), (1, 5), (1, 2), (2, 3), (1, 2), (0, 1)]
         qm_ewg_grad += lib.einsum('jab,ga,gb,gx,g,jg,g->jx', qm_quads, Gv, Gv, Gv, zcosGvRqm, sinGvRqm, Gpref, optimize=p) / 3
         qm_ewg_grad -= lib.einsum('jab,ga,gb,gx,g,jg,g->jx', qm_quads, Gv, Gv, Gv, zsinGvRqm, cosGvRqm, Gpref, optimize=p) / 3
-    
+
         logger.timer(self, 'grad_ewald k-space', *cput2)
         logger.timer(self, 'grad_ewald', *cput0)
         if not with_mm:

@@ -130,7 +130,7 @@ class Cell(qmmm.mm_mole.Mole, pbc.gto.Cell):
 
         ew_eta, ew_cut = self.get_ewald_params()
         mesh = self.mesh
-        
+
         logger.debug(self, f"Ewald exponent {ew_eta}")
 
         # TODO Lall should respect ew_rcut
