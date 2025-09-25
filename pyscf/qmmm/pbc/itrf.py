@@ -25,8 +25,6 @@ from pyscf import scf
 from pyscf import grad
 from pyscf.lib import logger
 from pyscf.qmmm.pbc import mm_mole
-from pyscf.qmmm.itrf import _QMMM, _QMMMGrad
-from pyscf import qmmm as qmmm_gas
 
 from scipy.special import erfc, erf
 
@@ -107,8 +105,6 @@ def qmmm_for_scf(method, mm_mol):
 class QMMM:
     __name_mixin__ = 'QMMM'
 
-_QMMM = QMMM
-
 class QMMMSCF(QMMM):
     _keys = {'mm_mol', 's1r', 's1rr', 'mm_ewald_pot', 'qm_ewald_hess', 'e_nuc'}
 
@@ -178,14 +174,14 @@ class QMMMSCF(QMMM):
         r_qm = (mol.atom_coords() - qm_center)[None,:,:] - Ls[:,None,:]
         r_qm = np.einsum('Lix,Lix->Li', r_qm, r_qm)
         assert rcut_hcore**2 < np.min(r_qm), \
-            f"QM image is within rcut_hcore of QM center. " + \
+             "QM image is within rcut_hcore of QM center. " + \
             f"rcut_hcore = {rcut_hcore} >= min(r_qm) = {np.sqrt(np.min(r_qm))}"
         Ls[Ls == np.inf] = 0.0
 
         r_qm = mol.atom_coords() - qm_center
         r_qm = np.einsum('ix,ix->i', r_qm, r_qm)
         assert rcut_hcore**2 > np.max(r_qm), \
-            f"Not all QM atoms are within rcut_hcore of QM center. " + \
+             "Not all QM atoms are within rcut_hcore of QM center. " + \
             f"rcut_hcore = {rcut_hcore} <= max(r_qm) = {np.sqrt(np.max(r_qm))}"
         r_qm = None
 
@@ -219,7 +215,7 @@ class QMMMSCF(QMMM):
                 j3c = df.incore.aux_e2(mol, fakemol, intor=intor,
                                        aosym='s2ij', cintopt=cintopt)
                 v += lib.einsum('xk,k->x', j3c, -charges[i0:i1])
-            if not (type(v) is int):
+            if type(v) is not int:
                 v = lib.unpack_tril(v)
             h1e += v
         elif mm_mol.charge_model == 'point' and len(coords) != 0:
