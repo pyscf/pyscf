@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2025 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -683,7 +683,7 @@ class QMMMGrad:
                 Tijabc -= 8/5 / np.sqrt(np.pi) * lib.einsum('j,ij,ijc,ab->ijabc', eta**5, ekR, R, np.eye(3))
                 return Tija, Tijab, Tijabc
 
-        #------ qm - mm clasiical ewald energy gradient ------#
+        #------ qm - mm classical ewald energy gradient ------#
         all_mm_coords = lib.direct_sum('jx-Lx->Ljx', mm_coords, Lall).reshape(-1,3)
         all_mm_charges = np.hstack([mm_charges] * len(Lall))
         dist2 = lib.direct_sum('jx-x->jx', all_mm_coords, np.mean(qm_coords, axis=0))
@@ -743,7 +743,7 @@ class QMMMGrad:
             mm_ewovrl_grad = np.sum(mm_ewovrl_grad, axis=0)
         all_mm_coords = all_mm_charges = None
 
-        #------ qm - qm clasiical ewald energy gradient ------#
+        #------ qm - qm classical ewald energy gradient ------#
         R = lib.direct_sum('ix-jx->ijx', qm_coords, qm_coords)
         r = np.sqrt(lib.einsum('ijx,ijx->ij', R, R))
         r[r<1e-16] = 1e100
