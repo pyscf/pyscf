@@ -542,6 +542,29 @@ class KnownValues(unittest.TestCase):
         f.kpts = np.random.random((4,3))
         f.check_sanity()
 
+    def test_check_kpts(self):
+        aft_obj = aft.AFTDF(cell)
+        aft_obj.kpts = np.ones(3)
+        ks, is_single_kpt = aft._check_kpts(aft_obj, None)
+        assert ks.ndim == 2
+        assert is_single_kpt
+        ks, is_single_kpt = aft._check_kpts(aft_obj, np.ones((1, 3)))
+        assert ks.ndim == 2
+        assert not is_single_kpt
+        ks, is_single_kpt = aft._check_kpts(aft_obj, np.ones(3))
+        assert ks.ndim == 2
+        assert is_single_kpt
+
+        aft_obj.kpts = np.ones((1, 3))
+        ks, is_single_kpt = aft._check_kpts(aft_obj, None)
+        assert ks.ndim == 2
+        assert not is_single_kpt
+        ks, is_single_kpt = aft._check_kpts(aft_obj, np.ones((1, 3)))
+        assert ks.ndim == 2
+        assert not is_single_kpt
+        ks, is_single_kpt = aft._check_kpts(aft_obj, np.ones(3))
+        assert ks.ndim == 2
+        assert is_single_kpt
 
 if __name__ == '__main__':
     print("Full Tests for aft")
