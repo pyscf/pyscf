@@ -1283,7 +1283,10 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
         x1, rmat = _qr(x1, dot)
         x1 *= rmat.diagonal()[:,None]
         innerprod = (rmat.diagonal().real ** 2).tolist()
-        max_innerprod = max(innerprod)
+        if innerprod:
+            max_innerprod = max(innerprod)
+        else:
+            max_innerprod = 0
     else:
         max_innerprod = dot(x1[0].conj(), x1[0]).real
         innerprod = [max_innerprod]
