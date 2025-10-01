@@ -254,7 +254,7 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
 init_guess_by_chkfile = kuhf.init_guess_by_chkfile
 
 class KROHF(khf.KRHF):
-    '''UHF class with k-point sampling.
+    '''PBC ROHF class with k-point sampling (default: gamma point).
     '''
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
 
@@ -274,7 +274,7 @@ class KROHF(khf.KRHF):
     gen_response = kuhf.gen_response
     to_gpu = lib.to_gpu
 
-    def __init__(self, cell, kpts=np.zeros((1,3)),
+    def __init__(self, cell, kpts=None,
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         khf.KSCF.__init__(self, cell, kpts, exxdiv)
         self.nelec = None

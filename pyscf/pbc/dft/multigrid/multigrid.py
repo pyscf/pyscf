@@ -1795,6 +1795,8 @@ class MultiGridNumInt(lib.StreamObject, LibXCMixin):
         return self
 
     def reset(self, cell=None):
+        if cell is not None:
+            self.cell = cell
         self.tasks = None
         self._rsh_df = {}
         return self

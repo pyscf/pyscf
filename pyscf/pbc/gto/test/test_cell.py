@@ -584,6 +584,89 @@ class KnownValues(unittest.TestCase):
             r1 = cell.atom_coords()
             self.assertAlmostEqual(abs(ref - r1).max(), 0, 12)
 
+    def test_set_geom_(self):
+        BOHR = lib.param.BOHR
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]])
+
+        cl.set_geom_(np.ones((1, 3)), unit='Bohr')
+        self.assertTrue(cl.atom_coords()[0,0] == 1)
+        self.assertTrue(cl.lattice_vectors()[0,0] == 4/BOHR)
+
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]])
+        cl.set_geom_(a=np.eye(3)*5., unit='Bohr')
+        self.assertTrue(cl.atom_coords()[0,2] == 1/BOHR)
+        self.assertTrue(cl.lattice_vectors()[0,0] == 5)
+
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]])
+        cl.set_geom_(unit='Bohr')
+        self.assertTrue(cl.atom_coords()[0,2] == 1/BOHR)
+        self.assertTrue(cl.lattice_vectors()[0,0] == 4/BOHR)
+
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]], unit='AU')
+        cl.set_geom_(np.ones((1, 3)), unit='Ang')
+        self.assertTrue(cl.atom_coords()[0,0] == 1/BOHR)
+        self.assertTrue(cl.lattice_vectors()[0,0] == 4)
+
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]], unit='Bohr')
+        cl.set_geom_(a=np.eye(3)*5., unit='Ang')
+        self.assertTrue(cl.atom_coords()[0,2] == 1)
+        self.assertTrue(cl.lattice_vectors()[0,0] == 5/BOHR)
+
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]], unit='AU')
+        cl.set_geom_(unit='Ang')
+        self.assertTrue(cl.atom_coords()[0,2] == 1)
+        self.assertTrue(cl.lattice_vectors()[0,0] == 4)
+
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]], unit=1.5)
+        cl.set_geom_(np.ones((1, 3)))
+        self.assertTrue(cl.atom_coords()[0,0] == 1/1.5)
+        self.assertTrue(cl.lattice_vectors()[0,0] == 4/1.5)
+
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]], unit=1.5)
+        cl.set_geom_(a=np.eye(3)*3)
+        self.assertTrue(cl.atom_coords()[0,2] == 1/1.5)
+        self.assertTrue(cl.lattice_vectors()[0,0] == 3/1.5)
+
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]], unit=1.5)
+        cl.set_geom_(a=np.eye(3)*5., unit='Ang')
+        self.assertTrue(cl.atom_coords()[0,2] == 1/1.5)
+        self.assertTrue(cl.lattice_vectors()[0,0] == 5/BOHR)
+
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]], unit=1.5)
+        cl.set_geom_(unit='Ang')
+        self.assertTrue(cl.atom_coords()[0,2] == 1/1.5)
+        self.assertTrue(cl.lattice_vectors()[0,0] == 4/1.5)
+
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")
     unittest.main()
