@@ -185,22 +185,27 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
                      level=3, prune=nwchem_prune, **kwargs):
     '''Generate number of radial grids and angular grids for the given molecule.
 
+    Args:
+        atom_grid : dict or
+
     Returns:
         A dict, with the atom symbol for the dict key.  For each atom type,
         the dict value has two items: one is the meshgrid coordinates wrt the
         atom center; the second is the volume of that grid.
     '''
     if isinstance(atom_grid, (list, tuple)):
-        atom_grid = {mol.atom_symbol(ia): atom_grid
-                          for ia in range(mol.natm)}
+        atom_grid = {mol.atom_symbol(ia): atom_grid for ia in range(mol.natm)}
+
+    default = atom_grid.get('default', None)
     atom_grids_tab = {}
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
 
         if symb not in atom_grids_tab:
             chg = gto.charge(symb)
-            if symb in atom_grid:
-                n_rad, n_ang = atom_grid[symb]
+            atom_config = atom_grid.get(symb, default)
+            if atom_config is not None:
+                n_rad, n_ang = atom_config
                 if n_ang not in LEBEDEV_NGRID:
                     if n_ang in LEBEDEV_ORDER:
                         logger.warn(mol, 'n_ang %d for atom %d %s is not '
