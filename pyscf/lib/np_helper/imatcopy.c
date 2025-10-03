@@ -20,8 +20,8 @@
 #include <math.h>
 #include "np_helper.h"
 
-const int TILESIZE = 32;
-const int TILESIZE_CPLX = 16;
+static const int TILESIZE = 32;
+static const int TILESIZE_CPLX = 16;
 
 /*
  * Calculate the largest integer i such that

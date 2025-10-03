@@ -88,6 +88,17 @@ void NPomp_zmul(const size_t m, const size_t n,
                 double complex *b, const size_t b_stride,
                 double complex *out, const size_t out_stride);
 
+void NPomp_dmul_12(const size_t m, const size_t n, const size_t k,
+                   const double *a, const size_t a_stride_0,
+                   const size_t a_stride_1, double *b,
+                   const size_t b_stride, double *c,
+                   const size_t c_stride_0, const size_t c_stride_1);
+void NPomp_zmul_12(const size_t m, const size_t n, const size_t k,
+                   const double complex *a, const size_t a_stride_0,
+                   const size_t a_stride_1, double complex *b,
+                   const size_t b_stride, double complex *c,
+                   const size_t c_stride_0, const size_t c_stride_1);
+
 void NPdgemm(const char trans_a, const char trans_b,
              const int m, const int n, const int k,
              const int lda, const int ldb, const int ldc,

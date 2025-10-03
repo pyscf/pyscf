@@ -290,6 +290,30 @@ class KnownValues(unittest.TestCase):
         lib.entrywise_mul(a, b, out=b)
         self.assertTrue(numpy.allclose(prod, b))
 
+    def test_broadcast_mul(self):
+        a = numpy.random.random((3,101,39))
+        b = numpy.random.random((101,39))
+        testval = lib.broadcast_mul(a, b)
+        self.assertTrue(numpy.allclose(testval, a * b[None, ...]))
+
+        a = numpy.random.random((3,101,39))
+        b = numpy.random.random((101,39))
+        c = numpy.random.random((3,101,39))
+        refval = a * b[None, ...] + c
+        testval = lib.broadcast_mul(a, b, out=c)
+        self.assertTrue(numpy.allclose(testval, refval))
+
+        a = numpy.random.random((3,101,39)) + 1j * numpy.random.random((3,101,39))
+        b = numpy.random.random((101,39)) + 1j * numpy.random.random((101,39))
+        testval = lib.broadcast_mul(a, b)
+        self.assertTrue(numpy.allclose(testval, a * b[None, ...]))
+
+        a = numpy.random.random((3,101,39)) + 1j * numpy.random.random((3,101,39))
+        b = numpy.random.random((101,39)) + 1j * numpy.random.random((101,39))
+        c = numpy.random.random((3,101,39)) + 1j * numpy.random.random((3,101,39))
+        refval = a * b[None, ...] + c
+        testval = lib.broadcast_mul(a, b, out=c)
+        self.assertTrue(numpy.allclose(testval, refval))
 if __name__ == "__main__":
     print("Full Tests for numpy_helper")
     unittest.main()
