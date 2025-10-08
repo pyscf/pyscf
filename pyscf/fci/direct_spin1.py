@@ -1089,7 +1089,7 @@ class FCIvector(numpy.ndarray):
     '''An 2D np array for FCI coefficients'''
 
     # Special cases for ndarray when the array was modified (through ufunc)
-    def __array_wrap__(self, out):
+    def __array_wrap__(self, out, context=None, return_scalar=False):
         if out.shape == self.shape:
             return out
         elif out.shape == ():  # if ufunc returns a scalar

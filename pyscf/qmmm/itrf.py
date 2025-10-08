@@ -21,7 +21,7 @@ QM/MM helper functions that modify the QM methods.
 '''
 
 import numpy
-import scipy.special
+from scipy.special import erf
 import pyscf
 from pyscf import lib
 from pyscf import gto
@@ -31,8 +31,6 @@ from pyscf import mcscf
 from pyscf import grad
 from pyscf.lib import logger
 from pyscf.qmmm import mm_mole
-
-from scipy.special import erf
 
 
 def add_mm_charges(scf_method, atoms_or_coords, charges, radii=None, unit=None):
