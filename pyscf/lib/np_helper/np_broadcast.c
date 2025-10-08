@@ -26,9 +26,9 @@ static const int BLOCKSIZE_CPLX = 16;
  * where A and C are 3D arrays and B is a 2D array.
  */
 void NPomp_dmul_12(const size_t m, const size_t n, const size_t k,
-                   const double *__restrict a, const size_t a_stride_0,
-                   const size_t a_stride_1, double *__restrict b,
-                   const size_t b_stride, double *__restrict c,
+                   const double *__restrict__ a, const size_t a_stride_0,
+                   const size_t a_stride_1, double *__restrict__ b,
+                   const size_t b_stride, double *__restrict__ c,
                    const size_t c_stride_0, const size_t c_stride_1) {
   const size_t kclean = k - k % BLOCKSIZE;
   const size_t k_rem = k - kclean;
@@ -61,9 +61,9 @@ void NPomp_dmul_12(const size_t m, const size_t n, const size_t k,
  * where A and C are 3D arrays and B is a 2D array.
  */
 void NPomp_zmul_12(const size_t m, const size_t n, const size_t k,
-                   const double complex *__restrict a, const size_t a_stride_0,
-                   const size_t a_stride_1, double complex *__restrict b,
-                   const size_t b_stride, double complex *__restrict c,
+                   const double complex *__restrict__ a, const size_t a_stride_0,
+                   const size_t a_stride_1, double complex *__restrict__ b,
+                   const size_t b_stride, double complex *__restrict__ c,
                    const size_t c_stride_0, const size_t c_stride_1) {
   const size_t kclean = k - k % BLOCKSIZE_CPLX;
   const size_t k_rem = k - kclean;
