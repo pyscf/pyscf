@@ -28,7 +28,6 @@ from pyscf.lib import logger
 
 def get_cds(smdobj):
     mol = smdobj.mol.copy()
-    solvent = smdobj.solvent
     smdobj_tmp = smdobj.copy()
     def smd_grad_scanner(mol):
         smdobj_tmp.reset(mol)
