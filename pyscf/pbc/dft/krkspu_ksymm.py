@@ -55,6 +55,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 @lib.with_doc(krkspu.KRKSpU.__doc__)
 class KsymAdaptedKRKSpU(krks_ksymm.KRKS):
 
+    _keys = {"U_idx", "U_val", "C_ao_lo", "U_lab", 'minao_ref', 'alpha'}
+
     get_veff = get_veff
     energy_elec = krkspu.energy_elec
     to_hf = lib.invalid_method('to_hf')
@@ -62,7 +64,7 @@ class KsymAdaptedKRKSpU(krks_ksymm.KRKS):
     @lib.with_doc(krkspu.KRKSpU.__init__.__doc__)
     def __init__(self, cell, kpts=libkpts.KPoints(), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'),
-                 U_idx=[], U_val=[], C_ao_lo='minao', minao_ref='MINAO', **kwargs):
+                 U_idx=[], U_val=[], C_ao_lo=None, minao_ref='MINAO', **kwargs):
         krkspu.KRKSpU.__init__(self, cell, kpts=kpts, xc=xc, exxdiv=exxdiv,
                                U_idx=U_idx, U_val=U_val, C_ao_lo=C_ao_lo,
                                minao_ref=minao_ref, **kwargs)

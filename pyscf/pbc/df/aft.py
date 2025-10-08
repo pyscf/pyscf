@@ -29,6 +29,7 @@ from pyscf.pbc.gto import pseudo, error_for_ke_cutoff
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.gto.pseudo import pp_int
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
+from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import aft_ao2mo
@@ -170,7 +171,10 @@ def _check_kpts(mydf, kpts):
         kpts = np.zeros((1, 3))
         is_single_kpt = True
     else:
-        kpts = np.asarray(kpts)
+        if isinstance(kpts, KPoints):
+            raise NotImplementedError('DF for symmetry-adapted Kpoints is not supported')
+        else:
+            kpts = np.asarray(kpts)
         is_single_kpt = kpts.ndim == 1
     kpts = kpts.reshape(-1,3)
     return kpts, is_single_kpt
@@ -182,9 +186,16 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e', aosym='s2', comp=1):
 def get_pp(mydf, kpts=None):
     '''Get the periodic pseudopotential nuc-el AO matrix, with G=0 removed.
 
-    Kwargs:
-        mesh: custom mesh grids. By default mesh is determined by the
-        function _guess_eta from module pbc.df.gdf_builder.
+    The output of this function depends on the input `kpts`. Generally, the
+    output is a (Nk, Nao, Nao) array, where Nk is the number of k-points in the
+    provided `kpts`. If `kpts` is a (3,) array, corresponding to a single
+    k-point, the output will be a (Nao, Nao) matrix. If the optional input
+    `kpts` is not specified, this function will read the AFTDF.kpts for the
+    k-mesh and return a (Nk, Nao, Nao) array.
+
+    Note: This API has changed since PySCF-2.10. In PySCF 2.9 (or older), if
+    `kpts` is not specified, this funciton may return a (Nao, Nao) matrix for
+    the gamma point and a (Nk, Nao, Nao) array for other k-points.
     '''
     t0 = (logger.process_clock(), logger.perf_counter())
     kpts, is_single_kpt = _check_kpts(mydf, kpts)
@@ -205,8 +216,16 @@ def get_pp(mydf, kpts=None):
 def get_nuc(mydf, kpts=None):
     '''Get the periodic nuc-el AO matrix, with G=0 removed.
 
-    Kwargs:
-        function _guess_eta from module pbc.df.gdf_builder.
+    The output of this function depends on the input `kpts`. Generally, the
+    output is a (Nk, Nao, Nao) array, where Nk is the number of k-points in the
+    provided `kpts`. If `kpts` is a (3,) array, corresponding to a single
+    k-point, the output will be a (Nao, Nao) matrix. If the optional input
+    `kpts` is not specified, this function will read the AFTDF.kpts for the
+    k-mesh and return a (Nk, Nao, Nao) array.
+
+    Note: This API has changed since PySCF-2.10. In PySCF 2.9 (or older), if
+    `kpts` is not specified, this funciton may return a (Nao, Nao) matrix for
+    the gamma point and a (Nk, Nao, Nao) array for other k-points.
     '''
     t0 = (logger.process_clock(), logger.perf_counter())
     nuc = _get_pp_loc_part1(mydf, kpts, with_pseudo=False)
@@ -485,9 +504,9 @@ class AFTDFMixin:
             mesh = self.mesh
         if kpts is None:
             assert (is_zero(q))
-            kpts = self.kpts
-        kpts = np.asarray(kpts)
-        nkpts = len(kpts)
+            nkpts = 1
+        else:
+            nkpts = len(kpts)
 
         ao_loc = cell.ao_loc_nr()
         Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
@@ -507,7 +526,10 @@ class AFTDFMixin:
             nij = ni*nj
 
         if bvk_kmesh is None:
-            bvk_kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
+            if kpts is None:
+                bvk_kmesh = [1, 1, 1]
+            else:
+                bvk_kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
         #TODO:
         # ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh)
         # rs_cell = ft_ao._RangeSeparatedCell.from_cell(cell, ke_cutoff, ft_ao.RCUT_THRESHOLD)
@@ -587,11 +609,17 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
         self._rsh_df = {}  # Range separated Coulomb DF objects
 
     def dump_flags(self, verbose=None):
-        logger.info(self, '\n')
-        logger.info(self, '******** %s ********', self.__class__)
-        logger.info(self, 'mesh = %s (%d PWs)', self.mesh, np.prod(self.mesh))
-        logger.info(self, 'len(kpts) = %d', len(self.kpts))
-        logger.debug1(self, '    kpts = %s', self.kpts)
+        log = logger.new_logger(self, verbose)
+        if log.verbose < logger.INFO:
+            return self
+        log.info('\n')
+        log.info('******** %s ********', self.__class__)
+        log.info('mesh = %s (%d PWs)', self.mesh, np.prod(self.mesh))
+        kpts = self.kpts
+        if isinstance(kpts, KPoints):
+            kpts = kpts.kpts
+        log.info('len(kpts) = %d', len(kpts))
+        log.debug1('    kpts = %s', kpts)
         return self
 
     def reset(self, cell=None):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2025 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,19 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-'''Errors and exceptions'''
-
-class BasisNotFoundError(RuntimeError):
-    pass
-
-class PointGroupSymmetryError(RuntimeError):
-    pass
-
-class WfnSymmetryError(RuntimeError):
-    pass
-
-class LinearDependencyError(RuntimeError):
-    pass
-
-class DeprecationWarning(UserWarning):
-    pass
+"""
+QMMM with PBC
+"""
+from pyscf.qmmm.pbc import mm_mole, itrf
