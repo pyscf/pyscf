@@ -21,6 +21,7 @@ QM/MM helper functions that modify the QM methods.
 '''
 
 import numpy
+from scipy.special import erf
 import pyscf
 from pyscf import lib
 from pyscf import gto
@@ -30,8 +31,6 @@ from pyscf import mcscf
 from pyscf import grad
 from pyscf.lib import logger
 from pyscf.qmmm import mm_mole
-
-from scipy.special import erf
 
 
 def add_mm_charges(scf_method, atoms_or_coords, charges, radii=None, unit=None):
@@ -180,18 +179,23 @@ class QMMMSCF(QMMM):
         return h1e
 
     def energy_nuc(self):
-        # interactions between QM nuclei and MM particles
-        nuc = self.mol.energy_nuc()
-        coords = self.mm_mol.atom_coords()
-        charges = self.mm_mol.atom_charges()
-        if self.mm_mol.charge_model == 'gaussian':
-            expnts = numpy.sqrt(self.mm_mol.get_zetas())
-        for j in range(self.mol.natm):
-            q2, r2 = self.mol.atom_charge(j), self.mol.atom_coord(j)
+        '''interactions between QM nuclei and MM particles'''
+        mol = self.mol
+        mm_mol = self.mm_mol
+        nuc = mol.energy_nuc()
+        coords = mm_mol.atom_coords()
+        charges = mm_mol.atom_charges()
+        if mm_mol.charge_model == 'gaussian':
+            expnts = numpy.sqrt(mm_mol.get_zetas())
+        for j in range(mol.natm):
+            q2, r2 = mol.atom_charge(j), mol.atom_coord(j)
             r = lib.norm(r2-coords, axis=1)
-            if self.mm_mol.charge_model != 'gaussian':
+            if mm_mol.charge_model != 'gaussian':
                 nuc += q2*(charges/r).sum()
             else:
+                # * MM paritcles may be defined as a spreaded distribution. The
+                # charge distribution may overlap to QM atoms and slightly affect
+                # the interaction.
                 nuc += q2*(charges*erf(expnts*r)/r).sum()
         return nuc
 
@@ -355,7 +359,7 @@ class QMMMGrad:
 
         coords = mm_mol.atom_coords()
         charges = mm_mol.atom_charges()
-        expnts = mm_mol.get_zetas()
+        expnts = mm_mol.get_zetas() + numpy.zeros_like(charges)
 
         intor = 'int3c2e_ip2'
         nao = mol.nao
@@ -376,21 +380,24 @@ class QMMMGrad:
     contract_hcore_mm = grad_hcore_mm # for backward compatibility
 
     def grad_nuc(self, mol=None, atmlst=None):
+        '''Nuclear gradients of the QM-MM nuclear energy wrt QM atoms
+        '''
         if mol is None: mol = self.mol
-        coords = self.base.mm_mol.atom_coords()
-        charges = self.base.mm_mol.atom_charges()
-        if self.base.mm_mol.charge_model == 'gaussian':
-            expnts = self.base.mm_mol.get_zetas()
+        mm_mol = self.base.mm_mol
+        coords = mm_mol.atom_coords()
+        charges = mm_mol.atom_charges()
+        if mm_mol.charge_model == 'gaussian':
+            expnts = mm_mol.get_zetas()
             radii = 1 / numpy.sqrt(expnts)
 
         g_qm = super().grad_nuc(mol, atmlst)
-# nuclei lattice interaction
+        # nuclei lattice interaction
         g_mm = numpy.empty((mol.natm,3))
         for i in range(mol.natm):
             q1 = mol.atom_charge(i)
             r1 = mol.atom_coord(i)
             r = lib.norm(r1-coords, axis=1)
-            if self.base.mm_mol.charge_model != 'gaussian':
+            if mm_mol.charge_model != 'gaussian':
                 coulkern = 1/r**3
             else:
                 coulkern = erf(r/radii)/r - 2/(numpy.sqrt(numpy.pi)*radii) * numpy.exp(-expnts*r**2)
