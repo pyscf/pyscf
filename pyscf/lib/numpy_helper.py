@@ -1299,6 +1299,58 @@ def entrywise_mul(a, b, out=None):
        ctypes.c_size_t(ld_out))
     return out
 
+def broadcast_mul(a, b, out=None):
+    """Broadcasted entrywise multiplication.
+    out[:, :, :] += a[:, :, :] * b[None, :, :]
+
+    Parameters
+    ----------
+    a : ndarray, C order, 3D.
+    b : ndarray, C order, 2D.
+    out : ndarray, optional
+        Output matrix. A new one is allocated and zeroed if not provided.
+
+    Returns
+    -------
+    ndarray
+        a * b
+    """
+    assert a.ndim == 3 and b.ndim == 2
+    assert a.shape[1:] == b.shape and a.dtype == b.dtype
+    a_strides = [s//a.itemsize for s in a.strides]
+    assert a_strides[2] == 1
+
+    if out is None:
+        out = zeros(a.shape, a.dtype, order='C')
+    else:
+        assert out.shape == a.shape and out.dtype == a.dtype
+
+    out_strides = [s//out.itemsize for s in out.strides]
+    assert out_strides[2] == 1
+
+    b_strides = [s//b.itemsize for s in b.strides]
+    assert b_strides[1] == 1
+    ldb = b_strides[0]
+
+    if a.dtype == numpy.double:
+        fn = _np_helper.NPomp_dmul_12
+    elif a.dtype == numpy.complex128:
+        fn = _np_helper.NPomp_zmul_12
+    else:
+        raise NotImplementedError
+    fn(ctypes.c_size_t(a.shape[0]),
+       ctypes.c_size_t(a.shape[1]),
+       ctypes.c_size_t(a.shape[2]),
+       a.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_size_t(a_strides[0]),
+       ctypes.c_size_t(a_strides[1]),
+       b.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_size_t(ldb),
+       out.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_size_t(out_strides[0]),
+       ctypes.c_size_t(out_strides[1]))
+    return out
+
 def ndarray_pointer_2d(array):
     '''Return an array that contains the addresses of the first element in each
     row of the input 2d array.
