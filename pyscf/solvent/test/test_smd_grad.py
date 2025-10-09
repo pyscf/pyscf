@@ -29,7 +29,7 @@ H       0.7570000000     0.0000000000    -0.4696000000
     '''
     mol.basis = 'sto3g'
     mol.output = '/dev/null'
-    mol.build(verbose=0)
+    mol.build(verbose=6)
 
 def tearDownModule():
     global mol

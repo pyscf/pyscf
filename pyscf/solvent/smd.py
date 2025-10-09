@@ -360,6 +360,7 @@ class SMD(pcm.PCM):
         fakemol_nuc = gto.fakemol_for_charges(atom_coords)
         v_ng = gto.mole.intor_cross(int2c2e, fakemol_nuc, fakemol)
         self.v_grids_n = np.dot(atom_charges, v_ng)
+        return self
 
     @property
     def solvent(self):
@@ -427,7 +428,7 @@ class SMD(pcm.PCM):
         de_solvent+= grad_nuc(self, dm)
         #de_cds     = get_cds(self.base.with_solvent)
         de_cds     = get_cds_legacy(self)[1]
-        logger.info(self, 'Cavitation, Dispersion and Solvent structure contribution %g', de_cds)
+        logger.info(self, 'Cavitation, Dispersion and Solvent structure contribution %s', de_cds)
         return de_solvent + de_cds
 
     def Hessian(self, hess_method):
@@ -441,8 +442,8 @@ class SMD(pcm.PCM):
         de_solvent  =    analytical_hess_nuc(self, dm, verbose=self.verbose)
         de_solvent +=     analytical_hess_qv(self, dm, verbose=self.verbose)
         de_solvent += analytical_hess_solver(self, dm, verbose=self.verbose)
-        de_cds = get_cds(self.base.with_solvent)
-        logger.info('Cavitation, Dispersion and Solvent structure contribution %g', de_cds)
+        de_cds = get_cds(self)
+        logger.info(self, 'Cavitation, Dispersion and Solvent structure contribution %s', de_cds)
         return de_solvent + de_cds
 
     def reset(self, mol=None):
