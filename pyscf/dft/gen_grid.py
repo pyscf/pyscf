@@ -195,11 +195,11 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
             configurations. atom_grid can be provided as a tuple (n_rad, n_ang).
             In this case, the same grid setting will apply apply to all atoms.
         radi_method : function
-            The method to generate radial grids. Supported functions include the 
+            The method to generate radial grids. Supported functions include the
             treutler_ahlrichs, delley, mura_knowles, gauss_chebeshev in the
             `dft.radi` module.
         level : integer
-            Predefined configurations for radial and angular grids based on 
+            Predefined configurations for radial and angular grids based on
             the period of the elements. The number of radial and angular grids
             for each level can be found in dft.gen_grid.RAD_GRIDS and
             dft.gen_grid.ANG_ORDER.
