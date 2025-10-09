@@ -23,6 +23,8 @@ from pyscf.pbc import gto as pgto
 from pyscf.pbc import scf as pscf
 from pyscf.pbc.df import df, aug_etb, FFTDF, mdf
 from pyscf.pbc.df import gdf_builder
+from pyscf.pbc.tools import k2gamma
+from pyscf.pbc.lib.kpts_helper import get_kconserv, kk_adapted_iter
 #from mpi4pyscf.pbc.df import df
 pyscf.pbc.DEBUG = False
 
@@ -283,6 +285,28 @@ Li  P
 
         kmf = cell.KRKS(kpts=kpts, xc='wb97').density_fit().run()
         assert abs(kmf.e_tot - -0.678851816639354) < 1e-8
+
+    def test_gdf_kpts_vs_fftdf(self):
+        np.random.seed(3)
+        cell = pgto.Cell()
+        cell.a = np.eye(3)*3 + np.random.rand(3,3)*.2
+        cell.atom = '''He    3.    2.       3.
+                       He    1.    1.       1.'''
+        cell.basis = [[0, [.5, 1]], [1, [.7, 1]]],
+        cell.build(0,0)
+        kmesh = [3,1,1]
+        kpts = cell.make_kpts(kmesh)
+        kmdf = df.DF(cell, kpts=kpts)
+        kmdf.auxbasis = [[0, [1, 1]], [0, [1.4, 1]], [1, [1.2, 1]], [2, [1.4, 1]]]
+        kcons = get_kconserv(cell, kpts)
+        n = len(kpts)
+        for i in range(n):
+            for j in range(n):
+                for k in range(n):
+                    l = kcons[i,j,k]
+                    dat = kmdf.get_eri(kpts[[i,j,k,l]])
+                    ref = FFTDF(cell, kpts).get_eri(kpts[[i,j,k,l]])
+                    self.assertAlmostEqual(abs(dat-ref).max(), 0, 2)
 
 if __name__ == '__main__':
     print("Full Tests for df")

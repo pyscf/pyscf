@@ -98,11 +98,11 @@ def get_jk(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
     return vj, vk
 
 class GHF(pbchf.SCF):
-    '''GHF class for PBCs.
+    '''GHF class for PBCs at a single point (default: gamma point).
     '''
     _keys = {'with_soc'}
 
-    def __init__(self, cell, kpt=np.zeros(3),
+    def __init__(self, cell, kpt=None,
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         pbchf.SCF.__init__(self, cell, kpt, exxdiv)
         self.with_soc = None

@@ -248,7 +248,7 @@ def _get_jk(mf, cell, dm, hermi, kpts, kpts_band=None, with_j=True, kshift=0):
     return vj, vk
 
 class KRKS(rks.KohnShamDFT, khf.KRHF):
-    '''RKS class adapted for PBCs with k-point sampling.
+    '''RKS class adapted for PBCs with k-point sampling (default: gamma point).
     '''
 
     get_veff = get_veff
@@ -256,7 +256,7 @@ class KRKS(rks.KohnShamDFT, khf.KRHF):
     get_rho = get_rho
     gen_response = gen_response
 
-    def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
+    def __init__(self, cell, kpts=None, xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         khf.KRHF.__init__(self, cell, kpts, exxdiv=exxdiv)
         rks.KohnShamDFT.__init__(self, xc)

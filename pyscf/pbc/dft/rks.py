@@ -293,6 +293,7 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
         pbchf.SCF.reset(self, cell)
         self.grids.reset(cell)
         self.nlcgrids.reset(cell)
+        self._numint.reset(cell)
         return self
 
     def build(self, cell=None):
@@ -398,7 +399,7 @@ pbchf.KohnShamDFT = KohnShamDFT
 
 
 class RKS(KohnShamDFT, pbchf.RHF):
-    '''RKS class adapted for PBCs.
+    '''PBC-RKS at a single point (default: gamma point).
 
     This is a literal duplication of the molecular RKS class with some `mol`
     variables replaced by `cell`.
@@ -410,7 +411,7 @@ class RKS(KohnShamDFT, pbchf.RHF):
     energy_elec = mol_ks.energy_elec
     gen_response = gen_response
 
-    def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN',
+    def __init__(self, cell, kpt=None, xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         pbchf.RHF.__init__(self, cell, kpt, exxdiv=exxdiv)
         KohnShamDFT.__init__(self, xc)
