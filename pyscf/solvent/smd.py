@@ -422,12 +422,12 @@ class SMD(pcm.PCM):
         '''
         from pyscf.solvent.grad.pcm import grad_qv, grad_nuc
         from pyscf.solvent.grad.smd import grad_solver, get_cds
-        de_solvent = grad_qv(self.base.with_solvent, dm)
-        de_solvent+= grad_solver(self.base.with_solvent, dm)
-        de_solvent+= grad_nuc(self.base.with_solvent, dm)
+        de_solvent = grad_qv(self, dm)
+        de_solvent+= grad_solver(self, dm)
+        de_solvent+= grad_nuc(self, dm)
         #de_cds     = get_cds(self.base.with_solvent)
-        de_cds     = get_cds_legacy(self.base.with_solvent)[1]
-        logger.info('Cavitation, Dispersion and Solvent structure contribution %g', de_cds)
+        de_cds     = get_cds_legacy(self)[1]
+        logger.info(self, 'Cavitation, Dispersion and Solvent structure contribution %g', de_cds)
         return de_solvent + de_cds
 
     def Hessian(self, hess_method):

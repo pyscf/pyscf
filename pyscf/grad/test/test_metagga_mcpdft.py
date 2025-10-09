@@ -120,7 +120,6 @@ class KnownValues(unittest.TestCase):
                 de = mc.kernel(state=state)[1, 0] / BOHR
                 self.assertAlmostEqual(de, DE_REF[state], 5)
 
-    @unittest.skip("MC23 fnal requires PySCF-Forge dft2 libxc interface")
     def test_grad_lih_ssmc2322_sto3g(self):
         mc = diatomic("Li", "H", 0.8, "MC23", "STO-3G", 2, 2, 1, grids_level=1)
         de = mc.kernel()[1, 0] / BOHR
@@ -132,7 +131,6 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(de, DE_REF, 5)
 
-    @unittest.skip("MC23 fnal requires PySCF-Forge dft2 libxc interface")
     def test_grad_lih_sa2mc2322_sto3g(self):
         mc = diatomic("Li", "H", 0.8, "MC23", "STO-3G", 2, 2, 2, grids_level=1)
 
@@ -146,7 +144,6 @@ class KnownValues(unittest.TestCase):
                 de = mc.kernel(state=state)[1, 0] / BOHR
                 self.assertAlmostEqual(de, DE_REF[state], 5)
 
-    @unittest.skip("MC23 fnal requires PySCF-Forge dft2 libxc interface")
     def test_grad_lih_sa2mc2322_sto3g_df(self):
         mc = diatomic(
             "Li", "H", 0.8, "MC23", "STO-3G", 2, 2, 2, grids_level=1, density_fit=df

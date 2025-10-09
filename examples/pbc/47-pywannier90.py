@@ -18,7 +18,6 @@ cell.atom = [['Si',[0.0,0.0,0.0]], ['Si',[1.35775, 1.35775, 1.35775]]]
 cell.a = [[0.0, 2.7155, 2.7155], [2.7155, 0.0, 2.7155], [2.7155, 2.7155, 0.0]]
 cell.basis = 'gth-dzv'
 cell.pseudo = 'gth-pade'
-cell.exp_to_discard = 0.1
 cell.build()
 
 

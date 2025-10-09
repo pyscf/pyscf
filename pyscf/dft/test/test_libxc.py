@@ -13,6 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# This file is adapted from `dft/test/test_libxc.py` of the PySCF core module
+# commit 25eaa9572977b903de24d5c11ad345cecd744728
+
 import os
 import ctypes
 import unittest
@@ -179,18 +182,17 @@ class KnownValues(unittest.TestCase):
         self.assertTrue (dft.libxc.is_nlc(('402', 'b97mv')))
 
     def test_libxc_cam_beta(self):
-        rsh_tmp = (ctypes.c_double*3)()
-        dft.libxc._itrf.LIBXC_rsh_coeff(1, rsh_tmp)
+        rsh_tmp = dft.libxc.rsh_coeff(1)
         beta = rsh_tmp[2]
         self.assertEqual(beta, 0)
 
-        dft.libxc._itrf.LIBXC_rsh_coeff(433, rsh_tmp)
-        dft.libxc._itrf.LIBXC_rsh_coeff(1, rsh_tmp)
+        rsh_tmp = dft.libxc.rsh_coeff(433)
+        rsh_tmp = dft.libxc.rsh_coeff(1)
         beta = rsh_tmp[2]
         self.assertEqual(beta, 0)
 
-        dft.libxc._itrf.LIBXC_is_hybrid(1)
-        dft.libxc._itrf.LIBXC_rsh_coeff(1, rsh_tmp)
+        dft.libxc.is_hybrid_xc(1)
+        rsh_tmp = dft.libxc.rsh_coeff(1)
         beta = rsh_tmp[2]
         self.assertEqual(beta, 0)
 
@@ -444,6 +446,68 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(parse_dft('b3lyp-d3zerom'), ('b3lyp', '', 'd3zerom'))
         self.assertEqual(parse_dft('wb97x-d3bj'), ('wb97x-v', False, 'd3bj'))
         self.assertEqual(parse_dft('wb97x-d3zero2b'), ('wb97x', '', 'd3zero2b'))
+
+    def test_set_param(self):
+        XC_ID_B97_2 = 410
+
+        B97_2_ref = dft.libxc.eval_xc('B97-2', rho, 0, deriv=2)[:3]
+
+        param_b97_1 = numpy.array([0.789518, 0.573805, 0.660975, 0.0, 0.0,
+                                   0.0820011, 2.71681, -2.87103, 0.0, 0.0,
+                                   0.955689, 0.788552, -5.47869, 0.0, 0.0,
+                                   0.21
+        ])
+
+        param_b97_3 = numpy.array([0.7334648, 0.292527, 3.338789, -10.51158, 10.60907,
+                                   0.5623649, -1.32298, 6.359191, -7.464002, 1.827082,
+                                   1.13383, -2.811967, 7.431302, -1.969342, -11.74423,
+                                   2.692880E-01
+        ])
+
+        e1, v1, f1 = dft.libxc.eval_xc('B97-1', rho, 0, deriv=2)[:3]
+
+        e3, v3, f3 = dft.libxc.eval_xc('B97-3', rho, 0, deriv=2)[:3]
+
+        dft.libxc.register_custom_functional_('myfunc1', 'B97-2',
+                                              ext_params={XC_ID_B97_2: param_b97_1})
+        self.assertAlmostEqual(dft.libxc.hybrid_coeff('myfunc1'), 0.21, 10)
+        e, v, f = dft.libxc.eval_xc('myfunc1', rho, 0, deriv=2)[:3]
+        self.assertTrue(numpy.allclose(e, e1, 1e-7))
+        self.assertTrue(numpy.allclose(v, v1, 1e-7))
+        self.assertTrue(numpy.allclose(f, f1, 1e-7))
+
+        dft.libxc.register_custom_functional_('myfunc2', 'B97-2',
+                                              ext_params={XC_ID_B97_2: param_b97_3})
+        self.assertAlmostEqual(dft.libxc.hybrid_coeff('myfunc2'), 2.692880E-01, 10)
+        e, v, f = dft.libxc.eval_xc('myfunc2', rho, 0, deriv=2)[:3]
+        self.assertTrue(numpy.allclose(e, e3, 1e-7))
+        self.assertTrue(numpy.allclose(v, v3, 1e-7))
+        self.assertTrue(numpy.allclose(f, f3, 1e-7))
+
+        dft.libxc.update_custom_functional_('myfunc1',
+                                            ext_params={XC_ID_B97_2: param_b97_3})
+        self.assertAlmostEqual(dft.libxc.hybrid_coeff('myfunc1'), 2.692880E-01, 10)
+        e, v, f = dft.libxc.eval_xc('myfunc1', rho, 0, deriv=2)[:3]
+        self.assertTrue(numpy.allclose(e, e3, 1e-7))
+        self.assertTrue(numpy.allclose(v, v3, 1e-7))
+        self.assertTrue(numpy.allclose(f, f3, 1e-7))
+
+        self.assertEqual(dft.libxc.xc_type('myfunc1'), 'GGA')
+
+        dft.libxc.unregister_custom_functional_('myfunc1')
+        dft.libxc.unregister_custom_functional_('myfunc2')
+        self.assertRaises(KeyError, dft.libxc.xc_type, 'myfunc1')
+        self.assertRaises(KeyError, dft.libxc.xc_type, 'myfunc2')
+
+        # Ensure original xc functionals after unregister_custom_functional_
+        e_ref, v_ref, f_ref = B97_2_ref
+        e, v, f = dft.libxc.eval_xc('B97-2', rho, 0, deriv=2)[:3]
+        self.assertAlmostEqual(abs(e    / e_ref    - 1).max(), 0, 14)
+        self.assertAlmostEqual(abs(v[0] / v_ref[0] - 1).max(), 0, 14)
+        self.assertAlmostEqual(abs(v[1] / v_ref[1] - 1).max(), 0, 14)
+        self.assertAlmostEqual(abs(f[0] / f_ref[0] - 1).max(), 0, 14)
+        self.assertAlmostEqual(abs(f[1] / f_ref[1] - 1).max(), 0, 14)
+        self.assertAlmostEqual(abs(f[2] / f_ref[2] - 1).max(), 0, 14)
 
 if __name__ == "__main__":
     print("Test libxc")

@@ -229,6 +229,8 @@ Keyword argument "init_dm" is replaced by "dm0"''')
             scf_conv = mf.check_convergence(locals())
         elif abs(e_tot-last_hf_e) < conv_tol or norm_gorb < conv_tol_grad:
             scf_conv = True
+        else:
+            scf_conv = False
         logger.info(mf, 'Extra cycle  E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
                     e_tot, e_tot-last_hf_e, norm_gorb, norm_ddm)
         if dump_chk and mf.chkfile:
@@ -2196,6 +2198,10 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
 
     def nuc_grad_method(self):  # pragma: no cover
         '''Hook to create object for analytical nuclear gradients.'''
+        return self.Gradients()
+
+    def Gradients(self):  # pragma: no cover
+        '''Hook to create object for analytical nuclear gradients.'''
         raise NotImplementedError
 
     def update_(self, chkfile=None):
@@ -2484,26 +2490,10 @@ def _hf1e_scf(mf, *args):
     mf.mo_energy, mf.mo_coeff = mf.eig(h1e, s1e)
     mf.mo_occ = mf.get_occ(mf.mo_energy, mf.mo_coeff)
     mf.e_tot = mf.mo_energy[mf.mo_occ>0][0].real + mf.mol.energy_nuc()
+    if mf.chkfile:
+        mf.dump_chk(mf.chkfile)
     mf._finalize()
     return mf.e_tot
 
 
 del (WITH_META_LOWDIN, PRE_ORTH_METHOD)
-
-
-if __name__ == '__main__':
-    from pyscf import scf
-    mol = gto.Mole()
-    mol.verbose = 5
-    mol.output = None
-
-    mol.atom = [['He', (0, 0, 0)], ]
-    mol.basis = 'ccpvdz'
-    mol.build(0, 0)
-
-##############
-# SCF result
-    method = scf.RHF(mol).x2c().density_fit().newton()
-    method.init_guess = '1e'
-    energy = method.scf()
-    print(energy)

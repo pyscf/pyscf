@@ -443,7 +443,11 @@ def get_jk(mydf, dm, hermi=1, kpt=np.zeros(3), kpts_band=None,
         The function returns one J and one K matrix, corresponding to the input
         density matrix (both order and shape).
     '''
-    dm = np.asarray(dm, order='C')
+    if getattr(dm, "mo_coeff", None) is not None:
+        dm = lib.tag_array(np.asarray(dm, order='C'), mo_coeff=dm.mo_coeff,
+                           mo_occ=dm.mo_occ)
+    else:
+        dm = np.asarray(dm, order='C')
     vj = vk = None
     if with_j:
         vj = get_j(mydf, dm, hermi, kpt, kpts_band)
@@ -508,9 +512,17 @@ def get_k(mydf, dm, hermi=1, kpt=np.zeros(3), kpts_band=None, exxdiv=None):
         The function returns one J and one K matrix, corresponding to the input
         density matrix (both order and shape).
     '''
+    if getattr(dm, "mo_coeff", None) is not None:
+        mo_coeff = dm.mo_coeff
+        mo_occ = dm.mo_occ
+    else:
+        mo_coeff = None
+        mo_occ = None
+
     dm = np.asarray(dm, order='C')
     nao = dm.shape[-1]
     dm_kpts = dm.reshape(-1,1,nao,nao)
+    dm_kpts = lib.tag_array(dm_kpts, mo_coeff=mo_coeff, mo_occ=mo_occ)
     vk = get_k_kpts(mydf, dm_kpts, hermi, kpt.reshape(1,3), kpts_band, exxdiv)
     if kpts_band is None:
         vk = vk[:,0,:,:]

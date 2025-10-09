@@ -30,7 +30,7 @@ import numpy as np
 from numba import njit, prange
 from scipy.special import roots_hermite
 
-from pyscf import gto
+from pyscf import gto, M
 
 
 @njit(cache=True, nogil=True)
@@ -135,8 +135,13 @@ def primitive_overlap_matrix(ls, exps, norm_coef, bas_coords, roots, weights):
     return smat
 
 
-def absolute_overlap_matrix(mol, nroots=500):
-    assert mol.cart
+def get_cart_mol(mol):
+    return M(atom=mol.atom, basis=mol.basis, charge=mol.charge, spin=mol.spin, cart=True)
+
+
+def _cart_mol_abs_ovlp_matrix(mol, nroots=500):
+    if not mol.cart:
+        raise ValueError('Molecule has to use cartesian basis functions.')
     # Integrals are computed using primitive GTOs. ctr_mat transforms the
     # primitive GTOs to the contracted GTOs.
     pmol, ctr_mat = mol.decontract_basis(aggregate=True)
@@ -150,7 +155,32 @@ def absolute_overlap_matrix(mol, nroots=500):
     bas_coords = np.array([pmol.bas_coord(i) for i in range(pmol.nbas)])
     r, w = roots_hermite(nroots)
     s = primitive_overlap_matrix(ls, exps, norm_coef, bas_coords, r, w)
-    return ctr_mat.T @ s @ ctr_mat
+    assert (s >= 0).all()
+    return s, ctr_mat
+
+
+def approx_S_abs(mol, nroots=500):
+    """Compute the approximated absolute overlap matrix.
+
+    The calculation is only exact for uncontracted, cartesian basis functions.
+    Since the absolute value is not a linear function, the
+    value after contraction and/or transformation to spherical-harmonics is approximated
+    via the RHS of the triangle inequality:
+
+    .. math::
+
+        \int |\phi_i(\mathbf{r})| \, |\phi_j(\mathbf{r})| \, d\mathbf{r}
+        \leq
+        \sum_{\alpha,\beta} |c_{\alpha i}| \, |c_{\beta j}| \int |\chi_\alpha(\mathbf{r})| \, |\chi_\beta(\mathbf{r})| \, d\mathbf{r}
+    """
+    if mol.cart:
+        s, ctr_mat = _cart_mol_abs_ovlp_matrix(mol, nroots)
+        return abs(ctr_mat.T) @ s @ abs(ctr_mat)
+    else:
+        cart_mol = get_cart_mol(mol)
+        s, ctr_mat = _cart_mol_abs_ovlp_matrix(cart_mol, nroots)
+        cart2spher = cart_mol.cart2sph_coeff(normalized='sp')
+        return abs(cart2spher.T @ ctr_mat.T) @ s @ abs(ctr_mat @ cart2spher)
 
 
 def find_instr(func, keyword, sig=0, limit=5):
@@ -168,6 +198,8 @@ def find_instr(func, keyword, sig=0, limit=5):
 if __name__ == '__main__':
     import pyscf
 
-    mol = pyscf.M(atom='H 0 0 0; H 0 0 1', basis='def2-svp', cart=True)
-    pmol, ctr_mat = mol.decontract_basis(to_cart=True, aggregate=True)
-    absolute_overlap_matrix(mol)
+    spher_mol = pyscf.M(atom='H 0 0 0; H 0 0 1', basis='def2-svp', cart=False)
+    approx_S_abs(spher_mol)
+
+    cart_mol = pyscf.M(atom='H 0 0 0; H 0 0 1', basis='def2-svp', cart=True)
+    approx_S_abs(cart_mol)

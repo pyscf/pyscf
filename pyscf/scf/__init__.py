@@ -210,26 +210,26 @@ def newton(mf):
 
 fast_newton = addons.fast_newton
 
-def KS(mol, *args):
+def KS(mol, *args, **kwargs):
     from pyscf import dft
-    return dft.KS(mol, *args)
+    return dft.KS(mol, *args, **kwargs)
 
-def RKS(mol, *args):
+def RKS(mol, *args, **kwargs):
     from pyscf import dft
-    return dft.RKS(mol, *args)
+    return dft.RKS(mol, *args, **kwargs)
 
-def ROKS(mol, *args):
+def ROKS(mol, *args, **kwargs):
     from pyscf import dft
-    return dft.ROKS(mol, *args)
+    return dft.ROKS(mol, *args, **kwargs)
 
-def UKS(mol, *args):
+def UKS(mol, *args, **kwargs):
     from pyscf import dft
-    return dft.UKS(mol, *args)
+    return dft.UKS(mol, *args, **kwargs)
 
-def GKS(mol, *args):
+def GKS(mol, *args, **kwargs):
     from pyscf import dft
-    return dft.GKS(mol, *args)
+    return dft.GKS(mol, *args, **kwargs)
 
-def DKS(mol, *args):
+def DKS(mol, *args, **kwargs):
     from pyscf import dft
-    return dft.DKS(mol, *args)
+    return dft.DKS(mol, *args, **kwargs)

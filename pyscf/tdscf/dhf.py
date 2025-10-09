@@ -386,9 +386,6 @@ class TDBase(rhf.TDBase):
     get_nto = get_nto
     _contract_multipole = _contract_multipole  # needed by transition dipoles
 
-    def nuc_grad_method(self):
-        raise NotImplementedError
-
 
 @lib.with_doc(rhf.TDA.__doc__)
 class TDA(TDBase):

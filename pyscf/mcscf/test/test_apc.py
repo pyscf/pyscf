@@ -37,6 +37,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(nb, 4)
         self.assertAlmostEqual(lib.fp(np.abs(casorbs)),3.405630497055709,4)
 
+        #With fixed size constraint:
+        myapc = apc.APC(mf,max_size=(8,8),fixed=True)
+        ncas,nelecas,casorbs = myapc.kernel() #(8,8)
+        na,nb = nelecas
+        self.assertAlmostEqual(ncas, 8)
+        self.assertAlmostEqual(na, 4)
+        self.assertAlmostEqual(nb, 4)
+        self.assertAlmostEqual(lib.fp(np.abs(casorbs)),3.6190025185578323,4)
+
         #With n=0
         myapc = apc.APC(mf,max_size=(2,2),n=0,verbose=APC_VERBOSE)
         ncas,nelecas,casorbs = myapc.kernel()

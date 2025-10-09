@@ -19,8 +19,7 @@ from pyscf import ao2mo, fci, mcscf, lib, __config__
 from pyscf.lib import logger
 from pyscf.dft import gen_grid
 from pyscf.mcscf import mc1step
-from pyscf.mcscf.addons import StateAverageMCSCFSolver, state_average_mix
-from pyscf.mcscf.addons import state_average_mix_, StateAverageMixFCISolver
+from pyscf.mcscf.addons import StateAverageMCSCFSolver, StateAverageMixFCISolver
 from pyscf.mcscf.df import _DFCASSCF, _DFCAS
 from pyscf.mcpdft import pdft_veff, pdft_feff
 from pyscf.mcpdft.otfnal import transfnal, get_transfnal
@@ -728,19 +727,6 @@ class _PDFT:
             raise NotImplementedError("PDFT dipole moments with frozen orbitals")
         elif isinstance(self, _DFCASSCF):
             raise NotImplementedError("PDFT dipole moments with density-fitting ERIs")
-        # Monkeypatch for double prop folders
-        # TODO: more elegant solution
-        import os
-        mypath = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        myproppath = os.path.join(mypath, 'prop')
-        # suppress irrelevant warnings when 'properties' ext mod installed
-        import warnings
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", message="Module.*is under testing")
-            from pyscf import prop
-        prop.__path__.append(myproppath)
-        prop.__path__ = list(set(prop.__path__))
         from pyscf.prop.dip_moment.mcpdft import ElectricDipole
         dip_obj = ElectricDipole(self)
         mol_dipole = dip_obj.kernel(state=state, unit=unit, origin=origin)
@@ -758,13 +744,6 @@ class _PDFT:
             grids_level=grids_level, grids_attr=grids_attr,
             split_x_c=split_x_c, verbose=verbose
         )
-
-    def state_average_mix(self, fcisolvers=None, weights=(0.5, 0.5)):
-        return state_average_mix(self, fcisolvers, weights)
-
-    def state_average_mix_(self, fcisolvers=None, weights=(0.5, 0.5)):
-        state_average_mix_(self, fcisolvers, weights)
-        return self
 
     def multi_state_mix(self, fcisolvers=None, weights=(0.5, 0.5), method='LIN'):
         if method.upper() == "LIN":

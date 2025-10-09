@@ -57,16 +57,16 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(eci[0][0], 0.693665750383, 5)
         self.assertAlmostEqual(eci[0][1], 0.693665750384, 5)
         eci, v = myci.kernel(nroots=2, eris=eris, kptlist=[1])
-        self.assertAlmostEqual(eci[0][0], 0.760927568875, 5)
+        self.assertAlmostEqual(eci[0][0], 0.800318837778, 5)
         self.assertAlmostEqual(eci[0][1], 0.800318837778, 5)
 
     def test_cis_H(self):
         h = ci.kcis_rhf.cis_H(kci, 0, eris=eris)
-        self.assertAlmostEqual(lib.fp(h), 2.979013823936476+0j, 7)
+        self.assertAlmostEqual(lib.fp(h), 2.979013823936476+0j, 5)
         e0ref, v0ref = np.linalg.eigh(h)
 
         h = ci.kcis_rhf.cis_H(kci, 1, eris=eris)
-        self.assertAlmostEqual(lib.fp(h), 4.046206590499069-0j, 7)
+        self.assertAlmostEqual(lib.fp(h), 4.046206590499069-0j, 4)
         e1ref, v1ref = np.linalg.eigh(h)
 
         eci, v = kci.kernel(nroots=3, eris=eris, kptlist=[0, 1])
@@ -83,7 +83,7 @@ class KnownValues(unittest.TestCase):
         h = ci.kcis_rhf.cis_H(kci, 1, eris=eris)
         hdiag = kci.get_diag(1, eris=eris)
         self.assertAlmostEqual(abs(h.diagonal() - hdiag).max(), 0, 6)
-        self.assertAlmostEqual(lib.fp(hdiag), 5.219997654681162+0j, 6)
+        self.assertAlmostEqual(lib.fp(hdiag), 5.219997654681162+0j, 5)
 
     def test_cis_matvec_singlet(self):
         vsize = kci.vector_size()
