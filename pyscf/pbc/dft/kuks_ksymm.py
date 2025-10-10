@@ -78,7 +78,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         if ground_state:
             ecoul = np.einsum('K,nKij,Kji->', weight, dm, vj) * .5
     if ni.libxc.is_hybrid_xc(ks.xc):
-        vxc -= vk
+        vxc = np.array([vxc - vk[0], vxc - vk[1]]) 
         if ground_state:
             exc -= np.einsum('K,nKij,nKji->', weight, dm, vk).real * .5
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
