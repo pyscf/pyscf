@@ -114,7 +114,7 @@ def check_mesh_symmetry(cell, ops, mesh=None, tol=SYMPREC,
         for x in range(3):
             while True:
                 tmp = ft[:,x] * mesh1[x]
-                if (abs(tmp - tmp.round()) > tol).any():
+                if (abs((tmp - tmp.round())/mesh1[x]) > tol).any():
                     mesh1[x] = mesh1[x] + 1
                 else:
                     break

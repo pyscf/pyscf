@@ -43,7 +43,7 @@ def get_norb(sos_ks):
         norb_ks.append(norb)
     return norb_ks
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_C2h_symorb(self):
         atom = """
             Cu    1.145000    8.273858   11.128085
@@ -161,5 +161,21 @@ class KnowValues(unittest.TestCase):
         assert norb_ks == [[2, 2, 3, 6], [3, 1, 1, 2, 2, 4],
                            [3, 1, 1, 2, 2, 4], [2, 2, 3, 6]]
 
+    def test_adjust_mesh(self):
+        cell = gto.Cell()
+        cell.atom = "He 0 0 0; He 1 1 1"
+        cell.basis = "6-31g"
+        cell.spin = 2
+        cell.a = np.eye(3) * 3
+        cell.verbose = 0
+        cell.precision = 1e-8
+        cell.build()
+        assert list(cell.mesh) == [139, 139, 139]
+
+        cell.space_group_symmetry = True
+        cell.build()
+        assert list(cell.mesh) == [141, 141, 141]
+
 if __name__ == "__main__":
     print("Full Tests for pbc.symm.basis")
+    unittest.main()
