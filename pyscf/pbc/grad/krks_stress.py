@@ -344,9 +344,10 @@ def _get_first_order_local_orbitals(cell, minao_ref='MINAO', kpts=None):
     nao = cell.nao
     naop = pcell.nao
     if is_zero(kpts):
-        C1_minao = np.empty((3, 3, nkpts, nao, naop))
+        dtype = np.float64
     else:
-        C1_minao = np.empty((3, 3, nkpts, nao, naop), dtype=np.complex128)
+        dtype = np.complex128
+    C1_minao = np.empty((3, 3, nkpts, nao, naop), dtype=dtype)
     disp = 1e-5
     for x in range(3):
         for y in range(3):
@@ -354,8 +355,8 @@ def _get_first_order_local_orbitals(cell, minao_ref='MINAO', kpts=None):
             pcell1, pcell2 = _finite_diff_cells(pcell, x, y, disp)
             kpts1 = scaled_kpts.dot(cell1.reciprocal_vectors(norm_to=1))
             kpts2 = scaled_kpts.dot(cell2.reciprocal_vectors(norm_to=1))
-            C1 = _make_minao_lo(cell1, pcell1, kpts=kpts1)
-            C2 = _make_minao_lo(cell2, pcell2, kpts=kpts2)
+            C1 = np.asarray(_make_minao_lo(cell1, pcell1, kpts=kpts1), dtype=dtype)
+            C2 = np.asarray(_make_minao_lo(cell2, pcell2, kpts=kpts2), dtype=dtype)
             C1_minao[x,y] = (C1 - C2) / (2*disp)
     return C1_minao
 
@@ -366,7 +367,7 @@ def _hubbard_U_deriv1(mf, dm=None, kpts=None):
     if dm is None:
         dm = mf.make_rdm1()
     if kpts is None:
-        kpts = mf.kpts.reshape(-1, 3)
+        kpts = mf.kpts
     nkpts = len(kpts)
     cell = mf.cell
 
@@ -379,7 +380,7 @@ def _hubbard_U_deriv1(mf, dm=None, kpts=None):
     C1_ao_lo = _get_first_order_local_orbitals(cell, pcell, kpts)
     C1 = [C_k[:,:,:,U_idx_stack] for C_k in C1_ao_lo.transpose(2,0,1,3,4)]
 
-    ovlp0 = cell.intor('int1e_ovlp', kpts)
+    ovlp0 = cell.pbc_intor('int1e_ovlp', kpts=kpts)
     ovlp1 = np.asarray(get_ovlp(cell, kpts))
     nao = cell.nao
     ovlp1 = ovlp1.reshape(3,3,nkpts,nao,nao).transpose(2,0,1,3,4)

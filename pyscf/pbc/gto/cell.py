@@ -1425,8 +1425,8 @@ class Cell(mole.MoleBase):
         if not self.space_group_symmetry:
             return mesh
 
-        _, mesh1 = self.lattice_symmetry.check_mesh_symmetry(mesh=mesh,
-                                                             return_mesh=True)
+        _, mesh1 = self.lattice_symmetry.check_mesh_symmetry(
+            cell=self, mesh=mesh, return_mesh=True)
         if np.prod(mesh1) != np.prod(mesh):
             logger.debug(self, 'mesh %s is symmetrized as %s', mesh, mesh1)
         m1size = np.prod(mesh1)

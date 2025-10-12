@@ -280,7 +280,7 @@ def _hubbard_U_deriv1(mf, dm=None, kpts=None):
     C1_ao_lo = _get_first_order_local_orbitals(cell, pcell, kpts)
     C1 = [C_k[:,:,:,U_idx_stack] for C_k in C1_ao_lo.transpose(2,0,1,3,4)]
 
-    ovlp0 = cell.intor('int1e_ovlp', kpts)
+    ovlp0 = cell.pbc_intor('int1e_ovlp', kpts=kpts)
     ovlp1 = np.asarray(get_ovlp(cell, kpts))
     nao = cell.nao
     ovlp1 = ovlp1.reshape(3,3,nkpts,nao,nao).transpose(2,0,1,3,4)

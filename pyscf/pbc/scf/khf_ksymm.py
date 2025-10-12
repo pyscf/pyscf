@@ -150,9 +150,9 @@ class KsymAdaptedKSCF(khf.KSCF):
         if 'kpts' in self.__dict__:
             # To handle the attribute kpt loaded from chkfile
             kpts_ibz = self.__dict__.pop('kpts')
-            if len(kpts_ibz) != self.kpts.nkpts_ibz:
+            if len(kpts_ibz) != self._kpts.nkpts_ibz:
                 raise RuntimeError("chkfile is not consistent with the current system.")
-        return self.with_df.kpts
+        return self._kpts
 
     @kpts.setter
     def kpts(self, kpts):
@@ -162,11 +162,12 @@ class KsymAdaptedKSCF(khf.KSCF):
         elif not isinstance(kpts, libkpts.KPoints):
             raise TypeError("Input kpts have wrong type: %s" % type(kpts))
         self.with_df.kpts = kpts
+        self._kpts = kpts
 
     @property
     def kmesh(self):
         from pyscf.pbc.tools.k2gamma import kpts_to_kmesh
-        kpts_bz = self.kpts.kpts
+        kpts_bz = self._kpts.kpts
         kmesh = kpts_to_kmesh(kpts_bz)
         if len(kpts_bz) != np.prod(kmesh):
             logger.WARN(self, 'K-points specified in %s are not Monkhorst-Pack %s grids',
@@ -178,7 +179,9 @@ class KsymAdaptedKSCF(khf.KSCF):
         self.kpts = self.cell.make_kpts(x, space_group_symmetry=True)
 
     def reset(self, cell=None):
-        raise NotImplementedError
+        self.kpts.reset(cell)
+        khf.KSCF.reset(self, cell)
+        return self
 
     def dump_flags(self, verbose=None):
         mol_hf.SCF.dump_flags(self, verbose)

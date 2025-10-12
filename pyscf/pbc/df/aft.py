@@ -611,7 +611,7 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
     @property
     def kpts(self):
         if isinstance(self._kpts, KPoints):
-            return self._kpts
+            return self._kpts.kpts
         else:
             return self.cell.get_abs_kpts(self._kpts)
 
@@ -632,8 +632,6 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
         log.info('******** %s ********', self.__class__)
         log.info('mesh = %s (%d PWs)', self.mesh, np.prod(self.mesh))
         kpts = self.kpts
-        if isinstance(kpts, KPoints):
-            kpts = kpts.kpts
         log.info('len(kpts) = %d', len(kpts))
         log.debug1('    kpts = %s', kpts)
         return self

@@ -549,6 +549,11 @@ class KSCF(pbchf.SCF):
             self.check_sanity()
         return self
 
+    def reset(self, cell=None):
+        pbchf.SCF.reset(self, cell)
+        self.exx_built = False
+        return self
+
     def dump_flags(self, verbose=None):
         mol_hf.SCF.dump_flags(self, verbose)
         logger.info(self, '\n')

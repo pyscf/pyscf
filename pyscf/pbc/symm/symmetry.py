@@ -216,6 +216,11 @@ class Symmetry():
     def dump_info(self):
         self.spacegroup.dump_info(ops=self.ops)
 
+    def reset(self, cell=None):
+        self.spacegroup = None
+        self._built = False
+        return self
+
 
 def _get_phase(cell, op, kpt_scaled, ignore_phase=False, tol=SYMPREC):
     kpt_scaled = op.a2b(cell).dot_rot(kpt_scaled)

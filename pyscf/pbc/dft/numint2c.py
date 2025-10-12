@@ -337,6 +337,9 @@ class KNumInt2C(lib.StreamObject, numint.LibXCMixin):
     make_mask = lib.invalid_method('make_mask')
     eval_ao = staticmethod(pnumint.eval_ao_kpts)
 
+    def reset(self, cell=None):
+        return self
+
     def eval_rho(self, cell, ao_kpts, dm_kpts, non0tab=None, xctype='LDA',
                  hermi=0, with_lapl=True, verbose=None):
         '''Collocate the density (opt. gradients) on the real-space grid.

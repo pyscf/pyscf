@@ -206,7 +206,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
     @property
     def kpts(self):
         if isinstance(self._kpts, KPoints):
-            return self._kpts
+            return self._kpts.kpts
         else:
             return self.cell.get_abs_kpts(self._kpts)
 
@@ -243,8 +243,6 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             log.info('_cderi_to_save = %s', self._cderi_to_save.name)
 
         kpts = self.kpts
-        if isinstance(kpts, KPoints):
-            kpts = kpts.kpts
         log.info('len(kpts) = %d', len(kpts))
         log.debug1('    kpts = %s', kpts)
         if self.kpts_band is not None:
