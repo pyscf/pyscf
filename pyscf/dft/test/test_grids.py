@@ -126,7 +126,7 @@ class KnownValues(unittest.TestCase):
     def test_gen_atomic_grids(self):
         grid = gen_grid.Grids(h2o)
         grid.prune = None
-        grid.atom_grid = {"H": (10, 58), "O": (10, 50),}
+        grid.atom_grid = {"default": (10, 58), "O": (10, 50),}
         self.assertRaises(ValueError, grid.build)
 
     def test_make_mask(self):
