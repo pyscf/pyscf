@@ -401,4 +401,4 @@ def _hubbard_U_deriv1(mf, dm=None, kpts=None):
             sigma += weight * (val * 0.5) * (
                 np.einsum('xyii->xy', P1).real * 2 # *2 for P1+P1.T
                 - np.einsum('xyij,ji->xy', P1, P0).real * 2)
-    return sigma.get()
+    return sigma

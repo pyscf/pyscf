@@ -179,7 +179,7 @@ class KsymAdaptedKSCF(khf.KSCF):
         self.kpts = self.cell.make_kpts(x, space_group_symmetry=True)
 
     def reset(self, cell=None):
-        self.kpts.reset(cell)
+        self._kpts.reset(cell)
         khf.KSCF.reset(self, cell)
         return self
 

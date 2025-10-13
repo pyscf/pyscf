@@ -444,7 +444,6 @@ class KSCF(pbchf.SCF):
 
     _keys = {'cell', 'exx_built', 'exxdiv', 'with_df', 'rsjk'}
 
-    reset = pbchf.SCF.reset
     mol = pbchf.SCF.mol
 
     check_sanity = pbchf.SCF.check_sanity
