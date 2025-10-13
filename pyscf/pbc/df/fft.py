@@ -244,7 +244,7 @@ class FFTDF(lib.StreamObject):
     def reset(self, cell=None):
         if cell is not None:
             if isinstance(self._kpts, KPoints):
-                self.kpts.reset(cell)
+                self._kpts.reset(cell)
             self.cell = cell
         self._rsh_df = {}
         return self

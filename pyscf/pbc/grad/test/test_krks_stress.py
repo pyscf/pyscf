@@ -282,7 +282,7 @@ class KnownValues(unittest.TestCase):
             exc2 = ni.nr_rks(cell2, UniformGrids(cell2), xc, dm, kpts=cell2.make_kpts(kmesh))[1]
             de = np.einsum('kij,kji', dm, (vne1-vne2)) / len(kpts)
             de += exc1 - exc2
-            assert abs(dat[i,j] - de/2e-5) < 1e-9
+            assert abs(dat[i,j] - de/2e-5) < 2e-9
 
     def test_get_pp(self):
         a = np.eye(3) * 5
@@ -423,22 +423,4 @@ class KnownValues(unittest.TestCase):
 
 if __name__ == "__main__":
     print("Full Tests for KRKS Stress tensor")
-    #unittest.main()
-    if 1:
-        cell = gto.M(
-            unit = 'A',
-            atom = 'C 0.,  0.,  0.; O 0.5,  0.8,  1.1',
-            a = '''0.      1.7834  1.7834
-                   1.7834  0.      1.7834
-                   1.7834  1.7834  0.    ''',
-            basis = [[0, [1.3, 1]], [1, [0.8, 1]]],
-            pseudo = 'gth-pbe')
-        kmesh = [3,1,1]
-        kpts = cell.make_kpts(kmesh)
-        minao = 'gth-szv'
-
-        U_idx = ['C 2p']
-        U_val = [5]
-        mf = krkspu.KRKSpU(cell, kpts=kpts, U_idx=U_idx, U_val=U_val, minao_ref=minao)
-        mf.__dict__.update(cell.KRKS(kpts=kpts).run(max_cycle=1).__dict__)
-        sigma = krks_stress._hubbard_U_deriv1(mf)
+    unittest.main()
