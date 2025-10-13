@@ -1334,47 +1334,74 @@ class Cell(mole.MoleBase):
         from pyscf.pbc import scf, dft
         from pyscf.dft import XC
 
-        for mod in (scf, dft):
-            method = getattr(mod, key, None)
-            if callable(method):
-                return method(self)
-
-        if key[0] == 'K':  # with k-point sampling
-            if 'TD' in key[:4]:
-                if key in ('KTDHF', 'KTDA'):
-                    mf = scf.KHF(self)
-                else:
-                    mf = dft.KKS(self)
-                    xc = key.split('TD', 1)[1]
-                    if xc in XC:
-                        mf.xc = xc
-                        key = 'KTDDFT'
-            elif 'CI' in key or 'CC' in key or 'MP' in key:
-                mf = scf.KHF(self)
-            else:
-                return object.__getattribute__(self, key)
-            # Remove prefix 'K' because methods are registered without the leading 'K'
-            key = key[1:]
+        attr_name = key
+        mf_xc = None
+        for mod in (dft, scf):
+            mf_method = getattr(mod, key, None)
+            if callable(mf_method):
+                key = None
+                break
         else:
-            if 'TD' in key[:3]:
-                if key in ('TDHF', 'TDA'):
-                    mf = scf.HF(self)
+            if key[0] == 'K':  # with k-point sampling
+                if 'TD' in key[:4]:
+                    if key in ('KTDHF', 'KTDA'):
+                        mf_method = scf.KHF
+                    else:
+                        mf_method = dft.KKS
+                        xc = key.split('TD', 1)[1]
+                        if xc in XC:
+                            mf_xc = xc
+                            key = 'KTDDFT'
+                elif 'CI' in key or 'CC' in key or 'MP' in key:
+                    mf_method = scf.KHF
                 else:
-                    mf = dft.KS(self)
-                    xc = key.split('TD', 1)[1]
-                    if xc in XC:
-                        mf.xc = xc
-                        key = 'TDDFT'
-            elif 'CI' in key or 'CC' in key or 'MP' in key:
-                mf = scf.HF(self)
+                    return object.__getattribute__(self, key)
+                # Remove prefix 'K' because methods are registered without the leading 'K'
+                key = key[1:]
             else:
-                return object.__getattribute__(self, key)
+                if 'TD' in key[:3]:
+                    if key in ('TDHF', 'TDA'):
+                        mf_method = scf.HF
+                    else:
+                        mf_method = dft.KS
+                        xc = key.split('TD', 1)[1]
+                        if xc in XC:
+                            mf_xc = xc
+                            key = 'TDDFT'
+                elif 'CI' in key or 'CC' in key or 'MP' in key:
+                    mf_method = scf.HF
+                else:
+                    return object.__getattribute__(self, key)
 
-        method = getattr(mf, key)
+        post_mf_key = key
+        SCF_KW = {'kpt', 'kpts', 'xc', 'exxdiv',
+                  'U_idx', 'U_val', 'C_ao_lo', 'minao_ref'}
 
-        if self.nelectron != 0:
-            mf.run()
-        return method
+        def fn(*args, **kwargs):
+            if mf_xc is not None:
+                assert 'xc' not in kwargs
+                kwargs['xc'] = mf_xc
+
+            mf_kw = {}
+            remaining_kw = {}
+            for k, v in kwargs.items():
+                if k in SCF_KW:
+                    mf_kw[k] = v
+                else:
+                    remaining_kw[k] = v
+            mf = mf_method(self, **mf_kw)
+
+            if post_mf_key is None:
+                if args:
+                    raise RuntimeError(
+                        f'cell.{attr_name} function does not support positional arguments')
+                return mf.set(**remaining_kw)
+
+            post_mf = getattr(mf, post_mf_key)
+            if self.nelectron != 0:
+                mf.run()
+            return post_mf(*args, **remaining_kw)
+        return mole._MoleLazyCallAdapter(fn, attr_name)
 
     tot_electrons = tot_electrons
 
@@ -1531,14 +1558,7 @@ class Cell(mole.MoleBase):
         _built = self._built
         mole.MoleBase.build(self, False, parse_arg, *args, **kwargs)
 
-        exp_min = np.array([self.bas_exp(ib).min() for ib in range(self.nbas)])
-        if self.exp_to_discard is None:
-            if np.any(exp_min < 0.1):
-                sys.stderr.write('''WARNING!
-  Very diffused basis functions are found in the basis set. They may lead to severe
-  linear dependence and numerical instability.  You can set  cell.exp_to_discard=0.1
-  to remove the diffused Gaussians whose exponents are less than 0.1.\n\n''')
-        elif np.any(exp_min < self.exp_to_discard):
+        if self.exp_to_discard is not None:
             # Discard functions of small exponents in basis
             _basis = {}
             for symb, basis_now in self._basis.items():

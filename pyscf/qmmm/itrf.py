@@ -21,6 +21,7 @@ QM/MM helper functions that modify the QM methods.
 '''
 
 import numpy
+from scipy.special import erf
 import pyscf
 from pyscf import lib
 from pyscf import gto
@@ -178,14 +179,24 @@ class QMMMSCF(QMMM):
         return h1e
 
     def energy_nuc(self):
-        # interactions between QM nuclei and MM particles
-        nuc = self.mol.energy_nuc()
-        coords = self.mm_mol.atom_coords()
-        charges = self.mm_mol.atom_charges()
-        for j in range(self.mol.natm):
-            q2, r2 = self.mol.atom_charge(j), self.mol.atom_coord(j)
+        '''interactions between QM nuclei and MM particles'''
+        mol = self.mol
+        mm_mol = self.mm_mol
+        nuc = mol.energy_nuc()
+        coords = mm_mol.atom_coords()
+        charges = mm_mol.atom_charges()
+        if mm_mol.charge_model == 'gaussian':
+            expnts = numpy.sqrt(mm_mol.get_zetas())
+        for j in range(mol.natm):
+            q2, r2 = mol.atom_charge(j), mol.atom_coord(j)
             r = lib.norm(r2-coords, axis=1)
-            nuc += q2*(charges/r).sum()
+            if mm_mol.charge_model != 'gaussian':
+                nuc += q2*(charges/r).sum()
+            else:
+                # * MM paritcles may be defined as a spreaded distribution. The
+                # charge distribution may overlap to QM atoms and slightly affect
+                # the interaction.
+                nuc += q2*(charges*erf(expnts*r)/r).sum()
         return nuc
 
     def to_gpu(self):
@@ -348,7 +359,7 @@ class QMMMGrad:
 
         coords = mm_mol.atom_coords()
         charges = mm_mol.atom_charges()
-        expnts = mm_mol.get_zetas()
+        expnts = mm_mol.get_zetas() + numpy.zeros_like(charges)
 
         intor = 'int3c2e_ip2'
         nao = mol.nao
@@ -369,18 +380,29 @@ class QMMMGrad:
     contract_hcore_mm = grad_hcore_mm # for backward compatibility
 
     def grad_nuc(self, mol=None, atmlst=None):
+        '''Nuclear gradients of the QM-MM nuclear energy wrt QM atoms
+        '''
         if mol is None: mol = self.mol
-        coords = self.base.mm_mol.atom_coords()
-        charges = self.base.mm_mol.atom_charges()
+        mm_mol = self.base.mm_mol
+        coords = mm_mol.atom_coords()
+        charges = mm_mol.atom_charges()
+        if mm_mol.charge_model == 'gaussian':
+            expnts = mm_mol.get_zetas()
+            radii = 1 / numpy.sqrt(expnts)
 
         g_qm = super().grad_nuc(mol, atmlst)
-# nuclei lattice interaction
+        # nuclei lattice interaction
         g_mm = numpy.empty((mol.natm,3))
         for i in range(mol.natm):
             q1 = mol.atom_charge(i)
             r1 = mol.atom_coord(i)
             r = lib.norm(r1-coords, axis=1)
-            g_mm[i] = -q1 * numpy.einsum('i,ix,i->x', charges, r1-coords, 1/r**3)
+            if mm_mol.charge_model != 'gaussian':
+                coulkern = 1/r**3
+            else:
+                coulkern = erf(r/radii)/r - 2/(numpy.sqrt(numpy.pi)*radii) * numpy.exp(-expnts*r**2)
+                coulkern = coulkern / r**2
+            g_mm[i] = -q1 * numpy.einsum('i,ix,i->x', charges, r1-coords, coulkern)
         if atmlst is not None:
             g_mm = g_mm[atmlst]
         return g_qm + g_mm
@@ -395,12 +417,20 @@ class QMMMGrad:
         mm_mol = self.base.mm_mol
         coords = mm_mol.atom_coords()
         charges = mm_mol.atom_charges()
+        if mm_mol.charge_model == 'gaussian':
+            expnts = mm_mol.get_zetas()
+            radii = 1 / numpy.sqrt(expnts)
         g_mm = numpy.zeros_like(coords)
         for i in range(mol.natm):
             q1 = mol.atom_charge(i)
             r1 = mol.atom_coord(i)
             r = lib.norm(r1-coords, axis=1)
-            g_mm += q1 * numpy.einsum('i,ix,i->ix', charges, r1-coords, 1/r**3)
+            if mm_mol.charge_model != 'gaussian':
+                coulkern = 1/r**3
+            else:
+                coulkern = erf(r/radii)/r - 2/(numpy.sqrt(numpy.pi)*radii) * numpy.exp(-expnts*r**2)
+                coulkern = coulkern / r**2
+            g_mm += q1 * numpy.einsum('i,ix,i->ix', charges, r1-coords, coulkern)
         return g_mm
 
     def to_gpu(self):
@@ -414,41 +444,3 @@ _QMMMGrad = QMMMGrad
 scf.hf.SCF.QMMM = mm_charge
 mcscf.casci.CASBase.QMMM = mm_charge
 grad.rhf.Gradients.QMMM = mm_charge_grad
-
-if __name__ == '__main__':
-    from pyscf import scf, cc, grad
-    mol = gto.Mole()
-    mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
-                   H                 -0.00000000   -0.84695236    0.59109389
-                   H                 -0.00000000    0.89830571    0.52404783 '''
-    mol.basis = 'cc-pvdz'
-    mol.build()
-
-    coords = [(0.5,0.6,0.8)]
-    #coords = [(0.0,0.0,0.0)]
-    charges = [-0.5]
-    mf = mm_charge(scf.RHF(mol), coords, charges)
-    print(mf.kernel()) # -76.3206550372
-
-    g = mf.nuc_grad_method().kernel()
-    mfs = mf.as_scanner()
-    e1 = mfs(''' O                  0.00100000    0.00000000   -0.11081188
-             H                 -0.00000000   -0.84695236    0.59109389
-             H                 -0.00000000    0.89830571    0.52404783 ''')
-    e2 = mfs(''' O                 -0.00100000    0.00000000   -0.11081188
-             H                 -0.00000000   -0.84695236    0.59109389
-             H                 -0.00000000    0.89830571    0.52404783 ''')
-    print((e1 - e2)/0.002 * lib.param.BOHR, g[0,0])
-
-    mycc = cc.ccsd.CCSD(mf)
-    ecc, t1, t2 = mycc.kernel() # ecc = -0.228939687075
-
-    g = mycc.nuc_grad_method().kernel()
-    ccs = mycc.as_scanner()
-    e1 = ccs(''' O                  0.00100000    0.00000000   -0.11081188
-             H                 -0.00000000   -0.84695236    0.59109389
-             H                 -0.00000000    0.89830571    0.52404783 ''')
-    e2 = ccs(''' O                 -0.00100000    0.00000000   -0.11081188
-             H                 -0.00000000   -0.84695236    0.59109389
-             H                 -0.00000000    0.89830571    0.52404783 ''')
-    print((e1 - e2)/0.002 * lib.param.BOHR, g[0,0])

@@ -428,11 +428,14 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=1,
     '''
     if kpts is None:
         kpts = numpy.zeros((1,3))
-    elif isinstance(kpts, KPoints):
+    if isinstance(kpts, KPoints):
         if kpts.kpts.size > 3: # multiple k points
             dms = kpts.transform_dm(dms)
+        nkpts = len(kpts)
         kpts = kpts.kpts
-    kpts = kpts.reshape(-1,3)
+    else:
+        kpts = kpts.reshape(-1,3)
+        nkpts = len(kpts)
 
     xctype = ni._xc_type(xc_code)
     if xctype == 'LDA':
@@ -496,7 +499,8 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=1,
             excsum = excsum[0]
             vmat = vmat[:,0]
     else:
-        nelec = excsum = vmat = 0
+        nelec = excsum = 0
+        vmat = numpy.zeros((2, nkpts, nao, nao), dtype=numpy.complex128)
     return nelec, excsum, vmat
 
 def _format_uks_dm(dms):

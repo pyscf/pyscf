@@ -41,6 +41,7 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_eri1111(self):
+        numpy.random.seed(1)
         kpts = numpy.random.random((4,3)) * .25
         kpts[3] = -numpy.einsum('ij->j', kpts[:3])
         with_df = mdf.MDF(cell).set(auxbasis='weigend')
@@ -57,6 +58,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(eri1.reshape(eri0.shape)-eri0).sum(), 0, 9)
 
     def test_eri0110(self):
+        numpy.random.seed(1)
         kpts = numpy.random.random((4,3)) * .25
         kpts[3] = kpts[0]
         kpts[2] = kpts[1]

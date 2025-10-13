@@ -9,6 +9,7 @@ convergence issue in geometry optimizer.
 
 from pyscf import gto
 from pyscf import scf, mcscf
+import copy
 
 mol = gto.Mole()
 mol.atom="N; N 1, 1.1"
@@ -56,12 +57,11 @@ mol1 = excited_grad.optimizer().kernel()
 # 3. Geometry optimization for mixed FCI solvers.
 # Note the state-averaged gradients are optimized.
 #
-import copy
 mc = mcscf.CASSCF(mf, 4,4)
 solver1 = mc.fcisolver
 solver2 = copy.copy(mc.fcisolver)
 solver2.spin = 2
-mc = mcscf.addons.state_average_mix_(mc, [solver1, solver2], (.5, .5))
+mc = mc.state_average_mix([solver1, solver2], (.5, .5))
 excited_grad = mc.nuc_grad_method().as_scanner()
 mol1 = excited_grad.optimizer().kernel()
 
@@ -81,7 +81,7 @@ mc = mcscf.CASSCF(mf, 4,4)
 solver1 = mc.fcisolver
 solver2 = copy.copy(mc.fcisolver)
 solver2.spin = 2
-mc = mcscf.addons.state_average_mix_(mc, [solver1, solver2], (.5, .5))
+mc.state_average_mix_([solver1, solver2], (.5, .5))
 excited_grad = mc.nuc_grad_method().as_scanner(state=1)
 mol1 = excited_grad.optimizer().kernel()
 
