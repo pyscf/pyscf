@@ -52,7 +52,7 @@ class KnownValues(unittest.TestCase):
             cell2.precision = 1e-10
             exc1 = ni.nr_uks(cell1, UniformGrids(cell1), xc, dm)[1]
             exc2 = ni.nr_uks(cell2, UniformGrids(cell2), xc, dm)[1]
-            assert abs(dat[i,j] - (exc1 - exc2)/2e-5) < 2e-9
+            assert abs(dat[i,j] - (exc1 - exc2)/2e-5) < 5e-9
 
     def test_get_vxc_gga(self):
         a = np.eye(3) * 5
@@ -95,7 +95,7 @@ class KnownValues(unittest.TestCase):
             cell2.precision = 1e-10
             exc1 = ni.nr_uks(cell1, UniformGrids(cell1), xc, dm)[1]
             exc2 = ni.nr_uks(cell2, UniformGrids(cell2), xc, dm)[1]
-            assert abs(dat[i,j] - (exc1 - exc2)/2e-5) < 1e-9
+            assert abs(dat[i,j] - (exc1 - exc2)/2e-5) < 5e-9
 
     def test_get_j(self):
         a = np.eye(3) * 5

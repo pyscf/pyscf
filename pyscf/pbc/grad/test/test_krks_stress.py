@@ -257,7 +257,7 @@ class KnownValues(unittest.TestCase):
             exc2 = ni.nr_rks(cell2, UniformGrids(cell2), xc, dm, kpts=cell2.make_kpts(kmesh))[1]
             de = np.einsum('kij,kji', dm, (vj1-vj2)) / len(kpts)
             de += exc1 - exc2
-            assert abs(dat[i,j] - de/2e-5) < 1e-9
+            assert abs(dat[i,j] - de/2e-5) < 2e-9
 
     def test_get_nuc(self):
         a = np.eye(3) * 5

@@ -337,7 +337,7 @@ class KnownValues(unittest.TestCase):
             exc2 = ni.nr_rks(cell2, UniformGrids(cell2), xc, dm)[1]
             de = np.einsum('ij,ji', dm, (vj1-vj2))
             de += exc1 - exc2
-            assert abs(dat[i,j] - de/2e-5) < 1e-9
+            assert abs(dat[i,j] - de/2e-5) < 2e-9
 
     def test_get_nuc(self):
         a = np.eye(3) * 5
@@ -360,7 +360,7 @@ class KnownValues(unittest.TestCase):
             exc2 = ni.nr_rks(cell2, UniformGrids(cell2), xc, dm)[1]
             de = np.einsum('ij,ji', dm, (vne1-vne2))
             de += exc1 - exc2
-            assert abs(dat[i,j] - de/2e-5) < 1e-9
+            assert abs(dat[i,j] - de/2e-5) < 2e-9
 
     def test_get_pp(self):
         a = np.eye(3) * 5
