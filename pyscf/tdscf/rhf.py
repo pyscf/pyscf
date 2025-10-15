@@ -853,7 +853,8 @@ class TDA(TDBase):
 
     Input Attributes:
         conv_tol : float
-            Diagonalization convergence tolerance.  Default is 1e-9.
+            Convergence is achieved when the norm of the residual for a state is
+            below this threshold. Default is 1e-5.
         nstates : int
             Number of TD states to be computed. Default is 3.
         frozen : int or list
@@ -863,8 +864,8 @@ class TDA(TDBase):
 
     Saved results:
 
-        converged : bool
-            Diagonalization converged or not
+        converged : bool array
+            Indicates whether each excited state is converged.
         e : 1D array
             Excitation energy for each excited state.
         xy : A list of two 2D arrays

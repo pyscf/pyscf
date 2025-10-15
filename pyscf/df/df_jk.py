@@ -37,9 +37,16 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
 
     Kwargs:
         auxbasis : str or basis dict
-            Same format to the input attribute mol.basis.  If auxbasis is
-            None, optimal auxiliary basis based on AO basis (if possible) or
-            even-tempered Gaussian basis will be used.
+            Same format as the input attribute mol.basis. If auxbasis is set to
+            None, an optimal auxiliary basis set will be selected based on the
+            AO basis set, according to the records in the basis set exchange
+            database and the predefined mappings in `pyscf.df.addons.DEFAULT_AUXBASIS`.
+            For DFT methods, the selection of auxiliary basis sets is also
+            influenced by the xc functional. The J-FIT basis set will be used for
+            local and semi-local functionals (LDA, GGA, and meta-GGA). JK-FIT
+            basis set will be employed for hybrid and RSH functionals.
+            If optimal auxiliary basis sets are not available, the PySCF built-in
+            even-tempered Gaussian basis set will be used.
 
         only_dfj : str
             Compute Coulomb integrals only and no approximation for HF
