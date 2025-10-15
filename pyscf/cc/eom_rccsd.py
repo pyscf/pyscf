@@ -58,6 +58,9 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
     # GHF or customized RHF/UHF may be of complex type
     real_system = (eom._cc._scf.mo_coeff[0].dtype == np.double)
 
+    mem_now = lib.current_memory()[0]
+    max_memory = max(0, eom.max_memory - mem_now)
+
     eig = lib.davidson_nosym1
     if user_guess or koopmans:
         assert len(guess) == nroots
@@ -69,14 +72,14 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
             return lib.linalg_helper._eigs_cmplx2real(w, v, idx, real_system)
         conv, es, vs = eig(matvec, guess, precond, pick=eig_close_to_init_guess,
                            tol=eom.conv_tol, max_cycle=eom.max_cycle,
-                           max_space=eom.max_space, nroots=nroots, verbose=log)
+                           max_space=eom.max_space, max_memory=max_memory, nroots=nroots, verbose=log)
     else:
         def pickeig(w, v, nroots, envs):
             real_idx = np.where(abs(w.imag) < 1e-3)[0]
             return lib.linalg_helper._eigs_cmplx2real(w, v, real_idx, real_system)
         conv, es, vs = eig(matvec, guess, precond, pick=pickeig,
                            tol=eom.conv_tol, max_cycle=eom.max_cycle,
-                           max_space=eom.max_space, nroots=nroots, verbose=log)
+                           max_space=eom.max_space, max_memory=max_memory, nroots=nroots, verbose=log)
 
     if eom.verbose >= logger.INFO:
         for n, en, vn, convn in zip(range(nroots), es, vs, conv):

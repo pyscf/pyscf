@@ -3764,31 +3764,57 @@ class Mole(MoleBase):
         from pyscf import __all__  # noqa
         from pyscf import scf, dft
 
-        for mod in (scf, dft):
-            method = getattr(mod, key, None)
-            if callable(method):
-                return method(self)
-
-        if 'TD' in key[:3]:
-            if key in ('TDHF', 'TDA'):
-                mf = scf.HF(self)
-            else:
-                mf = dft.KS(self)
-                xc = key.split('TD', 1)[1]
-                if xc in dft.XC:
-                    mf.xc = xc
-                    key = 'TDDFT'
-        elif 'CI' in key or 'CC' in key or 'CAS' in key or 'MP' in key:
-            mf = scf.HF(self)
+        attr_name = key
+        mf_xc = None
+        for mod in (dft, scf):
+            mf_method = getattr(mod, key, None)
+            if callable(mf_method):
+                key = None
+                break
         else:
-            return object.__getattribute__(self, key)
+            if 'TD' in key[:3]:
+                if key in ('TDHF', 'TDA'):
+                    mf_method = scf.HF
+                else:
+                    mf_method = dft.KS
+                    xc = key.split('TD', 1)[1]
+                    if xc in dft.XC:
+                        mf_xc = xc
+                        key = 'TDDFT'
+            elif 'CI' in key or 'CC' in key or 'CAS' in key or 'MP' in key:
+                mf_method = scf.HF
+            else:
+                return object.__getattribute__(self, key)
 
-        method = getattr(mf, key)
+        post_mf_key = key
+        SCF_KW = {'xc', 'U_idx', 'U_val', 'C_ao_lo', 'minao_ref'}
 
-        # Initialize SCF object for post-SCF methods if applicable
-        if self.nelectron != 0:
-            mf.run()
-        return method
+        def fn(*args, **kwargs):
+            if mf_xc is not None:
+                assert 'xc' not in kwargs
+                kwargs['xc'] = mf_xc
+
+            mf_kw = {}
+            remaining_kw = {}
+            for k, v in kwargs.items():
+                if k in SCF_KW:
+                    mf_kw[k] = v
+                else:
+                    remaining_kw[k] = v
+            mf = mf_method(self, **mf_kw)
+
+            if post_mf_key is None:
+                if args:
+                    raise RuntimeError(
+                        f'mol.{attr_name} function does not support positional arguments')
+                return mf.set(**remaining_kw)
+
+            post_mf = getattr(mf, post_mf_key)
+            # Initialize SCF object for post-SCF methods if applicable
+            if self.nelectron != 0:
+                mf.run()
+            return post_mf(*args, **remaining_kw)
+        return _MoleLazyCallAdapter(fn, attr_name)
 
     def ao2mo(self, mo_coeffs, erifile=None, dataname='eri_mo', intor='int2e',
               **kwargs):
@@ -4286,3 +4312,20 @@ def extract_pgto_params(mol, op='diffuse'):
         _, idx = np.unique(basis_id[ke_order], return_index=True)
         idx = ke_order[idx]
     return e[idx], c[idx]
+
+class _MoleLazyCallAdapter:
+    '''Adapter for API updates. Should be removed in future'''
+    def __init__(self, fn, name):
+        self.fn = fn
+        self.name = name
+
+    def __call__(self, *args, **kwargs):
+        return self.fn(*args, **kwargs)
+
+    def __getattr__(self, key):
+        warnings.warn(
+            f'The API mol.{self.name}.{key} is deprecated and will be '
+            f'removed in a future release. Please use mol.{self.name}().{key} instead.',
+            lib.exceptions.DeprecationWarning, stacklevel=1)
+        out = self.fn()
+        return getattr(out, key)

@@ -229,6 +229,3 @@ class Gradients(tdrhf_grad.Gradients):
         return grad_elec(self, xy, atmlst, self.max_memory, self.verbose)
 
 Grad = Gradients
-
-from pyscf import tdscf
-tdscf.uhf.TDA.Gradients = tdscf.uhf.TDHF.Gradients = lib.class_as_method(Gradients)

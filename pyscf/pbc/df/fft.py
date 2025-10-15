@@ -38,6 +38,20 @@ KE_SCALING = getattr(__config__, 'pbc_df_aft_ke_cutoff_scaling', 0.75)
 
 
 def get_nuc(mydf, kpts=None):
+    r'''
+    Compute integrals for the nuclear attraction term.
+
+    The output of this function depends on the input `kpts`. Generally, the
+    output is a (Nk, Nao, Nao) array, where Nk is the number of k-points in the
+    provided `kpts`. If `kpts` is a (3,) array, corresponding to a single
+    k-point, the output will be a (Nao, Nao) matrix. If the optional input
+    `kpts` is not specified, this function will read the FFTDF.kpts for the
+    k-mesh and return a (Nk, Nao, Nao) array.
+
+    Note: This API has changed since PySCF-2.10. In PySCF 2.9 (or older), if
+    `kpts` is not specified, this funciton may return a (Nao, Nao) matrix for
+    the gamma point and a (Nk, Nao, Nao) array for other k-points.
+    '''
     from pyscf.pbc.dft import gen_grid
     kpts, is_single_kpt = _check_kpts(mydf, kpts)
     cell = mydf.cell
@@ -66,6 +80,17 @@ def get_nuc(mydf, kpts=None):
 
 def get_pp(mydf, kpts=None):
     '''Get the periodic pseudopotential nuc-el AO matrix, with G=0 removed.
+
+    The output of this function depends on the input `kpts`. Generally, the
+    output is a (Nk, Nao, Nao) array, where Nk is the number of k-points in the
+    provided `kpts`. If `kpts` is a (3,) array, corresponding to a single
+    k-point, the output will be a (Nao, Nao) matrix. If the optional input
+    `kpts` is not specified, this function will read the FFTDF.kpts for the
+    k-mesh and return a (Nk, Nao, Nao) array.
+
+    Note: This API has changed since PySCF-2.10. In PySCF 2.9 (or older), if
+    `kpts` is not specified, this funciton may return a (Nao, Nao) matrix for
+    the gamma point and a (Nk, Nao, Nao) array for other k-points.
     '''
     from pyscf.pbc.dft import gen_grid
     kpts, is_single_kpt = _check_kpts(mydf, kpts)
@@ -165,7 +190,7 @@ class FFTDF(lib.StreamObject):
     blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
 
     _keys = {
-        'cell', 'kpts', 'grids', 'mesh', 'blockdim', 'exxdiv',
+        'cell', 'kpts', 'mesh', 'blockdim', 'exxdiv',
     }
 
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
@@ -206,11 +231,17 @@ class FFTDF(lib.StreamObject):
         return self
 
     def dump_flags(self, verbose=None):
-        logger.info(self, '\n')
-        logger.info(self, '******** %s ********', self.__class__)
-        logger.info(self, 'mesh = %s (%d PWs)', self.mesh, numpy.prod(self.mesh))
-        logger.info(self, 'len(kpts) = %d', len(self.kpts))
-        logger.debug1(self, '    kpts = %s', self.kpts)
+        log = logger.new_logger(self, verbose)
+        if log.verbose < logger.INFO:
+            return self
+        log.info('\n')
+        log.info('******** %s ********', self.__class__)
+        log.info('mesh = %s (%d PWs)', self.mesh, numpy.prod(self.mesh))
+        kpts = self.kpts
+        if isinstance(kpts, KPoints):
+            kpts = kpts.kpts
+        log.info('len(kpts) = %d', len(kpts))
+        log.debug1('    kpts = %s', kpts)
         return self
 
     def check_sanity(self):
@@ -254,9 +285,6 @@ class FFTDF(lib.StreamObject):
             cell = grids.cell
         if grids.non0tab is None:
             grids.build(with_non0tab=True)
-
-        if kpts is None: kpts = self.kpts
-        kpts = numpy.asarray(kpts)
 
         if cell.dimension <= 2 and cell.low_dim_ft_type == 'inf_vacuum':
             raise RuntimeError('FFTDF method does not support low-dimension '

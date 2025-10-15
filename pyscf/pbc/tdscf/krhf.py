@@ -213,6 +213,7 @@ class KTDBase(TDBase):
                 logger.error(self, 'Solutions with non-zero kshift for %s are '
                              'only supported by GDF/RSDF')
                 raise NotImplementedError
+        assert isinstance(mf, scf.khf.KSCF)
 
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''
