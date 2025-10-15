@@ -380,12 +380,12 @@ class PCM(lib.StreamObject):
             radii_table = vdw_scale * modified_Bondi + self.r_probe/radii.BOHR
         else:
             radii_table = self.radii_table
-        logger.debug2(self, 'radii_table %s', self.radii_table)
+        logger.debug2(self, 'radii_table %s', radii_table)
         mol = self.mol
         if ng is None:
             ng = gen_grid.LEBEDEV_ORDER[self.lebedev_order]
 
-        self.surface = gen_surface(mol, rad=self.radii_table, ng=ng)
+        self.surface = gen_surface(mol, rad=radii_table, ng=ng)
         self._intermediates = {}
         F, A = get_F_A(self.surface)
         D, S = get_D_S(self.surface, with_S=True, with_D=True)
