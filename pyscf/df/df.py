@@ -70,7 +70,7 @@ class DF(lib.StreamObject):
             in the DF integral tensor.  Thus the shape of DF integral tensor
             is (M,N*(N+1)/2), where M is the number of auxbasis functions and
             N is the number of basis functions of the orbital basis.
-            This attribute is not compatible between the CPU and GPU implementations. 
+            This attribute is not compatible between the CPU and GPU implementations.
             It will not be transferred during the to_cpu() and to_gpu() calls.
         blockdim : int
             When reading DF integrals from disk the chunk size to load.  It is
@@ -89,7 +89,7 @@ class DF(lib.StreamObject):
             An instance that caches precomputation variables to optimize the
             computation of the Coulomb matrix.
         _rsh_df : dict
-            For range-separated DFT functionals, this object stores the density fitting 
+            For range-separated DFT functionals, this object stores the density fitting
             instances for long-range or short-range Coulomb integrals.
     '''
 
