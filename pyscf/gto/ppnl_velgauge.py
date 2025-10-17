@@ -109,7 +109,7 @@ def get_ppnl_half_rc(mol, q, origin=(0,0,0)):
     return ppnl_half, ppnl_rc_half
 
 def get_gth_pp_nl_velgauge_commutator(mol, q, origin=(0,0,0)):
-    """Get the matrix elements of [r, V_nl] in velocity gauge.
+    r"""Get the matrix elements of [r, V_nl] in velocity gauge.
 
     \int i(r) j(r') exp(-iq*r) [\hat{r} V_nl(r,r') - V_nl(r,r') \hat{r'}] exp(iq*r') dr dr'
 

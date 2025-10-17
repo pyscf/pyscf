@@ -184,12 +184,14 @@ class VelGaugePPNLHelper:
         self.hl_dims = hl_dims
 
         for hl_idx, intor_name in zip(range(self.hl_max), self.intors):
-            shls_slice, ft_kern, cell_conc_fakecell = prepare_ppnl_ft_data(self.cell, self.fakecell, hl_idx, self.hl_blocks, self.kpts,
+            shls_slice, ft_kern, cell_conc_fakecell = prepare_ppnl_ft_data(
+                self.cell, self.fakecell, hl_idx, self.hl_blocks, self.kpts,
                 intor=intor_name, origin=self.origin, comp=1)
             self.ft_data[intor_name] = (shls_slice, ft_kern, cell_conc_fakecell)
 
         for hl_idx, intor_name in zip(range(self.hl_max), self.comm_intors):
-            shls_slice, ft_kern, cell_conc_fakecell = prepare_ppnl_ft_data(self.cell, self.fakecell, hl_idx, self.hl_blocks, self.kpts,
+            shls_slice, ft_kern, cell_conc_fakecell = prepare_ppnl_ft_data(
+                self.cell, self.fakecell, hl_idx, self.hl_blocks, self.kpts,
                 intor=intor_name, origin=self.origin, comp=3)
             self.ft_data[intor_name] = (shls_slice, ft_kern, cell_conc_fakecell)
 
@@ -261,7 +263,13 @@ def prepare_ppnl_ft_data(cell, fakecell, hl_idx, hl_blocks, kpts, intor, origin=
     return shls_slice, ft_kern, cell_conc_fakecell
 
 
-def ft_aopair_kpts_kern(cell, aosym='s1', kptjs=np.zeros((1,3)), intor='GTO_ft_ovlp', comp=1, bvk_kmesh=None, origin=(0.0, 0.0, 0.0)):
+def ft_aopair_kpts_kern(cell,
+                        aosym='s1',
+                        kptjs=np.zeros((1,3)),
+                        intor='GTO_ft_ovlp',
+                        comp=1,
+                        bvk_kmesh=None,
+                        origin=(0.0, 0.0, 0.0)):
     r'''
     Fourier transform AO pair for a group of k-points
     \sum_T exp(-i k_j * T) \int exp(-i(G+q)r) i(r) j(r-T) dr^3
