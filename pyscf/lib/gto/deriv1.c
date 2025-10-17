@@ -57,6 +57,64 @@ int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
         return 1;
 }
 
+int GTOcontract_exp0_r2(double *ectr, double *coord, double *alpha, double *coeff,
+                     int l, int nprim, int nctr, size_t ngrids, double fac)
+{
+        size_t i, j, k;
+        double arr, eprim;
+        double rr[BLKSIZE];
+        double *gridx = coord;
+        double *gridy = coord+BLKSIZE;
+        double *gridz = coord+BLKSIZE*2;
+
+#pragma GCC ivdep
+        for (i = 0; i < ngrids; i++) {
+                rr[i] = gridx[i]*gridx[i] + gridy[i]*gridy[i] + gridz[i]*gridz[i];
+        }
+
+        for (i = 0; i < nctr*BLKSIZE; i++) {
+                ectr[i] = 0;
+        }
+        for (j = 0; j < nprim; j++) {
+        for (i = 0; i < ngrids; i++) {
+                arr = alpha[j] * rr[i];
+                eprim = exp(-arr) * fac * rr[i];
+                for (k = 0; k < nctr; k++) {
+                        ectr[k*BLKSIZE+i] += eprim * coeff[k*nprim+j];
+                }
+        } }
+        return 1;
+}
+
+int GTOcontract_exp0_r4(double *ectr, double *coord, double *alpha, double *coeff,
+                     int l, int nprim, int nctr, size_t ngrids, double fac)
+{
+        size_t i, j, k;
+        double arr, eprim;
+        double rr[BLKSIZE];
+        double *gridx = coord;
+        double *gridy = coord+BLKSIZE;
+        double *gridz = coord+BLKSIZE*2;
+
+#pragma GCC ivdep
+        for (i = 0; i < ngrids; i++) {
+                rr[i] = gridx[i]*gridx[i] + gridy[i]*gridy[i] + gridz[i]*gridz[i];
+        }
+
+        for (i = 0; i < nctr*BLKSIZE; i++) {
+                ectr[i] = 0;
+        }
+        for (j = 0; j < nprim; j++) {
+        for (i = 0; i < ngrids; i++) {
+                arr = alpha[j] * rr[i];
+                eprim = exp(-arr) * fac * rr[i] * rr[i];
+                for (k = 0; k < nctr; k++) {
+                        ectr[k*BLKSIZE+i] += eprim * coeff[k*nprim+j];
+                }
+        } }
+        return 1;
+}
+
 /*
  * deriv 0: exp(-ar^2) x^n
  * deriv 1: exp(-ar^2)[nx^{n-1} - 2ax^{n+1}]
@@ -463,7 +521,6 @@ void GTOshell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
                 }
         }
 }
-
 void GTOval_cart(int ngrids, int *shls_slice, int *ao_loc,
                  double *ao, double *coord, uint8_t *non0table,
                  int *atm, int natm, int *bas, int nbas, double *env)
