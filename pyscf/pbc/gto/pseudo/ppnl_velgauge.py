@@ -40,7 +40,7 @@ KECUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_kecut_threshold', 10.0)
 libpbc = lib.load_library('libpbc')
 
 
-def get_pp_nl_velgauge(cell, q, kpts=None, vgppnl_helper=None):
+def get_gth_pp_nl_velgauge(cell, q, kpts=None, vgppnl_helper=None):
     """Nonlocal part of GTH pseudopotential in velocity gauge.
 
     Parameters
@@ -103,9 +103,9 @@ def get_pp_nl_velgauge(cell, q, kpts=None, vgppnl_helper=None):
 
     if kpts is None or np.shape(kpts) == (3,):
         ppnl = ppnl[0]
-    return ppnl, vgppnl_helper
+    return ppnl
 
-def get_pp_nl_velgauge_commutator(cell, q, kpts=None, vgppnl_helper=None):
+def get_gth_pp_nl_velgauge_commutator(cell, q, kpts=None, vgppnl_helper=None):
     if kpts is None:
         kpts_lst = np.zeros((1,3))
     else:
@@ -148,7 +148,7 @@ def get_pp_nl_velgauge_commutator(cell, q, kpts=None, vgppnl_helper=None):
             vppnl_commutator[k] -= np.einsum('ilp,ij,xjlq->xpq', ilp.conj(), hl, rc_ilp)
     if kpts is None or np.shape(kpts) == (3,):
         vppnl_commutator = vppnl_commutator[0]
-    return vppnl_commutator, vgppnl_helper
+    return vppnl_commutator
 
 
 

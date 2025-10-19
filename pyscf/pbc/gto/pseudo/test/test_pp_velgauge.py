@@ -1,10 +1,8 @@
 import pathlib
 
 import numpy as np
-from pyscf import lib
 from pyscf.pbc import gto as pgto
-from pyscf.pbc.df import ft_ao as pft_ao
-from pyscf.pbc.gto.pseudo.ppnl_velgauge import get_pp_nl_velgauge, get_pp_nl_velgauge_commutator
+from pyscf.pbc.gto.pseudo.ppnl_velgauge import get_gth_pp_nl_velgauge, get_gth_pp_nl_velgauge_commutator
 
 
 # Reference values obtained from https://github.com/pyscf/pyscf-forge/pull/136
@@ -27,7 +25,7 @@ def test_pp_velgauge1():
     fspath = pathlib.Path(__file__).parent / "ppnl_refvals1.txt"
     ref_vals = np.loadtxt(fspath, dtype=np.complex128)
 
-    new_vals, _ = get_pp_nl_velgauge(cell, q=A_over_c, kpts=kpts)
+    new_vals = get_gth_pp_nl_velgauge(cell, q=A_over_c, kpts=kpts)
 
     assert np.allclose(ref_vals, new_vals)
 
@@ -46,7 +44,7 @@ def test_pp_velgauge2():
     fspath = pathlib.Path(__file__).parent / "ppnl_refvals2.txt"
     ref_vals = np.loadtxt(fspath, dtype=np.complex128)
 
-    new_vals, _ = get_pp_nl_velgauge(cell, q=A_over_c, kpts=kpts)
+    new_vals = get_gth_pp_nl_velgauge(cell, q=A_over_c, kpts=kpts)
 
     assert np.allclose(ref_vals, new_vals)
 
@@ -66,7 +64,7 @@ def test_pp_velgauge3():
     fspath = pathlib.Path(__file__).parent / "ppnl_refvals3.txt"
     ref_vals = np.loadtxt(fspath, dtype=np.complex128)
 
-    new_vals, _ = get_pp_nl_velgauge(cell, q=A_over_c, kpts=kpts)
+    new_vals = get_gth_pp_nl_velgauge(cell, q=A_over_c, kpts=kpts)
     new_vals = new_vals[0]
 
     print(new_vals)
@@ -90,7 +88,7 @@ def test_ppxx_velgauge1():
     fspath = pathlib.Path(__file__).parent / "ppxx_refvals1.npy"
     ref_vals = np.load(fspath).transpose(1,0,2,3)
 
-    new_vals, _ = get_pp_nl_velgauge_commutator(cell, q=A_over_c, kpts=kpts)
+    new_vals = get_gth_pp_nl_velgauge_commutator(cell, q=A_over_c, kpts=kpts)
 
     assert np.allclose(ref_vals, new_vals)
 
@@ -109,7 +107,7 @@ def test_ppxx_velgauge2():
     fspath = pathlib.Path(__file__).parent / "ppxx_refvals2.npy"
     ref_vals = np.load(fspath).transpose(1,0,2,3)
 
-    new_vals, _ = get_pp_nl_velgauge_commutator(cell, q=A_over_c, kpts=kpts)
+    new_vals = get_gth_pp_nl_velgauge_commutator(cell, q=A_over_c, kpts=kpts)
 
     assert np.allclose(ref_vals, new_vals)
 
