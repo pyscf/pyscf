@@ -503,13 +503,15 @@ def transition_velocity_dipole(tdobj, xy=None):
     '''
     ints_p = tdobj.mol.intor('int1e_ipovlp', comp=3, hermi=0)
     if tdobj.mol.pseudo:
-        # velocity operator = p - i[r, V_nl]
-        # Because int1e_ipovlp is ( nabla \| ) = ( \| -nabla ) = p / i, we have
-        # Im [ vel. ] = int1e_ipovlp - [ r, V_nl ].
-        ints = ints_p - get_gth_pp_nl_velgauge_commutator(tdobj.mol, q=numpy.zeros(3))
+        r_vnl_commutator = get_gth_pp_nl_velgauge_commutator(tdobj.mol, q=numpy.zeros(3)).real
     else:
-        ints = ints_p
-    v = tdobj._contract_multipole(ints, hermi=False, xy=xy).real
+        r_vnl_commutator = 0.0
+    # velocity operator = p - i[r, V_nl]
+    # Because int1e_ipovlp is ( nabla \| ) = ( \| -nabla ) = p / i, we have
+    # Im [ vel. ] = int1e_ipovlp - [ r, V_nl ].
+    # Note that the matrix of [ r_a, V_nl ] (a = 1, 2, 3) is real and anti-Hermitian.
+    velocity_operator = ints_p - r_vnl_commutator
+    v = tdobj._contract_multipole(velocity_operator, hermi=False, xy=xy)
     return -v
 
 def transition_magnetic_dipole(tdobj, xy=None):

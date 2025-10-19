@@ -24,6 +24,7 @@ import numpy as np
 from pyscf import lib
 from pyscf.tdscf import rhf
 from pyscf.pbc import scf
+from pyscf.pbc.gto.pseudo.ppnl_velgauge import get_gth_pp_nl_velgauge_commutator
 from pyscf import __config__
 
 def get_ab(mf):
@@ -136,6 +137,23 @@ def get_ab(mf):
 
     return a, b
 
+def transition_velocity_dipole(tdobj, xy=None):
+    '''Transition dipole moments in the velocity gauge (imaginary part only)
+    '''
+    kpt = tdobj._scf.kpt
+    ints_p = tdobj.cell.pbc_intor('int1e_ipovlp', comp=3, hermi=0, kpts=kpt)
+    if tdobj.cell.pseudo:
+        r_vnl_commutator = get_gth_pp_nl_velgauge_commutator(tdobj.cell, q=np.zeros(3), kpts=kpt)
+    else:
+        r_vnl_commutator = 0.0
+    # velocity operator = p - i[r, V_nl]
+    # Because int1e_ipovlp is ( nabla \| ) = ( \| -nabla ) = p / i, we have
+    # Im [ vel. ] = int1e_ipovlp - [ r, V_nl ].
+    # Note that the matrix of [ r_a, V_nl ] (a = 1, 2, 3) is real and anti-Hermitian.
+    velocity_operator = ints_p - r_vnl_commutator
+    v = tdobj._contract_multipole(velocity_operator, hermi=0, xy=xy)
+    return -v
+
 class TDBase(rhf.TDBase):
     _keys = {'cell'}
 
@@ -151,12 +169,11 @@ class TDBase(rhf.TDBase):
         raise NotImplementedError
 
     get_nto = rhf.TDBase.get_nto
-    analyze = lib.invalid_method('analyze')
-    oscillator_strength = lib.invalid_method('oscillator_strength')
+    transition_velocity_dipole     = transition_velocity_dipole
+    analyze                        = lib.invalid_method('analyze')
     transition_dipole              = lib.invalid_method('transition_dipole')
     transition_quadrupole          = lib.invalid_method('transition_quadrupole')
     transition_octupole            = lib.invalid_method('transition_octupole')
-    transition_velocity_dipole     = lib.invalid_method('transition_velocity_dipole')
     transition_velocity_quadrupole = lib.invalid_method('transition_velocity_quadrupole')
     transition_velocity_octupole   = lib.invalid_method('transition_velocity_octupole')
     transition_magnetic_dipole     = lib.invalid_method('transition_magnetic_dipole')
