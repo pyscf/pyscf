@@ -31,6 +31,7 @@
 
 #define INTBUFMAX10     8000
 #define OF_CMPLX        2
+#define LATSUM_BLKSIZE  8
 
 typedef void (*FPtrSort)(double *outR, double *outI, double *bufkkR, double *bufkkI,
                          int *shls, int *ao_loc, BVKEnvs *envs_bvk);
@@ -464,50 +465,74 @@ static void _fill_kk(FPtrIntor intor, FPtrSort fsort,
         double *bufkkR = bufkLI + (size_t)d3cL * nkpts;
         double *bufkkI = bufkkR + (size_t)d3c * nkpts * nkpts;
         double *bufL = bufkkR;
-        double *pbuf = bufL;
         int iL, ish_bvk, iseg0, iseg1, nish;
         int jL, jsh_bvk, jseg0, jseg1, njsh;
         int bvk_cells[2];
         int cutoff = envs_bvk->cutoff;
 
-        int iLmax = -1;
+        int njsh_in_seg = 0;
+        for (jL = 0; jL < bvk_ncells; jL++) {
+                jsh_bvk = jL * nbasp + jsh_cell0;
+                jseg0 = seg_loc[jsh_bvk];
+                jseg1 = seg_loc[jsh_bvk+1];
+                njsh = seg2sh[jseg1] - seg2sh[jseg0];
+                njsh_in_seg += njsh;
+        }
+        double *expLkR = envs_bvk->expLkR;
+        double *expLkI = envs_bvk->expLkI;
+        int jsh0_in_seg = 0;
         int jLmax = -1;
-        for (iL = 0; iL < bvk_ncells; iL++) {
-                bvk_cells[0] = iL;
-                ish_bvk = iL * nbasp + ish_cell0;
-                iseg0 = seg_loc[ish_bvk];
-                iseg1 = seg_loc[ish_bvk+1];
-                nish = seg2sh[iseg1] - seg2sh[iseg0];
-                for (jL = 0; jL < bvk_ncells; jL++) {
-                        bvk_cells[1] = jL;
+        int jL0;
+        for (jL0 = 0; jL0 < bvk_ncells; jL0 += LATSUM_BLKSIZE) {
+                int jL1 = MIN(jL0+LATSUM_BLKSIZE, bvk_ncells);
+                double *pbuf = bufL;
+                int iLmax = -1;
+                int ish_in_seg = 0;
+                for (iL = 0; iL < bvk_ncells; iL++) {
+                        bvk_cells[0] = iL;
+                        ish_bvk = iL * nbasp + ish_cell0;
+                        iseg0 = seg_loc[ish_bvk];
+                        iseg1 = seg_loc[ish_bvk+1];
+                        nish = seg2sh[iseg1] - seg2sh[iseg0];
+                        int jsh_in_seg = jsh0_in_seg;
+                        for (jL = jL0; jL < jL1; jL++) {
+                                bvk_cells[1] = jL;
+                                jsh_bvk = jL * nbasp + jsh_cell0;
+                                jseg0 = seg_loc[jsh_bvk];
+                                jseg1 = seg_loc[jsh_bvk+1];
+                                njsh = seg2sh[jseg1] - seg2sh[jseg0];
+                                if ((*intor)(pbuf, cell0_shls, bvk_cells, cutoff,
+                                             rij_cond+(ish_in_seg*njsh_in_seg+nish*jsh_in_seg)*3,
+                                             envs_cint, envs_bvk)) {
+                                        iLmax = iL;
+                                        jLmax = MAX(jL, jLmax);
+                                }
+                                pbuf += d3c;
+                                jsh_in_seg += njsh;
+                        }
+                        ish_in_seg += nish;
+                }
+                for (jL = jL0; jL < jL1; jL++) {
                         jsh_bvk = jL * nbasp + jsh_cell0;
                         jseg0 = seg_loc[jsh_bvk];
                         jseg1 = seg_loc[jsh_bvk+1];
                         njsh = seg2sh[jseg1] - seg2sh[jseg0];
-                        if ((*intor)(pbuf, cell0_shls, bvk_cells, cutoff,
-                                     rij_cond, envs_cint, envs_bvk)) {
-                                iLmax = iL;
-                                jLmax = MAX(jL, jLmax);
-                        }
-                        pbuf += d3c;
-                        rij_cond += nish * njsh * 3;
+                        jsh0_in_seg += njsh;
                 }
+                int nLi = MAX(iLmax + 1, 1);
+                int d3c_j = d3c * (jL1 - jL0);
+                int offset = nkpts * d3c * jL0;
+                dgemm_(&TRANS_N, &TRANS_T, &nkpts, &d3c_j, &nLi,
+                       &D1, expLkR, &nkpts, bufL, &d3c_j,
+                       &D0, bufkLR+offset, &nkpts);
+                // conj(exp(1j*dot(h,k)))
+                dgemm_(&TRANS_N, &TRANS_T, &nkpts, &d3c_j, &nLi,
+                       &ND1, expLkI, &nkpts, bufL, &d3c_j,
+                       &D0, bufkLI+offset, &nkpts);
         }
 
-        int nLi = iLmax + 1;
-        int nLj = jLmax + 1;
-        double *expLkR = envs_bvk->expLkR;
-        double *expLkI = envs_bvk->expLkI;
-
         if (jLmax >= 0) {  // ensure j3c buf is not empty
-                dgemm_(&TRANS_N, &TRANS_T, &nkpts, &d3cL, &nLi,
-                       &D1, expLkR, &nkpts, bufL, &d3cL,
-                       &D0, bufkLR, &nkpts);
-                // conj(exp(1j*dot(h,k)))
-                dgemm_(&TRANS_N, &TRANS_T, &nkpts, &d3cL, &nLi,
-                       &ND1, expLkI, &nkpts, bufL, &d3cL,
-                       &D0, bufkLI, &nkpts);
-
+                int nLj = jLmax + 1;
                 dgemm_(&TRANS_N, &TRANS_T, &nkpts, &d3ck, &nLj,
                        &D1, expLkR, &nkpts, bufkLR, &d3ck,
                        &D0, bufkkR, &nkpts);

@@ -311,9 +311,11 @@ class Int3cBuilder(lib.StreamObject):
         else:
             assert nkpts < 45000
             fill = f'PBCfill_nr3c_kk{aosym}'
+            LATSUM_BLKSIZE = 8
             nkpts_ij = nkpts * nkpts
-            cache_size = (max(dijk * bvk_ncells**2 + cache_size, dijk * nkpts**2 * 2) +
+            cache_size = (max(dijk * bvk_ncells*LATSUM_BLKSIZE + cache_size, dijk * nkpts**2 * 2) +
                           dijk * bvk_ncells * nkpts * 2)
+            assert cache_size < 2**31
             if aosym == 's2' and reindex_k is not None:
                 kk_mask = np.zeros((nkpts*nkpts), dtype=bool)
                 kk_mask[reindex_k] = True
