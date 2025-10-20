@@ -450,6 +450,52 @@ class KnownValues(unittest.TestCase):
             v1 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(abs(ref - v1).max(), 0, 7)
 
+    # issue 2973
+    def test_off_center_kpts_rsdf_vs_fft(self):
+        cell = pgto.M(
+            atom='He 0 0 0', a=np.eye(3)*3.2,
+            basis=[[2, [.06, 1]]], cart=True)
+        cell.mesh = [9] * 3
+        cell.build()
+        nk = [2,1,1]
+        tw = np.array([0.81,0.57,0.27])
+        kpts = cell.make_kpts(nk, scaled_center=tw)
+        gpw_ref = FFTDF(cell, kpts)
+        auxcell = cell.copy()
+        auxcell.basis = [[4, [.12, 1]]]
+        auxcell.mesh = [9] * 3
+        auxcell.build(0, 0)
+        naux = auxcell.nao
+        nao = cell.nao
+        Gv, Gvbase, kws = cell.get_Gv_weights()
+        dfbuilder = rsdf_builder._RSGDFBuilder(cell, auxcell, kpts)
+        dfbuilder.fft_dd_block = False
+        dfbuilder.exclude_d_aux = False
+        with tempfile.NamedTemporaryFile() as tmpf:
+            dfbuilder.build()
+            dfbuilder.make_j3c(tmpf.name)
+            nkpts = len(kpts)
+            with df.CDERIArray(tmpf.name) as cderi_array:
+                for ki in range(nkpts):
+                    for kj in range(nkpts):
+                        v1 = cderi_array[ki, kj]
+                        if ki == kj:
+                            v1 = lib.unpack_tril(v1)
+                        else:
+                            v1 = v1.reshape(naux, nao, nao)
+                        dat = np.einsum('pij,plk->ijkl', v1, v1.conj())
+
+                        q = kpts[kj]-kpts[ki]
+                        coulG = pbctools.get_coulG(cell, q, Gv=Gv)
+                        auxG = ft_ao.ft_ao(auxcell, Gv=Gv+q)
+                        j2c = (coulG[:,None]*kws * auxG).T.dot(auxG.conj())
+                        ngrids = np.prod(cell.mesh)
+                        pair_ij = gpw_ref.get_ao_pairs_G(kpts[[ki,kj]])
+                        ref = np.einsum('gm,g,gk->mk', pair_ij, coulG/ngrids, auxG.conj())
+                        ref = ref.dot(np.linalg.solve(j2c, ref.conj().T))
+                        ref = ref.reshape(dat.shape).transpose(0,1,3,2)
+                        self.assertAlmostEqual(abs(ref - dat).max(), 0, 7)
+
 if __name__ == '__main__':
     print("Full Tests for rsdf_builder")
     unittest.main()
