@@ -137,9 +137,9 @@ class UKSpU(uks.UKS):
 
         Attributes:
             U_idx: same as the input.
-            U_val: effectiv U-J [in AU]
-            C_ao_loc: np.array
-            alpha: the perturbation [in AU] used to compute U in LR-cDFT.
+            U_val: effectiv U-J [in eV]
+            C_ao_lo: (np.ndarray) Custom local orbitals.
+            alpha: the perturbation [in eV] used to compute U in LR-cDFT.
                 Refs: Cococcioni and de Gironcoli, PRB 71, 035105 (2005)
         """
         super(self.__class__, self).__init__(mol, xc=xc)
