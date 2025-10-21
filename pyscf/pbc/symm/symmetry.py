@@ -97,13 +97,14 @@ def check_mesh_symmetry(cell, ops, mesh=None, tol=SYMPREC,
                         return_mesh=False):
     if mesh is None:
         mesh = cell.mesh
+    mesh = np.asarray(mesh)
     ft = []
     rm_list = []
     for i, op in enumerate(ops):
         if not op.trans_is_zero:
             ft.append(op.trans)
-            tmp = op.trans * np.asarray(mesh)
-            if (abs(tmp - tmp.round()) > tol).any():
+            tmp = op.trans * mesh
+            if (abs(tmp - tmp.round())/mesh > tol).any():
                 rm_list.append(i)
 
     if len(rm_list) == 0:
