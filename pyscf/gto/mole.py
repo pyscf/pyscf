@@ -3133,7 +3133,7 @@ class MoleBase(lib.StreamObject):
                 coordb = tuple(atom[1])
                 coords = coorda + coordb
                 logger.info(mol, ' %3d %-4s %16.12f %16.12f %16.12f AA  '
-                            '%16.12f %16.12f %16.12f Bohr\n',
+                            '%16.12f %16.12f %16.12f Bohr',
                             ia+1, mol.atom_symbol(ia), *coords)
         return mol
 
@@ -4299,13 +4299,14 @@ def bse_predefined_ecp(basis_name, elements):
                 ecp = basis_meta[0] # standard format basis set name
     return ecp, ecp_atoms
 
-def extract_pgto_params(mol, op='diffused'):
+def extract_pgto_params(mol, op='diffuse'):
     '''A helper function to extract exponents and contraction coefficients of
-    the most diffused or compact primitive GTOs for each shell. These exponents
+    the most diffuse or compact primitive GTOs for each shell. These exponents
     and coefficients are typically used in estimating rcut and Ecut for PBC
     methods.
     '''
-    if op != 'diffused' and op != 'compact':
+    op = op[:7] # in previous versions, op was spelled as diffused
+    if op != 'diffuse' and op != 'compact':
         raise RuntimeError(f'Unsupported operation {op}')
 
     e = np.hstack(mol.bas_exps())
@@ -4314,7 +4315,7 @@ def extract_pgto_params(mol, op='diffused'):
     l = np.repeat(mol._bas[:,ANG_OF], mol._bas[:,NPRIM_OF])
     basis_id = np.repeat(np.arange(mol.nbas), mol._bas[:,NPRIM_OF])
     precision = 1e-8
-    if op == 'diffused':
+    if op == 'diffuse':
         # A quick estimation for the radius that each primitive GTO decays to the
         # value smaller than the required precision
         r2 = np.log(c**2/precision * 10**l + 1e-200) / e

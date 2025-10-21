@@ -410,7 +410,7 @@ def _load_conf(mod, name, default):
         return var
 
 class Grids(lib.StreamObject):
-    '''DFT mesh grids
+    '''Atomic grids for DFT numerical integration
 
     Attributes for Grids:
         level : int
@@ -461,7 +461,25 @@ class Grids(lib.StreamObject):
             Eg, grids.atom_grid = {'H': (20,110)} will generate 20 radial
             grids and 110 angular grids for H atom.
 
-        Examples:
+    Saved results:
+        coords : ndarray
+            Coordinates of the integration grids.
+        weights : ndarray
+            Integration weights of the integration grids.
+
+    Intermediate Attributes (These attributes are generated during calculations
+    and should not be modified. Additionally, they may not be compatible between
+    GPU and CPU implementations):
+        non0tab :
+            The important grids for each AO shell.
+        screen_index :
+            An estimation of the AO values on the grids.
+        atm_idx :
+            Atom ID for each grid.
+        quadrature_weights :
+            Volume of each grid, not scaled by the Becke partitioning.
+
+    Examples:
 
         >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1')
         >>> grids = dft.gen_grid.Grids(mol)

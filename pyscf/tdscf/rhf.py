@@ -853,18 +853,23 @@ class TDBase(lib.StreamObject):
 class TDA(TDBase):
     '''Tamm-Dancoff approximation
 
-    Attributes:
+    Input Attributes:
         conv_tol : float
-            Diagonalization convergence tolerance.  Default is 1e-9.
+            Convergence is achieved when the norm of the residual for a state is
+            below this threshold. Default is 1e-5.
         nstates : int
             Number of TD states to be computed. Default is 3.
+        frozen : int or list
+            Orbitals indices to be frozen during the TDDFT diagonalization.
+        wfnsym : str
+            The irrep name
 
     Saved results:
 
-        converged : bool
-            Diagonalization converged or not
+        converged : bool array
+            Indicates whether each excited state is converged.
         e : 1D array
-            excitation energy for each excited state.
+            Excitation energy for each excited state.
         xy : A list of two 2D arrays
             The two 2D arrays are Excitation coefficients X (shape [nocc,nvir])
             and de-excitation coefficients Y (shape [nocc,nvir]) for each

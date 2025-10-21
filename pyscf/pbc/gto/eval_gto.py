@@ -171,7 +171,7 @@ pbc_eval_gto = eval_gto
 def _estimate_rcut(cell, deriv=0):
     '''Cutoff radius, above which each shell decays to a value less than the
     required precision'''
-    es, cs = extract_pgto_params(cell, 'diffused')
+    es, cs = extract_pgto_params(cell, 'diffuse')
     ls = cell._bas[:,ANG_OF]
 
     vol = cell.vol
