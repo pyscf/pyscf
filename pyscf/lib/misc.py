@@ -701,7 +701,7 @@ class StreamObject:
         '''
         Clean up intermediates
         '''
-        return self
+        raise NotImplementedError
 
 
 _warn_once_registry = {}

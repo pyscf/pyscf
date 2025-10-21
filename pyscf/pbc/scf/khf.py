@@ -444,7 +444,6 @@ class KSCF(pbchf.SCF):
 
     _keys = {'cell', 'exx_built', 'exxdiv', 'with_df', 'rsjk'}
 
-    reset = pbchf.SCF.reset
     mol = pbchf.SCF.mol
 
     check_sanity = pbchf.SCF.check_sanity
@@ -547,6 +546,11 @@ class KSCF(pbchf.SCF):
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
+        return self
+
+    def reset(self, cell=None):
+        pbchf.SCF.reset(self, cell)
+        self.exx_built = False
         return self
 
     def dump_flags(self, verbose=None):
@@ -777,6 +781,8 @@ class KSCF(pbchf.SCF):
         raise NotImplementedError
 
 class KRHF(KSCF):
+    '''RHF class with k-point sampling (default: gamma point).
+    '''
 
     analyze = analyze
     spin_square = mol_hf.RHF.spin_square

@@ -133,7 +133,7 @@ def gen_response(mf, mo_coeff=None, mo_occ=None,
     return vind
 
 class UKS(rks.KohnShamDFT, pbcuhf.UHF):
-    '''UKS class adapted for PBCs.
+    '''PBC-UKS at a single point (default: gamma point).
 
     This is a literal duplication of the molecular UKS class with some `mol`
     variables replaced by `cell`.
@@ -146,7 +146,7 @@ class UKS(rks.KohnShamDFT, pbcuhf.UHF):
     energy_elec = pyscf.dft.uks.energy_elec
     gen_response = gen_response
 
-    def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN',
+    def __init__(self, cell, kpt=None, xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         pbcuhf.UHF.__init__(self, cell, kpt, exxdiv=exxdiv)
         rks.KohnShamDFT.__init__(self, xc)

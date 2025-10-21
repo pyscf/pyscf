@@ -193,15 +193,13 @@ class FFTDF(lib.StreamObject):
         'cell', 'kpts', 'mesh', 'blockdim', 'exxdiv',
     }
 
-    def __init__(self, cell, kpts=numpy.zeros((1,3))):
+    def __init__(self, cell, kpts=None):
         from pyscf.pbc.dft import numint
         self.cell = cell
         self.stdout = cell.stdout
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
 
-        if isinstance(kpts, KPoints):
-            kpts = kpts.kpts
         self.kpts = kpts
         # FFT from real space density distributes error to every rho_ij(G) than
         # the one with largest Gaussian exponent. Therefore the error for FFT-ERI
@@ -223,9 +221,30 @@ class FFTDF(lib.StreamObject):
         grids = gen_grid.UniformGrids(self.cell)
         grids.mesh = self.mesh
         return grids
+    @grids.setter
+    def grids(self, val):
+        self.mesh = val.mesh
+
+    @property
+    def kpts(self):
+        if isinstance(self._kpts, KPoints):
+            return self._kpts.kpts
+        else:
+            return self.cell.get_abs_kpts(self._kpts)
+
+    @kpts.setter
+    def kpts(self, val):
+        if val is None:
+            self._kpts = numpy.zeros((1, 3))
+        elif isinstance(val, KPoints):
+            self._kpts = val
+        else:
+            self._kpts = self.cell.get_scaled_kpts(val)
 
     def reset(self, cell=None):
         if cell is not None:
+            if isinstance(self._kpts, KPoints):
+                self._kpts.reset(cell)
             self.cell = cell
         self._rsh_df = {}
         return self
@@ -238,8 +257,6 @@ class FFTDF(lib.StreamObject):
         log.info('******** %s ********', self.__class__)
         log.info('mesh = %s (%d PWs)', self.mesh, numpy.prod(self.mesh))
         kpts = self.kpts
-        if isinstance(kpts, KPoints):
-            kpts = kpts.kpts
         log.info('len(kpts) = %d', len(kpts))
         log.debug1('    kpts = %s', kpts)
         return self

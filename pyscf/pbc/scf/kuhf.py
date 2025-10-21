@@ -403,7 +403,7 @@ def gen_response(mf, mo_coeff=None, mo_occ=None,
     return vind
 
 class KUHF(khf.KSCF):
-    '''UHF class with k-point sampling.
+    '''UHF class with k-point sampling (default: gamma point).
     '''
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
     init_guess_breaksym = getattr(__config__, 'scf_uhf_init_guess_breaksym', 1)
@@ -425,7 +425,7 @@ class KUHF(khf.KSCF):
     gen_response = gen_response
     to_gpu = lib.to_gpu
 
-    def __init__(self, cell, kpts=np.zeros((1,3)),
+    def __init__(self, cell, kpts=None,
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         khf.KSCF.__init__(self, cell, kpts, exxdiv)
         self.nelec = None

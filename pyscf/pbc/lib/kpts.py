@@ -981,6 +981,21 @@ class KPoints(symm.Symmetry, lib.StreamObject):
         self.dump_info()
         return self
 
+    def reset(self, cell=None):
+        '''
+        Update the absolute k-points of an object wrt the input cell,
+        while preserving the same fractional (scaled) k-point coordinates.
+        '''
+        if cell is None:
+            return self
+
+        self.cell = cell
+        self._built = False
+        self.kpts = self.kpts_ibz = cell.get_abs_kpts(self.kpts_scaled)
+        self.build(space_group_symmetry=cell.space_group_symmetry,
+                   time_reversal_symmetry=self.time_reversal)
+        return self
+
     def dump_info(self):
         if self.verbose >= logger.INFO:
             logger.info(self, 'time reversal: %s', self.time_reversal)

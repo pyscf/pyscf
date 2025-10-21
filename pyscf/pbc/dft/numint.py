@@ -978,6 +978,9 @@ class NumInt(lib.StreamObject, numint.LibXCMixin):
 
     cutoff = CUTOFF * 1e2  # cutoff for small AO product
 
+    def reset(self, cell=None):
+        return self
+
     def nr_vxc(self, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
                kpt=None, kpts_band=None, max_memory=2000, verbose=None):
         '''Evaluate RKS/UKS XC functional and potential matrix.
@@ -1130,8 +1133,12 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
     '''Generalization of pyscf's NumInt class for k-point sampling and
     periodic images.
     '''
-    def __init__(self, kpts=numpy.zeros((1,3))):
-        self.kpts = numpy.reshape(kpts, (-1,3))
+    def __init__(self, *args, **kwargs):
+        # define this anonymous __init__ for backward compatibility
+        pass
+
+    def reset(self, cell=None):
+        return self
 
     eval_ao = staticmethod(eval_ao_kpts)
 
@@ -1196,26 +1203,20 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
     @lib.with_doc(nr_rks.__doc__)
     def nr_rks(self, cell, grids, xc_code, dms, relativity=0, hermi=1,
                kpts=None, kpts_band=None, max_memory=2000, verbose=None, **kwargs):
-        if kpts is None:
-            if 'kpt' in kwargs:
-                sys.stderr.write('WARN: KNumInt.nr_rks function finds keyword '
-                                 'argument "kpt" and converts it to "kpts"\n')
-                kpts = kwargs['kpt']
-            else:
-                kpts = self.kpts
+        if 'kpt' in kwargs:
+            sys.stderr.write('WARN: KNumInt.nr_rks function finds keyword '
+                             'argument "kpt" and converts it to "kpts"\n')
+            kpts = kwargs['kpt']
         return nr_rks(self, cell, grids, xc_code, dms, 0, 0,
                       hermi, kpts, kpts_band, max_memory, verbose)
 
     @lib.with_doc(nr_uks.__doc__)
     def nr_uks(self, cell, grids, xc_code, dms, relativity=0, hermi=1,
                kpts=None, kpts_band=None, max_memory=2000, verbose=None, **kwargs):
-        if kpts is None:
-            if 'kpt' in kwargs:
-                sys.stderr.write('WARN: KNumInt.nr_uks function finds keyword '
-                                 'argument "kpt" and converts it to "kpts"\n')
-                kpts = kwargs['kpt']
-            else:
-                kpts = self.kpts
+        if 'kpt' in kwargs:
+            sys.stderr.write('WARN: KNumInt.nr_uks function finds keyword '
+                             'argument "kpt" and converts it to "kpts"\n')
+            kpts = kwargs['kpt']
         return nr_uks(self, cell, grids, xc_code, dms, 1, 0,
                       hermi, kpts, kpts_band, max_memory, verbose)
 

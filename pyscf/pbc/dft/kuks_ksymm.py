@@ -87,9 +87,11 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
 class KsymAdaptedKUKS(kuks.KUKS, kuhf_ksymm.KUHF):
 
+    reset = khf_ksymm.KsymAdaptedKSCF.reset
     get_veff = get_veff
 
     kpts = khf_ksymm.KsymAdaptedKSCF.kpts
+    kmesh = khf_ksymm.KsymAdaptedKSCF.kmesh
     get_ovlp = khf_ksymm.KsymAdaptedKSCF.get_ovlp
     get_hcore = khf_ksymm.KsymAdaptedKSCF.get_hcore
     get_jk = khf_ksymm.KsymAdaptedKSCF.get_jk
