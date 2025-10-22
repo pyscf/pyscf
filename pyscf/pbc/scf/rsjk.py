@@ -207,8 +207,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                 log.debug('supmol_d nbas = %d cGTO = %d', supmol_d.nbas, supmol_d.nao)
         log.timer_debug1('initializing supmol', *cpu0)
 
-        self._cintopt = _vhf.make_cintopt(supmol_sr._atm, supmol_sr._bas,
-                                          supmol_sr._env, 'int2e')
+        self._cintopt = lib.c_null_ptr()
         nbas = supmol_sr.nbas
         qindex = np.empty((3,nbas,nbas), dtype=np.int16)
         ao_loc = supmol_sr.ao_loc
