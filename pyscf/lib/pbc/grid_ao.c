@@ -1200,3 +1200,51 @@ void PBCGTOval_sph_deriv1_strain_tensor(int ngrids, int *shls_slice, int *ao_loc
                 ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
                 ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
 }
+
+void PBCGTOval_r2_cart(int ngrids, int *shls_slice, int *ao_loc,
+                          double *Ls, int nimgs, double complex *expLk, int nkpts,
+                          double complex *ao, double *coord,
+                          double *rcut, uint8_t *non0table,
+                          int *atm, int natm, int *bas, int nbas, double *env)
+{
+        int param[] = {1, 1};
+        PBCeval_cart_drv(GTOshell_eval_grid_cart, GTOcontract_exp0_r2,
+                        ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
+                        ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
+}
+
+void PBCGTOval_r2_sph(int ngrids, int *shls_slice, int *ao_loc,
+                          double *Ls, int nimgs, double complex *expLk, int nkpts,
+                          double complex *ao, double *coord,
+                          double *rcut, uint8_t *non0table,
+                          int *atm, int natm, int *bas, int nbas, double *env)
+{
+        int param[] = {1, 1};
+        PBCeval_sph_drv(GTOshell_eval_grid_cart, GTOcontract_exp0_r2,
+                        ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
+                        ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
+}
+
+void PBCGTOval_r4_cart(int ngrids, int *shls_slice, int *ao_loc,
+                          double *Ls, int nimgs, double complex *expLk, int nkpts,
+                          double complex *ao, double *coord,
+                          double *rcut, uint8_t *non0table,
+                          int *atm, int natm, int *bas, int nbas, double *env)
+{
+        int param[] = {1, 1};
+        PBCeval_cart_drv(GTOshell_eval_grid_cart, GTOcontract_exp0_r4,
+                        ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
+                        ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
+}
+
+void PBCGTOval_r4_sph(int ngrids, int *shls_slice, int *ao_loc,
+                          double *Ls, int nimgs, double complex *expLk, int nkpts,
+                          double complex *ao, double *coord,
+                          double *rcut, uint8_t *non0table,
+                          int *atm, int natm, int *bas, int nbas, double *env)
+{
+        int param[] = {1, 1};
+        PBCeval_sph_drv(GTOshell_eval_grid_cart, GTOcontract_exp0_r4,
+                        ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
+                        ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
+}

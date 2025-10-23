@@ -235,6 +235,8 @@ _GTO_EVAL_FUNCTIONS = {
     'GTOval_sp'             : (4, 1 ),
     'GTOval_ipsp'           : (12,3 ),
     'GTOval_ipipsp'         : (36,9 ),
+    'GTOval_r2'             : (1, 1 ),
+    'GTOval_r4'             : (1, 1 ),
 }
 
 
