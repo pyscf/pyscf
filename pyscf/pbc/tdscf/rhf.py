@@ -154,6 +154,27 @@ def transition_velocity_dipole(tdobj, xy=None):
     v = tdobj._contract_multipole(velocity_operator, hermi=0, xy=xy)
     return -v
 
+def oscillator_strength(tdobj, e=None, xy=None, gauge='velocity', order=0):
+    if e is None: e = tdobj.e
+
+    if gauge == 'length':
+        raise NotImplementedError
+
+    elif gauge == 'velocity':
+        trans_dip = tdobj.transition_velocity_dipole(xy)
+        f = 2./3. * np.einsum('s,sx,sx->s', 1./e, trans_dip, trans_dip.conj()).real
+
+        if order > 0:
+            raise NotImplementedError
+    else:
+        raise ValueError(f'Unknown gauge {gauge}')
+
+    lib.logger.warn(tdobj, 'You requested oscillator strengths for a periodic system.'
+                           ' Please note that they are only intended for comparison'
+                           ' with molecular calculations.')
+
+    return f
+
 class TDBase(rhf.TDBase):
     _keys = {'cell'}
 
@@ -170,6 +191,7 @@ class TDBase(rhf.TDBase):
 
     get_nto = rhf.TDBase.get_nto
     transition_velocity_dipole     = transition_velocity_dipole
+    oscillator_strength            = oscillator_strength
     analyze                        = lib.invalid_method('analyze')
     transition_dipole              = lib.invalid_method('transition_dipole')
     transition_quadrupole          = lib.invalid_method('transition_quadrupole')
@@ -178,6 +200,7 @@ class TDBase(rhf.TDBase):
     transition_velocity_octupole   = lib.invalid_method('transition_velocity_octupole')
     transition_magnetic_dipole     = lib.invalid_method('transition_magnetic_dipole')
     transition_magnetic_quadrupole = lib.invalid_method('transition_magnetic_quadrupole')
+    photoabsorption_cross_section  = lib.invalid_method('photoabsorption_cross_section')
 
 
 class TDA(TDBase):

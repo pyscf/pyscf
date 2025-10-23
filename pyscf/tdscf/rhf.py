@@ -663,7 +663,7 @@ def dipole_spectral_function(tdobj, e=None, xy=None, gauge='length', freqs=None,
     """
     if e is None:
         e = tdobj.e
-    f = oscillator_strength(tdobj, e=e, xy=xy, gauge=gauge)
+    f = tdobj.oscillator_strength(e=e, xy=xy, gauge=gauge)
 
     def lorentz_broad(w, w0, eta):
         # approximate a delta function by eta/(pi*((w-w0)^2+eta^2))
@@ -677,7 +677,7 @@ def photoabsorption_cross_section(tdobj, e=None, xy=None, gauge='length', freqs=
     """Photoabsorption cross section.
     sigma(omega) = 2 pi^2 / c * S(omega)
     """
-    spec = dipole_spectral_function(tdobj, e=e, xy=xy, gauge=gauge, freqs=freqs, eta=eta)
+    spec = tdobj.dipole_spectral_function(e=e, xy=xy, gauge=gauge, freqs=freqs, eta=eta)
     # sigma = 2 pi^2 S(omega) / c
     return 2 * numpy.pi**2 * spec / nist.LIGHT_SPEED
 
