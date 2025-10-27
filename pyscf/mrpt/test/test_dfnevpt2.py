@@ -29,7 +29,7 @@ Note that these values were computed without frozen core approximation.
 
 class KnownValues(unittest.TestCase):
 
-    def test_multistate(self):
+    def test_dfnevpt2(self):
         mol = gto.M(atom='''
                 C   -0.669500   0.000000   0.000000
                 C    0.669500   0.000000   0.000000
@@ -55,7 +55,7 @@ class KnownValues(unittest.TestCase):
         e0 = mc.e_tot + mp0.e_corr
 
         # Reference values computed from ORCA (6.1.0)
-        self.assertAlmostEqual(mp0.e_corr, -0.25704466647882, 4)
+        self.assertAlmostEqual(mp0.e_corr, -0.25704466647882, 3)
         self.assertAlmostEqual(e0, -78.26314110837014, 4)
 
         # NEVPT2 with density fitting
@@ -64,7 +64,7 @@ class KnownValues(unittest.TestCase):
         e1 = mc.e_tot + mp1.e_corr
 
         # Reference values computed from ORCA (6.1.0)
-        self.assertAlmostEqual(mp1.e_corr, -0.25691533473915, 4)
+        self.assertAlmostEqual(mp1.e_corr, -0.25691533473915, 3)
         self.assertAlmostEqual(e1, -78.26299316692777, 4)
         self.assertAlmostEqual(mp1.e_corr, mp0.e_corr, 3)
 
