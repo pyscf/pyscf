@@ -56,7 +56,7 @@ class KnownValues(unittest.TestCase):
 
         # Reference values computed from ORCA (6.1.0)
         self.assertAlmostEqual(mp0.e_corr, -0.25704466647882, 3)
-        self.assertAlmostEqual(e0, -78.26314110837014, 4)
+        self.assertAlmostEqual(e0, -78.26314110837014, delta=5e-5)
 
         # NEVPT2 with density fitting
         mp1 = nevpt2.NEVPT(mc, density_fit=True)
@@ -65,8 +65,11 @@ class KnownValues(unittest.TestCase):
 
         # Reference values computed from ORCA (6.1.0)
         self.assertAlmostEqual(mp1.e_corr, -0.25691533473915, 3)
-        self.assertAlmostEqual(e1, -78.26299316692777, 4)
+        self.assertAlmostEqual(e1, -78.26299316692777, delta=5e-5)
         self.assertAlmostEqual(mp1.e_corr, mp0.e_corr, 3)
+
+        # Calculate with DF-NEVPT2 in PySCF
+        self.assertAlmostEqual(mp1.e_corr, -0.256916544254705, 6)
 
 if __name__ == "__main__":
     print("Full Tests for df-nevpt2")
