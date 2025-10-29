@@ -311,7 +311,7 @@ class SGXData:
         self.hermi = hermi
         # Use position-dependent screening of integrals
         # (speeds up short-range exchange)
-        self._build_rdpt_screen = False
+        self._build_rdpt_screen = True
         self._etol = etol
         self._screen_energy = True
         self._vtol = vtol
@@ -378,7 +378,11 @@ class SGXData:
         self._this.msum_i = _arr2c(self._msum_i)
         if self._build_rdpt_screen:
             self._this.rbar_ij = _arr2c(self._rbar_ij)
+            # TODO the batch code will need C info
             self._this.mbar_bi = _arr2c(self._mbar_bi)
+        else:
+            self._this.rbar_ij = None  #lib.c_null_ptr()
+            self._this.mbar_bi = None  #lib.c_null_ptr()
         # buf can contain the following:
         # For batch screening step
         #   Nothing for no dm screening
@@ -390,22 +394,27 @@ class SGXData:
         dsize = self.mol.nbas * ctypes.sizeof(ctypes.c_double)
         isize = self.mol.nbas * ctypes.sizeof(ctypes.c_int)
         bsize = self.mol.nbas * ctypes.sizeof(ctypes.c_uint8)
-        self._this.buf_size_bytes = 5 * dsize + 3 * isize
         # shl_info can contain the following:
         #   shlscreen_i (nbas * uint8_t)
         #   bscreen_i (nbas * double)
         #   fbar_i (nbas * double)
         #   fmf_ij (nbas^2 * double)
+        bsb = 5 * dsize + 3 * isize
         sisb = bsize + 2 * dsize
         if self.upper_bound_algo == "fullsort":
+            bsb += (dsize + 2 * isize) * self.mol.nbas
             sisb += dsize * self.mol.nbas
+            # grid_screen = "SGXscreen_grid_fullsort"
+            grid_screen = "SGXscreen_grid_approx"
+            shl_screen = "SGXscreen_shells_fullsort"
+        else:
+            grid_screen = "SGXscreen_grid_v4"
+            shl_screen = "SGXscreen_shells_sorted"
         self._this.direct_scf_tol = 1e-13
+        self._this.buf_size_bytes = bsb
         self._this.shl_info_size_bytes = sisb
-        # self._this.fscreen_grid = _vhf.libcvhf.SGXscreen_grid_v4
-        self._this.fscreen_grid = _vhf._fpointer("SGXscreen_grid_v4")
-        # self._this.fscreen_shl = _vhf.libcvhf.SGXscreen_shells_sorted
-        # self._this.fscreen_shl = _vhf._fpointer("SGXscreen_shells_simple")
-        self._this.fscreen_shl = _vhf._fpointer("SGXscreen_shells_sorted")
+        self._this.fscreen_grid = _vhf._fpointer(grid_screen)
+        self._this.fscreen_shl = _vhf._fpointer(shl_screen)
         # TODO need to make this modifiable
         self._intor = "int1e_grids_sph"
 
@@ -437,9 +446,54 @@ class SGXData:
             pair_mask = None
         return nbins, screen_index, pair_mask, ao_loc, blksize
 
+    def _get_diagonal_ints(self):
+        mol = self.mol
+        drv = _vhf.libcvhf.SGXfit_diagonal_ints
+        atm_coords = numpy.ascontiguousarray(
+            mol.atom_coords(unit='Bohr')
+        )
+        ao_loc = mol.ao_loc_nr().astype(numpy.int32)
+        if self._opt is None:
+            from pyscf.sgx.sgx import _make_opt
+            sgxopt = _make_opt(mol, False, 1e-16)
+        else:
+            sgxopt = self._opt
+        cintor = _vhf._fpointer(sgxopt._intor)
+        atm, bas, env = mol._atm, mol._bas, mol._env
+        nrad = self._nrad
+        env = numpy.append(env, numpy.zeros(3 * mol.nbas * nrad))
+        env[gto.NGRIDS] = 3 * mol.nbas * nrad
+        env[gto.PTR_GRIDS] = mol._env.size
+        ovlp = mol.intor_symmetric("int1e_ovlp")
+        if not ovlp.flags.c_contiguous:
+            ovlp = ovlp.T
+        sbar_ij = numpy.zeros((mol.nbas, mol.nbas))
+        self._make_shl_mat(ovlp, sbar_ij, ao_loc, ao_loc)
+        norms = numpy.ascontiguousarray(numpy.diag(sbar_ij))
+        drv(
+            cintor, ctypes.c_int(nrad), atm_coords.ctypes,
+            ao_loc.ctypes, sgxopt._cintopt,
+            atm.ctypes, ctypes.c_int(mol.natm), bas.ctypes,
+            ctypes.c_int(mol.nbas), env.ctypes,
+            norms.ctypes,
+        )
+        res = env[mol._env.size:].reshape(mol.nbas, 3, nrad)
+        radii = numpy.ascontiguousarray(res[:, 1, 0])
+        res = numpy.ascontiguousarray(res[:, 0, :])
+        res[:, -2:] = 0  # avoid interpolating in crazy directions
+        #print(res[:, [0, 1, 2, -3, -2, -1]])
+        #print(radii)
+        return res, radii, norms
+        exit()
+
     def _build_integral_bounds(self):
         mol = self.mol
         mbar_ij = numpy.zeros((mol.nbas, mol.nbas))
+        if self._build_rdpt_screen:
+            rbar_ij = numpy.zeros((mol.nbas, mol.nbas))
+        else:
+            rbar_ij = None
+        vals, widths, norms = self._get_diagonal_ints()
         drv = _vhf.libcvhf.SGXsample_ints
         atm_coords = numpy.ascontiguousarray(
             mol.atom_coords(unit='Bohr')
@@ -479,23 +533,121 @@ class SGXData:
         self._check_arr(atm, dtype=numpy.int32)
         self._check_arr(bas, dtype=numpy.int32)
         self._check_arr(env, dtype=numpy.float64)
+        crbar = None if rbar_ij is None else rbar_ij.ctypes
+        t0 = time.monotonic()
         drv(
-            cintor, mbar_ij.ctypes, None, radii.ctypes,
+            cintor, mbar_ij.ctypes, crbar, radii.ctypes,
             ctypes.c_int(self._nquad), ctypes.c_int(self._nrad),
             ctypes.c_double(self._rcmul), atm_coords.ctypes,
             rs.ctypes, ao_loc.ctypes, sgxopt._cintopt,
             atm.ctypes, ctypes.c_int(mol.natm), bas.ctypes,
-            ctypes.c_int(mol.nbas), env.ctypes, ctypes.c_int(env.size)
+            ctypes.c_int(mol.nbas), env.ctypes, ctypes.c_int(env.size),
+            widths.ctypes, norms.ctypes, vals.ctypes
         )
-        self._mbar_ij = mbar_ij
+        t1 = time.monotonic()
+        print("SAMPLE TIME", t1 - t0)
+        self._mbar_ij = numpy.maximum(mbar_ij, mbar_ij.T)
+        if self._build_rdpt_screen:
+            self._rbar_ij = numpy.maximum(rbar_ij, rbar_ij.T)
+            print("NAN?")
+            print(numpy.isnan(self._rbar_ij).any())
+        else:
+            self._rbar_ij = None
         self._mmax_i = numpy.max(mbar_ij, axis=1)
         self._msum_i = numpy.sum(mbar_ij, axis=1)
         self._opt.q_cond = mbar_ij
         if self._build_rdpt_screen:
-            raise NotImplementedError
+            self._get_pos_dpt_ints(widths, norms, vals, self._nrad, atm_coords)
         else:
             self._rbar_ij = None
             self._mbar_bi = None
+    
+    def _get_pos_dpt_ints(self, widths, norms, vals, nrad, atm_coords):
+        t0 = time.monotonic()
+        mol = self.mol
+        grid_coords = self.grids.coords
+        atm, bas, env = mol._atm, mol._bas, mol._env
+        if self._opt is None:
+            from pyscf.sgx.sgx import _make_opt
+            sgxopt = _make_opt(mol, False, 1e-16)
+        else:
+            sgxopt = self._opt
+        cintor = _vhf._fpointer(sgxopt._intor)
+        ngrids = grid_coords.shape[0]
+        nblk = (ngrids + SGX_BLKSIZE - 1) // SGX_BLKSIZE
+        env = numpy.append(env, grid_coords.ravel())
+        env[gto.NGRIDS] = ngrids
+        env[gto.PTR_GRIDS] = mol._env.size
+        m_bi = numpy.empty((nblk, mol.nbas))
+        """
+        _vhf.libcvhf.SGXdiagonal_ints(
+            cintor,
+            m_bi.ctypes,
+            self._ao_loc.ctypes,
+            sgxopt._cintopt,
+            atm.ctypes,
+            ctypes.c_int(mol.natm),
+            bas.ctypes,
+            ctypes.c_int(mol.nbas),
+            env.ctypes,
+        )
+        """
+        _vhf.libcvhf.SGXdiagonal_ints2(
+            cintor,
+            m_bi.ctypes,
+            self._ao_loc.ctypes,
+            sgxopt._cintopt,
+            atm.ctypes,
+            ctypes.c_int(mol.natm),
+            bas.ctypes,
+            ctypes.c_int(mol.nbas),
+            env.ctypes,
+            widths.ctypes,
+            norms.ctypes,
+            vals.ctypes,
+            ctypes.c_int(nrad),
+            atm_coords.ctypes,
+        )
+        t1 = time.monotonic()
+        print("BUILD TIME", t1 -t0)
+        """
+        print("INTEGRALS1")
+        print(numpy.max(m_bi / numpy.diag(self._mbar_ij), axis=0))
+        print(numpy.min(m_bi / numpy.diag(self._mbar_ij), axis=0))
+        print(numpy.mean(m_bi / numpy.diag(self._mbar_ij), axis=0))
+        print(numpy.mean(m_bi / numpy.diag(self._mbar_ij)))
+        print(numpy.median(m_bi / numpy.diag(self._mbar_ij), axis=0).mean())
+        print("ITNEGRALS2")
+        """
+        m_bi[:] = numpy.sqrt(m_bi)
+        #ints_bij = m_bi[:, None, :] * m_bi[:, : , None] * self._rbar_ij
+        #est_bij = ints_bij.copy() + 1e-13
+        #ints_bij[:] /= self._mbar_ij + 1e-16
+        #print(numpy.min(numpy.max(ints_bij, axis=0).ravel()[self._mbar_ij.ravel() > 1e-13]))
+        #print(numpy.median(ints_bij, axis=0).mean())
+        #print(numpy.mean(ints_bij, axis=0).mean())
+        self._mbar_bi = m_bi
+        return
+
+        coords = self.grids.coords[:SGX_BLKSIZE * 100]
+        ints = mol.intor("int1e_grids", grids=coords)
+        print(ints.shape)
+        ints = ints.reshape(100, SGX_BLKSIZE, *(ints.shape[1:3]))
+        # ints = numpy.ascontiguousarray(numpy.abs(ints))
+        ints = numpy.ascontiguousarray(ints)
+        bints = numpy.empty((100, SGX_BLKSIZE, mol.nbas, mol.nbas))
+        for i in range(100):
+            print(i)
+            for j in range(SGX_BLKSIZE):
+                self._make_shl_mat(ints[i,j], bints[i, j], self._ao_loc, self._ao_loc)
+        print(ints.shape)
+        print("BIJ INFO")
+        stats = (bints / est_bij[:100, None, :, :])[bints > 0]
+        print(numpy.max(stats))
+        print(numpy.min(stats))
+        print(numpy.median(stats))
+        print(numpy.mean(stats))
+        print(numpy.mean(numpy.max(stats, axis=1)))
 
     def _build_ovlp_fit(self):
         mol = self.mol
@@ -623,9 +775,6 @@ class SGXData:
             self._stilde_ij = stilde_ij
             self._mtilde_ij = self._mbar_ij.copy()
             self._pow_screen(self._mtilde_ij, _SGX_DELTA_2)
-        else:
-            self._mmax_i = numpy.max(self._mbar_ij, axis=1)
-            self._msum_i = numpy.sum(self._mbar_ij, axis=1)
         t2 = logger.perf_counter()
         if self._screen_potential:
             for i0, i1 in lib.prange(0, ngrids, blksize):
@@ -651,6 +800,7 @@ class SGXData:
             locs[-1] = xni_bi.shape[0]
             ones = numpy.arange(mol.nbas + 1, dtype=numpy.int32)
             self._make_shl_mat(xni_bi, xsgx_bi, locs, ones)
+            self._xsgx_bi = xsgx_bi.copy()  # TODO remove?
             self._pow_screen(xni_bi, _SGX_DELTA_3)
             self._pow_screen(xsgx_bi, _SGX_DELTA_3)
             self._xni_b = numpy.min(xni_bi, axis=1)
@@ -673,6 +823,7 @@ class SGXData:
         self._ovlp_proj = self._build_ovlp_fit()
         t2 = logger.perf_counter()
         print("SETUP", t2 - t1, t1 - t0)
+        #exit()
         if self.use_dm_screening:
             self._build_dm_screen()
         self._setup_opt()
@@ -720,6 +871,53 @@ class SGXData:
             else:
                 return None
 
+    def get_energy_bound(self, f_ug, de, wt, i0):
+        if self.upper_bound_algo != "fullsort":
+            return
+        SGX_NRADIX = 24  # must match C code
+        nao, ngrids = f_ug.shape[-2:]
+        b0 = i0 // SGX_BLKSIZE
+        b1 = (ngrids + SGX_BLKSIZE - 1) // SGX_BLKSIZE + b0
+        f_bi = numpy.empty((b1 - b0, self.mol.nbas))
+        cloc = numpy.arange(b1 - b0 + 1, dtype=numpy.int32) * SGX_BLKSIZE
+        cloc[-1] = ngrids
+        self._make_shl_mat(f_ug, f_bi, self._ao_loc, cloc, wt=wt, tr=True)
+        out = numpy.zeros(SGX_NRADIX)
+        nbas = self.mol.nbas
+        size = nbas * nbas * (b1 - b0)
+        #expnt = numpy.log(size) / (SGX_NRADIX - 1)
+        #rvals = numpy.exp(expnt * numpy.arange(SGX_NRADIX)) * (de / size)
+        expnt = numpy.log(size) / (SGX_NRADIX - 1)
+        rvals = numpy.exp(expnt * numpy.arange(SGX_NRADIX)) * (de / size)
+        print("RVALS", rvals)
+        if self._build_rdpt_screen:
+            f_bi[:] *= self._mbar_bi
+            _vhf.libcvhf.SGXbin_contrib_bounds(
+                f_bi.ctypes,
+                self._rbar_ij.ctypes,
+                ctypes.c_int(b1 - b0),
+                ctypes.c_int(nbas),
+                out.ctypes,
+                rvals.ctypes,
+            )
+        else:
+            _vhf.libcvhf.SGXbin_contrib_bounds(
+                f_bi.ctypes,
+                self._mbar_ij.ctypes,
+                ctypes.c_int(b1 - b0),
+                ctypes.c_int(nbas),
+                out.ctypes,
+                rvals.ctypes,
+            )
+        # TODO this check should be more careful
+        assert out[0] <= de + 1e-10
+        etol = rvals[numpy.argmax(out[out <= de])]
+        if self.upper_bound_algo == "fullsort":
+            self._this.etol = etol
+            # self._this.etol = etol
+            # self._this.etol = self._etol_per_sgx_block
+        return etol
+
     def _argsort(self, f):
         assert f.ndim == 2
         self._check_arr(f, dtype=numpy.float64)
@@ -756,6 +954,35 @@ class SGXData:
         assert nao == ao_loc[-1]
         b1 = (ngrids + BLKSIZE - 1) // BLKSIZE + b0
         thresh = dv * self._xni_b[b0:b1]
+
+        """
+        b0sgx = i0 // SGX_BLKSIZE
+        b1sgx = (ngrids + SGX_BLKSIZE - 1) // SGX_BLKSIZE + b0
+        fsgx_ib = numpy.empty((self.mol.nbas, b1sgx - b0sgx))
+        cloc = numpy.arange(b1sgx - b0sgx + 1, dtype=numpy.int32) * SGX_BLKSIZE
+        cloc[-1] = ngrids
+        self._make_shl_mat(f_ug, fsgx_ib, self._ao_loc, cloc, wt=wt)
+        # print("CHECK2", (fsgx_ib > 1e-5).sum())
+
+        
+        cloc = numpy.arange(b1 - b0 + 1, dtype=numpy.int32) * BLKSIZE
+        cloc[-1] = ngrids
+        f_ib = numpy.empty((self.mol.nbas, b1 - b0))
+        self._make_shl_mat(f_ug, f_ib, self._ao_loc, cloc, wt=wt)
+        print((self._mbar_ij.dot(f_ib) * f_ib > 1e-9 / f_ib.shape[1]).sum(0).mean())
+        mij = self._mbar_ij**0.1
+        f_ib[:] **= 0.1
+        print((numpy.einsum("ib,jb->ij", f_ib, f_ib) * mij).mean())
+        print(numpy.einsum("ib,ib->i", f_ib, f_ib).mean() / f_ib.shape[1])
+        f_jb = mij.dot(f_ib)
+        f_ij = numpy.einsum("ib,jb->ij", f_ib, f_jb)
+        f_ib *= f_jb
+        print(f_ij.mean())
+        print("EINSUM", f_ib.sum(), f_ib.sum(0).mean() * f_ib.shape[1], f_ib.shape, numpy.prod(f_ib.shape) * mij.shape[0])
+        # print("EINSUM", f_ib.sum(), f_ib.sum(0).mean() * f_ib.shape[1], f_ib.shape, numpy.prod(f_ib.shape))
+        print("EINSUM", f_ib.sum(), f_ib.sum(0).mean(), numpy.std(f_ib.sum(0)), f_ib.shape, numpy.prod(f_ib.shape))
+        """
+
         if self._screen_energy:
             if not self._screen_potential:
                 # no screening on potential
@@ -931,7 +1158,7 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13, full_dm=None):
     t_setup = logger.perf_counter()
     print("AFTER_SETUP", t_setup - t0[1])
 
-    ao = None
+    ao = numpy.empty(ngrids * nao)  # TODO None
     fg = None
     t_ao = 0
     t_scale = 0
@@ -944,8 +1171,9 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13, full_dm=None):
         coords = grids.coords[i0:i1]
         weights = grids.weights[i0:i1]
         mask = screen_index[i0 // BLKSIZE :]
+        print((screen_index > 0).sum(), screen_index.size)
         ta = logger.perf_counter()
-        ao = mol.eval_gto('GTOval', coords, non0tab=mask, out=ao)
+        ao = mol.eval_gto('GTOval_sph_deriv0', coords, non0tab=mask, out=ao)
         tb = logger.perf_counter()
         tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
         tc = logger.perf_counter()
@@ -954,6 +1182,8 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13, full_dm=None):
         else:
             # fg = lib.einsum('xij,ig->xjg', proj_dm, wao.T)
             fg = _sgxdot_ao_dm(ao, proj_dm, mask, shls_slice, ao_loc, out=fg)
+        etol = sgx._pjs_data.get_energy_bound(fg, sgx.sgx_tol_energy, weights, i0)
+        print("TOL", etol)
         te = logger.perf_counter()
 
         if sgx.use_dm_screening:

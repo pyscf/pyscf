@@ -36,6 +36,7 @@
 #define UNROLL_SIZE     NI_BLKSIZE
 #define BOXSIZE         96
 #define SGX_BLKSIZE     224
+#define SGX_NRADIX      24
 
 typedef struct {
         int ncomp;
@@ -81,6 +82,48 @@ size_t _max_cache_size_sgx(int (*intor)(), int *shls_slice, int ncenter,
                 cache_size = MAX(cache_size, n);
         }
         return cache_size;
+}
+
+void SGXbin_contrib_bounds(double *f_bi, double *m_ij, int nblk, int nbas,
+                           double *out, double *radix_vals)
+{
+        // out must start as zeros
+        double total = 0;
+#pragma omp parallel
+{
+        int iradix;
+        size_t iblk, ish, jsh;
+        double term;
+        double *f_i;
+        double _total = 0;
+        double *_out = malloc(SGX_NRADIX * sizeof(double));
+        for (iradix = 0; iradix < SGX_NRADIX; iradix++) {
+                _out[iradix] = 0;
+        }
+#pragma omp for
+        for (iblk = 0; iblk < nblk; iblk++) {
+                f_i = f_bi + iblk * nbas;
+                for (ish = 0; ish < nbas; ish++) {
+                for (jsh = 0; jsh < nbas; jsh++) {
+                        term = f_i[ish] * f_i[jsh] * m_ij[ish * nbas + jsh];
+                        _total += term;
+                        for (iradix = 0; iradix < SGX_NRADIX; iradix++) {
+                                if (term < radix_vals[iradix]) {
+                                        _out[iradix] += term;
+                                }
+                        }
+                } }
+        }
+#pragma omp critical
+{
+        total += _total;
+        for (iradix = 0; iradix < SGX_NRADIX; iradix++) {
+                out[iradix] += _out[iradix];
+        }
+}
+        free(_out);
+}
+        printf("TOTAL EXX %lf\n", total);
 }
 
 void SGXreduce_dft_mask(uint8_t *sgx_mask, uint8_t *dft_mask,
@@ -797,10 +840,127 @@ static int SGXnr_pj_escreen(int *shls, CVHFOpt *opt,
         return opt->q_cond[i*n+j] * MAX(shl_maxs[i] * econd[j], shl_maxs[j] * econd[i]) > etol;
 }
 
+static inline double get_interp_rad(double width, int ig)
+{
+        return 0.5 * width * (exp(0.1 * ig) - 1);
+}
+
+static inline double interp_diag_int(double r, double width, int nrad, double *vals)
+{
+        double di = log(r / (0.5 * width) + 1) / 0.1;
+        int i = MIN((int) di, nrad - 2);
+        di -= i;
+        return vals[i] + di * (vals[i+1] - vals[i]);
+}
+
+static inline double diag_esp_est(double r, double omega, double width)
+{
+        double romega;
+        if (omega > 0) {
+                romega = omega;
+        } else {
+                romega = 1.0 / width;
+        }
+        double est = erf(romega * r) / r;
+        if (omega < 0) {
+                est *= erfc(omega * r);
+        }
+        return est;
+}
+
+static inline double diag_int_est(double r, double width, double omega,
+                                  int nrad, double *vals)
+{
+        return diag_esp_est(r, omega, width) + interp_diag_int(r, width, nrad, vals);
+}
+
+void SGXfit_diagonal_ints(int (*intor)(), int nrad, double *atm_coords,
+                          int *ao_loc, CINTOpt *cintopt, int *atm,
+                          int natm, int *bas, int nbas, double *env,
+                          double *norms)
+{
+        int shls_slice[] = {0, nbas, 0, nbas};
+        int di = GTOmax_shell_dim(ao_loc, shls_slice, 2);
+        const size_t buffer_size = nrad;
+        int cache_size = _max_cache_size_sgx(intor, shls_slice, 2,
+                                             atm, natm, bas, nbas, env,
+                                             buffer_size);
+#pragma omp parallel
+{
+        int ish, ij;
+        int shls[4];
+        double my_int;
+        double *buf = calloc(sizeof(double), buffer_size*di*di);
+        double *cache = malloc(sizeof(double) * cache_size);
+        double *rads = malloc(sizeof(double) * nrad);
+        double *grids;
+        const double omega = env[PTR_RANGE_OMEGA];
+        double radius, est, rrad, romega;
+        double orig[3];
+        int ia;
+        int ig;
+#pragma omp for
+        for (ish = 0; ish < nbas; ish++) {
+                ia = bas(ATOM_OF, ish);
+                orig[0] = atm_coords[3*ia+0];
+                orig[1] = atm_coords[3*ia+1];
+                orig[2] = atm_coords[3*ia+2];
+                grids = env + ((int) env[PTR_GRIDS]) + 3 * ish * nrad;
+                grids[0] = orig[0];
+                grids[1] = orig[1];
+                grids[2] = orig[2];
+                shls[0] = ish;
+                shls[1] = ish;
+                shls[2] = nrad * ish;
+                shls[3] = nrad * ish + 1;
+                const int dims0[] = {ao_loc[ish+1]-ao_loc[ish],
+                                    ao_loc[ish+1]-ao_loc[ish],
+                                    1};
+                (*intor)(buf, dims0, shls, atm, natm, bas, nbas,
+                         env, cintopt, cache);
+                my_int = 0;
+                for (ij = 0; ij < dims0[0] * dims0[1]; ij++) {
+                        my_int += buf[ij] * buf[ij];
+                }
+                my_int = sqrt(my_int);
+                radius = norms[ish] / my_int;
+                (*intor)(buf, dims0, shls, atm, natm, bas, nbas,
+                         env, cintopt, cache);
+                for (ig = 0; ig < nrad; ig++) {
+                        rads[ig] = get_interp_rad(radius, ig);
+                        grids[3*ig+0] = orig[0];
+                        grids[3*ig+1] = orig[1];
+                        grids[3*ig+2] = orig[2] + rads[ig];
+                }
+                shls[2] = nrad * ish;
+                shls[3] = nrad * (ish + 1);
+                const int dims[] = {ao_loc[ish+1]-ao_loc[ish],
+                                    ao_loc[ish+1]-ao_loc[ish],
+                                    nrad};
+                (*intor)(buf, dims, shls, atm, natm, bas, nbas,
+                         env, cintopt, cache);
+                for (ig = 0; ig < dims[2]; ig++) {
+                        my_int = 0;
+                        for (ij = 0; ij < dims[0] * dims[1]; ij++) {
+                                my_int += buf[ij * dims[2] + ig]
+                                          * buf[ij * dims[2] + ig];
+                        }
+                        est = diag_esp_est(rads[ig] + 1e-10, omega, radius);
+                        grids[ig] = sqrt(my_int) / norms[ish] - est;
+                }
+                grids[nrad] = radius;
+        }
+        free(buf);
+        free(cache);
+        free(rads);
+}
+}
+
 void SGXsample_ints(int (*intor)(), double *m_ij, double *r_ij, double *radii,
                     int nquad, int nrad, double rcmul, double *atm_coords,
                     double *rs, int *ao_loc, CINTOpt *cintopt, int *atm,
-                    int natm, int *bas, int nbas, double *_env, int env_size)
+                    int natm, int *bas, int nbas, double *_env, int env_size,
+                    double *widths, double *norms, double *vals)
 {
         int shls_slice[] = {0, nbas, 0, nbas};
         int di = GTOmax_shell_dim(ao_loc, shls_slice, 2);
@@ -812,7 +972,7 @@ void SGXsample_ints(int (*intor)(), double *m_ij, double *r_ij, double *radii,
 {
         int ish, jsh, ij;
         int shls[4];
-        double maxint, my_int, my_den;
+        double maxint, my_int, my_deni, my_denj;
         double *buf = calloc(sizeof(double), buffer_size*di*di);
         double *buf2 = calloc(sizeof(double), buffer_size*di*di);
         double *buf3 = calloc(sizeof(double), buffer_size*di*di);
@@ -821,6 +981,8 @@ void SGXsample_ints(int (*intor)(), double *m_ij, double *r_ij, double *radii,
         double *env = (double*) malloc(env_size * sizeof(double));
         memcpy(env, _env, env_size * sizeof(double));
         double *grids = env + (int) env[PTR_GRIDS];
+        const double omega = env[PTR_RANGE_OMEGA];
+        double r, maxrel;
         double rhat[3];
         double rcross[3];
         double diff[3];
@@ -905,6 +1067,7 @@ void SGXsample_ints(int (*intor)(), double *m_ij, double *r_ij, double *radii,
                 (*intor)(buf, dims, shls, atm, natm, bas, nbas,
                          env, cintopt, cache);
                 maxint = 0;
+                maxrel = 0;
                 for (igt = 0; igt < dims[2]; igt++) {
                         my_int = 0;
                         for (ij = 0; ij < dims[0] * dims[1]; ij++) {
@@ -912,23 +1075,45 @@ void SGXsample_ints(int (*intor)(), double *m_ij, double *r_ij, double *radii,
                                           * buf[ij * dims[2] + igt];
                         }
                         maxint = MAX(maxint, my_int);
+                        // TODO use direct_scf_tol
+                        if (r_ij != NULL && my_int > 1e-16) {
+                                diff[0] = grids[3*igt+0] - orig[0];
+                                diff[1] = grids[3*igt+1] - orig[1];
+                                diff[2] = grids[3*igt+2] - orig[2];
+                                r = diff[0] * diff[0] + diff[1] * diff[1]
+                                    + diff[2] * diff[2];
+                                r = sqrt(r);
+                                my_deni = norms[ish] * diag_int_est(
+                                        r + 1e-10, widths[ish], omega, nrad,
+                                        vals + ish * nrad
+                                );
+                                my_denj = norms[jsh] * diag_int_est(
+                                        r + 1e-10, widths[jsh], omega, nrad,
+                                        vals + jsh * nrad
+                                );
+                                maxrel = MAX(maxrel, my_int / (my_deni * my_denj));
+                        }
                 }
                 m_ij[ish * nbas + jsh] = sqrt(maxint);
-                if (rnorm > 1e-16 && r_ij != NULL) {
+                if (r_ij != NULL) {
+                        r_ij[ish * nbas + jsh] = sqrt(maxrel);
+                }
+                /*
+                if (r_ij != NULL) {
                         shls[0] = ish;
                         shls[1] = ish;
                         shls[2] = 0;
                         shls[3] = ig;
                         const int nshi = ao_loc[ish+1]-ao_loc[ish];
                         const int nshj = ao_loc[jsh+1]-ao_loc[jsh];
-                        const int dimsi[] = {nshi, nshj, ig};
+                        const int dimsi[] = {nshi, nshi, ig};
                         (*intor)(buf2, dimsi, shls, atm, natm, bas, nbas,
                                  env, cintopt, cache);
                         shls[0] = jsh;
                         shls[1] = jsh;
                         shls[2] = 0;
                         shls[3] = ig;
-                        const int dimsj[] = {nshi, nshj, ig};
+                        const int dimsj[] = {nshj, nshj, ig};
                         (*intor)(buf3, dimsj, shls, atm, natm, bas, nbas,
                                  env, cintopt, cache);
                         maxint = 0;
@@ -938,25 +1123,146 @@ void SGXsample_ints(int (*intor)(), double *m_ij, double *r_ij, double *radii,
                                         my_int += buf[ij * dims[2] + igt]
                                                   * buf[ij * dims[2] + igt];
                                 }
-                                my_den = 0;
+                                my_deni = 0;
                                 for (ij = 0; ij < nshi * nshi; ij++) {
-                                        my_den += buf2[ij * dims[2] + igt]
+                                        my_deni += buf2[ij * dims[2] + igt]
                                                   * buf2[ij * dims[2] + igt];
                                 }
+                                my_denj = 0;
                                 for (ij = 0; ij < nshj * nshj; ij++) {
-                                        my_den += buf3[ij * dims[2] + igt]
+                                        my_denj += buf3[ij * dims[2] + igt]
                                                   * buf3[ij * dims[2] + igt];
                                 }
-                                maxint = MAX(maxint, my_int);
+                                maxint = MAX(maxint, my_int / sqrt(my_deni * my_denj));
                         }
-                        r_ij[ish * nbas + jsh] = maxint;
+                        r_ij[ish * nbas + jsh] = sqrt(maxint);
                 }
+                */
         }
         free(buf);
         free(buf2);
         free(buf3);
         free(env);
         free(cache);
+}
+}
+
+void SGXdiagonal_ints(int (*intor)(), double *m_bi, int *ao_loc, CINTOpt *cintopt,
+                      int *atm, int natm, int *bas, int nbas, double *env)
+{
+        int shls_slice[] = {0, nbas, 0, nbas};
+        int di = GTOmax_shell_dim(ao_loc, shls_slice, 2);
+        int cache_size = _max_cache_size_sgx(intor, shls_slice, 2,
+                                             atm, natm, bas, nbas, env,
+                                             SGX_BLKSIZE);
+#pragma omp parallel
+{
+        int ig0, ig1, dg;
+        int ish;
+        int i0, i1, idm;
+        int shls[4];
+        int ncomp = 1;
+        double *buf = calloc(sizeof(double), SGX_BLKSIZE*di*di*ncomp);
+        double *cache = malloc(sizeof(double) * cache_size);
+        double *dists = malloc(sizeof(int) * SGX_BLKSIZE);
+        int sj_index;
+        double maxint = 0;
+        double my_int;
+        int igt, ij;
+        const int tot_ngrids = (int) env[NGRIDS];
+        const int nbatch = (tot_ngrids + SGX_BLKSIZE - 1) / SGX_BLKSIZE;
+#pragma omp for nowait schedule(dynamic, 1)
+        for (int ibatch = 0; ibatch < nbatch; ibatch++) {
+                ig0 = ibatch * SGX_BLKSIZE;
+                ig1 = MIN(ig0 + SGX_BLKSIZE, tot_ngrids);
+                dg = ig1 - ig0;
+                for (ish = 0; ish < nbas; ish++) {
+                        shls[0] = ish;
+                        shls[1] = ish;
+                        i0 = ao_loc[ish  ];
+                        i1 = ao_loc[ish+1];
+                        const int dims[] = {ao_loc[ish+1]-ao_loc[ish],
+                                            ao_loc[ish+1]-ao_loc[ish], dg};
+                        shls[2] = ig0;
+                        shls[3] = ig1;
+                        (*intor)(buf, dims, shls, atm, natm, bas, nbas,
+                                 env, cintopt, cache);
+                        maxint = 0;
+                        for (igt = 0; igt < dims[2]; igt++) {
+                                my_int = 0;
+                                for (ij = 0; ij < dims[0] * dims[1]; ij++) {
+                                        my_int += buf[ij * dims[2] + igt]
+                                                * buf[ij * dims[2] + igt];
+                                }
+                                maxint = MAX(maxint, my_int);
+                        }
+                        m_bi[ibatch * nbas + ish] = sqrt(maxint);
+                }
+        }
+        free(buf);
+        free(cache);
+        free(dists);
+}
+}
+
+void SGXdiagonal_ints2(int (*intor)(), double *m_bi, int *ao_loc, CINTOpt *cintopt,
+                       int *atm, int natm, int *bas, int nbas, double *env,
+                       double *widths, double *norms, double *vals, int nrad,
+                       double *atm_coords)
+{
+        int shls_slice[] = {0, nbas, 0, nbas};
+        int di = GTOmax_shell_dim(ao_loc, shls_slice, 2);
+        int cache_size = _max_cache_size_sgx(intor, shls_slice, 2,
+                                             atm, natm, bas, nbas, env,
+                                             SGX_BLKSIZE);
+#pragma omp parallel
+{
+        int ig0, ig1, dg;
+        int ish;
+        int i0, i1, idm;
+        int shls[4];
+        int ncomp = 1;
+        double *buf = calloc(sizeof(double), SGX_BLKSIZE*di*di*ncomp);
+        double *cache = malloc(sizeof(double) * cache_size);
+        double *dists = malloc(sizeof(int) * SGX_BLKSIZE);
+        const double omega = env[PTR_RANGE_OMEGA];
+        double *grids = env + (int) env[PTR_GRIDS];
+        double r;
+        int ia;
+        double diff[3];
+        int sj_index;
+        double maxint = 0;
+        double my_int;
+        int igt, ij;
+        const int tot_ngrids = (int) env[NGRIDS];
+        const int nbatch = (tot_ngrids + SGX_BLKSIZE - 1) / SGX_BLKSIZE;
+#pragma omp for nowait schedule(dynamic, 1)
+        for (int ibatch = 0; ibatch < nbatch; ibatch++) {
+                ig0 = ibatch * SGX_BLKSIZE;
+                ig1 = MIN(ig0 + SGX_BLKSIZE, tot_ngrids);
+                dg = ig1 - ig0;
+                for (ish = 0; ish < nbas; ish++) {
+                        maxint = 0;
+                        for (igt = 0; igt < dg; igt++) {
+                                ia = bas(ATOM_OF, ish);
+                                diff[0] = grids[3*(igt+ig0)+0] - atm_coords[3*ia+0];
+                                diff[1] = grids[3*(igt+ig0)+1] - atm_coords[3*ia+1];
+                                diff[2] = grids[3*(igt+ig0)+2] - atm_coords[3*ia+2];
+                                r = diff[0] * diff[0] + diff[1] * diff[1]
+                                    + diff[2] * diff[2];
+                                r = sqrt(r);
+                                my_int = norms[ish] * diag_int_est(
+                                        r + 1e-10, widths[ish], omega, nrad,
+                                        vals + ish * nrad
+                                );
+                                maxint = MAX(maxint, my_int);
+                        }
+                        m_bi[ibatch * nbas + ish] = maxint;
+                }
+        }
+        free(buf);
+        free(cache);
+        free(dists);
 }
 }
 
@@ -1121,6 +1427,42 @@ static void _merge_sort(double *a, int *aind, double *b,
         }
 }
 
+static inline void _bottom_up_merge_big(double *a, size_t *aind, size_t il,
+                                        size_t ir, size_t ie,
+                                        double *b, size_t *bind)
+{
+        size_t i = il;
+        size_t j = ir;
+        size_t k;
+        for (k = il; k < ie; k++) {
+                if (i < ir && (j >= ie || a[i] <= a[j])) {
+                        b[k] = a[i];
+                        bind[k] = aind[i];
+                        i++;
+                } else {
+                        b[k] = a[j];
+                        bind[k] = aind[j];
+                        j++;
+                }
+        }
+}
+
+// a is input/output (overwritten), b is buffer/work array
+// based on wikipedia merge sort
+static void _merge_sort_big(double *a, size_t *aind, double *b,
+                            size_t *bind, const size_t n) {
+        size_t width;
+        size_t i;
+        for (width = 1; width < n; width = width * 2) {
+                for (i = 0; i < n; i = i + 2 * width) {
+                        _bottom_up_merge_big(a, aind, i, MIN(i + width, n),
+                                             MIN(i + 2 * width, n), b, bind);
+                }
+                memcpy(a, b, sizeof(double) * n);
+                memcpy(aind, bind, sizeof(size_t) * n);
+        }
+}
+
 void SGXsort_lists(double *out, double *in, const int num_lists,
                    const int list_size)
 {
@@ -1174,6 +1516,14 @@ static void _cumsum(double *out, double *in, int *inds, int list_size)
         out[inds[0]] = in[inds[0]];
         for (int i = 1; i < list_size; i++) {
                 out[inds[i]] = out[inds[i - 1]] + in[inds[i]];
+        }
+}
+
+static void _cumsum2(double *out, double *in, int *inds, int list_size)
+{
+        out[inds[0]] = in[0];
+        for (int i = 1; i < list_size; i++) {
+                out[inds[i]] = out[inds[i - 1]] + in[i];
         }
 }
 
@@ -1373,8 +1723,9 @@ static void _get_screening_v3(double *f_ug, double *wt, double *mbar_ij,
 }
 
 
-void SGXscreen_grid_v3(CSGXOpt *sgxopt, double *f_ug, int ibatch,
-                       int n_dm, int nish, void *shl_info, void *buf)
+void SGXscreen_grid_v3(CSGXOpt *sgxopt, double *f_ug, const int ibatch,
+                       const int n_dm, const int nish, void *shl_info,
+                       void *buf)
 {
         int nbas = sgxopt->nbas;
         double *fmf_i = (double*) buf;
@@ -1391,6 +1742,15 @@ void SGXscreen_grid_v3(CSGXOpt *sgxopt, double *f_ug, int ibatch,
         int dg = MAX(0, MIN(SGX_BLKSIZE, sgxopt->ngrids - ibatch * SGX_BLKSIZE));
         const size_t Ngrids = sgxopt->ngrids;
 
+        int rdpt_ints = 0;
+        double *mbar_ij = sgxopt->mbar_ij;
+        double *mbar_ii = NULL;
+        if (sgxopt->rbar_ij != NULL && sgxopt->mbar_bi != NULL) {
+                mbar_ij = sgxopt->rbar_ij;
+                rdpt_ints = 1;
+                mbar_ii = sgxopt->mbar_bi + ibatch * sgxopt->nbas;
+        }
+
         int *ao_loc = sgxopt->ao_loc;
         int ish;
         int onei = 1;
@@ -1401,12 +1761,19 @@ void SGXscreen_grid_v3(CSGXOpt *sgxopt, double *f_ug, int ibatch,
                 fbar_i[ish] = _shl_mat_elem_wt(
                         f_ug, wt, ao_loc[ish], ao_loc[ish+1], 0, dg,
                         n_dm, Ngrids, ao_loc[nbas] * Ngrids);
+                if (rdpt_ints) {
+                        fbar_i[ish] *= mbar_ii[ish];
+                }
         }
         // trans, m, n, alpha, a, lda, x, incx, beta, y, incy
-        dgemv_(&ntrans, &nish, &nish, &oned, sgxopt->mbar_ij, &nish,
+        dgemv_(&ntrans, &nish, &nish, &oned, mbar_ij, &nish,
                fbar_i, &onei, &zerod, sum_fmf_i, &onei);
         for (ish = 0; ish < nish; ish++) {
-                shlscreen_i[ish] = sum_fmf_i[ish] > dv;
+                if (rdpt_ints) {
+                        shlscreen_i[ish] = sum_fmf_i[ish] * mbar_ii[ish] > dv;
+                } else {
+                        shlscreen_i[ish] = sum_fmf_i[ish] > dv;
+                }
                 sum_fmf_i[ish] *= fbar_i[ish];
                 fmf_i[ish] = sum_fmf_i[ish];
                 inds_i[ish] = ish;
@@ -1416,7 +1783,7 @@ void SGXscreen_grid_v3(CSGXOpt *sgxopt, double *f_ug, int ibatch,
         int count = 0;
         for (ish = 0; ish < nish; ish++) {
                 shlscreen_i[ish] = shlscreen_i[ish]
-                                           || (sum_fmf_i[ish] > sgxopt->etol);
+                                   || (sum_fmf_i[ish] > sgxopt->etol);
                 count += shlscreen_i[ish];
         }
         count = MAX(count, 1);
@@ -1462,8 +1829,11 @@ void SGXscreen_grid_v4(CSGXOpt *sgxopt, double *f_ug, int ibatch,
         }
         _merge_sort(smfbar_i, inds_i, tmpf_i, tmpinds_i, nish);
         _cumsum(smfbar_i, mfbar_i, inds_i, nish);
+        for (ish = 0; ish < nish; ish++) {
+                inds_i[ish] = ish;
+        }
         _merge_sort(sfbar2_i, inds_i, tmpf_i, tmpinds_i, nish);
-        _cumsum(sfbar2_i, sfbar2_i, inds_i, nish);
+        _cumsum(sfbar2_i, fbar2_i, inds_i, nish);
         int count = 0;
         for (ish = 0; ish < nish; ish++) {
                 shlscreen_i[ish] = smfbar_i[ish] > dv || (sfbar2_i[ish] > sgxopt->etol);
@@ -1478,6 +1848,121 @@ void SGXscreen_grid_v4(CSGXOpt *sgxopt, double *f_ug, int ibatch,
 inline static int _simple_prescreen(int i, int j, CSGXOpt *opt)
 {
         return opt->mbar_ij[i * opt->nbas + j] > opt->direct_scf_cutoff;
+}
+
+void SGXscreen_grid_fullsort(CSGXOpt *sgxopt, double *f_ug, int ibatch,
+                             int n_dm, int nish, void *shl_info, void *buf)
+{
+        size_t nbas = sgxopt->nbas;
+        double *tmp_ij = (double*) buf;
+        int *inds_ij = (int*) (tmp_ij + nbas * nbas);
+        int *tmpinds_ij = inds_ij + nbas * nbas;
+
+        double *fbar_i = (double*) shl_info;
+        double *bscreen_i = fbar_i + nbas;
+        double *fmf_ij = bscreen_i + nbas;
+        double dv = sgxopt->vtol[ibatch];
+        double *wt = sgxopt->wt + ibatch * SGX_BLKSIZE;
+        int dg = MAX(0, MIN(SGX_BLKSIZE, sgxopt->ngrids - ibatch * SGX_BLKSIZE));
+        const size_t Ngrids = sgxopt->ngrids;
+
+        int rdpt_ints = 0;
+        double *mbar_ij = sgxopt->mbar_ij;
+        double *mbar_ii = NULL;
+        if (sgxopt->rbar_ij != NULL && sgxopt->mbar_bi != NULL) {
+                mbar_ij = sgxopt->rbar_ij;
+                rdpt_ints = 1;
+                mbar_ii = sgxopt->mbar_bi + ibatch * sgxopt->nbas;
+        }
+
+        int *ao_loc = sgxopt->ao_loc;
+        int ish; 
+        for (ish = 0; ish < nish; ish++) {
+                fbar_i[ish] = _shl_mat_elem_wt(
+                        f_ug, wt, ao_loc[ish], ao_loc[ish+1], 0, dg,
+                        n_dm, Ngrids, ao_loc[nbas] * Ngrids);
+                bscreen_i[ish] = dv;
+                if (rdpt_ints) {
+                        fbar_i[ish] *= mbar_ii[ish];
+                        bscreen_i[ish] /= mbar_ii[ish];
+                }
+        }
+        int npair = 0;
+        size_t ij;
+        int jsh;
+        for (ish = 0; ish < nish; ish++) {
+                //if (fbar_i[ish] > 1e-8) {
+                for (jsh = 0; jsh < nish; jsh++) {
+                        ij = ish * nbas + jsh;
+                        if (_simple_prescreen(ish, jsh, sgxopt)) {
+                                //fmf_ij[ij] = fbar_i[ish] * sgxopt->mbar_ij[ij]
+                                //                * fbar_i[jsh];
+                                fmf_ij[npair] = fbar_i[ish] * mbar_ij[ij]
+                                                * fbar_i[jsh];
+                                tmp_ij[npair] = fmf_ij[npair];
+                                inds_ij[npair] = ij;
+                                npair++;
+                        }
+                } //}
+        }
+        if (npair > 0) {
+                _merge_sort(tmp_ij, inds_ij, fmf_ij, tmpinds_ij, npair);
+                //for (ij = 0; ij < npair; ij++) {
+                //        tmp_ij[inds_ij[ij]] = fmf_ij[ij];
+                //}
+                _cumsum2(fmf_ij, tmp_ij, inds_ij, npair);
+        }
+}
+
+void SGXscreen_grid_approx(CSGXOpt *sgxopt, double *f_ug, int ibatch,
+                           int n_dm, int nish, void *shl_info, void *buf)
+{
+        size_t nbas = sgxopt->nbas;
+        double *tmp_ij = (double*) buf;
+        int *inds_ij = (int*) (tmp_ij + nbas * nbas);
+        int *tmpinds_ij = inds_ij + nbas * nbas;
+
+        double *fbar_i = (double*) shl_info;
+        double *bscreen_i = fbar_i + nbas;
+        double *fmf_ij = bscreen_i + nbas;
+        double dv = sgxopt->vtol[ibatch];
+        double *wt = sgxopt->wt + ibatch * SGX_BLKSIZE;
+        int dg = MAX(0, MIN(SGX_BLKSIZE, sgxopt->ngrids - ibatch * SGX_BLKSIZE));
+        const size_t Ngrids = sgxopt->ngrids;
+
+        int rdpt_ints = 0;
+        double *mbar_ij = sgxopt->mbar_ij;
+        double *mbar_ii = NULL;
+        if (sgxopt->rbar_ij != NULL && sgxopt->mbar_bi != NULL) {
+                mbar_ij = sgxopt->rbar_ij;
+                rdpt_ints = 1;
+                mbar_ii = sgxopt->mbar_bi + ibatch * sgxopt->nbas;
+        }
+
+        int *ao_loc = sgxopt->ao_loc;
+        int ish;
+        for (ish = 0; ish < nish; ish++) {
+                fbar_i[ish] = _shl_mat_elem_wt(
+                        f_ug, wt, ao_loc[ish], ao_loc[ish+1], 0, dg,
+                        n_dm, Ngrids, ao_loc[nbas] * Ngrids);
+                bscreen_i[ish] = dv;
+                if (rdpt_ints) {
+                        fbar_i[ish] *= mbar_ii[ish];
+                        bscreen_i[ish] /= mbar_ii[ish];
+                }
+        }
+        int npair = 0;
+        size_t ij;
+        int jsh;
+        for (ish = 0; ish < nish; ish++) {
+                for (jsh = 0; jsh < nish; jsh++) {
+                        ij = ish * nbas + jsh;
+                        if (_simple_prescreen(ish, jsh, sgxopt)) {
+                                fmf_ij[ij] = fbar_i[ish] * mbar_ij[ij]
+                                             * fbar_i[jsh];
+                        }
+                }
+        }
 }
 
 int SGXscreen_shells_simple(CSGXOpt *sgxopt, int jmax, int ish,
@@ -1504,13 +1989,18 @@ int SGXscreen_shells_sorted(CSGXOpt *sgxopt, int jmax, int ish,
                             int nish, int ish0, int jsh0, void *shl_info,
                             void *buf, int *shl_inds)
 {
-        int nbas = sgxopt->nbas;
+        size_t nbas = sgxopt->nbas;
         double *qcond_row = (double*) buf;
         double *qcond_row2 = qcond_row + nbas;
         double *qcond_buf = qcond_row + 2 * nbas;
         int *sort_inds = (int*) (qcond_buf + nbas);
         int *select_inds = sort_inds + nbas;
         int *index_buf = sort_inds + 2 * nbas;
+
+        double *mbar_ij = sgxopt->mbar_ij;
+        if (sgxopt->rbar_ij != NULL) {
+                mbar_ij = sgxopt->rbar_ij;
+        }
 
         double *fbar_i = (double*) shl_info;
         double *bscreen_i = fbar_i + nbas;
@@ -1524,7 +2014,62 @@ int SGXscreen_shells_sorted(CSGXOpt *sgxopt, int jmax, int ish,
                 shls[1] = jsh + jsh0;
                 if ((shlscreen_i[jsh] || shlscreen_i[ish])
                     && _simple_prescreen(shls[0], shls[1], sgxopt)) {
-                        qcond_row[jc] = sgxopt->mbar_ij[ish * nbas + jsh];
+                        qcond_row[jc] = mbar_ij[ish * nbas + jsh];
+                        qcond_row[jc] *= fbar_i[jsh];
+                        qcond_row2[jc] = qcond_row[jc];
+                        sort_inds[jc] = jc;
+                        select_inds[jsh] = jc;
+                        jc++;
+                } else {
+                        select_inds[jsh] = -1;
+                }
+        }
+        if (jc > 0) {
+                _merge_sort(qcond_row2, sort_inds, qcond_buf,
+                            index_buf, jc);
+                _cumsum2(qcond_row, qcond_row2, sort_inds, jc);
+                jc = 0;
+                for (int jsh = 0; jsh < jmax; jsh++) {
+                if (select_inds[jsh] == jc) {
+                        if (qcond_row[jc] > bscreen_i[ish]) {
+                                shl_inds[num_sj_shells] = jsh;
+                                num_sj_shells++;
+                        }
+                        jc++;
+                } }
+        }
+        return num_sj_shells;
+}
+
+int SGXscreen_shells_fullsort(CSGXOpt *sgxopt, int jmax, int ish,
+                              int nish, int ish0, int jsh0, void *shl_info,
+                              void *buf, int *shl_inds)
+{
+        int nbas = sgxopt->nbas;
+        double *qcond_row = (double*) buf;
+        double *qcond_row2 = qcond_row + nbas;
+        double *qcond_buf = qcond_row + 2 * nbas;
+        int *sort_inds = (int*) (qcond_buf + nbas);
+        int *select_inds = sort_inds + nbas;
+        int *index_buf = sort_inds + 2 * nbas;
+
+        double *mbar_ij = sgxopt->mbar_ij;
+        if (sgxopt->rbar_ij != NULL) {
+                mbar_ij = sgxopt->rbar_ij;
+        }
+
+        double *fbar_i = (double*) shl_info;
+        double *bscreen_i = fbar_i + nbas;
+        double *fmf_ij = bscreen_i + nbas;
+        int jc = 0;
+        int jsh;
+        int shls[2];
+        int num_sj_shells = 0;
+        for (jsh = 0; jsh < nish; jsh++) {
+                shls[0] = ish + ish0;
+                shls[1] = jsh + jsh0;
+                if (_simple_prescreen(shls[0], shls[1], sgxopt)) {
+                        qcond_row[jc] = mbar_ij[ish * nbas + jsh];
                         qcond_row[jc] *= fbar_i[jsh];
                         qcond_row2[jc] = qcond_row[jc];
                         sort_inds[jc] = jc;
@@ -1541,7 +2086,8 @@ int SGXscreen_shells_sorted(CSGXOpt *sgxopt, int jmax, int ish,
                 jc = 0;
                 for (int jsh = 0; jsh < jmax; jsh++) {
                 if (select_inds[jsh] == jc) {
-                        if (qcond_row[jc] > bscreen_i[ish]) {
+                        if (qcond_row[jc] > bscreen_i[ish]
+                            || fmf_ij[ish * nbas + jsh] > sgxopt->etol) {
                                 shl_inds[num_sj_shells] = jsh;
                                 num_sj_shells++;
                         }
@@ -1550,7 +2096,6 @@ int SGXscreen_shells_sorted(CSGXOpt *sgxopt, int jmax, int ish,
         }
         return num_sj_shells;
 }
-
 
 void SGXbuild_gv_threshold(double *f_ug, double *g_ug, int *ao_loc, double *dv, double de,
                            double *wt, int ncomp, int nbas, int ngrids, uint8_t *thresh)
@@ -1798,6 +2343,7 @@ void SGXnr_direct_drv4(int (*intor)(), SGXJKOperator **jkop,
         int num_sj_shells;
         int sj_index;
         double _usc = 0;
+        int nij;
 #pragma omp for nowait schedule(dynamic, 1)
         for (int ibatch = 0; ibatch < nbatch; ibatch++) {
                 ig0 = ibatch * SGX_BLKSIZE;
@@ -1808,6 +2354,7 @@ void SGXnr_direct_drv4(int (*intor)(), SGXJKOperator **jkop,
                 for (idm = 0; idm < n_dm; idm++) {
                         jkop[idm]->set0(v_priv[idm], dg);
                 }
+                nij = 0;
                 for (ish = 0; ish < nbas; ish++) {
                         if (aosym == 2) {
                                 jmax = ish + 1;
@@ -1839,8 +2386,11 @@ void SGXnr_direct_drv4(int (*intor)(), SGXJKOperator **jkop,
                                         jkop[idm]->contract(buf, dms[idm], v_priv[idm],
                                                                 i0, i1, j0, j1, ig0, dg);
                                 }
+                                _usc++;
                         }
+                        nij += num_sj_shells;
                 }
+                //printf("BATCH %d %d\n", ibatch, nij);
                 for (idm = 0; idm < n_dm; idm++) {
                         jkop[idm]->send(v_priv[idm], ig0, dg, vjk[idm]);
                 }

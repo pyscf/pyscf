@@ -20,7 +20,7 @@ typedef struct CSGXOpt_struct {
 
     // integral bounds, maxes, sums, etc.
     double *mbar_ij;
-    double *mbar_ib;
+    double *mbar_bi;
     double *rbar_ij;
     double *mmax_i;
     double *msum_i;
