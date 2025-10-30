@@ -381,13 +381,7 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
         for k1, ao1T in enumerate(ao1_kpts):
             kpt1 = kpts_band[k1]
 
-            # If we have an ewald exxdiv, we add the G=0 correction near the
-            # end of the function to bypass any discretization errors
-            # that arise from the FFT.
-            if exxdiv == 'ewald':
-                coulG = tools.get_coulG(cell, kpt2-kpt1, False, mydf, mesh)
-            else:
-                coulG = tools.get_coulG(cell, kpt2-kpt1, exxdiv, mydf, mesh)
+            coulG = tools.get_coulG(cell, kpt2-kpt1, exxdiv, mydf, mesh)
             if is_zero(kpt1-kpt2):
                 expmikr = np.array(1.)
             else:
@@ -411,11 +405,6 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
                 vk_kpts[:,i,k1] -= weight * np.einsum('aig,jg->aij', vR_dm[:,i], ao1T[0])
         t1 = logger.timer_debug1(mydf, 'get_k_kpts: make_kpt (%d,*)'%k2, *t1)
 
-    # Ewald correction has no contribution to nuclear gradient unless range separated Coulomb is used
-    # The gradient correction part is not added in the vk matrix
-    if exxdiv == 'ewald' and cell.omega!=0:
-        raise NotImplementedError("Range Separated Coulomb")
-        # when cell.omega !=0: madelung constant will have a non-zero derivative
     vk_kpts = np.asarray([_format_jks(vk, dm_kpts, input_band, kpts) for vk in vk_kpts])
     return vk_kpts
 

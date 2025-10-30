@@ -54,6 +54,18 @@ class KnownValues(unittest.TestCase):
         e2 = mfs([['C', [0.0, 0.0, 0.0]], ['C', [1.685068664391,1.685068664391,1.685068664391-disp/2.0]]])
         self.assertAlmostEqual(g[1,2], (e1-e2)/disp, 6)
 
+    # issue 2877
+    def test_exxdiv_ewald(self):
+        cell = gto.Cell()
+        cell.atom    = 'H 0 0 0; H 0 0 0.74'
+        cell.basis   = [[0, [1, 1]]]
+        cell.a = np.eye(3) * 4
+        cell.pseudo = 'gth-pade'
+        cell.build()
+        ref = scf.KRHF(cell, exxdiv=None).run().Gradients().kernel()
+        dat = scf.KRHF(cell, exxdiv="ewald").run().Gradients().kernel()
+        self.assertAlmostEqual(abs(dat - ref).max(), 0, 6)
+
 if __name__ == "__main__":
     print("Full Tests for KRHF Gradients")
     unittest.main()
