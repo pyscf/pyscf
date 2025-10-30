@@ -110,12 +110,16 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     nocc = mf.cell.nelectron * nkpts
 
     mo_energy = np.sort(np.hstack(mo_energy_kpts))
+    nmo = mo_energy.size
+    if nocc > nmo:
+        raise RuntimeError('Failed to assign occupancies. '
+                           f'Nocc ({nocc}) > Nmo ({nmo})')
     fermi = mo_energy[nocc-1]
     mo_occ_kpts = []
     for mo_e in mo_energy_kpts:
         mo_occ_kpts.append((mo_e <= fermi).astype(np.double))
 
-    if nocc < mo_energy.size:
+    if nocc < nmo:
         logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
                     mo_energy[nocc-1], mo_energy[nocc])
         if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
