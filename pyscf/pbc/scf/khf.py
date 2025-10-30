@@ -192,6 +192,9 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
 
     mo_energy = np.sort(np.hstack(mo_energy_kpts))
     nmo = mo_energy.size
+    if nocc > nmo:
+        raise RuntimeError('Failed to assign occupancies. '
+                           f'Nocc ({nocc}) > Nmo ({nmo})')
     fermi = mo_energy[nocc-1]
     mo_occ_kpts = []
     for mo_e in mo_energy_kpts:
@@ -203,9 +206,6 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
         if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
             logger.warn(mf, 'HOMO %.12g == LUMO %.12g',
                         mo_energy[nocc-1], mo_energy[nocc])
-    elif nocc >= nmo:
-        raise RuntimeError('Failed to assign occupancies. '
-                           f'Nocc ({nocc}) >= Nmo ({nmo})')
     else:
         logger.info(mf, 'HOMO = %.12g (no LUMO)', mo_energy[nocc-1])
 

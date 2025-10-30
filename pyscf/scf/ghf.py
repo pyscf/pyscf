@@ -153,6 +153,8 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     nmo = mo_energy.size
     mo_occ = numpy.zeros_like(mo_energy)
     nocc = mf.mol.nelectron
+    if nocc > nmo:
+        raise RuntimeError(f'Failed to assign mo_occ. Nocc ({nocc}) > Nmo ({nmo})')
     mo_occ[e_idx[:nocc]] = 1
     if mf.verbose >= logger.INFO and nocc < nmo:
         if e_sort[nocc-1]+1e-3 > e_sort[nocc]:
