@@ -1539,6 +1539,11 @@ def to_gpu(method, out=None):
         from importlib import import_module
         mod = import_module(method.__module__.replace('pyscf', 'gpu4pyscf'))
         cls = getattr(mod, method.__class__.__name__)
+
+        # Allow gpu4pyscf to customize the to_gpu method for PySCF classes.
+        if hasattr(cls, 'from_cpu'):
+            return cls.from_cpu(method)
+
         # A temporary GPU instance. This ensures to initialize private
         # attributes that are only available for GPU code.
         if hasattr(method, 'base'):
@@ -1551,6 +1556,9 @@ def to_gpu(method, out=None):
             out = cls(method.mol)
         else:
             raise TypeError('Conversion for class {cls} not supported')
+    elif hasattr(out, 'from_cpu'):
+        out.__dict__.update(out.__class__.from_cpu(method).__dict__)
+        return out
 
     # Convert only the keys that are defined in the corresponding GPU class
     cls_keys = [getattr(cls, '_keys', ()) for cls in out.__class__.__mro__[:-1]]
