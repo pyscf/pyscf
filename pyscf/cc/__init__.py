@@ -1,4 +1,4 @@
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2025 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -75,6 +75,9 @@ from pyscf.cc import eom_rccsd
 from pyscf.cc import eom_uccsd
 from pyscf.cc import eom_gccsd
 from pyscf.cc import qcisd
+from pyscf.cc import rccsdt, rccsdt_highm
+from pyscf.cc import uccsdt, uccsdt_highm
+from pyscf.cc import rccsdtq, rccsdtq_highm
 from pyscf import scf
 
 def CCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
@@ -233,3 +236,119 @@ def BCCD(mf, frozen=None, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
             return self.e_tot
 
     return mycc.view(BCCD)
+
+
+def CCSDT(mf, frozen=None, mo_coeff=None, mo_occ=None, compact_tamps=True):
+    if mf.istype('UHF'):
+        return UCCSDT(mf, frozen, mo_coeff, mo_occ, compact_tamps=compact_tamps)
+    elif mf.istype('GHF'):
+        raise NotImplementedError("GCCSDT not implemented")
+    else:
+        return RCCSDT(mf, frozen, mo_coeff, mo_occ, compact_tamps=compact_tamps)
+
+scf.hf.SCF.CCSDT = CCSDT
+
+
+def RCCSDT(mf, frozen=None, mo_coeff=None, mo_occ=None, compact_tamps=True):
+    import numpy
+    from pyscf import lib
+    from pyscf.df.df_jk import _DFHF
+
+    if mf.istype('UHF'):
+        raise RuntimeError('RCCSDT cannot be used with UHF method.')
+    elif mf.istype('ROHF'):
+        lib.logger.warn(mf, 'RCCSDT method does not support ROHF method. ROHF object '
+                        'is converted to UHF object and UCCSDT method is called.')
+        mf = mf.to_uhf()
+        return UCCSDT(mf, frozen, mo_coeff, mo_occ)
+
+    mf = mf.remove_soscf()
+    if not mf.istype('RHF'):
+        mf = mf.to_rhf()
+
+    if isinstance(mf, _DFHF) and mf.with_df:
+        lib.logger.warn(mf, 'RCCSDT does not support density fitting. The ERIs have been rebuilt in-core, '
+                            'and the RCCSDT calculation will proceed without density fitting.')
+        if compact_tamps:
+            return rccsdt.RCCSDT(mf, frozen, mo_coeff, mo_occ)
+        else:
+            return rccsdt_highm.RCCSDT(mf, frozen, mo_coeff, mo_occ)
+
+    elif numpy.iscomplexobj(mo_coeff) or numpy.iscomplexobj(mf.mo_coeff):
+        raise NotImplementedError('RCCSDT does not support complex numbers')
+
+    else:
+        if compact_tamps:
+            return rccsdt.RCCSDT(mf, frozen, mo_coeff, mo_occ)
+        else:
+            return rccsdt_highm.RCCSDT(mf, frozen, mo_coeff, mo_occ)
+RCCSDT.__doc__ = rccsdt.RCCSDT.__doc__
+
+
+def UCCSDT(mf, frozen=None, mo_coeff=None, mo_occ=None, compact_tamps=True):
+    from pyscf import lib
+    from pyscf.df.df_jk import _DFHF
+
+    mf = mf.remove_soscf()
+    if not mf.istype('UHF'):
+        mf = mf.to_uhf()
+
+    if isinstance(mf, _DFHF) and mf.with_df:
+        lib.logger.warn(mf, 'UCCSDT does not support density fitting. The ERIs have been rebuilt in-core, '
+                            'and the UCCSDT calculation will proceed without density fitting.')
+        if compact_tamps:
+            return uccsdt.UCCSDT(mf, frozen, mo_coeff, mo_occ)
+        else:
+            return uccsdt_highm.UCCSDT(mf, frozen, mo_coeff, mo_occ)
+    else:
+        if compact_tamps:
+            return uccsdt.UCCSDT(mf, frozen, mo_coeff, mo_occ)
+        else:
+            return uccsdt_highm.UCCSDT(mf, frozen, mo_coeff, mo_occ)
+UCCSDT.__doc__ = uccsdt.UCCSDT.__doc__
+
+
+def CCSDTQ(mf, frozen=None, mo_coeff=None, mo_occ=None, compact_tamps=True):
+    if mf.istype('UHF'):
+        raise NotImplementedError("UCCSDTQ not implemented")
+    elif mf.istype('GHF'):
+        raise NotImplementedError("GCCSDTQ not implemented")
+    else:
+        return RCCSDTQ(mf, frozen, mo_coeff, mo_occ, compact_tamps=compact_tamps)
+
+scf.hf.SCF.CCSDTQ = CCSDTQ
+
+
+def RCCSDTQ(mf, frozen=None, mo_coeff=None, mo_occ=None, compact_tamps=True):
+    import numpy
+    from pyscf import lib
+    from pyscf.df.df_jk import _DFHF
+
+    if mf.istype('UHF'):
+        raise RuntimeError('RCCSDTQ cannot be used with UHF method.')
+    elif mf.istype('ROHF'):
+        lib.logger.warn(mf, 'RCCSDTQ method does not support ROHF method. ROHF object '
+                        'is converted to UHF object and regular UCCSDTQ method is called.')
+        raise NotImplementedError('UCCSDTQ method is not implemented')
+
+    mf = mf.remove_soscf()
+    if not mf.istype('RHF'):
+        mf = mf.to_rhf()
+
+    if isinstance(mf, _DFHF) and mf.with_df:
+        lib.logger.warn(mf, 'RCCSDTQ does not support density fitting. The ERIs have been rebuilt in-core, '
+                            'and the RCCSDTQ calculation will proceed without density fitting.')
+        if compact_tamps:
+            return rccsdtq.RCCSDTQ(mf, frozen, mo_coeff, mo_occ)
+        else:
+            return rccsdtq_highm.RCCSDTQ(mf, frozen, mo_coeff, mo_occ)
+
+    elif numpy.iscomplexobj(mo_coeff) or numpy.iscomplexobj(mf.mo_coeff):
+        raise NotImplementedError('RCCSDTQ does not support complex numbers')
+
+    else:
+        if compact_tamps:
+            return rccsdtq.RCCSDTQ(mf, frozen, mo_coeff, mo_occ)
+        else:
+            return rccsdtq_highm.RCCSDTQ(mf, frozen, mo_coeff, mo_occ)
+RCCSDTQ.__doc__ = rccsdtq.RCCSDTQ.__doc__
