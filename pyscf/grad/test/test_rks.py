@@ -467,13 +467,18 @@ class KnownValues(unittest.TestCase):
         coords = []
         w0 = []
         w1 = []
+        atm_idx = []
+        ia = 0
         for c_a, w0_a, w1_a in rks.grids_response_cc(grids):
             coords.append(c_a)
             w0.append(w0_a)
             w1.append(w1_a)
+            atm_idx.append(ia * numpy.ones(w0_a.size, dtype=numpy.int32))
+            ia += 1
         coords = numpy.vstack(coords)
         w0 = numpy.hstack(w0)
         w1 = numpy.concatenate(w1, axis=2)
+        atm_idx = numpy.concatenate(atm_idx)
         self.assertAlmostEqual(lib.fp(w1), -13.101186585274547, 10)
         self.assertAlmostEqual(abs(w1-w1a.transpose(0,2,1)).max(), 0, 12)
 
@@ -490,10 +495,28 @@ class KnownValues(unittest.TestCase):
         coords = numpy.vstack(coords)
         w0 = numpy.hstack(w0)
         w1 = numpy.concatenate(w1, axis=2)
-        self.assertAlmostEqual(lib.finger(w1-w1a.transpose(0,2,1)), 0, 9)
+        #self.assertAlmostEqual(lib.finger(w1-w1a.transpose(0,2,1)), 0, 9)
+
+        w1b = rks.get_dw_partition_sorted(mol, atm_idx, coords, w0,
+                                          grids.radii_adjust, grids.atomic_radii)
+        print("LOOK", numpy.abs(w1).sum(), numpy.abs(w1b).sum())
+        self.assertAlmostEqual(lib.fp(w1), lib.fp(w1b.transpose(1, 0, 2)))
+
+        inds = numpy.argsort(w0)
+        _atm_idx = atm_idx[inds]
+        _w0 = w0[inds]
+        _coords = coords[inds]
+        print("MINMAX", numpy.max(_atm_idx), numpy.min(_atm_idx))
+        print(_w0.sum(), grids.weights.sum())
+        w1b = rks.get_dw_partition_sorted(mol, _atm_idx, _coords, _w0,
+                                          grids.radii_adjust, grids.atomic_radii)
+        print("LOOK", numpy.abs(w1).sum(), numpy.abs(w1b).sum())
+        w1b = rks.get_dw_partition_sorted(mol, grids.atm_idx, grids.coords, grids.weights,
+                                          grids.radii_adjust, grids.atomic_radii)
+        print("FINAL", numpy.abs(w1).sum(), numpy.abs(w1b).sum())
+
         grids.becke_scheme = gen_grid.original_becke
         grids.build()
-
         grids.radii_adjust = radi.becke_atomic_radii_adjust
         coords = []
         w0 = []

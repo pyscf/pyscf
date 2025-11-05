@@ -401,7 +401,7 @@ class SGX(lib.StreamObject):
                 rsh_df._overlap_correction_matrix = None
                 self._rsh_df[key] = rsh_df
                 logger.info(self, 'Create RSH-SGX object %s for omega=%s', rsh_df, omega)
-
+            print("RUNNING RS", omega)
             with rsh_df.mol.with_range_coulomb(omega):
                 return rsh_df.get_jk(dm, hermi, with_j, with_k,
                                      direct_scf_tol)

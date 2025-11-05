@@ -256,6 +256,9 @@ def scalable_grids_response_cc(grids, blksize):
     mol = grids.mol
     ngrids = grids.weights.size
     assert blksize % BLKSIZE == 0 or blksize == grids.weights.size
+    weights1 = get_dw_partition_sorted(mol, grids.atm_idx, grids.coords, grids.weights,
+                                       grids.radii_adjust, grids.atomic_radii)
+    print("ONE MORE TRY", numpy.abs(weights1).sum())
     for i0, i1 in lib.prange(0, ngrids, blksize):
         coords = grids.coords[i0:i1]
         weights = grids.weights[i0:i1]
@@ -291,17 +294,21 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     dms = dms.reshape(-1,nao,nao)
     nset = dms.shape[0]
     shls_slice = (0, mol.nbas)
-    sgx_data = sgx_jk.run_k_only_setup(sgx, dms, hermi)
-    blksize, screen_index, proj, dm_mask, ncond, ncond_ni, ao_loc = sgx_data
+    loop_data = sgx._pjs_data.get_loop_data(nset=nset, with_pair_mask=True)
+    nbins, screen_index, pair_mask, ao_loc, blksize = loop_data
+    proj = sgx._pjs_data._overlap_correction_matrix
+    dm_mask = sgx._pjs_data.get_dm_threshold_matrix(
+        dms, sgx.sgx_tol_potential, sgx.sgx_tol_energy
+    )
 
     vk = numpy.zeros_like(dms)
     dvk = numpy.zeros((dms.shape[0], 3,) + dms.shape[1:])
     dek = numpy.zeros((mol.natm, 3)) # derivs wrt atom positions
-    xed = numpy.zeros((nset, grids.weights.size)) # works if grids are not screened initially
 
-    batch_k = sgx_jk._gen_k_direct(mol, 's2', direct_scf_tol, sgx._opt)
+    batch_k = sgx_jk._gen_k_direct(mol, 's2', direct_scf_tol, sgx._pjs_data, use_dm_screening=True)
     if include_grid_response:
-        batch_k_grad = sgx_jk._gen_k_direct(mol, 's1', direct_scf_tol, None, grad=True)
+        batch_k_grad = sgx_jk._gen_k_direct(mol, 's1', direct_scf_tol, None,
+                                            use_dm_screening=False, grad=True)
     t1 = logger.perf_counter()
 
     t2, t3 = 0, 0
@@ -312,7 +319,6 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
         proj_dm = lib.einsum('ki,xij->xkj', proj, dms)
         if sgx._symm_ovlp_fit:
             other_dm = proj_dm
-            # dvk1 = numpy.zeros_like(dvk)
             dvk1 = numpy.zeros((3, nao))
         else:
             other_dm = dms
@@ -339,11 +345,16 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
         ta = logger.perf_counter()
         if sgx.use_dm_screening:
             fg = sgx_jk._sgxdot_ao_dm_sparse(ao, proj_dm, mask, dm_mask, ao_loc, out=fg)
-            gv = batch_k(mol, coords, fg, weights, ncond[i0 // SGX_BLKSIZE :])
+            mbar = sgx._pjs_data._mbar_ij
+            b0 = i0 // SGX_BLKSIZE
+            dv = sgx.sgx_tol_potential * sgx._pjs_data._xsgx_b[b0:]
+            de = sgx.sgx_tol_energy / sgx._pjs_data._xsgx_b.size
+            gv = batch_k(mol, coords, fg, weights, mbar, dv, de)
             if include_grid_response:
-                dgv = batch_k_grad(mol, coords, fg, weights, ncond[i0 // SGX_BLKSIZE :])
-            shl_norms = sgx_jk._get_shell_norms(gv, weights, ao_loc)
-            mask2 = shl_norms > ncond_ni[i0 // BLKSIZE : i0 // BLKSIZE + shl_norms.shape[0], None]
+                dgv = batch_k_grad(mol, coords, fg, weights, mbar, dv, de)
+            mask2 = sgx._pjs_data.get_g_threshold(
+                fg, gv, i0, sgx.sgx_tol_potential, sgx.sgx_tol_energy, weights
+            )
         else:
             fg = sgx_jk._sgxdot_ao_dm(ao, proj_dm, mask, shls_slice, ao_loc, out=fg)
             gv = batch_k(mol, coords, fg, weights)
@@ -388,13 +399,7 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     if sgx.fit_ovlp and include_grid_response:
         aoslices = mol.aoslice_by_atom()
         if sgx._symm_ovlp_fit:
-            # dvk = lib.einsum('ik,...ij->...kj', proj, dvk)
-            # dvk = lib.einsum('kj,...ij->...ik', proj, dvk)
-            ovlp = mol.intor_symmetric("int1e_ovlp")
-            proj = numpy.linalg.solve(sn, ovlp)
-        # ovlp = mol.intor_symmetric("int1e_ovlp")
-        # proj = numpy.linalg.solve(sn, ovlp)
-        # (xyz, moving atom, stationary atom)
+            proj = 2 * proj - numpy.identity(proj.shape[0])
         grad_ovlp = mol.intor("int1e_ipovlp", comp=3)
         Cmat = 0
         for i in range(nset):

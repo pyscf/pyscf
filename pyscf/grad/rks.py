@@ -613,10 +613,17 @@ def _get_lko_partition_functions(mol, ia, radii_adjust, atomic_radii):
             ialist = numpy.repeat(numpy.int32(ia), coords.shape[0])
         else:
             assert isinstance(ia, numpy.ndarray)
-            ialist = ia.astype(numpy.int32, order="C", copy=False)
+            ialist = ia.astype(numpy.int32, order="C", copy=True)
+            print("SUMS2 ialist", numpy.max(ialist), numpy.min(ialist), ialist.shape, coords.shape, coords[-8:])
         coords = numpy.asarray(coords, order='F')
         ngrids = coords.shape[0]
         pbecke = numpy.empty((4,mol.natm,ngrids))
+        print("SUMS inputs", pbecke.flags.c_contiguous, pbecke.shape,
+              dbecke.flags.c_contiguous, dbecke.shape,
+              coords.flags.f_contiguous, coords.shape,
+              atm_coords.flags.c_contiguous, atm_coords.shape,
+              p_radii_table, mol.natm, ngrids, ialist.flags.c_contiguous,
+              ialist.dtype, ialist.shape)
         gen_deriv_fn(pbecke.ctypes.data_as(ctypes.c_void_p),
                      dbecke.ctypes.data_as(ctypes.c_void_p),
                      coords.ctypes.data_as(ctypes.c_void_p),
@@ -643,6 +650,7 @@ def get_dw_partition(mol, ia, atom_grids_tab,
     if wtonly:
         return coords, weights
     else:
+        print("DWDW")
         dbecke = -pbecke * weights * invsum
         dbecke[ia, :] += weights
         dbecke = numpy.ascontiguousarray(dbecke)
@@ -651,19 +659,22 @@ def get_dw_partition(mol, ia, atom_grids_tab,
 
 
 def get_dw_partition_sorted(mol, ialist, coords, weights,
-                            radii_adjust=None, atomic_radii=radi.BRAGG_RADII,
-                            concat=True, wtonly=False):
+                            radii_adjust=None, atomic_radii=radi.BRAGG_RADII):
     gen_grid_partition, gen_grid_deriv = _get_lko_partition_functions(
         mol, ialist, radii_adjust, atomic_radii
     )[:2]
     pbecke = gen_grid_partition(coords)
     invsum = (1./pbecke.sum(axis=0))
     dbecke = -pbecke * weights * invsum
-    for ia in range(mol.natm):
-        cond = (ialist == ia)
-        dbecke[ia, cond] += weights[cond]
+    for g in range(weights.size):
+        dbecke[ialist[g], g] += weights[g]
+    #for ia in range(mol.natm):
+    #    cond = numpy.nonzero(ialist == ia)
+    #    dbecke[ia][cond] += weights[cond]
     dbecke = numpy.ascontiguousarray(dbecke)
+    print("SUMS dbecke", numpy.abs(weights).sum(), numpy.abs(weights * invsum).mean(), numpy.abs(dbecke).sum())
     weights1 = gen_grid_deriv(coords, dbecke)
+    print("SUMS weights1", numpy.abs(weights1).sum())
     return weights1
 
 
