@@ -1575,5 +1575,8 @@ def to_gpu(method, out=None):
             val = val.to_gpu()
         setattr(out, key, val)
     if hasattr(out, 'reset'):
-        out.reset()
+        try:
+            out.reset()
+        except NotImplementedError:
+            pass
     return out
