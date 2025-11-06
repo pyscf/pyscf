@@ -569,6 +569,23 @@ class Grids(lib.StreamObject):
             logger.info(self, 'User specified grid scheme %s', str(self.atom_grid))
         return self
 
+    def _select_grids(self, idx):
+        self.coords = self.coords[idx]
+        self.weights = self.weights[idx]
+        self.atm_idx = self.atm_idx[idx]
+        self.quadrature_weights = self.quadrature_weights[idx]
+    
+    def _add_padding(self):
+        if self.alignment > 1:
+            padding = _padding_size(self.size, self.alignment)
+            logger.debug(self, 'Padding %d grids', padding)
+            if padding > 0:
+                self.coords = numpy.vstack(
+                    [self.coords, numpy.repeat([[1e-4]*3], padding, axis=0)])
+                self.weights = numpy.hstack([self.weights, numpy.zeros(padding)])
+                self.atm_idx = numpy.hstack([self.atm_idx, numpy.full(padding, -1, dtype=numpy.int32)])
+                self.quadrature_weights = numpy.hstack([self.quadrature_weights, numpy.zeros(padding)])
+
     def build(self, mol=None, with_non0tab=False, sort_grids=True, **kwargs):
         import time
         t0 = time.monotonic()
@@ -593,20 +610,9 @@ class Grids(lib.StreamObject):
 
         if sort_grids:
             idx = arg_group_grids(mol, self.coords)
-            self.coords = self.coords[idx]
-            self.weights = self.weights[idx]
-            self.atm_idx = self.atm_idx[idx]
-            self.quadrature_weights = self.quadrature_weights[idx]
+            self._select_grids(idx)
 
-        if self.alignment > 1:
-            padding = _padding_size(self.size, self.alignment)
-            logger.debug(self, 'Padding %d grids', padding)
-            if padding > 0:
-                self.coords = numpy.vstack(
-                    [self.coords, numpy.repeat([[1e-4]*3], padding, axis=0)])
-                self.weights = numpy.hstack([self.weights, numpy.zeros(padding)])
-                self.atm_idx = numpy.hstack([self.atm_idx, numpy.full(padding, -1, dtype=numpy.int32)])
-                self.quadrature_weights = numpy.hstack([self.quadrature_weights, numpy.zeros(padding)])
+        self._add_padding()
 
         if with_non0tab:
             self.non0tab = self.make_mask(mol, self.coords)

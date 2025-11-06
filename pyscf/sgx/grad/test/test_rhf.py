@@ -1,16 +1,25 @@
 from pyscf.sgx.sgx import sgx_fit
 from pyscf import gto, scf, lib
+import numpy
 import unittest
 
 
-USE_OPTK = True
+ALL_SETTINGS = [
+    [False, False, False, False, False],
+    [True, False, False, False, False],
+    [True, True, False, False, False],
+    [True, False, True, False, True],
+    [True, True, True, True, False],
+    [True, True, True, True, True],
+]
+ALL_PRECISIONS = [5, 6, 3, 6, 4, 6]
 
 
 def setUpModule():
-    global mol, mf1, mf2, mf3, mf4, mf5
+    global mol
     mol = gto.Mole()
-    mol.verbose = 3
-    #mol.output = '/dev/null'
+    mol.verbose = 5
+    mol.output = '/dev/null'
     mol.atom.extend([
         ["O" , (0. , 0.     , 0.)],
         [1   , (0. , -0.757 , 0.587)],
@@ -20,77 +29,58 @@ def setUpModule():
     mol.max_memory = 2000
     mol.build()
 
-    mf1 = sgx_fit(scf.RHF(mol))
-    mf1.with_df.grids_level_f = 1
-    mf1.with_df.dfj = True
-    mf1.with_df.fit_ovlp = True
-    mf1.with_df._symm_ovlp_fit = True
-    mf1.with_df.use_dm_screening = True
-    mf1.with_df.optk = USE_OPTK
-    mf1.conv_tol = 1e-14
-    mf1.kernel()
 
-    mf2 = sgx_fit(scf.RHF(mol))
-    mf2.with_df.grids_level_f = 2
-    mf2.with_df.dfj = False
-    mf2.with_df.fit_ovlp = False
-    mf2.with_df.optk = False
-    mf2.conv_tol = 1e-14
-    mf2.kernel()
+def _set_df_args(mf, dfj, fit_ovlp, optk, dm_screen, symm_fit):
+    if dfj:
+        mf.with_df.grids_level_f = 1
+    else:
+        mf.with_df.grids_level_f = 2
+    mf.with_df.dfj = dfj
+    mf.with_df.fit_ovlp = fit_ovlp
+    mf.with_df.optk = optk
+    mf.with_df.use_dm_screening = dm_screen
+    mf.with_df._symm_ovlp_fit = symm_fit
+    mf.with_df.use_opt_grids = True
+    #mf.rebuild_nsteps = 1
+    mf.conv_tol = 1e-12
 
-    mf3 = sgx_fit(scf.RKS(mol).set(xc='PBE0'))
-    mf3.with_df.grids_level_f = 1
-    mf3.with_df.dfj = True
-    mf3.with_df.fit_ovlp = True
-    mf3.with_df._symm_ovlp_fit = False
-    mf3.with_df.use_dm_screening = True
-    mf3.with_df.optk = USE_OPTK
-    mf3.conv_tol = 1e-14
-    mf3.kernel()
-
-    mf4 = sgx_fit(scf.RKS(mol).set(xc='WB97X'))
-    mf4.with_df.grids_level_f = 1
-    mf4.with_df.dfj = True
-    mf4.with_df.fit_ovlp = True
-    mf4.with_df._symm_ovlp_fit = True
-    mf4.with_df.use_dm_screening = True
-    mf4.with_df.optk = USE_OPTK
-    mf4.conv_tol = 1e-14
-    mf4.kernel()
-
-    mf5 = sgx_fit(scf.RKS(mol).set(xc='HSE06'))
-    mf5.with_df.grids_level_f = 1
-    mf5.with_df.dfj = True
-    mf5.with_df.fit_ovlp = True
-    mf5.with_df._symm_ovlp_fit = True
-    mf5.with_df.use_dm_screening = True
-    mf5.with_df.optk = USE_OPTK
-    mf5.conv_tol = 1e-14
-    mf5.kernel()
 
 def tearDownModule():
-    global mol, mf1, mf2, mf3, mf4, mf5
+    global mol
     mol.stdout.close()
-    del mol, mf1, mf2, mf3, mf4, mf5
+    del mol
 
 
 class KnownValues(unittest.TestCase):
 
-    def _check_finite_diff_grad(self, mf, order):
+    def _check_finite_diff_grad(self, df_settings, order):
+        mf = sgx_fit(scf.RHF(mol))
+        _set_df_args(mf, *df_settings)
         g = mf.nuc_grad_method().set(sgx_grid_response=True, grid_response=True).kernel()
         mol1 = mol.copy()
         mf_scanner = mf.as_scanner()
         delta = 1e-5
-        e1 = mf_scanner(mol1.set_geom_(f'O  0. 0. {delta:f}; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
-        e2 = mf_scanner(mol1.set_geom_(f'O  0. 0. -{delta:f}; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e1 = mf_scanner(mol1.set_geom_(
+            f'O  0. 0. {delta:f}; 1  0. -0.757 0.587; 1  0. 0.757 0.587'
+        ))
+        e2 = mf_scanner(mol1.set_geom_(
+            f'O  0. 0. -{delta:f}; 1  0. -0.757 0.587; 1  0. 0.757 0.587'
+        ))
+        if (
+            (not mf.with_df.optk) or (not mf.with_df.fit_ovlp)
+            or mf.with_df._symm_ovlp_fit
+        ):
+            self.assertAlmostEqual(numpy.abs(g.sum(axis=0)).sum(), 0, 13)
         self.assertAlmostEqual(g[0,2], (e1-e2)/(2*delta)*lib.param.BOHR, order)
-
+    
     def test_finite_diff_grad(self):
-        self._check_finite_diff_grad(mf1, 6)
-        self._check_finite_diff_grad(mf2, 5)
-        self._check_finite_diff_grad(mf3, 6)
-        self._check_finite_diff_grad(mf4, 6)
-        self._check_finite_diff_grad(mf5, 6)
+        self._check_finite_diff_grad(ALL_SETTINGS[0], ALL_PRECISIONS[0])
+        self._check_finite_diff_grad(ALL_SETTINGS[1], ALL_PRECISIONS[1])
+        self._check_finite_diff_grad(ALL_SETTINGS[2], ALL_PRECISIONS[2])
+        self._check_finite_diff_grad(ALL_SETTINGS[3], ALL_PRECISIONS[3])
+        self._check_finite_diff_grad(ALL_SETTINGS[4], ALL_PRECISIONS[4])
+        self._check_finite_diff_grad(ALL_SETTINGS[5], ALL_PRECISIONS[5])
+
 
 if __name__ == '__main__':
     unittest.main()

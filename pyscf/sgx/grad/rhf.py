@@ -48,7 +48,7 @@ def get_jk_grad(sgx, dm, hermi=1, with_j=True, with_k=True,
     mol = sgx.mol
     grids = sgx.grids
     grids.build()
-    include_grid_response = sgx.grid_response
+    include_grid_response = sgx._grid_response
 
     if dm.ndim == 2:
         restricted = True
@@ -90,6 +90,13 @@ def get_jk_grad(sgx, dm, hermi=1, with_j=True, with_k=True,
     blksize = min(ngrids, max(4, int(min(sblk, max_memory*1e6/8/nao**2))))
 
     if sgx.fit_ovlp:
+        if include_grid_response:
+            msg = (
+                "SGX-JK neglects the overlap fitting contribution to the "
+                "gradient, which can cause significant errors. For exact "
+                "gradients, set fit_ovlp=False OR fit_ovlp=dfj=optk=True."
+            )
+            logger.warn(sgx, msg)
         for i0, i1 in lib.prange(0, ngrids, blksize):
             coords = grids.coords[i0:i1]
             ao = mol.eval_gto('GTOval', coords)
@@ -107,8 +114,8 @@ def get_jk_grad(sgx, dm, hermi=1, with_j=True, with_k=True,
     vk = numpy.zeros_like(dms)
     dvk = numpy.zeros((dms.shape[0], 3,) + dms.shape[1:])
     tnuc = 0, 0
-    xed = numpy.zeros((nset, grids.weights.size)) # works if grids are not screened initially
 
+    jtotal = 0
     for ia, (coord_ia, weight_ia, weight1_ia) in enumerate(grids_response_cc(grids)):
         ngrids = weight_ia.size
         dvj_tmp = numpy.zeros_like(dvk)
@@ -130,8 +137,8 @@ def get_jk_grad(sgx, dm, hermi=1, with_j=True, with_k=True,
                 fg0_no_w = lib.einsum('gi,xij->xgj', ao, dms)
 
             if with_j:
-                rhog = numpy.einsum('xgu,gu->xg', fg, ao)
-                drhog_sum = numpy.einsum('xgu,ngu->ng', fg, dao)
+                rhog = lib.einsum('xgu,gu->xg', fg, ao)
+                drhog_sum = lib.einsum('xgu,ngu->ng', fg, dao)
                 rhog_sum = rhog.sum(axis=0)
             else:
                 rhog = None
@@ -151,9 +158,9 @@ def get_jk_grad(sgx, dm, hermi=1, with_j=True, with_k=True,
                         djpart_int = lib.einsum('nguv,xg->xnuv', dgbn, rhog)
                         djg = lib.einsum('nguv,xuv->xng', dgbn, dms)
                 if with_k:
-                    gv = lib.einsum('gtv,xgt->xgv', gbn, fg)
+                    gv = lib.einsum('gtv,xgt->xvg', gbn, fg)
                     if include_grid_response:
-                        dgv = lib.einsum('ngvt,xgt->xngv', dgbn, fg)
+                        dgv = lib.einsum('ngvt,xgt->xnvg', dgbn, fg)
                 gbn = None
             else:
                 tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
@@ -161,21 +168,23 @@ def get_jk_grad(sgx, dm, hermi=1, with_j=True, with_k=True,
                 jg, gv = batch_jk(mol, coords, dms, fg.transpose(0, 2, 1).copy(), weights)
                 if include_grid_response:
                     djpart_int, dgv = batch_jk_grad(mol, coords, rhog, fg.transpose(0, 2, 1).copy(), weights)
-                    if with_j:
+                    if with_j and include_grid_response:
                         djg, _ = batch_jonly(mol, coords, dms, None, weights)
                 tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
 
-            # TODO for j-part, orbital response is not quite right
-            # because of the projected density matrix. (Used 0 times for j orb response, should be used once each)
+            # NOTE for j-part, orbital response is not quite right because the overlap
+            # fitted density matrix is not used. However, the error due to this is small
+            # compared to the error of neglecting the gradient of the overlap fitting matrix.
             if with_j:
                 for i in range(nset):
                     xj = lib.einsum('ngv,g->ngv', dao, jg[i])
                     if not include_grid_response:
-                        dvj_tmp[i] -= lib.einsum('xgu,gv->xuv', xj, wao) # ORBITAL RESPONSE
+                        dvj_tmp[i] -= 1.0 * lib.einsum('xgu,gv->xuv', xj, wao) # ORBITAL RESPONSE
                     else:
                         dvj_tmp[i] -= 0.5 * lib.einsum('xgu,gv->xuv', xj, wao) # ORBITAL RESPONSE
                         dvj_tmp[i] -= 0.5 * djpart_int[i] # INTEGRAL RESPONSE
-                        dej[:,:] += numpy.dot(weights1, jg[i]*(rhog_sum/(weights[:,0]+1e-16))) # GRID RESPONSE PART 1
+                        jtotal += jg.sum(axis=0).dot(rhog_sum)
+                        dej[:,:] += numpy.dot(weights1, jg[i]*(rhog_sum/(weights[:,0]+1e-32))) # GRID RESPONSE PART 1
                         dej[ia] += 2 * numpy.einsum('xg,g->x', djg[i], rhog_sum)
                         dej[ia] += 2 * numpy.einsum('xg,g->x', drhog_sum, jg[i])
 
@@ -256,9 +265,6 @@ def scalable_grids_response_cc(grids, blksize):
     mol = grids.mol
     ngrids = grids.weights.size
     assert blksize % BLKSIZE == 0 or blksize == grids.weights.size
-    weights1 = get_dw_partition_sorted(mol, grids.atm_idx, grids.coords, grids.weights,
-                                       grids.radii_adjust, grids.atomic_radii)
-    print("ONE MORE TRY", numpy.abs(weights1).sum())
     for i0, i1 in lib.prange(0, ngrids, blksize):
         coords = grids.coords[i0:i1]
         weights = grids.weights[i0:i1]
@@ -282,7 +288,7 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
 
     mol = sgx.mol
     grids = sgx.grids
-    include_grid_response = sgx.grid_response
+    include_grid_response = sgx._grid_response
 
     if dm.ndim == 2:
         restricted = True
@@ -329,7 +335,7 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
         other_dm = dms
         dvk1 = None
     for items in scalable_grids_response_cc(grids, blksize):
-        # iatoms is an array shape (ngrids,)
+        # atm_idx is an array shape (ngrids,)
         # coords is an array shape (ngrids, 3)
         # weights is an array shape (ngrids)
         # weights1 is an array shape (natm, 3, ngrids)
@@ -343,21 +349,19 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
         wao = ao * weights[:, None]
         wdao = dao * weights[:, None]
         ta = logger.perf_counter()
+        b0 = i0 // SGX_BLKSIZE
+        fg0_no_w = lib.einsum('gi,xij->xjg', ao, dms)
         if sgx.use_dm_screening:
             fg = sgx_jk._sgxdot_ao_dm_sparse(ao, proj_dm, mask, dm_mask, ao_loc, out=fg)
-            mbar = sgx._pjs_data._mbar_ij
-            b0 = i0 // SGX_BLKSIZE
-            dv = sgx.sgx_tol_potential * sgx._pjs_data._xsgx_b[b0:]
-            de = sgx.sgx_tol_energy / sgx._pjs_data._xsgx_b.size
-            gv = batch_k(mol, coords, fg, weights, mbar, dv, de)
+            gv = batch_k(mol, coords, fg, weights, b0)
             if include_grid_response:
-                dgv = batch_k_grad(mol, coords, fg, weights, mbar, dv, de)
+                dgv = batch_k_grad(mol, coords, fg, weights, b0)
             mask2 = sgx._pjs_data.get_g_threshold(
                 fg, gv, i0, sgx.sgx_tol_potential, sgx.sgx_tol_energy, weights
             )
         else:
             fg = sgx_jk._sgxdot_ao_dm(ao, proj_dm, mask, shls_slice, ao_loc, out=fg)
-            gv = batch_k(mol, coords, fg, weights)
+            gv = batch_k(mol, coords, fg, weights, b0)
             if include_grid_response:
                 dgv = batch_k_grad(mol, coords, fg, weights)
             mask2 = None
@@ -374,7 +378,6 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
             else:
                 dvk[i] -= 0.5 * lib.einsum('xgu,gv->xuv', wdao, gv[i].T) # ORBITAL RESPONSE
                 if sgx.fit_ovlp and sgx._symm_ovlp_fit:
-                    # dvk1[i] -= 0.5 * lib.einsum('xug,gv->xuv', dgv[i], wao) # INTEGRAL RESPONSE
                     dvk1[:] -= 0.5 * lib.einsum('xug,ug,g->xu', dgv[i], fg[i], weights) # INTEGRAL RESPONSE
                 else:
                     dvk[i] -= 0.5 * lib.einsum('xug,gv->xuv', dgv[i], wao) # INTEGRAL RESPONSE
@@ -400,6 +403,15 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
         aoslices = mol.aoslice_by_atom()
         if sgx._symm_ovlp_fit:
             proj = 2 * proj - numpy.identity(proj.shape[0])
+        else:
+            msg = (
+                "SGX-K gradients with fit_ovlp=True are only exact if "
+                "_symm_ovlp_fit=True, and it is currently False. "
+                "There might be small errors in the analytical gradients, "
+                "including non-zero sum of forces over the atoms. "
+                "Set _symm_ovlp_fit=True for exact analytical gradients."
+            )
+            logger.warn(sgx, msg)
         grad_ovlp = mol.intor("int1e_ipovlp", comp=3)
         Cmat = 0
         for i in range(nset):
@@ -440,8 +452,7 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
                 for ia in range(mol.natm):
                     p0, p1 = aoslices[ia, 2:]
                     dek[ia, x] += 4 * lib.einsum("iuv,iuv->", dvk[:, x, p0 : p1], proj_dm[:, p0 : p1])
-                    # dek[ia, x] += 4 * lib.einsum("iuv,ivu->", dvk1[:, x, p0 : p1], proj_dm[:, :, p0 : p1])
-                    dek[ia, x] += numpy.sum(4 * dvk1[:, p0 : p1])
+                    dek[ia, x] += numpy.sum(4 * dvk1[x, p0 : p1])
             dvk[:] = 0
 
     # TODO don't need to compute vk
@@ -483,6 +494,8 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=1, vhfopt=None, with_j=True, with_k
     if with_j and mf_grad.base.with_df.dfj:
         vj = super(mf_grad.__class__, mf_grad).get_jk(
             mf_grad.mol, dm, hermi, with_j=True, with_k=False)[0]
+        if not with_k:
+            return vj, None
     else:
         vj = None
 
@@ -503,10 +516,10 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=1, vhfopt=None, with_j=True, with_k
             logger.info(sgx, 'Create RSH-SGX object %s for omega=%s', rsh_df, omega)
 
         with rsh_df.mol.with_range_coulomb(omega):
-            rsh_df.grid_response = mf_grad.sgx_grid_response
+            rsh_df._grid_response = mf_grad.sgx_grid_response
             _vj, vk = _get_jk(rsh_df, dm, hermi, with_j, with_k, direct_scf_tol)
     else:
-        sgx.grid_response = mf_grad.sgx_grid_response
+        sgx._grid_response = mf_grad.sgx_grid_response
         _vj, vk = _get_jk(sgx, dm, hermi, with_j, with_k, direct_scf_tol)
 
     if vj is None:
@@ -528,6 +541,9 @@ class _GradientsMixin:
     def check_sanity(self):
         assert isinstance(self.base, sgx._SGXHF)
 
+    def get_j(self, mol=None, dm=None, hermi=0, omega=None):
+        return self.get_jk(mol=mol, dm=dm, hermi=hermi, vhfopt=None,
+                           with_j=True, with_k=False, omega=omega)[0]
 
 class Gradients(_GradientsMixin, dfrhf_grad.Gradients):
     '''Restricted SGX Hartree-Fock gradients. Note: sgx_grid_response determines

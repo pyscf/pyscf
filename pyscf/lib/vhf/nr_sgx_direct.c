@@ -1164,6 +1164,10 @@ void SGXcumsum_lists(double *out_lists, double *in_lists, int *index_lists,
 }
 }
 
+void SGXnoscreen_grid(CSGXOpt *sgxopt, double *f_ug, const int ibatch,
+                    const int n_dm, const int nish, void *shl_info,
+                    void *buf) {}
+
 void SGXscreen_grid(CSGXOpt *sgxopt, double *f_ug, const int ibatch,
                     const int n_dm, const int nish, void *shl_info,
                     void *buf)
@@ -1231,6 +1235,58 @@ void SGXscreen_grid(CSGXOpt *sgxopt, double *f_ug, const int ibatch,
         for (ish = 0; ish < nish; ish++) {
                 oned = sgxopt->etol / (fbar_i[ish] * count + 1e-32);
                 bscreen_i[ish] = MIN(dv, oned);
+        }
+}
+
+void SGXscreen_grid_v2(CSGXOpt *sgxopt, double *f_ug, int ibatch,
+                       int n_dm, int nish, void *shl_info, void *buf)
+{
+        int nbas = sgxopt->nbas;
+        double *mfbar_i = (double*) buf;
+        double *smfbar_i = mfbar_i + nbas;
+        double *sfbar2_i = mfbar_i + 2 * nbas;
+        double *tmpf_i = mfbar_i + 3 * nbas;
+        double *fbar2_i = mfbar_i + 4 * nbas;
+        int *inds_i = (int*) (fbar2_i + nbas);
+        int *tmpinds_i = inds_i + nbas;
+
+        double *mbar_sum = sgxopt->msum_i;
+        double *mbar_max = sgxopt->mmax_i;
+        double *fbar_i = (double*) shl_info;
+        double *bscreen_i = fbar_i + nbas;
+        uint8_t *shlscreen_i = (uint8_t*) (bscreen_i + nbas);
+        double dv = sgxopt->vtol[ibatch];
+        double *wt = sgxopt->wt + ibatch * SGX_BLKSIZE;
+        int dg = MAX(0, MIN(SGX_BLKSIZE, sgxopt->ngrids - ibatch * SGX_BLKSIZE));
+        const size_t Ngrids = sgxopt->ngrids;
+
+        int *ao_loc = sgxopt->ao_loc;
+        int ish;
+        for (ish = 0; ish < nish; ish++) {
+                fbar_i[ish] = _shl_mat_elem_wt(
+                        f_ug, wt, ao_loc[ish], ao_loc[ish+1], 0, dg,
+                        n_dm, Ngrids, ao_loc[nbas] * Ngrids);
+                fbar2_i[ish] = fbar_i[ish] * fbar_i[ish] * mbar_sum[ish];
+                smfbar_i[ish] = fbar_i[ish] * mbar_max[ish];
+                mfbar_i[ish] = fbar_i[ish] * mbar_max[ish];
+                sfbar2_i[ish] = fbar2_i[ish];
+                inds_i[ish] = ish;
+        }
+        _merge_sort(smfbar_i, inds_i, tmpf_i, tmpinds_i, nish);
+        _cumsum(smfbar_i, mfbar_i, inds_i, nish);
+        for (ish = 0; ish < nish; ish++) {
+                inds_i[ish] = ish;
+        }
+        _merge_sort(sfbar2_i, inds_i, tmpf_i, tmpinds_i, nish);
+        _cumsum(sfbar2_i, fbar2_i, inds_i, nish);
+        int count = 0;
+        for (ish = 0; ish < nish; ish++) {
+                shlscreen_i[ish] = smfbar_i[ish] > dv || (sfbar2_i[ish] > sgxopt->etol);
+                count += shlscreen_i[ish];
+        }
+        count = MAX(count, 1);
+        for (ish = 0; ish < nish; ish++) {
+                bscreen_i[ish] = MIN(dv, sgxopt->etol / (fbar_i[ish] * count + 1e-32));
         }
 }
 
@@ -1415,11 +1471,9 @@ void SGXbuild_gv_threshold(double *f_ug, double *g_ug, int *ao_loc, double *dv, 
 
 void SGXnr_direct_k_drv(int (*intor)(), SGXJKOperator **jkop,
                         double **dms, double **vjk, int n_dm, int ncomp,
-                        int *shls_slice, int *ao_loc,
-                        CINTOpt *cintopt, CSGXOpt *sgxopt,
-                        int *atm, int natm, int *bas, int nbas, double *env,
-                        int aosym, double *wt, double *mbar_ij, double *dv,
-                        double de)
+                        int *shls_slice, int *ao_loc, CINTOpt *cintopt,
+                        CSGXOpt *sgxopt, int *atm, int natm, int *bas,
+                        int nbas, double *env, int aosym)
 {
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
@@ -1438,9 +1492,6 @@ void SGXnr_direct_k_drv(int (*intor)(), SGXJKOperator **jkop,
                 return;
         }
         const int tot_ngrids = (int) env[NGRIDS];
-        sgxopt->ngrids = tot_ngrids;
-        sgxopt->wt = wt;
-        sgxopt->vtol = dv;
         const int nbatch = (tot_ngrids + SGX_BLKSIZE - 1) / SGX_BLKSIZE;
         double usc = 0;
 #pragma omp parallel

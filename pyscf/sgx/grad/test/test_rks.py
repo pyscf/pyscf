@@ -1,18 +1,14 @@
 from pyscf.sgx.sgx import sgx_fit
 from pyscf import gto, scf, lib
-import numpy
 import unittest
 
 
 ALL_SETTINGS = [
     [False, False, False, False, False],
     [True, False, False, False, False],
-    [True, True, False, False, False],
-    [True, False, True, False, True],
-    [True, True, True, True, False],
     [True, True, True, True, True],
 ]
-ALL_PRECISIONS = [5, 6, 3, 6, 4, 6]
+ALL_PRECISIONS = [5, 6, 6]
 
 
 def setUpModule():
@@ -27,8 +23,6 @@ def setUpModule():
     ])
     mol.basis = '6-31g'
     mol.max_memory = 2000
-    mol.spin = 1
-    mol.charge = 1
     mol.build()
 
 
@@ -37,6 +31,8 @@ def _set_df_args(mf, dfj, fit_ovlp, optk, dm_screen, symm_fit):
         mf.with_df.grids_level_f = 1
     else:
         mf.with_df.grids_level_f = 2
+    if mf.xc == "HSE06" and not dfj:
+        mf.with_df.debug = True
     mf.with_df.dfj = dfj
     mf.with_df.fit_ovlp = fit_ovlp
     mf.with_df.optk = optk
@@ -53,33 +49,27 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
 
-    def _check_finite_diff_grad(self, df_settings, order):
-        mf = sgx_fit(scf.UHF(mol))
+    def _check_finite_diff_grad(self, df_settings, order, xc):
+        mf = sgx_fit(scf.RKS(mol).set(xc=xc))
         _set_df_args(mf, *df_settings)
         g = mf.nuc_grad_method().set(sgx_grid_response=True, grid_response=True).kernel()
         mol1 = mol.copy()
         mf_scanner = mf.as_scanner()
         delta = 1e-5
-        e1 = mf_scanner(mol1.set_geom_(
-            f'O  0. 0. {delta:f}; 1  0. -0.757 0.587; 1  0. 0.757 0.587'
-        ))
-        e2 = mf_scanner(mol1.set_geom_(
-            f'O  0. 0. -{delta:f}; 1  0. -0.757 0.587; 1  0. 0.757 0.587'
-        ))
-        if (
-            (not mf.with_df.optk) or (not mf.with_df.fit_ovlp)
-            or mf.with_df._symm_ovlp_fit
-        ):
-            self.assertAlmostEqual(numpy.abs(g.sum(axis=0)).sum(), 0, 13)
+        e1 = mf_scanner(mol1.set_geom_(f'O  0. 0. {delta:f}; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_(f'O  0. 0. -{delta:f}; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         self.assertAlmostEqual(g[0,2], (e1-e2)/(2*delta)*lib.param.BOHR, order)
     
     def test_finite_diff_grad(self):
-        self._check_finite_diff_grad(ALL_SETTINGS[0], ALL_PRECISIONS[0])
-        self._check_finite_diff_grad(ALL_SETTINGS[1], ALL_PRECISIONS[1])
-        self._check_finite_diff_grad(ALL_SETTINGS[2], ALL_PRECISIONS[2])
-        self._check_finite_diff_grad(ALL_SETTINGS[3], ALL_PRECISIONS[3])
-        self._check_finite_diff_grad(ALL_SETTINGS[4], ALL_PRECISIONS[4])
-        self._check_finite_diff_grad(ALL_SETTINGS[5], ALL_PRECISIONS[5])
+        self._check_finite_diff_grad(ALL_SETTINGS[0], ALL_PRECISIONS[0], "PBE0")
+        self._check_finite_diff_grad(ALL_SETTINGS[0], ALL_PRECISIONS[0], "HSE06")
+        self._check_finite_diff_grad(ALL_SETTINGS[0], ALL_PRECISIONS[0], "WB97X")
+        self._check_finite_diff_grad(ALL_SETTINGS[1], ALL_PRECISIONS[1], "PBE0")
+        self._check_finite_diff_grad(ALL_SETTINGS[1], ALL_PRECISIONS[1], "HSE06")
+        self._check_finite_diff_grad(ALL_SETTINGS[1], ALL_PRECISIONS[1], "WB97X")
+        self._check_finite_diff_grad(ALL_SETTINGS[2], ALL_PRECISIONS[2], "PBE0")
+        self._check_finite_diff_grad(ALL_SETTINGS[2], ALL_PRECISIONS[2], "HSE06")
+        self._check_finite_diff_grad(ALL_SETTINGS[2], ALL_PRECISIONS[2], "WB97X")
 
 
 if __name__ == '__main__':

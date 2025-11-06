@@ -285,12 +285,15 @@ class SGX(lib.StreamObject):
         self.stdout = mol.stdout
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
-        self.grids_thrd = 1e-10
+        self.grids_thrd = 1e-13
         self.grids_level_i = 1 # initial grids level
         self.grids_level_f = 2 # final grids level
         self.use_opt_grids = True # use optimized grids for SGX based on ORCA
         # whether to numerically fit overlap matrix to improve numerical precision
         self.fit_ovlp = True
+        # perform a symmetric overlap fit when optk is True.
+        # When fit_ovlp=True, _symm_ovlp_fit=True is required
+        # for exact analytical gradients.
         self._symm_ovlp_fit = True
         self.grids_switch_thrd = 0.03
         # compute J matrix using DF and K matrix using SGX. It's identical to
@@ -401,7 +404,7 @@ class SGX(lib.StreamObject):
                 rsh_df._overlap_correction_matrix = None
                 self._rsh_df[key] = rsh_df
                 logger.info(self, 'Create RSH-SGX object %s for omega=%s', rsh_df, omega)
-            print("RUNNING RS", omega)
+
             with rsh_df.mol.with_range_coulomb(omega):
                 return rsh_df.get_jk(dm, hermi, with_j, with_k,
                                      direct_scf_tol)

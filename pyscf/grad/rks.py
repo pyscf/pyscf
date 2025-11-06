@@ -614,16 +614,9 @@ def _get_lko_partition_functions(mol, ia, radii_adjust, atomic_radii):
         else:
             assert isinstance(ia, numpy.ndarray)
             ialist = ia.astype(numpy.int32, order="C", copy=True)
-            print("SUMS2 ialist", numpy.max(ialist), numpy.min(ialist), ialist.shape, coords.shape, coords[-8:])
         coords = numpy.asarray(coords, order='F')
         ngrids = coords.shape[0]
         pbecke = numpy.empty((4,mol.natm,ngrids))
-        print("SUMS inputs", pbecke.flags.c_contiguous, pbecke.shape,
-              dbecke.flags.c_contiguous, dbecke.shape,
-              coords.flags.f_contiguous, coords.shape,
-              atm_coords.flags.c_contiguous, atm_coords.shape,
-              p_radii_table, mol.natm, ngrids, ialist.flags.c_contiguous,
-              ialist.dtype, ialist.shape)
         gen_deriv_fn(pbecke.ctypes.data_as(ctypes.c_void_p),
                      dbecke.ctypes.data_as(ctypes.c_void_p),
                      coords.ctypes.data_as(ctypes.c_void_p),
@@ -650,7 +643,6 @@ def get_dw_partition(mol, ia, atom_grids_tab,
     if wtonly:
         return coords, weights
     else:
-        print("DWDW")
         dbecke = -pbecke * weights * invsum
         dbecke[ia, :] += weights
         dbecke = numpy.ascontiguousarray(dbecke)
@@ -672,9 +664,7 @@ def get_dw_partition_sorted(mol, ialist, coords, weights,
     #    cond = numpy.nonzero(ialist == ia)
     #    dbecke[ia][cond] += weights[cond]
     dbecke = numpy.ascontiguousarray(dbecke)
-    print("SUMS dbecke", numpy.abs(weights).sum(), numpy.abs(weights * invsum).mean(), numpy.abs(dbecke).sum())
     weights1 = gen_grid_deriv(coords, dbecke)
-    print("SUMS weights1", numpy.abs(weights1).sum())
     return weights1
 
 
