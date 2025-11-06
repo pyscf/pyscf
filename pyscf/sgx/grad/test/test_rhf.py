@@ -12,7 +12,7 @@ ALL_SETTINGS = [
     [True, True, True, True, False],
     [True, True, True, True, True],
 ]
-ALL_PRECISIONS = [5, 6, 3, 6, 4, 6]
+ALL_PRECISIONS = [5, 6, 3, 6, 5, 6]
 
 
 def setUpModule():
@@ -66,11 +66,7 @@ class KnownValues(unittest.TestCase):
         e2 = mf_scanner(mol1.set_geom_(
             f'O  0. 0. -{delta:f}; 1  0. -0.757 0.587; 1  0. 0.757 0.587'
         ))
-        if (
-            (not mf.with_df.optk) or (not mf.with_df.fit_ovlp)
-            or mf.with_df._symm_ovlp_fit
-        ):
-            self.assertAlmostEqual(numpy.abs(g.sum(axis=0)).sum(), 0, 13)
+        self.assertAlmostEqual(numpy.abs(g.sum(axis=0)).sum(), 0, 13)
         self.assertAlmostEqual(g[0,2], (e1-e2)/(2*delta)*lib.param.BOHR, order)
     
     def test_finite_diff_grad(self):
