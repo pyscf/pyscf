@@ -1509,7 +1509,7 @@ omniobj.base = omniobj
 omniobj.precision = 1e-8 # utilized by several pbc modules
 
 # Attributes that are kept in np.ndarray during the to_gpu conversion
-_ATTRIBUTES_IN_NPARRAY = {'kpt', 'kpts', 'kpts_band', 'mesh', 'frozen'}
+_ATTRIBUTES_IN_NPARRAY = {'kpt', 'kpts', '_kpts', 'kpts_band', 'mesh', 'frozen'}
 
 def to_gpu(method, out=None):
     '''Convert a method to its corresponding GPU variant, and recursively
@@ -1553,16 +1553,9 @@ def to_gpu(method, out=None):
 
         # A temporary GPU instance. This ensures to initialize private
         # attributes that are only available for GPU code.
-        if hasattr(method, 'base'):
-            out = cls(method.base)
-        elif hasattr(method, '_scf'):
-            out = cls(method._scf)
-        elif hasattr(method, 'cell'):
-            out = cls(method.cell)
-        elif hasattr(method, 'mol'):
-            out = cls(method.mol)
-        else:
-            raise TypeError('Conversion for class {cls} not supported')
+        cls = getattr(mod, method.__class__.__name__)
+        out = method.view(cls)
+
     elif hasattr(out, 'from_cpu'):
         out.__dict__.update(out.__class__.from_cpu(method).__dict__)
         return out
