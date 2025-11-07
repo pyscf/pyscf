@@ -414,7 +414,7 @@ class SGXData:
         else:
             self._this.mbar_bi = None
 
-    def get_loop_data(self, nset=1, with_pair_mask=True):
+    def get_loop_data(self, nset=1, with_pair_mask=True, grad=False):
         mol = self.mol
         grids = self.grids
         nao = mol.nao_nr()
@@ -431,8 +431,14 @@ class SGXData:
         screen_index = non0tab
         ngrids = grids.coords.shape[0]
         max_memory = self.max_memory - lib.current_memory()[0]
-        # We need to store ao, wao, and fg -> 2 + nset sets of size nao
-        blksize = max(SGX_BLKSIZE, int(max_memory*1e6/8/((2+nset)*nao)))
+        if grad:
+            # TODO make a better estimate here
+            # We need ~4 ao copes (ao, dx, dy, dz) and gv, dgv
+            data_dim = 4 + 4 * nset
+        else:
+            # We need to store ao, wao, and fg -> 2 + nset sets of size nao
+            data_dim = 2 + nset
+        blksize = max(SGX_BLKSIZE, int(max_memory*1e6/8/(data_dim*nao)))
         blksize = min(ngrids, max(1, blksize // SGX_BLKSIZE) * SGX_BLKSIZE)
         cutoff = grids.cutoff * 1e2
         nbins = NBINS * 2 - int(NBINS * numpy.log(cutoff) / numpy.log(grids.cutoff))

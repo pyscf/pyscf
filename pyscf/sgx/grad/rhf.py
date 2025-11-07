@@ -265,7 +265,7 @@ def scalable_grids_response_cc(grids, blksize):
     assert grids.atm_idx is not None
     mol = grids.mol
     ngrids = grids.weights.size
-    assert blksize % BLKSIZE == 0 or blksize == grids.weights.size
+    assert blksize % BLKSIZE == 0 or blksize == ngrids
     for i0, i1 in lib.prange(0, ngrids, blksize):
         coords = grids.coords[i0:i1]
         weights = grids.weights[i0:i1]
@@ -302,13 +302,14 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     dms = dms.reshape(-1,nao,nao)
     nset = dms.shape[0]
     shls_slice = (0, mol.nbas)
-    loop_data = sgx._pjs_data.get_loop_data(nset=nset, with_pair_mask=True)
+    loop_data = sgx._pjs_data.get_loop_data(nset=nset, with_pair_mask=True, grad=True)
     nbins, screen_index, pair_mask, ao_loc, blksize = loop_data
     pair_mask_ones = numpy.ones_like(pair_mask)
     proj = sgx._pjs_data._overlap_correction_matrix
     dm_mask = sgx._pjs_data.get_dm_threshold_matrix(
         dms, sgx.sgx_tol_potential, sgx.sgx_tol_energy
     )
+    ngrids = grids.weights.size
 
     vk = numpy.zeros_like(dms)
     dvk = numpy.zeros((dms.shape[0], 3,) + dms.shape[1:])
@@ -323,6 +324,9 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     t2, t3 = 0, 0
     t4 = -logger.perf_counter()
     fg = None
+    if include_grid_response:
+        all_xed = numpy.zeros(ngrids)
+        all_dxed = numpy.zeros((3, ngrids))
     if sgx.fit_ovlp and include_grid_response:
         sn = numpy.zeros((nao, nao))
         proj_dm = lib.einsum('ki,xij->xkj', proj, dms)
@@ -338,13 +342,16 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
         proj_dm = lib.einsum('ki,xij->xkj', proj, dms)
         other_dm = dms
         dvk1 = numpy.zeros((3, nao))
-    for items in scalable_grids_response_cc(grids, blksize):
-        # atm_idx is an array shape (ngrids,)
-        # coords is an array shape (ngrids, 3)
-        # weights is an array shape (ngrids)
-        # weights1 is an array shape (natm, 3, ngrids)
+
+    for i0, i1 in lib.prange(0, ngrids, blksize):
         ta = logger.perf_counter()
-        i0, i1, atm_idx, coords, weights, weights1, mask = items
+        assert i0 % SGX_BLKSIZE == 0
+        b0 = i0 // SGX_BLKSIZE
+        b0ni = i0 // BLKSIZE
+        b1ni = (i1 + BLKSIZE - 1) // BLKSIZE
+        coords = grids.coords[i0:i1]
+        weights = grids.weights[i0:i1]
+        mask = screen_index[b0ni:b1ni]
         print("LOOP", i0)
         if mol.cart:
             _ao = mol.eval_gto('GTOval_cart_deriv1', coords, non0tab=mask)
@@ -352,7 +359,6 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
             _ao = mol.eval_gto('GTOval_sph_deriv1', coords, non0tab=mask)
         ao = _ao[0]
         dao = _ao[1:4]
-        b0 = i0 // SGX_BLKSIZE
         if sgx.use_dm_screening:
             fg = sgx_jk._sgxdot_ao_dm_sparse(ao, proj_dm, mask, dm_mask, ao_loc, out=fg)
             gv = batch_k(mol, coords, fg, weights, b0)
@@ -378,10 +384,6 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
 
         tb = logger.perf_counter()
         no_mask2 = mask2 is None
-        if no_mask2:
-            dxed = 0
-        else:
-            dxed = numpy.zeros((3, weights.size))
         for i in range(nset):
             if no_mask2:
                 tmp = lib.einsum("vg,vu->ug", gv[i], other_dm[i])
@@ -391,7 +393,6 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
                 # signficant at all, don't ignore. TODO this is overly
                 # conservative but matches the approach for energy/potential
                 mask3 = numpy.uint8(127) * numpy.logical_or(mask, mask2)
-                print(numpy.count_nonzero(mask3) / mask3.size)
                 tmp = sgx_jk._dot_ao_dm_sparse(
                     gv[i].T, other_dm[i], nbins, mask3, pair_mask_ones, ao_loc
                 ).T
@@ -401,22 +402,24 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
                 if no_mask2:
                     wfg = lib.einsum("ug,g->ug", fg[i], 0.5 * weights)
                     dvk1[:] -= lib.einsum('xug,ug->xu', dgv[i], wfg) # INTEGRAL RESPONSE
-                    xed = lib.einsum('ug,ug->g', fg[i], gv[i])
-                    dxed -= lib.einsum('ug,xug->xg', wfg, dgv[i]) # INTEGRAL RESPONSE
-                    dxed -= lib.einsum("ug,xgu->xg", tmp, dao)
+                    all_xed[i0:i1] += lib.einsum('ug,ug->g', fg[i], gv[i])
+                    all_dxed[:, i0:i1] -= lib.einsum('ug,xug->xg', wfg, dgv[i]) # INTEGRAL RESPONSE
+                    all_dxed[:, i0:i1] -= lib.einsum("ug,xgu->xg", tmp, dao)
                 else:
                     wfg = ni._scale_ao_sparse(fg[i].T, 0.5 * weights, mask3, ao_loc)
-                    xed = ni._contract_rho_sparse(fg[i].T, gv[i].T, mask3, ao_loc)
+                    all_xed[i0:i1] += ni._contract_rho_sparse(fg[i].T, gv[i].T, mask3, ao_loc)
                     for x in range(3):
                         dvk1[x] -= lib.einsum('ug,ug->u', dgv[i, x], wfg.T)
-                        dxed[x] -= ni._contract_rho_sparse(wfg, dgv[i, x].T, mask3, ao_loc)
-                        dxed[x] -= ni._contract_rho_sparse(tmp.T, dao[x], mask3, ao_loc)
-                dek[:, :] += lib.einsum("axg,g->ax", weights1, xed) # GRID RESPONSE PART 1
-        if include_grid_response:
-            for ia in range(mol.natm):
-                cond = (atm_idx == ia)
-                dek[ia] -= 4 * numpy.sum(dxed[:, cond], axis=1)  # GRID RESPONSE PART 2
-        else:
+                        all_dxed[x, i0:i1] -= ni._contract_rho_sparse(wfg, dgv[i, x].T, mask3, ao_loc)
+                        all_dxed[x, i0:i1] -= ni._contract_rho_sparse(tmp.T, dao[x], mask3, ao_loc)
+                #dek[:, :] += lib.einsum("axg,g->ax", weights1, xed) # GRID RESPONSE PART 1
+        #if include_grid_response:
+        #    for ia in range(mol.natm):
+        #        cond = (atm_idx == ia)
+        #        dek[ia] -= 4 * numpy.sum(dxed[:, cond], axis=1)  # GRID RESPONSE PART 2
+        #else:
+        #    dvk1[:] *= 2
+        if not include_grid_response:
             dvk1[:] *= 2
         tc = logger.perf_counter()
 
@@ -452,6 +455,10 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
         Cmat = Cmat + Cmat.T
         mat = numpy.zeros_like(grad_ovlp)
         for items in scalable_grids_response_cc(grids, blksize):
+            # atm_idx is an array shape (ngrids,)
+            # coords is an array shape (ngrids, 3)
+            # weights is an array shape (ngrids)
+            # weights1 is an array shape (natm, 3, ngrids)
             i0, i1, atm_idx, coords, weights, weights1, mask = items
             if mol.cart:
                 _ao = mol.eval_gto('GTOval_cart_deriv1', coords, non0tab=mask)
@@ -462,17 +469,19 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
             ca = sgx_jk._dot_ao_dm_sparse(ao, Cmat, nbins, mask, pair_mask_ones, ao_loc)
             #xed = lib.einsum("gv,gv->g", ca, ao)
             #dxed = lib.einsum("gv,xgv->xg", ca, dao)
-            xed = ni._contract_rho_sparse(ca, ao, mask, ao_loc)
+            xed = all_xed[i0:i1] - 0.5 * ni._contract_rho_sparse(ca, ao, mask, ao_loc)
             dxed = numpy.empty((3, weights.size))
             for x in range(3):
                 dxed[x] = ni._contract_rho_sparse(ca, dao[x], mask, ao_loc)
             dxed[:] *= weights
+            dxed[:] += 4 * all_dxed[:, i0:i1]
             for x in range(3):
                 mat[x] += sgx_jk._dot_ao_ao_sparse(
                     dao[x], ao, weights, nbins, mask, pair_mask, ao_loc, hermi=0
                 )
             # negative because d sn^-1 / dR = -sn^-1 (dsn/dR) sn^-1
-            dek[:, :] -= 0.5 * lib.einsum("axg,g->ax", weights1, xed)  # GRID RESPONSE PART 1
+            # dek[:, :] -= 0.5 * lib.einsum("axg,g->ax", weights1, xed)  # GRID RESPONSE PART 1
+            dek[:, :] += lib.einsum("axg,g->ax", weights1, xed)  # GRID RESPONSE PART 1
             for ia in range(mol.natm):
                 cond = (atm_idx == ia)
                 dek[ia] -= numpy.sum(dxed[:, cond], axis=1)  # GRID RESPONSE PART 2
@@ -480,6 +489,18 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
             for ia in range(mol.natm):
                 p0, p1 = aoslices[ia, 2:]
                 dek[ia, x] += lib.einsum("uv,uv->", mat[x, p0 : p1], Cmat[p0 : p1])
+    elif include_grid_response:
+        for items in scalable_grids_response_cc(grids, blksize):
+            # atm_idx is an array shape (ngrids,)
+            # coords is an array shape (ngrids, 3)
+            # weights is an array shape (ngrids)
+            # weights1 is an array shape (natm, 3, ngrids)
+            i0, i1, atm_idx, coords, weights, weights1, mask = items
+            dek[:, :] += lib.einsum("axg,g->ax", weights1, all_xed[i0:i1])  # GRID RESPONSE PART 1
+            dxed = all_dxed[:, i0:i1]
+            for ia in range(mol.natm):
+                cond = (atm_idx == ia)
+                dek[ia] -= 4 * numpy.sum(dxed[:, cond], axis=1)
 
     for x in range(3):
         for ia in range(mol.natm):

@@ -200,7 +200,6 @@ class _SGXHF:
             self._ctx_lock = threading.RLock()
 
         with self._ctx_lock:
-            sgx._full_dm = dm
             try:
                 will_reset = False
                 self._grids_reset = False
@@ -211,6 +210,10 @@ class _SGXHF:
                         and self._in_scf:
                     self._grids_reset = True
                     will_reset = True
+                if will_reset:
+                    sgx._full_dm = None
+                else:
+                    sgx._full_dm = dm
                 yield will_reset
             finally:
                 sgx._full_dm = None

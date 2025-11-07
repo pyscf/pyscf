@@ -39,6 +39,7 @@ def _set_df_args(mf, dfj, fit_ovlp, optk, dm_screen, symm_fit):
     mf.with_df.optk = optk
     mf.with_df.use_dm_screening = dm_screen
     mf.with_df._symm_ovlp_fit = symm_fit
+    mf.grids.level = 1
     mf.conv_tol = 1e-12
 
 

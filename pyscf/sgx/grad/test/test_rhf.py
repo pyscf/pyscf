@@ -5,12 +5,12 @@ import unittest
 
 
 ALL_SETTINGS = [
-    [False, False, False, False, False],
-    [True, False, False, False, False],
-    [True, True, False, False, False],
-    [True, False, True, False, True],
-    [True, True, True, True, False],
-    [True, True, True, True, True],
+    [False, False, False, False, False, 2],
+    [True, False, False, False, False, 1],
+    [True, True, False, False, False, 1],
+    [True, False, True, False, True, 1],
+    [True, True, True, True, False, 1],
+    [True, True, True, True, True, 1],
 ]
 ALL_PRECISIONS = [5, 6, 3, 6, 5, 6]
 
@@ -30,11 +30,8 @@ def setUpModule():
     mol.build()
 
 
-def _set_df_args(mf, dfj, fit_ovlp, optk, dm_screen, symm_fit):
-    if dfj:
-        mf.with_df.grids_level_f = 1
-    else:
-        mf.with_df.grids_level_f = 2
+def _set_df_args(mf, dfj, fit_ovlp, optk, dm_screen, symm_fit, lvl):
+    mf.with_df.grids_level_f = lvl
     mf.with_df.dfj = dfj
     mf.with_df.fit_ovlp = fit_ovlp
     mf.with_df.optk = optk
@@ -53,10 +50,13 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
 
-    def _check_finite_diff_grad(self, df_settings, order):
+    def _check_finite_diff_grad(self, df_settings, order, sgr=True):
+        if not sgr:
+            df_settings = [s for s in df_settings]
+            df_settings[-1] += 1
         mf = sgx_fit(scf.RHF(mol))
         _set_df_args(mf, *df_settings)
-        g = mf.nuc_grad_method().set(sgx_grid_response=True, grid_response=True).kernel()
+        g = mf.nuc_grad_method().set(sgx_grid_response=sgr, grid_response=True).kernel()
         mol1 = mol.copy()
         mf_scanner = mf.as_scanner()
         delta = 1e-5
@@ -66,7 +66,9 @@ class KnownValues(unittest.TestCase):
         e2 = mf_scanner(mol1.set_geom_(
             f'O  0. 0. -{delta:f}; 1  0. -0.757 0.587; 1  0. 0.757 0.587'
         ))
-        self.assertAlmostEqual(numpy.abs(g.sum(axis=0)).sum(), 0, 13)
+        if sgr:
+            # Forces will not sum to zero unless sgx_grid_response=True
+            self.assertAlmostEqual(numpy.abs(g.sum(axis=0)).sum(), 0, 13)
         self.assertAlmostEqual(g[0,2], (e1-e2)/(2*delta)*lib.param.BOHR, order)
     
     def test_finite_diff_grad(self):
@@ -77,6 +79,13 @@ class KnownValues(unittest.TestCase):
         self._check_finite_diff_grad(ALL_SETTINGS[4], ALL_PRECISIONS[4])
         self._check_finite_diff_grad(ALL_SETTINGS[5], ALL_PRECISIONS[5])
 
+    def test_finite_diff_noresponse(self):
+        self._check_finite_diff_grad(ALL_SETTINGS[0], 3, False)
+        self._check_finite_diff_grad(ALL_SETTINGS[1], 3, False)
+        self._check_finite_diff_grad(ALL_SETTINGS[2], 3, False)
+        self._check_finite_diff_grad(ALL_SETTINGS[3], 3, False)
+        self._check_finite_diff_grad(ALL_SETTINGS[4], 3, False)
+        self._check_finite_diff_grad(ALL_SETTINGS[5], 3, False)
 
 if __name__ == '__main__':
     unittest.main()

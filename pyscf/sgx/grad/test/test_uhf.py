@@ -53,10 +53,10 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
 
-    def _check_finite_diff_grad(self, df_settings, order):
+    def _check_finite_diff_grad(self, df_settings, order, sgr=True):
         mf = sgx_fit(scf.UHF(mol))
         _set_df_args(mf, *df_settings)
-        g = mf.nuc_grad_method().set(sgx_grid_response=True, grid_response=True).kernel()
+        g = mf.nuc_grad_method().set(sgx_grid_response=sgr, grid_response=True).kernel()
         mol1 = mol.copy()
         mf_scanner = mf.as_scanner()
         delta = 1e-5
@@ -66,7 +66,9 @@ class KnownValues(unittest.TestCase):
         e2 = mf_scanner(mol1.set_geom_(
             f'O  0. 0. -{delta:f}; 1  0. -0.757 0.587; 1  0. 0.757 0.587'
         ))
-        self.assertAlmostEqual(numpy.abs(g.sum(axis=0)).sum(), 0, 13)
+        if sgr:
+            # Forces will not sum to zero unless sgx_grid_response=True
+            self.assertAlmostEqual(numpy.abs(g.sum(axis=0)).sum(), 0, 13)
         self.assertAlmostEqual(g[0,2], (e1-e2)/(2*delta)*lib.param.BOHR, order)
     
     def test_finite_diff_grad(self):
@@ -76,6 +78,10 @@ class KnownValues(unittest.TestCase):
         self._check_finite_diff_grad(ALL_SETTINGS[3], ALL_PRECISIONS[3])
         self._check_finite_diff_grad(ALL_SETTINGS[4], ALL_PRECISIONS[4])
         self._check_finite_diff_grad(ALL_SETTINGS[5], ALL_PRECISIONS[5])
+
+    def test_finite_diff_noresponse(self):
+        self._check_finite_diff_grad(ALL_SETTINGS[0], 3, False)
+        self._check_finite_diff_grad(ALL_SETTINGS[5], 3, False)
 
 
 if __name__ == '__main__':
