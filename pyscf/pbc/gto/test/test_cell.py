@@ -436,20 +436,25 @@ class KnownValues(unittest.TestCase):
     def test_getattr(self):
         from pyscf.pbc import scf, dft, cc, tdscf
         cell = pgto.M(atom='He', a=np.eye(3)*4, basis={'He': [[0, (1, 1)]]})
-        self.assertEqual(cell.HF().__class__, scf.HF(cell).__class__)
-        self.assertEqual(cell.KS().__class__, dft.KS(cell).__class__)
-        self.assertEqual(cell.UKS().__class__, dft.UKS(cell).__class__)
-        self.assertEqual(cell.KROHF().__class__, scf.KROHF(cell).__class__)
-        self.assertEqual(cell.KKS().__class__, dft.KKS(cell).__class__)
-        self.assertEqual(cell.CCSD().__class__, cc.ccsd.RCCSD)
-        self.assertEqual(cell.TDA().__class__, tdscf.rhf.TDA)
-        self.assertEqual(cell.TDBP86().__class__, tdscf.rks.CasidaTDDFT)
-        self.assertEqual(cell.TDB3LYP().__class__, tdscf.rks.TDDFT)
-        self.assertEqual(cell.KCCSD().__class__, cc.kccsd_rhf.KRCCSD)
-        self.assertEqual(cell.KTDA().__class__, tdscf.krhf.TDA)
-        self.assertEqual(cell.KTDBP86().__class__, tdscf.krks.TDDFT)
+        kpt = np.zeros(3)
+        kpts = np.zeros((1, 3))
+        self.assertEqual(cell.HF(kpt=kpt).__class__, scf.HF(cell).__class__)
+        self.assertEqual(cell.KS(xc='pbe', kpt=kpt).__class__, dft.KS(cell, xc='pbe').__class__)
+        self.assertEqual(cell.KS(xc='pbe', kpt=kpt).xc, dft.KS(cell, xc='pbe').xc)
+        self.assertEqual(cell.UKS(xc='pbe', kpt=kpt).__class__, dft.UKS(cell, xc='pbe').__class__)
+        self.assertEqual(cell.UKS(xc='pbe', kpt=kpt).xc, dft.UKS(cell, xc='pbe').xc)
+        self.assertEqual(cell.KROHF(kpts=kpts).__class__, scf.KROHF(cell).__class__)
+        self.assertEqual(cell.KKS(kpts=kpts).__class__, dft.KKS(cell).__class__)
+        self.assertEqual(cell.CCSD(kpt=kpt).__class__, cc.ccsd.RCCSD)
+        self.assertEqual(cell.TDA(kpt=kpt).__class__, tdscf.rhf.TDA)
+        self.assertEqual(cell.TDBP86(kpt=kpt).__class__, tdscf.rks.CasidaTDDFT)
+        self.assertEqual(cell.TDB3LYP(kpt=kpt).__class__, tdscf.rks.TDDFT)
+        self.assertEqual(cell.KCCSD(kpts=kpts).__class__, cc.kccsd_rhf.KRCCSD)
+        self.assertEqual(cell.KTDA(kpts=kpts).__class__, tdscf.krhf.TDA)
+        self.assertEqual(cell.KTDBP86(kpts=kpts).__class__, tdscf.krks.TDDFT)
+        self.assertEqual(cell.KRKSpU(kpts=kpts, U_idx=['2p'], U_val=[1]).__class__, dft.KRKSpU(cell, U_idx=['2p'], U_val=[1]).__class__)
         self.assertRaises(AttributeError, lambda: cell.xyz)
-        self.assertRaises(AttributeError, lambda: cell.TDxyz)
+        self.assertRaises(AttributeError, lambda: cell.TDxyz())
 
         cell = pgto.M(atom='He', charge=1, spin=1, a=np.eye(3)*4, basis={'He': [[0, (1, 1)]]})
         self.assertTrue(cell.HF().__class__, scf.uhf.UHF)
@@ -462,6 +467,16 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(cell.KCCSD().__class__, cc.kccsd_uhf.KUCCSD)
         self.assertTrue(cell.KTDA().__class__, tdscf.kuhf.TDA)
         self.assertTrue(cell.KTDBP86().__class__, tdscf.kuks.TDDFT)
+
+        cell = pgto.M(atom='He', a=np.eye(3)*4, basis={'He': [[0, (1, 1)]]}, space_group_symmetry=True)
+        kpts = cell.make_kpts([3,1,1], space_group_symmetry=True)
+        self.assertEqual(cell.KHF(kpts=kpts, exxdiv=None).__class__, scf.KHF(cell, kpts=kpts, exxdiv=None).__class__)
+        self.assertEqual(cell.KKS(xc='pbe', kpts=kpts).__class__, dft.KKS(cell, xc='pbe', kpts=kpts).__class__)
+        self.assertEqual(cell.KKS(xc='pbe', kpts=kpts).xc, dft.KKS(cell, xc='pbe', kpts=kpts).xc)
+        self.assertEqual(cell.KUKS(xc='pbe').__class__, dft.KUKS(cell, xc='pbe').__class__)
+        self.assertEqual(cell.KUKS(xc='pbe').xc, dft.KUKS(cell, xc='pbe').xc)
+        self.assertEqual(cell.KRKSpU(kpts=kpts, U_idx=['2p'], U_val=[1.]).__class__,
+                         dft.KRKSpU(cell, kpts=kpts, U_idx=['2p'], U_val=[1.]).__class__)
 
     def test_ghost(self):
         cell = pgto.Cell(
@@ -568,6 +583,89 @@ class KnownValues(unittest.TestCase):
             cell.fromfile(f.name, 'xyz')
             r1 = cell.atom_coords()
             self.assertAlmostEqual(abs(ref - r1).max(), 0, 12)
+
+    def test_set_geom_(self):
+        BOHR = lib.param.BOHR
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]])
+
+        cl.set_geom_(np.ones((1, 3)), unit='Bohr')
+        self.assertTrue(cl.atom_coords()[0,0] == 1)
+        self.assertTrue(cl.lattice_vectors()[0,0] == 4/BOHR)
+
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]])
+        cl.set_geom_(a=np.eye(3)*5., unit='Bohr')
+        self.assertTrue(cl.atom_coords()[0,2] == 1/BOHR)
+        self.assertTrue(cl.lattice_vectors()[0,0] == 5)
+
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]])
+        cl.set_geom_(unit='Bohr')
+        self.assertTrue(cl.atom_coords()[0,2] == 1/BOHR)
+        self.assertTrue(cl.lattice_vectors()[0,0] == 4/BOHR)
+
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]], unit='AU')
+        cl.set_geom_(np.ones((1, 3)), unit='Ang')
+        self.assertTrue(cl.atom_coords()[0,0] == 1/BOHR)
+        self.assertTrue(cl.lattice_vectors()[0,0] == 4)
+
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]], unit='Bohr')
+        cl.set_geom_(a=np.eye(3)*5., unit='Ang')
+        self.assertTrue(cl.atom_coords()[0,2] == 1)
+        self.assertTrue(cl.lattice_vectors()[0,0] == 5/BOHR)
+
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]], unit='AU')
+        cl.set_geom_(unit='Ang')
+        self.assertTrue(cl.atom_coords()[0,2] == 1)
+        self.assertTrue(cl.lattice_vectors()[0,0] == 4)
+
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]], unit=1.5)
+        cl.set_geom_(np.ones((1, 3)))
+        self.assertTrue(cl.atom_coords()[0,0] == 1/1.5)
+        self.assertTrue(cl.lattice_vectors()[0,0] == 4/1.5)
+
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]], unit=1.5)
+        cl.set_geom_(a=np.eye(3)*3)
+        self.assertTrue(cl.atom_coords()[0,2] == 1/1.5)
+        self.assertTrue(cl.lattice_vectors()[0,0] == 3/1.5)
+
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]], unit=1.5)
+        cl.set_geom_(a=np.eye(3)*5., unit='Ang')
+        self.assertTrue(cl.atom_coords()[0,2] == 1/1.5)
+        self.assertTrue(cl.lattice_vectors()[0,0] == 5/BOHR)
+
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]], unit=1.5)
+        cl.set_geom_(unit='Ang')
+        self.assertTrue(cl.atom_coords()[0,2] == 1/1.5)
+        self.assertTrue(cl.lattice_vectors()[0,0] == 4/1.5)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")

@@ -216,7 +216,9 @@ class KnownValues(unittest.TestCase):
         dm = dm + dm.transpose(0,2,1)
         mydf = df.DF(cell0).set(auxbasis='weigend')
         mydf.linear_dep_threshold = 1e-7
-        mydf.kpts = numpy.random.random((4,3))
+        kpts = numpy.random.random((4,3))
+        kpts -= cell0.get_abs_kpts(cell0.get_scaled_kpts(kpts).round(0))
+        mydf.kpts = kpts
         mydf.exxdiv = None
         mydf.eta = 0.15
         mydf.exp_to_discard = 0.3

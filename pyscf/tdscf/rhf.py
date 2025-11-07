@@ -833,9 +833,11 @@ class TDBase(lib.StreamObject):
 
     as_scanner = as_scanner
 
+    def Gradients(self):
+        raise NotImplementedError
+
     def nuc_grad_method(self):
-        from pyscf.grad import tdrhf
-        return tdrhf.Gradients(self)
+        return self.Gradients()
 
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''
@@ -851,18 +853,23 @@ class TDBase(lib.StreamObject):
 class TDA(TDBase):
     '''Tamm-Dancoff approximation
 
-    Attributes:
+    Input Attributes:
         conv_tol : float
-            Diagonalization convergence tolerance.  Default is 1e-9.
+            Convergence is achieved when the norm of the residual for a state is
+            below this threshold. Default is 1e-5.
         nstates : int
             Number of TD states to be computed. Default is 3.
+        frozen : int or list
+            Orbitals indices to be frozen during the TDDFT diagonalization.
+        wfnsym : str
+            The irrep name
 
     Saved results:
 
-        converged : bool
-            Diagonalization converged or not
+        converged : bool array
+            Indicates whether each excited state is converged.
         e : 1D array
-            excitation energy for each excited state.
+            Excitation energy for each excited state.
         xy : A list of two 2D arrays
             The two 2D arrays are Excitation coefficients X (shape [nocc,nvir])
             and de-excitation coefficients Y (shape [nocc,nvir]) for each
@@ -980,6 +987,13 @@ class TDA(TDBase):
         log.timer('TDA', *cpu0)
         self._finalize()
         return self.e, self.xy
+
+    def Gradients(self):
+        if getattr(self._scf, 'with_df', None):
+            logger.warn(self, 'TDDFT Gradients with DF approximation is not available. '
+                        'TDDFT Gradients are computed using exact integrals')
+        from pyscf.grad import tdrhf
+        return tdrhf.Gradients(self)
 
     to_gpu = lib.to_gpu
 
@@ -1178,9 +1192,7 @@ class TDHF(TDBase):
         self._finalize()
         return self.e, self.xy
 
-    def nuc_grad_method(self):
-        from pyscf.grad import tdrhf
-        return tdrhf.Gradients(self)
+    Gradients = TDA.Gradients
 
     to_gpu = lib.to_gpu
 

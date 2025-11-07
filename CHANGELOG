@@ -1,3 +1,33 @@
+PySCF 2.11.0 (2025-10-15)
+-------------------------
+* Added
+  - MCPDFT, XMS-PDFT, CMS-PDFT, and L-PDFT
+  - Analytical Gradients for CASSCF-PDFT, SA-CASSCF-PDFT, CMS-PDFT, and L-PDFT
+  - Non-adiabatic coupling vector for CMS-PDFT
+  - QM/MM interface for PBC systems.
+  - Analytical nuclear gradients for DFT+U methods
+  - Gaussian charge models for MM particles in QM/MM interface
+  - MC25 functional parameters
+  - Stress tensor for semi-local functioanlsGGA, 
+  - Fixed-Size APC active space selection
+* Improved
+  - libxc interface for customizing functional parameters
+  - Support the 'default' key in the input for the mol.ecp and grids.atom_grid
+  - Print imaginary frequency as negative frequency in dump_normal_mode()
+  - RHF exchange performance by preserving MO information
+  - Improve performance of PM localization with Becke charges
+  - Molecular density fitting RMP2 and UMP2 support PBC gamma-point mf instance
+  - ASE interface to support lattice optimization and geometry optimization for PBC systems
+* Fixes
+  - to_gpu interface for solvent modules
+  - The mismatch exx between k-point and super-cell calculations caused by the inconsistent treatment in get_coulG and super_cell functions
+  - cell.KRKS() instantiation for symmetry adapted k-points
+  - Return converged == False if extra cycle in SCF is not converged
+* API changes
+  - move state_average_mix to CASBase
+  - Remove the misleading warning `exp_to_discard`
+
+
 PySCF 2.10.0 (2025-07-15)
 -------------------------
 * Added
@@ -29,6 +59,12 @@ PySCF 2.10.0 (2025-07-15)
   - Application order of solvent models and density fitting
   - Slow convergence in GHF SOSCF
   - Bugs in the geomeTRIC interface: max iteration, convergence check, and non-standard element symbols
+* API changes
+  - The MultigridFFTDF class has been removed. The multigrid functionality has
+    been migrated to the MultigridNumInt class.
+  - The outputs of get_nuc and get_pp methods of the FFTDF, AFTDF, and GDF
+    classes have been changed. They now return high-dimensiontal arrays that are
+    adapted to k-points by default.
 
 
 PySCF 2.9.0 (2025-04-20)

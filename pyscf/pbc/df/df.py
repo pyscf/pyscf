@@ -138,14 +138,12 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         'mesh', 'exp_to_discard', 'exxdiv', 'auxcell', 'linear_dep_threshold',
     }
 
-    def __init__(self, cell, kpts=numpy.zeros((1,3))):
+    def __init__(self, cell, kpts=None):
         self.cell = cell
         self.stdout = cell.stdout
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
 
-        if isinstance(kpts, KPoints):
-            kpts = kpts.kpts
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
         self._auxbasis = None
@@ -188,6 +186,8 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 
     def reset(self, cell=None):
         if cell is not None:
+            if isinstance(self._kpts, KPoints):
+                self._kpts.reset(cell)
             self.cell = cell
         self.auxcell = None
         self._cderi = None
@@ -203,8 +203,26 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                       'mesh = the number of PWs (=2*gs+1) for each direction.')
         self.mesh = [2*n+1 for n in x]
 
+    @property
+    def kpts(self):
+        if isinstance(self._kpts, KPoints):
+            return self._kpts.kpts
+        else:
+            return self.cell.get_abs_kpts(self._kpts)
+
+    @kpts.setter
+    def kpts(self, val):
+        if val is None:
+            self._kpts = numpy.zeros((1, 3))
+        elif isinstance(val, KPoints):
+            self._kpts = val
+        else:
+            self._kpts = self.cell.get_scaled_kpts(val)
+
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
+        if log.verbose < logger.INFO:
+            return self
         log.info('\n')
         log.info('******** %s ********', self.__class__)
         if self.auxcell is None:
@@ -223,8 +241,10 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             log.info('_cderi_to_save = %s', self._cderi_to_save)
         else:
             log.info('_cderi_to_save = %s', self._cderi_to_save.name)
-        log.info('len(kpts) = %d', len(self.kpts))
-        log.debug1('    kpts = %s', self.kpts)
+
+        kpts = self.kpts
+        log.info('len(kpts) = %d', len(kpts))
+        log.debug1('    kpts = %s', kpts)
         if self.kpts_band is not None:
             log.info('len(kpts_band) = %d', len(self.kpts_band))
             log.debug1('    kpts_band = %s', self.kpts_band)
@@ -308,10 +328,11 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             return True
         else:
             kpts = numpy.asarray(kpts).reshape(-1,3)
+            cached_kpts = self.kpts
             if self.kpts_band is None:
-                return all((len(member(kpt, self.kpts))>0) for kpt in kpts)
+                return all((len(member(kpt, cached_kpts))>0) for kpt in kpts)
             else:
-                return all((len(member(kpt, self.kpts))>0 or
+                return all((len(member(kpt, cached_kpts))>0 or
                             len(member(kpt, self.kpts_band))>0) for kpt in kpts)
 
     def sr_loop(self, kpti_kptj=numpy.zeros((2,3)), max_memory=2000,
@@ -380,6 +401,17 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 
     def get_pp(self, kpts=None):
         '''Get the periodic pseudopotential nuc-el AO matrix, with G=0 removed.
+
+        The output of this function depends on the input `kpts`. Generally, the
+        output is a (Nk, Nao, Nao) array, where Nk is the number of k-points in the
+        provided `kpts`. If `kpts` is a (3,) array, corresponding to a single
+        k-point, the output will be a (Nao, Nao) matrix. If the optional input
+        `kpts` is not specified, this function will read the GDF.kpts for the
+        k-mesh and return a (Nk, Nao, Nao) array.
+
+        Note: This API has changed since PySCF-2.10. In PySCF 2.9 (or older), if
+        `kpts` is not specified, this funciton may return a (Nao, Nao) matrix for
+        the gamma point and a (Nk, Nao, Nao) array for other k-points.
         '''
         cell = self.cell
         kpts, is_single_kpt = _check_kpts(self, kpts)
@@ -395,6 +427,17 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 
     def get_nuc(self, kpts=None):
         '''Get the periodic nuc-el AO matrix, with G=0 removed.
+
+        The output of this function depends on the input `kpts`. Generally, the
+        output is a (Nk, Nao, Nao) array, where Nk is the number of k-points in the
+        provided `kpts`. If `kpts` is a (3,) array, corresponding to a single
+        k-point, the output will be a (Nao, Nao) matrix. If the optional input
+        `kpts` is not specified, this function will read the GDF.kpts for the
+        k-mesh and return a (Nk, Nao, Nao) array.
+
+        Note: This API has changed since PySCF-2.10. In PySCF 2.9 (or older), if
+        `kpts` is not specified, this funciton may return a (Nao, Nao) matrix for
+        the gamma point and a (Nk, Nao, Nao) array for other k-points.
         '''
         cell = self.cell
         kpts, is_single_kpt = _check_kpts(self, kpts)

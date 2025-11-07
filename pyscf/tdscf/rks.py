@@ -23,6 +23,7 @@
 
 import numpy
 from pyscf import lib
+from pyscf.lib import logger
 from pyscf import symm
 from pyscf.tdscf import rhf
 from pyscf.tdscf._lr_eig import eigh as lr_eigh
@@ -31,14 +32,15 @@ from pyscf import __config__
 
 
 class TDA(rhf.TDA):
-    def nuc_grad_method(self):
+    def Gradients(self):
+        if getattr(self._scf, 'with_df', None):
+            logger.warn(self, 'TDDFT Gradients with DF approximation is not available. '
+                        'TDDFT Gradients are computed using exact integrals')
         from pyscf.grad import tdrks
         return tdrks.Gradients(self)
 
 class TDDFT(rhf.TDHF):
-    def nuc_grad_method(self):
-        from pyscf.grad import tdrks
-        return tdrks.Gradients(self)
+    Gradients = TDA.Gradients
 
 RPA = TDRKS = TDDFT
 
@@ -168,10 +170,6 @@ class CasidaTDDFT(TDDFT, TDA):
         log.timer('TDDFT', *cpu0)
         self._finalize()
         return self.e, self.xy
-
-    def nuc_grad_method(self):
-        from pyscf.grad import tdrks
-        return tdrks.Gradients(self)
 
 TDDFTNoHybrid = CasidaTDDFT
 

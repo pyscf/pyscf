@@ -270,6 +270,17 @@ def get_kconserv(cell, kpts):
         [\phi*[k](1) \phi[l](1) | \phi*[m](2) \phi[n](2)]
     are zero unless n satisfies the above.
     '''
+    from pyscf.pbc.tools.k2gamma import kpts_to_kmesh, double_translation_indices
+    kmesh = kpts_to_kmesh(cell, kpts)
+    nkpts = kpts.shape[0]
+    if np.prod(kmesh) == nkpts:
+        # k=ijk_conserv[i,j] provides: -i + j - k = 2n\pi
+        # k - l + m - n = -(-k+l) + m - n = 2n\pi  ->  n = ijk_conserv[(-k+l), m]
+        ijk_conserv = double_translation_indices(kmesh)
+        return ijk_conserv[ijk_conserv.ravel()].reshape([nkpts]*3)
+    return _get_kconserv_slow(cell, kpts)
+
+def _get_kconserv_slow(cell, kpts):
     nkpts = kpts.shape[0]
     a = cell.lattice_vectors() / (2*np.pi)
 

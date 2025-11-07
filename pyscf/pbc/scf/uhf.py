@@ -119,7 +119,7 @@ def gen_response(mf, mo_coeff=None, mo_occ=None,
     return vind
 
 class UHF(pbchf.SCF):
-    '''UHF class for PBCs.
+    '''UHF class for PBCs at a single point (default: gamma point).
     '''
     init_guess_breaksym = getattr(__config__, 'scf_uhf_init_guess_breaksym', 1)
 
@@ -148,7 +148,7 @@ class UHF(pbchf.SCF):
     gen_response = gen_response
     to_gpu = lib.to_gpu
 
-    def __init__(self, cell, kpt=np.zeros(3),
+    def __init__(self, cell, kpt=None,
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         pbchf.SCF.__init__(self, cell, kpt, exxdiv)
         self.nelec = None

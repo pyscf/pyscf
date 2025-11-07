@@ -114,6 +114,29 @@ C, 0.8917,  2.6751,  2.6751'''
         self.assertTrue(not a_hf.with_df._j_only)
         self.assertTrue(isinstance(a_hf, pbcscf.kuhf.KUHF))
 
+    # issue 2993
+    def test_kuks_as_kuhf(self):
+        cell = pbcgto.Cell()
+        cell.atom = "He 0 0 0; He 1 1 1"
+        cell.basis = [[0, [1, 1]], [0, [.5, 1]]]
+        cell.spin = 2
+        cell.a = np.eye(3) * 3
+        cell.build()
+
+        kmesh = [3, 1, 1]
+        kpts = cell.make_kpts(kmesh, time_reversal_symmetry=True)
+        mf = pbcdft.KUKS(cell, kpts, xc="hf")
+        mf.max_cycle = 1
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -4.213403459087, 9)
+
+        kmesh = [3, 1, 1]
+        kpts = cell.make_kpts(kmesh)
+        mf = pbcdft.KUKS(cell, kpts, xc="hf")
+        mf.max_cycle = 1
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -4.213403459087, 9)
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.kuks")

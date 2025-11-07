@@ -35,20 +35,20 @@ class FakeFCI(pyscf.fci.direct_spin1_symm.FCI):
             h1 = h1 + np.identity(norb) * self.fake_potential
         return super().kernel(h1, h2, norb, nelec, *args, **kwargs)
 
-    def make_rdm1(self, civec, norb, nelec):
+    def make_rdm1(self, civec, norb, nelec, **kwargs):
         if self.nelec is not None:
             nelec = self.nelec
-        return super().make_rdm1(civec, norb, nelec)
+        return super().make_rdm1(civec, norb, nelec, **kwargs)
 
-    def make_rdm12(self, civec, norb, nelec):
+    def make_rdm12(self, civec, norb, nelec, **kwargs):
         if self.nelec is not None:
             nelec = self.nelec
-        return super().make_rdm12(civec, norb, nelec)
+        return super().make_rdm12(civec, norb, nelec, **kwargs)
 
-    def spin_square(self, civec, norb, nelec):
+    def spin_square(self, civec, norb, nelec, **kwargs):
         if self.nelec is not None:
             nelec = self.nelec
-        return super().spin_square(civec, norb, nelec)
+        return super().spin_square(civec, norb, nelec, **kwargs)
 
 solver1 = FakeFCI(mol)
 solver1.nelec = (4, 3)

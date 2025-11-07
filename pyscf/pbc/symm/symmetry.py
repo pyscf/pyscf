@@ -97,13 +97,14 @@ def check_mesh_symmetry(cell, ops, mesh=None, tol=SYMPREC,
                         return_mesh=False):
     if mesh is None:
         mesh = cell.mesh
+    mesh = np.asarray(mesh)
     ft = []
     rm_list = []
     for i, op in enumerate(ops):
         if not op.trans_is_zero:
             ft.append(op.trans)
-            tmp = op.trans * np.asarray(mesh)
-            if (abs(tmp - tmp.round()) > tol).any():
+            tmp = op.trans * mesh
+            if (abs(tmp - tmp.round())/mesh > tol).any():
                 rm_list.append(i)
 
     if len(rm_list) == 0:
@@ -114,7 +115,7 @@ def check_mesh_symmetry(cell, ops, mesh=None, tol=SYMPREC,
         for x in range(3):
             while True:
                 tmp = ft[:,x] * mesh1[x]
-                if (abs(tmp - tmp.round()) > tol).any():
+                if (abs((tmp - tmp.round())/mesh1[x]) > tol).any():
                     mesh1[x] = mesh1[x] + 1
                 else:
                     break
@@ -215,6 +216,11 @@ class Symmetry():
 
     def dump_info(self):
         self.spacegroup.dump_info(ops=self.ops)
+
+    def reset(self, cell=None):
+        self.spacegroup = None
+        self._built = False
+        return self
 
 
 def _get_phase(cell, op, kpt_scaled, ignore_phase=False, tol=SYMPREC):

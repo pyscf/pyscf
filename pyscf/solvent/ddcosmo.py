@@ -762,7 +762,7 @@ class ddCOSMO(lib.StreamObject):
         '''
         self._dm = dm
         self.e, self.v = self._get_vind(dm)
-        logger.info(self, '%s E_diel = %.15g', self.__class__, self.e)
+        logger.info(self, '%s E_diel = %.15g', self.__class__.__name__, self.e)
         return self.e, self.v
 
     def reset(self, mol=None):

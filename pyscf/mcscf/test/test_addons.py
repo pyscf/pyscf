@@ -321,8 +321,7 @@ class KnownValues(unittest.TestCase):
         solver2.wfnsym = 'A1u'
         solver2.spin = 2
         mc = mcscf.CASSCF(mfr, 4, 4)
-        mc = mcscf.addons.state_average_mix_(mc, [solver1, solver2],
-                                             (0.25,0.25,0.5))
+        mc = mc.state_average_mix_([solver1, solver2], (0.25,0.25,0.5))
         mc.kernel()
         e = mc.e_states
         self.assertAlmostEqual(mc.e_tot, -108.80340952016508, 7)

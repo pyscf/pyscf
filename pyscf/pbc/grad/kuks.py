@@ -130,23 +130,6 @@ class Gradients(uhf_grad.Gradients):
 
     get_veff = get_veff
 
-if __name__=='__main__':
-    from pyscf.pbc import dft
-    cell = gto.Cell()
-    cell.atom = [['He', [0.0, 0.0, 0.0]], ['He', [1, 1.1, 1.2]]]
-    cell.basis = 'gth-dzv'
-    cell.a = np.eye(3) * 3
-    cell.mesh = [19,19,19]
-    cell.unit='bohr'
-    cell.pseudo='gth-pade'
-    cell.verbose=5
-    cell.build()
-
-    nmp = [1,1,5]
-    kpts = cell.make_kpts(nmp)
-    kmf = dft.KUKS(cell, kpts)
-    kmf.exxdiv = None
-    kmf.xc = 'b3lyp'
-    kmf.kernel()
-    mygrad = Gradients(kmf)
-    mygrad.kernel()
+    def get_stress(self):
+        from pyscf.pbc.grad import kuks_stress
+        return kuks_stress.kernel(self)

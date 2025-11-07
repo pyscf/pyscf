@@ -305,8 +305,77 @@ def get_cds_legacy(smdobj):
 # Note: in various places, SMD instance is not explictly tested. It is checked
 # by the statement "isinstance(solvent, PCM)"
 class SMD(pcm.PCM):
+    '''
+    SMD Solvent Model
+
+    Attributes:
+    ----------
+    method : str
+        No effects. It is set to 'SMD' as a placeholder
+
+    vdw_scale : float
+        A scaling factor for van der Waals radii. Default is 1.0.
+
+    r_probe : float
+        An additional radius (in Angstrom) added to the van der Waals radii.
+        Default is 0.4 Angstrom.
+
+    radii_table : dict
+        Custom van der Waals radii for each element. By default, scaled van der Waals radii
+        from `vdw_scale` and `r_probe` are used.
+
+    sasa_ng : int
+        The number of quadrature grids used for calculating the Solvent
+        Accessible Surface Area (SASA). Default is 590.
+
+    solvent : str
+        The name of the solvent, which is used to determine the dielectric constant and other
+        relevant parameters. Supported solvents can be accessed via the variable
+        `pyscf.solvent.smd.solvent_db`.
+
+    frozen : bool
+        Whether to freeze the potential produced by the solvent during SCF iterations or
+        other convergence processes. When frozen=True is set, the solvent is
+        assumed to respond slowly, while the electron density relaxes quickly.
+        Default is False.
+
+    max_cycle : int
+        The maximum number of iterations to relax the solvent.
+
+    conv_tol : float
+        The convergence tolerance for total energy during solvent relaxation.
+
+    equilibrium_solvation : bool
+        Affects TDDFT and other excited state computations. Controls whether the solvent
+        relaxes rapidly with respect to the electron density of the excited state.
+        For vertical excitations, it is recommended to set this to False, as the solvent
+        typically does not fully relax. In some software packages (e.g., Q-Chem),
+        non-equilibrium solvation is applied with an optical dielectric constant of
+        eps=1.78. Default is False.
+
+    state_id : int
+        Specifies the target state in excited state calculations.
+        `state_id=0` corresponds to the ground state, while `state_id=1` corresponds
+        to the first excited state. Default is 0.
+
+    Saved Results:
+    --------------
+    e_cds : float
+        Cavitation, Dispersion and Solvent energy
+
+    Intermediate Attributes:
+    ------------------------
+    These attributes are generated during calculations and should not be modified.
+    Additionally, they may not be compatible between GPU and CPU implementations.
+
+    - surface
+    - _intermediates
+    - v_grids_n
+    - solvent_descriptors
+    '''
+
     _keys = {
-        'intopt', 'method', 'e_cds', 'solvent_descriptors', 'r_probe', 'sasa_ng'
+        'method', 'e_cds', 'solvent_descriptors', 'r_probe', 'sasa_ng'
     }
     def __init__(self, mol, solvent=''):
         super().__init__(mol)
@@ -318,18 +387,20 @@ class SMD(pcm.PCM):
             raise RuntimeError(f'{solvent} is not available in SMD')
         self._solvent = solvent
         self.solvent_descriptors = solvent_db[solvent]
-        self.radii_table = smd_radii(self.solvent_descriptors[2])
+        self.radii_table = None
         self.e_cds = None
 
     def build(self, ng=None):
         if self.radii_table is None:
-            vdw_scale = self.vdw_scale
-            self.radii_table = vdw_scale * pcm.modified_Bondi + self.r_probe
+            radii_table = smd_radii(self.solvent_descriptors[2])
+        else:
+            radii_table = self.radii_table
+        logger.info(self, 'radii_table %s', radii_table*radii.BOHR)
         mol = self.mol
         if ng is None:
             ng = gen_grid.LEBEDEV_ORDER[self.lebedev_order]
 
-        self.surface = pcm.gen_surface(mol, rad=self.radii_table, ng=ng)
+        self.surface = pcm.gen_surface(mol, rad=radii_table, ng=ng)
         self._intermediates = {}
         F, A = pcm.get_F_A(self.surface)
         D, S = pcm.get_D_S(self.surface, with_S=True, with_D=True)
@@ -360,6 +431,7 @@ class SMD(pcm.PCM):
         fakemol_nuc = gto.fakemol_for_charges(atom_coords)
         v_ng = gto.mole.intor_cross(int2c2e, fakemol_nuc, fakemol)
         self.v_grids_n = np.dot(atom_charges, v_ng)
+        return self
 
     @property
     def solvent(self):
@@ -371,6 +443,7 @@ class SMD(pcm.PCM):
         self.solvent_descriptors = solvent_db[solvent]
         self.radii_table = smd_radii(self.solvent_descriptors[2])
         self.eps = self.solvent_descriptors[5]
+        self.reset()
 
     @property
     def sol_desc(self):
@@ -386,6 +459,7 @@ class SMD(pcm.PCM):
         self.solvent_descriptors = values
         self.radii_table = smd_radii(self.solvent_descriptors[2])
         self.eps = values[5]
+        self.reset()
 
     def dump_flags(self, verbose=None):
         n, _, alpha, beta, gamma, _, phi, psi = self.solvent_descriptors
@@ -403,13 +477,12 @@ class SMD(pcm.PCM):
         logger.info(self, f'psi   = {psi}')
         logger.info(self, '--------------------- end ----------------')
         logger.info(self, 'equilibrium_solvation = %s', self.equilibrium_solvation)
-        logger.info(self, 'radii_table %s', self.radii_table*radii.BOHR)
-        if self.atom_radii:
-            logger.info(self, 'User specified atomic radii %s', str(self.atom_radii))
         return self
 
     def get_cds(self):
-        return get_cds_legacy(self)[0]
+        if self.e_cds is None:
+            self.e_cds = get_cds_legacy(self)[0]
+        return self.e_cds
 
     def nuc_grad_method(self, grad_method):
         raise DeprecationWarning('Use the make_grad_object function from '
@@ -422,12 +495,12 @@ class SMD(pcm.PCM):
         '''
         from pyscf.solvent.grad.pcm import grad_qv, grad_nuc
         from pyscf.solvent.grad.smd import grad_solver, get_cds
-        de_solvent = grad_qv(self.base.with_solvent, dm)
-        de_solvent+= grad_solver(self.base.with_solvent, dm)
-        de_solvent+= grad_nuc(self.base.with_solvent, dm)
+        de_solvent = grad_qv(self, dm)
+        de_solvent+= grad_solver(self, dm)
+        de_solvent+= grad_nuc(self, dm)
         #de_cds     = get_cds(self.base.with_solvent)
-        de_cds     = get_cds_legacy(self.base.with_solvent)[1]
-        logger.info('Cavitation, Dispersion and Solvent structure contribution %g', de_cds)
+        de_cds     = get_cds_legacy(self)[1]
+        logger.info(self, 'Cavitation, Dispersion and Solvent structure contribution %s', de_cds)
         return de_solvent + de_cds
 
     def Hessian(self, hess_method):
@@ -441,8 +514,8 @@ class SMD(pcm.PCM):
         de_solvent  =    analytical_hess_nuc(self, dm, verbose=self.verbose)
         de_solvent +=     analytical_hess_qv(self, dm, verbose=self.verbose)
         de_solvent += analytical_hess_solver(self, dm, verbose=self.verbose)
-        de_cds = get_cds(self.base.with_solvent)
-        logger.info('Cavitation, Dispersion and Solvent structure contribution %g', de_cds)
+        de_cds = get_cds(self)
+        logger.info(self, 'Cavitation, Dispersion and Solvent structure contribution %s', de_cds)
         return de_solvent + de_cds
 
     def reset(self, mol=None):

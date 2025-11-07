@@ -27,34 +27,30 @@ from pyscf.solvent.hessian import pcm as pcm_hess
 from pyscf.lib import logger
 
 def get_cds(smdobj):
-    mol = smdobj.mol
-    solvent = smdobj.solvent
+    mol = smdobj.mol.copy()
+    smdobj_tmp = smdobj.copy()
     def smd_grad_scanner(mol):
-        smdobj_tmp = smd.SMD(mol)
-        smdobj_tmp.solvent = solvent
+        smdobj_tmp.reset(mol)
         return smd_grad.get_cds(smdobj_tmp)
 
     log = logger.new_logger(mol, mol.verbose)
     t1 = (logger.process_clock(), logger.perf_counter())
     log.warn("Using finite difference scheme for CDS contribution.")
+    coords = mol.atom_coords(unit='B')
+    coords_backup = coords.copy()
     eps = 1e-4
     natm = mol.natm
     hess_cds = np.zeros([natm,natm,3,3])
     for ia in range(mol.natm):
         for j in range(3):
-            coords = mol.atom_coords(unit='B')
             coords[ia,j] += eps
             mol.set_geom_(coords, unit='B')
-            mol.build()
             grad0_cds = smd_grad_scanner(mol)
 
             coords[ia,j] -= 2.0*eps
             mol.set_geom_(coords, unit='B')
-            mol.build()
             grad1_cds = smd_grad_scanner(mol)
-
-            coords[ia,j] += eps
-            mol.set_geom_(coords, unit='B')
             hess_cds[ia,:,j] = (grad0_cds - grad1_cds) / (2.0 * eps)
+            coords[ia,j] = coords_backup[ia,j]
     t1 = log.timer_debug1('solvent energy', *t1)
     return hess_cds # hartree

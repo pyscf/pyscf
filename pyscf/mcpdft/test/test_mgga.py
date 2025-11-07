@@ -114,6 +114,7 @@ def setUpModule():
     global get_lih, lih_tm06l, lih_tmc23, lih_tm06l_sa2, lih_tmc23_sa2,lih_tm06l0
     global get_water_triplet, water_tm06l, water_tmc23
     global lih_tmc23_2, lih_tmc23_sa2_2, water_tmc23_2
+    global lih_tmc25, lih_tmc25_sa2, water_tmc25
 
     # register otfnal tMC23_2 which is identical to MC23
     mc232_preset = mcpdft.otfnal.OT_PRESET['MC23']
@@ -121,13 +122,16 @@ def setUpModule():
 
     lih_tm06l = get_lih(1.5, functional='tM06L')
     lih_tmc23 = get_lih(1.5, functional='MC23')
+    lih_tmc25 = get_lih(1.5, functional='MC25')
     lih_tmc23_2 = get_lih(1.5, functional='tMC23_2')
     lih_tm06l_sa2 = get_lih(1.5, stateaverage=True, functional='tM06L')
     lih_tmc23_sa2 = get_lih(1.5, stateaverage=True, functional='MC23')
+    lih_tmc25_sa2 = get_lih(1.5, stateaverage=True, functional='MC25')
     lih_tmc23_sa2_2 = get_lih(1.5, stateaverage=True, functional='tmc23_2')
     lih_tm06l0 = get_lih(1.5, functional='tM06L0')
     water_tm06l = get_water_triplet()
     water_tmc23 = get_water_triplet(functional='MC23')
+    water_tmc25 = get_water_triplet(functional='MC25')
     water_tmc23_2 = get_water_triplet(functional='TMc23_2')
 
 def tearDownModule():
@@ -209,6 +213,25 @@ class KnownValues(unittest.TestCase):
         self.assertListAlmostEqual(sa_e_mcscf, SA_E_CASSCF_EXPECTED, 6)
         self.assertListAlmostEqual(sa_epdft, SA_E_MCPDFT_EXPECTED, 6)
 
+    def test_tmc25(self):
+        e_mcscf = lih_tmc25.e_mcscf
+        epdft = lih_tmc25.e_tot
+
+        sa_e_mcscf = lih_tmc25_sa2.e_mcscf
+        sa_epdft = lih_tmc25_sa2.e_states
+
+        # The CAS and MCPDFT reference values are generated using
+        # OpenMolcas v25.06, tag 7-g86cf2a446
+        E_CASSCF_EXPECTED = -7.88214917
+        E_MCPDFT_EXPECTED = -7.95714954
+        SA_E_CASSCF_EXPECTED = [-7.88205449, -7.74391704]
+        SA_E_MCPDFT_EXPECTED = [-7.95708248, -7.81092529]
+
+        self.assertAlmostEqual(e_mcscf, E_CASSCF_EXPECTED, 6)
+        self.assertAlmostEqual(epdft, E_MCPDFT_EXPECTED, 6)
+        self.assertListAlmostEqual(sa_e_mcscf, SA_E_CASSCF_EXPECTED, 6)
+        self.assertListAlmostEqual(sa_epdft, SA_E_MCPDFT_EXPECTED, 6)
+
     def test_tmc23_2(self):
         e_mcscf = lih_tmc23_2.e_mcscf
         epdft = lih_tmc23_2.e_tot
@@ -248,6 +271,18 @@ class KnownValues(unittest.TestCase):
         # OpenMolcas v24.10, tag 682-gf74be507d
         E_CASSCF_EXPECTED = -75.72365496
         E_MCPDFT_EXPECTED = -76.02630019
+
+        self.assertAlmostEqual(e_mcscf, E_CASSCF_EXPECTED, 6)
+        self.assertAlmostEqual(epdft, E_MCPDFT_EXPECTED, 6)
+
+    def test_water_triplet_tmc25(self):
+        e_mcscf = water_tmc25.e_mcscf
+        epdft = water_tmc25.e_tot
+
+        # The CAS and MCPDFT reference values are generated using
+        # OpenMolcas v25.06, tag 7-g86cf2a446
+        E_CASSCF_EXPECTED = -75.72365496
+        E_MCPDFT_EXPECTED = -76.08619632
 
         self.assertAlmostEqual(e_mcscf, E_CASSCF_EXPECTED, 6)
         self.assertAlmostEqual(epdft, E_MCPDFT_EXPECTED, 6)

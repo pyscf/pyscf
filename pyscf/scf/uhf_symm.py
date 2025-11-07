@@ -60,11 +60,11 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         for i, ir in enumerate(mol.irrep_id):
             if (noccsa[i]+noccsb[i]) % 2:
                 tot_sym ^= ir
-        if mol.groupname in ('Dooh', 'Coov', 'SO3'):
-            log.note('TODO: total wave-function symmetry for %s', mol.groupname)
-        else:
+        if mol.groupname in symm.param.POINTGROUP:
             log.note('Wave-function symmetry = %s',
                      symm.irrep_id2name(mol.groupname, tot_sym))
+        else:
+            log.note('TODO: total wave-function symmetry for %s', mol.groupname)
         log.note('alpha occupancy for each irrep:  '+(' %4s'*nirrep),
                  *mol.irrep_name)
         log.note('                                 '+(' %4d'*nirrep),

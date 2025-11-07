@@ -2198,6 +2198,10 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
 
     def nuc_grad_method(self):  # pragma: no cover
         '''Hook to create object for analytical nuclear gradients.'''
+        return self.Gradients()
+
+    def Gradients(self):  # pragma: no cover
+        '''Hook to create object for analytical nuclear gradients.'''
         raise NotImplementedError
 
     def update_(self, chkfile=None):

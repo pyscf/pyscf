@@ -198,6 +198,7 @@ def ghf_stability(mf, verbose=None, return_status=False,
     '''
     log = logger.new_logger(mf, verbose)
     with_symmetry = True
+    # Hessian might be incorrect. see https://github.com/pyscf/pyscf/issues/2591
     g, hop, hdiag = newton_ah.gen_g_hop_ghf(mf, mf.mo_coeff, mf.mo_occ)
     hdiag *= 2
     stable = True

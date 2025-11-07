@@ -697,6 +697,12 @@ class StreamObject:
 
     __getstate__, __setstate__ = generate_pickle_methods()
 
+    def reset(self):
+        '''
+        Clean up intermediates
+        '''
+        raise NotImplementedError
+
 
 _warn_once_registry = {}
 def check_sanity(obj, keysref, stdout=sys.stdout):
@@ -1535,13 +1541,22 @@ def to_gpu(method, out=None):
         cls = getattr(mod, method.__class__.__name__)
         # A temporary GPU instance. This ensures to initialize private
         # attributes that are only available for GPU code.
-        out = cls(omniobj)
+        if hasattr(method, 'base'):
+            out = cls(method.base)
+        elif hasattr(method, '_scf'):
+            out = cls(method._scf)
+        elif hasattr(method, 'cell'):
+            out = cls(method.cell)
+        elif hasattr(method, 'mol'):
+            out = cls(method.mol)
+        else:
+            raise TypeError('Conversion for class {cls} not supported')
 
     # Convert only the keys that are defined in the corresponding GPU class
     cls_keys = [getattr(cls, '_keys', ()) for cls in out.__class__.__mro__[:-1]]
     out_keys = set(out.__dict__).union(*cls_keys)
     # Only overwrite the attributes of the same name.
-    keys = set(method.__dict__).intersection(out_keys)
+    keys = out_keys.intersection(method.__dict__)
 
     for key in keys:
         val = getattr(method, key)
