@@ -41,6 +41,10 @@ typedef struct CSGXOpt_struct {
     int (*fscreen_shl)(struct CSGXOpt_struct *opt, int jmax, int ish,
                        int nish, int ish0, int jsh0, void *shl_info,
                        void *buf, int *shl_inds);
+
+    // approximate block-norm of full density matrix, for use in
+    // incremental Fock build
+    double *full_f_bi;
 } CSGXOpt;
 
 #endif

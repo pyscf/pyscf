@@ -36,7 +36,6 @@
 #define UNROLL_SIZE     NI_BLKSIZE
 #define BOXSIZE         96
 #define SGX_BLKSIZE     224
-#define SGX_NRADIX      4
 
 typedef struct {
         int ncomp;
@@ -80,48 +79,6 @@ size_t _max_cache_size_sgx(int (*intor)(), int *shls_slice, int ncenter,
                 cache_size = MAX(cache_size, n);
         }
         return cache_size;
-}
-
-void SGXbin_contrib_bounds(double *f_bi, double *m_ij, int nblk, int nbas,
-                           double *out, double *radix_vals)
-{
-        // out must start as zeros
-        double total = 0;
-#pragma omp parallel
-{
-        int iradix;
-        size_t iblk, ish, jsh;
-        double term;
-        double *f_i;
-        double _total = 0;
-        double *_out = malloc(SGX_NRADIX * sizeof(double));
-        for (iradix = 0; iradix < SGX_NRADIX; iradix++) {
-                _out[iradix] = 0;
-        }
-#pragma omp for
-        for (iblk = 0; iblk < nblk; iblk++) {
-                f_i = f_bi + iblk * nbas;
-                for (ish = 0; ish < nbas; ish++) {
-                for (jsh = 0; jsh < nbas; jsh++) {
-                        term = f_i[ish] * f_i[jsh] * m_ij[ish * nbas + jsh];
-                        _total += term;
-                        for (iradix = 0; iradix < SGX_NRADIX; iradix++) {
-                                if (term < radix_vals[iradix]) {
-                                        _out[iradix] += term;
-                                }
-                        }
-                } }
-        }
-#pragma omp critical
-{
-        total += _total;
-        for (iradix = 0; iradix < SGX_NRADIX; iradix++) {
-                out[iradix] += _out[iradix];
-        }
-}
-        free(_out);
-}
-        printf("TOTAL EXX %lf\n", total);
 }
 
 static inline double _shl_mat_elem(double *mat, int i0, int i1, int j0, int j1, size_t ncol)
@@ -1181,7 +1138,8 @@ void SGXscreen_grid(CSGXOpt *sgxopt, double *f_ug, const int ibatch,
 
         double *fbar_i = (double*) shl_info;
         double *bscreen_i = fbar_i + nbas;
-        uint8_t *shlscreen_i = (uint8_t*) (bscreen_i + nbas);
+        double *ffbar_i = bscreen_i + nbas;
+        uint8_t *shlscreen_i = (uint8_t*) (ffbar_i + nbas);
         double dv = sgxopt->vtol[ibatch];
         double *wt = sgxopt->wt + ibatch * SGX_BLKSIZE;
         int dg = MAX(0, MIN(SGX_BLKSIZE, sgxopt->ngrids - ibatch * SGX_BLKSIZE));
@@ -1206,8 +1164,14 @@ void SGXscreen_grid(CSGXOpt *sgxopt, double *f_ug, const int ibatch,
                 fbar_i[ish] = _shl_mat_elem_wt(
                         f_ug, wt, ao_loc[ish], ao_loc[ish+1], 0, dg,
                         n_dm, Ngrids, ao_loc[nbas] * Ngrids);
+                if (sgxopt->full_f_bi == NULL) {
+                        ffbar_i[ish] = fbar_i[ish];
+                } else {
+                        ffbar_i[ish] = sgxopt->full_f_bi[ibatch * nbas + ish];
+                }
                 if (rdpt_ints) {
                         fbar_i[ish] *= mbar_ii[ish];
+                        ffbar_i[ish] *= mbar_ii[ish];
                 }
         }
         // trans, m, n, alpha, a, lda, x, incx, beta, y, incy
@@ -1219,7 +1183,7 @@ void SGXscreen_grid(CSGXOpt *sgxopt, double *f_ug, const int ibatch,
                 } else {
                         shlscreen_i[ish] = sum_fmf_i[ish] > dv;
                 }
-                sum_fmf_i[ish] *= fbar_i[ish];
+                sum_fmf_i[ish] *= ffbar_i[ish];
                 fmf_i[ish] = sum_fmf_i[ish];
                 inds_i[ish] = ish;
         }
@@ -1233,7 +1197,7 @@ void SGXscreen_grid(CSGXOpt *sgxopt, double *f_ug, const int ibatch,
         }
         count = MAX(count, 1);
         for (ish = 0; ish < nish; ish++) {
-                oned = sgxopt->etol / (fbar_i[ish] * count + 1e-32);
+                oned = sgxopt->etol / (ffbar_i[ish] * count + 1e-32);
                 bscreen_i[ish] = MIN(dv, oned);
         }
 }
@@ -1254,7 +1218,8 @@ void SGXscreen_grid_v2(CSGXOpt *sgxopt, double *f_ug, int ibatch,
         double *mbar_max = sgxopt->mmax_i;
         double *fbar_i = (double*) shl_info;
         double *bscreen_i = fbar_i + nbas;
-        uint8_t *shlscreen_i = (uint8_t*) (bscreen_i + nbas);
+        double *ffbar_i = bscreen_i + nbas;
+        uint8_t *shlscreen_i = (uint8_t*) (ffbar_i + nbas);
         double dv = sgxopt->vtol[ibatch];
         double *wt = sgxopt->wt + ibatch * SGX_BLKSIZE;
         int dg = MAX(0, MIN(SGX_BLKSIZE, sgxopt->ngrids - ibatch * SGX_BLKSIZE));
@@ -1293,57 +1258,6 @@ void SGXscreen_grid_v2(CSGXOpt *sgxopt, double *f_ug, int ibatch,
 inline static int _simple_prescreen(int i, int j, CSGXOpt *opt)
 {
         return opt->mbar_ij[i * opt->nbas + j] > opt->direct_scf_cutoff;
-}
-
-void SGXscreen_grid_approx(CSGXOpt *sgxopt, double *f_ug, int ibatch,
-                           int n_dm, int nish, void *shl_info, void *buf)
-{
-        size_t nbas = sgxopt->nbas;
-        double *tmp_ij = (double*) buf;
-        int *inds_ij = (int*) (tmp_ij + nbas * nbas);
-        int *tmpinds_ij = inds_ij + nbas * nbas;
-
-        double *fbar_i = (double*) shl_info;
-        double *bscreen_i = fbar_i + nbas;
-        double *fmf_ij = bscreen_i + nbas;
-        double dv = sgxopt->vtol[ibatch];
-        double *wt = sgxopt->wt + ibatch * SGX_BLKSIZE;
-        int dg = MAX(0, MIN(SGX_BLKSIZE, sgxopt->ngrids - ibatch * SGX_BLKSIZE));
-        const size_t Ngrids = sgxopt->ngrids;
-
-        int rdpt_ints = 0;
-        double *mbar_ij = sgxopt->mbar_ij;
-        double *mbar_ii = NULL;
-        if (sgxopt->rbar_ij != NULL && sgxopt->mbar_bi != NULL) {
-                mbar_ij = sgxopt->rbar_ij;
-                rdpt_ints = 1;
-                mbar_ii = sgxopt->mbar_bi + ibatch * sgxopt->nbas;
-        }
-
-        int *ao_loc = sgxopt->ao_loc;
-        int ish;
-        for (ish = 0; ish < nish; ish++) {
-                fbar_i[ish] = _shl_mat_elem_wt(
-                        f_ug, wt, ao_loc[ish], ao_loc[ish+1], 0, dg,
-                        n_dm, Ngrids, ao_loc[nbas] * Ngrids);
-                bscreen_i[ish] = dv;
-                if (rdpt_ints) {
-                        fbar_i[ish] *= mbar_ii[ish];
-                        bscreen_i[ish] /= mbar_ii[ish];
-                }
-        }
-        int npair = 0;
-        size_t ij;
-        int jsh;
-        for (ish = 0; ish < nish; ish++) {
-                for (jsh = 0; jsh < nish; jsh++) {
-                        ij = ish * nbas + jsh;
-                        if (_simple_prescreen(ish, jsh, sgxopt)) {
-                                fmf_ij[ij] = fbar_i[ish] * mbar_ij[ij]
-                                             * fbar_i[jsh];
-                        }
-                }
-        }
 }
 
 int SGXscreen_shells_simple(CSGXOpt *sgxopt, int jmax, int ish,
@@ -1385,7 +1299,8 @@ int SGXscreen_shells_sorted(CSGXOpt *sgxopt, int jmax, int ish,
 
         double *fbar_i = (double*) shl_info;
         double *bscreen_i = fbar_i + nbas;
-        uint8_t *shlscreen_i = (uint8_t*) (bscreen_i + nbas);
+        double *ffbar_i = bscreen_i + nbas;
+        uint8_t *shlscreen_i = (uint8_t*) (ffbar_i + nbas);
         int jc = 0;
         int jsh;
         int shls[2];
@@ -1423,19 +1338,25 @@ int SGXscreen_shells_sorted(CSGXOpt *sgxopt, int jmax, int ish,
 }
 
 void SGXbuild_gv_threshold(double *f_ug, double *g_ug, int *ao_loc, double *dv, double de,
-                           double *wt, int ncomp, int nbas, int ngrids, uint8_t *thresh)
+                           double *wt, int ncomp, int nbas, int ngrids, uint8_t *thresh,
+                           double *full_f_bi)
 {
         const int nbatch = (ngrids + NI_BLKSIZE - 1) / NI_BLKSIZE;
         const size_t Nbas = nbas;
         const size_t Nbatch = nbatch;
         int *col_loc = malloc((nbatch + 1) * sizeof(int));
-        double *f_bi = malloc(Nbas * nbatch * sizeof(double));
         double *g_bi = malloc(Nbas * nbatch * sizeof(double));
         for (int ibatch = 0; ibatch < nbatch + 1; ibatch++) {
             col_loc[ibatch] = MIN(ibatch * NI_BLKSIZE, ngrids);
         }
-        SGXmake_shl_mat_wt_tr(f_ug, f_bi, nbas, nbatch, ao_loc,
-                              col_loc, wt, ncomp);
+        double *f_bi;
+        if (full_f_bi == NULL) {
+                f_bi = malloc(Nbas * nbatch * sizeof(double));
+                SGXmake_shl_mat_wt_tr(f_ug, f_bi, nbas, nbatch, ao_loc,
+                                      col_loc, wt, ncomp);
+        } else {
+                f_bi = full_f_bi;
+        }
         SGXmake_shl_mat_wt(g_ug, g_bi, nbas, nbatch, ao_loc,
                               col_loc, wt, ncomp);
 #pragma omp parallel
@@ -1465,7 +1386,9 @@ void SGXbuild_gv_threshold(double *f_ug, double *g_ug, int *ao_loc, double *dv, 
         free(wk);
 }
         free(col_loc);
-        free(f_bi);
+        if (full_f_bi == NULL) {
+                free(f_bi);
+        }
         free(g_bi);
 }
 

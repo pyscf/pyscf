@@ -283,6 +283,8 @@ def scalable_grids_response_cc(grids, blksize):
 
 def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     print("STARTING SGX-K GRAD")
+    if sgx._full_dm is not None:
+        raise ValueError("No incremental build for gradients")
     t00 = logger.process_clock(), logger.perf_counter()
     t0 = t00[1]
     if sgx.debug:
