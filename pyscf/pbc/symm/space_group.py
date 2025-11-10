@@ -43,7 +43,7 @@ def transform_rot(op, a, b, allow_non_integer=False):
             Basis vectors of :math:`\mathbf{b}` basis system (row-major).
         allow_non_integer : bool
             Whether to allow non-integer rotation matrix in the new basis system.
-            Defualt value is False.
+            Default value is False.
 
     Returns:
         A (3,3) array

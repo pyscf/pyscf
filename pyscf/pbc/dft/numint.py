@@ -1058,7 +1058,7 @@ class NumInt(lib.StreamObject, numint.LibXCMixin):
                    kpts_band=None, max_memory=2000, non0tab=None, blksize=None):
         '''Define this macro to loop over grids by blocks.
         '''
-        # For UniformGrids, grids.coords does not indicate whehter grids are initialized
+        # For UniformGrids, grids.coords does not indicate whether grids are initialized
         if grids.non0tab is None:
             grids.build(with_non0tab=True)
         if nao is None:
