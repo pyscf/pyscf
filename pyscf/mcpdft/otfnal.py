@@ -951,7 +951,7 @@ class colle_salvetti_corr (otfnal):
 
 def _hybrid_2c_coeff (ni, xc_code, spin=0):
     ''' Wrapper to the xc_code hybrid coefficient parser to return the
-    exchange and correlation components of the hybrid coefficent
+    exchange and correlation components of the hybrid coefficient
     separately '''
 
     if xc_code.upper() in REG_OT_FUNCTIONALS:

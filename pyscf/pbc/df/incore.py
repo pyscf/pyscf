@@ -73,7 +73,7 @@ def aux_e2(cell, auxcell_or_auxbasis, intor='int3c2e', aosym='s1', comp=None,
         assert isinstance(auxcell_or_auxbasis, str)
         auxcell = make_auxcell(cell, auxcell_or_auxbasis)
 
-# For some unkown reasons, the pre-decontracted basis 'is slower than
+# For some unknown reasons, the pre-decontracted basis 'is slower than
 ## Slighly decontract basis. The decontracted basis has better locality.
 ## The locality can be used in the lattice sum to reduce cost.
 #    if shls_slice is None and cell.nao_nr() < 200:

@@ -49,7 +49,7 @@ def get_nuc(mydf, kpts=None):
     k-mesh and return a (Nk, Nao, Nao) array.
 
     Note: This API has changed since PySCF-2.10. In PySCF 2.9 (or older), if
-    `kpts` is not specified, this funciton may return a (Nao, Nao) matrix for
+    `kpts` is not specified, this function may return a (Nao, Nao) matrix for
     the gamma point and a (Nk, Nao, Nao) array for other k-points.
     '''
     from pyscf.pbc.dft import gen_grid
@@ -89,7 +89,7 @@ def get_pp(mydf, kpts=None):
     k-mesh and return a (Nk, Nao, Nao) array.
 
     Note: This API has changed since PySCF-2.10. In PySCF 2.9 (or older), if
-    `kpts` is not specified, this funciton may return a (Nao, Nao) matrix for
+    `kpts` is not specified, this function may return a (Nao, Nao) matrix for
     the gamma point and a (Nk, Nao, Nao) array for other k-points.
     '''
     from pyscf.pbc.dft import gen_grid
