@@ -91,7 +91,6 @@ def get_hcore(cell, kpts):
     dtype = h1.dtype
     if cell._pseudo:
         SI=cell.get_SI()
-        natom = cell.natm
         coords = cell.get_uniform_grids()
         vlocG = get_vlocG(cell)
         vpplocG = -np.einsum('ij,ij->j', SI, vlocG)
@@ -115,16 +114,13 @@ def hcore_generator(mf_grad, cell=None, kpts=None):
     if cell is None: cell = mf_grad.cell
     if kpts is None: kpts = mf_grad.kpts
     h1 = mf_grad.get_hcore(cell, kpts)
-    dtype = h1.dtype
 
     aoslices = cell.aoslice_by_atom()
     SI=cell.get_SI()  ##[natom ,grid]
     mesh = cell.mesh
     Gv = cell.Gv    ##[grid, 3]
-    ngrids = len(Gv)
     coords = cell.get_uniform_grids()
     vlocG = get_vlocG(cell)  ###[natom, grid]
-    ptr = mole.PTR_ENV_START
     def hcore_deriv(atm_id):
         shl0, shl1, p0, p1 = aoslices[atm_id]
         vloc_g = 1j * np.einsum('ga,g->ag', Gv, SI[atm_id]*vlocG[atm_id])
