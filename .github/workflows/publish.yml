@@ -71,7 +71,7 @@ jobs:
 
   release-pypi-macos-x86:
     name: Build wheels for macos Intel chips
-    runs-on: macos-13
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
