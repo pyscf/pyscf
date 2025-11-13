@@ -364,6 +364,20 @@ class KnownValues(unittest.TestCase):
         h1 = ecp.ecp_int(cell, kpts)
         self.assertAlmostEqual(lib.fp(h1), 4.160881841456467, 7)
 
+    def test_ecp_soc_int(self):
+        cell = pgto.M(
+            a = np.eye(3) * 8,
+            atom = 'C 0 0 0; C 0 0 1.5',
+            basis = 'crenbl',
+            ecp = {'C': 'crenbl'}
+        )
+        dat = ecp.ecp_int(cell, intor='ECPso')
+
+        s = .5 * lib.PauliMatrices
+        ecpso = np.einsum('sxy,spq->xpyq', -1j * s, cell.intor('ECPso'))
+        mol_ecpso = ecpso.reshape(dat.shape)
+        self.assertAlmostEqual(abs(mol_ecpso - dat).max(), 0, 8)
+
     def test_ecp_keyword_in_pseudo(self):
         cell = pgto.M(
             a = np.eye(3)*5,
