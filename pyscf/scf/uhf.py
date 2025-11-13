@@ -295,7 +295,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     if n_a > nmo or n_b > nmo:
         raise RuntimeError('Failed to assign mo_occ. '
                            f'nelec ({n_a}, {n_b}) > Nmo ({nmo})')
-    if mf.verbose >= logger.INFO and n_b > 0:
+    if mf.verbose >= logger.INFO and n_a < nmo and n_b < nmo:
         if e_sort_a[n_a-1]+1e-3 > e_sort_a[n_a]:
             logger.warn(mf, 'alpha nocc = %d  HOMO %.15g >= LUMO %.15g',
                         n_a, e_sort_a[n_a-1], e_sort_a[n_a])
