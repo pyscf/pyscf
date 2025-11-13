@@ -16,6 +16,7 @@
 #         Samragni Banerjee <samragnibanerjee4@gmail.com>
 #         James Serna <jamcar456@gmail.com>
 #         Terrence Stahl <>
+#         Ning-Yuan Chen <cny003@outlook.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 
 '''
@@ -923,7 +924,6 @@ def make_rdm1_eigenvectors(adc, L, R):
     R = np.array(R).ravel()
 
     t1_ccee = adc.t2[0][:]
-    t2_ce = adc.t1[0][:]
 
     nocc = adc._nocc
     nvir = adc._nvir
@@ -931,13 +931,19 @@ def make_rdm1_eigenvectors(adc, L, R):
     n_singles = nvir
     n_doubles = nvir * nvir * nocc
 
+    if adc.t1[0] is not None:
+        t2_ce = adc.t1[0]
+    else:
+        t2_ce = np.zeros((nocc, nvir))
+
+    occ_list = range(nocc)
+
     s1 = 0
     f1 = n_singles
     s2 = f1
     f2 = s2 + n_doubles
 
     rdm1  = np.zeros((nmo,nmo))
-    kd_oc = np.identity(nocc)
 
     L1 = L[s1:f1]
     L2 = L[s2:f2]
@@ -952,13 +958,13 @@ def make_rdm1_eigenvectors(adc, L, R):
 
 ############# block- ij
     ### 000 ###
-    rdm1[:nocc, :nocc] += 2 * einsum('a,a,IJ->IJ', L1, R1, kd_oc, optimize = einsum_type)
+    rdm1[occ_list, occ_list] += 2 * einsum('a,a->', L1, R1, optimize = einsum_type)
 
     ### 101 ###
     rdm1[:nocc, :nocc] -= 2 * einsum('Jab,Iab->IJ', L2, R2, optimize = einsum_type)
     rdm1[:nocc, :nocc] += 1 * einsum('Jab,Iba->IJ', L2, R2, optimize = einsum_type)
-    rdm1[:nocc, :nocc] += 4 * einsum('iab,iab,IJ->IJ', L2, R2, kd_oc, optimize = einsum_type)
-    rdm1[:nocc, :nocc] -= 2 * einsum('iab,iba,IJ->IJ', L2, R2, kd_oc, optimize = einsum_type)
+    rdm1[occ_list, occ_list] += 4 * einsum('iab,iab->', L2, R2, optimize = einsum_type)
+    rdm1[occ_list, occ_list] -= 2 * einsum('iab,iba->', L2, R2, optimize = einsum_type)
 
     ### 020 ###
     rdm1[:nocc, :nocc] -= 2 * einsum('a,a,Iibc,Jibc->IJ', L1, R1,
@@ -1040,8 +1046,12 @@ def make_rdm1_eigenvectors(adc, L, R):
     if adc.method == "adc(3)":
         ### Redudant Variables used for names from SQA
         einsum_type = True
-        t3_ce = adc.t1[1][:]
         t2_ccee = adc.t2[1][:]
+
+        if adc.t1[1] is not None:
+            t3_ce = adc.t1[1]
+        else:
+            t3_ce = np.zeros((nocc, nvir))
 
 ############# block- ij
         # 120 #
@@ -1523,19 +1533,34 @@ class RADCEA(radc.RADC):
     compute_dyson_mo = compute_dyson_mo
     make_rdm1 = make_rdm1
 
-    def get_init_guess(self, nroots=1, diag=None, ascending=True):
-        if diag is None :
-            diag = self.get_diag()
-        idx = None
-        if ascending:
-            idx = np.argsort(diag)
+    def get_init_guess(self, nroots=1, diag=None, ascending=True, type=None, ini=None):
+        if (type=="read"):
+            logger.info(self, "obtain initial guess from input variable")
+            ncore = self._nocc
+            nextern = self._nvir
+            n_singles = nextern
+            n_doubles = ncore * nextern * nextern
+            dim = n_singles + n_doubles
+            if isinstance(ini, list):
+                g = np.array(ini)
+            else:
+                g = ini
+            if g.shape[0] != dim or g.shape[1] != nroots:
+                raise ValueError(f"Shape of guess should be ({dim},{nroots})")
+
         else:
-            idx = np.argsort(diag)[::-1]
-        guess = np.zeros((diag.shape[0], nroots))
-        min_shape = min(diag.shape[0], nroots)
-        guess[:min_shape,:min_shape] = np.identity(min_shape)
-        g = np.zeros((diag.shape[0], nroots))
-        g[idx] = guess.copy()
+            if diag is None :
+                diag = self.get_diag()
+            idx = None
+            if ascending:
+                idx = np.argsort(diag)
+            else:
+                idx = np.argsort(diag)[::-1]
+            guess = np.zeros((diag.shape[0], nroots))
+            min_shape = min(diag.shape[0], nroots)
+            guess[:min_shape,:min_shape] = np.identity(min_shape)
+            g = np.zeros((diag.shape[0], nroots))
+            g[idx] = guess.copy()
         guess = []
         for p in range(g.shape[1]):
             guess.append(g[:,p])

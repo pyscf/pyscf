@@ -13,6 +13,7 @@
 # limitations under the License.
 #
 # Author: Terrence Stahl <terrencestahl1@@gmail.com>
+#         Ning-Yuan Chen <cny003@outlook.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
@@ -105,9 +106,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3],0.3790532775, 6)
 
         self.assertAlmostEqual(p[0],0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.02714686, 6)
+        self.assertAlmostEqual(p[1],0.02702943, 6)
         self.assertAlmostEqual(p[2],0.00000000, 6)
         self.assertAlmostEqual(p[3],0.00000000, 6)
+
 if __name__ == "__main__":
     print("EE calculations for different ADC methods for water molecule")
     unittest.main()

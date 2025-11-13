@@ -16,6 +16,7 @@
 #         Samragni Banerjee <samragnibanerjee4@gmail.com>
 #         James Serna <jamcar456@gmail.com>
 #         Terrence Stahl <terrencestahl1@gmail.com>
+#         Ning-Yuan Chen <cny003@outlook.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 
 '''
@@ -70,7 +71,14 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     imds = adc.get_imds(eris)
     matvec, diag = adc.gen_matvec(imds, eris)
 
-    guess = adc.get_init_guess(nroots, diag, ascending = True)
+    if guess is None:
+        guess = adc.get_init_guess(nroots, diag, ascending = True)
+    elif isinstance(guess, str) and guess == "cis" and adc.method_type == "ee":
+        guess = adc.get_init_guess(nroots, diag, ascending = True, type="cis", eris=eris)
+    elif isinstance(guess, np.ndarray) or isinstance(guess, list):
+        guess = adc.get_init_guess(nroots, diag, ascending = True, type = "read", ini = guess)
+    else:
+        raise NotImplementedError("Guess type not implemented")
 
     conv, adc.E, U = lib.linalg_helper.davidson1(
         lambda xs : [matvec(x) for x in xs],
@@ -116,6 +124,236 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     return adc.E, adc.U, adc.P, adc.X
 
 
+def make_ref_rdm1(adc):
+    from pyscf.lib import einsum
+
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+        raise NotImplementedError(adc.method)
+
+    t2_1_a = adc.t2[0][0][:]
+    t2_1_ab = adc.t2[0][1][:]
+    t2_1_b = adc.t2[0][2][:]
+
+    ######################
+    einsum_type = True
+    nocc_a = adc.nocc_a
+    nocc_b = adc.nocc_b
+    nvir_a = adc.nvir_a
+    nvir_b = adc.nvir_b
+    nmo_a = nocc_a + nvir_a
+    nmo_b = nocc_b + nvir_b
+
+    rdm1_a  = np.zeros((nmo_a,nmo_a))
+    rdm1_b  = np.zeros((nmo_b,nmo_b))
+
+    if adc.f_ov is None:
+        t1_1_a = np.zeros((nocc_a, nvir_a))
+        t1_1_b = np.zeros((nocc_b, nvir_b))
+    else:
+        t1_1_a = adc.t1[2][0][:]
+        t1_1_b = adc.t1[2][1][:]
+
+    if adc.t1[0][0] is not None:
+        t1_2_a = adc.t1[0][0][:]
+        t1_2_b = adc.t1[0][1][:]
+    else:
+        t1_2_a = np.zeros((nocc_a, nvir_a))
+        t1_2_b = np.zeros((nocc_b, nvir_b))
+
+    ####### ADC(2) SPIN ADAPTED REF OPDM with SQA ################
+    ### OCC-OCC ###
+    rdm1_a[:nocc_a, :nocc_a]  = einsum('IJ->IJ', np.identity(nocc_a), optimize = einsum_type).copy()
+
+    rdm1_b[:nocc_b, :nocc_b]  = einsum('IJ->IJ', np.identity(nocc_b), optimize = einsum_type).copy()
+
+    rdm1_a[:nocc_a, :nocc_a] -= einsum('Ia,Ja->IJ', t1_1_a, t1_1_a, optimize = einsum_type)
+    rdm1_a[:nocc_a, :nocc_a] -= 1/2 * einsum('Iiab,Jiab->IJ', t2_1_a, t2_1_a, optimize = einsum_type)
+    rdm1_a[:nocc_a, :nocc_a] -= einsum('Iiab,Jiab->IJ', t2_1_ab, t2_1_ab, optimize = einsum_type)
+
+    rdm1_b[:nocc_b, :nocc_b] -= einsum('Ia,Ja->IJ', t1_1_b, t1_1_b, optimize = einsum_type)
+    rdm1_b[:nocc_b, :nocc_b] -= einsum('iIab,iJab->IJ', t2_1_ab, t2_1_ab, optimize = einsum_type)
+    rdm1_b[:nocc_b, :nocc_b] -= 1/2 * einsum('Iiab,Jiab->IJ', t2_1_b, t2_1_b, optimize = einsum_type)
+
+    ### OCC-VIR ###
+    rdm1_a[:nocc_a, nocc_a:]  = einsum('IA->IA', t1_1_a, optimize = einsum_type).copy()
+    rdm1_a[:nocc_a, nocc_a:] += einsum('IA->IA', t1_2_a, optimize = einsum_type)
+    rdm1_a[:nocc_a, nocc_a:] += 1/2 * einsum('ia,IiAa->IA', t1_1_a, t2_1_a, optimize = einsum_type)
+    rdm1_a[:nocc_a, nocc_a:] += 1/2 * einsum('ia,IiAa->IA', t1_1_b, t2_1_ab, optimize = einsum_type)
+
+    rdm1_b[:nocc_b, nocc_b:]  = einsum('IA->IA', t1_1_b, optimize = einsum_type).copy()
+    rdm1_b[:nocc_b, nocc_b:] += einsum('IA->IA', t1_2_b, optimize = einsum_type)
+    rdm1_b[:nocc_b, nocc_b:] += 1/2 * einsum('ia,iIaA->IA', t1_1_a, t2_1_ab, optimize = einsum_type)
+    rdm1_b[:nocc_b, nocc_b:] += 1/2 * einsum('ia,IiAa->IA', t1_1_b, t2_1_b, optimize = einsum_type)
+
+    ### VIR-OCC ###
+    rdm1_a[nocc_a:, :nocc_a]  = rdm1_a[:nocc_a, nocc_a:].T
+
+    rdm1_b[nocc_b:, :nocc_b]  = rdm1_b[:nocc_b, nocc_b:].T
+
+    ### VIR-VIR ###
+    rdm1_a[nocc_a:, nocc_a:]  = einsum('iA,iB->AB', t1_1_a, t1_1_a, optimize = einsum_type)
+    rdm1_a[nocc_a:, nocc_a:] += 1/2 * einsum('ijAa,ijBa->AB', t2_1_a, t2_1_a, optimize = einsum_type)
+    rdm1_a[nocc_a:, nocc_a:] += einsum('ijAa,ijBa->AB', t2_1_ab, t2_1_ab, optimize = einsum_type)
+
+    rdm1_b[nocc_b:, nocc_b:]  = einsum('iA,iB->AB', t1_1_b, t1_1_b, optimize = einsum_type)
+    rdm1_b[nocc_b:, nocc_b:] += einsum('ijaA,ijaB->AB', t2_1_ab, t2_1_ab, optimize = einsum_type)
+    rdm1_b[nocc_b:, nocc_b:] += 1/2 * einsum('ijAa,ijBa->AB', t2_1_b, t2_1_b, optimize = einsum_type)
+
+    ####### ADC(3) SPIN ADAPTED REF OPDM WITH SQA ################
+    if adc.method == "adc(3)":
+        t2_2_a = adc.t2[1][0][:]
+        t2_2_ab = adc.t2[1][1][:]
+        t2_2_b = adc.t2[1][2][:]
+        if adc.t1[1][0] is not None:
+            t1_3_a = adc.t1[1][0][:]
+            t1_3_b = adc.t1[1][1][:]
+        else:
+            t1_3_a = np.zeros((nocc_a, nvir_a))
+            t1_3_b = np.zeros((nocc_b, nvir_b))
+
+        #### OCC-OCC ###
+        rdm1_a[:nocc_a, :nocc_a] -= einsum('Ia,Ja->IJ', t1_1_a, t1_2_a, optimize = einsum_type)
+        rdm1_a[:nocc_a, :nocc_a] -= einsum('Ja,Ia->IJ', t1_1_a, t1_2_a, optimize = einsum_type)
+        rdm1_a[:nocc_a, :nocc_a] -= 1/2 * einsum('Iiab,Jiab->IJ', t2_1_a, t2_2_a, optimize = einsum_type)
+        rdm1_a[:nocc_a, :nocc_a] -= 1/2 * einsum('Jiab,Iiab->IJ', t2_1_a, t2_2_a, optimize = einsum_type)
+        rdm1_a[:nocc_a, :nocc_a] -= einsum('Iiab,Jiab->IJ', t2_1_ab, t2_2_ab, optimize = einsum_type)
+        rdm1_a[:nocc_a, :nocc_a] -= einsum('Jiab,Iiab->IJ', t2_1_ab, t2_2_ab, optimize = einsum_type)
+        rdm1_a[:nocc_a, :nocc_a] -= 1/2 * \
+            einsum('Ia,ib,Jiab->IJ', t1_1_a, t1_1_b, t2_1_ab, optimize = einsum_type)
+        rdm1_a[:nocc_a, :nocc_a] -= 1/2 * \
+            einsum('Ja,ib,Iiab->IJ', t1_1_a, t1_1_b, t2_1_ab, optimize = einsum_type)
+        rdm1_a[:nocc_a, :nocc_a] += 1/2 * \
+            einsum('Iiab,ia,Jb->IJ', t2_1_a, t1_1_a, t1_1_a, optimize = einsum_type)
+        rdm1_a[:nocc_a, :nocc_a] += 1/2 * \
+            einsum('Jiab,ia,Ib->IJ', t2_1_a, t1_1_a, t1_1_a, optimize = einsum_type)
+
+
+        rdm1_b[:nocc_b, :nocc_b] -= einsum('Ia,Ja->IJ', t1_1_b, t1_2_b, optimize = einsum_type)
+        rdm1_b[:nocc_b, :nocc_b] -= einsum('Ja,Ia->IJ', t1_1_b, t1_2_b, optimize = einsum_type)
+        rdm1_b[:nocc_b, :nocc_b] -= einsum('iIab,iJab->IJ', t2_1_ab, t2_2_ab, optimize = einsum_type)
+        rdm1_b[:nocc_b, :nocc_b] -= einsum('iJab,iIab->IJ', t2_1_ab, t2_2_ab, optimize = einsum_type)
+        rdm1_b[:nocc_b, :nocc_b] -= 1/2 * einsum('Iiab,Jiab->IJ', t2_1_b, t2_2_b, optimize = einsum_type)
+        rdm1_b[:nocc_b, :nocc_b] -= 1/2 * einsum('Jiab,Iiab->IJ', t2_1_b, t2_2_b, optimize = einsum_type)
+        rdm1_b[:nocc_b, :nocc_b] -= 1/2 * \
+            einsum('ia,Ib,iJab->IJ', t1_1_a, t1_1_b, t2_1_ab, optimize = einsum_type)
+        rdm1_b[:nocc_b, :nocc_b] -= 1/2 * \
+            einsum('ia,Jb,iIab->IJ', t1_1_a, t1_1_b, t2_1_ab, optimize = einsum_type)
+        rdm1_b[:nocc_b, :nocc_b] += 1/2 * \
+            einsum('Iiab,ia,Jb->IJ', t2_1_b, t1_1_b, t1_1_b, optimize = einsum_type)
+        rdm1_b[:nocc_b, :nocc_b] += 1/2 * \
+            einsum('Jiab,ia,Ib->IJ', t2_1_b, t1_1_b, t1_1_b, optimize = einsum_type)
+
+        ##### OCC-VIR ### ####
+        rdm1_a[:nocc_a, nocc_a:] += einsum('IA->IA', t1_3_a, optimize = einsum_type).copy()
+        rdm1_a[:nocc_a, nocc_a:] += 1/2 * einsum('ia,IiAa->IA', t1_2_a, t2_1_a, optimize = einsum_type)
+        rdm1_a[:nocc_a, nocc_a:] += 1/2 * einsum('ia,IiAa->IA', t1_2_b, t2_1_ab, optimize = einsum_type)
+        rdm1_a[:nocc_a, nocc_a:] += 1/2 * einsum('ia,IiAa->IA', t1_1_a, t2_2_a, optimize = einsum_type)
+        rdm1_a[:nocc_a, nocc_a:] += 1/2 * einsum('ia,IiAa->IA', t1_1_b, t2_2_ab, optimize = einsum_type)
+        rdm1_a[:nocc_a, nocc_a:] -= 2/3 * einsum('Ia,iA,ia->IA', t1_1_a, t1_1_a, t1_1_a, optimize = einsum_type)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/3 * \
+            einsum('Ia,ijab,ijAb->IA', t1_1_a, t2_1_a, t2_1_a, optimize = einsum_type)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/3 * \
+            einsum('iA,ijab,Ijab->IA', t1_1_a, t2_1_a, t2_1_a, optimize = einsum_type)
+        rdm1_a[:nocc_a, nocc_a:] += 1/6 * \
+            einsum('ia,ijab,IjAb->IA', t1_1_a, t2_1_a, t2_1_a, optimize = einsum_type)
+        rdm1_a[:nocc_a, nocc_a:] -= 2/3 * \
+            einsum('Ia,ijab,ijAb->IA', t1_1_a, t2_1_ab, t2_1_ab, optimize = einsum_type)
+        rdm1_a[:nocc_a, nocc_a:] -= 2/3 * \
+            einsum('iA,ijab,Ijab->IA', t1_1_a, t2_1_ab, t2_1_ab, optimize = einsum_type)
+        rdm1_a[:nocc_a, nocc_a:] += 1/6 * \
+            einsum('ia,ijab,IjAb->IA', t1_1_a, t2_1_ab, t2_1_ab, optimize = einsum_type)
+        rdm1_a[:nocc_a, nocc_a:] += 1/6 * \
+            einsum('ia,IjAb,jiba->IA', t1_1_b, t2_1_a, t2_1_ab, optimize = einsum_type)
+        rdm1_a[:nocc_a, nocc_a:] += 1/6 * \
+            einsum('ia,IjAb,ijab->IA', t1_1_b, t2_1_ab, t2_1_b, optimize = einsum_type)
+
+        rdm1_b[:nocc_b, nocc_b:] += einsum('IA->IA', t1_3_b, optimize = einsum_type).copy()
+        rdm1_b[:nocc_b, nocc_b:] += 1/2 * einsum('ia,iIaA->IA', t1_2_a, t2_1_ab, optimize = einsum_type)
+        rdm1_b[:nocc_b, nocc_b:] += 1/2 * einsum('ia,IiAa->IA', t1_2_b, t2_1_b, optimize = einsum_type)
+        rdm1_b[:nocc_b, nocc_b:] += 1/2 * einsum('ia,iIaA->IA', t1_1_a, t2_2_ab, optimize = einsum_type)
+        rdm1_b[:nocc_b, nocc_b:] += 1/2 * einsum('ia,IiAa->IA', t1_1_b, t2_2_b, optimize = einsum_type)
+        rdm1_b[:nocc_b, nocc_b:] += 1/6 * \
+            einsum('ia,ijab,jIbA->IA', t1_1_a, t2_1_a, t2_1_ab, optimize = einsum_type)
+        rdm1_b[:nocc_b, nocc_b:] += 1/6 * \
+            einsum('ia,ijab,IjAb->IA', t1_1_a, t2_1_ab, t2_1_b, optimize = einsum_type)
+        rdm1_b[:nocc_b, nocc_b:] -= 2/3 * einsum('Ia,iA,ia->IA', t1_1_b, t1_1_b, t1_1_b, optimize = einsum_type)
+        rdm1_b[:nocc_b, nocc_b:] -= 2/3 * \
+            einsum('Ia,ijba,ijbA->IA', t1_1_b, t2_1_ab, t2_1_ab, optimize = einsum_type)
+        rdm1_b[:nocc_b, nocc_b:] -= 2/3 * \
+            einsum('iA,jiab,jIab->IA', t1_1_b, t2_1_ab, t2_1_ab, optimize = einsum_type)
+        rdm1_b[:nocc_b, nocc_b:] += 1/6 * \
+            einsum('ia,jiba,jIbA->IA', t1_1_b, t2_1_ab, t2_1_ab, optimize = einsum_type)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/3 * \
+            einsum('Ia,ijab,ijAb->IA', t1_1_b, t2_1_b, t2_1_b, optimize = einsum_type)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/3 * \
+            einsum('iA,ijab,Ijab->IA', t1_1_b, t2_1_b, t2_1_b, optimize = einsum_type)
+        rdm1_b[:nocc_b, nocc_b:] += 1/6 * \
+            einsum('ia,ijab,IjAb->IA', t1_1_b, t2_1_b, t2_1_b, optimize = einsum_type)
+
+        ###### VIR-OCC ###
+        rdm1_a[nocc_a:, :nocc_a] = rdm1_a[:nocc_a, nocc_a:].T
+
+        rdm1_b[nocc_b:, :nocc_b] = rdm1_b[:nocc_b, nocc_b:].T
+
+        ##### VIR-VIR ###
+        rdm1_a[nocc_a:, nocc_a:] += 1/2 * einsum('ijAa,ijBa->AB', t2_1_a, t2_2_a, optimize = einsum_type)
+        rdm1_a[nocc_a:, nocc_a:] += 1/2 * einsum('ijBa,ijAa->AB', t2_1_a, t2_2_a, optimize = einsum_type)
+        rdm1_a[nocc_a:, nocc_a:] += einsum('ijAa,ijBa->AB', t2_1_ab, t2_2_ab, optimize = einsum_type)
+        rdm1_a[nocc_a:, nocc_a:] += einsum('ijBa,ijAa->AB', t2_1_ab, t2_2_ab, optimize = einsum_type)
+        rdm1_a[nocc_a:, nocc_a:] += einsum('iA,iB->AB', t1_1_a, t1_2_a, optimize = einsum_type)
+        rdm1_a[nocc_a:, nocc_a:] += einsum('iB,iA->AB', t1_1_a, t1_2_a, optimize = einsum_type)
+        rdm1_a[nocc_a:, nocc_a:] += 1/2 * \
+            einsum('iA,ja,ijBa->AB', t1_1_a, t1_1_b, t2_1_ab, optimize = einsum_type)
+        rdm1_a[nocc_a:, nocc_a:] += 1/2 * \
+            einsum('iB,ja,ijAa->AB', t1_1_a, t1_1_b, t2_1_ab, optimize = einsum_type)
+        rdm1_a[nocc_a:, nocc_a:] += 1/2 * \
+            einsum('ijAa,iB,ja->AB', t2_1_a, t1_1_a, t1_1_a, optimize = einsum_type)
+        rdm1_a[nocc_a:, nocc_a:] += 1/2 * \
+            einsum('ijBa,iA,ja->AB', t2_1_a, t1_1_a, t1_1_a, optimize = einsum_type)
+
+        rdm1_b[nocc_b:, nocc_b:] += einsum('ijaA,ijaB->AB', t2_1_ab, t2_2_ab, optimize = einsum_type)
+        rdm1_b[nocc_b:, nocc_b:] += einsum('ijaB,ijaA->AB', t2_1_ab, t2_2_ab, optimize = einsum_type)
+        rdm1_b[nocc_b:, nocc_b:] += 1/2 * einsum('ijAa,ijBa->AB', t2_1_b, t2_2_b, optimize = einsum_type)
+        rdm1_b[nocc_b:, nocc_b:] += 1/2 * einsum('ijBa,ijAa->AB', t2_1_b, t2_2_b, optimize = einsum_type)
+        rdm1_b[nocc_b:, nocc_b:] += einsum('iA,iB->AB', t1_1_b, t1_2_b, optimize = einsum_type)
+        rdm1_b[nocc_b:, nocc_b:] += einsum('iB,iA->AB', t1_1_b, t1_2_b, optimize = einsum_type)
+        rdm1_b[nocc_b:, nocc_b:] += 1/2 * \
+            einsum('ia,jA,ijaB->AB', t1_1_a, t1_1_b, t2_1_ab, optimize = einsum_type)
+        rdm1_b[nocc_b:, nocc_b:] += 1/2 * \
+            einsum('ia,jB,ijaA->AB', t1_1_a, t1_1_b, t2_1_ab, optimize = einsum_type)
+        rdm1_b[nocc_b:, nocc_b:] += 1/2 * \
+            einsum('ijAa,iB,ja->AB', t2_1_b, t1_1_b, t1_1_b, optimize = einsum_type)
+        rdm1_b[nocc_b:, nocc_b:] += 1/2 * \
+            einsum('ijBa,iA,ja->AB', t2_1_b, t1_1_b, t1_1_b, optimize = einsum_type)
+
+    return (rdm1_a, rdm1_b)
+
+def get_frozen_mask(myadc):
+    moidx = (np.ones(myadc.mo_occ[0].size, dtype=bool),np.ones(myadc.mo_occ[1].size, dtype=bool))
+    if myadc.frozen is None:
+        pass
+    elif isinstance(myadc.frozen, tuple) and len(myadc.frozen) == 2:
+        if myadc.frozen[0] is None:
+            pass
+        elif isinstance(myadc.frozen[0], (int, np.integer)):
+            moidx[0][:myadc.frozen[0]] = False
+        elif hasattr(myadc.frozen[0], '__len__'):
+            moidx[0][list(myadc.frozen[0])] = False
+        else:
+            raise NotImplementedError
+        if myadc.frozen[1] is None:
+            pass
+        elif isinstance(myadc.frozen[1], (int, np.integer)):
+            moidx[1][:myadc.frozen[1]] = False
+        elif hasattr(myadc.frozen[1], '__len__'):
+            moidx[1][list(myadc.frozen[1])] = False
+        else:
+            raise NotImplementedError
+    else:
+        raise NotImplementedError
+    return moidx
+
+
 class UADC(lib.StreamObject):
     '''Ground state calculations
 
@@ -151,7 +389,9 @@ class UADC(lib.StreamObject):
         'max_space', 'mo_occ', 'max_cycle', 'imds', 'with_df', 'compute_properties',
         'approx_trans_moments', 'evec_print_tol', 'spec_factor_print_tol',
         'E', 'U', 'P', 'X', 'ncvs', 'dip_mom', 'dip_mom_nuc',
-        'compute_spin_square', 'f_ov'
+        'compute_spin_square', 'f_ov',
+        'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b',
+        'if_heri_eris'
     }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
@@ -180,6 +420,9 @@ class UADC(lib.StreamObject):
         self.incore_complete = self.incore_complete or self.mol.incore_anyway
 
         self.f_ov = None
+        self._nmo = None
+        self._nocc = mf.nelec
+        self.mo_occ = mo_occ
 
         if isinstance(mf, scf.rohf.ROHF):
 
@@ -202,6 +445,17 @@ class UADC(lib.StreamObject):
             else:
                 ndocc = nalpha
                 nsocc = nbeta - nalpha
+
+            if frozen is not None:
+                from pyscf.mp import mp2
+                mask = mp2.get_frozen_mask(self)
+                mo_a = mo_a[:, mask]
+                ndocc -= np.count_nonzero(~mask[:ndocc])
+                nsocc -= np.count_nonzero(~mask[ndocc:ndocc+nsocc])
+                if nalpha > nbeta:
+                    self._nocc = (ndocc + nsocc, ndocc)
+                else:
+                    self._nocc = (ndocc, ndocc + nsocc)
 
             fock_a = np.dot(mo_a.T,np.dot(fock_a, mo_a))
             fock_b = np.dot(mo_a.T,np.dot(fock_b, mo_a))
@@ -226,14 +480,70 @@ class UADC(lib.StreamObject):
             self.mo_energy_b = mf.mo_energy[1]
 
         self.mo_coeff = mo_coeff
-        self.mo_occ = mo_occ
         self.e_corr = None
         self.t1 = None
         self.t2 = None
         self.imds = lambda:None
-        self._nocc = mf.nelec
-        self._nmo = (mo_coeff[0].shape[1], mo_coeff[1].shape[1])
+        self.if_heri_eris = False
+        if frozen is None or isinstance(mf, scf.rohf.ROHF):
+            self._nmo = (mo_coeff[0].shape[1], mo_coeff[1].shape[1])
+        elif hasattr(frozen, '__len__'):
+            if len(frozen) != 2:
+                raise NotImplementedError("frozen should be announced as None or a array-like object with two elements")
+            if isinstance(frozen, tuple):
+                pass
+            if isinstance(frozen, list) or isinstance(frozen, np.ndarray):
+                self.frozen = frozen = tuple(frozen)
+
+            if frozen[0] is None:
+                nmo_a = mo_coeff[0].shape[1]
+            elif isinstance(frozen[0], (int, np.integer)):
+                nmo_a = mo_coeff[0].shape[1]-frozen[0]
+            elif hasattr(frozen[0], '__len__'):
+                nmo_a = mo_coeff[0].shape[1]-len(frozen[0])
+            else:
+                raise NotImplementedError
+            if frozen[1] is None:
+                nmo_b = mo_coeff[1].shape[1]
+            elif isinstance(frozen[1], (int, np.integer)):
+                nmo_b = mo_coeff[1].shape[1]-frozen[1]
+            elif hasattr(frozen[1], '__len__'):
+                nmo_b = mo_coeff[1].shape[1]-len(frozen[1])
+            else:
+                raise NotImplementedError
+            self._nmo = (nmo_a, nmo_b)
+        else:
+            raise NotImplementedError("each element of frozen should be None, an integer or a array-like object")
+
+        if frozen is not None and not isinstance(mf, scf.rohf.ROHF):
+            (mask_a,mask_b) = self.get_frozen_mask()
+            maskocc_a = mf.mo_occ[0]>1e-6
+            maskocc_b = mf.mo_occ[1]>1e-6
+            occ_a = maskocc_a & mask_a
+            occ_b = maskocc_b & mask_b
+            self._nocc = (int(occ_a.sum()), int(occ_b.sum()))
+            self.mo_coeff = (mo_coeff[0][:,mask_a], mo_coeff[1][:,mask_b])
+            if mo_coeff is self._scf.mo_coeff and self._scf.converged:
+                self.mo_energy_a = self.mo_energy_a[mask_a]
+                self.mo_energy_b = self.mo_energy_b[mask_b]
+            else:
+                dm = self._scf.make_rdm1(mo_coeff, self.mo_occ)
+                vhf = self._scf.get_veff(self.mol, dm)
+                fockao_a, fockao_b = self._scf.get_fock(vhf=vhf, dm=dm)
+                fock_a = self.mo_coeff[0].conj().T.dot(fockao_a).dot(self.mo_coeff[0])
+                fock_b = self.mo_coeff[1].conj().T.dot(fockao_b).dot(self.mo_coeff[1])
+                (self.mo_energy_a,self.mo_energy_b) = (fock_a.diagonal().real,fock_b.diagonal().real)
+                self.scf_energy = self._scf.energy_tot(dm=dm, vhf=vhf)
         self._nvir = (self._nmo[0] - self._nocc[0], self._nmo[1] - self._nocc[1])
+        self.nocc_a = self._nocc[0]
+        self.nocc_b = self._nocc[1]
+        self.nvir_a = self._nvir[0]
+        self.nvir_b = self._nvir[1]
+        if self.nocc_a == 0 or self.nocc_b == 0:
+            raise ValueError("No occupied alpha or beta orbitals found")
+        if self.nvir_a == 0 or self.nvir_b == 0:
+            raise ValueError("No virtual alpha or beta orbitals found")
+
         self.chkfile = mf.chkfile
         self.method = "adc(2)"
         self.method_type = "ip"
@@ -257,8 +567,8 @@ class UADC(lib.StreamObject):
 
         for i in range(dip_ints.shape[0]):
             dip = dip_ints[i,:,:]
-            dip_mom_a[i,:,:] = np.dot(mo_coeff[0].T, np.dot(dip, mo_coeff[0]))
-            dip_mom_b[i,:,:] = np.dot(mo_coeff[1].T, np.dot(dip, mo_coeff[1]))
+            dip_mom_a[i,:,:] = np.dot(self.mo_coeff[0].T, np.dot(dip, self.mo_coeff[0]))
+            dip_mom_b[i,:,:] = np.dot(self.mo_coeff[1].T, np.dot(dip, self.mo_coeff[1]))
 
         self.dip_mom = []
         self.dip_mom.append(dip_mom_a)
@@ -271,6 +581,9 @@ class UADC(lib.StreamObject):
     compute_amplitudes = uadc_amplitudes.compute_amplitudes
     compute_energy = uadc_amplitudes.compute_energy
     transform_integrals = uadc_ao2mo.transform_integrals_incore
+    make_ref_rdm1 = make_ref_rdm1
+    get_frozen_mask = get_frozen_mask
+
 
     def semi_canonicalize_orbitals(self, f, nocc, C):
 
@@ -331,6 +644,44 @@ class UADC(lib.StreamObject):
         mem_incore = (max(nao_pair**2, nmo_a**4) + nmo_pair**2) * 2 * 8/1e6
         mem_now = lib.current_memory()[0]
 
+        if isinstance(self._scf, scf.rohf.ROHF):
+            nocc = max(self.nocc_a, self.nocc_b)
+            nvir = min(self.nvir_a, self.nvir_b)
+            nocc_fr = max(self._scf.mol.nelec[0], self._scf.mol.nelec[1]) - nocc
+            nvir_fr = self._scf.mo_coeff.shape[1] - nmo_a - nocc_fr
+
+            logger.info(self, '******** ADC Orbital Information ********')
+            logger.info(self, 'Number of Frozen Occupied Orbitals: %d', nocc_fr)
+            logger.info(self, 'Number of Frozen Virtual Orbitals: %d', nvir_fr)
+            logger.info(self, 'Number of Active Occupied Orbitals: %d', nocc)
+            logger.info(self, 'Number of Active Virtual Orbitals: %d', nvir)
+            if hasattr(self.frozen, '__len__'):
+                logger.info(self, 'Frozen Orbital List: %s', self.frozen)
+            logger.info(self, '*****************************************')
+
+        else:
+            nocc_fr_a = self._scf.nelec[0] - self.nocc_a
+            nocc_fr_b = self._scf.nelec[1] - self.nocc_b
+            nvir_fr_a = self._scf.mo_coeff[0].shape[1] - nmo_a - nocc_fr_a
+            nvir_fr_b = self._scf.mo_coeff[1].shape[1] - nmo_b - nocc_fr_b
+
+            logger.info(self, '******** ADC Orbital Information ********')
+            logger.info(self, 'Number of Frozen Occupied Alpha Orbitals: %d', nocc_fr_a)
+            logger.info(self, 'Number of Frozen Occupied Beta Orbitals: %d', nocc_fr_b)
+            logger.info(self, 'Number of Frozen Virtual Alpha Orbitals: %d', nvir_fr_a)
+            logger.info(self, 'Number of Frozen Virtual Beta Orbitals: %d', nvir_fr_b)
+            logger.info(self, 'Number of Active Occupied Alpha Orbitals: %d', self.nocc_a)
+            logger.info(self, 'Number of Active Occupied Beta Orbitals: %d', self.nocc_b)
+            logger.info(self, 'Number of Active Virtual Alpha Orbitals: %d', self.nvir_a)
+            logger.info(self, 'Number of Active Virtual Beta Orbitals: %d', self.nvir_b)
+
+            if hasattr(self.frozen, '__len__'):
+                if hasattr(self.frozen[0], '__len__'):
+                    logger.info(self, 'Frozen Orbital List (Alpha): %s', self.frozen[0])
+                if hasattr(self.frozen[1], '__len__'):
+                    logger.info(self, 'Frozen Orbital List (Beta): %s', self.frozen[1])
+            logger.info(self, '*****************************************')
+
         if getattr(self, 'with_df', None) or getattr(self._scf, 'with_df', None):
             if getattr(self, 'with_df', None):
                 self.with_df = self.with_df
@@ -373,22 +724,61 @@ class UADC(lib.StreamObject):
         mem_incore = (max(nao_pair**2, nmo_a**4) + nmo_pair**2) * 2 * 8/1e6
         mem_now = lib.current_memory()[0]
 
-        if getattr(self, 'with_df', None) or getattr(self._scf, 'with_df', None):
-            if getattr(self, 'with_df', None):
-                self.with_df = self.with_df
-            else:
-                self.with_df = self._scf.with_df
+        if isinstance(self._scf, scf.rohf.ROHF):
+            nocc = max(self.nocc_a, self.nocc_b)
+            nvir = min(self.nvir_a, self.nvir_b)
+            nocc_fr = max(self._scf.mol.nelec[0], self._scf.mol.nelec[1]) - nocc
+            nvir_fr = self._scf.mo_coeff.shape[1] - nmo_a - nocc_fr
 
-            def df_transform():
-                return uadc_ao2mo.transform_integrals_df(self)
-            self.transform_integrals = df_transform
-        elif (self._scf._eri is None or
-              (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
-            def outcore_transform():
-                return uadc_ao2mo.transform_integrals_outcore(self)
-            self.transform_integrals = outcore_transform
+            logger.info(self, '******** ADC Orbital Information ********')
+            logger.info(self, 'Number of Frozen Occupied Orbitals: %d', nocc_fr)
+            logger.info(self, 'Number of Frozen Virtual Orbitals: %d', nvir_fr)
+            logger.info(self, 'Number of Active Occupied Orbitals: %d', nocc)
+            logger.info(self, 'Number of Active Virtual Orbitals: %d', nvir)
+            if hasattr(self.frozen, '__len__'):
+                logger.info(self, 'Frozen Orbital List: %s', self.frozen)
+            logger.info(self, '*****************************************')
 
-        eris = self.transform_integrals()
+        else:
+            nocc_fr_a = self._scf.nelec[0] - self.nocc_a
+            nocc_fr_b = self._scf.nelec[1] - self.nocc_b
+            nvir_fr_a = self._scf.mo_coeff[0].shape[1] - nmo_a - nocc_fr_a
+            nvir_fr_b = self._scf.mo_coeff[1].shape[1] - nmo_b - nocc_fr_b
+
+            logger.info(self, '******** ADC Orbital Information ********')
+            logger.info(self, 'Number of Frozen Occupied Alpha Orbitals: %d', nocc_fr_a)
+            logger.info(self, 'Number of Frozen Occupied Beta Orbitals: %d', nocc_fr_b)
+            logger.info(self, 'Number of Frozen Virtual Alpha Orbitals: %d', nvir_fr_a)
+            logger.info(self, 'Number of Frozen Virtual Beta Orbitals: %d', nvir_fr_b)
+            logger.info(self, 'Number of Active Occupied Alpha Orbitals: %d', self.nocc_a)
+            logger.info(self, 'Number of Active Occupied Beta Orbitals: %d', self.nocc_b)
+            logger.info(self, 'Number of Active Virtual Alpha Orbitals: %d', self.nvir_a)
+            logger.info(self, 'Number of Active Virtual Beta Orbitals: %d', self.nvir_b)
+
+            if hasattr(self.frozen, '__len__'):
+                if hasattr(self.frozen[0], '__len__'):
+                    logger.info(self, 'Frozen Orbital List (Alpha): %s', self.frozen[0])
+                if hasattr(self.frozen[1], '__len__'):
+                    logger.info(self, 'Frozen Orbital List (Beta): %s', self.frozen[1])
+            logger.info(self, '*****************************************')
+
+        if eris is None:
+            if getattr(self, 'with_df', None) or getattr(self._scf, 'with_df', None):
+                if getattr(self, 'with_df', None):
+                    self.with_df = self.with_df
+                else:
+                    self.with_df = self._scf.with_df
+
+                def df_transform():
+                    return uadc_ao2mo.transform_integrals_df(self)
+                self.transform_integrals = df_transform
+            elif (self._scf._eri is None or
+                    (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
+                def outcore_transform():
+                    return uadc_ao2mo.transform_integrals_outcore(self)
+                self.transform_integrals = outcore_transform
+
+            eris = self.transform_integrals()
 
         self.e_corr, self.t1, self.t2 = uadc_amplitudes.compute_amplitudes_energy(
             self, eris=eris, verbose=self.verbose)
@@ -413,7 +803,10 @@ class UADC(lib.StreamObject):
             raise NotImplementedError(self.method_type)
 
         self._adc_es = adc_es
-        return e_exc, v_exc, spec_fac, X
+        if self.if_heri_eris:
+            return e_exc, v_exc, spec_fac, X, eris
+        else:
+            return e_exc, v_exc, spec_fac, X
 
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''

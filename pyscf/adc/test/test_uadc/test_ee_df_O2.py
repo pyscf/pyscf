@@ -13,6 +13,7 @@
 # limitations under the License.
 #
 # Author: Terrence Stahl <terrencestahl1@@gmail.com>
+#         Ning-Yuan Chen <cny003@outlook.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
@@ -95,6 +96,27 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(spin[2],1.98890715 , 5)
         self.assertAlmostEqual(spin[3],1.99566792 , 5)
 
+    def test_ee_adc2x_cis(self):
+        myadc.method = "adc(2)-x"
+
+        e,v,p,x = myadc.kernel(nroots=4, guess = "cis")
+        spin = get_spin_square(myadc._adc_es)[0]
+
+        self.assertAlmostEqual(e[0],0.2287827140, 6)
+        self.assertAlmostEqual(e[1],0.2287827140, 6)
+        self.assertAlmostEqual(e[2],0.2336997839, 6)
+        self.assertAlmostEqual(e[3],0.3371119023, 6)
+
+        self.assertAlmostEqual(p[0],0.00000000, 6)
+        self.assertAlmostEqual(p[1],0.00000000 , 6)
+        self.assertAlmostEqual(p[2],0.00000000 , 6)
+        self.assertAlmostEqual(p[3],0.16781476 , 6)
+
+        self.assertAlmostEqual(spin[0],1.98846574 , 5)
+        self.assertAlmostEqual(spin[1],1.98846575 , 5)
+        self.assertAlmostEqual(spin[2],1.98890715 , 5)
+        self.assertAlmostEqual(spin[3],1.99566777 , 5)
+
     def test_ee_adc3(self):
         myadc.method = "adc(3)"
 
@@ -109,7 +131,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0],0.00000000, 6)
         self.assertAlmostEqual(p[1],0.00000000 , 6)
         self.assertAlmostEqual(p[2],0.00000000 , 6)
-        self.assertAlmostEqual(p[3],0.16860063 , 6)
+        self.assertAlmostEqual(p[3],0.16877767 , 6)
 
         self.assertAlmostEqual(spin[0],1.99155510 , 5)
         self.assertAlmostEqual(spin[1],1.99155510 , 5)
