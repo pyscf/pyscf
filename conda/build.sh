@@ -15,10 +15,6 @@ set -x -e
 # https://pyscf.org/install.html#using-optimized-blas
 export CMAKE_CONFIGURE_ARGS="-DWITH_F12=OFF -DENABLE_SMD=ON -DBLA_VENDOR=Intel10_64lp_seq"
 
-# the distutils module are not longer available in python 3.11. Use the
-# distutils from setuptools instead.
-pip install setuptools
-
 # env PYTHON not defined in certain conda-build version
 # $PYTHON -m pip install . -vv
 MAKEFLAGS="-j4" pip install -v --prefix=$PREFIX .

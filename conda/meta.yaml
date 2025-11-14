@@ -1,10 +1,9 @@
-{% set data = load_setup_py_data() %}
 {% set project_data = load_file_data('pyproject.toml')['project'] %}
-
+{% set version = load_file_regex(load_file="pyscf/__init__.py", regex_pattern="__version__ = '(.+)'") %}
 
 package:
   name: "pyscf"
-  version: "{{ data['version'] }}"
+  version: "{{ version }}"
 
 source:
   path: ..
