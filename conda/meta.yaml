@@ -1,9 +1,9 @@
 {% set project_data = load_file_data('pyproject.toml')['project'] %}
-{% set data = load_setup_py_data() %}
+{% set version = load_setup_py_data()['version'] %}
 
 package:
   name: "pyscf"
-  version: "{{ data['version'] }}"
+  version: "{{ version }}"
 
 source:
   path: ..
