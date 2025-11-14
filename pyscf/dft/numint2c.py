@@ -720,6 +720,13 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
     block_loop = numint.NumInt.block_loop
     _gen_rho_evaluator = numint.NumInt._gen_rho_evaluator
 
+    def to_gpu(self):
+        try:
+            from gpu4pyscf.dft import numint2c # type: ignore
+            return numint2c.NumInt2C()
+        except ImportError:
+            raise ImportError('Cannot find GPU4PySCF')
+
     def _to_numint1c(self):
         '''Converts to the associated class to handle collinear systems'''
         return self.view(numint.NumInt)
