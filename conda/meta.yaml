@@ -1,9 +1,9 @@
 {% set project_data = load_file_data('pyproject.toml')['project'] %}
-{% set version = load_file_regex(load_file="pyscf/__init__.py", regex_pattern="__version__ = '(.+)'") %}
+{% set data = load_setup_py_data() %}
 
 package:
   name: "pyscf"
-  version: "{{ version }}"
+  version: "{{ data['version'] }}"
 
 source:
   path: ..
@@ -14,12 +14,10 @@ build:
 requirements:
   build:
     - python {{ python }}
-    - cmake
     - make
     - mkl
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
-    - {{ compiler('fortran') }}
   host:
     - python
   run:
