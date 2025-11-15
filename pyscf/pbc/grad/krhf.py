@@ -86,7 +86,11 @@ def _make_fakemol():
     return fakemol
 
 def get_hcore(cell, kpts):
-    '''Part of the nuclear gradients of core Hamiltonian'''
+    '''
+        Part of the nuclear gradients of core Hamiltonian
+        If pseudo potential is turned on, the local term is included,
+        but the nonlocal term is not included.
+    '''
     h1 = np.asarray(cell.pbc_intor('int1e_ipkin', kpts=kpts))
     dtype = h1.dtype
     if cell._pseudo:
@@ -111,6 +115,10 @@ def get_ovlp(cell, kpts):
     return -np.asarray(cell.pbc_intor('int1e_ipovlp', kpts=kpts))
 
 def hcore_generator(mf_grad, cell=None, kpts=None):
+    '''
+        If pseudo potential is turned on, the local term is included,
+        but the nonlocal term is not included.
+    '''
     if cell is None: cell = mf_grad.cell
     if kpts is None: kpts = mf_grad.kpts
     h1 = mf_grad.get_hcore(cell, kpts)
