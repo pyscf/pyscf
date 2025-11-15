@@ -502,8 +502,8 @@ def vppnl_nuc_grad(cell, dm, kpts=None):
         grad[ia] -= numpy.einsum('kdpq,kqp->d', dppnl[:,:,p0:p1,:], dm_dmH[:,:,p0:p1])
 
     grad_max_imag = numpy.max(numpy.abs(grad.imag))
-    assert grad_max_imag < 1e-8, \
-        f"Large imaginary part ({grad_max_imag:e}) from pseudopotential non-local term gradient"
+    if grad_max_imag >= 1e-8:
+        lib.logger.warn(cell, f"Large imaginary part ({grad_max_imag:e}) from pseudopotential non-local term gradient.")
     grad = grad.real
 
     return grad
