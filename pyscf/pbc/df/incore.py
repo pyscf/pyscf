@@ -38,6 +38,17 @@ LOG_ADJUST = 32
 
 libpbc = lib.load_library('libpbc')
 
+def verify_cint_backend():
+    compiled_with_qcint = ctypes.c_int.in_dll(libpbc, 'compiled_with_qcint').value
+    if compiled_with_qcint:
+        if not hasattr(libpbc, 'CINTgout2e_simd1'):
+            raise RuntimeError(
+                'PySCF was compiled with qcint, but the loaded integral library is cint')
+    else:
+        if hasattr(libpbc, 'CINTgout2e_simd1'):
+            raise RuntimeError(
+                'PySCF was compiled with cint, but the loaded integral library is qcint')
+
 def make_auxcell(cell, auxbasis=None):
     '''
     See pyscf.df.addons.make_auxmol
@@ -321,6 +332,7 @@ class Int3cBuilder(lib.StreamObject):
             reindex_k = np.asarray(reindex_k, dtype=np.int32)
             nkpts_ij = reindex_k.size
 
+        verify_cint_backend()
         drv = libpbc.PBCfill_nr3c_drv
 
         # is_pbcintor controls whether to use memory efficient functions
