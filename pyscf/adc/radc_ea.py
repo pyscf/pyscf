@@ -1038,7 +1038,7 @@ def make_rdm1_eigenvectors(adc, L, R):
 
     ####### ADC(3) SPIN ADAPTED EXCITED STATE OPDM WITH SQA ################
     if adc.method == "adc(3)":
-        ### Redudant Variables used for names from SQA
+        ### Redundant Variables used for names from SQA
         einsum_type = True
         t3_ce = adc.t1[1][:]
         t2_ccee = adc.t2[1][:]

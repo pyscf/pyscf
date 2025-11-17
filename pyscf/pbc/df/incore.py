@@ -38,6 +38,17 @@ LOG_ADJUST = 32
 
 libpbc = lib.load_library('libpbc')
 
+def verify_cint_backend():
+    compiled_with_qcint = ctypes.c_int.in_dll(libpbc, 'compiled_with_qcint').value
+    if compiled_with_qcint:
+        if not hasattr(libpbc, 'CINTgout2e_simd1'):
+            raise RuntimeError(
+                'PySCF was compiled with qcint, but the loaded integral library is cint')
+    else:
+        if hasattr(libpbc, 'CINTgout2e_simd1'):
+            raise RuntimeError(
+                'PySCF was compiled with cint, but the loaded integral library is qcint')
+
 def make_auxcell(cell, auxbasis=None):
     '''
     See pyscf.df.addons.make_auxmol
@@ -73,7 +84,7 @@ def aux_e2(cell, auxcell_or_auxbasis, intor='int3c2e', aosym='s1', comp=None,
         assert isinstance(auxcell_or_auxbasis, str)
         auxcell = make_auxcell(cell, auxcell_or_auxbasis)
 
-# For some unkown reasons, the pre-decontracted basis 'is slower than
+# For some unknown reasons, the pre-decontracted basis 'is slower than
 ## Slighly decontract basis. The decontracted basis has better locality.
 ## The locality can be used in the lattice sum to reduce cost.
 #    if shls_slice is None and cell.nao_nr() < 200:
@@ -321,6 +332,7 @@ class Int3cBuilder(lib.StreamObject):
             reindex_k = np.asarray(reindex_k, dtype=np.int32)
             nkpts_ij = reindex_k.size
 
+        verify_cint_backend()
         drv = libpbc.PBCfill_nr3c_drv
 
         # is_pbcintor controls whether to use memory efficient functions

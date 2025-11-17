@@ -806,9 +806,9 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         ewg *= inv_area*0.5
 
     elif cell.dimension == 0:
-        # The truncted Coulomb kernel 4*pi/G^2(1-cos(G*Rc)) should work for the
+        # The truncated Coulomb kernel 4*pi/G^2(1-cos(G*Rc)) should work for the
         # ewg term. However, large errors may be introduced in ewovrl or ewself.
-        # For dimesion=0 with truncated Coulomb, the nuclear energy can be
+        # For dimension=0 with truncated Coulomb, the nuclear energy can be
         # computed directly using the mole.classical_coulomb_energy function.
         raise RuntimeError('Ewald with truncated Coulomb')
 

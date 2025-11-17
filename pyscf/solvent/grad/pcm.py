@@ -423,7 +423,7 @@ class WithSolventGrad:
         return obj
 
     def to_gpu(self):
-        from gpu4pyscf.solvent.grad import pcm    # type: ignore
+        from pyscf.lib.misc import to_gpu
         from pyscf.tdscf.rhf import TDBase
         # Only PCM and SMD are available on GPU.
         # FIXME: The SMD class is a child class of PCM now. Additional check for
@@ -431,7 +431,7 @@ class WithSolventGrad:
         assert isinstance(self.base.with_solvent, PCM)
         if isinstance(self, TDBase):
             raise NotImplementedError('.to_gpu() for PCM-TDDFT')
-        return self.base.to_gpu().PCM().Gradients()
+        return to_gpu(self, self.base.to_gpu().Gradients())
 
     def kernel(self, *args, dm=None, atmlst=None, **kwargs):
         if dm is None:

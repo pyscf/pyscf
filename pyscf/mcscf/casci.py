@@ -569,7 +569,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE, envs=None):
         mo_coeff : ndarray
             orbitals to construct active space Hamiltonian
         ci0 : ndarray or custom types
-            FCI sovler initial guess. For external FCI-like solvers, it can be
+            FCI solver initial guess. For external FCI-like solvers, it can be
             overloaded different data type. For example, in the state-average
             FCI solver, ci0 is a list of ndarray. In other solvers such as
             DMRGCI solver, SHCI solver, ci0 are custom types.

@@ -1339,7 +1339,7 @@ class XCFunctionalCache:
 
         Additional argument:
             clear: bool
-                If True, clear all cached properties. Set to False may have a slight performace
+                If True, clear all cached properties. Set to False may have a slight performance
                 gain, but one must manually clear cached properties that might change prior to
                 any productive calculations, preferably in the callback.
         '''
@@ -1443,8 +1443,8 @@ def register_custom_functional_(new_xc_code, based_on_xc_code, ext_params=None, 
         The string identifier of the parent functional
     ext_params : dict, with LibXC functional integer ID as key, and an array-like
         object containing the functional parameters as value.
-        If not None, set the external parameters of the functional componet from
-        the dict using the xc_func_set_ext_params API.
+        If not None, set the external parameters of the functional component
+        from the dict using the xc_func_set_ext_params API.
     omega : float
         If not None, set the omega value in self.hyb. If hyb argument is set,
         this argument is ignored.
@@ -1500,7 +1500,7 @@ def update_custom_functional_(xc_code, ext_params=None, omega=None,
             required if one or more cached properties (such as hybrid_coeff) are
             changed after the update. Set to False allows users to manually handle
             cache; one can clear only the properties that are expected to change
-            for a slight performace gain.
+            for a slight performance gain.
     '''
     def update(xc):
         xc.customize_(ext_params, omega, hyb, facs, density_threshold, callback, clear)
