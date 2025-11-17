@@ -20,10 +20,17 @@ mo_coeff = avas.kernel(myhf, ['O 2p'], minao=mol.basis)[2]
 mycas = mcscf.CASCI(myhf, 6, 8)
 mycas.kernel(mo_coeff)
 
-# NEVPT2 calculation by default with CAS or DFCAS reference wavefunction does
-# not uses the density fitting. That can be turned on by setting density_fit=True like below.
-mp = mrpt.nevpt2.NEVPT(mycas, density_fit=True)
+# For DF-CAS object by default the density fitting will be used
+# for NEVPT2 calculation as well.
+mp = mrpt.nevpt2.NEVPT(mycas)
 mp.kernel()
+e_tot1 = mycas.e_tot + mp.e_corr
 
-print("NEVPT2 correlation energy with density fitting: ", mp.e_corr)
-print("Total energy: ", mycas.e_tot + mp.e_corr)
+# Even though density fitting is used for reference MCSCF wavefunction,
+# it can be turned off for NEVPT2 calculation as follows:
+mp = mrpt.nevpt2.NEVPT(mycas, density_fit=False)
+mp.kernel()
+e_tot2 = mycas.e_tot + mp.e_corr
+
+print("Total energy with DF-NEVPT2: ", e_tot1)
+print("Total energy with NEVPT2: ", e_tot2)

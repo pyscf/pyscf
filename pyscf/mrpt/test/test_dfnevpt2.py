@@ -49,8 +49,8 @@ class KnownValues(unittest.TestCase):
         mc = mcscf.CASSCF(mf, 2, (1, 1))
         mc.kernel(mo_coeff)
 
-        # NEVPT2 without density fitting: default option for both CASSCF and DFCASSCF
-        mp0 = nevpt2.NEVPT(mc)
+        # NEVPT2 without density fitting:
+        mp0 = nevpt2.NEVPT(mc, density_fit=False)
         mp0.kernel()
         e0 = mc.e_tot + mp0.e_corr
 
@@ -58,8 +58,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mp0.e_corr, -0.25704466647882, 3)
         self.assertAlmostEqual(e0, -78.26314110837014, delta=1e-4)
 
-        # NEVPT2 with density fitting
-        mp1 = nevpt2.NEVPT(mc, density_fit=True)
+        # NEVPT2 with density fitting (Default for DF-CAS object):
+        mp1 = nevpt2.NEVPT(mc)
         mp1.kernel()
         e1 = mc.e_tot + mp1.e_corr
 

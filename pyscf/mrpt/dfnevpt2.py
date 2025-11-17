@@ -27,67 +27,6 @@ def prange(start, end, step):
     for i in range(start, end, step):
         yield i, min(i+step, end)
 
-def _dfnevpt2_eris_incore(mc, mo_coeff, with_df):
-    '''
-    Construction of ERIs required by NEVPT2 in MO basis using DF intermediates with incore memory.
-    '''
-    ncore = mc.ncore
-    ncas = mc.ncas
-    nmo = mo_coeff.shape[1]
-    nvir = nmo - ncore - ncas
-
-    def eri_from_dfinter(Lpq, lpqslice, lrsslice, blksize=2000):
-        Lpq = np.asarray(Lpq, dtype=np.float64, order='C')
-        naux = Lpq.shape[0]
-
-        A = Lpq[(slice(None),) + lpqslice]
-        B = Lpq[(slice(None),) + lrsslice]
-
-        pA, qA = A.shape[1], A.shape[2]
-        pB, qB = B.shape[1], B.shape[2]
-
-        eriout = np.zeros((pA, qA, pB, qB), dtype=Lpq.dtype, order='C')
-        # Edge cases
-        if pA * qA == 0 or pB * qB == 0:
-            return eriout
-
-        eriout = eriout.reshape(pA * qA, pB * qB)
-
-        nblk = max(1, int(blksize))
-
-        for p0 in range(0, naux, nblk):
-            p1 = min(p0 + nblk, naux)
-            Ablk = A[p0:p1].reshape(-1, pA * qA)
-            Bblk = B[p0:p1].reshape(-1, pB * qB)
-            eriout += Ablk.T @ Bblk
-        return eriout.reshape(pA, qA, pB, qB)
-
-    Luv = lib.unpack_tril(with_df._cderi)
-    Lpq = np.tensordot(mo_coeff.conj().T, np.dot(Luv, mo_coeff), axes=([1],[1])).transpose(1,0,2)
-    Luv = None
-
-    # ppaa = np.einsum('lpq, lrs->pqrs', Lpq, Lpq[:, ncore:ncore+ncas, ncore:ncore+ncas])
-    # papa = np.einsum('lpq, lrs->pqrs', Lpq[:, :, ncore:ncore+ncas], Lpq[:, :, ncore:ncore+ncas])
-    # pacv = np.einsum('lpq, lrs->pqrs', Lpq[:, :, ncore+ncas:], Lpq[:, :ncore, ncore+ncas:])
-    # cvcv = np.einsum('lpq, lrs->pqrs', Lpq[:, :ncore, ncore+ncas:], Lpq[:, :ncore, ncore+ncas:])
-
-    blksize = with_df.blockdim
-
-    ppaa = eri_from_dfinter(Lpq, (slice(None), slice(None)),
-                        (slice(ncore, ncore+ncas), slice(ncore, ncore+ncas)), blksize)
-
-    papa = eri_from_dfinter(Lpq, (slice(None), slice(ncore, ncore+ncas)),
-                        (slice(None), slice(ncore, ncore+ncas)), blksize)
-
-    pacv = eri_from_dfinter(Lpq, (slice(None), slice(ncore, ncore+ncas)),
-                        (slice(0, ncore), slice(ncore+ncas, None)), blksize)
-
-    cvcv = eri_from_dfinter(Lpq, (slice(0, ncore), slice(ncore+ncas, None)),
-                        (slice(0, ncore), slice(ncore+ncas, None)), blksize)
-    cvcv = cvcv.reshape(ncore*nvir, ncore*nvir)
-
-    return papa, ppaa, pacv, cvcv
-
 def _dfnevpt2_eris_outcore(mc, mo_coeff, with_df):
     '''
     Construction of ERIs required by NEVPT2 in MO basis using DF intermediates.
@@ -244,13 +183,24 @@ def _ERIS(mc, mo, with_df, method='incore'):
     ncore = mc.ncore
     ncas = mc.ncas
     nmo = mo.shape[1]
+    nvir = nmo - ncore - ncas
+    moa = mo[:, ncore:ncore+ncas]
+    moc = mo[:, :ncore]
+    mov = mo[:, ncore+ncas:]
+
     max_memory = max(4000, 0.9*mc.max_memory-lib.current_memory()[0])
 
     mem_incore, mem_outcore = _mem_usage(ncore, ncas, nmo)
     mem_now = lib.current_memory()[0]
     if (method == 'incore' and with_df is not None and
         (mem_incore+mem_now < mc.max_memory*.9)):
-        papa, ppaa, pacv, cvcv = _dfnevpt2_eris_incore(mc, mo, with_df)
+        papa = with_df.ao2mo([mo, moa, mo, moa], compact=False)
+        ppaa = with_df.ao2mo([mo, mo, moa, moa], compact=False)
+        pacv = with_df.ao2mo([mo, moa, moc, mov], compact=False)
+        cvcv = with_df.ao2mo([moc, mov, moc, mov], compact=False)
+        papa = papa.reshape(nmo, ncas, nmo, ncas)
+        ppaa = ppaa.reshape(nmo, nmo, ncas, ncas)
+        pacv = pacv.reshape(nmo, ncas, ncore, nvir)
     elif with_df is not None and (mem_outcore < max_memory):
         papa, ppaa, pacv, cvcv = _dfnevpt2_eris_outcore(mc, mo, with_df)
     else:
