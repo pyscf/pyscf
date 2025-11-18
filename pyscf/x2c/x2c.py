@@ -313,7 +313,7 @@ class SpinOrbitalX2CHelper(X2CHelperBase):
             # spin-orbital basis is twice the size of NR basis
             atom_slices[:,2:] *= 2
             nao = xmol.nao_nr() * 2
-            x = numpy.zeros((nao,nao))
+            x = numpy.zeros((nao,nao), dtype=numpy.complex128)
             for ia in range(xmol.natm):
                 ish0, ish1, p0, p1 = atom_slices[ia]
                 shls_slice = (ish0, ish1, ish0, ish1)
@@ -375,7 +375,7 @@ class SpinOrbitalX2CHelper(X2CHelperBase):
             # spin-orbital basis is twice the size of NR basis
             atom_slices[:,2:] *= 2
             nao = xmol.nao_nr() * 2
-            x = numpy.zeros((nao,nao))
+            x = numpy.zeros((nao,nao), dtype=numpy.complex128)
             for ia in range(xmol.natm):
                 ish0, ish1, p0, p1 = atom_slices[ia]
                 shls_slice = (ish0, ish1, ish0, ish1)

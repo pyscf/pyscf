@@ -217,6 +217,17 @@ C     F
         self.assertAlmostEqual(mf.e_tot, ref.e_tot, 9)
         self.assertAlmostEqual(abs(mf.dip_moment() - ref.dip_moment()).max(), 0, 9)
 
+    def test_ghf_atom(self):
+        # Test whether the result of spinor X2C is a solution of .GHF().x2c()
+        mol = gto.M(atom='C', basis='ccpvdz-dk')
+        mf_1e = mol.GHF().x2c1e()
+        mf_1e.kernel()
+        mf_atom1e = mol.GHF().x2c1e()
+        mf_atom1e.with_x2c.approx = 'ATOM1E'
+        mf_atom1e.kernel()
+        self.assertAlmostEqual(abs(mf_1e.e_tot - mf_atom1e.e_tot).max(), 0, 9)
+        self.assertAlmostEqual(abs(mf_1e.mo_energy - mf_atom1e.mo_energy).max(), 0, 9)
+
     def test_gks(self):
         mol = gto.M(atom='C', basis='ccpvdz-dk')
         ref = mol.DKS(xc='b3lyp').x2c().run()
