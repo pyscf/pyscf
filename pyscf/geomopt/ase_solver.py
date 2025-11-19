@@ -21,6 +21,7 @@ https://ase-lib.org/ase/optimize.html
 from ase.optimize import BFGS
 from ase.filters import UnitCellFilter, StrainFilter
 from pyscf import lib
+from pyscf.lib import logger
 from pyscf.pbc import gto
 from pyscf.pbc.tools.pyscf_ase import pyscf_to_ase_atoms, PySCF
 
@@ -61,9 +62,7 @@ def kernel(method, target=None, logfile=None, fmax=0.05, max_steps=100,
 
     if target is None:
         if is_pbc:
-            target = 'cell'
-        else:
-            target = 'atoms'
+            atoms = UnitCellFilter(atoms)
     elif target == 'cell':
         atoms = UnitCellFilter(atoms)
     elif target == 'lattice':
@@ -75,12 +74,27 @@ def kernel(method, target=None, logfile=None, fmax=0.05, max_steps=100,
     opt = BFGS(atoms, logfile=logfile)
     converged = opt.run(fmax=fmax, steps=max_steps)
 
-    if target == 'cell' or target == 'lattice':
+    if isinstance(atoms, (UnitCellFilter, StrainFilter)):
         atoms = atoms.atoms
     if is_pbc:
         cell = cell.set_geom_(atoms.get_positions(), unit='Ang', a=atoms.cell, inplace=False)
     else:
         cell = cell.set_geom_(atoms.get_positions(), unit='Ang', inplace=False)
+
+    if converged:
+        logger.note(cell, 'Geometry optimization converged')
+    else:
+        logger.note(cell, 'Geometry optimization not converged')
+    if cell.verbose >= logger.NOTE:
+        coords = cell.atom_coords() * lib.param.BOHR
+        for ia in range(cell.natm):
+            logger.note(cell, ' %3d %-4s %16.9f %16.9f %16.9f AA',
+                        ia+1, cell.atom_symbol(ia), *coords[ia])
+        if is_pbc:
+            a = cell.lattice_vectors() * lib.param.BOHR
+            logger.note(cell, 'lattice vectors  a1 [%.9f, %.9f, %.9f]', *a[0])
+            logger.note(cell, '                 a2 [%.9f, %.9f, %.9f]', *a[1])
+            logger.note(cell, '                 a3 [%.9f, %.9f, %.9f]', *a[2])
     return converged, cell
 
 class GeometryOptimizer(lib.StreamObject):
