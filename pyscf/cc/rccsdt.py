@@ -72,7 +72,7 @@ def _einsum(einsum_backend, script, *tensors, out=None, alpha=1.0, beta=0.0):
             tensors = [_fix_strides_for_pytblis(x) for x in tensors]
             out = _fix_strides_for_pytblis(out)
             pytblis.contract(script, *tensors, out=out, alpha=alpha, beta=beta)
-            return
+            return out
     elif einsum_backend == 'pyscf':
         result = lib.einsum(script, *tensors, optimize='optimal')
     else:
