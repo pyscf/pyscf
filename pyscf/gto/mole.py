@@ -408,14 +408,7 @@ def format_atom(atoms, origin=0, axes=None,
     if axes is None:
         axes = numpy.eye(3)
 
-    if isinstance(unit, str):
-        if is_au(unit):
-            unit = 1.
-        else:
-            unit = 1./param.BOHR
-    else:
-        unit = 1./unit
-
+    unit = _length_in_au(unit)
     c = numpy.array([a[1] for a in fmt_atoms], dtype=numpy.double)
     c = numpy.einsum('ix,kx->ki', axes * unit, c - origin)
     z = [a[0] for a in fmt_atoms]
@@ -2175,6 +2168,15 @@ def is_au(unit):
     '''
     return isinstance(unit, str) and unit.upper().startswith(('B', 'AU'))
 
+def _length_in_au(unit):
+    '''Converts the input unit string into its length in A.U.'''
+    if isinstance(unit, str):
+        if is_au(unit):
+            unit = 1.
+        else:
+            unit = 1/param.BOHR
+    return unit
+
 #
 # MoleBase handles three layers of basis data: input, internal format, libcint arguments.
 # The relationship of the three layers are
@@ -3090,11 +3092,13 @@ class MoleBase(lib.StreamObject):
             mol = self.copy(deep=False)
             mol._env = mol._env.copy()
 
-        if unit is not None and self.unit != unit:
-            logger.warn(mol, 'Mole.unit (%s) is changed to %s', self.unit, unit)
-            mol.unit = unit
+        if unit is None:
+            _unit = mol.unit
         else:
-            unit = mol.unit
+            _unit = _length_in_au(unit)
+            if _unit != _length_in_au(self.unit):
+                logger.warn(mol, 'Mole.unit (%s) is changed to %s', self.unit, unit)
+                mol.unit = unit
 
         if symmetry is None:
             symmetry = mol.symmetry
@@ -3106,14 +3110,7 @@ class MoleBase(lib.StreamObject):
             mol.atom = atoms_or_coords
 
         if isinstance(atoms_or_coords, numpy.ndarray) and not symmetry:
-            if isinstance(unit, str):
-                if is_au(unit):
-                    unit = 1.
-                else:
-                    unit = 1./param.BOHR
-            else:
-                unit = 1./unit
-
+            unit = _length_in_au(_unit)
             mol._atom = list(zip([x[0] for x in mol._atom],
                                  (atoms_or_coords * unit).tolist()))
             ptr = mol._atm[:,PTR_COORD]
