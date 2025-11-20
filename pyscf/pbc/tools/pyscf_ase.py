@@ -117,7 +117,7 @@ class PySCF(Calculator):
             _atoms = list(zip(atomic_numbers, positions))
 
         if self.pbc:
-            self.mol.set_geom_(_atoms, a=atoms.cell, unit='Angstrom')
+            self.mol.set_geom_(_atoms, a=np.asarray(atoms.cell), unit='Angstrom')
         else:
             self.mol.set_geom_(_atoms, unit='Angstrom')
 

@@ -2008,7 +2008,6 @@ class Cell(mole.MoleBase):
                     atoms_or_coords = self.atom_coords() * _unit
 
         if a is not None:
-            a = np.asarray(a)
             logger.info(self, 'Set new lattice vectors')
             logger.info(self, '%s', a)
             cell.a = a
