@@ -2003,9 +2003,9 @@ class Cell(mole.MoleBase):
             _unit = mole._length_in_au(unit)
             if _unit != mole._length_in_au(cell.unit):
                 if a is None:
-                    a = self.lattice_vectors() * _unit
+                    a = self.lattice_vectors() / _unit
                 if atoms_or_coords is None:
-                    atoms_or_coords = self.atom_coords() * _unit
+                    atoms_or_coords = self.atom_coords() / _unit
 
         if a is not None:
             logger.info(self, 'Set new lattice vectors')

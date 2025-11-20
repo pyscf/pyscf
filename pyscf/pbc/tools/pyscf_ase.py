@@ -81,8 +81,8 @@ class PySCF(Calculator):
 
         method: A PySCF method class
         """
-        Calculator.__init__(self, restart, label, atoms, directory=directory,
-                            **kwargs)
+        Calculator.__init__(self, restart, label=label, atoms=atoms,
+                            directory=directory, **kwargs)
 
         if not isinstance(method, lib.StreamObject):
             raise RuntimeError(f'{method} must be an instance of a PySCF method')
