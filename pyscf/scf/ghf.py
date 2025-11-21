@@ -553,7 +553,7 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
 
     to_gpu = lib.to_gpu
 
-def _from_rhf_init_dm(dm, breaksym=True):
+def _from_rhf_init_dm(dm, breaksym=False):
     dma = dm * .5
     dm = scipy.linalg.block_diag(dma, dma)
     if breaksym:
