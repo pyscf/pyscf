@@ -55,12 +55,6 @@ def rdms_test(dm):
     r2 = np.einsum('pq,pq->',r2_int,dm_ao)
     return r2
 
-def rdms_test_fr(dm):
-    r2_int = mol.intor('int1e_r2')
-    dm_ao = np.einsum('pi,ij,qj->pq', myadc_fr.mo_coeff, dm, myadc_fr.mo_coeff.conj())
-    r2 = np.einsum('pq,pq->',r2_int,dm_ao)
-    return r2
-
 class KnownValues(unittest.TestCase):
 
     def test_ee_adc2(self):

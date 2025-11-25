@@ -59,13 +59,6 @@ def rdms_test(dm_a,dm_b):
     r2 = np.einsum('pq,pq->',r2_int,dm_ao_a+dm_ao_b)
     return r2
 
-def rdms_test_fr(dm_a,dm_b):
-    r2_int = mol.intor('int1e_r2')
-    dm_ao_a = np.einsum('pi,ij,qj->pq', myadc_fr.mo_coeff[0], dm_a, myadc_fr.mo_coeff[0].conj())
-    dm_ao_b = np.einsum('pi,ij,qj->pq', myadc_fr.mo_coeff[1], dm_b, myadc_fr.mo_coeff[1].conj())
-    r2 = np.einsum('pq,pq->',r2_int,dm_ao_a+dm_ao_b)
-    return r2
-
 class KnownValues(unittest.TestCase):
 
     def test_ee_adc2(self):
@@ -167,16 +160,16 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2],0.01528284 , 6)
         self.assertAlmostEqual(p[3],0.00008856 , 6)
 
-        self.assertAlmostEqual(spin[0],0.780295683904329 , 5)
-        self.assertAlmostEqual(spin[1],0.780295683904327 , 5)
-        self.assertAlmostEqual(spin[2],0.798279630625708 , 5)
-        self.assertAlmostEqual(spin[3],4.104839234050192 , 5)
+        self.assertAlmostEqual(spin[0],0.78029468 , 5)
+        self.assertAlmostEqual(spin[1],0.78029468 , 5)
+        self.assertAlmostEqual(spin[2],0.79827929 , 5)
+        self.assertAlmostEqual(spin[3],4.10483825 , 5)
 
         dm1_exc = np.array(myadc_fr.make_rdm1())
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[0][0],dm1_exc[1][0]), 39.14079352286587, 6)
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[0][1],dm1_exc[1][1]), 39.14079352286588, 6)
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[0][2],dm1_exc[1][2]), 38.40905147279677, 6)
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[0][3],dm1_exc[1][3]), 38.45707389334778, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 41.35811760272720, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 41.35811760272718, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 40.62637555265807, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 40.67439797320911, 6)
 
 if __name__ == "__main__":
     print("EE calculations for different ADC methods for CN molecule")

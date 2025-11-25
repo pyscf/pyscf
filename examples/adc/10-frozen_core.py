@@ -109,7 +109,7 @@ mf = scf.ROHF(mol).run()
 #
 # Freeze the inner most one orbital.
 #
-myadc = adc.ADC(mf,frozen=1)
+myadc = adc.ADC(mf,frozen=[1,1])
 myadc.verbose = 4
 myadc.method = "adc(3)"
 myadc.method_type = "ee"

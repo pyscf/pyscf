@@ -46,7 +46,7 @@ def transform_integrals_incore(myadc):
 
     if ((myadc.method == "adc(2)" and myadc.method_type == "ee" and myadc.approx_trans_moments is False)
         or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False)
-        or (myadc.method == "adc(2)-x" and myadc.method_type == "ee")
+        or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is True and myadc.method_type in ("ea","ee"))
         or (myadc.method == "adc(3)")):
         eris.vvvv = ao2mo.general(myadc._scf._eri, (vir, vir, vir, vir),
                                 compact=False).reshape(nvir, nvir, nvir, nvir)
@@ -158,7 +158,7 @@ def transform_integrals_outcore(myadc):
 
     if ((myadc.method == "adc(2)" and myadc.method_type == "ee" and myadc.approx_trans_moments is False)
         or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False)
-        or (myadc.method == "adc(2)-x" and myadc.method_type == "ee")
+        or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is True and myadc.method_type in ("ea","ee"))
         or (myadc.method == "adc(3)")):
 
         eris.vvvv = []

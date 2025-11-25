@@ -29,6 +29,7 @@ from pyscf.adc import radc
 from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
 from pyscf import symm
+from pyscf.data.nist import HARTREE2EV
 
 
 def get_imds(adc, eris=None):
@@ -786,7 +787,7 @@ def analyze_eigenvector(adc):
             iter_num += 1
 
         logger.info(adc, '%s | root %d | Energy (eV) = %12.8f | norm(1p)  = %6.4f | norm(1h2p) = %6.4f ',
-                    adc.method, I, adc.E[I]*27.2114, U1dotU1, U2dotU2)
+                    adc.method, I, adc.E[I]*HARTREE2EV, U1dotU1, U2dotU2)
 
         if singles_val:
             logger.info(adc, "\n1p block: ")
@@ -836,7 +837,7 @@ def analyze_spec_factor(adc):
             continue
 
         logger.info(adc, '%s | root %d | Energy (eV) = %12.8f \n',
-                adc.method, i, adc.E[i]*27.2114)
+                adc.method, i, adc.E[i]*HARTREE2EV)
         logger.info(adc, "     HF MO     Spec. Contribution     Orbital symmetry")
         logger.info(adc, "-----------------------------------------------------------")
 
@@ -1478,10 +1479,11 @@ class RADCEA(radc.RADC):
 
     _keys = {
         'tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff',
-        'mo_energy', 't1', 'max_space', 't2', 'max_cycle',
+        'mo_coeff_hf', 'mo_energy', 't1', 'max_space', 't2', 'max_cycle',
         'nmo', 'transform_integrals', 'with_df', 'compute_properties',
         'approx_trans_moments', 'E', 'U', 'P', 'X',
         'evec_print_tol', 'spec_factor_print_tol',
+        '_make_rdm1', 'frozen', 'mo_occ'
     }
 
     def __init__(self, adc):
@@ -1504,12 +1506,15 @@ class RADCEA(radc.RADC):
         self._nvir = adc._nvir
         self._nmo = adc._nmo
         self.mo_coeff = adc.mo_coeff
+        self.mo_coeff_hf = adc.mo_coeff_hf
         self.mo_energy = adc.mo_energy
         self.nmo = adc._nmo
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
         self.compute_properties = adc.compute_properties
         self.approx_trans_moments = adc.approx_trans_moments
+        self.frozen = adc.frozen
+        self.mo_occ = adc.mo_occ
 
         self.evec_print_tol = adc.evec_print_tol
         self.spec_factor_print_tol = adc.spec_factor_print_tol
@@ -1518,6 +1523,8 @@ class RADCEA(radc.RADC):
         self.U = adc.U
         self.P = adc.P
         self.X = adc.X
+
+        self._adc_es = self
 
     kernel = radc.kernel
     get_imds = get_imds
@@ -1531,7 +1538,7 @@ class RADCEA(radc.RADC):
     analyze_spec_factor = analyze_spec_factor
     analyze_eigenvector = analyze_eigenvector
     compute_dyson_mo = compute_dyson_mo
-    make_rdm1 = make_rdm1
+    _make_rdm1 = make_rdm1
 
     def get_init_guess(self, nroots=1, diag=None, ascending=True, type=None, ini=None):
         if (type=="read"):

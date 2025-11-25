@@ -29,6 +29,7 @@ from pyscf.adc import radc
 from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
 from pyscf import symm
+from pyscf.data.nist import HARTREE2EV
 
 
 def get_imds(adc, eris=None):
@@ -867,7 +868,7 @@ def analyze_eigenvector(adc):
             iter_num += 1
 
         logger.info(adc,'%s | root %d | Energy (eV) = %12.8f | norm(1h)  = %6.4f | norm(2h1p) = %6.4f ',
-                    adc.method, I, adc.E[I]*27.2114, U1dotU1, U2dotU2)
+                    adc.method, I, adc.E[I]*HARTREE2EV, U1dotU1, U2dotU2)
 
         if singles_val:
             logger.info(adc, "\n1h block: ")
@@ -916,7 +917,8 @@ def analyze_spec_factor(adc):
         if np.sum(spec_Contribution) == 0.0:
             continue
 
-        logger.info(adc,'%s | root %d \n',adc.method ,i)
+        logger.info(adc, '%s | root %d | Energy (eV) = %12.8f \n',
+                adc.method, i, adc.E[i]*HARTREE2EV)
         logger.info(adc, "     HF MO     Spec. Contribution     Orbital symmetry")
         logger.info(adc, "-----------------------------------------------------------")
 
@@ -1273,11 +1275,12 @@ class RADCIPCVS(radc.RADC):
 
     _keys = {
         'tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff',
-        'mo_energy_b', 't1', 'mo_energy_a',
+        'mo_coeff_hf', 'mo_energy_b', 't1', 'mo_energy_a',
         'max_space', 't2', 'max_cycle',
         'nmo', 'transform_integrals', 'with_df', 'compute_properties',
         'approx_trans_moments', 'E', 'U', 'P', 'X',
         'evec_print_tol', 'spec_factor_print_tol', 'ncvs',
+        '_make_rdm1', 'frozen', 'mo_occ'
     }
 
     def __init__(self, adc):
@@ -1300,6 +1303,7 @@ class RADCIPCVS(radc.RADC):
         self._nvir = adc._nvir
         self._nmo = adc._nmo
         self.mo_coeff = adc.mo_coeff
+        self.mo_coeff_hf = adc.mo_coeff_hf
         self.mo_energy = adc.mo_energy
         self.nmo = adc._nmo
         self.transform_integrals = adc.transform_integrals
@@ -1313,6 +1317,9 @@ class RADCIPCVS(radc.RADC):
         self.evec_print_tol = adc.evec_print_tol
         self.spec_factor_print_tol = adc.spec_factor_print_tol
         self.ncvs = adc.ncvs
+        self.frozen = adc.frozen
+        self.mo_occ = adc.mo_occ
+        self._adc_es = self
 
     kernel = radc.kernel
     get_imds = get_imds
@@ -1325,7 +1332,7 @@ class RADCIPCVS(radc.RADC):
     analyze_eigenvector = analyze_eigenvector
     analyze = analyze
     compute_dyson_mo = compute_dyson_mo
-    make_rdm1 = make_rdm1
+    _make_rdm1 = make_rdm1
 
     def get_init_guess(self, nroots=1, diag=None, ascending=True, type=None, ini=None):
         if (type=="read"):

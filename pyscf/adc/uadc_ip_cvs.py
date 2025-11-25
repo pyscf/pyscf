@@ -31,6 +31,8 @@ from pyscf.adc import uadc
 from pyscf.adc import uadc_ao2mo
 from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
+from pyscf.data.nist import HARTREE2EV
+
 
 def get_imds(adc, eris=None):
 
@@ -2101,7 +2103,7 @@ def analyze_eigenvector(adc):
             doubles_bbb_val.append(doubles_bbb_ecc_val[idx])
 
         logger.info(adc,'%s | root %d | Energy (eV) = %12.8f | norm(1h)  = %6.4f | norm(2h1p) = %6.4f ',
-                    adc.method, I, adc.E[I]*27.2114, U1dotU1, U2dotU2)
+                    adc.method, I, adc.E[I]*HARTREE2EV, U1dotU1, U2dotU2)
 
         if singles_a_val:
             logger.info(adc, "\n1h(alpha) block: ")
@@ -2199,7 +2201,8 @@ def analyze_spec_factor(adc):
             if np.sum(spec_Contribution) == 0.0:
                 continue
 
-            logger.info(adc, '%s | root %d %s\n', adc.method, i, spin)
+            logger.info(adc, '%s | root %d | Energy (eV) = %12.8f | %s\n',
+                    adc.method, i, adc.E[i]*HARTREE2EV, spin)
             logger.info(adc, "     HF MO     Spec. Contribution     Orbital symmetry")
             logger.info(adc, "-----------------------------------------------------------")
 
@@ -2982,13 +2985,13 @@ class UADCIPCVS(uadc.UADC):
 
     _keys = {
         'tol_residual','conv_tol', 'e_corr', 'method',
-        'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory',
+        'method_type', 'mo_coeff', 'mo_coeff_hf', 'mo_energy_b', 'max_memory',
         't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle',
         'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b', 'mo_coeff', 'mo_energy_a',
         'mo_energy_b', 'nmo_a', 'nmo_b', 'mol', 'transform_integrals',
         'with_df', 'spec_factor_print_tol', 'evec_print_tol', 'ncvs',
         'compute_properties', 'approx_trans_moments', 'E', 'U', 'P', 'X',
-        'compute_spin_square'
+        'compute_spin_square', '_make_rdm1', 'frozen', 'mo_occ'
     }
 
     def __init__(self, adc):
@@ -3013,6 +3016,7 @@ class UADCIPCVS(uadc.UADC):
         self.nvir_a = adc._nvir[0]
         self.nvir_b = adc._nvir[1]
         self.mo_coeff = adc.mo_coeff
+        self.mo_coeff_hf = adc.mo_coeff_hf
         self.mo_energy_a = adc.mo_energy_a
         self.mo_energy_b = adc.mo_energy_b
         self.nmo_a = adc._nmo[0]
@@ -3023,6 +3027,8 @@ class UADCIPCVS(uadc.UADC):
         self.spec_factor_print_tol = adc.spec_factor_print_tol
         self.evec_print_tol = adc.evec_print_tol
         self.ncvs = adc.ncvs
+        self.frozen = adc.frozen
+        self.mo_occ = adc.mo_occ
 
         self.compute_properties = adc.compute_properties
         self.approx_trans_moments = adc.approx_trans_moments
@@ -3033,6 +3039,8 @@ class UADCIPCVS(uadc.UADC):
         self.U = adc.U
         self.P = adc.P
         self.X = adc.X
+
+        self._adc_es = self
 
     kernel = uadc.kernel
     get_imds = get_imds
@@ -3045,7 +3053,7 @@ class UADCIPCVS(uadc.UADC):
     analyze_eigenvector = analyze_eigenvector
     analyze = analyze
     compute_dyson_mo = compute_dyson_mo
-    make_rdm1 = make_rdm1
+    _make_rdm1 = make_rdm1
 
     def get_init_guess(self, nroots=1, diag=None, ascending=True, type=None, ini=None):
         if (type=="read"):

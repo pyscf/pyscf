@@ -59,12 +59,6 @@ def rdms_test(dm):
     r2 = np.einsum('pq,pq->',r2_int,dm_ao)
     return r2
 
-def rdms_test_fr(dm):
-    r2_int = mol.intor('int1e_r2')
-    dm_ao = np.einsum('pi,ij,qj->pq', myadc_fr.mo_coeff, dm, myadc_fr.mo_coeff.conj())
-    r2 = np.einsum('pq,pq->',r2_int,dm_ao)
-    return r2
-
 class KnownValues(unittest.TestCase):
 
     def test_ea_adc2(self):
@@ -151,8 +145,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.21936553835290462, 6)
 
         dm1_gs = myadc_fr.make_ref_rdm1()
-        r2_gs = rdms_test_fr(dm1_gs)
-        self.assertAlmostEqual(r2_gs, 20.2484571569487, 6)
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 20.3548798093427, 6)
 
         myadcea_fr = adc.radc_ea.RADCEA(myadc_fr)
         e,v,p,x = myadcea_fr.kernel(nroots=3)
@@ -166,9 +160,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 1.9760458112204118, 6)
 
         dm1_exc = np.array(myadcea_fr.make_rdm1())
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[0]), 60.64068202356829, 6)
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[1]), 77.39392254596629, 6)
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[2]), 51.34649710740471, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 60.7471046759578, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 77.5003451983682, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 51.4529197597908, 6)
 
 
     def test_ea_adc2x_frozen(self):
@@ -177,8 +171,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.21936553835290462, 6)
 
         dm1_gs = myadc_fr.make_ref_rdm1()
-        r2_gs = rdms_test_fr(dm1_gs)
-        self.assertAlmostEqual(r2_gs, 20.2484571569487, 6)
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 20.3548798093427, 6)
 
         myadcea_fr = adc.radc_ea.RADCEA(myadc_fr)
         e,v,p,x = myadcea_fr.kernel(nroots=3)
@@ -192,10 +186,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 1.9593139012649046, 6)
 
         dm1_exc = np.array(myadcea_fr.make_rdm1())
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[0]), 60.21156461757987, 6)
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[1]), 77.12688831295762, 6)
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[2]), 51.95109796881898, 6)
-
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 60.3179872699728, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 77.2333109653418, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 52.0575206212114, 6)
 
     def test_ea_adc3_frozen(self):
         myadc_fr.method = "adc(3)"
@@ -203,8 +196,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.2241204658960519, 6)
 
         dm1_gs = myadc_fr.make_ref_rdm1()
-        r2_gs = rdms_test_fr(dm1_gs)
-        self.assertAlmostEqual(r2_gs, 19.965315744449295, 6)
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 20.07173839684320, 6)
 
         myadcea_fr = adc.radc_ea.RADCEA(myadc_fr)
         e,v,p,x = myadcea_fr.kernel(nroots=4)
@@ -220,10 +213,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[3], 1.9743683769537101, 6)
 
         dm1_exc = np.array(myadcea_fr.make_rdm1())
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[0]), 60.11398823298523, 6)
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[1]), 76.93354441778688, 6)
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[2]), 51.17742215904089, 6)
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[3]), 43.27197899640896, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 60.2204108853800, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 77.0399670701813, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 51.2838448114322, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[3]), 43.3784016488027, 6)
 
 if __name__ == "__main__":
     print("EA calculations for different RADC methods for water molecule")

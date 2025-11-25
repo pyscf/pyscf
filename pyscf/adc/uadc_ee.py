@@ -30,6 +30,7 @@ from pyscf.adc import uadc_ao2mo, uadc_amplitudes
 from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
 from pyscf import scf
+from pyscf.data.nist import HARTREE2EV
 
 
 def get_imds(adc, eris=None):
@@ -16799,14 +16800,26 @@ def get_spin_square(adc):
 
     t1 = adc.t1
     t2 = adc.t2
-    nocc_a = adc.nocc_a
-    nocc_b = adc.nocc_b
-    nvir_a = adc.nvir_a
-    nvir_b = adc.nvir_b
+    nmo_a = adc.mo_coeff_hf[0].shape[1]
+    nmo_b = adc.mo_coeff_hf[1].shape[1]
+    nocc_a = np.count_nonzero(adc.mo_occ[0] > 0)
+    nocc_b = np.count_nonzero(adc.mo_occ[1] > 0)
+    nvir_a = nmo_a - nocc_a
+    nvir_b = nmo_b - nocc_b
 
     ovlp = adc._scf.get_ovlp(adc._scf.mol).copy()
 
-    delta = np.dot(adc.mo_coeff[0].transpose(), np.dot(ovlp, adc.mo_coeff[1]))
+    if adc.frozen is not None:
+        moidx = adc.get_frozen_mask()
+        moidxa_occ = np.where(moidx[0][:nocc_a])[0]
+        moidxb_occ = np.where(moidx[1][:nocc_b])[0]
+        moidxa_vir = np.where(moidx[0][nocc_a:])[0]
+        moidxb_vir = np.where(moidx[1][nocc_b:])[0]
+        idx0_a, idx1_a, idx2_a, idx3_a = np.ix_(moidxa_occ, moidxa_occ, moidxa_vir, moidxa_vir)
+        idx0_b, idx1_b, idx2_b, idx3_b = np.ix_(moidxb_occ, moidxb_occ, moidxb_vir, moidxb_vir)
+        idx0_ab, idx1_ab, idx2_ab, idx3_ab = np.ix_(moidxa_occ, moidxb_occ, moidxa_vir, moidxb_vir)
+
+    delta = np.dot(adc.mo_coeff_hf[0].transpose(), np.dot(ovlp, adc.mo_coeff_hf[1]))
 
     if adc.f_ov is None:
         f_ov_a = np.zeros((nocc_a, nvir_a))
@@ -16817,10 +16830,24 @@ def get_spin_square(adc):
         f_ov_a, f_ov_b = adc.f_ov
         t1_ce_aa = t1[2][0][:]
         t1_ce_bb = t1[2][1][:]
+        if adc.frozen is not None:
+            temp_a = np.zeros((nocc_a, nvir_a))
+            temp_b = np.zeros((nocc_b, nvir_b))
+            temp_a[moidxa_occ[:,None],moidxa_vir] = t1_ce_aa
+            temp_b[moidxb_occ[:,None],moidxb_vir] = t1_ce_bb
+            t1_ce_aa = temp_a.copy()
+            t1_ce_bb = temp_b.copy()
 
     if t1[0][0] is not None:
         t2_ce_aa = t1[0][0][:]
         t2_ce_bb = t1[0][1][:]
+        if adc.frozen is not None:
+            temp_a = np.zeros((nocc_a, nvir_a))
+            temp_b = np.zeros((nocc_b, nvir_b))
+            temp_a[moidxa_occ[:,None],moidxa_vir] = t2_ce_aa
+            temp_b[moidxb_occ[:,None],moidxb_vir] = t2_ce_bb
+            t2_ce_aa = temp_a.copy()
+            t2_ce_bb = temp_b.copy()
     else:
         t2_ce_aa = np.zeros((nocc_a, nvir_a))
         t2_ce_bb = np.zeros((nocc_b, nvir_b))
@@ -16828,26 +16855,46 @@ def get_spin_square(adc):
     t1_ccee_aaaa = t2[0][0][:]
     t1_ccee_abab = t2[0][1][:]
     t1_ccee_bbbb = t2[0][2][:]
+    if adc.frozen is not None:
+        temp_a = np.zeros((nocc_a, nocc_a, nvir_a, nvir_a))
+        temp_b = np.zeros((nocc_b, nocc_b, nvir_b, nvir_b))
+        temp_ab = np.zeros((nocc_a, nocc_b, nvir_a, nvir_b))
+        temp_a[idx0_a,idx1_a,idx2_a,idx3_a] = t1_ccee_aaaa
+        temp_b[idx0_b,idx1_b,idx2_b,idx3_b] = t1_ccee_bbbb
+        temp_ab[idx0_ab,idx1_ab,idx2_ab,idx3_ab] = t1_ccee_abab
+        t1_ccee_aaaa = temp_a.copy()
+        t1_ccee_bbbb = temp_b.copy()
+        t1_ccee_abab = temp_ab.copy()
 
     if t2[1][0] is not None:
         t2_ccee_aaaa = t2[1][0][:]
         t2_ccee_abab = t2[1][1][:]
         t2_ccee_bbbb = t2[1][2][:]
+        if adc.frozen is not None:
+            temp_a = np.zeros((nocc_a, nocc_a, nvir_a, nvir_a))
+            temp_b = np.zeros((nocc_b, nocc_b, nvir_b, nvir_b))
+            temp_ab = np.zeros((nocc_a, nocc_b, nvir_a, nvir_b))
+            temp_a[idx0_a,idx1_a,idx2_a,idx3_a] = t2_ccee_aaaa
+            temp_b[idx0_b,idx1_b,idx2_b,idx3_b] = t2_ccee_bbbb
+            temp_ab[idx0_ab,idx1_ab,idx2_ab,idx3_ab] = t2_ccee_abab
+            t2_ccee_aaaa = temp_a.copy()
+            t2_ccee_bbbb = temp_b.copy()
+            t2_ccee_abab = temp_ab.copy()
     else:
         t2_ccee_aaaa = np.zeros((nocc_a, nocc_a, nvir_a, nvir_a))
         t2_ccee_abab = np.zeros((nocc_a, nocc_b, nvir_a, nvir_b))
         t2_ccee_bbbb = np.zeros((nocc_b, nocc_b, nvir_b, nvir_b))
 
-    n_singles_a = nocc_a * nvir_a
-    n_singles_b = nocc_b * nvir_b
-    n_doubles_aaaa = nocc_a * (nocc_a - 1) * nvir_a * (nvir_a - 1) // 4
-    n_doubles_ab = nocc_a * nocc_b * nvir_a * nvir_b
-    n_doubles_bbbb = nocc_b * (nocc_b - 1) * nvir_b * (nvir_b - 1) // 4
+    n_singles_a = adc.nocc_a * adc.nvir_a
+    n_singles_b = adc.nocc_b * adc.nvir_b
+    n_doubles_aaaa = adc.nocc_a * (adc.nocc_a - 1) * adc.nvir_a * (adc.nvir_a - 1) // 4
+    n_doubles_ab = adc.nocc_a * adc.nocc_b * adc.nvir_a * adc.nvir_b
+    n_doubles_bbbb = adc.nocc_b * (adc.nocc_b - 1) * adc.nvir_b * (adc.nvir_b - 1) // 4
 
-    ij_ind_a = np.tril_indices(nocc_a, k=-1)
-    ij_ind_b = np.tril_indices(nocc_b, k=-1)
-    ab_ind_a = np.tril_indices(nvir_a, k=-1)
-    ab_ind_b = np.tril_indices(nvir_b, k=-1)
+    ij_ind_a = np.tril_indices(adc.nocc_a, k=-1)
+    ij_ind_b = np.tril_indices(adc.nocc_b, k=-1)
+    ab_ind_a = np.tril_indices(adc.nvir_a, k=-1)
+    ab_ind_b = np.tril_indices(adc.nvir_b, k=-1)
 
     f_a = n_singles_a
     s_b = f_a
@@ -16873,32 +16920,49 @@ def get_spin_square(adc):
 
     for r in range(U.shape[0]):
 
-        Y_aa = U[r][:f_a].reshape(nocc_a, nvir_a)
-        Y_bb = U[r][f_a:f_b].reshape(nocc_b, nvir_b)
+        Y_aa = U[r][:f_a].reshape(adc.nocc_a, adc.nvir_a)
+        Y_bb = U[r][f_a:f_b].reshape(adc.nocc_b, adc.nvir_b)
 
-        Y_abab = U[r][s_abab:f_ab].reshape(nocc_a, nocc_b, nvir_a, nvir_b)
+        Y_abab = U[r][s_abab:f_ab].reshape(adc.nocc_a, adc.nocc_b, adc.nvir_a, adc.nvir_b)
 
-        Y_vv_u_a = np.zeros((int((nocc_a * (nocc_a - 1)) / 2), nvir_a, nvir_a))
+        Y_vv_u_a = np.zeros((int((adc.nocc_a * (adc.nocc_a - 1)) / 2), adc.nvir_a, adc.nvir_a))
         Y_vv_u_a[:, ab_ind_a[0], ab_ind_a[1]] = U[r][s_aaaa:f_aaaa].reshape(
-            int((nocc_a * (nocc_a - 1)) / 2), int((nvir_a * (nvir_a - 1)) / 2))
+            int((adc.nocc_a * (adc.nocc_a - 1)) / 2), int((adc.nvir_a * (adc.nvir_a - 1)) / 2))
         Y_vv_u_a[:, ab_ind_a[1], ab_ind_a[0]] = -U[r][s_aaaa:f_aaaa].reshape(
-            int((nocc_a * (nocc_a - 1)) / 2), int((nvir_a * (nvir_a - 1)) / 2))
-        Y_aaaa = np.zeros((nocc_a, nocc_a, nvir_a, nvir_a))
+            int((adc.nocc_a * (adc.nocc_a - 1)) / 2), int((adc.nvir_a * (adc.nvir_a - 1)) / 2))
+        Y_aaaa = np.zeros((adc.nocc_a, adc.nocc_a, adc.nvir_a, adc.nvir_a))
         Y_aaaa[ij_ind_a[0], ij_ind_a[1], :, :] = Y_vv_u_a
         Y_aaaa[ij_ind_a[1], ij_ind_a[0], :, :] = -Y_vv_u_a
 
         del Y_vv_u_a
 
-        Y_vv_u_b = np.zeros((int((nocc_b * (nocc_b - 1)) / 2), nvir_b, nvir_b))
+        Y_vv_u_b = np.zeros((int((adc.nocc_b * (adc.nocc_b - 1)) / 2), adc.nvir_b, adc.nvir_b))
         Y_vv_u_b[:, ab_ind_b[0], ab_ind_b[1]] = U[r][s_bbbb:f_bbbb].reshape(
-            int((nocc_b * (nocc_b - 1)) / 2), int((nvir_b * (nvir_b - 1)) / 2))
+            int((adc.nocc_b * (adc.nocc_b - 1)) / 2), int((adc.nvir_b * (adc.nvir_b - 1)) / 2))
         Y_vv_u_b[:, ab_ind_b[1], ab_ind_b[0]] = -U[r][s_bbbb:f_bbbb].reshape(
-            int((nocc_b * (nocc_b - 1)) / 2), int((nvir_b * (nvir_b - 1)) / 2))
-        Y_bbbb = np.zeros((nocc_b, nocc_b, nvir_b, nvir_b))
+            int((adc.nocc_b * (adc.nocc_b - 1)) / 2), int((adc.nvir_b * (adc.nvir_b - 1)) / 2))
+        Y_bbbb = np.zeros((adc.nocc_b, adc.nocc_b, adc.nvir_b, adc.nvir_b))
         Y_bbbb[ij_ind_b[0], ij_ind_b[1], :, :] = Y_vv_u_b
         Y_bbbb[ij_ind_b[1], ij_ind_b[0], :, :] = -Y_vv_u_b
 
         del Y_vv_u_b
+
+        if adc.frozen is not None:
+            Y_aa_temp = np.zeros((nocc_a, nvir_a))
+            Y_bb_temp = np.zeros((nocc_b, nvir_b))
+            Y_aaaa_temp = np.zeros((nocc_a, nocc_a, nvir_a, nvir_a))
+            Y_abab_temp = np.zeros((nocc_a, nocc_b, nvir_a, nvir_b))
+            Y_bbbb_temp = np.zeros((nocc_b, nocc_b, nvir_b, nvir_b))
+            Y_aa_temp[moidxa_occ[:,None],moidxa_vir] = Y_aa
+            Y_bb_temp[moidxb_occ[:,None],moidxb_vir] = Y_bb
+            Y_aaaa_temp[idx0_a,idx1_a,idx2_a,idx3_a] = Y_aaaa
+            Y_abab_temp[idx0_ab,idx1_ab,idx2_ab,idx3_ab] = Y_abab
+            Y_bbbb_temp[idx0_b,idx1_b,idx2_b,idx3_b] = Y_bbbb
+            Y_aa = Y_aa_temp
+            Y_bb = Y_bb_temp
+            Y_aaaa = Y_aaaa_temp
+            Y_abab = Y_abab_temp
+            Y_bbbb = Y_bbbb_temp
 
         # 2-RDM contributions to the S^2 values
         IjKl = - 1 / 4 * \
@@ -23670,7 +23734,7 @@ def analyze_eigenvector(adc):
         doubles_bbbb_val = list(U_sorted_bbbb)
 
         logger.info(adc, '%s | root %d | Energy (eV) = %12.8f | norm(1p1h)  = %6.4f | norm(2p2h) = %6.4f ',
-                    adc.method, I, adc.E[I]*27.2114, U1dotU1, U2dotU2)
+                    adc.method, I, adc.E[I]*HARTREE2EV, U1dotU1, U2dotU2)
 
         if singles_aa_val:
             logger.info(adc, "\n1p1h(alpha|alpha) block: ")
@@ -23725,7 +23789,7 @@ def analyze_spec_factor(adc):
     X_aa = X_aa.reshape(nroots, -1)
     X_bb = X_bb.reshape(nroots, -1)
 
-    energy = adc.E * 27.2114
+    energy = adc.E * HARTREE2EV
 
     X_a = (X_aa.copy())**2
     X_b = (X_bb.copy())**2
@@ -23930,12 +23994,13 @@ class UADCEE(uadc.UADC):
 
     _keys = {
         'tol_residual', 'conv_tol', 'e_corr', 'method',
-        'method_type', 'mo_coeff', 'mo_energy_a', 'mo_energy_b', 'max_memory',
+        'method_type', 'mo_coeff', 'mo_coeff_hf', 'mo_energy_a', 'mo_energy_b', 'max_memory',
         't1', 't2', 'max_space', 'max_cycle',
         'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b', 'mo_energy_a',
         'mo_energy_b', 'nmo_a', 'nmo_b', 'mol', 'transform_integrals',
         'with_df', 'spec_factor_print_tol', 'evec_print_tol',
         'compute_properties', 'approx_trans_moments', 'E', 'U', 'P', 'X',
+        '_make_rdm1', 'frozen', 'mo_occ'
     }
 
     def __init__(self, adc):
@@ -23961,6 +24026,7 @@ class UADCEE(uadc.UADC):
         self.nvir_a = adc.nvir_a
         self.nvir_b = adc.nvir_b
         self.mo_coeff = adc.mo_coeff
+        self.mo_coeff_hf = adc.mo_coeff_hf
         self.mo_energy_a = adc.mo_energy_a
         self.mo_energy_b = adc.mo_energy_b
         self.nmo_a = adc._nmo[0]
@@ -23969,6 +24035,8 @@ class UADCEE(uadc.UADC):
         self.with_df = adc.with_df
         self.compute_properties = adc.compute_properties
         self.approx_trans_moments = adc.approx_trans_moments
+        self.frozen = adc.frozen
+        self.mo_occ = adc.mo_occ
 
         self.spec_factor_print_tol = adc.spec_factor_print_tol
         self.evec_print_tol = adc.evec_print_tol
@@ -23983,13 +24051,15 @@ class UADCEE(uadc.UADC):
         self.dip_mom = adc.dip_mom
         self.dip_mom_nuc = adc.dip_mom_nuc
 
+        self._adc_es = self
+
     kernel = uadc.kernel
     get_imds = get_imds
     get_diag = get_diag
     matvec = matvec
     get_trans_moments = get_trans_moments
     get_spin_square = get_spin_square
-    make_rdm1 = make_rdm1
+    _make_rdm1 = make_rdm1
     get_properties = get_properties
     analyze_eigenvector = analyze_eigenvector
 

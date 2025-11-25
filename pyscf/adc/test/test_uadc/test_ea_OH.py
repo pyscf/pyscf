@@ -57,13 +57,6 @@ def rdms_test(dm_a,dm_b):
     r2 = np.einsum('pq,pq->',r2_int,dm_ao_a+dm_ao_b)
     return r2
 
-def rdms_test_fr(dm_a,dm_b):
-    r2_int = mol.intor('int1e_r2')
-    dm_ao_a = np.einsum('pi,ij,qj->pq', myadc_fr.mo_coeff[0], dm_a, myadc_fr.mo_coeff[0].conj())
-    dm_ao_b = np.einsum('pi,ij,qj->pq', myadc_fr.mo_coeff[1], dm_b, myadc_fr.mo_coeff[1].conj())
-    r2 = np.einsum('pq,pq->',r2_int,dm_ao_a+dm_ao_b)
-    return r2
-
 class KnownValues(unittest.TestCase):
 
     def test_ea_adc2(self):
@@ -161,9 +154,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 0.9767596218115034, 6)
 
         dm1_exc = np.array(myadc_fr.make_rdm1())
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[0][0],dm1_exc[1][0]), 28.8743270613980, 6)
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[0][1],dm1_exc[1][1]), 56.9914998674124, 6)
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[0][2],dm1_exc[1][2]), 57.5822417416815, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 30.65748194797707, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 58.77465475399459, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 59.36539662826338, 6)
 
 if __name__ == "__main__":
     print("EA calculations for different ADC methods for open-shell molecule")

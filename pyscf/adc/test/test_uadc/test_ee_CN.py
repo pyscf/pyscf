@@ -58,13 +58,6 @@ def rdms_test(dm_a,dm_b):
     r2 = np.einsum('pq,pq->',r2_int,dm_ao_a+dm_ao_b)
     return r2
 
-def rdms_test_fr(dm_a,dm_b):
-    r2_int = mol.intor('int1e_r2')
-    dm_ao_a = np.einsum('pi,ij,qj->pq', myadc_fr.mo_coeff[0], dm_a, myadc_fr.mo_coeff[0].conj())
-    dm_ao_b = np.einsum('pi,ij,qj->pq', myadc_fr.mo_coeff[1], dm_b, myadc_fr.mo_coeff[1].conj())
-    r2 = np.einsum('pq,pq->',r2_int,dm_ao_a+dm_ao_b)
-    return r2
-
 class KnownValues(unittest.TestCase):
 
     def test_ee_adc2(self):
@@ -193,16 +186,16 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2],0.01528568, 6)
         self.assertAlmostEqual(p[3],0.00009021, 6)
 
-        self.assertAlmostEqual(spin[0],0.780275417780729, 5)
-        self.assertAlmostEqual(spin[1],0.780275417780728, 5)
-        self.assertAlmostEqual(spin[2],0.798396848726367, 5)
-        self.assertAlmostEqual(spin[3],4.105017182578975, 5)
+        self.assertAlmostEqual(spin[0],0.78027442, 5)
+        self.assertAlmostEqual(spin[1],0.78027442, 5)
+        self.assertAlmostEqual(spin[2],0.79839650, 5)
+        self.assertAlmostEqual(spin[3],4.10501620, 5)
 
         dm1_exc = np.array(myadc_fr.make_rdm1())
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[0][0],dm1_exc[1][0]), 39.1413505592602, 6)
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[0][1],dm1_exc[1][1]), 39.1413505592602, 6)
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[0][2],dm1_exc[1][2]), 38.4096834950545, 6)
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[0][3],dm1_exc[1][3]), 38.4575497187636, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 41.35867463912157, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 41.35867463912155, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 40.62700757491586, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 40.67487379862491, 6)
 
 if __name__ == "__main__":
     print("EE calculations for different ADC methods for CN molecule")

@@ -31,6 +31,7 @@ from pyscf.adc import uadc_amplitudes
 from pyscf import __config__
 from pyscf import df
 from pyscf import scf
+from pyscf.data.nist import HARTREE2EV
 
 
 # Excited-state kernel
@@ -105,7 +106,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     for n in range(nroots):
         print_string = ('%s root %d  |  Energy (Eh) = %14.10f  |  Energy (eV) = %12.8f  ' %
-                        (adc.method, n, adc.E[n], adc.E[n]*27.2114))
+                        (adc.method, n, adc.E[n], adc.E[n]*HARTREE2EV))
         if adc.compute_properties:
             if (adc.method_type == "ee"):
                 print_string += ("|  Osc. strength = %10.8f  " % adc.P[n])
@@ -124,7 +125,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     return adc.E, adc.U, adc.P, adc.X
 
 
-def make_ref_rdm1(adc):
+def make_ref_rdm1(adc, with_frozen=True, ao_repr=False):
     from pyscf.lib import einsum
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -326,7 +327,34 @@ def make_ref_rdm1(adc):
         rdm1_b[nocc_b:, nocc_b:] += 1/2 * \
             einsum('ijBa,iA,ja->AB', t2_1_b, t1_1_b, t1_1_b, optimize = einsum_type)
 
+    if with_frozen and adc.frozen is not None:
+        nmo_a = adc.mo_coeff_hf[0].shape[1]
+        nmo_b = adc.mo_coeff_hf[1].shape[1]
+        nocc_a = np.count_nonzero(adc.mo_occ[0] > 0)
+        nocc_b = np.count_nonzero(adc.mo_occ[1] > 0)
+        dm_a = np.zeros((nmo_a,nmo_a))
+        dm_b = np.zeros((nmo_b,nmo_b))
+        dm_a[np.diag_indices(nocc_a)] = 1
+        dm_b[np.diag_indices(nocc_b)] = 1
+        moidx = adc.get_frozen_mask()
+        moidxa = np.where(moidx[0])[0]
+        moidxb = np.where(moidx[1])[0]
+        dm_a[moidxa[:,None],moidxa] = rdm1_a
+        dm_b[moidxb[:,None],moidxb] = rdm1_b
+        rdm1_a = dm_a
+        rdm1_b = dm_b
+        if ao_repr:
+            mo_a, mo_b = adc.mo_coeff_hf
+            rdm1_a = lib.einsum('pi,ij,qj->pq', mo_a, rdm1_a, mo_a)
+            rdm1_b = lib.einsum('pi,ij,qj->pq', mo_b, rdm1_b, mo_b)
+
+    elif ao_repr:
+        mo_a, mo_b = adc.mo_coeff
+        rdm1_a = lib.einsum('pi,ij,qj->pq', mo_a, rdm1_a, mo_a)
+        rdm1_b = lib.einsum('pi,ij,qj->pq', mo_b, rdm1_b, mo_b)
+
     return (rdm1_a, rdm1_b)
+
 
 def get_frozen_mask(myadc):
     moidx = (np.ones(myadc.mo_occ[0].size, dtype=bool),np.ones(myadc.mo_occ[1].size, dtype=bool))
@@ -384,7 +412,7 @@ class UADC(lib.StreamObject):
 
     _keys = {
         'tol_residual','conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff',
-        'mol', 'mo_energy_a', 'mo_energy_b', 'incore_complete',
+        'mo_coeff_hf', 'mol', 'mo_energy_a', 'mo_energy_b', 'incore_complete',
         'scf_energy', 'e_tot', 't1', 't2', 'frozen', 'chkfile',
         'max_space', 'mo_occ', 'max_cycle', 'imds', 'with_df', 'compute_properties',
         'approx_trans_moments', 'evec_print_tol', 'spec_factor_print_tol',
@@ -394,13 +422,11 @@ class UADC(lib.StreamObject):
         'if_heri_eris'
     }
 
-    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None, f_ov=None):
 
         if 'dft' in str(mf.__module__):
             raise NotImplementedError('DFT reference for UADC')
 
-        if mo_coeff is None:
-            mo_coeff = mf.mo_coeff
         if mo_occ is None:
             mo_occ = mf.mo_occ
 
@@ -419,80 +445,82 @@ class UADC(lib.StreamObject):
         self.frozen = frozen
         self.incore_complete = self.incore_complete or self.mol.incore_anyway
 
-        self.f_ov = None
+        self.f_ov = f_ov
         self._nmo = None
         self._nocc = mf.nelec
         self.mo_occ = mo_occ
 
         if isinstance(mf, scf.rohf.ROHF):
 
-            logger.info(mf, "\nROHF reference detected in ADC, semicanonicalizing the orbitals...")
+            logger.info(mf, "\nROHF reference detected in ADC")
 
-            mo_a = mo_coeff.copy()
-            nalpha = mf.mol.nelec[0]
-            nbeta = mf.mol.nelec[1]
-
-            h1e = mf.get_hcore()
-            dm = mf.make_rdm1()
-            vhf = mf.get_veff(mf.mol, dm)
-
-            fock_a = h1e + vhf[0]
-            fock_b = h1e + vhf[1]
-
-            if nalpha > nbeta:
-                ndocc = nbeta
-                nsocc = nalpha - nbeta
-            else:
-                ndocc = nalpha
-                nsocc = nbeta - nalpha
-
-            if frozen is not None:
-                from pyscf.mp import mp2
-                mask = mp2.get_frozen_mask(self)
-                mo_a = mo_a[:, mask]
-                ndocc -= np.count_nonzero(~mask[:ndocc])
-                nsocc -= np.count_nonzero(~mask[ndocc:ndocc+nsocc])
-                if nalpha > nbeta:
-                    self._nocc = (ndocc + nsocc, ndocc)
-                else:
-                    self._nocc = (ndocc, ndocc + nsocc)
-
-            fock_a = np.dot(mo_a.T,np.dot(fock_a, mo_a))
-            fock_b = np.dot(mo_a.T,np.dot(fock_b, mo_a))
-
-            # Semicanonicalize Ca using fock_a, nocc_a -> Ca, mo_energy_a, U_a, f_ov_a
-            mo_a_coeff, mo_energy_a, f_ov_a, f_aa = self.semi_canonicalize_orbitals(
-                fock_a, ndocc + nsocc, mo_a)
-
-            # Semicanonicalize Cb using fock_b, nocc_b -> Cb, mo_energy_b, U_b, f_ov_b
-            mo_b_coeff, mo_energy_b, f_ov_b, f_bb = self.semi_canonicalize_orbitals(fock_b, ndocc, mo_a)
-
-            mo_coeff = [mo_a_coeff, mo_b_coeff]
-
-            f_ov = [f_ov_a, f_ov_b]
-
-            self.f_ov = f_ov
-            self.mo_energy_a = mo_energy_a.copy()
-            self.mo_energy_b = mo_energy_b.copy()
-
+            mo_occa = (mo_occ>1e-8).astype(np.double)
+            mo_occb = mo_occ - mo_occa
+            self.mo_occ = [mo_occa, mo_occb]
+            if_canonical = False
         else:
             self.mo_energy_a = mf.mo_energy[0]
             self.mo_energy_b = mf.mo_energy[1]
 
+        if mo_coeff is None:
+            mo_coeff = mf.mo_coeff
+            if isinstance(mf, scf.rohf.ROHF):
+
+                logger.info(mf, "\nSemicanonicalizing the orbitals...")
+
+                if_canonical = True
+                mo_a = mo_coeff.copy()
+                nalpha = mf.mol.nelec[0]
+                nbeta = mf.mol.nelec[1]
+
+                h1e = mf.get_hcore()
+                dm = mf.make_rdm1()
+                vhf = mf.get_veff(mf.mol, dm)
+
+                fock_a = h1e + vhf[0]
+                fock_b = h1e + vhf[1]
+
+                if nalpha > nbeta:
+                    ndocc = nbeta
+                    nsocc = nalpha - nbeta
+                else:
+                    ndocc = nalpha
+                    nsocc = nbeta - nalpha
+
+                fock_a = np.dot(mo_a.T,np.dot(fock_a, mo_a))
+                fock_b = np.dot(mo_a.T,np.dot(fock_b, mo_a))
+
+                # Semicanonicalize Ca using fock_a, nocc_a -> Ca, mo_energy_a, U_a, f_ov_a
+                mo_a_coeff, mo_energy_a, f_ov_a, f_aa = self.semi_canonicalize_orbitals(
+                    fock_a, ndocc + nsocc, mo_a)
+
+                # Semicanonicalize Cb using fock_b, nocc_b -> Cb, mo_energy_b, U_b, f_ov_b
+                mo_b_coeff, mo_energy_b, f_ov_b, f_bb = self.semi_canonicalize_orbitals(fock_b, ndocc, mo_a)
+
+                mo_coeff = [mo_a_coeff, mo_b_coeff]
+
+                f_ov = [f_ov_a, f_ov_b]
+
+                self.f_ov = f_ov
+                self.mo_energy_a = mo_energy_a.copy()
+                self.mo_energy_b = mo_energy_b.copy()
+
+        elif isinstance(mf, scf.rohf.ROHF) and f_ov is None:
+            raise ValueError("f_ov must be provided when mo_coeff is given for ROHF reference")
+
         self.mo_coeff = mo_coeff
+        self.mo_coeff_hf = mo_coeff
         self.e_corr = None
         self.t1 = None
         self.t2 = None
         self.imds = lambda:None
         self.if_heri_eris = False
-        if frozen is None or isinstance(mf, scf.rohf.ROHF):
+        if frozen is None:
             self._nmo = (mo_coeff[0].shape[1], mo_coeff[1].shape[1])
         elif hasattr(frozen, '__len__'):
             if len(frozen) != 2:
                 raise NotImplementedError("frozen should be announced as None or a array-like object with two elements")
-            if isinstance(frozen, tuple):
-                pass
-            if isinstance(frozen, list) or isinstance(frozen, np.ndarray):
+            elif isinstance(frozen, list) or isinstance(frozen, np.ndarray):
                 self.frozen = frozen = tuple(frozen)
 
             if frozen[0] is None:
@@ -512,28 +540,40 @@ class UADC(lib.StreamObject):
             else:
                 raise NotImplementedError
             self._nmo = (nmo_a, nmo_b)
-        else:
-            raise NotImplementedError("each element of frozen should be None, an integer or a array-like object")
 
-        if frozen is not None and not isinstance(mf, scf.rohf.ROHF):
             (mask_a,mask_b) = self.get_frozen_mask()
-            maskocc_a = mf.mo_occ[0]>1e-6
-            maskocc_b = mf.mo_occ[1]>1e-6
+            maskocc_a = self.mo_occ[0]>1e-6
+            maskocc_b = self.mo_occ[1]>1e-6
             occ_a = maskocc_a & mask_a
             occ_b = maskocc_b & mask_b
             self._nocc = (int(occ_a.sum()), int(occ_b.sum()))
-            self.mo_coeff = (mo_coeff[0][:,mask_a], mo_coeff[1][:,mask_b])
-            if mo_coeff is self._scf.mo_coeff and self._scf.converged:
+            self.mo_coeff = (self.mo_coeff[0][:,mask_a], self.mo_coeff[1][:,mask_b])
+            if (self.mo_coeff_hf is self._scf.mo_coeff and self._scf.converged) or \
+                    (isinstance(self._scf, scf.rohf.ROHF) and if_canonical):
                 self.mo_energy_a = self.mo_energy_a[mask_a]
                 self.mo_energy_b = self.mo_energy_b[mask_b]
+                if isinstance(self._scf, scf.rohf.ROHF):
+                    vir_a = ~maskocc_a & mask_a
+                    vir_b = ~maskocc_b & mask_b
+                    f_ov_a, f_ov_b = self.f_ov
+                    f_ov_a_tmp = f_ov_a[occ_a[:mf.nelec[0]],:]
+                    f_ov_a = f_ov_a_tmp[:,vir_a[mf.nelec[0]:]]
+                    f_ov_b_tmp = f_ov_b[occ_b[:mf.nelec[1]],:]
+                    f_ov_b = f_ov_b_tmp[:,vir_b[mf.nelec[1]:]]
+                    self.f_ov = [f_ov_a, f_ov_b]
             else:
-                dm = self._scf.make_rdm1(mo_coeff, self.mo_occ)
-                vhf = self._scf.get_veff(self.mol, dm)
-                fockao_a, fockao_b = self._scf.get_fock(vhf=vhf, dm=dm)
-                fock_a = self.mo_coeff[0].conj().T.dot(fockao_a).dot(self.mo_coeff[0])
-                fock_b = self.mo_coeff[1].conj().T.dot(fockao_b).dot(self.mo_coeff[1])
+                h1e = mf.get_hcore()
+                dm = scf.uhf.make_rdm1(mo_coeff, self.mo_occ)
+                vhf = scf.uhf.get_veff(mf.mol, dm)
+                fock_a = h1e + vhf[0]
+                fock_b = h1e + vhf[1]
+                fock_a = self.mo_coeff[0].conj().T.dot(fock_a).dot(self.mo_coeff[0])
+                fock_b = self.mo_coeff[1].conj().T.dot(fock_b).dot(self.mo_coeff[1])
                 (self.mo_energy_a,self.mo_energy_b) = (fock_a.diagonal().real,fock_b.diagonal().real)
                 self.scf_energy = self._scf.energy_tot(dm=dm, vhf=vhf)
+        else:
+            raise NotImplementedError("each element of frozen should be None, an integer or a array-like object")
+
         self._nvir = (self._nmo[0] - self._nocc[0], self._nmo[1] - self._nocc[1])
         self.nocc_a = self._nocc[0]
         self.nocc_b = self._nocc[1]
@@ -644,43 +684,27 @@ class UADC(lib.StreamObject):
         mem_incore = (max(nao_pair**2, nmo_a**4) + nmo_pair**2) * 2 * 8/1e6
         mem_now = lib.current_memory()[0]
 
-        if isinstance(self._scf, scf.rohf.ROHF):
-            nocc = max(self.nocc_a, self.nocc_b)
-            nvir = min(self.nvir_a, self.nvir_b)
-            nocc_fr = max(self._scf.mol.nelec[0], self._scf.mol.nelec[1]) - nocc
-            nvir_fr = self._scf.mo_coeff.shape[1] - nmo_a - nocc_fr
+        nocc_fr_a = self._scf.nelec[0] - self.nocc_a
+        nocc_fr_b = self._scf.nelec[1] - self.nocc_b
+        nvir_fr_a = self.mo_occ[0].shape[0] - nmo_a - nocc_fr_a
+        nvir_fr_b = self.mo_occ[1].shape[0] - nmo_b - nocc_fr_b
 
-            logger.info(self, '******** ADC Orbital Information ********')
-            logger.info(self, 'Number of Frozen Occupied Orbitals: %d', nocc_fr)
-            logger.info(self, 'Number of Frozen Virtual Orbitals: %d', nvir_fr)
-            logger.info(self, 'Number of Active Occupied Orbitals: %d', nocc)
-            logger.info(self, 'Number of Active Virtual Orbitals: %d', nvir)
-            if hasattr(self.frozen, '__len__'):
-                logger.info(self, 'Frozen Orbital List: %s', self.frozen)
-            logger.info(self, '*****************************************')
+        logger.info(self, '******** ADC Orbital Information ********')
+        logger.info(self, 'Number of Frozen Occupied Alpha Orbitals: %d', nocc_fr_a)
+        logger.info(self, 'Number of Frozen Occupied Beta Orbitals: %d', nocc_fr_b)
+        logger.info(self, 'Number of Frozen Virtual Alpha Orbitals: %d', nvir_fr_a)
+        logger.info(self, 'Number of Frozen Virtual Beta Orbitals: %d', nvir_fr_b)
+        logger.info(self, 'Number of Active Occupied Alpha Orbitals: %d', self.nocc_a)
+        logger.info(self, 'Number of Active Occupied Beta Orbitals: %d', self.nocc_b)
+        logger.info(self, 'Number of Active Virtual Alpha Orbitals: %d', self.nvir_a)
+        logger.info(self, 'Number of Active Virtual Beta Orbitals: %d', self.nvir_b)
 
-        else:
-            nocc_fr_a = self._scf.nelec[0] - self.nocc_a
-            nocc_fr_b = self._scf.nelec[1] - self.nocc_b
-            nvir_fr_a = self._scf.mo_coeff[0].shape[1] - nmo_a - nocc_fr_a
-            nvir_fr_b = self._scf.mo_coeff[1].shape[1] - nmo_b - nocc_fr_b
-
-            logger.info(self, '******** ADC Orbital Information ********')
-            logger.info(self, 'Number of Frozen Occupied Alpha Orbitals: %d', nocc_fr_a)
-            logger.info(self, 'Number of Frozen Occupied Beta Orbitals: %d', nocc_fr_b)
-            logger.info(self, 'Number of Frozen Virtual Alpha Orbitals: %d', nvir_fr_a)
-            logger.info(self, 'Number of Frozen Virtual Beta Orbitals: %d', nvir_fr_b)
-            logger.info(self, 'Number of Active Occupied Alpha Orbitals: %d', self.nocc_a)
-            logger.info(self, 'Number of Active Occupied Beta Orbitals: %d', self.nocc_b)
-            logger.info(self, 'Number of Active Virtual Alpha Orbitals: %d', self.nvir_a)
-            logger.info(self, 'Number of Active Virtual Beta Orbitals: %d', self.nvir_b)
-
-            if hasattr(self.frozen, '__len__'):
-                if hasattr(self.frozen[0], '__len__'):
-                    logger.info(self, 'Frozen Orbital List (Alpha): %s', self.frozen[0])
-                if hasattr(self.frozen[1], '__len__'):
-                    logger.info(self, 'Frozen Orbital List (Beta): %s', self.frozen[1])
-            logger.info(self, '*****************************************')
+        if hasattr(self.frozen, '__len__'):
+            if hasattr(self.frozen[0], '__len__'):
+                logger.info(self, 'Frozen Orbital List (Alpha): %s', self.frozen[0])
+            if hasattr(self.frozen[1], '__len__'):
+                logger.info(self, 'Frozen Orbital List (Beta): %s', self.frozen[1])
+        logger.info(self, '*****************************************')
 
         if getattr(self, 'with_df', None) or getattr(self._scf, 'with_df', None):
             if getattr(self, 'with_df', None):
@@ -724,43 +748,27 @@ class UADC(lib.StreamObject):
         mem_incore = (max(nao_pair**2, nmo_a**4) + nmo_pair**2) * 2 * 8/1e6
         mem_now = lib.current_memory()[0]
 
-        if isinstance(self._scf, scf.rohf.ROHF):
-            nocc = max(self.nocc_a, self.nocc_b)
-            nvir = min(self.nvir_a, self.nvir_b)
-            nocc_fr = max(self._scf.mol.nelec[0], self._scf.mol.nelec[1]) - nocc
-            nvir_fr = self._scf.mo_coeff.shape[1] - nmo_a - nocc_fr
+        nocc_fr_a = self._scf.nelec[0] - self.nocc_a
+        nocc_fr_b = self._scf.nelec[1] - self.nocc_b
+        nvir_fr_a = self.mo_occ[0].shape[0] - nmo_a - nocc_fr_a
+        nvir_fr_b = self.mo_occ[1].shape[0] - nmo_b - nocc_fr_b
 
-            logger.info(self, '******** ADC Orbital Information ********')
-            logger.info(self, 'Number of Frozen Occupied Orbitals: %d', nocc_fr)
-            logger.info(self, 'Number of Frozen Virtual Orbitals: %d', nvir_fr)
-            logger.info(self, 'Number of Active Occupied Orbitals: %d', nocc)
-            logger.info(self, 'Number of Active Virtual Orbitals: %d', nvir)
-            if hasattr(self.frozen, '__len__'):
-                logger.info(self, 'Frozen Orbital List: %s', self.frozen)
-            logger.info(self, '*****************************************')
+        logger.info(self, '******** ADC Orbital Information ********')
+        logger.info(self, 'Number of Frozen Occupied Alpha Orbitals: %d', nocc_fr_a)
+        logger.info(self, 'Number of Frozen Occupied Beta Orbitals: %d', nocc_fr_b)
+        logger.info(self, 'Number of Frozen Virtual Alpha Orbitals: %d', nvir_fr_a)
+        logger.info(self, 'Number of Frozen Virtual Beta Orbitals: %d', nvir_fr_b)
+        logger.info(self, 'Number of Active Occupied Alpha Orbitals: %d', self.nocc_a)
+        logger.info(self, 'Number of Active Occupied Beta Orbitals: %d', self.nocc_b)
+        logger.info(self, 'Number of Active Virtual Alpha Orbitals: %d', self.nvir_a)
+        logger.info(self, 'Number of Active Virtual Beta Orbitals: %d', self.nvir_b)
 
-        else:
-            nocc_fr_a = self._scf.nelec[0] - self.nocc_a
-            nocc_fr_b = self._scf.nelec[1] - self.nocc_b
-            nvir_fr_a = self._scf.mo_coeff[0].shape[1] - nmo_a - nocc_fr_a
-            nvir_fr_b = self._scf.mo_coeff[1].shape[1] - nmo_b - nocc_fr_b
-
-            logger.info(self, '******** ADC Orbital Information ********')
-            logger.info(self, 'Number of Frozen Occupied Alpha Orbitals: %d', nocc_fr_a)
-            logger.info(self, 'Number of Frozen Occupied Beta Orbitals: %d', nocc_fr_b)
-            logger.info(self, 'Number of Frozen Virtual Alpha Orbitals: %d', nvir_fr_a)
-            logger.info(self, 'Number of Frozen Virtual Beta Orbitals: %d', nvir_fr_b)
-            logger.info(self, 'Number of Active Occupied Alpha Orbitals: %d', self.nocc_a)
-            logger.info(self, 'Number of Active Occupied Beta Orbitals: %d', self.nocc_b)
-            logger.info(self, 'Number of Active Virtual Alpha Orbitals: %d', self.nvir_a)
-            logger.info(self, 'Number of Active Virtual Beta Orbitals: %d', self.nvir_b)
-
-            if hasattr(self.frozen, '__len__'):
-                if hasattr(self.frozen[0], '__len__'):
-                    logger.info(self, 'Frozen Orbital List (Alpha): %s', self.frozen[0])
-                if hasattr(self.frozen[1], '__len__'):
-                    logger.info(self, 'Frozen Orbital List (Beta): %s', self.frozen[1])
-            logger.info(self, '*****************************************')
+        if hasattr(self.frozen, '__len__'):
+            if hasattr(self.frozen[0], '__len__'):
+                logger.info(self, 'Frozen Orbital List (Alpha): %s', self.frozen[0])
+            if hasattr(self.frozen[1], '__len__'):
+                logger.info(self, 'Frozen Orbital List (Beta): %s', self.frozen[1])
+        logger.info(self, '*****************************************')
 
         if eris is None:
             if getattr(self, 'with_df', None) or getattr(self._scf, 'with_df', None):
@@ -858,8 +866,50 @@ class UADC(lib.StreamObject):
     def compute_dyson_mo(self):
         return self._adc_es.compute_dyson_mo()
 
-    def make_rdm1(self):
-        return self._adc_es.make_rdm1()
+    def make_rdm1(self, with_frozen=True, ao_repr=False):
+        list_rdm1_a, list_rdm1_b = self._adc_es._make_rdm1()
+
+        if with_frozen and self.frozen is not None:
+            nmo_a = self.mo_coeff_hf[0].shape[1]
+            nmo_b = self.mo_coeff_hf[1].shape[1]
+            if isinstance(self._scf, scf.rohf.ROHF):
+                nocc_a = self._scf.mol.nelec[0]
+                nocc_b = self._scf.mol.nelec[1]
+            else:
+                nocc_a = np.count_nonzero(self.mo_occ[0] > 0)
+                nocc_b = np.count_nonzero(self.mo_occ[1] > 0)
+            moidx = self.get_frozen_mask()
+            moidxa = np.where(moidx[0])[0]
+            moidxb = np.where(moidx[1])[0]
+            for i in range(self._adc_es.U.shape[1]):
+                rdm1_a = list_rdm1_a[i]
+                rdm1_b = list_rdm1_b[i]
+                dm_a = np.zeros((nmo_a,nmo_a))
+                dm_b = np.zeros((nmo_b,nmo_b))
+                dm_a[np.diag_indices(nocc_a)] = 1
+                dm_b[np.diag_indices(nocc_b)] = 1
+                dm_a[moidxa[:,None],moidxa] = rdm1_a
+                dm_b[moidxb[:,None],moidxb] = rdm1_b
+                rdm1_a = dm_a
+                rdm1_b = dm_b
+                if ao_repr:
+                    mo_a, mo_b = self.mo_coeff_hf
+                    rdm1_a = lib.einsum('pi,ij,qj->pq', mo_a, rdm1_a, mo_a)
+                    rdm1_b = lib.einsum('pi,ij,qj->pq', mo_b, rdm1_b, mo_b)
+                list_rdm1_a[i] = rdm1_a
+                list_rdm1_b[i] = rdm1_b
+
+        elif ao_repr:
+            mo_a, mo_b = self.mo_coeff
+            for i in range(self._adc_es.U.shape[1]):
+                rdm1_a = list_rdm1_a[i]
+                rdm1_b = list_rdm1_b[i]
+                rdm1_a = lib.einsum('pi,ij,qj->pq', mo_a, rdm1_a, mo_a)
+                rdm1_b = lib.einsum('pi,ij,qj->pq', mo_b, rdm1_b, mo_b)
+                list_rdm1_a[i] = rdm1_a
+                list_rdm1_b[i] = rdm1_b
+
+        return (list_rdm1_a, list_rdm1_b)
 
 
 if __name__ == '__main__':

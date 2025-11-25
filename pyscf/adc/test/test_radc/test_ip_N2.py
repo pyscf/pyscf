@@ -54,12 +54,6 @@ def rdms_test(dm):
     r2 = np.einsum('pq,pq->',r2_int,dm_ao)
     return r2
 
-def rdms_test_fr(dm):
-    r2_int = mol.intor('int1e_r2')
-    dm_ao = np.einsum('pi,ij,qj->pq', myadc_fr.mo_coeff, dm, myadc_fr.mo_coeff.conj())
-    r2 = np.einsum('pq,pq->',r2_int,dm_ao)
-    return r2
-
 class KnownValues(unittest.TestCase):
 
     def test_ip_adc2(self):
@@ -155,8 +149,8 @@ class KnownValues(unittest.TestCase):
 
         myadc_fr.kernel_gs()
         dm1_gs = myadc_fr.make_ref_rdm1()
-        r2_gs = rdms_test_fr(dm1_gs)
-        self.assertAlmostEqual(r2_gs, 37.183958614972845, 6)
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 39.47517224542838, 6)
 
         myadcip_fr = adc.radc_ip.RADCIP(myadc_fr)
         e,v,p,x = myadcip_fr.kernel(nroots=3)
@@ -173,9 +167,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 1.842845439201718, 6)
 
         dm1_exc = myadcip_fr.make_rdm1()
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[0]), 30.203741033361403, 6)
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[1]), 31.365038757164818, 6)
-        self.assertAlmostEqual(rdms_test_fr(dm1_exc[2]), 31.365038757164847, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 32.494954663813, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 33.656252387618, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 33.656252387618, 6)
 
 if __name__ == "__main__":
     print("IP calculations for different RADC methods for nitrogen molecule")

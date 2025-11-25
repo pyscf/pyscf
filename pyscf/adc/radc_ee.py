@@ -27,6 +27,8 @@ from pyscf.adc import radc
 from pyscf.adc import radc_ao2mo, radc_amplitudes
 from pyscf.adc import dfadc
 from pyscf import symm
+from pyscf.data.nist import HARTREE2EV
+
 
 def get_imds(adc, eris=None):
 
@@ -1400,7 +1402,7 @@ def analyze_eigenvector(adc):
             iter_num += 1
 
         logger.info(adc,'%s | root %d | Energy (eV) = %12.8f | norm(1p1h)  = %6.4f | norm(2p2h) = %6.4f ',
-                    adc.method, I, adc.E[I]*27.2114, U1dotU1, U2dotU2)
+                    adc.method, I, adc.E[I]*HARTREE2EV, U1dotU1, U2dotU2)
 
         if singles_val:
             logger.info(adc, "\n1p1h block: ")
@@ -1454,7 +1456,7 @@ def analyze_spec_factor(adc):
             continue
 
         logger.info(adc, '%s | root %d | Energy (eV) = %12.8f \n',
-                adc.method, i, adc.E[i]*27.2114)
+                adc.method, i, adc.E[i]*HARTREE2EV)
         logger.info(adc, "     Hole_MO     Particle_MO     Spec. Contribution     Orbital symmetry")
         logger.info(adc, "-----------------------------------------------------------")
 
@@ -1944,11 +1946,12 @@ class RADCEE(radc.RADC):
 
     _keys = {
         'tol_residual', 'conv_tol', 'e_corr', 'method',
-        'method_type', 'mo_coeff', 'mo_energy', 'max_memory',
+        'method_type', 'mo_coeff', 'mo_coeff_hf', 'mo_energy', 'max_memory',
         't1', 't2', 'max_space', 'max_cycle',
         'nocc', 'nvir', 'nmo', 'mol', 'transform_integrals',
         'with_df', 'dip_mom','spec_factor_print_tol', 'evec_print_tol',
         'compute_properties', 'approx_trans_moments', 'E', 'U', 'P', 'X',
+        '_make_rdm1', 'frozen', 'mo_occ'
     }
 
     def __init__(self, adc):
@@ -1971,6 +1974,7 @@ class RADCEE(radc.RADC):
         self._nvir = adc._nvir
         self._nmo = adc._nmo
         self.mo_coeff = adc.mo_coeff
+        self.mo_coeff_hf = adc.mo_coeff_hf
         self.mo_energy = adc.mo_energy
         self.nmo = adc._nmo
         self.dip_mom = adc.dip_mom
@@ -1984,6 +1988,9 @@ class RADCEE(radc.RADC):
         self.X = None
         self.evec_print_tol = adc.evec_print_tol
         self.spec_factor_print_tol = adc.spec_factor_print_tol
+        self.frozen = adc.frozen
+        self.mo_occ = adc.mo_occ
+        self._adc_es = self
 
     kernel = radc.kernel
     get_imds = get_imds
@@ -1993,7 +2000,7 @@ class RADCEE(radc.RADC):
 
     renormalize_eigenvectors = renormalize_eigenvectors
     analyze = analyze
-    make_rdm1 = make_rdm1
+    _make_rdm1 = make_rdm1
     analyze_eigenvector = analyze_eigenvector
     analyze_spec_factor = analyze_spec_factor
     get_properties = get_properties
