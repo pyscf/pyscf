@@ -2175,6 +2175,8 @@ def _length_in_au(unit):
             unit = 1.
         else:
             unit = 1/param.BOHR
+    else:
+        unit = 1./unit
     return unit
 
 #
