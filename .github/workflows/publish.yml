@@ -71,7 +71,7 @@ jobs:
 
   release-pypi-macos-x86:
     name: Build wheels for macos Intel chips
-    runs-on: macos-13
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -152,20 +152,13 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
-      - name: Setup conda
-        uses: s-weigand/setup-conda@v1.2.4
-        with:
-          update-conda: true
-          conda-channels: conda-forge
-      - run: conda --version
-      - run: which python
       - name: Publish to conda
         run: |
-          export CMAKE_BUILD_PARALLEL_LEVEL=4
-          export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_TOKEN }}
-          conda install -y anaconda-client conda-build
-          conda config --set anaconda_upload yes
-          conda build --output-folder . conda
+            docker run --rm -v ${{ github.workspace }}:/src/pyscf \
+            -e CMAKE_BUILD_PARALLEL_LEVEL=4 \
+            -e ANACONDA_API_TOKEN=${{ secrets.ANACONDA_TOKEN }} \
+            continuumio/miniconda3:25.3.1-1 \
+            bash -c "conda install -y anaconda-client conda-build && conda config --set anaconda_upload yes && cd /src/pyscf && conda build --output-folder . conda"
 
   release-docker:
     runs-on: ubuntu-latest
