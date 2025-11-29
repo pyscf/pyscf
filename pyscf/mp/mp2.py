@@ -521,7 +521,11 @@ class MP2Base(lib.StreamObject):
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
 
-        if mo_coeff is None: mo_coeff = mf.mo_coeff
+        if mo_coeff is None:
+            mo_coeff = mf.mo_coeff
+            if mo_coeff is None:
+                mf.run()
+                mo_coeff = mf.mo_coeff
         if mo_occ is None: mo_occ = mf.mo_occ
 
         self.mol = mf.mol

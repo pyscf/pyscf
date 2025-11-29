@@ -720,6 +720,8 @@ class TDBase(lib.StreamObject):
         self.verbose = mf.verbose
         self.stdout = mf.stdout
         self.mol = mf.mol
+        if mf.mo_coeff is None:
+            mf.run()
         self._scf = mf
         self.max_memory = mf.max_memory
         self.chkfile = mf.chkfile
@@ -776,11 +778,6 @@ class TDBase(lib.StreamObject):
         if not self._scf.converged:
             log.warn('Ground state SCF is not converged')
         log.info('\n')
-
-    def check_sanity(self):
-        if self._scf.mo_coeff is None:
-            raise RuntimeError('SCF object is not initialized')
-        lib.StreamObject.check_sanity(self)
 
     def reset(self, mol=None):
         if mol is not None:

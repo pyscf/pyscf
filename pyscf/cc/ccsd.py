@@ -953,7 +953,11 @@ class CCSDBase(lib.StreamObject):
                 'CCSD calculation should be initialized with HF object.\n'
                 'DFT can be converted to HF object with the mf.to_hf() method\n')
 
-        if mo_coeff is None: mo_coeff = mf.mo_coeff
+        if mo_coeff is None:
+            mo_coeff = mf.mo_coeff
+            if mo_coeff is None:
+                mf.run()
+                mo_coeff = mf.mo_coeff
         if mo_occ is None: mo_occ = mf.mo_occ
 
         self.mol = mf.mol

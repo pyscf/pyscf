@@ -813,6 +813,8 @@ class CASBase(lib.StreamObject):
         self.e_tot = 0
         self.e_cas = None
         self.ci = None
+        if mf.mo_coeff is None:
+            mf.run()
         self.mo_coeff = mf.mo_coeff
         self.mo_energy = mf.mo_energy
         self.mo_occ = None
