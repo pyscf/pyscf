@@ -13,6 +13,7 @@
 # limitations under the License.
 #
 # Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
+#         Ning-Yuan Chen <cny003@outlook.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
@@ -24,7 +25,7 @@ from pyscf import scf
 from pyscf import adc
 
 def setUpModule():
-    global mol, mf, myadc
+    global mol, mf, myadc, myadc_fr
     mol = gto.Mole()
     r = 0.957492
     x = r * math.sin(104.468205 * math.pi/(2 * 180.0))
@@ -44,10 +45,13 @@ def setUpModule():
     myadc = adc.ADC(mf)
     myadc.conv_tol = 1e-12
     myadc.tol_residual = 1e-6
+    myadc_fr = adc.ADC(mf,frozen=1)
+    myadc_fr.conv_tol = 1e-12
+    myadc_fr.tol_residual = 1e-6
 
 def tearDownModule():
-    global mol, mf, myadc
-    del mol, mf, myadc
+    global mol, mf, myadc, myadc_fr
+    del mol, mf, myadc, myadc_fr
 
 def rdms_test(dm):
     r2_int = mol.intor('int1e_r2')
@@ -134,6 +138,35 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(rdms_test(dm1_exc[0]), 14.865794062106032, 6)
         self.assertAlmostEqual(rdms_test(dm1_exc[1]), 14.750656672998344, 6)
         self.assertAlmostEqual(rdms_test(dm1_exc[2]), 14.508101917384584, 6)
+
+    def test_ip_adc3_frozen(self):
+        myadc_fr.method = "adc(3)"
+        e, t_amp1, t_amp2 = myadc_fr.kernel_gs()
+        self.assertAlmostEqual(e, -0.2086469399105177, 6)
+
+        dm1_gs = myadc_fr.make_ref_rdm1()
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 19.04384526031426, 6)
+
+        myadcip_fr = adc.radc_ip.RADCIP(myadc_fr)
+        e,v,p,x = myadcip_fr.kernel(nroots=4)
+        myadcip_fr.analyze()
+
+        self.assertAlmostEqual(e[0], 0.44800668424168, 6)
+        self.assertAlmostEqual(e[1], 0.53153771640387, 6)
+        self.assertAlmostEqual(e[2], 0.68490751867029, 6)
+        self.assertAlmostEqual(e[3], 1.10909800938983, 6)
+
+        self.assertAlmostEqual(p[0], 1.86821936670658, 6)
+        self.assertAlmostEqual(p[1], 1.87197540965746, 6)
+        self.assertAlmostEqual(p[2], 1.88815422801761, 6)
+        self.assertAlmostEqual(p[3], 0.16535921260158, 6)
+
+        dm1_exc = myadcip_fr.make_rdm1()
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 14.86624286213650, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 14.75089237761041, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 14.50839928341921, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[3]), 21.67690885835218, 6)
 
 if __name__ == "__main__":
     print("IP calculations for different ADC methods for water molecule")
