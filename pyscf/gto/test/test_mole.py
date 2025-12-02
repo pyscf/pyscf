@@ -296,6 +296,10 @@ C    SP
                     basis = {8: 'ccpvdz'})
         self.assertEqual(mol.nao_nr(), 14)
 
+        mol = gto.M(atom = '''O 0 0 0; 1 0 1 0; H 0 0 1''',
+                    basis = {8: 'def2-SVP'})
+        self.assertEqual(mol.nao_nr(), 14)
+
         mol = gto.M(atom = '''O 0 0 0; H:1 0 1 0; H@2 0 0 1''',
                     basis = {'O': 'ccpvdz', 'H:1': 'sto3g', 'H': 'unc-iglo3'})
         self.assertEqual(mol.nao_nr(), 32)
