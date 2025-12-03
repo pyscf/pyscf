@@ -3933,6 +3933,10 @@ class Mole(MoleBase):
         cell.build(False, False)
         return cell
 
+    def to_gpu(self):
+        from gpu4pyscf.gto.mole import Mole
+        return Mole.from_cpu(self)
+
 def _parse_default_basis(basis, uniq_atoms):
     if isinstance(basis, (str, tuple, list)):
         # default basis for all atoms
