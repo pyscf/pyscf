@@ -203,12 +203,12 @@ class _SGXHF:
             try:
                 will_reset = False
                 self._grids_reset = False
-                if self._nsteps_direct == 0:
-                    will_reset = True
-                elif sgx.grids_level_f != sgx.grids_level_i \
+                if sgx.grids_level_f != sgx.grids_level_i \
                         and numpy.linalg.norm(dm - dm_last) < sgx.grids_switch_thrd \
                         and self._in_scf:
                     self._grids_reset = True
+                    will_reset = True
+                elif self._nsteps_direct == 0:
                     will_reset = True
                 if will_reset:
                     sgx._full_dm = None
@@ -279,7 +279,7 @@ class SGX(lib.StreamObject):
     _keys = {
         'mol', 'grids_thrd', 'grids_level_i', 'grids_level_f',
         'grids_switch_thrd', 'dfj', 'direct_j', 'debug', 'grids',
-        'blockdim', 'auxmol', 'use_dm_screening', 'sgx_tol_potential',
+        'blockdim', 'auxmol', 'sgx_tol_potential',
         'sgx_tol_energy', 'use_opt_grids', 'fit_ovlp'
     }
 
@@ -288,40 +288,63 @@ class SGX(lib.StreamObject):
         self.stdout = mol.stdout
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
-        self.grids_thrd = 1e-13
-        self.grids_level_i = 1 # initial grids level
-        self.grids_level_f = 2 # final grids level
-        self.use_opt_grids = True # use optimized grids for SGX based on ORCA
-        # whether to numerically fit overlap matrix to improve numerical precision
+
+        # BASIC SGX SETTINGS
+        # Remove grids with small weights using this threshold.
+        self.grids_thrd = 1e-10
+        # initial grids level
+        self.grids_level_i = 2
+        # final grids level
+        self.grids_level_f = 2
+        # use optimized grids for SGX based on ORCA
+        self.use_opt_grids = True
+        # numerically fit overlap matrix to improve numerical precision
         self.fit_ovlp = True
-        # perform a symmetric overlap fit when optk is True.
-        # When fit_ovlp=True, _symm_ovlp_fit=True is required
-        # for exact analytical gradients.
-        self._symm_ovlp_fit = True
+        # threshold of density matrix convergence to switch from the coarse
+        # initial grid (grids_level_i) to the denser final grid (grids_level_f)
+        # Ignored if grids_level_i == grids_level_f
         self.grids_switch_thrd = 0.03
         # compute J matrix using DF and K matrix using SGX. It's identical to
         # the RIJCOSX method in ORCA
-        self.dfj = False
+        self.dfj = True
+
+        # OPTIMIZED SGX-K SETTINGS
         # Turn on optimization for evaluating the K-matrix with SGX.
         # Only has an effect is dfj is True
-        self.optk = False
-        # For debugging only. Run the calculation with direct integral J-matrix.
-        self.direct_j = False
-        self._auxbasis = auxbasis
-
-        self.use_dm_screening = False
-        # TODO set this to standard direct_scf_tol by default
-        self.sgx_tol_potential = 1e-13
-        self.sgx_tol_energy = 1e-13
-
-        # debug=True generates a dense tensor of the Coulomb integrals at each
-        # grids. debug=False utilizes the sparsity of the integral tensor and
-        # contracts the sparse tensor and density matrices on the fly.
-        self.debug = False
+        self.optk = True
+        # DM screening error tolerance for energy. "auto" means set
+        # automatically based on direct_scf_tol.
+        self.sgx_tol_energy = "auto"
+        # DM screening error tolerance for the potential. "auto" means
+        # set to sqrt(sgx_tol_energy), or sqrt(direct_scf_tol)
+        # if sgx_tol_energy is None.
+        self.sgx_tol_potential = "auto"
+        # Note: If (sgx_tol_energy, sgx_tol_potential) is
+        #   (float/"auto", float/"auto"): Bound energy and potential error
+        #   (float/"auto", None): Bound energy error only
+        #   (None, float/"auto"): Bound potential error only
+        #   (None, None): Turn off DM screening (no energy or potential error)
+        # It is recommended to bound both energy and potential error
+        # for numerical stability
 
         self.grids = None
         self.blockdim = 1200
         self.auxmol = None
+
+        # DEBUGGING SETTINGS
+        # debug=True generates a dense tensor of the Coulomb integrals at each
+        # grid. debug=False utilizes the sparsity of the integral tensor and
+        # contracts the sparse tensor and density matrices on the fly.
+        self.debug = False
+        # Run the calculation with direct integral J-matrix.
+        self.direct_j = False
+        # perform a symmetric overlap fit when optk is True.
+        # When fit_ovlp=True, _symm_ovlp_fit=True is required
+        # for exact analytical gradients.
+        self._symm_ovlp_fit = True
+
+        # private attributes
+        self._auxbasis = auxbasis
         self._vjopt = None
         self._opt = None
         self._rsh_df = {}  # Range separated Coulomb DF objects

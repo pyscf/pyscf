@@ -28,18 +28,9 @@ based on grid.(see Friesner, R. A. Chem. Phys. Lett. 1985, 116, 39)
 Minimizing numerical errors using overlap fitting correction.(see
 Lzsak, R. et. al. J. Chem. Phys. 2011, 135, 144105)
 Grid screening for weighted AO value and DktXkg.
-Two SCF steps: coarse grid then fine grid. There are 5 parameters can be changed:
-# threshold for Xg and Fg screening
-gthrd = 1e-10
-# initial and final grids level
-grdlvl_i = 0
-grdlvl_f = 1
-# norm_ddm threshold for grids change
-thrd_nddm = 0.03
-# set block size to adapt memory
-sblk = 200
+Two SCF steps: coarse grid then fine grid.
 
-Set mf.direct_scf = False because no traditional 2e integrals
+See the docs of pyscf.sgx.sgx for details on adjustable parameters.
 '''
 
 
@@ -58,9 +49,8 @@ from pyscf.data.radii import BRAGG
 from pyscf.dft.radi import treutler_ahlrichs
 from pyscf.dft.gen_grid import LEBEDEV_ORDER, SGX_ANG_MAPPING, \
                                sgx_prune, becke_lko
-from pyscf.dft.numint import eval_ao, BLKSIZE, NBINS, libdft, \
-    SWITCH_SIZE, _scale_ao, _dot_ao_ao_sparse, _dot_ao_dm_sparse, \
-    _scale_ao_sparse
+from pyscf.dft.numint import BLKSIZE, NBINS, libdft, \
+    SWITCH_SIZE, _scale_ao, _dot_ao_ao_sparse
 import time
 
 
@@ -90,13 +80,9 @@ def _sgxdot_ao_dm(ao, dms, non0tab, shls_slice, ao_loc, out=None):
         ao = lib.transpose(ao)
     if ao.dtype == dms.dtype == numpy.double:
         fn = libdft.VXCsgx_ao_dm
-        # fn = libdft.VXCdot_ao_dm
     else:
-        # TODO implement this
+        # TODO implement complex dot
         raise NotImplementedError("Complex sgxdot")
-        fn = libdft.VXCzdot_ao_dm
-        ao = numpy.asarray(ao, numpy.complex128)
-        dms = numpy.asarray(dms, numpy.complex128)
 
     dms = numpy.asarray(dms, order='C')
     for i in range(len(dms)):
@@ -117,25 +103,21 @@ def _sgxdot_ao_dm_sparse(ao, dms, mask, pair_mask, ao_loc, out=None):
     '''return numpy.dot(ao, dms)'''
     ngrids, nao = ao.shape
     nbas = len(ao_loc) - 1
+    if pair_mask is None:
+        return _sgxdot_ao_dm(ao, dms, mask, (0, nbas), ao_loc, out=out)
     vms = numpy.ndarray((dms.shape[0], dms.shape[2], ngrids), dtype=ao.dtype, order='C', buffer=out)
     if (nao < SWITCH_SIZE or mask is None or ao_loc is None):
         for i in range(len(dms)):
             lib.dot(dms[i].T, ao.T, c=vms[i])
         return vms
-    if pair_mask is None:
-        return _sgxdot_ao_dm(ao, dms, mask, (0, nbas), ao_loc, out=out)
 
     if not ao.flags.f_contiguous:
         ao = lib.transpose(ao)
     if ao.dtype == dms.dtype == numpy.double:
         fn = _vhf.libcvhf.SGXdot_ao_dm_sparse
-        # fn = libdft.VXCdot_ao_dm
     else:
-        # TODO implement this
+        # TODO implement complex dot
         raise NotImplementedError("Complex sgxdot")
-        fn = libdft.VXCzdot_ao_dm
-        ao = numpy.asarray(ao, numpy.complex128)
-        dms = numpy.asarray(dms, numpy.complex128)
 
     dms = numpy.asarray(dms, order='C')
     for i in range(len(dms)):
@@ -180,11 +162,8 @@ def _sgxdot_ao_gv(ao, gv, non0tab, shls_slice, ao_loc, out=None):
     if ao.dtype == gv.dtype == numpy.double:
         fn = libdft.VXCsgx_ao_ao
     else:
-        # TODO implement this
+        # TODO implement complex dot
         raise NotImplementedError("Complex sgxdot")
-        fn = libdft.VXCzdot_ao_ao
-        ao = numpy.asarray(ao, numpy.complex128)
-        gv = numpy.asarray(gv, numpy.complex128)
 
     vv = numpy.empty(outshape, dtype=ao.dtype, order='C')
     for i in range(len(gv)):
@@ -276,8 +255,8 @@ class SGXData:
                  fit_ovlp=True, sym_ovlp=False,
                  max_memory=2000, hermi=0,
                  bound_algo="sample_pos",
-                 sgxopt=None, etol=1e-10,
-                 vtol=1e-5):
+                 sgxopt=None, etol=None, vtol=None,
+                 direct_scf_tol=0.0):
         """
         bound_algo can be
             "ovlp": Screen integrals based on overlap of
@@ -286,7 +265,7 @@ class SGXData:
             "sample": Provide an approximate but accurate
                 upper bound for the ESP integrals by sampling
                 _nquad points for each shell pair.
-            "sample_pos": Same as sample, the but the ESP
+            "sample_pos": Same as sample, but the ESP
                 bounds are position-dependent, which gives
                 a slight speed increase for large systems
                 and a significant speed increase for
@@ -300,6 +279,14 @@ class SGXData:
         self.sym_ovlp = sym_ovlp
         self.max_memory = max_memory
         self.hermi = hermi
+        self._itol = direct_scf_tol
+        if etol == "auto":
+            etol = direct_scf_tol
+        if vtol == "auto":
+            if etol is None:
+                vtol = direct_scf_tol**0.5
+            else:
+                vtol = etol**0.5
         self._etol = etol
         self._screen_energy = etol is not None
         self._vtol = vtol
@@ -361,7 +348,10 @@ class SGXData:
         self._this.nbas = self.mol.nbas
         self._this.ngrids = self.grids.weights.size
         self._this.ao_loc = _arr2c(self._ao_loc)
-        self._this.etol = self._etol_per_sgx_block
+        if self._screen_energy:
+            self._this.etol = self._etol_per_sgx_block
+        else:
+            self._this.etol = 1e10
         self._this.vtol = None
         self._this.wt = None  # set in each cycle
         self._this.mbar_ij = _arr2c(self._mbar_ij)
@@ -400,17 +390,23 @@ class SGXData:
             shl_screen = "SGXscreen_shells_simple"
         self._this.fscreen_grid = _vhf._fpointer(grid_screen)
         self._this.fscreen_shl = _vhf._fpointer(shl_screen)
-        self._this.direct_scf_tol = 1e-13
+        self._this.direct_scf_tol = self._itol
         self._this.buf_size_bytes = bsb
         self._this.shl_info_size_bytes = sisb
         # TODO need to make this modifiable
-        self._intor = "int1e_grids_sph"
+        if self.mol.cart:
+            self._intor = "int1e_grids_cart"
+        else:
+            self._intor = "int1e_grids_sph"
 
     def set_block(self, b0, weights, full_f_bi=None):
         self._wt = weights
         self._this.ngrids = weights.size
         self._this.wt = _arr2c(weights)
-        self._this.vtol = _arr2c(self._vtol_arr[b0:])
+        if self._screen_potential or self._screen_energy:
+            self._this.vtol = _arr2c(self._vtol_arr[b0:])
+        else:
+            self._this.vtol = None
         if self.bound_algo == "sample_pos":
             self._this.mbar_bi = _arr2c(self._mbar_bi[b0:])
         else:
@@ -464,7 +460,7 @@ class SGXData:
             pair_mask = None
         return nbins, screen_index, pair_mask, ao_loc, blksize
 
-    def _get_diagonal_ints(self):
+    def _get_diagonal_ints(self, sgxopt):
         """
         Compute the maximum of the ESP integrals within each block
         for the diagonal shell pairs (i.e. ish == jsh).
@@ -475,11 +471,6 @@ class SGXData:
             mol.atom_coords(unit='Bohr')
         )
         ao_loc = mol.ao_loc_nr().astype(numpy.int32)
-        if self._opt is None:
-            from pyscf.sgx.sgx import _make_opt
-            sgxopt = _make_opt(mol, False, 1e-16)
-        else:
-            sgxopt = self._opt
         cintor = _vhf._fpointer(sgxopt._intor)
         atm, bas, env = mol._atm, mol._bas, mol._env
         nrad = self._nrad
@@ -521,7 +512,7 @@ class SGXData:
         ao_loc = mol.ao_loc_nr().astype(numpy.int32)
         if self._opt is None:
             from pyscf.sgx.sgx import _make_opt
-            sgxopt = _make_opt(mol, False, 1e-16)
+            sgxopt = _make_opt(mol, False, self._itol)
         else:
             sgxopt = self._opt
         if self.bound_algo == "ovlp":
@@ -532,7 +523,7 @@ class SGXData:
                 ctypes.c_int(mol.nbas), env.ctypes,
             )
         else:
-            vals, widths, norms = self._get_diagonal_ints()
+            vals, widths, norms = self._get_diagonal_ints(sgxopt)
             drv = _vhf.libcvhf.SGXsample_ints
             cintor = _vhf._fpointer(sgxopt._intor)
             atm, bas, env = mol._atm, mol._bas, mol._env
@@ -568,7 +559,8 @@ class SGXData:
                 rs.ctypes, ao_loc.ctypes, sgxopt._cintopt,
                 atm.ctypes, ctypes.c_int(mol.natm), bas.ctypes,
                 ctypes.c_int(mol.nbas), env.ctypes, ctypes.c_int(env.size),
-                widths.ctypes, norms.ctypes, vals.ctypes
+                widths.ctypes, norms.ctypes, vals.ctypes,
+                ctypes.c_double(self._itol)
             )
             t1 = time.monotonic()
             print("SAMPLE TIME", t1 - t0)
@@ -578,12 +570,12 @@ class SGXData:
         self._opt.q_cond = mbar_ij
         if self.bound_algo == "sample_pos":
             self._rbar_ij = numpy.maximum(rbar_ij, rbar_ij.T)
-            self._get_pos_dpt_ints(widths, norms, vals, self._nrad, atm_coords)
+            self._get_pos_dpt_ints(sgxopt, widths, norms, vals, self._nrad, atm_coords)
         else:
             self._rbar_ij = None
             self._mbar_bi = None
     
-    def _get_pos_dpt_ints(self, widths, norms, vals, nrad, atm_coords):
+    def _get_pos_dpt_ints(self, sgxopt, widths, norms, vals, nrad, atm_coords):
         """
         Calculate position-dependent bounds on the ESP integrals.
         Gives a slight speedup to full exchange and a large
@@ -593,11 +585,6 @@ class SGXData:
         mol = self.mol
         grid_coords = self.grids.coords
         atm, bas, env = mol._atm, mol._bas, mol._env
-        if self._opt is None:
-            from pyscf.sgx.sgx import _make_opt
-            sgxopt = _make_opt(mol, False, 1e-16)
-        else:
-            sgxopt = self._opt
         cintor = _vhf._fpointer(sgxopt._intor)
         ngrids = grid_coords.shape[0]
         nblk = (ngrids + SGX_BLKSIZE - 1) // SGX_BLKSIZE
@@ -778,11 +765,17 @@ class SGXData:
             self._vtol_arr = self._vtol * self._xsgx_b
             print(t3 - t2)
         else:
+            self._xni_b = numpy.empty(nblk_ni)
+            self._xni_b[:] = numpy.inf
             self._vtol_arr = numpy.empty(nblk)
             self._vtol_arr[:] = numpy.inf
         self._buf = xni_bi
-        self._etol_per_sgx_block = self._etol / nblk
-        self._etol_per_ni_block = self._etol / nblk_ni
+        if self._screen_energy:
+            self._etol_per_sgx_block = self._etol / nblk
+            self._etol_per_ni_block = self._etol / nblk_ni
+        else:
+            self._etol_per_sgx_block = 1e10
+            self._etol_per_ni_block = 1e10
         tc = logger.perf_counter()
         print("SETUP TOOK", tc - ta, t2 - ta, tc - t2)
 
@@ -797,7 +790,8 @@ class SGXData:
             self._build_dm_screen()
         self._setup_opt()
 
-    def get_dm_threshold_matrix(self, dm, dv, de, full_dm_ij=None):
+    def get_dm_threshold_matrix(self, dm, full_dm_ij=None):
+        de, dv = self._etol, self._vtol
         mol = self.mol
         ao_loc = mol.ao_loc_nr()
         if dm.ndim == 3:
@@ -855,7 +849,8 @@ class SGXData:
         )
         return out
 
-    def get_g_threshold(self, f_ug, g_ug, i0, dv, de, wt, full_f_bi=None):
+    def get_g_threshold(self, f_ug, g_ug, i0, wt, full_f_bi=None):
+        de, dv = self._etol, self._vtol
         t0 = time.monotonic()
         b0 = i0 // BLKSIZE
         ao_loc = self._ao_loc
@@ -865,12 +860,13 @@ class SGXData:
         assert g_ug.shape == f_ug.shape
         assert nao == ao_loc[-1]
         b1 = (ngrids + BLKSIZE - 1) // BLKSIZE + b0
-        thresh = dv * self._xni_b[b0:b1]
+        if self._screen_potential:
+            thresh = dv * self._xni_b[b0:b1]
+        else:
+            thresh = numpy.empty(b1-b0, dtype=numpy.float64)
+            thresh[:] = numpy.inf
         fullf_ptr = None if full_f_bi is None else full_f_bi.ctypes
         if self._screen_energy:
-            if not self._screen_potential:
-                # no screening on potential
-                thresh[:] = numpy.inf
             cond = numpy.empty((b1 - b0, self.mol.nbas), dtype=numpy.uint8)
             _vhf.libcvhf.SGXbuild_gv_threshold(
                 f_ug.ctypes,
@@ -1015,6 +1011,7 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
             fit_ovlp=sgx.fit_ovlp,
             sym_ovlp=sgx._symm_ovlp_fit,
             max_memory=sgx.max_memory,
+            direct_scf_tol=direct_scf_tol,
             vtol=sgx.sgx_tol_potential,
             etol=sgx.sgx_tol_energy,
             hermi=1,
@@ -1022,14 +1019,13 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
             sgxopt=sgx._opt,
         )
         sgx._pjs_data.build()
+    sgxdat = sgx._pjs_data
     loop_data = sgx._pjs_data.get_loop_data(nset=nset, with_pair_mask=True)
     nbins, screen_index, pair_mask, ao_loc, blksize = loop_data
     proj = sgx._pjs_data._overlap_correction_matrix
     proj_dm = lib.einsum('ki,xij->xkj', proj, dms)
-    if sgx.use_dm_screening:
-        dm_mask = sgx._pjs_data.get_dm_threshold_matrix(
-            dms, sgx.sgx_tol_potential, sgx.sgx_tol_energy
-        )
+    if sgxdat.use_dm_screening:
+        dm_mask = sgx._pjs_data.get_dm_threshold_matrix(dms)
         if sgx._full_dm is None:
             full_dm_ij = None
         else:
@@ -1044,14 +1040,12 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
         dm_mask = None
         full_dm_ij = None
 
-    # TODO dm screening can be False
-    batch_k = _gen_k_direct(mol, 's2', direct_scf_tol, sgx._pjs_data,
-                            use_dm_screening=True)
+    batch_k = _gen_k_direct(mol, 's2', direct_scf_tol, sgx._pjs_data)
 
     t_setup = logger.perf_counter()
     print("AFTER_SETUP", t_setup - t0[1])
 
-    ao = numpy.empty(ngrids * nao)  # TODO None
+    ao = None
     fg = None
     t_ao = 0
     t_scale = 0
@@ -1076,19 +1070,14 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
             assert full_fni_bi.flags.c_contiguous
             full_fsgx_bi = sgx._pjs_data.reduce_mask_ni2sgx(full_fni_bi)
         tc = logger.perf_counter()
-        if sgx.use_dm_screening:
-            fg = _sgxdot_ao_dm_sparse(ao, proj_dm, mask, dm_mask, ao_loc, out=fg)
-        else:
-            # equivalent to fg = lib.einsum('xij,ig->xjg', proj_dm, wao.T)
-            fg = _sgxdot_ao_dm(ao, proj_dm, mask, shls_slice, ao_loc, out=fg)
+        fg = _sgxdot_ao_dm_sparse(ao, proj_dm, mask, dm_mask, ao_loc, out=fg)
         te = logger.perf_counter()
         tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
         gv = batch_k(mol, coords, fg, weights, i0 // SGX_BLKSIZE, full_fsgx_bi)
         tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
-        if sgx.use_dm_screening:
+        if sgxdat.use_dm_screening:
             mask2 = sgx._pjs_data.get_g_threshold(
-                fg, gv, i0, sgx.sgx_tol_potential, sgx.sgx_tol_energy, weights,
-                full_f_bi=full_fni_bi
+                fg, gv, i0, weights, full_f_bi=full_fni_bi
             )
         else:
             mask2 = None
@@ -1322,7 +1311,7 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol,
 
 
 def _gen_k_direct(mol, aosym, direct_scf_tol,
-                  sgxopt=None, grad=False, use_dm_screening=False):
+                  sgxopt=None, grad=False):
     '''K-only ontraction between sgX Coulomb integrals and density matrices
     K: einsum('gtv,xgt->xgv', gbn, fg)
     '''
@@ -1350,10 +1339,7 @@ def _gen_k_direct(mol, aosym, direct_scf_tol,
         ncomp = 1
     nao = mol.nao
     cintor = _vhf._fpointer(intor_name)
-    if use_dm_screening:
-        drv = _vhf.libcvhf.SGXnr_direct_k_drv
-    else:
-        drv = _vhf.libcvhf.SGXnr_direct_drv
+    drv = _vhf.libcvhf.SGXnr_direct_k_drv
 
     def k_part(mol, grid_coords, fg, weights=None, b0=None,
                full_f_bi=None):
@@ -1385,32 +1371,20 @@ def _gen_k_direct(mol, aosym, direct_scf_tol,
         dmsptr = (ctypes.c_void_p*(n_dm))(*dmsptr)
         vjkptr = (ctypes.c_void_p*(n_dm))(*vjkptr)
 
-        if use_dm_screening:
-            assert weights is not None
-            assert b0 is not None
-            sgxopt.set_block(b0, weights, full_f_bi)
-            drv(
-                cintor, fjk, dmsptr, vjkptr, n_dm, ncomp,
-                (ctypes.c_int*4)(*shls_slice),
-                ao_loc.ctypes.data_as(ctypes.c_void_p),
-                _cintopt, ctypes.byref(sgxopt._this),
-                atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
-                bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-                env.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(2 if aosym == 's2' else 1),
-            )
-            sgxopt.unset_block()
-        else:
-            drv(
-                cintor, fjk, dmsptr, vjkptr, n_dm, ncomp,
-                (ctypes.c_int*4)(*shls_slice),
-                ao_loc.ctypes.data_as(ctypes.c_void_p),
-                sgxopt._cintopt, ctypes.byref(sgxopt._this),
-                atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
-                bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-                env.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(2 if aosym == 's2' else 1),
-            )
+        assert weights is not None
+        assert b0 is not None
+        sgxopt.set_block(b0, weights, full_f_bi)
+        drv(
+            cintor, fjk, dmsptr, vjkptr, n_dm, ncomp,
+            (ctypes.c_int*4)(*shls_slice),
+            ao_loc.ctypes.data_as(ctypes.c_void_p),
+            _cintopt, ctypes.byref(sgxopt._this),
+            atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
+            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
+            env.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(2 if aosym == 's2' else 1),
+        )
+        sgxopt.unset_block()
         return vk
     return k_part
 

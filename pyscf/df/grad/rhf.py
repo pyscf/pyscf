@@ -22,7 +22,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import time
 import numpy
 import ctypes
 import scipy.linalg
@@ -68,8 +67,23 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True,
             is set to ED.
     '''
     assert (with_j or with_k)
+    if (
+        with_k
+        and hasattr(mf_grad.base, "only_dfj")
+        and mf_grad.base.only_dfj
+    ):
+        if with_j:
+            vj = get_j(mf_grad, mol=mol, dm=dm, hermi=hermi)
+            vkaux = numpy.zeros_like(vj.aux)
+        else:
+            vj = None
+            if mol is None: mol = mf_grad.mol
+            vkaux = numpy.zeros((1, 1, mol.natm, 3))
+        vk = rhf_grad.get_k(mol, dm)
+        vk = lib.tag_array(vk, aux=vkaux)
+        return vj, vk
     if not with_k:
-        return get_j (mf_grad, mol=mol, dm=dm, hermi=hermi), None
+        return get_j(mf_grad, mol=mol, dm=dm, hermi=hermi), None
     t0 = (logger.process_clock (), logger.perf_counter ())
     if mol is None: mol = mf_grad.mol
     if dm is None: dm = mf_grad.base.make_rdm1()
@@ -232,8 +246,6 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True,
     else: return None, vk
 
 def get_j(mf_grad, mol=None, dm=None, hermi=0):
-    import time
-    ta = logger.perf_counter ()
     if mol is None: mol = mf_grad.mol
     if dm is None: dm = mf_grad.base.make_rdm1()
     t0 = (logger.process_clock (), logger.perf_counter ())
@@ -266,7 +278,6 @@ def get_j(mf_grad, mol=None, dm=None, hermi=0):
     blksize = int(min(max(max_memory * .5e6/8 / (nao**2*3), 20), naux, 240))
     ao_ranges = balance_partition(aux_loc, blksize)
 
-    tb = logger.perf_counter ()
     # (i,j|P)
     rhoj = numpy.empty((nset,naux))
     for shl0, shl1, nL in ao_ranges:
@@ -280,7 +291,6 @@ def get_j(mf_grad, mol=None, dm=None, hermi=0):
     rhoj = scipy.linalg.solve(int2c, rhoj.T, assume_a='pos').T
     int2c = None
 
-    tc = logger.perf_counter ()
     # (d/dX i,j|P)
     vj = numpy.zeros((nset,3,nao,nao))
     _vj = vj.view()
@@ -294,7 +304,6 @@ def get_j(mf_grad, mol=None, dm=None, hermi=0):
             _vj[:, x] += lib.dot(rhoj[:, p0:p1], _int3c)
         int3c = None
     vj = numpy.ascontiguousarray(vj.transpose(0, 1, 3, 2))
-    td = logger.perf_counter ()
 
     if mf_grad.auxbasis_response:
         # (i,j|d/dX P)
@@ -319,10 +328,8 @@ def get_j(mf_grad, mol=None, dm=None, hermi=0):
         vj = lib.tag_array(-vj.reshape(out_shape), aux=numpy.array(vjaux))
     else:
         vj = -vj.reshape(out_shape)
-    te = logger.perf_counter ()
 
-    print("VJ TIMES", tb - ta, tc - tb, td - tc, te - td)
-    logger.timer (mf_grad, 'df vj', *t0)
+    logger.timer(mf_grad, 'df vj', *t0)
     return vj
 
 def _int3c_wrapper(mol, auxmol, intor, aosym):
