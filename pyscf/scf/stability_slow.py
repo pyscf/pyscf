@@ -288,18 +288,21 @@ def ghf_internal(mf, return_status=False, verbose=None):
         eri_mo_a+= lib.einsum('pqrs,pi,qj->ijrs', eri_ao, orbob.conj(), mob)
         eri_mo = lib.einsum('ijrs,rk,sl->ijkl', eri_mo_a, moa.conj(), moa)
         eri_mo+= lib.einsum('ijrs,rk,sl->ijkl', eri_mo_a, mob.conj(), mob)
+    # The orbital hessian is constructed as (ai|jb) in soscf/newton_ah.py
+    # (ai|jb) == iabj.conj()
     a += numpy.einsum('iabj->iajb', eri_mo[:nocc,nocc:,nocc:,:nocc].conj())
     a -= numpy.einsum('ijba->iajb', eri_mo[:nocc,:nocc,nocc:,nocc:].conj())
     b += numpy.einsum('iajb->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:].conj())
     b -= numpy.einsum('jaib->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:].conj())
 
-    a, b = numpy.reshape((a, b), (2, nocc*nvir, nocc*nvir))
+    a = a.reshape(nocc*nvir, nocc*nvir)
+    b = b.reshape(nocc*nvir, nocc*nvir)
     hessian = numpy.block([[a,b],[b.conj(),a.conj()]])
 
     # This factor is necessary to replicate the eigenvalues of ghf_stability
     hessian *= 2
 
-    e, v = numpy.linalg.eigh(hessian)
+    e, v = scipy.linalg.eigh(hessian)
     log.info('ghf_internal: lowest eigs of H = %s', e[:5])
 
     e = e[0]
