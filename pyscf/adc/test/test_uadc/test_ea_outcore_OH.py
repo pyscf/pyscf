@@ -13,6 +13,7 @@
 # limitations under the License.
 #
 # Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
+#         Ning-Yuan Chen <cny003@outlook.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
@@ -23,7 +24,7 @@ from pyscf import scf
 from pyscf import adc
 
 def setUpModule():
-    global mol, mf, myadc
+    global mol, mf, myadc, myadc_fr
     r = 0.969286393
     mol = gto.Mole()
     mol.atom = [
@@ -41,10 +42,13 @@ def setUpModule():
     myadc = adc.ADC(mf)
     myadc.conv_tol = 1e-12
     myadc.tol_residual = 1e-6
+    myadc_fr = adc.ADC(mf,frozen=(1,1))
+    myadc_fr.conv_tol = 1e-12
+    myadc_fr.tol_residual = 1e-6
 
 def tearDownModule():
-    global mol, mf, myadc
-    del mol, mf, myadc
+    global mol, mf, myadc, myadc_fr
+    del mol, mf, myadc, myadc_fr
 
 class KnownValues(unittest.TestCase):
 
@@ -102,6 +106,26 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 0.8722483551941809, 6)
         self.assertAlmostEqual(p[1], 0.9927117650068699, 6)
         self.assertAlmostEqual(p[2], 0.9766456031927034, 6)
+
+    def test_ea_adc3_high_cost_frozen(self):
+
+        myadc_fr.max_memory = 300
+        myadc_fr.incore_complete = False
+        myadc_fr.method = "adc(3)"
+        e, t_amp1, t_amp2 = myadc_fr.kernel_gs()
+        self.assertAlmostEqual(e, -0.17416890784191413, 6)
+
+        myadc_fr.method_type = "ea"
+        e,v,p,x = myadc_fr.kernel(nroots=3)
+        myadc_fr.analyze()
+
+        self.assertAlmostEqual(e[0], -0.0449624364309033, 6)
+        self.assertAlmostEqual(e[1],  0.0300414467534955, 6)
+        self.assertAlmostEqual(e[2],  0.03153991727098654, 6)
+
+        self.assertAlmostEqual(p[0], 0.8722200055138165, 6)
+        self.assertAlmostEqual(p[1], 0.9927113317116674, 6)
+        self.assertAlmostEqual(p[2], 0.9767596218115033, 6)
 
 if __name__ == "__main__":
     print("EA calculations for different ADC methods for open-shell molecule")

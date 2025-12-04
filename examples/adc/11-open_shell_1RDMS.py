@@ -10,20 +10,19 @@ from pyscf import lib
 import math
 
 #WATER
+r = 0.969286393
 mol = gto.Mole()
-r = 0.957492
-x = r * math.sin(104.468205 * math.pi/(2 * 180.0))
-y = r * math.cos(104.468205* math.pi/(2 * 180.0))
 mol.atom = [
-    ['O', (0., 0.    , 0)],
-    ['H', (0., -x, y)],
-    ['H', (0., x , y)],]
-mol.basis = {'H': 'cc-pVDZ',
-             'O': 'cc-pVDZ',}
+    ['O', (0., 0.    , -r/2   )],
+    ['H', (0., 0.    ,  r/2)],]
+mol.basis = {'O':'aug-cc-pvdz',
+                'H':'aug-cc-pvdz'}
 mol.verbose = 0
+mol.symmetry = False
+mol.spin  = 1
 mol.build()
 
-mf = scf.RHF(mol)
+mf = scf.UHF(mol)
 mf.verbose = 0
 mf.conv_tol = 1e-12
 mf.kernel()
@@ -41,31 +40,22 @@ def get_dip_moments(adc_var):
 
     hline = "-" * len(header)
     print(hline)
-    print('Calculating dipole moment components...')
-    dip_ints = -adc_var.mol.intor('int1e_r', comp = 3)
-
-    for i in range(dip_ints.shape[0]):
-        dip_ints[i] = np.dot(mf.mo_coeff.T, np.dot(dip_ints[i], mf.mo_coeff))
-
-    #NUCLEAR
-    print('Attaining nuclear charges and coordinates...')
-    charges = myadc.mol.atom_charges()
-    coords  = myadc.mol.atom_coords()
-    nucl_dip = lib.einsum('i,ix->x', charges, coords)
-
     #Calculate GS/REF 1RDM
     print('Calculating Reference 1RDM...')
     rdm1_ref = myadc.make_ref_rdm1()
 
     #Calculate EXCITED STATE 1RDM
     print('Calculating Excited State 1RDM...')
-    rdm1_exc = myadc.make_rdm1()
+    rdm1_exc_i = myadc.make_rdm1()
+    rdm1_exc = (np.array(rdm1_exc_i[0]),np.array(rdm1_exc_i[1]))
 
     #REF 1RDM CONT
-    ref_dip = lib.einsum("xqr,qr->x", dip_ints, rdm1_ref) + nucl_dip
+    ref_dip = lib.einsum("xqr,qr->x", adc_var.dip_mom[0], rdm1_ref[0]) + \
+                         lib.einsum("xqr,qr->x", adc_var.dip_mom[1], rdm1_ref[1]) + adc_var.dip_mom_nuc
 
     #EXS 1RDM CONT
-    exc_dip = lib.einsum("xqr,eqr->ex", dip_ints, rdm1_exc) + nucl_dip
+    exc_dip = lib.einsum("xqr,eqr->ex", adc_var.dip_mom[0], rdm1_exc[0]) + \
+                         lib.einsum("xqr,eqr->ex", adc_var.dip_mom[1], rdm1_exc[1]) + adc_var.dip_mom_nuc
 
     print(hline)
     print("Reference dipole moment (a.u.):")

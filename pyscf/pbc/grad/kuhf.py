@@ -24,7 +24,7 @@ import numpy as np
 from pyscf.lib import logger
 from pyscf.pbc.grad import krhf as krhf_grad
 from pyscf.pbc import gto
-
+from pyscf.pbc.gto.pseudo import pp_int
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     mf = mf_grad.base
@@ -63,6 +63,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
         de[k] -= np.einsum('kxij,kji->x', s1[:,:,p0:p1], dme0_sf[:,:,p0:p1]).real * 2
         de[k] /= nkpts
         de[k] += mf_grad.extra_force(ia, locals())
+    de += pp_int.vppnl_nuc_grad(cell, dm0_sf, kpts) / nkpts
 
     if log.verbose > logger.DEBUG:
         log.debug('gradients of electronic part')

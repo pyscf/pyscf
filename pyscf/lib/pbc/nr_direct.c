@@ -568,6 +568,7 @@ static void approx_bvk_rcond0(float *rcond, int ish0, int ish1, BVKEnvs *envs_bv
                 for (jseg = jseg0; jseg < jseg1; jseg++) {
                         jsh0 = seg2sh[jseg];
                         jsh1 = seg2sh[jseg+1];
+                        if (jsh0 >= jsh1) continue;
                         aj = env[bas(PTR_EXP, jsh0) + bas(NPRIM_OF, jsh0) - 1];
                         aij = ai + aj;
                         ci = ai / aij;

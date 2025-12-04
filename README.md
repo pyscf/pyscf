@@ -38,7 +38,7 @@ Python-based Simulations of Chemistry Framework
         pip install pyscf[dispersion]
 
 * More details of custom installation can be found in
-  [installation manual](http://pyscf.org/install.html#compiling-from-source-code)
+  [installation manual](http://pyscf.org/user/install.html#build-from-source)
 
 
 # Citing PySCF

@@ -52,7 +52,7 @@ def load_qcschema_molecule(qcschema_dict, to_Angstrom=False, xyz=False, mol_sele
         coords: x y z coordinates (in qcschema format)
         mol_select: specifies which molecule to load from qcschema format results.
                     Default loads 'molecule' from qcschema.
-                    Geometry optimizations or trajectories have mutliple geometries saved in the schema.
+                    Geometry optimizations or trajectories have multiple geometries saved in the schema.
                     mol_select = 1 (default) molecule from standard qcschema format
                                = 2 initial_molecule in GO or traj qcschema
                                = 3 final_molecule in GO or traj qcschema

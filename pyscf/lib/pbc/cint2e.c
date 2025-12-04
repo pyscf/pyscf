@@ -27,6 +27,12 @@
 #include "np_helper/np_helper.h"
 #include "pbc/pbc.h"
 
+#ifdef QCINT_VERSION
+int compiled_with_qcint = 1;
+#else
+int compiled_with_qcint = 0;
+#endif
+
 void CINTinit_int2e_EnvVars(CINTEnvVars *envs, int *ng, int *shls,
                             int *atm, int natm, int *bas, int nbas, double *env);
 extern void CINTgout2e();
@@ -167,7 +173,12 @@ int PBCint2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, int cutoff,
         if (envs_cint->opt == NULL) {
                 intor_loop = &CINT2e_loop_nopt;
         } else if (x_ctr[0] == 1 && x_ctr[1] == 1 && x_ctr[2] == 1 && x_ctr[3] == 1) {
+#ifdef QCINT_VERSION
+                // In qcint, CINT2e_1111_loop is problematic can cause seg fault.
+                intor_loop = &CINT2e_loop;
+#else
                 intor_loop = &CINT2e_1111_loop;
+#endif
         } else {
                 intor_loop = &CINT2e_loop;
         }

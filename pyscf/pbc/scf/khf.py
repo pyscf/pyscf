@@ -100,7 +100,7 @@ def get_j(mf, cell, dm_kpts, kpts, kpts_band=None):
 
     Kwargs:
         kpts_band : (k,3) ndarray
-            A list of arbitrary "band" k-points at which to evalute the matrix.
+            A list of arbitrary "band" k-points at which to evaluate the matrix.
 
     Returns:
         vj : (nkpts, nao, nao) ndarray
@@ -119,7 +119,7 @@ def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None, with_j=True, with_k=True,
 
     Kwargs:
         kpts_band : (3,) ndarray
-            A list of arbitrary "band" k-point at which to evalute the matrix.
+            A list of arbitrary "band" k-point at which to evaluate the matrix.
 
     Returns:
         vj : (nkpts, nao, nao) ndarray

@@ -16,6 +16,7 @@
 #         Samragni Banerjee <samragnibanerjee4@gmail.com>
 #         James Serna <jamcar456@gmail.com>
 #         Terrence Stahl <>
+#         Ning-Yuan Chen <cny003@outlook.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 
 '''
@@ -28,6 +29,7 @@ from pyscf.adc import radc
 from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
 from pyscf import symm
+from pyscf.data.nist import HARTREE2EV
 
 
 def get_imds(adc, eris=None):
@@ -785,7 +787,7 @@ def analyze_eigenvector(adc):
             iter_num += 1
 
         logger.info(adc, '%s | root %d | Energy (eV) = %12.8f | norm(1p)  = %6.4f | norm(1h2p) = %6.4f ',
-                    adc.method, I, adc.E[I]*27.2114, U1dotU1, U2dotU2)
+                    adc.method, I, adc.E[I]*HARTREE2EV, U1dotU1, U2dotU2)
 
         if singles_val:
             logger.info(adc, "\n1p block: ")
@@ -835,7 +837,7 @@ def analyze_spec_factor(adc):
             continue
 
         logger.info(adc, '%s | root %d | Energy (eV) = %12.8f \n',
-                adc.method, i, adc.E[i]*27.2114)
+                adc.method, i, adc.E[i]*HARTREE2EV)
         logger.info(adc, "     HF MO     Spec. Contribution     Orbital symmetry")
         logger.info(adc, "-----------------------------------------------------------")
 
@@ -923,7 +925,6 @@ def make_rdm1_eigenvectors(adc, L, R):
     R = np.array(R).ravel()
 
     t1_ccee = adc.t2[0][:]
-    t2_ce = adc.t1[0][:]
 
     nocc = adc._nocc
     nvir = adc._nvir
@@ -931,13 +932,19 @@ def make_rdm1_eigenvectors(adc, L, R):
     n_singles = nvir
     n_doubles = nvir * nvir * nocc
 
+    if adc.t1[0] is not None:
+        t2_ce = adc.t1[0]
+    else:
+        t2_ce = np.zeros((nocc, nvir))
+
+    occ_list = range(nocc)
+
     s1 = 0
     f1 = n_singles
     s2 = f1
     f2 = s2 + n_doubles
 
     rdm1  = np.zeros((nmo,nmo))
-    kd_oc = np.identity(nocc)
 
     L1 = L[s1:f1]
     L2 = L[s2:f2]
@@ -952,13 +959,13 @@ def make_rdm1_eigenvectors(adc, L, R):
 
 ############# block- ij
     ### 000 ###
-    rdm1[:nocc, :nocc] += 2 * einsum('a,a,IJ->IJ', L1, R1, kd_oc, optimize = einsum_type)
+    rdm1[occ_list, occ_list] += 2 * einsum('a,a->', L1, R1, optimize = einsum_type)
 
     ### 101 ###
     rdm1[:nocc, :nocc] -= 2 * einsum('Jab,Iab->IJ', L2, R2, optimize = einsum_type)
     rdm1[:nocc, :nocc] += 1 * einsum('Jab,Iba->IJ', L2, R2, optimize = einsum_type)
-    rdm1[:nocc, :nocc] += 4 * einsum('iab,iab,IJ->IJ', L2, R2, kd_oc, optimize = einsum_type)
-    rdm1[:nocc, :nocc] -= 2 * einsum('iab,iba,IJ->IJ', L2, R2, kd_oc, optimize = einsum_type)
+    rdm1[occ_list, occ_list] += 4 * einsum('iab,iab->', L2, R2, optimize = einsum_type)
+    rdm1[occ_list, occ_list] -= 2 * einsum('iab,iba->', L2, R2, optimize = einsum_type)
 
     ### 020 ###
     rdm1[:nocc, :nocc] -= 2 * einsum('a,a,Iibc,Jibc->IJ', L1, R1,
@@ -1038,10 +1045,14 @@ def make_rdm1_eigenvectors(adc, L, R):
 
     ####### ADC(3) SPIN ADAPTED EXCITED STATE OPDM WITH SQA ################
     if adc.method == "adc(3)":
-        ### Redudant Variables used for names from SQA
+        ### Redundant Variables used for names from SQA
         einsum_type = True
-        t3_ce = adc.t1[1][:]
         t2_ccee = adc.t2[1][:]
+
+        if adc.t1[1] is not None:
+            t3_ce = adc.t1[1]
+        else:
+            t3_ce = np.zeros((nocc, nvir))
 
 ############# block- ij
         # 120 #
@@ -1468,10 +1479,11 @@ class RADCEA(radc.RADC):
 
     _keys = {
         'tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff',
-        'mo_energy', 't1', 'max_space', 't2', 'max_cycle',
+        'mo_coeff_hf', 'mo_energy', 't1', 'max_space', 't2', 'max_cycle',
         'nmo', 'transform_integrals', 'with_df', 'compute_properties',
         'approx_trans_moments', 'E', 'U', 'P', 'X',
         'evec_print_tol', 'spec_factor_print_tol',
+        '_make_rdm1', 'frozen', 'mo_occ'
     }
 
     def __init__(self, adc):
@@ -1494,12 +1506,15 @@ class RADCEA(radc.RADC):
         self._nvir = adc._nvir
         self._nmo = adc._nmo
         self.mo_coeff = adc.mo_coeff
+        self.mo_coeff_hf = adc.mo_coeff_hf
         self.mo_energy = adc.mo_energy
         self.nmo = adc._nmo
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
         self.compute_properties = adc.compute_properties
         self.approx_trans_moments = adc.approx_trans_moments
+        self.frozen = adc.frozen
+        self.mo_occ = adc.mo_occ
 
         self.evec_print_tol = adc.evec_print_tol
         self.spec_factor_print_tol = adc.spec_factor_print_tol
@@ -1508,6 +1523,8 @@ class RADCEA(radc.RADC):
         self.U = adc.U
         self.P = adc.P
         self.X = adc.X
+
+        self._adc_es = self
 
     kernel = radc.kernel
     get_imds = get_imds
@@ -1521,21 +1538,36 @@ class RADCEA(radc.RADC):
     analyze_spec_factor = analyze_spec_factor
     analyze_eigenvector = analyze_eigenvector
     compute_dyson_mo = compute_dyson_mo
-    make_rdm1 = make_rdm1
+    _make_rdm1 = make_rdm1
 
-    def get_init_guess(self, nroots=1, diag=None, ascending=True):
-        if diag is None :
-            diag = self.get_diag()
-        idx = None
-        if ascending:
-            idx = np.argsort(diag)
+    def get_init_guess(self, nroots=1, diag=None, ascending=True, type=None, ini=None):
+        if (type=="read"):
+            logger.info(self, "obtain initial guess from input variable")
+            ncore = self._nocc
+            nextern = self._nvir
+            n_singles = nextern
+            n_doubles = ncore * nextern * nextern
+            dim = n_singles + n_doubles
+            if isinstance(ini, list):
+                g = np.array(ini)
+            else:
+                g = ini
+            if g.shape[0] != dim or g.shape[1] != nroots:
+                raise ValueError(f"Shape of guess should be ({dim},{nroots})")
+
         else:
-            idx = np.argsort(diag)[::-1]
-        guess = np.zeros((diag.shape[0], nroots))
-        min_shape = min(diag.shape[0], nroots)
-        guess[:min_shape,:min_shape] = np.identity(min_shape)
-        g = np.zeros((diag.shape[0], nroots))
-        g[idx] = guess.copy()
+            if diag is None :
+                diag = self.get_diag()
+            idx = None
+            if ascending:
+                idx = np.argsort(diag)
+            else:
+                idx = np.argsort(diag)[::-1]
+            guess = np.zeros((diag.shape[0], nroots))
+            min_shape = min(diag.shape[0], nroots)
+            guess[:min_shape,:min_shape] = np.identity(min_shape)
+            g = np.zeros((diag.shape[0], nroots))
+            g[idx] = guess.copy()
         guess = []
         for p in range(g.shape[1]):
             guess.append(g[:,p])
