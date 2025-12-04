@@ -167,7 +167,6 @@ class KnownValues(unittest.TestCase):
         tmp_switch = sgx_jk.SWITCH_SIZE
         sgx_jk.SWITCH_SIZE = 0
         for dm in [dm0, dmr]:
-            print("HI")
             pair_mask = sgx_jk._get_sgx_dm_mask(sgxobj, dm, ao_loc)
             outr = lib.einsum("gu,xuv->xvg", wao, dm)
             out = sgx_jk._sgxdot_ao_dm(wao, dm, mask, shls_slice, ao_loc)

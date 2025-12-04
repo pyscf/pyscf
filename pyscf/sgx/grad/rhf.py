@@ -16,8 +16,6 @@
 # Author: Kyle Bystrom <kylebystrom@gmail.com>
 #
 
-
-import ctypes
 import numpy
 import scipy.linalg
 from pyscf import lib
@@ -280,11 +278,9 @@ def scalable_grids_response_cc(grids, blksize):
 
 
 def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
-    print("STARTING SGX-K GRAD")
     if sgx._full_dm is not None:
         raise ValueError("No incremental build for gradients")
-    t00 = logger.process_clock(), logger.perf_counter()
-    t0 = t00[1]
+    t0 = logger.process_clock(), logger.perf_counter()
     if sgx.debug:
         raise NotImplementedError("debug mode for accelerated K matrix")
 
@@ -320,10 +316,7 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     if include_grid_response:
         batch_k_grad = sgx_jk._gen_k_direct(mol, 's1', direct_scf_tol, sgx._pjs_data,
                                             grad=True)
-    t1 = logger.perf_counter()
 
-    t2, t3 = 0, 0
-    t4 = -logger.perf_counter()
     fg = None
     if include_grid_response:
         all_xed = numpy.zeros(ngrids)
@@ -345,7 +338,6 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
         dvk1 = numpy.zeros((3, nao))
 
     for i0, i1 in lib.prange(0, ngrids, blksize):
-        ta = logger.perf_counter()
         assert i0 % SGX_BLKSIZE == 0
         b0 = i0 // SGX_BLKSIZE
         b0ni = i0 // BLKSIZE
@@ -353,7 +345,6 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
         coords = grids.coords[i0:i1]
         weights = grids.weights[i0:i1]
         mask = screen_index[b0ni:b1ni]
-        print("LOOP", i0)
         if mol.cart:
             _ao = mol.eval_gto('GTOval_cart_deriv1', coords, non0tab=mask)
         else:
@@ -377,7 +368,6 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
                 ao, ao, weights, nbins, mask, pair_mask, ao_loc, hermi=0
             )
 
-        tb = logger.perf_counter()
         no_mask2 = mask2 is None
         for i in range(nset):
             if no_mask2:
@@ -409,13 +399,6 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
                         all_dxed[x, i0:i1] -= ni._contract_rho_sparse(tmp.T, dao[x], mask3, ao_loc)
         if not include_grid_response:
             dvk1[:] *= 2
-        tc = logger.perf_counter()
-
-        t2 += tb - ta
-        t3 += tc - tb
-    tmid = logger.perf_counter()
-    t4 += tmid
-    print("TIMES", t1 - t0, t2, t3, t4 - t3 - t2)
 
     aoslices = mol.aoslice_by_atom()
     if sgx.fit_ovlp and include_grid_response:
@@ -493,14 +476,12 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
             dek[ia, x] += numpy.sum(4 * dvk1[x, p0 : p1])
 
     vk = dvk
-    logger.timer(mol, "vk", *t00)
+    logger.timer(mol, "vk", *t0)
     dm_shape = (nset, 3) + dms.shape[1:]
     vk = vk.reshape(dm_shape)
     if restricted:
         vk = vk[0]
     vk = lib.tag_array(vk, aux=0.5*dek[None, None])
-    tfin = logger.perf_counter()
-    print("TOTAL SGX-K TIME", tfin - t0, tfin - tmid)
     return vk
 
 

@@ -551,7 +551,6 @@ class SGXData:
                 self._check_arr(_arr, dtype=numpy.int32)
             assert sgxopt._cintopt is not None
             crbar = None if rbar_ij is None else rbar_ij.ctypes
-            t0 = time.monotonic()
             drv(
                 cintor, mbar_ij.ctypes, crbar, radii.ctypes,
                 ctypes.c_int(self._nquad), ctypes.c_int(self._nrad),
@@ -562,8 +561,6 @@ class SGXData:
                 widths.ctypes, norms.ctypes, vals.ctypes,
                 ctypes.c_double(self._itol)
             )
-            t1 = time.monotonic()
-            print("SAMPLE TIME", t1 - t0)
         self._mbar_ij = numpy.maximum(mbar_ij, mbar_ij.T)
         self._mmax_i = numpy.max(mbar_ij, axis=1)
         self._msum_i = numpy.sum(mbar_ij, axis=1)
@@ -581,7 +578,6 @@ class SGXData:
         Gives a slight speedup to full exchange and a large
         speedup to short-range exchange.
         """
-        t0 = time.monotonic()
         mol = self.mol
         grid_coords = self.grids.coords
         atm, bas, env = mol._atm, mol._bas, mol._env
@@ -608,8 +604,6 @@ class SGXData:
             ctypes.c_int(nrad),
             atm_coords.ctypes,
         )
-        t1 = time.monotonic()
-        print("BUILD TIME", t1 -t0)
         m_bi[:] = numpy.sqrt(m_bi)
         self._mbar_bi = m_bi
 
@@ -721,7 +715,6 @@ class SGXData:
         return x_bi
 
     def _build_dm_screen(self):
-        ta = logger.perf_counter()
         mol = self.mol
         grids = self.grids
         ngrids = grids.weights.size
@@ -739,7 +732,6 @@ class SGXData:
         stilde_ij = numpy.zeros((mol.nbas, mol.nbas))
         self._make_shl_mat(ovlp, stilde_ij, ao_loc, ao_loc)
         self._sbar_ij = stilde_ij.copy()
-        t2 = logger.perf_counter()
         if self._screen_potential:
             ao = None
             for i0, i1 in lib.prange(0, ngrids, blksize):
@@ -751,11 +743,6 @@ class SGXData:
                 ao = mol.eval_gto('GTOval', coords, non0tab=mask, out=ao)
                 xtmp_bi = self.reduce_ao_to_shl_mat(ao, ao_loc, grids.weights[i0:i1])
                 xni_bi[b0:b1] = xtmp_bi
-            t3 = logger.perf_counter()
-            #locs = DFT_PER_SGX * numpy.arange(nblk + 1, dtype=numpy.int32)
-            #locs[-1] = xni_bi.shape[0]
-            #ones = numpy.arange(mol.nbas + 1, dtype=numpy.int32)
-            #self._make_shl_mat(xni_bi, xsgx_bi, locs, ones)
             xsgx_bi = self.reduce_mask_ni2sgx(xni_bi)
             assert xsgx_bi.shape == (nblk, mol.nbas)
             self._pow_screen(xni_bi, SGX_DELTA)
@@ -763,7 +750,6 @@ class SGXData:
             self._xni_b = numpy.min(xni_bi, axis=1)
             self._xsgx_b = numpy.min(xsgx_bi, axis=1)
             self._vtol_arr = self._vtol * self._xsgx_b
-            print(t3 - t2)
         else:
             self._xni_b = numpy.empty(nblk_ni)
             self._xni_b[:] = numpy.inf
@@ -776,16 +762,10 @@ class SGXData:
         else:
             self._etol_per_sgx_block = 1e10
             self._etol_per_ni_block = 1e10
-        tc = logger.perf_counter()
-        print("SETUP TOOK", tc - ta, t2 - ta, tc - t2)
 
     def build(self):
-        t0 = logger.perf_counter()
         self._build_integral_bounds()
-        t1 = logger.perf_counter()
         self._ovlp_proj = self._build_ovlp_fit()
-        t2 = logger.perf_counter()
-        print("SETUP", t2 - t1, t1 - t0)
         if self.use_dm_screening:
             self._build_dm_screen()
         self._setup_opt()
@@ -851,7 +831,6 @@ class SGXData:
 
     def get_g_threshold(self, f_ug, g_ug, i0, wt, full_f_bi=None):
         de, dv = self._etol, self._vtol
-        t0 = time.monotonic()
         b0 = i0 // BLKSIZE
         ao_loc = self._ao_loc
         assert f_ug.flags.c_contiguous
@@ -894,8 +873,6 @@ class SGXData:
             cond = g_ib.T > thresh[:, None]
         else:
             cond = None
-        t1 = time.monotonic()
-        print("TOTAL GTIME", t1 - t0)
         return cond
 
 
@@ -995,7 +972,6 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     t1 = logger.timer_debug1(mol, "sgX initialization", *t0)
     vk = numpy.zeros_like(dms)
     tnuc = 0, 0
-    shls_slice = (0, mol.nbas)
     ngrids = grids.weights.size
 
     assert sgx._opt is not None
@@ -1042,9 +1018,6 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
 
     batch_k = _gen_k_direct(mol, 's2', direct_scf_tol, sgx._pjs_data)
 
-    t_setup = logger.perf_counter()
-    print("AFTER_SETUP", t_setup - t0[1])
-
     ao = None
     fg = None
     t_ao = 0
@@ -1057,10 +1030,7 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
         coords = grids.coords[i0:i1]
         weights = grids.weights[i0:i1]
         mask = screen_index[i0 // BLKSIZE :]
-        print((screen_index > 0).sum(), screen_index.size)
-        ta = logger.perf_counter()
         ao = mol.eval_gto('GTOval', coords, non0tab=mask, out=ao)
-        tb = logger.perf_counter()
         if full_dm_ij is None:
             full_fni_bi = None
             full_fsgx_bi = None
@@ -1069,9 +1039,7 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
             full_fni_bi = lib.dot(full_fni_bi, full_dm_ij)
             assert full_fni_bi.flags.c_contiguous
             full_fsgx_bi = sgx._pjs_data.reduce_mask_ni2sgx(full_fni_bi)
-        tc = logger.perf_counter()
         fg = _sgxdot_ao_dm_sparse(ao, proj_dm, mask, dm_mask, ao_loc, out=fg)
-        te = logger.perf_counter()
         tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
         gv = batch_k(mol, coords, fg, weights, i0 // SGX_BLKSIZE, full_fsgx_bi)
         tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
@@ -1081,16 +1049,8 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
             )
         else:
             mask2 = None
-        tf = logger.perf_counter()
         _sgxdot_ao_gv_sparse(ao, gv, weights, mask, mask2, ao_loc, out=vk)
-        tg = logger.perf_counter()
         gv = None
-        t_ao += tb - ta
-        t_scale += tc - tb
-        t_ao_dm += te - tc
-        t_int += tf - te
-        t_ao_ao += tg - tf
-    print("Times", t_ao, t_scale, t_ao_dm, t_int, t_ao_ao)
     if sgx._pjs_data.sym_ovlp:
         vk = lib.einsum('ik,xij->xkj', proj, vk)
 
@@ -1099,9 +1059,6 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     logger.debug1(sgx, '(CPU, wall) time for integrals (%.2f, %.2f); '
                   'for tensor contraction (%.2f, %.2f)',
                   tnuc[0], tnuc[1], tdot[0], tdot[1])
-    print(sgx, '(CPU, wall) time for integrals (%.2f, %.2f); '
-          'for tensor contraction (%.2f, %.2f)',
-          tnuc[0], tnuc[1], tdot[0], tdot[1])
 
     if hermi == 1:
         vk = (vk + vk.transpose(0,2,1))*.5
@@ -1204,9 +1161,6 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
 
     t2 = logger.timer_debug1(mol, "sgX J/K builder", *t1)
     tdot = t2[0] - t1[0] - tnuc[0] , t2[1] - t1[1] - tnuc[1]
-    print(sgx, '(CPU, wall) time for integrals (%.2f, %.2f); '
-          'for tensor contraction (%.2f, %.2f)',
-          tnuc[0], tnuc[1], tdot[0], tdot[1])
 
     for i in range(nset):
         lib.hermi_triu(vj[i], inplace=True)

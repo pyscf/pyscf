@@ -924,7 +924,6 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
         }
         const int tot_ngrids = (int) env[NGRIDS];
         const int nbatch = (tot_ngrids + SGX_BLKSIZE - 1) / SGX_BLKSIZE;
-        double usc = 0;
 #pragma omp parallel
 {
         int ig0, ig1, dg;
@@ -940,7 +939,6 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
         int *sj_shells = malloc(sizeof(int) * nish);
         int num_sj_shells;
         int sj_index;
-        double _usc = 0;
 #pragma omp for nowait schedule(dynamic, 1)
         for (int ibatch = 0; ibatch < nbatch; ibatch++) {
                 ig0 = ibatch * SGX_BLKSIZE;
@@ -962,7 +960,6 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
                                 if ((*fprescreen)(shls, vhfopt, atm, bas, env)) {
                                         sj_shells[num_sj_shells] = jsh;
                                         num_sj_shells++;
-                                        _usc += 1;
                                 }
                         }
                         for (sj_index = 0; sj_index < num_sj_shells; sj_index++) {
@@ -998,12 +995,7 @@ void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
         free(buf);
         free(cache);
         free(sj_shells);
-#pragma omp critical
-{
-        usc += _usc;
 }
-}
-        printf("unscreened: %lf\n", usc);
 }
 
 static inline void _bottom_up_merge(double *a, int *aind, int il, int ir,
@@ -1417,12 +1409,11 @@ void SGXnr_direct_k_drv(int (*intor)(), SGXJKOperator **jkop,
         const int joff = ao_loc[jsh0];
 
         if (sgxopt == NULL) {
-                printf("ERROR sgxopt is required\n");
-                return;
+                fprintf(stderr, "ERROR sgxopt is required\n");
+                exit(1);
         }
         const int tot_ngrids = (int) env[NGRIDS];
         const int nbatch = (tot_ngrids + SGX_BLKSIZE - 1) / SGX_BLKSIZE;
-        double usc = 0;
 #pragma omp parallel
 {
         int ig0, ig1, dg;
@@ -1440,7 +1431,6 @@ void SGXnr_direct_k_drv(int (*intor)(), SGXJKOperator **jkop,
         void *shl_info = malloc(sgxopt->shl_info_size_bytes);
         int num_sj_shells;
         int sj_index;
-        double _usc = 0;
         int nij;
 #pragma omp for nowait schedule(dynamic, 1)
         for (int ibatch = 0; ibatch < nbatch; ibatch++) {
@@ -1480,7 +1470,6 @@ void SGXnr_direct_k_drv(int (*intor)(), SGXJKOperator **jkop,
                                         jkop[idm]->contract(buf, dms[idm], v_priv[idm],
                                                             i0, i1, j0, j1, ig0, dg);
                                 }
-                                _usc++;
                         }
                         nij += num_sj_shells;
                 }
@@ -1499,12 +1488,7 @@ void SGXnr_direct_k_drv(int (*intor)(), SGXJKOperator **jkop,
         free(sj_shells);
         free(screen_buf);
         free(shl_info);
-#pragma omp critical
-{
-        usc += _usc;
 }
-}
-        printf("unscreened: %lf\n", usc);
 }
 
 void SGXnr_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,

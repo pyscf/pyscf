@@ -84,10 +84,11 @@ class KnownValues(unittest.TestCase):
         e2, te2, tg2, c2 = self._check_finite_diff_grad(False, True, True)
         self.assertAlmostEqual(e1, e0, 8)
         self.assertAlmostEqual(e2, e1, 3)
-        print("Times for energy and gradients, in s")
-        print("No Optk", te0, tg0, c0)
-        print("Optk", te1, tg1, c1)
-        print("Optk w/ovlp fit", te2, tg2, c2)
+        msg = "Times for energy and gradients, in s\n"
+        msg = msg + "No Optk %f %f %f\n" % (te0, tg0, c0)
+        msg = msg + "Optk %f %f %f\n" % (te1, tg1, c1)
+        msg = msg + "Optk w/ovlp fit %f %f %f\n" % (te2, tg2, c2)
+        print(msg)
 
     def test_uhf_dm_screening(self):
         e0, te0, tg0, c0 = self._check_finite_diff_grad(True, False, False)
@@ -95,10 +96,11 @@ class KnownValues(unittest.TestCase):
         e2, te2, tg2, c2 = self._check_finite_diff_grad(True, True, True)
         self.assertAlmostEqual(e1, e0, 8)
         self.assertAlmostEqual(e2, e1, 3)
-        print("Times for energy and gradients, in s")
-        print("No Optk", te0, tg0, c0)
-        print("Optk", te1, tg1, c1)
-        print("Optk w/ovlp fit", te2, tg2, c2)
+        msg = "Times for energy and gradients, in s\n"
+        msg = msg + "No Optk %f %f %f\n" % (te0, tg0, c0)
+        msg = msg + "Optk %f %f %f\n" % (te1, tg1, c1)
+        msg = msg + "Optk w/ovlp fit %f %f %f\n" % (te2, tg2, c2)
+        print(msg)
 
 
 if __name__ == '__main__':

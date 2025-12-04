@@ -632,8 +632,6 @@ class Grids(lib.StreamObject):
                 self.quadrature_weights = numpy.hstack([self.quadrature_weights, numpy.zeros(padding)])
 
     def build(self, mol=None, with_non0tab=False, sort_grids=True, **kwargs):
-        import time
-        t0 = time.monotonic()
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -665,8 +663,6 @@ class Grids(lib.StreamObject):
         else:
             self.screen_index = self.non0tab = None
         logger.info(self, 'tot grids = %d', len(self.weights))
-        t1 = time.monotonic()
-        print("Time to build grids is {} s".format(t1-t0))
         return self
 
     def kernel(self, mol=None, with_non0tab=False):
@@ -715,7 +711,6 @@ class Grids(lib.StreamObject):
                          self.weights.size - numpy.count_nonzero(idx))
             self.coords  = numpy.asarray(self.coords [idx], order='C')
             self.weights = numpy.asarray(self.weights[idx], order='C')
-            print("Unpruned -> Pruned tot grids", rho.size, self.weights.size)
             self.atm_idx = numpy.asarray(self.atm_idx[idx], order='C')
             self.quadrature_weights = numpy.asarray(self.quadrature_weights[idx], order='C')
             if self.alignment > 1:
