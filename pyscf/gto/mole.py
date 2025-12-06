@@ -3807,7 +3807,7 @@ class Mole(MoleBase):
                         mf_xc = xc
                         key = 'TDDFT'
                     elif 'TDDFT' not in key:
-                        raise RuntimeError(f'method {key} not supported')
+                        raise AttributeError(f'method {key} not supported')
             elif 'CI' in key or 'CC' in key or 'CAS' in key or 'MP' in key:
                 mf_method = scf.HF
             else:
@@ -3838,7 +3838,7 @@ class Mole(MoleBase):
 
             if post_mf_key is None:
                 if args:
-                    raise RuntimeError(
+                    raise AttributeError(
                         f'mol.{attr_name} function does not support positional arguments')
                 return mf.set(**remaining_kw)
 
