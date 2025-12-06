@@ -3794,7 +3794,10 @@ class Mole(MoleBase):
         else:
             if 'TD' in key[:3]:
                 if 'TDA' in key:
-                    mf_method = 'SCF_TO_BE_DETERMINED'
+                    if key == 'dTDA':
+                        mf_method = dft.KS
+                    else:
+                        mf_method = 'SCF_TO_BE_DETERMINED'
                 elif 'TDHF' in key:
                     mf_method = scf.HF
                 else:

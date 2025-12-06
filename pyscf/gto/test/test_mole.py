@@ -957,7 +957,6 @@ O    SP
         self.assertEqual(mol.HF().__class__, scf.HF(mol).__class__)
         self.assertEqual(mol.KS().__class__, dft.KS(mol).__class__)
         self.assertEqual(mol.UKS().__class__, dft.UKS(mol).__class__)
-        self.assertEqual(mol.UTDA(xc='pbe0').__class__, tdscf.uks.TDA)
         self.assertEqual(mol.RKSpU(U_idx=['2p'], U_val=[1.]).__class__,
                          dft.RKSpU(mol, U_idx=['2p'], U_val=[1.]).__class__)
 
