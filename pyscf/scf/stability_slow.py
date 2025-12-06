@@ -28,6 +28,9 @@ import scipy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
+from pyscf.scf.stability import dump_status
+from pyscf.soscf import newton_ah
+from pyscf.scf.hf import KohnShamDFT
 
 def rhf_stability(mf, internal=True, external=False, verbose=None):
     if internal:
@@ -227,6 +230,102 @@ def uhf_external(mf, verbose=None):
     else:
         log.log('UHF wavefunction is stable in the UHF -> GHF stability analysis')
 
+def ghf_internal(mf, return_status=False, verbose=None):
+    '''
+    GHF internal stability analysis.
+
+    Args:
+        mf : GHF object
+
+    Kwargs:
+        return_status: bool
+            Whether to return `stable_i` and `stable_e`
+
+    Returns:
+        If return_status is False (default), the return value includes
+        a new set of orbitals, which are more close to the stable condition.
+
+        Else, a tuple of orbitals with a boolean value `stable` is returned.
+    '''
+    log = logger.new_logger(mf, verbose)
+
+    if isinstance(mf, KohnShamDFT):
+        log.warn('ghf_internal: Hessian does not include XC contributions.')
+
+    mo_energy = mf.mo_energy
+    mo_coeff = mf.mo_coeff
+    mo_occ = mf.mo_occ
+
+    mol = mf.mol
+    nmo = mo_occ.size
+    nao = mol.nao
+    occidx = numpy.where(mo_occ==1)[0]
+    viridx = numpy.where(mo_occ==0)[0]
+    orbv = mo_coeff[:,viridx]
+    orbo = mo_coeff[:,occidx]
+    nvir = orbv.shape[1]
+    nocc = orbo.shape[1]
+    mo = numpy.hstack((orbo,orbv))
+    moa = mo[:nao].copy()
+    mob = mo[nao:].copy()
+    orboa = orbo[:nao]
+    orbob = orbo[nao:]
+    nmo = nocc + nvir
+
+    e_ia = mo_energy[viridx] - mo_energy[occidx,None]
+    a = numpy.diag(e_ia.ravel()).reshape(nocc,nvir,nocc,nvir).astype(mo_coeff.dtype)
+    b = numpy.zeros_like(a)
+
+    if mo_coeff.dtype == numpy.double:
+        eri_mo  = ao2mo.general(mol, [orboa,moa,moa,moa], compact=False)
+        eri_mo += ao2mo.general(mol, [orbob,mob,mob,mob], compact=False)
+        eri_mo += ao2mo.general(mol, [orboa,moa,mob,mob], compact=False)
+        eri_mo += ao2mo.general(mol, [orbob,mob,moa,moa], compact=False)
+        eri_mo = eri_mo.reshape(nocc,nmo,nmo,nmo)
+    else:
+        eri_ao = mol.intor('int2e').reshape([nao]*4)
+        eri_mo_a = lib.einsum('pqrs,pi,qj->ijrs', eri_ao, orboa.conj(), moa)
+        eri_mo_a+= lib.einsum('pqrs,pi,qj->ijrs', eri_ao, orbob.conj(), mob)
+        eri_mo = lib.einsum('ijrs,rk,sl->ijkl', eri_mo_a, moa.conj(), moa)
+        eri_mo+= lib.einsum('ijrs,rk,sl->ijkl', eri_mo_a, mob.conj(), mob)
+    # The orbital hessian is constructed as (ai|jb) in soscf/newton_ah.py
+    # (ai|jb) == iabj.conj()
+    a += numpy.einsum('iabj->iajb', eri_mo[:nocc,nocc:,nocc:,:nocc].conj())
+    a -= numpy.einsum('ijba->iajb', eri_mo[:nocc,:nocc,nocc:,nocc:].conj())
+    b += numpy.einsum('iajb->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:].conj())
+    b -= numpy.einsum('jaib->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:].conj())
+
+    a = a.reshape(nocc*nvir, nocc*nvir)
+    b = b.reshape(nocc*nvir, nocc*nvir)
+    hessian = numpy.block([[a,b],[b.conj(),a.conj()]])
+
+    # This factor is necessary to replicate the eigenvalues of ghf_stability
+    hessian *= 2
+
+    e, v = scipy.linalg.eigh(hessian)
+    log.info('ghf_internal: lowest eigs of H = %s', e[:5])
+
+    e = e[0]
+    v = v[:,0]
+    stable = not (e < -1e-5)
+    dump_status(log, stable, f'{mf.__class__}', 'internal')
+
+    mo =  mf.mo_coeff
+    if not stable:
+        occidx = numpy.where(mf.mo_occ > 0)[0]
+        viridx = numpy.where(mf.mo_occ == 0)[0]
+        nocc = len(occidx)
+        nvir = len(viridx)
+        nmo = nocc+nvir
+        dx = numpy.zeros((nmo,nmo), dtype=mf.mo_coeff.dtype)
+        dx[occidx[:,None],viridx] = v[:nocc*nvir].reshape(nocc,nvir).conj()
+        dx[occidx[:,None],viridx]+= v[nocc*nvir:].reshape(nocc,nvir).conj()
+        u = newton_ah.expmat(dx - dx.conj().T)
+        mo = numpy.dot(mo, u)
+    if return_status:
+        return mo, stable
+    else:
+        return mo
 
 if __name__ == '__main__':
     from pyscf import gto, scf
