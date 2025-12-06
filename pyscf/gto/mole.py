@@ -4289,7 +4289,7 @@ def bse_predefined_ecp(basis_name, elements):
     pyscf_basis_alias = basis._format_basis_name(basis_name).lower()
     basis_meta = BSE_META.get(pyscf_basis_alias)
     if basis_meta:
-        if isinstance(elements, str):
+        if isinstance(elements, (str, int)):
             elements = [elements]
         ecp_elements = basis_meta[1]
         if ecp_elements:
