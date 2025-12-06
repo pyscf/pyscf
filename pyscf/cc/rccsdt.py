@@ -26,6 +26,8 @@ J. Chem. Phys. 142, 064108 (2015); DOI:10.1063/1.4907278
 Chem. Phys. Lett. 228, 233 (1994); DOI:10.1016/0009-2614(94)00898-1
 '''
 
+import itertools
+from math import prod, factorial
 import numpy as np
 import numpy
 import functools
@@ -58,7 +60,6 @@ def _einsum(einsum_backend, script, *tensors, out=None, alpha=1.0, beta=0.0):
 
     def _fix_strides_for_pytblis(arr):
         '''Fix strides for pytblis'''
-        import itertools, numpy as np
         if arr.strides == (0,) * arr.ndim:
             strides = tuple(itertools.accumulate([x if x != 0 else 1 for x in arr.shape],
                             lambda x, y: x * y, initial=1))[:-1]
@@ -193,7 +194,7 @@ def accumulate_t3_single2tri_(t3, t3_blk, map_, i0, j0, k0, nocc, nvir, alpha, b
     return t3
 
 def _unpack_t3_(mycc, t3, t3_blk, i0, i1, j0, j1, k0, k1, blksize0=None, blksize1=None, blksize2=None):
-    '''Unpack triangular-stored T3 amplitudes into the block `t3_full[i0:i1, j0:j1, k0:k1, :, :, :]`'''
+    r'''Unpack triangular-stored T3 amplitudes into the block `t3_full[i0:i1, j0:j1, k0:k1, :, :, :]`'''
     if blksize0 is None: blksize0 = mycc.blksize
     if blksize1 is None: blksize1 = mycc.blksize
     if blksize2 is None: blksize2 = mycc.blksize
@@ -202,7 +203,7 @@ def _unpack_t3_(mycc, t3, t3_blk, i0, i1, j0, j1, k0, k1, blksize0=None, blksize
     return t3_blk
 
 def _unpack_t3_s_pair_(mycc, t3, t3_blk, i0, j0, k0):
-    '''Unpack triangular-stored T3 amplitudes into the block
+    r'''Unpack triangular-stored T3 amplitudes into the block
     `t3_full[i0, j0, k0, :, :, :] + t3_full[j0, i0, k0, :, :, :].transpose(1, 0, 2)`
     '''
     unpack_t3_tri2single_pair_(t3, t3_blk, mycc.tri2block_map, mycc.tri2block_mask,
@@ -210,7 +211,7 @@ def _unpack_t3_s_pair_(mycc, t3, t3_blk, i0, j0, k0):
     return t3_blk
 
 def _unpack_t3_pair_(mycc, t3, t3_blk, i0, i1, j0, j1, k0, k1, blksize0=None, blksize1=None, blksize2=None):
-    '''Unpack triangular-stored T3 amplitudes into the block
+    r'''Unpack triangular-stored T3 amplitudes into the block
     `t3_full[i0:i1, j0:j1, k0:k1, :, :, :] + t3_full[k0:k1, j0:j1, i0:i1, :, :, :].transpose(0, 1, 2, 3, 5, 4)`
     '''
     if blksize0 is None: blksize0 = mycc.blksize_oovv
@@ -236,7 +237,6 @@ def _accumulate_t3_s_(mycc, t3, t3_blk, i0, j0, k0, alpha=1.0, beta=0.0):
 
 def setup_tri2block_rhf(mycc):
     '''Build the map used to unpack and accumulate between the triangular-stored T3 and the block of full T3 tensor.'''
-    from math import prod, factorial
     nx = lambda n, order: prod(n + i for i in range(order)) // factorial(order)
 
     cc_order = mycc.cc_order
@@ -252,7 +252,6 @@ def setup_tri2block_rhf(mycc):
     idx = np.stack(idx)
     tamps_map = np.where(np.all(np.diff(idx, axis=0) >= 0, axis=0))
 
-    import itertools
     perms = list(itertools.permutations(range(cc_order)))
     for i, perm in enumerate(perms):
         inds = tuple(tamps_map[p] for p in perm)
@@ -332,7 +331,6 @@ def symmetrize_tamps_tri_(r, nocc):
         - i <= j = k <= l : symmetrize over (b, c)
         - i <= j <= k = l : symmetrize over (c, d)
     '''
-    import numpy as np
     order = r.ndim - 1
     idx = np.meshgrid(*[np.arange(nocc)] * order, indexing='ij')
     occ = np.stack(idx, axis=-1).reshape(-1, order)
@@ -364,7 +362,6 @@ def purify_tamps_tri_(r, nocc):
     '''Zero out unphysical diagonal elements in tri-stored CC amplitudes, i.e.,
     enforces T = 0 if three or more occupied/virtual indices are equal.
     '''
-    import itertools, numpy as np
     order = r.ndim - 1
     # occupied indices
     idx = np.meshgrid(*[np.arange(nocc)] * order, indexing='ij')
@@ -410,7 +407,6 @@ def init_amps_rhf(mycc, eris=None):
     e_corr += 2.0 * einsum("ai,ia->", eris.fock[nocc:, :nocc], t1)
     logger.info(mycc, "Init t2, MP2 energy = % .12f  E_corr(MP2) % .12f" % (e_hf + e_corr, e_corr))
 
-    from math import prod, factorial
     nx = lambda n, order: prod(n + i for i in range(order)) // factorial(order)
     cc_order = mycc.cc_order
     tamps = [t1, t2]
@@ -911,7 +907,6 @@ def update_amps_rccsdt_tri_(mycc, tamps, eris):
 
 def amplitudes_to_vector_rhf(mycc, tamps):
     '''Convert T-amplitudes to a vector form, storing only symmetry-unique elements (triangular components).'''
-    from math import prod, factorial
     nx = lambda n, order: prod(n + i for i in range(order)) // factorial(order)
 
     nocc, nmo = mycc.nocc, mycc.nmo
@@ -931,7 +926,6 @@ def vector_to_amplitudes_rhf(mycc, vector):
     if mycc.unique_tamps_map is None:
         mycc.unique_tamps_map = mycc.build_unique_tamps_map()
 
-    from math import prod, factorial
     nx = lambda n, order: prod(n + i for i in range(order)) // factorial(order)
 
     nocc, nmo = mycc.nocc, mycc.nmo
@@ -1077,7 +1071,6 @@ def restore_from_diis_(mycc, diis_file, inplace=True):
     The CC amplitudes will be restored from the DIIS object. The `tamps` of the CC object will be overwritten
     by the generated `tamps`. The amplitudes vector and error vector will be reused in the CC calculation.
     '''
-    from math import prod, factorial
     nx = lambda n, order: prod(n + i for i in range(order)) // factorial(order)
 
     nocc, nmo = mycc.nocc, mycc.nmo
@@ -1187,7 +1180,6 @@ def dump_flags(mycc, verbose=None):
     return mycc
 
 def vector_size_rhf(mycc, nmo=None, nocc=None):
-    from math import prod, factorial
     nx = lambda n, order: prod(n + i for i in range(order)) // factorial(order)
 
     if nocc is None: nocc = mycc.nocc
@@ -1339,10 +1331,44 @@ def tamps_full2tri_rhf(mycc, tamps_full):
 
 
 class RCCSDT(ccsd.CCSDBase):
+    __doc__ = f'''{__doc__}
+Attributes such as conv_tol, max_cycle, diis_space, diis_start_cycle,
+iterative_damping, incore_complete, level_shift, and frozen can be configured in
+the same way as in CCSD. Additional attributes are:
+
+    do_diis_max_t : bool
+        Whether to use DIIS to accelerate convergence. Note that enabling DIIS
+        will increase memory consumption.
+    blksize, blksize_oovv, blksize_oooo :
+        Batch sizes used to reduce the memory footprint during tensor contractions.
+    einsum_backend : string
+        Selects a more efficient einsum backend, such as pytblis or PySCF
+        built-in einsum. By default, numpy.einsum is used.
+
+Saved results:
+
+    converged : bool
+        Whether the CCSDT iteration converged
+    e_corr : float
+        CCSDT correlation correction
+    e_tot : float
+        Total CCSDT energy (HF + correlation)
+    cycles : int
+        Number of iteration cycles performed.
+    t1, t2 :
+        T amplitudes t1[i,a], t2[i,j,a,b]  (i,j in occ, a,b in virt)
+    t3 :
+        An array of shape (compressed_occ, nvir, nvir, nvir) for T3 amplitudes.
+        The occupied-oribtal dimension is stored in a compressed form for the
+        i <= j <= k index combinations. The compressed tensor can be expanded to
+        the full tensor by self.tamps_tri2full(t3)
+    tamps :
+        A tuple (t1, t2, t3) containing the RCCSDT cluster amplitudes.
+'''
 
     conv_tol = getattr(__config__, 'cc_rccsdt_RCCSDT_conv_tol', 1e-7)
     conv_tol_normt = getattr(__config__, 'cc_rccsdt_RCCSDT_conv_tol_normt', 1e-6)
-    cc_order = getattr(__config__, 'cc_rccsdt_RCCSDT_cc_order', 3)
+    cc_order = 3
     do_diis_max_t = getattr(__config__, 'cc_rccsdt_RCCSDT_do_diis_max_t', True)
     blksize = getattr(__config__, 'cc_rccsdt_RCCSDT_blksize', 8)
     blksize_oovv = getattr(__config__, 'cc_rccsdt_RCCSDT_blksize_oovv', 4)

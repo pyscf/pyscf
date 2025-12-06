@@ -2610,10 +2610,11 @@ def tamps_uhf2rhf(mycc, tamps_uhf):
 
 
 class UCCSDT(ccsd.CCSDBase):
+    __doc__ = __doc__
 
     conv_tol = getattr(__config__, 'cc_uccsdt_UCCSDT_conv_tol', 1e-7)
     conv_tol_normt = getattr(__config__, 'cc_uccsdt_UCCSDT_conv_tol_normt', 1e-6)
-    cc_order = getattr(__config__, 'cc_uccsdt_UCCSDT_cc_order', 3)
+    cc_order = 3
     do_diis_max_t = getattr(__config__, 'cc_uccsdt_UCCSDT_do_diis_max_t', True)
     blksize_o_aaa = getattr(__config__, 'cc_uccsdt_UCCSDT_blksize_o_aaa', 8)
     blksize_v_aaa = getattr(__config__, 'cc_uccsdt_UCCSDT_blksize_v_aaa', 64)

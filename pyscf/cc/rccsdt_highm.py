@@ -66,7 +66,7 @@ def purify_tamps_(r):
     '''Zero out unphysical diagonal elements in CC amplitudes, i.e.,
     enforces T = 0 if three or more occupied/virtual indices are equal
     '''
-    import itertools, numpy as np
+    import itertools
     order = r.ndim // 2
     for perm in itertools.combinations(range(order), 3):
         idxl, idxr = [slice(None)] * order, [slice(None)] * order

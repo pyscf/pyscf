@@ -959,10 +959,44 @@ def dump_chk(mycc, tamps=None, frozen=None, mo_coeff=None, mo_occ=None):
 
 
 class RCCSDTQ(rccsdt.RCCSDT):
+    __doc__ = f'''{__doc__}
+Attributes such as conv_tol, max_cycle, diis_space, diis_start_cycle,
+iterative_damping, incore_complete, level_shift, and frozen can be configured in
+the same way as in CCSD. Additional attributes are:
+
+    do_diis_max_t : bool
+        Whether to use DIIS to accelerate convergence. Note that enabling DIIS
+        will increase memory consumption.
+    blksize, blksize_oovv, blksize_oooo :
+        Batch sizes used to reduce the memory footprint during tensor contractions.
+    einsum_backend : string
+        Selects a more efficient einsum backend, such as pytblis or PySCF
+        built-in einsum. By default, numpy.einsum is used.
+
+Saved results:
+
+    converged : bool
+        Whether the CCSDT iteration converged
+    e_corr : float
+        CCSDT correlation correction
+    e_tot : float
+        Total CCSDT energy (HF + correlation)
+    cycles : int
+        Number of iteration cycles performed.
+    t1, t2, t3 :
+        T amplitudes t1[i,a], t2[i,j,a,b], t3[i,j,k,a,b,c]
+    t4 :
+        An array of shape (compressed_occ, nvir, nvir, nvir, nvir) for T4 amplitudes.
+        The occupied-oribtal dimension is stored in a compressed form for the
+        i <= j <= k <= l index combinations. The compressed tensor can be expanded to
+        the full tensor by self.tamps_tri2full(t4)
+    tamps :
+        A tuple (t1, t2, t3, t4) containing the RCCSDTQ cluster amplitudes.
+'''
 
     conv_tol = getattr(__config__, 'cc_rccsdtq_RCCSDTQ_conv_tol', 1e-7)
     conv_tol_normt = getattr(__config__, 'cc_rccsdtq_RCCSDTQ_conv_tol_normt', 1e-6)
-    cc_order = getattr(__config__, 'cc_rccsdtq_RCCSDTQ_cc_order', 4)
+    cc_order = 4
     do_diis_max_t = getattr(__config__, 'cc_rccsdtq_RCCSDTQ_do_diis_max_t', True)
     blksize = getattr(__config__, 'cc_rccsdtq_RCCSDTQ_blksize', 4)
 
