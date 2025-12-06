@@ -227,6 +227,16 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(mycc2.tamps[2]).max(), 0, 9)
         self.assertAlmostEqual(abs(mycc2.tamps[3]).max(), 0, 9)
 
+    def test_vs_fci(self):
+        from pyscf import fci
+        mol = gto.M(atom='''
+            Li .8    0.2      0.
+            H  0.   -0.19    0.587
+            H  0.   0.757    0.587''', basis='6-31g', charge=1)
+        mf = mol.RHF().run(conv_tol=1e-12)
+        mycc2 = cc.RCCSDTQ(mf).run(conv_tol=1e-10)
+        ref = fci.FCI(mf).run().e_tot
+        self.assertAlmostEqual(mycc2.e_tot, ref, 8)
 
 if __name__ == "__main__":
     print("Full Tests for rccsdtq.RCCSDTQ")

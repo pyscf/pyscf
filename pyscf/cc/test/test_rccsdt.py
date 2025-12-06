@@ -19,7 +19,6 @@ import unittest
 import copy
 import numpy
 import numpy as np
-import h5py
 
 from pyscf import gto, lib
 from pyscf import scf, dft
@@ -239,6 +238,22 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(mycc1.t2 - mycc2.t2).max(), 0, 8)
         self.assertAlmostEqual(abs(mycc2.tamps[2]).max(), 0, 9)
 
+    def test_vs_fci(self):
+        from pyscf import fci
+        mol = gto.M(atom='''
+            H  0.3  0.2     0.
+            H  0.   -0.19   0.587
+            H  0.   0.757   0.587''', basis='ccpvdz', spin=1)
+        mf = mol.RHF().run(conv_tol=1e-12)
+        mycc2 = cc.RCCSDT(mf).run(conv_tol=1e-10)
+        ref = fci.FCI(mf).run().e_tot
+        self.assertAlmostEqual(mycc2.e_tot, ref, 8)
+
+        mol.spin = 3
+        mf = mol.RHF().run(conv_tol=1e-12)
+        mycc2 = cc.RCCSDT(mf).run(conv_tol=1e-10)
+        ref = fci.FCI(mf).run().e_tot
+        self.assertAlmostEqual(mycc2.e_tot, ref, 8)
 
 if __name__ == "__main__":
     print("Full Tests for rccsdt.RCCSDT")
