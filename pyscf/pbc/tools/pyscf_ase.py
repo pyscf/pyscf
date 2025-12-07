@@ -72,7 +72,7 @@ def cell_from_ase(ase_atoms):
 
 class PySCF(Calculator):
     implemented_properties = ['energy', 'forces', 'stress',
-                              'dipole', 'magmom']
+                              'dipole', 'magmom', 'polarizability']
 
     default_parameters = {}
 
@@ -168,6 +168,20 @@ class PySCF(Calculator):
                 raise NotImplementedError('dipole for PBC calculations')
             # in Gaussian cgs unit
             self.results['dipole'] = base_method.dip_moment() * Debye
+
+        if 'polarizability' in properties:
+            assert hasattr(base_method, 'istype') and base_method.istype('SCF'), \
+                    'Polarizability can only be computed with mean-field methods'
+            if self.pbc:
+                from pyscf.pbc.prop.polarizability.rhf import Polarizability
+                p = Polarizability(base_method).polarizability()
+            else:
+                from pyscf.prop.polarizability import rhf, uhf
+                if base_method.istype('UHF'):
+                    p = uhf.Polarizability(base_method).polarizability()
+                else:
+                    p = rhf.Polarizability(base_method).polarizability()
+            self.results['polarizability'] = p * (BOHR**3)
 
         if 'magmom' in properties:
             magmom = self.mol.spin
