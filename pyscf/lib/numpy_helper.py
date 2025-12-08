@@ -20,20 +20,33 @@
 Extension to numpy and scipy
 '''
 
+import os
 import ctypes
 import math
 import numpy
 from pyscf.lib import misc
 from numpy import asarray  # For backward compatibility
 
-EINSUM_MAX_SIZE = getattr(misc.__config__, 'lib_einsum_max_size', 2000)
+EINSUM_MAX_SIZE = getattr(misc.__config__, 'lib_einsum_max_size', 500)
 
-try:
-    # Import tblis before libnp_helper to avoid potential dl-loading conflicts
+# If ensium backend is configured, use the specified einsum implementation.
+EINSUM_BACKEND = getattr(misc.__config__, 'lib_einsum_backend', None)
+if EINSUM_BACKEND is None:
+    try:
+        import pytblis
+        EINSUM_BACKEND = 'pytblis'
+    except (ImportError, OSError):
+        try:
+            from pyscf import tblis_einsum
+            EINSUM_BACKEND = 'pyscf-tblis'
+        except (ImportError, OSError):
+            pass
+elif EINSUM_BACKEND == 'pytblis':
+    import pytblis
+elif EINSUM_BACKEND == 'pyscf-tblis':
     from pyscf import tblis_einsum
-    FOUND_TBLIS = True
-except (ImportError, OSError):
-    FOUND_TBLIS = False
+else:
+    raise ValueError(f"Unknown einsum backend: {EINSUM_BACKEND}")
 
 _np_helper = misc.load_library('libnp_helper')
 
@@ -98,9 +111,20 @@ else:
         return operands, einsum_args
 
 _numpy_einsum = numpy.einsum
-def _contract(subscripts, *tensors, **kwargs):
+def contract(subscripts, A, B, **kwargs):
+    '''
+    Perform tensor contraction using einsum notation
+    C = alpha * einsum(subscripts, A, B) + beta * C
+
+    Kwargs:
+        alpha : scalar, optional
+            Default value is 1.
+        beta : scalar, optional
+            Default value is 0.
+        out : ndarray, optional
+            Output tensor to store the result.
+    '''
     idx_str = subscripts.replace(' ','')
-    A, B = tensors
     # Call numpy.asarray because A or B may be HDF5 Datasets
     A = numpy.asarray(A)
     B = numpy.asarray(B)
@@ -109,8 +133,11 @@ def _contract(subscripts, *tensors, **kwargs):
     if A.size < EINSUM_MAX_SIZE or B.size < EINSUM_MAX_SIZE:
         return _numpy_einsum(idx_str, A, B)
 
+    if EINSUM_BACKEND == 'pytblis':
+        return pytblis.contract(idx_str, A, B, **kwargs)
+
     C_dtype = numpy.result_type(A, B)
-    if FOUND_TBLIS and C_dtype == numpy.double:
+    if EINSUM_BACKEND =='pyscf-tblis' and C_dtype == numpy.double:
         # tblis is slow for complex type
         return tblis_einsum.contract(idx_str, A, B, **kwargs)
 
@@ -221,7 +248,7 @@ def _contract(subscripts, *tensors, **kwargs):
 
     return dot(At,Bt).reshape(shapeCt, order='A').transpose(new_orderCt)
 
-def einsum(subscripts, *tensors, **kwargs):
+def einsum(scripts, *tensors, **kwargs):
     '''Perform a more efficient einsum via reshaping to a matrix multiply.
 
     Current differences compared to numpy.einsum:
@@ -229,9 +256,14 @@ def einsum(subscripts, *tensors, **kwargs):
     and appears only twice (i.e. no 'ij,ik,il->jkl'). The output indices must
     be explicitly specified (i.e. 'ij,j->i' and not 'ij,j').
     '''
-    contract = kwargs.pop('_contract', _contract)
+    if EINSUM_BACKEND == 'pytblis':
+        if 'optimize' in kwargs and kwargs['optimize'] is True:
+            kwargs['optimize'] = 'optimal'
+        return pytblis.einsum(scripts, *tensors, **kwargs)
 
-    subscripts = subscripts.replace(' ','')
+    _contract = kwargs.pop('_contract', contract)
+
+    subscripts = scripts.replace(' ','')
     if len(tensors) <= 1 or '...' in subscripts:
         out = _numpy_einsum(subscripts, *tensors, **kwargs)
     elif len(tensors) <= 2:
@@ -247,10 +279,9 @@ def einsum(subscripts, *tensors, **kwargs):
             if len(tmp_operands) > 2:
                 out = _numpy_einsum(einsum_str, *tmp_operands)
             else:
-                out = contract(einsum_str, *tmp_operands)
+                out = _contract(einsum_str, *tmp_operands)
             tensors.append(out)
     return out
-
 
 # 2d -> 1d or 3d -> 2d
 def pack_tril(mat, axis=-1, out=None):
