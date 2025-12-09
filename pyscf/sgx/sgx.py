@@ -33,7 +33,7 @@ from pyscf.sgx import sgx_jk
 from pyscf.df import df_jk
 from pyscf import __config__
 
-def sgx_fit(mf, auxbasis=None, with_df=None):
+def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
     '''For the given SCF object, update the J, K matrix constructor with
     corresponding SGX or density fitting integrals.
 
@@ -47,6 +47,13 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
             even-tempered Gaussian basis will be used.
         with_df : SGX
             Existing SGX object for the system.
+        pjs : bool
+            If True, the SGX object is set up to screen negligible integrals
+            using the density matrix (i.e. P-junction screening), and density
+            fitting is used for the J-matrix. If False, no P-junction
+            screening is performed, and SGX is used for the J-matrix.
+            Screening settings can also be adjusted after initialization.
+            See dfj, optk, sgx_tol_energy, and sgx_tol_potential for details.
 
     Returns:
         An SCF object with a modified J, K matrix constructor which uses density
@@ -85,6 +92,13 @@ def sgx_fit(mf, auxbasis=None, with_df=None):
         with_df.max_memory = mf.max_memory
         with_df.stdout = mf.stdout
         with_df.verbose = mf.verbose
+
+    if pjs:
+        with_df.optk = True
+        with_df.dfj = True
+    else:
+        with_df.optk = False
+        with_df.dfj = False
 
     if isinstance(mf, _SGXHF):
         mf = mf.copy()
@@ -275,7 +289,7 @@ class SGX(lib.StreamObject):
         'mol', 'grids_thrd', 'grids_level_i', 'grids_level_f',
         'grids_switch_thrd', 'dfj', 'direct_j', 'debug', 'grids',
         'blockdim', 'auxmol', 'sgx_tol_potential',
-        'sgx_tol_energy', 'use_opt_grids', 'fit_ovlp'
+        'sgx_tol_energy', 'use_opt_grids', 'fit_ovlp', 'bound_algo'
     }
 
     def __init__(self, mol, auxbasis=None):
@@ -322,6 +336,22 @@ class SGX(lib.StreamObject):
         # It is recommended to bound both energy and potential error
         # for numerical stability
 
+        # Bound algo determines how the three-center integral upper bounds
+        # are estimated. Can be
+        #   "ovlp": Screen integrals based on overlap of
+        #       orbital pairs. Overlap serves as a rough
+        #       approximation of the maximum ESP integral.
+        #   "sample": Provide an approximate but accurate
+        #       upper bound for the ESP integrals by sampling
+        #       _nquad points for each shell pair.
+        #   "sample_pos": Same as sample, but the ESP
+        #       bounds are position-dependent, which gives
+        #       a slight speed increase for large systems
+        #       and a significant speed increase for
+        #       short-range hybrids.
+        # Default is "sample_pos" and is recommended for most cases.
+        self.bound_algo = "sample_pos"
+
         self.grids = None
         self.blockdim = 1200
         self.auxmol = None
@@ -336,6 +366,12 @@ class SGX(lib.StreamObject):
         # perform a symmetric overlap fit when optk is True.
         # When fit_ovlp=True, _symm_ovlp_fit=True is required
         # for exact analytical gradients.
+        # Note that symmetric overlap fitting is not "perfect"
+        # overlap fitting. It fits the overlap correctly to
+        # first order in the difference between the exact and
+        # numerical overlap matrix. This difference is quite small
+        # for any reasonable grid, so this approximation typically
+        # works well.
         self._symm_ovlp_fit = True
 
         # private attributes
@@ -346,6 +382,7 @@ class SGX(lib.StreamObject):
         self._overlap_correction_matrix = None
         self._sgx_block_cond = None
         self._full_dm = None
+        self._pjs_data = None
 
     @property
     def auxbasis(self):
@@ -384,6 +421,7 @@ class SGX(lib.StreamObject):
             self.mol, level, self.grids_thrd, self.use_opt_grids
         )
         self._opt = _make_opt(self.mol)
+        self._pjs_data = None
 
         # In the RSH-integral temporary treatment, recursively rebuild SGX
         # objects in _rsh_df.
@@ -391,6 +429,23 @@ class SGX(lib.StreamObject):
             for k, v in self._rsh_df.items():
                 v.build(level)
         return self
+
+    def _build_pjs(self, direct_scf_tol):
+        assert self._opt is not None
+        self._pjs_data = sgx_jk.SGXData(
+            self.mol,
+            self.grids,
+            fit_ovlp=self.fit_ovlp,
+            sym_ovlp=self._symm_ovlp_fit,
+            max_memory=self.max_memory,
+            direct_scf_tol=direct_scf_tol,
+            vtol=self.sgx_tol_potential,
+            etol=self.sgx_tol_energy,
+            hermi=1,
+            bound_algo=self.bound_algo,
+            sgxopt=self._opt,
+        )
+        self._pjs_data.build()
 
     def kernel(self, *args, **kwargs):
         return self.build(*args, **kwargs)

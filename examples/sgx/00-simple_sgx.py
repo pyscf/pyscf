@@ -28,12 +28,12 @@ mf.kernel()
 
 # Turn on P-junction screening to accelerate large calculations
 # (uses algorithm similar to COSX)
-mf.with_df.pjs = True
+# dfj must be True to use optk
+mf.with_df.optk = True
 mf.kernel()
 
-# direct_scf_sgx turns on direct SCF for SGX
-# JK matrix is rebuilt from scratch every rebuild_nsteps steps
-mf.direct_scf_sgx = True
+# JK matrix is rebuilt from scratch every rebuild_nsteps steps (default 5)
+mf.rebuild_nsteps = 5
 # If grids_level_i == grids_level_j, no grid switch occurs
 mf.with_df.grids_level_i = 1
 mf.kernel()

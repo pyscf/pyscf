@@ -46,7 +46,8 @@ class KnownValues(unittest.TestCase):
             atom = [["O" , (0. , 0.     , 0.)],
                     [1   , (0. , -0.757 , 0.587)],
                     [1   , (0. , 0.757  , 0.587)] ],
-            basis = 'ccpvdz',
+            basis='ccpvdz',
+            verbose=0,
         )
         mf = sgx.sgx_fit(scf.RHF(mol), 'weigend')
         mf.with_df.dfj = True
@@ -67,14 +68,15 @@ class KnownValues(unittest.TestCase):
     def test_sgx_pjs(self):
         mol = gto.Mole()
         atom0 = [["O" , (0. , 0.     , 0.)],
-                    [1   , (0. , -0.757 , 0.587)],
-                    [1   , (0. , 0.757  , 0.587)],]
+                 [1   , (0. , -0.757 , 0.587)],
+                 [1   , (0. , 0.757  , 0.587)],]
         atom = []
         for i in range(3):
             atom = atom + [[z, (c[0] + i * 5, c[1], c[2])] for z, c in atom0]
         mol.build(
             atom=atom,
-            basis = 'sto-3g',
+            basis='sto-3g',
+            verbose=0,
         )
         mf = sgx.sgx_fit(mol.RHF())
         mf.with_df.dfj = True
@@ -92,7 +94,6 @@ class KnownValues(unittest.TestCase):
         mf.with_df.sgx_tol_energy = 1e-9
         mf.with_df.sgx_tol_potential = "auto"
         energy2 = mf.kernel()
-        # self.assertAlmostEqual(energy, -76.0267979, 9)
         self.assertAlmostEqual(energy, energy2, 9)
 
 if __name__ == "__main__":

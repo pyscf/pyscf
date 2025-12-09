@@ -106,7 +106,6 @@ def get_veff(ks_grad, mol=None, dm=None):
             vklr *= (alpha - hyb)
             vk += vklr
         """
-            
     return lib.tag_array(vxc, exc1_grid=exc)
 
 def _initialize_grids(ks_grad):

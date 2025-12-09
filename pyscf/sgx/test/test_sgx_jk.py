@@ -117,7 +117,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(vk), -16.715352176119794, 9)
 
     def test_rsh_get_jk(self):
-        mol = gto.M(verbose = 0,
+        mol = gto.M(
+            verbose = 0,
             atom = 'H 0 0 0; H 0 0 1',
             basis = 'ccpvdz',
         )
@@ -151,9 +152,8 @@ class KnownValues(unittest.TestCase):
         sgxobj = sgx.SGX(mol)
         sgxobj.grids = sgx_jk.get_gridss(mol, 0, 1e-7)
         sgxobj._opt = sgx._make_opt(mol)
-        sgxobj._pjs_data = sgx_jk.SGXData(mol, sgxobj.grids, etol=1e-13,
-                                          vtol=1e-13, direct_scf_tol=1e-13,
-                                          sgxopt=sgxobj._opt)
+        sgxobj.sgx_tol_potential = 1e-13
+        sgxobj._build_pjs(1e-13)
         sgxobj._pjs_data.build()
         grids = sgxobj.grids
         ao = gto.eval_gto(mol, "GTOval", grids.coords)
@@ -217,9 +217,9 @@ class PJunctionScreening(unittest.TestCase):
                     [1   , (0. , -0.757 , 0.587)],
                     [1   , (0. , 0.757  , 0.587)],]
         atom = []
-        for i in range(3):
+        for i in range(4):
             atom = atom + [[z, (c[0] + i * 5, c[1], c[2])] for z, c in atom0]
-        mol = gto.M(atom=atom, basis='def2-svp')
+        mol = gto.M(atom=atom, basis='def2-svp', verbose=0)
 
         mf = dft.RKS(mol)
         mf.xc = 'PBE'
@@ -239,22 +239,22 @@ class PJunctionScreening(unittest.TestCase):
         import time
         t0 = time.monotonic()
         en0 = mf.energy_tot(dm=dm)
-        # en0scf = mf.kernel()
+        en0scf = mf.kernel()
         t1 = time.monotonic()
 
         # Turn on P-junction screening. dfj must also be true.
         mf.with_df.reset()
-        mf.with_df.sgx_tol_energy = "auto"
+        mf.with_df.sgx_tol_energy = 1e-10
         mf.with_df.sgx_tol_potential = "auto"
         mf.build()
         t2 = time.monotonic()
         en1 = mf.energy_tot(dm=dm)
-        # en1scf = mf.kernel()
+        en1scf = mf.kernel()
         t3 = time.monotonic()
 
-        print(t3 - t2, t1 - t0)
+        print("SGX Times", t3 - t2, t1 - t0)
         self.assertAlmostEqual(abs(en1-en0), 0, 10)
-        # self.assertAlmostEqual(abs(en1scf-en0scf), 0, 10)
+        self.assertAlmostEqual(abs(en1scf-en0scf), 0, 10)
 
 
 if __name__ == "__main__":

@@ -619,7 +619,7 @@ class Grids(lib.StreamObject):
         self.weights = self.weights[idx]
         self.atm_idx = self.atm_idx[idx]
         self.quadrature_weights = self.quadrature_weights[idx]
-    
+
     def _add_padding(self):
         if self.alignment > 1:
             padding = _padding_size(self.size, self.alignment)

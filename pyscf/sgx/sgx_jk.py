@@ -434,6 +434,7 @@ class SGXData:
         if (grids.coords is None or grids.non0tab is None
                 or grids.atm_idx is None):
             grids.build(with_non0tab=True)
+        ngrids = grids.coords.shape[0]
         if mol is grids.mol:
             non0tab = grids.non0tab
         if non0tab is None:
@@ -441,7 +442,6 @@ class SGXData:
                                     dtype=numpy.uint8)
             non0tab[:] = NBINS + 1  # Corresponding to AO value ~= 1
         screen_index = non0tab
-        ngrids = grids.coords.shape[0]
         max_memory = self.max_memory - lib.current_memory()[0]
         if grad:
             # TODO make a better estimate here
@@ -516,8 +516,14 @@ class SGXData:
         else:
             sgxopt = self._opt
         if self.bound_algo == "ovlp":
+            atm, bas, env = mol._atm, mol._bas, mol._env
+            if self.mol.cart:
+                intor = "int1e_ovlp_cart"
+            else:
+                intor = "int1e_ovlp_sph"
+            cintor = _vhf._fpointer(intor)
             _vhf.libcvhf.SGXnr_q_cond(
-                _vhf._fpointer(sgxopt._intor), sgxopt._cintopt,
+                cintor, lib.c_null_ptr(),
                 mbar_ij.ctypes, ao_loc.ctypes,
                 atm.ctypes, ctypes.c_int(mol.natm), bas.ctypes,
                 ctypes.c_int(mol.nbas), env.ctypes,
@@ -571,7 +577,7 @@ class SGXData:
         else:
             self._rbar_ij = None
             self._mbar_bi = None
-    
+
     def _get_pos_dpt_ints(self, sgxopt, widths, norms, vals, nrad, atm_coords):
         """
         Calculate position-dependent bounds on the ESP integrals.
@@ -974,27 +980,13 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
     tnuc = 0, 0
     ngrids = grids.weights.size
 
-    assert sgx._opt is not None
     if (
-        not hasattr(sgx, "_pjs_data")
-        or sgx._pjs_data is None
+        sgx._pjs_data is None
         or sgx._pjs_data.mol is not mol
         or sgx._pjs_data.grids is not grids
+        or sgx._pjs_data._itol != direct_scf_tol
     ):
-        sgx._pjs_data = SGXData(
-            mol,
-            grids,
-            fit_ovlp=sgx.fit_ovlp,
-            sym_ovlp=sgx._symm_ovlp_fit,
-            max_memory=sgx.max_memory,
-            direct_scf_tol=direct_scf_tol,
-            vtol=sgx.sgx_tol_potential,
-            etol=sgx.sgx_tol_energy,
-            hermi=1,
-            bound_algo="sample_pos",
-            sgxopt=sgx._opt,
-        )
-        sgx._pjs_data.build()
+        sgx._build_pjs(direct_scf_tol)
     sgxdat = sgx._pjs_data
     loop_data = sgx._pjs_data.get_loop_data(nset=nset, with_pair_mask=True)
     nbins, screen_index, pair_mask, ao_loc, blksize = loop_data
@@ -1155,7 +1147,10 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
         jpart = gv = None
 
     t2 = logger.timer_debug1(mol, "sgX J/K builder", *t1)
-    tdot = t2[0] - t1[0] - tnuc[0] , t2[1] - t1[1] - tnuc[1]
+    tdot = t2[0] - t1[0] - tnuc[0], t2[1] - t1[1] - tnuc[1]
+    logger.debug1(sgx, '(CPU, wall) time for integrals (%.2f, %.2f); '
+                  'for tensor contraction (%.2f, %.2f)',
+                  tnuc[0], tnuc[1], tdot[0], tdot[1])
 
     for i in range(nset):
         lib.hermi_triu(vj[i], inplace=True)
