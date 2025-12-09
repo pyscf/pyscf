@@ -1020,11 +1020,6 @@ def get_k_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
 
     ao = None
     fg = None
-    t_ao = 0
-    t_scale = 0
-    t_ao_dm = 0
-    t_ao_ao = 0
-    t_int = 0
     for i0, i1 in lib.prange(0, ngrids, blksize):
         assert i0 % SGX_BLKSIZE == 0
         coords = grids.coords[i0:i1]

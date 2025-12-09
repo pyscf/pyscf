@@ -35,10 +35,13 @@ def _set_df_args(mf, dfj, fit_ovlp, optk, dm_screen, symm_fit, lvl):
     mf.with_df.dfj = dfj
     mf.with_df.fit_ovlp = fit_ovlp
     mf.with_df.optk = optk
-    mf.with_df.use_dm_screening = dm_screen
+    if dm_screen:
+        mf.with_df.sgx_tol_energy = 1e-12
+    else:
+        mf.with_df.sgx_tol_energy = None
+        mf.with_df.sgx_tol_potential = None
     mf.with_df._symm_ovlp_fit = symm_fit
     mf.with_df.use_opt_grids = True
-    #mf.rebuild_nsteps = 1
     mf.conv_tol = 1e-12
 
 
@@ -59,7 +62,7 @@ class KnownValues(unittest.TestCase):
         g = mf.nuc_grad_method().set(sgx_grid_response=sgr, grid_response=True).kernel()
         mol1 = mol.copy()
         mf_scanner = mf.as_scanner()
-        delta = 1e-5
+        delta = 1e-4
         e1 = mf_scanner(mol1.set_geom_(
             f'O  0. 0. {delta:f}; 1  0. -0.757 0.587; 1  0. 0.757 0.587'
         ))

@@ -804,7 +804,6 @@ void SGXsample_ints(int (*intor)(), double *m_ij, double *r_ij, double *radii,
                                           * buf[ij * dims[2] + igt];
                         }
                         maxint = MAX(maxint, my_int);
-                        // TODO use direct_scf_tol
                         if (r_ij != NULL && my_int > tol2) {
                                 diff[0] = grids[3*igt+0] - orig[0];
                                 diff[1] = grids[3*igt+1] - orig[1];

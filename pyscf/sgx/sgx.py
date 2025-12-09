@@ -33,7 +33,7 @@ from pyscf.sgx import sgx_jk
 from pyscf.df import df_jk
 from pyscf import __config__
 
-def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
+def sgx_fit(mf, auxbasis=None, with_df=None):
     '''For the given SCF object, update the J, K matrix constructor with
     corresponding SGX or density fitting integrals.
 
@@ -47,11 +47,6 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
             even-tempered Gaussian basis will be used.
         with_df : SGX
             Existing SGX object for the system.
-        pjs: bool
-            Whether to perform P-junction screening (screening matrix elements
-            by the density matrix). Default False. If True, dfj is set to True
-            automatically at the beginning of the calculation, as this screening
-            is only for K-matrix elements.
 
     Returns:
         An SCF object with a modified J, K matrix constructor which uses density
@@ -408,6 +403,7 @@ class SGX(lib.StreamObject):
         self.auxmol = None
         self._vjopt = None
         self._opt = None
+        self._pjs_data = None
         self._rsh_df = {}
         self._overlap_correction_matrix = None
         self._sgx_block_cond = None

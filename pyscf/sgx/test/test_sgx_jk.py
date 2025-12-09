@@ -109,6 +109,7 @@ class KnownValues(unittest.TestCase):
         mf.with_df.grids_level_i = 0
         mf.with_df.grids_level_f = 1
         mf.with_df.use_opt_grids = False
+        mf.with_df._symm_ovlp_fit = False
         mf.with_df.dfj = True
         mf.build()
         vj, vk = mf.get_jk(mol, dm)
@@ -124,6 +125,7 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(1)
         dm = numpy.random.random((2,nao,nao))
         sgxobj = sgx.SGX(mol)
+        sgxobj.dfj = False
         sgxobj.grids = sgx_jk.get_gridss(mol, 0, 1e-7)
         vj, vk = sgxobj.get_jk(dm, hermi=0, omega=1.1)
         self.assertAlmostEqual(lib.finger(vj), 4.783036401049238, 9)
@@ -148,6 +150,11 @@ class KnownValues(unittest.TestCase):
         ao_loc = mol.ao_loc_nr()
         sgxobj = sgx.SGX(mol)
         sgxobj.grids = sgx_jk.get_gridss(mol, 0, 1e-7)
+        sgxobj._opt = sgx._make_opt(mol)
+        sgxobj._pjs_data = sgx_jk.SGXData(mol, sgxobj.grids, etol=1e-13,
+                                          vtol=1e-13, direct_scf_tol=1e-13,
+                                          sgxopt=sgxobj._opt)
+        sgxobj._pjs_data.build()
         grids = sgxobj.grids
         ao = gto.eval_gto(mol, "GTOval", grids.coords)
         wao = ao * grids.weights[:, None]
@@ -167,7 +174,8 @@ class KnownValues(unittest.TestCase):
         tmp_switch = sgx_jk.SWITCH_SIZE
         sgx_jk.SWITCH_SIZE = 0
         for dm in [dm0, dmr]:
-            pair_mask = sgx_jk._get_sgx_dm_mask(sgxobj, dm, ao_loc)
+            # pair_mask = sgx_jk._get_sgx_dm_mask(sgxobj, dm, ao_loc)
+            pair_mask = sgxobj._pjs_data.get_dm_threshold_matrix(dm)
             outr = lib.einsum("gu,xuv->xvg", wao, dm)
             out = sgx_jk._sgxdot_ao_dm(wao, dm, mask, shls_slice, ao_loc)
             self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
@@ -205,8 +213,13 @@ class PJunctionScreening(unittest.TestCase):
     # @unittest.skip("computationally expensive test")
     def test_pjs(self):
         cwd = os.path.dirname(os.path.abspath(__file__))
-        fname = os.path.join(cwd, 'a12.xyz')
-        mol = gto.M(atom=fname, basis='def2-svp')
+        atom0 = [["O" , (0. , 0.     , 0.)],
+                    [1   , (0. , -0.757 , 0.587)],
+                    [1   , (0. , 0.757  , 0.587)],]
+        atom = []
+        for i in range(3):
+            atom = atom + [[z, (c[0] + i * 5, c[1], c[2])] for z, c in atom0]
+        mol = gto.M(atom=atom, basis='def2-svp')
 
         mf = dft.RKS(mol)
         mf.xc = 'PBE'
@@ -214,11 +227,13 @@ class PJunctionScreening(unittest.TestCase):
         mf.conv_tol = 1e-9
         dm = mf.make_rdm1()
 
-        mf = sgx.sgx_fit(scf.RHF(mol), pjs=False)
+        mf = sgx.sgx_fit(scf.RHF(mol))
         mf.with_df.dfj = True
         mf.with_df.grids_level_i = 1
         mf.with_df.grids_level_f = 1
         mf.with_df.use_opt_grids = False
+        mf.with_df.sgx_tol_energy = None
+        mf.with_df.sgx_tol_potential = None
         mf.direct_scf_tol = 1e-13
         mf.build()
         import time
@@ -228,7 +243,9 @@ class PJunctionScreening(unittest.TestCase):
         t1 = time.monotonic()
 
         # Turn on P-junction screening. dfj must also be true.
-        mf.with_df.pjs = True
+        mf.with_df.reset()
+        mf.with_df.sgx_tol_energy = "auto"
+        mf.with_df.sgx_tol_potential = "auto"
         mf.build()
         t2 = time.monotonic()
         en1 = mf.energy_tot(dm=dm)
