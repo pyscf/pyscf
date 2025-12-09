@@ -77,7 +77,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(g[2,2], (e1-e2)/(2*delta)*lib.param.BOHR, 6)
         self.assertAlmostEqual(numpy.abs(g.sum(axis=0)).sum(), 0, 13)
         return mf.e_tot, (t3 - t2) + (t1 - t0), t2 - t1, mf.cycles
-    
+
     def test_rhf_dm_screening(self):
         e0, te0, tg0, c0 = self._check_finite_diff_grad(False, False, False)
         e1, te1, tg1, c1 = self._check_finite_diff_grad(False, False, True)
