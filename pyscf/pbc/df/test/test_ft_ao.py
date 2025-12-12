@@ -249,6 +249,61 @@ class KnownValues(unittest.TestCase):
                  for i in range(nao)]
         self.assertAlmostEqual(abs(numpy.array(aoref).T - aoG).max(), 0, 8)
 
+    def test_ft_aoao_r2(self):
+        cell = pgto.Cell()
+        cell.a = numpy.eye(3) * 5
+        n = 18
+        cell.mesh = numpy.array([n,n,n])
+        cell.atom = '''C    1.3    .2       .3
+                       C     .1    .1      1.1
+                       '''
+        cell.basis = {'C': [[1, (0.6, 1)]]}
+        cell.unit = 'B'
+        cell.precision = 1e-10
+        cell.build(0,0)
+
+        ao2_r2 = ft_ao.ft_aopair(cell, Gv=cell.Gv, intor='GTO_ft_r2_origi')
+        nao = cell.nao_nr()
+        coords = cell.get_uniform_grids()
+        aoR_r2 = cell.pbc_eval_gto('GTOval_r2', coords)
+        aoR = cell.pbc_eval_gto('GTOval', coords)
+        aoR_r2_aoR = numpy.einsum('ki,kj->kij', aoR_r2.conj(), aoR)
+        ngrids = aoR.shape[0]
+
+        ao2ref = [tools.fft(aoR_r2_aoR[:,i,j], cell.mesh) * cell.vol/ngrids
+                  for i in range(nao) for j in range(nao)]
+        ao2ref = numpy.array(ao2ref).reshape(6,6,-1).transpose(2,0,1)
+
+        self.assertAlmostEqual(abs(ao2ref - ao2_r2).max(), 0, 8)
+
+    def test_ft_aoao_r4(self):
+        cell = pgto.Cell()
+        cell.a = numpy.eye(3) * 5
+        n = 20
+        cell.mesh = numpy.array([n,n,n])
+        cell.atom = '''C    1.3    .2       .3
+                       C     .1    .1      1.1
+                       '''
+        cell.basis = {'C': [[1, (0.6, 1)]]}
+        cell.unit = 'B'
+        cell.precision = 1e-12
+        cell.build(0,0)
+
+        ao2_r4 = ft_ao.ft_aopair(cell, Gv=cell.Gv, intor='GTO_ft_r4_origi')
+        nao = cell.nao_nr()
+        coords = cell.get_uniform_grids()
+        aoR_r4 = cell.pbc_eval_gto('GTOval_r4', coords)
+        aoR = cell.pbc_eval_gto('GTOval', coords)
+        aoR_r4_aoR = numpy.einsum('ki,kj->kij', aoR_r4.conj(), aoR)
+        ngrids = aoR.shape[0]
+
+        ao4ref = [tools.fft(aoR_r4_aoR[:,i,j], cell.mesh) * cell.vol/ngrids
+                  for i in range(nao) for j in range(nao)]
+        ao4ref = numpy.array(ao4ref).reshape(6,6,-1).transpose(2,0,1)
+
+        self.assertAlmostEqual(abs(ao4ref - ao2_r4).max(), 0, 8)
+
+
     def test_ft_aopair_bvk(self):
         from pyscf.pbc.tools import k2gamma
         n = 2
