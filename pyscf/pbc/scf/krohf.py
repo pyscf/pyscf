@@ -134,6 +134,10 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     nocc_a, nocc_b = mf.nelec
     mo_energy_kpts1 = np.hstack(mo_energy_kpts)
     mo_energy = np.sort(mo_energy_kpts1)
+    nmo = mo_energy.size
+    if nocc_a > nmo or nocc_b > nmo:
+        raise RuntimeError('Failed to assign occupancies. '
+                           f'nocc ({nocc_a}) > Nmo ({nmo})')
     if nocc_b > 0:
         core_level = mo_energy[nocc_b-1]
     else:

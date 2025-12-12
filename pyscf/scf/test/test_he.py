@@ -83,6 +83,12 @@ class KnownValues_NR(unittest.TestCase):
         result = atom_ks.get_atm_nrks(mol)
         self.assertAlmostEqual(result['N'][0], -53.53518426665269, 9)
 
+    def test_invalid_occupancy(self):
+        mol = gto.M(atom='He 0 0 1',
+                    basis=[[0, [.6, 1]]], spin=2)
+        mf = mol.UHF()
+        self.assertRaises(RuntimeError, mf.run)
+
 if __name__ == "__main__":
     print("Full Tests for He")
     unittest.main()
