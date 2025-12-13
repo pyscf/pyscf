@@ -129,18 +129,33 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
     assert fcivec.size == na*nb
-    assert fcivec.dtype == eri.dtype == numpy.float64
-    ci1 = numpy.empty_like(fcivec)
+    assert eri.dtype == numpy.float64
+    if fcivec.dtype == eri.dtype == numpy.float64:
+        fcivec = numpy.asarray(fcivec, order='C')
+        eri = numpy.asarray(eri, order='C')
+        ci1 = numpy.empty_like(fcivec)
+        libfci.FCIcontract_2e_spin1(
+            eri.ctypes.data_as(ctypes.c_void_p),
+            fcivec.ctypes.data_as(ctypes.c_void_p),
+            ci1.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(norb),
+            ctypes.c_int(na),
+            ctypes.c_int(nb),
+            ctypes.c_int(nlinka),
+            ctypes.c_int(nlinkb),
+            link_indexa.ctypes.data_as(ctypes.c_void_p),
+            link_indexb.ctypes.data_as(ctypes.c_void_p),
+        )
+        return ci1.view(FCIvector)
 
-    libfci.FCIcontract_2e_spin1(eri.ctypes.data_as(ctypes.c_void_p),
-                                fcivec.ctypes.data_as(ctypes.c_void_p),
-                                ci1.ctypes.data_as(ctypes.c_void_p),
-                                ctypes.c_int(norb),
-                                ctypes.c_int(na), ctypes.c_int(nb),
-                                ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
-                                link_indexa.ctypes.data_as(ctypes.c_void_p),
-                                link_indexb.ctypes.data_as(ctypes.c_void_p))
-    return ci1.view(FCIvector)
+    ciR = numpy.asarray(fcivec.real, order='C')
+    ciI = numpy.asarray(fcivec.imag, order='C')
+    link_index = (link_indexa, link_indexb)
+    outR = contract_2e(eri, ciR, norb, nelec, link_index=link_index)
+    outI = contract_2e(eri, ciI, norb, nelec, link_index=link_index)
+    out = outR.astype(numpy.complex128)
+    out.imag = outI
+    return out
 
 def make_hdiag(h1e, eri, norb, nelec, compress=False):
     '''Diagonal Hamiltonian for Davidson preconditioner
