@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2025 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,8 +21,15 @@
 ASE package interface
 '''
 
+try:
+    from ase.calculators.calculator import Calculator, all_properties
+except ImportError:
+    print("""ASE is not found. Please install ASE via
+pip3 install ase
+          """)
+    raise RuntimeError("ASE is not found")
+
 import numpy as np
-from ase.calculators.calculator import Calculator, all_properties
 from ase.units import Debye
 from pyscf import lib
 from pyscf.data.nist import BOHR, HARTREE2EV
@@ -65,7 +72,7 @@ def cell_from_ase(ase_atoms):
 
 class PySCF(Calculator):
     implemented_properties = ['energy', 'forces', 'stress',
-                              'dipole', 'magmom']
+                              'dipole', 'magmom', 'polarizability']
 
     default_parameters = {}
 
@@ -159,9 +166,20 @@ class PySCF(Calculator):
             # in Gaussian cgs unit
             self.results['dipole'] = base_method.dip_moment() * Debye
 
+        if 'polarizability' in properties:
+            assert hasattr(base_method, 'istype') and base_method.istype('SCF'), \
+                    'Polarizability can only be computed with mean-field methods'
+            if self.pbc:
+                from pyscf.pbc.prop.polarizability.rhf import Polarizability
+                p = Polarizability(base_method).polarizability()
+            else:
+                from pyscf.prop.polarizability import rhf, uhf
+                if base_method.istype('UHF'):
+                    p = uhf.Polarizability(base_method).polarizability()
+                else:
+                    p = rhf.Polarizability(base_method).polarizability()
+            self.results['polarizability'] = p * (BOHR**3)
+
         if 'magmom' in properties:
             magmom = self.mol.spin
             self.results['magmom'] = magmom
-
-def make_kpts(cell, nks):
-    raise DeprecationWarning('Use cell.make_kpts(nks) instead.')
