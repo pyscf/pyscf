@@ -60,7 +60,7 @@ def cell_from_ase(ase_atoms):
     '''
     cell = Cell()
     cell.atom = ase_atoms_to_pyscf(ase_atoms)
-    cell.a = ase_atoms.cell
+    cell.a = np.asarray(ase_atoms.cell)
     return cell
 
 class PySCF(Calculator):
@@ -69,9 +69,8 @@ class PySCF(Calculator):
 
     default_parameters = {}
 
-    def __init__(self, restart=None, ignore_bad_restart_file=False,
-                 label='PySCF', atoms=None, directory='.', method=None,
-                 **kwargs):
+    def __init__(self, restart=None, label='PySCF', atoms=None, directory='.',
+                 method=None, **kwargs):
         """Construct PySCF-calculator object.
 
         Parameters
@@ -82,8 +81,8 @@ class PySCF(Calculator):
 
         method: A PySCF method class
         """
-        Calculator.__init__(self, restart, ignore_bad_restart_file,
-                            label, atoms, directory=directory, **kwargs)
+        Calculator.__init__(self, restart, label=label, atoms=atoms,
+                            directory=directory, **kwargs)
 
         if not isinstance(method, lib.StreamObject):
             raise RuntimeError(f'{method} must be an instance of a PySCF method')
@@ -94,8 +93,6 @@ class PySCF(Calculator):
             mol = method.cell
         else:
             mol = method.mol
-        if not mol.unit.startswith(('A','a')):
-            raise RuntimeError("PySCF unit must be A to work with ASE")
         self.mol = mol
         self.method_scan = None
         if hasattr(method, 'as_scanner'):
@@ -120,11 +117,14 @@ class PySCF(Calculator):
             _atoms = list(zip(atomic_numbers, positions))
 
         if self.pbc:
-            self.mol.set_geom_(_atoms, a=atoms.cell)
+            self.mol.set_geom_(_atoms, a=np.asarray(atoms.cell), unit='Angstrom')
         else:
-            self.mol.set_geom_(_atoms)
+            self.mol.set_geom_(_atoms, unit='Angstrom')
 
-        if 'energy' in properties:
+        with_grad = 'forces' in properties or 'stress' in properties
+        with_energy = with_grad or 'energy' in properties or 'dipole' in properties
+
+        if with_energy:
             if self.method_scan is None:
                 self.mol.set_geom_(atoms)
                 self.method.reset(self.mol).run()
@@ -142,7 +142,7 @@ class PySCF(Calculator):
         else:
             base_method = self.method_scan
 
-        if 'forces' in properties or 'stress' in properties:
+        if with_grad:
             grad_obj = base_method.Gradients()
 
         if 'forces' in properties:
@@ -154,6 +154,8 @@ class PySCF(Calculator):
             self.results['stress'] = stress * (HARTREE2EV / BOHR)
 
         if 'dipole' in properties:
+            if self.pbc:
+                raise NotImplementedError('dipole for PBC calculations')
             # in Gaussian cgs unit
             self.results['dipole'] = base_method.dip_moment() * Debye
 

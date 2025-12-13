@@ -1683,7 +1683,7 @@ class Cell(mole.MoleBase):
             if self.exp_to_discard is not None:
                 logger.info(self, 'exp_to_discard = %s', self.exp_to_discard)
             logger.info(self, 'rcut = %s (nimgs = %s)', self.rcut, self.nimgs)
-            logger.info(self, 'lattice sum = %d cells', len(self.get_lattice_Ls()))
+            #logger.info(self, 'lattice sum = %d cells', len(self.get_lattice_Ls()))
             logger.info(self, 'precision = %g', self.precision)
             logger.info(self, 'pseudo = %s', self.pseudo)
             if ke_cutoff is not None:
@@ -1999,18 +1999,13 @@ class Cell(mole.MoleBase):
             cell = self.copy(deep=False)
             cell._env = cell._env.copy()
 
-        if unit is not None and cell.unit != unit:
-            if isinstance(unit, str):
-                if is_au(unit):
-                    _unit = 1.
-                else:
-                    _unit = param.BOHR
-            else:
-                _unit = unit
-            if a is None:
-                a = self.lattice_vectors() * _unit
-            if atoms_or_coords is None:
-                atoms_or_coords = self.atom_coords() * _unit
+        if unit is not None:
+            _unit = mole._length_in_au(unit)
+            if _unit != mole._length_in_au(cell.unit):
+                if a is None:
+                    a = self.lattice_vectors() / _unit
+                if atoms_or_coords is None:
+                    atoms_or_coords = self.atom_coords() / _unit
 
         if a is not None:
             logger.info(self, 'Set new lattice vectors')
