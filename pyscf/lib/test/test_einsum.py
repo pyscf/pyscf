@@ -211,7 +211,7 @@ class KnownValues(unittest.TestCase):
         c1 = einsum("ij,ji->", x, y)
         self.assertTrue(abs(c0-c1).max() < 1e-13)
 
-    def test_contract(self):
+    def test_tblis_einsum(self):
         try:
             from pyscf.lib import tblis_einsum
             tblis_available = True
@@ -244,7 +244,6 @@ class KnownValues(unittest.TestCase):
         ref = lib.einsum('jlxy,lyp->jlxp', ref, c)
         ref = lib.einsum('jlxp,px->jl', ref, d)
         self.assertAlmostEqual(abs(ref-f).max(), 0, 9)
-
 
 if __name__ == '__main__':
     unittest.main()

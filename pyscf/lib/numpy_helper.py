@@ -1672,14 +1672,3 @@ def isin_1d(v, vs, return_index=False):
         if len(idx) == 1:
             idx = idx[0]
         return v_in_vs, idx
-
-if __name__ == '__main__':
-    a = numpy.random.random((30,40,5,10))
-    b = numpy.random.random((10,30,5,20))
-    c = numpy.random.random((10,20,20))
-    d = numpy.random.random((20,10))
-    f = einsum('ijkl,xiky,ayp,px->ajl', a,b,c,d, optimize=True)
-    ref = einsum('ijkl,xiky->jlxy', a, b)
-    ref = einsum('jlxy,ayp->jlxap', ref, c)
-    ref = einsum('jlxap,px->ajl', ref, d)
-    print(abs(ref-f).max())
