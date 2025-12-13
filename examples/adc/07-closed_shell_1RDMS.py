@@ -43,7 +43,7 @@ def get_dip_moments(adc_var):
     print(hline)
     print('Calculating dipole moment components...')
     dip_ints = -adc_var.mol.intor('int1e_r', comp = 3)
-    
+
     for i in range(dip_ints.shape[0]):
         dip_ints[i] = np.dot(mf.mo_coeff.T, np.dot(dip_ints[i], mf.mo_coeff))
 
@@ -66,7 +66,7 @@ def get_dip_moments(adc_var):
 
     #EXS 1RDM CONT
     exc_dip = lib.einsum("xqr,eqr->ex", dip_ints, rdm1_exc) + nucl_dip
-    
+
     print(hline)
     print("Reference dipole moment (a.u.):")
     print(f"    X: {ref_dip[0]:10.3e}")
@@ -75,7 +75,7 @@ def get_dip_moments(adc_var):
     print(hline)
     print(hline)
 
-    for r in range(exc_dip.shape[0]):  
+    for r in range(exc_dip.shape[0]):
         print(f"Excited state root {r} dipole moment (a.u.):")
         print(f"    X: {exc_dip[r][0]:10.3e}")
         print(f"    Y: {exc_dip[r][1]:10.3e}")
@@ -121,5 +121,24 @@ get_dip_moments(myadc)
 #EA-RADC(3) for 1 root
 myadc.method = "adc(3)"
 myadc.method_type = "ea"
+myadc.kernel(nroots = 1)
+get_dip_moments(myadc)
+
+###EE CALCS
+#EE-RADC(2) for 3 roots
+myadc.method = "adc(2)"
+myadc.method_type = "ee"
+myadc.kernel(nroots = 3)
+get_dip_moments(myadc)
+
+#EE-RADC(2)-x for 1 root
+myadc.method = "adc(2)-x"
+myadc.method_type = "ee"
+myadc.kernel(nroots = 1)
+get_dip_moments(myadc)
+
+#EE-RADC(3) for 1 root
+myadc.method = "adc(3)"
+myadc.method_type = "ee"
 myadc.kernel(nroots = 1)
 get_dip_moments(myadc)

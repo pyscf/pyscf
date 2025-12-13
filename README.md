@@ -7,14 +7,14 @@ Python-based Simulations of Chemistry Framework
 [![Build Status](https://github.com/pyscf/pyscf/workflows/CI/badge.svg)](https://github.com/pyscf/pyscf/actions?query=workflow%3ACI)
 [![codecov](https://codecov.io/gh/pyscf/pyscf/branch/master/graph/badge.svg)](https://codecov.io/gh/pyscf/pyscf)
 
-2025-07-15
+2025-10-15
 
-* [Stable release 2.10.0](https://github.com/pyscf/pyscf/releases/tag/v2.10.0)
+* [Stable release 2.11.0](https://github.com/pyscf/pyscf/releases/tag/v2.11.0)
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org)
 * [Installation](#installation)
 * [Features](../master/FEATURES)
-* [News](https://pyscf.org/news.html): **2nd PySCF Developers Meeting!**
+* [News](https://pyscf.org/news.html): **3rd PySCF Developers Meeting!**
 
 
 # Installation
@@ -38,7 +38,7 @@ Python-based Simulations of Chemistry Framework
         pip install pyscf[dispersion]
 
 * More details of custom installation can be found in
-  [installation manual](http://pyscf.org/install.html#compiling-from-source-code)
+  [installation manual](http://pyscf.org/user/install.html#build-from-source)
 
 
 # Citing PySCF

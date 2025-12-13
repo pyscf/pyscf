@@ -151,7 +151,7 @@ class KnownValues(unittest.TestCase):
         coords = [(0.5,0.6,0.1)]
         #coords = [(0.0,0.0,0.0)]
         charges = [-0.1]
-        mf = qmmm.add_mm_charges(mol.RHF, coords, charges)
+        mf = qmmm.add_mm_charges(mol.RHF(), coords, charges)
         ps = mf.MP2().as_scanner()
         g = ps.nuc_grad_method().as_scanner()(mol)[1]
         e1 = ps(''' O                  0.00100000    0.00000000   -0.11081188

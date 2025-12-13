@@ -13,11 +13,12 @@
 # limitations under the License.
 #
 # Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
+#         Ning-Yuan Chen <cny003@outlook.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
 import unittest
-import numpy
+import numpy as np
 from pyscf import gto
 from pyscf import scf
 from pyscf import adc
@@ -44,6 +45,13 @@ def tearDownModule():
     global mol, mf, myadc
     del mol, mf, myadc
 
+def rdms_test(dm_a,dm_b):
+    r2_int = mol.intor('int1e_r2')
+    dm_ao_a = np.einsum('pi,ij,qj->pq', mf.mo_coeff[0], dm_a, mf.mo_coeff[0].conj())
+    dm_ao_b = np.einsum('pi,ij,qj->pq', mf.mo_coeff[1], dm_b, mf.mo_coeff[1].conj())
+    r2 = np.einsum('pq,pq->',r2_int,dm_ao_a+dm_ao_b)
+    return r2
+
 class KnownValues(unittest.TestCase):
 
     def test_ip_adc2(self):
@@ -68,6 +76,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[4], 0.00000021157430, 6)
         self.assertAlmostEqual(p[5], 0.00000027136657, 6)
 
+        dm1_exc = np.array(myadc.make_rdm1())
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 24.33034492900383, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 24.42115827627032, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 44.99906123473563, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 44.99906123473501, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][4],dm1_exc[1][4]), 44.99906123473585, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][5],dm1_exc[1][5]), 44.99906123473656, 6)
+
     def test_ip_adc2x(self):
 
         myadc.ncvs = 2
@@ -91,6 +107,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[4], 0.00000140035298, 6)
         self.assertAlmostEqual(p[5], 0.00000140035318, 6)
 
+        dm1_exc = np.array(myadc.make_rdm1())
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 24.071667937205092, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 24.195548010935678, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 27.598011511917026, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 27.735289852038065, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][4],dm1_exc[1][4]), 27.735289853609093, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][5],dm1_exc[1][5]), 27.735289844280143, 6)
+
     def test_ip_adc3_high_cost(self):
 
         myadc.ncvs = 2
@@ -113,6 +137,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[3], 0.00000140035297, 6)
         self.assertAlmostEqual(p[4], 0.00000140035305, 6)
         self.assertAlmostEqual(p[5], 0.00000140035318, 6)
+
+        dm1_exc = np.array(myadc.make_rdm1())
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 24.30525761733679, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 24.46041808613336, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 27.57372942007785, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 27.73528982525924, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][4],dm1_exc[1][4]), 27.73528984901638, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][5],dm1_exc[1][5]), 27.73528988288061, 6)
 
 if __name__ == "__main__":
     print("IP calculations for different ADC methods for open-shell atom")

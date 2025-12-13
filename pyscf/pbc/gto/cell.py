@@ -806,9 +806,9 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         ewg *= inv_area*0.5
 
     elif cell.dimension == 0:
-        # The truncted Coulomb kernel 4*pi/G^2(1-cos(G*Rc)) should work for the
+        # The truncated Coulomb kernel 4*pi/G^2(1-cos(G*Rc)) should work for the
         # ewg term. However, large errors may be introduced in ewovrl or ewself.
-        # For dimesion=0 with truncated Coulomb, the nuclear energy can be
+        # For dimension=0 with truncated Coulomb, the nuclear energy can be
         # computed directly using the mole.classical_coulomb_energy function.
         raise RuntimeError('Ewald with truncated Coulomb')
 
@@ -1334,47 +1334,94 @@ class Cell(mole.MoleBase):
         from pyscf.pbc import scf, dft
         from pyscf.dft import XC
 
-        for mod in (scf, dft):
-            method = getattr(mod, key, None)
-            if callable(method):
-                return method(self)
-
-        if key[0] == 'K':  # with k-point sampling
-            if 'TD' in key[:4]:
-                if key in ('KTDHF', 'KTDA'):
-                    mf = scf.KHF(self)
-                else:
-                    mf = dft.KKS(self)
-                    xc = key.split('TD', 1)[1]
-                    if xc in XC:
-                        mf.xc = xc
-                        key = 'KTDDFT'
-            elif 'CI' in key or 'CC' in key or 'MP' in key:
-                mf = scf.KHF(self)
-            else:
-                return object.__getattribute__(self, key)
-            # Remove prefix 'K' because methods are registered without the leading 'K'
-            key = key[1:]
+        attr_name = key
+        mf_xc = None
+        for mod in (dft, scf):
+            mf_method = getattr(mod, key, None)
+            if callable(mf_method):
+                key = None
+                break
         else:
-            if 'TD' in key[:3]:
-                if key in ('TDHF', 'TDA'):
-                    mf = scf.HF(self)
+            if key[0] == 'K':  # with k-point sampling
+                if 'TD' in key[:4]:
+                    if 'KTDA' in key:
+                        mf_method = 'KSCF_TO_BE_DETERMINED'
+                    elif 'KTDHF' in key:
+                        mf_method = scf.KHF
+                    else:
+                        mf_method = dft.KKS
+                        xc = key.split('TD', 1)[1]
+                        if xc in XC:
+                            mf_xc = xc
+                            key = 'KTDDFT'
+                        elif 'TDDFT' not in key:
+                            raise AttributeError(f'method {key} not supported')
+                elif 'CI' in key or 'CC' in key or 'MP' in key:
+                    mf_method = scf.KHF
                 else:
-                    mf = dft.KS(self)
-                    xc = key.split('TD', 1)[1]
-                    if xc in XC:
-                        mf.xc = xc
-                        key = 'TDDFT'
-            elif 'CI' in key or 'CC' in key or 'MP' in key:
-                mf = scf.HF(self)
+                    return object.__getattribute__(self, key)
+                # Remove prefix 'K' because methods are registered without the leading 'K'
+                key = key[1:]
             else:
-                return object.__getattribute__(self, key)
+                if 'TD' in key[:3]:
+                    if 'TDA' in key:
+                        mf_method = 'SCF_TO_BE_DETERMINED'
+                    elif 'TDHF' in key:
+                        mf_method = scf.HF
+                    else:
+                        mf_method = dft.KS
+                        xc = key.split('TD', 1)[1]
+                        if xc in XC:
+                            mf_xc = xc
+                            key = 'TDDFT'
+                        elif 'TDDFT' not in key:
+                            raise AttributeError(f'method {key} not supported')
+                elif 'CI' in key or 'CC' in key or 'MP' in key:
+                    mf_method = scf.HF
+                else:
+                    return object.__getattribute__(self, key)
 
-        method = getattr(mf, key)
+        post_mf_key = key
+        SCF_KW = {'kpt', 'kpts', 'xc', 'exxdiv',
+                  'U_idx', 'U_val', 'C_ao_lo', 'minao_ref'}
 
-        if self.nelectron != 0:
-            mf.run()
-        return method
+        def fn(*args, **kwargs):
+            if mf_xc is not None:
+                assert 'xc' not in kwargs
+                kwargs['xc'] = mf_xc
+
+            mf_kw = {}
+            remaining_kw = {}
+            for k, v in kwargs.items():
+                if k in SCF_KW:
+                    mf_kw[k] = v
+                else:
+                    remaining_kw[k] = v
+
+            if mf_method == 'SCF_TO_BE_DETERMINED':
+                if 'xc' in mf_kw:
+                    mf = dft.KS(self, **mf_kw)
+                else:
+                    mf = scf.HF(self, **mf_kw)
+            elif mf_method == 'KSCF_TO_BE_DETERMINED':
+                if 'xc' in mf_kw:
+                    mf = dft.KKS(self, **mf_kw)
+                else:
+                    mf = scf.KHF(self, **mf_kw)
+            else:
+                mf = mf_method(self, **mf_kw)
+
+            if post_mf_key is None:
+                if args:
+                    raise AttributeError(
+                        f'cell.{attr_name} function does not support positional arguments')
+                return mf.set(**remaining_kw)
+
+            post_mf = getattr(mf, post_mf_key)
+            if self.nelectron != 0:
+                mf.run()
+            return post_mf(*args, **remaining_kw)
+        return mole._MoleLazyCallAdapter(fn, attr_name)
 
     tot_electrons = tot_electrons
 
@@ -1398,8 +1445,8 @@ class Cell(mole.MoleBase):
         if not self.space_group_symmetry:
             return mesh
 
-        _, mesh1 = self.lattice_symmetry.check_mesh_symmetry(mesh=mesh,
-                                                             return_mesh=True)
+        _, mesh1 = self.lattice_symmetry.check_mesh_symmetry(
+            cell=self, mesh=mesh, return_mesh=True)
         if np.prod(mesh1) != np.prod(mesh):
             logger.debug(self, 'mesh %s is symmetrized as %s', mesh, mesh1)
         m1size = np.prod(mesh1)
@@ -1439,6 +1486,10 @@ class Cell(mole.MoleBase):
             _mesh_from_build = self._mesh_from_build
             self.mesh = self.symmetrize_mesh()
             self._mesh_from_build = _mesh_from_build
+        # lattice_symmetry introduces circular dependency to cell
+        del self.lattice_symmetry.cell
+        if self.lattice_symmetry.spacegroup is not None:
+            del self.lattice_symmetry.spacegroup.cell
         return self
 
     @lib.with_doc(mole.format_atom.__doc__)
@@ -1652,7 +1703,7 @@ class Cell(mole.MoleBase):
             if self.exp_to_discard is not None:
                 logger.info(self, 'exp_to_discard = %s', self.exp_to_discard)
             logger.info(self, 'rcut = %s (nimgs = %s)', self.rcut, self.nimgs)
-            logger.info(self, 'lattice sum = %d cells', len(self.get_lattice_Ls()))
+            #logger.info(self, 'lattice sum = %d cells', len(self.get_lattice_Ls()))
             logger.info(self, 'precision = %g', self.precision)
             logger.info(self, 'pseudo = %s', self.pseudo)
             if ke_cutoff is not None:
@@ -1939,5 +1990,59 @@ class Cell(mole.MoleBase):
         if mol.symmetry:
             mol._build_symmetry()
         return mol
+
+    def set_geom_(self, atoms_or_coords=None, unit=None, symmetry=None,
+                  a=None, inplace=True):
+        '''Update geometry and lattice parameters
+
+        Kwargs:
+            atoms_or_coords : list, str, or numpy.ndarray
+                When specified in list or str, it is processed as the Mole.atom
+                attribute. If inputing a (N, 3) numpy array, this array
+                represents the coordinates of the atoms in the molecule.
+            a : list, str, or numpy.ndarray
+                If specified, it is assigned to the cell.a attribute. Its data
+                format should be the same to cell.a
+            unit : str
+                The unit for the input `atoms_or_coords` and `a`. If specified,
+                cell.unit will be updated to this value. If not provided, the
+                current cell.unit will be used for the two inputs.
+            symmetry : bool
+                Whether to enable space_group_symmetry. It is a reserved input
+                argument. This functionality is not supported yet.
+            inplace : bool
+                Whether to overwrite the existing Mole object.
+        '''
+        if inplace:
+            cell = self
+        else:
+            cell = self.copy(deep=False)
+            cell._env = cell._env.copy()
+
+        if unit is not None:
+            _unit = mole._length_in_au(unit)
+            if _unit != mole._length_in_au(cell.unit):
+                if a is None:
+                    a = self.lattice_vectors() / _unit
+                if atoms_or_coords is None:
+                    atoms_or_coords = self.atom_coords() / _unit
+
+        if a is not None:
+            logger.info(self, 'Set new lattice vectors')
+            logger.info(self, '%s', a)
+            cell.a = a
+            if self._mesh_from_build:
+                cell.mesh = None
+            if self._rcut_from_build:
+                cell.rcut = None
+            cell._built = False
+        cell.enuc = None
+
+        if atoms_or_coords is not None:
+            cell = mole.MoleBase.set_geom_(cell, atoms_or_coords, unit, symmetry)
+
+        if not cell._built:
+            cell.build(False, False)
+        return cell
 
 del (INTEGRAL_PRECISION, WRAP_AROUND, WITH_GAMMA, EXP_DELIMITER)

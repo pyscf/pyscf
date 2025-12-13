@@ -364,12 +364,16 @@ class GradientsBase(lib.StreamObject):
             solver (string) : geometry optimization solver, can be "geomeTRIC"
             (default) or "berny".
         '''
-        if solver.lower() == 'geometric':
+        solver = solver.lower()
+        if solver == 'geometric':
             from pyscf.geomopt import geometric_solver
             return geometric_solver.GeometryOptimizer(self.as_scanner())
-        elif solver.lower() == 'berny':
+        elif solver == 'berny':
             from pyscf.geomopt import berny_solver
             return berny_solver.GeometryOptimizer(self.as_scanner())
+        elif solver == 'ase':
+            from pyscf.geomopt import ase_solver
+            return ase_solver.GeometryOptimizer(self.base)
         else:
             raise RuntimeError('Unknown geometry optimization solver %s' % solver)
 

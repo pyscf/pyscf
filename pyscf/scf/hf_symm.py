@@ -838,12 +838,12 @@ class SymAdaptedROHF(rohf.ROHF):
                 ir_in_d2h = mol.irrep_id[k] % 10  # convert to D2h irreps
                 wfnsym ^= ir_in_d2h
 
-            if mol.groupname in ('SO3', 'Dooh', 'Coov'):
-                # TODO: check wave function symmetry
-                log.note('Wave-function symmetry = %s', mol.groupname)
-            else:
+            if mol.groupname in symm.param.POINTGROUP:
                 log.note('Wave-function symmetry = %s',
                          symm.irrep_id2name(mol.groupname, wfnsym))
+            else:
+                # TODO: check wave function symmetry for ('SO3', 'Dooh', 'Coov') etc
+                log.note('Wave-function symmetry = %s', mol.groupname)
             log.note('occupancy for each irrep:  ' + (' %4s'*nirrep),
                      *mol.irrep_name)
             log.note('double occ                 ' + (' %4d'*nirrep), *ndoccs)

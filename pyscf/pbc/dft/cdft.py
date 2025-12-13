@@ -38,7 +38,7 @@ def cdft(mf,cell,offset,orbital,basis=None):
     '''
     Input:
         mf -- a mean field object for DFT or (in principle) HF (doesn't really matter)
-        shift -- float -- a semi aribitrary energy which displaces the selected orbitals by the diagonal
+        shift -- float -- a semi arbitrary energy which displaces the selected orbitals by the diagonal
         orbital -- int -- indicating which orbital are shifted in the selected basis
         basis -- 2D numpy array -- the working basis in the basis of AOs from 'cell' (Defaults to AO basis)
 

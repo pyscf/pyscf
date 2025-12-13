@@ -100,7 +100,7 @@ def get_j(mf, cell, dm_kpts, kpts, kpts_band=None):
 
     Kwargs:
         kpts_band : (k,3) ndarray
-            A list of arbitrary "band" k-points at which to evalute the matrix.
+            A list of arbitrary "band" k-points at which to evaluate the matrix.
 
     Returns:
         vj : (nkpts, nao, nao) ndarray
@@ -119,7 +119,7 @@ def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None, with_j=True, with_k=True,
 
     Kwargs:
         kpts_band : (3,) ndarray
-            A list of arbitrary "band" k-point at which to evalute the matrix.
+            A list of arbitrary "band" k-point at which to evaluate the matrix.
 
     Returns:
         vj : (nkpts, nao, nao) ndarray
@@ -191,19 +191,23 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     nocc = mf.cell.tot_electrons(nkpts) // 2
 
     mo_energy = np.sort(np.hstack(mo_energy_kpts))
+    nmo = mo_energy.size
+    if nocc > nmo:
+        raise RuntimeError('Failed to assign occupancies. '
+                           f'Nocc ({nocc}) > Nmo ({nmo})')
     fermi = mo_energy[nocc-1]
     mo_occ_kpts = []
     for mo_e in mo_energy_kpts:
         mo_occ_kpts.append((mo_e <= fermi).astype(np.double) * 2)
 
-    if nocc < mo_energy.size:
+    if nocc < nmo:
         logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
                     mo_energy[nocc-1], mo_energy[nocc])
         if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
             logger.warn(mf, 'HOMO %.12g == LUMO %.12g',
                         mo_energy[nocc-1], mo_energy[nocc])
     else:
-        logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
+        logger.info(mf, 'HOMO = %.12g (no LUMO)', mo_energy[nocc-1])
 
     if mf.verbose >= logger.DEBUG:
         np.set_printoptions(threshold=len(mo_energy))
@@ -444,7 +448,6 @@ class KSCF(pbchf.SCF):
 
     _keys = {'cell', 'exx_built', 'exxdiv', 'with_df', 'rsjk'}
 
-    reset = pbchf.SCF.reset
     mol = pbchf.SCF.mol
 
     check_sanity = pbchf.SCF.check_sanity
@@ -547,6 +550,11 @@ class KSCF(pbchf.SCF):
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
+        return self
+
+    def reset(self, cell=None):
+        pbchf.SCF.reset(self, cell)
+        self.exx_built = False
         return self
 
     def dump_flags(self, verbose=None):
@@ -777,6 +785,8 @@ class KSCF(pbchf.SCF):
         raise NotImplementedError
 
 class KRHF(KSCF):
+    '''RHF class with k-point sampling (default: gamma point).
+    '''
 
     analyze = analyze
     spin_square = mol_hf.RHF.spin_square

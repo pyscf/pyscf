@@ -267,7 +267,6 @@ XC_ALIAS = {
     'SCAN0'             : 'SCAN0,SCAN',
     'PBEOP'             : 'PBE,OP_PBE',
     'BOP'               : 'B88,OP_B88',
-    # new in libxc-4.2.3
     'REVSCAN'           : 'MGGA_X_REVSCAN,MGGA_C_REVSCAN',
     'REVSCAN_VV10'      : 'MGGA_X_REVSCAN,MGGA_C_REVSCAN_VV10',
     'SCAN_VV10'         : 'MGGA_X_SCAN,MGGA_C_SCAN_VV10',
@@ -276,6 +275,7 @@ XC_ALIAS = {
     'M06'               : 'HYB_MGGA_X_M06,MGGA_C_M06',
     'M05_2X'            : 'HYB_MGGA_X_M05_2X,MGGA_C_M05_2X',
     'M06_2X'            : 'HYB_MGGA_X_M06_2X,MGGA_C_M06_2X',
+    'M06_HF'            : 'HYB_MGGA_X_M06_HF,MGGA_C_M06_HF',
     # extra aliases
     'SOGGA11X'          : 'SOGGA11_X',
     'M06L'              : 'M06_L',
@@ -286,6 +286,7 @@ XC_ALIAS = {
     'MN12SX'            : 'MN12_SX',
     'M052X'             : 'M05_2X',
     'M062X'             : 'M06_2X',
+    'M06HF'             : 'M06_HF',
 }  # noqa: E122
 XC_ALIAS.update([(key.replace('-',''), XC_ALIAS[key])
                  for key in XC_ALIAS if '-' in key])
@@ -548,16 +549,6 @@ def parse_xc(description):
         from pyscf.scf.dispersion import parse_dft
         description, _, _ = parse_dft(description)
         description = description.upper()
-
-    if (description in ('B3P86', 'B3LYP', 'X3LYP') and
-        not getattr(parse_xc, 'b3lyp5_warned', False) and
-        not hasattr(__config__, 'B3LYP_WITH_VWN5')):
-        parse_xc.b3lyp5_warned = True
-        warnings.warn('Since PySCF-2.3, B3LYP (and B3P86) are changed to the VWN-RPA variant, '
-                      'corresponding to the original definition by Stephens et al. (issue 1480) '
-                      'and the same as the B3LYP functional in Gaussian. '
-                      'To restore the VWN5 definition, you can put the setting '
-                      '"B3LYP_WITH_VWN5 = True" in pyscf_conf.py')
 
     def assign_omega(omega, hyb_or_sr, lr=0):
         if hyb[2] == omega or omega == 0:
@@ -1348,7 +1339,7 @@ class XCFunctionalCache:
 
         Additional argument:
             clear: bool
-                If True, clear all cached properties. Set to False may have a slight performace
+                If True, clear all cached properties. Set to False may have a slight performance
                 gain, but one must manually clear cached properties that might change prior to
                 any productive calculations, preferably in the callback.
         '''
@@ -1452,8 +1443,8 @@ def register_custom_functional_(new_xc_code, based_on_xc_code, ext_params=None, 
         The string identifier of the parent functional
     ext_params : dict, with LibXC functional integer ID as key, and an array-like
         object containing the functional parameters as value.
-        If not None, set the external parameters of the functional componet from
-        the dict using the xc_func_set_ext_params API.
+        If not None, set the external parameters of the functional component
+        from the dict using the xc_func_set_ext_params API.
     omega : float
         If not None, set the omega value in self.hyb. If hyb argument is set,
         this argument is ignored.
@@ -1509,7 +1500,7 @@ def update_custom_functional_(xc_code, ext_params=None, omega=None,
             required if one or more cached properties (such as hybrid_coeff) are
             changed after the update. Set to False allows users to manually handle
             cache; one can clear only the properties that are expected to change
-            for a slight performace gain.
+            for a slight performance gain.
     '''
     def update(xc):
         xc.customize_(ext_params, omega, hyb, facs, density_threshold, callback, clear)

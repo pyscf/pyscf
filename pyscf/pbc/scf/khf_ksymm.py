@@ -118,7 +118,6 @@ def eig(kmf, h_kpts, s_kpts):
     return eig_kpts, mo_coeff_kpts
 
 def ksymm_scf_common_init(kmf, cell, kpts, use_ao_symmetry=True):
-    kmf._kpts = None
     kmf.use_ao_symmetry = (cell.dimension == 3 and
                            use_ao_symmetry and
                            not kpts.time_reversal and
@@ -162,8 +161,7 @@ class KsymAdaptedKSCF(khf.KSCF):
             kpts = libkpts.make_kpts(self.cell, kpts=kpts)
         elif not isinstance(kpts, libkpts.KPoints):
             raise TypeError("Input kpts have wrong type: %s" % type(kpts))
-        kpts_bz = kpts.kpts
-        self.with_df.kpts = np.reshape(kpts_bz, (-1,3))
+        self.with_df.kpts = kpts
         self._kpts = kpts
 
     @property
@@ -178,7 +176,12 @@ class KsymAdaptedKSCF(khf.KSCF):
 
     @kmesh.setter
     def kmesh(self, x):
-        self.kpts = self.cell.make_kpts(x)
+        self.kpts = self.cell.make_kpts(x, space_group_symmetry=True)
+
+    def reset(self, cell=None):
+        self._kpts.reset(cell)
+        khf.KSCF.reset(self, cell)
+        return self
 
     def dump_flags(self, verbose=None):
         mol_hf.SCF.dump_flags(self, verbose)

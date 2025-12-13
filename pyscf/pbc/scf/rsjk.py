@@ -39,7 +39,7 @@ from pyscf.pbc.df import aft, rsdf_builder, aft_jk
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df.df_jk import (zdotNN, zdotCN, zdotNC, _ewald_exxdiv_for_G0,
                                 _format_dms, _format_kpts_band, _format_jks)
-from pyscf.pbc.df.incore import libpbc, _get_cache_size, LOG_ADJUST
+from pyscf.pbc.df.incore import libpbc, _get_cache_size, LOG_ADJUST, verify_cint_backend
 from pyscf.pbc.lib.kpts_helper import (is_zero, kk_adapted_iter,
                                        group_by_conj_pairs, intersection)
 from pyscf import __config__
@@ -207,6 +207,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
                 log.debug('supmol_d nbas = %d cGTO = %d', supmol_d.nbas, supmol_d.nao)
         log.timer_debug1('initializing supmol', *cpu0)
 
+        verify_cint_backend()
         self._cintopt = _vhf.make_cintopt(supmol_sr._atm, supmol_sr._bas,
                                           supmol_sr._env, 'int2e')
         nbas = supmol_sr.nbas

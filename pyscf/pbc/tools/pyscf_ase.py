@@ -76,9 +76,8 @@ class PySCF(Calculator):
 
     default_parameters = {}
 
-    def __init__(self, restart=None, ignore_bad_restart_file=False,
-                 label='PySCF', atoms=None, directory='.', method=None,
-                 **kwargs):
+    def __init__(self, restart=None, label='PySCF', atoms=None, directory='.',
+                 method=None, **kwargs):
         """Construct PySCF-calculator object.
 
         Parameters
@@ -89,8 +88,8 @@ class PySCF(Calculator):
 
         method: A PySCF method class
         """
-        Calculator.__init__(self, restart, ignore_bad_restart_file,
-                            label, atoms, directory=directory, **kwargs)
+        Calculator.__init__(self, restart, label=label, atoms=atoms,
+                            directory=directory, **kwargs)
 
         if not isinstance(method, lib.StreamObject):
             raise RuntimeError(f'{method} must be an instance of a PySCF method')
@@ -101,8 +100,6 @@ class PySCF(Calculator):
             mol = method.cell
         else:
             mol = method.mol
-        if not mol.unit.startswith(('A','a')):
-            raise RuntimeError("PySCF unit must be A to work with ASE")
         self.mol = mol
         self.method_scan = None
         if hasattr(method, 'as_scanner'):
@@ -127,9 +124,9 @@ class PySCF(Calculator):
             _atoms = list(zip(atomic_numbers, positions))
 
         if self.pbc:
-            self.mol.set_geom_(_atoms, a=atoms.cell)
+            self.mol.set_geom_(_atoms, a=np.asarray(atoms.cell), unit='Angstrom')
         else:
-            self.mol.set_geom_(_atoms)
+            self.mol.set_geom_(_atoms, unit='Angstrom')
 
         with_grad = 'forces' in properties or 'stress' in properties
         with_energy = with_grad or 'energy' in properties or 'dipole' in properties

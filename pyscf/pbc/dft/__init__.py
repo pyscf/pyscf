@@ -34,10 +34,6 @@ from pyscf.pbc.dft import kukspu_ksymm
 from pyscf.pbc.dft.rks import KohnShamDFT
 from pyscf.pbc.lib import kpts as libkpts
 
-GKS = gks.GKS
-UKS = uks.UKS
-ROKS = roks.ROKS
-
 def KRKS(cell, *args, **kwargs):
     for arg in args:
         if isinstance(arg, libkpts.KPoints):
@@ -78,26 +74,46 @@ def KUKSpU(cell, *args, **kwargs):
     return kukspu.KUKSpU(cell, *args, **kwargs)
 
 def RKS(cell, *args, **kwargs):
+    if 'kpts' in kwargs:
+        return KRKS(cell, *args, **kwargs)
     if cell.spin == 0:
         return rks.RKS(cell, *args, **kwargs)
     else:
         return roks.ROKS(cell, *args, **kwargs)
 RKS.__doc__ = rks.RKS.__doc__
 
+def UKS(cell, *args, **kwargs):
+    if 'kpts' in kwargs:
+        return KUKS(cell, *args, **kwargs)
+    return uks.UKS(cell, *args, **kwargs)
+UKS.__doc__ = uks.UKS.__doc__
+
+def GKS(cell, *args, **kwargs):
+    if 'kpts' in kwargs:
+        return KGKS(cell, *args, **kwargs)
+    return gks.GKS(cell, *args, **kwargs)
+GKS.__doc__ = gks.GKS.__doc__
+
+def ROKS(cell, *args, **kwargs):
+    if 'kpts' in kwargs:
+        return KROKS(cell, *args, **kwargs)
+    return roks.ROKS(cell, *args, **kwargs)
+ROKS.__doc__ = roks.ROKS.__doc__
+
 def KS(cell, *args, **kwargs):
     if cell.spin == 0:
-        return rks.RKS(cell, *args, **kwargs)
+        return RKS(cell, *args, **kwargs)
     else:
-        return uks.UKS(cell, *args, **kwargs)
+        return UKS(cell, *args, **kwargs)
 KS.__doc__ = '''
 A wrap function to create DFT object (RKS or UKS) for PBC systems.\n
 ''' + rks.RKS.__doc__
 
 def KKS(cell, *args, **kwargs):
     if cell.spin == 0:
-        return krks.KRKS(cell, *args, **kwargs)
+        return KRKS(cell, *args, **kwargs)
     else:
-        return kuks.KUKS(cell, *args, **kwargs)
+        return KUKS(cell, *args, **kwargs)
 KKS.__doc__ = '''
 A wrap function to create DFT object with k-point sampling (KRKS or KUKS).\n
 ''' + krks.KRKS.__doc__

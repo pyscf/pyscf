@@ -148,6 +148,7 @@ add_subdirectory(vhf)
 add_subdirectory(ao2mo)
 add_subdirectory(mcscf)
 add_subdirectory(cc)
+add_subdirectory(ccsdt)
 add_subdirectory(mp)
 add_subdirectory(ri)
 #add_subdirectory(localizer)
@@ -237,6 +238,7 @@ if(ENABLE_LIBXC AND BUILD_LIBXC)
             -DCMAKE_C_CREATE_SHARED_LIBRARY=${C_LINK_TEMPLATE}
             -DENABLE_XHOST:STRING=${BUILD_MARCH_NATIVE}
             -DCMAKE_C_COMPILER:STRING=${CMAKE_C_COMPILER}
+	    -DCMAKE_POLICY_VERSION_MINIMUM=3.5 # remove when libxc update version min in next release
   )
   add_dependencies(xc_itrf libxc)
   add_dependencies(dft libxc)

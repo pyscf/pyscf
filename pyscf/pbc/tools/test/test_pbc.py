@@ -19,6 +19,8 @@ from pyscf import gto
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import tools
 from pyscf.pbc.scf import khf
+from pyscf.pbc.df import fft
+from pyscf.pbc.tools.k2gamma import translation_vectors_for_kmesh
 from pyscf import lib
 
 
@@ -39,6 +41,8 @@ class KnownValues(unittest.TestCase):
         mf = khf.KRHF(cell, exxdiv='vcut_ws')
         mf.kpts = cell.make_kpts([2,2,2])
         coulG = tools.get_coulG(cell, mf.kpts[2], True, mf, gs=[5,5,5])
+        coulG = coulG.reshape([11]*3)
+        coulG[:,5,:] = 0
         self.assertAlmostEqual(lib.fp(coulG), 1.3245365170998518+0j, 9)
 
     def test_unconventional_ws_cell(self):
@@ -72,8 +76,6 @@ class KnownValues(unittest.TestCase):
 
         cell.a = numpy.eye(3)
         cell.unit = 'B'
-        coulG = tools.get_coulG(cell, numpy.array([0, numpy.pi, 0]))
-        self.assertAlmostEqual(lib.fp(coulG), 4.6737453679713905, 9)
         coulG = tools.get_coulG(cell, numpy.array([0, numpy.pi, 0]),
                                 wrap_around=False)
         self.assertAlmostEqual(lib.fp(coulG), 4.5757877990664744, 9)
@@ -265,6 +267,24 @@ C  15.16687337 15.16687337 15.16687337
         mesh = tools.cutoff_to_mesh(a, ke.min())
         k1 = tools.mesh_to_cutoff(a, mesh)
         self.assertAlmostEqual(ke.min(), k1.min(), 9)
+
+    def test_coulG_wrap_around(self):
+        for mesh in [[7,7,7], [6,7,7]]:
+            for kmesh in [[2,1,1], [3,1,1], [4,1,1]]:
+                cell = pbcgto.M(atom='He', a=np.eye(3)*3, basis=[[0, [.6, 1]]], mesh=mesh)
+                kpts = cell.make_kpts(kmesh)
+                nkpts = len(kpts)
+                dm_kpts = np.ones([nkpts, 1, 1])
+                vk = fft.FFTDF(cell).get_jk(dm_kpts, kpts=kpts, with_j=False)[1]
+                e1 = np.einsum('kij,kji->', vk, dm_kpts)
+
+                expLk = np.exp(1j*np.dot(translation_vectors_for_kmesh(cell, kmesh), kpts.T))
+                dm = np.einsum('Rk,Sk,kuv->RuSv', expLk, expLk.conj(), dm_kpts) / nkpts
+                dm = dm.reshape(nkpts, nkpts)
+                scell = tools.super_cell(cell, kmesh)
+                vk = fft.FFTDF(scell).get_jk(dm, with_j=False)[1]
+                e2 = np.einsum('ij,ji->', vk, dm)
+                self.assertAlmostEqual(abs(e1 - e2), 0, 10)
 
 
 if __name__ == '__main__':

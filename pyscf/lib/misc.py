@@ -697,6 +697,12 @@ class StreamObject:
 
     __getstate__, __setstate__ = generate_pickle_methods()
 
+    def reset(self):
+        '''
+        Clean up intermediates
+        '''
+        raise NotImplementedError
+
 
 _warn_once_registry = {}
 def check_sanity(obj, keysref, stdout=sys.stdout):
@@ -1503,7 +1509,7 @@ omniobj.base = omniobj
 omniobj.precision = 1e-8 # utilized by several pbc modules
 
 # Attributes that are kept in np.ndarray during the to_gpu conversion
-_ATTRIBUTES_IN_NPARRAY = {'kpt', 'kpts', 'kpts_band', 'mesh', 'frozen'}
+_ATTRIBUTES_IN_NPARRAY = {'kpt', 'kpts', '_kpts', 'kpts_band', 'mesh', 'frozen'}
 
 def to_gpu(method, out=None):
     '''Convert a method to its corresponding GPU variant, and recursively
@@ -1532,16 +1538,33 @@ def to_gpu(method, out=None):
 
         from importlib import import_module
         mod = import_module(method.__module__.replace('pyscf', 'gpu4pyscf'))
-        cls = getattr(mod, method.__class__.__name__)
+        try:
+            cls = getattr(mod, method.__class__.__name__)
+        except AttributeError:
+            if hasattr(cls, 'from_cpu'):
+                # the customized to_gpu function can be accessed at module
+                # levelin gpu4pyscf.
+                return cls.from_cpu(method)
+            raise
+
+        # Allow gpu4pyscf to customize the to_gpu method for PySCF classes.
+        if hasattr(mod, 'from_cpu'):
+            return mod.from_cpu(method)
+
         # A temporary GPU instance. This ensures to initialize private
         # attributes that are only available for GPU code.
-        out = cls(omniobj)
+        cls = getattr(mod, method.__class__.__name__)
+        out = method.view(cls)
+
+    elif hasattr(out, 'from_cpu'):
+        out.__dict__.update(out.__class__.from_cpu(method).__dict__)
+        return out
 
     # Convert only the keys that are defined in the corresponding GPU class
     cls_keys = [getattr(cls, '_keys', ()) for cls in out.__class__.__mro__[:-1]]
     out_keys = set(out.__dict__).union(*cls_keys)
     # Only overwrite the attributes of the same name.
-    keys = set(method.__dict__).intersection(out_keys)
+    keys = out_keys.intersection(method.__dict__)
 
     for key in keys:
         val = getattr(method, key)
@@ -1552,5 +1575,8 @@ def to_gpu(method, out=None):
             val = val.to_gpu()
         setattr(out, key, val)
     if hasattr(out, 'reset'):
-        out.reset()
+        try:
+            out.reset()
+        except NotImplementedError:
+            pass
     return out

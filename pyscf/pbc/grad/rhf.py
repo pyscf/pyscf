@@ -166,6 +166,16 @@ class GradientsBase(mol_rhf.GradientsBase):
             mol = self.mol
         return get_ovlp(mol, kpt)
 
+    def optimizer(self, solver='ase'):
+        '''Geometry optimization solver
+        '''
+        solver = solver.lower()
+        if solver == 'ase':
+            from pyscf.geomopt import ase_solver
+            return ase_solver.GeometryOptimizer(self.base)
+        else:
+            raise RuntimeError(f'Optimization solver {solver} not supported')
+
 
 class Gradients(GradientsBase):
     '''Non-relativistic Gamma-point restricted Hartree-Fock gradients'''

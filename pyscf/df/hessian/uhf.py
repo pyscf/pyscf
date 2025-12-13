@@ -522,6 +522,9 @@ def _gen_jk(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None,
 
 class Hessian(uhf_hess.Hessian):
     '''Non-relativistic UHF hessian'''
+
+    _keys = {'auxbasis_response',}
+
     def __init__(self, mf):
         uhf_hess.Hessian.__init__(self, mf)
 

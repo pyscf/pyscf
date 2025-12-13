@@ -183,7 +183,32 @@ def original_becke(g):
 
 def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
                      level=3, prune=nwchem_prune, **kwargs):
-    '''Generate number of radial grids and angular grids for the given molecule.
+    '''Generate radial and angular grids for each atom within a molecule
+
+    Kwargs:
+        atom_grid : dict or tuple
+            A dict {atom: (n_rad, n_ang)} to define the grid settings for each
+            atom within the molecule. For atoms in mol.atom that are not
+            included in the dict, the radial and angular configuration
+            associated with `level` will be used as the default setting.
+            The dict can also accept a "default" key to specify default
+            configurations. atom_grid can be provided as a tuple (n_rad, n_ang).
+            In this case, the same grid setting will apply apply to all atoms.
+        radi_method : function
+            The method to generate radial grids. Supported functions include the
+            treutler_ahlrichs, delley, mura_knowles, gauss_chebeshev in the
+            `dft.radi` module.
+        level : integer
+            Predefined configurations for radial and angular grids based on
+            the period of the elements. The number of radial and angular grids
+            for each level can be found in dft.gen_grid.RAD_GRIDS and
+            dft.gen_grid.ANG_ORDER.
+        prune : function
+            The pruning scheme to reduce angular grids for radial griads.
+            Available functions include the nwchem_prune, sg1_prune,
+            and treutler_prune, implemented in the `dft.gen_grid` module.
+            If None is provided for this argument, no pruning scheme will
+            be applied.
 
     Returns:
         A dict, with the atom symbol for the dict key.  For each atom type,
@@ -191,16 +216,18 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
         atom center; the second is the volume of that grid.
     '''
     if isinstance(atom_grid, (list, tuple)):
-        atom_grid = {mol.atom_symbol(ia): atom_grid
-                          for ia in range(mol.natm)}
+        atom_grid = {mol.atom_symbol(ia): atom_grid for ia in range(mol.natm)}
+
+    default = atom_grid.get('default', None)
     atom_grids_tab = {}
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
 
         if symb not in atom_grids_tab:
             chg = gto.charge(symb)
-            if symb in atom_grid:
-                n_rad, n_ang = atom_grid[symb]
+            atom_config = atom_grid.get(symb, default)
+            if atom_config is not None:
+                n_rad, n_ang = atom_config
                 if n_ang not in LEBEDEV_NGRID:
                     if n_ang in LEBEDEV_ORDER:
                         logger.warn(mol, 'n_ang %d for atom %d %s is not '
@@ -383,7 +410,7 @@ def _load_conf(mod, name, default):
         return var
 
 class Grids(lib.StreamObject):
-    '''DFT mesh grids
+    '''Atomic grids for DFT numerical integration
 
     Attributes for Grids:
         level : int
@@ -434,7 +461,25 @@ class Grids(lib.StreamObject):
             Eg, grids.atom_grid = {'H': (20,110)} will generate 20 radial
             grids and 110 angular grids for H atom.
 
-        Examples:
+    Saved results:
+        coords : ndarray
+            Coordinates of the integration grids.
+        weights : ndarray
+            Integration weights of the integration grids.
+
+    Intermediate Attributes (These attributes are generated during calculations
+    and should not be modified. Additionally, they may not be compatible between
+    GPU and CPU implementations):
+        non0tab :
+            The important grids for each AO shell.
+        screen_index :
+            An estimation of the AO values on the grids.
+        atm_idx :
+            Atom ID for each grid.
+        quadrature_weights :
+            Volume of each grid, not scaled by the Becke partitioning.
+
+    Examples:
 
         >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.1')
         >>> grids = dft.gen_grid.Grids(mol)

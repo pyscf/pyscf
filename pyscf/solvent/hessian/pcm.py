@@ -1040,12 +1040,11 @@ class WithSolventHess:
         return obj
 
     def to_gpu(self):
-        from gpu4pyscf.solvent.hessian import pcm    # type: ignore
+        from pyscf.lib.misc import to_gpu
         from pyscf.tdscf.rhf import TDBase
         if isinstance(self, TDBase):
             raise NotImplementedError('.to_gpu() for PCM-TDDFT')
-        # ground state methods
-        return self.undo_solvent().to_gpu().Hessian()
+        return to_gpu(self, self.base.to_gpu().Hessian())
 
     def kernel(self, *args, dm=None, atmlst=None, **kwargs):
         if dm is None:

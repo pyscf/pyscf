@@ -42,16 +42,18 @@ class DF(lib.StreamObject):
     r'''
     Object to hold 3-index tensor
 
-    Attributes:
+    Input Attributes:
         auxbasis : str or dict
-            Same input format as :attr:`Mole.basis`
-
-        auxmol : Mole object
-            Read only Mole object to hold the auxiliary basis.  auxmol is
-            generated automatically in the initialization step based on the
-            given auxbasis.  It is used in the rest part of the code to
-            determine the problem size, the integral batches etc.  This object
-            should NOT be modified.
+            Same format as the input attribute mol.basis. If auxbasis is set to
+            None, an optimal auxiliary basis set will be selected based on the
+            AO basis set, according to the records in the basis set exchange
+            database and the predefined mappings in `pyscf.df.addons.DEFAULT_AUXBASIS`.
+            For DFT methods, the selection of auxiliary basis sets is also
+            influenced by the xc functional. The J-FIT basis set will be used for
+            local and semi-local functionals (LDA, GGA, and meta-GGA). JK-FIT
+            basis set will be employed for hybrid and RSH functionals.
+            If optimal auxiliary basis sets are not available, the PySCF built-in
+            even-tempered Gaussian basis set will be used.
         _cderi_to_save : str
             If _cderi_to_save is specified, the DF integral tensor will be
             saved in this file.
@@ -68,9 +70,27 @@ class DF(lib.StreamObject):
             in the DF integral tensor.  Thus the shape of DF integral tensor
             is (M,N*(N+1)/2), where M is the number of auxbasis functions and
             N is the number of basis functions of the orbital basis.
+            This attribute is not compatible between the CPU and GPU implementations.
+            It will not be transferred during the to_cpu() and to_gpu() calls.
         blockdim : int
             When reading DF integrals from disk the chunk size to load.  It is
             used to improve IO performance.
+
+    Intermediate Attributes (These attributes are generated during calculations
+    and should not be modified. Additionally, they may not be compatible between
+    GPU and CPU implementations.)
+        auxmol : Mole object
+            Read only Mole object to hold the auxiliary basis.  auxmol is
+            generated automatically in the initialization step based on the
+            given auxbasis.  It is used in the rest part of the code to
+            determine the problem size, the integral batches etc.  This object
+            should NOT be modified.
+        _vjopt : _VHFOpt instance
+            An instance that caches precomputation variables to optimize the
+            computation of the Coulomb matrix.
+        _rsh_df : dict
+            For range-separated DFT functionals, this object stores the density fitting
+            instances for long-range or short-range Coulomb integrals.
     '''
 
     blockdim = getattr(__config__, 'df_df_DF_blockdim', 240)

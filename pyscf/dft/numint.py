@@ -2737,7 +2737,14 @@ _NumIntMixin = LibXCMixin
 
 
 class NumInt(lib.StreamObject, LibXCMixin):
-    '''Numerical integration methods for non-relativistic RKS and UKS'''
+    '''Numerical integration methods for non-relativistic RKS and UKS
+
+    Input Attributes:
+        omega :
+            The Coulomb attenuation parameter for range-separated functionals.
+            If specified, this value will replace the default setting in libxc
+            when evaluating the libxc RSH functional.
+    '''
 
     cutoff = CUTOFF * 1e2  # cutoff for small AO product
 

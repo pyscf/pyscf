@@ -569,7 +569,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE, envs=None):
         mo_coeff : ndarray
             orbitals to construct active space Hamiltonian
         ci0 : ndarray or custom types
-            FCI sovler initial guess. For external FCI-like solvers, it can be
+            FCI solver initial guess. For external FCI-like solvers, it can be
             overloaded different data type. For example, in the state-average
             FCI solver, ci0 is a list of ndarray. In other solvers such as
             DMRGCI solver, SHCI solver, ci0 are custom types.
@@ -1023,6 +1023,13 @@ To enable the solvent model for CASCI, the following code needs to be called
     @lib.with_doc(addons.state_average.__doc__)
     def state_average(self, weights=(0.5,0.5), wfnsym=None):
         return addons.state_average(self, weights, wfnsym)
+
+    def state_average_mix(self, fcisolvers=None, weights=(0.5, 0.5)):
+        return addons.state_average_mix(self, fcisolvers, weights)
+
+    def state_average_mix_(self, fcisolvers=None, weights=(0.5, 0.5)):
+        addons.state_average_mix_(self, fcisolvers, weights)
+        return self
 
     @lib.with_doc(addons.state_specific_.__doc__)
     def state_specific_(self, state=1):
