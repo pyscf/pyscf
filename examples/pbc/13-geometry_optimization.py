@@ -21,7 +21,7 @@ opt = mf.Gradients().optimizer()
 # By default, both the crystal lattice and atomic positions are optimized.
 opt.run()
 
-# Optimize the crystal lattice, while the relation atomic position in unit cell
+# Optimize the crystal lattice, while the relative atomic position in unit cell
 # are fixed.
 opt.target = 'lattice'
 opt.run()

@@ -25,8 +25,7 @@ from pyscf.lib import logger
 from pyscf.pbc import gto
 from pyscf.pbc.tools.pyscf_ase import pyscf_to_ase_atoms, PySCF
 
-def kernel(method, target=None, logfile=None, fmax=0.05, max_steps=100,
-           restart=False):
+def kernel(method, target=None, logfile=None, fmax=0.05, max_steps=100):
     '''Optimize the geometry using ASE.
 
     Kwargs:
@@ -45,10 +44,7 @@ def kernel(method, target=None, logfile=None, fmax=0.05, max_steps=100,
             Convergence threshold for atomic forces (in eV/A^3).
         max_steps : int
             Maximum number of optimization steps.
-        restart : bool
-            Whether to restart from a previous optimization state.
     '''
-    assert not restart
     if hasattr(method, 'cell'):
         cell = method.cell
     elif hasattr(method, 'mol'):
