@@ -15,6 +15,9 @@
 #
 # Author: Christopher Hillenbrand <chillenbrand15@gmail.com>
 #
+# This code is adapted from pyscf.gto.pseudo.pp_int, written by:
+# Qiming Sun <osirpt.sun@gmail.com>
+
 
 '''Analytic PP integrals for GTH/HGH PPs in velocity gauge.
 
@@ -27,6 +30,8 @@ import numpy as np
 from pyscf import lib
 from pyscf import gto
 from pyscf.gto import ft_ao
+from pyscf.pbc.gto.pseudo import pp_int
+from pyscf.df import incore
 from pyscf.gto.mole import ATOM_OF
 
 def get_gth_pp_nl_velgauge(mol, q):
@@ -48,8 +53,6 @@ def get_gth_pp_nl_velgauge(mol, q):
         The matrix elements of the velocity gauge-transformed nonlocal GTH
         pseudopotential.
     """
-    from pyscf.pbc.gto.pseudo import pp_int
-    from pyscf.df import incore
     fakemol, hl_blocks = pp_int.fake_cell_vnl(mol)
     hl_dims = np.array([len(hl) for hl in hl_blocks])
     _bas = fakemol._bas
@@ -82,32 +85,6 @@ def get_gth_pp_nl_velgauge(mol, q):
     return vppnl
 
 
-def get_ppnl_half_rc(mol, q, origin=(0,0,0)):
-    from pyscf.pbc.gto.pseudo import pp_int
-    from pyscf.df import incore
-    fakemol, hl_blocks = pp_int.fake_cell_vnl(mol)
-    hl_dims = np.array([len(hl) for hl in hl_blocks])
-    _bas = fakemol._bas
-
-    ppnl_half = []
-    ppnl_rc_half = []
-
-    intors = ('GTO_ft_ovlp', 'GTO_ft_r2_origi', 'GTO_ft_r4_origi')
-    intors_rc = ('GTO_ft_rc', 'GTO_ft_rc_r2_origi', 'GTO_ft_rc_r4_origi')
-
-    for i, (intor, intor_rc) in enumerate( zip(intors, intors_rc) ):
-        fakemol._bas = _bas[hl_dims>i]
-        if fakemol.nbas > 0:
-            ppnl_half.append(_ft_ao_cross(intor, fakemol, mol, Gv=q.reshape(1,3)))
-            with fakemol.with_common_origin(origin):
-                ppnl_rc_half.append(_ft_ao_cross(intor_rc, fakemol, mol, Gv=q.reshape(1,3), comp=3))
-        else:
-            ppnl_half.append(None)
-            ppnl_rc_half.append(None)
-    fakemol._bas = _bas
-
-    return ppnl_half, ppnl_rc_half
-
 def get_gth_pp_nl_velgauge_commutator(mol, q, origin=(0,0,0)):
     r"""Get the matrix elements of [r, V_nl] in velocity gauge.
 
@@ -127,8 +104,6 @@ def get_gth_pp_nl_velgauge_commutator(mol, q, origin=(0,0,0)):
     np.ndarray
         Shape (3, nao, nao).
     """
-    from pyscf.pbc.gto.pseudo import pp_int
-    from pyscf.df import incore
     fakemol, hl_blocks = pp_int.fake_cell_vnl(mol)
     hl_dims = np.array([len(hl) for hl in hl_blocks])
     _bas = fakemol._bas
@@ -214,9 +189,6 @@ def get_gth_pp_velgauge(mol, q):
     return get_gth_pp_loc(mol) + get_gth_pp_nl_velgauge(mol, q)
 
 def get_gth_pp_loc(mol):
-    from pyscf.pbc.gto.pseudo import pp_int
-    from pyscf.df import incore
-
     # Analytical integration for get_pp_loc_part1(cell).
     fakemol = pp_int.fake_cell_vloc(mol, 0)
     vpploc = 0
