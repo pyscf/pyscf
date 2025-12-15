@@ -515,6 +515,10 @@ def transition_velocity_dipole(tdobj, xy=None):
     # Because int1e_ipovlp is ( nabla \| ) = ( \| -nabla ) = p / i, we have
     # Im [ vel. ] = int1e_ipovlp - [ r, V_nl ].
     # Note that the matrix of [ r_a, V_nl ] (a = 1, 2, 3) is real and anti-Hermitian.
+    # References:
+    # [1] 10.1021/acs.jctc.2c00644
+    # [2] 10.1103/PhysRevB.62.4927
+
     velocity_operator = ints_p - r_vnl_commutator
     v = tdobj._contract_multipole(velocity_operator, hermi=False, xy=xy)
     return -v

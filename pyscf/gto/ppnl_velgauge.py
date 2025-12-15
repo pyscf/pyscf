@@ -24,6 +24,14 @@
 For GTH/HGH PPs, see:
     Goedecker, Teter, Hutter, PRB 54, 1703 (1996)
     Hartwigsen, Goedecker, and Hutter, PRB 58, 3641 (1998)
+
+For the velocity gauge transformation, see:
+[1] Comparison of Length, Velocity, and Symmetric Gauges for the Calculation
+    of Absorption and Electric Circular Dichroism Spectra with Real-Time
+    Time-Dependent Density Functional Theory,
+    Johann Mattiat and Sandra Luber
+    Journal of Chemical Theory and Computation 2022 18 (9), 5513-5526,
+    DOI: 10.1021/acs.jctc.2c00644
 '''
 
 import numpy as np
