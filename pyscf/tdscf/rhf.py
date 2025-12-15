@@ -504,6 +504,11 @@ def transition_velocity_dipole(tdobj, xy=None):
     ints_p = tdobj.mol.intor('int1e_ipovlp', comp=3, hermi=0)
     if tdobj.mol.pseudo:
         r_vnl_commutator = get_gth_pp_nl_velgauge_commutator(tdobj.mol, q=numpy.zeros(3)).real
+    elif tdobj.mol.ecp:
+        raise NotImplementedError(
+            "The commutator term for transition velocity dipole with ECP\n"
+            "has not been implemented."
+        )
     else:
         r_vnl_commutator = 0.0
     # velocity operator = p - i[r, V_nl]
@@ -517,6 +522,11 @@ def transition_velocity_dipole(tdobj, xy=None):
 def transition_magnetic_dipole(tdobj, xy=None):
     '''Transition magnetic dipole moments (imaginary part only)'''
     mol = tdobj.mol
+    if mol.pseudo or mol.ecp:
+        raise NotImplementedError(
+            "The commutator term for velocity gauge transition magnetic\n"
+            "dipole with ECP or pseudopotentials has not been implemented."
+        )
     with mol.with_common_orig(_charge_center(mol)):
         ints = mol.intor('int1e_cg_irxp', comp=3, hermi=2)
     m_pol = tdobj._contract_multipole(ints, hermi=False, xy=xy)
@@ -535,6 +545,11 @@ def transition_velocity_quadrupole(tdobj, xy=None):
     '''Transition quadrupole moments in the velocity gauge (imaginary part only)
     '''
     mol = tdobj.mol
+    if mol.pseudo or mol.ecp:
+        raise NotImplementedError(
+            "The commutator term for velocity gauge transition quadrupole\n"
+            "with ECP or pseudopotentials has not been implemented."
+        )
     nao = mol.nao_nr()
     with mol.with_common_orig(_charge_center(mol)):
         ints = mol.intor('int1e_irp', comp=9, hermi=0).reshape(3,3,nao,nao)
@@ -546,6 +561,11 @@ def transition_magnetic_quadrupole(tdobj, xy=None):
     '''Transition magnetic quadrupole moments (imaginary part only)'''
     XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = range(9)
     mol = tdobj.mol
+    if mol.pseudo or mol.ecp:
+        raise NotImplementedError(
+            "The commutator term for transition magnetic quadrupole\n"
+            "with ECP or pseudopotentials has not been implemented."
+        )
     nao = mol.nao_nr()
     with mol.with_common_orig(_charge_center(mol)):
         ints = mol.intor('int1e_irrp', comp=27, hermi=0).reshape(3,9,nao,nao)
@@ -569,6 +589,11 @@ def transition_velocity_octupole(tdobj, xy=None):
     '''Transition octupole moments in the velocity gauge (imaginary part only)
     '''
     mol = tdobj.mol
+    if mol.pseudo or mol.ecp:
+        raise NotImplementedError(
+            "The commutator term for velocity gauge transition octupole\n"
+            "with ECP or pseudopotentials has not been implemented."
+        )
     nao = mol.nao_nr()
     with mol.with_common_orig(_charge_center(mol)):
         ints = mol.intor('int1e_irrp', comp=27, hermi=0).reshape(3,3,3,nao,nao)
