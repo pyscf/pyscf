@@ -136,12 +136,10 @@ def hcore_generator(mf_grad, cell=None, kpts=None):
         hcore = np.zeros([3,nkpts,nao,nao], dtype=h1.dtype)
         for kn, kpt in enumerate(kpts):
             ao = eval_ao_kpts(cell, coords, kpt)[0]
-            rho = np.einsum('gi,gj->gij',ao.conj(),ao)
             for ax in range(3):
                 vloc_R = tools.ifft(vloc_g[ax], mesh).real
-                vloc = np.einsum('gij,g->ij', rho, vloc_R)
+                vloc = np.einsum('gi,gj,g->ij', ao.conj(), ao, vloc_R, optimize=True)
                 hcore[ax,kn] += vloc
-            rho = None
             ao = None
             hcore[:,kn,p0:p1] -= h1[kn,:,p0:p1]
             hcore[:,kn,:,p0:p1] -= h1[kn,:,p0:p1].transpose(0,2,1).conj()
