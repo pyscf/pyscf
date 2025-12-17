@@ -444,12 +444,12 @@ class SGXData:
         screen_index = non0tab
         max_memory = self.max_memory - lib.current_memory()[0]
         if grad:
-            # TODO make a better estimate here
-            # We need ~4 ao copes (ao, dx, dy, dz) and gv, dgv
-            data_dim = 4 + 4 * nset
+            # We need ~4 ao copes (ao, dx, dy, dz), plus 2 temporary arrays
+            # along with gv, dgv, and fg
+            data_dim = 6 + 5 * nset
         else:
-            # We need to store ao, wao, and fg -> 2 + nset sets of size nao
-            data_dim = 2 + nset
+            # We need to store ao, wao, fg, and gv -> 2 + nset sets of size nao
+            data_dim = 2 + 2 * nset
         blksize = max(SGX_BLKSIZE, int(max_memory*1e6/8/(data_dim*nao)))
         blksize = min(ngrids, max(1, blksize // SGX_BLKSIZE) * SGX_BLKSIZE)
         cutoff = grids.cutoff * 1e2
