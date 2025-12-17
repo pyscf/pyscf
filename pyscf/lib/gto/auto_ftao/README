@@ -1,0 +1,20 @@
+
+
+This is a modified version of the code generator from libcint
+which supports analytic FT with combinations of select one-electron operators.
+
+To add new integrals, just add new entries to "auto_ft.cl" and then run
+`clisp auto_ft.cl`. Refer to the libcint documentation here:
+https://github.com/sunqm/libcint
+
+The current integrals have been validated; always check new ones
+for correctness. There may be some uncaught bugs.
+
+Only the various flavors of p and r are supported.
+No nuc, rinv, nabla-rinv, g, gaunt, breit, etc.
+Dot works, but cross products do not.
+
+The resulting integrals may be used for both molecular and PBC (lattice sum)
+ft-aopair. See pyscf/gto/ppnl_velgauge.py and pyscf/pbc/gto/pseudo/ppnl_velgauge.py
+for examples.
+

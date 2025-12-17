@@ -296,6 +296,10 @@ C    SP
                     basis = {8: 'ccpvdz'})
         self.assertEqual(mol.nao_nr(), 14)
 
+        mol = gto.M(atom = '''O 0 0 0; 1 0 1 0; H 0 0 1''',
+                    basis = {8: 'def2-SVP'})
+        self.assertEqual(mol.nao_nr(), 14)
+
         mol = gto.M(atom = '''O 0 0 0; H:1 0 1 0; H@2 0 0 1''',
                     basis = {'O': 'ccpvdz', 'H:1': 'sto3g', 'H': 'unc-iglo3'})
         self.assertEqual(mol.nao_nr(), 32)
@@ -946,6 +950,7 @@ O    SP
         self.assertEqual(mol.UKS(xc='pbe').xc, dft.UKS(mol, xc='pbe').xc)
         self.assertEqual(mol.CISD().__class__, ci.cisd.RCISD)
         self.assertEqual(mol.TDA().__class__, tdscf.rhf.TDA)
+        self.assertEqual(mol.TDA(xc='pbe0').__class__, tdscf.rks.TDA)
         self.assertEqual(mol.dTDA().__class__, tdscf.rks.dTDA)
         self.assertEqual(mol.TDBP86().__class__, tdscf.rks.TDDFTNoHybrid)
         self.assertEqual(mol.TDB3LYP().__class__, tdscf.rks.TDDFT)

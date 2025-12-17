@@ -289,8 +289,15 @@ class GradientsBase(molgrad.GradientsBase):
         if cell is None: cell = self.cell
         return grad_nuc(cell, atmlst)
 
-    def optimizer(self):
-        raise NotImplementedError
+    def optimizer(self, solver='ase'):
+        '''Geometry optimization solver
+        '''
+        solver = solver.lower()
+        if solver == 'ase':
+            from pyscf.geomopt import ase_solver
+            return ase_solver.GeometryOptimizer(self.base)
+        else:
+            raise RuntimeError(f'Optimization solver {solver} not supported')
 
 def as_scanner(mf_grad):
     '''Generating a nuclear gradients scanner/solver (for geometry optimizer).

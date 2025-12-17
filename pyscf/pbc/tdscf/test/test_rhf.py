@@ -189,6 +189,74 @@ class WaterBigBox(unittest.TestCase):
         moltd = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
         self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev -
                                    moltd.e[:self.nstates_test] * unitev).max(), 0, 2)
+        osci_v_td = td.oscillator_strength(gauge='velocity')
+        osci_v_moltd = moltd.oscillator_strength(gauge='velocity')
+        self.assertAlmostEqual(abs(osci_v_td[:self.nstates_test] -
+                                   osci_v_moltd[:self.nstates_test]).max(), 0, 6)
+
+    def test_tda_singlet(self):
+        self.kernel('TDA')
+
+    def test_tda_triplet(self):
+        self.kernel('TDA', singlet=False)
+
+    def test_tdhf_singlet(self):
+        self.kernel('TDHF')
+
+    def test_tdhf_triplet(self):
+        self.kernel('TDHF', singlet=False)
+
+
+class WaterBigBoxGTH(unittest.TestCase):
+    ''' Match molecular CIS
+    '''
+    @classmethod
+    def setUpClass(cls):
+        cell = gto.Cell()
+        cell.verbose = 4
+        cell.output = '/dev/null'
+        cell.atom = '''
+        O          0.00000        0.00000        0.11779
+        H          0.00000        0.75545       -0.47116
+        H          0.00000       -0.75545       -0.47116
+        '''
+        cell.a = np.eye(3) * 15
+        cell.basis = 'gth-szv'
+        cell.pseudo = 'gth-hf-rev'
+        cell.build()
+        mf = scf.RHF(cell).rs_density_fit(auxbasis='weigend')
+        mf.with_df.omega = 0.1
+        mf.kernel()
+        cls.cell = cell
+        cls.mf = mf
+
+        mol = molgto.Mole()
+        for key in ['verbose','output','atom','basis']:
+            setattr(mol, key, getattr(cell, key))
+        mol.build()
+        molmf = molscf.RHF(mol).density_fit(auxbasis=mf.with_df.auxbasis).run()
+        cls.mol = mol
+        cls.molmf = molmf
+
+        cls.nstates = 5 # make sure first `nstates_test` states are converged
+        cls.nstates_test = 2
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.cell.stdout.close()
+        cls.mol.stdout.close()
+        del cls.cell, cls.mf
+        del cls.mol, cls.molmf
+
+    def kernel(self, TD, **kwargs):
+        td = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
+        moltd = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
+        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev -
+                                   moltd.e[:self.nstates_test] * unitev).max(), 0, 2)
+        osci_v_td = td.oscillator_strength(gauge='velocity')
+        osci_v_moltd = moltd.oscillator_strength(gauge='velocity')
+        self.assertAlmostEqual(abs(osci_v_td[:self.nstates_test] -
+                                   osci_v_moltd[:self.nstates_test]).max(), 0, 6)
 
     def test_tda_singlet(self):
         self.kernel('TDA')

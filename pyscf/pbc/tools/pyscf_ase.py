@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2025 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,8 +21,15 @@
 ASE package interface
 '''
 
+try:
+    from ase.calculators.calculator import Calculator, all_properties
+except ImportError:
+    print("""ASE is not found. Please install ASE via
+pip3 install ase
+          """)
+    raise RuntimeError("ASE is not found")
+
 import numpy as np
-from ase.calculators.calculator import Calculator, all_properties
 from ase.units import Debye
 from pyscf import lib
 from pyscf.data.nist import BOHR, HARTREE2EV
@@ -60,18 +67,17 @@ def cell_from_ase(ase_atoms):
     '''
     cell = Cell()
     cell.atom = ase_atoms_to_pyscf(ase_atoms)
-    cell.a = ase_atoms.cell
+    cell.a = np.asarray(ase_atoms.cell)
     return cell
 
 class PySCF(Calculator):
     implemented_properties = ['energy', 'forces', 'stress',
-                              'dipole', 'magmom']
+                              'dipole', 'magmom', 'polarizability']
 
     default_parameters = {}
 
-    def __init__(self, restart=None, ignore_bad_restart_file=False,
-                 label='PySCF', atoms=None, directory='.', method=None,
-                 **kwargs):
+    def __init__(self, restart=None, label='PySCF', atoms=None, directory='.',
+                 method=None, **kwargs):
         """Construct PySCF-calculator object.
 
         Parameters
@@ -82,8 +88,8 @@ class PySCF(Calculator):
 
         method: A PySCF method class
         """
-        Calculator.__init__(self, restart, ignore_bad_restart_file,
-                            label, atoms, directory=directory, **kwargs)
+        Calculator.__init__(self, restart, label=label, atoms=atoms,
+                            directory=directory, **kwargs)
 
         if not isinstance(method, lib.StreamObject):
             raise RuntimeError(f'{method} must be an instance of a PySCF method')
@@ -94,8 +100,6 @@ class PySCF(Calculator):
             mol = method.cell
         else:
             mol = method.mol
-        if not mol.unit.startswith(('A','a')):
-            raise RuntimeError("PySCF unit must be A to work with ASE")
         self.mol = mol
         self.method_scan = None
         if hasattr(method, 'as_scanner'):
@@ -120,11 +124,14 @@ class PySCF(Calculator):
             _atoms = list(zip(atomic_numbers, positions))
 
         if self.pbc:
-            self.mol.set_geom_(_atoms, a=atoms.cell)
+            self.mol.set_geom_(_atoms, a=np.asarray(atoms.cell), unit='Angstrom')
         else:
-            self.mol.set_geom_(_atoms)
+            self.mol.set_geom_(_atoms, unit='Angstrom')
 
-        if 'energy' in properties:
+        with_grad = 'forces' in properties or 'stress' in properties
+        with_energy = with_grad or 'energy' in properties or 'dipole' in properties
+
+        if with_energy:
             if self.method_scan is None:
                 self.mol.set_geom_(atoms)
                 self.method.reset(self.mol).run()
@@ -142,7 +149,7 @@ class PySCF(Calculator):
         else:
             base_method = self.method_scan
 
-        if 'forces' in properties or 'stress' in properties:
+        if with_grad:
             grad_obj = base_method.Gradients()
 
         if 'forces' in properties:
@@ -154,12 +161,25 @@ class PySCF(Calculator):
             self.results['stress'] = stress * (HARTREE2EV / BOHR)
 
         if 'dipole' in properties:
+            if self.pbc:
+                raise NotImplementedError('dipole for PBC calculations')
             # in Gaussian cgs unit
             self.results['dipole'] = base_method.dip_moment() * Debye
+
+        if 'polarizability' in properties:
+            assert hasattr(base_method, 'istype') and base_method.istype('SCF'), \
+                    'Polarizability can only be computed with mean-field methods'
+            if self.pbc:
+                from pyscf.pbc.prop.polarizability.rhf import Polarizability
+                p = Polarizability(base_method).polarizability()
+            else:
+                from pyscf.prop.polarizability import rhf, uhf
+                if base_method.istype('UHF'):
+                    p = uhf.Polarizability(base_method).polarizability()
+                else:
+                    p = rhf.Polarizability(base_method).polarizability()
+            self.results['polarizability'] = p * (BOHR**3)
 
         if 'magmom' in properties:
             magmom = self.mol.spin
             self.results['magmom'] = magmom
-
-def make_kpts(cell, nks):
-    raise DeprecationWarning('Use cell.make_kpts(nks) instead.')

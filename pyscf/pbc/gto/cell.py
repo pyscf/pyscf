@@ -1344,7 +1344,9 @@ class Cell(mole.MoleBase):
         else:
             if key[0] == 'K':  # with k-point sampling
                 if 'TD' in key[:4]:
-                    if key in ('KTDHF', 'KTDA'):
+                    if 'KTDA' in key:
+                        mf_method = 'KSCF_TO_BE_DETERMINED'
+                    elif 'KTDHF' in key:
                         mf_method = scf.KHF
                     else:
                         mf_method = dft.KKS
@@ -1352,6 +1354,8 @@ class Cell(mole.MoleBase):
                         if xc in XC:
                             mf_xc = xc
                             key = 'KTDDFT'
+                        elif 'TDDFT' not in key:
+                            raise AttributeError(f'method {key} not supported')
                 elif 'CI' in key or 'CC' in key or 'MP' in key:
                     mf_method = scf.KHF
                 else:
@@ -1360,7 +1364,9 @@ class Cell(mole.MoleBase):
                 key = key[1:]
             else:
                 if 'TD' in key[:3]:
-                    if key in ('TDHF', 'TDA'):
+                    if 'TDA' in key:
+                        mf_method = 'SCF_TO_BE_DETERMINED'
+                    elif 'TDHF' in key:
                         mf_method = scf.HF
                     else:
                         mf_method = dft.KS
@@ -1368,6 +1374,8 @@ class Cell(mole.MoleBase):
                         if xc in XC:
                             mf_xc = xc
                             key = 'TDDFT'
+                        elif 'TDDFT' not in key:
+                            raise AttributeError(f'method {key} not supported')
                 elif 'CI' in key or 'CC' in key or 'MP' in key:
                     mf_method = scf.HF
                 else:
@@ -1389,11 +1397,23 @@ class Cell(mole.MoleBase):
                     mf_kw[k] = v
                 else:
                     remaining_kw[k] = v
-            mf = mf_method(self, **mf_kw)
+
+            if mf_method == 'SCF_TO_BE_DETERMINED':
+                if 'xc' in mf_kw:
+                    mf = dft.KS(self, **mf_kw)
+                else:
+                    mf = scf.HF(self, **mf_kw)
+            elif mf_method == 'KSCF_TO_BE_DETERMINED':
+                if 'xc' in mf_kw:
+                    mf = dft.KKS(self, **mf_kw)
+                else:
+                    mf = scf.KHF(self, **mf_kw)
+            else:
+                mf = mf_method(self, **mf_kw)
 
             if post_mf_key is None:
                 if args:
-                    raise RuntimeError(
+                    raise AttributeError(
                         f'cell.{attr_name} function does not support positional arguments')
                 return mf.set(**remaining_kw)
 
@@ -1683,7 +1703,7 @@ class Cell(mole.MoleBase):
             if self.exp_to_discard is not None:
                 logger.info(self, 'exp_to_discard = %s', self.exp_to_discard)
             logger.info(self, 'rcut = %s (nimgs = %s)', self.rcut, self.nimgs)
-            logger.info(self, 'lattice sum = %d cells', len(self.get_lattice_Ls()))
+            #logger.info(self, 'lattice sum = %d cells', len(self.get_lattice_Ls()))
             logger.info(self, 'precision = %g', self.precision)
             logger.info(self, 'pseudo = %s', self.pseudo)
             if ke_cutoff is not None:
@@ -1999,18 +2019,13 @@ class Cell(mole.MoleBase):
             cell = self.copy(deep=False)
             cell._env = cell._env.copy()
 
-        if unit is not None and cell.unit != unit:
-            if isinstance(unit, str):
-                if is_au(unit):
-                    _unit = 1.
-                else:
-                    _unit = param.BOHR
-            else:
-                _unit = unit
-            if a is None:
-                a = self.lattice_vectors() * _unit
-            if atoms_or_coords is None:
-                atoms_or_coords = self.atom_coords() * _unit
+        if unit is not None:
+            _unit = mole._length_in_au(unit)
+            if _unit != mole._length_in_au(cell.unit):
+                if a is None:
+                    a = self.lattice_vectors() / _unit
+                if atoms_or_coords is None:
+                    atoms_or_coords = self.atom_coords() / _unit
 
         if a is not None:
             logger.info(self, 'Set new lattice vectors')

@@ -34,7 +34,7 @@ cell.verbose = 0
 mf = cell.KRKS(xc='lda,vwn', kpts=cell.make_kpts([2,2,2]))
 
 # Once this is setup, ASE is used for everything from this point on
-ase_atom.set_calculator(pyscf_ase.PySCF(method=mf))
+ase_atom.calc = pyscf_ase.PySCF(method=mf)
 
 print("ASE energy", ase_atom.get_potential_energy())
 print("ASE energy (should avoid re-evaluation)", ase_atom.get_potential_energy())

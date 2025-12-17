@@ -139,6 +139,12 @@ class KnownValues(unittest.TestCase):
         mf = pscf.KUHF(mol,kpts=[[0., 0., 0.]]).run()
         self.assertAlmostEqual(mf.e_tot, -2.2719576422665635, 8)
 
+    def test_invalid_occupancy(self):
+        cell = pgto.M(a=np.eye(3)*5.,
+                      atom='He 0 0 1',
+                      basis=[[0, [.6, 1]]], spin=2)
+        mf = cell.KUHF(kpts=cell.make_kpts([2,1,1]))
+        self.assertRaises(RuntimeError, mf.run)
 
 if __name__ == '__main__':
     print("Tests for PBC UHF and PBC KUHF")
