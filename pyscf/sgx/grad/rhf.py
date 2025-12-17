@@ -397,8 +397,8 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
                         dvk1[x] -= lib.einsum('ug,ug->u', dgv[i, x], wfg.T)
                         all_dxed[x, i0:i1] -= ni._contract_rho_sparse(wfg, dgv[i, x].T, mask3, ao_loc)
                         all_dxed[x, i0:i1] -= ni._contract_rho_sparse(tmp.T, dao[x], mask3, ao_loc)
-        if not include_grid_response:
-            dvk1[:] *= 2
+    if not include_grid_response:
+        dvk1[:] *= 2
 
     aoslices = mol.aoslice_by_atom()
     if sgx.fit_ovlp and include_grid_response:
