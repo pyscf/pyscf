@@ -24,7 +24,7 @@ from pyscf.solvent import pcm, smd
 from pyscf.solvent.grad import pcm as pcm_grad
 from pyscf.solvent.smd import (
     sigma_water, sigma_n, sigma_alpha, sigma_beta, r_zz, swtich_function,
-    hartree2kcal)
+    hartree2kcal, solvent_db)
 
 def grad_swtich_function(R, r, dr):
     if R < r + dr:
@@ -187,7 +187,8 @@ def atomic_surface_tension(symbols, coords, n, alpha, beta, water=True):
 
 def get_cds(smdobj):
     mol = smdobj.mol
-    n, _, alpha, beta, gamma, _, phi, psi = smdobj.solvent_descriptors
+    solvent_descriptors = smdobj.solvent_descriptors or solvent_db[smdobj.solvent]
+    n, _, alpha, beta, gamma, _, phi, psi = solvent_descriptors
     symbols = [mol.atom_symbol(ia) for ia in range(mol.natm)]
     coords = mol.atom_coords(unit='A')
     if smdobj._solvent.lower() != 'water':
