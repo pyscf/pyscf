@@ -91,6 +91,7 @@ c_double_p = ctypes.POINTER(ctypes.c_double)
 c_int_p = ctypes.POINTER(ctypes.c_int)
 c_null_ptr = ctypes.POINTER(ctypes.c_void_p)
 
+@functools.lru_cache
 def load_library(libname):
     try:
         _loaderpath = os.path.dirname(__file__)
