@@ -21,7 +21,6 @@ def setUpModule():
     mol.output = '/dev/null'
     mol.atom.extend(ATOM)
     mol.basis = '6-31g'
-    mol.max_memory = 2000
     mol.build()
     mol2 = mol.copy()
     mol2.spin = 1
