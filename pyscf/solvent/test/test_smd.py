@@ -20,7 +20,7 @@ from pyscf import scf, dft
 from pyscf.solvent import smd
 
 def setUpModule():
-    global mol, epsilon, lebedev_order
+    global mol, epsilon
     mol = gto.Mole()
     mol.atom = '''
 O       0.0000000000    -0.0000000000     0.1174000000
@@ -30,7 +30,6 @@ H       0.7570000000     0.0000000000    -0.4696000000
     mol.basis = 'def2-tzvpp'
     mol.output = '/dev/null'
     mol.build()
-    lebedev_order = 29
 
 def tearDownModule():
     global mol
@@ -46,7 +45,6 @@ def _check_smd(atom, e_ref, solvent='water'):
     smdobj = smd.SMD(mol)
     smdobj.solvent = solvent
     smdobj.sasa_ng = 590
-    smdobj.lebedev_order = 29
     e_cds = smdobj.get_cds() * 627.509 # in kcal/mol
     mol.stdout.close()
     assert numpy.abs(e_cds - e_ref) < 1e-3
