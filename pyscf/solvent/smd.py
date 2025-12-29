@@ -20,7 +20,7 @@ SMD solvent model, copied from GPU4PYSCF with modification for CPU
 import numpy as np
 from pyscf import lib, gto
 from pyscf.data import radii
-from pyscf.dft import gen_grid
+from pyscf.dft.gen_grid import LEBEDEV_ORDER
 from pyscf.solvent import pcm
 from pyscf.solvent._attach_solvent import _for_scf
 from pyscf.lib import logger
@@ -470,6 +470,16 @@ class SMD(pcm.PCM):
         '''
         assert len(values) == 8
         self.solvent_descriptors = values
+
+    @property
+    def lebedev_order(self):
+        for key, val in LEBEDEV_ORDER.items():
+            if val == self.sasa_ng:
+                return key
+        raise RuntimeError(f'sasa_ng={self.sasa_ng} does not have a corresponding lebedev_order')
+    @lebedev_order.setter
+    def lebedev_order(self, x):
+        self.sasa_ng = LEBEDEV_ORDER[x]
 
     def dump_flags(self, verbose=None):
         solvent_descriptors = self.solvent_descriptors or solvent_db[self.solvent]
