@@ -3112,7 +3112,7 @@ class MoleBase(lib.StreamObject):
             mol.atom = atoms_or_coords
 
         if isinstance(atoms_or_coords, numpy.ndarray) and not symmetry:
-            _unit = _length_in_au(unit)
+            _unit = _length_in_au(mol.unit)
             mol._atom = list(zip([x[0] for x in mol._atom],
                                  (atoms_or_coords * _unit).tolist()))
             ptr = mol._atm[:,PTR_COORD]
