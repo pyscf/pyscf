@@ -1510,6 +1510,9 @@ omniobj.precision = 1e-8 # utilized by several pbc modules
 
 # Attributes that are kept in np.ndarray during the to_gpu conversion
 _ATTRIBUTES_IN_NPARRAY = {'kpt', 'kpts', '_kpts', 'kpts_band', 'mesh', 'frozen'}
+# Call .to_gpu() for additional attributes that are not specified in the
+# class._keys list
+_ADDITIONAL_ATTRIBUTES = ['_scf', '_numint']
 
 def to_gpu(method, out=None):
     '''Convert a method to its corresponding GPU variant, and recursively
@@ -1560,20 +1563,26 @@ def to_gpu(method, out=None):
         out.__dict__.update(out.__class__.from_cpu(method).__dict__)
         return out
 
-    # Convert only the keys that are defined in the corresponding GPU class
-    cls_keys = [getattr(cls, '_keys', ()) for cls in out.__class__.__mro__[:-1]]
-    out_keys = set(out.__dict__).union(*cls_keys)
-    # Only overwrite the attributes of the same name.
-    keys = out_keys.intersection(method.__dict__)
+    cls_keys = set.union(*[getattr(cls, '_keys', ()) for cls in out.__class__.__mro__[:-1]])
+    cpu_keys = set.union(*[getattr(cls, '_keys', ()) for cls in method.__class__.__mro__[:-1]])
+    # Discards keys that are only defined in CPU classes
+    discards = cpu_keys.difference(cls_keys)
+    for k in discards:
+        out.__dict__.pop(k, None)
 
-    for key in keys:
-        val = getattr(method, key)
-        if isinstance(val, numpy.ndarray):
-            if key not in _ATTRIBUTES_IN_NPARRAY:
+    for key, val in method.__dict__.items():
+        # Convert only the keys that are defined in the corresponding GPU class
+        if key in cls_keys and key not in _ATTRIBUTES_IN_NPARRAY:
+            if isinstance(val, numpy.ndarray):
                 val = cupy.asarray(val)
-        elif hasattr(val, 'to_gpu'):
-            val = val.to_gpu()
+            elif hasattr(val, 'to_gpu'):
+                val = val.to_gpu()
         setattr(out, key, val)
+
+    for key in _ADDITIONAL_ATTRIBUTES:
+        val = getattr(method, key, None)
+        if hasattr(val, 'to_gpu'):
+            setattr(out, key, val.to_gpu())
     if hasattr(out, 'reset'):
         try:
             out.reset()
