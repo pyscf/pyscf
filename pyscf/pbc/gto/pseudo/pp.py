@@ -203,15 +203,19 @@ def Ylm_real(l,m,theta,phi):
     else: # m == 0
         return Ylabsm.real
 
-def Ylm(l,m,theta,phi):
-    '''
-    Spherical harmonics; returns a complex number
+if hasattr(scipy.special, 'sph_harm_y'):
+    def Ylm(l,m,theta,phi):
+        '''
+        Spherical harmonics; returns a complex number
 
-    Note the "convention" for theta and phi:
-    http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.special.sph_harm.html
-    '''
-    #return scipy.special.sph_harm(m=m,n=l,theta=phi,phi=theta)
-    return scipy.special.sph_harm(m,l,phi,theta)
+        Note the "convention" for theta and phi:
+        http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.special.sph_harm.html
+        '''
+        #return scipy.special.sph_harm(m=m,n=l,theta=phi,phi=theta)
+        return scipy.special.sph_harm_y(m,l,phi,theta)
+else:
+    def Ylm(l,m,theta,phi):
+        return scipy.special.sph_harm(m,l,phi,theta)
 
 def cart2polar(rvec):
     # The rows of rvec are the 3-component vectors
