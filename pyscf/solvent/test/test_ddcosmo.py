@@ -16,11 +16,11 @@
 import unittest
 from functools import reduce
 import numpy
-import scipy.special
 from pyscf import lib, gto, scf, dft, ao2mo, df
 from pyscf.solvent import ddcosmo
 from pyscf.solvent import _attach_solvent
 from pyscf.symm import sph
+from pyscf.lib import Ylm
 
 
 def make_v_phi(mol, dm, r_vdw, lebedev_order):
@@ -301,10 +301,10 @@ class KnownValues(unittest.TestCase):
         ylmref = []
         for l in range(lmax+1):
             ylm = numpy.empty((l*2+1,ngrid))
-            ylm[l] = scipy.special.sph_harm(0, l, theta, varphi).real
+            ylm[l] = Ylm(l, 0, varphi, theta).real
             for m in range(1, l+1):
-                f1 = scipy.special.sph_harm(-m, l, theta, varphi)
-                f2 = scipy.special.sph_harm( m, l, theta, varphi)
+                f1 = Ylm(l, -m, varphi, theta)
+                f2 = Ylm(l,  m, varphi, theta)
                 # complex to real spherical functions
                 if m % 2 == 1:
                     ylm[l-m] = (-f1.imag - f2.imag) / numpy.sqrt(2)
