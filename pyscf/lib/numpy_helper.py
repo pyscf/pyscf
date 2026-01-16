@@ -971,10 +971,10 @@ else:
         r = numpy.column_stack((x, y, z)).reshape(-1, 3)
 
         ngrid = r.shape[0]
-        xs = numpy.ones((lmax+1,ngrid))
-        ys = numpy.ones((lmax+1,ngrid))
-        zs = numpy.ones((lmax+1,ngrid))
-        for i in range(1,lmax+1):
+        xs = numpy.ones((l+1,ngrid))
+        ys = numpy.ones((l+1,ngrid))
+        zs = numpy.ones((l+1,ngrid))
+        for i in range(1,l+1):
             xs[i] = xs[i-1] * r[:,0]
             ys[i] = ys[i-1] * r[:,1]
             zs[i] = zs[i-1] * r[:,2]
