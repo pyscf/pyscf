@@ -353,7 +353,6 @@ class SGX(lib.StreamObject):
         self.bound_algo = "sample_pos"
 
         self.grids = None
-        self.blockdim = 1200
         self.auxmol = None
 
         # DEBUGGING SETTINGS
@@ -361,6 +360,8 @@ class SGX(lib.StreamObject):
         # grid. debug=False utilizes the sparsity of the integral tensor and
         # contracts the sparse tensor and density matrices on the fly.
         self.debug = False
+        # max block size for grids when debug=True
+        self.blockdim = 1200
         # Run the calculation with direct integral J-matrix.
         self.direct_j = False
         # perform a symmetric overlap fit when optk is True.

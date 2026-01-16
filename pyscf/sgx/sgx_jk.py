@@ -907,8 +907,14 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
 
     ngrids = grids.coords.shape[0]
     max_memory = sgx.max_memory - lib.current_memory()[0]
-    # We need to store ao, wao, and fg -> 3 sets of size nao
-    blksize = min(ngrids, max(112, int(max_memory*1e6/8/(3 * nao))))
+    if sgx.debug:
+        sblk = sgx.blockdim
+        blksize = min(ngrids, max(4, int(min(sblk, max_memory*1e6/8/nao**2))))
+        blksize = max(1, blksize // SGX_BLKSIZE) * SGX_BLKSIZE
+    else:
+        # We need to store ao, wao, and fg, gv -> 2 + 2 * nset sets of size nao
+        blksize = min(ngrids, max(SGX_BLKSIZE,
+                      int(max_memory*1e6/8/(2 + 2 * nset))))
     tnuc = 0, 0
     for i0, i1 in lib.prange(0, ngrids, blksize):
         coords = grids.coords[i0:i1]
@@ -1083,9 +1089,14 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
     sn = numpy.zeros((nao,nao))
     ngrids = grids.coords.shape[0]
     max_memory = sgx.max_memory - lib.current_memory()[0]
-    # We need to store ao, wao, and fg -> 2 + nset sets of size nao
-    blksize = min(ngrids, max(112, int(max_memory*1e6/8/((2 + nset) * nao))))
-    blksize = max(4, blksize // BLKSIZE) * BLKSIZE
+    if sgx.debug:
+        sblk = sgx.blockdim
+        blksize = min(ngrids, max(4, int(min(sblk, max_memory*1e6/8/nao**2))))
+        blksize = max(1, blksize // SGX_BLKSIZE) * SGX_BLKSIZE
+    else:
+        # We need to store ao, wao, and fg, gv -> 2 + 2 * nset sets of size nao
+        blksize = min(ngrids, max(SGX_BLKSIZE,
+                      int(max_memory*1e6/8/((2 + 2 * nset) * nao))))
     if sgx.fit_ovlp:
         for i0, i1 in lib.prange(0, ngrids, blksize):
             assert i0 % BLKSIZE == 0

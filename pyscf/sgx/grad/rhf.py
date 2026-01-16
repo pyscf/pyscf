@@ -85,8 +85,16 @@ def get_jk_grad(sgx, dm, hermi=1, with_j=True, with_k=True,
     sn = numpy.zeros((nao,nao))
     ngrids = grids.coords.shape[0]
     max_memory = sgx.max_memory - lib.current_memory()[0]
-    sblk = sgx.blockdim
-    blksize = min(ngrids, max(4, int(min(sblk, max_memory*1e6/8/nao**2))))
+    if sgx.debug:
+        sblk = sgx.blockdim
+        blksize = min(ngrids, max(4, int(min(sblk, max_memory*1e6/24/nao**2))))
+        blksize = max(1, blksize // SGX_BLKSIZE) * SGX_BLKSIZE
+    else:
+        # We need ~4 ao copes (ao, dx, dy, dz), plus wao
+        # along with gv, dgv, and fg
+        data_dim = 5 + 5 * nset
+        blksize = min(ngrids, max(SGX_BLKSIZE,
+                      int(max_memory*1e6/8/(data_dim * nao))))
 
     if sgx.fit_ovlp:
         if include_grid_response:
