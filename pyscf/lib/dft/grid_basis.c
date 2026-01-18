@@ -500,6 +500,9 @@ void VXCgen_grid_lko_deriv(double *out, double *dw, double *coords, double *atm_
             dfacz = dadz[i*natm+j];
             for (n = 0; n < ngs; n++) {
                 ia_p = atm_idx[ig0 + n];
+                if (ia_p < 0) {
+                    continue;
+                }
                 tmp = dw[j*Ngrids+ig0+n] * dg[n] / (.5 + g[n] + 1e-200);
                 tmp-= dw[i*Ngrids+ig0+n] * dg[n] / (.5 - g[n] + 1e-200);
                 tmp *= (grid_dist[i*GRIDS_BLOCK+n] -
