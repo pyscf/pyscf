@@ -243,7 +243,10 @@ def einsum(subscripts, *tensors, **kwargs):
         contraction_list = _einsum_path(subscripts, *tensors, optimize=optimize,
                                         einsum_call=True)[1]
         for contraction in contraction_list:
-            inds, idx_rm, einsum_str, remaining = contraction[:4]
+            if len(contraction) == 3: # numpy 2.4.0 changes the einsum_path APIs
+                inds, einsum_str = contraction[:2]
+            else: # einsum_path in numpy 2.3.* and older returns 5-element tuple
+                inds, idx_rm, einsum_str, remaining = contraction[:4]
             tmp_operands = [tensors.pop(x) for x in inds]
             if len(tmp_operands) > 2:
                 out = _numpy_einsum(einsum_str, *tmp_operands)
