@@ -276,16 +276,12 @@ void VXCgen_grid_lko(double *out, double *coords, double *atm_coords,
     const int num_ij = natm * (natm + 1) / 2;
 #pragma omp for nowait schedule(static)
     for (ij = 0; ij < num_ij; ij++) {
-
-    //for (i = 0; i < natm; i++) {
-        //for (j = 0; j < i; j++) {
-            i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
-            j = ij - i*(i+1)/2;
-            dx = atm_coords[i*3+0] - atm_coords[j*3+0];
-            dy = atm_coords[i*3+1] - atm_coords[j*3+1];
-            dz = atm_coords[i*3+2] - atm_coords[j*3+2];
-            atom_dist[i*natm+j] = 1 / _lko_sat_func(sqrt(dx*dx + dy*dy + dz*dz));
-        //}
+        i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
+        j = ij - i*(i+1)/2;
+        dx = atm_coords[i*3+0] - atm_coords[j*3+0];
+        dy = atm_coords[i*3+1] - atm_coords[j*3+1];
+        dz = atm_coords[i*3+2] - atm_coords[j*3+2];
+        atom_dist[i*natm+j] = 1 / _lko_sat_func(sqrt(dx*dx + dy*dy + dz*dz));
     }
 }
 
