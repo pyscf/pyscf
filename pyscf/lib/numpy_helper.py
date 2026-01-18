@@ -29,7 +29,7 @@ from numpy import asarray  # For backward compatibility
 
 EINSUM_MAX_SIZE = getattr(misc.__config__, 'lib_einsum_max_size', 500)
 
-# If ensium backend is configured, use the specified einsum implementation.
+# If einsum backend is configured, use the specified einsum implementation.
 EINSUM_BACKEND = getattr(misc.__config__, 'lib_einsum_backend', None)
 if EINSUM_BACKEND is None:
     try:
@@ -110,11 +110,29 @@ else:
         einsum_args.insert(0, ((a, b), idx_removed, einsum_str, indices_in))
         return operands, einsum_args
 
-_numpy_einsum = numpy.einsum
-def contract(subscripts, A, B, **kwargs):
+def _numpy_einsum(scripts, *tensors, alpha=1, beta=0, out=None):
+    if out is None or beta == 0:
+        if alpha == 1:
+            out = numpy.einsum(scripts, *tensors, out=out)
+        elif out is None:
+            # alpha may be a complex number, out cannot be scaled inplace
+            out = numpy.einsum(scripts, *tensors) * alpha
+        else:
+            # When output is specified, alpha and out must be the same dtype
+            out = numpy.einsum(scripts, *tensors, out=out)
+            out *= alpha
+    else: # out is not None and beta != 0
+        C = numpy.einsum(scripts, *tensors)
+        if alpha != 1:
+            C = C * alpha
+        out *= beta
+        out += C
+    return out
+
+def contract(subscripts, A, B, alpha=1, beta=0, out=None, **kwargs):
     '''
     Perform tensor contraction using einsum notation
-    C = alpha * einsum(subscripts, A, B) + beta * C
+    C = alpha * einsum(subscripts, A, B) + beta * out
 
     Kwargs:
         alpha : scalar, optional
@@ -131,19 +149,19 @@ def contract(subscripts, A, B, **kwargs):
 
     # small problem size
     if A.size < EINSUM_MAX_SIZE or B.size < EINSUM_MAX_SIZE:
-        return _numpy_einsum(idx_str, A, B)
+        return _numpy_einsum(idx_str, A, B, alpha=alpha, beta=beta, out=out)
 
     if EINSUM_BACKEND == 'pytblis':
-        return pytblis.contract(idx_str, A, B, **kwargs)
+        return pytblis.contract(idx_str, A, B, alpha=alpha, beta=beta, out=out)
 
     C_dtype = numpy.result_type(A, B)
     if EINSUM_BACKEND =='pyscf-tblis' and C_dtype == numpy.double:
         # tblis is slow for complex type
-        return tblis_einsum.contract(idx_str, A, B, **kwargs)
+        return tblis_einsum.contract(idx_str, A, B, alpha=alpha, beta=beta, out=out)
 
     indices  = idx_str.replace(',', '').replace('->', '')
     if '->' not in idx_str or any(indices.count(x) != 2 for x in set(indices)):
-        return _numpy_einsum(idx_str, A, B)
+        return _numpy_einsum(idx_str, A, B, alpha=alpha, beta=beta, out=out)
 
     # Split the strings into a list of idx char's
     idxA, idxBC = idx_str.split(',')
@@ -161,7 +179,7 @@ def contract(subscripts, A, B, **kwargs):
         uniq_idxA == shared_idxAB or uniq_idxB == shared_idxAB or
         # repeated indices (e.g. 'iijk,kl->jl')
         len(idxA) != len(uniq_idxA) or len(idxB) != len(uniq_idxB)):
-        return _numpy_einsum(idx_str, A, B)
+        return _numpy_einsum(idx_str, A, B, alpha=alpha, beta=beta, out=out)
 
     DEBUG = kwargs.get('DEBUG', False)
 
@@ -246,7 +264,19 @@ def contract(subscripts, A, B, **kwargs):
     else:
         Bt = numpy.asarray(Bt.reshape(inner_shape,-1), order='C')
 
-    return dot(At,Bt).reshape(shapeCt, order='A').transpose(new_orderCt)
+    C = dot(At,Bt).reshape(shapeCt, order='A').transpose(new_orderCt)
+    if alpha != 1:
+        C = C * alpha
+    if out is None:
+        return C
+
+    # Write to the out buffer
+    if beta == 0:
+        out[:] = C
+    else:
+        out *= beta
+        out[:] += C
+    return out
 
 def einsum(scripts, *tensors, **kwargs):
     '''Perform a more efficient einsum via reshaping to a matrix multiply.
@@ -1141,7 +1171,7 @@ def direct_sum(subscripts, *operands):
         unisymb = set(symb)
         if len(unisymb) != len(symb):
             unisymb = ''.join(unisymb)
-            op = _numpy_einsum('->'.join((symb, unisymb)), op)
+            op = numpy.einsum('->'.join((symb, unisymb)), op)
             src[i] = unisymb
         if i == 0:
             if sign[i] == '+':
@@ -1153,7 +1183,7 @@ def direct_sum(subscripts, *operands):
         else:
             out = out.reshape(out.shape+(1,)*op.ndim) - op
 
-    out = _numpy_einsum('->'.join((''.join(src), dest)), out)
+    out = numpy.einsum('->'.join((''.join(src), dest)), out)
     out.flags.writeable = True  # old numpy has this issue
     return out
 
