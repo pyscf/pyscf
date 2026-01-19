@@ -110,19 +110,19 @@ else:
         einsum_args.insert(0, ((a, b), idx_removed, einsum_str, indices_in))
         return operands, einsum_args
 
-def _numpy_einsum(scripts, *tensors, alpha=1, beta=0, out=None):
+def _numpy_einsum(scripts, *tensors, alpha=1, beta=0, out=None, **kwargs):
     if out is None or beta == 0:
         if alpha == 1:
-            out = numpy.einsum(scripts, *tensors, out=out)
+            out = numpy.einsum(scripts, *tensors, out=out, **kwargs)
         elif out is None:
             # alpha may be a complex number, out cannot be scaled inplace
-            out = numpy.einsum(scripts, *tensors) * alpha
+            out = numpy.einsum(scripts, *tensors, **kwargs) * alpha
         else:
             # When output is specified, alpha and out must be the same dtype
-            out = numpy.einsum(scripts, *tensors, out=out)
+            out = numpy.einsum(scripts, *tensors, out=out, **kwargs)
             out *= alpha
     else: # out is not None and beta != 0
-        C = numpy.einsum(scripts, *tensors)
+        C = numpy.einsum(scripts, *tensors, **kwargs)
         if alpha != 1:
             C = C * alpha
         out *= beta
