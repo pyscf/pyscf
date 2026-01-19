@@ -1991,6 +1991,10 @@ class Cell(mole.MoleBase):
             mol._build_symmetry()
         return mol
 
+    def to_gpu(self):
+        from gpu4pyscf.gto.mole import Cell
+        return Cell.from_cpu(self)
+
     def set_geom_(self, atoms_or_coords=None, unit=None, symmetry=None,
                   a=None, inplace=True):
         '''Update geometry and lattice parameters
