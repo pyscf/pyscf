@@ -13,6 +13,7 @@ PySCF 2.12.0 (2026-01-20)
   - Improve PBC DFT instantiation
   - support complex vector for fci.direct_spin1 solver
   - Reduced memory usage for pbc RSGDF
+  - Configurable einsum backend, supporting pytblis, tlibs-einsum and tensordot
 * Fixes
   - KRHF gradients when exxdiv='ewald'
   - segfault for qcint backend
