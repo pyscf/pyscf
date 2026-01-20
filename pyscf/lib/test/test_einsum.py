@@ -211,7 +211,7 @@ class KnownValues(unittest.TestCase):
         c1 = einsum("ij,ji->", x, y)
         self.assertTrue(abs(c0-c1).max() < 1e-13)
 
-    def test_contract(self):
+    def test_tblis_einsum(self):
         try:
             from pyscf.lib import tblis_einsum
             tblis_available = True
@@ -226,7 +226,7 @@ class KnownValues(unittest.TestCase):
             c0 = tblis_einsum.contract('ijk,jlk->li', a, b, out=c1, alpha=.5j, beta=.2)
             c1 = numpy.ones((9,5), dtype=numpy.complex128)
             c1 = c1*.2 + numpy.einsum('ijk,jlk->li', a, b)*.5j
-            self.assertTrue(abs(c0-c1).max() < 1e-13)
+            self.assertAlmostEqual(abs(c0-c1).max(), 0, 12)
 
     def test_4operands(self):
         a = numpy.random.random((30,40,5,10))
@@ -245,6 +245,24 @@ class KnownValues(unittest.TestCase):
         ref = lib.einsum('jlxp,px->jl', ref, d)
         self.assertAlmostEqual(abs(ref-f).max(), 0, 9)
 
+    def test_alpha_beta(self):
+        a = numpy.random.random((5,4,6))
+        b = numpy.random.random((4,9,6))
+
+        c1 = numpy.ones((9,5), dtype=numpy.complex128)
+        c0 = lib.numpy_helper.contract('ijk,jlk->li', a, b, out=c1, alpha=.5j, beta=.2)
+        c1 = numpy.ones((9,5), dtype=numpy.complex128)
+        c1 = c1*.2 + numpy.einsum('ijk,jlk->li', a, b)*.5j
+        self.assertAlmostEqual(abs(c0-c1).max(), 0, 12)
+
+        a = numpy.random.random((25,24,26))
+        b = numpy.random.random((24,29,26))
+
+        c1 = numpy.ones((29,25))
+        c0 = lib.numpy_helper.contract('ijk,jlk->li', a, b, out=c1, beta=.2)
+        c1 = numpy.ones((29,25))
+        c1 = c1*.2 + numpy.einsum('ijk,jlk->li', a, b)
+        self.assertAlmostEqual(abs(c0-c1).max(), 0, 12)
 
 if __name__ == '__main__':
     unittest.main()

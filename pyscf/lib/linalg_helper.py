@@ -23,7 +23,6 @@ Extension to scipy.linalg module
 import sys
 import inspect
 import warnings
-from functools import reduce
 import numpy
 import scipy.linalg
 from pyscf.lib import logger
@@ -80,7 +79,7 @@ def safe_eigh(h, s, lindep=SAFE_EIGH_LINDEP):
     mask = seig >= lindep
     t = t[:,mask] * (1/numpy.sqrt(seig[mask]))
     if t.size > 0:
-        heff = reduce(numpy.dot, (t.T.conj(), h, t))
+        heff = t.conj().T.dot(h).dot(t)
         w, v = scipy.linalg.eigh(heff)
         v = numpy.dot(t, v)
     else:
@@ -130,7 +129,7 @@ def eigh_by_blocks(h, s=None, labels=None):
     >>> from pyscf import gto, lib, symm
     >>> mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='ccpvdz', symmetry=True)
     >>> c = numpy.hstack(mol.symm_orb)
-    >>> vnuc_so = reduce(numpy.dot, (c.T, mol.intor('int1e_nuc_sph'), c))
+    >>> vnuc_so = c.T.dot(mol.intor('int1e_nuc_sph')).dot(c)
     >>> orbsym = symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, c)
     >>> lib.eigh_by_blocks(vnuc_so, labels=orbsym)
     (array([-4.50766885, -1.80666351, -1.7808565 , -1.7808565 , -1.74189134,
@@ -147,7 +146,7 @@ def eigh_by_blocks(h, s=None, labels=None):
         p0 = 0
         for label in set(labels):
             idx = labels == label
-            e, c = scipy.linalg.eigh(h[idx][:,idx])
+            e, c = scipy.linalg.eigh(h[idx[:,None],idx])
             cs[idx,p0:p0+e.size] = c
             es.append(e)
             p0 = p0 + e.size
@@ -155,7 +154,7 @@ def eigh_by_blocks(h, s=None, labels=None):
         p0 = 0
         for label in set(labels):
             idx = labels == label
-            e, c = scipy.linalg.eigh(h[idx][:,idx], s[idx][:,idx])
+            e, c = scipy.linalg.eigh(h[idx[:,None],idx], s[idx[:,None],idx])
             cs[idx,p0:p0+e.size] = c
             es.append(e)
             p0 = p0 + e.size
