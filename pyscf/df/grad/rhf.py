@@ -22,7 +22,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import time
 import numpy
 import ctypes
 import scipy.linalg
@@ -68,8 +67,23 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True,
             is set to ED.
     '''
     assert (with_j or with_k)
+    if (
+        with_k
+        and hasattr(mf_grad.base, "only_dfj")
+        and mf_grad.base.only_dfj
+    ):
+        if with_j:
+            vj = get_j(mf_grad, mol=mol, dm=dm, hermi=hermi)
+            vkaux = numpy.zeros_like(vj.aux)
+        else:
+            vj = None
+            if mol is None: mol = mf_grad.mol
+            vkaux = numpy.zeros((1, 1, mol.natm, 3))
+        vk = rhf_grad.get_k(mol, dm)
+        vk = lib.tag_array(vk, aux=vkaux)
+        return vj, vk
     if not with_k:
-        return get_j (mf_grad, mol=mol, dm=dm, hermi=hermi), None
+        return get_j(mf_grad, mol=mol, dm=dm, hermi=hermi), None
     t0 = (logger.process_clock (), logger.perf_counter ())
     if mol is None: mol = mf_grad.mol
     if dm is None: dm = mf_grad.base.make_rdm1()
@@ -279,11 +293,17 @@ def get_j(mf_grad, mol=None, dm=None, hermi=0):
 
     # (d/dX i,j|P)
     vj = numpy.zeros((nset,3,nao,nao))
+    _vj = vj.view()
+    _vj.shape = (nset, 3, -1)
     for shl0, shl1, nL in ao_ranges:
         int3c = get_int3c_ip1((0, nbas, 0, nbas, shl0, shl1))  # (i,j|P)
         p0, p1 = aux_loc[shl0], aux_loc[shl1]
-        vj += lib.einsum('xijp,np->nxij', int3c, rhoj[:,p0:p1])
+        for x in range(3):
+            _int3c = int3c[x].T
+            _int3c.shape = (p1 - p0, -1)
+            _vj[:, x] += lib.dot(rhoj[:, p0:p1], _int3c)
         int3c = None
+    vj = numpy.ascontiguousarray(vj.transpose(0, 1, 3, 2))
 
     if mf_grad.auxbasis_response:
         # (i,j|d/dX P)
@@ -291,13 +311,16 @@ def get_j(mf_grad, mol=None, dm=None, hermi=0):
         for shl0, shl1, nL in ao_ranges:
             int3c = get_int3c_ip2((0, nbas, 0, nbas, shl0, shl1))  # (i,j|P)
             p0, p1 = aux_loc[shl0], aux_loc[shl1]
-            vjaux[:,:,:,p0:p1] = lib.einsum('xwp,mw,np->mnxp',
-                                          int3c, dm_tril, rhoj[:,p0:p1])
+            tmp_mxp = lib.einsum("xwp,mw->mxp", int3c, dm_tril)
+            vjaux[:,:,:,p0:p1] = lib.einsum("np,mxp->mnxp", rhoj[:,p0:p1], tmp_mxp)
             int3c = None
 
         # (d/dX P|Q)
         int2c_e1 = auxmol.intor('int2c2e_ip1', aosym='s1')
-        vjaux -= lib.einsum('xpq,mp,nq->mnxp', int2c_e1, rhoj, rhoj)
+        shape = int2c_e1.shape
+        b = numpy.reshape(int2c_e1, (-1, shape[-1]))
+        tmp_nxp = numpy.reshape(lib.dot(rhoj, b.T), (-1, shape[0], shape[1]))
+        vjaux -= lib.einsum("mp,nxp->mnxp", rhoj, tmp_nxp)
 
         auxslices = auxmol.aoslice_by_atom()
         vjaux = numpy.array ([-vjaux[:,:,:,p0:p1].sum(axis=3) for p0, p1 in auxslices[:,2:]])
@@ -305,7 +328,8 @@ def get_j(mf_grad, mol=None, dm=None, hermi=0):
         vj = lib.tag_array(-vj.reshape(out_shape), aux=numpy.array(vjaux))
     else:
         vj = -vj.reshape(out_shape)
-    logger.timer (mf_grad, 'df vj', *t0)
+
+    logger.timer(mf_grad, 'df vj', *t0)
     return vj
 
 def _int3c_wrapper(mol, auxmol, intor, aosym):

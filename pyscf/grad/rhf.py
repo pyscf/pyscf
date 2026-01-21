@@ -145,14 +145,8 @@ def hcore_generator(mf, mol=None):
 def get_ovlp(mol):
     return -mol.intor('int1e_ipovlp', comp=3)
 
-
-def get_jk(mol, dm):
-    '''J = ((-nabla i) j| kl) D_lk
-    K = ((-nabla i) j| kl) D_jk
-    '''
+def _calc_q_cond(mol, vhfopt):
     libcvhf = _vhf.libcvhf
-    vhfopt = _vhf._VHFOpt(mol, 'int2e_ip1', 'CVHFgrad_jk_prescreen',
-                          dmcondname='CVHFnr_dm_cond1')
     ao_loc = mol.ao_loc_nr()
     nbas = mol.nbas
     q_cond = numpy.empty((2, nbas, nbas))
@@ -167,8 +161,15 @@ def get_jk(mol, dm):
             lib.c_null_ptr(), q_cond[1].ctypes,
             ao_loc.ctypes, mol._atm.ctypes, ctypes.c_int(mol.natm),
             mol._bas.ctypes, ctypes.c_int(nbas), mol._env.ctypes)
-    vhfopt.q_cond = q_cond
+    return q_cond
 
+def get_jk(mol, dm):
+    '''J = ((-nabla i) j| kl) D_lk
+    K = ((-nabla i) j| kl) D_jk
+    '''
+    vhfopt = _vhf._VHFOpt(mol, 'int2e_ip1', 'CVHFgrad_jk_prescreen',
+                          dmcondname='CVHFnr_dm_cond1')
+    vhfopt.q_cond = _calc_q_cond(mol, vhfopt)
     intor = mol._add_suffix('int2e_ip1')
     vj, vk = _vhf.direct_mapdm(intor,  # (nabla i,j|k,l)
                                's2kl', # ip1_sph has k>=l,
@@ -176,6 +177,36 @@ def get_jk(mol, dm):
                                dm, 3, # xyz, 3 components
                                mol._atm, mol._bas, mol._env, vhfopt=vhfopt)
     return -vj, -vk
+
+def get_j(mol, dm):
+    '''
+    J = ((-nabla i) j| kl) D_lk
+    '''
+    vhfopt = _vhf._VHFOpt(mol, 'int2e_ip1', 'CVHFgrad_j_prescreen',
+                          dmcondname='CVHFnr_dm_cond1')
+    vhfopt.q_cond = _calc_q_cond(mol, vhfopt)
+    intor = mol._add_suffix('int2e_ip1')
+    vj = _vhf.direct_mapdm(intor,  # (nabla i,j|k,l)
+                           's2kl', # ip1_sph has k>=l,
+                           'lk->s1ij',
+                           dm, 3, # xyz, 3 components
+                           mol._atm, mol._bas, mol._env, vhfopt=vhfopt)
+    return -vj
+
+def get_k(mol, dm):
+    '''
+    K = ((-nabla i) j| kl) D_jk
+    '''
+    vhfopt = _vhf._VHFOpt(mol, 'int2e_ip1', 'CVHFgrad_k_prescreen',
+                          dmcondname='CVHFnr_dm_cond1')
+    vhfopt.q_cond = _calc_q_cond(mol, vhfopt)
+    intor = mol._add_suffix('int2e_ip1')
+    vk = _vhf.direct_mapdm(intor,  # (nabla i,j|k,l)
+                           's2kl', # ip1_sph has k>=l,
+                           'jk->s1il',
+                           dm, 3, # xyz, 3 components
+                           mol._atm, mol._bas, mol._env, vhfopt=vhfopt)
+    return -vk
 
 def get_veff(mf_grad, mol, dm):
     '''NR Hartree-Fock Coulomb repulsion'''
@@ -328,24 +359,18 @@ class GradientsBase(lib.StreamObject):
     def get_j(self, mol=None, dm=None, hermi=0, omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.base.make_rdm1()
-        intor = mol._add_suffix('int2e_ip1')
         if omega is None:
-            return -_vhf.direct_mapdm(intor, 's2kl', 'lk->s1ij', dm, 3,
-                                      mol._atm, mol._bas, mol._env)
+            return get_j(mol, dm)
         with mol.with_range_coulomb(omega):
-            return -_vhf.direct_mapdm(intor, 's2kl', 'lk->s1ij', dm, 3,
-                                      mol._atm, mol._bas, mol._env)
+            return get_j(mol, dm)
 
     def get_k(self, mol=None, dm=None, hermi=0, omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.base.make_rdm1()
-        intor = mol._add_suffix('int2e_ip1')
         if omega is None:
-            return -_vhf.direct_mapdm(intor, 's2kl', 'jk->s1il', dm, 3,
-                                      mol._atm, mol._bas, mol._env)
+            return get_k(mol, dm)
         with mol.with_range_coulomb(omega):
-            return -_vhf.direct_mapdm(intor, 's2kl', 'jk->s1il', dm, 3,
-                                      mol._atm, mol._bas, mol._env)
+            return get_k(mol, dm)
 
     def get_veff(self, mol=None, dm=None):
         raise NotImplementedError
