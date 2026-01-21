@@ -1,3 +1,48 @@
+PySCF 2.12.0 (2026-01-20)
+-------------------------
+* Added
+  - Velocity gauge integrals and oscillator strengths for TDSCF using GTH basis sets
+  - High Performance CCSDT and CCSDTQ Implementation (T1-dressed formalism)
+  - GHF stability_slow
+  - Density fitting implementation for the NEVPT2
+* Improved
+  - Adjust UHF and ROHF analyze() to be compatible with msym
+  - Evaluate pseudo potential nonlocal term gradient on real space, the same as corresponding Fock evaluation
+  - Improve GPU4PySCF interface
+  - In pseudopotential nonlocal term gradient, if large imaginary is found, print warning instead of raise error
+  - Improve PBC DFT instantiation
+  - support complex vector for fci.direct_spin1 solver
+  - Reduced memory usage for pbc RSGDF
+  - Configurable einsum backend, supporting pytblis, tlibs-einsum and tensordot
+* Fixes
+  - KRHF gradients when exxdiv='ewald'
+  - segfault for qcint backend
+  - fix a bug in x2c, where imag part has been deprecated.
+* New Features and Improvements in the Molecular ADC Module
+  - Expanded 1-RDM Functionality:
+    * Introduced 1-RDM calculation functions for CVS-IP-RADC, CVS-IP-UADC, EE-RADC, and EA-UADC methods.
+    * Enhanced reference 1-RDM calculation function in UADC.
+    * Updated 1-RDM functions in IP-UADC and EE-UADC to include contributions up to ADC(3).
+  - Expanded oscillator strengths Functionality:
+    * Enabled oscillator strengths calculation for EE-RADC.
+    * Introduced get_properties function for EE-RADC.
+    * Updated get_trans_moments function EE-UADC to include contributions from 3rd order singlet excited amplitudes
+  - Advanced Orbital Control:
+    * Implemented frozen orbital functionality across all ADC cases, offering greater computational efficiency and control.
+  - Improved Initial Guess Strategies for ADC:
+    * Added CIS initial guess options for EE-UADC and EE-RADC.
+    * Introduced user-defined initial guess capabilities for all ADC methods, providing increased flexibility.
+  - Enhanced Analysis and Output:
+    * Integrated `analyze_eigenvector` function into EE-UADC, EE-RADC, CVS-IP-RADC, and CVS-IP-UADC for detailed analysis.
+    * Added `analyze_spec_factor` for EE-RADC.
+    * Updated `analyze` function for  CVS-IP-RADC, CVS-IP-UADC, EE-RADC, and EA-UADC methods.
+    * Improved logging in `kernel` and `kernel_gs` functions (UADC and RADC) to report the number of frozen and active orbitals.
+  - Bug Fixes
+    * Resolved a bug in 1-RDM functions that occurred when `approx_trans_moments` was set to `True`.
+    * Fixed merge conflicts.
+  - General Improvements
+    * Replaced long floating-point numbers with fractional representations for improved precision and readability.
+
 PySCF 2.11.0 (2025-10-15)
 -------------------------
 * Added
