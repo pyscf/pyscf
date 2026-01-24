@@ -23,7 +23,7 @@ def test_ugw_ac(h2o_cation_uhf):
     gw = UGWAC(h2o_cation_uhf)
     gw.orbs = range(2, 8)
     gw.kernel()
-    assert abs(gw.mo_energy[0][4] - -1.02679347) < 1e-5
-    assert abs(gw.mo_energy[0][5] - -0.15525786) < 1e-5
-    assert abs(gw.mo_energy[1][3] - -0.99401046) < 1e-5
-    assert abs(gw.mo_energy[1][4] - -0.42543725) < 1e-5
+    assert gw.mo_energy[0][4] == pytest.approx(-1.02679347, abs=1e-5)
+    assert gw.mo_energy[0][5] == pytest.approx(-0.15525786, abs=1e-5)
+    assert gw.mo_energy[1][3] == pytest.approx(-0.99401046, abs=1e-5)
+    assert gw.mo_energy[1][4] == pytest.approx(-0.42543725, abs=1e-5)
