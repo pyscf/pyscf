@@ -1076,27 +1076,3 @@ class UGWAC(GWAC):
                     gf[s, :, :, iw] = np.linalg.inv(np.linalg.inv(gf0[s, :, :, iw]) - sigma_diff[s, :, :, iw])
 
         return gf, gf0, sigma
-
-
-if __name__ == '__main__':
-    from pyscf import gto, dft, scf
-
-    mol = gto.Mole()
-    mol.verbose = 5
-    mol.atom = [[8, (0.0, 0.0, 0.0)], [1, (0.0, -0.7571, 0.5861)], [1, (0.0, 0.7571, 0.5861)]]
-    mol.basis = 'def2-svp'
-    mol.charge = 1
-    mol.spin = 1
-    mol.build()
-
-    mf = dft.UKS(mol)
-    mf.xc = 'pbe0'
-    mf.kernel()
-
-    gw = UGWAC(mf)
-    gw.orbs = range(2, 8)
-    gw.kernel()
-    assert abs(gw.mo_energy[0][4] - -1.02679347) < 1e-5
-    assert abs(gw.mo_energy[0][5] - -0.15525786) < 1e-5
-    assert abs(gw.mo_energy[1][3] - -0.99401046) < 1e-5
-    assert abs(gw.mo_energy[1][4] - -0.42543725) < 1e-5
