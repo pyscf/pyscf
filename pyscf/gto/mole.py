@@ -2148,8 +2148,8 @@ def fromstring(string, format='xyz'):
     if format == 'zmat':
         return string
     elif format == 'xyz':
-        line, title, geom = string.split('\n', 2)
-        return geom
+        atom_number_str, title, geom = string.split('\n', 2)
+        return geom[:int(atom_number_str)]
     elif format == 'sdf':
         raw = string.splitlines()
         natoms, nbonds = raw[3].split()[:2]
