@@ -43,7 +43,7 @@ from pyscf.mp.ump2 import get_nocc, get_nmo, get_frozen_mask
 from pyscf.scf.addons import _fermi_smearing_occ, _gaussian_smearing_occ, _smearing_optimize
 
 from pyscf.gw.utils.ac_grid import _get_scaled_legendre_roots, PadeAC, TwoPoleAC
-from pyscf.gw.utils import arraymath
+from pyscf.gw.utils.gw_np_helper import mkslice, get_id_minus_pi_inv_minus_id
 from pyscf.gw.gw_ac import GWAC
 
 
@@ -327,7 +327,7 @@ def get_sigma(
         Lia_a = np.ascontiguousarray(Lpq[0, :, : nocc[0], nocc[0] :])
         Lia_b = np.ascontiguousarray(Lpq[1, :, : nocc[1], nocc[1] :])
     # assume Lpq = Lpq, so we don't generate Lpq[:, :, mkslice(orbs), :]
-    l_slice = Lpq[:, :, :, arraymath.mkslice(orbs)].reshape(2, naux, -1)
+    l_slice = Lpq[:, :, :, mkslice(orbs)].reshape(2, naux, -1)
 
     # self-energy is calculated as equation 27 in doi.org/10.1021/acs.jctc.0c00704
     logger.info(gw, 'Starting get_sigma_diag main loop with %d frequency points.', nquadfreqs)
@@ -351,7 +351,7 @@ def get_sigma(
             Pi = get_rho_response_metal(quad_freqs[w], mo_energy, mo_occ, Lpq[0], Lpq[1])
         else:
             Pi = get_rho_response(quad_freqs[w], mo_energy_w, Lia_a, Lia_b)
-        Pi_inv = arraymath.get_id_minus_pi_inv_minus_id(Pi, overwrite_input=True)
+        Pi_inv = get_id_minus_pi_inv_minus_id(Pi, overwrite_input=True)
 
         for s in range(2):
             # second line in equation 27
@@ -581,7 +581,7 @@ def get_sigma_outcore(
                 Lpq = gw.loop_ao2mo(mo_coeff=mo_coeff, spin='a', ijslicea=ijslice)
             else:
                 Lpq = gw.loop_ao2mo(mo_coeff=mo_coeff, spin='b', ijsliceb=ijslice)
-            l_slice = np.ascontiguousarray(Lpq[:, :, arraymath.mkslice(orbs)].reshape(naux, -1))
+            l_slice = np.ascontiguousarray(Lpq[:, :, mkslice(orbs)].reshape(naux, -1))
             del Lpq
 
             for w in range(nquadfreqs):
