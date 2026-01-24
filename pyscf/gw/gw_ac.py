@@ -42,7 +42,7 @@ from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask
 from pyscf.scf.addons import _fermi_smearing_occ, _gaussian_smearing_occ, _smearing_optimize
 
 from pyscf.gw.utils.ac_grid import _get_scaled_legendre_roots, PadeAC, TwoPoleAC
-from pyscf.gw.utils import arraymath
+from pyscf.gw.utils.gw_np_helper import get_id_minus_pi_inv, mkslice, addto_diagonal
 
 
 def kernel(gw):
@@ -195,6 +195,7 @@ def get_rho_response(omega, mo_energy, Lia, out=None):
 
 def get_rho_response_metal(omega, mo_energy, mo_occ, Lpq, out=None):
     """Get response function in auxiliary basis for metallic systems.
+    Also applicable to molecular SCF with smearing.
 
     Parameters
     ----------
@@ -226,120 +227,6 @@ def get_rho_response_metal(omega, mo_energy, mo_occ, Lpq, out=None):
 
     Pi = np.matmul(Pia.reshape(naux, -1), Lpq.reshape(naux, -1).T, out=out)
     return Pi
-
-
-def get_rho_response_head(omega, mo_energy, qij):
-    """Compute head (G=0, G'=0) density response function in auxiliary basis at freq iw.
-    equation 48 in 10.1021/acs.jctc.0c00704
-
-    Parameters
-    ----------
-    omega : double
-        frequency point
-    mo_energy : double ndarray
-        orbital energy
-    qij : complex ndarray
-        pair density matrix defined as equation 51 in 10.1021/acs.jctc.0c00704
-
-    Returns
-    -------
-    Pi_00 : complex
-        head response function
-    """
-    nocc = qij.shape[0]
-
-    Pi_00 = 0j
-    eia = mo_energy[:nocc, None] - mo_energy[None, nocc:]
-    eia = eia / (omega**2 + eia**2)
-    Pi_00 += 4.0 * einsum('ia,ia->', eia, qij.conj() * qij)
-    return Pi_00
-
-
-def get_rho_response_wing(omega, mo_energy, Lia, qij):
-    """Compute wing (G=P, G'=0) density response function in auxiliary basis at freq iw.
-    equation 48 in 10.1021/acs.jctc.0c00704
-
-    Parameters
-    ----------
-    omega : double
-        frequency point
-    mo_energy : double 2d array
-        orbital energy
-    Lia : complex 4d array
-        occupied-virtual block of three-center density fitting matrix in MO
-    qij : complex ndarray
-        pair density matrix defined as equation 51 in 10.1021/acs.jctc.0c00704
-
-    Returns
-    -------
-    Pi : complex ndarray
-        wing response function
-    """
-    naux, nocc, nvir = Lia.shape
-
-    Pi = np.zeros(shape=[naux], dtype=np.complex128)
-    eia = mo_energy[:nocc, None] - mo_energy[None, nocc:]
-    eia = eia / (omega**2 + eia**2)
-    eia_q = eia * qij.conj()
-    Pi += 4.0 * np.matmul(Lia.reshape(naux, nocc * nvir), eia_q.reshape(nocc * nvir))
-    return Pi
-
-
-def get_qij(gw, q, mo_energy, mo_coeff, uniform_grids=False):
-    """Compute pair density matrix in the long-wavelength limit through kp perturbation theory
-    k=0 only for gamma point
-    qij = 1/Omega * |< psi_{ik} | e^{iqr} | psi_{ak-q} >|^2
-    equation 51 in 10.1021/acs.jctc.0c00704
-    Ref: Phys. Rev. B 83, 245122 (2011)
-
-    Parameters
-    ----------
-    gw : GWAC
-        gw object, provides attributes: nocc, nmo, kpts, mol
-    q : double
-        q grid
-    mo_energy : double ndarray
-        orbital energy
-    mo_coeff : complex ndarray
-        coefficient from AO to MO
-    uniform_grids : bool, optional
-        use uniform grids, by default False
-
-    Returns
-    -------
-    qij : complex ndarray
-        pair density matrix in the long-wavelength limit
-    """
-    from pyscf import pbc
-    nocc = gw.nocc
-    nmo = gw.nmo
-    nvir = nmo - nocc
-    cell = gw.mol
-
-    if uniform_grids:
-        with temporary_env(cell, verbose=0):
-            mydf = pbc.df.FFTDF(cell)
-            coords = cell.gen_uniform_grids(mydf.mesh)
-    else:
-        with temporary_env(cell, verbose=0):
-            coords, weights = pbc.dft.gen_grid.get_becke_grids(cell, level=4)
-    ngrid = len(coords)
-
-    qij = np.zeros(shape=[nocc, nvir], dtype=np.complex128)
-    ao_p = pbc.dft.numint.eval_ao(cell, coords, deriv=1)
-    ao = ao_p[0]
-    ao_grad = ao_p[1:4]
-    if uniform_grids:
-        ao_ao_grad = einsum('mg,xgn->xmn', ao.T.conj(), ao_grad) * cell.vol / ngrid
-    else:
-        ao_ao_grad = einsum('g,mg,xgn->xmn', weights, ao.T.conj(), ao_grad)
-    q_ao_ao_grad = -1j * einsum('x,xmn->mn', q, ao_ao_grad)
-    q_mo_mo_grad = mo_coeff[:, :nocc].T.conj() @ q_ao_ao_grad @ mo_coeff[:, nocc:]
-    enm = 1.0 / (mo_energy[nocc:, None] - mo_energy[None, :nocc])
-    dens = enm.T * q_mo_mo_grad
-    qij = dens / np.sqrt(cell.vol)
-
-    return qij
 
 
 def get_sigma(
@@ -422,17 +309,11 @@ def get_sigma(
         sigma_real = np.zeros(shape=[nw_sigma, norbs, norbs], dtype=np.double)
         sigma_imag = np.zeros(shape=[nw_sigma, norbs, norbs], dtype=np.double)
 
-    if gw.fc is True:
-        if fullsigma is False:
-            sigma_fc = np.zeros(shape=[norbs, nw_sigma], dtype=np.complex128)
-        else:
-            sigma_fc = np.zeros(shape=[norbs, norbs, nw_sigma], dtype=np.complex128)
-
     # make density-fitting matrix for contractions
     if hasattr(gw._scf, 'sigma') is False:
         Lia = np.ascontiguousarray(Lpq[:, :nocc, nocc:])
     # assume Lpq = Lpq, so we don't generate Lpq[:, mkslice(orbs), :]
-    l_slice = Lpq[:, :, arraymath.mkslice(orbs)].reshape(naux, -1)
+    l_slice = Lpq[:, :, mkslice(orbs)].reshape(naux, -1)
 
     # self-energy is calculated as equation 27 in doi.org/10.1021/acs.jctc.0c00704
     logger.info(gw, 'Starting get_sigma_diag main loop with %d frequency points.', nquadfreqs)
@@ -444,32 +325,6 @@ def get_sigma(
     else:
         Qmn = np.zeros(shape=[naux, norbs], dtype=np.double)
         Wmn = np.zeros(shape=[nmo, norbs, norbs], dtype=np.double)
-
-    if gw.fc is True:
-        # Set up q mesh for q->0 finite size correction
-        if not gw.fc_grid:
-            q_pts = np.array([1e-3, 0, 0], dtype=np.double).reshape(1, 3)
-        else:
-            Nq = 3
-            q_pts = np.zeros(shape=[Nq**3 - 1, 3], dtype=np.double)
-            for i in range(Nq):
-                for j in range(Nq):
-                    for k in range(Nq):
-                        if i == 0 and j == 0 and k == 0:
-                            continue
-                        else:
-                            q_pts[i * Nq**2 + j * Nq + k - 1, 0] = k * 5e-4
-                            q_pts[i * Nq**2 + j * Nq + k - 1, 1] = j * 5e-4
-                            q_pts[i * Nq**2 + j * Nq + k - 1, 2] = i * 5e-4
-        nq_pts = len(q_pts)
-        q_abs = gw.mol.get_abs_kpts(q_pts)
-
-        # Get qij = 1/sqrt(Omega) * < psi_{ik} | e^{iqr} | psi_{ak-q} > at q: (nocc, nvir)
-        qij = np.zeros(shape=[nq_pts, nocc, nmo - nocc], dtype=np.complex128)
-
-        if not gw.fc_grid:
-            for k in range(nq_pts):
-                qij[k] = get_qij(gw, q_abs[k], mo_energy, mo_coeff)
 
     for w in range(nquadfreqs):
         if gw.verbose >= 4:
@@ -484,32 +339,11 @@ def get_sigma(
         else:
             Pi = get_rho_response(quad_freqs[w], mo_energy_w, Lia)
         # Pi_inv contains (I - Pi)^-1.
-        Pi_inv = arraymath.get_id_minus_pi_inv(Pi, overwrite_input=True)
-
-        if gw.fc is True:
-            eps_inv_00 = 0j
-            eps_inv_P0 = np.zeros(shape=[naux], dtype=np.complex128)
-            for iq in range(nq_pts):
-                # head dielectric matrix eps_00, equation 47 in 10.1021/acs.jctc.0c00704
-                Pi_00 = get_rho_response_head(quad_freqs[w], mo_energy, qij[iq])
-                eps_00 = 1.0 - 4.0 * np.pi / np.linalg.norm(q_abs[iq]) ** 2.0 * Pi_00
-
-                # wings dielectric matrix eps_P0, equation 48 in 10.1021/acs.jctc.0c00704
-                Pi_P0 = get_rho_response_wing(quad_freqs[w], mo_energy, Lia, qij[iq])
-                eps_P0 = -np.sqrt(4.0 * np.pi) / np.linalg.norm(q_abs[iq]) * Pi_P0
-
-                # inverse dielectric matrix
-                # equation 53 in 10.1021/acs.jctc.0c00704
-                eps_inv_00 += 1.0 / nq_pts * 1.0 / (eps_00 - eps_P0.conj() @ Pi_inv @ eps_P0)
-                # equation 54 in 10.1021/acs.jctc.0c00704
-                eps_inv_P0 += 1.0 / nq_pts * (-eps_inv_00) * np.matmul(Pi_inv, eps_P0)
-
-            # head correction, equation 43 in 10.1021/acs.jctc.0c00704
-            Del_00 = 2.0 / np.pi * (6.0 * np.pi**2 / gw.mol.vol) ** (1.0 / 3.0) * (eps_inv_00 - 1.0)
+        Pi_inv = get_id_minus_pi_inv(Pi, overwrite_input=True)
 
         # second line in equation 27
         # Pi_inv now contains (I - Pi)^-1 - I.
-        arraymath.addto_diagonal(Pi_inv, -1.0)
+        addto_diagonal(Pi_inv, -1.0)
         g0 = quad_wts[w] * emo / (emo**2 + quad_freqs[w] ** 2)
 
         # split g0 into real and imag parts to avoid costly type conversions
@@ -582,36 +416,11 @@ def get_sigma(
                 overwrite_c=True,
             )
 
-        if gw.fc is True:
-            if fullsigma is False:
-                # head correction
-                sigma_fc += -Del_00 * g0[orbs] / np.pi
-
-                # wing correction
-                Wn_P0 = einsum('Pnn,P->n', Lpq, eps_inv_P0)
-                Wn_P0 = Wn_P0[orbs].real * 2.0
-                Del_P0 = np.sqrt(gw.mol.vol / 4 / np.pi**3) * (6 * np.pi**2 / gw.mol.vol) ** (2 / 3) * Wn_P0
-                sigma_fc += -einsum('n,nw->nw', Del_P0, g0[orbs]) / np.pi
-            else:
-                # head correction
-                tmp = -Del_00 * g0[orbs] / np.pi
-                sigma_fc[np.arange(norbs), np.arange(norbs), :] += tmp
-
-                # wing correction
-                Wn_P0 = einsum('Pnn,P->n', Lpq, eps_inv_P0)
-                Wn_P0 = Wn_P0[orbs].real * 2.0
-                Del_P0 = np.sqrt(gw.mol.vol / 4 / np.pi**3) * (6 * np.pi**2 / gw.mol.vol) ** (2 / 3) * Wn_P0
-                tmp = -einsum('n,nw->nw', Del_P0, g0[orbs]) / np.pi
-                sigma_fc[np.arange(norbs), np.arange(norbs), :] += tmp
-
     sigma = sigma_real + 1.0j * sigma_imag
     if fullsigma is False:
         sigma = np.ascontiguousarray(sigma.transpose(1, 0))
     else:
         sigma = np.ascontiguousarray(sigma.transpose(1, 2, 0))
-
-    if gw.fc is True:
-        sigma += sigma_fc
 
     logger.info(gw, '\nFinished get_sigma_diag main loop.')
 
@@ -749,7 +558,7 @@ def get_sigma_outcore(gw, orbs, quad_freqs, quad_wts, ef, mo_energy, mo_coeff, m
         orb_end = min((i + 1) * gw.segsize, nmo)
         ijslice = (orb_start, orb_end, 0, nmo)
         Lpq = gw.loop_ao2mo(mo_coeff=mo_coeff, ijslice=ijslice)
-        l_slice = np.ascontiguousarray(Lpq[:, :, arraymath.mkslice(orbs)].reshape(naux, -1))
+        l_slice = np.ascontiguousarray(Lpq[:, :, mkslice(orbs)].reshape(naux, -1))
         del Lpq
 
         for w in range(nw):
@@ -940,8 +749,6 @@ class GWAC(lib.StreamObject):
         self.fullsigma = False  # calculate off-diagonal self-energy
         self.rdm = False  # calculate GW density matrix
         self.vhf_df = False  # use density-fitting for exchange self-energy
-        self.fc = False  # finite-size correction (for supercell)
-        self.fc_grid = False  # finite-size correction grid (for supercell)
         self.outcore = False  # low-memory routine to calculate self-energy
         self.segsize = 100  # number of orbitals in one segment for outcore
         self.eta = 5.0e-3  # broadening parameter
