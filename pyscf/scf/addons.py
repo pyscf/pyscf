@@ -89,7 +89,7 @@ def _smearing_optimize(f_occ, mo_es, nocc, sigma):
     res = scipy.optimize.minimize(
         nelec_cost_fn, mu0, method='Powell',
         options={'xtol': 1e-5, 'ftol': 1e-5, 'maxiter': 10000})
-    mu = res.x
+    mu = res.x[0]
     mo_occs = f_occ(mu, mo_es, sigma)
     return mu, mo_occs
 
