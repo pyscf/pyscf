@@ -86,10 +86,10 @@ def _smearing_optimize(f_occ, mo_es, nocc, sigma):
         return (mo_occ.sum() - nocc)**2
 
     mu0 = _init_guess_mu(f_occ, mo_es, nocc, sigma)
-    res = scipy.optimize.minimize(
+    res = scipy.optimize.minimize_scalar(
         nelec_cost_fn, mu0, method='Powell',
         options={'xtol': 1e-5, 'ftol': 1e-5, 'maxiter': 10000})
-    mu = res.x[0]
+    mu = res.x
     mo_occs = f_occ(mu, mo_es, sigma)
     return mu, mo_occs
 
