@@ -18,7 +18,6 @@
 #          Junzi Liu <latrix1247@gmail.com>
 #          Susi Lehtola <susi.lehtola@gmail.com>
 
-import math
 from functools import reduce
 import numpy
 import scipy.linalg
@@ -101,13 +100,13 @@ def _smearing_optimize(f_occ, mo_es, nocc, sigma):
 
     iters, maxiter = 0, 1000
 
-    while abs(rootfn(math.nextafter(mu, math.inf))) < cur_err and iters < maxiter:
-        mu = math.nextafter(mu, math.inf)
+    while abs(rootfn(numpy.nextafter(mu, numpy.inf))) < cur_err and iters < maxiter:
+        mu = numpy.nextafter(mu, numpy.inf)
         cur_err = abs(rootfn(mu))
         iters += 1
 
-    while abs(rootfn(math.nextafter(mu, -math.inf))) < cur_err and iters < maxiter:
-        mu = math.nextafter(mu, -math.inf)
+    while abs(rootfn(numpy.nextafter(mu, -numpy.inf))) < cur_err and iters < maxiter:
+        mu = numpy.nextafter(mu, -numpy.inf)
         cur_err = abs(rootfn(mu))
         iters += 1
 
