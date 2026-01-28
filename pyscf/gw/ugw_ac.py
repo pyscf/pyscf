@@ -102,7 +102,8 @@ def kernel(gw):
     # compute self-energy on imaginary axis
     if gw.outcore:
         sigmaI, omega = get_sigma_outcore(
-            gw, orbs_frz, quad_freqs, quad_wts, ef, mo_energy=mo_energy_frz, mo_coeff=mo_coeff_frz, iw_cutoff=gw.ac_iw_cutoff,
+            gw, orbs_frz, quad_freqs, quad_wts, ef,
+            mo_energy=mo_energy_frz, mo_coeff=mo_coeff_frz, iw_cutoff=gw.ac_iw_cutoff,
             eval_freqs=eval_freqs_with_zero, fullsigma=gw.fullsigma
         )
     else:
@@ -248,9 +249,9 @@ def get_rho_response_metal(omega, mo_energy, mo_occ, Lpqa, Lpqb):
     return Pi
 
 
-def get_sigma(
-        gw, orbs, Lpq, quad_freqs, quad_wts, ef, mo_energy, mo_occ=None, iw_cutoff=None, eval_freqs=None, mo_energy_w=None,
-        fullsigma=False):
+def get_sigma(gw, orbs, Lpq, quad_freqs, quad_wts,ef, mo_energy,
+              mo_occ=None, iw_cutoff=None, eval_freqs=None,
+              mo_energy_w=None, fullsigma=False):
     """Compute GW correlation self-energy on imaginary axis.
     See equation 62 and 62 in 10.1088/1367-2630/14/5/053020,
     and equation 27 in doi.org/10.1021/acs.jctc.0c00704.
@@ -442,10 +443,9 @@ def get_sigma(
     return sigma[..., :nw_cutoff], omega[:nw_cutoff]
 
 
-def get_sigma_outcore(
-    gw, orbs, quad_freqs, quad_wts, ef, mo_energy, mo_coeff, mo_occ=None, iw_cutoff=None, eval_freqs=None, mo_energy_w=None,
-    fullsigma=False
-):
+def get_sigma_outcore(gw, orbs, quad_freqs, quad_wts, ef, mo_energy, mo_coeff,
+                      mo_occ=None, iw_cutoff=None, eval_freqs=None,
+                      mo_energy_w=None, fullsigma=False):
     """Low-memory routine to compute GW correlation self-energy (diagonal elements) MO basis on imaginary axis.
     See equation 62 and 62 in 10.1088/1367-2630/14/5/053020,
     and equation 27 in doi.org/10.1021/acs.jctc.0c00704.
@@ -1064,7 +1064,7 @@ class UGWAC(GWAC):
                 for iw in range(len(omega)):
                     for i in range(len(mo_energy)):
                         sigma[s, i, i, iw] = self.acobj[s, i].ac_eval(omega + 1j * eta)
-                        sigma_diff[s, i, i, iw] = sigma[s, i, i, iw] + self.vk[s, i, i] - gw.vxc[s, i, i]
+                        sigma_diff[s, i, i, iw] = sigma[s, i, i, iw] + self.vk[s, i, i] - self.vxc[s, i, i]
 
         for s in range(2):
             for iw in range(len(omega)):

@@ -127,7 +127,8 @@ def kernel(gw):
             # self-consistently solve QP equation
             def quasiparticle(omega):
                 sigmaR = diag_acobj[ip].ac_eval(omega).real
-                return omega - gw._scf.mo_energy[p_in_all] - (sigmaR + vk[p_in_frz, p_in_frz] - v_mf[p_in_frz, p_in_frz])
+                return omega - gw._scf.mo_energy[p_in_all] \
+                    - (sigmaR + vk[p_in_frz, p_in_frz] - v_mf[p_in_frz, p_in_frz])
 
             try:
                 mo_energy[p_in_all] = newton(
