@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import pytest
+import numpy as np
 from pyscf import gto, scf, dft
 from pyscf.gw.gw_ac import GWAC
 
@@ -76,3 +77,17 @@ def test_gwac_pade_frozen_list(h2o_pbe0):
     gw.kernel()
     assert gw.mo_energy[4] == pytest.approx(-0.43309464, abs=1e-5)
     assert gw.mo_energy[7] == pytest.approx(0.73675504, abs=2e-5)
+
+
+def test_loop_ao2mo(h2o_pbe0):
+    mf = h2o_pbe0
+    gw = GWAC(mf)
+    gw.initialize_df()
+    mo_coeff = mf.mo_coeff
+    nmo = mo_coeff.shape[1]
+    nocc = mf.mol.nelectron // 2
+    ijslice = (0, nocc, 0, nmo)
+    # small blocksize to force multiple blocks
+    Lpq_loop = gw.loop_ao2mo(mo_coeff=mo_coeff, ijslice=ijslice, blksize=4)
+    Lpq_full = gw.ao2mo(mo_coeff=mo_coeff)
+    assert np.allclose(Lpq_loop, Lpq_full[:, :nocc, :], atol=1e-15)

@@ -898,8 +898,8 @@ class GWAC(lib.StreamObject):
         """
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
-        nmo = self.nmo
-        nao = self.mo_coeff.shape[0]
+        nmo = mo_coeff.shape[1]
+        nao = mo_coeff.shape[0]
         naux = self.with_df.get_naoaux()
         nmo_pair = nmo * (nmo + 1) // 2
         nao_pair = nao * (nao + 1) // 2
@@ -916,7 +916,7 @@ class GWAC(lib.StreamObject):
         else:
             raise MemoryError
 
-    def loop_ao2mo(self, mo_coeff=None, ijslice=None):
+    def loop_ao2mo(self, mo_coeff=None, ijslice=None, blksize=None):
         """Transform density-fitting integral from AO to MO by block.
 
         Parameters
@@ -941,19 +941,17 @@ class GWAC(lib.StreamObject):
         njslice = ijslice[3] - ijslice[2]
 
         with_df = self.with_df
-        mem_now = lib.current_memory()[0]
-        max_memory = max(2000, (self.max_memory - mem_now) * 0.3)
-        blksize = int(min(naux, max(with_df.blockdim, (max_memory * 1e6 / 8) / (nmo * nmo))))
-        eri_3d = []
-        for eri1 in with_df.loop(blksize=blksize):
-            Lpq = None
-            Lpq = nr_e2(eri1, mo, ijslice, aosym='s2', mosym='s1', out=Lpq)
-            eri_3d.append(Lpq)
-        del eri1
-        del Lpq
 
-        eri_3d = np.vstack(eri_3d).reshape(naux, nislice, njslice)
-        return eri_3d
+        if blksize is None:
+            mem_now = lib.current_memory()[0]
+            max_memory = max(2000, (self.max_memory - mem_now) * 0.3)
+            blksize = int(min(naux, max(with_df.blockdim, (max_memory * 1e6 / 8) / (nmo * nmo))))
+
+        eri_3d = np.empty((naux, nislice * njslice))
+        for eri1, (p0, p1) in zip(with_df.loop(blksize=blksize), lib.prange(0, naux, blksize)):
+            nr_e2(eri1, mo, ijslice, aosym='s2', mosym='s1', out=eri_3d[p0:p1])
+
+        return eri_3d.reshape(naux, nislice, njslice)
 
     def get_ef(self, mo_energy=None):
         """Get Fermi level.
@@ -1112,7 +1110,7 @@ class GWAC(lib.StreamObject):
             self-energy
         """
         mo_energy = np.asarray(self._scf.mo_energy)
-        gf0 = get_g0(omega, mo_energy, eta)
+        gf0 = get_g0(omega, mo_energy[self.orbs], eta)
 
         gf = np.zeros_like(gf0)
         if self.fullsigma is True:
