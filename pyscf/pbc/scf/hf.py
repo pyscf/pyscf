@@ -41,7 +41,7 @@ from pyscf.pbc import df
 from pyscf.pbc.scf.rsjk import RangeSeparatedJKBuilder
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
-
+from pyscf.soscf import newton_ah
 
 def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
@@ -606,6 +606,14 @@ class SCF(mol_hf.SCF):
             isinstance(self.with_df, df.df.DF)):
             logger.warn(self, 'exxdiv %s is not supported in DF or MDF',
                         self.exxdiv)
+
+        if isinstance(self, newton_ah._CIAH_SOSCF) and (str(self._scf.exxdiv).lower() != str(self.exxdiv).lower()):
+            msg = (
+                "The exxdiv treatment is not consistent with the newton solver. "
+                "mf._scf.exxdiv ('%s') != mf.exxdiv ('%s'). "
+                "Set the same exxdiv for both. See pyscf/example/pbc/20-k_points_scf.py"
+            ) % (self._scf.exxdiv, self.exxdiv)
+            raise NotImplementedError(msg)
 
         if self.verbose >= logger.DEBUG:
             s = self.get_ovlp()
