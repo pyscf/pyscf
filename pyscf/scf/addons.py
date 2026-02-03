@@ -81,36 +81,36 @@ def _gaussian_smearing_occ(mu, mo_energy, sigma):
     return 0.5 * scipy.special.erfc((mo_energy - mu) / sigma)
 
 def _smearing_optimize(f_occ, mo_es, nocc, sigma):
-    def nelec_cost_fn(m):
+    def rootfn(m):
         mo_occ = f_occ(m, mo_es, sigma)
-        return (mo_occ.sum() - nocc)**2
+        return mo_occ.sum() - nocc
 
-    mu0 = _init_guess_mu(f_occ, mo_es, nocc, sigma)
-    res = scipy.optimize.minimize(
-        nelec_cost_fn, mu0, method='Powell',
-        options={'xtol': 1e-5, 'ftol': 1e-5, 'maxiter': 10000})
-    mu = res.x
-    mo_occs = f_occ(mu, mo_es, sigma)
-    return mu, mo_occs
+    # it's okay to set small xtol according to the docs.
+    mu = scipy.optimize.bisect(rootfn, mo_es.min()-10., mo_es.max()+10.,
+                               xtol=1e-16, maxiter=10000)
 
-def _init_guess_mu(f_occ, mo_es, nocc, sigma, box=[-1.,1.], step=1e-3):
-    ''' Generate an initial guess for `mu` by manually minimizing the nocc error on a grid
-        around `fermi`. The grid is constructed as:
+    cur_err = abs(rootfn(mu))
 
-            mus = fermi + numpy.arange(*box, step) / 27.211399
+    # Check if we can further improve mu by moving it up/down
+    # by the minimum machine-representable amount.
+    # In many cases with Fermi-type smearing and sigma~1e-6,
+    # the minimum possible error is still >1e-11 because the
+    # smearing function is just so sharp. Because xtol is set to 1e-16 above,
+    # this should not take too many iterations.
 
-        By default, `box = [-1, 1]` and `step = 1e-3`, which corresponds to searching
-        within a +/-1 eV window around `fermi` with a resolution of 1 meV (resulting
-        in 2000 grid points).
+    iters, maxiter = 0, 1000
 
-        Return:
-            mu0 : float
-                Best initial guess within the searching window
-    '''
-    fermi = _get_fermi(mo_es, nocc)
-    mus = fermi + numpy.arange(*box, step)/27.211399
-    noccs = numpy.asarray([f_occ(m, mo_es, sigma).sum() for m in mus])
-    return mus[abs(noccs-nocc).argmin()]
+    while abs(rootfn(numpy.nextafter(mu, numpy.inf))) < cur_err and iters < maxiter:
+        mu = numpy.nextafter(mu, numpy.inf)
+        cur_err = abs(rootfn(mu))
+        iters += 1
+
+    while abs(rootfn(numpy.nextafter(mu, -numpy.inf))) < cur_err and iters < maxiter:
+        mu = numpy.nextafter(mu, -numpy.inf)
+        cur_err = abs(rootfn(mu))
+        iters += 1
+
+    return mu, f_occ(mu, mo_es, sigma)
 
 def _get_fermi(mo_energy, nocc):
     mo_e_sorted = numpy.sort(mo_energy)
