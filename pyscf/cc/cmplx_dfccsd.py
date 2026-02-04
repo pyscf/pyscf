@@ -91,7 +91,6 @@ def _contract_ovvv_t2(mycc, eris, t2, out=None, verbose=None):
     assert occblk > 0, "enlarge mem"
     ia = 0
     for i0, i1 in lib.prange(0, nocci, occblk):
-        print("ovvv_t2 blk:", [i0, i1], nocci, flush=True)
         x2 = _cp(t2[:,i0:i1]).reshape(nocci, -1)
         ovvv = eris.get_ovvv(slice(i0,i1)).transpose(0,1,3,2)
         ovvv = ovvv.reshape(-1, nvira)
@@ -120,7 +119,6 @@ def _contract_ovvv_t(mycc, eris, t1, t2, out=None, verbose=None):
     occblk = min(nocci, int(0.8*mem_avail / (2*nvir3 + nvira*nocci**2 )))
     assert occblk > 0, "enlarge mem"
     for i0, i1 in lib.prange(0, nocci, occblk):
-        print("ovvv_t blk:", [i0, i1], nocci, flush=True)
         ovvv = eris.get_ovvv(slice(i0,i1)).transpose(0,2,1,3)
         ovvv = ovvv.reshape(-1,nvira * nvirb)
         Ht2[i0*nvira:i1*nvira] = _dot(ovvv, x2)
@@ -147,7 +145,6 @@ def _contract_ovvv_t1(mycc, eris, t1, out=None, verbose=None):
     occblk = min(nocci, int(0.7*(mem_avail - nocci * nvira) / (2*nvir3+2*nocci*nvira**2) ))
     assert occblk > 0, "enlarge mem"
     for i0, i1 in lib.prange(0, nocci, occblk):
-        print("ovvv_t1 blk:", [i0, i1], nocci, flush=True)
         ovvv = eris.get_ovvv(slice(i0,i1)).transpose(0,1,3,2).conj().reshape(-1, nvira)
         tmp = _dot(ovvv,t1.T)
         tmp = tmp.reshape(i1-i0, nvira, nvira, nocci)
