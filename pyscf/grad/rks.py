@@ -25,10 +25,9 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.grad import rhf as rhf_grad
 from pyscf.dft import numint, radi, gen_grid, xc_deriv
+from pyscf.dft.numint import libdft
 from pyscf import __config__
 import ctypes
-
-libdft = lib.load_library('libdft')
 
 
 def get_veff(ks_grad, mol=None, dm=None):
@@ -87,7 +86,26 @@ def get_veff(ks_grad, mol=None, dm=None):
         if omega != 0:
             vk += ks_grad.get_k(mol, dm, omega=omega) * (alpha - hyb)
         vxc += vj - vk * .5
-
+        """
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks_grad.xc, spin=mol.spin)
+        if omega == 0:
+            vj, vk = ks_grad.get_jk(mol, dm)
+            vk *= hyb
+        elif alpha == 0: # LR=0, only SR exchange
+            vj = ks_grad.get_j(mol, dm)
+            vk = ks_grad.get_k(mol, dm, omega=-omega)
+            vk *= hyb
+        elif hyb == 0: # SR=0, only LR exchange
+            vj = ks_grad.get_j(mol, dm)
+            vk = ks_grad.get_k(mol, dm, omega=omega)
+            vk *= alpha
+        else: # SR and LR exchange with different ratios
+            vj, vk = ks_grad.get_jk(mol, dm)
+            vk *= hyb
+            vklr = ks_grad.get_k(mol, dm, omega=omega)
+            vklr *= (alpha - hyb)
+            vk += vklr
+        """
     return lib.tag_array(vxc, exc1_grid=exc)
 
 def _initialize_grids(ks_grad):
@@ -449,7 +467,7 @@ def get_nlc_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=
 
 
 # JCP 98, 5612 (1993); DOI:10.1063/1.464906
-def grids_response_cc(grids):
+def grids_response_becke(grids):
     mol = grids.mol
     atom_grids_tab = grids.gen_atomic_grids(mol, grids.atom_grid,
                                             grids.radi_method,
@@ -561,9 +579,109 @@ def grids_response_cc(grids):
         yield coords, w0, w1
 
 
+def _get_lko_partition_functions(mol, ia, radii_adjust, atomic_radii):
+    if callable(radii_adjust) and atomic_radii is not None:
+        f_radii_adjust = radii_adjust(mol, atomic_radii)
+    else:
+        f_radii_adjust = None
+    atm_coords = numpy.asarray(mol.atom_coords() , order='C')
+    gen_grid_fn = gen_grid.libdft.VXCgen_grid_lko
+    gen_deriv_fn = gen_grid.libdft.VXCgen_grid_lko_deriv
+
+    if f_radii_adjust is None:
+        p_radii_table = lib.c_null_ptr()
+    else:
+        f_radii_table = numpy.asarray([f_radii_adjust(i, j, 0)
+                                       for i in range(mol.natm)
+                                       for j in range(mol.natm)])
+        p_radii_table = f_radii_table.ctypes.data_as(ctypes.c_void_p)
+
+    def gen_grid_partition(coords):
+        coords = numpy.asarray(coords, order='F')
+        ngrids = coords.shape[0]
+        pbecke = numpy.empty((mol.natm,ngrids))
+        gen_grid_fn(pbecke.ctypes.data_as(ctypes.c_void_p),
+                    coords.ctypes.data_as(ctypes.c_void_p),
+                    atm_coords.ctypes.data_as(ctypes.c_void_p),
+                    p_radii_table,
+                    ctypes.c_int(mol.natm), ctypes.c_int(ngrids))
+        return pbecke
+
+    def gen_grid_deriv(coords, dbecke):
+        if isinstance(ia, int):
+            ialist = numpy.repeat(numpy.int32(ia), coords.shape[0])
+        else:
+            assert isinstance(ia, numpy.ndarray)
+            ialist = ia.astype(numpy.int32, order="C", copy=True)
+        coords = numpy.asarray(coords, order='F')
+        ngrids = coords.shape[0]
+        pbecke = numpy.empty((4,mol.natm,ngrids))
+        gen_deriv_fn(pbecke.ctypes.data_as(ctypes.c_void_p),
+                     dbecke.ctypes.data_as(ctypes.c_void_p),
+                     coords.ctypes.data_as(ctypes.c_void_p),
+                     atm_coords.ctypes.data_as(ctypes.c_void_p),
+                     p_radii_table,
+                     ctypes.c_int(mol.natm), ctypes.c_int(ngrids),
+                     ialist.ctypes.data_as(ctypes.c_void_p))
+        return pbecke[1:]
+
+    return gen_grid_partition, gen_grid_deriv, atm_coords
+
+
+def get_dw_partition(mol, ia, atom_grids_tab,
+                     radii_adjust=None, atomic_radii=radi.BRAGG_RADII,
+                     concat=True, wtonly=False):
+    gen_grid_partition, gen_grid_deriv, atm_coords = _get_lko_partition_functions(
+        mol, ia, radii_adjust, atomic_radii
+    )
+    coords, vol = atom_grids_tab[mol.atom_symbol(ia)]
+    coords = coords + atm_coords[ia]
+    pbecke = gen_grid_partition(coords)
+    invsum = (1./pbecke.sum(axis=0))
+    weights = vol * pbecke[ia] * invsum
+    if wtonly:
+        return coords, weights
+    else:
+        dbecke = -pbecke * weights * invsum
+        dbecke[ia, :] += weights
+        dbecke = numpy.ascontiguousarray(dbecke)
+        weights1 = gen_grid_deriv(coords, dbecke)
+        return coords, weights, weights1
+
+
+def get_dw_partition_sorted(mol, ialist, coords, weights,
+                            radii_adjust=None, atomic_radii=radi.BRAGG_RADII):
+    gen_grid_partition, gen_grid_deriv = _get_lko_partition_functions(
+        mol, ialist, radii_adjust, atomic_radii
+    )[:2]
+    pbecke = gen_grid_partition(coords)
+    invsum = (1./pbecke.sum(axis=0))
+    dbecke = -pbecke * weights * invsum
+    for g in range(weights.size):
+        dbecke[ialist[g], g] += weights[g]
+    #for ia in range(mol.natm):
+    #    cond = numpy.nonzero(ialist == ia)
+    #    dbecke[ia][cond] += weights[cond]
+    dbecke = numpy.ascontiguousarray(dbecke)
+    weights1 = gen_grid_deriv(coords, dbecke)
+    return weights1
+
+
+def grids_response_lko(grids):
+    mol = grids.mol
+    atom_grids_tab = grids.gen_atomic_grids(mol, grids.atom_grid,
+                                            grids.radi_method,
+                                            grids.level, grids.prune)
+    for ia in range(mol.natm):
+        coord, weight, weight1 = get_dw_partition(mol, ia, atom_grids_tab,
+                                                  grids.radii_adjust,
+                                                  grids.atomic_radii)
+        yield coord, weight, weight1.transpose(1,0,2)
+
+
 def grids_noresponse_cc(grids):
     # same as above but without the response, for nlc grids response routine
-    assert grids.becke_scheme == gen_grid.original_becke
+    assert grids.becke_scheme in [gen_grid.original_becke, gen_grid.becke_lko]
     mol = grids.mol
     atom_grids_tab = grids.gen_atomic_grids(mol, grids.atom_grid,
                                             grids.radi_method,
@@ -576,6 +694,15 @@ def grids_noresponse_cc(grids):
     natm = mol.natm
     for ia in range(natm):
         yield coords_all[ia], weights_all[ia]
+
+
+def grids_response_cc(grids):
+    if grids.becke_scheme == gen_grid.becke_lko:
+        gr_fn = grids_response_lko
+    else:
+        gr_fn = grids_response_becke
+    for coord, weight, weight1 in gr_fn(grids):
+        yield coord, weight, weight1
 
 
 class Gradients(rhf_grad.Gradients):
