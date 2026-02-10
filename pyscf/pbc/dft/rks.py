@@ -303,10 +303,9 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
         elif 'kpt' in self.__dict__:
             self.kpt = self.__dict__.pop('kpt')
 
-        kpts = self.kpts
         if self.rsjk:
-            if not numpy.all(self.rsjk.kpts == self.kpt):
-                self.rsjk = self.rsjk.__class__(cell, kpts)
+            if not numpy.all(self.rsjk.kpts == self.kpts):
+                self.rsjk = self.rsjk.__class__(cell, self.kpts)
 
         if self.verbose >= logger.WARN:
             self.check_sanity()

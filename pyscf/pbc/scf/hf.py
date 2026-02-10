@@ -554,8 +554,8 @@ class SCF(mol_hf.SCF):
             self.kpt = self.__dict__.pop('kpt')
 
         if self.rsjk:
-            if not np.all(self.rsjk.kpts == self.kpt):
-                self.rsjk = self.rsjk.__class__(cell, self.kpt)
+            if not np.all(self.rsjk.kpts == self.kpts):
+                self.rsjk = self.rsjk.__class__(cell, self.kpts)
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
