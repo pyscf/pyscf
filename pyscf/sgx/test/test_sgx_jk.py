@@ -210,12 +210,10 @@ class KnownValues(unittest.TestCase):
 
 
 class PJunctionScreening(unittest.TestCase):
-    # @unittest.skip("computationally expensive test")
     def test_pjs(self):
-        cwd = os.path.dirname(os.path.abspath(__file__))
         atom0 = [["O" , (0. , 0.     , 0.)],
-                    [1   , (0. , -0.757 , 0.587)],
-                    [1   , (0. , 0.757  , 0.587)],]
+                 [1   , (0. , -0.757 , 0.587)],
+                 [1   , (0. , 0.757  , 0.587)],]
         atom = []
         for i in range(4):
             atom = atom + [[z, (c[0] + i * 5, c[1], c[2])] for z, c in atom0]
@@ -227,8 +225,7 @@ class PJunctionScreening(unittest.TestCase):
         mf.conv_tol = 1e-9
         dm = mf.make_rdm1()
 
-        mf = sgx.sgx_fit(scf.RHF(mol))
-        mf.with_df.dfj = True
+        mf = sgx.sgx_fit(scf.RHF(mol), pjs=True)
         mf.with_df.grids_level_i = 1
         mf.with_df.grids_level_f = 1
         mf.with_df.use_opt_grids = False
@@ -239,6 +236,7 @@ class PJunctionScreening(unittest.TestCase):
         import time
         t0 = time.monotonic()
         en0 = mf.energy_tot(dm=dm)
+        kref = mf.get_k(dm=dm)
         en0scf = mf.kernel()
         t1 = time.monotonic()
 
@@ -255,6 +253,45 @@ class PJunctionScreening(unittest.TestCase):
         print("SGX Times", t3 - t2, t1 - t0)
         self.assertAlmostEqual(abs(en1-en0), 0, 10)
         self.assertAlmostEqual(abs(en1scf-en0scf), 0, 10)
+
+        switch = sgx_jk.SWITCH_SIZE
+        for _switch in [0, switch]:
+            sgx_jk.SWITCH_SIZE = _switch
+            mf.with_df.reset()
+            mf.rebuild_nsteps = 5
+            mf.with_df.sgx_tol_energy = 1e-10
+            mf.with_df.sgx_tol_potential = "auto"
+            mf.build()
+            en1 = mf.energy_tot(dm=dm)
+            k = mf.get_k(dm=dm)
+            en1scf = mf.kernel()
+            self.assertAlmostEqual(abs(en1-en0), 0, 10)
+            self.assertAlmostEqual(abs(en1scf-en0scf), 0, 10)
+            self.assertAlmostEqual(numpy.max(numpy.abs(k-kref)), 0, 5)
+
+            mf.with_df.reset()
+            mf.with_df.sgx_tol_potential = None
+            mf.build()
+            en1 = mf.energy_tot(dm=dm)
+            k = mf.get_k(dm=dm)
+            en1scf = mf.kernel()
+            self.assertAlmostEqual(abs(en1-en0), 0, 10)
+            self.assertAlmostEqual(abs(en1scf-en0scf), 0, 10)
+            self.assertAlmostEqual(numpy.max(numpy.abs(k-kref)), 0, 5)
+
+            mf.with_df.reset()
+            mf.with_df.sgx_tol_energy = None
+            mf.with_df.sgx_tol_potential = 1e-4
+            mf.build()
+            k = mf.get_k(dm=dm)
+            self.assertAlmostEqual(numpy.max(numpy.abs(k-kref)), 0, 4)
+
+            mf.with_df.reset()
+            mf.with_df.sgx_tol_energy = 1e8
+            mf.build()
+            k2 = mf.get_k(dm=dm)
+            self.assertAlmostEqual(numpy.max(numpy.abs(k-k2)), 0, 9)
+        sgx_jk.SWITCH_SIZE = switch
 
 
 if __name__ == "__main__":

@@ -622,7 +622,7 @@ void SGXfit_diagonal_ints(int (*intor)(), int nrad, double *atm_coords,
         double *rads = malloc(sizeof(double) * nrad);
         double *grids;
         const double omega = env[PTR_RANGE_OMEGA];
-        double radius, est, rrad, romega;
+        double radius, est;
         double orig[3];
         int ia;
         int ig;
@@ -849,8 +849,6 @@ void SGXdiagonal_ints(int (*intor)(), double *m_bi, int *ao_loc, CINTOpt *cintop
 {
         int ig0, ig1, dg;
         int ish;
-        int i0, i1, idm;
-        int shls[4];
         int ncomp = 1;
         double *buf = calloc(sizeof(double), SGX_BLKSIZE*di*di*ncomp);
         double *cache = malloc(sizeof(double) * cache_size);
@@ -860,10 +858,9 @@ void SGXdiagonal_ints(int (*intor)(), double *m_bi, int *ao_loc, CINTOpt *cintop
         double r;
         int ia;
         double diff[3];
-        int sj_index;
         double maxint = 0;
         double my_int;
-        int igt, ij;
+        int igt;
         const int tot_ngrids = (int) env[NGRIDS];
         const int nbatch = (tot_ngrids + SGX_BLKSIZE - 1) / SGX_BLKSIZE;
 #pragma omp for nowait schedule(dynamic, 1)
@@ -1131,6 +1128,7 @@ void SGXscreen_grid(CSGXOpt *sgxopt, double *f_ug, const int ibatch,
         double *fbar_i = (double*) shl_info;
         double *bscreen_i = fbar_i + nbas;
         double *ffbar_i = bscreen_i + nbas;
+        double *bscreen2_i = ffbar_i;
         uint8_t *shlscreen_i = (uint8_t*) (ffbar_i + nbas);
         double dv = sgxopt->vtol[ibatch];
         double *wt = sgxopt->wt + ibatch * SGX_BLKSIZE;
@@ -1196,61 +1194,8 @@ void SGXscreen_grid(CSGXOpt *sgxopt, double *f_ug, const int ibatch,
         }
         count = MAX(count, 1);
         for (ish = 0; ish < nish; ish++) {
-                oned = sgxopt->etol / (ffbar_i[ish] * count + 1e-32);
-                bscreen_i[ish] = MIN(dv, oned);
-        }
-}
-
-void SGXscreen_grid_v2(CSGXOpt *sgxopt, double *f_ug, int ibatch,
-                       int n_dm, int nish, void *shl_info, void *buf)
-{
-        int nbas = sgxopt->nbas;
-        double *mfbar_i = (double*) buf;
-        double *smfbar_i = mfbar_i + nbas;
-        double *sfbar2_i = mfbar_i + 2 * nbas;
-        double *tmpf_i = mfbar_i + 3 * nbas;
-        double *fbar2_i = mfbar_i + 4 * nbas;
-        int *inds_i = (int*) (fbar2_i + nbas);
-        int *tmpinds_i = inds_i + nbas;
-
-        double *mbar_sum = sgxopt->msum_i;
-        double *mbar_max = sgxopt->mmax_i;
-        double *fbar_i = (double*) shl_info;
-        double *bscreen_i = fbar_i + nbas;
-        double *ffbar_i = bscreen_i + nbas;
-        uint8_t *shlscreen_i = (uint8_t*) (ffbar_i + nbas);
-        double dv = sgxopt->vtol[ibatch];
-        double *wt = sgxopt->wt + ibatch * SGX_BLKSIZE;
-        int dg = MAX(0, MIN(SGX_BLKSIZE, sgxopt->ngrids - ibatch * SGX_BLKSIZE));
-        const size_t Ngrids = sgxopt->ngrids;
-
-        int *ao_loc = sgxopt->ao_loc;
-        int ish;
-        for (ish = 0; ish < nish; ish++) {
-                fbar_i[ish] = _shl_mat_elem_wt(
-                        f_ug, wt, ao_loc[ish], ao_loc[ish+1], 0, dg,
-                        n_dm, Ngrids, ao_loc[nbas] * Ngrids);
-                fbar2_i[ish] = fbar_i[ish] * fbar_i[ish] * mbar_sum[ish];
-                smfbar_i[ish] = fbar_i[ish] * mbar_max[ish];
-                mfbar_i[ish] = fbar_i[ish] * mbar_max[ish];
-                sfbar2_i[ish] = fbar2_i[ish];
-                inds_i[ish] = ish;
-        }
-        _merge_sort(smfbar_i, inds_i, tmpf_i, tmpinds_i, nish);
-        _cumsum(smfbar_i, mfbar_i, inds_i, nish);
-        for (ish = 0; ish < nish; ish++) {
-                inds_i[ish] = ish;
-        }
-        _merge_sort(sfbar2_i, inds_i, tmpf_i, tmpinds_i, nish);
-        _cumsum(sfbar2_i, fbar2_i, inds_i, nish);
-        int count = 0;
-        for (ish = 0; ish < nish; ish++) {
-                shlscreen_i[ish] = smfbar_i[ish] > dv || (sfbar2_i[ish] > sgxopt->etol);
-                count += shlscreen_i[ish];
-        }
-        count = MAX(count, 1);
-        for (ish = 0; ish < nish; ish++) {
-                bscreen_i[ish] = MIN(dv, sgxopt->etol / (fbar_i[ish] * count + 1e-32));
+                bscreen_i[ish] = sgxopt->etol / (ffbar_i[ish] * count + 1e-100);
+                bscreen2_i[ish] = dv / count;
         }
 }
 
@@ -1296,8 +1241,8 @@ int SGXscreen_shells_sorted(CSGXOpt *sgxopt, int jmax, int ish,
 
         double *fbar_i = (double*) shl_info;
         double *bscreen_i = fbar_i + nbas;
-        double *ffbar_i = bscreen_i + nbas;
-        uint8_t *shlscreen_i = (uint8_t*) (ffbar_i + nbas);
+        double *bscreen2_i = bscreen_i + nbas;
+        uint8_t *shlscreen_i = (uint8_t*) (bscreen2_i + nbas);
         int jc = 0;
         int jsh;
         int shls[2];
@@ -1308,8 +1253,8 @@ int SGXscreen_shells_sorted(CSGXOpt *sgxopt, int jmax, int ish,
                 if ((shlscreen_i[jsh] || shlscreen_i[ish])
                     && _simple_prescreen(shls[0], shls[1], sgxopt)) {
                         qcond_row[jc] = mbar_ij[ish * nbas + jsh];
-                        qcond_row[jc] *= fbar_i[jsh];
-                        qcond_row2[jc] = qcond_row[jc];
+                        qcond_row2[jc] = qcond_row[jc] * MAX(fbar_i[ish], fbar_i[jsh]);
+                        qcond_buf[jc] = qcond_row[jc] * fbar_i[jsh];
                         sort_inds[jc] = jc;
                         select_inds[jsh] = jc;
                         jc++;
@@ -1318,13 +1263,14 @@ int SGXscreen_shells_sorted(CSGXOpt *sgxopt, int jmax, int ish,
                 }
         }
         if (jc > 0) {
-                _merge_sort(qcond_row2, sort_inds, qcond_buf,
+                _merge_sort(qcond_buf, sort_inds, qcond_row,
                             index_buf, jc);
-                _cumsum2(qcond_row, qcond_row2, sort_inds, jc);
+                _cumsum2(qcond_row, qcond_buf, sort_inds, jc);
                 jc = 0;
                 for (int jsh = 0; jsh < jmax; jsh++) {
                 if (select_inds[jsh] == jc) {
-                        if (qcond_row[jc] > bscreen_i[ish]) {
+                        if (qcond_row[jc] > bscreen_i[ish]
+                            || qcond_row2[jc] > bscreen2_i[ish]) {
                                 shl_inds[num_sj_shells] = jsh;
                                 num_sj_shells++;
                         }
@@ -1355,10 +1301,9 @@ void SGXbuild_gv_threshold(double *f_ug, double *g_ug, int *ao_loc, double *dv, 
                 f_bi = full_f_bi;
         }
         SGXmake_shl_mat_wt(g_ug, g_bi, nbas, nbatch, ao_loc,
-                              col_loc, wt, ncomp);
+                           col_loc, wt, ncomp);
 #pragma omp parallel
 {
-        double di;
         int ibatch, ish;
         int *inds = malloc(sizeof(int) * nbas);
         int *wkinds = malloc(sizeof(int) * nbas);
@@ -1367,14 +1312,15 @@ void SGXbuild_gv_threshold(double *f_ug, double *g_ug, int *ao_loc, double *dv, 
 #pragma omp for
         for (ibatch = 0; ibatch < nbatch; ibatch++) {
                 for (ish = 0; ish < nbas; ish++) {
-                        sumfbar_i[ish] = f_bi[ibatch * Nbas + ish];
+                        sumfbar_i[ish] = f_bi[ibatch * Nbas + ish]
+                                         * g_bi[ish * Nbatch + ibatch];
                         inds[ish] = ish;
                 }
                 _merge_sort(sumfbar_i, inds, wk, wkinds, nbas);
                 _cumsum(sumfbar_i, f_bi + Nbas * ibatch, inds, nbas);
                 for (ish = 0; ish < nbas; ish++) {
-                        di = de / (sumfbar_i[ish] + 1e-32);
-                        thresh[ibatch * Nbas + ish] = g_bi[ish * Nbatch + ibatch] > MIN(dv[ibatch], di);
+                        thresh[ibatch * Nbas + ish] = g_bi[ish * Nbatch + ibatch] > dv[ibatch]
+                                                      || sumfbar_i[ish] > de;
                 }
         }
         free(inds);
