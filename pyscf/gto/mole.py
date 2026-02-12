@@ -2149,7 +2149,7 @@ def fromstring(string, format='xyz'):
         return string
     elif format == 'xyz':
         atom_number_str, title, geom = string.split('\n', 2)
-        return geom[:int(atom_number_str)]
+        return '\n'.join(geom.splitlines()[:int(atom_number_str)])
     elif format == 'sdf':
         raw = string.splitlines()
         natoms, nbonds = raw[3].split()[:2]
