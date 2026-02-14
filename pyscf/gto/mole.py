@@ -1993,17 +1993,18 @@ def inertia_moment(mol, mass=None, coords=None):
     im = numpy.eye(3) * im.trace() - im
     return im
 
-def atom_mass_list(mol, isotope_avg=False):
+def atom_mass_list(mol, isotope_avg=False, mass_table=None):
     '''A list of mass for all atoms in the molecule
 
     Kwargs:
         isotope_avg : boolean
             Whether to use the isotope average mass as the atomic mass
     '''
-    if isotope_avg:
-        mass_table = elements.MASSES
-    else:
-        mass_table = elements.ISOTOPE_MAIN
+    if mass_table is None:
+        if isotope_avg:
+            mass_table = elements.MASSES
+        else:
+            mass_table = elements.ISOTOPE_MAIN
 
     nucprop = mol.nucprop
     if nucprop:
@@ -3094,9 +3095,7 @@ class MoleBase(lib.StreamObject):
             mol = self.copy(deep=False)
             mol._env = mol._env.copy()
 
-        if unit is None:
-            _unit = mol.unit
-        else:
+        if unit is not None:
             _unit = _length_in_au(unit)
             if _unit != _length_in_au(self.unit):
                 logger.warn(mol, 'Mole.unit (%s) is changed to %s', self.unit, unit)
@@ -3252,7 +3251,7 @@ class MoleBase(lib.StreamObject):
         ptr = self._atm[:,PTR_COORD]
         c = self._env[ptr[:,None] + np.arange(3)]
         if not is_au(unit):
-            c *= param.BOHR
+            c *= 1./_length_in_au(unit)
         return c
 
     atom_mass_list = atom_mass_list
