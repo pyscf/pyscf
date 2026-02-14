@@ -949,6 +949,11 @@ class RHF(SCF):
     gen_response = gen_response
     to_gpu = lib.to_gpu
 
+    def get_fermi(self):
+        nocc = self.mo_occ.sum() / 2
+        nocc = int(nocc.round(3))
+        return self.mo_energy[nocc-1]
+
     def to_ks(self, xc='HF'):
         '''Convert to RKS object.
         '''
