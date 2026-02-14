@@ -1777,24 +1777,27 @@ class Cell(mole.MoleBase):
                    (x, rcut_guess))
             warnings.warn(msg)
 
-    def lattice_vectors(self):
-        '''Convert the primitive lattice vectors.
-
-        Return 3x3 array in which each row represents one direction of the
-        lattice vectors (unit in Bohr)
+    def lattice_vectors(self, unit='Bohr'):
         '''
+        Return the primitive lattice vectors in 3x3 array. Each row of the
+        lattice vectors corresponds to one direction (unit in Bohr by default).
+
+        Kwargs:
+            unit : str
+                Target length unit. If provided, the lattice vectors are rescaled
+                to the specified unit.
+        '''
+        scale = mole._length_in_au(self.unit)
+        if not is_au(unit):
+            scale /= mol._length_in_au(unit)
+
         if isinstance(self.a, str):
             a = self.a.replace(';',' ').replace(',',' ').replace('\n',' ')
             a = np.asarray([float(x) for x in a.split()]).reshape(3,3)
+            a *= scale
         else:
-            a = np.asarray(self.a, dtype=np.double).reshape(3,3)
-        if isinstance(self.unit, str):
-            if is_au(self.unit):
-                return a
-            else:
-                return a/param.BOHR
-        else:
-            return a/self.unit
+            a = np.asarray(self.a, dtype=np.double).reshape(3,3) * scale
+        return a
 
     def get_scaled_atom_coords(self, a=None):
         ''' Get scaled atomic coordinates.
@@ -2027,9 +2030,9 @@ class Cell(mole.MoleBase):
             _unit = mole._length_in_au(unit)
             if _unit != mole._length_in_au(cell.unit):
                 if a is None:
-                    a = self.lattice_vectors() / _unit
+                    a = self.lattice_vectors(unit)
                 if atoms_or_coords is None:
-                    atoms_or_coords = self.atom_coords() / _unit
+                    atoms_or_coords = self.atom_coords(unit)
 
         if a is not None:
             logger.info(self, 'Set new lattice vectors')
