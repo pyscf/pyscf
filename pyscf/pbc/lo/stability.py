@@ -30,7 +30,7 @@ from pyscf.pbc.tools import k2gamma
 
 
 def pipek_stability_jacobi(mlo, verbose=None, return_status=False, Rmax=10):
-    '''Jacobi-sweep stability check for k-point PMWFs.
+    r'''Jacobi-sweep stability check for k-point PMWFs.
 
     This routine tests whether any translationally symmetric 2×2 Jacobi
     rotations can increase the PM objective. Specifically, it considers

@@ -70,8 +70,6 @@ def gen_proj_op(cell, mo_coeff, kpts, method='meta_lowdin', proj_data=None, verb
         proj_op : callable
             A function ``proj_op(v)`` that applies the atomic projector(s) to a vector ``v``.
     '''
-    log = logger.new_logger(cell, verbose=verbose)
-
     method = method.lower().replace('_', '-')
     mo_coeff = numpy.asarray(mo_coeff)
     nkpts,nao,nmo = mo_coeff.shape
@@ -221,8 +219,6 @@ def atomic_pops(cell, mo_coeff, kpts, mode='kk', method='meta_lowdin', proj_data
         pyscf/examples/loc_orb/40-hubbard_model_PM_localization.py for the PM
         localization of site-based population for hubbard model.
     '''
-    log = logger.new_logger(cell, verbose=verbose)
-
     method = method.lower().replace('_', '-')
     mo_coeff = numpy.asarray(mo_coeff)
     nkpts,nao,nmo = mo_coeff.shape
@@ -234,7 +230,6 @@ def atomic_pops(cell, mo_coeff, kpts, mode='kk', method='meta_lowdin', proj_data
         proj_data = get_proj_data(cell, mo_coeff, method, kpts)
 
     def proj_orth(mo_coeff, proj_coeff, offset_nr_by_atom):
-        Natm = len(offset_nr_by_atom)
         nproj = proj_coeff.shape[-1]
         Nproj = nkpts*nproj
 
@@ -284,7 +279,6 @@ def atomic_pops(cell, mo_coeff, kpts, mode='kk', method='meta_lowdin', proj_data
         return proj
 
     def proj_biorth(mo_coeff, proj_coeff, projtild_coeff, offset_nr_by_atom):
-        Natm = len(offset_nr_by_atom)
         nproj = proj_coeff.shape[-1]
         Nproj = nkpts*nproj
 

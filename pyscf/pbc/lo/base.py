@@ -86,8 +86,10 @@ class KptsOrbitalLocalizer(lib.StreamObject, kciah.SubspaceCIAHOptimizerMixin):
             logger.warn(cell, 'Time-reversal symmetry will be ignored')
 
         self.kpts = kpts
-        rtypes = [1] + [2] * (len(kpts)-1)  # One gauge-fixed complex rotation
-                                            # + (Nk-1) general complex rotations
+        ''' One gauge-fixed complex rotation (type 1)
+            + (Nk - 1) general complex rotations (type 2)
+        '''
+        rtypes = [1] + [2] * (len(kpts)-1)
         kciah.SubspaceCIAHOptimizerMixin.__init__(self, mo_coeff[0].shape[1], rtypes)
 
         self.cell = cell
@@ -116,9 +118,7 @@ class KptsOrbitalLocalizer(lib.StreamObject, kciah.SubspaceCIAHOptimizerMixin):
         '''
         cell = self.cell
         kpts = self.kpts
-        nkpts = len(kpts)
         mo_coeff = self.mo_coeff
-        nmo = mo_coeff[0].shape[1]
 
         mo0 = mo_coeff[0]
         if isinstance(key, str) and key.lower().startswith('atom'):

@@ -26,7 +26,7 @@ from pyscf.soscf.ciah import CIAHOptimizerMixin, expmat
 
 
 class SubspaceCIAHOptimizerMixin(CIAHOptimizerMixin):
-    ''' Base class for unitary rotations with direct sum structure:
+    r''' Base class for unitary rotations with direct sum structure:
             U = U1 \oplus U2 \oplus U3 ...
         where each Ui is of shape (norb, norb)
 

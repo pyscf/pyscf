@@ -32,8 +32,9 @@ mf.kernel()
 #
 from pyscf import lo
 class HubbardPM(lo.pipek.PM):
-# Construct the site-population tensor for each orbital-pair density.
-# This tensor is used in cost-function and its gradients.
+    r'''Construct the site-population tensor for each orbital-pair density.
+        This tensor is used in cost-function and its gradients.
+    '''
     pop_method = None
     def atomic_pops(self, mol, mo_coeff, method=None, mode=None):
         if mode == 'pop':

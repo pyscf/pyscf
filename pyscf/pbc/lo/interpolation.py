@@ -18,7 +18,7 @@
 #
 
 
-''' Helper functions for Fourier interpolation:
+r''' Helper functions for Fourier interpolation:
         F(R) = \sum_{k} F(k) exp(ikR) / sqrt(Nk)
         F(q) = \sum_{R \in WS} F(R) exp(-ikR) / sqrt(Nk) * ws_weight(R)
     where the backwards transform is performed over the Wigner-Seitz cell.
@@ -70,7 +70,6 @@ def get_fock_ks(cell, kpts, mo_coeff, mo_energy, lo_coeff):
     return f_ks
 
 def fourier_interpolate(cell, kpts, kpts_band, f_ks):
-    nkpts = len(kpts)
     kmesh = get_kmesh(cell, kpts)
     Rs, ws = get_WigerSeitz_Rs(cell.lattice_vectors(), kmesh)
 
@@ -147,7 +146,8 @@ def get_WigerSeitz_Rs(a, kmesh, search_mesh=None, tol=1e-6, forPlot = False):
         raise RuntimeError
 
     if abs(numpy.sum(ws) - Nk) > tol:
-        raise RuntimeError('Weights do not sum to kmesh size. Please use a larger search_mesh than the default value, [2,2,2].')
+        raise RuntimeError('Weights do not sum to kmesh size. Please use a larger '
+                           'search_mesh than the default value, [2,2,2].')
 
     return Rs, numpy.sqrt(ws)
 

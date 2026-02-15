@@ -37,7 +37,7 @@ from pyscf import __config__
 
 def atomic_pops(mol, mo_coeff, method='meta_lowdin', kpt=None, proj_data=None, mode=None,
                 verbose=None):
-    '''
+    r'''
     Kwargs:
         method : string
             The atomic population projection scheme. It can be mulliken,

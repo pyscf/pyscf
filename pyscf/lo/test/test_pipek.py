@@ -237,7 +237,6 @@ class WaterComplex(unittest.TestCase):
         # real orbitals
         s = cell.pbc_intor('int1e_ovlp')
         mo_coeff = lo.orth.schmidt(s)
-        norb = mo_coeff.shape[1]
 
         mlo = lo.pipek.PipekMezeyComplex(cell, mo_coeff, kpt=kpt)
 
