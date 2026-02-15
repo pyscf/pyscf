@@ -32,15 +32,26 @@ mf.kernel()
 #
 from pyscf import lo
 class HubbardPM(lo.pipek.PM):
-# Construct the site-population tensor for each orbital-pair density.
-# This tensor is used in cost-function and its gradients.
-    def atomic_pops(self, mol, mo_coeff, method=None):
-        return numpy.einsum('pi,pj->pij', mo_coeff, mo_coeff)
+    r'''Construct the site-population tensor for each orbital-pair density.
+        This tensor is used in cost-function and its gradients.
+    '''
+    pop_method = None
+    def atomic_pops(self, mol, mo_coeff, method=None, mode=None):
+        if mode == 'pop':
+            return numpy.einsum('pi,pi->pi', mo_coeff.conj(), mo_coeff).real
+        else:
+            return numpy.einsum('pi,pj->pij', mo_coeff.conj(), mo_coeff)
 
 loc_orb_init_guess = mf.mo_coeff[:,2:8]
-#mol.verbose = 5
-locobj = HubbardPM(mol, loc_orb_init_guess)
-print('PM cost function  ', locobj.cost_function())
-loc_orb = locobj.kernel()
-print('PM cost function  ', locobj.cost_function())
+mlo = HubbardPM(mol, loc_orb_init_guess).set(verbose=4)
+print('PM cost function  ', mlo.cost_function())
+loc_orb = mlo.kernel()
+print('PM cost function  ', mlo.cost_function())
 
+while True:
+    mo, stable = mlo.stability_jacobi(return_status=True)
+    if stable:
+        break
+    mlo.kernel(mo)
+
+print('PM cost function  ', mlo.cost_function())
