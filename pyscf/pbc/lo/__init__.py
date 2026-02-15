@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pyscf.pbc.lo import interpolation
 from pyscf.pbc.lo.base import KptsOrbitalLocalizer, KptsOrbitalLocalizerReal
 from pyscf.pbc.lo.kpipek import KPM, KPipek, KPipekMezey, KptsPipekMezey
 from pyscf.pbc.lo.kpipek import KPMReal, KPipekReal, KPipekMezeyReal, KptsPipekMezeyReal
