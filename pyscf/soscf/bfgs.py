@@ -87,7 +87,6 @@ def rotate_orb_cc(localizer, u0, conv_tol_grad=None, verbose=None,
         the cap. Default is ``localizer.max_stepsize``. If the latter is None,
         0.05 is used.
     '''
-    log = logger.new_logger(localizer, verbose=verbose)
     if conv_tol_grad is None:
         conv_tol_grad = getattr(localizer, "conv_tol_grad", 1e-4)
     if max_stepsize is None:
@@ -134,11 +133,17 @@ def rotate_orb_cc(localizer, u0, conv_tol_grad=None, verbose=None,
             sty = _vdot_real(s, y)
             if sty > 1e-12:
                 rho = 1.0 / sty
-                s_list.append(s); y_list.append(y); rho_list.append(rho)
+                s_list.append(s)
+                y_list.append(y)
+                rho_list.append(rho)
                 if len(s_list) > m:
-                    s_list.pop(0); y_list.pop(0); rho_list.pop(0)
+                    s_list.pop(0)
+                    y_list.pop(0)
+                    rho_list.pop(0)
             else:
-                s_list.clear(); y_list.clear(); rho_list.clear()
+                s_list.clear()
+                y_list.clear()
+                rho_list.clear()
 
         # initial scaling
         h0_scale = 1.0
