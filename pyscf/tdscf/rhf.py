@@ -457,7 +457,7 @@ def analyze(tdobj, verbose=None):
 
         
         if tdobj.mol.ecp:
-            log.info("ECP detected, skipping calculation of transition velocity and magnetic dipole moments.")
+            log.warn("ECP detected. Skipping calculation of transition velocity and magnetic dipole moments, which have not yet been implemented.")
         else:
             log.info('\n** Transition velocity dipole moments (imaginary part, AU) **')
             log.info('state          X           Y           Z        Dip. S.      Osc.')
