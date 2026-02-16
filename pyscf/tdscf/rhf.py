@@ -455,22 +455,26 @@ def analyze(tdobj, verbose=None):
                      i+1, dip[0], dip[1], dip[2], numpy.dot(dip, dip),
                      f_oscillator[i])
 
-        log.info('\n** Transition velocity dipole moments (imaginary part, AU) **')
-        log.info('state          X           Y           Z        Dip. S.      Osc.')
-        trans_v = tdobj.transition_velocity_dipole()
-        f_v = tdobj.oscillator_strength(gauge='velocity', order=0)
-        for i, ei in enumerate(tdobj.e):
-            v = trans_v[i]
-            log.info('%3d    %11.4f %11.4f %11.4f %11.4f %11.4f',
+        
+        if tdobj.mol.ecp:
+            log.info("ECP detected, skipping calculation of transition velocity and magnetic dipole moments.")
+        else:
+            log.info('\n** Transition velocity dipole moments (imaginary part, AU) **')
+            log.info('state          X           Y           Z        Dip. S.      Osc.')
+            trans_v = tdobj.transition_velocity_dipole()
+            f_v = tdobj.oscillator_strength(gauge='velocity', order=0)
+            for i, ei in enumerate(tdobj.e):
+                v = trans_v[i]
+                log.info('%3d    %11.4f %11.4f %11.4f %11.4f %11.4f',
                      i+1, v[0], v[1], v[2], numpy.dot(v, v), f_v[i])
 
-        log.info('\n** Transition magnetic dipole moments (imaginary part, AU) **')
-        log.info('state          X           Y           Z')
-        trans_m = tdobj.transition_magnetic_dipole()
-        for i, ei in enumerate(tdobj.e):
-            m = trans_m[i]
-            log.info('%3d    %11.4f %11.4f %11.4f',
-                     i+1, m[0], m[1], m[2])
+            log.info('\n** Transition magnetic dipole moments (imaginary part, AU) **')
+            log.info('state          X           Y           Z')
+            trans_m = tdobj.transition_magnetic_dipole()
+            for i, ei in enumerate(tdobj.e):
+                m = trans_m[i]
+                log.info('%3d    %11.4f %11.4f %11.4f',
+                         i+1, m[0], m[1], m[2])
     return tdobj
 
 def _analyze_wfnsym(tdobj, x_sym, x):
