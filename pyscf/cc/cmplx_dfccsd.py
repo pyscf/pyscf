@@ -268,6 +268,7 @@ def _make_df_eris(cc, mo_coeff=None):
             for p0, p1 in lib.prange(0, naux, blksize):
                 Lvv = _cp(eris.Lvv[p0:p1])
                 eris.ovvv[i0:i1] += _dot(_cp(ovL[i0*nvir:i1*nvir,p0:p1]), Lvv).reshape(i1-i0,nvir,nvir,nvir)
+        eris.feri.flush()
 
     elif isinstance(cc._feri, str):
         print("load dferi from", cc._feri)
