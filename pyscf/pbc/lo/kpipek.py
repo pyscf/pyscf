@@ -20,7 +20,7 @@
 '''
 K-point Pipek-Mezey localization
 
-ref. [To be updated]
+ref: Yang and Ye, arxiv:2602.12382
 '''
 
 import numpy

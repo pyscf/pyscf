@@ -28,7 +28,7 @@ r''' Helper functions for Fourier interpolation:
         https://doi.org/10.1016/j.cpc.2007.11.016
 
     This particular implementation is described in:
-        [ref to be added]
+        Yang and Ye, arxiv:2602.12382
 '''
 
 

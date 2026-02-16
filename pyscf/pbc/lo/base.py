@@ -20,7 +20,7 @@
 '''
 Base classes for k-point orbital rotations
 
-ref. [To be updated]
+ref: Yang and Ye, arxiv:2602.12382
 '''
 
 import numpy
