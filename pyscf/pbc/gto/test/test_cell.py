@@ -614,9 +614,9 @@ Direct
 # generated using pymatgen
 data_Si
 _symmetry_space_group_name_H-M   'P 1'
-_cell_length_a   3.86697465
-_cell_length_b   3.86697465
-_cell_length_c   3.86697465
+_cell_length_a   3.86697465(8)
+_cell_length_b   3.86697465(8)
+_cell_length_c   3.86697465(8)
 _cell_angle_alpha   60.00000000
 _cell_angle_beta   60.00000000
 _cell_angle_gamma   60.00000000

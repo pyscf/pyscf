@@ -1196,12 +1196,13 @@ def _parse_cif(string):
         elif in_atom_loop and atom_headers:
             atoms.append(line)
 
-    a = float(cell['_cell_length_a'])
-    b = float(cell['_cell_length_b'])
-    c = float(cell['_cell_length_c'])
-    alpha = float(cell['_cell_angle_alpha'])
-    beta = float(cell['_cell_angle_beta'])
-    gamma = float(cell['_cell_angle_gamma'])
+    # .split('(')[0] to handle the estimate number such as 3.44715(31)
+    a = float(cell['_cell_length_a'].split('(')[0])
+    b = float(cell['_cell_length_b'].split('(')[0])
+    c = float(cell['_cell_length_c'].split('(')[0])
+    alpha = float(cell['_cell_angle_alpha'].split('(')[0])
+    beta = float(cell['_cell_angle_beta'].split('(')[0])
+    gamma = float(cell['_cell_angle_gamma'].split('(')[0])
     lattice_vectors = _cellpar_to_cell(a, b, c, alpha, beta, gamma)
 
     idx_s = atom_headers.index('_atom_site_type_symbol')
@@ -1213,9 +1214,9 @@ def _parse_cif(string):
     for line in atoms:
         parts = line.split()
         elements.append(''.join([x for x in parts[idx_s] if x.isalpha()]))
-        coords.append(parts[idx_x])
-        coords.append(parts[idx_y])
-        coords.append(parts[idx_z])
+        coords.append(parts[idx_x].split('(')[0])
+        coords.append(parts[idx_y].split('(')[0])
+        coords.append(parts[idx_z].split('(')[0])
     coords = np.fromstring(' '.join(coords), sep=' ').reshape(-1, 3)
     fractional = True
     return lattice_vectors, elements, coords, fractional
