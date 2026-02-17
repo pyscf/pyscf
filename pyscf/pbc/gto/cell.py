@@ -1185,7 +1185,7 @@ def _parse_cif(string):
         if line.startswith('_cell_'):
             # Cell parameters
             key, val = line.split(maxsplit=1)
-            cell[key] = float(val)
+            cell[key] = val
 
         elif line.startswith('loop_'):
             in_atom_loop = True
