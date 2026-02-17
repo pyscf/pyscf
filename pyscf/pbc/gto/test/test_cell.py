@@ -734,6 +734,25 @@ loop_
         self.assertTrue(cl.atom_coords()[0,2] == 1/1.5)
         self.assertTrue(cl.lattice_vectors()[0,0] == 4/1.5)
 
+    def test_gth_basis(self):
+        cl = pgto.M(a=np.eye(3), atom='Cd 0 0 0', basis='TZVP-MOLOPT-HYB-GTH',
+                    pseudo='gth-hf-rev-q2')
+        assert cl.nbas == 4
+        assert all(cl._bas[:,2] == 5)
+        assert cl._pseudo['Cd'][0] == [2, 0, 0, 0]
+
+        cl = pgto.M(a=np.eye(3), atom='Cd 0 0 0', basis='TZVP-MOLOPT-SCAN-GTH',
+                    pseudo='gth-hf-rev')
+        assert cl.nbas == 4
+        assert all(cl._bas[:,2] == 5)
+        assert cl._pseudo['Cd'][0] == [4, 6, 10, 0]
+
+        cl = pgto.M(a=np.eye(3), atom='Be 0 0 0', basis='TZVP-MOLOPT-PBE-GTH-q2',
+                    pseudo='GTH-PBE-q2')
+        print(cl.nbas == 2)
+        print(cl._bas[:,2] == [5, 5])
+        print(cl._pseudo['Be'][0] == [2, 0, 0, 0])
+
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")
     unittest.main()

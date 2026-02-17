@@ -566,6 +566,43 @@ ECP,I,46,4,3;
         dat2 = mol.intor('ECPscalar')
         self.assertAlmostEqual(abs(dat1 - dat2).max(), 0, 14)
 
+    def test_to_MOLOPT_name(self):
+        assert parse_cp2k._to_MOLOPT_name('gthszvmolopt'   ) == 'SZV-MOLOPT-GTH'
+        assert parse_cp2k._to_MOLOPT_name('gthdzvpmolopt'  ) == 'DZVP-MOLOPT-GTH'
+        assert parse_cp2k._to_MOLOPT_name('gthtzvpmolopt'  ) == 'TZVP-MOLOPT-GTH'
+        assert parse_cp2k._to_MOLOPT_name('gthtzv2pmolopt' ) == 'TZV2P-MOLOPT-GTH'
+        assert parse_cp2k._to_MOLOPT_name('gthszvmoloptsr' ) == 'SZV-MOLOPT-SR-GTH'
+        assert parse_cp2k._to_MOLOPT_name('gthdzvpmoloptsr') == 'DZVP-MOLOPT-SR-GTH'
+
+    def test_load_gth_basis(self):
+        basis_dir = gto.basis._GTH_BASIS_DIR
+        def load(basis_name, element):
+            basis = parse_cp2k._load_MOLOPT(basis_name, element, basis_dir)
+            return [x[0] for x in basis], [len(x)-1 for x in basis]
+        assert load('TZVP-MOLOPT-PBE-GTH', 'Cd') == ([0, 1, 2, 3], [5, 5, 5, 5])
+        assert load('TZVP-MOLOPT-SCAN-GTH', 'Cd') == ([0, 1, 2, 3], [5, 5, 5, 5])
+        assert load('SZV-MOLOPT-SR-GTH', 'Cu') == ([0, 1, 2], [6, 6, 6])
+        assert load('TZVP-MOLOPT-SR-GTH', 'Cu') == ([0, 1, 2, 3], [6, 6, 6, 6])
+        assert load('TZVP-MOLOPT-HYB-GTH', 'Cd') == ([0, 1, 2, 3], [5, 5, 5, 5])
+        assert load('TZVP-GTH', 'C') == ([0, 1, 2], [5, 5, 1])
+        assert load('TZVP-MOLOPT-GTH', 'C') == ([0, 1, 2], [7, 7, 7])
+        assert load('TZV2P-MOLOPT-PBE-GTH', 'Na') == ([0, 1, 2], [3, 3, 3])
+        assert load('TZV2P-MOLOPT-PBE-GTH-q1', 'Na') == ([0, 1, 2], [3, 3, 3])
+        assert load('TZV2P-MOLOPT-PBE-GTH-q9', 'Na') == ([0, 1, 2], [7, 7, 7])
+
+    def test_load_gth_pseudo(self):
+        pp_dir = gto.basis._GTH_PP_DIR
+        pp = parse_cp2k_pp._load_GTH_POTENTIALS('GTH-PBE', 'Na', pp_dir)
+        assert pp[0] == [3, 6]
+        pp = parse_cp2k_pp._load_GTH_POTENTIALS('GTH-PBE-q1', 'Na', pp_dir)
+        assert pp[0] == [1]
+        pp = parse_cp2k_pp._load_GTH_POTENTIALS('GTH-PBE-q9_old', 'Na', pp_dir)
+        assert pp[0] == [3, 6]
+        pp = parse_cp2k_pp._load_GTH_POTENTIALS('GTH-LDA', 'Be', pp_dir)
+        assert pp[0] == [4]
+        pp = parse_cp2k_pp._load_GTH_POTENTIALS('GTH-LDA-q2', 'Be', pp_dir)
+        assert pp[0] == [2]
+
 if __name__ == "__main__":
     print("test basis module")
     unittest.main()
