@@ -1,6 +1,6 @@
 """
 Take ASE structure, PySCF object,
-and run through ASE calculator interface. 
+and run through ASE calculator interface.
 
 This allows other ASE methods to be used with PySCF;
 here we try to compute an equation of state.
@@ -8,8 +8,6 @@ here we try to compute an equation of state.
 
 import numpy as np
 from pyscf.pbc.tools import pyscf_ase
-import pyscf.pbc.gto as pbcgto
-import pyscf.pbc.dft as pbcdft
 
 import ase
 import ase.lattice
@@ -23,7 +21,7 @@ ase_atom=Diamond(symbol='C', latticeconstant=3.5668)
 # cell_from_ase function sets up a cell with cell.atom and cell.a initialized
 # from ASE atoms. Everything else for a PySCF calculation should be specified to
 # the cell.
-cell = cell_from_ase(ase_atom)
+cell = pyscf_ase.cell_from_ase(ase_atom)
 cell.basis = 'gth-szv'
 cell.pseudo = 'gth-pade'
 cell.verbose = 0
