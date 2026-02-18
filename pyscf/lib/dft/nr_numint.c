@@ -123,6 +123,145 @@ void VXCdot_ao_dm(double *vm, double *ao, double *dm,
 }
 }
 
+/*static void make_box_loc(int *box_loc, uint8_t *non0table, int nbas, int ngrids)
+{
+        if (nbas < 1) {
+                return;
+        }
+        const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
+        int *sizes = malloc(nblk * sizeof(int));
+#pragma omp parallel for
+        for (int iblk = 0; iblk < nblk; iblk++) {
+                sizes[iblk] = 0;
+                uint8_t prev_non0 = non0table[iblk * nbas];
+        }
+}*/
+
+static void sgx_ao_dm(double *vm, double *ao, double *dm,
+                      int nao, int nocc, int ngrids, int bgrids,
+                      uint8_t *non0table, int *shls_slice, int *ao_loc)
+{
+        int nbox = (nao+BOXSIZE-1) / BOXSIZE;
+        int8_t empty[nbox];
+
+        const char TRANS_T = 'T';
+        const char TRANS_N = 'N';
+        const double D1 = 1;
+        const double beta = 1.0;
+
+        int ish, blen;
+        size_t i, j;
+        size_t b0;
+
+        for (i = 0; i < nocc; i++) {
+                for (j = 0; j < bgrids; j++) {
+                        vm[i*ngrids+j] = 0;
+                }
+        }
+        for (ish = shls_slice[0]; ish < shls_slice[1]; ish++) {
+                if (non0table[ish]) {
+                        b0 = ao_loc[ish];
+                        blen = ao_loc[ish + 1] - b0;
+                        dgemm_(&TRANS_N, &TRANS_T, &bgrids, &nocc, &blen,
+                               &D1, ao+b0*ngrids, &ngrids, dm+b0*nocc, &nocc,
+                               &beta, vm, &ngrids);
+                }
+        }
+}
+
+/* vm[nocc,ngrids] = ao[i,ngrids] * dm[i,nocc] */
+void VXCsgx_ao_dm(double *vm, double *ao, double *dm,
+                  int nao, int nocc, int ngrids, int nbas,
+                  uint8_t *non0table, int *shls_slice, int *ao_loc)
+{
+        const int blksize = BLKSIZE;
+        const int nblk = (ngrids+blksize-1) / blksize;
+
+#pragma omp parallel
+{
+        int ip, ib;
+#pragma omp for nowait schedule(static)
+        for (ib = 0; ib < nblk; ib++) {
+                ip = ib * blksize;
+                sgx_ao_dm(vm+ip, ao+ip, dm,
+                          nao, nocc, ngrids, MIN(ngrids-ip, blksize),
+                          non0table+ib*nbas, shls_slice, ao_loc);
+        }
+}
+}
+
+/*void VXCsgx_ao_dm_v2(double *vm, double *ao, double *dm,
+                  int nao, int nocc, int ngrids, int nbas,
+                  uint8_t *non0table, int *shls_slice, int *ao_loc)
+{
+        size_t Nao = nao;
+        size_t Ngrids = ngrids;
+        NPdset0(vm, Nao * ngrids);
+        const char TRANS_N = 'N';
+        const double D1 = 1;
+        const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
+
+#pragma omp parallel
+{
+        int shlsize, ish;
+        size_t j0, j1;
+        int ni;
+        NPomp_split(&j0, &j1, nao);
+        int ip, ib;
+        int bgrids;
+        const int nj = j1 - j0;
+        for (ib = 0; ib < nblk; ib++) {
+                ip = ib * BLKSIZE;
+                bgrids = MIN(ip + BLKSIZE, ngrids) - ip;
+                for (ish = shls_slice[0]; ish < shls_slice[1]; ish++) {
+                        if (non0table[ib * nbas + ish]) {
+                                ni = ao_loc[ish + 1] - ao_loc[ish];
+                                dgemm_(&TRANS_N, &TRANS_N, &bgrids, &nj, &ni, &D1,
+                                       ao+ao_loc[ish]*Ngrids+ip, &ngrids,
+                                       dm+j0*Nao+ao_loc[ish], &ngrids,
+                                       &D1, vm+j0*Ngrids+ip, &ngrids);
+                        }
+                }
+        }
+}
+}*/
+
+void VXCsgx_ao_ao(double *vv, double *ao1, double *ao2,
+                  int nao, int ngrids, int nbas,
+                  uint8_t *non0table, int *shls_slice, int *ao_loc)
+{
+        size_t Nao = nao;
+        size_t Ngrids = ngrids;
+        const char TRANS_T = 'T';
+        const char TRANS_N = 'N';
+        const double D1 = 1;
+        const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
+        NPdset0(vv, Nao * Nao);
+
+#pragma omp parallel
+{
+        int shlsize, ish;
+        size_t j0, j1;
+        int ni;
+        NPomp_split(&j0, &j1, nao);
+        int ip, ib;
+        int bgrids;
+        const int nj = j1 - j0;
+        for (ib = 0; ib < nblk; ib++) {
+                ip = ib * BLKSIZE;
+                bgrids = MIN(ip + BLKSIZE, ngrids) - ip;
+                for (ish = shls_slice[0]; ish < shls_slice[1]; ish++) {
+                        if (non0table[ib * nbas + ish]) {
+                                ni = ao_loc[ish + 1] - ao_loc[ish];
+                                dgemm_(&TRANS_T, &TRANS_N, &ni, &nj, &bgrids, &D1,
+                                       ao1+ao_loc[ish]*Ngrids+ip, &ngrids,
+                                       ao2+j0*Ngrids+ip, &ngrids,
+                                       &D1, vv+j0*nao+ao_loc[ish], &nao);
+                        }
+                }
+        }
+}
+}
 
 
 /* vv[n,m] = ao1[n,ngrids] * ao2[m,ngrids] */

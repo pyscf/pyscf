@@ -16,7 +16,7 @@
 import unittest
 import numpy
 from pyscf import gto, dft, lib
-from pyscf.dft import radi
+from pyscf.dft import radi, gen_grid
 from pyscf.grad import rks
 try:
     from pyscf.dispersion import dftd3, dftd4
@@ -24,7 +24,24 @@ except ImportError:
     dftd3 = dftd4 = None
 
 
-def grids_response(grids):
+RCUT_LKO = 5.0
+MC_LKO = 12
+
+def fcut(x, xc, mc):
+    cut = 0
+    for m in range(1,mc+1):
+        cut += (x/xc)**m / m
+    return xc * (1 - numpy.exp(-cut))
+
+def dfcut(x, xc, mc):
+    cut = 0
+    dcut = 0
+    for m in range(1,mc+1):
+        cut += (x/xc)**m / m
+        dcut += (x/xc)**(m-1)
+    return numpy.exp(-cut) * dcut
+
+def grids_response(grids, lko=False):
     # JCP 98, 5612 (1993); DOI:10.1063/1.464906
     mol = grids.mol
     atom_grids_tab = grids.gen_atomic_grids(mol, grids.atom_grid,
@@ -32,6 +49,8 @@ def grids_response(grids):
                                             grids.level, grids.prune)
     atm_coords = numpy.asarray(mol.atom_coords() , order='C')
     atm_dist = gto.mole.inter_distance(mol, atm_coords)
+    if lko:
+        atm_dist = fcut(atm_dist, RCUT_LKO, MC_LKO)
 
     def _radii_adjust(mol, atomic_radii):
         charges = mol.atom_charges()
@@ -70,6 +89,9 @@ def grids_response(grids):
         for i in range(mol.natm):
             for j in range(i):
                 g = 1/atm_dist[i,j] * (grid_dist[i]-grid_dist[j])
+                if lko:
+                    g = numpy.minimum(g, 1.0)
+                    g = numpy.maximum(g, -1.0)
                 g = fadjust(i, j, g)
                 g = (3 - g**2) * g * .5
                 g = (3 - g**2) * g * .5
@@ -82,6 +104,10 @@ def grids_response(grids):
             for ib in range(mol.natm):
                 if ib != ia:
                     g = 1/atm_dist[ia,ib] * (grid_dist[ia]-grid_dist[ib])
+                    if lko:
+                        cond = numpy.logical_or(g >= 1, g <= -1)
+                        g = numpy.minimum(g, 1.0)
+                        g = numpy.maximum(g, -1.0)
                     p0 = gadjust(ia, ib, g)
                     g = fadjust(ia, ib, g)
                     p1 = (3 - g **2) * g  * .5
@@ -89,6 +115,8 @@ def grids_response(grids):
                     p3 = (3 - p2**2) * p2 * .5
                     s_uab = .5 * (1 - p3 + 1e-200)
                     t_uab = -27./16 * (1-p2**2) * (1-p1**2) * (1-g**2)
+                    if lko:
+                        t_uab[cond] = 0
                     t_uab /= s_uab
                     t_uab *= p0
 
@@ -100,12 +128,18 @@ def grids_response(grids):
                         ua = atm_coords[ib] - coords
                         d_uab = ua/grid_dist[ib,:,None]/atm_dist[ia,ib]
                         v = (grid_dist[ia]-grid_dist[ib])/atm_dist[ia,ib]**3
+                        if lko:
+                            v[cond] = 0
+                            v *= dfcut(atm_dist[ia,ib], RCUT_LKO, MC_LKO)
                         d_uab-= v[:,None] * uab
                         dpbecke[ia,ia] += (pbecke[ia]*t_uab).reshape(-1,1) * d_uab
                     else:  # dB PB: dB~ib, PB~ia
                         ua = atm_coords[ia] - coords
                         d_uab = ua/grid_dist[ia,:,None]/atm_dist[ia,ib]
                         v = (grid_dist[ia]-grid_dist[ib])/atm_dist[ia,ib]**3
+                        if lko:
+                            v[cond] = 0
+                            v *= dfcut(atm_dist[ia,ib], RCUT_LKO, MC_LKO)
                         d_uab-= v[:,None] * uab
                         dpbecke[ia,ia] += (pbecke[ia]*t_uab).reshape(-1,1) * d_uab
 
@@ -120,12 +154,18 @@ def grids_response(grids):
                         ub = atm_coords[ia] - coords
                         d_uba = ub/grid_dist[ia,:,None]/atm_dist[ia,ib]
                         v = (grid_dist[ib]-grid_dist[ia])/atm_dist[ia,ib]**3
+                        if lko:
+                            v[cond] = 0
+                            v *= dfcut(atm_dist[ia,ib], RCUT_LKO, MC_LKO)
                         d_uba-= v[:,None] * uba
                         dpbecke[ib,ia] += -(pbecke[ia]*t_uab).reshape(-1,1) * d_uba
                     else:  # dB PC: dB~ib, PC~ia and dB PA: dB~ib, PA~ia
                         ub = atm_coords[ib] - coords
                         d_uba = ub/grid_dist[ib,:,None]/atm_dist[ia,ib]
                         v = (grid_dist[ib]-grid_dist[ia])/atm_dist[ia,ib]**3
+                        if lko:
+                            v[cond] = 0
+                            v *= dfcut(atm_dist[ia,ib], RCUT_LKO, MC_LKO)
                         d_uba-= v[:,None] * uba
                         dpbecke[ib,ia] += -(pbecke[ia]*t_uab).reshape(-1,1) * d_uba
         return pbecke, dpbecke
@@ -155,7 +195,7 @@ def grids_response(grids):
     return coords_all, w0, w1
 
 def setUpModule():
-    global mol, mf
+    global mol, mf, mf2
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = '/dev/null'
@@ -168,10 +208,15 @@ def setUpModule():
     mf = dft.RKS(mol)
     mf.conv_tol = 1e-14
 
+    mf2 = dft.RKS(mol)
+    mf2.grids.becke_scheme = gen_grid.becke_lko
+    mf2.conv_tol = 1e-14
+    mf2.kernel()
+
 def tearDownModule():
-    global mol, mf
+    global mol, mf, mf2
     mol.stdout.close()
-    del mol, mf
+    del mol, mf, mf2
 
 class KnownValues(unittest.TestCase):
     @classmethod
@@ -228,6 +273,14 @@ class KnownValues(unittest.TestCase):
         e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
+
+    def test_finite_diff_rks_grad_lko(self):
+        g = mf2.nuc_grad_method().set(grid_response=True).kernel()
+        mol1 = mol.copy()
+        mf_scanner = mf2.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
 
     def test_finite_diff_df_rks_grad(self):
         mf1 = mf.density_fit ().run ()
@@ -414,6 +467,27 @@ class KnownValues(unittest.TestCase):
         coords = []
         w0 = []
         w1 = []
+        atm_idx = []
+        ia = 0
+        for c_a, w0_a, w1_a in rks.grids_response_cc(grids):
+            coords.append(c_a)
+            w0.append(w0_a)
+            w1.append(w1_a)
+            atm_idx.append(ia * numpy.ones(w0_a.size, dtype=numpy.int32))
+            ia += 1
+        coords = numpy.vstack(coords)
+        w0 = numpy.hstack(w0)
+        w1 = numpy.concatenate(w1, axis=2)
+        atm_idx = numpy.concatenate(atm_idx)
+        self.assertAlmostEqual(lib.fp(w1), -13.101186585274547, 10)
+        self.assertAlmostEqual(abs(w1-w1a.transpose(0,2,1)).max(), 0, 12)
+
+        grids.becke_scheme = gen_grid.becke_lko
+        grids.build()
+        c, w0a, w1a = grids_response(grids, lko=True)
+        coords = []
+        w0 = []
+        w1 = []
         for c_a, w0_a, w1_a in rks.grids_response_cc(grids):
             coords.append(c_a)
             w0.append(w0_a)
@@ -421,9 +495,14 @@ class KnownValues(unittest.TestCase):
         coords = numpy.vstack(coords)
         w0 = numpy.hstack(w0)
         w1 = numpy.concatenate(w1, axis=2)
-        self.assertAlmostEqual(lib.fp(w1), -13.101186585274547, 10)
-        self.assertAlmostEqual(abs(w1-w1a.transpose(0,2,1)).max(), 0, 12)
+        self.assertAlmostEqual(lib.finger(w1-w1a.transpose(0,2,1)), 0, 9)
 
+        w1b = rks.get_dw_partition_sorted(mol, atm_idx, coords, w0,
+                                          grids.radii_adjust, grids.atomic_radii)
+        self.assertAlmostEqual(lib.fp(w1), lib.fp(w1b.transpose(1, 0, 2)), 9)
+
+        grids.becke_scheme = gen_grid.original_becke
+        grids.build()
         grids.radii_adjust = radi.becke_atomic_radii_adjust
         coords = []
         w0 = []
@@ -436,7 +515,6 @@ class KnownValues(unittest.TestCase):
         w0 = numpy.hstack(w0)
         w1 = numpy.concatenate(w1, axis=2)
         self.assertAlmostEqual(lib.fp(w1), -163.85086096365865, 9)
-
 
     def test_get_vxc(self):
         mol = gto.Mole()

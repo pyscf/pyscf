@@ -67,6 +67,55 @@ int CVHFgrad_jk_prescreen(int *shls, CVHFOpt *opt,
             || (  opt->dm_cond[j*n+l] > dmin));
 }
 
+int CVHFgrad_j_prescreen(int *shls, CVHFOpt *opt,
+                         int *atm, int *bas, double *env)
+{
+        if (opt == NULL) {
+                return 1; // no screen
+        }
+        int i = shls[0];
+        int j = shls[1];
+        int k = shls[2];
+        int l = shls[3];
+        int n = opt->nbas;
+        assert(opt->q_cond);
+        assert(opt->dm_cond);
+        assert(i < n);
+        assert(j < n);
+        assert(k < n);
+        assert(l < n);
+        double *q_cond_kl = opt->q_cond + n * n;
+        double qijkl = opt->q_cond[i*n+j] * q_cond_kl[k*n+l];
+        double dmin = opt->direct_scf_cutoff / qijkl;
+        return qijkl > opt->direct_scf_cutoff
+            && (2*opt->dm_cond[l*n+k] > dmin);
+}
+
+int CVHFgrad_k_prescreen(int *shls, CVHFOpt *opt,
+                          int *atm, int *bas, double *env)
+{
+        if (opt == NULL) {
+                return 1; // no screen
+        }
+        int i = shls[0];
+        int j = shls[1];
+        int k = shls[2];
+        int l = shls[3];
+        int n = opt->nbas;
+        assert(opt->q_cond);
+        assert(opt->dm_cond);
+        assert(i < n);
+        assert(j < n);
+        assert(k < n);
+        assert(l < n);
+        double *q_cond_kl = opt->q_cond + n * n;
+        double qijkl = opt->q_cond[i*n+j] * q_cond_kl[k*n+l];
+        double dmin = opt->direct_scf_cutoff / qijkl;
+        return qijkl > opt->direct_scf_cutoff
+            &&((opt->dm_cond[j*n+k] > dmin)
+            || (opt->dm_cond[j*n+l] > dmin));
+}
+
 void CVHFnr_int2e_pp_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
                             int *ao_loc, int *atm, int natm,
                             int *bas, int nbas, double *env)

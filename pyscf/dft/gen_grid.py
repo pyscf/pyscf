@@ -155,6 +155,58 @@ def treutler_prune(nuc, rads, n_ang, radii=None):
     leb_ngrid[nr//2:] = n_ang
     return leb_ngrid
 
+SGX_ANG_MAPPING = numpy.array(
+    [[ 5,  7, 11, 11, 7],
+     [ 5,  7, 11, 17, 11],
+     [ 7, 11, 17, 23, 17],
+     [ 7, 17, 23, 29, 23],
+     [ 7, 23, 29, 35, 29],
+     [11, 29, 35, 41, 35],
+     [17, 35, 41, 47, 41],
+     [47, 47, 47, 47, 47]]
+)
+
+# Prune scheme similar to ORCA for SGX
+def sgx_prune(nuc, rads, n_ang, radii=radi.BRAGG_RADII):
+    '''ORCA-like pruning for SGX grids with same alphas
+       vectors as nwchem pruning
+
+    Args:
+        nuc : int
+            Nuclear charge.
+
+        rads : 1D array
+            Grid coordinates on radical axis.
+
+        n_ang : int
+            Max number of grids over angular part.
+
+    Kwargs:
+        radii : 1D array
+            radii (in Bohr) for atoms in periodic table
+
+    Returns:
+        A list has the same length as rads. The list element is the number of
+        grids over angular part for each radial grid.
+    '''
+    alphas = numpy.array((
+        (0.25  , 0.5, 1.0, 4.5),
+        (0.1667, 0.5, 0.9, 3.5),
+        (0.1   , 0.4, 0.8, 2.5)))
+    lvls = [LEBEDEV_ORDER[l] for l in SGX_ANG_MAPPING[:,3]]
+    level = (n_ang > numpy.array(lvls)).sum()
+    leb_l = SGX_ANG_MAPPING[level]
+
+    r_atom = radii[nuc] + 1e-200
+    if nuc <= 2:  # H, He
+        place = ((rads/r_atom).reshape(-1,1) > alphas[0]).sum(axis=1)
+    elif nuc <= 10:  # Li - Ne
+        place = ((rads/r_atom).reshape(-1,1) > alphas[1]).sum(axis=1)
+    else:
+        place = ((rads/r_atom).reshape(-1,1) > alphas[2]).sum(axis=1)
+    angs = leb_l[place]
+    angs = numpy.array([LEBEDEV_ORDER[ang] for ang in angs], dtype=numpy.int32)
+    return angs
 
 
 ###########################################################
@@ -179,6 +231,9 @@ def original_becke(g):
 #    g = (3 - g**2) * g * .5
 #    g = (3 - g**2) * g * .5
 #    return g
+    pass
+
+def becke_lko(g):
     pass
 
 def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
@@ -288,7 +343,7 @@ def get_partition(mol, atom_grids_tab,
         f_radii_adjust = None
     atm_coords = numpy.asarray(mol.atom_coords() , order='C')
     atm_dist = gto.inter_distance(mol)
-    if (becke_scheme is original_becke and
+    if (becke_scheme in [original_becke, becke_lko] and
         (radii_adjust is radi.treutler_atomic_radii_adjust or
          radii_adjust is radi.becke_atomic_radii_adjust or
          f_radii_adjust is None)):
@@ -300,15 +355,20 @@ def get_partition(mol, atom_grids_tab,
                                            for j in range(mol.natm)])
             p_radii_table = f_radii_table.ctypes.data_as(ctypes.c_void_p)
 
+        if becke_scheme == original_becke:
+            gen_grid_fn = libdft.VXCgen_grid
+        else:
+            gen_grid_fn = libdft.VXCgen_grid_lko
+
         def gen_grid_partition(coords):
             coords = numpy.asarray(coords, order='F')
             ngrids = coords.shape[0]
             pbecke = numpy.empty((mol.natm,ngrids))
-            libdft.VXCgen_grid(pbecke.ctypes.data_as(ctypes.c_void_p),
-                               coords.ctypes.data_as(ctypes.c_void_p),
-                               atm_coords.ctypes.data_as(ctypes.c_void_p),
-                               p_radii_table,
-                               ctypes.c_int(mol.natm), ctypes.c_int(ngrids))
+            gen_grid_fn(pbecke.ctypes.data_as(ctypes.c_void_p),
+                        coords.ctypes.data_as(ctypes.c_void_p),
+                        atm_coords.ctypes.data_as(ctypes.c_void_p),
+                        p_radii_table,
+                        ctypes.c_int(mol.natm), ctypes.c_int(ngrids))
             return pbecke
     else:
         def gen_grid_partition(coords):
@@ -554,6 +614,23 @@ class Grids(lib.StreamObject):
             logger.info(self, 'User specified grid scheme %s', str(self.atom_grid))
         return self
 
+    def _select_grids(self, idx):
+        self.coords = self.coords[idx]
+        self.weights = self.weights[idx]
+        self.atm_idx = self.atm_idx[idx]
+        self.quadrature_weights = self.quadrature_weights[idx]
+
+    def _add_padding(self):
+        if self.alignment > 1:
+            padding = _padding_size(self.size, self.alignment)
+            logger.debug(self, 'Padding %d grids', padding)
+            if padding > 0:
+                self.coords = numpy.vstack(
+                    [self.coords, numpy.repeat([[1e-4]*3], padding, axis=0)])
+                self.weights = numpy.hstack([self.weights, numpy.zeros(padding)])
+                self.atm_idx = numpy.hstack([self.atm_idx, numpy.full(padding, -1, dtype=numpy.int32)])
+                self.quadrature_weights = numpy.hstack([self.quadrature_weights, numpy.zeros(padding)])
+
     def build(self, mol=None, with_non0tab=False, sort_grids=True, **kwargs):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
@@ -576,20 +653,9 @@ class Grids(lib.StreamObject):
 
         if sort_grids:
             idx = arg_group_grids(mol, self.coords)
-            self.coords = self.coords[idx]
-            self.weights = self.weights[idx]
-            self.atm_idx = self.atm_idx[idx]
-            self.quadrature_weights = self.quadrature_weights[idx]
+            self._select_grids(idx)
 
-        if self.alignment > 1:
-            padding = _padding_size(self.size, self.alignment)
-            logger.debug(self, 'Padding %d grids', padding)
-            if padding > 0:
-                self.coords = numpy.vstack(
-                    [self.coords, numpy.repeat([[1e-4]*3], padding, axis=0)])
-                self.weights = numpy.hstack([self.weights, numpy.zeros(padding)])
-                self.atm_idx = numpy.hstack([self.atm_idx, numpy.full(padding, -1, dtype=numpy.int32)])
-                self.quadrature_weights = numpy.hstack([self.quadrature_weights, numpy.zeros(padding)])
+        self._add_padding()
 
         if with_non0tab:
             self.non0tab = self.make_mask(mol, self.coords)

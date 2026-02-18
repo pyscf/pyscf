@@ -26,9 +26,16 @@
 #include "cint.h"
 #include "nr_direct.h"
 #include "gto/gto.h"
+#include "fblas.h"
+#include "nr_sgx_direct.h"
 
 #define MAX(I,J)        ((I) > (J) ? (I) : (J))
 #define MIN(I,J)        ((I) < (J) ? (I) : (J))
+#define ALIGNMENT       8
+#define NI_BLKSIZE      56
+#define UNROLL_SIZE     NI_BLKSIZE
+#define BOXSIZE         96
+#define SGX_BLKSIZE     224
 
 typedef struct {
         int ncomp;
@@ -38,22 +45,19 @@ typedef struct {
 
 typedef struct {
         SGXJKArray *(*allocate)(int *shls_slice, int *ao_loc, int ncomp, int ngrids);
-        //void (*contract)(double *eri, double *dm, SGXJKArray *vjk,
-        //                 int i0, int i1, int j0, int j1);
         void (*contract)(double *eri, double *dm, SGXJKArray *vjk,
-                             int i0, int i1, int j0, int j1,
-                             int* inds, int ngrids);
+                         int i0, int i1, int j0, int j1,
+                         int grid_offset, int ngrids);
         void (*set0)(SGXJKArray *, int);
-        void (*send)(SGXJKArray *, int, double *);
+        void (*send)(SGXJKArray *, int, int, double *);
         void (*finalize)(SGXJKArray *, double *);
         void (*sanity_check)(int *shls_slice);
 } SGXJKOperator;
 
-#define BLKSIZE         312
-
 // for grids integrals only
 size_t _max_cache_size_sgx(int (*intor)(), int *shls_slice, int ncenter,
-                           int *atm, int natm, int *bas, int nbas, double *env)
+                           int *atm, int natm, int *bas, int nbas, double *env,
+                           int blksize)
 {
         int i;
         int i0 = shls_slice[0];
@@ -70,11 +74,481 @@ size_t _max_cache_size_sgx(int (*intor)(), int *shls_slice, int ncenter,
                 shls[0] = i;
                 shls[1] = i;
                 shls[2] = 0;
-                shls[3] = BLKSIZE;
+                shls[3] = blksize;
                 n = (*f)(NULL, NULL, shls, atm, natm, bas, nbas, env, NULL, NULL);
                 cache_size = MAX(cache_size, n);
         }
         return cache_size;
+}
+
+static inline double _shl_mat_elem(double *mat, int i0, int i1, int j0, int j1, size_t ncol)
+{
+        double res = 0;
+        int i, j;
+        size_t ind;
+        for (i = i0; i < i1; i++) {
+        for (j = j0; j < j1; j++) {
+                ind = i * ncol + j;
+                res += mat[ind] * mat[ind];
+        }
+        }
+        return sqrt(res);
+}
+
+static inline double _shl_mat_elem_wt(double *mat, double *wt, int i0, int i1,
+                                      int j0, int j1, int ncomp, size_t ncol,
+                                      size_t stride)
+{
+        double res = 0;
+        int i, j, c;
+        size_t ind;
+        for (c = 0; c < ncomp; c++) {
+        for (i = i0; i < i1; i++) {
+#pragma omp simd reduction(+:res)
+        for (j = j0; j < j1; j++) {
+                ind = c * stride + i * ncol + j;
+                res += mat[ind] * mat[ind] * fabs(wt[j]);
+        } } }
+        return sqrt(res);
+}
+
+void SGXmake_shl_mat(double *mat, double *shl_mat, int row_nblk,
+                     int col_nblk, int *row_loc, int *col_loc) {
+#pragma omp parallel
+{
+        size_t ish, jsh;
+        const size_t col_nelem = col_loc[col_nblk];
+        size_t shl_ind;
+#pragma omp for
+        for (ish = 0; ish < row_nblk; ish++) {
+        for (jsh = 0; jsh < col_nblk; jsh++) {
+                shl_ind = ish * col_nblk + jsh;
+                shl_mat[shl_ind] = _shl_mat_elem(mat, row_loc[ish], row_loc[ish + 1],
+                                                 col_loc[jsh], col_loc[jsh + 1],
+                                                 col_nelem);
+        }
+        }
+}
+}
+
+// wt must be for the columns
+void SGXmake_shl_mat_wt(double *mat, double *shl_mat, int row_nblk,
+                        int col_nblk, int *row_loc, int *col_loc,
+                        double *wt, int ncomp) {
+#pragma omp parallel
+{
+        size_t ish, jsh;
+        const size_t col_nelem = col_loc[col_nblk];
+        size_t shl_ind;
+        size_t stride = col_nelem * row_loc[row_nblk];
+#pragma omp for collapse(2)
+        for (ish = 0; ish < row_nblk; ish++) {
+        for (jsh = 0; jsh < col_nblk; jsh++) {
+                shl_ind = ish * col_nblk + jsh;
+                shl_mat[shl_ind] = _shl_mat_elem_wt(mat, wt,
+                                                    row_loc[ish], row_loc[ish + 1],
+                                                    col_loc[jsh], col_loc[jsh + 1],
+                                                    ncomp, col_nelem, stride);
+        }
+        }
+}
+}
+
+void SGXmake_shl_mat_wt_tr(double *mat, double *shl_mat, int row_nblk,
+                           int col_nblk, int *row_loc, int *col_loc,
+                           double *wt, int ncomp) {
+#pragma omp parallel
+{
+        size_t ish, jsh;
+        const size_t col_nelem = col_loc[col_nblk];
+        size_t shl_ind;
+        size_t stride = col_nelem * row_loc[row_nblk];
+#pragma omp for collapse(2)
+        for (ish = 0; ish < row_nblk; ish++) {
+        for (jsh = 0; jsh < col_nblk; jsh++) {
+                shl_ind = jsh * row_nblk + ish;
+                shl_mat[shl_ind] = _shl_mat_elem_wt(mat, wt,
+                                                    row_loc[ish], row_loc[ish + 1],
+                                                    col_loc[jsh], col_loc[jsh + 1],
+                                                    ncomp, col_nelem, stride);
+        }
+        }
+}
+}
+
+int CVHFshls_block_partition(int *block_loc, int *shls_slice, int *ao_loc,
+                             int block_size);
+
+void SGXdot_ao_ao_sparse(double *out, double *bra, double *ket, double *wv,
+                         int nao, int ngrids, int nbas, int hermi,
+                         uint8_t *bra_mask, uint8_t *ket_mask, int *ao_loc)
+{
+        size_t Nao = nao;
+        size_t Ngrids = ngrids;
+        size_t Ngrids_blksize = NI_BLKSIZE;
+        int shls_slice[2] = {0, nbas};
+        int *box_l1_loc = malloc(sizeof(int) * (nbas+1));
+        int nbox_l1 = CVHFshls_block_partition(box_l1_loc, shls_slice, ao_loc, BOXSIZE);
+        const char TRANS_T = 'T';
+        const char TRANS_N = 'N';
+        const double D1 = 1;
+        const double D0 = 0;
+
+#pragma omp parallel
+{
+        int ijb, ib, jb, ib0, jb0, ib1, jb1, ig0, ig1;
+        int ish0, ish1, jsh0, jsh1, i, j;
+        int ng, g, gblk, screened_ni, ish, screened_nj;
+        int *aolist_i = malloc(sizeof(int) * BOXSIZE);
+        int *aolist_j = malloc(sizeof(int) * BOXSIZE);
+        double *buf1 = malloc(sizeof(double) * (Ngrids_blksize * BOXSIZE + ALIGNMENT));
+        double *buf2 = malloc(sizeof(double) * (Ngrids_blksize * BOXSIZE + ALIGNMENT));
+        double *buf3 = malloc(sizeof(double) * (BOXSIZE * BOXSIZE + ALIGNMENT));
+        double *braw = (double *)((uintptr_t)(buf1+ALIGNMENT-1) & (-(uintptr_t)(ALIGNMENT*sizeof(double))));
+        double *ketw = (double *)((uintptr_t)(buf2+ALIGNMENT-1) & (-(uintptr_t)(ALIGNMENT*sizeof(double))));
+        double *outbuf = (double *)((uintptr_t)(buf3+ALIGNMENT-1) & (-(uintptr_t)(ALIGNMENT*sizeof(double))));
+#pragma omp for schedule(dynamic, 4) nowait
+        for (ijb = 0; ijb < nbox_l1*nbox_l1; ijb++) {
+                ib = ijb / nbox_l1;
+                jb = ijb % nbox_l1;
+                if (hermi && ib < jb) {
+                        continue;
+                }
+                ib0 = ib;
+                jb0 = jb;
+                ib1 = ib + 1;
+                jb1 = jb + 1;
+                ish0 = box_l1_loc[ib0];
+                jsh0 = box_l1_loc[jb0];
+                ish1 = box_l1_loc[ib1];
+                jsh1 = box_l1_loc[jb1];
+
+                for (i = 0; i < BOXSIZE * BOXSIZE; i++) {
+                        outbuf[i] = 0;
+                }
+                for (ig0 = 0; ig0 < ngrids; ig0+=Ngrids_blksize) {
+                        ig1 = MIN(ig0 + Ngrids_blksize, ngrids);
+                        ng = ig1 - ig0;
+                        gblk = ig0 / Ngrids_blksize;
+                        int ip = 0;
+                        for(ish = ish0; ish < ish1; ish++) {
+                        for (i = ao_loc[ish]; i < ao_loc[ish+1]; i++) {
+                        if (bra_mask[gblk * nbas + ish]) {
+                                aolist_i[ip] = i;
+                                for (g = ig0; g < ig1; g++) {
+                                        braw[ip * ng + g - ig0] = bra[i * Ngrids + g] * wv[g];
+                                }
+                                ip++;
+                        } } }
+                        screened_ni = ip;
+                        ip = 0;
+                        for(ish = jsh0; ish < jsh1; ish++) {
+                        for (i = ao_loc[ish]; i < ao_loc[ish+1]; i++) {
+                        if (ket_mask[gblk * nbas + ish]) {
+                                aolist_j[ip] = i;
+                                for (g = ig0; g < ig1; g++) {
+                                        ketw[ip * ng + g - ig0] = ket[i * Ngrids + g];
+                                }
+                                ip++;
+                        } } }
+                        screened_nj = ip;
+                        if (screened_ni == 0 || screened_nj == 0) {
+                                continue;
+                        }
+                        dgemm_(&TRANS_T, &TRANS_N, &screened_nj, &screened_ni, &ng,
+                               &D1, ketw, &ng, braw, &ng,
+                               &D0, outbuf, &screened_nj);
+                        for (i = 0; i < screened_ni; i++) {
+                        for (j = 0; j < screened_nj; j++) {
+                                out[aolist_i[i] * Nao + aolist_j[j]] +=
+                                        outbuf[i * screened_nj + j];
+                        } }
+                }
+        }
+        free(buf1);
+        free(buf2);
+        free(buf3);
+        free(aolist_i);
+        free(aolist_j);
+}
+        free(box_l1_loc);
+
+        // TODO hermi in C
+        //if (hermi != 0) {
+        //        NPdsymm_triu(nao, out, hermi);
+        //}
+}
+
+static void _dot_ao_dm_l1(double *out, double *ao, double *dm,
+                          int nao, size_t ngrids, int nbas, int ig0, int ig1,
+                          int ish0, int ish1, int jsh0, int jsh1,
+                          uint8_t *screen_index, uint8_t *pair_mask, int *ao_loc)
+{
+        size_t Nao = nao;
+        int ig, ish, jsh, i0, i1, i, j, box_id, n;
+        size_t i_addr, j_addr;
+        double dm_val;
+        double s8[UNROLL_SIZE];
+        double *dm_j;
+
+        for (ig = ig0; ig < ig1; ig+=UNROLL_SIZE) {
+                box_id = ig / NI_BLKSIZE;
+                for (jsh = jsh0; jsh < jsh1; jsh++) {
+                        for (j = ao_loc[jsh]; j < ao_loc[jsh+1]; j++) {
+                                dm_j = dm + j;
+                                j_addr = j * ngrids + ig;
+                                for (n = 0; n < UNROLL_SIZE; n++) {
+                                        s8[n] = out[j_addr+n];
+                                }
+                                for (ish = ish0; ish < ish1; ish++) {
+                                        if (screen_index[box_id * nbas + ish] &&
+                                            pair_mask[ish*nbas+jsh]) {
+i0 = ao_loc[ish];
+i1 = ao_loc[ish+1];
+switch (i1 - i0) {
+case 1:
+        for (i = i0; i < i0 + 1; i++) {
+                dm_val = dm_j[i * Nao];
+                i_addr = i * ngrids + ig;
+                for (n = 0; n < UNROLL_SIZE; n++) {
+                        s8[n] += ao[i_addr+n] * dm_val;
+                }
+        } break;
+case 2:
+        for (i = i0; i < i0 + 2; i++) {
+                dm_val = dm_j[i * Nao];
+                i_addr = i * ngrids + ig;
+                for (n = 0; n < UNROLL_SIZE; n++) {
+                        s8[n] += ao[i_addr+n] * dm_val;
+                }
+        } break;
+case 3:
+        for (i = i0; i < i0 + 3; i++) {
+                dm_val = dm_j[i * Nao];
+                i_addr = i * ngrids + ig;
+                for (n = 0; n < UNROLL_SIZE; n++) {
+                        s8[n] += ao[i_addr+n] * dm_val;
+                }
+        } break;
+case 5:
+        for (i = i0; i < i0 + 5; i++) {
+                dm_val = dm_j[i * Nao];
+                i_addr = i * ngrids + ig;
+                for (n = 0; n < UNROLL_SIZE; n++) {
+                        s8[n] += ao[i_addr+n] * dm_val;
+                }
+        } break;
+case 6:
+        for (i = i0; i < i0 + 6; i++) {
+                dm_val = dm_j[i * Nao];
+                i_addr = i * ngrids + ig;
+                for (n = 0; n < UNROLL_SIZE; n++) {
+                        s8[n] += ao[i_addr+n] * dm_val;
+                }
+        } break;
+case 7:
+        for (i = i0; i < i0 + 7; i++) {
+                dm_val = dm_j[i * Nao];
+                i_addr = i * ngrids + ig;
+                for (n = 0; n < UNROLL_SIZE; n++) {
+                        s8[n] += ao[i_addr+n] * dm_val;
+                }
+        } break;
+case 10:
+        for (i = i0; i < i0 + 10; i++) {
+                dm_val = dm_j[i * Nao];
+                i_addr = i * ngrids + ig;
+                for (n = 0; n < UNROLL_SIZE; n++) {
+                        s8[n] += ao[i_addr+n] * dm_val;
+                }
+        } break;
+default:
+        for (i = i0; i < i1; i++) {
+                dm_val = dm_j[i * Nao];
+                i_addr = i * ngrids + ig;
+                for (n = 0; n < UNROLL_SIZE; n++) {
+                        s8[n] += ao[i_addr+n] * dm_val;
+                }
+        }
+}
+                                        }
+                                }
+                                for (n = 0; n < UNROLL_SIZE; n++) {
+                                        out[j_addr+n] = s8[n];
+                                }
+                        }
+                }
+        }
+}
+
+static void _dot_ao_dm_frac(double *out, double *ao, double *dm,
+                            int nao, size_t ngrids, int nbas, int ig0,
+                            uint8_t *screen_index, uint8_t *pair_mask, int *ao_loc)
+{
+        size_t Nao = nao;
+        int ngrids_rest = ngrids - ig0;
+        int ish, jsh, i0, i1, i, j, n;
+        size_t i_addr, j_addr;
+        double dm_val;
+        double s8[UNROLL_SIZE];
+        double *dm_j;
+
+        int box_id = ig0 / NI_BLKSIZE;
+        for (jsh = 0; jsh < nbas; jsh++) {
+                for (j = ao_loc[jsh]; j < ao_loc[jsh+1]; j++) {
+                        dm_j = dm + j;
+                        j_addr = j * ngrids + ig0;
+                        for (n = 0; n < ngrids_rest; n++) {
+                                s8[n] = 0;
+                        }
+                        for (ish = 0; ish < nbas; ish++) {
+                                if (screen_index[box_id * nbas + ish]
+                                    && pair_mask[ish*nbas+jsh]) {
+                                        i0 = ao_loc[ish];
+                                        i1 = ao_loc[ish+1];
+                                        for (i = i0; i < i1; i++) {
+                                                dm_val = dm_j[i * Nao];
+                                                i_addr = i * ngrids + ig0;
+                                                for (n = 0; n < ngrids_rest; n++) {
+                                                        s8[n] += ao[i_addr+n] * dm_val;
+                                                }
+                                        }
+                                }
+                        }
+                        for (n = 0; n < ngrids_rest; n++) {
+                                out[j_addr+n] = s8[n];
+                        }
+                }
+        }
+}
+
+// return number of non-zero values in mask array
+static void mask_l1_abstract(uint8_t *out, uint8_t *mask, int *box_loc,
+                             int nbox, int ngrids, int nbas)
+{
+        int i, m, ig, box_id, ig0, ig1, i0, i1, n;
+        int with_value;
+        for (n = 0, ig0 = 0; ig0 < ngrids; ig0 += NI_BLKSIZE) {
+        for (box_id = 0; box_id < nbox; box_id++, n++) {
+                i0 = box_loc[box_id];
+                i1 = box_loc[box_id+1];
+                ig1 = MIN(ig0+NI_BLKSIZE, ngrids);
+                with_value = 0;
+                for (i = i0; i < i1; i++) {
+                for (ig = ig0; ig < ig1; ig+=NI_BLKSIZE) {
+                        m = ig / NI_BLKSIZE;
+                        if (mask[m*nbas+i] != 0) {
+                                with_value = 1;
+                                goto next_l1_box;
+                        }
+                } }
+next_l1_box:
+                out[n] = with_value;
+        } }
+}
+
+
+void SGXdot_ao_dm_sparse(double *out, double *ao, double *dm,
+                         int nao, int ngrids, int nbas,
+                         uint8_t *screen_index, uint8_t *pair_mask, int *ao_loc)
+{
+        size_t Ngrids = ngrids;
+        int shls_slice[2] = {0, nbas};
+        int *box_l1_loc = malloc(sizeof(int) * (nbas+1));
+        int nbox_l1 = CVHFshls_block_partition(box_l1_loc, shls_slice, ao_loc, BOXSIZE);
+        int mask_l1_size = (ngrids + NI_BLKSIZE - 1) / NI_BLKSIZE * nbox_l1;
+        uint8_t *mask_l1 = malloc(sizeof(uint8_t) * mask_l1_size);
+        mask_l1_abstract(mask_l1, screen_index, box_l1_loc, nbox_l1, ngrids, nbas);
+        int ngrids_align_down = (ngrids / NI_BLKSIZE) * NI_BLKSIZE;
+
+        if (nao * 2 < ngrids) {
+#pragma omp parallel
+{
+                int ig, j, j0, j1, jsh0, jsh1, ib, jb, ig0, ig1, ig_box2;
+#pragma omp for schedule(dynamic)
+                for (ig0 = 0; ig0 < ngrids_align_down; ig0+=NI_BLKSIZE) {
+                        ig1 = MIN(ig0 + NI_BLKSIZE, ngrids_align_down);
+                        ig_box2 = ig0 / NI_BLKSIZE;
+                        for (jb = 0; jb < nbox_l1; jb++) {
+                                jsh0 = box_l1_loc[jb];
+                                jsh1 = box_l1_loc[jb+1];
+                                j0 = ao_loc[jsh0];
+                                j1 = ao_loc[jsh1];
+                                for (j = j0; j < j1; j++) {
+                                for (ig = ig0; ig < ig1; ig++) {
+                                        out[j*Ngrids+ig] = 0;
+                                } }
+                                for (ib = 0; ib < nbox_l1; ib++) {
+                                        if (mask_l1[ig_box2 * nbox_l1 + ib]) {
+_dot_ao_dm_l1(out, ao, dm, nao, ngrids, nbas, ig0, ig1,
+              box_l1_loc[ib], box_l1_loc[ib+1], jsh0, jsh1,
+              screen_index, pair_mask, ao_loc);
+                                        }
+                                }
+                        }
+                }
+}
+        } else {
+#pragma omp parallel
+{
+                int ig, j, j0, j1, jsh0, jsh1, ib, jb, ig0, ig1, ig_box2;
+#pragma omp for schedule(dynamic)
+                for (jb = 0; jb < nbox_l1; jb++) {
+                        jsh0 = box_l1_loc[jb];
+                        jsh1 = box_l1_loc[jb+1];
+                        j0 = ao_loc[jsh0];
+                        j1 = ao_loc[jsh1];
+                        for (ig0 = 0; ig0 < ngrids_align_down; ig0+=NI_BLKSIZE) {
+                                ig1 = MIN(ig0 + NI_BLKSIZE, ngrids_align_down);
+                                ig_box2 = ig0 / NI_BLKSIZE;
+                                for (j = j0; j < j1; j++) {
+                                for (ig = ig0; ig < ig1; ig++) {
+                                        out[j*Ngrids+ig] = 0;
+                                } }
+                                for (ib = 0; ib < nbox_l1; ib++) {
+                                        if (mask_l1[ig_box2 * nbox_l1 + ib]) {
+_dot_ao_dm_l1(out, ao, dm, nao, ngrids, nbas, ig0, ig1,
+              box_l1_loc[ib], box_l1_loc[ib+1], jsh0, jsh1,
+              screen_index, pair_mask, ao_loc);
+                                        }
+                                }
+                        }
+                }
+}
+        }
+        if (ngrids_align_down < ngrids) {
+                _dot_ao_dm_frac(out, ao, dm, nao, ngrids, nbas, ngrids_align_down,
+                                screen_index, pair_mask, ao_loc);
+        }
+        free(box_l1_loc);
+        free(mask_l1);
+}
+
+int SGXreturn_blksize() { return SGX_BLKSIZE; }
+
+// note this is in-place with output of norms
+void SGXpow_screen(double *norms, int nblk, int nbas, double delta)
+{
+        double *sums = malloc(nbas * sizeof(double));
+        const size_t Nbas = nbas;
+#pragma omp parallel for
+        for (int ish = 0; ish < nbas; ish++) {
+                sums[ish] = 0;
+                int ib;
+                for (ib = 0; ib < nblk; ib++) {
+                        sums[ish] += pow(norms[ib * Nbas + ish], 1 - delta);
+                }
+        }
+#pragma omp parallel for
+        for (int ib = 0; ib < nblk; ib++) {
+                int ish;
+                size_t ind;
+                for (ish = 0; ish < nbas; ish++) {
+                        ind = ib * Nbas + ish;
+                        norms[ind] = 1.0 / (sums[ish] * pow(norms[ind], delta));
+                }
+        }
+        free(sums);
 }
 
 #define DECLARE_ALL \
@@ -92,109 +566,351 @@ size_t _max_cache_size_sgx(int (*intor)(), int *shls_slice, int ncenter,
         ish = shls[0]; \
         jsh = shls[1];
 
-int SGXnr_pj_prescreen(int *shls, CVHFOpt *opt,
-                       int *atm, int *bas, double *env)
+
+static inline double get_interp_rad(double width, int ig)
 {
-        if (opt == NULL) {
-                return 1;
-        }
-        int i = shls[0];
-        int j = shls[1];
-        int k = shls[2];
-        int n = opt->nbas;
-        int nk = opt->ngrids;
-        assert(opt->q_cond);
-        assert(opt->dm_cond);
-        assert(i < n);
-        assert(j < n);
-        assert(k < nk);
-        return opt->q_cond[i*n+j]
-               * MAX(fabs(opt->dm_cond[j*nk+k]), fabs(opt->dm_cond[i*nk+k]))
-               > opt->direct_scf_cutoff;
+        return 0.5 * width * (exp(0.1 * ig) - 1);
 }
 
-void SGXdot_nrk(int (*intor)(), SGXJKOperator **jkop, SGXJKArray **vjk,
-                double **dms, double *buf, double *cache, int n_dm, int* shls,
-                CVHFOpt *vhfopt, IntorEnvs *envs,
-                double* all_grids, int tot_grids)
+static inline double interp_diag_int(double r, double width, int nrad, double *vals)
 {
-        DECLARE_ALL;
+        double di = log(r / (0.5 * width) + 1) / 0.1;
+        int i = MIN((int) di, nrad - 2);
+        di -= i;
+        return vals[i] + di * (vals[i+1] - vals[i]);
+}
 
-        i0 = ao_loc[ish  ] - ioff;
-        j0 = ao_loc[jsh  ] - joff;
-        i1 = ao_loc[ish+1] - ioff;
-        j1 = ao_loc[jsh+1] - joff;
+static inline double diag_esp_est(double r, double omega, double width)
+{
+        double romega;
+        if (omega > 0) {
+                romega = omega;
+        } else {
+                romega = 1.0 / width;
+        }
+        double est = erf(romega * r) / r;
+        if (omega < 0) {
+                est *= erfc(-omega * r);
+        }
+        return est;
+}
 
-        int tmp_ngrids = 0;
-        int k;
-        int* inds = (int*) malloc(tot_grids*sizeof(int));
+static inline double diag_int_est(double r, double width, double omega,
+                                  int nrad, double *vals)
+{
+        return diag_esp_est(r, omega, width) + interp_diag_int(r, width, nrad, vals);
+}
 
-        double *grids = env + (size_t) env[PTR_GRIDS];
-        
-        if (vhfopt != NULL && vhfopt->dm_cond != NULL) {
-                for (k = 0; k < tot_grids; k++) {
-                        shls[2] = k;
-                        if (SGXnr_pj_prescreen(shls, vhfopt, atm, bas, env)) {
-                                grids[3*tmp_ngrids+0] = all_grids[3*k+0];
-                                grids[3*tmp_ngrids+1] = all_grids[3*k+1];
-                                grids[3*tmp_ngrids+2] = all_grids[3*k+2];
-                                inds[tmp_ngrids] = k;
-                                tmp_ngrids++;
+void SGXfit_diagonal_ints(int (*intor)(), int nrad, double *atm_coords,
+                          int *ao_loc, CINTOpt *cintopt, int *atm,
+                          int natm, int *bas, int nbas, double *env,
+                          double *norms)
+{
+        int shls_slice[] = {0, nbas, 0, nbas};
+        int di = GTOmax_shell_dim(ao_loc, shls_slice, 2);
+        const size_t buffer_size = nrad;
+        int cache_size = _max_cache_size_sgx(intor, shls_slice, 2,
+                                             atm, natm, bas, nbas, env,
+                                             buffer_size);
+#pragma omp parallel
+{
+        int ish, ij;
+        int shls[4];
+        double my_int;
+        double *buf = calloc(sizeof(double), buffer_size*di*di);
+        double *cache = malloc(sizeof(double) * cache_size);
+        double *rads = malloc(sizeof(double) * nrad);
+        double *grids;
+        const double omega = env[PTR_RANGE_OMEGA];
+        double radius, est;
+        double orig[3];
+        int ia;
+        int ig;
+#pragma omp for
+        for (ish = 0; ish < nbas; ish++) {
+                ia = bas(ATOM_OF, ish);
+                orig[0] = atm_coords[3*ia+0];
+                orig[1] = atm_coords[3*ia+1];
+                orig[2] = atm_coords[3*ia+2];
+                grids = env + ((int) env[PTR_GRIDS]) + 3 * ish * nrad;
+                grids[0] = orig[0];
+                grids[1] = orig[1];
+                grids[2] = orig[2];
+                shls[0] = ish;
+                shls[1] = ish;
+                shls[2] = nrad * ish;
+                shls[3] = nrad * ish + 1;
+                const int dims0[] = {ao_loc[ish+1]-ao_loc[ish],
+                                    ao_loc[ish+1]-ao_loc[ish],
+                                    1};
+                (*intor)(buf, dims0, shls, atm, natm, bas, nbas,
+                         env, cintopt, cache);
+                my_int = 0;
+                for (ij = 0; ij < dims0[0] * dims0[1]; ij++) {
+                        my_int += buf[ij] * buf[ij];
+                }
+                my_int = sqrt(my_int);
+                radius = norms[ish] / my_int;
+                (*intor)(buf, dims0, shls, atm, natm, bas, nbas,
+                         env, cintopt, cache);
+                for (ig = 0; ig < nrad; ig++) {
+                        rads[ig] = get_interp_rad(radius, ig);
+                        grids[3*ig+0] = orig[0];
+                        grids[3*ig+1] = orig[1];
+                        grids[3*ig+2] = orig[2] + rads[ig];
+                }
+                shls[2] = nrad * ish;
+                shls[3] = nrad * (ish + 1);
+                const int dims[] = {ao_loc[ish+1]-ao_loc[ish],
+                                    ao_loc[ish+1]-ao_loc[ish],
+                                    nrad};
+                (*intor)(buf, dims, shls, atm, natm, bas, nbas,
+                         env, cintopt, cache);
+                for (ig = 0; ig < dims[2]; ig++) {
+                        my_int = 0;
+                        for (ij = 0; ij < dims[0] * dims[1]; ij++) {
+                                my_int += buf[ij * dims[2] + ig]
+                                          * buf[ij * dims[2] + ig];
+                        }
+                        est = diag_esp_est(rads[ig] + 1e-10, omega, radius);
+                        grids[ig] = sqrt(my_int) / norms[ish] - est;
+                }
+                grids[nrad] = radius;
+        }
+        free(buf);
+        free(cache);
+        free(rads);
+}
+}
+
+void SGXsample_ints(int (*intor)(), double *m_ij, double *r_ij, double *radii,
+                    int nquad, int nrad, double rcmul, double *atm_coords,
+                    double *rs, int *ao_loc, CINTOpt *cintopt, int *atm,
+                    int natm, int *bas, int nbas, double *_env, int env_size,
+                    double *widths, double *norms, double *vals,
+                    double direct_scf_tol)
+{
+        int shls_slice[] = {0, nbas, 0, nbas};
+        int di = GTOmax_shell_dim(ao_loc, shls_slice, 2);
+        const size_t buffer_size = nquad + nrad + 2;
+        int cache_size = _max_cache_size_sgx(intor, shls_slice, 2,
+                                             atm, natm, bas, nbas, _env,
+                                             buffer_size);
+        const double tol2 = direct_scf_tol * direct_scf_tol;
+#pragma omp parallel
+{
+        int ish, jsh, ij;
+        int shls[4];
+        double maxint, my_int, my_deni, my_denj;
+        double *buf = calloc(sizeof(double), buffer_size*di*di);
+        double *buf2 = calloc(sizeof(double), buffer_size*di*di);
+        double *buf3 = calloc(sizeof(double), buffer_size*di*di);
+        double *cache = malloc(sizeof(double) * cache_size);
+        // env[NGRIDS] must be at least nquad + nrad + 2
+        double *env = (double*) malloc(env_size * sizeof(double));
+        memcpy(env, _env, env_size * sizeof(double));
+        double *grids = env + (int) env[PTR_GRIDS];
+        const double omega = env[PTR_RANGE_OMEGA];
+        double r, maxrel;
+        double rhat[3];
+        double rcross[3];
+        double diff[3];
+        double orig[3];
+        double mid_rad, start_rad, rnorm, rcn, ddist, cdist;
+        size_t shprod;
+        int ia, ja, nlin, ncross;
+        int igt, igc, ig;
+#pragma omp for
+        for (shprod = 0; shprod < nbas * nbas; shprod++) {
+                ig = 0;
+                ish = shprod / nbas;
+                jsh = shprod % nbas;
+                ia = bas(ATOM_OF, ish);
+                ja = bas(ATOM_OF, jsh);
+                orig[0] = atm_coords[3*ia+0];
+                orig[1] = atm_coords[3*ia+1];
+                orig[2] = atm_coords[3*ia+2];
+                diff[0] = atm_coords[3*ja+0] - orig[0];
+                diff[1] = atm_coords[3*ja+1] - orig[1];
+                diff[2] = atm_coords[3*ja+2] - orig[2];
+                rnorm = sqrt(diff[0] * diff[0]
+                             + diff[1] * diff[1]
+                             + diff[2] * diff[2]);
+                if (rnorm < 1e-16) {
+                        rhat[0] = 0.0;
+                        rhat[1] = 0.0;
+                        rhat[2] = 1.0;
+                } else {
+                        rhat[0] = diff[0] / rnorm;
+                        rhat[1] = diff[1] / rnorm;
+                        rhat[2] = diff[2] / rnorm;
+                        mid_rad = 0.5 * (radii[ia] + radii[ja]);
+                        start_rad = -0.5 * radii[ia];
+                        if (fabs(rhat[1]) > fabs(rhat[0])) {
+                                // x is small, so cross with x
+                                rcross[0] = 0.0;
+                                rcross[1] = rhat[2];
+                                rcross[2] = -rhat[1];
+                                rcn = rcross[1] * rcross[1] + rcross[2] * rcross[2];
+                                rcn = sqrt(rcn);
+                                rcross[1] /= rcn;
+                                rcross[2] /= rcn;
+                        } else {
+                                // x is large, so cross with y
+                                rcross[0] = -rhat[2];
+                                rcross[1] = 0.0;
+                                rcross[2] = rhat[0];
+                                rcn = rcross[0] * rcross[0] + rcross[2] * rcross[2];
+                                rcn = sqrt(rcn);
+                                rcross[0] /= rcn;
+                                rcross[2] /= rcn;
+                        }
+                        nlin = (int) ((rnorm + mid_rad) / mid_rad * 8);
+                        nlin = MIN(nquad, MAX(nlin, 10));
+                        ncross = nquad / nlin + 1;
+                        for (igt = 0; igt < (nlin + 1) / 2; igt++) {
+                                ddist = start_rad + ((rnorm + mid_rad) * (igt + 1)) / (nlin + 2);
+                                for (igc = 0; igc < ncross; igc++, ig++) {
+                                        cdist = (rcmul * mid_rad * igc) / ncross;
+                                        grids[3*ig+0] = orig[0] + ddist * rhat[0]
+                                                        + cdist * rcross[0];
+                                        grids[3*ig+1] = orig[1] + ddist * rhat[1]
+                                                        + cdist * rcross[1];
+                                        grids[3*ig+2] = orig[2] + ddist * rhat[2]
+                                                        + cdist * rcross[2];
+                                }
                         }
                 }
-                env[NGRIDS] = tmp_ngrids;
-        } else {
-                for (k = 0; k < tot_grids; k++) {
-                        shls[2] = k;
-                        grids[3*tmp_ngrids+0] = all_grids[3*k+0];
-                        grids[3*tmp_ngrids+1] = all_grids[3*k+1];
-                        grids[3*tmp_ngrids+2] = all_grids[3*k+2];
-                        inds[tmp_ngrids] = k;
-                        tmp_ngrids++;
+                for (igt = 0; igt < nrad; igt++, ig++) {
+                        grids[3*ig+0] = orig[0] + rhat[0] * rs[ia * nrad + igt];
+                        grids[3*ig+1] = orig[1] + rhat[1] * rs[ia * nrad + igt];
+                        grids[3*ig+2] = orig[2] + rhat[2] * rs[ia * nrad + igt];
                 }
-                env[NGRIDS] = tmp_ngrids;
+                shls[0] = ish;
+                shls[1] = jsh;
+                shls[2] = 0;
+                shls[3] = ig;
+                const int dims[] = {ao_loc[ish+1]-ao_loc[ish],
+                                    ao_loc[jsh+1]-ao_loc[jsh],
+                                    ig};
+                (*intor)(buf, dims, shls, atm, natm, bas, nbas,
+                         env, cintopt, cache);
+                maxint = 0;
+                maxrel = 0;
+                for (igt = 0; igt < dims[2]; igt++) {
+                        my_int = 0;
+                        for (ij = 0; ij < dims[0] * dims[1]; ij++) {
+                                my_int += buf[ij * dims[2] + igt]
+                                          * buf[ij * dims[2] + igt];
+                        }
+                        maxint = MAX(maxint, my_int);
+                        if (r_ij != NULL && my_int > tol2) {
+                                diff[0] = grids[3*igt+0] - orig[0];
+                                diff[1] = grids[3*igt+1] - orig[1];
+                                diff[2] = grids[3*igt+2] - orig[2];
+                                r = diff[0] * diff[0] + diff[1] * diff[1]
+                                    + diff[2] * diff[2];
+                                r = sqrt(r);
+                                my_deni = norms[ish] * diag_int_est(
+                                        r + 1e-10, widths[ish], omega, nrad,
+                                        vals + ish * nrad
+                                );
+                                my_denj = norms[jsh] * diag_int_est(
+                                        r + 1e-10, widths[jsh], omega, nrad,
+                                        vals + jsh * nrad
+                                );
+                                maxrel = MAX(maxrel, my_int / (my_deni * my_denj));
+                        }
+                }
+                m_ij[ish * nbas + jsh] = sqrt(maxint);
+                if (r_ij != NULL) {
+                        r_ij[ish * nbas + jsh] = sqrt(maxrel);
+                }
         }
-
-        int grid0, grid1;
-        const int dims[] = {ao_loc[ish+1]-ao_loc[ish], ao_loc[jsh+1]-ao_loc[jsh], tmp_ngrids};
-        for (grid0 = 0; grid0 < tmp_ngrids; grid0 += BLKSIZE) {
-                grid1 = MIN(grid0 + BLKSIZE, tmp_ngrids);
-                shls[2] = grid0;
-                shls[3] = grid1;
-                (*intor)(buf+grid0, dims, shls, atm, natm, bas, nbas, env, cintopt, cache);
-        }
-        //(*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, cintopt, cache);
-
-        for (idm = 0; idm < n_dm; idm++) {
-                jkop[idm]->contract(buf, dms[idm], vjk[idm],
-                                    i0, i1, j0, j1, inds, tmp_ngrids);
-        }
-        
-        free(inds);
+        free(buf);
+        free(buf2);
+        free(buf3);
+        free(env);
+        free(cache);
+}
 }
 
-
-void SGXnr_direct_drv(int (*intor)(), void (*fdot)(), SGXJKOperator **jkop,
-                        double **dms, double **vjk, int n_dm, int ncomp,
-                        int *shls_slice, int *ao_loc,
-                        CINTOpt *cintopt, CVHFOpt *vhfopt,
-                        int *atm, int natm, int *bas, int nbas, double *env,
-                        int env_size, int aosym)
+void SGXdiagonal_ints(int (*intor)(), double *m_bi, int *ao_loc, CINTOpt *cintopt,
+                       int *atm, int natm, int *bas, int nbas, double *env,
+                       double *widths, double *norms, double *vals, int nrad,
+                       double *atm_coords)
 {
+        int shls_slice[] = {0, nbas, 0, nbas};
+        int di = GTOmax_shell_dim(ao_loc, shls_slice, 2);
+        int cache_size = _max_cache_size_sgx(intor, shls_slice, 2,
+                                             atm, natm, bas, nbas, env,
+                                             SGX_BLKSIZE);
+#pragma omp parallel
+{
+        int ig0, ig1, dg;
+        int ish;
+        int ncomp = 1;
+        double *buf = calloc(sizeof(double), SGX_BLKSIZE*di*di*ncomp);
+        double *cache = malloc(sizeof(double) * cache_size);
+        double *dists = malloc(sizeof(int) * SGX_BLKSIZE);
+        const double omega = env[PTR_RANGE_OMEGA];
+        double *grids = env + (int) env[PTR_GRIDS];
+        double r;
+        int ia;
+        double diff[3];
+        double maxint = 0;
+        double my_int;
+        int igt;
+        const int tot_ngrids = (int) env[NGRIDS];
+        const int nbatch = (tot_ngrids + SGX_BLKSIZE - 1) / SGX_BLKSIZE;
+#pragma omp for nowait schedule(dynamic, 1)
+        for (int ibatch = 0; ibatch < nbatch; ibatch++) {
+                ig0 = ibatch * SGX_BLKSIZE;
+                ig1 = MIN(ig0 + SGX_BLKSIZE, tot_ngrids);
+                dg = ig1 - ig0;
+                for (ish = 0; ish < nbas; ish++) {
+                        maxint = 0;
+                        for (igt = 0; igt < dg; igt++) {
+                                ia = bas(ATOM_OF, ish);
+                                diff[0] = grids[3*(igt+ig0)+0] - atm_coords[3*ia+0];
+                                diff[1] = grids[3*(igt+ig0)+1] - atm_coords[3*ia+1];
+                                diff[2] = grids[3*(igt+ig0)+2] - atm_coords[3*ia+2];
+                                r = diff[0] * diff[0] + diff[1] * diff[1]
+                                    + diff[2] * diff[2];
+                                r = sqrt(r);
+                                my_int = norms[ish] * diag_int_est(
+                                        r + 1e-10, widths[ish], omega, nrad,
+                                        vals + ish * nrad
+                                );
+                                maxint = MAX(maxint, my_int);
+                        }
+                        m_bi[ibatch * nbas + ish] = maxint;
+                }
+        }
+        free(buf);
+        free(cache);
+        free(dists);
+}
+}
 
+void SGXnr_direct_drv(int (*intor)(), SGXJKOperator **jkop,
+                      double **dms, double **vjk, int n_dm, int ncomp,
+                      int *shls_slice, int *ao_loc,
+                      CINTOpt *cintopt, CVHFOpt *vhfopt,
+                      int *atm, int natm, int *bas, int nbas, double *env,
+                      int aosym)
+{
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
         int nish = ish1 - ish0;
         int di = GTOmax_shell_dim(ao_loc, shls_slice, 2);
         int cache_size = _max_cache_size_sgx(intor, shls_slice, 2,
-                                             atm, natm, bas, nbas, env);
-        int npair;
-        if (aosym == 2) {
-            npair = nish * (nish+1) / 2;
-        } else {
-            npair = nish * nish;
-        }
+                                             atm, natm, bas, nbas, env,
+                                             SGX_BLKSIZE);
+
+        const int ioff = ao_loc[ish0];
+        const int joff = ao_loc[jsh0];
 
         int (*fprescreen)();
         if (vhfopt != NULL) {
@@ -202,57 +918,521 @@ void SGXnr_direct_drv(int (*intor)(), void (*fdot)(), SGXJKOperator **jkop,
         } else {
                 fprescreen = CVHFnoscreen;
         }
-        int ngrids = (int) env[NGRIDS];
-        double* all_grids = env+(size_t)env[PTR_GRIDS];
-
-#pragma omp parallel default(none) firstprivate(ish0, jsh0) \
-        shared(intor, fdot, jkop, ao_loc, shls_slice, \
-               dms, vjk, n_dm, ncomp, nbas, vhfopt, \
-               atm, bas, env, natm, \
-               nish, di, cache_size, fprescreen, \
-               aosym, npair, cintopt, env_size, \
-               ngrids, all_grids)
+        const int tot_ngrids = (int) env[NGRIDS];
+        const int nbatch = (tot_ngrids + SGX_BLKSIZE - 1) / SGX_BLKSIZE;
+#pragma omp parallel
 {
-        int i, ij, ish, jsh;
+        int ig0, ig1, dg;
+        int ish, jsh, jmax;
+        int i0, i1, j0, j1, idm;
         int shls[4];
-        double* tmp_env = (double*) malloc(env_size * sizeof(double));
-        for (i = 0; i < env_size; i++) {
-            tmp_env[i] = env[i];
-        }
-        IntorEnvs envs = {natm, nbas, atm, bas, tmp_env, shls_slice, ao_loc, NULL,
-                          cintopt, ncomp};
         SGXJKArray *v_priv[n_dm];
-        for (i = 0; i < n_dm; i++) {
-                v_priv[i] = jkop[i]->allocate(shls_slice, ao_loc, ncomp, ngrids);
+        for (idm = 0; idm < n_dm; idm++) {
+                v_priv[idm] = jkop[idm]->allocate(shls_slice, ao_loc, ncomp, tot_ngrids);
         }
-        double *buf = malloc(sizeof(double) * ngrids*di*di*ncomp);
+        double *buf = calloc(sizeof(double), SGX_BLKSIZE*di*di*ncomp);
         double *cache = malloc(sizeof(double) * cache_size);
+        int *sj_shells = malloc(sizeof(int) * nish);
+        int num_sj_shells;
+        int sj_index;
 #pragma omp for nowait schedule(dynamic, 1)
-        for (ij = 0; ij < npair; ij++) {
-                if (aosym == 2) {
-                    ish = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
-                    jsh = ij - ish*(ish+1)/2;
-                } else {
-                    ish = ij / nish;
-                    jsh = ij % nish;
+        for (int ibatch = 0; ibatch < nbatch; ibatch++) {
+                ig0 = ibatch * SGX_BLKSIZE;
+                ig1 = MIN(ig0 + SGX_BLKSIZE, tot_ngrids);
+                dg = ig1 - ig0;
+                for (idm = 0; idm < n_dm; idm++) {
+                        jkop[idm]->set0(v_priv[idm], dg);
                 }
-                shls[0] = ish + ish0;
-                shls[1] = jsh + jsh0;
-                if ((*fprescreen)(shls, vhfopt, atm, bas, env))
-                {
-                    (*fdot)(intor, jkop, v_priv, dms, buf, cache, n_dm, shls,
-                            vhfopt, &envs, all_grids, ngrids);
+                for (ish = 0; ish < nbas; ish++) {
+                        if (aosym == 2) {
+                                jmax = ish + 1;
+                        } else {
+                                jmax = nish;
+                        }
+                        num_sj_shells = 0;
+                        for (jsh = 0; jsh < jmax; jsh++) {
+                                shls[0] = ish + ish0;
+                                shls[1] = jsh + jsh0;
+                                if ((*fprescreen)(shls, vhfopt, atm, bas, env)) {
+                                        sj_shells[num_sj_shells] = jsh;
+                                        num_sj_shells++;
+                                }
+                        }
+                        for (sj_index = 0; sj_index < num_sj_shells; sj_index++) {
+                                jsh = sj_shells[sj_index];
+                                shls[0] = ish + ish0;
+                                shls[1] = jsh + jsh0;
+                                i0 = ao_loc[ish  ] - ioff;
+                                j0 = ao_loc[jsh  ] - joff;
+                                i1 = ao_loc[ish+1] - ioff;
+                                j1 = ao_loc[jsh+1] - joff;
+                                const int dims[] = {ao_loc[ish+1]-ao_loc[ish],
+                                                    ao_loc[jsh+1]-ao_loc[jsh], dg};
+                                shls[2] = ig0;
+                                shls[3] = ig1;
+                                (*intor)(buf, dims, shls, atm, natm, bas, nbas,
+                                         env, cintopt, cache);
+                                for (idm = 0; idm < n_dm; idm++) {
+                                        jkop[idm]->contract(buf, dms[idm], v_priv[idm],
+                                                            i0, i1, j0, j1, ig0, dg);
+                                }
+                        }
+                }
+                for (idm = 0; idm < n_dm; idm++) {
+                        jkop[idm]->send(v_priv[idm], ig0, dg, vjk[idm]);
                 }
         }
 #pragma omp critical
 {
-        for (i = 0; i < n_dm; i++) {
-                jkop[i]->finalize(v_priv[i], vjk[i]);
+        for (idm = 0; idm < n_dm; idm++) {
+                jkop[idm]->finalize(v_priv[idm], vjk[idm]);
         }
 }
         free(buf);
         free(cache);
-        free(tmp_env);
+        free(sj_shells);
+}
+}
+
+static inline void _bottom_up_merge(double *a, int *aind, int il, int ir,
+                                    int ie, double *b, int *bind)
+{
+        int i = il;
+        int j = ir;
+        int k;
+        for (k = il; k < ie; k++) {
+                if (i < ir && (j >= ie || a[i] <= a[j])) {
+                        b[k] = a[i];
+                        bind[k] = aind[i];
+                        i++;
+                } else {
+                        b[k] = a[j];
+                        bind[k] = aind[j];
+                        j++;
+                }
+        }
+}
+
+// a is input/output (overwritten), b is buffer/work array
+// based on wikipedia merge sort
+static void _merge_sort(double *a, int *aind, double *b,
+                        int *bind, const int n) {
+        int width;
+        int i;
+        for (width = 1; width < n; width = width * 2) {
+                for (i = 0; i < n; i = i + 2 * width) {
+                        _bottom_up_merge(a, aind, i, MIN(i + width, n),
+                                         MIN(i + 2 * width, n), b, bind);
+                }
+                memcpy(a, b, sizeof(double) * n);
+                memcpy(aind, bind, sizeof(int) * n);
+        }
+}
+
+void SGXsort_lists(double *out, double *in, const int num_lists,
+                   const int list_size)
+{
+#pragma omp parallel
+{
+        size_t ilist, i;
+        double *buf = malloc(list_size * sizeof(double));
+        int *aind = malloc(list_size * sizeof(int));
+        int *bind = malloc(list_size * sizeof(int));
+#pragma omp for
+        for (ilist = 0; ilist < num_lists; ilist++) {
+                for (i = 0; i < list_size; i++) {
+                        out[ilist * list_size + i] = in[ilist * list_size + i];
+                        aind[i] = i;
+                }
+                _merge_sort(out + ilist * list_size, aind,
+                            buf, bind, list_size);
+        }
+        free(buf);
+        free(aind);
+        free(bind);
+}
+}
+
+void SGXargsort_lists(int *aind, double *in, const int num_lists,
+                      const int list_size)
+{
+#pragma omp parallel
+{
+        size_t ilist, i;
+        double *buf = malloc(list_size * sizeof(double));
+        double *out = malloc(list_size * sizeof(double));
+        int *bind = malloc(list_size * sizeof(int));
+#pragma omp for
+        for (ilist = 0; ilist < num_lists; ilist++) {
+                for (i = 0; i < list_size; i++) {
+                        out[i] = in[ilist * list_size + i];
+                        aind[ilist * list_size + i] = i;
+                }
+                _merge_sort(out, aind + ilist * list_size,
+                            buf, bind, list_size);
+        }
+        free(buf);
+        free(out);
+        free(bind);
+}
+}
+
+static void _cumsum(double *out, double *in, int *inds, int list_size)
+{
+        out[inds[0]] = in[inds[0]];
+        for (int i = 1; i < list_size; i++) {
+                out[inds[i]] = out[inds[i - 1]] + in[inds[i]];
+        }
+}
+
+static void _cumsum2(double *out, double *in, int *inds, int list_size)
+{
+        out[inds[0]] = in[0];
+        for (int i = 1; i < list_size; i++) {
+                out[inds[i]] = out[inds[i - 1]] + in[i];
+        }
+}
+
+void SGXcumsum_lists(double *out_lists, double *in_lists, int *index_lists,
+                     const int num_lists, const int list_size)
+{
+#pragma omp parallel
+{
+        size_t ilist;
+        double *out, *in;
+        int *inds;
+#pragma omp for
+        for (ilist = 0; ilist < num_lists; ilist++) {
+                out = out_lists + ilist * list_size;
+                in = in_lists + ilist * list_size;
+                inds = index_lists + ilist * list_size;
+                _cumsum(out, in, inds, list_size);
+        }
+}
+}
+
+void SGXnoscreen_grid(CSGXOpt *sgxopt, double *f_ug, const int ibatch,
+                    const int n_dm, const int nish, void *shl_info,
+                    void *buf) {}
+
+void SGXscreen_grid(CSGXOpt *sgxopt, double *f_ug, const int ibatch,
+                    const int n_dm, const int nish, void *shl_info,
+                    void *buf)
+{
+        int nbas = sgxopt->nbas;
+        double *fmf_i = (double*) buf;
+        double *sum_fmf_i = fmf_i + nbas;
+        int *inds_i = (int*) (fmf_i + 3 * nbas);
+        int *tmpinds_i = inds_i + nbas;
+
+        double *fbar_i = (double*) shl_info;
+        double *bscreen_i = fbar_i + nbas;
+        double *ffbar_i = bscreen_i + nbas;
+        double *bscreen2_i = ffbar_i;
+        uint8_t *shlscreen_i = (uint8_t*) (ffbar_i + nbas);
+        double dv = sgxopt->vtol[ibatch];
+        double *wt = sgxopt->wt + ibatch * SGX_BLKSIZE;
+        int dg = MAX(0, MIN(SGX_BLKSIZE, sgxopt->ngrids - ibatch * SGX_BLKSIZE));
+        const size_t Ngrids = sgxopt->ngrids;
+
+        int rdpt_ints = 0;
+        double *mbar_ij = sgxopt->mbar_ij;
+        double *mbar_ii = NULL;
+        if (sgxopt->rbar_ij != NULL && sgxopt->mbar_bi != NULL) {
+                mbar_ij = sgxopt->rbar_ij;
+                rdpt_ints = 1;
+                mbar_ii = sgxopt->mbar_bi + ibatch * sgxopt->nbas;
+        }
+
+        int *ao_loc = sgxopt->ao_loc;
+        int ish;
+        int onei = 1;
+        double zerod = 0;
+        double oned = 1;
+        char ntrans = 'N';
+        if (sgxopt->full_f_bi == NULL) {
+                ffbar_i = fbar_i;
+                for (ish = 0; ish < nish; ish++) {
+                        fbar_i[ish] = _shl_mat_elem_wt(
+                                f_ug, wt, ao_loc[ish], ao_loc[ish+1], 0, dg,
+                                n_dm, Ngrids, ao_loc[nbas] * Ngrids);
+                        if (rdpt_ints) {
+                                fbar_i[ish] *= mbar_ii[ish];
+                        }
+                }
+        } else {
+                for (ish = 0; ish < nish; ish++) {
+                        fbar_i[ish] = _shl_mat_elem_wt(
+                                f_ug, wt, ao_loc[ish], ao_loc[ish+1], 0, dg,
+                                n_dm, Ngrids, ao_loc[nbas] * Ngrids);
+                        ffbar_i[ish] = sgxopt->full_f_bi[ibatch * nbas + ish];
+                        if (rdpt_ints) {
+                                fbar_i[ish] *= mbar_ii[ish];
+                                ffbar_i[ish] *= mbar_ii[ish];
+                        }
+                }
+        }
+        // trans, m, n, alpha, a, lda, x, incx, beta, y, incy
+        dgemv_(&ntrans, &nish, &nish, &oned, mbar_ij, &nish,
+               fbar_i, &onei, &zerod, fmf_i, &onei);
+        for (ish = 0; ish < nish; ish++) {
+                if (rdpt_ints) {
+                        shlscreen_i[ish] = fmf_i[ish] * mbar_ii[ish] > dv;
+                } else {
+                        shlscreen_i[ish] = fmf_i[ish] > dv;
+                }
+                fmf_i[ish] *= ffbar_i[ish];
+                inds_i[ish] = ish;
+        }
+        _merge_sort(fmf_i, inds_i, sum_fmf_i, tmpinds_i, nish);
+        _cumsum2(sum_fmf_i, fmf_i, inds_i, nish);
+        int count = 0;
+        for (ish = 0; ish < nish; ish++) {
+                shlscreen_i[ish] = shlscreen_i[ish]
+                                   || (sum_fmf_i[ish] > sgxopt->etol);
+                count += shlscreen_i[ish];
+        }
+        count = MAX(count, 1);
+        for (ish = 0; ish < nish; ish++) {
+                bscreen_i[ish] = sgxopt->etol / (ffbar_i[ish] * count + 1e-100);
+                bscreen2_i[ish] = dv / count;
+        }
+}
+
+inline static int _simple_prescreen(int i, int j, CSGXOpt *opt)
+{
+        return opt->mbar_ij[i * opt->nbas + j] > opt->direct_scf_cutoff;
+}
+
+int SGXscreen_shells_simple(CSGXOpt *sgxopt, int jmax, int ish,
+                            int nish, int ish0, int jsh0, void *shl_info,
+                            void *buf, int *shl_inds)
+{
+        int jsh;
+        int shls[2];
+        int num_sj_shells = 0;
+        for (jsh = 0; jsh < jmax; jsh++) {
+                shls[0] = ish + ish0;
+                shls[1] = jsh + jsh0;
+                if (_simple_prescreen(shls[0], shls[1], sgxopt)) {
+                        shl_inds[num_sj_shells] = jsh;
+                        num_sj_shells++;
+                }
+        }
+        return num_sj_shells;
+}
+
+int SGXscreen_shells_sorted(CSGXOpt *sgxopt, int jmax, int ish,
+                            int nish, int ish0, int jsh0, void *shl_info,
+                            void *buf, int *shl_inds)
+{
+        size_t nbas = sgxopt->nbas;
+        double *qcond_row = (double*) buf;
+        double *qcond_row2 = qcond_row + nbas;
+        double *qcond_buf = qcond_row + 2 * nbas;
+        int *sort_inds = (int*) (qcond_buf + nbas);
+        int *select_inds = sort_inds + nbas;
+        int *index_buf = sort_inds + 2 * nbas;
+
+        double *mbar_ij = sgxopt->mbar_ij;
+        if (sgxopt->rbar_ij != NULL) {
+                mbar_ij = sgxopt->rbar_ij;
+        }
+
+        double *fbar_i = (double*) shl_info;
+        double *bscreen_i = fbar_i + nbas;
+        double *bscreen2_i = bscreen_i + nbas;
+        uint8_t *shlscreen_i = (uint8_t*) (bscreen2_i + nbas);
+        int jc = 0;
+        int jsh;
+        int shls[2];
+        int num_sj_shells = 0;
+        for (jsh = 0; jsh < nish; jsh++) {
+                shls[0] = ish + ish0;
+                shls[1] = jsh + jsh0;
+                if ((shlscreen_i[jsh] || shlscreen_i[ish])
+                    && _simple_prescreen(shls[0], shls[1], sgxopt)) {
+                        qcond_row[jc] = mbar_ij[ish * nbas + jsh];
+                        qcond_row2[jc] = qcond_row[jc] * MAX(fbar_i[ish], fbar_i[jsh]);
+                        qcond_buf[jc] = qcond_row[jc] * fbar_i[jsh];
+                        sort_inds[jc] = jc;
+                        select_inds[jsh] = jc;
+                        jc++;
+                } else {
+                        select_inds[jsh] = -1;
+                }
+        }
+        if (jc > 0) {
+                _merge_sort(qcond_buf, sort_inds, qcond_row,
+                            index_buf, jc);
+                _cumsum2(qcond_row, qcond_buf, sort_inds, jc);
+                jc = 0;
+                for (int jsh = 0; jsh < jmax; jsh++) {
+                if (select_inds[jsh] == jc) {
+                        if (qcond_row[jc] > bscreen_i[ish]
+                            || qcond_row2[jc] > bscreen2_i[ish]) {
+                                shl_inds[num_sj_shells] = jsh;
+                                num_sj_shells++;
+                        }
+                        jc++;
+                } }
+        }
+        return num_sj_shells;
+}
+
+void SGXbuild_gv_threshold(double *f_ug, double *g_ug, int *ao_loc, double *dv, double de,
+                           double *wt, int ncomp, int nbas, int ngrids, uint8_t *thresh,
+                           double *full_f_bi)
+{
+        const int nbatch = (ngrids + NI_BLKSIZE - 1) / NI_BLKSIZE;
+        const size_t Nbas = nbas;
+        const size_t Nbatch = nbatch;
+        int *col_loc = malloc((nbatch + 1) * sizeof(int));
+        double *g_bi = malloc(Nbas * nbatch * sizeof(double));
+        for (int ibatch = 0; ibatch < nbatch + 1; ibatch++) {
+            col_loc[ibatch] = MIN(ibatch * NI_BLKSIZE, ngrids);
+        }
+        double *f_bi;
+        if (full_f_bi == NULL) {
+                f_bi = malloc(Nbas * nbatch * sizeof(double));
+                SGXmake_shl_mat_wt_tr(f_ug, f_bi, nbas, nbatch, ao_loc,
+                                      col_loc, wt, ncomp);
+        } else {
+                f_bi = full_f_bi;
+        }
+        SGXmake_shl_mat_wt(g_ug, g_bi, nbas, nbatch, ao_loc,
+                           col_loc, wt, ncomp);
+#pragma omp parallel
+{
+        int ibatch, ish;
+        int *inds = malloc(sizeof(int) * nbas);
+        int *wkinds = malloc(sizeof(int) * nbas);
+        double *sumfbar_i = malloc(sizeof(double) * nbas);
+        double *wk = malloc(sizeof(double) * nbas);
+#pragma omp for
+        for (ibatch = 0; ibatch < nbatch; ibatch++) {
+                for (ish = 0; ish < nbas; ish++) {
+                        sumfbar_i[ish] = f_bi[ibatch * Nbas + ish]
+                                         * g_bi[ish * Nbatch + ibatch];
+                        inds[ish] = ish;
+                }
+                _merge_sort(sumfbar_i, inds, wk, wkinds, nbas);
+                _cumsum(sumfbar_i, f_bi + Nbas * ibatch, inds, nbas);
+                for (ish = 0; ish < nbas; ish++) {
+                        thresh[ibatch * Nbas + ish] = g_bi[ish * Nbatch + ibatch] > dv[ibatch]
+                                                      || sumfbar_i[ish] > de;
+                }
+        }
+        free(inds);
+        free(wkinds);
+        free(sumfbar_i);
+        free(wk);
+}
+        free(col_loc);
+        if (full_f_bi == NULL) {
+                free(f_bi);
+        }
+        free(g_bi);
+}
+
+void SGXnr_direct_k_drv(int (*intor)(), SGXJKOperator **jkop,
+                        double **dms, double **vjk, int n_dm, int ncomp,
+                        int *shls_slice, int *ao_loc, CINTOpt *cintopt,
+                        CSGXOpt *sgxopt, int *atm, int natm, int *bas,
+                        int nbas, double *env, int aosym)
+{
+        const int ish0 = shls_slice[0];
+        const int ish1 = shls_slice[1];
+        const int jsh0 = shls_slice[2];
+        const int nish = ish1 - ish0;
+        const int di = GTOmax_shell_dim(ao_loc, shls_slice, 2);
+        const int cache_size = _max_cache_size_sgx(intor, shls_slice, 2,
+                                                   atm, natm, bas, nbas, env,
+                                                   SGX_BLKSIZE);
+
+        const int ioff = ao_loc[ish0];
+        const int joff = ao_loc[jsh0];
+
+        if (sgxopt == NULL) {
+                fprintf(stderr, "ERROR sgxopt is required\n");
+                exit(1);
+        }
+        const int tot_ngrids = (int) env[NGRIDS];
+        const int nbatch = (tot_ngrids + SGX_BLKSIZE - 1) / SGX_BLKSIZE;
+#pragma omp parallel
+{
+        int ig0, ig1, dg;
+        int ish, jsh, jmax;
+        int i0, i1, j0, j1, idm;
+        int shls[4];
+        SGXJKArray *v_priv[n_dm];
+        for (idm = 0; idm < n_dm; idm++) {
+                v_priv[idm] = jkop[idm]->allocate(shls_slice, ao_loc, ncomp, tot_ngrids);
+        }
+        double *buf = calloc(sizeof(double), SGX_BLKSIZE*di*di*ncomp);
+        double *cache = malloc(sizeof(double) * cache_size);
+        int *sj_shells = malloc(sizeof(int) * nish);
+        void *screen_buf = malloc(sgxopt->buf_size_bytes);
+        void *shl_info = malloc(sgxopt->shl_info_size_bytes);
+        int num_sj_shells;
+        int sj_index;
+        int nij;
+#pragma omp for nowait schedule(dynamic, 1)
+        for (int ibatch = 0; ibatch < nbatch; ibatch++) {
+                ig0 = ibatch * SGX_BLKSIZE;
+                ig1 = MIN(ig0 + SGX_BLKSIZE, tot_ngrids);
+                dg = ig1 - ig0;
+                sgxopt->fscreen_grid(sgxopt, dms[0] + ig0, ibatch,
+                                     n_dm, nish, shl_info, screen_buf);
+                for (idm = 0; idm < n_dm; idm++) {
+                        jkop[idm]->set0(v_priv[idm], dg);
+                }
+                nij = 0;
+                for (ish = 0; ish < nbas; ish++) {
+                        if (aosym == 2) {
+                                jmax = ish + 1;
+                        } else {
+                                jmax = nish;
+                        }
+                        num_sj_shells = sgxopt->fscreen_shl(
+                                sgxopt, jmax, ish, nish, ish0, jsh0,
+                                shl_info, screen_buf, sj_shells);
+                        for (sj_index = 0; sj_index < num_sj_shells; sj_index++) {
+                                jsh = sj_shells[sj_index];
+                                shls[0] = ish + ish0;
+                                shls[1] = jsh + jsh0;
+                                i0 = ao_loc[ish  ] - ioff;
+                                j0 = ao_loc[jsh  ] - joff;
+                                i1 = ao_loc[ish+1] - ioff;
+                                j1 = ao_loc[jsh+1] - joff;
+                                const int dims[] = {ao_loc[ish+1]-ao_loc[ish],
+                                                ao_loc[jsh+1]-ao_loc[jsh], dg};
+                                shls[2] = ig0;
+                                shls[3] = ig1;
+                                (*intor)(buf, dims, shls, atm, natm, bas, nbas,
+                                         env, cintopt, cache);
+                                for (idm = 0; idm < n_dm; idm++) {
+                                        jkop[idm]->contract(buf, dms[idm], v_priv[idm],
+                                                            i0, i1, j0, j1, ig0, dg);
+                                }
+                        }
+                        nij += num_sj_shells;
+                }
+                for (idm = 0; idm < n_dm; idm++) {
+                        jkop[idm]->send(v_priv[idm], ig0, dg, vjk[idm]);
+                }
+        }
+#pragma omp critical
+{
+        for (idm = 0; idm < n_dm; idm++) {
+                jkop[idm]->finalize(v_priv[idm], vjk[idm]);
+        }
+}
+        free(buf);
+        free(cache);
+        free(sj_shells);
+        free(screen_buf);
+        free(shl_info);
 }
 }
 
@@ -310,63 +1490,6 @@ void SGXnr_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
 }
 }
 
-void SGXsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
-                         int *ao_loc, int *atm, int natm,
-                         int *bas, int nbas, double *env)
-{
-        if (opt->q_cond != NULL) {
-                free(opt->q_cond);
-        }
-        nbas = opt->nbas;
-        double *q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
-        opt->q_cond = q_cond;
-        SGXnr_q_cond(intor, cintopt, q_cond, ao_loc, atm, natm, bas, nbas, env);
-}
-
-void SGXnr_dm_cond(double *dm_cond, double *dm, int nset, int *ao_loc,
-                   int *atm, int natm, int *bas, int nbas, double *env,
-                   int ngrids)
-{
-        size_t nao = ao_loc[nbas] - ao_loc[0];
-        double dmax;
-        size_t i, j, jsh, iset;
-        double *pdm;
-        for (i = 0; i < ngrids; i++) {
-        for (jsh = 0; jsh < nbas; jsh++) {
-                dmax = 0;
-                for (iset = 0; iset < nset; iset++) {
-                        pdm = dm + nao*ngrids*iset;
-                        for (j = ao_loc[jsh]; j < ao_loc[jsh+1]; j++) {
-                                dmax = MAX(dmax, fabs(pdm[i*nao+j]));
-                        }
-                }
-                dm_cond[jsh*ngrids+i] = dmax;
-        } }
-}
-
-void SGXsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
-                            int *atm, int natm, int *bas, int nbas, double *env,
-                            int ngrids)
-{
-        nbas = opt->nbas;
-        if (opt->dm_cond != NULL) {
-                free(opt->dm_cond);
-        }
-        opt->dm_cond = (double *)malloc(sizeof(double) * nbas*ngrids);
-        if (opt->dm_cond == NULL) {
-                fprintf(stderr, "malloc(%zu) failed in SGXsetnr_direct_scf_dm\n",
-                        sizeof(double) * nbas*ngrids);
-                exit(1);
-        }
-        // nbas in the input arguments may different to opt->nbas.
-        // Use opt->nbas because it is used in the prescreen function
-        memset(opt->dm_cond, 0, sizeof(double)*nbas*ngrids);
-        opt->ngrids = ngrids;
-
-        SGXnr_dm_cond(opt->dm_cond, dm, nset, ao_loc,
-                      atm, natm, bas, nbas, env, ngrids);
-}
-
 int SGXnr_ovlp_prescreen(int *shls, CVHFOpt *opt,
                          int *atm, int *bas, double *env)
 {
@@ -382,7 +1505,6 @@ int SGXnr_ovlp_prescreen(int *shls, CVHFOpt *opt,
         return opt->q_cond[i*n+j] > opt->direct_scf_cutoff;
 }
 
-
 #define JTYPE1  1
 #define JTYPE2  2
 #define KTYPE1  3
@@ -396,44 +1518,65 @@ static SGXJKArray *SGXJKOperator_allocate_##label(int *shls_slice, int *ao_loc, 
         jkarray->v_dims[1]  = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]; \
         jkarray->v_dims[2]  = ngrids; \
         if (task == JTYPE1) { \
-                jkarray->data = calloc(ncomp * jkarray->v_dims[2], sizeof(double)); \
+                jkarray->data = malloc(ncomp * SGX_BLKSIZE * sizeof(double)); \
         } else if (task == JTYPE2) { \
                 jkarray->data = calloc(ncomp * jkarray->v_dims[0] \
                                        * jkarray->v_dims[1], sizeof(double)); \
         } else { \
-                jkarray->data = calloc(ncomp * jkarray->v_dims[0] \
-                                       * jkarray->v_dims[2], sizeof(double)); \
+                jkarray->data = malloc(ncomp * jkarray->v_dims[0] \
+                                       * SGX_BLKSIZE * sizeof(double)); \
         } \
         jkarray->ncomp = ncomp; \
         return jkarray; \
 } \
-static void SGXJKOperator_set0_##label(SGXJKArray *jkarray, int k) \
-{ } \
-static void SGXJKOperator_send_##label(SGXJKArray *jkarray, int k, double *out) \
-{ } \
+static void SGXJKOperator_set0_##label(SGXJKArray *jkarray, int dk) \
+{ \
+        int ncomp = jkarray->ncomp; \
+        int i, k; \
+        double *data = jkarray->data; \
+        if (task == JTYPE1) { \
+                for (i = 0; i < ncomp; i++) { \
+                for (k = 0; k < dk; k++) { \
+                        data[i*dk+k] = 0; \
+                } } \
+        } else if (task == KTYPE1) { \
+                for (i = 0; i < ncomp * jkarray->v_dims[0]; i++) { \
+                for (k = 0; k < dk; k++) { \
+                        data[i*dk+k] = 0; \
+                } } \
+        } \
+} \
+static void SGXJKOperator_send_##label(SGXJKArray *jkarray, int k0, int dk, double *out) \
+{ \
+        int ncomp = jkarray->ncomp; \
+        size_t i, k, icomp; \
+        double *data = jkarray->data; \
+        const size_t ni = jkarray->v_dims[0]; \
+        const size_t nk_global = jkarray->v_dims[2]; \
+        out = out + k0; \
+        if (task == JTYPE1) { \
+                for (i = 0; i < ncomp; i++) { \
+                for (k = 0; k < dk; k++) { \
+                        out[i*nk_global+k] = data[i*dk+k]; \
+                } } \
+        } else if (task == KTYPE1) { \
+                for (icomp = 0; icomp < ncomp; icomp++) { \
+                        for (i = 0; i < ni; i++) { \
+                        for (k = 0; k < dk; k++) { \
+                                out[i*nk_global+k] = data[i*dk+k]; \
+                        } } \
+                        out += nk_global * ni; \
+                        data += dk * ni; \
+                } \
+        } \
+} \
 static void SGXJKOperator_final_##label(SGXJKArray *jkarray, double *out) \
 { \
-        int i, k, icomp; \
-        int ni = jkarray->v_dims[0]; \
+        int i; \
         double *data = jkarray->data; \
-        int ngrids = jkarray->v_dims[2]; \
-        if (task == JTYPE1) { \
-                for (i = 0; i < jkarray->ncomp; i++) { \
-                for (k = 0; k < ngrids; k++) { \
-                        out[i*ngrids+k] += data[i*ngrids+k]; \
-                } } \
-        } else if (task == JTYPE2) { \
+        if (task == JTYPE2) { \
                 for (i = 0; i < jkarray->ncomp * jkarray->v_dims[0] * jkarray->v_dims[1]; i++) { \
                         out[i] += data[i]; \
-                } \
-        } else { \
-                for (icomp = 0; icomp < jkarray->ncomp; icomp++) { \
-                        for (i = 0; i < ni; i++) { \
-                        for (k = 0; k < ngrids; k++) { \
-                                out[i*ngrids+k] += data[i*ngrids+k]; \
-                        } } \
-                        out += ngrids * ni; \
-                        data += ngrids * ni; \
                 } \
         } \
         SGXJKOperator_deallocate(jkarray); \
@@ -466,9 +1609,9 @@ static void SGXJKOperator_sanity_check_s2(int *shls_slice)
 
 static void nrs1_ijg_ji_g(double *eri, double *dm, SGXJKArray *out,
                           int i0, int i1, int j0, int j1,
-                           int* inds, int pngrids)
+                          const int k0, const int dk)
 {
-        const int ncol = out->v_dims[0];
+        const size_t ncol = out->v_dims[0];
         int i, j, k, icomp;
         double *data = out->data;
 
@@ -476,23 +1619,23 @@ static void nrs1_ijg_ji_g(double *eri, double *dm, SGXJKArray *out,
         for (icomp = 0; icomp < out->ncomp; icomp++) {
                 for (j = j0; j < j1; j++) {
                 for (i = i0; i < i1; i++, ij++) {
-                for (k = 0; k < pngrids; k++) {
-                        data[inds[k]] += eri[ij*pngrids+k] * dm[j*ncol+i];
+                for (k = 0; k < dk; k++) {
+                        data[k] += eri[ij*dk+k] * dm[j*ncol+i];
                 } } }
-                data += out->v_dims[2];
+                data += dk;
         }
 }
 ADD_OP(nrs1_ijg_ji_g, JTYPE1, s1);
 
 static void nrs2_ijg_ji_g(double *eri, double *dm, SGXJKArray *out,
                           int i0, int i1, int j0, int j1,
-                           int* inds, int pngrids)
+                          const int k0, const int dk)
 {
         if (i0 == j0) {
-                return nrs1_ijg_ji_g(eri, dm, out, i0, i1, j0, j1, inds, pngrids);
+                return nrs1_ijg_ji_g(eri, dm, out, i0, i1, j0, j1, k0, dk);
         }
 
-        const int ncol = out->v_dims[0];
+        const size_t ncol = out->v_dims[0];
         int i, j, k, icomp;
         double *data = out->data;
 
@@ -500,29 +1643,30 @@ static void nrs2_ijg_ji_g(double *eri, double *dm, SGXJKArray *out,
         for (icomp = 0; icomp < out->ncomp; icomp++) {
                 for (j = j0; j < j1; j++) {
                 for (i = i0; i < i1; i++, ij++) {
-                for (k = 0; k < pngrids; k++) {
-                        data[inds[k]] += eri[ij*pngrids+k] * (dm[j*ncol+i] + dm[i*ncol+j]);
+                for (k = 0; k < dk; k++) {
+                        data[k] += eri[ij*dk+k] * (dm[j*ncol+i] + dm[i*ncol+j]);
                 } } }
-                data += out->v_dims[2];
+                data += dk;
         }
 }
 ADD_OP(nrs2_ijg_ji_g, JTYPE1, s2);
 
 static void nrs1_ijg_g_ij(double *eri, double *dm, SGXJKArray *out,
                           int i0, int i1, int j0, int j1,
-                           int* inds, int pngrids)
+                          const int k0, const int dk)
 {
-        int ni = out->v_dims[0];
-        int nj = out->v_dims[1];
+        const size_t ni = out->v_dims[0];
+        const size_t nj = out->v_dims[1];
         int i, j, k, icomp;
         double *data = out->data;
+        dm = dm + k0;
 
         int ij = 0;
         for (icomp = 0; icomp < out->ncomp; icomp++) {
                 for (j = j0; j < j1; j++) {
                 for (i = i0; i < i1; i++, ij++) {
-                for (k = 0; k < pngrids; k++) {
-                        data[i*nj+j] += eri[ij*pngrids+k] * dm[inds[k]];
+                for (k = 0; k < dk; k++) {
+                        data[i*nj+j] += eri[ij*dk+k] * dm[k];
                 } } }
                 data += ni * nj;
         }
@@ -536,48 +1680,50 @@ SGXJKOperator SGXnrs2_ijg_g_ij = {SGXJKOperator_allocate_nrs1_ijg_g_ij,
 
 static void nrs1_ijg_gj_gi(double *eri, double *dm, SGXJKArray *out,
                            int i0, int i1, int j0, int j1,
-                           int* inds, int pngrids)
+                           const int k0, const int dk)
 {
         double *data = out->data;
+        dm = dm + k0;
         int i, j, k, icomp;
-        const int ngrids = out->v_dims[2];
+        const size_t nk_global = out->v_dims[2];
 
         int ij = 0;
         for (icomp = 0; icomp < out->ncomp; icomp++) {
                 for (j = j0; j < j1; j++) {
                 for (i = i0; i < i1; i++, ij++) {
-                for (k = 0; k < pngrids; k++) {
-                        data[i*ngrids+inds[k]] += eri[ij*pngrids+k] * dm[j*ngrids+inds[k]];
+                for (k = 0; k < dk; k++) {
+                        data[i*dk+k] += eri[ij*dk+k] * dm[j*nk_global+k];
                 } } }
-                data += out->v_dims[0] * out->v_dims[2];
+                data += out->v_dims[0] * dk;
         }
 }
 ADD_OP(nrs1_ijg_gj_gi, KTYPE1, s1);
 
 static void nrs2_ijg_gj_gi(double *eri, double *dm, SGXJKArray *out,
                            int i0, int i1, int j0, int j1,
-                           int* inds, int pngrids)
+                           const int k0, const int dk)
 {
         if (i0 == j0) {
-                return nrs1_ijg_gj_gi(eri, dm, out, i0, i1, j0, j1, inds, pngrids);
+                return nrs1_ijg_gj_gi(eri, dm, out, i0, i1, j0, j1, k0, dk);
         }
 
         double *data = out->data;
-        const int ngrids = out->v_dims[2];
+        dm = dm + k0;
+        const size_t nk_global = out->v_dims[2];
         int i, j, k, icomp;
 
         int ij = 0;
         for (icomp = 0; icomp < out->ncomp; icomp++) {
                 for (j = j0; j < j1; j++) {
                 for (i = i0; i < i1; i++, ij++) {
-                for (k = 0; k < pngrids; k++) {
-                        data[i*ngrids+inds[k]] += eri[ij*pngrids+k] * dm[j*ngrids+inds[k]];
+                for (k = 0; k < dk; k++) {
+                        data[i*dk+k] += eri[ij*dk+k] * dm[j*nk_global+k];
                 }
-                for (k = 0; k < pngrids; k++) {
-                        data[j*ngrids+inds[k]] += eri[ij*pngrids+k] * dm[i*ngrids+inds[k]];
+                for (k = 0; k < dk; k++) {
+                        data[j*dk+k] += eri[ij*dk+k] * dm[i*nk_global+k];
                 }
                 } }
-                data += out->v_dims[0] * out->v_dims[2];
+                data += out->v_dims[0] * dk;
         }
 }
 ADD_OP(nrs2_ijg_gj_gi, KTYPE1, s2);
