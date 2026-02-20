@@ -211,6 +211,42 @@ class KnownValues(unittest.TestCase):
         op = spg.SPGElement(rot, trans)
         self.assertTrue(hash(op) == num)
 
+    def test_spg_arccos_prec(self):
+        cell = gto.Cell(
+        atom = 'Ne 0.000 0.000 0.000',
+        a = '''0.000000000000 2.000000000000 2.000000000000
+               2.000000000000 0.000000000000 2.000000000000
+               2.000000000000 2.000000000000 0.000000000000''',
+        basis = 'gth-szv',
+        space_group_symmetry = True,
+        )
+        cell.build()
+        sg = spg.SpaceGroup(cell)
+        sg.backend = 'pyscf'
+        sg.build()
+        ops = sg.ops
+        pg = sg.groupname['point_group_symbol']
+
+
+        cell1 = gto.Cell(
+        atom = 'Ne 0.000 0.000 0.000',
+        a = '''0.000000000000 2.150000000000 2.150000000000
+               2.150000000000 0.000000000000 2.150000000000
+               2.150000000000 2.150000000000 0.000000000000''',
+        basis = 'gth-szv',
+        space_group_symmetry = True,
+        )
+        cell1.build()
+        sg = spg.SpaceGroup(cell1)
+        sg.backend = 'pyscf'
+        sg.build()
+        ops1 = sg.ops
+        pg1 = sg.groupname['point_group_symbol']
+
+        self.assertTrue(pg==pg1)
+        for op, op1 in zip(ops, ops1):
+            self.assertTrue(op == op1)
+
 
 if __name__ == '__main__':
     print("Full Tests for space group symmetry detection")
