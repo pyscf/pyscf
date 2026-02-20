@@ -40,8 +40,8 @@ print(mol.RHF().run().Hessian().kernel())
 # Finite difference Gradients as a PySCF builtin Gradients object
 #
 mf = mol.RHF()
-mf.Gradients().run()
+finite_diff.Gradients(mf).run()
 #
 # This object can be used in the geometry optimization processes
 #
-mf.Gradients().optimizer().run()
+finite_diff.Gradients(mf).optimizer().run()
