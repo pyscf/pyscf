@@ -99,7 +99,14 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
     naoi = ao_loc[i1] - ao_loc[i0]
     naoj = ao_loc[j1] - ao_loc[j0]
 
-    Ls = gto.eval_gto.get_lattice_Ls(cell)
+    # The multigrid algorithm assumes that grids are monotonically positioned
+    # within the cell. For low-dimensional systems, atoms may be located near
+    # the non-periodic boundaries. The grids surrounding these atoms must be
+    # represented by periodic images.
+    # This differs from the behavior in pbc.df.fft, where only a single image
+    # is required along non-periodic dimensions. In pbc.df.fft uniform grids are
+    # wrapped around the cell boundaries.
+    Ls = gto.eval_gto.get_lattice_Ls(cell, dimension=3)
     nimgs = len(Ls)
 
     weights = numpy.asarray(weights, order='C')
@@ -140,6 +147,9 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
 
     def make_mat(weights):
         mat = numpy.zeros((nimgs,comp,naoj,naoi))
+        # Atoms may be located near the non-periodic boundaries, which require
+        # grids from periodic images.
+        dimension = 3
         drv(getattr(libdft, eval_fn),
             weights.ctypes.data_as(ctypes.c_void_p),
             mat.ctypes.data_as(ctypes.c_void_p),
@@ -147,7 +157,7 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
             (ctypes.c_int*4)(i0, i1, j0, j1),
             ao_loc.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_double(log_prec),
-            ctypes.c_int(cell.dimension),
+            ctypes.c_int(dimension),
             ctypes.c_int(nimgs),
             Ls.ctypes.data_as(ctypes.c_void_p),
             a.ctypes.data_as(ctypes.c_void_p),
@@ -161,17 +171,7 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
 
     out = []
     for wv in weights:
-        if cell.dimension == 0:
-            mat = make_mat(wv)[0].transpose(0,2,1)
-            if hermi == 1:
-                for i in range(comp):
-                    lib.hermi_triu(mat[i], inplace=True)
-            if comp == 1:
-                mat = mat[0]
-            # Add a leading dimension. When handling the output of this
-            # function in _get_j_pass2, the dimension for k-point is required.
-            mat = mat[None,:]
-        elif kpts is None or gamma_point(kpts):
+        if kpts is None or gamma_point(kpts):
             mat = make_mat(wv).sum(axis=0).transpose(0,2,1)
             if hermi == 1:
                 for i in range(comp):
@@ -233,7 +233,14 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
     dm = numpy.asarray(dm, order='C')
     assert (dm.shape[-2:] == (naoi, naoj))
 
-    Ls = gto.eval_gto.get_lattice_Ls(cell)
+    # The multigrid algorithm assumes that grids are monotonically positioned
+    # within the cell. For low-dimensional systems, atoms may be located near
+    # the non-periodic boundaries. The grids surrounding these atoms must be
+    # represented by periodic images.
+    # This differs from the behavior in pbc.df.fft, where only a single image
+    # is required along non-periodic dimensions. In pbc.df.fft uniform grids are
+    # wrapped around the cell boundaries.
+    Ls = gto.eval_gto.get_lattice_Ls(cell, dimension=3)
 
     if cell.dimension == 0 or kpts is None or gamma_point(kpts):
         nkpts, nimgs = 1, Ls.shape[0]
@@ -273,6 +280,9 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
     drv = libdft.NUMINT_rho_drv
 
     def make_rho_(rho, dm, hermi):
+        # Atoms may be located near the non-periodic boundaries, which require
+        # grids from periodic images.
+        dimension = 3
         drv(getattr(libdft, eval_fn),
             rho.ctypes.data_as(ctypes.c_void_p),
             dm.ctypes.data_as(ctypes.c_void_p),
@@ -280,7 +290,7 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
             (ctypes.c_int*4)(i0, i1, j0, j1),
             ao_loc.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_double(log_prec),
-            ctypes.c_int(cell.dimension),
+            ctypes.c_int(dimension),
             ctypes.c_int(nimgs),
             Ls.ctypes.data_as(ctypes.c_void_p),
             a.ctypes.data_as(ctypes.c_void_p),
@@ -294,20 +304,7 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
 
     rho = []
     for i, dm_i in enumerate(dm):
-        if cell.dimension == 0:
-            if ignore_imag:
-                # basis are real. dm.imag can be dropped if ignore_imag
-                dm_i = dm_i.real
-            has_imag = dm_i.dtype == numpy.complex128
-            if has_imag:
-                dmR = numpy.asarray(dm_i.real, order='C')
-                dmI = numpy.asarray(dm_i.imag, order='C')
-            else:
-                # make a copy because the dm may be overwritten in the
-                # NUMINT_rho_drv inplace
-                dmR = numpy.array(dm_i, order='C', copy=True)
-
-        elif kpts is None or gamma_point(kpts):
+        if kpts is None or gamma_point(kpts):
             if ignore_imag:
                 # basis are real. dm.imag can be dropped if ignore_imag
                 dm_i = dm_i.real

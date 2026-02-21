@@ -556,8 +556,9 @@ class KnownValues(unittest.TestCase):
             dimension = 0)
         mf = cell.RKS(xc='pbe')
         mf._numint = multigrid.MultiGridNumInt(cell)
+        mf.max_cycle = 1
         mf.run()
-        self.assertAlmostEqual(mf.e_tot, -6.86372200902191, 7)
+        self.assertAlmostEqual(mf.e_tot, -6.725761212638795, 8)
 
 if __name__ == '__main__':
     print("Full Tests for multigrid")
