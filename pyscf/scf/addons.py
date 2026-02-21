@@ -769,6 +769,7 @@ def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
         logger.info(mf, 'Using canonical orthogonalization with threshold {}'.format(threshold))
         mf._eigh = _eigh_with_canonical_orth(threshold)
     else:
+        assert s.dtype == numpy.float64
         logger.info(mf, 'Using partial Cholesky orthogonalization '
                     '(doi:10.1063/1.5139948, doi:10.1103/PhysRevA.101.032504)')
         logger.info(mf, 'Using threshold {} for pivoted Cholesky'.format(cholesky_threshold))
