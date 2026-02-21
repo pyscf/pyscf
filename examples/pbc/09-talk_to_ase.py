@@ -25,6 +25,7 @@ cell = pyscf_ase.cell_from_ase(ase_atom)
 cell.basis = 'gth-szv'
 cell.pseudo = 'gth-pade'
 cell.verbose = 0
+cell.build()
 
 # Set up a template calculation, which will be used for the ASE calculator.
 # Additional variables can be assigned to the template method.
@@ -36,6 +37,11 @@ ase_atom.calc = pyscf_ase.PySCF(method=mf)
 
 print("ASE energy", ase_atom.get_potential_energy())
 print("ASE energy (should avoid re-evaluation)", ase_atom.get_potential_energy())
+
+# Plot band structure and save to figure C-bands.png
+bs = ase_atom.calc.band_structure()
+bs.plot(filename='C-bands.png')
+
 # Compute equation of state
 ase_cell=ase_atom.cell
 volumes = []

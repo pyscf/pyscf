@@ -409,6 +409,8 @@ GTH_ALIAS = {
     'gthccdzvp'   : 'gth-cc-dzvp.dat',
     'gthcctzvp'   : 'gth-cc-tzvp.dat',
     'gthccqzvp'   : 'gth-cc-qzvp.dat',
+    # TODO: Remove the legacy database after verifying whether they are
+    # consistent with the latest version of BASIS_MOLOPT
     'gthszvmolopt'      : 'gth-szv-molopt.dat',
     'gthdzvpmolopt'     : 'gth-dzvp-molopt.dat',
     'gthtzvpmolopt'     : 'gth-tzvp-molopt.dat',
@@ -622,6 +624,7 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
         basmod = USER_BASIS_ALIAS[name]
         basis_dir = USER_BASIS_DIR
     elif name in GTH_ALIAS:
+        #TODO: _load_MOLOPT(_to_MOLOPT_name(name), symb, _GTH_BASIS_DIR)
         basmod = GTH_ALIAS[name]
         fload = parse_cp2k.load
         basis_dir = _GTH_BASIS_DIR
@@ -631,6 +634,9 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
         basis_dir = USER_BASIS_DIR
     elif _is_pople_basis(name):
         basmod = _parse_pople_basis(name, symb)
+    elif 'GTH' in filename_or_basisname:
+        assert contr_scheme == 'Full'
+        return parse_cp2k._load_MOLOPT(filename_or_basisname, symb, _GTH_BASIS_DIR)
     else:
         try:
             return parse_nwchem.parse(filename_or_basisname, symb,
@@ -729,6 +735,10 @@ def load_ecp(filename_or_basisname, symb):
 
     raise BasisNotFoundError('Unknown ECP format or ECP name')
 
+# PP_NAME_PATTERN follows the convention of CP2K orbital basis and pseudo names
+# https://pierre-24.github.io/cp2k-basis/users/basis_sets_and_pseudos
+PP_NAME_PATTERN = re.compile(r'^GTH-[A-Z0-9]+-q\d+$')
+
 def load_pseudo(filename_or_basisname, symb):
     '''Parses PP database file
     '''
@@ -736,17 +746,21 @@ def load_pseudo(filename_or_basisname, symb):
     if os.path.isfile(filename_or_basisname):
         return _load_external(parse_cp2k_pp, filename_or_basisname, symb)
 
+    if re.fullmatch(PP_NAME_PATTERN, filename_or_basisname):
+        # Note: the default *-GTH basis for Na has been changed, compared to
+        # eariler versions. The default one in earlier versions are renamed to
+        # *-GTH-q9_old in the new database (see GTH_POTENTIALS).
+        return parse_cp2k_pp._load_GTH_POTENTIALS(
+            filename_or_basisname, symb, _GTH_PP_DIR)
+
+    # TODO: remove the lagecy parser, except gth-hf-rev. gth-hf-rev data are not
+    # available in the GTH_POTENTIALS or POTENTIAL_UZH databases
     name, suffix = _format_pseudo_name(filename_or_basisname)
     if name in PP_ALIAS:
-        basmod = PP_ALIAS[name]
-        return parse_cp2k_pp.load(join(_GTH_PP_DIR, basmod), symb, suffix)
+        ppfile = PP_ALIAS[name]
+        return parse_cp2k_pp.load(join(_GTH_PP_DIR, ppfile), symb, suffix)
 
-    try:
-        return parse_cp2k_pp.parse(filename_or_basisname)
-    except BasisNotFoundError:
-        raise
-    except Exception:
-        raise BasisNotFoundError(f'Invalid PP {filename_or_basisname}')
+    return parse_cp2k_pp.parse(filename_or_basisname)
 
 def _load_external(module, filename_or_basisname, symb, **kwargs):
     '''Try to read basis from given file'''

@@ -586,6 +586,71 @@ class KnownValues(unittest.TestCase):
             r1 = cell.atom_coords()
             self.assertAlmostEqual(abs(ref - r1).max(), 0, 12)
 
+    def test_parse_poscar(self):
+        inp_str = '''\
+Cubic BN
+3.57
+0.0 0.5 0.5
+0.5 0.0 0.5
+0.5 0.5 0.0
+B N
+1 1
+Direct
+0.00 0.00 0.00
+0.25 0.25 0.25
+'''
+        a, atoms = pgto.cell.fromstring(inp_str, format='poscar')
+        ref_a = np.array([[0.   , 1.785, 1.785],
+                          [1.785, 0.   , 1.785],
+                          [1.785, 1.785, 0.   ]])
+        ref_pos = np.array([[0., 0., 0.],
+                            [0.8925, 0.8925, 0.8925]])
+        coords = np.array([x[1] for x in atoms])
+        assert abs(a - ref_a).max() < 1e-14
+        assert abs(coords - ref_pos).max() < 1e-14
+
+    def test_parse_cif(self):
+        inp_str = '''\
+# generated using pymatgen
+data_Si
+_symmetry_space_group_name_H-M   'P 1'
+_cell_length_a   3.86697465(8)
+_cell_length_b   3.86697465(8)
+_cell_length_c   3.86697465(8)
+_cell_angle_alpha   60.00000000
+_cell_angle_beta   60.00000000
+_cell_angle_gamma   60.00000000
+_symmetry_Int_Tables_number   1
+_chemical_formula_structural   Si
+_chemical_formula_sum   Si2
+_cell_volume   40.88829285
+_cell_formula_units_Z   2
+loop_
+ _symmetry_equiv_pos_site_id
+ _symmetry_equiv_pos_as_xyz
+  1  'x, y, z'
+loop_
+ _atom_site_type_symbol
+ _atom_site_label
+ _atom_site_symmetry_multiplicity
+ _atom_site_fract_x
+ _atom_site_fract_y
+ _atom_site_fract_z
+ _atom_site_occupancy
+  Si  Si0  1  0.75000000  0.75000000  0.75000000  1
+  Si  Si1  1  0.50000000  0.50000000  0.50000000  1
+'''
+        a, atoms = pgto.cell.fromstring(inp_str, format='cif')
+        # results from ase.io.cif.read_cif function
+        ref_a = np.array([[3.86697465, 0.0, 0.0],
+                        [1.933487325, 3.348898282690438, 0.0],
+                        [1.933487325, 1.1162994275634797, 3.1573715802591895]])
+        ref_pos = np.array([[5.80046198, 3.34889828, 2.36802869],
+                            [3.86697465, 2.23259886, 1.57868579]])
+        coords = np.array([x[1] for x in atoms])
+        assert abs(a - ref_a).max() < 1e-8
+        assert abs(coords - ref_pos).max() < 1e-8
+
     def test_set_geom_(self):
         BOHR = lib.param.BOHR
         cl = pgto.M(
@@ -668,6 +733,25 @@ class KnownValues(unittest.TestCase):
         cl.set_geom_(unit='Ang')
         self.assertTrue(cl.atom_coords()[0,2] == 1/1.5)
         self.assertTrue(cl.lattice_vectors()[0,0] == 4/1.5)
+
+    def test_gth_basis(self):
+        cl = pgto.M(a=np.eye(3), atom='Cd 0 0 0', basis='TZVP-MOLOPT-HYB-GTH',
+                    pseudo='gth-hf-rev-q2')
+        assert cl.nbas == 4
+        assert all(cl._bas[:,2] == 5)
+        assert cl._pseudo['Cd'][0] == [2, 0, 0, 0]
+
+        cl = pgto.M(a=np.eye(3), atom='Cd 0 0 0', basis='TZVP-MOLOPT-SCAN-GTH',
+                    pseudo='gth-hf-rev')
+        assert cl.nbas == 4
+        assert all(cl._bas[:,2] == 5)
+        assert cl._pseudo['Cd'][0] == [4, 6, 10, 0]
+
+        cl = pgto.M(a=np.eye(3), atom='Be 0 0 0', basis='TZVP-MOLOPT-PBE-GTH-q2',
+                    pseudo='GTH-PBE-q2')
+        print(cl.nbas == 2)
+        print(cl._bas[:,2] == [5, 5])
+        print(cl._pseudo['Be'][0] == [2, 0, 0, 0])
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")
