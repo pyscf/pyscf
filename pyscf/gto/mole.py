@@ -3933,8 +3933,8 @@ class Mole(MoleBase):
                 bas_coords = atom_coords[self._bas[:,ATOM_OF]]
                 upper_bound = (bas_coords + shell_radius[:,None]).max(axis=0)
                 lower_bound = (bas_coords - shell_radius[:,None]).min(axis=0)
-                box_size = upper_bound - lower_bound
-                box = numpy.diag(box_size)
+                box_size = (upper_bound - lower_bound).max()
+                box = numpy.eye(3) * box_size
             else:
                 atom_coords = self.atom_coords()
                 size = atom_coords.max(axis=0) - atom_coords.min(axis=0)

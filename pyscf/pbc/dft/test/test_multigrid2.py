@@ -270,6 +270,17 @@ class KnownValues(unittest.TestCase):
         g0 = np.array([[0, 0, -0.003145], [0, 0, 0.003145]])
         assert abs(g - g0).max() < 1e-6
 
+    def test_0D(self):
+        cell = gto.M(
+            a = np.eye(3) * 8,
+            atom = 'Li 0 0 0; H 0 0 1',
+            basis = [[0, [5, 1]], [0, [.8, 1]], [1, [.9, 1]]],
+            dimension = 0)
+        mf = cell.RKS(xc='pbe')
+        mf._numint = multigrid.MultiGridNumInt2(cell)
+        mf.run()
+        self.assertAlmostEqual(mf.e_tot, -6.86372200902191, 7)
+
 if __name__ == '__main__':
     print("Full Tests for multigrid2")
     unittest.main()

@@ -168,6 +168,9 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
                     lib.hermi_triu(mat[i], inplace=True)
             if comp == 1:
                 mat = mat[0]
+            # Add a leading dimension. When handling the output of this
+            # function in _get_j_pass2, the dimension for k-point is required.
+            mat = mat[None,:]
         elif kpts is None or gamma_point(kpts):
             mat = make_mat(wv).sum(axis=0).transpose(0,2,1)
             if hermi == 1:
@@ -917,10 +920,11 @@ def _get_j_pass2(mydf, vG, hermi=1, kpts=numpy.zeros((1,3)), verbose=None):
             nshells_t = _pgto_shells(t_cell)
             shls_slice = (0, nshells_h, 0, nshells_t)
             vp = eval_mat(t_cell, vR, shls_slice, 1, 0, 'LDA', kpts)
+            vp = numpy.asarray(vp)
             # Imaginary part may contribute
             if not ignore_vG_imag:
                 vpI = eval_mat(t_cell, vI, shls_slice, 1, 0, 'LDA', kpts)
-                vp = numpy.asarray(vp) + numpy.asarray(vpI) * 1j
+                vp = vp + numpy.asarray(vpI) * 1j
                 vpI = None
 
             vp = lib.einsum('nkpq,pi,qj->nkij', vp, h_coeff, t_coeff)
