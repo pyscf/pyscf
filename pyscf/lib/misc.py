@@ -1216,8 +1216,9 @@ class H5TmpFile(H5FileWrap):
     >>> ftmp = lib.H5TmpFile()
     '''
     def __init__(self, filename=None, mode='a', prefix='', suffix='',
-                 dir=param.TMPDIR, *args, **kwargs):
+                 dir=None, *args, **kwargs):
         self.delete_on_close = False
+        dir = dir or param.TMPDIR
         if filename is None:
             filename = H5TmpFile._gen_unique_name(dir, pre=prefix, suf=suffix)
             self.delete_on_close = True
