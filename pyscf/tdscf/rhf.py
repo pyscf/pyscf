@@ -455,9 +455,9 @@ def analyze(tdobj, verbose=None):
                      i+1, dip[0], dip[1], dip[2], numpy.dot(dip, dip),
                      f_oscillator[i])
 
-        
         if tdobj.mol.ecp:
-            log.warn("ECP detected. Skipping calculation of transition velocity and magnetic dipole moments, which have not yet been implemented.")
+            log.warn("ECP detected. Skipping calculation of transition velocity and "
+                     "magnetic dipole moments, which have not yet been implemented.")
         else:
             log.info('\n** Transition velocity dipole moments (imaginary part, AU) **')
             log.info('state          X           Y           Z        Dip. S.      Osc.')
