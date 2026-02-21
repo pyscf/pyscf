@@ -10,7 +10,7 @@ methods.
 
 import numpy as np
 from pyscf import gto as mol_gto
-from pyscf.pbc import gto, scf, cc, df
+from pyscf.pbc import gto, scf, df
 
 cell = gto.Cell()
 cell.atom='''
@@ -106,10 +106,10 @@ nao = cell.nao
 A_lpq = np.empty((naux,nao,nao))
 kpt = np.zeros(3)
 p1 = 0
-for LpqR, LpqI in a_gdf.sr_loop((kpt,kpt), compact=False):
+for LpqR, LpqI, sign in a_gdf.sr_loop((kpt,kpt), compact=False):
     p0, p1 = p1, p1 + LpqR.shape[0]
     A_lpq[p0:p1] = LpqR.reshape(-1,nao,nao)
 
 from pyscf import lib
-eri = lib.einsum('lpq,lrs->pqrs', A_lpq, A_lrs)
+eri = lib.einsum('lpq,lrs->pqrs', A_lpq, A_lpq)
 

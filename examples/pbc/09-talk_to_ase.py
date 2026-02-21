@@ -1,6 +1,6 @@
 """
 Take ASE structure, PySCF object,
-and run through ASE calculator interface. 
+and run through ASE calculator interface.
 
 This allows other ASE methods to be used with PySCF;
 here we try to compute an equation of state.
@@ -8,8 +8,6 @@ here we try to compute an equation of state.
 
 import numpy as np
 from pyscf.pbc.tools import pyscf_ase
-import pyscf.pbc.gto as pbcgto
-import pyscf.pbc.dft as pbcdft
 
 import ase
 import ase.lattice

@@ -6,10 +6,11 @@ system.
 '''
 
 import numpy
-from pyscf import gto, scf
+from pyscf import scf
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pbcscf
 from pyscf.pbc import df
+from pyscf.pbc.dft import multigrid
 
 cell = pbcgto.Cell()
 cell.atom = 'N 0 0 0; N 0 0 1.2'
@@ -49,7 +50,7 @@ print('E(HF) of molecular RHF with cell %s' % mf.e_tot)
 # Lattice vectors "a" are not available in the mole object. Specify a "box" to
 # place the mole in the cell.
 #
-cell_0D = mol.to_cell(box=a, dimension=0)
+cell_0D = mol.to_cell(box=numpy.eye(3)*1.8, dimension=0)
 mf = pbcscf.RHF(cell).density_fit().run()
 print('E(HF) with 0D PBC RHF calculation %s' % mf.e_tot)
 
@@ -60,5 +61,5 @@ print('E(HF) with 0D PBC RHF calculation %s' % mf.e_tot)
 cell_0D.verbose = 5
 mf = cell_0D.RKS(xc='pbe')
 mf.run() # This calls the standard numint module
-mf = mf.multigrid_numint()
+mf._numint = multigrid.MultiGridNumInt2(cell_0D)
 mf.run() # This calls the MultiGridNumInt algorithm
