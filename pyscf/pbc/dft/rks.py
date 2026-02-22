@@ -428,7 +428,7 @@ class RKS(KohnShamDFT, pbchf.RHF):
     def multigrid_numint(self, mesh=None):
         '''Apply the MultiGrid algorithm for XC numerical integartion'''
         mf = self.copy()
-        mf._numint = multigrid.MultiGridNumInt(self.cell)
+        mf._numint = multigrid.MultiGridNumInt2(self.cell)
         if mesh is not None:
             mf._numint.mesh = mesh
         return mf
