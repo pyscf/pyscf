@@ -62,5 +62,6 @@ print('E(HF) with 0D PBC RHF calculation %s' % mf.e_tot)
 cell_0D.verbose = 5
 mf = cell_0D.RKS(xc='pbe')
 mf.run() # This calls the standard numint module
-mf._numint = multigrid.MultiGridNumInt2(cell_0D)
+
+mf = mf.multigrid_numint()
 mf.run() # This calls the MultiGridNumInt algorithm
