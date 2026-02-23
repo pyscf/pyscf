@@ -111,6 +111,16 @@ class KnownValues(unittest.TestCase):
         mask = td.get_frozen_mask()
         self.assertEqual(mask.sum(), 9)
 
+        td.frozen = 0
+        td.run()
+        ref = [11.90276464, 11.90276464, 16.86036434]
+        self.assertAlmostEqual(abs(td.e[:len(ref)] * 27.2114 - ref).max(), 0, 5)
+
+        td.frozen = np.array([0])
+        td.run()
+        ref = [11.90287121, 11.90287121, 16.86054863]
+        self.assertAlmostEqual(abs(td.e[:len(ref)] * 27.2114 - ref).max(), 0, 5)
+
 
 if __name__ == "__main__":
     print("Full Tests for rhf-TDA and rhf-TDHF")

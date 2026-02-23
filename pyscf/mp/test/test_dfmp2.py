@@ -17,6 +17,7 @@ import unittest
 import tempfile
 from functools import reduce
 import numpy
+import numpy as np
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
@@ -66,6 +67,14 @@ class KnownValues(unittest.TestCase):
         mmp = mp.dfmp2.DFMP2(mf, frozen=[0,1,5])
         mmp.kernel()
         self.assertAlmostEqual(mmp.e_corr, -0.13844381496025246, 8)
+
+        mmp = mp.dfmp2.DFMP2(mf, frozen=0)
+        mmp.kernel()
+        self.assertAlmostEqual(mmp.e_corr, -0.2040048210277004, 8)
+
+        mmp = mp.dfmp2.DFMP2(mf, frozen=np.array([0]))
+        mmp.kernel()
+        self.assertAlmostEqual(mmp.e_corr, -0.20166760413156876, 8)
 
     def test_dfmp2_mf_with_df(self):
         mmpref = mp.mp2.MP2(dfmf)

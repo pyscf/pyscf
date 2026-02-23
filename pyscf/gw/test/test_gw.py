@@ -2,6 +2,7 @@
 
 import unittest
 import numpy
+import numpy as np
 from pyscf import lib, gto, scf, dft, tdscf
 from pyscf import gw
 from pyscf.gw import rpa
@@ -38,6 +39,26 @@ class KnownValues(unittest.TestCase):
         gw_obj.kernel()
         self.assertAlmostEqual(gw_obj.mo_energy[nocc-1], -0.412849230989, 5)
         self.assertAlmostEqual(gw_obj.mo_energy[nocc], 0.165745160102, 5)
+
+    def test_gwac_pade_frozen(self):
+        nocc = mol.nelectron//2
+        gw_obj = gw.GW(mf, freq_int='ac')
+        gw_obj.frozen = 1
+        gw_obj.linearized = False
+        gw_obj.ac = 'pade'
+        gw_obj.orbs = range(nocc-3, nocc+3)
+        gw_obj.kernel()
+        self.assertAlmostEqual(gw_obj.mo_energy[nocc-1], -0.4129411145067107, 8)
+        self.assertAlmostEqual(gw_obj.mo_energy[nocc], 0.16568737755110896, 8)
+
+        gw_obj = gw.GW(mf, freq_int='ac')
+        gw_obj.frozen = np.array([0])
+        gw_obj.linearized = False
+        gw_obj.ac = 'pade'
+        gw_obj.orbs = range(nocc-3, nocc+3)
+        gw_obj.kernel()
+        self.assertAlmostEqual(gw_obj.mo_energy[nocc-1], -0.4129411145067107, 8)
+        self.assertAlmostEqual(gw_obj.mo_energy[nocc], 0.16568737755110896, 8)
 
     def test_gwcd(self):
         nocc = mol.nelectron//2

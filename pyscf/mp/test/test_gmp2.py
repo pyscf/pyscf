@@ -16,6 +16,7 @@
 import unittest
 from functools import reduce
 import numpy
+import numpy as np
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
@@ -121,6 +122,14 @@ class KnownValues(unittest.TestCase):
         pt.kernel(with_t2=False)
         self.assertEqual(pt.frozen, 2)
         self.assertAlmostEqual(pt.emp2, -0.12783149583822068, 8)
+
+        pt.frozen = 0
+        pt.kernel(with_t2=False)
+        self.assertAlmostEqual(pt.emp2, -0.12886859451036942, 8)
+
+        pt.frozen = np.array([0])
+        pt.kernel(with_t2=False)
+        self.assertAlmostEqual(pt.emp2, -0.12819257245012924, 8)
 
     def test_gmp2_outcore_frozen(self):
         pt = mp.GMP2(gmf)
