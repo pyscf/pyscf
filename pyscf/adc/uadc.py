@@ -395,10 +395,10 @@ class UADC(lib.StreamObject):
         method : string
             nth-order ADC method. Options are : ADC(2), ADC(2)-X, ADC(3). Default is ADC(2).
         frozen : None, int or iterables
-	    Specifies frozen orbitals.
+            Specifies frozen orbitals.
             If an integer is provided, the lowest-energy orbitals are frozen.
             If an iterable is provided, the specified (0-based) orbital indices
-	    are excluded from the calculation.
+            are excluded from the calculation.
             Note, the `frozen` attribute is immutable and cannot be modified
             after object instantiation.
 
@@ -450,7 +450,8 @@ class UADC(lib.StreamObject):
         self.tol_residual = getattr(__config__, 'adc_uadc_UADC_tol_residual', 1e-5)
         self.scf_energy = mf.e_tot
 
-        self._frozen = frozen
+        # The frozen attribute cannot be modified after instantiating ADC object
+        self.frozen = frozen
         self.incore_complete = self.incore_complete or self.mol.incore_anyway
 
         self.f_ov = f_ov
@@ -631,14 +632,6 @@ class UADC(lib.StreamObject):
     transform_integrals = uadc_ao2mo.transform_integrals_incore
     make_ref_rdm1 = make_ref_rdm1
     get_frozen_mask = get_frozen_mask
-
-    @property
-    def frozen(self):
-        return self._frozen
-    @frozen.setter
-    def frozen(self, x):
-        raise RuntimeError(
-            'The frozen attribute cannot be modified after instantiating ADC object')
 
     def semi_canonicalize_orbitals(self, f, nocc, C):
 
