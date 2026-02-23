@@ -36,8 +36,8 @@ def search_point_group_ops(cell, tol=SYMPREC):
     # issue 3113
     # a_angle = np.arccos(G / np.outer(a_norm, a_norm))
     ratio = G / np.outer(a_norm, a_norm)
-    np.clip(ratio, out = ratio, a_min = None, a_max = 1, where=ratio <= 1.0 + SYMPREC/10)
-    np.clip(ratio, out = ratio, a_min = -1, a_max = None, where=ratio >= -1.0 - SYMPREC/10)
+    # diagonal terms may slightly exceed [-1, 1] due to rounding errors
+    ratio = np.clip(ratio, -1., 1.)
     a_angle = np.arccos(ratio)
     tol2 = tol**2
 
@@ -56,8 +56,7 @@ def search_point_group_ops(cell, tol=SYMPREC):
         # issue 3113
         # a_tilde_angle = np.arccos(G_tilde / np.outer(a_tilde_norm, a_tilde_norm))
         ratio = G_tilde / np.outer(a_tilde_norm, a_tilde_norm)
-        np.clip(ratio, out = ratio, a_min = None, a_max = 1, where=ratio <= 1.0 + SYMPREC/10)
-        np.clip(ratio, out = ratio, a_min = -1, a_max = None, where=ratio >= -1.0 - SYMPREC/10)
+        ratio = np.clip(ratio, -1., 1.)
         a_tilde_angle = np.arccos(ratio)
         angle_error = np.sin(a_angle - a_tilde_angle) **2 * np.outer(tmp,tmp) / 4
         if (angle_error > tol2).any():
