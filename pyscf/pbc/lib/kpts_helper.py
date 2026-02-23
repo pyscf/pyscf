@@ -30,6 +30,10 @@ KPT_DIFF_TOL = getattr(__config__, 'pbc_lib_kpts_helper_kpt_diff_tol', 1e-6)
 
 def is_zero(kpt):
     return abs(np.asarray(kpt)).sum() < KPT_DIFF_TOL
+
+# kpt might be an instance of KPoints class. If the pbc.lib.kpts module is
+# imported, is_gamma_point and gamma_point function will be overwritten by this
+# module to handle to handle the KPoints instances.
 is_gamma_point = gamma_point = is_zero
 
 def is_trim(cell, kpts, tol=KPT_DIFF_TOL):

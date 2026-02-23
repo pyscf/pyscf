@@ -22,7 +22,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.gto import moleintor
 from pyscf.pbc import tools
-from pyscf.pbc.lib.kpts_helper import gamma_point
+from pyscf.pbc.lib.kpts_helper import is_gamma_point
 from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.df import fft
 from pyscf.pbc.df.df_jk import (
@@ -180,7 +180,7 @@ def eval_rho(cell, dm, task_list, shls_slice=None, hermi=0, xctype='LDA', kpts=N
         dimension = cell0.dimension
     assert dimension == getattr(cell1, "dimension", None)
 
-    if dimension == 0 or kpts is None or gamma_point(kpts):
+    if dimension == 0 or kpts is None or is_gamma_point(kpts):
         dm = dm.reshape(-1,1,naoi,naoj)
     else:
         raise NotImplementedError
@@ -237,7 +237,7 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), deriv=0,
             xctype = 'LDA'
             rhodim = 1
             deriv = 0
-        assert hermi == 1 or gamma_point(kpts)
+        assert hermi == 1 or is_gamma_point(kpts)
 
     ignore_imag = (hermi == 1)
 
@@ -342,7 +342,7 @@ def eval_mat(cell, weights, task_list, shls_slice=None, comp=1, hermi=0, deriv=0
     assert dimension == getattr(cell1, "dimension", None)
 
     weights = np.asarray(weights)
-    if dimension == 0 or kpts is None or gamma_point(kpts):
+    if dimension == 0 or kpts is None or is_gamma_point(kpts):
         assert weights.dtype == np.double
     else:
         raise NotImplementedError
@@ -399,7 +399,7 @@ def _get_j_pass2(mydf, vG, hermi=1, kpts=np.zeros((1,3)), verbose=None):
     task_list = _update_task_list(mydf, hermi=hermi, ntasks=mydf.ntasks,
                                   ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
 
-    if gamma_point(kpts):
+    if is_gamma_point(kpts):
         vj_kpts = np.zeros((nset,nkpts,nao,nao))
     else:
         raise NotImplementedError
@@ -443,7 +443,7 @@ def _get_j_pass2_ip1(mydf, vG, hermi=0, kpts=np.zeros((1,3)), deriv=1, verbose=N
     task_list = _update_task_list(mydf, hermi=hermi, ntasks=mydf.ntasks,
                                   ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
 
-    if gamma_point(kpts):
+    if is_gamma_point(kpts):
         vj_kpts = np.zeros((nset,nkpts,comp,nao,nao))
     else:
         raise NotImplementedError
@@ -482,7 +482,7 @@ def _get_gga_pass2(mydf, vG, hermi=1, kpts=np.zeros((1,3)), verbose=None):
     task_list = _update_task_list(mydf, hermi=hermi, ntasks=mydf.ntasks,
                                   ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
 
-    if gamma_point(kpts):
+    if is_gamma_point(kpts):
         veff = np.zeros((nset,nkpts,nao,nao))
     else:
         raise NotImplementedError
@@ -526,7 +526,7 @@ def _get_gga_pass2_ip1(mydf, vG, hermi=0, kpts=np.zeros((1,3)), deriv=1, verbose
     task_list = _update_task_list(mydf, hermi=hermi, ntasks=mydf.ntasks,
                                   ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
 
-    if gamma_point(kpts):
+    if is_gamma_point(kpts):
         vj_kpts = np.zeros((nset,nkpts,comp,nao,nao))
     else:
         raise NotImplementedError
@@ -967,7 +967,7 @@ class MultiGridNumInt(MultiGridNumInt_v1):
         if kpts is None:
             kpts = np.zeros(1,3)
         kpts = kpts.reshape(-1,3)
-        if not gamma_point(kpts):
+        if not is_gamma_point(kpts):
             raise NotImplementedError('MultiGridNumInt2 only supports Gamma-point calculations.')
         vj = get_veff_ip1(self, dm, xc_code=xc_code,
                           kpts=kpts, kpts_band=kpts_band, spin=spin)
@@ -1011,7 +1011,7 @@ class MultiGridNumInt(MultiGridNumInt_v1):
 
     def nr_rks(self, cell, grids, xc_code, dm_kpts, relativity=0, hermi=1,
                kpts=None, kpts_band=None, max_memory=2000, verbose=None):
-        if kpts is not None and not gamma_point(kpts):
+        if kpts is not None and not is_gamma_point(kpts):
             raise NotImplementedError('MultiGridNumInt2 only supports Gamma-point calculations.')
         return_j = False
         return nr_rks(self, xc_code, dm_kpts, hermi, kpts, kpts_band, self.xc_with_j,
@@ -1019,7 +1019,7 @@ class MultiGridNumInt(MultiGridNumInt_v1):
 
     def nr_uks(self, cell, grids, xc_code, dm_kpts, relativity=0, hermi=1,
                kpts=None, kpts_band=None, max_memory=2000, verbose=None):
-        if kpts is not None and not gamma_point(kpts):
+        if kpts is not None and not is_gamma_point(kpts):
             raise NotImplementedError('MultiGridNumInt2 only supports Gamma-point calculations.')
         return_j = False
         return nr_uks(self, xc_code, dm_kpts, hermi, kpts, kpts_band, self.xc_with_j,
