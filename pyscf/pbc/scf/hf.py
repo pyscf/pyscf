@@ -698,8 +698,9 @@ class SCF(mol_hf.SCF):
             dm_shape = dm.shape
             dm = dm.reshape(-1, nao, nao)
             if mo_coeff is not None:
-                dm = lib.tag_array(dm, mo_coeff=mo_coeff.reshape(-1, nao, nao),
-                                   mo_occ=mo_occ.reshape(-1, nao))
+                nmo = mo_occ.shape[-1]
+                dm = lib.tag_array(dm, mo_coeff=mo_coeff.reshape(-1, nao, nmo),
+                                   mo_occ=mo_occ.reshape(-1, nmo))
             vj, vk = self.with_df.get_jk(dm, hermi, kpt, kpts_band,
                                          with_j, with_k, omega, exxdiv=self.exxdiv)
             dm = dm.reshape(dm_shape)
