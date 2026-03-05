@@ -548,6 +548,17 @@ class KnownValues(unittest.TestCase):
         out = mf.get_veff(cell, dm, kpts=kpts)
         self.assertAlmostEqual(abs(ref-out).max(), 0, 7)
 
+    def test_0D(self):
+        cell = gto.M(
+            a = np.eye(3) * 8,
+            atom = 'Li 0 0 0; H 0 0 1',
+            basis = [[0, [5, 1]], [0, [.8, 1]], [1, [.9, 1]]],
+            dimension = 0)
+        mf = cell.RKS(xc='pbe')
+        mf._numint = multigrid.MultiGridNumInt(cell)
+        mf.max_cycle = 1
+        mf.run()
+        self.assertAlmostEqual(mf.e_tot, -6.725761212638795, 8)
 
 if __name__ == '__main__':
     print("Full Tests for multigrid")
