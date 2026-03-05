@@ -126,6 +126,10 @@ class KnownValues(unittest.TestCase):
             self.assertEqual(len(auxbasis['O']), 35)
             self.assertEqual(len(auxbasis['H']), 3)
 
+        mol = gto.M(atom='C1 0 0 0', basis={'C': [[0, [1, 1]]]})
+        auxmol = df.addons.make_auxmol(mol)
+        self.assertEqual(auxmol.nbas, 1)
+
     def test_default_auxbasis(self):
         mol = gto.M(atom='He 0 0 0; O 0 0 1', basis='ccpvdz')
         auxbasis = df.addons.make_auxbasis(mol)
