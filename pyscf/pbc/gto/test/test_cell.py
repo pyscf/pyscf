@@ -609,6 +609,47 @@ Direct
         assert abs(a - ref_a).max() < 1e-14
         assert abs(coords - ref_pos).max() < 1e-14
 
+        inp_str = '''\
+SrTiO3 cubic perovskite
+3.9
+1.0 0.0 0.0
+0.0 1.0 0.0
+0.0 0.0 1.0
+Sr Ti O
+1 1 3
+Cartesian
+0.00 0.00 0.00
+1.95 1.95 1.95
+1.95 1.95 0.00
+1.95 0.00 1.95
+0.00 1.95 1.95
+'''
+        a, atoms = pgto.cell.fromstring(inp_str, format='poscar')
+        ref_pos = np.array([
+            [0.00, 0.00, 0.00],
+            [1.95, 1.95, 1.95],
+            [1.95, 1.95, 0.00],
+            [1.95, 0.00, 1.95],
+            [0.00, 1.95, 1.95]])
+        coords = np.array([x[1] for x in atoms])
+        assert abs(a[0,0] - 3.9) < 1e-14
+        assert abs(coords - ref_pos).max() < 1e-14
+        cell = pgto.M(atom=atoms, a=a, basis=[[0, [1,1]]])
+
+        assert cell.tostring('poscar').split('\n', 1)[1] == '''\
+1.0
+       3.90000000        0.00000000        0.00000000
+       0.00000000        3.90000000        0.00000000
+       0.00000000        0.00000000        3.90000000
+Sr Ti O
+1 1 3
+Cartesian
+       0.00000000        0.00000000        0.00000000
+       1.95000000        1.95000000        1.95000000
+       1.95000000        1.95000000        0.00000000
+       1.95000000        0.00000000        1.95000000
+       0.00000000        1.95000000        1.95000000'''
+
     def test_parse_cif(self):
         inp_str = '''\
 # generated using pymatgen
