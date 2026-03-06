@@ -213,6 +213,7 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         rs_cell = self.rs_cell
         fused_cell = self.fused_cell
         naux = self.auxcell.nao
+        nauxc = self.fused_cell.nao
         kpts = self.kpts
         nkpts = kpts.shape[0]
 
@@ -290,7 +291,9 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
 
         # split the 3-center tensor (nkpts_ij, i, j, aux) along shell i.
         # plus 1 to ensure the intermediates in libpbc do not overflow
-        buflen = min(max(int(max_memory*.9e6/16/naux/(nkpts_ij+1)), 1), nao_pair)
+        # Use the fused auxiliary dimension for buffer sizing to avoid
+        # underestimating the required workspace in CCDF.
+        buflen = min(max(int(max_memory*.9e6/16/nauxc/(nkpts_ij+1)), 1), nao_pair)
         # lower triangle part
         sh_ranges = _guess_shell_ranges(cell, buflen, aosym, start=ish0, stop=ish1)
         max_buflen = max([x[2] for x in sh_ranges])
@@ -834,8 +837,12 @@ def fuse_auxcell(auxcell, eta):
         aux_loc_sph = auxcell.ao_loc_nr(cart=False)
         naux_sph = aux_loc_sph[-1]
         def fuse(Lpq, axis=0):
+            transposed = False
             if axis == 1 and Lpq.ndim == 2:
-                Lpq = lib.transpose(Lpq)
+                # Use a view to avoid allocating a temporary transpose.
+                # This reduces peak memory when CCDF is enabled.
+                Lpq = Lpq.T
+                transposed = True
             Lpq, chgLpq = Lpq[:naux], Lpq[naux:]
             if Lpq.ndim == 1:
                 npq = 1
@@ -864,13 +871,17 @@ def fuse_auxcell(auxcell, eta):
                                ctypes.c_int(npq * auxcell.bas_nctr(i)),
                                Lpq_cart.ctypes.data_as(ctypes.c_void_p),
                                ctypes.c_int(l))
-            if axis == 1 and Lpq.ndim == 2:
-                Lpq_sph = lib.transpose(Lpq_sph)
+            if transposed:
+                # Return a view in the original orientation without copy.
+                return Lpq_sph.T
             return Lpq_sph
     else:
         def fuse(Lpq, axis=0):
+            transposed = False
             if axis == 1 and Lpq.ndim == 2:
-                Lpq = lib.transpose(Lpq)
+                # Use a view to avoid allocating a temporary transpose.
+                Lpq = Lpq.T
+                transposed = True
             Lpq, chgLpq = Lpq[:naux], Lpq[naux:]
             for i in range(auxcell.nbas):
                 l  = auxcell.bas_angular(i)
@@ -880,8 +891,9 @@ def fuse_auxcell(auxcell, eta):
                     nd = l * 2 + 1
                     for i0, i1 in lib.prange(aux_loc[i], aux_loc[i+1], nd):
                         Lpq[i0:i1] -= chgLpq[p0:p0+nd]
-            if axis == 1 and Lpq.ndim == 2:
-                Lpq = lib.transpose(Lpq)
+            if transposed:
+                # Return a view in the original orientation without copy.
+                return Lpq.T
             return np.asarray(Lpq, order='A')
     return fused_cell, fuse
 
