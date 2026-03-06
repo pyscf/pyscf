@@ -156,7 +156,9 @@ def convert_to_gccsd(mycc):
     gcc.mo_occ = mf.mo_occ
     if isinstance(mycc.frozen, (int, numpy.integer)):
         gcc.frozen = mycc.frozen * 2
-    elif not (mycc.frozen is None or mycc.frozen == 0):
+    elif (mycc.frozen is not None and
+          # to distinguish the setting cc.frozen = np.array([0]) and cc.frozen = 0
+          mycc.nmo != gcc.mo_occ.size):
         raise NotImplementedError
     gcc.t1 = spatial2spin(mycc.t1, mf.mo_coeff.orbspin)
     gcc.t2 = spatial2spin(mycc.t2, mf.mo_coeff.orbspin)

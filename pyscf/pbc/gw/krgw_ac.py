@@ -53,11 +53,7 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
         A list :  converged, mo_energy, mo_coeff
     '''
     mf = gw._scf
-    if gw.frozen is None:
-        frozen = 0
-    else:
-        frozen = gw.frozen
-    assert (frozen == 0)
+    assert gw.frozen is None
 
     if orbs is None:
         orbs = range(gw.nmo)

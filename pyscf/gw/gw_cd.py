@@ -54,11 +54,7 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
         A list :  converged, mo_energy, mo_coeff
     '''
     mf = gw._scf
-    if gw.frozen is None:
-        frozen = 0
-    else:
-        frozen = gw.frozen
-    assert frozen == 0
+    assert gw.frozen is None or gw.nmo == gw.mo_occ.size
 
     if Lpq is None:
         Lpq = gw.ao2mo(mo_coeff)
@@ -272,7 +268,7 @@ class GWCD(lib.StreamObject):
 
         self.frozen = frozen
         #TODO: implement frozen orbs
-        if not (self.frozen is None or self.frozen == 0):
+        if self.frozen is not None:
             raise NotImplementedError
 
         # DF-GW must use density fitting integrals
