@@ -71,8 +71,9 @@ class KnownValues(unittest.TestCase):
 
     def test_edmiston(self):
         idx = range(1, 5)
-        loc = edmiston.EdmistonRuedenberg(h2o)
-        mo = loc.kernel(mf_h2o.mo_coeff[:,idx])
+        mo = mf_h2o.mo_coeff[:,idx]
+        loc = edmiston.EdmistonRuedenberg(h2o, mo)
+        mo = loc.kernel(mo)
         dip = boys.dipole_integral(h2o, mo)
         z = numpy.einsum('xii,xii->', dip, dip)
         self.assertAlmostEqual(z, 1.1566988026, 4)

@@ -28,8 +28,10 @@ from pyscf.lo import boys
 
 class EdmistonRuedenberg(boys.OrbitalLocalizer):
 
-    def get_jk(self, u):
-        mo_coeff = numpy.dot(self.mo_coeff, u)
+    maximize = True
+
+    def get_jk(self, u=None):
+        mo_coeff = self.rotate_orb(u)
         nmo = mo_coeff.shape[1]
         dms = [numpy.einsum('i,j->ij', mo_coeff[:,i], mo_coeff[:,i]) for i in range(nmo)]
         vj, vk = hf.get_jk(self.mol, dms, hermi=1)
@@ -37,17 +39,17 @@ class EdmistonRuedenberg(boys.OrbitalLocalizer):
         vk = numpy.asarray([reduce(numpy.dot, (mo_coeff.T, v, mo_coeff)) for v in vk])
         return vj, vk
 
-    def gen_g_hop(self, u):
+    def gen_g_hop(self, u=None):
         vj, vk = self.get_jk(u)
 
         g0 = numpy.einsum('iip->pi', vj)
-        g = -self.pack_uniq_var(g0-g0.T) * 2
+        g = -self.pack_uniq_var(g0-g0.T) * 4
 
         h_diag = numpy.einsum('ipp->pi', vj) * 2
         g_diag = g0.diagonal()
         h_diag-= g_diag + g_diag.reshape(-1,1)
         h_diag+= numpy.einsum('ipp->pi', vk) * 4
-        h_diag = -self.pack_uniq_var(h_diag) * 2
+        h_diag = -self.pack_uniq_var(h_diag) * 4
 
         g0 = g0 + g0.T
 
@@ -57,17 +59,17 @@ class EdmistonRuedenberg(boys.OrbitalLocalizer):
             hx+= numpy.einsum('qi,iqp->pi', x, vk) * 2
             hx-= numpy.einsum('qp,piq->pi', x, vj) * 2
             hx-= numpy.einsum('qp,piq->pi', x, vk) * 2
-            return -self.pack_uniq_var(hx-hx.T)
+            return -self.pack_uniq_var(hx-hx.T) * 2
 
         return g, h_op, h_diag
 
-    def get_grad(self, u):
+    def get_grad(self, u=None):
         vj, vk = self.get_jk(u)
         g0 = numpy.einsum('iip->pi', vj)
-        g = -self.pack_uniq_var(g0-g0.T) * 2
+        g = -self.pack_uniq_var(g0-g0.T) * 4
         return g
 
-    def cost_function(self, u):
+    def cost_function(self, u=None):
         vj, vk = self.get_jk(u)
         return numpy.einsum('iii->', vj)
 
@@ -75,15 +77,71 @@ ER = Edmiston = EdmistonRuedenberg
 
 if __name__ == '__main__':
     from pyscf import gto, scf
+    from pyscf.lib import logger
+    from pyscf.lo.tools import findiff_grad, findiff_hess
 
     mol = gto.Mole()
     mol.atom = '''
-         He   0.    0.     0.2
+         O   0.    0.     0.2
          H    0.   -0.5   -0.4
-         H    0.    0.5   -0.4
+         H    0.    0.7   -0.2
       '''
-    mol.basis = 'sto-3g'
+    mol.basis = 'ccpvdz'
     mol.build()
     mf = scf.RHF(mol).run()
 
-    mo = ER(mol).kernel(mf.mo_coeff[:,:2], verbose=4)
+    log = logger.new_logger(mol, verbose=6)
+
+    mo = mf.mo_coeff[:,:mol.nelectron//2]
+    mlo = Edmiston(mol, mo)
+
+    # Validate gradient and Hessian against finite difference
+    g, h_op, hdiag = mlo.gen_g_hop()
+
+    h = numpy.zeros((mlo.pdim,mlo.pdim))
+    x0 = mlo.zero_uniq_var()
+    for i in range(mlo.pdim):
+        x0[i] = 1
+        h[:,i] = h_op(x0)
+        x0[i] = 0
+
+    def func(x):
+        u = mlo.extract_rotation(x)
+        f = mlo.cost_function(u)
+        if mlo.maximize:
+            return -f
+        else:
+            return f
+
+    def fgrad(x):
+        u = mlo.extract_rotation(x)
+        return mlo.get_grad(u)
+
+    g_num = findiff_grad(func, x0)
+    h_num = findiff_hess(fgrad, x0)
+    hdiag_num = numpy.diag(h_num)
+
+    log.info('Grad  error: %.3e', abs(g-g_num).max())
+    log.info('Hess  error: %.3e', abs(h-h_num).max())
+    log.info('Hdiag error: %.3e', abs(hdiag-hdiag_num).max())
+
+    # localization + stability check using CIAH
+    mlo.verbose = 4
+    mlo.algorithm = 'ciah'
+    mlo.kernel()
+
+    while True:
+        mo, stable = mlo.stability(return_status=True)
+        if stable:
+            break
+        mlo.kernel(mo)
+
+    # localization + stability check using BFGS
+    mlo.algorithm = 'bfgs'
+    mlo.kernel()
+
+    while True:
+        mo, stable = mlo.stability(return_status=True)
+        if stable:
+            break
+        mlo.kernel(mo)
