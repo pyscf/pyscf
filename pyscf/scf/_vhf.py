@@ -263,41 +263,6 @@ class _VHFOpt:
         if dm_cond is not None:
             self._this.dm_cond = dm_cond.ctypes.data_as(ctypes.c_void_p)
 
-class SGXOpt(_VHFOpt):
-    def __init__(self, mol, intor=None, prescreen='CVHFnoscreen',
-                 qcondname=None, dmcondname=None, direct_scf_tol=1e-14):
-        _VHFOpt.__init__(self, mol, intor, prescreen, qcondname, dmcondname,
-                         direct_scf_tol)
-        self.ngrids = None
-
-    def set_dm(self, dm, atm, bas, env):
-        if self._dmcondname is None:
-            return
-
-        mol = self.mol
-        if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-            n_dm = 1
-        else:
-            n_dm = len(dm)
-        dm = numpy.asarray(dm, order='C')
-        ao_loc = make_loc(mol._bas, self._intor)
-        if isinstance(self._dmcondname, ctypes._CFuncPtr):
-            fdmcond = self._dmcondname
-        else:
-            if self._dmcondname != 'SGXnr_dm_cond':
-                raise ValueError('SGXOpt only supports SGXnr_dm_cond')
-            fdmcond = getattr(libcvhf, self._dmcondname)
-        if self.ngrids is None:
-            ngrids = int(env[gto.NGRIDS])
-        else:
-            ngrids = self.ngrids
-        dm_cond = numpy.empty((mol.nbas, ngrids))
-        fdmcond(dm_cond.ctypes, dm.ctypes, ctypes.c_int(n_dm),
-                ao_loc.ctypes, mol._atm.ctypes, ctypes.c_int(mol.natm),
-                mol._bas.ctypes, ctypes.c_int(mol.nbas), mol._env.ctypes,
-                ctypes.c_int(ngrids))
-        self.dm_cond = dm_cond
-
 
 class _CVHFOpt(ctypes.Structure):
     __slots__ = []

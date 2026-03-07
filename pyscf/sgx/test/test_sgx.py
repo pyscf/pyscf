@@ -46,29 +46,55 @@ class KnownValues(unittest.TestCase):
             atom = [["O" , (0. , 0.     , 0.)],
                     [1   , (0. , -0.757 , 0.587)],
                     [1   , (0. , 0.757  , 0.587)] ],
-            basis = 'ccpvdz',
+            basis='ccpvdz',
+            verbose=0,
         )
         mf = sgx.sgx_fit(scf.RHF(mol), 'weigend')
         mf.with_df.dfj = True
+        mf.with_df.use_opt_grids = False
+        mf.with_df.grids_level_f = 1
+        mf.with_df._symm_ovlp_fit = False
         energy = mf.kernel()
         self.assertAlmostEqual(energy, -76.02686422219752, 9)
 
         mf = sgx.sgx_fit(scf.RHF(mol))
+        mf.with_df.use_opt_grids = False
+        mf.with_df.grids_level_f = 1
+        mf.with_df.optk = False
+        mf.with_df.dfj = False
         energy = mf.kernel()
         self.assertAlmostEqual(energy, -76.02673747035047, 8)
 
     def test_sgx_pjs(self):
         mol = gto.Mole()
+        atom0 = [["O" , (0. , 0.     , 0.)],
+                 [1   , (0. , -0.757 , 0.587)],
+                 [1   , (0. , 0.757  , 0.587)],]
+        atom = []
+        for i in range(3):
+            atom = atom + [[z, (c[0] + i * 5, c[1], c[2])] for z, c in atom0]
         mol.build(
-            atom = [["O" , (0. , 0.     , 0.)],
-                    [1   , (0. , -0.757 , 0.587)],
-                    [1   , (0. , 0.757  , 0.587)] ],
-            basis = 'ccpvdz',
+            atom=atom,
+            basis='sto-3g',
+            verbose=0,
         )
-        mf = sgx.sgx_fit(mol.RHF(), pjs=True)
+        mf = sgx.sgx_fit(mol.RHF())
         mf.with_df.dfj = True
+        mf.with_df.use_opt_grids = False
+        mf.with_df.grids_level_f = 1
+        mf.with_df.sgx_tol_energy = None
+        mf.with_df.sgx_tol_potential = None
         energy = mf.kernel()
-        self.assertAlmostEqual(energy, -76.0267979, 6)
+        mf = sgx.sgx_fit(mol.RHF())
+        mf.with_df.dfj = True
+        mf.with_df.use_opt_grids = False
+        mf.with_df.grids_level_f = 1
+        mf.with_df.sgx_tol_energy = None
+        mf.with_df.sgx_tol_potential = None
+        mf.with_df.sgx_tol_energy = 1e-9
+        mf.with_df.sgx_tol_potential = "auto"
+        energy2 = mf.kernel()
+        self.assertAlmostEqual(energy, energy2, 9)
 
 if __name__ == "__main__":
     print("Full Tests for SGX")
