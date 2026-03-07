@@ -37,6 +37,7 @@ from pyscf.pbc import gto
 from pyscf.pbc import tools
 from pyscf.pbc.gto.pseudo import get_pp
 from pyscf.pbc.scf import addons
+from pyscf.pbc.scf import smearing
 from pyscf.pbc import df
 from pyscf.pbc.scf.rsjk import RangeSeparatedJKBuilder
 from pyscf.pbc.lib.kpts_helper import gamma_point
@@ -514,6 +515,7 @@ class SCF(mol_hf.SCF):
     init_direct_scf = lib.invalid_method('init_direct_scf')
     get_bands = get_bands
     get_rho = get_rho
+    smearing = smearing.smearing
 
     def __init__(self, cell, kpt=None,
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
