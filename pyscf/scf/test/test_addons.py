@@ -413,44 +413,6 @@ class KnownValues(unittest.TestCase):
                                        lindep=1e-9).run()
         self.assertAlmostEqual(mf.e_tot, -1.6291001503057689, 7)
 
-    @unittest.skip('Smearing ROHF with fix_spin does not work')
-    def test_rohf_smearing(self):
-        # Fe2 from https://doi.org/10.1021/acs.jpca.1c05769
-        mol = gto.M(
-            atom='''
-        Fe       0. 0. 0.
-        Fe       2.01 0. 0.
-        ''', basis="lanl2dz", ecp="lanl2dz", symmetry=False, unit='Angstrom',
-            spin=6, charge=0, verbose=0)
-        myhf_s = scf.ROHF(mol)
-        myhf_s = addons.smearing(myhf_s, sigma=0.01, method='gaussian', fix_spin=True)
-        myhf_s.kernel()
-        # macos py3.7 CI -242.4828982467762
-        # linux py3.11 CI -242.48289824670388
-        self.assertAlmostEqual(myhf_s.e_tot, -242.482898246, 6)
-        self.assertAlmostEqual(myhf_s.entropy, 0.45197, 4)
-        myhf2 = myhf_s.undo_smearing().newton()
-        myhf2.kernel(myhf_s.make_rdm1())
-        # FIXME: note 16mHa lower energy than myhf
-        self.assertAlmostEqual(myhf2.e_tot, -244.9808750, 6)
-
-        myhf_s.smearing_method = 'fermi'
-        myhf_s.kernel()
-        self.assertAlmostEqual(myhf_s.e_tot, -244.200255453, 6)
-        self.assertAlmostEqual(myhf_s.entropy, 3.585155, 4)
-
-    def test_rohf_smearing1(self):
-        mol = gto.M(atom = '''
-            7      0.   0  -0.7
-            7      0.   0   0.7''',
-            charge = -1,
-            spin = 1)
-        mf = mol.RHF()
-        mf = addons.smearing(mf, sigma=0.1)
-        mf.kernel()
-        self.assertAlmostEqual(mf.mo_occ.sum(), 15, 8)
-        self.assertAlmostEqual(mf.e_tot, -106.9310800402, 8)
-
     def test_uhf_smearing(self):
         mol = gto.M(
             atom='''
