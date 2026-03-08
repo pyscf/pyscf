@@ -24,6 +24,7 @@ import os
 import ctypes
 import math
 import numpy
+import numpy as np
 import scipy.special
 from pyscf.lib import misc
 from numpy import asarray  # For backward compatibility
