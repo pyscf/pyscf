@@ -577,7 +577,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(ao_value), (0.38051517609460028+0.062526488684770759j), 9)
 
     def test_eval_gto1(self):
-        cell = pbcgto.M(a=np.eye(3)*2.5, atom='He 0.0 0.0 0.0', basis='''
+        cell = pgto.M(a=np.eye(3)*2.5, atom='He 0.0 0.0 0.0', basis='''
 S
 1.607   0.6400
 0.569   0.2900
@@ -587,7 +587,7 @@ S
         dat = cell.pbc_eval_ao('GTOval', grids)
 
         c = cell.bas_ctr_coeff(0)
-        cell1 = pbcgto.M(a=np.eye(3)*2.5, atom='He 0.0 0.0 0.0', basis='''
+        cell1 = pgto.M(a=np.eye(3)*2.5, atom='He 0.0 0.0 0.0', basis='''
 S
 1.607   1.
 S
