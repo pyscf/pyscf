@@ -14,7 +14,7 @@ from pyscf.fci import cistring
 
 # <T|i_alpha^+ j_beta|S>
 def make_rdm1_t2s(bra, ket, norb, nelec_ket):
-    neleca, nelecb = nelec = nelec_ket
+    neleca, nelecb = nelec_ket
     ades_index = cistring.gen_des_str_index(range(norb), neleca+1)
     bdes_index = cistring.gen_des_str_index(range(norb), nelecb)
     na_bra = cistring.num_strings(norb, neleca+1)
@@ -38,7 +38,7 @@ def make_rdm1_t2s(bra, ket, norb, nelec_ket):
 # <S|i_beta^+ j_alpha|T>
 def make_rdm1_s2t(bra, ket, norb, nelec_ket):
     '''Inefficient version. A check for make_rdm1_t2s'''
-    neleca, nelecb = nelec = nelec_ket
+    neleca, nelecb = nelec_ket
     ades_index = cistring.gen_des_str_index(range(norb), neleca)
     bcre_index = cistring.gen_cre_str_index(range(norb), nelecb)
     na_bra = cistring.num_strings(norb, neleca-1)

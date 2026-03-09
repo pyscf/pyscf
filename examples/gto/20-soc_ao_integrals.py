@@ -39,7 +39,7 @@ def ss(mol):
     mat4 = mat1.transpose(0,1,3,2,5,4) # <1 2 | nabla1 nabla2>
     mat = mat1 - mat2 - mat3 + mat4
 # Fermi contact term
-    h_fc = mol.intor('int4c1e').reshape(nao,nao,nao,nao) * (4*numpy.pi/3)
+    h_fc = mol.intor('int4c1e').reshape(n,n,n,n) * (4*numpy.pi/3)
     mat[0,0] -= h_fc
     mat[1,1] -= h_fc
     mat[2,2] -= h_fc

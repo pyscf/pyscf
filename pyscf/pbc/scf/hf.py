@@ -41,7 +41,7 @@ from pyscf.pbc import df
 from pyscf.pbc.scf.rsjk import RangeSeparatedJKBuilder
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
-
+from pyscf.soscf import newton_ah
 
 def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
@@ -554,8 +554,8 @@ class SCF(mol_hf.SCF):
             self.kpt = self.__dict__.pop('kpt')
 
         if self.rsjk:
-            if not np.all(self.rsjk.kpts == self.kpt):
-                self.rsjk = self.rsjk.__class__(cell, self.kpt)
+            if not np.all(self.rsjk.kpts == self.kpts):
+                self.rsjk = self.rsjk.__class__(cell, self.kpts)
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -606,6 +606,14 @@ class SCF(mol_hf.SCF):
             isinstance(self.with_df, df.df.DF)):
             logger.warn(self, 'exxdiv %s is not supported in DF or MDF',
                         self.exxdiv)
+
+        if isinstance(self, newton_ah._CIAH_SOSCF) and (str(self._scf.exxdiv).lower() != str(self.exxdiv).lower()):
+            msg = (
+                "The exxdiv treatment is not consistent with the newton solver. "
+                "mf._scf.exxdiv ('%s') != mf.exxdiv ('%s'). "
+                "Set the same exxdiv for both. See pyscf/example/pbc/20-k_points_scf.py"
+            ) % (self._scf.exxdiv, self.exxdiv)
+            raise NotImplementedError(msg)
 
         if self.verbose >= logger.DEBUG:
             s = self.get_ovlp()
@@ -690,8 +698,9 @@ class SCF(mol_hf.SCF):
             dm_shape = dm.shape
             dm = dm.reshape(-1, nao, nao)
             if mo_coeff is not None:
-                dm = lib.tag_array(dm, mo_coeff=mo_coeff.reshape(-1, nao, nao),
-                                   mo_occ=mo_occ.reshape(-1, nao))
+                nmo = mo_occ.shape[-1]
+                dm = lib.tag_array(dm, mo_coeff=mo_coeff.reshape(-1, nao, nmo),
+                                   mo_occ=mo_occ.reshape(-1, nmo))
             vj, vk = self.with_df.get_jk(dm, hermi, kpt, kpts_band,
                                          with_j, with_k, omega, exxdiv=self.exxdiv)
             dm = dm.reshape(dm_shape)
@@ -940,6 +949,11 @@ class RHF(SCF):
     stability = mol_hf.RHF.stability
     gen_response = gen_response
     to_gpu = lib.to_gpu
+
+    def get_fermi(self):
+        nocc = self.mo_occ.sum() / 2
+        nocc = int(nocc.round(3))
+        return self.mo_energy[nocc-1]
 
     def to_ks(self, xc='HF'):
         '''Convert to RKS object.

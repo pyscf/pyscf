@@ -25,11 +25,10 @@ direct_spin1_symm   Yes           No             Yes                Yes
 direct_spin0        No            Yes            Yes                Yes
 direct_spin1        No            No             Yes                Yes
 direct_uhf          No            No             Yes                No
-direct_nosym        No            No             No**               Yes
+direct_nosym        No            No             No                 Yes
 fci_dhf_slow        No            No             No***              No
 
 *  Real hermitian Hamiltonian implies (ij|kl) = (ji|kl) = (ij|lk) = (ji|lk)
-** Hamiltonian is real but not hermitian, (ij|kl) != (ji|kl) ...
 *** Hamiltonian is complex hermitian (DHF case) or real hermitian (GHF case)
 '''
 

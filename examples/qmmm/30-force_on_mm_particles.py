@@ -92,7 +92,7 @@ def make_rdm1_with_orbital_response(mp):
     doo, dvv = d1
     time1 = log.timer_debug1('rdm1 intermediates', *time0)
 
-    with_frozen = not (mp.frozen is None or mp.frozen is 0)
+    with_frozen = not (mp.frozen is None or mp.frozen == 0)
     OA, VA, OF, VF = _index_frozen_active(mp.get_frozen_mask(), mp.mo_occ)
     orbo = mp.mo_coeff[:,OA]
     orbv = mp.mo_coeff[:,VA]

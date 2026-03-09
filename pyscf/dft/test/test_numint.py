@@ -552,14 +552,14 @@ class KnownValues(unittest.TestCase):
         ni.omega = 0.4
         omega = 0.2
         exc, vxc, fxc, kxc = ni.eval_xc('ITYH,', rho0, 0, 0, 1, omega)
-        self.assertAlmostEqual(float(exc), -0.6359945579326314, 7)
-        self.assertAlmostEqual(float(vxc[0]), -0.8712041561251518, 7)
-        self.assertAlmostEqual(float(vxc[1]), -0.003911167644579979, 7)
+        self.assertAlmostEqual(float(exc[0]), -0.6359945579326314, 7)
+        self.assertAlmostEqual(float(vxc[0][0]), -0.8712041561251518, 7)
+        self.assertAlmostEqual(float(vxc[1][0]), -0.003911167644579979, 7)
 
         exc, vxc, fxc, kxc = ni.eval_xc('ITYH,', rho0, 0, 0, 1)
-        self.assertAlmostEqual(float(exc), -0.5406095865415561, 7)
-        self.assertAlmostEqual(float(vxc[0]), -0.772123720263471, 7)
-        self.assertAlmostEqual(float(vxc[1]), -0.00301639097170439, 7)
+        self.assertAlmostEqual(float(exc[0]), -0.5406095865415561, 7)
+        self.assertAlmostEqual(float(vxc[0][0]), -0.772123720263471, 7)
+        self.assertAlmostEqual(float(vxc[1][0]), -0.00301639097170439, 7)
 
     def test_cache_xc_kernel(self):
         mf = dft.RKS(h2o)
