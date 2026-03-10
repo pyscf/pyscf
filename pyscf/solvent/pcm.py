@@ -149,9 +149,7 @@ def gen_surface(mol, ng=302, rad=modified_Bondi, vdw_scale=1.2):
     gslice_by_atom = []
     p0 = p1 = 0
     for ia in range(mol.natm):
-        symb = mol.atom_symbol(ia)
-        chg = gto.charge(symb)
-        r_vdw = rad[chg]
+        r_vdw = R_J[ia]
 
         atom_grid = r_vdw * unit_sphere[:,:3] + atom_coords[ia,:]
         riJ = scipy.spatial.distance.cdist(atom_grid[:,:3], atom_coords)
