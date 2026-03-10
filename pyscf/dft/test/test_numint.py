@@ -745,7 +745,7 @@ class KnownValues(unittest.TestCase):
             spin = 1,
             verbose = 0,
         )
-        mf = mol.UKS(xc = 'wB97X-d4').density_fit(auxbasis = "def2-universal-jkfit")
+        mf = mol.UKS(xc = 'wB97X').density_fit(auxbasis = "def2-universal-jkfit")
         mf.grids.level = 3
         mf.conv_tol = 1e-10
         mf.kernel()
