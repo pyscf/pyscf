@@ -202,7 +202,6 @@ class KnownValues(unittest.TestCase):
             verbose = 0,
         )
 
-        mf = mol.RHF()
         mf = mol.RHF().PCM()
         mf.with_solvent.method = 'C-PCM'
         mf.with_solvent.lebedev_order = 3
