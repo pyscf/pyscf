@@ -91,7 +91,7 @@ def _smearing_optimize(f_occ, mo_es, nocc, sigma):
         cur_err = abs(rootfn(mu))
         iters += 1
 
-    return [mu], f_occ(mu, mo_es, sigma)
+    return mu, f_occ(mu, mo_es, sigma)
 
 def _get_fermi(mo_energy, nocc):
     mo_e_sorted = numpy.sort(mo_energy)
@@ -151,8 +151,6 @@ class _SmearingSCF:
             if self.mu0 is None:
                 mu_a, occa = _smearing_optimize(f_occ, mo_es[0], nocc[0], sigma)
                 mu_b, occb = _smearing_optimize(f_occ, mo_es[1], nocc[1], sigma)
-                mu_a = mu_a[0]
-                mu_b = mu_b[0]
             else:
                 if numpy.isscalar(self.mu0):
                     mu_a = mu_b = self.mu0
@@ -189,7 +187,6 @@ class _SmearingSCF:
 
             if self.mu0 is None:
                 mu, mo_occs = _smearing_optimize(f_occ, mo_es, nelectron, sigma)
-                mu = mu[0]
             else:
                 # If mu0 is given, fix mu instead of electron number. XXX -Chong Sun
                 mu = self.mu0

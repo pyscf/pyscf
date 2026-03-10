@@ -73,8 +73,6 @@ class _SmearingKSCF(mol_addons._SmearingSCF):
             if self.mu0 is None:
                 mu_a, occa = mol_addons._smearing_optimize(f_occ, mo_es[0], nocc[0], sigma)
                 mu_b, occb = mol_addons._smearing_optimize(f_occ, mo_es[1], nocc[1], sigma)
-                mu_a = mu_a[0]
-                mu_b = mu_b[0]
             else:
                 if numpy.isscalar(self.mu0):
                     mu_a = mu_b = self.mu0
@@ -117,7 +115,6 @@ class _SmearingKSCF(mol_addons._SmearingSCF):
 
             if self.mu0 is None:
                 mu, mo_occs = mol_addons._smearing_optimize(f_occ, mo_es, nocc, sigma)
-                mu = mu[0]
             else:
                 # If mu0 is given, fix mu instead of electron number. XXX -Chong Sun
                 mu = self.mu0
