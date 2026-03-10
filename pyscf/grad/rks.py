@@ -584,7 +584,6 @@ def grids_response_cc(grids):
 
 def grids_noresponse_cc(grids):
     # same as above but without the response, for nlc grids response routine
-    assert grids.becke_scheme == gen_grid.original_becke
     mol = grids.mol
     atom_grids_tab = grids.gen_atomic_grids(mol, grids.atom_grid,
                                             grids.radi_method,
