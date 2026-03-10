@@ -394,7 +394,7 @@ def get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2):
     ngrids, nao = aoR_k1.shape
 
     expmikr = np.exp(-1j*np.dot(kpt1-kpt2,coords.T))
-    coulG = tools.get_coulG(cell, kpt1-kpt2, exx=True, mf=mf)
+    coulG = tools.get_coulG(cell, kpt1-kpt2, exx=mf.exxdiv, mf=mf)
     def prod(ij):
         i, j = divmod(ij, nao)
         rhoR = aoR_k1[:,i] * aoR_k2[:,j].conj()
@@ -506,7 +506,7 @@ def get_vjR_kpts(cell, dm_kpts, aoR_kpts):
     nkpts = len(aoR_kpts)
     coulG = tools.get_coulG(cell)
 
-    rhoR = 0
+    rhoR = np.zeros(coulG.size, dtype=np.complex128)
     for k in range(nkpts):
         rhoR += 1./nkpts*numint.eval_rho(cell, aoR_kpts[k], dm_kpts[k])
     rhoG = tools.fft(rhoR, cell.mesh)
@@ -650,14 +650,24 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(vk), 4.290076429522121, 8)
 
     def test_get_jk_kpts(self):
-        df = fft.FFTDF(cell)
+        kpts = cell.make_kpts([3,2,1])
+        df = fft.FFTDF(cell, kpts=kpts)
+        mf = cell.KRHF(kpts=kpts, exxdiv='ewald')
+        dms = np.array(cell.pbc_intor('int1e_ovlp', kpts=kpts))
+        nkpts = len(kpts)
+        vj0, vk0 = get_jk_kpts(mf, cell, dms, kpts=kpts)
+        vj1, vk1 = df.get_jk(dms, kpts=kpts, exxdiv='ewald')
+        self.assertTrue(np.allclose(vj0, vj1, atol=1e-9, rtol=1e-9))
+        self.assertTrue(np.allclose(vk0, vk1, atol=1e-9, rtol=1e-9))
+
+    def test_get_jk_kpts1(self):
+        df = fft.FFTDF(cell, kpts=kpts)
+        mf = cell.KRHF(kpts=kpts, exxdiv=None)
         dm = mf0.get_init_guess()
         nkpts = len(kpts)
         dms = [dm] * nkpts
-        vj0, vk0 = get_jk_kpts(mf0, cell, dms, kpts=kpts)
+        vj0, vk0 = get_jk_kpts(mf, cell, dms, kpts=kpts)
         vj1, vk1 = df.get_jk(dms, kpts=kpts, exxdiv=None)
-        self.assertTrue(vj1.dtype == numpy.complex128)
-        self.assertTrue(vk1.dtype == numpy.complex128)
         self.assertTrue(np.allclose(vj0, vj1, atol=1e-9, rtol=1e-9))
         self.assertTrue(np.allclose(vk0, vk1, atol=1e-9, rtol=1e-9))
 
@@ -864,6 +874,44 @@ class KnownValues(unittest.TestCase):
 
         mc = mcscf.CASSCF(mf, 2, 0).run()
         self.assertAlmostEqual(mc.e_tot, ehf, 8)
+
+    def test_get_k_e1(self):
+        cell = pgto.M(
+            atom = '''
+            O   0.000    0.    0.1174
+            C   1.      1.    0.
+            ''',
+            a=np.eye(3)*4.,
+            basis=[[0, [.25, 1]], [1, [.3, 1]]],
+        )
+        kpts = cell.make_kpts([3,1,1])
+        dm = np.asarray(cell.pbc_intor('int1e_ovlp', kpts=kpts))
+
+        dat = np.zeros((cell.natm, 3))
+        myfft = fft.FFTDF(cell, kpts=kpts)
+        exx = 'ewald'
+        vk = myfft.get_k_e1(dm, kpts=kpts, exxdiv=exx)
+        aoslices = cell.aoslice_by_atom()
+        for i in range(cell.natm):
+            p0, p1 = aoslices[i, 2:]
+            dat[i] = np.einsum('xkpq,kqp->x', vk[:,:,p0:p1], dm[:,:,p0:p1]).real
+        nkpts = len(kpts)
+        dat *= 4./nkpts
+        assert abs(dat.sum(axis=0)).max() < 1e-11
+
+        disp = 1e-3
+        coords = cell.atom_coords()
+        coords[0,2] += disp * .5
+        cell1 = cell.set_geom_(coords, unit='Bohr')
+        vk = fft.FFTDF(cell1, kpts=kpts).get_jk(
+            dm=dm, kpts=kpts, with_j=False, exxdiv=exx)[1]
+        e1 = np.einsum('kij,kji->', vk, dm)
+        coords[0,2] -= disp
+        cell2 = cell.set_geom_(coords, unit='Bohr')
+        vk = fft.FFTDF(cell2, kpts=kpts).get_jk(
+            dm=dm, kpts=kpts, with_j=False, exxdiv=exx)[1]
+        e2 = np.einsum('kij,kji->', vk, dm)
+        assert abs((e1 - e2) / disp / nkpts - dat[0, 2]) < 1e-6
 
 
 if __name__ == '__main__':
