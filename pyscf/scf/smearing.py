@@ -241,3 +241,13 @@ class _SmearingSCF:
             logger.info(self, '    Total E(T) = %.15g  Free energy = %.15g  E0 = %.15g',
                         e_tot, self.e_free, self.e_zero)
         return e_tot
+
+    def to_gpu(self):
+        obj = self.undo_smearing().to_gpu().smearing()
+        obj.sigma = self.sigma
+        obj.smearing_method = self.smearing_method
+        obj.fix_spin = self.fix_spin
+        obj.entropy = self.entropy
+        obj.e_free = self.e_free
+        obj.e_zero = self.e_zero
+        return obj
