@@ -26,7 +26,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
-from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
 from pyscf.pbc.lib.kpts_helper import is_zero
 from pyscf.pbc.tools.k2gamma import kpts_to_kmesh
 
@@ -221,6 +220,12 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
 
+    kmesh = kpts_to_kmesh(cell, kpts)
+    if nkpts != np.prod(kmesh):
+        logger.warning(
+            mydf, 'Input kpts differ from the kpts attribute stored in the FFTDF '
+                'instance. The instance value will be ignored.')
+
     weight = 1./nkpts * (cell.vol/ngrids)
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
@@ -268,13 +273,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
         for k1, ao1T in enumerate(ao1_kpts):
             kpt1 = kpts_band[k1]
 
-            # If we have an ewald exxdiv, we add the G=0 correction near the
-            # end of the function to bypass any discretization errors
-            # that arise from the FFT.
-            if exxdiv == 'ewald':
-                coulG = tools.get_coulG(cell, kpt2-kpt1, False, mydf, mesh)
-            else:
-                coulG = tools.get_coulG(cell, kpt2-kpt1, exxdiv, mydf, mesh)
+            coulG = tools.get_coulG(cell, kpt2-kpt1, exxdiv, mesh=mesh, kmesh=kmesh)
             if is_zero(kpt1-kpt2):
                 expmikr = np.array(1.)
             else:
@@ -297,14 +296,6 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
             for i in range(nset):
                 vk_kpts[i,k1] += weight * lib.dot(vR_dm[i], ao1T.T)
         t1 = logger.timer_debug1(mydf, 'get_k_kpts: make_kpt (%d,*)'%k2, *t1)
-
-    # Function _ewald_exxdiv_for_G0 to add back in the G=0 component to vk_kpts
-    # Note in the _ewald_exxdiv_for_G0 implementation, the G=0 treatments are
-    # different for 1D/2D and 3D systems.  The special treatments for 1D and 2D
-    # can only be used with AFTDF/GDF/MDF method.  In the FFTDF method, 1D, 2D
-    # and 3D should use the ewald probe charge correction.
-    if exxdiv == 'ewald' and cell.dimension != 0:
-        _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts_band=kpts_band)
 
     return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
 
@@ -332,6 +323,11 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
     nset, nkpts, nao = dms.shape[:3]
 
     kmesh = kpts_to_kmesh(cell, kpts)
+    if nkpts != np.prod(kmesh):
+        logger.warning(
+            mydf, 'Input kpts differ from the kpts attribute stored in the FFTDF '
+                'instance. The instance value will be ignored.')
+
     weight = 1./nkpts * (cell.vol/ngrids)
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
