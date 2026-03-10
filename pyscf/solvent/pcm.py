@@ -131,9 +131,10 @@ def gen_surface(mol, ng=302, rad=modified_Bondi, vdw_scale=1.2):
     '''J. Phys. Chem. A 1999, 103, 11060-11079'''
     unit_sphere = gen_grid.MakeAngularGrid(ng)
     atom_coords = mol.atom_coords(unit='B')
-    charges = mol.atom_charges()
     N_J = ng * numpy.ones(mol.natm)
-    R_J = numpy.asarray([rad[chg] for chg in charges])
+    from pyscf.data.elements import charge as charge_of_element
+    element_index = [charge_of_element(mol.elements[i]) for i in range(mol.natm)]
+    R_J = numpy.asarray([rad[chg] for chg in element_index])
     R_sw_J = R_J * (14.0 / N_J)**0.5
     alpha_J = 1.0/2.0 + R_J/R_sw_J - ((R_J/R_sw_J)**2 - 1.0/28)**0.5
     R_in_J = R_J - alpha_J * R_sw_J
