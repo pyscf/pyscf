@@ -249,6 +249,57 @@ class KnownValues(unittest.TestCase):
         assert abs(test_energy - ref_energy) < 2e-6
         assert numpy.max(numpy.abs(test_gradient - ref_gradient)) < 1e-5
 
+    def test_iswig(self):
+        mol = gto.M(
+            atom = """
+                H 0 0 0
+                F 1 0 0.1
+            """,
+            basis = "6-31g",
+            verbose = 0,
+        )
+
+        mf = mol.RHF().PCM()
+        mf.with_solvent.method = 'C-PCM'
+        mf.with_solvent.lebedev_order = 7
+        mf.with_solvent.eps = 78
+        mf.with_solvent.surface_discretization_method = "iswig"
+        mf.conv_tol = 1e-10
+
+        test_energy = mf.kernel()
+        assert mf.converged
+
+        ### Q-Chem reference input
+        # $rem
+        # JOBTYPE sp
+        # METHOD HF
+        # BASIS 6-31g
+        # solvent_method          pcm
+        # SYMMETRY      FALSE
+        # SYM_IGNORE    TRUE
+        # MAX_SCF_CYCLES 100
+        # PURECART 1111
+        # SCF_CONVERGENCE 10
+        # THRESH        14
+        # $end
+
+        # $pcm
+        # Theory CPCM
+        # Method iSWIG
+        # Solver INVERSION
+        # HeavyPoints 26
+        # HPoints 26
+        # $end
+
+        # $solvent
+        # Dielectric 78
+        # $end
+
+        ### SWIG instead of iSWIG: -99.9889787249
+        ref_energy = -99.9890988749
+
+        assert abs(test_energy - ref_energy) < 1e-8
+
 if __name__ == "__main__":
     print("Full Tests for PCMs")
     unittest.main()
