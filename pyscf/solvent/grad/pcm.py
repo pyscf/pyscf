@@ -80,7 +80,8 @@ def get_dF_dA(surface, surface_discretization_method = "SWIG"):
             fiJ = 1 - 0.5 * (erf(erf_input_m) + erf(erf_input_p))
             fiJ[:,ia] = 1.0
 
-            dfiJ = 1/numpy.sqrt(numpy.pi) * xi[:, None] * (numpy.exp(-erf_input_m**2) - numpy.exp(-erf_input_p**2)) / (fiJ * riJ)
+            dfiJ = 1/numpy.sqrt(numpy.pi) * xi[:, None] * \
+                   (numpy.exp(-erf_input_m**2) - numpy.exp(-erf_input_p**2)) / (fiJ * riJ)
             dfiJ = numpy.expand_dims(dfiJ, axis=-1) * ri_rJ
 
             dfiJ[:, ia, :] = -numpy.sum(dfiJ, axis=1) # Translation invariance for diagonal terms

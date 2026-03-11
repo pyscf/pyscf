@@ -96,7 +96,9 @@ def get_d2F_d2A(surface, surface_discretization_method = "SWIG"):
             fiJ = 1 - 0.5 * (erf(erf_input_p) + erf(erf_input_m))
             # fiJ[:,i_grid_atom] = 1.0
             dfiJ = 1/numpy.sqrt(numpy.pi) * xi[:, None] * (numpy.exp(-erf_input_m**2) - numpy.exp(-erf_input_p**2))
-            dfiJ[:,i_grid_atom] = 0 # This is necessary, because in the second term of d2fiJK_diagonal, it's not zeroed out
+            ### It is necessary to zero out i \in I term in dfiJ, because the second term of d2fiJK_diagonal
+            ### is not zeroed out otherwise.
+            dfiJ[:,i_grid_atom] = 0
 
             fiJK = fiJ[:, :, numpy.newaxis] * fiJ[:, numpy.newaxis, :]
             dfiJK = dfiJ[:, :, numpy.newaxis] * dfiJ[:, numpy.newaxis, :]
