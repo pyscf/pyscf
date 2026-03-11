@@ -133,7 +133,7 @@ def gen_surface(mol, ng=302, rad=modified_Bondi, vdw_scale=1.2):
     atom_coords = mol.atom_coords(unit='B')
     N_J = ng * numpy.ones(mol.natm)
     from pyscf.data.elements import charge as charge_of_element
-    element_index = [charge_of_element(mol.elements[i]) for i in range(mol.natm)]
+    element_index = [charge_of_element(e) for e in mol.elements]
     R_J = numpy.asarray([rad[chg] for chg in element_index])
     R_sw_J = R_J * (14.0 / N_J)**0.5
     alpha_J = 1.0/2.0 + R_J/R_sw_J - ((R_J/R_sw_J)**2 - 1.0/28)**0.5
