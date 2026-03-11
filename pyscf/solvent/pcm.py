@@ -127,7 +127,7 @@ def switch_h(x):
     y[x>1] = 1.0
     return y
 
-def gen_surface(mol, ng=302, rad=modified_Bondi, vdw_scale=1.2, surface_discretization_method="SWIG"):
+def gen_surface(mol, ng=302, rad=modified_Bondi, surface_discretization_method="SWIG"):
     '''J. Phys. Chem. A 1999, 103, 11060-11079'''
     unit_sphere = gen_grid.MakeAngularGrid(ng)
     atom_coords = mol.atom_coords(unit='B')
