@@ -44,33 +44,73 @@ class CIAHOptimizerMixin:
     _keys = {
         'conv_tol_grad', 'max_stepsize', 'max_iters', 'kf_interval',
         'kf_trust_region', 'ah_start_tol', 'ah_start_cycle', 'ah_level_shift',
-        'ah_conv_tol', 'ah_lindep', 'ah_max_cycle', 'ah_trust_region',
+        'ah_conv_tol', 'ah_lindep', 'ah_max_cycle', 'ah_trust_region', 'norb',
     }
 
-    def gen_g_hop(self, u):
-        raise NotImplementedError
+    def __init__(self, norb):
+        self.norb = norb
+
+    @property
+    def pdim(self):
+        return self.norb*(self.norb-1)//2
 
     def pack_uniq_var(self, mat):
+        mat = mat.real
         nmo = mat.shape[0]
         idx = numpy.tril_indices(nmo, -1)
         return mat[idx]
 
     def unpack_uniq_var(self, v):
+        v = v.real
         nmo = int(numpy.sqrt(v.size*2)) + 1
         idx = numpy.tril_indices(nmo, -1)
         mat = numpy.zeros((nmo,nmo))
         mat[idx] = v
         return mat - mat.conj().T
 
-    def extract_rotation(self, dr, u0=1):
+    def extract_rotation(self, dr, u0=None):
         dr = self.unpack_uniq_var(dr)
-        return numpy.dot(u0, expmat(dr))
+        u1 = expmat(dr)
+        if u0 is None:
+            return u1
+        else:
+            return self.update_rotation(u0, u1)
 
-    def get_grad(self, u):
-        raise NotImplementedError
+    def update_rotation(self, u0, u1):
+        return numpy.dot(u0, u1)
 
-    def cost_function(self, u):
-        raise NotImplementedError
+    def zero_uniq_var(self):
+        return numpy.zeros(self.pdim)
+
+    def identity_rotation(self):
+        return self.extract_rotation(self.zero_uniq_var())
+
+
+class CIAHOptimizerMixinComplex(CIAHOptimizerMixin):
+
+    @property
+    def pdim(self):
+        return self.norb*(self.norb-1)
+
+    def pack_uniq_var(self, mat):
+        nmo = mat.shape[0]
+        idx = numpy.tril_indices(nmo, -1)
+        x = mat[idx].real
+        y = mat[idx].imag
+        return numpy.hstack((x,y))
+
+    def unpack_uniq_var(self, v):
+        v = v.real
+        nmo = int(numpy.round(((1+4*v.size)**0.5+1)*0.5))
+        assert( nmo*(nmo-1) == v.size )
+        nmo2 = nmo*(nmo-1)//2
+        v = v.reshape(-1)
+        x = v[:nmo2]
+        y = v[nmo2:]
+        mat = numpy.zeros((nmo,nmo), dtype=numpy.complex128)
+        idx = numpy.tril_indices(nmo, -1)
+        mat[idx] = x + y*1j
+        return mat - mat.conj().T
 
 
 def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
@@ -116,9 +156,9 @@ def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
     x0_guess = g_orb
     while True:
         stat = Statistic()
-        dr = 0
+        dr = iah.zero_uniq_var()
         ikf = 0
-        ukf = 1
+        ukf = iah.identity_rotation()
 
         for ah_conv, ihop, w, dxi, hdxi, residual, seig \
                 in davidson_cc(h_op, g_op, precond, x0_guess,
@@ -162,8 +202,8 @@ def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
                        norm_gorb < norm_gkf/kf_trust_region)):
                     ikf = 0
                     ukf = iah.extract_rotation(dr, ukf)
-                    dr[:] = 0
-                    g_kf1 = iah.get_grad(u0.dot(ukf))
+                    dr = iah.zero_uniq_var()
+                    g_kf1 = iah.get_grad(iah.update_rotation(u0, ukf))
                     stat.tot_kf += 1
                     norm_gkf1 = numpy.linalg.norm(g_kf1)
                     norm_dg = numpy.linalg.norm(g_kf1-g_orb)
@@ -192,7 +232,11 @@ def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
         t3m = log.timer('aug_hess in %d inner iters' % stat.imic, *t3m)
         u0 = (yield u, g_kf, stat)
 
+        # Separating timing of gen_g_hop from aug_hess
+        t2m = (logger.process_clock(), logger.perf_counter())
         g_kf, h_op, h_diag = iah.gen_g_hop(u0)
+        t3m = log.timer('gen h_op', *t2m)
+
         norm_gkf = numpy.linalg.norm(g_kf)
         norm_dg = numpy.linalg.norm(g_kf-g_orb)
         log.debug('    |g|= %4.3g (keyframe), |g-correction|= %4.3g',
