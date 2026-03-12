@@ -29,6 +29,7 @@ from pyscf.dft import gen_grid
 from pyscf.data import radii
 from pyscf.solvent import ddcosmo
 from pyscf.solvent import _attach_solvent
+from scipy.special import erf
 
 @lib.with_doc(_attach_solvent._for_scf.__doc__)
 def pcm_for_scf(mf, solvent_obj=None, dm=None):
@@ -164,7 +165,6 @@ def gen_surface(mol, ng=302, rad=modified_Bondi, surface_discretization_method="
             diJ[diJ < 1e-8] = 0.0
             fiJ = switch_h(diJ)
         elif surface_discretization_method.upper() == "ISWIG":
-            from scipy.special import erf
             fiJ = 1 - 0.5 * (erf(xi[:, None] * (R_J[None, :] - riJ)) + erf(xi[:, None] * (R_J[None, :] + riJ)))
             fiJ[:,ia] = 1.0
             fiJ[fiJ < 1e-8] = 0
@@ -243,7 +243,7 @@ def get_D_S(surface, with_S=True, with_D=False):
     rij = scipy.spatial.distance.cdist(grid_coords, grid_coords)
     xi_r_ij = xi_ij * rij
     numpy.fill_diagonal(rij, 1)
-    S = scipy.special.erf(xi_r_ij) / rij
+    S = erf(xi_r_ij) / rij
     numpy.fill_diagonal(S, charge_exp * (2.0 / PI)**0.5 / switch_fun)
 
     D = None
@@ -312,6 +312,15 @@ class PCM(lib.StreamObject):
         `state_id=0` corresponds to the ground state, while `state_id=1` corresponds
         to the first excited state. Default is 0.
 
+    surface_discretization_method : str
+        Specifies the algorithm for the switching function, i.e. how each grid is partitioned
+        among the atoms.
+        Available options are "SWIG" (switching/Gaussian method) and "ISWIG" (improved SWIG).
+        Please refer to the following paper for the definition of both algorithms:
+        Lange, A. W.; Herbert, J. M. A smooth, nonsingular, and faithful discretization scheme
+        for polarizable continuum models: The switching/Gaussian approach. The Journal of
+        Chemical Physics 2010, 133. https://doi.org/10.1063/1.3511297
+
     Saved Results:
     --------------
     e_tot : float
@@ -335,6 +344,7 @@ class PCM(lib.StreamObject):
         'mol', 'radii_table', 'lebedev_order',
         'eps', 'max_cycle', 'conv_tol', 'state_id', 'frozen',
         'equilibrium_solvation', 'e', 'v', 'v_grids_n',
+        'surface_discretization_method',
     }
 
     kernel = ddcosmo.DDCOSMO.kernel

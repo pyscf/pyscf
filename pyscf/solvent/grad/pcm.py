@@ -21,7 +21,7 @@ Gradient of PCM family solvent models, copied from GPU4PySCF with modifications
 '''
 
 import numpy
-import scipy
+from scipy.special import erf
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto, df
@@ -76,7 +76,6 @@ def get_dF_dA(surface, surface_discretization_method = "SWIG"):
             xi = charge_exp[p0:p1]
             erf_input_p = xi[:, None] * (R_J[None, :] + riJ)
             erf_input_m = xi[:, None] * (R_J[None, :] - riJ)
-            from scipy.special import erf
             fiJ = 1 - 0.5 * (erf(erf_input_m) + erf(erf_input_p))
             fiJ[:,ia] = 1.0
 
@@ -124,7 +123,7 @@ def get_dD_dS(surface, dF, with_S=True, with_D=False):
     xi_r_ij = xi_ij * rij
     numpy.fill_diagonal(rij, 1)
 
-    dS_dr = -(scipy.special.erf(xi_r_ij) - 2.0*xi_r_ij/PI**0.5*numpy.exp(-xi_r_ij**2))/rij**2
+    dS_dr = -(erf(xi_r_ij) - 2.0*xi_r_ij/PI**0.5*numpy.exp(-xi_r_ij**2))/rij**2
     numpy.fill_diagonal(dS_dr, 0)
 
     dS_dr= numpy.expand_dims(dS_dr, axis=-1)

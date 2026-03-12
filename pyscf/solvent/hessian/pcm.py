@@ -19,7 +19,7 @@ Gradient of PCM family solvent model, copied from GPU4PyCF with modifications
 # pylint: disable=C0103
 
 import numpy
-import scipy
+from scipy.special import erf
 from pyscf import lib, gto
 from pyscf import scf, df
 from pyscf.solvent.pcm import PI, switch_h
@@ -92,7 +92,6 @@ def get_d2F_d2A(surface, surface_discretization_method = "SWIG"):
             xi = charge_exp[p0:p1]
             erf_input_p = xi[:, None] * (R_J[None, :] + norm_si_rJ)
             erf_input_m = xi[:, None] * (R_J[None, :] - norm_si_rJ)
-            from scipy.special import erf
             fiJ = 1 - 0.5 * (erf(erf_input_p) + erf(erf_input_m))
             # fiJ[:,i_grid_atom] = 1.0
             dfiJ = 1/numpy.sqrt(numpy.pi) * xi[:, None] * (numpy.exp(-erf_input_m**2) - numpy.exp(-erf_input_p**2))
@@ -181,7 +180,7 @@ def get_d2D_d2S(surface, with_S=True, with_D=False, stream=None):
     rij_1 = 1.0/rij
     numpy.fill_diagonal(rij_1, 0)
 
-    erf_eij_rij = scipy.special.erf(eij * rij)
+    erf_eij_rij = erf(eij * rij)
     two_eij_over_sqrt_pi_exp_minus_eij2_rij2 = 2.0 / numpy.sqrt(PI) * eij * numpy.exp(-(eij * rij)**2)
 
     S_direct_product_prefactor = -two_eij_over_sqrt_pi_exp_minus_eij2_rij2 \
