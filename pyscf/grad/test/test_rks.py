@@ -438,6 +438,62 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(w1), -163.85086096365865, 9)
 
     def test_grid_response_stratmann(self):
+        mol0 = gto.M(
+            atom = '''
+            H   0.   0  -0.49999
+            C   0.   1    .1
+            O   0.   0   0.5
+            F   1.   .3  0.5''',
+            unit = 'B',
+            basis = "6-31g**"
+        )
+        grids0 = dft.gen_grid.Grids(mol0)
+        grids0.becke_scheme = gen_grid.stratmann
+
+        coords = []
+        w0 = []
+        w1 = []
+        for c_a, w0_a, w1_a in rks.grids_response_cc(grids0):
+            coords.append(c_a)
+            w0.append(w0_a)
+            w1.append(w1_a)
+        coords = numpy.vstack(coords)
+        w0 = numpy.hstack(w0)
+        w1 = numpy.concatenate(w1, axis=2)
+
+        n_grid = w0.shape[0]
+        numerical_dwdA = numpy.empty([mol0.natm, 3, n_grid])
+
+        def get_w(mol):
+            grids = dft.gen_grid.Grids(mol)
+            grids.becke_scheme = gen_grid.stratmann
+            w0 = []
+            for c_a, w0_a in rks.grids_noresponse_cc(grids):
+                w0.append(w0_a)
+            w0 = numpy.hstack(w0)
+            return w0
+
+        dx = 5e-6
+        mol_copy = mol0.copy()
+        for i_atom in range(mol0.natm):
+            for i_xyz in range(3):
+                xyz_p = mol0.atom_coords()
+                xyz_p[i_atom, i_xyz] += dx
+                mol_copy.set_geom_(xyz_p, unit='Bohr')
+                mol_copy.build()
+                w_p = get_w(mol_copy)
+
+                xyz_m = mol0.atom_coords()
+                xyz_m[i_atom, i_xyz] -= dx
+                mol_copy.set_geom_(xyz_m, unit='Bohr')
+                mol_copy.build()
+                w_m = get_w(mol_copy)
+
+                numerical_dwdA[i_atom, i_xyz] = (w_p - w_m) / (2 * dx)
+        assert numpy.max(numpy.abs(w1 - numerical_dwdA)) < 5e-7
+
+        ### Test grids_response_cc() above, integrated test below
+
         mol = gto.M(
             atom = '''
             Na 0 0 0
@@ -498,6 +554,64 @@ class KnownValues(unittest.TestCase):
         assert numpy.max(numpy.abs(test_gradient - ref_gradient)) < 1e-7
 
     def test_grid_response_no_radii_adjustment(self):
+        mol0 = gto.M(
+            atom = '''
+            H   0.   0  -0.49999
+            C   0.   1    .1
+            O   0.   0   0.5
+            F   1.   .3  0.5''',
+            unit = 'B',
+            basis = "6-31g**"
+        )
+        grids0 = dft.gen_grid.Grids(mol0)
+        grids0.radii_adjust = None
+        grids0.becke_scheme = gen_grid.stratmann
+
+        coords = []
+        w0 = []
+        w1 = []
+        for c_a, w0_a, w1_a in rks.grids_response_cc(grids0):
+            coords.append(c_a)
+            w0.append(w0_a)
+            w1.append(w1_a)
+        coords = numpy.vstack(coords)
+        w0 = numpy.hstack(w0)
+        w1 = numpy.concatenate(w1, axis=2)
+
+        n_grid = w0.shape[0]
+        numerical_dwdA = numpy.empty([mol0.natm, 3, n_grid])
+
+        def get_w(mol):
+            grids = dft.gen_grid.Grids(mol)
+            grids.radii_adjust = None
+            grids.becke_scheme = gen_grid.stratmann
+            w0 = []
+            for c_a, w0_a in rks.grids_noresponse_cc(grids):
+                w0.append(w0_a)
+            w0 = numpy.hstack(w0)
+            return w0
+
+        dx = 5e-6
+        mol_copy = mol0.copy()
+        for i_atom in range(mol0.natm):
+            for i_xyz in range(3):
+                xyz_p = mol0.atom_coords()
+                xyz_p[i_atom, i_xyz] += dx
+                mol_copy.set_geom_(xyz_p, unit='Bohr')
+                mol_copy.build()
+                w_p = get_w(mol_copy)
+
+                xyz_m = mol0.atom_coords()
+                xyz_m[i_atom, i_xyz] -= dx
+                mol_copy.set_geom_(xyz_m, unit='Bohr')
+                mol_copy.build()
+                w_m = get_w(mol_copy)
+
+                numerical_dwdA[i_atom, i_xyz] = (w_p - w_m) / (2 * dx)
+        assert numpy.max(numpy.abs(w1 - numerical_dwdA)) < 5e-7
+
+        ### Test grids_response_cc() above, integrated test below
+
         mol = gto.M(
             atom = '''
             Na 0 0 0
