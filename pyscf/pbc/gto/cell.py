@@ -1166,7 +1166,8 @@ def _parse_poscar(string):
         count = unique_atoms[atom_type]
         start, end = end, end + count
         elements.extend([atom_type] * count)
-        coords.append(np.fromstring(' '.join(lines[start:end]), sep=' '))
+        r = np.fromstring(' '.join(lines[start:end]), sep=' ')
+        coords.append(r.reshape(count, 3))
     coords = np.vstack(coords)
     assert len(coords) == len(elements)
     return lattice_vectors, elements, coords, fractional
