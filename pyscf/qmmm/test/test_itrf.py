@@ -200,6 +200,18 @@ class KnowValues(unittest.TestCase):
                  H                 -0.00000000    0.89830571    0.52404783 ''')
         self.assertAlmostEqual(g[0,2], (e1 - e2)/0.002 * lib.param.BOHR, 5)
 
+    # issue 3155
+    def test_ghost_atoms(self):
+        mol = pyscf.M(
+            atom = '''ghost  2.0  2.0  2.0''',
+            basis = [[0, [3,1]], [0, [1, 1]]],
+            charge = -2)
+        coords = [
+            ( 2.0,  2.0,  2.0),
+            (-2.0,  2.0,  2.0)]
+        charges = [1., -1.]
+        mf = itrf.mm_charge(mol.RHF(), coords, charges).run()
+        self.assertAlmostEqual(mf.e_tot, 1.15387333485901, 8)
 
 if __name__ == "__main__":
     print("Full Tests for qmmm")

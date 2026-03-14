@@ -189,6 +189,8 @@ class QMMMSCF(QMMM):
             expnts = numpy.sqrt(mm_mol.get_zetas())
         for j in range(mol.natm):
             q2, r2 = mol.atom_charge(j), mol.atom_coord(j)
+            if q2 == 0:
+                continue
             r = lib.norm(r2-coords, axis=1)
             if mm_mol.charge_model != 'gaussian':
                 nuc += q2*(charges/r).sum()
@@ -395,6 +397,8 @@ class QMMMGrad:
         g_mm = numpy.empty((mol.natm,3))
         for i in range(mol.natm):
             q1 = mol.atom_charge(i)
+            if q1 == 0:
+                continue
             r1 = mol.atom_coord(i)
             r = lib.norm(r1-coords, axis=1)
             if mm_mol.charge_model != 'gaussian':
@@ -423,6 +427,8 @@ class QMMMGrad:
         g_mm = numpy.zeros_like(coords)
         for i in range(mol.natm):
             q1 = mol.atom_charge(i)
+            if q1 == 0:
+                continue
             r1 = mol.atom_coord(i)
             r = lib.norm(r1-coords, axis=1)
             if mm_mol.charge_model != 'gaussian':
