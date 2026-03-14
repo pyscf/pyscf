@@ -224,7 +224,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     if nkpts != np.prod(kmesh):
         logger.warning(
             mydf, 'Input kpts differ from the kpts attribute stored in the FFTDF '
-                'instance. The instance value will be ignored.')
+            'instance. The instance value will be ignored.')
 
     weight = 1./nkpts * (cell.vol/ngrids)
 
@@ -326,7 +326,7 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
     if nkpts != np.prod(kmesh):
         logger.warning(
             mydf, 'Input kpts differ from the kpts attribute stored in the FFTDF '
-                'instance. The instance value will be ignored.')
+            'instance. The instance value will be ignored.')
 
     weight = 1./nkpts * (cell.vol/ngrids)
 

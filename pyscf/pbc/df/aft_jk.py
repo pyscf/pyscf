@@ -158,7 +158,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
     if nkpts != np.prod(kmesh):
         logger.warning(
             mydf, 'Input kpts differ from the kpts attribute stored in the FFTDF '
-                'instance. The instance value will be ignored.')
+            'instance. The instance value will be ignored.')
 
     rcut = ft_ao.estimate_rcut(cell)
     supmol = ft_ao.ExtendedMole.from_cell(cell, kmesh, rcut.max())
@@ -312,7 +312,7 @@ def get_k_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
     if nkpts != np.prod(kmesh):
         logger.warning(
             mydf, 'Input kpts differ from the kpts attribute stored in the FFTDF '
-                'instance. The instance value will be ignored.')
+            'instance. The instance value will be ignored.')
 
     swap_2e = (kpts_band is None)
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
