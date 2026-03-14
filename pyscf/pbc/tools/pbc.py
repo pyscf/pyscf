@@ -256,7 +256,7 @@ def _Gv_wrap_around(cell, Gv, k, mesh):
     return kG
 
 def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
-              wrap_around=True, omega=None, **kwargs):
+              wrap_around=True, omega=None, kmesh=None, **kwargs):
     '''Calculate the Coulomb kernel for all G-vectors, handling G=0 and exchange.
 
     Args:
@@ -264,7 +264,12 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             k-point
         exx : bool or str
             Whether this is an exchange matrix element
-        mf : instance of :class:`SCF`
+        mf : an SCF instance or an instance to provide the `.kpts` attribute
+            The .kpts attribute is used to determine the Monkhorst-Pack k-point
+            mesh size.
+        kmesh : (3,) ndarray
+            Monkhorst-Pack k-point mesh. When this parameter is specified,
+            the kpts attribute provided by `mf` will be ignored.
 
     Returns:
         coulG : (ngrids,) ndarray
@@ -365,11 +370,15 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     absG2 = np.einsum('gi,gi->g', kG, kG)
     G0_idx = []
 
-    if hasattr(mf, 'kpts'):
-        kpts = mf.kpts
+    if kmesh is None:
+        if hasattr(mf, 'kpts'):
+            kpts = mf.kpts
+        else:
+            kpts = k.reshape(1,3)
+        Nk = len(kpts)
     else:
-        kpts = k.reshape(1,3)
-    Nk = len(kpts)
+        kpts = None
+        Nk = np.prod(kmesh)
 
     if exxdiv == 'vcut_sph':  # PRB 77 193110
         Rc = (3*Nk*cell.vol/(4*np.pi))**(1./3)
@@ -383,7 +392,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     elif exxdiv == 'vcut_ws':  # PRB 87, 165122
         assert (cell.dimension == 3)
         if not getattr(mf, '_ws_exx', None):
-            mf._ws_exx = precompute_exx(cell, kpts)
+            mf._ws_exx = precompute_exx(cell, kpts, kmesh)
         exx_alpha = mf._ws_exx['alpha']
         exx_kcell = mf._ws_exx['kcell']
         exx_q = mf._ws_exx['q']
@@ -479,17 +488,20 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     # using Ewald probe charge (the function madelung below)
     if cell.dimension > 0 and exxdiv == 'ewald' and len(G0_idx) > 0:
         if omega is None: # Affects DFT-RSH
-            coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts)
+            coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts, kmesh=kmesh)
         else: # for RangeSeparatedJKBuilder
-            coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts, omega=0)
+            coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts, omega=0, kmesh=kmesh)
     return coulG
 
-def precompute_exx(cell, kpts):
+def precompute_exx(cell, kpts=None, kmesh=None):
     from pyscf.pbc import gto as pbcgto
     from pyscf.pbc.dft import gen_grid
     log = lib.logger.Logger(cell.stdout, cell.verbose)
     log.debug("# Precomputing Wigner-Seitz EXX kernel")
-    Nk = get_monkhorst_pack_size(cell, kpts)
+    if kmesh is None:
+        Nk = get_monkhorst_pack_size(cell, kpts)
+    else:
+        Nk = kmesh
     log.debug("# Nk = %s", Nk)
 
     kcell = pbcgto.Cell()
@@ -545,8 +557,11 @@ def precompute_exx(cell, kpts):
     return ws_exx
 
 
-def madelung(cell, kpts, omega=None):
-    Nk = get_monkhorst_pack_size(cell, kpts)
+def madelung(cell, kpts=None, omega=None, kmesh=None):
+    if kmesh is None:
+        Nk = get_monkhorst_pack_size(cell, kpts)
+    else:
+        Nk = kmesh
     ecell = cell.copy(deep=False)
     ecell._atm = np.array([[1, cell._env.size, 0, 0, 0, 0]])
     ecell._env = np.append(cell._env, [0., 0., 0.])
