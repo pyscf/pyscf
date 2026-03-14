@@ -458,6 +458,14 @@ def init_guess_by_minao(mol):
         if not gto.is_ghost_atom(symb):
             occ.append(occdic[symb])
             new_atom.append(mol._atom[ia])
+
+    if not occ:
+        # A system with only ghost atoms. (issue 3155)
+        nao = mol.nao
+        occ = numpy.zeros(nao)
+        dm = mo_coeff = numpy.zeros((nao, nao))
+        return lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=occ)
+
     occ = numpy.hstack(occ)
 
     pmol = gto.Mole()
