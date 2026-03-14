@@ -121,7 +121,7 @@ class KnownValues(unittest.TestCase):
 
     def test_uhf_smearing(self):
         mf = pscf.UHF(cell)
-        pscf.addons.smearing_(mf, 0.1, 'fermi')
+        mf = mf.smearing(0.1, 'fermi')
         mo_energy = numpy.arange(nao)*.2+numpy.cos(.5)*.1
         mo_energy = numpy.array([mo_energy, mo_energy+numpy.cos(mo_energy)*.02])
         mf.get_occ(mo_energy)
@@ -395,7 +395,7 @@ class KnownValues(unittest.TestCase):
         kmf.get_ovlp = lambda *args: numpy.array([numpy.eye(Nsite)]*Nk)
         kmf.get_veff = get_veff
 
-        kmf = pscf.addons.smearing_(kmf, sigma=0.2, method='gaussian')
+        kmf = kmf.smearing(sigma=0.2, method='gaussian')
 
         dm_a = numpy.array([numpy.eye(Nsite)]*Nk)
         dm_b = dm_a * 0.5
