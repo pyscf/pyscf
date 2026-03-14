@@ -31,12 +31,28 @@ def smearing(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
         mf.fix_spin = fix_spin
         return mf
 
-    assert not mf.istype('KSCF')
-    if mf.istype('ROHF'):
-        # ROHF leads to two Fock matrices. It's not clear how to define the
-        # Roothaan effective Fock matrix from the two.
-        raise NotImplementedError('Smearing-ROHF')
+    if mf.istype('_CIAH_SOSCF'):
+        raise NotImplementedError('Smearing with second order SCF is not supported')
 
+    if mf.istype('KSCF'):
+        from pyscf.pbc.scf.smearing import smearing
+        return smearing(mf, sigma, method, mu0, fix_spin)
+
+    if mf.istype('ROHF'):
+        if fix_spin:
+            raise RuntimeError('Smearing-ROHF with fix_spin not supported. Use UHF instead.')
+        # Roothaan Fock matrix for ROHF is not supported by the smearing method.
+        # The single occupancy can be handled using the regular RHF class
+        from pyscf.scf.addons import _object_without_soscf
+        from pyscf import scf
+        from pyscf import dft
+        known_class = {
+            dft.rks_symm.ROKS: dft.rks_symm.RKS,
+            dft.roks.ROKS    : dft.rks.RKS     ,
+            scf.hf_symm.ROHF : scf.hf_symm.RHF ,
+            scf.rohf.ROHF    : scf.hf.RHF      ,
+        }
+        mf = _object_without_soscf(mf, known_class)
     return lib.set_class(_SmearingSCF(mf, sigma, method, mu0, fix_spin),
                          (_SmearingSCF, mf.__class__))
 
@@ -136,8 +152,12 @@ class _SmearingSCF:
             mo_occ = super().get_occ(mo_energy, mo_coeff)
             return mo_occ
 
+        if self.istype('ROHF'):
+            # ROHF leads to two Fock matrices. It's not clear how to define the
+            # Roothaan effective Fock matrix from the two.
+            raise NotImplementedError('Smearing-ROHF')
         is_uhf = self.istype('UHF')
-        is_rhf = self.istype('RHF')
+        is_rhf = not is_uhf
 
         sigma = self.sigma
         if self.smearing_method.lower() == 'fermi':
