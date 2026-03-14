@@ -213,6 +213,8 @@ class KGHF(khf.KSCF):
     to_gpu = lib.to_gpu
 
     def get_hcore(self, cell=None, kpts=None):
+        if cell is None: cell = self.cell
+        if kpts is None: kpts = self.kpts
         hcore = khf.KSCF.get_hcore(self, cell, kpts)
         hcore = lib.asarray([scipy.linalg.block_diag(h, h) for h in hcore])
         if self.with_soc and cell.has_ecp_soc():
