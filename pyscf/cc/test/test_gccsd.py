@@ -15,6 +15,7 @@
 
 import unittest
 import numpy
+import numpy as np
 from functools import reduce
 
 from pyscf import lib
@@ -69,6 +70,21 @@ class KnownValues(unittest.TestCase):
         gcc = gccsd.GCCSD(mf, frozen=frozen)
         ecc, t1, t2 = gcc.kernel()
         self.assertAlmostEqual(ecc, -0.3486987472235819, 6)
+
+        gcc.frozen = None
+        gcc.kernel()
+        self.assertAlmostEqual(gcc.ecc, -0.352230909546054, 7)
+        self.assertEqual(gcc.t2.shape, (16, 16, 40, 40))
+
+        gcc.frozen = 1
+        gcc.kernel()
+        self.assertAlmostEqual(gcc.ecc, -0.351276499761539, 7)
+        self.assertEqual(gcc.t2.shape, (15, 15, 40, 40))
+
+        gcc.frozen = np.array([0])
+        gcc.kernel()
+        self.assertAlmostEqual(gcc.ecc, -0.35127649976153963, 7)
+        self.assertEqual(gcc.t2.shape, (15, 15, 40, 40))
 
     def test_ERIS(self):
         gcc = gccsd.GCCSD(mf, frozen=4)
