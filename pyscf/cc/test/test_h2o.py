@@ -80,7 +80,7 @@ class KnownValues(unittest.TestCase):
         mcc = cc.ccsd.CC(mf, frozen=range(1))
         mcc.conv_tol = 1e-10
         mcc.kernel()
-        self.assertAlmostEqual(mcc.ecc- -0.21124878189922872, 7)
+        self.assertAlmostEqual(mcc.ecc, -0.21124878189922872, 7)
         self.assertAlmostEqual(abs(mcc.t2).sum()- 5.4996425901189347, 5)
 
         mcc.frozen = None
@@ -90,12 +90,12 @@ class KnownValues(unittest.TestCase):
 
         mcc.frozen = 1
         mcc.kernel()
-        self.assertAlmostEqual(mcc.ecc, -0.2112487948725533, 7)
+        self.assertAlmostEqual(mcc.ecc, -0.21124878189922872, 7)
         self.assertEqual(mcc.t2.shape, (4, 4, 19, 19))
 
         mcc.frozen = np.array([0])
         mcc.kernel()
-        self.assertAlmostEqual(mcc.ecc)
+        self.assertAlmostEqual(mcc.ecc, -0.21124878189922872, 7)
         self.assertEqual(mcc.t2.shape, (4, 4, 19, 19))
 
     def test_ccsd_cart(self):
