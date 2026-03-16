@@ -322,6 +322,7 @@ def analytical_hess_qv(pcmobj, dm, verbose=None):
     d2I_dA2 = numpy.zeros([9, nao, nao])
     for g0, g1 in lib.prange(0, ngrids, blksize):
         fakemol = gto.fakemol_for_charges(grid_coords[g0:g1], expnt=charge_exp[g0:g1]**2)
+        fakemol.cart = mol.cart
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ipip1, aosym='s1', cintopt=cintopt)
         d2I_dA2 += numpy.einsum('dijq,q->dij', v_nj, q_sym[g0:g1])
     d2I_dA2 = d2I_dA2.reshape([3, 3, nao, nao])
@@ -338,6 +339,7 @@ def analytical_hess_qv(pcmobj, dm, verbose=None):
     d2I_dAdB = numpy.zeros([9, nao, nao])
     for g0, g1 in lib.prange(0, ngrids, blksize):
         fakemol = gto.fakemol_for_charges(grid_coords[g0:g1], expnt=charge_exp[g0:g1]**2)
+        fakemol.cart = mol.cart
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ipvip1, aosym='s1', cintopt=cintopt)
         d2I_dAdB += numpy.einsum('dijq,q->dij', v_nj, q_sym[g0:g1])
     d2I_dAdB = d2I_dAdB.reshape([3, 3, nao, nao])
@@ -356,6 +358,7 @@ def analytical_hess_qv(pcmobj, dm, verbose=None):
         int3c2e_ip1ip2 = mol._add_suffix('int3c2e_ip1ip2')
         cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, int3c2e_ip1ip2)
         fakemol = gto.fakemol_for_charges(grid_coords[g0:g1], expnt=charge_exp[g0:g1]**2)
+        fakemol.cart = mol.cart
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip1ip2, aosym='s1', cintopt=cintopt)
         d2I_dAdC = numpy.einsum('dijq,q->dij', v_nj, q_sym[g0:g1])
         d2I_dAdC = d2I_dAdC.reshape([3, 3, nao, nao])
@@ -378,6 +381,7 @@ def analytical_hess_qv(pcmobj, dm, verbose=None):
     d2I_dC2 = numpy.empty([9, ngrids])
     for g0, g1 in lib.prange(0, ngrids, blksize):
         fakemol = gto.fakemol_for_charges(grid_coords[g0:g1], expnt=charge_exp[g0:g1]**2)
+        fakemol.cart = mol.cart
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ipip2, aosym='s1', cintopt=cintopt)
         d2I_dC2[:,g0:g1] = numpy.einsum('dijq,ij->dq', v_nj, dm)
     d2I_dC2 = d2I_dC2.reshape([3, 3, ngrids])
@@ -937,6 +941,7 @@ def get_dvgrids(pcmobj, dm, atmlst):
     dIdA = numpy.empty([len(atmlst), 3, ngrids])
     for g0, g1 in lib.prange(0, ngrids, blksize):
         fakemol = gto.fakemol_for_charges(grid_coords[g0:g1], expnt=charge_exp[g0:g1]**2)
+        fakemol.cart = mol.cart
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip1, aosym='s1', cintopt=cintopt)
         v_nj = numpy.einsum('dijq,ij->diq', v_nj, dm + dm.T)
         dvj = numpy.asarray([numpy.sum(v_nj[:,p0:p1,:], axis=1) for p0,p1 in aoslice[:,2:]])
@@ -949,6 +954,7 @@ def get_dvgrids(pcmobj, dm, atmlst):
     dIdC = numpy.empty([3,ngrids])
     for g0, g1 in lib.prange(0, ngrids, blksize):
         fakemol = gto.fakemol_for_charges(grid_coords[g0:g1], expnt=charge_exp[g0:g1]**2)
+        fakemol.cart = mol.cart
         q_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip2, aosym='s1', cintopt=cintopt)
         dIdC[:,g0:g1] = numpy.einsum('dijq,ij->dq', q_nj, dm)
     for i_atom in atmlst:
@@ -1009,6 +1015,7 @@ def analytical_grad_vmat(pcmobj, dm, atmlst=None, verbose=None):
     dIdA = numpy.zeros([3, nao, nao])
     for g0, g1 in lib.prange(0, ngrids, blksize):
         fakemol = gto.fakemol_for_charges(grid_coords[g0:g1], expnt=charge_exp[g0:g1]**2)
+        fakemol.cart = mol.cart
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip1, aosym='s1', cintopt=cintopt)
         dIdA += numpy.einsum('dijq,q->dij', v_nj, q_sym[g0:g1])
 
@@ -1023,6 +1030,7 @@ def analytical_grad_vmat(pcmobj, dm, atmlst=None, verbose=None):
     for i_atom in atmlst:
         g0,g1 = gridslice[i_atom]
         fakemol = gto.fakemol_for_charges(grid_coords[g0:g1], expnt=charge_exp[g0:g1]**2)
+        fakemol.cart = mol.cart
         q_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip2, aosym='s1', cintopt=cintopt)
         dIdC = numpy.einsum('dijq,q->dij', q_nj, q_sym[g0:g1])
         dIdx[i_atom, :, :, :] += dIdC
@@ -1037,6 +1045,7 @@ def analytical_grad_vmat(pcmobj, dm, atmlst=None, verbose=None):
             dIdx_from_dqdx = numpy.zeros([nao, nao])
             for g0, g1 in lib.prange(0, ngrids, blksize):
                 fakemol = gto.fakemol_for_charges(grid_coords[g0:g1], expnt=charge_exp[g0:g1]**2)
+                fakemol.cart = mol.cart
                 v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s1', cintopt=cintopt)
                 dIdx_from_dqdx += numpy.einsum('ijq,q->ij', v_nj, dqdx[i_atom, i_xyz, g0:g1])
             dV_on_molecule_dx[i_atom, i_xyz, :, :] += dIdx_from_dqdx

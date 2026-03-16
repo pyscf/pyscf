@@ -217,6 +217,7 @@ def grad_qv(pcmobj, dm, q_sym = None):
     dvj = numpy.zeros([3,nao])
     for p0, p1 in lib.prange(0, ngrids, blksize):
         fakemol = gto.fakemol_for_charges(grid_coords[p0:p1], expnt=exponents[p0:p1]**2)
+        fakemol.cart = mol.cart
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip1, aosym='s1', cintopt=cintopt)
         dvj += numpy.einsum('xijk,ij,k->xi', v_nj, dm, q_sym[p0:p1])
 
@@ -225,6 +226,7 @@ def grad_qv(pcmobj, dm, q_sym = None):
     dq = numpy.empty([3,ngrids])
     for p0, p1 in lib.prange(0, ngrids, blksize):
         fakemol = gto.fakemol_for_charges(grid_coords[p0:p1], expnt=exponents[p0:p1]**2)
+        fakemol.cart = mol.cart
         q_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip2, aosym='s1', cintopt=cintopt)
         dq[:,p0:p1] = numpy.einsum('xijk,ij,k->xk', q_nj, dm, q_sym[p0:p1])
 
