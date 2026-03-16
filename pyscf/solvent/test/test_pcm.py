@@ -20,7 +20,7 @@ from pyscf import scf, gto, solvent, mcscf, cc, dft
 from pyscf.solvent import pcm
 
 def setUpModule():
-    global mol, mol0, epsilon, lebedev_order
+    global mol, mol0, epsilon
     mol0 = gto.Mole()
     mol0.atom = '''
 O       0.0000000000    -0.0000000000     0.1174000000
@@ -33,7 +33,6 @@ H       0.7570000000     0.0000000000    -0.4696000000
     mol = mol0.copy()
     mol.nelectron = mol.nao * 2
     epsilon = 35.9
-    lebedev_order = 3
 
 def diagonalize(a, b, nroots=5):
     nocc, nvir = a.shape[:2]
@@ -59,7 +58,7 @@ def tearDownModule():
     del mol, mol0
 
 def _energy_with_solvent(mf, method):
-    cm = pcm.PCM(mol)
+    cm = pcm.PCM(mf.mol)
     cm.eps = epsilon
     cm.verbose = 0
     cm.lebedev_order = 29
@@ -299,6 +298,44 @@ class KnownValues(unittest.TestCase):
         ref_energy = -99.9890988749
 
         assert abs(test_energy - ref_energy) < 1e-8
+
+    def test_cartesian_basis(self):
+        ### Q-Chem reference input
+        # $rem
+        # JOBTYPE freq
+        # METHOD HF
+        # BASIS def2-tzvp
+        # solvent_method          pcm
+        # SYMMETRY      FALSE
+        # SYM_IGNORE    TRUE
+        # MAX_SCF_CYCLES 100
+        # PURECART 2222
+        # SCF_CONVERGENCE 10
+        # THRESH        14
+        # $end
+
+        # $pcm
+        # Theory CPCM
+        # Method SWIG
+        # Solver INVERSION
+        # HeavyPoints 302
+        # HPoints 302
+        # $end
+
+        # $solvent
+        # Dielectric 35.9
+        # $end
+        mol = gto.M(
+            atom = """
+                H 0 0 0
+                F 1 0 0.1
+            """,
+            basis = "def2-tzvp",
+            cart = 1,
+            verbose = 0,
+        )
+        e_tot = _energy_with_solvent(scf.RHF(mol), 'C-PCM')
+        assert numpy.abs(e_tot - -100.0632200433) < 1e-10
 
 if __name__ == "__main__":
     print("Full Tests for PCMs")
