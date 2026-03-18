@@ -156,7 +156,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
     aosym = 's1'
     kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
     if nkpts != np.prod(kmesh):
-        logger.warning(
+        logger.warn(
             mydf, 'Input kpts differ from the kpts attribute stored in the FFTDF '
             'instance. The instance value will be ignored.')
 
@@ -310,7 +310,7 @@ def get_k_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
 
     kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
     if nkpts != np.prod(kmesh):
-        logger.warning(
+        logger.warn(
             mydf, 'Input kpts differ from the kpts attribute stored in the FFTDF '
             'instance. The instance value will be ignored.')
 
