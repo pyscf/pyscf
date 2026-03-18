@@ -154,7 +154,7 @@ int PBCint3c2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, int cutoff,
         }
 
         int *x_ctr = envs_cint->x_ctr;
-        int n_comp = envs_cint->ncomp_e1 * envs_cint->ncomp_e2 * envs_cint->ncomp_tensor;
+        int n_comp = envs_bvk->ncomp;
         size_t nc = x_ctr[0] * x_ctr[1] * x_ctr[2];
         size_t dijk = (size_t)envs_cint->nf * nc * n_comp;
         int empty = 1;

@@ -268,6 +268,79 @@ class KnownValues(unittest.TestCase):
 
         np.testing.assert_allclose(ref_grad_vmat, test_grad_vmat, atol = 1e-10)
 
+    def test_iswig_hessian(self):
+        mol = gto.M(
+            atom = """
+                H 0 0 0
+                F 1 0 0.1
+            """,
+            basis = "6-31g",
+            verbose = 0,
+        )
+
+        mf = mol.RHF().PCM()
+        mf.with_solvent.method = 'C-PCM'
+        mf.with_solvent.lebedev_order = 7
+        mf.with_solvent.eps = 78
+        mf.with_solvent.surface_discretization_method = "iswig"
+        mf.conv_tol = 1e-12
+        mf.kernel()
+        assert mf.converged
+
+        test_hessian = mf.Hessian().kernel()
+
+        ref_hessian = np.empty([mol.natm, mol.natm, 3, 3])
+
+        # def get_g(mol):
+        #     mf = mol.RHF().PCM()
+        #     mf.with_solvent.method = 'C-PCM'
+        #     mf.with_solvent.lebedev_order = 7
+        #     mf.with_solvent.eps = 78
+        #     mf.with_solvent.surface_discretization_method = "iswig"
+        #     mf.conv_tol = 1e-12
+        #     e = mf.kernel()
+        #     assert mf.converged
+        #     g = mf.Gradients().kernel()
+        #     return g
+
+        # dx = 4e-5
+        # mol_copy = mol.copy()
+        # for i_atom in range(mol.natm):
+        #     for i_xyz in range(3):
+        #         xyz_p = mol.atom_coords()
+        #         xyz_p[i_atom, i_xyz] += dx
+        #         mol_copy.set_geom_(xyz_p, unit='Bohr')
+        #         mol_copy.build()
+        #         g_p = get_g(mol_copy)
+
+        #         xyz_m = mol.atom_coords()
+        #         xyz_m[i_atom, i_xyz] -= dx
+        #         mol_copy.set_geom_(xyz_m, unit='Bohr')
+        #         mol_copy.build()
+        #         g_m = get_g(mol_copy)
+
+        #         ref_hessian[i_atom, :, i_xyz, :] = (g_p - g_m) / (2 * dx)
+        # print(repr(ref_hessian))
+
+        ref_hessian = np.array([[[[ 3.35524793e-01,  3.67074716e-13,  2.88733890e-02],
+         [ 1.30798150e-10,  3.67351939e-02, -6.44775032e-11],
+         [ 2.88733955e-02, -2.01254526e-13,  3.85748523e-02]],
+
+        [[-3.35524793e-01, -2.08425445e-13, -2.88733890e-02],
+         [-1.03562992e-10, -3.67351939e-02,  6.58219139e-11],
+         [-2.88733955e-02,  3.20686172e-13, -3.85748523e-02]]],
+
+
+       [[[-3.35524793e-01, -2.79067065e-14, -2.88733888e-02],
+         [ 1.49186219e-11, -3.67351939e-02,  9.92912350e-11],
+         [-2.88733954e-02,  5.08196980e-14, -3.85748524e-02]],
+
+        [[ 3.35524793e-01,  1.56062791e-13,  2.88733888e-02],
+         [-3.24393290e-11,  3.67351939e-02, -1.01437955e-10],
+         [ 2.88733954e-02,  6.31062334e-14,  3.85748524e-02]]]])
+
+        assert np.max(np.abs(test_hessian - ref_hessian)) < 1e-7
+
 if __name__ == "__main__":
     print("Full Tests for Hessian of PCMs")
     unittest.main()

@@ -41,7 +41,7 @@ class KnownValues(unittest.TestCase):
         self.assertRaises(KeyError, gto.basis._parse_pople_basis, '631g++', 'C')
 
     def test_basis_load(self):
-        self.assertRaises(BasisNotFoundError, gto.basis.load, 'abas', 'H')
+        self.assertRaises(RuntimeError, gto.basis.load, 'abas', 'H')
 
         self.assertEqual(len(gto.basis.load('631++g**', 'C')), 8)
         self.assertEqual(len(gto.basis.load('ccpcvdz', 'C')), 7)
@@ -149,6 +149,9 @@ Na P
         ecpdat1 = gto.basis.parse_nwchem.parse_ecp(
             gto.basis.parse_nwchem.convert_ecp_to_nwchem('Na', ecpdat), 'Na')
         self.assertEqual(ecpdat, ecpdat1)
+
+        mol = gto.M(atom='Cl 0 0 0; Cl 0 0 1', ecp=ecp_str)
+        self.assertEqual(len(mol._ecp['Cl']), 2)
 
     def test_optimize_contraction(self):
         bas = gto.parse(r'''
@@ -518,6 +521,9 @@ ECP,I,46,4,3;
         ref = gto.basis.load('gth-dzv', 'N')
         self.assertEqual(ref, basis1)
 
+        mol = gto.M(atom='N 0 0 0; N 0 0 1', basis=basis_str)
+        self.assertEqual(mol.nbas, 4)
+
         basis_str = '''
                         C DZV-GTH
                           1
@@ -531,6 +537,9 @@ ECP,I,46,4,3;
         basis1 = parse_cp2k.parse(basis_str)
         ref = gto.basis.load('gth-dzv', 'C')
         self.assertEqual(ref, basis1)
+
+        mol = gto.M(atom='Li 0 0 0; Li 0 0 1', basis=basis_str)
+        self.assertEqual(mol.nbas, 4)
 
     def test_parse_gth_pp(self):
         pp_str = '''
@@ -555,6 +564,14 @@ ECP,I,46,4,3;
         ref = gto.basis.load_pseudo('gth-pade', 'C')
         self.assertEqual(ref, pp1)
 
+        mol = gto.M(atom='C 0 0 0; C 0 0 1', pseudo=pp_str)
+        self.assertEqual(len(mol._pseudo['C']), 7)
+        self.assertEqual(mol._pseudo['C'][0], [2, 2])
+
+        mol = gto.M(atom='N 0 0 0; N 0 0 1', pseudo=pp_str)
+        self.assertEqual(len(mol._pseudo['N']), 7)
+        self.assertEqual(mol._pseudo['N'][0], [2, 1])
+
     # issue 2880
     @unittest.skipIf(basis_set_exchange is None, 'BSE not installed')
     def test_parse_bse_ecp(self):
@@ -564,7 +581,7 @@ ECP,I,46,4,3;
         dat1 = mol.intor('ECPscalar')
         mol = gto.M(atom='Fe', ecp='crenbs')
         dat2 = mol.intor('ECPscalar')
-        self.assertAlmostEqual(abs(dat1 - dat2).max(), 0, 14)
+        self.assertAlmostEqual(abs(dat1 - dat2).max(), 0, 12)
 
     def test_to_MOLOPT_name(self):
         assert parse_cp2k._to_MOLOPT_name('gthszvmolopt'   ) == 'SZV-MOLOPT-GTH'

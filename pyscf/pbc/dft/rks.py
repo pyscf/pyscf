@@ -427,8 +427,12 @@ class RKS(KohnShamDFT, pbchf.RHF):
 
     def multigrid_numint(self, mesh=None):
         '''Apply the MultiGrid algorithm for XC numerical integartion'''
+        from pyscf.pbc.lib.kpts_helper import is_gamma_point
         mf = self.copy()
-        mf._numint = multigrid.MultiGridNumInt(self.cell)
+        if is_gamma_point(mf.kpt):
+            mf._numint = multigrid.MultiGridNumInt2(self.cell)
+        else:
+            mf._numint = multigrid.MultiGridNumInt(self.cell)
         if mesh is not None:
             mf._numint.mesh = mesh
         return mf

@@ -32,7 +32,13 @@ def search_point_group_ops(cell, tol=SYMPREC):
         pbc_axis[cell.dimension:] = False
 
     a_norm = np.sqrt(np.diag(G))
-    a_angle = np.arccos(G / np.outer(a_norm, a_norm))
+
+    # issue 3113
+    # a_angle = np.arccos(G / np.outer(a_norm, a_norm))
+    ratio = G / np.outer(a_norm, a_norm)
+    # diagonal terms may slightly exceed [-1, 1] due to rounding errors
+    ratio = np.clip(ratio, -1., 1.)
+    a_angle = np.arccos(ratio)
     tol2 = tol**2
 
     rotations = []
@@ -46,7 +52,12 @@ def search_point_group_ops(cell, tol=SYMPREC):
         if (length_error > tol).any():
             continue
         tmp = (a_norm + a_tilde_norm)
-        a_tilde_angle = np.arccos(G_tilde / np.outer(a_tilde_norm, a_tilde_norm))
+
+        # issue 3113
+        # a_tilde_angle = np.arccos(G_tilde / np.outer(a_tilde_norm, a_tilde_norm))
+        ratio = G_tilde / np.outer(a_tilde_norm, a_tilde_norm)
+        ratio = np.clip(ratio, -1., 1.)
+        a_tilde_angle = np.arccos(ratio)
         angle_error = np.sin(a_angle - a_tilde_angle) **2 * np.outer(tmp,tmp) / 4
         if (angle_error > tol2).any():
             continue

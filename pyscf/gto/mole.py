@@ -481,11 +481,7 @@ def _generate_basis_converter():
         unc = basis_name.lower().startswith('unc')
         if unc:
             basis_name = basis_name[3:]
-        if 'gth' in basis_name:
-            from pyscf.pbc.gto.basis import load as pbc_basis_load
-            _basis = pbc_basis_load(basis_name, symb)
-        else:
-            _basis = basis.load(basis_name, symb)
+        _basis = basis.load(basis_name, symb)
         if unc:
             _basis = uncontracted_basis(_basis)
         return _basis
@@ -2149,8 +2145,8 @@ def fromstring(string, format='xyz'):
     if format == 'zmat':
         return string
     elif format == 'xyz':
-        line, title, geom = string.split('\n', 2)
-        return geom
+        atom_number_str, title, geom = string.split('\n', 2)
+        return '\n'.join(geom.splitlines()[:int(atom_number_str)])
     elif format == 'sdf':
         raw = string.splitlines()
         natoms, nbonds = raw[3].split()[:2]
@@ -3933,8 +3929,8 @@ class Mole(MoleBase):
                 bas_coords = atom_coords[self._bas[:,ATOM_OF]]
                 upper_bound = (bas_coords + shell_radius[:,None]).max(axis=0)
                 lower_bound = (bas_coords - shell_radius[:,None]).min(axis=0)
-                box_size = upper_bound - lower_bound
-                box = numpy.diag(box_size)
+                box_size = (upper_bound - lower_bound).max()
+                box = numpy.eye(3) * box_size
             else:
                 atom_coords = self.atom_coords()
                 size = atom_coords.max(axis=0) - atom_coords.min(axis=0)

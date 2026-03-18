@@ -29,6 +29,7 @@ from pyscf.dft import gen_grid
 from pyscf.data import radii
 from pyscf.solvent import ddcosmo
 from pyscf.solvent import _attach_solvent
+from scipy.special import erf
 
 @lib.with_doc(_attach_solvent._for_scf.__doc__)
 def pcm_for_scf(mf, solvent_obj=None, dm=None):
@@ -127,16 +128,18 @@ def switch_h(x):
     y[x>1] = 1.0
     return y
 
-def gen_surface(mol, ng=302, rad=modified_Bondi, vdw_scale=1.2):
+def gen_surface(mol, ng=302, rad=modified_Bondi, surface_discretization_method="SWIG"):
     '''J. Phys. Chem. A 1999, 103, 11060-11079'''
     unit_sphere = gen_grid.MakeAngularGrid(ng)
     atom_coords = mol.atom_coords(unit='B')
-    charges = mol.atom_charges()
     N_J = ng * numpy.ones(mol.natm)
-    R_J = numpy.asarray([rad[chg] for chg in charges])
-    R_sw_J = R_J * (14.0 / N_J)**0.5
-    alpha_J = 1.0/2.0 + R_J/R_sw_J - ((R_J/R_sw_J)**2 - 1.0/28)**0.5
-    R_in_J = R_J - alpha_J * R_sw_J
+    from pyscf.data.elements import charge as charge_of_element
+    element_index = [charge_of_element(e) for e in mol.elements]
+    R_J = numpy.asarray([rad[chg] for chg in element_index])
+    if surface_discretization_method.upper() == "SWIG":
+        R_sw_J = R_J * (14.0 / N_J)**0.5
+        alpha_J = 1.0/2.0 + R_J/R_sw_J - ((R_J/R_sw_J)**2 - 1.0/28)**0.5
+        R_in_J = R_J - alpha_J * R_sw_J
 
     grid_coords = []
     weights = []
@@ -148,19 +151,28 @@ def gen_surface(mol, ng=302, rad=modified_Bondi, vdw_scale=1.2):
     gslice_by_atom = []
     p0 = p1 = 0
     for ia in range(mol.natm):
-        symb = mol.atom_symbol(ia)
-        chg = gto.charge(symb)
-        r_vdw = rad[chg]
+        r_vdw = R_J[ia]
 
         atom_grid = r_vdw * unit_sphere[:,:3] + atom_coords[ia,:]
         riJ = scipy.spatial.distance.cdist(atom_grid[:,:3], atom_coords)
-        diJ = (riJ - R_in_J) / R_sw_J
-        diJ[:,ia] = 1.0
-        diJ[diJ < 1e-8] = 0.0
-        fiJ = switch_h(diJ)
 
         w = unit_sphere[:,3] * 4.0 * PI
+        xi = XI[ng] / (r_vdw * w**0.5)
+
+        if surface_discretization_method.upper() == "SWIG":
+            diJ = (riJ - R_in_J) / R_sw_J
+            diJ[:,ia] = 1.0
+            diJ[diJ < 1e-8] = 0.0
+            fiJ = switch_h(diJ)
+        elif surface_discretization_method.upper() == "ISWIG":
+            fiJ = 1 - 0.5 * (erf(xi[:, None] * (R_J[None, :] - riJ)) + erf(xi[:, None] * (R_J[None, :] + riJ)))
+            fiJ[:,ia] = 1.0
+            fiJ[fiJ < 1e-8] = 0
+        else:
+            raise NotImplementedError(f"surface_discretization_method = {surface_discretization_method} not recognized")
+
         swf = numpy.prod(fiJ, axis=1)
+
         idx = w*swf > 1e-16
 
         p0, p1 = p1, p1+sum(idx)
@@ -169,8 +181,7 @@ def gen_surface(mol, ng=302, rad=modified_Bondi, vdw_scale=1.2):
         weights.append(w[idx])
         switch_fun.append(swf[idx])
         norm_vec.append(unit_sphere[idx,:3])
-        xi = XI[ng] / (r_vdw * w[idx]**0.5)
-        charge_exp.append(xi)
+        charge_exp.append(xi[idx])
         R_vdw.append(numpy.ones(sum(idx)) * r_vdw)
         area.append(w[idx]*r_vdw**2*swf[idx])
 
@@ -192,10 +203,17 @@ def gen_surface(mol, ng=302, rad=modified_Bondi, vdw_scale=1.2):
         'R_vdw': R_vdw,
         'norm_vec': norm_vec,
         'area': area,
-        'R_in_J': R_in_J,
-        'R_sw_J': R_sw_J,
         'atom_coords': atom_coords
     }
+    if surface_discretization_method.upper() == "SWIG":
+        surface.update({
+            'R_in_J': R_in_J,
+            'R_sw_J': R_sw_J,
+        })
+    elif surface_discretization_method.upper() == "ISWIG":
+        surface.update({
+            'R_J': R_J,
+        })
     return surface
 
 def get_F_A(surface):
@@ -225,7 +243,7 @@ def get_D_S(surface, with_S=True, with_D=False):
     rij = scipy.spatial.distance.cdist(grid_coords, grid_coords)
     xi_r_ij = xi_ij * rij
     numpy.fill_diagonal(rij, 1)
-    S = scipy.special.erf(xi_r_ij) / rij
+    S = erf(xi_r_ij) / rij
     numpy.fill_diagonal(S, charge_exp * (2.0 / PI)**0.5 / switch_fun)
 
     D = None
@@ -294,6 +312,15 @@ class PCM(lib.StreamObject):
         `state_id=0` corresponds to the ground state, while `state_id=1` corresponds
         to the first excited state. Default is 0.
 
+    surface_discretization_method : str
+        Specifies the algorithm for the switching function, i.e. how each grid is partitioned
+        among the atoms.
+        Available options are "SWIG" (switching/Gaussian method) and "ISWIG" (improved SWIG).
+        Please refer to the following paper for the definition of both algorithms:
+        Lange, A. W.; Herbert, J. M. A smooth, nonsingular, and faithful discretization scheme
+        for polarizable continuum models: The switching/Gaussian approach. The Journal of
+        Chemical Physics 2010, 133. https://doi.org/10.1063/1.3511297
+
     Saved Results:
     --------------
     e_tot : float
@@ -317,6 +344,7 @@ class PCM(lib.StreamObject):
         'mol', 'radii_table', 'lebedev_order',
         'eps', 'max_cycle', 'conv_tol', 'state_id', 'frozen',
         'equilibrium_solvation', 'e', 'v', 'v_grids_n',
+        'surface_discretization_method',
     }
 
     kernel = ddcosmo.DDCOSMO.kernel
@@ -333,6 +361,7 @@ class PCM(lib.StreamObject):
         self.radii_table = None
         self.lebedev_order = 29
         self.eps = 78.3553
+        self.surface_discretization_method = "SWIG"
 
         self.max_cycle = 20
         self.conv_tol = 1e-7
@@ -385,7 +414,8 @@ class PCM(lib.StreamObject):
         if ng is None:
             ng = gen_grid.LEBEDEV_ORDER[self.lebedev_order]
 
-        self.surface = gen_surface(mol, rad=radii_table, ng=ng)
+        self.surface = gen_surface(mol, rad=radii_table, ng=ng,
+                                   surface_discretization_method = self.surface_discretization_method)
         self._intermediates = {}
         F, A = get_F_A(self.surface)
         D, S = get_D_S(self.surface, with_S=True, with_D=True)
