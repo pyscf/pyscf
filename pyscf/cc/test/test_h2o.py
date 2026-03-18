@@ -81,7 +81,7 @@ class KnownValues(unittest.TestCase):
         mcc.conv_tol = 1e-10
         mcc.kernel()
         self.assertAlmostEqual(mcc.ecc, -0.21124878189922872, 7)
-        self.assertAlmostEqual(abs(mcc.t2).sum()- 5.4996425901189347, 5)
+        self.assertAlmostEqual(abs(mcc.t2).sum(), 5.4996425901189347, 5)
 
         mcc.frozen = None
         mcc.kernel()
