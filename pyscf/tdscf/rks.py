@@ -112,6 +112,9 @@ class CasidaTDDFT(TDDFT, TDA):
         if mf._numint.libxc.is_hybrid_xc(mf.xc):
             raise RuntimeError('%s cannot be used with hybrid functional'
                                % self.__class__)
+        if mf.mo_energy is None:
+            mf.run()
+
         self.check_sanity()
         self.dump_flags()
         if nstates is None:

@@ -423,6 +423,10 @@ class TDA(TDBase):
         '''TDA diagonalization solver
         '''
         cpu0 = (logger.process_clock(), logger.perf_counter())
+        mf = self._scf
+        if mf.mo_energy is None:
+            mf.run()
+
         self.check_sanity()
         self.dump_flags()
         if nstates is None:
@@ -539,6 +543,10 @@ class TDHF(TDBase):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
         '''
         cpu0 = (logger.process_clock(), logger.perf_counter())
+        mf = self._scf
+        if mf.mo_energy is None:
+            mf.run()
+
         self.check_sanity()
         self.dump_flags()
         if nstates is None:
