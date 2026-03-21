@@ -364,12 +364,16 @@ class GradientsBase(lib.StreamObject):
             solver (string) : geometry optimization solver, can be "geomeTRIC"
             (default) or "berny".
         '''
-        if solver.lower() == 'geometric':
+        solver = solver.lower()
+        if solver == 'geometric':
             from pyscf.geomopt import geometric_solver
             return geometric_solver.GeometryOptimizer(self.as_scanner())
-        elif solver.lower() == 'berny':
+        elif solver == 'berny':
             from pyscf.geomopt import berny_solver
             return berny_solver.GeometryOptimizer(self.as_scanner())
+        elif solver == 'ase':
+            from pyscf.geomopt import ase_solver
+            return ase_solver.GeometryOptimizer(self.base)
         else:
             raise RuntimeError('Unknown geometry optimization solver %s' % solver)
 
@@ -435,14 +439,7 @@ class GradientsBase(lib.StreamObject):
         to be split into alpha,beta in DF-ROHF subclass'''
         return lib.tag_array (dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
 
-    # to_gpu can be reused only when __init__ still takes mf
-    def to_gpu(self):
-        mf = self.base.to_gpu()
-        from importlib import import_module
-        mod = import_module(self.__module__.replace('pyscf', 'gpu4pyscf'))
-        cls = getattr(mod, self.__class__.__name__)
-        obj = cls(mf)
-        return obj
+    to_gpu = lib.to_gpu
 
 # export the symbol GradientsMixin for backward compatibility.
 # GradientsMixin should be dropped in the future.

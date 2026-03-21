@@ -210,7 +210,16 @@ class KnowValues(unittest.TestCase):
         g, hop, hdiag = mf.gen_g_hop(mo, mo_occ, [mf.get_hcore()]*2)
         self.assertAlmostEqual(numpy.linalg.norm(hop(dm1)), 28.01954683540594, 6)
 
-
+    def test_exxdiv_treatment_newton(self):
+        mf_fo = scf.KRHF(cell, cell.make_kpts([2,1,1]))
+        mf_fo.exxdiv = None
+        mf_fo.conv_tol_grad = 1e-4
+        mf_fo.kernel()
+        mf_so = scf.KRHF(cell, cell.make_kpts([2,1,1]), exxdiv=None).newton()
+        mf_so.exxdiv = None
+        mf_so.conv_tol_grad = 1e-4
+        mf_so.kernel()
+        self.assertAlmostEqual(mf_so.e_tot, mf_fo.e_tot, 8)
 if __name__ == "__main__":
     print("Full Tests for PBC Newton solver")
     unittest.main()

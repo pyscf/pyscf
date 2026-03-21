@@ -73,7 +73,7 @@ def transform_integrals_incore(myadc):
 
     if ((myadc.method == "adc(2)" and myadc.method_type == "ee" and myadc.approx_trans_moments is False)
         or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False)
-        or (myadc.method == "adc(2)-x" and myadc.method_type == "ee")
+        or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is True and myadc.method_type in ("ea","ee"))
         or (myadc.method == "adc(3)")):
 
         eris.vvvv_p = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_a, vir_a),
@@ -222,7 +222,7 @@ def transform_integrals_outcore(myadc):
 
     if ((myadc.method == "adc(2)" and myadc.method_type == "ee" and myadc.approx_trans_moments is False)
         or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False)
-        or (myadc.method == "adc(2)-x" and myadc.method_type == "ee")
+        or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is True and myadc.method_type in ("ea","ee"))
         or (myadc.method == "adc(3)")):
 
         cput2 = logger.process_clock(), logger.perf_counter()
@@ -403,9 +403,6 @@ def transform_integrals_df(myadc):
     LOO = LOO.reshape(naux,nocc_b*nocc_b)
     eris.LOV = eris.LOV.reshape(naux,nocc_b*nvir_b)
     LVO = LVO.reshape(naux,nocc_b*nvir_b)
-    if not isinstance(myadc.ncvs, type(None)) and myadc.ncvs > 0:
-        eris.Lce = eris.Lce.reshape(naux,ncvs*nvir_a)
-        eris.LCE = eris.LCE.reshape(naux,ncvs*nvir_b)
 
     eris.Lee_p = Lvv_p = lib.pack_tril(eris.Lvv)
     eris.LEE_p = LVV_p = lib.pack_tril(eris.LVV)

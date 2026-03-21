@@ -16,6 +16,7 @@
 #         Samragni Banerjee <samragnibanerjee4@gmail.com>
 #         James Serna <jamcar456@gmail.com>
 #         Terrence Stahl <>
+#         Ning-Yuan Chen <cny003@outlook.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
@@ -30,6 +31,7 @@ from pyscf.adc import uadc
 from pyscf.adc import uadc_ao2mo
 from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
+from pyscf.data.nist import HARTREE2EV
 
 
 def get_imds(adc, eris=None):
@@ -1685,7 +1687,7 @@ def analyze_eigenvector(adc):
         doubles_bbb_val = list(U_sorted_bbb)
 
         logger.info(adc, '%s | root %d | Energy (eV) = %12.8f | norm(1p)  = %6.4f | norm(1h2p) = %6.4f ',
-                    adc.method, I, adc.E[I]*27.2114, U1dotU1, U2dotU2)
+                    adc.method, I, adc.E[I]*HARTREE2EV, U1dotU1, U2dotU2)
 
         if singles_a_val:
             logger.info(adc, "\n1p(alpha) block: ")
@@ -1784,7 +1786,7 @@ def analyze_spec_factor(adc):
                 continue
 
             logger.info(adc, '%s | root %d | Energy (eV) = %12.8f | %s\n',
-                    adc.method, i, adc.E[i]*27.2114, spin)
+                    adc.method, i, adc.E[i]*HARTREE2EV, spin)
             logger.info(adc, "     HF MO     Spec. Contribution     Orbital symmetry")
             logger.info(adc, "-----------------------------------------------------------")
 
@@ -1859,6 +1861,530 @@ def compute_dyson_mo(myadc):
 
     return dyson_mo
 
+def make_rdm1(adc):
+
+    cput0 = (logger.process_clock(), logger.perf_counter())
+    log = logger.Logger(adc.stdout, adc.verbose)
+
+    U = adc.U
+
+    list_rdm1_a = []
+    list_rdm1_b = []
+
+    for i in range(U.shape[1]):
+        rdm1_a, rdm1_b = make_rdm1_eigenvectors(adc, U[:,i], U[:,i])
+        list_rdm1_a.append(rdm1_a)
+        list_rdm1_b.append(rdm1_b)
+
+    cput0 = log.timer_debug1("completed OPDM calculation", *cput0)
+    return (list_rdm1_a, list_rdm1_b)
+
+def make_rdm1_eigenvectors(adc, L, R):
+
+    L = np.array(L).ravel()
+    R = np.array(R).ravel()
+
+    nocc_a = adc.nocc_a
+    nocc_b = adc.nocc_b
+    nvir_a = adc.nvir_a
+    nvir_b = adc.nvir_b
+    nmo_a = nocc_a + nvir_a
+    nmo_b = nocc_b + nvir_b
+
+    occ_list_a = range(nocc_a)
+    occ_list_b = range(nocc_b)
+
+    t2_1_a = adc.t2[0][0][:]
+    t2_1_ab = adc.t2[0][1][:]
+    t2_1_b = adc.t2[0][2][:]
+    if adc.t1[0][0] is not None:
+        t1_2_a = adc.t1[0][0][:]
+        t1_2_b = adc.t1[0][1][:]
+    else:
+        t1_2_a = np.zeros((nocc_a, nvir_a))
+        t1_2_b = np.zeros((nocc_b, nvir_b))
+
+    ab_ind_a = np.tril_indices(nvir_a, k=-1)
+    ab_ind_b = np.tril_indices(nvir_b, k=-1)
+    n_singles_a = nvir_a
+    n_singles_b = nvir_b
+    n_doubles_aaa = nvir_a * (nvir_a - 1) * nocc_a // 2
+    n_doubles_bab = nocc_b * nvir_a * nvir_b
+    n_doubles_aba = nocc_a * nvir_b * nvir_a
+    n_doubles_bbb = nvir_b * (nvir_b - 1) * nocc_b // 2
+
+    s_a = 0
+    f_a = n_singles_a
+    s_b = f_a
+    f_b = s_b + n_singles_b
+    s_aaa = f_b
+    f_aaa = s_aaa + n_doubles_aaa
+    s_bab = f_aaa
+    f_bab = s_bab + n_doubles_bab
+    s_aba = f_bab
+    f_aba = s_aba + n_doubles_aba
+    s_bbb = f_aba
+    f_bbb = s_bbb + n_doubles_bbb
+
+    rdm1_a  = np.zeros((nmo_a,nmo_a))
+    rdm1_b  = np.zeros((nmo_b,nmo_b))
+
+    L_a = L[s_a:f_a]
+    L_b = L[s_b:f_b]
+    L_aaa = L[s_aaa:f_aaa]
+    L_bab = L[s_bab:f_bab]
+    L_aba = L[s_aba:f_aba]
+    L_bbb = L[s_bbb:f_bbb]
+
+    R_a = R[s_a:f_a]
+    R_b = R[s_b:f_b]
+    R_aaa = R[s_aaa:f_aaa]
+    R_bab = R[s_bab:f_bab]
+    R_aba = R[s_aba:f_aba]
+    R_bbb = R[s_bbb:f_bbb]
+
+    L_aaa = L_aaa.reshape(nocc_a,-1)
+    L_bbb = L_bbb.reshape(nocc_b,-1)
+    L_aaa_u = None
+    L_aaa_u = np.zeros((nocc_a,nvir_a,nvir_a))
+    L_aaa_u[:,ab_ind_a[0],ab_ind_a[1]]= L_aaa.copy()
+    L_aaa_u[:,ab_ind_a[1],ab_ind_a[0]]= -L_aaa.copy()
+
+    L_bbb_u = None
+    L_bbb_u = np.zeros((nocc_b,nvir_b,nvir_b))
+    L_bbb_u[:,ab_ind_b[0],ab_ind_b[1]]= L_bbb.copy()
+    L_bbb_u[:,ab_ind_b[1],ab_ind_b[0]]= -L_bbb.copy()
+
+    L_aba = L_aba.reshape(nocc_a,nvir_b,nvir_a)
+    L_bab = L_bab.reshape(nocc_b,nvir_a,nvir_b)
+
+
+    R_aaa = R_aaa.reshape(nocc_a,-1)
+    R_bbb = R_bbb.reshape(nocc_b,-1)
+    R_aaa_u = None
+    R_aaa_u = np.zeros((nocc_a,nvir_a,nvir_a))
+    R_aaa_u[:,ab_ind_a[0],ab_ind_a[1]]= R_aaa.copy()
+    R_aaa_u[:,ab_ind_a[1],ab_ind_a[0]]= -R_aaa.copy()
+
+    R_bbb_u = None
+    R_bbb_u = np.zeros((nocc_b,nvir_b,nvir_b))
+    R_bbb_u[:,ab_ind_b[0],ab_ind_b[1]]= R_bbb.copy()
+    R_bbb_u[:,ab_ind_b[1],ab_ind_b[0]]= -R_bbb.copy()
+
+    R_aba = R_aba.reshape(nocc_a,nvir_b,nvir_a)
+    R_bab = R_bab.reshape(nocc_b,nvir_a,nvir_b)
+
+######### block- ij
+    rdm1_a[occ_list_a, occ_list_a]  = np.einsum('a,a->', L_a, R_a, optimize = True)
+    rdm1_a[occ_list_a, occ_list_a] += np.einsum('a,a->', L_b, R_b, optimize = True)
+
+    rdm1_b[occ_list_b, occ_list_b]  = np.einsum('a,a->', L_a, R_a, optimize = True)
+    rdm1_b[occ_list_b, occ_list_b] += np.einsum('a,a->', L_b, R_b, optimize = True)
+
+    rdm1_a[:nocc_a, :nocc_a] -= 1/2 * np.einsum('a,a,Iibc,Jibc->IJ', L_a, R_a, t2_1_a, t2_1_a, optimize = True)
+    rdm1_a[:nocc_a, :nocc_a] += np.einsum('a,b,Iiac,Jibc->IJ', L_a, R_a, t2_1_a, t2_1_a, optimize = True)
+    rdm1_a[:nocc_a, :nocc_a] -= np.einsum('a,a,Iibc,Jibc->IJ', L_a, R_a, t2_1_ab, t2_1_ab, optimize = True)
+    rdm1_a[:nocc_a, :nocc_a] += np.einsum('a,b,Iiac,Jibc->IJ', L_a, R_a, t2_1_ab, t2_1_ab, optimize = True)
+    rdm1_a[:nocc_a, :nocc_a] -= 1/2 * np.einsum('a,a,Iibc,Jibc->IJ', L_b, R_b, t2_1_a, t2_1_a, optimize = True)
+    rdm1_a[:nocc_a, :nocc_a] -= np.einsum('a,a,Iibc,Jibc->IJ', L_b, R_b, t2_1_ab, t2_1_ab, optimize = True)
+    rdm1_a[:nocc_a, :nocc_a] += np.einsum('a,b,Iica,Jicb->IJ', L_b, R_b, t2_1_ab, t2_1_ab, optimize = True)
+
+    rdm1_b[:nocc_b, :nocc_b] -= np.einsum('a,a,iIbc,iJbc->IJ', L_a, R_a, t2_1_ab, t2_1_ab, optimize = True)
+    rdm1_b[:nocc_b, :nocc_b] += np.einsum('a,b,iIac,iJbc->IJ', L_a, R_a, t2_1_ab, t2_1_ab, optimize = True)
+    rdm1_b[:nocc_b, :nocc_b] -= 1/2 * np.einsum('a,a,Iibc,Jibc->IJ', L_a, R_a, t2_1_b, t2_1_b, optimize = True)
+    rdm1_b[:nocc_b, :nocc_b] -= np.einsum('a,a,iIbc,iJbc->IJ', L_b, R_b, t2_1_ab, t2_1_ab, optimize = True)
+    rdm1_b[:nocc_b, :nocc_b] += np.einsum('a,b,iIca,iJcb->IJ', L_b, R_b, t2_1_ab, t2_1_ab, optimize = True)
+    rdm1_b[:nocc_b, :nocc_b] -= 1/2 * np.einsum('a,a,Iibc,Jibc->IJ', L_b, R_b, t2_1_b, t2_1_b, optimize = True)
+    rdm1_b[:nocc_b, :nocc_b] += np.einsum('a,b,Iiac,Jibc->IJ', L_b, R_b, t2_1_b, t2_1_b, optimize = True)
+
+    rdm1_a[:nocc_a, :nocc_a] -= 1/2 * np.einsum('Jab,Iab->IJ', L_aaa_u, R_aaa_u, optimize = True)
+    rdm1_a[:nocc_a, :nocc_a] -= np.einsum('Jab,Iab->IJ', L_aba, R_aba, optimize = True)
+    rdm1_a[occ_list_a, occ_list_a] += 1/2 * np.einsum('iab,iab->', L_aaa_u, R_aaa_u, optimize = True)
+    rdm1_a[occ_list_a, occ_list_a] += np.einsum('iab,iab->', L_aba, R_aba, optimize = True)
+    rdm1_a[occ_list_a, occ_list_a] += np.einsum('iab,iab->', L_bab, R_bab, optimize = True)
+    rdm1_a[occ_list_a, occ_list_a] += 1/2 * np.einsum('iab,iab->', L_bbb_u, R_bbb_u, optimize = True)
+
+    rdm1_b[:nocc_b, :nocc_b] -= np.einsum('Jab,Iab->IJ', L_bab, R_bab, optimize = True)
+    rdm1_b[:nocc_b, :nocc_b] -= 1/2 * np.einsum('Jab,Iab->IJ', L_bbb_u, R_bbb_u, optimize = True)
+    rdm1_b[occ_list_b, occ_list_b] += 1/2 * np.einsum('iab,iab->', L_aaa_u, R_aaa_u, optimize = True)
+    rdm1_b[occ_list_b, occ_list_b] += np.einsum('iab,iab->', L_aba, R_aba, optimize = True)
+    rdm1_b[occ_list_b, occ_list_b] += np.einsum('iab,iab->', L_bab, R_bab, optimize = True)
+    rdm1_b[occ_list_b, occ_list_b] += 1/2 * np.einsum('iab,iab->', L_bbb_u, R_bbb_u, optimize = True)
+
+########## block- ab
+    rdm1_a[nocc_a:, nocc_a:]  = np.einsum('A,B->AB', L_a, R_a, optimize = True)
+
+    rdm1_b[nocc_b:, nocc_b:]  = np.einsum('A,B->AB', L_b, R_b, optimize = True)
+
+    rdm1_a[nocc_a:, nocc_a:] -= 1/4 * np.einsum('A,a,ijab,ijBb->AB', L_a, R_a, t2_1_a, t2_1_a, optimize = True)
+    rdm1_a[nocc_a:, nocc_a:] -= 1/4 * np.einsum('a,B,ijab,ijAb->AB', L_a, R_a, t2_1_a, t2_1_a, optimize = True)
+    rdm1_a[nocc_a:, nocc_a:] += 1/2 * np.einsum('a,a,ijAb,ijBb->AB', L_a, R_a, t2_1_a, t2_1_a, optimize = True)
+    rdm1_a[nocc_a:, nocc_a:] -= 1/2 * np.einsum('a,b,ijBa,ijAb->AB', L_a, R_a, t2_1_a, t2_1_a, optimize = True)
+    rdm1_a[nocc_a:, nocc_a:] -= 1/2 * np.einsum('A,a,ijab,ijBb->AB', L_a, R_a, t2_1_ab, t2_1_ab, optimize = True)
+    rdm1_a[nocc_a:, nocc_a:] -= 1/2 * np.einsum('a,B,ijab,ijAb->AB', L_a, R_a, t2_1_ab, t2_1_ab, optimize = True)
+    rdm1_a[nocc_a:, nocc_a:] += np.einsum('a,a,ijAb,ijBb->AB', L_a, R_a, t2_1_ab, t2_1_ab, optimize = True)
+    rdm1_a[nocc_a:, nocc_a:] += 1/2 * np.einsum('a,a,ijAb,ijBb->AB', L_b, R_b, t2_1_a, t2_1_a, optimize = True)
+    rdm1_a[nocc_a:, nocc_a:] += np.einsum('a,a,ijAb,ijBb->AB', L_b, R_b, t2_1_ab, t2_1_ab, optimize = True)
+    rdm1_a[nocc_a:, nocc_a:] -= np.einsum('a,b,ijBa,ijAb->AB', L_b, R_b, t2_1_ab, t2_1_ab, optimize = True)
+
+    rdm1_b[nocc_b:, nocc_b:] += np.einsum('a,a,ijbA,ijbB->AB', L_a, R_a, t2_1_ab, t2_1_ab, optimize = True)
+    rdm1_b[nocc_b:, nocc_b:] -= np.einsum('a,b,ijaB,ijbA->AB', L_a, R_a, t2_1_ab, t2_1_ab, optimize = True)
+    rdm1_b[nocc_b:, nocc_b:] += 1/2 * np.einsum('a,a,ijAb,ijBb->AB', L_a, R_a, t2_1_b, t2_1_b, optimize = True)
+    rdm1_b[nocc_b:, nocc_b:] -= 1/2 * np.einsum('A,a,ijba,ijbB->AB', L_b, R_b, t2_1_ab, t2_1_ab, optimize = True)
+    rdm1_b[nocc_b:, nocc_b:] -= 1/2 * np.einsum('a,B,ijba,ijbA->AB', L_b, R_b, t2_1_ab, t2_1_ab, optimize = True)
+    rdm1_b[nocc_b:, nocc_b:] += np.einsum('a,a,ijbA,ijbB->AB', L_b, R_b, t2_1_ab, t2_1_ab, optimize = True)
+    rdm1_b[nocc_b:, nocc_b:] -= 1/4 * np.einsum('A,a,ijab,ijBb->AB', L_b, R_b, t2_1_b, t2_1_b, optimize = True)
+    rdm1_b[nocc_b:, nocc_b:] -= 1/4 * np.einsum('a,B,ijab,ijAb->AB', L_b, R_b, t2_1_b, t2_1_b, optimize = True)
+    rdm1_b[nocc_b:, nocc_b:] += 1/2 * np.einsum('a,a,ijAb,ijBb->AB', L_b, R_b, t2_1_b, t2_1_b, optimize = True)
+    rdm1_b[nocc_b:, nocc_b:] -= 1/2 * np.einsum('a,b,ijBa,ijAb->AB', L_b, R_b, t2_1_b, t2_1_b, optimize = True)
+
+    rdm1_a[nocc_a:, nocc_a:] += np.einsum('iAa,iBa->AB', L_aaa_u, R_aaa_u, optimize = True)
+    rdm1_a[nocc_a:, nocc_a:] += np.einsum('iaA,iaB->AB', L_aba, R_aba, optimize = True)
+    rdm1_a[nocc_a:, nocc_a:] += np.einsum('iAa,iBa->AB', L_bab, R_bab, optimize = True)
+
+    rdm1_b[nocc_b:, nocc_b:] += np.einsum('iAa,iBa->AB', L_aba, R_aba, optimize = True)
+    rdm1_b[nocc_b:, nocc_b:] += np.einsum('iaA,iaB->AB', L_bab, R_bab, optimize = True)
+    rdm1_b[nocc_b:, nocc_b:] += np.einsum('iAa,iBa->AB', L_bbb_u, R_bbb_u, optimize = True)
+
+#######G^100#### block- ia
+    rdm1_a[:nocc_a, nocc_a:] =- np.einsum('a,A,Ia->IA', L_a, R_a, t1_2_a, optimize = True)
+    rdm1_a[:nocc_a, nocc_a:] += np.einsum('a,a,IA->IA', L_a, R_a, t1_2_a, optimize = True)
+    rdm1_a[:nocc_a, nocc_a:] += np.einsum('a,a,IA->IA', L_b, R_b, t1_2_a, optimize = True)
+
+    rdm1_b[:nocc_b, nocc_b:]  = np.einsum('a,a,IA->IA', L_a, R_a, t1_2_b, optimize = True)
+    rdm1_b[:nocc_b, nocc_b:] -= np.einsum('a,A,Ia->IA', L_b, R_b, t1_2_b, optimize = True)
+    rdm1_b[:nocc_b, nocc_b:] += np.einsum('a,a,IA->IA', L_b, R_b, t1_2_b, optimize = True)
+
+    rdm1_a[:nocc_a, nocc_a:] -= np.einsum('a,IAa->IA', L_a, R_aaa_u, optimize = True)
+    rdm1_a[:nocc_a, nocc_a:] += np.einsum('a,IaA->IA', L_b, R_aba, optimize = True)
+
+    rdm1_b[:nocc_b, nocc_b:] += np.einsum('a,IaA->IA', L_a, R_bab, optimize = True)
+    rdm1_b[:nocc_b, nocc_b:] -= np.einsum('a,IAa->IA', L_b, R_bbb_u, optimize = True)
+
+    rdm1_a[:nocc_a, nocc_a:] -= 1/2 * np.einsum('iab,A,Iiab->IA', L_aaa_u, R_a, t2_1_a, optimize = True)
+    rdm1_a[:nocc_a, nocc_a:] += np.einsum('iab,a,IiAb->IA', L_aaa_u, R_a, t2_1_a, optimize = True)
+    rdm1_a[:nocc_a, nocc_a:] += np.einsum('iab,a,IiAb->IA', L_aba, R_b, t2_1_a, optimize = True)
+    rdm1_a[:nocc_a, nocc_a:] -= np.einsum('iab,A,Iiab->IA', L_bab, R_a, t2_1_ab, optimize = True)
+    rdm1_a[:nocc_a, nocc_a:] += np.einsum('iab,a,IiAb->IA', L_bab, R_a, t2_1_ab, optimize = True)
+    rdm1_a[:nocc_a, nocc_a:] += np.einsum('iab,a,IiAb->IA', L_bbb_u, R_b, t2_1_ab, optimize = True)
+
+    rdm1_b[:nocc_b, nocc_b:] += np.einsum('iab,a,iIbA->IA', L_aaa_u, R_a, t2_1_ab, optimize = True)
+    rdm1_b[:nocc_b, nocc_b:] -= np.einsum('iab,A,iIba->IA', L_aba, R_b, t2_1_ab, optimize = True)
+    rdm1_b[:nocc_b, nocc_b:] += np.einsum('iab,a,iIbA->IA', L_aba, R_b, t2_1_ab, optimize = True)
+    rdm1_b[:nocc_b, nocc_b:] += np.einsum('iab,a,IiAb->IA', L_bab, R_a, t2_1_b, optimize = True)
+    rdm1_b[:nocc_b, nocc_b:] -= 1/2 * np.einsum('iab,A,Iiab->IA', L_bbb_u, R_b, t2_1_b, optimize = True)
+    rdm1_b[:nocc_b, nocc_b:] += np.einsum('iab,a,IiAb->IA', L_bbb_u, R_b, t2_1_b, optimize = True)
+
+############ block- ai
+    rdm1_a[nocc_a:,:nocc_a] = rdm1_a[:nocc_a,nocc_a:].T
+    rdm1_b[nocc_b:,:nocc_b] = rdm1_b[:nocc_b,nocc_b:].T
+
+    ####### ADC(3) SPIN ADAPTED EXCITED STATE OPDM WITH SQA ################
+    if adc.method == "adc(3)":
+        ### Redudant Variables used for names from SQA
+        t2_2_a = adc.t2[1][0][:]
+        t2_2_ab = adc.t2[1][1][:]
+        t2_2_b = adc.t2[1][2][:]
+        if adc.t1[1][0] is not None:
+            t1_3_a = adc.t1[1][0][:]
+            t1_3_b = adc.t1[1][1][:]
+        else:
+            t1_3_a = np.zeros((nocc_a, nvir_a))
+            t1_3_b = np.zeros((nocc_b, nvir_b))
+
+        ###################################################
+
+############# block- ij
+        ### 030 ###
+        rdm1_a[:nocc_a, :nocc_a] -= 1/2 * np.einsum('a,a,Iibc,Jibc->IJ', L_a, R_a, t2_1_a, t2_2_a, optimize = True)
+        rdm1_a[:nocc_a, :nocc_a] -= 1/2 * np.einsum('a,a,Jibc,Iibc->IJ', L_a, R_a, t2_1_a, t2_2_a, optimize = True)
+        rdm1_a[:nocc_a, :nocc_a] += np.einsum('a,b,Iiac,Jibc->IJ', L_a, R_a, t2_1_a, t2_2_a, optimize = True)
+        rdm1_a[:nocc_a, :nocc_a] += np.einsum('a,b,Jibc,Iiac->IJ', L_a, R_a, t2_1_a, t2_2_a, optimize = True)
+        rdm1_a[:nocc_a, :nocc_a] -= np.einsum('a,a,Iibc,Jibc->IJ', L_a, R_a, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_a[:nocc_a, :nocc_a] -= np.einsum('a,a,Jibc,Iibc->IJ', L_a, R_a, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_a[:nocc_a, :nocc_a] += np.einsum('a,b,Iiac,Jibc->IJ', L_a, R_a, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_a[:nocc_a, :nocc_a] += np.einsum('a,b,Jibc,Iiac->IJ', L_a, R_a, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_a[:nocc_a, :nocc_a] -= 1/2 * np.einsum('a,a,Iibc,Jibc->IJ', L_b, R_b, t2_1_a, t2_2_a, optimize = True)
+        rdm1_a[:nocc_a, :nocc_a] -= 1/2 * np.einsum('a,a,Jibc,Iibc->IJ', L_b, R_b, t2_1_a, t2_2_a, optimize = True)
+        rdm1_a[:nocc_a, :nocc_a] -= np.einsum('a,a,Iibc,Jibc->IJ', L_b, R_b, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_a[:nocc_a, :nocc_a] -= np.einsum('a,a,Jibc,Iibc->IJ', L_b, R_b, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_a[:nocc_a, :nocc_a] += np.einsum('a,b,Iica,Jicb->IJ', L_b, R_b, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_a[:nocc_a, :nocc_a] += np.einsum('a,b,Jicb,Iica->IJ', L_b, R_b, t2_1_ab, t2_2_ab, optimize = True)
+
+        rdm1_b[:nocc_b, :nocc_b] -= np.einsum('a,a,iIbc,iJbc->IJ', L_a, R_a, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_b[:nocc_b, :nocc_b] -= np.einsum('a,a,iJbc,iIbc->IJ', L_a, R_a, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_b[:nocc_b, :nocc_b] += np.einsum('a,b,iIac,iJbc->IJ', L_a, R_a, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_b[:nocc_b, :nocc_b] += np.einsum('a,b,iJbc,iIac->IJ', L_a, R_a, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_b[:nocc_b, :nocc_b] -= 1/2 * np.einsum('a,a,Iibc,Jibc->IJ', L_a, R_a, t2_1_b, t2_2_b, optimize = True)
+        rdm1_b[:nocc_b, :nocc_b] -= 1/2 * np.einsum('a,a,Jibc,Iibc->IJ', L_a, R_a, t2_1_b, t2_2_b, optimize = True)
+        rdm1_b[:nocc_b, :nocc_b] -= np.einsum('a,a,iIbc,iJbc->IJ', L_b, R_b, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_b[:nocc_b, :nocc_b] -= np.einsum('a,a,iJbc,iIbc->IJ', L_b, R_b, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_b[:nocc_b, :nocc_b] += np.einsum('a,b,iIca,iJcb->IJ', L_b, R_b, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_b[:nocc_b, :nocc_b] += np.einsum('a,b,iJcb,iIca->IJ', L_b, R_b, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_b[:nocc_b, :nocc_b] -= 1/2 * np.einsum('a,a,Iibc,Jibc->IJ', L_b, R_b, t2_1_b, t2_2_b, optimize = True)
+        rdm1_b[:nocc_b, :nocc_b] -= 1/2 * np.einsum('a,a,Jibc,Iibc->IJ', L_b, R_b, t2_1_b, t2_2_b, optimize = True)
+        rdm1_b[:nocc_b, :nocc_b] += np.einsum('a,b,Iiac,Jibc->IJ', L_b, R_b, t2_1_b, t2_2_b, optimize = True)
+        rdm1_b[:nocc_b, :nocc_b] += np.einsum('a,b,Jibc,Iiac->IJ', L_b, R_b, t2_1_b, t2_2_b, optimize = True)
+
+        ### 021 & 120 ###
+        rdm1_a[:nocc_a, :nocc_a] -= 1/2 * np.einsum('a,Iab,Jb->IJ', L_a, R_aaa_u, t1_2_a, optimize = True)
+        rdm1_a[:nocc_a, :nocc_a] += 1/2 * np.einsum('a,Iba,Jb->IJ', L_a, R_aaa_u, t1_2_a, optimize = True)
+        rdm1_a[:nocc_a, :nocc_a] -= 1/2 * np.einsum('Jab,a,Ib->IJ', L_aaa_u, R_a, t1_2_a, optimize = True)
+        rdm1_a[:nocc_a, :nocc_a] += 1/2 * np.einsum('Jab,b,Ia->IJ', L_aaa_u, R_a, t1_2_a, optimize = True)
+        rdm1_a[:nocc_a, :nocc_a] -= np.einsum('Jab,a,Ib->IJ', L_aba, R_b, t1_2_a, optimize = True)
+        rdm1_a[:nocc_a, :nocc_a] -= np.einsum('a,Iab,Jb->IJ', L_b, R_aba, t1_2_a, optimize = True)
+
+        rdm1_b[:nocc_b, :nocc_b] -= np.einsum('a,Iab,Jb->IJ', L_a, R_bab, t1_2_b, optimize = True)
+        rdm1_b[:nocc_b, :nocc_b] -= 1/2 * np.einsum('a,Iab,Jb->IJ', L_b, R_bbb_u, t1_2_b, optimize = True)
+        rdm1_b[:nocc_b, :nocc_b] += 1/2 * np.einsum('a,Iba,Jb->IJ', L_b, R_bbb_u, t1_2_b, optimize = True)
+        rdm1_b[:nocc_b, :nocc_b] -= np.einsum('Jab,a,Ib->IJ', L_bab, R_a, t1_2_b, optimize = True)
+        rdm1_b[:nocc_b, :nocc_b] -= 1/2 * np.einsum('Jab,a,Ib->IJ', L_bbb_u, R_b, t1_2_b, optimize = True)
+        rdm1_b[:nocc_b, :nocc_b] += 1/2 * np.einsum('Jab,b,Ia->IJ', L_bbb_u, R_b, t1_2_b, optimize = True)
+
+        #----------------------------------------------------------------------------------------------------------#
+
+############# block- ab
+        ### 030 ###
+        rdm1_a[nocc_a:, nocc_a:] -= 1/4 * np.einsum('A,a,ijBb,ijab->AB', L_a, R_a, t2_1_a, t2_2_a, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] -= 1/4 * np.einsum('A,a,ijab,ijBb->AB', L_a, R_a, t2_1_a, t2_2_a, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] -= 1/4 * np.einsum('a,B,ijAb,ijab->AB', L_a, R_a, t2_1_a, t2_2_a, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] -= 1/4 * np.einsum('a,B,ijab,ijAb->AB', L_a, R_a, t2_1_a, t2_2_a, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] += 1/2 * np.einsum('a,a,ijAb,ijBb->AB', L_a, R_a, t2_1_a, t2_2_a, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] += 1/2 * np.einsum('a,a,ijBb,ijAb->AB', L_a, R_a, t2_1_a, t2_2_a, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] -= 1/2 * np.einsum('a,b,ijAb,ijBa->AB', L_a, R_a, t2_1_a, t2_2_a, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] -= 1/2 * np.einsum('a,b,ijBa,ijAb->AB', L_a, R_a, t2_1_a, t2_2_a, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] -= 1/2 * np.einsum('A,a,ijBb,ijab->AB', L_a, R_a, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] -= 1/2 * np.einsum('A,a,ijab,ijBb->AB', L_a, R_a, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] -= 1/2 * np.einsum('a,B,ijAb,ijab->AB', L_a, R_a, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] -= 1/2 * np.einsum('a,B,ijab,ijAb->AB', L_a, R_a, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] += np.einsum('a,a,ijAb,ijBb->AB', L_a, R_a, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] += np.einsum('a,a,ijBb,ijAb->AB', L_a, R_a, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] += 1/2 * np.einsum('a,a,ijAb,ijBb->AB', L_b, R_b, t2_1_a, t2_2_a, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] += 1/2 * np.einsum('a,a,ijBb,ijAb->AB', L_b, R_b, t2_1_a, t2_2_a, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] += np.einsum('a,a,ijAb,ijBb->AB', L_b, R_b, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] += np.einsum('a,a,ijBb,ijAb->AB', L_b, R_b, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] -= np.einsum('a,b,ijAb,ijBa->AB', L_b, R_b, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] -= np.einsum('a,b,ijBa,ijAb->AB', L_b, R_b, t2_1_ab, t2_2_ab, optimize = True)
+
+        rdm1_b[nocc_b:, nocc_b:] += np.einsum('a,a,ijbA,ijbB->AB', L_a, R_a, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] += np.einsum('a,a,ijbB,ijbA->AB', L_a, R_a, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] -= np.einsum('a,b,ijaB,ijbA->AB', L_a, R_a, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] -= np.einsum('a,b,ijbA,ijaB->AB', L_a, R_a, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] += 1/2 * np.einsum('a,a,ijAb,ijBb->AB', L_a, R_a, t2_1_b, t2_2_b, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] += 1/2 * np.einsum('a,a,ijBb,ijAb->AB', L_a, R_a, t2_1_b, t2_2_b, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] -= 1/2 * np.einsum('A,a,ijbB,ijba->AB', L_b, R_b, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] -= 1/2 * np.einsum('A,a,ijba,ijbB->AB', L_b, R_b, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] -= 1/2 * np.einsum('a,B,ijbA,ijba->AB', L_b, R_b, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] -= 1/2 * np.einsum('a,B,ijba,ijbA->AB', L_b, R_b, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] += np.einsum('a,a,ijbA,ijbB->AB', L_b, R_b, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] += np.einsum('a,a,ijbB,ijbA->AB', L_b, R_b, t2_1_ab, t2_2_ab, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] -= 1/4 * np.einsum('A,a,ijBb,ijab->AB', L_b, R_b, t2_1_b, t2_2_b, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] -= 1/4 * np.einsum('A,a,ijab,ijBb->AB', L_b, R_b, t2_1_b, t2_2_b, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] -= 1/4 * np.einsum('a,B,ijAb,ijab->AB', L_b, R_b, t2_1_b, t2_2_b, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] -= 1/4 * np.einsum('a,B,ijab,ijAb->AB', L_b, R_b, t2_1_b, t2_2_b, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] += 1/2 * np.einsum('a,a,ijAb,ijBb->AB', L_b, R_b, t2_1_b, t2_2_b, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] += 1/2 * np.einsum('a,a,ijBb,ijAb->AB', L_b, R_b, t2_1_b, t2_2_b, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] -= 1/2 * np.einsum('a,b,ijAb,ijBa->AB', L_b, R_b, t2_1_b, t2_2_b, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] -= 1/2 * np.einsum('a,b,ijBa,ijAb->AB', L_b, R_b, t2_1_b, t2_2_b, optimize = True)
+
+        ### 021 & 120 ###
+        rdm1_a[nocc_a:, nocc_a:] -= 1/2 * np.einsum('a,iBa,iA->AB', L_a, R_aaa_u, t1_2_a, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] += 1/2 * np.einsum('a,iaB,iA->AB', L_a, R_aaa_u, t1_2_a, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] -= 1/2 * np.einsum('iAa,a,iB->AB', L_aaa_u, R_a, t1_2_a, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] += 1/2 * np.einsum('iaA,a,iB->AB', L_aaa_u, R_a, t1_2_a, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] += np.einsum('iaA,a,iB->AB', L_aba, R_b, t1_2_a, optimize = True)
+        rdm1_a[nocc_a:, nocc_a:] += np.einsum('a,iaB,iA->AB', L_b, R_aba, t1_2_a, optimize = True)
+
+        rdm1_b[nocc_b:, nocc_b:] += np.einsum('a,iaB,iA->AB', L_a, R_bab, t1_2_b, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] -= 1/2 * np.einsum('a,iBa,iA->AB', L_b, R_bbb_u, t1_2_b, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] += 1/2 * np.einsum('a,iaB,iA->AB', L_b, R_bbb_u, t1_2_b, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] += np.einsum('iaA,a,iB->AB', L_bab, R_a, t1_2_b, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] -= 1/2 * np.einsum('iAa,a,iB->AB', L_bbb_u, R_b, t1_2_b, optimize = True)
+        rdm1_b[nocc_b:, nocc_b:] += 1/2 * np.einsum('iaA,a,iB->AB', L_bbb_u, R_b, t1_2_b, optimize = True)
+
+        #----------------------------------------------------------------------------------------------------------#
+############# block- ia
+        ### 030 ###
+        rdm1_a[:nocc_a, nocc_a:] -= np.einsum('a,A,Ia->IA', L_a, R_a, t1_3_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += np.einsum('a,a,IA->IA', L_a, R_a, t1_3_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += np.einsum('a,a,IA->IA', L_b, R_b, t1_3_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/2 * np.einsum('a,A,ib,Iiab->IA', L_a, R_a, t1_2_a, t2_1_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/2 * np.einsum('a,a,ib,IiAb->IA', L_a, R_a, t1_2_a, t2_1_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/2 * np.einsum('a,b,ib,IiAa->IA', L_a, R_a, t1_2_a, t2_1_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/2 * np.einsum('a,A,ib,Iiab->IA', L_a, R_a, t1_2_b, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/2 * np.einsum('a,a,ib,IiAb->IA', L_a, R_a, t1_2_b, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/2 * np.einsum('a,a,ib,IiAb->IA', L_b, R_b, t1_2_a, t2_1_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/2 * np.einsum('a,a,ib,IiAb->IA', L_b, R_b, t1_2_b, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/2 * np.einsum('a,b,ib,IiAa->IA', L_b, R_b, t1_2_b, t2_1_ab, optimize = True)
+
+        rdm1_b[:nocc_b, nocc_b:] += np.einsum('a,a,IA->IA', L_a, R_a, t1_3_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= np.einsum('a,A,Ia->IA', L_b, R_b, t1_3_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += np.einsum('a,a,IA->IA', L_b, R_b, t1_3_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/2 * np.einsum('a,a,ib,iIbA->IA', L_a, R_a, t1_2_a, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/2 * np.einsum('a,b,ib,iIaA->IA', L_a, R_a, t1_2_a, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/2 * np.einsum('a,a,ib,IiAb->IA', L_a, R_a, t1_2_b, t2_1_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/2 * np.einsum('a,A,ib,iIba->IA', L_b, R_b, t1_2_a, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/2 * np.einsum('a,a,ib,iIbA->IA', L_b, R_b, t1_2_a, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/2 * np.einsum('a,A,ib,Iiab->IA', L_b, R_b, t1_2_b, t2_1_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/2 * np.einsum('a,a,ib,IiAb->IA', L_b, R_b, t1_2_b, t2_1_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/2 * np.einsum('a,b,ib,IiAa->IA', L_b, R_b, t1_2_b, t2_1_b, optimize = True)
+
+        ### 021 & 120 ###
+        rdm1_a[:nocc_a, nocc_a:] -= 1/2 * np.einsum('iab,A,Iiab->IA', L_aaa_u, R_a, t2_2_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/2 * np.einsum('iab,a,IiAb->IA', L_aaa_u, R_a, t2_2_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/2 * np.einsum('iab,b,IiAa->IA', L_aaa_u, R_a, t2_2_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += np.einsum('iab,a,IiAb->IA', L_aba, R_b, t2_2_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= np.einsum('iab,A,Iiab->IA', L_bab, R_a, t2_2_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += np.einsum('iab,a,IiAb->IA', L_bab, R_a, t2_2_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/2 * np.einsum('iab,a,IiAb->IA', L_bbb_u, R_b, t2_2_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/2 * np.einsum('iab,b,IiAa->IA', L_bbb_u, R_b, t2_2_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/8 * np.einsum('a,Iab,ijbc,ijAc->IA',
+                                                    L_a, R_aaa_u, t2_1_a, t2_1_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/8 * np.einsum('a,Iba,ijbc,ijAc->IA',
+                                                    L_a, R_aaa_u, t2_1_a, t2_1_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/8 * np.einsum('a,Ibc,ijAa,ijbc->IA',
+                                                    L_a, R_aaa_u, t2_1_a, t2_1_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/8 * np.einsum('a,iAa,ijbc,Ijbc->IA',
+                                                    L_a, R_aaa_u, t2_1_a, t2_1_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/4 * np.einsum('a,iAb,Ijac,ijbc->IA',
+                                                    L_a, R_aaa_u, t2_1_a, t2_1_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/8 * np.einsum('a,iaA,ijbc,Ijbc->IA',
+                                                    L_a, R_aaa_u, t2_1_a, t2_1_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/4 * np.einsum('a,iab,ijbc,IjAc->IA',
+                                                    L_a, R_aaa_u, t2_1_a, t2_1_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/4 * np.einsum('a,ibA,Ijac,ijbc->IA',
+                                                    L_a, R_aaa_u, t2_1_a, t2_1_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/4 * np.einsum('a,iba,ijbc,IjAc->IA',
+                                                    L_a, R_aaa_u, t2_1_a, t2_1_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/4 * np.einsum('a,ibc,IjAa,ijbc->IA',
+                                                    L_a, R_aaa_u, t2_1_a, t2_1_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/4 * np.einsum('a,Iab,ijbc,ijAc->IA',
+                                                    L_a, R_aaa_u, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/4 * np.einsum('a,Iba,ijbc,ijAc->IA',
+                                                    L_a, R_aaa_u, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/4 * np.einsum('a,iAa,ijbc,Ijbc->IA',
+                                                    L_a, R_aaa_u, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/4 * np.einsum('a,iAb,Ijac,ijbc->IA',
+                                                    L_a, R_aaa_u, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/4 * np.einsum('a,iaA,ijbc,Ijbc->IA',
+                                                    L_a, R_aaa_u, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/4 * np.einsum('a,iab,ijbc,IjAc->IA',
+                                                    L_a, R_aaa_u, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/4 * np.einsum('a,ibA,Ijac,ijbc->IA',
+                                                    L_a, R_aaa_u, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/4 * np.einsum('a,iba,ijbc,IjAc->IA',
+                                                    L_a, R_aaa_u, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/2 * np.einsum('a,iAb,Ijac,jicb->IA', L_a, R_bab, t2_1_a, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/2 * np.einsum('a,iab,IjAc,jicb->IA', L_a, R_bab, t2_1_a, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/2 * np.einsum('a,ibc,IjAa,jibc->IA', L_a, R_bab, t2_1_a, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/2 * np.einsum('a,iAb,Ijac,ijbc->IA', L_a, R_bab, t2_1_ab, t2_1_b, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/2 * np.einsum('a,iab,IjAc,ijbc->IA', L_a, R_bab, t2_1_ab, t2_1_b, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/4 * np.einsum('a,Iab,ijbc,ijAc->IA', L_b, R_aba, t2_1_a, t2_1_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/4 * np.einsum('a,iaA,ijbc,Ijbc->IA', L_b, R_aba, t2_1_a, t2_1_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/2 * np.einsum('a,iab,ijbc,IjAc->IA', L_b, R_aba, t2_1_a, t2_1_a, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/2 * np.einsum('a,Iab,ijbc,ijAc->IA',
+                                                    L_b, R_aba, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/2 * np.einsum('a,Ibc,ijAa,ijcb->IA',
+                                                    L_b, R_aba, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/2 * np.einsum('a,iaA,ijbc,Ijbc->IA',
+                                                    L_b, R_aba, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/2 * np.einsum('a,iab,ijbc,IjAc->IA',
+                                                    L_b, R_aba, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/2 * np.einsum('a,ibA,Ijca,ijcb->IA',
+                                                    L_b, R_aba, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/2 * np.einsum('a,ibc,IjAa,ijcb->IA',
+                                                    L_b, R_aba, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/4 * np.einsum('a,iab,IjAc,jicb->IA',
+                                                    L_b, R_bbb_u, t2_1_a, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/4 * np.einsum('a,iba,IjAc,jicb->IA',
+                                                    L_b, R_bbb_u, t2_1_a, t2_1_ab, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/4 * np.einsum('a,iab,IjAc,ijbc->IA',
+                                                    L_b, R_bbb_u, t2_1_ab, t2_1_b, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] -= 1/4 * np.einsum('a,iba,IjAc,ijbc->IA',
+                                                    L_b, R_bbb_u, t2_1_ab, t2_1_b, optimize = True)
+        rdm1_a[:nocc_a, nocc_a:] += 1/4 * np.einsum('a,ibc,IjAa,ijbc->IA',
+                                                    L_b, R_bbb_u, t2_1_ab, t2_1_b, optimize = True)
+
+        rdm1_b[:nocc_b, nocc_b:] += 1/2 * np.einsum('iab,a,iIbA->IA', L_aaa_u, R_a, t2_2_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/2 * np.einsum('iab,b,iIaA->IA', L_aaa_u, R_a, t2_2_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= np.einsum('iab,A,iIba->IA', L_aba, R_b, t2_2_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += np.einsum('iab,a,iIbA->IA', L_aba, R_b, t2_2_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += np.einsum('iab,a,IiAb->IA', L_bab, R_a, t2_2_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/2 * np.einsum('iab,A,Iiab->IA', L_bbb_u, R_b, t2_2_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/2 * np.einsum('iab,a,IiAb->IA', L_bbb_u, R_b, t2_2_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/2 * np.einsum('iab,b,IiAa->IA', L_bbb_u, R_b, t2_2_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/4 * np.einsum('a,iab,ijbc,jIcA->IA',
+                                                    L_a, R_aaa_u, t2_1_a, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/4 * np.einsum('a,iba,ijbc,jIcA->IA',
+                                                    L_a, R_aaa_u, t2_1_a, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/4 * np.einsum('a,ibc,ijbc,jIaA->IA',
+                                                    L_a, R_aaa_u, t2_1_a, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/4 * np.einsum('a,iab,ijbc,IjAc->IA',
+                                                    L_a, R_aaa_u, t2_1_ab, t2_1_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/4 * np.einsum('a,iba,ijbc,IjAc->IA',
+                                                    L_a, R_aaa_u, t2_1_ab, t2_1_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/2 * np.einsum('a,Iab,ijcb,ijcA->IA',
+                                                    L_a, R_bab, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/2 * np.einsum('a,Ibc,ijaA,ijbc->IA',
+                                                    L_a, R_bab, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/2 * np.einsum('a,iaA,jibc,jIbc->IA',
+                                                    L_a, R_bab, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/2 * np.einsum('a,iab,jicb,jIcA->IA',
+                                                    L_a, R_bab, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/2 * np.einsum('a,ibA,jIac,jibc->IA',
+                                                    L_a, R_bab, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/2 * np.einsum('a,ibc,jIaA,jibc->IA',
+                                                    L_a, R_bab, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/4 * np.einsum('a,Iab,ijbc,ijAc->IA', L_a, R_bab, t2_1_b, t2_1_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/4 * np.einsum('a,iaA,ijbc,Ijbc->IA', L_a, R_bab, t2_1_b, t2_1_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/2 * np.einsum('a,iab,ijbc,IjAc->IA', L_a, R_bab, t2_1_b, t2_1_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/2 * np.einsum('a,iAb,ijbc,jIca->IA', L_b, R_aba, t2_1_a, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/2 * np.einsum('a,iab,ijbc,jIcA->IA', L_b, R_aba, t2_1_a, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/2 * np.einsum('a,iAb,ijbc,Ijac->IA', L_b, R_aba, t2_1_ab, t2_1_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/2 * np.einsum('a,iab,ijbc,IjAc->IA', L_b, R_aba, t2_1_ab, t2_1_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/2 * np.einsum('a,ibc,ijcb,IjAa->IA', L_b, R_aba, t2_1_ab, t2_1_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/4 * np.einsum('a,Iab,ijcb,ijcA->IA',
+                                                    L_b, R_bbb_u, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/4 * np.einsum('a,Iba,ijcb,ijcA->IA',
+                                                    L_b, R_bbb_u, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/4 * np.einsum('a,iAa,jibc,jIbc->IA',
+                                                    L_b, R_bbb_u, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/4 * np.einsum('a,iAb,jIca,jicb->IA',
+                                                    L_b, R_bbb_u, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/4 * np.einsum('a,iaA,jibc,jIbc->IA',
+                                                    L_b, R_bbb_u, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/4 * np.einsum('a,iab,jicb,jIcA->IA',
+                                                    L_b, R_bbb_u, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/4 * np.einsum('a,ibA,jIca,jicb->IA',
+                                                    L_b, R_bbb_u, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/4 * np.einsum('a,iba,jicb,jIcA->IA',
+                                                    L_b, R_bbb_u, t2_1_ab, t2_1_ab, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/8 * np.einsum('a,Iab,ijbc,ijAc->IA',
+                                                    L_b, R_bbb_u, t2_1_b, t2_1_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/8 * np.einsum('a,Iba,ijbc,ijAc->IA',
+                                                    L_b, R_bbb_u, t2_1_b, t2_1_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/8 * np.einsum('a,Ibc,ijAa,ijbc->IA',
+                                                    L_b, R_bbb_u, t2_1_b, t2_1_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/8 * np.einsum('a,iAa,ijbc,Ijbc->IA',
+                                                    L_b, R_bbb_u, t2_1_b, t2_1_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/4 * np.einsum('a,iAb,Ijac,ijbc->IA',
+                                                    L_b, R_bbb_u, t2_1_b, t2_1_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/8 * np.einsum('a,iaA,ijbc,Ijbc->IA',
+                                                    L_b, R_bbb_u, t2_1_b, t2_1_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/4 * np.einsum('a,iab,ijbc,IjAc->IA',
+                                                    L_b, R_bbb_u, t2_1_b, t2_1_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/4 * np.einsum('a,ibA,Ijac,ijbc->IA',
+                                                    L_b, R_bbb_u, t2_1_b, t2_1_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] -= 1/4 * np.einsum('a,iba,ijbc,IjAc->IA',
+                                                    L_b, R_bbb_u, t2_1_b, t2_1_b, optimize = True)
+        rdm1_b[:nocc_b, nocc_b:] += 1/4 * np.einsum('a,ibc,IjAa,ijbc->IA',
+                                                    L_b, R_bbb_u, t2_1_b, t2_1_b, optimize = True)
+
+############ block- ai
+        rdm1_a[nocc_a:,:nocc_a] = rdm1_a[:nocc_a,nocc_a:].T
+        rdm1_b[nocc_b:,:nocc_b] = rdm1_b[:nocc_b,nocc_b:].T
+
+    return (rdm1_a, rdm1_b)
 
 class UADCEA(uadc.UADC):
     '''unrestricted ADC for EA energies and spectroscopic amplitudes
@@ -1902,13 +2428,13 @@ class UADCEA(uadc.UADC):
 
     _keys = {
         'tol_residual','conv_tol', 'e_corr', 'method',
-        'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory',
+        'method_type', 'mo_coeff', 'mo_coeff_hf', 'mo_energy_b', 'max_memory',
         't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle',
         'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b', 'mo_coeff', 'mo_energy_a',
         'mo_energy_b', 'nmo_a', 'nmo_b', 'mol', 'transform_integrals',
         'with_df', 'spec_factor_print_tol', 'evec_print_tol',
         'compute_properties', 'approx_trans_moments', 'E', 'U', 'P', 'X',
-        'compute_spin_square'
+        'compute_spin_square', '_make_rdm1', 'frozen', 'mo_occ'
     }
 
     def __init__(self, adc):
@@ -1930,11 +2456,12 @@ class UADCEA(uadc.UADC):
         self._nocc = adc._nocc
         self._nvir = adc._nvir
         self._nmo = adc._nmo
-        self.nocc_a = adc._nocc[0]
-        self.nocc_b = adc._nocc[1]
-        self.nvir_a = adc._nvir[0]
-        self.nvir_b = adc._nvir[1]
+        self.nocc_a = adc.nocc_a
+        self.nocc_b = adc.nocc_b
+        self.nvir_a = adc.nvir_a
+        self.nvir_b = adc.nvir_b
         self.mo_coeff = adc.mo_coeff
+        self.mo_coeff_hf = adc.mo_coeff_hf
         self.mo_energy_a = adc.mo_energy_a
         self.mo_energy_b = adc.mo_energy_b
         self.nmo_a = adc._nmo[0]
@@ -1943,6 +2470,8 @@ class UADCEA(uadc.UADC):
         self.with_df = adc.with_df
         self.compute_properties = adc.compute_properties
         self.approx_trans_moments = adc.approx_trans_moments
+        self.frozen = adc.frozen
+        self.mo_occ = adc.mo_occ
 
         self.spec_factor_print_tol = adc.spec_factor_print_tol
         self.evec_print_tol = adc.evec_print_tol
@@ -1953,6 +2482,8 @@ class UADCEA(uadc.UADC):
         self.U = adc.U
         self.P = adc.P
         self.X = adc.X
+
+        self._adc_es = self
 
     kernel = uadc.kernel
     get_imds = get_imds
@@ -1965,20 +2496,42 @@ class UADCEA(uadc.UADC):
     analyze_spec_factor = analyze_spec_factor
     analyze_eigenvector = analyze_eigenvector
     compute_dyson_mo = compute_dyson_mo
+    _make_rdm1 = make_rdm1
 
-    def get_init_guess(self, nroots=1, diag=None, ascending=True):
-        if diag is None :
-            diag = self.get_diag()
-        idx = None
-        if ascending:
-            idx = np.argsort(diag)
+    def get_init_guess(self, nroots=1, diag=None, ascending=True, type=None, ini=None):
+        if (type=="read"):
+            logger.info(self,"obtain initial guess from input variable")
+            nocc_a = self.nocc_a
+            nocc_b = self.nocc_b
+            nvir_a = self.nvir_a
+            nvir_b = self.nvir_b
+            n_singles_a = nvir_a
+            n_singles_b = nvir_b
+            n_doubles_aaa = nvir_a * (nvir_a - 1) * nocc_a // 2
+            n_doubles_bab = nocc_b * nvir_a * nvir_b
+            n_doubles_aba = nocc_a * nvir_b * nvir_a
+            n_doubles_bbb = nvir_b * (nvir_b - 1) * nocc_b // 2
+            dim = n_singles_a + n_singles_b + n_doubles_aaa + n_doubles_bab + n_doubles_aba + n_doubles_bbb
+            if isinstance(ini, list):
+                g = np.array(ini)
+            else:
+                g = ini
+            if g.shape[0] != dim or g.shape[1] != nroots:
+                raise ValueError(f"Shape of guess should be ({dim},{nroots})")
+
         else:
-            idx = np.argsort(diag)[::-1]
-        guess = np.zeros((diag.shape[0], nroots))
-        min_shape = min(diag.shape[0], nroots)
-        guess[:min_shape,:min_shape] = np.identity(min_shape)
-        g = np.zeros((diag.shape[0], nroots))
-        g[idx] = guess.copy()
+            if diag is None :
+                diag = self.get_diag()
+            idx = None
+            if ascending:
+                idx = np.argsort(diag)
+            else:
+                idx = np.argsort(diag)[::-1]
+            guess = np.zeros((diag.shape[0], nroots))
+            min_shape = min(diag.shape[0], nroots)
+            guess[:min_shape,:min_shape] = np.identity(min_shape)
+            g = np.zeros((diag.shape[0], nroots))
+            g[idx] = guess.copy()
         guess = []
         for p in range(g.shape[1]):
             guess.append(g[:,p])

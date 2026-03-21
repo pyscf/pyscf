@@ -19,7 +19,7 @@ Gradient of PCM family solvent model, copied from GPU4PyCF with modifications
 # pylint: disable=C0103
 
 import numpy
-import scipy
+from scipy.special import erf
 from pyscf import lib, gto
 from pyscf import scf, df
 from pyscf.solvent.pcm import PI, switch_h
@@ -33,7 +33,7 @@ def gradgrad_switch_h(x):
     ddy[x>1] = 0.0
     return ddy
 
-def get_d2F_d2A(surface):
+def get_d2F_d2A(surface, surface_discretization_method = "SWIG"):
     '''
     Notations adopted from
     J. Chem. Phys. 133, 244111 (2010), Appendix C
@@ -42,8 +42,12 @@ def get_d2F_d2A(surface):
     grid_coords = surface['grid_coords']
     switch_fun  = surface['switch_fun']
     area        = surface['area']
-    R_in_J      = surface['R_in_J']
-    R_sw_J      = surface['R_sw_J']
+    if surface_discretization_method.upper() == "SWIG":
+        R_in_J = surface['R_in_J']
+        R_sw_J = surface['R_sw_J']
+    elif surface_discretization_method.upper() == "ISWIG":
+        charge_exp = surface['charge_exp']
+        R_J = surface['R_J']
 
     ngrids = grid_coords.shape[0]
     natom = atom_coords.shape[0]
@@ -55,33 +59,70 @@ def get_d2F_d2A(surface):
         coords = grid_coords[p0:p1]
         si_rJ = numpy.expand_dims(coords, axis=1) - atom_coords
         norm_si_rJ = numpy.linalg.norm(si_rJ, axis=-1)
-        diJ = (norm_si_rJ - R_in_J) / R_sw_J
-        diJ[:,i_grid_atom] = 1.0
-        diJ[diJ < 1e-8] = 0.0
         si_rJ[:,i_grid_atom,:] = 0.0
-        si_rJ[diJ < 1e-8] = 0.0
 
-        fiJ = switch_h(diJ)
-        dfiJ = grad_switch_h(diJ)
+        if surface_discretization_method.upper() == "SWIG":
+            diJ = (norm_si_rJ - R_in_J) / R_sw_J
+            diJ[:,i_grid_atom] = 1.0
+            diJ[diJ < 1e-8] = 0.0
+            si_rJ[diJ < 1e-8] = 0.0
 
-        fiJK = fiJ[:, :, numpy.newaxis] * fiJ[:, numpy.newaxis, :]
-        dfiJK = dfiJ[:, :, numpy.newaxis] * dfiJ[:, numpy.newaxis, :]
-        R_sw_JK = R_sw_J[:, numpy.newaxis] * R_sw_J[numpy.newaxis, :]
-        norm_si_rJK = norm_si_rJ[:, :, numpy.newaxis] * norm_si_rJ[:, numpy.newaxis, :]
-        terms_size_ngrids_natm_natm = dfiJK / (fiJK * norm_si_rJK * R_sw_JK)
-        si_rJK = si_rJ[:, :, numpy.newaxis, :, numpy.newaxis] * si_rJ[:, numpy.newaxis, :, numpy.newaxis, :]
-        d2fiJK_offdiagonal = terms_size_ngrids_natm_natm[:, :, :, numpy.newaxis, numpy.newaxis] * si_rJK
+            fiJ = switch_h(diJ)
+            dfiJ = grad_switch_h(diJ)
 
-        d2fiJ = gradgrad_switch_h(diJ)
-        terms_size_ngrids_natm = d2fiJ / (norm_si_rJ**2 * R_sw_J) - dfiJ / (norm_si_rJ**3)
-        si_rJJ = si_rJ[:, :, :, numpy.newaxis] * si_rJ[:, :, numpy.newaxis, :]
-        d2fiJK_diagonal = numpy.einsum('qA,qAdD->qAdD', terms_size_ngrids_natm, si_rJJ)
-        d2fiJK_diagonal += numpy.einsum('qA,dD->qAdD', dfiJ / norm_si_rJ, numpy.eye(3))
-        d2fiJK_diagonal /= (fiJ * R_sw_J)[:, :, numpy.newaxis, numpy.newaxis]
+            fiJK = fiJ[:, :, numpy.newaxis] * fiJ[:, numpy.newaxis, :]
+            dfiJK = dfiJ[:, :, numpy.newaxis] * dfiJ[:, numpy.newaxis, :]
+            R_sw_JK = R_sw_J[:, numpy.newaxis] * R_sw_J[numpy.newaxis, :]
+            norm_si_rJK = norm_si_rJ[:, :, numpy.newaxis] * norm_si_rJ[:, numpy.newaxis, :]
+            terms_size_ngrids_natm_natm = dfiJK / (fiJK * norm_si_rJK * R_sw_JK)
+            si_rJK = si_rJ[:, :, numpy.newaxis, :, numpy.newaxis] * si_rJ[:, numpy.newaxis, :, numpy.newaxis, :]
+            d2fiJK_offdiagonal = terms_size_ngrids_natm_natm[:, :, :, numpy.newaxis, numpy.newaxis] * si_rJK
 
-        d2fiJK = d2fiJK_offdiagonal
-        for i_atom in range(natom):
-            d2fiJK[:, i_atom, i_atom, :, :] = d2fiJK_diagonal[:, i_atom, :, :]
+            d2fiJ = gradgrad_switch_h(diJ)
+            terms_size_ngrids_natm = d2fiJ / (norm_si_rJ**2 * R_sw_J) - dfiJ / (norm_si_rJ**3)
+            si_rJJ = si_rJ[:, :, :, numpy.newaxis] * si_rJ[:, :, numpy.newaxis, :]
+            d2fiJK_diagonal = numpy.einsum('qA,qAdD->qAdD', terms_size_ngrids_natm, si_rJJ)
+            d2fiJK_diagonal += numpy.einsum('qA,dD->qAdD', dfiJ / norm_si_rJ, numpy.eye(3))
+            d2fiJK_diagonal /= (fiJ * R_sw_J)[:, :, numpy.newaxis, numpy.newaxis]
+
+            d2fiJK = d2fiJK_offdiagonal
+            for i_atom in range(natom):
+                d2fiJK[:, i_atom, i_atom, :, :] = d2fiJK_diagonal[:, i_atom, :, :]
+        elif surface_discretization_method.upper() == "ISWIG":
+            xi = charge_exp[p0:p1]
+            erf_input_p = xi[:, None] * (R_J[None, :] + norm_si_rJ)
+            erf_input_m = xi[:, None] * (R_J[None, :] - norm_si_rJ)
+            fiJ = 1 - 0.5 * (erf(erf_input_p) + erf(erf_input_m))
+            # fiJ[:,i_grid_atom] = 1.0
+            dfiJ = 1/numpy.sqrt(numpy.pi) * xi[:, None] * (numpy.exp(-erf_input_m**2) - numpy.exp(-erf_input_p**2))
+            ### It is necessary to zero out i \in I term in dfiJ, because the second term of d2fiJK_diagonal
+            ### is not zeroed out otherwise.
+            dfiJ[:,i_grid_atom] = 0
+
+            fiJK = fiJ[:, :, numpy.newaxis] * fiJ[:, numpy.newaxis, :]
+            dfiJK = dfiJ[:, :, numpy.newaxis] * dfiJ[:, numpy.newaxis, :]
+            norm_si_rJK = norm_si_rJ[:, :, numpy.newaxis] * norm_si_rJ[:, numpy.newaxis, :]
+            terms_size_ngrids_natm_natm = dfiJK / (fiJK * norm_si_rJK)
+            si_rJK = si_rJ[:, :, numpy.newaxis, :, numpy.newaxis] * si_rJ[:, numpy.newaxis, :, numpy.newaxis, :]
+            d2fiJK_offdiagonal = terms_size_ngrids_natm_natm[:, :, :, numpy.newaxis, numpy.newaxis] * si_rJK
+
+            d2fiJ = 2.0/numpy.sqrt(numpy.pi) * (xi**2)[:, None] * (
+                + erf_input_m * numpy.exp(-erf_input_m**2)
+                + erf_input_p * numpy.exp(-erf_input_p**2)
+            )
+            # d2fiJ[:,i_grid_atom] = 0.0
+
+            terms_size_ngrids_natm = d2fiJ / (norm_si_rJ**2) - dfiJ / (norm_si_rJ**3)
+            si_rJJ = si_rJ[:, :, :, numpy.newaxis] * si_rJ[:, :, numpy.newaxis, :]
+            d2fiJK_diagonal = numpy.einsum('qA,qAdD->qAdD', terms_size_ngrids_natm, si_rJJ)
+            d2fiJK_diagonal += numpy.einsum('qA,dD->qAdD', dfiJ / norm_si_rJ, numpy.eye(3))
+            d2fiJK_diagonal /= fiJ[:, :, numpy.newaxis, numpy.newaxis]
+
+            d2fiJK = d2fiJK_offdiagonal
+            for i_atom in range(natom):
+                d2fiJK[:, i_atom, i_atom, :, :] = d2fiJK_diagonal[:, i_atom, :, :]
+        else:
+            raise NotImplementedError(f"surface_discretization_method = {surface_discretization_method} not recognized")
 
         Fi = switch_fun[p0:p1]
         Ai = area[p0:p1]
@@ -139,7 +180,7 @@ def get_d2D_d2S(surface, with_S=True, with_D=False, stream=None):
     rij_1 = 1.0/rij
     numpy.fill_diagonal(rij_1, 0)
 
-    erf_eij_rij = scipy.special.erf(eij * rij)
+    erf_eij_rij = erf(eij * rij)
     two_eij_over_sqrt_pi_exp_minus_eij2_rij2 = 2.0 / numpy.sqrt(PI) * eij * numpy.exp(-(eij * rij)**2)
 
     S_direct_product_prefactor = -two_eij_over_sqrt_pi_exp_minus_eij2_rij2 \
@@ -281,6 +322,7 @@ def analytical_hess_qv(pcmobj, dm, verbose=None):
     d2I_dA2 = numpy.zeros([9, nao, nao])
     for g0, g1 in lib.prange(0, ngrids, blksize):
         fakemol = gto.fakemol_for_charges(grid_coords[g0:g1], expnt=charge_exp[g0:g1]**2)
+        fakemol.cart = mol.cart
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ipip1, aosym='s1', cintopt=cintopt)
         d2I_dA2 += numpy.einsum('dijq,q->dij', v_nj, q_sym[g0:g1])
     d2I_dA2 = d2I_dA2.reshape([3, 3, nao, nao])
@@ -297,6 +339,7 @@ def analytical_hess_qv(pcmobj, dm, verbose=None):
     d2I_dAdB = numpy.zeros([9, nao, nao])
     for g0, g1 in lib.prange(0, ngrids, blksize):
         fakemol = gto.fakemol_for_charges(grid_coords[g0:g1], expnt=charge_exp[g0:g1]**2)
+        fakemol.cart = mol.cart
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ipvip1, aosym='s1', cintopt=cintopt)
         d2I_dAdB += numpy.einsum('dijq,q->dij', v_nj, q_sym[g0:g1])
     d2I_dAdB = d2I_dAdB.reshape([3, 3, nao, nao])
@@ -315,6 +358,7 @@ def analytical_hess_qv(pcmobj, dm, verbose=None):
         int3c2e_ip1ip2 = mol._add_suffix('int3c2e_ip1ip2')
         cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, int3c2e_ip1ip2)
         fakemol = gto.fakemol_for_charges(grid_coords[g0:g1], expnt=charge_exp[g0:g1]**2)
+        fakemol.cart = mol.cart
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip1ip2, aosym='s1', cintopt=cintopt)
         d2I_dAdC = numpy.einsum('dijq,q->dij', v_nj, q_sym[g0:g1])
         d2I_dAdC = d2I_dAdC.reshape([3, 3, nao, nao])
@@ -337,6 +381,7 @@ def analytical_hess_qv(pcmobj, dm, verbose=None):
     d2I_dC2 = numpy.empty([9, ngrids])
     for g0, g1 in lib.prange(0, ngrids, blksize):
         fakemol = gto.fakemol_for_charges(grid_coords[g0:g1], expnt=charge_exp[g0:g1]**2)
+        fakemol.cart = mol.cart
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ipip2, aosym='s1', cintopt=cintopt)
         d2I_dC2[:,g0:g1] = numpy.einsum('dijq,ij->dq', v_nj, dm)
     d2I_dC2 = d2I_dC2.reshape([3, 3, ngrids])
@@ -457,7 +502,7 @@ def analytical_hess_solver(pcmobj, dm, verbose=None):
     vK_1 = numpy.linalg.solve(K.T, v_grids)
 
     if pcmobj.method.upper() in ['C-PCM', 'CPCM', 'COSMO']:
-        dF, _ = get_dF_dA(pcmobj.surface)
+        dF, _ = get_dF_dA(pcmobj.surface, surface_discretization_method = pcmobj.surface_discretization_method)
         _, dS, dSii = get_dD_dS(pcmobj.surface, dF, with_D=False, with_S=True)
 
         # dR = 0, dK = dS
@@ -472,7 +517,7 @@ def analytical_hess_solver(pcmobj, dm, verbose=None):
         d2e_from_d2KR = numpy.einsum('Adi,BDi->ABdD', VS_1_dot_dSdx, S_1_dSdx_dot_q) * 2
 
         _, d2S = get_d2D_d2S(pcmobj.surface, with_D=False, with_S=True)
-        d2F, _ = get_d2F_d2A(pcmobj.surface)
+        d2F, _ = get_d2F_d2A(pcmobj.surface, surface_discretization_method = pcmobj.surface_discretization_method)
         d2Sii = get_d2Sii(pcmobj.surface, dF, d2F)
         dF = None
         d2F = None
@@ -484,7 +529,7 @@ def analytical_hess_solver(pcmobj, dm, verbose=None):
         dvK_1R = -einsum_Adi_ij_Adj_inverseK(VS_1_dot_dSdx, K) @ R
 
     elif pcmobj.method.upper() in ['IEF-PCM', 'IEFPCM', 'SMD']:
-        dF, dA = get_dF_dA(pcmobj.surface)
+        dF, dA = get_dF_dA(pcmobj.surface, surface_discretization_method = pcmobj.surface_discretization_method)
         dD, dS, dSii = get_dD_dS(pcmobj.surface, dF, with_D=True, with_S=True)
 
         # dR = f_eps/(2*pi) * (dD*A + D*dA)
@@ -536,7 +581,7 @@ def analytical_hess_solver(pcmobj, dm, verbose=None):
         d2e_from_d2KR  = numpy.einsum('Adi,BDi->ABdD', vK_1_dot_dKdx, K_1_dot_dKdx_dot_q)
         d2e_from_d2KR += numpy.einsum('Adi,BDi->BADd', vK_1_dot_dKdx, K_1_dot_dKdx_dot_q)
 
-        d2F, d2A = get_d2F_d2A(pcmobj.surface)
+        d2F, d2A = get_d2F_d2A(pcmobj.surface, surface_discretization_method = pcmobj.surface_discretization_method)
         vK_1_d2K_q  = get_v_dot_d2A_dot_q(d2A, vK_1D, S @ q)
         vK_1_d2R_V  = get_v_dot_d2A_dot_q(d2A, vK_1D, v_grids)
         d2A = None
@@ -587,7 +632,7 @@ def analytical_hess_solver(pcmobj, dm, verbose=None):
         dvK_1R = -einsum_Adi_ij_Adj_inverseK(vK_1_dot_dKdx, K) @ R + VK_1_dot_dRdx
 
     elif pcmobj.method.upper() in ['SS(V)PE']:
-        dF, dA = get_dF_dA(pcmobj.surface)
+        dF, dA = get_dF_dA(pcmobj.surface, surface_discretization_method = pcmobj.surface_discretization_method)
         dD, dS, dSii = get_dD_dS(pcmobj.surface, dF, with_D=True, with_S=True)
 
         # dR = f_eps/(2*pi) * (dD*A + D*dA)
@@ -651,7 +696,7 @@ def analytical_hess_solver(pcmobj, dm, verbose=None):
         d2e_from_d2KR  = numpy.einsum('Adi,BDi->ABdD', vK_1_dot_dKdx, K_1_dot_dKdx_dot_q)
         d2e_from_d2KR += numpy.einsum('Adi,BDi->BADd', vK_1_dot_dKdx, K_1_dot_dKdx_dot_q)
 
-        d2F, d2A = get_d2F_d2A(pcmobj.surface)
+        d2F, d2A = get_d2F_d2A(pcmobj.surface, surface_discretization_method = pcmobj.surface_discretization_method)
         vK_1_d2K_q  = get_v_dot_d2A_dot_q(d2A, (D.T @ vK_1).T, S @ q)
         vK_1_d2K_q += get_v_dot_d2A_dot_q(d2A, (S @ vK_1).T, D.T @ q)
         vK_1_d2R_V  = get_v_dot_d2A_dot_q(d2A, (D.T @ vK_1).T, v_grids)
@@ -739,7 +784,7 @@ def get_dqsym_dx_fix_vgrids(pcmobj, atmlst):
     ngrids = q_sym.shape[0]
 
     if pcmobj.method.upper() in ['C-PCM', 'CPCM', 'COSMO']:
-        dF, _ = get_dF_dA(pcmobj.surface)
+        dF, _ = get_dF_dA(pcmobj.surface, surface_discretization_method = pcmobj.surface_discretization_method)
         _, dS, dSii = get_dD_dS(pcmobj.surface, dF, with_D=False, with_S=True)
         dF = None
 
@@ -749,7 +794,7 @@ def get_dqsym_dx_fix_vgrids(pcmobj, atmlst):
         dqdx_fix_Vq = einsum_ij_Adj_Adi_inverseK(K, dSdx_dot_q)
 
     elif pcmobj.method.upper() in ['IEF-PCM', 'IEFPCM', 'SMD']:
-        dF, dA = get_dF_dA(pcmobj.surface)
+        dF, dA = get_dF_dA(pcmobj.surface, surface_discretization_method = pcmobj.surface_discretization_method)
         dD, dS, dSii = get_dD_dS(pcmobj.surface, dF, with_D=True, with_S=True)
         dF = None
 
@@ -800,7 +845,7 @@ def get_dqsym_dx_fix_vgrids(pcmobj, atmlst):
         dqdx_fix_Vq *= -0.5
 
     elif pcmobj.method.upper() in ['SS(V)PE']:
-        dF, dA = get_dF_dA(pcmobj.surface)
+        dF, dA = get_dF_dA(pcmobj.surface, surface_discretization_method = pcmobj.surface_discretization_method)
         dD, dS, dSii = get_dD_dS(pcmobj.surface, dF, with_D=True, with_S=True)
         dF = None
 
@@ -896,6 +941,7 @@ def get_dvgrids(pcmobj, dm, atmlst):
     dIdA = numpy.empty([len(atmlst), 3, ngrids])
     for g0, g1 in lib.prange(0, ngrids, blksize):
         fakemol = gto.fakemol_for_charges(grid_coords[g0:g1], expnt=charge_exp[g0:g1]**2)
+        fakemol.cart = mol.cart
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip1, aosym='s1', cintopt=cintopt)
         v_nj = numpy.einsum('dijq,ij->diq', v_nj, dm + dm.T)
         dvj = numpy.asarray([numpy.sum(v_nj[:,p0:p1,:], axis=1) for p0,p1 in aoslice[:,2:]])
@@ -908,6 +954,7 @@ def get_dvgrids(pcmobj, dm, atmlst):
     dIdC = numpy.empty([3,ngrids])
     for g0, g1 in lib.prange(0, ngrids, blksize):
         fakemol = gto.fakemol_for_charges(grid_coords[g0:g1], expnt=charge_exp[g0:g1]**2)
+        fakemol.cart = mol.cart
         q_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip2, aosym='s1', cintopt=cintopt)
         dIdC[:,g0:g1] = numpy.einsum('dijq,ij->dq', q_nj, dm)
     for i_atom in atmlst:
@@ -968,6 +1015,7 @@ def analytical_grad_vmat(pcmobj, dm, atmlst=None, verbose=None):
     dIdA = numpy.zeros([3, nao, nao])
     for g0, g1 in lib.prange(0, ngrids, blksize):
         fakemol = gto.fakemol_for_charges(grid_coords[g0:g1], expnt=charge_exp[g0:g1]**2)
+        fakemol.cart = mol.cart
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip1, aosym='s1', cintopt=cintopt)
         dIdA += numpy.einsum('dijq,q->dij', v_nj, q_sym[g0:g1])
 
@@ -982,6 +1030,7 @@ def analytical_grad_vmat(pcmobj, dm, atmlst=None, verbose=None):
     for i_atom in atmlst:
         g0,g1 = gridslice[i_atom]
         fakemol = gto.fakemol_for_charges(grid_coords[g0:g1], expnt=charge_exp[g0:g1]**2)
+        fakemol.cart = mol.cart
         q_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip2, aosym='s1', cintopt=cintopt)
         dIdC = numpy.einsum('dijq,q->dij', q_nj, q_sym[g0:g1])
         dIdx[i_atom, :, :, :] += dIdC
@@ -996,6 +1045,7 @@ def analytical_grad_vmat(pcmobj, dm, atmlst=None, verbose=None):
             dIdx_from_dqdx = numpy.zeros([nao, nao])
             for g0, g1 in lib.prange(0, ngrids, blksize):
                 fakemol = gto.fakemol_for_charges(grid_coords[g0:g1], expnt=charge_exp[g0:g1]**2)
+                fakemol.cart = mol.cart
                 v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s1', cintopt=cintopt)
                 dIdx_from_dqdx += numpy.einsum('ijq,q->ij', v_nj, dqdx[i_atom, i_xyz, g0:g1])
             dV_on_molecule_dx[i_atom, i_xyz, :, :] += dIdx_from_dqdx

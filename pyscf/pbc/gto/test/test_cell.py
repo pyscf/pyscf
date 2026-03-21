@@ -364,6 +364,20 @@ class KnownValues(unittest.TestCase):
         h1 = ecp.ecp_int(cell, kpts)
         self.assertAlmostEqual(lib.fp(h1), 4.160881841456467, 7)
 
+    def test_ecp_soc_int(self):
+        cell = pgto.M(
+            a = np.eye(3) * 8,
+            atom = 'C 0 0 0; C 0 0 1.5',
+            basis = 'crenbl',
+            ecp = {'C': 'crenbl'}
+        )
+        dat = ecp.ecp_int(cell, intor='ECPso')
+
+        s = .5 * lib.PauliMatrices
+        ecpso = np.einsum('sxy,spq->xpyq', -1j * s, cell.intor('ECPso'))
+        mol_ecpso = ecpso.reshape(dat.shape)
+        self.assertAlmostEqual(abs(mol_ecpso - dat).max(), 0, 8)
+
     def test_ecp_keyword_in_pseudo(self):
         cell = pgto.M(
             a = np.eye(3)*5,
@@ -447,26 +461,28 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(cell.KKS(kpts=kpts).__class__, dft.KKS(cell).__class__)
         self.assertEqual(cell.CCSD(kpt=kpt).__class__, cc.ccsd.RCCSD)
         self.assertEqual(cell.TDA(kpt=kpt).__class__, tdscf.rhf.TDA)
+        self.assertEqual(cell.TDA(xc='pbe0').__class__, tdscf.rks.TDA)
         self.assertEqual(cell.TDBP86(kpt=kpt).__class__, tdscf.rks.CasidaTDDFT)
         self.assertEqual(cell.TDB3LYP(kpt=kpt).__class__, tdscf.rks.TDDFT)
         self.assertEqual(cell.KCCSD(kpts=kpts).__class__, cc.kccsd_rhf.KRCCSD)
         self.assertEqual(cell.KTDA(kpts=kpts).__class__, tdscf.krhf.TDA)
+        self.assertEqual(cell.KTDA(xc='pbe0', kpts=kpts).__class__, tdscf.krks.TDA)
         self.assertEqual(cell.KTDBP86(kpts=kpts).__class__, tdscf.krks.TDDFT)
         self.assertEqual(cell.KRKSpU(kpts=kpts, U_idx=['2p'], U_val=[1]).__class__, dft.KRKSpU(cell, U_idx=['2p'], U_val=[1]).__class__)
         self.assertRaises(AttributeError, lambda: cell.xyz)
         self.assertRaises(AttributeError, lambda: cell.TDxyz())
 
         cell = pgto.M(atom='He', charge=1, spin=1, a=np.eye(3)*4, basis={'He': [[0, (1, 1)]]})
-        self.assertTrue(cell.HF().__class__, scf.uhf.UHF)
-        self.assertTrue(cell.KS().__class__, dft.uks.UKS)
-        self.assertTrue(cell.KKS().__class__, dft.kuks.KUKS)
-        self.assertTrue(cell.CCSD().__class__, cc.ccsd.UCCSD)
-        self.assertTrue(cell.TDA().__class__, tdscf.uhf.TDA)
-        self.assertTrue(cell.TDBP86().__class__, tdscf.uks.CasidaTDDFT)
-        self.assertTrue(cell.TDB3LYP().__class__, tdscf.uks.TDDFT)
-        self.assertTrue(cell.KCCSD().__class__, cc.kccsd_uhf.KUCCSD)
-        self.assertTrue(cell.KTDA().__class__, tdscf.kuhf.TDA)
-        self.assertTrue(cell.KTDBP86().__class__, tdscf.kuks.TDDFT)
+        self.assertEqual(cell.HF().__class__, scf.uhf.UHF)
+        self.assertEqual(cell.KS().__class__, dft.uks.UKS)
+        self.assertEqual(cell.KKS().__class__, dft.kuks.KUKS)
+        self.assertEqual(cell.CCSD().__class__, cc.ccsd.UCCSD)
+        self.assertEqual(cell.TDA().__class__, tdscf.uhf.TDA)
+        self.assertEqual(cell.TDBP86().__class__, tdscf.uks.CasidaTDDFT)
+        self.assertEqual(cell.TDB3LYP().__class__, tdscf.uks.TDDFT)
+        self.assertEqual(cell.KCCSD().__class__, cc.kccsd_uhf.KUCCSD)
+        self.assertEqual(cell.KTDA().__class__, tdscf.kuhf.TDA)
+        self.assertEqual(cell.KTDBP86().__class__, tdscf.kuks.TDDFT)
 
         cell = pgto.M(atom='He', a=np.eye(3)*4, basis={'He': [[0, (1, 1)]]}, space_group_symmetry=True)
         kpts = cell.make_kpts([3,1,1], space_group_symmetry=True)
@@ -584,6 +600,71 @@ class KnownValues(unittest.TestCase):
             r1 = cell.atom_coords()
             self.assertAlmostEqual(abs(ref - r1).max(), 0, 12)
 
+    def test_parse_poscar(self):
+        inp_str = '''\
+Cubic BN
+3.57
+0.0 0.5 0.5
+0.5 0.0 0.5
+0.5 0.5 0.0
+B N
+1 1
+Direct
+0.00 0.00 0.00
+0.25 0.25 0.25
+'''
+        a, atoms = pgto.cell.fromstring(inp_str, format='poscar')
+        ref_a = np.array([[0.   , 1.785, 1.785],
+                          [1.785, 0.   , 1.785],
+                          [1.785, 1.785, 0.   ]])
+        ref_pos = np.array([[0., 0., 0.],
+                            [0.8925, 0.8925, 0.8925]])
+        coords = np.array([x[1] for x in atoms])
+        assert abs(a - ref_a).max() < 1e-14
+        assert abs(coords - ref_pos).max() < 1e-14
+
+    def test_parse_cif(self):
+        inp_str = '''\
+# generated using pymatgen
+data_Si
+_symmetry_space_group_name_H-M   'P 1'
+_cell_length_a   3.86697465(8)
+_cell_length_b   3.86697465(8)
+_cell_length_c   3.86697465(8)
+_cell_angle_alpha   60.00000000
+_cell_angle_beta   60.00000000
+_cell_angle_gamma   60.00000000
+_symmetry_Int_Tables_number   1
+_chemical_formula_structural   Si
+_chemical_formula_sum   Si2
+_cell_volume   40.88829285
+_cell_formula_units_Z   2
+loop_
+ _symmetry_equiv_pos_site_id
+ _symmetry_equiv_pos_as_xyz
+  1  'x, y, z'
+loop_
+ _atom_site_type_symbol
+ _atom_site_label
+ _atom_site_symmetry_multiplicity
+ _atom_site_fract_x
+ _atom_site_fract_y
+ _atom_site_fract_z
+ _atom_site_occupancy
+  Si  Si0  1  0.75000000  0.75000000  0.75000000  1
+  Si  Si1  1  0.50000000  0.50000000  0.50000000  1
+'''
+        a, atoms = pgto.cell.fromstring(inp_str, format='cif')
+        # results from ase.io.cif.read_cif function
+        ref_a = np.array([[3.86697465, 0.0, 0.0],
+                        [1.933487325, 3.348898282690438, 0.0],
+                        [1.933487325, 1.1162994275634797, 3.1573715802591895]])
+        ref_pos = np.array([[5.80046198, 3.34889828, 2.36802869],
+                            [3.86697465, 2.23259886, 1.57868579]])
+        coords = np.array([x[1] for x in atoms])
+        assert abs(a - ref_a).max() < 1e-8
+        assert abs(coords - ref_pos).max() < 1e-8
+
     def test_set_geom_(self):
         BOHR = lib.param.BOHR
         cl = pgto.M(
@@ -666,6 +747,25 @@ class KnownValues(unittest.TestCase):
         cl.set_geom_(unit='Ang')
         self.assertTrue(cl.atom_coords()[0,2] == 1/1.5)
         self.assertTrue(cl.lattice_vectors()[0,0] == 4/1.5)
+
+    def test_gth_basis(self):
+        cl = pgto.M(a=np.eye(3), atom='Cd 0 0 0', basis='TZVP-MOLOPT-HYB-GTH',
+                    pseudo='gth-hf-rev-q2')
+        assert cl.nbas == 4
+        assert all(cl._bas[:,2] == 5)
+        assert cl._pseudo['Cd'][0] == [2, 0, 0, 0]
+
+        cl = pgto.M(a=np.eye(3), atom='Cd 0 0 0', basis='TZVP-MOLOPT-SCAN-GTH',
+                    pseudo='gth-hf-rev')
+        assert cl.nbas == 4
+        assert all(cl._bas[:,2] == 5)
+        assert cl._pseudo['Cd'][0] == [4, 6, 10, 0]
+
+        cl = pgto.M(a=np.eye(3), atom='Be 0 0 0', basis='TZVP-MOLOPT-PBE-GTH-q2',
+                    pseudo='GTH-PBE-q2')
+        print(cl.nbas == 2)
+        print(cl._bas[:,2] == [5, 5])
+        print(cl._pseudo['Be'][0] == [2, 0, 0, 0])
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")

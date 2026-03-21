@@ -13,6 +13,7 @@
 # limitations under the License.
 #
 # Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
+#         Ning-Yuan Chen <cny003@outlook.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
@@ -24,7 +25,7 @@ from pyscf import scf
 from pyscf import adc
 
 def setUpModule():
-    global mol, mf, myadc
+    global mol, mf, myadc, myadc_fr
     mol = gto.Mole()
     r = 0.957492
     x = r * math.sin(104.468205 * math.pi/(2 * 180.0))
@@ -44,10 +45,13 @@ def setUpModule():
     myadc = adc.ADC(mf)
     myadc.conv_tol = 1e-12
     myadc.tol_residual = 1e-6
+    myadc_fr = adc.ADC(mf,frozen=1)
+    myadc_fr.conv_tol = 1e-12
+    myadc_fr.tol_residual = 1e-6
 
 def tearDownModule():
-    global mol, mf, myadc
-    del mol, mf, myadc
+    global mol, mf, myadc, myadc_fr
+    del mol, mf, myadc, myadc_fr
 
 class KnownValues(unittest.TestCase):
 
@@ -88,7 +92,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 1.9905409664546319, 6)
         self.assertAlmostEqual(p[2], 1.9593142553574816, 6)
 
-
     def test_ea_adc3_high_cost(self):
 
         myadc.max_memory = 20
@@ -109,6 +112,27 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 1.9920778842193207, 6)
         self.assertAlmostEqual(p[2], 1.9676462978544356, 6)
         self.assertAlmostEqual(p[3], 1.9743650630026532, 6)
+
+    def test_ea_adc3_high_cost_frozen(self):
+
+        myadc_fr.max_memory = 20
+        myadc_fr.incore_complete = False
+        myadc_fr.method_type = 'ea'
+        myadc_fr.method = "adc(3)"
+        e, t_amp1, t_amp2 = myadc_fr.kernel_gs()
+        self.assertAlmostEqual(e, -0.22412046589604967, 6)
+
+        e,v,p,x = myadc_fr.kernel(nroots=4)
+
+        self.assertAlmostEqual(e[0], 0.0277386102474744, 6)
+        self.assertAlmostEqual(e[1], 0.0551483888081479, 6)
+        self.assertAlmostEqual(e[2], 0.1620802624386915, 6)
+        self.assertAlmostEqual(e[3], 0.1882099906975843, 6)
+
+        self.assertAlmostEqual(p[0], 1.9814229584713985, 6)
+        self.assertAlmostEqual(p[1], 1.9920784490143149, 6)
+        self.assertAlmostEqual(p[2], 1.9676456097851998, 6)
+        self.assertAlmostEqual(p[3], 1.9743683769537108, 6)
 
 if __name__ == "__main__":
     print("EA calculations for different RADC methods for water molecule")

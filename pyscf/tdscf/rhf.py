@@ -33,6 +33,7 @@ from pyscf import symm
 from pyscf.lib import logger
 from pyscf.scf import hf_symm
 from pyscf.scf import _response_functions # noqa
+from pyscf.gto.ppnl_velgauge import get_gth_pp_nl_velgauge_commutator
 from pyscf.data import nist
 from pyscf.tdscf._lr_eig import eigh as lr_eigh, eig as lr_eig, real_eig
 from pyscf import __config__
@@ -454,22 +455,26 @@ def analyze(tdobj, verbose=None):
                      i+1, dip[0], dip[1], dip[2], numpy.dot(dip, dip),
                      f_oscillator[i])
 
-        log.info('\n** Transition velocity dipole moments (imaginary part, AU) **')
-        log.info('state          X           Y           Z        Dip. S.      Osc.')
-        trans_v = tdobj.transition_velocity_dipole()
-        f_v = tdobj.oscillator_strength(gauge='velocity', order=0)
-        for i, ei in enumerate(tdobj.e):
-            v = trans_v[i]
-            log.info('%3d    %11.4f %11.4f %11.4f %11.4f %11.4f',
+        if tdobj.mol.ecp:
+            log.warn("ECP detected. Skipping calculation of transition velocity and "
+                     "magnetic dipole moments, which have not yet been implemented.")
+        else:
+            log.info('\n** Transition velocity dipole moments (imaginary part, AU) **')
+            log.info('state          X           Y           Z        Dip. S.      Osc.')
+            trans_v = tdobj.transition_velocity_dipole()
+            f_v = tdobj.oscillator_strength(gauge='velocity', order=0)
+            for i, ei in enumerate(tdobj.e):
+                v = trans_v[i]
+                log.info('%3d    %11.4f %11.4f %11.4f %11.4f %11.4f',
                      i+1, v[0], v[1], v[2], numpy.dot(v, v), f_v[i])
 
-        log.info('\n** Transition magnetic dipole moments (imaginary part, AU) **')
-        log.info('state          X           Y           Z')
-        trans_m = tdobj.transition_magnetic_dipole()
-        for i, ei in enumerate(tdobj.e):
-            m = trans_m[i]
-            log.info('%3d    %11.4f %11.4f %11.4f',
-                     i+1, m[0], m[1], m[2])
+            log.info('\n** Transition magnetic dipole moments (imaginary part, AU) **')
+            log.info('state          X           Y           Z')
+            trans_m = tdobj.transition_magnetic_dipole()
+            for i, ei in enumerate(tdobj.e):
+                m = trans_m[i]
+                log.info('%3d    %11.4f %11.4f %11.4f',
+                         i+1, m[0], m[1], m[2])
     return tdobj
 
 def _analyze_wfnsym(tdobj, x_sym, x):
@@ -500,13 +505,36 @@ def transition_dipole(tdobj, xy=None):
 def transition_velocity_dipole(tdobj, xy=None):
     '''Transition dipole moments in the velocity gauge (imaginary part only)
     '''
-    ints = tdobj.mol.intor('int1e_ipovlp', comp=3, hermi=2)
-    v = tdobj._contract_multipole(ints, hermi=False, xy=xy)
+    ints_p = tdobj.mol.intor('int1e_ipovlp', comp=3, hermi=0)
+    if tdobj.mol.pseudo:
+        r_vnl_commutator = get_gth_pp_nl_velgauge_commutator(tdobj.mol, q=numpy.zeros(3)).real
+    elif tdobj.mol.ecp:
+        raise NotImplementedError(
+            "The commutator term for transition velocity dipole with ECP\n"
+            "has not been implemented."
+        )
+    else:
+        r_vnl_commutator = 0.0
+    # velocity operator = p - i[r, V_nl]
+    # Because int1e_ipovlp is ( nabla \| ) = ( \| -nabla ) = p / i, we have
+    # Im [ vel. ] = int1e_ipovlp - [ r, V_nl ].
+    # Note that the matrix of [ r_a, V_nl ] (a = 1, 2, 3) is real and anti-Hermitian.
+    # References:
+    # [1] 10.1021/acs.jctc.2c00644
+    # [2] 10.1103/PhysRevB.62.4927
+
+    velocity_operator = ints_p - r_vnl_commutator
+    v = tdobj._contract_multipole(velocity_operator, hermi=False, xy=xy)
     return -v
 
 def transition_magnetic_dipole(tdobj, xy=None):
     '''Transition magnetic dipole moments (imaginary part only)'''
     mol = tdobj.mol
+    if mol.pseudo or mol.ecp:
+        raise NotImplementedError(
+            "The commutator term for velocity gauge transition magnetic\n"
+            "dipole with ECP or pseudopotentials has not been implemented."
+        )
     with mol.with_common_orig(_charge_center(mol)):
         ints = mol.intor('int1e_cg_irxp', comp=3, hermi=2)
     m_pol = tdobj._contract_multipole(ints, hermi=False, xy=xy)
@@ -525,6 +553,11 @@ def transition_velocity_quadrupole(tdobj, xy=None):
     '''Transition quadrupole moments in the velocity gauge (imaginary part only)
     '''
     mol = tdobj.mol
+    if mol.pseudo or mol.ecp:
+        raise NotImplementedError(
+            "The commutator term for velocity gauge transition quadrupole\n"
+            "with ECP or pseudopotentials has not been implemented."
+        )
     nao = mol.nao_nr()
     with mol.with_common_orig(_charge_center(mol)):
         ints = mol.intor('int1e_irp', comp=9, hermi=0).reshape(3,3,nao,nao)
@@ -536,6 +569,11 @@ def transition_magnetic_quadrupole(tdobj, xy=None):
     '''Transition magnetic quadrupole moments (imaginary part only)'''
     XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = range(9)
     mol = tdobj.mol
+    if mol.pseudo or mol.ecp:
+        raise NotImplementedError(
+            "The commutator term for transition magnetic quadrupole\n"
+            "with ECP or pseudopotentials has not been implemented."
+        )
     nao = mol.nao_nr()
     with mol.with_common_orig(_charge_center(mol)):
         ints = mol.intor('int1e_irrp', comp=27, hermi=0).reshape(3,9,nao,nao)
@@ -559,6 +597,11 @@ def transition_velocity_octupole(tdobj, xy=None):
     '''Transition octupole moments in the velocity gauge (imaginary part only)
     '''
     mol = tdobj.mol
+    if mol.pseudo or mol.ecp:
+        raise NotImplementedError(
+            "The commutator term for velocity gauge transition octupole\n"
+            "with ECP or pseudopotentials has not been implemented."
+        )
     nao = mol.nao_nr()
     with mol.with_common_orig(_charge_center(mol)):
         ints = mol.intor('int1e_irrp', comp=27, hermi=0).reshape(3,3,3,nao,nao)
@@ -645,6 +688,31 @@ def oscillator_strength(tdobj, e=None, xy=None, gauge='length', order=0):
             logger.debug(tdobj, '    %s', f_m+f_o)
 
     return f
+
+def dipole_spectral_function(tdobj, e=None, xy=None, gauge='length', freqs=None, eta=1e-3):
+    """Dipole spectral function.
+
+    S(omega) = sum_n f_n delta(omega - Omega_n)
+    """
+    if e is None:
+        e = tdobj.e
+    f = tdobj.oscillator_strength(e=e, xy=xy, gauge=gauge)
+
+    def lorentz_broad(w, w0, eta):
+        # approximate a delta function by eta/(pi*((w-w0)^2+eta^2))
+        return eta / (numpy.pi * ((w-w0)**2 + eta**2))
+    spec = numpy.zeros_like(freqs)
+    for ei, fi in zip(e, f):
+        spec += fi * lorentz_broad(freqs, ei, eta)
+    return spec
+
+def photoabsorption_cross_section(tdobj, e=None, xy=None, gauge='length', freqs=None, eta=1e-3):
+    """Photoabsorption cross section.
+    sigma(omega) = 2 pi^2 / c * S(omega)
+    """
+    spec = tdobj.dipole_spectral_function(e=e, xy=xy, gauge=gauge, freqs=freqs, eta=eta)
+    # sigma = 2 pi^2 S(omega) / c
+    return 2 * numpy.pi**2 * spec / nist.LIGHT_SPEED
 
 
 def as_scanner(td):
@@ -827,6 +895,8 @@ class TDBase(lib.StreamObject):
     transition_velocity_octupole   = transition_velocity_octupole
     transition_magnetic_dipole     = transition_magnetic_dipole
     transition_magnetic_quadrupole = transition_magnetic_quadrupole
+    dipole_spectral_function       = dipole_spectral_function
+    photoabsorption_cross_section  = photoabsorption_cross_section
 
     as_scanner = as_scanner
 
@@ -841,7 +911,7 @@ class TDBase(lib.StreamObject):
         if not all(self.converged):
             logger.note(self, 'TD-SCF states %s not converged.',
                         [i for i, x in enumerate(self.converged) if not x])
-        logger.note(self, 'Excited State energies (eV)\n%s', self.e * nist.HARTREE2EV)
+        logger.note(self, 'Excitation energies (eV)\n%s', self.e * nist.HARTREE2EV)
         return self
 
     def to_gpu(self):
@@ -996,7 +1066,12 @@ class TDA(TDBase):
         from pyscf.grad import tdrhf
         return tdrhf.Gradients(self)
 
-    to_gpu = lib.to_gpu
+    def to_gpu(self):
+        import cupy as cp
+        out = lib.to_gpu(self)
+        if out.xy is not None:
+            out.xy = [(cp.asarray(x), y) for x, y in out.xy]
+        return out
 
 CIS = TDA
 
@@ -1199,7 +1274,12 @@ class TDHF(TDBase):
 
     Gradients = TDA.Gradients
 
-    to_gpu = lib.to_gpu
+    def to_gpu(self):
+        import cupy as cp
+        out = lib.to_gpu(self)
+        if out.xy is not None:
+            out.xy = [(cp.asarray(x), cp.asarray(y)) for x, y in out.xy]
+        return out
 
 RPA = TDRHF = TDHF
 

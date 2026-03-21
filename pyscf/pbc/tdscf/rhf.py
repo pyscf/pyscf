@@ -24,6 +24,7 @@ import numpy as np
 from pyscf import lib
 from pyscf.tdscf import rhf
 from pyscf.pbc import scf
+from pyscf.pbc.gto.pseudo.ppnl_velgauge import get_gth_pp_nl_velgauge_commutator
 from pyscf import __config__
 
 def get_ab(mf):
@@ -136,6 +137,44 @@ def get_ab(mf):
 
     return a, b
 
+def transition_velocity_dipole(tdobj, xy=None):
+    '''Transition dipole moments in the velocity gauge (imaginary part only)
+    '''
+    kpt = tdobj._scf.kpt
+    ints_p = tdobj.cell.pbc_intor('int1e_ipovlp', comp=3, hermi=0, kpts=kpt)
+    if tdobj.cell.pseudo:
+        r_vnl_commutator = get_gth_pp_nl_velgauge_commutator(tdobj.cell, q=np.zeros(3), kpts=kpt)
+    else:
+        r_vnl_commutator = 0.0
+    # velocity operator = p - i[r, V_nl]
+    # Because int1e_ipovlp is ( nabla \| ) = ( \| -nabla ) = p / i, we have
+    # Im [ vel. ] = int1e_ipovlp - [ r, V_nl ].
+    # Note that the matrix of [ r_a, V_nl ] (a = 1, 2, 3) is real and anti-Hermitian.
+    velocity_operator = ints_p - r_vnl_commutator
+    v = tdobj._contract_multipole(velocity_operator, hermi=0, xy=xy)
+    return -v
+
+def oscillator_strength(tdobj, e=None, xy=None, gauge='velocity', order=0):
+    if e is None: e = tdobj.e
+
+    if gauge == 'length':
+        raise NotImplementedError
+
+    elif gauge == 'velocity':
+        trans_dip = tdobj.transition_velocity_dipole(xy)
+        f = 2./3. * np.einsum('s,sx,sx->s', 1./e, trans_dip, trans_dip.conj()).real
+
+        if order > 0:
+            raise NotImplementedError
+    else:
+        raise ValueError(f'Unknown gauge {gauge}')
+
+    lib.logger.warn(tdobj, 'You requested oscillator strengths for a periodic system.'
+                           ' Please note that they are only intended for comparison'
+                           ' with molecular calculations.')
+
+    return f
+
 class TDBase(rhf.TDBase):
     _keys = {'cell'}
 
@@ -151,16 +190,17 @@ class TDBase(rhf.TDBase):
         raise NotImplementedError
 
     get_nto = rhf.TDBase.get_nto
-    analyze = lib.invalid_method('analyze')
-    oscillator_strength = lib.invalid_method('oscillator_strength')
+    transition_velocity_dipole     = transition_velocity_dipole
+    oscillator_strength            = oscillator_strength
+    analyze                        = lib.invalid_method('analyze')
     transition_dipole              = lib.invalid_method('transition_dipole')
     transition_quadrupole          = lib.invalid_method('transition_quadrupole')
     transition_octupole            = lib.invalid_method('transition_octupole')
-    transition_velocity_dipole     = lib.invalid_method('transition_velocity_dipole')
     transition_velocity_quadrupole = lib.invalid_method('transition_velocity_quadrupole')
     transition_velocity_octupole   = lib.invalid_method('transition_velocity_octupole')
     transition_magnetic_dipole     = lib.invalid_method('transition_magnetic_dipole')
     transition_magnetic_quadrupole = lib.invalid_method('transition_magnetic_quadrupole')
+    photoabsorption_cross_section  = lib.invalid_method('photoabsorption_cross_section')
 
 
 class TDA(TDBase):

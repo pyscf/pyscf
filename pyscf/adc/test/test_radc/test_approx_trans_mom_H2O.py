@@ -13,6 +13,7 @@
 # limitations under the License.
 #
 # Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
+#         Ning-Yuan Chen <cny003@outlook.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
@@ -24,7 +25,7 @@ from pyscf import scf
 from pyscf import adc
 
 def setUpModule():
-    global mol, mf, myadc
+    global mol, mf, myadc, myadc_fr
     mol = gto.Mole()
     r = 0.957492
     x = r * math.sin(104.468205 * math.pi/(2 * 180.0))
@@ -44,10 +45,13 @@ def setUpModule():
     myadc = adc.ADC(mf)
     myadc.conv_tol = 1e-12
     myadc.tol_residual = 1e-6
+    myadc_fr = adc.ADC(mf,frozen=1)
+    myadc_fr.conv_tol = 1e-12
+    myadc_fr.tol_residual = 1e-6
 
 def tearDownModule():
-    global mol, mf, myadc
-    del mol, mf, myadc
+    global mol, mf, myadc, myadc_fr
+    del mol, mf, myadc, myadc_fr
 
 class KnownValues(unittest.TestCase):
 
@@ -77,7 +81,6 @@ class KnownValues(unittest.TestCase):
         myadcip = adc.radc_ip.RADCIP(myadc)
         myadcip.approx_trans_moments = True
         e,v,p,x = myadcip.kernel(nroots=4)
-        myadcip.analyze()
 
         self.assertAlmostEqual(e[0], 0.4133257511, 6)
         self.assertAlmostEqual(e[1], 0.4978545288, 6)
@@ -89,6 +92,43 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 1.80354103, 6)
         self.assertAlmostEqual(p[3], 0.00396362, 6)
 
+
+    def test_ea_adc2_frozen(self):
+        myadc_fr.method = "adc(2)"
+        e, t_amp1, t_amp2 = myadc_fr.kernel_gs()
+        self.assertAlmostEqual(e, -0.2193655383529059, 6)
+
+        myadcea_fr = adc.radc_ea.RADCEA(myadc_fr)
+        myadcea_fr.approx_trans_moments = True
+        e,v,p,x = myadcea_fr.kernel(nroots=3)
+
+        self.assertAlmostEqual(e[0], 0.02876408, 6)
+        self.assertAlmostEqual(e[1], 0.05534878, 6)
+        self.assertAlmostEqual(e[2], 0.16435779, 6)
+
+        self.assertAlmostEqual(p[0],1.98680945, 6)
+        self.assertAlmostEqual(p[1],1.99411977 , 6)
+        self.assertAlmostEqual(p[2],1.97597194 , 6)
+
+
+    def test_ip_adc2_frozen(self):
+        myadc_fr.method = "adc(2)"
+        e, t_amp1, t_amp2 = myadc_fr.kernel_gs()
+        self.assertAlmostEqual(e, -0.2193655383529059, 6)
+
+        myadcip_fr = adc.radc_ip.RADCIP(myadc_fr)
+        myadcip_fr.approx_trans_moments = True
+        e,v,p,x = myadcip_fr.kernel(nroots=4)
+
+        self.assertAlmostEqual(e[0], 0.41331769, 6)
+        self.assertAlmostEqual(e[1], 0.49789443, 6)
+        self.assertAlmostEqual(e[2], 0.66078283, 6)
+        self.assertAlmostEqual(e[3], 1.05400422, 6)
+
+        self.assertAlmostEqual(p[0], 1.76841006, 6)
+        self.assertAlmostEqual(p[1], 1.77324237, 6)
+        self.assertAlmostEqual(p[2], 1.80357389, 6)
+        self.assertAlmostEqual(p[3], 0.00393261, 6)
 
 if __name__ == "__main__":
     print("Approximate transition moments calculations for different RADC methods for water molecule")

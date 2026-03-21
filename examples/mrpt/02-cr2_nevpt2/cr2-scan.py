@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 import numpy
-import numpy
 from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
-from pyscf import lo
 from pyscf import mrpt
 
 ehf = []

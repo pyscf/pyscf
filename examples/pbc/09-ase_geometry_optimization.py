@@ -26,7 +26,7 @@ mf.conv_tol = 1e-6
 # However, some methods may not support gradients or stress tensors. Geometry
 # optimization or lattice optimization that rely on these functionalities will
 # be halted.
-atoms.set_calculator(PySCF(method=mf))
+atoms.calc = PySCF(method=mf)
 
 # optimize atom positions
 opt = BFGS(atoms, logfile='atom_pos.log')

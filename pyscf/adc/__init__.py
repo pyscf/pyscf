@@ -31,14 +31,14 @@ from pyscf.adc import uadc_amplitudes
 from pyscf.adc import radc_ip
 from pyscf.adc import radc_ip_cvs
 from pyscf.adc import radc_ea
+from pyscf.adc import radc_ee
 from pyscf.adc import uadc_ip
 from pyscf.adc import uadc_ip_cvs
 from pyscf.adc import uadc_ea
+from pyscf.adc import uadc_ee
 
 
 def ADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    if not (frozen is None or frozen == 0):
-        raise NotImplementedError
 
     if mf.istype('UHF'):
         return UADC(mf, frozen, mo_coeff, mo_occ)
@@ -54,8 +54,6 @@ ADC.__doc__ = uadc.UADC.__doc__
 
 
 def UADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    if not (frozen is None or frozen == 0):
-        raise NotImplementedError
 
     if not (mf.istype('UHF') or mf.istype('ROHF')):
         mf = mf.to_uhf()
@@ -65,8 +63,6 @@ def UADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
 UADC.__doc__ = uadc.UADC.__doc__
 
 def RADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    if not (frozen is None or frozen == 0):
-        raise NotImplementedError
 
     mf = mf.remove_soscf()
     if not mf.istype('RHF'):

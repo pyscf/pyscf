@@ -281,6 +281,12 @@ class KRKS(rks.KohnShamDFT, khf.KRHF):
             out.with_df.reset()
         return out
 
-    multigrid_numint = rks.RKS.multigrid_numint
+    def multigrid_numint(self, mesh=None):
+        '''Apply the MultiGrid algorithm for XC numerical integartion'''
+        mf = self.copy()
+        mf._numint = multigrid.MultiGridNumInt(self.cell)
+        if mesh is not None:
+            mf._numint.mesh = mesh
+        return mf
 
     to_gpu = lib.to_gpu

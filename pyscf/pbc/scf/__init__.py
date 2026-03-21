@@ -37,16 +37,32 @@ from pyscf.pbc.scf import newton_ah
 from pyscf.pbc.scf import addons
 from pyscf.pbc.lib import kpts as libkpts
 
-GHF = ghf.GHF
-UHF = uhf.UHF
-ROHF = rohf.ROHF
-
 def RHF(cell, *args, **kwargs):
+    if 'kpts' in kwargs:
+        return KRHF(cell, *args, **kwargs)
     if cell.spin == 0:
         return rhf.RHF(cell, *args, **kwargs)
     else:
         return rohf.ROHF(cell, *args, **kwargs)
 RHF.__doc__ = rhf.RHF.__doc__
+
+def UHF(cell, *args, **kwargs):
+    if 'kpts' in kwargs:
+        return KUHF(cell, *args, **kwargs)
+    return uhf.UHF(cell, *args, **kwargs)
+UHF.__doc__ = uhf.UHF.__doc__
+
+def GHF(cell, *args, **kwargs):
+    if 'kpts' in kwargs:
+        return KGHF(cell, *args, **kwargs)
+    return ghf.GHF(cell, *args, **kwargs)
+GHF.__doc__ = ghf.GHF.__doc__
+
+def ROHF(cell, *args, **kwargs):
+    if 'kpts' in kwargs:
+        return KROHF(cell, *args, **kwargs)
+    return rohf.ROHF(cell, *args, **kwargs)
+ROHF.__doc__ = rohf.ROHF.__doc__
 
 #KRHF = krhf.KRHF  # KRHF supports cell.spin != 0 if number of k-points is even
 def KRHF(cell, *args, **kwargs):
@@ -83,9 +99,9 @@ newton = newton_ah.newton
 
 def HF(cell, *args, **kwargs):
     if cell.spin == 0:
-        return rhf.RHF(cell, *args, **kwargs)
+        return RHF(cell, *args, **kwargs)
     else:
-        return uhf.UHF(cell, *args, **kwargs)
+        return UHF(cell, *args, **kwargs)
 
 def KHF(cell, *args, **kwargs):
     if cell.spin == 0:

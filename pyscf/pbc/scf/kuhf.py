@@ -143,21 +143,29 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
 
     nocc_a, nocc_b = mf.nelec
     mo_energy = np.sort(np.hstack(mo_energy_kpts[0]))
+    nmo = mo_energy.size
+    if nocc_a > nmo:
+        raise RuntimeError('Failed to assign alpha occupancies. '
+                           f'Nocc_a ({nocc_a}) > Nmo ({nmo})')
     fermi_a = mo_energy[nocc_a-1]
     mo_occ_kpts = [[], []]
     for mo_e in mo_energy_kpts[0]:
         mo_occ_kpts[0].append((mo_e <= fermi_a).astype(np.double))
-    if nocc_a < len(mo_energy):
+    if nocc_a < nmo:
         logger.info(mf, 'alpha HOMO = %.12g  LUMO = %.12g', fermi_a, mo_energy[nocc_a])
     else:
         logger.info(mf, 'alpha HOMO = %.12g  (no LUMO because of small basis) ', fermi_a)
 
     if nocc_b > 0:
         mo_energy = np.sort(np.hstack(mo_energy_kpts[1]))
+        nmo = mo_energy.size
+        if nocc_b > nmo:
+            raise RuntimeError('Failed to assign beta occupancies. '
+                               f'Nocc_b ({nocc_b}) > Nmo ({nmo})')
         fermi_b = mo_energy[nocc_b-1]
         for mo_e in mo_energy_kpts[1]:
             mo_occ_kpts[1].append((mo_e <= fermi_b).astype(np.double))
-        if nocc_b < len(mo_energy):
+        if nocc_b < nmo:
             logger.info(mf, 'beta HOMO = %.12g  LUMO = %.12g', fermi_b, mo_energy[nocc_b])
         else:
             logger.info(mf, 'beta HOMO = %.12g  (no LUMO because of small basis) ', fermi_b)

@@ -41,7 +41,7 @@ class KnownValues(unittest.TestCase):
         self.assertRaises(KeyError, gto.basis._parse_pople_basis, '631g++', 'C')
 
     def test_basis_load(self):
-        self.assertRaises(BasisNotFoundError, gto.basis.load, 'abas', 'H')
+        self.assertRaises(RuntimeError, gto.basis.load, 'abas', 'H')
 
         self.assertEqual(len(gto.basis.load('631++g**', 'C')), 8)
         self.assertEqual(len(gto.basis.load('ccpcvdz', 'C')), 7)
@@ -149,6 +149,9 @@ Na P
         ecpdat1 = gto.basis.parse_nwchem.parse_ecp(
             gto.basis.parse_nwchem.convert_ecp_to_nwchem('Na', ecpdat), 'Na')
         self.assertEqual(ecpdat, ecpdat1)
+
+        mol = gto.M(atom='Cl 0 0 0; Cl 0 0 1', ecp=ecp_str)
+        self.assertEqual(len(mol._ecp['Cl']), 2)
 
     def test_optimize_contraction(self):
         bas = gto.parse(r'''
@@ -518,6 +521,9 @@ ECP,I,46,4,3;
         ref = gto.basis.load('gth-dzv', 'N')
         self.assertEqual(ref, basis1)
 
+        mol = gto.M(atom='N 0 0 0; N 0 0 1', basis=basis_str)
+        self.assertEqual(mol.nbas, 4)
+
         basis_str = '''
                         C DZV-GTH
                           1
@@ -531,6 +537,9 @@ ECP,I,46,4,3;
         basis1 = parse_cp2k.parse(basis_str)
         ref = gto.basis.load('gth-dzv', 'C')
         self.assertEqual(ref, basis1)
+
+        mol = gto.M(atom='Li 0 0 0; Li 0 0 1', basis=basis_str)
+        self.assertEqual(mol.nbas, 4)
 
     def test_parse_gth_pp(self):
         pp_str = '''
@@ -555,6 +564,14 @@ ECP,I,46,4,3;
         ref = gto.basis.load_pseudo('gth-pade', 'C')
         self.assertEqual(ref, pp1)
 
+        mol = gto.M(atom='C 0 0 0; C 0 0 1', pseudo=pp_str)
+        self.assertEqual(len(mol._pseudo['C']), 7)
+        self.assertEqual(mol._pseudo['C'][0], [2, 2])
+
+        mol = gto.M(atom='N 0 0 0; N 0 0 1', pseudo=pp_str)
+        self.assertEqual(len(mol._pseudo['N']), 7)
+        self.assertEqual(mol._pseudo['N'][0], [2, 1])
+
     # issue 2880
     @unittest.skipIf(basis_set_exchange is None, 'BSE not installed')
     def test_parse_bse_ecp(self):
@@ -564,7 +581,44 @@ ECP,I,46,4,3;
         dat1 = mol.intor('ECPscalar')
         mol = gto.M(atom='Fe', ecp='crenbs')
         dat2 = mol.intor('ECPscalar')
-        self.assertAlmostEqual(abs(dat1 - dat2).max(), 0, 14)
+        self.assertAlmostEqual(abs(dat1 - dat2).max(), 0, 12)
+
+    def test_to_MOLOPT_name(self):
+        assert parse_cp2k._to_MOLOPT_name('gthszvmolopt'   ) == 'SZV-MOLOPT-GTH'
+        assert parse_cp2k._to_MOLOPT_name('gthdzvpmolopt'  ) == 'DZVP-MOLOPT-GTH'
+        assert parse_cp2k._to_MOLOPT_name('gthtzvpmolopt'  ) == 'TZVP-MOLOPT-GTH'
+        assert parse_cp2k._to_MOLOPT_name('gthtzv2pmolopt' ) == 'TZV2P-MOLOPT-GTH'
+        assert parse_cp2k._to_MOLOPT_name('gthszvmoloptsr' ) == 'SZV-MOLOPT-SR-GTH'
+        assert parse_cp2k._to_MOLOPT_name('gthdzvpmoloptsr') == 'DZVP-MOLOPT-SR-GTH'
+
+    def test_load_gth_basis(self):
+        basis_dir = gto.basis._GTH_BASIS_DIR
+        def load(basis_name, element):
+            basis = parse_cp2k._load_MOLOPT(basis_name, element, basis_dir)
+            return [x[0] for x in basis], [len(x)-1 for x in basis]
+        assert load('TZVP-MOLOPT-PBE-GTH', 'Cd') == ([0, 1, 2, 3], [5, 5, 5, 5])
+        assert load('TZVP-MOLOPT-SCAN-GTH', 'Cd') == ([0, 1, 2, 3], [5, 5, 5, 5])
+        assert load('SZV-MOLOPT-SR-GTH', 'Cu') == ([0, 1, 2], [6, 6, 6])
+        assert load('TZVP-MOLOPT-SR-GTH', 'Cu') == ([0, 1, 2, 3], [6, 6, 6, 6])
+        assert load('TZVP-MOLOPT-HYB-GTH', 'Cd') == ([0, 1, 2, 3], [5, 5, 5, 5])
+        assert load('TZVP-GTH', 'C') == ([0, 1, 2], [5, 5, 1])
+        assert load('TZVP-MOLOPT-GTH', 'C') == ([0, 1, 2], [7, 7, 7])
+        assert load('TZV2P-MOLOPT-PBE-GTH', 'Na') == ([0, 1, 2], [3, 3, 3])
+        assert load('TZV2P-MOLOPT-PBE-GTH-q1', 'Na') == ([0, 1, 2], [3, 3, 3])
+        assert load('TZV2P-MOLOPT-PBE-GTH-q9', 'Na') == ([0, 1, 2], [7, 7, 7])
+
+    def test_load_gth_pseudo(self):
+        pp_dir = gto.basis._GTH_PP_DIR
+        pp = parse_cp2k_pp._load_GTH_POTENTIALS('GTH-PBE', 'Na', pp_dir)
+        assert pp[0] == [3, 6]
+        pp = parse_cp2k_pp._load_GTH_POTENTIALS('GTH-PBE-q1', 'Na', pp_dir)
+        assert pp[0] == [1]
+        pp = parse_cp2k_pp._load_GTH_POTENTIALS('GTH-PBE-q9_old', 'Na', pp_dir)
+        assert pp[0] == [3, 6]
+        pp = parse_cp2k_pp._load_GTH_POTENTIALS('GTH-LDA', 'Be', pp_dir)
+        assert pp[0] == [4]
+        pp = parse_cp2k_pp._load_GTH_POTENTIALS('GTH-LDA-q2', 'Be', pp_dir)
+        assert pp[0] == [2]
 
 if __name__ == "__main__":
     print("test basis module")

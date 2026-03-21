@@ -88,7 +88,6 @@ H       0.7570000000     0.0000000000    -0.4696000000
         mf = mf.SMD()
         mf.with_solvent.solvent = 'toluene'
         mf.with_solvent.sasa_ng = 590
-        mf.with_solvent.lebedev_order = 29
 
         mf.kernel()
         h = mf.Hessian().kernel()

@@ -44,6 +44,13 @@ def tearDownModule():
     global mol, mf, myadc
     del mol, mf, myadc
 
+def rdms_test(dm_a,dm_b):
+    r2_int = mol.intor('int1e_r2')
+    dm_ao_a = np.einsum('pi,ij,qj->pq', mf.mo_coeff[0], dm_a, mf.mo_coeff[0].conj())
+    dm_ao_b = np.einsum('pi,ij,qj->pq', mf.mo_coeff[1], dm_b, mf.mo_coeff[1].conj())
+    r2 = np.einsum('pq,pq->',r2_int,dm_ao_a+dm_ao_b)
+    return r2
+
 class KnownValues(unittest.TestCase):
 
     def test_ip_adc2(self):
@@ -62,6 +69,10 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(p[0], 0.77131403962843, 6)
         self.assertAlmostEqual(p[1], 0.77131403962002, 6)
+
+        dm1_exc = np.array(myadcipcvs.make_rdm1())
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 34.77893507724698, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 34.77893507598009, 6)
 
     def test_ip_adc2x(self):
 
@@ -84,6 +95,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 0.75723819837873, 6)
         self.assertAlmostEqual(p[3], 0.75723819850822, 6)
 
+        dm1_exc = np.array(myadcipcvs.make_rdm1())
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 34.74538220684249, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 34.74538220395507, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 34.75067997958486, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 34.75067997663937, 6)
+
     def test_ip_adc3_high_cost(self):
 
         myadc.method = "adc(3)"
@@ -104,6 +121,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 0.82130396559585, 6)
         self.assertAlmostEqual(p[2], 0.82061528343281, 6)
         self.assertAlmostEqual(p[3], 0.82061528704539, 6)
+
+        dm1_exc = np.array(myadcipcvs.make_rdm1())
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 34.73228818523228, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 34.73228818136017, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 34.73668136235344, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 34.73668135836863, 6)
 
 if __name__ == "__main__":
     print("IP calculations for different ADC methods for open-shell molecule")

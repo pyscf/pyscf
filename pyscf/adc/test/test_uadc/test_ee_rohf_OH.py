@@ -13,6 +13,7 @@
 # limitations under the License.
 #
 # Author: Terrence Stahl <terrencestahl1@@gmail.com>
+#         Ning-Yuan Chen <cny003@outlook.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
@@ -50,6 +51,12 @@ def tearDownModule():
     global mol, mf, myadc
     del mol, mf, myadc
 
+def rdms_test(dm_a,dm_b):
+    r2_int = mol.intor('int1e_r2')
+    dm_ao_a = np.einsum('pi,ij,qj->pq', myadc.mo_coeff[0], dm_a, myadc.mo_coeff[0].conj())
+    dm_ao_b = np.einsum('pi,ij,qj->pq', myadc.mo_coeff[1], dm_b, myadc.mo_coeff[1].conj())
+    r2 = np.einsum('pq,pq->',r2_int,dm_ao_a+dm_ao_b)
+    return r2
 
 class KnownValues(unittest.TestCase):
 
@@ -75,6 +82,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(spin[2],2.43570834 , 5)
         self.assertAlmostEqual(spin[3],1.14753801 , 5)
 
+        dm1_exc = np.array(myadc.make_rdm1())
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 14.82834303951204, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 14.58906976246459, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 22.55185011193399, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 22.69989460440471, 6)
+
     def test_ee_adc2x(self):
         myadc.method = "adc(2)-x"
 
@@ -96,6 +109,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(spin[2],3.65784145  , 5)
         self.assertAlmostEqual(spin[3],0.80459280  , 5)
 
+        dm1_exc = np.array(myadc.make_rdm1())
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 14.88282768620535, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 14.71720611496241, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 22.23562693053046, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 22.67130682497491, 6)
+
     def test_ee_adc3(self):
         myadc.method = "adc(3)"
 
@@ -108,14 +127,21 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3], 0.3187665826, 6)
 
         self.assertAlmostEqual(p[0],-0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.00239679 , 6)
-        self.assertAlmostEqual(p[2],0.00000001 , 6)
-        self.assertAlmostEqual(p[3],0.01492111 , 6)
+        self.assertAlmostEqual(p[1],0.00239567 , 6)
+        self.assertAlmostEqual(p[2],0.00000000 , 6)
+        self.assertAlmostEqual(p[3],0.01485308 , 6)
 
         self.assertAlmostEqual(spin[0], 0.75027556 , 5)
         self.assertAlmostEqual(spin[1],0.75009053  , 5)
         self.assertAlmostEqual(spin[2],3.72613641  , 5)
         self.assertAlmostEqual(spin[3],0.75901326  , 5)
+
+        dm1_exc = np.array(myadc.make_rdm1())
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 14.853375423229501, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 14.651068073945451, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 22.190262331871086, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 22.561776913279605, 6)
+
 if __name__ == "__main__":
     print("EE calculations for different ADC methods for OH molecule")
     unittest.main()

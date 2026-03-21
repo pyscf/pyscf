@@ -12,9 +12,9 @@ import numpy
 
 cell = gto.M(
     a = numpy.eye(3)*3.5668,
-    atom = '''C     0.      0.      0.    
+    atom = '''C     0.      0.      0.
               C     0.8917  0.8917  0.8917
-              C     1.7834  1.7834  0.    
+              C     1.7834  1.7834  0.
               C     2.6751  2.6751  0.8917
               C     1.7834  0.      1.7834
               C     2.6751  0.8917  2.6751
@@ -48,3 +48,22 @@ kmf.kernel()
 mf = scf.KRHF(cell, kpts).newton()
 mf.kernel()
 
+# When you are using the newton solver for the pbc mean-field, make sure
+# you are setting the same exxdiv for mean-field object before and after decorating the mean-field
+# with newton solver. Otherwise define it before decorating it with the newton solver.
+
+# For more details see: https://github.com/pyscf/pyscf/issues/3108
+
+# This can be done as follow: mf_opt1 and mf_opt2 are equivalent. However mf_opt3 can result in different energies.
+
+mf_opt1 = scf.KRHF(cell, kpts, exxdiv = None).density_fit().newton()
+# mf_opt1.kernel()
+
+mf_opt2 = scf.KRHF(cell, kpts).density_fit().newton()
+mf_opt2.exxdiv = None
+mf_opt2._scf.exxdiv = None
+# mf_opt2.kernel()
+
+mf_opt3 = scf.KRHF(cell, kpts).density_fit().newton()
+mf_opt3.exxdiv = None
+# mf_opt3.kernel()

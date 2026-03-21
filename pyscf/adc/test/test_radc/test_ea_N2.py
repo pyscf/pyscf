@@ -13,6 +13,7 @@
 # limitations under the License.
 #
 # Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
+#         Ning-Yuan Chen <cny003@outlook.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
@@ -23,7 +24,7 @@ from pyscf import scf
 from pyscf import adc
 
 def setUpModule():
-    global mol, mf, myadc
+    global mol, mf, myadc, myadc_fr
     r = 1.098
     mol = gto.Mole()
     mol.atom = [
@@ -38,10 +39,13 @@ def setUpModule():
     myadc = adc.ADC(mf)
     myadc.conv_tol = 1e-12
     myadc.tol_residual = 1e-6
+    myadc_fr = adc.ADC(mf,frozen=1)
+    myadc_fr.conv_tol = 1e-12
+    myadc_fr.tol_residual = 1e-6
 
 def tearDownModule():
-    global mol, mf, myadc
-    del mol, mf, myadc
+    global mol, mf, myadc, myadc_fr
+    del mol, mf, myadc, myadc_fr
 
 def rdms_test(dm):
     r2_int = mol.intor('int1e_r2')
@@ -145,6 +149,35 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(rdms_test(dm1_exc[0]), 55.12466915835939, 6)
         self.assertAlmostEqual(rdms_test(dm1_exc[1]), 84.21966457078218, 6)
         self.assertAlmostEqual(rdms_test(dm1_exc[2]), 67.34876130600885, 6)
+
+    def test_ea_adc3_frozen(self):
+
+        myadc_fr.method = "adc(3)"
+        myadc_fr.method_type = "ea"
+
+        myadc_fr.kernel_gs()
+        dm1_gs = myadc_fr.make_ref_rdm1()
+        r2_gs = rdms_test(dm1_gs)
+        self.assertAlmostEqual(r2_gs, 39.47517224541648, 6)
+
+        myadcea_fr = adc.radc_ea.RADCEA(myadc_fr)
+        e,v,p,x = myadcea_fr.kernel(nroots=3)
+        e_corr = myadcea_fr.e_corr
+
+        self.assertAlmostEqual(e_corr, -0.3146743531878695 , 6)
+
+        self.assertAlmostEqual(e[0], 0.0937398652995504, 6)
+        self.assertAlmostEqual(e[1], 0.0983621084096212, 6)
+        self.assertAlmostEqual(e[2], 0.1295704476416120, 6)
+
+        self.assertAlmostEqual(p[0], 1.8324350368047113, 6)
+        self.assertAlmostEqual(p[1], 1.9840923766686196, 6)
+        self.assertAlmostEqual(p[2], 1.9638320415786714, 6)
+
+        dm1_exc = myadcea_fr.make_rdm1()
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 55.13110184122054, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 84.21769669004136, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 67.34699782688966, 6)
 
 if __name__ == "__main__":
     print("EA calculations for different RADC methods for nitrogen molecule")

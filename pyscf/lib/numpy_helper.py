@@ -20,20 +20,34 @@
 Extension to numpy and scipy
 '''
 
+import os
 import ctypes
 import math
 import numpy
+import scipy.special
 from pyscf.lib import misc
 from numpy import asarray  # For backward compatibility
 
-EINSUM_MAX_SIZE = getattr(misc.__config__, 'lib_einsum_max_size', 2000)
+EINSUM_MAX_SIZE = getattr(misc.__config__, 'lib_einsum_max_size', 500)
 
-try:
-    # Import tblis before libnp_helper to avoid potential dl-loading conflicts
+# If einsum backend is configured, use the specified einsum implementation.
+EINSUM_BACKEND = getattr(misc.__config__, 'lib_einsum_backend', None)
+if EINSUM_BACKEND is None:
+    try:
+        import pytblis
+        EINSUM_BACKEND = 'pytblis'
+    except (ImportError, OSError):
+        try:
+            from pyscf import tblis_einsum
+            EINSUM_BACKEND = 'pyscf-tblis'
+        except (ImportError, OSError):
+            pass
+elif EINSUM_BACKEND == 'pytblis':
+    import pytblis
+elif EINSUM_BACKEND == 'pyscf-tblis':
     from pyscf import tblis_einsum
-    FOUND_TBLIS = True
-except (ImportError, OSError):
-    FOUND_TBLIS = False
+else:
+    raise ValueError(f"Unknown einsum backend: {EINSUM_BACKEND}")
 
 _np_helper = misc.load_library('libnp_helper')
 
@@ -97,26 +111,58 @@ else:
         einsum_args.insert(0, ((a, b), idx_removed, einsum_str, indices_in))
         return operands, einsum_args
 
-_numpy_einsum = numpy.einsum
-def _contract(subscripts, *tensors, **kwargs):
+def _numpy_einsum(scripts, *tensors, alpha=1, beta=0, out=None, **kwargs):
+    if out is None or beta == 0:
+        if alpha == 1:
+            out = numpy.einsum(scripts, *tensors, out=out, **kwargs)
+        elif out is None:
+            # alpha may be a complex number, out cannot be scaled inplace
+            out = numpy.einsum(scripts, *tensors, **kwargs) * alpha
+        else:
+            # When output is specified, alpha and out must be the same dtype
+            out = numpy.einsum(scripts, *tensors, out=out, **kwargs)
+            out *= alpha
+    else: # out is not None and beta != 0
+        C = numpy.einsum(scripts, *tensors, **kwargs)
+        if alpha != 1:
+            C = C * alpha
+        out *= beta
+        out += C
+    return out
+
+def contract(subscripts, A, B, alpha=1, beta=0, out=None, **kwargs):
+    '''
+    Perform tensor contraction using einsum notation
+    C = alpha * einsum(subscripts, A, B) + beta * out
+
+    Kwargs:
+        alpha : scalar, optional
+            Default value is 1.
+        beta : scalar, optional
+            Default value is 0.
+        out : ndarray, optional
+            Output tensor to store the result.
+    '''
     idx_str = subscripts.replace(' ','')
-    A, B = tensors
     # Call numpy.asarray because A or B may be HDF5 Datasets
     A = numpy.asarray(A)
     B = numpy.asarray(B)
 
     # small problem size
     if A.size < EINSUM_MAX_SIZE or B.size < EINSUM_MAX_SIZE:
-        return _numpy_einsum(idx_str, A, B)
+        return _numpy_einsum(idx_str, A, B, alpha=alpha, beta=beta, out=out)
+
+    if EINSUM_BACKEND == 'pytblis':
+        return pytblis.contract(idx_str, A, B, alpha=alpha, beta=beta, out=out)
 
     C_dtype = numpy.result_type(A, B)
-    if FOUND_TBLIS and C_dtype == numpy.double:
+    if EINSUM_BACKEND =='pyscf-tblis' and C_dtype == numpy.double:
         # tblis is slow for complex type
-        return tblis_einsum.contract(idx_str, A, B, **kwargs)
+        return tblis_einsum.contract(idx_str, A, B, alpha=alpha, beta=beta, out=out)
 
     indices  = idx_str.replace(',', '').replace('->', '')
     if '->' not in idx_str or any(indices.count(x) != 2 for x in set(indices)):
-        return _numpy_einsum(idx_str, A, B)
+        return _numpy_einsum(idx_str, A, B, alpha=alpha, beta=beta, out=out)
 
     # Split the strings into a list of idx char's
     idxA, idxBC = idx_str.split(',')
@@ -134,7 +180,7 @@ def _contract(subscripts, *tensors, **kwargs):
         uniq_idxA == shared_idxAB or uniq_idxB == shared_idxAB or
         # repeated indices (e.g. 'iijk,kl->jl')
         len(idxA) != len(uniq_idxA) or len(idxB) != len(uniq_idxB)):
-        return _numpy_einsum(idx_str, A, B)
+        return _numpy_einsum(idx_str, A, B, alpha=alpha, beta=beta, out=out)
 
     DEBUG = kwargs.get('DEBUG', False)
 
@@ -219,9 +265,21 @@ def _contract(subscripts, *tensors, **kwargs):
     else:
         Bt = numpy.asarray(Bt.reshape(inner_shape,-1), order='C')
 
-    return dot(At,Bt).reshape(shapeCt, order='A').transpose(new_orderCt)
+    C = dot(At,Bt).reshape(shapeCt, order='A').transpose(new_orderCt)
+    if alpha != 1:
+        C = C * alpha
+    if out is None:
+        return C
 
-def einsum(subscripts, *tensors, **kwargs):
+    # Write to the out buffer
+    if beta == 0:
+        out[:] = C
+    else:
+        out *= beta
+        out[:] += C
+    return out
+
+def einsum(scripts, *tensors, **kwargs):
     '''Perform a more efficient einsum via reshaping to a matrix multiply.
 
     Current differences compared to numpy.einsum:
@@ -229,9 +287,14 @@ def einsum(subscripts, *tensors, **kwargs):
     and appears only twice (i.e. no 'ij,ik,il->jkl'). The output indices must
     be explicitly specified (i.e. 'ij,j->i' and not 'ij,j').
     '''
-    contract = kwargs.pop('_contract', _contract)
+    if EINSUM_BACKEND == 'pytblis':
+        if 'optimize' in kwargs and kwargs['optimize'] is True:
+            kwargs['optimize'] = 'optimal'
+        return pytblis.einsum(scripts, *tensors, **kwargs)
 
-    subscripts = subscripts.replace(' ','')
+    _contract = kwargs.pop('_contract', contract)
+
+    subscripts = scripts.replace(' ','')
     if len(tensors) <= 1 or '...' in subscripts:
         out = _numpy_einsum(subscripts, *tensors, **kwargs)
     elif len(tensors) <= 2:
@@ -242,15 +305,17 @@ def einsum(subscripts, *tensors, **kwargs):
         contraction_list = _einsum_path(subscripts, *tensors, optimize=optimize,
                                         einsum_call=True)[1]
         for contraction in contraction_list:
-            inds, idx_rm, einsum_str, remaining = contraction[:4]
+            if len(contraction) == 3: # numpy 2.4.0 changes the einsum_path APIs
+                inds, einsum_str = contraction[:2]
+            else: # einsum_path in numpy 2.3.* and older returns 5-element tuple
+                inds, idx_rm, einsum_str, remaining = contraction[:4]
             tmp_operands = [tensors.pop(x) for x in inds]
             if len(tmp_operands) > 2:
                 out = _numpy_einsum(einsum_str, *tmp_operands)
             else:
-                out = contract(einsum_str, *tmp_operands)
+                out = _contract(einsum_str, *tmp_operands)
             tensors.append(out)
     return out
-
 
 # 2d -> 1d or 3d -> 2d
 def pack_tril(mat, axis=-1, out=None):
@@ -948,6 +1013,19 @@ def _zgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
                        (ctypes.c_double*2)(beta.real, beta.imag))
     return c
 
+if hasattr(scipy.special, 'sph_harm_y'):
+    Ylm = scipy.special.sph_harm_y
+else:
+    def Ylm(l,m,theta,phi):
+        '''
+        Spherical harmonics; returns a complex number
+
+        Note the "convention" for theta and phi:
+        http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.special.sph_harm.html
+        '''
+        #return scipy.special.sph_harm(m=m,n=l,theta=phi,phi=theta)
+        return scipy.special.sph_harm(m,l,phi,theta)
+
 def frompointer(pointer, count, dtype=float):
     '''Interpret a buffer that the pointer refers to as a 1-dimensional array.
 
@@ -1110,7 +1188,7 @@ def direct_sum(subscripts, *operands):
         unisymb = set(symb)
         if len(unisymb) != len(symb):
             unisymb = ''.join(unisymb)
-            op = _numpy_einsum('->'.join((symb, unisymb)), op)
+            op = numpy.einsum('->'.join((symb, unisymb)), op)
             src[i] = unisymb
         if i == 0:
             if sign[i] == '+':
@@ -1122,7 +1200,7 @@ def direct_sum(subscripts, *operands):
         else:
             out = out.reshape(out.shape+(1,)*op.ndim) - op
 
-    out = _numpy_einsum('->'.join((''.join(src), dest)), out)
+    out = numpy.einsum('->'.join((''.join(src), dest)), out)
     out.flags.writeable = True  # old numpy has this issue
     return out
 
@@ -1641,14 +1719,3 @@ def isin_1d(v, vs, return_index=False):
         if len(idx) == 1:
             idx = idx[0]
         return v_in_vs, idx
-
-if __name__ == '__main__':
-    a = numpy.random.random((30,40,5,10))
-    b = numpy.random.random((10,30,5,20))
-    c = numpy.random.random((10,20,20))
-    d = numpy.random.random((20,10))
-    f = einsum('ijkl,xiky,ayp,px->ajl', a,b,c,d, optimize=True)
-    ref = einsum('ijkl,xiky->jlxy', a, b)
-    ref = einsum('jlxy,ayp->jlxap', ref, c)
-    ref = einsum('jlxap,px->ajl', ref, d)
-    print(abs(ref-f).max())

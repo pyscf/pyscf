@@ -799,7 +799,13 @@ class TDA(TDBase):
         from pyscf.grad import tduhf
         return tduhf.Gradients(self)
 
-    to_gpu = lib.to_gpu
+    def to_gpu(self):
+        import cupy as cp
+        out = lib.to_gpu(self)
+        if out.xy is not None:
+            out.xy = [((cp.asarray(xa), cp.asarray(xb)), y)
+                      for (xa, xb), y in out.xy]
+        return out
 
 CIS = TDA
 
@@ -993,7 +999,14 @@ class TDHF(TDBase):
 
     Gradients = TDA.Gradients
 
-    to_gpu = lib.to_gpu
+    def to_gpu(self):
+        import cupy as cp
+        out = lib.to_gpu(self)
+        if out.xy is not None:
+            out.xy = [((cp.asarray(xa), cp.asarray(xb)),
+                       (cp.asarray(ya), cp.asarray(yb)))
+                      for (xa, xb), (ya, yb) in out.xy]
+        return out
 
 RPA = TDUHF = TDHF
 

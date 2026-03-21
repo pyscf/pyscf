@@ -21,6 +21,7 @@ import os
 import sys
 import json
 import ctypes
+import math
 import warnings
 import numpy as np
 import scipy.linalg
@@ -1094,7 +1095,7 @@ def fromfile(filename, format=None):
             format = 'poscar'
         else:
             format = os.path.splitext(filename)[1][1:].lower()
-        if format not in ('poscar', 'vasp', 'xyz'):
+        if format not in ('poscar', 'vasp', 'xyz', 'cif'):
             format = 'raw'
     with open(filename, 'r') as f:
         return fromstring(f.read(), format)
@@ -1113,38 +1114,17 @@ def fromstring(string, format='poscar'):
     '''
     format = format.lower()
     if format == 'poscar' or format == 'vasp':
-        lines = string.splitlines()
-        scale = float(lines[1])
-        a = lines[2:5]
-        lattice_vectors = np.array([np.fromstring(ax, sep=' ') for ax in a])
-        lattice_vectors *= scale
-        a = []
-        for i in range(3):
-            a.append(' '.join(str(ax) for ax in lattice_vectors[i]))
-        atom_position_type = lines[7].strip()
-        unique_atoms = dict()
-        natm = 0
-        for atom, count in zip(lines[5].split(), lines[6].split()):
-            unique_atoms[atom] = int(count)
-            natm += int(count)
-        atoms = []
-        start = 8
-        for atom_type in unique_atoms:
-            end = start + unique_atoms[atom_type]
-            for line in lines[start:end]:
-                coords = np.fromstring(line, sep=' ')
-                if atom_position_type.lower() == 'cartesian':
-                    x, y, z = coords * scale
-                elif atom_position_type.lower() == 'direct':
-                    x, y, z = np.dot(coords, lattice_vectors)
-                else:
-                    raise RuntimeError('Error reading VASP geometry due to '
-                        f'atom position type "{atom_position_type}". Atom '
-                        'positions must be Direct or Cartesian.')
-                atoms.append('%s %17.8f %17.8f %17.8f'
-                    % (atom_type, x, y, z))
-            start = end
-        return '\n'.join(a), '\n'.join(atoms)
+        a, elements, coords, fractional = _parse_poscar(string)
+        if fractional:
+            coords = coords.dot(a)
+        atoms = list(zip(elements, coords))
+        return a, atoms
+    elif format == 'cif':
+        a, elements, coords, fractional = _parse_cif(string)
+        if fractional:
+            coords = coords.dot(a)
+        atoms = list(zip(elements, coords))
+        return a, atoms
     elif format == 'xyz':
         lines = string.splitlines()
         natm = int(lines[0])
@@ -1159,6 +1139,112 @@ def fromstring(string, format='poscar'):
     else:
         raise NotImplementedError
 
+def _parse_poscar(string):
+    lines = string.splitlines()
+    scale = float(lines[1])
+    a = lines[2:5]
+    lattice_vectors = np.array([np.fromstring(ax, sep=' ') for ax in a])
+    lattice_vectors *= scale
+    atom_position_type = lines[7].strip().lower()
+    if atom_position_type == 'cartesian':
+        fractional = False
+    elif atom_position_type == 'direct':
+        fractional = True
+    else:
+        raise RuntimeError('Error reading VASP geometry due to '
+            f'atom position type "{atom_position_type}". Atom '
+            'positions must be Direct or Cartesian.')
+    unique_atoms = dict()
+    natm = 0
+    for atom, count in zip(lines[5].split(), lines[6].split()):
+        unique_atoms[atom] = int(count)
+        natm += int(count)
+    start = end = 8
+    elements = []
+    coords = []
+    for atom_type in unique_atoms:
+        count = unique_atoms[atom_type]
+        start, end = end, end + count
+        elements.extend([atom_type] * count)
+        coords.append(np.fromstring(' '.join(lines[start:end]), sep=' '))
+    coords = np.vstack(coords)
+    assert len(coords) == len(elements)
+    return lattice_vectors, elements, coords, fractional
+
+def _parse_cif(string):
+    lines = string.splitlines()
+    in_atom_loop = False
+    cell = {}
+    atom_headers = []
+    atoms = []
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        if line.startswith('_cell_'):
+            # Cell parameters
+            key, val = line.split(maxsplit=1)
+            cell[key] = val
+
+        elif line.startswith('loop_'):
+            in_atom_loop = True
+
+        elif line.startswith('_atom_site_'):
+            atom_headers.append(line)
+
+        elif in_atom_loop and atom_headers:
+            atoms.append(line)
+
+    # .split('(')[0] to handle the estimate number such as 3.44715(31)
+    a = float(cell['_cell_length_a'].split('(')[0])
+    b = float(cell['_cell_length_b'].split('(')[0])
+    c = float(cell['_cell_length_c'].split('(')[0])
+    alpha = float(cell['_cell_angle_alpha'].split('(')[0])
+    beta = float(cell['_cell_angle_beta'].split('(')[0])
+    gamma = float(cell['_cell_angle_gamma'].split('(')[0])
+    lattice_vectors = _cellpar_to_cell(a, b, c, alpha, beta, gamma)
+
+    idx_s = atom_headers.index('_atom_site_type_symbol')
+    idx_x = atom_headers.index('_atom_site_fract_x')
+    idx_y = atom_headers.index('_atom_site_fract_y')
+    idx_z = atom_headers.index('_atom_site_fract_z')
+    coords = []
+    elements = []
+    for line in atoms:
+        parts = line.split()
+        elements.append(''.join([x for x in parts[idx_s] if x.isalpha()]))
+        coords.append(parts[idx_x].split('(')[0])
+        coords.append(parts[idx_y].split('(')[0])
+        coords.append(parts[idx_z].split('(')[0])
+    coords = np.fromstring(' '.join(coords), sep=' ').reshape(-1, 3)
+    fractional = True
+    return lattice_vectors, elements, coords, fractional
+
+def _cellpar_to_cell(a, b, c, alpha, beta, gamma):
+    '''Return a 3x3 cell matrix. Angles must be in degrees.
+
+    Modified based on ASE ase.ase.geometry.cell.cellpar_to_cell function
+    '''
+    alpha = alpha / 180 * math.pi
+    beta = beta / 180 * math.pi
+    gamma = gamma / 180 * math.pi
+
+    cos_alpha = math.cos(alpha)
+    cos_beta = math.cos(beta)
+    cos_gamma = math.cos(gamma)
+    sin_gamma = math.sin(gamma)
+
+    bx = b * cos_gamma
+    by = b * sin_gamma
+    cx = c * cos_beta
+    cy = c * (cos_alpha - cos_beta * cos_gamma) / sin_gamma
+    cz = math.sqrt(max(c * c - cx * cx - cy * cy, 0))
+    lattice_vectors = np.array([
+        [a, 0, 0],
+        [bx, by, 0],
+        [cx, cy, cz]])
+    return lattice_vectors
 
 class Cell(mole.MoleBase):
     '''A Cell object holds the basic information of a crystal.
@@ -1344,7 +1430,9 @@ class Cell(mole.MoleBase):
         else:
             if key[0] == 'K':  # with k-point sampling
                 if 'TD' in key[:4]:
-                    if key in ('KTDHF', 'KTDA'):
+                    if 'KTDA' in key:
+                        mf_method = 'KSCF_TO_BE_DETERMINED'
+                    elif 'KTDHF' in key:
                         mf_method = scf.KHF
                     else:
                         mf_method = dft.KKS
@@ -1352,6 +1440,8 @@ class Cell(mole.MoleBase):
                         if xc in XC:
                             mf_xc = xc
                             key = 'KTDDFT'
+                        elif 'TDDFT' not in key:
+                            raise AttributeError(f'method {key} not supported')
                 elif 'CI' in key or 'CC' in key or 'MP' in key:
                     mf_method = scf.KHF
                 else:
@@ -1360,7 +1450,9 @@ class Cell(mole.MoleBase):
                 key = key[1:]
             else:
                 if 'TD' in key[:3]:
-                    if key in ('TDHF', 'TDA'):
+                    if 'TDA' in key:
+                        mf_method = 'SCF_TO_BE_DETERMINED'
+                    elif 'TDHF' in key:
                         mf_method = scf.HF
                     else:
                         mf_method = dft.KS
@@ -1368,6 +1460,8 @@ class Cell(mole.MoleBase):
                         if xc in XC:
                             mf_xc = xc
                             key = 'TDDFT'
+                        elif 'TDDFT' not in key:
+                            raise AttributeError(f'method {key} not supported')
                 elif 'CI' in key or 'CC' in key or 'MP' in key:
                     mf_method = scf.HF
                 else:
@@ -1389,11 +1483,23 @@ class Cell(mole.MoleBase):
                     mf_kw[k] = v
                 else:
                     remaining_kw[k] = v
-            mf = mf_method(self, **mf_kw)
+
+            if mf_method == 'SCF_TO_BE_DETERMINED':
+                if 'xc' in mf_kw:
+                    mf = dft.KS(self, **mf_kw)
+                else:
+                    mf = scf.HF(self, **mf_kw)
+            elif mf_method == 'KSCF_TO_BE_DETERMINED':
+                if 'xc' in mf_kw:
+                    mf = dft.KKS(self, **mf_kw)
+                else:
+                    mf = scf.KHF(self, **mf_kw)
+            else:
+                mf = mf_method(self, **mf_kw)
 
             if post_mf_key is None:
                 if args:
-                    raise RuntimeError(
+                    raise AttributeError(
                         f'cell.{attr_name} function does not support positional arguments')
                 return mf.set(**remaining_kw)
 
@@ -1683,7 +1789,7 @@ class Cell(mole.MoleBase):
             if self.exp_to_discard is not None:
                 logger.info(self, 'exp_to_discard = %s', self.exp_to_discard)
             logger.info(self, 'rcut = %s (nimgs = %s)', self.rcut, self.nimgs)
-            logger.info(self, 'lattice sum = %d cells', len(self.get_lattice_Ls()))
+            #logger.info(self, 'lattice sum = %d cells', len(self.get_lattice_Ls()))
             logger.info(self, 'precision = %g', self.precision)
             logger.info(self, 'pseudo = %s', self.pseudo)
             if ke_cutoff is not None:
@@ -1757,24 +1863,27 @@ class Cell(mole.MoleBase):
                    (x, rcut_guess))
             warnings.warn(msg)
 
-    def lattice_vectors(self):
-        '''Convert the primitive lattice vectors.
-
-        Return 3x3 array in which each row represents one direction of the
-        lattice vectors (unit in Bohr)
+    def lattice_vectors(self, unit='Bohr'):
         '''
+        Return the primitive lattice vectors in 3x3 array. Each row of the
+        lattice vectors corresponds to one direction (unit in Bohr by default).
+
+        Kwargs:
+            unit : str
+                Target length unit. If provided, the lattice vectors are rescaled
+                to the specified unit.
+        '''
+        scale = mole._length_in_au(self.unit)
+        if not is_au(unit):
+            scale /= mole._length_in_au(unit)
+
         if isinstance(self.a, str):
             a = self.a.replace(';',' ').replace(',',' ').replace('\n',' ')
             a = np.asarray([float(x) for x in a.split()]).reshape(3,3)
+            a *= scale
         else:
-            a = np.asarray(self.a, dtype=np.double).reshape(3,3)
-        if isinstance(self.unit, str):
-            if is_au(self.unit):
-                return a
-            else:
-                return a/param.BOHR
-        else:
-            return a/self.unit
+            a = np.asarray(self.a, dtype=np.double).reshape(3,3) * scale
+        return a
 
     def get_scaled_atom_coords(self, a=None):
         ''' Get scaled atomic coordinates.
@@ -1971,6 +2080,10 @@ class Cell(mole.MoleBase):
             mol._build_symmetry()
         return mol
 
+    def to_gpu(self):
+        from gpu4pyscf.gto.mole import Cell
+        return Cell.from_cpu(self)
+
     def set_geom_(self, atoms_or_coords=None, unit=None, symmetry=None,
                   a=None, inplace=True):
         '''Update geometry and lattice parameters
@@ -1999,18 +2112,13 @@ class Cell(mole.MoleBase):
             cell = self.copy(deep=False)
             cell._env = cell._env.copy()
 
-        if unit is not None and cell.unit != unit:
-            if isinstance(unit, str):
-                if is_au(unit):
-                    _unit = 1.
-                else:
-                    _unit = param.BOHR
-            else:
-                _unit = unit
-            if a is None:
-                a = self.lattice_vectors() * _unit
-            if atoms_or_coords is None:
-                atoms_or_coords = self.atom_coords() * _unit
+        if unit is not None:
+            _unit = mole._length_in_au(unit)
+            if _unit != mole._length_in_au(cell.unit):
+                if a is None:
+                    a = self.lattice_vectors(unit)
+                if atoms_or_coords is None:
+                    atoms_or_coords = self.atom_coords(unit)
 
         if a is not None:
             logger.info(self, 'Set new lattice vectors')

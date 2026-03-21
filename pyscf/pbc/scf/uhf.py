@@ -269,6 +269,10 @@ class UHF(pbchf.SCF):
         if kpt is None: kpt = self.kpt
         return init_guess_by_chkfile(self.cell, chk, project, kpt)
 
+    def get_fermi(self):
+        nocc_a, nocc_b = self.nelec
+        return self.mo_energy[0][nocc_a-1], self.mo_energy[1][nocc_b-1]
+
     def to_ks(self, xc='HF'):
         '''Convert to RKS object.
         '''

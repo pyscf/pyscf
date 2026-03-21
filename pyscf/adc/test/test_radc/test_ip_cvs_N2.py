@@ -13,11 +13,12 @@
 # limitations under the License.
 #
 # Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
+#         Ning-Yuan Chen <cny003@outlook.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
 import unittest
-import numpy
+import numpy as np
 from pyscf import gto
 from pyscf import scf
 from pyscf import adc
@@ -43,6 +44,12 @@ def tearDownModule():
     global mol, mf, myadc
     del mol, mf, myadc
 
+def rdms_test(dm):
+    r2_int = mol.intor('int1e_r2')
+    dm_ao = np.einsum('pi,ij,qj->pq', mf.mo_coeff, dm, mf.mo_coeff.conj())
+    r2 = np.einsum('pq,pq->',r2_int,dm_ao)
+    return r2
+
 class KnownValues(unittest.TestCase):
 
     def test_ip_adc2(self):
@@ -58,10 +65,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[0], 15.12281031796864, 6)
         self.assertAlmostEqual(e[1], 15.12611217935994, 6)
 
-
         self.assertAlmostEqual(p[0], 1.54262807973040, 6)
         self.assertAlmostEqual(p[1], 1.54152768244107, 6)
 
+        dm1_exc = np.array(myadc.make_rdm1())
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 34.77893499453598, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 34.78433184466488, 6)
 
     def test_ip_adc2x(self):
 
@@ -81,6 +90,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 1.51447639333099, 6)
         self.assertAlmostEqual(p[2], 0.00000030441510, 6)
 
+        dm1_exc = np.array(myadc.make_rdm1())
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 34.74538223874991, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 34.75067998057301, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 36.30183742247967, 6)
+
     def test_ip_adc3(self):
 
         myadc.ncvs = 2
@@ -98,6 +112,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 1.64260781902935, 6)
         self.assertAlmostEqual(p[1], 1.64123055314380, 6)
         self.assertAlmostEqual(p[2], 0.00000030441505, 6)
+
+        dm1_exc = np.array(myadc.make_rdm1())
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 34.73228837943413, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 34.73668157654031, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 36.30183742761254, 6)
 
 if __name__ == "__main__":
     print("IP calculations for different RADC methods for nitrogen molecule")

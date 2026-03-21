@@ -13,6 +13,7 @@
 # limitations under the License.
 #
 # Author: Terrence Stahl <terrencestahl1@@gmail.com>
+#         Ning-Yuan Chen <cny003@outlook.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
@@ -109,7 +110,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0],0.00000000, 6)
         self.assertAlmostEqual(p[1],0.00000000 , 6)
         self.assertAlmostEqual(p[2],0.00000000 , 6)
-        self.assertAlmostEqual(p[3],0.16725458 , 6)
+        self.assertAlmostEqual(p[3],0.16772555 , 6)
 
         self.assertAlmostEqual(spin[0],2.00117040 , 5)
         self.assertAlmostEqual(spin[1],2.00117040 , 5)

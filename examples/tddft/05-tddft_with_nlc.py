@@ -6,7 +6,7 @@ and is disabled by default. This examples shows how to enable the NLC part in
 TDDFT calculations.
 '''
 
-import pyscf
+from pyscf import gto, tddft
 
 mol = gto.M(
     atom = '''

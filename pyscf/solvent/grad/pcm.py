@@ -21,7 +21,7 @@ Gradient of PCM family solvent models, copied from GPU4PySCF with modifications
 '''
 
 import numpy
-import scipy
+from scipy.special import erf
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto, df
@@ -35,7 +35,7 @@ def grad_switch_h(x):
     dy[x>1] = 0.0
     return dy
 
-def get_dF_dA(surface):
+def get_dF_dA(surface, surface_discretization_method = "SWIG"):
     '''
     J. Chem. Phys. 133, 244111 (2010), Appendix C
     '''
@@ -44,8 +44,12 @@ def get_dF_dA(surface):
     grid_coords = surface['grid_coords']
     switch_fun  = surface['switch_fun']
     area        = surface['area']
-    R_in_J      = surface['R_in_J']
-    R_sw_J      = surface['R_sw_J']
+    if surface_discretization_method.upper() == "SWIG":
+        R_in_J = surface['R_in_J']
+        R_sw_J = surface['R_sw_J']
+    elif surface_discretization_method.upper() == "ISWIG":
+        charge_exp = surface['charge_exp']
+        R_J = surface['R_J']
 
     ngrids = grid_coords.shape[0]
     natom = atom_coords.shape[0]
@@ -57,15 +61,31 @@ def get_dF_dA(surface):
         coords = grid_coords[p0:p1]
         ri_rJ = numpy.expand_dims(coords, axis=1) - atom_coords
         riJ = numpy.linalg.norm(ri_rJ, axis=-1)
-        diJ = (riJ - R_in_J) / R_sw_J
-        diJ[:,ia] = 1.0
-        diJ[diJ < 1e-8] = 0.0
         ri_rJ[:,ia,:] = 0.0
-        ri_rJ[diJ < 1e-8] = 0.0
 
-        fiJ = switch_h(diJ)
-        dfiJ = grad_switch_h(diJ) / (fiJ * riJ * R_sw_J)
-        dfiJ = numpy.expand_dims(dfiJ, axis=-1) * ri_rJ
+        if surface_discretization_method.upper() == "SWIG":
+            diJ = (riJ - R_in_J) / R_sw_J
+            diJ[:,ia] = 1.0
+            diJ[diJ < 1e-8] = 0.0
+            ri_rJ[diJ < 1e-8] = 0.0
+
+            fiJ = switch_h(diJ)
+            dfiJ = grad_switch_h(diJ) / (fiJ * riJ * R_sw_J)
+            dfiJ = numpy.expand_dims(dfiJ, axis=-1) * ri_rJ
+        elif surface_discretization_method.upper() == "ISWIG":
+            xi = charge_exp[p0:p1]
+            erf_input_p = xi[:, None] * (R_J[None, :] + riJ)
+            erf_input_m = xi[:, None] * (R_J[None, :] - riJ)
+            fiJ = 1 - 0.5 * (erf(erf_input_m) + erf(erf_input_p))
+            fiJ[:,ia] = 1.0
+
+            dfiJ = 1/numpy.sqrt(numpy.pi) * xi[:, None] * \
+                   (numpy.exp(-erf_input_m**2) - numpy.exp(-erf_input_p**2)) / (fiJ * riJ)
+            dfiJ = numpy.expand_dims(dfiJ, axis=-1) * ri_rJ
+
+            dfiJ[:, ia, :] = -numpy.sum(dfiJ, axis=1) # Translation invariance for diagonal terms
+        else:
+            raise NotImplementedError(f"surface_discretization_method = {surface_discretization_method} not recognized")
 
         Fi = switch_fun[p0:p1]
         Ai = area[p0:p1]
@@ -103,7 +123,7 @@ def get_dD_dS(surface, dF, with_S=True, with_D=False):
     xi_r_ij = xi_ij * rij
     numpy.fill_diagonal(rij, 1)
 
-    dS_dr = -(scipy.special.erf(xi_r_ij) - 2.0*xi_r_ij/PI**0.5*numpy.exp(-xi_r_ij**2))/rij**2
+    dS_dr = -(erf(xi_r_ij) - 2.0*xi_r_ij/PI**0.5*numpy.exp(-xi_r_ij**2))/rij**2
     numpy.fill_diagonal(dS_dr, 0)
 
     dS_dr= numpy.expand_dims(dS_dr, axis=-1)
@@ -197,6 +217,7 @@ def grad_qv(pcmobj, dm, q_sym = None):
     dvj = numpy.zeros([3,nao])
     for p0, p1 in lib.prange(0, ngrids, blksize):
         fakemol = gto.fakemol_for_charges(grid_coords[p0:p1], expnt=exponents[p0:p1]**2)
+        fakemol.cart = mol.cart
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip1, aosym='s1', cintopt=cintopt)
         dvj += numpy.einsum('xijk,ij,k->xi', v_nj, dm, q_sym[p0:p1])
 
@@ -205,6 +226,7 @@ def grad_qv(pcmobj, dm, q_sym = None):
     dq = numpy.empty([3,ngrids])
     for p0, p1 in lib.prange(0, ngrids, blksize):
         fakemol = gto.fakemol_for_charges(grid_coords[p0:p1], expnt=exponents[p0:p1]**2)
+        fakemol.cart = mol.cart
         q_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip2, aosym='s1', cintopt=cintopt)
         dq[:,p0:p1] = numpy.einsum('xijk,ij,k->xk', q_nj, dm, q_sym[p0:p1])
 
@@ -242,7 +264,7 @@ def grad_solver(pcmobj, dm):
 
     vK_1 = numpy.linalg.solve(K.T, v_grids)
 
-    dF, dA = get_dF_dA(pcmobj.surface)
+    dF, dA = get_dF_dA(pcmobj.surface, pcmobj.surface_discretization_method)
 
     with_D = pcmobj.method.upper() in ['IEF-PCM', 'IEFPCM', 'SS(V)PE']
     dD, dS, dSii = get_dD_dS(pcmobj.surface, dF, with_D=with_D, with_S=True)

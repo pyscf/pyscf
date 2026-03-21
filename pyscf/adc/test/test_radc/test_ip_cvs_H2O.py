@@ -13,11 +13,12 @@
 # limitations under the License.
 #
 # Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
+#         Ning-Yuan Chen <cny003@outlook.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
 import unittest
-import numpy
+import numpy as np
 import math
 from pyscf import gto
 from pyscf import scf
@@ -49,6 +50,12 @@ def tearDownModule():
     global mol, mf, myadc
     del mol, mf, myadc
 
+def rdms_test(dm):
+    r2_int = mol.intor('int1e_r2')
+    dm_ao = np.einsum('pi,ij,qj->pq', mf.mo_coeff, dm, mf.mo_coeff.conj())
+    r2 = np.einsum('pq,pq->',r2_int,dm_ao)
+    return r2
+
 class KnownValues(unittest.TestCase):
 
     def test_ip_cvs_adc2(self):
@@ -64,6 +71,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[0], 19.83739019952255, 6)
 
         self.assertAlmostEqual(p[0], 1.54937962073732, 6)
+
+        dm1_exc = np.array(myadcipcvs.make_rdm1())
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 15.442826580011404, 6)
+
 
     def test_ip_adc2x(self):
 
@@ -83,6 +94,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 0.00000138285407, 6)
         self.assertAlmostEqual(p[2], 0.00000284749463, 6)
 
+        dm1_exc = np.array(myadcipcvs.make_rdm1())
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 15.59671948626664, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 22.03709522262716, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 22.51252895259129, 6)
+
 
     def test_ip_adc3(self):
 
@@ -101,6 +117,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 1.66994015437000, 6)
         self.assertAlmostEqual(p[1], 0.00000138285406, 6)
         self.assertAlmostEqual(p[2], 0.00000284749466, 6)
+
+        dm1_exc = np.array(myadcipcvs.make_rdm1())
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 15.956123863826356, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 22.037095256595208, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 22.512529237386634, 6)
 
 if __name__ == "__main__":
     print("IP-CVS calculations for different ADC methods for water molecule")

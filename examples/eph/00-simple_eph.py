@@ -4,6 +4,7 @@
 A simple example to run EPH calculation.
 '''
 
+import numpy as np
 from pyscf import gto, dft, eph
 
 mol = gto.M()
@@ -24,8 +25,8 @@ myeph = eph.EPH(mf)
 grad = mf.nuc_grad_method().kernel()
 print("Force on the atoms/au:")
 print(grad)
-eph, omega = myeph.kernel(mo_rep=True)
-print(np.amax(eph))
+ephmat, omega = myeph.kernel(mo_rep=True)
+print(np.amax(ephmat))
 
 
 mol = gto.M(atom='N 0 0 0; N 0 0 2.100825', basis='def2-svp', verbose=4, unit="bohr")

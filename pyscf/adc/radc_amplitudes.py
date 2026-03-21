@@ -117,7 +117,9 @@ def compute_amplitudes(myadc, eris):
     t1_3 = None
     t2_1_vvvv = None
 
-    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)"):
+    if ((myadc.method == "adc(2)" and myadc.method_type == "ee" and myadc.approx_trans_moments is False)
+        or (myadc.method =="adc(2)-x" and myadc.approx_trans_moments is False)
+        or (myadc.method == "adc(3)")):
 
         # Compute second-order doubles t2 (tijab)
 

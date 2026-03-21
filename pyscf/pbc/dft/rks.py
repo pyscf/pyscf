@@ -303,10 +303,9 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
         elif 'kpt' in self.__dict__:
             self.kpt = self.__dict__.pop('kpt')
 
-        kpts = self.kpts
         if self.rsjk:
-            if not numpy.all(self.rsjk.kpts == self.kpt):
-                self.rsjk = self.rsjk.__class__(cell, kpts)
+            if not numpy.all(self.rsjk.kpts == self.kpts):
+                self.rsjk = self.rsjk.__class__(cell, self.kpts)
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -428,8 +427,12 @@ class RKS(KohnShamDFT, pbchf.RHF):
 
     def multigrid_numint(self, mesh=None):
         '''Apply the MultiGrid algorithm for XC numerical integartion'''
+        from pyscf.pbc.lib.kpts_helper import is_gamma_point
         mf = self.copy()
-        mf._numint = multigrid.MultiGridNumInt(self.cell)
+        if is_gamma_point(mf.kpt):
+            mf._numint = multigrid.MultiGridNumInt2(self.cell)
+        else:
+            mf._numint = multigrid.MultiGridNumInt(self.cell)
         if mesh is not None:
             mf._numint.mesh = mesh
         return mf

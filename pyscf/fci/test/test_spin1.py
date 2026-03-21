@@ -78,6 +78,12 @@ class KnownValues(unittest.TestCase):
         ci3 = fci.direct_spin1.contract_2e(g2e, ci2, norb, neleci)
         self.assertAlmostEqual(numpy.linalg.norm(ci3), 127.49780293866368, 6)
 
+    def test_contract_complex(self):
+        ciref = fci.direct_spin1.contract_2e(g2e, ci0, norb, nelec).astype(complex)
+        ciref += 1j * fci.direct_spin1.contract_2e(g2e, ci1, norb, nelec)
+        result = fci.direct_spin1.contract_2e(g2e, ci0 + 1j * ci1, norb, nelec)
+        numpy.testing.assert_allclose(result, ciref)
+
     def test_kernel(self):
         eref, cref = fci.direct_spin0.kernel(h1e, g2e, norb, mol.nelectron)
         e, c = fci.direct_spin1.kernel(h1e, g2e, norb, nelec)

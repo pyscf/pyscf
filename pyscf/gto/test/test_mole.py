@@ -296,6 +296,10 @@ C    SP
                     basis = {8: 'ccpvdz'})
         self.assertEqual(mol.nao_nr(), 14)
 
+        mol = gto.M(atom = '''O 0 0 0; 1 0 1 0; H 0 0 1''',
+                    basis = {8: 'def2-SVP'})
+        self.assertEqual(mol.nao_nr(), 14)
+
         mol = gto.M(atom = '''O 0 0 0; H:1 0 1 0; H@2 0 0 1''',
                     basis = {'O': 'ccpvdz', 'H:1': 'sto3g', 'H': 'unc-iglo3'})
         self.assertEqual(mol.nao_nr(), 32)
@@ -640,6 +644,10 @@ O    SP
         mol1.set_geom_(mol0.atom_coords(), unit=1.)
         mol1.set_geom_(mol0.atom_coords(), unit='Ang', inplace=False)
 
+        r = mol1.atom_coords(unit='Ang')
+        mol1.set_geom_(r, unit='Ang')
+        assert np.array_equal(mol1.atom_coords(unit='Ang'), r)
+
     def test_apply(self):
         from pyscf import scf, mp
         self.assertTrue(isinstance(mol0.apply('RHF'), scf.rohf.ROHF))
@@ -816,7 +824,7 @@ O    SP
         mol1.build(False, False)
         gto.basis.load_ecp('lanl08', 'O')
         gto.format_ecp({'O':'lanl08', 1:'lanl2dz'})
-        self.assertRaises(BasisNotFoundError, gto.format_ecp, {'H':'lan2ldz'})
+        self.assertRaises(RuntimeError, gto.format_ecp, {'H':'lan2ldz'})
 
     def test_condense_to_shell(self):
         mol1 = mol0.copy()
@@ -946,6 +954,7 @@ O    SP
         self.assertEqual(mol.UKS(xc='pbe').xc, dft.UKS(mol, xc='pbe').xc)
         self.assertEqual(mol.CISD().__class__, ci.cisd.RCISD)
         self.assertEqual(mol.TDA().__class__, tdscf.rhf.TDA)
+        self.assertEqual(mol.TDA(xc='pbe0').__class__, tdscf.rks.TDA)
         self.assertEqual(mol.dTDA().__class__, tdscf.rks.dTDA)
         self.assertEqual(mol.TDBP86().__class__, tdscf.rks.TDDFTNoHybrid)
         self.assertEqual(mol.TDB3LYP().__class__, tdscf.rks.TDDFT)

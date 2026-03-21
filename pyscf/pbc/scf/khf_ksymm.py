@@ -24,6 +24,7 @@ from pyscf.lib import logger
 from pyscf.scf import hf as mol_hf
 from pyscf.pbc import tools
 from pyscf.pbc.lib import kpts as libkpts
+from pyscf.pbc.lib.kpts_helper import is_trim
 from pyscf.pbc.scf import khf
 
 @lib.with_doc(khf.get_occ.__doc__)
@@ -115,6 +116,27 @@ def eig(kmf, h_kpts, s_kpts):
         e, c = eig_symm(kmf, h_kpts[k], s_kpts[k], symm_orb[k], irrep_id[k])
         eig_kpts.append(e)
         mo_coeff_kpts.append(c)
+    return eig_kpts, mo_coeff_kpts
+
+def eig_trs(kmf, h_kpts, s_kpts):
+    ''' Forcing real orbitals at time-reversal invariant momenta.
+    '''
+    cell = kmf.cell
+    kpts = kmf.kpts
+    trs_mask = is_trim(cell, kpts.kpts_ibz)
+
+    eig_kpts = []
+    mo_coeff_kpts = []
+
+    for k in range(kpts.nkpts_ibz):
+        if trs_mask[k]:
+            e, c = kmf._eigh(h_kpts[k].real, s_kpts[k].real)
+        else:
+            e, c = kmf._eigh(h_kpts[k], s_kpts[k])
+        c = c.astype(h_kpts[k].dtype)
+        eig_kpts.append(e)
+        mo_coeff_kpts.append(c)
+
     return eig_kpts, mo_coeff_kpts
 
 def ksymm_scf_common_init(kmf, cell, kpts, use_ao_symmetry=True):
@@ -269,6 +291,8 @@ class KsymAdaptedKSCF(khf.KSCF):
     def eig(self, h_kpts, s_kpts):
         if self.use_ao_symmetry:
             return eig(self, h_kpts, s_kpts)
+        elif self.kpts.time_reversal:
+            return eig_trs(self, h_kpts, s_kpts)
         else:
             return khf.KSCF.eig(self, h_kpts, s_kpts)
 
