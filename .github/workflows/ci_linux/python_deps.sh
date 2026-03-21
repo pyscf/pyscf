@@ -12,6 +12,6 @@ if [ $version != '3.12' ]; then
 fi
 
 #cppe
-if [ "$RUNNER_OS" == "Linux" ] && [ $version != "3.12" ]; then
-    pip install cppe
-fi
+#if [ "$RUNNER_OS" == "Linux" ] && [ $version != "3.12" ]; then
+#    pip install cppe
+#fi
