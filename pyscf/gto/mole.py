@@ -2671,6 +2671,13 @@ class MoleBase(lib.StreamObject):
             self.symmetry = str(symm.std_symb(self.symmetry))
             groupname = None
             if abs(np.max(np.abs(axes),axis=0) - 1).max() < symm.TOLERANCE:
+                # MRH: Catch PointGroupSymmetryError before going into symm.check_symm
+                try:
+                    symm.as_subgroup(self.topgroup, axes, self.symmetry)
+                except PointGroupSymmetryError as e:
+                    raise PointGroupSymmetryError(
+                        'Unable to identify input symmetry %s. Try symmetry="%s"' %
+                        (self.symmetry, self.topgroup)) from e
                 if symm.check_symm(self.symmetry, self._atom, self._basis):
                     # Try to use original axes (issue #1209)
                     groupname = self.symmetry
