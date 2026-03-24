@@ -2670,7 +2670,7 @@ class MoleBase(lib.StreamObject):
         if isinstance(self.symmetry, str):
             self.symmetry = str(symm.std_symb(self.symmetry))
             groupname = None
-            if abs(axes - np.eye(3)).max() < symm.TOLERANCE:
+            if abs(np.max(np.abs(axes),axis=0) - 1).max() < symm.TOLERANCE:
                 if symm.check_symm(self.symmetry, self._atom, self._basis):
                     # Try to use original axes (issue #1209)
                     groupname = self.symmetry
