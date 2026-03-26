@@ -28,8 +28,9 @@
 int ECPtype_scalar_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                         int *atm, int natm, int *bas, int nbas, double *env,
                         ECPOpt *opt, double *cache);
-void ECPscalar_distribute(double *out, double *gctr, const int *dims,
-                          const int comp, const int di, const int dj);
+int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
+                    int *atm, int natm, int *bas, int nbas, double *env,
+                    ECPOpt *opt, double *cache);
 
 int PBCECP_loop(Function_cart intor,
                 double *gctr, int *cell0_shls, int *bvk_cells, int cutoff,
@@ -80,7 +81,7 @@ int PBCECP_loop(Function_cart intor,
         int ncj = bas[NCTR_OF+jsh0*BAS_SLOTS];
         int nfi = (li+1)*(li+2)/2;
         int nfj = (lj+1)*(lj+2)/2;
-        int n_comp = envs_cint->ncomp_e1 * envs_cint->ncomp_tensor;
+        int n_comp = envs_bvk->ncomp;
         int dij = nfi * nfj * nci * ncj * n_comp;
         int has_value = 0;
         NPdset0(gctr, dij);
@@ -246,6 +247,96 @@ int PBCECPscalar_sph(double *eri_buf, int *cell0_shls, int *bvk_cells, int cutof
         double *gcart = eri_buf + di*dj * comp;
         double *cache = gcart + nfi*nfj*nci*ncj * comp;
         int has_value = PBCECP_loop(ECPtype_scalar_cart,
+                                    gcart, cell0_shls, bvk_cells, cutoff,
+                                    rij_cond, envs_cint, envs_bvk, cache);
+        if (!has_value) {
+                NPdset0(eri_buf, di*dj*nci*ncj*comp);
+                return has_value;
+        }
+
+        dj = lj*2+1;
+        int j;
+        if (li < 2) {
+                for (j = 0; j < ncj * comp; j++) {
+                        CINTc2s_ket_sph1(eri_buf+j*dj*nfi*nci, gcart+j*nfj*nfi*nci,
+                                         nfi*nci, nfi*nci, lj);
+                }
+        } else {
+                for (j = 0; j < ncj * comp; j++) {
+                        CINTc2s_ket_sph1(cache+j*dj*nfi*nci, gcart+j*nfj*nfi*nci,
+                                         nfi*nci, nfi*nci, lj);
+                }
+                CINTc2s_bra_sph(eri_buf, nci*dj*ncj * comp, cache, li);
+        }
+        return has_value;
+}
+
+int PBCECPso_cart(double *eri_buf, int *cell0_shls, int *bvk_cells, int cutoff,
+                  float *rij_cond, CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
+{
+        int *bas = envs_cint->bas;
+        int nbasp = envs_bvk->nbasp;
+        int *seg_loc = envs_bvk->seg_loc;
+        int *seg2sh = envs_bvk->seg2sh;
+        int ish_cell0 = cell0_shls[0];
+        int jsh_cell0 = cell0_shls[1];
+        int cell_i = bvk_cells[0];
+        int cell_j = bvk_cells[1];
+        int ish_bvk = ish_cell0 + cell_i * nbasp;
+        int jsh_bvk = jsh_cell0 + cell_j * nbasp;
+        int iseg0 = seg_loc[ish_bvk];
+        int jseg0 = seg_loc[jsh_bvk];
+        int ish0 = seg2sh[iseg0];
+        int jsh0 = seg2sh[jseg0];
+        int li = bas[ANG_OF+ish0*BAS_SLOTS];
+        int lj = bas[ANG_OF+jsh0*BAS_SLOTS];
+        int nci = bas[NCTR_OF+ish0*BAS_SLOTS];
+        int ncj = bas[NCTR_OF+jsh0*BAS_SLOTS];
+        int nfi = (li+1)*(li+2)/2;
+        int nfj = (lj+1)*(lj+2)/2;
+        int comp = 3;
+        double *cache = eri_buf + nfi * nfj * nci * ncj * comp;
+        int has_value = PBCECP_loop(ECPtype_so_cart,
+                                    eri_buf, cell0_shls, bvk_cells, cutoff,
+                                    rij_cond, envs_cint, envs_bvk, cache);
+        return has_value;
+}
+
+int PBCECPso_sph(double *eri_buf, int *cell0_shls, int *bvk_cells, int cutoff,
+                 float *rij_cond, CINTEnvVars *envs_cint, BVKEnvs *envs_bvk)
+{
+        int *bas = envs_cint->bas;
+        int nbasp = envs_bvk->nbasp;
+        int *seg_loc = envs_bvk->seg_loc;
+        int *seg2sh = envs_bvk->seg2sh;
+        int *cell0_ao_loc = envs_bvk->ao_loc;
+        int ish_cell0 = cell0_shls[0];
+        int jsh_cell0 = cell0_shls[1];
+        int cell_i = bvk_cells[0];
+        int cell_j = bvk_cells[1];
+        int ish_bvk = ish_cell0 + cell_i * nbasp;
+        int jsh_bvk = jsh_cell0 + cell_j * nbasp;
+        int iseg0 = seg_loc[ish_bvk];
+        int jseg0 = seg_loc[jsh_bvk];
+        int ish0 = seg2sh[iseg0];
+        int jsh0 = seg2sh[jseg0];
+        // Note: ish0 (and jsh0) can be wrong when there is no basis between iseg0 and iseg1
+        int li = bas[ANG_OF+ish0*BAS_SLOTS];
+        int lj = bas[ANG_OF+jsh0*BAS_SLOTS];
+        int nci = bas[NCTR_OF+ish0*BAS_SLOTS];
+        int ncj = bas[NCTR_OF+jsh0*BAS_SLOTS];
+        int nfi = (li+1)*(li+2)/2;
+        int nfj = (lj+1)*(lj+2)/2;
+        int i0 = cell0_ao_loc[ish_cell0];
+        int j0 = cell0_ao_loc[jsh_cell0];
+        int i1 = cell0_ao_loc[ish_cell0+1];
+        int j1 = cell0_ao_loc[jsh_cell0+1];
+        int di = i1 - i0;
+        int dj = j1 - j0;
+        int comp = 3;
+        double *gcart = eri_buf + di*dj * comp;
+        double *cache = gcart + nfi*nfj*nci*ncj * comp;
+        int has_value = PBCECP_loop(ECPtype_so_cart,
                                     gcart, cell0_shls, bvk_cells, cutoff,
                                     rij_cond, envs_cint, envs_bvk, cache);
         if (!has_value) {

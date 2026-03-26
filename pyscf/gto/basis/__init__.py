@@ -25,11 +25,19 @@ import sys
 import re
 from os.path import join
 import importlib
+import warnings
 import pyscf
 from pyscf.gto.basis import parse_nwchem, parse_nwchem_ecp
 from pyscf.gto.basis import parse_cp2k, parse_cp2k_pp
 from pyscf.lib.exceptions import BasisNotFoundError
 from pyscf import __config__
+
+USER_BASIS_DIR = getattr(__config__, 'USER_BASIS_DIR', '')
+USER_BASIS_ALIAS = getattr(__config__, 'USER_BASIS_ALIAS', {})
+USER_GTH_ALIAS = getattr(__config__, 'USER_GTH_ALIAS', {})
+
+OPTIMIZE_CONTRACTION = getattr(__config__, 'gto_basis_parse_optimize', False)
+ENFORCE_ELEMENT_MATCH = getattr(__config__, 'gto_basis_enforce_element_match', False)
 
 ALIAS = {
     'ano'        : 'ano.dat'        ,
@@ -386,10 +394,6 @@ ALIAS = {
     'sapgrasplarge'   : 'sap_grasp_large.dat',
 }
 
-USER_BASIS_DIR = getattr(__config__, 'USER_BASIS_DIR', '')
-USER_BASIS_ALIAS = getattr(__config__, 'USER_BASIS_ALIAS', {})
-USER_GTH_ALIAS = getattr(__config__, 'USER_GTH_ALIAS', {})
-
 if USER_BASIS_ALIAS.keys() & ALIAS.keys():
     raise KeyError('USER_BASIS_ALIAS keys conflict with predefined basis sets')
 
@@ -409,6 +413,8 @@ GTH_ALIAS = {
     'gthccdzvp'   : 'gth-cc-dzvp.dat',
     'gthcctzvp'   : 'gth-cc-tzvp.dat',
     'gthccqzvp'   : 'gth-cc-qzvp.dat',
+    # TODO: Remove the legacy database after verifying whether they are
+    # consistent with the latest version of BASIS_MOLOPT
     'gthszvmolopt'      : 'gth-szv-molopt.dat',
     'gthdzvpmolopt'     : 'gth-dzvp-molopt.dat',
     'gthtzvpmolopt'     : 'gth-tzvp-molopt.dat',
@@ -471,8 +477,6 @@ def _parse_pople_basis(basis, symb):
             return ALIAS[mbas]
     else:
         return tuple([ALIAS[mbas]] + convert(extension.split(',')[0]))
-
-OPTIMIZE_CONTRACTION = getattr(__config__, 'gto_basis_parse_optimize', False)
 
 def parse(string, symb=None, optimize=OPTIMIZE_CONTRACTION):
     '''Parse the basis (ECP, PP) text in NWChem or CP2K format, returns internal format
@@ -575,6 +579,20 @@ def _truncate(basis, contr_scheme, symb, split_name):
 optimize_contraction = parse_nwchem.optimize_contraction
 to_general_contraction = parse_nwchem.to_general_contraction
 
+def _parse_basis_str(parse_fn, input_str, symb, optimize):
+    try:
+        return parse_fn(input_str, symb, optimize=optimize)
+    except BasisNotFoundError:
+        if not ENFORCE_ELEMENT_MATCH:
+            out = parse_fn(input_str, optimize=optimize)
+            warnings.warn(
+                'The basis set string does not explicitly match the element '
+                f'{symb}. It is stilled parsed and assigned to {symb} without '
+                'enforcing element matching. If you want to enforce a strict '
+                'match between the basis set and elements, set\n'
+                '    gto_basis_enforce_element_match = True\n'
+                'in ~/.pyscf_conf.py')
+            return out
 
 def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
     '''Convert the basis of the given symbol to internal format
@@ -622,6 +640,7 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
         basmod = USER_BASIS_ALIAS[name]
         basis_dir = USER_BASIS_DIR
     elif name in GTH_ALIAS:
+        #TODO: _load_MOLOPT(_to_MOLOPT_name(name), symb, _GTH_BASIS_DIR)
         basmod = GTH_ALIAS[name]
         fload = parse_cp2k.load
         basis_dir = _GTH_BASIS_DIR
@@ -631,33 +650,31 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
         basis_dir = USER_BASIS_DIR
     elif _is_pople_basis(name):
         basmod = _parse_pople_basis(name, symb)
+    elif 'GTH' in filename_or_basisname:
+        assert contr_scheme == 'Full'
+        if '\n' in filename_or_basisname:
+            return _parse_basis_str(parse_cp2k.parse, filename_or_basisname, symb, optimize)
+        else:
+            return parse_cp2k._load_MOLOPT(filename_or_basisname, symb, _GTH_BASIS_DIR)
     else:
-        try:
-            return parse_nwchem.parse(filename_or_basisname, symb,
-                                      optimize=optimize)
-        except BasisNotFoundError:
-            pass
-        except Exception:
-            raise BasisNotFoundError(filename_or_basisname)
+        if '\n' not in filename_or_basisname:
+            raise RuntimeError(f'Unable to parse the input basis set\n{filename_or_basisname}')
 
         try:
-            return parse_nwchem.parse(filename_or_basisname, optimize=optimize)
+            return _parse_basis_str(parse_nwchem.parse, filename_or_basisname,
+                                    symb, optimize)
         except BasisNotFoundError:
             pass
-        except Exception:
-            raise BasisNotFoundError(f'Invalid basis {filename_or_basisname}')
 
         try:
-            return parse_cp2k.parse(filename_or_basisname, optimize=optimize)
+            return _parse_basis_str(parse_cp2k.parse, filename_or_basisname,
+                                    symb, optimize)
         except BasisNotFoundError:
             pass
-        except Exception:
-            raise BasisNotFoundError(f'Invalid basis {filename_or_basisname}')
 
         # Last, a trial to access Basis Set Exchange database
         from pyscf.gto.basis import bse
         if bse.basis_set_exchange is None:
-            import warnings
             warnings.warn(
                 'Basis may be available in basis-set-exchange. '
                 'It is recommended to install basis-set-exchange: '
@@ -699,19 +716,27 @@ def load_ecp(filename_or_basisname, symb):
         basmod = ALIAS[name]
         return parse_nwchem_ecp.load(join(_BASIS_DIR, basmod), symb)
 
+    if '\n' not in filename_or_basisname:
+        raise RuntimeError(f'Unable to parse the input ECP data\n{filename_or_basisname}')
+
     try:
         return parse_nwchem_ecp.parse(filename_or_basisname, symb)
     except BasisNotFoundError:
         pass
-    except Exception:
-        raise BasisNotFoundError(filename_or_basisname)
 
-    try:
-        return parse_nwchem_ecp.parse(filename_or_basisname)
-    except BasisNotFoundError:
-        pass
-    except Exception:
-        raise BasisNotFoundError(f'Invalid ECP {filename_or_basisname}')
+    if not ENFORCE_ELEMENT_MATCH:
+        try:
+            out = parse_nwchem_ecp.parse(filename_or_basisname)
+            warnings.warn(
+                f'The ECP input does not explicitly match the element {symb}. '
+                'It is stilled parsed and assigned to {symb} without enforcing '
+                'element matching. If you want to enforce a strict match '
+                'between the ECP input and elements, set\n'
+                '    gto_basis_enforce_element_match = True\n'
+                'in ~/.pyscf_conf.py')
+            return out
+        except BasisNotFoundError:
+            pass
 
     # Last, a trial to access Basis Set Exchange database
     from pyscf.gto.basis import bse
@@ -729,6 +754,10 @@ def load_ecp(filename_or_basisname, symb):
 
     raise BasisNotFoundError('Unknown ECP format or ECP name')
 
+# PP_NAME_PATTERN follows the convention of CP2K orbital basis and pseudo names
+# https://pierre-24.github.io/cp2k-basis/users/basis_sets_and_pseudos
+PP_NAME_PATTERN = re.compile(r'^GTH-[A-Z0-9]+-q\d+$')
+
 def load_pseudo(filename_or_basisname, symb):
     '''Parses PP database file
     '''
@@ -736,17 +765,35 @@ def load_pseudo(filename_or_basisname, symb):
     if os.path.isfile(filename_or_basisname):
         return _load_external(parse_cp2k_pp, filename_or_basisname, symb)
 
+    if re.fullmatch(PP_NAME_PATTERN, filename_or_basisname):
+        # Note: the default *-GTH basis for Na has been changed, compared to
+        # eariler versions. The default one in earlier versions are renamed to
+        # *-GTH-q9_old in the new database (see GTH_POTENTIALS).
+        return parse_cp2k_pp._load_GTH_POTENTIALS(
+            filename_or_basisname, symb, _GTH_PP_DIR)
+
+    # TODO: remove the lagecy parser, except gth-hf-rev. gth-hf-rev data are not
+    # available in the GTH_POTENTIALS or POTENTIAL_UZH databases
     name, suffix = _format_pseudo_name(filename_or_basisname)
     if name in PP_ALIAS:
-        basmod = PP_ALIAS[name]
-        return parse_cp2k_pp.load(join(_GTH_PP_DIR, basmod), symb, suffix)
+        ppfile = PP_ALIAS[name]
+        return parse_cp2k_pp.load(join(_GTH_PP_DIR, ppfile), symb, suffix)
 
     try:
-        return parse_cp2k_pp.parse(filename_or_basisname)
+        return parse_cp2k_pp.parse(filename_or_basisname, symb)
     except BasisNotFoundError:
-        raise
-    except Exception:
-        raise BasisNotFoundError(f'Invalid PP {filename_or_basisname}')
+        pass
+
+    if not ENFORCE_ELEMENT_MATCH:
+        out = parse_cp2k_pp.parse(filename_or_basisname)
+        warnings.warn(
+            f'The pseudo string does not explicitly match the element {symb}. '
+            'It is stilled parsed and assigned to {symb} without enforcing '
+            'element matching. If you want to enforce a strict match '
+            'between the ECP input and elements, set\n'
+            '    gto_basis_enforce_element_match = True\n'
+            'in ~/.pyscf_conf.py')
+        return out
 
 def _load_external(module, filename_or_basisname, symb, **kwargs):
     '''Try to read basis from given file'''

@@ -824,7 +824,7 @@ O    SP
         mol1.build(False, False)
         gto.basis.load_ecp('lanl08', 'O')
         gto.format_ecp({'O':'lanl08', 1:'lanl2dz'})
-        self.assertRaises(BasisNotFoundError, gto.format_ecp, {'H':'lan2ldz'})
+        self.assertRaises(RuntimeError, gto.format_ecp, {'H':'lan2ldz'})
 
     def test_condense_to_shell(self):
         mol1 = mol0.copy()

@@ -16,11 +16,11 @@
 import ctypes
 import unittest
 import numpy
-import scipy.misc
 import scipy.special
 try:
     from scipy.special import factorial2
 except ImportError:
+    import scipy.misc
     from scipy.misc import factorial2
 from pyscf import lib
 from pyscf import gto

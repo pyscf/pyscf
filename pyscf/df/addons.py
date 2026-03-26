@@ -26,6 +26,7 @@ from pyscf import ao2mo
 from pyscf.data import elements
 from pyscf.lib.exceptions import BasisNotFoundError
 from pyscf.df.autoaux import autoaux, autoabs
+from pyscf.data.elements import _rm_digit
 from pyscf import __config__
 
 DFBASIS = getattr(__config__, 'df_addons_aug_etb_beta', 'weigend')
@@ -147,7 +148,10 @@ def aug_etb_for_dfbasis(mol, dfbasis=DFBASIS, beta=ETB_BETA,
         if nuc_charge < nuc_start:
             newbasis[symb] = dfbasis
         else:
-            basis = mol._basis[symb]
+            if symb in mol._basis:
+                basis = mol._basis[symb]
+            else:
+                basis = mol._basis[_rm_digit(symb)]
             etb = _aug_etb_element(nuc_charge, basis, beta)
             if etb:
                 newbasis[symb] = gto.expand_etbs(etb)

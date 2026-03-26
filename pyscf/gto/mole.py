@@ -481,11 +481,7 @@ def _generate_basis_converter():
         unc = basis_name.lower().startswith('unc')
         if unc:
             basis_name = basis_name[3:]
-        if 'gth' in basis_name:
-            from pyscf.pbc.gto.basis import load as pbc_basis_load
-            _basis = pbc_basis_load(basis_name, symb)
-        else:
-            _basis = basis.load(basis_name, symb)
+        _basis = basis.load(basis_name, symb)
         if unc:
             _basis = uncontracted_basis(_basis)
         return _basis
@@ -1993,17 +1989,18 @@ def inertia_moment(mol, mass=None, coords=None):
     im = numpy.eye(3) * im.trace() - im
     return im
 
-def atom_mass_list(mol, isotope_avg=False):
+def atom_mass_list(mol, isotope_avg=False, mass_table=None):
     '''A list of mass for all atoms in the molecule
 
     Kwargs:
         isotope_avg : boolean
             Whether to use the isotope average mass as the atomic mass
     '''
-    if isotope_avg:
-        mass_table = elements.MASSES
-    else:
-        mass_table = elements.ISOTOPE_MAIN
+    if mass_table is None:
+        if isotope_avg:
+            mass_table = elements.MASSES
+        else:
+            mass_table = elements.ISOTOPE_MAIN
 
     nucprop = mol.nucprop
     if nucprop:
@@ -2148,8 +2145,8 @@ def fromstring(string, format='xyz'):
     if format == 'zmat':
         return string
     elif format == 'xyz':
-        line, title, geom = string.split('\n', 2)
-        return geom
+        atom_number_str, title, geom = string.split('\n', 2)
+        return '\n'.join(geom.splitlines()[:int(atom_number_str)])
     elif format == 'sdf':
         raw = string.splitlines()
         natoms, nbonds = raw[3].split()[:2]
@@ -2673,7 +2670,14 @@ class MoleBase(lib.StreamObject):
         if isinstance(self.symmetry, str):
             self.symmetry = str(symm.std_symb(self.symmetry))
             groupname = None
-            if abs(axes - np.eye(3)).max() < symm.TOLERANCE:
+            if abs(np.max(np.abs(axes),axis=0) - 1).max() < symm.TOLERANCE:
+                # MRH: Catch PointGroupSymmetryError before going into symm.check_symm
+                try:
+                    symm.as_subgroup(self.topgroup, axes, self.symmetry)
+                except PointGroupSymmetryError as e:
+                    raise PointGroupSymmetryError(
+                        'Unable to identify input symmetry %s. Try symmetry="%s"' %
+                        (self.symmetry, self.topgroup)) from e
                 if symm.check_symm(self.symmetry, self._atom, self._basis):
                     # Try to use original axes (issue #1209)
                     groupname = self.symmetry
@@ -3094,9 +3098,7 @@ class MoleBase(lib.StreamObject):
             mol = self.copy(deep=False)
             mol._env = mol._env.copy()
 
-        if unit is None:
-            _unit = mol.unit
-        else:
+        if unit is not None:
             _unit = _length_in_au(unit)
             if _unit != _length_in_au(self.unit):
                 logger.warn(mol, 'Mole.unit (%s) is changed to %s', self.unit, unit)
@@ -3252,7 +3254,7 @@ class MoleBase(lib.StreamObject):
         ptr = self._atm[:,PTR_COORD]
         c = self._env[ptr[:,None] + np.arange(3)]
         if not is_au(unit):
-            c *= param.BOHR
+            c *= 1./_length_in_au(unit)
         return c
 
     atom_mass_list = atom_mass_list
@@ -3934,8 +3936,8 @@ class Mole(MoleBase):
                 bas_coords = atom_coords[self._bas[:,ATOM_OF]]
                 upper_bound = (bas_coords + shell_radius[:,None]).max(axis=0)
                 lower_bound = (bas_coords - shell_radius[:,None]).min(axis=0)
-                box_size = upper_bound - lower_bound
-                box = numpy.diag(box_size)
+                box_size = (upper_bound - lower_bound).max()
+                box = numpy.eye(3) * box_size
             else:
                 atom_coords = self.atom_coords()
                 size = atom_coords.max(axis=0) - atom_coords.min(axis=0)
@@ -3944,6 +3946,10 @@ class Mole(MoleBase):
         cell.dimension = dimension
         cell.build(False, False)
         return cell
+
+    def to_gpu(self):
+        from gpu4pyscf.gto.mole import Mole
+        return Mole.from_cpu(self)
 
 def _parse_default_basis(basis, uniq_atoms):
     if isinstance(basis, (str, tuple, list)):

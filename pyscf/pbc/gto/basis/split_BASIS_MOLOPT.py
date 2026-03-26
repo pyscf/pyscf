@@ -26,7 +26,8 @@ def main():
     basis_sets = OrderedDict()
     with open(file_GTH,'r') as searchfile:
         for line in searchfile:
-            if line[0] == '#':
+            line = line.strip()
+            if not line or line[0] == '#':
                 continue
             elif 'GTH' in line:
                 bas_type = line.split()[1]

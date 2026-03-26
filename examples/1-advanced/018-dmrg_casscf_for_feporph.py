@@ -45,7 +45,6 @@ def dmet_cas(mc, dm, implst):
     nao = mc.mol.nao_nr()
     ncore = mc.ncore
     ncas = mc.ncas
-    nocc = ncore + ncas
     nimp = len(implst)
     nbath = ncas - nimp
     corth = lo.orth.orth_ao(mol, method='meta_lowdin')
@@ -205,7 +204,7 @@ mf = scf.fast_newton(mf)
 #
 mc = mcscf.approx_hessian(dmrgscf.dmrgci.DMRGSCF(mf, 20, 16))
 idx = mol.search_ao_label(['Fe 3d', 'Fe 4d', 'Fe 4s', 'N 2pz'])
-mo = dmet_cas(mc, mf.make_rdm1(), idx3d)
+mo = dmet_cas(mc, mf.make_rdm1(), idx)
 mc.fcisolver.wfnsym = 'B1g'
 mc.kernel(mo)
 mo = mc.mo_coeff

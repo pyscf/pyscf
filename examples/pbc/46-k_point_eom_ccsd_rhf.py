@@ -14,7 +14,6 @@ Excitation energies from the two sets of calculations should match.
 """
 
 import numpy as np
-from pyscf import gto, scf, cc
 from pyscf.cc import eom_rccsd as mol_eom_rccsd
 from pyscf.pbc import gto, scf, cc
 from pyscf.pbc.cc import eom_kccsd_rhf as eom_krccsd

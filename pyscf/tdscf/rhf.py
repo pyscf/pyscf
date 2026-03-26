@@ -455,22 +455,26 @@ def analyze(tdobj, verbose=None):
                      i+1, dip[0], dip[1], dip[2], numpy.dot(dip, dip),
                      f_oscillator[i])
 
-        log.info('\n** Transition velocity dipole moments (imaginary part, AU) **')
-        log.info('state          X           Y           Z        Dip. S.      Osc.')
-        trans_v = tdobj.transition_velocity_dipole()
-        f_v = tdobj.oscillator_strength(gauge='velocity', order=0)
-        for i, ei in enumerate(tdobj.e):
-            v = trans_v[i]
-            log.info('%3d    %11.4f %11.4f %11.4f %11.4f %11.4f',
+        if tdobj.mol.ecp:
+            log.warn("ECP detected. Skipping calculation of transition velocity and "
+                     "magnetic dipole moments, which have not yet been implemented.")
+        else:
+            log.info('\n** Transition velocity dipole moments (imaginary part, AU) **')
+            log.info('state          X           Y           Z        Dip. S.      Osc.')
+            trans_v = tdobj.transition_velocity_dipole()
+            f_v = tdobj.oscillator_strength(gauge='velocity', order=0)
+            for i, ei in enumerate(tdobj.e):
+                v = trans_v[i]
+                log.info('%3d    %11.4f %11.4f %11.4f %11.4f %11.4f',
                      i+1, v[0], v[1], v[2], numpy.dot(v, v), f_v[i])
 
-        log.info('\n** Transition magnetic dipole moments (imaginary part, AU) **')
-        log.info('state          X           Y           Z')
-        trans_m = tdobj.transition_magnetic_dipole()
-        for i, ei in enumerate(tdobj.e):
-            m = trans_m[i]
-            log.info('%3d    %11.4f %11.4f %11.4f',
-                     i+1, m[0], m[1], m[2])
+            log.info('\n** Transition magnetic dipole moments (imaginary part, AU) **')
+            log.info('state          X           Y           Z')
+            trans_m = tdobj.transition_magnetic_dipole()
+            for i, ei in enumerate(tdobj.e):
+                m = trans_m[i]
+                log.info('%3d    %11.4f %11.4f %11.4f',
+                         i+1, m[0], m[1], m[2])
     return tdobj
 
 def _analyze_wfnsym(tdobj, x_sym, x):
@@ -910,7 +914,7 @@ class TDBase(lib.StreamObject):
         if not all(self.converged):
             logger.note(self, 'TD-SCF states %s not converged.',
                         [i for i, x in enumerate(self.converged) if not x])
-        logger.note(self, 'Excited State energies (eV)\n%s', self.e * nist.HARTREE2EV)
+        logger.note(self, 'Excitation energies (eV)\n%s', self.e * nist.HARTREE2EV)
         return self
 
     def to_gpu(self):
@@ -1061,7 +1065,12 @@ class TDA(TDBase):
         from pyscf.grad import tdrhf
         return tdrhf.Gradients(self)
 
-    to_gpu = lib.to_gpu
+    def to_gpu(self):
+        import cupy as cp
+        out = lib.to_gpu(self)
+        if out.xy is not None:
+            out.xy = [(cp.asarray(x), y) for x, y in out.xy]
+        return out
 
 CIS = TDA
 
@@ -1260,7 +1269,12 @@ class TDHF(TDBase):
 
     Gradients = TDA.Gradients
 
-    to_gpu = lib.to_gpu
+    def to_gpu(self):
+        import cupy as cp
+        out = lib.to_gpu(self)
+        if out.xy is not None:
+            out.xy = [(cp.asarray(x), cp.asarray(y)) for x, y in out.xy]
+        return out
 
 RPA = TDRHF = TDHF
 

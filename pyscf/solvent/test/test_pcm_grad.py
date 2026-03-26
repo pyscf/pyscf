@@ -257,6 +257,93 @@ class KnownValues(unittest.TestCase):
         td2 = mol2.RHF().PCM().run(conf_tol=1e-12).TDA(equilibrium_solvation=True).run(conf_tol=1e-10)
         assert abs((td2.e_tot[0]-td1.e_tot[0])/0.002- de[0,2]) < 1e-5
 
+    def test_iswig_grad(self):
+        mol = gto.M(
+            atom = """
+                H 0 0 0
+                F 1 0 0.1
+            """,
+            basis = "6-31g",
+            verbose = 0,
+        )
+
+        mf = mol.RHF().PCM()
+        mf.with_solvent.method = 'C-PCM'
+        mf.with_solvent.lebedev_order = 7
+        mf.with_solvent.eps = 78
+        mf.with_solvent.surface_discretization_method = "iswig"
+        mf.conv_tol = 1e-12
+        mf.kernel()
+        assert mf.converged
+
+        test_gradient = mf.Gradients().kernel()
+
+        # ref_gradient = numpy.empty([mol.natm, 3])
+
+        # def get_e(mol):
+        #     mf = mol.RHF().PCM()
+        #     mf.with_solvent.method = 'C-PCM'
+        #     mf.with_solvent.lebedev_order = 7
+        #     mf.with_solvent.eps = 78
+        #     mf.with_solvent.surface_discretization_method = "iswig"
+        #     mf.conv_tol = 1e-12
+        #     e = mf.kernel()
+        #     assert mf.converged
+        #     return e
+
+        # dx = 4e-5
+        # mol_copy = mol.copy()
+        # for i_atom in range(mol.natm):
+        #     for i_xyz in range(3):
+        #         xyz_p = mol.atom_coords()
+        #         xyz_p[i_atom, i_xyz] += dx
+        #         mol_copy.set_geom_(xyz_p, unit='Bohr')
+        #         mol_copy.build()
+        #         e_p = get_e(mol_copy)
+
+        #         xyz_m = mol.atom_coords()
+        #         xyz_m[i_atom, i_xyz] -= dx
+        #         mol_copy.set_geom_(xyz_m, unit='Bohr')
+        #         mol_copy.build()
+        #         e_m = get_e(mol_copy)
+
+        #         ref_gradient[i_atom, i_xyz] = (e_p - e_m) / (2 * dx)
+        # print(repr(ref_gradient))
+
+        ref_gradient = numpy.array([
+            [-6.76381013e-02,  8.88178420e-10, -6.88678181e-03],
+            [ 6.76381010e-02,  0.00000000e+00,  6.88678217e-03]
+        ])
+
+        assert numpy.max(numpy.abs(test_gradient - ref_gradient)) < 1e-7
+
+    def test_cartesian_basis_grad(self):
+        mol = gto.M(
+            atom = """
+                H 0 0 0
+                F 1 0 0.1
+            """,
+            basis = "def2-tzvp",
+            cart = 1,
+            verbose = 0,
+        )
+        mf = scf.RHF(mol).PCM()
+        mf.with_solvent.method = "C-PCM"
+        mf.with_solvent.eps = 35.9
+
+        mf.conv_tol = 1e-10
+        mf.kernel()
+        assert mf.converged
+
+        test_gradient = mf.Gradients().kernel()
+
+        ref_gradient = numpy.array([
+            [ -0.090575,     -0.000000,     -0.009052],
+            [  0.090575,      0.000000,      0.009052],
+        ])
+
+        assert numpy.max(numpy.abs(test_gradient - ref_gradient)) < 1e-6
+
 if __name__ == "__main__":
     print("Full Tests for Gradient of PCMs")
     unittest.main()

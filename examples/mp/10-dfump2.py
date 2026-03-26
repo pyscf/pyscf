@@ -4,9 +4,9 @@
 Example calculation using the DF-UMP2 code.
 
 This package includes two implementations of the Density-Fitted MP2 method,
-provided by the modules pyscf.mp.dfump2 and pyscf.mp.dfump2_native. 
+provided by the modules pyscf.mp.dfump2 and pyscf.mp.dfump2_native.
 The dfump2 module is based on the APIs and structure of the pyscf.mp.mp2 code,
-while the dfump2_native module provides a different API. 
+while the dfump2_native module provides a different API.
 
 Other differences include:
 - The dfump2 module is generally more efficient in memory usage and OpenMP parallelization.
@@ -16,8 +16,9 @@ Relevant examples:
 10-dfmp2.py 10-dfump2.py 10-dfgmp2.py 11-dfmp2-density.py 12-dfump2-natorbs.py
 '''
 
+import pyscf
 
-mol = pyscf.M(atm='''
+mol = pyscf.M(atom='''
 O'   0.    0.  0.
 O'   1.21  0.  0.''',
 spin=2,
