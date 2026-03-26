@@ -166,21 +166,21 @@ def _adjust_planar_d2h(atom_coords, axes):
     natm_with_y = numpy.count_nonzero(abs(atom_coords.dot(axes[1])) > tol)
     natm_with_z = numpy.count_nonzero(abs(atom_coords.dot(axes[2])) > tol)
     if natm_with_z == 0:  # atoms on xy plane
-        if natm_with_x >= natm_with_y:  # atoms-on-y >= atoms-on-x
+        if natm_with_x >= natm_with_y:
             # rotate xz
             axes = numpy.array([-axes[2], axes[1], axes[0]])
         else:
             # rotate xy then rotate xz
             axes = numpy.array([axes[2], axes[0], axes[1]])
     elif natm_with_y == 0:  # atoms on xz plane
-        if natm_with_x < natm_with_z:  # atoms-on-z >= atoms-on-x
+        if natm_with_x < natm_with_z:
             # rotate xy
             axes = numpy.array([-axes[1], axes[0], axes[2]])
         else:
             # rotate xz then rotate xy
             axes = numpy.array([axes[1], axes[2], axes[0]])
     elif natm_with_x == 0:  # atoms on yz plane
-        if natm_with_y > natm_with_z:  # atoms-on-z < atoms-on-y
+        if natm_with_y > natm_with_z:
             # rotate yz
             axes = numpy.array([axes[0], -axes[2], axes[1]])
     return axes
