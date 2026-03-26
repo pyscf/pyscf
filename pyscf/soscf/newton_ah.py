@@ -820,7 +820,7 @@ class _CIAH_SOSCF:
         return pyscf.df.df_jk.density_fit(self, auxbasis, with_df, only_dfj)
 
     def to_gpu(self):
-        return self.undo_soscf().to_gpu()
+        return self.undo_soscf().to_gpu().newton()
 
 class _SecondOrderROHF(_CIAH_SOSCF):
     gen_g_hop = gen_g_hop_rohf
