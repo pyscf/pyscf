@@ -4332,23 +4332,21 @@ def extract_pgto_params(mol, op='diffuse'):
                    for i in range(mol.nbas)])
     l = np.repeat(mol._bas[:,ANG_OF], mol._bas[:,NPRIM_OF])
     basis_id = np.repeat(np.arange(mol.nbas), mol._bas[:,NPRIM_OF])
-    precision = 1e-8
+    if isinstance(mol, Mole):
+        precision = 1e-8
+    else:
+        precision = mol.precision
     if op == 'diffuse':
         # A quick estimation for the radius that each primitive GTO decays to the
         # value smaller than the required precision
-        r2 = np.log(c**2/precision * 10**l + 1e-200) / e
-        # groupby.argmin()
-        r2_order = np.argsort(-r2)
-        _, idx = np.unique(basis_id[r2_order], return_index=True)
-        idx = r2_order[idx]
+        # c * r2**(l/2) * ((2*l+1)/4*np.pi)**.5 * exp(-e*r2) ~ precision
+        r2 = np.log((2*l+1)/(4*np.pi)/precision**2 * c**2 * 1e2**l + 1e-200) / (2*e)
+        idx = lib.groupby(basis_id, r2, 'argmax')
     else:
         # A quick estimation for the resolution of planewaves that each
         # primitive GTO requires
         ke = np.log(c**2 / precision * 50**l + 1e-200) * e
-        # groupby.argmax()
-        ke_order = np.argsort(-ke)
-        _, idx = np.unique(basis_id[ke_order], return_index=True)
-        idx = ke_order[idx]
+        idx = lib.groupby(basis_id, ke, 'argmax')
     return e[idx], c[idx]
 
 class _MoleLazyCallAdapter:
