@@ -448,8 +448,12 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         log.debug2('get_k_kpts: build K from symm mo coeff')
         nmo = skmoR[0,0].shape[1]
         log.debug2('get_k_kpts: rank(dm) = %d / %d', nmo, nao)
-        skmoI_mask = numpy.asarray([[abs(skmoI[i,k]).max() > cell.precision
-                                     for k in range(nkpts)] for i in range(nset)])
+        # Taking care of the case skmoI is empty array.
+        # skmoI_mask = numpy.asarray([[abs(skmoI[i,k]).max() > cell.precision
+        #                              for k in range(nkpts)] for i in range(nset)])
+        skmoI_mask = numpy.asarray(
+            [[(skmoI[i,k].size > 0) and (numpy.abs(skmoI[i,k]).max() > cell.precision)
+            for k in range(nkpts)] for i in range(nset)])
         bufR = numpy.empty((mydf.blockdim*nao**2))
         bufI = numpy.empty((mydf.blockdim*nao**2))
         max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
