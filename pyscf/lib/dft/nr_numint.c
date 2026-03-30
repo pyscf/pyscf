@@ -141,9 +141,6 @@ static void sgx_ao_dm(double *vm, double *ao, double *dm,
                       int nao, int nocc, int ngrids, int bgrids,
                       uint8_t *non0table, int *shls_slice, int *ao_loc)
 {
-        int nbox = (nao+BOXSIZE-1) / BOXSIZE;
-        int8_t empty[nbox];
-
         const char TRANS_T = 'T';
         const char TRANS_N = 'N';
         const double D1 = 1;
@@ -240,7 +237,7 @@ void VXCsgx_ao_ao(double *vv, double *ao1, double *ao2,
 
 #pragma omp parallel
 {
-        int shlsize, ish;
+        int ish;
         size_t j0, j1;
         int ni;
         NPomp_split(&j0, &j1, nao);
