@@ -57,7 +57,7 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
 
     Returns:
         An SCF object with a modified J, K matrix constructor which uses density
-        fitting integrals to compute J and K
+        fitting and seminumerical integrals to compute J and K
 
     Examples:
 
@@ -285,6 +285,92 @@ def _make_opt(mol, grad=False,
 
 
 class SGX(lib.StreamObject):
+    r'''
+    Object to perform seminumerical evaluation of J/K matrix.
+
+    Basic attributes:
+        grids_thrd : float
+            Remove grids with small weights using this threshold.
+            Default is 1e-10.
+        grids_level_i : int
+            Initial grids level (coarse grid for early SCF iterations).
+            Default is 2.
+        grids_level_f : int
+            Final grids level (dense grid for final SCF iterations).
+            Default is 2.
+        use_opt_grids : bool
+            Use optimized grids for SGX based on ORCA. Default is True.
+        fit_ovlp : bool
+            Numerically fit overlap matrix to improve numerical precision.
+            Default is True.
+        grids_switch_thrd : float
+            Threshold of density matrix convergence to switch from the coarse
+            initial grid (grids_level_i) to the denser final grid
+            (grids_level_f). Ignored if grids_level_i == grids_level_f.
+            Default is 0.03.
+        dfj : bool
+            Compute J matrix using DF and K matrix using SGX, like in the
+            RIJCOSX method in ORCA. Default is True.
+
+    Optimized SGX-K Attributes:
+        optk : bool
+            Turn on optimization for evaluating the K-matrix with SGX.
+            Only has an effect if dfj is True. Default is True.
+        sgx_tol_energy : float or str
+            DM screening error tolerance for the energy. "auto" means
+            set automatically using direct_scf_tol. Default="auto".
+        sgx_tol_potential : float or str
+            DM screening error tolerance for the potential (K-matrix).
+            "auto" means set to sqrt(sgx_tol_energy), or sqrt(direct_scf_tol)
+            if sgx_tol_energy is None. Default="auto".
+        bound_algo : str
+            Bound algo determines how the three-center integral upper bounds
+            are estimated. Default is "sample_pos".
+
+    If (sgx_tol_energy, sgx_tol_potential) is
+        (float/"auto", float/"auto"): Bound energy and potential error;
+        (float/"auto", None): Bound energy error only;
+        (None, float/"auto"): Bound potential error only;
+        (None, None): Turn off DM screening (no energy or potential error).
+    It is recommended to bound both energy and potential error
+    for numerical stability.
+
+    Attribute bound_algo can be
+        "ovlp":
+            Screen integrals based on overlap of
+            orbital pairs. Overlap serves as a rough
+            approximation of the maximum ESP integral.
+        "sample":
+            Provide an approximate but accurate
+            upper bound for the ESP integrals by sampling
+            _nquad points for each shell pair.
+        "sample_pos":
+            Same as sample, but the ESP
+            bounds are position-dependent, which gives
+            a slight speed increase for large systems
+            and a significant speed increase for
+            short-range hybrids.
+    Default is "sample_pos" and is recommended for most cases.
+
+    Debugging Attributes:
+        debug : bool
+            Whether to use debug mode. Default is False.
+        blockdim : int
+            Max block size for grids when debug=True. Default 1200.
+        direct_j : bool
+            Run the calculation with direct integral J-matrix. Default False.
+        _symm_ovlp_fit: bool
+            Default True. Perform a "symmetric" overlap fit when optk is True.
+            When fit_ovlp=True, _symm_ovlp_fit=True is required for exact
+            analytical gradients. Note that symmetric overlap fitting is not
+            "exact" overlap fitting. It fits the overlap correctly to
+            first order in the difference between the exact and numerical
+            overlap matrix. This difference is quite small for any reasonable
+            grid, so this approximation typically works well. Set to False
+            (not typically recommended) to obtain "exact" overlap fitting
+            and abandon exact analytical gradients.
+    '''
+
     _keys = {
         'mol', 'grids_thrd', 'grids_level_i', 'grids_level_f',
         'grids_switch_thrd', 'dfj', 'direct_j', 'debug', 'grids',
@@ -299,83 +385,31 @@ class SGX(lib.StreamObject):
         self.max_memory = mol.max_memory
 
         # BASIC SGX SETTINGS
-        # Remove grids with small weights using this threshold.
         self.grids_thrd = 1e-10
-        # initial grids level
         self.grids_level_i = 2
-        # final grids level
         self.grids_level_f = 2
-        # use optimized grids for SGX based on ORCA
         self.use_opt_grids = True
-        # numerically fit overlap matrix to improve numerical precision
         self.fit_ovlp = True
-        # threshold of density matrix convergence to switch from the coarse
-        # initial grid (grids_level_i) to the denser final grid (grids_level_f)
-        # Ignored if grids_level_i == grids_level_f
         self.grids_switch_thrd = 0.03
-        # compute J matrix using DF and K matrix using SGX. It's identical to
-        # the RIJCOSX method in ORCA
         self.dfj = True
 
         # OPTIMIZED SGX-K SETTINGS
-        # Turn on optimization for evaluating the K-matrix with SGX.
-        # Only has an effect is dfj is True
         self.optk = True
-        # DM screening error tolerance for energy. "auto" means set
-        # automatically based on direct_scf_tol.
         self.sgx_tol_energy = "auto"
-        # DM screening error tolerance for the potential. "auto" means
-        # set to sqrt(sgx_tol_energy), or sqrt(direct_scf_tol)
-        # if sgx_tol_energy is None.
         self.sgx_tol_potential = "auto"
-        # Note: If (sgx_tol_energy, sgx_tol_potential) is
-        #   (float/"auto", float/"auto"): Bound energy and potential error
-        #   (float/"auto", None): Bound energy error only
-        #   (None, float/"auto"): Bound potential error only
-        #   (None, None): Turn off DM screening (no energy or potential error)
-        # It is recommended to bound both energy and potential error
-        # for numerical stability
-
-        # Bound algo determines how the three-center integral upper bounds
-        # are estimated. Can be
-        #   "ovlp": Screen integrals based on overlap of
-        #       orbital pairs. Overlap serves as a rough
-        #       approximation of the maximum ESP integral.
-        #   "sample": Provide an approximate but accurate
-        #       upper bound for the ESP integrals by sampling
-        #       _nquad points for each shell pair.
-        #   "sample_pos": Same as sample, but the ESP
-        #       bounds are position-dependent, which gives
-        #       a slight speed increase for large systems
-        #       and a significant speed increase for
-        #       short-range hybrids.
-        # Default is "sample_pos" and is recommended for most cases.
         self.bound_algo = "sample_pos"
 
+        # Do not set these. They are set by the SGX algorithm.
         self.grids = None
         self.auxmol = None
 
         # DEBUGGING SETTINGS
-        # debug=True generates a dense tensor of the Coulomb integrals at each
-        # grid. debug=False utilizes the sparsity of the integral tensor and
-        # contracts the sparse tensor and density matrices on the fly.
         self.debug = False
-        # max block size for grids when debug=True
         self.blockdim = 1200
-        # Run the calculation with direct integral J-matrix.
         self.direct_j = False
-        # perform a symmetric overlap fit when optk is True.
-        # When fit_ovlp=True, _symm_ovlp_fit=True is required
-        # for exact analytical gradients.
-        # Note that symmetric overlap fitting is not "perfect"
-        # overlap fitting. It fits the overlap correctly to
-        # first order in the difference between the exact and
-        # numerical overlap matrix. This difference is quite small
-        # for any reasonable grid, so this approximation typically
-        # works well.
         self._symm_ovlp_fit = True
 
-        # private attributes
+        # Private attributes. The user should not set these.
         self._auxbasis = auxbasis
         self._vjopt = None
         self._opt = None
