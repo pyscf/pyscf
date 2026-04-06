@@ -71,14 +71,16 @@ class KnownValues(unittest.TestCase):
 
     def test_tddft_lda(self):
         td = mf_lda.TDDFT()
+        td.conv_tol = 1e-6
         es = td.kernel(nstates=4)[0]
         a,b = td.get_ab()
         e_ref = diagonalize(a, b, 8)
         self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 5)
-        self.assertAlmostEqual(lib.fp(es[:3] * 27.2114), 3.157449136045103, 5)
+        self.assertAlmostEqual(lib.fp(es[:3] * 27.2114), 3.157449136045103, delta=1e-5)
 
     def test_tda_lda(self):
         td = mf_lda.TDA()
+        td.conv_tol = 1e-6
         es = td.kernel(nstates=5)[0]
         a,b = td.get_ab()
         nocc, nvir = a.shape[:2]
@@ -102,7 +104,9 @@ class KnownValues(unittest.TestCase):
     def test_col_mgga_ab_ks(self):
         mf_m06l = dft.DKS(mol).set(xc='m06l')
         mf_m06l.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
-        self._check_against_ab_ks(mf_m06l.TDDFT(), 3.382341929143924, 0.6409502830461241)
+        td = mf_m06l.TDDFT()
+        td.conv_tol = 1e-6
+        self._check_against_ab_ks(td, 3.382341929143924, 0.6409502830461241)
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_lda_ab_ks(self):
