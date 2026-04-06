@@ -3948,8 +3948,11 @@ class Mole(MoleBase):
         return cell
 
     def to_gpu(self):
-        from gpu4pyscf.gto.mole import Mole
-        return Mole.from_cpu(self)
+        from gpu4pyscf.gto import mole
+        if hasattr(mole, 'Mole'):
+            return mole.Mole.from_cpu(self)
+        else: # Mole class is defined in gpu4pyscf 1.5 or newer
+            return self
 
 def _parse_default_basis(basis, uniq_atoms):
     if isinstance(basis, (str, tuple, list)):
