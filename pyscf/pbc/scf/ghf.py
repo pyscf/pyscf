@@ -124,6 +124,7 @@ class GHF(pbchf.SCF):
 
     def get_hcore(self, cell=None, kpt=None):
         if cell is None: cell = self.cell
+        if kpt is None: kpt = self.kpt
         hcore = pbchf.SCF.get_hcore(self, cell, kpt)
         hcore = scipy.linalg.block_diag(hcore, hcore)
         if self.with_soc and cell.has_ecp_soc():
