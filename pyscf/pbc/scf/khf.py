@@ -36,6 +36,7 @@ from pyscf import lib
 from pyscf.scf import hf as mol_hf
 from pyscf.lib import logger
 from pyscf.pbc.scf import addons
+from pyscf.pbc.scf import smearing
 from pyscf.pbc.scf import chkfile  # noqa
 from pyscf.pbc import tools
 from pyscf.pbc import df
@@ -465,6 +466,7 @@ class KSCF(pbchf.SCF):
     init_guess_by_atom = _cast_mol_init_guess(mol_hf.init_guess_by_atom)
     _finalize = pbchf.SCF._finalize
     canonicalize = canonicalize
+    smearing = smearing.smearing
 
     def __init__(self, cell, kpts=None,
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
