@@ -682,7 +682,20 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
             return parse_cp2k._load_MOLOPT(filename_or_basisname, symb, _GTH_BASIS_DIR)
     else:
         if '\n' not in filename_or_basisname:
-            raise RuntimeError(f'Unable to parse the input basis set\n{filename_or_basisname}')
+            from pyscf.gto.basis import bse
+            if bse.basis_set_exchange is None:
+                warnings.warn(
+                    'Basis may be available in basis-set-exchange. '
+                    'It is recommended to install basis-set-exchange: '
+                    'pip install basis-set-exchange')
+            else:
+                try:
+                    bse_obj = bse.basis_set_exchange.api.get_basis(
+                        filename_or_basisname, elements=symb)
+                except KeyError:
+                    raise BasisNotFoundError(filename_or_basisname)
+                return bse._orbital_basis(bse_obj)[0][symb]
+            raise BasisNotFoundError(f'Unknown basis format or basis name\n{filename_or_basisname}')
 
         try:
             return _parse_basis_str(parse_nwchem.parse, filename_or_basisname,
@@ -695,21 +708,6 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
                                     symb, optimize)
         except BasisNotFoundError:
             pass
-
-        # Last, a trial to access Basis Set Exchange database
-        from pyscf.gto.basis import bse
-        if bse.basis_set_exchange is None:
-            warnings.warn(
-                'Basis may be available in basis-set-exchange. '
-                'It is recommended to install basis-set-exchange: '
-                'pip install basis-set-exchange')
-        else:
-            try:
-                bse_obj = bse.basis_set_exchange.api.get_basis(
-                    filename_or_basisname, elements=symb)
-            except KeyError:
-                raise BasisNotFoundError(filename_or_basisname)
-            return bse._orbital_basis(bse_obj)[0][symb]
 
         raise BasisNotFoundError(f'Unknown basis format or basis name for {filename_or_basisname}')
 
