@@ -245,6 +245,32 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 7)
         self.assertAlmostEqual(lib.fp(ref), 0.09330727526256491-0.06470297312937545j, 7)
 
+    def test_orth_rks_mgga_kpts(self):
+        xc = 'r2scan,'
+        mydf = df.FFTDF(cell_orth)
+        ni = dft.numint.KNumInt()
+        n, exc0, ref = ni.nr_rks(cell_orth, mydf.grids, xc, dm, hermi=1, kpts=kpts)
+        ref += mydf.get_jk(dm, hermi=1, with_k=False, kpts=kpts)[0]
+        mydf = multigrid.MultiGridNumInt(cell_orth)
+        n, exc1, vxc = multigrid.nr_rks(mydf, xc, dm, hermi=1, kpts=kpts, with_j=True)
+        self.assertEqual(vxc.shape, ref.shape)
+        self.assertAlmostEqual(abs(ref-vxc).max(), 0, 7)
+        self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 7)
+
+    def test_orth_uks_mgga_kpts(self):
+        xc = 'r2scan,'
+        mydf = df.FFTDF(cell_orth)
+        ni = dft.numint.KNumInt()
+        dms = numpy.array([dm, dm])
+        n, exc0, ref = ni.nr_uks(cell_orth, mydf.grids, xc, dms, hermi=1, kpts=kpts)
+        vj = mydf.get_jk(dms, hermi=1, with_k=False, kpts=kpts)[0]
+        ref += vj[0] + vj[1]
+        ni = multigrid.MultiGridNumInt(cell_orth)
+        n, exc1, vxc = ni.nr_uks(cell_orth, None, xc, dms, hermi=1, kpts=kpts)
+        self.assertEqual(vxc.shape, ref.shape)
+        self.assertAlmostEqual(abs(ref-vxc).max(), 0, 7)
+        self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 7)
+
     def test_eval_rhoG_orth_kpts(self):
         numpy.random.seed(9)
         dm = numpy.random.random(dm1.shape) + numpy.random.random(dm1.shape) * 1j
@@ -283,6 +309,32 @@ class KnownValues(unittest.TestCase):
         ni = dft.numint.KNumInt()
         ao_kpts = ni.eval_ao(cell_nonorth, mydf.grids.coords, kpts, deriv=1)
         ref = ni.eval_rho(cell_nonorth, ao_kpts, dm, xctype='GGA')
+        rhoR = tools.ifft(rhoG[0], cell_nonorth.mesh)
+        rhoR *= numpy.prod(cell_nonorth.mesh)/cell_nonorth.vol
+        self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 7)
+
+    def test_eval_rhoG_orth_mgga(self):
+        mydf = multigrid.MultiGridNumInt(cell_orth)
+        rhoG = multigrid._eval_rhoG(mydf, dm, hermi=1, kpts=kpts, deriv=1,
+                                    rhog_high_order=True, xctype='MGGA')
+
+        mydf = df.FFTDF(cell_orth)
+        ni = dft.numint.KNumInt()
+        ao_kpts = ni.eval_ao(cell_orth, mydf.grids.coords, kpts, deriv=1)
+        ref = ni.eval_rho(cell_orth, ao_kpts, dm, xctype='MGGA')
+        rhoR = tools.ifft(rhoG[0], cell_orth.mesh)
+        rhoR *= numpy.prod(cell_orth.mesh)/cell_orth.vol
+        self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 8)
+
+    def test_eval_rhoG_nonorth_mgga(self):
+        mydf = multigrid.MultiGridNumInt(cell_nonorth)
+        rhoG = multigrid._eval_rhoG(mydf, dm, hermi=1, kpts=kpts, deriv=1,
+                                    rhog_high_order=True, xctype='MGGA')
+
+        mydf = df.FFTDF(cell_nonorth)
+        ni = dft.numint.KNumInt()
+        ao_kpts = ni.eval_ao(cell_nonorth, mydf.grids.coords, kpts, deriv=1)
+        ref = ni.eval_rho(cell_nonorth, ao_kpts, dm, xctype='MGGA')
         rhoR = tools.ifft(rhoG[0], cell_nonorth.mesh)
         rhoR *= numpy.prod(cell_nonorth.mesh)/cell_nonorth.vol
         self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 7)
