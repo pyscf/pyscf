@@ -321,7 +321,7 @@ class KnownValues(unittest.TestCase):
         mydf = df.FFTDF(cell_orth)
         ni = dft.numint.KNumInt()
         ao_kpts = ni.eval_ao(cell_orth, mydf.grids.coords, kpts, deriv=1)
-        ref = ni.eval_rho(cell_orth, ao_kpts, dm, xctype='MGGA')
+        ref = ni.eval_rho(cell_orth, ao_kpts, dm, xctype='MGGA', with_lapl=False)
         rhoR = tools.ifft(rhoG[0], cell_orth.mesh)
         rhoR *= numpy.prod(cell_orth.mesh)/cell_orth.vol
         self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 8)
@@ -334,7 +334,7 @@ class KnownValues(unittest.TestCase):
         mydf = df.FFTDF(cell_nonorth)
         ni = dft.numint.KNumInt()
         ao_kpts = ni.eval_ao(cell_nonorth, mydf.grids.coords, kpts, deriv=1)
-        ref = ni.eval_rho(cell_nonorth, ao_kpts, dm, xctype='MGGA')
+        ref = ni.eval_rho(cell_nonorth, ao_kpts, dm, xctype='MGGA', with_lapl=False)
         rhoR = tools.ifft(rhoG[0], cell_nonorth.mesh)
         rhoR *= numpy.prod(cell_nonorth.mesh)/cell_nonorth.vol
         self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 7)
