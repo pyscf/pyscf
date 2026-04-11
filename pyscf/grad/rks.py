@@ -282,7 +282,7 @@ def _vv10nlc_grad(rho, coords, vvrho, vvweight, vvcoords, nlc_pars):
     Gzp=vvrho[3,:][innerthreshind]
     Gp=Gxp**2.+Gyp**2.+Gzp**2.
 
-    assert vvcoords.shape > 0
+    assert vvcoords.size > 0
 
     #inner grid
     W0p=Gp/(Rp*Rp)
