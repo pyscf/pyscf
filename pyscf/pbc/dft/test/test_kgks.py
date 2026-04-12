@@ -95,7 +95,7 @@ class KnownValues(unittest.TestCase):
         dm = np.random.rand(2, n2c, n2c) * .4 + np.random.rand(2, n2c, n2c) * .2j
         mf.xc = 'pbe'
         v = mf.get_veff(cell, dm)
-        self.assertAlmostEqual(lib.fp(v), -99.365338+0j, 5)
+        self.assertAlmostEqual(lib.fp(v), -99.365338+0j, delta=1e-5)
 
     def test_KGKS_sfx2c1e_high_cost(self):
         with lib.light_speed(10) as c:

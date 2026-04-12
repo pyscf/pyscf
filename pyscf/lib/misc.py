@@ -1543,22 +1543,18 @@ def to_gpu(method, out=None):
 
         from importlib import import_module
         mod = import_module(method.__module__.replace('pyscf', 'gpu4pyscf'))
-        try:
-            cls = getattr(mod, method.__class__.__name__)
-        except AttributeError:
-            if hasattr(cls, 'from_cpu'):
-                # the customized to_gpu function can be accessed at module
-                # levelin gpu4pyscf.
-                return cls.from_cpu(method)
-            raise
-
-        # Allow gpu4pyscf to customize the to_gpu method for PySCF classes.
         if hasattr(mod, 'from_cpu'):
+            # the customized to_gpu function can be accessed at module
+            # levelin gpu4pyscf.
             return mod.from_cpu(method)
 
         # A temporary GPU instance. This ensures to initialize private
         # attributes that are only available for GPU code.
         cls = getattr(mod, method.__class__.__name__)
+        # Allow gpu4pyscf to customize the to_gpu method for PySCF classes.
+        if hasattr(cls, 'from_cpu'):
+            return cls.from_cpu(method)
+
         out = method.view(cls)
 
     elif hasattr(out, 'from_cpu'):
