@@ -317,6 +317,33 @@ class KnownValues(unittest.TestCase):
 
         assert numpy.max(numpy.abs(test_gradient - ref_gradient)) < 1e-7
 
+    def test_cartesian_basis_grad(self):
+        mol = gto.M(
+            atom = """
+                H 0 0 0
+                F 1 0 0.1
+            """,
+            basis = "def2-tzvp",
+            cart = 1,
+            verbose = 0,
+        )
+        mf = scf.RHF(mol).PCM()
+        mf.with_solvent.method = "C-PCM"
+        mf.with_solvent.eps = 35.9
+
+        mf.conv_tol = 1e-10
+        mf.kernel()
+        assert mf.converged
+
+        test_gradient = mf.Gradients().kernel()
+
+        ref_gradient = numpy.array([
+            [ -0.090575,     -0.000000,     -0.009052],
+            [  0.090575,      0.000000,      0.009052],
+        ])
+
+        assert numpy.max(numpy.abs(test_gradient - ref_gradient)) < 1e-6
+
 if __name__ == "__main__":
     print("Full Tests for Gradient of PCMs")
     unittest.main()

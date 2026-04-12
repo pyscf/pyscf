@@ -625,7 +625,7 @@ class UADC(lib.StreamObject):
 
         charges = self.mol.atom_charges()
         coords  = self.mol.atom_coords()
-        self.dip_mom_nuc = lib.einsum('i,ix->x', charges, coords)
+        self.dip_mom_nuc = np.einsum('i,ix->x', charges, coords)
 
     compute_amplitudes = uadc_amplitudes.compute_amplitudes
     compute_energy = uadc_amplitudes.compute_energy

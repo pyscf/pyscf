@@ -1227,9 +1227,8 @@ To enable the solvent model for CASSCF, the following code needs to be called
             if 'mo_energy' in envs:
                 mo_energy = envs['mo_energy']
 
-        chkfile.dump_mcscf(self, chk_file, 'mcscf', e_tot,
-                           mo_coeff, ncore, self.ncas, mo_occ,
-                           mo_energy, e_cas, civec, casdm1,
+        chkfile.dump_mcscf(self, chkfile=chk_file, e_tot=e_tot, mo_coeff=mo_coeff,
+                           mo_occ=mo_occ, mo_energy=mo_energy, e_cas=e_cas, ci_vector=civec, casdm1=casdm1,
                            overwrite_mol=(envs is None))
         return self
 

@@ -512,6 +512,7 @@ class PCM(lib.StreamObject):
         cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, int3c2e)
         for p0, p1 in lib.prange(0, ngrids, blksize):
             fakemol = gto.fakemol_for_charges(grid_coords[p0:p1], expnt=exponents[p0:p1]**2)
+            fakemol.cart = mol.cart
             v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s1', cintopt=cintopt)
             for i in range(nset):
                 v_grids_e[i,p0:p1] = numpy.einsum('ijL,ij->L',v_nj, dms[i])
@@ -534,6 +535,7 @@ class PCM(lib.StreamObject):
         cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, int3c2e)
         for p0, p1 in lib.prange(0, ngrids, blksize):
             fakemol = gto.fakemol_for_charges(grid_coords[p0:p1], expnt=exponents[p0:p1]**2)
+            fakemol.cart = mol.cart
             v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s1', cintopt=cintopt)
             for i in range(nset):
                 vmat[i] += -numpy.einsum('ijL,L->ij', v_nj, q[i,p0:p1])
