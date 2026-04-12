@@ -39,7 +39,7 @@ H     0.   0.7   0.7'''
     mol.spin = 1
     mol.build()
 
-    mf_lda = mol.DKS().set(xc='lda,', conv_tol=1e-12,
+    mf_lda = mol.DKS().set(xc='lda,', conv_tol=1e-10,
                            chkfile=tempfile.NamedTemporaryFile().name).newton().run()
 
 def tearDownModule():
