@@ -337,6 +337,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mc.e_tot, -108.85974001740854, 7)
         mc.analyze()
 
+        mc = mcscf.CASSCF(mol.RHF(), 4, 4)
+        mc.kernel()
+        self.assertAlmostEqual(mc.e_tot, -108.85974001740854, 7)
+
 
 if __name__ == "__main__":
     print("Full Tests for mc1step")

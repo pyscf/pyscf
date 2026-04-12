@@ -456,6 +456,9 @@ class WithSolventGrad:
         return to_gpu(self, self.base.to_gpu().Gradients())
 
     def kernel(self, *args, dm=None, atmlst=None, **kwargs):
+        logger.debug(self, 'Compute gradients from solutes')
+        self.de_solute = super().kernel(*args, **kwargs)
+
         if dm is None:
             dm = self.base.make_rdm1(ao_repr=True)
         if dm.ndim == 3:
@@ -463,8 +466,6 @@ class WithSolventGrad:
 
         logger.debug(self, 'Compute gradients from solvents')
         self.de_solvent = self.base.with_solvent.grad(dm)
-        logger.debug(self, 'Compute gradients from solutes')
-        self.de_solute = super().kernel(*args, **kwargs)
         self.de = self.de_solute + self.de_solvent
 
         if self.verbose >= logger.NOTE:

@@ -249,6 +249,12 @@ class KnownValues(unittest.TestCase):
         mc = mcscf.casci_symm.CASCI(mf, 4, 4).run()
         self.assertAlmostEqual(mc.e_tot, -108.83741684447352, 7)
 
+    def test_casci_without_initializing_scf(self):
+        mc = mol.RHF().CASCI(4, 4)
+        mc.kernel()
+        self.assertAlmostEqual(mc.e_tot, -108.83741684447352, 7)
+        mc.analyze()
+
 if __name__ == "__main__":
     print("Full Tests for CASCI")
     unittest.main()

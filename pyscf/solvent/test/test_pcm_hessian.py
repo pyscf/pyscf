@@ -15,6 +15,7 @@
 
 import unittest
 import numpy as np
+from pyscf import lib
 from pyscf import gto
 from pyscf import dft
 from pyscf.solvent import pcm
@@ -267,6 +268,11 @@ class KnownValues(unittest.TestCase):
         ref_grad_vmat = _fd_hess_contribution(hobj.base.with_solvent, dm, grad_solver)
 
         np.testing.assert_allclose(ref_grad_vmat, test_grad_vmat, atol = 1e-10)
+
+    def test_hess_lazy_run(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='631g', verbose=0)
+        h = mol.RHF().PCM().Hessian().run()
+        assert abs(lib.fp(h.de) - -0.01814426203830097) < 1e-6
 
     def test_iswig_hessian(self):
         mol = gto.M(
