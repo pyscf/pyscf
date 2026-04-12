@@ -1140,7 +1140,7 @@ class CASCI(CASBase):
         .e_tot, .e_cas, .ci, .mo_coeff, .mo_energy
         '''
         if mo_coeff is None:
-            if self.mo_coeff is None and mf.mol.nelectron > 0:
+            if self.mo_coeff is None and self._scf.mol.nelectron > 0:
                 self._scf.run()
                 self.mo_coeff = self._scf.mo_coeff
             mo_coeff = self.mo_coeff
