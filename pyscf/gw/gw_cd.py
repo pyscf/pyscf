@@ -54,11 +54,8 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
         A list :  converged, mo_energy, mo_coeff
     '''
     mf = gw._scf
-    if gw.frozen is None:
-        frozen = 0
-    else:
-        frozen = gw.frozen
-    assert frozen == 0
+    assert gw.frozen is None or gw.nmo == gw.mo_occ.size, \
+            'frozen orbitals not supported'
 
     if Lpq is None:
         Lpq = gw.ao2mo(mo_coeff)
@@ -271,9 +268,6 @@ class GWCD(lib.StreamObject):
         self.max_memory = mf.max_memory
 
         self.frozen = frozen
-        #TODO: implement frozen orbs
-        if not (self.frozen is None or self.frozen == 0):
-            raise NotImplementedError
 
         # DF-GW must use density fitting integrals
         if getattr(mf, 'with_df', None):
