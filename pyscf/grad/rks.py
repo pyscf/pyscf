@@ -483,6 +483,29 @@ def grids_response_cc(grids):
 
     fadjust, gadjust = _radii_adjust(mol, grids.atomic_radii)
 
+    def get_smooth_function_derivative(mu):
+        if grids.becke_scheme == gen_grid.original_becke:
+            p0 = mu
+            p1 = (3 - p0**2) * p0 * .5
+            p2 = (3 - p1**2) * p1 * .5
+            p3 = (3 - p2**2) * p2 * .5
+            t_uab = 27./8. * (1-p2**2) * (1-p1**2) * (1-p0**2)
+            return p3, t_uab
+        elif grids.becke_scheme == gen_grid.stratmann:
+            a = .64
+            ma = mu/a
+            ma2 = ma * ma
+            g1 = (1/16.)*(ma*(35 + ma2*(-35 + ma2*(21 - 5 *ma2))))
+            g1[mu<=-a] = -1
+            g1[mu>= a] =  1
+
+            t_uab = (35.0/16.0 / a) * (1.0 - ma2 * (3.0 - ma2 * (3.0 - ma2)))
+            t_uab[mu<=-a] = 0
+            t_uab[mu>= a] = 0
+            return g1, t_uab
+        else:
+            raise NotImplementedError(f"Grid response for becke_scheme = {grids.becke_scheme} is not implemented")
+
     def gen_grid_partition(coords, atom_id):
         ngrids = coords.shape[0]
         grid_dist = []
@@ -505,14 +528,12 @@ def grids_response_cc(grids):
         for ia in range(mol.natm):
             for ib in range(ia):
                 g = 1/atm_dist[ia,ib] * (grid_dist[ia]-grid_dist[ib])
-                p0 = fadjust(ia, ib, g)
-                p1 = (3 - p0**2) * p0 * .5
-                p2 = (3 - p1**2) * p1 * .5
-                p3 = (3 - p2**2) * p2 * .5
-                t_uab = 27./16 * (1-p2**2) * (1-p1**2) * (1-p0**2) * gadjust(ia, ib, g)
+                g_radii_adjusted = fadjust(ia, ib, g)
+                smoothed, t_uab = get_smooth_function_derivative(g_radii_adjusted)
+                t_uab *= 0.5 * gadjust(ia, ib, g)
 
-                s_uab = .5 * (1 - p3 + 1e-200)
-                s_uba = .5 * (1 + p3 + 1e-200)
+                s_uab = .5 * (1 - smoothed + 1e-200)
+                s_uba = .5 * (1 + smoothed + 1e-200)
                 pbecke[ia] *= s_uab
                 pbecke[ib] *= s_uba
                 pt_uab =-t_uab / s_uab
@@ -563,7 +584,6 @@ def grids_response_cc(grids):
 
 def grids_noresponse_cc(grids):
     # same as above but without the response, for nlc grids response routine
-    assert grids.becke_scheme == gen_grid.original_becke
     mol = grids.mol
     atom_grids_tab = grids.gen_atomic_grids(mol, grids.atom_grid,
                                             grids.radi_method,

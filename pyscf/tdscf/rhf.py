@@ -1161,7 +1161,8 @@ class TDHF(TDBase):
 
     Attributes:
         conv_tol : float
-            Diagonalization convergence tolerance.  Default is 1e-4.
+            Abosolute accuracy for eigenvalues in Davidson diagonalization.
+            Default is 1e-5.
         nstates : int
             Number of TD states to be computed. Default is 3.
 

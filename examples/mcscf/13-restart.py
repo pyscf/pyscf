@@ -48,3 +48,9 @@ mol.build()
 mc = mcscf.CASSCF(scf.RHF(mol), 6, 6)
 mo = lib.chkfile.load(tmpchk.name, 'mcscf/mo_coeff')
 mc.kernel(mo)
+
+# Assuming you lose all memory about the previous calculation.
+# Restart the calculation with chkfile only.
+mol, mcdata = mcscf.chkfile.load_mcscf(tmpchk.name)
+mc = mcscf.CASSCF(mol, mcdata['ncas'], mcdata['nelecas']).update_from_chk(tmpchk.name)
+mc.kernel()
