@@ -788,7 +788,7 @@ class TDBase(lib.StreamObject):
         self.verbose = mf.verbose
         self.stdout = mf.stdout
         self.mol = mf.mol
-        if mf.mo_coeff is None:
+        if mf.mo_coeff is None and mf.mol.nelectron > 0:
             mf.run()
         self._scf = mf
         self.max_memory = mf.max_memory
@@ -1010,10 +1010,6 @@ class TDA(TDBase):
         '''TDA diagonalization solver
         '''
         cpu0 = (logger.process_clock(), logger.perf_counter())
-        mf = self._scf
-        if mf.mo_energy is None:
-            mf.run()
-
         self.check_sanity()
         self.dump_flags()
         if nstates is None:

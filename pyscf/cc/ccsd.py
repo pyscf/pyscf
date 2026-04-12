@@ -955,7 +955,7 @@ class CCSDBase(lib.StreamObject):
 
         if mo_coeff is None:
             mo_coeff = mf.mo_coeff
-            if mo_coeff is None:
+            if mo_coeff is None and mf.mol.nelectron > 0:
                 mf.run()
                 mo_coeff = mf.mo_coeff
         if mo_occ is None: mo_occ = mf.mo_occ
