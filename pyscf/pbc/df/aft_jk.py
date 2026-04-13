@@ -155,10 +155,14 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
 
     aosym = 's1'
     kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
-    if nkpts != np.prod(kmesh):
-        logger.warn(
-            mydf, 'Input kpts differ from the kpts attribute stored in the FFTDF '
-            'instance. The instance value will be ignored.')
+    exx_kmesh = kmesh
+    if nkpts != np.prod(kmesh) and exxdiv:
+        log.warn(
+            f'Inconsistent k-point configuration: nkpts {nkpts} from the density '
+            f'matrix does not match the BvK mesh {exx_kmesh}. The input kpts '
+            'likely represent only a subset of the full BvK mesh. Finite-size '
+            'correction for the kpts subset is not well defined.')
+        exx_kmesh = None
 
     rcut = ft_ao.estimate_rcut(cell)
     supmol = ft_ao.ExtendedMole.from_cell(cell, kmesh, rcut.max())
@@ -271,7 +275,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
 
     for group_id, (kpt, ki_idx, kj_idx, self_conj) \
             in enumerate(kk_adapted_iter(cell, kpts)):
-        vkcoulG = mydf.weighted_coulG(kpt, exxdiv, mesh, kmesh=kmesh)
+        vkcoulG = mydf.weighted_coulG(kpt, exxdiv, mesh, kmesh=exx_kmesh)
         for p0, p1 in lib.prange(0, ngrids, Gblksize):
             log.debug3('update_vk [%s:%s]', p0, p1)
             Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt, out=buf)
@@ -308,12 +312,6 @@ def get_k_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
 
-    kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
-    if nkpts != np.prod(kmesh):
-        logger.warn(
-            mydf, 'Input kpts differ from the kpts attribute stored in the FFTDF '
-            'instance. The instance value will be ignored.')
-
     swap_2e = (kpts_band is None)
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     nband = len(kpts_band)
@@ -347,7 +345,7 @@ def get_k_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
         #bufR = numpy.empty((blksize*nao**2))
         #bufI = numpy.empty((blksize*nao**2))
         # Use DF object to mimic KRHF/KUHF object in function get_coulG
-        vkcoulG = mydf.weighted_coulG(kpt, exxdiv, mesh, kmesh=kmesh)
+        vkcoulG = mydf.weighted_coulG(kpt, exxdiv, mesh)
         weight = 1./len(kpts)
         perm_sym = swap_2e and not is_zero(kpt)
         for Gpq, p0, p1 in mydf.ft_loop(mesh, kpt, kpts, max_memory=max_memory1,

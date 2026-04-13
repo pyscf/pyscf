@@ -323,10 +323,14 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
     nset, nkpts, nao = dms.shape[:3]
 
     kmesh = kpts_to_kmesh(cell, kpts)
-    if nkpts != np.prod(kmesh):
-        logger.warn(
-            mydf, 'Input kpts differ from the kpts attribute stored in the FFTDF '
-            'instance. The instance value will be ignored.')
+    exx_kmesh = kmesh
+    if nkpts != np.prod(kmesh) and not exxdiv:
+        log.warn(
+            f'Inconsistent k-point configuration: nkpts {nkpts} from the density '
+            f'matrix does not match the BvK mesh {exx_kmesh}. The input kpts '
+            'likely represent only a subset of the full BvK mesh. Finite-size '
+            'correction for the kpts subset is not well defined.')
+        exx_kmesh = None
 
     weight = 1./nkpts * (cell.vol/ngrids)
 
@@ -379,7 +383,7 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
         for k1, ao1T in enumerate(ao1_kpts):
             kpt1 = kpts_band[k1]
 
-            coulG = tools.get_coulG(cell, kpt2-kpt1, exxdiv, mesh=mesh, kmesh=kmesh)
+            coulG = tools.get_coulG(cell, kpt2-kpt1, exxdiv, mesh=mesh, kmesh=exx_kmesh)
             if is_zero(kpt1-kpt2):
                 expmikr = np.array(1.)
             else:
