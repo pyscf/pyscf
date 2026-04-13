@@ -282,21 +282,21 @@ def get_nmo(mp, per_kpoint=False):
     if mp._nmo is not None:
         return mp._nmo
 
-    nmo = [0, 0]
-    if isinstance(mp.frozen, (int, np.integer)):
-        for spin in [0,1]:
-            nmo[spin] = [len(mp.mo_occ[spin][k]) - mp.frozen for k in range(mp.nkpts)]
+    if hasattr(mp, 'mo_energy') and mp.mo_energy is not None:
+        from pyscf.pbc.scf.hf import INVALID_ORBITAL_ENERGY
+        nmo = np.count_nonzero(mp.mo_energy != INVALID_ORBITAL_ENERGY, axis=2)
+    else:
+        nmo = np.full((2, mp.nkpts), mp.mo_occ.shape[2], dtype=int)
 
-    elif mp.frozen is None:
-        nmo = [[len(mp.mo_occ[0][k]) for k in range(mp.nkpts)],
-               [len(mp.mo_occ[1][k]) for k in range(mp.nkpts)]]
-
+    if mp.frozen is None:
+        pass
+    elif isinstance(mp.frozen, (int, np.integer)):
+        nmo = nmo - mp.frozen
     elif (_is_arraylike(mp.frozen[0]) and
           isinstance(mp.frozen[0][0], (int, np.integer))):  # case example: ([0, 4], [0, 5, 6])
         assert (len(mp.frozen) == 2)
-        for spin in [0,1]:
-            [_frozen_sanity_check(mp.frozen[spin], mp.mo_occ[spin][ikpt], ikpt) for ikpt in range(mp.nkpts)]
-            nmo[spin] = [len(mp.mo_occ[spin][ikpt]) - len(mp.frozen[spin]) for ikpt in range(mp.nkpts)]
+        nmo[0] -= len(mp.frozen[0])
+        nmo[1] -= len(mp.frozen[1])
 
     elif (_is_arraylike(mp.frozen[0]) and
           isinstance(mp.frozen[0][0], (list, np.ndarray))):  # case example: ([[0,],[]], [[0,1],[4]])
@@ -307,26 +307,27 @@ def get_nmo(mp, per_kpoint=False):
                 raise RuntimeError('Frozen list has a different number of k-points (length) than passed in'
                                    'mean-field/correlated calculation.  \n\nCalculation nkpts = %d, frozen'
                                    'list = %s (length = %d)' % (mp.nkpts, mp.frozen, nkpts))
-        for spin in [0,1]:
-            [_frozen_sanity_check(mp.frozen[spin][ikpt], mp.mo_occ[spin][ikpt], ikpt) for ikpt in range(mp.nkpts)]
-            nmo[spin] = [len(mp.mo_occ[spin][ikpt]) - len(mp.frozen[spin][ikpt]) for ikpt in range(nkpts)]
+        nmo[0] = np.array([n - len(c) for n, c in zip(nmo[0], mp.frozen[0])])
+        nmo[1] = np.array([n - len(c) for n, c in zip(nmo[1], mp.frozen[1])])
 
     else:
         raise NotImplementedError('No known conversion for frozen %s' % mp.frozen)
 
     for spin in [0,1]:
-        assert all(np.array(nmo[spin]) > 0), (
+        assert all(nmo[spin] > 0), (
             'Must have a positive number of orbitals! (spin=%d)'
-            '\n\nnmo %s\nfrozen %s\nmo_occ %s' % (spin, nmo, mp.frozen, mp.mo_occ))
+            '\n\nnmo %s\nfrozen %s\nmo_occ %s' % (spin, nmo[spin], mp.frozen, mp.mo_occ))
 
-    nmoa, nmob = nmo
-    if not per_kpoint:
+    if per_kpoint:
+        nmoa, nmob = nmo.tolist()
+    else:
+        nmoa, nmob = nmo
         # Depending on whether there are more occupied bands, we want to make sure    that
         # nmo has enough room for max(nocc) + max(nvir) number of orbitals for        occupied
         # and virtual space
         nocca, noccb = mp.get_nocc(per_kpoint=True)
-        nmoa = np.amax(nocca) + np.max(np.array(nmoa) - np.array(nocca))
-        nmob = np.amax(noccb) + np.max(np.array(nmob) - np.array(noccb))
+        nmoa = np.amax(nocca) + np.max(nmoa - np.array(nocca))
+        nmob = np.amax(noccb) + np.max(nmob - np.array(noccb))
 
     return nmoa, nmob
 

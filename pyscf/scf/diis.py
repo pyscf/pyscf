@@ -110,8 +110,8 @@ def get_err_vec_orth(s, d, f, Corth):
 
     elif f.ndim == s.ndim+1 and f.shape[0] == 2:  # for UHF
         errvec = numpy.hstack([
-            get_err_vec_orth(s, d[0], f[0], Corth[0]).ravel(),
-            get_err_vec_orth(s, d[1], f[1], Corth[1]).ravel()])
+            get_err_vec_orth(s, d[0], f[0], Corth).ravel(),
+            get_err_vec_orth(s, d[1], f[1], Corth).ravel()])
     else:
         raise RuntimeError('Unknown SCF DIIS type')
     return errvec

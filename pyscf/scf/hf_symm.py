@@ -446,6 +446,12 @@ class SymAdaptedRHF(hf.RHF):
         if mol is None: mol = self.mol
         if not mol.symmetry:
             raise RuntimeError('mol.symmetry not enabled')
+        if self.remove_linear_dep:
+            raise NotImplementedError
+            e, v = scipy.linalg.eigh(s1e)
+            mask = e > self.overlap_zero_eigenvalue_threshold
+            x = v[:,mask] / numpy.sqrt(e[mask])
+            self.overlap_canonical_decomposed_x = x
         check_irrep_nelec(mol, self.irrep_nelec, self.mol.nelectron)
         return hf.RHF.build(self, mol)
 

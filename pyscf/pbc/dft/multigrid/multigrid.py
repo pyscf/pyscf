@@ -181,7 +181,7 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
             if getattr(kpts, 'ndim', None) == 2:
                 mat = mat[None,:]
         else:
-            mat = make_mat(wv)
+            mat = np.asarray(make_mat(wv), dtype=np.complex128)
             expkL = numpy.exp(1j*kpts.reshape(-1,3).dot(Ls.T))
             mat = lib.einsum('kr,rcij->kcij', expkL, mat)
             if hermi == 1:

@@ -49,8 +49,7 @@ def make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs):
     Returns:
         dm_kpts : (2, nkpts, nao, nao) ndarray
     '''
-    nkpts = len(mo_occ_kpts[0])
-    nao, nmo = mo_coeff_kpts[0][0].shape
+    nkpts, nao, nmo = mo_coeff_kpts.shape[1:]
     def make_dm(mos, occs):
         return [np.dot(mos[k]*occs[k], mos[k].T.conj()) for k in range(nkpts)]
     dm_kpts =(make_dm(mo_coeff_kpts[0], mo_occ_kpts[0]) +
@@ -109,8 +108,8 @@ def get_fermi(mf, mo_energy_kpts=None, mo_occ_kpts=None):
     if mo_occ_kpts is None: mo_occ_kpts = mf.mo_occ
 
     # mo_energy_kpts and mo_occ_kpts are k-point UHF quantities
-    assert (mo_energy_kpts[0][0].ndim == 1)
-    assert (mo_occ_kpts[0][0].ndim == 1)
+    assert mo_energy_kpts.ndim == 3
+    assert mo_occ_kpts.ndim == 3
 
     nocca = sum(mo_occ.sum() for mo_occ in mo_occ_kpts[0])
     noccb = sum(mo_occ.sum() for mo_occ in mo_occ_kpts[1])
@@ -122,12 +121,12 @@ def get_fermi(mf, mo_energy_kpts=None, mo_occ_kpts=None):
     fermi_b = np.sort(np.hstack(mo_energy_kpts[1]))[noccb-1]
 
     for k, mo_e in enumerate(mo_energy_kpts[0]):
-        mo_occ = mo_occ_kpts[0][k]
+        mo_occ = mo_occ_kpts[0,k]
         if mo_occ[mo_e > fermi_a].sum() > 0.5:
             logger.warn(mf, 'Alpha occupied band above Fermi level: \n'
                         'k=%d, mo_e=%s, mo_occ=%s', k, mo_e, mo_occ)
     for k, mo_e in enumerate(mo_energy_kpts[1]):
-        mo_occ = mo_occ_kpts[1][k]
+        mo_occ = mo_occ_kpts[1,k]
         if mo_occ[mo_e > fermi_b].sum() > 0.5:
             logger.warn(mf, 'Beta occupied band above Fermi level: \n'
                         'k=%d, mo_e=%s, mo_occ=%s', k, mo_e, mo_occ)
@@ -142,61 +141,57 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
 
     nocc_a, nocc_b = mf.nelec
-    mo_energy = np.sort(np.hstack(mo_energy_kpts[0]))
+    mo_energy = np.sort(mo_energy_kpts[0].ravel())
     nmo = mo_energy.size
     if nocc_a > nmo:
         raise RuntimeError('Failed to assign alpha occupancies. '
                            f'Nocc_a ({nocc_a}) > Nmo ({nmo})')
     fermi_a = mo_energy[nocc_a-1]
-    mo_occ_kpts = [[], []]
-    for mo_e in mo_energy_kpts[0]:
-        mo_occ_kpts[0].append((mo_e <= fermi_a).astype(np.double))
-    if nocc_a < nmo:
-        logger.info(mf, 'alpha HOMO = %.12g  LUMO = %.12g', fermi_a, mo_energy[nocc_a])
-    else:
-        logger.info(mf, 'alpha HOMO = %.12g  (no LUMO because of small basis) ', fermi_a)
-
     if nocc_b > 0:
-        mo_energy = np.sort(np.hstack(mo_energy_kpts[1]))
+        mo_energy = np.sort(mo_energy_kpts[1].ravel())
         nmo = mo_energy.size
         if nocc_b > nmo:
             raise RuntimeError('Failed to assign beta occupancies. '
                                f'Nocc_b ({nocc_b}) > Nmo ({nmo})')
         fermi_b = mo_energy[nocc_b-1]
-        for mo_e in mo_energy_kpts[1]:
-            mo_occ_kpts[1].append((mo_e <= fermi_b).astype(np.double))
-        if nocc_b < nmo:
-            logger.info(mf, 'beta HOMO = %.12g  LUMO = %.12g', fermi_b, mo_energy[nocc_b])
-        else:
-            logger.info(mf, 'beta HOMO = %.12g  (no LUMO because of small basis) ', fermi_b)
     else:
-        for mo_e in mo_energy_kpts[1]:
-            mo_occ_kpts[1].append(np.zeros_like(mo_e))
+        fermi_b = -np.inf
+    fermi = np.array([fermi_a, fermi_b])
+    mo_occ_kpts = (mo_energy_kpts <= fermi[:,None,None]).astype(np.double)
+
+    if nocc_a < len(mo_energy):
+        logger.info(mf, 'alpha HOMO = %.12g  LUMO = %.12g', fermi_a, mo_energy[nocc_a])
+    else:
+        logger.info(mf, 'alpha HOMO = %.12g  (no LUMO because of small basis) ', fermi_a)
+    if 0 < nocc_b < len(mo_energy):
+        logger.info(mf, 'beta HOMO = %.12g  LUMO = %.12g', fermi_b, mo_energy[nocc_b])
+    elif 0 < nocc_b:
+        logger.info(mf, 'beta HOMO = %.12g  (no LUMO because of small basis) ', fermi_b)
 
     if mf.verbose >= logger.DEBUG:
         np.set_printoptions(threshold=len(mo_energy))
         logger.debug(mf, '     k-point                  alpha mo_energy')
         for k,kpt in enumerate(mf.cell.get_scaled_kpts(mf.kpts)):
-            if (np.count_nonzero(mo_occ_kpts[0][k]) > 0 and
-                np.count_nonzero(mo_occ_kpts[0][k] == 0) > 0):
+            if (np.count_nonzero(mo_occ_kpts[0,k]) > 0 and
+                np.count_nonzero(mo_occ_kpts[0,k] == 0) > 0):
                 logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
                              k, kpt[0], kpt[1], kpt[2],
-                             mo_energy_kpts[0][k][mo_occ_kpts[0][k]> 0],
-                             mo_energy_kpts[0][k][mo_occ_kpts[0][k]==0])
+                             mo_energy_kpts[0,k][mo_occ_kpts[0,k]> 0],
+                             mo_energy_kpts[0,k][mo_occ_kpts[0,k]==0])
             else:
                 logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s',
-                             k, kpt[0], kpt[1], kpt[2], mo_energy_kpts[0][k])
+                             k, kpt[0], kpt[1], kpt[2], mo_energy_kpts[0,k])
         logger.debug(mf, '     k-point                  beta  mo_energy')
         for k,kpt in enumerate(mf.cell.get_scaled_kpts(mf.kpts)):
-            if (np.count_nonzero(mo_occ_kpts[1][k]) > 0 and
-                np.count_nonzero(mo_occ_kpts[1][k] == 0) > 0):
+            if (np.count_nonzero(mo_occ_kpts[1,k]) > 0 and
+                np.count_nonzero(mo_occ_kpts[1,k] == 0) > 0):
                 logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
                              k, kpt[0], kpt[1], kpt[2],
-                             mo_energy_kpts[1][k][mo_occ_kpts[1][k]> 0],
-                             mo_energy_kpts[1][k][mo_occ_kpts[1][k]==0])
+                             mo_energy_kpts[1,k][mo_occ_kpts[1,k]> 0],
+                             mo_energy_kpts[1,k][mo_occ_kpts[1,k]==0])
             else:
                 logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s',
-                             k, kpt[0], kpt[1], kpt[2], mo_energy_kpts[1][k])
+                             k, kpt[0], kpt[1], kpt[2], mo_energy_kpts[1,k])
         np.set_printoptions(threshold=1000)
 
     return mo_occ_kpts
@@ -279,35 +274,10 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
     if fock is None:
         dm = mf.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
         fock = mf.get_fock(dm=dm)
-
-    def eig_(fock, mo_coeff, idx, es, cs):
-        if np.count_nonzero(idx) > 0:
-            orb = mo_coeff[:,idx]
-            f1 = reduce(np.dot, (orb.T.conj(), fock, orb))
-            e, c = scipy.linalg.eigh(f1)
-            es[idx] = e
-            cs[:,idx] = np.dot(orb, c)
-
-    mo_coeff = [[], []]
-    mo_energy = [[], []]
-    for k, mo in enumerate(mo_coeff_kpts[0]):
-        mo1 = np.empty_like(mo)
-        mo_e = np.empty_like(mo_occ_kpts[0][k])
-        occidxa = mo_occ_kpts[0][k] == 1
-        viridxa = ~occidxa
-        eig_(fock[0][k], mo, occidxa, mo_e, mo1)
-        eig_(fock[0][k], mo, viridxa, mo_e, mo1)
-        mo_coeff[0].append(mo1)
-        mo_energy[0].append(mo_e)
-    for k, mo in enumerate(mo_coeff_kpts[1]):
-        mo1 = np.empty_like(mo)
-        mo_e = np.empty_like(mo_occ_kpts[1][k])
-        occidxb = mo_occ_kpts[1][k] == 1
-        viridxb = ~occidxb
-        eig_(fock[1][k], mo, occidxb, mo_e, mo1)
-        eig_(fock[1][k], mo, viridxb, mo_e, mo1)
-        mo_coeff[1].append(mo1)
-        mo_energy[1].append(mo_e)
+    ea, ca = khf.canonicalize(mf, mo_coeff_kpts[0], mo_occ_kpts[0], fock[0])
+    eb, cb = khf.canonicalize(mf, mo_coeff_kpts[1], mo_occ_kpts[1], fock[1])
+    mo_energy = np.stack([ea, eb])
+    mo_coeff = np.stack([ca, cb])
     return mo_energy, mo_coeff
 
 def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
@@ -505,16 +475,16 @@ class KUHF(khf.KSCF):
             return g.ravel()
 
         nkpts = len(mo_occ_kpts[0])
-        grad_kpts = [grad(mo_coeff_kpts[0][k], mo_occ_kpts[0][k], fock[0][k])
+        grad_kpts = [grad(mo_coeff_kpts[0,k], mo_occ_kpts[0,k], fock[0,k])
                      for k in range(nkpts)]
-        grad_kpts+= [grad(mo_coeff_kpts[1][k], mo_occ_kpts[1][k], fock[1][k])
+        grad_kpts+= [grad(mo_coeff_kpts[1,k], mo_occ_kpts[1,k], fock[1,k])
                      for k in range(nkpts)]
         return np.hstack(grad_kpts)
 
-    def eig(self, h_kpts, s_kpts):
-        e_a, c_a = khf.KSCF.eig(self, h_kpts[0], s_kpts)
-        e_b, c_b = khf.KSCF.eig(self, h_kpts[1], s_kpts)
-        return (e_a,e_b), (c_a,c_b)
+    def eig(self, h_kpts, s_kpts, overwrite=False, x=None):
+        e_a, c_a = khf.KSCF.eig(self, h_kpts[0], s_kpts, x=x)
+        e_b, c_b = khf.KSCF.eig(self, h_kpts[1], s_kpts, overwrite, x)
+        return np.array((e_a,e_b)), np.array((c_a,c_b))
 
     def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None, **kwargs):
         if mo_coeff_kpts is None: mo_coeff_kpts = self.mo_coeff
@@ -594,8 +564,8 @@ class KUHF(khf.KSCF):
         '''
         nkpts = len(self.kpts)
         if mo_coeff is None:
-            mo_a = [self.mo_coeff[0][k][:,self.mo_occ[0][k]>0] for k in range(nkpts)]
-            mo_b = [self.mo_coeff[1][k][:,self.mo_occ[1][k]>0] for k in range(nkpts)]
+            mo_a = [self.mo_coeff[0,k][:,self.mo_occ[0,k]>0] for k in range(nkpts)]
+            mo_b = [self.mo_coeff[1,k][:,self.mo_occ[1,k]>0] for k in range(nkpts)]
         else:
             mo_a, mo_b = mo_coeff
         if s is None:

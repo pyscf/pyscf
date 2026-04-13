@@ -810,10 +810,14 @@ class UHF(hf.SCF):
         hf.SCF.dump_flags(self, verbose)
         logger.info(self, 'number electrons alpha = %d  beta = %d', *self.nelec)
 
-    def eig(self, fock, s):
-        e_a, c_a = self._eigh(fock[0], s)
-        e_b, c_b = self._eigh(fock[1], s)
-        return numpy.array((e_a,e_b)), numpy.array((c_a,c_b))
+    def eig(self, fock, s, overwrite=False, x=None):
+        e_a, c_a = self._eigh(fock[0], s, x=x)
+        e_b, c_b = self._eigh(fock[1], s, overwrite, x)
+        nao, nmo = c_a.shape
+        c = numpy.empty((2, nmo, nao), dtype=c_a.dtype).transpose(0,2,1)
+        c[0] = c_a
+        c[1] = c_b
+        return numpy.stack((e_a,e_b)), c
 
     get_fock = get_fock
 
