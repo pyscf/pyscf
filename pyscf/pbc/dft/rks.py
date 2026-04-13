@@ -122,17 +122,9 @@ def _patch_df_beckegrids(density_fit):
 
 NELEC_ERROR_TOL = getattr(__config__, 'pbc_dft_rks_prune_error_tol', 0.02)
 def prune_small_rho_grids_(ks, cell, dm, grids, kpts):
+    threshold = ks.small_rho_cutoff
     rho = ks.get_rho(dm, grids, kpts)
-    n = numpy.dot(rho, grids.weights)
-    if abs(n-cell.nelectron) < NELEC_ERROR_TOL*n:
-        rho *= grids.weights
-        idx = abs(rho) > ks.small_rho_cutoff / grids.weights.size
-        logger.debug(ks, 'Drop grids %d',
-                     grids.weights.size - numpy.count_nonzero(idx))
-        grids.coords  = numpy.asarray(grids.coords [idx], order='C')
-        grids.weights = numpy.asarray(grids.weights[idx], order='C')
-        grids.non0tab = grids.make_mask(cell, grids.coords)
-    return grids
+    return grids.prune_by_density_(rho, threshold)
 
 @lib.with_doc(pbchf.get_rho.__doc__)
 def get_rho(mf, dm=None, grids=None, kpt=None):
@@ -258,7 +250,7 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
 
     _keys = {'xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'}
     # Use rho to filter grids
-    small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
+    small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff', 0)
 
     get_rho = get_rho
 
@@ -371,6 +363,9 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
 
     def initialize_grids(self, cell, dm, kpts, ground_state=True):
         '''Initialize self.grids the first time call get_veff'''
+        if isinstance(self.grids, gen_grid.UniformGrids):
+            return self
+
         if self.grids.coords is None:
             t0 = (logger.process_clock(), logger.perf_counter())
             self.grids.build(with_non0tab=True)
