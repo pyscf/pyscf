@@ -993,7 +993,6 @@ def _get_mgga_pass2(mydf, wv_freq, hermi=1, kpts=numpy.zeros((1,3)), verbose=Non
     log = logger.new_logger(mydf, verbose)
     cell = mydf.cell
     nkpts = len(kpts)
-    nao = cell.nao_nr()
     nx, ny, nz = mydf.mesh
     wv_freq = wv_freq.reshape(-1, 5, nx, ny, nz)
     nset = wv_freq.shape[0]
@@ -1036,7 +1035,6 @@ def _get_mgga_pass2(mydf, wv_freq, hermi=1, kpts=numpy.zeros((1,3)), verbose=Non
             naoh = len(idx_h)
         else:
             idx_l = grids_sparse.ao_idx
-            idx_t = numpy.append(idx_h, idx_l)
             naoh = len(idx_h)
             l_cell = grids_sparse.cell
             l_pcell, l_coeff = l_cell.decontract_basis(to_cart=True, aggregate=True)
@@ -1303,7 +1301,6 @@ def nr_rks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
         deriv = 1
     elif xctype == 'MGGA':
         deriv = 2 if MGGA_DENSITY_LAPL else 1
-        
 
     if fxc is None:
         fxc = cache_xc_kernel1(mydf, xc_code, dm0, spin=0, kpts=kpts)[2]
@@ -1381,7 +1378,6 @@ def nr_uks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
         deriv = 1
     elif xctype == 'MGGA':
         deriv = 2 if MGGA_DENSITY_LAPL else 1
-        
 
     if fxc is None:
         fxc = cache_xc_kernel1(mydf, xc_code, dm0, spin=1, kpts=kpts)[2]
