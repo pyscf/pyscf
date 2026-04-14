@@ -329,61 +329,18 @@ class SymAdaptedUHF(uhf.UHF):
         hf_symm.check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
         return uhf.UHF.build(self, mol)
 
-    def eig(self, h, s):
-        mol = self.mol
-        nirrep = mol.symm_orb.__len__()
-        s = symm.symmetrize_matrix(s, mol.symm_orb)
-        ha = symm.symmetrize_matrix(h[0], mol.symm_orb)
-        hb = symm.symmetrize_matrix(h[1], mol.symm_orb)
-        cs_b = []
-        cs_a = []
-        es_b = []
-        es_a = []
-        orbsym_a = []
-        orbsym_b = []
-        if mol.groupname in ('Dooh', 'Coov'):
-            for ir in range(nirrep):
-                irrep_id = mol.irrep_id[ir]
-                irrep_1d = irrep_id in (0, 1, 4, 5)
-                irrep_2dx = irrep_id % 2 == 0
-                if irrep_1d or irrep_2dx:
-                    ea, ca = self._eigh(ha[ir], s[ir])
-                    eb, cb = self._eigh(hb[ir], s[ir])
-                    cs_a.append(ca)
-                    cs_b.append(cb)
-                    es_a.append(ea)
-                    es_b.append(eb)
-                    orbsym_a.append([mol.irrep_id[ir]] * ea.size)
-                    orbsym_b.append([mol.irrep_id[ir]] * eb.size)
+    check_linear_dependency = hf_symm.SymAdaptedRHF.check_linear_dependency
 
-                if not irrep_1d and irrep_2dx:
-                    # force 2D irreps using the same coefficients
-                    irrep_conj = irrep_id ^ 1
-                    assert mol.irrep_id[ir+1] == irrep_conj
-                    cs_a.append(ca)
-                    cs_b.append(cb)
-                    es_a.append(ea)
-                    es_b.append(eb)
-                    orbsym_a.append([irrep_conj] * ea.size)
-                    orbsym_b.append([irrep_conj] * eb.size)
-        else:
-            for ir in range(nirrep):
-                ea, ca = self._eigh(ha[ir], s[ir])
-                eb, cb = self._eigh(hb[ir], s[ir])
-                cs_a.append(ca)
-                cs_b.append(cb)
-                es_a.append(ea)
-                es_b.append(eb)
-                orbsym_a.append([mol.irrep_id[ir]] * ea.size)
-                orbsym_b.append([mol.irrep_id[ir]] * eb.size)
-
-        ea = numpy.hstack(es_a)
-        eb = numpy.hstack(es_b)
-        ca = hf_symm.so2ao_mo_coeff(mol.symm_orb, cs_a)
-        ca = lib.tag_array(ca, orbsym=numpy.hstack(orbsym_a))
-        cb = hf_symm.so2ao_mo_coeff(mol.symm_orb, cs_b)
-        cb = lib.tag_array(cb, orbsym=numpy.hstack(orbsym_b))
-        return numpy.asarray((ea,eb)), (ca,cb)
+    def eig(self, h, s, overwrite=False, x=None, symm_orb=None, irrep_id=None):
+        e_a, c_a = hf_symm.eig(self, h[0], s, False, x, symm_orb, irrep_id)
+        e_b, c_b = hf_symm.eig(self, h[1], s, False, x, symm_orb, irrep_id)
+        orbsym = numpy.stack([c_a.orbsym, c_b.orbsym])
+        nao, nmo = c_a.shape
+        c = numpy.empty((2, nmo, nao), dtype=c_a.dtype).transpose(0,2,1)
+        c[0] = c_a
+        c[1] = c_b
+        c = lib.tag_array(c, orbsym=orbsym)
+        return numpy.stack((e_a,e_b)), c
 
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         g = uhf.UHF.get_grad(self, mo_coeff, mo_occ, fock)

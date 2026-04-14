@@ -293,7 +293,7 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
 
 #TODO: force Dooh, Doov orbitals E1gx/E1gy ... using the same coefficients
 #TODO: force SO3 orbitals p+0,p-1,p+1, ... using the same coefficients
-def eig(mf, h, s, symm_orb=None, irrep_id=None):
+def eig(mf, h, s, overwrite=False, x=None, symm_orb=None, irrep_id=None):
     '''Solve generalized eigenvalue problem, for each irrep.  The
     eigenvalues and eigenvectors are not sorted to ascending order.
     Instead, they are grouped based on irreps.
@@ -304,19 +304,44 @@ def eig(mf, h, s, symm_orb=None, irrep_id=None):
             raise RuntimeError('mol.symmetry not enabled')
         symm_orb = mol.symm_orb
         irrep_id = mol.irrep_id
+    nirrep = len(symm_orb)
+    group_name = getattr(mol, 'groupname', None)
 
-    nirrep = symm_orb.__len__()
+    if x is not None and group_name not in ('Dooh', 'Coov'):
+        orbsym = x.orbsym
+        res = [mf._eigh(h, s, x=x[:,orbsym==irrep_id[ir]])
+               for ir in range(nirrep)]
+        e = numpy.hstack([e for e, c in res])
+        c = numpy.hstack([c for e, c in res])
+        c = lib.tag_array(c, orbsym=numpy.hstack(orbsym))
+        return e, c
+
     h = symm.symmetrize_matrix(h, symm_orb)
     s = symm.symmetrize_matrix(s, symm_orb)
     cs = []
     es = []
     orbsym = []
-    if getattr(mol, 'groupname', None) in ('Dooh', 'Coov'):
+    if group_name in ('Dooh', 'Coov'):
         for ir in range(nirrep):
             irrep_1d = irrep_id[ir] in (0, 1, 4, 5)
             irrep_2dx = irrep_id[ir] % 2 == 0
             if irrep_1d or irrep_2dx:
-                e, c = mf._eigh(h[ir], s[ir])
+                if x is not None:
+                    # For cylindrical symmetry, we want to ensure the strict
+                    # degeneracy between two branches in 2D irreps.
+                    # However, diagonalization in the canonical X bases may
+                    # introduce two eigh calls for the two branches and thereby
+                    # break the degeneracy. Here, we skip the use of X bases,
+                    # just truncate the subspace of each irrep according to the
+                    # dimension of X bases.
+                    nmo = numpy.count_nonzero(x.orbsym == ir)
+                    e, v = scipy.linalg.eigh(s[ir])
+                    x_ir = (v / numpy.sqrt(e))[:,-nmo:]
+                    h_ir = x_ir.conj().T.dot(h).dot(x_ir)
+                    e, c = scipy.linalg.eigh(h_ir)
+                    c = x_ir.dot(c)
+                else:
+                    e, c = mf._eigh(h[ir], s[ir])
                 cs.append(c)
                 es.append(e)
                 orbsym.append([irrep_id[ir]] * e.size)
@@ -446,14 +471,61 @@ class SymAdaptedRHF(hf.RHF):
         if mol is None: mol = self.mol
         if not mol.symmetry:
             raise RuntimeError('mol.symmetry not enabled')
-        if self.remove_linear_dep:
-            raise NotImplementedError
-            e, v = scipy.linalg.eigh(s1e)
-            mask = e > self.overlap_zero_eigenvalue_threshold
-            x = v[:,mask] / numpy.sqrt(e[mask])
-            self.overlap_canonical_decomposed_x = x
         check_irrep_nelec(mol, self.irrep_nelec, self.mol.nelectron)
         return hf.RHF.build(self, mol)
+
+    def check_linear_dependency(self, s, verbose=None):
+        log = logger.new_logger(self, verbose)
+        mol = self.mol
+        symm_orb = mol.symm_orb
+        irrep_id = mol.irrep_id
+        nirrep = len(symm_orb)
+        group_name = getattr(mol, 'groupname', None)
+        s = symm.symmetrize_matrix(s, symm_orb)
+        xs = []
+        orbsym = []
+        cond = []
+        for ir in range(nirrep):
+            e, v = scipy.linalg.eigh(s[ir])
+            abs_e = abs(e)
+            emax = abs_e.max()
+            emin = abs_e.min()
+            c = emax / emin
+            log.debug('irrep %d, cond(S) = %s', ir, c)
+            cond.append(c)
+            if hf.remove_overlap_zero_eigenvalue:
+                mask = e > hf.overlap_zero_eigenvalue_threshold
+                x = v[:,mask] / numpy.sqrt(e[mask])
+                nso, nmo = x.shape
+                if nmo < nso:
+                    log.info('irrep %d: %d small eigenvectors of overlap matrix removed',
+                             ir, nso-nmo)
+            else:
+                x = v / numpy.sqrt(e)
+
+            if group_name in ('Dooh', 'Coov'):
+                irrep_1d = irrep_id[ir] in (0, 1, 4, 5)
+                irrep_2dx = irrep_id[ir] % 2 == 0
+                if irrep_1d or irrep_2dx:
+                    xs.append(x)
+                    orbsym.append([irrep_id[ir]] * x.shape[1])
+                if not irrep_1d and irrep_2dx:
+                    # force 2D irreps using the same coefficients
+                    irrep_conj = irrep_id[ir] ^ 1
+                    assert irrep_id[ir+1] == irrep_conj
+                    xs.append(x)
+                    orbsym.append([irrep_conj] * x.shape[1])
+            else:
+                xs.append(x)
+                orbsym.append([irrep_id[ir]] * x.shape[1])
+
+        if any(c > 1e10 for c in cond):
+            log.warn('Singularity detected in the overlap matrix. '
+                     'SCF may be inaccurate and difficult to converge.')
+
+        x_orth = so2ao_mo_coeff(symm_orb, xs)
+        x_orth = lib.tag_array(x_orth, orbsym=numpy.hstack(orbsym))
+        return x_orth
 
     eig = eig
 
@@ -644,12 +716,13 @@ class SymAdaptedROHF(rohf.ROHF):
                              'support low-spin configuration.')
         return hf.RHF.build(self, mol)
 
-    @lib.with_doc(eig.__doc__)
-    def eig(self, fock, s):
-        e, c = eig(self, fock, s)
-        if getattr(fock, 'focka', None) is not None:
-            mo_ea = numpy.einsum('pi,pi->i', c, fock.focka.dot(c))
-            mo_eb = numpy.einsum('pi,pi->i', c, fock.fockb.dot(c))
+    check_linear_dependency = SymAdaptedRHF.check_linear_dependency
+
+    def eig(self, h, s, overwrite=False, x=None, symm_orb=None, irrep_id=None):
+        e, c = eig(self, h, s, overwrite, x, symm_orb, irrep_id)
+        if getattr(h, 'focka', None) is not None:
+            mo_ea = numpy.einsum('pi,pi->i', c, h.focka.dot(c))
+            mo_eb = numpy.einsum('pi,pi->i', c, h.fockb.dot(c))
             e = lib.tag_array(e, mo_ea=mo_ea, mo_eb=mo_eb)
         return e, c
 
