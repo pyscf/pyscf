@@ -233,8 +233,7 @@ def get_nuc(mydf, kpts=None):
     return nuc
 
 
-def weighted_coulG(mydf, kpt=np.zeros(3), exx=False, mesh=None, omega=None,
-                   kmesh=None):
+def weighted_coulG(mydf, kpt=np.zeros(3), exx=False, mesh=None, omega=None):
     '''Weighted regular Coulomb kernel'''
     cell = mydf.cell
     if mesh is None:
@@ -242,8 +241,7 @@ def weighted_coulG(mydf, kpt=np.zeros(3), exx=False, mesh=None, omega=None,
     Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
     if kmesh is not None:
         mydf = None
-    coulG = tools.get_coulG(cell, kpt, exx, mydf, mesh, Gv, omega=omega,
-                            kmesh=kmesh)
+    coulG = tools.get_coulG(cell, kpt, exx, mydf, mesh, Gv, omega=omega)
     coulG *= kws
     return coulG
 

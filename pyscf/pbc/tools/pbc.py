@@ -256,7 +256,7 @@ def _Gv_wrap_around(cell, Gv, k, mesh):
     return kG
 
 def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
-              wrap_around=True, omega=None, kmesh=None, **kwargs):
+              wrap_around=True, omega=None, **kwargs):
     '''Calculate the Coulomb kernel for all G-vectors, handling G=0 and exchange.
 
     Args:
@@ -370,15 +370,11 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     absG2 = np.einsum('gi,gi->g', kG, kG)
     G0_idx = []
 
-    if kmesh is None:
-        if hasattr(mf, 'kpts'):
-            kpts = mf.kpts
-        else:
-            kpts = k.reshape(1,3)
-        Nk = len(kpts)
+    if hasattr(mf, 'kpts'):
+        kpts = mf.kpts
     else:
-        kpts = None
-        Nk = np.prod(kmesh)
+        kpts = k.reshape(1,3)
+    Nk = len(kpts)
 
     if exxdiv == 'vcut_sph':  # PRB 77 193110
         Rc = (3*Nk*cell.vol/(4*np.pi))**(1./3)
@@ -488,9 +484,9 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     # using Ewald probe charge (the function madelung below)
     if cell.dimension > 0 and exxdiv == 'ewald' and len(G0_idx) > 0:
         if omega is None: # Affects DFT-RSH
-            coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts, kmesh=kmesh)
+            coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts)
         else: # for RangeSeparatedJKBuilder
-            coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts, omega=0, kmesh=kmesh)
+            coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts, omega=0)
     return coulG
 
 def precompute_exx(cell, kpts=None, kmesh=None):
@@ -557,11 +553,8 @@ def precompute_exx(cell, kpts=None, kmesh=None):
     return ws_exx
 
 
-def madelung(cell, kpts=None, omega=None, kmesh=None):
-    if kmesh is None:
-        Nk = get_monkhorst_pack_size(cell, kpts)
-    else:
-        Nk = kmesh
+def madelung(cell, kpts=None, omega=None):
+    Nk = get_monkhorst_pack_size(cell, kpts)
     ecell = cell.copy(deep=False)
     ecell._atm = np.array([[1, cell._env.size, 0, 0, 0, 0]])
     ecell._env = np.append(cell._env, [0., 0., 0.])

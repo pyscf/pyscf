@@ -155,15 +155,6 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
 
     aosym = 's1'
     kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
-    exx_kmesh = kmesh
-    if nkpts != np.prod(kmesh) and exxdiv:
-        log.warn(
-            f'Inconsistent k-point configuration: nkpts {nkpts} from the density '
-            f'matrix does not match the BvK mesh {exx_kmesh}. The input kpts '
-            'likely represent only a subset of the full BvK mesh. Finite-size '
-            'correction for the kpts subset is not well defined.')
-        exx_kmesh = None
-
     rcut = ft_ao.estimate_rcut(cell)
     supmol = ft_ao.ExtendedMole.from_cell(cell, kmesh, rcut.max())
     supmol = supmol.strip_basis(rcut)
@@ -275,7 +266,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
 
     for group_id, (kpt, ki_idx, kj_idx, self_conj) \
             in enumerate(kk_adapted_iter(cell, kpts)):
-        vkcoulG = mydf.weighted_coulG(kpt, exxdiv, mesh, kmesh=exx_kmesh)
+        vkcoulG = mydf.weighted_coulG(kpt, exxdiv, mesh)
         for p0, p1 in lib.prange(0, ngrids, Gblksize):
             log.debug3('update_vk [%s:%s]', p0, p1)
             Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt, out=buf)

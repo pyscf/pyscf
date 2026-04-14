@@ -138,8 +138,7 @@ class MDF(df.GDF):
         # mdf.mesh must be the mesh to generate cderi
         self.mesh = dfbuilder.mesh
 
-    def weighted_coulG(self, kpt=np.zeros(3), exx=False, mesh=None, omega=None,
-                       kmesh=None):
+    def weighted_coulG(self, kpt=np.zeros(3), exx=False, mesh=None, omega=None):
         # In PySCF-2.10 and earlier versions, certain contributions at the edges
         # +/-Gmax +/- 0.5 were removed to restore symmetry between the PW bases
         # in the MDF. Asymmetric PWs can introduce imaginary parts in the
@@ -151,7 +150,7 @@ class MDF(df.GDF):
         # treatment could cause inconsistency between supercell gamma point and
         # k-point sampled calculations, and has been removed from get_coulG. It
         # is exclusively applied within the MDF context here.
-        wcoulG = aft.weighted_coulG(self, kpt, exx, mesh, omega, kmesh=kmesh)
+        wcoulG = aft.weighted_coulG(self, kpt, exx, mesh, omega)
         if abs(kpt).max() < 1e-9:
             return wcoulG
         cell = self.cell

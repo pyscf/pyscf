@@ -202,6 +202,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
         vk : (nkpts, nao, nao) ndarray
         or list of vj and vk if the input dm_kpts is a list of DMs
     '''
+    log = logger.new_logger(mydf)
     cell = mydf.cell
     mesh = mydf.mesh
     assert cell.low_dim_ft_type != 'inf_vacuum'
@@ -219,12 +220,6 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
-
-    kmesh = kpts_to_kmesh(cell, kpts)
-    if nkpts != np.prod(kmesh):
-        logger.warn(
-            mydf, 'Input kpts differ from the kpts attribute stored in the FFTDF '
-            'instance. The instance value will be ignored.')
 
     weight = 1./nkpts * (cell.vol/ngrids)
 
@@ -252,13 +247,12 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     mem_now = lib.current_memory()[0]
     max_memory = mydf.max_memory - mem_now
     blksize = int(min(nao, max(1, (max_memory-mem_now)*1e6/16/4/ngrids/nao)))
-    logger.debug1(mydf, 'fft_jk: get_k_kpts max_memory %s  blksize %d',
-                  max_memory, blksize)
+    log.debug1('fft_jk: get_k_kpts max_memory %s  blksize %d', max_memory, blksize)
     #ao1_dtype = np.result_type(*ao1_kpts)
     #ao2_dtype = np.result_type(*ao2_kpts)
     vR_dm = np.empty((nset,nao,ngrids), dtype=vk_kpts.dtype)
 
-    t1 = (logger.process_clock(), logger.perf_counter())
+    t1 = log.init_timer()
     for k2, ao2T in enumerate(ao2_kpts):
         if ao2T.size == 0:
             continue
@@ -273,7 +267,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
         for k1, ao1T in enumerate(ao1_kpts):
             kpt1 = kpts_band[k1]
 
-            coulG = tools.get_coulG(cell, kpt2-kpt1, exxdiv, mesh=mesh, kmesh=kmesh)
+            coulG = tools.get_coulG(cell, kpt2-kpt1, exxdiv, mydf, mesh)
             if is_zero(kpt1-kpt2):
                 expmikr = np.array(1.)
             else:
@@ -295,7 +289,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
 
             for i in range(nset):
                 vk_kpts[i,k1] += weight * lib.dot(vR_dm[i], ao1T.T)
-        t1 = logger.timer_debug1(mydf, 'get_k_kpts: make_kpt (%d,*)'%k2, *t1)
+        t1 = log.timer_debug1('get_k_kpts: make_kpt (%d,*)'%k2, *t1)
 
     return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
 
@@ -303,7 +297,7 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
                   exxdiv=None):
     '''Derivatives of exchange (K) AO matrix at sampled k-points.
     '''
-
+    log = logger.new_logger(mydf)
     cell = mydf.cell
     mesh = mydf.mesh
     assert cell.low_dim_ft_type != 'inf_vacuum'
@@ -321,16 +315,6 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
-
-    kmesh = kpts_to_kmesh(cell, kpts)
-    exx_kmesh = kmesh
-    if nkpts != np.prod(kmesh) and not exxdiv:
-        log.warn(
-            f'Inconsistent k-point configuration: nkpts {nkpts} from the density '
-            f'matrix does not match the BvK mesh {exx_kmesh}. The input kpts '
-            'likely represent only a subset of the full BvK mesh. Finite-size '
-            'correction for the kpts subset is not well defined.')
-        exx_kmesh = None
 
     weight = 1./nkpts * (cell.vol/ngrids)
 
@@ -363,12 +347,12 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
     mem_now = lib.current_memory()[0]
     max_memory = mydf.max_memory - mem_now
     blksize = int(min(nao, max(1, (max_memory-mem_now)*1e6/16/4/3/ngrids/nao)))
-    logger.debug1(mydf, 'fft_jk: get_k_kpts max_memory %s  blksize %d',
-                  max_memory, blksize)
+    log.debug1('fft_jk: get_k_kpts max_memory %s  blksize %d',
+               max_memory, blksize)
 
     vR_dm = np.empty((3,nset,nao,ngrids), dtype=vk_kpts.dtype)
 
-    t1 = (logger.process_clock(), logger.perf_counter())
+    t1 = log.init_timer()
     for k2, ao2T in enumerate(ao2_kpts):
         if ao2T.size == 0:
             continue
@@ -383,7 +367,7 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
         for k1, ao1T in enumerate(ao1_kpts):
             kpt1 = kpts_band[k1]
 
-            coulG = tools.get_coulG(cell, kpt2-kpt1, exxdiv, mesh=mesh, kmesh=exx_kmesh)
+            coulG = tools.get_coulG(cell, kpt2-kpt1, exxdiv, mydf, mesh)
             if is_zero(kpt1-kpt2):
                 expmikr = np.array(1.)
             else:
@@ -405,7 +389,7 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
 
             for i in range(nset):
                 vk_kpts[:,i,k1] -= weight * np.einsum('aig,jg->aij', vR_dm[:,i], ao1T[0])
-        t1 = logger.timer_debug1(mydf, 'get_k_kpts: make_kpt (%d,*)'%k2, *t1)
+        t1 = log.timer_debug1('get_k_kpts: make_kpt (%d,*)'%k2, *t1)
 
     vk_kpts = np.asarray([_format_jks(vk, dm_kpts, input_band, kpts) for vk in vk_kpts])
     return vk_kpts
