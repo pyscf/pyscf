@@ -27,6 +27,7 @@ from pyscf.scf import hf as mol_hf
 from pyscf.pbc.scf import khf
 from pyscf.pbc.scf import kuhf
 from pyscf.pbc.scf import rohf as pbcrohf
+from pyscf.pbc.scf import hf as pbchf
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import addons
@@ -125,9 +126,9 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     '''
 
     if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
-    if getattr(mo_energy_kpts[0], 'mo_ea', None) is not None:
-        mo_ea_kpts = [x.mo_ea for x in mo_energy_kpts]
-        mo_eb_kpts = [x.mo_eb for x in mo_energy_kpts]
+    if getattr(mo_energy_kpts, 'mo_ea', None) is not None:
+        mo_ea_kpts = mo_energy_kpts.mo_ea
+        mo_eb_kpts = mo_energy_kpts.mo_eb
     else:
         mo_ea_kpts = mo_eb_kpts = mo_energy_kpts
 
@@ -231,11 +232,9 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
         dm = mf.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
         fock = mf.get_fock(dm=dm)
 
-    mo_coeff = []
-    mo_energy = []
+    mo_coeff = np.zeros_like(mo_coeff_kpts)
+    mo_energy = np.full(mo_occ_kpts.shape, pbchf.INVALID_ORBITAL_ENERGY)
     for k, mo in enumerate(mo_coeff_kpts):
-        mo1 = np.empty_like(mo)
-        mo_e = np.empty_like(mo_occ_kpts[k])
         coreidx = mo_occ_kpts[k] == 2
         openidx = mo_occ_kpts[k] == 1
         viridx = mo_occ_kpts[k] == 0
@@ -244,15 +243,16 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
                 orb = mo[:,idx]
                 f1 = reduce(np.dot, (orb.T.conj(), fock[k], orb))
                 e, c = scipy.linalg.eigh(f1)
-                mo1[:,idx] = np.dot(orb, c)
-                mo_e[idx] = e
-        if getattr(fock, 'focka', None) is not None:
-            fa, fb = fock.focka[k], fock.fockb[k]
-            mo_ea = np.einsum('pi,pi->i', mo1.conj(), fa.dot(mo1)).real
-            mo_eb = np.einsum('pi,pi->i', mo1.conj(), fb.dot(mo1)).real
-            mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
-        mo_coeff.append(mo1)
-        mo_energy.append(mo_e)
+                mo_coeff[k][:,idx] = np.dot(orb, c)
+                mo_energy[k,idx] = e
+
+    if getattr(fock, 'focka', None) is not None:
+        mo_ea = lib.einsum('kpi,kpq,kqi->ki', mo_coeff.conj(), fock.focka, mo_coeff).real
+        mo_eb = lib.einsum('kpi,kpq,kqi->ki', mo_coeff.conj(), fock.fockb, mo_coeff).real
+        mask = mo_energy == pbchf.INVALID_ORBITAL_ENERGY
+        mo_ea[mask] = pbchf.INVALID_ORBITAL_ENERGY
+        mo_eb[mask] = pbchf.INVALID_ORBITAL_ENERGY
+        mo_energy = lib.tag_array(mo_energy, mo_ea=mo_ea, mo_eb=mo_eb)
     return mo_energy, mo_coeff
 
 init_guess_by_chkfile = kuhf.init_guess_by_chkfile
@@ -344,14 +344,15 @@ class KROHF(khf.KRHF):
         grad_kpts = np.hstack([grad(k) for k in range(nkpts)])
         return grad_kpts
 
-    def eig(self, fock, s):
-        e, c = khf.KSCF.eig(self, fock, s)
+    def eig(self, fock, s, overwrite=False, x=None):
+        e, c = khf.KSCF.eig(self, fock, s, overwrite, x)
         if getattr(fock, 'focka', None) is not None:
-            for k, mo in enumerate(c):
-                fa, fb = fock.focka[k], fock.fockb[k]
-                mo_ea = np.einsum('pi,pi->i', mo.conj(), fa.dot(mo)).real
-                mo_eb = np.einsum('pi,pi->i', mo.conj(), fb.dot(mo)).real
-                e[k] = lib.tag_array(e[k], mo_ea=mo_ea, mo_eb=mo_eb)
+            mo_ea = lib.einsum('kpi,kpq,kqi->ki', c.conj(), fock.focka, c).real
+            mo_eb = lib.einsum('kpi,kpq,kqi->ki', c.conj(), fock.fockb, c).real
+            mask = e == pbchf.INVALID_ORBITAL_ENERGY
+            mo_ea[mask] = pbchf.INVALID_ORBITAL_ENERGY
+            mo_eb[mask] = pbchf.INVALID_ORBITAL_ENERGY
+            e = lib.tag_array(e, mo_ea=mo_ea, mo_eb=mo_eb)
         return e, c
 
     def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None, **kwargs):

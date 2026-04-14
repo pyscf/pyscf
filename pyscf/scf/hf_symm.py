@@ -330,14 +330,14 @@ def eig(mf, h, s, overwrite=False, x=None, symm_orb=None, irrep_id=None):
                     # For cylindrical symmetry, we want to ensure the strict
                     # degeneracy between two branches in 2D irreps.
                     # However, diagonalization in the canonical X bases may
-                    # introduce two eigh calls for the two branches and thereby
-                    # break the degeneracy. Here, we skip the use of X bases,
-                    # just truncate the subspace of each irrep according to the
+                    # introduce two eigh calls for the two branches and break
+                    # the degeneracy. Here, we skip the use of X bases, just
+                    # truncate the subspace of each irrep according to the
                     # dimension of X bases.
-                    nmo = numpy.count_nonzero(x.orbsym == ir)
+                    nmo = numpy.count_nonzero(x.orbsym == irrep_id[ir])
                     e, v = scipy.linalg.eigh(s[ir])
                     x_ir = (v / numpy.sqrt(e))[:,-nmo:]
-                    h_ir = x_ir.conj().T.dot(h).dot(x_ir)
+                    h_ir = x_ir.conj().T.dot(h[ir]).dot(x_ir)
                     e, c = scipy.linalg.eigh(h_ir)
                     c = x_ir.dot(c)
                 else:
@@ -361,6 +361,8 @@ def eig(mf, h, s, overwrite=False, x=None, symm_orb=None, irrep_id=None):
             orbsym.append([irrep_id[ir]] * e.size)
     e = numpy.hstack(es)
     c = so2ao_mo_coeff(symm_orb, cs)
+    idx = numpy.argmax(abs(c.real), axis=0)
+    c[:,c[idx,numpy.arange(len(e))].real<0] *= -1
     c = lib.tag_array(c, orbsym=numpy.hstack(orbsym))
     return e, c
 

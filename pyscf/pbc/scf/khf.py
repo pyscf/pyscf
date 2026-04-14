@@ -325,7 +325,7 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
     occmask = mo_occ_kpts > 0
     virmask = ~occmask
     mo_coeff = np.zeros_like(mo_coeff_kpts)
-    mo_energy = np.full(mo_occ_kpts.shape, pbchf.INVALID_ORBITAL_ENERGY, dtype=np.float64)
+    mo_energy = np.full(mo_occ_kpts.shape, pbchf.INVALID_ORBITAL_ENERGY)
     for k, c_k in enumerate(mo_coeff_kpts):
         f_k = c_k.conj().T.dot(fock[k]).dot(c_k)
         idx = np.where(occmask[k])[0]
