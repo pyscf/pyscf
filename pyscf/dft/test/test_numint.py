@@ -564,6 +564,7 @@ class KnownValues(unittest.TestCase):
     def test_cache_xc_kernel(self):
         mf = dft.RKS(h2o)
         mf.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
+        mf.small_rho_cutoff = 1e-7
         mf.run()
 
         mf.xc = 'WB97XD'
