@@ -267,9 +267,6 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         mf : an SCF instance or an instance to provide the `.kpts` attribute
             The .kpts attribute is used to determine the Monkhorst-Pack k-point
             mesh size.
-        kmesh : (3,) ndarray
-            Monkhorst-Pack k-point mesh. When this parameter is specified,
-            the kpts attribute provided by `mf` will be ignored.
 
     Returns:
         coulG : (ngrids,) ndarray
@@ -388,7 +385,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     elif exxdiv == 'vcut_ws':  # PRB 87, 165122
         assert (cell.dimension == 3)
         if not getattr(mf, '_ws_exx', None):
-            mf._ws_exx = precompute_exx(cell, kpts, kmesh)
+            mf._ws_exx = precompute_exx(cell, kpts)
         exx_alpha = mf._ws_exx['alpha']
         exx_kcell = mf._ws_exx['kcell']
         exx_q = mf._ws_exx['q']
@@ -489,15 +486,12 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts, omega=0)
     return coulG
 
-def precompute_exx(cell, kpts=None, kmesh=None):
+def precompute_exx(cell, kpts=None):
     from pyscf.pbc import gto as pbcgto
     from pyscf.pbc.dft import gen_grid
     log = lib.logger.Logger(cell.stdout, cell.verbose)
     log.debug("# Precomputing Wigner-Seitz EXX kernel")
-    if kmesh is None:
-        Nk = get_monkhorst_pack_size(cell, kpts)
-    else:
-        Nk = kmesh
+    Nk = get_monkhorst_pack_size(cell, kpts)
     log.debug("# Nk = %s", Nk)
 
     kcell = pbcgto.Cell()

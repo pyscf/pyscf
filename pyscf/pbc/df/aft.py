@@ -239,8 +239,6 @@ def weighted_coulG(mydf, kpt=np.zeros(3), exx=False, mesh=None, omega=None):
     if mesh is None:
         mesh = mydf.mesh
     Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
-    if kmesh is not None:
-        mydf = None
     coulG = tools.get_coulG(cell, kpt, exx, mydf, mesh, Gv, omega=omega)
     coulG *= kws
     return coulG

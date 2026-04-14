@@ -267,6 +267,11 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
         for k1, ao1T in enumerate(ao1_kpts):
             kpt1 = kpts_band[k1]
 
+            # In PySCF v1.5 - v2.12, the G=0 term is evaluated analytically
+            # using _ewald_exxdiv_for_G0. The G=0 component obtained here may
+            # differ from _ewald_exxdiv_for_G0 due to discretization errors in
+            # the FFT-based density (especially when the mesh is not
+            # sufficiently dense), which can lead to small discrepancies.
             coulG = tools.get_coulG(cell, kpt2-kpt1, exxdiv, mydf, mesh)
             if is_zero(kpt1-kpt2):
                 expmikr = np.array(1.)

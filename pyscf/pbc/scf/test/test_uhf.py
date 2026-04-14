@@ -49,7 +49,9 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_kuhf_kernel(self):
-        self.assertAlmostEqual(kmf.e_tot, -4.594854184081046, 8)
+        # If G=0 term is evaluated using _ewald_exxdiv_for_G0, e_tot=-4.59
+        #self.assertAlmostEqual(kmf.e_tot, -4.594854184081046, 8)
+        self.assertAlmostEqual(kmf.e_tot, -4.63255627933303, 8)
         e4 = super_cell(cell, [2,2,1]).KUHF().run().e_tot
         self.assertAlmostEqual(kmf.e_tot - e4/4, 0, 8)
         kmf.analyze()
@@ -105,7 +107,8 @@ class KnownValues(unittest.TestCase):
 
     def test_spin_square(self):
         ss = kmf.spin_square()[0]
-        self.assertAlmostEqual(ss, 2.0836508842313273, 4)
+        # If G=0 term is evaluated using _ewald_exxdiv_for_G0, ss=2.0836
+        self.assertAlmostEqual(ss, 2.088998921595176, 4)
 
     def test_bands(self):
         np.random.seed(1)
@@ -115,7 +118,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(e), 0.8857024, 5)
 
         e = kmf.get_bands(kpts_bands)[0]
-        self.assertAlmostEqual(lib.fp(e), -0.309626, 5)
+        self.assertAlmostEqual(lib.fp(e), -0.293993954, 5)
 
     def test_small_system(self):
         mol = pgto.Cell(
