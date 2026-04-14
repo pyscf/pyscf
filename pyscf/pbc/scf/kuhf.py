@@ -49,7 +49,8 @@ def make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs):
     Returns:
         dm_kpts : (2, nkpts, nao, nao) ndarray
     '''
-    nkpts, nao, nmo = mo_coeff_kpts.shape[1:]
+    nkpts = len(mo_coeff_kpts[0])
+    nao, nmo = mo_coeff_kpts[0][0].shape
     def make_dm(mos, occs):
         return [np.dot(mos[k]*occs[k], mos[k].T.conj()) for k in range(nkpts)]
     dm_kpts =(make_dm(mo_coeff_kpts[0], mo_occ_kpts[0]) +
@@ -121,12 +122,12 @@ def get_fermi(mf, mo_energy_kpts=None, mo_occ_kpts=None):
     fermi_b = np.sort(np.hstack(mo_energy_kpts[1]))[noccb-1]
 
     for k, mo_e in enumerate(mo_energy_kpts[0]):
-        mo_occ = mo_occ_kpts[0,k]
+        mo_occ = mo_occ_kpts[0][k]
         if mo_occ[mo_e > fermi_a].sum() > 0.5:
             logger.warn(mf, 'Alpha occupied band above Fermi level: \n'
                         'k=%d, mo_e=%s, mo_occ=%s', k, mo_e, mo_occ)
     for k, mo_e in enumerate(mo_energy_kpts[1]):
-        mo_occ = mo_occ_kpts[1,k]
+        mo_occ = mo_occ_kpts[1][k]
         if mo_occ[mo_e > fermi_b].sum() > 0.5:
             logger.warn(mf, 'Beta occupied band above Fermi level: \n'
                         'k=%d, mo_e=%s, mo_occ=%s', k, mo_e, mo_occ)
@@ -475,9 +476,9 @@ class KUHF(khf.KSCF):
             return g.ravel()
 
         nkpts = len(mo_occ_kpts[0])
-        grad_kpts = [grad(mo_coeff_kpts[0,k], mo_occ_kpts[0,k], fock[0,k])
+        grad_kpts = [grad(mo_coeff_kpts[0][k], mo_occ_kpts[0][k], fock[0][k])
                      for k in range(nkpts)]
-        grad_kpts+= [grad(mo_coeff_kpts[1,k], mo_occ_kpts[1,k], fock[1,k])
+        grad_kpts+= [grad(mo_coeff_kpts[1][k], mo_occ_kpts[1][k], fock[1][k])
                      for k in range(nkpts)]
         return np.hstack(grad_kpts)
 
@@ -564,8 +565,8 @@ class KUHF(khf.KSCF):
         '''
         nkpts = len(self.kpts)
         if mo_coeff is None:
-            mo_a = [self.mo_coeff[0,k][:,self.mo_occ[0,k]>0] for k in range(nkpts)]
-            mo_b = [self.mo_coeff[1,k][:,self.mo_occ[1,k]>0] for k in range(nkpts)]
+            mo_a = [self.mo_coeff[0][k][:,self.mo_occ[0][k]>0] for k in range(nkpts)]
+            mo_b = [self.mo_coeff[1][k][:,self.mo_occ[1][k]>0] for k in range(nkpts)]
         else:
             mo_a, mo_b = mo_coeff
         if s is None:

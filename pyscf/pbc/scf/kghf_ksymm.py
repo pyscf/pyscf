@@ -113,7 +113,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     mo_occ_kpts = kpts.check_mo_occ_symmetry(mo_occ_kpts)
     return mo_occ_kpts
 
-def eig(kmf, h_kpts, s_kpts):
+def eig(kmf, h_kpts, s_kpts, overwrite=False, x=None):
     from pyscf.scf.ghf_symm import GHF
     cell = kmf.cell
     symm_orb = cell.symm_orb
@@ -125,7 +125,8 @@ def eig(kmf, h_kpts, s_kpts):
     mo_coeff_kpts = []
 
     for k in range(nkpts):
-        e, c = GHF.eig(kmf, h_kpts[k], s_kpts[k], symm_orb[k], irrep_id[k])
+        e, c = GHF.eig(kmf, h_kpts[k], s_kpts[k], overwrite, x,
+                       symm_orb[k], irrep_id[k])
         eig_kpts.append(e)
         mo_coeff_kpts.append(c)
     return eig_kpts, mo_coeff_kpts

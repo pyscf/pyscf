@@ -18,6 +18,7 @@
 
 import numpy as np
 import h5py
+import scipy.linalg
 from pyscf import __config__
 from pyscf import lib
 from pyscf.lib import logger
@@ -26,6 +27,9 @@ from pyscf.pbc import tools
 from pyscf.pbc.lib import kpts as libkpts
 from pyscf.pbc.lib.kpts_helper import is_trim
 from pyscf.pbc.scf import khf
+from pyscf.pbc.scf import hf as pbchf
+from pyscf.symm import symmetrize_matrix
+from pyscf.scf.hf_symm import so2ao_mo_coeff
 
 @lib.with_doc(khf.get_occ.__doc__)
 def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
@@ -63,7 +67,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
         np.set_printoptions(threshold=1000)
 
     mo_occ_kpts = kpts.check_mo_occ_symmetry(mo_occ_kpts)
-    return mo_occ_kpts
+    return np.array(mo_occ_kpts)
 
 @lib.with_doc(khf.energy_elec.__doc__)
 def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
@@ -101,41 +105,57 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
     dm = kpts.transform_dm(dm)
     return khf.get_rho(mf, dm, grids, kpts.kpts)
 
-def eig(kmf, h_kpts, s_kpts):
+def eig(kmf, h_kpts, s_kpts, overwrite=False, x=None):
     from pyscf.scf.hf_symm import eig as eig_symm
     cell = kmf.cell
     symm_orb = cell.symm_orb
     irrep_id = cell.irrep_id
 
-    nkpts = len(h_kpts)
+    nkpts, nao = h_kpts.shape[:2]
     assert len(symm_orb) == nkpts
     eig_kpts = []
     mo_coeff_kpts = []
 
     for k in range(nkpts):
-        e, c = eig_symm(kmf, h_kpts[k], s_kpts[k], symm_orb[k], irrep_id[k])
+        e, c = eig_symm(kmf, h_kpts[k], s_kpts[k], overwrite, None,
+                        symm_orb[k], irrep_id[k])
         eig_kpts.append(e)
         mo_coeff_kpts.append(c)
     return eig_kpts, mo_coeff_kpts
 
-def eig_trs(kmf, h_kpts, s_kpts):
+def eig_trs(kmf, h_kpts, s_kpts, overwrite=False, x=None):
     ''' Forcing real orbitals at time-reversal invariant momenta.
     '''
     cell = kmf.cell
     kpts = kmf.kpts
     trs_mask = is_trim(cell, kpts.kpts_ibz)
 
-    eig_kpts = []
-    mo_coeff_kpts = []
+    nao = h_kpts.shape[1]
+    nkpts = kpts.nkpts_ibz
+    eig_kpts = np.empty((nkpts, nao))
+    mo_coeff_kpts = np.empty((nkpts, nao, nao), dtype=h_kpts.dtype)
 
-    for k in range(kpts.nkpts_ibz):
+    for k in range(nkpts):
+        h = h_kpts[k]
+        s = s_kpts[k]
         if trs_mask[k]:
-            e, c = kmf._eigh(h_kpts[k].real, s_kpts[k].real)
-        else:
+            h = h.real
+            s = s.real
+        if x is None:
             e, c = kmf._eigh(h_kpts[k], s_kpts[k])
-        c = c.astype(h_kpts[k].dtype)
-        eig_kpts.append(e)
-        mo_coeff_kpts.append(c)
+            eig_kpts[k] = e
+            mo_coeff_kpts[k] = c
+        else:
+            xk = x[k]
+            if trs_mask[k]:
+                xk = xk.real
+            _, nmo_k = xk.shape
+            e, c = scipy.linalg.eigh(xk.conj().T.dot(h).dot(xk))
+            eig_kpts[k,:nmo_k] = e
+            mo_coeff_kpts[k,:,:nmo_k] = xk.dot(c)
+            if nmo_k < nao:
+                eig_kpts[k,nmo_k:] = pbchf.INVALID_ORBITAL_ENERGY
+                mo_coeff_kpts[k,:,nmo_k:] = 0
 
     return eig_kpts, mo_coeff_kpts
 
@@ -232,6 +252,39 @@ class KsymAdaptedKSCF(khf.KSCF):
             self.with_df.dump_flags(verbose)
         return self
 
+    def check_linear_dependency(self, s, verbose=None):
+        cell = self.cell
+        symm_orb = cell.symm_orb
+        if symm_orb is None:
+            return khf.KSCF.check_linear_dependency(self, s, verbose)
+
+        assert len(symm_orb) == len(s), 'Number of k-points mismatch'
+        log = logger.new_logger(self, verbose)
+        discard = False
+        x_kpts = []
+        for k, s_k in enumerate(s):
+            nirrep = len(symm_orb[k])
+            s_k = symmetrize_matrix(s_k, symm_orb[k])
+            xs = []
+            for ir in range(nirrep):
+                e, v = scipy.linalg.eigh(s_k[ir])
+                if mol_hf.remove_overlap_zero_eigenvalue:
+                    mask = e > mol_hf.overlap_zero_eigenvalue_threshold
+                    x = v[:,mask] / np.sqrt(e[mask])
+                    nao, nmo = x.shape
+                    if nmo < nao:
+                        log.info(f"kpt {k}: {nao-nmo} small eigenvectors of overlap matrix removed")
+                        discard = True
+                else:
+                    x = v / np.sqrt(e)
+                xs.append(x)
+            x_kpts.append(so2ao_mo_coeff(symm_orb[k], xs))
+
+        x_orth = x_kpts
+        if not discard:
+            x_orth = np.stack(x_kpts)
+        return x_orth
+
     @lib.with_doc(khf.get_ovlp.__doc__)
     def get_ovlp(self, cell=None, kpts=None):
         if isinstance(kpts, np.ndarray):
@@ -288,13 +341,13 @@ class KsymAdaptedKSCF(khf.KSCF):
                 fh5['scf/kpts'] = self.kpts.kpts_ibz #FIXME Shall we rebuild kpts? If so, more info is needed.
         return self
 
-    def eig(self, h_kpts, s_kpts):
+    def eig(self, h_kpts, s_kpts, overwrite=False, x=None):
         if self.use_ao_symmetry:
-            return eig(self, h_kpts, s_kpts)
+            return eig(self, h_kpts, s_kpts, overwrite, x)
         elif self.kpts.time_reversal:
-            return eig_trs(self, h_kpts, s_kpts)
+            return eig_trs(self, h_kpts, s_kpts, overwrite, x)
         else:
-            return khf.KSCF.eig(self, h_kpts, s_kpts)
+            return khf.KSCF.eig(self, h_kpts, s_kpts, overwrite, x)
 
     def get_orbsym(self, mo_coeff=None, s=None):
         if not self.use_ao_symmetry:

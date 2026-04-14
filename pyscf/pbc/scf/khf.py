@@ -691,8 +691,7 @@ class KSCF(pbchf.SCF):
         return x_orth
 
     def eig(self, h_kpts, s_kpts, overwrite=False, x=None):
-        nkpts = len(h_kpts)
-        nao = h_kpts[0].shape[0]
+        nkpts, nao = h_kpts.shape[:2]
         eig_kpts = np.empty((nkpts, nao))
         mo_coeff_kpts = np.empty((nkpts, nao, nao), dtype=h_kpts.dtype)
         if x is None:

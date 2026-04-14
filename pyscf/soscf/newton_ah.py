@@ -485,7 +485,6 @@ def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
     h1e = mf._scf.get_hcore(mol)
     s1e = mf._scf.get_ovlp(mol)
     x_orth = mf._scf.check_linear_dependency(s1e, log)
-    s1e = None
 
     if mo_coeff is not None and mo_occ is not None:
         dm = mf.make_rdm1(mo_coeff, mo_occ)
