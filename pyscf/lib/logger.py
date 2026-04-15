@@ -203,6 +203,9 @@ class Logger:
         self._t0 = process_clock()
         self._w0 = perf_counter()
 
+    def init_timer(self):
+        return process_clock(), perf_counter()
+
     log = log
     error = error
     warn = warn
