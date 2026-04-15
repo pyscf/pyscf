@@ -108,18 +108,18 @@ def get_fermi(mf, mo_energy_kpts=None, mo_occ_kpts=None):
     if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
     if mo_occ_kpts is None: mo_occ_kpts = mf.mo_occ
 
-    # mo_energy_kpts and mo_occ_kpts are k-point UHF quantities
-    mo_energy_kpts = np.asarray(mo_energy_kpts)
-    mo_occ_kpts = np.asarray(mo_occ_kpts)
-    assert mo_energy_kpts.ndim == 3
-    assert mo_occ_kpts.ndim == 3
+    assert mo_energy_kpts[0][0].ndim == 1
+    assert mo_occ_kpts[0][0].ndim == 1
 
-    nocca = sum(mo_occ.sum() for mo_occ in mo_occ_kpts[0])
-    noccb = sum(mo_occ.sum() for mo_occ in mo_occ_kpts[1])
+    if isinstance(mo_occ_kpts[0], np.ndarray):
+        nocca = mo_occ_kpts[0].sum()
+        noccb = mo_occ_kpts[1].sum()
+    else:
+        nocca = sum(mo_occ.sum() for mo_occ in mo_occ_kpts[0])
+        noccb = sum(mo_occ.sum() for mo_occ in mo_occ_kpts[1])
     # nocc may not be perfect integer when smearing is enabled
     nocca = int(nocca.round(3))
     noccb = int(noccb.round(3))
-
     fermi_a = np.sort(np.hstack(mo_energy_kpts[0]))[nocca-1]
     fermi_b = np.sort(np.hstack(mo_energy_kpts[1]))[noccb-1]
 
@@ -144,6 +144,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
 
     nocc_a, nocc_b = mf.nelec
+    mo_energy_kpts = np.asarray(mo_energy_kpts)
     mo_energy = np.sort(mo_energy_kpts[0].ravel())
     nmo = mo_energy.size
     if nocc_a > nmo:
@@ -160,7 +161,8 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     else:
         fermi_b = -np.inf
     fermi = np.array([fermi_a, fermi_b])
-    mo_occ_kpts = (mo_energy_kpts <= fermi[:,None,None]).astype(np.double)
+    mo_occ_kpts = np.zeros_like(mo_energy_kpts)
+    mo_occ_kpts[mo_energy_kpts <= fermi[:,None,None]] = 1
 
     if nocc_a < len(mo_energy):
         logger.info(mf, 'alpha HOMO = %.12g  LUMO = %.12g', fermi_a, mo_energy[nocc_a])

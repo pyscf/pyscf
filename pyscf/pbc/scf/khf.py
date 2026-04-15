@@ -191,13 +191,15 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     nkpts = len(mo_energy_kpts)
     nocc = mf.cell.tot_electrons(nkpts) // 2
 
+    mo_energy_kpts = np.asarray(mo_energy_kpts)
     mo_energy = np.sort(mo_energy_kpts.ravel())
     nmo = mo_energy.size
     if nocc > nmo:
         raise RuntimeError('Failed to assign occupancies. '
                            f'Nocc ({nocc}) > Nmo ({nmo})')
     fermi = mo_energy[nocc-1]
-    mo_occ_kpts = (mo_energy_kpts <= fermi).astype(np.double) * 2
+    mo_occ_kpts = np.zeros_like(mo_energy_kpts)
+    mo_occ_kpts[mo_energy_kpts <= fermi] = 2
 
     if nocc < nmo:
         logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',

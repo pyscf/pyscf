@@ -127,14 +127,14 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
 
     if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
     if getattr(mo_energy_kpts, 'mo_ea', None) is not None:
-        mo_ea_kpts = mo_energy_kpts.mo_ea
-        mo_eb_kpts = mo_energy_kpts.mo_eb
+        mo_ea_kpts = np.asarray(mo_energy_kpts.mo_ea)
+        mo_eb_kpts = np.asarray(mo_energy_kpts.mo_eb)
     else:
-        mo_ea_kpts = mo_eb_kpts = mo_energy_kpts
+        mo_ea_kpts = mo_eb_kpts = np.asarray(mo_energy_kpts)
 
     nocc_a, nocc_b = mf.nelec
-    mo_energy_kpts1 = np.hstack(mo_energy_kpts)
-    mo_energy = np.sort(mo_energy_kpts1)
+    mo_energy_kpts = np.asarray(mo_energy_kpts)
+    mo_energy = np.sort(mo_energy_kpts.ravel())
     nmo = mo_energy.size
     if nocc_a > nmo or nocc_b > nmo:
         raise RuntimeError('Failed to assign occupancies. '
@@ -146,17 +146,13 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     if nocc_a == nocc_b:
         fermi = core_level
     else:
-        mo_ea_kpts1 = np.hstack(mo_ea_kpts)
-        mo_ea = np.sort(mo_ea_kpts1[mo_energy_kpts1 > core_level])
+        mo_ea = np.sort(mo_ea_kpts[mo_energy_kpts > core_level])
         fermi = mo_ea[nocc_a - nocc_b - 1]
 
-    mo_occ_kpts = []
-    for k, mo_e in enumerate(mo_energy_kpts):
-        occ = np.zeros_like(mo_e)
-        occ[mo_e <= core_level] = 2
-        if nocc_a != nocc_b:
-            occ[(mo_e > core_level) & (mo_ea_kpts[k] <= fermi)] = 1
-        mo_occ_kpts.append(occ)
+    mo_occ_kpts = np.zeros_like(mo_energy_kpts)
+    mo_occ_kpts[mo_energy_kpts <= core_level] = 2
+    if nocc_a != nocc_b:
+        mo_occ_kpts[(mo_energy_kpts > core_level) & (mo_ea_kpts <= fermi)] = 1
 
     if nocc_a < len(mo_energy):
         logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
@@ -207,7 +203,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
                           mo_eb_kpts[k][mo_occ_kpts[k]!=2])
     np.set_printoptions(threshold=1000)
 
-    return mo_occ_kpts
+    return np.array(mo_occ_kpts)
 
 
 energy_elec = kuhf.energy_elec
