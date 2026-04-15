@@ -109,6 +109,8 @@ def get_fermi(mf, mo_energy_kpts=None, mo_occ_kpts=None):
     if mo_occ_kpts is None: mo_occ_kpts = mf.mo_occ
 
     # mo_energy_kpts and mo_occ_kpts are k-point UHF quantities
+    mo_energy_kpts = np.asarray(mo_energy_kpts)
+    mo_occ_kpts = np.asarray(mo_occ_kpts)
     assert mo_energy_kpts.ndim == 3
     assert mo_occ_kpts.ndim == 3
 
@@ -173,26 +175,26 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
         np.set_printoptions(threshold=len(mo_energy))
         logger.debug(mf, '     k-point                  alpha mo_energy')
         for k,kpt in enumerate(mf.cell.get_scaled_kpts(mf.kpts)):
-            if (np.count_nonzero(mo_occ_kpts[0,k]) > 0 and
-                np.count_nonzero(mo_occ_kpts[0,k] == 0) > 0):
+            if (np.count_nonzero(mo_occ_kpts[0][k]) > 0 and
+                np.count_nonzero(mo_occ_kpts[0][k] == 0) > 0):
                 logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
                              k, kpt[0], kpt[1], kpt[2],
-                             mo_energy_kpts[0,k][mo_occ_kpts[0,k]> 0],
-                             mo_energy_kpts[0,k][mo_occ_kpts[0,k]==0])
+                             mo_energy_kpts[0][k][mo_occ_kpts[0][k]> 0],
+                             mo_energy_kpts[0][k][mo_occ_kpts[0][k]==0])
             else:
                 logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s',
-                             k, kpt[0], kpt[1], kpt[2], mo_energy_kpts[0,k])
+                             k, kpt[0], kpt[1], kpt[2], mo_energy_kpts[0][k])
         logger.debug(mf, '     k-point                  beta  mo_energy')
         for k,kpt in enumerate(mf.cell.get_scaled_kpts(mf.kpts)):
-            if (np.count_nonzero(mo_occ_kpts[1,k]) > 0 and
-                np.count_nonzero(mo_occ_kpts[1,k] == 0) > 0):
+            if (np.count_nonzero(mo_occ_kpts[1][k]) > 0 and
+                np.count_nonzero(mo_occ_kpts[1][k] == 0) > 0):
                 logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
                              k, kpt[0], kpt[1], kpt[2],
-                             mo_energy_kpts[1,k][mo_occ_kpts[1,k]> 0],
-                             mo_energy_kpts[1,k][mo_occ_kpts[1,k]==0])
+                             mo_energy_kpts[1][k][mo_occ_kpts[1][k]> 0],
+                             mo_energy_kpts[1][k][mo_occ_kpts[1][k]==0])
             else:
                 logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s',
-                             k, kpt[0], kpt[1], kpt[2], mo_energy_kpts[1,k])
+                             k, kpt[0], kpt[1], kpt[2], mo_energy_kpts[1][k])
         np.set_printoptions(threshold=1000)
 
     return mo_occ_kpts

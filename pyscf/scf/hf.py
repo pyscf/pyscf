@@ -154,10 +154,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         mf_diis.space = mf.diis_space
         mf_diis.rollback = mf.diis_space_rollback
         mf_diis.damp = mf.diis_damp
-        if isinstance(x_orth, list): # k point
-            mf_diis.Corth = lib.stack_with_padding(x_orth)
-        else:
-            mf_diis.Corth = numpy.asarray(x_orth)
+        mf_diis.Corth = x_orth
     else:
         mf_diis = None
 

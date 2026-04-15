@@ -567,7 +567,7 @@ def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
 remove_linear_dep = remove_linear_dep_
 
 def _eigh_with_canonical_orth(threshold=LINEAR_DEP_THRESHOLD):
-    def eigh(h, s):
+    def eigh(h, s, *args, **kwargs):
         x = canonical_orth_(s, threshold)
         xhx = reduce(lib.dot, (x.conj().T, h, x))
         e, c = scipy.linalg.eigh(xhx)
@@ -577,7 +577,7 @@ def _eigh_with_canonical_orth(threshold=LINEAR_DEP_THRESHOLD):
 
 def _eigh_with_pivot_cholesky(threshold=LINEAR_DEP_THRESHOLD,
                               cholesky_threshold=CHOLESKY_THRESHOLD):
-    def eigh(h, s):
+    def eigh(h, s, *args, **kwargs):
         x = partial_cholesky_orth_(s, canthr=threshold, cholthr=cholesky_threshold)
         xhx = reduce(lib.dot, (x.conj().T, h, x))
         e, c = scipy.linalg.eigh(xhx)

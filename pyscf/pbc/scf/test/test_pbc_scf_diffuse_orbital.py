@@ -67,7 +67,7 @@ class KnownValues(unittest.TestCase):
         mf = mf.multigrid_numint()
         mf.max_cycle=1
         test_energy = mf.kernel()
-        ref_energy = -1.7811660871735955
+        ref_energy = -1.7809196678928856
         assert abs(test_energy - ref_energy) < 2e-10
 
     def test_krks(self):

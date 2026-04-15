@@ -164,11 +164,11 @@ class KsymAdaptedKGHF(khf_ksymm.KsymAdaptedKSCF, kghf.KGHF):
         s = khf_ksymm.KsymAdaptedKSCF.get_ovlp(self, cell, kpts)
         return lib.asarray([scipy.linalg.block_diag(x, x) for x in s])
 
-    def eig(self, h_kpts, s_kpts):
+    def eig(self, h_kpts, s_kpts, overwrite=False, x=None):
         if self.use_ao_symmetry:
-            return eig(self, h_kpts, s_kpts)
+            return eig(self, h_kpts, s_kpts, overwrite, x)
         else:
-            return kghf.KGHF.eig(self, h_kpts, s_kpts)
+            return kghf.KGHF.eig(self, h_kpts, s_kpts, overwrite, x)
 
     def get_orbsym(self, mo_coeff=None, s=None):
         if not self.use_ao_symmetry:
