@@ -200,14 +200,16 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     occidxb = mo_occ[1] == 1
     viridxa = ~occidxa
     viridxb = ~occidxb
-    mo = numpy.empty_like(mo_coeff)
+    mo_a = numpy.empty_like(mo_coeff[0])
+    mo_b = numpy.empty_like(mo_coeff[1])
+    mo = [mo_a, mo_b]
     mo_e = numpy.empty(mo_occ.shape)
     s = mf.get_ovlp()
 
     if (getattr(mo_coeff, 'orbsym', None) is not None or
         (getattr(mo_coeff[0], 'orbsym', None) is not None and
          getattr(mo_coeff[1], 'orbsym', None) is not None)):
-        orbsyma, orbsymb = orbsym = mf.get_orbsym(mo_coeff, s)
+        orbsyma, orbsymb = mf.get_orbsym(mo_coeff, s)
         def eig_(fock, mo_coeff, idx, es, cs):
             if numpy.count_nonzero(idx) > 0:
                 orb = mo_coeff[:,idx]
@@ -239,11 +241,10 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
         eig_(fock[0], mo_coeff[0], viridxa, mo_e[0], mo[0])
         eig_(fock[1], mo_coeff[1], occidxb, mo_e[1], mo[1])
         eig_(fock[1], mo_coeff[1], viridxb, mo_e[1], mo[1])
-        orbsym = mf.get_orbsym(mo, s)
+        orbsyma, orbsymb = mf.get_orbsym(mo, s)
 
-    hf._adjust_phase_(mo[0])
-    hf._adjust_phase_(mo[1])
-    mo = lib.tag_array(mo, orbsym=orbsym)
+    mo = (lib.tag_array(hf._adjust_phase_(mo[0]), orbsym=orbsyma),
+          lib.tag_array(hf._adjust_phase_(mo[1]), orbsym=orbsymb))
     return mo_e, mo
 
 def get_orbsym(mol, mo_coeff, s=None, check=False):
@@ -252,7 +253,6 @@ def get_orbsym(mol, mo_coeff, s=None, check=False):
     else:
         orbsym = (hf_symm.get_orbsym(mol, mo_coeff[0], s, check),
                   hf_symm.get_orbsym(mol, mo_coeff[1], s, check))
-        orbsym = np.stack(orbsym)
     return orbsym
 
 def get_wfnsym(mf, mo_coeff=None, mo_occ=None, orbsym=None):
@@ -336,13 +336,7 @@ class SymAdaptedUHF(uhf.UHF):
     def eig(self, h, s, overwrite=False, x=None, symm_orb=None, irrep_id=None):
         e_a, c_a = hf_symm.eig(self, h[0], s, False, x, symm_orb, irrep_id)
         e_b, c_b = hf_symm.eig(self, h[1], s, False, x, symm_orb, irrep_id)
-        orbsym = numpy.stack([c_a.orbsym, c_b.orbsym])
-        nao, nmo = c_a.shape
-        c = numpy.empty((2, nmo, nao), dtype=c_a.dtype).transpose(0,2,1)
-        c[0] = c_a
-        c[1] = c_b
-        c = lib.tag_array(c, orbsym=orbsym)
-        return numpy.stack((e_a,e_b)), c
+        return numpy.stack((e_a,e_b)), (c_a, c_b)
 
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         g = uhf.UHF.get_grad(self, mo_coeff, mo_occ, fock)

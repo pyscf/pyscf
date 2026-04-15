@@ -147,10 +147,10 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
     Returns:
         A list of 2D ndarrays for alpha and beta spins
     '''
-    mo_a = mo_coeff[0]
-    mo_b = mo_coeff[1]
-    dm_a = numpy.dot(mo_a*mo_occ[0], mo_a.conj().T)
-    dm_b = numpy.dot(mo_b*mo_occ[1], mo_b.conj().T)
+    mo_a = mo_coeff[0][:,mo_occ[0]>0]
+    mo_b = mo_coeff[1][:,mo_occ[1]>0]
+    dm_a = numpy.dot(mo_a*mo_occ[0][mo_occ[0]>0], mo_a.conj().T)
+    dm_b = numpy.dot(mo_b*mo_occ[1][mo_occ[1]>0], mo_b.conj().T)
     return lib.tag_array((dm_a, dm_b), mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 def make_rdm2(mo_coeff, mo_occ):
@@ -659,7 +659,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
             f1 = reduce(numpy.dot, (orb.conj().T, fock, orb))
             e, c = scipy.linalg.eigh(f1)
             es[idx] = e
-            cs[:,idx] = orb.dot(hf._adjust_phase(c))
+            cs[:,idx] = orb.dot(c)
 
     mo = numpy.empty_like(mo_coeff)
     mo_e = numpy.empty(mo_occ.shape)
@@ -667,6 +667,8 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     eig_(fock[0], mo_coeff[0], viridxa, mo_e[0], mo[0])
     eig_(fock[1], mo_coeff[1], occidxb, mo_e[1], mo[1])
     eig_(fock[1], mo_coeff[1], viridxb, mo_e[1], mo[1])
+    hf._adjust_phase_(mo[0])
+    hf._adjust_phase_(mo[1])
     return mo_e, mo
 
 def det_ovlp(mo1, mo2, occ1, occ2, ovlp):
