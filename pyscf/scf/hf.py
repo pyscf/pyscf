@@ -1372,9 +1372,20 @@ def eig(h, s, overwrite=False):
     .. math:: HC = SCE
     '''
     e, c = scipy.linalg.eigh(h, s, overwrite_a=overwrite)
-    idx = numpy.argmax(abs(c.real), axis=0)
-    c[:,c[idx,numpy.arange(len(e))].real<0] *= -1
+    c = _adjust_phase_(c)
     return e, c
+
+def _adjust_phase_(c):
+    '''Make the largest component of each eigenvector real and positive
+    '''
+    idx = numpy.argmax(numpy.abs(c), axis=0)
+    if c.dtype == numpy.float64:
+        c[:,c[idx,numpy.arange(c.shape[1])]<0] *= -1
+    else:
+        phase = c[idx,numpy.arange(c.shape[1])]
+        phase /= numpy.abs(phase)
+        c *= phase.conj()
+    return c
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the Fock matrix within occupied, open,
@@ -1395,6 +1406,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
             e, c = scipy.linalg.eigh(f1)
             mo[:,idx] = numpy.dot(orb, c)
             mo_e[idx] = e
+    mo = _adjust_phase_(mo)
     return mo_e, mo
 
 def dip_moment(mol, dm, unit='Debye', origin=None, verbose=logger.NOTE, **kwargs):
@@ -1849,10 +1861,8 @@ class SCF(lib.StreamObject):
             return eig(h, s, overwrite)
         else:
             h = x.conj().T.dot(h).dot(x)
-            e, c = scipy.linalg.eigh(h, overwrite_a=overwrite)
-            c = x.dot(c)
-            idx = numpy.argmax(abs(c.real), axis=0)
-            c[:,c[idx,numpy.arange(len(e))].real<0] *= -1
+            e, c = scipy.linalg.eigh(h, overwrite_a=True)
+            c = _adjust_phase_(x.dot(c))
             return e, c
 
     @lib.with_doc(eig.__doc__)

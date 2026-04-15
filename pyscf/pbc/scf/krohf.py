@@ -245,6 +245,7 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
                 e, c = scipy.linalg.eigh(f1)
                 mo_coeff[k][:,idx] = np.dot(orb, c)
                 mo_energy[k,idx] = e
+        mol_hf._adjust_phase_(mo_coeff[k])
 
     if getattr(fock, 'focka', None) is not None:
         mo_ea = lib.einsum('kpi,kpq,kqi->ki', mo_coeff.conj(), fock.focka, mo_coeff).real

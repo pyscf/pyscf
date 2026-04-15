@@ -659,7 +659,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
             f1 = reduce(numpy.dot, (orb.conj().T, fock, orb))
             e, c = scipy.linalg.eigh(f1)
             es[idx] = e
-            cs[:,idx] = numpy.dot(orb, c)
+            cs[:,idx] = orb.dot(hf._adjust_phase(c))
 
     mo = numpy.empty_like(mo_coeff)
     mo_e = numpy.empty(mo_occ.shape)

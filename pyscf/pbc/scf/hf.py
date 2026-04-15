@@ -28,6 +28,7 @@ See Also:
 import sys
 
 import numpy as np
+import scipy.linalg
 import h5py
 from pyscf.scf import hf as mol_hf
 from pyscf import lib
@@ -198,7 +199,7 @@ def eigh_with_canonical_orth(h, s):
         x = mol_hf.canonical_orthogonalization(s[k])
         nmo_k = x.shape[1]
         xhx = x.conj().T.dot(h[k]).dot(x)
-        e, c = np.linalg.eigh(xhx)
+        e, c = scipy.linalg.eigh(xhx)
         mo_energy[k,:nmo_k] = e
         mo_coeff[k,:,:nmo_k] = x.dot(c)
         if nmo_k < nao:

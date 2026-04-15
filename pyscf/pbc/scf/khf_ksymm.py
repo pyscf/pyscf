@@ -149,8 +149,8 @@ def eig_trs(kmf, h_kpts, s_kpts, overwrite=False, x=None):
             xk = x[k]
             if trs_mask[k]:
                 xk = xk.real
-            _, nmo_k = xk.shape
-            e, c = scipy.linalg.eigh(xk.conj().T.dot(h).dot(xk))
+            e, c = kmf._eigh(h_kpts[k], s_kpts[k], x=xk)
+            nmo_k = c.shape[1]
             eig_kpts[k,:nmo_k] = e
             mo_coeff_kpts[k,:,:nmo_k] = xk.dot(c)
             if nmo_k < nao:

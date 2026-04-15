@@ -171,7 +171,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
                     orb = mo_coeff[:,idx]
                     f1 = reduce(numpy.dot, (orb.conj().T, fock, orb))
                     e, c = scipy.linalg.eigh(f1)
-                    mo[:,idx] = numpy.dot(mo_coeff[:,idx], c)
+                    mo[:,idx] = orb.dot(c)
                     mo_e[idx] = e
     else:
         s = mf.get_ovlp()
@@ -185,7 +185,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
                 mo_e[idx] = e
         orbsym = mf.get_orbsym(mo, s)
 
-    mo = lib.tag_array(mo, orbsym=orbsym)
+    mo = lib.tag_array(hf._adjust_phase_(mo), orbsym=orbsym)
     return mo_e, mo
 
 def _symmetrize_canonicalization_(mf, mo_energy, mo_coeff, s):
@@ -360,9 +360,7 @@ def eig(mf, h, s, overwrite=False, x=None, symm_orb=None, irrep_id=None):
             es.append(e)
             orbsym.append([irrep_id[ir]] * e.size)
     e = numpy.hstack(es)
-    c = so2ao_mo_coeff(symm_orb, cs)
-    idx = numpy.argmax(abs(c.real), axis=0)
-    c[:,c[idx,numpy.arange(len(e))].real<0] *= -1
+    c = hf._adjust_phase_(so2ao_mo_coeff(symm_orb, cs))
     c = lib.tag_array(c, orbsym=numpy.hstack(orbsym))
     return e, c
 

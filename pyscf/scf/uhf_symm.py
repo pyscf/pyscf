@@ -27,7 +27,7 @@ from pyscf import lib
 from pyscf import symm
 from pyscf.lib import logger
 from pyscf.scf import hf_symm
-from pyscf.scf import uhf
+from pyscf.scf import hf, uhf
 from pyscf.scf import chkfile
 from pyscf.lib.exceptions import PointGroupSymmetryError
 from pyscf import __config__
@@ -207,14 +207,14 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     if (getattr(mo_coeff, 'orbsym', None) is not None or
         (getattr(mo_coeff[0], 'orbsym', None) is not None and
          getattr(mo_coeff[1], 'orbsym', None) is not None)):
-        orbsyma, orbsymb = mf.get_orbsym(mo_coeff, s)
+        orbsyma, orbsymb = orbsym = mf.get_orbsym(mo_coeff, s)
         def eig_(fock, mo_coeff, idx, es, cs):
             if numpy.count_nonzero(idx) > 0:
                 orb = mo_coeff[:,idx]
                 f1 = reduce(numpy.dot, (orb.conj().T, fock, orb))
                 e, c = scipy.linalg.eigh(f1)
                 es[idx] = e
-                cs[:,idx] = numpy.dot(mo_coeff[:,idx], c)
+                cs[:,idx] = orb.dot(c)
 
         for ir in set(orbsyma):
             idx_ir = orbsyma == ir
@@ -232,17 +232,18 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
                 f1 = reduce(numpy.dot, (orb.conj().T, fock, orb))
                 e, c = scipy.linalg.eigh(f1)
                 es[idx] = e
-                c = numpy.dot(mo_coeff[:,idx], c)
+                c = orb.dot(c)
                 cs[:,idx] = hf_symm._symmetrize_canonicalization_(mf, e, c, s)
 
         eig_(fock[0], mo_coeff[0], occidxa, mo_e[0], mo[0])
         eig_(fock[0], mo_coeff[0], viridxa, mo_e[0], mo[0])
         eig_(fock[1], mo_coeff[1], occidxb, mo_e[1], mo[1])
         eig_(fock[1], mo_coeff[1], viridxb, mo_e[1], mo[1])
-        orbsyma, orbsymb = mf.get_orbsym(mo, s)
+        orbsym = mf.get_orbsym(mo, s)
 
-    mo = (lib.tag_array(mo[0], orbsym=orbsyma),
-          lib.tag_array(mo[1], orbsym=orbsymb))
+    hf._adjust_phase_(mo[0])
+    hf._adjust_phase_(mo[1])
+    mo = lib.tag_array(mo, orbsym=orbsym)
     return mo_e, mo
 
 def get_orbsym(mol, mo_coeff, s=None, check=False):
@@ -251,6 +252,7 @@ def get_orbsym(mol, mo_coeff, s=None, check=False):
     else:
         orbsym = (hf_symm.get_orbsym(mol, mo_coeff[0], s, check),
                   hf_symm.get_orbsym(mol, mo_coeff[1], s, check))
+        orbsym = np.stack(orbsym)
     return orbsym
 
 def get_wfnsym(mf, mo_coeff=None, mo_occ=None, orbsym=None):

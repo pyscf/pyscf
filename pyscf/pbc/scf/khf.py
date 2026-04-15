@@ -330,7 +330,7 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
         f_k = c_k.conj().T.dot(fock[k]).dot(c_k)
         idx = np.where(occmask[k])[0]
         if len(idx) > 0:
-            e, c = np.linalg.eigh(f_k[idx[:,None],idx])
+            e, c = scipy.linalg.eigh(f_k[idx[:,None],idx])
             mo_coeff[k][:,idx] = c_k[:,idx].dot(c)
             mo_energy[k,idx] = e
 
@@ -347,9 +347,10 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
                     break
             idx = idx[:i+1]
             sub_fock = sub_fock[:i+1,:i+1]
-            e, c = np.linalg.eigh(sub_fock)
+            e, c = scipy.linalg.eigh(sub_fock)
             mo_coeff[k][:,idx] = c_k[:,idx].dot(c)
             mo_energy[k,idx] = e
+        mol_hf._adjust_phase_(mo_coeff[k])
     return mo_energy, mo_coeff
 
 def _cast_mol_init_guess(fn):
@@ -701,11 +702,10 @@ class KSCF(pbchf.SCF):
                 mo_coeff_kpts[k] = c
         else:
             for k in range(nkpts):
-                xk = x[k]
-                _, nmo_k = xk.shape
-                ek, ck = scipy.linalg.eigh(xk.conj().T.dot(h_kpts[k]).dot(xk))
-                eig_kpts[k,:nmo_k] = ek
-                mo_coeff_kpts[k,:,:nmo_k] = xk.dot(ck)
+                e, c = self._eigh(h_kpts[k], s_kpts[k], x=x[k])
+                nmo_k = c.shape[1]
+                eig_kpts[k,:nmo_k] = e
+                mo_coeff_kpts[k,:,:nmo_k] = c
                 if nmo_k < nao:
                     eig_kpts[k,nmo_k:] = pbchf.INVALID_ORBITAL_ENERGY
                     mo_coeff_kpts[k,:,nmo_k:] = 0
