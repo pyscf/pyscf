@@ -1031,7 +1031,6 @@ def _get_mgga_pass2(mydf, wv_freq, hermi=1, kpts=numpy.zeros((1,3)), verbose=Non
         if grids_sparse is None:
             t_cell = h_pcell
             t_coeff = h_coeff
-            idx_t = idx_h
             naoh = len(idx_h)
         else:
             idx_l = grids_sparse.ao_idx
