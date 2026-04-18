@@ -42,6 +42,7 @@ from pyscf.pbc import tools
 from pyscf.pbc import df
 from pyscf.pbc.scf.rsjk import RangeSeparatedJKBuilder
 from pyscf.pbc.lib.kpts import KPoints
+from pyscf.pbc.lib.kpts_helper import is_trim
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'pbc_scf_analyze_with_meta_lowdin', True)
@@ -657,10 +658,16 @@ class KSCF(pbchf.SCF):
 
     def check_linear_dependency(self, s, verbose=None):
         log = logger.new_logger(self, verbose)
+        kpts = self.kpts
+        if isinstance(kpts, KPoints):
+            kpts = kpts.kpts_ibz
+        trs_mask = is_trim(self.cell, kpts)
         x_kpts = []
         cond_kpts = []
         discard = False
         for k, s_k in enumerate(s):
+            if trs_mask[k]:
+                s_k = s_k.real
             e, v = scipy.linalg.eigh(s_k)
             abs_e = abs(e)
             emax = abs_e.max()
@@ -688,9 +695,6 @@ class KSCF(pbchf.SCF):
         if discard:
             log.warn("The support for low-rank overlap matrix is not fully tested. "
                      "Please report any bugs you encountered to the developers.")
-        else:
-            x_orth = np.empty((nkpts, nao, nao), dtype=s.dtype)
-            x_orth = np.stack(x_kpts, out=x_orth)
         return x_orth
 
     def eig(self, h_kpts, s_kpts, overwrite=False, x=None):

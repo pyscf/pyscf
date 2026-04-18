@@ -88,25 +88,29 @@ def get_err_vec_orig(s, d, f):
 
 def get_err_vec_orth(s, d, f, Corth):
     '''error vector in orthonormal basis = C.T.conj() (SDF - FDS) C'''
-    # Symmetry information to reduce numerical error in DIIS (issue #1524)
-    orbsym = getattr(Corth, 'orbsym', None)
-    if orbsym is not None:
-        sym_forbid = orbsym[:,None] != orbsym
-
     if isinstance(f, numpy.ndarray) and f.ndim == 2:
         sdf = reduce(lib.dot, (Corth.conj().T, s, d, f, Corth))
-        if orbsym is not None:
-            sdf[sym_forbid] = 0
+        # Symmetry information to reduce numerical error in DIIS (issue #1524)
+        if hasattr(Corth, 'orbsym'):
+            orbsym = Corth.orbsym
+            sdf[orbsym[:,None] != orbsym] = 0
         errvec = (sdf.conj().T - sdf).ravel()
 
     elif isinstance(f, numpy.ndarray) and f.ndim == 3 and s.ndim == 3:
         errvec = []
         for i in range(f.shape[0]):
             sdf = reduce(lib.dot, (Corth[i].conj().T, s[i], d[i], f[i], Corth[i]))
-            if orbsym is not None:
+            errvec.append((sdf.conj().T - sdf))
+        if hasattr(Corth, 'orbsym'):
+            orbsym = Corth.orbsym
+            sym_forbid = orbsym[:,None] != orbsym
+            for sdf in errvec:
                 sdf[sym_forbid] = 0
-            errvec.append((sdf.conj().T - sdf).ravel())
-        errvec = numpy.hstack(errvec)
+        elif hasattr(Corth[0], 'orbsym'):
+            for i, sdf in enumerate(errvec):
+                orbsym = Corth[i].orbsym
+                sdf[orbsym[:,None] != orbsym] = 0
+        errvec = numpy.hstack([x.ravel() for x in errvec])
 
     elif f.ndim == s.ndim+1 and f.shape[0] == 2:  # for UHF
         errvec = numpy.hstack([

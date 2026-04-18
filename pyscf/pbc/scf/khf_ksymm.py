@@ -138,21 +138,23 @@ def eig_trs(kmf, h_kpts, s_kpts, overwrite=False, x=None):
     for k in range(nkpts):
         h = h_kpts[k]
         s = s_kpts[k]
-        if trs_mask[k]:
-            h = h.real
-            s = s.real
         if x is None:
-            e, c = kmf._eigh(h_kpts[k], s_kpts[k])
+            if trs_mask[k]:
+                e, c = kmf._eigh(h.real, s.real)
+            else:
+                e, c = kmf._eigh(h, s)
             eig_kpts[k] = e
             mo_coeff_kpts[k] = c
         else:
             xk = x[k]
             if trs_mask[k]:
-                xk = xk.real
-            e, c = kmf._eigh(h_kpts[k], s_kpts[k], x=xk)
+                e, c = kmf._eigh(h.real, s.real, x=x[k].real)
+            else:
+                e, c = kmf._eigh(h, s, x=x[k])
+            e1, _ = kmf._eigh(h, s)
             nmo_k = c.shape[1]
             eig_kpts[k,:nmo_k] = e
-            mo_coeff_kpts[k,:,:nmo_k] = xk.dot(c)
+            mo_coeff_kpts[k,:,:nmo_k] = c
             if nmo_k < nao:
                 eig_kpts[k,nmo_k:] = pbchf.INVALID_ORBITAL_ENERGY
                 mo_coeff_kpts[k,:,nmo_k:] = 0
@@ -260,11 +262,19 @@ class KsymAdaptedKSCF(khf.KSCF):
 
         assert len(symm_orb) == len(s), 'Number of k-points mismatch'
         log = logger.new_logger(self, verbose)
+        irrep_id = cell.irrep_id
+        kpts = self.kpts
+        if isinstance(kpts, libkpts.KPoints):
+            kpts = kpts.kpts_ibz
+        trs_mask = is_trim(cell, kpts)
         discard = False
         x_kpts = []
         for k, s_k in enumerate(s):
             nirrep = len(symm_orb[k])
+            if trs_mask[k]:
+                s_k = s_k.real
             s_k = symmetrize_matrix(s_k, symm_orb[k])
+            orbsym = []
             xs = []
             for ir in range(nirrep):
                 e, v = scipy.linalg.eigh(s_k[ir])
@@ -278,12 +288,10 @@ class KsymAdaptedKSCF(khf.KSCF):
                 else:
                     x = v / np.sqrt(e)
                 xs.append(x)
-            x_kpts.append(so2ao_mo_coeff(symm_orb[k], xs))
-
-        x_orth = x_kpts
-        if not discard:
-            x_orth = np.stack(x_kpts)
-        return x_orth
+                orbsym.append([irrep_id[ir]] * x.shape[1])
+            x_orth = so2ao_mo_coeff(symm_orb[k], xs)
+            x_kpts.append(lib.tag_array(x_orth, orbsym=numpy.hstack(orbsym)))
+        return x_kpts
 
     @lib.with_doc(khf.get_ovlp.__doc__)
     def get_ovlp(self, cell=None, kpts=None):
