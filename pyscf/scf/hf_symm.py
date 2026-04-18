@@ -508,16 +508,16 @@ class SymAdaptedRHF(hf.RHF):
                 irrep_2dx = irrep_id[ir] % 2 == 0
                 if irrep_1d or irrep_2dx:
                     xs.append(x)
-                    orbsym.append([irrep_id[ir]] * x.shape[1])
+                    orbsym.append(numpy.repeat(irrep_id[ir], x.shape[1]))
                 if not irrep_1d and irrep_2dx:
                     # force 2D irreps using the same coefficients
                     irrep_conj = irrep_id[ir] ^ 1
                     assert irrep_id[ir+1] == irrep_conj
                     xs.append(x)
-                    orbsym.append([irrep_conj] * x.shape[1])
+                    orbsym.append(numpy.repeat(irrep_conj, x.shape[1]))
             else:
                 xs.append(x)
-                orbsym.append([irrep_id[ir]] * x.shape[1])
+                orbsym.append(numpy.repeat(irrep_id[ir], x.shape[1]))
 
         if any(c > 1e10 for c in cond):
             log.warn('Singularity detected in the overlap matrix. '

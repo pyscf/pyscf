@@ -266,7 +266,6 @@ class KsymAdaptedKSCF(khf.KSCF):
         if isinstance(kpts, libkpts.KPoints):
             kpts = kpts.kpts_ibz
         trs_mask = is_trim(cell, kpts)
-        discard = False
         x_kpts = []
         for k, s_k in enumerate(s):
             nirrep = len(symm_orb[k])
@@ -286,7 +285,7 @@ class KsymAdaptedKSCF(khf.KSCF):
                 else:
                     x = v / np.sqrt(e)
                 xs.append(x)
-                orbsym.append([irrep_id[ir]] * x.shape[1])
+                orbsym.append(np.repeat(irrep_id[k][ir], x.shape[1]))
             x_orth = so2ao_mo_coeff(symm_orb[k], xs)
             x_kpts.append(lib.tag_array(x_orth, orbsym=np.hstack(orbsym)))
         return x_kpts
