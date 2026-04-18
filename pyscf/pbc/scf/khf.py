@@ -664,7 +664,6 @@ class KSCF(pbchf.SCF):
         trs_mask = is_trim(self.cell, kpts)
         x_kpts = []
         cond_kpts = []
-        discard = False
         for k, s_k in enumerate(s):
             if trs_mask[k]:
                 s_k = s_k.real
@@ -681,7 +680,6 @@ class KSCF(pbchf.SCF):
                 nao, nmo = x.shape
                 if nmo < nao:
                     log.info(f"kpt {k}: {nao-nmo} small eigenvectors of overlap matrix removed")
-                    discard = True
             else:
                 x = v / np.sqrt(e)
             x_kpts.append(x)
@@ -692,9 +690,6 @@ class KSCF(pbchf.SCF):
 
         x_orth = x_kpts
         nkpts, nao = s.shape[:2]
-        if discard:
-            log.warn("The support for low-rank overlap matrix is not fully tested. "
-                     "Please report any bugs you encountered to the developers.")
         return x_orth
 
     def eig(self, h_kpts, s_kpts, overwrite=False, x=None):

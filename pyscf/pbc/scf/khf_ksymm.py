@@ -146,7 +146,6 @@ def eig_trs(kmf, h_kpts, s_kpts, overwrite=False, x=None):
             eig_kpts[k] = e
             mo_coeff_kpts[k] = c
         else:
-            xk = x[k]
             if trs_mask[k]:
                 e, c = kmf._eigh(h.real, s.real, x=x[k].real)
             else:
@@ -284,13 +283,12 @@ class KsymAdaptedKSCF(khf.KSCF):
                     nao, nmo = x.shape
                     if nmo < nao:
                         log.info(f"kpt {k}: {nao-nmo} small eigenvectors of overlap matrix removed")
-                        discard = True
                 else:
                     x = v / np.sqrt(e)
                 xs.append(x)
                 orbsym.append([irrep_id[ir]] * x.shape[1])
             x_orth = so2ao_mo_coeff(symm_orb[k], xs)
-            x_kpts.append(lib.tag_array(x_orth, orbsym=numpy.hstack(orbsym)))
+            x_kpts.append(lib.tag_array(x_orth, orbsym=np.hstack(orbsym)))
         return x_kpts
 
     @lib.with_doc(khf.get_ovlp.__doc__)
