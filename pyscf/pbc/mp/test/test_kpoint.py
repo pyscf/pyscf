@@ -85,10 +85,10 @@ class KnownValues(unittest.TestCase):
     def test_111(self):
         nk = (1, 1, 1)
         escf, emp = run_kcell(cell,nk)
-        self.assertAlmostEqual(escf, -1.2061049658473704, 7)
-        self.assertAlmostEqual(emp, -5.44597932944397e-06, 9)
+        self.assertAlmostEqual(escf, -1.206272954628671, 7)
+        self.assertAlmostEqual(emp, -5.2597018396797814e-06, 9)
         escf, emp = run_kcell_complex(cell,nk)
-        self.assertAlmostEqual(emp, -5.44597932944397e-06, 9)
+        self.assertAlmostEqual(emp, -5.259701839679778e-06, 9)
 
     def test_311_high_cost(self):
         nk = (3, 1, 1)

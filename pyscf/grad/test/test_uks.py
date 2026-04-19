@@ -330,6 +330,56 @@ class KnownValues(unittest.TestCase):
         e2 = smf(mol2)
         self.assertAlmostEqual((e1-e2)/dx, g[1,0], 5)
 
+    def test_uks_grid_no_response_one_atom(self):
+        mol = gto.M(
+            atom = "Na 10 100 1000",
+            basis = "def2-svp",
+            charge = 0,
+            spin = 1,
+            verbose = 0,
+        )
+
+        mf = dft.UKS(mol, xc = 'wB97M-V').density_fit(auxbasis = "def2-universal-jkfit")
+        mf.grids.atom_grid = (2,6)
+        mf.nlcgrids.atom_grid = (2,6)
+        mf.conv_tol = 1e-12
+
+        ref_gradient = numpy.zeros((1,3))
+
+        mf.kernel()
+        assert mf.converged
+
+        gobj = mf.Gradients()
+        # gobj.grid_response = True
+        test_gradient = gobj.kernel()
+
+        assert numpy.abs(numpy.max(test_gradient - ref_gradient)) < 1e-9
+
+    def test_uks_grid_response_one_atom(self):
+        mol = gto.M(
+            atom = "Na 10 100 1000",
+            basis = "def2-svp",
+            charge = 0,
+            spin = 1,
+            verbose = 0,
+        )
+
+        mf = dft.UKS(mol, xc = 'wB97M-V').density_fit(auxbasis = "def2-universal-jkfit")
+        mf.grids.atom_grid = (2,6)
+        mf.nlcgrids.atom_grid = (2,6)
+        mf.conv_tol = 1e-12
+
+        ref_gradient = numpy.zeros((1,3))
+
+        mf.kernel()
+        assert mf.converged
+
+        gobj = mf.Gradients()
+        gobj.grid_response = True
+        test_gradient = gobj.kernel()
+
+        assert numpy.abs(numpy.max(test_gradient - ref_gradient)) < 1e-9
+
 
 if __name__ == "__main__":
     print("Full Tests for UKS Gradients")

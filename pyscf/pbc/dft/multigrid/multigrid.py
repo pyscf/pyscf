@@ -33,7 +33,6 @@ from pyscf.pbc import gto
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.gto.pseudo import pp_int
 from pyscf.pbc.dft import numint, gen_grid
-from pyscf.pbc.scf.khf import KSCF
 from pyscf.pbc.df.df_jk import (
     _format_dms,
     _format_kpts_band,
@@ -49,8 +48,6 @@ from pyscf.pbc.dft.multigrid.utils import (
     _takebak_5d,
 )
 
-#sys.stderr.write('WARN: multigrid is an experimental feature. It is still in '
-#                 'testing\nFeatures and APIs may be changed in the future.\n')
 
 EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-2)
 TO_EVEN_GRIDS = getattr(__config__, 'pbc_dft_multigrid_to_even', False)
@@ -125,8 +122,11 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
             weights = weights.reshape(-1, 4, numpy.prod(mesh))
         else:
             n_mat = weights.shape[0]
-    else:
-        raise NotImplementedError
+    elif xctype == 'MGGA':
+        if weights.ndim == 2:
+            weights = weights.reshape(-1, 5, numpy.prod(mesh))
+        else:
+            n_mat = weights.shape[0]
 
     a = cell.lattice_vectors()
     b = numpy.linalg.inv(a.T)
@@ -266,12 +266,13 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
     xctype = xctype.upper()
     if xctype == 'LDA':
         comp = 1
+    elif xctype == 'GGA' and hermi == 1:
+        raise RuntimeError('hermi=1 is not supported for GGA functional')
     elif xctype == 'GGA':
-        if hermi == 1:
-            raise RuntimeError('hermi=1 is not supported for GGA functional')
         comp = 4
-    else:
-        raise NotImplementedError('meta-GGA')
+    elif xctype == 'MGGA':
+        comp = 6 if MGGA_DENSITY_LAPL else 5
+
     if comp == 1:
         shape = (numpy.prod(submesh),)
     else:
@@ -391,8 +392,7 @@ def get_nuc(mydf, kpts=None):
     return numpy.asarray(vne)
 
 def get_pp(mydf, kpts=None, max_memory=4000):
-    '''Get the periodic pseudopotential nuc-el AO matrix, with G=0 removed.
-    '''
+    '''Get the periodic pseudopotential nuc-el AO matrix, with G=0 removed.'''
     from pyscf import gto
     if kpts is None:
         kpts = numpy.zeros((1, 3))
@@ -544,7 +544,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
 
 
 def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0,
-               rhog_high_order=RHOG_HIGH_ORDER):
+               rhog_high_order=RHOG_HIGH_ORDER, xctype=None):
     log = logger.Logger(mydf.stdout, mydf.verbose)
     cell = mydf.cell
 
@@ -557,8 +557,9 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0,
         mydf.tasks = tasks = multi_grids_tasks(cell, mydf.mesh, log)
         log.debug('Multigrid ntasks %s', len(tasks))
 
-    assert (deriv < 2)
-    #hermi = hermi and abs(dms - dms.transpose(0,1,3,2).conj()).max() < 1e-9
+    if xctype == 'MGGA':
+        rhog_high_order = True
+
     gga_high_order = False
     if deriv == 0:
         xctype = 'LDA'
@@ -566,18 +567,17 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0,
 
     elif deriv == 1:
         if rhog_high_order:
-            xctype = 'GGA'
-            rhodim = 4
+            xctype = xctype or 'GGA'
+            if xctype == 'MGGA':
+                rhodim = 6 if MGGA_DENSITY_LAPL else 5
+            else:
+                rhodim = 4
         else:  # approximate high order derivatives in reciprocal space
             gga_high_order = True
             xctype = 'LDA'
             rhodim = 1
             deriv = 0
-        #if hermi != 1 and not gamma_point(kpts):
-        #    raise NotImplementedError
-
-    elif deriv == 2:  # meta-GGA
-        raise NotImplementedError
+    assert (deriv < 2)  # grid-laplacian MGGA not supported
 
     ignore_imag = (hermi == 1)
 
@@ -603,10 +603,15 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0,
                         if xctype == 'LDA':
                             ao_dm = lib.dot(ao_h[k], dms_hh[i,k])
                             rho_sub = numpy.einsum('xi,xi->x', ao_dm, ao_h[k].conj())
-                        else:
+                        elif xctype == 'GGA' or xctype == 'MGGA':
                             rho_sub = numint.eval_rho(h_cell, ao_h[k], dms_hh[i,k],
-                                                      mask, xctype, hermi)
-                        rho[i,:,p0:p1] += rho_sub
+                                                      mask, 'GGA', hermi)
+                        rho[i,:4,p0:p1] += rho_sub
+                        if xctype == 'MGGA':
+                            tau_sub = numint.eval_rho(
+                                h_cell, ao_h[k], dms_hh[i,k], mask, 'MGGA', hermi,
+                                with_lapl=False)[4]
+                            rho[i,4,p0:p1] += tau_sub
                 ao_h = ao_h_etc = ao_dm = None
             if ignore_imag:
                 rho = rho.real
@@ -671,6 +676,40 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0,
                 else:
                     raise NotImplementedError
 
+                if xctype == 'MGGA':
+                    rho_mgga = numpy.zeros((nset, rhodim, ngrids), dtype=rho.dtype)
+                    rho_mgga[:,:4] = rho
+                    rho = rho_mgga
+                    grids_t = gen_grid.UniformGrids(t_cell)
+                    grids_t.mesh = mesh
+                    dms_tt = numpy.asarray(dms[:,:,idx_t[:,None],idx_t], order='C')
+                    pgto_dms = lib.einsum('nkij,pi,qj->nkpq', dms_tt, t_coeff, t_coeff)
+                    tau = numpy.zeros((nset, ngrids), dtype=numpy.complex128)
+                    fftdf = fft.FFTDF(t_cell, kpts=kpts)
+                    for ao_t_etc, p0, p1 in fftdf.aoR_loop(grids_t, kpts, deriv):
+                        ao_t, mask = ao_t_etc[0], ao_t_etc[2]
+                        for k in range(nkpts):
+                            for i in range(nset):
+                                tau_sub = numint.eval_rho(
+                                    t_cell, ao_t[k], pgto_dms[i,k], mask,
+                                    'MGGA', hermi, with_lapl=False)[4]
+                                tau[i,p0:p1] += tau_sub
+                    if len(idx_l) > 0:
+                        grids_l = gen_grid.UniformGrids(l_pcell)
+                        grids_l.mesh = mesh
+                        dms_ll = numpy.asarray(dms[:,:,idx_l[:,None],idx_l], order='C')
+                        pgto_dms = lib.einsum('nkij,pi,qj->nkpq', dms_ll, l_coeff, l_coeff)
+                        fftdf = fft.FFTDF(l_pcell, kpts=kpts)
+                        for ao_l_etc, p0, p1 in fftdf.aoR_loop(grids_l, kpts, deriv):
+                            ao_l, mask = ao_l_etc[0], ao_l_etc[2]
+                            for k in range(nkpts):
+                                for i in range(nset):
+                                    tau_sub = numint.eval_rho(
+                                        l_pcell, ao_l[k], pgto_dms[i,k], mask,
+                                        'MGGA', hermi, with_lapl=False)[4]
+                                    tau[i,p0:p1] -= tau_sub
+                    rho[:,4] = tau.real if ignore_imag else tau
+
         weight = 1./nkpts * cell.vol/ngrids
         rho_freq = tools.fft(rho.reshape(nset*rhodim, -1), mesh)
         rho_freq *= weight
@@ -698,8 +737,10 @@ def _eval_rho_bra(cell, dms, shls_slice, hermi, xctype, kpts, grids,
     nset = dms.shape[0]
     if xctype == 'LDA':
         rhodim = 1
-    else:
+    elif xctype == 'GGA':
         rhodim = 4
+    else:
+        rhodim = 6 if MGGA_DENSITY_LAPL else 5
 
     if rcut > rmax * R_RATIO_SUBLOOP:
         rho = eval_rho(cell, dms, shls_slice, hermi, xctype, kpts,
@@ -777,8 +818,10 @@ def _eval_rho_ket(cell, dms, shls_slice, hermi, xctype, kpts, grids,
     nset = dms.shape[0]
     if xctype == 'LDA':
         rhodim = 1
-    else:
+    elif xctype == 'GGA':
         rhodim = 4
+    else:
+        rhodim = 6 if MGGA_DENSITY_LAPL else 5
 
     if rcut > rmax * R_RATIO_SUBLOOP:
         rho = eval_rho(cell, dms, shls_slice, hermi, xctype, kpts,
@@ -946,24 +989,25 @@ def _get_j_pass2(mydf, vG, hermi=1, kpts=numpy.zeros((1,3)), verbose=None):
     return vj_kpts
 
 
-def _get_gga_pass2(mydf, vG, hermi=1, kpts=numpy.zeros((1,3)), verbose=None):
-    #if hermi != 1:
-    #    raise NotImplementedError('_get_gga_pass2 assumes hermi=1')
+def _get_mgga_pass2(mydf, wv_freq, hermi=1, kpts=numpy.zeros((1,3)), verbose=None):
     log = logger.new_logger(mydf, verbose)
     cell = mydf.cell
     nkpts = len(kpts)
-    nao = cell.nao_nr()
     nx, ny, nz = mydf.mesh
-    vG = vG.reshape(-1,4,nx,ny,nz)
-    nset = vG.shape[0]
+    wv_freq = wv_freq.reshape(-1, 5, nx, ny, nz)
+    nset = wv_freq.shape[0]
 
-    at_gamma_point = gamma_point(kpts)
-    if at_gamma_point:
-        veff = numpy.zeros((nset,nkpts,nao,nao))
-    else:
-        veff = numpy.zeros((nset,nkpts,nao,nao), dtype=numpy.complex128)
+    Gv = cell.get_Gv(mydf.mesh)
+    vg_freq = wv_freq[:,:4].reshape(nset, 4, -1).copy()
+    vg_freq[:,0] -= numpy.einsum('nxp,px->np', vg_freq[:,1:4], 1j*Gv)
+    vmat_kpts = _get_j_pass2(mydf, vg_freq[:,0], hermi, kpts, verbose=log)
 
-    for grids_dense, grids_sparse in mydf.tasks:
+    tasks = getattr(mydf, 'tasks', None)
+    if tasks is None:
+        mydf.tasks = tasks = multi_grids_tasks(cell, mydf.mesh, log)
+        log.debug('Multigrid ntasks %s', len(tasks))
+
+    for grids_dense, grids_sparse in tasks:
         mesh = grids_dense.mesh
         ngrids = numpy.prod(mesh)
         log.debug('mesh %s', mesh)
@@ -971,89 +1015,55 @@ def _get_gga_pass2(mydf, vG, hermi=1, kpts=numpy.zeros((1,3)), verbose=None):
         gx = numpy.fft.fftfreq(mesh[0], 1./mesh[0]).astype(numpy.int32)
         gy = numpy.fft.fftfreq(mesh[1], 1./mesh[1]).astype(numpy.int32)
         gz = numpy.fft.fftfreq(mesh[2], 1./mesh[2]).astype(numpy.int32)
-        #:sub_vG = vG[:,:,gx[:,None,None],gy[:,None],gz].reshape(-1,ngrids)
-        sub_vG = _take_5d(vG, (None, None, gx, gy, gz)).reshape(-1,ngrids)
-        v_rs = tools.ifft(sub_vG, mesh).reshape(nset,4,ngrids)
-        vR = numpy.asarray(v_rs.real, order='C')
-        vI = numpy.asarray(v_rs.imag, order='C')
-        ignore_vG_imag = hermi == 1 or abs(vI.sum()) < IMAG_TOL
-        if ignore_vG_imag:
-            v_rs = vR
-        elif veff.dtype == numpy.double:
-            # ensure result complex array if tddft amplitudes are complex while
-            # at gamma point
-            veff = veff.astype(numpy.complex128)
+        sub_wtauG = _take_4d(wv_freq[:,4], (None, gx, gy, gz)).reshape(nset, ngrids)
+        wtau_rs = tools.ifft(sub_wtauG, mesh).reshape(nset, ngrids) * .5
+        if hermi != 1 and numpy.iscomplexobj(wtau_rs) and abs(wtau_rs.imag).max() > IMAG_TOL:
+            vmat_kpts = vmat_kpts.astype(numpy.complex128, copy=False)
+        elif numpy.iscomplexobj(vmat_kpts):
+            wtau_rs = wtau_rs.astype(numpy.complex128, copy=False)
+        else:
+            wtau_rs = wtau_rs.real
+
+        idx_h = grids_dense.ao_idx
+        h_cell = grids_dense.cell
+        h_pcell, h_coeff = h_cell.decontract_basis(to_cart=True, aggregate=True)
 
         if grids_sparse is None:
-            idx_h = grids_dense.ao_idx
+            t_cell = h_pcell
+            t_coeff = h_coeff
             naoh = len(idx_h)
-            fftdf = fft.FFTDF(cell, kpts=kpts)
-            for ao_h_etc, p0, p1 in fftdf.aoR_loop(grids_dense, kpts, deriv=1):
-                ao_h = ao_h_etc[0]
-                for k in range(nkpts):
-                    for i in range(nset):
-                        aow = numint._scale_ao(ao_h[k], v_rs[i])
-                        v = lib.dot(ao_h[k][0].conj().T, aow)
-                        veff[i,k,idx_h[:,None],idx_h] += v
-                        if hermi == 1:
-                            veff[i,k,idx_h[:,None],idx_h] += v.conj().T
-                        else:
-                            aow = numint._scale_ao(ao_h[k], v_rs[i].conj())
-                            v = lib.dot(aow.conj().T, ao_h[k][0])
-                            veff[i,k,idx_h[:,None],idx_h] += v
-                ao_h = ao_h_etc = None
-
         else:
-            idx_h = grids_dense.ao_idx
             idx_l = grids_sparse.ao_idx
-            # idx_t = numpy.append(idx_h, idx_l)
             naoh = len(idx_h)
-
-            h_cell = grids_dense.cell
             l_cell = grids_sparse.cell
-            h_pcell, h_coeff = h_cell.decontract_basis(to_cart=True, aggregate=True)
             l_pcell, l_coeff = l_cell.decontract_basis(to_cart=True, aggregate=True)
             t_cell = h_pcell + l_pcell
             t_coeff = scipy.linalg.block_diag(h_coeff, l_coeff)
 
-            nshells_h = _pgto_shells(h_cell)
-            nshells_t = _pgto_shells(t_cell)
-            shls_slice = (0, nshells_h, 0, nshells_t)
-            vpR = eval_mat(t_cell, vR, shls_slice, 1, 0, 'GGA', kpts)
-            vp = vpR = lib.einsum('nkpq,pi,qj->nkij', vpR, h_coeff, t_coeff)
-            if not ignore_vG_imag:
-                vpI = eval_mat(t_cell, vI, shls_slice, 1, 0, 'GGA', kpts)
-                vpI = lib.einsum('nkpq,pi,qj->nkij', vpI, h_coeff, t_coeff)
-                vp = numpy.asarray(vpR) + numpy.asarray(vpI) * 1j
-            veff[:,:,idx_h[:,None],idx_h] += vp[:,:,:,:naoh]
-            veff[:,:,idx_h[:,None],idx_l] += vp[:,:,:,naoh:]
-            if hermi == 1:
-                veff[:,:,idx_h[:,None],idx_h] += vp[:,:,:,:naoh].conj().transpose(0,1,3,2)
-                veff[:,:,idx_l[:,None],idx_h] += vp[:,:,:,naoh:].conj().transpose(0,1,3,2)
-            else:
-                if not ignore_vG_imag:
-                    # eval_mat only supports <nabla i|v|j>. Evaluate <i|v|nabla j>
-                    # by conj(<nabla j|conj(v)|>)
-                    vp = numpy.asarray(vpR) - numpy.asarray(vpI) * 1j
-                veff[:,:,idx_h[:,None],idx_h] += vp[:,:,:,:naoh].conj().transpose(0,1,3,2)
-                veff[:,:,idx_l[:,None],idx_h] += vp[:,:,:,naoh:].conj().transpose(0,1,3,2)
+        grids_t = gen_grid.UniformGrids(t_cell)
+        grids_t.mesh = mesh
+        ao_loc = t_cell.ao_loc_nr()
+        shls_slice = (0, t_cell.nbas)
+        fftdf = fft.FFTDF(t_cell, kpts=kpts)
+        tnao = t_coeff.shape[0]
+        vp = numpy.zeros((nset, nkpts, tnao, tnao), dtype=vmat_kpts.dtype)
+        for ao_t_etc, p0, p1 in fftdf.aoR_loop(grids_t, kpts, deriv=1):
+            ao_t, mask = ao_t_etc[0], ao_t_etc[2]
+            for k in range(nkpts):
+                for i in range(nset):
+                    vp[i,k] += numint._tau_dot(
+                        t_cell, ao_t[k], ao_t[k], wtau_rs[i,p0:p1],
+                        mask, shls_slice, ao_loc)
+        vp = lib.einsum('nkpq,pi,qj->nkij', vp, t_coeff, t_coeff)
 
-            shls_slice = (nshells_h, nshells_t, 0, nshells_h)
-            vpR = eval_mat(t_cell, vR, shls_slice, 1, 0, 'GGA', kpts)
-            vp = vpR = lib.einsum('nkpq,pi,qj->nkij', vpR, l_coeff, h_coeff)
-            if not ignore_vG_imag:
-                vpI = eval_mat(t_cell, vI, shls_slice, 1, 0, 'GGA', kpts)
-                vpI = lib.einsum('nkpq,pi,qj->nkij', vpI, l_coeff, h_coeff)
-                vp = numpy.asarray(vpR) + numpy.asarray(vpI) * 1j
-            veff[:,:,idx_l[:,None],idx_h] += vp
-            if hermi == 1:
-                veff[:,:,idx_h[:,None],idx_l] += vp.conj().transpose(0,1,3,2)
-            else:
-                if not ignore_vG_imag:
-                    vp = numpy.asarray(vpR) - numpy.asarray(vpI) * 1j
-                veff[:,:,idx_h[:,None],idx_l] += vp.conj().transpose(0,1,3,2)
+        if grids_sparse is None:
+            vmat_kpts[:, :, idx_h[:, None], idx_h] += vp
+        else:
+            vmat_kpts[:, :, idx_h[:, None], idx_h] += vp[:, :, :naoh, :naoh]
+            vmat_kpts[:, :, idx_h[:, None], idx_l] += vp[:, :, :naoh, naoh:]
+            vmat_kpts[:, :, idx_l[:, None], idx_h] += vp[:, :, naoh:, :naoh]
 
-    return veff
+    return vmat_kpts
 
 
 def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
@@ -1103,9 +1113,9 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     elif xctype == 'GGA':
         deriv = 1
     elif xctype == 'MGGA':
-        deriv = 2 if MGGA_DENSITY_LAPL else 1
-        raise NotImplementedError
-    rhoG = _eval_rhoG(mydf, dm_kpts, hermi, kpts, deriv)
+        assert not MGGA_DENSITY_LAPL
+        deriv = 1
+    rhoG = _eval_rhoG(mydf, dm_kpts, hermi, kpts, deriv, xctype=xctype)
 
     mesh = mydf.mesh
     ngrids = numpy.prod(mesh)
@@ -1124,7 +1134,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
 
     if xctype == 'LDA':
         exc, vxc = ni.eval_xc_eff(xc_code, rhoR[0], deriv=1, xctype=xctype)[:2]
-    else:
+    elif xctype == 'GGA' or xctype == 'MGGA':
         exc, vxc = ni.eval_xc_eff(xc_code, rhoR, deriv=1, xctype=xctype)[:2]
     excsum = rhoR[0].dot(exc).sum() * weight
     wv = weight * vxc
@@ -1145,6 +1155,8 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         Gv = cell.get_Gv(ni.mesh)
         wv_freq[0] -= numpy.einsum('xp,px->p', 1j*wv_freq[1:4], Gv)
         veff = _get_j_pass2(mydf, wv_freq[0], hermi, kpts_band, verbose=log)
+    elif xctype == 'MGGA':
+        veff = _get_mgga_pass2(mydf, wv_freq, hermi, kpts_band, verbose=log)
     veff = _format_jks(veff, dm_kpts, input_band, kpts)
 
     if return_j:
@@ -1212,11 +1224,11 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     elif xctype == 'GGA':
         deriv = 1
     elif xctype == 'MGGA':
-        raise NotImplementedError
+        deriv = 2 if MGGA_DENSITY_LAPL else 1
 
     mesh = mydf.mesh
     ngrids = numpy.prod(mesh)
-    rhoG = _eval_rhoG(mydf, dm_kpts, hermi, kpts, deriv)
+    rhoG = _eval_rhoG(mydf, dm_kpts, hermi, kpts, deriv, xctype=xctype)
     rhoG = rhoG.reshape(2,-1,ngrids)
     rhoG_sf = rhoG[0,0] + rhoG[1,0]
     coulG = tools.get_coulG(cell, mesh=mesh)
@@ -1252,6 +1264,8 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         Gv = cell.get_Gv(ni.mesh)
         wv_freq[:,0] -= numpy.einsum('nxp,px->np', wv_freq[:,1:4], 1j*Gv)
         veff = _get_j_pass2(mydf, wv_freq[:,0], hermi, kpts_band, verbose=log)
+    elif xctype == 'MGGA':
+        veff = _get_mgga_pass2(mydf, wv_freq, hermi, kpts_band, verbose=log)
     veff = _format_jks(veff, dm_kpts, input_band, kpts)
     veff = veff.reshape(2, len(kpts_band), nao, nao)
 
@@ -1286,7 +1300,6 @@ def nr_rks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
         deriv = 1
     elif xctype == 'MGGA':
         deriv = 2 if MGGA_DENSITY_LAPL else 1
-        raise NotImplementedError
 
     if fxc is None:
         fxc = cache_xc_kernel1(mydf, xc_code, dm0, spin=0, kpts=kpts)[2]
@@ -1301,7 +1314,7 @@ def nr_rks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
 
-    rhoG = _eval_rhoG(mydf, dms, hermi, kpts, deriv)
+    rhoG = _eval_rhoG(mydf, dms, hermi, kpts, deriv, xctype=xctype)
     rho1 = tools.ifft(rhoG.reshape(-1,ngrids), mesh)
     if hermi == 1:
         rho1 = rho1.real
@@ -1327,6 +1340,8 @@ def nr_rks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
         Gv = cell.get_Gv(ni.mesh)
         wv[:,0] -= numpy.einsum('nxp,px->np', wv[:,1:4], 1j*Gv)
         veff = _get_j_pass2(mydf, wv[:,0], hermi, kpts, verbose=log)
+    elif xctype == 'MGGA':
+        veff = _get_mgga_pass2(mydf, wv, hermi, kpts, verbose=log)
 
     return veff.reshape(dm_kpts.shape)
 
@@ -1362,7 +1377,6 @@ def nr_uks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
         deriv = 1
     elif xctype == 'MGGA':
         deriv = 2 if MGGA_DENSITY_LAPL else 1
-        raise NotImplementedError
 
     if fxc is None:
         fxc = cache_xc_kernel1(mydf, xc_code, dm0, spin=1, kpts=kpts)[2]
@@ -1378,7 +1392,7 @@ def nr_uks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
     nset, nkpts, nao = dms.shape[:3]
     nstates = nset // 2
 
-    rhoG = _eval_rhoG(mydf, dms, hermi, kpts, deriv)
+    rhoG = _eval_rhoG(mydf, dms, hermi, kpts, deriv, xctype=xctype)
     rho1 = tools.ifft(rhoG.reshape(-1,ngrids), mesh)
     if hermi == 1:
         rho1 = rho1.real
@@ -1405,6 +1419,9 @@ def nr_uks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
         Gv = cell.get_Gv(ni.mesh)
         wv[:,:,0] -= numpy.einsum('anxp,px->anp', 1j*wv[:,:,1:4], Gv)
         veff = _get_j_pass2(mydf, wv[:,:,0], hermi, kpts, verbose=log)
+    elif xctype == 'MGGA':
+        veff = _get_mgga_pass2(mydf, wv.reshape(-1, 5, ngrids), hermi,
+                               kpts, verbose=log)
 
     return veff.reshape(dm_kpts.shape)
 
@@ -1447,11 +1464,11 @@ def cache_xc_kernel1(mydf, xc_code, dm, spin=0, kpts=None):
         comp = 4
     elif xctype == 'MGGA':
         deriv = 2 if MGGA_DENSITY_LAPL else 1
-        comp = 6
+        comp = 6 if MGGA_DENSITY_LAPL else 5
 
     hermi = 1
     weight = cell.vol / ngrids
-    rhoG = _eval_rhoG(mydf, dm, hermi, kpts, deriv)
+    rhoG = _eval_rhoG(mydf, dm, hermi, kpts, deriv, xctype=xctype)
     rho = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
     rho = rho.reshape(rhoG.shape)
 

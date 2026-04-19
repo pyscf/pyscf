@@ -257,6 +257,11 @@ class KnownValues(unittest.TestCase):
         td2 = mol2.RHF().PCM().run(conf_tol=1e-12).TDA(equilibrium_solvation=True).run(conf_tol=1e-10)
         assert abs((td2.e_tot[0]-td1.e_tot[0])/0.002- de[0,2]) < 1e-5
 
+    def test_grad_lazy_run(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='631g', verbose=0)
+        g = mol.RHF().PCM().Gradients().run()
+        assert abs(lib.fp(g.de) - 0.06742803540514217) < 1e-6
+
     def test_iswig_grad(self):
         mol = gto.M(
             atom = """
