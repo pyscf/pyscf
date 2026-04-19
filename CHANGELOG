@@ -3,42 +3,45 @@ PySCF 2.13.0 (2026-04-20)
 * Added
   - ASE band structure interface
   - SOC-ECP for PBC DFT methods
-  - get_rho_with_derivatives() function
-  - Support PCM ISWIG surface discretization method
-  - Support grid_response for Stratmann grid partition scheme
-  - Support Cartesian basis in PCM solvent module
-  - Add gw_ac/ugw_ac
-  - meta-GGA are computed in a slow mode in multigrid methods
-  - Support meta-GGA in multigrid methods (currently computed in a slower mode)
+  - `get_rho_with_derivatives()` function
+  - PCM ISWIG surface discretization method
+  - `grid_response` support for the Stratmann grid partition scheme
+  - Cartesian basis support in the PCM solvent module
+  - `gw_ac` and `ugw_ac` methods
+  - meta-GGA support in multigrid methods (currently computed in a slower mode)
+  - SGX gradients
 * Improvements
-  - Add warning for basis-element mismatch
-  - Update GTH basis set and pseudo potential databases
-  - force real orbitals for time-reversal symmetry KSCF
-  - Added sanity Check to avoid bugs in the newton solver for PBC mean-field
-  - Update ccECP from pseudopotentiallibrary
-  - Improve PBC 2c2e integral accuracy to improve numerical stability for PBC-GDF methods
+  - Warnings for basis-element mismatch
+  - Updated GTH basis set and pseudopotential databases
+  - Enforced real orbitals for time-reversal symmetric KSCF
+  - Added sanity checks to prevent bugs in the Newton solver for PBC mean-field methods
+  - Updated ccECP from pseudopotentiallibrary.org
+  - Improved PBC 2c2e integral accuracy for better numerical stability in PBC-GDF methods
+  - SGX implementation for improved numerical accuracy and performance
+  - Canonical orthogonalization by default in the SCF eigenvalue solver
 * Fixes
-  - Fix rsjk initialization
-  - Skips printing of velocity and magnetic dipole moments when ECP detected
-  - Fix mo_coeff reshape size in pbc/scf/hf DF JK
-  - Fix XYZ file parser
-  - Fix a bug that PCM finds wrong radius of ECP atoms
-  - Fix inconsistent symmetry axes assignment for D2h molecules #2773
-  - Load default cell and kpts in KGHF.get_hcore
-  - Fix POSCAR parser bug
-  - Handle ghost atoms in QM/MM interface
+  - RSJK initialization
+  - Skipped printing of velocity and magnetic dipole moments when ECP is detected
+  - `mo_coeff` reshape size in PBC SCF HF DF-JK
+  - XYZ file parser
+  - A bug where PCM assigned incorrect radii to ECP atoms
+  - Inconsistent symmetry axis assignment for D₂h molecules (#2773)
+  - Load default cell and k-points in `KGHF.get_hcore`
+  - POSCAR parser bug
+  - Handle ghost atoms in the QM/MM interface
   - Errors in AO values caused by an incorrect diffuseness estimator
-  - Fix the edge case for an empty array for df_jk construction in pbc df
-  - Fix wrong DFMP2 energy when using jkfit in HF and rifit in MP2
-  - Fix edge case for the frozen attribute (frozen=0)
-  - Fix PBC nuclear gradients fft_jk.get_k_e1 with exxdiv=ewald 
-* API updates
-  - Use multigrid2 as the default multigrid integrator.
-  - Smearing functions are collected in a separated module.
-  - The default auxbasis_response level is set to 2 (full response) in density fitting hessian methods
-  - Dump nelecas in mcscf chkfile
-  - Allow to skip run() for intermediate instances in a method chain
+  - Edge case involving empty arrays in DF-JK construction for PBC DF
+  - Incorrect DF-MP2 energy when using `jkfit` in HF and `rifit` in MP2
+  - Edge case for the `frozen` attribute (`frozen=0`)
+  - PBC nuclear gradients in `fft_jk.get_k_e1` with `exxdiv=ewald`
+* API Updates
+  - Set `multigrid2` as the default multigrid integrator
+  - Smearing functions are moved to a separate module
+  - Set default `auxbasis_response` level to 2 (full response) in density-fitting Hessian methods
+  - Dump `nelecas` in mcscf chkfile
+  - Allow to skip `.run()` for intermediate instances in method chains
   - In method pipelines, `.run()` of intermediate steps is now executed automatically
+  - Linear dependency for orbital bases are removed by default in SCF
 
 
 PySCF 2.12.1 (2026-01-27)
@@ -103,7 +106,7 @@ PySCF 2.11.0 (2025-10-15)
   - Analytical nuclear gradients for DFT+U methods
   - Gaussian charge models for MM particles in QM/MM interface
   - MC25 functional parameters
-  - Stress tensor for semi-local functioanlsGGA, 
+  - Stress tensor for semi-local functioanlsGGA,
   - Fixed-Size APC active space selection
 * Improved
   - libxc interface for customizing functional parameters
@@ -299,7 +302,7 @@ PySCF 2.6.0 (2024-06-01)
 PySCF 2.5.0 (2024-02-03)
 ------------------------
 * Added
-  - SA-CASSCF Nonadiabatic Coupling Vectors 
+  - SA-CASSCF Nonadiabatic Coupling Vectors
   - The to_gpu function to convert pyscf objects to gpu4pyscf objects.
   - 4th, and 5th order XC derivatives.
 * Improved
