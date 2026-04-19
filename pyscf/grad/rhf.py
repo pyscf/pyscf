@@ -348,27 +348,20 @@ class GradientsBase(lib.StreamObject):
         if mol is None: mol = self.mol
         if dm is None: dm = self.base.make_rdm1()
         cpu0 = (logger.process_clock(), logger.perf_counter())
-        if omega is None:
+        with mol.with_range_coulomb(omega):
             vj, vk = get_jk(mol, dm)
-        else:
-            with mol.with_range_coulomb(omega):
-                vj, vk = get_jk(mol, dm)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
     def get_j(self, mol=None, dm=None, hermi=0, omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.base.make_rdm1()
-        if omega is None:
-            return get_j(mol, dm)
         with mol.with_range_coulomb(omega):
             return get_j(mol, dm)
 
     def get_k(self, mol=None, dm=None, hermi=0, omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.base.make_rdm1()
-        if omega is None:
-            return get_k(mol, dm)
         with mol.with_range_coulomb(omega):
             return get_k(mol, dm)
 

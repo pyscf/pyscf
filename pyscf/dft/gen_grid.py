@@ -234,6 +234,19 @@ def original_becke(g):
     pass
 
 def becke_lko(g):
+    '''
+    Improved Becke partitioning scheme to provide more smooth grids weights.
+
+    Reference:
+        An improved molecular partitioning scheme for numerical quadratures in
+        density functional theory.
+        H. Laqua; J. Kussmann; C. Ochsenfeld
+        J. Chem. Phys. 149, 204111 (2018)
+        DOI: 10.1063/1.5049435
+
+    This is a placeholder function. The actual implementation is provided in the
+    C routine VXCgen_grid_lko.
+    '''
     pass
 
 def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,

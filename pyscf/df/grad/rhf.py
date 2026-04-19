@@ -67,23 +67,21 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True,
             is set to ED.
     '''
     assert (with_j or with_k)
-    if (
-        with_k
-        and hasattr(mf_grad.base, "only_dfj")
-        and mf_grad.base.only_dfj
-    ):
+    if not with_k:
+        return get_j(mf_grad, mol=mol, dm=dm, hermi=hermi), None
+
+    if mf_grad.base.only_dfj:
+        if mol is None: mol = mf_grad.mol
         if with_j:
             vj = get_j(mf_grad, mol=mol, dm=dm, hermi=hermi)
             vkaux = numpy.zeros_like(vj.aux)
         else:
             vj = None
-            if mol is None: mol = mf_grad.mol
             vkaux = numpy.zeros((1, 1, mol.natm, 3))
         vk = rhf_grad.get_k(mol, dm)
         vk = lib.tag_array(vk, aux=vkaux)
         return vj, vk
-    if not with_k:
-        return get_j(mf_grad, mol=mol, dm=dm, hermi=hermi), None
+
     t0 = (logger.process_clock (), logger.perf_counter ())
     if mol is None: mol = mf_grad.mol
     if dm is None: dm = mf_grad.base.make_rdm1()
