@@ -154,6 +154,15 @@ class KnownValues(unittest.TestCase):
             dat = np.array([float(f'{x:.6e}') for x in dat])
             self.assertAlmostEqual(abs(np.array(ref) - dat).max(), 0, 6)
 
+    def test_auto_aux_as_basis_set_name(self):
+        mol = gto.M(atom='Li 0 0 0; F 0 0 0', basis='STO-3G')
+        auxmol = df.addons.make_auxmol(mol, auxbasis='autoaux')
+        self.assertEqual(auxmol.nbas, 52)
+        auxmol = df.addons.make_auxmol(mol, auxbasis={'Li': 'autoaux', 'F': 'autoaux'})
+        self.assertEqual(auxmol.nbas, 52)
+        auxmol = df.addons.make_auxmol(mol, auxbasis={'default': 'autoaux', 'S': 'ano'})
+        self.assertEqual(auxmol.nbas, 52)
+
 def flatten(lst):
     if not isinstance(lst, list):
         return [lst]
