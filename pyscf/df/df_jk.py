@@ -131,11 +131,11 @@ class _DFHF:
         self.__dict__.update(mf.__dict__)
         self._eri = None
         self.with_df = df
+        self.only_dfj = only_dfj
         # Unless DF is used only for J matrix, disable direct_scf for K build.
         # It is more efficient to construct K matrix with MO coefficients than
         # the incremental method in direct_scf.
-        if only_dfj is not None:
-            self.direct_scf = only_dfj
+        self.direct_scf = only_dfj
 
     def undo_df(self):
         '''Remove the DFHF Mixin'''
