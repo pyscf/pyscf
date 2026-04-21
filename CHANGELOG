@@ -19,6 +19,7 @@ PySCF 2.13.0 (2026-04-20)
   - Improved PBC 2c2e integral accuracy for better numerical stability in PBC-GDF methods
   - SGX implementation for improved numerical accuracy and performance
   - Canonical orthogonalization by default in the SCF eigenvalue solver
+  - Support specifying "autoaux" as a key for auxiliary basis set 
 * Fixes
   - RSJK initialization
   - Skipped printing of velocity and magnetic dipole moments when ECP is detected
