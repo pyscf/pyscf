@@ -189,6 +189,9 @@ def timer_debug1(rec, msg, cpu0=None, wall0=None):
         rec._t0 = process_clock()
         return rec._t0
 
+def init_timer():
+    return process_clock(), perf_counter()
+
 class Logger:
     '''
     Attributes:

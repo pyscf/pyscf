@@ -156,6 +156,13 @@ class UKS(rks.KohnShamDFT, pbcuhf.UHF):
         rks.KohnShamDFT.dump_flags(self, verbose)
         return self
 
+    def initialize_grids(self, cell, dm, kpts, ground_state=True):
+        '''Initialize self.grids the first time call get_veff'''
+        if isinstance(self.grids, gen_grid.BeckeGrids) and self.grids.coords is None:
+            rks.KohnShamDFT.initialize_grids(self, cell, dm[0]+dm[1], kpts,
+                                             ground_state)
+        return self
+
     def to_hf(self):
         '''Convert to UHF object.'''
         from pyscf.pbc import scf
