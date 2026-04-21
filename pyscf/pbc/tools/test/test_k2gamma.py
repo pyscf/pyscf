@@ -146,8 +146,13 @@ class KnownValues(unittest.TestCase):
 
         cell = gto.M(atom='He 0 0 0', basis=[[0, (2.3, 1)]], a=np.eye(3)*3, verbose=0)
         kpts = cell.make_kpts([6,1,1])
-        kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
+        kmesh = k2gamma.kpts_to_kmesh(cell, kpts, bound_by_supmol=True)
         self.assertEqual(kmesh.tolist(), [3, 1, 1])
+
+        cell = gto.M(atom='He 0 0 0', basis=[[0, (5.3, 1)]], a=np.eye(3)*4, verbose=0)
+        kpts = cell.make_kpts([8,1,1])
+        kmesh = k2gamma.kpts_to_kmesh(cell, kpts, bound_by_supmol=False)
+        self.assertEqual(kmesh.tolist(), [8, 1, 1])
 
 
 if __name__ == '__main__':

@@ -444,8 +444,8 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
     get_occ = get_occ
 
     @lib.with_doc(hf.eig.__doc__)
-    def eig(self, fock, s):
-        e, c = self._eigh(fock, s)
+    def eig(self, fock, s, overwrite=False, x=None):
+        e, c = self._eigh(fock, s, overwrite, x)
         if getattr(fock, 'focka', None) is not None:
             mo_ea = numpy.einsum('pi,pi->i', c.conj(), fock.focka.dot(c)).real
             mo_eb = numpy.einsum('pi,pi->i', c.conj(), fock.fockb.dot(c)).real

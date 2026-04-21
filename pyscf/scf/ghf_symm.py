@@ -145,13 +145,60 @@ class SymAdaptedGHF(ghf.GHF):
                         mol.nelectron-nelec_fix, ' '.join(float_irname))
         return ghf.GHF.build(self, mol)
 
-    def eig(self, h, s, symm_orb=None, irrep_id=None):
+    def check_linear_dependency(self, s, verbose=None):
+        log = logger.new_logger(self, verbose)
+        mol = self.mol
+        symm_orb = [scipy.linalg.block_diag(c, c) for c in mol.symm_orb]
+        irrep_id = mol.irrep_id
+        nirrep = len(symm_orb)
+        s = symm.symmetrize_matrix(s, symm_orb)
+        xs = []
+        orbsym = []
+        cond = []
+        for ir in range(nirrep):
+            e, v = scipy.linalg.eigh(s[ir])
+            abs_e = abs(e)
+            emax = abs_e.max()
+            emin = abs_e.min()
+            c = emax / emin
+            log.debug('irrep %d, cond(S) = %s', ir, c)
+            cond.append(c)
+            if hf.remove_overlap_zero_eigenvalue:
+                mask = e > hf.overlap_zero_eigenvalue_threshold
+                x = v[:,mask] / numpy.sqrt(e[mask])
+                nso, nmo = x.shape
+                if nmo < nso:
+                    log.info('irrep %d: %d small eigenvectors of overlap matrix removed',
+                             ir, nso-nmo)
+            else:
+                x = v / numpy.sqrt(e)
+            xs.append(x)
+            orbsym.append([irrep_id[ir]] * x.shape[1])
+
+        if any(c > 1e10 for c in cond):
+            log.warn('Singularity detected in the overlap matrix. '
+                     'SCF may be inaccurate and difficult to converge.')
+
+        x_orth = hf_symm.so2ao_mo_coeff(symm_orb, xs)
+        x_orth = lib.tag_array(x_orth, orbsym=numpy.hstack(orbsym))
+        return x_orth
+
+    def eig(self, h, s, overwrite=False, x=None, symm_orb=None, irrep_id=None):
         if symm_orb is None or irrep_id is None:
             mol = self.mol
             symm_orb = mol.symm_orb
             irrep_id = mol.irrep_id
-
         nirrep = len(symm_orb)
+
+        if x is not None:
+            orbsym = x.orbsym
+            res = [self._eigh(h, s, x=x[:,orbsym==irrep_id[ir]])
+                   for ir in range(nirrep)]
+            e = numpy.hstack([e for e, c in res])
+            c = numpy.hstack([c for e, c in res])
+            c = lib.tag_array(c, orbsym=numpy.hstack(orbsym))
+            return e, c
+
         symm_orb = [scipy.linalg.block_diag(c, c) for c in symm_orb]
         h = symm.symmetrize_matrix(h, symm_orb)
         s = symm.symmetrize_matrix(s, symm_orb)

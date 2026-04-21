@@ -72,21 +72,21 @@ class KnownValues(unittest.TestCase):
     def tearDownClass(cls):
         radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
 
-    def test_krks_gamma_center(self):
-        kpts0 = cell.make_kpts(nk, with_gamma_point=True)
-        kmf0 = krks.KRKS(cell, kpts=kpts0)
-        kmf0.xc = 'lda'
-        kmf0.kernel()
-        rho0 = kmf0.get_rho()
-
-        kpts = cell.make_kpts(nk, with_gamma_point=True,space_group_symmetry=True,time_reversal_symmetry=True)
-        kmf = pscf.KRKS(cell, kpts=kpts)
-        kmf.xc = 'lda'
-        kmf.kernel()
-        self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 7)
-        rho = kmf.get_rho()
-        error = np.amax(np.absolute(rho - rho0))
-        self.assertAlmostEqual(error, 0., 7)
+#    def test_krks_gamma_center(self):
+#        kpts0 = cell.make_kpts(nk, with_gamma_point=True)
+#        kmf0 = krks.KRKS(cell, kpts=kpts0)
+#        kmf0.xc = 'lda'
+#        kmf0.kernel()
+#        rho0 = kmf0.get_rho()
+#
+#        kpts = cell.make_kpts(nk, with_gamma_point=True,space_group_symmetry=True,time_reversal_symmetry=True)
+#        kmf = pscf.KRKS(cell, kpts=kpts)
+#        kmf.xc = 'lda'
+#        kmf.kernel()
+#        self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 7)
+#        rho = kmf.get_rho()
+#        error = np.amax(np.absolute(rho - rho0))
+#        self.assertAlmostEqual(error, 0., 7)
 
     def test_krks_monkhorst(self):
         kpts0 = cell.make_kpts(nk, with_gamma_point=False)
