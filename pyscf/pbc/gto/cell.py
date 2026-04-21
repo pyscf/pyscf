@@ -2082,8 +2082,11 @@ class Cell(mole.MoleBase):
         return mol
 
     def to_gpu(self):
-        from gpu4pyscf.gto.mole import Cell
-        return Cell.from_cpu(self)
+        from gpu4pyscf.gto import mole
+        if hasattr(mole, 'Cell'):
+            return mole.Cell.from_cpu(self)
+        else: # Cell class is defined in gpu4pyscf 1.5 or newer
+            return self
 
     def set_geom_(self, atoms_or_coords=None, unit=None, symmetry=None,
                   a=None, inplace=True):

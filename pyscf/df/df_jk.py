@@ -125,6 +125,8 @@ class _DFHF:
 
     _keys = {'with_df', 'only_dfj'}
 
+    only_dfj = None
+
     def __init__(self, mf, df=None, only_dfj=None):
         self.__dict__.update(mf.__dict__)
         self._eri = None

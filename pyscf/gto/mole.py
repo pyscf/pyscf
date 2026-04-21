@@ -3948,8 +3948,11 @@ class Mole(MoleBase):
         return cell
 
     def to_gpu(self):
-        from gpu4pyscf.gto.mole import Mole
-        return Mole.from_cpu(self)
+        from gpu4pyscf.gto import mole
+        if hasattr(mole, 'Mole'):
+            return mole.Mole.from_cpu(self)
+        else: # Mole class is defined in gpu4pyscf 1.5 or newer
+            return self
 
 def _parse_default_basis(basis, uniq_atoms):
     if isinstance(basis, (str, tuple, list)):
@@ -4364,6 +4367,17 @@ def extract_pgto_params(mol, op='diffuse'):
         ke = np.log(c**2 / precision * 50**l + 1e-200) * e
         idx = lib.groupby(basis_id, ke, 'argmax')
     return e[idx], c[idx]
+
+def most_diffuse_pgto(mol):
+    '''
+    Returns the exponent, normalization factor and angular momentum of the most
+    diffuse primitive GTO
+    '''
+    exps, cs = extract_pgto_params(mol, 'diffuse')
+    ls = mol._bas[:,ANG_OF]
+    r2 = np.log(cs**2 / mol.precision * 10**ls + 1e-200) / exps
+    idx = r2.argmax()
+    return exps[idx], cs[idx], ls[idx]
 
 class _MoleLazyCallAdapter:
     '''Adapter for API updates. Should be removed in future'''

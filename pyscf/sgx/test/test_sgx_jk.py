@@ -25,6 +25,20 @@ from pyscf.sgx import sgx
 from pyscf.sgx import sgx_jk
 import os
 
+
+WATER_CLUSTER = """
+O       89.814000000   100.835000000   101.232000000
+H       89.329200000    99.976800000   101.063000000
+H       89.151600000   101.561000000   101.414000000
+O       98.804000000    98.512200000    97.758100000
+H       99.782100000    98.646900000    97.916700000
+H       98.421800000    99.326500000    97.321300000
+O      108.070300000    98.516900000   100.438000000
+H      107.172800000    98.878600000   100.690000000
+H      108.194000000    98.592200000    99.448100000
+"""
+
+
 class KnownValues(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -92,6 +106,10 @@ class KnownValues(unittest.TestCase):
         dm = dm + dm.T
 
         mf = sgx.sgx_fit(scf.RHF(mol), 'weigend')
+        mf.with_df.grids_level_i = 0
+        mf.with_df.grids_level_f = 1
+        mf.with_df.use_opt_grids = False
+        mf.with_df._symm_ovlp_fit = False
         mf.with_df.dfj = True
         mf.build()
         vj, vk = mf.get_jk(mol, dm)
@@ -99,7 +117,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(vk), -16.715352176119794, 9)
 
     def test_rsh_get_jk(self):
-        mol = gto.M(verbose = 0,
+        mol = gto.M(
+            verbose = 0,
             atom = 'H 0 0 0; H 0 0 1',
             basis = 'ccpvdz',
         )
@@ -107,6 +126,7 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(1)
         dm = numpy.random.random((2,nao,nao))
         sgxobj = sgx.SGX(mol)
+        sgxobj.dfj = False
         sgxobj.grids = sgx_jk.get_gridss(mol, 0, 1e-7)
         vj, vk = sgxobj.get_jk(dm, hermi=0, omega=1.1)
         self.assertAlmostEqual(lib.finger(vj), 4.783036401049238, 9)
@@ -116,34 +136,162 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(vj-vj1).max(), 0, 2)
         self.assertAlmostEqual(abs(vk-vk1).max(), 0, 2)
 
+    def test_sgx_dot(self):
+        """
+        The purpose of this test is to call the SGX dot functions
+        with both localized and random density matrices and make
+        sure they work in comparison to lib.einsum
+        """
+        mol = gto.Mole()
+        mol.build(
+            verbose=0,
+            atom=WATER_CLUSTER,
+            basis="ccpvdz",
+        )
+        ao_loc = mol.ao_loc_nr()
+        sgxobj = sgx.SGX(mol)
+        sgxobj.grids = sgx_jk.get_gridss(mol, 0, 1e-7)
+        sgxobj._opt = sgx._make_opt(mol)
+        sgxobj.sgx_tol_potential = 1e-13
+        sgxobj._build_pjs(1e-13)
+        sgxobj._pjs_data.build()
+        grids = sgxobj.grids
+        ao = gto.eval_gto(mol, "GTOval", grids.coords)
+        wao = ao * grids.weights[:, None]
+        nao = mol.nao_nr()
+        numpy.random.seed(1)
+        dmr = numpy.random.random((nao, nao))
+        dmr = numpy.abs(dmr)
+        dmr = dmr + dmr.T
+        dmr = dmr[None, :]
+        sgxobj.get_jk(dmr)
+        mf = scf.UHF(mol)
+        dm0 = mf.get_init_guess()
+        ib = (grids.weights.size // 2) // sgx_jk.BLKSIZE
+        im = ib * sgx_jk.BLKSIZE
+        shls_slice = (0, mol.nbas)
+        mask = grids.non0tab
+        tmp_switch = sgx_jk.SWITCH_SIZE
+        sgx_jk.SWITCH_SIZE = 0
+        for dm in [dm0, dmr]:
+            # pair_mask = sgx_jk._get_sgx_dm_mask(sgxobj, dm, ao_loc)
+            pair_mask = sgxobj._pjs_data.get_dm_threshold_matrix(dm)
+            outr = lib.einsum("gu,xuv->xvg", wao, dm)
+            out = sgx_jk._sgxdot_ao_dm(wao, dm, mask, shls_slice, ao_loc)
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+            out = sgx_jk._sgxdot_ao_dm(wao, dm, None, shls_slice, ao_loc)
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+            out = numpy.empty_like(out)
+            sgx_jk._sgxdot_ao_dm(wao, dm, mask, shls_slice, ao_loc, out)
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+            out = sgx_jk._sgxdot_ao_dm_sparse(wao, dm, mask, pair_mask, ao_loc)
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+            out = sgx_jk._sgxdot_ao_dm_sparse(wao, dm, mask, None, ao_loc)
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+            out = sgx_jk._sgxdot_ao_dm_sparse(wao, dm, None, None, ao_loc)
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+            out = numpy.empty_like(out)
+            out = sgx_jk._sgxdot_ao_dm_sparse(wao, dm, mask, pair_mask, ao_loc)
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+
+            gv = lib.einsum("xuv,gv->xug", dm, ao)
+            outr = lib.einsum("gu,xvg->xuv", wao, gv)
+            out = sgx_jk._sgxdot_ao_gv(wao, gv, mask, shls_slice, ao_loc)
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+            sgx_jk._sgxdot_ao_gv(wao, gv, mask, shls_slice, ao_loc, out=out)
+            out[:] *= 0.5
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+            out = sgx_jk._sgxdot_ao_gv_sparse(ao, gv, grids.weights, mask, None, ao_loc)
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+            sgx_jk._sgxdot_ao_gv_sparse(ao, gv, grids.weights, mask, None, ao_loc, out=out)
+            out[:] *= 0.5
+            self.assertAlmostEqual(abs(outr - out).max(), 0, 13)
+        sgx_jk.SWITCH_SIZE = tmp_switch
+
 
 class PJunctionScreening(unittest.TestCase):
-    @unittest.skip("computationally expensive test")
     def test_pjs(self):
-        cwd = os.path.dirname(os.path.abspath(__file__))
-        fname = os.path.join(cwd, 'a12.xyz')
-        mol = gto.M(atom=fname, basis='sto-3g')
+        atom0 = [["O" , (0. , 0.     , 0.)],
+                 [1   , (0. , -0.757 , 0.587)],
+                 [1   , (0. , 0.757  , 0.587)],]
+        atom = []
+        for i in range(4):
+            atom = atom + [[z, (c[0] + i * 5, c[1], c[2])] for z, c in atom0]
+        mol = gto.M(atom=atom, basis='def2-svp', verbose=0)
 
         mf = dft.RKS(mol)
         mf.xc = 'PBE'
         mf.kernel()
+        mf.conv_tol = 1e-9
         dm = mf.make_rdm1()
 
-        mf = sgx.sgx_fit(scf.RHF(mol), pjs=False)
-        mf.with_df.dfj = True
+        mf = sgx.sgx_fit(scf.RHF(mol), pjs=True)
+        mf.with_df.grids_level_i = 1
+        mf.with_df.grids_level_f = 1
+        mf.with_df.use_opt_grids = False
+        mf.with_df.sgx_tol_energy = None
+        mf.with_df.sgx_tol_potential = None
+        mf.direct_scf_tol = 1e-13
         mf.build()
+        import time
+        t0 = time.monotonic()
         en0 = mf.energy_tot(dm=dm)
+        kref = mf.get_k(dm=dm)
         en0scf = mf.kernel()
+        t1 = time.monotonic()
 
         # Turn on P-junction screening. dfj must also be true.
-        mf.with_df.pjs = True
-        mf.direct_scf_tol = 1e-10
+        mf.with_df.reset()
+        mf.with_df.sgx_tol_energy = 1e-10
+        mf.with_df.sgx_tol_potential = "auto"
         mf.build()
+        t2 = time.monotonic()
         en1 = mf.energy_tot(dm=dm)
         en1scf = mf.kernel()
+        t3 = time.monotonic()
 
+        print("SGX Times", t3 - t2, t1 - t0)
         self.assertAlmostEqual(abs(en1-en0), 0, 10)
         self.assertAlmostEqual(abs(en1scf-en0scf), 0, 10)
+
+        switch = sgx_jk.SWITCH_SIZE
+        for _switch in [0, switch]:
+            sgx_jk.SWITCH_SIZE = _switch
+            mf.with_df.reset()
+            mf.rebuild_nsteps = 5
+            mf.with_df.sgx_tol_energy = 1e-10
+            mf.with_df.sgx_tol_potential = "auto"
+            mf.build()
+            en1 = mf.energy_tot(dm=dm)
+            k = mf.get_k(dm=dm)
+            en1scf = mf.kernel()
+            self.assertAlmostEqual(abs(en1-en0), 0, 10)
+            self.assertAlmostEqual(abs(en1scf-en0scf), 0, 10)
+            self.assertAlmostEqual(numpy.max(numpy.abs(k-kref)), 0, 5)
+
+            mf.with_df.reset()
+            mf.with_df.sgx_tol_potential = None
+            mf.build()
+            en1 = mf.energy_tot(dm=dm)
+            k = mf.get_k(dm=dm)
+            en1scf = mf.kernel()
+            self.assertAlmostEqual(abs(en1-en0), 0, 10)
+            self.assertAlmostEqual(abs(en1scf-en0scf), 0, 10)
+            self.assertAlmostEqual(numpy.max(numpy.abs(k-kref)), 0, 5)
+
+            mf.with_df.reset()
+            mf.with_df.sgx_tol_energy = None
+            mf.with_df.sgx_tol_potential = 1e-4
+            mf.build()
+            k = mf.get_k(dm=dm)
+            self.assertAlmostEqual(numpy.max(numpy.abs(k-kref)), 0, 4)
+
+            mf.with_df.reset()
+            mf.with_df.sgx_tol_energy = 1e8
+            mf.build()
+            k2 = mf.get_k(dm=dm)
+            self.assertAlmostEqual(numpy.max(numpy.abs(k-k2)), 0, 9)
+        sgx_jk.SWITCH_SIZE = switch
 
 
 if __name__ == "__main__":

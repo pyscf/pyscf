@@ -1097,14 +1097,15 @@ class WithSolventHess:
         return to_gpu(self, self.base.to_gpu().Hessian())
 
     def kernel(self, *args, dm=None, atmlst=None, **kwargs):
+        with lib.temporary_env(self.base.with_solvent, equilibrium_solvation=True):
+            logger.debug(self, 'Compute Hessian from solutes')
+            self.de_solute = super().kernel(*args, **kwargs)
+
+        logger.debug(self, 'Compute Hessian from solvents')
         if dm is None:
             dm = self.base.make_rdm1(ao_repr=True)
         if dm.ndim == 3:
             dm = dm[0] + dm[1]
-        with lib.temporary_env(self.base.with_solvent, equilibrium_solvation=True):
-            logger.debug(self, 'Compute Hessian from solutes')
-            self.de_solute = super().kernel(*args, **kwargs)
-        logger.debug(self, 'Compute Hessian from solvents')
         self.de_solvent = self.base.with_solvent.hess(dm)
         self.de = self.de_solute + self.de_solvent
         return self.de

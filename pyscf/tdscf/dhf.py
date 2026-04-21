@@ -414,7 +414,7 @@ class TDA(TDBase):
         e_threshold += self.deg_eia_thresh
 
         idx = numpy.where(e_ia <= e_threshold)[0]
-        x0 = numpy.zeros((idx.size, nov))
+        x0 = numpy.zeros((idx.size, nov), dtype=numpy.complex128)
         for i, j in enumerate(idx):
             x0[i, j] = 1  # Koopmans' excitations
         return x0
@@ -539,6 +539,10 @@ class TDHF(TDBase):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
         '''
         cpu0 = (logger.process_clock(), logger.perf_counter())
+        mf = self._scf
+        if mf.mo_energy is None:
+            mf.run()
+
         self.check_sanity()
         self.dump_flags()
         if nstates is None:

@@ -66,7 +66,8 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''
     if mol is None: mol = ks.mol
     if dm is None: dm = ks.make_rdm1()
-    ks.initialize_grids(mol, dm)
+    if ks.grids.coords is None:
+        ks.initialize_grids(mol, dm)
 
     t0 = (logger.process_clock(), logger.perf_counter())
 
@@ -327,7 +328,7 @@ class KohnShamDFT:
     _keys = {'xc', 'nlc', 'grids', 'disp', 'nlcgrids', 'small_rho_cutoff'}
 
     # Use rho to filter grids
-    small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
+    small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff', 0)
 
     def __init__(self, xc='LDA,VWN'):
         # By default, self.nlc = '' and self.disp = None

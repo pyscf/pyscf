@@ -27,7 +27,7 @@ from pyscf import lib
 from pyscf import symm
 from pyscf.lib import logger
 from pyscf.scf import hf_symm
-from pyscf.scf import uhf
+from pyscf.scf import hf, uhf
 from pyscf.scf import chkfile
 from pyscf.lib.exceptions import PointGroupSymmetryError
 from pyscf import __config__
@@ -200,7 +200,9 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     occidxb = mo_occ[1] == 1
     viridxa = ~occidxa
     viridxb = ~occidxb
-    mo = numpy.empty_like(mo_coeff)
+    mo_a = numpy.empty_like(mo_coeff[0])
+    mo_b = numpy.empty_like(mo_coeff[1])
+    mo = [mo_a, mo_b]
     mo_e = numpy.empty(mo_occ.shape)
     s = mf.get_ovlp()
 
@@ -214,7 +216,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
                 f1 = reduce(numpy.dot, (orb.conj().T, fock, orb))
                 e, c = scipy.linalg.eigh(f1)
                 es[idx] = e
-                cs[:,idx] = numpy.dot(mo_coeff[:,idx], c)
+                cs[:,idx] = orb.dot(c)
 
         for ir in set(orbsyma):
             idx_ir = orbsyma == ir
@@ -232,7 +234,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
                 f1 = reduce(numpy.dot, (orb.conj().T, fock, orb))
                 e, c = scipy.linalg.eigh(f1)
                 es[idx] = e
-                c = numpy.dot(mo_coeff[:,idx], c)
+                c = orb.dot(c)
                 cs[:,idx] = hf_symm._symmetrize_canonicalization_(mf, e, c, s)
 
         eig_(fock[0], mo_coeff[0], occidxa, mo_e[0], mo[0])
@@ -241,8 +243,8 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
         eig_(fock[1], mo_coeff[1], viridxb, mo_e[1], mo[1])
         orbsyma, orbsymb = mf.get_orbsym(mo, s)
 
-    mo = (lib.tag_array(mo[0], orbsym=orbsyma),
-          lib.tag_array(mo[1], orbsym=orbsymb))
+    mo = (lib.tag_array(hf._adjust_phase_(mo[0]), orbsym=orbsyma),
+          lib.tag_array(hf._adjust_phase_(mo[1]), orbsym=orbsymb))
     return mo_e, mo
 
 def get_orbsym(mol, mo_coeff, s=None, check=False):
@@ -329,61 +331,12 @@ class SymAdaptedUHF(uhf.UHF):
         hf_symm.check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
         return uhf.UHF.build(self, mol)
 
-    def eig(self, h, s):
-        mol = self.mol
-        nirrep = mol.symm_orb.__len__()
-        s = symm.symmetrize_matrix(s, mol.symm_orb)
-        ha = symm.symmetrize_matrix(h[0], mol.symm_orb)
-        hb = symm.symmetrize_matrix(h[1], mol.symm_orb)
-        cs_b = []
-        cs_a = []
-        es_b = []
-        es_a = []
-        orbsym_a = []
-        orbsym_b = []
-        if mol.groupname in ('Dooh', 'Coov'):
-            for ir in range(nirrep):
-                irrep_id = mol.irrep_id[ir]
-                irrep_1d = irrep_id in (0, 1, 4, 5)
-                irrep_2dx = irrep_id % 2 == 0
-                if irrep_1d or irrep_2dx:
-                    ea, ca = self._eigh(ha[ir], s[ir])
-                    eb, cb = self._eigh(hb[ir], s[ir])
-                    cs_a.append(ca)
-                    cs_b.append(cb)
-                    es_a.append(ea)
-                    es_b.append(eb)
-                    orbsym_a.append([mol.irrep_id[ir]] * ea.size)
-                    orbsym_b.append([mol.irrep_id[ir]] * eb.size)
+    check_linear_dependency = hf_symm.SymAdaptedRHF.check_linear_dependency
 
-                if not irrep_1d and irrep_2dx:
-                    # force 2D irreps using the same coefficients
-                    irrep_conj = irrep_id ^ 1
-                    assert mol.irrep_id[ir+1] == irrep_conj
-                    cs_a.append(ca)
-                    cs_b.append(cb)
-                    es_a.append(ea)
-                    es_b.append(eb)
-                    orbsym_a.append([irrep_conj] * ea.size)
-                    orbsym_b.append([irrep_conj] * eb.size)
-        else:
-            for ir in range(nirrep):
-                ea, ca = self._eigh(ha[ir], s[ir])
-                eb, cb = self._eigh(hb[ir], s[ir])
-                cs_a.append(ca)
-                cs_b.append(cb)
-                es_a.append(ea)
-                es_b.append(eb)
-                orbsym_a.append([mol.irrep_id[ir]] * ea.size)
-                orbsym_b.append([mol.irrep_id[ir]] * eb.size)
-
-        ea = numpy.hstack(es_a)
-        eb = numpy.hstack(es_b)
-        ca = hf_symm.so2ao_mo_coeff(mol.symm_orb, cs_a)
-        ca = lib.tag_array(ca, orbsym=numpy.hstack(orbsym_a))
-        cb = hf_symm.so2ao_mo_coeff(mol.symm_orb, cs_b)
-        cb = lib.tag_array(cb, orbsym=numpy.hstack(orbsym_b))
-        return numpy.asarray((ea,eb)), (ca,cb)
+    def eig(self, h, s, overwrite=False, x=None, symm_orb=None, irrep_id=None):
+        e_a, c_a = hf_symm.eig(self, h[0], s, False, x, symm_orb, irrep_id)
+        e_b, c_b = hf_symm.eig(self, h[1], s, False, x, symm_orb, irrep_id)
+        return numpy.stack((e_a,e_b)), (c_a, c_b)
 
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         g = uhf.UHF.get_grad(self, mo_coeff, mo_occ, fock)
