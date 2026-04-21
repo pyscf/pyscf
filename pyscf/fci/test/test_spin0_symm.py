@@ -39,6 +39,9 @@ def setUpModule():
     m = scf.RHF(mol)
     m.conv_tol_grad = 1e-8
     ehf = m.scf()
+    c = m.mo_coeff
+    idx = numpy.argmax(abs(c.real), axis=0)
+    c[:,c[idx,numpy.arange(c.shape[1])].real<0] *= -1
     norb = m.mo_coeff.shape[1]
     nelec = mol.nelectron
     h1e = reduce(numpy.dot, (m.mo_coeff.T, scf.hf.get_hcore(mol), m.mo_coeff))
@@ -62,25 +65,25 @@ class KnownValues(unittest.TestCase):
         ci1ref = direct_spin1.contract_2e(g2e, ci1, norb, nelec)
         ci1 = cis.contract_2e(g2e, ci1, norb, nelec, wfnsym=0)
         self.assertAlmostEqual(abs(ci1ref - ci1).max(), 0, 9)
-        self.assertAlmostEqual(numpy.linalg.norm(ci1), 83.221199436109003, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 83.69043090287111, 9)
 
         ci1 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym, wfnsym=1)
         ci1ref = direct_spin1.contract_2e(g2e, ci1, norb, nelec)
         ci1 = cis.contract_2e(g2e, ci1, norb, nelec, wfnsym=1)
         self.assertAlmostEqual(abs(ci1ref - ci1).max(), 0, 9)
-        self.assertAlmostEqual(numpy.linalg.norm(ci1), 82.571087072474697, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 86.81470149363146, 9)
 
         ci1 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym, wfnsym=3)
         ci1ref = direct_spin1.contract_2e(g2e, ci1, norb, nelec)
         ci1 = cis.contract_2e(g2e, ci1, norb, nelec, wfnsym=3)
         self.assertAlmostEqual(abs(ci1ref - ci1).max(), 0, 9)
-        self.assertAlmostEqual(numpy.linalg.norm(ci1), 82.257163492625622, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 81.56480269572414, 9)
 
         ci1 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym, wfnsym=2)
         ci1ref = direct_spin1.contract_2e(g2e, ci1, norb, nelec)
         ci1 = cis.contract_2e(g2e, ci1, norb, nelec, wfnsym=2)
         self.assertAlmostEqual(abs(ci1ref - ci1).max(), 0, 9)
-        self.assertAlmostEqual(numpy.linalg.norm(ci1), 81.010497935954916, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 85.23024871497113, 9)
 
     def test_kernel(self):
         e, c = fci.direct_spin0_symm.kernel(h1e, g2e, norb, nelec, orbsym=orbsym)

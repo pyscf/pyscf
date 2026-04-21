@@ -28,6 +28,7 @@ See Also:
 import sys
 
 import numpy as np
+import scipy.linalg
 import h5py
 from pyscf.scf import hf as mol_hf
 from pyscf import lib
@@ -44,10 +45,12 @@ from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
 from pyscf.soscf import newton_ah
 
+INVALID_ORBITAL_ENERGY = 1e30
+
 def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
-    precision = cell.precision * 1e-5
+    precision = cell.precision * 1e-6
     rcut = max(cell.rcut, gto.estimate_rcut(cell, precision))
     with lib.temporary_env(cell, rcut=rcut, precision=precision):
         # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
@@ -59,18 +62,6 @@ def get_ovlp(cell, kpt=np.zeros(3)):
         logger.warn(cell, '%.4g error found in overlap integrals. '
                     'cell.precision  or  cell.rcut  can be adjusted to '
                     'improve accuracy.', hermi_error)
-
-    if cell.verbose >= logger.DEBUG:
-        cond = np.max(lib.cond(s))
-        if cond * precision > 1e2:
-            prec = 1e7 / cond
-            rmin = gto.estimate_rcut(cell, prec*1e-5)
-            logger.warn(cell, 'Singularity detected in overlap matrix.  '
-                        'Integral accuracy may be not enough.\n      '
-                        'You can adjust  cell.precision  or  cell.rcut  to '
-                        'improve accuracy.  Recommended settings are\n      '
-                        'cell.precision < %.2g\n      '
-                        'cell.rcut > %.4g', prec, rmin)
     return s
 
 
@@ -172,15 +163,9 @@ def get_bands(mf, kpts_band, cell=None, dm=None, kpt=None):
     kpts_band = kpts_band.reshape(-1,3)
 
     fock = mf.get_hcore(cell, kpts_band)
-    fock = fock + mf.get_veff(cell, dm, kpt=kpt, kpts_band=kpts_band)
+    fock += mf.get_veff(cell, dm, kpt=kpt, kpts_band=kpts_band)
     s1e = mf.get_ovlp(cell, kpts_band)
-    nkpts = len(kpts_band)
-    mo_energy = []
-    mo_coeff = []
-    for k in range(nkpts):
-        e, c = mf.eig(fock[k], s1e[k])
-        mo_energy.append(e)
-        mo_coeff.append(c)
+    mo_energy, mo_coeff = eigh_with_canonical_orth(fock, s1e)
 
     if single_kpt_band:
         mo_energy = mo_energy[0]
@@ -204,6 +189,23 @@ get_occ = mol_hf.get_occ
 get_grad = mol_hf.get_grad
 make_rdm1 = mol_hf.make_rdm1
 energy_elec = mol_hf.energy_elec
+
+def eigh_with_canonical_orth(h, s):
+    nkpts = len(h)
+    nao = h[0].shape[0]
+    mo_energy = np.empty((nkpts, nao))
+    mo_coeff = np.empty((nkpts, nao, nao), dtype=h.dtype)
+    for k in range(nkpts):
+        x = mol_hf.canonical_orthogonalization(s[k])
+        nmo_k = x.shape[1]
+        xhx = x.conj().T.dot(h[k]).dot(x)
+        e, c = scipy.linalg.eigh(xhx)
+        mo_energy[k,:nmo_k] = e
+        mo_coeff[k,:,:nmo_k] = x.dot(c)
+        if nmo_k < nao:
+            mo_energy[k,nmo_k:] = INVALID_ORBITAL_ENERGY
+            mo_coeff[k,:,nmo_k:] = 0
+    return mo_energy, mo_coeff
 
 
 def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
@@ -616,13 +618,6 @@ class SCF(mol_hf.SCF):
                 "Set the same exxdiv for both. See pyscf/example/pbc/20-k_points_scf.py"
             ) % (self._scf.exxdiv, self.exxdiv)
             raise NotImplementedError(msg)
-
-        if self.verbose >= logger.DEBUG:
-            s = self.get_ovlp()
-            cond = np.max(lib.cond(s))
-            if cond * 1e-17 > self.conv_tol:
-                logger.warn(self, 'Singularity detected in overlap matrix (condition number = %4.3g). '
-                            'SCF may be inaccurate and hard to converge.', cond)
         return self
 
     def get_hcore(self, cell=None, kpt=None):

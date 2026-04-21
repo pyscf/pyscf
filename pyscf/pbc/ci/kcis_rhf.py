@@ -155,7 +155,7 @@ def cis_matvec_singlet(cis, vector, kshift, eris=None):
     r = cis.vector_to_amplitudes(vector)
 
     # Should use Fock diagonal elements to build (e_a - e_i) matrix
-    epsilons = [eris.fock[k].diagonal().real for k in range(nkpts)]
+    epsilons = [np.asarray(eris.fock[k].diagonal(), order='C') for k in range(nkpts)]
 
     Hr = np.zeros_like(r)
     for ki in range(nkpts):
