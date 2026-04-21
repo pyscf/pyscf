@@ -363,23 +363,21 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
 
     def initialize_grids(self, cell, dm, kpts, ground_state=True):
         '''Initialize self.grids the first time call get_veff'''
-        if isinstance(self.grids, gen_grid.UniformGrids):
-            return self
-
-        if self.grids.coords is None:
-            t0 = (logger.process_clock(), logger.perf_counter())
+        if (isinstance(self.grids, gen_grid.BeckeGrids) and
+            self.grids.coords is None):
+            t0 = logger.init_timer()
             self.grids.build(with_non0tab=True)
-            if (isinstance(self.grids, gen_grid.BeckeGrids) and
-                self.small_rho_cutoff > 1e-20 and ground_state):
+            if (self.small_rho_cutoff > 1e-20 and ground_state):
                 self.grids = prune_small_rho_grids_(
                     self, self.cell, dm, self.grids, kpts)
             t0 = logger.timer(self, 'setting up grids', *t0)
         is_nlc = self.do_nlc()
-        if is_nlc and self.nlcgrids.coords is None:
-            t0 = (logger.process_clock(), logger.perf_counter())
+        if (is_nlc and
+            isinstance(self.nlcgrids, gen_grid.BeckeGrids) and
+            self.nlcgrids.coords is None):
+            t0 = logger.init_timer()
             self.nlcgrids.build(with_non0tab=True)
-            if (isinstance(self.grids, gen_grid.BeckeGrids) and
-                self.small_rho_cutoff > 1e-20 and ground_state):
+            if (self.small_rho_cutoff > 1e-20 and ground_state):
                 self.nlcgrids = prune_small_rho_grids_(
                     self, self.cell, dm, self.nlcgrids, kpts)
             t0 = logger.timer(self, 'setting up nlc grids', *t0)
