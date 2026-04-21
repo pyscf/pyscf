@@ -537,6 +537,15 @@ def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
             The threshold that triggers the special treatment of the linear
             dependence issue.
     '''
+    if not force_pivoted_cholesky:
+        from warnings import warn
+        warn("remove_linear_dep_ is deprecated and will be removed in a future release. "
+             "Linear dependency handling is now built into the SCF procedure by default. "
+             "Linear dependency removal can be controlled using the following settings:\n"
+             "  pyscf.scf.hf.remove_overlap_zero_eigenvalue = True\n"
+             "  pyscf.scf.hf.overlap_zero_eigenvalue_threshold = 1e-6\n",
+             DeprecationWarning, stacklevel=2)
+
     s = mf.get_ovlp()
     cond = numpy.max(lib.cond(s))
     if cond < 1./lindep and not force_pivoted_cholesky:
@@ -558,7 +567,7 @@ def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
 remove_linear_dep = remove_linear_dep_
 
 def _eigh_with_canonical_orth(threshold=LINEAR_DEP_THRESHOLD):
-    def eigh(h, s):
+    def eigh(h, s, *args, **kwargs):
         x = canonical_orth_(s, threshold)
         xhx = reduce(lib.dot, (x.conj().T, h, x))
         e, c = scipy.linalg.eigh(xhx)
@@ -568,7 +577,7 @@ def _eigh_with_canonical_orth(threshold=LINEAR_DEP_THRESHOLD):
 
 def _eigh_with_pivot_cholesky(threshold=LINEAR_DEP_THRESHOLD,
                               cholesky_threshold=CHOLESKY_THRESHOLD):
-    def eigh(h, s):
+    def eigh(h, s, *args, **kwargs):
         x = partial_cholesky_orth_(s, canthr=threshold, cholthr=cholesky_threshold)
         xhx = reduce(lib.dot, (x.conj().T, h, x))
         e, c = scipy.linalg.eigh(xhx)

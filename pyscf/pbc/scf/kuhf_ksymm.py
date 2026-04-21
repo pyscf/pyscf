@@ -86,7 +86,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     if isinstance(kpts, KPoints):
         mo_occ_kpts[0] = kpts.check_mo_occ_symmetry(mo_occ_kpts[0], tol=1e-4)
         mo_occ_kpts[1] = kpts.check_mo_occ_symmetry(mo_occ_kpts[1], tol=1e-4)
-    return mo_occ_kpts
+    return np.array(mo_occ_kpts)
 
 @lib.with_doc(kuhf.energy_elec.__doc__)
 def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
@@ -181,10 +181,10 @@ class KsymAdaptedKUHF(khf_ksymm.KsymAdaptedKSCF, kuhf.KUHF):
             dm_kpts *= (nelec / ne).reshape(2,-1,1,1)
         return dm_kpts
 
-    def eig(self, h_kpts, s_kpts):
+    def eig(self, h_kpts, s_kpts, overwrite=False, x=None):
         e_a, c_a = khf_ksymm.KsymAdaptedKSCF.eig(self, h_kpts[0], s_kpts)
         e_b, c_b = khf_ksymm.KsymAdaptedKSCF.eig(self, h_kpts[1], s_kpts)
-        return (e_a,e_b), (c_a,c_b)
+        return np.array((e_a,e_b)), (c_a,c_b)
 
     def get_orbsym(self, mo_coeff=None, s=None):
         if mo_coeff is None:

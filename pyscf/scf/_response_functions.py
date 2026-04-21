@@ -61,6 +61,9 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
             mem_now = lib.current_memory()[0]
             max_memory = max(2000, mf.max_memory*.8-mem_now)
 
+        if not with_nlc and mf.do_nlc():
+            logger.warn(mf, "NLC contribution in gen_response is NOT included")
+
         if singlet is None:
             # Without specify singlet, used in ground state orbital hessian
             def vind(dm1):
@@ -191,6 +194,9 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
             mem_now = lib.current_memory()[0]
             max_memory = max(2000, mf.max_memory*.8-mem_now)
 
+        if not with_nlc and mf.do_nlc():
+            logger.warn(mf, "NLC contribution in gen_response is NOT included")
+
         def vind(dm1):
             if hermi == 2:
                 v1 = numpy.zeros_like(dm1)
@@ -263,6 +269,9 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
         if max_memory is None:
             mem_now = lib.current_memory()[0]
             max_memory = max(2000, mf.max_memory*.8-mem_now)
+
+        if not with_nlc and mf.do_nlc():
+            logger.warn(mf, "NLC contribution in gen_response is NOT included")
 
         def vind(dm1):
             if hermi == 2:
