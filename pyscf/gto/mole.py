@@ -4368,6 +4368,17 @@ def extract_pgto_params(mol, op='diffuse'):
         idx = lib.groupby(basis_id, ke, 'argmax')
     return e[idx], c[idx]
 
+def most_diffuse_pgto(mol):
+    '''
+    Returns the exponent, normalization factor and angular momentum of the most
+    diffuse primitive GTO
+    '''
+    exps, cs = extract_pgto_params(mol, 'diffuse')
+    ls = mol._bas[:,ANG_OF]
+    r2 = np.log(cs**2 / mol.precision * 10**ls + 1e-200) / exps
+    idx = r2.argmax()
+    return exps[idx], cs[idx], ls[idx]
+
 class _MoleLazyCallAdapter:
     '''Adapter for API updates. Should be removed in future'''
     def __init__(self, fn, name):
