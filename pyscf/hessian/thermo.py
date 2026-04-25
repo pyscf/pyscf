@@ -119,6 +119,7 @@ def rotation_const(mass, atom_coords, unit='GHz'):
     im = numpy.einsum('z,zr,zs->rs', mass, r, r)
     im = numpy.eye(3) * im.trace() - im
     e = numpy.sort(numpy.linalg.eigvalsh(im))
+    e[e < 1e-6] = 0.0
 
     unit_im = nist.ATOMIC_MASS * (nist.BOHR_SI)**2
     unit_hz = nist.HBAR / (4 * numpy.pi * unit_im)
