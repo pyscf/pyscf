@@ -63,9 +63,20 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(c[1] == numpy.inf)
         self.assertTrue(c[2] == numpy.inf)
 
+    def test_rotor_type(self):
+        mol = gto.M(atom='O 6.49389522e-15 -2.57224363e-14 -3.70463374e-03; O -6.49389522e-15 2.57224363e-14 1.21370463e+00')
+        mass = mol.atom_mass_list(isotope_avg=True)
+        atom_coords = mol.atom_coords()
+        mass_center = numpy.einsum('z,zx->x', mass, atom_coords) / mass.sum()
+        atom_coords = atom_coords - mass_center
+        rot_const = thermo.rotation_const(mass, atom_coords)
+        self.assertEqual(rot_const[0], numpy.inf)
+        rotor_type = thermo._get_rotor_type(rot_const)
+        self.assertEqual(rotor_type, 'LINEAR')
+
     def test_thermo(self):
         mol = gto.M(atom='O 0 0 0; H 0 .757 .587; H 0 -.757 .587')
-        mf = mol.HF.run(conv_tol=1e-11)
+        mf = mol.HF().run(conv_tol=1e-11)
         hess = mf.Hessian().kernel()
         results = thermo.harmonic_analysis(mol, hess)
         self.assertAlmostEqual(lib.fp(abs(results['norm_mode'])), 0.1144453655, 6)
