@@ -16,18 +16,20 @@
 # Authors: Xing Zhang <zhangxing.nju@gmail.com>
 #
 
+from functools import reduce
 import numpy as np
+
 from pyscf import __config__
 from pyscf import lib
 from pyscf.gto import mole
-from functools import reduce
 
-SYMPREC = getattr(__config__, 'pbc_symm_space_group_symprec', 1e-6) #this has the unit of length
+SYMPREC = getattr(__config__, 'pbc_symm_space_group_symprec', 1e-6)  # this has the unit of length
+
 
 def search_point_group_ops(cell, tol=SYMPREC):
     a = cell.lattice_vectors()
     G = np.dot(a, a.T)
-    pbc_axis = np.array([1,1,1], dtype=bool)
+    pbc_axis = np.array([1, 1, 1], dtype=bool)
     if cell.dimension < 3:
         pbc_axis[cell.dimension:] = False
 
@@ -42,11 +44,11 @@ def search_point_group_ops(cell, tol=SYMPREC):
     tol2 = tol**2
 
     rotations = []
-    for op in lib.cartesian_prod([[1,0,-1],]*9):
-        W = np.asarray(op, dtype=np.int32).reshape(3,3)
+    for op in lib.cartesian_prod([[1, 0, -1],] * 9):
+        W = np.asarray(op, dtype=np.int32).reshape(3, 3)
         G_tilde = reduce(np.dot, (W.T, G, W))
 
-        #check change of metric
+        # check change of metric
         a_tilde_norm = np.sqrt(np.diag(G_tilde))
         length_error = np.abs(a_norm - a_tilde_norm)
         if (length_error > tol).any():
@@ -58,23 +60,23 @@ def search_point_group_ops(cell, tol=SYMPREC):
         ratio = G_tilde / np.outer(a_tilde_norm, a_tilde_norm)
         ratio = np.clip(ratio, -1., 1.)
         a_tilde_angle = np.arccos(ratio)
-        angle_error = np.sin(a_angle - a_tilde_angle) **2 * np.outer(tmp,tmp) / 4
+        angle_error = np.sin(a_angle - a_tilde_angle) ** 2 * np.outer(tmp, tmp) / 4
         if (angle_error > tol2).any():
             continue
 
-        #check if rotation inverts non-periodic axes
+        # check if rotation inverts non-periodic axes
         if not (W[np.diag(~pbc_axis)] == 1).all():
             continue
 
-        #check if rotation swaps periodic and non-periodic axes
+        # check if rotation swaps periodic and non-periodic axes
         pbc_axis2 = np.logical_and.outer(pbc_axis, pbc_axis)
         if W[~(pbc_axis2 | np.eye(3, dtype=bool))].any():
             continue
 
         rotations.append(W)
 
-    rotations = np.asarray(rotations)
-    return rotations
+    return np.asarray(rotations)
+
 
 def search_space_group_ops(cell, rotations=None, tol=SYMPREC):
     '''
@@ -86,19 +88,20 @@ def search_space_group_ops(cell, rotations=None, tol=SYMPREC):
         then one can use different names for the two sets of atoms and set their
         magnetic moment to 0.
     '''
-    if rotations is None: rotations = search_point_group_ops(cell, tol=tol)
+    if rotations is None:
+        rotations = search_point_group_ops(cell, tol=tol)
     a = cell.lattice_vectors()
     coords = cell.get_scaled_atom_coords()
     atmgrp = mole.atom_types(cell._atom, magmom=cell.magmom)
-    atmgrp_spin_inv = {} #spin up and down inverted
+    atmgrp_spin_inv = {}  # spin up and down inverted
     has_spin = False
     for atm in atmgrp.keys():
         if atm[-2:] == '_u':
             has_spin = True
-            atmgrp_spin_inv[atm] = atmgrp[atm[:-2]+'_d']
+            atmgrp_spin_inv[atm] = atmgrp[atm[:-2] + '_d']
         elif atm[-2:] == '_d':
             has_spin = True
-            atmgrp_spin_inv[atm] = atmgrp[atm[:-2]+'_u']
+            atmgrp_spin_inv[atm] = atmgrp[atm[:-2] + '_u']
         else:
             atmgrp_spin_inv[atm] = atmgrp[atm]
 
@@ -107,9 +110,9 @@ def search_space_group_ops(cell, rotations=None, tol=SYMPREC):
             x = coords[idx]
             xt = np.dot(x, R.T) + t
             if not spin_inverse:
-                x_xt = np.concatenate((x,xt))
+                x_xt = np.concatenate((x, xt))
             else:
-                x_xt = np.concatenate((coords[atmgrp_spin_inv[atm]],xt))
+                x_xt = np.concatenate((coords[atmgrp_spin_inv[atm]], xt))
             x_xt = np.mod(x_xt, 1)
             x_xt = np.round(x_xt, -np.log10(tol).astype(int))
             x_xt = np.mod(x_xt, 1)
@@ -120,9 +123,10 @@ def search_space_group_ops(cell, rotations=None, tol=SYMPREC):
                 return False
         return True
 
-    grp_len = [len(v) for v in atmgrp.values()]
-    atm = [k for k in atmgrp.keys() if len(atmgrp[k]) == min(grp_len)][0]
-    x = coords[atmgrp[atm]]
+    grp_len_min = min(len(v) for v in atmgrp.values())
+    atm, value = next((k, value) for k, value in atmgrp.items()
+                      if len(value) == grp_len_min)
+    x = coords[value]
     x_spin_inv = None
     if atm[-2:] in ['_u', '_d']:
         x_spin_inv = coords[atmgrp_spin_inv[atm]]
@@ -146,38 +150,38 @@ def search_space_group_ops(cell, rotations=None, tol=SYMPREC):
                     ops.append(SPGElement(rot, trans))
     return ops
 
+
 def get_crystal_class(cell, ops=None, tol=SYMPREC):
-    if ops is None: ops = search_space_group_ops(cell, tol=tol)
-    rotations = []
-    for op in ops:
-        rotations.append(op.rot)
+    if ops is None:
+        ops = search_space_group_ops(cell, tol=tol)
+    rotations = [op.rot for op in ops]
     rotations = np.unique(np.asarray(rotations), axis=0)
 
-    maps =  {-6 : 0,
-             -4 : 1,
-             -3 : 2,
-             -2 : 3,
-             -1 : 4,
-              1 : 5,
-              2 : 6,
-              3 : 7,
-              4 : 8,
-              6 : 9}
+    maps = {-6: 0,
+            -4: 1,
+            -3: 2,
+            -2: 3,
+            -1: 4,
+             1: 5,
+             2: 6,
+             3: 7,
+             4: 8,
+             6: 9}
     table = [0,] * 10
     for rot in rotations:
         trace = np.trace(rot)
         det = np.linalg.det(rot)
         if trace == 3:
-            assert(det == 1)
+            assert (det == 1)
             table[maps[1]] += 1
         elif trace == -3:
-            assert(det == -1)
+            assert (det == -1)
             table[maps[-1]] += 1
         elif trace == 2:
-            assert(det == 1)
+            assert (det == 1)
             table[maps[6]] += 1
         elif trace == -2:
-            assert(det == -1)
+            assert (det == -1)
             table[maps[-6]] += 1
         elif trace == 0:
             if det == 1:
@@ -203,7 +207,8 @@ def get_crystal_class(cell, ops=None, tol=SYMPREC):
     for k, v in CrystalClass.items():
         count = 0
         for i in range(10):
-            if table[i] == v[i]: count += 1
+            if table[i] == v[i]:
+                count += 1
         if count == 10:
             crystal_class = k
             break
@@ -239,7 +244,8 @@ if __name__ == "__main__":
     cell.build()
 
     ops = search_space_group_ops(cell)
-    for op in ops: print(op)
+    for op in ops:
+        print(op)
 
     point_group = get_crystal_class(cell, ops=ops)[0]
     print(point_group)
