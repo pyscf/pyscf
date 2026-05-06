@@ -739,6 +739,23 @@ def load_ecp(filename_or_basisname, symb):
         return parse_nwchem_ecp.load(join(_BASIS_DIR, basmod), symb)
 
     if '\n' not in filename_or_basisname:
+        from pyscf.gto.basis import bse
+        if bse.basis_set_exchange is None:
+            warnings.warn(
+                'ECP may be available in basis-set-exchange. '
+                'It is recommended to install basis-set-exchange: '
+                'pip install basis-set-exchange')
+        else:
+            try:
+                bse_obj = bse.basis_set_exchange.api.get_basis(
+                    filename_or_basisname, elements=symb)
+            except KeyError:
+                raise BasisNotFoundError(filename_or_basisname)
+            ecp_basis = bse._ecp_basis(bse_obj)
+            if symb not in ecp_basis:
+                raise BasisNotFoundError(
+                    f'No ECP defined for {symb} in {filename_or_basisname}')
+            return ecp_basis[symb]
         raise RuntimeError(f'Unable to parse the input ECP data\n{filename_or_basisname}')
 
     try:
@@ -759,20 +776,6 @@ def load_ecp(filename_or_basisname, symb):
             return out
         except BasisNotFoundError:
             pass
-
-    # Last, a trial to access Basis Set Exchange database
-    from pyscf.gto.basis import bse
-    if bse.basis_set_exchange is not None:
-        try:
-            bse_obj = bse.basis_set_exchange.api.get_basis(
-                filename_or_basisname, elements=symb)
-        except KeyError:
-            raise BasisNotFoundError(filename_or_basisname)
-        ecp_basis = bse._ecp_basis(bse_obj)
-        if len(ecp_basis) > 0:
-            return ecp_basis[symb]
-        else:
-            return {}
 
     raise BasisNotFoundError('Unknown ECP format or ECP name')
 
