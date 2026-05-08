@@ -604,3 +604,108 @@ class NVTBerendson(_Integrator):
         necessary equations of motion for the velocity is
             v(t_i+1) = v(t_i) + /delta t * 0.5(a(t_i+1) + a(t_i))'''
         return self.veloc + 0.5 * self.dt * (self.accel + next_accel)
+
+
+class Langevin(_Integrator):
+    """Langevin algorithm
+
+    Args:
+        method : lib.GradScanner or rhf.GradientsBase instance, or
+        has nuc_grad_method method.
+            Method by which to compute the energy gradients and energies
+            in order to propagate the equations of motion. Realistically,
+            it can be any callable object such that it returns the energy
+            and potential energy gradient when given a mol.
+
+        gamma  : float
+            Friction coefficient for the Langevin thermostat.
+
+        T      : float
+        Temperature of the heat bath for the Langevin thermostat. Given in K.
+
+    Attributes:
+        accel : ndarray
+            Current acceleration for the simulation. Values are given
+            in atomic units (Bohr/a.u.^2). Dimensions is (natm, 3) such as
+
+             [[x1, y1, z1],
+             [x2, y2, z2],
+             [x3, y3, z3]]
+    """
+
+    def __init__(self, method, T: float, **kwargs):
+        friction_coef = 1.0  # Temporary hardcoded value for friction
+
+        self.friction_coef = friction_coef
+        self.T: float = T
+        self.R_i = np.random.normal(0, 2 * friction_coef * data.nist.BOLTZMANN * T)  # 2*gamma*k_B*T
+        self.accel = None
+        super().__init__(method, **kwargs)
+        self.alpha = np.exp(-friction_coef * self.dt)
+
+    def _next(self):
+        """Computes the next frame of the simulation and sets all internal
+         variables to this new frame. First computes the
+
+        # FIXME
+         new geometry,
+         then the next acceleration, and finally the velocity,
+
+         all according
+         to the Langevin algorithm.
+
+        Returns:
+            The next frame of the simulation.
+        """
+
+        # Compute forces on first call
+        if self.accel is None:
+            self.epot, self.accel = self._compute_accel()
+            self.ekin = self.compute_kinetic_energy()
+            return _toframe(self)
+
+        mid_velocity = self._mid_velocity()
+        final_velocity = self._final_velocity(mid_velocity)
+        final_geometry = self._final_geometry(mid_velocity, final_velocity)
+
+        # Update geometry, recompute forces
+        self.mol.set_geom_(self._next_geometry(), unit='B')
+        self.mol.build()
+        self.epot, self.accel = self._compute_accel()
+
+        self.veloc = final_velocity
+        self.ekin = self.compute_kinetic_energy()
+
+        return _toframe(self)
+
+    def _compute_accel(self):
+        """Given the current geometry, computes the acceleration
+        for each atom."""
+        e_tot, grad = self.scanner(self.mol)
+        if not self.scanner.converged:
+            raise RuntimeError('Gradients did not converge!')
+
+        a = -1 * grad / self._masses.reshape(-1, 1)
+        return e_tot, a
+
+    # TODOL Find better function names for these
+    def _mid_velocity(self):
+        """
+        v_i(t + delta_t/2) = v_i(t - delta_t/2) + f_i(t)*delta_t/m_i
+        """
+        return self.veloc + 0.5 * self.dt * self.accel
+
+    def _final_velocity(self, mid_velocity):
+        """
+        v'_i(t + delta_t/2) = v_i(t + delta_t/2)*alpha + sqrt(k*T*(1-alpha^2)/m*R)
+        """
+        return mid_velocity * self.alpha + np.sqrt(
+            data.nist.BOLTZMANN * self.T * (1 - self.alpha**2) / (self._masses.reshape(-1, 1)) * self.R_i
+        )
+
+    def _final_geometry(self, mid_velocity, final_velocity):
+        """
+        r_i(t + delta_t) = r_i(t + delta_t/2) + v'_i(t + delta_t/2)*delta_t/2
+        """
+        mid_geometry = self.mol.atom_coords() + mid_velocity * self.dt / 2
+        return mid_geometry + final_velocity * self.dt / 2
