@@ -274,12 +274,12 @@ class Cube:
             self.ys = numpy.linspace(0, 1, ny, endpoint=True)
             self.zs = numpy.linspace(0, 1, nz, endpoint=True)
 
-    def get_coords(self) :
+    def get_coords(self):
         """  Result: set of coordinates to compute a field which is to be stored
         in the file.
         """
         frac_coords = lib.cartesian_prod([self.xs, self.ys, self.zs])
-        return frac_coords @ self.box + self.boxorig # Convert fractional coordinates to real-space coordinates
+        return frac_coords @ self.box + self.boxorig  # Convert fractional coordinates to real-space coordinates
 
     def get_ngrids(self):
         return self.nx * self.ny * self.nz
@@ -310,7 +310,7 @@ class Cube:
             f.write(f'{self.nz:5d}{delta[2,0]:12.6f}{delta[2,1]:12.6f}{delta[2,2]:12.6f}\n')
             for ia in range(mol.natm):
                 atmsymb = mol.atom_symbol(ia)
-                f.write('%5d%12.6f'% (gto.charge(atmsymb), 0.))
+                f.write('%5d%12.6f' % (gto.charge(atmsymb), 0.))
                 f.write('%12.6f%12.6f%12.6f\n' % tuple(coord[ia]))
 
             for ix in range(self.nx):
@@ -326,6 +326,7 @@ class Cube:
             data = f.readline().split()
             natm = int(data[0])
             self.boxorig = numpy.array([float(x) for x in data[1:]])
+
             def parse_nx(data):
                 from pyscf.pbc.gto import Cell
                 d = data.split()
@@ -361,6 +362,6 @@ if __name__ == '__main__':
                 H 0.761561, 0.478993, 0.00000000
                 H -0.761561, 0.478993, 0.00000000''', basis='6-31g*')
     mf = scf.RHF(mol).run()
-    cubegen.density(mol, 'h2o_den.cube', mf.make_rdm1()) #makes total density
+    cubegen.density(mol, 'h2o_den.cube', mf.make_rdm1())  # makes total density
     cubegen.mep(mol, 'h2o_pot.cube', mf.make_rdm1())
     cubegen.orbital(mol, 'h2o_mo1.cube', mf.mo_coeff[:,0])
