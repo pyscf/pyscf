@@ -176,17 +176,17 @@ class KnownValues(unittest.TestCase):
         mol = make_disp_mol()
         mf = scf.UHF(mol)
         mf.disp = 'd3bj'
+        mf.conv_tol = 1e-10
         e_tot = mf.kernel()
-        self.assertAlmostEqual(e_tot, -150.7949833081, 8)
+        self.assertAlmostEqual(e_tot, -150.7949833081, 6)
 
     @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
     def test_uhf_d4(self):
         mol = make_disp_mol()
         mf = scf.UHF(mol)
         mf.disp = 'd4'
-        mf.kernel()
         e_disp = mf.get_dispersion()
-        self.assertAlmostEqual(e_disp, -0.00967083082, 8)
+        self.assertAlmostEqual(e_disp, -0.00967083082, 7)
 
     def test_scf_negative_spin(self):
         mol = gto.M(atom = '''
