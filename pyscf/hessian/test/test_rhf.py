@@ -19,7 +19,7 @@ from pyscf import gto, scf, lib
 from pyscf import grad, hessian
 try:
     from pyscf.dispersion import dftd3, dftd4
-except ImportError:
+except (ImportError, OSError):
     dftd3 = dftd4 = None
 
 def setUpModule():

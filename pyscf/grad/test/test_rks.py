@@ -20,7 +20,7 @@ from pyscf.dft import radi, gen_grid
 from pyscf.grad import rks
 try:
     from pyscf.dispersion import dftd3, dftd4
-except ImportError:
+except (ImportError, OSError):
     dftd3 = dftd4 = None
 
 

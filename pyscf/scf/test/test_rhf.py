@@ -24,16 +24,10 @@ from pyscf import gto
 from pyscf import scf
 from pyscf.scf import atom_hf
 
-import sys
 try:
-    import dftd3
-except ImportError:
-    pass
-
-try:
-    import dftd4
-except ImportError:
-    pass
+    from pyscf.dispersion import dftd3, dftd4
+except (ImportError, OSError):
+    dftd3 = dftd4 = None
 
 def setUpModule():
     global mol, mf, n2sym, n2mf, re_ecp1, re_ecp2
@@ -371,7 +365,7 @@ class KnownValues(unittest.TestCase):
     def test_scf(self):
         self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
 
-    @unittest.skipIf('dispersion' not in sys.modules, "requires the dftd3 library")
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
     def test_scf_d3(self):
         mf = scf.RHF(mol)
         mf.disp = 'd3bj'
@@ -380,7 +374,7 @@ class KnownValues(unittest.TestCase):
         e_tot = mf.kernel()
         self.assertAlmostEqual(e_tot, -76.03127458778653, 9)
 
-    @unittest.skipIf('dispersion' not in sys.modules, "requires the dftd4 library")
+    @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
     def test_scf_d4(self):
         mf = scf.RHF(mol)
         mf.disp = 'd4'

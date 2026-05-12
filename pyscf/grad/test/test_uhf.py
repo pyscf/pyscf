@@ -19,7 +19,7 @@ from pyscf import gto, scf, lib
 from pyscf import grad
 try:
     from pyscf.dispersion import dftd3, dftd4
-except ImportError:
+except (ImportError, OSError):
     dftd3 = dftd4 = None
 
 
@@ -196,8 +196,8 @@ H              0.99207379    1.16253558   -0.88226569
 H             -0.43459905    0.65805058   -0.00861418''')
         self.assertAlmostEqual(g[2,1], (e2-e1)/2e-4*lib.param.BOHR, 7)
 
-    @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
-    def test_finite_diff_df_uhf_d4_grad(self):
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_finite_diff_df_uhf_d3_grad(self):
         mf = scf.UHF(mol).density_fit ()
         mf.conv_tol = 1e-14
         mf.disp = 'd3bj'

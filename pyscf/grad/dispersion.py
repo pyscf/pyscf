@@ -28,9 +28,11 @@ def get_dispersion(mf_grad, disp=None, with_3body=None, verbose=None):
     '''gradient of DFTD3/DFTD4 dispersion correction'''
     mf = mf_grad.base
     mol = mf.mol
-    disp_version = check_disp(mf, disp)
-    if not disp_version:
+    if not check_disp(mf, disp):
         return np.zeros([mol.natm,3])
+
+    if disp is None:
+        disp = getattr(mf, 'disp', None)
 
     try:
         from pyscf.dispersion import dftd3, dftd4
@@ -39,9 +41,9 @@ def get_dispersion(mf_grad, disp=None, with_3body=None, verbose=None):
         raise
 
     method = getattr(mf, 'xc', 'hf')
-    method, _, disp_with_3body = parse_disp(method)
+    method, disp_version, disp_with_3body = parse_disp(method, disp)
 
-    if with_3body is not None:
+    if with_3body is None:
         with_3body = disp_with_3body
 
     if disp_version[:2].upper() == 'D3':
