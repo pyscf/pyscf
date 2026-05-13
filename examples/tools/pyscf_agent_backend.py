@@ -318,7 +318,13 @@ def intent_parser(state: Dict[str, Any]) -> Dict[str, Any]:
 
 def task_spec_from_partial(raw_spec: Dict[str, Any]) -> TaskSpec:
     task_spec = TaskSpec()
-    if isinstance(raw_spec.get('system'), dict) or isinstance(raw_spec.get('method'), dict):
+    if any(isinstance(raw_spec.get(key), dict) for key in (
+        'system',
+        'method',
+        'job',
+        'analysis',
+        'runtime',
+    )):
         return task_spec_from_dict(raw_spec)
 
     for key in ('atom', 'basis', 'unit', 'charge', 'spin', 'symmetry'):
