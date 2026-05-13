@@ -26,6 +26,7 @@ from __future__ import annotations
 import ast
 import copy
 import io
+import inspect
 import json
 import re
 from contextlib import redirect_stdout
@@ -308,7 +309,12 @@ def _build_method_constructor(task_spec: TaskSpec) -> Tuple[str, List[str]]:
 
 def generate_input_script(task_spec: TaskSpec) -> str:
     constructor, settings = _build_method_constructor(task_spec)
+    helper_sources = (
+        inspect.getsource(_extract_homo_lumo).rstrip(),
+        inspect.getsource(_safe_to_list).rstrip(),
+    )
     lines = [
+        'from __future__ import annotations',
         'import io',
         'import json',
         'from contextlib import redirect_stdout',
@@ -326,6 +332,7 @@ def generate_input_script(task_spec: TaskSpec) -> str:
         'mf = {0}'.format(constructor),
     ]
     lines.extend(settings)
+    lines.extend(['', helper_sources[0], '', helper_sources[1], ''])
     lines.extend([
         'energy = mf.kernel()',
         'log_buffer = io.StringIO()',
@@ -333,18 +340,9 @@ def generate_input_script(task_spec: TaskSpec) -> str:
         '    mf.analyze()',
         'mo_occ = mf.mo_occ',
         'mo_energy = mf.mo_energy',
-        'if hasattr(mo_occ, "ndim") and mo_occ.ndim == 2:',
-        '    occ_mask = mo_occ[0] > 0',
-        '    vir_mask = mo_occ[0] == 0',
-        '    homo = float(mo_energy[0][occ_mask][-1]) if occ_mask.any() else None',
-        '    lumo = float(mo_energy[0][vir_mask][0]) if vir_mask.any() else None',
-        'else:',
-        '    occ_mask = mo_occ > 0',
-        '    vir_mask = mo_occ == 0',
-        '    homo = float(mo_energy[occ_mask][-1]) if occ_mask.any() else None',
-        '    lumo = float(mo_energy[vir_mask][0]) if vir_mask.any() else None',
+        'homo, lumo = _extract_homo_lumo(mo_energy, mo_occ)',
         'dm = mf.make_rdm1()',
-        'dipole = mf.dip_moment(mol, dm).tolist()',
+        'dipole = _safe_to_list(mf.dip_moment(mol, dm))',
         'result = {',
         "    'converged': bool(mf.converged),",
         "    'energy': float(energy),",
@@ -433,8 +431,10 @@ def _run_pyscf_task(task_spec: TaskSpec) -> Dict[str, Any]:
 
 def _safe_to_list(value: Any) -> Any:
     if hasattr(value, 'tolist'):
-        return value.tolist()
-    if isinstance(value, tuple):
+        return _safe_to_list(value.tolist())
+    if isinstance(value, dict):
+        return {key: _safe_to_list(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
         return [_safe_to_list(item) for item in value]
     return value
 
@@ -513,7 +513,7 @@ def repair_or_retry(state: Dict[str, Any]) -> Dict[str, Any]:
     task_spec = task_spec_from_dict(state['task_spec'])
     lower_error = state.get('raw_stderr', '').lower()
 
-    if 'conver' in lower_error:
+    if 'converge' in lower_error or 'convergence' in lower_error:
         task_spec.runtime.max_cycle *= 2
         if task_spec.method.name == 'hf' and task_spec.system.spin != 0:
             task_spec.method.restricted = False
