@@ -258,11 +258,15 @@ def _extract_key_value_block(text: str) -> Dict[str, Any]:
 
 def parse_user_request(user_request: str) -> Dict[str, Any]:
     parsed = _extract_json_object(user_request)
-    if parsed is not None:
-        return parsed
-
-    parsed = _extract_key_value_block(user_request)
-    lower = user_request.lower()
+    request_hints = []
+    if parsed is None:
+        parsed = _extract_key_value_block(user_request)
+    else:
+        for key in ('request', 'message', 'prompt'):
+            value = parsed.get(key)
+            if isinstance(value, str) and value.strip():
+                request_hints.append(value.strip())
+    lower = '\n'.join(request_hints + [user_request]).lower()
 
     basis_match = re.search(r'([a-z0-9+\-]+g(?:\*{1,2})?)', lower)
     if 'basis' not in parsed and basis_match:
@@ -283,17 +287,18 @@ def parse_user_request(user_request: str) -> Dict[str, Any]:
     if 'job' not in parsed:
         parsed['job'] = 'single_point'
 
-    outputs = []
-    if 'homo' in lower or 'lumo' in lower:
-        outputs.append('homo_lumo')
-    if 'dipole' in lower:
-        outputs.append('dipole')
-    if 'mulliken' in lower or 'population' in lower:
-        outputs.append('mulliken')
-    if 'energy' in lower or 'single point' in lower or 'single-point' in lower:
-        outputs.append('energy')
-    if outputs:
-        parsed['outputs'] = sorted(set(outputs))
+    if 'outputs' not in parsed:
+        outputs = []
+        if 'homo' in lower or 'lumo' in lower:
+            outputs.append('homo_lumo')
+        if 'dipole' in lower:
+            outputs.append('dipole')
+        if 'mulliken' in lower or 'population' in lower:
+            outputs.append('mulliken')
+        if 'energy' in lower or 'single point' in lower or 'single-point' in lower:
+            outputs.append('energy')
+        if outputs:
+            parsed['outputs'] = sorted(set(outputs))
 
     return parsed
 

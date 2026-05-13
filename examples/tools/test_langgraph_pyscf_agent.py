@@ -68,6 +68,17 @@ class KnownValues(unittest.TestCase):
         self.assertIn("mf.xc = 'b3lyp'", script)
         self.assertIn("basis='6-31g'", script)
 
+    def test_parse_user_request_merges_json_and_prompt_hints(self):
+        parsed = BACKEND.parse_user_request(json.dumps({
+            'atom': 'H 0 0 0; H 0 0 0.74',
+            'basis': 'sto-3g',
+            'request': 'Run a DFT calculation and report dipole',
+        }))
+
+        self.assertEqual(parsed['method'], 'dft')
+        self.assertEqual(parsed['job'], 'single_point')
+        self.assertIn('dipole', parsed['outputs'])
+
     def test_result_analyst_summary(self):
         state = MODULE.default_state('irrelevant')
         state['execution_status'] = 'succeeded'
@@ -141,14 +152,38 @@ class KnownValues(unittest.TestCase):
         self.assertIn('messages', report)
         self.assertIn('logs', report)
 
+    def test_web_api_accepts_structured_form_payload(self):
+        status, headers, body = WEB.handle_api_request(json.dumps({
+            'request': 'Please focus on dipole analysis',
+            'task_spec': {
+                'atom': 'O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587',
+                'basis': '6-31g',
+                'method': 'dft',
+                'xc': 'b3lyp',
+                'job': 'single_point',
+                'outputs': ['energy', 'dipole'],
+            },
+        }).encode('utf-8'))
+
+        report = json.loads(body.decode('utf-8'))
+        self.assertEqual(status, 200)
+        self.assertEqual(headers['Content-Type'], 'application/json; charset=utf-8')
+        self.assertEqual(report['task_spec']['method']['name'], 'dft')
+        self.assertEqual(report['task_spec']['method']['xc'], 'b3lyp')
+        self.assertEqual(report['task_spec']['analysis']['outputs'], ['energy', 'dipole'])
+
     def test_web_index_contains_frontend(self):
         page = WEB.build_index_html()
         self.assertIn('PySCF Agent 网页界面', page)
         self.assertIn('/api/run', page)
+        self.assertIn('select id="basis"', page)
+        self.assertIn('select id="method"', page)
+        self.assertIn('select id="xc"', page)
+        self.assertIn('div id="conversation"', page)
+        self.assertIn('pre id="input-preview"', page)
         self.assertIn('textarea id="request"', page)
         self.assertIn('button id="run"', page)
-        self.assertIn('pre id="report"', page)
-        self.assertIn('pre id="logs"', page)
+        self.assertNotIn('pre id="logs"', page)
 
 
 if __name__ == '__main__':
