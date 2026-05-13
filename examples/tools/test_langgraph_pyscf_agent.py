@@ -61,7 +61,7 @@ class KnownValues(unittest.TestCase):
 
         state = MODULE.result_analyst(state)
         self.assertIn('总能', state['analysis_summary'])
-        self.assertIn('Gap', state['analysis_summary'])
+        self.assertIn('能隙', state['analysis_summary'])
         self.assertIn('偶极矩', state['analysis_summary'])
 
     def test_retry_policy_doubles_max_cycle(self):

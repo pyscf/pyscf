@@ -172,6 +172,7 @@ def parse_user_request(user_request: str) -> Dict[str, Any]:
     parsed = _extract_key_value_block(user_request)
     lower = user_request.lower()
 
+    # Match compact basis aliases such as sto-3g, 6-31g, and 6-31g**.
     basis_match = re.search(r'([a-z0-9+\-]+g(?:\*{1,2})?)', lower)
     if 'basis' not in parsed and basis_match:
         parsed['basis'] = basis_match.group(1)
@@ -231,6 +232,7 @@ def spec_builder(state: Dict[str, Any]) -> Dict[str, Any]:
 
 def task_spec_from_partial(raw_spec: Dict[str, Any]) -> TaskSpec:
     task_spec = TaskSpec()
+    # When the request already contains nested blocks, preserve that structure.
     if isinstance(raw_spec.get('system'), dict) or isinstance(raw_spec.get('method'), dict):
         return task_spec_from_dict(raw_spec)
 
@@ -494,7 +496,7 @@ def result_analyst(state: Dict[str, Any]) -> Dict[str, Any]:
         pieces.append('总能={0:.12f} Ha'.format(results['energy']))
     if results.get('homo') is not None and results.get('lumo') is not None:
         pieces.append(
-            'HOMO={0:.6f} Ha, LUMO={1:.6f} Ha, Gap={2:.6f} Ha'.format(
+            'HOMO={0:.6f} Ha, LUMO={1:.6f} Ha, 能隙={2:.6f} Ha'.format(
                 results['homo'], results['lumo'], results['gap']
             )
         )
