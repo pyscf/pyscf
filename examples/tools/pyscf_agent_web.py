@@ -300,7 +300,11 @@ def build_agent_request(payload: Dict[str, Any]) -> str:
             structured_request[key] = value
     outputs = task_spec.get('outputs')
     if isinstance(outputs, list):
-        normalized_outputs = [str(item).strip() for item in outputs if str(item).strip()]
+        normalized_outputs = []
+        for item in outputs:
+            normalized_item = str(item).strip()
+            if normalized_item:
+                normalized_outputs.append(normalized_item)
         if normalized_outputs:
             structured_request['outputs'] = normalized_outputs
     if normalized_request:
@@ -311,7 +315,10 @@ def build_agent_request(payload: Dict[str, Any]) -> str:
 
 
 def build_index_html() -> str:
-    example_request = json.loads(backend.example_request())
+    try:
+        example_request = json.loads(backend.example_request())
+    except (TypeError, json.JSONDecodeError):
+        example_request = {}
     return HTML_PAGE.format(
         default_atom=html.escape(example_request.get('atom', '')),
         default_request='',
