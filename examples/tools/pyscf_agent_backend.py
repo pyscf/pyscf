@@ -264,8 +264,10 @@ def parse_user_request(user_request: str) -> Dict[str, Any]:
     else:
         for key in ('request', 'message', 'prompt'):
             value = parsed.get(key)
-            if isinstance(value, str) and value.strip():
-                request_hints.append(value.strip())
+            if isinstance(value, str):
+                normalized_value = value.strip()
+                if normalized_value and normalized_value not in request_hints:
+                    request_hints.append(normalized_value)
     lower = '\n'.join(request_hints + [user_request]).lower()
 
     basis_match = re.search(r'([a-z0-9+\-]+g(?:\*{1,2})?)', lower)

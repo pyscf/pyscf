@@ -289,7 +289,8 @@ def _build_output_options(selected_outputs: Sequence[str]) -> str:
 
 def build_agent_request(payload: Dict[str, Any]) -> str:
     request_text = payload.get('request')
-    task_spec = payload.get('task_spec') if isinstance(payload.get('task_spec'), dict) else {}
+    task_spec_payload = payload.get('task_spec')
+    task_spec = task_spec_payload if isinstance(task_spec_payload, dict) else {}
     normalized_request = request_text.strip() if isinstance(request_text, str) else ''
     structured_request = {}
     for key in ('atom', 'basis', 'method', 'xc', 'job'):
@@ -318,6 +319,7 @@ def build_index_html() -> str:
     try:
         example_request = json.loads(backend.example_request())
     except (TypeError, json.JSONDecodeError):
+        backend.LOGGER.warning('Failed to load example_request JSON for web defaults', exc_info=True)
         example_request = {}
     return HTML_PAGE.format(
         default_atom=html.escape(example_request.get('atom', '')),
