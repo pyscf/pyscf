@@ -2,12 +2,14 @@
 
 import importlib.util
 import pathlib
+import sys
 import unittest
 
 
 MODULE_PATH = pathlib.Path(__file__).with_name('09-langgraph_pyscf_agent.py')
 SPEC = importlib.util.spec_from_file_location('langgraph_pyscf_agent_example', MODULE_PATH)
 MODULE = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
 
 
