@@ -319,7 +319,10 @@ def build_index_html() -> str:
     try:
         example_request = json.loads(backend.example_request())
     except (TypeError, json.JSONDecodeError):
-        backend.LOGGER.warning('Failed to parse example_request JSON, using empty defaults', exc_info=True)
+        backend.LOGGER.warning(
+            'Failed to parse example_request JSON; backend.example_request() should return a JSON object string, using empty defaults',
+            exc_info=True,
+        )
         example_request = {}
     return HTML_PAGE.format(
         default_atom=html.escape(example_request.get('atom', '')),
@@ -342,7 +345,7 @@ def handle_api_request(request_body: bytes) -> Tuple[HTTPStatus, Dict[str, str],
 
     request_text = build_agent_request(payload)
     if not request_text:
-        response = {'error': 'Field "request" or "task_spec" is required'}
+        response = {'error': 'At least one of "request" or "task_spec" must be provided with valid content'}
         return HTTPStatus.BAD_REQUEST, {'Content-Type': 'application/json; charset=utf-8'}, (
             json.dumps(response, ensure_ascii=False).encode('utf-8')
         )

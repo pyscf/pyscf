@@ -32,6 +32,11 @@ DEFAULT_ANALYSIS = (
     'mulliken',
     'dipole',
 )
+REQUEST_HINT_KEYS = (
+    'request',
+    'message',
+    'prompt',
+)
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.addHandler(logging.NullHandler())
@@ -262,7 +267,7 @@ def parse_user_request(user_request: str) -> Dict[str, Any]:
     if parsed is None:
         parsed = _extract_key_value_block(user_request)
     else:
-        for key in ('request', 'message', 'prompt'):
+        for key in REQUEST_HINT_KEYS:
             value = parsed.get(key)
             if isinstance(value, str):
                 normalized_value = value.strip()
