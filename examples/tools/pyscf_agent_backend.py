@@ -268,7 +268,8 @@ def parse_user_request(user_request: str) -> Dict[str, Any]:
                 normalized_value = value.strip()
                 if normalized_value and normalized_value not in request_hints:
                     request_hints.append(normalized_value)
-    lower = '\n'.join(request_hints + [user_request]).lower()
+    lower_source = request_hints if parsed is not None else [user_request]
+    lower = '\n'.join(lower_source).lower()
 
     basis_match = re.search(r'([a-z0-9+\-]+g(?:\*{1,2})?)', lower)
     if 'basis' not in parsed and basis_match:

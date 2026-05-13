@@ -291,7 +291,7 @@ def build_agent_request(payload: Dict[str, Any]) -> str:
     request_text = payload.get('request')
     task_spec_payload = payload.get('task_spec')
     task_spec = task_spec_payload if isinstance(task_spec_payload, dict) else {}
-    normalized_request = request_text.strip() if isinstance(request_text, str) else ''
+    request_note = request_text.strip() if isinstance(request_text, str) else ''
     structured_request = {}
     for key in ('atom', 'basis', 'method', 'xc', 'job'):
         value = task_spec.get(key)
@@ -308,18 +308,18 @@ def build_agent_request(payload: Dict[str, Any]) -> str:
                 normalized_outputs.append(normalized_item)
         if normalized_outputs:
             structured_request['outputs'] = normalized_outputs
-    if normalized_request:
-        structured_request['request'] = normalized_request
+    if request_note:
+        structured_request['request'] = request_note
     if structured_request:
         return json.dumps(structured_request, ensure_ascii=False)
-    return normalized_request
+    return request_note
 
 
 def build_index_html() -> str:
     try:
         example_request = json.loads(backend.example_request())
     except (TypeError, json.JSONDecodeError):
-        backend.LOGGER.warning('Failed to load example_request JSON for web defaults', exc_info=True)
+        backend.LOGGER.warning('Failed to parse example_request JSON, using empty defaults', exc_info=True)
         example_request = {}
     return HTML_PAGE.format(
         default_atom=html.escape(example_request.get('atom', '')),
