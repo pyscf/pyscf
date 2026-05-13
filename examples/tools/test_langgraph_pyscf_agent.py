@@ -4,6 +4,8 @@ import importlib.util
 import pathlib
 import sys
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 
 
 MODULE_PATH = pathlib.Path(__file__).with_name('09-langgraph_pyscf_agent.py')
@@ -11,6 +13,24 @@ SPEC = importlib.util.spec_from_file_location('langgraph_pyscf_agent_example', M
 MODULE = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
+
+BACKEND_PATH = pathlib.Path(__file__).with_name('pyscf_agent_backend.py')
+BACKEND_SPEC = importlib.util.spec_from_file_location('pyscf_agent_backend_example', BACKEND_PATH)
+BACKEND = importlib.util.module_from_spec(BACKEND_SPEC)
+sys.modules[BACKEND_SPEC.name] = BACKEND
+BACKEND_SPEC.loader.exec_module(BACKEND)
+
+CLI_PATH = pathlib.Path(__file__).with_name('pyscf_agent_cli.py')
+CLI_SPEC = importlib.util.spec_from_file_location('pyscf_agent_cli_example', CLI_PATH)
+CLI = importlib.util.module_from_spec(CLI_SPEC)
+sys.modules[CLI_SPEC.name] = CLI
+CLI_SPEC.loader.exec_module(CLI)
+
+WEB_PATH = pathlib.Path(__file__).with_name('pyscf_agent_web.py')
+WEB_SPEC = importlib.util.spec_from_file_location('pyscf_agent_web_example', WEB_PATH)
+WEB = importlib.util.module_from_spec(WEB_SPEC)
+sys.modules[WEB_SPEC.name] = WEB
+WEB_SPEC.loader.exec_module(WEB)
 
 
 class KnownValues(unittest.TestCase):
@@ -78,6 +98,52 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(state['execution_status'], 'pending')
         self.assertEqual(state['task_spec']['runtime']['max_cycle'], 100)
         self.assertEqual(state['retry_count'], 1)
+
+    def test_backend_records_structured_messages_and_logs(self):
+        final_state = BACKEND.execute_request('Run a DFT calculation', channel='cli')
+        report = final_state['final_report']
+
+        self.assertEqual(report['channel'], 'cli')
+        self.assertTrue(report['messages'])
+        self.assertTrue(report['logs'])
+        self.assertEqual(report['messages'][0]['role'], 'user')
+        self.assertEqual(report['messages'][0]['channel'], 'cli')
+        self.assertEqual(report['messages'][1]['kind'], 'intent')
+        self.assertEqual(report['messages'][-1]['kind'], 'summary')
+        self.assertIn('workflow.initialized', [item['event'] for item in report['logs']])
+        self.assertIn('workflow.finalized', [item['event'] for item in report['logs']])
+
+    def test_cli_returns_json_report(self):
+        output = StringIO()
+        with redirect_stdout(output):
+            return_code = CLI.main([
+                'Run a DFT calculation',
+                '--pretty',
+            ])
+
+        payload = output.getvalue().strip()
+        report = MODULE.json.loads(payload)
+        self.assertEqual(return_code, 0)
+        self.assertEqual(report['channel'], 'cli')
+        self.assertIn('messages', report)
+        self.assertIn('logs', report)
+
+    def test_web_api_uses_shared_backend(self):
+        status, headers, body = WEB.handle_api_request(MODULE.json.dumps({
+            'request': 'Run a DFT calculation',
+        }).encode('utf-8'))
+
+        report = MODULE.json.loads(body.decode('utf-8'))
+        self.assertEqual(status, 200)
+        self.assertEqual(headers['Content-Type'], 'application/json; charset=utf-8')
+        self.assertEqual(report['channel'], 'web')
+        self.assertIn('messages', report)
+        self.assertIn('logs', report)
+
+    def test_web_index_contains_frontend(self):
+        page = WEB.build_index_html()
+        self.assertIn('PySCF Agent Web UI', page)
+        self.assertIn('/api/run', page)
 
 
 if __name__ == '__main__':
