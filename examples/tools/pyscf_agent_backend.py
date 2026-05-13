@@ -317,15 +317,19 @@ def intent_parser(state: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def task_spec_from_partial(raw_spec: Dict[str, Any]) -> TaskSpec:
-    task_spec = TaskSpec()
-    if any(isinstance(raw_spec.get(key), dict) for key in (
+    nested_keys = (
         'system',
         'method',
         'job',
         'analysis',
         'runtime',
-    )):
-        return task_spec_from_dict(raw_spec)
+    )
+    if any(isinstance(raw_spec.get(key), dict) for key in nested_keys):
+        task_spec = task_spec_from_dict({
+            key: raw_spec[key] for key in nested_keys if isinstance(raw_spec.get(key), dict)
+        })
+    else:
+        task_spec = TaskSpec()
 
     for key in ('atom', 'basis', 'unit', 'charge', 'spin', 'symmetry'):
         if key in raw_spec:
@@ -692,7 +696,6 @@ def final_reporter(state: Dict[str, Any]) -> Dict[str, Any]:
         'analysis_summary': state.get('analysis_summary'),
         'clarification_questions': state.get('clarification_questions'),
         'messages': copy.deepcopy(state.get('messages', [])),
-        'logs': copy.deepcopy(state.get('logs', [])),
     }
     append_log(state, 'info', 'workflow.finalized', {
         'status': state.get('execution_status'),

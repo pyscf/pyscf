@@ -145,6 +145,10 @@ class KnownValues(unittest.TestCase):
         page = WEB.build_index_html()
         self.assertIn('PySCF Agent 网页界面', page)
         self.assertIn('/api/run', page)
+        self.assertIn('textarea id="request"', page)
+        self.assertIn('button id="run"', page)
+        self.assertIn('pre id="report"', page)
+        self.assertIn('pre id="logs"', page)
 
 
 if __name__ == '__main__':
