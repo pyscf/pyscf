@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import importlib.util
+import json
 import pathlib
 import sys
 import unittest
@@ -122,18 +123,18 @@ class KnownValues(unittest.TestCase):
             ])
 
         payload = output.getvalue().strip()
-        report = MODULE.json.loads(payload)
+        report = json.loads(payload)
         self.assertEqual(return_code, 0)
         self.assertEqual(report['channel'], 'cli')
         self.assertIn('messages', report)
         self.assertIn('logs', report)
 
     def test_web_api_uses_shared_backend(self):
-        status, headers, body = WEB.handle_api_request(MODULE.json.dumps({
+        status, headers, body = WEB.handle_api_request(json.dumps({
             'request': 'Run a DFT calculation',
         }).encode('utf-8'))
 
-        report = MODULE.json.loads(body.decode('utf-8'))
+        report = json.loads(body.decode('utf-8'))
         self.assertEqual(status, 200)
         self.assertEqual(headers['Content-Type'], 'application/json; charset=utf-8')
         self.assertEqual(report['channel'], 'web')

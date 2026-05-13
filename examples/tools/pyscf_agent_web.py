@@ -94,7 +94,7 @@ def handle_api_request(request_body: bytes) -> Tuple[HTTPStatus, Dict[str, str],
 
 
 class AgentWebHandler(BaseHTTPRequestHandler):
-    def _write_response(self, status: int, headers: Dict[str, str], body: bytes) -> None:
+    def _write_response(self, status: HTTPStatus, headers: Dict[str, str], body: bytes) -> None:
         self.send_response(status)
         for key, value in headers.items():
             self.send_header(key, value)
