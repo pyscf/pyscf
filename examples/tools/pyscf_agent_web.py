@@ -9,7 +9,7 @@ import pathlib
 import sys
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Optional, Sequence, Tuple
+from typing import Dict, Optional, Sequence, Tuple
 
 
 THIS_DIR = pathlib.Path(__file__).resolve().parent
