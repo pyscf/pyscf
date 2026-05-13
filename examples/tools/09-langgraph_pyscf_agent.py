@@ -121,6 +121,7 @@ def task_spec_from_dict(data: Optional[Dict[str, Any]]) -> TaskSpec:
 
 
 def _extract_json_object(text: str) -> Optional[Dict[str, Any]]:
+    '''Return the first valid JSON object embedded in free-form text.'''
     start = text.find('{')
     if start < 0:
         return None
@@ -140,6 +141,7 @@ def _extract_json_object(text: str) -> Optional[Dict[str, Any]]:
 
 
 def _extract_key_value_block(text: str) -> Dict[str, Any]:
+    '''Parse simple ``key: value`` lines into a flat task description.'''
     parsed = {}
     for line in text.splitlines():
         if ':' not in line:
@@ -289,18 +291,15 @@ def spec_validator(state: Dict[str, Any]) -> Dict[str, Any]:
     return state
 
 
-def _python_literal(value: Any) -> str:
-    return repr(value)
-
-
 def _build_method_constructor(task_spec: TaskSpec) -> Tuple[str, List[str]]:
+    '''Return the mean-field constructor and assignment lines for script export.'''
     settings = []
     method = task_spec.method
     if method.name == 'hf':
         constructor = 'scf.RHF(mol)' if method.restricted else 'scf.UHF(mol)'
     else:
         constructor = 'dft.RKS(mol)' if method.restricted else 'dft.UKS(mol)'
-        settings.append("mf.xc = {0}".format(_python_literal(method.xc)))
+        settings.append("mf.xc = {0}".format(repr(method.xc)))
     settings.append('mf.max_cycle = {0}'.format(task_spec.runtime.max_cycle))
     if task_spec.runtime.conv_tol is not None:
         settings.append('mf.conv_tol = {0}'.format(task_spec.runtime.conv_tol))
@@ -321,9 +320,9 @@ def generate_input_script(task_spec: TaskSpec) -> str:
         'from pyscf import dft, gto, scf',
         '',
         'mol = gto.M(',
-        '    atom={0},'.format(_python_literal(task_spec.system.atom)),
-        '    basis={0},'.format(_python_literal(task_spec.system.basis)),
-        '    unit={0},'.format(_python_literal(task_spec.system.unit)),
+        '    atom={0},'.format(repr(task_spec.system.atom)),
+        '    basis={0},'.format(repr(task_spec.system.basis)),
+        '    unit={0},'.format(repr(task_spec.system.unit)),
         '    charge={0},'.format(task_spec.system.charge),
         '    spin={0},'.format(task_spec.system.spin),
         '    symmetry={0},'.format(task_spec.system.symmetry),
@@ -365,6 +364,7 @@ def input_generator(state: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _extract_homo_lumo(mo_energy: Any, mo_occ: Any) -> Tuple[Optional[float], Optional[float]]:
+    '''Extract HOMO and LUMO energies from restricted or unrestricted MO arrays.'''
     try:
         occ_ndim = mo_occ.ndim
     except AttributeError:
@@ -385,6 +385,7 @@ def _extract_homo_lumo(mo_energy: Any, mo_occ: Any) -> Tuple[Optional[float], Op
 
 
 def _run_pyscf_task(task_spec: TaskSpec) -> Dict[str, Any]:
+    '''Execute a PySCF MVP task and return JSON-serializable structured results.'''
     from pyscf import dft, gto, scf  # pylint: disable=import-outside-toplevel
 
     mol = gto.M(
@@ -430,6 +431,7 @@ def _run_pyscf_task(task_spec: TaskSpec) -> Dict[str, Any]:
 
 
 def _safe_to_list(value: Any) -> Any:
+    '''Recursively convert arrays and nested containers to JSON-safe Python objects.'''
     if hasattr(value, 'tolist'):
         return _safe_to_list(value.tolist())
     if isinstance(value, dict):
