@@ -37,7 +37,7 @@ LOGGER = logging.getLogger(__name__)
 LOGGER.addHandler(logging.NullHandler())
 
 
-def _utc_timestamp() -> str:
+def utc_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
@@ -48,7 +48,7 @@ class MessageEnvelope:
     content: str
     channel: str = 'agent'
     metadata: Dict[str, Any] = field(default_factory=dict)
-    timestamp: str = field(default_factory=_utc_timestamp)
+    timestamp: str = field(default_factory=utc_timestamp)
 
 
 @dataclass
@@ -56,7 +56,7 @@ class LogEntry:
     level: str
     event: str
     details: Dict[str, Any] = field(default_factory=dict)
-    timestamp: str = field(default_factory=_utc_timestamp)
+    timestamp: str = field(default_factory=utc_timestamp)
 
 
 @dataclass
@@ -218,7 +218,8 @@ def _extract_json_object(text: str) -> Optional[Dict[str, Any]]:
     if start < 0:
         return None
     depth = 0
-    for idx, char in enumerate(text[start:], start=start):
+    for idx in range(start, len(text)):
+        char = text[idx]
         if char == '{':
             depth += 1
         elif char == '}':

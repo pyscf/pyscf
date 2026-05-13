@@ -23,7 +23,7 @@ HTML_PAGE = '''<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <title>PySCF Agent Web UI</title>
+  <title>PySCF Agent 网页界面</title>
   <style>
     body {{ font-family: sans-serif; margin: 2rem; max-width: 960px; }}
     textarea {{ width: 100%; min-height: 12rem; }}
@@ -33,7 +33,7 @@ HTML_PAGE = '''<!doctype html>
   </style>
 </head>
 <body>
-  <h1>PySCF Agent Web UI</h1>
+  <h1>PySCF Agent 网页界面</h1>
   <p>统一后端、结构化消息和结构化日志演示。</p>
   <textarea id="request">{default_request}</textarea>
   <br>
@@ -71,7 +71,7 @@ def build_index_html() -> str:
     return HTML_PAGE.format(default_request=html.escape(backend.example_request()))
 
 
-def handle_api_request(request_body: bytes) -> Tuple[int, Dict[str, str], bytes]:
+def handle_api_request(request_body: bytes) -> Tuple[HTTPStatus, Dict[str, str], bytes]:
     try:
         payload = json.loads(request_body.decode('utf-8') or '{}')
     except json.JSONDecodeError:
@@ -135,7 +135,7 @@ class AgentWebHandler(BaseHTTPRequestHandler):
                 'path': self.path,
                 'message': format % args,
             },
-            'timestamp': backend._utc_timestamp(),
+                'timestamp': backend.utc_timestamp(),
         }, ensure_ascii=False, sort_keys=True))
 
 

@@ -142,7 +142,7 @@ class KnownValues(unittest.TestCase):
 
     def test_web_index_contains_frontend(self):
         page = WEB.build_index_html()
-        self.assertIn('PySCF Agent Web UI', page)
+        self.assertIn('PySCF Agent 网页界面', page)
         self.assertIn('/api/run', page)
 
 
