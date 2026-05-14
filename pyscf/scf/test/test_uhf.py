@@ -23,6 +23,25 @@ from pyscf import lib
 from pyscf import gto
 from pyscf import scf
 
+try:
+    from pyscf.dispersion import dftd3, dftd4
+except (ImportError, OSError):
+    dftd3 = dftd4 = None
+
+
+def make_disp_mol():
+    return gto.M(
+        atom='''
+C  -0.65830719,  0.61123287, -0.00800148
+C   0.73685281,  0.61123287, -0.00800148
+C   1.43439081,  1.81898387, -0.00800148
+C   0.73673681,  3.02749287, -0.00920048
+''',
+        basis='ccpvtz',
+        charge=1,
+        spin=1,
+        output='/dev/null')
+
 def setUpModule():
     global mol, mf, n2sym, n2mf, mol2, mf2, bak
     mol = gto.M(
@@ -151,6 +170,24 @@ class KnownValues(unittest.TestCase):
 
     def test_scf(self):
         self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
+
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_uhf_d3bj(self):
+        mol = make_disp_mol()
+        mf = scf.UHF(mol)
+        mf.disp = 'd3bj'
+        e_disp = mf.get_dispersion()
+        print(e_disp)
+        self.assertAlmostEqual(e_disp, -0.030566786972, 9)
+
+    @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
+    def test_uhf_d4(self):
+        mol = make_disp_mol()
+        mf = scf.UHF(mol)
+        mf.disp = 'd4'
+        e_disp = mf.get_dispersion()
+        print(e_disp)
+        self.assertAlmostEqual(e_disp, -0.0096708308236, 9)
 
     def test_scf_negative_spin(self):
         mol = gto.M(atom = '''

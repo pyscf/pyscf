@@ -19,6 +19,11 @@ import pyscf
 from pyscf import lib
 from pyscf import scf, dft
 
+try:
+    from pyscf.dispersion import dftd3
+except (ImportError, OSError):
+    dftd3 = None
+
 def setUpModule():
     global mol
     mol = pyscf.M(
@@ -96,6 +101,23 @@ class KnownValues(unittest.TestCase):
         assert np.abs(gradient - np.array(
             [[ 2.44273951e-01,  2.44377010e-02,  6.79546462e-17],
              [-2.44288315e-01, -2.44313901e-02, -1.66959137e-16]])).max() < 1e-5
+
+    @unittest.skipIf(dftd3 is None, "dftd3 not available")
+    def test_rks_soscf(self):
+        mf = dft.RKS(mol, xc = "wB97M-d3bj")
+        mf.grids.atom_grid = (99,590)
+        mf.conv_tol = 1e-10
+        mf = mf.newton()
+        energy = mf.kernel()
+        assert mf.converged
+        assert np.abs(energy - -7.773544875779531) < 1e-5
+
+        gobj = mf.Gradients()
+        gradient = gobj.kernel()
+        assert np.max(np.abs(gradient - np.array([
+            [ 2.44614610e-01,  2.44653881e-02, -3.14001231e-18],
+            [-2.44641034e-01, -2.44569088e-02, -6.41480825e-18],
+        ]))) < 1e-5
 
     def test_uhf(self):
         mf = dft.RKS(mol, xc = "PBE")
