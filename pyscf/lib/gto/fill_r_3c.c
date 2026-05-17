@@ -157,11 +157,16 @@ void GTOr3c_fill_s2ij(int (*intor)(), double complex *out, double complex *buf,
                 shls[2] = ksh;
                 dk = ao_loc[ksh+1] - ao_loc[ksh];
                 k0 = ao_loc[ksh  ] - ao_loc[ksh0];
-                (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, cintopt, cache);
-                if (ip != jp) {
-                        zcopy_s2_igtj(out+k0*nij, buf, comp, ip, nij, nijk, di, dj, dk);
-                } else {
-                        zcopy_s2_ieqj(out+k0*nij, buf, comp, ip, nij, nijk, di, dj, dk);
+                // intor returns 0 when all primitives are screened out and
+                // does not guarantee buf has been zeroed. Skip the copy in
+                // that case (matching the gate used in fill_int2e.c).
+                if ((*intor)(buf, NULL, shls, atm, natm, bas, nbas, env,
+                             cintopt, cache)) {
+                        if (ip != jp) {
+                                zcopy_s2_igtj(out+k0*nij, buf, comp, ip, nij, nijk, di, dj, dk);
+                        } else {
+                                zcopy_s2_ieqj(out+k0*nij, buf, comp, ip, nij, nijk, di, dj, dk);
+                        }
                 }
         }
 }
