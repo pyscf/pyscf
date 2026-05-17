@@ -549,7 +549,7 @@ void GTO_Gv_orth(double *gzR, double *gzI, double fac, double aij,
         int *idy = idx + nGv;
         int *idz = idy + nGv;
 
-        double cutoff = EXPCUTOFF * aij * 4;
+        double cutoff = envs->expcutoff * aij * 4;
         double aij4 = .25 / aij;
         double complex fac1 = fac * envs->common_factor;
         int n, ix, iy, iz;
@@ -636,7 +636,7 @@ void GTO_Gv_nonorth(double *gzR, double *gzI, double fac, double aij,
         int *idy = idx + nGv;
         int *idz = idy + nGv;
 
-        double cutoff = EXPCUTOFF * aij * 4;
+        double cutoff = envs->expcutoff * aij * 4;
         double aij4 = -.25 / aij;
         double complex fac1 = fac * envs->common_factor;
         int ix, iy, iz;

@@ -32,8 +32,13 @@ void GTO_screen_index(uint8_t *screen_index, int nbins, double cutoff,
                       double *coords, int ngrids, int blksize,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
-        double scale = -nbins / log(MIN(cutoff, .1));
+        // Clamp nbins before computing scale so that si = nbins - arr*scale
+        // (used downstream) stays self-consistent: both terms reference the
+        // same effective nbins. Without this, callers passing nbins > 127
+        // get a different screening map than callers passing nbins <= 127
+        // with the same cutoff.
         nbins = MIN(127, nbins);
+        double scale = -nbins / log(MIN(cutoff, .1));
 #pragma omp parallel
 {
         const int nblk = (ngrids+blksize-1) / blksize;
