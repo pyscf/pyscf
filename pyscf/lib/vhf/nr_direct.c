@@ -387,17 +387,25 @@ void CVHFnr_direct_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
         int *block_jloc = block_iloc + nish + 1;
         int *block_kloc = block_jloc + njsh + 1;
         int *block_lloc = block_kloc + nksh + 1;
-        uint32_t nblock_i = CVHFshls_block_partition(block_iloc, shls_slice+0, ao_loc, AO_BLOCK_SIZE);
-        uint32_t nblock_j = CVHFshls_block_partition(block_jloc, shls_slice+2, ao_loc, AO_BLOCK_SIZE);
-        uint32_t nblock_k = CVHFshls_block_partition(block_kloc, shls_slice+4, ao_loc, AO_BLOCK_SIZE);
-        uint32_t nblock_l = CVHFshls_block_partition(block_lloc, shls_slice+6, ao_loc, AO_BLOCK_SIZE);
-        uint32_t nblock_kl = nblock_k * nblock_l;
-        uint32_t nblock_jkl = nblock_j * nblock_kl;
+        // size_t to keep nblock^3 from overflowing for large molecules. The
+        // same fix was applied to nr_sr_vhf.c.
+        size_t nblock_i = CVHFshls_block_partition(block_iloc, shls_slice+0, ao_loc, AO_BLOCK_SIZE);
+        size_t nblock_j = CVHFshls_block_partition(block_jloc, shls_slice+2, ao_loc, AO_BLOCK_SIZE);
+        size_t nblock_k = CVHFshls_block_partition(block_kloc, shls_slice+4, ao_loc, AO_BLOCK_SIZE);
+        size_t nblock_l = CVHFshls_block_partition(block_lloc, shls_slice+6, ao_loc, AO_BLOCK_SIZE);
+        size_t nblock_kl = nblock_k * nblock_l;
+        size_t nblock_jkl = nblock_j * nblock_kl;
         int nblock_max = MAX(nblock_i, nblock_j);
         nblock_max = MAX(nblock_max, nblock_k);
         nblock_max = MAX(nblock_max, nblock_l);
-        // up to 1.6 GB per thread
-        int size_limit = (200000000 - di*di*di*di*ncomp - cache_size) / n_dm;
+        // up to 1.6 GB per thread. Compute in ssize_t so that di^4 * ncomp
+        // larger than 2e8 underflows visibly rather than silently casting to
+        // a huge unsigned through "200000000 - ...".
+        ssize_t size_limit = ((ssize_t)200000000 - (ssize_t)(di*di*di*di*ncomp)
+                              - (ssize_t)cache_size) / n_dm;
+        if (size_limit < AO_BLOCK_SIZE*AO_BLOCK_SIZE*ncomp) {
+                size_limit = AO_BLOCK_SIZE*AO_BLOCK_SIZE*ncomp;
+        }
 
 #pragma omp parallel
 {
@@ -405,7 +413,8 @@ void CVHFnr_direct_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
         int joff = ao_loc[jsh0];
         int koff = ao_loc[ksh0];
         int loff = ao_loc[lsh0];
-        int i, j, k, l, n, r, blk_id;
+        int i, j, k, l, n;
+        size_t r, blk_id;
         JKArray *v_priv[n_dm];
         for (i = 0; i < n_dm; i++) {
                 v_priv[i] = CVHFallocate_JKArray(jkop[i], shls_slice, ao_loc,
@@ -545,8 +554,13 @@ void CVHFnr_direct_ex_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
         int nblock_max = MAX(nblock_i, nblock_j);
         nblock_max = MAX(nblock_max, nblock_k);
         nblock_max = MAX(nblock_max, nblock_l);
-        // up to 1.6 GB per thread
-        int size_limit = (200000000 - di*di*di*di*ncomp - cache_size) / n_dm;
+        // up to 1.6 GB per thread. Compute in ssize_t so the subtraction
+        // doesn't silently underflow when di^4 * ncomp > 2e8.
+        ssize_t size_limit = ((ssize_t)200000000 - (ssize_t)(di*di*di*di*ncomp)
+                              - (ssize_t)cache_size) / n_dm;
+        if (size_limit < AO_BLOCK_SIZE*AO_BLOCK_SIZE*ncomp) {
+                size_limit = AO_BLOCK_SIZE*AO_BLOCK_SIZE*ncomp;
+        }
 
 #pragma omp parallel
 {
@@ -554,7 +568,8 @@ void CVHFnr_direct_ex_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
         int joff = ao_loc[jsh0];
         int koff = ao_loc[ksh0];
         int loff = ao_loc[lsh0];
-        int i, j, k, l, n, r, blk_id;
+        int i, j, k, l, n;
+        size_t r, blk_id;
         JKArray *v_priv[n_dm];
         for (i = 0; i < n_dm; i++) {
                 v_priv[i] = CVHFallocate_JKArray(jkop[i], shls_slice, ao_loc,

@@ -485,8 +485,13 @@ void CVHFrkbssll_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
                 exit(1);
         }
         nset = nset / 4;
-        size_t nbas2 = nbas * nbas;
+        size_t nbas2 = (size_t)nbas * nbas;
         opt->dm_cond = (double *)malloc(sizeof(double)*nbas2*4*(1+nset));
+        // CVHFrkbssll_dm_cond only writes the LL/SS/SL diagonal blocks for
+        // jsh<=ish; the strict upper triangle of the master slots would
+        // otherwise be read uninitialised by CVHFrkbssll_prescreen. Match
+        // the NPdset0() that the sibling CVHFrkbllll_direct_scf_dm uses.
+        NPdset0(opt->dm_cond, nbas2*4*(1+nset));
         CVHFrkbssll_dm_cond(opt->dm_cond, dm, nset, ao_loc,
                             atm, natm, bas, nbas, env);
 }
