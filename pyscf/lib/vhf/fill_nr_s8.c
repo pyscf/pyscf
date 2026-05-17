@@ -92,7 +92,7 @@ static void store_ij(int (*intor)(), double *eri, double *buf, int ish, int jsh,
         for (i0 = ao_loc[ish], i = 0; i < di; i++, i0++) {
         for (j0 = ao_loc[jsh], j = 0; j < dj; j++, j0++) {
                 if (i0 >= j0) {
-                        ij0 = i0*(i0+1)/2 + j0;
+                        ij0 = (size_t)i0*(i0+1)/2 + j0;
                         peri = eri + ij0*(ij0+1)/2;
                         pbuf = buf + nao2 * (i*dj+j);
                         for (kl = 0, k = 0; k < i0; k++) {

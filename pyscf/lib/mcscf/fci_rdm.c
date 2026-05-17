@@ -149,7 +149,8 @@ static void tril_particle_symm(double *rdm2, double *tbra, double *tket,
         const char TRANS_T = 'T';
         int nnorb = norb * norb;
         int i, j, k, m, n;
-        int blk = MIN(((int)(48/norb))*norb, nnorb);
+        int blk_units = 48 / norb;
+        int blk = MIN(MAX(blk_units, 1) * norb, nnorb);
         double *buf = malloc(sizeof(double) * nnorb*bcount);
         double *p1;
 
