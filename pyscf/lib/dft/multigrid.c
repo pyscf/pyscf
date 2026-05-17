@@ -94,7 +94,10 @@ void init_rs_grid(RS_Grid** rs_grid, GridLevel_Info** gridlevel_info, int comp)
     int *mesh = gl_info->mesh;
     rg->data = (double**)malloc(sizeof(double*) * nlevels);
     for (i = 0; i < nlevels; i++) {
-        ngrid = mesh[i*3] * mesh[i*3+1] * mesh[i*3+2];
+        // Cast to size_t before multiplying so very fine meshes
+        // (mesh > ~1024 on a side) do not overflow int and silently
+        // under-size the FFT-grid allocation.
+        ngrid = (size_t)mesh[i*3] * mesh[i*3+1] * mesh[i*3+2];
         (rg->data)[i] = calloc(comp*ngrid, sizeof(double));
     }
     *rs_grid = rg;

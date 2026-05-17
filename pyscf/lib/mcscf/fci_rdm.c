@@ -310,7 +310,7 @@ void FCIrdm12kern_sf(double *rdm1, double *rdm2, double *bra, double *ket,
                            clink_indexa, clink_indexb);
         if (csum > CSUMTHR) {
                 dgemv_(&TRANS_N, &nnorb, &bcount, &D1, buf, &nnorb,
-                       ket+stra_id*nb+strb_id, &INC1, &D1, rdm1, &INC1);
+                       ket+stra_id*(size_t)nb+strb_id, &INC1, &D1, rdm1, &INC1);
                 switch (symm) {
                 case BRAKETSYM:
                         dsyrk_(&UP, &TRANS_N, &nnorb, &bcount,
@@ -367,7 +367,7 @@ void FCIrdm12kern_spin0(double *rdm1, double *rdm2, double *bra, double *ket,
         }
         if (csum > CSUMTHR) {
                 dgemv_(&TRANS_N, &nnorb, &fill1, &D2, buf, &nnorb,
-                       ket+stra_id*na+strb_id, &INC1, &D1, rdm1, &INC1);
+                       ket+stra_id*(size_t)na+strb_id, &INC1, &D1, rdm1, &INC1);
 
                 for (i = fill0*nnorb; i < fill1*nnorb; i++) {
                         buf[i] *= SQRT2;
@@ -418,7 +418,7 @@ void FCItdm12kern_sf(double *tdm1, double *tdm2, double *bra, double *ket,
                            clink_indexa, clink_indexb);
         if (csum < CSUMTHR) { goto _normal_end; }
         dgemv_(&TRANS_N, &nnorb, &bcount, &D1, buf0, &nnorb,
-               bra+stra_id*nb+strb_id, &INC1, &D1, tdm1, &INC1);
+               bra+stra_id*(size_t)nb+strb_id, &INC1, &D1, tdm1, &INC1);
         switch (symm) {
         case PARTICLESYM:
                 tril_particle_symm(tdm2, buf1, buf0, bcount, norb, D1, D1);
@@ -457,7 +457,7 @@ void FCIrdm12kern_a(double *rdm1, double *rdm2, double *bra, double *ket,
                               norb, nb, nlinka, clink_indexa);
         if (csum > CSUMTHR) {
                 dgemv_(&TRANS_N, &nnorb, &bcount, &D1, buf, &nnorb,
-                       ket+stra_id*nb+strb_id, &INC1, &D1, rdm1, &INC1);
+                       ket+stra_id*(size_t)nb+strb_id, &INC1, &D1, rdm1, &INC1);
                 switch (symm) {
                 case BRAKETSYM:
                         dsyrk_(&UP, &TRANS_N, &nnorb, &bcount,
@@ -495,7 +495,7 @@ void FCIrdm12kern_b(double *rdm1, double *rdm2, double *bra, double *ket,
                               norb, nb, nlinkb, clink_indexb);
         if (csum > CSUMTHR) {
                 dgemv_(&TRANS_N, &nnorb, &bcount, &D1, buf, &nnorb,
-                       ket+stra_id*nb+strb_id, &INC1, &D1, rdm1, &INC1);
+                       ket+stra_id*(size_t)nb+strb_id, &INC1, &D1, rdm1, &INC1);
                 switch (symm) {
                 case BRAKETSYM:
                         dsyrk_(&UP, &TRANS_N, &nnorb, &bcount,
@@ -534,7 +534,7 @@ void FCItdm12kern_a(double *tdm1, double *tdm2, double *bra, double *ket,
                               norb, nb, nlinka, clink_indexa);
         if (csum < CSUMTHR) { goto _normal_end; }
         dgemv_(&TRANS_N, &nnorb, &bcount, &D1, buf0, &nnorb,
-               bra+stra_id*nb+strb_id, &INC1, &D1, tdm1, &INC1);
+               bra+stra_id*(size_t)nb+strb_id, &INC1, &D1, tdm1, &INC1);
         switch (symm) {
         case PARTICLESYM:
                 tril_particle_symm(tdm2, buf1, buf0, bcount, norb, D1, D1);
@@ -569,7 +569,7 @@ void FCItdm12kern_b(double *tdm1, double *tdm2, double *bra, double *ket,
                               norb, nb, nlinkb, clink_indexb);
         if (csum < CSUMTHR) { goto _normal_end; }
         dgemv_(&TRANS_N, &nnorb, &bcount, &D1, buf0, &nnorb,
-               bra+stra_id*nb+strb_id, &INC1, &D1, tdm1, &INC1);
+               bra+stra_id*(size_t)nb+strb_id, &INC1, &D1, tdm1, &INC1);
         switch (symm) {
         case PARTICLESYM:
                 tril_particle_symm(tdm2, buf1, buf0, bcount, norb, D1, D1);

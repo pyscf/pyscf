@@ -460,7 +460,7 @@ void CVHFset_int2e_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
         CVHFnr_int2e_q_cond(intor, cintopt, q_cond, ao_loc, atm, natm, bas, nbas, env);
 }
 
-void CVHFset_q_cond(CVHFOpt *opt, double *q_cond, int len)
+void CVHFset_q_cond(CVHFOpt *opt, double *q_cond, size_t len)
 {
         if (opt->q_cond != NULL) {
                 free(opt->q_cond);
@@ -535,7 +535,7 @@ void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
         CVHFnr_dm_cond(opt->dm_cond, dm, nset, ao_loc, atm, natm, bas, nbas, env);
 }
 
-void CVHFset_dm_cond(CVHFOpt *opt, double *dm_cond, int len)
+void CVHFset_dm_cond(CVHFOpt *opt, double *dm_cond, size_t len)
 {
         if (opt->dm_cond != NULL) {
                 free(opt->dm_cond);
