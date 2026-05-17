@@ -18,6 +18,7 @@
 
 #include <stdlib.h>
 #include <complex.h>
+#include <assert.h>
 #include "config.h"
 #include "cint.h"
 #include "np_helper/np_helper.h"
@@ -75,6 +76,11 @@ void GTOgrids_int2c(int (*intor)(), double *mat, int comp, int hermi,
         const int njsh = jsh1 - jsh0;
         const size_t naoi = ao_loc[ish1] - ao_loc[ish0];
         const size_t naoj = ao_loc[jsh1] - ao_loc[jsh0];
+        // The hermi-mode symmetrization loop below decodes (i, j) via
+        // ig/naoj and then writes to both mat[j*naoi+i] and mat[i*naoi+j],
+        // which only addresses the right cells when naoi == naoj and the
+        // slice is square.
+        assert(hermi == PLAIN || (ish0 == jsh0 && naoi == naoj));
         const size_t cache_size = _max_cache_size(intor, shls_slice, 2,
                                                   atm, natm, bas, nbas, env);
         const int dims[] = {naoi, naoj, ngrids};
@@ -153,6 +159,9 @@ void GTOgrids_int2c_spinor(int (*intor)(), double complex *mat, int comp, int he
         const int njsh = jsh1 - jsh0;
         const size_t naoi = ao_loc[ish1] - ao_loc[ish0];
         const size_t naoj = ao_loc[jsh1] - ao_loc[jsh0];
+        // Hermi-mode symmetrization assumes a square layout (same reasoning
+        // as the real variant above).
+        assert(hermi == PLAIN || (ish0 == jsh0 && naoi == naoj));
         const size_t cache_size = _max_cache_size(intor, shls_slice, 2,
                                                   atm, natm, bas, nbas, env);
         int dims[] = {naoi, naoj, ngrids};
