@@ -92,17 +92,17 @@ void GTOgrids_int2c(int (*intor)(), double *mat, int comp, int hermi,
                         // fill up only upper triangle of F-array
                         continue;
                 }
+                ish += ish0;
+                jsh += jsh0;
+                shls[0] = ish;
+                shls[1] = jsh;
+                i0 = ao_loc[ish] - ao_loc[ish0];
+                j0 = ao_loc[jsh] - ao_loc[jsh0];
 
                 for (grid0 = 0; grid0 < ngrids; grid0 += BLKSIZE) {
                         grid1 = MIN(grid0 + BLKSIZE, ngrids);
-                        ish += ish0;
-                        jsh += jsh0;
-                        shls[0] = ish;
-                        shls[1] = jsh;
                         shls[2] = grid0;
                         shls[3] = grid1;
-                        i0 = ao_loc[ish] - ao_loc[ish0];
-                        j0 = ao_loc[jsh] - ao_loc[jsh0];
                         (*intor)(mat+ngrids*(j0*naoi+i0)+grid0, dims, shls,
                                  atm, natm, bas, nbas, env, opt, cache);
                 }
@@ -169,17 +169,17 @@ void GTOgrids_int2c_spinor(int (*intor)(), double complex *mat, int comp, int he
                 if (hermi != PLAIN && ish > jsh) {
                         continue;
                 }
+                ish += ish0;
+                jsh += jsh0;
+                shls[0] = ish;
+                shls[1] = jsh;
+                i0 = ao_loc[ish] - ao_loc[ish0];
+                j0 = ao_loc[jsh] - ao_loc[jsh0];
 
                 for (grid0 = 0; grid0 < ngrids; grid0 += BLKSIZE) {
                         grid1 = MIN(grid0 + BLKSIZE, ngrids);
-                        ish += ish0;
-                        jsh += jsh0;
-                        shls[0] = ish;
-                        shls[1] = jsh;
                         shls[2] = grid0;
                         shls[3] = grid1;
-                        i0 = ao_loc[ish] - ao_loc[ish0];
-                        j0 = ao_loc[jsh] - ao_loc[jsh0];
                         (*intor)(mat+ngrids*(j0*naoi+i0)+grid0, dims, shls,
                                  atm, natm, bas, nbas, env, opt, cache);
                 }
