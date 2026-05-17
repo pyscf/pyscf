@@ -18,6 +18,7 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <math.h>
 #include <complex.h>
 #include "cint.h"
@@ -5616,6 +5617,19 @@ int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 if (lc == -1) { // Treat Ul term as L_max in SO-ECP
                         n = ecpbas[ATOM_OF+ecploc[iloc]*BAS_SLOTS];
                         lc = ecp_lmax[n] + 1;
+                }
+                // _angular_moment_matrix[] only has entries for lc in 0..4
+                // (s..g). Higher-l SO-ECP projectors (or Ul fallbacks that push
+                // lc past 4) would read past the table in transform_angj and
+                // overflow the angi/angj/jmm_angj allocations sized assuming
+                // lc <= ECP_LMAX. Skip rather than crash silently.
+                if (lc > 4) {
+                        fprintf(stderr,
+                                "ECPtype_so_cart: SO-ECP projector with lc=%d "
+                                "(atom %d) is not supported (max lc=4); "
+                                "skipping.\n",
+                                lc, ecpbas[ATOM_OF+ecploc[iloc]*BAS_SLOTS]);
+                        continue;
                 }
                 atm_id = ecpbas[ATOM_OF+ecploc[iloc]*BAS_SLOTS];
                 rc = env + atm[PTR_COORD+atm_id*ATM_SLOTS];

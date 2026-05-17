@@ -20,6 +20,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <math.h>
+#include <float.h>
 #include "cint.h"
 #include "np_helper/np_helper.h"
 #include "pbc/pbc.h"
@@ -129,7 +130,11 @@ int PBCECP_loop(Function_cart intor,
                 ksh1 = ecploc[esh+1];
                 ecpbas = all_ecpbas + ksh0 * BAS_SLOTS;
                 necpbas = ksh1 - ksh0;
-                eta = 1.f;
+                // Init to FLT_MAX so the MIN-reduction below returns the
+                // true smallest exponent. The previous 1.f init silently
+                // clamps the screening lower bound for atoms whose ECP
+                // primitive exponents are all > 1 (typical for tight cores).
+                eta = FLT_MAX;
                 for (ksh = 0; ksh < necpbas; ksh++) {
                         nprim = ecpbas[ksh*BAS_SLOTS+NPRIM_OF];
                         ak = env[ecpbas[ksh*BAS_SLOTS+PTR_EXP]+nprim-1];
