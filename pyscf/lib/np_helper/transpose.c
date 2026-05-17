@@ -56,7 +56,7 @@ void NPdtranspose_021(int *shape, double *a, double *at)
         shared(shape, a, at)
 {
         int ic;
-        size_t nm = shape[1] * shape[2];
+        size_t nm = (size_t)shape[1] * shape[2];
 #pragma omp for schedule (static)
         for (ic = 0; ic < shape[0]; ic++) {
                 NPdtranspose(shape[1], shape[2], a+ic*nm, at+ic*nm);
@@ -70,7 +70,7 @@ void NPztranspose_021(int *shape, double complex *a, double complex *at)
         shared(shape, a, at)
 {
         int ic;
-        size_t nm = shape[1] * shape[2];
+        size_t nm = (size_t)shape[1] * shape[2];
 #pragma omp for schedule (static)
         for (ic = 0; ic < shape[0]; ic++) {
                 NPztranspose(shape[1], shape[2], a+ic*nm, at+ic*nm);
