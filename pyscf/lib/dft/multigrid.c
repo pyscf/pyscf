@@ -171,7 +171,11 @@ double pgfpair_radius(int la, int lb, double zeta, double zetb, double* ra, doub
     double zetp = zeta + zetb;
     double eps = precision * precision;
 
-    if (rab[0] < RZERO && rab[1] < RZERO && rab[2] < RZERO) {
+    // Same-atom shortcut: compare the magnitude of the displacement vector,
+    // not the signed components. The previous "rab[0] < RZERO && ..." test
+    // wrongly fired on any all-negative displacement (~1/8 of periodic-image
+    // shifted pairs) and returned the wrong radius.
+    if (SQUARE(rab) < RZERO*RZERO) {
         radius = pgf_rcut(la+lb, zetp, 1., eps, radius);
         return radius;
     }
