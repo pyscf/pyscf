@@ -5478,6 +5478,7 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 prad[i*ljlc1+j] = s;
         } }
 
+        converged[ijl] = 1;
         for (i = 0; i < d2; i++) {
                 if (!CLOSE_ENOUGH(plast[i],prad[i])) {
                         converged[ijl] = 0;
@@ -5692,6 +5693,7 @@ int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 prad[i*ljlc1+j] = s;
         } }
 
+        converged[ijl] = 1;
         for (i = 0; i < d2; i++) {
                 if (!CLOSE_ENOUGH(plast[i], prad[i])) {
                         converged[ijl] = 0;
