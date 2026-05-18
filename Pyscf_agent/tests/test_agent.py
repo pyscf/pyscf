@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 
+import importlib
 import json
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
 
-from Pyscf_agent import backend as BACKEND
-from Pyscf_agent import cli as CLI
-from Pyscf_agent import main as MODULE
-from Pyscf_agent import web as WEB
+BACKEND = importlib.import_module('Pyscf_agent.backend')
+CLI = importlib.import_module('Pyscf_agent.cli')
+MODULE = importlib.import_module('Pyscf_agent.main')
+WEB = importlib.import_module('Pyscf_agent.web')
 
 
 class KnownValues(unittest.TestCase):
