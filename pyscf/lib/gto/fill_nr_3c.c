@@ -173,19 +173,13 @@ void GTOnr3c_fill_s2ij(int (*intor)(), double *out, double *buf,
                 di = ao_loc[ish+1] - ao_loc[ish];
                 dj = ao_loc[jsh+1] - ao_loc[jsh];
 
-                // intor returns 0 when all primitives are screened out and
-                // does not guarantee buf has been zeroed. Skip the copy in
-                // that case so dcopy_s2_* doesn't propagate uninitialised
-                // values into the output. Sister code in fill_int2e.c uses
-                // the same return-value gate.
-                if ((*intor)(buf, NULL, shls, atm, natm, bas, nbas, env,
-                             cintopt, cache)) {
-                        pout = out + ip * (ip + 1) / 2 - off + jp;
-                        if (ip != jp) {
-                                dcopy_s2_igtj(pout, buf, comp, ip, nij, nijk, di, dj, dk);
-                        } else {
-                                dcopy_s2_ieqj(pout, buf, comp, ip, nij, nijk, di, dj, dk);
-                        }
+                (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, cintopt, cache);
+
+                pout = out + ip * (ip + 1) / 2 - off + jp;
+                if (ip != jp) {
+                        dcopy_s2_igtj(pout, buf, comp, ip, nij, nijk, di, dj, dk);
+                } else {
+                        dcopy_s2_ieqj(pout, buf, comp, ip, nij, nijk, di, dj, dk);
                 }
         } }
 }
