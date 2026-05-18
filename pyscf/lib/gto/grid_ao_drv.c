@@ -17,6 +17,7 @@
  */
 
 #include <stdlib.h>
+#include <assert.h>
 #include <math.h>
 #include <stdint.h>
 #include <complex.h>
@@ -32,12 +33,9 @@ void GTO_screen_index(uint8_t *screen_index, int nbins, double cutoff,
                       double *coords, int ngrids, int blksize,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
-        // Clamp nbins before computing scale so that si = nbins - arr*scale
-        // (used downstream) stays self-consistent: both terms reference the
-        // same effective nbins. Without this, callers passing nbins > 127
-        // get a different screening map than callers passing nbins <= 127
-        // with the same cutoff.
-        nbins = MIN(127, nbins);
+        // Keep nbins < 120 so si = nbins - arr*scale + 1 fits in uint8_t
+        // without saturating the screen_index = 255 cap below.
+        assert(nbins < 120);
         double scale = -nbins / log(MIN(cutoff, .1));
 #pragma omp parallel
 {
