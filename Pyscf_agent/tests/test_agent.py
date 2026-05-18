@@ -2,15 +2,9 @@
 
 import importlib
 import json
-import pathlib
-import sys
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
-
-ROOT_DIR = pathlib.Path(__file__).resolve().parents[2]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
 
 BACKEND = importlib.import_module('Pyscf_agent.backend')
 CLI = importlib.import_module('Pyscf_agent.cli')
