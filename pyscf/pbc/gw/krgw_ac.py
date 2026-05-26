@@ -399,7 +399,8 @@ def get_sigma(
     Parameters
     ----------
     gw : KRGWAC
-        GW objects, provides attributes: _scf, mol, frozen, nmo, nocc, kpts, nkpts, mo_coeff, mo_occ, fc, fc_grid, with_df
+        GW objects,
+        provides attributes: _scf, mol, frozen, nmo, nocc, kpts, nkpts, mo_coeff, mo_occ, fc, fc_grid, with_df
     freqs : double array
         position of imaginary frequency
     wts : double array
@@ -649,7 +650,8 @@ def get_sigma_outcore(
     Parameters
     ----------
     gw : KRGWAC
-        GW objects, provides attributes: _scf, mol, frozen, nmo, nocc, kpts, nkpts, mo_coeff, mo_occ, fc, fc_grid, with_df
+        GW objects,
+        provides attributes: _scf, mol, frozen, nmo, nocc, kpts, nkpts, mo_coeff, mo_occ, fc, fc_grid, with_df
     freqs : double array
         position of imaginary frequency
     wts : double array

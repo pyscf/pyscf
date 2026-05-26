@@ -437,7 +437,8 @@ def get_sigma(
     Parameters
     ----------
     gw : KUGWAC
-        GW objects, provides attributes: _scf, mol, frozen, nmo, nocc, kpts, nkpts, mo_coeff, mo_occ, fc, fc_grid, with_df
+        GW objects,
+        provides attributes: _scf, mol, frozen, nmo, nocc, kpts, nkpts, mo_coeff, mo_occ, fc, fc_grid, with_df
     freqs : double array
         position of imaginary frequency
     wts : double array
@@ -660,7 +661,11 @@ def get_sigma(
                             # apply wing correction
                             Wn_P0 = einsum('Pnn,P->n', Lij[kn, s], eps_inv_P0)
                             Wn_P0 = Wn_P0[orbs].real * 2.0
-                            Del_P0 = np.sqrt(gw.mol.vol / 4.0 / np.pi**3) * (6.0 * np.pi**2 / gw.mol.vol / nkpts) ** (2 / 3) * Wn_P0
+                            Del_P0 = (
+                                np.sqrt(gw.mol.vol / 4.0 / np.pi**3)
+                                * (6.0 * np.pi**2 / gw.mol.vol / nkpts) ** (2 / 3)
+                                * Wn_P0
+                            )
 
                             sigma[s, k] += -einsum('n,nw->nw', Del_P0, g0[s][kn][orbs]) / np.pi
                         else:
@@ -673,7 +678,11 @@ def get_sigma(
                             # wing correction
                             Wn_P0 = einsum('Pnn,P->n', Lij[kn, s], eps_inv_P0)
                             Wn_P0 = Wn_P0[orbs].real * 2.0
-                            Del_P0 = np.sqrt(gw.mol.vol / 4.0 / np.pi**3) * (6.0 * np.pi**2 / gw.mol.vol / nkpts) ** (2 / 3) * Wn_P0
+                            Del_P0 = (
+                                np.sqrt(gw.mol.vol / 4.0 / np.pi**3)
+                                * (6.0 * np.pi**2 / gw.mol.vol / nkpts) ** (2 / 3)
+                                * Wn_P0
+                            )
                             tmp = -einsum('n,nw->nw', Del_P0, g0[s][kn][orbs]) / np.pi
                             for p in range(norbs):
                                 sigma[s, k, p, p, :] += tmp[p, :]
@@ -855,7 +864,7 @@ def make_rdm1_linear(gw, ao_repr=False):
     for s in range(2):
         for k in range(nkpts):
             for iw in range(len(freqs)):
-                gf[s, k, :, :, iw] = reduce(np.matmul, (gf0[s, k, :, :, iw], sigma[s, k, :, :, iw], gf0[s, k, :, :, iw]))
+                gf[s, k, :, :, iw] = gf0[s, k, :, :, iw] @ sigma[s, k, :, :, iw] @ gf0[s, k, :, :, iw]
 
     # GW density matrix
     rdm1 = np.zeros(shape=[2, nkpts, nmo, nmo], dtype=np.double)
