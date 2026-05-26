@@ -1,6 +1,11 @@
 # ecp-q-vSZP companion ECP from grimme-lab/q-vSZPs
 # Converted from q-vSZPs_basis/ecpq to PySCF/NWChem ECP format.
 # Source: https://github.com/grimme-lab/q-vSZPs
+# Reference:
+# Benedikt Bädorf, Marcel Müller, Thomas Froitzheim, et al. q-vSZPs: 
+# A polarized, adaptive minimal Gaussian basis set for the elements Z = 1−86 designed 
+# for efficient mean-field electronic structure calculations. ChemRxiv. 21 May 2026.
+# DOI: https://doi.org/10.26434/chemrxiv.15003662/v1
 
 ECP
 Li nelec 2
