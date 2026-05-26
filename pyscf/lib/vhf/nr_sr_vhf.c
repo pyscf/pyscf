@@ -698,9 +698,9 @@ void CVHFnr_sr_direct_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
                                                             shls_slice, ao_loc);
         }
 
-        size_t di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
-        size_t cache_size = GTOmax_cache_size(intor, shls_slice, 4,
-                                              atm, natm, bas, nbas, env);
+        int64_t di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
+        int64_t cache_size = GTOmax_cache_size(intor, shls_slice, 4,
+                                               atm, natm, bas, nbas, env);
         int ish0 = shls_slice[0];
         int ish1 = shls_slice[1];
         int jsh0 = shls_slice[2];
@@ -722,8 +722,12 @@ void CVHFnr_sr_direct_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
         size_t nblock = CVHFshls_block_partition(block_loc, shls_slice, ao_loc, AO_BLOCK_SIZE);
         size_t nblock2 = nblock * nblock;
         size_t nblock3 = nblock2 * nblock;
-        // up to 1.6 GB per thread
-        int size_limit = (200000000 - di*di*di*di*ncomp - cache_size) / n_dm;
+        // up to 3.2 GB per thread.
+        int64_t size_limit = (400000000 - di*di*di*di*ncomp - cache_size) / n_dm;
+        if (size_limit < 0) {
+                fprintf(stderr, "Insufficient memory for caching CVHFnr_sr_direct_drv intermediates\n");
+                exit(1);
+        }
 
         size_t Nbas = nbas;
         size_t Nbas2 = Nbas * Nbas;

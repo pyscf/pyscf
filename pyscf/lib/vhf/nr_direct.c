@@ -252,6 +252,11 @@ JKArray *CVHFallocate_JKArray(JKOperator *op, int *shls_slice, int *ao_loc,
         }
         jkarray->stack_size = 0;
         jkarray->data = malloc(sizeof(double) * (size_limit + 136*136));
+        if (jkarray->data == NULL) {
+                fprintf(stderr, "malloc(%zu) failed in CVHFallocate_JKArray\n",
+                        sizeof(double) * (size_limit + 136*136));
+                exit(1);
+        }
         jkarray->ncomp = ncomp;
         int keys_max = size_limit / (AO_BLOCK_SIZE*AO_BLOCK_SIZE*ncomp);
         jkarray->keys_cache = malloc(sizeof(int) * keys_max);
@@ -368,9 +373,9 @@ void CVHFnr_direct_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
                                                             shls_slice, ao_loc);
         }
 
-        size_t di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
-        size_t cache_size = GTOmax_cache_size(intor, shls_slice, 4,
-                                              atm, natm, bas, nbas, env);
+        int64_t di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
+        int64_t cache_size = GTOmax_cache_size(intor, shls_slice, 4,
+                                               atm, natm, bas, nbas, env);
         int ish0 = shls_slice[0];
         int ish1 = shls_slice[1];
         int jsh0 = shls_slice[2];
@@ -398,13 +403,11 @@ void CVHFnr_direct_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
         int nblock_max = MAX(nblock_i, nblock_j);
         nblock_max = MAX(nblock_max, nblock_k);
         nblock_max = MAX(nblock_max, nblock_l);
-        // up to 1.6 GB per thread. Compute in ssize_t so that di^4 * ncomp
-        // larger than 2e8 underflows visibly rather than silently casting to
-        // a huge unsigned through "200000000 - ...".
-        ssize_t size_limit = ((ssize_t)200000000 - (ssize_t)(di*di*di*di*ncomp)
-                              - (ssize_t)cache_size) / n_dm;
-        if (size_limit < AO_BLOCK_SIZE*AO_BLOCK_SIZE*ncomp) {
-                size_limit = AO_BLOCK_SIZE*AO_BLOCK_SIZE*ncomp;
+        // up to 3.2 GB per thread.
+        int64_t size_limit = (400000000 - di*di*di*di*ncomp - cache_size) / n_dm;
+        if (size_limit < 0) {
+                fprintf(stderr, "Insufficient memory for caching CVHFnr_direct_drv intermediates\n");
+                exit(1);
         }
 
 #pragma omp parallel
@@ -525,9 +528,9 @@ void CVHFnr_direct_ex_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
                                                             shls_slice, ao_loc);
         }
 
-        size_t di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
-        size_t cache_size = GTOmax_cache_size(intor, shls_slice, 4,
-                                              atm, natm, bas, nbas, env);
+        int64_t di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
+        int64_t cache_size = GTOmax_cache_size(intor, shls_slice, 4,
+                                               atm, natm, bas, nbas, env);
         int ish0 = shls_slice[0];
         int ish1 = shls_slice[1];
         int jsh0 = shls_slice[2];
@@ -554,12 +557,11 @@ void CVHFnr_direct_ex_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
         int nblock_max = MAX(nblock_i, nblock_j);
         nblock_max = MAX(nblock_max, nblock_k);
         nblock_max = MAX(nblock_max, nblock_l);
-        // up to 1.6 GB per thread. Compute in ssize_t so the subtraction
-        // doesn't silently underflow when di^4 * ncomp > 2e8.
-        ssize_t size_limit = ((ssize_t)200000000 - (ssize_t)(di*di*di*di*ncomp)
-                              - (ssize_t)cache_size) / n_dm;
-        if (size_limit < AO_BLOCK_SIZE*AO_BLOCK_SIZE*ncomp) {
-                size_limit = AO_BLOCK_SIZE*AO_BLOCK_SIZE*ncomp;
+        // up to 3.2 GB per thread.
+        int64_t size_limit = (400000000 - di*di*di*di*ncomp - cache_size) / n_dm;
+        if (size_limit < 0) {
+                fprintf(stderr, "Insufficient memory for caching CVHFnr_direct_ex_drv intermediates\n");
+                exit(1);
         }
 
 #pragma omp parallel
