@@ -127,7 +127,7 @@ class GCCSD(ccsd.CCSDBase):
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         eijab = lib.direct_sum('ia,jb->ijab', eia, eia)
         t1 = eris.fock[:nocc,nocc:] / eia
-        eris_oovv = np.array(eris.oovv)
+        eris_oovv = np.asarray(eris.oovv)
         t2 = eris_oovv.conj() / eijab
         self.emp2 = 0.25*einsum('ijab,ijab', t2, eris_oovv).real
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
@@ -346,20 +346,23 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     eris._common_init_(mycc, mo_coeff)
     nocc = eris.nocc
     nao, nmo = eris.mo_coeff.shape
+    nao = nao // 2
 
     if callable(ao2mofn):
         eri = ao2mofn(eris.mo_coeff).reshape([nmo]*4)
-    else:
-        assert (eris.mo_coeff.dtype == np.double)
-        mo_a = eris.mo_coeff[:nao//2]
-        mo_b = eris.mo_coeff[nao//2:]
+    elif eris.mo_coeff.dtype == np.float64:
+        mo_a = eris.mo_coeff[:nao]
+        mo_b = eris.mo_coeff[nao:]
         orbspin = eris.orbspin
         if orbspin is None:
             eri  = ao2mo.kernel(mycc._scf._eri, mo_a)
             eri += ao2mo.kernel(mycc._scf._eri, mo_b)
             eri1 = ao2mo.kernel(mycc._scf._eri, (mo_a,mo_a,mo_b,mo_b))
             eri += eri1
-            eri += eri1.T
+            if eri1.ndim == 2:
+                eri += eri1.T
+            else:
+                eri += eri1.transpose(2,3,0,1)
         else:
             mo = mo_a + mo_b
             eri = ao2mo.kernel(mycc._scf._eri, mo)
@@ -373,6 +376,16 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
 
         if eri.dtype == np.double:
             eri = ao2mo.restore(1, eri, nmo)
+    else:
+        assert eris.mo_coeff.dtype == np.complex128
+        mo_a = eris.mo_coeff[:nao]
+        mo_b = eris.mo_coeff[nao:]
+        eri_ao = ao2mo.restore(1, mycc._scf._eri, nao)
+        eri  = ao2mo.kernel(eri_ao, mo_a)
+        eri += ao2mo.kernel(eri_ao, mo_b)
+        eri1 = ao2mo.kernel(eri_ao, (mo_a,mo_a,mo_b,mo_b))
+        eri += eri1
+        eri += eri1.transpose(2,3,0,1)
 
     eri = eri.reshape(nmo,nmo,nmo,nmo)
     eri = eri.transpose(0,2,1,3) - eri.transpose(0,2,3,1)
@@ -395,34 +408,76 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     eris = _PhysicistsERIs()
     eris._common_init_(mycc, mo_coeff)
     nocc = eris.nocc
-    nao, nmo = eris.mo_coeff.shape
+    mo = eris.mo_coeff
+    nao, nmo = mo.shape
+    nao = nao // 2
     nvir = nmo - nocc
-    assert (eris.mo_coeff.dtype == np.double)
-    mo_a = eris.mo_coeff[:nao//2]
-    mo_b = eris.mo_coeff[nao//2:]
+    mo_a = mo[:nao]
+    mo_b = mo[nao:]
     orbspin = eris.orbspin
 
     feri = eris.feri = lib.H5TmpFile()
-    dtype = np.result_type(eris.mo_coeff).char
-    eris.oooo = feri.create_dataset('oooo', (nocc,nocc,nocc,nocc), dtype)
-    eris.ooov = feri.create_dataset('ooov', (nocc,nocc,nocc,nvir), dtype)
-    eris.oovv = feri.create_dataset('oovv', (nocc,nocc,nvir,nvir), dtype)
-    eris.ovov = feri.create_dataset('ovov', (nocc,nvir,nocc,nvir), dtype)
-    eris.ovvo = feri.create_dataset('ovvo', (nocc,nvir,nvir,nocc), dtype)
-    eris.ovvv = feri.create_dataset('ovvv', (nocc,nvir,nvir,nvir), dtype)
+    dtype = np.result_type(eris.mo_coeff)
+    eris.oooo = feri.create_dataset('oooo', (nocc,nocc,nocc,nocc), dtype.char)
+    eris.ooov = feri.create_dataset('ooov', (nocc,nocc,nocc,nvir), dtype.char)
+    eris.oovv = feri.create_dataset('oovv', (nocc,nocc,nvir,nvir), dtype.char)
+    eris.ovov = feri.create_dataset('ovov', (nocc,nvir,nocc,nvir), dtype.char)
+    eris.ovvo = feri.create_dataset('ovvo', (nocc,nvir,nvir,nocc), dtype.char)
+    eris.ovvv = feri.create_dataset('ovvv', (nocc,nvir,nvir,nvir), dtype.char)
 
-    if orbspin is None:
+    if mo.dtype == np.complex128:
+        max_memory = mycc.max_memory-lib.current_memory()[0]
+        blksize = min(nocc, max(2, int(max_memory*1e6/dtype.itemsize/(nmo**3*2))))
+        max_memory = max(MEMORYMIN, max_memory)
+
+        orbo = mo[:,:nocc]
+        orbv = mo[:,nocc:]
+        fswap = lib.H5TmpFile()
+        ao2mo.kernel(mycc.mol, (orbo,mo,mo,mo), fswap, 'eri_mo',
+                     max_memory=max_memory, verbose=log)
+
+        for p0, p1 in lib.prange(0, nocc, blksize):
+            tmp = np.asarray(fswap['eri_mo'][p0*nmo:p1*nmo])
+            tmp = tmp.reshape(p1-p0, nmo, nmo, nmo)
+            eris.oooo[p0:p1] = (tmp[:,:nocc,:nocc,:nocc].transpose(0,2,1,3) -
+                                tmp[:,:nocc,:nocc,:nocc].transpose(0,2,3,1))
+            eris.ooov[p0:p1] = (tmp[:,:nocc,:nocc,nocc:].transpose(0,2,1,3) -
+                                tmp[:,nocc:,:nocc,:nocc].transpose(0,2,3,1))
+            eris.ovvv[p0:p1] = (tmp[:,nocc:,nocc:,nocc:].transpose(0,2,1,3) -
+                                tmp[:,nocc:,nocc:,nocc:].transpose(0,2,3,1))
+            eris.oovv[p0:p1] = (tmp[:,nocc:,:nocc,nocc:].transpose(0,2,1,3) -
+                                tmp[:,nocc:,:nocc,nocc:].transpose(0,2,3,1))
+            eris.ovov[p0:p1] = (tmp[:,:nocc,nocc:,nocc:].transpose(0,2,1,3) -
+                                tmp[:,nocc:,nocc:,:nocc].transpose(0,2,3,1))
+            eris.ovvo[p0:p1] = (tmp[:,nocc:,nocc:,:nocc].transpose(0,2,1,3) -
+                                tmp[:,:nocc,nocc:,nocc:].transpose(0,2,3,1))
+            tmp = None
+        fswap = None
+        cput0 = log.timer_debug1('transforming ovvv', *cput0)
+
+        eris.vvvv = feri.create_dataset('vvvv', (nvir,nvir,nvir,nvir), dtype.char)
+        fswap = lib.H5TmpFile()
+        ao2mo.kernel(mycc.mol, orbv, fswap, 'vvvv',
+                     max_memory=max_memory, verbose=log)
+        for p0, p1 in lib.prange(0, nvir, blksize):
+            tmp = np.asarray(fswap['vvvv'][p0*nvir:p1*nvir])
+            tmp = tmp.reshape(p1-p0, nvir, nvir, nvir)
+            eris.vvvv[p0:p1] = tmp.transpose(0,2,1,3) - tmp.transpose(0,2,3,1)
+            tmp = None
+        cput0 = log.timer_debug1('transforming vvvv', *cput0)
+
+    elif orbspin is None:
         orbo_a = mo_a[:,:nocc]
         orbv_a = mo_a[:,nocc:]
         orbo_b = mo_b[:,:nocc]
         orbv_b = mo_b[:,nocc:]
 
         max_memory = mycc.max_memory-lib.current_memory()[0]
-        blksize = min(nocc, max(2, int(max_memory*1e6/8/(nmo**3*2))))
+        blksize = min(nocc, max(2, int(max_memory*1e6/dtype.itemsize/(nmo**3*2))))
         max_memory = max(MEMORYMIN, max_memory)
 
         fswap = lib.H5TmpFile()
-        ao2mo.kernel(mycc.mol, (orbo_a,mo_a,mo_a,mo_a), fswap, 'aaaa',
+        ao2mo.kernel(mycc.mol, (orbo,mo_a,mo_a,mo_a), fswap, 'aaaa',
                      max_memory=max_memory, verbose=log)
         ao2mo.kernel(mycc.mol, (orbo_a,mo_a,mo_b,mo_b), fswap, 'aabb',
                      max_memory=max_memory, verbose=log)
@@ -452,7 +507,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
             tmp = None
         cput0 = log.timer_debug1('transforming ovvv', *cput0)
 
-        eris.vvvv = feri.create_dataset('vvvv', (nvir,nvir,nvir,nvir), dtype)
+        eris.vvvv = feri.create_dataset('vvvv', (nvir,nvir,nvir,nvir), dtype.char)
         tril2sq = lib.square_mat_in_trilu_indices(nvir)
         fswap = lib.H5TmpFile()
         ao2mo.kernel(mycc.mol, (orbv_a,orbv_a,orbv_a,orbv_a), fswap, 'aaaa',
@@ -491,7 +546,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
         orbv = mo[:,nocc:]
 
         max_memory = mycc.max_memory-lib.current_memory()[0]
-        blksize = min(nocc, max(2, int(max_memory*1e6/8/(nmo**3*2))))
+        blksize = min(nocc, max(2, int(max_memory*1e6/dtype.itemsize/(nmo**3*2))))
         max_memory = max(MEMORYMIN, max_memory)
 
         fswap = lib.H5TmpFile()
@@ -520,7 +575,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
             tmp = None
         cput0 = log.timer_debug1('transforming ovvv', *cput0)
 
-        eris.vvvv = feri.create_dataset('vvvv', (nvir,nvir,nvir,nvir), dtype)
+        eris.vvvv = feri.create_dataset('vvvv', (nvir,nvir,nvir,nvir), dtype.char)
         sym_forbid = (orbspin[nocc:,None]!=orbspin[nocc:])[np.tril_indices(nvir)]
         tril2sq = lib.square_mat_in_trilu_indices(nvir)
 
