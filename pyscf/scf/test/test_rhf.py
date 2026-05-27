@@ -22,6 +22,7 @@ import tempfile
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
+from pyscf.scf import _vhf
 from pyscf.scf import atom_hf
 
 try:
@@ -895,10 +896,10 @@ H     0    0.757    0.587'''
         self.assertAlmostEqual(numpy.linalg.norm(vj1), 77.035779188661465, 9)
 
         orig = mf1.opt.prescreen
-        self.assertEqual(orig, scf._vhf._fpointer('CVHFnrs8_prescreen').value)
+        self.assertEqual(orig, _vhf._fpointer('CVHFnrs8_prescreen').value)
         mf1.opt.prescreen = orig
         mf1.opt.prescreen = 'CVHFnoscreen'
-        self.assertEqual(mf1.opt.prescreen, scf._vhf._fpointer('CVHFnoscreen').value)
+        self.assertEqual(mf1.opt.prescreen, _vhf._fpointer('CVHFnoscreen').value)
 
         # issue #1114
         dm = numpy.eye(nao, dtype=int)
