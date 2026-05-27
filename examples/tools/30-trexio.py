@@ -26,7 +26,8 @@ mf = scf.RHF(mol).run()
 trexio.to_trexio(mf, 'h2o.trexio',
                  backend='TEXT',     # use 'HDF5' if trexio was built with HDF5
                  with_ao_ints=True,  # write S, T, V_ne, h_core, dipole
-                 with_eri=True)      # write 8-fold-symmetric AO ERIs
+                 with_eri=True,      # write 8-fold-symmetric AO ERIs
+                 with_mo_eri=True)   # write 8-fold-symmetric MO ERIs
 
 # 2) Reconstruct a mean-field object from the file.
 mf2 = trexio.scf_from_trexio('h2o.trexio', backend='TEXT')
@@ -40,4 +41,6 @@ print('nao =', mol2.nao_nr())
 ints = trexio.read_ao_1e_integrals('h2o.trexio', mol=mol2, backend='TEXT')
 print('overlap shape =', ints['overlap'].shape)
 eri = trexio.read_ao_2e_integrals('h2o.trexio', mol=mol2, backend='TEXT')
-print('eri shape =', eri.shape)
+print('AO eri shape =', eri.shape)
+mo_eri = trexio.read_mo_2e_integrals('h2o.trexio', backend='TEXT')
+print('MO eri shape =', mo_eri.shape)

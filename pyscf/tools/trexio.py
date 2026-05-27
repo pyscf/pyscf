@@ -139,6 +139,20 @@ def _ao_permutation(mol):
     return numpy.asarray(perm, dtype=int)
 
 
+def _ao_normalization(mol):
+    '''Per-AO factor ``N_i`` (in PySCF AO order) that maps PySCF's AOs to
+    unit-normalised AOs (TREXIO canonical convention).
+
+    Computed directly from ``diag(S)`` so the file's AOs are unit-normalised
+    regardless of PySCF's internal scaling. For spherical AOs this is 1; for
+    Cartesians it absorbs both the ``(2a-1)!!`` angular ratio and any
+    contraction-level prefactor PySCF baked into ``z^l`` (e.g. the ``4π/5``
+    for d shells).
+    '''
+    s = mol.intor('int1e_ovlp').diagonal()
+    return 1.0 / numpy.sqrt(s)
+
+
 def _reorder_to_trexio(mat, perm, axes=(0,)):
     '''Apply ``perm`` along the listed axes of ``mat``.'''
     out = mat
@@ -240,33 +254,29 @@ def _write_basis(tf, mol):
 
 
 def _write_ao(tf, mol):
-    '''AO group: shell index per AO and per-AO normalization.
+    '''AO group following the canonical TREXIO convention.
 
-    PySCF's internal Cartesian AOs are not unit-normalised per component (only
-    the ``z^l`` component is), and stored MO coefficients/integrals follow that
-    convention. We therefore write ``ao.normalization = 1`` for both spherical
-    and Cartesian, so the file is self-consistent for PySCF round-trips. Other
-    codes that consume the file under the strict TREXIO convention should
-    rescale the basis or MOs by ``_cart_self_overlap_ratio`` if they want
-    unit-normalised Cartesian AOs.
+    For Cartesians, ``ao.normalization[i]`` is the per-component factor that
+    unit-normalises the AO relative to PySCF's ``z^l`` normalisation; MOs and
+    AO integrals are rescaled accordingly elsewhere so the file represents
+    unit-normalised Cartesian AOs. For spherical AOs the factor is 1.
     '''
     ao_shell = []
-    ao_norm = []
     shell_count = 0
     for ib in range(mol.nbas):
         l = mol.bas_angular(ib)
         nctr = mol.bas_nctr(ib)
         n_ao_per_contr = (l + 1) * (l + 2) // 2 if mol.cart else 2 * l + 1
         for _ in range(nctr):
-            for _ in range(n_ao_per_contr):
-                ao_shell.append(shell_count)
-                ao_norm.append(1.0)
+            ao_shell.extend([shell_count] * n_ao_per_contr)
             shell_count += 1
 
+    perm = _ao_permutation(mol)
+    ao_norm = _ao_normalization(mol)[perm]
     trexio.write_ao_cartesian(tf, 1 if mol.cart else 0)
     trexio.write_ao_num(tf, len(ao_shell))
     trexio.write_ao_shell(tf, numpy.asarray(ao_shell, dtype=numpy.int64))
-    trexio.write_ao_normalization(tf, numpy.asarray(ao_norm))
+    trexio.write_ao_normalization(tf, ao_norm)
 
 
 def _write_ecp(tf, mol):
@@ -314,59 +324,72 @@ def _write_ecp(tf, mol):
     trexio.write_ecp_coefficient(tf, numpy.asarray(coefficients))
 
 
+def _to_trexio_2d(mat, perm, N_trexio):
+    '''Reorder a (nao, nao) PySCF-AO matrix into TREXIO AO order and apply
+    canonical unit-normalisation rescaling ``M_trexio = N_i N_j M_pyscf``.
+    '''
+    out = mat[numpy.ix_(perm, perm)]
+    return out * numpy.outer(N_trexio, N_trexio)
+
+
+def _from_trexio_2d(mat, perm, N_trexio):
+    inv = numpy.argsort(perm)
+    return (mat / numpy.outer(N_trexio, N_trexio))[numpy.ix_(inv, inv)]
+
+
 def _write_ao_1e_integrals(tf, mol):
     perm = _ao_permutation(mol)
-    s = _reorder_to_trexio(mol.intor('int1e_ovlp'), perm, (0, 1))
-    t = _reorder_to_trexio(mol.intor('int1e_kin'), perm, (0, 1))
-    v = _reorder_to_trexio(mol.intor('int1e_nuc'), perm, (0, 1))
-    trexio.write_ao_1e_int_overlap(tf, s)
-    trexio.write_ao_1e_int_kinetic(tf, t)
-    trexio.write_ao_1e_int_potential_n_e(tf, v)
+    N = _ao_normalization(mol)[perm]
+    def w(name, m):
+        getattr(trexio, f'write_ao_1e_int_{name}')(tf, _to_trexio_2d(m, perm, N))
+    s = mol.intor('int1e_ovlp')
+    t = mol.intor('int1e_kin')
+    v = mol.intor('int1e_nuc')
+    w('overlap', s)
+    w('kinetic', t)
+    w('potential_n_e', v)
     h = t + v
     if mol.has_ecp():
-        ecp = _reorder_to_trexio(mol.intor('ECPscalar'), perm, (0, 1))
-        trexio.write_ao_1e_int_ecp(tf, ecp)
+        ecp = mol.intor('ECPscalar')
+        w('ecp', ecp)
         h = h + ecp
-    trexio.write_ao_1e_int_core_hamiltonian(tf, h)
-    # Dipole integrals: r_x, r_y, r_z
+    w('core_hamiltonian', h)
     try:
         dip = mol.intor('int1e_r', comp=3)
-        dx = _reorder_to_trexio(dip[0], perm, (0, 1))
-        dy = _reorder_to_trexio(dip[1], perm, (0, 1))
-        dz = _reorder_to_trexio(dip[2], perm, (0, 1))
-        trexio.write_ao_1e_int_dipole_x(tf, dx)
-        trexio.write_ao_1e_int_dipole_y(tf, dy)
-        trexio.write_ao_1e_int_dipole_z(tf, dz)
+        w('dipole_x', dip[0])
+        w('dipole_y', dip[1])
+        w('dipole_z', dip[2])
     except Exception:  # pragma: no cover
         pass
 
 
-def _write_ao_2e_integrals(tf, mol,
-                           buffer_size=DEFAULT_ERI_BUFFER,
-                           threshold=DEFAULT_ERI_THRESHOLD):
-    '''Write 8-fold-symmetry ERIs sparsely in TREXIO chemist's notation (ij|kl).'''
-    perm = _ao_permutation(mol)
-    nao = mol.nao
-    eri = mol.intor('int2e', aosym='s8')  # length nao*(nao+1)*... /8
-    # Use unpacked dense access via ao2mo to enumerate unique indices.
-    from pyscf import ao2mo
-    eri = ao2mo.restore(8, eri, nao)  # 1d array
+def _write_sparse_4index(tf, write_fn, eri_full, perm, N_trexio,
+                         buffer_size=DEFAULT_ERI_BUFFER,
+                         threshold=DEFAULT_ERI_THRESHOLD):
+    '''Write a 4-index PySCF-AO/MO tensor sparsely into TREXIO, applying the
+    AO permutation and the canonical normalisation rescaling
+    ``(ij|kl)_trexio = N_i N_j N_k N_l (ij|kl)_pyscf``.
+
+    The input ``eri_full`` is the dense 4-index tensor in PySCF index order
+    with 8-fold permutational symmetry, and ``write_fn`` is one of
+    ``trexio.write_ao_2e_int_eri`` / ``trexio.write_mo_2e_int_eri``.
+    '''
+    n = eri_full.shape[0]
+    inv = numpy.argsort(perm)  # pyscf index -> trexio index
 
     indices_buf = numpy.empty((buffer_size, 4), dtype=numpy.int32)
     values_buf = numpy.empty(buffer_size, dtype=numpy.float64)
     offset = 0
     count = 0
 
-    # Enumerate (i>=j, k>=l, ij>=kl) in chemist notation and remap with perm.
-    inv = numpy.argsort(perm)  # pyscf index -> trexio index
-    idx = 0
-    for i in range(nao):
+    for i in range(n):
         for j in range(i + 1):
             for k in range(i + 1):
                 lmax = k if k < i else j
                 for l in range(lmax + 1):
-                    v = eri[idx]
-                    idx += 1
+                    v = (eri_full[i, j, k, l]
+                         * N_trexio[inv[i]] * N_trexio[inv[j]]
+                         * N_trexio[inv[k]] * N_trexio[inv[l]])
                     if abs(v) < threshold:
                         continue
                     indices_buf[count, 0] = inv[i]
@@ -376,20 +399,54 @@ def _write_ao_2e_integrals(tf, mol,
                     values_buf[count] = v
                     count += 1
                     if count == buffer_size:
-                        trexio.write_ao_2e_int_eri(
-                            tf, offset, count,
-                            indices_buf[:count], values_buf[:count])
+                        write_fn(tf, offset, count,
+                                 indices_buf[:count], values_buf[:count])
                         offset += count
                         count = 0
     if count > 0:
-        trexio.write_ao_2e_int_eri(
-            tf, offset, count,
-            indices_buf[:count], values_buf[:count])
+        write_fn(tf, offset, count,
+                 indices_buf[:count], values_buf[:count])
+
+
+def _write_ao_2e_integrals(tf, mol,
+                           buffer_size=DEFAULT_ERI_BUFFER,
+                           threshold=DEFAULT_ERI_THRESHOLD):
+    '''Write 8-fold-symmetry AO ERIs sparsely in chemist's notation (ij|kl).'''
+    from pyscf import ao2mo
+    perm = _ao_permutation(mol)
+    N = _ao_normalization(mol)[perm]
+    eri = ao2mo.restore(1, mol.intor('int2e', aosym='s8'), mol.nao)
+    _write_sparse_4index(tf, trexio.write_ao_2e_int_eri,
+                         eri, perm, N, buffer_size, threshold)
+
+
+def _write_mo_2e_integrals(tf, mol, mo_coeff,
+                           buffer_size=DEFAULT_ERI_BUFFER,
+                           threshold=DEFAULT_ERI_THRESHOLD):
+    '''Write 8-fold-symmetry MO ERIs sparsely in chemist's notation (ij|kl).
+
+    For UHF MOs, all spin-mixed integrals are not supported in TREXIO's
+    single ``mo_2e_int_eri`` group; this writer expects a 2D ``mo_coeff``
+    array (RHF/ROHF). Pass alpha or beta coefficients explicitly for UHF.
+    '''
+    from pyscf import ao2mo
+    nmo = mo_coeff.shape[1]
+    eri = ao2mo.restore(1, ao2mo.full(mol, mo_coeff, compact=False), nmo)
+    # MO ERIs are in MO index order; identity permutation, normalisation = 1.
+    identity = numpy.arange(nmo)
+    ones = numpy.ones(nmo)
+    _write_sparse_4index(tf, trexio.write_mo_2e_int_eri,
+                         eri, identity, ones, buffer_size, threshold)
 
 
 def _write_mo(tf, mf):
+    '''Write MOs in canonical TREXIO convention: AO axis is reordered to
+    TREXIO order and each component is divided by ``N_i`` so that the file
+    represents coefficients in the unit-normalised AO basis.
+    '''
     mol = mf.mol
     perm = _ao_permutation(mol)
+    N = _ao_normalization(mol)[perm]
     mo_coeff = numpy.asarray(mf.mo_coeff)
     mo_energy = numpy.asarray(mf.mo_energy)
     mo_occ = numpy.asarray(mf.mo_occ)
@@ -412,7 +469,7 @@ def _write_mo(tf, mf):
         spin = numpy.zeros(coeff.shape[1], dtype=numpy.int64)
         mo_type = 'RHF'
 
-    coeff = _reorder_to_trexio(coeff, perm, (0,))
+    coeff = coeff[perm] / N[:, None]
     # TREXIO stores MO coefficients as [mo_num, ao_num]; PySCF has [ao, mo].
     trexio.write_mo_type(tf, mo_type)
     trexio.write_mo_num(tf, coeff.shape[1])
@@ -425,9 +482,12 @@ def _write_mo(tf, mf):
 # -- Public writer ----------------------------------------------------------
 
 def to_trexio(obj, filename, backend='HDF5', with_ao_ints=False,
-              with_eri=False, eri_threshold=DEFAULT_ERI_THRESHOLD,
+              with_eri=False, with_mo_eri=False,
+              eri_threshold=DEFAULT_ERI_THRESHOLD,
               overwrite=True):
-    '''Write a PySCF object (``Mole`` or SCF result) to a TREXIO file.
+    '''Write a PySCF object (``Mole`` or SCF result) to a TREXIO file in
+    canonical TREXIO conventions (spherical AO ordering ``0,+1,-1,...``;
+    unit-normalised Cartesian AOs via ``ao.normalization``).
 
     Args:
         obj: either a ``gto.Mole`` instance, or an SCF object exposing
@@ -436,6 +496,9 @@ def to_trexio(obj, filename, backend='HDF5', with_ao_ints=False,
         backend: ``'HDF5'`` (default) or ``'TEXT'``.
         with_ao_ints: also write overlap/kinetic/V_ne/core-H/dipole integrals.
         with_eri: also write the 4-index AO ERIs sparsely.
+        with_mo_eri: also write the 4-index MO ERIs sparsely (RHF/ROHF only;
+            for UHF, only the alpha block is written — pass UHF alpha
+            coefficients separately if you need spin-resolved MO ERIs).
         eri_threshold: drop ERIs below this absolute value when writing.
         overwrite: replace any existing file at ``filename``.
     '''
@@ -468,6 +531,15 @@ def to_trexio(obj, filename, backend='HDF5', with_ao_ints=False,
             _write_ao_1e_integrals(tf, mol)
         if with_eri:
             _write_ao_2e_integrals(tf, mol, threshold=eri_threshold)
+        if with_mo_eri:
+            if mf is None:
+                raise ValueError("with_mo_eri requires an SCF object with "
+                                 "mo_coeff, not a bare Mole.")
+            mo_coeff = numpy.asarray(mf.mo_coeff)
+            # For UHF take alpha block only; user can extract beta manually.
+            if mo_coeff.ndim == 3:
+                mo_coeff = mo_coeff[0]
+            _write_mo_2e_integrals(tf, mol, mo_coeff, threshold=eri_threshold)
 
 
 # -- Readers ---------------------------------------------------------------
@@ -657,7 +729,14 @@ def _read_mo(tf, mol):
     mo_type = trexio.read_mo_type(tf) if trexio.has_mo_type(tf) else 'RHF'
 
     perm = _ao_permutation(mol)
-    coeff = _reorder_from_trexio(coeff, perm, (0,))
+    inv = numpy.argsort(perm)
+    # Read TREXIO ao.normalization to convert from unit-normalised AO
+    # convention back to PySCF's. Default to 1 if the file omits the field.
+    if trexio.has_ao_normalization(tf):
+        N_trexio = numpy.asarray(trexio.read_ao_normalization(tf))
+    else:
+        N_trexio = numpy.ones(coeff.shape[0])
+    coeff = (coeff * N_trexio[:, None])[inv]
 
     if mo_type.upper() == 'UHF' and spin is not None and (spin == 1).any():
         mask_a = spin == 0
@@ -706,11 +785,11 @@ def scf_from_trexio(filename, backend='HDF5'):
 
 # -- AO integral readers ---------------------------------------------------
 
-def _read_ao_int_1e(tf, mol, name):
+def _read_ao_int_1e(tf, mol, name, N_trexio):
     perm = _ao_permutation(mol)
     fn = getattr(trexio, f'read_ao_1e_int_{name}')
     mat = numpy.asarray(fn(tf))
-    return _reorder_from_trexio(mat, perm, (0, 1))
+    return _from_trexio_2d(mat, perm, N_trexio)
 
 
 def read_ao_1e_integrals(filename, mol=None, backend='HDF5'):
@@ -722,6 +801,10 @@ def read_ao_1e_integrals(filename, mol=None, backend='HDF5'):
     with _open(filename, 'r', backend) as tf:
         if mol is None:
             mol = _build_mol(tf)
+        if trexio.has_ao_normalization(tf):
+            N_trexio = numpy.asarray(trexio.read_ao_normalization(tf))
+        else:
+            N_trexio = numpy.ones(trexio.read_ao_num(tf))
         out = {}
         for tag, name in [('overlap', 'overlap'),
                           ('kinetic', 'kinetic'),
@@ -733,38 +816,63 @@ def read_ao_1e_integrals(filename, mol=None, backend='HDF5'):
                           ('dipole_z', 'dipole_z')]:
             has = getattr(trexio, f'has_ao_1e_int_{tag}')
             if has(tf):
-                out[name] = _read_ao_int_1e(tf, mol, tag)
+                out[name] = _read_ao_int_1e(tf, mol, tag, N_trexio)
     return out
+
+
+def _read_sparse_4index(tf, read_fn, n, buffer_size):
+    eri = numpy.zeros((n, n, n, n))
+    offset = 0
+    while True:
+        idx, vals, n_read, eof = read_fn(tf, offset, buffer_size)
+        for k in range(n_read):
+            i, j, kk, ll = idx[k]
+            v = vals[k]
+            eri[i, j, kk, ll] = v
+            eri[j, i, kk, ll] = v
+            eri[i, j, ll, kk] = v
+            eri[j, i, ll, kk] = v
+            eri[kk, ll, i, j] = v
+            eri[ll, kk, i, j] = v
+            eri[kk, ll, j, i] = v
+            eri[ll, kk, j, i] = v
+        offset += n_read
+        if eof:
+            break
+    return eri
 
 
 def read_ao_2e_integrals(filename, mol=None, backend='HDF5',
                          buffer_size=DEFAULT_ERI_BUFFER):
-    '''Return the dense 4-index AO ERI ``(ij|kl)`` reordered to PySCF AO order.'''
+    '''Return the dense 4-index AO ERI ``(ij|kl)`` in PySCF AO order and
+    PySCF Cartesian convention (unit-normalisation rescaling is undone).'''
     with _open(filename, 'r', backend) as tf:
         if mol is None:
             mol = _build_mol(tf)
         perm = _ao_permutation(mol)
-        nao = mol.nao
-        eri = numpy.zeros((nao, nao, nao, nao))
-        offset = 0
-        while True:
-            idx, vals, n_read, eof = trexio.read_ao_2e_int_eri(
-                tf, offset, buffer_size)
-            for k in range(n_read):
-                i, j, kk, ll = idx[k]
-                v = vals[k]
-                # Apply 8-fold permutational symmetry.
-                eri[i, j, kk, ll] = v
-                eri[j, i, kk, ll] = v
-                eri[i, j, ll, kk] = v
-                eri[j, i, ll, kk] = v
-                eri[kk, ll, i, j] = v
-                eri[ll, kk, i, j] = v
-                eri[kk, ll, j, i] = v
-                eri[ll, kk, j, i] = v
-            offset += n_read
-            if eof:
-                break
-        # Reorder all four indices from TREXIO back to PySCF
-        eri = _reorder_from_trexio(eri, perm, (0, 1, 2, 3))
+        inv = numpy.argsort(perm)
+        if trexio.has_ao_normalization(tf):
+            N_trexio = numpy.asarray(trexio.read_ao_normalization(tf))
+        else:
+            N_trexio = numpy.ones(mol.nao)
+        eri = _read_sparse_4index(tf, trexio.read_ao_2e_int_eri,
+                                  mol.nao, buffer_size)
+        # Undo the N⊗N⊗N⊗N scaling, then permute all four indices.
+        scale = N_trexio
+        eri = eri / scale[:, None, None, None] / scale[None, :, None, None] \
+                  / scale[None, None, :, None] / scale[None, None, None, :]
+        eri = eri[numpy.ix_(inv, inv, inv, inv)]
     return eri
+
+
+def read_mo_2e_integrals(filename, backend='HDF5',
+                         buffer_size=DEFAULT_ERI_BUFFER):
+    '''Return the dense 4-index MO ERI ``(ij|kl)`` in MO index order. No
+    AO permutation or normalisation rescaling is applied (MOs already live
+    in the canonical ordering with unit-overlap orbitals).'''
+    with _open(filename, 'r', backend) as tf:
+        if not trexio.has_mo_2e_int_eri(tf):
+            raise ValueError(f"No MO ERIs stored in '{filename}'.")
+        nmo = trexio.read_mo_num(tf)
+        return _read_sparse_4index(tf, trexio.read_mo_2e_int_eri,
+                                   nmo, buffer_size)

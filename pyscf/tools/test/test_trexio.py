@@ -114,6 +114,34 @@ class KnownValues(unittest.TestCase):
             pass
         self.assertEqual(molmod.NORMALIZE_GTO, saved)
 
+    def test_canonical_cartesian_in_file(self):
+        # The file should represent unit-normalised Cartesian AOs.
+        import trexio as _t
+        mol = gto.M(atom='O 0 0 0; H 0 0 0.96; H 0.93 0 -0.24',
+                    basis='ccpvdz', cart=True, verbose=0)
+        mf = scf.RHF(mol).run()
+        with tempfile.TemporaryDirectory() as d:
+            fn = os.path.join(d, 'h2o.trexio')
+            ptr.to_trexio(mf, fn, backend=_BACKEND, with_ao_ints=True)
+            be = _t.TREXIO_HDF5 if _BACKEND == 'HDF5' else _t.TREXIO_TEXT
+            tf = _t.File(fn, mode='r', back_end=be)
+            S_file = numpy.asarray(_t.read_ao_1e_int_overlap(tf))
+            tf.close()
+        self.assertAlmostEqual(abs(S_file.diagonal() - 1).max(), 0, 12)
+
+    def test_mo_eri_round_trip(self):
+        from pyscf import ao2mo
+        mol = gto.M(atom='H 0 0 0; F 0 0 0.92', basis='631g', verbose=0)
+        mf = scf.RHF(mol).run()
+        nmo = mf.mo_coeff.shape[1]
+        ref = ao2mo.restore(1, ao2mo.full(mol, mf.mo_coeff, compact=False), nmo)
+        with tempfile.TemporaryDirectory() as d:
+            fn = os.path.join(d, 'hf.trexio')
+            ptr.to_trexio(mf, fn, backend=_BACKEND, with_mo_eri=True)
+            mo_eri = ptr.read_mo_2e_integrals(fn, backend=_BACKEND)
+        self.assertEqual(mo_eri.shape, (nmo, nmo, nmo, nmo))
+        self.assertAlmostEqual(abs(mo_eri - ref).max(), 0, 12)
+
     def test_mol_only(self):
         mol = gto.M(atom='H 0 0 0; H 0 0 0.74', basis='631g**', verbose=0)
         with tempfile.TemporaryDirectory() as d:
