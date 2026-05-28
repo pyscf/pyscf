@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2025 The PySCF Developers. All Rights Reserved.
+# Copyright 2025-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ from pyscf.dft import uks
 from pyscf.dft.rkspu import _set_U, _make_minao_lo
 from pyscf.lo.iao import reference_mol
 
-def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
+def get_veff(ks, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
     """
     Coulomb + XC functional + (Hubbard - double counting) for UKS+U.
     """
@@ -94,17 +94,19 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     if vhf is None or getattr(vhf, 'ecoul', None) is None:
         vhf = mf.get_veff(mf.mol, dm)
 
-    e1 = (np.einsum('ij,ji->', h1e, dm[0]) +
-          np.einsum('ij,ji->', h1e, dm[1]))
-    tot_e = e1 + vhf.ecoul + vhf.exc + vhf.E_U
-    mf.scf_summary['e1'] = e1.real
+    e1 = (np.einsum('ij,ji->', h1e, dm[0]).real +
+          np.einsum('ij,ji->', h1e, dm[1]).real)
+    e2 = (vhf.ecoul + vhf.exc + vhf.E_U).real
+    tot_e = e1 + e2
+    mf.scf_summary['e1'] = e1
+    mf.scf_summary['e2'] = e2
     mf.scf_summary['coul'] = vhf.ecoul.real
     mf.scf_summary['exc'] = vhf.exc.real
     mf.scf_summary['E_U'] = vhf.E_U.real
 
-    logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s  EU = %s',
-                 e1, vhf.ecoul, vhf.exc, vhf.E_U)
-    return tot_e.real, vhf.ecoul + vhf.exc + vhf.E_U
+    logger.debug(mf, 'E1 = %s  E2 = %s  Ecoul = %s  Exc = %s  EU = %s',
+                 e1, e2, vhf.ecoul, vhf.exc, vhf.E_U)
+    return tot_e, e2
 
 class UKSpU(uks.UKS):
     """

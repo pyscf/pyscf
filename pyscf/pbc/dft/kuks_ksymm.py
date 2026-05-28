@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ from pyscf.pbc.dft import gen_grid, multigrid
 from pyscf.pbc.dft import rks, krks, kuks
 
 @lib.with_doc(kuks.get_veff.__doc__)
-def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
              kpts=None, kpts_band=None):
     if cell is None: cell = ks.cell
     if dm is None: dm = ks.make_rdm1()
@@ -124,19 +124,21 @@ class KsymAdaptedKUKS(kuks.KUKS, kuhf_ksymm.KUHF):
             vhf = self.get_veff(self.cell, dm_kpts)
 
         weight = self.kpts.weights_ibz
-        e1 = np.einsum('k,kij,kji', weight, h1e_kpts, dm_kpts[0]+dm_kpts[1])
+        e1 = np.einsum('k,kij,nkji->', weight, h1e_kpts, dm_kpts)
         ecoul = vhf.ecoul
         exc = vhf.exc
-        tot_e = e1 + ecoul + exc
+        e2 = ecoul + exc
+        tot_e = e1 + e2
         self.scf_summary['e1'] = e1.real
+        self.scf_summary['e2'] = e2.real
         self.scf_summary['coul'] = ecoul.real
         self.scf_summary['exc'] = exc.real
-        logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, ecoul, exc)
+        logger.debug(self, 'E1 = %s  E2 = %s  Ecoul = %s  Exc = %s', e1, e2, ecoul, exc)
         if khf.CHECK_COULOMB_IMAG and abs(ecoul.imag) > self.cell.precision*10:
             logger.warn(self, "Coulomb energy has imaginary part %s. "
                         "Coulomb integrals (e-e, e-N) may not converge !",
                         ecoul.imag)
-        return tot_e.real, ecoul.real + exc.real
+        return tot_e.real, e2.real
 
     def to_hf(self):
         '''Convert to KRHF object.'''

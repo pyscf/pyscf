@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2025 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ from pyscf import lo
 from pyscf.pbc import gto as pgto
 from pyscf.dft.rkspu import _set_U, reference_mol
 
-def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
              kpts=None, kpts_band=None):
     """
     Coulomb + XC functional + Hubbard U terms.
@@ -147,16 +147,18 @@ def energy_elec(ks, dm_kpts=None, h1e_kpts=None, vhf=None):
     if vhf is None or getattr(vhf, 'ecoul', None) is None:
         vhf = ks.get_veff(ks.cell, dm_kpts)
 
-    weight = getattr(ks.kpts, "weights_ibz",
-                     np.array([1.0/len(h1e_kpts),]*len(h1e_kpts)))
-    e1 = np.einsum('k,kij,kji', weight, h1e_kpts, dm_kpts)
-    tot_e = e1 + vhf.ecoul + vhf.exc + vhf.E_U
+    nkpts = len(h1e_kpts)
+    weight = getattr(mf.kpts, "weights_ibz", np.full(nkpts, 1./nkpts))
+    e1 = np.einsum('k,kij,kji->', weight, h1e_kpts, dm_kpts)
+    e2 = vhf.ecoul + vhf.exc + vhf.E_U
+    tot_e = e1 + e2
     ks.scf_summary['e1'] = e1.real
+    ks.scf_summary['e2'] = e2.real
     ks.scf_summary['coul'] = vhf.ecoul.real
     ks.scf_summary['exc'] = vhf.exc.real
     ks.scf_summary['E_U'] = vhf.E_U.real
-    logger.debug(ks, 'E1 = %s  Ecoul = %s  Exc = %s  EU = %s', e1, vhf.ecoul,
-                 vhf.exc, vhf.E_U)
+    logger.debug(ks, 'E1 = %s  E2 = %s  Ecoul = %s  Exc = %s  EU = %s',
+                 e1, e2, vhf.ecoul, vhf.exc, vhf.E_U)
     return tot_e.real, vhf.ecoul + vhf.exc + vhf.E_U
 
 def _make_minao_lo(cell, minao_ref='minao', kpts=None):

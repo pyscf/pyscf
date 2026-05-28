@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -252,19 +252,24 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     '''
     if dm_kpts is None: dm_kpts = mf.make_rdm1()
     if h1e_kpts is None: h1e_kpts = mf.get_hcore()
-    if vhf_kpts is None: vhf_kpts = mf.get_veff(mf.cell, dm_kpts)
+    if vhf_kpts is None or getattr(vhf_kpts, 'ecoul', None) is None:
+        vhf_kpts = mf.get_veff(mf.cell, dm_kpts)
 
     nkpts = len(dm_kpts)
-    e1 = 1./nkpts * np.einsum('kij,kji', dm_kpts, h1e_kpts)
-    e_coul = 1./nkpts * np.einsum('kij,kji', dm_kpts, vhf_kpts) * 0.5
+    e1 = 1./nkpts * np.einsum('kij,kji->', dm_kpts, h1e_kpts)
+    e2 = 1./nkpts * np.einsum('kij,kji->', dm_kpts, vhf_kpts) * 0.5
+    ecoul = vhf_kpts.ecoul
+    exx = e2 - ecoul
     mf.scf_summary['e1'] = e1.real
-    mf.scf_summary['e2'] = e_coul.real
-    logger.debug(mf, 'E1 = %s  E_coul = %s', e1, e_coul)
-    if CHECK_COULOMB_IMAG and abs(e_coul.imag) > mf.cell.precision*10:
+    mf.scf_summary['e2'] = e2.real
+    mf.scf_summary['coul'] = ecoul.real
+    mf.scf_summary['exc'] = exx.real
+    logger.debug(mf, 'E1 = %s  E2 = %s  E_coul = %s  Exc = %s', e1, e2, ecoul, exx)
+    if CHECK_COULOMB_IMAG and abs(e2.imag) > mf.cell.precision*10:
         logger.warn(mf, "Coulomb energy has imaginary part %s. "
                     "Coulomb integrals (e-e, e-N) may not converge !",
-                    e_coul.imag)
-    return (e1+e_coul).real, e_coul.real
+                    e2.imag)
+    return (e1+e2).real, e2.real
 
 
 def analyze(mf, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
@@ -635,7 +640,7 @@ class KSCF(pbchf.SCF):
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
-    def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
+    def get_veff(self, cell=None, dm_kpts=None, dm_last=None, vhf_last=None, hermi=1,
                  kpts=None, kpts_band=None):
         '''Hartree-Fock potential matrix for the given density matrix.
         See :func:`scf.hf.get_veff` and :func:`scf.hf.RHF.get_veff`
@@ -643,7 +648,12 @@ class KSCF(pbchf.SCF):
         if dm_kpts is None:
             dm_kpts = self.make_rdm1()
         vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
-        return vj - vk * .5
+        vhf = vj - vk * .5
+        if dm_kpts.ndim == 3 and kpts_band is None:
+            nkpts = len(dm_kpts)
+            ecoul = np.einsum('Kij,Kji->', dm_kpts, vj).real * .5/nkpts
+            vhf = lib.tag_array(vhf, ecoul=ecoul)
+        return vhf
 
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):
         '''

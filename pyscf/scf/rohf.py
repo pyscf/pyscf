@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -472,26 +472,15 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
     energy_elec = energy_elec
 
     @lib.with_doc(uhf.get_veff.__doc__)
-    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-        if mol is None: mol = self.mol
+    def get_veff(self, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
         if dm is None: dm = self.make_rdm1()
-        if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-            dm = numpy.array((dm*.5, dm*.5))
-
         if self._eri is not None or not self.direct_scf:
             if hasattr(dm, 'mo_occ') and numpy.ndim(dm.mo_occ) == 1:
                 mo_occa = (dm.mo_occ > 0).astype(numpy.double)
                 mo_occb = (dm.mo_occ ==2).astype(numpy.double)
                 dm = lib.tag_array(dm, mo_coeff=(dm.mo_coeff,)*2,
                                    mo_occ=(mo_occa,mo_occb))
-            vj, vk = self.get_jk(mol, dm, hermi)
-            vhf = vj[0] + vj[1] - vk
-        else:
-            ddm = dm - numpy.asarray(dm_last)
-            vj, vk = self.get_jk(mol, ddm, hermi)
-            vhf = vj[0] + vj[1] - vk
-            vhf += numpy.asarray(vhf_last)
-        return vhf
+        return uhf.UHF.get_veff(self, mol, dm, dm_last, vhf_last, hermi)
 
     @lib.with_doc(analyze.__doc__)
     def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ from pyscf.pbc.dft import multigrid
 from pyscf import __config__
 
 
-def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
              kpts=None, kpts_band=None):
     '''Coulomb + XC functional for UKS.  See pyscf/pbc/dft/uks.py
     :func:`get_veff` fore more details.
@@ -98,15 +98,16 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
         vhf = mf.get_veff(mf.cell, dm_kpts)
 
     weight = 1./len(h1e_kpts)
-    e1 = weight *(np.einsum('kij,kji', h1e_kpts, dm_kpts[0]) +
-                  np.einsum('kij,kji', h1e_kpts, dm_kpts[1]))
+    e1 = weight * np.einsum('kij,nkji->', h1e_kpts, dm_kpts)
     ecoul = vhf.ecoul
     exc = vhf.exc
-    tot_e = e1 + ecoul + exc
+    e2 = ecoul + exc
+    tot_e = e1 + e2
     mf.scf_summary['e1'] = e1.real
+    mf.scf_summary['e2'] = e2.real
     mf.scf_summary['coul'] = ecoul.real
     mf.scf_summary['exc'] = exc.real
-    logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s', e1, ecoul, exc)
+    logger.debug(mf, 'E1 = %s  E2 = %s  Ecoul = %s  Exc = %s', e1, e2, ecoul, exc)
     if khf.CHECK_COULOMB_IMAG and abs(ecoul.imag) > mf.cell.precision*10:
         logger.warn(mf, "Coulomb energy has imaginary part %s. "
                     "Coulomb integrals (e-e, e-N) may not converge !",

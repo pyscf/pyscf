@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2020-2023 The PySCF Developers. All Rights Reserved.
+# Copyright 2020-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -73,19 +73,24 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
 def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     if dm_kpts is None: dm_kpts = mf.make_rdm1()
     if h1e_kpts is None: h1e_kpts = mf.get_hcore()
-    if vhf_kpts is None: vhf_kpts = mf.get_veff(mf.cell, dm_kpts)
+    if vhf_kpts is None or getattr(vhf_kpts, 'ecoul', None) is None:
+        vhf_kpts = mf.get_veff(mf.cell, dm_kpts)
 
     kpts_weights = mf.kpts.weights_ibz
-    e1 = np.einsum('k,kij,kji', kpts_weights, dm_kpts, h1e_kpts)
-    e_coul = np.einsum('k,kij,kji', kpts_weights, dm_kpts, vhf_kpts) * 0.5
+    e1 = np.einsum('k,kij,kji->', kpts_weights, dm_kpts, h1e_kpts)
+    e2 = np.einsum('k,kij,kji->', kpts_weights, dm_kpts, vhf_kpts) * 0.5
+    ecoul = vhf_kpts.ecoul
+    exx = e2 - ecoul
     mf.scf_summary['e1'] = e1.real
-    mf.scf_summary['e2'] = e_coul.real
-    logger.debug(mf, 'E1 = %s  E_coul = %s', e1, e_coul)
-    if khf.CHECK_COULOMB_IMAG and abs(e_coul.imag) > mf.cell.precision*10:
+    mf.scf_summary['e2'] = e2.real
+    mf.scf_summary['coul'] = ecoul.real
+    mf.scf_summary['exc'] = exx.real
+    logger.debug(mf, 'E1 = %s  E2 = %s  E_coul = %s  Exc = %s', e1, e2, ecoul, exx)
+    if khf.CHECK_COULOMB_IMAG and abs(e2.imag) > mf.cell.precision*10:
         logger.warn(mf, "Coulomb energy has imaginary part %s. "
                     "Coulomb integrals (e-e, e-N) may not converge !",
-                    e_coul.imag)
-    return (e1+e_coul).real, e_coul.real
+                    e2.imag)
+    return (e1+e2).real, e2.real
 
 @lib.with_doc(khf.get_rho.__doc__)
 def get_rho(mf, dm=None, grids=None, kpts=None):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -282,13 +282,18 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     '''
     if dm is None: dm = mf.make_rdm1()
     if h1e is None: h1e = mf.get_hcore()
-    if vhf is None: vhf = mf.get_veff(mf.mol, dm)
+    if vhf is None or getattr(vhf, 'ecoul', None) is None:
+        vhf = mf.get_veff(mf.mol, dm)
     e1 = numpy.einsum('ij,ji->', h1e, dm).real
-    e_coul = numpy.einsum('ij,ji->', vhf, dm).real * .5
+    e2 = numpy.einsum('ij,ji->', vhf, dm).real * .5
+    ecoul = vhf.ecoul.real
+    exx = e2 - ecoul
     mf.scf_summary['e1'] = e1
-    mf.scf_summary['e2'] = e_coul
-    logger.debug(mf, 'E1 = %s  E_coul = %s', e1, e_coul)
-    return e1+e_coul, e_coul
+    mf.scf_summary['e2'] = e2
+    mf.scf_summary['coul'] = ecoul
+    mf.scf_summary['exc'] = exx
+    logger.debug(mf, 'E1 = %s  E2 = %s  Ecoul = %s  Exc = %s', e1, e2, ecoul, exx)
+    return e1+e2, e2
 
 
 def energy_tot(mf, dm=None, h1e=None, vhf=None):
@@ -1041,10 +1046,10 @@ def get_veff(mol, dm, dm_last=None, vhf_last=None, hermi=1, vhfopt=None):
             A density matrix or a list of density matrices
 
     Kwargs:
-        dm_last : ndarray or a list of ndarrays or 0
+        dm_last : ndarray or a list of ndarrays
             The density matrix baseline.  If not 0, this function computes the
             increment of HF potential w.r.t. the reference HF potential matrix.
-        vhf_last : ndarray or a list of ndarrays or 0
+        vhf_last : ndarray or a list of ndarrays
             The reference HF potential matrix.
         hermi : int
             Whether J, K matrix is hermitian
@@ -1077,11 +1082,17 @@ def get_veff(mol, dm, dm_last=None, vhf_last=None, hermi=1, vhfopt=None):
     '''
     if dm_last is None:
         vj, vk = get_jk(mol, numpy.asarray(dm), hermi, vhfopt)
-        return vj - vk * .5
+        vhf = vj - vk * .5
     else:
-        ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
+        ddm = numpy.asarray(dm)
+        if dm_last is not None:
+            assert vhf_last is not None
+            ddm = ddm - numpy.asarray(dm_last)
         vj, vk = get_jk(mol, ddm, hermi, vhfopt)
-        return vj - vk * .5 + numpy.asarray(vhf_last)
+        vhf = vj - vk * .5
+        if dm_last is not None:
+            vhf += numpy.asarray(vhf_last)
+    return vhf
 
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None,
@@ -2153,17 +2164,36 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         return self.get_jk(mol, dm, hermi, with_j=False, omega=omega)[1]
 
     @lib.with_doc(get_veff.__doc__)
-    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-        # Be careful with the effects of :attr:`SCF.direct_scf` on this function
+    def get_veff(self, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        if self.direct_scf:
-            ddm = numpy.asarray(dm) - dm_last
-            vj, vk = self.get_jk(mol, ddm, hermi=hermi)
-            return vhf_last + vj - vk * .5
+        if self._eri is not None or not self.direct_scf:
+            vj, vk = self.get_jk(mol, dm, hermi)
+            vhf = vj - vk * .5
+            if dm.ndim == 2:
+                ecoul = numpy.einsum('ij,ji->', dm, vj).real * .5
+                vhf = lib.tag_array(vhf, ecoul=ecoul)
         else:
-            vj, vk = self.get_jk(mol, dm, hermi=hermi)
-            return vj - vk * .5
+            ddm = numpy.asarray(dm)
+            if dm_last is not None:
+                assert vhf_last is not None
+                ddm = ddm - dm_last
+            vj, vk = self.get_jk(mol, ddm, hermi)
+            vhf = vj - vk * .5
+            if dm_last is not None:
+                vhf += vhf_last
+                if hasattr(vhf_last, 'ecoul') and dm.ndim == 2:
+                    # Ecoul = 1/2 (dm_last+ddm)*J[dm_last+ddm]
+                    # = 1/2 (dm_last*J[dm_last] + 2 dm_last*J[ddm] + ddm*J[ddm])
+                    # = Ecoul_last + dm_last*J[ddm] + 1/2 ddm*J[ddm]
+                    ecoul = numpy.einsum('ij,ji->', dm_last, vj).real
+                    ecoul += numpy.einsum('ij,ji->', ddm, vj).real * .5
+                    ecoul += vhf_last.ecoul
+                    vhf = lib.tag_array(vhf, ecoul=ecoul)
+            elif dm.ndim == 2:
+                ecoul = numpy.einsum('ij,ji->', dm, vj).real * .5
+                vhf = lib.tag_array(vhf, ecoul=ecoul)
+        return vhf
 
     @lib.with_doc(analyze.__doc__)
     def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
@@ -2474,20 +2504,6 @@ class RHF(SCF):
         else:
             vj, vk = SCF.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
         return vj, vk
-
-    @lib.with_doc(get_veff.__doc__)
-    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-        if mol is None: mol = self.mol
-        if dm is None: dm = self.make_rdm1()
-        if self._eri is not None or not self.direct_scf:
-            vj, vk = self.get_jk(mol, dm, hermi)
-            vhf = vj - vk * .5
-        else:
-            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
-            vj, vk = self.get_jk(mol, ddm, hermi)
-            vhf = vj - vk * .5
-            vhf += numpy.asarray(vhf_last)
-        return vhf
 
     def convert_from_(self, mf):
         '''Convert the input mean-field object to RHF/ROHF'''

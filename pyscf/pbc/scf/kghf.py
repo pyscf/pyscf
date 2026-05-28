@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -233,10 +233,15 @@ class KGHF(khf.KSCF):
     def get_k(self, cell=None, dm_kpts=None, hermi=0, kpts=None, kpts_band=None):
         return self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band, False, True)[1]
 
-    def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
+    def get_veff(self, cell=None, dm_kpts=None, dm_last=None, vhf_last=None, hermi=1,
                  kpts=None, kpts_band=None):
+        if dm_kpts is None: dm_kpts = mf.make_rdm1()
         vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band, True, True)
         vhf = vj - vk
+        if dm_kpts.ndim == 3 and kpts_band is None:
+            nkpts = len(dm_kpts)
+            ecoul = np.einsum('Kij,Kji->', dm_kpts, vj).real * .5/nkpts
+            vhf = lib.tag_array(vhf, ecoul=ecoul)
         return vhf
 
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):

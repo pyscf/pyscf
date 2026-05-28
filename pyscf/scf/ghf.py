@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -469,16 +469,33 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         vj, vk = get_jk(mol, dm, hermi, with_j, with_k, jkbuild, omega)
         return vj, vk
 
-    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
+    def get_veff(self, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if self._eri is not None or not self.direct_scf:
             vj, vk = self.get_jk(mol, dm, hermi)
             vhf = vj - vk
+            if dm.ndim == 2:
+                ecoul = numpy.einsum('ij,ji->', dm, vj).real * .5
+                vhf = lib.tag_array(vhf, ecoul=ecoul)
         else:
-            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
+            ddm = numpy.asarray(dm)
+            if dm_last is not None:
+                assert vhf_last is not None
+                dm_last = numpy.asarray(dm_last)
+                ddm = ddm - dm_last
             vj, vk = self.get_jk(mol, ddm, hermi)
-            vhf = vj - vk + numpy.asarray(vhf_last)
+            vhf = vj - vk
+            if dm_last is not None:
+                vhf += vhf_last
+                if hasattr(vhf_last, 'ecoul') and dm.ndim == 2:
+                    ecoul = numpy.einsum('ij,ji->', dm_last, vj).real
+                    ecoul += numpy.einsum('ij,ji->', ddm, vj).real * .5
+                    ecoul += vhf_last.ecoul
+                    vhf = lib.tag_array(vhf, ecoul=ecoul)
+            elif dm.ndim == 2:
+                ecoul = numpy.einsum('ij,ji->', dm, vj).real * .5
+                vhf = lib.tag_array(vhf, ecoul=ecoul)
         return vhf
 
     def analyze(self, verbose=None, **kwargs):
