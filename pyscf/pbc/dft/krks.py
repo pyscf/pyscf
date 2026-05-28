@@ -122,19 +122,19 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
     weight = 1./len(h1e_kpts)
     e1 = weight * np.einsum('kij,kji->', h1e_kpts, dm_kpts)
     ecoul = vhf.ecoul
-    exc = vhf.exc
+    exc = vhf.exc.real
     e2 = ecoul + exc
     tot_e = e1 + e2
     mf.scf_summary['e1'] = e1.real
     mf.scf_summary['e2'] = e2.real
     mf.scf_summary['coul'] = ecoul.real
-    mf.scf_summary['exc'] = exc.real
+    mf.scf_summary['exc'] = exc
     logger.debug(mf, 'E1 = %s  E2 = %s  Ecoul = %s  Exc = %s', e1, e2, ecoul, exc)
     if khf.CHECK_COULOMB_IMAG and abs(ecoul.imag) > mf.cell.precision*10:
         logger.warn(mf, "Coulomb energy has imaginary part %s. "
                     "Coulomb integrals (e-e, e-N) may not converge !",
                     ecoul.imag)
-    return tot_e.real, ecoul.real + exc.real
+    return tot_e.real, e2
 
 def gen_response(mf, mo_coeff=None, mo_occ=None, singlet=None, hermi=0,
                  max_memory=None, with_nlc=True):
