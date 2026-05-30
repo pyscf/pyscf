@@ -22,6 +22,7 @@ Some helper functions
 
 import os
 import sys
+import atexit
 import time
 import random
 import platform
@@ -1257,6 +1258,17 @@ class H5TmpFile(H5FileWrap):
         self.close()
 
 
+def _cleanup_tmpfiles():
+    for name in _to_delete:
+        try:
+            os.unlink(name)
+        except OSError:
+            pass
+
+_to_delete = set()
+atexit.register(_cleanup_tmpfiles)
+
+
 def NamedTemporaryFile(*args, **kwargs):
     '''Create a named temporary file object. This function wraps
     `tempfile.NamedTemporaryFile`. On Windows, `delete=False` is forced
@@ -1271,7 +1283,10 @@ def NamedTemporaryFile(*args, **kwargs):
     '''
     if sys.platform == 'win32':
         kwargs['delete'] = False
-    return tempfile.NamedTemporaryFile(*args, **kwargs)
+    f = tempfile.NamedTemporaryFile(*args, **kwargs)
+    if sys.platform == 'win32':
+        _to_delete.add(f.name)
+    return f
 
 
 def fingerprint(a):
