@@ -215,15 +215,16 @@ class KnownValues(unittest.TestCase):
     # issue 1986
     def test_init_guess_chkfile(self):
         mol = gto.M(atom='He 0 0 0', basis='631g', charge=1, spin=1)
-        mf = dft.RKS(mol)
-        e1 = mf.kernel()
-        chkname = mf.chkfile
-        mf = dft.RKS(mol)
-        mf.chkfile = chkname
-        mf.init_guess = 'chkfile'
-        mf.max_cycle = 1
-        e2 = mf.kernel()
-        self.assertAlmostEqual(e1, e2, 9)
+        with lib.NamedTemporaryFile() as tmpf:
+            mf = dft.RKS(mol)
+            mf.chkfile = tmpf.name
+            e1 = mf.kernel()
+            mf = dft.RKS(mol)
+            mf.chkfile = tmpf.name
+            mf.init_guess = 'chkfile'
+            mf.max_cycle = 1
+            e2 = mf.kernel()
+            self.assertAlmostEqual(e1, e2, 9)
 
 
 if __name__ == "__main__":

@@ -52,7 +52,7 @@ def auto_setup(xyz="Li 0 0 0\nH 1.5 0 0", fnal="tPBE"):
     mcp_ss_nosym = mcpdft.CASSCF(mc_nosym, fnal, 5, 2).run(conv_tol=1e-8)
     mcp_ss_sym = (
         mcpdft.CASSCF(mc_sym, fnal, 5, 2)
-        .set()  # , chk_ci=True)
+        .set(chkfile=lib.NamedTemporaryFile().name, chk_ci=True)
         .run(conv_tol=1e-8)
     )
     mcp_sa_0 = mcp_ss_nosym.state_average(
@@ -85,7 +85,7 @@ def auto_setup(xyz="Li 0 0 0\nH 1.5 0 0", fnal="tPBE"):
             ]
             * 5,
         )
-        .set(ci=None)  # , chk_ci=True)
+        .set(ci=None, chkfile=lib.NamedTemporaryFile().name, chk_ci=True)
         .run(conv_tol=1e-8)
     )
     mcp = [[mcp_ss_nosym, mcp_ss_sym], [mcp_sa_0, mcp_sa_1, mcp_sa_2]]
