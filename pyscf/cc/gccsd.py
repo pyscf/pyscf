@@ -477,7 +477,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
         max_memory = max(MEMORYMIN, max_memory)
 
         fswap = lib.H5TmpFile()
-        ao2mo.kernel(mycc.mol, (orbo,mo_a,mo_a,mo_a), fswap, 'aaaa',
+        ao2mo.kernel(mycc.mol, (orbo_a,mo_a,mo_a,mo_a), fswap, 'aaaa',
                      max_memory=max_memory, verbose=log)
         ao2mo.kernel(mycc.mol, (orbo_a,mo_a,mo_b,mo_b), fswap, 'aabb',
                      max_memory=max_memory, verbose=log)
