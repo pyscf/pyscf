@@ -19,7 +19,6 @@
 
 import ctypes
 
-import tempfile
 from functools import reduce
 import numpy
 import h5py
@@ -381,7 +380,7 @@ def Sijrs(mc, eris, verbose=None):
     ncas = mo_cas.shape[1]
     nocc = ncore + ncas
     if eris is None:
-        erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+        erifile = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
         feri = ao2mo.outcore.general(mc.mol, (mo_core,mo_virt,mo_core,mo_virt),
                                      erifile.name, verbose=mc.verbose)
     else:
@@ -992,7 +991,7 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
 
     if tmpdir is None:
         tmpdir = lib.param.TMPDIR
-    swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
+    swapfile = lib.NamedTemporaryFile(dir=tmpdir)
     ao2mo.outcore.half_e1(mol, (mo[:,:nocc],mo[:,ncore:]), swapfile.name,
                           max_memory=max_memory, ioblk_size=ioblk_size,
                           verbose=log, compact=False)
@@ -1016,7 +1015,7 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
     time0 = logger.timer(mol, 'halfe1', *time0)
     time1 = [logger.process_clock(), logger.perf_counter()]
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
-    cvcvfile = tempfile.NamedTemporaryFile(dir=tmpdir)
+    cvcvfile = lib.NamedTemporaryFile(dir=tmpdir)
     with lib.H5TmpFile(cvcvfile.name, 'w') as f5:
         cvcv = f5.create_dataset('eri_mo', (ncore*nvir,ncore*nvir), 'f8')
         ppaa, papa, pacv = _trans(mo, ncore, ncas, load_buf, cvcv, ao_loc)[:3]

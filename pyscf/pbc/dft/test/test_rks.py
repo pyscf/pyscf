@@ -18,7 +18,6 @@
 #
 
 import unittest
-import tempfile
 import numpy as np
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import dft as pbcdft
@@ -82,7 +81,6 @@ class KnownValues(unittest.TestCase):
         cell.verbose = 0
         cell.build()
         mf1 = pbcdft.RKS(cell)
-        mf1.chkfile = tempfile.NamedTemporaryFile().name
         mf1.max_cycle = 1
         mf1.kernel()
 

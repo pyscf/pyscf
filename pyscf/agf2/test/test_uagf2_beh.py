@@ -17,7 +17,6 @@
 #
 
 import unittest
-import tempfile
 import numpy as np
 from pyscf import gto, scf, agf2, lib
 
@@ -28,7 +27,6 @@ class KnownValues(unittest.TestCase):
     def setUpClass(self):
         self.mol = gto.M(atom='Be 0 0 0; H 0 0 1', basis='cc-pvdz', spin=1, verbose=0)
         self.mf = scf.UHF(self.mol)
-        self.mf.chkfile = tempfile.NamedTemporaryFile().name
         self.mf.conv_tol = 1e-12
         self.mf.run()
         self.gf2 = agf2.UAGF2(self.mf)
@@ -72,7 +70,6 @@ class KnownValues(unittest.TestCase):
     def test_uagf2_outcore(self):
         # tests the out-of-core and chkfile support for AGF2 for BeH/cc-pvdz
         gf2 = agf2.UAGF2(self.mf)
-        gf2.chkfile = tempfile.NamedTemporaryFile().name
         gf2.max_memory = 1
         gf2.conv_tol = 1e-7
         gf2.run()

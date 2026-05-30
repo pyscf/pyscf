@@ -21,8 +21,6 @@ Hartree-Fock
 '''
 
 import sys
-import tempfile
-
 from functools import reduce
 import numpy
 import scipy.linalg
@@ -1771,7 +1769,7 @@ class SCF(lib.StreamObject):
         else:
             # the chkfile will be removed automatically, to save the chkfile, assign a
             # filename to self.chkfile
-            self._chkfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+            self._chkfile = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
             self.chkfile = self._chkfile.name
 
 ##################################################

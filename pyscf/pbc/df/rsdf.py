@@ -42,7 +42,6 @@ the LR integrals are evaluated in reciprocal space with a plane wave basis.
 import os
 import h5py
 import scipy.linalg
-import tempfile
 import numpy as np
 
 from pyscf import lib
@@ -424,7 +423,7 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
                       kptij_lst=None, j_only=False, dataname='j3c-junk',
                       shls_slice=None):
         # Deadlock on NFS if you open an already-opened tmpfile in H5PY
-        # swapfile = tempfile.NamedTemporaryFile(dir=os.path.dirname(cderi_file))
+        # swapfile = lib.NamedTemporaryFile(dir=os.path.dirname(cderi_file))
         fswap = lib.H5TmpFile(dir=os.path.dirname(cderi_file), prefix='.outcore_auxe2_swap')
         # avoid trash files
         os.unlink(fswap.filename)

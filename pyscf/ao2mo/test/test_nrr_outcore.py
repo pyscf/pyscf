@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import unittest
-import tempfile
 import numpy as np
 import h5py
 from pyscf import lib

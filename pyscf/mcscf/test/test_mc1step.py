@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import unittest
-import tempfile
 import numpy
 import h5py
 from pyscf import lib
@@ -37,7 +36,6 @@ def setUpModule():
     )
     m = scf.RHF(mol)
     m.conv_tol = 1e-10
-    m.chkfile = tempfile.NamedTemporaryFile().name
     m.scf()
     mc0 = mcscf.CASSCF(m, 4, 4).run()
 
@@ -51,7 +49,6 @@ def setUpModule():
     symmetry = True
     )
     msym = scf.RHF(molsym)
-    msym.chkfile = tempfile.NamedTemporaryFile().name
     msym.conv_tol = 1e-10
     msym.scf()
 

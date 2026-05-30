@@ -14,6 +14,7 @@ PySCF supports input molecule geometry in
 
 import numpy
 from pyscf import gto
+from pyscf import lib
 
 #
 # Input Cartesian coordinates
@@ -127,8 +128,7 @@ mol.build()
 # Read geometry from a file. If the file name is assigned to mol.atom, the
 # build method will guess the file format and parse the contents accordingly
 #
-import tempfile
-with tempfile.NamedTemporaryFile(mode='w', suffix='.xyz') as f:
+with lib.NamedTemporaryFile(mode='w', suffix='.xyz') as f:
     f.write('''3
 
 O 0 0 0

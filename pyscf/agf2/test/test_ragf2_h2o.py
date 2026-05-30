@@ -17,7 +17,6 @@
 #
 
 import unittest
-import tempfile
 import numpy as np
 import h5py
 from pyscf import gto, scf, agf2, lib
@@ -29,7 +28,6 @@ class KnownValues(unittest.TestCase):
     def setUpClass(self):
         self.mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='cc-pvdz', verbose=0)
         self.mf = scf.RHF(self.mol)
-        self.mf.chkfile = tempfile.NamedTemporaryFile().name
         self.mf.conv_tol = 1e-12
         self.mf.run()
         self.gf2 = agf2.RAGF2(self.mf)

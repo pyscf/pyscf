@@ -15,7 +15,7 @@
 #
 # Author: Matthew Hennefarth <mhennefarth@uchicago.com>
 
-import tempfile, h5py
+import h5py
 import numpy as np
 from pyscf import gto, scf, dft, fci, lib
 from pyscf import mcpdft
@@ -57,7 +57,6 @@ def get_water(functional='tpbe', basis='6-31g'):
     solver2.spin = 2
 
     mc = mcpdft.CASSCF(mf, functional, 4, 4, grids_level=1)
-    mc.chkfile = tempfile.NamedTemporaryFile().name 
     # mc.chk_ci = True
     mc = mc.multi_state_mix([solver1, solver2], weights, "lin")
     mc.run()
@@ -82,7 +81,6 @@ def get_water_triplet(functional='tPBE', basis="6-31G"):
     solver2.nroots = 2
 
     mc = mcpdft.CASSCF(mf, functional, 4, 4, grids_level=1)
-    mc.chkfile = tempfile.NamedTemporaryFile().name 
     # mc.chk_ci = True
     mc = mc.multi_state_mix([solver1, solver2], weights, "lin")
     mc.run()

@@ -3,9 +3,9 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import tempfile
 import h5py
 from pyscf import gto, df, scf, mcscf
+from pyscf import lib
 
 '''
 Using the Cholesky decomposed 2-electron integrals to define the Hamiltonian in CASSCF
@@ -33,7 +33,7 @@ mc.kernel()
 #
 # Integrals on disk
 #
-ftmp = tempfile.NamedTemporaryFile()
+ftmp = lib.NamedTemporaryFile()
 df.outcore.cholesky_eri(mol, ftmp.name, auxbasis='ccpvdz-fit')
 
 with h5py.File(ftmp.name, 'r') as file1:

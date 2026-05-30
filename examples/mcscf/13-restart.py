@@ -3,7 +3,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import tempfile
+import os
 from pyscf import gto, scf, mcscf
 from pyscf import lib
 
@@ -19,25 +19,25 @@ CASSCF intermediate results.  Then we can "restart" the calculation from the
 intermediate results.
 '''
 
-tmpchk = tempfile.NamedTemporaryFile()
-
 mol = gto.Mole()
 mol.atom = 'C 0 0 0; C 0 0 1.2'
 mol.basis = 'ccpvdz'
 mol.build()
 
+chkname = os.path.join(lib.param.TMPDIR, '13-restart.chk')
 mf = scf.RHF(mol)
+mf.chkfile = chkname
 mf.kernel()
 
 mc = mcscf.CASSCF(mf, 6, 6)
-mc.chkfile = tmpchk.name
+mc.chkfile = chkname
 mc.max_cycle_macro = 1
 mc.kernel()
 
 #######################################################################
 #
 # Assuming the CASSCF was interrupted.  Intermediate data were saved in
-# tmpchk file.  Here we read the chkfile to restart the previous calculation.
+# chkname file.  Here we read the chkfile to restart the previous calculation.
 #
 #######################################################################
 mol = gto.Mole()
@@ -46,11 +46,11 @@ mol.basis = 'ccpvdz'
 mol.build()
 
 mc = mcscf.CASSCF(scf.RHF(mol), 6, 6)
-mo = lib.chkfile.load(tmpchk.name, 'mcscf/mo_coeff')
+mo = lib.chkfile.load(chkname, 'mcscf/mo_coeff')
 mc.kernel(mo)
 
 # Assuming you lose all memory about the previous calculation.
 # Restart the calculation with chkfile only.
-mol, mcdata = mcscf.chkfile.load_mcscf(tmpchk.name)
-mc = mcscf.CASSCF(mol, mcdata['ncas'], mcdata['nelecas']).update_from_chk(tmpchk.name)
+mol, mcdata = mcscf.chkfile.load_mcscf(chkname)
+mc = mcscf.CASSCF(mol, mcdata['ncas'], mcdata['nelecas']).update_from_chk(chkname)
 mc.kernel()

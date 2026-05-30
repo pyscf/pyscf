@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tempfile
 from functools import reduce
 import unittest
 import copy
@@ -43,7 +42,6 @@ def setUpModule():
     mol.basis = '631g'
     mol.build()
     mf = scf.RHF(mol)
-    mf.chkfile = tempfile.NamedTemporaryFile().name
     mf.conv_tol_grad = 1e-8
     mf.kernel()
 
@@ -152,7 +150,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(cc1.e_corr, -0.13516622806104395, 7)
 
     def test_restart(self):
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = lib.NamedTemporaryFile()
         cc1 = cc.CCSD(mf)
         cc1.max_cycle = 5
         cc1.kernel()
