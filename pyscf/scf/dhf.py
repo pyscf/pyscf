@@ -27,10 +27,10 @@ import numpy
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
+from pyscf.data import nist
 from pyscf.scf import hf, ghf
 from pyscf.scf import _vhf
 from pyscf.scf import chkfile
-from pyscf.data import nist
 from pyscf import __config__
 
 zquatev = None
@@ -571,20 +571,23 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         nocc = mol.nelectron
         if mo_energy[n2c] > -1.999 * c**2:
             mo_occ[n2c:n2c+nocc] = 1
+            homo = mo_energy[n2c+nocc-1]
+            lumo = mo_energy[n2c+nocc]
         else:
             logger.warn(self, 'Variational collapse. PES mo_energy %g < -2c^2',
                         mo_energy[n2c])
             lumo = mo_energy[mo_energy > -1.999 * c**2][nocc]
             mo_occ[mo_energy > -1.999 * c**2] = 1
             mo_occ[mo_energy >= lumo] = 0
+            homo = mo_energy[mo_occ == 1].max()
+        gap = (lumo - homo) * nist.HARTREE2EV
+        self.scf_summary['gap'] = gap
         if self.verbose >= logger.INFO:
-            if mo_energy[n2c+nocc-1]+1e-3 > mo_energy[n2c+nocc]:
-                logger.warn(self, 'HOMO %.15g == LUMO %.15g',
-                            mo_energy[n2c+nocc-1], mo_energy[n2c+nocc])
+            if homo+1e-3 > lumo:
+                logger.warn(self, 'HOMO %.15g == LUMO %.15g', homo, lumo)
             else:
-                logger.info(self, 'HOMO %d = %.12g  LUMO %d = %.12g',
-                            nocc, mo_energy[n2c+nocc-1],
-                            nocc+1, mo_energy[n2c+nocc])
+                logger.info(self, 'HOMO %d = %.12g  LUMO %d = %.12g  gap/eV = %.5f',
+                            nocc, homo, nocc+1, lumo, gap)
                 logger.debug1(self, 'NES  mo_energy = %s', mo_energy[:n2c])
                 logger.debug(self, 'PES  mo_energy = %s', mo_energy[n2c:])
         return mo_occ

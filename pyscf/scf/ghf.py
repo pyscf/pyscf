@@ -26,6 +26,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
+from pyscf.data import nist
 from pyscf.scf import hf
 from pyscf.scf import uhf
 from pyscf.scf import chkfile
@@ -149,20 +150,22 @@ def get_jk(mol, dm, hermi=0,
 def get_occ(mf, mo_energy=None, mo_coeff=None):
     if mo_energy is None: mo_energy = mf.mo_energy
     e_idx = numpy.argsort(mo_energy.round(9), kind='stable')
-    e_sort = mo_energy[e_idx]
     nmo = mo_energy.size
     mo_occ = numpy.zeros_like(mo_energy)
     nocc = mf.mol.nelectron
-    if nocc > nmo:
+    if nocc < nmo:
+        homo, lumo = mo_energy[e_idx[nocc-1:nocc+1]]
+        gap = (lumo - homo) * nist.HARTREE2EV
+        mf.scf_summary['gap'] = gap
+        if mf.verbose >= logger.INFO:
+            if homo+1e-3 > lumo:
+                logger.warn(mf, 'HOMO %.15g == LUMO %.15g', homo, lumo)
+            else:
+                logger.info(mf, '  HOMO = %.15g  LUMO = %.15g  gap/eV = %.5f',
+                            homo, lumo, gap)
+    elif nocc > nmo:
         raise RuntimeError(f'Failed to assign mo_occ. Nocc ({nocc}) > Nmo ({nmo})')
     mo_occ[e_idx[:nocc]] = 1
-    if mf.verbose >= logger.INFO and nocc < nmo:
-        if e_sort[nocc-1]+1e-3 > e_sort[nocc]:
-            logger.warn(mf, 'HOMO %.15g == LUMO %.15g',
-                        e_sort[nocc-1], e_sort[nocc])
-        else:
-            logger.info(mf, '  HOMO = %.15g  LUMO = %.15g',
-                        e_sort[nocc-1], e_sort[nocc])
 
     if mf.verbose >= logger.DEBUG:
         numpy.set_printoptions(threshold=nmo)

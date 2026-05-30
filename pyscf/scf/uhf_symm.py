@@ -26,6 +26,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf import symm
 from pyscf.lib import logger
+from pyscf.data import nist
 from pyscf.scf import hf_symm
 from pyscf.scf import hf, uhf
 from pyscf.scf import chkfile
@@ -363,6 +364,7 @@ class SymAdaptedUHF(uhf.UHF):
 
         orbsyma, orbsymb = self.get_orbsym(mo_coeff)
         mo_occ = numpy.zeros_like(mo_energy)
+        nmo = mo_energy.shape[1]
         idx_ea_left = []
         idx_eb_left = []
         neleca_fix = nelecb_fix = 0
@@ -386,9 +388,9 @@ class SymAdaptedUHF(uhf.UHF):
                 idx_ea_left.append(ir_idxa)
                 idx_eb_left.append(ir_idxb)
 
-        nelec = self.nelec
-        neleca_float = nelec[0] - neleca_fix
-        nelecb_float = nelec[1] - nelecb_fix
+        neleca, nelecb = self.nelec
+        neleca_float = neleca - neleca_fix
+        nelecb_float = nelecb - nelecb_fix
         assert (neleca_float >= 0)
         assert (nelecb_float >= 0)
         if len(idx_ea_left) > 0:
@@ -404,46 +406,57 @@ class SymAdaptedUHF(uhf.UHF):
             occ_idx = idx_eb_left[eb_sort][:nelecb_float]
             mo_occ[1][occ_idx] = 1
 
-        vir_idx = (mo_occ[0]==0)
-        if self.verbose >= logger.INFO and numpy.count_nonzero(vir_idx) > 0:
-            noccsa = []
-            noccsb = []
-            for i, ir in enumerate(mol.irrep_id):
-                irname = mol.irrep_name[i]
-                ir_idxa = orbsyma == ir
-                ir_idxb = orbsymb == ir
-                noccsa.append(numpy.count_nonzero(mo_occ[0][ir_idxa]))
-                noccsb.append(numpy.count_nonzero(mo_occ[1][ir_idxb]))
-
-            ir_id2name = dict(zip(mol.irrep_id, mol.irrep_name))
+        vir_idx = (mo_occ[1]==0)
+        if numpy.count_nonzero(vir_idx) > 0:
             ehomo = ehomoa = max(mo_energy[0][mo_occ[0]>0 ])
-            elumo = elumoa = min(mo_energy[0][mo_occ[0]==0])
-            irhomoa = ir_id2name[orbsyma[mo_energy[0] == ehomoa][0]]
-            irlumoa = ir_id2name[orbsyma[mo_energy[0] == elumoa][0]]
-            logger.info(self, 'alpha HOMO (%s) = %.15g  LUMO (%s) = %.15g',
-                        irhomoa, ehomoa, irlumoa, elumoa)
-            if nelecb_float > 0:
+            elumo = elumob = min(mo_energy[1][mo_occ[1]==0])
+            if nelecb > 0:
                 ehomob = max(mo_energy[1][mo_occ[1]>0 ])
-                elumob = min(mo_energy[1][mo_occ[1]==0])
-                irhomob = ir_id2name[orbsymb[mo_energy[1] == ehomob][0]]
-                irlumob = ir_id2name[orbsymb[mo_energy[1] == elumob][0]]
-                logger.info(self, 'beta  HOMO (%s) = %.15g  LUMO (%s) = %.15g',
-                            irhomob, ehomob, irlumob, elumob)
-                ehomo = max(ehomoa,ehomob)
-                elumo = min(elumoa,elumob)
+                ehomo = max(ehomoa, ehomob)
+            if neleca < nmo:
+                elumoa = min(mo_energy[0][mo_occ[0]==0])
+                elumo = min(elumoa, elumob)
+            gap = (elumo - ehomo) * nist.HARTREE2EV
+            self.scf_summary['gap'] = gap
 
-            logger.debug(self, 'alpha irrep_nelec = %s', noccsa)
-            logger.debug(self, 'beta  irrep_nelec = %s', noccsb)
-            hf_symm._dump_mo_energy(mol, mo_energy[0], mo_occ[0], ehomo, elumo,
-                                    orbsyma, 'alpha-', verbose=self.verbose)
-            hf_symm._dump_mo_energy(mol, mo_energy[1], mo_occ[1], ehomo, elumo,
-                                    orbsymb, 'beta-', verbose=self.verbose)
+            if self.verbose >= logger.INFO:
+                noccsa = []
+                noccsb = []
+                for i, ir in enumerate(mol.irrep_id):
+                    irname = mol.irrep_name[i]
+                    ir_idxa = orbsyma == ir
+                    ir_idxb = orbsymb == ir
+                    noccsa.append(numpy.count_nonzero(mo_occ[0][ir_idxa]))
+                    noccsb.append(numpy.count_nonzero(mo_occ[1][ir_idxb]))
 
-            if mo_coeff is not None and self.verbose >= logger.DEBUG:
-                ovlp_ao = self.get_ovlp()
-                ss, s = self.spin_square((mo_coeff[0][:,mo_occ[0]>0],
-                                          mo_coeff[1][:,mo_occ[1]>0]), ovlp_ao)
-                logger.debug(self, 'multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
+                ir_id2name = dict(zip(mol.irrep_id, mol.irrep_name))
+                irhomoa = ir_id2name[orbsyma[mo_energy[0] == ehomoa][0]]
+                irlumoa = ir_id2name[orbsyma[mo_energy[0] == elumoa][0]]
+                logger.info(self, 'alpha HOMO (%s) = %.15g  LUMO (%s) = %.15g',
+                            irhomoa, ehomoa, irlumoa, elumoa)
+                if nelecb_float > 0:
+                    irhomob = ir_id2name[orbsymb[mo_energy[1] == ehomob][0]]
+                    irlumob = ir_id2name[orbsymb[mo_energy[1] == elumob][0]]
+                    logger.info(self, 'beta  HOMO (%s) = %.15g  LUMO (%s) = %.15g',
+                                irhomob, ehomob, irlumob, elumob)
+                if ehomo+1e-3 > elumo:
+                    logger.warn(self, 'HOMO %.15g >= LUMO %.15g', ehomo, elumo)
+                else:
+                    logger.info(self, '  HOMO = %.12g  LUMO = %.12g  gap/eV = %.5f',
+                                ehomo, elumo, gap)
+
+                logger.debug(self, 'alpha irrep_nelec = %s', noccsa)
+                logger.debug(self, 'beta  irrep_nelec = %s', noccsb)
+                hf_symm._dump_mo_energy(mol, mo_energy[0], mo_occ[0], ehomo, elumo,
+                                        orbsyma, 'alpha-', verbose=self.verbose)
+                hf_symm._dump_mo_energy(mol, mo_energy[1], mo_occ[1], ehomo, elumo,
+                                        orbsymb, 'beta-', verbose=self.verbose)
+
+                if mo_coeff is not None and self.verbose >= logger.DEBUG:
+                    ovlp_ao = self.get_ovlp()
+                    ss, s = self.spin_square((mo_coeff[0][:,mo_occ[0]>0],
+                                              mo_coeff[1][:,mo_occ[1]>0]), ovlp_ao)
+                    logger.debug(self, 'multiplicity <S^2> = %.8g  2S+1 = %.8g', ss, s)
         return mo_occ
 
     def _finalize(self):

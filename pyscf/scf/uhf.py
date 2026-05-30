@@ -20,6 +20,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
+from pyscf.data import nist
 from pyscf.scf import hf
 from pyscf.scf import chkfile
 from pyscf import __config__
@@ -285,37 +286,50 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
 
 def get_occ(mf, mo_energy=None, mo_coeff=None):
     if mo_energy is None: mo_energy = mf.mo_energy
-    e_idx_a = numpy.argsort(mo_energy[0])
-    e_idx_b = numpy.argsort(mo_energy[1])
-    e_sort_a = mo_energy[0][e_idx_a]
-    e_sort_b = mo_energy[1][e_idx_b]
-    nmo = mo_energy[0].size
+    e_idx_a = numpy.argsort(mo_energy[0].round(9), kind='stable')
+    e_idx_b = numpy.argsort(mo_energy[1].round(9), kind='stable')
+    nmo = len(e_idx_a)
     n_a, n_b = mf.nelec
     mo_occ = numpy.zeros_like(mo_energy)
     mo_occ[0,e_idx_a[:n_a]] = 1
     mo_occ[1,e_idx_b[:n_b]] = 1
-    if n_a > nmo or n_b > nmo:
+
+    if n_a < nmo and n_b < nmo:
+        homo = homo_a = mo_energy[0,e_idx_a[n_a-1]]
+        homo_b = None
+        if n_b > 0:
+            homo_b = mo_energy[1,e_idx_b[n_b-1]]
+            homo = max(homo, homo_b)
+        lumo = lumo_b = mo_energy[1,e_idx_b[n_b]]
+        lumo_a = None
+        if n_a < nmo:
+            lumo_a = mo_energy[1,e_idx_a[n_a]]
+            lumo = min(lumo, lumo_a)
+        gap = (lumo - homo) * nist.HARTREE2EV
+        mf.scf_summary['gap'] = gap
+        if mf.verbose >= logger.INFO and lumo_a is not None and homo_b is not None:
+            if homo_a+1e-3 > lumo_a:
+                logger.warn(mf, 'alpha nocc = %d  HOMO %.15g >= LUMO %.15g',
+                            n_a, homo_a, lumo_a)
+            else:
+                logger.info(mf, '  alpha nocc = %d  HOMO = %.15g  LUMO = %.15g',
+                            n_a, homo_a, lumo_a)
+            if homo_b+1e-3 > lumo_b:
+                logger.warn(mf, 'beta  nocc = %d  HOMO %.15g >= LUMO %.15g',
+                            n_b, homo_b, lumo_b)
+            else:
+                logger.info(mf, '  beta  nocc = %d  HOMO = %.15g  LUMO = %.15g',
+                            n_b, homo_b, lumo_b)
+        if homo+1e-3 > lumo:
+            logger.warn(mf, 'HOMO %.15g >= LUMO %.15g', homo, lumo)
+        else:
+            logger.info(mf, '  HOMO = %.12g  LUMO = %.12g  gap/eV = %.5f',
+                        homo, lumo, gap)
+    elif n_a > nmo or n_b > nmo:
         raise RuntimeError('Failed to assign mo_occ. '
                            f'nelec ({n_a}, {n_b}) > Nmo ({nmo})')
-    if mf.verbose >= logger.INFO and n_a < nmo and n_b < nmo:
-        if e_sort_a[n_a-1]+1e-3 > e_sort_a[n_a]:
-            logger.warn(mf, 'alpha nocc = %d  HOMO %.15g >= LUMO %.15g',
-                        n_a, e_sort_a[n_a-1], e_sort_a[n_a])
-        else:
-            logger.info(mf, '  alpha nocc = %d  HOMO = %.15g  LUMO = %.15g',
-                        n_a, e_sort_a[n_a-1], e_sort_a[n_a])
 
-        if e_sort_b[n_b-1]+1e-3 > e_sort_b[n_b]:
-            logger.warn(mf, 'beta  nocc = %d  HOMO %.15g >= LUMO %.15g',
-                        n_b, e_sort_b[n_b-1], e_sort_b[n_b])
-        else:
-            logger.info(mf, '  beta  nocc = %d  HOMO = %.15g  LUMO = %.15g',
-                        n_b, e_sort_b[n_b-1], e_sort_b[n_b])
-
-        if e_sort_a[n_a-1]+1e-3 > e_sort_b[n_b]:
-            logger.warn(mf, 'system HOMO %.15g >= system LUMO %.15g',
-                        e_sort_b[n_a-1], e_sort_b[n_b])
-
+    if mf.verbose >= logger.DEBUG:
         numpy.set_printoptions(threshold=nmo)
         logger.debug(mf, '  alpha mo_energy =\n%s', mo_energy[0])
         logger.debug(mf, '  beta  mo_energy =\n%s', mo_energy[1])

@@ -35,6 +35,7 @@ from pyscf.pbc.scf import hf as pbchf
 from pyscf import lib
 from pyscf.scf import hf as mol_hf
 from pyscf.lib import logger
+from pyscf.data import nist
 from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import smearing
 from pyscf.pbc.scf import chkfile  # noqa
@@ -195,21 +196,23 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     mo_energy_kpts = np.asarray(mo_energy_kpts)
     mo_energy = np.sort(mo_energy_kpts.ravel())
     nmo = mo_energy.size
-    if nocc > nmo:
-        raise RuntimeError('Failed to assign occupancies. '
-                           f'Nocc ({nocc}) > Nmo ({nmo})')
+    if nocc < nmo:
+        homo, lumo = mo_energy[nocc-1:nocc+1]
+        gap = (lumo - homo) * nist.HARTREE2EV
+        mf.scf_summary['gap'] = gap
+        if mf.verbose >= logger.INFO:
+            if homo+1e-3 > lumo:
+                logger.warn(mf, 'HOMO %.12g == LUMO %.12g', homo, lumo)
+            else:
+                logger.info(mf, '  HOMO = %.12g  LUMO = %.12g  gap/eV = %.5f',
+                            homo, lumo, gap)
+    elif nocc == nmo:
+        logger.info(mf, 'HOMO = %.12g (no LUMO)', mo_energy[nocc-1])
+    else:
+        raise RuntimeError(f'Failed to assign mo_occ. Nocc ({nocc}) > Nmo ({nmo})')
     fermi = mo_energy[nocc-1]
     mo_occ_kpts = np.zeros_like(mo_energy_kpts)
     mo_occ_kpts[mo_energy_kpts <= fermi] = 2
-
-    if nocc < nmo:
-        logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
-                    mo_energy[nocc-1], mo_energy[nocc])
-        if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
-            logger.warn(mf, 'HOMO %.12g == LUMO %.12g',
-                        mo_energy[nocc-1], mo_energy[nocc])
-    else:
-        logger.info(mf, 'HOMO = %.12g (no LUMO)', mo_energy[nocc-1])
 
     if mf.verbose >= logger.DEBUG:
         np.set_printoptions(threshold=len(mo_energy))

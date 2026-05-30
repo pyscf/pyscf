@@ -29,13 +29,13 @@ import scipy.linalg
 import h5py
 from pyscf import gto
 from pyscf import lib
+from pyscf.data import nist
 from pyscf.lib import logger
 from pyscf.scf import diis
 from pyscf.scf import _vhf
 from pyscf.scf import chkfile
 from pyscf.scf import dispersion
 from pyscf.scf import smearing
-from pyscf.data import nist
 from pyscf import __config__
 
 
@@ -1164,21 +1164,23 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     array([2, 2, 0, 2, 2, 2])
     '''
     if mo_energy is None: mo_energy = mf.mo_energy
-    e_idx = numpy.argsort(mo_energy)
-    e_sort = mo_energy[e_idx]
+    e_idx = numpy.argsort(mo_energy.round(9), kind='stable')
     nmo = mo_energy.size
     mo_occ = numpy.zeros_like(mo_energy)
     nocc = mf.mol.nelectron // 2
     mo_occ[e_idx[:nocc]] = 2
-    if nocc > nmo:
+    if nocc < nmo:
+        homo, lumo = mo_energy[e_idx[nocc-1:nocc+1]]
+        gap = (lumo - homo) * nist.HARTREE2EV
+        mf.scf_summary['gap'] = gap
+        if mf.verbose >= logger.INFO:
+            if homo+1e-3 > lumo:
+                logger.warn(mf, 'HOMO %.15g == LUMO %.15g', homo, lumo)
+            else:
+                logger.info(mf, '  HOMO = %.15g  LUMO = %.15g  gap/eV = %.5f',
+                            homo, lumo, gap)
+    elif nocc > nmo:
         raise RuntimeError(f'Failed to assign mo_occ. Nocc ({nocc}) > Nmo ({nmo})')
-    if mf.verbose >= logger.INFO and nocc < nmo:
-        if e_sort[nocc-1]+1e-3 > e_sort[nocc]:
-            logger.warn(mf, 'HOMO %.15g == LUMO %.15g',
-                        e_sort[nocc-1], e_sort[nocc])
-        else:
-            logger.info(mf, '  HOMO = %.15g  LUMO = %.15g',
-                        e_sort[nocc-1], e_sort[nocc])
 
     if mf.verbose >= logger.DEBUG:
         numpy.set_printoptions(threshold=nmo)
@@ -1261,6 +1263,7 @@ def dump_scf_summary(mf, verbose=logger.DEBUG):
     write('Two-electron Energy =             %24.15f', 'e2')
     write('Two-electron Coulomb Energy =     %24.15f', 'coul')
     write('DFT Exchange-Correlation Energy = %24.15f', 'exc')
+    write('HOMO-LUMO gap [eV] =              %24.15f', 'gap')
     write('Empirical Dispersion Energy =     %24.15f', 'dispersion')
     write('PCM Polarization Energy =         %24.15f', 'epcm')
     write('EFP Energy =                      %24.15f', 'efp')

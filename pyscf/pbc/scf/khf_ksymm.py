@@ -22,6 +22,7 @@ import scipy.linalg
 from pyscf import __config__
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.data import nist
 from pyscf.scf import hf as mol_hf
 from pyscf.pbc import tools
 from pyscf.pbc.lib import kpts as libkpts
@@ -42,19 +43,26 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     nocc = cell.tot_electrons(kpts.nkpts) // 2
     mo_energy_kpts = kpts.transform_mo_energy(mo_energy_kpts)
     mo_energy = np.sort(np.hstack(mo_energy_kpts))
+    nmo = mo_energy.size
     fermi = mo_energy[nocc-1]
     mo_occ_kpts = []
     for mo_e in mo_energy_kpts:
         mo_occ_kpts.append((mo_e <= fermi).astype(np.double) * 2)
 
-    if nocc < mo_energy.size:
-        logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
-                    mo_energy[nocc-1], mo_energy[nocc])
-        if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
-            logger.warn(mf, 'HOMO %.12g == LUMO %.12g',
-                        mo_energy[nocc-1], mo_energy[nocc])
-    else:
+    if nocc < nmo:
+        homo, lumo = mo_energy[nocc-1:nocc+1]
+        gap = (lumo - homo) * nist.HARTREE2EV
+        mf.scf_summary['gap'] = gap
+        if mf.verbose >= logger.INFO:
+            if homo+1e-3 > lumo:
+                logger.warn(mf, 'HOMO %.12g == LUMO %.12g', homo, lumo)
+            else:
+                logger.info(mf, '  HOMO = %.12g  LUMO = %.12g  gap/eV = %.5f',
+                            homo, lumo, gap)
+    elif nocc == nmo:
         logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
+    else:
+        raise RuntimeError(f'Failed to assign mo_occ. Nocc ({nocc}) > Nmo ({nmo})')
 
     if mf.verbose >= logger.DEBUG:
         np.set_printoptions(threshold=len(mo_energy))

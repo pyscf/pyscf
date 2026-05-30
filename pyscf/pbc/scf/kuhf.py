@@ -32,6 +32,7 @@ from pyscf.pbc.scf import khf
 from pyscf.pbc.scf import uhf as pbcuhf
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.data import nist
 from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile  # noqa
 from pyscf import __config__
@@ -145,36 +146,52 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
 
     nocc_a, nocc_b = mf.nelec
     mo_energy_kpts = np.asarray(mo_energy_kpts)
-    mo_energy = np.sort(mo_energy_kpts[0].ravel())
-    nmo = mo_energy.size
-    if nocc_a > nmo:
-        raise RuntimeError('Failed to assign alpha occupancies. '
-                           f'Nocc_a ({nocc_a}) > Nmo ({nmo})')
-    fermi_a = mo_energy[nocc_a-1]
+    mo_energy_a = np.sort(mo_energy_kpts[0].ravel())
+    nmo = mo_energy_a.size
+    if nocc_a > nmo or nocc_b > nmo:
+        raise RuntimeError('Failed to assign mo_occ. '
+                           f'nelec ({nocc_a}, {nocc_b}) > Nmo ({nmo})')
+
+    fermi_a = mo_energy_a[nocc_a-1]
     if nocc_b > 0:
-        mo_energy = np.sort(mo_energy_kpts[1].ravel())
-        nmo = mo_energy.size
-        if nocc_b > nmo:
-            raise RuntimeError('Failed to assign beta occupancies. '
-                               f'Nocc_b ({nocc_b}) > Nmo ({nmo})')
-        fermi_b = mo_energy[nocc_b-1]
+        mo_energy_b = np.sort(mo_energy_kpts[1].ravel())
+        nmo = mo_energy_b.size
+        fermi_b = mo_energy_b[nocc_b-1]
     else:
         fermi_b = -np.inf
     fermi = np.array([fermi_a, fermi_b])
     mo_occ_kpts = np.zeros_like(mo_energy_kpts)
     mo_occ_kpts[mo_energy_kpts <= fermi[:,None,None]] = 1
 
-    if nocc_a < len(mo_energy):
-        logger.info(mf, 'alpha HOMO = %.12g  LUMO = %.12g', fermi_a, mo_energy[nocc_a])
-    else:
-        logger.info(mf, 'alpha HOMO = %.12g  (no LUMO because of small basis) ', fermi_a)
-    if 0 < nocc_b < len(mo_energy):
-        logger.info(mf, 'beta HOMO = %.12g  LUMO = %.12g', fermi_b, mo_energy[nocc_b])
-    elif 0 < nocc_b:
-        logger.info(mf, 'beta HOMO = %.12g  (no LUMO because of small basis) ', fermi_b)
+    if nocc_a < nmo and nocc_b < nmo:
+        homo = homo_a = fermi_a
+        homo_b = None
+        if nocc_b > 0:
+            homo = max(homo, fermi_b)
+        lumo = lumo_b = mo_energy_b[nocc_b]
+        lumo_a = None
+        if nocc_a < nmo:
+            lumo_a = mo_energy_a[nocc_a]
+            lumo = min(lumo, lumo_a)
+        gap = (lumo - homo) * nist.HARTREE2EV
+        mf.scf_summary['gap'] = gap
+
+        if lumo_a is not None:
+            logger.info(mf, 'alpha HOMO = %.12g  LUMO = %.12g', homo_a, lumo_a)
+        else:
+            logger.info(mf, 'alpha HOMO = %.12g  (no LUMO because of small basis) ', homo_a)
+        if homo_b is not None:
+            logger.info(mf, 'beta HOMO = %.12g  LUMO = %.12g', homo_b, lumo_b)
+        else:
+            logger.info(mf, 'beta               LUMO = %.12g', lumo_b)
+        if homo+1e-3 > lumo:
+            logger.warn(mf, 'HOMO %.15g >= LUMO %.15g', homo, lumo)
+        else:
+            logger.info(mf, '  HOMO = %.12g  LUMO = %.12g  gap/eV = %.5f',
+                        homo, lumo, gap)
 
     if mf.verbose >= logger.DEBUG:
-        np.set_printoptions(threshold=len(mo_energy))
+        np.set_printoptions(threshold=nmo)
         logger.debug(mf, '     k-point                  alpha mo_energy')
         for k,kpt in enumerate(mf.cell.get_scaled_kpts(mf.kpts)):
             if (np.count_nonzero(mo_occ_kpts[0][k]) > 0 and
