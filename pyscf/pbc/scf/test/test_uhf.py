@@ -83,6 +83,7 @@ class KnownValues(unittest.TestCase):
         mf = pscf.KUHF(cell, [k], exxdiv='vcut_sph')
         mf.max_cycle = 1
         mf.diis = None
+        mf.chkfile = lib.NamedTemporaryFile().name
         e1 = mf.kernel()
         self.assertAlmostEqual(e1, -3.4070772194665477, 7)
 

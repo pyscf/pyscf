@@ -82,6 +82,7 @@ class KnownValues(unittest.TestCase):
         mf.init_guess = 'hcore'
         mf.max_cycle = 1
         mf.diis = None
+        mf.chkfile = lib.NamedTemporaryFile().name
         e1 = mf.kernel()
         self.assertAlmostEqual(e1, -3.4376090968645068, 7)
 

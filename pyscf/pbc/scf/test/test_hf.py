@@ -154,6 +154,7 @@ class KnownValues(unittest.TestCase):
         mf = pbchf.RHF(cell, k, exxdiv='vcut_sph')
         mf.max_cycle = 1
         mf.diis = None
+        mf.chkfile = lib.NamedTemporaryFile().name
         e1 = mf.kernel()
         self.assertAlmostEqual(e1, -4.132445328608581, 7)
 

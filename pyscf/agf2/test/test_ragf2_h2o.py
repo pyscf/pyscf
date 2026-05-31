@@ -29,6 +29,7 @@ class KnownValues(unittest.TestCase):
         self.mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='cc-pvdz', verbose=0)
         self.mf = scf.RHF(self.mol)
         self.mf.conv_tol = 1e-12
+        self.mf.chkfile = lib.NamedTemporaryFile().name
         self.mf.run()
         self.gf2 = agf2.RAGF2(self.mf)
         self.gf2.conv_tol = 1e-7

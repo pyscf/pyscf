@@ -59,6 +59,7 @@ def get_water(functional='tpbe', basis='6-31g'):
     mc = mcpdft.CASSCF(mf, functional, 4, 4, grids_level=1)
     # mc.chk_ci = True
     mc = mc.multi_state_mix([solver1, solver2], weights, "lin")
+    mc.chkfile = lib.NamedTemporaryFile().name
     mc.run()
     return mc
 
@@ -83,6 +84,7 @@ def get_water_triplet(functional='tPBE', basis="6-31G"):
     mc = mcpdft.CASSCF(mf, functional, 4, 4, grids_level=1)
     # mc.chk_ci = True
     mc = mc.multi_state_mix([solver1, solver2], weights, "lin")
+    mc.chkfile = lib.NamedTemporaryFile().name
     mc.run()
     return mc
 

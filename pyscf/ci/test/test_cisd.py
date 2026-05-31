@@ -331,6 +331,7 @@ class KnownValues(unittest.TestCase):
         H   0.   -0.757   0.587
         H   0.   0.757    0.587''', basis='631g')
         mf = scf.RHF(mol).run()
+        mf.chkfile = lib.NamedTemporaryFile().name
         ci_scanner = ci.CISD(mf).as_scanner()
         ci_scanner(mol)
         ci_scanner.nmo = mf.mo_energy.size

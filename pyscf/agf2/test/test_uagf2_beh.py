@@ -28,6 +28,7 @@ class KnownValues(unittest.TestCase):
         self.mol = gto.M(atom='Be 0 0 0; H 0 0 1', basis='cc-pvdz', spin=1, verbose=0)
         self.mf = scf.UHF(self.mol)
         self.mf.conv_tol = 1e-12
+        self.mf.chkfile = lib.NamedTemporaryFile().name
         self.mf.run()
         self.gf2 = agf2.UAGF2(self.mf)
         self.gf2.conv_tol = 1e-7
@@ -72,6 +73,7 @@ class KnownValues(unittest.TestCase):
         gf2 = agf2.UAGF2(self.mf)
         gf2.max_memory = 1
         gf2.conv_tol = 1e-7
+        gf2.chkfile = lib.NamedTemporaryFile().name
         gf2.run()
         e_ip, v_ip = self.gf2.ipagf2(nroots=1)
         e_ea, v_ea = self.gf2.eaagf2(nroots=1)

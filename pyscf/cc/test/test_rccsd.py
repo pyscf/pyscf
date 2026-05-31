@@ -43,6 +43,7 @@ def setUpModule():
     mol.build()
     mf = scf.RHF(mol)
     mf.conv_tol_grad = 1e-8
+    mf.chkfile = lib.NamedTemporaryFile().name
     mf.kernel()
 
     mycc = rccsd.RCCSD(mf)

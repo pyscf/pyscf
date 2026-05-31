@@ -36,6 +36,7 @@ def setUpModule():
     )
     m = scf.RHF(mol)
     m.conv_tol = 1e-10
+    m.chkfile = lib.NamedTemporaryFile().name
     m.scf()
     mc0 = mcscf.CASSCF(m, 4, 4).run()
 
@@ -50,6 +51,7 @@ def setUpModule():
     )
     msym = scf.RHF(molsym)
     msym.conv_tol = 1e-10
+    msym.chkfile = lib.NamedTemporaryFile().name
     msym.scf()
 
 def tearDownModule():

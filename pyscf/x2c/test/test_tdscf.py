@@ -39,7 +39,7 @@ def setUpModule():
     mol.spin = 1
     mol.build()
 
-    mf_lda = dft.UKS(mol).set(xc='lda,', conv_tol=1e-12).newton().run()
+    mf_lda = dft.UKS(mol).set(xc='lda,', conv_tol=1e-12, chkfile=lib.NamedTemporaryFile().name).newton().run()
 
 def tearDownModule():
     global mol, mf_lda

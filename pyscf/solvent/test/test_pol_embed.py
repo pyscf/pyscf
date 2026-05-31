@@ -293,7 +293,7 @@ class TestPolEmbed(unittest.TestCase):
         self.assertAlmostEqual(mf.e_tot, -168.147494986446, 8)
 
     def test_as_scanner(self):
-        mf = mol.RHF()
+        mf = mol.RHF(chkfile=lib.NamedTemporaryFile().name)
         mf_scanner = solvent.PE(mf, potfile).as_scanner()
         mf_scanner(mol)
         self.assertAlmostEqual(mf_scanner.with_solvent.e, 0.00020182314249546455, 9)

@@ -101,6 +101,7 @@ class KnownValues(unittest.TestCase):
         kpts = cell.make_kpts(nk)
         kmf = khf.KRHF(cell, kpts, exxdiv='vcut_sph')
         kmf.conv_tol = 1e-9
+        kmf.chkfile = lib.NamedTemporaryFile().name
         ekpt = kmf.scf()
         dm1 = kmf.make_rdm1()
         dm2 = kmf.from_chk(kmf.chkfile)

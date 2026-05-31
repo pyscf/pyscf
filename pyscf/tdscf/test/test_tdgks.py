@@ -47,14 +47,14 @@ H     0.   0.7   0.7'''
     mol.spin = 1
     mol.build()
 
-    mf_lda = mol.GKS().set(xc='lda,', conv_tol=1e-12).newton().run()
+    mf_lda = mol.GKS().set(xc='lda,', conv_tol=1e-12, chkfile=lib.NamedTemporaryFile().name).newton().run()
     mcol_lda = None
     if mcfun is not None:
-        mcol_lda = mol.GKS().set(xc='lda,', conv_tol=1e-12,
+        mcol_lda = mol.GKS().set(xc='lda,', conv_tol=1e-12, chkfile=lib.NamedTemporaryFile().name,
                                   collinear='mcol')
         mcol_lda._numint.spin_samples = 6
         mcol_lda = mcol_lda.run()
-    mf_bp86 = molsym.GKS().set(xc='bp86', conv_tol=1e-12).run()
+    mf_bp86 = molsym.GKS().set(xc='bp86', conv_tol=1e-12, chkfile=lib.NamedTemporaryFile().name).run()
 
 def tearDownModule():
     global mol, molsym, mf_bp86, mf_lda, mcol_lda
