@@ -15,8 +15,8 @@ include pyscf/geomopt/log.ini
 include pyscf/gto/basis/bse_meta.json
 
 # CP2K basis set
-include pyscf/lib/pbc/gto/basis/*BASIS*
-include pyscf/lib/pbc/gto/pseudo/*POTENTIAL*
+include pyscf/pbc/gto/basis/*BASIS*
+include pyscf/pbc/gto/pseudo/*POTENTIAL*
 
 # source code
 recursive-include pyscf/lib *.c *.h CMakeLists.txt
