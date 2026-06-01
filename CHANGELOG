@@ -1,3 +1,12 @@
+PySCF 2.13.1 (2026-06-01)
+-------------------------
+* Fixes
+  - Missing CP2K basis set data in wheel distributions
+  - Small-rotor error.
+  - Corrected SG1 grid radii handling for ghost atoms.
+  - Fixed ECP loading to correctly fall back to Basis Set Exchange when local data is unavailable.
+
+
 PySCF 2.13.0 (2026-04-20)
 -------------------------
 * Added
