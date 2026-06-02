@@ -251,7 +251,13 @@ class DIIS:
         g = numpy.zeros(nd+1, h.dtype)
         g[0] = 1
 
-        w, v = scipy.linalg.eigh(h)
+        # eig works better when the errors have similar norm
+        print('diag h {}'.format(numpy.diag(h)))
+        normlz = numpy.power(numpy.asarray([hd if hd!=0.0 else 1.0 for hd in numpy.diag(h)]), -0.5)
+        hnorm = numpy.dot(numpy.diag(normlz), numpy.dot(h, numpy.diag(normlz)))
+        w, vnorm = scipy.linalg.eigh(hnorm)
+        v = numpy.dot(numpy.diag(normlz), vnorm)
+
         if numpy.any(abs(w)<1e-14):
             logger.debug(self, 'Linear dependence found in DIIS error vectors.')
             idx = abs(w)>1e-14
