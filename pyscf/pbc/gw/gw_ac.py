@@ -185,6 +185,10 @@ class GWAC(GWAC_mol):
 
     def get_sigma_exchange(self, mo_coeff):
         """Get exchange self-energy (EXX).
+        The exchange self-energy is calculated via PySCF functions with exxdiv=None,
+        then the finite-size correction for GW exchange self-energy is added if self.fc is True.
+        The finite-size correction is defined similar to k-point GW method,
+        as in equation 46 in doi.org/10.1021/acs.jctc.0c00704
 
         Parameters
         ----------
