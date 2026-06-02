@@ -9,7 +9,7 @@ Python-based Simulations of Chemistry Framework
 
 2026-06-01
 
-* [Stable release 2.13.0](https://github.com/pyscf/pyscf/releases/tag/v2.13.1)
+* [Stable release 2.13.1](https://github.com/pyscf/pyscf/releases/tag/v2.13.1)
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org)
 * [Installation](#installation)
