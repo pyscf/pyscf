@@ -35,6 +35,8 @@ FT_C = getattr(__config__, 'mcpdft_otfnal_ftransfnal_C', -85.38149682)
 OT_ALIAS = {
     'MC23': 'tMC23',
     'MC25': 'tMC25',
+    'COF26': 'tCOF26',
+    'MC26': 'tMC26',
 }
 OT_HYB_ALIAS = {'PBE0' : '0.25*HF + 0.75*PBE, 0.25*HF + 0.75*PBE',
                 }
@@ -144,11 +146,16 @@ def _get_registered_ot_functional(xc_code, mol):
         xc_code: str
             The name of the on-top functional to be registered.
     '''
-    if (xc_code.upper() not in REG_OT_FUNCTIONALS) and (xc_code.upper() in OT_PRESET):
-        preset = OT_PRESET[xc_code.upper()]
+    xc_code = xc_code.upper()
+    if (xc_code in ('COF26', 'MC26')) and (xc_code not in OT_PRESET):
+        from pyscf.mcpdft import mc26
+        OT_PRESET[xc_code] = mc26.build_preset(xc_code)
+
+    if (xc_code not in REG_OT_FUNCTIONALS) and (xc_code in OT_PRESET):
+        preset = OT_PRESET[xc_code]
         register_otfnal(xc_code, preset)
         logger.info(mol, 'Registered the on-top functional: %s', xc_code)
-    return xc_code.upper()
+    return xc_code
 
 def energy_ot (ot, casdm1s, casdm2, mo_coeff, ncore, max_memory=2000, hermi=1):
     '''Compute the on-top energy - the last term in

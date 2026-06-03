@@ -18,6 +18,7 @@ from pyscf.dft.libxc import XC_KEYS, XC_ALIAS, hybrid_coeff, rsh_coeff
 from pyscf.dft.libxc import parse_xc, is_nlc, needs_laplacian
 from pyscf import mcpdft
 from pyscf.mcpdft.otfnal import make_hybrid_fnal
+import numpy as np
 import unittest
 from itertools import product
 
@@ -100,11 +101,38 @@ class KnownValues(unittest.TestCase):
     def test_null_fnal (self):
         _test_hybrid_and_decomp (self, '')
 
+    def test_mc26_presets(self):
+        mol = h2.mol
+        rho = [[[0.2, 0.3],
+                [0.01, 0.02],
+                [0.02, 0.03],
+                [0.03, 0.04],
+                [0.04, 0.05]],
+               [[0.15, 0.25],
+                [0.02, 0.03],
+                [0.03, 0.04],
+                [0.04, 0.05],
+                [0.03, 0.04]]]
+        try:
+            for xc_code, hyb in (('COF26', 0.3208952612412691),
+                                 ('MC26', 0.278090700064691)):
+                with self.subTest(xc_code=xc_code):
+                    ot = mcpdft.otfnal.get_transfnal(mol, xc_code)
+                    self.assertEqual(ot.otxc, 't' + xc_code)
+                    self.assertEqual(ot.xctype, 'MGGA')
+                    self.assertAlmostEqual(
+                        ot._numint.rsh_and_hybrid_coeff(ot.otxc)[2][0],
+                        hyb, 15)
+                    exc = ot._numint.eval_xc(ot.otxc, rho, spin=1, deriv=0)[0]
+                    self.assertEqual(exc.size, 2)
+                    self.assertTrue(np.all(np.isfinite(exc)))
+        finally:
+            mcpdft.otfnal.unregister_otfnal('COF26')
+            mcpdft.otfnal.unregister_otfnal('MC26')
+
 if __name__ == "__main__":
     print("Full Tests for MC-PDFT on-top functional class API")
     unittest.main()
-
-
 
 
 

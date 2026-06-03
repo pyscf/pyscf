@@ -1,0 +1,237 @@
+#!/usr/bin/env python
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+'''
+COF26 and MC26 MC-PDFT on-top functional presets.
+
+The fitted parameter vectors are stored here as LibXC external parameters for
+M06-L and MN15-L. The M06-L correlation functional has five non-linear
+external parameters; they are kept at the standard LibXC values.
+'''
+
+import numpy as np
+
+M06L_X_ID = 203
+M06L_C_ID = 233
+MN15L_X_ID = 260
+MN15L_C_ID = 261
+
+_M06_MN15_XC_BASE = (
+    'MGGA_X_M06_L + MGGA_X_MN15_L, '
+    'MGGA_C_M06_L + MGGA_C_MN15_L'
+)
+
+_M06L_C_LINEAR_INDICES = np.array([
+    *range(4, 9),
+    *range(9, 14),
+    *range(14, 20),
+    *range(20, 26),
+], dtype=int)
+
+_M06L_C_NONLINEAR_DEFAULTS = {
+    0: 0.06,
+    1: 0.0031,
+    2: 0.00515088,
+    3: 0.00304966,
+    26: 1e-10,
+}
+
+COF26_A0 = 0.3208952612412691
+COF26_LINEAR_KERNEL = np.array([
+    3.6295828040839164e+00, -8.7342184852617444e-01,
+    -1.7481508116171234e+00, -2.8861297241150035e+00,
+    2.2923458690969234e+00, -2.7615671248443228e+00,
+    -5.0612406399375756e+00, -8.2750767387643620e-01,
+    -1.2687729597794246e+00, 1.6494389742267404e+00,
+    3.0206204628341751e+00, -1.3045393617636420e+00,
+    -2.0290406090099791e+00, -5.0269818588938295e-02,
+    3.5222575092813353e-02, 3.7732820547511391e-05,
+    -1.7216916111543551e-04, 0.0000000000000000e+00,
+    -4.1730803288358000e+00, 6.7176180190284773e+00,
+    -2.4653534800813999e+00, 1.6537512115792724e-01,
+    1.4174093845963274e+00, 2.4521537864782536e-01,
+    -1.6923903730313747e+00, -3.0194892624489986e+00,
+    -1.1714557059911295e+00, 3.8486361611867723e+00,
+    -6.0945104989683196e+00, -8.4576249150565986e-04,
+    -8.0220623519375245e-01, -1.1224310851706041e-04,
+    1.0822050295891493e-02, 0.0000000000000000e+00,
+    6.3572219904928395e-01, -3.6759152092850980e-02,
+    9.4673482384342381e-02, 7.3055061467144173e-04,
+    -1.6657618977217563e-03, 0.0000000000000000e+00,
+    3.2066805228503675e-01, -1.8316655910737716e-02,
+    1.5774747117660721e+00, 4.7431218819624528e+00,
+    -2.7978403249741852e+00, 4.6181845023066641e+00,
+    1.7728376307236107e+00, -1.4095713144608859e+00,
+    -2.0818151711034281e+00, -6.3782949360787704e+00,
+    4.8264501134781339e+00, 1.5373491818483449e+00,
+    -3.8388656031205479e+00, -2.3652614908541416e+00,
+    1.0752781276107928e+00, -5.2316721287830932e+00,
+    2.6862383109907406e+00, -2.5651592702375186e+00,
+    -1.4217737136837527e+00, 3.9072495125176423e+00,
+    -4.6142667539744551e+00, -3.2394200838994496e+00,
+    3.6724065158458687e+00, 5.4302625704602088e+00,
+    1.3661863196774258e+00, -6.4127583044549166e+00,
+    3.9132981828957534e+00, 1.6717944991727778e+00,
+    -1.5327384586630146e+00, -3.9195377605873860e+00,
+    3.8409267824585375e-01, -5.7786554398999819e+00,
+    1.0321078063255984e+01, 8.7525506028293276e-01,
+    5.5418974929198681e+00, -2.3568631055699485e+00,
+    -5.2991779435071900e+00, -8.6246921652006800e-02,
+    4.0122149627045420e+00, -8.0681481382874249e+00,
+    9.5326877108995611e-01, -1.4874880062016240e+00,
+    6.1468290567325186e+00, -6.9988024753560820e+00,
+    2.6611090022518020e+00, -2.5046878447382408e+00,
+    7.5017808322558945e+00, -1.1489267291001537e+00,
+    3.7106116196639620e+00, -4.9163131250138958e-01,
+    2.3264062461798551e+00, -1.2998768715390485e+00,
+    4.5617230570501137e+00, -4.2759025452160477e+00,
+    -7.6485354613123613e-01, -5.2880931058776453e+00,
+    3.1613968938668542e+00, -3.5570671789630834e+00,
+    4.5410491624422189e+00, -4.6117923388450794e+00,
+    4.8030425696052044e+00, -3.6009792370298106e+00,
+    2.7734714859632370e+00, -1.3053758805703795e+00,
+])
+
+MC26_A0 = 0.278090700064691
+MC26_LINEAR_KERNEL = np.array([
+    1.2793598175048828e+01, 1.0464407205581665e+00,
+    -1.1021970510482788e+00, -1.4680061340332031e+00,
+    1.0868027210235596e+00, 1.1653898239135742e+01,
+    -3.4057228565216064e+00, -2.0206926345825195e+01,
+    -1.7893168926239014e+00, 1.4406887054443359e+01,
+    1.7784547805786133e+00, -3.9581349492073059e-01,
+    -1.2139795303344727e+01, -6.0597252100706100e-02,
+    1.6891608014702797e-02, -7.1535338065586984e-05,
+    1.1998059926554561e-04, 0.0000000000000000e+00,
+    -6.1781471967697144e-01, 8.7920103073120117e+00,
+    -8.6559629440307617e+00, 1.5397195816040039e+01,
+    -9.6856250762939453e+00, 2.9046888351440430e+00,
+    -9.8271059989929199e-01, 1.7047909498214722e+00,
+    -1.9396733045578003e+00, -5.8756942749023438e+00,
+    1.1270228624343872e+00, -2.9264968633651733e-01,
+    1.0097602754831314e-01, 2.4184023495763540e-03,
+    -4.9975846195593476e-04, 0.0000000000000000e+00,
+    -1.0493528842926025e+00, -3.4804373979568481e-02,
+    1.6264947131276131e-02, 7.8431163274217397e-05,
+    4.0581694338470697e-04, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+    0.0000000000000000e+00, 0.0000000000000000e+00,
+])
+
+_FUNCTIONAL_PARAMS = {
+    'COF26': (COF26_A0, COF26_LINEAR_KERNEL),
+    'MC26': (MC26_A0, MC26_LINEAR_KERNEL),
+}
+
+
+def _expand_linear_kernel(linear_kernel):
+    linear_kernel = np.asarray(linear_kernel, dtype=float).reshape(-1)
+    if linear_kernel.size != 104:
+        raise ValueError('expected 104 COF26/MC26 linear parameters, '
+                         f'got {linear_kernel.size}')
+
+    m06l_c = np.zeros(27, dtype=float)
+    for index, value in _M06L_C_NONLINEAR_DEFAULTS.items():
+        m06l_c[index] = value
+    m06l_c[_M06L_C_LINEAR_INDICES] = linear_kernel[18:40]
+
+    return {
+        M06L_X_ID: np.array(linear_kernel[:18], copy=True),
+        M06L_C_ID: m06l_c,
+        MN15L_X_ID: np.array(linear_kernel[40:80], copy=True),
+        MN15L_C_ID: np.array(linear_kernel[80:104], copy=True),
+    }
+
+
+def build_preset(functional_name):
+    '''Build the LibXC custom-functional preset for COF26 or MC26.'''
+    name = functional_name.upper()
+    try:
+        a0, linear_kernel = _FUNCTIONAL_PARAMS[name]
+    except KeyError as err:
+        raise KeyError(f'Unknown MC-PDFT on-top functional {functional_name}') from err
+
+    return {
+        'xc_base': _M06_MN15_XC_BASE,
+        'ext_params': _expand_linear_kernel(linear_kernel),
+        'hyb': (a0, a0, 0.0),
+        'facs': (1.0, 1.0, 1.0, 1.0),
+    }
+
+
+def build_cof26_preset():
+    '''Build the LibXC custom-functional preset for COF26.'''
+    return build_preset('COF26')
+
+
+def build_mc26_preset():
+    '''Build the LibXC custom-functional preset for MC26.'''
+    return build_preset('MC26')
+
+
+def register_otfnal(functional_name, replace=True):
+    '''Register COF26 or MC26 in the current Python process.'''
+    from pyscf.mcpdft import otfnal
+
+    name = functional_name.upper()
+    preset = build_preset(name)
+    if replace and name in otfnal.REG_OT_FUNCTIONALS:
+        otfnal.unregister_otfnal(name)
+
+    otfnal.OT_PRESET[name] = preset
+    otfnal.OT_ALIAS[name] = f't{name}'
+    otfnal.register_otfnal(name, preset)
+    return preset
+
+
+def unregister_otfnal(functional_name):
+    '''Remove a registered COF26 or MC26 on-top functional.'''
+    from pyscf.mcpdft import otfnal
+
+    name = functional_name.upper()
+    otfnal.unregister_otfnal(name)
+    otfnal.OT_PRESET.pop(name, None)
+    otfnal.OT_ALIAS.pop(name, None)
