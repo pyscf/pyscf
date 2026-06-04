@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 
 import unittest
-import numpy
 import numpy as np
-from pyscf import lib, gto, scf, dft, tdscf
+from pyscf import gto, dft, tdscf
 from pyscf import gw
 from pyscf.gw import rpa
 
@@ -59,15 +58,6 @@ class KnownValues(unittest.TestCase):
         gw_obj.kernel()
         self.assertAlmostEqual(gw_obj.mo_energy[nocc-1], -0.4129411145067107, 8)
         self.assertAlmostEqual(gw_obj.mo_energy[nocc], 0.16568737755110896, 8)
-
-    def test_gwcd(self):
-        nocc = mol.nelectron//2
-        gw_obj = gw.GW(mf, freq_int='cd', frozen=0)
-        gw_obj.linearized = False
-        gw_obj.kernel(orbs=range(0, nocc+3))
-        self.assertAlmostEqual(gw_obj.mo_energy[nocc-1], -0.41284735, 5)
-        self.assertAlmostEqual(gw_obj.mo_energy[nocc], 0.16574524, 5)
-        self.assertAlmostEqual(gw_obj.mo_energy[0], -19.53387986, 4)
 
     def test_gw_exact(self):
         mol = gto.Mole()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,372 +14,381 @@
 # limitations under the License.
 #
 # Author: Tianyu Zhu <zhutianyu1991@gmail.com>
+# Author: Christopher Hillenbrand <chillenbrand15@gmail.com>
 #
 
-'''
-Spin-restricted G0W0 approximation with contour deformation
-
-This implementation has the same scaling (N^4) as GW-AC, more robust but slower.
+"""
+Spin-restricted G0W0 method based the contour deformation scheme.
+The scaling N^4 for valence and N^5 for core states.
 GW-CD is particularly recommended for accurate core and high-energy states.
 
-Method:
-    See T. Zhu and G.K.-L. Chan, arxiv:2007.03148 (2020) for details
-    Compute Sigma directly on real axis with density fitting
-    through a contour deformation method
-
-Useful References:
+References:
+    T. Zhu and G.K.-L. Chan, J. Chem. Theory. Comput. 17, 727-741 (2021)
     J. Chem. Theory Comput. 14, 4856-4869 (2018)
-'''
+"""
 
-from functools import reduce
-import numpy
+import time
 import numpy as np
 import h5py
-from scipy.optimize import newton, least_squares
+from scipy.optimize import newton
+import scipy.linalg as sla
 
 from pyscf import lib
-from pyscf.lib import logger
-from pyscf.ao2mo import _ao2mo
-from pyscf import df, scf
-from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask
-from pyscf import __config__
+from pyscf.lib import logger, temporary_env
+from pyscf.gw.gw_ac import GWAC, get_rho_response, set_frozen_orbs, _mo_energy_without_core, _mo_without_core
+from pyscf.gw.utils.ac_grid import _get_scaled_legendre_roots
+from pyscf.gw.utils.gw_np_helper import mkslice, get_id_minus_pi, get_id_minus_pi_inv_minus_id
+
 
 einsum = lib.einsum
 
-def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
-           nw=None, vhf_df=False, verbose=logger.NOTE):
-    '''GW-corrected quasiparticle orbital energies
 
-    Returns:
-        A list :  converged, mo_energy, mo_coeff
-    '''
+def kernel(gw, load_chk=None):
+    """GWCD kernel.
+
+    Parameters
+    ----------
+    gw : GWCD
+        instance of GWCD class
+    load_chk : str, optional
+        name of chkfile to load
+
+    Returns
+    -------
+    tuple(bool, ndarray, ndarray)
+        conv : bool
+            True if converged
+        conv_inds : ndarray
+            conv_inds[p] = 1 if quasiparticle energy for orbital p is converged
+        mo_energy : ndarray
+            quasiparticle energies
+    """
+    # local variables for convenience
     mf = gw._scf
-    assert gw.frozen is None or gw.nmo == gw.mo_occ.size, \
-            'frozen orbitals not supported'
-
-    if Lpq is None:
-        Lpq = gw.ao2mo(mo_coeff)
-    if orbs is None:
-        orbs = range(gw.nmo)
-
-    # v_xc
-    v_mf = mf.get_veff() - mf.get_j()
-    v_mf = reduce(numpy.dot, (mo_coeff.T, v_mf, mo_coeff))
-
     nocc = gw.nocc
+
+    # set frozen orbitals
+    set_frozen_orbs(gw)
+    orbs = gw.orbs
+    orbs_frz = gw.orbs_frz
+
+    # get non-frozen quantities
+    mo_energy_frz = _mo_energy_without_core(gw, gw.mo_energy)
+    mo_coeff_frz = _mo_without_core(gw, gw.mo_coeff)
+
+    if gw.Lpq is None and (not gw.outcore):
+        with temporary_env(gw.with_df, verbose=0), temporary_env(gw.mol, verbose=0):
+            gw.Lpq = gw.ao2mo(mo_coeff_frz)
+    Lpq = gw.Lpq
+
     nmo = gw.nmo
+    mo_energy = np.zeros_like(gw._scf.mo_energy)
+    conv_inds = np.zeros(shape=mo_energy.shape, dtype=int)
 
-    # v_hf from DFT/HF density
-    if vhf_df: # and frozen == 0:
-        # density fitting for vk
-        vk = -einsum('Lni,Lim->nm',Lpq[:,:,:nocc],Lpq[:,:nocc,:])
+    if load_chk is not None:
+        with h5py.File(load_chk, 'r') as f:
+            g = f['gwcd']
+            mo_energy = g['mo_energy'][()]
+            conv_inds = g['conv_inds'][()]
+        if mo_energy.shape != (nmo,):
+            raise RuntimeError(f'{load_chk}: mo_energy shape mismatch')
+        if conv_inds.shape != mo_energy.shape:
+            raise RuntimeError(f'{load_chk}: conv_inds shape mismatch')
+
+    chkfile = gw.chkfile
+    if chkfile is not None:
+        with h5py.File(chkfile, 'a') as f:
+            if 'gwcd' in f:
+                del f['gwcd']
+            g = f.create_group('gwcd')
+            g.create_dataset('mo_energy', data=mo_energy)
+            g.create_dataset('conv_inds', data=conv_inds)
+
+    # mean-field exchange-correlation
+    with temporary_env(mf, verbose=0):
+        v_mf = mo_coeff_frz.T @ (mf.get_veff() - mf.get_j()) @ mo_coeff_frz
+    gw.vxc = v_mf
+
+    # exchange self-energy
+    if gw.vhf_df and gw.outcore is False:
+        # TODO: support smearing
+        vk = -einsum('Lpi,Liq->pq', Lpq[:, :, :nocc], Lpq[:, :nocc, :])
     else:
-        # exact vk without density fitting
-        dm = mf.make_rdm1()
-        rhf = scf.RHF(gw.mol)
-        vk = rhf.get_veff(gw.mol,dm) - rhf.get_j(gw.mol,dm)
-        vk = reduce(numpy.dot, (mo_coeff.T, vk, mo_coeff))
+        vk = gw.get_sigma_exchange(mo_coeff=mo_coeff_frz)
+    gw.vk = vk
 
-    # Grids for integration on imaginary axis
-    freqs,wts = _get_scaled_legendre_roots(nw)
+    # set up Fermi level
+    gw.ef = gw.get_ef(mo_energy=mf.mo_energy)
+
+    # grids for integration on imaginary axis
+    quad_freqs, quad_wts = _get_scaled_legendre_roots(gw.nw)
 
     # Compute Wmn(iw) on imaginary axis
-    logger.debug(gw, "Computing the imaginary part")
-    Wmn = get_WmnI_diag(gw, orbs, Lpq, freqs)
+    logger.debug(gw, 'Computing the imaginary part')
+    Lia = np.ascontiguousarray(gw.Lpq[:, :nocc, nocc:])
+    Wmn = get_WmnI_diag(gw, gw.orbs, gw.Lpq, Lia, quad_freqs, mo_energy_frz)
 
     conv = True
-    mo_energy = np.zeros_like(gw._scf.mo_energy)
-    for p in orbs:
-        if gw.linearized:
+    for p_in_frz, p_in_all in zip(orbs_frz, orbs):
+        if gw.qpe_linearized:
             # FIXME
-            logger.warn(gw,'linearization with CD leads to wrong quasiparticle energy')
+            logger.warn(gw, 'linearization with CD leads to wrong quasiparticle energy')
             raise NotImplementedError
-        else:
-            def quasiparticle(omega):
-                sigma = get_sigma_diag(gw, omega, p, Lpq, Wmn[:,p-orbs[0],:], freqs, wts).real
-                return omega - gw._scf.mo_energy[p] - (sigma.real + vk[p,p] - v_mf[p,p])
-            try:
-                if p < nocc:
-                    delta = -1e-2
-                else:
-                    delta = 1e-2
-                e = newton(quasiparticle, gw._scf.mo_energy[p]+delta, tol=1e-6, maxiter=50)
-                logger.debug(gw, "Computing poles for QP (orb: %s)"%(p))
-                mo_energy[p] = e
-            except RuntimeError:
-                conv = False
-    mo_coeff = gw._scf.mo_coeff
+
+        def quasiparticle(omega):
+            sigma = get_sigma_diag(
+                gw.ef, omega, p_in_frz, mo_energy_frz, gw.Lpq, Lia, Wmn[:, p_in_frz], quad_freqs, quad_wts, gw.eta
+            ).real
+            return (
+                omega - gw._scf.mo_energy[p_in_all] - (sigma.real + vk[p_in_frz, p_in_frz] - v_mf[p_in_frz, p_in_frz])
+            )
+
+        try:
+            if p_in_frz < nocc:
+                delta = -1e-2
+            else:
+                delta = 1e-2
+            e, result = newton(
+                quasiparticle,
+                gw._scf.mo_energy[p_in_frz] + delta,
+                tol=gw.qpe_tol,
+                maxiter=gw.qpe_max_iter,
+                full_output=True,
+            )
+            logger.debug(gw, f'QP energy for orb {p_in_all}: {e}')
+            logger.debug(gw, f'Number of iterations: {result.iterations}')
+            mo_energy[p_in_all] = e
+            conv_inds[p_in_all] = 1
+            if chkfile is not None:
+                with h5py.File(chkfile, 'r+') as f:
+                    g = f['gwcd']
+                    g['mo_energy'][()] = mo_energy[()]
+                    g['conv_inds'][()] = conv_inds[()]
+        except RuntimeError:
+            conv = False
 
     if gw.verbose >= logger.DEBUG:
-        numpy.set_printoptions(threshold=nmo)
+        np.set_printoptions(threshold=nmo)
         logger.debug(gw, '  GW mo_energy =\n%s', mo_energy)
-        numpy.set_printoptions(threshold=1000)
+        np.set_printoptions(threshold=1000)
 
-    return conv, mo_energy, mo_coeff
+    return conv, conv_inds, mo_energy
 
-def get_sigma_diag(gw, ep, p, Lpq, Wmn, freqs, wts):
-    '''
-    Compute self-energy on real axis using contour deformation
-    '''
-    nocc = gw.nocc
-    ef = (gw._scf.mo_energy[nocc-1] + gw._scf.mo_energy[nocc])/2.
-    sign = np.sign(ef-gw._scf.mo_energy)
-    sigmaI = get_sigmaI_diag(gw, ep, Wmn, sign, freqs, wts)
-    sigmaR = get_sigmaR_diag(gw, ep, p, ef, Lpq)
+
+def get_sigma_diag(ef, ep, p, mo_energy, Lpq, Lia, Wmn, freqs, wts, eta):
+    """Compute self-energy on real axis using contour deformation.
+
+    Parameters
+    ----------
+    ef : double
+        Fermi level
+    ep : double
+        frequency at which to evaluate self-energy
+    p : int
+        orbital index for which to compute self-energy
+    mo_energy : double 1d array
+        MO energies
+    Lpq : double 3d array
+        three-center density-fitting matrix in MO space
+    Lia : double 3d array
+        three-center density-fitting matrix in MO space, O-V block
+    Wmn : double 2d array
+        Wmn on imaginary axis, shape (nw, nmo)
+    freqs : double 1d array
+        position of imaginary frequency grids used for integration
+    wts : double 1d array
+        weights of imaginary frequency grids used for integration
+    eta : double
+        smearing parameter for poles
+
+    Returns
+    -------
+    complex
+        self-energy for orbital p at frequency ep
+    """
+    sign = np.sign(ef - mo_energy)
+
+    emo = ep - 1j * eta * sign - mo_energy
+    g0 = wts[None, :] * emo[:, None] / ((emo**2)[:, None] + (freqs**2)[None, :])
+    sigmaI = -einsum('mw,wm', g0, Wmn) / np.pi
+
+    sigmaR = get_sigmaR_diag(mo_energy, ep, p, ef, Lpq, Lia, eta)
     return sigmaI + sigmaR
 
 
-def get_rho_response(omega, mo_energy, Lpq):
-    '''
-    Compute density response function in auxiliary basis at freq iw
-    '''
-    naux, nocc, nvir = Lpq.shape
-    eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
-    eia = eia/(omega**2+eia*eia)
-    Pia = einsum('Pia,ia->Pia',Lpq,eia)
-    # Response from both spin-up and spin-down density
-    Pi = 4. * einsum('Pia,Qia->PQ',Pia,Lpq)
-    return Pi
+def get_sigmaR_diag(mo_energy, omega, orbp, ef, Lpq, Lia, eta):
+    """Compute self-energy for poles inside contour
+    (more and more expensive away from Fermi surface).
 
-def get_WmnI_diag(gw, orbs, Lpq, freqs):
-    '''
-    Compute W_mn(iw) on imarginary axis grids
-    Return:
-        Wmn: (Nmo, Norbs, Nw)
-    '''
-    mo_energy = gw._scf.mo_energy
-    nocc = gw.nocc
-    nmo = gw.nmo
-    nw = len(freqs)
-    naux = Lpq.shape[0]
+    Parameters
+    ----------
+    mo_energy : double 1d array
+        MO energies
+    omega : double
+        frequency at which to evaluate self-energy
+    orbp : int
+        orbital index for which to compute self-energy
+    ef : double
+        Fermi level
+    Lpq : double 3d array
+        three-center density-fitting matrix in MO space
+    Lia : double 3d array
+        three-center density-fitting matrix in MO space, O-V block
+    eta : double
+        smearing parameter for poles
 
-    norbs = len(orbs)
-    Wmn = np.zeros((nmo,norbs,nw))
-    for w in range(nw):
-        Pi = get_rho_response(freqs[w], mo_energy, Lpq[:,:nocc,nocc:])
-        Pi_inv = np.linalg.inv(np.eye(naux)-Pi)-np.eye(naux)
-        Qnm = einsum('Pnm,PQ->Qnm',Lpq[:,orbs,:],Pi_inv)
-        Wmn[:,:,w] = einsum('Qnm,Qmn->mn',Qnm,Lpq[:,:,orbs])
-
-    return Wmn
-
-def get_sigmaI_diag(gw, omega, Wmn, sign, freqs, wts):
-    '''
-    Compute self-energy by integrating on imaginary axis
-    '''
-    mo_energy = gw._scf.mo_energy
-    emo = omega - 1j*gw.eta*sign - mo_energy
-    g0 = wts[None,:]*emo[:,None] / ((emo**2)[:,None]+(freqs**2)[None,:])
-    sigma = -einsum('mw,mw',g0,Wmn)/np.pi
-
-    return sigma
-
-def get_rho_response_R(gw, omega, Lpq):
-    '''
-    Compute density response function in auxiliary basis at poles
-    '''
-    naux, nocc, nvir = Lpq.shape
-    mo_energy = gw._scf.mo_energy
-    eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
-    eia = 1./(omega+eia+2j*gw.eta) + 1./(-omega+eia)
-    Pia = einsum('Pia,ia->Pia',Lpq,eia)
-    # Response from both spin-up and spin-down density
-    Pi = 2. * einsum('Pia,Qia->PQ',Pia,Lpq)
-    return Pi
-
-def get_sigmaR_diag(gw, omega, orbp, ef, Lpq):
-    '''
-    Compute self-energy for poles inside contour
-    (more and more expensive away from Fermi surface)
-    '''
-    mo_energy = gw._scf.mo_energy
-    nocc = gw.nocc
-    naux = Lpq.shape[0]
-
+    Returns
+    -------
+    complex
+        self-energy for orbital orbp at frequency omega from poles inside contour
+    """
     if omega > ef:
         fm = 1.0
-        idx = np.where((mo_energy<omega) & (mo_energy>ef))[0]
+        idx = np.where((mo_energy < omega) & (mo_energy > ef))[0]
     else:
         fm = -1.0
-        idx = np.where((mo_energy>omega) & (mo_energy<ef))[0]
+        idx = np.where((mo_energy > omega) & (mo_energy < ef))[0]
+
+    nocc = Lia.shape[1]
+    eia = mo_energy[:nocc, None] - mo_energy[None, nocc:]
 
     sigmaR = 0j
     if len(idx) > 0:
         for m in idx:
             em = mo_energy[m] - omega
-            Pi = get_rho_response_R(gw, abs(em), Lpq[:,:nocc,nocc:])
-            Pi_inv = np.linalg.inv(np.eye(naux)-Pi)-np.eye(naux)
-            sigmaR += fm * np.dot(np.dot(Lpq[:,orbp,m],Pi_inv), Lpq[:,m,orbp])
-
+            Pi = get_rho_response_R(eia, abs(em), Lia, eta)
+            Pi = get_id_minus_pi(Pi)
+            vec = sla.solve(Pi.T, Lpq[:, orbp, m], check_finite=False, overwrite_a=True, assume_a='sym')
+            vec -= Lpq[:, orbp, m]
+            sigmaR += fm * np.dot(Lpq[:, m, orbp], vec)
     return sigmaR
 
-def _get_scaled_legendre_roots(nw):
-    """
-    Scale nw Legendre roots, which lie in the
-    interval [-1, 1], so that they lie in [0, inf)
-    Ref: www.cond-mat.de/events/correl19/manuscripts/ren.pdf
 
-    Returns:
-        freqs : 1D ndarray
-        wts : 1D ndarray
-    """
-    freqs, wts = np.polynomial.legendre.leggauss(nw)
-    x0 = 0.5
-    freqs_new = x0*(1.+freqs)/(1.-freqs)
-    wts = wts*2.*x0/(1.-freqs)**2
-    return freqs_new, wts
+def get_WmnI_diag(gw, orbs, Lpq, Lia, quad_freqs, mo_energy):
+    """Calculate Wmn on imaginary axis.
 
-def _get_clenshaw_curtis_roots(nw):
+    Parameters
+    ----------
+    gw : GWCD
+        GWCD object
+    orbs : list
+        list of orbital indexes
+    Lpq : double 3d array
+        three-center density-fitting matrix in MO space
+    Lia : double 3d array
+        three-center density-fitting matrix in MO space, O-V block
+    quad_freqs : double 1d array
+        position of imaginary frequency grids used for integration
+    mo_energy : double 1d array
+        MO energies
+
+    Returns
+    -------
+    complex 3d array
+        Wmn on imaginary axis, shape (nw, norbs, nmo)
     """
-    Clenshaw-Curtis quadrature on [0,inf)
-    Ref: J. Chem. Phys. 132, 234114 (2010)
-    Returns:
-        freqs : 1D ndarray
-        wts : 1D ndarray
-    """
-    freqs = np.zeros(nw)
-    wts = np.zeros(nw)
-    a = 0.2
+    naux, nmo, _ = Lpq.shape
+    nw = len(quad_freqs)
+    l_slice = Lpq[:, mkslice(orbs), :].reshape(naux, -1)
+
+    naux_ones = np.ones((1, naux))
+
+    norbs = len(orbs)
+    Wmn = np.empty((nw, norbs, nmo))
+    Pi = np.empty((naux, naux))
+
+    logger.info(gw, f'Computing Wmn on imaginary axis ({nw} points)')
+
     for w in range(nw):
-        t = (w+1.0)/nw * np.pi/2.
-        freqs[w] = a / np.tan(t)
-        if w != nw-1:
-            wts[w] = a*np.pi/2./nw/(np.sin(t)**2)
-        else:
-            wts[w] = a*np.pi/4./nw/(np.sin(t)**2)
-    return freqs[::-1], wts[::-1]
+        if gw.verbose >= 4:
+            gw.stdout.write(f'{w:4d} ')
+            if w % 12 == 11:
+                gw.stdout.write('\n')
+            gw.stdout.flush()
+
+        #  Pi_inv = (I - Pi)^-1 - I.
+        Pi = get_rho_response(quad_freqs[w], mo_energy, Lia, out=Pi)
+        Pi_inv = get_id_minus_pi_inv_minus_id(Pi, overwrite_input=True)
+
+        # These lines compute
+        # Wmn = einsum('Pmn, Qmn, PQ -> mn', Lpq[:, :, mkslice(orbs)], Lpq[:,  :, mkslice(orbs)], Pi_inv)
+        Qmn = np.matmul(Pi_inv, l_slice)
+        Qmn *= l_slice
+        Wmn[w] = (naux_ones @ Qmn).reshape(norbs, nmo)
+
+    gw.stdout.write('\n')
+    gw.stdout.flush()
+
+    # Simple but slow version:
+    # for w in range(nw):
+    #     Pi = get_rho_response(freqs[w], mo_energy, Lpq[:,:nocc,nocc:])
+    #     Pi_inv = np.linalg.inv(np.eye(naux)-Pi)-np.eye(naux)
+    #     Qnm = einsum('Pnm,PQ->Qnm',Lpq[:,orbs,:],Pi_inv)
+    #     Wmn[:,:,w] = einsum('Qnm,Qmn->mn',Qnm,Lpq[:,:,orbs])
+
+    return Wmn
 
 
-class GWCD(lib.StreamObject):
+def get_rho_response_R(eia, omega, Lia, eta):
+    """
+    Compute density response function in auxiliary basis at poles.
 
-    eta = getattr(__config__, 'gw_gw_GW_eta', 1e-3)
-    linearized = getattr(__config__, 'gw_gw_GW_linearized', False)
+    Parameters
+    ----------
+    eia : double 2d array
+        eia[i,a] = mo_energy[i] - mo_energy[a], where i is occupied and a is virtual
+    omega : double
+        frequency at which to evaluate response function
+    Lia : double 3d array
+        three-center density-fitting matrix in MO space, O-V block
+    eta : double
+        smearing parameter for poles
 
-    _keys = {
-        'eta', 'linearized', 'mol', 'frozen', 'with_df',
-        'mo_energy', 'mo_coeff', 'mo_occ', 'sigma',
-    }
+    Returns
+    -------
+    complex 2d array
+        density response function in auxiliary basis at poles
+    """
+    naux, nocc, nvir = Lia.shape
 
-    def __init__(self, mf, frozen=None):
-        self.mol = mf.mol
-        self._scf = mf
-        self.verbose = self.mol.verbose
-        self.stdout = self.mol.stdout
-        self.max_memory = mf.max_memory
+    # Simple but slow version:
+    # eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
+    # eia = 1./(omega+eia+2j*gw.eta) + 1./(-omega+eia)
+    # #Pia = einsum('Pia,ia->Pia',Lia,eia)
 
-        self.frozen = frozen
+    # # Response from both spin-up and spin-down density
+    # Pi = 2. * einsum('Pia,Qia->PQ',Pia,Lia)
+    # return Pi
 
-        # DF-GW must use density fitting integrals
-        if getattr(mf, 'with_df', None):
-            self.with_df = mf.with_df
-        else:
-            self.with_df = df.DF(mf.mol)
-            self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
+    naux, nocc, nvir = Lia.shape
+    eia = 1.0 / (omega + eia + 2j * eta) + 1.0 / (-omega + eia)
+    eiaR = np.ascontiguousarray(eia.real)
+    eiaI = np.ascontiguousarray(eia.imag)
 
-##################################################
-# don't modify the following attributes, they are not input options
-        self._nocc = None
-        self._nmo = None
-        # self.mo_energy: GW quasiparticle energy, not scf mo_energy
-        self.mo_energy = None
-        self.mo_coeff = mf.mo_coeff
-        self.mo_occ = mf.mo_occ
-        self.sigma = None
+    # Response from both spin-up and spin-down density
+    PiaR = Lia * (eiaR * 2.0)
+    Pi_R = PiaR.reshape(naux, nocc * nvir) @ Lia.reshape(naux, nocc * nvir).T
+    del PiaR
+    PiaI = Lia * (eiaI * 2.0)
+    Pi_I = PiaI.reshape(naux, nocc * nvir) @ Lia.reshape(naux, nocc * nvir).T
+    del PiaI
+    return Pi_R + 1j * Pi_I
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
-        log.info('')
-        log.info('******** %s ********', self.__class__)
-        log.info('method = %s', self.__class__.__name__)
-        nocc = self.nocc
-        nvir = self.nmo - nocc
-        log.info('GW nocc = %d, nvir = %d', nocc, nvir)
-        if self.frozen is not None:
-            log.info('frozen = %s', self.frozen)
-        logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
-        return self
 
-    @property
-    def nocc(self):
-        return self.get_nocc()
-    @nocc.setter
-    def nocc(self, n):
-        self._nocc = n
+class GWCD(GWAC):
+    def __init__(self, mf, frozen=None, auxbasis=None, chkfile=None):
+        super().__init__(mf, frozen=frozen, auxbasis=auxbasis)
+        self.chkfile = chkfile  # checkpoint file
+        self.eta = 1.0e-3  # broadening parameter
+        return
 
-    @property
-    def nmo(self):
-        return self.get_nmo()
-    @nmo.setter
-    def nmo(self, n):
-        self._nmo = n
+    def kernel(self):
+        """Do one-shot GW calculation using contour deformation."""
+        if self.Lpq is None:
+            self.initialize_df(auxbasis=self.auxbasis)
 
-    get_nocc = get_nocc
-    get_nmo = get_nmo
-    get_frozen_mask = get_frozen_mask
-
-    def kernel(self, mo_energy=None, mo_coeff=None, Lpq=None, orbs=None, nw=100, vhf_df=False):
-        """
-        Input:
-            orbs: self-energy orbs
-            nw: grid number
-        Output:
-            mo_energy: GW quasiparticle energy
-        """
-        if mo_coeff is None:
-            mo_coeff = self._scf.mo_coeff
-        if mo_energy is None:
-            mo_energy = self._scf.mo_energy
-
-        cput0 = (logger.process_clock(), logger.perf_counter())
+        cput0 = (time.process_time(), time.perf_counter())
         self.dump_flags()
-        self.converged, self.mo_energy, self.mo_coeff = \
-                kernel(self, mo_energy, mo_coeff,
-                       Lpq=Lpq, orbs=orbs, nw=nw, vhf_df=vhf_df, verbose=self.verbose)
-
-        logger.timer(self, 'GW', *cput0)
-        return self.mo_energy
-
-    def ao2mo(self, mo_coeff=None):
-        if mo_coeff is None:
-            mo_coeff = self.mo_coeff
-        nmo = self.nmo
-        naux = self.with_df.get_naoaux()
-        mem_incore = (2*nmo**2*naux) * 8/1e6
-        mem_now = lib.current_memory()[0]
-
-        mo = numpy.asarray(mo_coeff, order='F')
-        ijslice = (0, nmo, 0, nmo)
-        Lpq = None
-        if (mem_incore + mem_now < 0.99*self.max_memory) or self.mol.incore_anyway:
-            Lpq = _ao2mo.nr_e2(self.with_df._cderi, mo, ijslice, aosym='s2', out=Lpq)
-            return Lpq.reshape(naux,nmo,nmo)
-        else:
-            logger.warn(self, 'Memory may not be enough!')
-            raise NotImplementedError
-
-
-if __name__ == '__main__':
-    from pyscf import gto, dft, tddft
-    mol = gto.Mole()
-    mol.verbose = 4
-    mol.atom = [
-        [8 , (0. , 0.     , 0.)],
-        [1 , (0. , -0.7571 , 0.5861)],
-        [1 , (0. , 0.7571 , 0.5861)]]
-    mol.basis = 'def2-svp'
-    mol.build()
-
-    mf = dft.RKS(mol)
-    mf.xc = 'pbe'
-    mf.kernel()
-
-    nocc = mol.nelectron//2
-    nmo = mf.mo_energy.size
-    nvir = nmo-nocc
-
-    gw = GWCD(mf)
-    gw.kernel(orbs=range(0,nocc+3))
-    print(gw.mo_energy)
-    assert (abs(gw.mo_energy[nocc-1]--0.41284735)<1e-5)
-    assert (abs(gw.mo_energy[nocc]-0.16574524)<1e-5)
-    assert (abs(gw.mo_energy[0]--19.53387986)<1e-5)
+        self.converged, self.conv_inds, self.mo_energy = kernel(self)
+        logger.timer(self, 'GWCD', *cput0)
+        return
