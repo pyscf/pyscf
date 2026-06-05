@@ -148,6 +148,7 @@ ALIAS = {
     'dzpdunning' : 'dzp_dunning'    ,
     'dzvp'       : 'dzvp.dat'       ,
     'dzvp2'      : 'dzvp2.dat'      ,
+    'tzvp'       : 'tzvp.dat'       ,
     'dzp'        : 'dzp.dat'        ,
     'tzp'        : 'tzp.dat'        ,
     'qzp'        : 'qzp.dat'        ,
