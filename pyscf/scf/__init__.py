@@ -36,11 +36,12 @@ to control the SCF method.
     chkfile : str
         checkpoint file to save MOs, orbital energies etc.
     conv_tol : float
-        converge threshold.  Default is 1e-10
+        converge threshold.  Default is 1e-9
     max_cycle : int
         max number of iterations.  Default is 50
     init_guess : str
-        initial guess method.  It can be one of 'minao', 'atom', '1e', 'chkfile'.
+        initial guess method.  It can be one of 'minao', 'atom', 'huckel',
+        'mod_huckel', '1e', 'hcore', 'sap', 'chkfile'.
         Default is 'minao'
     DIIS : class listed in :mod:`scf.diis`
         Default is :class:`diis.SCF_DIIS`. Set it to None/False to turn off DIIS.

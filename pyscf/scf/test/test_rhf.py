@@ -248,6 +248,12 @@ class KnownValues(unittest.TestCase):
         dm = scf.hf.RHF(mol).get_init_guess(mol, key='mod_huckel')
         self.assertAlmostEqual(lib.fp(dm), 3.233072986208057, 5)
 
+        # init_guess_by_mod_huckel should be callable without arguments,
+        # consistent with init_guess_by_huckel and the UHF/ROHF/GHF/DHF
+        # implementations.
+        dm = scf.hf.RHF(mol).init_guess_by_mod_huckel()
+        self.assertAlmostEqual(lib.fp(dm), 3.233072986208057, 5)
+
         dm = scf.ROHF(mol).init_guess_by_mod_huckel()
         self.assertAlmostEqual(lib.fp(dm[0]), 3.233072986208057/2, 5)
 
