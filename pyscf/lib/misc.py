@@ -1258,17 +1258,6 @@ class H5TmpFile(H5FileWrap):
         self.close()
 
 
-def _cleanup_tmpfiles():
-    for name in _to_delete:
-        try:
-            os.unlink(name)
-        except OSError:
-            pass
-
-_to_delete = set()
-atexit.register(_cleanup_tmpfiles)
-
-
 def NamedTemporaryFile(*args, **kwargs):
     '''Create a named temporary file object. This function wraps
     `tempfile.NamedTemporaryFile`. On Windows, `delete=False` is forced
@@ -1285,7 +1274,16 @@ def NamedTemporaryFile(*args, **kwargs):
         kwargs['delete'] = False
     f = tempfile.NamedTemporaryFile(*args, **kwargs)
     if sys.platform == 'win32':
-        _to_delete.add(f.name)
+        def _close_and_unlink():
+            try:
+                f.close()
+            except Exception:
+                pass
+            try:
+                os.unlink(f.name)
+            except OSError:
+                pass
+        atexit.register(_close_and_unlink)
     return f
 
 
