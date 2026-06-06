@@ -722,6 +722,7 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
             mod = importlib.import_module('.'+basmod, __package__)
             b = mod.__getattribute__(symb)
     except (BasisNotFoundError, AttributeError):
+        # When basis set is recognized but its .dat file lacks required elements (e.g., lanthanides), fallback to BSE
         from pyscf.gto.basis import bse
         if bse.basis_set_exchange is None:
             warnings.warn(
