@@ -22,6 +22,7 @@ Numerical integration functions for RKS and UKS with real AO basis
 
 import warnings
 import ctypes
+import sys
 import numpy
 from pyscf import lib
 try:
@@ -39,6 +40,11 @@ from pyscf.dft import xc_deriv
 from pyscf import __config__
 
 libdft = lib.load_library('libdft')
+if sys.platform == 'win32':
+    libcvhf = lib.load_library('libcvhf')
+    libcgto = lib.load_library('libcgto')
+    libcint = lib.load_library('libcint')
+    libdft = lib.make_dll_wrapper(libdft, libcvhf, libcgto, libcint)
 OCCDROP = getattr(__config__, 'dft_numint_occdrop', 1e-12)
 # The system size above which to consider the sparsity of the density matrix.
 # If the number of AOs in the system is less than this value, all tensors are

@@ -23,10 +23,15 @@ Mole.intor method to drive the integral evaluation functions.
 
 import warnings
 import ctypes
+import sys
 import numpy
 from pyscf import lib
 
 libcgto = lib.load_library('libcgto')
+
+if sys.platform == 'win32':
+    libcint = lib.load_library('libcint')
+    libcgto = lib.make_dll_wrapper(libcgto, libcint)
 
 ANG_OF     = 1
 NPRIM_OF   = 2

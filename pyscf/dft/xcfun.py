@@ -23,6 +23,7 @@ U. Ekstrom et al, J. Chem. Theory Comput., 6, 1971
 '''
 
 import ctypes
+import sys
 from functools import lru_cache
 import math
 import numpy
@@ -31,7 +32,13 @@ from pyscf.dft.xc.utils import remove_dup, format_xc_code
 from pyscf.dft import xc_deriv
 from pyscf import __config__
 
-_itrf = lib.load_library('libxcfun_itrf')
+_itrf_raw = lib.load_library('libxcfun_itrf')
+
+if sys.platform == 'win32':
+    xcfun = lib.load_library('xcfun')
+    _itrf = lib.make_dll_wrapper(_itrf_raw, xcfun)
+else:
+    _itrf = _itrf_raw
 
 _itrf.xcfun_splash.restype = ctypes.c_char_p
 _itrf.xcfun_version.restype = ctypes.c_char_p
@@ -306,7 +313,7 @@ RSH_XC = {'CAMB3LYP'}
 
 # The compatibility with the old libxcfun_itrf.so library
 try:
-    MAX_DERIV_ORDER = ctypes.c_int.in_dll(_itrf, 'XCFUN_max_deriv_order').value
+    MAX_DERIV_ORDER = ctypes.c_int.in_dll(_itrf_raw, 'XCFUN_max_deriv_order').value
 except ValueError:
     MAX_DERIV_ORDER = 3
 

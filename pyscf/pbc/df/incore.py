@@ -31,12 +31,11 @@ from pyscf.pbc.tools import k2gamma
 from pyscf.pbc.tools import pbc as pbctools
 from pyscf import __config__
 from pyscf.pbc.gto import _pbcintor
+from pyscf.pbc.gto._pbcintor import libpbc
 
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 2.5)
 KECUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_kecut_threshold', 10.0)
 LOG_ADJUST = 32
-
-libpbc = lib.load_library('libpbc')
 
 def verify_cint_backend():
     compiled_with_qcint = ctypes.c_int.in_dll(libpbc, 'compiled_with_qcint').value

@@ -97,6 +97,13 @@ def load_library(libname):
         _loaderpath = os.path.dirname(__file__)
         return numpy.ctypeslib.load_library(libname, _loaderpath)
     except OSError:
+        if sys.platform == 'win32':
+            for env_path in [os.path.join(sys.prefix, 'Library', 'bin'),
+                             os.path.join(sys.prefix, 'Library', 'lib')]:
+                try:
+                    return numpy.ctypeslib.load_library(libname, env_path)
+                except OSError:
+                    pass
         from pyscf import __path__ as ext_modules
         for path in ext_modules:
             libpath = os.path.join(path, 'lib')
@@ -106,21 +113,41 @@ def load_library(libname):
                         return numpy.ctypeslib.load_library(libname, libpath)
         raise
 
+
+def make_dll_wrapper(lib, *fallbacks):
+    if sys.platform != 'win32':
+        return lib
+    class _DllWrapper:
+        def __init__(self, primary, *fallbacks):
+            object.__setattr__(self, '_primary', primary)
+            object.__setattr__(self, '_fallbacks', fallbacks)
+        def __getattr__(self, name):
+            for dll in (self._primary,) + self._fallbacks:
+                try:
+                    return getattr(dll, name)
+                except AttributeError:
+                    pass
+            raise AttributeError(f"function '{name}' not found")
+    return _DllWrapper(lib, *fallbacks)
+
 #Fixme, the standard resource module gives wrong number when objects are released
 # http://fa.bianp.net/blog/2013/different-ways-to-get-memory-consumption-or-lessons-learned-from-memory_profiler/#fn:1
 #or use slow functions as memory_profiler._get_memory did
-CLOCK_TICKS = os.sysconf("SC_CLK_TCK")
-PAGESIZE = os.sysconf("SC_PAGE_SIZE")
 def current_memory():
     '''Return the size of used memory and allocated virtual memory (in MB)'''
-    #import resource
-    #return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1000
     if sys.platform.startswith('linux'):
+        pagesize = os.sysconf("SC_PAGE_SIZE")
         with open("/proc/%s/statm" % os.getpid()) as f:
-            vms, rss = [int(x)*PAGESIZE for x in f.readline().split()[:2]]
+            vms, rss = [int(x) * pagesize for x in f.readline().split()[:2]]
             return rss/1e6, vms/1e6
     else:
-        return 0, 0
+        try:
+            import psutil
+            process = psutil.Process(os.getpid())
+            mem_info = process.memory_info()
+            return mem_info.rss/1e6, mem_info.vms/1e6
+        except (ImportError, Exception):
+            return 0, 0
 
 def num_threads(n=None):
     '''Set the number of OMP threads.  If argument is not specified, the

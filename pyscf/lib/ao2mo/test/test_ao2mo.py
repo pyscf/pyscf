@@ -26,7 +26,7 @@ from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.scf import _vhf
 
-libao2mo1 = lib.load_library('libao2mo')
+from pyscf.ao2mo._ao2mo import libao2mo as libao2mo1
 
 mol = gto.Mole()
 mol.verbose = 0

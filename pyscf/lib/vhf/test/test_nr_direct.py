@@ -15,7 +15,6 @@
 
 import os
 import ctypes
-import _ctypes
 import unittest
 import numpy
 from pyscf import lib
@@ -23,7 +22,7 @@ from pyscf import scf
 from pyscf import gto
 from pyscf import ao2mo
 
-libcvhf2 = lib.load_library('libcvhf')
+from pyscf.scf._vhf import libcvhf as libcvhf2
 
 mol = gto.Mole()
 mol.verbose = 0
@@ -68,7 +67,7 @@ def runjk(dm1, ncomp, intorname, filldot, *namejk):
     dmsptr = (ctypes.c_void_p*(njk*n_dm))()
     vjkptr = (ctypes.c_void_p*(njk*n_dm))()
     for i, symb in enumerate(namejk):
-        f1 = ctypes.c_void_p(_ctypes.dlsym(libcvhf2._handle, symb))
+        f1 = ctypes.cast(getattr(libcvhf2, symb), ctypes.c_void_p)
         for j in range(n_dm):
             dmsptr[i*n_dm+j] = dm1[j].ctypes.data_as(ctypes.c_void_p)
             vjkptr[i*n_dm+j] = vjk[i,j*ncomp].ctypes.data_as(ctypes.c_void_p)

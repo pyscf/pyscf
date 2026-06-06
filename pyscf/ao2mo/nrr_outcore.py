@@ -22,7 +22,6 @@ import tempfile
 import numpy
 import h5py
 import ctypes
-import _ctypes
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
@@ -31,9 +30,8 @@ from pyscf.ao2mo import outcore
 from pyscf import __config__
 from pyscf.gto.moleintor import make_cintopt, make_loc, ascint3
 
-libao2mo = lib.load_library('libao2mo')
-def _fpointer(name):
-    return ctypes.c_void_p(_ctypes.dlsym(libao2mo._handle, name))
+libao2mo = _ao2mo.libao2mo
+_fpointer = _ao2mo._fpointer
 
 IOBLK_SIZE = getattr(__config__, 'ao2mo_outcore_ioblk_size', 256)  # 256 MB
 IOBUF_WORDS = getattr(__config__, 'ao2mo_outcore_iobuf_words', 1e8)  # 1.6 GB

@@ -45,6 +45,11 @@ from pyscf.dft import xc_deriv
 from pyscf import __config__
 
 _itrf = lib.load_library('libxc_itrf')
+
+if sys.platform == 'win32':
+    libxc = lib.load_library('xc')
+    _itrf = lib.make_dll_wrapper(_itrf, libxc)
+
 _itrf.LIBXC_is_lda.restype = ctypes.c_int
 _itrf.LIBXC_is_gga.restype = ctypes.c_int
 _itrf.LIBXC_is_meta_gga.restype = ctypes.c_int
