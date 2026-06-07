@@ -45,7 +45,6 @@ from pyscf.dft import xc_deriv
 from pyscf import __config__
 
 _itrf = lib.load_library('libxc_itrf')
-
 _itrf.LIBXC_is_lda.restype = ctypes.c_int
 _itrf.LIBXC_is_gga.restype = ctypes.c_int
 _itrf.LIBXC_is_meta_gga.restype = ctypes.c_int
