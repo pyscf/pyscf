@@ -104,47 +104,36 @@ _dll_deps = {
 
 @functools.lru_cache(128)
 def load_library(libname):
+    lib = None
     try:
         _loaderpath = os.path.dirname(__file__)
         lib = numpy.ctypeslib.load_library(libname, _loaderpath)
     except OSError:
-        lib = None
-        if sys.platform == 'win32':
-            for env_path in [os.path.join(sys.prefix, 'Library', 'bin'),
-                             os.path.join(sys.prefix, 'Library', 'lib')]:
-                try:
-                    lib = numpy.ctypeslib.load_library(libname, env_path)
-                    break
-                except OSError:
-                    pass
-            else:
-                lib = None
-            if lib is None:
-                from pyscf import __path__ as ext_modules
-                for path in ext_modules:
-                    libpath = os.path.join(path, 'lib')
-                    if os.path.isdir(libpath):
-                        for files in os.listdir(libpath):
-                            if files.startswith(libname):
-                                lib = numpy.ctypeslib.load_library(libname, libpath)
-                                break
-                        if lib is not None:
-                            break
-                if lib is None:
-                    raise
-        else:
-            from pyscf import __path__ as ext_modules
-            for path in ext_modules:
-                libpath = os.path.join(path, 'lib')
-                if os.path.isdir(libpath):
-                    for files in os.listdir(libpath):
-                        if files.startswith(libname):
-                            lib = numpy.ctypeslib.load_library(libname, libpath)
-                            break
-                    if lib is not None:
+        pass
+
+    if lib is None and sys.platform == 'win32':
+        for env_path in [os.path.join(sys.prefix, 'Library', 'bin'),
+                         os.path.join(sys.prefix, 'Library', 'lib')]:
+            try:
+                lib = numpy.ctypeslib.load_library(libname, env_path)
+                break
+            except OSError:
+                pass
+
+    if lib is None:
+        from pyscf import __path__ as ext_modules
+        for path in ext_modules:
+            libpath = os.path.join(path, 'lib')
+            if os.path.isdir(libpath):
+                for files in os.listdir(libpath):
+                    if files.startswith(libname):
+                        lib = numpy.ctypeslib.load_library(libname, libpath)
                         break
-            else:
-                raise
+                if lib is not None:
+                    break
+        if lib is None:
+            raise OSError(f'Library {libname} not found')
+
     if sys.platform == 'win32' and libname in _dll_deps:
         deps = [load_library(d) for d in _dll_deps[libname]]
         lib = make_dll_wrapper(lib, *deps)
