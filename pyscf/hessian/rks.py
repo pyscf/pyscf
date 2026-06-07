@@ -23,7 +23,6 @@ Non-relativistic RKS analytical Hessian
 
 import numpy
 import ctypes
-import sys
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
@@ -40,12 +39,6 @@ min_grid_blksize = 128*128
 NLC_REMOVE_ZERO_RHO_GRID_THRESHOLD = 1e-8
 
 libdft = lib.load_library('libdft')
-
-if sys.platform == 'win32':
-    libcvhf = lib.load_library('libcvhf')
-    libcgto = lib.load_library('libcgto')
-    libcint = lib.load_library('libcint')
-    libdft = lib.make_dll_wrapper(libdft, libcvhf, libcgto, libcint)
 contract = numpy.einsum
 
 

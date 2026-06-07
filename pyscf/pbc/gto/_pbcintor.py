@@ -13,17 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
 import ctypes
 import numpy
 from pyscf import lib
 
 libpbc = lib.load_library('libpbc')
-
-if sys.platform == 'win32':
-    libcint = lib.load_library('libcint')
-    libcgto = lib.load_library('libcgto')
-    libpbc = lib.make_dll_wrapper(libpbc, libcint, libcgto)
 def _fpointer(name):
     return ctypes.addressof(getattr(libpbc, name))
 

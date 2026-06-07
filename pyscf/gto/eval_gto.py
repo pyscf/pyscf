@@ -18,7 +18,6 @@
 
 import warnings
 import ctypes
-import sys
 import numpy
 from pyscf import lib
 from pyscf.gto.moleintor import make_loc
@@ -29,10 +28,6 @@ NBINS = 100
 CUTOFF = getattr(__config__, 'eval_gto_cutoff', 1e-15)
 
 libcgto = lib.load_library('libcgto')
-
-if sys.platform == 'win32':
-    libcint = lib.load_library('libcint')
-    libcgto = lib.make_dll_wrapper(libcgto, libcint)
 
 def eval_gto(mol, eval_name, coords, comp=None, shls_slice=None, non0tab=None,
              ao_loc=None, cutoff=None, out=None):

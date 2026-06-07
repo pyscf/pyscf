@@ -17,7 +17,6 @@
 #
 
 import ctypes
-import sys
 import numpy
 import scipy.linalg
 from pyscf import lib
@@ -28,13 +27,6 @@ from pyscf.ao2mo import _ao2mo
 DEBUG = False
 
 libri = lib.load_library('libri')
-
-if sys.platform == 'win32':
-    libao2mo = lib.load_library('libao2mo')
-    libcvhf = lib.load_library('libcvhf')
-    libcgto = lib.load_library('libcgto')
-    libcint = lib.load_library('libcint')
-    libri = lib.make_dll_wrapper(libri, libao2mo, libcvhf, libcgto, libcint)
 
 def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
     '''For the given SCF object, update the J, K matrix constructor with

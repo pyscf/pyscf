@@ -23,17 +23,10 @@ import math
 import itertools
 from functools import lru_cache
 import ctypes
-import sys
 import numpy as np
 from pyscf import lib
 
 libdft = lib.load_library('libdft')
-
-if sys.platform == 'win32':
-    libcvhf = lib.load_library('libcvhf')
-    libcgto = lib.load_library('libcgto')
-    libcint = lib.load_library('libcint')
-    libdft = lib.make_dll_wrapper(libdft, libcvhf, libcgto, libcint)
 
 
 def transform_vxc(rho, vxc, xctype, spin=0):

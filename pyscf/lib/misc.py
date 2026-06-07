@@ -91,27 +91,64 @@ c_double_p = ctypes.POINTER(ctypes.c_double)
 c_int_p = ctypes.POINTER(ctypes.c_int)
 c_null_ptr = ctypes.POINTER(ctypes.c_void_p)
 
+_dll_deps = {
+    'libcgto':       ['libcint'],
+    'libcvhf':       ['libcint'],
+    'libao2mo':      ['libcint', 'libcvhf'],
+    'libdft':        ['libcvhf', 'libcgto', 'libcint'],
+    'libpbc':        ['libcint', 'libcgto'],
+    'libri':         ['libao2mo', 'libcvhf', 'libcgto', 'libcint'],
+    'libxc_itrf':    ['xc'],
+    'libxcfun_itrf': ['xcfun'],
+}
+
 @functools.lru_cache(128)
 def load_library(libname):
     try:
         _loaderpath = os.path.dirname(__file__)
-        return numpy.ctypeslib.load_library(libname, _loaderpath)
+        lib = numpy.ctypeslib.load_library(libname, _loaderpath)
     except OSError:
+        lib = None
         if sys.platform == 'win32':
             for env_path in [os.path.join(sys.prefix, 'Library', 'bin'),
                              os.path.join(sys.prefix, 'Library', 'lib')]:
                 try:
-                    return numpy.ctypeslib.load_library(libname, env_path)
+                    lib = numpy.ctypeslib.load_library(libname, env_path)
+                    break
                 except OSError:
                     pass
-        from pyscf import __path__ as ext_modules
-        for path in ext_modules:
-            libpath = os.path.join(path, 'lib')
-            if os.path.isdir(libpath):
-                for files in os.listdir(libpath):
-                    if files.startswith(libname):
-                        return numpy.ctypeslib.load_library(libname, libpath)
-        raise
+            else:
+                lib = None
+            if lib is None:
+                from pyscf import __path__ as ext_modules
+                for path in ext_modules:
+                    libpath = os.path.join(path, 'lib')
+                    if os.path.isdir(libpath):
+                        for files in os.listdir(libpath):
+                            if files.startswith(libname):
+                                lib = numpy.ctypeslib.load_library(libname, libpath)
+                                break
+                        if lib is not None:
+                            break
+                if lib is None:
+                    raise
+        else:
+            from pyscf import __path__ as ext_modules
+            for path in ext_modules:
+                libpath = os.path.join(path, 'lib')
+                if os.path.isdir(libpath):
+                    for files in os.listdir(libpath):
+                        if files.startswith(libname):
+                            lib = numpy.ctypeslib.load_library(libname, libpath)
+                            break
+                    if lib is not None:
+                        break
+            else:
+                raise
+    if sys.platform == 'win32' and libname in _dll_deps:
+        deps = [load_library(d) for d in _dll_deps[libname]]
+        lib = make_dll_wrapper(lib, *deps)
+    return lib
 
 
 def make_dll_wrapper(lib, *fallbacks):

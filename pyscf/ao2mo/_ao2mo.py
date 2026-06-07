@@ -14,18 +14,12 @@
 # limitations under the License.
 
 import ctypes
-import sys
 import numpy
 from pyscf import lib
 from pyscf.gto.moleintor import make_cintopt, make_loc, ascint3
 from pyscf.scf import _vhf
 
 libao2mo = lib.load_library('libao2mo')
-
-if sys.platform == 'win32':
-    libcint = lib.load_library('libcint')
-    libcvhf = lib.load_library('libcvhf')
-    libao2mo = lib.make_dll_wrapper(libao2mo, libcint, libcvhf)
 
 def _fpointer(name):
     return ctypes.cast(getattr(libao2mo, name), ctypes.c_void_p)

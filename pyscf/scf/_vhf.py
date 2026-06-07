@@ -22,10 +22,6 @@ from pyscf.gto.moleintor import make_cintopt, make_loc, ascint3
 
 libcvhf = lib.load_library('libcvhf')
 
-if sys.platform == 'win32':
-    libcint = lib.load_library('libcint')
-    libcvhf = lib.make_dll_wrapper(libcvhf, libcint)
-
 def _fpointer(name):
     return ctypes.cast(getattr(libcvhf, name), ctypes.c_void_p)
 
