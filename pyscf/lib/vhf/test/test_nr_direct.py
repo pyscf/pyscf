@@ -22,7 +22,7 @@ from pyscf import scf
 from pyscf import gto
 from pyscf import ao2mo
 
-from pyscf.scf._vhf import libcvhf as libcvhf2
+libcvhf2 = lib.load_library('libcvhf')
 
 mol = gto.Mole()
 mol.verbose = 0

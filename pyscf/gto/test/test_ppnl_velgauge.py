@@ -20,9 +20,10 @@ from pyscf.dft import gen_grid
 from pyscf.dft import radi
 
 from pyscf.gto.ppnl_velgauge import get_gth_pp_nl_velgauge, get_gth_pp_nl_velgauge_commutator, _ft_ao_cross
-from pyscf.pbc.gto._pbcintor import libpbc
 
 import pytest
+
+libpbc = lib.load_library('libpbc')
 
 @pytest.mark.parametrize('q', [np.array([0.1, 0.2, 0.3]), np.array([0., 0., 0.]), np.array([-2., 1., 0.5])])
 def test_ppnl_velgauge(q):

@@ -19,7 +19,7 @@ import numpy
 from pyscf import lib, gto, df
 from pyscf.gto.eval_gto import BLKSIZE
 
-from pyscf.dft.numint import libdft as libcgto
+libcgto = lib.load_library('libdft')
 
 mol = gto.M(atom='''
             O 0.5 0.5 0.

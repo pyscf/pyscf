@@ -31,7 +31,8 @@ from pyscf.pbc.tools import k2gamma
 from pyscf.pbc.tools import pbc as pbctools
 from pyscf import __config__
 from pyscf.pbc.gto import _pbcintor
-from pyscf.pbc.gto._pbcintor import libpbc
+
+libpbc = lib.load_library('libpbc')
 
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 2.5)
 KECUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_kecut_threshold', 10.0)

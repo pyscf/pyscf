@@ -19,7 +19,8 @@ import numpy
 from pyscf import lib
 from pyscf import gto
 from pyscf.gto import ft_ao
-from pyscf.pbc.gto._pbcintor import libpbc
+
+libpbc = lib.load_library('libpbc')
 
 def setUpModule():
     global mol, b, Gvbase, Gv, gxyz
