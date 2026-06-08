@@ -244,16 +244,22 @@ def PipekMezey(mol, orbocc, iaos, s, exponent, minao=MINAO):
 
     # Define the mulliken population of each atom based on IAO basis.
     # proj[i].trace is the mulliken population of atom i.
-    def atomic_pops(mol, mo_coeff, method=None):
+    def atomic_pops(mol, mo_coeff, method=None, mode=None):
         nmo = mo_coeff.shape[1]
-        proj = numpy.empty((mol.natm,nmo,nmo))
         orb_in_iao = reduce(numpy.dot, (iao_inv, mo_coeff))
-        for i, (b0, b1, p0, p1) in enumerate(iao_mol.offset_nr_by_atom()):
-            csc = reduce(numpy.dot, (orb_in_iao[p0:p1].T, s_iao[p0:p1],
-                                     orb_in_iao))
-            proj[i] = (csc + csc.T) * .5
+        if mode == 'pop':
+            proj = numpy.empty((mol.natm,nmo))
+            for i, (b0, b1, p0, p1) in enumerate(iao_mol.offset_nr_by_atom()):
+                proj[i] = numpy.einsum('mi,mn,ni->i', orb_in_iao[p0:p1], s_iao[p0:p1], orb_in_iao)
+        else:
+            proj = numpy.empty((mol.natm,nmo,nmo))
+            for i, (b0, b1, p0, p1) in enumerate(iao_mol.offset_nr_by_atom()):
+                csc = reduce(numpy.dot, (orb_in_iao[p0:p1].T, s_iao[p0:p1],
+                                         orb_in_iao))
+                proj[i] = (csc + csc.T) * .5
         return proj
     pm = pipek.PM(mol, orbocc)
+    pm.pop_method = None    # set pop_method to None for customized population
     pm.atomic_pops = atomic_pops
     pm.exponent = exponent
     return pm
