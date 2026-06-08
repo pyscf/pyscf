@@ -240,7 +240,11 @@ def project_to_atomic_orbitals(mol, ref_basis):
         if symb in mol._basis:
             ano = aos[symb]
         else:
-            ano = aos[mol.atom_pure_symbol(ia)]
+            try:
+                ano = aos[mol.atom_pure_symbol(ia)]
+            except KeyError: 
+                if symb in mol.ecp.keys() and mol.ecp[symb][0] == 0:  # if it is an ECP with nelec=0, skip it
+                    continue
         p0, p1 = p1, p1 + ano.shape[1]
         c[p0:p1,p0:p1] = ano
     return c
