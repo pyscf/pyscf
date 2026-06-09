@@ -11,8 +11,16 @@ include pyscf/lib/deps/lib*/libcint.[4-9].dylib
 include pyscf/lib/deps/lib*/libxc.*.dylib
 include pyscf/lib/deps/lib*/libxcfun.[2-9].dylib
 
+# windows dynamic libraries
+include pyscf/lib/*.dll
+include pyscf/lib/deps/bin/*.dll
+
 include pyscf/geomopt/log.ini
 include pyscf/gto/basis/bse_meta.json
+
+# CP2K basis set
+include pyscf/pbc/gto/basis/*BASIS*
+include pyscf/pbc/gto/pseudo/*POTENTIAL*
 
 # source code
 recursive-include pyscf/lib *.c *.h CMakeLists.txt

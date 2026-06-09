@@ -338,6 +338,15 @@ class KnownValues(unittest.TestCase):
         kmf = pscf.KUHF(cell, kpts=kpts).newton().run()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 6)
 
+    def test_trs_real_orb(self):
+        from pyscf.pbc.lib.kpts_helper import is_trim
+        kpts = cell.make_kpts([2,2,1], time_reversal_symmetry=True)
+        kmf = pscf.KRHF(cell, kpts=kpts).run()
+        mask = is_trim(kmf.cell, kmf.kpts.kpts_ibz)
+        for k,mo in enumerate(kmf.mo_coeff):
+            if mask[k]:
+                self.assertAlmostEqual(abs(kmf.mo_coeff[k].imag).max(), 0, 8)
+
 if __name__ == '__main__':
     print("Full Tests for HF with k-point symmetry")
     unittest.main()

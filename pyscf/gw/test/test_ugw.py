@@ -32,7 +32,8 @@ class KnownValues(unittest.TestCase):
         gw_obj = ugw_ac.UGWAC(mf, frozen=0)
         gw_obj.linearized = False
         gw_obj.ac = 'pade'
-        gw_obj.kernel(orbs=range(nocca-3, nocca+3))
+        gw_obj.orbs = range(nocca-3, nocca+3)
+        gw_obj.kernel()
         self.assertAlmostEqual(gw_obj.mo_energy[0][nocca-1], -0.521932084529, 5)
         self.assertAlmostEqual(gw_obj.mo_energy[0][nocca],    0.167547592784, 5)
         self.assertAlmostEqual(gw_obj.mo_energy[1][noccb-1], -0.464605523684, 5)

@@ -22,18 +22,13 @@ import tempfile
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
+from pyscf.scf import _vhf
 from pyscf.scf import atom_hf
 
-import sys
 try:
-    import dftd3
-except ImportError:
-    pass
-
-try:
-    import dftd4
-except ImportError:
-    pass
+    from pyscf.dispersion import dftd3, dftd4
+except (ImportError, OSError):
+    dftd3 = dftd4 = None
 
 def setUpModule():
     global mol, mf, n2sym, n2mf, re_ecp1, re_ecp2
@@ -253,6 +248,12 @@ class KnownValues(unittest.TestCase):
         dm = scf.hf.RHF(mol).get_init_guess(mol, key='mod_huckel')
         self.assertAlmostEqual(lib.fp(dm), 3.233072986208057, 5)
 
+        # init_guess_by_mod_huckel should be callable without arguments,
+        # consistent with init_guess_by_huckel and the UHF/ROHF/GHF/DHF
+        # implementations.
+        dm = scf.hf.RHF(mol).init_guess_by_mod_huckel()
+        self.assertAlmostEqual(lib.fp(dm), 3.233072986208057, 5)
+
         dm = scf.ROHF(mol).init_guess_by_mod_huckel()
         self.assertAlmostEqual(lib.fp(dm[0]), 3.233072986208057/2, 5)
 
@@ -371,7 +372,7 @@ class KnownValues(unittest.TestCase):
     def test_scf(self):
         self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
 
-    @unittest.skipIf('dispersion' not in sys.modules, "requires the dftd3 library")
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
     def test_scf_d3(self):
         mf = scf.RHF(mol)
         mf.disp = 'd3bj'
@@ -380,7 +381,7 @@ class KnownValues(unittest.TestCase):
         e_tot = mf.kernel()
         self.assertAlmostEqual(e_tot, -76.03127458778653, 9)
 
-    @unittest.skipIf('dispersion' not in sys.modules, "requires the dftd4 library")
+    @unittest.skipIf(dftd4 is None, "requires the dftd4 library")
     def test_scf_d4(self):
         mf = scf.RHF(mol)
         mf.disp = 'd4'
@@ -901,10 +902,10 @@ H     0    0.757    0.587'''
         self.assertAlmostEqual(numpy.linalg.norm(vj1), 77.035779188661465, 9)
 
         orig = mf1.opt.prescreen
-        self.assertEqual(orig, scf._vhf._fpointer('CVHFnrs8_prescreen').value)
+        self.assertEqual(orig, _vhf._fpointer('CVHFnrs8_prescreen').value)
         mf1.opt.prescreen = orig
         mf1.opt.prescreen = 'CVHFnoscreen'
-        self.assertEqual(mf1.opt.prescreen, scf._vhf._fpointer('CVHFnoscreen').value)
+        self.assertEqual(mf1.opt.prescreen, _vhf._fpointer('CVHFnoscreen').value)
 
         # issue #1114
         dm = numpy.eye(nao, dtype=int)

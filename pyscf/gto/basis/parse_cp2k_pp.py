@@ -62,26 +62,61 @@ def load(pseudofile, symb, suffix=None):
     '''
     return _parse(search_seg(pseudofile, symb, suffix))
 
+def _load_GTH_POTENTIALS(pp_name, symb, pp_dir):
+    data = []
+    pp_files = ('GTH_POTENTIALS', 'POTENTIAL_UZH')
+    for pp_file in pp_files:
+        with open(f'{pp_dir}/{pp_file}', 'r') as searchfile:
+            in_block = False
+            for line in searchfile:
+                if not line or line[0] == '#':
+                    continue
+                if not in_block:
+                    line = line.lstrip()
+                    if line.startswith(symb+' ') and pp_name in line:
+                        # must be an exact match. There exist multiple GTH-PBE
+                        # blocks for the same elements, only differed by suffices.
+                        if pp_name in line.split():
+                            data.append(line)
+                            in_block = True
+                    continue
+
+                data.append(line.strip())
+                if 'GTH' in line: # next block
+                    break
+        if data:
+            break
+    else:
+        raise BasisNotFoundError(
+            f'{pp_name} for {symb} not found in files {",".join(pp_files)}.')
+
+    return _parse(data)
+
 def _parse(plines):
-    header_ln = plines.pop(0)  # noqa: F841
-    nelecs = [ int(nelec) for nelec in plines.pop(0).split() ]
-    rnc_ppl = plines.pop(0).split()
+    line_iter = iter(plines)
+    try:
+        header_ln = next(line_iter)  # noqa: F841
+        nelecs = [ int(nelec) for nelec in next(line_iter).split() ]
+    except Exception:
+        raise BasisNotFoundError('Not pseudo potential data')
+
+    rnc_ppl = next(line_iter).split()
     rloc = float(rnc_ppl[0])
     nexp = int(rnc_ppl[1])
     cexp = [ float(c) for c in rnc_ppl[2:] ]
-    nproj_types = int(plines.pop(0))
+    nproj_types = int(next(line_iter))
     r = []
     nproj = []
     hproj = []
     for p in range(nproj_types):
-        rnh_ppnl = plines.pop(0).split()
+        rnh_ppnl = next(line_iter).split()
         r.append(float(rnh_ppnl[0]))
         nproj.append(int(rnh_ppnl[1]))
         hproj_p_ij = []
         for h in rnh_ppnl[2:]:
             hproj_p_ij.append(float(h))
         for i in range(1,nproj[-1]):
-            for h in plines.pop(0).split():
+            for h in next(line_iter).split():
                 hproj_p_ij.append(float(h))
         hproj_p = np.zeros((nproj[-1],nproj[-1]))
         hproj_p[np.triu_indices(nproj[-1])] = list(hproj_p_ij)
@@ -121,29 +156,3 @@ def _search_gthpp_block(raw_data, symb, suffix=None):
                 if any(suffix == x.split('-')[-1] for x in dat[0].split()):
                     return dat
     return None
-
-if __name__ == '__main__':
-    args = sys.argv[1:]
-    if len(args) == 2:
-        ppfile = args[0]
-        atom = args[1]
-    else:
-        print('usage: ppfile atomlabel ')
-        sys.exit(1)
-
-    print("Testing search_seg():")
-    print(search_seg(ppfile,atom))
-
-    print("Testing load() [[from file]]:")
-    load(ppfile,atom)
-
-    print("Testing parse():")
-    print(parse("""
-    #PSEUDOPOTENTIAL
-    C GTH-BLYP-q4
-        2    2
-         0.33806609    2    -9.13626871     1.42925956
-        2
-         0.30232223    1     9.66551228
-         0.28637912    0
-    """))

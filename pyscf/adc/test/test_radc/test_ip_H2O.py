@@ -168,6 +168,31 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(rdms_test(dm1_exc[2]), 14.50839928341921, 6)
         self.assertAlmostEqual(rdms_test(dm1_exc[3]), 21.67690885835218, 6)
 
+    def test_ip_adc2_frozen(self):
+        adc2 = adc.ADC(mf,frozen=1)
+        adc2.method = 'adc(2)'
+        e_exc, v_exc = adc2.kernel()[:2]
+        self.assertAlmostEqual(e_exc[0], 0.40346356, 6)
+        self.assertEqual(v_exc.shape, (308, 1))
+
+        adc2 = adc.ADC(mf,frozen=np.array([0]))
+        adc2.method = 'adc(2)'
+        e_exc, v_exc = adc2.kernel()[:2]
+        self.assertAlmostEqual(e_exc[0], 0.40346356, 6)
+        self.assertEqual(v_exc.shape, (308, 1))
+
+        adc2 = adc.ADC(mf,frozen=0)
+        adc2.method = 'adc(2)'
+        e_exc, v_exc = adc2.kernel()[:2]
+        self.assertAlmostEqual(e_exc[0], 0.40346348, 6)
+        self.assertEqual(v_exc.shape, (480, 1))
+
+        adc2 = adc.ADC(mf,frozen=2)
+        adc2.method = 'adc(2)'
+        e_exc, v_exc = adc2.kernel()[:2]
+        self.assertAlmostEqual(e_exc[0], 0.42796576, 6)
+        self.assertEqual(v_exc.shape, (174, 1))
+
 if __name__ == "__main__":
     print("IP calculations for different ADC methods for water molecule")
     unittest.main()

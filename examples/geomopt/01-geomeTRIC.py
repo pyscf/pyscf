@@ -48,7 +48,7 @@ mol_eq = mc.Gradients().optimizer(solver='geomeTRIC').kernel(conv_params)
 # calculations. This feature can be activated by setting hessian=True in the
 # conv_params. E.g.
 params = {**conv_params, 'hessian': True}
-mol_eq = optimization(mf, **conv_params)
+mol_eq = optimize(mf, **conv_params)
 
 #
 # geometry optimization for DFT, MP2, CCSD

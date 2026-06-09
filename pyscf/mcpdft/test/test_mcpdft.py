@@ -45,7 +45,7 @@ def auto_setup(xyz="Li 0 0 0\nH 1.5 0 0", fnal="tPBE"):
     mol_sym = gto.M(
         atom=xyz, basis="sto3g", symmetry=True, verbose=0, output="/dev/null"
     )
-    mf_nosym = scf.RHF(mol_nosym).run()
+    mf_nosym = scf.RHF(mol_nosym).run(conv_tol=1e-12)
     mc_nosym = mcscf.CASSCF(mf_nosym, 5, 2).run(conv_tol=1e-8)
     mf_sym = scf.RHF(mol_sym).run()
     mc_sym = mcscf.CASSCF(mf_sym, 5, 2).run(conv_tol=1e-8)

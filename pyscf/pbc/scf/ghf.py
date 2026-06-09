@@ -123,10 +123,14 @@ class GHF(pbchf.SCF):
     gen_response = NotImplemented
 
     def get_hcore(self, cell=None, kpt=None):
+        if cell is None: cell = self.cell
+        if kpt is None: kpt = self.kpt
         hcore = pbchf.SCF.get_hcore(self, cell, kpt)
         hcore = scipy.linalg.block_diag(hcore, hcore)
-        if self.with_soc:
-            raise NotImplementedError
+        if self.with_soc and cell.has_ecp_soc():
+            from pyscf.pbc.gto.ecp import ecp_int
+            # The ECP SOC contribution = <|1j * s * U_SOC|>
+            hcore = hcore + ecp_int(cell, kpt, intor='ECPso')
         return hcore
 
     def get_ovlp(self, cell=None, kpt=None):

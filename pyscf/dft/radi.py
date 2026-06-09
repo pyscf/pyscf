@@ -37,7 +37,7 @@ ATOM_SPECIFIC_TREUTLER_GRIDS = getattr(__config__, 'ATOM_SPECIFIC_TREUTLER_GRIDS
 
 # P.M.W. Gill, B.G. Johnson, J.A. Pople, Chem. Phys. Letters 209 (1993) 506-512
 SG1RADII = numpy.array((
-    0,
+    1.0000, # Ghost
     1.0000,                                                 0.5882,
     3.0769, 2.0513, 1.5385, 1.2308, 1.0256, 0.8791, 0.7692, 0.6838,
     4.0909, 3.1579, 2.5714, 2.1687, 1.8750, 1.6514, 1.4754, 1.3333))

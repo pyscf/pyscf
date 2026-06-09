@@ -76,6 +76,7 @@ def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
         for i,j in enumerate(aoidx):
             fout.write(' %3d    %18.14g\n' % (i+1, mo_coeff[j,imo]))
 
+
 def from_mo(mol, filename, mo_coeff, spin='Alpha', symm=None, ene=None,
             occ=None, ignore_h=IGNORE_H):
     '''Dump the given MOs in Molden format'''
@@ -87,6 +88,8 @@ def from_mo(mol, filename, mo_coeff, spin='Alpha', symm=None, ene=None,
 def from_scf(mf, filename, ignore_h=IGNORE_H):
     '''Dump the given SCF object in Molden format'''
     dump_scf(mf, filename, ignore_h)
+
+
 def dump_scf(mf, filename, ignore_h=IGNORE_H):
     import pyscf.scf
     mol = mf.mol
@@ -104,6 +107,7 @@ def dump_scf(mf, filename, ignore_h=IGNORE_H):
             orbital_coeff(mf.mol, f, mf.mo_coeff,
                           ene=mf.mo_energy, occ=mf.mo_occ, ignore_h=ignore_h)
 
+
 def from_mcscf(mc, filename, ignore_h=IGNORE_H, cas_natorb=False):
     mol = mc.mol
     dm1 = mc.make_rdm1()
@@ -117,6 +121,7 @@ def from_mcscf(mc, filename, ignore_h=IGNORE_H, cas_natorb=False):
     with open(filename, 'w') as f:
         header(mol, f, ignore_h)
         orbital_coeff(mol, f, mo_coeff, ene=mo_energy, occ=occ, ignore_h=ignore_h)
+
 
 def from_chkfile(filename, chkfile, key='scf/mo_coeff', ignore_h=IGNORE_H):
     import pyscf.scf
@@ -156,6 +161,7 @@ def from_chkfile(filename, chkfile, key='scf/mo_coeff', ignore_h=IGNORE_H):
 
 _SEC_RE = re.compile(r'\[[^]]+\]')
 
+
 def _read_one_section(molden_fp):
     sec = [None]
     last_pos = 0
@@ -183,9 +189,11 @@ def _read_one_section(molden_fp):
 
     return sec
 
+
 def _parse_natoms(lines, envs):
     envs['natm'] = natm = int(lines[1])
     return natm
+
 
 def _parse_atoms(lines, envs):
     if 'ANG' in lines[0].upper():
@@ -203,9 +211,10 @@ def _parse_atoms(lines, envs):
         sys.stderr.write('Number of atoms in section ATOMS does not equal to N_ATOMS\n')
     return atoms
 
+
 def _parse_charge(lines, envs):
-    mulliken_charges = [float(_d2e(x)) for x in lines[1:]]
-    return mulliken_charges
+    return [float(_d2e(x)) for x in lines[1:]]  # Mulliken charges
+
 
 def _parse_gto(lines, envs):
     mol = envs['mol']
@@ -251,6 +260,7 @@ def _parse_gto(lines, envs):
     mol._basis = envs['basis'] = gto.format_basis(_basis, sort_basis=False)
     return mol
 
+
 def _parse_mo(lines, envs):
     mol = envs['mol']
     if not mol._built:
@@ -263,7 +273,7 @@ def _parse_mo(lines, envs):
     mo_energy = []
     spins = []
     mo_occ = []
-    mo_coeff_prim = [] # primary data, will be reworked for missing values
+    mo_coeff_prim = []  # primary data, will be reworked for missing values
     coeff_idx = []
     mo_id = 0
     for line in lines[1:]:
@@ -296,7 +306,6 @@ def _parse_mo(lines, envs):
         s = mol.intor('int1e_ovlp')
         mo_coeff = numpy.einsum('i,ij->ij', numpy.sqrt(1/s.diagonal()), mo_coeff)
 
-
     return mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins
 
 
@@ -316,6 +325,7 @@ def _parse_core(lines, envs):
                          'ECP information was lost when saving to molden format.\n\n')
     return mol.ecp
 
+
 _SEC_PARSER = {'N_ATOMS'  : _parse_natoms,
                'ATOMS'    : _parse_atoms,
                'GTO'      : _parse_gto,
@@ -326,10 +336,11 @@ _SEC_PARSER = {'N_ATOMS'  : _parse_natoms,
 
 _SEC_ORDER = ['N_ATOMS', 'ATOMS', 'GTO', 'CHARGE', 'MO', 'CORE', 'MOLDEN FORMAT']
 
+
 def load(moldenfile, verbose=0):
     '''Extract mol and orbitals from molden file
     '''
-    sec_kinds = {} # found sections and their lines are stored in this dic
+    sec_kinds = {}  # found sections and their lines are stored in this dic
     with open(moldenfile, 'r') as f:
         mol = gto.Mole()
         mol.cart = True
@@ -367,7 +378,7 @@ def load(moldenfile, verbose=0):
         if sec_kind == 'MO' and 'MO' in sec_kinds:
             if len(sec_kinds['MO']) == 1:
                 mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins = \
-                        _parse_mo(sec_kinds['MO'][0], tokens)
+                    _parse_mo(sec_kinds['MO'][0], tokens)
                 # If found only one MO section while 'B' appears in the spins
                 # labels, the MOs so obtained are spin orbitals, with beta
                 # orbitals at the second half of the mo_coeff matrix.
@@ -376,23 +387,23 @@ def load(moldenfile, verbose=0):
                         # general spin orbitals which allows to mix spin alpha
                         # and spin beta components in the same orbitals
                         raise NotImplementedError
-                    else:
-                        # Regular spin orbitals, alpha and beta do not mix
-                        beta_idx = numpy.array([s[0] == 'B' for s in spins])
-                        alpha_idx = ~beta_idx
-                        mo_energy = mo_energy[alpha_idx], mo_energy[beta_idx]
-                        mo_coeff = mo_coeff[:,alpha_idx], mo_coeff[:,beta_idx]
-                        mo_occ = mo_occ[alpha_idx], mo_occ[beta_idx]
-                        irrep_labels = numpy.array(irrep_labels)
-                        irrep_labels = irrep_labels[alpha_idx], irrep_labels[beta_idx]
-                        spins = numpy.array(spins)
-                        spins = spins[alpha_idx], spins[beta_idx]
+
+                    # Regular spin orbitals, alpha and beta do not mix
+                    beta_idx = numpy.array([s[0] == 'B' for s in spins])
+                    alpha_idx = ~beta_idx
+                    mo_energy = mo_energy[alpha_idx], mo_energy[beta_idx]
+                    mo_coeff = mo_coeff[:,alpha_idx], mo_coeff[:,beta_idx]
+                    mo_occ = mo_occ[alpha_idx], mo_occ[beta_idx]
+                    irrep_labels = numpy.array(irrep_labels)
+                    irrep_labels = irrep_labels[alpha_idx], irrep_labels[beta_idx]
+                    spins = numpy.array(spins)
+                    spins = spins[alpha_idx], spins[beta_idx]
 
             elif len(sec_kinds['MO']) == 2:
                 res_a = _parse_mo(sec_kinds['MO'][0], tokens)
                 res_b = _parse_mo(sec_kinds['MO'][1], tokens)
                 mo_energy, mo_coeff, mo_occ, irrep_labels, spins = \
-                        list(zip(res_a[1:], res_b[1:]))
+                    list(zip(res_a[1:], res_b[1:]))
                 mol = res_b[0]
 
         if sec_kind in sec_kinds:
@@ -406,10 +417,13 @@ def load(moldenfile, verbose=0):
         mol.build(0, 0)
     return mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins
 
+
 parse = read = load
+
 
 def _d2e(token):
     return token.replace('D', 'e').replace('d', 'e')
+
 
 def header(mol, fout, ignore_h=IGNORE_H):
     if ignore_h:
@@ -426,7 +440,7 @@ def header(mol, fout, ignore_h=IGNORE_H):
 
     fout.write('[GTO]\n')
     for ia, (sh0, sh1, p0, p1) in enumerate(mol.offset_nr_by_atom()):
-        fout.write('%d 0\n' %(ia+1))
+        fout.write('%d 0\n' % (ia+1))
         for ib in range(sh0, sh1):
             l = mol.bas_angular(ib)
             nprim = mol.bas_nprim(ib)
@@ -451,6 +465,7 @@ def header(mol, fout, ignore_h=IGNORE_H):
             if nelec_ecp_core != 0:
                 fout.write('%s : %d\n' % (ia+1, nelec_ecp_core))
     fout.write('\n')
+
 
 def order_ao_index(mol):
     # reorder d,f,g function to
@@ -500,6 +515,7 @@ def order_ao_index(mol):
                 off += l * 2 + 1
     return idx
 
+
 def remove_high_l(mol, mo_coeff=None):
     '''Remove high angular momentum (l >= 5) functions before dumping molden file.
     If molden function raised error message ``RuntimeError l=5 is not supported``,
@@ -521,23 +537,22 @@ def remove_high_l(mol, mo_coeff=None):
     pmol.build(0, 0)
     if mo_coeff is None:
         return pmol, None
-    else:
-        p1 = 0
-        idx = []
-        for ib in range(mol.nbas):
-            l = mol.bas_angular(ib)
-            nc = mol.bas_nctr(ib)
-            if mol.cart:
-                nd = (l + 1) * (l + 2) // 2
-            else:
-                nd = l * 2 + 1
-            p0, p1 = p1, p1 + nd * nc
-            if l <= 4:
-                idx.append(range(p0, p1))
 
-        idx = numpy.hstack(idx)
-        return pmol, mo_coeff[idx]
+    p1 = 0
+    idx = []
+    for ib in range(mol.nbas):
+        l = mol.bas_angular(ib)
+        nc = mol.bas_nctr(ib)
+        if mol.cart:
+            nd = (l + 1) * (l + 2) // 2
+        else:
+            nd = l * 2 + 1
+        p0, p1 = p1, p1 + nd * nc
+        if l <= 4:
+            idx.append(range(p0, p1))
 
+    idx = numpy.hstack(idx)
+    return pmol, mo_coeff[idx]
 
 
 if __name__ == '__main__':
@@ -545,7 +560,7 @@ if __name__ == '__main__':
     import tempfile
     mol = gto.Mole()
     mol.verbose = 5
-    mol.output = None#'out_gho'
+    mol.output = None  # 'out_gho'
     mol.atom = [['C', (0.,0.,0.)],
                 ['H', ( 1, 1, 1)],
                 ['H', (-1,-1, 1)],

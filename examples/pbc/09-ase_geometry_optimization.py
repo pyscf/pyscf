@@ -29,19 +29,19 @@ mf.conv_tol = 1e-6
 atoms.calc = PySCF(method=mf)
 
 # optimize atom positions
-opt = BFGS(atoms, logfile='atom_pos.log')
+opt = BFGS(atoms, logfile='atom_pos_opt.log')
 opt.run()
 print(atoms.get_positions())
 
 
 # Optimize both lattice and atom positions
-opt = BFGS(UnitCellFilter(atoms), logfile='lattice_atom.log')
+opt = BFGS(UnitCellFilter(atoms), logfile='lattice_atom_opt.log')
 opt.run()
 print(atoms.get_positions())
 print(atoms.cell)
 
 
 # Optimize lattice only. Atom positions (fractional coordinates) are frozen.
-opt = BFGS(StrainFilter(atoms), logfile='lattice_atom.log')
+opt = BFGS(StrainFilter(atoms), logfile='lattice_opt.log')
 opt.run()
 print(atoms.cell)

@@ -279,7 +279,7 @@ class KnownValues(unittest.TestCase):
         with h5py.File(mc0.chkfile, 'r') as f:
             self.assertEqual(
                 set(f['mcscf'].keys()),
-                {'ncore', 'e_tot', 'mo_energy', 'casdm1', 'mo_occ', 'ncas', 'mo_coeff', 'e_cas'})
+                {'ncore', 'e_tot', 'mo_energy', 'casdm1', 'mo_occ', 'ncas', 'nelecas', 'mo_coeff', 'e_cas'})
 
     def test_state_average1(self):
         mc = mcscf.CASSCF(m, 4, 4)
@@ -336,6 +336,10 @@ class KnownValues(unittest.TestCase):
         mc.kernel(m.mo_coeff)
         self.assertAlmostEqual(mc.e_tot, -108.85974001740854, 7)
         mc.analyze()
+
+        mc = mcscf.CASSCF(mol.RHF(), 4, 4)
+        mc.kernel()
+        self.assertAlmostEqual(mc.e_tot, -108.85974001740854, 7)
 
 
 if __name__ == "__main__":

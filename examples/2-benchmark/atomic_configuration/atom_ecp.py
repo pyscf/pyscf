@@ -16,7 +16,7 @@ for z in range(21, 94):
     try:
         a = gto.M(atom=[[z, (0, 0, 0)]], basis='lanl2dz', ecp='lanl2dz', verbose=0, spin=None)
         atoms[z] = a
-    except:
+    except Exception:
         pass
 
 def count_scf_cycle(envs):

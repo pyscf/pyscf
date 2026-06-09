@@ -20,7 +20,6 @@ from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pbcscf
 import pyscf.pbc.mp
 import pyscf.pbc.mp.kmp2
-from pyscf.scf.addons import remove_linear_dep_
 
 
 def setUpModule():
@@ -49,7 +48,6 @@ def tearDownModule():
 def run_kcell(cell, nk):
     abs_kpts = cell.make_kpts(nk, wrap_around=True)
     kmf = pbcscf.KRHF(cell, abs_kpts)
-    kmf = remove_linear_dep_(kmf, threshold=1e-5, lindep=1e-6)
     kmf.conv_tol = 1e-12
     ekpt = kmf.scf()
     mp = pyscf.pbc.mp.kmp2.KMP2(kmf).run()
@@ -75,7 +73,6 @@ class KnownValues(unittest.TestCase):
         nk = [2, 2, 1]
         abs_kpts = cell1.make_kpts(nk, wrap_around=True)
         kmf = pbcscf.KRHF(cell1, abs_kpts)
-        kmf = remove_linear_dep_(kmf, threshold=1e-4, lindep=1e-6)
         ekpt = kmf.scf()
         mp = pyscf.pbc.mp.kmp2.KMP2(kmf).run()
 

@@ -826,7 +826,7 @@ UHF = UDHF = DHF
 class HF1e(DHF):
     scf = hf._hf1e_scf
 
-    def _eigh(self, h, s):
+    def _eigh(self, h, s, overwrite=False, x=None):
         if zquatev:
             return zquatev.solve_KR_FCSCE(self.mol, h, s)
         else:
@@ -842,7 +842,7 @@ class RDHF(DHF):
             raise RuntimeError('zquatev library is required to perform Kramers-restricted DHF')
         UHF.__init__(self, mol)
 
-    def _eigh(self, h, s):
+    def _eigh(self, h, s, overwrite=False, x=None):
         return zquatev.solve_KR_FCSCE(self.mol, h, s)
 
     def x2c1e(self):

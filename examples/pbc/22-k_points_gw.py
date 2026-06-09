@@ -3,10 +3,8 @@
 '''
 G0W0 with k-points sampling
 '''
-
-from functools import reduce
-import numpy
-from pyscf.pbc import gto, scf, gw
+import numpy as np
+from pyscf.pbc import df, gto, scf, gw
 
 cell = gto.Cell()
 cell.atom='''
@@ -23,21 +21,59 @@ cell.unit = 'B'
 cell.verbose = 5
 cell.build()
 
-#
-# KDFT and KGW with 2x2x2 k-points
-#
-kpts = cell.make_kpts([2,2,2])
-kmf = scf.KRKS(cell).density_fit()
-kmf.kpts = kpts
-emf = kmf.kernel()
+kpts = cell.make_kpts([2, 2, 2])
+gdf = df.RSDF(cell, kpts)
+gdf.build()
 
-# Default is AC frequency integration
-mygw = gw.KRGW(kmf)
+# restricted KGW
+kmf = scf.KRKS(cell, kpts).rs_density_fit()
+kmf.with_df = gdf
+kmf.kernel()
+
+# KRGWAC using analytical continuation
+mygw = gw.krgw_ac.KRGWAC(kmf)
 mygw.kernel()
-print("KRGW energies =", mygw.mo_energy)
+
+# KRGWAC low-memory routine
+# finite-size correction is not implemented for outcore routine
+mygw = gw.krgw_ac.KRGWAC(kmf)
+mygw.outcore = True
+mygw.fc = False
+mygw.kernel()
+
+# KRGWAC full self-energy and density of states
+mygw = gw.krgw_ac.KRGWAC(kmf)
+mygw.fullsigma = True
+mygw.kernel()
+omega = np.linspace(-1, 1, 201)
+# gf: GW Green's function; gf0: DFT Green's function; sigma: self-energy
+gf, gf0, sigma = mygw.make_gf(omega, eta=1e-2)
+print("k=0 density of states")
+for i in range(len(omega)):
+    print(omega[i], -np.trace(gf[0, :, :, i].imag) / np.pi)
 
 # With CD frequency integration
 #mygw = gw.KRGW(kmf, freq_int='cd')
 #mygw.kernel()
 #print("KRGW-CD energies =", mygw.mo_energy)
 
+# restricted KGW
+kmf = scf.KUKS(cell, kpts).rs_density_fit()
+kmf.with_df = gdf
+kmf.kernel()
+
+# KUGWAC using analytical continuation with finite-size correction
+mygw = gw.kugw_ac.KUGWAC(kmf)
+mygw.fc = True
+mygw.kernel()
+
+# KUGWAC full self-energy and density of states
+mygw = gw.kugw_ac.KUGWAC(kmf)
+mygw.fullsigma = True
+mygw.kernel()
+omega = np.linspace(-1, 1, 201)
+# gf: GW Green's function; gf0: DFT Green's function; sigma: self-energy
+gf, gf0, sigma = mygw.make_gf(omega, eta=1e-2)
+print("k=0 density of states: alpha beta")
+for i in range(len(omega)):
+    print(omega[i], -np.trace(gf[0, 0, :, :, i].imag) / np.pi, -np.trace(gf[0, 1, :, :, i].imag) / np.pi)

@@ -1,7 +1,4 @@
 #!/usr/bin/env python
-#
-# Author: Qiming Sun <osirpt.sun@gmail.com>
-#
 
 '''
 Applying scalar relativistic effects by decorating the scf object with

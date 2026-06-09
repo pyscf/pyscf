@@ -21,6 +21,7 @@ from pyscf.pbc.gto import Cell
 from pyscf.pbc.df import FFTDF
 from pyscf.pbc.tools import k2gamma
 from pyscf.pbc.scf import rsjk
+from pyscf.pbc import scf, dft
 
 class KnownValues(unittest.TestCase):
     def test_get_jk(self):
@@ -280,6 +281,56 @@ class KnownValues(unittest.TestCase):
         vj, vk = mf.rsjk.get_jk(dm, kpts=kpts, exxdiv=None)
         self.assertAlmostEqual(abs(vj-refj).max(), 0, 7)
         self.assertAlmostEqual(abs(vk-refk).max(), 0, 7)
+
+    def test_krks_rsjk(self):
+        cell = Cell().build(
+             a = np.eye(3)*1.8,
+             atom = '''He     0.      0.      0.
+                       He     0.4917  0.4917  0.4917''',
+             basis = {'He': [[0, [2.5, 1]]]},
+             precision = 1e-9,
+             verbose = 0,
+        )
+        kpts = cell.make_kpts([2, 1, 1])
+        kmf = cell.KRKS(kpts=kpts).jk_method('RS')
+        kmf.run()
+
+    def test_rks_rsjk(self):
+        cell = Cell().build(
+             a = np.eye(3)*1.8,
+             atom = '''He     0.      0.      0.
+                       He     0.4917  0.4917  0.4917''',
+             basis = {'He': [[0, [2.5, 1]]]},
+             precision = 1e-9,
+             verbose = 0,
+        )
+        kmf = cell.RKS().jk_method('RS')
+        kmf.run()
+
+    def test_krhf_rsjk(self):
+        cell = Cell().build(
+             a = np.eye(3)*1.8,
+             atom = '''He     0.      0.      0.
+                       He     0.4917  0.4917  0.4917''',
+             basis = {'He': [[0, [2.5, 1]]]},
+             precision = 1e-9,
+             verbose = 0,
+        )
+        kpts = cell.make_kpts([2, 1, 1])
+        kmf = cell.KRHF(kpts=kpts).jk_method('RS')
+        kmf.run()
+
+    def test_rhf_rsjk(self):
+        cell = Cell().build(
+             a = np.eye(3)*1.8,
+             atom = '''He     0.      0.      0.
+                       He     0.4917  0.4917  0.4917''',
+             basis = {'He': [[0, [2.5, 1]]]},
+             precision = 1e-9,
+             verbose = 0,
+        )
+        kmf = cell.RHF().jk_method('RS')
+        kmf.run()
 
 if __name__ == '__main__':
     print("Full Tests for rsjk")

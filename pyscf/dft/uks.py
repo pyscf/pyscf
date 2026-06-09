@@ -38,7 +38,8 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     if dm.ndim == 2:  # RHF DM
         logger.warn(ks, 'Incompatible dm dimension. Treat dm as RHF density matrix.')
         dm = numpy.repeat(dm[None]*.5, 2, axis=0)
-    ks.initialize_grids(mol, dm)
+    if ks.grids.coords is None:
+        ks.initialize_grids(mol, dm)
 
     t0 = (logger.process_clock(), logger.perf_counter())
 

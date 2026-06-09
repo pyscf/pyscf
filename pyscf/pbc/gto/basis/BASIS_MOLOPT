@@ -1,3 +1,4 @@
+# =================================================================================================================================================================
 #
 # This is a library of molecularly optimised basis functions as described in the paper:
 #
@@ -9,6 +10,31 @@
 #
 # URL: http://link.aip.org/link/?JCP/127/114105
 # DOI: 10.1063/1.2770708
+#
+# In this work, we have shown that accurate basis sets (e.g. small BSSE, close to the basis set limit)
+# but well conditioned (and thus suitable for a wide variety of chemical environments, i.e. gas and condensed phases)
+# can be derived by optimising highly contracted family basis sets, including diffuse exponents, on molecular systems.
+# Typically, these basis sets outperform split valence basis sets of similar size. For small gas-phase systems (including QMMM)
+# or large systems (thousands of atoms) their cost is moderate, whereas the diffuse nature of the basis set increases the computational
+# for medium size condensed phase systems. 
+#
+# This file contains the molecularly optimised basis sets for the elements H , C , N , O , F , Si , P , S , Cl
+# as discussed in the paper (SZV-MOLOPT-GTH, DZVP-MOLOPT-GTH, TZVP-MOLOPT-GTH, TZV2P-MOLOPT-GTH, TZV2PX-MOLOPT-GTH).
+#
+# Usage hint : 'NGRIDS 5' (section &MGRID) will deal more efficiently (2x speedup) with the diffuse nature of the basis.
+#
+# In addition to the basis sets discussed in the paper above, we have generated with the same procedure
+# variants of these basis sets using less and thus less diffuse primitives (based on the atomic code being with 1mHt of the basis set limit)
+# These are the  SZV-MOLOPT-SR-GTH and DZVP-MOLOPT-SR-GTH (Shorter Range) basis sets for most of the periodic table
+# These basis sets reduce the cost for medium size condensed phase systems, while most properties are only slightly affected.
+# Most affected is BSSE, which increases to 0.32, 0.16, 0.31, 0.24 from 0.23, 0.11, 0.41, 0.20 kcal/mol (DZVP-MOLOPT-SR-GTH vs. DZVP-MOLOPT-GTH),
+# while for a box with 64 molecules timings are 25 and 111 s respectively.
+#
+#
+# the -qXX documents the valence of the pseudo corresponding to the basis set. Of course, a matching valence in basis and pseudo is required.
+#
+#
+# =================================================================================================================================================================
 #
 # Basis set format:
 #
@@ -1702,3 +1728,14 @@
       0.319589540831 -0.907143180970 -0.390801321298 -0.775828387512 -0.485164655715 -1.000515166114
       0.124013091191 -0.222277238353 -1.541429072147 -0.204098521582 -1.116124046015 -1.713700191874
       0.113270499507 -0.001928995329  1.908801729636 -0.288853228632  1.721625954410  0.927072017361
+#
+U DZVP-MOLOPT-GTH-q14
+  1
+  6  0  4  7  3  3  2  2  1       6s              7s              8s              6p              7p              8p              6d              7d              5f              6f              5g
+      2.970404051267 -8.613286991729 -4.847218644580 -0.094448304725  2.089613520508 -1.388690863894 -0.339032038879 -0.517917661294 -0.108712988266  0.630053678940 -0.328083139683  0.193812038517
+      2.837409896206  9.359917338956  5.295013384216  0.080503840695 -2.330831226482  1.591366466533 -0.297639904371  0.575541916820  0.134339314945  0.077256524471 -0.136357555344 -0.096937116722
+      1.029287870466 -0.223393808655 -0.207730929575  0.170499084947  0.118073808224 -0.298526476737 -0.144235936067 -0.007051323571 -0.072924564853  0.798224117501 -0.044975575325  0.942045397086
+      0.447156512122 -1.138927348908 -1.085942892963 -0.128005768148  0.875430068610 -0.558080313712  0.020421937017 -0.328938941888 -0.022899936943  0.416776715909  0.084347995405  1.112468197028
+      0.224386023364 -0.475585548696 -0.147870903958  0.028006926300  0.257221846022 -0.186869197027 -0.068935950988 -0.436497768592  0.047774203203  0.269342903301  0.107901532632  0.049712666496
+      0.082082026090 -0.038412518166  1.206363318489  0.959404540206 -0.004940369038  1.337846156620  1.078056470699 -0.170128075474  1.023142281896  0.095618485831  0.591613653295  0.071150976147
+      0.048989649967 -0.161438730593  0.204614845616  0.064250249847 -0.040926507048  0.070410902066  0.151425801177  0.019870929957  0.031382006308 -0.029027116072  0.159595534158 -0.000586301554

@@ -91,36 +91,89 @@ c_double_p = ctypes.POINTER(ctypes.c_double)
 c_int_p = ctypes.POINTER(ctypes.c_int)
 c_null_ptr = ctypes.POINTER(ctypes.c_void_p)
 
-@functools.lru_cache
+_dll_deps = {
+    'libcgto':       ['libcint'],
+    'libcvhf':       ['libcint'],
+    'libao2mo':      ['libcint', 'libcvhf'],
+    'libdft':        ['libcvhf', 'libcgto', 'libcint'],
+    'libpbc':        ['libcint', 'libcgto'],
+    'libri':         ['libao2mo', 'libcvhf', 'libcgto', 'libcint'],
+    'libxc_itrf':    ['xc'],
+    'libxcfun_itrf': ['xcfun'],
+}
+
+@functools.lru_cache(128)
 def load_library(libname):
+    lib = None
     try:
         _loaderpath = os.path.dirname(__file__)
-        return numpy.ctypeslib.load_library(libname, _loaderpath)
+        lib = numpy.ctypeslib.load_library(libname, _loaderpath)
     except OSError:
+        pass
+
+    if lib is None and sys.platform == 'win32':
+        for env_path in [os.path.join(sys.prefix, 'Library', 'bin'),
+                         os.path.join(sys.prefix, 'Library', 'lib')]:
+            try:
+                lib = numpy.ctypeslib.load_library(libname, env_path)
+                break
+            except OSError:
+                pass
+
+    if lib is None:
         from pyscf import __path__ as ext_modules
         for path in ext_modules:
             libpath = os.path.join(path, 'lib')
             if os.path.isdir(libpath):
                 for files in os.listdir(libpath):
                     if files.startswith(libname):
-                        return numpy.ctypeslib.load_library(libname, libpath)
-        raise
+                        lib = numpy.ctypeslib.load_library(libname, libpath)
+                        break
+                if lib is not None:
+                    break
+        if lib is None:
+            raise OSError(f'Library {libname} not found')
+
+    if sys.platform == 'win32' and libname in _dll_deps:
+        deps = [load_library(d) for d in _dll_deps[libname]]
+        lib = make_dll_wrapper(lib, *deps)
+    return lib
+
+
+def make_dll_wrapper(lib, *fallbacks):
+    if sys.platform != 'win32':
+        return lib
+    class _DllWrapper:
+        def __init__(self, primary, *fallbacks):
+            object.__setattr__(self, '_primary', primary)
+            object.__setattr__(self, '_fallbacks', fallbacks)
+        def __getattr__(self, name):
+            for dll in (self._primary,) + self._fallbacks:
+                try:
+                    return getattr(dll, name)
+                except AttributeError:
+                    pass
+            raise AttributeError(f"function '{name}' not found")
+    return _DllWrapper(lib, *fallbacks)
 
 #Fixme, the standard resource module gives wrong number when objects are released
 # http://fa.bianp.net/blog/2013/different-ways-to-get-memory-consumption-or-lessons-learned-from-memory_profiler/#fn:1
 #or use slow functions as memory_profiler._get_memory did
-CLOCK_TICKS = os.sysconf("SC_CLK_TCK")
-PAGESIZE = os.sysconf("SC_PAGE_SIZE")
 def current_memory():
     '''Return the size of used memory and allocated virtual memory (in MB)'''
-    #import resource
-    #return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1000
     if sys.platform.startswith('linux'):
+        pagesize = os.sysconf("SC_PAGE_SIZE")
         with open("/proc/%s/statm" % os.getpid()) as f:
-            vms, rss = [int(x)*PAGESIZE for x in f.readline().split()[:2]]
+            vms, rss = [int(x) * pagesize for x in f.readline().split()[:2]]
             return rss/1e6, vms/1e6
     else:
-        return 0, 0
+        try:
+            import psutil
+            process = psutil.Process(os.getpid())
+            mem_info = process.memory_info()
+            return mem_info.rss/1e6, mem_info.vms/1e6
+        except (ImportError, Exception):
+            return 0, 0
 
 def num_threads(n=None):
     '''Set the number of OMP threads.  If argument is not specified, the
@@ -1216,8 +1269,9 @@ class H5TmpFile(H5FileWrap):
     >>> ftmp = lib.H5TmpFile()
     '''
     def __init__(self, filename=None, mode='a', prefix='', suffix='',
-                 dir=param.TMPDIR, *args, **kwargs):
+                 dir=None, *args, **kwargs):
         self.delete_on_close = False
+        dir = dir or param.TMPDIR
         if filename is None:
             filename = H5TmpFile._gen_unique_name(dir, pre=prefix, suf=suffix)
             self.delete_on_close = True
@@ -1542,22 +1596,18 @@ def to_gpu(method, out=None):
 
         from importlib import import_module
         mod = import_module(method.__module__.replace('pyscf', 'gpu4pyscf'))
-        try:
-            cls = getattr(mod, method.__class__.__name__)
-        except AttributeError:
-            if hasattr(cls, 'from_cpu'):
-                # the customized to_gpu function can be accessed at module
-                # levelin gpu4pyscf.
-                return cls.from_cpu(method)
-            raise
-
-        # Allow gpu4pyscf to customize the to_gpu method for PySCF classes.
         if hasattr(mod, 'from_cpu'):
+            # the customized to_gpu function can be accessed at module
+            # levelin gpu4pyscf.
             return mod.from_cpu(method)
 
         # A temporary GPU instance. This ensures to initialize private
         # attributes that are only available for GPU code.
         cls = getattr(mod, method.__class__.__name__)
+        # Allow gpu4pyscf to customize the to_gpu method for PySCF classes.
+        if hasattr(cls, 'from_cpu'):
+            return cls.from_cpu(method)
+
         out = method.view(cls)
 
     elif hasattr(out, 'from_cpu'):

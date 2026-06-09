@@ -129,6 +129,7 @@ class DF(lib.StreamObject):
     def auxbasis(self, x):
         if self._auxbasis != x:
             self.reset()
+            self.auxmol = None
             self._auxbasis = x
 
     def dump_flags(self, verbose=None):

@@ -188,7 +188,7 @@ def CASSCF(mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
     if isinstance(mf, scf.uhf.UHF):
         mf = mf.to_rhf()
     if isinstance(mf, _DFHF) and mf.with_df:
-        return DFCASSCF(mf, ncas, nelecas, ncore, frozen)
+        return DFCASSCF(mf, ncas, nelecas, ncore=ncore, frozen=frozen)
 
     if mf.mol.symmetry and mf.mol.groupname != 'C1':
         mc = mc1step_symm.CASSCF(mf, ncas, nelecas, ncore, frozen)
@@ -212,7 +212,7 @@ def CASCI(mf_or_mol, ncas, nelecas, ncore=None):
         mf = mf.to_rhf()
 
     if isinstance(mf, _DFHF) and mf.with_df:
-        return DFCASCI(mf, ncas, nelecas, ncore)
+        return DFCASCI(mf, ncas, nelecas, ncore=ncore)
 
     if mf.mol.symmetry and mf.mol.groupname != 'C1':
         mc = casci_symm.CASCI(mf, ncas, nelecas, ncore)

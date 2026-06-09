@@ -15,12 +15,15 @@
 from functools import reduce
 import numpy
 
+
 def rotmatz(ang):
     c = numpy.cos(ang)
     s = numpy.sin(ang)
     return numpy.array((( c, s, 0),
                         (-s, c, 0),
                         ( 0, 0, 1),))
+
+
 def rotmaty(ang):
     c = numpy.cos(ang)
     s = numpy.sin(ang)
@@ -28,9 +31,9 @@ def rotmaty(ang):
                         ( 0, 1, 0),
                         (-s, 0, c),))
 
+
 def r2edge(ang, r):
     return 2*r*numpy.sin(ang/2)
-
 
 
 def make60(b5, b6):

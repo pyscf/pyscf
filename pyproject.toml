@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools >= 61.0", "wheel", "cmake<4.0"]
+requires = ["setuptools>=61.0", "wheel", "cmake<4.0"]
 build-backend = "setuptools.build_meta"
 
 
@@ -21,6 +21,8 @@ classifiers = [
   'Programming Language :: Python :: 3.10',
   'Programming Language :: Python :: 3.11',
   'Programming Language :: Python :: 3.12',
+  'Programming Language :: Python :: 3.13',
+  'Programming Language :: Python :: 3.14',
   'Topic :: Software Development',
   'Topic :: Scientific/Engineering',
   'Operating System :: POSIX',
@@ -34,11 +36,13 @@ authors = [{ name = "Qiming Sun", email = "osirpt.sun@gmail.com" }]
 
 license = { text = "Apache-2.0" }
 
+requires-python = ">=3.7"
 dependencies = [
   'numpy>=1.13,!=1.16,!=1.17',
   'scipy>=1.6.0',
   'h5py>=2.7',
   'setuptools',
+  "psutil; sys_platform == 'win32'"
 ]
 
 [project.urls]

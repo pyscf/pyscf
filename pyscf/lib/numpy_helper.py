@@ -24,6 +24,7 @@ import os
 import ctypes
 import math
 import numpy
+import numpy as np
 import scipy.special
 from pyscf.lib import misc
 from numpy import asarray  # For backward compatibility
@@ -1719,3 +1720,50 @@ def isin_1d(v, vs, return_index=False):
         if len(idx) == 1:
             idx = idx[0]
         return v_in_vs, idx
+
+def groupby(labels, a, op='argmin'):
+    '''Perform groupby(labels, a).op(). For example,
+    groupby(['A', 'A', 'B'], [1, 2, 3], 'min') => [1, 3]
+    '''
+    if 'min' in op:
+        a_order = a.argsort()
+        _, idx = np.unique(labels[a_order], return_index=True)
+        idx = a_order[idx]
+    elif 'max' in op:
+        a_order = a.argsort()[::-1]
+        _, idx = np.unique(labels[a_order], return_index=True)
+        idx = a_order[idx]
+    elif op == 'sum':
+        labels, inv = np.unique(labels, return_inverse=True)
+        if a.ndim == 1:
+            summed = np.bincount(inv, weights=a)
+        else:
+            summed = np.zeros((len(labels), *a.shape[1:]), dtype=a.dtype)
+            np.add.at(summed, inv, a)
+        return summed
+    else:
+        raise NotImplementedError
+
+    if 'arg' in op:
+        return idx
+    else:
+        return a[idx]
+
+def stack_with_padding(arrays):
+    '''
+    Stack orbital coefficients, padding zeros to smaller arrays
+    '''
+    if not arrays:
+        raise ValueError("arrays must be a non-empty sequence")
+
+    max_nmo = max(a.shape[1] for a in arrays)
+    nao = arrays[0].shape[0]
+    dtype = numpy.result_type(*arrays)
+    out = numpy.empty((len(arrays), nao, max_nmo), dtype=dtype)
+
+    for k, a in enumerate(arrays):
+        nmo = a.shape[1]
+        out[k,:,:nmo] = a
+        if nmo < max_nmo:
+            out[k,:,nmo:] = 0
+    return out

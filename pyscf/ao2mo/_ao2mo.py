@@ -14,15 +14,15 @@
 # limitations under the License.
 
 import ctypes
-import _ctypes
 import numpy
 from pyscf import lib
 from pyscf.gto.moleintor import make_cintopt, make_loc, ascint3
 from pyscf.scf import _vhf
 
 libao2mo = lib.load_library('libao2mo')
+
 def _fpointer(name):
-    return ctypes.c_void_p(_ctypes.dlsym(libao2mo._handle, name))
+    return ctypes.cast(getattr(libao2mo, name), ctypes.c_void_p)
 
 class AO2MOpt:
     def __init__(self, mol, intor, prescreen='CVHFnoscreen', qcondname=None):

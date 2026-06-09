@@ -392,15 +392,16 @@ void CCsd_t_contract(double *e_tot,
                                         cache_row_b, cache_col_b, sizeof(double));
         int *permute_idx = malloc(sizeof(int) * nocc*nocc*nocc * 6);
         _make_permute_indices(permute_idx, nocc);
+        FILE *err_fp = stderr;
 #pragma omp parallel default(none) \
         shared(njobs, nocc, nvir, mo_energy, t1T, t2T, nirrep, o_ir_loc, \
-               v_ir_loc, oo_ir_loc, orbsym, vooo, fvo, jobs, e_tot, permute_idx, stderr)
+               v_ir_loc, oo_ir_loc, orbsym, vooo, fvo, jobs, e_tot, permute_idx, err_fp)
 {
         int a, b, c;
         size_t k;
         double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*3+2));
         if (cache1 == NULL) {
-                fprintf(stderr, "malloc(%zu) failed in CCsd_t_contract\n",
+                fprintf(err_fp, "malloc(%zu) failed in CCsd_t_contract\n",
                         sizeof(double) * nocc*nocc*nocc*3);
                 exit(1);
         }
@@ -447,15 +448,16 @@ void QCIsd_t_contract(double *e_tot,
                                         cache_row_b, cache_col_b, sizeof(double));
         int *permute_idx = malloc(sizeof(int) * nocc*nocc*nocc * 6);
         _make_permute_indices(permute_idx, nocc);
+        FILE *err_fp = stderr;
 #pragma omp parallel default(none) \
         shared(njobs, nocc, nvir, mo_energy, t1T, t2T, nirrep, o_ir_loc, \
-               v_ir_loc, oo_ir_loc, orbsym, vooo, fvo, jobs, e_tot, permute_idx, stderr)
+               v_ir_loc, oo_ir_loc, orbsym, vooo, fvo, jobs, e_tot, permute_idx, err_fp)
 {
         int a, b, c;
         size_t k;
         double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*3+2));
         if (cache1 == NULL) {
-                fprintf(stderr, "malloc(%zu) failed in QCIsd_t_contract\n",
+                fprintf(err_fp, "malloc(%zu) failed in QCIsd_t_contract\n",
                         sizeof(double) * nocc*nocc*nocc*3);
                 exit(1);
         }
@@ -628,15 +630,16 @@ void CCsd_t_zcontract(double complex *e_tot,
         int *permute_idx = malloc(sizeof(int) * nocc*nocc*nocc * 6);
         _make_permute_indices(permute_idx, nocc);
 
+        FILE *err_fp = stderr;
 #pragma omp parallel default(none) \
         shared(njobs, nocc, nvir, mo_energy, t1T, t2T, nirrep, o_ir_loc, \
-               v_ir_loc, oo_ir_loc, orbsym, vooo, fvo, jobs, e_tot, permute_idx, stderr)
+               v_ir_loc, oo_ir_loc, orbsym, vooo, fvo, jobs, e_tot, permute_idx, err_fp)
 {
         int a, b, c;
         size_t k;
         double complex *cache1 = malloc(sizeof(double complex) * (nocc*nocc*nocc*3+2));
         if (cache1 == NULL) {
-                fprintf(stderr, "malloc(%zu) failed in CCsd_t_zcontract\n",
+                fprintf(err_fp, "malloc(%zu) failed in CCsd_t_zcontract\n",
                         sizeof(double complex) * nocc*nocc*nocc*3);
                 exit(1);
         }
@@ -686,15 +689,16 @@ void QCIsd_t_zcontract(double complex *e_tot,
         int *permute_idx = malloc(sizeof(int) * nocc*nocc*nocc * 6);
         _make_permute_indices(permute_idx, nocc);
 
+        FILE *err_fp = stderr;
 #pragma omp parallel default(none) \
         shared(njobs, nocc, nvir, mo_energy, t1T, t2T, nirrep, o_ir_loc, \
-               v_ir_loc, oo_ir_loc, orbsym, vooo, fvo, jobs, e_tot, permute_idx, stderr)
+               v_ir_loc, oo_ir_loc, orbsym, vooo, fvo, jobs, e_tot, permute_idx, err_fp)
 {
         int a, b, c;
         size_t k;
         double complex *cache1 = malloc(sizeof(double complex) * (nocc*nocc*nocc*3+2));
         if (cache1 == NULL) {
-                fprintf(stderr, "malloc(%zu) failed in QCIsd_t_zcontract\n",
+                fprintf(err_fp, "malloc(%zu) failed in QCIsd_t_zcontract\n",
                         sizeof(double complex) * nocc*nocc*nocc*3);
                 exit(1);
         }
@@ -872,15 +876,16 @@ void MPICCsd_t_contract(double *e_tot, double *mo_energy, double *t1T,
         int *permute_idx = malloc(sizeof(int) * nocc*nocc*nocc * 6);
         _make_permute_indices(permute_idx, nocc);
 
+        FILE *err_fp = stderr;
 #pragma omp parallel default(none) \
         shared(njobs, nocc, nvir, mo_energy, t1T, fvo, jobs, e_tot, slices, \
-               data_ptrs, permute_idx, stderr)
+               data_ptrs, permute_idx, err_fp)
 {
         int a, b, c;
         size_t k;
         double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*3+2));
         if (cache1 == NULL) {
-                fprintf(stderr, "malloc(%zu) failed in MPICCsd_t_contract\n",
+                fprintf(err_fp, "malloc(%zu) failed in MPICCsd_t_contract\n",
                         sizeof(double) * nocc*nocc*nocc*3);
                 exit(1);
         }
@@ -1105,15 +1110,16 @@ void CCsd_zcontract_t3T(double complex *t3Tw, double complex *t3Tv, double *mo_e
         int *permute_idx = malloc(sizeof(int) * nocc*nocc*nocc * 6);
         _make_permute_indices(permute_idx, nocc);
 
+        FILE *err_fp = stderr;
 #pragma omp parallel default(none) \
         shared(njobs, nocc, nvir, nkpts, t3Tw, t3Tv, mo_offset, mo_energy, t1T, fvo, jobs, slices, \
-               data_ptrs, permute_idx, stderr)
+               data_ptrs, permute_idx, err_fp)
 {
         int a, b, c;
         size_t k;
         complex double *cache1 = malloc(sizeof(double complex) * (nocc*nocc*nocc*3+2));
         if (cache1 == NULL) {
-                fprintf(stderr, "malloc(%zu) failed in CCsd_zcontract_t3T\n",
+                fprintf(err_fp, "malloc(%zu) failed in CCsd_zcontract_t3T\n",
                         sizeof(double complex) * nocc*nocc*nocc*3);
                 exit(1);
         }

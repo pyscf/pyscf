@@ -23,10 +23,10 @@ def setUpModule():
 
     numpy.random.seed(2)
     cell_orth = gto.M(atom='H1 1 1 0; H2 0 0 1',
-                      basis={'H1':[[0, ( 1, 1, .1), (.5, .1, 1)],
-                                   [1, (.8, 1, .2), (.3, .2, 1)]],
-                             'H2':[[0, (.9, .6, .3), (.4, .1, 1)],
-                                   [2, (.7, .8, .2), (.2, .2, 1)]]},
+                      basis={'H1':[[0, (3.1, 2.1, .1), (4.5, 3.1, 1)],
+                                   [1, (3.8, 2.1, .2), (4.3, 3.2, 1)]],
+                             'H2':[[0, (3.9, 2.6, .3), (4.4, 3.1, 1)],
+                                   [2, (3.7, 2.8, .2), (4.2, 3.2, 1)]]},
                       unit='B',
                       mesh=[7,6,5],
                       a=numpy.eye(3)*8,
@@ -36,10 +36,10 @@ def setUpModule():
     mol_orth.dimension = 0
 
     cell_north = gto.M(atom='H1 1 1 0; H2 0 0 1',
-                       basis={'H1':[[0, ( 1, 1, .1), (.5, .1, 1)],
-                                    [1, (.8, 1, .2), (.3, .2, 1)]],
-                              'H2':[[0, (.9, .6, .3), (.4, .1, 1)],
-                                    [2, (.7, .8, .2), (.2, .2, 1)]]},
+                      basis={'H1':[[0, (3.1, 2.1, .1), (4.5, 3.1, 1)],
+                                   [1, (3.8, 2.1, .2), (4.3, 3.2, 1)]],
+                             'H2':[[0, (3.9, 2.6, .3), (4.4, 3.1, 1)],
+                                   [2, (3.7, 2.8, .2), (4.2, 3.2, 1)]]},
                        unit='B',
                        mesh=[7,6,5],
                        a=numpy.eye(3)*8+numpy.random.rand(3,3),
@@ -60,13 +60,13 @@ def setUpModule():
 
     grids_orth = gen_grid.UniformGrids(cell_orth).run()
     grids_north = gen_grid.UniformGrids(cell_north).run()
-    grids_orth.coords = cell_orth.get_uniform_grids(wrap_around=False)
-    grids_north.coords = cell_north.get_uniform_grids(wrap_around=False)
+    #grids_orth.coords = cell_orth.get_uniform_grids(wrap_around=False)
+    #grids_north.coords = cell_north.get_uniform_grids(wrap_around=False)
 
     ao_kpts_orth = cell_orth.pbc_eval_gto('GTOval_sph_deriv1', grids_orth.coords, kpts=kpts)
     ao_kpts_north = cell_north.pbc_eval_gto('GTOval_sph_deriv1', grids_north.coords, kpts=kpts)
-    ao_orth = mol_orth.eval_gto('GTOval_sph_deriv1', grids_orth.coords, kpts=kpts)
-    ao_north = mol_north.eval_gto('GTOval_sph_deriv1', grids_north.coords, kpts=kpts)
+    ao_orth = mol_orth.eval_gto('GTOval_sph_deriv1', grids_orth.coords)
+    ao_north = mol_north.eval_gto('GTOval_sph_deriv1', grids_north.coords)
     ao_gamma_orth = cell_orth.pbc_eval_gto('GTOval_sph_deriv1', grids_orth.coords)
     ao_gamma_north = cell_north.pbc_eval_gto('GTOval_sph_deriv1', grids_north.coords)
 
@@ -107,7 +107,7 @@ class KnownValues(unittest.TestCase):
     def test_pbc_orth_overlap(self):
         ref = cell_orth.pbc_intor('int1e_ovlp', kpts=kpts)
         pcell, contr_coeff = uncontract(cell_orth)
-        pcell.mesh = [30]*3
+        pcell.mesh = [40]*3
         w = gen_grid.UniformGrids(pcell).weights
         out = eval_mat(pcell, w, hermi=0, kpts=kpts)
         out = numpy.einsum('pi,kpq,qj->kij', contr_coeff, out, contr_coeff)
@@ -145,7 +145,7 @@ class KnownValues(unittest.TestCase):
     def test_pbc_nonorth_overlap(self):
         ref = cell_north.pbc_intor('int1e_ovlp', kpts=kpts)
         pcell, contr_coeff = uncontract(cell_north)
-        pcell.mesh = [30]*3
+        pcell.mesh = [50]*3
         w = gen_grid.UniformGrids(pcell).weights
         out = eval_mat(pcell, w, hermi=0, kpts=kpts)
         out = numpy.einsum('pi,kpq,qj->kij', contr_coeff, out, contr_coeff)

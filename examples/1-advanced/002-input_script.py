@@ -52,7 +52,6 @@ mol.RHF().run(conv_tol=1e-7).MP2(frozen=2).run(max_memory=100).Gradients().run()
 # >>> from pyscf import scf, dft, tdscf
 # >>> mf = dft.KS(mol).density_fit()
 # >>> # This function removes possible basis linear dependency
-# >>> mf = scf.addons.remove_linear_dep_(mf)
 # >>> mf.conv_tol=1e-6
 # >>> mf.xc = 'blyp'
 # >>> mf.kernel()
@@ -62,7 +61,6 @@ mol.RHF().run(conv_tol=1e-7).MP2(frozen=2).run(max_memory=100).Gradients().run()
 mol.KS() \
     .set(conv_tol=1e-6, xc='blyp') \
     .density_fit() \
-    .apply(pyscf.scf.addons.remove_linear_dep_) \
     .run() \
     .TDA() \
     .run(nstates=5)

@@ -56,7 +56,7 @@ void NPdtranspose_021(int *shape, double *a, double *at)
         shared(shape, a, at)
 {
         int ic;
-        size_t nm = shape[1] * shape[2];
+        size_t nm = (size_t)shape[1] * shape[2];
 #pragma omp for schedule (static)
         for (ic = 0; ic < shape[0]; ic++) {
                 NPdtranspose(shape[1], shape[2], a+ic*nm, at+ic*nm);
@@ -70,7 +70,7 @@ void NPztranspose_021(int *shape, double complex *a, double complex *at)
         shared(shape, a, at)
 {
         int ic;
-        size_t nm = shape[1] * shape[2];
+        size_t nm = (size_t)shape[1] * shape[2];
 #pragma omp for schedule (static)
         for (ic = 0; ic < shape[0]; ic++) {
                 NPztranspose(shape[1], shape[2], a+ic*nm, at+ic*nm);
@@ -132,7 +132,7 @@ void NPdsymm_021_sum(int *shape, double *a, double *out, int hermi)
         shared(shape, a, out, hermi)
 {
         int ic;
-        size_t nn = shape[1] * shape[1];
+        size_t nn = (size_t)shape[1] * shape[1];
 #pragma omp for schedule (static)
         for (ic = 0; ic < shape[0]; ic++) {
                 NPdsymm_sum(shape[1], a+ic*nn, out+ic*nn, hermi);
@@ -146,7 +146,7 @@ void NPzhermi_021_sum(int *shape, double complex *a, double complex *out, int he
         shared(shape, a, out, hermi)
 {
         int ic;
-        size_t nn = shape[1] * shape[1];
+        size_t nn = (size_t)shape[1] * shape[1];
 #pragma omp for schedule (static)
         for (ic = 0; ic < shape[0]; ic++) {
                 NPzhermi_sum(shape[1], a+ic*nn, out+ic*nn, hermi);

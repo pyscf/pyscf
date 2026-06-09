@@ -15,6 +15,7 @@
 
 import unittest
 import numpy
+import numpy as np
 from pyscf import lib
 from pyscf.pbc import gto as pgto
 from pyscf.pbc import scf as pscf
@@ -58,7 +59,14 @@ class KnownValues(unittest.TestCase):
 
         hop2, hdiag2 = stability._gen_hop_rhf_external(kmf)
         self.assertAlmostEqual(lib.fp(hdiag2), 18.528134783454508, 6)
-        self.assertAlmostEqual(lib.fp(hop2(hdiag2)), 108.99683506471919, 5)
+
+        c = np.array(kmf.mo_coeff)
+        o = c[:,:,:2]
+        v = c[:,:,2:]
+        t = cell.pbc_intor('int1e_kin', kpts=kpts)
+        x = lib.einsum('kpa,kpq,kqi->kai', v.conj(), t, o)
+        dat = lib.einsum('kpa,kai,kqi->kpq', v, hop2(x).reshape(x.shape), o.conj())
+        self.assertAlmostEqual(lib.fp(dat), -106.11159100045222+16.669812904469463j, 5)
 
     def test_uhf_stability(self):
         umf = pscf.UHF(cell, exxdiv='ewald').run(conv_tol=1e-12)
@@ -74,7 +82,13 @@ class KnownValues(unittest.TestCase):
 
         hop2, hdiag2 = stability._gen_hop_uhf_external(kumf)
         self.assertAlmostEqual(lib.fp(hdiag2), 10.977759629315884, 7)
-        self.assertAlmostEqual(lib.fp(hop2(hdiag2)), 86.425042652868, 5)
+        c = np.array(kumf.mo_coeff)
+        o = np.array(c[::-1,:,:,:2], order='C')
+        v = c[:,:,:,2:]
+        t = cell.pbc_intor('int1e_kin', kpts=kpts)
+        x = lib.einsum('skpa,kpq,skqi->skai', v.conj(), t, o)
+        dat = lib.einsum('skpa,skai,skqi->skpq', v, hop2(x.ravel()).reshape(x.shape), o.conj())
+        self.assertAlmostEqual(lib.fp(dat), -48.801552094996055+44.4209696875281j, 5)
 
     def test_rotate_mo(self):
         numpy.random.seed(4)

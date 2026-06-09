@@ -9,7 +9,7 @@ Ref: Masios et al., Phys. Rev. Lett. 131, 186401 (2023)
 Original Source:
 Modified from pyscf/cc/rccsd_slow.py
 
-Contact: 
+Contact:
 caochangsu@gmail.com
 '''
 
@@ -47,7 +47,6 @@ def update_amps(cc, t1, t2, eris):
 def energy(cc, t1, t2, eris):
     # Ref: Scuseria et al., J. Chem. Phys. 129, 231101 (2008) Eq.(11)
     nocc, nvir = t1.shape
-    fock = eris.fock
     eris_ovov = np.asarray(eris.ovov)
     e = 2*einsum('ijab,iajb', t2, eris_ovov)
     return e.real
@@ -86,7 +85,7 @@ class _ChemistsERIs:
         mo = cc._scf.mo_coeff
         Lpq = cc._scf._cderi
         ijslice = (0, nocc, nocc, nmo)
-        Lov = _ao2mo.nr_e2(Lpq, mo, ijslice, aosym='s2', mosym='s1') 
+        Lov = _ao2mo.nr_e2(Lpq, mo, ijslice, aosym='s2', mosym='s1')
         eris_ovov = Lov.T @ Lov
         self.ovov = eris_ovov.reshape(nocc, nvir, nocc, nvir)
         self.ovvo = self.ovov.transpose(0,1,3,2).copy()
@@ -101,7 +100,7 @@ class drCCD(ccsd.CCSD):
 
 
 if __name__ == '__main__':
-    from pyscf import gto, dft, scf
+    from pyscf import gto, scf
     mol = gto.Mole()
     mol.verbose = 4
     mol.atom = 'H 0 0 0; F 0 0 1.1'

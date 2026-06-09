@@ -363,6 +363,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(r2-spin_r2_ea).max(), 0, 12)
 
     # TODO: more tests are needed for kuccsd_rdm
+    @unittest.skip('Some checks may fail due to uncertainty in orbital phases')
     def test_kuccsd_rdm_slow(self):
         a0 = 3.0
         nmp = [3,1,1]

@@ -17,14 +17,16 @@ import unittest
 import tempfile
 from functools import reduce
 import numpy
+import numpy as np
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
 from pyscf import mp
+from pyscf import df
 
 def setUpModule():
-    global mol, mf, dfmf
+    global mol, mf, dfmf, dfmf2
     mol = gto.Mole()
     mol.verbose = 7
     mol.output = '/dev/null'
@@ -44,10 +46,14 @@ def setUpModule():
     dfmf.conv_tol = 1e-12
     dfmf.kernel()
 
+    dfmf2 = scf.RHF(mol).density_fit(auxbasis='cc-pvdz-jkfit')
+    dfmf2.conv_tol = 1e-12
+    dfmf2.kernel()
+
 def tearDownModule():
-    global mol, mf, dfmf
+    global mol, mf, dfmf, dfmf2
     mol.stdout.close()
-    del mol, mf, dfmf
+    del mol, mf, dfmf, dfmf2
 
 
 class KnownValues(unittest.TestCase):
@@ -67,6 +73,14 @@ class KnownValues(unittest.TestCase):
         mmp.kernel()
         self.assertAlmostEqual(mmp.e_corr, -0.13844381496025246, 8)
 
+        mmp = mp.dfmp2.DFMP2(mf, frozen=0)
+        mmp.kernel()
+        self.assertAlmostEqual(mmp.e_corr, -0.2040048210277004, 8)
+
+        mmp = mp.dfmp2.DFMP2(mf, frozen=np.array([0]))
+        mmp.kernel()
+        self.assertAlmostEqual(mmp.e_corr, -0.20166760413156876, 8)
+
     def test_dfmp2_mf_with_df(self):
         mmpref = mp.mp2.MP2(dfmf)
         mmpref.kernel()
@@ -80,6 +94,24 @@ class KnownValues(unittest.TestCase):
         mmp.kernel()
         self.assertAlmostEqual(mmp.e_corr, mmpref.e_corr, 8)
         self.assertAlmostEqual(abs(mmp.t2-mmpref.t2).max(), 0, 8)
+
+    def test_dfmp2_mf_with_df_diff_auxbasis(self):
+        mp2_df = df.DF(mol)
+        mp2_df.auxbasis = 'cc-pvdz-ri'
+        mmp0 = mp.dfmp2.DFMP2(dfmf2)
+        mmp0.with_df = mp2_df
+        mmp0.kernel()
+        ref_e_corr = mmp0.e_corr
+        self.assertAlmostEqual(ref_e_corr, -0.20399004345216082, 8)
+
+        mmp1 = mp.MP2(dfmf2).density_fit(auxbasis='cc-pvdz-ri')
+        mmp1.kernel()
+        self.assertAlmostEqual(mmp1.e_corr, ref_e_corr, 8)
+
+        mmp2 = mp.dfmp2.DFMP2(dfmf2)
+        mmp2.with_df.auxbasis = 'cc-pvdz-ri'
+        mmp2.kernel()
+        self.assertAlmostEqual(mmp2.e_corr, ref_e_corr, 8)
 
     def test_read_ovL_incore(self):
         mmp = mp.dfmp2.DFMP2(mf)

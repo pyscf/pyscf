@@ -38,7 +38,6 @@ def dmet_cas(mc, dm, implst):
     nao = mc.mol.nao_nr()
     ncore = mc.ncore
     ncas = mc.ncas
-    nocc = ncore + ncas
     nimp = len(implst)
     nbath = ncas - nimp
     corth = lo.orth.orth_ao(mol, method='meta_lowdin')
@@ -183,7 +182,7 @@ cas_q = mc.mo_coeff[:,mc.ncore:mc.ncore+mc.ncas]
 # is not able to predict the right orbital rotations since the first order
 # approximation for orbital gradients and CI hamiltonian are just too far to the
 # exact value.
-# 
+#
 
 mol.spin = 2
 mol.build(0, 0)  # (0, 0) to avoid dumping input file again

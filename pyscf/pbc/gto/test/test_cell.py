@@ -364,6 +364,20 @@ class KnownValues(unittest.TestCase):
         h1 = ecp.ecp_int(cell, kpts)
         self.assertAlmostEqual(lib.fp(h1), 4.160881841456467, 7)
 
+    def test_ecp_soc_int(self):
+        cell = pgto.M(
+            a = np.eye(3) * 8,
+            atom = 'C 0 0 0; C 0 0 1.5',
+            basis = 'crenbl',
+            ecp = {'C': 'crenbl'}
+        )
+        dat = ecp.ecp_int(cell, intor='ECPso')
+
+        s = .5 * lib.PauliMatrices
+        ecpso = np.einsum('sxy,spq->xpyq', -1j * s, cell.intor('ECPso'))
+        mol_ecpso = ecpso.reshape(dat.shape)
+        self.assertAlmostEqual(abs(mol_ecpso - dat).max(), 0, 8)
+
     def test_ecp_keyword_in_pseudo(self):
         cell = pgto.M(
             a = np.eye(3)*5,
@@ -562,6 +576,29 @@ class KnownValues(unittest.TestCase):
         ao_value = cell.pbc_eval_gto("GTOval_ip_cart", coords, kpts=cell.make_kpts([3]*3))
         self.assertAlmostEqual(lib.fp(ao_value), (0.38051517609460028+0.062526488684770759j), 9)
 
+    def test_eval_gto1(self):
+        cell = pgto.M(a=np.eye(3)*2.5, atom='He 0.0 0.0 0.0', basis='''
+S
+1.607   0.6400
+0.569   0.2900
+0.076   0.0007
+''')
+        grids = cell.get_uniform_grids()
+        dat = cell.pbc_eval_ao('GTOval', grids)
+
+        c = cell.bas_ctr_coeff(0)
+        cell1 = pgto.M(a=np.eye(3)*2.5, atom='He 0.0 0.0 0.0', basis='''
+S
+1.607   1.
+S
+0.569   1.
+S
+0.076   1.
+''')
+        ref = cell1.pbc_eval_gto('GTOval', grids)
+        ref = np.einsum('pi,gp->gi', c, ref)
+        self.assertAlmostEqual(abs(dat - ref).max(), 0, 8)
+
     def test_empty_cell(self):
         cell = pgto.M(a=np.eye(3)*4)
         Ls = pbctools.get_lattice_Ls(cell)
@@ -585,6 +622,112 @@ class KnownValues(unittest.TestCase):
             cell.fromfile(f.name, 'xyz')
             r1 = cell.atom_coords()
             self.assertAlmostEqual(abs(ref - r1).max(), 0, 12)
+
+    def test_parse_poscar(self):
+        inp_str = '''\
+Cubic BN
+3.57
+0.0 0.5 0.5
+0.5 0.0 0.5
+0.5 0.5 0.0
+B N
+1 1
+Direct
+0.00 0.00 0.00
+0.25 0.25 0.25
+'''
+        a, atoms = pgto.cell.fromstring(inp_str, format='poscar')
+        ref_a = np.array([[0.   , 1.785, 1.785],
+                          [1.785, 0.   , 1.785],
+                          [1.785, 1.785, 0.   ]])
+        ref_pos = np.array([[0., 0., 0.],
+                            [0.8925, 0.8925, 0.8925]])
+        coords = np.array([x[1] for x in atoms])
+        assert abs(a - ref_a).max() < 1e-14
+        assert abs(coords - ref_pos).max() < 1e-14
+
+        inp_str = '''\
+SrTiO3 cubic perovskite
+3.9
+1.0 0.0 0.0
+0.0 1.0 0.0
+0.0 0.0 1.0
+Sr Ti O
+1 1 3
+Cartesian
+0.00 0.00 0.00
+1.95 1.95 1.95
+1.95 1.95 0.00
+1.95 0.00 1.95
+0.00 1.95 1.95
+'''
+        a, atoms = pgto.cell.fromstring(inp_str, format='poscar')
+        ref_pos = np.array([
+            [0.00, 0.00, 0.00],
+            [1.95, 1.95, 1.95],
+            [1.95, 1.95, 0.00],
+            [1.95, 0.00, 1.95],
+            [0.00, 1.95, 1.95]])
+        coords = np.array([x[1] for x in atoms])
+        assert abs(a[0,0] - 3.9) < 1e-14
+        assert abs(coords - ref_pos).max() < 1e-14
+        cell = pgto.M(atom=atoms, a=a, basis=[[0, [1,1]]])
+
+        assert cell.tostring('poscar').split('\n', 1)[1] == '''\
+1.0
+       3.90000000        0.00000000        0.00000000
+       0.00000000        3.90000000        0.00000000
+       0.00000000        0.00000000        3.90000000
+Sr Ti O
+1 1 3
+Cartesian
+       0.00000000        0.00000000        0.00000000
+       1.95000000        1.95000000        1.95000000
+       1.95000000        1.95000000        0.00000000
+       1.95000000        0.00000000        1.95000000
+       0.00000000        1.95000000        1.95000000'''
+
+    def test_parse_cif(self):
+        inp_str = '''\
+# generated using pymatgen
+data_Si
+_symmetry_space_group_name_H-M   'P 1'
+_cell_length_a   3.86697465(8)
+_cell_length_b   3.86697465(8)
+_cell_length_c   3.86697465(8)
+_cell_angle_alpha   60.00000000
+_cell_angle_beta   60.00000000
+_cell_angle_gamma   60.00000000
+_symmetry_Int_Tables_number   1
+_chemical_formula_structural   Si
+_chemical_formula_sum   Si2
+_cell_volume   40.88829285
+_cell_formula_units_Z   2
+loop_
+ _symmetry_equiv_pos_site_id
+ _symmetry_equiv_pos_as_xyz
+  1  'x, y, z'
+loop_
+ _atom_site_type_symbol
+ _atom_site_label
+ _atom_site_symmetry_multiplicity
+ _atom_site_fract_x
+ _atom_site_fract_y
+ _atom_site_fract_z
+ _atom_site_occupancy
+  Si  Si0  1  0.75000000  0.75000000  0.75000000  1
+  Si  Si1  1  0.50000000  0.50000000  0.50000000  1
+'''
+        a, atoms = pgto.cell.fromstring(inp_str, format='cif')
+        # results from ase.io.cif.read_cif function
+        ref_a = np.array([[3.86697465, 0.0, 0.0],
+                        [1.933487325, 3.348898282690438, 0.0],
+                        [1.933487325, 1.1162994275634797, 3.1573715802591895]])
+        ref_pos = np.array([[5.80046198, 3.34889828, 2.36802869],
+                            [3.86697465, 2.23259886, 1.57868579]])
+        coords = np.array([x[1] for x in atoms])
+        assert abs(a - ref_a).max() < 1e-8
+        assert abs(coords - ref_pos).max() < 1e-8
 
     def test_set_geom_(self):
         BOHR = lib.param.BOHR
@@ -668,6 +811,25 @@ class KnownValues(unittest.TestCase):
         cl.set_geom_(unit='Ang')
         self.assertTrue(cl.atom_coords()[0,2] == 1/1.5)
         self.assertTrue(cl.lattice_vectors()[0,0] == 4/1.5)
+
+    def test_gth_basis(self):
+        cl = pgto.M(a=np.eye(3), atom='Cd 0 0 0', basis='TZVP-MOLOPT-HYB-GTH',
+                    pseudo='gth-hf-rev-q2')
+        assert cl.nbas == 4
+        assert all(cl._bas[:,2] == 5)
+        assert cl._pseudo['Cd'][0] == [2, 0, 0, 0]
+
+        cl = pgto.M(a=np.eye(3), atom='Cd 0 0 0', basis='TZVP-MOLOPT-SCAN-GTH',
+                    pseudo='gth-hf-rev')
+        assert cl.nbas == 4
+        assert all(cl._bas[:,2] == 5)
+        assert cl._pseudo['Cd'][0] == [4, 6, 10, 0]
+
+        cl = pgto.M(a=np.eye(3), atom='Be 0 0 0', basis='TZVP-MOLOPT-PBE-GTH-q2',
+                    pseudo='GTH-PBE-q2')
+        print(cl.nbas == 2)
+        print(cl._bas[:,2] == [5, 5])
+        print(cl._pseudo['Be'][0] == [2, 0, 0, 0])
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")

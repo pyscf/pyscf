@@ -29,7 +29,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import khf, kuhf
 from pyscf.pbc.dft import gen_grid
-from pyscf.pbc.dft import rks, krks
+from pyscf.pbc.dft import rks, krks, uks
 from pyscf.pbc.dft.krks import get_rho
 from pyscf.pbc.dft import multigrid
 from pyscf import __config__
@@ -158,6 +158,7 @@ class KUKS(rks.KohnShamDFT, kuhf.KUHF):
     energy_elec = energy_elec
     get_rho = get_rho
     gen_response = gen_response
+    initialize_grids = uks.UKS.initialize_grids
 
     def __init__(self, cell, kpts=None, xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):

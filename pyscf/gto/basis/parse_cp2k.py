@@ -69,6 +69,69 @@ def parse(string, symb=None, optimize=False):
 def load(basisfile, symb, optimize=False):
     return _parse(search_seg(basisfile, symb), optimize)
 
+def _to_MOLOPT_name(basis_name):
+    '''Convert the alias name (such as gthszvmoloptsr) to the standard MOLOPT
+    basis set name
+    '''
+    if '-' in basis_name:
+        # If a full CP2K basis set name is specified
+        return basis_name
+
+    basis_name = basis_name.upper()
+    if 'MOLOPT' not in basis_name:
+        raise BasisNotFoundError(f'{basis_name} is not a valid MOLOPT basis set')
+    if basis_name[:3] == 'GTH':
+        basis_name = basis_name[3:] # handle GTHSZVMOLOPTSR
+    parts = basis_name.split('MOLOPT')
+    assert len(parts) >= 2
+    parts = [x for x in parts if x]
+    parts.insert(1, 'MOLOPT')
+    parts.append('GTH')
+    basis_name = '-'.join(parts)
+    return basis_name
+
+def _load_MOLOPT(basis_name, symb, basis_dir, optimize=False):
+    if 'MOLOPT-PBE-GTH' in basis_name or 'MOLOPT-GGA-GTH' in basis_name:
+        basisfiles = ('BASIS_MOLOPT_UZH',)
+    elif 'MOLOPT-SCAN-GTH' in basis_name or 'MOLOPT-MGGA-GTH' in basis_name:
+        basisfiles = ('BASIS_MOLOPT_UZH',)
+    elif 'MOLOPT-PBE0-GTH' in basis_name or 'MOLOPT-HYB-GTH' in basis_name:
+        basisfiles = ('BASIS_MOLOPT_UZH',)
+    elif 'MOLOPT-SR-GTH' in basis_name:
+        basisfiles = ('BASIS_MOLOPT', 'BASIS_MOLOPT_UCL')
+    elif 'MOLOPT-GTH' in basis_name:
+        basisfiles = ('BASIS_MOLOPT',)
+    elif '-GTH' in basis_name:
+        basisfiles = ('GTH_BASIS_SETS',)
+    else:
+        raise BasisNotFoundError(
+            f'MOLOPT basis set {basis_name} is not available in the built-in database.')
+
+    data = []
+    for basisfile in basisfiles:
+        with open(f'{basis_dir}/{basisfile}', 'r') as searchfile:
+            in_block = False
+            for line in searchfile:
+                if not line or line[0] == '#':
+                    continue
+                if not in_block:
+                    line = line.lstrip()
+                    if line.startswith(symb+' ') and basis_name in line:
+                        data.append(line)
+                        in_block = True
+                    continue
+
+                data.append(line.strip())
+                if 'GTH' in line or 'END' in line: # next block
+                    break
+        if data:
+            break
+    else:
+        raise BasisNotFoundError(
+            f'{basis_name} for {symb} not found in files {", ".join(basisfiles)}.')
+
+    return _parse(data, optimize)
+
 def _parse(blines, optimize=False):
     blines_iter = iter(blines)
     try:
@@ -80,7 +143,8 @@ def _parse(blines, optimize=False):
     basis = []
     try:
         for n in range(nsets):
-            comp = [int(p) for p in next(blines_iter).split()]
+            line = next(blines_iter)
+            comp = [int(p) for p in line.split()]
             lmin, lmax, nexps, ncontractions = comp[1], comp[2], comp[3], comp[4:]
             basis_n = [[l] for l in range(lmin,lmax+1)]
             for nexp in range(nexps):
