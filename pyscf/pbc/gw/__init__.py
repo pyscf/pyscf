@@ -19,6 +19,8 @@ Periodic G0W0 approximation
 from pyscf.pbc.gw import krgw_ac
 from pyscf.pbc.gw import kugw_ac
 from pyscf.pbc.gw import krgw_cd
+from pyscf.pbc.gw import krevgw, kuevgw
+from pyscf.pbc.gw import krqsgw, kuqsgw
 from pyscf.pbc import scf
 
 def KRGW(mf, freq_int='ac', frozen=None):
