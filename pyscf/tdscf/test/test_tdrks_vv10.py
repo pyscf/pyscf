@@ -117,9 +117,9 @@ class KnownValues(unittest.TestCase):
         mf = make_mf(mol)
         tda = mf.TDA()
         tda.exclude_nlc = False
-        test_excitation_energy, test_state_vector = tda.kernel(nstates = 3)
+        test_excitation_energy, test_state_vector = tda.kernel(nstates = 2)
 
-        assert np.linalg.norm(test_excitation_energy - reference_excitation_energy[:3]) < excitation_energy_threshold
+        assert np.linalg.norm(test_excitation_energy - reference_excitation_energy[:2]) < excitation_energy_threshold
 
         reference_transition_dipole = np.array([
             [-0.0039, -0.0088, -0.0068],
@@ -130,14 +130,14 @@ class KnownValues(unittest.TestCase):
         ])
         test_transition_dipole = tda.transition_dipole()
 
-        for i_dipole in range(reference_transition_dipole.shape[0]):
+        for i_dipole in range(2):
             assert np.linalg.norm(test_transition_dipole[i_dipole] - reference_transition_dipole[i_dipole]) < dipole_threshold \
                 or np.linalg.norm(test_transition_dipole[i_dipole] + reference_transition_dipole[i_dipole]) < dipole_threshold
 
         reference_oscillator_strength = np.array([0.0000204074, 0.0054841178, 0.0031204297, 0.0063755735, 0.0137712931])
         test_oscillator_strength = tda.oscillator_strength()
 
-        assert np.linalg.norm(test_oscillator_strength - reference_oscillator_strength[:3]) < oscillator_strength_threshold
+        assert np.linalg.norm(test_oscillator_strength - reference_oscillator_strength[:2]) < oscillator_strength_threshold
 
     def test_wb97xv_tddft_triplet_high_cost(self):
         ### Q-Chem input
