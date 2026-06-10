@@ -67,7 +67,10 @@ void contract_vhf_dm(double* out, double* vhf, double* dm,
         jsh = ij % njsh + jsh0;
 
         if (nl0 != NULL) {
-            nimgs = ((nl0->pairs)[ish*nbas + jsh])->nimgs;
+            // Use nl0->njsh, not nbas: the neighbor list may have been built
+            // with a narrower shls_slice and indexing with nbas would read
+            // past the pairs allocation.
+            nimgs = ((nl0->pairs)[ish*nl0->njsh + jsh])->nimgs;
         }
         if (nimgs > 0) { // this shell pair has contribution
             p0 = ao_loc[ish] - ao_loc[ish0];
@@ -80,7 +83,10 @@ void contract_vhf_dm(double* out, double* vhf, double* dm,
             pdm = dm + (p0 * naoj + q0);
             for (ic = 0; ic < comp; ic++) {
                 for (i = 0; i < ni; i++) {
-                    buf[iatm*3+ic] += ddot_(&nj, pvhf+i*naoj, &I1, pdm+i*naoj, &I1);
+                    // Stride is comp, not 3: comp is the gradient/derivative
+                    // component count and is 3 for first derivatives but can
+                    // be larger for higher-order routines.
+                    buf[iatm*comp+ic] += ddot_(&nj, pvhf+i*naoj, &I1, pdm+i*naoj, &I1);
                 }
                 pvhf += naoi * naoj;
             }

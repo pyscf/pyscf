@@ -24,10 +24,18 @@ from pyscf.lib import logger
 from pyscf import __config__
 from pyscf.pbc.symm import symmetry as symm
 from pyscf.pbc.symm.group import PGElement, PointGroup, Representation
-from pyscf.pbc.lib.kpts_helper import member, round_to_fbz, KPT_DIFF_TOL
+from pyscf.pbc.lib.kpts_helper import is_zero, member, round_to_fbz, KPT_DIFF_TOL
+from pyscf.pbc.lib import kpts_helper
 from numpy.linalg import inv
 
 libpbc = lib.load_library('libpbc')
+
+def is_gamma_point(kpt_or_kpts):
+    if isinstance(kpt_or_kpts, KPoints):
+        return is_zero(kpt_or_kpts.kpts_ibz)
+    return is_zero(kpt_or_kpts)
+kpts_helper.gamma_point = is_gamma_point
+kpts_helper.is_gamma_point = is_gamma_point
 
 def make_kpts_ibz(kpts, tol=KPT_DIFF_TOL):
     """

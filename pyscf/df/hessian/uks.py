@@ -132,7 +132,7 @@ class Hessian(uks_hess.Hessian):
     def __init__(self, mf):
         uks_hess.Hessian.__init__(self, mf)
 
-    auxbasis_response = 1
+    auxbasis_response = 2
     partial_hess_elec = partial_hess_elec
     make_h1 = make_h1
 

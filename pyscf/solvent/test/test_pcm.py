@@ -20,7 +20,7 @@ from pyscf import scf, gto, solvent, mcscf, cc, dft
 from pyscf.solvent import pcm
 
 def setUpModule():
-    global mol, mol0, epsilon, lebedev_order
+    global mol, mol0, epsilon
     mol0 = gto.Mole()
     mol0.atom = '''
 O       0.0000000000    -0.0000000000     0.1174000000
@@ -33,7 +33,6 @@ H       0.7570000000     0.0000000000    -0.4696000000
     mol = mol0.copy()
     mol.nelectron = mol.nao * 2
     epsilon = 35.9
-    lebedev_order = 3
 
 def diagonalize(a, b, nroots=5):
     nocc, nvir = a.shape[:2]
@@ -59,7 +58,7 @@ def tearDownModule():
     del mol, mol0
 
 def _energy_with_solvent(mf, method):
-    cm = pcm.PCM(mol)
+    cm = pcm.PCM(mf.mol)
     cm.eps = epsilon
     cm.verbose = 0
     cm.lebedev_order = 29
@@ -188,6 +187,155 @@ class KnownValues(unittest.TestCase):
         es_gound = es + mf.e_tot
         ref = np.array([-75.61072291, -75.54419399, -75.51949191, -75.45219025, -75.40975027])
         assert abs(es_gound - ref).max() < 1e-6
+
+    def test_with_ecp(self):
+        mol = gto.M(
+            atom = """
+                Al      0.000000    0.000000    0.000000
+                F       1.650000    0.000000    0.000000
+                F      -0.825000    1.428941    0.000000
+                F      -0.825000   -1.428941    0.000000
+            """,
+            basis = "CRENBL",
+            ecp = "CRENBL",
+            verbose = 0,
+        )
+
+        mf = mol.RHF().PCM()
+        mf.with_solvent.method = 'C-PCM'
+        mf.with_solvent.lebedev_order = 3
+        mf.with_solvent.eps = 78
+        mf.conv_tol = 1e-10
+
+        test_energy = mf.kernel()
+        test_gradient = mf.Gradients().kernel()
+
+        ### Q-Chem reference input
+        # $rem
+        # JOBTYPE force
+        # METHOD HF
+        # BASIS CRENBL
+        # ECP CRENBL
+        # ECP_FIT false
+        # ECP_QUAD true
+        # solvent_method          pcm
+        # SYMMETRY      FALSE
+        # SYM_IGNORE    TRUE
+        # MAX_SCF_CYCLES 100
+        # PURECART 1111
+        # SCF_CONVERGENCE 10
+        # THRESH        14
+        # $end
+
+        # $pcm
+        # Theory CPCM
+        # Method SWIG
+        # Solver INVERSION
+        # HeavyPoints 6
+        # $end
+
+        # $solvent
+        # Dielectric 78
+        # $end
+        ref_energy = -73.8339216743
+        ref_gradient = numpy.array([
+            [ -0.006814,     -0.000000,     -0.000000],
+            [ -0.006077,      0.000000,      0.000000],
+            [  0.006446,     -0.013978,      0.000000],
+            [  0.006446,      0.013978,      0.000000],
+        ])
+
+        assert abs(test_energy - ref_energy) < 2e-6
+        assert numpy.max(numpy.abs(test_gradient - ref_gradient)) < 1e-5
+
+    def test_iswig(self):
+        mol = gto.M(
+            atom = """
+                H 0 0 0
+                F 1 0 0.1
+            """,
+            basis = "6-31g",
+            verbose = 0,
+        )
+
+        mf = mol.RHF().PCM()
+        mf.with_solvent.method = 'C-PCM'
+        mf.with_solvent.lebedev_order = 7
+        mf.with_solvent.eps = 78
+        mf.with_solvent.surface_discretization_method = "iswig"
+        mf.conv_tol = 1e-10
+
+        test_energy = mf.kernel()
+        assert mf.converged
+
+        ### Q-Chem reference input
+        # $rem
+        # JOBTYPE sp
+        # METHOD HF
+        # BASIS 6-31g
+        # solvent_method          pcm
+        # SYMMETRY      FALSE
+        # SYM_IGNORE    TRUE
+        # MAX_SCF_CYCLES 100
+        # PURECART 1111
+        # SCF_CONVERGENCE 10
+        # THRESH        14
+        # $end
+
+        # $pcm
+        # Theory CPCM
+        # Method iSWIG
+        # Solver INVERSION
+        # HeavyPoints 26
+        # HPoints 26
+        # $end
+
+        # $solvent
+        # Dielectric 78
+        # $end
+
+        ### SWIG instead of iSWIG: -99.9889787249
+        ref_energy = -99.9890988749
+
+        assert abs(test_energy - ref_energy) < 1e-8
+
+    def test_cartesian_basis(self):
+        ### Q-Chem reference input
+        # $rem
+        # JOBTYPE freq
+        # METHOD HF
+        # BASIS def2-tzvp
+        # solvent_method          pcm
+        # SYMMETRY      FALSE
+        # SYM_IGNORE    TRUE
+        # MAX_SCF_CYCLES 100
+        # PURECART 2222
+        # SCF_CONVERGENCE 10
+        # THRESH        14
+        # $end
+
+        # $pcm
+        # Theory CPCM
+        # Method SWIG
+        # Solver INVERSION
+        # HeavyPoints 302
+        # HPoints 302
+        # $end
+
+        # $solvent
+        # Dielectric 35.9
+        # $end
+        mol = gto.M(
+            atom = """
+                H 0 0 0
+                F 1 0 0.1
+            """,
+            basis = "def2-tzvp",
+            cart = 1,
+            verbose = 0,
+        )
+        e_tot = _energy_with_solvent(scf.RHF(mol), 'C-PCM')
+        assert numpy.abs(e_tot - -100.0632200433) < 1e-10
 
 if __name__ == "__main__":
     print("Full Tests for PCMs")

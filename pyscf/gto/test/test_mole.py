@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import unittest
-import tempfile
 from functools import reduce
 import numpy
 import numpy as np
@@ -44,7 +43,7 @@ def setUpModule():
     mol0.spin = 1
     mol0.verbose = 7
     mol0.ecp = {'O1': 'lanl2dz'}
-    ftmp = tempfile.NamedTemporaryFile()
+    ftmp = lib.NamedTemporaryFile()
     mol0.output = ftmp.name
     mol0.build()
 
@@ -257,7 +256,7 @@ C    SP
         self.assertEqual(mol1.natm, 1)
 
     def test_atom_as_file(self):
-        ftmp = tempfile.NamedTemporaryFile('w')
+        ftmp = lib.NamedTemporaryFile('w')
         # file in raw format
         ftmp.write('He 0 0 0\nHe 0 0 1\n')
         ftmp.flush()
@@ -265,14 +264,14 @@ C    SP
         self.assertEqual(mol1.natm, 2)
 
         # file in xyz format
-        ftmp = tempfile.NamedTemporaryFile('w', suffix='.xyz')
+        ftmp = lib.NamedTemporaryFile('w', suffix='.xyz')
         ftmp.write('2\n\nHe 0 0 0\nHe 0 0 1\n')
         ftmp.flush()
         mol1 = gto.M(atom=ftmp.name)
         self.assertEqual(mol1.natm, 2)
 
         # file in zmatrix format
-        ftmp = tempfile.NamedTemporaryFile('w', suffix='.zmat')
+        ftmp = lib.NamedTemporaryFile('w', suffix='.zmat')
         ftmp.write('He\nHe 1 1.5\n')
         ftmp.flush()
         mol1 = gto.M(atom=ftmp.name)
@@ -621,7 +620,7 @@ O    SP
 
     def test_dump_loads_skip(self):
         import json
-        with tempfile.NamedTemporaryFile() as tmpfile:
+        with lib.NamedTemporaryFile() as tmpfile:
             lib.chkfile.save_mol(mol0, tmpfile.name)
             mol1 = gto.Mole()
             mol1.update(tmpfile.name)
@@ -824,7 +823,7 @@ O    SP
         mol1.build(False, False)
         gto.basis.load_ecp('lanl08', 'O')
         gto.format_ecp({'O':'lanl08', 1:'lanl2dz'})
-        self.assertRaises(BasisNotFoundError, gto.format_ecp, {'H':'lan2ldz'})
+        self.assertRaises(RuntimeError, gto.format_ecp, {'H':'lan2ldz'})
 
     def test_condense_to_shell(self):
         mol1 = mol0.copy()
@@ -975,7 +974,7 @@ O    SP
         self.assertAlmostEqual(eri[0,0], 1.0557129427350722, 12)
 
     def test_tofile(self):
-        tmpfile = tempfile.NamedTemporaryFile()
+        tmpfile = lib.NamedTemporaryFile()
         mol = gto.M(atom=[[1  , (0.,1.,1.)],
                           ["O1", (0.,0.,0.)],
                           [1  , (1.,1.,0.)], ])
@@ -990,7 +989,7 @@ H           1.00000000        1.00000000        0.00000000
             self.assertEqual(f.read(), ref)
         self.assertEqual(out1, ref[:-1])
 
-        tmpfile = tempfile.NamedTemporaryFile(suffix='.zmat')
+        tmpfile = lib.NamedTemporaryFile(suffix='.zmat')
         str1 = mol.tofile(tmpfile.name, format='zmat')
         #FIXME:self.assertEqual(mol._atom, mol.fromfile(tmpfile.name))
 
@@ -1020,7 +1019,7 @@ H           1.00000000        1.00000000        0.00000000
         print(mol.unit == 'Angstrom')
 
     def test_fromfile(self):
-        with tempfile.NamedTemporaryFile(mode='w+', suffix='.xyz') as f:
+        with lib.NamedTemporaryFile(mode='w+', suffix='.xyz') as f:
             f.write('2\n\nH 0 0 1; H 0 -1 0')
             f.flush()
             mol = gto.Mole()

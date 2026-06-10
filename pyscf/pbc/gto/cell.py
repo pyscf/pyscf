@@ -1166,7 +1166,8 @@ def _parse_poscar(string):
         count = unique_atoms[atom_type]
         start, end = end, end + count
         elements.extend([atom_type] * count)
-        coords.append(np.fromstring(' '.join(lines[start:end]), sep=' '))
+        r = np.fromstring(' '.join(lines[start:end]), sep=' ')
+        coords.append(r.reshape(count, 3))
     coords = np.vstack(coords)
     assert len(coords) == len(elements)
     return lattice_vectors, elements, coords, fractional
@@ -2081,8 +2082,11 @@ class Cell(mole.MoleBase):
         return mol
 
     def to_gpu(self):
-        from gpu4pyscf.gto.mole import Cell
-        return Cell.from_cpu(self)
+        from gpu4pyscf.gto import mole
+        if hasattr(mole, 'Cell'):
+            return mole.Cell.from_cpu(self)
+        else: # Cell class is defined in gpu4pyscf 1.5 or newer
+            return self
 
     def set_geom_(self, atoms_or_coords=None, unit=None, symmetry=None,
                   a=None, inplace=True):

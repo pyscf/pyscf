@@ -299,16 +299,17 @@ void CCuccsd_t_aaa(double complex *e_tot,
         int *permute_idx = malloc(sizeof(int) * nocc*nocc*nocc * 6);
         _make_permute_indices(permute_idx, nocc);
 
+        FILE *err_fp = stderr;
 #pragma omp parallel default(none) \
         shared(njobs, nocc, nvir, mo_energy, t1T, t2T, nirrep, o_ir_loc, \
                v_ir_loc, oo_ir_loc, orbsym, vooo, fvohalf, jobs, e_tot, \
-               permute_idx, stderr)
+               permute_idx, err_fp)
 {
         int a, b, c;
         size_t k;
         double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*3+2));
         if (cache1 == NULL) {
-                fprintf(stderr, "malloc(%zu) failed in CCuccsd_t_aaa\n",
+                fprintf(err_fp, "malloc(%zu) failed in CCuccsd_t_aaa\n",
                         sizeof(double) * nocc*nocc*nocc*3);
                 exit(1);
         }
@@ -549,15 +550,16 @@ void CCuccsd_t_baa(double complex *e_tot,
         double *vs_ts[] = {mo_ea, mo_eb, fvo, fVO, vooo, vOoO, VoOo,
                 t1aT, t1bT, t2aaT, t2abT};
 
+        FILE *err_fp = stderr;
 #pragma omp parallel default(none) \
-        shared(njobs, nocca, noccb, nvira, nvirb, vs_ts, jobs, e_tot, stderr)
+        shared(njobs, nocca, noccb, nvira, nvirb, vs_ts, jobs, e_tot, err_fp)
 {
         int a, b, c;
         size_t k;
         double *cache1 = malloc(sizeof(double) * (noccb*nocca*nocca*5+1 +
                                                   nocca*2+noccb*2));
         if (cache1 == NULL) {
-                fprintf(stderr, "malloc(%zu) failed in CCuccsd_t_baa\n",
+                fprintf(err_fp, "malloc(%zu) failed in CCuccsd_t_baa\n",
                         sizeof(double) * noccb*nocca*nocca*5);
                 exit(1);
         }
@@ -705,17 +707,18 @@ void CCuccsd_t_zaaa(double complex *e_tot,
         int *permute_idx = malloc(sizeof(int) * nocc*nocc*nocc * 6);
         _make_permute_indices(permute_idx, nocc);
 
+        FILE *err_fp = stderr;
 #pragma omp parallel default(none) \
         shared(njobs, nocc, nvir, mo_energy, t1T, t2T, nirrep, o_ir_loc, \
                v_ir_loc, oo_ir_loc, orbsym, vooo, fvohalf, jobs, e_tot, \
-               permute_idx, stderr)
+               permute_idx, err_fp)
 {
         int a, b, c;
         size_t k;
         double complex *cache1 = malloc(sizeof(double complex) *
                                         (nocc*nocc*nocc*3+2));
         if (cache1 == NULL) {
-                fprintf(stderr, "malloc(%zu) failed in CCuccsd_t_zaaa\n",
+                fprintf(err_fp, "malloc(%zu) failed in CCuccsd_t_zaaa\n",
                         sizeof(double complex) * nocc*nocc*nocc*3);
                 exit(1);
         }
@@ -915,8 +918,9 @@ void CCuccsd_t_zbaa(double complex *e_tot,
                 (double complex *)mo_eb, fvo, fVO, vooo, vOoO, VoOo,
                 t1aT, t1bT, t2aaT, t2abT};
 
+        FILE *err_fp = stderr;
 #pragma omp parallel default(none) \
-        shared(njobs, nocca, noccb, nvira, nvirb, vs_ts, jobs, e_tot, stderr)
+        shared(njobs, nocca, noccb, nvira, nvirb, vs_ts, jobs, e_tot, err_fp)
 {
         int a, b, c;
         size_t k;
@@ -924,7 +928,7 @@ void CCuccsd_t_zbaa(double complex *e_tot,
                                         (noccb*nocca*nocca*5+1 +
                                          nocca*2+noccb*2));
         if (cache1 == NULL) {
-                fprintf(stderr, "malloc(%zu) failed in CCuccsd_t_zbaa\n",
+                fprintf(err_fp, "malloc(%zu) failed in CCuccsd_t_zbaa\n",
                         sizeof(double complex) * noccb*nocca*nocca*5);
                 exit(1);
         }

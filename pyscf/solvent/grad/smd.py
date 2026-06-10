@@ -56,7 +56,8 @@ def grad_solver(pcmobj, dm):
     dD, dS, dSii = pcm_grad.get_dD_dS(pcmobj.surface, dF, with_D=True, with_S=True)
     DA = D*A
 
-    epsilon = pcmobj.eps
+    solvent_descriptors = pcmobj.solvent_descriptors or smd.solvent_db[pcmobj.solvent]
+    epsilon = pcmobj.eps or solvent_descriptors[5]
 
     #de_dF = v0 * -dSii_dF * q
     #de += 0.5*numpy.einsum('i,inx->nx', de_dF, dF)

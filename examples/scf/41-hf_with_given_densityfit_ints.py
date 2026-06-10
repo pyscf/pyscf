@@ -10,9 +10,9 @@ See also:
 examples/df/40-precompute_df_ints.py
 '''
 
-import tempfile
 import h5py
 from pyscf import gto, df, scf
+from pyscf import lib
 
 mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvdz')
 
@@ -20,7 +20,7 @@ mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvdz')
 int3c = df.incore.cholesky_eri(mol, auxbasis='ccpvdz-fit')
 
 # Integrals on disk
-ftmp = tempfile.NamedTemporaryFile()
+ftmp = lib.NamedTemporaryFile()
 df.outcore.cholesky_eri(mol, ftmp.name, auxbasis='ccpvdz-fit')
 
 

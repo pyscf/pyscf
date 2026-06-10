@@ -19,7 +19,6 @@
 import unittest
 import numpy
 import scipy.linalg
-import tempfile
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
@@ -196,7 +195,7 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(dm.mo_occ.size, dm.mo_coeff.shape[1])
         s = scf.hf.get_ovlp(mol)
         occ, mo = scipy.linalg.eigh(dm, s, type=2)
-        ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+        ftmp = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
         scf.chkfile.dump_scf(mol, ftmp.name, 0, occ, mo, occ)
         self.assertAlmostEqual(numpy.linalg.norm(dm), 3.0334714065913508, 9)
 
@@ -220,7 +219,7 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(dm.mo_occ.size, dm.mo_coeff.shape[1])
         s = scf.hf.get_ovlp(mol)
         occ, mo = scipy.linalg.eigh(dm, s, type=2)
-        ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+        ftmp = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
         scf.chkfile.dump_scf(mol, ftmp.name, 0, occ, mo, occ)
         self.assertAlmostEqual(numpy.linalg.norm(dm), 3.041411845876416, 8)
 
@@ -249,7 +248,7 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(dm.mo_occ.size, dm.mo_coeff.shape[1])
         s = scf.hf.get_ovlp(mol)
         occ, mo = scipy.linalg.eigh(dm, s, type=2)
-        ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+        ftmp = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
         scf.chkfile.dump_scf(mol, ftmp.name, 0, occ, mo, occ,
                              overwrite_mol=False)  # dump_scf twice to test overwrite_mol
         scf.chkfile.dump_scf(mol, ftmp.name, 0, occ, mo, occ)
@@ -275,7 +274,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(dm1), 7.5925205205065422, 9)
 
     def test_init_guess_chkfile(self):
-        ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+        ftmp = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
         def save(HFclass):
             mf0 = HFclass(mol)
             mf0.chkfile = ftmp.name

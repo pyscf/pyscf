@@ -15,6 +15,7 @@
 
 import unittest
 import numpy
+import numpy as np
 from functools import reduce
 
 from pyscf import gto, lib
@@ -81,6 +82,21 @@ class KnownValues(unittest.TestCase):
         mcc.kernel()
         self.assertAlmostEqual(mcc.ecc, -0.21124878189922872, 7)
         self.assertAlmostEqual(abs(mcc.t2).sum(), 5.4996425901189347, 5)
+
+        mcc.frozen = None
+        mcc.kernel()
+        self.assertAlmostEqual(mcc.ecc, -0.213343233755606, 7)
+        self.assertEqual(mcc.t2.shape, (5, 5, 19, 19))
+
+        mcc.frozen = 1
+        mcc.kernel()
+        self.assertAlmostEqual(mcc.ecc, -0.21124878189922872, 7)
+        self.assertEqual(mcc.t2.shape, (4, 4, 19, 19))
+
+        mcc.frozen = np.array([0])
+        mcc.kernel()
+        self.assertAlmostEqual(mcc.ecc, -0.21124878189922872, 7)
+        self.assertEqual(mcc.t2.shape, (4, 4, 19, 19))
 
     def test_ccsd_cart(self):
         pmol = mol.copy()

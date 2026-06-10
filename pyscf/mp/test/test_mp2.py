@@ -16,6 +16,7 @@
 import unittest
 from functools import reduce
 import numpy
+import numpy as np
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
@@ -197,6 +198,14 @@ class KnownValues(unittest.TestCase):
         pt.kernel(with_t2=False)
         self.assertAlmostEqual(pt.emp2, -0.20168270592254167, 8)
         pt.set_frozen()
+        pt.kernel(with_t2=False)
+        self.assertAlmostEqual(pt.emp2, -0.20168270592254167, 8)
+
+        pt.frozen = 0
+        pt.kernel(with_t2=False)
+        self.assertAlmostEqual(pt.emp2, -0.20401996716763607, 8)
+
+        pt.frozen = np.array([0])
         pt.kernel(with_t2=False)
         self.assertAlmostEqual(pt.emp2, -0.20168270592254167, 8)
 

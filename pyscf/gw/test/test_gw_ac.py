@@ -2,7 +2,7 @@
 
 import pytest
 import numpy as np
-from pyscf import gto, scf, dft
+from pyscf import gto, dft
 from pyscf.gw.gw_ac import GWAC
 
 @pytest.fixture

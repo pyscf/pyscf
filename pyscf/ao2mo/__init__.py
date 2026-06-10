@@ -35,6 +35,7 @@ from pyscf import gto
 from pyscf.ao2mo import incore
 from pyscf.ao2mo import outcore
 from pyscf.ao2mo import r_outcore
+from pyscf.ao2mo import nrr_outcore
 from pyscf.ao2mo.addons import load, restore
 
 def full(eri_or_mol, mo_coeff, erifile=None, dataname='eri_mo', intor='int2e',
@@ -147,6 +148,8 @@ def full(eri_or_mol, mo_coeff, erifile=None, dataname='eri_mo', intor='int2e',
     elif isinstance(eri_or_mol, gto.MoleBase):
         if '_spinor' in intor:
             mod = r_outcore
+        elif numpy.result_type(mo_coeff) == numpy.complex128:
+            mod = nrr_outcore
         else:
             mod = outcore
 
@@ -302,6 +305,8 @@ def general(eri_or_mol, mo_coeffs, erifile=None, dataname='eri_mo', intor='int2e
     elif isinstance(eri_or_mol, gto.MoleBase):
         if '_spinor' in intor:
             mod = r_outcore
+        elif numpy.result_type(*mo_coeffs) == numpy.complex128:
+            mod = nrr_outcore
         else:
             mod = outcore
 

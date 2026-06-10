@@ -52,7 +52,8 @@ def kernel(gw, mo_energy, mo_coeff, td_e, td_xy, eris=None,
                            dft.roks.ROKS    , dft.uks.UKS,
                            dft.rks_symm.RKS , dft.uks_symm.UKS,
                            dft.rks_symm.ROKS, dft.uks_symm.UKS)))
-    assert (gw.frozen == 0 or gw.frozen is None)
+    assert gw.frozen is None or gw.nmo == gw.mo_occ.size, \
+            'frozen orbitals not supported'
 
     if eris is None:
         eris = gw.ao2mo(mo_coeff)

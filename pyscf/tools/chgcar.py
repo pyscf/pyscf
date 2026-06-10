@@ -166,7 +166,7 @@ class CHGCAR(cubegen.Cube):
             self.mol = cell
             cell = cell.view(pbcgto.Cell)
             if (isinstance(cell.unit, str) and
-                cell.unit.startswith(('B','b','au','AU'))):
+                    cell.unit.startswith(('B','b','au','AU'))):
                 cell.a = self.box
             else:
                 cell.a = self.box * lib.param.BOHR
@@ -183,7 +183,7 @@ class CHGCAR(cubegen.Cube):
         self.boxorig = numpy.zeros(3)
         self.vol = cell.vol
 
-    def get_coords(self) :
+    def get_coords(self):
         """  Result: set of coordinates to compute a field which is to be stored
         in the file.
         """
@@ -208,9 +208,9 @@ class CHGCAR(cubegen.Cube):
         field = field * self.vol
 
         boxA = self.box * lib.param.BOHR
-        atomList= [cell.atom_pure_symbol(i) for i in range(cell.natm)]
+        atomList = [cell.atom_pure_symbol(i) for i in range(cell.natm)]
         Axyz = zip(atomList, cell.atom_coords().tolist())
-        Axyz = sorted(Axyz, key = lambda x: x[0])
+        Axyz = sorted(Axyz, key=lambda x: x[0])
         swappedCoords = [(vec[1]+self.boxorig) * lib.param.BOHR for vec in Axyz]
         vaspAtomicInfo = collections.Counter([xyz[0] for xyz in Axyz])
         vaspAtomicInfo = sorted(vaspAtomicInfo.items())
@@ -221,8 +221,8 @@ class CHGCAR(cubegen.Cube):
             f.write('%14.8f %14.8f %14.8f \n' % (boxA[0,0],boxA[0,1],boxA[0,2]))
             f.write('%14.8f %14.8f %14.8f \n' % (boxA[1,0],boxA[1,1],boxA[1,2]))
             f.write('%14.8f %14.8f %14.8f \n' % (boxA[2,0],boxA[2,1],boxA[2,2]))
-            f.write(''.join(['%5.3s'%atomN[0] for atomN in vaspAtomicInfo]) + '\n')
-            f.write(''.join(['%5d'%atomN[1] for atomN in vaspAtomicInfo]) + '\n')
+            f.write(''.join(['%5.3s' % atomN[0] for atomN in vaspAtomicInfo]) + '\n')
+            f.write(''.join(['%5d' % atomN[1] for atomN in vaspAtomicInfo]) + '\n')
             f.write('Cartesian \n')
             for ia in range(cell.natm):
                 f.write(' %14.8f %14.8f %14.8f\n' % tuple(swappedCoords[ia]))
@@ -244,6 +244,6 @@ if __name__ == '__main__':
     from pyscf.tools import chgcar
     cell = gto.M(atom='H 0 0 0; H 0 0 1', a=numpy.eye(3)*3)
     mf = scf.RHF(cell).run()
-    chgcar.density(cell, 'h2.CHGCAR', mf.make_rdm1()) #makes total density
-    chgcar.orbital(cell, 'h2_mo1.CHGCAR', mf.mo_coeff[:,0]) # makes mo#1 (sigma)
-    chgcar.orbital(cell, 'h2_mo2.CHGCAR', mf.mo_coeff[:,1]) # makes mo#2 (sigma*)
+    chgcar.density(cell, 'h2.CHGCAR', mf.make_rdm1())  # makes total density
+    chgcar.orbital(cell, 'h2_mo1.CHGCAR', mf.mo_coeff[:,0])  # makes mo#1 (sigma)
+    chgcar.orbital(cell, 'h2_mo2.CHGCAR', mf.mo_coeff[:,1])  # makes mo#2 (sigma*)

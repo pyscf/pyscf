@@ -383,7 +383,7 @@ def to_fcivec(cisdvec, norb, nelec, frozen=None):
 
 def from_fcivec(ci0, norb, nelec, frozen=None):
     '''Extract CISD coefficients from FCI coefficients'''
-    if not (frozen is None or frozen == 0):
+    if frozen is not None:
         raise NotImplementedError
 
     if isinstance(nelec, (int, numpy.number)):
@@ -875,7 +875,11 @@ class CISD(lib.StreamObject):
                 'CISD calculation should be initialized with HF object.\n'
                 'DFT can be converted to HF object with the mf.to_hf() method\n')
 
-        if mo_coeff is None: mo_coeff = mf.mo_coeff
+        if mo_coeff is None:
+            mo_coeff = mf.mo_coeff
+            if mo_coeff is None and mf.mol.nelectron > 0:
+                mf.run()
+                mo_coeff = mf.mo_coeff
         if mo_occ is None: mo_occ   = mf.mo_occ
 
         self.mol = mf.mol

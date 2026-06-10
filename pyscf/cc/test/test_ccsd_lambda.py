@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tempfile
 import unittest
 import numpy
 from functools import reduce
@@ -112,7 +111,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.dot(numpy.sin(l2new.flatten()), numpy.arange(35**2)), 507.656936701192, 8)
 
     def test_restart(self):
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = lib.NamedTemporaryFile()
         cc1 = mycc.copy()
         cc1.max_cycle = 5
         cc1.solve_lambda()

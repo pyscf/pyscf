@@ -813,7 +813,7 @@ class UGWAC(GWAC):
         """Do one-shot spin-unrestricted GW calculation using analytical continuation."""
         # smeared GW needs denser grids to be accurate
         if hasattr(self._scf, 'sigma'):
-            assert self.frozen == 0 or self.frozen is None
+            assert self.frozen is None or self.nmo == self.mo_occ.shape
             self.nw = max(400, self.nw)
             self.ac_pade_npts = 18
             self.ac_pade_step_ratio = 5.0 / 6.0

@@ -17,7 +17,6 @@
 #
 
 import unittest
-import tempfile
 import numpy
 import scipy.linalg
 from functools import reduce
@@ -41,7 +40,7 @@ def setUpModule():
     )
     mf = scf.GHF(mol)
     mf.conv_tol = 1e-12
-    mf.chkfile = tempfile.NamedTemporaryFile().name
+    mf.chkfile = lib.NamedTemporaryFile().name
     mf.kernel()
 
     molsym = gto.M(
@@ -57,8 +56,8 @@ def setUpModule():
     mfsym = scf.GHF(molsym).run(conv_tol=1e-10)
 
     mol1 = gto.M(atom=mol.atom, basis='631g', spin=2, verbose=0)
-    mf_r = scf.RHF(mol1).run(conv_tol=1e-10, chkfile=tempfile.NamedTemporaryFile().name)
-    mf_u = scf.RHF(mol1).run(conv_tol=1e-10, chkfile=tempfile.NamedTemporaryFile().name)
+    mf_r = scf.RHF(mol1).run(conv_tol=1e-10, chkfile=lib.NamedTemporaryFile().name)
+    mf_u = scf.RHF(mol1).run(conv_tol=1e-10, chkfile=lib.NamedTemporaryFile().name)
 
 def tearDownModule():
     global mol, mf, molsym, mfsym, mol1, mf_r, mf_u
@@ -110,7 +109,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(dm[24:,24:])*2, 2.7821827416174094, 7)
 
     def test_init_guess_chk(self):
-        dm = mol.GHF(chkfile=tempfile.NamedTemporaryFile().name).get_init_guess(mol, key='chkfile')
+        dm = mol.GHF(chkfile=lib.NamedTemporaryFile().name).get_init_guess(mol, key='chkfile')
         self.assertEqual(dm.shape, (48,48))
         self.assertAlmostEqual(lib.fp(dm), 1.8117584283411752, 5)
 

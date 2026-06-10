@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import unittest
-import tempfile
 import numpy as np
 import scipy.linalg
 from pyscf import lib
@@ -109,7 +108,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ccmdf_make_j3c_gamma(self):
         dfbuilder = mdf._CCMDFBuilder(cell, auxcell).set(mesh=mesh).build()
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 0.01486794482668373, 7)
@@ -127,7 +126,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ccmdf_make_j3c(self):
         dfbuilder = mdf._CCMDFBuilder(cell, auxcell, kpts).set(mesh=mesh).build()
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v_s2 = []
             for ki in range(nkpts):
@@ -149,7 +148,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ccmdf_make_j3c_j_only(self):
         dfbuilder = mdf._CCMDFBuilder(cell, auxcell, kpts).set(mesh=mesh).build()
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2', j_only=True)
             v_s2 = []
             for ki in range(nkpts):
@@ -200,7 +199,7 @@ class KnownValues(unittest.TestCase):
         j2c = dfbuilder.eigenvalue_decomposed_metric(j2c[0])
         ref = lib.dot(j2c[0], j3c)
         ref = ref.T.dot(ref)
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2', j_only=True)
             v1 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(abs(ref - v1).max(), 0, 8)
@@ -224,7 +223,7 @@ class KnownValues(unittest.TestCase):
 
     def test_rsmdf_make_j3c_gamma(self):
         dfbuilder = mdf._RSMDFBuilder(cell, auxcell).set(mesh=mesh).build()
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 0.01486794482668373, 7)
@@ -257,7 +256,7 @@ class KnownValues(unittest.TestCase):
 
     def test_rsmdf_make_j3c(self):
         dfbuilder = mdf._RSMDFBuilder(cell, auxcell, kpts).set(mesh=mesh).build()
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v_s2 = []
             for ki in range(nkpts):
@@ -279,7 +278,7 @@ class KnownValues(unittest.TestCase):
 
     def test_rsmdf_make_j3c_j_only(self):
         dfbuilder = mdf._RSMDFBuilder(cell, auxcell, kpts).set(mesh=mesh).build()
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2', j_only=True)
             v_s2 = []
             for ki in range(nkpts):
@@ -316,7 +315,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ccmdf_make_j3c_gamma_lr(self):
         dfbuilder = mdf._CCMDFBuilder(cell_lr, auxcell_lr).set(mesh=mesh).build()
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 1.0439710349332878e-05, 7)
@@ -334,7 +333,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ccmdf_make_j3c_lr(self):
         dfbuilder = mdf._CCMDFBuilder(cell_lr, auxcell_lr, kpts).set(mesh=mesh).build()
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v_s2 = []
             for ki in range(nkpts):
@@ -356,7 +355,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ccmdf_make_j3c_j_only_lr(self):
         dfbuilder = mdf._CCMDFBuilder(cell_lr, auxcell_lr, kpts).set(mesh=mesh).build()
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2', j_only=True)
             v_s2 = []
             for ki in range(nkpts):
@@ -411,7 +410,7 @@ class KnownValues(unittest.TestCase):
         j2c = dfbuilder.eigenvalue_decomposed_metric(j2c[0])
         ref = lib.dot(j2c[0], j3c)
         ref = ref.T.dot(ref)
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2', j_only=True)
             v1 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(abs(ref - v1).max(), 0, 9)
@@ -437,7 +436,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ccmdf_make_j3c_gamma_sr(self):
         dfbuilder = mdf._CCMDFBuilder(cell_sr, auxcell_sr).set(mesh=mesh).build()
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 0.014857466177913803, 7)
@@ -455,7 +454,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ccmdf_make_j3c_sr(self):
         dfbuilder = mdf._CCMDFBuilder(cell_sr, auxcell_sr, kpts).set(mesh=mesh).build()
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v_s2 = []
             for ki in range(nkpts):
@@ -477,7 +476,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ccmdf_make_j3c_j_only_sr(self):
         dfbuilder = mdf._CCMDFBuilder(cell_sr, auxcell_sr, kpts).set(mesh=mesh).build()
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2', j_only=True)
             v_s2 = []
             for ki in range(nkpts):
@@ -531,7 +530,7 @@ class KnownValues(unittest.TestCase):
         j2c = dfbuilder.eigenvalue_decomposed_metric(j2c[0])
         ref = lib.dot(j2c[0], j3c)
         ref = ref.T.dot(ref)
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2', j_only=True)
             v1 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(abs(ref - v1).max(), 0, 8)
@@ -557,7 +556,7 @@ class KnownValues(unittest.TestCase):
 
     def test_rsmdf_make_j3c_gamma_sr(self):
         dfbuilder = mdf._RSMDFBuilder(cell_sr, auxcell_sr).set(mesh=mesh).build()
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 0.014857466177913803, 7)
@@ -590,7 +589,7 @@ class KnownValues(unittest.TestCase):
 
     def test_rsmdf_make_j3c_sr(self):
         dfbuilder = mdf._RSMDFBuilder(cell_sr, auxcell_sr, kpts).set(mesh=mesh).build()
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v_s2 = []
             for ki in range(nkpts):
@@ -612,7 +611,7 @@ class KnownValues(unittest.TestCase):
 
     def test_rsmdf_make_j3c_j_only_sr(self):
         dfbuilder = mdf._RSMDFBuilder(cell_sr, auxcell_sr, kpts).set(mesh=mesh).build()
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2', j_only=True)
             v_s2 = []
             for ki in range(nkpts):

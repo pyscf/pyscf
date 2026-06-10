@@ -14,9 +14,9 @@
 # limitations under the License.
 
 import unittest
-import tempfile
 from functools import reduce
 import numpy
+import numpy as np
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
@@ -69,6 +69,14 @@ class KnownValues(unittest.TestCase):
         mmp.kernel()
         self.assertAlmostEqual(mmp.e_corr, -0.09397152054462676, 8)
 
+        mmp = mp.dfump2.DFUMP2(mf, frozen=0)
+        mmp.kernel()
+        self.assertAlmostEqual(mmp.e_corr, -0.15321910903780495, 8)
+
+        mmp = mp.dfump2.DFUMP2(mf, frozen=np.array([0]))
+        mmp.kernel()
+        self.assertAlmostEqual(mmp.e_corr, -0.15103334394544674, 8)
+
     def test_dfmp2_mf_with_df(self):
         mmpref = mp.ump2.UMP2(dfmf)
         mmpref.kernel()
@@ -97,7 +105,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mmp.e_corr, mmp1.e_corr, 8)
 
     def test_read_ovL_outcore(self):
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = lib.NamedTemporaryFile()
 
         mmp = mp.dfump2.DFUMP2(mf)
         eris = mmp.ao2mo(ovL_to_save=ftmp.name)

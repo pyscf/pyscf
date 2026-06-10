@@ -37,6 +37,7 @@ def dump_mcscf(
     mo_coeff=None,
     ncore=None,
     ncas=None,
+    nelecas=None,
     mo_occ=None,
     mo_energy=None,
     e_cas=None,
@@ -51,6 +52,8 @@ def dump_mcscf(
         ncore = mc.ncore
     if ncas is None:
         ncas = mc.ncas
+    if nelecas is None:
+        nelecas = mc.nelecas
     if e_tot is None:
         e_tot = mc.e_tot
     if e_cas is None:
@@ -90,6 +93,7 @@ def dump_mcscf(
         store("e_cas", e_cas)
         store("ncore", ncore)
         store("ncas", ncas)
+        store("nelecas", nelecas)
         store("mo_occ", mo_occ)
         if mo_energy is not None:
             store("mo_energy", mo_energy)

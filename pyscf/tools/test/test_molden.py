@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import unittest
-import tempfile
 from pyscf import lib, gto, scf
 from pyscf.tools import molden
 
@@ -37,7 +36,7 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_dump_scf(self):
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = lib.NamedTemporaryFile()
         fname = ftmp.name
         molden.dump_scf(mf, fname)
         res = molden.read(fname)
@@ -45,7 +44,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(mf.mo_coeff-mo_coeff).max(), 0, 12)
 
     def test_dump_uhf(self):
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = lib.NamedTemporaryFile()
         fname = ftmp.name
         with lib.temporary_env(mol, spin=2, charge=2):
             mf = scf.UHF(mol).run()
@@ -57,7 +56,7 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(abs(mf.mo_coeff[1]-mo_coeff[1]).max(), 0, 12)
 
     def test_dump_cartesian_gto_orbital(self):
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = lib.NamedTemporaryFile()
         fname = ftmp.name
         with lib.temporary_env(mol, cart=True, symmetry=False):
             mf = scf.UHF(mol).run()
@@ -69,7 +68,7 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(abs(mf.mo_coeff[1]-mo_coeff[1]).max(), 0, 12)
 
     def test_dump_cartesian_gto_symm_orbital(self):
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = lib.NamedTemporaryFile()
         fname = ftmp.name
 
         pmol = mol.copy()
@@ -83,7 +82,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(mf.mo_coeff-mo_coeff).max(), 0, 12)
 
     def test_basis_not_sorted(self):
-        with tempfile.NamedTemporaryFile('w') as ftmp:
+        with lib.NamedTemporaryFile('w') as ftmp:
             ftmp.write('''\
 [Molden Format]
 made by pyscf v[2.4.0]

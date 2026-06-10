@@ -394,10 +394,13 @@ class UADC(lib.StreamObject):
             Avoid all I/O. Default is False.
         method : string
             nth-order ADC method. Options are : ADC(2), ADC(2)-X, ADC(3). Default is ADC(2).
-
-            >>> mol = gto.M(atom = 'H 0 0 0; F 0 0 1.1', basis = 'ccpvdz')
-            >>> mf = scf.RHF(mol).run()
-            >>> myadc = adc.UADC(mf).run()
+        frozen : None, int or iterables
+            Specifies frozen orbitals.
+            If an integer is provided, the lowest-energy orbitals are frozen.
+            If an iterable is provided, the specified (0-based) orbital indices
+            are excluded from the calculation.
+            Note, the `frozen` attribute is immutable and cannot be modified
+            after object instantiation.
 
     Saved results
 
@@ -407,6 +410,11 @@ class UADC(lib.StreamObject):
             Total energy (HF + correlation)
         t1, t2 :
             T amplitudes t1[i,a], t2[i,j,a,b]  (i,j in occ, a,b in virt)
+
+    Examples:
+        >>> mol = gto.M(atom = 'H 0 0 0; F 0 0 1.1', basis = 'ccpvdz')
+        >>> mf = scf.RHF(mol).run()
+        >>> myadc = adc.UADC(mf).run()
     '''
     incore_complete = getattr(__config__, 'adc_uadc_UADC_incore_complete', False)
 
@@ -442,6 +450,7 @@ class UADC(lib.StreamObject):
         self.tol_residual = getattr(__config__, 'adc_uadc_UADC_tol_residual', 1e-5)
         self.scf_energy = mf.e_tot
 
+        # The frozen attribute cannot be modified after instantiating ADC object
         self.frozen = frozen
         self.incore_complete = self.incore_complete or self.mol.incore_anyway
 
@@ -616,14 +625,13 @@ class UADC(lib.StreamObject):
 
         charges = self.mol.atom_charges()
         coords  = self.mol.atom_coords()
-        self.dip_mom_nuc = lib.einsum('i,ix->x', charges, coords)
+        self.dip_mom_nuc = np.einsum('i,ix->x', charges, coords)
 
     compute_amplitudes = uadc_amplitudes.compute_amplitudes
     compute_energy = uadc_amplitudes.compute_energy
     transform_integrals = uadc_ao2mo.transform_integrals_incore
     make_ref_rdm1 = make_ref_rdm1
     get_frozen_mask = get_frozen_mask
-
 
     def semi_canonicalize_orbitals(self, f, nocc, C):
 

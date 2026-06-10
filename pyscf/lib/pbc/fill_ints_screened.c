@@ -265,7 +265,7 @@ static void _nr3c_screened_sum_auxbas_fill_g(int (*intor)(), void (*fsort)(), do
 
         for (ksh = ksh0; ksh < ksh1; ksh++){
             dk = ao_loc[ksh+1] - ao_loc[ksh];
-            assert(dk < dkmax);
+            assert(dk <= dkmax);
             dijk = dij * dk;
             shls[2] = ksh;
             ksh_off = ksh - nshij;
@@ -646,7 +646,7 @@ static void _nr3c1e_screened_nuc_grad_fill_g(int (*intor)(), void (*fcontract)()
 
     for (ksh = ksh0; ksh < ksh1; ksh++){
         dk = ao_loc[ksh+1] - ao_loc[ksh];
-        assert(dk < dkmax);
+        assert(dk <= dkmax);
         dijk = dij * dk;
         shls[2] = ksh;
         ksh_off = ksh - nbas*2;
@@ -894,7 +894,8 @@ static int _nr2c_screened_fill(
         int ishloc[ish1-ish0+1];
         int nishloc = shloc_partition(ishloc, ao_loc, ish0, ish1, dimax);
 
-        int m, msh0, msh1, dijc, dmjc, ish, di, empty;
+        int m, msh0, msh1, dijc, dmjc, ish, di;
+        int empty = 1;
         int jL, idx_j;
         int shls[2];
         double *bufk_r = buf;
