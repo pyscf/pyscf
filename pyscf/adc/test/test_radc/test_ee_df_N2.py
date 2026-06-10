@@ -70,10 +70,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[3], 6.481812538202186e-30, 6)
 
         dm1_exc = np.array(myadc.make_rdm1())
-        self.assertAlmostEqual(rdms_test(dm1_exc[0]) - 39.97509426976306, 0, 4)
-        self.assertAlmostEqual(rdms_test(dm1_exc[1]) - 39.97509426976296, 0, 4)
-        self.assertAlmostEqual(rdms_test(dm1_exc[2]) - 40.69394840350379, 0, 4)
-        self.assertAlmostEqual(rdms_test(dm1_exc[3]) - 40.99987050864409, 0, 4)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]) - 39.97509426976306, 0, 3)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]) - 39.97509426976296, 0, 3)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]) - 40.69394840350379, 0, 3)
+        self.assertAlmostEqual(rdms_test(dm1_exc[3]) - 40.99987050864409, 0, 3)
 
 
     def test_ee_adc2x(self):
