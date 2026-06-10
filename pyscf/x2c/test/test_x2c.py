@@ -225,8 +225,19 @@ C     F
         mf_atom1e = mol.GHF().x2c1e()
         mf_atom1e.with_x2c.approx = 'ATOM1E'
         mf_atom1e.kernel()
-        self.assertAlmostEqual(abs(mf_1e.e_tot - mf_atom1e.e_tot).max(), 0, 9)
+        self.assertAlmostEqual(mf_1e.e_tot, mf_atom1e.e_tot, 9)
         self.assertAlmostEqual(abs(mf_1e.mo_energy - mf_atom1e.mo_energy).max(), 0, 9)
+
+        with lib.temporary_env(lib.param, LIGHT_SPEED=15.):
+            mol = gto.M(atom='Ne 0 1 -1; Ne 0 8 8', basis='ccpvdz')
+            mf_1e = mol.GHF().x2c1e()
+            mf_1e.kernel()
+            mf_atom1e = mol.GHF().x2c1e()
+            mf_atom1e.with_x2c.approx = 'ATOM1E'
+            mf_atom1e.kernel()
+            self.assertAlmostEqual(mf_1e.e_tot, -266.688128052731, 8)
+            self.assertAlmostEqual(mf_1e.e_tot, mf_atom1e.e_tot, 8)
+            self.assertAlmostEqual(abs(mf_1e.mo_energy - mf_atom1e.mo_energy).max(), 0, 6)
 
     def test_gks(self):
         mol = gto.M(atom='C', basis='ccpvdz-dk')
@@ -240,6 +251,17 @@ C     F
         self.assertTrue(mf.converged)
         self.assertAlmostEqual(mf.e_tot, ref.e_tot, 9)
         self.assertAlmostEqual(abs(mf.dip_moment() - ref.dip_moment()).max(), 0, 9)
+
+        with lib.temporary_env(lib.param, LIGHT_SPEED=15.):
+            mol = gto.M(atom='Ne 0 1 -1; Ne 0 8 8', basis='ccpvdz')
+            mf_1e = mol.DKS().x2c1e()
+            mf_1e.kernel()
+            mf_atom1e = mol.DKS().x2c1e()
+            mf_atom1e.with_x2c.approx = 'ATOM1E'
+            mf_atom1e.kernel()
+            self.assertAlmostEqual(mf_1e.e_tot, -266.688128052731, 8)
+            self.assertAlmostEqual(mf_1e.e_tot, mf_atom1e.e_tot, 8)
+            self.assertAlmostEqual(abs(mf_1e.mo_energy - mf_atom1e.mo_energy).max(), 0, 6)
 
     def test_undo_x2c(self):
         mf = mol.RHF().x2c().density_fit()
