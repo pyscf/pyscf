@@ -100,25 +100,25 @@ class KnownValues(unittest.TestCase):
         g = mf.get_grad(mf.mo_coeff, mf.mo_occ)
         self.assertAlmostEqual(abs(g).max(), 0, 5)
 
-    if scf.dhf.zquatev:
-        def test_rhf(self):
-            mol = gto.M(
-                verbose = 5,
-                output = '/dev/null',
-                atom = '''
-                    O     0    0        0
-                    H     0    -0.757   0.587
-                    H     0    0.757    0.587''',
-                basis = '631g',
-            )
-            mf = scf.dhf.RHF(mol)
-            mf.with_ssss = False
-            mf.conv_tol_grad = 1e-5
-            self.assertAlmostEqual(mf.kernel(), -76.03852477545016, 8)
+    @unittest.skipIf(scf.dhf.zquatev is None, 'requires zquatev')
+    def test_rhf(self):
+        mol = gto.M(
+            verbose = 5,
+            output = '/dev/null',
+            atom = '''
+                O     0    0        0
+                H     0    -0.757   0.587
+                H     0    0.757    0.587''',
+            basis = '631g',
+        )
+        mf = scf.dhf.RHF(mol)
+        mf.with_ssss = False
+        mf.conv_tol_grad = 1e-5
+        self.assertAlmostEqual(mf.kernel(), -76.03852477545016, 8)
 
-            mf.ssss_approx = None
-            mf.conv_tol_grad = 1e-5
-            self.assertAlmostEqual(mf.kernel(), -76.03852480744785, 8)
+        mf.ssss_approx = None
+        mf.conv_tol_grad = 1e-5
+        self.assertAlmostEqual(mf.kernel(), -76.03852480744785, 8)
 
     def test_get_veff(self):
         n4c = mol.nao_2c() * 2
@@ -325,6 +325,23 @@ class KnownValues(unittest.TestCase):
         mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='sto3g', verbose=0)
         e = mol.DHF().kernel()
         self.assertAlmostEqual(e, -1.066122658859047, 12)
+
+    def test_he_with_gaunt(self):
+        mol = gto.M(
+            atom=[['He', (0.,0.,0.)]],
+            basis = {
+                'He': [(0, 0, (1, 1)),
+                       (0, 0, (3, 1)),
+                       (1, 0, (1, 1)), ]})
+        method = mol.DHF()
+        energy = method.scf()
+        self.assertAlmostEqual(energy, -2.38146942868, 8)
+        method.with_gaunt = True
+        energy = method.scf()
+        self.assertAlmostEqual(energy, -2.38138339005, 8)
+        method.with_breit = True
+        energy = method.scf()
+        self.assertAlmostEqual(energy, -2.38138339005, 8)
 
 def _fill_gaunt(mol, erig):
     n2c = erig.shape[0]

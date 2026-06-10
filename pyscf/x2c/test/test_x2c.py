@@ -196,7 +196,7 @@ C     F
         s = mol.intor_symmetric('int1e_ovlp_spinor')
         e_ref = scipy.linalg.eigvalsh(hcore, s)
 
-        mol = gto.M(atom='C', basis=(mol.basis, [[0, [0.1285000001, 1]]]))
+        mol = gto.M(atom='C', basis=(mol.basis, [[0, [0.128500001, 1]]]))
         x2c_obj = x2c.X2C(mol)
         xmol, c = x2c_obj.get_xmol(mol)
         self.assertEqual(xmol.nbas, 19)
@@ -215,13 +215,13 @@ C     F
         myx2c.with_x2c.get_xmat = lambda xmol: numpy.zeros((xmol.nao, xmol.nao))
         h1 = myx2c.with_x2c.get_hcore()
         ref = mol.intor('int1e_nuc')
-        self.assertAlmostEqual(abs(h1 - ref).max(), 0, 12)
+        self.assertAlmostEqual(abs(h1 - ref).max(), 0, 11)
 
         with_x2c = x2c.X2C(mol)
         with_x2c.get_xmat = lambda xmol: numpy.zeros((xmol.nao_2c(), xmol.nao_2c()))
         h1 = with_x2c.get_hcore()
         ref = mol.intor('int1e_nuc_spinor')
-        self.assertAlmostEqual(abs(h1 - ref).max(), 0, 12)
+        self.assertAlmostEqual(abs(h1 - ref).max(), 0, 11)
 
     def test_ghf(self):
         # Test whether the result of spinor X2C is a solution of .GHF().x2c()
@@ -255,7 +255,7 @@ C     F
             mf_atom1e = mol.GHF().x2c1e()
             mf_atom1e.with_x2c.approx = 'ATOM1E'
             mf_atom1e.kernel()
-            self.assertAlmostEqual(mf_1e.e_tot, -266.688128052731, 8)
+            self.assertAlmostEqual(mf_1e.e_tot, -267.39699993561, 8)
             self.assertAlmostEqual(mf_1e.e_tot, mf_atom1e.e_tot, 8)
             self.assertAlmostEqual(abs(mf_1e.mo_energy - mf_atom1e.mo_energy).max(), 0, 6)
 

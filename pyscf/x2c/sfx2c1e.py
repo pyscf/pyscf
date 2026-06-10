@@ -278,10 +278,10 @@ def _atomic_1e_x(mol):
     x_conf = {}
     c = lib.param.LIGHT_SPEED
     for elem, atom in atoms.items():
-        t1 = atom.intor_symmetric('int1e_kin_spinor')
-        s1 = atom.intor_symmetric('int1e_ovlp_spinor')
-        v1 = atom.intor_symmetric('int1e_nuc_spinor')
-        w1 = atom.intor_symmetric('int1e_spnucsp_spinor')
+        t1 = atom.intor_symmetric('int1e_kin')
+        s1 = atom.intor_symmetric('int1e_ovlp')
+        v1 = atom.intor_symmetric('int1e_nuc')
+        w1 = atom.intor_symmetric('int1e_pnucp')
         x_conf[elem] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
 
     atom_slices = mol.offset_nr_by_atom()

@@ -623,8 +623,31 @@ class RHF(SCF):
         if dhf.zquatev is None:
             raise RuntimeError('zquatev library is required to perform Kramers-restricted X2C-RHF')
 
-    def _eigh(self, h, s):
-        return dhf.zquatev.solve_KR_FCSCE(self.mol, h, s)
+    def check_linear_dependency(self, s, verbose=None):
+        log = logger.new_logger(self, verbose)
+        idx = dhf._kramers_pair_sort_ao_idx(self.mol, four_component=False)
+        s = s[idx[:,None], idx]
+        e, v = dhf.zquatev.eigh(s)
+        if log is not None:
+            abs_e = abs(e)
+            emax = abs_e.max()
+            emin = abs_e.min()
+            c = emax / emin
+            log.debug('cond(S) = %s', c)
+            if c > 1e10:
+                log.warn('Singularity detected in the overlap matrix. '
+                         'SCF may be inaccurate and difficult to converge.')
+
+        if hf.remove_overlap_zero_eigenvalue:
+            mask = e > hf.overlap_zero_eigenvalue_threshold
+            x = v[:,mask] / numpy.sqrt(e[mask])
+        else:
+            x = v / numpy.sqrt(e)
+        x1 = numpy.empty_like(x)
+        x1[idx] = x
+        return x1
+
+    _eigh = dhf.RDHF._eigh
 
     def to_ks(self, xc='HF'):
         '''Convert the input mean-field object to an X2C-KS object.

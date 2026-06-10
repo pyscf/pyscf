@@ -5,13 +5,14 @@ pip install pyberny
 pip install --no-deps pyscf-dispersion==1.3.0
 
 version=$(python -c 'import sys; version=sys.version_info[:2]; print("{0}.{1}".format(*version))')
-if [ $version != '3.12' ]; then
+if [ $version == '3.8' ]; then
     pip install geometric
     pip install spglib
 fi
 
-if [ $version != '3.8' ]; then
+if [ $version == '3.12' ]; then
     pip install pytblis
+    pip install git+https://github.com/sunqm/zquatev
 fi
 
 #cppe
