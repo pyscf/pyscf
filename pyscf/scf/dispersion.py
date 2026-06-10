@@ -21,12 +21,17 @@
 dispersion correction for HF and DFT
 '''
 
+import warnings
 from functools import lru_cache
 from pyscf.lib import logger
 from pyscf import scf
+from pyscf import __config__
+
+DFTD4_RECOMMENDATIONS = getattr(__config__, 'DFTD4_RECOMMENDATIONS', True)
 
 # supported dispersion corrections
 DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']
+# XC names for dftd3 and dftd4 inputs
 XC_MAP = {'wb97m-d3bj': 'wb97m',
           'b97m-d3bj': 'b97m',
           'wb97x-d3bj': 'wb97x',
@@ -48,6 +53,10 @@ _white_list = {
     'wb97x-d3bj': ('wb97x-v', False, 'd3bj'),
     'wb97x-3c': ('wb97x-v', False, 'd4:wb97x-3c'),
 }
+if DFTD4_RECOMMENDATIONS:
+    _white_list['b97m-d4'] = ('b97m_v', False, 'd4:b97m')
+    _white_list['wb97m-d4'] = ('wb97m_v', False, 'd4:wb97m')
+    _white_list['wb97x-d4'] = ('wb97x_v', False, 'd4:wb97x')
 
 # These xc functionals are not supported yet
 _black_list = {
@@ -68,13 +77,24 @@ def parse_dft(xc_code):
     if method_lower in _black_list:
         raise NotImplementedError(f'{method_lower} is not supported yet.')
 
-    if method_lower in _white_list:
-        return _white_list[method_lower]
-
     if method_lower.endswith('-3c'):
         if method_lower == "wb97x-3c":
             return _white_list[method_lower]
         raise NotImplementedError('Only wb97x-3c is supported for now. Other 3c methods are not supported yet.')
+
+    if method_lower in _white_list:
+        if '-d4' in method_lower:
+            xc, nlc, disp = _white_list[method_lower]
+            if disp == 'd4:wb97x':
+                disp = disp + '-2008'
+            warnings.warn(f'''
+{method_lower} now follows the DFT-D4 recommendations: {xc} with D4 instead of vv10.
+To reproduce the previous PySCF behavior (v2.13 and earlier versions), explicitly specify
+
+    mf.xc = '{xc[:-2]}'
+    mf.disp = '{disp}'
+''', FutureWarning, stacklevel=2)
+        return _white_list[method_lower]
 
     if '-d3' in method_lower or '-d4' in method_lower:
         xc, disp = method_lower.split('-')
@@ -137,7 +157,7 @@ def parse_disp(dft_method=None, disp=None):
 
     if dft_method is not None:
         dft_lower = dft_method.lower()
-        xc, _, disp_from_dft = parse_dft(dft_lower)
+        xc, nlc, disp_from_dft = parse_dft(dft_lower)
         if xc in XC_MAP:
             xc = XC_MAP[xc]
 
