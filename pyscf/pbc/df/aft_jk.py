@@ -154,9 +154,9 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
     weight = 1. / nkpts
 
     aosym = 's1'
-    bvk_kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
+    kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
     rcut = ft_ao.estimate_rcut(cell)
-    supmol = ft_ao.ExtendedMole.from_cell(cell, bvk_kmesh, rcut.max())
+    supmol = ft_ao.ExtendedMole.from_cell(cell, kmesh, rcut.max())
     supmol = supmol.strip_basis(rcut)
 
     t_rev_pairs = group_by_conj_pairs(cell, kpts, return_kpts_pairs=False)

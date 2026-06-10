@@ -317,17 +317,19 @@ void AGF2udf_vv_vev_islice_lowmem(double *qxi,
         do_os = j < nob;
         do_ss = j < noa;
 
-        // build qx_i
+        // build qx_i / qa_i (always indexed by i < noa)
         AGF2slice_01i(qxi, naux, nmo, noa, i, qx_i);
-
-        // build qx_j
-        AGF2slice_01i(qxi, naux, nmo, noa, j, qx_j);
-
-        // build qa_i
         AGF2slice_0i2(qja, naux, noa, nva, i, qa_i);
 
-        // build qa_j
-        AGF2slice_0i2(qja, naux, noa, nva, j, qa_j);
+        // Build qx_j / qa_j only when j is in the alpha range. With
+        // nob > noa, j ranges up to nob-1 for the cross-spin (do_os) part,
+        // and slicing the alpha arrays qxi/qja at j >= noa would read past
+        // their noa-dim. The OS path uses qx_j_b / qa_j_b instead, so the
+        // alpha j slice is only needed for do_ss.
+        if (do_ss) {
+            AGF2slice_01i(qxi, naux, nmo, noa, j, qx_j);
+            AGF2slice_0i2(qja, naux, noa, nva, j, qa_j);
+        }
 
         if (do_ss) {
             // build xija

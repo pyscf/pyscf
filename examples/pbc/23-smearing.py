@@ -1,46 +1,51 @@
 #!/usr/bin/env python
 
-'''Fermi-Dirac or Gaussian smearing for PBC SCF calculation'''
+'''Fermi-Dirac or Gaussian smearing for PBC SCF calculations
 
-import numpy
-from pyscf.pbc import gto, scf
-
-cell = gto.Cell()
-cell.atom = '''
-He 0 0 1
-He 1 0 1
+In metallic systems, the small gaps can lead to slow SCF convergence.
+The smearing technique can aid SCF convergence by introducing fractional
+occupancy near the Fermi level.
 '''
-cell.basis = 'ccpvdz'
-cell.a = numpy.eye(3) * 4
-cell.verbose = 4
-cell.build()
 
+import pyscf
+
+cell = pyscf.M(
+a='''
+0.   2.02 2.02
+2.02 0.   2.02
+2.02 2.02 0.
+''',
+atom='Al 0 0 0',
+basis='gth-dzvp',
+pseudo='gth-pbe',
+verbose=5)
+
+kmesh = [4,4,4]
+mf = cell.KRKS(xc='pbe', kpts=cell.make_kpts(kmesh))
 #
-# Use scf.addons.smearing_ function to modify the PBC (gamma-point or k-points)
-# SCF object
+# mf.smearing() method creates a new SCF object with smearing enabled.
 #
-nks = [2,1,1]
-mf = scf.KRHF(cell, cell.make_kpts(nks)).density_fit()
-mf = scf.addons.smearing_(mf, sigma=.1, method='fermi')
+# sigma : smearing width (Hartree)
+# method: 'fermi' for Fermi-Dirac smearing, 'gauss' for Gaussian smearing
+#
+mf = mf.smearing(sigma=0.1, method='fermi')
 mf.kernel()
 print('Entropy = %s' % mf.entropy)
 print('Free energy = %s' % mf.e_free)
-print('Zero temperature energy = %s' % ((mf.e_tot+mf.e_free)/2))
+print('Approximate zero temperature energy = %s' % ((mf.e_tot+mf.e_free)/2))
 
+# Smearing parameters can be adjusted at runtime to help SCF convergence.
+# The converged orbitals and density from the previous SCF run are reused
+# as the initial guess for the next calculation.
 #
-# The smearing method and parameters can be modified at runtime
+# For example, the smearing width (sigma) can be reduced gradually
+# (e.g., 0.1 -> 0.01 -> 0.001) to approach the zero-temperature limit.
 #
-#mf.sigma = .1
-#mf.method = 'gauss'
-#mf.max_cycle = 1
-#mf.kernel()
+# Note, very small sigma (e.g., 1e-4 or smaller) may result in numerical
+# instability. Setting sigma = 0 disables smearing.
+
 mf.sigma = .01
-mf.smearing_method = 'gauss'
-mf.max_cycle = 2
 mf.kernel()
 
-mf.sigma = .005
-mf.smearing_method = 'fermi'
-mf.max_cycle = 50
+mf.sigma = 0.001
 mf.kernel()
-

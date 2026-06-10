@@ -782,9 +782,9 @@ class UCASSCF(ucasci.UCASBase):
                 mo_occ[0,ncore[0]:nocca] = casdm1[0].diagonal()
                 mo_occ[1,ncore[1]:noccb] = casdm1[1].diagonal()
 
-        chkfile.dump_mcscf(self, self.chkfile, 'mcscf', e_tot,
-                           mo_coeff, ncore, ncas, mo_occ,
-                           mo_energy, e_cas, civec, casdm1,
+        chkfile.dump_mcscf(self, chkfile=self.chkfile, e_tot=e_tot,
+                           mo_coeff=mo_coeff, mo_occ=mo_occ,
+                           mo_energy=mo_energy, e_cas=e_cas, ci_vector=civec, casdm1=casdm1,
                            overwrite_mol=(envs is None))
         return self
 

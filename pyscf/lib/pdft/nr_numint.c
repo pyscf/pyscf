@@ -79,7 +79,7 @@ static void dot_ao_mo(double *vv, double *ao, double *mo,
                                 lenj = MIN(nmo-b0j, BOXSIZE);
                                 dgemm_(&TRANS_T, &TRANS_N, &lenj, &leni, &bgrids, &D1,
                                        mo+b0j*ngrids, &ngrids, ao+b0i*ngrids, &ngrids,
-                                       &D1, vv+b0i*nao+b0j, &nmo);
+                                       &D1, vv+b0i*nmo+b0j, &nmo);
                         } 
                 } }
         } else {

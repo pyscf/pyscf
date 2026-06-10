@@ -355,6 +355,11 @@ void SCIcontract_2e_bbaa(double *eri, double *ci0, double *ci1,
         FCIcompress_link_tril(clinka, link_indexa, na, nlinka);
         FCIcompress_link_tril(clinkb, link_indexb, nb, nlinkb);
 
+        // NOTE: ci1 is intentionally NOT zeroed here. The Python wrappers
+        // (selected_ci.py / selected_ci_spin0.py) call this after the
+        // (aa|aa) and (bb|bb) SCIcontract_2e_aaaa kernels and rely on the
+        // (bb|aa) contribution being accumulated on top.
+
 #pragma omp parallel
 {
         int strk, ib, blen;
@@ -572,6 +577,11 @@ void SCIcontract_2e_bbaa_symm(double *eri, double *ci0, double *ci1,
         _LinkTrilT *clinkb = malloc(sizeof(_LinkTrilT) * nlinkb * nb);
         FCIcompress_link_tril(clinka, link_indexa, na, nlinka);
         FCIcompress_link_tril(clinkb, link_indexb, nb, nlinkb);
+
+        // NOTE: ci1 is intentionally NOT zeroed here. The Python wrappers
+        // (selected_ci_symm.py / selected_ci_spin0_symm.py) call this after
+        // the (aa|aa) and (bb|bb) SCIcontract_2e_aaaa_symm kernels and
+        // rely on accumulation.
 
 #pragma omp parallel
 {

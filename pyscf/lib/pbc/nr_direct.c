@@ -954,8 +954,6 @@ void PBCVHF_direct_drv_nodddd(
                         k = kl / nlsh + ksh0;
                         l = kl % nlsh + lsh0;
                 }
-                k = kl / nlsh + ksh0;
-                l = kl % nlsh + lsh0;
                 qklkl_max = _max_qindex(qindex, Nbas,
                                         seg2sh[seg_loc[k]], seg2sh[seg_loc[k+1]],
                                         seg2sh[seg_loc[l]], seg2sh[seg_loc[l+1]]);

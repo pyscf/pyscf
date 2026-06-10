@@ -2623,6 +2623,102 @@ def get_rho(ni, mol, dm, grids, max_memory=2000):
         rho[p0:p1] = make_rho(0, ao, mask, 'LDA')
     return rho
 
+def get_rho_naive(mol, dm, grids):
+    # No cache, no sparsity, no reordering, just use the most naive way, to get a correct rho result
+    ni = NumInt()
+
+    if dm.ndim == 2:
+        dm = dm[None, :, :]
+    nset = dm.shape[0]
+    assert nset in (1, 2)
+    assert dm.shape == (nset, mol.nao, mol.nao)
+    dm = dm.copy() # Remove all attached fields like mo_coeff
+
+    grids_coords = grids.coords
+    assert grids_coords is not None
+    ngrids = grids_coords.shape[0]
+
+    rho_tot = numpy.zeros([nset, ngrids])
+
+    ngrids_per_batch = 4096
+    for g0 in range(0, ngrids, ngrids_per_batch):
+        g1 = min(g0 + ngrids_per_batch, ngrids)
+        ao = ni.eval_ao(mol, grids_coords[g0:g1, :], deriv = 0)
+        for i_dm in range(nset):
+            rho_tot[i_dm, g0:g1] = numpy.einsum("gi,gj,ij->g", ao, ao, dm[i_dm])
+
+    rho_tot = numpy.sum(rho_tot, axis = 0)
+    return rho_tot
+
+def get_rho_with_derivatives(ni, mol, dm, grids, xc = "r2scan", max_memory=2000, verbose=None):
+    xctype = ni._xc_type(xc)
+    assert xctype in ['LDA', 'GGA', 'MGGA']
+
+    if xctype == 'LDA':
+        ao_deriv = 0
+    else:
+        ao_deriv = 1
+
+    if xctype == 'LDA':
+        rho_dim = 1
+    elif xctype == 'GGA':
+        rho_dim = 4
+    else:
+        rho_dim = 5
+
+    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, 1, False, grids)
+
+    ngrids = grids.coords.shape[0]
+    rho_tot = numpy.empty([nset, rho_dim, ngrids])
+
+    p1 = 0
+    for ao, mask, weight, coords \
+            in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
+        p0, p1 = p1, p1 + weight.size
+        for i_dm in range(nset):
+            rho_tot[i_dm, :, p0:p1] = make_rho(i_dm, ao, mask, xctype)
+
+    return rho_tot
+
+def get_rho_with_derivatives_naive(mol, dm, grids, xc = "r2scan"):
+    # No cache, no sparsity, no reordering, just use the most naive way, to get a correct rho result
+    ni = NumInt()
+    xctype = ni._xc_type(xc)
+    assert xctype in ['LDA', 'GGA', 'MGGA']
+
+    if dm.ndim == 2:
+        dm = dm[None, :, :]
+    nset = dm.shape[0]
+    assert nset in (1, 2)
+    dm = dm.copy() # Remove all attached fields like mo_coeff
+
+    grids_coords = grids.coords
+    assert grids_coords is not None
+    ngrids = grids_coords.shape[0]
+
+    if xctype == 'LDA':
+        ao_deriv = 0
+    else:
+        ao_deriv = 1
+
+    if xctype == 'LDA':
+        rho_dim = 1
+    elif xctype == 'GGA':
+        rho_dim = 4
+    else:
+        rho_dim = 5
+    rho_tot = numpy.empty([nset, rho_dim, ngrids])
+
+    ngrids_per_batch = 4096
+    for g0 in range(0, ngrids, ngrids_per_batch):
+        g1 = min(g0 + ngrids_per_batch, ngrids)
+        ao = ni.eval_ao(mol, grids_coords[g0:g1, :], deriv = ao_deriv)
+        for i_dm in range(nset):
+            rho = ni.eval_rho(mol, ao, dm[i_dm], xctype = xctype, hermi = 1, with_lapl = False)
+            rho_tot[i_dm, :, g0:g1] = rho
+
+    return rho_tot
+
 
 class LibXCMixin:
     libxc = libxc
@@ -2786,6 +2882,7 @@ class NumInt(lib.StreamObject, LibXCMixin):
     eval_rho1 = lib.module_method(eval_rho1, absences=['cutoff'])
     eval_rho2 = staticmethod(eval_rho2)
     get_rho = get_rho
+    get_rho_with_derivatives = get_rho_with_derivatives
 
     def block_loop(self, mol, grids, nao=None, deriv=0, max_memory=2000,
                    non0tab=None, blksize=None, buf=None):

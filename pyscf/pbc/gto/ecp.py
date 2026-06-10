@@ -28,15 +28,18 @@ from pyscf.pbc.gto.cell import _split_basis
 from pyscf.pbc.df import incore
 
 
-def ecp_int(cell, kpts=None):
+def ecp_int(cell, kpts=None, intor='ECPscalar'):
+    assert intor in ('ECPscalar', 'ECPso')
     lib.logger.debug(cell, 'PBC-ECP integrals')
     if kpts is None:
         kpts_lst = np.zeros((1,3))
     else:
         kpts_lst = np.reshape(kpts, (-1,3))
+    nkpts = len(kpts_lst)
 
     cell, contr_coeff = _split_basis(cell)
     lib.logger.debug1(cell, 'nao %d -> nao %d', *(contr_coeff.shape))
+    nao_sorted, nao = contr_coeff.shape
 
     ecpcell = cell.copy(deep=False)
     # append a fake s function to mimic the auxiliary index in pbc.incore.
@@ -48,16 +51,28 @@ def ecp_int(cell, kpts=None):
     shls_slice = (0, cell.nbas, 0, cell.nbas, 0, 1)
 
     dfbuilder = incore.Int3cBuilder(cell, ecpcell, kpts_lst).build()
-    int3c = dfbuilder.gen_int3c_kernel('ECPscalar', aosym='s2', comp=1,
-                                       j_only=True, return_complex=True)
-    buf = int3c(shls_slice)
-    buf = buf.reshape(len(kpts_lst),-1)
-    mat = []
-    for k, kpt in enumerate(kpts_lst):
-        v = lib.unpack_tril(buf[k], lib.HERMITIAN)
-        if abs(kpt).max() < 1e-9:  # gamma_point:
-            v = v.real
-        mat.append(reduce(np.dot, (contr_coeff.T, v, contr_coeff)))
+    if intor == 'ECPscalar':
+        comp = 1
+        int3c = dfbuilder.gen_int3c_kernel(intor, aosym='s2', comp=comp,
+                                           j_only=True, return_complex=True)
+        mat = int3c(shls_slice)
+        mat = lib.unpack_tril(mat.reshape(nkpts*comp,-1), lib.HERMITIAN)
+        mat = lib.einsum('npq,pi,qj->nij', mat, contr_coeff, contr_coeff)
+        mat = mat.reshape(nkpts, comp, nao, nao)
+        mat = list(mat[:,0])
+        for k, kpt in enumerate(kpts_lst):
+            if abs(kpt).max() < 1e-9:  # gamma_point:
+                mat[k] = mat[k].real
+    else:
+        comp = 3
+        int3c = dfbuilder.gen_int3c_kernel(intor, aosym='s1', comp=comp,
+                                           j_only=True, return_complex=True)
+        mat = int3c(shls_slice)
+        mat = mat.reshape(nkpts, comp, nao_sorted, nao_sorted)
+        mat = lib.einsum('nspq,pi,qj->nsij', mat, contr_coeff, contr_coeff)
+        s = .5 * lib.PauliMatrices
+        mat = np.einsum('sxy,kspq->kxpyq', -1j * s, mat)
+        mat = mat.reshape(nkpts, 2*nao, 2*nao)
     if kpts is None or np.shape(kpts) == (3,):
         mat = mat[0]
     return mat

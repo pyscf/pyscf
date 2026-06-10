@@ -446,6 +446,7 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(parse_dft('b3lyp-d3zerom'), ('b3lyp', '', 'd3zerom'))
         self.assertEqual(parse_dft('wb97x-d3bj'), ('wb97x-v', False, 'd3bj'))
         self.assertEqual(parse_dft('wb97x-d3zero2b'), ('wb97x', '', 'd3zero2b'))
+        self.assertEqual(parse_dft('wb97x-3c'), ('wb97x-v', False, 'd4:wb97x-3c'))
 
     def test_set_param(self):
         XC_ID_B97_2 = 410

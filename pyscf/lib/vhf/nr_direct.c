@@ -18,6 +18,7 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <assert.h>
 #include <math.h>
 //#include <omp.h>
@@ -252,6 +253,11 @@ JKArray *CVHFallocate_JKArray(JKOperator *op, int *shls_slice, int *ao_loc,
         }
         jkarray->stack_size = 0;
         jkarray->data = malloc(sizeof(double) * (size_limit + 136*136));
+        if (jkarray->data == NULL) {
+                fprintf(stderr, "malloc(%zu) failed in CVHFallocate_JKArray\n",
+                        sizeof(double) * (size_limit + 136*136));
+                exit(1);
+        }
         jkarray->ncomp = ncomp;
         int keys_max = size_limit / (AO_BLOCK_SIZE*AO_BLOCK_SIZE*ncomp);
         jkarray->keys_cache = malloc(sizeof(int) * keys_max);
@@ -368,9 +374,9 @@ void CVHFnr_direct_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
                                                             shls_slice, ao_loc);
         }
 
-        size_t di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
-        size_t cache_size = GTOmax_cache_size(intor, shls_slice, 4,
-                                              atm, natm, bas, nbas, env);
+        int64_t di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
+        int64_t cache_size = GTOmax_cache_size(intor, shls_slice, 4,
+                                               atm, natm, bas, nbas, env);
         int ish0 = shls_slice[0];
         int ish1 = shls_slice[1];
         int jsh0 = shls_slice[2];
@@ -387,17 +393,23 @@ void CVHFnr_direct_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
         int *block_jloc = block_iloc + nish + 1;
         int *block_kloc = block_jloc + njsh + 1;
         int *block_lloc = block_kloc + nksh + 1;
-        uint32_t nblock_i = CVHFshls_block_partition(block_iloc, shls_slice+0, ao_loc, AO_BLOCK_SIZE);
-        uint32_t nblock_j = CVHFshls_block_partition(block_jloc, shls_slice+2, ao_loc, AO_BLOCK_SIZE);
-        uint32_t nblock_k = CVHFshls_block_partition(block_kloc, shls_slice+4, ao_loc, AO_BLOCK_SIZE);
-        uint32_t nblock_l = CVHFshls_block_partition(block_lloc, shls_slice+6, ao_loc, AO_BLOCK_SIZE);
-        uint32_t nblock_kl = nblock_k * nblock_l;
-        uint32_t nblock_jkl = nblock_j * nblock_kl;
+        // size_t to keep nblock^3 from overflowing for large molecules. The
+        // same fix was applied to nr_sr_vhf.c.
+        size_t nblock_i = CVHFshls_block_partition(block_iloc, shls_slice+0, ao_loc, AO_BLOCK_SIZE);
+        size_t nblock_j = CVHFshls_block_partition(block_jloc, shls_slice+2, ao_loc, AO_BLOCK_SIZE);
+        size_t nblock_k = CVHFshls_block_partition(block_kloc, shls_slice+4, ao_loc, AO_BLOCK_SIZE);
+        size_t nblock_l = CVHFshls_block_partition(block_lloc, shls_slice+6, ao_loc, AO_BLOCK_SIZE);
+        size_t nblock_kl = nblock_k * nblock_l;
+        size_t nblock_jkl = nblock_j * nblock_kl;
         int nblock_max = MAX(nblock_i, nblock_j);
         nblock_max = MAX(nblock_max, nblock_k);
         nblock_max = MAX(nblock_max, nblock_l);
-        // up to 1.6 GB per thread
-        int size_limit = (200000000 - di*di*di*di*ncomp - cache_size) / n_dm;
+        // up to 3.2 GB per thread.
+        int64_t size_limit = (400000000 - di*di*di*di*ncomp - cache_size) / n_dm;
+        if (size_limit < 0) {
+                fprintf(stderr, "Insufficient memory for caching CVHFnr_direct_drv intermediates\n");
+                exit(1);
+        }
 
 #pragma omp parallel
 {
@@ -405,7 +417,8 @@ void CVHFnr_direct_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
         int joff = ao_loc[jsh0];
         int koff = ao_loc[ksh0];
         int loff = ao_loc[lsh0];
-        int i, j, k, l, n, r, blk_id;
+        int i, j, k, l, n;
+        size_t r, blk_id;
         JKArray *v_priv[n_dm];
         for (i = 0; i < n_dm; i++) {
                 v_priv[i] = CVHFallocate_JKArray(jkop[i], shls_slice, ao_loc,
@@ -516,9 +529,9 @@ void CVHFnr_direct_ex_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
                                                             shls_slice, ao_loc);
         }
 
-        size_t di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
-        size_t cache_size = GTOmax_cache_size(intor, shls_slice, 4,
-                                              atm, natm, bas, nbas, env);
+        int64_t di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
+        int64_t cache_size = GTOmax_cache_size(intor, shls_slice, 4,
+                                               atm, natm, bas, nbas, env);
         int ish0 = shls_slice[0];
         int ish1 = shls_slice[1];
         int jsh0 = shls_slice[2];
@@ -545,8 +558,12 @@ void CVHFnr_direct_ex_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
         int nblock_max = MAX(nblock_i, nblock_j);
         nblock_max = MAX(nblock_max, nblock_k);
         nblock_max = MAX(nblock_max, nblock_l);
-        // up to 1.6 GB per thread
-        int size_limit = (200000000 - di*di*di*di*ncomp - cache_size) / n_dm;
+        // up to 3.2 GB per thread.
+        int64_t size_limit = (400000000 - di*di*di*di*ncomp - cache_size) / n_dm;
+        if (size_limit < 0) {
+                fprintf(stderr, "Insufficient memory for caching CVHFnr_direct_ex_drv intermediates\n");
+                exit(1);
+        }
 
 #pragma omp parallel
 {
@@ -554,7 +571,8 @@ void CVHFnr_direct_ex_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
         int joff = ao_loc[jsh0];
         int koff = ao_loc[ksh0];
         int loff = ao_loc[lsh0];
-        int i, j, k, l, n, r, blk_id;
+        int i, j, k, l, n;
+        size_t r, blk_id;
         JKArray *v_priv[n_dm];
         for (i = 0; i < n_dm; i++) {
                 v_priv[i] = CVHFallocate_JKArray(jkop[i], shls_slice, ao_loc,

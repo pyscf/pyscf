@@ -382,6 +382,7 @@ class SMD(pcm.PCM):
         'frozen_dm0_for_finite_difference_without_response',
         'equilibrium_solvation', 'solvent_descriptors',
         'surface', 'intopt', 'e', 'v', 'v_grids_n', 'e_cds',
+        'surface_discretization_method',
     }
 
     def __init__(self, mol, solvent=''):
@@ -399,6 +400,7 @@ class SMD(pcm.PCM):
         self.solvent_descriptors = None
         self.radii_table = None
         self.eps = None
+        self.surface_discretization_method = "SWIG"
         self.max_cycle = 20
         self.conv_tol = 1e-7
         self.state_id = 0

@@ -496,7 +496,7 @@ if __name__ == '__main__':
            1        0.000000   -0.935307   -1.082500
                 ''', basis='sto3g')
     mf = mol.RHF()
-    with tempfile.NamedTemporaryFile() as f:
+    with lib.NamedTemporaryFile() as f:
         f.write(b'''!
 @COORDINATES
 3

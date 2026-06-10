@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import unittest
-import tempfile
 import numpy
 import h5py
 from pyscf import lib
@@ -45,7 +44,7 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(1)
         kptij_lst = numpy.random.random((3,2,3))
         kptij_lst[0] = 0
-        with tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR) as tmpfile:
+        with lib.NamedTemporaryFile(dir=lib.param.TMPDIR) as tmpfile:
             outcore.aux_e1(cell, cell, tmpfile.name, aosym='s2', comp=1,
                            kptij_lst=kptij_lst, verbose=0)
             refk = incore.aux_e2(cell, cell, aosym='s1', kptij_lst=kptij_lst)

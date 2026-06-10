@@ -22,7 +22,6 @@ Ref:
 J. Chem. Phys. 147, 164119 (2017)
 '''
 
-import tempfile
 import numpy as np
 import h5py
 import scipy.linalg
@@ -89,7 +88,7 @@ class MDF(df.GDF):
         self.linear_dep_threshold = df.LINEAR_DEP_THR
         self._j_only = False
 # If _cderi_to_save is specified, the 3C-integral tensor will be saved in this file.
-        self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+        self._cderi_to_save = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
 # If _cderi is specified, the 3C-integral tensor will be read from this file
         self._cderi = None
         self._rsh_df = {}  # Range separated Coulomb DF objects

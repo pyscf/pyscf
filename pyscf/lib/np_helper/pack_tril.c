@@ -217,8 +217,8 @@ void NPdunpack_tril_2d(int count, int n, double *tril, double *mat, int hermi)
         shared(count, n, tril, mat, hermi)
 {
         int ic;
-        size_t nn = n * n;
-        size_t n2 = n*(n+1)/2;
+        size_t nn = (size_t)n * n;
+        size_t n2 = (size_t)n*(n+1)/2;
 #pragma omp for schedule (static)
         for (ic = 0; ic < count; ic++) {
                 NPdunpack_tril(n, tril+n2*ic, mat+nn*ic, hermi);
@@ -233,8 +233,8 @@ void NPzunpack_tril_2d(int count, int n,
         shared(count, n, tril, mat, hermi)
 {
         int ic;
-        size_t nn = n * n;
-        size_t n2 = n*(n+1)/2;
+        size_t nn = (size_t)n * n;
+        size_t n2 = (size_t)n*(n+1)/2;
 #pragma omp for schedule (static)
         for (ic = 0; ic < count; ic++) {
                 NPzunpack_tril(n, tril+n2*ic, mat+nn*ic, hermi);
@@ -248,8 +248,8 @@ void NPdpack_tril_2d(int count, int n, double *tril, double *mat)
         shared(count, n, tril, mat)
 {
         int ic;
-        size_t nn = n * n;
-        size_t n2 = n*(n+1)/2;
+        size_t nn = (size_t)n * n;
+        size_t n2 = (size_t)n*(n+1)/2;
 #pragma omp for schedule (static)
         for (ic = 0; ic < count; ic++) {
                 NPdpack_tril(n, tril+n2*ic, mat+nn*ic);
@@ -263,8 +263,8 @@ void NPzpack_tril_2d(int count, int n, double complex *tril, double complex *mat
         shared(count, n, tril, mat)
 {
         int ic;
-        size_t nn = n * n;
-        size_t n2 = n*(n+1)/2;
+        size_t nn = (size_t)n * n;
+        size_t n2 = (size_t)n*(n+1)/2;
 #pragma omp for schedule (static)
         for (ic = 0; ic < count; ic++) {
                 NPzpack_tril(n, tril+n2*ic, mat+nn*ic);

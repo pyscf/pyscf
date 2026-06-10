@@ -17,6 +17,7 @@
  */
 
 #include <stdlib.h>
+#include <assert.h>
 #include <math.h>
 #include <stdint.h>
 #include <complex.h>
@@ -32,8 +33,10 @@ void GTO_screen_index(uint8_t *screen_index, int nbins, double cutoff,
                       double *coords, int ngrids, int blksize,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
+        // Keep nbins < 120 so si = nbins - arr*scale + 1 fits in uint8_t
+        // without saturating the screen_index = 255 cap below.
+        assert(nbins < 120);
         double scale = -nbins / log(MIN(cutoff, .1));
-        nbins = MIN(127, nbins);
 #pragma omp parallel
 {
         const int nblk = (ngrids+blksize-1) / blksize;
@@ -101,8 +104,15 @@ void GTO_screen_index(uint8_t *screen_index, int nbins, double cutoff,
                                         - log_coeff;
                         }
                         si = nbins - arr * scale;
+                        /* screen_index is uint8: 0 = screened out, otherwise stored value
+                         * is (raw_si + 1). Cap at 254 to keep the +1 from wrapping mod
+                         * 256, which would silently demote a very-significant entry
+                         * (large -arr from extremely tight AOs) to 0 = "screened out".
+                         * Behavior for si <= 254 is unchanged. */
                         if (si <= 0) {
                                 screen_index[ib*nbas+bas_id] = 0;
+                        } else if (si > 254) {
+                                screen_index[ib*nbas+bas_id] = 255;
                         } else {
                                 screen_index[ib*nbas+bas_id] = (uint8_t)(si + 1);
                         }

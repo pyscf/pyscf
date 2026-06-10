@@ -94,7 +94,10 @@ void init_rs_grid(RS_Grid** rs_grid, GridLevel_Info** gridlevel_info, int comp)
     int *mesh = gl_info->mesh;
     rg->data = (double**)malloc(sizeof(double*) * nlevels);
     for (i = 0; i < nlevels; i++) {
-        ngrid = mesh[i*3] * mesh[i*3+1] * mesh[i*3+2];
+        // Cast to size_t before multiplying so very fine meshes
+        // (mesh > ~1024 on a side) do not overflow int and silently
+        // under-size the FFT-grid allocation.
+        ngrid = (size_t)mesh[i*3] * mesh[i*3+1] * mesh[i*3+2];
         (rg->data)[i] = calloc(comp*ngrid, sizeof(double));
     }
     *rs_grid = rg;
@@ -171,7 +174,11 @@ double pgfpair_radius(int la, int lb, double zeta, double zetb, double* ra, doub
     double zetp = zeta + zetb;
     double eps = precision * precision;
 
-    if (rab[0] < RZERO && rab[1] < RZERO && rab[2] < RZERO) {
+    // Same-atom shortcut: compare the magnitude of the displacement vector,
+    // not the signed components. The previous "rab[0] < RZERO && ..." test
+    // wrongly fired on any all-negative displacement (~1/8 of periodic-image
+    // shifted pairs) and returned the wrong radius.
+    if (SQUARE(rab) < RZERO*RZERO) {
         radius = pgf_rcut(la+lb, zetp, 1., eps, radius);
         return radius;
     }

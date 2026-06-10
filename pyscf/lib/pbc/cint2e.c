@@ -162,7 +162,7 @@ int PBCint2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, int cutoff,
         int rs_cell_nbas = seg_loc[nbasp];
 
         int *x_ctr = envs_cint->x_ctr;
-        int ncomp = envs_cint->ncomp_e1 * envs_cint->ncomp_e2 * envs_cint->ncomp_tensor;
+        int ncomp = envs_bvk->ncomp;
         size_t nc = x_ctr[0] * x_ctr[1] * x_ctr[2] * x_ctr[3];
         size_t dijkl = (size_t)envs_cint->nf * nc * ncomp;
         size_t Nbas2 = Nbas * Nbas;

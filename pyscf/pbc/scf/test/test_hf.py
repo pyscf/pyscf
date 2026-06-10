@@ -17,7 +17,6 @@
 #
 
 import unittest
-import tempfile
 import numpy
 from pyscf import lib
 from pyscf.scf import atom_hf
@@ -153,9 +152,9 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(1)
         k = numpy.random.random(3)
         mf = pbchf.RHF(cell, k, exxdiv='vcut_sph')
-        mf.chkfile = tempfile.NamedTemporaryFile().name
         mf.max_cycle = 1
         mf.diis = None
+        mf.chkfile = lib.NamedTemporaryFile().name
         e1 = mf.kernel()
         self.assertAlmostEqual(e1, -4.132445328608581, 7)
 

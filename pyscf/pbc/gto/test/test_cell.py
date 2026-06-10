@@ -17,7 +17,6 @@
 #
 
 import unittest
-import tempfile
 import ctypes
 import numpy
 import numpy as np
@@ -364,6 +363,20 @@ class KnownValues(unittest.TestCase):
         h1 = ecp.ecp_int(cell, kpts)
         self.assertAlmostEqual(lib.fp(h1), 4.160881841456467, 7)
 
+    def test_ecp_soc_int(self):
+        cell = pgto.M(
+            a = np.eye(3) * 8,
+            atom = 'C 0 0 0; C 0 0 1.5',
+            basis = 'crenbl',
+            ecp = {'C': 'crenbl'}
+        )
+        dat = ecp.ecp_int(cell, intor='ECPso')
+
+        s = .5 * lib.PauliMatrices
+        ecpso = np.einsum('sxy,spq->xpyq', -1j * s, cell.intor('ECPso'))
+        mol_ecpso = ecpso.reshape(dat.shape)
+        self.assertAlmostEqual(abs(mol_ecpso - dat).max(), 0, 8)
+
     def test_ecp_keyword_in_pseudo(self):
         cell = pgto.M(
             a = np.eye(3)*5,
@@ -562,6 +575,29 @@ class KnownValues(unittest.TestCase):
         ao_value = cell.pbc_eval_gto("GTOval_ip_cart", coords, kpts=cell.make_kpts([3]*3))
         self.assertAlmostEqual(lib.fp(ao_value), (0.38051517609460028+0.062526488684770759j), 9)
 
+    def test_eval_gto1(self):
+        cell = pgto.M(a=np.eye(3)*2.5, atom='He 0.0 0.0 0.0', basis='''
+S
+1.607   0.6400
+0.569   0.2900
+0.076   0.0007
+''')
+        grids = cell.get_uniform_grids()
+        dat = cell.pbc_eval_ao('GTOval', grids)
+
+        c = cell.bas_ctr_coeff(0)
+        cell1 = pgto.M(a=np.eye(3)*2.5, atom='He 0.0 0.0 0.0', basis='''
+S
+1.607   1.
+S
+0.569   1.
+S
+0.076   1.
+''')
+        ref = cell1.pbc_eval_gto('GTOval', grids)
+        ref = np.einsum('pi,gp->gi', c, ref)
+        self.assertAlmostEqual(abs(dat - ref).max(), 0, 8)
+
     def test_empty_cell(self):
         cell = pgto.M(a=np.eye(3)*4)
         Ls = pbctools.get_lattice_Ls(cell)
@@ -579,7 +615,7 @@ class KnownValues(unittest.TestCase):
 
     def test_fromfile(self):
         ref = cl.atom_coords().copy()
-        with tempfile.NamedTemporaryFile() as f:
+        with lib.NamedTemporaryFile() as f:
             cl.tofile(f.name, 'xyz')
             cell = pgto.Cell()
             cell.fromfile(f.name, 'xyz')
@@ -608,6 +644,47 @@ Direct
         coords = np.array([x[1] for x in atoms])
         assert abs(a - ref_a).max() < 1e-14
         assert abs(coords - ref_pos).max() < 1e-14
+
+        inp_str = '''\
+SrTiO3 cubic perovskite
+3.9
+1.0 0.0 0.0
+0.0 1.0 0.0
+0.0 0.0 1.0
+Sr Ti O
+1 1 3
+Cartesian
+0.00 0.00 0.00
+1.95 1.95 1.95
+1.95 1.95 0.00
+1.95 0.00 1.95
+0.00 1.95 1.95
+'''
+        a, atoms = pgto.cell.fromstring(inp_str, format='poscar')
+        ref_pos = np.array([
+            [0.00, 0.00, 0.00],
+            [1.95, 1.95, 1.95],
+            [1.95, 1.95, 0.00],
+            [1.95, 0.00, 1.95],
+            [0.00, 1.95, 1.95]])
+        coords = np.array([x[1] for x in atoms])
+        assert abs(a[0,0] - 3.9) < 1e-14
+        assert abs(coords - ref_pos).max() < 1e-14
+        cell = pgto.M(atom=atoms, a=a, basis=[[0, [1,1]]])
+
+        assert cell.tostring('poscar').split('\n', 1)[1] == '''\
+1.0
+       3.90000000        0.00000000        0.00000000
+       0.00000000        3.90000000        0.00000000
+       0.00000000        0.00000000        3.90000000
+Sr Ti O
+1 1 3
+Cartesian
+       0.00000000        0.00000000        0.00000000
+       1.95000000        1.95000000        1.95000000
+       1.95000000        1.95000000        0.00000000
+       1.95000000        0.00000000        1.95000000
+       0.00000000        1.95000000        1.95000000'''
 
     def test_parse_cif(self):
         inp_str = '''\

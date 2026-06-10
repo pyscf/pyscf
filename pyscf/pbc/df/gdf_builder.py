@@ -26,7 +26,6 @@ for regular density fitting and SR-integral density fitting only.
 
 import os
 import ctypes
-import tempfile
 import numpy as np
 import scipy.linalg
 from pyscf import gto
@@ -204,7 +203,7 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
             shls_slice :
                 Indicate the shell slices in the primitive cell
         '''
-        swapfile = tempfile.NamedTemporaryFile(dir=os.path.dirname(cderi_file))
+        swapfile = lib.NamedTemporaryFile(dir=os.path.dirname(cderi_file))
         fswap = lib.H5TmpFile(swapfile.name)
         swapfile = None
 

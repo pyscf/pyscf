@@ -90,11 +90,13 @@ TYPE_MAP = [
     [21,24,25,30,33,31,26,34,35,28,22,27,32,29,23],  # G
     [56,55,54,53,52,51,50,49,48,47,46,45,44,43,42,41,40,39,38,37,36],  # H
 ]
+
+
 def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
     if mol.cart:
         raise NotImplementedError('Cartesian basis not available')
 
-    #FIXME: Duplicated primitives may lead to problems.  x2c._uncontract_mol
+    # FIXME: Duplicated primitives may lead to problems.  x2c._uncontract_mol
     # is the workaround at the moment to remove duplicated primitives.
     from pyscf.x2c import x2c
     mol, ctr = x2c._uncontract_mol(mol, True, 0.)
@@ -118,8 +120,7 @@ def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
         mosub = numpy.einsum('yki,cy,pk->pci', mosub, c2s, c)
         mo_cart.append(mosub.transpose(1,0,2).reshape(-1,nmo))
 
-        for t in TYPE_MAP[l]:
-            types.append([t]*np)
+        types.extend([t] * np for t in TYPE_MAP[l])
         ncart = mol.bas_len_cart(ib)
         exps.extend([es]*ncart)
         centers.extend([ia+1]*(np*ncart))
@@ -139,11 +140,11 @@ def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
                    % (mol.atom_pure_symbol(ia), ia+1, ia+1, x, y, z,
                       mol.atom_charge(ia)))
     for i0, i1 in lib.prange(0, nprim, 20):
-        fout.write('CENTRE ASSIGNMENTS  %s\n' % ''.join('%3d'%x for x in centers[i0:i1]))
+        fout.write('CENTRE ASSIGNMENTS  %s\n' % ''.join('%3d' % x for x in centers[i0:i1]))
     for i0, i1 in lib.prange(0, nprim, 20):
-        fout.write('TYPE ASSIGNMENTS    %s\n' % ''.join('%3d'%x for x in types[i0:i1]))
+        fout.write('TYPE ASSIGNMENTS    %s\n' % ''.join('%3d' % x for x in types[i0:i1]))
     for i0, i1 in lib.prange(0, nprim, 5):
-        fout.write('EXPONENTS  %s\n' % ' '.join('%13.7E'%x for x in exps[i0:i1]))
+        fout.write('EXPONENTS  %s\n' % ' '.join('%13.7E' % x for x in exps[i0:i1]))
 
     for k in range(nmo):
         mo = mo_cart[:,k]
@@ -156,14 +157,15 @@ def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
             fout.write('MO  %-4d                  OCC NO = %12.8f ORB. ENERGY = %12.8f\n' %
                        (k+1, mo_occ[k], mo_energy[k]))
         for i0, i1 in lib.prange(0, nprim, 5):
-            fout.write(' %s\n' % ' '.join('%15.8E'%x for x in mo[i0:i1]))
+            fout.write(' %s\n' % ' '.join('%15.8E' % x for x in mo[i0:i1]))
     fout.write('END DATA\n')
     if mo_energy is None or mo_occ is None:
         fout.write('ALDET    ENERGY =        0.0000000000   VIRIAL(-V/T)  =   0.00000000\n')
     elif mo_energy is None and mo_occ is None:
         pass
-    else :
+    else:
         fout.write('RHF      ENERGY =        0.0000000000   VIRIAL(-V/T)  =   0.00000000\n')
+
 
 def write_ci(fout, fcivec, norb, nelec, ncore=0):
     from pyscf import fci
@@ -179,6 +181,7 @@ def write_ci(fout, fcivec, norb, nelec, ncore=0):
     nb = fci.cistring.num_strings(norb, nelecb)
     stringsa = fci.cistring.gen_strings4orblist(range(norb), neleca)
     stringsb = fci.cistring.gen_strings4orblist(range(norb), nelecb)
+
     def str2orbidx(string, ncore):
         bstring = bin(string)
         return [i+1+ncore for i,s in enumerate(bstring[::-1]) if s == '1']
@@ -188,8 +191,9 @@ def write_ci(fout, fcivec, norb, nelec, ncore=0):
         addra, addrb = divmod(iaddr, nb)
         idxa = ['%3d' % x for x in str2orbidx(stringsa[addra], ncore)]
         idxb = ['%3d' % (-x) for x in str2orbidx(stringsb[addrb], ncore)]
-        #TODO:add a cuttoff and a counter for ndets
+        # TODO:add a cuttoff and a counter for ndets
         fout.write('%18.10E %s %s\n' % (fcivec[addra,addrb], ' '.join(idxa), ' '.join(idxb)))
+
 
 if __name__ == '__main__':
     from pyscf import scf, mcscf, symm
@@ -198,9 +202,9 @@ if __name__ == '__main__':
                 unit='B', basis='ccpvtz', verbose=4,
                 symmetry=1, symmetry_subgroup='d2h')
     mf = scf.RHF(mol).run()
-    coeff = mf.mo_coeff[:,mf.mo_occ>0]
-    energy = mf.mo_energy[mf.mo_occ>0]
-    occ = mf.mo_occ[mf.mo_occ>0]
+    coeff = mf.mo_coeff[:,mf.mo_occ > 0]
+    energy = mf.mo_energy[mf.mo_occ > 0]
+    occ = mf.mo_occ[mf.mo_occ > 0]
     with open('n2_hf.wfn', 'w') as f2:
         write_mo(f2, mol, coeff, energy, occ)
 #

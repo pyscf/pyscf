@@ -458,7 +458,7 @@ def to_fcivec(cisdvec, norb, nelec, frozen=None):
 
 def from_fcivec(ci0, norb, nelec, frozen=None):
     '''Extract CISD coefficients from FCI coefficients'''
-    if not (frozen is None or frozen == 0):
+    if frozen is not None:
         raise NotImplementedError
 
     if isinstance(nelec, (int, numpy.number)):

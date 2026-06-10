@@ -264,7 +264,9 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             k-point
         exx : bool or str
             Whether this is an exchange matrix element
-        mf : instance of :class:`SCF`
+        mf : an SCF instance or an instance to provide the `.kpts` attribute
+            The .kpts attribute is used to determine the Monkhorst-Pack k-point
+            mesh size.
 
     Returns:
         coulG : (ngrids,) ndarray
@@ -484,7 +486,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts, omega=0)
     return coulG
 
-def precompute_exx(cell, kpts):
+def precompute_exx(cell, kpts=None):
     from pyscf.pbc import gto as pbcgto
     from pyscf.pbc.dft import gen_grid
     log = lib.logger.Logger(cell.stdout, cell.verbose)
@@ -545,7 +547,7 @@ def precompute_exx(cell, kpts):
     return ws_exx
 
 
-def madelung(cell, kpts, omega=None):
+def madelung(cell, kpts=None, omega=None):
     Nk = get_monkhorst_pack_size(cell, kpts)
     ecell = cell.copy(deep=False)
     ecell._atm = np.array([[1, cell._env.size, 0, 0, 0, 0]])

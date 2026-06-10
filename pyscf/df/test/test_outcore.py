@@ -16,7 +16,6 @@
 #
 
 import unittest
-import tempfile
 import numpy
 import scipy.linalg
 import h5py
@@ -47,7 +46,7 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_outcore(self):
-        ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+        ftmp = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
         cderi0 = df.incore.cholesky_eri(mol)
         df.outcore.cholesky_eri(mol, ftmp.name)
         with h5py.File(ftmp.name, 'r') as feri:
@@ -73,7 +72,7 @@ class KnownValues(unittest.TestCase):
         with h5py.File(ftmp.name, 'r') as feri:
             self.assertTrue(numpy.allclose(feri['j3c'], cderi0.reshape(naux,-1)))
 
-        ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+        ftmp = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
         numpy.random.seed(1)
         co = numpy.random.random((nao,4))
         cv = numpy.random.random((nao,25))
@@ -96,7 +95,7 @@ class KnownValues(unittest.TestCase):
             self.assertTrue(numpy.allclose(feri['eri_mo'], cderi0))
 
     def test_lindep(self):
-        ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+        ftmp = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
         df.outcore.cholesky_eri(mol, ftmp.name, auxmol=auxmol, verbose=7)
         with h5py.File(ftmp.name, 'r') as f:
             cderi0 = f['j3c'][:]
@@ -111,7 +110,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(eri0-eri1).max(), 0, 9)
 
 #    def test_int3c2e_ip(self):
-#        ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+#        ftmp = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
 #        df.outcore.cholesky_eri(mol, ftmp.name, int3c='int3c2e_ip1',
 #                                auxmol=auxmol, comp=3)
 #        with h5py.File(ftmp.name, 'r') as f:

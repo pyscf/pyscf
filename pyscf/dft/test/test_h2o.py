@@ -22,7 +22,7 @@ from pyscf import dft
 from pyscf import scf
 try:
     from pyscf.dispersion import dftd3, dftd4
-except ImportError:
+except (ImportError, OSError):
     dftd3 = dftd4 = None
 
 def setUpModule():

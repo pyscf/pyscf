@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tempfile
 import unittest
 import copy
 import numpy
@@ -185,7 +184,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mycc.e_tot, -75.83479685448731, 8)
 
     def test_restart_s0(self):
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = lib.NamedTemporaryFile()
         cc1 = cc.UCCSDT(mf)
         cc1.max_cycle = 5
         cc1.kernel()
@@ -233,7 +232,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(cc1.t3[3] - cc2.t3[3]).max(), 0, 9)
 
     def test_restart_s2(self):
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = lib.NamedTemporaryFile()
         cc1 = cc.UCCSDT(mf_s2)
         cc1.max_cycle = 5
         cc1.kernel()
@@ -281,7 +280,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(cc1.t3[3] - cc2.t3[3]).max(), 0, 9)
 
     def test_restart_s2_not_do_diis_max_t(self):
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = lib.NamedTemporaryFile()
         cc1 = cc.UCCSDT(mf_s2)
         cc1.max_cycle = 5
         cc1.do_diis_max_t = False

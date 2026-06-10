@@ -178,7 +178,7 @@ def to_fcivec(cisdvec, nelec, orbspin, frozen=None):
     return ucisd.to_fcivec(ucisdvec, norb//2, nelec, frozen)
 
 def from_fcivec(ci0, nelec, orbspin, frozen=None):
-    if not (frozen is None or frozen == 0):
+    if frozen is not None:
         raise NotImplementedError
 
     assert (numpy.count_nonzero(orbspin == 0) ==
