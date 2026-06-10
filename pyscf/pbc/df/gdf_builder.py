@@ -243,7 +243,6 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         else:
             merge_dd = None
 
-        reindex_k = None
         # TODO: shape = (comp, nao_pair, naux)
         shape = (nao_pair, naux)
         if j_only or nkpts == 1:
@@ -254,14 +253,12 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
                 # Ensure kk_idx is a subset of all possible ki-kj paris
                 assert np.all(np.isin(kk_idx, kikj_idx))
                 kikj_idx = kk_idx
-            reindex_k = kikj_idx // nkpts
         else:
             nkpts_ij = nkpts * nkpts
             if kk_idx is None:
                 kikj_idx = np.arange(nkpts_ij, dtype=np.int32)
             else:
                 kikj_idx = kk_idx
-            reindex_k = kikj_idx
             if merge_dd and kk_idx is None:
                 kpt_ij_iters = list(kk_adapted_iter(cell, kpts))
 
