@@ -3,7 +3,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import tempfile
 import numpy
 import h5py
 from pyscf import gto, scf, ao2mo

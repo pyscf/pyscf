@@ -576,7 +576,7 @@ if __name__ == '__main__':
     print(order_ao_index(mol))
     orbital_coeff(mol, mol.stdout, m.mo_coeff)
 
-    ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+    ftmp = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
     from_mo(mol, ftmp.name, m.mo_coeff)
 
     print(parse(ftmp.name))

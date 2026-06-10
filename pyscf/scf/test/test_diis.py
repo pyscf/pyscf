@@ -14,9 +14,9 @@
 # limitations under the License.
 
 import unittest
-import tempfile
 import numpy
 from pyscf import gto
+from pyscf import lib
 from pyscf import scf
 from pyscf.scf import diis
 
@@ -82,7 +82,7 @@ class KnownValues(unittest.TestCase):
         H     0    1.757    1.587''',
             basis = '631g',
         )
-        tmpf = tempfile.NamedTemporaryFile()
+        tmpf = lib.NamedTemporaryFile()
         mf = scf.RHF(mol)
         mf.diis_file = tmpf.name
         eref = mf.kernel()

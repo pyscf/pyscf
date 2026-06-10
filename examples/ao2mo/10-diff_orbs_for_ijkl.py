@@ -3,10 +3,10 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import tempfile
 import numpy
 import h5py
 from pyscf import gto, scf, ao2mo
+from pyscf import lib
 
 '''
 Integral transformation for four different orbitals
@@ -39,7 +39,7 @@ print('E = %.15g, ref -230.776765415' % e)
 #
 # Given four MOs, compute the MO-integrals and saved in dataset "mp2_bz"
 #
-eritmp = tempfile.NamedTemporaryFile()
+eritmp = lib.NamedTemporaryFile()
 nocc = mol.nelectron // 2
 nvir = len(mf.mo_energy) - nocc
 co = mf.mo_coeff[:,:nocc]

@@ -22,6 +22,7 @@ Some helper functions
 
 import os
 import sys
+import atexit
 import time
 import random
 import platform
@@ -545,7 +546,7 @@ class capture_stdout:
         self._contents = None
         self.old_stdout_fileno = sys.stdout.fileno()
         self.bak_stdout_fd = os.dup(self.old_stdout_fileno)
-        self.ftmp = tempfile.NamedTemporaryFile(dir=param.TMPDIR)
+        self.ftmp = NamedTemporaryFile(dir=param.TMPDIR)
         os.dup2(self.ftmp.file.fileno(), self.old_stdout_fileno)
         return self
     def __exit__(self, type, value, traceback):
@@ -1308,6 +1309,35 @@ class H5TmpFile(H5FileWrap):
 
     def __exit__(self, type, value, traceback):
         self.close()
+
+
+def NamedTemporaryFile(*args, **kwargs):
+    '''Create a named temporary file object. This function wraps
+    `tempfile.NamedTemporaryFile`. On Windows, `delete=False` is forced
+    to prevent permission errors when the file is reopened by another
+    handle.
+
+    Examples:
+
+    >>> from pyscf import lib
+    >>> ftmp = lib.NamedTemporaryFile()
+    >>> ftmp.name
+    '''
+    if sys.platform == 'win32':
+        kwargs['delete'] = False
+    f = tempfile.NamedTemporaryFile(*args, **kwargs)
+    if sys.platform == 'win32':
+        def _close_and_unlink():
+            try:
+                f.close()
+            except Exception:
+                pass
+            try:
+                os.unlink(f.name)
+            except OSError:
+                pass
+        atexit.register(_close_and_unlink)
+    return f
 
 
 def fingerprint(a):

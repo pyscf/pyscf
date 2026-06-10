@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tempfile
 import h5py
 import numpy as np
 from pyscf import lib
@@ -73,7 +72,7 @@ def cc_Wvvvv(t1,t2,eris):
     #Wabef += 0.25*einsum('mnab,mnef->abef',tau,eris.oovv)
     if t1.dtype == np.complex128: ds_type = 'c16'
     else: ds_type = 'f8'
-    _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+    _tmpfile1 = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
     fimd = h5py.File(_tmpfile1.name)
     nocc, nvir = t1.shape
     Wabef = fimd.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
@@ -120,7 +119,7 @@ def Wvvvv(t1,t2,eris):
     #Wabef = cc_Wvvvv(t1,t2,eris) + 0.25*einsum('mnab,mnef->abef',tau,eris.oovv)
     if t1.dtype == np.complex128: ds_type = 'c16'
     else: ds_type = 'f8'
-    _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+    _tmpfile1 = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
     fimd = h5py.File(_tmpfile1.name)
     nocc, nvir = t1.shape
     Wabef = fimd.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)

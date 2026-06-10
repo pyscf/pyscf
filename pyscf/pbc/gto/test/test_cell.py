@@ -17,7 +17,6 @@
 #
 
 import unittest
-import tempfile
 import ctypes
 import numpy
 import numpy as np
@@ -616,7 +615,7 @@ S
 
     def test_fromfile(self):
         ref = cl.atom_coords().copy()
-        with tempfile.NamedTemporaryFile() as f:
+        with lib.NamedTemporaryFile() as f:
             cl.tofile(f.name, 'xyz')
             cell = pgto.Cell()
             cell.fromfile(f.name, 'xyz')

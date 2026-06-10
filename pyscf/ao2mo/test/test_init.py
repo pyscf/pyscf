@@ -16,7 +16,6 @@
 import ctypes
 import unittest
 from functools import reduce
-import tempfile
 import numpy
 import h5py
 from pyscf import lib
@@ -80,7 +79,7 @@ class KnowValues(unittest.TestCase):
         with ao2mo.load(h5file, 'eri') as eri:
             self.assertEqual(eri.shape, (10,10))
 
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = lib.NamedTemporaryFile()
         ao2mo.kernel(mol, mo, ftmp, intor='int2e', dataname='eri')
         with ao2mo.load(ftmp, 'eri') as eri:
             self.assertEqual(eri.shape, (10,10))
@@ -97,7 +96,7 @@ class KnowValues(unittest.TestCase):
         ao2mo.kernel(mol, [mo]*4, erifile=h5file, intor='int2e', dataname='eri')
         self.assertEqual(h5file['eri'].shape, (10,10))
 
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = lib.NamedTemporaryFile()
         ao2mo.kernel(mol, [mo]*4, ftmp, intor='int2e', dataname='eri')
         with ao2mo.load(ftmp.name, 'eri') as eri:
             self.assertEqual(eri.shape, (10,10))

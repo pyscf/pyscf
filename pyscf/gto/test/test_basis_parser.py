@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import unittest
-import tempfile
 from functools import reduce
 import numpy
 from pyscf import gto
@@ -61,7 +60,7 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(len(gto.basis.load('def2-svp', 'Rn')), 16)
 
     def test_basis_load_from_file(self):
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = lib.NamedTemporaryFile()
         ftmp.write('''
 Li    S
      16.1195750              0.15432897
@@ -401,7 +400,7 @@ F   1   1.00
         self.assertEqual(ref, basis1)
 
     def test_parse_gaussian_load_basis(self):
-        with tempfile.NamedTemporaryFile(mode='w+') as f:
+        with lib.NamedTemporaryFile(mode='w+') as f:
             f.write('''
 ****
 H 0
@@ -412,7 +411,7 @@ S 1 1.0
             f.flush()
             self.assertEqual(parse_gaussian.load(f.name, 'H'), [[0, [1., 1.]]])
 
-        with tempfile.NamedTemporaryFile(mode='w+') as f:
+        with lib.NamedTemporaryFile(mode='w+') as f:
             f.write('''
 H 0
 S 1 1.0
@@ -422,7 +421,7 @@ S 1 1.0
             f.flush()
             self.assertEqual(parse_gaussian.load(f.name, 'H'), [[0, [1., 1.]]])
 
-        with tempfile.NamedTemporaryFile(mode='w+') as f:
+        with lib.NamedTemporaryFile(mode='w+') as f:
             f.write('''
 ****
 H 0
@@ -432,7 +431,7 @@ S 1 1.0
             f.flush()
             self.assertEqual(parse_gaussian.load(f.name, 'H'), [[0, [1., 1.]]])
 
-        with tempfile.NamedTemporaryFile(mode='w+') as f:
+        with lib.NamedTemporaryFile(mode='w+') as f:
             f.write('''
 H 0
 S 1 1.0

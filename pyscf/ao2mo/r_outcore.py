@@ -14,7 +14,6 @@
 # limitations under the License.
 
 
-import tempfile
 import numpy
 import h5py
 from pyscf import lib
@@ -103,7 +102,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
               float(nij_pair)*nkl_pair*comp, nij_pair*nkl_pair*comp*16/1e6)
 
 # transform e1
-    swapfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+    swapfile = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
     half_e1(mol, mo_coeffs, swapfile.name, intor, aosym, comp,
             max_memory, ioblk_size, log)
 
@@ -253,7 +252,7 @@ def half_e1(mol, mo_coeffs, swapfile,
 
 def full_iofree(mol, mo_coeff, intor='int2e_spinor', aosym='s4', comp=None,
                 verbose=logger.WARN, **kwargs):
-    erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+    erifile = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
     general(mol, (mo_coeff,)*4, erifile.name, dataname='eri_mo',
             intor=intor, aosym=aosym, comp=comp,
             verbose=verbose)
@@ -262,7 +261,7 @@ def full_iofree(mol, mo_coeff, intor='int2e_spinor', aosym='s4', comp=None,
 
 def general_iofree(mol, mo_coeffs, intor='int2e_spinor', aosym='s4', comp=None,
                    verbose=logger.WARN, **kwargs):
-    erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+    erifile = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
     general(mol, mo_coeffs, erifile.name, dataname='eri_mo',
             intor=intor, aosym=aosym, comp=comp,
             verbose=verbose)

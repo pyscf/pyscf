@@ -17,7 +17,6 @@
 
 import os
 import unittest
-import tempfile
 import numpy
 from pyscf import lib
 from pyscf import gto
@@ -73,7 +72,7 @@ class KnownValues(unittest.TestCase):
 
     def test_cderi_to_save(self):
         with open(os.devnull, 'w') as f:
-            ftmp = tempfile.NamedTemporaryFile()
+            ftmp = lib.NamedTemporaryFile()
             dfobj = df.DF(mol)
             dfobj.auxmol = df.addons.make_auxmol(mol, 'weigend')
             dfobj.verbose = 5
@@ -132,7 +131,7 @@ class KnownValues(unittest.TestCase):
         mol = gto.M(atom = 'H 0 0 0; F 0 0 1.1', basis='ccpvdz', max_memory=10, verbose=0)
         mf = mol.RKS().density_fit()
         mf.xc = 'lda+0.5*SR_HF(0.3)'
-        with tempfile.NamedTemporaryFile() as ftmp:
+        with lib.NamedTemporaryFile() as ftmp:
             mf.with_df._cderi_to_save = ftmp.name
             mf.run()
         self.assertAlmostEqual(mf.e_tot, -103.4965622991, 6)
