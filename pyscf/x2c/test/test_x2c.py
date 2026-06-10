@@ -17,6 +17,7 @@
 #
 
 import numpy
+import scipy.linalg
 import unittest
 from pyscf import gto
 from pyscf import scf
@@ -185,10 +186,29 @@ C     D
 C     F 
     0.761000000E+00    0.100000000E+01
 ''')
-        xmol, c = x2c.X2C(mol).get_xmol(mol)
+        x2c_obj = x2c.X2C(mol)
+        xmol, c = x2c_obj.get_xmol(mol)
         self.assertEqual(xmol.nbas, 18)
         self.assertEqual(xmol.nao, 42)
         self.assertAlmostEqual(lib.fp(c), -5.480689638416739, 12)
+
+        hcore = x2c_obj.get_hcore()
+        s = mol.intor_symmetric('int1e_ovlp_spinor')
+        e_ref = scipy.linalg.eigvalsh(hcore, s)
+
+        mol = gto.M(atom='C', basis=(mol.basis, [[0, [0.1285000001, 1]]]))
+        x2c_obj = x2c.X2C(mol)
+        xmol, c = x2c_obj.get_xmol(mol)
+        self.assertEqual(xmol.nbas, 19)
+        self.assertEqual(xmol.nao, 43)
+        hcore = x2c_obj.get_hcore()
+        s = mol.intor_symmetric('int1e_ovlp_spinor')
+        d, t = scipy.linalg.eigh(s)
+        idx = d > 1e-8
+        t = t[:,idx] / numpy.sqrt(d[idx])
+        tht = t.T.conj().dot(hcore.dot(t))
+        e = scipy.linalg.eigvalsh(tht)
+        self.assertAlmostEqual(abs(e - e_ref).max(), 0, 6)
 
     def test_get_hcore(self):
         myx2c = scf.RHF(mol).sfx2c1e()

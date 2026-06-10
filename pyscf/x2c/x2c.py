@@ -253,6 +253,8 @@ class X2CHelperBase(lib.StreamObject):
             self.mol = mol
         return self
 
+    to_gpu = lib.to_gpu
+
 class SpinorX2CHelper(X2CHelperBase):
     '''2-component X2c (including spin-free and spin-dependent terms) in
     the j-adapted spinor basis.
@@ -772,12 +774,12 @@ def _uncontract_mol(mol, xuncontract=None, exp_drop=0.2):
 
 
 def _sqrt(a, tol=1e-14):
-    e, v = numpy.linalg.eigh(a)
+    e, v = scipy.linalg.eigh(a)
     idx = e > tol
     return numpy.dot(v[:,idx]*numpy.sqrt(e[idx]), v[:,idx].T.conj())
 
 def _invsqrt(a, tol=1e-14):
-    e, v = numpy.linalg.eigh(a)
+    e, v = scipy.linalg.eigh(a)
     idx = e > tol
     return numpy.dot(v[:,idx]/numpy.sqrt(e[idx]), v[:,idx].T.conj())
 
@@ -798,7 +800,7 @@ def _get_hcore_fw(t, v, w, s, x, c):
 def _get_r(s, snesc):
     # R^dag \tilde{S} R = S
     # R = S^{-1/2} [S^{-1/2}\tilde{S}S^{-1/2}]^{-1/2} S^{1/2}
-    w, v = numpy.linalg.eigh(s)
+    w, v = scipy.linalg.eigh(s)
     idx = w > 1e-14
     v = v[:,idx]
     w_sqrt = numpy.sqrt(w[idx])
@@ -807,7 +809,7 @@ def _get_r(s, snesc):
     # eigenvectors of S as the new basis
     snesc = reduce(numpy.dot, (v.conj().T, snesc, v))
     r_mid = numpy.einsum('i,ij,j->ij', w_invsqrt, snesc, w_invsqrt)
-    w1, v1 = numpy.linalg.eigh(r_mid)
+    w1, v1 = scipy.linalg.eigh(r_mid)
     idx1 = w1 > 1e-14
     v1 = v1[:,idx1]
     r_mid = numpy.dot(v1/numpy.sqrt(w1[idx1]), v1.conj().T)
@@ -833,19 +835,20 @@ def _x2c1e_xmatrix(t, v, w, s, c):
         e, a = scipy.linalg.eigh(h, m)
         cl = a[:nao,nao:]
         cs = a[nao:,nao:]
-        x = numpy.linalg.solve(cl.T, cs.T).T  # B = XA
+        x = scipy.linalg.solve(cl.T, cs.T).T  # B = XA
     except scipy.linalg.LinAlgError:
-        d, t = numpy.linalg.eigh(m)
+        d, t = scipy.linalg.eigh(m)
         idx = d>LINEAR_DEP_THRESHOLD
         t = t[:,idx] / numpy.sqrt(d[idx])
         tht = reduce(numpy.dot, (t.T.conj(), h, t))
-        e, a = numpy.linalg.eigh(tht)
+        e, a = scipy.linalg.eigh(tht)
         a = numpy.dot(t, a)
         idx = e > -c**2
         cl = a[:nao,idx]
         cs = a[nao:,idx]
-        # X = B A^{-1} = B A^T S
-        x = cs.dot(cl.conj().T).dot(m)
+        # X = B A^{-1} = B (A^T A)^{-1} A^T
+        cl_inv = scipy.linalg.solve(cl.conj().T.dot(cl), cl.conj().T)
+        x = cs.dot(cl_inv)
     return x
 
 def _x2c1e_get_hcore(t, v, w, s, c):
@@ -867,11 +870,11 @@ def _x2c1e_get_hcore(t, v, w, s, c):
         # cs = a[nao:,nao:]
         e = e[nao:]
     except scipy.linalg.LinAlgError:
-        d, t = numpy.linalg.eigh(m)
+        d, t = scipy.linalg.eigh(m)
         idx = d>LINEAR_DEP_THRESHOLD
         t = t[:,idx] / numpy.sqrt(d[idx])
         tht = reduce(numpy.dot, (t.T.conj(), h, t))
-        e, a = numpy.linalg.eigh(tht)
+        e, a = scipy.linalg.eigh(tht)
         a = numpy.dot(t, a)
         idx = e > -c**2
         cl = a[:nao,idx]
@@ -907,7 +910,7 @@ def _x2c1e_get_hcore(t, v, w, s, c):
 #      = S A R[A]^{-1}^+ A^+ h1 A R[A]^{-1} A^+ S
 #      = S A R[A]^{-1}^+ e R[A]^{-1} A^+ S                (2)
 
-    w, u = numpy.linalg.eigh(reduce(numpy.dot, (cl.T.conj(), s, cl)))
+    w, u = scipy.linalg.eigh(reduce(numpy.dot, (cl.T.conj(), s, cl)))
     idx = w > 1e-14
     # Adopt (2) here because X is not appeared in Eq (2).
     # R[A] = u w^{1/2} u^+,  so R[A]^{-1} A^+ S in Eq (2) is
