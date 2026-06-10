@@ -37,7 +37,7 @@ def hydrogen_kuhf():
     cell.stdout.close()
 
 
-def test_kuqsgw_with_fc(hydrogen_kuhf):
+def test_kuqsgw_with_fc_high_cost(hydrogen_kuhf):
     gw = KUQSGW(hydrogen_kuhf)
     gw.fc = True
     gw.kernel()

@@ -40,7 +40,7 @@ def diamond_pbe():
     cell.stdout.close()
 
 
-def test_krqsgw_no_fc(diamond_pbe):
+def test_krqsgw_no_fc_high_cost(diamond_pbe):
     gw = KRQSGW(diamond_pbe)
     gw.fc = False
     gw.kernel()

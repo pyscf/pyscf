@@ -39,7 +39,7 @@ def diamond_krhf():
     cell.stdout.close()
 
 
-def test_krevgw_no_fc(diamond_krhf):
+def test_krevgw_no_fc_high_cost(diamond_krhf):
     gw = KREVGW(diamond_krhf)
     gw.fc = False
     gw.max_cycle = 100
