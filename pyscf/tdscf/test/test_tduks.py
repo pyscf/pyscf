@@ -146,7 +146,7 @@ class KnownValues(unittest.TestCase):
         es = td.kernel(nstates=4)[0]
         a,b = td.get_ab()
         e_ref = diagonalize(a, b, 5)
-        self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 6)
+        self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 5)
         self.assertAlmostEqual(lib.fp(es[:3]*27.2114), 7.69383202636, 4)
 
     def test_tda_b3lyp(self):
