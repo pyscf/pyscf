@@ -20,9 +20,7 @@
 import unittest
 import numpy as np
 import math
-from pyscf import gto
-from pyscf import scf
-from pyscf import adc
+from pyscf import gto, scf, adc, lib
 
 def setUpModule():
     global mol, mf, myadc, myadc_fr
@@ -49,8 +47,8 @@ def tearDownModule():
 
 def rdms_test(dm):
     r2_int = mol.intor('int1e_r2')
-    dm_ao = np.einsum('pi,ij,qj->pq', mf.mo_coeff, dm, mf.mo_coeff.conj())
-    r2 = np.einsum('pq,pq->',r2_int,dm_ao)
+    dm_ao = lib.einsum('pi,ij,qj->pq', mf.mo_coeff, dm, mf.mo_coeff.conj())
+    r2 = lib.einsum('pq,pq->',r2_int,dm_ao)
     return r2
 
 class KnownValues(unittest.TestCase):
@@ -72,10 +70,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[3], 6.481812538202186e-30, 6)
 
         dm1_exc = np.array(myadc.make_rdm1())
-        self.assertAlmostEqual(rdms_test(dm1_exc[0]), 39.97509426976306, 4)
-        self.assertAlmostEqual(rdms_test(dm1_exc[1]), 39.97509426976296, 4)
-        self.assertAlmostEqual(rdms_test(dm1_exc[2]), 40.69394840350379, 4)
-        self.assertAlmostEqual(rdms_test(dm1_exc[3]), 40.99987050864409, 4)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0]) - 39.97509426976306, 0, 4)
+        self.assertAlmostEqual(rdms_test(dm1_exc[1]) - 39.97509426976296, 0, 4)
+        self.assertAlmostEqual(rdms_test(dm1_exc[2]) - 40.69394840350379, 0, 4)
+        self.assertAlmostEqual(rdms_test(dm1_exc[3]) - 40.99987050864409, 0, 4)
 
 
     def test_ee_adc2x(self):
@@ -124,7 +122,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(rdms_test(dm1_exc[3]), 40.91091417592432, 4)
 
 
-    def test_ee_adc3(self):
+    def test_ee_adc3_high_cost(self):
         myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
 

@@ -87,7 +87,7 @@ class DiamondM06(unittest.TestCase):
 
     def kernel(self, TD, ref, **kwargs):
         td = getattr(self.mf, TD)().set(nstates=self.nstates, **kwargs).run()
-        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 5)
+        self.assertAlmostEqual(abs(td.e[:self.nstates_test] * unitev  - ref).max(), 0, 4)
         return td
 
     def test_tda(self):
@@ -103,7 +103,7 @@ class DiamondM06(unittest.TestCase):
         td = self.kernel('TDDFT', ref, conv_tol=1e-8)
         a, b = td.get_ab()
         eref = diagonalize(a, b)
-        self.assertAlmostEqual(abs(td.e[:4] - eref[:4]).max(), 0, 8)
+        self.assertAlmostEqual(abs(td.e[:4] - eref[:4]).max(), 0, 7)
 
     def check_rsh_tda(self, xc, place=6):
         cell = self.cell

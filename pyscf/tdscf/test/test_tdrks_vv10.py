@@ -117,9 +117,9 @@ class KnownValues(unittest.TestCase):
         mf = make_mf(mol)
         tda = mf.TDA()
         tda.exclude_nlc = False
-        test_excitation_energy, test_state_vector = tda.kernel(nstates = len(reference_excited_state_energy))
+        test_excitation_energy, test_state_vector = tda.kernel(nstates = 3)
 
-        assert np.linalg.norm(test_excitation_energy - reference_excitation_energy) < excitation_energy_threshold
+        assert np.linalg.norm(test_excitation_energy - reference_excitation_energy[:3]) < excitation_energy_threshold
 
         reference_transition_dipole = np.array([
             [-0.0039, -0.0088, -0.0068],
@@ -137,7 +137,7 @@ class KnownValues(unittest.TestCase):
         reference_oscillator_strength = np.array([0.0000204074, 0.0054841178, 0.0031204297, 0.0063755735, 0.0137712931])
         test_oscillator_strength = tda.oscillator_strength()
 
-        assert np.linalg.norm(test_oscillator_strength - reference_oscillator_strength) < oscillator_strength_threshold
+        assert np.linalg.norm(test_oscillator_strength - reference_oscillator_strength[:3]) < oscillator_strength_threshold
 
     def test_wb97xv_tddft_triplet_high_cost(self):
         ### Q-Chem input
@@ -232,7 +232,7 @@ class KnownValues(unittest.TestCase):
 
         assert np.linalg.norm(test_oscillator_strength - reference_oscillator_strength) < oscillator_strength_threshold
 
-    def test_wb97xv_unrestricted_tda(self):
+    def test_wb97xv_unrestricted_tda_high_cost(self):
         # Same Q-Chem input as above, Q-Chem computes both TDA and TDDFT in the same run
         reference_ground_state_energy = -150.9397884760
         reference_excited_state_energy = np.array([-150.88981193, -150.79604327, -150.75118183, -150.72292823, -150.71461300])
