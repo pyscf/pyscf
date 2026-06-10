@@ -280,10 +280,6 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
             self._outcore_dd_block(fswap, intor, aosym, comp, j_only,
                                    dataname, kk_idx=kk_idx)
 
-        # int3c2e for (cell, cell | fused_cell)
-        int3c = self.gen_int3c_kernel(intor, aosym, comp, j_only,
-                                      reindex_k=reindex_k, auxcell=self.fused_cell)
-
         mem_now = lib.current_memory()[0]
         log.debug2('memory = %s', mem_now)
         max_memory = max(2000, self.max_memory-mem_now)
@@ -296,66 +292,159 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         # lower triangle part
         sh_ranges = _guess_shell_ranges(cell, buflen, aosym, start=ish0, stop=ish1)
         max_buflen = max([x[2] for x in sh_ranges])
-        if max_buflen > buflen:
+
+        # The per-step int3c output buffer is (nkpts_ij_chunk, max_buflen,
+        # nauxc) doubles for both R and I, i.e. nkpts_ij_chunk*max_buflen*nauxc*16
+        # bytes. When nkpts_ij is large (e.g. 6x6x6 k-mesh with j_only=False
+        # gives 46656 pairs), this buffer dwarfs max_memory and the libpbc
+        # int3c kernel OOMs. Split kikj_idx into chunks so each chunk's int3c
+        # call fits within max_memory, then loop over chunks. The shell-block
+        # granularity (sh_ranges) is held fixed across chunks so that fswap
+        # row writes (row0:row1) remain consistent.
+        bytes_per_pair = max_buflen * nauxc * 16
+        kpts_chunk = max(1, int(max_memory * .9e6 / bytes_per_pair))
+        kpts_chunk = min(kpts_chunk, nkpts_ij)
+
+        # Build chunks of kpt-pair indices. The merge_dd branch that pairs
+        # (ij_idx, ji_idx) within an adapted-kpt group (see kpt_ij_iters
+        # below) requires both indices to live in the same chunk; for that
+        # path we group whole kk_adapted groups together. Otherwise we chunk
+        # contiguously.
+        need_group_chunks = (merge_dd is not None
+                             and not (j_only or nkpts == 1)
+                             and not gamma_point_only
+                             and kk_idx is None)
+        if need_group_chunks:
+            chunks_meta = []
+            cur_pairs = []
+            cur_groups = []
+            for grp in kpt_ij_iters:
+                _, ki_idx_g, kj_idx_g, self_conj_g = grp
+                grp_pairs = list(ki_idx_g * nkpts + kj_idx_g)
+                if not self_conj_g:
+                    grp_pairs += list(kj_idx_g * nkpts + ki_idx_g)
+                if cur_pairs and len(cur_pairs) + len(grp_pairs) > kpts_chunk:
+                    chunks_meta.append((np.asarray(cur_pairs, dtype=np.int32),
+                                        cur_groups))
+                    cur_pairs = []
+                    cur_groups = []
+                cur_pairs.extend(grp_pairs)
+                cur_groups.append(grp)
+            if cur_pairs:
+                chunks_meta.append((np.asarray(cur_pairs, dtype=np.int32),
+                                    cur_groups))
+        else:
+            chunks_meta = []
+            for start in range(0, nkpts_ij, kpts_chunk):
+                end = min(start + kpts_chunk, nkpts_ij)
+                chunks_meta.append((np.asarray(kikj_idx[start:end],
+                                               dtype=np.int32), None))
+        nchunks = len(chunks_meta)
+
+        if max_buflen > buflen and nchunks == 1:
+            # Only meaningful when chunking did not bring usage under budget.
             log.warn('memory usage of outcore_auxe2 may be %.2f times over max_memory',
                      (max_buflen/buflen - 1))
+        if nchunks > 1:
+            log.debug('outcore_auxe2: splitting %d kpt pairs into %d chunks '
+                      '(<= %d pairs/chunk, max_buflen=%d, nauxc=%d)',
+                      nkpts_ij, nchunks, kpts_chunk, max_buflen, nauxc)
 
         cpu0 = logger.process_clock(), logger.perf_counter()
         nsteps = len(sh_ranges)
-        row1 = 0
-        for istep, (sh_start, sh_end, nrow) in enumerate(sh_ranges):
-            if aosym == 's2':
-                shls_slice = (sh_start, sh_end, jsh0, sh_end, ksh0, ksh1)
+
+        for ichunk, (kikj_idx_chunk, chunk_groups) in enumerate(chunks_meta):
+            # Build a fresh int3c kernel restricted to this chunk's kpt-pairs.
+            # The chunk's reindex_k follows the same convention as the original
+            # reindex_k assignment above.
+            if j_only or nkpts == 1:
+                reindex_k_chunk = kikj_idx_chunk // nkpts
             else:
-                shls_slice = (sh_start, sh_end, jsh0, jsh1, ksh0, ksh1)
-            outR, outI = int3c(shls_slice)
-            log.debug2('      step [%d/%d], shell range [%d:%d], len(buf) = %d',
-                       istep+1, nsteps, sh_start, sh_end, nrow)
-            cpu0 = log.timer_debug1(f'outcore_auxe2 [{istep+1}/{nsteps}]', *cpu0)
+                reindex_k_chunk = kikj_idx_chunk
+            chunk_int3c = self.gen_int3c_kernel(
+                intor, aosym, comp, j_only,
+                reindex_k=reindex_k_chunk, auxcell=self.fused_cell)
+            # Local map from global kpt-pair index -> position in outR/outI
+            pair_pos = {int(idx): k for k, idx in enumerate(kikj_idx_chunk)}
 
-            outR = list(outR)
-            if outI is not None:
-                outI = list(outI)
-            for k, idx in enumerate(kikj_idx):
-                outR[k] = self.fuse(outR[k], axis=1)
-                if f'{dataname}I/{idx}' in fswap and outI[k] is not None:
-                    outI[k] = self.fuse(outI[k], axis=1)
-
-            shls_slice = (sh_start, sh_end, 0, cell.nbas)
-            row0, row1 = row1, row1 + nrow
-            if merge_dd is not None:
-                if gamma_point_only:
-                    merge_dd(outR[0], fswap[f'{dataname}R-dd/0'], shls_slice)
-                elif j_only or nkpts == 1:
-                    for k, idx in enumerate(kikj_idx):
-                        merge_dd(outR[k], fswap[f'{dataname}R-dd/{idx}'], shls_slice)
-                        merge_dd(outI[k], fswap[f'{dataname}I-dd/{idx}'], shls_slice)
-                elif kk_idx is None:
-                    for _, ki_idx, kj_idx, self_conj in kpt_ij_iters:
-                        kpt_ij_idx = ki_idx * nkpts + kj_idx
-                        if self_conj:
-                            for ij_idx in kpt_ij_idx:
-                                merge_dd(outR[ij_idx], fswap[f'{dataname}R-dd/{ij_idx}'], shls_slice)
-                                merge_dd(outI[ij_idx], fswap[f'{dataname}I-dd/{ij_idx}'], shls_slice)
-                        else:
-                            kpt_ji_idx = kj_idx * nkpts + ki_idx
-                            for ij_idx, ji_idx in zip(kpt_ij_idx, kpt_ji_idx):
-                                j3cR_dd = np.asarray(fswap[f'{dataname}R-dd/{ij_idx}'])
-                                merge_dd(outR[ij_idx], j3cR_dd, shls_slice)
-                                merge_dd(outR[ji_idx], j3cR_dd.transpose(1,0,2), shls_slice)
-                                j3cI_dd = np.asarray(fswap[f'{dataname}I-dd/{ij_idx}'])
-                                merge_dd(outI[ij_idx], j3cI_dd, shls_slice)
-                                merge_dd(outI[ji_idx],-j3cI_dd.transpose(1,0,2), shls_slice)
+            row1 = 0
+            for istep, (sh_start, sh_end, nrow) in enumerate(sh_ranges):
+                if aosym == 's2':
+                    int3c_shls_slice = (sh_start, sh_end, jsh0, sh_end, ksh0, ksh1)
                 else:
-                    for k, idx in enumerate(kikj_idx):
-                        merge_dd(outR[k], fswap[f'{dataname}R-dd/{idx}'], shls_slice)
-                        merge_dd(outI[k], fswap[f'{dataname}I-dd/{idx}'], shls_slice)
+                    int3c_shls_slice = (sh_start, sh_end, jsh0, jsh1, ksh0, ksh1)
+                outR, outI = chunk_int3c(int3c_shls_slice)
+                log.debug2('      chunk [%d/%d] step [%d/%d], shell range [%d:%d], '
+                           'len(buf) = %d',
+                           ichunk+1, nchunks, istep+1, nsteps, sh_start, sh_end, nrow)
+                cpu0 = log.timer_debug1(
+                    f'outcore_auxe2 chunk[{ichunk+1}/{nchunks}] '
+                    f'step[{istep+1}/{nsteps}]', *cpu0)
 
-            for k, idx in enumerate(kikj_idx):
-                fswap[f'{dataname}R/{idx}'][row0:row1] = outR[k]
-                if f'{dataname}I/{idx}' in fswap:
-                    fswap[f'{dataname}I/{idx}'][row0:row1] = outI[k]
-            outR = outI = None
+                outR = list(outR)
+                if outI is not None:
+                    outI = list(outI)
+                for k, idx in enumerate(kikj_idx_chunk):
+                    outR[k] = self.fuse(outR[k], axis=1)
+                    if f'{dataname}I/{idx}' in fswap and outI[k] is not None:
+                        outI[k] = self.fuse(outI[k], axis=1)
+
+                merge_shls_slice = (sh_start, sh_end, 0, cell.nbas)
+                row0, row1 = row1, row1 + nrow
+                if merge_dd is not None:
+                    if gamma_point_only:
+                        merge_dd(outR[0], fswap[f'{dataname}R-dd/0'],
+                                 merge_shls_slice)
+                    elif j_only or nkpts == 1:
+                        for k, idx in enumerate(kikj_idx_chunk):
+                            merge_dd(outR[k], fswap[f'{dataname}R-dd/{idx}'],
+                                     merge_shls_slice)
+                            merge_dd(outI[k], fswap[f'{dataname}I-dd/{idx}'],
+                                     merge_shls_slice)
+                    elif kk_idx is None:
+                        for _, ki_idx, kj_idx, self_conj in chunk_groups:
+                            kpt_ij_idx = ki_idx * nkpts + kj_idx
+                            if self_conj:
+                                for ij_idx in kpt_ij_idx:
+                                    ij_local = pair_pos[int(ij_idx)]
+                                    merge_dd(outR[ij_local],
+                                             fswap[f'{dataname}R-dd/{ij_idx}'],
+                                             merge_shls_slice)
+                                    merge_dd(outI[ij_local],
+                                             fswap[f'{dataname}I-dd/{ij_idx}'],
+                                             merge_shls_slice)
+                            else:
+                                kpt_ji_idx = kj_idx * nkpts + ki_idx
+                                for ij_idx, ji_idx in zip(kpt_ij_idx, kpt_ji_idx):
+                                    ij_local = pair_pos[int(ij_idx)]
+                                    ji_local = pair_pos[int(ji_idx)]
+                                    j3cR_dd = np.asarray(
+                                        fswap[f'{dataname}R-dd/{ij_idx}'])
+                                    merge_dd(outR[ij_local], j3cR_dd,
+                                             merge_shls_slice)
+                                    merge_dd(outR[ji_local],
+                                             j3cR_dd.transpose(1,0,2),
+                                             merge_shls_slice)
+                                    j3cI_dd = np.asarray(
+                                        fswap[f'{dataname}I-dd/{ij_idx}'])
+                                    merge_dd(outI[ij_local], j3cI_dd,
+                                             merge_shls_slice)
+                                    merge_dd(outI[ji_local],
+                                            -j3cI_dd.transpose(1,0,2),
+                                             merge_shls_slice)
+                    else:
+                        for k, idx in enumerate(kikj_idx_chunk):
+                            merge_dd(outR[k], fswap[f'{dataname}R-dd/{idx}'],
+                                     merge_shls_slice)
+                            merge_dd(outI[k], fswap[f'{dataname}I-dd/{idx}'],
+                                     merge_shls_slice)
+
+                for k, idx in enumerate(kikj_idx_chunk):
+                    fswap[f'{dataname}R/{idx}'][row0:row1] = outR[k]
+                    if f'{dataname}I/{idx}' in fswap:
+                        fswap[f'{dataname}I/{idx}'][row0:row1] = outI[k]
+                outR = outI = None
+            chunk_int3c = None
         return fswap
 
     def weighted_ft_ao(self, kpt):
