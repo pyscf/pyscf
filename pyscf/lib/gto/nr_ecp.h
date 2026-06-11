@@ -13,7 +13,7 @@
 #define SIM_ZERO        1e-50
 #define EXPCUTOFF       39   // 1e-17
 #define CUTOFF          460  // ~ 1e200
-#define CLOSE_ENOUGH(x, y)      (fabs(x-y) < 1e-12*fabs(y) || fabs(x-y) < 1e-12)
+#define CLOSE_ENOUGH(x, y)      (fabs(x-y) <= 1e-12 * fmax(fabs(x), fabs(y)))
 #define SQUARE(r)       (r[0]*r[0]+r[1]*r[1]+r[2]*r[2])
 #define CART_CUM        (455+1) // upto l = 12
 #define K_TAYLOR_MAX    7
