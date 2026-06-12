@@ -592,7 +592,7 @@ def nr_nlc_vxc(ni, cell, grids, xc_code, dms, relativity=0, hermi=1,
 
 def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                rho0=None, vxc=None, fxc=None, kpts=None, max_memory=2000,
-               verbose=None):
+               verbose=None, ao_cache=None):
     '''Contract RKS XC kernel matrix with given density matrices
 
     Args:
@@ -662,7 +662,8 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         vmat = [0] * nset
         p1 = 0
         for ao_k1, ao_k2, mask, weight, coords \
-                in ni.block_loop(cell, grids, nao, ao_deriv, kpts, None, max_memory):
+                in ni.block_loop(cell, grids, nao, ao_deriv, kpts, None, max_memory,
+                                 ao_cache=ao_cache):
             p0, p1 = p1, p1 + weight.size
             _fxc = fxc[:,:,p0:p1]
             for i in range(nset):
@@ -971,6 +972,78 @@ def get_rho(ni, cell, dm, grids, kpts=None, max_memory=2000):
     return rho
 
 
+class AOCache:
+    '''Precomputed AO values on a fixed (uniform) grid, threaded explicitly
+    into ``block_loop`` to avoid repeated ``eval_ao`` calls during a single
+    nuclear-gradient evaluation.
+
+    During one gradient the geometry is fixed, so the uniform-grid AO array
+    (and its derivatives) is a pure function of (cell, grid, deriv).  This
+    container stores the full-grid AO for one k-point set up to derivative
+    order ``deriv``; ``block_loop`` serves a grid block ``[ip0:ip1]`` (and a
+    lower requested derivative, via the leading components) by slicing.  Any
+    mismatch (different k-points, or a higher derivative than stored) makes
+    ``get`` return ``None`` so the caller falls back to ``eval_ao``.
+
+    The cache disables itself (acts as a no-op) when the full array would
+    exceed ``max_memory`` (MB), so callers can pass it unconditionally.
+
+    Intended scope: Gamma / single k-point, uniform (FFTDF) grids.  Build it
+    at the highest derivative order any consumer will request (2 for GGA,
+    else 1).  Keep it local to one ``grad_elec`` call; never attach it to a
+    long-lived object, or it will go stale when the geometry changes.
+    '''
+    def __init__(self, ni, cell, grids, deriv, kpts=None, max_memory=4000):
+        self.cell = cell
+        self.grids = grids
+        self.deriv = deriv
+        self.kpts = None if kpts is None else numpy.reshape(kpts, (-1, 3))
+        self.ao = None
+        if grids.coords is None:
+            grids.build(with_non0tab=True)
+        ngrids = grids.coords.shape[0]
+        nao = cell.nao
+        comp = (deriv+1)*(deriv+2)*(deriv+3)//6
+        nk = 1 if self.kpts is None else len(self.kpts)
+        itemsize = 8 if self.kpts is None else 16
+        if comp*ngrids*nao*nk*itemsize/1e6 > max_memory:
+            return  # too large: leave self.ao = None (cache disabled)
+        if self.kpts is None:
+            self.ao = ni.eval_ao(cell, grids.coords, deriv=deriv)
+        else:
+            self.ao = ni.eval_ao(cell, grids.coords, self.kpts, deriv=deriv)
+
+    def _match_kpts(self, kpts):
+        if (self.kpts is None) != (kpts is None):
+            return False
+        if self.kpts is None:
+            return True
+        kpts = numpy.reshape(kpts, (-1, 3))
+        return (len(kpts) == len(self.kpts) and
+                abs(self.kpts - kpts).max() < 1e-9)
+
+    def usable(self, deriv, kpts=None):
+        '''Whether the cache can serve a request at this derivative order and
+        these k-points.  If False, the caller falls back to ``eval_ao``.'''
+        return (self.ao is not None and deriv <= self.deriv
+                and self._match_kpts(kpts))
+
+    def get(self, deriv, ip0, ip1, kpts=None):
+        '''Return the AO block ``[ip0:ip1]`` (and the leading components for a
+        lower derivative).  Only call when ``usable(deriv, kpts)`` is True.'''
+        comp = (deriv+1)*(deriv+2)*(deriv+3)//6
+
+        def _slice(a):
+            if a.ndim == 2:        # stored deriv == 0 (no component axis)
+                return a[ip0:ip1]
+            if comp == 1:          # want values out of a deriv>0 store
+                return a[0, ip0:ip1]
+            return a[:comp, ip0:ip1]
+        if self.kpts is None:
+            return _slice(self.ao)
+        return [_slice(a) for a in self.ao]
+
+
 class NumInt(lib.StreamObject, numint.LibXCMixin):
     '''Generalization of pyscf's NumInt class for a single k-point shift and
     periodic images.
@@ -1055,7 +1128,8 @@ class NumInt(lib.StreamObject, numint.LibXCMixin):
         return cache_xc_kernel1(self, cell, grids, xc_code, dm, spin, kpt, max_memory)
 
     def block_loop(self, cell, grids, nao=None, deriv=0, kpt=None,
-                   kpts_band=None, max_memory=2000, non0tab=None, blksize=None):
+                   kpts_band=None, max_memory=2000, non0tab=None, blksize=None,
+                   ao_cache=None):
         '''Define this macro to loop over grids by blocks.
         '''
         # For UniformGrids, grids.coords does not indicate whether grids are initialized
@@ -1094,8 +1168,11 @@ class NumInt(lib.StreamObject, numint.LibXCMixin):
             coords = grids_coords[ip0:ip1]
             weight = grids_weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
-            ao_k2 = self.eval_ao(cell, coords, kpt2, deriv=deriv, non0tab=non0,
-                                 cutoff=grids.cutoff)
+            if ao_cache is not None and ao_cache.usable(deriv):
+                ao_k2 = ao_cache.get(deriv, ip0, ip1)
+            else:
+                ao_k2 = self.eval_ao(cell, coords, kpt2, deriv=deriv, non0tab=non0,
+                                     cutoff=grids.cutoff)
             if abs(kpt1-kpt2).sum() < 1e-9:
                 ao_k1 = ao_k2
             else:
@@ -1253,7 +1330,8 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
     get_fxc = nr_fxc
 
     def block_loop(self, cell, grids, nao=None, deriv=0, kpts=None,
-                   kpts_band=None, max_memory=2000, non0tab=None, blksize=None):
+                   kpts_band=None, max_memory=2000, non0tab=None, blksize=None,
+                   ao_cache=None):
         '''Define this macro to loop over grids by blocks.
         '''
         if grids.coords is None:
@@ -1298,7 +1376,10 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
             coords = grids_coords[ip0:ip1]
             weight = grids_weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
-            ao_kall = self.eval_ao(cell, coords, kpts_all, deriv=deriv, non0tab=non0)
+            if ao_cache is not None and ao_cache.usable(deriv, kpts_all):
+                ao_kall = ao_cache.get(deriv, ip0, ip1, kpts_all)
+            else:
+                ao_kall = self.eval_ao(cell, coords, kpts_all, deriv=deriv, non0tab=non0)
             if kpts_band is None:
                 ao_k1 = ao_k2 = ao_kall
             else:

@@ -110,7 +110,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
 
     return _format_jks(vj_kpts, dm_kpts, input_band, kpts)
 
-def get_j_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None):
+def get_j_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None, ao_cache=None):
     '''Derivatives of Coulomb (J) AO matrix at sampled k-points.
     '''
 
@@ -130,7 +130,7 @@ def get_j_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None):
 
     if is_zero(kpts):
         vR = rhoR = np.zeros((nset,ngrids))
-        for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts):
+        for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts, ao_cache=ao_cache):
             ao_ks, mask = ao_ks_etc[0], ao_ks_etc[2]
             for i in range(nset):
                 rhoR[i,p0:p1] += make_rho(i, ao_ks, mask, 'LDA').real
@@ -143,7 +143,7 @@ def get_j_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None):
 
     else:  # vR may be complex if the underlying density is complex
         vR = rhoR = np.zeros((nset,ngrids), dtype=np.complex128)
-        for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts):
+        for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts, ao_cache=ao_cache):
             ao_ks, mask = ao_ks_etc[0], ao_ks_etc[2]
             for i in range(nset):
                 for k, ao in enumerate(ao_ks):
@@ -165,7 +165,7 @@ def get_j_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None):
     else:
         vj_kpts = np.zeros((3,nset,nband,nao,nao), dtype=np.complex128)
 
-    for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts_band, deriv=1):
+    for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts_band, deriv=1, ao_cache=ao_cache):
         ao_ks, mask = ao_ks_etc[0], ao_ks_etc[2]
         for i in range(nset):
             # ni.eval_mat can handle real vR only
