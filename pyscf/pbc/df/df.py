@@ -276,6 +276,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                 if self._cderi == cderi and os.path.isfile(cderi):
                     logger.warn(self, 'File %s (specified by ._cderi) is '
                                 'overwritten by GDF initialization.', cderi)
+                    self._cderi_to_save.close()
                     os.remove(cderi)
                 else:
                     logger.warn(self, 'Value of ._cderi is ignored. '

@@ -426,7 +426,8 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
         # swapfile = lib.NamedTemporaryFile(dir=os.path.dirname(cderi_file))
         fswap = lib.H5TmpFile(dir=os.path.dirname(cderi_file), prefix='.outcore_auxe2_swap')
         # avoid trash files
-        os.unlink(fswap.filename)
+        if sys.platform != 'win32':
+            os.unlink(fswap.filename)
 
         cell = self.cell
         if self.use_bvk and self.kpts_band is None:

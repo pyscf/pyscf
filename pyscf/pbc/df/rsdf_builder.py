@@ -384,7 +384,8 @@ class _RSGDFBuilder(Int3cBuilder):
         # as cderi_file.
         fswap = lib.H5TmpFile(dir=os.path.dirname(cderi_file), prefix='.outcore_auxe2_swap')
         # Unlink swapfile to avoid trash files
-        os.unlink(fswap.filename)
+        if sys.platform != 'win32':
+            os.unlink(fswap.filename)
 
         log = logger.new_logger(self)
         cell = self.cell
