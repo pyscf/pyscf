@@ -171,7 +171,6 @@ def _unpack_t3_(mycc, t3, t3_blk, i0, i1, j0, j1, k0, k1, blksize0=None, blksize
 
 def _unpack_t3_pair_(mycc, t3, t3_blk, i0, i1, j0, j1, k0, k1, blksize0=None, blksize1=None, blksize2=None):
     r'''Unpack triangular-stored T3 amplitudes into the block
-    # `t3_full[i0:i1, j0:j1, k0:k1, :, :, :] + t3_full[k0:k1, j0:j1, i0:i1, :, :, :].transpose(0, 1, 2, 3, 5, 4)`
     `t3_full[i0:i1, j0:j1, k0:k1, :, :, :] + t3_full[i0:i1, j0:j1, k0:k1, :, :, :].transpose(0, 1, 2, 4, 5, 3)`
     '''
     if blksize0 is None: blksize0 = mycc.blksize_oovv

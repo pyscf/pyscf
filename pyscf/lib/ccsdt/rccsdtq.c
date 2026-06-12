@@ -27,7 +27,7 @@
 // Apply spin summation projection to T4 amplitudes in place.
 // A: pointer to T4 tensor (size nocc4 * nvir**4)
 // pattern: "P4_full" : P(A) = (1 + P_c^d) (1 + P_b^c + P_b^d) (1 + P_a^b + P_a^c + P_a^d) A
-//         "P4_444"  : P(A) = (2 - P_c^d) (2 - P_b^c - P_b^d) (2 - P_a^b - P_a^c - P_a^d) A
+//          "P4_444"  : P(A) = (2 - P_c^d) (2 - P_b^c - P_b^d) (2 - P_a^b - P_a^c - P_a^d) A
 //          "P4_422"  : P(A) = (1 + 0 * P_c^d) (2 - P_b^c - P_b^d) (2 - P_a^b - P_a^c - P_a^d) A
 //          "P4_201"  : P(A) = (1 + 0 * P_c^d) (1 + 0 * P_b^c + 0 * P_b^d) (2 - P_a^b - P_a^c - P_a^d) A
 // alpha, beta: A = beta * A + alpha * P(A)

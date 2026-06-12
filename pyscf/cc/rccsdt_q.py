@@ -97,6 +97,8 @@ def kernel(mycc, eris=None, tamps=None, verbose=logger.NOTE):
     eris_vvvv = eris.pppp[nocc:, nocc:, nocc:, nocc:].copy()
     eris_oooo = eris.pppp[:nocc, :nocc, :nocc, :nocc].copy()
 
+    eris = None
+
     def get_t3_slice(t3_blk, i, j):
         if mycc.do_tri_max_t:
             _unpack_t3_(mycc, t3, t3_blk, i, i + 1, j, j + 1, 0, nocc, 1, 1, nocc)
