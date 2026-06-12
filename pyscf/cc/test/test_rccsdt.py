@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2025 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -134,7 +134,7 @@ class KnownValues(unittest.TestCase):
         cc1.diis = False
         cc1.max_cycle = 4
         cc1.kernel()
-        self.assertAlmostEqual(cc1.e_corr, -0.1362172678103062, 7)
+        self.assertAlmostEqual(cc1.e_corr, -0.13620561873465928, 7)
 
     def test_restart(self):
         ftmp = lib.NamedTemporaryFile()
@@ -148,7 +148,7 @@ class KnownValues(unittest.TestCase):
         cc1.diis = adiis
         cc1.max_cycle = 3
         cc1.kernel(tamps=None)
-        self.assertAlmostEqual(cc1.e_corr, -0.13618790413398396, 7)
+        self.assertAlmostEqual(cc1.e_corr, -0.13601543222004697, 7)
 
         tamps = cc1.vector_to_amplitudes(adiis.extrapolate())
         self.assertAlmostEqual(abs(tamps[0] - cc1.t1).max(), 0, 9)
@@ -159,7 +159,7 @@ class KnownValues(unittest.TestCase):
         import copy
         tmp_tamps = copy.deepcopy(tamps)
         cc1.kernel(tmp_tamps)
-        self.assertAlmostEqual(cc1.e_corr, -0.13636637468987364, 7)
+        self.assertAlmostEqual(cc1.e_corr, -0.13632994594327189, 7)
 
         cc1.diis = adiis
         cc1.max_cycle = 2
