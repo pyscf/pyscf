@@ -719,7 +719,7 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, hermi=0, singlet=Tru
 
 def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                rho0=None, vxc=None, fxc=None, kpts=None, max_memory=2000,
-               verbose=None):
+               verbose=None, ao_cache=None):
     '''Contract UKS XC kernel matrix with given density matrices
 
     Args:
@@ -799,7 +799,8 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     if xctype in ('LDA', 'GGA', 'MGGA'):
         p1 = 0
         for ao_k1, ao_k2, mask, weight, coords \
-                in ni.block_loop(cell, grids, nao, ao_deriv, kpts, None, max_memory):
+                in ni.block_loop(cell, grids, nao, ao_deriv, kpts, None, max_memory,
+                                 ao_cache=ao_cache):
             p0, p1 = p1, p1 + weight.size
             _fxc = fxc[:,:,:,:,p0:p1]
 

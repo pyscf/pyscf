@@ -114,7 +114,8 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
     return tot_e.real, ecoul.real + exc.real
 
 def gen_response(mf, mo_coeff=None, mo_occ=None,
-                 with_j=True, hermi=0, max_memory=None, with_nlc=True):
+                 with_j=True, hermi=0, max_memory=None, with_nlc=True,
+                 ao_cache=None):
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     cell = mf.cell
@@ -140,7 +141,8 @@ def gen_response(mf, mo_coeff=None, mo_occ=None,
         else:
             assert kshift == 0
             v1 = ni.nr_uks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, hermi,
-                               rho0, vxc, fxc, kpts, max_memory=max_memory)
+                               rho0, vxc, fxc, kpts, max_memory=max_memory,
+                               ao_cache=ao_cache)
         vj, vk = krks._get_jk(mf, cell, dm1, hermi, kpts, with_j=not j_in_xc,
                               kshift=kshift)
         if not j_in_xc:
