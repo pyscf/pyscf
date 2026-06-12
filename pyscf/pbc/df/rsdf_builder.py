@@ -28,6 +28,7 @@ Ref:
 '''
 
 import os
+import sys
 import ctypes
 import warnings
 import tempfile
