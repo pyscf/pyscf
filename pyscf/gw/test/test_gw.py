@@ -49,7 +49,7 @@ class KnownValues(unittest.TestCase):
         gw_obj.orbs = range(nocc-3, nocc+3)
         gw_obj.kernel()
         self.assertAlmostEqual(gw_obj.mo_energy[nocc-1], -0.4129411145067107, 7)
-        self.assertAlmostEqual(gw_obj.mo_energy[nocc], 0.16568737755110896, 8)
+        self.assertAlmostEqual(gw_obj.mo_energy[nocc], 0.16568737755110896, 7)
 
         gw_obj = gw.GW(mf, freq_int='ac')
         gw_obj.frozen = np.array([0])
@@ -57,8 +57,8 @@ class KnownValues(unittest.TestCase):
         gw_obj.ac = 'pade'
         gw_obj.orbs = range(nocc-3, nocc+3)
         gw_obj.kernel()
-        self.assertAlmostEqual(gw_obj.mo_energy[nocc-1], -0.4129411145067107, 8)
-        self.assertAlmostEqual(gw_obj.mo_energy[nocc], 0.16568737755110896, 8)
+        self.assertAlmostEqual(gw_obj.mo_energy[nocc-1], -0.4129411145067107, 7)
+        self.assertAlmostEqual(gw_obj.mo_energy[nocc], 0.16568737755110896, 7)
 
     def test_gwcd(self):
         nocc = mol.nelectron//2

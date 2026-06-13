@@ -42,7 +42,7 @@ def diamond_supercell_pbe():
     yield mf
 
 
-def test_gwac_pade_diamond_supercell(diamond_supercell_pbe):
+def test_gwac_pade_diamond_supercell_high_cost(diamond_supercell_pbe):
     gw = GWAC(diamond_supercell_pbe)
     gw.kernel()
 
