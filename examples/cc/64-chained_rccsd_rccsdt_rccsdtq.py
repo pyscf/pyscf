@@ -11,7 +11,6 @@ This script demonstrates how to:
     - Examine the influence of DIIS acceleration on convergence.
 '''
 
-import numpy as np
 from pyscf import gto, scf, cc
 
 def run_rccsd_rccsdt_rccsdtq(do_diis=False, do_diis_max_t=False, verbose=0):
