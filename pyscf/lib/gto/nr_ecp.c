@@ -5462,7 +5462,7 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                         pradi = radi + ic * nrs * lilc1;
                         pradj = radj + jc * nrs * ljlc1;
                         for (lab = 0; lab <= li+lj; lab++, ijl++) {
-                                if (!converged[ijl]) {
+                                if (converged[ijl] < 2) {
         prur = rur + lab * nrs;
         prad = rad_all + ijl*d2;
         for (i = 0; i < d2; i++) {
@@ -5479,12 +5479,20 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 prad[i*ljlc1+j] = s;
         } }
 
-        converged[ijl] = 1;
-        for (i = 0; i < d2; i++) {
-                if (!CLOSE_ENOUGH(plast[i],prad[i])) {
+        {
+                int _pair_close = 1;
+                for (i = 0; i < d2; i++) {
+                        if (!CLOSE_ENOUGH(plast[i],prad[i])) {
+                                _pair_close = 0;
+                                break;
+                        }
+                }
+                if (_pair_close) {
+                        converged[ijl] += 1;
+                        if (converged[ijl] < 2) { all_conv = 0; }
+                } else {
                         converged[ijl] = 0;
                         all_conv = 0;
-                        break;
                 }
         }
                                 }
@@ -5690,7 +5698,7 @@ int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                         pradi = radi + ic * nrs * lilc1;
                         pradj = radj + jc * nrs * ljlc1;
                         for (lab = 0; lab <= li+lj; lab++, ijl++) {
-                                if (!converged[ijl]) {
+                                if (converged[ijl] < 2) {
         prur = rur + lab * nrs;
         prad = rad_all + ijl*d2;
         for (i = 0; i < d2; i++) {
@@ -5707,12 +5715,20 @@ int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 prad[i*ljlc1+j] = s;
         } }
 
-        converged[ijl] = 1;
-        for (i = 0; i < d2; i++) {
-                if (!CLOSE_ENOUGH(plast[i], prad[i])) {
+        {
+                int _pair_close = 1;
+                for (i = 0; i < d2; i++) {
+                        if (!CLOSE_ENOUGH(plast[i], prad[i])) {
+                                _pair_close = 0;
+                                break;
+                        }
+                }
+                if (_pair_close) {
+                        converged[ijl] += 1;
+                        if (converged[ijl] < 2) { all_conv = 0; }
+                } else {
                         converged[ijl] = 0;
                         all_conv = 0;
-                        break;
                 }
         }
                                 }
@@ -5938,7 +5954,7 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 all_conv = 1;
                 for (ip = 0; ip < npi; ip++) {
                 for (jp = 0; jp < npj; jp++) {
-                        if (!converged[ip*npj+jp]) {
+                        if (converged[ip*npj+jp] < 2) {
                                 prad = rad_all + (ip*npj+jp)*d2;
                                 for (i = 0; i < d2; i++) {
                                         plast[i] = prad[i];
@@ -5949,12 +5965,20 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                                 rij[2] = ai[ip] * rca[2] + aj[jp] * rcb[2];
                                 type1_rad_part(prad, li+lj, sqrt(SQUARE(rij))*2,
                                                ai[ip]+aj[jp], ur, rs+start, nrs, step, cache);
-                                converged[ip*npj+jp] = 1;
-                                for (i = 0; i < d2; i++) {
-                                        if (!CLOSE_ENOUGH(plast[i],prad[i])) {
+                                {
+                                        int _pair_close = 1;
+                                        for (i = 0; i < d2; i++) {
+                                                if (!CLOSE_ENOUGH(plast[i],prad[i])) {
+                                                        _pair_close = 0;
+                                                        break;
+                                                }
+                                        }
+                                        if (_pair_close) {
+                                                converged[ip*npj+jp] += 1;
+                                                if (converged[ip*npj+jp] < 2) { all_conv = 0; }
+                                        } else {
                                                 converged[ip*npj+jp] = 0;
                                                 all_conv = 0;
-                                                break;
                                         }
                                 }
                         }
