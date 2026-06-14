@@ -129,13 +129,17 @@ def hcore_generator(mf_grad, cell=None, kpts=None):
     Gv = cell.Gv    ##[grid, 3]
     coords = cell.get_uniform_grids()
     vlocG = get_vlocG(cell)  ###[natom, grid]
+    # The local-PP AO product depends only on (coords, kpt), not on the atom
+    # or Cartesian component, so evaluate it once per k-point instead of once
+    # per (atom, k-point) inside the closure below.
+    ao_kpts = eval_ao_kpts(cell, coords, kpts)
     def hcore_deriv(atm_id):
         shl0, shl1, p0, p1 = aoslices[atm_id]
         vloc_g = 1j * np.einsum('ga,g->ag', Gv, SI[atm_id]*vlocG[atm_id])
         nkpts, nao = h1.shape[0], h1.shape[2]
         hcore = np.zeros([3,nkpts,nao,nao], dtype=h1.dtype)
         for kn, kpt in enumerate(kpts):
-            ao = eval_ao_kpts(cell, coords, kpt)[0]
+            ao = ao_kpts[kn]
             for ax in range(3):
                 vloc_R = tools.ifft(vloc_g[ax], mesh).real
                 vloc = np.einsum('gi,gj,g->ij', ao.conj(), ao, vloc_R, optimize=True)
@@ -266,11 +270,11 @@ class GradientsBase(molgrad.GradientsBase):
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
-    def get_j(self, dm=None, kpts=None):
+    def get_j(self, dm=None, kpts=None, ao_cache=None):
         if kpts is None: kpts = self.kpts
         if dm is None: dm = self.base.make_rdm1()
         cpu0 = (logger.process_clock(), logger.perf_counter())
-        vj = self.base.with_df.get_j_e1(dm, kpts)
+        vj = self.base.with_df.get_j_e1(dm, kpts, ao_cache=ao_cache)
         logger.timer(self, 'vj', *cpu0)
         return vj
 

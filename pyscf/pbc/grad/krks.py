@@ -45,14 +45,24 @@ def get_veff(ks_grad, dm=None, kpts=None):
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, ks_grad.max_memory*.9-mem_now)
+
+    # Precompute the uniform-grid AOs once and reuse them across the XC and
+    # Coulomb derivative passes of this gradient (see pbc.dft.numint.AOCache).
+    # Works for any number of k-points; the cache disables itself (and the
+    # code falls back to eval_ao) when the full array exceeds max_memory.
+    from pyscf.pbc.dft.numint import AOCache
+    ao_deriv = 2 if ni._xc_type(mf.xc) in ('GGA', 'MGGA') else 1
+    ao_cache = AOCache(ni, cell, grids, ao_deriv, kpts=kpts, max_memory=max_memory)
+
     if ks_grad.grid_response:
         raise NotImplementedError
     else:
         vxc = get_vxc(ni, cell, grids, mf.xc, dm, kpts,
-                           max_memory=max_memory, verbose=ks_grad.verbose)
+                           max_memory=max_memory, verbose=ks_grad.verbose,
+                           ao_cache=ao_cache)
     t0 = logger.timer(ks_grad, 'vxc', *t0)
     if not ni.libxc.is_hybrid_xc(mf.xc):
-        vj = ks_grad.get_j(dm, kpts)
+        vj = ks_grad.get_j(dm, kpts, ao_cache=ao_cache)
         vxc += vj
     else:
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=cell.spin)
@@ -66,7 +76,7 @@ def get_veff(ks_grad, dm=None, kpts=None):
     return vxc
 
 def get_vxc(ni, cell, grids, xc_code, dms, kpts, kpts_band=None, relativity=0, hermi=1,
-            max_memory=2000, verbose=None):
+            max_memory=2000, verbose=None, ao_cache=None):
     xctype = ni._xc_type(xc_code)
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms, hermi)
     ao_loc = cell.ao_loc_nr()
@@ -75,7 +85,8 @@ def get_vxc(ni, cell, grids, xc_code, dms, kpts, kpts_band=None, relativity=0, h
     if xctype == 'LDA':
         ao_deriv = 1
         for ao_k1, ao_k2, mask, weight, coords \
-                in ni.block_loop(cell, grids, nao, ao_deriv, kpts, kpts_band, max_memory):
+                in ni.block_loop(cell, grids, nao, ao_deriv, kpts, kpts_band, max_memory,
+                                 ao_cache=ao_cache):
             ao_k1 = np.asarray(ao_k1)
             ao_k2 = np.asarray(ao_k2)
             for i in range(nset):
@@ -90,7 +101,8 @@ def get_vxc(ni, cell, grids, xc_code, dms, kpts, kpts_band=None, relativity=0, h
     elif xctype == 'GGA':
         ao_deriv = 2
         for ao_k1, ao_k2, mask, weight, coords \
-                in ni.block_loop(cell, grids, nao, ao_deriv, kpts, kpts_band, max_memory):
+                in ni.block_loop(cell, grids, nao, ao_deriv, kpts, kpts_band, max_memory,
+                                 ao_cache=ao_cache):
             ao_k1 = np.asarray(ao_k1)
             ao_k2 = np.asarray(ao_k2)
             for i in range(nset):
