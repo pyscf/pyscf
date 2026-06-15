@@ -21,7 +21,6 @@
 RHF-CCSDT(Q) for real integrals
 '''
 
-import sys
 import functools
 import numpy as np
 import ctypes
@@ -106,26 +105,26 @@ def kernel(mycc, eris=None, tamps=None, verbose=logger.NOTE):
             t3_blk[0, 0, :nocc] = t3[i, j, :nocc]
         return t3_blk
 
-    def compute_W_vvvvoo(j, k):
-        W = np.empty((nvir, nvir, nvir, nvir), dtype=t2.dtype)
-        einsum('abef,fc->abce', eris_vvvv, t2[j, k], out=W, alpha=0.5, beta=0.0)
-        einsum('acef,fb->abce', eris_vvvv, t2[k, j], out=W, alpha=0.5, beta=1.0)
-        return W
+    def compute_W_vvvvoo(W_vvvvoo_slice, j, k):
+        einsum('abef,fc->abce', eris_vvvv, t2[j, k], out=W_vvvvoo_slice, alpha=0.5, beta=0.0)
+        einsum('acef,fb->abce', eris_vvvv, t2[k, j], out=W_vvvvoo_slice, alpha=0.5, beta=1.0)
+        return W_vvvvoo_slice
 
-    def compute_W_vvoooo(i, j, k):
-        W = np.empty((nvir, nvir, nocc), dtype=t2.dtype)
-        einsum('eam,be->abm', eris_ovvo[i], t2[j, k], out=W, alpha=1.0, beta=0.0)
-        einsum('ebm,ae->abm', eris_ovvo[j], t2[i, k], out=W, alpha=1.0, beta=1.0)
-        einsum('ema,be->abm', eris_ovov[k], t2[j, i], out=W, alpha=1.0, beta=1.0)
-        einsum('emb,ae->abm', eris_ovov[k], t2[i, j], out=W, alpha=1.0, beta=1.0)
-        einsum('mn,nab->abm', eris_oooo[k, i], t2[:, j], out=W, alpha=-0.5, beta=1.0)
-        einsum('mn,nba->abm', eris_oooo[k, j], t2[:, i], out=W, alpha=-0.5, beta=1.0)
-        return W
+    def compute_W_vvoooo(W_vvoooo_slice, i, j, k):
+        einsum('eam,be->abm', eris_ovvo[i], t2[j, k], out=W_vvoooo_slice, alpha=1.0, beta=0.0)
+        einsum('ebm,ae->abm', eris_ovvo[j], t2[i, k], out=W_vvoooo_slice, alpha=1.0, beta=1.0)
+        einsum('ema,be->abm', eris_ovov[k], t2[j, i], out=W_vvoooo_slice, alpha=1.0, beta=1.0)
+        einsum('emb,ae->abm', eris_ovov[k], t2[i, j], out=W_vvoooo_slice, alpha=1.0, beta=1.0)
+        einsum('mn,nab->abm', eris_oooo[k, i], t2[:, j], out=W_vvoooo_slice, alpha=-0.5, beta=1.0)
+        einsum('mn,nba->abm', eris_oooo[k, j], t2[:, i], out=W_vvoooo_slice, alpha=-0.5, beta=1.0)
+        return W_vvoooo_slice
 
     time1 = logger.process_clock(), logger.perf_counter()
     t4_blk = np.empty((nvir,) * 4, dtype=t2.dtype)
     z4_blk = np.empty_like(t4_blk)
     t3_blk = np.empty((1,) * 2 + (nocc,) + (nvir,) * 3, dtype=t3.dtype)
+    W_vvoooo_slice = np.empty((nvir, nvir, nocc), dtype=t2.dtype)
+    W_vvvvoo_slice = np.empty((nvir, nvir, nvir, nvir), dtype=t2.dtype)
     e_q_bracket = 0.0
     e_q_paren = 0.0
     for l in range(nocc):
@@ -180,49 +179,49 @@ def kernel(mycc, eris=None, tamps=None, verbose=logger.NOTE):
                     einsum('ecd,abe->abcd', eris_ovvv[k], t3_blk[0, 0, l], out=z4_blk, alpha=1.0, beta=1.0)
 
                     # t4
-                    W_vvoooo_ijk = compute_W_vvoooo(i, j, k)
-                    W_vvoooo_ijl = compute_W_vvoooo(i, j, l)
-                    W_vvoooo_ikj = compute_W_vvoooo(i, k, j)
-                    W_vvoooo_ikl = compute_W_vvoooo(i, k, l)
-                    W_vvoooo_ilj = compute_W_vvoooo(i, l, j)
-                    W_vvoooo_ilk = compute_W_vvoooo(i, l, k)
-                    W_vvoooo_jki = compute_W_vvoooo(j, k, i)
-                    W_vvoooo_jkl = compute_W_vvoooo(j, k, l)
-                    W_vvoooo_jli = compute_W_vvoooo(j, l, i)
-                    W_vvoooo_jlk = compute_W_vvoooo(j, l, k)
-                    W_vvoooo_kli = compute_W_vvoooo(k, l, i)
-                    W_vvoooo_klj = compute_W_vvoooo(k, l, j)
-                    einsum('abm,mdc->abcd', W_vvoooo_ijk, t2[l], out=t4_blk, alpha=-1.0, beta=0.0)
-                    einsum('abm,mcd->abcd', W_vvoooo_ijl, t2[k], out=t4_blk, alpha=-1.0, beta=1.0)
-                    einsum('acm,mdb->abcd', W_vvoooo_ikj, t2[l], out=t4_blk, alpha=-1.0, beta=1.0)
-                    einsum('acm,mbd->abcd', W_vvoooo_ikl, t2[j], out=t4_blk, alpha=-1.0, beta=1.0)
-                    einsum('adm,mcb->abcd', W_vvoooo_ilj, t2[k], out=t4_blk, alpha=-1.0, beta=1.0)
-                    einsum('adm,mbc->abcd', W_vvoooo_ilk, t2[j], out=t4_blk, alpha=-1.0, beta=1.0)
-                    einsum('bcm,mda->abcd', W_vvoooo_jki, t2[l], out=t4_blk, alpha=-1.0, beta=1.0)
-                    einsum('bcm,mad->abcd', W_vvoooo_jkl, t2[i], out=t4_blk, alpha=-1.0, beta=1.0)
-                    einsum('bdm,mca->abcd', W_vvoooo_jli, t2[k], out=t4_blk, alpha=-1.0, beta=1.0)
-                    einsum('bdm,mac->abcd', W_vvoooo_jlk, t2[i], out=t4_blk, alpha=-1.0, beta=1.0)
-                    einsum('cdm,mba->abcd', W_vvoooo_kli, t2[j], out=t4_blk, alpha=-1.0, beta=1.0)
-                    einsum('cdm,mab->abcd', W_vvoooo_klj, t2[i], out=t4_blk, alpha=-1.0, beta=1.0)
+                    compute_W_vvoooo(W_vvoooo_slice, i, j, k)
+                    einsum('abm,mdc->abcd', W_vvoooo_slice, t2[l], out=t4_blk, alpha=-1.0, beta=0.0)
+                    compute_W_vvoooo(W_vvoooo_slice, i, j, l)
+                    einsum('abm,mcd->abcd', W_vvoooo_slice, t2[k], out=t4_blk, alpha=-1.0, beta=1.0)
+                    compute_W_vvoooo(W_vvoooo_slice, i, k, j)
+                    einsum('acm,mdb->abcd', W_vvoooo_slice, t2[l], out=t4_blk, alpha=-1.0, beta=1.0)
+                    compute_W_vvoooo(W_vvoooo_slice, i, k, l)
+                    einsum('acm,mbd->abcd', W_vvoooo_slice, t2[j], out=t4_blk, alpha=-1.0, beta=1.0)
+                    compute_W_vvoooo(W_vvoooo_slice, i, l, j)
+                    einsum('adm,mcb->abcd', W_vvoooo_slice, t2[k], out=t4_blk, alpha=-1.0, beta=1.0)
+                    compute_W_vvoooo(W_vvoooo_slice, i, l, k)
+                    einsum('adm,mbc->abcd', W_vvoooo_slice, t2[j], out=t4_blk, alpha=-1.0, beta=1.0)
+                    compute_W_vvoooo(W_vvoooo_slice, j, k, i)
+                    einsum('bcm,mda->abcd', W_vvoooo_slice, t2[l], out=t4_blk, alpha=-1.0, beta=1.0)
+                    compute_W_vvoooo(W_vvoooo_slice, j, k, l)
+                    einsum('bcm,mad->abcd', W_vvoooo_slice, t2[i], out=t4_blk, alpha=-1.0, beta=1.0)
+                    compute_W_vvoooo(W_vvoooo_slice, j, l, i)
+                    einsum('bdm,mca->abcd', W_vvoooo_slice, t2[k], out=t4_blk, alpha=-1.0, beta=1.0)
+                    compute_W_vvoooo(W_vvoooo_slice, j, l, k)
+                    einsum('bdm,mac->abcd', W_vvoooo_slice, t2[i], out=t4_blk, alpha=-1.0, beta=1.0)
+                    compute_W_vvoooo(W_vvoooo_slice, k, l, i)
+                    einsum('cdm,mba->abcd', W_vvoooo_slice, t2[j], out=t4_blk, alpha=-1.0, beta=1.0)
+                    compute_W_vvoooo(W_vvoooo_slice, k, l, j)
+                    einsum('cdm,mab->abcd', W_vvoooo_slice, t2[i], out=t4_blk, alpha=-1.0, beta=1.0)
 
-                    W_vvvvoo_jk = compute_W_vvvvoo(j, k)
-                    W_vvvvoo_jl = compute_W_vvvvoo(j, l)
-                    W_vvvvoo_kl = compute_W_vvvvoo(k, l)
-                    W_vvvvoo_ik = compute_W_vvvvoo(i, k)
-                    W_vvvvoo_il = compute_W_vvvvoo(i, l)
-                    W_vvvvoo_ij = compute_W_vvvvoo(i, j)
-                    einsum('abce,ed->abcd', W_vvvvoo_jk, t2[i, l], out=t4_blk, alpha=1.0, beta=1.0)
-                    einsum('dbce,ea->abcd', W_vvvvoo_jk, t2[l, i], out=t4_blk, alpha=1.0, beta=1.0)
-                    einsum('abde,ec->abcd', W_vvvvoo_jl, t2[i, k], out=t4_blk, alpha=1.0, beta=1.0)
-                    einsum('cbde,ea->abcd', W_vvvvoo_jl, t2[k, i], out=t4_blk, alpha=1.0, beta=1.0)
-                    einsum('acde,eb->abcd', W_vvvvoo_kl, t2[i, j], out=t4_blk, alpha=1.0, beta=1.0)
-                    einsum('bcde,ea->abcd', W_vvvvoo_kl, t2[j, i], out=t4_blk, alpha=1.0, beta=1.0)
-                    einsum('bace,ed->abcd', W_vvvvoo_ik, t2[j, l], out=t4_blk, alpha=1.0, beta=1.0)
-                    einsum('dace,eb->abcd', W_vvvvoo_ik, t2[l, j], out=t4_blk, alpha=1.0, beta=1.0)
-                    einsum('bade,ec->abcd', W_vvvvoo_il, t2[j, k], out=t4_blk, alpha=1.0, beta=1.0)
-                    einsum('cade,eb->abcd', W_vvvvoo_il, t2[k, j], out=t4_blk, alpha=1.0, beta=1.0)
-                    einsum('cabe,ed->abcd', W_vvvvoo_ij, t2[k, l], out=t4_blk, alpha=1.0, beta=1.0)
-                    einsum('dabe,ec->abcd', W_vvvvoo_ij, t2[l, k], out=t4_blk, alpha=1.0, beta=1.0)
+                    compute_W_vvvvoo(W_vvvvoo_slice, j, k)
+                    einsum('abce,ed->abcd', W_vvvvoo_slice, t2[i, l], out=t4_blk, alpha=1.0, beta=1.0)
+                    einsum('dbce,ea->abcd', W_vvvvoo_slice, t2[l, i], out=t4_blk, alpha=1.0, beta=1.0)
+                    compute_W_vvvvoo(W_vvvvoo_slice, j, l)
+                    einsum('abde,ec->abcd', W_vvvvoo_slice, t2[i, k], out=t4_blk, alpha=1.0, beta=1.0)
+                    einsum('cbde,ea->abcd', W_vvvvoo_slice, t2[k, i], out=t4_blk, alpha=1.0, beta=1.0)
+                    compute_W_vvvvoo(W_vvvvoo_slice, k, l)
+                    einsum('acde,eb->abcd', W_vvvvoo_slice, t2[i, j], out=t4_blk, alpha=1.0, beta=1.0)
+                    einsum('bcde,ea->abcd', W_vvvvoo_slice, t2[j, i], out=t4_blk, alpha=1.0, beta=1.0)
+                    compute_W_vvvvoo(W_vvvvoo_slice, i, k)
+                    einsum('bace,ed->abcd', W_vvvvoo_slice, t2[j, l], out=t4_blk, alpha=1.0, beta=1.0)
+                    einsum('dace,eb->abcd', W_vvvvoo_slice, t2[l, j], out=t4_blk, alpha=1.0, beta=1.0)
+                    compute_W_vvvvoo(W_vvvvoo_slice, i, l)
+                    einsum('bade,ec->abcd', W_vvvvoo_slice, t2[j, k], out=t4_blk, alpha=1.0, beta=1.0)
+                    einsum('cade,eb->abcd', W_vvvvoo_slice, t2[k, j], out=t4_blk, alpha=1.0, beta=1.0)
+                    compute_W_vvvvoo(W_vvvvoo_slice, i, j)
+                    einsum('cabe,ed->abcd', W_vvvvoo_slice, t2[k, l], out=t4_blk, alpha=1.0, beta=1.0)
+                    einsum('dabe,ec->abcd', W_vvvvoo_slice, t2[l, k], out=t4_blk, alpha=1.0, beta=1.0)
 
                     t4_add_(t4_blk, z4_blk, 1, nvir)
                     eijkl_division_single_(t4_blk, e_occ, e_vir, i, j, k, l, nvir)
