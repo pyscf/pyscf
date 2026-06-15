@@ -756,7 +756,7 @@ def compute_r3_tri(mycc, imds, t2, t3):
                 einsum('acde,dbe->abc', W_vvvv, t3[index], out=r3[index], alpha=1.0, beta=1.0)
                 einsum('bcde,ade->abc', W_vvvv, t3[index], out=r3[index], alpha=1.0, beta=1.0)
                 index += 1
-        time2 = log.timer_debug1('t3: iter: W_vvvv %3d:'%k0, *time2)
+        time2 = log.timer_debug1('t3: iter: W_vvvv %3d:'%i0, *time2)
     W_vvvv = imds.W_vvvv = None
     time1 = log.timer_debug1('t3: W_vvvv * t3', *time1)
     return r3
