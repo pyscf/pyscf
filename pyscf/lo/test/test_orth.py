@@ -117,7 +117,7 @@ class KnownValues(unittest.TestCase):
                     verbose=0)
         c0 = orth.pre_orth_ao(mol, method='ano')
         self.assertAlmostEqual(numpy.linalg.norm(c0), 5.9621174285790959, 9)
-    
+
     def test_pre_orth_ao_with_coreless_ecp(self):
         mol = gto.M(atom = '''
             ghost-Cu2  2.33770     1.38257    -2.24106
