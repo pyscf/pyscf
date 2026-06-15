@@ -43,23 +43,26 @@ def auto_setup (xyz='Li 0 0 0\nH 1.5 0 0'):
     mol_sym = gto.M (atom = xyz, basis = 'sto3g', symmetry=True,
                      output = '/dev/null', verbose = 0)
     mf_nosym = scf.RHF (mol_nosym).run ()
-    mc_nosym = mcscf.CASSCF (mf_nosym, 5, 2).run ()
+    mc_nosym = mcscf.CASSCF (mf_nosym, 5, 2)#.run ()
     mf_sym = scf.RHF (mol_sym).run ()
     mc_sym = mcscf.CASSCF (mf_sym, 5, 2).run ()
+    mc_nosym.run (mo_coeff=mc_sym.mo_coeff)
     mcp_ss_nosym = mcpdft.CASSCF (mc_nosym, 'ftLDA,VWN3', 5, 2,
                                   grids_level=1).run ()
     mcp_ss_sym = mcpdft.CASSCF (mc_sym, 'ftLDA,VWN3', 5, 2,
                                 grids_level=1).run ()
-    mcp_sa_0 = mcp_ss_nosym.state_average ([1.0/5,]*5).run ()
+    mcp_sa_0 = mcp_ss_nosym.state_average ([1.0/5,]*5)#.run ()
     solver_S = fci.solver (mol_nosym, singlet=True).set (spin=0, nroots=2)
     solver_T = fci.solver (mol_nosym, singlet=False).set (spin=2, nroots=3)
     mcp_sa_1 = mcp_ss_nosym.state_average_mix (
-        [solver_S,solver_T], [1.0/5,]*5).set(ci=None).run ()
+        [solver_S,solver_T], [1.0/5,]*5).set(ci=None)#.run ()
     solver_A1 = fci.solver (mol_sym).set (wfnsym='A1', nroots=3)
     solver_E1x = fci.solver (mol_sym).set (wfnsym='E1x', nroots=1, spin=2)
     solver_E1y = fci.solver (mol_sym).set (wfnsym='E1y', nroots=1, spin=2)
     mcp_sa_2 = mcp_ss_sym.state_average_mix (
         [solver_A1,solver_E1x,solver_E1y], [1.0/5,]*5).set(ci=None).run ()
+    mcp_sa_0.run (mo_coeff=mcp_sa_2.mo_coeff)
+    mcp_sa_1.run (mo_coeff=mcp_sa_2.mo_coeff)
     mcp = [[mcp_ss_nosym, mcp_ss_sym], [mcp_sa_0, mcp_sa_1, mcp_sa_2]]
     nosym = [mol_nosym, mf_nosym, mc_nosym]
     sym = [mol_sym, mf_sym, mc_sym]

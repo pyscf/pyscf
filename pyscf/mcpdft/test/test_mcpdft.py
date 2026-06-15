@@ -46,9 +46,12 @@ def auto_setup(xyz="Li 0 0 0\nH 1.5 0 0", fnal="tPBE"):
         atom=xyz, basis="sto3g", symmetry=True, verbose=0, output="/dev/null"
     )
     mf_nosym = scf.RHF(mol_nosym).run(conv_tol=1e-12)
-    mc_nosym = mcscf.CASSCF(mf_nosym, 5, 2).run(conv_tol=1e-8)
+    mc_nosym = mcscf.CASSCF(mf_nosym, 5, 2)#.run(conv_tol=1e-8)
     mf_sym = scf.RHF(mol_sym).run()
     mc_sym = mcscf.CASSCF(mf_sym, 5, 2).run(conv_tol=1e-8)
+    mc_nosym.run (mo_coeff=mc_sym.mo_coeff,
+                  ci=mc_sym.ci,
+                  conv_tol=1e-8)
     mcp_ss_nosym = mcpdft.CASSCF(mc_nosym, fnal, 5, 2).run(conv_tol=1e-8)
     mcp_ss_sym = (
         mcpdft.CASSCF(mc_sym, fnal, 5, 2)
@@ -60,7 +63,7 @@ def auto_setup(xyz="Li 0 0 0\nH 1.5 0 0", fnal="tPBE"):
             1.0 / 5,
         ]
         * 5
-    ).run(conv_tol=1e-8)
+    )#.run(conv_tol=1e-8)
     solver_S = fci.solver(mol_nosym, singlet=True).set(spin=0, nroots=2)
     solver_T = fci.solver(mol_nosym, singlet=False).set(spin=2, nroots=3)
     mcp_sa_1 = (
@@ -72,7 +75,7 @@ def auto_setup(xyz="Li 0 0 0\nH 1.5 0 0", fnal="tPBE"):
             * 5,
         )
         .set(ci=None)
-        .run(conv_tol=1e-8)
+        #.run(conv_tol=1e-8)
     )
     solver_A1 = fci.solver(mol_sym).set(wfnsym="A1", nroots=3)
     solver_E1x = fci.solver(mol_sym).set(wfnsym="E1x", nroots=1, spin=2)
@@ -88,6 +91,11 @@ def auto_setup(xyz="Li 0 0 0\nH 1.5 0 0", fnal="tPBE"):
         .set(ci=None, chkfile=lib.NamedTemporaryFile().name, chk_ci=True)
         .run(conv_tol=1e-8)
     )
+    mcp_sa_1.run (mo_coeff=mcp_sa_2.mo_coeff,
+                  conv_tol=1e-8)
+    ci = [mcp_sa_2.ci[i] for i in np.argsort (mcp_sa_2.e_mcscf, stable=True)]
+    mcp_sa_0.run (mo_coeff=mcp_sa_2.mo_coeff,
+                  conv_tol=1e-8)
     mcp = [[mcp_ss_nosym, mcp_ss_sym], [mcp_sa_0, mcp_sa_1, mcp_sa_2]]
     nosym = [mol_nosym, mf_nosym, mc_nosym]
     sym = [mol_sym, mf_sym, mc_sym]
