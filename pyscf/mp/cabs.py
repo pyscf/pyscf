@@ -24,7 +24,8 @@ Refs:
 import numpy
 import scipy.linalg
 
-from pyscf import gto
+from pyscf import gto, scf
+from pyscf.data import elements
 from pyscf.lib import logger
 from pyscf.scf import hf
 
@@ -73,19 +74,93 @@ def _as_cabs_auxmol(mol, auxmol_or_basis):
     return make_cabs_auxmol(mol, auxmol_or_basis)
 
 
-def _cabs_singles_from_fock(fock, cabs_coeff, mo_coeff, mo_occ, mo_energy):
-    occidx = mo_occ > 0
+def _frozen_mask(mol, mo_occ, frozen):
+    mask = numpy.zeros(mo_occ.size, dtype=bool)
+    if frozen is None:
+        return mask
+
+    if isinstance(frozen, str):
+        scheme = frozen.lower()
+        if scheme == 'chemcore':
+            frozen = elements.chemcore(mol)
+        elif scheme == 'none':
+            frozen = 0
+        else:
+            raise ValueError(f'Unsupported CABS frozen orbital scheme {frozen!r}')
+
+    if isinstance(frozen, (bool, numpy.bool_)):
+        raise TypeError('CABS frozen orbitals must be specified as an int, sequence, tuple, or named scheme')
+    if isinstance(frozen, (int, numpy.integer)):
+        mask[:frozen] = True
+    else:
+        mask[numpy.asarray(frozen, dtype=int)] = True
+    return mask
+
+
+def _active_masks(mol, mo_occ, frozen):
+    frozen_mask = _frozen_mask(mol, mo_occ, frozen)
+    occidx = (mo_occ > 0) & ~frozen_mask
+    viridx = (mo_occ == 0) & ~frozen_mask
+    return occidx, viridx
+
+
+def _spin_masks(mol, spin_occ, frozen):
+    if isinstance(frozen, (tuple, list)) and len(frozen) == 2 and not isinstance(frozen[0], (int, numpy.integer)):
+        return tuple(_active_masks(mol, occ, frz) for occ, frz in zip(spin_occ, frozen))
+    return tuple(_active_masks(mol, occ, frozen) for occ in spin_occ)
+
+
+def _embed_dm(dm, nao, nca):
+    dm = numpy.asarray(dm)
+    dm_ext = numpy.zeros(dm.shape[:-2] + (nca, nca), dtype=dm.dtype)
+    dm_ext[..., :nao, :nao] = dm
+    return dm_ext
+
+
+def _get_jk(mf, cabs_mol, dm):
+    if getattr(mf, 'with_df', None) is not None:
+        dfmf = scf.RHF(cabs_mol).density_fit(auxbasis=mf.with_df.auxbasis)
+        dfmf.with_df.max_memory = mf.with_df.max_memory
+        dfmf.with_df.stdout = mf.with_df.stdout
+        dfmf.with_df.verbose = mf.with_df.verbose
+        return dfmf.get_jk(cabs_mol, dm, hermi=1)
+    return hf.get_jk(cabs_mol, dm, hermi=1)
+
+
+def _unrestricted_focks(mf, cabs_mol, dm):
+    vj, vk = _get_jk(mf, cabs_mol, dm)
+    hcore = mf.get_hcore(cabs_mol)
+    vj_tot = vj[0] + vj[1]
+    return hcore + vj_tot - vk[0], hcore + vj_tot - vk[1]
+
+
+def _extended_projector(mo_coeff, cabs_coeff):
+    nao, nmo = mo_coeff.shape
+    nca = cabs_coeff.shape[0]
+    pcoeff = numpy.zeros((nca, nmo + cabs_coeff.shape[1]))
+    pcoeff[:nao, :nmo] = mo_coeff
+    pcoeff[:, nmo:] = cabs_coeff
+    return pcoeff
+
+
+def _cabs_singles_from_fock(fock, pcoeff, mo_occ, mo_energy, occidx, viridx):
+    nmo = mo_occ.size
     if not numpy.any(occidx):
         return 0.0
 
-    fcabs = numpy.dot(fock, cabs_coeff)
-    e_cabs, u_cabs = scipy.linalg.eigh(numpy.dot(cabs_coeff.T, fcabs))
-    fia = numpy.dot(numpy.dot(mo_coeff[:, occidx].T, fcabs[: mo_coeff.shape[0]]), u_cabs)
+    # Diagonalize the external space formed by orbital-basis virtual MOs and CABS.
+    # The MO-virtual block is zero for canonical RHF/UHF, but gives the ROHF/non-canonical singles contribution,
+    # and MolPro separates those contributions.
+    extidx = numpy.r_[numpy.where(viridx)[0], numpy.arange(nmo, pcoeff.shape[1])]
+
+    fock_p = pcoeff.T.dot(fock).dot(pcoeff)
+    e_cabs, u_cabs = scipy.linalg.eigh(fock_p[numpy.ix_(extidx, extidx)])
+    fia = fock_p[numpy.ix_(occidx, extidx)].dot(u_cabs)
     denom = mo_energy[occidx, None] - e_cabs
     return numpy.einsum('i,ia,ia,ia->', mo_occ[occidx], fia, fia, 1.0 / denom)
 
 
-def energy_singles(mf, auxmol_or_basis, lindep=1e-8):
+def energy_singles(mf, auxmol_or_basis, frozen='chemcore', lindep=1e-8):
     r"""CABS singles correction to the Hartree-Fock reference energy.
 
     For a closed-shell reference this evaluates
@@ -94,21 +169,53 @@ def energy_singles(mf, auxmol_or_basis, lindep=1e-8):
         E_\mathrm{CABS} = 2 \sum_{iA}
             \frac{|F_{iA}|^2}{\epsilon_i - \epsilon_A}
 
-    where ``A`` denotes canonical orbitals in the complementary auxiliary
-    basis space. For UHF references the same expression is evaluated for the
-    alpha and beta Fock matrices with spin occupations as prefactors.
+    where ``A`` denotes canonical orbitals in the external space formed by
+    the virtual MOs of the orbital basis and CABS. For UHF and ROHF references
+    the same expression is evaluated for the alpha and beta Fock matrices with
+    spin occupations as prefactors.
 
     Args:
         mf : SCF object
             Converged molecular HF object.
         auxmol_or_basis : Mole, str, list, tuple, or dict
             CABS/OptRI basis as a Mole object or in the usual Mole.basis format.
-            If a normal charged Mole is supplied on the same centers as ``mf``,
-            it is converted to ghost centers to avoid doubled nuclei.
+            If a normal charged Mole is supplied on the same centers as ``mf``.
+        frozen : None, int, sequence, tuple, or str
+            Frozen orbital selection. ``'chemcore'`` (default) freezes the chemical
+            core. ``None`` or ``0`` includes all orbitals. An integer freezes
+            the lowest orbitals and a sequence freezes explicit MO indices. For
+            UHF, a flat sequence is applied to both spins; a nested two-item
+            sequence gives separate alpha and beta frozen orbitals.
         lindep : float
             Linear-dependence threshold in the CABS projection.
     """
     mol = mf.mol
+    mo_coeff = mf.mo_coeff
+    mo_occ = mf.mo_occ
+    mo_energy = mf.mo_energy
+    is_uhf = isinstance(mo_coeff, (tuple, list)) or getattr(mo_coeff, 'ndim', 0) == 3
+    is_rohf = not is_uhf and numpy.any(mo_occ == 1)
+
+    if not is_uhf:
+        valid_occ = (mo_occ == 0) | (mo_occ == 2)
+        if is_rohf:
+            valid_occ |= mo_occ == 1
+        if numpy.any(~valid_occ):
+            raise NotImplementedError('CABS singles for general fractional-occupation references is not implemented.')
+
+    if is_rohf:
+        spin_coeff = (mo_coeff, mo_coeff)
+        spin_occ = (mo_occ > 0, mo_occ == 2)
+        spin_energy = (mo_energy.mo_ea, mo_energy.mo_eb)
+        spin_masks = _spin_masks(mol, spin_occ, frozen)
+    elif is_uhf:
+        spin_coeff = mo_coeff
+        spin_occ = mo_occ
+        spin_energy = mo_energy
+        spin_masks = _spin_masks(mol, spin_occ, frozen)
+    else:
+        occidx, viridx = _active_masks(mol, mo_occ, frozen)
+
     auxmol = _as_cabs_auxmol(mol, auxmol_or_basis)
     cabs_mol, cabs_coeff = find_cabs(mol, auxmol, lindep)
     if cabs_coeff.shape[1] == 0:
@@ -117,32 +224,19 @@ def energy_singles(mf, auxmol_or_basis, lindep=1e-8):
     nao = mol.nao_nr()
     nca = cabs_mol.nao_nr()
 
-    mo_coeff = mf.mo_coeff
-    mo_occ = mf.mo_occ
-    mo_energy = mf.mo_energy
-    is_uhf = isinstance(mo_coeff, (tuple, list)) or getattr(mo_coeff, 'ndim', 0) == 3
-    if is_uhf:
-        moa, mob = mo_coeff
-        dma, dmb = mf.make_rdm1()
-        dm = numpy.zeros((2, nca, nca))
-        dm[0, :nao, :nao] = dma
-        dm[1, :nao, :nao] = dmb
-        vj, vk = hf.get_jk(cabs_mol, dm, hermi=1)
-        hcore = mf.get_hcore(cabs_mol)
-        focka = hcore + vj[0] + vj[1] - vk[0]
-        fockb = hcore + vj[0] + vj[1] - vk[1]
-        e_cabs = _cabs_singles_from_fock(focka, cabs_coeff, moa, mo_occ[0], mo_energy[0])
-        e_cabs += _cabs_singles_from_fock(fockb, cabs_coeff, mob, mo_occ[1], mo_energy[1])
+    if is_rohf or is_uhf:
+        dm = _embed_dm(mf.make_rdm1(), nao, nca)
+        focks = _unrestricted_focks(mf, cabs_mol, dm)
+        e_cabs = 0.0
+        for fock, coeff, occ, energy, (occidx, viridx) in zip(focks, spin_coeff, spin_occ, spin_energy, spin_masks):
+            pcoeff = _extended_projector(coeff, cabs_coeff)
+            e_cabs += _cabs_singles_from_fock(fock, pcoeff, occ, energy, occidx, viridx)
     else:
-        if numpy.any((mo_occ != 0) & (mo_occ != 2)):
-            raise NotImplementedError(
-                'CABS singles for ROHF/general open-shell references is not implemented. Use a UHF reference.'
-            )
-        dm = numpy.zeros((nca, nca))
-        dm[:nao, :nao] = mf.make_rdm1()
-        vj, vk = hf.get_jk(cabs_mol, dm, hermi=1)
+        pcoeff = _extended_projector(mo_coeff, cabs_coeff)
+        dm = _embed_dm(mf.make_rdm1(), nao, nca)
+        vj, vk = _get_jk(mf, cabs_mol, dm)
         fock = mf.get_hcore(cabs_mol) + vj - vk * 0.5
-        e_cabs = _cabs_singles_from_fock(fock, cabs_coeff, mo_coeff, mo_occ, mo_energy)
+        e_cabs = _cabs_singles_from_fock(fock, pcoeff, mo_occ, mo_energy, occidx, viridx)
 
     logger.info(mf, 'CABS singles correction = %.15g', e_cabs)
     return e_cabs
