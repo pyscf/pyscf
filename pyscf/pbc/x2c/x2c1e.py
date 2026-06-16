@@ -107,6 +107,15 @@ class X2C1E_GSCF(x2c._X2C_SCF):
         else:
             return super(x2c._X2C_SCF).get_hcore(cell, kpts)
 
+    def undo_x2c(self):
+        obj = lib.view(self, lib.drop_class(self.__class__, X2C1E_GSCF))
+        del obj.with_x2c
+        return obj
+
+    def to_gpu(self):
+        obj = self.undo_x2c().to_gpu().x2c1e()
+        return lib.to_gpu(self, obj)
+
 class SpinOrbitalX2C1EHelper(sfx2c1e.PBCX2CHelper):
     def get_hcore(self, cell=None, kpts=None):
         if cell is None:
@@ -125,7 +134,9 @@ class SpinOrbitalX2C1EHelper(sfx2c1e.PBCX2CHelper):
         c = lib.param.LIGHT_SPEED
 
         if 'ATOM' in self.approx.upper():
-            raise NotImplementedError
+            raise NotImplementedError(
+                'Atomic X is generated in molecular orbitals without PBC. '
+                'It is incompatible with crystal orbital bases.')
         else:
             w_sr = sfx2c1e.get_pnucp(with_df, kpts_lst)
             w_soc = get_pbc_pvxp(with_df, kpts_lst)
