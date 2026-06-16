@@ -26,7 +26,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf, rohf, uhf, ghf, dhf
 
-def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
+def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, dm0=None,
                       singlet=None, hermi=0, max_memory=None, with_nlc=True):
     '''Generate a function to compute the product of RHF response function and
     RHF density matrices.
@@ -40,8 +40,9 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
     '''
     assert isinstance(mf, hf.RHF) and not isinstance(mf, (uhf.UHF, rohf.ROHF))
 
-    if mo_coeff is None: mo_coeff = mf.mo_coeff
-    if mo_occ is None: mo_occ = mf.mo_occ
+    if dm0 is None:
+        if mo_coeff is None: mo_coeff = mf.mo_coeff
+        if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
     if isinstance(mf, hf.KohnShamDFT):
         ni = mf._numint
@@ -53,9 +54,12 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
             spin = 0
         else:
             spin = 1
-        rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
-                                            mo_coeff, mo_occ, spin)
-        dm0 = None
+        if mo_coeff is not None and mo_occ is not None:
+            rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
+                                                mo_coeff, mo_occ, spin)
+        else:
+            rho0, vxc, fxc = ni.cache_xc_kernel1(mol, mf.grids, mf.xc,
+                                                 dm0, spin)
 
         if max_memory is None:
             mem_now = lib.current_memory()[0]
@@ -74,8 +78,11 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     v1 = ni.nr_rks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                        rho0, vxc, fxc, max_memory=max_memory)
                     if with_nlc and mf.do_nlc():
-                        from pyscf.hessian.rks import get_vnlc_resp # Cannot import at top due to circular dependency
-                        v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1, max_memory)
+                        from pyscf.hessian.rks import get_vnlc_resp, get_vnlc_resp1 # Cannot import at top due to circular dependency
+                        if mo_coeff is not None and mo_occ is not None:
+                            v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1, max_memory)
+                        else:
+                            v1 += get_vnlc_resp1(mf, mol, dm0, dm1, max_memory)
                 if hybrid:
                     if omega == 0:
                         vj, vk = mf.get_jk(mol, dm1, hermi)
@@ -110,8 +117,11 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     v1 = ni.nr_rks_fxc_st(mol, mf.grids, mf.xc, dm0, dm1, hermi, True,
                                           rho0, vxc, fxc, max_memory=max_memory)
                     if with_nlc and mf.do_nlc():
-                        from pyscf.hessian.rks import get_vnlc_resp # Cannot import at top due to circular dependency
-                        v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1, max_memory)
+                        from pyscf.hessian.rks import get_vnlc_resp, get_vnlc_resp1 # Cannot import at top due to circular dependency
+                        if mo_coeff is not None and mo_occ is not None:
+                            v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1, max_memory)
+                        else:
+                            v1 += get_vnlc_resp1(mf, mol, dm0, dm1, max_memory)
                 if hybrid:
                     if omega == 0:
                         vj, vk = mf.get_jk(mol, dm1, hermi)
@@ -171,14 +181,15 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
     return vind
 
 
-def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
+def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None, dm0=None,
                       with_j=True, hermi=0, max_memory=None, with_nlc=True):
     '''Generate a function to compute the product of UHF response function and
     UHF density matrices.
     '''
     assert isinstance(mf, (uhf.UHF, rohf.ROHF))
-    if mo_coeff is None: mo_coeff = mf.mo_coeff
-    if mo_occ is None: mo_occ = mf.mo_occ
+    if dm0 is None:
+        if mo_coeff is None: mo_coeff = mf.mo_coeff
+        if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
     if isinstance(mf, hf.KohnShamDFT):
         ni = mf._numint
@@ -186,9 +197,12 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
         hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
-        rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
-                                            mo_coeff, mo_occ, 1)
-        dm0 = None
+        if mo_coeff is not None and mo_occ is not None:
+            rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
+                                                mo_coeff, mo_occ, 1)
+        else:
+            rho0, vxc, fxc = ni.cache_xc_kernel1(mol, mf.grids, mf.xc,
+                                                 dm0, 1)
 
         if max_memory is None:
             mem_now = lib.current_memory()[0]
@@ -204,8 +218,11 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
                 v1 = ni.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                    rho0, vxc, fxc, max_memory=max_memory)
                 if with_nlc and mf.do_nlc():
-                    from pyscf.hessian.rks import get_vnlc_resp # Cannot import at top due to circular dependency
-                    v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1[0] + dm1[1], max_memory)
+                    from pyscf.hessian.rks import get_vnlc_resp, get_vnlc_resp1 # Cannot import at top due to circular dependency
+                    if mo_coeff is not None and mo_occ is not None:
+                        v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1, max_memory)
+                    else:
+                        v1 += get_vnlc_resp1(mf, mol, dm0[0] + dm0[1], dm1[0] + dm1[1], max_memory)
             if not hybrid:
                 if with_j:
                     vj = mf.get_j(mol, dm1, hermi=hermi)
