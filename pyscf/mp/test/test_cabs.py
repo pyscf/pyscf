@@ -68,7 +68,13 @@ class KnownValues(unittest.TestCase):
         mol.build()
         mf = scf.RHF(mol).density_fit(auxbasis='cc-pvdz-jkfit').run()
         e = cabs.energy_singles(mf, 'cc-pvdz-jkfit')
-        self.assertAlmostEqual(e, -0.03330486489465237, 9)
+        # MolPro: -0.033551214
+        self.assertAlmostEqual(e, -0.033551214448, 9)
+        e = cabs.energy_singles(mf, 'cc-pvdz-jkfit', frozen=[0])
+        self.assertAlmostEqual(e, -0.033551214448, 9)
+        e = cabs.energy_singles(mf, 'cc-pvdz-jkfit', frozen=0)
+        # MRCC:   -0.033749160781
+        self.assertAlmostEqual(e, -0.033749161358, 9)
 
     def test_uhf_cabs_singles(self):
         mol = gto.Mole(atom='''
@@ -78,7 +84,41 @@ class KnownValues(unittest.TestCase):
         mol.build()
         mf = scf.UHF(mol).density_fit(auxbasis='cc-pvdz-jkfit').run()
         e = cabs.energy_singles(mf, 'cc-pvdz-jkfit')
-        self.assertAlmostEqual(e, -0.02277698312272855, 9)
+        # no MolPro, it has only ROHF-MP2
+        self.assertAlmostEqual(e, -0.022958881659, 9)
+        e = cabs.energy_singles(mf, 'cc-pvdz-jkfit', frozen=([0], [0]))
+        self.assertAlmostEqual(e, -0.022958881659, 9)
+        e = cabs.energy_singles(mf, 'cc-pvdz-jkfit', frozen=0)
+        # MRCC:   -0.023166900284
+        self.assertAlmostEqual(e, -0.023166901553, 9)
+
+    def test_rohf_cabs_singles(self):
+        mol = gto.Mole(atom='''
+            H   0.000000000   0.000000000   0.457870600
+            O   0.000000000   0.000000000  -0.457870600
+        ''', basis='cc-pvdz', spin=1, verbose=0)
+        mol.build()
+        mf = scf.ROHF(mol).density_fit(auxbasis='cc-pvdz-jkfit').run()
+        e = cabs.energy_singles(mf, 'cc-pvdz-jkfit')
+        # MolPro:
+        #                                       TOTAL          ALPHA          BETA
+        # Singles Contributions MO        -0.002681874   -0.001339551   -0.001342323
+        # Singles Contributions CABS      -0.022664571   -0.013326055   -0.009338516
+        # Pure DF-RHF relaxation          -0.022020485
+        #
+        # One has to sum MO + CABS contributions:
+        # -0.002681874 + -0.022664571 = -0.025346445
+        self.assertAlmostEqual(e, -0.025343529823, 9)
+        e = cabs.energy_singles(mf, 'cc-pvdz-jkfit', frozen=([0], [0]))
+        self.assertAlmostEqual(e, -0.025343529823, 9)
+        e = cabs.energy_singles(mf, 'cc-pvdz-jkfit', frozen=0)
+        # MolPro:
+        #                                       TOTAL          ALPHA          BETA
+        # Singles Contributions MO        -0.002709569   -0.001352954   -0.001356615
+        # Singles Contributions CABS      -0.022873615   -0.013438077   -0.009435538
+        # Pure DF-RHF relaxation          -0.022198754
+        # Sum: -0.025583184
+        self.assertAlmostEqual(e, -0.025580122540, 9)
 
 
 if __name__ == "__main__":
