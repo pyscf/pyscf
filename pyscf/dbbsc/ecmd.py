@@ -577,6 +577,7 @@ def _ecmd_from_options(method, options):
 
 def kernel(
     method,
+    *,
     aux_basis=None,
     functional='pbe',
     frozen=None,
@@ -700,6 +701,7 @@ class ECMD(lib.StreamObject):
     def __init__(
         self,
         method,
+        *,
         aux_basis=None,
         functional='pbe',
         frozen=None,
@@ -750,12 +752,13 @@ class ECMD(lib.StreamObject):
 
     def kernel(
         self,
+        *,
         aux_basis=None,
         functional=None,
         frozen=None,
         grids=None,
         ontop_model=None,
-        max_memory=2000,
+        max_memory=None,
         verbose=None,
     ):
         """Compute the DBBSC ECMD correction and save it in ``self.e_dbbsc``.
