@@ -42,7 +42,7 @@ from pyscf.pbc.cc.kccsd_uhf import get_nocc, get_nmo, get_frozen_mask
 from pyscf.gw.utils.ac_grid import _get_scaled_legendre_roots
 from pyscf.pbc.gw.kugw_ac import get_rho_response, get_rho_response_metal, get_rho_response_head, \
     get_rho_response_wing, get_qij
-from pyscf.pbc.gw.krpa import KRPA, rho_accum_inner, get_rpa_ecorr_w, get_kconserv_ria_efficient
+from pyscf.pbc.gw.krpa import KRPA, rho_accum_inner, rho_wing_accum_inner, get_rpa_ecorr_w, get_kconserv_ria_efficient
 
 
 def kernel(rpa, mo_energy, mo_coeff, nw=None, with_e_hf=None):
@@ -94,12 +94,9 @@ def kernel(rpa, mo_energy, mo_coeff, nw=None, with_e_hf=None):
 
     is_metal = hasattr(rpa._scf, 'sigma')
 
-    # Turn off FC for metals and outcore
+    # Turn off FC for metals
     if is_metal and rpa.fc:
         logger.warn(rpa, 'FC not available for metals - setting rpa.fc to False')
-        rpa.fc = False
-    if rpa.fc and rpa.outcore:
-        logger.warn(rpa, 'FC not available for outcore - setting rpa.fc to False')
         rpa.fc = False
 
     # Grids for integration on imaginary axis
@@ -323,6 +320,7 @@ def get_rpa_ecorr_outcore(rpa, freqs, wts):
 
     for kL in range(nkpts):
         Pi = None
+        Pi_P0 = None
         kidx = np.zeros((nkpts), dtype=np.int64)
         kidx_r = np.zeros((nkpts), dtype=np.int64)
         for s in range(2):
@@ -357,12 +355,38 @@ def get_rpa_ecorr_outcore(rpa, freqs, wts):
                     Lij_slice = Lij_slice.reshape(naux, norb_this_iter, rpa.nmo[s] - rpa.nocc[s])
                     if Pi is None:
                         Pi = np.zeros((nw, naux, naux), dtype=np.complex128)
+                        if kL == 0 and rpa.fc:
+                            Pi_P0 = np.zeros((nq_pts, nw, naux), dtype=np.complex128)
                     eia = mo_energy[s, i][orb_start:orb_end, None] - mo_energy[s, j][None, rpa.nocc[s] :]
                     for w in range(nw):
                         rho_accum_inner(Pi[w], eia, freqs[w], Lij_slice, alpha=2.0 / nkpts)
+                        if kL == 0 and rpa.fc:
+                            for iq in range(nq_pts):
+                                rho_wing_accum_inner(
+                                    Pi_P0[iq, w],
+                                    eia,
+                                    freqs[w],
+                                    Lij_slice,
+                                    (qij_a if s == 0 else qij_b)[iq, i, orb_start:orb_end],
+                                    alpha=2.0 / nkpts,
+                                )
 
         for w in range(nw):
-            e_corr += get_rpa_ecorr_w(Pi[w], wts[w])
+            if kL == 0 and rpa.fc:
+                for iq in range(nq_pts):
+                    Pi_00 = get_rho_response_head(freqs[w], mo_energy, (qij_a[iq], qij_b[iq]))
+                    Pi_00 = 4.0 * np.pi / np.linalg.norm(q_abs[iq]) ** 2 * Pi_00
+                    Pi_P0_iq = np.sqrt(4.0 * np.pi) / np.linalg.norm(q_abs[iq]) * Pi_P0[iq, w]
+
+                    Pi_fc = np.zeros((naux + 1, naux + 1), dtype=Pi.dtype)
+                    Pi_fc[0, 0] = Pi_00
+                    Pi_fc[0, 1:] = Pi_P0_iq.conj()
+                    Pi_fc[1:, 0] = Pi_P0_iq
+                    Pi_fc[1:, 1:] = Pi[w]
+
+                    e_corr += get_rpa_ecorr_w(Pi_fc, wts[w] / nq_pts)
+            else:
+                e_corr += get_rpa_ecorr_w(Pi[w], wts[w])
 
     e_corr = e_corr.real
     e_corr *= 1.0 / (2.0 * np.pi) / nkpts

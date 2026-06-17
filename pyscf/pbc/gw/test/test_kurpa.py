@@ -63,3 +63,14 @@ def test_kurpa_with_fc(hydrogen_kuhf):
     rpa.kernel()
 
     assert rpa.e_corr == pytest.approx(-0.04295466718074476, abs=1e-6)
+
+
+def test_kurpa_with_fc_outcore(hydrogen_kuhf):
+    rpa = KURPA(hydrogen_kuhf)
+    rpa.fc = True
+    rpa.outcore = True
+    rpa.segsize = 3
+    rpa.kernel()
+
+    assert rpa.e_corr == pytest.approx(-0.04295466718074476, abs=1e-6)
+

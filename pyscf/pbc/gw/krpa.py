@@ -94,12 +94,9 @@ def kernel(rpa, mo_energy, mo_coeff, nw=None, with_e_hf=None):
 
     is_metal = hasattr(rpa._scf, 'sigma')
 
-    # Turn off FC for metals and outcore
+    # Turn off FC for metals
     if is_metal and rpa.fc:
         logger.warn(rpa, 'FC not available for metals - setting rpa.fc to False')
-        rpa.fc = False
-    if rpa.outcore and rpa.fc:
-        logger.warn(rpa, 'FC not available for outcore - setting rpa.fc to False')
         rpa.fc = False
 
     # Grids for integration on imaginary axis
@@ -248,6 +245,31 @@ def rho_accum_inner(Pi, eia, omega, Lov, alpha=0.0, fia=None):
         c=Pi.T,  # Pi.T += alpha * Lov.conj() @ Pia.T
         overwrite_c=True,
     )
+
+    return
+
+
+def rho_wing_accum_inner(Pi_P0, eia, omega, Lov, qov, alpha=0.0):
+    """Accumulate the finite-size-correction wing response for one OV slice.
+
+    Parameters
+    ----------
+    Pi_P0 : complex 1d array
+        finite-size correction to density-density response function, will be overwritten
+    eia : double 2d array
+        occupied-virtual orbital energy difference
+    omega : double
+        frequency
+    Lov : complex 3d array
+        occupied-virtual block of three-center density-fitting matrix in MO
+    qov : complex 2d array
+        virtual-occupied correction
+    alpha : float, optional
+        prefactor, by default 0.0
+    """
+    naux, nocc, nvir = Lov.shape
+    eia_q = eia * qov.conj() / (omega**2 + eia**2)
+    Pi_P0 += alpha * np.matmul(Lov.reshape(naux, nocc * nvir), eia_q.reshape(nocc * nvir))
 
     return
 
@@ -430,6 +452,7 @@ def get_rpa_ecorr_outcore(rpa, freqs, wts):
 
     for kL in range(nkpts):
         Pi = None
+        Pi_P0 = None
         nseg = nocc // rpa.segsize + 1
         for iseg in range(nseg):
             orb_start = iseg * rpa.segsize
@@ -469,15 +492,41 @@ def get_rpa_ecorr_outcore(rpa, freqs, wts):
                 Lij_slice = Lij_slice.reshape(naux, norb_this_iter, nmo - nocc)
                 if Pi is None:
                     Pi = np.zeros((nw, naux, naux), dtype=np.complex128)
+                    if kL == 0 and rpa.fc:
+                        Pi_P0 = np.zeros((nq_pts, nw, naux), dtype=np.complex128)
 
                 # Find ka that conserves with ki and kL (-ki+ka+kL=G)
                 a_inner = kconserv_table[kL, i]
                 eia = mo_energy[i][orb_start:orb_end, None] - mo_energy[a_inner][None, nocc:]
                 for w in range(nw):
                     rho_accum_inner(Pi[w], eia, freqs[w], Lij_slice, alpha=4.0 / nkpts)
+                    if kL == 0 and rpa.fc:
+                        for iq in range(nq_pts):
+                            rho_wing_accum_inner(
+                                Pi_P0[iq, w],
+                                eia,
+                                freqs[w],
+                                Lij_slice,
+                                qij[iq, i, orb_start:orb_end],
+                                alpha=4.0 / nkpts,
+                            )
 
         for w in range(nw):
-            e_corr += get_rpa_ecorr_w(Pi[w], wts[w])
+            if kL == 0 and rpa.fc:
+                for iq in range(nq_pts):
+                    Pi_00 = get_rho_response_head(freqs[w], mo_energy, qij[iq])
+                    Pi_00 = 4.0 * np.pi / np.linalg.norm(q_abs[iq]) ** 2 * Pi_00
+                    Pi_P0_iq = np.sqrt(4.0 * np.pi) / np.linalg.norm(q_abs[iq]) * Pi_P0[iq, w]
+
+                    Pi_fc = np.zeros((naux + 1, naux + 1), dtype=Pi.dtype)
+                    Pi_fc[0, 0] = Pi_00
+                    Pi_fc[0, 1:] = Pi_P0_iq.conj()
+                    Pi_fc[1:, 0] = Pi_P0_iq
+                    Pi_fc[1:, 1:] = Pi[w]
+
+                    e_corr += get_rpa_ecorr_w(Pi_fc, wts[w])
+            else:
+                e_corr += get_rpa_ecorr_w(Pi[w], wts[w])
 
     e_corr = e_corr.real
     e_corr *= 1.0 / (2.0 * np.pi) / nkpts
