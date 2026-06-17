@@ -377,13 +377,13 @@ def mo_energy_with_exxdiv_none(mf, mo_coeff=None):
     else:
         log.error(f'Unknown SCF type {mf.__class__.__name__}')
         raise NotImplementedError
-        
+
 def slab_dipole_correction(mf, dir_idx=2, slab_center=None):
     """Apply self-consistent Neugebauer-Scheffler slab dipole corrections.
 
     doi:10.1103/PhysRevB.46.16067
     doi:10.1103/PhysRevB.59.12301
-    
+
     Removes the leading-order error in the energy of polarized surfaces
     caused by the spurious electrostatic interaction between periodic slab
     images. A compensating sawtooth potential is added to the KS potential,
@@ -459,7 +459,7 @@ def slab_dipole_correction(mf, dir_idx=2, slab_center=None):
         # TODO: cache AO values on the grid
         ao_kpts = cell.pbc_eval_gto("GTOval", coords, kpts=kpts)
         v_dip_mat = numpy.asarray(
-      [lib.einsum("pi,p,pj->ij", ao.conj(), v_dip_grid, ao) for ao in ao_kpts])
+            [lib.einsum("pi,p,pj->ij", ao.conj(), v_dip_grid, ao) for ao in ao_kpts])
         veff_new = veff + v_dip_mat
         exc_dip = 0.5 * e_field * p_tot
         logger.info(mf, "Dipole correction: E = %.10g, p = %.6g",
