@@ -623,10 +623,10 @@ def kernel(
     Examples:
 
     >>> from pyscf import gto, scf
-    >>> from pyscf.dbbsc import ecmd3
+    >>> from pyscf.dbbsc import ecmd
     >>> mol = gto.M(atom='H 0 0 0; F 0 0 0.9', basis='cc-pvdz')
     >>> mf = scf.RHF(mol).run()
-    >>> e_dbbsc = ecmd3.kernel(mf, functional='pbe')
+    >>> e_dbbsc = ecmd.kernel(mf, functional='pbe')
     """
     options = ECMDOptions(
         aux_basis=aux_basis,
@@ -676,10 +676,10 @@ class ECMD(lib.StreamObject):
     Examples:
 
     >>> from pyscf import gto, scf
-    >>> from pyscf.dbbsc import ecmd3
+    >>> from pyscf.dbbsc import ecmd
     >>> mol = gto.M(atom='H 0 0 0; F 0 0 0.9', basis='cc-pvdz')
     >>> mf = scf.RHF(mol).run()
-    >>> myecmd = ecmd3.ECMD(mf, functional='pbe')
+    >>> myecmd = ecmd.ECMD(mf, functional='pbe')
     >>> myecmd.kernel()
     >>> print(myecmd.e_dbbsc)
     """
