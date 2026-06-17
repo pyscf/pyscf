@@ -477,7 +477,7 @@ def bse_davidson(
 
     if precond_exact_diag:
         assert TDA
-        Laa_diag = [np.diagonal(Laa[s], axis1=0, axis2=2) for s in range(nspin)]
+        Laa_diag = [np.diagonal(Laa[s], axis1=1, axis2=2) for s in range(nspin)]
         Lii_bar_diag = [np.diagonal(Lii_bar[s], axis1=0, axis2=2) for s in range(nspin)]
         v_iaia = [
             2 / nspin * np.vecdot(Lia[s].reshape(-1, nocc[s] * nvir[s]).T, Lia[s].reshape(-1, nocc[s] * nvir[s]).T)
@@ -1844,9 +1844,9 @@ class BSE(lib.StreamObject):
         cput0 = (time.process_time(), time.perf_counter())
         self.dump_flags()
         self.check_memory()
-        exci, X, Y = bse_davidson(bse=self, multi=multi, e_min=e_min, delta=delta, **kwargs)
+        self.exci, self.X_vec, self.Y_vec = bse_davidson(bse=self, multi=multi, e_min=e_min, delta=delta, **kwargs)
         lib.logger.timer(self, 'BSE', *cput0)
-        return exci, X, Y
+        return self.exci, self.X_vec, self.Y_vec
 
     def full_diagonalization(self, multi):
         """Full diagonalization.
