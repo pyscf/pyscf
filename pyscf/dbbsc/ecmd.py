@@ -45,7 +45,7 @@ import numpy
 from pyscf import ao2mo, df, dft, lib
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo.incore import _conc_mos
-from pyscf.dbbsc.ecmd3_helper import (
+from pyscf.dbbsc.ecmd_helper import (
     ReferenceKind,
     _check_active_mask,
     _frozen_orbital_mask,
