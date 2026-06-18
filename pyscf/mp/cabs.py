@@ -160,7 +160,7 @@ def _cabs_singles_from_fock(fock, pcoeff, mo_occ, mo_energy, occidx, viridx):
     return numpy.einsum('i,ia,ia,ia->', mo_occ[occidx], fia, fia, 1.0 / denom)
 
 
-def energy_singles(mf, auxmol_or_basis, frozen='chemcore', lindep=1e-8):
+def energy_singles(mf, auxmol_or_basis, *, frozen='chemcore', lindep=1e-8):
     r"""CABS singles correction to the Hartree-Fock reference energy.
 
     For a closed-shell reference this evaluates
@@ -219,7 +219,7 @@ def energy_singles(mf, auxmol_or_basis, frozen='chemcore', lindep=1e-8):
     auxmol = _as_cabs_auxmol(mol, auxmol_or_basis)
     cabs_mol, cabs_coeff = find_cabs(mol, auxmol, lindep)
     if cabs_coeff.shape[1] == 0:
-        logger.info(mf, 'CABS singles correction = 0')
+        logger.note(mf, 'CABS singles correction = 0.0')
         return 0.0
     nao = mol.nao_nr()
     nca = cabs_mol.nao_nr()
@@ -238,7 +238,7 @@ def energy_singles(mf, auxmol_or_basis, frozen='chemcore', lindep=1e-8):
         fock = mf.get_hcore(cabs_mol) + vj - vk * 0.5
         e_cabs = _cabs_singles_from_fock(fock, pcoeff, mo_occ, mo_energy, occidx, viridx)
 
-    logger.info(mf, 'CABS singles correction = %.15g', e_cabs)
+    logger.note(mf, 'CABS singles correction = %.15g', e_cabs)
     return e_cabs
 
 
