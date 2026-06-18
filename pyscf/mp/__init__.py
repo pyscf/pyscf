@@ -23,6 +23,7 @@ from pyscf.mp import ump2
 from pyscf.mp import dfump2
 from pyscf.mp import gmp2
 from pyscf.mp import dfgmp2
+from pyscf.mp import cabs
 
 def MP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if mf.istype('UHF'):
