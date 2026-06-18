@@ -160,7 +160,7 @@ def _cabs_singles_from_fock(fock, pcoeff, mo_occ, mo_energy, occidx, viridx):
     return numpy.einsum('i,ia,ia,ia->', mo_occ[occidx], fia, fia, 1.0 / denom)
 
 
-def energy_singles(mf, auxmol_or_basis, *, frozen='chemcore', lindep=1e-8):
+def energy_singles(mf, auxbasis, *, frozen='chemcore', lindep=1e-8):
     r"""CABS singles correction to the Hartree-Fock reference energy.
 
     For a closed-shell reference this evaluates
@@ -177,7 +177,7 @@ def energy_singles(mf, auxmol_or_basis, *, frozen='chemcore', lindep=1e-8):
     Args:
         mf : SCF object
             Converged molecular HF object.
-        auxmol_or_basis : Mole, str, list, tuple, or dict
+        auxbasis : Mole, str, list, tuple, or dict
             CABS/OptRI basis as a Mole object or in the usual Mole.basis format.
             If a normal charged Mole is supplied on the same centers as ``mf``.
         frozen : None, int, sequence, tuple, or str
@@ -216,7 +216,7 @@ def energy_singles(mf, auxmol_or_basis, *, frozen='chemcore', lindep=1e-8):
     else:
         occidx, viridx = _active_masks(mol, mo_occ, frozen)
 
-    auxmol = _as_cabs_auxmol(mol, auxmol_or_basis)
+    auxmol = _as_cabs_auxmol(mol, auxbasis)
     cabs_mol, cabs_coeff = find_cabs(mol, auxmol, lindep)
     if cabs_coeff.shape[1] == 0:
         logger.note(mf, 'CABS singles correction = 0.0')
