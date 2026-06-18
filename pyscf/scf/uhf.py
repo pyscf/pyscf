@@ -122,6 +122,57 @@ def _break_dm_spin_symm(mol, dm, breaksym=1):
             dmb = numpy.zeros_like(dma)
             for b0, b1, p0, p1 in mol.aoslice_by_atom():
                 dmb[...,p0:p1,p0:p1] = dma[...,p0:p1,p0:p1]
+        elif breaksym == 2:
+            # 45-degree HOMO-LUMO rotation mixes the frontier orbitals between alpha
+            # and beta spins while keeping them delocalized over the full molecule.
+            # Unlike breaksym=1 (which zeroes off-diagonal AO blocks and artificially
+            # localises charge onto atoms), this rotation preserves the full molecular
+            # orbital character and provides a smoother path away from the RHF fixed
+            # point, reducing the risk of converging back to the closed-shell solution.
+            mo_coeff = getattr(dm, 'mo_coeff', None)
+            mo_occ = getattr(dm, 'mo_occ', None)
+            if mo_coeff is not None and mo_occ is not None:
+                # Energy-ordered MOs (ascending): HOMO = last occupied, LUMO = first virtual.
+                mo_a = mo_coeff[0]
+                occ_a = mo_occ[0]
+                occ_b = mo_occ[1]
+                occ_idx = numpy.where(occ_a > 0.5)[0]
+                vir_idx = numpy.where(occ_a < 0.5)[0]
+                homo_idx = occ_idx[-1]
+                lumo_idx = vir_idx[0]
+            else:
+                # No MO info: build natural orbitals via the S^{1/2} transform.
+                # Plain eigh(dma) in a non-orthogonal AO basis gives wrong eigenvalues;
+                # the S^{1/2}-transformed DM has eigenvalues equal to true occupations
+                # so that Tr(S*DM)=N_elec is preserved after reconstruction.
+                # eigh sorts ascending: virtual NOs (occ≈0) first, occupied (occ≈1) last;
+                # HOMO = last occupied, LUMO-like = last virtual (index just below HOMO).
+                s1e = mol.intor_symmetric('int1e_ovlp')
+                s_eval, s_evec = numpy.linalg.eigh(s1e)
+                s_sqrt = numpy.dot(s_evec * numpy.sqrt(s_eval), s_evec.T)
+                s_invsqrt = numpy.dot(s_evec * (1.0 / numpy.sqrt(s_eval)), s_evec.T)
+                occ_a, C_orth = numpy.linalg.eigh(s_sqrt.dot(dma).dot(s_sqrt))
+                mo_a = s_invsqrt.dot(C_orth)
+                occ_b = occ_a.copy()
+                occ_idx = numpy.where(occ_a > 0.5)[0]
+                vir_idx = numpy.where(occ_a < 0.5)[0]
+                homo_idx = occ_idx[-1]
+                lumo_idx = vir_idx[-1]
+            if len(occ_idx) > 0 and len(vir_idx) > 0:
+                homo = mo_a[:, homo_idx]
+                lumo = mo_a[:, lumo_idx]
+                c = numpy.sqrt(0.5)
+                # alpha HOMO → (HOMO + LUMO)/√2
+                mo_alpha = mo_a.copy()
+                mo_alpha[:, homo_idx] = c * (homo + lumo)
+                # beta  HOMO → (HOMO − LUMO)/√2
+                mo_beta = mo_a.copy()
+                mo_beta[:, homo_idx] = c * (homo - lumo)
+                dma = numpy.dot(mo_alpha[:, occ_a > 0.5] * occ_a[occ_a > 0.5],
+                                mo_alpha[:, occ_a > 0.5].conj().T)
+                dmb = numpy.dot(mo_beta[:, occ_b > 0.5] * occ_b[occ_b > 0.5],
+                                mo_beta[:, occ_b > 0.5].conj().T)
+
         else:
             # Adjust num. electrons for density matrices (issue #1839)
             # Get overlap matrix
