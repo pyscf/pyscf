@@ -122,7 +122,7 @@ def _break_dm_spin_symm(mol, dm, breaksym=1):
             dmb = numpy.zeros_like(dma)
             for b0, b1, p0, p1 in mol.aoslice_by_atom():
                 dmb[...,p0:p1,p0:p1] = dma[...,p0:p1,p0:p1]
-        elif breaksym == 2:
+        elif breaksym == 'mix':
             # 45-degree HOMO-LUMO rotation mixes the frontier orbitals between alpha
             # and beta spins while keeping them delocalized over the full molecule.
             # Unlike breaksym=1 (which zeroes off-diagonal AO blocks and artificially
@@ -141,23 +141,23 @@ def _break_dm_spin_symm(mol, dm, breaksym=1):
                 homo_idx = occ_idx[-1]
                 lumo_idx = vir_idx[0]
             else:
-                # No MO info: build natural orbitals via the S^{1/2} transform.
-                # Plain eigh(dma) in a non-orthogonal AO basis gives wrong eigenvalues;
-                # the S^{1/2}-transformed DM has eigenvalues equal to true occupations
-                # so that Tr(S*DM)=N_elec is preserved after reconstruction.
-                # eigh sorts ascending: virtual NOs (occ≈0) first, occupied (occ≈1) last;
-                # HOMO = last occupied, LUMO-like = last virtual (index just below HOMO).
+                # No MO info: build a MINAO restricted DM, construct the Fock matrix
+                # from it, and diagonalise once to get energy-ordered MOs.  This costs
+                # one Fock build and one diagonalisation — no SCF iterations — but gives
+                # the true HOMO/LUMO rather than an arbitrary vector from the degenerate
+                # virtual subspace that a plain DM diagonalisation would produce.
+                rhf_tmp = hf.RHF(mol)
+                dm_minao = hf.init_guess_by_minao(mol)
+                fock = rhf_tmp.get_hcore() + rhf_tmp.get_veff(mol, dm_minao)
                 s1e = mol.intor_symmetric('int1e_ovlp')
-                s_eval, s_evec = numpy.linalg.eigh(s1e)
-                s_sqrt = numpy.dot(s_evec * numpy.sqrt(s_eval), s_evec.T)
-                s_invsqrt = numpy.dot(s_evec * (1.0 / numpy.sqrt(s_eval)), s_evec.T)
-                occ_a, C_orth = numpy.linalg.eigh(s_sqrt.dot(dma).dot(s_sqrt))
-                mo_a = s_invsqrt.dot(C_orth)
+                _, mo_a = rhf_tmp.eig(fock, s1e)
+                mo_occ_rhf = rhf_tmp.get_occ(_, mo_a)
+                occ_a = (mo_occ_rhf > 1e-8).astype(numpy.double)
                 occ_b = occ_a.copy()
                 occ_idx = numpy.where(occ_a > 0.5)[0]
                 vir_idx = numpy.where(occ_a < 0.5)[0]
                 homo_idx = occ_idx[-1]
-                lumo_idx = vir_idx[-1]
+                lumo_idx = vir_idx[0]
             if len(occ_idx) > 0 and len(vir_idx) > 0:
                 homo = mo_a[:, homo_idx]
                 lumo = mo_a[:, lumo_idx]
@@ -811,11 +811,15 @@ class UHF(hf.SCF):
             If given, freeze the number of (alpha,beta) electrons to the given value.
         level_shift : number or two-element list
             level shift (in Eh) for alpha and beta Fock if two-element list is given.
-        init_guess_breaksym : int
-             This configuration controls the algorithm used to break the spin
-             symmetry of the initial guess:
-             - 0 to disable symmetry breaking in the initial guess.
-             - 1 to use the default algorithm introduced in pyscf-1.7.
+        init_guess_breaksym : int or str
+             Controls how spin symmetry is broken in the initial guess:
+             - 0 to disable symmetry breaking.
+             - 1 (default) to use the atom-block algorithm introduced in pyscf-1.7.
+             - 'mix' to rotate the HOMO and LUMO by 45 degrees between alpha and
+               beta spins. Builds one MINAO Fock matrix and diagonalises it to get
+               energy-ordered MOs, then mixes: alpha HOMO → (HOMO+LUMO)/√2,
+               beta HOMO → (HOMO−LUMO)/√2. Preserves molecular delocalization and
+               gives a smoother symmetry break than mode 1.
              - 2 to adjust the num. electrons for spin-up and spin-down density matrices (issue #1839).
 
     Examples:
