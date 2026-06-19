@@ -179,7 +179,8 @@ def energy_singles(mf, auxbasis, *, frozen='chemcore', lindep=1e-8):
             Converged molecular HF object.
         auxbasis : Mole, str, list, tuple, or dict
             CABS/OptRI basis as a Mole object or in the usual Mole.basis format.
-            If a normal charged Mole is supplied on the same centers as ``mf``.
+            If a normal charged Mole is supplied on the same centers as ``mf``,
+            only its basis is used; its nuclear charges and ECPs must be discarded.
         frozen : None, int, sequence, tuple, or str
             Frozen orbital selection. ``'chemcore'`` (default) freezes the chemical
             core. ``None`` or ``0`` includes all orbitals. An integer freezes
