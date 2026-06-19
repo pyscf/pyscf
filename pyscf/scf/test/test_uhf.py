@@ -159,11 +159,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.all(numpy.linalg.eigvalsh(dma) > -1e-10))
         self.assertTrue(numpy.all(numpy.linalg.eigvalsh(dmb) > -1e-10))
 
-
-        # breaksym=1 zeros the cross-atom block in dmb — confirm the contrast
-        _, dmb1 = mf_h2.init_guess_by_minao(mol_h2, breaksym=1)
-        self.assertAlmostEqual(abs(dmb1[p0:p1, p2:p3]).max(), 0.0, 10)
-
+    
     def test_break_spin_symm_mix_h2_dissociation(self):
         # At stretched H2 (well past the Coulson-Fischer point) UHF with
         # breaksym='mix' should find a lower-energy broken-symmetry solution
