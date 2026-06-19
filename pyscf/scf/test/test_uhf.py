@@ -159,11 +159,6 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.all(numpy.linalg.eigvalsh(dma) > -1e-10))
         self.assertTrue(numpy.all(numpy.linalg.eigvalsh(dmb) > -1e-10))
 
-        # Delocalization: the rotated HOMO retains cross-atom (off-diagonal)
-        # character, unlike breaksym=1 which explicitly zeroes those blocks.
-        slices = mol_h2.aoslice_by_atom()
-        p0, p1 = slices[0][2], slices[0][3]
-        p2, p3 = slices[1][2], slices[1][3]
 
         # breaksym=1 zeros the cross-atom block in dmb — confirm the contrast
         _, dmb1 = mf_h2.init_guess_by_minao(mol_h2, breaksym=1)
