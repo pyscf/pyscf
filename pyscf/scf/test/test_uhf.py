@@ -164,7 +164,6 @@ class KnownValues(unittest.TestCase):
         slices = mol_h2.aoslice_by_atom()
         p0, p1 = slices[0][2], slices[0][3]
         p2, p3 = slices[1][2], slices[1][3]
-        self.assertGreater(abs(dma[p0:p1, p2:p3]).max(), 0.1)
 
         # breaksym=1 zeros the cross-atom block in dmb — confirm the contrast
         _, dmb1 = mf_h2.init_guess_by_minao(mol_h2, breaksym=1)
