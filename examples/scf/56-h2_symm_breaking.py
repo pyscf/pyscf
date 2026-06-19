@@ -1,11 +1,20 @@
 #!/usr/bin/env python
 # Author: James D Whitfield <jdwhitfield@gmail.com>
 '''
-Scan H2 molecule dissociation curve comparing UHF and RHF solutions per the 
-example of Szabo and Ostlund section 3.8.7
+Scan H2 molecule dissociation curve comparing UHF and RHF solutions per the
+example of Szabo and Ostlund section 3.8.7.
 
 The initial guess is obtained by mixing the HOMO and LUMO and is implemented
 as a function that can be used in other applications.
+
+NOTE: The HOMO-LUMO mixing strategy used here is now available as a built-in
+option via init_guess_breaksym='mix', which also works for UKS.  The manual
+init_guess_mixed function below is kept for educational purposes.  To use the
+built-in version replace uhf.kernel(init_guess_mixed(mol)) with:
+
+    uhf = scf.UHF(mol)
+    uhf.init_guess_breaksym = 'mix'
+    uhf.kernel()
 
 See also 16-h2_scan.py, 30-scan_pes.py, 32-break_spin_symm.py
 '''
