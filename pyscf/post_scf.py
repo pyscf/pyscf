@@ -1,4 +1,5 @@
-from . import mp, ci, cc, mcscf, fci, tdscf
+from . import cc, ci, dbbsc, fci, mcscf, mp, tdscf
+
 try:
     from . import doci
 except ImportError:
