@@ -535,7 +535,7 @@ def _ecmd_from_options(method, options):
     nocc_a = _mo_occ(reference, 0).shape[1]
     nocc_b = _mo_occ(reference, 1).shape[1]
     if nocc_a + nocc_b <= 1:
-        log.info('E(DBBSC-ECMD-%s/%s) = 0.0', settings.xc, options.ontop_model)
+        log.note('E(DBBSC-ECMD-%s/%s) = 0.0', settings.xc, options.ontop_model)
         return 0.0
 
     grids = _make_grids(reference.mf, reference.mol, options.grids)
@@ -571,7 +571,7 @@ def _ecmd_from_options(method, options):
 
     log.timer('DBBSC ECMD correction', *t0)
     e_dbbsc = float(e_dbbsc)
-    log.info('E(DBBSC-ECMD-%s/%s) = %.15g', settings.xc, options.ontop_model, e_dbbsc)
+    log.note('E(DBBSC-ECMD-%s/%s) = %.15g', settings.xc, options.ontop_model, e_dbbsc)
     return e_dbbsc
 
 
