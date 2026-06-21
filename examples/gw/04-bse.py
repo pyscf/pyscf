@@ -1,5 +1,24 @@
 """
 Example for Bethe-Salpeter equation.
+
+########
+Reference results for H2O / PBE / def2-SVP
+
+* GW step (fully analytic GW, quasiparticle equation solved iteratively)
+                HOMO (eV)   LUMO (eV)
+Turbomole        -8.78        2.75
+PySCF            -8.79        2.75
+
+* First three singlet excitations (eV) for BSE
+                S1      S2      S3
+Turbomole      3.41    7.35    8.56
+PySCF          3.41    7.36    8.58
+
+* First three triplet excitations (eV) for BSE
+                T1      T2      T3
+Turbomole      2.68    4.67    7.14
+PySCF          2.67    4.67    7.14
+
 """
 import numpy as np
 from pyscf import gto, dft
