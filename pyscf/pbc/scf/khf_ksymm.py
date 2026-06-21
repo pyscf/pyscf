@@ -60,7 +60,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
                 logger.info(mf, '  HOMO = %.12g  LUMO = %.12g  gap/eV = %.5f',
                             homo, lumo, gap)
     elif nocc == nmo:
-        logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
+        logger.info(mf, 'HOMO = %.12g (no LUMO)', mo_energy[nocc-1])
     else:
         raise RuntimeError(f'Failed to assign mo_occ. Nocc ({nocc}) > Nmo ({nmo})')
 

@@ -30,6 +30,7 @@ from pyscf.pbc.scf import rohf as pbcrohf
 from pyscf.pbc.scf import hf as pbchf
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.data import nist
 from pyscf.pbc.scf import addons
 from pyscf import __config__
 
@@ -154,11 +155,13 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     if nocc_a != nocc_b:
         mo_occ_kpts[(mo_energy_kpts > core_level) & (mo_ea_kpts <= fermi)] = 1
 
-    if nocc_a < len(mo_energy):
-        logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
-                    mo_energy[nocc_a-1], mo_energy[nocc_a])
+    if nocc_a < nmo:
+        homo, lumo = mo_energy[nocc_a-1:nocc_a+1]
+        gap = (lumo - homo) * nist.HARTREE2EV
+        mf.scf_summary['gap'] = gap
+        logger.info(mf, '  HOMO = %.12g  LUMO = %.12g  gap/eV = %.5f', homo, lumo, gap)
     else:
-        logger.info(mf, 'HOMO = %.12g', mo_energy[nocc_a-1])
+        logger.info(mf, 'HOMO = %.12g (no LUMO)', mo_energy[nocc_a-1])
 
     np.set_printoptions(threshold=len(mo_energy))
     if mf.verbose >= logger.DEBUG:

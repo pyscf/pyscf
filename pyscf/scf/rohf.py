@@ -27,6 +27,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import uhf
+from pyscf.data import nist
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
@@ -189,10 +190,13 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     if mf.verbose >= logger.INFO and nocc < nmo and ncore > 0:
         ehomo = max(mo_energy[mo_occ> 0])
         elumo = min(mo_energy[mo_occ==0])
+        gap = (elumo - ehomo) * nist.HARTREE2EV
+        mf.scf_summary['gap'] = gap
         if ehomo+1e-3 > elumo:
             logger.warn(mf, 'HOMO %.15g >= LUMO %.15g', ehomo, elumo)
         else:
-            logger.info(mf, '  HOMO = %.15g  LUMO = %.15g', ehomo, elumo)
+            logger.info(mf, '  HOMO = %.15g  LUMO = %.15g  gap/eV = %.5f',
+                        ehomo, elumo, gap)
         if nopen > 0 and mf.verbose >= logger.DEBUG:
             core_idx = mo_occ == 2
             open_idx = mo_occ == 1

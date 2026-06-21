@@ -32,6 +32,7 @@ from pyscf.pbc.scf import khf
 from pyscf.pbc.scf import ghf as pbcghf
 from pyscf.pbc.scf import addons
 from pyscf.pbc.df.df_jk import _format_jks
+from pyscf.data import nist
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'pbc_scf_analyze_with_meta_lowdin', True)
@@ -120,13 +121,17 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
         mo_occ_kpts.append((mo_e <= fermi).astype(np.double))
 
     if nocc < nmo:
-        logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
-                    mo_energy[nocc-1], mo_energy[nocc])
-        if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
-            logger.warn(mf, 'HOMO %.12g == LUMO %.12g',
-                        mo_energy[nocc-1], mo_energy[nocc])
+        homo, lumo = mo_energy[nocc-1:nocc+1]
+        gap = (lumo - homo) * nist.HARTREE2EV
+        mf.scf_summary['gap'] = gap
+        if mf.verbose >= logger.INFO:
+            if homo+1e-3 > lumo:
+                logger.warn(mf, 'HOMO %.12g == LUMO %.12g', homo, lumo)
+            else:
+                logger.info(mf, '  HOMO = %.12g  LUMO = %.12g  gap/eV = %.5f',
+                            homo, lumo, gap)
     else:
-        logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
+        logger.info(mf, 'HOMO = %.12g (no LUMO)', mo_energy[nocc-1])
 
     if mf.verbose >= logger.DEBUG:
         np.set_printoptions(threshold=len(mo_energy))

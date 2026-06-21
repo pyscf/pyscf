@@ -510,15 +510,17 @@ class SCF(hf.SCF):
         nocc = mol.nelectron
         mo_occ[:nocc] = 1
         if nocc < len(mo_energy):
-            if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
-                logger.warn(self, 'HOMO %.15g == LUMO %.15g',
-                            mo_energy[nocc-1], mo_energy[nocc])
-            else:
-                logger.info(self, 'nocc = %d  HOMO = %.12g  LUMO = %.12g',
-                            nocc, mo_energy[nocc-1], mo_energy[nocc])
+            homo, lumo = mo_energy[nocc-1:nocc+1]
+            gap = (lumo - homo) * nist.HARTREE2EV
+            self.scf_summary['gap'] = gap
+            if self.verbose >= logger.INFO:
+                if homo+1e-3 > lumo:
+                    logger.warn(self, 'HOMO %.12g == LUMO %.12g', homo, lumo)
+                else:
+                    logger.info(self, '  HOMO = %.12g  LUMO = %.12g  gap/eV = %.5f',
+                                homo, lumo, gap)
         else:
-            logger.info(self, 'nocc = %d  HOMO = %.12g  no LUMO',
-                        nocc, mo_energy[nocc-1])
+            logger.info(self, 'HOMO = %.12g (no LUMO)', mo_energy[nocc-1])
         logger.debug(self, '  mo_energy = %s', mo_energy)
         return mo_occ
 
