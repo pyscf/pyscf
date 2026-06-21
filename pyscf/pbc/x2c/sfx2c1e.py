@@ -154,8 +154,8 @@ class SpinFreeX2CHelper(PBCX2CHelper):
         assert ('1E' in self.approx.upper())
         if 'ATOM' in self.approx.upper():
             raise NotImplementedError(
-                'Atomic X is generated in molecular orbitals without PBC. '
-                'It is incompatible with crystal orbital bases.')
+                'Atomic X is generated in molecular orbitals. '
+                'It might be incompatible with PBC setup.')
             atom_slices = xcell.offset_nr_by_atom()
             nao = xcell.nao_nr()
             x = numpy.zeros((nao,nao))
@@ -185,10 +185,9 @@ class SpinFreeX2CHelper(PBCX2CHelper):
         h1_kpts = []
         for k in range(len(kpts_lst)):
             if 'ATOM' in self.approx.upper():
-                h1 = x2c._get_hcore_fw(t[k], v[k], wloc, s[k], x, c)
+                h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], x, c)
             else:
-                xk = x2c._x2c1e_xmatrix(t[k], v[k], w[k], s[k], c)
-                h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], xk, c)
+                h1 = x2c._x2c1e_get_hcore(t[k], v[k], w[k], s[k], c)
 
             if self.basis is not None:
                 # If cell = xcell, U = identity matrix
@@ -209,8 +208,8 @@ class SpinFreeX2CHelper(PBCX2CHelper):
         assert ('1E' in self.approx.upper())
         if 'ATOM' in self.approx.upper():
             raise NotImplementedError(
-                'Atomic X is generated in molecular orbitals without PBC. '
-                'It is incompatible with crystal orbital bases.')
+                'Atomic X is generated in molecular orbitals. '
+                'It might be incompatible with PBC setup.')
             atom_slices = xcell.offset_nr_by_atom()
             nao = xcell.nao_nr()
             x = numpy.zeros((nao,nao))

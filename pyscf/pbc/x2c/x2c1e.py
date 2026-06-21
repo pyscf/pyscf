@@ -135,8 +135,8 @@ class SpinOrbitalX2C1EHelper(sfx2c1e.PBCX2CHelper):
 
         if 'ATOM' in self.approx.upper():
             raise NotImplementedError(
-                'Atomic X is generated in molecular orbitals without PBC. '
-                'It is incompatible with crystal orbital bases.')
+                'Atomic X is generated in molecular orbitals. '
+                'It might be incompatible with PBC setup.')
         else:
             w_sr = sfx2c1e.get_pnucp(with_df, kpts_lst)
             w_soc = get_pbc_pvxp(with_df, kpts_lst)
@@ -166,8 +166,7 @@ class SpinOrbitalX2C1EHelper(sfx2c1e.PBCX2CHelper):
             if 'ATOM' in self.approx.upper():
                 raise NotImplementedError
             else:
-                xk = x2c._x2c1e_xmatrix(t[k], v[k], w[k], s[k], c)
-                h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], xk, c)
+                h1 = x2c._x2c1e_get_hcore(t[k], v[k], w[k], s[k], c)
 
             if self.basis is not None:
                 # If cell = xcell, U = identity matrix
