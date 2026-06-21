@@ -16,7 +16,6 @@
 import ctypes
 import unittest
 from functools import reduce
-import tempfile
 import numpy
 import h5py
 from pyscf import lib
@@ -46,7 +45,7 @@ class KnowValues(unittest.TestCase):
         mo = numpy.random.random((nao,nmo))
         eriref = ao2mo.incore.full(eri, mo)
 
-        tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+        tmpfile = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
         io_size = nao**2*4e-5
 
         semi_incore.general(eri, [mo]*4, tmpfile.name, ioblk_size=io_size)
@@ -67,7 +66,7 @@ class KnowValues(unittest.TestCase):
                             mo.conj(), mo, mo.conj(), mo)
         eriref = eriref.reshape(12**2,12**2)
 
-        tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+        tmpfile = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
         io_size = nao**2*4e-5
 
         semi_incore.general(eri, [mo]*4, tmpfile.name, ioblk_size=io_size)

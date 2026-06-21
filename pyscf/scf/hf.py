@@ -21,8 +21,6 @@ Hartree-Fock
 '''
 
 import sys
-import tempfile
-
 from functools import reduce
 import numpy
 import scipy.linalg
@@ -771,7 +769,7 @@ def get_init_guess(mol, key='minao', **kwargs):
 
     Kwargs:
         key : str
-            One of 'minao', 'atom', 'huckel', 'hcore', '1e', 'sap', 'chkfile'.
+            One of 'minao', 'atom', 'huckel', 'mod_huckel', 'hcore', '1e', 'sap', 'chkfile'.
     '''
     return RHF(mol).get_init_guess(mol, key, **kwargs)
 
@@ -1668,7 +1666,8 @@ class SCF(lib.StreamObject):
             be skipped and the kernel function will compute only the total
             energy based on the initial guess. Default value is 50.
         init_guess : str
-            initial guess method.  It can be one of 'minao', 'atom', 'huckel', 'hcore', '1e', 'sap', 'chkfile'.
+            initial guess method.  It can be one of 'minao', 'atom', 'huckel',
+            'mod_huckel', 'hcore', '1e', 'sap', 'chkfile'.
             Default is 'minao'
         sap_basis : str or dict
             basis for SAP initial guess, either filename or path as str or
@@ -1785,7 +1784,7 @@ class SCF(lib.StreamObject):
         else:
             # the chkfile will be removed automatically, to save the chkfile, assign a
             # filename to self.chkfile
-            self._chkfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+            self._chkfile = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
             self.chkfile = self._chkfile.name
 
 ##################################################
@@ -1960,7 +1959,7 @@ class SCF(lib.StreamObject):
         return self.make_rdm1(mo_coeff, mo_occ)
 
     @lib.with_doc(init_guess_by_mod_huckel.__doc__)
-    def init_guess_by_mod_huckel(self, updated_rule, mol=None):
+    def init_guess_by_mod_huckel(self, mol=None):
         if mol is None: mol = self.mol
         logger.info(self, '''Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089,
 employing the updated GWH rule from doi:10.1021/ja00480a005.''')

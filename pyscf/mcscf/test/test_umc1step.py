@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import unittest
-import tempfile
 import numpy
 from pyscf import lib
 from pyscf import gto
@@ -48,8 +47,8 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_ucasscf(self):
-        with tempfile.NamedTemporaryFile() as f:
-            mc = mcscf.UCASSCF(m, 4, 4)
+        mc = mcscf.UCASSCF(m, 4, 4)
+        with lib.NamedTemporaryFile() as f:
             mc.chkfile = f.name
             mc.run()
         self.assertAlmostEqual(mc.e_tot, -75.7460662487894, 6)

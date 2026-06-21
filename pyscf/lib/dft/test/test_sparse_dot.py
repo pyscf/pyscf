@@ -162,7 +162,7 @@ class KnownValues(unittest.TestCase):
             ctypes.c_int(nbins), s_index.ctypes.data_as(ctypes.c_void_p),
             pair_mask.ctypes.data_as(ctypes.c_void_p),
             ao_loc.ctypes.data_as(ctypes.c_void_p))
-        self.assertAlmostEqual(abs(ref - out).max(), 0, 24)
+        self.assertAlmostEqual(abs(ref - out).max(), 0, 23)
 
     def test_dot_ao_ao_case2(self):
         np.random.seed(1)

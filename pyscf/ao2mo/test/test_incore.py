@@ -16,7 +16,6 @@
 import ctypes
 import unittest
 from functools import reduce
-import tempfile
 import numpy
 import h5py
 from pyscf import lib

@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import unittest
-import tempfile
 import numpy
 from pyscf import gto
 from pyscf import scf
@@ -200,7 +199,7 @@ class KnownValues(unittest.TestCase):
             * 4,
         )
         mo = mc.sort_mo([4, 5, 6, 10], base=1)
-        mc.chkfile = tempfile.NamedTemporaryFile().name
+        mc.chkfile = lib.NamedTemporaryFile().name
         mc.chk_ci = True
         mc.kernel(mo)
         self.assertAlmostEqual(mc.e_tot, mc_ref.e_tot, 8)

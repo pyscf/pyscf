@@ -92,7 +92,7 @@ static void store_ij(int (*intor)(), double *eri, double *buf, int ish, int jsh,
         for (i0 = ao_loc[ish], i = 0; i < di; i++, i0++) {
         for (j0 = ao_loc[jsh], j = 0; j < dj; j++, j0++) {
                 if (i0 >= j0) {
-                        ij0 = i0*(i0+1)/2 + j0;
+                        ij0 = (size_t)i0*(i0+1)/2 + j0;
                         peri = eri + ij0*(ij0+1)/2;
                         pbuf = buf + nao2 * (i*dj+j);
                         for (kl = 0, k = 0; k < i0; k++) {
@@ -123,11 +123,12 @@ void GTO2e_cart_or_sph(int (*intor)(), CINTOpt *cintopt, double *eri, int *ao_lo
 
 #pragma omp parallel
 {
-        int i, j, ij;
-        double *buf = malloc(sizeof(double) * (di*di*nao*nao + cache_size));
+        size_t i, j, ij;
+        double *buf = malloc(sizeof(double) * ((size_t)di*di*nao*nao + cache_size));
+        size_t nshell_pairs = (size_t)nbas*(nbas+1)/2;
 #pragma omp for nowait schedule(dynamic, 2)
-        for (ij = 0; ij < nbas*(nbas+1)/2; ij++) {
-                i = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
+        for (ij = 0; ij < nshell_pairs; ij++) {
+                i = (size_t)(sqrt(2.*ij+.25) - .5 + 1e-7);
                 j = ij - (i*(i+1)/2);
                 store_ij(intor, eri, buf, i, j, vhfopt, &envs);
         }

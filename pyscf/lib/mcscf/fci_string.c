@@ -187,7 +187,9 @@ void FCIaddrs2str(uint64_t *strings, int *addrs, int count, int norb, int nelec)
         for (i = 0; i < count; i++) {
                 addr = addrs[i];
                 if (addr == 0 || nelec == norb || nelec == 0) {
-                        strings[i] = (1UL << nelec) - 1UL;
+                        // 1ULL not 1UL: on LLP64 (Windows) "unsigned long" is
+                        // 32 bits, so 1UL << nelec wraps for nelec >= 32.
+                        strings[i] = (1ULL << nelec) - 1ULL;
                         continue;
                 }
 
@@ -199,10 +201,10 @@ void FCIaddrs2str(uint64_t *strings, int *addrs, int count, int norb, int nelec)
                         if (nelec_left == 0) {
                                 break;
                         } else if (addr == 0) {
-                                str1 |= (1UL << nelec_left) - 1UL;
+                                str1 |= (1ULL << nelec_left) - 1ULL;
                                 break;
                         } else if (nextaddr <= addr) {
-                                str1 |= 1UL << norb_left;
+                                str1 |= 1ULL << norb_left;
                                 addr -= nextaddr;
                                 nextaddr *= nelec_left;
                                 nextaddr /= norb_left;

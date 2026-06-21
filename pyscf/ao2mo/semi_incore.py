@@ -290,7 +290,7 @@ if __name__ == '__main__':
     onnn2 = ao2mo.incore.general(mf._eri, (orbo,mo_coeff,mo_coeff,mo_coeff))
     print('    Time elapsed (s): ',logger.perf_counter() - start_time)
 
-    tmpfile2 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+    tmpfile2 = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
 
     print('\n\nCustom outcore transformation ...')
     orbo = mo_coeff[:,:nocc]

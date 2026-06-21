@@ -3,10 +3,10 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import tempfile
 import numpy
 import h5py
 from pyscf import gto, scf, ao2mo
+from pyscf import lib
 
 '''
 Integral transformation for irregular operators
@@ -28,7 +28,7 @@ print('E = %.15g, ref -76.0267656731' % e)
 #
 # Given four MOs, compute the MO-integral gradients
 #
-gradtmp = tempfile.NamedTemporaryFile()
+gradtmp = lib.NamedTemporaryFile()
 nocc = mol.nelectron // 2
 nvir = len(mf.mo_energy) - nocc
 co = mf.mo_coeff[:,:nocc]
@@ -56,7 +56,7 @@ print('gradient integrals (d/dR i j|kl) have shape %s == (3,%dx%d,%dx%d)'
 #       9       d/dZ  d/dZ
 #
 orb = mf.mo_coeff
-hesstmp = tempfile.NamedTemporaryFile()
+hesstmp = lib.NamedTemporaryFile()
 ao2mo.kernel(mol, orb, hesstmp.name, intor='cint2e_ipvip1_sph',
              dataname='hessints1', aosym='s4')
 with ao2mo.load(hesstmp, 'hessints1') as eri:

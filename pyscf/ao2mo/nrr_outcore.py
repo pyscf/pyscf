@@ -18,11 +18,9 @@ ao2mo of scalar integrals to complex MO integrals for GHF orbitals
 '''
 
 import time
-import tempfile
 import numpy
 import h5py
 import ctypes
-import _ctypes
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
@@ -33,7 +31,7 @@ from pyscf.gto.moleintor import make_cintopt, make_loc, ascint3
 
 libao2mo = lib.load_library('libao2mo')
 def _fpointer(name):
-    return ctypes.c_void_p(_ctypes.dlsym(libao2mo._handle, name))
+    return ctypes.cast(getattr(libao2mo, name), ctypes.c_void_p)
 
 IOBLK_SIZE = getattr(__config__, 'ao2mo_outcore_ioblk_size', 256)  # 256 MB
 IOBUF_WORDS = getattr(__config__, 'ao2mo_outcore_iobuf_words', 1e8)  # 1.6 GB
@@ -124,7 +122,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
               float(nij_pair)*nkl_pair*comp, nij_pair*nkl_pair*comp*16/1e6)
 
 # transform e1
-    swapfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+    swapfile = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
     half_e1(mol, (mo_alph, mo_beta), swapfile.name, intor, aosym, comp,
             max_memory, ioblk_size, log)
     time_1pass = log.timer('AO->MO transformation for %s 1 pass'%intor,
@@ -189,7 +187,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
 def full_iofree(mol, mo_coeff, dataname='eri_mo', intor='int2e_sph',
                 motype='ghf', aosym='s1', comp=None, verbose=logger.debug,
                 **kwargs):
-    erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+    erifile = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
     general(mol, (mo_coeff,)*4, erifile.name, dataname='eri_mo',
             intor=intor, motype=motype, aosym=aosym, comp=comp,
             verbose=verbose)
@@ -199,7 +197,7 @@ def full_iofree(mol, mo_coeff, dataname='eri_mo', intor='int2e_sph',
 def general_iofree(mol, mo_coeffs, dataname='eri_mo', intor='int2e_sph',
                    motype='ghf', aosym='s1', comp=None, verbose=logger.debug,
                    **kwargs):
-    erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+    erifile = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
     general(mol, mo_coeffs, erifile.name, dataname='eri_mo',
             intor=intor, motype=motype, aosym=aosym, comp=comp,
             verbose=verbose)

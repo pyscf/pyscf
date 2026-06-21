@@ -10,7 +10,6 @@ The format and input convention of auxbasis are the same to the AO basis.
 See also examples/gto/04-input_basis.py
 '''
 
-import tempfile
 from pyscf import gto, scf, df
 
 #

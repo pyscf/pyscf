@@ -11,7 +11,6 @@ guess.  If not given, SCF constructs an atomic density superposition for the
 initial guess.
 '''
 
-import tempfile
 from pyscf import gto
 from pyscf import scf
 
@@ -38,10 +37,7 @@ mol = gto.M(
     basis = 'cc-pVDZ',
 )
 
-tmp_chkfile = tempfile.NamedTemporaryFile()
-chkfile_name = tmp_chkfile.name
 mf = scf.RHF(mol)
-mf.chkfile = chkfile_name
 mf.kernel(dm_init_guess)
 
 # If a numpy array is assigned to the attribute .init_guess, it will be used

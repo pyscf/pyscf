@@ -120,7 +120,7 @@ void CVHFnr_int2e_pp_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
                             int *ao_loc, int *atm, int natm,
                             int *bas, int nbas, double *env)
 {
-        int nbas2 = nbas * nbas;
+        size_t nbas2 = (size_t)nbas * nbas;
         int shls_slice[] = {0, nbas};
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
                                                  atm, natm, bas, nbas, env);
@@ -137,7 +137,7 @@ void CVHFnr_int2e_pp_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
                 dj = ao_loc[ish+1] - ao_loc[ish];
                 di = MAX(di, dj);
         }
-        double *buf = malloc(sizeof(double) * 9 * di*di*di*di);
+        double *buf = malloc(sizeof(double) * 9 * (size_t)di*di*di*di);
         double *bufx = buf;
         double *bufy, *bufz;
 #pragma omp for schedule(dynamic, 4)
@@ -202,7 +202,8 @@ void CVHFgrad_jk_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
                 free(opt->dm_cond);
         }
         nbas = opt->nbas;
-        opt->dm_cond = (double *)malloc(sizeof(double) * nbas*nbas);
+        size_t Nbas = nbas;
+        opt->dm_cond = (double *)malloc(sizeof(double) * Nbas*Nbas);
         CVHFnr_dm_cond1(opt->dm_cond, dm, nset, ao_loc, atm, natm, bas, nbas, env);
 }
 
@@ -288,7 +289,7 @@ void CVHFnr_int2e_pppp_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
                               int *ao_loc, int *atm, int natm,
                               int *bas, int nbas, double *env)
 {
-        int nbas2 = nbas * nbas;
+        size_t nbas2 = (size_t)nbas * nbas;
         int shls_slice[] = {0, nbas};
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
                                                  atm, natm, bas, nbas, env);
@@ -305,7 +306,7 @@ void CVHFnr_int2e_pppp_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
                 dj = ao_loc[ish+1] - ao_loc[ish];
                 di = MAX(di, dj);
         }
-        double *buf = malloc(sizeof(double) * 256 * di*di*di*di);
+        double *buf = malloc(sizeof(double) * 256 * (size_t)di*di*di*di);
         double *bufxx = buf;
         double *bufxy, *bufxz, *bufyx, *bufyy, *bufyz, *bufzx, *bufzy, *bufzz;
 #pragma omp for schedule(dynamic, 4)
@@ -363,7 +364,7 @@ void CVHFipip1_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
         size_t Nbas = nbas;
         size_t Nbas2 = Nbas * Nbas;
         // First n*n elements for derivatives, the next n*n elements for regular ERIs
-        opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas*2);
+        opt->q_cond = (double *)malloc(sizeof(double) * Nbas2*2);
 
         if (ao_loc[nbas] == CINTtot_cgto_spheric(bas, nbas)) {
                 CVHFnr_int2e_q_cond(int2e_sph, NULL, opt->q_cond+Nbas2, ao_loc,

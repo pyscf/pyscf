@@ -21,7 +21,6 @@ J-metric density fitting
 '''
 
 
-import tempfile
 import contextlib
 import numpy
 import h5py
@@ -171,7 +170,7 @@ class DF(lib.StreamObject):
                                               max_memory=max_memory, verbose=log)
         else:
             if self._cderi_to_save is None:
-                self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+                self._cderi_to_save = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
             cderi = self._cderi_to_save
 
             if is_custom_storage:

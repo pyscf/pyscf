@@ -17,7 +17,6 @@
 #
 
 
-import tempfile
 import numpy
 import scipy.linalg
 import h5py
@@ -57,7 +56,7 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='j3c', tmpdir=No
 
     if tmpdir is None:
         tmpdir = lib.param.TMPDIR
-    swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
+    swapfile = lib.NamedTemporaryFile(dir=tmpdir)
     cholesky_eri_b(mol, swapfile.name, auxbasis, dataname,
                    int3c, aosym, int2c, comp, max_memory, auxmol, verbose=log)
     fswap = h5py.File(swapfile.name, 'r')
@@ -243,7 +242,7 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
 
     if tmpdir is None:
         tmpdir = lib.param.TMPDIR
-    swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
+    swapfile = lib.NamedTemporaryFile(dir=tmpdir)
     cholesky_eri_b(mol, swapfile.name, auxbasis, dataname,
                    int3c, aosym, int2c, comp, max_memory, verbose=log)
     fswap = h5py.File(swapfile.name, 'r')

@@ -505,6 +505,36 @@ class KnownValues(unittest.TestCase):
         emp2 = mp.MP2(mf).kernel()[0]
         self.assertAlmostEqual(e, emp2, 9)
 
+    def test_complex_orbitals(self):
+        mol = gto.M(atom='''
+        O    0.   0.       0.
+        H    0.   -0.757   0.587
+        H    0.   0.757    0.587''',
+        basis='6-31g*')
+        mf = mol.RHF().run()
+        cc = mf.CCSD().run()
+        nr_ref = cc.ecc
+
+        mf = mol.GHF()
+        dm = mf.get_init_guess() + 0j
+        nao = mol.nao
+        # Mixing alpha and beta spins
+        dm[nao:,:nao] = .02j
+        dm[:nao,nao:] = -.02j
+        mf.kernel(dm0=dm)
+        # test eris_incore
+        cc = mf.CCSD().run()
+        self.assertAlmostEqual(cc.ecc, nr_ref, 6)
+
+        # test eris_outcore
+        mf._eri = None
+        cc = mf.CCSD().run()
+        self.assertAlmostEqual(cc.ecc, nr_ref, 6)
+
+        # With SOC, correlation energy is slightly different from NR ref value
+        mf = mf.x2c().run()
+        cc = mf.CCSD().run()
+        self.assertAlmostEqual(cc.ecc, -0.19527045, 6)
 
 if __name__ == "__main__":
     print("Tests for GCCSD")

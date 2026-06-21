@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import unittest
-import tempfile
 import numpy
 from pyscf import lib
 from pyscf import gto
@@ -51,7 +50,7 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(1)
         mo = numpy.random.random((n2c,n2c)) + numpy.random.random((n2c,n2c))*1j
         eriref = trans(eri0, [mo]*4)
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = lib.NamedTemporaryFile()
 
         ao2mo.kernel(mol, mo, erifile=ftmp.name, intor='int2e_spinor', max_memory=10, ioblk_size=5)
         with ao2mo.load(ftmp) as eri1:

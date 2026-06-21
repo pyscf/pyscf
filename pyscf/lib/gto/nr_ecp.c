@@ -18,6 +18,7 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <math.h>
 #include <complex.h>
 #include "cint.h"
@@ -4686,7 +4687,11 @@ static const double _j_inv[] = { // 1/j
 };
 void ECPsph_ine_opt(double *out, int order, double z)
 {
-        if (z < 1e-7 || z > 16) {
+        // The default branch below reads/writes k0[0..order+K_TAYLOR_MAX] which
+        // would overrun the K_TAB_COL-wide _sph_ine_tab row (and the K_TAB_COL
+        // local buf) when order > K_TAB_COL-K_TAYLOR_MAX-1 = 16. Fall back to
+        // the slow general routine for high-l basis combined with high-l ECP.
+        if (z < 1e-7 || z > 16 || order > K_TAB_COL - K_TAYLOR_MAX - 1) {
                 return ECPsph_ine(out, order, z);
         } else {
                 /*
@@ -5457,7 +5462,7 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                         pradi = radi + ic * nrs * lilc1;
                         pradj = radj + jc * nrs * ljlc1;
                         for (lab = 0; lab <= li+lj; lab++, ijl++) {
-                                if (!converged[ijl]) {
+                                if (converged[ijl] < 2) {
         prur = rur + lab * nrs;
         prad = rad_all + ijl*d2;
         for (i = 0; i < d2; i++) {
@@ -5474,11 +5479,20 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 prad[i*ljlc1+j] = s;
         } }
 
-        for (i = 0; i < d2; i++) {
-                if (!CLOSE_ENOUGH(plast[i],prad[i])) {
+        {
+                int _pair_close = 1;
+                for (i = 0; i < d2; i++) {
+                        if (!CLOSE_ENOUGH(plast[i],prad[i])) {
+                                _pair_close = 0;
+                                break;
+                        }
+                }
+                if (_pair_close) {
+                        converged[ijl] += 1;
+                        if (converged[ijl] < 2) { all_conv = 0; }
+                } else {
                         converged[ijl] = 0;
                         all_conv = 0;
-                        break;
                 }
         }
                                 }
@@ -5571,7 +5585,6 @@ int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         MARK_STACK;
         MALLOC_INSTACK(angi, (li+1)*nfi*(ECP_LMAX*2+1)*(li+ECP_LMAX+1));
         MALLOC_INSTACK(angj, (lj+1)*nfj*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1));
-        MALLOC_INSTACK(buf, nfi*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1));
         MALLOC_INSTACK(jmm_angj, (lj+1)*nfj*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1)*3);
         MALLOC_INSTACK(buf, nfi*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1));
 
@@ -5612,6 +5625,19 @@ int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 if (lc == -1) { // Treat Ul term as L_max in SO-ECP
                         n = ecpbas[ATOM_OF+ecploc[iloc]*BAS_SLOTS];
                         lc = ecp_lmax[n] + 1;
+                }
+                // _angular_moment_matrix[] only has entries for lc in 0..4
+                // (s..g). Higher-l SO-ECP projectors (or Ul fallbacks that push
+                // lc past 4) would read past the table in transform_angj and
+                // overflow the angi/angj/jmm_angj allocations sized assuming
+                // lc <= ECP_LMAX. Skip rather than crash silently.
+                if (lc > 4) {
+                        fprintf(stderr,
+                                "ECPtype_so_cart: SO-ECP projector with lc=%d "
+                                "(atom %d) is not supported (max lc=4); "
+                                "skipping.\n",
+                                lc, ecpbas[ATOM_OF+ecploc[iloc]*BAS_SLOTS]);
+                        continue;
                 }
                 atm_id = ecpbas[ATOM_OF+ecploc[iloc]*BAS_SLOTS];
                 rc = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
@@ -5672,7 +5698,7 @@ int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                         pradi = radi + ic * nrs * lilc1;
                         pradj = radj + jc * nrs * ljlc1;
                         for (lab = 0; lab <= li+lj; lab++, ijl++) {
-                                if (!converged[ijl]) {
+                                if (converged[ijl] < 2) {
         prur = rur + lab * nrs;
         prad = rad_all + ijl*d2;
         for (i = 0; i < d2; i++) {
@@ -5689,11 +5715,20 @@ int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 prad[i*ljlc1+j] = s;
         } }
 
-        for (i = 0; i < d2; i++) {
-                if (!CLOSE_ENOUGH(plast[i], prad[i])) {
+        {
+                int _pair_close = 1;
+                for (i = 0; i < d2; i++) {
+                        if (!CLOSE_ENOUGH(plast[i], prad[i])) {
+                                _pair_close = 0;
+                                break;
+                        }
+                }
+                if (_pair_close) {
+                        converged[ijl] += 1;
+                        if (converged[ijl] < 2) { all_conv = 0; }
+                } else {
                         converged[ijl] = 0;
                         all_conv = 0;
-                        break;
                 }
         }
                                 }
@@ -5919,7 +5954,7 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 all_conv = 1;
                 for (ip = 0; ip < npi; ip++) {
                 for (jp = 0; jp < npj; jp++) {
-                        if (!converged[ip*npj+jp]) {
+                        if (converged[ip*npj+jp] < 2) {
                                 prad = rad_all + (ip*npj+jp)*d2;
                                 for (i = 0; i < d2; i++) {
                                         plast[i] = prad[i];
@@ -5930,12 +5965,20 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                                 rij[2] = ai[ip] * rca[2] + aj[jp] * rcb[2];
                                 type1_rad_part(prad, li+lj, sqrt(SQUARE(rij))*2,
                                                ai[ip]+aj[jp], ur, rs+start, nrs, step, cache);
-                                converged[ip*npj+jp] = 1;
-                                for (i = 0; i < d2; i++) {
-                                        if (!CLOSE_ENOUGH(plast[i],prad[i])) {
+                                {
+                                        int _pair_close = 1;
+                                        for (i = 0; i < d2; i++) {
+                                                if (!CLOSE_ENOUGH(plast[i],prad[i])) {
+                                                        _pair_close = 0;
+                                                        break;
+                                                }
+                                        }
+                                        if (_pair_close) {
+                                                converged[ip*npj+jp] += 1;
+                                                if (converged[ip*npj+jp] < 2) { all_conv = 0; }
+                                        } else {
                                                 converged[ip*npj+jp] = 0;
                                                 all_conv = 0;
-                                                break;
                                         }
                                 }
                         }
@@ -6389,7 +6432,7 @@ void ECPdel_optimizer(ECPOpt **opt)
                 free(opt0->u_ecp);
         }
         free(opt0);
-        opt = NULL;
+        *opt = NULL;
 }
 
 
