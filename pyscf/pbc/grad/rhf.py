@@ -33,7 +33,7 @@ libpbc = lib.load_library('libpbc')
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None,
               atmlst=None, kpt=np.zeros(3)):
     mf = mf_grad.base
-    mol = mf_grad.mol
+    cell = mf_grad.cell
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
@@ -46,25 +46,28 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None,
         ni = mf.with_df
         raise NotImplementedError
 
-    s1 = mf_grad.get_ovlp(mol, kpt)
+    if cell._ecp:
+        raise NotImplementedError('ECP Gradients with PBC')
+
+    s1 = mf_grad.get_ovlp(cell, kpt)
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
 
     t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Computing Gradients of NR-HF Coulomb repulsion')
-    vhf = mf_grad.get_veff(mol, dm0, kpt)
+    vhf = mf_grad.get_veff(cell, dm0, kpt)
     log.timer('gradients of 2e part', *t0)
 
     dme0 = mf_grad.make_rdm1e(mo_energy, mo_coeff, mo_occ)
 
     if atmlst is None:
-        atmlst = range(mol.natm)
+        atmlst = range(cell.natm)
 
     if gamma_point(kpt):
-        h1ao = -mol.pbc_intor('int1e_ipkin', kpt=kpt)
-        if mol._pseudo:
+        h1ao = -cell.pbc_intor('int1e_ipkin', kpt=kpt)
+        if cell._pseudo:
             de  = ni.vpploc_part1_nuc_grad(dm0, kpts=kpt.reshape(-1,3))
-            de += pp_int.vpploc_part2_nuc_grad(mol, dm0)
-            de += pp_int.vppnl_nuc_grad(mol, dm0)
+            de += pp_int.vpploc_part2_nuc_grad(cell, dm0)
+            de += pp_int.vppnl_nuc_grad(cell, dm0)
             if hasattr(ni, 'vpplocG_part1'):
                 if ni.vpplocG_part1 is None:
                     h1ao -= ni.get_vpploc_part1_ip1(kpts=kpt.reshape(-1,3))
@@ -83,7 +86,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None,
 
     if log.verbose >= logger.DEBUG:
         log.debug('gradients of electronic part')
-        _write(log, mol, de, atmlst)
+        _write(log, cell, de, atmlst)
     return de
 
 
@@ -135,7 +138,7 @@ def get_ovlp(cell, kpt=np.zeros(3)):
     return -cell.pbc_intor('int1e_ipovlp', kpt=kpt)
 
 
-def get_veff(mf_grad, mol, dm, kpt=np.zeros(3)):
+def get_veff(mf_grad, cell, dm, kpt=np.zeros(3)):
     mf = mf_grad.base
     xc_code = getattr(mf, 'xc', None)
     kpts = kpt.reshape(-1,3)
@@ -157,14 +160,22 @@ def grad_nuc(cell, atmlst=None, ew_eta=None, ew_cut=None):
 
 class GradientsBase(mol_rhf.GradientsBase):
     '''Base class for Gamma-point nuclear gradient'''
-    def grad_nuc(self, mol=None, atmlst=None):
-        if mol is None: mol = self.mol
-        return grad_nuc(mol, atmlst)
+    # used by hf kernel
+    @property
+    def mol(self):
+        return self.cell
+    @mol.setter
+    def mol(self, x):
+        self.cell = x
 
-    def get_ovlp(self, mol=None, kpt=np.zeros(3)):
-        if mol is None:
-            mol = self.mol
-        return get_ovlp(mol, kpt)
+    def grad_nuc(self, cell=None, atmlst=None):
+        if cell is None: cell = self.cell
+        return grad_nuc(cell, atmlst)
+
+    def get_ovlp(self, cell=None, kpt=np.zeros(3)):
+        if cell is None:
+            cell = self.cell
+        return get_ovlp(cell, kpt)
 
     def optimizer(self, solver='ase'):
         '''Geometry optimization solver
@@ -179,10 +190,10 @@ class GradientsBase(mol_rhf.GradientsBase):
 
 class Gradients(GradientsBase):
     '''Non-relativistic Gamma-point restricted Hartree-Fock gradients'''
-    def get_veff(self, mol=None, dm=None, kpt=np.zeros(3)):
-        if mol is None: mol = self.mol
+    def get_veff(self, cell=None, dm=None, kpt=np.zeros(3)):
+        if cell is None: cell = self.cell
         if dm is None: dm = self.base.make_rdm1()
-        return get_veff(self, mol, dm, kpt)
+        return get_veff(self, cell, dm, kpt)
 
     make_rdm1e = mol_rhf.Gradients.make_rdm1e
     grad_elec = grad_elec

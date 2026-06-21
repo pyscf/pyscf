@@ -241,7 +241,7 @@ def get_hcore(mol):
     h1aa = mol.intor('int1e_ipipkin', comp=9)
     h1ab = mol.intor('int1e_ipkinip', comp=9)
     if mol._pseudo:
-        NotImplementedError('Nuclear hessian for GTH PP')
+        raise NotImplementedError('Nuclear hessian for GTH PP')
     else:
         h1aa+= mol.intor('int1e_ipipnuc', comp=9)
         h1ab+= mol.intor('int1e_ipnucip', comp=9)
