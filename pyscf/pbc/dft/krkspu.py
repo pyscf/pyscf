@@ -148,7 +148,7 @@ def energy_elec(ks, dm_kpts=None, h1e_kpts=None, vhf=None):
         vhf = ks.get_veff(ks.cell, dm_kpts)
 
     nkpts = len(h1e_kpts)
-    weight = getattr(mf.kpts, "weights_ibz", np.full(nkpts, 1./nkpts))
+    weight = getattr(ks.kpts, "weights_ibz", np.full(nkpts, 1./nkpts))
     e1 = np.einsum('k,kij,kji->', weight, h1e_kpts, dm_kpts)
     e2 = vhf.ecoul + vhf.exc + vhf.E_U
     tot_e = e1 + e2

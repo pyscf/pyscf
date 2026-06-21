@@ -371,7 +371,7 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
         e1 = numpy.einsum('ij,nji->', h1e, dm).real
     else:
         e1 = numpy.einsum('nij,nji->', h1e, dm).real
-    e2 = numpy.einsum('nij,nji->', vhf[0], dm[0]).real * .5
+    e2 = numpy.einsum('nij,nji->', vhf, dm).real * .5
     e_elec = e1 + e2
     ecoul = vhf.ecoul.real
     exx = e2 - ecoul
