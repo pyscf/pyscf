@@ -637,6 +637,53 @@ class KnownValues(unittest.TestCase):
         h2_ref = (h1_deriv_1(1)[2] - h1_deriv_2(1)[2]) / 0.0002 * lib.param.BOHR
         self.assertAlmostEqual(abs(h2[2,2]-h2_ref).max(), 0, 7)
 
+    def test_hcore(self):
+        with lib.light_speed(10) as c:
+            mol = gto.M(
+                verbose = 0,
+                atom = [["O" , (0. , 0.     , 0.0001)],
+                        [1   , (0. , -0.757 , 0.587)],
+                        [1   , (0. , 0.757  , 0.587)]],
+                basis = '3-21g',
+            )
+            h1_deriv_1 = sfx2c1e_grad.gen_sf_hfw(mol, approx='1E')
+            ha1_deriv_1 = sfx2c1e_grad.gen_sf_hfw(mol, approx='ATOM1E')
+
+            mol = gto.M(
+                verbose = 0,
+                atom = [["O" , (0. , 0.     ,-0.0001)],
+                        [1   , (0. , -0.757 , 0.587)],
+                        [1   , (0. , 0.757  , 0.587)]],
+                basis = '3-21g',
+            )
+            h1_deriv_2 = sfx2c1e_grad.gen_sf_hfw(mol, approx='1E')
+            ha1_deriv_2 = sfx2c1e_grad.gen_sf_hfw(mol, approx='ATOM1E')
+
+            mol = gto.M(
+                verbose = 0,
+                atom = [["O" , (0. , 0.     , 0.   )],
+                        [1   , (0. , -0.757 , 0.587)],
+                        [1   , (0. , 0.757  , 0.587)]],
+                basis = '3-21g',
+            )
+            h2_deriv = sfx2c1e_hess.gen_sf_hfw(mol)
+            ha2_deriv = sfx2c1e_hess.gen_sf_hfw(mol, approx='ATOM1E')
+
+            h2 = h2_deriv(0,0)
+            h2_ref = (h1_deriv_1(0)[2] - h1_deriv_2(0)[2]) / 0.0002 * lib.param.BOHR
+            self.assertAlmostEqual(abs(h2[2,2]-h2_ref).max(), 0, 6)
+            self.assertAlmostEqual(lib.fp(h2), 33.71188112440316, 9)
+
+            h2 = h2_deriv(1,0)
+            h2_ref = (h1_deriv_1(1)[2] - h1_deriv_2(1)[2]) / 0.0002 * lib.param.BOHR
+            self.assertAlmostEqual(abs(h2[2,2]-h2_ref).max(), 0, 6)
+            self.assertAlmostEqual(lib.fp(h2), -23.609411428378138, 9)
+
+            h2 = ha2_deriv(0,0)
+            h2_ref = (ha1_deriv_1(0)[2] - ha1_deriv_2(0)[2]) / 0.0002 * lib.param.BOHR
+            self.assertAlmostEqual(abs(h2[2,2]-h2_ref).max(), 0, 6)
+            self.assertAlmostEqual(lib.fp(h2), 33.718665748856324, 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for sfx2c1e gradients")
