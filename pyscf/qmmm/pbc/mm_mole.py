@@ -308,9 +308,8 @@ class Cell(qmmm.mm_mole.Mole, pbc.gto.Cell):
             ewg1  = lib.einsum('gx,ig->ix', Gv*(zsinGvR2*Gpref)[:,None], cosGvR1)
             ewg1 -= lib.einsum('gx,ig->ix', Gv*(zcosGvR2*Gpref)[:,None], sinGvR1)
             # qm quad - mm pc
-            GvGv = lib.einsum('gx,gy->gxy', Gv, Gv)
-            ewg2  = -lib.einsum('ig,gxy->ixy', cosGvR1*(zcosGvR2*Gpref)[None,:], GvGv)
-            ewg2 += -lib.einsum('ig,gxy->ixy', sinGvR1*(zsinGvR2*Gpref)[None,:], GvGv)
+            ewg2  = -lib.einsum('ig,gx,gy->ixy', cosGvR1*(zcosGvR2*Gpref)[None,:], Gv, Gv)
+            ewg2 += -lib.einsum('ig,gx,gy->ixy', sinGvR1*(zsinGvR2*Gpref)[None,:], Gv, Gv)
             ewg2 /= 3
         else:
             # qm pc - qm pc

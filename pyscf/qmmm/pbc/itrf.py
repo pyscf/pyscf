@@ -805,8 +805,7 @@ class QMMMGrad:
         TGGsinGvRqm = lib.einsum("iab,ga,gb,ig->g", qm_quads, Gv, Gv, sinGvRqm)
 
         DGqm = lib.einsum('ia,ga->ig', qm_dipoles, Gv)
-        GvGv = lib.einsum('ga,gb->gab', Gv, Gv)
-        TGGqm = lib.einsum('iab,gab->ig', qm_quads, GvGv)
+        TGGqm = lib.einsum('iab,ga,gb->ig', qm_quads, Gv, Gv)
 
         qm_ewg_grad = np.zeros_like(qm_coords)
         if with_mm:
