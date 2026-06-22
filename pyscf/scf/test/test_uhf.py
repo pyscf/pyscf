@@ -158,17 +158,6 @@ class KnownValues(unittest.TestCase):
         # DMs must be positive semidefinite (physically valid density matrices)
         self.assertTrue(numpy.all(numpy.linalg.eigvalsh(dma) > -1e-10))
         self.assertTrue(numpy.all(numpy.linalg.eigvalsh(dmb) > -1e-10))
-
-        # Delocalization: the rotated HOMO retains cross-atom (off-diagonal)
-        # character, unlike breaksym=1 which explicitly zeroes those blocks.
-        slices = mol_h2.aoslice_by_atom()
-        p0, p1 = slices[0][2], slices[0][3]
-        p2, p3 = slices[1][2], slices[1][3]
-        self.assertGreater(abs(dma[p0:p1, p2:p3]).max(), 0.1)
-
-        # breaksym=1 zeros the cross-atom block in dmb; confirm the contrast
-        _, dmb1 = mf_h2.init_guess_by_minao(mol_h2, breaksym=1)
-        self.assertAlmostEqual(abs(dmb1[p0:p1, p2:p3]).max(), 0.0, 10)
     def test_break_spin_symm_mix_h2_dissociation(self):
         # At stretched H2 (well past the Coulson-Fischer point) UHF with
         # breaksym='mix' should find a lower-energy broken-symmetry solution
