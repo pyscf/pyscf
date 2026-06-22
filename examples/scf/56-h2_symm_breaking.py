@@ -32,18 +32,18 @@ dm = None
 def init_guess_mixed(mol,mixing_parameter=numpy.pi/4):
     ''' Generate density matrix with broken spatial and spin symmetry by mixing
     HOMO and LUMO orbitals following ansatz in Szabo and Ostlund, Sec 3.8.7.
-    
+
     psi_1a = numpy.cos(q)*psi_homo + numpy.sin(q)*psi_lumo
     psi_1b = numpy.cos(q)*psi_homo - numpy.sin(q)*psi_lumo
-        
+
     psi_2a = -numpy.sin(q)*psi_homo + numpy.cos(q)*psi_lumo
     psi_2b =  numpy.sin(q)*psi_homo + numpy.cos(q)*psi_lumo
 
-    Returns: 
+    Returns:
         Density matrices, a list of 2D ndarrays for alpha and beta spins
     '''
     # opt: q, mixing parameter 0 < q < 2 pi
-    
+
     #based on init_guess_by_1e
     h1e = scf.hf.get_hcore(mol)
     s1e = scf.hf.get_ovlp(mol)
@@ -60,7 +60,7 @@ def init_guess_mixed(mol,mixing_parameter=numpy.pi/4):
 
     psi_homo=mo_coeff[:, homo_idx]
     psi_lumo=mo_coeff[:, lumo_idx]
-    
+
     Ca=numpy.zeros_like(mo_coeff)
     Cb=numpy.zeros_like(mo_coeff)
 
@@ -81,7 +81,7 @@ def init_guess_mixed(mol,mixing_parameter=numpy.pi/4):
         Cb[:,k]=mo_coeff[:,k]
 
     dm =scf.UHF(mol).make_rdm1( (Ca,Cb), (mo_occ,mo_occ) )
-    return dm 
+    return dm
 
 
 for b in numpy.arange(0.7, 4.01, 0.1):

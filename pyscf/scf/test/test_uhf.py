@@ -158,6 +158,7 @@ class KnownValues(unittest.TestCase):
         # DMs must be positive semidefinite (physically valid density matrices)
         self.assertTrue(numpy.all(numpy.linalg.eigvalsh(dma) > -1e-10))
         self.assertTrue(numpy.all(numpy.linalg.eigvalsh(dmb) > -1e-10))
+
     def test_break_spin_symm_mix_h2_dissociation(self):
         # At stretched H2 (well past the Coulson-Fischer point) UHF with
         # breaksym='mix' should find a lower-energy broken-symmetry solution
