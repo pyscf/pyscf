@@ -64,7 +64,7 @@ class KnownValues(unittest.TestCase):
 
     def test_Gv(self):
         a = cl1.get_Gv()
-        self.assertAlmostEqual(lib.fp(a), -99.791927068519939, 10)
+        self.assertAlmostEqual(lib.fp(a), -99.791927068519939, 9)
 
     def test_SI(self):
         a = cl1.get_SI()

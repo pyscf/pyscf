@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import unittest
 from functools import reduce
 import numpy
@@ -29,14 +30,15 @@ except ImportError:
 
 class KnownValues(unittest.TestCase):
     def test_parse_pople(self):
+        join = os.path.join
         self.assertEqual(gto.basis._parse_pople_basis('631g(d)', 'C'),
-                         ('pople-basis/6-31G.dat', 'pople-basis/6-31G-polarization-d.dat'))
+                         (join('pople-basis', '6-31G.dat'), join('pople-basis', '6-31G-polarization-d.dat')))
         self.assertEqual(gto.basis._parse_pople_basis('631g**', 'C'),
-                         ('pople-basis/6-31Gss.dat',))
+                         (join('pople-basis', '6-31Gss.dat'),))
         self.assertEqual(gto.basis._parse_pople_basis('631++g**', 'C'),
-                         ('pople-basis/6-31++Gss.dat',))
+                         (join('pople-basis', '6-31++Gss.dat'),))
         self.assertEqual(gto.basis._parse_pople_basis('6311+g(d,p)', 'C'),
-                         ('pople-basis/6-311+G.dat', 'pople-basis/6-311G-polarization-d.dat'))
+                         (join('pople-basis', '6-311+G.dat'), join('pople-basis', '6-311G-polarization-d.dat')))
         self.assertRaises(KeyError, gto.basis._parse_pople_basis, '631g++', 'C')
 
     def test_basis_load(self):

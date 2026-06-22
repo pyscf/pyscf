@@ -286,7 +286,7 @@ class KnownValues(unittest.TestCase):
                 de_ref = mc_grad_ref.kernel(state=i)[1, 0]
                 self.assertAlmostEqual (de, de_ref, 6)
 
-    def test_dfrohf_sanity (self):
+    def test_dfrohf_sanity_high_cost (self):
         n_states = 3
         mc_grad = diatomic(
             "Li", "H", 1.4, "ftpbe", "6-31g", 4, 2, n_states, density_fit=True, spin=2

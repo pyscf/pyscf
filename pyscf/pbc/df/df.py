@@ -31,6 +31,7 @@ J. Chem. Phys. 147, 164119 (2017)
 
 import os
 import ctypes
+import sys
 import warnings
 import contextlib
 import itertools
@@ -276,6 +277,10 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                 if self._cderi == cderi and os.path.isfile(cderi):
                     logger.warn(self, 'File %s (specified by ._cderi) is '
                                 'overwritten by GDF initialization.', cderi)
+                    # On Windows, close the handle before os.remove to avoid
+                    # permission error.
+                    if sys.platform == 'win32':
+                        self._cderi_to_save.close()
                     os.remove(cderi)
                 else:
                     logger.warn(self, 'Value of ._cderi is ignored. '

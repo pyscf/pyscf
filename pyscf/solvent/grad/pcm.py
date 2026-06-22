@@ -220,6 +220,8 @@ def grad_qv(pcmobj, dm, q_sym = None):
         fakemol.cart = mol.cart
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip1, aosym='s1', cintopt=cintopt)
         dvj += numpy.einsum('xijk,ij,k->xi', v_nj, dm, q_sym[p0:p1])
+        # Free up v_nj to stay within mem limits
+        del v_nj
 
     int3c2e_ip2 = mol._add_suffix('int3c2e_ip2')
     cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, int3c2e_ip2)
@@ -229,6 +231,8 @@ def grad_qv(pcmobj, dm, q_sym = None):
         fakemol.cart = mol.cart
         q_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip2, aosym='s1', cintopt=cintopt)
         dq[:,p0:p1] = numpy.einsum('xijk,ij,k->xk', q_nj, dm, q_sym[p0:p1])
+        # Free up q_nj to stay within mem limits
+        del q_nj
 
     aoslice = mol.aoslice_by_atom()
     dq = numpy.asarray([numpy.sum(dq[:,p0:p1], axis=1) for p0,p1 in gridslice])
@@ -415,7 +419,7 @@ def make_grad_object(base_method):
     assert isinstance(base_method, _Solvation)
     with_solvent = base_method.with_solvent
     if with_solvent.frozen:
-        raise RuntimeError('Frozen solvent model is not avialbe for energy gradients')
+        raise RuntimeError('Frozen solvent model is not available for energy gradients')
 
     # create the Gradients in vacuum. Cannot call super().Gradients() here
     # because other dynamic corrections might be applied to the base_method.

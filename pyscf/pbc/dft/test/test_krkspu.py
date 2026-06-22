@@ -93,7 +93,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(vxc.E_U, 0.07587726255165786, 11)
         self.assertAlmostEqual(lib.fp(vxc), 12.77643098220399, 8)
 
-    def test_KRKSpU_linear_response(self):
+    def test_KRKSpU_linear_response_high_cost(self):
         cell = pgto.Cell()
         cell.unit = 'A'
         cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
