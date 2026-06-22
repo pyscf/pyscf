@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <complex.h>
 #include <math.h>
+#include <assert.h>
 #include "config.h"
 #include "cint.h"
 #include "np_helper/np_helper.h"
@@ -44,6 +45,12 @@ void GTOint2c(int (*intor)(), double *mat, int comp, int hermi,
         const int njsh = jsh1 - jsh0;
         const size_t naoi = ao_loc[ish1] - ao_loc[ish0];
         const size_t naoj = ao_loc[jsh1] - ao_loc[jsh0];
+        // Hermi-mode symmetrization (NPdsymm_triu below) and the upper-
+        // triangle skip (ish > jsh in slice-relative indices) both assume a
+        // square layout with ish0 == jsh0. The per-component stride
+        // ic*naoi*naoi also assumes that. Calling with hermi != PLAIN on a
+        // rectangular or offset slice silently corrupts the matrix.
+        assert(hermi == PLAIN || (ish0 == jsh0 && naoi == naoj));
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 2,
                                                  atm, natm, bas, nbas, env);
 #pragma omp parallel
@@ -92,6 +99,9 @@ void GTOint2c_spinor(int (*intor)(), double complex *mat, int comp, int hermi,
         const int njsh = jsh1 - jsh0;
         const size_t naoi = ao_loc[ish1] - ao_loc[ish0];
         const size_t naoj = ao_loc[jsh1] - ao_loc[jsh0];
+        // Hermi-mode symmetrization assumes a square layout (same reasoning
+        // as the real variant above).
+        assert(hermi == PLAIN || (ish0 == jsh0 && naoi == naoj));
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 2,
                                                  atm, natm, bas, nbas, env);
 

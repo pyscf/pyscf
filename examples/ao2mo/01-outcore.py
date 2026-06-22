@@ -3,9 +3,9 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import tempfile
 import h5py
 from pyscf import gto, scf, ao2mo
+from pyscf import lib
 
 '''
 Save the transformed integrals in the given file in HDF5 format
@@ -22,7 +22,7 @@ myhf = scf.RHF(mol)
 myhf.kernel()
 
 orb = myhf.mo_coeff
-ftmp = tempfile.NamedTemporaryFile()
+ftmp = lib.NamedTemporaryFile()
 print('MO integrals are saved in file  %s  under dataset "eri_mo"' % ftmp.name)
 ao2mo.kernel(mol, orb, ftmp.name)
 

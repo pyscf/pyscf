@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import unittest
-import tempfile
 import numpy as np
 import scipy.linalg
 from pyscf import lib
@@ -88,7 +87,7 @@ class KnownValues(unittest.TestCase):
         dfbuilder = rsdf._RSGDFBuilder(cell, auxcell, kpts)
         dfbuilder.__dict__.update(dfobj.__dict__)
         dfbuilder.build()
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name)
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 1.4877735852543206, 8)
@@ -97,7 +96,7 @@ class KnownValues(unittest.TestCase):
         dfbuilder = rsdf._RSGDFBuilder(cell, auxcell, kpts)
         dfbuilder.__dict__.update(dfobj.__dict__)
         dfbuilder.build()
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             self.assertAlmostEqual(lib.fp(load(tmpf.name, kpts[[0, 0]])), 1.4877735860707935, 7)
             self.assertAlmostEqual(lib.fp(load(tmpf.name, kpts[[2, 4]])), 4.530919637533813+0.10852447737595214j, 7)
@@ -107,7 +106,7 @@ class KnownValues(unittest.TestCase):
         dfbuilder = rsdf._RSGDFBuilder(cell, auxcell, kpts)
         dfbuilder.__dict__.update(dfobj.__dict__)
         dfbuilder.build()
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2', j_only=True)
             self.assertAlmostEqual(lib.fp(load(tmpf.name, kpts[[0, 0]])), 1.4877735860707935, 7)
             self.assertAlmostEqual(lib.fp(load(tmpf.name, kpts[[2, 2]])), 1.4492567814298059, 7)
@@ -147,7 +146,7 @@ class KnownValues(unittest.TestCase):
         j3c = lib.dot(auxG.conj()*coulG, aopair.reshape(ngrids,-1))
         j2c = scipy.linalg.cholesky(j2c[0], lower=True)
         ref = scipy.linalg.solve_triangular(j2c, j3c, lower=True)
-        with tempfile.NamedTemporaryFile() as tmpf:
+        with lib.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2', j_only=True)
             v1 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(abs(ref - v1).max(), 0, 9)

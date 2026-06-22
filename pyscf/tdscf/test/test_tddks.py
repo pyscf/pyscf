@@ -17,7 +17,6 @@
 #
 
 import unittest
-import tempfile
 import numpy
 from pyscf import lib, gto, scf, dft
 from pyscf import tdscf
@@ -38,8 +37,7 @@ H     0.   0.7   0.7'''
     mol.basis = 'uncsto3g'
     mol.spin = 1
     mol.build()
-    mf_lda = mol.DKS().set(xc='lda,', conv_tol=1e-12,
-                           chkfile=tempfile.NamedTemporaryFile().name).run()
+    mf_lda = mol.DKS().set(xc='lda,', conv_tol=1e-12, chkfile=lib.NamedTemporaryFile().name).run()
 
 def tearDownModule():
     global mol, mf_lda

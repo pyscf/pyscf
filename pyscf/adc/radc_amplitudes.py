@@ -565,5 +565,5 @@ def _create_t2_h5cache():
     as a temporary workaround before figuring out a better solution to handle
     big t2 amplitudes.
     '''
-    tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+    tmpfile = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
     return h5py.File(tmpfile.name, 'w')

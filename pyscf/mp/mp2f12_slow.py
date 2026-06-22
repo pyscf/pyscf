@@ -26,29 +26,18 @@ With strong orthogonalization ansatz 2
 import warnings
 from functools import reduce
 import numpy
-import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
-from pyscf import ao2mo
-from pyscf.scf import jk
 from pyscf.mp import mp2
+from pyscf.mp import cabs
 
 warnings.warn('Module MP2-F12 is under testing')
 
 
 # The cabs space, the complimentary space to the OBS.
 def find_cabs(mol, auxmol, lindep=1e-8):
-    cabs_mol = gto.conc_mol(mol, auxmol)
-    nao = mol.nao_nr()
-    s = cabs_mol.intor_symmetric('int1e_ovlp')
-
-    ls12 = scipy.linalg.solve(s[:nao,:nao], s[:nao,nao:], assume_a='pos')
-    s[nao:,nao:] -= s[nao:,:nao].dot(ls12)
-    w, v = scipy.linalg.eigh(s[nao:,nao:])
-    c2 = v[:,w>lindep]/numpy.sqrt(w[w>lindep])
-    c1 = ls12.dot(c2)
-    return cabs_mol, numpy.vstack((-c1,c2))
+    return cabs.find_cabs(mol, auxmol, lindep)
 
 def trans(eri, mos):
     naoi, nmoi = mos[0].shape

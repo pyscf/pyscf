@@ -42,6 +42,7 @@ dependencies = [
   'scipy>=1.6.0',
   'h5py>=2.7',
   'setuptools',
+  "psutil; sys_platform == 'win32'"
 ]
 
 [project.urls]

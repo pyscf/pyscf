@@ -43,7 +43,7 @@ void PBCdel_optimizer(PBCOpt **opt)
         if (opt0->rrcut != NULL) {
                 free(opt0->rrcut);
         }
-        if (!opt0->rcut) {
+        if (opt0->rcut != NULL) {
                 free(opt0->rcut);
         }
         free(opt0);

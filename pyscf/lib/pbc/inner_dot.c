@@ -252,13 +252,13 @@ void PBC_zdot_CNC_s1(double *outR, double *outI, double *aR, double *aI,
                         }
                         dg = ig1 - ig0;
                         dgemm_(&TRANS_T, &TRANS_N, &nc, &dab, &dg,
-                               &D1, cR+ig0, &ng, bufR, &gsize, &D1, outR, &nc);
+                               &D1, cR+ig0, &ng, bufR, &gsize, &D1, poutR, &nc);
                         dgemm_(&TRANS_T, &TRANS_N, &nc, &dab, &dg,
-                               &D1, cI+ig0, &ng, bufI, &gsize, &D1, outR, &nc);
+                               &D1, cI+ig0, &ng, bufI, &gsize, &D1, poutR, &nc);
                         dgemm_(&TRANS_T, &TRANS_N, &nc, &dab, &dg,
-                               &D1, cR+ig0, &ng, bufI, &gsize, &D1, outI, &nc);
+                               &D1, cR+ig0, &ng, bufI, &gsize, &D1, poutI, &nc);
                         dgemm_(&TRANS_T, &TRANS_N, &nc, &dab, &dg,
-                               &ND1, cI+ig0, &ng, bufR, &gsize, &D1, outI, &nc);
+                               &ND1, cI+ig0, &ng, bufR, &gsize, &D1, poutI, &nc);
                 }
         }
         free(bufR);
@@ -378,13 +378,13 @@ void PBC_zdot_CNN_s1(double *outR, double *outI, double *aR, double *aI,
                         }
                         dg = ig1 - ig0;
                         dgemm_(&TRANS_T, &TRANS_N, &nc, &dab, &dg,
-                               &D1, cR+ig0, &ng, bufR, &gsize, &D1, outR, &nc);
+                               &D1, cR+ig0, &ng, bufR, &gsize, &D1, poutR, &nc);
                         dgemm_(&TRANS_T, &TRANS_N, &nc, &dab, &dg,
-                               &ND1, cI+ig0, &ng, bufI, &gsize, &D1, outR, &nc);
+                               &ND1, cI+ig0, &ng, bufI, &gsize, &D1, poutR, &nc);
                         dgemm_(&TRANS_T, &TRANS_N, &nc, &dab, &dg,
-                               &D1, cR+ig0, &ng, bufI, &gsize, &D1, outI, &nc);
+                               &D1, cR+ig0, &ng, bufI, &gsize, &D1, poutI, &nc);
                         dgemm_(&TRANS_T, &TRANS_N, &nc, &dab, &dg,
-                               &D1, cI+ig0, &ng, bufR, &gsize, &D1, outI, &nc);
+                               &D1, cI+ig0, &ng, bufR, &gsize, &D1, poutI, &nc);
                 }
         }
         free(bufR);

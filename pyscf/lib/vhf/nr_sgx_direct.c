@@ -840,19 +840,10 @@ void SGXdiagonal_ints(int (*intor)(), double *m_bi, int *ao_loc, CINTOpt *cintop
                        double *widths, double *norms, double *vals, int nrad,
                        double *atm_coords)
 {
-        int shls_slice[] = {0, nbas, 0, nbas};
-        int di = GTOmax_shell_dim(ao_loc, shls_slice, 2);
-        int cache_size = _max_cache_size_sgx(intor, shls_slice, 2,
-                                             atm, natm, bas, nbas, env,
-                                             SGX_BLKSIZE);
 #pragma omp parallel
 {
         int ig0, ig1, dg;
         int ish;
-        int ncomp = 1;
-        double *buf = calloc(sizeof(double), SGX_BLKSIZE*di*di*ncomp);
-        double *cache = malloc(sizeof(double) * cache_size);
-        double *dists = malloc(sizeof(int) * SGX_BLKSIZE);
         const double omega = env[PTR_RANGE_OMEGA];
         double *grids = env + (int) env[PTR_GRIDS];
         double r;
@@ -887,9 +878,6 @@ void SGXdiagonal_ints(int (*intor)(), double *m_bi, int *ao_loc, CINTOpt *cintop
                         m_bi[ibatch * nbas + ish] = maxint;
                 }
         }
-        free(buf);
-        free(cache);
-        free(dists);
 }
 }
 

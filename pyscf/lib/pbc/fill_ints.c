@@ -1350,7 +1350,8 @@ static int _nr2c_fill(int (*intor)(), double complex *out,
         int ishloc[ish1-ish0+1];
         int nishloc = shloc_partition(ishloc, ao_loc, ish0, ish1, dimax);
 
-        int m, msh0, msh1, dmjc, ish, di, empty;
+        int m, msh0, msh1, dmjc, ish, di;
+        int empty = 1;
         int jL;
         int shls[2];
         double *bufk_r = buf;

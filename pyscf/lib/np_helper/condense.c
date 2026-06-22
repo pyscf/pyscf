@@ -251,6 +251,9 @@ int8_t NP_all(int8_t *a, int nd, int di, int dj)
 
 uint8_t NP_Bmax(uint8_t *a, int nd, int di, int dj)
 {
+        if (di == 0 || dj == 0) {
+                return 0;
+        }
         int i, j;
         uint8_t out = a[0];
         for (i = 0; i < di; i++) {
@@ -262,6 +265,9 @@ uint8_t NP_Bmax(uint8_t *a, int nd, int di, int dj)
 
 int NP_imax(int *a, int nd, int di, int dj)
 {
+        if (di == 0 || dj == 0) {
+                return 0;
+        }
         int i, j;
         int out = a[0];
         for (i = 0; i < di; i++) {
@@ -273,6 +279,9 @@ int NP_imax(int *a, int nd, int di, int dj)
 
 float NP_fmax(float *a, int nd, int di, int dj)
 {
+        if (di == 0 || dj == 0) {
+                return 0.f;
+        }
         int i, j;
         float out = a[0];
         for (i = 0; i < di; i++) {

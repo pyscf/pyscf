@@ -16,7 +16,6 @@
 import ctypes
 import unittest
 from functools import reduce
-import tempfile
 import numpy
 import h5py
 from pyscf import lib
@@ -47,7 +46,7 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_nroutcore_grad(self):
-        ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+        ftmp = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
         erifile = ftmp.name
         eri_ao = mol.intor('int2e_ip1', aosym='s1').reshape(3,nao,nao,nao,nao)
         eriref = numpy.einsum('npjkl,pi->nijkl', eri_ao, mo)
@@ -64,7 +63,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(eri1, eriref))
 
     def test_nroutcore_eri(self):
-        ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+        ftmp = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
         erifile = ftmp.name
         eri_ao = ao2mo.restore(1, mol.intor('int2e', aosym='s2kl'), nao)
         eriref = numpy.einsum('pjkl,pi->ijkl', eri_ao, mo)

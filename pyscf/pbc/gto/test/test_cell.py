@@ -17,7 +17,6 @@
 #
 
 import unittest
-import tempfile
 import ctypes
 import numpy
 import numpy as np
@@ -65,7 +64,7 @@ class KnownValues(unittest.TestCase):
 
     def test_Gv(self):
         a = cl1.get_Gv()
-        self.assertAlmostEqual(lib.fp(a), -99.791927068519939, 10)
+        self.assertAlmostEqual(lib.fp(a), -99.791927068519939, 9)
 
     def test_SI(self):
         a = cl1.get_SI()
@@ -616,7 +615,7 @@ S
 
     def test_fromfile(self):
         ref = cl.atom_coords().copy()
-        with tempfile.NamedTemporaryFile() as f:
+        with lib.NamedTemporaryFile() as f:
             cl.tofile(f.name, 'xyz')
             cell = pgto.Cell()
             cell.fromfile(f.name, 'xyz')

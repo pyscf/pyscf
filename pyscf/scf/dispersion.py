@@ -58,6 +58,10 @@ _white_list = {
     'b97m-d3bj': ('b97m-v', False, 'd3bj'),
     'wb97x-d3bj': ('wb97x-v', False, 'd3bj'),
     'wb97x-3c': ('wb97x-v', False, 'd4:wb97x-3c'),
+    # CF22D is parameterized together with its D3 (zero-damping) dispersion
+    # correction, so it is enabled by default. The cf22d damping parameters
+    # are shipped with simple-dftd3 (>=1.2.1) under zero damping.
+    'cf22d': ('cf22d', '', 'd3zero'),
     'b97m-d4': ('b97m_v', False, 'd4:b97m'),
     'wb97m-d4': ('wb97m_v', False, 'd4:wb97m'),
     'wb97x-d4': ('wb97x_v', False, 'd4:wb97x'),

@@ -15,14 +15,13 @@
 
 import unittest
 import numpy
-import tempfile
 from pyscf import lib, gto
 
 class KnownValues(unittest.TestCase):
     def test_save_load_mol(self):
         mol = gto.M(atom=[['H', (0,0,i)] for i in range(8)],
                     basis='sto3g')
-        fchk = tempfile.NamedTemporaryFile()
+        fchk = lib.NamedTemporaryFile()
         lib.chkfile.save_mol(mol, fchk.name)
         mol1 = lib.chkfile.load_mol(fchk.name)
         self.assertTrue(numpy.all(mol1._atm == mol._atm))
@@ -30,7 +29,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.all(mol1._env == mol._env))
 
     def test_save_load_arrays(self):
-        fchk = tempfile.NamedTemporaryFile()
+        fchk = lib.NamedTemporaryFile()
         a = numpy.eye(3)
         lib.chkfile.save(fchk.name, 'a', a)
         self.assertTrue(numpy.all(a == lib.chkfile.load(fchk.name, 'a')))

@@ -15,15 +15,15 @@
 
 import sys
 import ctypes
-import _ctypes
 import numpy
 from pyscf import lib
 from pyscf import gto
 from pyscf.gto.moleintor import make_cintopt, make_loc, ascint3
 
 libcvhf = lib.load_library('libcvhf')
+
 def _fpointer(name):
-    return ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, name))
+    return ctypes.cast(getattr(libcvhf, name), ctypes.c_void_p)
 
 class VHFOpt:
     def __init__(self, mol, intor=None,

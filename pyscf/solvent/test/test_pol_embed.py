@@ -15,7 +15,6 @@
 
 import unittest
 import os
-import tempfile
 import numpy
 from numpy.testing import assert_allclose
 from pyscf import lib, gto, scf, dft
@@ -34,7 +33,7 @@ dname = os.path.dirname(__file__)
 
 def setUpModule():
     global potf, potf2, mol, mol2, potfile, potfile2
-    potf = tempfile.NamedTemporaryFile()
+    potf = lib.NamedTemporaryFile()
     potf.write(b'''!
 @COORDINATES
 3
@@ -70,7 +69,7 @@ EXCLISTS
                 ''', basis='sto3g', verbose=7,
                 output='/dev/null')
 
-    potf2 = tempfile.NamedTemporaryFile()
+    potf2 = lib.NamedTemporaryFile()
     potf2.write(b'''! water molecule + a large, positive charge to force electron spill-out
 @COORDINATES
 4
@@ -294,7 +293,7 @@ class TestPolEmbed(unittest.TestCase):
         self.assertAlmostEqual(mf.e_tot, -168.147494986446, 8)
 
     def test_as_scanner(self):
-        mf = mol.RHF(chkfile=tempfile.NamedTemporaryFile().name)
+        mf = mol.RHF(chkfile=lib.NamedTemporaryFile().name)
         mf_scanner = solvent.PE(mf, potfile).as_scanner()
         mf_scanner(mol)
         self.assertAlmostEqual(mf_scanner.with_solvent.e, 0.00020182314249546455, 9)
