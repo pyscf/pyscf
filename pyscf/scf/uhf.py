@@ -143,7 +143,7 @@ def _break_dm_spin_symm(mol, dm, breaksym=1):
             else:
                 # No MO info: build a MINAO restricted DM, construct the Fock matrix
                 # from it, and diagonalise once to get energy-ordered MOs.  This costs
-                # one Fock build and one diagonalisation — no SCF iterations — but gives
+                # one Fock build and one diagonalisation (no SCF iterations) but gives
                 # the true HOMO/LUMO rather than an arbitrary vector from the degenerate
                 # virtual subspace that a plain DM diagonalisation would produce.
                 rhf_tmp = hf.RHF(mol)
@@ -162,10 +162,10 @@ def _break_dm_spin_symm(mol, dm, breaksym=1):
                 homo = mo_a[:, homo_idx]
                 lumo = mo_a[:, lumo_idx]
                 c = numpy.sqrt(0.5)
-                # alpha HOMO → (HOMO + LUMO)/√2
+                # alpha HOMO -> (HOMO + LUMO)/sqrt(2)
                 mo_alpha = mo_a.copy()
                 mo_alpha[:, homo_idx] = c * (homo + lumo)
-                # beta  HOMO → (HOMO − LUMO)/√2
+                # beta  HOMO -> (HOMO - LUMO)/sqrt(2)
                 mo_beta = mo_a.copy()
                 mo_beta[:, homo_idx] = c * (homo - lumo)
                 dma = numpy.dot(mo_alpha[:, occ_a > 0.5] * occ_a[occ_a > 0.5],
@@ -817,8 +817,8 @@ class UHF(hf.SCF):
              - 1 (default) to use the atom-block algorithm introduced in pyscf-1.7.
              - 'mix' to rotate the HOMO and LUMO by 45 degrees between alpha and
                beta spins. Builds one MINAO Fock matrix and diagonalises it to get
-               energy-ordered MOs, then mixes: alpha HOMO → (HOMO+LUMO)/√2,
-               beta HOMO → (HOMO−LUMO)/√2. Preserves molecular delocalization and
+               energy-ordered MOs, then mixes: alpha HOMO -> (HOMO+LUMO)/sqrt(2),
+               beta HOMO -> (HOMO-LUMO)/sqrt(2). Preserves molecular delocalization and
                gives a smoother symmetry break than mode 1.
              - 2 to adjust the num. electrons for spin-up and spin-down density matrices (issue #1839).
 
