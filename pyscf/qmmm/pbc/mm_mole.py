@@ -305,13 +305,12 @@ class Cell(qmmm.mm_mole.Mole, pbc.gto.Cell):
             ewg0  = lib.einsum('ig,g,g->i', cosGvR1, zcosGvR2, Gpref)
             ewg0 += lib.einsum('ig,g,g->i', sinGvR1, zsinGvR2, Gpref)
             # qm dip - mm pc
-            p = ['einsum_path', (2, 3), (0, 2), (0, 1)]
-            ewg1  = lib.einsum('gx,ig,g,g->ix', Gv, cosGvR1, zsinGvR2, Gpref, optimize=p)
-            ewg1 -= lib.einsum('gx,ig,g,g->ix', Gv, sinGvR1, zcosGvR2, Gpref, optimize=p)
+            ewg1  = lib.einsum('gx,ig->ix', Gv*(zsinGvR2*Gpref)[:,None], cosGvR1)
+            ewg1 -= lib.einsum('gx,ig->ix', Gv*(zcosGvR2*Gpref)[:,None], sinGvR1)
             # qm quad - mm pc
-            p = ['einsum_path', (3, 4), (0, 3), (0, 2), (0, 1)]
-            ewg2  = -lib.einsum('gx,gy,ig,g,g->ixy', Gv, Gv, cosGvR1, zcosGvR2, Gpref, optimize=p)
-            ewg2 += -lib.einsum('gx,gy,ig,g,g->ixy', Gv, Gv, sinGvR1, zsinGvR2, Gpref, optimize=p)
+            GvGv = lib.einsum('gx,gy->gxy', Gv, Gv)
+            ewg2  = -lib.einsum('ig,gxy->ixy', cosGvR1*(zcosGvR2*Gpref)[None,:], GvGv)
+            ewg2 += -lib.einsum('ig,gxy->ixy', sinGvR1*(zsinGvR2*Gpref)[None,:], GvGv)
             ewg2 /= 3
         else:
             # qm pc - qm pc
