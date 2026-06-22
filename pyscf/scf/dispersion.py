@@ -27,7 +27,13 @@ from pyscf.lib import logger
 from pyscf import scf
 from pyscf import __config__
 
-DFTD4_RECOMMENDATIONS = getattr(__config__, 'DFTD4_RECOMMENDATIONS', True)
+try:
+    from pyscf import dispersion
+    from pyscf.dispersion import dftd3, dftd4
+except ImportError:
+    dispersion = dftd3 = dftd4 = None
+
+DFTD4_RECOMMENDATIONS = getattr(__config__, 'DFTD4_RECOMMENDATIONS', False)
 
 # supported dispersion corrections
 DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']
@@ -52,11 +58,10 @@ _white_list = {
     'b97m-d3bj': ('b97m-v', False, 'd3bj'),
     'wb97x-d3bj': ('wb97x-v', False, 'd3bj'),
     'wb97x-3c': ('wb97x-v', False, 'd4:wb97x-3c'),
+    'b97m-d4': ('b97m_v', False, 'd4:b97m'),
+    'wb97m-d4': ('wb97m_v', False, 'd4:wb97m'),
+    'wb97x-d4': ('wb97x_v', False, 'd4:wb97x'),
 }
-if DFTD4_RECOMMENDATIONS:
-    _white_list['b97m-d4'] = ('b97m_v', False, 'd4:b97m')
-    _white_list['wb97m-d4'] = ('wb97m_v', False, 'd4:wb97m')
-    _white_list['wb97x-d4'] = ('wb97x_v', False, 'd4:wb97x')
 
 # These xc functionals are not supported yet
 _black_list = {
@@ -82,18 +87,33 @@ def parse_dft(xc_code):
             return _white_list[method_lower]
         raise NotImplementedError('Only wb97x-3c is supported for now. Other 3c methods are not supported yet.')
 
-    if method_lower in _white_list:
-        if '-d4' in method_lower:
-            xc, nlc, disp = _white_list[method_lower]
-            if disp == 'd4:wb97x':
-                disp = disp + '-2008'
-            warnings.warn(f'''
-{method_lower} now follows the DFT-D4 recommendations: {xc} with D4 instead of vv10.
-To reproduce the previous PySCF behavior (v2.13 and earlier versions), explicitly specify
+    if method_lower == 'wb97x-d4' and not DFTD4_RECOMMENDATIONS:
+        xc, nlc, disp = _white_list[method_lower]
+        warnings.warn('''
+You are seeing this warning because `wb97x-d4` may produce different results from other packages.
+PySCF currently evaluates the XC functional using `wb97x`, following the behavior of PySCF
+v2.13 and earlier releases. This differs from the DFT-D4 recommendation, which uses wb97x_v and 
+replaces the VV10 part with the D4 dispersion correction.
 
-    mf.xc = '{xc[:-2]}'
-    mf.disp = '{disp}'
+To use the DFT-D4 recommended convention, set
+
+mf.xc = 'wb97x_v'
+mf.nlc = False
+mf.disp = 'd4:wb97x'
+
+or enable it globally via
+
+DFTD4_RECOMMENDATIONS = True
+
+in ~/pyscf_conf.py`, or at runtime via
+
+pyscf.scf.dispersion.DFTD4_RECOMMENDATIONS = True
+
+The default behavior will change to the DFT-D4 recommended convention in PySCF v2.16.
 ''', FutureWarning, stacklevel=2)
+        return 'wb97x', False, 'd4:wb97x'
+
+    if method_lower in _white_list:
         return _white_list[method_lower]
 
     if '-d3' in method_lower or '-d4' in method_lower:
@@ -260,12 +280,6 @@ def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
     if disp is None:
         disp = getattr(mf, 'disp', None)
 
-    try:
-        from pyscf.dispersion import dftd3, dftd4
-    except ImportError:
-        print('dftd3 and dftd4 not available. Install them with `pip install pyscf-dispersion`')
-        raise
-
     dft_method = getattr(mf, 'xc', 'hf')
     method, disp_version, disp_with_3body = parse_disp(dft_method, disp)
     if with_3body is None:
@@ -275,6 +289,8 @@ def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
 
     # for dftd3
     if disp_version[:2].upper() == 'D3':
+        if dftd3 is None:
+            raise RuntimeError('dftd3 not available. Install them with `pip install pyscf-dispersion`')
         logger.info(mf, "Calc dispersion correction with DFTD3.")
         logger.info(mf, f"Parameters: xc={method}, version={disp_version}, atm={with_3body}")
         d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
@@ -285,6 +301,8 @@ def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
 
     # for dftd4
     elif disp_version[:2].upper() == 'D4':
+        if dftd4 is None:
+            raise RuntimeError('dftd4 not available. Install them with `pip install pyscf-dispersion`')
         logger.info(mf, "Calc dispersion correction with DFTD4.")
         logger.info(mf, f"Parameters: xc={method}, atm={with_3body}")
         d4_model = dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body)
