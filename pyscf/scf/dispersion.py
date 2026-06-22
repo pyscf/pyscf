@@ -96,7 +96,7 @@ def parse_dft(xc_code):
         warnings.warn('''
 You are seeing this warning because `wb97x-d4` may produce different results from other packages.
 PySCF currently evaluates the XC functional using `wb97x`, following the behavior of PySCF
-v2.13 and earlier releases. This differs from the DFT-D4 recommendation, which uses wb97x_v and 
+v2.13 and earlier releases. This differs from the DFT-D4 recommendation, which uses wb97x_v and
 replaces the VV10 part with the D4 dispersion correction.
 
 To use the DFT-D4 recommended convention, set
