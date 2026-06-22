@@ -592,7 +592,7 @@ def nr_nlc_vxc(ni, cell, grids, xc_code, dms, relativity=0, hermi=1,
 
 def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                rho0=None, vxc=None, fxc=None, kpts=None, max_memory=2000,
-               verbose=None, ao_cache=None):
+               verbose=None):
     '''Contract RKS XC kernel matrix with given density matrices
 
     Args:
@@ -662,8 +662,7 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         vmat = [0] * nset
         p1 = 0
         for ao_k1, ao_k2, mask, weight, coords \
-                in ni.block_loop(cell, grids, nao, ao_deriv, kpts, None, max_memory,
-                                 ao_cache=ao_cache):
+                in ni.block_loop(cell, grids, nao, ao_deriv, kpts, None, max_memory):
             p0, p1 = p1, p1 + weight.size
             _fxc = fxc[:,:,p0:p1]
             for i in range(nset):
@@ -719,7 +718,7 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, hermi=0, singlet=Tru
 
 def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                rho0=None, vxc=None, fxc=None, kpts=None, max_memory=2000,
-               verbose=None, ao_cache=None):
+               verbose=None):
     '''Contract UKS XC kernel matrix with given density matrices
 
     Args:
@@ -796,11 +795,11 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     ao_loc = cell.ao_loc_nr()
     vmata = [0] * nset
     vmatb = [0] * nset
+
     if xctype in ('LDA', 'GGA', 'MGGA'):
         p1 = 0
         for ao_k1, ao_k2, mask, weight, coords \
-                in ni.block_loop(cell, grids, nao, ao_deriv, kpts, None, max_memory,
-                                 ao_cache=ao_cache):
+                in ni.block_loop(cell, grids, nao, ao_deriv, kpts, None, max_memory):
             p0, p1 = p1, p1 + weight.size
             _fxc = fxc[:,:,:,:,p0:p1]
 
@@ -1051,9 +1050,20 @@ class NumInt(lib.StreamObject, numint.LibXCMixin):
     '''
 
     cutoff = CUTOFF * 1e2  # cutoff for small AO product
+    ao_cache = None  # AOCache instance for AO precomputation
 
     def reset(self, cell=None):
+        self.ao_cache = None
         return self
+
+    def set_ao_cache(self, cell, grids, deriv, kpts=None, max_memory=4000):
+        '''Setup AOCache for precomputed AO values.
+        
+        This should be called at the beginning of gradient evaluation to cache
+        AO values and avoid repeated eval_ao calls.
+        '''
+        self.ao_cache = AOCache(self, cell, grids, deriv, kpts, max_memory)
+        return self.ao_cache
 
     def nr_vxc(self, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
                kpt=None, kpts_band=None, max_memory=2000, verbose=None):
@@ -1129,8 +1139,7 @@ class NumInt(lib.StreamObject, numint.LibXCMixin):
         return cache_xc_kernel1(self, cell, grids, xc_code, dm, spin, kpt, max_memory)
 
     def block_loop(self, cell, grids, nao=None, deriv=0, kpt=None,
-                   kpts_band=None, max_memory=2000, non0tab=None, blksize=None,
-                   ao_cache=None):
+                   kpts_band=None, max_memory=2000, non0tab=None, blksize=None):
         '''Define this macro to loop over grids by blocks.
         '''
         # For UniformGrids, grids.coords does not indicate whether grids are initialized
@@ -1169,8 +1178,8 @@ class NumInt(lib.StreamObject, numint.LibXCMixin):
             coords = grids_coords[ip0:ip1]
             weight = grids_weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
-            if ao_cache is not None and ao_cache.usable(deriv):
-                ao_k2 = ao_cache.get(deriv, ip0, ip1)
+            if self.ao_cache is not None and self.ao_cache.usable(deriv):
+                ao_k2 = self.ao_cache.get(deriv, ip0, ip1)
             else:
                 ao_k2 = self.eval_ao(cell, coords, kpt2, deriv=deriv, non0tab=non0,
                                      cutoff=grids.cutoff)
@@ -1331,8 +1340,7 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
     get_fxc = nr_fxc
 
     def block_loop(self, cell, grids, nao=None, deriv=0, kpts=None,
-                   kpts_band=None, max_memory=2000, non0tab=None, blksize=None,
-                   ao_cache=None):
+                   kpts_band=None, max_memory=2000, non0tab=None, blksize=None):
         '''Define this macro to loop over grids by blocks.
         '''
         if grids.coords is None:
@@ -1377,8 +1385,8 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
             coords = grids_coords[ip0:ip1]
             weight = grids_weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
-            if ao_cache is not None and ao_cache.usable(deriv, kpts_all):
-                ao_kall = ao_cache.get(deriv, ip0, ip1, kpts_all)
+            if self.ao_cache is not None and self.ao_cache.usable(deriv, kpts_all):
+                ao_kall = self.ao_cache.get(deriv, ip0, ip1, kpts_all)
             else:
                 ao_kall = self.eval_ao(cell, coords, kpts_all, deriv=deriv, non0tab=non0)
             if kpts_band is None:

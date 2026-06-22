@@ -270,11 +270,11 @@ class GradientsBase(molgrad.GradientsBase):
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
-    def get_j(self, dm=None, kpts=None, ao_cache=None):
+    def get_j(self, dm=None, kpts=None):
         if kpts is None: kpts = self.kpts
         if dm is None: dm = self.base.make_rdm1()
         cpu0 = (logger.process_clock(), logger.perf_counter())
-        vj = self.base.with_df.get_j_e1(dm, kpts, ao_cache=ao_cache)
+        vj = self.base.with_df.get_j_e1(dm, kpts)
         logger.timer(self, 'vj', *cpu0)
         return vj
 

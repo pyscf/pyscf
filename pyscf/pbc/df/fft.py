@@ -294,7 +294,7 @@ class FFTDF(lib.StreamObject):
     def build(self):
         return self.check_sanity()
 
-    def aoR_loop(self, grids=None, kpts=None, deriv=0, ao_cache=None):
+    def aoR_loop(self, grids=None, kpts=None, deriv=0):
         if grids is None:
             grids = self.grids
             cell = self.cell
@@ -313,7 +313,7 @@ class FFTDF(lib.StreamObject):
         nao = cell.nao_nr()
         p1 = 0
         for ao_k1_etc in ni.block_loop(cell, grids, nao, deriv, kpts,
-                                       max_memory=max_memory, ao_cache=ao_cache):
+                                       max_memory=max_memory):
             coords = ao_k1_etc[4]
             p0, p1 = p1, p1 + coords.shape[0]
             yield ao_k1_etc, p0, p1
@@ -327,9 +327,9 @@ class FFTDF(lib.StreamObject):
         vk = fft_jk.get_k_e1_kpts(self, dm, kpts, kpts_band, exxdiv)
         return vj, vk
 
-    def get_j_e1(self, dm, kpts=None, kpts_band=None, ao_cache=None):
+    def get_j_e1(self, dm, kpts=None, kpts_band=None):
         kpts = _check_kpts(self, kpts)[0]
-        vj = fft_jk.get_j_e1_kpts(self, dm, kpts, kpts_band, ao_cache=ao_cache)
+        vj = fft_jk.get_j_e1_kpts(self, dm, kpts, kpts_band)
         return vj
 
     def get_k_e1(self, dm, kpts=None, kpts_band=None, exxdiv=None):
