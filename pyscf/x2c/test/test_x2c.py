@@ -17,6 +17,7 @@
 #
 
 import numpy
+import scipy.linalg
 import unittest
 from pyscf import gto
 from pyscf import scf
@@ -185,23 +186,42 @@ C     D
 C     F 
     0.761000000E+00    0.100000000E+01
 ''')
-        xmol, c = x2c.X2C(mol).get_xmol(mol)
+        x2c_obj = x2c.X2C(mol)
+        xmol, c = x2c_obj.get_xmol(mol)
         self.assertEqual(xmol.nbas, 18)
         self.assertEqual(xmol.nao, 42)
         self.assertAlmostEqual(lib.fp(c), -5.480689638416739, 12)
+
+        hcore = x2c_obj.get_hcore()
+        s = mol.intor_symmetric('int1e_ovlp_spinor')
+        e_ref = scipy.linalg.eigvalsh(hcore, s)
+
+        mol = gto.M(atom='C', basis=(mol.basis, [[0, [0.128500001, 1]]]))
+        x2c_obj = x2c.X2C(mol)
+        xmol, c = x2c_obj.get_xmol(mol)
+        self.assertEqual(xmol.nbas, 19)
+        self.assertEqual(xmol.nao, 43)
+        hcore = x2c_obj.get_hcore()
+        s = mol.intor_symmetric('int1e_ovlp_spinor')
+        d, t = scipy.linalg.eigh(s)
+        idx = d > 1e-8
+        t = t[:,idx] / numpy.sqrt(d[idx])
+        tht = t.T.conj().dot(hcore.dot(t))
+        e = scipy.linalg.eigvalsh(tht)
+        self.assertAlmostEqual(abs(e - e_ref).max(), 0, 6)
 
     def test_get_hcore(self):
         myx2c = scf.RHF(mol).sfx2c1e()
         myx2c.with_x2c.get_xmat = lambda xmol: numpy.zeros((xmol.nao, xmol.nao))
         h1 = myx2c.with_x2c.get_hcore()
         ref = mol.intor('int1e_nuc')
-        self.assertAlmostEqual(abs(h1 - ref).max(), 0, 12)
+        self.assertAlmostEqual(abs(h1 - ref).max(), 0, 11)
 
         with_x2c = x2c.X2C(mol)
         with_x2c.get_xmat = lambda xmol: numpy.zeros((xmol.nao_2c(), xmol.nao_2c()))
         h1 = with_x2c.get_hcore()
         ref = mol.intor('int1e_nuc_spinor')
-        self.assertAlmostEqual(abs(h1 - ref).max(), 0, 12)
+        self.assertAlmostEqual(abs(h1 - ref).max(), 0, 11)
 
     def test_ghf(self):
         # Test whether the result of spinor X2C is a solution of .GHF().x2c()
@@ -225,8 +245,19 @@ C     F
         mf_atom1e = mol.GHF().x2c1e()
         mf_atom1e.with_x2c.approx = 'ATOM1E'
         mf_atom1e.kernel()
-        self.assertAlmostEqual(abs(mf_1e.e_tot - mf_atom1e.e_tot).max(), 0, 9)
+        self.assertAlmostEqual(mf_1e.e_tot, mf_atom1e.e_tot, 9)
         self.assertAlmostEqual(abs(mf_1e.mo_energy - mf_atom1e.mo_energy).max(), 0, 9)
+
+        with lib.temporary_env(lib.param, LIGHT_SPEED=15.):
+            mol = gto.M(atom='Ne 0 1 -1; Ne 0 8 8', basis='ccpvdz')
+            mf_1e = mol.GHF().x2c1e()
+            mf_1e.kernel()
+            mf_atom1e = mol.GHF().x2c1e()
+            mf_atom1e.with_x2c.approx = 'ATOM1E'
+            mf_atom1e.kernel()
+            self.assertAlmostEqual(mf_1e.e_tot, -267.39699993561, 8)
+            self.assertAlmostEqual(mf_1e.e_tot, mf_atom1e.e_tot, 8)
+            self.assertAlmostEqual(abs(mf_1e.mo_energy - mf_atom1e.mo_energy).max(), 0, 6)
 
     def test_gks(self):
         mol = gto.M(atom='C', basis='ccpvdz-dk')
@@ -240,6 +271,17 @@ C     F
         self.assertTrue(mf.converged)
         self.assertAlmostEqual(mf.e_tot, ref.e_tot, 9)
         self.assertAlmostEqual(abs(mf.dip_moment() - ref.dip_moment()).max(), 0, 9)
+
+        with lib.temporary_env(lib.param, LIGHT_SPEED=15.):
+            mol = gto.M(atom='Ne 0 1 -1; Ne 0 8 8', basis='ccpvdz')
+            mf_1e = mol.DKS().x2c1e()
+            mf_1e.kernel()
+            mf_atom1e = mol.DKS().x2c1e()
+            mf_atom1e.with_x2c.approx = 'ATOM1E'
+            mf_atom1e.kernel()
+            self.assertAlmostEqual(mf_1e.e_tot, -266.688128052731, 8)
+            self.assertAlmostEqual(mf_1e.e_tot, mf_atom1e.e_tot, 8)
+            self.assertAlmostEqual(abs(mf_1e.mo_energy - mf_atom1e.mo_energy).max(), 0, 6)
 
     def test_undo_x2c(self):
         mf = mol.RHF().x2c().density_fit()

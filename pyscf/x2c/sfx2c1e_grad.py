@@ -25,7 +25,7 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf import gto
-from pyscf.x2c import x2c
+from pyscf.x2c import x2c, sfx2c1e
 
 def hcore_grad_generator(x2cobj, mol=None):
     '''nuclear gradients of 1-component X2c hcore Hamiltonian  (spin-free part only)
@@ -49,25 +49,13 @@ def hcore_grad_generator(x2cobj, mol=None):
 
 def gen_sf_hfw(mol, approx='1E'):
     approx = approx.upper()
-    c = lib.param.LIGHT_SPEED
 
     h0, s0 = _get_h0_s0(mol)
     e0, c0 = scipy.linalg.eigh(h0, s0)
 
-    aoslices = mol.aoslice_by_atom()
     nao = mol.nao_nr()
     if 'ATOM' in approx:
-        x0 = numpy.zeros((nao,nao))
-        for ia in range(mol.natm):
-            ish0, ish1, p0, p1 = aoslices[ia]
-            shls_slice = (ish0, ish1, ish0, ish1)
-            t1 = mol.intor('int1e_kin', shls_slice=shls_slice)
-            s1 = mol.intor('int1e_ovlp', shls_slice=shls_slice)
-            with mol.with_rinv_at_nucleus(ia):
-                z = -mol.atom_charge(ia)
-                v1 = z * mol.intor('int1e_rinv', shls_slice=shls_slice)
-                w1 = z * mol.intor('int1e_prinvp', shls_slice=shls_slice)
-            x0[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
+        x0 = sfx2c1e._atomic_1e_x(mol)
     else:
         cl0 = c0[:nao,nao:]
         cs0 = c0[nao:,nao:]
@@ -244,51 +232,3 @@ def _get_r1(s0_roots, s_nesc0, s1, s_nesc1, r0_roots):
     R1 += reduce(numpy.dot, (vr0_s0_invsqrt.T, vr0_wr0_sqrt.T, s1_sqrt))
     R1 = reduce(numpy.dot, (v_s, R1, v_s.T))
     return R1
-
-
-if __name__ == '__main__':
-    bak = lib.param.LIGHT_SPEED
-    lib.param.LIGHT_SPEED = 10
-    def get_h(mol):
-        c = lib.param.LIGHT_SPEED
-        t = mol.intor_symmetric('int1e_kin')
-        v = mol.intor_symmetric('int1e_nuc')
-        s = mol.intor_symmetric('int1e_ovlp')
-        w = mol.intor_symmetric('int1e_pnucp')
-        return x2c._x2c1e_get_hcore(t, v, w, s, c)
-
-    mol = gto.M(
-        verbose = 0,
-        atom = [["O" , (0. , 0.     , 0.0001)],
-                [1   , (0. , -0.757 , 0.587)],
-                [1   , (0. , 0.757  , 0.587)]],
-        basis = '3-21g',
-    )
-    h_1 = get_h(mol)
-
-    mol = gto.M(
-        verbose = 0,
-        atom = [["O" , (0. , 0.     ,-0.0001)],
-                [1   , (0. , -0.757 , 0.587)],
-                [1   , (0. , 0.757  , 0.587)]],
-        basis = '3-21g',
-    )
-    h_2 = get_h(mol)
-    h_ref = (h_1 - h_2) / 0.0002 * lib.param.BOHR
-
-    mol = gto.M(
-        verbose = 0,
-        atom = [["O" , (0. , 0.     , 0.   )],
-                [1   , (0. , -0.757 , 0.587)],
-                [1   , (0. , 0.757  , 0.587)]],
-        basis = '3-21g',
-    )
-    hcore_deriv = gen_sf_hfw(mol)
-    h1 = hcore_deriv(0)
-    print(abs(h1[2]-h_ref).max())
-    lib.param.LIGHT_SPEED = bak
-
-    print(lib.finger(h1) - -1.4618392662849411)
-    hcore_deriv = gen_sf_hfw(mol, approx='atom1e')
-    h1 = hcore_deriv(0)
-    print(lib.finger(h1) - -1.3596826558976405)
