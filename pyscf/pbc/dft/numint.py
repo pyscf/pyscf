@@ -1044,26 +1044,36 @@ class AOCache:
         return [_slice(a) for a in self.ao]
 
 
-class NumInt(lib.StreamObject, numint.LibXCMixin):
-    '''Generalization of pyscf's NumInt class for a single k-point shift and
-    periodic images.
+class _AOCacheMixin:
+    '''AOCache plumbing shared by the gamma-point (:class:`NumInt`) and the
+    k-point (:class:`KNumInt`) numerical-integration classes, so that
+    ``block_loop`` can transparently reuse precomputed AOs during a single
+    nuclear-gradient evaluation.  Keep the cache local to one ``grad_elec``
+    call and clear it in ``reset`` so it cannot go stale across geometries.
     '''
 
-    cutoff = CUTOFF * 1e2  # cutoff for small AO product
     ao_cache = None  # AOCache instance for AO precomputation
-
-    def reset(self, cell=None):
-        self.ao_cache = None
-        return self
 
     def set_ao_cache(self, cell, grids, deriv, kpts=None, max_memory=4000):
         '''Setup AOCache for precomputed AO values.
-        
+
         This should be called at the beginning of gradient evaluation to cache
         AO values and avoid repeated eval_ao calls.
         '''
         self.ao_cache = AOCache(self, cell, grids, deriv, kpts, max_memory)
         return self.ao_cache
+
+
+class NumInt(lib.StreamObject, numint.LibXCMixin, _AOCacheMixin):
+    '''Generalization of pyscf's NumInt class for a single k-point shift and
+    periodic images.
+    '''
+
+    cutoff = CUTOFF * 1e2  # cutoff for small AO product
+
+    def reset(self, cell=None):
+        self.ao_cache = None
+        return self
 
     def nr_vxc(self, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
                kpt=None, kpts_band=None, max_memory=2000, verbose=None):
@@ -1178,8 +1188,11 @@ class NumInt(lib.StreamObject, numint.LibXCMixin):
             coords = grids_coords[ip0:ip1]
             weight = grids_weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
-            if self.ao_cache is not None and self.ao_cache.usable(deriv):
-                ao_k2 = self.ao_cache.get(deriv, ip0, ip1)
+            # getattr: block_loop is also borrowed by the 2-component numints
+            # (NumInt2C/KNumInt2C), which deliberately do not carry an AO cache.
+            ao_cache = getattr(self, 'ao_cache', None)
+            if ao_cache is not None and ao_cache.usable(deriv):
+                ao_k2 = ao_cache.get(deriv, ip0, ip1)
             else:
                 ao_k2 = self.eval_ao(cell, coords, kpt2, deriv=deriv, non0tab=non0,
                                      cutoff=grids.cutoff)
@@ -1216,7 +1229,7 @@ class NumInt(lib.StreamObject, numint.LibXCMixin):
 _NumInt = NumInt
 
 
-class KNumInt(lib.StreamObject, numint.LibXCMixin):
+class KNumInt(lib.StreamObject, numint.LibXCMixin, _AOCacheMixin):
     '''Generalization of pyscf's NumInt class for k-point sampling and
     periodic images.
     '''
@@ -1225,6 +1238,7 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
         pass
 
     def reset(self, cell=None):
+        self.ao_cache = None
         return self
 
     eval_ao = staticmethod(eval_ao_kpts)
@@ -1385,8 +1399,11 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
             coords = grids_coords[ip0:ip1]
             weight = grids_weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
-            if self.ao_cache is not None and self.ao_cache.usable(deriv, kpts_all):
-                ao_kall = self.ao_cache.get(deriv, ip0, ip1, kpts_all)
+            # getattr: block_loop is also borrowed by the 2-component numints
+            # (NumInt2C/KNumInt2C), which deliberately do not carry an AO cache.
+            ao_cache = getattr(self, 'ao_cache', None)
+            if ao_cache is not None and ao_cache.usable(deriv, kpts_all):
+                ao_kall = ao_cache.get(deriv, ip0, ip1, kpts_all)
             else:
                 ao_kall = self.eval_ao(cell, coords, kpts_all, deriv=deriv, non0tab=non0)
             if kpts_band is None:

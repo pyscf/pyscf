@@ -16,7 +16,6 @@
 import unittest
 import numpy as np
 from pyscf.pbc import dft, gto
-import pyscf.pbc.dft.numint as pbcni
 
 
 def _make(dz, xc, kmesh=(1, 1, 1)):
@@ -40,15 +39,17 @@ def _make(dz, xc, kmesh=(1, 1, 1)):
 class KnownValues(unittest.TestCase):
     def _cached_equals_uncached(self, xc, kmesh=(1, 1, 1)):
         mf = _make(0.0, xc, kmesh)
+        ni = mf._numint
         g = mf.nuc_grad_method()
+        # Default: the AO cache is off, so the gradient is the stock pyscf path.
+        self.assertFalse(g.use_ao_cache)
+        de_plain = g.kernel()
+        self.assertIsNone(ni.ao_cache)
+        # Turning the flag on must build the cache (so the cached path is really
+        # exercised) and reproduce the uncached gradient bit-for-bit.
+        g.use_ao_cache = True
         de_cached = g.kernel()
-        # disable the AO cache by forcing every block to fall back to eval_ao
-        orig = pbcni.AOCache.usable
-        try:
-            pbcni.AOCache.usable = lambda *args, **kwargs: False
-            de_plain = g.kernel()
-        finally:
-            pbcni.AOCache.usable = orig
+        self.assertIsNotNone(ni.ao_cache)
         self.assertAlmostEqual(abs(de_cached - de_plain).max(), 0, 9)
         return de_cached
 
