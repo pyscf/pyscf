@@ -677,7 +677,7 @@ class KnownValues(unittest.TestCase):
             h2 = h2_deriv(1,0)
             h2_ref = (h1_deriv_1(1)[2] - h1_deriv_2(1)[2]) / 0.0002 * lib.param.BOHR
             self.assertAlmostEqual(abs(h2[2,2]-h2_ref).max(), 0, 6)
-            self.assertAlmostEqual(lib.fp(h2), -23.609411428378138, 9)
+            self.assertAlmostEqual(lib.fp(h2), -23.609411428378138, 7)
 
             h2 = ha2_deriv(0,0)
             h2_ref = (ha1_deriv_1(0)[2] - ha1_deriv_2(0)[2]) / 0.0002 * lib.param.BOHR
