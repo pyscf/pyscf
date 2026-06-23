@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2025 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ from pyscf import ao2mo, lib
 from pyscf.ao2mo import _ao2mo
 from pyscf.lib import logger
 from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, get_e_hf, _mo_without_core
-from pyscf.cc import ccsd, _ccsd
+from pyscf.cc import ccsd
 from pyscf import __config__
 
 
@@ -121,23 +121,6 @@ def unpack_t3_tri2block_(t3, t3_blk, map_, mask, i0, i1, j0, j1, k0, k1, nocc, n
     )
     return t3_blk
 
-def unpack_t3_tri2single_pair_(t3, t3_blk, map_, mask, i0, j0, k0, nocc, nvir):
-    assert t3.dtype == np.float64 and t3_blk.dtype == np.float64
-    assert map_.dtype == np.int64 and mask.dtype == np.bool_
-    t3 = np.ascontiguousarray(t3)
-    t3_blk = np.ascontiguousarray(t3_blk)
-    map_ = np.ascontiguousarray(map_)
-    mask = np.ascontiguousarray(mask)
-    _libccsdt.unpack_t3_tri2single_pair_(
-        t3.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
-        t3_blk.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
-        map_.ctypes.data_as(ctypes.POINTER(ctypes.c_int64)),
-        mask.ctypes.data_as(ctypes.POINTER(ctypes.c_bool)),
-        ctypes.c_int64(i0), ctypes.c_int64(j0), ctypes.c_int64(k0),
-        ctypes.c_int64(nocc), ctypes.c_int64(nvir),
-    )
-    return t3_blk
-
 def unpack_t3_tri2block_pair_(t3, t3_blk, map_, mask, i0, i1, j0, j1, k0, k1, nocc, nvir, blk_i, blk_j, blk_k):
     assert t3.dtype == np.float64 and t3_blk.dtype == np.float64
     assert map_.dtype == np.int64 and mask.dtype == np.bool_
@@ -177,22 +160,6 @@ def accumulate_t3_block2tri_(t3, t3_blk, map_, i0, i1, j0, j1, k0, k1, nocc, nvi
     )
     return t3
 
-def accumulate_t3_single2tri_(t3, t3_blk, map_, i0, j0, k0, nocc, nvir, alpha, beta):
-    assert t3.dtype == np.float64 and t3_blk.dtype == np.float64
-    assert map_.dtype == np.int64
-    t3 = np.ascontiguousarray(t3)
-    t3_blk = np.ascontiguousarray(t3_blk)
-    map_ = np.ascontiguousarray(map_)
-    _libccsdt.accumulate_t3_single2tri_(
-        t3.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
-        t3_blk.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
-        map_.ctypes.data_as(ctypes.POINTER(ctypes.c_int64)),
-        ctypes.c_int64(i0), ctypes.c_int64(j0), ctypes.c_int64(k0),
-        ctypes.c_int64(nocc), ctypes.c_int64(nvir),
-        ctypes.c_double(alpha), ctypes.c_double(beta)
-    )
-    return t3
-
 def _unpack_t3_(mycc, t3, t3_blk, i0, i1, j0, j1, k0, k1, blksize0=None, blksize1=None, blksize2=None):
     r'''Unpack triangular-stored T3 amplitudes into the block `t3_full[i0:i1, j0:j1, k0:k1, :, :, :]`'''
     if blksize0 is None: blksize0 = mycc.blksize
@@ -202,17 +169,9 @@ def _unpack_t3_(mycc, t3, t3_blk, i0, i1, j0, j1, k0, k1, blksize0=None, blksize
                         i0, i1, j0, j1, k0, k1, mycc.nocc, mycc.nmo - mycc.nocc, blksize0, blksize1, blksize2)
     return t3_blk
 
-def _unpack_t3_s_pair_(mycc, t3, t3_blk, i0, j0, k0):
-    r'''Unpack triangular-stored T3 amplitudes into the block
-    `t3_full[i0, j0, k0, :, :, :] + t3_full[j0, i0, k0, :, :, :].transpose(1, 0, 2)`
-    '''
-    unpack_t3_tri2single_pair_(t3, t3_blk, mycc.tri2block_map, mycc.tri2block_mask,
-                                i0, j0, k0, mycc.nocc, mycc.nmo - mycc.nocc)
-    return t3_blk
-
 def _unpack_t3_pair_(mycc, t3, t3_blk, i0, i1, j0, j1, k0, k1, blksize0=None, blksize1=None, blksize2=None):
     r'''Unpack triangular-stored T3 amplitudes into the block
-    `t3_full[i0:i1, j0:j1, k0:k1, :, :, :] + t3_full[k0:k1, j0:j1, i0:i1, :, :, :].transpose(0, 1, 2, 3, 5, 4)`
+    `t3_full[i0:i1, j0:j1, k0:k1, :, :, :] + t3_full[i0:i1, j0:j1, k0:k1, :, :, :].transpose(0, 1, 2, 4, 5, 3)`
     '''
     if blksize0 is None: blksize0 = mycc.blksize_oovv
     if blksize1 is None: blksize1 = mycc.nocc
@@ -228,11 +187,6 @@ def _accumulate_t3_(mycc, t3, t3_blk, i0, i1, j0, j1, k0, k1,
     if blksize2 is None: blksize2 = mycc.blksize
     accumulate_t3_block2tri_(t3, t3_blk, mycc.tri2block_map, i0, i1, j0, j1, k0, k1,
                         mycc.nocc, mycc.nmo - mycc.nocc, blksize0, blksize1, blksize2, alpha=alpha, beta=beta)
-    return t3
-
-def _accumulate_t3_s_(mycc, t3, t3_blk, i0, j0, k0, alpha=1.0, beta=0.0):
-    accumulate_t3_single2tri_(t3, t3_blk, mycc.tri2block_map, i0, j0, k0,
-                                mycc.nocc, mycc.nmo - mycc.nocc, alpha=alpha, beta=beta)
     return t3
 
 def setup_tri2block_rhf(mycc):
@@ -463,12 +417,13 @@ def intermediates_t1t2(mycc, imds, t2):
     einsum('lkdc,ljcd->kj', t1_eris[:nocc, :nocc, nocc:, nocc:], t2, out=F_oo, alpha=-1.0, beta=1.0)
     W_oooo = t1_eris[:nocc, :nocc, :nocc, :nocc].copy()
     einsum('klcd,ijcd->klij', t1_eris[:nocc, :nocc, nocc:, nocc:], t2, out=W_oooo, alpha=1.0, beta=1.0)
-    W_ovvo = - t1_eris[:nocc, nocc:, nocc:, :nocc]
-    einsum('klcd,ilad->kaci', t1_eris[:nocc, :nocc, nocc:, nocc:], t2, out=W_ovvo, alpha=-1.0, beta=1.0)
-    einsum('kldc,ilad->kaci', t1_eris[:nocc, :nocc, nocc:, nocc:], t2, out=W_ovvo, alpha=0.5, beta=1.0)
-    einsum('klcd,ilda->kaci', t1_eris[:nocc, :nocc, nocc:, nocc:], t2, out=W_ovvo, alpha=0.5, beta=1.0)
-    W_ovov = - t1_eris[:nocc, nocc:, :nocc, nocc:]
-    einsum('kldc,liad->kaic', t1_eris[:nocc, :nocc, nocc:, nocc:], t2, out=W_ovov, alpha=0.5, beta=1.0)
+    c_t2 = 2.0 * t2 - t2.transpose(0, 1, 3, 2)
+    W_ovvo = 2.0 * t1_eris[:nocc, nocc:, nocc:, :nocc] - t1_eris[:nocc, nocc:, :nocc, nocc:].transpose(0, 1, 3, 2)
+    einsum('mled,miea->ladi', t1_eris[:nocc, :nocc, nocc:, nocc:], c_t2, out=W_ovvo, alpha=1.0, beta=1.0)
+    einsum('mlde,miea->ladi', t1_eris[:nocc, :nocc, nocc:, nocc:], c_t2, out=W_ovvo, alpha=-0.5, beta=1.0)
+    c_t2 = None
+    W_ovov = t1_eris[:nocc, nocc:, :nocc, nocc:].copy()
+    einsum('mlde,imea->laid', t1_eris[:nocc, :nocc, nocc:, nocc:], t2, out=W_ovov, alpha=-0.5, beta=1.0)
     imds.F_vv, imds.F_oo, imds.W_oooo, imds.W_ovvo, imds.W_ovov = F_vv, F_oo, W_oooo, W_ovvo, W_ovov
     return imds
 
@@ -495,12 +450,10 @@ def compute_r1r2(mycc, imds, t2):
     einsum("kj,ikab->ijab", F_oo, t2, out=r2, alpha=-1.0, beta=1.0)
     einsum("abcd,ijcd->ijab", t1_eris[nocc:, nocc:, nocc:, nocc:], t2, out=r2, alpha=0.5, beta=1.0)
     einsum("klij,klab->ijab", W_oooo, t2, out=r2, alpha=0.5, beta=1.0)
-    einsum("kajc,ikcb->ijab", W_ovov, t2, out=r2, alpha=1.0, beta=1.0)
-    einsum("kaci,kjcb->ijab", W_ovvo, t2, out=r2, alpha=-2.0, beta=1.0)
-    einsum("kaic,kjcb->ijab", W_ovov, t2, out=r2, alpha=1.0, beta=1.0)
-    einsum("kaci,jkcb->ijab", W_ovvo, t2, out=r2, alpha=1.0, beta=1.0)
-    W_ovvo = imds.W_ovvo = None
-    W_ovov = imds.W_ovov = None
+    einsum("kaci,kjcb->ijab", W_ovvo, c_t2, out=r2, alpha=0.5, beta=1.0)
+    einsum("kaic,jkcb->ijab", W_ovov, t2, out=r2, alpha=-0.5, beta=1.0)
+    einsum("kbic,jkca->ijab", W_ovov, t2, out=r2, alpha=-1.0, beta=1.0)
+    c_t2 = None
     return r1, r2
 
 def r1r2_add_t3_tri_(mycc, imds, r1, r2, t3):
@@ -523,9 +476,7 @@ def r1r2_add_t3_tri_(mycc, imds, r1, r2, t3):
                 t3_spin_summation_inplace_(t3_tmp, blksize**3, nvir, "P3_422", 1.0, 0.0)
                 einsum('jkbc,ijkabc->ia', t1_eris[j0:j1, k0:k1, nocc:, nocc:],
                     t3_tmp[:bi, :bj, :bk], out=r1[i0:i1, :], alpha=0.5, beta=1.0)
-    t3_tmp = None
 
-    t3_tmp = np.empty((blksize,) * 3 + (nvir,) * 3, dtype=t3.dtype)
     for k0, k1 in lib.prange(0, nocc, blksize):
         bk = k1 - k0
         for j0, j1 in lib.prange(0, nocc, blksize):
@@ -535,7 +486,7 @@ def r1r2_add_t3_tri_(mycc, imds, r1, r2, t3):
                 _unpack_t3_(mycc, t3, t3_tmp, k0, k1, i0, i1, j0, j1)
                 t3_spin_summation_inplace_(t3_tmp, blksize**3, nvir, "P3_201", 1.0, 0.0)
                 einsum("kc,kijcab->ijab", t1_fock[k0:k1, nocc:], t3_tmp[:bk, :bi, :bj],
-                    out=r2[i0:i1, j0:j1, :, :], alpha=0.5, beta=1.0)
+                        out=r2[i0:i1, j0:j1, :, :], alpha=0.5, beta=1.0)
                 einsum("bkcd,kijdac->ijab", t1_eris[nocc:, k0:k1, nocc:, nocc:],
                         t3_tmp[:bk, :bi, :bj], out=r2[i0:i1, j0:j1, :, :], alpha=1.0, beta=1.0)
                 einsum("jklc,kijcab->ilab", t1_eris[j0:j1, k0:k1, :nocc, nocc:],
@@ -578,14 +529,12 @@ def intermediates_t3(mycc, imds, t2):
     einsum('lbde,jlea->abdj', t1_eris[:nocc, nocc:, nocc:, nocc:], t2, out=W_vvvo, alpha=-1.0, beta=1.0)
     einsum('lmdj,lmab->abdj', t1_eris[:nocc, :nocc, nocc:, :nocc], t2, out=W_vvvo, alpha=1.0, beta=1.0)
 
-    W_ovvo = (2.0 * t1_eris[:nocc, nocc:, nocc:, :nocc] - t1_eris[:nocc, nocc:, :nocc, nocc:].transpose(0, 1, 3, 2))
-    einsum('mled,miea->ladi', t1_eris[:nocc, :nocc, nocc:, nocc:], c_t2, out=W_ovvo, alpha=2.0, beta=1.0)
-    einsum('mlde,miea->ladi', t1_eris[:nocc, :nocc, nocc:, nocc:], c_t2, out=W_ovvo, alpha=-1.0, beta=1.0)
+    einsum('mled,miea->ladi', t1_eris[:nocc, :nocc, nocc:, nocc:], c_t2, out=imds.W_ovvo, alpha=1.0, beta=1.0)
+    einsum('mlde,miea->ladi', t1_eris[:nocc, :nocc, nocc:, nocc:], c_t2, out=imds.W_ovvo, alpha=-0.5, beta=1.0)
     c_t2 = None
 
-    W_ovov = t1_eris[:nocc, nocc:, :nocc, nocc:].copy()
-    einsum('mlde,imea->laid', t1_eris[:nocc, :nocc, nocc:, nocc:], t2, out=W_ovov, alpha=-1.0, beta=1.0)
-    imds.W_vooo, imds.W_ovvo, imds.W_ovov, imds.W_vvvo, imds.W_vvvv = W_vooo, W_ovvo, W_ovov, W_vvvo, W_vvvv
+    einsum('mlde,imea->laid', t1_eris[:nocc, :nocc, nocc:, nocc:], t2, out=imds.W_ovov, alpha=-0.5, beta=1.0)
+    imds.W_vooo, imds.W_vvvo, imds.W_vvvv = W_vooo, W_vvvo, W_vvvv
     return imds
 
 def intermediates_t3_add_t3_tri(mycc, imds, t3):
@@ -673,10 +622,8 @@ def compute_r3_tri(mycc, imds, t2, t3):
 
                 _unpack_t3_(mycc, t3, t3_tmp, i0, i1, j0, j1, k0, k1)
                 einsum('ad,ijkdbc->ijkabc', F_vv, t3_tmp[:bi, :bj, :bk], out=r3_tmp[:bi, :bj, :bk], alpha=1.0, beta=1.0)
-                _unpack_t3_(mycc, t3, t3_tmp, j0, j1, i0, i1, k0, k1)
-                einsum('bd,jikdac->ijkabc', F_vv, t3_tmp[:bj, :bi, :bk], out=r3_tmp[:bi, :bj, :bk], alpha=1.0, beta=1.0)
-                _unpack_t3_(mycc, t3, t3_tmp, k0, k1, j0, j1, i0, i1)
-                einsum('cd,kjidba->ijkabc', F_vv, t3_tmp[:bk, :bj, :bi], out=r3_tmp[:bi, :bj, :bk], alpha=1.0, beta=1.0)
+                einsum('bd,ijkadc->ijkabc', F_vv, t3_tmp[:bi, :bj, :bk], out=r3_tmp[:bi, :bj, :bk], alpha=1.0, beta=1.0)
+                einsum('cd,ijkabd->ijkabc', F_vv, t3_tmp[:bi, :bj, :bk], out=r3_tmp[:bi, :bj, :bk], alpha=1.0, beta=1.0)
 
                 _accumulate_t3_(mycc, r3, r3_tmp, i0, i1, j0, j1, k0, k1, alpha=1.0, beta=1.0)
         time2 = log.timer_debug1('t3: iter: W_vvvo, W_vooo, F_vv [%3d, %3d]:'%(k0, k1), *time2)
@@ -740,8 +687,7 @@ def compute_r3_tri(mycc, imds, t2, t3):
                 _unpack_t3_(mycc, t3, t3_tmp, j0, j1, 0, nocc, k0, k1, blksize_oovv, nocc, blksize_oovv)
                 einsum('lbid,jlkdac->ijkabc', W_ovov[:, :, i0:i1, :], t3_tmp[:bj, :, :bk],
                     out=r3_tmp[:bi, :bj, :bk], alpha=-1.0, beta=0.0)
-                _unpack_t3_(mycc, t3, t3_tmp, k0, k1, 0, nocc, j0, j1, blksize_oovv, nocc, blksize_oovv)
-                einsum('lcid,kljdab->ijkabc', W_ovov[:, :, i0:i1, :], t3_tmp[:bk, :, :bj],
+                einsum('lcid,jlkbad->ijkabc', W_ovov[:, :, i0:i1, :], t3_tmp[:bj, :, :bk],
                     out=r3_tmp[:bi, :bj, :bk], alpha=-1.0, beta=1.0)
                 _unpack_t3_pair_(mycc, t3, t3_tmp, j0, j1, 0, nocc, k0, k1)
                 einsum('laid,jlkdbc->ijkabc', W_ovov[:, :, i0:i1, :], t3_tmp[:bj, :, :bk],
@@ -750,8 +696,7 @@ def compute_r3_tri(mycc, imds, t2, t3):
                 _unpack_t3_(mycc, t3, t3_tmp, i0, i1, 0, nocc, k0, k1, blksize_oovv, nocc, blksize_oovv)
                 einsum('lajd,ilkdbc->ijkabc', W_ovov[:, :, j0:j1, :], t3_tmp[:bi, :, :bk],
                     out=r3_tmp[:bi, :bj, :bk], alpha=-1.0, beta=1.0)
-                _unpack_t3_(mycc, t3, t3_tmp, k0, k1, 0, nocc, i0, i1, blksize_oovv, nocc, blksize_oovv)
-                einsum('lcjd,klidba->ijkabc', W_ovov[:, :, j0:j1, :], t3_tmp[:bk, :, :bi],
+                einsum('lcjd,ilkabd->ijkabc', W_ovov[:, :, j0:j1, :], t3_tmp[:bi, :, :bk],
                     out=r3_tmp[:bi, :bj, :bk], alpha=-1.0, beta=1.0)
                 _unpack_t3_pair_(mycc, t3, t3_tmp, i0, i1, 0, nocc, k0, k1)
                 einsum('lbjd,ilkdac->ijkabc', W_ovov[:, :, j0:j1, :], t3_tmp[:bi, :, :bk],
@@ -760,8 +705,7 @@ def compute_r3_tri(mycc, imds, t2, t3):
                 _unpack_t3_(mycc, t3, t3_tmp, i0, i1, 0, nocc, j0, j1, blksize_oovv, nocc, blksize_oovv)
                 einsum('lakd,iljdcb->ijkabc', W_ovov[:, :, k0:k1, :], t3_tmp[:bi, :, :bj],
                     out=r3_tmp[:bi, :bj, :bk], alpha=-1.0, beta=1.0)
-                _unpack_t3_(mycc, t3, t3_tmp, j0, j1, 0, nocc, i0, i1, blksize_oovv, nocc, blksize_oovv)
-                einsum('lbkd,jlidca->ijkabc', W_ovov[:, :, k0:k1, :], t3_tmp[:bj, :, :bi],
+                einsum('lbkd,iljacd->ijkabc', W_ovov[:, :, k0:k1, :], t3_tmp[:bi, :, :bj],
                     out=r3_tmp[:bi, :bj, :bk], alpha=-1.0, beta=1.0)
                 _unpack_t3_pair_(mycc, t3, t3_tmp, i0, i1, 0, nocc, j0, j1)
                 einsum('lckd,iljdab->ijkabc', W_ovov[:, :, k0:k1, :], t3_tmp[:bi, :, :bj],
@@ -803,22 +747,16 @@ def compute_r3_tri(mycc, imds, t2, t3):
     W_oooo = imds.W_oooo = None
     time1 = log.timer_debug1('t3: W_oooo * t3', *time1)
 
-    t3_tmp_s = np.empty((nvir, nvir, nvir), dtype=t3.dtype)
-    r3_tmp_s = np.empty((nvir, nvir, nvir), dtype=t3.dtype)
     time2 = logger.process_clock(), logger.perf_counter()
-    for k0 in range(nocc):
-        for j0 in range(k0 + 1):
-            for i0 in range(j0 + 1):
-                _unpack_t3_s_pair_(mycc, t3, t3_tmp_s, i0, j0, k0)
-                einsum('abde,dec->abc', W_vvvv, t3_tmp_s, out=r3_tmp_s, alpha=0.5, beta=0.0)
-                _unpack_t3_s_pair_(mycc, t3, t3_tmp_s, i0, k0, j0)
-                einsum('acde,deb->abc', W_vvvv, t3_tmp_s, out=r3_tmp_s, alpha=0.5, beta=1.0)
-                _unpack_t3_s_pair_(mycc, t3, t3_tmp_s, j0, k0, i0)
-                einsum('bcde,dea->abc', W_vvvv, t3_tmp_s, out=r3_tmp_s, alpha=0.5, beta=1.0)
-                _accumulate_t3_s_(mycc, r3, r3_tmp_s, i0, j0, k0, alpha=1.0, beta=1.0)
-        time2 = log.timer_debug1('t3: iter: W_vvvv %3d:'%k0, *time2)
-    t3_tmp_s = None
-    r3_tmp_s = None
+    index = 0
+    for i0 in range(nocc):
+        for j0 in range(i0, nocc):
+            for k0 in range(j0, nocc):
+                einsum('abde,dec->abc', W_vvvv, t3[index], out=r3[index], alpha=1.0, beta=1.0)
+                einsum('acde,dbe->abc', W_vvvv, t3[index], out=r3[index], alpha=1.0, beta=1.0)
+                einsum('bcde,ade->abc', W_vvvv, t3[index], out=r3[index], alpha=1.0, beta=1.0)
+                index += 1
+        time2 = log.timer_debug1('t3: iter: W_vvvv %3d:'%i0, *time2)
     W_vvvv = imds.W_vvvv = None
     time1 = log.timer_debug1('t3: W_vvvv * t3', *time1)
     return r3
@@ -869,15 +807,9 @@ def update_amps_rccsdt_tri_(mycc, tamps, eris):
     # symmetrization
     r2 += r2.transpose(1, 0, 3, 2)
     time1 = log.timer_debug1('t1t2: symmetrize r2', *time1)
-    # divide by eijkabc
+    # divide by eijab
     r1r2_divide_e_(mycc, r1, r2, mo_energy)
     time1 = log.timer_debug1('t1t2: divide r1 & r2 by eia & eijab', *time1)
-
-    res_norm = [np.linalg.norm(r1), np.linalg.norm(r2)]
-
-    t1 += r1
-    t2 += r2
-    time1 = log.timer_debug1('t1t2: update t1 & t2', *time1)
     time0 = log.timer_debug1('t1t2 total', *time0)
 
     # t3
@@ -897,11 +829,13 @@ def update_amps_rccsdt_tri_(mycc, tamps, eris):
     r3_tri_divide_e_(mycc, r3, mo_energy)
     time1 = log.timer_debug1('t3: divide r3 by eijkabc', *time1)
 
-    res_norm.append(np.linalg.norm(r3))
+    res_norm = [np.linalg.norm(r1), np.linalg.norm(r2), np.linalg.norm(r3)]
 
+    t1 += r1
+    t2 += r2
     t3 += r3
-    r3 = None
-    time1 = log.timer_debug1('t3: update t3', *time1)
+    r1, r2, r3 = None, None, None
+    time1 = log.timer_debug1('t3: update t1, t2, t3', *time1)
     time0 = log.timer_debug1('t3 total', *time0)
     return res_norm
 
@@ -1087,9 +1021,9 @@ def restore_from_diis_(mycc, diis_file, inplace=True):
     else:
         mycc.tamps[:cc_order - 1] = tamps
         if mycc.do_tri_max_t:
-            mycc.tamp[-1] = np.zeros((nx(nocc, cc_order),) + (nvir,) * cc_order, dtype=ccvec.dtype)
+            mycc.tamps[-1] = np.zeros((nx(nocc, cc_order),) + (nvir,) * cc_order, dtype=ccvec.dtype)
         else:
-            mycc.tamp[-1] = np.zeros((nocc,) * cc_order + (nvir,) * cc_order, dtype=ccvec.dtype)
+            mycc.tamps[-1] = np.zeros((nocc,) * cc_order + (nvir,) * cc_order, dtype=ccvec.dtype)
     if inplace:
         mycc.diis = adiis
     return mycc
@@ -1337,8 +1271,8 @@ iterative_damping, incore_complete, level_shift, and frozen can be configured in
 the same way as in CCSD. Additional attributes are:
 
     do_diis_max_t : bool
-        Whether to use DIIS to accelerate convergence. Note that enabling DIIS
-        will increase memory consumption.
+        Whether to use DIIS for the highest-order amplitudes to accelerate convergence.
+        Note that enabling DIIS will increase memory consumption.
     blksize, blksize_oovv, blksize_oooo :
         Batch sizes used to reduce the memory footprint during tensor contractions.
     einsum_backend : string
@@ -1359,7 +1293,7 @@ Saved results:
         T amplitudes t1[i,a], t2[i,j,a,b]  (i,j in occ, a,b in virt)
     t3 :
         An array of shape (compressed_occ, nvir, nvir, nvir) for T3 amplitudes.
-        The occupied-oribtal dimension is stored in a compressed form for the
+        The occupied-orbital dimension is stored in a compressed form for the
         i <= j <= k index combinations. The compressed tensor can be expanded to
         the full tensor by self.tamps_tri2full(t3)
     tamps :
@@ -1490,8 +1424,11 @@ Saved results:
         self._finalize()
         return self.e_corr, self.tamps
 
-    def ccsdt_q(self, tamps, eris=None):
-        raise NotImplementedError
+    def ccsdt_q(self, tamps=None, eris=None):
+        from pyscf.cc import rccsdt_q
+        if tamps is None: tamps = self.tamps
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        return rccsdt_q.kernel(self, eris, tamps, self.verbose)
 
 class _IMDS:
 
@@ -1634,3 +1571,13 @@ if __name__ == "__main__":
     print('max(abs(t2 difference))                    % .10e' % np.max(np.abs(mycc.t2 - mycc2.t2)))
     print('max(abs(t3_tri - t3_tri_from_t3_full))     % .10e' % np.max(np.abs(t3_tri - t3_tri_from_t3_full)))
     print('max(abs(t3_full - t3_full_from_t3_tri))    % .10e' % np.max(np.abs(t3_full - t3_full_from_t3_tri)))
+
+    # ccsdt_q
+    # [Q] and (Q) energy correction
+    e_q_bracket, e_q_paren = mycc.ccsdt_q()
+    e_q_bracket2, e_q_paren2 = mycc2.ccsdt_q()
+    ref_e_q_bracket, ref_e_q_paren = -0.001412978902990858, -0.0017003938319959389
+    print('[Q] difference                      % .10e' % (e_q_bracket - e_q_bracket2))
+    print('(Q) difference                      % .10e' % (e_q_paren - e_q_paren2))
+    print('[Q] difference from reference       % .10e' % (e_q_bracket - ref_e_q_bracket))
+    print('(Q) difference from reference       % .10e' % (e_q_paren - ref_e_q_paren))

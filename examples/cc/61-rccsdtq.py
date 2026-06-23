@@ -52,7 +52,7 @@ mycc2.conv_tol_normt = 1e-6
 mycc2.verbose = 5
 mycc2.incore_complete = True
 mycc2.kernel()
-print('Full-T4 RCCSDQ e_corr       % .12f    Ref % .12f    Diff % .12e' % (
+print('Full-T4 RCCSDTQ e_corr       % .12f    Ref % .12f    Diff % .12e' % (
         mycc2.e_corr, ref_e_corr, mycc2.e_corr - ref_e_corr))
 
 #
