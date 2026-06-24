@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -137,10 +137,14 @@ class GHF(pbchf.SCF):
         s = pbchf.SCF.get_ovlp(self, cell, kpt)
         return scipy.linalg.block_diag(s, s)
 
-    def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+    def get_veff(self, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
                  kpt=None, kpts_band=None):
+        if dm is None: dm = self.make_rdm1()
         vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
         vhf = vj - vk
+        if dm.ndim == 2 and kpts_band is None:
+            ecoul = np.einsum('ij,ji->', dm, vj).real * .5
+            vhf = lib.tag_array(vhf, ecoul=ecoul)
         return vhf
 
     def get_bands(self, kpts_band, cell=None, dm=None, kpt=None):

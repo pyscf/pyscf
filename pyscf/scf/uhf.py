@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
+from pyscf.data import nist
 from pyscf.scf import hf
 from pyscf.scf import chkfile
 from pyscf import __config__
@@ -223,7 +224,7 @@ def make_rdm2(mo_coeff, mo_occ):
     dm2ab = numpy.einsum('ij,kl->ijkl', dm1a, dm1b)
     return dm2aa, dm2ab, dm2bb
 
-def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
+def get_veff(mol, dm, dm_last=None, vhf_last=None, hermi=1, vhfopt=None):
     r'''Unrestricted Hartree-Fock potential matrix of alpha and beta spins,
     for the given density matrix
 
@@ -241,10 +242,10 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
             A list of density matrices, stored as (alpha,alpha,...,beta,beta,...)
 
     Kwargs:
-        dm_last : ndarray or a list of ndarrays or 0
+        dm_last : ndarray or a list of ndarrays
             The density matrix baseline.  When it is not 0, this function computes
             the increment of HF potential w.r.t. the reference HF potential matrix.
-        vhf_last : ndarray or a list of ndarrays or 0
+        vhf_last : ndarray or a list of ndarrays
             The reference HF potential matrix.
         hermi : int
             Whether J, K matrix is hermitian
@@ -277,18 +278,20 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     >>> vhfb.shape
     (3, 2, 2)
     '''
-    dm = numpy.asarray(dm)
-    dm_last = numpy.asarray(dm_last)
-    assert dm_last.ndim == 0 or dm_last.ndim == dm.ndim
+    ddm = dm = numpy.asarray(dm)
+    if dm_last is not None:
+        assert vhf_last is not None
+        dm_last = numpy.asarray(dm_last)
+        ddm = ddm - dm_last
     nao = dm.shape[-1]
-    ddm = dm - dm_last
     # dm.reshape(-1,nao,nao) to remove first dim, compress (dma,dmb)
     vj, vk = hf.get_jk(mol, ddm.reshape(-1,nao,nao), hermi=hermi, vhfopt=vhfopt)
     vj = vj.reshape(dm.shape)
     vk = vk.reshape(dm.shape)
     assert (vj.ndim >= 3 and vj.shape[0] == 2)
     vhf = vj[0] + vj[1] - vk
-    vhf += numpy.asarray(vhf_last)
+    if dm_last is not None:
+        vhf += numpy.asarray(vhf_last)
     return vhf
 
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
@@ -334,37 +337,50 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
 
 def get_occ(mf, mo_energy=None, mo_coeff=None):
     if mo_energy is None: mo_energy = mf.mo_energy
-    e_idx_a = numpy.argsort(mo_energy[0])
-    e_idx_b = numpy.argsort(mo_energy[1])
-    e_sort_a = mo_energy[0][e_idx_a]
-    e_sort_b = mo_energy[1][e_idx_b]
-    nmo = mo_energy[0].size
+    e_idx_a = numpy.argsort(mo_energy[0].round(9), kind='stable')
+    e_idx_b = numpy.argsort(mo_energy[1].round(9), kind='stable')
+    nmo = len(e_idx_a)
     n_a, n_b = mf.nelec
     mo_occ = numpy.zeros_like(mo_energy)
     mo_occ[0,e_idx_a[:n_a]] = 1
     mo_occ[1,e_idx_b[:n_b]] = 1
-    if n_a > nmo or n_b > nmo:
+
+    if n_a < nmo and n_b < nmo:
+        homo = homo_a = mo_energy[0,e_idx_a[n_a-1]]
+        homo_b = None
+        if n_b > 0:
+            homo_b = mo_energy[1,e_idx_b[n_b-1]]
+            homo = max(homo, homo_b)
+        lumo = lumo_b = mo_energy[1,e_idx_b[n_b]]
+        lumo_a = None
+        if n_a < nmo:
+            lumo_a = mo_energy[1,e_idx_a[n_a]]
+            lumo = min(lumo, lumo_a)
+        gap = (lumo - homo) * nist.HARTREE2EV
+        mf.scf_summary['gap'] = gap
+        if mf.verbose >= logger.INFO and lumo_a is not None and homo_b is not None:
+            if homo_a+1e-3 > lumo_a:
+                logger.warn(mf, 'alpha nocc = %d  HOMO %.15g >= LUMO %.15g',
+                            n_a, homo_a, lumo_a)
+            else:
+                logger.info(mf, '  alpha nocc = %d  HOMO = %.15g  LUMO = %.15g',
+                            n_a, homo_a, lumo_a)
+            if homo_b+1e-3 > lumo_b:
+                logger.warn(mf, 'beta  nocc = %d  HOMO %.15g >= LUMO %.15g',
+                            n_b, homo_b, lumo_b)
+            else:
+                logger.info(mf, '  beta  nocc = %d  HOMO = %.15g  LUMO = %.15g',
+                            n_b, homo_b, lumo_b)
+        if homo+1e-3 > lumo:
+            logger.warn(mf, 'HOMO %.15g >= LUMO %.15g', homo, lumo)
+        else:
+            logger.info(mf, '  HOMO = %.12g  LUMO = %.12g  gap/eV = %.5f',
+                        homo, lumo, gap)
+    elif n_a > nmo or n_b > nmo:
         raise RuntimeError('Failed to assign mo_occ. '
                            f'nelec ({n_a}, {n_b}) > Nmo ({nmo})')
-    if mf.verbose >= logger.INFO and n_a < nmo and n_b < nmo:
-        if e_sort_a[n_a-1]+1e-3 > e_sort_a[n_a]:
-            logger.warn(mf, 'alpha nocc = %d  HOMO %.15g >= LUMO %.15g',
-                        n_a, e_sort_a[n_a-1], e_sort_a[n_a])
-        else:
-            logger.info(mf, '  alpha nocc = %d  HOMO = %.15g  LUMO = %.15g',
-                        n_a, e_sort_a[n_a-1], e_sort_a[n_a])
 
-        if e_sort_b[n_b-1]+1e-3 > e_sort_b[n_b]:
-            logger.warn(mf, 'beta  nocc = %d  HOMO %.15g >= LUMO %.15g',
-                        n_b, e_sort_b[n_b-1], e_sort_b[n_b])
-        else:
-            logger.info(mf, '  beta  nocc = %d  HOMO = %.15g  LUMO = %.15g',
-                        n_b, e_sort_b[n_b-1], e_sort_b[n_b])
-
-        if e_sort_a[n_a-1]+1e-3 > e_sort_b[n_b]:
-            logger.warn(mf, 'system HOMO %.15g >= system LUMO %.15g',
-                        e_sort_b[n_a-1], e_sort_b[n_b])
-
+    if mf.verbose >= logger.DEBUG:
         numpy.set_printoptions(threshold=nmo)
         logger.debug(mf, '  alpha mo_energy =\n%s', mo_energy[0])
         logger.debug(mf, '  beta  mo_energy =\n%s', mo_energy[1])
@@ -400,19 +416,22 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
         h1e = mf.get_hcore()
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = numpy.array((dm*.5, dm*.5))
-    if vhf is None:
+    if vhf is None or getattr(vhf, 'ecoul', None) is None:
         vhf = mf.get_veff(mf.mol, dm)
     if h1e[0].ndim < dm[0].ndim:  # get [0] because h1e and dm may not be ndarrays
-        h1e = (h1e, h1e)
-    e1 = numpy.einsum('ij,ji->', h1e[0], dm[0])
-    e1+= numpy.einsum('ij,ji->', h1e[1], dm[1])
-    e_coul =(numpy.einsum('ij,ji->', vhf[0], dm[0]) +
-             numpy.einsum('ij,ji->', vhf[1], dm[1])) * .5
-    e_elec = (e1 + e_coul).real
-    mf.scf_summary['e1'] = e1.real
-    mf.scf_summary['e2'] = e_coul.real
-    logger.debug(mf, 'E1 = %s  Ecoul = %s', e1, e_coul.real)
-    return e_elec, e_coul
+        e1 = numpy.einsum('ij,nji->', h1e, dm).real
+    else:
+        e1 = numpy.einsum('nij,nji->', h1e, dm).real
+    e2 = numpy.einsum('nij,nji->', vhf, dm).real * .5
+    e_elec = e1 + e2
+    ecoul = vhf.ecoul.real
+    exx = e2 - ecoul
+    mf.scf_summary['e1'] = e1
+    mf.scf_summary['e2'] = e2
+    mf.scf_summary['coul'] = ecoul
+    mf.scf_summary['exc'] = exx
+    logger.debug(mf, 'E1 = %s  E2 = %s  Ecoul = %s  Exc = %s', e1, e2, ecoul, exx)
+    return e_elec, e2
 
 # mo_a and mo_b are occupied orbitals
 def spin_square(mo, s=1):
@@ -1033,7 +1052,7 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         return vj, vk
 
     @lib.with_doc(get_veff.__doc__)
-    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
+    def get_veff(self, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
@@ -1041,15 +1060,30 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
             dm = numpy.repeat(dm[None]*.5, 2, axis=0)
         if self._eri is not None or not self.direct_scf:
             vj, vk = self.get_jk(mol, dm, hermi)
-            vhf = vj[0] + vj[1] - vk
+            vj = vj[0] + vj[1]
+            vhf = vj - vk
+            if dm.ndim == 3:
+                ecoul = numpy.einsum('nij,ji->', dm, vj).real * .5
+                vhf = lib.tag_array(vhf, ecoul=ecoul)
         else:
-            dm_last = numpy.asarray(dm_last)
-            dm = numpy.asarray(dm)
-            assert dm_last.ndim == 0 or dm_last.ndim == dm.ndim
-            ddm = dm - dm_last
+            ddm = dm = numpy.asarray(dm)
+            if dm_last is not None:
+                assert vhf_last is not None
+                dm_last = numpy.asarray(dm_last)
+                ddm = ddm - dm_last
             vj, vk = self.get_jk(mol, ddm, hermi)
-            vhf = vj[0] + vj[1] - vk
-            vhf += numpy.asarray(vhf_last)
+            vj = vj[0] + vj[1]
+            vhf = vj - vk
+            if dm_last is not None:
+                vhf += vhf_last
+                if hasattr(vhf_last, 'ecoul') and dm.ndim == 3:
+                    ecoul = numpy.einsum('nij,ji->', dm_last, vj).real
+                    ecoul += numpy.einsum('nij,ji->', ddm, vj).real * .5
+                    ecoul += vhf_last.ecoul
+                    vhf = lib.tag_array(vhf, ecoul=ecoul)
+            elif dm.ndim == 3:
+                ecoul = numpy.einsum('nij,ji->', dm, vj).real * .5
+                vhf = lib.tag_array(vhf, ecoul=ecoul)
         return vhf
 
     def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,

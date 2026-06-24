@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -460,15 +460,17 @@ class SCF(hf.SCF):
         nocc = mol.nelectron
         mo_occ[:nocc] = 1
         if nocc < len(mo_energy):
-            if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
-                logger.warn(self, 'HOMO %.15g == LUMO %.15g',
-                            mo_energy[nocc-1], mo_energy[nocc])
-            else:
-                logger.info(self, 'nocc = %d  HOMO = %.12g  LUMO = %.12g',
-                            nocc, mo_energy[nocc-1], mo_energy[nocc])
+            homo, lumo = mo_energy[nocc-1:nocc+1]
+            gap = (lumo - homo) * nist.HARTREE2EV
+            self.scf_summary['gap'] = gap
+            if self.verbose >= logger.INFO:
+                if homo+1e-3 > lumo:
+                    logger.warn(self, 'HOMO %.12g == LUMO %.12g', homo, lumo)
+                else:
+                    logger.info(self, '  HOMO = %.12g  LUMO = %.12g  gap/eV = %.5f',
+                                homo, lumo, gap)
         else:
-            logger.info(self, 'nocc = %d  HOMO = %.12g  no LUMO',
-                        nocc, mo_energy[nocc-1])
+            logger.info(self, 'HOMO = %.12g (no LUMO)', mo_energy[nocc-1])
         logger.debug(self, '  mo_energy = %s', mo_energy)
         return mo_occ
 
@@ -495,17 +497,10 @@ class SCF(hf.SCF):
         logger.timer(self, 'vj and vk', *t0)
         return vj, vk
 
-    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
+    def get_veff(self, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
         '''Dirac-Coulomb'''
-        if mol is None: mol = self.mol
-        if dm is None: dm = self.make_rdm1()
-        if self.direct_scf:
-            ddm = numpy.array(dm) - numpy.array(dm_last)
-            vj, vk = self.get_jk(mol, ddm, hermi=hermi)
-            return numpy.array(vhf_last) + vj - vk
-        else:
-            vj, vk = self.get_jk(mol, dm, hermi=hermi)
-            return vj - vk
+        assert self._eri is None
+        return ghf.GHF.get_veff(self, mol, dm, dm_last, vhf_last, hermi)
 
     def analyze(self, verbose=None):
         if verbose is None: verbose = self.verbose

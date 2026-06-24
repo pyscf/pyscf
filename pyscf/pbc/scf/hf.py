@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2024 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -729,7 +729,7 @@ class SCF(mol_hf.SCF):
         return self.get_jk(cell, dm, hermi, kpt, kpts_band, with_j=False,
                            omega=omega)[1]
 
-    def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+    def get_veff(self, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
                  kpt=None, kpts_band=None):
         '''Hartree-Fock potential matrix for the given density matrix.
         See :func:`scf.hf.get_veff` and :func:`scf.hf.RHF.get_veff`
@@ -739,6 +739,9 @@ class SCF(mol_hf.SCF):
         if kpt is None: kpt = self.kpt
         vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
         vhf = vj - vk * .5
+        if dm.ndim == 2 and kpts_band is None:
+            ecoul = np.einsum('ij,ji->', dm, vj).real * .5
+            vhf = lib.tag_array(vhf, ecoul=ecoul)
         return vhf
 
     def get_jk_incore(self, cell=None, dm=None, hermi=1, kpt=None, omega=None,

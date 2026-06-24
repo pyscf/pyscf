@@ -25,6 +25,7 @@ from pyscf.pbc.lib import kpts as libkpts
 from pyscf.pbc.scf import kghf
 from pyscf.pbc.scf import khf_ksymm
 from pyscf.pbc.df.df_jk import _format_jks
+from pyscf.data import nist
 
 def get_jk(mf, cell=None, dm_kpts=None, hermi=0, kpts=None, kpts_band=None,
            with_j=True, with_k=True, **kwargs):
@@ -92,13 +93,17 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
         mo_occ_kpts.append((mo_e <= fermi).astype(np.double))
 
     if nocc < mo_energy.size:
-        logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
-                    mo_energy[nocc-1], mo_energy[nocc])
-        if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
-            logger.warn(mf, 'HOMO %.12g == LUMO %.12g',
-                        mo_energy[nocc-1], mo_energy[nocc])
+        homo, lumo = mo_energy[nocc-1:nocc+1]
+        gap = (lumo - homo) * nist.HARTREE2EV
+        mf.scf_summary['gap'] = gap
+        if mf.verbose >= logger.INFO:
+            if homo+1e-3 > lumo:
+                logger.warn(mf, 'HOMO %.12g == LUMO %.12g', homo, lumo)
+            else:
+                logger.info(mf, '  HOMO = %.12g  LUMO = %.12g  gap/eV = %.5f',
+                            homo, lumo, gap)
     else:
-        logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
+        logger.info(mf, 'HOMO = %.12g (no LUMO)', mo_energy[nocc-1])
 
     if mf.verbose >= logger.DEBUG:
         np.set_printoptions(threshold=len(mo_energy))

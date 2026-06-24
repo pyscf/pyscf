@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
+from pyscf.data import nist
 from pyscf.scf import hf
 from pyscf.scf import uhf
 from pyscf.scf import chkfile
@@ -149,20 +150,22 @@ def get_jk(mol, dm, hermi=0,
 def get_occ(mf, mo_energy=None, mo_coeff=None):
     if mo_energy is None: mo_energy = mf.mo_energy
     e_idx = numpy.argsort(mo_energy.round(9), kind='stable')
-    e_sort = mo_energy[e_idx]
     nmo = mo_energy.size
     mo_occ = numpy.zeros_like(mo_energy)
     nocc = mf.mol.nelectron
-    if nocc > nmo:
+    if nocc < nmo:
+        homo, lumo = mo_energy[e_idx[nocc-1:nocc+1]]
+        gap = (lumo - homo) * nist.HARTREE2EV
+        mf.scf_summary['gap'] = gap
+        if mf.verbose >= logger.INFO:
+            if homo+1e-3 > lumo:
+                logger.warn(mf, 'HOMO %.15g == LUMO %.15g', homo, lumo)
+            else:
+                logger.info(mf, '  HOMO = %.15g  LUMO = %.15g  gap/eV = %.5f',
+                            homo, lumo, gap)
+    elif nocc > nmo:
         raise RuntimeError(f'Failed to assign mo_occ. Nocc ({nocc}) > Nmo ({nmo})')
     mo_occ[e_idx[:nocc]] = 1
-    if mf.verbose >= logger.INFO and nocc < nmo:
-        if e_sort[nocc-1]+1e-3 > e_sort[nocc]:
-            logger.warn(mf, 'HOMO %.15g == LUMO %.15g',
-                        e_sort[nocc-1], e_sort[nocc])
-        else:
-            logger.info(mf, '  HOMO = %.15g  LUMO = %.15g',
-                        e_sort[nocc-1], e_sort[nocc])
 
     if mf.verbose >= logger.DEBUG:
         numpy.set_printoptions(threshold=nmo)
@@ -469,16 +472,33 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         vj, vk = get_jk(mol, dm, hermi, with_j, with_k, jkbuild, omega)
         return vj, vk
 
-    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
+    def get_veff(self, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if self._eri is not None or not self.direct_scf:
             vj, vk = self.get_jk(mol, dm, hermi)
             vhf = vj - vk
+            if dm.ndim == 2:
+                ecoul = numpy.einsum('ij,ji->', dm, vj).real * .5
+                vhf = lib.tag_array(vhf, ecoul=ecoul)
         else:
-            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
+            ddm = numpy.asarray(dm)
+            if dm_last is not None:
+                assert vhf_last is not None
+                dm_last = numpy.asarray(dm_last)
+                ddm = ddm - dm_last
             vj, vk = self.get_jk(mol, ddm, hermi)
-            vhf = vj - vk + numpy.asarray(vhf_last)
+            vhf = vj - vk
+            if dm_last is not None:
+                vhf += vhf_last
+                if hasattr(vhf_last, 'ecoul') and dm.ndim == 2:
+                    ecoul = numpy.einsum('ij,ji->', dm_last, vj).real
+                    ecoul += numpy.einsum('ij,ji->', ddm, vj).real * .5
+                    ecoul += vhf_last.ecoul
+                    vhf = lib.tag_array(vhf, ecoul=ecoul)
+            elif dm.ndim == 2:
+                ecoul = numpy.einsum('ij,ji->', dm, vj).real * .5
+                vhf = lib.tag_array(vhf, ecoul=ecoul)
         return vhf
 
     def analyze(self, verbose=None, **kwargs):

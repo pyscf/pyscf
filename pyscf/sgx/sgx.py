@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2018-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2018-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -185,11 +185,11 @@ class _SGXHF:
 
         return vj, vk
 
-    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
+    def get_veff(self, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
         with self.with_full_dm(dm, dm_last) as will_reset:
             if will_reset:
-                dm_last = 0
-                vhf_last = 0
+                dm_last = None
+                vhf_last = None
             veff = super().get_veff(
                 mol=mol, dm=dm, dm_last=dm_last, vhf_last=vhf_last, hermi=hermi
             )
