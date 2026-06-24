@@ -377,3 +377,100 @@ def mo_energy_with_exxdiv_none(mf, mo_coeff=None):
     else:
         log.error(f'Unknown SCF type {mf.__class__.__name__}')
         raise NotImplementedError
+
+def slab_dipole_correction(mf, dir_idx=2, slab_center=None):
+    """Apply self-consistent Neugebauer-Scheffler slab dipole corrections.
+
+    doi:10.1103/PhysRevB.46.16067
+    doi:10.1103/PhysRevB.59.12301
+
+    Removes the leading-order error in the energy of polarized surfaces
+    caused by the spurious electrostatic interaction between periodic slab
+    images. A compensating sawtooth potential is added to the KS potential,
+    so the density relaxes self-consistently; this can slow SCF convergence.
+    k-point-sampled DFT (KS) only.
+
+    Note: this is distinct from pyscf.pbc.scf.makov_payne_correction.
+    """
+    if not hasattr(mf, "_numint") or not hasattr(mf, "grids"):
+        raise NotImplementedError(
+            "Dipole correction requires a periodic DFT object with an "
+            "integration grid; got %s" % type(mf).__name__)
+    cell = mf.cell
+    lattice = cell.lattice_vectors()
+    lattice_inv = numpy.linalg.inv(lattice)  # cartesian -> fractional
+    L = lattice[dir_idx, dir_idx]
+    area = abs(numpy.linalg.det(lattice)) / L
+
+    # Automatically determine the slab center if not provided.
+    if slab_center is None:
+        charges = cell.atom_charges()
+        coords = cell.atom_coords()
+        real_atom_mask = charges > 0
+        if numpy.any(real_atom_mask):
+            real_z = coords[real_atom_mask, dir_idx]
+            slab_center = (numpy.max(real_z) + numpy.min(real_z)) / 2.0
+        else:
+            slab_center = L / 2.0
+
+    origin = numpy.zeros(3)
+    origin[dir_idx] = slab_center
+
+    def wrap_dir(r):
+        rf = (r - origin).dot(lattice_inv)
+        rf[:, dir_idx] -= numpy.round(rf[:, dir_idx])
+        return rf.dot(lattice)[:, dir_idx]
+
+    old_get_veff = mf.get_veff
+
+    def get_veff(cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+                 kpts=None, kpts_band=None):
+        if cell is None:
+            cell = mf.cell
+        if dm is None:
+            dm = mf.make_rdm1()
+        if kpts is None:
+            kpts = getattr(mf, "kpts", numpy.zeros((1, 3)))
+        veff = old_get_veff(cell, dm, dm_last, vhf_last, hermi,
+                            kpts, kpts_band)
+        if mf.grids.coords is None:
+            mf.grids.build()
+        coords = mf.grids.coords
+        weights = mf.grids.weights
+        # Total (k-point-traced) electron density on the grid. Collapse the
+        # spin channels for UKS before evaluating the density.
+        dm_rho = dm
+        if getattr(dm_rho, "ndim", None) == 4:  # (2, nkpts, nao, nao)
+            dm_rho = dm_rho[0] + dm_rho[1]
+        rho = mf._numint.get_rho(cell, dm_rho, mf.grids, kpts, mf.max_memory)
+        rho = numpy.atleast_2d(rho).sum(axis=0)
+        # Reference so dir_idx = 0 sits at the slab center; the sawtooth
+        # discontinuity lands in the vacuum at slab_center + L/2.
+        z_shifted = wrap_dir(coords)
+        # Electronic and ionic dipole moments per cell
+        p_elec = numpy.sum(rho * z_shifted * weights)
+        charges = cell.atom_charges()
+        ion_shifted = wrap_dir(cell.atom_coords())
+        p_ion = numpy.sum(charges * ion_shifted)
+        p_tot = p_ion - p_elec
+        # Artificial PBC field and compensating sawtooth potential.
+        e_field = 4 * numpy.pi * p_tot / (area * L)
+        v_dip_grid = -e_field * z_shifted * weights
+        # TODO: cache AO values on the grid
+        ao_kpts = cell.pbc_eval_gto("GTOval", coords, kpts=kpts)
+        v_dip_mat = numpy.asarray(
+            [lib.einsum("pi,p,pj->ij", ao.conj(), v_dip_grid, ao) for ao in ao_kpts])
+        veff_new = veff + v_dip_mat
+        exc_dip = 0.5 * e_field * p_tot
+        logger.info(mf, "Dipole correction: E = %.10g, p = %.6g",
+                    exc_dip, p_tot)
+        veff_new = lib.tag_array(
+            veff_new,
+            exc=getattr(veff, "exc", 0.0) + exc_dip,
+            ecoul=getattr(veff, "ecoul", 0.0),
+            vj=getattr(veff, "vj", None),
+            vk=getattr(veff, "vk", None),
+        )
+        return veff_new
+    mf.get_veff = get_veff
+    return mf
