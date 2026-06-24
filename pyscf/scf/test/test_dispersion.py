@@ -14,7 +14,7 @@
 # limitations under the License.
 
 import unittest
-
+import pyscf
 from pyscf import gto, scf
 from pyscf.scf import dispersion
 
@@ -113,6 +113,28 @@ class TestDispersionLogic(unittest.TestCase):
         with self.assertRaises(ValueError):
             dispersion.check_disp(mf_dft, disp='unsupported')
 
+    def test_wb97x_d4(self):
+        mol = gto.M(
+            verbose = 5,
+            output = '/dev/null',
+            atom = '''
+              O     0.   0.       0.
+              H     0.   -0.757   0.587
+              H     0.   0.757    0.587''',
+            basis = 'def2-svp')
+        mf = mol.RKS(xc='wb97x-d4').run()
+        if int(pyscf.__version__.split('.')[1]) > 15:
+            # corresponding to
+            # mf.xc = 'wb97x-v'
+            # mf.nlc = False
+            # mf.disp = 'd4:wb97x'
+            self.assertAlmostEqual(mf.e_tot, -76.37197333535842, 8)
+        else:
+            # legacy value, corresponding to
+            # mf.xc = 'wb97x'
+            # mf.nlc = False
+            # mf.disp = 'd4:wb97x'
+            self.assertAlmostEqual(mf.e_tot, -76.33801606078175, 8)
 
 if __name__ == "__main__":
     unittest.main()
