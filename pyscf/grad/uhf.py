@@ -46,19 +46,29 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
     dm0 = mf_grad._tag_rdm1 (dm0, mo_coeff=mo_coeff, mo_occ=mo_occ)
 
+    dme0 = mf_grad.make_rdm1e(mo_energy, mo_coeff, mo_occ)
+    dm0_sf = dm0[0] + dm0[1]
+    dme0_sf = dme0[0] + dme0[1]
+
+    if mol._pseudo:
+        from pyscf.gto.pp_int import vpploc_nuc_grad, vppnl_nuc_grad
+        de = vpploc_nuc_grad(mol, dm0_sf)
+        de += vppnl_nuc_grad(mol, dm0_sf)
+    else:
+        de = numpy.zeros((mol.natm, 3))
+
     t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Computing Gradients of NR-UHF Coulomb repulsion')
     vhf = mf_grad.get_veff(mol, dm0)
     log.timer('gradients of 2e part', *t0)
 
-    dme0 = mf_grad.make_rdm1e(mo_energy, mo_coeff, mo_occ)
-    dm0_sf = dm0[0] + dm0[1]
-    dme0_sf = dme0[0] + dme0[1]
-
     if atmlst is None:
         atmlst = range(mol.natm)
+    else:
+        de = de[atmlst]
+        atmlst = range(mol.natm)
+
     aoslices = mol.aoslice_by_atom()
-    de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
         h1ao = hcore_deriv(ia)

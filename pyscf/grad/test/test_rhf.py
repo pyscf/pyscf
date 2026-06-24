@@ -240,6 +240,21 @@ class KnownValues(unittest.TestCase):
         ref = grad_nuc(mol)
         self.assertAlmostEqual(abs(gs - ref).max(), 0, 9)
 
+    # issue #3198
+    def test_gth_pp_grad(self):
+        mol = gto.M(
+            atom    = 'F 0 0 0; H 0 0 1.76',
+            basis   = 'gth-dzv',
+            pseudo  = 'gth-pbe',
+            unit    = 'B',)
+        mf = mol.RKS(xc='pbe').run()
+        g  = mf.nuc_grad_method().kernel()
+
+        mf_scan = mf.as_scanner()
+        e1 = mf_scan('F 0 0 0; H 0 0 1.761')
+        e2 = mf_scan('F 0 0 0; H 0 0 1.759')
+        self.assertAlmostEqual(g[1, 2], (e1 - e2)/2e-3, 6)
+
 def grad_nuc(mol):
     gs = numpy.zeros((mol.natm,3))
     for j in range(mol.natm):
