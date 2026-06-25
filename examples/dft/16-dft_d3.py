@@ -1,7 +1,18 @@
 #!/usr/bin/env python
 
+import sys
 import pyscf
 from pyscf.dft import KS
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+try:
+    import pyscf.dispersion  # noqa: F401
+except ModuleNotFoundError:
+    if verify_windows:
+        # D3/D4 support comes from the optional pyscf-dispersion package.
+        print('Skipping D3/D4 example during Windows verification because pyscf-dispersion is not installed.')
+        raise SystemExit(0)
+    raise
 
 '''
 D3 and D4 Dispersion.

@@ -22,6 +22,7 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
+.wheeltest/
 
 # Local log files
 *~
@@ -60,7 +61,7 @@ CMakeCache.txt
 CMakeFiles
 Makefile
 cmake_install.cmake
-pyscf/lib/deps
+pyscf/lib/deps/*
 pyscf/lib/config.h
 
 settings.py
@@ -80,6 +81,47 @@ OneRDM*
 
 # Memoization and caching
 tmp/
+.tmp/
+
+# Local Windows build inputs
+third_party/
+
+conda/windows/*.json
+conda/windows/*.jsonl
+
+# Generated Windows binaries
+pyscf/lib/*.dll
+pyscf/lib/*.pdb
+pyscf/lib/deps/bin/*.dll
+pyscf/lib/deps/bin/*.exe
+!pyscf/lib/deps/win64/
+pyscf/lib/deps/win64/*
+!pyscf/lib/deps/win64/bin/
+pyscf/lib/deps/win64/bin/*
+
+# Example outputs from local verification
+examples/**/*.chk
+examples/**/*.h5
+examples/**/*.out
+examples/**/out_*
+examples/**/*.cube
+examples/**/*.CHGCAR
+examples/**/*.vasp
+examples/**/*.md.data
+examples/**/*.md.xyz
+examples/**/energies.txt
+examples/**/hf-scan.txt
+examples/**/fcidump.example*
+examples/**/bz-homo.spt
+examples/**/density_diff.cube
+examples/**/tda_density.cube
+examples/**/mcscf-mo-*.npy
+examples/pbc/POSCAR
+examples/pbc/bn.xyz
+
+# Local Windows packaging docs and logs
+conda/windows/report-*.json
+conda/windows/report-*.jsonl
 
 # IDEs
 .idea/

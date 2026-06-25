@@ -6,9 +6,19 @@ correction), a fake pyscf method need to be created before passing to
 berny_solver.
 '''
 
+import sys
 import numpy as np
 from pyscf import gto, scf
-from pyscf.geomopt import berny_solver, geometric_solver, as_pyscf_method
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+try:
+    from pyscf.geomopt import berny_solver, geometric_solver, as_pyscf_method
+except ModuleNotFoundError:
+    if verify_windows:
+        # This example requires optional berny/geometric optimizer packages.
+        print('Skipping custom geometry optimization example during Windows verification because optional geomopt dependencies are not installed.')
+        raise SystemExit(0)
+    raise
 
 mol = gto.M(atom='N 0 0 0; N 0 0 1.8', unit='Bohr', basis='ccpvdz')
 mf = scf.RHF(mol)

@@ -28,6 +28,7 @@ print('E(CISD) = %s' % myci.e_tot)
 cisd_result_dic = chkfile.load('example.chk', 'cisd')
 myci_new = ci.CISD(mf_new)
 myci_new.__dict__.update(cisd_result_dic)
+myci_new.e_hf = mf_new.e_tot
 print('E(CISD) from chkfile = %s' % myci_new.e_tot)
 
 mol_new = chkfile.load_mol('example.chk')
@@ -37,9 +38,9 @@ print(numpy.allclose(mol.atom_charges(), mol_new.atom_charges()))
 
 with h5py.File('example.chk') as f:
     print('\nCheckpoint file is a HDF5 file. data are stored in file/directory structure.')
-    print('/', f.keys())
-    print('/scf', f['scf'].keys())
-    print('/scf/mo_occ', f['scf/mo_occ'].value)
-    print('/cisd', f['cisd'].keys())
+    print('/', list(f.keys()))
+    print('/scf', list(f['scf'].keys()))
+    print('/scf/mo_occ', f['scf/mo_occ'][()])
+    print('/cisd', list(f['cisd'].keys()))
     print('\nMolecular object (mol) is seriealized to json format and stored')
-    print('/mol: %s ...' % f['mol'].value[:20])
+    print('/mol: %s ...' % f['mol'][()][:20])

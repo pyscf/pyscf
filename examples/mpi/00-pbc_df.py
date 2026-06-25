@@ -9,9 +9,19 @@ mpi4pyscf allows you switching to MPI mode seamlessly by replacing certain
 object, eg the density fitting object in the PBC calculations.
 '''
 
+import sys
 import numpy
 from pyscf.pbc import gto, scf, dft
-from mpi4pyscf.pbc import df as mpidf
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+try:
+    from mpi4pyscf.pbc import df as mpidf
+except ModuleNotFoundError:
+    if verify_windows:
+        # mpi4pyscf is an optional add-on for MPI examples.
+        print('Skipping MPI density-fitting example during Windows verification because mpi4pyscf is not installed.')
+        raise SystemExit(0)
+    raise
 
 cell = gto.M(
     h = numpy.eye(3)*3.5668,

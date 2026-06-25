@@ -4,6 +4,16 @@
 #       Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import sys
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+
+if verify_windows:
+    # This example requires an external DMRG backend and a multi-day runtime.
+    # Skip it in the installed-wheel verification sweep.
+    print('Skipping external DMRG example during wheel verification.')
+    raise SystemExit(0)
+
 from functools import reduce
 import numpy
 import scipy.linalg

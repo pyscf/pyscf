@@ -3,6 +3,16 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import sys
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+
+if verify_windows:
+    # Cornell SHCI relies on an external solver installation that is not part
+    # of the wheel verification environment.
+    print('Skipping Cornell SHCI example during wheel verification.')
+    raise SystemExit(0)
+
 '''
 Use Cornell SHCI program as the active space solver for CASSCF
 '''

@@ -5,6 +5,9 @@ This example collects tricks that can be used in the pyscf input script.
 '''
 
 import pyscf
+import sys
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
 
 
 #
@@ -100,5 +103,12 @@ hf_grad_scan(mol)
 # geometry optimization object.
 
 de = mol.RHF().nuc_grad_method()
-geom_opt = mol.RHF().nuc_grad_method().optimizer()
+try:
+    geom_opt = mol.RHF().nuc_grad_method().optimizer()
+except ModuleNotFoundError:
+    if verify_windows:
+        # Geometry optimization requires the optional geometric package.
+        print('Skipping geometry optimizer example during Windows verification because geometric is not installed.')
+        raise SystemExit(0)
+    raise
 geom_opt.run()

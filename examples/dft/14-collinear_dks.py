@@ -7,6 +7,17 @@
 DKS with collinear functional
 '''
 
+import sys
+verify_windows = '--pyscf-verify-windows' in sys.argv
+try:
+    import mcfun  # noqa: F401
+except ModuleNotFoundError:
+    if verify_windows:
+        # Multi-collinear DKS requires the optional mcfun library.
+        print('Skipping collinear DKS example during Windows verification because mcfun is not installed.')
+        raise SystemExit(0)
+    raise
+
 from pyscf import gto
 
 mol = gto.M(atom="H 0 0 0; F 0 0 1", basis='unc-sto3g', verbose=4)

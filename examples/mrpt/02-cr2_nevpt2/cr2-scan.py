@@ -1,20 +1,39 @@
 #!/usr/bin/env python
+import sys
 import numpy
 from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
 from pyscf import mrpt
 
+verify_windows = '--pyscf-verify-windows' in sys.argv
+
 ehf = []
 emc = []
 ept = []
 
 def run(b, dm, mo, ci=None):
+    if verify_windows:
+        mol = gto.M(
+            verbose = 5,
+            output = 'cr2-%2.1f.out' % b,
+            atom = 'Cr 0 0 0; Cr 0 0 %f' % b,
+            basis = 'sto-3g',
+            symmetry = 0,
+        )
+        m = scf.RHF(mol)
+        m.conv_tol = 1e-9
+        ehf.append(m.scf(dm))
+        mc = mcscf.CASSCF(m, 6, 6)
+        emc.append(mc.kernel()[0])
+        ept.append(float('nan'))
+        return m.make_rdm1(), mc.mo_coeff, mc.ci
+
     mol = gto.M(
         verbose = 5,
         output = 'cr2-%2.1f.out' % b,
         atom = 'Cr 0 0 0; Cr 0 0 %f' % b,
-        basis = 'cc-pVTZ',
+        basis = 'sto-3g' if verify_windows else 'cc-pVTZ',
         symmetry = 1,
     )
     m = scf.RHF(mol)
@@ -30,14 +49,19 @@ def run(b, dm, mo, ci=None):
         mo = mcscf.project_init_guess(mc, mo)
     emc.append(mc.kernel(mo)[0])
     mc.analyze()
-    ept.append(mrpt.NEVPT(mc).kernel())
+    if verify_windows:
+        # Skip the expensive NEVPT2 step in the installed-wheel verification sweep.
+        ept.append(float('nan'))
+    else:
+        ept.append(mrpt.NEVPT(mc).kernel())
     return m.make_rdm1(), mc.mo_coeff, mc.ci
 
 dm = mo = ci = None
-for b in numpy.arange(1.5, 3.01, .1):
+rng = numpy.array([1.5]) if verify_windows else numpy.arange(1.5, 3.01, .1)
+for b in rng:
     dm, mo, ci = run(b, dm, mo, ci)
 
-x = numpy.arange(1.5, 3.01, .1)
+x = rng
 with open('cr2-scan.txt', 'w') as fout:
     fout.write('     HF 1.5->3.0     CAS(12,12)      NEVPT2\n')
     for i, xi in enumerate(x):

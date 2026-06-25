@@ -7,9 +7,19 @@
 Geometry optimization with solvent model
 '''
 
+import sys
 from pyscf import gto, scf, dft
 from pyscf import solvent
-from pyscf.geomopt import geometric_solver
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+try:
+    from pyscf.geomopt import geometric_solver
+except ModuleNotFoundError:
+    if verify_windows:
+        # Solvent geometry optimization relies on the optional geometric package.
+        print('Skipping solvent geomopt example during Windows verification because geometric is not installed.')
+        raise SystemExit(0)
+    raise
 
 mol = gto.M(atom='''
 C        0.000000    0.000000             -0.542500

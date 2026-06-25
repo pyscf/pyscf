@@ -1,10 +1,20 @@
 #!/usr/bin/env python
 
+import sys
 import pyscf
-from pyscf.pbc.tools.pyscf_ase import PySCF, cell_from_ase
-from ase.build import bulk
-from ase.optimize import BFGS
-from ase.filters import UnitCellFilter, StrainFilter
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+try:
+    from pyscf.pbc.tools.pyscf_ase import PySCF, cell_from_ase
+    from ase.build import bulk
+    from ase.optimize import BFGS
+    from ase.filters import UnitCellFilter, StrainFilter
+except (ModuleNotFoundError, RuntimeError):
+    if verify_windows:
+        # ASE-backed periodic optimization is optional in the verification environment.
+        print('Skipping PBC ASE geometry optimization example during Windows verification because ASE is not installed.')
+        raise SystemExit(0)
+    raise
 
 atoms = bulk('Si', 'diamond', a=5.43)
 # Only .atoms and .a are defined in this cell instance. It's necessary to assign

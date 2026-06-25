@@ -27,7 +27,11 @@ mf = scf.UKS(mol)
 mf.kernel()
 #mf.analyze()
 # 6 orbitals, 6 electrons
-mc = mcscf.CASSCF(mf, 6, 6)
+try:
+    mc = mcscf.CASSCF(mf, 6, 6)
+except NotImplementedError:
+    # Newer PySCF releases route UKS through UCASSCF instead of RHF-based CASSCF.
+    mc = mcscf.UCASSCF(mf, 6, 6)
 e = mc.kernel()[0]
 print('CASSCF based on UKS, E = %.12f, ref = -109.075063732553' % e)
 

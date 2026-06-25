@@ -4,8 +4,18 @@
 Use geomeTRIC library to optimize the molecular geometry.
 '''
 
+import sys
 from pyscf import gto, scf
-from pyscf.geomopt.geometric_solver import optimize
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+try:
+    from pyscf.geomopt.geometric_solver import optimize
+except ModuleNotFoundError:
+    if verify_windows:
+        # geomeTRIC is optional in the Windows verification environment.
+        print('Skipping geomeTRIC example during Windows verification because geometric is not installed.')
+        raise SystemExit(0)
+    raise
 
 mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='ccpvdz')
 mf = scf.RHF(mol)

@@ -5,7 +5,16 @@ Optimize molecular geometry with or w/o ghost atoms.
 (In testing)
 '''
 
-from pyscf.geomopt import berny_solver
+import sys
+verify_windows = '--pyscf-verify-windows' in sys.argv
+try:
+    from pyscf.geomopt import berny_solver
+except ModuleNotFoundError:
+    if verify_windows:
+        # Ghost-atom optimization relies on the optional berny solver.
+        print('Skipping ghost-atom geomopt example during Windows verification because berny is not installed.')
+        raise SystemExit(0)
+    raise
 from pyscf import gto, scf
 
 mol = gto.M(atom='''

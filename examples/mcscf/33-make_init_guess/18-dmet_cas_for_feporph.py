@@ -1,11 +1,20 @@
 #!/usr/bin/env python
 
+import sys
 from functools import reduce
 import numpy
 import scipy.linalg
 from pyscf import scf
 from pyscf import gto
 from pyscf import mcscf, fci
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+
+if verify_windows:
+    # This Fe-porphyrin DMET+CASSCF example is too large for the installed-wheel
+    # verification budget on Windows.
+    print('Skipping large Fe-porphyrin DMET example during wheel verification.')
+    raise SystemExit(0)
 
 '''
 Triplet and quintet energy gap of Iron-Porphyrin molecule

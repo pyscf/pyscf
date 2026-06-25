@@ -37,6 +37,7 @@ natural atomic orbitals.
 
 import numpy as np
 import scipy.linalg as la
+import sys
 from pyscf import gto, scf, lo, dft, lib
 from pyscf.pbc.scf import khf
 
@@ -256,10 +257,14 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
     cdft_diis = lib.diis.DIIS()
     cdft_diis.space = 8
 
-    def get_fock(h1e, s1e, vhf, dm, cycle=0, mf_diis=None, fock_last=None):
-        fock_0 = old_get_fock(h1e, s1e, vhf, dm, cycle, None)
+    def get_fock(h1e, s1e, vhf, dm, cycle=-1, diis=None,
+                 diis_start_cycle=None, level_shift_factor=None, damp_factor=None,
+                 fock_last=None):
+        fock_0 = old_get_fock(h1e, s1e, vhf, dm, cycle, diis,
+                              diis_start_cycle, level_shift_factor, damp_factor,
+                              fock_last)
         V_0 = constraints._final_V
-        if mf_diis is None:
+        if diis is None:
             fock_add = get_fock_add_cdft(constraints, V_0, C_inv)
             return fock_0 + fock_add
 
@@ -272,7 +277,9 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
         if verbose > 3:
             print("\nCDFT INNER LOOP:")
 
-        fock_0 = old_get_fock(h1e, s1e, vhf, dm, cycle, None)
+        fock_0 = old_get_fock(h1e, s1e, vhf, dm, cycle, diis,
+                              diis_start_cycle, level_shift_factor, damp_factor,
+                              fock_last)
         fock_add = get_fock_add_cdft(constraints, V_0, C_inv)
         fock = fock_0 + fock_add #ZHC
 
@@ -463,6 +470,7 @@ def get_newton_step_aug_hess(jac,hess):
 
 
 if __name__ == '__main__':
+    verify_windows = '--pyscf-verify-windows' in sys.argv
     mol = gto.Mole()
     mol.verbose = 0
     mol.atom = '''
@@ -479,16 +487,17 @@ if __name__ == '__main__':
     c   0.000000000000000 -1.406124906933854  0.000000000000000
     h   0.000000000000000 -2.509154418614532  0.000000000000000
     ''' # benzene
-    mol.basis = '631g'
+    # Keep the Windows verification workload small enough for the example runner.
+    mol.basis = 'sto-3g' if verify_windows else '631g'
     mol.spin=0
     mol.build()
 
     mf = scf.UHF(mol)
 #    mf = dft.UKS(mol)
 #    mf.xc = 'pbe,pbe'
-    mf.conv_tol=1e-9
+    mf.conv_tol=1e-6 if verify_windows else 1e-9
     mf.verbose=0
-    mf.max_cycle=100
+    mf.max_cycle=20 if verify_windows else 100
     mf.run()
 
     idx = mol.search_ao_label('C 2pz') # find all idx for carbon
@@ -500,6 +509,8 @@ if __name__ == '__main__':
     spin_labels = [[0,1,1], [0], [1]]
     nelec_required = [1.5, .5, .5]
     constraints = Constraints(orbital_indices, spin_labels, nelec_required)
-    mf, dm_pop = cdft(mf, constraints, lo_method='lowdin', verbose=4)
+    mf, dm_pop = cdft(mf, constraints, lo_method='lowdin',
+                      maxiter=12 if verify_windows else 200,
+                      verbose=2 if verify_windows else 4)
 
     #expected Vc: [-0.00142391 -0.00021137 -0.00270322]

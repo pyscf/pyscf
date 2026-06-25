@@ -4,8 +4,18 @@
 Use pyberny to get the molecular equilibrium geometry.
 '''
 
+import sys
 from pyscf import gto, scf
-from pyscf.geomopt.berny_solver import optimize
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+try:
+    from pyscf.geomopt.berny_solver import optimize
+except ModuleNotFoundError:
+    if verify_windows:
+        # pyberny is optional in the Windows verification environment.
+        print('Skipping pyberny example during Windows verification because berny is not installed.')
+        raise SystemExit(0)
+    raise
 
 mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='ccpvdz')
 mf = scf.RHF(mol)

@@ -22,8 +22,14 @@ sa_mc_grad = sa_mc.Gradients()
 # The state-averaged nuclear gradients
 de_avg = sa_mc_grad.kernel()
 
+# State-specific gradients are computed from dedicated state-specific CASSCF
+# objects. Recent PySCF releases keep the state-average gradient object for the
+# weighted average only.
+ss_mc = mf.CASSCF(4, 4).state_specific_(0).run()
+
 # Nuclear gradients for state 1
-de_0 = sa_mc_grad.kernel(state=0)
+de_0 = ss_mc.Gradients().kernel()
 
 # Nuclear gradients for state 2
-de_1 = sa_mc_grad.kernel(state=1)
+ss_mc = mf.CASSCF(4, 4).state_specific_(1).run()
+de_1 = ss_mc.Gradients().kernel()

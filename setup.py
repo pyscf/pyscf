@@ -15,6 +15,8 @@
 
 import os
 import sys
+import shutil
+import traceback
 from setuptools import setup, find_packages, Extension
 from setuptools.command.build_py import build_py
 
@@ -27,6 +29,20 @@ def get_version():
                 return line.split(delim)[1]
     raise ValueError("Version string not found")
 VERSION = get_version()
+
+WINDOWS_RUNTIME_DLLS = (
+    'libgcc_s_seh-1.dll',
+    'libgomp-1.dll',
+    'libgfortran-5.dll',
+    'libopenblas.dll',
+    'libquadmath-0.dll',
+    'libstdc++-6.dll',
+    'libwinpthread-1.dll',
+)
+
+def _repo_windows_runtime_dir():
+    topdir = os.path.abspath(os.path.join(__file__, '..'))
+    return os.path.join(topdir, 'pyscf', 'lib', 'deps', 'win64', 'bin')
 
 
 def get_platform():
@@ -51,7 +67,81 @@ def get_platform():
                 os.putenv('CMAKE_OSX_ARCHITECTURES', 'arm64;x86_64')
     return platform
 
+def _candidate_runtime_dirs():
+    seen = set()
+    candidates = []
+    override = os.getenv('PYSCF_WINDOWS_RUNTIME_DLL_DIR')
+    if override:
+        candidates.append(override)
+    candidates.append(_repo_windows_runtime_dir())
+
+    for exe_name in ('gcc', 'g++'):
+        exe = shutil.which(exe_name)
+        if exe:
+            candidates.append(os.path.dirname(os.path.abspath(exe)))
+
+    candidates.extend(os.getenv('PATH', '').split(os.pathsep))
+    candidates.extend([
+        os.path.join(sys.prefix, 'Library', 'bin'),
+        os.path.join(sys.prefix, 'Library', 'lib'),
+    ])
+
+    for path in candidates:
+        if not path:
+            continue
+        path = os.path.abspath(path)
+        if path in seen or not os.path.isdir(path):
+            continue
+        seen.add(path)
+        yield path
+
+def _bundle_windows_runtime_dlls(src_dir):
+    if sys.platform != 'win32':
+        return
+
+    legacy_dir = os.path.join(src_dir, 'deps', 'bin')
+    dst_dir = os.path.join(src_dir, 'deps', 'win64', 'bin')
+    os.makedirs(dst_dir, exist_ok=True)
+    missing = []
+    for dll_name in WINDOWS_RUNTIME_DLLS:
+        legacy_path = os.path.join(legacy_dir, dll_name)
+        if os.path.exists(legacy_path):
+            os.remove(legacy_path)
+
+        src = None
+        for base in _candidate_runtime_dirs():
+            candidate = os.path.join(base, dll_name)
+            if os.path.exists(candidate):
+                src = candidate
+                break
+        if src is None:
+            missing.append(dll_name)
+            continue
+        dst = os.path.join(dst_dir, dll_name)
+        if os.path.exists(dst) and os.path.samefile(src, dst):
+            continue
+        shutil.copy2(src, dst)
+
+    if missing:
+        raise RuntimeError(
+            'Missing Windows runtime DLLs required for wheel bundling: '
+            + ', '.join(missing)
+            + '. Set PYSCF_WINDOWS_RUNTIME_DLL_DIR to the directory that contains them.'
+        )
+
 class CMakeBuildPy(build_py):
+    def build_package_data(self):
+        for target, srcfile in self._get_package_data_output_mapping():
+            self.mkpath(os.path.dirname(target))
+            try:
+                _outf, _copied = self.copy_file(srcfile, target)
+                os.chmod(target, os.stat(target).st_mode | 0o200)
+            except OSError as exc:
+                raise OSError(
+                    f'Failed to stage package data during wheel packaging '
+                    f'from {srcfile} to {target}: {exc}'
+                ) from exc
+
     def run(self):
         self.plat_name = get_platform()
         self.build_base = 'build'
@@ -79,7 +169,15 @@ class CMakeBuildPy(build_py):
             self.announce(' '.join(cmd))
         else:
             self.spawn(cmd)
-        super().run()
+
+        self.announce('Bundling Windows runtime DLLs', level=3)
+        _bundle_windows_runtime_dlls(src_dir)
+        try:
+            super().run()
+        except Exception:
+            self.announce('build_py failed; printing traceback', level=4)
+            traceback.print_exc()
+            raise
 
 # build_py will produce plat_name = 'any'. Patch the bdist_wheel to change the
 # platform tag because the C extensions are platform dependent.

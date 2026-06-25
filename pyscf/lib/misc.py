@@ -99,22 +99,70 @@ _dll_deps = {
     'libdft':        ['libcvhf', 'libcgto', 'libcint'],
     'libpbc':        ['libcint', 'libcgto'],
     'libri':         ['libao2mo', 'libcvhf', 'libcgto', 'libcint'],
-    'libxc_itrf':    ['xc'],
-    'libxcfun_itrf': ['xcfun'],
+    'libxc_itrf':    ['libxc'],
+    'libxcfun_itrf': ['libxcfun'],
 }
+
+_windows_dll_dir_handles = []
+_windows_preloaded_libs = {}
+
+def _iter_windows_dll_dirs(loaderpath):
+    seen = set()
+    candidates = [
+        loaderpath,
+        os.path.join(loaderpath, 'deps', 'bin'),
+        os.path.join(loaderpath, 'deps', 'win64', 'bin'),
+        os.path.join(loaderpath, 'deps', 'lib'),
+        os.path.join(sys.prefix, 'Library', 'bin'),
+        os.path.join(sys.prefix, 'Library', 'lib'),
+    ]
+    candidates.extend(os.environ.get('PATH', '').split(os.pathsep))
+    for path in candidates:
+        if not path:
+            continue
+        path = os.path.abspath(path)
+        if path in seen or not os.path.isdir(path):
+            continue
+        seen.add(path)
+        yield path
+
+def _preload_windows_support_dlls(loaderpath):
+    support_dirs = (
+        os.path.join(loaderpath, 'deps', 'win64', 'bin'),
+        os.path.join(loaderpath, 'deps', 'bin'),
+    )
+    for dll_dir in support_dirs:
+        if not os.path.isdir(dll_dir):
+            continue
+        for filename in sorted(os.listdir(dll_dir)):
+            if not filename.lower().endswith('.dll'):
+                continue
+            dll_path = os.path.abspath(os.path.join(dll_dir, filename))
+            if dll_path in _windows_preloaded_libs:
+                continue
+            try:
+                _windows_preloaded_libs[dll_path] = ctypes.CDLL(dll_path)
+            except OSError:
+                pass
 
 @functools.lru_cache(128)
 def load_library(libname):
     lib = None
+    _loaderpath = os.path.dirname(__file__)
+    if sys.platform == 'win32' and hasattr(os, 'add_dll_directory'):
+        for dll_dir in _iter_windows_dll_dirs(_loaderpath):
+            try:
+                _windows_dll_dir_handles.append(os.add_dll_directory(dll_dir))
+            except OSError:
+                pass
+        _preload_windows_support_dlls(_loaderpath)
     try:
-        _loaderpath = os.path.dirname(__file__)
         lib = numpy.ctypeslib.load_library(libname, _loaderpath)
     except OSError:
         pass
 
     if lib is None and sys.platform == 'win32':
-        for env_path in [os.path.join(sys.prefix, 'Library', 'bin'),
-                         os.path.join(sys.prefix, 'Library', 'lib')]:
+        for env_path in _iter_windows_dll_dirs(_loaderpath):
             try:
                 lib = numpy.ctypeslib.load_library(libname, env_path)
                 break

@@ -3,6 +3,16 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import sys
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+
+if verify_windows:
+    # BLOCK is an external DMRG executable and is not available in the wheel
+    # verification environment.
+    print('Skipping BLOCK-based DMRG example during wheel verification.')
+    raise SystemExit(0)
+
 '''
 Use BLOCK program as the DMRG solver and parallel DMRGSCF on different nodes.
 

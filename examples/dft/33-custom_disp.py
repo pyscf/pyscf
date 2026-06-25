@@ -51,8 +51,19 @@ Below we run six minimal single-point examples for H2O. Each block creates an
 SCF object, then sets mf.xc / mf.disp / mf.nlc explicitly.
 """
 
+import sys
 import pyscf
 from pyscf import dft
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+try:
+    import pyscf.dispersion  # noqa: F401
+except ModuleNotFoundError:
+    if verify_windows:
+        # Custom dispersion examples require the optional pyscf-dispersion package.
+        print('Skipping custom dispersion example during Windows verification because pyscf-dispersion is not installed.')
+        raise SystemExit(0)
+    raise
 
 atom = '''
 O       0.0000000000    -0.0000000000     0.1174000000

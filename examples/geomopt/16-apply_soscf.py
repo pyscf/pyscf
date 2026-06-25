@@ -4,8 +4,18 @@
 Automatically apply SOSCF for unconverged SCF calculations in geometry optimization.
 '''
 
+import sys
 import pyscf
-from pyscf.geomopt import geometric_solver, as_pyscf_method
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+try:
+    from pyscf.geomopt import geometric_solver, as_pyscf_method
+except ModuleNotFoundError:
+    if verify_windows:
+        # SOSCF geometry optimization relies on the optional geometric package.
+        print('Skipping SOSCF geomopt example during Windows verification because geometric is not installed.')
+        raise SystemExit(0)
+    raise
 
 # Force SCF to stop early at an unconverged state
 pyscf.scf.hf.RHF.max_cycle = 5

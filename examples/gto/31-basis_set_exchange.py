@@ -3,8 +3,18 @@
 # Author: Susi Lehtola <susi.lehtola@gmail.com>
 #
 
+import sys
 from pyscf import gto, symm
-import basis_set_exchange
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+try:
+    import basis_set_exchange
+except ModuleNotFoundError:
+    if verify_windows:
+        # This example exercises the optional Basis Set Exchange Python backend.
+        print('Skipping Basis Set Exchange example during Windows verification because basis_set_exchange is not installed.')
+        raise SystemExit(0)
+    raise
 
 '''
 Interface with the Basis Set Exchange's Python backend.

@@ -1,7 +1,19 @@
+import sys
 from pyscf.pbc.gto import Cell
 from pyscf.pbc.scf import KRHF
-from pyscf.pbc.tdscf.krhf_slow import TDRHF
 from pyscf.pbc.gw import KRGW
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+
+try:
+    from pyscf.pbc.tdscf.krhf_slow import TDRHF
+except ModuleNotFoundError:
+    # The slow KRHF TD-SCF reference module is optional and is not shipped in
+    # the minimal wheel verification environment.
+    if verify_windows:
+        print('Skipping slow PBC GW example during wheel verification.')
+        raise SystemExit(0)
+    raise
 
 cell = Cell()
 cell.atom = '''

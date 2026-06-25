@@ -3,6 +3,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import sys
 import numpy
 import h5py
 from pyscf import gto, scf, ao2mo
@@ -11,6 +12,8 @@ from pyscf import lib
 '''
 Integral transformation for four different orbitals
 '''
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
 
 mol = gto.Mole()
 mol.build(
@@ -28,7 +31,7 @@ mol.build(
     ["H", (-1.20821019,  3.97969587, -0.01063248)],
     ["H", (-2.45529319,  1.81939187, -0.00886348)],],
 
-    basis = 'ccpvtz'
+    basis = '6-31g' if verify_windows else 'ccpvtz'
 )
 
 mf = scf.RHF(mol)

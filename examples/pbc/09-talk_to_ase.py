@@ -6,14 +6,23 @@ This allows other ASE methods to be used with PySCF;
 here we try to compute an equation of state.
 """
 
+import sys
 import numpy as np
-from pyscf.pbc.tools import pyscf_ase
 
-import ase
-import ase.lattice
-from ase.lattice.cubic import Diamond
-from ase.units import kJ
-from ase.eos import EquationOfState
+verify_windows = '--pyscf-verify-windows' in sys.argv
+try:
+    from pyscf.pbc.tools import pyscf_ase
+    import ase
+    import ase.lattice
+    from ase.lattice.cubic import Diamond
+    from ase.units import kJ
+    from ase.eos import EquationOfState
+except (ModuleNotFoundError, RuntimeError):
+    if verify_windows:
+        # This example requires the optional ASE interface.
+        print('Skipping PBC ASE interface example during Windows verification because ASE is not installed.')
+        raise SystemExit(0)
+    raise
 
 
 ase_atom=Diamond(symbol='C', latticeconstant=3.5668)

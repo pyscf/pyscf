@@ -19,6 +19,36 @@
 C extensions and helper functions
 '''
 
+import os
+import sys
+
+_windows_dll_dir_handles = []
+
+if sys.platform == 'win32' and hasattr(os, 'add_dll_directory'):
+    _loaderpath = os.path.dirname(__file__)
+    _seen = set()
+    _candidates = [
+        _loaderpath,
+        os.path.join(_loaderpath, 'deps', 'bin'),
+        os.path.join(_loaderpath, 'deps', 'win64', 'bin'),
+        os.path.join(_loaderpath, 'deps', 'lib'),
+        os.path.join(sys.prefix, 'Library', 'bin'),
+        os.path.join(sys.prefix, 'Library', 'lib'),
+    ]
+    _candidates.extend(os.environ.get('PATH', '').split(os.pathsep))
+    for _path in _candidates:
+        if not _path:
+            continue
+        _path = os.path.abspath(_path)
+        if _path in _seen or not os.path.isdir(_path):
+            continue
+        _seen.add(_path)
+        try:
+            _windows_dll_dir_handles.append(os.add_dll_directory(_path))
+        except OSError:
+            pass
+    del _candidates, _loaderpath, _path, _seen
+
 from pyscf.lib import parameters
 param = parameters
 from pyscf.lib import numpy_helper

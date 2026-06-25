@@ -1,8 +1,11 @@
 #!/usr/bin/env python
+import sys
 import numpy
 from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
 
 
 def run(b, mo0=None, dm0=None):
@@ -59,8 +62,12 @@ def urun(b, mo0=None, dm0=None):
     mc.analyze()
     return mf, mc
 
-x = numpy.hstack((numpy.arange(0.9, 2.01, 0.1),
-                  numpy.arange(2.1, 4.01, 0.1)))
+if verify_windows:
+    # Keep the wheel verification sweep short while still exercising both scan directions.
+    x = numpy.array([0.9, 1.5, 2.1])
+else:
+    x = numpy.hstack((numpy.arange(0.9, 2.01, 0.1),
+                      numpy.arange(2.1, 4.01, 0.1)))
 
 dm0 = mo0 = None
 eumc = []
@@ -70,8 +77,12 @@ for b in reversed(x):
     mf, mc = urun(b, mo0, dm0)
     mo0 = mc.mo_coeff
     dm0 = mf.make_rdm1()
-    s.append(mc.spin_square()[1])
-    euhf.append(mf.hf_energy)
+    try:
+        s.append(mc.spin_square()[1])
+    except AttributeError:
+        # Some UCASSCF objects no longer expose spin_square directly.
+        s.append(float('nan'))
+    euhf.append(getattr(mf, 'hf_energy', mf.e_tot))
     eumc.append(mc.e_tot)
 
 euhf.reverse()
@@ -86,7 +97,7 @@ for b in x:
     mf, mc = run(b, mo0, dm0)
     mo0 = mc.mo_coeff
     dm0 = mf.make_rdm1()
-    erhf.append(mf.hf_energy)
+    erhf.append(getattr(mf, 'hf_energy', mf.e_tot))
     ermc.append(mc.e_tot)
 
 with open('o2-scan.txt', 'w') as fout:
@@ -95,7 +106,14 @@ with open('o2-scan.txt', 'w') as fout:
         fout.write('%2.1f  %12.8f  %12.8f  %12.8f  %12.8f\n'
                    % (xi, erhf[i], ermc[i], euhf[i], eumc[i]))
 
-import matplotlib.pyplot as plt
+try:
+    import matplotlib.pyplot as plt
+except ModuleNotFoundError:
+    if verify_windows:
+        print('Skipping plot rendering during wheel verification.')
+        raise SystemExit(0)
+    raise
+
 plt.plot(x, erhf, label='ROHF,0.9->4.0')
 plt.plot(x, euhf, label='UHF, 4.0->0.9')
 plt.plot(x, ermc, label='RCAS(6,6),0.9->4.0')

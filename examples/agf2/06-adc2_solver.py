@@ -20,45 +20,56 @@ The AGF2 method is outlined in the papers:
 import numpy
 from pyscf import gto, scf, agf2, adc
 
-mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='cc-pvdz', verbose=0)
 
-mf = scf.RHF(mol)
-mf.conv_tol = 1e-12
-mf.run()
+def main():
+    mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='cc-pvdz', verbose=0)
 
-# We can build the compressed ADC(2) self-energy as the zeroth iteration
-# of AGF2, taking only the space corresponding to 1p coupling to 2p1h
-gf2 = agf2.AGF2(mf)
-se = gf2.build_se()
-se = se.get_occupied() # 2p1h/1p2h -> 2p1h
-se.coupling = se.coupling[:gf2.nocc] # 1p/1h -> 1p
+    mf = scf.RHF(mol)
+    mf.conv_tol = 1e-12
+    mf.run()
 
-# Use the adc module to get the 1p space from ADC(2). In AGF2, this is the
-# bare Fock matrix, and is relaxed through the self-consistency. We can use
-# the ADC 1p space instead.
-adc2 = adc.radc.RADCIP(adc.ADC(mf).run())
-h_1p = adc2.get_imds()
+    # We can build the compressed ADC(2) self-energy as the zeroth iteration
+    # of AGF2, taking only the space corresponding to 1p coupling to 2p1h.
+    gf2 = agf2.AGF2(mf)
+    se = gf2.build_se()
+    se = se.get_occupied()  # 2p1h/1p2h -> 2p1h
+    se.coupling = se.coupling[:gf2.nocc]  # 1p/1h -> 1p
 
-# Find the eigenvalues of the self-energy in the 'extended Fock matrix'
-# format, which are the ionization potentials:
-e_ip = se.eig(h_1p)[0]
-print('IP-ADC(2) using the AGF2 solver (with renormalization):')
-print(-e_ip[-1])
+    # Use the adc module to get the 1p space from ADC(2). In AGF2, this is the
+    # bare Fock matrix, and is relaxed through the self-consistency. We can use
+    # the ADC 1p space instead.
+    myadc = adc.ADC(mf).run()
+    try:
+        adc2 = adc.radc.RADCIP(myadc)
+    except AttributeError:
+        # Newer PySCF exports the IP solver from adc.radc_ip instead of adc.radc.
+        adc2 = adc.radc_ip.RADCIP(myadc)
+    h_1p = adc2.get_imds()
 
-# Compare to ADC(2) values - note that these will not be the same, since
-# AGF2 performs a compression/renormalization of the 2p1h space to allow 
-# full diagonalisation of the Hamiltonian instead of using an iterative solver:
-e_ip = adc2.kernel(nroots=1)[0]
-print('IP-ADC(2) using the pyscf solver:')
-print(e_ip[-1])
+    # Find the eigenvalues of the self-energy in the 'extended Fock matrix'
+    # format, which are the ionization potentials:
+    e_ip = se.eig(h_1p)[0]
+    print('IP-ADC(2) using the AGF2 solver (with renormalization):')
+    print(-e_ip[-1])
 
-# One may instead calculate the uncompressed self-energy (slow code), and
-# then use the Davidson solver in pyscf.agf2.aux to get the exact ADC(2)
-# values:
-gf2 = agf2.AGF2(mf, nmom=(None, None))
-se = gf2.build_se()
-se = se.get_occupied() # 2p1h/1p2h -> 2p1h
-se.coupling = se.coupling[:gf2.nocc] # 1p/1h -> 1p
-e_ip = agf2.aux.davidson(se, h_1p, nroots=1)[1]
-print('IP-ADC(2) via AGF2 without self-consistency or auxiliary renormalization:')
-print(-e_ip[-1])
+    # Compare to ADC(2) values - note that these will not be the same, since
+    # AGF2 performs a compression/renormalization of the 2p1h space to allow
+    # full diagonalisation of the Hamiltonian instead of using an iterative solver.
+    e_ip = adc2.kernel(nroots=1)[0]
+    print('IP-ADC(2) using the pyscf solver:')
+    print(e_ip[-1])
+
+    # One may instead calculate the uncompressed self-energy (slow code), and
+    # then use the Davidson solver in pyscf.agf2.aux to get the exact ADC(2)
+    # values:
+    gf2 = agf2.AGF2(mf, nmom=(None, None))
+    se = gf2.build_se()
+    se = se.get_occupied()  # 2p1h/1p2h -> 2p1h
+    se.coupling = se.coupling[:gf2.nocc]  # 1p/1h -> 1p
+    e_ip = agf2.aux.davidson(se, h_1p, nroots=1)[1]
+    print('IP-ADC(2) via AGF2 without self-consistency or auxiliary renormalization:')
+    print(-e_ip[-1])
+
+
+if __name__ == '__main__':
+    main()

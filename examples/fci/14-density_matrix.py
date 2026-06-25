@@ -13,12 +13,15 @@ Compute FCI 1,2,3,4-particle density matrices
 #
 
 import numpy
+import sys
 from pyscf import gto, scf, fci
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
 
 mol = gto.Mole()
 mol.build(
     atom = 'H 0 0 0; F 0 0 1.1',  # in Angstrom
-    basis = '6-31g',
+    basis = 'sto-3g' if verify_windows else '6-31g',
     spin = 2,
 )
 myhf = scf.RHF(mol)
@@ -147,6 +150,10 @@ dm1, dm2, dm3 = fci.rdm.reorder_dm123(dm1, dm2, dm3)
 #
 # NOTE computing 4-pdm is very slow
 #
+if verify_windows:
+    print('Skipping 4-particle density matrices during wheel verification.')
+    raise SystemExit(0)
+
 #
 # Spin-traced 4-particle density matrix
 # Note make_dm1234 computes  dm4[p,q,r,s,t,u,v,w] = <p^+ q r^+ s t^+ u v^+ w>  which is

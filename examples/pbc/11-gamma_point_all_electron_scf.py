@@ -10,7 +10,10 @@ examples/df/40-precomupte_df_ints.py
 '''
 
 import numpy
+import sys
 from pyscf.pbc import gto, scf, dft
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
 
 cell = gto.M(
     a = numpy.eye(3)*3.5668,
@@ -22,9 +25,13 @@ cell = gto.M(
               C     2.6751  0.8917  2.6751
               C     0.      1.7834  1.7834
               C     0.8917  2.6751  2.6751''',
-    basis = '6-31g',
+    basis = 'sto-3g' if verify_windows else '6-31g',
     verbose = 4,
 )
+if verify_windows:
+    cell.atom = '''C 0.0000 0.0000 0.0000
+                   C 0.8917 0.8917 0.8917'''
+    cell.build(False, False)
 
 mf = scf.RHF(cell).density_fit()
 mf.kernel()
@@ -48,6 +55,9 @@ mf.xc = 'bp86'
 # examples/scf/22-newton.py)
 mf = mf.newton()
 mf.kernel()
+
+if verify_windows:
+    raise SystemExit(0)
 
 #
 # The computational costs to initialize PBC DF object is high.  The density

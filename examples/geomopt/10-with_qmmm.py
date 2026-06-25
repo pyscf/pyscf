@@ -4,8 +4,11 @@
 Optimize molecular geometry within the environment of QM/MM charges.
 '''
 
+import sys
 import numpy
 from pyscf import gto, scf, cc, qmmm
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
 
 mol = gto.M(atom='''
 C       1.1879  -0.3829 0.0000
@@ -26,7 +29,14 @@ charges = (numpy.arange(5) + 1.) * -.001
 mf = qmmm.mm_charge(scf.RHF(mol), coords, charges)
 #mf.verbose=4
 #mf.kernel()
-mol1 = mf.Gradients().optimizer(solver='berny').kernel()
+try:
+    mol1 = mf.Gradients().optimizer(solver='berny').kernel()
+except ModuleNotFoundError:
+    if verify_windows:
+        # QM/MM geometry optimization uses optional berny/geometric packages.
+        print('Skipping QM/MM geomopt example during Windows verification because optional geomopt dependencies are not installed.')
+        raise SystemExit(0)
+    raise
 # or
 #from pyscf.geomopt import berny_solver
 #mol1 = berny_solver.optimize(mf)

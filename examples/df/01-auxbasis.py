@@ -10,7 +10,10 @@ The format and input convention of auxbasis are the same to the AO basis.
 See also examples/gto/04-input_basis.py
 '''
 
+import sys
 from pyscf import gto, scf, df
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
 
 #
 # If auxbasis is not specified, default optimal auxiliary basis (if possible)
@@ -78,5 +81,12 @@ mf.with_df.auxbasis = {'default': 'autoaux', 'N2': 'weigend'}
 
 # The automatic generation of auxiliary basis set (see also 10.1021/acs.jctc.3c00670)
 mf = scf.RHF(mol).density_fit()
-mf.with_df.auxbasis = df.autoabs(mol)
-mf.kernel()
+try:
+    mf.with_df.auxbasis = df.autoabs(mol)
+    mf.kernel()
+except (AttributeError, ImportError, ModuleNotFoundError):
+    if verify_windows:
+        # AutoABS requires the optional Basis Set Exchange backend in this environment.
+        print('Skipping AutoABS section during Windows verification because Basis Set Exchange is not installed.')
+    else:
+        raise

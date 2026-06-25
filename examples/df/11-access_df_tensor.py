@@ -20,7 +20,7 @@ mol.atom = '''
 mol.basis = 'ccpvdz'
 mol.build()
 
-mf = scf.RHF(mol).density_fit()
+mf = scf.RHF(mol).density_fit(auxbasis=df.make_auxbasis(mol))
 mf.kernel()
 
 #
@@ -54,7 +54,7 @@ print(Lpq.shape)
 # the CD tensor for future use, you need to assign a filename to the attribute
 # mf.with_df._cderi_to_save
 #
-mf = scf.RHF(mol).density_fit()
+mf = scf.RHF(mol).density_fit(auxbasis=df.make_auxbasis(mol))
 mf.with_df._cderi_to_save = 'saved_cderi.h5'
 mf.kernel()
 

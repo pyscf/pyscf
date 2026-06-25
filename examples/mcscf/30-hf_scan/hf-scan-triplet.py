@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import sys
 import numpy
 from pyscf import scf
 from pyscf import gto
@@ -10,6 +11,7 @@ Scan HF molecule triplet state dissociation curve
 
 ehf = []
 emc = []
+verify_windows = '--pyscf-verify-windows' in sys.argv
 
 def run(b, dm, mo):
     mol = gto.Mole()
@@ -54,7 +56,14 @@ with open('hf-scan-triplet.txt', 'w') as fout:
         fout.write('%2.1f  %12.8f  %12.8f  %12.8f  %12.8f\n'
                    % (xi, ehf1[i], emc1[i], ehf2[i], emc2[i]))
 
-import matplotlib.pyplot as plt
+try:
+    import matplotlib.pyplot as plt
+except ModuleNotFoundError:
+    if verify_windows:
+        # Plotting is optional for verification; the scan data has already been written.
+        print('Skipping triplet HF scan plotting during Windows verification because matplotlib is not installed.')
+        raise SystemExit(0)
+    raise
 plt.plot(x, emc1, label='CAS(6,6),4.0->0.7')
 plt.plot(x, emc2, label='CAS(6,6),0.7->4.0')
 plt.legend()

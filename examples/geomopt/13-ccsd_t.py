@@ -8,12 +8,22 @@ then use "as_pyscf_method" to pass them to berny_solver.
 See also  examples/geomopt/02-as_pyscf_method.py
 '''
 
+import sys
 from pyscf import gto
 from pyscf import scf
 from pyscf import cc
 from pyscf.cc import ccsd_t_lambda_slow as ccsd_t_lambda
 from pyscf.grad import ccsd_t as ccsd_t_grad
-from pyscf.geomopt import berny_solver
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+try:
+    from pyscf.geomopt import berny_solver
+except ModuleNotFoundError:
+    if verify_windows:
+        # CCSD(T) geometry optimization relies on the optional berny solver.
+        print('Skipping CCSD(T) geomopt example during Windows verification because berny is not installed.')
+        raise SystemExit(0)
+    raise
 
 mol = gto.M(
     verbose = 3,

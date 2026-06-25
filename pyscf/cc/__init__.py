@@ -78,6 +78,7 @@ from pyscf.cc import qcisd
 from pyscf.cc import rccsdt, rccsdt_highm
 from pyscf.cc import uccsdt, uccsdt_highm
 from pyscf.cc import rccsdtq, rccsdtq_highm
+from pyscf.cc import momgfccsd
 from pyscf import scf
 
 def CCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
@@ -160,6 +161,8 @@ def QCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
 QCISD.__doc__ = qcisd.QCISD.__doc__
 
 scf.hf.SCF.QCISD = QCISD
+
+MomGFCCSD = momgfccsd.MomGFCCSD
 
 def RQCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     import numpy

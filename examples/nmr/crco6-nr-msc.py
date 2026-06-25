@@ -1,8 +1,18 @@
 #!/usr/bin/env python
+import sys
 import numpy
 from pyscf import gto
 from pyscf import scf
-from pyscf.prop import nmr
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+try:
+    from pyscf.prop import nmr
+except ModuleNotFoundError:
+    if verify_windows:
+        # This example depends on the optional pyscf-properties package.
+        print('Skipping NMR property example during Windows verification because pyscf-properties is not installed.')
+        raise SystemExit(0)
+    raise
 
 mol = gto.Mole()
 mol.verbose = 5

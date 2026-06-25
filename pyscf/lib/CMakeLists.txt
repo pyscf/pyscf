@@ -17,6 +17,9 @@ project (pyscf)
 
 include(CheckSymbolExists)
 
+get_filename_component(PYSCF_TOP_DIR "${PROJECT_SOURCE_DIR}/../.." ABSOLUTE)
+set(PYSCF_THIRD_PARTY_DIR "${PYSCF_TOP_DIR}/third_party")
+
 if (NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
 endif()
@@ -176,6 +179,7 @@ option(USE_QCINT "Using the qcint library (optimized for x86-64) for gaussian in
 if(BUILD_LIBCINT)
   set(LIBCINT_GIT https://github.com/sunqm/libcint.git) # libcint is a portable, cross-platform implementation
   set(LIBCINT_VERSION v6.1.3)
+  set(LIBCINT_LOCAL_DIR "${PYSCF_THIRD_PARTY_DIR}/libcint")
   if (USE_QCINT)
     set(LIBCINT_GIT https://github.com/sunqm/qcint.git) # qcint is an optimized implementation for x86-64 architecture
     set(LIBCINT_VERSION v6.1.3)
@@ -184,26 +188,49 @@ if(BUILD_LIBCINT)
     endif()
   endif()
 
-  ExternalProject_Add(libcint
-    GIT_REPOSITORY ${LIBCINT_GIT}
-    GIT_TAG ${LIBCINT_VERSION}
-    PREFIX ${PROJECT_BINARY_DIR}/deps
-    INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE
-    CMAKE_CACHE_ARGS
-        -DWITH_F12:STRING=${WITH_F12}
-        -DWITH_RANGE_COULOMB:STRING=1
-        -DWITH_FORTRAN:STRING=0
-        -DWITH_CINT2_INTERFACE:STRING=0
-        -DWITH_4C1E:STRING=1
-        -DMIN_EXPCUTOFF:STRING=20
-        -DKEEP_GOING:STRING=1
-        -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
-        -DCMAKE_INSTALL_LIBDIR:PATH=lib
-        -DCMAKE_C_COMPILER:STRING=${CMAKE_C_COMPILER}
-        -DCMAKE_C_CREATE_SHARED_LIBRARY:STRING=${C_LINK_TEMPLATE}
-        -DBUILD_MARCH_NATIVE:STRING=${BUILD_MARCH_NATIVE}
-  )
+  if(EXISTS "${LIBCINT_LOCAL_DIR}/CMakeLists.txt")
+    message(STATUS "Using local libcint source: ${LIBCINT_LOCAL_DIR}")
+    ExternalProject_Add(libcint
+      SOURCE_DIR "${LIBCINT_LOCAL_DIR}"
+      PREFIX ${PROJECT_BINARY_DIR}/deps
+      INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+      CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE
+      CMAKE_CACHE_ARGS
+          -DWITH_F12:STRING=${WITH_F12}
+          -DWITH_RANGE_COULOMB:STRING=1
+          -DWITH_FORTRAN:STRING=0
+          -DWITH_CINT2_INTERFACE:STRING=0
+          -DWITH_4C1E:STRING=1
+          -DMIN_EXPCUTOFF:STRING=20
+          -DKEEP_GOING:STRING=1
+          -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+          -DCMAKE_INSTALL_LIBDIR:PATH=lib
+          -DCMAKE_C_COMPILER:STRING=${CMAKE_C_COMPILER}
+          -DCMAKE_C_CREATE_SHARED_LIBRARY:STRING=${C_LINK_TEMPLATE}
+          -DBUILD_MARCH_NATIVE:STRING=${BUILD_MARCH_NATIVE}
+    )
+  else()
+    ExternalProject_Add(libcint
+      GIT_REPOSITORY ${LIBCINT_GIT}
+      GIT_TAG ${LIBCINT_VERSION}
+      PREFIX ${PROJECT_BINARY_DIR}/deps
+      INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+      CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE
+      CMAKE_CACHE_ARGS
+          -DWITH_F12:STRING=${WITH_F12}
+          -DWITH_RANGE_COULOMB:STRING=1
+          -DWITH_FORTRAN:STRING=0
+          -DWITH_CINT2_INTERFACE:STRING=0
+          -DWITH_4C1E:STRING=1
+          -DMIN_EXPCUTOFF:STRING=20
+          -DKEEP_GOING:STRING=1
+          -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+          -DCMAKE_INSTALL_LIBDIR:PATH=lib
+          -DCMAKE_C_COMPILER:STRING=${CMAKE_C_COMPILER}
+          -DCMAKE_C_CREATE_SHARED_LIBRARY:STRING=${C_LINK_TEMPLATE}
+          -DBUILD_MARCH_NATIVE:STRING=${BUILD_MARCH_NATIVE}
+    )
+  endif()
   add_dependencies(cgto libcint)
   add_dependencies(ao2mo libcint)
 endif() # BUILD_LIBCINT
@@ -227,40 +254,77 @@ if(ENABLE_LIBXC)
 endif() # ENABLE_LIBXC
 
 if(ENABLE_LIBXC AND BUILD_LIBXC)
-  ExternalProject_Add(libxc
-    #GIT_REPOSITORY https://gitlab.com/libxc/libxc.git
-    #GIT_TAG master
-    URL https://gitlab.com/libxc/libxc/-/archive/7.0.0/libxc-7.0.0.tar.gz
-    PREFIX ${PROJECT_BINARY_DIR}/deps
-    INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
-            -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
-            -DCMAKE_INSTALL_LIBDIR:PATH=lib
-            -DENABLE_FORTRAN=0 -DDISABLE_KXC=0 -DDISABLE_LXC=1
-            -DCMAKE_C_CREATE_SHARED_LIBRARY=${C_LINK_TEMPLATE}
-            -DENABLE_XHOST:STRING=${BUILD_MARCH_NATIVE}
-            -DCMAKE_C_COMPILER:STRING=${CMAKE_C_COMPILER}
-	    -DCMAKE_POLICY_VERSION_MINIMUM=3.5 # remove when libxc update version min in next release
-  )
+  set(LIBXC_LOCAL_DIR "${PYSCF_THIRD_PARTY_DIR}/libxc-7.0.0")
+  if(EXISTS "${LIBXC_LOCAL_DIR}/CMakeLists.txt")
+    message(STATUS "Using local libxc source: ${LIBXC_LOCAL_DIR}")
+    ExternalProject_Add(libxc
+      SOURCE_DIR "${LIBXC_LOCAL_DIR}"
+      PREFIX ${PROJECT_BINARY_DIR}/deps
+      INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+      CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
+              -DBUILD_TESTING=OFF
+              -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+              -DCMAKE_INSTALL_LIBDIR:PATH=lib
+              -DENABLE_FORTRAN=0 -DDISABLE_KXC=0 -DDISABLE_LXC=1
+              -DCMAKE_C_CREATE_SHARED_LIBRARY=${C_LINK_TEMPLATE}
+              -DENABLE_XHOST:STRING=${BUILD_MARCH_NATIVE}
+              -DCMAKE_C_COMPILER:STRING=${CMAKE_C_COMPILER}
+	      -DCMAKE_POLICY_VERSION_MINIMUM=3.5 # remove when libxc update version min in next release
+    )
+  else()
+    ExternalProject_Add(libxc
+      #GIT_REPOSITORY https://gitlab.com/libxc/libxc.git
+      #GIT_TAG master
+      URL https://gitlab.com/libxc/libxc/-/archive/7.0.0/libxc-7.0.0.tar.gz
+      PREFIX ${PROJECT_BINARY_DIR}/deps
+      INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+      CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
+              -DBUILD_TESTING=OFF
+              -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+              -DCMAKE_INSTALL_LIBDIR:PATH=lib
+              -DENABLE_FORTRAN=0 -DDISABLE_KXC=0 -DDISABLE_LXC=1
+              -DCMAKE_C_CREATE_SHARED_LIBRARY=${C_LINK_TEMPLATE}
+              -DENABLE_XHOST:STRING=${BUILD_MARCH_NATIVE}
+              -DCMAKE_C_COMPILER:STRING=${CMAKE_C_COMPILER}
+	      -DCMAKE_POLICY_VERSION_MINIMUM=3.5 # remove when libxc update version min in next release
+    )
+  endif()
   add_dependencies(xc_itrf libxc)
   add_dependencies(dft libxc)
   add_dependencies(pdft libxc)
 endif() # ENABLE_LIBXC
 
 if(ENABLE_XCFUN AND BUILD_XCFUN)
-  ExternalProject_Add(libxcfun
-    GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
-    GIT_TAG a89b783
-    # This patch adds the xcfun derivative order up to 5
-    PATCH_COMMAND git apply --reject ${PROJECT_SOURCE_DIR}/libxcfun.patch || true
-    PREFIX ${PROJECT_BINARY_DIR}/deps
-    INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
-            -DXCFUN_MAX_ORDER=${XCFUN_MAX_ORDER} -DENABLE_TESTALL=0
-            -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
-            -DCMAKE_CXX_CREATE_SHARED_LIBRARY=${CXX_LINK_TEMPLATE}
-            -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-  )
+  set(XCFUN_LOCAL_DIR "${PYSCF_THIRD_PARTY_DIR}/xcfun")
+  if(EXISTS "${XCFUN_LOCAL_DIR}/CMakeLists.txt")
+    message(STATUS "Using local xcfun source: ${XCFUN_LOCAL_DIR}")
+    ExternalProject_Add(libxcfun
+      SOURCE_DIR "${XCFUN_LOCAL_DIR}"
+      # This patch adds the xcfun derivative order up to 5
+      # PATCH_COMMAND git apply --reject ${PROJECT_SOURCE_DIR}/libxcfun.patch || true
+      PREFIX ${PROJECT_BINARY_DIR}/deps
+      INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+      CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
+              -DXCFUN_MAX_ORDER=${XCFUN_MAX_ORDER} -DENABLE_TESTALL=0
+              -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+              -DCMAKE_CXX_CREATE_SHARED_LIBRARY=${CXX_LINK_TEMPLATE}
+              -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+    )
+  else()
+    ExternalProject_Add(libxcfun
+      GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
+      GIT_TAG a89b783
+      # This patch adds the xcfun derivative order up to 5
+      # PATCH_COMMAND git apply --reject ${PROJECT_SOURCE_DIR}/libxcfun.patch || true
+      PREFIX ${PROJECT_BINARY_DIR}/deps
+      INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+      CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
+              -DXCFUN_MAX_ORDER=${XCFUN_MAX_ORDER} -DENABLE_TESTALL=0
+              -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+              -DCMAKE_CXX_CREATE_SHARED_LIBRARY=${CXX_LINK_TEMPLATE}
+              -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+    )
+  endif()
   add_dependencies(xcfun_itrf libxcfun)
   add_dependencies(dft libxcfun)
 endif() # ENABLE_XCFUN

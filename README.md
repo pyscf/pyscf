@@ -40,6 +40,9 @@ Python-based Simulations of Chemistry Framework
 * More details of custom installation can be found in
   [installation manual](http://pyscf.org/user/install.html#build-from-source)
 
+* Windows source wheel packaging notes are available in
+  [conda/windows/README.md](conda/windows/README.md)
+
 
 # Citing PySCF
 

@@ -4,6 +4,7 @@
 #
 
 import numpy
+import sys
 from pyscf import lo
 from pyscf.tools import chgcar
 from pyscf.pbc import gto, scf
@@ -12,6 +13,8 @@ from functools import reduce
 This Benchmark show how to use the Cubegen command to make VASP chgcars for
 visualizing periodic IBOs for example in diamond 
 '''
+verify_windows = '--pyscf-verify-windows' in sys.argv
+
 cell = gto.Cell()
 cell.a = '''
 3.5668  0       0
@@ -25,9 +28,12 @@ cell.atom='''C 0.      0.      0.
    C 2.6751  0.8917  2.6751
    C 0.      1.7834  1.7834
    C 0.8917  2.6751  2.6751'''
+if verify_windows:
+    cell.atom='''C 0.0000 0.0000 0.0000
+    C 0.8917 0.8917 0.8917'''
 
-cell.ke_cutoff = 100
-cell.basis = 'gth-dzv'
+cell.ke_cutoff = 50 if verify_windows else 100
+cell.basis = 'gth-szv' if verify_windows else 'gth-dzv'
 cell.pseudo = 'gth-pade'
 cell.verbose = 4
 cell.build(unit='Angstrom')
@@ -48,9 +54,14 @@ ibo = lo.ibo.ibo(cell, mo_occ, iaos=a)
 '''
 Generates IBO files as VASP Chgcars
 '''
-for i in range(ibo.shape[1]):
+num_orbitals = min(2, ibo.shape[1]) if verify_windows else ibo.shape[1]
+for i in range(num_orbitals):
     chgcar.orbital(cell, 'diamond_ibo{:02d}.chgcar'.format(i+1), ibo[:,i])
     print("wrote cube {:02d}".format(i+1))
+
+if verify_windows:
+    # Skip the slower post-processing analysis in the installed-wheel sweep.
+    raise SystemExit(0)
 
 '''
 Makes Population Analysis with IAOs

@@ -26,8 +26,18 @@ Algorithms, and Python Tools", arXiv:2506.06661.
 This example provides a complete implementation of the code discussed in that paper.
 """
 
+import sys
 import numpy as np
-from numba import njit, prange
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+try:
+    from numba import njit, prange
+except ModuleNotFoundError:
+    if verify_windows:
+        # This example is primarily about Numba acceleration.
+        print('Skipping Numba example during Windows verification because numba is not installed.')
+        raise SystemExit(0)
+    raise
 from scipy.special import roots_hermite
 
 from pyscf import gto, M

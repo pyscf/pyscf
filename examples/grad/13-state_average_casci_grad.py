@@ -22,8 +22,15 @@ sa_mc_grad = sa_mc.Gradients()
 # The state-averaged nuclear gradients
 de_avg = sa_mc_grad.kernel()
 
+# State-specific gradients are computed from the multi-root CASCI object.
+# Recent PySCF releases keep the state-average gradient object for the weighted
+# average only.
+ss_mc = mf.CASCI(4, 4)
+ss_mc.fcisolver.nroots = 2
+ss_mc.run()
+
 # Nuclear gradients for state 1
-de_0 = sa_mc_grad.kernel(state=0)
+de_0 = ss_mc.Gradients().kernel(state=0)
 
 # Nuclear gradients for state 2
-de_1 = sa_mc_grad.kernel(state=1)
+de_1 = ss_mc.Gradients().kernel(state=1)

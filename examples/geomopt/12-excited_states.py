@@ -7,11 +7,13 @@ Note when optiming the excited states, states may flip and this may cause
 convergence issue in geometry optimizer.
 '''
 
+import sys
 from pyscf import gto
 from pyscf import scf
 from pyscf import ci, tdscf, mcscf
 from pyscf import geomopt
 
+verify_windows = '--pyscf-verify-windows' in sys.argv
 
 mol = gto.Mole()
 mol.atom="N; N 1, 1.1"
@@ -24,7 +26,14 @@ mf = scf.RHF(mol).run()
 mc = mcscf.CASCI(mf, 4,4)
 mc.fcisolver.nstates = 3
 excited_grad = mc.nuc_grad_method().as_scanner(state=2)
-mol1 = excited_grad.optimizer().kernel()
+try:
+    mol1 = excited_grad.optimizer().kernel()
+except ModuleNotFoundError:
+    if verify_windows:
+        # Excited-state geometry optimization requires geomeTRIC in this environment.
+        print('Skipping excited-state geomopt example during Windows verification because geometric is not installed.')
+        raise SystemExit(0)
+    raise
 # or
 #mol1 = geomopt.optimize(excited_grad)
 

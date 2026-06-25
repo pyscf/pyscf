@@ -3,6 +3,8 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import sys
+from pathlib import Path
 import numpy as np
 from pyscf import gto, symm
 from pyscf.gto.basis import parse_molpro
@@ -27,10 +29,20 @@ saves the molecular orbital coefficients on symmetry adapted basis.  We can
 read the coefficients and transform the orbitals to AO representation.
 '''
 
+verify_windows = '--pyscf-verify-windows' in sys.argv
+basis_path = Path('path/to/molpor/basis_name.libmol')
+orbital_path = Path('orb.matrop')
+
+if verify_windows and (not basis_path.is_file() or not orbital_path.is_file()):
+    # The Molpro basis library and orbital dump are external inputs and are
+    # intentionally not bundled into the wheel verification environment.
+    print('Skipping Molpro orbital import example during wheel verification.')
+    raise SystemExit(0)
+
 mol = gto.M(atom='N 0 0 1; N 0 0 -1',
-            basis={'N':parse_molpro.load('path/to/molpor/basis_name.libmol', 'N')},
+            basis={'N':parse_molpro.load(str(basis_path), 'N')},
             symmetry='d2h')
-dat = open('orb.matrop').read().split('\n')
+dat = orbital_path.read_text().split('\n')
 dat = ''.join(dat[2:-2])  # [2:-2] to skip comments
 dat = np.array([float(x) for x in dat.split(',')[:-1]])  # [:-1] to remove last comma
 dims = [7,3,3,1,7,3,3,1]  # orbitals in each irrep

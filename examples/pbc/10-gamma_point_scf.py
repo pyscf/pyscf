@@ -7,9 +7,12 @@ The 2-electron integrals are computed using Poisson solver with FFT by default.
 In most scenario, it should be used with pseudo potential.
 '''
 
+import sys
 # Note import path which is different to molecule code
 from pyscf.pbc import gto, scf, dft
 import numpy
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
 
 cell = gto.Cell()
 # .a is a matrix for lattice vectors.
@@ -25,6 +28,9 @@ cell.atom = '''C     0.      0.      0.
               C     2.6751  0.8917  2.6751
               C     0.      1.7834  1.7834
               C     0.8917  2.6751  2.6751'''
+if verify_windows:
+    cell.atom = '''C 0.0000 0.0000 0.0000
+                   C 0.8917 0.8917 0.8917'''
 cell.basis = 'gth-szv'
 cell.pseudo = 'gth-pade'
 cell.verbose = 4
@@ -38,6 +44,9 @@ mf = dft.RKS(cell)
 mf.xc = 'm06,m06'
 edft = mf.kernel()
 print("DFT energy (per unit cell) = %.17g" % edft)
+
+if verify_windows:
+    raise SystemExit(0)
 
 #
 # By default, DFT use uniform cubic grids.  It can be replaced by atomic grids.

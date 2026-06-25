@@ -1,11 +1,19 @@
 #!/usr/bin/env python
 import pyscf
+import sys
+from pathlib import Path
 from pyscf.tools.mo_mapping import mo_comps
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from benchmarking_utils import setup_logger, get_cpu_timings
 
 log = setup_logger()
 
-for bas in ('3-21g', '6-31g*', 'cc-pVTZ', 'ANO-Roos-TZ'):
+verify_windows = '--pyscf-verify-windows' in sys.argv
+# Keep the verification profile aligned with the Windows example-runner budget.
+basis_sets = ('3-21g',) if verify_windows else ('3-21g', '6-31g*', 'cc-pVTZ', 'ANO-Roos-TZ')
+
+for bas in basis_sets:
     mol = pyscf.M(atom = 'N 0 0 0; N 0 0 1.1',
                   basis = bas)
     cpu0 = get_cpu_timings()

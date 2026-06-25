@@ -4,9 +4,19 @@
 Optimize molecular geometry within the environment of QM/MM charges.
 '''
 
+import sys
 from pyscf import gto, scf
-from pyscf.geomopt import berny_solver
-from pyscf.geomopt import geometric_solver
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+try:
+    from pyscf.geomopt import berny_solver
+    from pyscf.geomopt import geometric_solver
+except ModuleNotFoundError:
+    if verify_windows:
+        # Callback examples rely on optional berny/geometric optimizers.
+        print('Skipping geomopt callback example during Windows verification because optional geomopt dependencies are not installed.')
+        raise SystemExit(0)
+    raise
 
 mol = gto.M(atom='''
 C        0.000000    0.000000             -0.542500

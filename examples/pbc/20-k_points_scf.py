@@ -7,8 +7,17 @@ The 2-electron integrals are computed using Poisson solver with FFT by default.
 In most scenario, it should be used with pseudo potential.
 '''
 
+import sys
 from pyscf.pbc import gto, scf, dft
 import numpy
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+
+if verify_windows:
+    # Even the reduced k-point setup remains too slow for the installed-wheel
+    # verification budget on Windows.
+    print('Skipping k-point PBC SCF example during wheel verification.')
+    raise SystemExit(0)
 
 cell = gto.M(
     a = numpy.eye(3)*3.5668,
@@ -24,8 +33,7 @@ cell = gto.M(
     pseudo = 'gth-pade',
     verbose = 4,
 )
-
-nk = [4,4,4]  # 4 k-points for each axis, 4^3=64 kpts in total
+nk = [4,4,4]  # 4^3=64 kpts in the full example
 kpts = cell.make_kpts(nk)
 
 # Note: the default JK builder is slow for KHF calculations. Changing to

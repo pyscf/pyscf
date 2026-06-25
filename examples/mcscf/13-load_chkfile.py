@@ -40,7 +40,7 @@ mc.kernel()
 with h5py.File(chkname) as f:
     print('Keys in chkfile', f.keys)
     print('Keys in mcscf group', f['mcscf'].keys)
-    mcscf_orb = f['mcscf/mo_coeff'].value
+    mcscf_orb = f['mcscf/mo_coeff'][()]
 
 
 #

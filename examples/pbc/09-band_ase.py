@@ -1,8 +1,18 @@
+import sys
 import numpy as np
 import pyscf.pbc.gto as pbcgto
-from pyscf.pbc.tools import pyscf_ase
-from ase.build import bulk
-import matplotlib.pyplot as plt
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
+try:
+    from pyscf.pbc.tools import pyscf_ase
+    from ase.build import bulk
+    import matplotlib.pyplot as plt
+except (ModuleNotFoundError, RuntimeError):
+    if verify_windows:
+        # This plotting example requires optional ASE and matplotlib dependencies.
+        print('Skipping PBC ASE band example during Windows verification because optional plotting dependencies are not installed.')
+        raise SystemExit(0)
+    raise
 
 c = bulk('C', 'diamond', a=3.5668)
 print(c.get_volume())

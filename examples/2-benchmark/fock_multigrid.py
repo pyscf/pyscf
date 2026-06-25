@@ -1,8 +1,12 @@
 #!/usr/bin/env python
 
 import numpy as np
+import sys
+from pathlib import Path
 import pyscf
 from pyscf import pbc
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from benchmarking_utils import setup_logger, get_cpu_timings
 
 log = setup_logger()
@@ -208,17 +212,33 @@ H      11.491592       8.576221       8.647557
                 max_memory = 50000,
                 precision = 1e-6)
 
-for xc in ('LDA,VWN', 'pbe'):
-    for images in ([1,1,1], [2,1,1], [2,2,1], [2,2,2]):
-        cell = pbc.tools.super_cell(cell0, images)
-        nao = cell.nao
-        log.note('nao = %d', nao)
-        dm = np.random.random((nao,nao))
-        dm = dm + dm.T
 
-        mf = cell.RKS().set(xc=xc)
-        mf.with_df = pbc.dft.multigrid.MultiGridFFTDF(cell)
+def main():
+    verify_windows = '--pyscf-verify-windows' in sys.argv
+    # Keep the Windows verification profile small enough for the example runner.
+    xc_values = ('LDA,VWN',) if verify_windows else ('LDA,VWN', 'pbe')
+    image_sets = ((1, 1, 1),) if verify_windows else ((1, 1, 1), (2, 1, 1), (2, 2, 1), (2, 2, 2))
 
-        cpu0 = get_cpu_timings()
-        v = mf.get_veff(cell, dm)
-        log.timer('Fock build (xc=%s, nao=%d)' % (xc, nao), *cpu0)
+    for xc in xc_values:
+        for images in image_sets:
+            cell = pbc.tools.super_cell(cell0, images)
+            nao = cell.nao
+            log.note('nao = %d', nao)
+            rng = np.random.default_rng(1)
+            dm = rng.random((nao, nao))
+            dm = dm + dm.T
+
+            mf = cell.RKS().set(xc=xc)
+            try:
+                mf.with_df = pbc.dft.multigrid.MultiGridFFTDF(cell)
+            except AttributeError:
+                # Newer PySCF replaces MultiGridFFTDF with multigrid_numint().
+                mf = mf.multigrid_numint()
+
+            cpu0 = get_cpu_timings()
+            mf.get_veff(cell, dm)
+            log.timer('Fock build (xc=%s, nao=%d)' % (xc, nao), *cpu0)
+
+
+if __name__ == '__main__':
+    main()

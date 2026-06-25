@@ -1,4 +1,7 @@
+import sys
 import pyscf
+
+verify_windows = '--pyscf-verify-windows' in sys.argv
 
 cell = pyscf.M(
     atom='''
@@ -16,7 +19,14 @@ C 1.685068664391   1.685068664391   1.685068664391
 )
 
 mf = cell.KRKS(xc='pbe', kpts=cell.make_kpts([2]*3))
-opt = mf.Gradients().optimizer()
+try:
+    opt = mf.Gradients().optimizer()
+except ModuleNotFoundError:
+    if verify_windows:
+        # Periodic geometry optimization relies on the optional ASE backend.
+        print('Skipping PBC geometry optimization example during Windows verification because ASE is not installed.')
+        raise SystemExit(0)
+    raise
 
 # By default, both the crystal lattice and atomic positions are optimized.
 opt.run()
