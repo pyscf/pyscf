@@ -1,0 +1,76 @@
+{
+  "examples": [
+    {
+      "path": "examples/cc/50-simple_momgfccsd.py"
+    },
+    {
+      "path": "examples/cc/51-momgfccsd_hermiticity.py"
+    },
+    {
+      "path": "examples/df/00-with_df.py"
+    },
+    {
+      "path": "examples/dft/02-gks.py"
+    },
+    {
+      "path": "examples/1-advanced/033-constrained_dft.py"
+    },
+    {
+      "path": "examples/agf2/06-adc2_solver.py"
+    },
+    {
+      "path": "examples/gw/00-simple_gw.py"
+    }
+  ],
+  "packaging": [
+    {
+      "path": "examples/cc/52-momgfccsd_moment_input.py",
+      "reason": "Historical MomGFCCSD wheel export regression"
+    },
+    {
+      "path": "examples/cc/53-momgfccsd_weight_threshold.py",
+      "reason": "Historical MomGFCCSD wheel export regression"
+    },
+    {
+      "path": "examples/cc/54-momgfccsd_self_energy.py",
+      "reason": "Historical MomGFCCSD wheel export regression"
+    },
+    {
+      "path": "examples/df/11-get_j_io_free.py",
+      "reason": "Historical density-fitting wheel regression"
+    },
+    {
+      "path": "examples/dft/12-camb3lyp.py",
+      "reason": "Historical libxc wheel regression"
+    },
+    {
+      "path": "examples/dft/13-rsh_dft.py",
+      "reason": "Historical libxc wheel regression"
+    },
+    {
+      "path": "examples/dft/15-nlc_functionals.py",
+      "reason": "Historical xcfun wheel regression"
+    },
+    {
+      "path": "examples/cc/00-simple_ccsd.py",
+      "reason": "General installed-wheel coupled-cluster regression guard"
+    },
+    {
+      "path": "examples/adc/01-closed_shell.py",
+      "reason": "General installed-wheel ADC regression guard"
+    },
+    {
+      "path": "examples/agf2/00-simple_agf2.py",
+      "reason": "General installed-wheel AGF2 regression guard"
+    },
+    {
+      "path": "examples/ao2mo/00-mo_integrals.py",
+      "reason": "General installed-wheel AO2MO regression guard"
+    },
+    {
+      "path": "examples/mcscf/13-restart.py",
+      "reason": "General installed-wheel MCSCF regression guard"
+    }
+  ],
+  "diagnostics": []
+}

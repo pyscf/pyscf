@@ -212,11 +212,9 @@ The current Windows targeted verification result is:
 - `smoke`: PASS
 - `examples`: PASS
 - `packaging`: PASS
-- `diagnostics`: PASS
-
 The aggregated `all` report contains:
 
-- `passed = 27`
+- `passed = 26`
 - `failed = 0`
 - `skipped = 0`
 
@@ -228,9 +226,14 @@ This report confirms that the Windows wheel packaging issues addressed in this b
 
 The additional `artifact` phase can now be run before installation to verify wheel contents directly.
 
+There are currently no active targeted `diagnostics` cases in
+`conda/windows/verify-wheel-manifest.json`. Optional-dependency examples that
+were previously tracked as expected failures now short-circuit cleanly during
+Windows verification and are therefore treated as ordinary PASS cases.
+
 The latest full targeted verification report in the workspace is:
 
-- `.tmp/verify-wheel-all-pyscf-win313.json`
+- `.tmp/windows/verify/verify-wheel-all.json`
 
 Recommended transient output layout for Windows packaging work:
 

@@ -88,6 +88,7 @@ third_party/
 
 conda/windows/*.json
 conda/windows/*.jsonl
+!conda/windows/verify-wheel-manifest.json
 
 # Generated Windows binaries
 pyscf/lib/*.dll

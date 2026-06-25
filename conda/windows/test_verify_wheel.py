@@ -74,12 +74,9 @@ class VerifyWheelRunnerTest(unittest.TestCase):
         self.assertIn("examples/dft/12-camb3lyp.py", manifest)
         self.assertIn("examples/mcscf/13-restart.py", manifest)
 
-    def test_diagnostic_manifest_tracks_non_packaging_failures(self):
+    def test_diagnostic_manifest_is_currently_empty(self):
         manifest = verify_wheel.diagnostic_failure_manifest()
-        self.assertEqual(
-            manifest["examples/geomopt/01-geomeTRIC.py"],
-            "No module named 'geometric'",
-        )
+        self.assertEqual(manifest, {})
         self.assertNotIn("examples/gw/00-simple_gw.py", manifest)
 
     def test_build_summary_counts_by_status(self):
