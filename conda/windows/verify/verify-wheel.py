@@ -2,8 +2,8 @@
 """Verify that an installed PySCF wheel works on Windows.
 
 Usage:
-    python conda/windows/verify-wheel.py --repo-root . --phase all
-    python conda/windows/verify-wheel.py --repo-root . --phase packaging --output-json .tmp/verify-wheel-packaging.json
+    python conda/windows/verify/verify-wheel.py --repo-root . --phase all
+    python conda/windows/verify/verify-wheel.py --repo-root . --phase packaging --output-json .tmp/verify-wheel-packaging.json
 
 The script must be run from a Python interpreter that can import the installed
 wheel. It always runs the example scripts from outside the repository root so

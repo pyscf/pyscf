@@ -2,7 +2,7 @@
 
 ## Scope
 
-This note evaluates whether the current Windows wheel release path should be migrated from the custom `build-wheel.ps1` + `verify-wheel.ps1` flow to `cibuildwheel`.
+This note evaluates whether the current Windows wheel release path should be migrated from the custom `conda/windows/build-wheel.ps1` + `conda/windows/verify/verify-wheel.ps1` flow to `cibuildwheel`.
 
 ## Current State
 
@@ -20,8 +20,8 @@ The current Windows release path is now stable in these areas:
 - a matching GitHub Actions Windows runner path using:
   - `actions/setup-python`
   - `msys2/setup-msys2`
-  - `build-wheel.ps1`
-  - `verify-wheel.ps1`
+  - `conda/windows/build-wheel.ps1`
+  - `conda/windows/verify/verify-wheel.ps1`
 
 ## What cibuildwheel Would Improve
 
@@ -49,7 +49,7 @@ The current Windows flow still depends on project-specific behavior that is not 
    - it is not yet a fully generic `cibuildwheel` drop-in case
 
 4. Verification is an explicit post-build gate
-   - `verify-wheel.ps1` is a real release-quality contract, not an optional smoke check
+   - `conda/windows/verify/verify-wheel.ps1` is a real release-quality contract, not an optional smoke check
    - any migration still needs this verification layer
 
 ## Decision
@@ -77,7 +77,7 @@ Revisit migration only when all of these are true:
 
 If migration is revisited later, use this order:
 
-1. Keep `build-wheel.ps1` and `verify-wheel.ps1` as the authoritative build/verify contracts
+1. Keep `conda/windows/build-wheel.ps1` and `conda/windows/verify/verify-wheel.ps1` as the authoritative build/verify contracts
 2. Introduce `cibuildwheel` first as a wrapper around the existing Windows build assumptions, not as a rewrite
 3. Preserve the post-build verification gate unchanged
 4. Compare:

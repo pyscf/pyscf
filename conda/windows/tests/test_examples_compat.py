@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def load_module(module_name, relative_path):
@@ -24,7 +24,7 @@ def load_module(module_name, relative_path):
 
 class ExampleVerificationRoutingTests(unittest.TestCase):
     def test_installed_example_runner_passes_windows_verify_flag(self):
-        module = load_module("run_installed_examples", "conda/windows/run-installed-examples.py")
+        module = load_module("run_installed_examples", "conda/windows/examples/run-installed-examples.py")
 
         def fake_run(cmd, **kwargs):
             self.assertIn("--pyscf-verify-windows", cmd)
@@ -44,7 +44,7 @@ class ExampleVerificationRoutingTests(unittest.TestCase):
         self.assertFalse(timed_out)
 
     def test_verify_wheel_runner_passes_windows_verify_flag(self):
-        module = load_module("verify_wheel", "conda/windows/verify-wheel.py")
+        module = load_module("verify_wheel", "conda/windows/verify/verify-wheel.py")
         spec = module.ExampleSpec("examples/gw/00-simple_gw.py", "examples")
 
         def fake_run(cmd, **kwargs):
@@ -59,7 +59,7 @@ class ExampleVerificationRoutingTests(unittest.TestCase):
 
 class ExampleManifestTests(unittest.TestCase):
     def test_api_drift_examples_are_no_longer_diagnostics(self):
-        manifest = json.loads((REPO_ROOT / "conda/windows/verify-wheel-manifest.json").read_text(encoding="utf-8"))
+        manifest = json.loads((REPO_ROOT / "conda/windows/verify/verify-wheel-manifest.json").read_text(encoding="utf-8"))
         diagnostics = {entry["path"] for entry in manifest["diagnostics"]}
         examples = {entry["path"] for entry in manifest["examples"]}
 

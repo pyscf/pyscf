@@ -1,96 +1,127 @@
-# Windows Wheel Packaging and Verification
+# Windows Packaging Workflow For PySCF
 
-This directory contains the Windows-specific build and verification entry points for PySCF wheel packaging.
+This README is the entry point for the Windows packaging work under `conda/windows/`.
+It is written to match the current Windows workflow as it exists in this repository,
+not as an abstract future design. A new contributor should be able to read this file
+from top to bottom and understand what the Windows packaging effort is doing, which
+script owns which responsibility, and where to continue the work safely.
 
-## Layout
+## 0. Workflow Overview
 
-- `build-wheel.ps1`
-  Builds a Windows wheel and prepares the required external runtime dependencies in the local staging directory `pyscf/lib/deps/win64/bin`.
-- `verify-wheel.ps1`
-  Installs a wheel if requested and runs the targeted Windows verification phases.
-- `verify-wheel.py`
-  Python implementation of the targeted verification phases.
-- `verify-wheel-manifest.json`
-  Stable data file for the targeted example, packaging regression, and diagnostic expected-failure cases.
-- `cibuildwheel-evaluation.md`
-  Recorded go/no-go decision for future Windows wheel unification work.
-- `test_verify_wheel.py`
-  Unit tests for the verification helpers.
-- `run-installed-examples.py`
-  Full installed-wheel example sweep for Windows.
+The current Windows logic is intentionally layered.
 
-The Windows external runtime dependencies are not committed to the repository.
-They are prepared under `pyscf/lib/deps/win64/bin` as local build artifacts by
-`build-wheel.ps1` before wheel creation.
+1. **Prepare the Windows build environment**
+   - Script and file: `conda/windows/environment.yml`
+   - Purpose: define the recommended local `conda` environment used for build and verification.
 
-## Prerequisites
+2. **Build the wheel**
+   - Script: `conda/windows/build-wheel.ps1`
+   - Purpose: resolve the Python interpreter, validate the toolchain, stage runtime DLLs, and build the wheel.
 
-The local build flow assumes:
+3. **Install the wheel into the target environment**
+   - Script: `conda/windows/verify/verify-wheel.ps1`
+   - Purpose: optionally install the built wheel into the intended interpreter before running verification.
 
-- Python 3.13
-- `build`
-- Git for Windows
-- CMake >= 3.22
-- Ninja
-- MSYS2 UCRT64 GCC
-- MSYS2 UCRT64 OpenBLAS runtime files
+4. **Run package-level verification**
+   - Scripts: `conda/windows/verify/verify-wheel.ps1`, `conda/windows/verify/verify-wheel.py`, `conda/windows/verify/wheel_utils.py`
+   - Purpose: check the wheel artifact itself, then verify imports and minimal runtime behavior.
 
-`build-wheel.ps1` now enforces the critical parts of this contract directly:
+5. **Run a small, targeted example set**
+   - Scripts: `conda/windows/verify/verify-wheel.py`, `conda/windows/verify/verify-wheel-manifest.json`
+   - Purpose: guard the known packaging regressions and keep a small, high-signal installed-wheel gate.
 
-- Python must be 3.13
-- `build`, `cmake`, `ninja`, `git`, `gcc`, and `g++` must resolve on `PATH`
-- the runtime source directory must contain the required external runtime files
+6. **Run the full installed-wheel example sweep**
+   - Script: `conda/windows/examples/run-installed-examples.py`
+   - Purpose: execute the broad installed-wheel example suite and classify outcomes into `PASS`, `FAIL`, `TIMEOUT`, `MISSING_DEP`, `IMPORT_ERROR`, and `MISSING_FILE`.
 
-During packaging the script stages those runtime files into `pyscf/lib/deps/win64/bin`, sets `PYSCF_WINDOWS_RUNTIME_DLL_DIR` to that location, and invokes `python -m build --wheel --no-isolation` from outside the repository root so the repo-local `build/` directory does not shadow the Python build frontend.
+7. **Extract and summarize the full-sweep results**
+   - Current state: partial
+   - Purpose: turn raw full-sweep JSONL output into an indexed, queryable, repeatable triage layer.
+   - Current repository status: raw JSONL output exists and the README records high-level counts, but the dedicated indexing/summarization layer has not been implemented yet.
 
-It also prepends these directories to `PATH`:
+8. **Maintain the workflow contract**
+   - Tests: `conda/windows/tests/`
+   - Decision note: `conda/windows/docs/cibuildwheel-evaluation.md`
+   - Purpose: keep the build/verify entry points stable and document why Windows currently stays on its native runner path.
 
-- `pyscf/lib`
-- `pyscf/lib/deps/bin`
-- `pyscf/lib/deps/lib`
-- `pyscf/lib/deps/win64/bin`
+If you only need the shortest mental model, it is:
 
-This ensures that runtime library resolution works both while building the wheel and while
-running local source-tree validation after the build.
+- `environment.yml` prepares the interpreter
+- `build-wheel.ps1` creates the wheel
+- `verify-wheel.ps1` installs the wheel and drives layered verification
+- `verify-wheel.py` owns the targeted installed-wheel checks
+- `run-installed-examples.py` owns the full example sweep
+- the future indexing layer will sit on top of the full-sweep JSONL output
 
-The staged runtime files are local build outputs and should remain ignored by git.
+## 1. Directory Map
 
-## Environment Setup
+The Windows packaging directory is organized by responsibility:
 
-If Miniforge is not installed yet, install it to a directory of your choice, for example:
+- `conda/windows/README.md`
+  - This document. Read this first.
+- `conda/windows/environment.yml`
+  - Recommended local `conda` environment.
+- `conda/windows/build-wheel.ps1`
+  - Wheel build orchestration entry point.
+- `conda/windows/verify/`
+  - Post-build installation and layered verification.
+- `conda/windows/examples/`
+  - Full installed-wheel example sweep entry point.
+- `conda/windows/tests/`
+  - Unit tests that protect the Windows packaging and verification helpers.
+- `conda/windows/docs/`
+  - Supporting design and policy notes that are referenced from this README.
 
-```powershell
-$MiniforgeRoot = "C:\Tools\Miniforge3"
-```
+## 2. Environment Preparation
 
-Create the recommended local environment from `conda/windows/environment.yml`:
+The recommended environment file is:
+
+- `conda/windows/environment.yml`
+
+It currently describes:
+
+- Python `3.13`
+- `pip`
+- `setuptools`
+- `wheel`
+- `cmake<4`
+- `ninja`
+- Python package `build`
+
+Create the environment with:
 
 ```powershell
 $RepoRoot = (Get-Location).Path
-
 conda env create -f (Join-Path $RepoRoot "conda\windows\environment.yml")
 ```
 
-Resolve the environment interpreter explicitly:
+Then resolve the interpreter explicitly:
 
 ```powershell
 $PythonExe = "D:\ProgramData\miniforge3\envs\pyscf-win313\python.exe"
 ```
 
-If Miniforge is installed elsewhere, adjust the path accordingly.
+The explicit interpreter path matters because the Windows workflow is designed
+to keep build and verification tied to the same known environment rather than
+to whichever Python happens to be active in the shell.
 
-The scripts in this directory assume that:
+## 3. Layer 1: Build The Wheel
 
-- `-PythonExe` points at the intended environment interpreter
-- GCC/OpenBLAS runtime files are available from MSYS2 UCRT64, typically under a path such as `$RuntimeDllDir`
+The authoritative build entry point is:
 
-Why the explicit interpreter path is recommended:
+- `conda/windows/build-wheel.ps1`
 
-- it makes local runs match the successful verification path exactly
-- it avoids non-interactive PowerShell sessions accidentally falling back to `base`
-- it lets build and verification use the same Python without relying on shell activation state
+This script is responsible for more than just calling `python -m build`. It:
 
-## Build Command
+- resolves the target Python interpreter
+- checks that `git`, `cmake`, `ninja`, `gcc`, and `g++` are available
+- validates the Python build frontend
+- locates the runtime DLL source directory
+- stages runtime DLLs into `pyscf/lib/deps/win64/bin`
+- sets the environment needed by the native build
+- runs `python -m build --wheel --no-isolation`
+
+Recommended command:
 
 ```powershell
 $RepoRoot = (Get-Location).Path
@@ -104,19 +135,52 @@ powershell -ExecutionPolicy Bypass -File (Join-Path $RepoRoot "conda\windows\bui
   -ParallelLevel 8
 ```
 
-If `third_party/libcint`, `third_party/libxc-7.0.0`, or `third_party/xcfun` are absent, the CMake ExternalProject configuration in `pyscf/lib/CMakeLists.txt` will download them during the build.
-
 Use `-Clean` for a release rebuild or when you need to reset cached build state.
-For normal local iteration, omit `-Clean` so the ExternalProject build tree can be reused.
+For normal local iteration, omit `-Clean` so the external project build tree can be reused.
 
-The build script prints the resolved parallel level and the final total build time:
+## 4. Layer 2: Install The Wheel
 
-- `parallel: 8`
-- `Build time: hh:mm:ss`
+The Windows flow treats wheel installation as an explicit step, not as an
+implicit side effect of verification.
 
-## Targeted Verification
+The installation entry point is:
 
-Run the targeted Windows wheel verification suite:
+- `conda/windows/verify/verify-wheel.ps1`
+
+When called with `-InstallWheel`, it runs:
+
+```powershell
+& $PythonExe -m pip install --force-reinstall $WheelPath
+```
+
+This layer is intentionally separate from build so that:
+
+- wheel creation and wheel consumption stay distinct
+- the same verification entry point can be used with an already-built wheel
+- failures can be attributed to build, install, or runtime more cleanly
+
+## 5. Layer 3: Package-Level Verification
+
+The package-level verification stack is:
+
+- `conda/windows/verify/verify-wheel.ps1`
+- `conda/windows/verify/verify-wheel.py`
+- `conda/windows/verify/wheel_utils.py`
+
+This layer answers a narrower question than the full example sweep:
+
+> Does the built wheel look structurally correct, import correctly, and survive a few minimal runtime checks?
+
+The verification phases are:
+
+- `artifact`
+  - inspect the wheel payload and metadata before installation-time reasoning
+- `import`
+  - verify that `pyscf` and core modules import from the installed wheel
+- `smoke`
+  - run minimal RHF, DFT, DF, and export checks
+
+Recommended command:
 
 ```powershell
 $RepoRoot = (Get-Location).Path
@@ -126,7 +190,7 @@ $WheelPath = Join-Path $RepoRoot "dist\pyscf-2.13.1-py3-none-win_amd64.whl"
 
 New-Item -ItemType Directory -Force -Path (Join-Path $TmpDir "verify") | Out-Null
 
-powershell -ExecutionPolicy Bypass -File (Join-Path $RepoRoot "conda\windows\verify-wheel.ps1") `
+powershell -ExecutionPolicy Bypass -File (Join-Path $RepoRoot "conda\windows\verify\verify-wheel.ps1") `
   -PythonExe $PythonExe `
   -RepoRoot $RepoRoot `
   -InstallWheel `
@@ -135,36 +199,58 @@ powershell -ExecutionPolicy Bypass -File (Join-Path $RepoRoot "conda\windows\ver
   -OutputJson (Join-Path $TmpDir "verify\verify-wheel-all.json")
 ```
 
-Available phases:
+Current targeted package-level status on this branch:
 
-- `artifact`
-- `import`
-- `smoke`
+- `artifact`: PASS
+- `import`: PASS
+- `smoke`: PASS
+
+The latest targeted verification JSON in the workspace is:
+
+- `.tmp/windows/verify/verify-wheel-all.json`
+
+## 6. Layer 4: Targeted Example Verification
+
+The targeted example layer is still driven by `verify-wheel.py`, but it should
+be thought of as a different gate from the package-level checks above.
+
+Its inputs are:
+
+- `conda/windows/verify/verify-wheel.py`
+- `conda/windows/verify/verify-wheel-manifest.json`
+
+Its phases are:
+
 - `examples`
+  - representative installed-wheel examples
 - `packaging`
+  - historically sensitive packaging-regression examples
 - `diagnostics`
-- `all`
+  - expected non-packaging failures
 
-At the end of each run, `verify-wheel.py` prints a compact summary grouped by phase and lists failing cases separately. This is the primary CI triage view.
+The current branch keeps `diagnostics` empty because the previously tracked
+optional-dependency cases now short-circuit cleanly under `--pyscf-verify-windows`.
 
-Both `verify-wheel.py` and `run-installed-examples.py` force the child processes to use:
+Current targeted example status on this branch:
 
-- `OMP_NUM_THREADS=1`
-- `OPENBLAS_NUM_THREADS=1`
-- `MKL_NUM_THREADS=1`
+- `examples`: PASS
+- `packaging`: PASS
+- `diagnostics`: no active cases
 
-This keeps the Windows verification path stable and avoids spurious `CVHFallocate_JKArray` allocation failures in otherwise valid packaging checks.
+This layer is the fastest installed-wheel gate that still protects real
+regressions. It should stay small, explicit, and stable.
 
-## Unit Tests
+## 7. Layer 5: Full Installed-Wheel Example Sweep
 
-```powershell
-$PythonExe = "D:\ProgramData\miniforge3\envs\pyscf-win313\python.exe"
-& $PythonExe conda\windows\test_verify_wheel.py
-```
+The full sweep entry point is:
 
-## Full Installed-Wheel Example Sweep
+- `conda/windows/examples/run-installed-examples.py`
 
-Use the full example runner when a complete installed-wheel report is needed:
+This script is intentionally broader and noisier than the targeted verification
+layer. It exists to surface the full installed-wheel compatibility picture, not
+to act as the release gate by itself.
+
+Recommended command:
 
 ```powershell
 $RepoRoot = (Get-Location).Path
@@ -173,7 +259,7 @@ $PythonExe = "D:\ProgramData\miniforge3\envs\pyscf-win313\python.exe"
 
 New-Item -ItemType Directory -Force -Path (Join-Path $TmpDir "examples") | Out-Null
 
-& $PythonExe conda\windows\run-installed-examples.py `
+& $PythonExe (Join-Path $RepoRoot "conda\windows\examples\run-installed-examples.py") `
   --repo-root $RepoRoot `
   --examples-root (Join-Path $RepoRoot "examples") `
   --output (Join-Path $TmpDir "examples\wheel-examples.jsonl")
@@ -188,75 +274,34 @@ $PythonExe = "D:\ProgramData\miniforge3\envs\pyscf-win313\python.exe"
 
 New-Item -ItemType Directory -Force -Path (Join-Path $TmpDir "examples") | Out-Null
 
-& $PythonExe conda\windows\run-installed-examples.py `
+& $PythonExe (Join-Path $RepoRoot "conda\windows\examples\run-installed-examples.py") `
   --repo-root $RepoRoot `
   --examples-root (Join-Path $RepoRoot "examples") `
   --output (Join-Path $TmpDir "examples\wheel-examples-part1.jsonl") `
   --limit 228
 
-& $PythonExe conda\windows\run-installed-examples.py `
+& $PythonExe (Join-Path $RepoRoot "conda\windows\examples\run-installed-examples.py") `
   --repo-root $RepoRoot `
   --examples-root (Join-Path $RepoRoot "examples") `
   --output (Join-Path $TmpDir "examples\wheel-examples-part2.jsonl") `
   --start-at examples\mcscf\13-restart.py
 ```
 
-## Validation Results
+The classifier currently distinguishes:
 
-### Targeted wheel verification
+- `PASS`
+- `FAIL`
+- `TIMEOUT`
+- `MISSING_DEP`
+- `IMPORT_ERROR`
+- `MISSING_FILE`
 
-The current Windows targeted verification result is:
+That classification is useful because the full-sweep failures are not all
+Windows wheel defects. Some are optional dependencies, some are heavy examples,
+some are example/API drift, and some are genuine issues worth fixing in the
+installed-wheel path.
 
-- `artifact`: PASS
-- `import`: PASS
-- `smoke`: PASS
-- `examples`: PASS
-- `packaging`: PASS
-The aggregated `all` report contains:
-
-- `passed = 26`
-- `failed = 0`
-- `skipped = 0`
-
-This report confirms that the Windows wheel packaging issues addressed in this branch are fixed:
-
-- `pyscf.cc.MomGFCCSD` is exported correctly
-- `libxc` and `xcfun` DLL lookup works from an installed wheel
-- representative CC, DFT, DF, ADC, AGF2, AO2MO, and MCSCF examples run outside the repository tree
-
-The additional `artifact` phase can now be run before installation to verify wheel contents directly.
-
-There are currently no active targeted `diagnostics` cases in
-`conda/windows/verify-wheel-manifest.json`. Optional-dependency examples that
-were previously tracked as expected failures now short-circuit cleanly during
-Windows verification and are therefore treated as ordinary PASS cases.
-
-The latest full targeted verification report in the workspace is:
-
-- `.tmp/windows/verify/verify-wheel-all.json`
-
-Recommended transient output layout for Windows packaging work:
-
-- verification JSON: `.tmp/windows/verify/`
-- installed-wheel example runs: `.tmp/windows/examples/`
-- final wheel artifacts: `dist/`
-
-The stable targeted case lists now live in:
-
-- `conda/windows/verify-wheel-manifest.json`
-
-The current `cibuildwheel` decision note lives in:
-
-- `conda/windows/cibuildwheel-evaluation.md`
-
-### Latest complete installed-wheel example sweep
-
-The latest complete installed-wheel sweep currently available in the workspace is the two-part report stored in:
-
-- `.tmp/wheel-examples-part1.jsonl`
-- `.tmp/wheel-examples-part2.jsonl`
-
-That complete sweep reported:
+The latest complete full-sweep counts recorded in this README are:
 
 - `PASS 323`
 - `FAIL 62`
@@ -265,96 +310,99 @@ That complete sweep reported:
 - `MISSING_DEP 41`
 - `MISSING_FILE 1`
 
-Important note:
+These counts are still an upper bound on the remaining problem set because the
+targeted `packaging` layer has already revalidated several historically failing
+examples after that full sweep was captured.
 
-- Those counts are from the latest complete sweep, but they still include historical packaging failures that this branch has since revalidated individually.
-- In particular, the targeted `packaging` phase now passes for:
-  - `examples/cc/50-simple_momgfccsd.py`
-  - `examples/cc/51-momgfccsd_hermiticity.py`
-  - `examples/cc/52-momgfccsd_moment_input.py`
-  - `examples/cc/53-momgfccsd_weight_threshold.py`
-  - `examples/cc/54-momgfccsd_self_energy.py`
-  - `examples/df/11-get_j_io_free.py`
-  - `examples/dft/12-camb3lyp.py`
-  - `examples/dft/13-rsh_dft.py`
-  - `examples/dft/15-nlc_functionals.py`
+## 8. Layer 6: Full-Sweep Result Extraction And Summarization
 
-Because the full 456-example sweep has not been rerun after those targeted fixes, the `FAIL 62` figure should be treated as an upper bound on the remaining full-suite failures.
+This is the only layer in the current Windows logic that is still intentionally
+incomplete.
 
-## Remaining Issues Observed In The Full Sweep
+What already exists:
 
-The remaining issues are dominated by non-packaging categories:
+- raw JSONL full-sweep artifacts under `.tmp/`
+- human-readable aggregate counts in this README
+- a stable status vocabulary from the example runner
 
-### Optional dependencies not installed
+What does not exist yet:
 
-Examples that require optional packages still fail until those packages are installed:
+- a dedicated indexed results store
+- repeatable error clustering
+- historical run-to-run diff reporting
+- a script-owned summary extraction layer for the full sweep
 
-- `geometric`
-- `ase`
-- `berny`
-- `numba`
-- `mcfun`
-- `pyscf.dispersion`
-- selected extension modules such as `dmrgscf`
+In other words:
 
-### Example/API compatibility drift
+- the full sweep can already produce facts
+- the repository does not yet have the final extraction/indexing layer that
+  turns those facts into a queryable triage database
 
-Some examples fail because their example code does not match current public APIs:
+That future work should sit on top of the JSONL artifacts rather than replacing
+the current full-sweep runner.
 
-- `examples/1-advanced/033-constrained_dft.py`
-  - `get_fock()` does not accept `level_shift_factor`
-- `examples/agf2/06-adc2_solver.py`
-  - `pyscf.adc.radc.RADCIP` is not available
-- `examples/gw/00-simple_gw.py`
-  - `GWAC.kernel()` does not accept `orbs`
-- `examples/2-benchmark/fock_multigrid.py`
-  - `pyscf.pbc.dft.multigrid.MultiGridFFTDF` is not available
+## 9. Supporting Tests
 
-### Memory-allocation failures on large examples
+Windows-specific helper tests live in:
 
-Several examples still fail with:
+- `conda/windows/tests/test_build_wheel.py`
+- `conda/windows/tests/test_verify_wheel.py`
+- `conda/windows/tests/test_examples_compat.py`
 
-- `malloc(...) failed in CVHFallocate_JKArray`
+These tests protect the contract of the Windows packaging layer itself. They do
+not replace real build or verification runs, but they are useful when editing
+the local helper scripts and README paths.
 
-Representative files include:
+Examples:
 
-- `examples/1-advanced/002-input_script.py`
-- `examples/2-benchmark/bz.py`
-- `examples/2-benchmark/c60.py`
-- `examples/2-benchmark/ccsd_iteration.py`
-- `examples/ao2mo/10-diff_orbs_for_ijkl.py`
-- `examples/dft/20-density_fitting.py`
+```powershell
+$PythonExe = "D:\ProgramData\miniforge3\envs\pyscf-win313\python.exe"
 
-These failures do not currently point to wheel packaging defects. They are more consistent with runtime memory pressure and workload size on Windows.
+& $PythonExe conda\windows\tests\test_build_wheel.py
+& $PythonExe conda\windows\tests\test_verify_wheel.py
+& $PythonExe conda\windows\tests\test_examples_compat.py
+```
 
-### Long-running examples
+## 10. Supporting Notes And Policy Documents
 
-Some examples still hit the example-runner timeout:
+The main supplementary note currently tracked with this workflow is:
 
-- large FCI examples
-- large CC examples
-- selected MCSCF and benchmark examples
+- `conda/windows/docs/cibuildwheel-evaluation.md`
 
-## GitHub Release Workflow
+Read it when you want to answer:
 
-`.github/workflows/publish.yml` now includes a Windows release job that:
+- why Windows still uses the native runner path
+- why the project did not immediately migrate Windows to `cibuildwheel`
+- what conditions would justify revisiting that decision later
 
-1. checks out the repository
-2. sets up Python 3.13
-3. installs MSYS2 UCRT64 GCC and OpenBLAS
-4. installs `build`, `cmake<4.0`, and Ninja
-5. restores cached `third_party` source directories when available
-6. restores cached ExternalProject source/download state under `build/temp.win-amd64/deps/` when available
-7. runs `conda/windows/build-wheel.ps1`
-8. writes verification JSON under `.tmp/windows/verify/` and runs `conda/windows/verify-wheel.ps1 -Phase all`
-9. uploads the resulting wheel to PyPI
+This note is not the workflow entry point. It is background context that should
+be read after this README, not instead of it.
 
-This keeps the Windows packaging path aligned with the existing release workflow structure already used for Linux and macOS.
+## 11. How The Windows Release Job Maps To The Layers
 
-## Future Unification
+The GitHub Actions Windows release job follows the same layered model:
 
-The current decision is to keep Windows on the native runner path for now and defer `cibuildwheel` migration.
+1. set up Python and MSYS2
+2. run `conda/windows/build-wheel.ps1`
+3. install and verify through `conda/windows/verify/verify-wheel.ps1`
+4. collect the wheel
+5. upload the artifact
 
-See:
+This is important because local debugging should stay aligned with the same
+build/verify split used by the release workflow. Local commands should explain
+release behavior, not invent a separate Windows path.
 
-- `conda/windows/cibuildwheel-evaluation.md`
+## 12. Recommended Reading Order For New Contributors
+
+If you are new to this Windows packaging work, use this reading order:
+
+1. read this `README.md`
+2. inspect `environment.yml`
+3. inspect `build-wheel.ps1`
+4. inspect `verify/verify-wheel.ps1`
+5. inspect `verify/verify-wheel.py`
+6. inspect `examples/run-installed-examples.py`
+7. inspect `tests/`
+8. read `docs/cibuildwheel-evaluation.md` if you need policy context
+
+That order matches the actual workflow and keeps the mental model consistent.

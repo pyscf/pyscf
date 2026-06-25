@@ -1,7 +1,7 @@
 """Unit tests for the Windows wheel verification helpers.
 
 Usage:
-    python conda/windows/test_verify_wheel.py
+    python conda/windows/tests/test_verify_wheel.py
 """
 
 import importlib.util
@@ -13,7 +13,7 @@ from pathlib import Path
 from zipfile import ZipFile
 
 
-MODULE_PATH = Path(__file__).with_name("verify-wheel.py")
+MODULE_PATH = Path(__file__).resolve().parents[1] / "verify" / "verify-wheel.py"
 if str(MODULE_PATH.parent) not in sys.path:
     sys.path.insert(0, str(MODULE_PATH.parent))
 spec = importlib.util.spec_from_file_location("verify_wheel", MODULE_PATH)

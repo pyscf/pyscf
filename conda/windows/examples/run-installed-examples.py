@@ -2,9 +2,9 @@
 """Run the full PySCF example suite against an installed Windows wheel.
 
 Usage:
-    python conda/windows/run-installed-examples.py --repo-root . --examples-root ./examples --output .tmp/wheel-examples.jsonl
-    python conda/windows/run-installed-examples.py --repo-root . --examples-root ./examples --output .tmp/wheel-examples-part1.jsonl --limit 228
-    python conda/windows/run-installed-examples.py --repo-root . --examples-root ./examples --output .tmp/wheel-examples-part2.jsonl --start-at examples/mcscf/13-restart.py
+    python conda/windows/examples/run-installed-examples.py --repo-root . --examples-root ./examples --output .tmp/wheel-examples.jsonl
+    python conda/windows/examples/run-installed-examples.py --repo-root . --examples-root ./examples --output .tmp/wheel-examples-part1.jsonl --limit 228
+    python conda/windows/examples/run-installed-examples.py --repo-root . --examples-root ./examples --output .tmp/wheel-examples-part2.jsonl --start-at examples/mcscf/13-restart.py
 
 The script always runs the example processes from outside the repository root
 so that imports resolve to the installed package, not to the local source tree.

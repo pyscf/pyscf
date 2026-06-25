@@ -4,8 +4,8 @@ Verify that a built PySCF wheel works on Windows.
 
 .DESCRIPTION
 Usage:
-  powershell -ExecutionPolicy Bypass -File conda\windows\verify-wheel.ps1 -Phase all
-  powershell -ExecutionPolicy Bypass -File conda\windows\verify-wheel.ps1 -InstallWheel -WheelPath dist\pyscf-2.13.1-py3-none-win_amd64.whl -Phase all -OutputJson .tmp\verify-wheel-all.json
+  powershell -ExecutionPolicy Bypass -File conda\windows\verify\verify-wheel.ps1 -Phase all
+  powershell -ExecutionPolicy Bypass -File conda\windows\verify\verify-wheel.ps1 -InstallWheel -WheelPath dist\pyscf-2.13.1-py3-none-win_amd64.whl -Phase all -OutputJson .tmp\verify-wheel-all.json
 
 The verification phases are:
   artifact     Wheel artifact content checks
@@ -45,7 +45,7 @@ function Resolve-PythonExe {
 }
 
 if (-not $RepoRoot) {
-    $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+    $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 }
 
 $PythonExe = Resolve-PythonExe $PythonExe

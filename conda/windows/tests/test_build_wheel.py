@@ -2,7 +2,7 @@ import pathlib
 import unittest
 
 
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 BUILD_WHEEL = REPO_ROOT / "conda" / "windows" / "build-wheel.ps1"
 README = REPO_ROOT / "conda" / "windows" / "README.md"
 CMAKELISTS = REPO_ROOT / "pyscf" / "lib" / "CMakeLists.txt"

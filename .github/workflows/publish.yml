@@ -176,7 +176,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path $env:PYSCF_WINDOWS_TMP | Out-Null
           $wheel = Get-ChildItem dist\pyscf-*.whl | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-          powershell -ExecutionPolicy Bypass -File conda\windows\verify-wheel.ps1 `
+          powershell -ExecutionPolicy Bypass -File conda\windows\verify\verify-wheel.ps1 `
             -InstallWheel `
             -WheelPath $wheel.FullName `
             -Phase all `
