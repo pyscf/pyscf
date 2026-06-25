@@ -1,0 +1,58 @@
+[
+  {
+    "match_type": "stderr_contains",
+    "pattern": "CVHFallocate_JKArray",
+    "category": "memory_pressure",
+    "fingerprint": "memory_pressure:cvhfallocate_jkarray",
+    "priority": 100,
+    "enabled": true
+  },
+  {
+    "match_type": "stderr_contains",
+    "pattern": "unexpected keyword argument",
+    "category": "api_drift",
+    "fingerprint": "api_drift:unexpected_keyword_argument",
+    "priority": 90,
+    "enabled": true
+  },
+  {
+    "match_type": "stderr_contains",
+    "pattern": "has no attribute",
+    "category": "api_drift",
+    "fingerprint": "api_drift:missing_attribute",
+    "priority": 80,
+    "enabled": true
+  },
+  {
+    "match_type": "stderr_contains",
+    "pattern": "NotImplementedError",
+    "category": "api_drift",
+    "fingerprint": "api_drift:not_implemented",
+    "priority": 70,
+    "enabled": true
+  },
+  {
+    "match_type": "status_is",
+    "pattern": "TIMEOUT",
+    "category": "timeout_heavy",
+    "fingerprint": "timeout",
+    "priority": 60,
+    "enabled": true
+  },
+  {
+    "match_type": "status_is",
+    "pattern": "MISSING_FILE",
+    "category": "path_or_data",
+    "fingerprint": "missing_file",
+    "priority": 60,
+    "enabled": true
+  },
+  {
+    "match_type": "status_is",
+    "pattern": "IMPORT_ERROR",
+    "category": "import_error",
+    "fingerprint": "import_error",
+    "priority": 60,
+    "enabled": true
+  }
+]

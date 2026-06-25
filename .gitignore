@@ -89,6 +89,7 @@ third_party/
 conda/windows/*.json
 conda/windows/*.jsonl
 !conda/windows/verify-wheel-manifest.json
+!conda/windows/example-triage-rules.json
 
 # Generated Windows binaries
 pyscf/lib/*.dll

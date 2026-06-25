@@ -35,9 +35,9 @@ The current Windows logic is intentionally layered.
    - Purpose: execute the broad installed-wheel example suite and classify outcomes into `PASS`, `FAIL`, `TIMEOUT`, `MISSING_DEP`, `IMPORT_ERROR`, and `MISSING_FILE`.
 
 7. **Extract and summarize the full-sweep results**
-   - Current state: partial
-   - Purpose: turn raw full-sweep JSONL output into an indexed, queryable, repeatable triage layer.
-   - Current repository status: raw JSONL output exists and the README records high-level counts, but the dedicated indexing/summarization layer has not been implemented yet.
+   - Scripts and file: `conda/windows/index-example-results.py`, `conda/windows/report-example-results.py`, `conda/windows/example-triage-rules.json`
+   - Purpose: import raw full-sweep JSONL output into a local SQLite database, assign stable fingerprints, and render repeatable summary, clustering, and diff reports.
+   - Current repository status: the first repo-owned indexing and reporting layer now exists and is intended to grow without changing the full-sweep runner contract.
 
 8. **Maintain the workflow contract**
    - Tests: `conda/windows/tests/`
@@ -51,7 +51,8 @@ If you only need the shortest mental model, it is:
 - `verify-wheel.ps1` installs the wheel and drives layered verification
 - `verify-wheel.py` owns the targeted installed-wheel checks
 - `run-installed-examples.py` owns the full example sweep
-- the future indexing layer will sit on top of the full-sweep JSONL output
+- `index-example-results.py` imports sweep artifacts into SQLite
+- `report-example-results.py` renders summary, clusters, and diffs from the indexed runs
 
 ## 1. Directory Map
 
@@ -63,6 +64,12 @@ The Windows packaging directory is organized by responsibility:
   - Recommended local `conda` environment.
 - `conda/windows/build-wheel.ps1`
   - Wheel build orchestration entry point.
+- `conda/windows/index-example-results.py`
+  - Import raw JSONL sweep artifacts into the local indexing database.
+- `conda/windows/report-example-results.py`
+  - Render summary, clustering, and diff views from indexed runs.
+- `conda/windows/example-triage-rules.json`
+  - Rule file for stable failure fingerprints and high-level triage categories.
 - `conda/windows/verify/`
   - Post-build installation and layered verification.
 - `conda/windows/examples/`
@@ -316,27 +323,76 @@ examples after that full sweep was captured.
 
 ## 8. Layer 6: Full-Sweep Result Extraction And Summarization
 
-This is the only layer in the current Windows logic that is still intentionally
-incomplete.
+This layer now exists as a first repo-owned implementation and is designed to
+stay additive. The full-sweep runner remains the fact-producing layer. The new
+index/report scripts sit on top of its JSONL artifacts.
 
-What already exists:
+What already exists in the repository:
 
 - raw JSONL full-sweep artifacts under `.tmp/`
-- human-readable aggregate counts in this README
 - a stable status vocabulary from the example runner
+- an indexing import entry point at `conda/windows/index-example-results.py`
+- a reporting entry point at `conda/windows/report-example-results.py`
+- the triage rule file `conda/windows/example-triage-rules.json`
+- summary reconstruction from historical chunked inputs
+- cluster rendering for repeated failure fingerprints
+- run-to-run diff rendering at the example-file level
+
+The local indexing database is intended to live at:
+
+- `.tmp/windows/index/examples.db`
+
+Recommended indexing command:
+
+```powershell
+$RepoRoot = (Get-Location).Path
+$TmpDir = Join-Path $RepoRoot ".tmp\windows"
+$PythonExe = "D:\ProgramData\miniforge3\envs\pyscf-win313\python.exe"
+
+New-Item -ItemType Directory -Force -Path (Join-Path $TmpDir "index") | Out-Null
+
+& $PythonExe (Join-Path $RepoRoot "conda\windows\index-example-results.py") `
+  --db (Join-Path $TmpDir "index\examples.db") `
+  --input (Join-Path $TmpDir "examples\wheel-examples-part1.jsonl") `
+  --input (Join-Path $TmpDir "examples\wheel-examples-part2.jsonl") `
+  --source-kind chunked `
+  --repo-root $RepoRoot
+```
+
+Older historical artifacts in this repository may still live directly under
+`.tmp/` rather than under `.tmp/windows/examples/`. The indexer accepts either
+layout as long as the input paths are passed explicitly.
+
+Recommended reporting commands:
+
+```powershell
+$RepoRoot = (Get-Location).Path
+$TmpDir = Join-Path $RepoRoot ".tmp\windows"
+$PythonExe = "D:\ProgramData\miniforge3\envs\pyscf-win313\python.exe"
+
+& $PythonExe (Join-Path $RepoRoot "conda\windows\report-example-results.py") `
+  summary `
+  --db (Join-Path $TmpDir "index\examples.db") `
+  --run-id latest
+
+& $PythonExe (Join-Path $RepoRoot "conda\windows\report-example-results.py") `
+  clusters `
+  --db (Join-Path $TmpDir "index\examples.db") `
+  --run-id latest `
+  --status FAIL
+```
 
 What does not exist yet:
 
-- a dedicated indexed results store
-- repeatable error clustering
-- historical run-to-run diff reporting
-- a script-owned summary extraction layer for the full sweep
+- richer fingerprint rules for the long tail of failures
+- a canonical exported report format for archiving outside the SQLite database
+- higher-level historical trend views across many runs
 
 In other words:
 
-- the full sweep can already produce facts
-- the repository does not yet have the final extraction/indexing layer that
-  turns those facts into a queryable triage database
+- the full sweep already produces the raw facts
+- the repository now has a script-owned indexing and reporting workflow
+- the remaining work is about coverage and ergonomics, not about inventing the layer from scratch
 
 That future work should sit on top of the JSONL artifacts rather than replacing
 the current full-sweep runner.
@@ -348,6 +404,8 @@ Windows-specific helper tests live in:
 - `conda/windows/tests/test_build_wheel.py`
 - `conda/windows/tests/test_verify_wheel.py`
 - `conda/windows/tests/test_examples_compat.py`
+- `conda/windows/tests/test_index_example_results.py`
+- `conda/windows/tests/test_report_example_results.py`
 
 These tests protect the contract of the Windows packaging layer itself. They do
 not replace real build or verification runs, but they are useful when editing
@@ -361,6 +419,8 @@ $PythonExe = "D:\ProgramData\miniforge3\envs\pyscf-win313\python.exe"
 & $PythonExe conda\windows\tests\test_build_wheel.py
 & $PythonExe conda\windows\tests\test_verify_wheel.py
 & $PythonExe conda\windows\tests\test_examples_compat.py
+& $PythonExe conda\windows\tests\test_index_example_results.py
+& $PythonExe conda\windows\tests\test_report_example_results.py
 ```
 
 ## 10. Supporting Notes And Policy Documents

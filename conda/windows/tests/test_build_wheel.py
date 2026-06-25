@@ -40,6 +40,12 @@ class BuildWheelScriptTests(unittest.TestCase):
         self.assertIn('-ParallelLevel 8', text)
         self.assertIn('Use `-Clean` for a release rebuild or when you need to reset cached build state.', text)
 
+    def test_readme_documents_result_indexing_layer(self):
+        text = README.read_text(encoding="utf-8")
+        self.assertIn("index-example-results.py", text)
+        self.assertIn("report-example-results.py", text)
+        self.assertIn(".tmp/windows/index/examples.db", text)
+
     def test_setup_build_py_reports_package_data_source_and_destination(self):
         text = SETUPPY.read_text(encoding="utf-8")
         self.assertIn('def build_package_data(self):', text)
