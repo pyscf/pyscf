@@ -8,7 +8,6 @@ from pyscf.gw.gw_ac import GWAC
 @pytest.fixture
 def h2o_pbe0():
     mol = gto.Mole()
-    mol.verbose = 5
     mol.atom = [[8, (0.0, 0.0, 0.0)], [1, (0.0, -0.7571, 0.5861)], [1, (0.0, 0.7571, 0.5861)]]
     mol.basis = 'def2-svp'
     mol.build()

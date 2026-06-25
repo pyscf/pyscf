@@ -1,4 +1,4 @@
-/* Copyright 2014-2025 The PySCF Developers. All Rights Reserved.
+/* Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -496,6 +496,17 @@ const int64_t tp_t3[6][3] = {
     {2, 1, 0}, // reverse
 };
 
+static inline int64_t src_idx_from_full3(const int64_t *restrict perm, int64_t v0, int64_t v1, int64_t v2, int64_t nvir)
+{
+    int64_t src_abc[3];
+
+    src_abc[perm[0]] = v0;
+    src_abc[perm[1]] = v1;
+    src_abc[perm[2]] = v2;
+
+    return ((src_abc[0] * nvir + src_abc[1]) * nvir + src_abc[2]);
+}
+
 // Unpack triangular-stored T3 amplitudes into a full T3 block.
 //
 // This kernel reconstructs the full permutation-expanded T3 tensor block from the compressed triangular
@@ -521,6 +532,7 @@ void unpack_t3_tri2block_(const double *restrict t3_tri,
 {
 #define MAP(sym, x, y, z) map[(((sym) * nocc + (x)) * nocc + (y)) * nocc + (z)]
 #define MASK(sym, x, y, z) mask[(((sym) * nocc + (x)) * nocc + (y)) * nocc + (z)]
+#define VIDX(a, b, c) (((a) * nvir + (b)) * nvir + (c))
 
 #pragma omp parallel for collapse(4) schedule(dynamic)
     for (int64_t sym = 0; sym < 6; ++sym)
@@ -549,15 +561,10 @@ void unpack_t3_tri2block_(const double *restrict t3_tri,
                         {
                             for (int64_t c = 0; c < nvir; ++c)
                             {
-                                int64_t abc[3] = {a, b, c};
-                                int64_t aa = abc[perm[0]];
-                                int64_t bb = abc[perm[1]];
-                                int64_t cc = abc[perm[2]];
+                                int64_t src = src_base + src_idx_from_full3(perm, a, b, c, nvir);
+                                int64_t dest = dest_base + VIDX(a, b, c);
 
-                                int64_t src_idx = src_base + (a * nvir + b) * nvir + c;
-                                int64_t dest_idx = dest_base + (aa * nvir + bb) * nvir + cc;
-
-                                t3_blk[dest_idx] = t3_tri[src_idx];
+                                t3_blk[dest] = t3_tri[src];
                             }
                         }
                     }
@@ -569,112 +576,11 @@ void unpack_t3_tri2block_(const double *restrict t3_tri,
 #undef MASK
 }
 
-// Unpack a triangular-stored T3 (i, j, k) element into its 6-fold
-// permutation representation for a single occupied triplet.
+
+// Unpack triangular-stored T3 amplitudes directly into the final block:
 //
-// This routine identifies the symmetry representative of (i0, j0, k0) in the triangular (i <= j <= k) index domain,
-// applies the corresponding (a, b, c) permutation, and scatters the resulting amplitudes into `t3_blk`.
-// In addition, a second symmetry partner (selected via `tmp_indices`) is accumulated to complete the required
-// two-term contribution.  Conceptually, this corresponds to reconstructing:
+//   t3_tmp + t3_tmp.transpose(0, 1, 2, 4, 5, 3)
 //
-//     t3_full[i0, j0, k0, :, :, :] + t3_full[j0, i0, k0, :, :, :].transpose(1, 0, 2)
-//
-// Input
-//   t3_tri     : triangular-stored T3 amplitudes
-//   t3_blk     : output buffer [nvir**3]
-//   map        : mapping (sym, i, j, k) -> tri index
-//   mask       : triangular-domain mask for valid (i, j, k)
-//   i0, j0, k0 : occupied indices for this element
-//   nocc       : number of occupied orbitals
-//   nvir       : number of virtual orbitals
-void unpack_t3_tri2single_pair_(const double *restrict t3_tri,
-                                double *restrict t3_blk,
-                                const int64_t *restrict map,
-                                const bool *restrict mask,
-                                int64_t i0, int64_t j0, int64_t k0,
-                                int64_t nocc, int64_t nvir)
-{
-
-#define MAP(sym, x, y, z) map[(((sym) * nocc + (x)) * nocc + (y)) * nocc + (z)]
-#define MASK(sym, x, y, z) mask[(((sym) * nocc + (x)) * nocc + (y)) * nocc + (z)]
-
-    int64_t sym;
-    for (sym = 0; sym < 6; ++sym)
-    {
-        if (MASK(sym, i0, j0, k0))
-            break;
-    }
-
-    const int64_t *perm = tp_t3[sym];
-    int64_t idx = MAP(sym, i0, j0, k0);
-
-#pragma omp parallel for collapse(3) schedule(static)
-    for (int64_t a = 0; a < nvir; ++a)
-    {
-        for (int64_t b = 0; b < nvir; ++b)
-        {
-            for (int64_t c = 0; c < nvir; ++c)
-            {
-                int64_t abc[3] = {a, b, c};
-                int64_t aa = abc[perm[0]];
-                int64_t bb = abc[perm[1]];
-                int64_t cc = abc[perm[2]];
-
-                int64_t src_idx = ((idx * nvir + a) * nvir + b) * nvir + c;
-                int64_t dest_idx = (aa * nvir + bb) * nvir + cc;
-
-                t3_blk[dest_idx] = t3_tri[src_idx];
-            }
-        }
-    }
-
-    const int64_t tmp_indices[6] = {2, 4, 0, 5, 1, 3};
-
-    for (sym = 0; sym < 6; ++sym)
-    {
-        if (MASK(tmp_indices[sym], i0, j0, k0))
-            break;
-    }
-
-    const int64_t *perm2 = tp_t3[tmp_indices[sym]];
-    idx = MAP(tmp_indices[sym], i0, j0, k0);
-
-#pragma omp parallel for collapse(3) schedule(static)
-    for (int64_t a = 0; a < nvir; ++a)
-    {
-        for (int64_t b = 0; b < nvir; ++b)
-        {
-            for (int64_t c = 0; c < nvir; ++c)
-            {
-                int64_t abc[3] = {a, b, c};
-                int64_t aa = abc[perm2[0]];
-                int64_t bb = abc[perm2[1]];
-                int64_t cc = abc[perm2[2]];
-
-                int64_t src_idx = ((idx * nvir + a) * nvir + b) * nvir + c;
-                int64_t dest_idx = (aa * nvir + bb) * nvir + cc;
-
-                t3_blk[dest_idx] += t3_tri[src_idx];
-            }
-        }
-    }
-#undef MAP
-#undef MASK
-}
-
-// Unpack triangular-stored T3 amplitudes into a full T3 block.
-//
-// This kernel reconstructs the full permutation-expanded T3 tensor block from the compressed triangular
-// representation without forming the full tensor in memory.
-//
-// Input:
-//   t3_tri                    : triangular-stored T3 amplitudes
-//   t3_blk                    : output buffer [blk_i * blk_j * blk_k * nvir**3]
-//   map                       : mapping index table for (i, j, k) -> tri index
-//   mask                      : mask indicating which (i, j, k) indices are stored (triangular domain)
-//   [i0:i1), [j0:j1), [k0:k1) : occupied index block ranges
-//   nocc, nvir                : number of occupied / virtual orbitals
-//   blk_i, blk_j, blk_k       : block sizes for the destination tensor
 void unpack_t3_tri2block_pair_(const double *restrict t3_tri,
                                double *restrict t3_blk,
                                const int64_t *restrict map,
@@ -688,9 +594,7 @@ void unpack_t3_tri2block_pair_(const double *restrict t3_tri,
 
 #define MAP(sym, x, y, z) map[(((sym) * nocc + (x)) * nocc + (y)) * nocc + (z)]
 #define MASK(sym, x, y, z) mask[(((sym) * nocc + (x)) * nocc + (y)) * nocc + (z)]
-
-    const int64_t tmp_indices[6] = {5, 3, 4, 1, 2, 0};
-    const int64_t trans_indices[6] = {1, 0, 3, 2, 5, 4};
+#define VIDX(a, b, c) (((a) * nvir + (b)) * nvir + (c))
 
 #pragma omp parallel for collapse(4) schedule(dynamic)
     for (int64_t sym = 0; sym < 6; ++sym)
@@ -719,59 +623,11 @@ void unpack_t3_tri2block_pair_(const double *restrict t3_tri,
                         {
                             for (int64_t c = 0; c < nvir; ++c)
                             {
-                                int64_t abc[3] = {a, b, c};
-                                int64_t aa = abc[perm[0]];
-                                int64_t bb = abc[perm[1]];
-                                int64_t cc = abc[perm[2]];
+                                const int64_t src0 = src_base + src_idx_from_full3(perm, a, b, c, nvir);
+                                const int64_t src1 = src_base + src_idx_from_full3(perm, b, c, a, nvir);
+                                const int64_t dest = dest_base + VIDX(a, b, c);
 
-                                int64_t src_idx = src_base + (a * nvir + b) * nvir + c;
-                                int64_t dest_idx = dest_base + (aa * nvir + bb) * nvir + cc;
-
-                                t3_blk[dest_idx] = t3_tri[src_idx];
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-#pragma omp parallel for collapse(4) schedule(dynamic)
-    for (int64_t sym = 0; sym < 6; ++sym)
-    {
-        for (int64_t i = i0; i < i1; ++i)
-        {
-            for (int64_t j = j0; j < j1; ++j)
-            {
-                for (int64_t k = k0; k < k1; ++k)
-                {
-                    if (!MASK(tmp_indices[sym], i, j, k))
-                        continue;
-
-                    const int64_t *perm2 = tp_t3[trans_indices[sym]];
-
-                    int64_t loc_i = i - i0;
-                    int64_t loc_j = j - j0;
-                    int64_t loc_k = k - k0;
-
-                    int64_t src_base = MAP(tmp_indices[sym], i, j, k) * nvir * nvir * nvir;
-                    int64_t dest_base = ((loc_i * blk_j + loc_j) * blk_k + loc_k) * nvir * nvir * nvir;
-
-                    for (int64_t a = 0; a < nvir; ++a)
-                    {
-                        for (int64_t b = 0; b < nvir; ++b)
-                        {
-                            for (int64_t c = 0; c < nvir; ++c)
-                            {
-                                int64_t abc[3] = {a, b, c};
-                                int64_t aa = abc[perm2[0]];
-                                int64_t bb = abc[perm2[1]];
-                                int64_t cc = abc[perm2[2]];
-
-                                int64_t src_idx = src_base + (a * nvir + b) * nvir + c;
-                                int64_t dest_idx = dest_base + (aa * nvir + bb) * nvir + cc;
-
-                                t3_blk[dest_idx] += t3_tri[src_idx];
+                                t3_blk[dest] = t3_tri[src0] + t3_tri[src1];
                             }
                         }
                     }
@@ -846,43 +702,6 @@ void accumulate_t3_block2tri_(double *restrict t3_tri,
                         }
                     }
                 }
-            }
-        }
-    }
-#undef MAP
-}
-
-// Accumulate a single (i0, j0, k0) full T3 slice into the triangular 6-fold compressed T3 storage.
-//
-// Inputs
-//   t3_tri      : triangular-stored T3 amplitudes
-//   t3_blk      : full T3 slice [nvir**3] for (i0, j0, k0)
-//   map         : mapping (sym, i, j, k) -> triangular index (sym = 0 used here)
-//   i0, j0, k0  : occupied indices
-//   nocc        : number of occupied orbitals
-//   nvir        : number of virtual orbitals
-//   alpha, beta : scaling coefficients for accumulation
-void accumulate_t3_single2tri_(double *restrict t3_tri,
-                               const double *restrict t3_blk,
-                               const int64_t *restrict map,
-                               int64_t i0, int64_t j0, int64_t k0,
-                               int64_t nocc, int64_t nvir,
-                               double alpha, double beta)
-{
-#define MAP(sym, x, y, z) map[(((sym) * nocc + (x)) * nocc + (y)) * nocc + (z)]
-
-    int64_t p = MAP(0, i0, j0, k0);
-    int64_t tri_base = p * nvir * nvir * nvir;
-
-#pragma omp parallel for collapse(3) schedule(static)
-    for (int64_t a = 0; a < nvir; ++a)
-    {
-        for (int64_t b = 0; b < nvir; ++b)
-        {
-            for (int64_t c = 0; c < nvir; ++c)
-            {
-                int64_t idx = ((a * nvir + b) * nvir + c);
-                t3_tri[tri_base + idx] = beta * t3_tri[tri_base + idx] + alpha * t3_blk[idx];
             }
         }
     }

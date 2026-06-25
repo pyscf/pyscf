@@ -6,7 +6,6 @@ from pyscf.gw.ugw_ac import UGWAC
 @pytest.fixture
 def h2o_cation_uhf():
     mol = gto.Mole()
-    mol.verbose = 5
     mol.atom = [[8, (0.0, 0.0, 0.0)], [1, (0.0, -0.7571, 0.5861)], [1, (0.0, 0.7571, 0.5861)]]
     mol.basis = 'def2-svp'
     mol.charge = 1

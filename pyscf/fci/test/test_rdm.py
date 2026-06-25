@@ -267,7 +267,7 @@ class KnownValues(unittest.TestCase):
         h2 = numpy.random.random((npair,npair)) * .1
         h2 = h2 + h2.T
         cis = fci.direct_spin1.FCI()
-        e, c = cis.kernel(h1, h2, norb, nelec, verbose=5)
+        e, c = cis.kernel(h1, h2, norb, nelec)
         dm1s, dm2s = cis.make_rdm12s(c, norb, nelec)
         self.assertAlmostEqual(abs(dm1s[0]).sum(), 6, 9)
         self.assertAlmostEqual(dm1s[1].trace(), 3, 9)
@@ -285,7 +285,7 @@ class KnownValues(unittest.TestCase):
         h2 = numpy.random.random((npair,npair)) * .1
         h2 = h2 + h2.T
         cis = fci.direct_spin1.FCI()
-        e, c = cis.kernel(h1, h2, norb, nelec, verbose=5)
+        e, c = cis.kernel(h1, h2, norb, nelec)
         dm1s, dm2s = cis.make_rdm12s(c, norb, nelec)
         self.assertAlmostEqual(dm1s[0].trace(), 3, 9)
         self.assertAlmostEqual(abs(dm1s[1]).sum(), 0, 9)

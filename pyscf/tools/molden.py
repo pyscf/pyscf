@@ -394,8 +394,9 @@ def load(moldenfile, verbose=0):
                     mo_energy = mo_energy[alpha_idx], mo_energy[beta_idx]
                     mo_coeff = mo_coeff[:,alpha_idx], mo_coeff[:,beta_idx]
                     mo_occ = mo_occ[alpha_idx], mo_occ[beta_idx]
-                    irrep_labels = numpy.array(irrep_labels)
-                    irrep_labels = irrep_labels[alpha_idx], irrep_labels[beta_idx]
+                    if irrep_labels:
+                        irrep_labels = numpy.array(irrep_labels)
+                        irrep_labels = irrep_labels[alpha_idx], irrep_labels[beta_idx]
                     spins = numpy.array(spins)
                     spins = spins[alpha_idx], spins[beta_idx]
 
