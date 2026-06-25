@@ -9,6 +9,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -143,6 +144,55 @@ class VerifyWheelRunnerTest(unittest.TestCase):
             elapsed_sec=1.2,
         )
         self.assertEqual(result.status, "FAIL")
+
+    def test_missing_manifest_example_fails_verification(self):
+        spec = verify_wheel.ExampleSpec(
+            path="examples/does-not-exist.py",
+            phase="packaging",
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = verify_wheel._run_example(
+                spec,
+                repo_root=tmpdir,
+                python_exe=sys.executable,
+            )
+        self.assertEqual(result.status, "FAIL")
+        self.assertEqual(result.observed_status, "FAIL")
+        self.assertIn("example not found", result.detail)
+
+    def test_run_example_passes_timeout_to_subprocess(self):
+        spec = verify_wheel.ExampleSpec(
+            path="examples/test.py",
+            phase="examples",
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            script = repo_root / "examples" / "test.py"
+            script.parent.mkdir(parents=True)
+            script.write_text("print('ok')\n", encoding="utf-8")
+
+            captured = {}
+
+            def fake_run(*args, **kwargs):
+                captured["timeout"] = kwargs.get("timeout")
+
+                class Proc:
+                    returncode = 0
+                    stdout = "ok\n"
+                    stderr = ""
+
+                return Proc()
+
+            with mock.patch.object(verify_wheel.subprocess, "run", side_effect=fake_run):
+                result = verify_wheel._run_example(
+                    spec,
+                    repo_root=repo_root,
+                    python_exe=sys.executable,
+                    timeout=17,
+                )
+
+        self.assertEqual(result.status, "PASS")
+        self.assertEqual(captured["timeout"], 17)
 
     def test_resolve_wheel_path_uses_latest_dist_wheel_when_path_not_provided(self):
         with tempfile.TemporaryDirectory() as tmpdir:

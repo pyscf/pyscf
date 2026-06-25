@@ -35,6 +35,15 @@ class BuildWheelScriptTests(unittest.TestCase):
         text = CMAKELISTS.read_text(encoding="utf-8")
         self.assertGreaterEqual(text.count('-DBUILD_TESTING=OFF'), 2)
 
+    def test_xcfun_external_project_still_applies_local_patch(self):
+        text = CMAKELISTS.read_text(encoding="utf-8")
+        active_lines = [
+            line.strip()
+            for line in text.splitlines()
+            if line.strip() == 'PATCH_COMMAND git apply --reject ${PROJECT_SOURCE_DIR}/libxcfun.patch || true'
+        ]
+        self.assertGreaterEqual(len(active_lines), 2)
+
     def test_readme_documents_parallel_level_build_command(self):
         text = README.read_text(encoding="utf-8")
         self.assertIn('-ParallelLevel 8', text)

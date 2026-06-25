@@ -230,11 +230,11 @@ def assess_example_outcome(spec, observed_status, detail, elapsed_sec):
     return Result(spec.path, spec.phase, "FAIL", elapsed_sec, detail, observed_status)
 
 
-def _run_example(spec, repo_root=None, python_exe=None):
+def _run_example(spec, repo_root=None, python_exe=None, timeout=120):
     repo_root = Path(repo_root).resolve()
     script = repo_root / spec.path
     if not script.exists():
-        return Result(spec.path, spec.phase, "SKIP", 0.0, "example not found", "SKIP")
+        return Result(spec.path, spec.phase, "FAIL", 0.0, "example not found", "FAIL")
 
     code = (
         "import runpy, sys; "
@@ -243,15 +243,22 @@ def _run_example(spec, repo_root=None, python_exe=None):
         'runpy.run_path(script, run_name="__main__")'
     )
     started = time.perf_counter()
-    proc = subprocess.run(
-        [python_exe or sys.executable, "-c", code, str(script), "--pyscf-verify-windows"],
-        cwd=_outside_repo_cwd(repo_root),
-        env=_verification_env(),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    elapsed = round(time.perf_counter() - started, 3)
+    try:
+        proc = subprocess.run(
+            [python_exe or sys.executable, "-c", code, str(script), "--pyscf-verify-windows"],
+            cwd=_outside_repo_cwd(repo_root),
+            env=_verification_env(),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+        elapsed = round(time.perf_counter() - started, 3)
+    except subprocess.TimeoutExpired as exc:
+        elapsed = round(time.perf_counter() - started, 3)
+        detail = merge_process_output(exc.stderr or "", exc.stdout or "")
+        detail = f"timed out after {timeout} seconds" + (f"\n{detail}" if detail else "")
+        return assess_example_outcome(spec, "FAIL", detail, elapsed)
     if proc.returncode != 0:
         detail = merge_process_output(proc.stderr, proc.stdout)
         return assess_example_outcome(spec, "FAIL", detail, elapsed)
@@ -278,7 +285,7 @@ def _diagnostic_specs():
     ]
 
 
-def run_examples(repo_root, python_exe=None, phase="examples"):
+def run_examples(repo_root, python_exe=None, phase="examples", timeout=120):
     specs = []
     if phase in ("examples", "all"):
         specs.extend(_example_specs())
@@ -287,7 +294,7 @@ def run_examples(repo_root, python_exe=None, phase="examples"):
     if phase in ("diagnostics", "all"):
         specs.extend(_diagnostic_specs())
     return [
-        _run_example(spec, repo_root=repo_root, python_exe=python_exe)
+        _run_example(spec, repo_root=repo_root, python_exe=python_exe, timeout=timeout)
         for spec in specs
     ]
 
@@ -303,6 +310,7 @@ def main():
     parser.add_argument("--python-exe", default=sys.executable)
     parser.add_argument("--wheel-path", default="")
     parser.add_argument("--output-json", default="")
+    parser.add_argument("--example-timeout", type=int, default=120)
     args = parser.parse_args()
 
     results = []
@@ -312,7 +320,14 @@ def main():
         for case in cases
     )
     if args.phase in ("examples", "packaging", "diagnostics", "all"):
-        results.extend(run_examples(args.repo_root, python_exe=args.python_exe, phase=args.phase))
+        results.extend(
+            run_examples(
+                args.repo_root,
+                python_exe=args.python_exe,
+                phase=args.phase,
+                timeout=args.example_timeout,
+            )
+        )
     for result in results:
         print(f"[{result.phase}] {result.name}: {result.status}")
         if result.detail:
