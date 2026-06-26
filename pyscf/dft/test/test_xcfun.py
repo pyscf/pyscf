@@ -46,6 +46,7 @@ def fp(a):
     w = numpy.cos(numpy.arange(a.size))
     return numpy.dot(w, a.ravel())
 
+@unittest.skipIf(not hasattr(dft, 'xcfun'), 'PySCF was not built with XCFun.')
 class KnownValues(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

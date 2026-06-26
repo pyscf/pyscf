@@ -83,8 +83,9 @@ class KnownValues(unittest.TestCase):
         g1 = tdg.kernel(state=3)
         self.assertAlmostEqual(g1[0,2], -9.32506535e-02, 6)
 
-    @unittest.skipIf(not hasattr(dft, 'xcfun'), 'xcfun not available')
     def test_tda_singlet_b3lyp_xcfun(self):
+        if not hasattr(dft, 'xcfun'):
+            raise unittest.SkipTest('PySCF not built with XCFun.')
         mf = dft.RKS(mol)
         mf.xc = 'b3lyp5'
         mf._numint.libxc = dft.xcfun
@@ -151,6 +152,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs((e1[2]-e2[2])/.002 - g1[0,2]).max(), 0, 3)
 
     def test_tddft_b3lyp_high_cost(self):
+        if not hasattr(dft, 'xcfun'):
+            raise unittest.SkipTest('PySCF not built with XCFun.')
         mf = dft.RKS(mol)
         mf.xc = 'b3lyp5'
         mf._numint.libxc = dft.xcfun
@@ -162,6 +165,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(g1[0,2], -1.55778110e-01, 6)
 
     def test_range_separated_high_cost(self):
+        if not hasattr(dft, 'xcfun'):
+            raise unittest.SkipTest('PySCF not built with XCFun.')
         mol = gto.M(atom="H; H 1 1.", basis='631g', verbose=0)
         mf = dft.RKS(mol).set(xc='CAMB3LYP')
         mf._numint.libxc = dft.xcfun

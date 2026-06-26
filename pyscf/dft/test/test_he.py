@@ -114,6 +114,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mf.e_tot, -1.9931564410562266, 9)
 
     def test_xcfun_nr_blyp(self):
+        if not hasattr(dft, 'xcfun'):
+            raise unittest.SkipTest('PySCF was not built with XCFun.')
         m = mol.RKS()
         m._numint.libxc = dft.xcfun
         m.xc = 'b88,lyp'
