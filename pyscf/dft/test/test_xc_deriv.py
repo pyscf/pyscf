@@ -521,8 +521,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(xc1.sum(), 19.977512805950784, 9)
         self.assertAlmostEqual(abs(ref[1] - xc1).max(), 0, 9)
 
-    @unittest.skipIf(not (hasattr(dft, 'xcfun') and dft.xcfun.MAX_DERIV_ORDER > 3), 'xcfun order')
     def test_xcfun_gga_deriv4(self):
+        if not hasattr(dft, 'xcfun'):
+            raise unittest.SkipTest('XCFun not available.')
+        if dft.xcfun.MAX_DERIV_ORDER <= 3:
+            raise unittest.SkipTest('XCFun MAX_DERIV_ORDER <= 3.')
+
         rho1 = rho[:,:4].copy()
         xc1 = dft.xcfun.eval_xc_eff('PBE', rho1, deriv=4)
         self.assertAlmostEqual(xc1.sum(), -1141.356286780069, 9)
@@ -531,8 +535,12 @@ class KnownValues(unittest.TestCase):
         xc1 = dft.xcfun.eval_xc_eff('PBE', rho1, deriv=4)
         self.assertAlmostEqual(xc1.sum(), -615.116081052867, 9)
 
-    @unittest.skipIf(not (hasattr(dft, 'xcfun') and dft.xcfun.MAX_DERIV_ORDER > 3), 'xcfun order')
     def test_xcfun_gga_deriv4_finite_diff(self):
+        if not hasattr(dft, 'xcfun'):
+            raise unittest.SkipTest('XCFun not available.')
+        if dft.xcfun.MAX_DERIV_ORDER <= 3:
+            raise unittest.SkipTest('XCFun MAX_DERIV_ORDER <= 3.')
+
         xctype = 'GGA'
         deriv = 4
         nvar = 4
