@@ -103,17 +103,28 @@ _dll_deps = {
     'libxcfun_itrf': ['xcfun'],
 }
 
+if sys.platform == 'win32':
+    # Windows wheels ship these support libraries with the "lib" prefix,
+    # unlike the long-standing Linux/macOS loader names.
+    _dll_deps.update({
+        'libxc_itrf': ['libxc'],
+        'libxcfun_itrf': ['libxcfun'],
+    })
+
 @functools.lru_cache(128)
 def load_library(libname):
     lib = None
+    _loaderpath = os.path.dirname(__file__)
     try:
-        _loaderpath = os.path.dirname(__file__)
         lib = numpy.ctypeslib.load_library(libname, _loaderpath)
     except OSError:
         pass
 
     if lib is None and sys.platform == 'win32':
-        for env_path in [os.path.join(sys.prefix, 'Library', 'bin'),
+        # Look in deps/bin before the environment so large support DLLs can stay
+        # bundled once under pyscf/lib/deps/bin instead of being duplicated in pyscf/lib.
+        for env_path in [os.path.join(_loaderpath, 'deps', 'bin'),
+                         os.path.join(sys.prefix, 'Library', 'bin'),
                          os.path.join(sys.prefix, 'Library', 'lib')]:
             try:
                 lib = numpy.ctypeslib.load_library(libname, env_path)

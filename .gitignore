@@ -81,6 +81,11 @@ OneRDM*
 # Memoization and caching
 tmp/
 
+# Local-only Windows packaging planning notes
+conda/windows/*.local.md
+conda/windows/tests/
+pyscf/lib/*.dll
+
 # IDEs
 .idea/
 .vscode/

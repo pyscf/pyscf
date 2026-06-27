@@ -19,6 +19,22 @@
 C extensions and helper functions
 '''
 
+import os
+import sys
+
+# Keep the bundled support DLL search path narrow on Windows so the wheel can
+# load libcint/libxc from deps/bin without duplicating those large DLLs in pyscf/lib.
+_windows_dll_dir_handles = []
+if sys.platform == 'win32' and hasattr(os, 'add_dll_directory'):
+    _loaderpath = os.path.dirname(__file__)
+    _deps_bin = os.path.join(_loaderpath, 'deps', 'bin')
+    if os.path.isdir(_deps_bin):
+        try:
+            _windows_dll_dir_handles.append(os.add_dll_directory(_deps_bin))
+        except OSError:
+            pass
+    del _deps_bin, _loaderpath
+
 from pyscf.lib import parameters
 param = parameters
 from pyscf.lib import numpy_helper
