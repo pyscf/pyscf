@@ -14,6 +14,8 @@ include pyscf/lib/deps/lib*/libxcfun.[2-9].dylib
 # windows dynamic libraries
 include pyscf/lib/*.dll
 include pyscf/lib/deps/bin/*.dll
+exclude pyscf/lib/deps/bin/libcint.dll
+exclude pyscf/lib/deps/bin/libxc.dll
 
 include pyscf/geomopt/log.ini
 include pyscf/gto/basis/bse_meta.json

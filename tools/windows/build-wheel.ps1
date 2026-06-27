@@ -19,6 +19,11 @@ $RuntimeDlls = @(
     "libwinpthread-1.dll"
 )
 
+$SupportDlls = @(
+    "libcint.dll",
+    "libxc.dll"
+)
+
 function Resolve-RepoRoot {
     param([string]$ConfiguredValue)
     if ($ConfiguredValue) {
@@ -101,8 +106,8 @@ function Copy-RequiredDlls {
         [string]$RuntimeDllDir,
         [string]$LibDir
     )
-    # Keep runtime DLLs next to the extension modules. The larger support
-    # libraries remain in pyscf\lib\deps\bin so the wheel does not carry them twice.
+    # Keep runtime DLLs next to the extension modules so the wheel can load
+    # them through the normal pyscf\lib search path.
     foreach ($name in $RuntimeDlls) {
         $source = Join-Path $RuntimeDllDir $name
         if (-not (Test-Path $source)) {
@@ -112,12 +117,20 @@ function Copy-RequiredDlls {
     }
 }
 
-function Remove-StaleSupportDlls {
-    param([string]$LibDir)
-    # Remove stale copies from pyscf\lib so setuptools only packages the
-    # canonical support DLLs from pyscf\lib\deps\bin.
-    foreach ($name in @("libcint.dll", "libxc.dll")) {
-        Remove-Item (Join-Path $LibDir $name) -Force -ErrorAction SilentlyContinue
+function Copy-SupportDlls {
+    param(
+        [string]$DepsBinDir,
+        [string]$LibDir
+    )
+    # Stage the bundled support DLLs in pyscf\lib because PySCF loads them
+    # through its main library directory rather than from deps\bin. Duplicate
+    # copies under deps\bin are excluded from the wheel by MANIFEST.in.
+    foreach ($name in $SupportDlls) {
+        $source = Join-Path $DepsBinDir $name
+        if (-not (Test-Path $source)) {
+            throw "Missing support DLL: $source"
+        }
+        Copy-Item -LiteralPath $source -Destination (Join-Path $LibDir $name) -Force
     }
 }
 
@@ -134,6 +147,7 @@ try {
     $LibraryBin = Join-Path $EnvRoot "Library\\bin"
     $ScriptsDir = Join-Path $EnvRoot "Scripts"
     $LibDir = Join-Path $RepoRoot 'pyscf\lib'
+    $DepsBinDir = Join-Path $RepoRoot 'pyscf\lib\deps\bin'
 
     $RuntimeDllDir = Resolve-RuntimeDllDir -ConfiguredValue $RuntimeDllDir
     $BootstrapPaths = @(
@@ -152,7 +166,7 @@ try {
     Require-Command "g++" | Out-Null
 
     Copy-RequiredDlls -RuntimeDllDir $RuntimeDllDir -LibDir $LibDir
-    Remove-StaleSupportDlls -LibDir $LibDir
+    Copy-SupportDlls -DepsBinDir $DepsBinDir -LibDir $LibDir
 
     if ($Clean) {
         Remove-Item (Join-Path $RepoRoot "build") -Recurse -Force -ErrorAction SilentlyContinue

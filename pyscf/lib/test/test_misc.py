@@ -13,12 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import unittest
 import pathlib
 import numpy
+import unittest
 from pyscf import lib
 
-LIB_INIT = pathlib.Path(__file__).resolve().parents[1] / '__init__.py'
 LIB_MISC = pathlib.Path(__file__).resolve().parents[1] / 'misc.py'
 
 class KnownValues(unittest.TestCase):
@@ -92,26 +91,18 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(list(lib.prange_split(10, 3)), [(0, 4), (4, 7), (7, 10)])
 
     def test_windows_dll_dependency_names(self):
-        # The Windows wheel keeps the lib-prefixed DLL names local to win32 so
-        # Linux/macOS continue to use the historical dependency names.
-        self.assertEqual(lib.misc._dll_deps['libxc_itrf'], ['libxc'])
-        self.assertEqual(lib.misc._dll_deps['libxcfun_itrf'], ['libxcfun'])
         text = LIB_MISC.read_text(encoding='utf-8')
-        self.assertIn("if sys.platform == 'win32':", text)
-        self.assertIn("'libxc_itrf': ['libxc']", text)
+        # Keep both candidate names in the shared dependency table so the
+        # win32 loader can try conda-forge DLL names before lib-prefixed ones.
+        self.assertIn("'libxc_itrf': [('xc', 'libxc')]", text)
+        self.assertIn("'libxcfun_itrf': [('xcfun', 'libxcfun')]", text)
 
-    def test_windows_lib_init_registers_deps_bin_directory(self):
-        # Register deps/bin before importing extension modules so Windows can
-        # resolve bundled support DLLs without copying them into pyscf/lib.
-        text = LIB_INIT.read_text(encoding='utf-8')
-        self.assertIn("os.add_dll_directory", text)
-        self.assertIn("os.path.join(_loaderpath, 'deps', 'bin')", text)
-
-    def test_windows_misc_searches_deps_bin_for_support_dlls(self):
-        # Explicitly loading libcint/libxc still needs a direct deps/bin lookup
-        # because add_dll_directory only helps dependency resolution.
+    def test_windows_misc_does_not_search_deps_bin_for_support_dlls(self):
         text = LIB_MISC.read_text(encoding='utf-8')
-        self.assertIn("os.path.join(_loaderpath, 'deps', 'bin')", text)
+        # Keep the direct DLL search limited to pyscf/lib and the active
+        # environment. Support DLLs should not be loaded from deps/bin.
+        self.assertNotIn("os.path.join(_loaderpath, 'deps', 'bin')", text)
+        self.assertIn("def _load_dependency(libname):", text)
 
     def test_pickle(self):
         import pickle

@@ -99,17 +99,26 @@ _dll_deps = {
     'libdft':        ['libcvhf', 'libcgto', 'libcint'],
     'libpbc':        ['libcint', 'libcgto'],
     'libri':         ['libao2mo', 'libcvhf', 'libcgto', 'libcint'],
-    'libxc_itrf':    ['xc'],
-    'libxcfun_itrf': ['xcfun'],
+    # Windows wheels may bundle lib-prefixed support DLLs, while conda-forge
+    # provides xc.dll and xcfun.dll. Keep both names here so the win32 loader
+    # can try the environment-provided name first and then fall back to the
+    # wheel-bundled filename when needed.
+    'libxc_itrf':    [('xc', 'libxc')],
+    'libxcfun_itrf': [('xcfun', 'libxcfun')],
 }
 
-if sys.platform == 'win32':
-    # Windows wheels ship these support libraries with the "lib" prefix,
-    # unlike the long-standing Linux/macOS loader names.
-    _dll_deps.update({
-        'libxc_itrf': ['libxc'],
-        'libxcfun_itrf': ['libxcfun'],
-    })
+def _load_dependency(libname):
+    # Some Windows builds use the conda-forge DLL names while the local wheel
+    # packaging path keeps the lib-prefixed filenames.
+    if isinstance(libname, str):
+        return load_library(libname)
+
+    for candidate in libname:
+        try:
+            return load_library(candidate)
+        except OSError:
+            pass
+    raise OSError(f'Library candidates {libname} not found')
 
 @functools.lru_cache(128)
 def load_library(libname):
@@ -121,10 +130,7 @@ def load_library(libname):
         pass
 
     if lib is None and sys.platform == 'win32':
-        # Look in deps/bin before the environment so large support DLLs can stay
-        # bundled once under pyscf/lib/deps/bin instead of being duplicated in pyscf/lib.
-        for env_path in [os.path.join(_loaderpath, 'deps', 'bin'),
-                         os.path.join(sys.prefix, 'Library', 'bin'),
+        for env_path in [os.path.join(sys.prefix, 'Library', 'bin'),
                          os.path.join(sys.prefix, 'Library', 'lib')]:
             try:
                 lib = numpy.ctypeslib.load_library(libname, env_path)
@@ -147,7 +153,7 @@ def load_library(libname):
             raise OSError(f'Library {libname} not found')
 
     if sys.platform == 'win32' and libname in _dll_deps:
-        deps = [load_library(d) for d in _dll_deps[libname]]
+        deps = [_load_dependency(d) for d in _dll_deps[libname]]
         lib = make_dll_wrapper(lib, *deps)
     return lib
 

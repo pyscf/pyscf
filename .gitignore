@@ -82,8 +82,8 @@ OneRDM*
 tmp/
 
 # Local-only Windows packaging planning notes
-conda/windows/*.local.md
-conda/windows/tests/
+tools/windows/*.local.md
+tools/windows/tests/
 pyscf/lib/*.dll
 
 # IDEs
