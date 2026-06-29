@@ -260,6 +260,9 @@ if(ENABLE_XCFUN AND BUILD_XCFUN)
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
             -DXCFUN_MAX_ORDER=${XCFUN_MAX_ORDER} -DENABLE_TESTALL=0
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+            # xcfun uses M_PI in its C++ sources. In the bundled Windows build
+            # path, M_PI is referenced before a later header defines it, so
+            # define it explicitly when BUILD_XCFUN=ON.
             -DCMAKE_CXX_FLAGS=-DM_PI=3.14159265358979323846
             -DCMAKE_CXX_CREATE_SHARED_LIBRARY=${CXX_LINK_TEMPLATE}
             -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}

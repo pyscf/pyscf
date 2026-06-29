@@ -202,7 +202,7 @@ The current full installed-wheel verification on Windows passed 51 of 53 discove
 
 ### TODO: `libxcfun.patch` Is Corrupt
 
-During the Windows `xcfun` packaging work, the build exposed a pre-existing issue in `pyscf\lib\libxcfun.patch`:
+While validating the bundled `xcfun` build path in the Windows packaging workflow, the build exposed a pre-existing issue in `pyscf\lib\libxcfun.patch`:
 
 ```text
 error: corrupt patch at line 11
@@ -219,11 +219,17 @@ Cause:
 - The patch file itself is malformed. In the first hunk, an empty context line is stored as a truly empty line instead of a unified-diff context line with a leading space.
 - As a result, `git apply` fails while parsing the patch file itself, before it can even determine whether the patch still matches the upstream `xcfun` source tree.
 
+Platform scope:
+
+- This is not inherently a Windows-specific compiler problem. The patch-applicability failure happens before compilation and belongs to the bundled `xcfun` patch file itself.
+- In practice, only build paths that actually try to build bundled `xcfun` (`ENABLE_XCFUN=ON` and `BUILD_XCFUN=ON`) will hit it.
+- Build paths that use a preinstalled/system `xcfun`, or do not build bundled `xcfun`, will not see this issue.
+
 Why this is a TODO instead of an immediate blocker:
 
 - The current Windows packaging path already works without the patch being applied.
 - The main functional goal for this work was to get `xcfun` built and shipped in the wheel, and that goal has been reached.
-- The patch appears to target higher-order `xcfun` derivative support, while the current PySCF build still defaults to `XCFUN_MAX_ORDER=3`, so the immediate runtime benefit of fixing the patch is limited.
+- The patch appears to be related to higher-order `xcfun` derivative support. Since the current build still uses `XCFUN_MAX_ORDER=3`, the immediate impact on the validated Windows wheel path appears limited, but the patch should still be repaired or removed in a follow-up cleanup.
 
 Suggested repair directions:
 
