@@ -33,8 +33,6 @@ class VerifyInstalledWheelScriptTests(unittest.TestCase):
     def test_script_discovers_installed_test_directories(self):
         text = VERIFY_WHEEL.read_text(encoding="utf-8")
         self.assertIn("function Stage-TestDirectory", text)
-        self.assertIn("function Get-StagedSupportFileRules", text)
-        self.assertIn("function Copy-StagedSupportFiles", text)
         self.assertIn("Get-ChildItem -Directory -Recurse (Join-Path $RepoRoot \"pyscf\")", text)
         self.assertIn("Where-Object { $_.Name -eq 'test' }", text)
         self.assertIn("Sort-Object -Unique", text)
@@ -43,9 +41,6 @@ class VerifyInstalledWheelScriptTests(unittest.TestCase):
         self.assertNotIn(".Replace($RepoRoot", text)
         self.assertIn("Copy-Item -Path (Join-Path $SourceDirectory '*')", text)
         self.assertIn("Join-Path $RunRoot \"tests\"", text)
-        self.assertIn('"pyscf\\lib\\test"', text)
-        self.assertIn('"..\\misc.py"', text)
-        self.assertIn('"misc.py"', text)
 
     def test_script_installs_latest_wheel_and_writes_reports(self):
         text = VERIFY_WHEEL.read_text(encoding="utf-8")

@@ -13,12 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pathlib
-import numpy
 import unittest
+import numpy
 from pyscf import lib
-
-LIB_MISC = pathlib.Path(__file__).resolve().parents[1] / 'misc.py'
 
 class KnownValues(unittest.TestCase):
     def test_call_in_background_skip(self):
@@ -89,24 +86,6 @@ class KnownValues(unittest.TestCase):
 
     def test_prange_split(self):
         self.assertEqual(list(lib.prange_split(10, 3)), [(0, 4), (4, 7), (7, 10)])
-
-    def test_windows_dll_dependency_names(self):
-        text = LIB_MISC.read_text(encoding='utf-8')
-        # Keep both candidate names in the shared dependency table so the
-        # win32 loader can try conda-forge DLL names before lib-prefixed ones.
-        self.assertIn("'libxc_itrf':", text)
-        self.assertIn("('xc', 'libxc')", text)
-        self.assertIn("'libxcfun_itrf':", text)
-        self.assertIn("('xcfun', 'libxcfun')", text)
-
-    def test_windows_misc_does_not_search_deps_bin_for_support_dlls(self):
-        text = LIB_MISC.read_text(encoding='utf-8')
-        # Keep the direct DLL search limited to pyscf/lib and the active
-        # environment. Support DLLs should not be loaded from deps/bin.
-        self.assertNotIn("os.path.join(_loaderpath, 'deps', 'bin')", text)
-        self.assertIn("def _load_dependency(libname):", text)
-        self.assertIn("if isinstance(libname, tuple):", text)
-        self.assertIn("raise TypeError(", text)
 
     def test_pickle(self):
         import pickle

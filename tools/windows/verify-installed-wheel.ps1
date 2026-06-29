@@ -146,51 +146,6 @@ function Get-LogicalPath {
     return Get-RelativePath -BasePath $RepoRoot -TargetPath $TargetPath
 }
 
-function Get-StagedSupportFileRules {
-    param([string]$LogicalDirectory)
-
-    switch ($LogicalDirectory) {
-        "pyscf\lib\test" {
-            return @(
-                [pscustomobject]@{
-                    source_relative_path = "..\misc.py"
-                    destination_relative_path = "misc.py"
-                }
-            )
-        }
-        default {
-            return @()
-        }
-    }
-}
-
-function Copy-StagedSupportFiles {
-    param(
-        [string]$SourceDirectory,
-        [string]$StageRoot,
-        [string]$LogicalDirectory
-    )
-
-    $stageRootFull = [System.IO.Path]::GetFullPath($StageRoot)
-    foreach ($rule in @(Get-StagedSupportFileRules -LogicalDirectory $LogicalDirectory)) {
-        $sourcePath = [System.IO.Path]::GetFullPath((Join-Path $SourceDirectory $rule.source_relative_path))
-        if (-not (Test-Path $sourcePath)) {
-            throw "Expected support file '$($rule.source_relative_path)' for '$LogicalDirectory' was not found at '$sourcePath'."
-        }
-
-        $destinationPath = [System.IO.Path]::GetFullPath((Join-Path $StageRoot $rule.destination_relative_path))
-        if (-not $destinationPath.StartsWith($stageRootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
-            throw "Refusing to stage support file outside the test run root: $destinationPath"
-        }
-
-        $destinationParent = Split-Path -Parent $destinationPath
-        if ($destinationParent) {
-            New-Item -ItemType Directory -Path $destinationParent -Force | Out-Null
-        }
-        Copy-Item -LiteralPath $sourcePath -Destination $destinationPath -Force
-    }
-}
-
 function Stage-TestDirectory {
     param(
         [string]$SourceDirectory,
@@ -203,7 +158,6 @@ function Stage-TestDirectory {
     $stagedDirectory = Join-Path $stageRoot (Sanitize-Name $relative)
     New-Item -ItemType Directory -Path $stagedDirectory -Force | Out-Null
     Copy-Item -Path (Join-Path $SourceDirectory '*') -Destination $stagedDirectory -Recurse -Force
-    Copy-StagedSupportFiles -SourceDirectory $SourceDirectory -StageRoot $stageRoot -LogicalDirectory $relative
 
     return [pscustomobject]@{
         source_directory = $SourceDirectory
