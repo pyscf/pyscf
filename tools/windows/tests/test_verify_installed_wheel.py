@@ -20,6 +20,18 @@ class VerifyInstalledWheelScriptTests(unittest.TestCase):
         self.assertIn("pytest is not available", text)
         self.assertIn("function Invoke-ExternalCommandCapture", text)
 
+    def test_script_prefers_active_conda_python_when_available(self):
+        text = VERIFY_WHEEL.read_text(encoding="utf-8")
+        self.assertIn('$env:CONDA_PREFIX', text)
+        self.assertIn('Join-Path $env:CONDA_PREFIX "python.exe"', text)
+        self.assertIn('Test-Path $condaPython', text)
+        self.assertIn('function Normalize-TestRootsBinding', text)
+        self.assertIn("PythonExe resolved to a directory", text)
+        self.assertIn("comma-separated values", text)
+        self.assertIn('function Expand-PathArguments', text)
+        self.assertIn(".Split(',')", text)
+        self.assertIn('Test-Path $candidatePath -PathType Container', text)
+
     def test_script_runs_from_temp_root_and_clears_pythonpath(self):
         text = VERIFY_WHEEL.read_text(encoding="utf-8")
         self.assertIn("Remove-Item Env:PYTHONPATH", text)

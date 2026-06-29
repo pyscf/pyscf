@@ -120,7 +120,7 @@ Notes:
 
 Useful `verify-installed-wheel.ps1` parameters:
 
-- `-TestRoots <paths...>`: only run the listed test directories or module roots, for example `-TestRoots pyscf\gto\test pyscf\scf\test`
+- `-TestRoots <paths...>`: only run the listed test directories or module roots. When invoking the script through `powershell -File`, use comma-separated values, for example `-TestRoots 'pyscf\gto\test','pyscf\scf\test'`
 - `-ExcludeTestRoots <paths...>`: exclude one or more directories or subtrees from the discovered test set, for example `-ExcludeTestRoots pyscf\pbc`
 - `-SkipPbc`: shorthand to exclude the entire `pyscf\pbc` subtree while leaving the rest of the repository unchanged
 - `-SkipBuild`: reuse the newest existing wheel under `dist\`
@@ -137,7 +137,7 @@ Examples:
 # Run only the gto and scf installed-wheel tests
 powershell -ExecutionPolicy Bypass -File .\tools\windows\verify-installed-wheel.ps1 `
   -SkipBuild `
-  -TestRoots pyscf\gto\test pyscf\scf\test
+  -TestRoots 'pyscf\gto\test','pyscf\scf\test'
 
 # Run the full installed-wheel sweep except for pyscf\pbc
 powershell -ExecutionPolicy Bypass -File .\tools\windows\verify-installed-wheel.ps1 `
@@ -200,80 +200,87 @@ The current full installed-wheel verification on Windows passed 51 of 53 discove
    - Current assessment: this looks like a platform- or linear-algebra-dependent numerical deviation in the periodic TDDFT/TDHF test case rather than an installed-wheel staging or packaging defect.
    - Review position: worth follow-up as a separate Windows numerical deviation, but not currently treated as a wheel packaging merge blocker.
 
-### TODO: `libxcfun.patch` Is Corrupt
+### `libxcfun.patch` Line-Ending Fix
 
-While validating the bundled `xcfun` build path in the Windows packaging workflow, the build exposed a pre-existing issue in `pyscf\lib\libxcfun.patch`:
+Cross-platform re-checks showed that `pyscf\lib\libxcfun.patch` was not inherently corrupt:
+
+- A clean Linux checkout and a clean Windows checkout with line-ending conversion disabled produced the same LF-only patch bytes.
+- On both platforms, that LF-only patch passed `git apply --check`, applied cleanly against `xcfun@a89b783`, and did not block a direct patched-`xcfun` build.
+
+The previously observed Windows packaging failure turned out to be checkout-specific:
 
 ```text
 error: corrupt patch at line 11
 ```
 
+Root cause:
+
+- The Windows global Git configuration used in the packaging environment had `core.autocrlf=true`.
+- The repository did not yet have a `.gitattributes` rule protecting `pyscf\lib\libxcfun.patch`.
+- As a result, a normal Windows checkout rewrote the patch from LF to CRLF.
+- The CRLF worktree copy then failed `git apply --check` against the bundled `xcfun` source tree, even though the LF version of the same patch succeeded.
+
+Fix:
+
+- Add a repository-level `.gitattributes` rule:
+  - `pyscf/lib/libxcfun.patch text eol=lf`
+- Renormalize the worktree copy of `pyscf\lib\libxcfun.patch` so Windows checkouts keep the file in LF form.
+
+Validation:
+
+- `git -C build\temp.win-amd64\deps\src\libxcfun apply --check pyscf\lib\libxcfun.patch` now succeeds on the Windows packaging checkout.
+- A clean Windows wheel build (`tools\windows\build-wheel.ps1 -Clean`) now shows the bundled `xcfun` patch step completing successfully:
+  - `Checking patch CMakeLists.txt...`
+  - `Checking patch src/XCFunctional.cpp...`
+  - `Applied patch CMakeLists.txt cleanly.`
+  - `Applied patch src/XCFunctional.cpp cleanly.`
+- The follow-up installed-wheel verification for `pyscf\dft\test` and `pyscf\tdscf\test` also passed in the dedicated test environment.
+
+Scope:
+
+- This is not a Windows compiler problem.
+- This is not a target-tree problem with `xcfun@a89b783`; the same clean target tree accepted the LF patch and rejected the CRLF worktree copy.
+- The issue only appears on Windows-style checkouts that rewrite the patch line endings before the bundled `xcfun` patch step runs.
+
 Current status:
 
-- The Windows wheel build now succeeds because the `PATCH_COMMAND` fallback was adjusted to continue when this patch cannot be applied.
-- `xcfun` is still built, bundled, installed, and validated successfully in the current wheel path.
-- This means the issue is not a current merge blocker for the Windows packaging flow, but it remains a cleanup item.
+- The line-ending issue is fixed in this checkout.
+- The bundled `xcfun` patch step now behaves deterministically on the validated Windows build path.
+- The fallback `PATCH_COMMAND ... || cmake -E true` still remains in the CMake flow, but the clean validation run no longer depends on that fallback for this patch.
 
-Cause:
+Expected benefit:
 
-- The patch file itself is malformed. In the first hunk, an empty context line is stored as a truly empty line instead of a unified-diff context line with a leading space.
-- As a result, `git apply` fails while parsing the patch file itself, before it can even determine whether the patch still matches the upstream `xcfun` source tree.
+- The build log matches the real situation: the patch file itself is valid when preserved as LF.
+- Future maintainers are less likely to misdiagnose the issue as a new `xcfun` or compiler regression.
+- The bundled `xcfun` patch step becomes deterministic across clean Linux and Windows checkouts.
 
-Platform scope:
-
-- This is not inherently a Windows-specific compiler problem. The patch-applicability failure happens before compilation and belongs to the bundled `xcfun` patch file itself.
-- In practice, only build paths that actually try to build bundled `xcfun` (`ENABLE_XCFUN=ON` and `BUILD_XCFUN=ON`) will hit it.
-- Build paths that use a preinstalled/system `xcfun`, or do not build bundled `xcfun`, will not see this issue.
-
-Why this is a TODO instead of an immediate blocker:
-
-- The current Windows packaging path already works without the patch being applied.
-- The main functional goal for this work was to get `xcfun` built and shipped in the wheel, and that goal has been reached.
-- The patch appears to be related to higher-order `xcfun` derivative support. Since the current build still uses `XCFUN_MAX_ORDER=3`, the immediate impact on the validated Windows wheel path appears limited, but the patch should still be repaired or removed in a follow-up cleanup.
-
-Suggested repair directions:
-
-1. Minimal cleanup:
-   - Fix the unified-diff formatting so `git apply --check pyscf\lib\libxcfun.patch` no longer reports a corrupt patch.
-   - Keep the current fallback logic in place until the patch has been validated on all supported build paths.
-2. Functional review:
-   - Re-check whether the patch is still needed for the pinned upstream `xcfun` revision (`a89b783`).
-   - If the patch is still needed, rebuild it cleanly against that revision.
-   - If it is no longer needed, remove the patch and the patch application step entirely.
-3. Optional follow-up:
-   - If the patch is meant to unlock higher derivative orders, evaluate whether `XCFUN_MAX_ORDER` should also be raised and tested explicitly.
-
-Expected benefit of fixing it:
-
-- Cleaner and more deterministic build logs.
-- Clearer ownership of the `xcfun` integration logic.
-- Reduced risk that future maintainers mistake the patch failure for a new regression.
-- Potential access to the originally intended higher-order `xcfun` behavior, if that behavior is still relevant and the patch is still required.
-
-Recommended validation after any future fix:
+Recommended validation for future regressions:
 
 ```powershell
 # 0. Set the repository root for this checkout
 $RepoRoot = "C:\path\to\pyscf"
 Set-Location $RepoRoot
 
-# 1. Confirm the patch is syntactically valid against the pinned xcfun source tree
+# 1. Confirm the worktree copy is LF-only
+python -c "from pathlib import Path; data = Path(r'pyscf/lib/libxcfun.patch').read_bytes(); print(data.count(b'\n'), data.count(b'\r'))"
+
+# 2. Confirm the patch is syntactically valid against the pinned xcfun source tree
 git -C build\temp.win-amd64\deps\src\libxcfun apply --check (Join-Path $RepoRoot "pyscf\lib\libxcfun.patch")
 
-# 2. Rebuild the wheel in the packaging environment
+# 3. Rebuild the wheel in the packaging environment with a clean build tree
 conda activate pyscf-win313
-powershell -ExecutionPolicy Bypass -File .\tools\windows\build-wheel.ps1
+powershell -ExecutionPolicy Bypass -File .\tools\windows\build-wheel.ps1 -Clean
 
-# 3. Reinstall the wheel into the test environment and verify xcfun imports from site-packages
+# 4. Reinstall the wheel into the test environment and verify xcfun imports from site-packages
 conda activate pyscf-win313-test
-python -m pip install --force-reinstall .\dist\pyscf-*.whl
+python -m pip install --force-reinstall .\dist\pyscf-2.13.1-py3-none-win_amd64.whl
 cd $env:TEMP
 python -c "import pyscf; from pyscf import dft; print(pyscf.__file__); print(dft.xcfun.__file__)"
 
-# 4. Re-run the installed-wheel directories that previously depended on xcfun
+# 5. Re-run the installed-wheel directories that previously depended on xcfun
 Set-Location $RepoRoot
 powershell -ExecutionPolicy Bypass -File .\tools\windows\verify-installed-wheel.ps1 `
   -SkipBuild `
   -SkipInstall `
-  -TestRoots pyscf\dft\test pyscf\tdscf\test
+  -TestRoots 'pyscf\dft\test','pyscf\tdscf\test'
 ```

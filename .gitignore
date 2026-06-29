@@ -83,6 +83,7 @@ tmp/
 
 # Local-only Windows packaging planning notes
 tools/windows/*.local.md
+tools/windows/build-logs/
 tools/windows/reports/*
 pyscf/lib/*.dll
 

@@ -8,6 +8,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+$TranscriptStarted = $false
+$LogPath = $null
 
 $RuntimeDlls = @(
     "libgcc_s_seh-1.dll",
@@ -171,6 +173,12 @@ function Invoke-WheelBuild {
 
 try {
     $RepoRoot = Resolve-RepoRoot $RepoRoot
+    $BuildLogsDir = Join-Path $RepoRoot 'tools\windows\build-logs'
+    New-Item -ItemType Directory -Path $BuildLogsDir -Force | Out-Null
+    $LogPath = Join-Path $BuildLogsDir ("build-wheel-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    Start-Transcript -Path $LogPath -Force | Out-Null
+    $TranscriptStarted = $true
+    Write-Host "Build log: $LogPath"
     $PythonExe = Resolve-PythonExe $PythonExe
     $PythonDir = Split-Path $PythonExe -Parent
     if ((Split-Path $PythonDir -Leaf) -ieq "Scripts") {
@@ -225,6 +233,12 @@ try {
     Invoke-WheelBuild -PythonExe $PythonExe -RepoRoot $RepoRoot
 }
 finally {
+    if ($TranscriptStarted) {
+        Stop-Transcript | Out-Null
+        if ($LogPath) {
+            Write-Host "Build log saved to: $LogPath"
+        }
+    }
     $Stopwatch.Stop()
     Write-Host ("Total build time: {0:hh\:mm\:ss} ({1:N1} s)" -f $Stopwatch.Elapsed, $Stopwatch.Elapsed.TotalSeconds)
 }

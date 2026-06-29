@@ -22,10 +22,50 @@ function Resolve-RepoRoot {
     return (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 }
 
+function Normalize-TestRootsBinding {
+    param(
+        [string]$RepoRoot,
+        [string]$ConfiguredPythonExe,
+        [string[]]$ConfiguredTestRoots
+    )
+
+    $normalizedPythonExe = $ConfiguredPythonExe
+    $normalizedTestRoots = @($ConfiguredTestRoots)
+
+    if ($normalizedPythonExe -and -not $normalizedPythonExe.Trim().ToLowerInvariant().EndsWith(".exe")) {
+        $candidatePath = if ([System.IO.Path]::IsPathRooted($normalizedPythonExe)) {
+            $normalizedPythonExe
+        }
+        else {
+            Join-Path $RepoRoot $normalizedPythonExe
+        }
+
+        if (Test-Path $candidatePath -PathType Container) {
+            $normalizedTestRoots = @($normalizedTestRoots + $normalizedPythonExe)
+            $normalizedPythonExe = ""
+        }
+    }
+
+    return [pscustomobject]@{
+        PythonExe = $normalizedPythonExe
+        TestRoots = $normalizedTestRoots
+    }
+}
+
 function Resolve-PythonExe {
     param([string]$ConfiguredValue)
     if ($ConfiguredValue) {
-        return (Resolve-Path $ConfiguredValue).Path
+        $resolved = (Resolve-Path $ConfiguredValue).Path
+        if (Test-Path $resolved -PathType Container) {
+            throw "PythonExe resolved to a directory: $resolved. If you are passing multiple -TestRoots values through powershell -File, use comma-separated values such as -TestRoots 'pyscf\dft\test','pyscf\tdscf\test', or pass -PythonExe explicitly."
+        }
+        return $resolved
+    }
+    if ($env:CONDA_PREFIX) {
+        $condaPython = Join-Path $env:CONDA_PREFIX "python.exe"
+        if (Test-Path $condaPython) {
+            return (Resolve-Path $condaPython).Path
+        }
     }
     $cmd = Get-Command python -ErrorAction SilentlyContinue
     if (-not $cmd) {
@@ -122,12 +162,47 @@ function Write-PytestConfig {
     return $pytestIni
 }
 
+function Expand-PathArguments {
+    param(
+        [string]$RepoRoot,
+        [string[]]$Paths
+    )
+
+    $expanded = New-Object System.Collections.Generic.List[string]
+    foreach ($pathValue in $Paths) {
+        if (-not $pathValue) {
+            continue
+        }
+        $candidatePath = if ([System.IO.Path]::IsPathRooted($pathValue)) {
+            $pathValue
+        }
+        else {
+            Join-Path $RepoRoot $pathValue
+        }
+
+        if ((-not (Test-Path $candidatePath)) -and $pathValue.Contains(",")) {
+            foreach ($part in $pathValue.Split(',')) {
+                $trimmed = $part.Trim()
+                if ($trimmed) {
+                    $expanded.Add($trimmed)
+                }
+            }
+            continue
+        }
+
+        $expanded.Add($pathValue)
+    }
+
+    return @($expanded)
+}
+
 function Resolve-PathList {
     param(
         [string]$RepoRoot,
         [string[]]$Paths
     )
-    return $Paths |
+    $expandedPaths = Expand-PathArguments -RepoRoot $RepoRoot -Paths $Paths
+    return $expandedPaths |
         ForEach-Object {
             if ([System.IO.Path]::IsPathRooted($_)) {
                 (Resolve-Path $_).Path
@@ -523,6 +598,9 @@ function Write-Reports {
 
 try {
     $RepoRoot = Resolve-RepoRoot $RepoRoot
+    $normalizedBinding = Normalize-TestRootsBinding -RepoRoot $RepoRoot -ConfiguredPythonExe $PythonExe -ConfiguredTestRoots $TestRoots
+    $PythonExe = $normalizedBinding.PythonExe
+    $TestRoots = @($normalizedBinding.TestRoots)
     $PythonExe = Resolve-PythonExe $PythonExe
     if (-not $ReportDir) {
         $ReportDir = Join-Path $RepoRoot "tools\windows\reports"
