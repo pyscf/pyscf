@@ -20,8 +20,9 @@ $RuntimeDlls = @(
 )
 
 $SupportDlls = @(
-    "libcint.dll",
-    "libxc.dll"
+    @("libcint.dll"),
+    @("libxc.dll"),
+    @("xcfun.dll", "libxcfun.dll")
 )
 
 function Resolve-RepoRoot {
@@ -120,17 +121,51 @@ function Copy-RequiredDlls {
 function Copy-SupportDlls {
     param(
         [string]$DepsBinDir,
-        [string]$LibDir
+        [string]$LibDir,
+        [switch]$AllowMissing
     )
     # Stage the bundled support DLLs in pyscf\lib because PySCF loads them
-    # through its main library directory rather than from deps\bin. Duplicate
-    # copies under deps\bin are excluded from the wheel by MANIFEST.in.
-    foreach ($name in $SupportDlls) {
-        $source = Join-Path $DepsBinDir $name
-        if (-not (Test-Path $source)) {
-            throw "Missing support DLL: $source"
+    # through its main library directory rather than from deps\bin. Allow
+    # xcfun to resolve either the environment-style name or the lib-prefixed
+    # name so the Windows wheel follows the upstream release build behavior.
+    $missing = @()
+    foreach ($candidates in $SupportDlls) {
+        $source = $null
+        $name = $null
+        foreach ($candidate in $candidates) {
+            $candidatePath = Join-Path $DepsBinDir $candidate
+            if (Test-Path $candidatePath) {
+                $source = $candidatePath
+                $name = $candidate
+                break
+            }
+        }
+        if (-not $source) {
+            if ($AllowMissing) {
+                $missing += ,($candidates -join ', ')
+                continue
+            }
+            throw "Missing support DLL. Checked: $($candidates -join ', ') under $DepsBinDir"
         }
         Copy-Item -LiteralPath $source -Destination (Join-Path $LibDir $name) -Force
+    }
+    return $missing
+}
+
+function Invoke-WheelBuild {
+    param(
+        [string]$PythonExe,
+        [string]$RepoRoot
+    )
+    Push-Location $RepoRoot
+    try {
+        & $PythonExe -m build -x --wheel --no-isolation --outdir dist .
+        if ($LASTEXITCODE -ne 0) {
+            throw "Wheel build failed"
+        }
+    }
+    finally {
+        Pop-Location
     }
 }
 
@@ -165,9 +200,6 @@ try {
     Require-Command "gcc" | Out-Null
     Require-Command "g++" | Out-Null
 
-    Copy-RequiredDlls -RuntimeDllDir $RuntimeDllDir -LibDir $LibDir
-    Copy-SupportDlls -DepsBinDir $DepsBinDir -LibDir $LibDir
-
     if ($Clean) {
         Remove-Item (Join-Path $RepoRoot "build") -Recurse -Force -ErrorAction SilentlyContinue
         Remove-Item (Join-Path $RepoRoot "dist") -Recurse -Force -ErrorAction SilentlyContinue
@@ -181,18 +213,16 @@ try {
     $env:CC = "gcc"
     $env:CXX = "g++"
     $env:CMAKE_BUILD_PARALLEL_LEVEL = $ParallelLevel.ToString()
-    $env:CMAKE_CONFIGURE_ARGS = "-G Ninja -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DBLAS_LIBRARIES=$RuntimeDllDir\\..\\lib\\libopenblas.dll.a -DENABLE_XCFUN=OFF -DBUILD_XCFUN=OFF"
+    $env:CMAKE_CONFIGURE_ARGS = "-G Ninja -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DBLAS_LIBRARIES=$RuntimeDllDir\\..\\lib\\libopenblas.dll.a -DENABLE_XCFUN=ON -DBUILD_XCFUN=ON"
+    Copy-RequiredDlls -RuntimeDllDir $RuntimeDllDir -LibDir $LibDir
+    $missingSupportDlls = @(Copy-SupportDlls -DepsBinDir $DepsBinDir -LibDir $LibDir -AllowMissing)
 
-    Push-Location $RepoRoot
-    try {
-        & $PythonExe -m build -x --wheel --no-isolation --outdir dist .
-        if ($LASTEXITCODE -ne 0) {
-            throw "Wheel build failed"
-        }
+    if ($missingSupportDlls.Count -gt 0) {
+        Write-Host "Missing support DLLs will be retried after the first wheel build pass."
+        Invoke-WheelBuild -PythonExe $PythonExe -RepoRoot $RepoRoot
     }
-    finally {
-        Pop-Location
-    }
+    Copy-SupportDlls -DepsBinDir $DepsBinDir -LibDir $LibDir | Out-Null
+    Invoke-WheelBuild -PythonExe $PythonExe -RepoRoot $RepoRoot
 }
 finally {
     $Stopwatch.Stop()

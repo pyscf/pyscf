@@ -112,13 +112,15 @@ def _load_dependency(libname):
     # packaging path keeps the lib-prefixed filenames.
     if isinstance(libname, str):
         return load_library(libname)
+    if isinstance(libname, tuple):
+        for candidate in libname:
+            try:
+                return load_library(candidate)
+            except OSError:
+                pass
+        raise OSError(f'Library candidates {libname} not found')
 
-    for candidate in libname:
-        try:
-            return load_library(candidate)
-        except OSError:
-            pass
-    raise OSError(f'Library candidates {libname} not found')
+    raise TypeError(f'Unsupported dependency spec: {libname!r}')
 
 @functools.lru_cache(128)
 def load_library(libname):

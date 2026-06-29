@@ -1,0 +1,16 @@
+name: pyscf-win313-test
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - pip
+  - setuptools
+  - wheel
+  - "numpy!=1.16,!=1.17"
+  - "scipy!=1.5"
+  - h5py
+  - "pytest<9"
+  - pytest-cov
+  - geometric
+  - spglib
+  - git

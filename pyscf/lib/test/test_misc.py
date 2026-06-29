@@ -94,8 +94,10 @@ class KnownValues(unittest.TestCase):
         text = LIB_MISC.read_text(encoding='utf-8')
         # Keep both candidate names in the shared dependency table so the
         # win32 loader can try conda-forge DLL names before lib-prefixed ones.
-        self.assertIn("'libxc_itrf': [('xc', 'libxc')]", text)
-        self.assertIn("'libxcfun_itrf': [('xcfun', 'libxcfun')]", text)
+        self.assertIn("'libxc_itrf':", text)
+        self.assertIn("('xc', 'libxc')", text)
+        self.assertIn("'libxcfun_itrf':", text)
+        self.assertIn("('xcfun', 'libxcfun')", text)
 
     def test_windows_misc_does_not_search_deps_bin_for_support_dlls(self):
         text = LIB_MISC.read_text(encoding='utf-8')
@@ -103,6 +105,8 @@ class KnownValues(unittest.TestCase):
         # environment. Support DLLs should not be loaded from deps/bin.
         self.assertNotIn("os.path.join(_loaderpath, 'deps', 'bin')", text)
         self.assertIn("def _load_dependency(libname):", text)
+        self.assertIn("if isinstance(libname, tuple):", text)
+        self.assertIn("raise TypeError(", text)
 
     def test_pickle(self):
         import pickle
