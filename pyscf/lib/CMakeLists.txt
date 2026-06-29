@@ -234,6 +234,8 @@ if(ENABLE_LIBXC AND BUILD_LIBXC)
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
+            # Skip libxc's upstream test dependencies in the wheel build path.
+            -DBUILD_TESTING=OFF
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
             -DCMAKE_INSTALL_LIBDIR:PATH=lib
             -DENABLE_FORTRAN=0 -DDISABLE_KXC=0 -DDISABLE_LXC=1
@@ -252,12 +254,16 @@ if(ENABLE_XCFUN AND BUILD_XCFUN)
     GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
     GIT_TAG a89b783
     # This patch adds the xcfun derivative order up to 5
-    PATCH_COMMAND git apply --reject ${PROJECT_SOURCE_DIR}/libxcfun.patch || true
+    PATCH_COMMAND git apply --reject ${PROJECT_SOURCE_DIR}/libxcfun.patch || ${CMAKE_COMMAND} -E true
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
             -DXCFUN_MAX_ORDER=${XCFUN_MAX_ORDER} -DENABLE_TESTALL=0
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+            # xcfun uses M_PI in its C++ sources. In the bundled Windows build
+            # path, M_PI is referenced before a later header defines it, so
+            # define it explicitly when BUILD_XCFUN=ON.
+            -DCMAKE_CXX_FLAGS=-DM_PI=3.14159265358979323846
             -DCMAKE_CXX_CREATE_SHARED_LIBRARY=${CXX_LINK_TEMPLATE}
             -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
   )

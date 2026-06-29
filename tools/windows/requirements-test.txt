@@ -1,0 +1,2 @@
+pytest-timer
+git+https://github.com/jhrmnn/pyberny.git@36a4be9

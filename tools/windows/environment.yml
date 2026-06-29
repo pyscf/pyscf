@@ -1,0 +1,12 @@
+name: pyscf-win313
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - pip
+  - setuptools
+  - wheel
+  - cmake<4
+  - ninja
+  - pip:
+      - build
