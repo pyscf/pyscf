@@ -1,66 +1,49 @@
 #!/usr/bin/env python
 
 '''
-eigenvalue self-energy GW calculation
+Eigenvalue self-consistent GW calculation.
+
+Method                                                   GW class    Option
+evGW (analytical continuation, N4 scaling)               EVGW        -
+evGW0 (analytical continuation, N4 scaling)              EVGW        W0 = True
+evGW (fully analytic, N6 scaling)                        EVGWExact   -
+evGW0 (fully analytic, N6 scaling)                       EVGWExact   W0 = True
+unrestricted evGW (analytical continuation, N4 scaling)  UEVGW       -
+unrestricted evGW0 (analytical continuation, N4 scaling) UEVGW       W0 = True
+unrestricted evGW exact (fully analytic, N6 scaling)     UEVGWExact  -
+unrestricted evGW0 exact (fully analytic, N6 scaling)    UEVGWExact  W0 = True
 '''
 
 from pyscf import gto, dft
+from pyscf.gw.evgw import EVGW
+from pyscf.gw.uevgw import UEVGW
 
-mol = gto.M(
-    atom = 'H 0 0 0; F 0 0 1.1',
-    basis = 'ccpvdz')
+
+# spin-restricted case
+mol = gto.M(atom='H 0 0 0; F 0 0 0.91', basis='ccpvdz')
+
 mf = dft.RKS(mol)
 mf.xc = 'b3lyp'
 mf.kernel()
 
-# self-energy evaluated using analytical continuation
-# N4 scaling, inaccurate for core and high-lying states
-from pyscf.gw.evgw import EVGW
 gw = EVGW(mf)
+# use W0 option to enable evGW0 calculation
+# gw.W0 = True
 gw.kernel()
+print(gw.mo_energy)
 
-# evGW0
-gw = EVGW(mf)
-gw.W0 = True
-gw.kernel()
+# spin-unrestricted case
+mol = gto.M(atom='H 0 0 0; F 0 0 0.91', basis='ccpvdz', charge=1, spin=1)
 
-# self-energy evaluated using exact frequency integration
-# N6 scaling, accurate for all states
-from pyscf.gw.evgw_exact import EVGWExact
-gw = EVGWExact(mf)
-gw.kernel()
-
-# evGW0 with exact frequency integration
-gw = EVGWExact(mf)
-gw.W0 = True
-gw.kernel()
-
-# spin-unrestricted
-mol = gto.M(
-    atom = 'H 0 0 0; F 0 0 1.1',
-    basis = 'ccpvdz',
-    spin = 1,
-    charge = 1)
 mf = dft.UKS(mol)
 mf.xc = 'b3lyp'
 mf.kernel()
 
-# self-energy evaluated using analytical continuation
-from pyscf.gw.uevgw import UEVGW
 gw = UEVGW(mf)
+# use W0 option to enable evGW0 calculation
+# gw.W0 = True
 gw.kernel()
-
-# evGW0
-gw = UEVGW(mf)
-gw.W0 = True
-gw.kernel()
-
-# self-energy evaluated using exact frequency integration
-from pyscf.gw.uevgw_exact import UEVGWExact
-gw = UEVGWExact(mf)
-gw.kernel()
-
-# evGW0 with exact frequency integration
-gw = UEVGWExact(mf)
-gw.W0 = True
-gw.kernel()
+# alpha channel
+print(gw.mo_energy[0])
+# beta channel
+print(gw.mo_energy[1])

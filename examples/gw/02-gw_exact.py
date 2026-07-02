@@ -20,16 +20,15 @@ print(gw.mo_energy)
 # density-fitting GW with exact frequency integration
 from pyscf.gw.gw_exact_df import GWExactDF
 gw = GWExactDF(mf)
-gw.kernel()
-# Galitskii-Migdal total energy
-gw.energy_tot()
-
 # test charge-test charge vertex correction
-mf = scf.RHF(mol)
-mf.kernel()
-gw = GWExactDF(mf)
-gw.RPAE = True
+# gw.RPAE = True
 gw.kernel()
+print(gw.mo_energy)
+# Galitskii-Migdal total energy
+e_tot, e_hf, e_c = gw.energy_tot()
+print("GW total energy:", e_tot)
+print("HF energy:", e_hf)
+print("Correlation energy:", e_c)
 
 # spin-unrestricted
 mol = gto.M(
@@ -42,14 +41,13 @@ mf.kernel()
 
 # density-fitting GW with exact frequency integration
 from pyscf.gw.ugw_exact_df import UGWExactDF
-mygw = UGWExactDF(mf)
-mygw.kernel()
-# Galitskii-Migdal total energy
-mygw.energy_tot()
-
+gw = UGWExactDF(mf)
 # test charge-test charge vertex correction
-mf = scf.UHF(mol)
-mf.kernel()
-mygw = UGWExactDF(mf)
-mygw.RPAE = True
-mygw.kernel()
+# gw.RPAE = True
+gw.kernel()
+print(gw.mo_energy)
+# Galitskii-Migdal total energy
+e_tot, e_hf, e_c = gw.energy_tot()
+print("GW total energy:", e_tot)
+print("HF energy:", e_hf)
+print("Correlation energy:", e_c)
