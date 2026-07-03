@@ -14,7 +14,6 @@
 # limitations under the License.
 #
 
-import tempfile
 from pyscf import dft, gto, lib
 from pyscf.eph import eph_fd, rks
 import numpy as np
@@ -33,7 +32,6 @@ def setUpModule():
     mol.output = '/dev/null'
     mol.build()
     mf = dft.RKS(mol)
-    mf.chkfile = tempfile.NamedTemporaryFile().name
     mf.grids.level = 3
     mf.xc = 'b3lyp5'
     mf.conv_tol = 1e-14

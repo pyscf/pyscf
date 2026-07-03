@@ -16,7 +16,6 @@
 # Authors: Bhavnesh Jangid <jangidbhavnesh@uchicago.edu>
 
 import ctypes
-import tempfile
 import numpy as np
 from functools import reduce
 from pyscf import lib
@@ -128,7 +127,7 @@ def _dfnevpt2_eris_outcore(mc, mo_coeff, with_df):
 
     # Step-3: from the transfomed (L|pq), build pacv and cvcv
     tmpdir = lib.param.TMPDIR
-    cvcvfile = tempfile.NamedTemporaryFile(dir=tmpdir)
+    cvcvfile = lib.NamedTemporaryFile(dir=tmpdir)
     # Edge cases
     if ncore * nvir == 0 or ncore * nvir == 0:
         f5 = lib.H5TmpFile(cvcvfile.name, 'w')

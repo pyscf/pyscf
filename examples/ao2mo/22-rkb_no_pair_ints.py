@@ -10,7 +10,6 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import lib
 from pyscf.ao2mo import r_outcore
-import tempfile
 import os
 
 mol = gto.M(
@@ -53,7 +52,7 @@ def no_pair_ovov(mol, mo_coeff, erifile):
 
         def run_and_add(mol, mos, erifile, dataname_main, intor):
             # Use a temporary file for the intermediate integrals
-            with tempfile.NamedTemporaryFile(suffix=".h5", delete=False) as tmpfile:
+            with lib.NamedTemporaryFile(suffix=".h5", delete=False) as tmpfile:
                 tmp_erifile = tmpfile.name
 
             try:

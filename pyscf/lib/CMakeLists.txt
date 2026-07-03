@@ -128,7 +128,9 @@ include_directories("${PROJECT_BINARY_DIR}")
 
 # See also https://gitlab.kitware.com/cmake/community/wikis/doc/cmake/RPATH-handling
 if (WIN32)
-  #?
+  set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--disable-runtime-pseudo-reloc")
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}")
 elseif (APPLE)
   set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
   set(CMAKE_INSTALL_RPATH "@loader_path;@loader_path/deps/lib;@loader_path/deps/lib64")

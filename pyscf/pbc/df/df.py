@@ -31,8 +31,8 @@ J. Chem. Phys. 147, 164119 (2017)
 
 import os
 import ctypes
+import sys
 import warnings
-import tempfile
 import contextlib
 import itertools
 import numpy
@@ -166,7 +166,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         self.linear_dep_threshold = LINEAR_DEP_THR
         self._j_only = False
 # If _cderi_to_save is specified, the 3C-integral tensor will be saved in this file.
-        self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+        self._cderi_to_save = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
 # If _cderi is specified, the 3C-integral tensor will be read from this file
         self._cderi = None
         self._rsh_df = {}  # Range separated Coulomb DF objects
@@ -277,6 +277,10 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                 if self._cderi == cderi and os.path.isfile(cderi):
                     logger.warn(self, 'File %s (specified by ._cderi) is '
                                 'overwritten by GDF initialization.', cderi)
+                    # On Windows, close the handle before os.remove to avoid
+                    # permission error.
+                    if sys.platform == 'win32':
+                        self._cderi_to_save.close()
                     os.remove(cderi)
                 else:
                     logger.warn(self, 'Value of ._cderi is ignored. '

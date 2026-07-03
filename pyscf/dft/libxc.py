@@ -276,6 +276,7 @@ XC_ALIAS = {
     'M05_2X'            : 'HYB_MGGA_X_M05_2X,MGGA_C_M05_2X',
     'M06_2X'            : 'HYB_MGGA_X_M06_2X,MGGA_C_M06_2X',
     'M06_HF'            : 'HYB_MGGA_X_M06_HF,MGGA_C_M06_HF',
+    'CF22D'             : 'HYB_MGGA_X_CF22D,MGGA_C_CF22D',
     # extra aliases
     'SOGGA11X'          : 'SOGGA11_X',
     'M06L'              : 'M06_L',

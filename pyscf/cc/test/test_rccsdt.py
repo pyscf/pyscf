@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2025 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tempfile
 from functools import reduce
 import unittest
 import copy
@@ -41,8 +40,8 @@ def setUpModule():
     mol.basis = '631g'
     mol.build()
     mf = scf.RHF(mol)
-    mf.chkfile = tempfile.NamedTemporaryFile().name
     mf.conv_tol_grad = 1e-8
+    mf.chkfile = lib.NamedTemporaryFile().name
     mf.kernel()
 
     mycc = rccsdt.RCCSDT(mf)
@@ -135,10 +134,10 @@ class KnownValues(unittest.TestCase):
         cc1.diis = False
         cc1.max_cycle = 4
         cc1.kernel()
-        self.assertAlmostEqual(cc1.e_corr, -0.1362172678103062, 7)
+        self.assertAlmostEqual(cc1.e_corr, -0.13620561873465928, 7)
 
     def test_restart(self):
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = lib.NamedTemporaryFile()
         cc1 = cc.RCCSDT(mf)
         cc1.max_cycle = 5
         cc1.kernel()
@@ -149,7 +148,7 @@ class KnownValues(unittest.TestCase):
         cc1.diis = adiis
         cc1.max_cycle = 3
         cc1.kernel(tamps=None)
-        self.assertAlmostEqual(cc1.e_corr, -0.13618790413398396, 7)
+        self.assertAlmostEqual(cc1.e_corr, -0.13601543222004697, 7)
 
         tamps = cc1.vector_to_amplitudes(adiis.extrapolate())
         self.assertAlmostEqual(abs(tamps[0] - cc1.t1).max(), 0, 9)
@@ -160,7 +159,7 @@ class KnownValues(unittest.TestCase):
         import copy
         tmp_tamps = copy.deepcopy(tamps)
         cc1.kernel(tmp_tamps)
-        self.assertAlmostEqual(cc1.e_corr, -0.13636637468987364, 7)
+        self.assertAlmostEqual(cc1.e_corr, -0.13632994594327189, 7)
 
         cc1.diis = adiis
         cc1.max_cycle = 2

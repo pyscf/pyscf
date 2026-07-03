@@ -17,7 +17,6 @@
 
 import unittest
 import itertools
-import tempfile
 import numpy as np
 from pyscf import lib
 from pyscf import gto

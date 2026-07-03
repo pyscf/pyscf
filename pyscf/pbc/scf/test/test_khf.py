@@ -18,7 +18,6 @@
 #
 
 import unittest
-import tempfile
 import numpy as np
 
 from pyscf import lib
@@ -101,8 +100,8 @@ class KnownValues(unittest.TestCase):
 
         kpts = cell.make_kpts(nk)
         kmf = khf.KRHF(cell, kpts, exxdiv='vcut_sph')
-        kmf.chkfile = tempfile.NamedTemporaryFile().name
         kmf.conv_tol = 1e-9
+        kmf.chkfile = lib.NamedTemporaryFile().name
         ekpt = kmf.scf()
         dm1 = kmf.make_rdm1()
         dm2 = kmf.from_chk(kmf.chkfile)
@@ -300,6 +299,13 @@ class KnownValues(unittest.TestCase):
                               diis_start_cycle=2, damp_factor=damp, fock_last=f_prev)
         for k in range(len(kpts)):
             self.assertAlmostEqual(abs(f_damp[k] - (f[k]*(1-damp) + f_prev[k]*damp)).max(), 0, 9)
+
+    def test_kmesh_property(self):
+        kmf = cell.KRHF(kpts=cell.make_kpts([3,1,1]))
+        assert np.array_equal(kmf.kmesh, [3, 1, 1])
+
+        kmf = cell.KRHF(kpts=cell.make_kpts([18]*3))
+        assert np.array_equal(kmf.kmesh, [13, 13, 13])
 
 if __name__ == '__main__':
     print("Full Tests for pbc.scf.khf")

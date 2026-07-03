@@ -686,7 +686,7 @@ def linear_multi_state(mc, weights=(0.5, 0.5), **kwargs):
         mc = mc.state_average(weights=weights, **kwargs)
 
     else:
-        base_name = mc.__class__.bases__[0].__name__
+        base_name = mc.__class__.__bases__[0].__name__
 
     mcbase_class = mc.__class__
 
@@ -724,7 +724,7 @@ def linear_multi_state_mix(mc, fcisolvers, weights=(0.5, 0.5), **kwargs):
         raise RuntimeError("already a StateAverageMCSCF solver")
 
     else:
-        base_name = mc.__class__.bases__[0].__name__
+        base_name = mc.__class__.__bases__[0].__name__
 
     mcbase_class = mc.__class__
 

@@ -18,7 +18,6 @@
 
 import numpy
 import unittest
-import tempfile
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
@@ -44,7 +43,7 @@ def setUpModule():
 
     mf = scf.RHF(mol)
     mf.conv_tol = 1e-10
-    mf.chkfile = tempfile.NamedTemporaryFile().name
+    mf.chkfile = lib.NamedTemporaryFile().name
     mf.kernel()
 
     n2sym = gto.M(
@@ -224,7 +223,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(scf_result['Cu'][0], -194.92388639203045, 9)
 
     def test_init_guess_chk(self):
-        dm = mol.HF(chkfile=tempfile.NamedTemporaryFile().name).get_init_guess(mol, key='chkfile')
+        dm = mol.HF(chkfile=lib.NamedTemporaryFile().name).get_init_guess(mol, key='chkfile')
         self.assertAlmostEqual(lib.fp(dm), 2.5912875957299684, 5)
 
         dm = mf.get_init_guess(mol, key='chkfile')
@@ -246,6 +245,12 @@ class KnownValues(unittest.TestCase):
 
     def test_init_guess_huckel(self):
         dm = scf.hf.RHF(mol).get_init_guess(mol, key='mod_huckel')
+        self.assertAlmostEqual(lib.fp(dm), 3.233072986208057, 5)
+
+        # init_guess_by_mod_huckel should be callable without arguments,
+        # consistent with init_guess_by_huckel and the UHF/ROHF/GHF/DHF
+        # implementations.
+        dm = scf.hf.RHF(mol).init_guess_by_mod_huckel()
         self.assertAlmostEqual(lib.fp(dm), 3.233072986208057, 5)
 
         dm = scf.ROHF(mol).init_guess_by_mod_huckel()
@@ -758,12 +763,12 @@ H     0    0.757    0.587'''
         self.assertAlmostEqual(mf_scanner(mol.atom), -76.075408156235909, 9)
 
         mol1 = gto.M(atom='H 0 0 0; H 0 0 .9', basis='cc-pvdz')
-        ref = mol1.RHF(chkfile=tempfile.NamedTemporaryFile().name).x2c().density_fit().run()
+        ref = mol1.RHF(chkfile=lib.NamedTemporaryFile().name).x2c().density_fit().run()
         e1 = mf_scanner('H 0 0 0; H 0 0 .9')
         self.assertAlmostEqual(e1, -1.116394048204042, 9)
         self.assertAlmostEqual(e1, ref.e_tot, 9)
 
-        mfs = mol1.RHF(chkfile=tempfile.NamedTemporaryFile().name).as_scanner()
+        mfs = mol1.RHF(chkfile=lib.NamedTemporaryFile().name).as_scanner()
         mfs.__dict__.update(scf.chkfile.load(ref.chkfile, 'scf'))
         e = mfs(mol1)
         self.assertAlmostEqual(e, -1.1163913004438035, 9)

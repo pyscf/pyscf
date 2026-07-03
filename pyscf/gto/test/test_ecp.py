@@ -420,6 +420,53 @@ Eu F
         self.assertEqual(mol.ao_labels()[40], '0 U 5f-3  ')
         self.assertAlmostEqual(lib.fp(mf.get_hcore()), -55.38627201912257)
 
+    def test_large_exponent_ecp_closed_form(self):
+        # Regression test for the adaptive Gauss-Chebyshev radial quadrature
+        # in nr_ecp.c.  At large combined exponents the integrand is sharply
+        # peaked at small r; two successive coarse rules would happen to agree
+        # to 1e-12 even when both were under-resolved, so the loop declared
+        # premature convergence and the integral could be off by 1e-5.
+        #
+        # The radial integral with a same-center primitive AO of angular
+        # momentum l_ao (single primitive, exponent al) and a same-center
+        # local/semilocal ECP channel c * r^(n-2) * exp(-g r^2) factorises so
+        # that the ratio I(g1)/I(g2) at fixed alpha and l is
+        #   ((2 alpha + g2) / (2 alpha + g1)) ** ((n + 2*l_ao + 1) / 2)
+        # independent of the AO normalisation, providing a stringent
+        # closed-form check on the radial quadrature.
+        L_SYM = {0: 'S', 1: 'P', 2: 'D'}
+
+        def build_local(n, l, al, g):
+            basis = {'Kr': [[l, [al, 1.0]]]}
+            ecp = 'ECP\nKr nelec 0\nKr ul\n%d  %.10e  1.0\nEND\n' % (n, g)
+            return gto.M(atom='Kr 0 0 0', basis=basis,
+                         ecp={'Kr': ecp}, verbose=0)
+
+        def build_semilocal(n, l, al, g):
+            basis = {'Kr': [[l, [al, 1.0]]]}
+            # zero ul keeps a local channel present (required by parser)
+            ecp = ('ECP\nKr nelec 0\nKr ul\n2  1.0  0.0\n'
+                   'Kr %s\n%d  %.10e  1.0\nEND\n' % (L_SYM[l], n, g))
+            return gto.M(atom='Kr 0 0 0', basis=basis,
+                         ecp={'Kr': ecp}, verbose=0)
+
+        def ratio_closed(n, l, al, g1, g2):
+            p = (n + 2 * l + 1) / 2.0
+            return ((2 * al + g2) / (2 * al + g1)) ** p
+
+        worst = 0.0
+        for build in (build_local, build_semilocal):
+            for n in (1, 2):
+                for l in (0, 1, 2):
+                    for al in (1e0, 1e2, 1e4, 3e5):
+                        for g1, g2 in ((1e1, 1e7), (1e3, 1e7), (1e5, 1e7)):
+                            m1 = build(n, l, al, g1).intor('ECPscalar')[0, 0]
+                            m2 = build(n, l, al, g2).intor('ECPscalar')[0, 0]
+                            r = m1 / m2
+                            err = abs(r / ratio_closed(n, l, al, g1, g2) - 1)
+                            worst = max(worst, err)
+        self.assertLess(worst, 1e-10)
+
 
 if __name__ == '__main__':
     print("Full Tests for ECP")

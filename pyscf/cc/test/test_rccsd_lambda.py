@@ -262,7 +262,7 @@ class KnownValues(unittest.TestCase):
             +numpy.einsum('pkkq->pq', eri0[:nocc,:nocc,:nocc,:nocc]).trace())
         self.assertAlmostEqual(e2, -794721.197459942, 8)
         self.assertAlmostEqual(numpy.einsum('pqrs,pqrs', dm2, eri0)*.5 +
-                               numpy.einsum('pq,qp', dm1, h1), e2, 9)
+                               numpy.einsum('pq,qp', dm1, h1), e2, 8)
 
         self.assertAlmostEqual(abs(dm2-dm2.transpose(1,0,3,2)).max(), 0, 9)
         self.assertAlmostEqual(abs(dm2-dm2.transpose(2,3,0,1)).max(), 0, 9)

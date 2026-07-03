@@ -63,7 +63,7 @@ print('RCCSDT correlation energy % .12f    Ref % .12f    Diff % .12e' % (
 
 # Restart UCCSDT using amplitudes converted from RCCSDT
 tamps_init_uhf = [t1_rhf2uhf, t2_rhf2uhf, t3_rhf2uhf]
-myucc2 = cc.UCCSDT(mf, compact_tamps=False).set(conv_tol=1e-10, conv_tol_normt=1e-8, verbose=5)
+myucc2 = cc.UCCSDT(mf_uhf, compact_tamps=False).set(conv_tol=1e-10, conv_tol_normt=1e-8, verbose=5)
 myucc2.kernel(tamps=tamps_init_uhf)
 print('UCCSDT correlation energy % .12f    Ref % .12f    Diff % .12e' % (
         myucc2.e_corr, -0.2188784727114157, myucc2.e_corr - -0.2188784727114157))

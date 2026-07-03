@@ -15,7 +15,6 @@
 
 import unittest
 import numpy
-import tempfile
 from pyscf import lib, gto
 
 def make_ab(n):
@@ -51,7 +50,7 @@ class KnownValues(unittest.TestCase):
     def test_restore(self):
         a, b, adiag, arest, x = make_ab(16)
         lib.diis.INCORE_SIZE, bak = 4, lib.diis.INCORE_SIZE
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = lib.NamedTemporaryFile()
         ad = lib.diis.DIIS(filename=ftmp.name)
         for i in range(8):
             x = (b - arest.dot(x)) / adiag

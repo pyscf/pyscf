@@ -184,19 +184,7 @@ class SpinFreeX2CHelper(x2c.X2CHelperBase):
             h1 = x2c._get_hcore_fw(t, v, w, s, x, c)
 
         elif 'ATOM' in self.approx.upper():
-            atom_slices = xmol.offset_nr_by_atom()
-            nao = xmol.nao_nr()
-            x = numpy.zeros((nao,nao))
-            for ia in range(xmol.natm):
-                ish0, ish1, p0, p1 = atom_slices[ia]
-                shls_slice = (ish0, ish1, ish0, ish1)
-                t1 = xmol.intor('int1e_kin', shls_slice=shls_slice)
-                s1 = xmol.intor('int1e_ovlp', shls_slice=shls_slice)
-                with xmol.with_rinv_at_nucleus(ia):
-                    z = -xmol.atom_charge(ia)
-                    v1 = z * xmol.intor('int1e_rinv', shls_slice=shls_slice)
-                    w1 = z * xmol.intor('int1e_prinvp', shls_slice=shls_slice)
-                x[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
+            x = _atomic_1e_x(xmol)
             h1 = x2c._get_hcore_fw(t, v, w, s, x, c)
 
         else:
@@ -253,19 +241,7 @@ class SpinFreeX2CHelper(x2c.X2CHelperBase):
         assert ('1E' in self.approx.upper())
 
         if 'ATOM' in self.approx.upper():
-            atom_slices = xmol.offset_nr_by_atom()
-            nao = xmol.nao_nr()
-            x = numpy.zeros((nao,nao))
-            for ia in range(xmol.natm):
-                ish0, ish1, p0, p1 = atom_slices[ia]
-                shls_slice = (ish0, ish1, ish0, ish1)
-                t1 = xmol.intor('int1e_kin', shls_slice=shls_slice)
-                s1 = xmol.intor('int1e_ovlp', shls_slice=shls_slice)
-                with xmol.with_rinv_at_nucleus(ia):
-                    z = -xmol.atom_charge(ia)
-                    v1 = z * xmol.intor('int1e_rinv', shls_slice=shls_slice)
-                    w1 = z * xmol.intor('int1e_prinvp', shls_slice=shls_slice)
-                x[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
+            x = _atomic_1e_x(xmol)
         else:
             t = xmol.intor_symmetric('int1e_kin')
             v = xmol.intor_symmetric('int1e_nuc')
@@ -297,28 +273,22 @@ class SpinFreeX2CHelper(x2c.X2CHelperBase):
 
 SpinFreeX2C = SpinFreeX2CHelper
 
+def _atomic_1e_x(mol):
+    atoms = x2c._atoms_in_mole(mol)
+    x_conf = {}
+    c = lib.param.LIGHT_SPEED
+    for elem, atom in atoms.items():
+        t1 = atom.intor_symmetric('int1e_kin')
+        s1 = atom.intor_symmetric('int1e_ovlp')
+        v1 = atom.intor_symmetric('int1e_nuc')
+        w1 = atom.intor_symmetric('int1e_pnucp')
+        x_conf[elem] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
 
-if __name__ == '__main__':
-    mol = gto.Mole()
-    mol.build(
-        verbose = 0,
-        atom = [["O" , (0. , 0.     , 0.)],
-                [1   , (0. , -0.757 , 0.587)],
-                [1   , (0. , 0.757  , 0.587)] ],
-        basis = 'ccpvdz-dk',
-    )
-
-    method = hf.RHF(mol)
-    enr = method.kernel()
-    print('E(NR) = %.12g' % enr)
-
-    method = sfx2c1e(hf.RHF(mol))
-    esfx2c = method.kernel()
-    print('E(SFX2C1E) = %.12g' % esfx2c)
-    method.with_x2c.basis = 'unc-ccpvqz-dk'
-    print('E(SFX2C1E) = %.12g' % method.kernel())
-    method.with_x2c.approx = 'atom1e'
-    print('E(SFX2C1E) = %.12g' % method.kernel())
-
-    mf = method.density_fit().undo_x2c().run()
-    print('E(DF-NR) = %.12g' % mf.e_tot)
+    atom_slices = mol.offset_nr_by_atom()
+    nao = mol.nao
+    x = numpy.zeros((nao, nao))
+    for ia in range(mol.natm):
+        p0, p1 = atom_slices[ia, 2:]
+        elem = mol.atom_symbol(ia)
+        x[p0:p1,p0:p1] = x_conf[elem]
+    return x

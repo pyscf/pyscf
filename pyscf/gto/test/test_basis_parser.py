@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import unittest
-import tempfile
 from functools import reduce
 import numpy
 from pyscf import gto
@@ -30,14 +30,15 @@ except ImportError:
 
 class KnownValues(unittest.TestCase):
     def test_parse_pople(self):
+        join = os.path.join
         self.assertEqual(gto.basis._parse_pople_basis('631g(d)', 'C'),
-                         ('pople-basis/6-31G.dat', 'pople-basis/6-31G-polarization-d.dat'))
+                         (join('pople-basis', '6-31G.dat'), join('pople-basis', '6-31G-polarization-d.dat')))
         self.assertEqual(gto.basis._parse_pople_basis('631g**', 'C'),
-                         ('pople-basis/6-31Gss.dat',))
+                         (join('pople-basis', '6-31Gss.dat'),))
         self.assertEqual(gto.basis._parse_pople_basis('631++g**', 'C'),
-                         ('pople-basis/6-31++Gss.dat',))
+                         (join('pople-basis', '6-31++Gss.dat'),))
         self.assertEqual(gto.basis._parse_pople_basis('6311+g(d,p)', 'C'),
-                         ('pople-basis/6-311+G.dat', 'pople-basis/6-311G-polarization-d.dat'))
+                         (join('pople-basis', '6-311+G.dat'), join('pople-basis', '6-311G-polarization-d.dat')))
         self.assertRaises(KeyError, gto.basis._parse_pople_basis, '631g++', 'C')
 
     def test_basis_load(self):
@@ -61,7 +62,7 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(len(gto.basis.load('def2-svp', 'Rn')), 16)
 
     def test_basis_load_from_file(self):
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = lib.NamedTemporaryFile()
         ftmp.write('''
 Li    S
      16.1195750              0.15432897
@@ -401,7 +402,7 @@ F   1   1.00
         self.assertEqual(ref, basis1)
 
     def test_parse_gaussian_load_basis(self):
-        with tempfile.NamedTemporaryFile(mode='w+') as f:
+        with lib.NamedTemporaryFile(mode='w+') as f:
             f.write('''
 ****
 H 0
@@ -412,7 +413,7 @@ S 1 1.0
             f.flush()
             self.assertEqual(parse_gaussian.load(f.name, 'H'), [[0, [1., 1.]]])
 
-        with tempfile.NamedTemporaryFile(mode='w+') as f:
+        with lib.NamedTemporaryFile(mode='w+') as f:
             f.write('''
 H 0
 S 1 1.0
@@ -422,7 +423,7 @@ S 1 1.0
             f.flush()
             self.assertEqual(parse_gaussian.load(f.name, 'H'), [[0, [1., 1.]]])
 
-        with tempfile.NamedTemporaryFile(mode='w+') as f:
+        with lib.NamedTemporaryFile(mode='w+') as f:
             f.write('''
 ****
 H 0
@@ -432,7 +433,7 @@ S 1 1.0
             f.flush()
             self.assertEqual(parse_gaussian.load(f.name, 'H'), [[0, [1., 1.]]])
 
-        with tempfile.NamedTemporaryFile(mode='w+') as f:
+        with lib.NamedTemporaryFile(mode='w+') as f:
             f.write('''
 H 0
 S 1 1.0
