@@ -46,7 +46,7 @@ class KnownValues(unittest.TestCase):
             self.assertIsInstance(nCoreX[at], int)
             self.assertIsInstance(nAoX[at], int)
             self.assertEqual(len(AoLabels[at]), nAoX[at])
-    
+
     def test_ibo(self):
         mf = scf.RHF(mol).run()
         b = ibo.ibo(mol, mf.mo_coeff[:,mf.mo_occ>0], exponent=4)
