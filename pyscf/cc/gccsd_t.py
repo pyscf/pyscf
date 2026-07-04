@@ -25,6 +25,9 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.cc import gccsd
 
+#einsum = np.einsum
+einsum = lib.einsum
+
 # spin-orbital formula
 # JCP 98, 8718 (1993); DOI:10.1063/1.464480
 def kernel(cc, eris, t1=None, t2=None, verbose=logger.INFO):
@@ -44,10 +47,10 @@ def kernel(cc, eris, t1=None, t2=None, verbose=logger.INFO):
     t2T = t2.transpose(2,3,0,1)
     t1T = t1.T
     def get_wv(a, b, c):
-        w  = numpy.einsum('ejk,ei->ijk', t2T[a,:], bcei[b,c])
-        w -= numpy.einsum('im,mjk->ijk', t2T[b,c], majk[:,a])
-        v  = numpy.einsum('i,jk->ijk', t1T[a], bcjk[b,c])
-        v += numpy.einsum('i,jk->ijk', fvo[a], t2T [b,c])
+        w  = einsum('ejk,ei->ijk', t2T[a,:], bcei[b,c])
+        w -= einsum('im,mjk->ijk', t2T[b,c], majk[:,a])
+        v  = einsum('i,jk->ijk', t1T[a], bcjk[b,c])
+        v += einsum('i,jk->ijk', fvo[a], t2T [b,c])
         v += w
         w = w + w.transpose(2,0,1) + w.transpose(1,2,0)
         return w, v
@@ -63,7 +66,7 @@ def kernel(cc, eris, t1=None, t2=None, verbose=logger.INFO):
                 w = wabc + wcab - wbac
                 v = vabc + vcab - vbac
                 w /= eijk - eabc[a,b,c]
-                et += numpy.einsum('ijk,ijk', w, v.conj())
+                et += einsum('ijk,ijk', w, v.conj())
     et /= 2
     return et
 
