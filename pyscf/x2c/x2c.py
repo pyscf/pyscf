@@ -91,19 +91,7 @@ class X2CHelperBase(lib.StreamObject):
             h1 = _get_hcore_fw(t, v, w, s, x, c)
 
         elif 'ATOM' in self.approx.upper():
-            atom_slices = xmol.offset_2c_by_atom()
-            n2c = xmol.nao_2c()
-            x = numpy.zeros((n2c,n2c), dtype=numpy.complex128)
-            for ia in range(xmol.natm):
-                ish0, ish1, p0, p1 = atom_slices[ia]
-                shls_slice = (ish0, ish1, ish0, ish1)
-                s1 = xmol.intor('int1e_ovlp_spinor', shls_slice=shls_slice)
-                t1 = xmol.intor('int1e_spsp_spinor', shls_slice=shls_slice) * .5
-                with xmol.with_rinv_at_nucleus(ia):
-                    z = -xmol.atom_charge(ia)
-                    v1 = z*xmol.intor('int1e_rinv_spinor', shls_slice=shls_slice)
-                    w1 = z*xmol.intor('int1e_sprinvsp_spinor', shls_slice=shls_slice)
-                x[p0:p1,p0:p1] = _x2c1e_xmatrix(t1, v1, w1, s1, c)
+            x = _spinor_atomic_1e_x(xmol)
             h1 = _get_hcore_fw(t, v, w, s, x, c)
 
         else:
@@ -239,19 +227,7 @@ class X2CHelperBase(lib.StreamObject):
         assert ('1E' in self.approx.upper())
 
         if 'ATOM' in self.approx.upper():
-            atom_slices = xmol.offset_2c_by_atom()
-            n2c = xmol.nao_2c()
-            x = numpy.zeros((n2c,n2c), dtype=numpy.complex128)
-            for ia in range(xmol.natm):
-                ish0, ish1, p0, p1 = atom_slices[ia]
-                shls_slice = (ish0, ish1, ish0, ish1)
-                s1 = xmol.intor('int1e_ovlp_spinor', shls_slice=shls_slice)
-                t1 = xmol.intor('int1e_spsp_spinor', shls_slice=shls_slice) * .5
-                with xmol.with_rinv_at_nucleus(ia):
-                    z = -xmol.atom_charge(ia)
-                    v1 = z*xmol.intor('int1e_rinv_spinor', shls_slice=shls_slice)
-                    w1 = z*xmol.intor('int1e_sprinvsp_spinor', shls_slice=shls_slice)
-                x[p0:p1,p0:p1] = _x2c1e_xmatrix(t1, v1, w1, s1, c)
+            x = _spinor_atomic_1e_x(xmol)
         else:
             s = xmol.intor_symmetric('int1e_ovlp_spinor')
             t = xmol.intor_symmetric('int1e_spsp_spinor') * .5
@@ -276,6 +252,8 @@ class X2CHelperBase(lib.StreamObject):
         if mol is not None:
             self.mol = mol
         return self
+
+    to_gpu = lib.to_gpu
 
 class SpinorX2CHelper(X2CHelperBase):
     '''2-component X2c (including spin-free and spin-dependent terms) in
@@ -309,21 +287,7 @@ class SpinOrbitalX2CHelper(X2CHelperBase):
             h1 = _get_hcore_fw(t, v, w, s, x, c)
 
         elif 'ATOM' in self.approx.upper():
-            atom_slices = xmol.offset_nr_by_atom()
-            # spin-orbital basis is twice the size of NR basis
-            atom_slices[:,2:] *= 2
-            nao = xmol.nao_nr() * 2
-            x = numpy.zeros((nao,nao), dtype=numpy.complex128)
-            for ia in range(xmol.natm):
-                ish0, ish1, p0, p1 = atom_slices[ia]
-                shls_slice = (ish0, ish1, ish0, ish1)
-                t1 = _block_diag(xmol.intor('int1e_kin', shls_slice=shls_slice))
-                s1 = _block_diag(xmol.intor('int1e_ovlp', shls_slice=shls_slice))
-                with xmol.with_rinv_at_nucleus(ia):
-                    z = -xmol.atom_charge(ia)
-                    v1 = _block_diag(z * xmol.intor('int1e_rinv', shls_slice=shls_slice))
-                    w1 = _sigma_dot(z * xmol.intor('int1e_sprinvsp', shls_slice=shls_slice))
-                x[p0:p1,p0:p1] = _x2c1e_xmatrix(t1, v1, w1, s1, c)
+            x = _spin_orbital_atomic_1e_x(xmol)
             h1 = _get_hcore_fw(t, v, w, s, x, c)
 
         else:
@@ -371,21 +335,7 @@ class SpinOrbitalX2CHelper(X2CHelperBase):
         assert ('1E' in self.approx.upper())
 
         if 'ATOM' in self.approx.upper():
-            atom_slices = xmol.offset_nr_by_atom()
-            # spin-orbital basis is twice the size of NR basis
-            atom_slices[:,2:] *= 2
-            nao = xmol.nao_nr() * 2
-            x = numpy.zeros((nao,nao), dtype=numpy.complex128)
-            for ia in range(xmol.natm):
-                ish0, ish1, p0, p1 = atom_slices[ia]
-                shls_slice = (ish0, ish1, ish0, ish1)
-                t1 = _block_diag(xmol.intor('int1e_kin', shls_slice=shls_slice))
-                s1 = _block_diag(xmol.intor('int1e_ovlp', shls_slice=shls_slice))
-                with xmol.with_rinv_at_nucleus(ia):
-                    z = -xmol.atom_charge(ia)
-                    v1 = _block_diag(z * xmol.intor('int1e_rinv', shls_slice=shls_slice))
-                    w1 = _sigma_dot(z * xmol.intor('int1e_sprinvsp', shls_slice=shls_slice))
-                x[p0:p1,p0:p1] = _x2c1e_xmatrix(t1, v1, w1, s1, c)
+            x = _spin_orbital_atomic_1e_x(xmol)
         else:
             t = _block_diag(xmol.intor_symmetric('int1e_kin'))
             v = _block_diag(xmol.intor_symmetric('int1e_nuc'))
@@ -668,8 +618,31 @@ class RHF(SCF):
         if dhf.zquatev is None:
             raise RuntimeError('zquatev library is required to perform Kramers-restricted X2C-RHF')
 
-    def _eigh(self, h, s):
-        return dhf.zquatev.solve_KR_FCSCE(self.mol, h, s)
+    def check_linear_dependency(self, s, verbose=None):
+        log = logger.new_logger(self, verbose)
+        idx = dhf._kramers_pair_sort_ao_idx(self.mol, four_component=False)
+        s = s[idx[:,None], idx]
+        e, v = dhf.zquatev.eigh(s)
+        if log is not None:
+            abs_e = abs(e)
+            emax = abs_e.max()
+            emin = abs_e.min()
+            c = emax / emin
+            log.debug('cond(S) = %s', c)
+            if c > 1e10:
+                log.warn('Singularity detected in the overlap matrix. '
+                         'SCF may be inaccurate and difficult to converge.')
+
+        if hf.remove_overlap_zero_eigenvalue:
+            mask = e > hf.overlap_zero_eigenvalue_threshold
+            x = v[:,mask] / numpy.sqrt(e[mask])
+        else:
+            x = v / numpy.sqrt(e)
+        x1 = numpy.empty_like(x)
+        x1[idx] = x
+        return x1
+
+    _eigh = dhf.RDHF._eigh
 
     def to_ks(self, xc='HF'):
         '''Convert the input mean-field object to an X2C-KS object.
@@ -819,12 +792,12 @@ def _uncontract_mol(mol, xuncontract=None, exp_drop=0.2):
 
 
 def _sqrt(a, tol=1e-14):
-    e, v = numpy.linalg.eigh(a)
+    e, v = scipy.linalg.eigh(a)
     idx = e > tol
     return numpy.dot(v[:,idx]*numpy.sqrt(e[idx]), v[:,idx].T.conj())
 
 def _invsqrt(a, tol=1e-14):
-    e, v = numpy.linalg.eigh(a)
+    e, v = scipy.linalg.eigh(a)
     idx = e > tol
     return numpy.dot(v[:,idx]/numpy.sqrt(e[idx]), v[:,idx].T.conj())
 
@@ -845,7 +818,7 @@ def _get_hcore_fw(t, v, w, s, x, c):
 def _get_r(s, snesc):
     # R^dag \tilde{S} R = S
     # R = S^{-1/2} [S^{-1/2}\tilde{S}S^{-1/2}]^{-1/2} S^{1/2}
-    w, v = numpy.linalg.eigh(s)
+    w, v = scipy.linalg.eigh(s)
     idx = w > 1e-14
     v = v[:,idx]
     w_sqrt = numpy.sqrt(w[idx])
@@ -854,7 +827,7 @@ def _get_r(s, snesc):
     # eigenvectors of S as the new basis
     snesc = reduce(numpy.dot, (v.conj().T, snesc, v))
     r_mid = numpy.einsum('i,ij,j->ij', w_invsqrt, snesc, w_invsqrt)
-    w1, v1 = numpy.linalg.eigh(r_mid)
+    w1, v1 = scipy.linalg.eigh(r_mid)
     idx1 = w1 > 1e-14
     v1 = v1[:,idx1]
     r_mid = numpy.dot(v1/numpy.sqrt(w1[idx1]), v1.conj().T)
@@ -880,19 +853,20 @@ def _x2c1e_xmatrix(t, v, w, s, c):
         e, a = scipy.linalg.eigh(h, m)
         cl = a[:nao,nao:]
         cs = a[nao:,nao:]
-        x = numpy.linalg.solve(cl.T, cs.T).T  # B = XA
+        x = scipy.linalg.solve(cl.T, cs.T).T  # B = XA
     except scipy.linalg.LinAlgError:
-        d, t = numpy.linalg.eigh(m)
+        d, t = scipy.linalg.eigh(m)
         idx = d>LINEAR_DEP_THRESHOLD
         t = t[:,idx] / numpy.sqrt(d[idx])
         tht = reduce(numpy.dot, (t.T.conj(), h, t))
-        e, a = numpy.linalg.eigh(tht)
+        e, a = scipy.linalg.eigh(tht)
         a = numpy.dot(t, a)
         idx = e > -c**2
         cl = a[:nao,idx]
         cs = a[nao:,idx]
-        # X = B A^{-1} = B A^T S
-        x = cs.dot(cl.conj().T).dot(m)
+        # X = B A^{-1} = B (A^T A)^{-1} A^T
+        cl_inv = scipy.linalg.solve(cl.conj().T.dot(cl), cl.conj().T)
+        x = cs.dot(cl_inv)
     return x
 
 def _x2c1e_get_hcore(t, v, w, s, c):
@@ -914,11 +888,11 @@ def _x2c1e_get_hcore(t, v, w, s, c):
         # cs = a[nao:,nao:]
         e = e[nao:]
     except scipy.linalg.LinAlgError:
-        d, t = numpy.linalg.eigh(m)
+        d, t = scipy.linalg.eigh(m)
         idx = d>LINEAR_DEP_THRESHOLD
         t = t[:,idx] / numpy.sqrt(d[idx])
         tht = reduce(numpy.dot, (t.T.conj(), h, t))
-        e, a = numpy.linalg.eigh(tht)
+        e, a = scipy.linalg.eigh(tht)
         a = numpy.dot(t, a)
         idx = e > -c**2
         cl = a[:nao,idx]
@@ -954,7 +928,7 @@ def _x2c1e_get_hcore(t, v, w, s, c):
 #      = S A R[A]^{-1}^+ A^+ h1 A R[A]^{-1} A^+ S
 #      = S A R[A]^{-1}^+ e R[A]^{-1} A^+ S                (2)
 
-    w, u = numpy.linalg.eigh(reduce(numpy.dot, (cl.T.conj(), s, cl)))
+    w, u = scipy.linalg.eigh(reduce(numpy.dot, (cl.T.conj(), s, cl)))
     idx = w > 1e-14
     # Adopt (2) here because X is not appeared in Eq (2).
     # R[A] = u w^{1/2} u^+,  so R[A]^{-1} A^+ S in Eq (2) is
@@ -1071,3 +1045,55 @@ def _decontract_spinor(mol, atoms=None):
     pmol._env = numpy.hstack(env)
     contr_coeff = scipy.linalg.block_diag(*contr_coeff)
     return pmol, contr_coeff
+
+def _atoms_in_mole(mol):
+    atoms = {}
+    for i in range(mol.natm):
+        symb = mol.atom_symbol(i)
+        if symb not in atoms:
+            atoms[symb] = atom = mol.copy(deep=False)
+            mask = mol._bas[:,mole.ATOM_OF] == i
+            atom._bas = mol._bas[mask]
+            atom._atm = mol._atm[i:i+1]
+            atom._bas[:,mole.ATOM_OF] = 0
+    return atoms
+
+def _spin_orbital_atomic_1e_x(mol):
+    atoms = _atoms_in_mole(mol)
+    x_conf = {}
+    c = lib.param.LIGHT_SPEED
+    for elem, atom in atoms.items():
+        t1 = _block_diag(atom.intor_symmetric('int1e_kin'))
+        s1 = _block_diag(atom.intor_symmetric('int1e_ovlp'))
+        v1 = _block_diag(atom.intor_symmetric('int1e_nuc'))
+        w1 = _sigma_dot(atom.intor('int1e_spnucsp'))
+        x_conf[elem] = _x2c1e_xmatrix(t1, v1, w1, s1, c)
+
+    atom_slices = mol.offset_nr_by_atom()
+    nao = mol.nao_nr()
+    x = numpy.zeros((2, nao, 2, nao), dtype=numpy.complex128)
+    for ia in range(mol.natm):
+        p0, p1 = atom_slices[ia, 2:]
+        elem = mol.atom_symbol(ia)
+        x[:,p0:p1,:,p0:p1] = x_conf[elem].reshape(2, p1-p0, 2, p1-p0)
+    return x.reshape(nao*2, nao*2)
+
+def _spinor_atomic_1e_x(mol):
+    atoms = _atoms_in_mole(mol)
+    x_conf = {}
+    c = lib.param.LIGHT_SPEED
+    for elem, atom in atoms.items():
+        t1 = atom.intor_symmetric('int1e_kin_spinor')
+        s1 = atom.intor_symmetric('int1e_ovlp_spinor')
+        v1 = atom.intor_symmetric('int1e_nuc_spinor')
+        w1 = atom.intor_symmetric('int1e_spnucsp_spinor')
+        x_conf[elem] = _x2c1e_xmatrix(t1, v1, w1, s1, c)
+
+    atom_slices = mol.offset_2c_by_atom()
+    nao = mol.nao_2c()
+    x = numpy.zeros((nao, nao), dtype=numpy.complex128)
+    for ia in range(mol.natm):
+        p0, p1 = atom_slices[ia, 2:]
+        elem = mol.atom_symbol(ia)
+        x[p0:p1,p0:p1] = x_conf[elem]
+    return x

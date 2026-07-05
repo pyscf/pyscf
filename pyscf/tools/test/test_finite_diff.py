@@ -62,7 +62,6 @@ class KnownValues(unittest.TestCase):
 
     def test_convergence_failed(self):
         mol = pyscf.M(atom='H 0 0 0; H 0 0 1')
-        mol.verbose = 4
         geom_ref = mol.atom_coords()
         mf = mol.RHF().run()
         ref = mf.Gradients().kernel()

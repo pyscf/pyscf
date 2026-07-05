@@ -542,9 +542,9 @@ class KSCF(pbchf.SCF):
         '''The number of k-points along each axis in the first Brillouin zone'''
         from pyscf.pbc.tools.k2gamma import kpts_to_kmesh
         kpts = self.kpts
-        kmesh = kpts_to_kmesh(kpts)
+        kmesh = kpts_to_kmesh(self.cell, kpts)
         if len(kpts) != np.prod(kmesh):
-            logger.WARN(self, 'K-points specified in %s are not Monkhorst-Pack %s grids',
+            logger.warn(self, 'K-points specified in %s are not Monkhorst-Pack %s grids',
                         self, kmesh)
         return kmesh
 

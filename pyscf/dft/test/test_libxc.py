@@ -306,6 +306,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(vxc0[0]-vxc1[0]).max(), 0, 9)
         self.assertAlmostEqual(abs(vxc0[1]-vxc1[1]).max(), 0, 9)
 
+        ni = dft.numint.NumInt()
+        ref = ni.eval_xc1('pbe', rho, deriv=2)
+        ni = dft.libxc.define_xc_(ni, 'pbe*1.0', xctype='GGA')
+        dat = ni.eval_xc1('abc', rho, deriv=2)
+        self.assertAlmostEqual(abs(ref - dat).max(), 0, 9)
+
     def test_define_xc_mgga(self):
         def eval_mgga_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=None):
             # A fictitious XC functional to demonstrate the usage
@@ -332,6 +338,12 @@ class KnownValues(unittest.TestCase):
 
         with self.assertRaises(AssertionError):
             ni.eval_xc_eff(None, rho, deriv=2)
+
+        ni = dft.numint.NumInt()
+        ref = ni.eval_xc1('r2scan', rho, deriv=2)
+        ni = dft.libxc.define_xc_(ni, 'r2scan*1.0', xctype='MGGA')
+        dat = ni.eval_xc1('abc', rho, deriv=2)
+        self.assertAlmostEqual(abs(ref - dat).max(), 0, 9)
 
     def test_m05x(self):
         rho =(numpy.array([1., 1., 0., 0., 0., 0.165 ]).reshape(-1,1),

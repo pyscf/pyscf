@@ -11,7 +11,6 @@ This script demonstrates how to:
     - Understand and handle the difference in T2 amplitude conventions between UCCSD and UCCSDT implementations.
 '''
 
-import numpy as np
 from pyscf import gto, scf, cc
 
 def run_uccsd_uccsdt(do_diis=False, do_diis_max_t=False, verbose=0):
@@ -32,7 +31,7 @@ def run_uccsd_uccsdt(do_diis=False, do_diis_max_t=False, verbose=0):
     myccsd.verbose = verbose
     myccsd.diis = do_diis
     myccsd.kernel()
-    print('RCCSD   e_corr % .12f    Ref % .12f    Diff % .12e' % (
+    print('UCCSD   e_corr % .12f    Ref % .12f    Diff % .12e' % (
             myccsd.e_corr, ref_ccsd_e_corr, myccsd.e_corr - ref_ccsd_e_corr))
 
     # UCCSDT
@@ -99,7 +98,7 @@ if __name__ == "__main__":
     do_diis_max_t = False
     run_uccsd_uccsdt(do_diis=do_diis, do_diis_max_t=do_diis_max_t)
 
-    print('=== UCCSD / UCCSDT with DIIS (including T3 amplitudes) ===')
+    print('=== UCCSD -> UCCSDT with DIIS (including T3 amplitudes) ===')
     do_diis = True
     do_diis_max_t = True
     run_uccsd_uccsdt(do_diis=do_diis, do_diis_max_t=do_diis_max_t)

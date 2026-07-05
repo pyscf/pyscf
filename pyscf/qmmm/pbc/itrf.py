@@ -805,60 +805,48 @@ class QMMMGrad:
         TGGcosGvRqm = lib.einsum("iab,ga,gb,ig->g", qm_quads, Gv, Gv, cosGvRqm)
         TGGsinGvRqm = lib.einsum("iab,ga,gb,ig->g", qm_quads, Gv, Gv, sinGvRqm)
 
+        DGqm = lib.einsum('ia,ga->ig', qm_dipoles, Gv)
+        TGGqm = lib.einsum('iab,ga,gb->ig', qm_quads, Gv, Gv)
+
         qm_ewg_grad = np.zeros_like(qm_coords)
         if with_mm:
             mm_ewg_grad = np.zeros_like(mm_coords)
 
         # qm pc - mm pc
-        p = ['einsum_path', (3, 4), (1, 3), (1, 2), (0, 1)]
-        qm_ewg_grad -= lib.einsum('i,gx,ig,g,g->ix', qm_charges, Gv, sinGvRqm, zcosGvRmm, Gpref, optimize=p)
-        qm_ewg_grad += lib.einsum('i,gx,ig,g,g->ix', qm_charges, Gv, cosGvRqm, zsinGvRmm, Gpref, optimize=p)
+        qm_ewg_grad -= qm_charges[:,None] * lib.einsum('ig,gx->ix', sinGvRqm, Gv*(zcosGvRmm*Gpref)[:,None])
+        qm_ewg_grad += qm_charges[:,None] * lib.einsum('ig,gx->ix', cosGvRqm, Gv*(zsinGvRmm*Gpref)[:,None])
         if with_mm:
-            p = ['einsum_path', (0, 2), (1, 2), (0, 2), (0, 1)]
-            mm_ewg_grad -= lib.einsum('i,gx,ig,g,g->ix', mm_charges, Gv, sinGvRmm, zcosGvRqm, Gpref, optimize=p)
-            mm_ewg_grad += lib.einsum('i,gx,ig,g,g->ix', mm_charges, Gv, cosGvRmm, zsinGvRqm, Gpref, optimize=p)
+            mm_ewg_grad -= mm_charges[:,None] * lib.einsum('ig,gx->ix', sinGvRmm, Gv*(zcosGvRqm*Gpref)[:,None])
+            mm_ewg_grad += mm_charges[:,None] * lib.einsum('ig,gx->ix', cosGvRmm, Gv*(zsinGvRqm*Gpref)[:,None])
         # qm dip - mm pc
-        p = ['einsum_path', (4, 5), (1, 4), (0, 1), (0, 2), (0, 1)]
-        qm_ewg_grad -= lib.einsum('ia,gx,ga,ig,g,g->ix', qm_dipoles, Gv, Gv, sinGvRqm, zsinGvRmm, Gpref, optimize=p)
-        qm_ewg_grad -= lib.einsum('ia,gx,ga,ig,g,g->ix', qm_dipoles, Gv, Gv, cosGvRqm, zcosGvRmm, Gpref, optimize=p)
+        qm_ewg_grad -= lib.einsum('ig,gx->ix', DGqm*sinGvRqm, Gv*(zsinGvRmm*Gpref)[:,None])
+        qm_ewg_grad -= lib.einsum('ig,gx->ix', DGqm*cosGvRqm, Gv*(zcosGvRmm*Gpref)[:,None])
         if with_mm:
-            p = ['einsum_path', (1, 3), (0, 2), (0, 2), (0, 1)]
-            mm_ewg_grad += lib.einsum('g,j,gx,jg,g->jx', DGcosGvRqm, mm_charges, Gv, cosGvRmm, Gpref, optimize=p)
-            mm_ewg_grad += lib.einsum('g,j,gx,jg,g->jx', DGsinGvRqm, mm_charges, Gv, sinGvRmm, Gpref, optimize=p)
+            mm_ewg_grad += mm_charges[:,None] * lib.einsum('ig,gx->ix', cosGvRmm, Gv*(DGcosGvRqm*Gpref)[:,None])
+            mm_ewg_grad += mm_charges[:,None] * lib.einsum('ig,gx->ix', sinGvRmm, Gv*(DGsinGvRqm*Gpref)[:,None])
         # qm quad - mm pc
-        p = ['einsum_path', (5, 6), (0, 5), (0, 2), (2, 3), (1, 2), (0, 1)]
-        qm_ewg_grad += lib.einsum('ga,gb,iab,gx,ig,g,g->ix', Gv, Gv, qm_quads,
-                                  Gv, sinGvRqm, zcosGvRmm, Gpref, optimize=p) / 3
-        qm_ewg_grad -= lib.einsum('ga,gb,iab,gx,ig,g,g->ix', Gv, Gv, qm_quads,
-                                  Gv, cosGvRqm, zsinGvRmm, Gpref, optimize=p) / 3
+        qm_ewg_grad += lib.einsum('ig,gx->ix', TGGqm*sinGvRqm, Gv*(zcosGvRmm*Gpref)[:,None]) / 3
+        qm_ewg_grad -= lib.einsum('ig,gx->ix', TGGqm*cosGvRqm, Gv*(zsinGvRmm*Gpref)[:,None]) / 3
         if with_mm:
-            p = ['einsum_path', (1, 3), (0, 2), (0, 2), (0, 1)]
-            mm_ewg_grad += lib.einsum('g,j,gx,jg,g->jx', TGGcosGvRqm, mm_charges, Gv, sinGvRmm, Gpref, optimize=p) / 3
-            mm_ewg_grad -= lib.einsum('g,j,gx,jg,g->jx', TGGsinGvRqm, mm_charges, Gv, cosGvRmm, Gpref, optimize=p) / 3
+            mm_ewg_grad += mm_charges[:,None] * lib.einsum('ig,gx->ix', sinGvRmm, Gv*(TGGcosGvRqm*Gpref)[:,None]) / 3
+            mm_ewg_grad -= mm_charges[:,None] * lib.einsum('ig,gx->ix', cosGvRmm, Gv*(TGGsinGvRqm*Gpref)[:,None]) / 3
 
         # qm pc - qm pc
-        p = ['einsum_path', (3, 4), (1, 3), (1, 2), (0, 1)]
-        qm_ewg_grad -= lib.einsum('i,gx,ig,g,g->ix', qm_charges, Gv, sinGvRqm, zcosGvRqm, Gpref, optimize=p)
-        qm_ewg_grad += lib.einsum('i,gx,ig,g,g->ix', qm_charges, Gv, cosGvRqm, zsinGvRqm, Gpref, optimize=p)
+        qm_ewg_grad -= qm_charges[:,None] * lib.einsum('ig,gx->ix', sinGvRqm, Gv*(zcosGvRqm*Gpref)[:,None])
+        qm_ewg_grad += qm_charges[:,None] * lib.einsum('ig,gx->ix', cosGvRqm, Gv*(zsinGvRqm*Gpref)[:,None])
         # qm pc - qm dip
-        qm_ewg_grad += lib.einsum('i,gx,ig,g,g->ix', qm_charges, Gv, cosGvRqm, DGcosGvRqm, Gpref, optimize=p)
-        qm_ewg_grad += lib.einsum('i,gx,ig,g,g->ix', qm_charges, Gv, sinGvRqm, DGsinGvRqm, Gpref, optimize=p)
-        p = ['einsum_path', (3, 5), (1, 4), (1, 3), (1, 2), (0, 1)]
-        qm_ewg_grad -= lib.einsum('ja,ga,gx,g,jg,g->jx', qm_dipoles, Gv, Gv, zsinGvRqm, sinGvRqm, Gpref, optimize=p)
-        qm_ewg_grad -= lib.einsum('ja,ga,gx,g,jg,g->jx', qm_dipoles, Gv, Gv, zcosGvRqm, cosGvRqm, Gpref, optimize=p)
+        qm_ewg_grad += qm_charges[:,None] * lib.einsum('ig,gx->ix', cosGvRqm, Gv*(DGcosGvRqm*Gpref)[:,None])
+        qm_ewg_grad += qm_charges[:,None] * lib.einsum('ig,gx->ix', sinGvRqm, Gv*(DGsinGvRqm*Gpref)[:,None])
+        qm_ewg_grad -= lib.einsum('ig,gx->ix', DGqm*sinGvRqm, Gv*(zsinGvRqm*Gpref)[:,None])
+        qm_ewg_grad -= lib.einsum('ig,gx->ix', DGqm*cosGvRqm, Gv*(zcosGvRqm*Gpref)[:,None])
         # qm dip - qm dip
-        p = ['einsum_path', (4, 5), (1, 4), (1, 3), (1, 2), (0, 1)]
-        qm_ewg_grad -= lib.einsum('ia,ga,gx,ig,g,g->ix', qm_dipoles, Gv, Gv, sinGvRqm, DGcosGvRqm, Gpref, optimize=p)
-        qm_ewg_grad += lib.einsum('ia,ga,gx,ig,g,g->ix', qm_dipoles, Gv, Gv, cosGvRqm, DGsinGvRqm, Gpref, optimize=p)
+        qm_ewg_grad -= lib.einsum('ig,gx->ix', DGqm*sinGvRqm, Gv*(DGcosGvRqm*Gpref)[:,None])
+        qm_ewg_grad += lib.einsum('ig,gx->ix', DGqm*cosGvRqm, Gv*(DGsinGvRqm*Gpref)[:,None])
         # qm pc - qm quad
-        p = ['einsum_path', (3, 4), (1, 3), (1, 2), (0, 1)]
-        qm_ewg_grad += lib.einsum('i,gx,ig,g,g->ix', qm_charges, Gv, sinGvRqm, TGGcosGvRqm, Gpref, optimize=p) / 3
-        qm_ewg_grad -= lib.einsum('i,gx,ig,g,g->ix', qm_charges, Gv, cosGvRqm, TGGsinGvRqm, Gpref, optimize=p) / 3
-        p = ['einsum_path', (4, 6), (1, 5), (1, 2), (2, 3), (1, 2), (0, 1)]
-        qm_ewg_grad += lib.einsum('jab,ga,gb,gx,g,jg,g->jx', qm_quads, Gv, Gv,
-                                  Gv, zcosGvRqm, sinGvRqm, Gpref, optimize=p) / 3
-        qm_ewg_grad -= lib.einsum('jab,ga,gb,gx,g,jg,g->jx', qm_quads, Gv, Gv,
-                                  Gv, zsinGvRqm, cosGvRqm, Gpref, optimize=p) / 3
+        qm_ewg_grad += qm_charges[:,None] * lib.einsum('ig,gx->ix', sinGvRqm, Gv*(TGGcosGvRqm*Gpref)[:,None]) / 3
+        qm_ewg_grad -= qm_charges[:,None] * lib.einsum('ig,gx->ix', cosGvRqm, Gv*(TGGsinGvRqm*Gpref)[:,None]) / 3
+        qm_ewg_grad += lib.einsum('ig,gx->ix', TGGqm*sinGvRqm, Gv*(zcosGvRqm*Gpref)[:,None]) / 3
+        qm_ewg_grad -= lib.einsum('ig,gx->ix', TGGqm*cosGvRqm, Gv*(zsinGvRqm*Gpref)[:,None]) / 3
 
         logger.timer(self, 'grad_ewald k-space', *cput2)
         logger.timer(self, 'grad_ewald', *cput0)

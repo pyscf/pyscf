@@ -694,7 +694,6 @@ def get_rpa_exx(rpa, acfd=False, correction_only=False):
     ex : double
         exchange energy
     """
-    mo_energy = np.array(_mo_energy_frozen(rpa, rpa._scf.mo_energy))
     mo_coeff = np.array(_mo_frozen(rpa, rpa._scf.mo_coeff))
     mo_occ = np.array(_mo_occ_frozen(rpa, rpa._scf.mo_occ))
 
@@ -753,24 +752,7 @@ def get_rpa_exx(rpa, acfd=False, correction_only=False):
                         mo_occ_ij = np.minimum(mo_occ[km][:nocc_i, None], mo_occ[kn][None, :nocc_j]) / 2.0
                         mo_occ_ij -= mo_occ[km][:nocc_i, None] * mo_occ[kn][None, :nocc_j] / 4.0
                     else:
-                        # numerical integration for equation 12 in doi.org/10.1103/PhysRevB.81.115126
-                        # NOTE: this integration is not stable!!!
-                        # w, wts = _get_scaled_legendre_roots(200)
-                        #eij = mo_energy[km][:nocc_i, None] - mo_energy[kn][None, :nocc_j]
-                        ##integrad = eij[:, :, None] / lib.direct_sum("ij+w->ijw", eij**2, w**2) * wts[None, None]
-                        #integrand = eij[:, :, None] / (eij[:, :, None]**2 + w**2) * wts[None, None]
-                        #integrand = np.sum(integrand, axis=2) * 2.0 / np.pi
-
-                        # The following line is equivalent to the frequency integration in equation 12 in
-                        # doi.org/10.1103/PhysRevB.81.115126
-                        # TODO: add a detailed note
-                        eij = mo_energy[km][:nocc_i, None] - mo_energy[kn][None, :nocc_j]
-                        integrand = np.zeros((nocc_i, nocc_j), dtype=np.complex128)
-                        integrand[eij > 1e-6] = 1
-                        integrand[eij < -1e-6] = -1
-                        mo_occ_ij = 1.0 - integrand
-                        # spin-restricted mo_occ should be divided by 2
-                        mo_occ_ij = mo_occ_ij * mo_occ[km][:nocc_i, None] / 2.0
+                        mo_occ_ij = np.minimum(mo_occ[km][:nocc_i, None], mo_occ[kn][None, :nocc_j]) / 2.0
                 else:
                     mo_occ_ij = mo_occ[km][:nocc_i, None] * mo_occ[kn][None, :nocc_j] / 4.0
                 Lij_occ = Lij * mo_occ_ij[None]

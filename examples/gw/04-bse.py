@@ -2,7 +2,8 @@
 Example for Bethe-Salpeter equation.
 
 ########
-Reference results for H2O / PBE / def2-SVP
+Reference results for acetone / B3LYP / def2-SVP
+acetone geometry from: J. Phys. Chem. Lett. 2016, 7, 3, 586-591
 
 * GW step (fully analytic GW, quasiparticle equation solved iteratively)
                 HOMO (eV)   LUMO (eV)

@@ -845,8 +845,39 @@ class RDHF(DHF):
             raise RuntimeError('zquatev library is required to perform Kramers-restricted DHF')
         UHF.__init__(self, mol)
 
+    def check_linear_dependency(self, s, verbose=None):
+        log = logger.new_logger(self, verbose)
+        idx = _kramers_pair_sort_ao_idx(self.mol, four_component=True)
+        s = s[idx[:,None], idx]
+        e, v = zquatev.eigh(s)
+        if log is not None:
+            abs_e = abs(e)
+            emax = abs_e.max()
+            emin = abs_e.min()
+            c = emax / emin
+            log.debug('cond(S) = %s', c)
+            if c > 1e10:
+                log.warn('Singularity detected in the overlap matrix. '
+                         'SCF may be inaccurate and difficult to converge.')
+
+        if hf.remove_overlap_zero_eigenvalue:
+            mask = e > hf.overlap_zero_eigenvalue_threshold
+            x = v[:,mask] / numpy.sqrt(e[mask])
+        else:
+            x = v / numpy.sqrt(e)
+        x1 = numpy.empty_like(x)
+        x1[idx] = x
+        return x1
+
     def _eigh(self, h, s, overwrite=False, x=None):
-        return zquatev.solve_KR_FCSCE(self.mol, h, s)
+        if x is None:
+            if h.dtype != s.dtype:
+                s = s.astype(h.dtype)
+            return zquatev.solve_KR_FCSCE(self.mol, h, s)
+        else:
+            h = x.conj().T.dot(h).dot(x)
+            e, c = zquatev.eigh(h, iop=1)
+            return e, x.dot(c)
 
     def x2c1e(self):
         from pyscf.x2c import x2c
@@ -1113,26 +1144,13 @@ class _VHFOpt(_vhf._VHFOpt):
                 mol._bas.ctypes, ctypes.c_int(nbas), mol._env.ctypes)
         self.dm_cond = dm_cond
 
-
-if __name__ == '__main__':
-    import pyscf.gto
-    mol = pyscf.gto.Mole()
-    mol.verbose = 5
-    mol.output = 'out_dhf'
-
-    mol.atom.extend([['He', (0.,0.,0.)], ])
-    mol.basis = {
-        'He': [(0, 0, (1, 1)),
-               (0, 0, (3, 1)),
-               (1, 0, (1, 1)), ]}
-    mol.build()
-
-    ##############
-    # SCF result
-    method = UHF(mol)
-    energy = method.scf() #-2.38146942868
-    print(energy)
-    method.with_gaunt = True
-    print(method.scf()) # -2.38138339005
-    method.with_breit = True
-    print(method.scf()) # -2.38138339005
+def _kramers_pair_sort_ao_idx(mol, four_component=True):
+    trmaps = mol.time_reversal_map()
+    idxA = numpy.where(trmaps > 0)[0]
+    idxB = trmaps[idxA] - 1
+    if four_component:
+        n = trmaps.size
+        idx = numpy.hstack((idxA,idxA+n,idxB,idxB+n))
+    else:
+        idx = numpy.hstack((idxA,idxB))
+    return idx

@@ -19,7 +19,7 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf import gto
-from pyscf.x2c import sfx2c1e
+from pyscf.x2c import x2c, sfx2c1e
 from pyscf.x2c import sfx2c1e_grad
 
 def _sqrt0(a):
@@ -267,6 +267,47 @@ class KnownValues(unittest.TestCase):
             fh_ref = (x2c_1.get_hcore() - x2c_2.get_hcore()) / 0.0002 * lib.param.BOHR
             fh = x2cobj.hcore_deriv_generator(deriv=1)
             self.assertAlmostEqual(abs(fh(0)[2] - fh_ref).max(), 0, 7)
+
+    def test_hcore(self):
+        with lib.light_speed(10) as c:
+            mol = gto.M(
+                verbose = 0,
+                atom = [["O" , (0. , 0.     , 0.0001)],
+                        [1   , (0. , -0.757 , 0.587)],
+                        [1   , (0. , 0.757  , 0.587)]],
+                basis = '3-21g',
+            )
+            h_1 = sfx2c1e.SpinFreeX2CHelper(mol).set(xuncontract=False).get_hcore()
+            ha_1 = sfx2c1e.SpinFreeX2CHelper(mol).set(xuncontract=False, approx='ATOM1E').get_hcore()
+
+            mol = gto.M(
+                verbose = 0,
+                atom = [["O" , (0. , 0.     ,-0.0001)],
+                        [1   , (0. , -0.757 , 0.587)],
+                        [1   , (0. , 0.757  , 0.587)]],
+                basis = '3-21g',
+            )
+            h_2 = sfx2c1e.SpinFreeX2CHelper(mol).set(xuncontract=False).get_hcore()
+            ha_2 = sfx2c1e.SpinFreeX2CHelper(mol).set(xuncontract=False, approx='ATOM1E').get_hcore()
+            h_ref = (h_1 - h_2) / 0.0002 * lib.param.BOHR
+            ha_ref = (ha_1 - ha_2) / 0.0002 * lib.param.BOHR
+
+            mol = gto.M(
+                verbose = 0,
+                atom = [["O" , (0. , 0.     , 0.   )],
+                        [1   , (0. , -0.757 , 0.587)],
+                        [1   , (0. , 0.757  , 0.587)]],
+                basis = '3-21g',
+            )
+            hcore_deriv = sfx2c1e_grad.gen_sf_hfw(mol)
+            h1 = hcore_deriv(0)
+            self.assertAlmostEqual(abs(h1[2]-h_ref).max(), 0, 6)
+
+            self.assertAlmostEqual(lib.fp(h1), -1.4618392662849411, 9)
+            hcore_deriv = sfx2c1e_grad.gen_sf_hfw(mol, approx='atom1e')
+            h1 = hcore_deriv(0)
+            self.assertAlmostEqual(abs(h1[2]-ha_ref).max(), 0, 6)
+            self.assertAlmostEqual(lib.fp(h1), -1.4802587171126063, 9)
 
 if __name__ == "__main__":
     print("Full Tests for sfx2c1e gradients")
