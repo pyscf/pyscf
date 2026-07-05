@@ -240,7 +240,7 @@ class KGHF(khf.KSCF):
 
     def get_veff(self, cell=None, dm_kpts=None, dm_last=None, vhf_last=None, hermi=1,
                  kpts=None, kpts_band=None):
-        if dm_kpts is None: dm_kpts = mf.make_rdm1()
+        if dm_kpts is None: dm_kpts = self.make_rdm1()
         vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band, True, True)
         vhf = vj - vk
         if dm_kpts.ndim == 3 and kpts_band is None:

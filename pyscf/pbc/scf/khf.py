@@ -196,7 +196,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     mo_energy_kpts = np.asarray(mo_energy_kpts)
     mo_energy = np.sort(mo_energy_kpts.ravel())
     nmo = mo_energy.size
-    if nocc < nmo:
+    if 0 < nocc < nmo:
         homo, lumo = mo_energy[nocc-1:nocc+1]
         gap = (lumo - homo) * nist.HARTREE2EV
         mf.scf_summary['gap'] = gap
@@ -255,19 +255,22 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     '''
     if dm_kpts is None: dm_kpts = mf.make_rdm1()
     if h1e_kpts is None: h1e_kpts = mf.get_hcore()
-    if vhf_kpts is None or getattr(vhf_kpts, 'ecoul', None) is None:
+    if vhf_kpts is None:
         vhf_kpts = mf.get_veff(mf.cell, dm_kpts)
 
     nkpts = len(dm_kpts)
     e1 = 1./nkpts * np.einsum('kij,kji->', dm_kpts, h1e_kpts)
     e2 = 1./nkpts * np.einsum('kij,kji->', dm_kpts, vhf_kpts) * 0.5
-    ecoul = vhf_kpts.ecoul
-    exx = e2 - ecoul
     mf.scf_summary['e1'] = e1.real
     mf.scf_summary['e2'] = e2.real
-    mf.scf_summary['coul'] = ecoul.real
-    mf.scf_summary['exc'] = exx.real
-    logger.debug(mf, 'E1 = %s  E2 = %s  E_coul = %s  Exc = %s', e1, e2, ecoul, exx)
+    if hasattr(vhf_kpts, 'ecoul'):
+        ecoul = vhf_kpts.ecoul
+        exx = e2 - ecoul
+        mf.scf_summary['coul'] = ecoul.real
+        mf.scf_summary['exc'] = exx.real
+        logger.debug(mf, 'E1 = %s  E2 = %s  E_coul = %s  Exc = %s', e1, e2, ecoul, exx)
+    else:
+        logger.debug(mf, 'E1 = %s  E2 = %s', e1, e2)
     if CHECK_COULOMB_IMAG and abs(e2.imag) > mf.cell.precision*10:
         logger.warn(mf, "Coulomb energy has imaginary part %s. "
                     "Coulomb integrals (e-e, e-N) may not converge !",

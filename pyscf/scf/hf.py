@@ -280,17 +280,20 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     '''
     if dm is None: dm = mf.make_rdm1()
     if h1e is None: h1e = mf.get_hcore()
-    if vhf is None or getattr(vhf, 'ecoul', None) is None:
+    if vhf is None:
         vhf = mf.get_veff(mf.mol, dm)
     e1 = numpy.einsum('ij,ji->', h1e, dm).real
     e2 = numpy.einsum('ij,ji->', vhf, dm).real * .5
-    ecoul = vhf.ecoul.real
-    exx = e2 - ecoul
     mf.scf_summary['e1'] = e1
     mf.scf_summary['e2'] = e2
-    mf.scf_summary['coul'] = ecoul
-    mf.scf_summary['exc'] = exx
-    logger.debug(mf, 'E1 = %s  E2 = %s  Ecoul = %s  Exc = %s', e1, e2, ecoul, exx)
+    if hasattr(vhf, 'ecoul'):
+        ecoul = vhf.ecoul.real
+        exx = e2 - ecoul
+        mf.scf_summary['coul'] = ecoul
+        mf.scf_summary['exc'] = exx
+        logger.debug(mf, 'E1 = %s  E2 = %s  Ecoul = %s  Exc = %s', e1, e2, ecoul, exx)
+    else:
+        logger.debug(mf, 'E1 = %s  E2 = %s', e1, e2)
     return e1+e2, e2
 
 
@@ -1167,7 +1170,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     mo_occ = numpy.zeros_like(mo_energy)
     nocc = mf.mol.nelectron // 2
     mo_occ[e_idx[:nocc]] = 2
-    if nocc < nmo:
+    if 0 < nocc < nmo:
         homo, lumo = mo_energy[e_idx[nocc-1:nocc+1]]
         gap = (lumo - homo) * nist.HARTREE2EV
         mf.scf_summary['gap'] = gap

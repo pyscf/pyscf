@@ -153,7 +153,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     nmo = mo_energy.size
     mo_occ = numpy.zeros_like(mo_energy)
     nocc = mf.mol.nelectron
-    if nocc < nmo:
+    if 0 < nocc < nmo:
         homo, lumo = mo_energy[e_idx[nocc-1:nocc+1]]
         gap = (lumo - homo) * nist.HARTREE2EV
         mf.scf_summary['gap'] = gap

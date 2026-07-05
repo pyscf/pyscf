@@ -169,8 +169,8 @@ def grad_elec(cc_grad, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=Non
         dm1b[:noccb,:noccb] = (dOO + dOO.T) * .5
         dm1b[noccb:,noccb:] = (dVV + dVV.T) * .5
 
-    dm1 = (reduce(numpy.dot, (mo_a, dm1a, mo_a.T)),
-           reduce(numpy.dot, (mo_b, dm1b, mo_b.T)))
+    dm1 = numpy.stack((reduce(numpy.dot, (mo_a, dm1a, mo_a.T)),
+                       reduce(numpy.dot, (mo_b, dm1b, mo_b.T))))
     vhf = mycc._scf.get_veff(mycc.mol, dm1)
     Xvo = reduce(numpy.dot, (mo_a[:,nocca:].T, vhf[0], mo_a[:,:nocca]))
     XVO = reduce(numpy.dot, (mo_b[:,noccb:].T, vhf[1], mo_b[:,:noccb]))
@@ -206,7 +206,8 @@ def grad_elec(cc_grad, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=Non
 
     dm1 = (reduce(numpy.dot, (mo_a, dm1a, mo_a.T)),
            reduce(numpy.dot, (mo_b, dm1b, mo_b.T)))
-    vhf_s1occ = mycc._scf.get_veff(mol, (dm1[0]+dm1[0].T, dm1[1]+dm1[1].T))
+    vhf_s1occ = mycc._scf.get_veff(
+        mol, numpy.stack((dm1[0]+dm1[0].T, dm1[1]+dm1[1].T)))
     p1a = numpy.dot(mo_a[:,:nocca], mo_a[:,:nocca].T)
     p1b = numpy.dot(mo_b[:,:noccb], mo_b[:,:noccb].T)
     vhf_s1occ = (reduce(numpy.dot, (p1a, vhf_s1occ[0], p1a)) +
@@ -257,7 +258,8 @@ def _response_dm1(mycc, Xvo, eris=None):
             x1b = x[0,nova:].reshape(XVO.shape)
             dm1a = reduce(numpy.dot, (mo_a[:,nocca:], x1a, mo_a[:,:nocca].T))
             dm1b = reduce(numpy.dot, (mo_b[:,noccb:], x1b, mo_b[:,:noccb].T))
-            va, vb = mycc._scf.get_veff(mycc.mol, (dm1a+dm1a.T, dm1b+dm1b.T))
+            dm1 = numpy.stack((dm1a+dm1a.T, dm1b+dm1b.T))
+            va, vb = mycc._scf.get_veff(mycc.mol, dm1)
             va = reduce(numpy.dot, (mo_a[:,nocca:].T, va, mo_a[:,:nocca]))
             vb = reduce(numpy.dot, (mo_b[:,noccb:].T, vb, mo_b[:,:noccb]))
             return numpy.hstack((va.ravel(), vb.ravel()))

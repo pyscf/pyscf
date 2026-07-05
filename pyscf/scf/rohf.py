@@ -187,7 +187,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     nopen = nocc - ncore
     mo_occ = _fill_rohf_occ(mo_energy, mo_ea, mo_eb, ncore, nopen)
 
-    if mf.verbose >= logger.INFO and nocc < nmo and ncore > 0:
+    if mf.verbose >= logger.INFO and 0 < nocc < nmo and ncore > 0:
         ehomo = max(mo_energy[mo_occ> 0])
         elumo = min(mo_energy[mo_occ==0])
         gap = (elumo - ehomo) * nist.HARTREE2EV
@@ -484,6 +484,11 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
                 mo_occb = (dm.mo_occ ==2).astype(numpy.double)
                 dm = lib.tag_array(dm, mo_coeff=(dm.mo_coeff,)*2,
                                    mo_occ=(mo_occa,mo_occb))
+        if dm_last is not None and dm_last.ndim == 2:
+            # When a RHF density matrix is provided as initial guess, dm_last
+            # will be this RHF-DM, with ndim == 2 in the second SCF iteration.
+            # Extend the dimension of this DM.
+            dm_last = numpy.repeat(dm_last[None]*.5, 2, axis=0)
         return uhf.UHF.get_veff(self, mol, dm, dm_last, vhf_last, hermi)
 
     @lib.with_doc(analyze.__doc__)

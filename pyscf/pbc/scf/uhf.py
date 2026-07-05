@@ -187,7 +187,7 @@ class UHF(pbchf.SCF):
         vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
         vj = vj[0] + vj[1]
         vhf = vj - vk
-        if dm.ndim == 3 and kpts_band is None:
+        if isinstance(dm, np.ndarray) and dm.ndim == 3 and kpts_band is None:
             ecoul = np.einsum('nij,ji->', dm, vj).real * .5
             vhf = lib.tag_array(vhf, ecoul=ecoul)
         return vhf

@@ -286,6 +286,7 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
 
 def get_occ(mf, mo_energy=None, mo_coeff=None):
     if mo_energy is None: mo_energy = mf.mo_energy
+    mo_energy = numpy.asarray(mo_energy)
     e_idx_a = numpy.argsort(mo_energy[0].round(9), kind='stable')
     e_idx_b = numpy.argsort(mo_energy[1].round(9), kind='stable')
     nmo = len(e_idx_a)
@@ -294,7 +295,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     mo_occ[0,e_idx_a[:n_a]] = 1
     mo_occ[1,e_idx_b[:n_b]] = 1
 
-    if n_a < nmo and n_b < nmo:
+    if 0 < n_a < nmo and n_b < nmo:
         homo = homo_a = mo_energy[0,e_idx_a[n_a-1]]
         homo_b = None
         if n_b > 0:
@@ -365,7 +366,7 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
         h1e = mf.get_hcore()
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = numpy.array((dm*.5, dm*.5))
-    if vhf is None or getattr(vhf, 'ecoul', None) is None:
+    if vhf is None:
         vhf = mf.get_veff(mf.mol, dm)
     if h1e[0].ndim < dm[0].ndim:  # get [0] because h1e and dm may not be ndarrays
         e1 = numpy.einsum('ij,nji->', h1e, dm).real
@@ -373,13 +374,16 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
         e1 = numpy.einsum('nij,nji->', h1e, dm).real
     e2 = numpy.einsum('nij,nji->', vhf, dm).real * .5
     e_elec = e1 + e2
-    ecoul = vhf.ecoul.real
-    exx = e2 - ecoul
     mf.scf_summary['e1'] = e1
     mf.scf_summary['e2'] = e2
-    mf.scf_summary['coul'] = ecoul
-    mf.scf_summary['exc'] = exx
-    logger.debug(mf, 'E1 = %s  E2 = %s  Ecoul = %s  Exc = %s', e1, e2, ecoul, exx)
+    if hasattr(vhf, 'ecoul'):
+        ecoul = vhf.ecoul.real
+        exx = e2 - ecoul
+        mf.scf_summary['coul'] = ecoul
+        mf.scf_summary['exc'] = exx
+        logger.debug(mf, 'E1 = %s  E2 = %s  Ecoul = %s  Exc = %s', e1, e2, ecoul, exx)
+    else:
+        logger.debug(mf, 'E1 = %s  E2 = %s', e1, e2)
     return e_elec, e2
 
 # mo_a and mo_b are occupied orbitals
@@ -921,8 +925,8 @@ class UHF(hf.SCF):
         logger.info(self, '''Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089,
 employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         mo_energy, mo_coeff = hf._init_guess_huckel_orbitals(mol, updated_rule = True)
-        mo_energy = (mo_energy, mo_energy)
-        mo_coeff = (mo_coeff, mo_coeff)
+        mo_energy = numpy.stack((mo_energy, mo_energy))
+        mo_coeff = numpy.stack((mo_coeff, mo_coeff))
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         dma, dmb = self.make_rdm1(mo_coeff, mo_occ)
         if breaksym:
@@ -1007,7 +1011,7 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
             vj, vk = self.get_jk(mol, dm, hermi)
             vj = vj[0] + vj[1]
             vhf = vj - vk
-            if dm.ndim == 3:
+            if isinstance(dm, numpy.ndarray) and dm.ndim == 3:
                 ecoul = numpy.einsum('nij,ji->', dm, vj).real * .5
                 vhf = lib.tag_array(vhf, ecoul=ecoul)
         else:

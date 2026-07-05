@@ -110,20 +110,23 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     '''
     if dm is None: dm = mf.make_rdm1()
     if h1e is None: h1e = mf.get_hcore()
-    if vhf is None or getattr(vhf, 'ecoul', None) is None:
+    if vhf is None:
         vhf = mf.get_veff(mf.mol, dm)
     e1 = numpy.einsum('ij,ji->', h1e, dm).real
     e2 = numpy.einsum('ij,ji->', vhf, dm).real * .5
-    ecoul = vhf.ecoul.real
-    exx = e2 - ecoul
     if not mf.with_ssss and mf.ssss_approx == 'Visscher':
         e2 += _visscher_ssss_correction(mf, dm)
 
     mf.scf_summary['e1'] = e1
     mf.scf_summary['e2'] = e2
-    mf.scf_summary['coul'] = ecoul
-    mf.scf_summary['exc'] = exx
-    logger.debug(mf, 'E1 = %s  E2 = %s  Ecoul = %s  Exc = %s', e1, e2, ecoul, exx)
+    if hasattr(vhf, 'ecoul'):
+        ecoul = vhf.ecoul.real
+        exx = e2 - ecoul
+        mf.scf_summary['coul'] = ecoul
+        mf.scf_summary['exc'] = exx
+        logger.debug(mf, 'E1 = %s  E2 = %s  Ecoul = %s  Exc = %s', e1, e2, ecoul, exx)
+    else:
+        logger.debug(mf, 'E1 = %s  E2 = %s', e1, e2)
     return e1+e2, e2
 
 def _visscher_ssss_correction(mf, dm):
