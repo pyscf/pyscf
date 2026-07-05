@@ -107,7 +107,16 @@ class SFX2C1E_SCF(x2c._X2C_SCF):
         else:
             return super(x2c._X2C_SCF, self).get_hcore(cell, kpts)
 
-class PBCX2CHelper(x2c.X2C):
+    def undo_x2c(self):
+        obj = lib.view(self, lib.drop_class(self.__class__, SFX2C1E_SCF))
+        del obj.with_x2c
+        return obj
+
+    def to_gpu(self):
+        obj = self.undo_x2c().to_gpu().sfx2c1e()
+        return lib.to_gpu(self, obj)
+
+class PBCX2CHelper(x2c.X2CHelperBase):
 
     exp_drop = getattr(__config__, 'pbc_x2c_X2C_exp_drop', 0.2)
     # 1e: X2C1e, atom1e: X2C1e with one-center approximation
@@ -118,12 +127,14 @@ class PBCX2CHelper(x2c.X2C):
 
     def __init__(self, cell, kpts=None):
         self.cell = cell
-        x2c.X2C.__init__(self, cell)
+        x2c.X2CHelperBase.__init__(self, cell)
 
     def reset(self, cell=None):
         if cell is not None:
             self.cell = cell
         return self
+
+    to_gpu = lib.to_gpu
 
 class SpinFreeX2CHelper(PBCX2CHelper):
     '''1-component X2c Foldy-Wouthuysen (FW Hamiltonian  (spin-free part only)
@@ -142,11 +153,12 @@ class SpinFreeX2CHelper(PBCX2CHelper):
         c = lib.param.LIGHT_SPEED
         assert ('1E' in self.approx.upper())
         if 'ATOM' in self.approx.upper():
+            raise NotImplementedError(
+                'Atomic X is generated in molecular orbitals. '
+                'It might be incompatible with PBC setup.')
             atom_slices = xcell.offset_nr_by_atom()
             nao = xcell.nao_nr()
             x = numpy.zeros((nao,nao))
-            vloc = numpy.zeros((nao,nao))
-            wloc = numpy.zeros((nao,nao))
             for ia in range(xcell.natm):
                 ish0, ish1, p0, p1 = atom_slices[ia]
                 shls_slice = (ish0, ish1, ish0, ish1)
@@ -156,8 +168,6 @@ class SpinFreeX2CHelper(PBCX2CHelper):
                     z = -xcell.atom_charge(ia)
                     v1 = z * xcell.intor('int1e_rinv', shls_slice=shls_slice)
                     w1 = z * xcell.intor('int1e_prinvp', shls_slice=shls_slice)
-                vloc[p0:p1,p0:p1] = v1
-                wloc[p0:p1,p0:p1] = w1
                 x[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
         else:
             w = get_pnucp(with_df, kpts_lst)
@@ -175,13 +185,9 @@ class SpinFreeX2CHelper(PBCX2CHelper):
         h1_kpts = []
         for k in range(len(kpts_lst)):
             if 'ATOM' in self.approx.upper():
-                # The treatment of pnucp local part has huge effects to hcore
-                #h1 = x2c._get_hcore_fw(t[k], vloc, wloc, s[k], x, c) - vloc + v[k]
-                #h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], x, c)
-                h1 = x2c._get_hcore_fw(t[k], v[k], wloc, s[k], x, c)
+                h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], x, c)
             else:
-                xk = x2c._x2c1e_xmatrix(t[k], v[k], w[k], s[k], c)
-                h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], xk, c)
+                h1 = x2c._x2c1e_get_hcore(t[k], v[k], w[k], s[k], c)
 
             if self.basis is not None:
                 # If cell = xcell, U = identity matrix
@@ -201,6 +207,9 @@ class SpinFreeX2CHelper(PBCX2CHelper):
         c = lib.param.LIGHT_SPEED
         assert ('1E' in self.approx.upper())
         if 'ATOM' in self.approx.upper():
+            raise NotImplementedError(
+                'Atomic X is generated in molecular orbitals. '
+                'It might be incompatible with PBC setup.')
             atom_slices = xcell.offset_nr_by_atom()
             nao = xcell.nao_nr()
             x = numpy.zeros((nao,nao))
@@ -310,46 +319,3 @@ def get_pnucp(mydf, kpts=None):
     if kpts is None or numpy.shape(kpts) == (3,):
         wj_kpts = wj_kpts[0]
     return numpy.asarray(wj_kpts)
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import scf
-    cell = pbcgto.Cell()
-    cell.build(unit = 'B',
-               a = numpy.eye(3)*4,
-               mesh = [11]*3,
-               atom = 'H 0 0 0; H 0 0 1.8',
-               verbose = 4,
-               basis='sto3g')
-    lib.param.LIGHT_SPEED = 2
-    mf = scf.RHF(cell)
-    mf.with_df = aft.AFTDF(cell)
-    enr = mf.kernel()
-    print('E(NR) = %.12g' % enr)
-
-    mf = sfx2c1e(mf)
-    esfx2c = mf.kernel()
-    print('E(SFX2C1E) = %.12g' % esfx2c)
-
-    mf = scf.KRHF(cell)
-    mf.with_df = aft.AFTDF(cell)
-    mf.kpts = cell.make_kpts([2,2,1])
-    enr = mf.kernel()
-    print('E(k-NR) = %.12g' % enr)
-
-    mf = sfx2c1e(mf)
-    esfx2c = mf.kernel()
-    print('E(k-SFX2C1E) = %.12g' % esfx2c)
-
-#    cell = pbcgto.M(unit = 'B',
-#               a = numpy.eye(3)*4,
-#               atom = 'H 0 0 0; H 0 0 1.8',
-#               mesh = None,
-#               dimension = 2,
-#               basis='sto3g')
-#    with_df = aft.AFTDF(cell)
-#    w0 = get_pnucp(with_df, cell.make_kpts([2,2,1]))
-#    with_df = aft.AFTDF(cell)
-#    with_df.eta = 0
-#    w1 = get_pnucp(with_df, cell.make_kpts([2,2,1]))
-#    print(abs(w0-w1).max())

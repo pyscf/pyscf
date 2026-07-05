@@ -54,6 +54,7 @@ def tearDownModule():
     del cell, cell1
 
 class KnownValues(unittest.TestCase):
+    @unittest.skip('The implementation of atom-X approximation requires more validation.')
     def test_hf(self):
         with lib.light_speed(4) as c:
             mf = scf.RHF(cell1).sfx2c1e()
@@ -69,6 +70,7 @@ class KnownValues(unittest.TestCase):
             h1 = mf.get_hcore(kpt=kpts[1])
             self.assertAlmostEqual(numpy.einsum('ij,ji', dm, h1), -0.32361715420090226 + 0j, 8)
 
+    @unittest.skip('The implementation of atom-X approximation requires more validation.')
     def test_hf_high_cost(self):
         with lib.light_speed(2) as c:
             mf = scf.RHF(cell).sfx2c1e()
@@ -89,6 +91,7 @@ class KnownValues(unittest.TestCase):
             h1 = mf.get_hcore(kpt=kpts[1])
             self.assertAlmostEqual(numpy.einsum('ij,ji', dm, h1), -0.04113247191600125+0j, 8)
 
+    @unittest.skip('The implementation of atom-X approximation requires more validation.')
     def test_khf_high_cost(self):
         with lib.light_speed(2) as c:
             mf = scf.KRHF(cell).sfx2c1e()

@@ -1217,11 +1217,11 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
                 assert len(fxc) == 3, 'fxc for GGA should be arranged as (v2rho2, v2rhosigma, v2sigma2)'
             elif xctype == 'MGGA':
                 if len(fxc) == 10:
-                    fxc = [fxc[i] for i in [0, 1, 2, 6, 4, 9]]
+                    fxc = [fxc[i] for i in [0, 1, 2, 6, 9, 4]]
                 else:
                     assert len(fxc) == 6, (
                         'fxc for MGGA should be arranged as\n'
-                        '(v2rho2, v2rhosigma, v2sigma2, v2tau2, v2rhotau, v2sigmatau)\nor\n'
+                        '(v2rho2, v2rhosigma, v2sigma2, v2rhotau, v2sigmatau, v2tau2)\nor\n'
                         '(v2rho2, v2rhosigma, v2sigma2, v2lapl2, v2tau2, '
                         'v2rholapl, v2rhotau, v2lapltau, v2sigmalapl, v2sigmatau)')
             assert all(x is not None for x in fxc)

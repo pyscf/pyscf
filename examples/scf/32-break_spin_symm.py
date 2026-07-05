@@ -7,6 +7,7 @@
 Break spin symmetry for UHF/UKS by initial guess.
 
 See also examples/dft/32-broken_symmetry_dft.py
+     and examples/scf/56-h2_symm_breaking.py
 '''
 
 import numpy
@@ -38,3 +39,17 @@ dm_alpha, dm_beta = mf.get_init_guess()
 dm_beta[:2,:2] = 0
 dm = (dm_alpha,dm_beta)
 mf.kernel(dm)
+
+#
+# Alternative: use the built-in HOMO-LUMO rotation (breaksym='mix').
+# Instead of zeroing atom blocks, this rotates the alpha and beta HOMOs
+# by +/-45 degrees into the LUMO:
+#   alpha HOMO -> (HOMO + LUMO) / sqrt(2)
+#   beta  HOMO -> (HOMO - LUMO) / sqrt(2)
+# The orbitals remain delocalized over the full molecule, giving a smoother
+# symmetry break that is less likely to collapse back to the RHF solution.
+# This option also works for UKS.
+#
+mf2 = scf.UHF(mol)
+mf2.init_guess_breaksym = 'mix'
+mf2.kernel()

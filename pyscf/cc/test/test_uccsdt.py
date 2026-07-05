@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2025 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -195,7 +195,7 @@ class KnownValues(unittest.TestCase):
         cc1.diis = adiis
         cc1.max_cycle = 3
         cc1.kernel(tamps=None)
-        self.assertAlmostEqual(cc1.e_corr, -0.13617537767875998, 7)
+        self.assertAlmostEqual(cc1.e_corr, -0.13598921953216506, 7)
 
         tamps = cc1.vector_to_amplitudes(adiis.extrapolate())
         self.assertAlmostEqual(abs(tamps[0][0] - cc1.t1[0]).max(), 0, 9)
@@ -212,7 +212,7 @@ class KnownValues(unittest.TestCase):
         import copy
         tmp_tamps = copy.deepcopy(tamps)
         cc1.kernel(tmp_tamps)
-        self.assertAlmostEqual(cc1.e_corr, -0.13636112399459543, 7)
+        self.assertAlmostEqual(cc1.e_corr, -0.13631662652255083, 7)
 
         cc1.diis = adiis
         cc1.max_cycle = 2
@@ -243,7 +243,7 @@ class KnownValues(unittest.TestCase):
         cc1.diis = adiis
         cc1.max_cycle = 3
         cc1.kernel(tamps=None)
-        self.assertAlmostEqual(cc1.e_corr, -0.10899528342067309, 7)
+        self.assertAlmostEqual(cc1.e_corr, -0.10890900976962495, 7)
 
         tamps = cc1.vector_to_amplitudes(adiis.extrapolate())
         self.assertAlmostEqual(abs(tamps[0][0] - cc1.t1[0]).max(), 0, 9)
@@ -260,7 +260,7 @@ class KnownValues(unittest.TestCase):
         import copy
         tmp_tamps = copy.deepcopy(tamps)
         cc1.kernel(tmp_tamps)
-        self.assertAlmostEqual(cc1.e_corr, -0.10909663534556953, 7)
+        self.assertAlmostEqual(cc1.e_corr, -0.10908025852894825, 7)
 
         cc1.diis = adiis
         cc1.max_cycle = 2
@@ -292,7 +292,7 @@ class KnownValues(unittest.TestCase):
         cc1.diis = adiis
         cc1.max_cycle = 3
         cc1.kernel(tamps=None)
-        self.assertAlmostEqual(cc1.e_corr, -0.10900065442286336, 7)
+        self.assertAlmostEqual(cc1.e_corr, -0.10890253107679486, 7)
 
         tamps = cc1.vector_to_amplitudes(adiis.extrapolate())
         tamps.append(cc1.tamps[2])
@@ -306,7 +306,7 @@ class KnownValues(unittest.TestCase):
         import copy
         tmp_tamps = copy.deepcopy(tamps)
         cc1.kernel(tmp_tamps)
-        self.assertAlmostEqual(cc1.e_corr, -0.10907414414270558, 7)
+        self.assertAlmostEqual(cc1.e_corr, -0.10903201331931782, 7)
 
         cc1.diis = adiis
         cc1.max_cycle = 2

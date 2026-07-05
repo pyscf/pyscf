@@ -300,6 +300,13 @@ class KnownValues(unittest.TestCase):
         for k in range(len(kpts)):
             self.assertAlmostEqual(abs(f_damp[k] - (f[k]*(1-damp) + f_prev[k]*damp)).max(), 0, 9)
 
+    def test_kmesh_property(self):
+        kmf = cell.KRHF(kpts=cell.make_kpts([3,1,1]))
+        assert np.array_equal(kmf.kmesh, [3, 1, 1])
+
+        kmf = cell.KRHF(kpts=cell.make_kpts([18]*3))
+        assert np.array_equal(kmf.kmesh, [13, 13, 13])
+
 if __name__ == '__main__':
     print("Full Tests for pbc.scf.khf")
     unittest.main()

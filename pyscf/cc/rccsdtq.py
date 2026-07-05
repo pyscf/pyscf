@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2025 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,13 +27,11 @@ Chem. Phys. Lett. 228, 233 (1994); DOI:10.1016/0009-2614(94)00898-1
 '''
 
 import numpy as np
-import numpy
 import functools
 import ctypes
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, get_e_hf, _mo_without_core
-from pyscf.cc import ccsd, _ccsd, rccsdt
+from pyscf.cc import rccsdt
 from pyscf.cc.rccsdt import (_einsum, t3_spin_summation_inplace_, symmetrize_tamps_tri_, purify_tamps_tri_,
                             update_t1_fock_eris, intermediates_t1t2, compute_r1r2, r1r2_divide_e_,
                             intermediates_t3, kernel, _PhysicistsERIs, format_size)
@@ -51,6 +49,15 @@ def t4_spin_summation_inplace_(A, nocc4, nvir, pattern, alpha=1.0, beta=0.0):
         A.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int64(nocc4), ctypes.c_int64(nvir),
         ctypes.c_char_p(pattern_c),
+        ctypes.c_double(alpha), ctypes.c_double(beta)
+    )
+    return A
+
+def t4_project_1_minus_p4_p31_inplace_(A, nocc4, nvir, alpha=1.0, beta=0.0):
+    assert A.dtype == np.float64 and A.flags['C_CONTIGUOUS'], "A must be a contiguous float64 array"
+    _libccsdt.t4_project_1_minus_p4_p31_inplace_(
+        A.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int64(nocc4), ctypes.c_int64(nvir),
         ctypes.c_double(alpha), ctypes.c_double(beta)
     )
     return A
@@ -86,6 +93,28 @@ def unpack_t4_tri2block_(t4, t4_blk, map_, mask, i0, i1, j0, j1, k0, k1, l0, l1,
     )
     return t4_blk
 
+def unpack_t4_tri2block_triples_(t4, t4_blk, map_, mask, i0, i1, j0, j1, k0, k1, l0, l1,
+                                nocc, nvir, blk_i, blk_j, blk_k, blk_l):
+    assert t4.dtype == np.float64 and t4_blk.dtype == np.float64
+    assert map_.dtype == np.int64 and mask.dtype == np.bool_
+    t4 = np.ascontiguousarray(t4)
+    t4_blk = np.ascontiguousarray(t4_blk)
+    map_ = np.ascontiguousarray(map_)
+    mask = np.ascontiguousarray(mask)
+    _libccsdt.unpack_t4_tri2block_triples_(
+        t4.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+        t4_blk.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+        map_.ctypes.data_as(ctypes.POINTER(ctypes.c_int64)),
+        mask.ctypes.data_as(ctypes.POINTER(ctypes.c_bool)),
+        ctypes.c_int64(i0), ctypes.c_int64(i1),
+        ctypes.c_int64(j0), ctypes.c_int64(j1),
+        ctypes.c_int64(k0), ctypes.c_int64(k1),
+        ctypes.c_int64(l0), ctypes.c_int64(l1),
+        ctypes.c_int64(nocc), ctypes.c_int64(nvir),
+        ctypes.c_int64(blk_i), ctypes.c_int64(blk_j), ctypes.c_int64(blk_k), ctypes.c_int64(blk_l)
+    )
+    return t4_blk
+
 def accumulate_t4_block2tri_(t4, t4_blk, map_, i0, i1, j0, j1, k0, k1, l0, l1,
                                 nocc, nvir, blk_i, blk_j, blk_k, blk_l, alpha, beta):
     assert t4.dtype == np.float64 and t4_blk.dtype == np.float64
@@ -107,6 +136,18 @@ def accumulate_t4_block2tri_(t4, t4_blk, map_, i0, i1, j0, j1, k0, k1, l0, l1,
     )
     return t4
 
+def r4_tri_divide_e_(mycc, r4, mo_energy):
+    nocc, nmo = mycc.nocc, mycc.nmo
+    nvir = nmo - nocc
+    assert r4.dtype == np.float64 and r4.flags['C_CONTIGUOUS'], "r4 must be a contiguous float64 array"
+    eia = np.ascontiguousarray(mo_energy[:nocc, None] - mo_energy[None, nocc:] - mycc.level_shift, dtype=np.float64)
+    _libccsdt.r4_tri_divide_e_(
+        r4.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+        eia.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+        ctypes.c_int64(nocc), ctypes.c_int64(nvir)
+    )
+    return r4
+
 def _unpack_t4_(mycc, t4, t4_blk, i0, i1, j0, j1, k0, k1, l0, l1,
                     blksize0=None, blksize1=None, blksize2=None, blksize3=None):
     if blksize0 is None: blksize0 = mycc.blksize
@@ -114,6 +155,16 @@ def _unpack_t4_(mycc, t4, t4_blk, i0, i1, j0, j1, k0, k1, l0, l1,
     if blksize2 is None: blksize2 = mycc.blksize
     if blksize3 is None: blksize3 = mycc.blksize
     unpack_t4_tri2block_(t4, t4_blk, mycc.tri2block_map, mycc.tri2block_mask, i0, i1, j0, j1, k0, k1, l0, l1,
+                        mycc.nocc, mycc.nmo - mycc.nocc, blksize0, blksize1, blksize2, blksize3)
+    return t4_blk
+
+def _unpack_t4_triples_(mycc, t4, t4_blk, i0, i1, j0, j1, k0, k1, l0, l1,
+                        blksize0=None, blksize1=None, blksize2=None, blksize3=None):
+    if blksize0 is None: blksize0 = mycc.blksize
+    if blksize1 is None: blksize1 = mycc.blksize
+    if blksize2 is None: blksize2 = mycc.blksize
+    if blksize3 is None: blksize3 = mycc.blksize
+    unpack_t4_tri2block_triples_(t4, t4_blk, mycc.tri2block_map, mycc.tri2block_mask, i0, i1, j0, j1, k0, k1, l0, l1,
                         mycc.nocc, mycc.nmo - mycc.nocc, blksize0, blksize1, blksize2, blksize3)
     return t4_blk
 
@@ -198,26 +249,26 @@ def intermediates_t4_tri(mycc, imds, t2, t3, t4):
 
     einsum('me,mjab->abej', t1_fock[:nocc, nocc:], t2, out=W_vvvo, alpha=-1.0, beta=1.0)
 
-    W_ovvvoo = np.empty((nocc,) + (nvir,) * 3 + (nocc,) * 2)
-    einsum('maef,jibf->mabeij', t1_eris[:nocc, nocc:, nocc:, nocc:], t2, out=W_ovvvoo, alpha=2.0, beta=0.0)
-    einsum('mafe,jibf->mabeij', t1_eris[:nocc, nocc:, nocc:, nocc:], t2, out=W_ovvvoo, alpha=-1.0, beta=1.0)
-    einsum('mnei,njab->mabeij', t1_eris[:nocc, :nocc, nocc:, :nocc], t2, out=W_ovvvoo, alpha=-2.0, beta=1.0)
-    einsum('nmei,njab->mabeij', t1_eris[:nocc, :nocc, nocc:, :nocc], t2, out=W_ovvvoo, alpha=1.0, beta=1.0)
+    W_oovvvo = np.empty((nocc,) * 2 + (nvir,) * 3 + (nocc,))
+    einsum('maef,jibf->ijeabm', t1_eris[:nocc, nocc:, nocc:, nocc:], t2, out=W_oovvvo, alpha=2.0, beta=0.0)
+    einsum('mafe,jibf->ijeabm', t1_eris[:nocc, nocc:, nocc:, nocc:], t2, out=W_oovvvo, alpha=-1.0, beta=1.0)
+    einsum('mnei,njab->ijeabm', t1_eris[:nocc, :nocc, nocc:, :nocc], t2, out=W_oovvvo, alpha=-2.0, beta=1.0)
+    einsum('nmei,njab->ijeabm', t1_eris[:nocc, :nocc, nocc:, :nocc], t2, out=W_oovvvo, alpha=1.0, beta=1.0)
     c_t3 = np.empty_like(t3)
     t3_spin_summation(t3, c_t3, nocc**3, nvir, "P3_201", 1.0, 0.0)
-    einsum('nmfe,nijfab->mabeij', t1_eris[:nocc, :nocc, nocc:, nocc:], c_t3, out=W_ovvvoo, alpha=0.5, beta=1.0)
-    einsum('mnfe,nijfab->mabeij', t1_eris[:nocc, :nocc, nocc:, nocc:], c_t3, out=W_ovvvoo, alpha=-0.25, beta=1.0)
+    einsum('nmfe,nijfab->ijeabm', t1_eris[:nocc, :nocc, nocc:, nocc:], c_t3, out=W_oovvvo, alpha=0.5, beta=1.0)
+    einsum('mnfe,nijfab->ijeabm', t1_eris[:nocc, :nocc, nocc:, nocc:], c_t3, out=W_oovvvo, alpha=-0.25, beta=1.0)
     c_t3 = None
 
-    W_ovvovo = np.empty((nocc, nvir, nvir, nocc, nvir, nocc))
-    einsum('mafe,jibf->mabiej', t1_eris[:nocc, nocc:, nocc:, nocc:], t2, out=W_ovvovo, alpha=1.0, beta=0.0)
-    einsum('mnie,njab->mabiej', t1_eris[:nocc, :nocc, :nocc, nocc:], t2, out=W_ovvovo, alpha=-1.0, beta=1.0)
-    einsum('nmef,injfab->mabiej', t1_eris[:nocc, :nocc, nocc:, nocc:], t3, out=W_ovvovo, alpha=-0.5, beta=1.0)
+    W_ovovvo = np.empty((nocc, nvir, nocc, nvir, nvir, nocc))
+    einsum('mafe,jibf->iejabm', t1_eris[:nocc, nocc:, nocc:, nocc:], t2, out=W_ovovvo, alpha=1.0, beta=0.0)
+    einsum('mnie,njab->iejabm', t1_eris[:nocc, :nocc, :nocc, nocc:], t2, out=W_ovovvo, alpha=-1.0, beta=1.0)
+    einsum('nmef,injfab->iejabm', t1_eris[:nocc, :nocc, nocc:, nocc:], t3, out=W_ovovvo, alpha=-0.5, beta=1.0)
 
-    W_vooooo = np.empty((nvir,) + (nocc,) * 5)
-    einsum('mnek,ijae->amnijk', t1_eris[:nocc, :nocc, nocc:, :nocc], t2, out=W_vooooo, alpha=1.0, beta=0.0)
-    einsum('mnef,ijkaef->amnijk', t1_eris[:nocc, :nocc, nocc:, nocc:], t3, out=W_vooooo, alpha=0.5, beta=1.0)
-    W_vooooo += W_vooooo.transpose(0, 2, 1, 3, 5, 4)
+    W_ooooov = np.empty((nocc,) * 5 + (nvir,))
+    einsum('mnek,ijae->kjinma', t1_eris[:nocc, :nocc, nocc:, :nocc], t2, out=W_ooooov, alpha=1.0, beta=0.0)
+    einsum('mnef,ijkaef->kjinma', t1_eris[:nocc, :nocc, nocc:, nocc:], t3, out=W_ooooov, alpha=0.5, beta=1.0)
+    W_ooooov += W_ooooov.transpose(1, 0, 2, 4, 3, 5)
 
     W_vvoooo = np.empty((nvir,) * 2 + (nocc,) * 4)
     einsum('amef,ijkebf->abmijk', t1_eris[nocc:, :nocc, nocc:, nocc:], t3, out=W_vvoooo, alpha=1.0, beta=0.0)
@@ -252,10 +303,10 @@ def intermediates_t4_tri(mycc, imds, t2, t3, t4):
                         t4_tmp[:bn, :bi, :bj, :bk], out=W_vvvvoo[..., j0:j1, k0:k1], alpha=-0.5, beta=1.0)
     t4_tmp = None
 
-    W_ovvvoo += W_ovvvoo.transpose(0, 2, 1, 3, 5, 4)
+    W_oovvvo += W_oovvvo.transpose(1, 0, 2, 4, 3, 5)
     W_vvoooo += W_vvoooo.transpose(1, 0, 2, 4, 3, 5)
     W_vvvvoo += W_vvvvoo.transpose(0, 2, 1, 3, 5, 4)
-    imds.W_ovvvoo, imds.W_ovvovo, imds.W_vooooo = W_ovvvoo, W_ovvovo, W_vooooo
+    imds.W_oovvvo, imds.W_ovovvo, imds.W_ooooov = W_oovvvo, W_ovovvo, W_ooooov
     imds.W_vvoooo, imds.W_vvvvoo = W_vvoooo, W_vvvvoo
     return imds
 
@@ -274,17 +325,17 @@ def compute_r4_tri(mycc, imds, t2, t3, t4):
     F_oo, F_vv = imds.F_oo, imds.F_vv
     W_oooo, W_ovvo, W_ovov = imds.W_oooo, imds.W_ovvo, imds.W_ovov
     W_vvvo, W_vooo, W_vvvv = imds.W_vvvo, imds.W_vooo, imds.W_vvvv
-    W_ovvvoo, W_ovvovo, W_vooooo = imds.W_ovvvoo, imds.W_ovvovo, imds.W_vooooo
+    W_oovvvo, W_ovovvo, W_ooooov = imds.W_oovvvo, imds.W_ovovvo, imds.W_ooooov
     W_vvoooo, W_vvvvoo = imds.W_vvoooo, imds.W_vvvvoo
+
+    W_voov = np.ascontiguousarray(W_ovvo.transpose(1, 0, 3, 2))
 
     c_t3 = np.empty_like(t3)
     t3_spin_summation(t3, c_t3, nocc**3, nvir, "P3_201", 1.0, 0.0)
 
     # r4 = np.empty_like(t4)
     r4 = np.zeros_like(t4)
-
     time2 = logger.process_clock(), logger.perf_counter()
-    t4_tmp = np.empty((blksize,) * 4 + (nvir,) * 4, dtype=t4.dtype)
     r4_tmp = np.empty((blksize,) * 4 + (nvir,) * 4, dtype=t4.dtype)
     for l0, l1 in lib.prange(0, nocc, blksize):
         bl = l1 - l0
@@ -345,152 +396,128 @@ def compute_r4_tri(mycc, imds, t2, t3, t4):
                     einsum("dmlk,mijcab->ijklabcd", W_vooo[:, :, l0:l1, k0:k1],
                         t3[:, i0:i1, j0:j1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
 
-                    einsum("mabeij,mklecd->ijklabcd", W_ovvvoo[..., i0:i1, j0:j1],
-                        c_t3[:, k0:k1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.25, beta=1.0)
-                    einsum("maceik,mjlebd->ijklabcd", W_ovvvoo[..., i0:i1, k0:k1],
-                        c_t3[:, j0:j1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.25, beta=1.0)
-                    einsum("madeil,mjkebc->ijklabcd", W_ovvvoo[..., i0:i1, l0:l1],
-                        c_t3[:, j0:j1, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.25, beta=1.0)
-                    einsum("mbaeji,mklecd->ijklabcd", W_ovvvoo[..., j0:j1, i0:i1],
-                        c_t3[:, k0:k1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.25, beta=1.0)
-                    einsum("mcaeki,mjlebd->ijklabcd", W_ovvvoo[..., k0:k1, i0:i1],
-                        c_t3[:, j0:j1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.25, beta=1.0)
-                    einsum("mdaeli,mjkebc->ijklabcd", W_ovvvoo[..., l0:l1, i0:i1],
-                        c_t3[:, j0:j1, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.25, beta=1.0)
-                    einsum("mbcejk,milead->ijklabcd", W_ovvvoo[..., j0:j1, k0:k1],
-                        c_t3[:, i0:i1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.25, beta=1.0)
-                    einsum("mbdejl,mikeac->ijklabcd", W_ovvvoo[..., j0:j1, l0:l1],
-                        c_t3[:, i0:i1, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.25, beta=1.0)
-                    einsum("mcbekj,milead->ijklabcd", W_ovvvoo[..., k0:k1, j0:j1],
-                        c_t3[:, i0:i1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.25, beta=1.0)
-                    einsum("mdbelj,mikeac->ijklabcd", W_ovvvoo[..., l0:l1, j0:j1],
-                        c_t3[:, i0:i1, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.25, beta=1.0)
-                    einsum("mcdekl,mijeab->ijklabcd", W_ovvvoo[..., k0:k1, l0:l1],
-                        c_t3[:, i0:i1, j0:j1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.25, beta=1.0)
-                    einsum("mdcelk,mijeab->ijklabcd", W_ovvvoo[..., l0:l1, k0:k1],
-                        c_t3[:, i0:i1, j0:j1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.25, beta=1.0)
+                    einsum("ijeabm,mklecd->ijklabcd", W_oovvvo[i0:i1, j0:j1],
+                        c_t3[:, k0:k1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.5, beta=1.0)
+                    einsum("ikeacm,mjlebd->ijklabcd", W_oovvvo[i0:i1, k0:k1],
+                        c_t3[:, j0:j1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.5, beta=1.0)
+                    einsum("ileadm,mjkebc->ijklabcd", W_oovvvo[i0:i1, l0:l1],
+                        c_t3[:, j0:j1, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.5, beta=1.0)
+                    einsum("jkebcm,milead->ijklabcd", W_oovvvo[j0:j1, k0:k1],
+                        c_t3[:, i0:i1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.5, beta=1.0)
+                    einsum("jlebdm,mikeac->ijklabcd", W_oovvvo[j0:j1, l0:l1],
+                        c_t3[:, i0:i1, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.5, beta=1.0)
+                    einsum("klecdm,mijeab->ijklabcd", W_oovvvo[k0:k1, l0:l1],
+                        c_t3[:, i0:i1, j0:j1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.5, beta=1.0)
 
-                    einsum("mabiej,mklced->ijklabcd", W_ovvovo[..., i0:i1, :, j0:j1],
-                        t3[:, k0:k1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("mabiej,mlkdec->ijklabcd", W_ovvovo[..., i0:i1, :, j0:j1],
-                        t3[:, l0:l1, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("maciek,mjlbed->ijklabcd", W_ovvovo[..., i0:i1, :, k0:k1],
-                        t3[:, j0:j1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("madiel,mjkbec->ijklabcd", W_ovvovo[..., i0:i1, :, l0:l1],
-                        t3[:, j0:j1, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("maciek,mljdeb->ijklabcd", W_ovvovo[..., i0:i1, :, k0:k1],
-                        t3[:, l0:l1, j0:j1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("madiel,mkjceb->ijklabcd", W_ovvovo[..., i0:i1, :, l0:l1],
-                        t3[:, k0:k1, j0:j1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("mbajei,mklced->ijklabcd", W_ovvovo[..., j0:j1, :, i0:i1],
-                        t3[:, k0:k1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("mbajei,mlkdec->ijklabcd", W_ovvovo[..., j0:j1, :, i0:i1],
-                        t3[:, l0:l1, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("mcakei,mjlbed->ijklabcd", W_ovvovo[..., k0:k1, :, i0:i1],
-                        t3[:, j0:j1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("mdalei,mjkbec->ijklabcd", W_ovvovo[..., l0:l1, :, i0:i1],
-                        t3[:, j0:j1, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("mcakei,mljdeb->ijklabcd", W_ovvovo[..., k0:k1, :, i0:i1],
-                        t3[:, l0:l1, j0:j1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("mdalei,mkjceb->ijklabcd", W_ovvovo[..., l0:l1, :, i0:i1],
-                        t3[:, k0:k1, j0:j1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("mbcjek,milaed->ijklabcd", W_ovvovo[..., j0:j1, :, k0:k1],
-                        t3[:, i0:i1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("mbdjel,mikaec->ijklabcd", W_ovvovo[..., j0:j1, :, l0:l1],
-                        t3[:, i0:i1, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("mcbkej,milaed->ijklabcd", W_ovvovo[..., k0:k1, :, j0:j1],
-                        t3[:, i0:i1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("mdblej,mikaec->ijklabcd", W_ovvovo[..., l0:l1, :, j0:j1],
-                        t3[:, i0:i1, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("mcdkel,mijaeb->ijklabcd", W_ovvovo[..., k0:k1, :, l0:l1],
-                        t3[:, i0:i1, j0:j1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("mdclek,mijaeb->ijklabcd", W_ovvovo[..., l0:l1, :, k0:k1],
-                        t3[:, i0:i1, j0:j1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("mbcjek,mlidea->ijklabcd", W_ovvovo[..., j0:j1, :, k0:k1],
-                        t3[:, l0:l1, i0:i1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("mbdjel,mkicea->ijklabcd", W_ovvovo[..., j0:j1, :, l0:l1],
-                        t3[:, k0:k1, i0:i1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("mcbkej,mlidea->ijklabcd", W_ovvovo[..., k0:k1, :, j0:j1],
-                        t3[:, l0:l1, i0:i1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("mdblej,mkicea->ijklabcd", W_ovvovo[..., l0:l1, :, j0:j1],
-                        t3[:, k0:k1, i0:i1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("mcdkel,mjibea->ijklabcd", W_ovvovo[..., k0:k1, :, l0:l1],
-                        t3[:, j0:j1, i0:i1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                    einsum("mdclek,mjibea->ijklabcd", W_ovvovo[..., l0:l1, :, k0:k1],
-                        t3[:, j0:j1, i0:i1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-
-                    einsum("mcbiej,mklaed->ijklabcd", W_ovvovo[..., i0:i1, :, j0:j1],
+                    einsum("iejcbm,mklaed->ijklabcd", W_ovovvo[i0:i1, :, j0:j1],
                         t3[:, k0:k1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("mdbiej,mlkaec->ijklabcd", W_ovvovo[..., i0:i1, :, j0:j1],
+                    einsum("iejdbm,mlkaec->ijklabcd", W_ovovvo[i0:i1, :, j0:j1],
                         t3[:, l0:l1, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("mbciek,mjlaed->ijklabcd", W_ovvovo[..., i0:i1, :, k0:k1],
+                    einsum("iekbcm,mjlaed->ijklabcd", W_ovovvo[i0:i1, :, k0:k1],
                         t3[:, j0:j1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("mbdiel,mjkaec->ijklabcd", W_ovvovo[..., i0:i1, :, l0:l1],
+                    einsum("ielbdm,mjkaec->ijklabcd", W_ovovvo[i0:i1, :, l0:l1],
                         t3[:, j0:j1, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("mdciek,mljaeb->ijklabcd", W_ovvovo[..., i0:i1, :, k0:k1],
+                    einsum("iekdcm,mljaeb->ijklabcd", W_ovovvo[i0:i1, :, k0:k1],
                         t3[:, l0:l1, j0:j1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("mcdiel,mkjaeb->ijklabcd", W_ovvovo[..., i0:i1, :, l0:l1],
+                    einsum("ielcdm,mkjaeb->ijklabcd", W_ovovvo[i0:i1, :, l0:l1],
                         t3[:, k0:k1, j0:j1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("mcajei,mklbed->ijklabcd", W_ovvovo[..., j0:j1, :, i0:i1],
+                    einsum("jeicam,mklbed->ijklabcd", W_ovovvo[j0:j1, :, i0:i1],
                         t3[:, k0:k1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("mdajei,mlkbec->ijklabcd", W_ovvovo[..., j0:j1, :, i0:i1],
+                    einsum("jeidam,mlkbec->ijklabcd", W_ovovvo[j0:j1, :, i0:i1],
                         t3[:, l0:l1, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("mbakei,mjlced->ijklabcd", W_ovvovo[..., k0:k1, :, i0:i1],
+                    einsum("keibam,mjlced->ijklabcd", W_ovovvo[k0:k1, :, i0:i1],
                         t3[:, j0:j1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("mbalei,mjkdec->ijklabcd", W_ovvovo[..., l0:l1, :, i0:i1],
+                    einsum("leibam,mjkdec->ijklabcd", W_ovovvo[l0:l1, :, i0:i1],
                         t3[:, j0:j1, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("mdakei,mljceb->ijklabcd", W_ovvovo[..., k0:k1, :, i0:i1],
+                    einsum("keidam,mljceb->ijklabcd", W_ovovvo[k0:k1, :, i0:i1],
                         t3[:, l0:l1, j0:j1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("mcalei,mkjdeb->ijklabcd", W_ovvovo[..., l0:l1, :, i0:i1],
+                    einsum("leicam,mkjdeb->ijklabcd", W_ovovvo[l0:l1, :, i0:i1],
                         t3[:, k0:k1, j0:j1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("macjek,milbed->ijklabcd", W_ovvovo[..., j0:j1, :, k0:k1],
+                    einsum("jekacm,milbed->ijklabcd", W_ovovvo[j0:j1, :, k0:k1],
                         t3[:, i0:i1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("madjel,mikbec->ijklabcd", W_ovvovo[..., j0:j1, :, l0:l1],
+                    einsum("jeladm,mikbec->ijklabcd", W_ovovvo[j0:j1, :, l0:l1],
                         t3[:, i0:i1, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("mabkej,milced->ijklabcd", W_ovvovo[..., k0:k1, :, j0:j1],
+                    einsum("kejabm,milced->ijklabcd", W_ovovvo[k0:k1, :, j0:j1],
                         t3[:, i0:i1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("mablej,mikdec->ijklabcd", W_ovvovo[..., l0:l1, :, j0:j1],
+                    einsum("lejabm,mikdec->ijklabcd", W_ovovvo[l0:l1, :, j0:j1],
                         t3[:, i0:i1, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("madkel,mijceb->ijklabcd", W_ovvovo[..., k0:k1, :, l0:l1],
+                    einsum("keladm,mijceb->ijklabcd", W_ovovvo[k0:k1, :, l0:l1],
                         t3[:, i0:i1, j0:j1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("maclek,mijdeb->ijklabcd", W_ovvovo[..., l0:l1, :, k0:k1],
+                    einsum("lekacm,mijdeb->ijklabcd", W_ovovvo[l0:l1, :, k0:k1],
                         t3[:, i0:i1, j0:j1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("mdcjek,mlibea->ijklabcd", W_ovvovo[..., j0:j1, :, k0:k1],
+                    einsum("jekdcm,mlibea->ijklabcd", W_ovovvo[j0:j1, :, k0:k1],
                         t3[:, l0:l1, i0:i1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("mcdjel,mkibea->ijklabcd", W_ovvovo[..., j0:j1, :, l0:l1],
+                    einsum("jelcdm,mkibea->ijklabcd", W_ovovvo[j0:j1, :, l0:l1],
                         t3[:, k0:k1, i0:i1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("mdbkej,mlicea->ijklabcd", W_ovvovo[..., k0:k1, :, j0:j1],
+                    einsum("kejdbm,mlicea->ijklabcd", W_ovovvo[k0:k1, :, j0:j1],
                         t3[:, l0:l1, i0:i1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("mcblej,mkidea->ijklabcd", W_ovvovo[..., l0:l1, :, j0:j1],
+                    einsum("lejcbm,mkidea->ijklabcd", W_ovovvo[l0:l1, :, j0:j1],
                         t3[:, k0:k1, i0:i1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("mbdkel,mjicea->ijklabcd", W_ovvovo[..., k0:k1, :, l0:l1],
+                    einsum("kelbdm,mjicea->ijklabcd", W_ovovvo[k0:k1, :, l0:l1],
                         t3[:, j0:j1, i0:i1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                    einsum("mbclek,mjidea->ijklabcd", W_ovvovo[..., l0:l1, :, k0:k1],
+                    einsum("lekbcm,mjidea->ijklabcd", W_ovovvo[l0:l1, :, k0:k1],
                         t3[:, j0:j1, i0:i1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
 
-                    einsum("amnijk,mnlbcd->ijklabcd", W_vooooo[..., i0:i1, j0:j1, k0:k1],
+                    _accumulate_t4_(mycc, r4, r4_tmp, i0, i1, j0, j1, k0, k1, l0, l1)
+        time2 = log.timer_debug1('t4: iter: W_vvvo * t3, W_vooo * t3, W_oovvvo * t3, W_ovovvo * t3'
+                                 ' [%3d, %3d]:' % (l0, l1), *time2)
+    r4_tmp = None
+    c_t3 = None
+    W_vvvo = imds.W_vvvo = None
+    W_vooo = imds.W_vooo = None
+    W_oovvvo = imds.W_oovvvo = None
+    time1 = log.timer_debug1('t4: W_vvvo * t3, W_vooo * t3, W_oovvvo * t3, W_ovovvo * t3', *time1)
+
+    c_t3 = t3 + t3.transpose(0, 1, 2, 4, 5, 3)
+    W_ovovvo += W_ovovvo.transpose(2, 1, 0, 4, 3, 5)
+    time2 = logger.process_clock(), logger.perf_counter()
+    t4_tmp = np.empty((blksize,) * 4 + (nvir,) * 4, dtype=t4.dtype)
+    r4_tmp = np.empty((blksize,) * 4 + (nvir,) * 4, dtype=t4.dtype)
+    for l0, l1 in lib.prange(0, nocc, blksize):
+        bl = l1 - l0
+        for k0, k1 in lib.prange(0, l1, blksize):
+            bk = k1 - k0
+            for j0, j1 in lib.prange(0, k1, blksize):
+                bj = j1 - j0
+                for i0, i1 in lib.prange(0, j1, blksize):
+                    bi = i1 - i0
+
+                    einsum("iejabm,mklced->ijklabcd", W_ovovvo[i0:i1, :, j0:j1],
+                        c_t3[:, k0:k1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=0.0)
+                    einsum("iekacm,mjlbed->ijklabcd", W_ovovvo[i0:i1, :, k0:k1],
+                        c_t3[:, j0:j1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
+                    einsum("ieladm,mjkbec->ijklabcd", W_ovovvo[i0:i1, :, l0:l1],
+                        c_t3[:, j0:j1, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
+                    einsum("jekbcm,milaed->ijklabcd", W_ovovvo[j0:j1, :, k0:k1],
+                        c_t3[:, i0:i1, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
+                    einsum("jelbdm,mikaec->ijklabcd", W_ovovvo[j0:j1, :, l0:l1],
+                        c_t3[:, i0:i1, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
+                    einsum("kelcdm,mijaeb->ijklabcd", W_ovovvo[k0:k1, :, l0:l1],
+                        c_t3[:, i0:i1, j0:j1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
+
+                    einsum("kjinma,mnlbcd->ijklabcd", W_ooooov[k0:k1, j0:j1, i0:i1],
                         t3[:, :, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                    einsum("amnijl,mnkbdc->ijklabcd", W_vooooo[..., i0:i1, j0:j1, l0:l1],
+                    einsum("ljinma,mnkbdc->ijklabcd", W_ooooov[l0:l1, j0:j1, i0:i1],
                         t3[:, :, k0:k1,], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                    einsum("amnikl,mnjcdb->ijklabcd", W_vooooo[..., i0:i1, k0:k1, l0:l1],
+                    einsum("lkinma,mnjcdb->ijklabcd", W_ooooov[l0:l1, k0:k1, i0:i1],
                         t3[:, :, j0:j1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                    einsum("bmnjik,mnlacd->ijklabcd", W_vooooo[..., j0:j1, i0:i1, k0:k1],
+                    einsum("kijnmb,mnlacd->ijklabcd", W_ooooov[k0:k1, i0:i1, j0:j1],
                         t3[:, :, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                    einsum("bmnjil,mnkadc->ijklabcd", W_vooooo[..., j0:j1, i0:i1, l0:l1],
+                    einsum("lijnmb,mnkadc->ijklabcd", W_ooooov[l0:l1, i0:i1, j0:j1],
                         t3[:, :, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                    einsum("bmnjkl,mnicda->ijklabcd", W_vooooo[..., j0:j1, k0:k1, l0:l1],
+                    einsum("lkjnmb,mnicda->ijklabcd", W_ooooov[l0:l1, k0:k1, j0:j1],
                         t3[:, :, i0:i1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                    einsum("cmnkij,mnlabd->ijklabcd", W_vooooo[..., k0:k1, i0:i1, j0:j1],
+                    einsum("jiknmc,mnlabd->ijklabcd", W_ooooov[j0:j1, i0:i1, k0:k1],
                         t3[:, :, l0:l1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                    einsum("cmnkil,mnjadb->ijklabcd", W_vooooo[..., k0:k1, i0:i1, l0:l1],
+                    einsum("liknmc,mnjadb->ijklabcd", W_ooooov[l0:l1, i0:i1, k0:k1],
                         t3[:, :, j0:j1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                    einsum("cmnkjl,mnibda->ijklabcd", W_vooooo[..., k0:k1, j0:j1, l0:l1],
+                    einsum("ljknmc,mnibda->ijklabcd", W_ooooov[l0:l1, j0:j1, k0:k1],
                         t3[:, :, i0:i1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                    einsum("dmnlij,mnkabc->ijklabcd", W_vooooo[..., l0:l1, i0:i1, j0:j1],
+                    einsum("jilnmd,mnkabc->ijklabcd", W_ooooov[j0:j1, i0:i1, l0:l1],
                         t3[:, :, k0:k1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                    einsum("dmnlik,mnjacb->ijklabcd", W_vooooo[..., l0:l1, i0:i1, k0:k1],
+                    einsum("kilnmd,mnjacb->ijklabcd", W_ooooov[k0:k1, i0:i1, l0:l1],
                         t3[:, :, j0:j1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                    einsum("dmnljk,mnibca->ijklabcd", W_vooooo[..., l0:l1, j0:j1, k0:k1],
+                    einsum("kjlnmd,mnibca->ijklabcd", W_ooooov[k0:k1, j0:j1, l0:l1],
                         t3[:, :, i0:i1], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
 
                     einsum("mlcd,abmijk->ijklabcd", t2[:, l0:l1], W_vvoooo[..., i0:i1, j0:j1, k0:k1],
@@ -546,57 +573,44 @@ def compute_r4_tri(mycc, imds, t2, t3, t4):
                     _unpack_t4_(mycc, t4, t4_tmp, i0, i1, j0, j1, k0, k1, l0, l1)
                     einsum("ae,ijklebcd->ijklabcd", F_vv, t4_tmp[:bi, :bj, :bk, :bl],
                         out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                    _unpack_t4_(mycc, t4, t4_tmp, j0, j1, i0, i1, k0, k1, l0, l1)
-                    einsum("be,jikleacd->ijklabcd", F_vv, t4_tmp[:bj, :bi, :bk, :bl],
+                    einsum("be,ijklaecd->ijklabcd", F_vv, t4_tmp[:bi, :bj, :bk, :bl],
                         out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                    _unpack_t4_(mycc, t4, t4_tmp, k0, k1, i0, i1, j0, j1, l0, l1)
-                    einsum("ce,kijleabd->ijklabcd", F_vv, t4_tmp[:bk, :bi, :bj, :bl],
+                    einsum("ce,ijklabed->ijklabcd", F_vv, t4_tmp[:bi, :bj, :bk, :bl],
                         out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                    _unpack_t4_(mycc, t4, t4_tmp, l0, l1, i0, i1, j0, j1, k0, k1)
-                    einsum("de,lijkeabc->ijklabcd", F_vv, t4_tmp[:bl, :bi, :bj, :bk],
+                    einsum("de,ijklabce->ijklabcd", F_vv, t4_tmp[:bi, :bj, :bk, :bl],
                         out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
 
-                    _unpack_t4_(mycc, t4, t4_tmp, i0, i1, j0, j1, k0, k1, l0, l1)
                     einsum("abef,ijklefcd->ijklabcd", W_vvvv, t4_tmp[:bi, :bj, :bk, :bl],
                         out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                    _unpack_t4_(mycc, t4, t4_tmp, i0, i1, k0, k1, j0, j1, l0, l1)
-                    einsum("acef,ikjlefbd->ijklabcd", W_vvvv, t4_tmp[:bi, :bk, :bj, :bl],
+                    einsum("acef,ijklebfd->ijklabcd", W_vvvv, t4_tmp[:bi, :bj, :bk, :bl],
                         out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                    _unpack_t4_(mycc, t4, t4_tmp, i0, i1, l0, l1, j0, j1, k0, k1)
-                    einsum("adef,iljkefbc->ijklabcd", W_vvvv, t4_tmp[:bi, :bl, :bj, :bk],
+                    einsum("adef,ijklebcf->ijklabcd", W_vvvv, t4_tmp[:bi, :bj, :bk, :bl],
                         out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                    _unpack_t4_(mycc, t4, t4_tmp, j0, j1, k0, k1, i0, i1, l0, l1)
-                    einsum("bcef,jkilefad->ijklabcd", W_vvvv, t4_tmp[:bj, :bk, :bi, :bl],
+                    einsum("bcef,ijklaefd->ijklabcd", W_vvvv, t4_tmp[:bi, :bj, :bk, :bl],
                         out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                    _unpack_t4_(mycc, t4, t4_tmp, j0, j1, l0, l1, i0, i1, k0, k1)
-                    einsum("bdef,jlikefac->ijklabcd", W_vvvv, t4_tmp[:bj, :bl, :bi, :bk],
+                    einsum("bdef,ijklaecf->ijklabcd", W_vvvv, t4_tmp[:bi, :bj, :bk, :bl],
                         out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                    _unpack_t4_(mycc, t4, t4_tmp, k0, k1, l0, l1, i0, i1, j0, j1)
-                    einsum("cdef,klijefab->ijklabcd", W_vvvv, t4_tmp[:bk, :bl, :bi, :bj],
+                    einsum("cdef,ijklabef->ijklabcd", W_vvvv, t4_tmp[:bi, :bj, :bk, :bl],
                         out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
 
-                    _accumulate_t4_(mycc, r4, r4_tmp, i0, i1, j0, j1, k0, k1, l0, l1)
-        time2 = log.timer_debug1('t4: iter: W_vvoooo * t2, W_vvvvoo * t2,\n'
-            '                           W_vvvo * t3, W_vooo * t3, W_ovvvoo * t3, W_ovvovo * t3, W_vooooo * t3,\n'
+                    _accumulate_t4_(mycc, r4, r4_tmp, i0, i1, j0, j1, k0, k1, l0, l1, beta=1.0)
+        time2 = log.timer_debug1('t4: iter: W_vvoooo * t2, W_vvvvoo * t2, W_ovovvo * t3, W_ooooov * t3,\n'
             '                           F_vv * t4, W_vvvv * t4 [%3d, %3d]:' % (l0, l1), *time2)
     t4_tmp = None
     r4_tmp = None
     c_t3 = None
     F_vv = imds.F_vv = None
-    W_vvvo = imds.W_vvvo = None
-    W_vooo = imds.W_vooo = None
     W_vvvv = imds.W_vvvv = None
-    W_ovvvoo = imds.W_ovvvoo = None
-    W_ovvovo = imds.W_ovvovo = None
-    W_vooooo = imds.W_vooooo = None
+    W_ovovvo = imds.W_ovovvo = None
+    W_ooooov = imds.W_ooooov = None
     W_vvoooo = imds.W_vvoooo = None
     W_vvvvoo = imds.W_vvvvoo = None
 
-    time1 = log.timer_debug1('t4: W_vvoooo * t2, W_vvvvoo * t2, W_vvvo * t3, W_vooo * t3, W_ovvvoo * t3,\n'
-                        '                     W_ovvovo * t3, W_vooooo * t3, F_vv * t4, W_vvvv * t4', *time1)
+    time1 = log.timer_debug1('t4: W_vvoooo * t2, W_vvvvoo * t2, W_ovovvo * t3, W_ooooov * t3, F_vv * t4, W_vvvv * t4',
+                             *time1)
 
     time2 = logger.process_clock(), logger.perf_counter()
-    t4_tmp = np.empty((blksize,) * 4 + (nvir,) * 4, dtype=t4.dtype)
+    t4_tmp = np.empty((nocc,) + (blksize,) * 3 + (nvir,) * 4, dtype=t4.dtype)
     r4_tmp = np.empty((blksize,) * 4 + (nvir,) * 4, dtype=t4.dtype)
     for l0, l1 in lib.prange(0, nocc, blksize):
         bl = l1 - l0
@@ -607,95 +621,74 @@ def compute_r4_tri(mycc, imds, t2, t3, t4):
                 for i0, i1 in lib.prange(0, j1, blksize):
                     bi = i1 - i0
 
-                    r4_tmp[:] = 0.0
-                    for m0, m1 in lib.prange(0, nocc, blksize):
-                        bm = m1 - m0
+                    _unpack_t4_(mycc, t4, t4_tmp, 0, nocc, j0, j1, k0, k1, l0, l1, nocc, blksize, blksize, blksize)
+                    einsum("mi,mjklabcd->ijklabcd", F_oo[:, i0:i1], t4_tmp[:, :bj, :bk, :bl],
+                        out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=0.0)
+                    einsum("mbie,mjklaecd->ijklabcd", W_ovov[:, :, i0:i1, :], t4_tmp[:, :bj, :bk, :bl],
+                        out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
+                    einsum("mcie,mjklabed->ijklabcd", W_ovov[:, :, i0:i1, :], t4_tmp[:, :bj, :bk, :bl],
+                        out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
+                    einsum("mdie,mjklabce->ijklabcd", W_ovov[:, :, i0:i1, :], t4_tmp[:, :bj, :bk, :bl],
+                        out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
+                    t4_spin_summation_inplace_(t4_tmp, nocc * blksize**3, nvir, "P4_201", 1.0, 0.0)
+                    einsum("amie,mjklebcd->ijklabcd", W_voov[:, :, i0:i1, :], t4_tmp[:, :bj, :bk, :bl],
+                        out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.5, beta=1.0)
 
-                        _unpack_t4_(mycc, t4, t4_tmp, m0, m1, j0, j1, k0, k1, l0, l1)
-                        einsum("mi,mjklabcd->ijklabcd", F_oo[m0:m1, i0:i1], t4_tmp[:bm, :bj, :bk, :bl],
-                            out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                        t4_spin_summation_inplace_(t4_tmp, blksize**4, nvir, "P4_201", 1.0, 0.0)
-                        einsum("maei,mjklebcd->ijklabcd", W_ovvo[m0:m1, :, :, i0:i1],
-                            t4_tmp[:bm, :bj, :bk, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.5, beta=1.0)
-                        _unpack_t4_(mycc, t4, t4_tmp, m0, m1, i0, i1, k0, k1, l0, l1)
-                        einsum("mj,miklbacd->ijklabcd", F_oo[m0:m1, j0:j1], t4_tmp[:bm, :bi, :bk, :bl],
-                            out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                        t4_spin_summation_inplace_(t4_tmp, blksize**4, nvir, "P4_201", 1.0, 0.0)
-                        einsum("mbej,mikleacd->ijklabcd", W_ovvo[m0:m1, :, :, j0:j1],
-                            t4_tmp[:bm, :bi, :bk, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.5, beta=1.0)
-                        _unpack_t4_(mycc, t4, t4_tmp, m0, m1, i0, i1, j0, j1, l0, l1)
-                        einsum("mk,mijlcabd->ijklabcd", F_oo[m0:m1, k0:k1], t4_tmp[:bm, :bi, :bj, :bl],
-                            out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                        t4_spin_summation_inplace_(t4_tmp, blksize**4, nvir, "P4_201", 1.0, 0.0)
-                        einsum("mcek,mijleabd->ijklabcd", W_ovvo[m0:m1, :, :, k0:k1],
-                            t4_tmp[:bm, :bi, :bj, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.5, beta=1.0)
-                        _unpack_t4_(mycc, t4, t4_tmp, m0, m1, i0, i1, j0, j1, k0, k1)
-                        einsum("ml,mijkdabc->ijklabcd", F_oo[m0:m1, l0:l1], t4_tmp[:bm, :bi, :bj, :bk],
-                            out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                        t4_spin_summation_inplace_(t4_tmp, blksize**4, nvir, "P4_201", 1.0, 0.0)
-                        einsum("mdel,mijkeabc->ijklabcd", W_ovvo[m0:m1, :, :, l0:l1],
-                            t4_tmp[:bm, :bi, :bj, :bk], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.5, beta=1.0)
+                    _unpack_t4_(mycc, t4, t4_tmp, 0, nocc, i0, i1, k0, k1, l0, l1, nocc, blksize, blksize, blksize)
+                    einsum("mj,miklbacd->ijklabcd", F_oo[:, j0:j1], t4_tmp[:, :bi, :bk, :bl],
+                        out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
+                    einsum("maje,miklbecd->ijklabcd", W_ovov[:, :, j0:j1, :], t4_tmp[:, :bi, :bk, :bl],
+                        out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
+                    einsum("mcje,miklbaed->ijklabcd", W_ovov[:, :, j0:j1, :], t4_tmp[:, :bi, :bk, :bl],
+                        out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
+                    einsum("mdje,miklbace->ijklabcd", W_ovov[:, :, j0:j1, :], t4_tmp[:, :bi, :bk, :bl],
+                        out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
+                    t4_spin_summation_inplace_(t4_tmp, nocc * blksize**3, nvir, "P4_201", 1.0, 0.0)
+                    einsum("bmje,mikleacd->ijklabcd", W_voov[:, :, j0:j1, :], t4_tmp[:, :bi, :bk, :bl],
+                        out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.5, beta=1.0)
 
-                        _unpack_t4_(mycc, t4, t4_tmp, m0, m1, j0, j1, k0, k1, l0, l1)
-                        einsum("maie,mjklbecd->ijklabcd", W_ovov[m0:m1, :, i0:i1, :],
-                            t4_tmp[:bm, :bj, :bk, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                        einsum("mbie,mjklaecd->ijklabcd", W_ovov[m0:m1, :, i0:i1, :],
-                            t4_tmp[:bm, :bj, :bk, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                        _unpack_t4_(mycc, t4, t4_tmp, m0, m1, k0, k1, j0, j1, l0, l1)
-                        einsum("maie,mkjlcebd->ijklabcd", W_ovov[m0:m1, :, i0:i1, :],
-                            t4_tmp[:bm, :bk, :bj, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                        einsum("mcie,mkjlaebd->ijklabcd", W_ovov[m0:m1, :, i0:i1, :],
-                            t4_tmp[:bm, :bk, :bj, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                        _unpack_t4_(mycc, t4, t4_tmp, m0, m1, l0, l1, j0, j1, k0, k1)
-                        einsum("maie,mljkdebc->ijklabcd", W_ovov[m0:m1, :, i0:i1, :],
-                            t4_tmp[:bm, :bl, :bj, :bk], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                        einsum("mdie,mljkaebc->ijklabcd", W_ovov[m0:m1, :, i0:i1, :],
-                            t4_tmp[:bm, :bl, :bj, :bk], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                        _unpack_t4_(mycc, t4, t4_tmp, m0, m1, i0, i1, k0, k1, l0, l1)
-                        einsum("mbje,miklaecd->ijklabcd", W_ovov[m0:m1, :, j0:j1, :],
-                            t4_tmp[:bm, :bi, :bk, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                        einsum("maje,miklbecd->ijklabcd", W_ovov[m0:m1, :, j0:j1, :],
-                            t4_tmp[:bm, :bi, :bk, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                        _unpack_t4_(mycc, t4, t4_tmp, m0, m1, i0, i1, j0, j1, l0, l1)
-                        einsum("mcke,mijlaebd->ijklabcd", W_ovov[m0:m1, :, k0:k1, :],
-                            t4_tmp[:bm, :bi, :bj, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                        einsum("make,mijlcebd->ijklabcd", W_ovov[m0:m1, :, k0:k1, :],
-                            t4_tmp[:bm, :bi, :bj, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                        _unpack_t4_(mycc, t4, t4_tmp, m0, m1, i0, i1, j0, j1, k0, k1)
-                        einsum("mdle,mijkaebc->ijklabcd", W_ovov[m0:m1, :, l0:l1, :],
-                            t4_tmp[:bm, :bi, :bj, :bk], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                        einsum("male,mijkdebc->ijklabcd", W_ovov[m0:m1, :, l0:l1, :],
-                            t4_tmp[:bm, :bi, :bj, :bk], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                        _unpack_t4_(mycc, t4, t4_tmp, m0, m1, k0, k1, i0, i1, l0, l1)
-                        einsum("mbje,mkilcead->ijklabcd", W_ovov[m0:m1, :, j0:j1, :],
-                            t4_tmp[:bm, :bk, :bi, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                        einsum("mcje,mkilbead->ijklabcd", W_ovov[m0:m1, :, j0:j1, :],
-                            t4_tmp[:bm, :bk, :bi, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                        _unpack_t4_(mycc, t4, t4_tmp, m0, m1, l0, l1, i0, i1, k0, k1)
-                        einsum("mbje,mlikdeac->ijklabcd", W_ovov[m0:m1, :, j0:j1, :],
-                            t4_tmp[:bm, :bl, :bi, :bk], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                        einsum("mdje,mlikbeac->ijklabcd", W_ovov[m0:m1, :, j0:j1, :],
-                            t4_tmp[:bm, :bl, :bi, :bk], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                        _unpack_t4_(mycc, t4, t4_tmp, m0, m1, j0, j1, i0, i1, l0, l1)
-                        einsum("mcke,mjilbead->ijklabcd", W_ovov[m0:m1, :, k0:k1, :],
-                            t4_tmp[:bm, :bj, :bi, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                        einsum("mbke,mjilcead->ijklabcd", W_ovov[m0:m1, :, k0:k1, :],
-                            t4_tmp[:bm, :bj, :bi, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                        _unpack_t4_(mycc, t4, t4_tmp, m0, m1, j0, j1, i0, i1, k0, k1)
-                        einsum("mdle,mjikbeac->ijklabcd", W_ovov[m0:m1, :, l0:l1, :],
-                            t4_tmp[:bm, :bj, :bi, :bk], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                        einsum("mble,mjikdeac->ijklabcd", W_ovov[m0:m1, :, l0:l1, :],
-                            t4_tmp[:bm, :bj, :bi, :bk], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                        _unpack_t4_(mycc, t4, t4_tmp, m0, m1, l0, l1, i0, i1, j0, j1)
-                        einsum("mcke,mlijdeab->ijklabcd", W_ovov[m0:m1, :, k0:k1, :],
-                            t4_tmp[:bm, :bl, :bi, :bj], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                        einsum("mdke,mlijceab->ijklabcd", W_ovov[m0:m1, :, k0:k1, :],
-                            t4_tmp[:bm, :bl, :bi, :bj], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
-                        _unpack_t4_(mycc, t4, t4_tmp, m0, m1, k0, k1, i0, i1, j0, j1)
-                        einsum("mdle,mkijceab->ijklabcd", W_ovov[m0:m1, :, l0:l1, :],
-                            t4_tmp[:bm, :bk, :bi, :bj], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
-                        einsum("mcle,mkijdeab->ijklabcd", W_ovov[m0:m1, :, l0:l1, :],
-                            t4_tmp[:bm, :bk, :bi, :bj], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
+                    _unpack_t4_(mycc, t4, t4_tmp, 0, nocc, i0, i1, j0, j1, l0, l1, nocc, blksize, blksize, blksize)
+                    einsum("mk,mijlcabd->ijklabcd", F_oo[:, k0:k1], t4_tmp[:, :bi, :bj, :bl],
+                        out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
+                    einsum("make,mijlcebd->ijklabcd", W_ovov[:, :, k0:k1, :], t4_tmp[:, :bi, :bj, :bl],
+                        out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
+                    einsum("mbke,mijlcaed->ijklabcd", W_ovov[:, :, k0:k1, :], t4_tmp[:, :bi, :bj, :bl],
+                        out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
+                    einsum("mdke,mijlcabe->ijklabcd", W_ovov[:, :, k0:k1, :], t4_tmp[:, :bi, :bj, :bl],
+                        out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
+                    t4_spin_summation_inplace_(t4_tmp, nocc * blksize**3, nvir, "P4_201", 1.0, 0.0)
+                    einsum("cmke,mijleabd->ijklabcd", W_voov[:, :, k0:k1, :], t4_tmp[:, :bi, :bj, :bl],
+                        out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.5, beta=1.0)
+
+                    _unpack_t4_(mycc, t4, t4_tmp, 0, nocc, i0, i1, j0, j1, k0, k1, nocc, blksize, blksize, blksize)
+                    einsum("ml,mijkdabc->ijklabcd", F_oo[:, l0:l1], t4_tmp[:, :bi, :bj, :bk],
+                        out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
+                    einsum("male,mijkdebc->ijklabcd", W_ovov[:, :, l0:l1, :], t4_tmp[:, :bi, :bj, :bk],
+                        out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
+                    einsum("mble,mijkdaec->ijklabcd", W_ovov[:, :, l0:l1, :], t4_tmp[:, :bi, :bj, :bk],
+                        out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
+                    einsum("mcle,mijkdabe->ijklabcd", W_ovov[:, :, l0:l1, :], t4_tmp[:, :bi, :bj, :bk],
+                        out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-1.0, beta=1.0)
+                    t4_spin_summation_inplace_(t4_tmp, nocc * blksize**3, nvir, "P4_201", 1.0, 0.0)
+                    einsum("dmle,mijkeabc->ijklabcd", W_voov[:, :, l0:l1, :], t4_tmp[:, :bi, :bj, :bk],
+                        out=r4_tmp[:bi, :bj, :bk, :bl], alpha=0.5, beta=1.0)
+
+                    _unpack_t4_triples_(mycc, t4, t4_tmp, 0, nocc, j0, j1, k0, k1, l0, l1,
+                                        nocc, blksize, blksize, blksize)
+                    einsum("maie,mjklbecd->ijklabcd", W_ovov[:, :, i0:i1, :],
+                        t4_tmp[:, :bj, :bk, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
+                    _unpack_t4_triples_(mycc, t4, t4_tmp, 0, nocc, i0, i1, k0, k1, l0, l1,
+                                        nocc, blksize, blksize, blksize)
+                    einsum("mbje,miklaecd->ijklabcd", W_ovov[:, :, j0:j1, :],
+                        t4_tmp[:, :bi, :bk, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
+                    _unpack_t4_triples_(mycc, t4, t4_tmp, 0, nocc, i0, i1, j0, j1, l0, l1,
+                                        nocc, blksize, blksize, blksize)
+                    einsum("mcke,mijlaebd->ijklabcd", W_ovov[:, :, k0:k1, :],
+                        t4_tmp[:, :bi, :bj, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
+                    _unpack_t4_triples_(mycc, t4, t4_tmp, 0, nocc, i0, i1, j0, j1, k0, k1,
+                                        nocc, blksize, blksize, blksize)
+                    einsum("mdle,mijkaebc->ijklabcd", W_ovov[:, :, l0:l1, :],
+                        t4_tmp[:, :bi, :bj, :bk], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=-0.5, beta=1.0)
 
                     _accumulate_t4_(mycc, r4, r4_tmp, i0, i1, j0, j1, k0, k1, l0, l1, beta=1.0)
         time2 = log.timer_debug1('t4: iter: F_oo * t4, W_ovvo * t4, W_ovov * t4 [%3d, %3d]:'%(l0, l1), *time2)
@@ -703,11 +696,11 @@ def compute_r4_tri(mycc, imds, t2, t3, t4):
     r4_tmp = None
     F_oo = imds.F_oo = None
     W_ovvo = imds.W_ovvo = None
-    W_ovov = imds.V_ovov = None
+    W_ovov = imds.W_ovov = None
     time1 = log.timer_debug1('t4: F_oo * t4, W_ovvo * t4, W_ovov * t4', *time1)
 
     time2 = logger.process_clock(), logger.perf_counter()
-    t4_tmp = np.empty((blksize,) * 4 + (nvir,) * 4, dtype=t4.dtype)
+    t4_tmp = np.empty((blksize,) * 3 + (nocc,) + (nvir,) * 4, dtype=t4.dtype)
     r4_tmp = np.empty((blksize,) * 4 + (nvir,) * 4, dtype=t4.dtype)
     for l0, l1 in lib.prange(0, nocc, blksize):
         bl = l1 - l0
@@ -717,33 +710,30 @@ def compute_r4_tri(mycc, imds, t2, t3, t4):
                 bj = j1 - j0
                 for i0, i1 in lib.prange(0, j1, blksize):
                     bi = i1 - i0
-
-                    r4_tmp[:] = 0.0
                     for m0, m1 in lib.prange(0, nocc, blksize):
                         bm = m1 - m0
-                        for n0, n1 in lib.prange(0, nocc, blksize):
-                            bn = n1 - n0
 
-                            _unpack_t4_(mycc, t4, t4_tmp, m0, m1, n0, n1, k0, k1, l0, l1)
-                            einsum("mnij,mnklabcd->ijklabcd", W_oooo[m0:m1, n0:n1, i0:i1, j0:j1],
-                                t4_tmp[:bm, :bn, :bk, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                            _unpack_t4_(mycc, t4, t4_tmp, m0, m1, n0, n1, j0, j1, l0, l1)
-                            einsum("mnik,mnjlacbd->ijklabcd", W_oooo[m0:m1, n0:n1, i0:i1, k0:k1],
-                                t4_tmp[:bm, :bn, :bj, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                            _unpack_t4_(mycc, t4, t4_tmp, m0, m1, n0, n1, j0, j1, k0, k1)
-                            einsum("mnil,mnjkadbc->ijklabcd", W_oooo[m0:m1, n0:n1, i0:i1, l0:l1],
-                                t4_tmp[:bm, :bn, :bj, :bk], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                            _unpack_t4_(mycc, t4, t4_tmp, m0, m1, n0, n1, i0, i1, l0, l1)
-                            einsum("mnjk,mnilbcad->ijklabcd", W_oooo[m0:m1, n0:n1, j0:j1, k0:k1],
-                                t4_tmp[:bm, :bn, :bi, :bl], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                            _unpack_t4_(mycc, t4, t4_tmp, m0, m1, n0, n1, i0, i1, k0, k1)
-                            einsum("mnjl,mnikbdac->ijklabcd", W_oooo[m0:m1, n0:n1, j0:j1, l0:l1],
-                                t4_tmp[:bm, :bn, :bi, :bk], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
-                            _unpack_t4_(mycc, t4, t4_tmp, m0, m1, n0, n1, i0, i1, j0, j1)
-                            einsum("mnkl,mnijcdab->ijklabcd", W_oooo[m0:m1, n0:n1, k0:k1, l0:l1],
-                                t4_tmp[:bm, :bn, :bi, :bj], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
+                        _unpack_t4_(mycc, t4, t4_tmp, k0, k1, l0, l1,  m0, m1, 0, nocc, blksize, blksize, blksize, nocc)
+                        einsum("mnij,klmncdab->ijklabcd", W_oooo[m0:m1, :, i0:i1, j0:j1],
+                            t4_tmp[:bk, :bl, :bm], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=0.0)
+                        _unpack_t4_(mycc, t4, t4_tmp, j0, j1, l0, l1, m0, m1, 0, nocc, blksize, blksize, blksize, nocc)
+                        einsum("mnik,jlmnbdac->ijklabcd", W_oooo[m0:m1, :, i0:i1, k0:k1],
+                            t4_tmp[:bj, :bl, :bm], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
+                        _unpack_t4_(mycc, t4, t4_tmp, j0, j1, k0, k1, m0, m1, 0, nocc, blksize, blksize, blksize, nocc)
+                        einsum("mnil,jkmnbcad->ijklabcd", W_oooo[m0:m1, :, i0:i1, l0:l1],
+                            t4_tmp[:bj, :bk, :bm], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
+                        _unpack_t4_(mycc, t4, t4_tmp, i0, i1, l0, l1, m0, m1, 0, nocc, blksize, blksize, blksize, nocc)
+                        einsum("mnjk,ilmnadbc->ijklabcd", W_oooo[m0:m1, :, j0:j1, k0:k1],
+                            t4_tmp[:bi, :bl, :bm], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
+                        _unpack_t4_(mycc, t4, t4_tmp, i0, i1, k0, k1, m0, m1, 0, nocc, blksize, blksize, blksize, nocc)
+                        einsum("mnjl,ikmnacbd->ijklabcd", W_oooo[m0:m1, :, j0:j1, l0:l1],
+                            t4_tmp[:bi, :bk, :bm], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
+                        _unpack_t4_(mycc, t4, t4_tmp, i0, i1, j0, j1, m0, m1, 0, nocc, blksize, blksize, blksize, nocc)
+                        einsum("mnkl,ijmnabcd->ijklabcd", W_oooo[m0:m1, :, k0:k1, l0:l1],
+                            t4_tmp[:bi, :bj, :bm], out=r4_tmp[:bi, :bj, :bk, :bl], alpha=1.0, beta=1.0)
 
-                    _accumulate_t4_(mycc, r4, r4_tmp, i0, i1, j0, j1, k0, k1, l0, l1, beta=1.0)
+                        _accumulate_t4_(mycc, r4, r4_tmp, i0, i1, j0, j1, k0, k1, l0, l1, beta=1.0)
+
         time2 = log.timer_debug1('t4: iter: W_oooo * t4 [%3d, %3d]:'%(l0, l1), *time2)
     t4_tmp = None
     r4_tmp = None
@@ -751,7 +741,8 @@ def compute_r4_tri(mycc, imds, t2, t3, t4):
     time1 = log.timer_debug1('t4: W_oooo * t4', *time1)
     return r4
 
-def r4_tri_divide_e_(mycc, r4, mo_energy):
+def r4_tri_divide_e_py_(mycc, r4, mo_energy):
+    # NOTE: For reference, not used in the actual code.
     nocc, nmo = mycc.nocc, mycc.nmo
     nvir = nmo - nocc
     blksize = mycc.blksize
@@ -804,15 +795,9 @@ def update_amps_rccsdtq_tri_(mycc, tamps, eris):
     # symmetrization
     r2 += r2.transpose(1, 0, 3, 2)
     time1 = log.timer_debug1('t1t2: symmetrize r2', *time1)
-    # divide by eijkabc
+    # divide by eijab
     r1r2_divide_e_(mycc, r1, r2, mo_energy)
     time1 = log.timer_debug1('t1t2: divide r1 & r2 by eia & eijab', *time1)
-
-    res_norm = [np.linalg.norm(r1), np.linalg.norm(r2)]
-
-    t1 += r1
-    t2 += r2
-    time1 = log.timer_debug1('t1t2: update t1 & t2', *time1)
     time0 = log.timer_debug1('t1t2 total', *time0)
 
     # t3
@@ -830,12 +815,6 @@ def update_amps_rccsdtq_tri_(mycc, tamps, eris):
     # divide by eijkabc
     r3_divide_e_(mycc, r3, mo_energy)
     time1 = log.timer_debug1('t3: divide r3 by eijkabc', *time1)
-
-    res_norm.append(np.linalg.norm(r3))
-
-    t3 += r3
-    r3 = None
-    time1 = log.timer_debug1('t3: update t3', *time1)
     time0 = log.timer_debug1('t3 total', *time0)
 
     # t4
@@ -847,19 +826,22 @@ def update_amps_rccsdtq_tri_(mycc, tamps, eris):
     time1 = log.timer_debug1('t4: compute r4', *time1)
     # symmetrization
     symmetrize_tamps_tri_(r4, nocc)
-    t4_spin_summation_inplace_(r4, nocc4, nvir, "P4_full", -1.0 / 24.0, 1.0)
+    t4_project_1_minus_p4_p31_inplace_(r4, nocc4, nvir)
     purify_tamps_tri_(r4, nocc)
     time1 = log.timer_debug1('t4: symmetrize r4', *time1)
     # divide by eijkabc
     r4_tri_divide_e_(mycc, r4, mo_energy)
     time1 = log.timer_debug1('t4: divide r4 by eijklabcd', *time1)
 
-    res_norm.append(np.linalg.norm(r4))
+    res_norm = [np.linalg.norm(r1), np.linalg.norm(r2), np.linalg.norm(r3), np.linalg.norm(r4)]
 
-    # t4 += r4
+    t1 += r1
+    t2 += r2
+    t3 += r3
+    # C implementation of t4 += r4
     t4_add_(t4, r4, nocc4, nvir)
-    r4 = None
-    time1 = log.timer_debug1('t4: update t4', *time1)
+    r1, r2, r3, r4 = None, None, None, None
+    time1 = log.timer_debug1('t4: update t1, t2, t3, t4', *time1)
     time0 = log.timer_debug1('t4 total', *time0)
     return res_norm
 
@@ -956,6 +938,7 @@ def dump_chk(mycc, tamps=None, frozen=None, mo_coeff=None, mo_occ=None):
         lib.chkfile.save(mycc.chkfile, 'rccsdtq', cc_chk)
     else:
         lib.chkfile.save(mycc.chkfile, 'rccsdtq_highm', cc_chk)
+    return mycc
 
 
 class RCCSDTQ(rccsdt.RCCSDT):
@@ -987,7 +970,7 @@ Saved results:
         T amplitudes t1[i,a], t2[i,j,a,b], t3[i,j,k,a,b,c]
     t4 :
         An array of shape (compressed_occ, nvir, nvir, nvir, nvir) for T4 amplitudes.
-        The occupied-oribtal dimension is stored in a compressed form for the
+        The occupied-orbital dimension is stored in a compressed form for the
         i <= j <= k <= l index combinations. The compressed tensor can be expanded to
         the full tensor by self.tamps_tri2full(t4)
     tamps :
@@ -1071,9 +1054,9 @@ class _IMDS:
         self.W_vooo = None
         self.W_vvvo = None
         self.W_vvvv = None
-        self.W_ovvvoo = None
-        self.W_ovvovo = None
-        self.W_vooooo = None
+        self.W_oovvvo = None
+        self.W_ovovvo = None
+        self.W_ooooov = None
         self.W_vvoooo = None
         self.W_vvvvoo = None
 
