@@ -113,7 +113,7 @@ class TestDispersionLogic(unittest.TestCase):
         with self.assertRaises(ValueError):
             dispersion.check_disp(mf_dft, disp='unsupported')
 
-    @unittest.skipIf(dispersion.dftd4 is not None, 'DFTD4 not installed')
+    @unittest.skipIf(dispersion.dftd4 is None, 'DFTD4 not installed')
     def test_wb97x_d4(self):
         mol = gto.M(
             verbose = 5,
