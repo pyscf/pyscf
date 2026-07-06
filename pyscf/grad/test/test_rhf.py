@@ -285,7 +285,7 @@ class KnownValues(unittest.TestCase):
         e1 = numpy.einsum('ij,ij', dm, pp_int.get_gth_pp(mol))
         mol = mol.set_geom_('Al 0 0 0; Al 0 0 1.899')
         e2 = numpy.einsum('ij,ij', dm, pp_int.get_gth_pp(mol))
-        self.assertAlmostEqual(de[1, 2]- (e1 - e2) / 2e-3, 6)
+        self.assertAlmostEqual(de[1, 2], (e1 - e2) / 2e-3, 6)
 
 def grad_nuc(mol):
     gs = numpy.zeros((mol.natm,3))
