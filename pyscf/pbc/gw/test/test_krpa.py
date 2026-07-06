@@ -58,6 +58,16 @@ def test_krpa_no_fc_outcore(diamond_krhf):
     assert rpa.e_tot == pytest.approx(-10.694392044197565, abs=1e-6)
 
 
+def test_krpa_acfd_exx_high_cost(diamond_krhf):
+    rpa = KRPA(diamond_krhf)
+    rpa.fc = False
+    rpa.acfd_exx = True
+    rpa.kernel()
+
+    assert rpa.e_corr == pytest.approx(-0.18527720400362488, abs=1e-6)
+    assert rpa.e_tot == pytest.approx(-10.694392045437178, abs=1e-6)
+
+
 def test_krpa_with_fc(diamond_krhf):
     rpa = KRPA(diamond_krhf)
     rpa.fc = True
@@ -76,4 +86,3 @@ def test_krpa_with_fc_outcore(diamond_krhf):
 
     assert rpa.e_corr == pytest.approx(-0.20723389722097715, abs=1e-6)
     assert rpa.e_tot == pytest.approx(-10.716348738655793, abs=1e-6)
-

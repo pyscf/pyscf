@@ -318,73 +318,73 @@ def MakeAtomInfos():
     for At in "Sc Ti V Cr Mn Fe Co Ni Cu Zn".split(): SetAo(At, "[1s] [2s] [3s] 4s [2px] [2py] [2pz] [3px] [3py] [3pz] 3d0 3d2- 3d1+ 3d2+ 3d1-")
     for At in "Ga Ge As Se Br Kr".split(): SetAo(At, "[1s] [2s] [3s] 4s [2px] [2py] [2pz] [3px] [3py] [3pz] 4px 4py 4pz [3d0] [3d2-] [3d1+] [3d2+] [3d1-]")
     for At in "Rb Sr".split():
-        nCoreX[At] = 36/2
+        nCoreX[At] = 36//2
         nAoX[At] = nCoreX[At] + 1
         SetAo(At, ' '.join ([shell_str(0,4,1),
                              shell_str(1,3,0),
                              shell_str(2,1,0)]))
     for At in "Y Zr Nb Mo Tc Ru Rh Pd Ag Cd".split():
-        nCoreX[At] = 36/2
+        nCoreX[At] = 36//2
         nAoX[At] = nCoreX[At] + 1 + 5
         SetAo(At, ' '.join ([shell_str(0,4,1),
                              shell_str(1,3,0),
                              shell_str(2,1,1)]))
     for At in "In Sn Sb Te I Xe".split():
-        nCoreX[At] = 36/2 + 5
+        nCoreX[At] = 36//2 + 5
         nAoX[At] = nCoreX[At] + 1 + 3
         SetAo(At, ' '.join ([shell_str(0,4,1),
                              shell_str(1,3,1),
                              shell_str(2,2,0)]))
     for At in "Cs Ba".split():
-        nCoreX[At] = 54/2
+        nCoreX[At] = 54//2
         nAoX[At] = nCoreX[At] + 1
         SetAo(At, ' '.join ([shell_str(0,5,1),
                              shell_str(1,4,0),
                              shell_str(2,2,0)]))
     for At in "Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu".split():
-        nCoreX[At] = 54/2
+        nCoreX[At] = 54//2
         nAoX[At] = nCoreX[At] + 1 + 5 + 7
         SetAo(At, ' '.join ([shell_str(0,5,1),
                              shell_str(1,4,0),
                              shell_str(2,2,1),
                              shell_str(3,0,1)]))
     for At in "La Hf Ta W Re Os Ir Pt Au Hg".split():
-        nCoreX[At] = 54/2 + 7
+        nCoreX[At] = 54//2 + 7
         nAoX[At] = nCoreX[At] + 1 + 5
         SetAo(At, ' '.join ([shell_str(0,5,1),
                              shell_str(1,4,0),
                              shell_str(2,2,1),
                              shell_str(3,1,0)]))
     for At in "Tl Pb Bi Po At Rn".split():
-        nCoreX[At] = 54/2 + 7 + 5
+        nCoreX[At] = 54//2 + 7 + 5
         nAoX[At] = nCoreX[At] + 1 + 3
         SetAo(At, ' '.join ([shell_str(0,5,1),
                              shell_str(1,4,1),
                              shell_str(2,3,0),
                              shell_str(3,1,0)]))
     for At in "Fr Ra".split():
-        nCoreX[At] = 86/2
+        nCoreX[At] = 86//2
         nAoX[At] = nCoreX[At] + 1
         SetAo(At, ' '.join ([shell_str(0,6,1),
                              shell_str(1,5,0),
                              shell_str(2,3,0),
                              shell_str(3,1,0)]))
     for At in "Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No".split():
-        nCoreX[At] = 86/2
+        nCoreX[At] = 86//2
         nAoX[At] = nCoreX[At] + 1 + 5 + 7
         SetAo(At, ' '.join ([shell_str(0,6,1),
                              shell_str(1,5,0),
                              shell_str(2,3,1),
                              shell_str(3,1,1)]))
     for At in "Ac Lr Rf Db Sg Bh Hs Mt Ds Rg Cn".split():
-        nCoreX[At] = 86/2 + 7
+        nCoreX[At] = 86//2 + 7
         nAoX[At] = nCoreX[At] + 1 + 5
         SetAo(At, ' '.join ([shell_str(0,6,1),
                              shell_str(1,5,0),
                              shell_str(2,3,1),
                              shell_str(3,2,0)]))
     for At in "Nh Fl Mc Lv Ts Og".split():
-        nCoreX[At] = 86/2 + 7 + 5
+        nCoreX[At] = 86//2 + 7 + 5
         nAoX[At] = nCoreX[At] + 1 + 3
         SetAo(At, ' '.join ([shell_str(0,6,1),
                              shell_str(1,5,1),

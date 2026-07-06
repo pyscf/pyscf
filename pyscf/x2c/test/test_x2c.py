@@ -311,6 +311,27 @@ C     F
         dat = c.T.dot(pmol.intor('int1e_ovlp_spinor')).dot(c)
         self.assertAlmostEqual(abs(ref - dat).max(), 0, 12)
 
+    # issue 3295
+    def test_to_ks(self):
+        def check(mf, cls):
+            assert isinstance(mf, x2c._X2C_SCF) and mf.istype(cls)
+
+        mol = gto.M(atom='He')
+        for cls in ('RHF', 'UHF', 'RKS', 'UKS'):
+            mf = getattr(mol, cls).sfx2c1e()
+            check(mf.to_rks(), 'RKS')
+            check(mf.to_uks(), 'UKS')
+            check(mf.to_gks(), 'GKS')
+            check(mf.to_rhf(), 'RHF')
+            check(mf.to_uhf(), 'UHF')
+            check(mf.to_ghf(), 'GHF')
+
+        mf = mol.GHF().sfx2c1e()
+        check(mf.to_ghf(), 'GHF')
+        check(mf.to_gks(), 'GKS')
+        mf = mol.GKS().sfx2c1e()
+        check(mf.to_ghf(), 'GHF')
+        check(mf.to_gks(), 'GKS')
 
 if __name__ == "__main__":
     print("Full Tests for x2c")

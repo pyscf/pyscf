@@ -152,7 +152,8 @@ class SFX2C1E_SCF(x2c._X2C_SCF):
         if self.with_x2c and not hasattr(dst, 'with_x2c'):
             logger.warn(self, 'Destination object of to_hf/to_ks method is not '
                         'an X2C object. Convert dst to X2C object.')
-            dst = dst.sfx2c()
+            # dst = dst.sfx2c()
+            dst = (getattr(dst, 'sfx2c', None) or getattr(dst, 'sfx2c1e'))()
         return hf.SCF._transfer_attrs_(self, dst)
 
     def to_gpu(self):
