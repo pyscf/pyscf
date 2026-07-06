@@ -212,9 +212,9 @@ class _SGXHF:
             try:
                 will_reset = False
                 self._grids_reset = False
-                if sgx.grids_level_f != sgx.grids_level_i \
-                        and numpy.linalg.norm(dm - dm_last) < sgx.grids_switch_thrd \
-                        and self._in_scf:
+                if (sgx.grids_level_f != sgx.grids_level_i and
+                    self._in_scf and
+                    dm_last is not None and numpy.linalg.norm(dm - dm_last) < sgx.grids_switch_thrd):
                     self._grids_reset = True
                     will_reset = True
                 elif self._nsteps_direct == 0:
