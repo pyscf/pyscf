@@ -153,10 +153,16 @@ def contract(subscripts, A, B, alpha=1, beta=0, out=None, **kwargs):
     if A.size < EINSUM_MAX_SIZE or B.size < EINSUM_MAX_SIZE:
         return _numpy_einsum(idx_str, A, B, alpha=alpha, beta=beta, out=out)
 
+    C_dtype = numpy.result_type(A, B)
     if EINSUM_BACKEND == 'pytblis':
+        # pytblis cannot apply alpha/beta when it has to fall back to numpy
+        # tensordot, and it requires the output to share the IEEE type of the
+        # inputs. Route these cases through numpy instead.
+        if ((out is not None and out.dtype != C_dtype) or
+                numpy.result_type(C_dtype, alpha, beta) != C_dtype):
+            return _numpy_einsum(idx_str, A, B, alpha=alpha, beta=beta, out=out)
         return pytblis.contract(idx_str, A, B, alpha=alpha, beta=beta, out=out)
 
-    C_dtype = numpy.result_type(A, B)
     if EINSUM_BACKEND =='pyscf-tblis' and C_dtype == numpy.double:
         # tblis is slow for complex type
         return tblis_einsum.contract(idx_str, A, B, alpha=alpha, beta=beta, out=out)

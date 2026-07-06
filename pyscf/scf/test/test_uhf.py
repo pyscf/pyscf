@@ -139,6 +139,44 @@ class KnownValues(unittest.TestCase):
         dm2 = scf.uhf.UHF(mol).get_init_guess(mol, key='sap')
         self.assertAlmostEqual(lib.fp(dm2), 0.6440359527450615, 7)
 
+    def test_break_spin_symm_mix(self):
+        # H2 at equilibrium: verify DM properties of the breaksym='mix' initial guess
+        mol_h2 = gto.M(atom='H 0 0 0; H 0 0 1.4', basis='sto-3g', spin=0, verbose=0)
+        s = mol_h2.intor_symmetric('int1e_ovlp')
+
+        mf_h2 = scf.UHF(mol_h2)
+        dm = mf_h2.init_guess_by_minao(mol_h2, breaksym='mix')
+        dma, dmb = dm
+
+        # spin symmetry must be broken
+        self.assertFalse(numpy.allclose(dma, dmb))
+
+        # electron count preserved: Tr(S * DM) = N_elec per spin
+        self.assertAlmostEqual(numpy.einsum('ij,ji->', s, dma), 1.0, 5)
+        self.assertAlmostEqual(numpy.einsum('ij,ji->', s, dmb), 1.0, 5)
+
+        # DMs must be positive semidefinite (physically valid density matrices)
+        self.assertTrue(numpy.all(numpy.linalg.eigvalsh(dma) > -1e-10))
+        self.assertTrue(numpy.all(numpy.linalg.eigvalsh(dmb) > -1e-10))
+
+    def test_break_spin_symm_mix_h2_dissociation(self):
+        # At stretched H2 (well past the Coulson-Fischer point) UHF with
+        # breaksym='mix' should find a lower-energy broken-symmetry solution
+        # than RHF, with the unpaired electrons localised on separate atoms.
+        mol_h2 = gto.M(atom='H 0 0 0; H 0 0 4.0', basis='sto-3g', spin=0, verbose=0)
+
+        e_rhf = scf.RHF(mol_h2).kernel()
+
+        mf_uhf = scf.UHF(mol_h2)
+        mf_uhf.init_guess_breaksym = 'mix'
+        e_uhf = mf_uhf.kernel()
+
+        self.assertTrue(mf_uhf.converged)
+        # broken-symmetry UHF must be lower than RHF at stretched geometry
+        self.assertLess(e_uhf, e_rhf)
+        # significant spin contamination expected (<S^2> -> 1 as R -> inf)
+        self.assertGreater(mf_uhf.spin_square()[0], 0.5)
+
     def test_get_grad(self):
         g = mf2.get_grad(mf2.mo_coeff, mf2.mo_occ)
         self.assertAlmostEqual(abs(g).max(), 0, 6)

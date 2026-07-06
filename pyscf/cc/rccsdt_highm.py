@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2025 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,13 +27,11 @@ Chem. Phys. Lett. 228, 233 (1994); DOI:10.1016/0009-2614(94)00898-1
 '''
 
 import numpy as np
-import numpy
 import functools
 import ctypes
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, get_e_hf, _mo_without_core
-from pyscf.cc import _ccsd, rccsdt
+from pyscf.cc import rccsdt
 from pyscf.cc.rccsdt import (_einsum, t3_spin_summation_inplace_, update_t1_fock_eris, intermediates_t1t2,
                             compute_r1r2, r1r2_divide_e_, intermediates_t3, _PhysicistsERIs, _IMDS)
 from pyscf import __config__
@@ -187,15 +185,9 @@ def update_amps_rccsdt_(mycc, tamps, eris):
     # symmetrization
     r2 += r2.transpose(1, 0, 3, 2)
     time1 = log.timer_debug1('t1t2: symmetrize r2', *time1)
-    # divide by eijkabc
+    # divide by eijab
     r1r2_divide_e_(mycc, r1, r2, mo_energy)
     time1 = log.timer_debug1('t1t2: divide r1 & r2 by eia & eijab', *time1)
-
-    res_norm = [np.linalg.norm(r1), np.linalg.norm(r2)]
-
-    t1 += r1
-    t2 += r2
-    time1 = log.timer_debug1('t1t2: update t1 & t2', *time1)
     time0 = log.timer_debug1('t1t2 total', *time0)
 
     intermediates_t3(mycc, imds, t2)
@@ -215,11 +207,13 @@ def update_amps_rccsdt_(mycc, tamps, eris):
     r3_divide_e_(mycc, r3, mo_energy)
     time1 = log.timer_debug1('t3: divide r3 by eijkabc', *time1)
 
-    res_norm.append(np.linalg.norm(r3))
+    res_norm = [np.linalg.norm(r1), np.linalg.norm(r2), np.linalg.norm(r3)]
 
+    t1 += r1
+    t2 += r2
     t3 += r3
-    r3 = None
-    time1 = log.timer_debug1('t3: update t3', *time1)
+    r1, r2, r3 = None, None, None
+    time1 = log.timer_debug1('t3: update t1, t2, t3', *time1)
     time0 = log.timer_debug1('t3 total', *time0)
     return res_norm
 

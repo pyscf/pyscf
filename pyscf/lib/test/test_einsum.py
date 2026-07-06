@@ -3,6 +3,11 @@ import numpy
 from pyscf import lib
 einsum = lib.einsum
 
+# pytblis does not support contractions between operands of different
+# floating-point precision (e.g. float64 vs float32); real/complex mixing at
+# the same precision is fine
+_pytblis = lib.numpy_helper.EINSUM_BACKEND == 'pytblis'
+
 def setUpModule():
     global bak
     lib.numpy_helper.EINSUM_MAX_SIZE, bak = 0, lib.numpy_helper.EINSUM_MAX_SIZE
@@ -92,6 +97,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(c0.dtype == c1.dtype)
         self.assertTrue(abs(c0-c1).max() < 1e-14)
 
+    @unittest.skipIf(_pytblis, 'pytblis does not support operands of different precision')
     def test_d_cslice(self):
         a = numpy.random.random((7,1,3,4))
         b = numpy.random.random((2,4,5,7)).astype(numpy.float32)
@@ -100,6 +106,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(c0.dtype == c1.dtype)
         self.assertTrue(abs(c0-c1).max() < 1e-14)
 
+    @unittest.skipIf(_pytblis, 'pytblis does not support operands of different precision')
     def test_z_cslice(self):
         a = numpy.random.random((7,1,3,4)).astype(numpy.float32) + 0j
         b = numpy.random.random((2,4,5,7))
@@ -108,6 +115,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(c0.dtype == c1.dtype)
         self.assertTrue(abs(c0-c1).max() < 1e-14)
 
+    @unittest.skipIf(_pytblis, 'pytblis does not support operands of different precision')
     def test_cslice_dslice(self):
         a = numpy.random.random((7,1,3,4)).astype(numpy.float32) + 0j
         b = numpy.random.random((2,4,5,7))

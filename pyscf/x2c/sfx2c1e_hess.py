@@ -26,7 +26,7 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf import gto
-from pyscf.x2c import x2c
+from pyscf.x2c import x2c, sfx2c1e
 from pyscf.x2c import sfx2c1e_grad
 
 def hcore_hess_generator(x2cobj, mol=None):
@@ -60,17 +60,7 @@ def gen_sf_hfw(mol, approx='1E'):
     aoslices = mol.aoslice_by_atom()
     nao = mol.nao_nr()
     if 'ATOM' in approx:
-        x0 = numpy.zeros((nao,nao))
-        for ia in range(mol.natm):
-            ish0, ish1, p0, p1 = aoslices[ia]
-            shls_slice = (ish0, ish1, ish0, ish1)
-            t1 = mol.intor('int1e_kin', shls_slice=shls_slice)
-            s1 = mol.intor('int1e_ovlp', shls_slice=shls_slice)
-            with mol.with_rinv_at_nucleus(ia):
-                z = -mol.atom_charge(ia)
-                v1 = z * mol.intor('int1e_rinv', shls_slice=shls_slice)
-                w1 = z * mol.intor('int1e_prinvp', shls_slice=shls_slice)
-            x0[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
+        x0 = sfx2c1e._atomic_1e_x(mol)
     else:
         cl0 = c0[:nao,nao:]
         cs0 = c0[nao:,nao:]
@@ -329,46 +319,3 @@ def _get_r2(s0_roots, sa0, s1i, sa1i, s1j, sa1j, s2, sa2, r0_roots):
     R2 += lib.einsum('i,iq,qj->ij' , w_invsqrt  , R0_mid , s2_sqrt)
     R2 = reduce(numpy.dot, (v_s, R2, v_s.T))
     return R2
-
-
-if __name__ == '__main__':
-    bak = lib.param.LIGHT_SPEED
-    lib.param.LIGHT_SPEED = 10
-
-    mol = gto.M(
-        verbose = 0,
-        atom = [["O" , (0. , 0.     , 0.0001)],
-                [1   , (0. , -0.757 , 0.587)],
-                [1   , (0. , 0.757  , 0.587)]],
-        basis = '3-21g',
-    )
-    h1_deriv_1 = sfx2c1e_grad.gen_sf_hfw(mol, approx='1E')
-
-    mol = gto.M(
-        verbose = 0,
-        atom = [["O" , (0. , 0.     ,-0.0001)],
-                [1   , (0. , -0.757 , 0.587)],
-                [1   , (0. , 0.757  , 0.587)]],
-        basis = '3-21g',
-    )
-    h1_deriv_2 = sfx2c1e_grad.gen_sf_hfw(mol, approx='1E')
-
-    mol = gto.M(
-        verbose = 0,
-        atom = [["O" , (0. , 0.     , 0.   )],
-                [1   , (0. , -0.757 , 0.587)],
-                [1   , (0. , 0.757  , 0.587)]],
-        basis = '3-21g',
-    )
-    h2_deriv = gen_sf_hfw(mol)
-
-    h2 = h2_deriv(0,0)
-    h2_ref = (h1_deriv_1(0)[2] - h1_deriv_2(0)[2]) / 0.0002 * lib.param.BOHR
-    print(abs(h2[2,2]-h2_ref).max())
-    print(lib.finger(h2) - 33.71188112440316)
-
-    h2 = h2_deriv(1,0)
-    h2_ref = (h1_deriv_1(1)[2] - h1_deriv_2(1)[2]) / 0.0002 * lib.param.BOHR
-    print(abs(h2[2,2]-h2_ref).max())
-    print(lib.finger(h2) - -23.609411428378138)
-    lib.param.LIGHT_SPEED = bak

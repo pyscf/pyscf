@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2025 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,14 +28,10 @@ MBPT and Coupled-Cluster Theory, Cambridge University Press (2009). DOI: 10.1017
 '''
 
 import numpy as np
-import numpy
 import functools
-from pyscf import lib
 from pyscf.lib import logger
-from pyscf.mp.mp2 import get_e_hf
-from pyscf.mp.ump2 import get_nocc, get_nmo, get_frozen_mask
 from pyscf.cc import uccsdt
-from pyscf.cc.rccsdt import _einsum, run_diis, _finalize
+from pyscf.cc.rccsdt import _einsum
 from pyscf.cc.uccsdt import (update_t1_fock_eris_uhf, intermediates_t1t2_uhf, compute_r1r2_uhf,
                             antisymmetrize_r2_uhf_, r1r2_divide_e_uhf_, intermediates_t3_uhf, _PhysicistsERIs, _IMDS)
 from pyscf import __config__
@@ -132,7 +128,7 @@ def compute_r3_uhf(mycc, imds, t2, t3):
     W_oooo, W_oOoO, W_OOOO = imds.W_oooo, imds.W_oOoO, imds.W_OOOO
     W_ovoo, W_oVoO, W_OVOO = imds.W_ovoo, imds.W_oVoO, imds.W_OVOO
     W_vOoO, W_oVoV, W_vOvO, W_vVoV = imds.W_vOoO, imds.W_oVoV, imds.W_vOvO, imds.W_vVoV
-    W_voov, W_vOoV, W_VoOv, W_VOOV = imds.W_voov, imds.W_vOoV, imds.W_VoOv, imds.W_VOOV
+    W_voov, W_vOoV, W_oVvO, W_VOOV = imds.W_voov, imds.W_vOoV, imds.W_oVvO, imds.W_VOOV
     W_vvvo, W_vVvO, W_VVVO = imds.W_vvvo, imds.W_vVvO, imds.W_VVVO
     W_vvvv, W_vVvV, W_VVVV = imds.W_vvvv, imds.W_vVvV, imds.W_VVVV
 
@@ -155,7 +151,7 @@ def compute_r3_uhf(mycc, imds, t2, t3):
     einsum("abde,ijkdec->ijkabc", W_VVVV, t3bbb, out=r3bbb, alpha=1.0 / 24.0, beta=1.0)
     einsum("lmij,lmkabc->ijkabc", W_OOOO, t3bbb, out=r3bbb, alpha=1.0 / 24.0, beta=1.0)
     einsum("alid,ljkdbc->ijkabc", W_VOOV, t3bbb, out=r3bbb, alpha=0.25, beta=1.0)
-    einsum("alid,jkbcld->ijkabc", W_VoOv, t3bba, out=r3bbb, alpha=0.25, beta=1.0)
+    einsum("ladi,jkbcld->ijkabc", W_oVvO, t3bba, out=r3bbb, alpha=0.25, beta=1.0)
     time1 = log.timer_debug1('t3: r3bbb', *time1)
 
     r3aab = np.empty_like(t3aab)
@@ -177,7 +173,7 @@ def compute_r3_uhf(mycc, imds, t2, t3):
     einsum("alid,lkdcjb->ijabkc", W_vOoV, t3bba, out=r3aab, alpha=1.0, beta=1.0)
     einsum("lcid,ljabkd->ijabkc", W_oVoV, t3aab, out=r3aab, alpha=-0.5, beta=1.0)
     einsum("aldk,ijdblc->ijabkc", W_vOvO, t3aab, out=r3aab, alpha=-0.5, beta=1.0)
-    einsum("clkd,ijlabd->ijabkc", W_VoOv, t3aaa, out=r3aab, alpha=0.25, beta=1.0)
+    einsum("lcdk,ijlabd->ijabkc", W_oVvO, t3aaa, out=r3aab, alpha=0.25, beta=1.0)
     einsum("clkd,ijabld->ijabkc", W_VOOV, t3aab, out=r3aab, alpha=0.25, beta=1.0)
     W_vvvo = imds.W_vvvo = None
     W_ovoo = imds.W_ovoo = None
@@ -201,7 +197,7 @@ def compute_r3_uhf(mycc, imds, t2, t3):
     einsum("lmij,lmabkc->ijabkc", W_OOOO, t3bba, out=r3bba, alpha=0.125, beta=1.0)
     einsum("mlki,ljabmc->ijabkc", W_oOoO, t3bba, out=r3bba, alpha=0.5, beta=1.0)
     einsum("alid,ljdbkc->ijabkc", W_VOOV, t3bba, out=r3bba, alpha=1.0, beta=1.0)
-    einsum("alid,lkdcjb->ijabkc", W_VoOv, t3aab, out=r3bba, alpha=1.0, beta=1.0)
+    einsum("ladi,lkdcjb->ijabkc", W_oVvO, t3aab, out=r3bba, alpha=1.0, beta=1.0)
     einsum("cldi,ljabkd->ijabkc", W_vOvO, t3bba, out=r3bba, alpha=-0.5, beta=1.0)
     einsum("lakd,ijdblc->ijabkc", W_oVoV, t3bba, out=r3bba, alpha=-0.5, beta=1.0)
     einsum("clkd,ijlabd->ijabkc", W_vOoV, t3bbb, out=r3bba, alpha=0.25, beta=1.0)
@@ -220,7 +216,7 @@ def compute_r3_uhf(mycc, imds, t2, t3):
     W_oOoO = imds.W_oOoO = None
     W_oVoV = imds.W_oVoV = None
     W_vOvO = imds.W_vOvO = None
-    W_VoOv = imds.W_VoOv = None
+    W_oVvO = imds.W_oVvO = None
     W_VOOV = imds.W_VOOV = None
     W_VVVV = imds.W_VVVV = None
     W_VVVO = imds.W_VVVO = None
@@ -292,20 +288,10 @@ def update_amps_uccsdt_(mycc, tamps, eris):
     # antisymmetrization
     antisymmetrize_r2_uhf_(r2)
     time1 = log.timer_debug1('t1t2: antisymmetrize r2', *time1)
-    # divide by eijkabc
+    # divide by eijab
     r1r2_divide_e_uhf_(mycc, r1, r2, mo_energy)
     (r1a, r1b), (r2aa, r2ab, r2bb) = r1, r2
     time1 = log.timer_debug1('t1t2: divide r1 & r2 by eia & eijab', *time1)
-
-    res_norm = [np.linalg.norm(r1a), np.linalg.norm(r1b),
-                np.linalg.norm(r2aa), np.linalg.norm(r2ab), np.linalg.norm(r2bb)]
-
-    t1a += r1a
-    t1b += r1b
-    t2aa += r2aa
-    t2ab += r2ab
-    t2bb += r2bb
-    time1 = log.timer_debug1('t1t2: update t1 & t2', *time1)
     time0 = log.timer_debug1('t1t2 total', *time0)
 
     # t3
@@ -324,8 +310,16 @@ def update_amps_uccsdt_(mycc, tamps, eris):
     r3aaa, r3aab, r3bba, r3bbb = r3
     time1 = log.timer_debug1('t3: divide r3 by eijkabc', *time1)
 
-    res_norm += [np.linalg.norm(r3aaa), np.linalg.norm(r3aab), np.linalg.norm(r3bba), np.linalg.norm(r3bbb)]
+    res_norm = [np.linalg.norm(r1a), np.linalg.norm(r1b),
+                np.linalg.norm(r2aa), np.linalg.norm(r2ab), np.linalg.norm(r2bb),
+                np.linalg.norm(r3aaa), np.linalg.norm(r3aab), np.linalg.norm(r3bba), np.linalg.norm(r3bbb)]
 
+    t1a += r1a
+    t1b += r1b
+    t2aa += r2aa
+    t2ab += r2ab
+    t2bb += r2bb
+    r1a, r1b, r2aa, r2ab, r2bb = None, None, None, None, None
     t3aaa += r3aaa
     r3aaa = None
     t3bbb += r3bbb
@@ -335,7 +329,7 @@ def update_amps_uccsdt_(mycc, tamps, eris):
     t3bba += r3bba
     r3bba = None
     t3 = (t3aaa, t3aab, t3bba, t3bbb)
-    time1 = log.timer_debug1('t3: update t3', *time1)
+    time1 = log.timer_debug1('t3: update t1, t2, t3', *time1)
     time0 = log.timer_debug1('t3 total', *time0)
 
     tamps = [t1, t2, t3]
