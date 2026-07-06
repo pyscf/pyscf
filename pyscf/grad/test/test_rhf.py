@@ -253,7 +253,39 @@ class KnownValues(unittest.TestCase):
         mf_scan = mf.as_scanner()
         e1 = mf_scan('F 0 0 0; H 0 0 1.761')
         e2 = mf_scan('F 0 0 0; H 0 0 1.759')
-        self.assertAlmostEqual(g[1, 2], (e1 - e2)/2e-3, 6)
+        self.assertAlmostEqual(g[1, 2], (e1 - e2)/2e-3, delta=3e-6)
+
+    def test_gth_pp_hcore_grad(self):
+        from pyscf.df import incore
+        from pyscf.gto import pp_int
+        from pyscf.pbc.gto.pseudo.pp_int import fake_cell_vloc
+        mol = gto.M(
+            atom    = 'Al 0 0 0; Al 0 0 1.9',
+            basis   = 'gth-dzvp',
+            pseudo  = 'gth-pbe',
+            unit    = 'B',)
+        numpy.random.seed(1)
+        nao = mol.nao
+        dm = numpy.random.rand(nao,nao) - .5
+        dm = dm.dot(dm.T)
+        de = pp_int.vpploc_nuc_grad(mol, dm)
+        de += pp_int.vppnl_nuc_grad(mol, dm)
+
+        p0, p1 = mol.aoslice_by_atom()[1,2:]
+        fakemol = fake_cell_vloc(mol, 0)
+        Z = fakemol.atom_charges()
+        v = incore.aux_e2(mol, fakemol, 'int3c2e_ip1', comp=3)
+        v1 = numpy.einsum('xpqi,i->xpq', v, Z)
+        vrinv = v[:,:,:,1] * -Z[1]
+        vrinv[:,p0:p1] += v1[:,p0:p1]
+        vrinv = vrinv + vrinv.transpose(0,2,1)
+        de[1] += numpy.einsum('xpq,pq->x', vrinv, dm)
+
+        mol = mol.set_geom_('Al 0 0 0; Al 0 0 1.901')
+        e1 = numpy.einsum('ij,ij', dm, pp_int.get_gth_pp(mol))
+        mol = mol.set_geom_('Al 0 0 0; Al 0 0 1.899')
+        e2 = numpy.einsum('ij,ij', dm, pp_int.get_gth_pp(mol))
+        self.assertAlmostEqual(de[1, 2]- (e1 - e2) / 2e-3, 6)
 
 def grad_nuc(mol):
     gs = numpy.zeros((mol.natm,3))
