@@ -134,8 +134,8 @@ class TestDispersionLogic(unittest.TestCase):
             # legacy value, corresponding to
             # mf.xc = 'wb97x'
             # mf.nlc = False
-            # mf.disp = 'd4:wb97x'
-            self.assertAlmostEqual(mf.e_tot, -76.33801606078175, 8)
+            # mf.disp = 'd4:wb97x-2008'
+            self.assertAlmostEqual(mf.e_tot, -76.3377143469286, 8)
 
 if __name__ == "__main__":
     unittest.main()

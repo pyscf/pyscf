@@ -115,13 +115,17 @@ pyscf.scf.dispersion.DFTD4_RECOMMENDATIONS = True
 
 The default behavior will change to the DFT-D4 recommended convention in PySCF v2.16.
 ''', FutureWarning, stacklevel=2)
-        return 'wb97x', False, 'd4:wb97x'
+        return 'wb97x', False, 'd4:wb97x-2008'
 
     if method_lower in _white_list:
         return _white_list[method_lower]
 
-    if '-d3' in method_lower or '-d4' in method_lower:
-        xc, disp = method_lower.split('-')
+    if '-d3' in method_lower:
+        xc, _, disp_suffix = method_lower.partition('-d3')
+        disp = f'd3{disp_suffix}'
+    elif '-d4' in method_lower:
+        xc, _, disp_suffix = method_lower.partition('-d4')
+        disp = f'd4{disp_suffix}'
     else:
         xc, disp = method_lower, None
 
