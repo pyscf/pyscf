@@ -5,6 +5,7 @@ import unittest
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 BUILD_WHEEL = REPO_ROOT / "tools" / "windows" / "build-wheel.ps1"
 ENVIRONMENT = REPO_ROOT / "tools" / "windows" / "environment.yml"
+GITATTRIBUTES = REPO_ROOT / ".gitattributes"
 
 
 class BuildWheelLayoutTests(unittest.TestCase):
@@ -79,9 +80,14 @@ class BuildWheelLayoutTests(unittest.TestCase):
         self.assertIn('Missing support DLLs will be retried after the first wheel build pass.', text)
         self.assertIn('Copy-Item -LiteralPath $source -Destination (Join-Path $LibDir $name) -Force', text)
 
-    def test_cmakelists_uses_cross_platform_xcfun_patch_fallback(self):
+    def test_gitattributes_forces_lf_for_patch_files(self):
+        text = GITATTRIBUTES.read_text(encoding="utf-8")
+        self.assertIn("*.patch text eol=lf", text)
+
+    def test_cmakelists_keeps_xcfun_build_flags_without_patch_fallback(self):
         text = (REPO_ROOT / "pyscf" / "lib" / "CMakeLists.txt").read_text(encoding="utf-8")
-        self.assertIn('git apply --reject ${PROJECT_SOURCE_DIR}/libxcfun.patch || ${CMAKE_COMMAND} -E true', text)
+        self.assertIn('PATCH_COMMAND git apply --reject ${PROJECT_SOURCE_DIR}/libxcfun.patch || true', text)
+        self.assertNotIn('${CMAKE_COMMAND} -E true', text)
         self.assertIn('-DCMAKE_CXX_FLAGS=-DM_PI=3.14159265358979323846', text)
 
 

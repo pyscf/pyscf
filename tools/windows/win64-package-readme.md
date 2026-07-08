@@ -116,7 +116,7 @@ Notes:
   - `tools/windows/reports/installed-wheel-report.json`
 - Per-directory raw pytest logs are stored under `tools/windows/reports/logs/`.
 - Verification time is approximately 46 minutes on a i5-13600KF.
-- A recent full Windows run finished with two known failures, `pyscf\cc\test` and `pyscf\pbc\tdscf\test`, which currently look like numerical or platform-specific deviations rather than wheel packaging defects. See `Appendix -> Known Windows Test Deviations` for the concrete failing test cases and current review notes.
+- A recent full Windows run finished with two known failures, `pyscf\cc\test` and `pyscf\pbc\tdscf\test`, which currently look like numerical or platform-specific deviations rather than wheel packaging defects.
 
 Useful `verify-installed-wheel.ps1` parameters:
 
@@ -181,25 +181,6 @@ Remove-Item .\tools\windows\reports\installed-wheel-report-*.json -Force -ErrorA
 
 ## Appendix
 
-### Known Windows Test Deviations
-
-The current full installed-wheel verification on Windows passed 51 of 53 discovered test directories. The remaining two failures are recorded here for review because they appear to be numerical or platform-specific test deviations rather than wheel packaging regressions.
-
-1. `pyscf\cc\test`
-   - Failing test: `pyscf\cc\test\test_eom_gccsd.py::KnownValues::test_eaccsd`
-   - Log: `tools\windows\reports\logs\pyscf__cc__test.log`
-   - Observed failure: the final `eaccsd_star_contract` check for the third root returned `0.19228223370666436` instead of the expected `0.2820757599337823`.
-   - Context from the log: `WARN: Small 4.0361280166920697e-29 left-right amplitude overlap. Results may be inaccurate.`
-   - Current assessment: this looks like a numerical stability or left/right eigenvector matching issue inside the test scenario, not a missing file, missing DLL, or installed-wheel import problem.
-   - Review position: worth follow-up as a separate numerical correctness investigation, but not currently treated as a Windows wheel packaging merge blocker.
-
-2. `pyscf\pbc\tdscf\test`
-   - Failing test: `pyscf\pbc\tdscf\test\test_uks.py::DiamondPBE0::test_tdhf`
-   - Log: `tools\windows\reports\logs\pyscf__pbc__tdscf__test.log`
-   - Observed failure: the `TDDFT` result differed from the hard-coded reference by `0.10508681940613762 eV`, exceeding the current `assertAlmostEqual(..., 5)` tolerance.
-   - Current assessment: this looks like a platform- or linear-algebra-dependent numerical deviation in the periodic TDDFT/TDHF test case rather than an installed-wheel staging or packaging defect.
-   - Review position: worth follow-up as a separate Windows numerical deviation, but not currently treated as a wheel packaging merge blocker.
-
 ### `libxcfun.patch` Line-Ending Fix
 
 Cross-platform re-checks showed that `pyscf\lib\libxcfun.patch` was not inherently corrupt:
@@ -223,7 +204,7 @@ Root cause:
 Fix:
 
 - Add a repository-level `.gitattributes` rule:
-  - `pyscf/lib/libxcfun.patch text eol=lf`
+  - `*.patch text eol=lf`
 - Renormalize the worktree copy of `pyscf\lib\libxcfun.patch` so Windows checkouts keep the file in LF form.
 
 Validation:
@@ -246,7 +227,7 @@ Current status:
 
 - The line-ending issue is fixed in this checkout.
 - The bundled `xcfun` patch step now behaves deterministically on the validated Windows build path.
-- The fallback `PATCH_COMMAND ... || cmake -E true` still remains in the CMake flow, but the clean validation run no longer depends on that fallback for this patch.
+- The `PATCH_COMMAND` flow is back to the upstream-style `... || true` form now that the worktree patch can be preserved as LF.
 
 Expected benefit:
 
