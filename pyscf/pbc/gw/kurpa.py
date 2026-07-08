@@ -524,7 +524,6 @@ def get_rpa_exx(rpa, acfd=False, correction_only=False):
     ex : double
         exchange energy
     """
-    mo_energy = np.asarray(rpa._scf.mo_energy)
     mo_coeff = np.asarray(rpa._scf.mo_coeff)
     mo_occ = np.asarray(rpa._scf.mo_occ)
 
@@ -584,15 +583,7 @@ def get_rpa_exx(rpa, acfd=False, correction_only=False):
                             mo_occ_ij = np.minimum(mo_occ[s][km][:nocc_i, None], mo_occ[s][kn][None, :nocc_j])
                             mo_occ_ij -= mo_occ[s][km][:nocc_i, None] * mo_occ[s][kn][None, :nocc_j]
                         else:
-                            # The following line is equivalent to the frequency integration in equation 12 in
-                            # doi.org/10.1103/PhysRevB.81.115126
-                            # TODO: add a detailed note
-                            eij = mo_energy[s][km][:nocc_i, None] - mo_energy[s][kn][None, :nocc_j]
-                            integrand = np.zeros((nocc_i, nocc_j), dtype=np.complex128)
-                            integrand[eij > 1e-6] = 1
-                            integrand[eij < -1e-6] = -1
-                            mo_occ_ij = 1.0 - integrand
-                            mo_occ_ij = mo_occ_ij * mo_occ[s][km][:nocc_i, None]
+                            mo_occ_ij = np.minimum(mo_occ[s][km][:nocc_i, None], mo_occ[s][kn][None, :nocc_j])
                     else:
                         mo_occ_ij = mo_occ[s][km][:nocc_i, None] * mo_occ[s][kn][None, :nocc_j]
                     Lij_occ = Lij * mo_occ_ij[None]

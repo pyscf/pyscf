@@ -57,6 +57,16 @@ def test_kurpa_no_fc_outcore(hydrogen_kuhf):
     assert rpa.e_tot == pytest.approx(-1.584806462873674, abs=1e-6)
 
 
+def test_kurpa_acfd_exx_high_cost(hydrogen_kuhf):
+    rpa = KURPA(hydrogen_kuhf)
+    rpa.fc = False
+    rpa.acfd_exx = True
+    rpa.kernel()
+
+    assert rpa.e_corr == pytest.approx(-0.042883522669012034, abs=1e-6)
+    assert rpa.e_tot == pytest.approx(-1.5848064557082748, abs=1e-6)
+
+
 def test_kurpa_with_fc(hydrogen_kuhf):
     rpa = KURPA(hydrogen_kuhf)
     rpa.fc = True
@@ -73,4 +83,3 @@ def test_kurpa_with_fc_outcore(hydrogen_kuhf):
     rpa.kernel()
 
     assert rpa.e_corr == pytest.approx(-0.04295466718074476, abs=1e-6)
-
