@@ -89,6 +89,14 @@ class KnownValues(unittest.TestCase):
         h1 = df_h.kernel()
         self.assertAlmostEqual(abs(href - h1).max(), 0, 4)
 
+    def test_uks_lda_hess(self):
+        href = mol.UKS.run(xc='svwn').Hessian().kernel()
+        mf = mol.UKS(xc='svwn').density_fit().run()
+        df_hess = mf.Hessian()
+        df_hess.auxbasis_response = 2
+        h1 = df_hess.kernel()
+        self.assertAlmostEqual(abs(href - h1).max(), 0, 4)
+
 if __name__ == "__main__":
     print("Full Tests for df.hessian")
     unittest.main()
