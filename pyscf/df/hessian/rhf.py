@@ -105,15 +105,17 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     int2c_ip1 = auxmol.intor('int2c2e_ip1', aosym='s1')
 
     rhoj0_P = 0
-    if hessobj.max_memory*.8e6/8 < naux*nocc*(nocc+nao):
-        raise RuntimeError('Memory not enough. You need to increase mol.max_memory')
-    rhok0_Pl_ = np.empty((naux,nao,nocc))
+    if with_k:
+        if hessobj.max_memory*.8e6/8 < naux*nocc*(nocc+nao):
+            raise RuntimeError('Memory not enough. You need to increase mol.max_memory')
+        rhok0_Pl_ = np.empty((naux,nao,nocc))
     for i, (shl0, shl1, p0, p1) in enumerate(aoslices):
         int3c = get_int3c((shl0, shl1, 0, nbas, 0, auxmol.nbas))
         rhoj0_P += np.einsum('klp,kl->p', int3c, dm0[p0:p1])
-        tmp = lib.einsum('ijp,jk->pik', int3c, mocc_2)
-        tmp = solve_j2c(tmp.reshape(naux,-1))
-        rhok0_Pl_[:,p0:p1] = tmp.reshape(naux,p1-p0,nocc)
+        if with_k:
+            tmp = lib.einsum('ijp,jk->pik', int3c, mocc_2)
+            tmp = solve_j2c(tmp.reshape(naux,-1))
+            rhok0_Pl_[:,p0:p1] = tmp.reshape(naux,p1-p0,nocc)
         int3c = tmp = None
     rhoj0_P = solve_j2c(rhoj0_P)
 
@@ -183,12 +185,13 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
     if hessobj.auxbasis_response > 1:
         get_int3c_ipip2 = _int3c_wrapper(mol, auxmol, 'int3c2e_ipip2', 's1')
-        rhok0_P__ = lib.einsum('plj,li->pij', rhok0_Pl_, mocc_2)
-        rho2c_0 = lib.einsum('pij,qji->pq', rhok0_P__, rhok0_P__)
         int2c_inv = _pinv(int2c, lindep=LINEAR_DEP_THRESHOLD)
         int2c_ipip1 = auxmol.intor('int2c2e_ipip1', aosym='s1')
         int2c_ip_ip  = lib.einsum('xpq,qr,ysr->xyps', int2c_ip1, int2c_inv, int2c_ip1)
         int2c_ip_ip -= auxmol.intor('int2c2e_ip1ip2', aosym='s1').reshape(3,3,naux,naux)
+        if with_k:
+            rhok0_P__ = lib.einsum('plj,li->pij', rhok0_Pl_, mocc_2)
+            rho2c_0 = lib.einsum('pij,qji->pq', rhok0_P__, rhok0_P__)
     int2c = solve_j2c = None
 
     get_int3c_ipvip1 = _int3c_wrapper(mol, auxmol, 'int3c2e_ipvip1', 's1')
