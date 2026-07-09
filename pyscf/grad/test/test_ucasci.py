@@ -4,9 +4,11 @@ import unittest
 import numpy
 from pyscf import gto
 from pyscf import scf
+from pyscf import dft
 from pyscf import mcscf
 from pyscf import ci
 from pyscf import lib
+from pyscf.lib import logger
 
 
 def _move_atom(atom, ia, ix, dx):
@@ -387,6 +389,14 @@ class KnownValues(unittest.TestCase):
             ref = (e1-e2) / 0.002 * lib.param.BOHR
             self.assertLess(abs(grad[1,2] - ref), tol)
 
+    def test_uks_orbitals_not_implemented(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 1; H 0 1 0',
+                    basis='sto-3g', spin=1, verbose=0)
+        mf = dft.UKS(mol).run(conv_tol=1e-12)
+        mc = mcscf.UCASCI(mf, 2, (1,1), ncore=(1,0)).run()
+        with self.assertRaises(NotImplementedError):
+            mc.nuc_grad_method().kernel()
+
     def test_restricted_casci_carbon_finite_diff_benchmark(self):
         atom = '''
         C  0.00  0.00  0.00
@@ -503,6 +513,16 @@ class KnownValues(unittest.TestCase):
         ref = (e1-e2) / 0.002 * lib.param.BOHR
         self.assertAlmostEqual(e, -1.5056055923848675, 8)
         self.assertAlmostEqual(grad[1,2], ref, 5)
+
+    def test_verbose_finalize(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 1; H 0 1 0',
+                    basis='sto-3g', spin=1, verbose=0)
+        mf = scf.UHF(mol).run(conv_tol=1e-12)
+        mc = mcscf.UCASCI(mf, 2, (1,1), ncore=(1,0)).run()
+        grad = mc.nuc_grad_method()
+        grad.verbose = logger.NOTE
+        de = grad.kernel()
+        self.assertEqual(de.shape, (3,3))
 
 
 if __name__ == "__main__":

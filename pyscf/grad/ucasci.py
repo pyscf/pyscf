@@ -5,11 +5,17 @@
 
 '''
 UCASCI analytical nuclear gradients
+
+This module implements the UHF-orbital UCASCI gradient formulation.  The
+orbital response is the UCPHF response of the underlying UHF reference.  CASCI
+gradients with UKS-generated orbitals require a distinct CPKS/XC-response
+formulation and are not implemented here.
 '''
 
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.scf import hf
 from pyscf.grad import uhf as uhf_grad
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import casci as casci_grad
@@ -18,6 +24,13 @@ from pyscf import ao2mo
 from pyscf.mcscf.addons import StateAverageMCSCFSolver
 
 RANGE_TYPE = range
+
+
+def _check_supported_orbital_source(mc):
+    if isinstance(mc._scf, hf.KohnShamDFT):
+        raise NotImplementedError(
+            'UCASCI gradients with KS orbitals require the UKS/CPKS '
+            'orbital response, which is not implemented')
 
 
 def _uccsd_env(mc, mo_coeff):
@@ -152,6 +165,7 @@ def _casci_active_rdm_to_uccsd_intermediates(casdm1s, casdm2s, nelecas):
 
 def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
     mc = mc_grad.base
+    _check_supported_orbital_source(mc)
     if mo_coeff is None:
         mo_coeff = mc.mo_coeff
     if ci is None:
@@ -169,7 +183,9 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
 
 
 class Gradients(uhf_grad.Gradients):
-    '''Non-relativistic unrestricted CASCI gradients'''
+    '''Non-relativistic UHF-CASCI gradients'''
+
+    _keys = {'state'}
 
     grad_elec = grad_elec
 
@@ -220,7 +236,7 @@ class Gradients(uhf_grad.Gradients):
         if self.verbose >= logger.NOTE:
             logger.note(self, '--------- %s gradients ----------',
                         self.base.__class__.__name__)
-            rhf_grad._write(self.stdout, self.mol, self.de, self.atmlst)
+            self._write(self.mol, self.de, self.atmlst)
             logger.note(self, '----------------------------------------------')
 
     as_scanner = casci_grad.as_scanner

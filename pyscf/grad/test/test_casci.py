@@ -10,6 +10,7 @@ import numpy
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
+from pyscf import dft
 from pyscf import mcscf
 from pyscf import ao2mo
 from pyscf.scf import cphf
@@ -17,6 +18,35 @@ from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import casci as casci_grad
 from pyscf.grad import ccsd as ccsd_grad
 from pyscf.grad.mp2 import _shell_prange, has_frozen_orbitals
+
+
+def _move_atom(atom, ia, ix, dx):
+    coords = []
+    for line in atom.splitlines():
+        if line.strip():
+            sym, x, y, z = line.split()
+            coords.append([sym, float(x), float(y), float(z)])
+    if ia is not None:
+        coords[ia][ix+1] += dx
+    return coords
+
+
+def _five_point_fd_grad(run, natm, step, state=None):
+    def energy(ia, ix, dx):
+        e_tot = run(ia, ix, dx).e_tot
+        if state is not None:
+            e_tot = e_tot[state]
+        return e_tot
+
+    ref = numpy.zeros((natm, 3))
+    for ia in range(natm):
+        for ix in range(3):
+            ep2 = energy(ia, ix, 2*step)
+            ep1 = energy(ia, ix, step)
+            em1 = energy(ia, ix, -step)
+            em2 = energy(ia, ix, -2*step)
+            ref[ia,ix] = (-ep2 + 8*ep1 - 8*em1 + em2) / (12*step)
+    return ref * lib.param.BOHR
 
 
 def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
@@ -326,6 +356,156 @@ class KnownValues(unittest.TestCase):
         e1 = mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2'))
         e2 = mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2'))
         self.assertAlmostEqual(g1[1,2], (e1-e2)/0.002*lib.param.BOHR, 5)
+
+    def test_rks_orbital_casci_finite_diff(self):
+        atom = '''
+        O 0.000  0.000 0.000
+        H 0.000  0.800 0.600
+        H 0.000 -0.800 0.600
+        '''
+
+        def run(xc, ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
+                        basis='sto-3g', verbose=0)
+            mf = dft.RKS(mol, xc=xc).run(conv_tol=1e-12)
+            return mcscf.CASCI(mf, 4, 4, ncore=3).run()
+
+        step = 1e-3
+        for xc in ('lda,vwn', 'b88,p86', 'b3lyp'):
+            mc = run(xc)
+            self.assertEqual(mc.nuc_grad_method().__class__.__module__,
+                             'pyscf.grad.kscasci')
+            self.assertEqual(mc.Gradients().__class__.__module__,
+                             'pyscf.grad.kscasci')
+            grad = mc.nuc_grad_method().kernel()
+            ep2 = run(xc, 1, 2, 2*step).e_tot
+            ep1 = run(xc, 1, 2, step).e_tot
+            em1 = run(xc, 1, 2, -step).e_tot
+            em2 = run(xc, 1, 2, -2*step).e_tot
+            ref = (-ep2 + 8*ep1 - 8*em1 + em2) / (12*step)
+            ref *= lib.param.BOHR
+            self.assertLess(abs(grad[1,2] - ref), 2e-6)
+
+    def test_rks_orbital_casci_formaldehyde_all_components_finite_diff(self):
+        atom = '''
+        C  0.012000 -0.018000  0.004000
+        O -0.043000  0.026000  1.213000
+        H  0.091000  0.954000 -0.602000
+        H -0.068000 -0.912000 -0.551000
+        '''
+
+        def run(ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
+                        basis='6-31g', verbose=0)
+            mf = dft.RKS(mol, xc='b3lyp').run(conv_tol=1e-11)
+            return mcscf.CASCI(mf, 4, 4, ncore=6).run()
+
+        mc = run()
+        grad = mc.nuc_grad_method().kernel()
+        ref = _five_point_fd_grad(run, mc.mol.natm, 1e-3)
+        err = abs(grad - ref)
+        self.assertLess(err.max(), 1e-6)
+        self.assertLess(numpy.linalg.norm(err) / err.size**.5, 5e-7)
+
+    def test_rhf_casci_formaldehyde_all_components_finite_diff(self):
+        atom = '''
+        C  0.012000 -0.018000  0.004000
+        O -0.043000  0.026000  1.213000
+        H  0.091000  0.954000 -0.602000
+        H -0.068000 -0.912000 -0.551000
+        '''
+
+        def run(ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
+                        basis='6-31g', verbose=0)
+            mf = scf.RHF(mol).run(conv_tol=1e-12)
+            return mcscf.CASCI(mf, 4, 4, ncore=6).run()
+
+        mc = run()
+        grad = mc.nuc_grad_method().kernel()
+        ref = _five_point_fd_grad(run, mc.mol.natm, 1e-3)
+        err = abs(grad - ref)
+        self.assertLess(err.max(), 5e-7)
+        self.assertLess(numpy.linalg.norm(err) / err.size**.5, 2e-7)
+
+    def test_rks_orbital_casci_hcn_all_components_finite_diff(self):
+        atom = '''
+        H  0.052000 -0.031000 -1.066000
+        C  0.011000  0.024000  0.000000
+        N -0.038000 -0.017000  1.154000
+        '''
+
+        def run(ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
+                        basis='6-31g', verbose=0)
+            mf = dft.RKS(mol, xc='lda,vwn').run(conv_tol=1e-11)
+            return mcscf.CASCI(mf, 4, 4, ncore=5).run()
+
+        mc = run()
+        grad = mc.nuc_grad_method().kernel()
+        ref = _five_point_fd_grad(run, mc.mol.natm, 1e-3)
+        err = abs(grad - ref)
+        self.assertLess(err.max(), 5e-7)
+        self.assertLess(numpy.linalg.norm(err) / err.size**.5, 2e-7)
+
+    def test_rks_gga_casci_hcn_all_components_finite_diff(self):
+        atom = '''
+        H  0.052000 -0.031000 -1.066000
+        C  0.011000  0.024000  0.000000
+        N -0.038000 -0.017000  1.154000
+        '''
+
+        def run(ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
+                        basis='6-31g', verbose=0)
+            mf = dft.RKS(mol, xc='pbe,pbe').run(conv_tol=1e-11)
+            return mcscf.CASCI(mf, 4, 4, ncore=5).run()
+
+        mc = run()
+        grad = mc.nuc_grad_method().kernel()
+        ref = _five_point_fd_grad(run, mc.mol.natm, 1e-3)
+        err = abs(grad - ref)
+        self.assertLess(err.max(), 5e-7)
+        self.assertLess(numpy.linalg.norm(err) / err.size**.5, 2e-7)
+
+    def test_rks_excited_root_casci_hcn_all_components_finite_diff(self):
+        atom = '''
+        H  0.052000 -0.031000 -1.066000
+        C  0.011000  0.024000  0.000000
+        N -0.038000 -0.017000  1.154000
+        '''
+
+        def run(ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
+                        basis='6-31g', verbose=0)
+            mf = dft.RKS(mol, xc='lda,vwn').run(conv_tol=1e-11)
+            mc = mcscf.CASCI(mf, 4, 4, ncore=5)
+            mc.fcisolver.nroots = 2
+            return mc.run()
+
+        mc = run()
+        grad = mc.nuc_grad_method().kernel(state=1)
+        ref = _five_point_fd_grad(run, mc.mol.natm, 1e-3, state=1)
+        err = abs(grad - ref)
+        self.assertLess(err.max(), 5e-7)
+        self.assertLess(numpy.linalg.norm(err) / err.size**.5, 2e-7)
+
+    def test_rks_casci_unsupported_functionals(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 1.0', basis='sto-3g', verbose=0)
+        mf = dft.RKS(mol, xc='lda,vwn').run(conv_tol=1e-12)
+
+        # The SCF object is already converged; only the gradient guard behavior
+        # depends on these fields in this test.
+        mf.xc = 'tpss'
+        mc = mcscf.CASCI(mf, 2, 2).run()
+        with self.assertRaisesRegex(NotImplementedError, 'meta-GGA'):
+            mc.nuc_grad_method().kernel()
+
+        mf.xc = 'lda,vwn'
+        mf.nlc = 'vv10'
+        mc = mcscf.CASCI(mf, 2, 2).run()
+        with self.assertRaisesRegex(NotImplementedError, 'NLC'):
+            mc.nuc_grad_method().kernel()
 
     def test_casci_grad_excited_state(self):
         mc = mcscf.CASCI(mf, 4, 4)
