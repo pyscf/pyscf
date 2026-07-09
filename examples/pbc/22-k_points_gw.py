@@ -52,12 +52,24 @@ print("k=0 density of states")
 for i in range(len(omega)):
     print(omega[i], -np.trace(gf[0, :, :, i].imag) / np.pi)
 
-# With CD frequency integration
-#mygw = gw.KRGW(kmf, freq_int='cd')
-#mygw.kernel()
-#print("KRGW-CD energies =", mygw.mo_energy)
+# eigenvalue self-consistent KRGW
+mygw = gw.krevgw.KREVGW(kmf)
+mygw.fc = True
+mygw.max_cycle = 100
+mygw.kernel()
 
-# restricted KGW
+# quasiparticle self-consistent KRGW
+mygw = gw.krqsgw.KRQSGW(kmf)
+mygw.fc = True
+mygw.max_cycle = 100
+mygw.kernel()
+
+# With CD frequency integration
+mygw = gw.KRGW(kmf, freq_int='cd')
+mygw.kernel()
+print("KRGW-CD energies =", mygw.mo_energy)
+
+# unrestricted KGW
 kmf = scf.KUKS(cell, kpts).rs_density_fit()
 kmf.with_df = gdf
 kmf.kernel()
@@ -77,3 +89,15 @@ gf, gf0, sigma = mygw.make_gf(omega, eta=1e-2)
 print("k=0 density of states: alpha beta")
 for i in range(len(omega)):
     print(omega[i], -np.trace(gf[0, 0, :, :, i].imag) / np.pi, -np.trace(gf[0, 1, :, :, i].imag) / np.pi)
+
+# eigenvalue self-consistent KRGW
+mygw = gw.kuevgw.KUEVGW(kmf)
+mygw.fc = True
+mygw.max_cycle = 100
+mygw.kernel()
+
+# quasiparticle self-consistent KRGW
+mygw = gw.kuqsgw.KUQSGW(kmf)
+mygw.fc = True
+mygw.max_cycle = 100
+mygw.kernel()
