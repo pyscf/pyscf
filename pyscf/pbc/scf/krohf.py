@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ from pyscf.pbc.scf import rohf as pbcrohf
 from pyscf.pbc.scf import hf as pbchf
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.data import nist
 from pyscf.pbc.scf import addons
 from pyscf import __config__
 
@@ -154,11 +155,13 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     if nocc_a != nocc_b:
         mo_occ_kpts[(mo_energy_kpts > core_level) & (mo_ea_kpts <= fermi)] = 1
 
-    if nocc_a < len(mo_energy):
-        logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
-                    mo_energy[nocc_a-1], mo_energy[nocc_a])
+    if nocc_a < nmo:
+        homo, lumo = mo_energy[nocc_a-1:nocc_a+1]
+        gap = (lumo - homo) * nist.HARTREE2EV
+        mf.scf_summary['gap'] = gap
+        logger.info(mf, '  HOMO = %.12g  LUMO = %.12g  gap/eV = %.5f', homo, lumo, gap)
     else:
-        logger.info(mf, 'HOMO = %.12g', mo_energy[nocc_a-1])
+        logger.info(mf, 'HOMO = %.12g (no LUMO)', mo_energy[nocc_a-1])
 
     np.set_printoptions(threshold=len(mo_energy))
     if mf.verbose >= logger.DEBUG:
@@ -305,7 +308,7 @@ class KROHF(khf.KRHF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
-    def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
+    def get_veff(self, cell=None, dm_kpts=None, dm_last=None, vhf_last=None, hermi=1,
                  kpts=None, kpts_band=None):
         if dm_kpts is None:
             dm_kpts = self.make_rdm1()
@@ -315,9 +318,8 @@ class KROHF(khf.KRHF):
             mo_occ_b = [(x ==2).astype(np.double) for x in dm_kpts.mo_occ]
             dm_kpts = lib.tag_array(dm_kpts, mo_coeff=(mo_coeff,mo_coeff),
                                     mo_occ=(mo_occ_a,mo_occ_b))
-        vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
-        vhf = vj[0] + vj[1] - vk
-        return vhf
+        return kuhf.KUHF.get_veff(self, cell, dm_kpts, dm_last, vhf_last, hermi,
+                                  kpts, kpts_band)
 
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):
         if fock is None:

@@ -32,6 +32,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf import symm
 from pyscf.lib import logger
+from pyscf.data import nist
 from pyscf.scf import hf
 from pyscf.scf import uhf
 from pyscf.scf import rohf
@@ -570,25 +571,28 @@ class SymAdaptedRHF(hf.RHF):
             mo_occ[occ_idx] = 2
 
         vir_idx = (mo_occ==0)
-        if self.verbose >= logger.INFO and numpy.count_nonzero(vir_idx) > 0:
+        if numpy.count_nonzero(vir_idx) > 0:
             ehomo = max(mo_energy[~vir_idx])
             elumo = min(mo_energy[ vir_idx])
-            noccs = []
-            for i, ir in enumerate(mol.irrep_id):
-                irname = mol.irrep_name[i]
-                ir_idx = (orbsym == ir)
+            gap = (elumo - ehomo) * nist.HARTREE2EV
+            self.scf_summary['gap'] = gap
+            if self.verbose >= logger.INFO:
+                noccs = []
+                for i, ir in enumerate(mol.irrep_id):
+                    irname = mol.irrep_name[i]
+                    ir_idx = (orbsym == ir)
 
-                noccs.append(int(mo_occ[ir_idx].sum()))
-                if ehomo in mo_energy[ir_idx]:
-                    irhomo = irname
-                if elumo in mo_energy[ir_idx]:
-                    irlumo = irname
-            logger.info(self, 'HOMO (%s) = %.15g  LUMO (%s) = %.15g',
-                        irhomo, ehomo, irlumo, elumo)
+                    noccs.append(int(mo_occ[ir_idx].sum()))
+                    if ehomo in mo_energy[ir_idx]:
+                        irhomo = irname
+                    if elumo in mo_energy[ir_idx]:
+                        irlumo = irname
+                logger.info(self, 'HOMO (%s) = %.15g  LUMO (%s) = %.15g  gap/eV = %.5f',
+                            irhomo, ehomo, irlumo, elumo, gap)
 
-            logger.debug(self, 'irrep_nelec = %s', noccs)
-            _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym,
-                            verbose=self.verbose)
+                logger.debug(self, 'irrep_nelec = %s', noccs)
+                _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym,
+                                verbose=self.verbose)
         return mo_occ
 
     def _finalize(self):

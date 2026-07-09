@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ from pyscf.dft import r_numint
 
 
 @lib.with_doc(gks.get_veff.__doc__)
-def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
+def get_veff(ks, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
     if ks.do_nlc():
         raise NotImplementedError(f'NLC functional {ks.xc} + {ks.nlc}')
     return gks.get_veff(ks, mol, dm, dm_last, vhf_last, hermi)

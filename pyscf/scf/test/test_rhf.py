@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -484,6 +484,12 @@ H     0    0.757    0.587'''
         self.assertEqual(vhf4.ndim, 4)
         self.assertAlmostEqual(lib.fp(vhf4), 4.9026999849223287, 12)
         self.assertAlmostEqual(abs(vhf4[0]-vhf3).max(), 0, 12)
+
+        vhf5 = mf1.get_veff(pmol, dm[1,0], dm_last=dm[0,0],
+                            vhf_last=vhf2, hermi=0)
+        ref = mf1.get_veff(pmol, dm[1,0], hermi=0)
+        self.assertAlmostEqual(abs(ref - vhf5).max(), 0, 12)
+        self.assertAlmostEqual(vhf5.ecoul, ref.ecoul, 12)
 
     def test_hf_symm(self):
         pmol = mol.copy()
