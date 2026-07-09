@@ -58,6 +58,7 @@ try:
     #from . import uccsd_t
     from . import ucisd
     from . import ucasci
+    from . import ukscasci
     from . import uks
     from . import ump2
 

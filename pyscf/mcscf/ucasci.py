@@ -443,6 +443,10 @@ class UCASCI(UCASBase):
     as_scanner = as_scanner
 
     def nuc_grad_method(self):
+        # Select the gradient implementation from the source orbitals.
+        if isinstance(self._scf, scf.hf.KohnShamDFT):
+            from pyscf.grad import ukscasci
+            return ukscasci.Gradients(self)
         from pyscf.grad import ucasci
         return ucasci.Gradients(self)
 

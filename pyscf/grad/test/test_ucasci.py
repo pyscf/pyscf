@@ -21,6 +21,14 @@ def _move_atom(atom, ia, ix, dx):
     return coords
 
 
+def _five_point_fd(run, ia, ix, h=1e-3):
+    ep2 = run((ia, ix,  2*h)).e_tot
+    ep1 = run((ia, ix,    h)).e_tot
+    em1 = run((ia, ix,   -h)).e_tot
+    em2 = run((ia, ix, -2*h)).e_tot
+    return (-ep2 + 8*ep1 - 8*em1 + em2) / (12*h) * lib.param.BOHR
+
+
 def _pair_symmetric_eri(nmo, seed):
     rng = numpy.random.default_rng(seed)
     eri = rng.standard_normal((nmo,nmo,nmo,nmo))
@@ -389,13 +397,268 @@ class KnownValues(unittest.TestCase):
             ref = (e1-e2) / 0.002 * lib.param.BOHR
             self.assertLess(abs(grad[1,2] - ref), tol)
 
-    def test_uks_orbitals_not_implemented(self):
-        mol = gto.M(atom='H 0 0 0; H 0 0 1; H 0 1 0',
-                    basis='sto-3g', spin=1, verbose=0)
-        mf = dft.UKS(mol).run(conv_tol=1e-12)
-        mc = mcscf.UCASCI(mf, 2, (1,1), ncore=(1,0)).run()
-        with self.assertRaises(NotImplementedError):
-            mc.nuc_grad_method().kernel()
+    def test_uks_casci_h3_all_component_finite_diff(self):
+        def run(disp=None):
+            coords = numpy.asarray(((0., 0., 0.),
+                                    (0., 0., 1.),
+                                    (0., 1., 0.)))
+            if disp is not None:
+                ia, ix, dx = disp
+                coords[ia, ix] += dx
+            mol = gto.M(atom=[('H', coords[i]) for i in range(3)],
+                        unit='Angstrom', basis='sto-3g', spin=1, verbose=0)
+            mf = dft.UKS(mol)
+            mf.xc = 'lda,vwn'
+            mf.run(conv_tol=1e-12)
+            return mcscf.UCASCI(mf, 2, (1,1), ncore=(1,0)).run()
+
+        mc = run()
+        grad = mc.nuc_grad_method().kernel()
+        h = 1e-3
+        fd = numpy.zeros_like(grad)
+        for ia in range(3):
+            for ix in range(3):
+                ep2 = run((ia, ix,  2*h)).e_tot
+                ep1 = run((ia, ix,    h)).e_tot
+                em1 = run((ia, ix,   -h)).e_tot
+                em2 = run((ia, ix, -2*h)).e_tot
+                fd[ia,ix] = (-ep2 + 8*ep1 - 8*em1 + em2) / (12*h)
+                fd[ia,ix] *= lib.param.BOHR
+        self.assertLess(abs(grad - fd).max(), 2e-7)
+
+    def test_uks_casci_ch3_all_component_finite_diff(self):
+        atom = '''
+        C  0.000000  0.000000  0.000000
+        H  0.000000  0.000000  1.090000
+        H  1.026719  0.000000 -0.363333
+        H -0.513360  0.889165 -0.363333
+        '''
+
+        def run(disp=None):
+            mol0 = gto.M(atom=atom, basis='3-21g', spin=1,
+                         unit='Angstrom', verbose=0)
+            if disp is not None:
+                ia, ix, dx = disp
+                coords = mol0.atom_coords(unit='Angstrom')
+                coords[ia,ix] += dx
+                mol0 = gto.M(atom=[(mol0.atom_symbol(i), coords[i])
+                                   for i in range(mol0.natm)],
+                             basis='3-21g', spin=1, unit='Angstrom',
+                             verbose=0)
+            mf = dft.UKS(mol0)
+            mf.xc = 'lda,vwn'
+            mf.grids.level = 1
+            mf.run(conv_tol=1e-11)
+            return mcscf.UCASCI(mf, 6, (3,2), ncore=(2,2)).run()
+
+        mc = run()
+        grad = mc.nuc_grad_method().kernel()
+        h = 1e-3
+        fd = numpy.zeros_like(grad)
+        for ia in range(mc.mol.natm):
+            for ix in range(3):
+                ep2 = run((ia, ix,  2*h)).e_tot
+                ep1 = run((ia, ix,    h)).e_tot
+                em1 = run((ia, ix,   -h)).e_tot
+                em2 = run((ia, ix, -2*h)).e_tot
+                fd[ia,ix] = (-ep2 + 8*ep1 - 8*em1 + em2) / (12*h)
+                fd[ia,ix] *= lib.param.BOHR
+        self.assertLess(abs(grad - fd).max(), 3e-5)
+
+    def test_uks_casci_nh2_all_component_finite_diff(self):
+        atom = '''
+        N  0.000000  0.000000  0.000000
+        H  0.000000  0.000000  1.030000
+        H  0.968000  0.000000 -0.344000
+        '''
+
+        def run(disp=None):
+            mol = gto.M(atom=atom if disp is None else
+                        _move_atom(atom, disp[0], disp[1], disp[2]),
+                        basis='3-21g', spin=1, unit='Angstrom',
+                        verbose=0)
+            mf = dft.UKS(mol)
+            mf.xc = 'lda,vwn'
+            mf.grids.level = 1
+            mf.run(conv_tol=1e-11)
+            return mcscf.UCASCI(mf, 6, (3,2), ncore=(2,2)).run()
+
+        mc = run()
+        grad = mc.nuc_grad_method().kernel()
+        fd = numpy.zeros_like(grad)
+        for ia in range(mc.mol.natm):
+            for ix in range(3):
+                fd[ia,ix] = _five_point_fd(run, ia, ix)
+        self.assertLess(abs(grad - fd).max(), 3e-6)
+
+    def test_uks_casci_ch2_triplet_gga_finite_diff(self):
+        atom = '''
+        C  0.000000  0.000000  0.000000
+        H  0.000000  0.000000  1.080000
+        H  1.020000  0.000000 -0.360000
+        '''
+
+        def run(disp=None):
+            mol = gto.M(atom=atom if disp is None else
+                        _move_atom(atom, disp[0], disp[1], disp[2]),
+                        basis='3-21g', spin=2, unit='Angstrom',
+                        verbose=0)
+            mf = dft.UKS(mol)
+            mf.xc = 'pbe,pbe'
+            mf.grids.level = 1
+            mf.run(conv_tol=1e-11)
+            return mcscf.UCASCI(mf, 7, (4,2), ncore=(1,1)).run()
+
+        mc = run()
+        grad = mc.nuc_grad_method().kernel()
+        for ia, ix in ((0,2), (1,0), (2,2)):
+            self.assertLess(abs(grad[ia,ix] - _five_point_fd(run, ia, ix)),
+                            1e-5)
+
+    def test_uks_casci_zero_active_sector_finite_diff(self):
+        atom = '''
+        Li 0.000000  0.000000  0.000000
+        H  0.000000  0.000000  1.650000
+        '''
+
+        def run(disp=None):
+            mol = gto.M(atom=atom if disp is None else
+                        _move_atom(atom, disp[0], disp[1], disp[2]),
+                        basis='sto-3g', spin=1, charge=1,
+                        unit='Angstrom', verbose=0)
+            mf = dft.UKS(mol)
+            mf.xc = 'lda,vwn'
+            mf.grids.level = 4
+            mf.run(conv_tol=1e-12)
+            return mcscf.UCASCI(mf, 1, (1,0), ncore=(1,1)).run()
+
+        mc = run()
+        grad = mc.nuc_grad_method().kernel()
+        self.assertLess(abs(grad[1,2] - _five_point_fd(run, 1, 2)), 1e-7)
+
+    def test_uks_casci_no_core_full_active_finite_diff(self):
+        atom = '''
+        H  0.000000  0.000000  0.000000
+        H  0.000000  0.000000  1.000000
+        H  0.000000  1.050000  0.100000
+        '''
+
+        def run(disp=None):
+            mol = gto.M(atom=atom if disp is None else
+                        _move_atom(atom, disp[0], disp[1], disp[2]),
+                        basis='sto-3g', spin=1, unit='Angstrom',
+                        verbose=0)
+            mf = dft.UKS(mol)
+            mf.xc = 'lda,vwn'
+            mf.run(conv_tol=1e-11)
+            return mcscf.UCASCI(mf, 3, (2,1), ncore=(0,0)).run()
+
+        mc = run()
+        grad = mc.nuc_grad_method().kernel()
+        fd = numpy.zeros_like(grad)
+        for ia in range(mc.mol.natm):
+            for ix in range(3):
+                fd[ia,ix] = _five_point_fd(run, ia, ix)
+        self.assertLess(abs(grad - fd).max(), 1e-8)
+
+    def test_uks_casci_global_hybrid_finite_diff(self):
+        def run(disp=None):
+            coords = numpy.asarray(((0., 0., 0.),
+                                    (0., 0., 1.),
+                                    (0., 1., 0.)))
+            if disp is not None:
+                ia, ix, dx = disp
+                coords[ia, ix] += dx
+            mol = gto.M(atom=[('H', coords[i]) for i in range(3)],
+                        unit='Angstrom', basis='sto-3g', spin=1,
+                        verbose=0)
+            mf = dft.UKS(mol)
+            mf.xc = 'b3lyp'
+            mf.grids.level = 1
+            mf.run(conv_tol=1e-11)
+            return mcscf.UCASCI(mf, 2, (1,1), ncore=(1,0)).run()
+
+        mc = run()
+        grad = mc.nuc_grad_method().kernel()
+        fd = numpy.zeros_like(grad)
+        for ia in range(mc.mol.natm):
+            for ix in range(3):
+                fd[ia,ix] = _five_point_fd(run, ia, ix)
+        self.assertLess(abs(grad - fd).max(), 3e-6)
+
+    def test_uks_casci_excited_root_finite_diff(self):
+        atom = '''
+        H  0.000000  0.000000  0.000000
+        H  0.000000  0.000000  1.000000
+        H  0.000000  1.000000  0.150000
+        '''
+
+        def run(disp=None):
+            mol = gto.M(atom=atom if disp is None else
+                        _move_atom(atom, disp[0], disp[1], disp[2]),
+                        basis='sto-3g', spin=1, unit='Angstrom',
+                        verbose=0)
+            mf = dft.UKS(mol)
+            mf.xc = 'lda,vwn'
+            mf.run(conv_tol=1e-11)
+            mc = mcscf.UCASCI(mf, 2, (1,1), ncore=(1,0))
+            mc.fcisolver.nroots = 3
+            return mc.run()
+
+        mc = run()
+        grad = mc.nuc_grad_method().kernel(state=1)
+        h = 1e-3
+        for ia, ix in ((0,2), (1,0), (2,2)):
+            ep2 = run((ia, ix,  2*h)).e_tot[1]
+            ep1 = run((ia, ix,    h)).e_tot[1]
+            em1 = run((ia, ix,   -h)).e_tot[1]
+            em2 = run((ia, ix, -2*h)).e_tot[1]
+            fd = (-ep2 + 8*ep1 - 8*em1 + em2) / (12*h)
+            fd *= lib.param.BOHR
+            self.assertLess(abs(grad[ia,ix] - fd), 5e-7)
+
+    def test_uks_casci_state_average_finite_diff(self):
+        atom = '''
+        H  0.000000  0.000000  0.000000
+        H  0.000000  0.000000  1.000000
+        H  0.000000  1.000000  0.150000
+        '''
+
+        def run(disp=None):
+            mol = gto.M(atom=atom if disp is None else
+                        _move_atom(atom, disp[0], disp[1], disp[2]),
+                        basis='sto-3g', spin=1, unit='Angstrom',
+                        verbose=0)
+            mf = dft.UKS(mol)
+            mf.xc = 'lda,vwn'
+            mf.run(conv_tol=1e-11)
+            mc = mcscf.UCASCI(mf, 2, (1,1), ncore=(1,0))
+            mc.fcisolver.nroots = 2
+            return mc.state_average_([.3, .7]).run()
+
+        mc = run()
+        grad = mc.nuc_grad_method().kernel()
+        for ia, ix in ((0,2), (1,0), (2,2)):
+            self.assertLess(abs(grad[ia,ix] - _five_point_fd(run, ia, ix)),
+                            5e-7)
+
+    def test_uks_restricted_collapse_matches_rks_casci(self):
+        mol = gto.M(atom='''
+                    O 0.000  0.000 0.000
+                    H 0.000 -0.757 0.587
+                    H 0.000  0.757 0.587''',
+                    basis='sto-3g', verbose=0)
+        rks = dft.RKS(mol)
+        rks.xc = 'lda,vwn'
+        rks.run(conv_tol=1e-12)
+        uks = dft.UKS(mol)
+        uks.xc = 'lda,vwn'
+        uks.run(conv_tol=1e-12)
+        rcas = mcscf.CASCI(rks, 4, 4, ncore=3).run()
+        ucas = mcscf.UCASCI(uks, 4, (2,2), ncore=(3,3)).run()
+        g_r = rcas.nuc_grad_method().kernel()
+        g_u = ucas.nuc_grad_method().kernel()
+        self.assertAlmostEqual(abs(g_r - g_u).max(), 0, 9)
 
     def test_restricted_casci_carbon_finite_diff_benchmark(self):
         atom = '''
