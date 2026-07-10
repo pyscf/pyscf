@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2025 The PySCF Developers. All Rights Reserved.
+# Copyright 2025-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -321,7 +321,7 @@ class QMMMSCF(QMMM):
         vdiff = (vdiff + vdiff.T) / 2
         return vdiff
 
-    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+    def get_veff(self, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
                  mm_ewald_pot=None, qm_ewald_pot=None):
         if mol is None:
             mol = self.mol
@@ -356,7 +356,8 @@ class QMMMSCF(QMMM):
         veff = super().get_veff(mol, dm, dm_last, vhf_last, hermi)
         if isinstance(veff, lib.NPArrayWithTag):
             metadata = veff.__dict__
-            veff = lib.tag_array(veff + vdiff, veff_rs=veff, **metadata)
+            veff = lib.tag_array(veff + vdiff, veff_rs=veff.view(np.ndarray),
+                                 **metadata)
         else:
             veff = lib.tag_array(veff + vdiff, veff_rs=veff)
         return veff

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2025 The PySCF Developers. All Rights Reserved.
+# Copyright 2025-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ from pyscf.data.nist import HARTREE2EV
 from pyscf import lo
 from pyscf.lo.iao import reference_mol
 
-def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
+def get_veff(ks, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
     """
     Coulomb + XC functional + Hubbard U terms for RKS+U.
 
@@ -116,15 +116,17 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
     if vhf is None or getattr(vhf, 'ecoul', None) is None:
         vhf = ks.get_veff(ks.mol, dm)
 
-    e1 = np.einsum('ij,ji->', h1e, dm)
-    tot_e = e1 + vhf.ecoul + vhf.exc + vhf.E_U
-    ks.scf_summary['e1'] = e1.real
+    e1 = np.einsum('ij,ji->', h1e, dm).real
+    e2 = (vhf.ecoul + vhf.exc + vhf.E_U).real
+    tot_e = e1 + e2
+    ks.scf_summary['e1'] = e1
+    ks.scf_summary['e2'] = e2
     ks.scf_summary['coul'] = vhf.ecoul.real
     ks.scf_summary['exc'] = vhf.exc.real
     ks.scf_summary['E_U'] = vhf.E_U.real
-    logger.debug(ks, 'E1 = %s  Ecoul = %s  Exc = %s  EU = %s', e1, vhf.ecoul,
-                 vhf.exc, vhf.E_U)
-    return tot_e.real, vhf.ecoul + vhf.exc + vhf.E_U
+    logger.debug(ks, 'E1 = %s  E2 = %s  Ecoul = %s  Exc = %s  EU = %s',
+                 e1, e2, vhf.ecoul, vhf.exc, vhf.E_U)
+    return tot_e, e2
 
 def _groupby(inp, labels):
     _, where, counts = np.unique(labels, return_index=True, return_counts=True)

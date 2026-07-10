@@ -198,8 +198,9 @@ def get_pcm_parameters(mf, step=0.2):
     n_segments = len(mf.with_solvent._intermediates['q'])
     area = float(sum(mf.with_solvent.surface['area'])) # np.float is not json-seriazable
     volume = float(get_sas_volume(mf.with_solvent.surface, step))
-    E_tot = float(sum(mf.scf_summary.values()))
-    E_diel = float(mf.scf_summary['e_solvent'])
+    scf_summary = mf.scf_summary
+    E_diel = float(scf_summary['e_solvent'])
+    E_tot = float(scf_summary['nuc'] + scf_summary['e1'] + scf_summary['e2'] + E_diel)
 
     # atoms
     atom_idxs = list(range(1, 1 + mf.mol.natm))

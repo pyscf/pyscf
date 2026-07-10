@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -442,6 +442,11 @@ H     0    0.757    0.587'''
         self.assertEqual(vhf4.ndim, 4)
         self.assertAlmostEqual(abs(vhf4-vhf3).max(), 0, 12)
         self.assertAlmostEqual(lib.fp(vhf4), -9.9614575705134953, 12)
+
+        vhf5 = mf1.get_veff(pmol, dm[:,1], dm_last=dm[:,0],
+                            vhf_last=vhf3a, hermi=0)
+        self.assertAlmostEqual(abs(vhf3b - vhf5).max(), 0, 12)
+        self.assertAlmostEqual(vhf5.ecoul, vhf3b.ecoul, 12)
 
     def test_natm_eq_0(self):
         mol = gto.M()

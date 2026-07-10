@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -177,7 +177,7 @@ class UHF(pbchf.SCF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
-    def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+    def get_veff(self, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
                  kpt=None, kpts_band=None):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
@@ -185,7 +185,11 @@ class UHF(pbchf.SCF):
         if isinstance(dm, np.ndarray) and dm.ndim == 2:
             dm = np.asarray((dm*.5,dm*.5))
         vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
-        vhf = vj[0] + vj[1] - vk
+        vj = vj[0] + vj[1]
+        vhf = vj - vk
+        if isinstance(dm, np.ndarray) and dm.ndim == 3 and kpts_band is None:
+            ecoul = np.einsum('nij,ji->', dm, vj).real * .5
+            vhf = lib.tag_array(vhf, ecoul=ecoul)
         return vhf
 
     def get_bands(self, kpts_band, cell=None, dm=None, kpt=None):

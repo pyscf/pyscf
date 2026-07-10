@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -94,22 +94,18 @@ class ROHF(pbchf.RHF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
-    def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+    def get_veff(self, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
                  kpt=None, kpts_band=None):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         if kpt is None: kpt = self.kpt
-        if isinstance(dm, np.ndarray) and dm.ndim == 2:
-            dm = np.asarray((dm*.5,dm*.5))
         if getattr(dm, 'mo_coeff', None) is not None:
             mo_coeff = dm.mo_coeff
             mo_occ_a = (dm.mo_occ > 0).astype(np.double)
             mo_occ_b = (dm.mo_occ ==2).astype(np.double)
             dm = lib.tag_array(dm, mo_coeff=(mo_coeff,mo_coeff),
                                mo_occ=(mo_occ_a,mo_occ_b))
-        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
-        vhf = vj[0] + vj[1] - vk
-        return vhf
+        return pbcuhf.UHF.get_veff(self, cell, dm, dm_last, vhf_last, hermi, kpt, kpts_band)
 
     def get_bands(self, kpts_band, cell=None, dm=None, kpt=None):
         '''Get energy bands at the given (arbitrary) 'band' k-points.

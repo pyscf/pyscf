@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ from pyscf.lib import logger
 from pyscf.scf import hf, uhf
 from pyscf.dft import rks
 
-def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
+def get_veff(ks, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
     '''Coulomb + XC functional for UKS.  See pyscf/dft/rks.py
     :func:`get_veff` fore more details.
     '''
@@ -66,6 +66,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         t0 = logger.timer(ks, 'vxc', *t0)
 
     incremental_jk = (ks._eri is None and ks.direct_scf and
+                      dm_last is not None and
                       getattr(vhf_last, 'vj', None) is not None)
     if incremental_jk:
         dm_last = numpy.asarray(dm_last)

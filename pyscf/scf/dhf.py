@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,10 +27,10 @@ import numpy
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
-from pyscf.scf import hf
+from pyscf.data import nist
+from pyscf.scf import hf, ghf
 from pyscf.scf import _vhf
 from pyscf.scf import chkfile
-from pyscf.data import nist
 from pyscf import __config__
 
 zquatev = None
@@ -110,17 +110,24 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     '''
     if dm is None: dm = mf.make_rdm1()
     if h1e is None: h1e = mf.get_hcore()
-    if vhf is None: vhf = mf.get_veff(mf.mol, dm)
+    if vhf is None:
+        vhf = mf.get_veff(mf.mol, dm)
     e1 = numpy.einsum('ij,ji->', h1e, dm).real
-    e_coul = numpy.einsum('ij,ji->', vhf, dm).real * .5
-    logger.debug(mf, 'E1 = %.14g  E_coul = %.14g', e1, e_coul)
-
+    e2 = numpy.einsum('ij,ji->', vhf, dm).real * .5
     if not mf.with_ssss and mf.ssss_approx == 'Visscher':
-        e_coul += _visscher_ssss_correction(mf, dm)
+        e2 += _visscher_ssss_correction(mf, dm)
 
     mf.scf_summary['e1'] = e1
-    mf.scf_summary['e2'] = e_coul
-    return e1+e_coul, e_coul
+    mf.scf_summary['e2'] = e2
+    if hasattr(vhf, 'ecoul'):
+        ecoul = vhf.ecoul.real
+        exx = e2 - ecoul
+        mf.scf_summary['coul'] = ecoul
+        mf.scf_summary['exc'] = exx
+        logger.debug(mf, 'E1 = %s  E2 = %s  Ecoul = %s  Exc = %s', e1, e2, ecoul, exx)
+    else:
+        logger.debug(mf, 'E1 = %s  E2 = %s', e1, e2)
+    return e1+e2, e2
 
 def _visscher_ssss_correction(mf, dm):
     '''
@@ -567,20 +574,23 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         nocc = mol.nelectron
         if mo_energy[n2c] > -1.999 * c**2:
             mo_occ[n2c:n2c+nocc] = 1
+            homo = mo_energy[n2c+nocc-1]
+            lumo = mo_energy[n2c+nocc]
         else:
             logger.warn(self, 'Variational collapse. PES mo_energy %g < -2c^2',
                         mo_energy[n2c])
             lumo = mo_energy[mo_energy > -1.999 * c**2][nocc]
             mo_occ[mo_energy > -1.999 * c**2] = 1
             mo_occ[mo_energy >= lumo] = 0
+            homo = mo_energy[mo_occ == 1].max()
+        gap = (lumo - homo) * nist.HARTREE2EV
+        self.scf_summary['gap'] = gap
         if self.verbose >= logger.INFO:
-            if mo_energy[n2c+nocc-1]+1e-3 > mo_energy[n2c+nocc]:
-                logger.warn(self, 'HOMO %.15g == LUMO %.15g',
-                            mo_energy[n2c+nocc-1], mo_energy[n2c+nocc])
+            if homo+1e-3 > lumo:
+                logger.warn(self, 'HOMO %.15g == LUMO %.15g', homo, lumo)
             else:
-                logger.info(self, 'HOMO %d = %.12g  LUMO %d = %.12g',
-                            nocc, mo_energy[n2c+nocc-1],
-                            nocc+1, mo_energy[n2c+nocc])
+                logger.info(self, 'HOMO %d = %.12g  LUMO %d = %.12g  gap/eV = %.5f',
+                            nocc, homo, nocc+1, lumo, gap)
                 logger.debug1(self, 'NES  mo_energy = %s', mo_energy[:n2c])
                 logger.debug(self, 'PES  mo_energy = %s', mo_energy[n2c:])
         return mo_occ
@@ -684,17 +694,10 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         log.timer('vj and vk', *t0)
         return vj, vk
 
-    def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
+    def get_veff(self, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
         '''Dirac-Coulomb'''
-        if mol is None: mol = self.mol
-        if dm is None: dm = self.make_rdm1()
-        if self.direct_scf:
-            ddm = numpy.array(dm) - numpy.array(dm_last)
-            vj, vk = self.get_jk(mol, ddm, hermi=hermi)
-            return numpy.array(vhf_last) + vj - vk
-        else:
-            vj, vk = self.get_jk(mol, dm, hermi=hermi)
-            return vj - vk
+        assert self._eri is None
+        return ghf.GHF.get_veff(self, mol, dm, dm_last, vhf_last, hermi)
 
     def scf(self, dm0=None):
         cput0 = (logger.process_clock(), logger.perf_counter())

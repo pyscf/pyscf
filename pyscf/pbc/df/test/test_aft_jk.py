@@ -235,7 +235,7 @@ class KnownValues(unittest.TestCase):
         dm = numpy.einsum('npi,nqi->npq', mo, mo.conj())
         dm = lib.tag_array(dm, mo_coeff=mo, mo_occ=mo_occ)
         mydf = aft.AFTDF(cell)
-        mydf.k_conj_symmetry = False
+        mydf.time_reversal_symmetry = False
         mydf.kpts = kpts
         vk = aft_jk.get_k_kpts(mydf, dm, 1, mydf.kpts)
         self.assertAlmostEqual(lib.fp(vk), 5.872042619636364+0.39662848875321643j, 7)

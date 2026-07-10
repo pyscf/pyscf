@@ -718,6 +718,70 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(scf.GHF(h2o).density_fit().to_ks() .__class__, dft.gks.GKS(h2o).density_fit().__class__)
         self.assertEqual(scf.GHF(h2o).density_fit().to_gks().__class__, dft.gks.GKS(h2o).density_fit().__class__)
 
+    def test_ghost_dft_grid(self):
+        mol = gto.M(
+            atom = """
+            O      0.000000     0.000000     0.000000
+            H      0.960000     0.000000     0.000000
+            H     -0.240000     0.930000     0.000000
+            ghost:H     -0.240000    -0.310000     0.880000
+            """,
+            basis = "sto-3g",
+            verbose = 0,
+        )
+
+        mf = dft.RKS(mol, xc = "pbe").density_fit(auxbasis = "def2-universal-jkfit")
+        mf.grids.atom_grid = (50,194)
+        mf.grids.radii_adjust = dft.radi.treutler_atomic_radii_adjust
+        mf.conv_tol = 1e-10
+
+        test_energy_treutler = mf.kernel()
+
+        mf = dft.RKS(mol, xc = "pbe").density_fit(auxbasis = "def2-universal-jkfit")
+        mf.grids.atom_grid = (50,194)
+        mf.grids.radii_adjust = dft.radi.becke_atomic_radii_adjust
+        mf.conv_tol = 1e-10
+
+        test_energy_becke = mf.kernel()
+
+        mf = dft.RKS(mol, xc = "pbe").density_fit(auxbasis = "def2-universal-jkfit")
+        mf.grids.atom_grid = (50,194)
+        mf.grids.radii_adjust = None
+        mf.conv_tol = 1e-10
+
+        test_energy_no_adjust = mf.kernel()
+
+        ### Q-Chem reference input
+        # $molecule
+        # 0 1
+        #     O      0.000000     0.000000     0.000000
+        #     H      0.960000     0.000000     0.000000
+        #     H     -0.240000     0.930000     0.000000
+        #     @H     -0.240000    -0.310000     0.880000
+        # $end
+
+        # $rem
+        # JOBTYPE force
+        # METHOD PBE
+        # XC_GRID       000050000194
+        # BASIS sto-3g
+        # SYMMETRY      FALSE
+        # SYM_IGNORE    TRUE
+        # MAX_SCF_CYCLES 100
+        # PURECART 1111
+        # SCF_CONVERGENCE 10
+        # THRESH        14
+        # ri_j        True
+        # ri_k        True
+        # aux_basis RIJK-def2-TZVP
+        # $end
+
+        ref_energy = -75.2497029684
+
+        assert numpy.abs(test_energy_treutler - ref_energy) < 2e-5
+        assert numpy.abs(test_energy_becke - ref_energy) < 2e-5
+        assert numpy.abs(test_energy_no_adjust - ref_energy) < 2e-5
+
 if __name__ == "__main__":
     print("Full Tests for H2O")
     unittest.main()
