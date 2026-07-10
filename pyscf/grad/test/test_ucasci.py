@@ -413,6 +413,10 @@ class KnownValues(unittest.TestCase):
             return mcscf.UCASCI(mf, 2, (1,1), ncore=(1,0)).run()
 
         mc = run()
+        self.assertEqual(mc.nuc_grad_method().__class__.__module__,
+                         'pyscf.grad.ukscasci')
+        self.assertEqual(mc.Gradients().__class__.__module__,
+                         'pyscf.grad.ukscasci')
         grad = mc.nuc_grad_method().kernel()
         h = 1e-3
         fd = numpy.zeros_like(grad)
@@ -425,6 +429,31 @@ class KnownValues(unittest.TestCase):
                 fd[ia,ix] = (-ep2 + 8*ep1 - 8*em1 + em2) / (12*h)
                 fd[ia,ix] *= lib.param.BOHR
         self.assertLess(abs(grad - fd).max(), 2e-7)
+
+    def test_uks_casci_unsupported_functionals(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 1; H 0 1 0',
+                    basis='sto-3g', spin=1, verbose=0)
+        mf = dft.UKS(mol)
+        mf.xc = 'lda,vwn'
+        mf.run(conv_tol=1e-12)
+
+        # The CASCI Hamiltonian is independent of the source XC functional.
+        # Only the gradient guard behavior depends on these fields here.
+        mf.xc = 'tpss'
+        mc = mcscf.UCASCI(mf, 2, (1,1), ncore=(1,0)).run()
+        with self.assertRaisesRegex(NotImplementedError, 'meta-GGA'):
+            mc.nuc_grad_method().kernel()
+
+        mf.xc = 'cam-b3lyp'
+        mc = mcscf.UCASCI(mf, 2, (1,1), ncore=(1,0)).run()
+        with self.assertRaisesRegex(NotImplementedError, 'range-separated'):
+            mc.nuc_grad_method().kernel()
+
+        mf.xc = 'lda,vwn'
+        mf.nlc = 'vv10'
+        mc = mcscf.UCASCI(mf, 2, (1,1), ncore=(1,0)).run()
+        with self.assertRaisesRegex(NotImplementedError, 'NLC'):
+            mc.nuc_grad_method().kernel()
 
     def test_uks_casci_ch3_all_component_finite_diff(self):
         atom = '''

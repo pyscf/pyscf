@@ -34,6 +34,7 @@ from pyscf import lib
 from pyscf.mcscf import umc1step
 from pyscf.grad import ucasci as ucasci_grad
 from pyscf.grad import kscasci as kscasci_grad
+from pyscf.grad.mp2 import _shell_prange
 
 
 def _check_supported_functional(mc):
@@ -88,74 +89,63 @@ def _restricted_collapse_grad(mc_grad, mo_coeff, ci, atmlst, verbose):
                                       verbose)
 
 
-def _full_rdm12s(casdm1s, casdm2s, nmo, ncore, ncas):
-    ncorea, ncoreb = ncore
-    nacca = ncorea + ncas
-    naccb = ncoreb + ncas
-    casdm1a, casdm1b = casdm1s
-    casdm2aa, casdm2ab, casdm2bb = casdm2s
-
-    dm1a = numpy.zeros((nmo,nmo))
-    dm1b = numpy.zeros((nmo,nmo))
-    dm1a[numpy.arange(ncorea),numpy.arange(ncorea)] = 1
-    dm1b[numpy.arange(ncoreb),numpy.arange(ncoreb)] = 1
-    dm1a[ncorea:nacca,ncorea:nacca] = casdm1a
-    dm1b[ncoreb:naccb,ncoreb:naccb] = casdm1b
-
-    dm2aa = numpy.zeros((nmo,nmo,nmo,nmo))
-    dm2ab = numpy.zeros((nmo,nmo,nmo,nmo))
-    dm2bb = numpy.zeros((nmo,nmo,nmo,nmo))
-    for i in range(ncorea):
-        for j in range(ncorea):
-            dm2aa[i,i,j,j] += 1
-            dm2aa[i,j,j,i] -= 1
-        dm2aa[i,i,ncorea:nacca,ncorea:nacca] += casdm1a
-        dm2aa[ncorea:nacca,ncorea:nacca,i,i] += casdm1a
-        dm2aa[i,ncorea:nacca,ncorea:nacca,i] -= casdm1a
-        dm2aa[ncorea:nacca,i,i,ncorea:nacca] -= casdm1a
-    for i in range(ncoreb):
-        for j in range(ncoreb):
-            dm2bb[i,i,j,j] += 1
-            dm2bb[i,j,j,i] -= 1
-        dm2bb[i,i,ncoreb:naccb,ncoreb:naccb] += casdm1b
-        dm2bb[ncoreb:naccb,ncoreb:naccb,i,i] += casdm1b
-        dm2bb[i,ncoreb:naccb,ncoreb:naccb,i] -= casdm1b
-        dm2bb[ncoreb:naccb,i,i,ncoreb:naccb] -= casdm1b
-    for i in range(ncorea):
-        for j in range(ncoreb):
-            dm2ab[i,i,j,j] += 1
-        dm2ab[i,i,ncoreb:naccb,ncoreb:naccb] += casdm1b
-    for j in range(ncoreb):
-        dm2ab[ncorea:nacca,ncorea:nacca,j,j] += casdm1a
-
-    dm2aa[ncorea:nacca,ncorea:nacca,ncorea:nacca,ncorea:nacca] += casdm2aa
-    dm2ab[ncorea:nacca,ncorea:nacca,ncoreb:naccb,ncoreb:naccb] += casdm2ab
-    dm2bb[ncoreb:naccb,ncoreb:naccb,ncoreb:naccb,ncoreb:naccb] += casdm2bb
-    return (dm1a, dm1b), (dm2aa, dm2ab, dm2bb)
+def _ao_density_components(casdm1s, mo_coeff, ncore, ncas):
+    mo_core = (mo_coeff[0][:,:ncore[0]], mo_coeff[1][:,:ncore[1]])
+    mo_act = (mo_coeff[0][:,ncore[0]:ncore[0]+ncas],
+              mo_coeff[1][:,ncore[1]:ncore[1]+ncas])
+    dm_core = [numpy.dot(mo_core[s], mo_core[s].T) for s in range(2)]
+    dm_act = [reduce(numpy.dot, (mo_act[s], casdm1s[s], mo_act[s].T))
+              for s in range(2)]
+    return mo_act, dm_core, dm_act
 
 
-def _casci_orbital_gradient(mc, mo_coeff, ci, casdm1s, casdm2s):
+def _same_spin_dm2ao_slice(dm_core, dm_act, mo_act, casdm2,
+                           p0, p1, q0, q1):
+    # Same-spin CASCI 2-RDM = core determinant + core-active terms + active
+    # CAS 2-RDM.  Only the AO slice needed for the current derivative-ERI block
+    # is transformed.
+    dm2 = lib.einsum('pq,rs->pqrs', dm_core[p0:p1,q0:q1], dm_core)
+    dm2 -= lib.einsum('ps,qr->pqrs', dm_core[p0:p1], dm_core[q0:q1])
+    dm2 += lib.einsum('pq,rs->pqrs', dm_core[p0:p1,q0:q1], dm_act)
+    dm2 += lib.einsum('pq,rs->pqrs', dm_act[p0:p1,q0:q1], dm_core)
+    dm2 -= lib.einsum('ps,qr->pqrs', dm_core[p0:p1], dm_act[q0:q1])
+    dm2 -= lib.einsum('ps,qr->pqrs', dm_act[p0:p1], dm_core[q0:q1])
+    dm2 += lib.einsum('pi,qj,rk,sl,ijkl->pqrs',
+                      mo_act[p0:p1], mo_act[q0:q1], mo_act, mo_act,
+                      casdm2)
+    return dm2
+
+
+def _mixed_spin_dm2ao_slice(dm_core0, dm_act0, mo_act0,
+                            dm_core1, dm_act1, mo_act1, casdm2,
+                            p0, p1, q0, q1):
+    # Mixed-spin 2-RDM has no exchange terms.  The first spin occupies the
+    # derivative index pair (p,q); the second spin occupies (r,s).
+    dm2 = lib.einsum('pq,rs->pqrs', dm_core0[p0:p1,q0:q1],
+                     dm_core1 + dm_act1)
+    dm2 += lib.einsum('pq,rs->pqrs', dm_act0[p0:p1,q0:q1], dm_core1)
+    dm2 += lib.einsum('pi,qj,rk,sl,ijkl->pqrs',
+                      mo_act0[p0:p1], mo_act0[q0:q1], mo_act1, mo_act1,
+                      casdm2)
+    return dm2
+
+
+def _casci_orbital_intermediates(mc, mo_coeff, ci, casdm1s, casdm2s):
+    casscf = mcscf.UCASSCF(mc._scf, mc.ncas, mc.nelecas, ncore=mc.ncore)
+    casscf.mo_coeff = mo_coeff
+    casscf.ci = ci
+    casscf.fcisolver = mc.fcisolver
+    eris = casscf.ao2mo(mo_coeff)
+
     # UCASSCF uses the antisymmetric orbital-gradient vector as the orbital
     # optimization RHS.  The same object is Delta X in the Sherrill CI-gradient
     # orbital-response term.
-    casscf = mcscf.UCASSCF(mc._scf, mc.ncas, mc.nelecas, ncore=mc.ncore)
-    casscf.mo_coeff = mo_coeff
-    casscf.ci = ci
-    casscf.fcisolver = mc.fcisolver
-    eris = casscf.ao2mo(mo_coeff)
     g_orb = umc1step.gen_g_hop(casscf, mo_coeff, None,
                                casdm1s, casdm2s, eris)[0]
-    return casscf.unpack_uniq_var(g_orb)
+    dx = casscf.unpack_uniq_var(g_orb)
 
-
-def _casci_generalized_fock(mc, mo_coeff, ci, casdm1s, casdm2s):
     # The overlap/Lagrangian term needs the unsymmetrized generalized Fock X,
     # not the antisymmetric orbital-gradient matrix returned by gen_g_hop.
-    casscf = mcscf.UCASSCF(mc._scf, mc.ncas, mc.nelecas, ncore=mc.ncore)
-    casscf.mo_coeff = mo_coeff
-    casscf.ci = ci
-    casscf.fcisolver = mc.fcisolver
-    eris = casscf.ao2mo(mo_coeff)
     ncas = mc.ncas
     ncore = mc.ncore
     nocc = (ncore[0] + ncas, ncore[1] + ncas)
@@ -191,7 +181,7 @@ def _casci_generalized_fock(mc, mo_coeff, ci, casdm1s, casdm2s):
         xmat[s][:,ncore[s]:nocc[s]] += (
             numpy.einsum('vuuq->qv', hdm2[s][:,:,ncore[s]:nocc[s]])
             + numpy.dot(vhf_c[s][:,ncore[s]:nocc[s]], casdm1s[s]))
-    return tuple(xmat)
+    return dx, tuple(xmat)
 
 
 def _reference_occ(mc, mo_coeff):
@@ -205,39 +195,89 @@ def _reference_occ(mc, mo_coeff):
     return mo_occ
 
 
-def _orbital_response_grad(mc_grad, mo_coeff, ci, casdm1s, casdm2s, atmlst):
+def _orbital_response_grad(mc_grad, mo_coeff, dx, atmlst):
     mc = mc_grad.base
     mol = mc_grad.mol
+    atmlst = list(atmlst)
     mo_occ = _reference_occ(mc, mo_coeff)
     nocc = (numpy.count_nonzero(mo_occ[0] > 0),
             numpy.count_nonzero(mo_occ[1] > 0))
     nmo = (mo_coeff[0].shape[1], mo_coeff[1].shape[1])
     nao = mo_coeff[0].shape[0]
-    dx = _casci_orbital_gradient(mc, mo_coeff, ci, casdm1s, casdm2s)
     h1ao = mc._scf.Hessian().make_h1(mo_coeff, mo_occ)
     s1a = mc_grad.get_ovlp(mol)
     aoslices = mol.aoslice_by_atom()
     vresp = mc._scf.gen_response(mo_coeff, mo_occ, hermi=1)
+    viridx = (mo_occ[0] == 0, mo_occ[1] == 0)
+
+    def occ_response_dm(mo1):
+        nset = mo1[0].shape[0]
+        dm = numpy.empty((2,nset,nao,nao))
+        for s in range(2):
+            dm[s] = numpy.einsum('pi,xij,qj->xpq',
+                                 mo_coeff[s], mo1[s],
+                                 mo_coeff[s][:,:nocc[s]])
+        return dm + dm.transpose(0,1,3,2)
+
+    def full_response_dm(u):
+        dm = numpy.empty((2,nao,nao))
+        for s in range(2):
+            dm[s] = reduce(numpy.dot, (mo_coeff[s], u[s], mo_coeff[s].T))
+        return dm + dm.transpose(0,2,1)
+
+    # Put CASCI-independent rotations that are redundant for the UKS
+    # determinant directly into zvec with canonical-orbital denominators.  Their
+    # induced KS response potential contributes to the occupied-virtual adjoint
+    # RHS below, matching the restricted CASCI Z-vector strategy.
+    zvec = [numpy.zeros((nmo[s], nmo[s])) for s in range(2)]
+    for s in range(2):
+        eps = mc._scf.mo_energy[s]
+        ncore = mc.ncore[s]
+        nref = ncore + mc.nelecas[s]
+        ncasocc = ncore + mc.ncas
+        for p in range(ncore, nref):
+            for q in range(ncore):
+                zvec[s][p,q] = dx[s][p,q] / (eps[q] - eps[p])
+        for p in range(ncasocc, nmo[s]):
+            for q in range(nref, ncasocc):
+                zvec[s][p,q] = dx[s][p,q] / (eps[q] - eps[p])
+
+    vden = vresp(full_response_dm(zvec))
+    wvo = []
+    for s in range(2):
+        w = dx[s] + reduce(numpy.dot, (mo_coeff[s].T, vden[s],
+                                       mo_coeff[s]))
+        wvo.append(w[viridx[s]][:,:nocc[s]])
 
     def fvind(x):
-        x = x.reshape(-1, nmo[0]*nocc[0] + nmo[1]*nocc[1])
+        # UCPHF may ask for several right-hand sides at once.  Keep the leading
+        # dimension through the AO density build so the UKS response kernel can
+        # contract all corresponding XC potentials in one call.
+        x = x.reshape(-1, wvo[0].size + wvo[1].size)
+        nset = x.shape[0]
+        mo1 = []
+        p0 = 0
+        for s in range(2):
+            p1 = p0 + wvo[s].size
+            z = numpy.zeros((nset, nmo[s], nocc[s]))
+            z[:,viridx[s]] = x[:,p0:p1].reshape((nset,) + wvo[s].shape)
+            mo1.append(z)
+            p0 = p1
+        dm = occ_response_dm(mo1)
+        v1 = vresp(dm)
         vout = []
-        for x1 in x:
-            xa = x1[:nmo[0]*nocc[0]].reshape(nmo[0], nocc[0])
-            xb = x1[nmo[0]*nocc[0]:].reshape(nmo[1], nocc[1])
-            dm = numpy.empty((2,nao,nao))
-            dm[0] = reduce(numpy.dot, (mo_coeff[0], xa,
-                                       mo_coeff[0][:,:nocc[0]].T))
-            dm[1] = reduce(numpy.dot, (mo_coeff[1], xb,
-                                       mo_coeff[1][:,:nocc[1]].T))
-            dm = dm + dm.transpose(0,2,1)
-            v1 = vresp(dm)
-            va = reduce(numpy.dot, (mo_coeff[0].T, v1[0],
-                                    mo_coeff[0][:,:nocc[0]]))
-            vb = reduce(numpy.dot, (mo_coeff[1].T, v1[1],
-                                    mo_coeff[1][:,:nocc[1]]))
-            vout.append(numpy.hstack((va.ravel(), vb.ravel())))
-        return numpy.asarray(vout)
+        for s in range(2):
+            v = numpy.einsum('pi,xpq,qj->xij', mo_coeff[s], v1[s],
+                             mo_coeff[s][:,:nocc[s]])
+            vout.append(v[:,viridx[s]].reshape(nset,-1))
+        return numpy.hstack(vout)
+
+    # This is the single perturbation-independent adjoint CPKS solve.  The
+    # nuclear derivative enters only later through B0-like contractions.
+    zvo = ucphf.solve(fvind, mc._scf.mo_energy, mo_occ, tuple(wvo),
+                      max_cycle=50)[0]
+    for s in range(2):
+        zvec[s][viridx[s],:nocc[s]] = zvo[s]
 
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
@@ -246,85 +286,45 @@ def _orbital_response_grad(mc_grad, mo_coeff, ci, casdm1s, casdm2s, atmlst):
         s1[:,p0:p1] += s1a[:,p0:p1]
         s1[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
 
-        h1mo = []
-        s1mo = []
+        # ucphf.solve(with s1) fixes the occupied-occupied response gauge to
+        # -S1/2.  In the adjoint form this gauge is a direct source term and
+        # its induced UKS response potential contributes to the B0 contraction.
+        smo = []
+        ug = []
         for s in range(2):
-            h1mo.append(numpy.einsum('xij,ip,jq->xpq',
-                                     h1ao[s][ia], mo_coeff[s],
-                                     mo_coeff[s][:,:nocc[s]]))
-            s1mo.append(numpy.einsum('xij,ip,jq->xpq',
-                                     s1, mo_coeff[s],
-                                     mo_coeff[s][:,:nocc[s]]))
+            sm = numpy.einsum('xij,ip,jq->xpq', s1, mo_coeff[s],
+                              mo_coeff[s])
+            u = numpy.zeros((3,nmo[s],nmo[s]))
+            u[:,:nocc[s],:nocc[s]] = -.5 * sm[:,:nocc[s],:nocc[s]]
+            smo.append(sm)
+            ug.append(u)
 
-        mo1 = ucphf.solve(fvind, mc._scf.mo_energy, mo_occ,
-                          (h1mo[0], h1mo[1]), (s1mo[0], s1mo[1]),
-                          max_cycle=50)[0]
+        dm_g = numpy.empty((2,3,nao,nao))
         for x in range(3):
-            dm1 = numpy.empty((2,nao,nao))
-            for s in range(2):
-                dm1[s] = reduce(numpy.dot, (mo_coeff[s], mo1[s][x],
-                                            mo_coeff[s][:,:nocc[s]].T))
-            dm1 = dm1 + dm1.transpose(0,2,1)
-            v1 = vresp(dm1)
-
-            for s in range(2):
-                u = numpy.zeros_like(dx[s])
-                u[:,:nocc[s]] = mo1[s][x]
-
-                b0 = reduce(numpy.dot, (mo_coeff[s].T,
-                                        h1ao[s][ia][x] + v1[s],
-                                        mo_coeff[s]))
-                smo = reduce(numpy.dot, (mo_coeff[s].T, s1[x], mo_coeff[s]))
-                b0 -= smo * mc._scf.mo_energy[s][None,:]
-                eps = mc._scf.mo_energy[s]
-                ncore = mc.ncore[s]
-                nref = ncore + mc.nelecas[s]
-                ncasocc = ncore + mc.ncas
-
-                # ucphf.solve(with s1) fixes the occupied-occupied response
-                # gauge to -S1/2.  CASCI also needs the canonical
-                # active-occupied/core rotation, so add the off-diagonal
-                # first-order Fock correction in the UCASSCF unique-variable
-                # orientation.
-                for p in range(ncore, nref):
-                    for q in range(ncore):
-                        u[p,q] += b0[p,q] / (eps[q] - eps[p])
-                for p in range(ncasocc, nmo[s]):
-                    for q in range(nref, ncasocc):
-                        u[p,q] = b0[p,q] / (eps[q] - eps[p])
-
-                de[k,x] += 2 * numpy.einsum('pq,pq->', u, dx[s])
+            dm_g[:,x] = full_response_dm((ug[0][x], ug[1][x]))
+        vg = vresp(dm_g)
+        for s in range(2):
+            b0 = numpy.einsum('pi,xpq,qj->xij', mo_coeff[s],
+                              h1ao[s][ia] + vg[s], mo_coeff[s])
+            b0 -= smo[s] * mc._scf.mo_energy[s][None,None,:]
+            de[k] += 2 * numpy.einsum('pq,xpq->x', zvec[s], b0)
+            de[k] += 2 * numpy.einsum('xpq,pq->x',
+                                      ug[s][:,:nocc[s],:nocc[s]],
+                                      dx[s][:nocc[s],:nocc[s]])
     return de
 
 
-def _skeleton_grad(mc_grad, mo_coeff, ci, casdm1s, casdm2s, atmlst):
+def _skeleton_grad(mc_grad, mo_coeff, xmo, casdm1s, casdm2s, atmlst):
     mc = mc_grad.base
     mol = mc_grad.mol
-    nmo = mo_coeff[0].shape[1]
-    dm1mo, dm2mo = _full_rdm12s(casdm1s, casdm2s, nmo, mc.ncore, mc.ncas)
-    dm1ao = (reduce(numpy.dot, (mo_coeff[0], dm1mo[0], mo_coeff[0].T)),
-             reduce(numpy.dot, (mo_coeff[1], dm1mo[1], mo_coeff[1].T)))
-    dm2aa = lib.einsum('pi,qj,rk,sl,ijkl->pqrs',
-                       mo_coeff[0], mo_coeff[0], mo_coeff[0], mo_coeff[0],
-                       dm2mo[0])
-    dm2ab = lib.einsum('pi,qj,rk,sl,ijkl->pqrs',
-                       mo_coeff[0], mo_coeff[0], mo_coeff[1], mo_coeff[1],
-                       dm2mo[1])
-    dm2bb = lib.einsum('pi,qj,rk,sl,ijkl->pqrs',
-                       mo_coeff[1], mo_coeff[1], mo_coeff[1], mo_coeff[1],
-                       dm2mo[2])
-    # Same-spin FCI RDMs already carry the convention needed by PySCF's
-    # one-index derivative integral contraction.  Do not halve them here as in
-    # the spin-free energy expression.
-    dm2a = dm2aa + dm2ab
-    dm2b = dm2bb + dm2ab.transpose(2,3,0,1)
+    nao = mol.nao
+    mo_act, dm_core, dm_act = _ao_density_components(
+        casdm1s, mo_coeff, mc.ncore, mc.ncas)
+    dm1ao = (dm_core[0] + dm_act[0], dm_core[1] + dm_act[1])
 
     hcore_deriv = mc_grad.hcore_generator(mol)
     s1a = mc_grad.get_ovlp(mol)
     aoslices = mol.aoslice_by_atom()
-    eri1 = mol.intor('int2e_ip1', comp=3, aosym='s1')
-    eri1 = eri1.reshape(3, mol.nao, mol.nao, mol.nao, mol.nao)
-    xmo = _casci_generalized_fock(mc, mo_coeff, ci, casdm1s, casdm2s)
     xtilde = []
     for s in range(2):
         x = xmo[s].copy()
@@ -333,14 +333,45 @@ def _skeleton_grad(mc_grad, mo_coeff, ci, casdm1s, casdm2s, atmlst):
         xtilde.append(x)
 
     de = numpy.zeros((len(atmlst),3))
+    max_memory = max(2000, mc_grad.max_memory*.9 - lib.current_memory()[0])
+    max_atom_nao = max(aoslices[:,3] - aoslices[:,2])
+    blksize = int(max_memory*1e6/8 / (max_atom_nao * nao * nao * 6))
+    blksize = min(nao, max(2, blksize))
+
     for k, ia in enumerate(atmlst):
-        p0, p1 = aoslices[ia][2:]
+        shl0, shl1, p0, p1 = aoslices[ia]
         de[k] += numpy.einsum('xij,ij->x', hcore_deriv(ia),
                               dm1ao[0] + dm1ao[1])
-        de[k] -= numpy.einsum('xpqrs,pqrs->x',
-                              eri1[:,p0:p1], dm2a[p0:p1]) * 2
-        de[k] -= numpy.einsum('xpqrs,pqrs->x',
-                              eri1[:,p0:p1], dm2b[p0:p1]) * 2
+
+        q1 = 0
+        for b0, b1, nf in _shell_prange(mol, 0, mol.nbas, blksize):
+            q0, q1 = q1, q1 + nf
+            shls_slice = (shl0, shl1, b0, b1, 0, mol.nbas, 0, mol.nbas)
+            eri1 = mol.intor('int2e_ip1', comp=3, aosym='s1',
+                             shls_slice=shls_slice)
+            eri1 = eri1.reshape(3, p1-p0, nf, nao, nao)
+
+            # Same-spin FCI RDMs already carry the convention needed by
+            # PySCF's one-index derivative integral contraction.  Do not halve
+            # them here as in the spin-free energy expression.
+            dm2a = _same_spin_dm2ao_slice(
+                dm_core[0], dm_act[0], mo_act[0], casdm2s[0],
+                p0, p1, q0, q1)
+            dm2a += _mixed_spin_dm2ao_slice(
+                dm_core[0], dm_act[0], mo_act[0],
+                dm_core[1], dm_act[1], mo_act[1], casdm2s[1],
+                p0, p1, q0, q1)
+            dm2b = _same_spin_dm2ao_slice(
+                dm_core[1], dm_act[1], mo_act[1], casdm2s[2],
+                p0, p1, q0, q1)
+            dm2b += _mixed_spin_dm2ao_slice(
+                dm_core[1], dm_act[1], mo_act[1],
+                dm_core[0], dm_act[0], mo_act[0],
+                casdm2s[1].transpose(2,3,0,1), p0, p1, q0, q1)
+
+            de[k] -= numpy.einsum('xpqrs,pqrs->x', eri1, dm2a) * 2
+            de[k] -= numpy.einsum('xpqrs,pqrs->x', eri1, dm2b) * 2
+
         s1 = numpy.zeros_like(s1a)
         s1[:,p0:p1] += s1a[:,p0:p1]
         s1[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
@@ -354,9 +385,10 @@ def _skeleton_grad(mc_grad, mo_coeff, ci, casdm1s, casdm2s, atmlst):
 def _direct_grad_elec(mc_grad, mo_coeff, ci, atmlst):
     mc = mc_grad.base
     casdm1s, casdm2s = mc.fcisolver.make_rdm12s(ci, mc.ncas, mc.nelecas)
-    de = _skeleton_grad(mc_grad, mo_coeff, ci, casdm1s, casdm2s, atmlst)
-    de += _orbital_response_grad(
-        mc_grad, mo_coeff, ci, casdm1s, casdm2s, atmlst)
+    dx, xmo = _casci_orbital_intermediates(
+        mc, mo_coeff, ci, casdm1s, casdm2s)
+    de = _skeleton_grad(mc_grad, mo_coeff, xmo, casdm1s, casdm2s, atmlst)
+    de += _orbital_response_grad(mc_grad, mo_coeff, dx, atmlst)
     return de
 
 
