@@ -21,11 +21,6 @@ CASCI analytical nuclear gradients
 
 Ref.
 J. Comput. Chem., 5, 589
-
-This module implements the HF-orbital CASCI gradient formulation.  The
-orbital response is the CPHF response of the underlying RHF reference.  CASCI
-gradients with KS-generated orbitals require a distinct CPKS/XC-response
-formulation and are not implemented here.
 '''
 
 import sys
