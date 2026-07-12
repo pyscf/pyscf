@@ -4,11 +4,7 @@
 # Licensed under the Apache License, Version 2.0
 
 '''
-UCASCI analytical nuclear gradients
-
-This module implements the UHF-orbital UCASCI gradient formulation.  The
-orbital response is the UCPHF response of the underlying UHF reference.  The
-UKS-orbital formulation is exposed through pyscf.grad.ukscasci.
+UHF-orbital UCASCI analytical nuclear gradients
 '''
 
 import numpy
@@ -26,6 +22,14 @@ RANGE_TYPE = range
 
 
 def _check_supported_orbital_source(mc):
+    if getattr(mc, '_scf_df_source', False):
+        raise NotImplementedError(
+            'UCASCI gradients with density-fitted UHF orbitals require '
+            'DF-UHF orbital-response terms')
+    if getattr(mc._scf, 'with_df', None):
+        raise NotImplementedError(
+            'UCASCI gradients with density-fitted UHF orbitals require '
+            'DF-UHF orbital-response terms')
     if isinstance(mc._scf, hf.KohnShamDFT):
         raise NotImplementedError(
             'UCASCI gradients with KS orbitals require the UKS/CPKS '

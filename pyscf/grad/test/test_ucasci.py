@@ -7,28 +7,15 @@ from pyscf import scf
 from pyscf import dft
 from pyscf import mcscf
 from pyscf import ci
-from pyscf import lib
 from pyscf.lib import logger
+from pyscf.grad.test.test_casci import _check_fd_grad
+from pyscf.grad.test.test_casci import _move_atom
 
 
-def _move_atom(atom, ia, ix, dx):
-    coords = []
-    for line in atom.splitlines():
-        if line.strip():
-            sym, x, y, z = line.split()
-            coords.append([sym, float(x), float(y), float(z)])
-    coords[ia][ix+1] += dx
-    return coords
-
-
-def _five_point_fd(run, ia, ix, h=1e-3):
-    ep2 = run((ia, ix,  2*h)).e_tot
-    ep1 = run((ia, ix,    h)).e_tot
-    em1 = run((ia, ix,   -h)).e_tot
-    em2 = run((ia, ix, -2*h)).e_tot
-    return (-ep2 + 8*ep1 - 8*em1 + em2) / (12*h) * lib.param.BOHR
-
-
+# Helper functions to build an independent reference full spin RDM and
+# generic pair-symmetric two-electron tensors. The RDM-intermediate tests
+# use them to check the UCASCI RDM -> UCCSD d1/d2 conversion
+# with a more literal construction
 def _pair_symmetric_eri(nmo, seed):
     rng = numpy.random.default_rng(seed)
     eri = rng.standard_normal((nmo,nmo,nmo,nmo))
@@ -92,7 +79,8 @@ def _make_full_rdm12s(casdm1s, casdm2s, nmo, ncore, ncas):
 
 
 class KnownValues(unittest.TestCase):
-    def test_full_active_matches_restricted_casci(self):
+    # Closed shell UCASCI matches restricted CASCI gradient.
+    def test_full_active_matches_restricted(self):
         mol = gto.M(atom='H 0 0 0; H 0 0 1',
                     basis='sto-3g', verbose=0)
         mf = scf.RHF(mol).run(conv_tol=1e-12)
@@ -104,22 +92,26 @@ class KnownValues(unittest.TestCase):
         grad = ucas.nuc_grad_method().kernel()
         self.assertAlmostEqual(abs(ref-grad).max(), 0, 9)
 
-    def test_full_active_one_electron_finite_diff(self):
-        def run(bond):
-            mol = gto.M(atom=f'H 0 0 0; H 0 0 {bond}',
+    def test_full_active_one_electron_fd(self):
+        atom = '''
+        H 0 0 0
+        H 0 0 1
+        '''
+
+        def run(ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
                         basis='sto-3g', charge=1, spin=1, verbose=0)
             mf = scf.UHF(mol).run(conv_tol=1e-12)
             mc = mcscf.UCASCI(mf, mf.mo_coeff[0].shape[1], mol.nelec).run()
             return mc
 
-        mc = run(1.0)
-        grad = mc.nuc_grad_method().kernel()
-        e1 = run(1.001).e_tot
-        e2 = run(0.999).e_tot
-        ref = (e1-e2) / 0.002 * lib.param.BOHR
-        self.assertAlmostEqual(grad[1,2], ref, 5)
+        mc = run()
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 1e-6)
 
-    def test_inactive_orbitals_openshell_multicomponent_finite_diff(self):
+    # One core electron
+    def test_inactive_openshell_fd(self):
         atom = '''
         H 0 0 0
         H 0 0 1
@@ -134,14 +126,12 @@ class KnownValues(unittest.TestCase):
             return mc
 
         mc = run()
-        grad = mc.nuc_grad_method().kernel()
-        for ia, ix in ((0,1), (0,2), (1,1), (1,2), (2,1), (2,2)):
-            e1 = run(ia, ix, 0.001).e_tot
-            e2 = run(ia, ix, -0.001).e_tot
-            ref = (e1-e2) / 0.002 * lib.param.BOHR
-            self.assertLess(abs(grad[ia,ix] - ref), 5e-7)
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 5e-7)
 
-    def test_ucasci_matches_ucisd_complete_active_space(self):
+    # UCASCI and UCISD should be the same for a 2-electron case.
+    def test_ucasci_matches_ucisd(self):
         mol = gto.M(atom='H 0 0 0; H 0 0 1; H 0 1 0',
                     basis='sto-3g', spin=1, verbose=0)
         mf = scf.UHF(mol).run(conv_tol=1e-12)
@@ -152,6 +142,8 @@ class KnownValues(unittest.TestCase):
         g_ucis = myci.nuc_grad_method().kernel()
         self.assertAlmostEqual(abs(g_ucas - g_ucis).max(), 0, 10)
 
+
+    # Convert UCASCI RDMs into UCCSD d1/d2 intermediates and back.
     def test_rdm_intermediates_round_trip(self):
         from pyscf.cc import uccsd_rdm
         from pyscf.grad import ucasci
@@ -173,7 +165,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(max(abs(rdm2[i]-full2[i]).max()
                                    for i in range(3)), 0, 12)
 
-    def test_general_rdm_intermediates_contract_symmetric_integrals(self):
+    # Check the larger-space RDM conversion with generic pair-symmetric
+    # two-electron tensor contractions.
+    def test_rdm_intermediates_contraction(self):
         from pyscf.cc import uccsd_rdm
         from pyscf.grad import ucasci
         mol = gto.M(atom='''
@@ -208,22 +202,27 @@ class KnownValues(unittest.TestCase):
                   .5 * numpy.einsum('pqrs,pqrs', eribb, rdm2[2]))
         self.assertAlmostEqual(e_test, e_ref, 10)
 
-    def test_full_active_openshell_finite_diff(self):
-        def run(bond):
-            mol = gto.M(atom=f'H 0 0 0; H 0 0 {bond}; H 0 1 0',
+    def test_all_active_fd(self):
+        atom = '''
+        H 0 0 0
+        H 0 0 1
+        H 0 1 0
+        '''
+
+        def run(ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
                         basis='sto-3g', spin=1, verbose=0)
             mf = scf.UHF(mol).run(conv_tol=1e-12)
             mc = mcscf.UCASCI(mf, mf.mo_coeff[0].shape[1], mol.nelec).run()
             return mc
 
-        mc = run(1.0)
-        grad = mc.nuc_grad_method().kernel()
-        e1 = run(1.001).e_tot
-        e2 = run(0.999).e_tot
-        ref = (e1-e2) / 0.002 * lib.param.BOHR
-        self.assertAlmostEqual(grad[1,2], ref, 5)
+        mc = run()
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 1e-6)
 
-    def test_general_casci_carbon_multicomponent_finite_diff(self):
+    # CH3 radical against FD
+    def test_ch3_fd(self):
         atom = '''
         C  0.00  0.00  0.00
         H  0.10  0.02  1.09
@@ -238,15 +237,13 @@ class KnownValues(unittest.TestCase):
             return mcscf.UCASCI(mf, 7, (3,2), ncore=(2,2)).run()
 
         mc = run()
-        grad = mc.nuc_grad_method().kernel()
         step = 2.5e-4
-        for ia, ix in ((0,0), (1,2), (2,0), (3,1)):
-            e1 = run(ia, ix, step).e_tot
-            e2 = run(ia, ix, -step).e_tot
-            ref = (e1-e2) / (2*step) * lib.param.BOHR
-            self.assertLess(abs(grad[ia,ix] - ref), 1e-6)
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 1e-6, step=step)
 
-    def test_general_casci_nitrogen_hydride_finite_diff(self):
+    # NH2 radical against FD
+    def test_nh2_fd(self):
         atom = '''
         N 0.000  0.000 0.000
         H 0.000  0.900 0.650
@@ -260,14 +257,13 @@ class KnownValues(unittest.TestCase):
             return mcscf.UCASCI(mf, 6, (3,2), ncore=(2,2)).run()
 
         mc = run()
-        grad = mc.nuc_grad_method().kernel()
         step = 5e-4
-        e1 = run(1, 2, step).e_tot
-        e2 = run(1, 2, -step).e_tot
-        ref = (e1-e2) / (2*step) * lib.param.BOHR
-        self.assertLess(abs(grad[1,2] - ref), 1e-6)
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 1e-6, step=step)
 
-    def test_general_casci_high_spin_carbon_finite_diff(self):
+    # CH2 triplet against FD
+    def test_ch2_fd(self):
         atom = '''
         C 0.000 0.000  0.000
         H 0.000 0.000  1.080
@@ -281,14 +277,13 @@ class KnownValues(unittest.TestCase):
             return mcscf.UCASCI(mf, 7, (4,2), ncore=(1,1)).run()
 
         mc = run()
-        grad = mc.nuc_grad_method().kernel()
         step = 5e-4
-        e1 = run(1, 2, step).e_tot
-        e2 = run(1, 2, -step).e_tot
-        ref = (e1-e2) / (2*step) * lib.param.BOHR
-        self.assertLess(abs(grad[1,2] - ref), 1e-6)
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 1e-6, step=step)
 
-    def test_general_casci_ccpvtz_five_point_finite_diff(self):
+    # CH2 triplet against FD with triple-zeta basis
+    def test_ch2_tz_fd(self):
         atom = '''
         C 0.000 0.000  0.000
         H 0.000 0.000  1.080
@@ -302,16 +297,13 @@ class KnownValues(unittest.TestCase):
             return mcscf.UCASCI(mf, 7, (4,2), ncore=(1,1)).run()
 
         mc = run()
-        grad = mc.nuc_grad_method().kernel()
         step = 1e-3
-        ep2 = run(1, 2, 2*step).e_tot
-        ep1 = run(1, 2, step).e_tot
-        em1 = run(1, 2, -step).e_tot
-        em2 = run(1, 2, -2*step).e_tot
-        ref = (-ep2 + 8*ep1 - 8*em1 + em2) / (12*step) * lib.param.BOHR
-        self.assertLess(abs(grad[1,2] - ref), 5e-7)
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 5e-7, step=step)
 
-    def test_general_casci_excited_root_finite_diff(self):
+    # CH3 excited states against FD
+    def test_ch3_excited_state_fd(self):
         atom = '''
         C  0.00  0.00  0.00
         H  0.10  0.02  1.09
@@ -328,14 +320,13 @@ class KnownValues(unittest.TestCase):
             return mc.run()
 
         mc = run()
-        grad = mc.nuc_grad_method().kernel(state=1)
         step = 5e-4
-        e1 = run(1, 2, step).e_tot[1]
-        e2 = run(1, 2, -step).e_tot[1]
-        ref = (e1-e2) / (2*step) * lib.param.BOHR
-        self.assertLess(abs(grad[1,2] - ref), 2e-6)
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(state=1),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot[1],
+                       mc.mol.natm, 2e-6, step=step)
 
-    def test_general_casci_state_average_finite_diff(self):
+    # CH3 state average against FD
+    def test_ch3_state_average_fd(self):
         atom = '''
         C  0.00  0.00  0.00
         H  0.10  0.02  1.09
@@ -352,16 +343,21 @@ class KnownValues(unittest.TestCase):
             return mc.state_average_([.4, .6]).run()
 
         mc = run()
-        grad = mc.nuc_grad_method().kernel()
         step = 5e-4
-        e1 = run(1, 2, step).e_tot
-        e2 = run(1, 2, -step).e_tot
-        ref = (e1-e2) / (2*step) * lib.param.BOHR
-        self.assertLess(abs(grad[1,2] - ref), 2e-6)
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 2e-6, step=step)
 
-    def test_state_specific_excited_root_finite_diff(self):
-        def run(dz=0):
-            mol = gto.M(atom=f'H 0 0 0; H 0 0 {1+dz}; H 0 1 0',
+    # All active excited state against FD
+    def test_all_active_excited_state_fd(self):
+        atom = '''
+        H 0 0 0
+        H 0 0 1
+        H 0 1 0
+        '''
+
+        def run(ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
                         basis='sto-3g', spin=1, verbose=0)
             mf = scf.UHF(mol).run(conv_tol=1e-12)
             mc = mcscf.UCASCI(mf, 3, (2,1))
@@ -369,41 +365,75 @@ class KnownValues(unittest.TestCase):
             return mc.run()
 
         mc = run()
-        grad = mc.nuc_grad_method().kernel(state=2)
-        e1 = run(0.001).e_tot[2]
-        e2 = run(-0.001).e_tot[2]
-        ref = (e1-e2) / 0.002 * lib.param.BOHR
-        self.assertLess(abs(grad[1,2] - ref), 1e-6)
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(state=2),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot[2],
+                       mc.mol.natm, 1e-6)
 
-    def test_symmetry_x2c_df_finite_diff(self):
-        def run(dz=0, symmetry=False, x2c=False, density_fit=False):
-            mol = gto.M(atom=f'H 0 0 0; H 0 0 {1+dz}; H 0 1 0',
-                        basis='sto-3g', spin=1, symmetry=symmetry, verbose=0)
-            mf = scf.UHF(mol)
-            if x2c:
-                mf = mf.x2c()
-            if density_fit:
-                mf = mf.density_fit()
-            mf.run(conv_tol=1e-12)
+    # UCASCI with symmetry against FD
+    def test_symmetry_fd(self):
+        atom = '''
+        H 0 0 0
+        H 0 0 1
+        H 0 1 0
+        '''
+
+        def run(ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
+                        basis='sto-3g', spin=1, symmetry=True, verbose=0)
+            mf = scf.UHF(mol).run(conv_tol=1e-12)
             return mcscf.UCASCI(mf, 2, (1,1), ncore=(1,0)).run()
 
-        for kwargs, tol in (((dict(symmetry=True)), 1e-6),
-                            ((dict(x2c=True)), 1e-6),
-                            ((dict(density_fit=True)), 3e-6)):
-            mc = run(**kwargs)
-            grad = mc.nuc_grad_method().kernel()
-            e1 = run(0.001, **kwargs).e_tot
-            e2 = run(-0.001, **kwargs).e_tot
-            ref = (e1-e2) / 0.002 * lib.param.BOHR
-            self.assertLess(abs(grad[1,2] - ref), tol)
+        mc = run()
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 1e-6)
 
-    def test_uks_casci_h3_all_component_finite_diff(self):
-        def run(disp=None):
+    # X2C on open-shell OH2+ against FD
+    def test_x2c_oh2_fd(self):
+        atom = '''
+        O 0.000000  0.000000 0.000000
+        H 0.000000  0.757000 0.587000
+        H 0.000000 -0.757000 0.587000
+        '''
+
+        def run(ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
+                        basis='6-31g', charge=1, spin=1, unit='Angstrom',
+                        verbose=0)
+            mf = scf.UHF(mol).x2c().run(conv_tol=1e-12)
+            return mcscf.UCASCI(mf, 4, (2,1), ncore=(3,3)).run()
+
+        mc = run()
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 1e-6)
+
+    # Error out when DF-generated UHF/UKS orbital sources are used
+    def test_density_fitted_orbitals_unsupported(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 1; H 0 1 0',
+                    basis='sto-3g', spin=1, verbose=0)
+
+        mf = scf.UHF(mol).density_fit().run(conv_tol=1e-12)
+        mc = mcscf.UCASCI(mf, 2, (1,1), ncore=(1,0)).run()
+        self.assertTrue(getattr(mc, '_scf_df_source', False))
+        with self.assertRaisesRegex(NotImplementedError, 'DF-UHF'):
+            mc.nuc_grad_method().kernel()
+
+        mf = dft.UKS(mol)
+        mf.xc = 'lda,vwn'
+        mf = mf.density_fit()
+        mc = mcscf.UCASCI(mf, 2, (1,1), ncore=(1,0))
+        self.assertTrue(getattr(mc, '_scf_df_source', False))
+        with self.assertRaisesRegex(NotImplementedError, 'DF-UKS'):
+            mc.nuc_grad_method().grad_elec(ci=0)
+
+    # UKS-CASCI with one core electron
+    def test_uks_casci_h3_finite_diff(self):
+        def run(ia=None, ix=None, dx=0):
             coords = numpy.asarray(((0., 0., 0.),
                                     (0., 0., 1.),
                                     (0., 1., 0.)))
-            if disp is not None:
-                ia, ix, dx = disp
+            if ia is not None:
                 coords[ia, ix] += dx
             mol = gto.M(atom=[('H', coords[i]) for i in range(3)],
                         unit='Angstrom', basis='sto-3g', spin=1, verbose=0)
@@ -417,19 +447,11 @@ class KnownValues(unittest.TestCase):
                          'pyscf.grad.ukscasci')
         self.assertEqual(mc.Gradients().__class__.__module__,
                          'pyscf.grad.ukscasci')
-        grad = mc.nuc_grad_method().kernel()
-        h = 1e-3
-        fd = numpy.zeros_like(grad)
-        for ia in range(3):
-            for ix in range(3):
-                ep2 = run((ia, ix,  2*h)).e_tot
-                ep1 = run((ia, ix,    h)).e_tot
-                em1 = run((ia, ix,   -h)).e_tot
-                em2 = run((ia, ix, -2*h)).e_tot
-                fd[ia,ix] = (-ep2 + 8*ep1 - 8*em1 + em2) / (12*h)
-                fd[ia,ix] *= lib.param.BOHR
-        self.assertLess(abs(grad - fd).max(), 2e-7)
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 2e-7)
 
+    # Error out when requesting UKS-CASCI gradients for unsupported functionals
     def test_uks_casci_unsupported_functionals(self):
         mol = gto.M(atom='H 0 0 0; H 0 0 1; H 0 1 0',
                     basis='sto-3g', spin=1, verbose=0)
@@ -437,8 +459,6 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'lda,vwn'
         mf.run(conv_tol=1e-12)
 
-        # The CASCI Hamiltonian is independent of the source XC functional.
-        # Only the gradient guard behavior depends on these fields here.
         mf.xc = 'tpss'
         mc = mcscf.UCASCI(mf, 2, (1,1), ncore=(1,0)).run()
         with self.assertRaisesRegex(NotImplementedError, 'meta-GGA'):
@@ -455,7 +475,8 @@ class KnownValues(unittest.TestCase):
         with self.assertRaisesRegex(NotImplementedError, 'NLC'):
             mc.nuc_grad_method().kernel()
 
-    def test_uks_casci_ch3_all_component_finite_diff(self):
+    # CH3 radical against FD with UKS(lda,vwn) orbitals
+    def test_uks_ch3_fd(self):
         atom = '''
         C  0.000000  0.000000  0.000000
         H  0.000000  0.000000  1.090000
@@ -463,11 +484,10 @@ class KnownValues(unittest.TestCase):
         H -0.513360  0.889165 -0.363333
         '''
 
-        def run(disp=None):
+        def run(ia=None, ix=None, dx=0):
             mol0 = gto.M(atom=atom, basis='3-21g', spin=1,
                          unit='Angstrom', verbose=0)
-            if disp is not None:
-                ia, ix, dx = disp
+            if ia is not None:
                 coords = mol0.atom_coords(unit='Angstrom')
                 coords[ia,ix] += dx
                 mol0 = gto.M(atom=[(mol0.atom_symbol(i), coords[i])
@@ -481,29 +501,20 @@ class KnownValues(unittest.TestCase):
             return mcscf.UCASCI(mf, 6, (3,2), ncore=(2,2)).run()
 
         mc = run()
-        grad = mc.nuc_grad_method().kernel()
-        h = 1e-3
-        fd = numpy.zeros_like(grad)
-        for ia in range(mc.mol.natm):
-            for ix in range(3):
-                ep2 = run((ia, ix,  2*h)).e_tot
-                ep1 = run((ia, ix,    h)).e_tot
-                em1 = run((ia, ix,   -h)).e_tot
-                em2 = run((ia, ix, -2*h)).e_tot
-                fd[ia,ix] = (-ep2 + 8*ep1 - 8*em1 + em2) / (12*h)
-                fd[ia,ix] *= lib.param.BOHR
-        self.assertLess(abs(grad - fd).max(), 3e-5)
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 3e-6)
 
-    def test_uks_casci_nh2_all_component_finite_diff(self):
+    # NH2 radical against FD with UKS(lda,vwn) orbitals
+    def test_uks_nh2_fd(self):
         atom = '''
         N  0.000000  0.000000  0.000000
         H  0.000000  0.000000  1.030000
         H  0.968000  0.000000 -0.344000
         '''
 
-        def run(disp=None):
-            mol = gto.M(atom=atom if disp is None else
-                        _move_atom(atom, disp[0], disp[1], disp[2]),
+        def run(ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
                         basis='3-21g', spin=1, unit='Angstrom',
                         verbose=0)
             mf = dft.UKS(mol)
@@ -513,46 +524,42 @@ class KnownValues(unittest.TestCase):
             return mcscf.UCASCI(mf, 6, (3,2), ncore=(2,2)).run()
 
         mc = run()
-        grad = mc.nuc_grad_method().kernel()
-        fd = numpy.zeros_like(grad)
-        for ia in range(mc.mol.natm):
-            for ix in range(3):
-                fd[ia,ix] = _five_point_fd(run, ia, ix)
-        self.assertLess(abs(grad - fd).max(), 3e-6)
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 3e-6)
 
-    def test_uks_casci_ch2_triplet_gga_finite_diff(self):
+    # CH2 triplet against FD with UKS(pbe,pbe)
+    def test_uks_ch2_fd(self):
         atom = '''
         C  0.000000  0.000000  0.000000
         H  0.000000  0.000000  1.080000
         H  1.020000  0.000000 -0.360000
         '''
 
-        def run(disp=None):
-            mol = gto.M(atom=atom if disp is None else
-                        _move_atom(atom, disp[0], disp[1], disp[2]),
+        def run(ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
                         basis='3-21g', spin=2, unit='Angstrom',
                         verbose=0)
             mf = dft.UKS(mol)
             mf.xc = 'pbe,pbe'
-            mf.grids.level = 1
+            mf.grids.level = 3
             mf.run(conv_tol=1e-11)
             return mcscf.UCASCI(mf, 7, (4,2), ncore=(1,1)).run()
 
         mc = run()
-        grad = mc.nuc_grad_method().kernel()
-        for ia, ix in ((0,2), (1,0), (2,2)):
-            self.assertLess(abs(grad[ia,ix] - _five_point_fd(run, ia, ix)),
-                            1e-5)
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 3e-6)
 
-    def test_uks_casci_zero_active_sector_finite_diff(self):
+    # one-electron UKS-CASCI against FD
+    def test_uks_emptybeta_fd(self):
         atom = '''
         Li 0.000000  0.000000  0.000000
         H  0.000000  0.000000  1.650000
         '''
 
-        def run(disp=None):
-            mol = gto.M(atom=atom if disp is None else
-                        _move_atom(atom, disp[0], disp[1], disp[2]),
+        def run(ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
                         basis='sto-3g', spin=1, charge=1,
                         unit='Angstrom', verbose=0)
             mf = dft.UKS(mol)
@@ -562,19 +569,19 @@ class KnownValues(unittest.TestCase):
             return mcscf.UCASCI(mf, 1, (1,0), ncore=(1,1)).run()
 
         mc = run()
-        grad = mc.nuc_grad_method().kernel()
-        self.assertLess(abs(grad[1,2] - _five_point_fd(run, 1, 2)), 1e-7)
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 1e-7)
 
-    def test_uks_casci_no_core_full_active_finite_diff(self):
+    def test_uks_all_active_fd(self):
         atom = '''
         H  0.000000  0.000000  0.000000
         H  0.000000  0.000000  1.000000
         H  0.000000  1.050000  0.100000
         '''
 
-        def run(disp=None):
-            mol = gto.M(atom=atom if disp is None else
-                        _move_atom(atom, disp[0], disp[1], disp[2]),
+        def run(ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
                         basis='sto-3g', spin=1, unit='Angstrom',
                         verbose=0)
             mf = dft.UKS(mol)
@@ -583,20 +590,17 @@ class KnownValues(unittest.TestCase):
             return mcscf.UCASCI(mf, 3, (2,1), ncore=(0,0)).run()
 
         mc = run()
-        grad = mc.nuc_grad_method().kernel()
-        fd = numpy.zeros_like(grad)
-        for ia in range(mc.mol.natm):
-            for ix in range(3):
-                fd[ia,ix] = _five_point_fd(run, ia, ix)
-        self.assertLess(abs(grad - fd).max(), 1e-8)
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 1e-8)
 
-    def test_uks_casci_global_hybrid_finite_diff(self):
-        def run(disp=None):
+    # UKS-CASCI gradient against FD when using B3LYP.
+    def test_uks_b3lyp_fd(self):
+        def run(ia=None, ix=None, dx=0):
             coords = numpy.asarray(((0., 0., 0.),
                                     (0., 0., 1.),
                                     (0., 1., 0.)))
-            if disp is not None:
-                ia, ix, dx = disp
+            if ia is not None:
                 coords[ia, ix] += dx
             mol = gto.M(atom=[('H', coords[i]) for i in range(3)],
                         unit='Angstrom', basis='sto-3g', spin=1,
@@ -608,23 +612,20 @@ class KnownValues(unittest.TestCase):
             return mcscf.UCASCI(mf, 2, (1,1), ncore=(1,0)).run()
 
         mc = run()
-        grad = mc.nuc_grad_method().kernel()
-        fd = numpy.zeros_like(grad)
-        for ia in range(mc.mol.natm):
-            for ix in range(3):
-                fd[ia,ix] = _five_point_fd(run, ia, ix)
-        self.assertLess(abs(grad - fd).max(), 3e-6)
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 3e-6)
 
-    def test_uks_casci_excited_root_finite_diff(self):
+    # excited state UKS-CASCI gradients against FD.
+    def test_uks_casci_excited_state_fd(self):
         atom = '''
         H  0.000000  0.000000  0.000000
         H  0.000000  0.000000  1.000000
         H  0.000000  1.000000  0.150000
         '''
 
-        def run(disp=None):
-            mol = gto.M(atom=atom if disp is None else
-                        _move_atom(atom, disp[0], disp[1], disp[2]),
+        def run(ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
                         basis='sto-3g', spin=1, unit='Angstrom',
                         verbose=0)
             mf = dft.UKS(mol)
@@ -635,27 +636,20 @@ class KnownValues(unittest.TestCase):
             return mc.run()
 
         mc = run()
-        grad = mc.nuc_grad_method().kernel(state=1)
-        h = 1e-3
-        for ia, ix in ((0,2), (1,0), (2,2)):
-            ep2 = run((ia, ix,  2*h)).e_tot[1]
-            ep1 = run((ia, ix,    h)).e_tot[1]
-            em1 = run((ia, ix,   -h)).e_tot[1]
-            em2 = run((ia, ix, -2*h)).e_tot[1]
-            fd = (-ep2 + 8*ep1 - 8*em1 + em2) / (12*h)
-            fd *= lib.param.BOHR
-            self.assertLess(abs(grad[ia,ix] - fd), 5e-7)
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(state=1),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot[1],
+                       mc.mol.natm, 5e-7)
 
-    def test_uks_casci_state_average_finite_diff(self):
+    # state-averaged UKS(lda,vwn)-CASCI gradients against FD.
+    def test_uks_state_average_fd(self):
         atom = '''
         H  0.000000  0.000000  0.000000
         H  0.000000  0.000000  1.000000
         H  0.000000  1.000000  0.150000
         '''
 
-        def run(disp=None):
-            mol = gto.M(atom=atom if disp is None else
-                        _move_atom(atom, disp[0], disp[1], disp[2]),
+        def run(ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
                         basis='sto-3g', spin=1, unit='Angstrom',
                         verbose=0)
             mf = dft.UKS(mol)
@@ -666,12 +660,12 @@ class KnownValues(unittest.TestCase):
             return mc.state_average_([.3, .7]).run()
 
         mc = run()
-        grad = mc.nuc_grad_method().kernel()
-        for ia, ix in ((0,2), (1,0), (2,2)):
-            self.assertLess(abs(grad[ia,ix] - _five_point_fd(run, ia, ix)),
-                            5e-7)
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 5e-7)
 
-    def test_uks_restricted_collapse_matches_rks_casci(self):
+    # Closed shell UKS-CASCI matches RKS-CASCI gradient.
+    def test_ukscasci_matches_restricted(self):
         mol = gto.M(atom='''
                     O 0.000  0.000 0.000
                     H 0.000 -0.757 0.587
@@ -689,50 +683,9 @@ class KnownValues(unittest.TestCase):
         g_u = ucas.nuc_grad_method().kernel()
         self.assertAlmostEqual(abs(g_r - g_u).max(), 0, 9)
 
-    def test_restricted_casci_carbon_finite_diff_benchmark(self):
-        atom = '''
-        C  0.00  0.00  0.00
-        H  0.10  0.02  1.09
-        H  1.02  0.08 -0.35
-        H -0.42  0.96 -0.28
-        H -0.62 -0.78 -0.42
-        '''
 
-        def run(dx=0):
-            coords = []
-            for line in atom.splitlines():
-                if line.strip():
-                    sym, x, y, z = line.split()
-                    coords.append([sym, float(x), float(y), float(z)])
-            coords[4][1] += dx
-            mol = gto.M(atom=coords, basis='6-31g', verbose=0)
-            mf = scf.RHF(mol).run(conv_tol=1e-12)
-            return mcscf.CASCI(mf, 8, 6, ncore=2).run()
-
-        mc = run()
-        grad = mc.nuc_grad_method().kernel()
-        e1 = run(0.001).e_tot
-        e2 = run(-0.001).e_tot
-        ref = (e1-e2) / 0.002 * lib.param.BOHR
-        self.assertLess(abs(grad[4,0] - ref), 1e-6)
-
-    def test_restricted_collapse_h4_inactive(self):
-        mol = gto.M(atom='''
-                    H 0.0 0.0 0.0
-                    H 0.0 0.0 1.0
-                    H 0.0 1.0 0.0
-                    H 0.2 1.0 1.0''',
-                    basis='sto-3g', verbose=0)
-        rhf = scf.RHF(mol).run(conv_tol=1e-12)
-        uhf = scf.UHF(mol).run(conv_tol=1e-12)
-        rcas = mcscf.CASCI(rhf, 2, 2, ncore=1).run()
-        ucas = mcscf.UCASCI(uhf, 2, (1,1), ncore=(1,1)).run()
-        self.assertAlmostEqual(rcas.e_tot, ucas.e_tot, 10)
-        g_r = rcas.nuc_grad_method().kernel()
-        g_u = ucas.nuc_grad_method().kernel()
-        self.assertAlmostEqual(abs(g_r - g_u).max(), 0, 9)
-
-    def test_restricted_collapse_ch4_larger_active_space(self):
+    # Closed shell UCASCI matches restricted CASCI gradient.
+    def test_ucasci_matches_restricted(self):
         mol = gto.M(atom='''
                     C  0.00  0.00  0.00
                     H  0.10  0.02  1.09
@@ -749,9 +702,16 @@ class KnownValues(unittest.TestCase):
         g_u = ucas.nuc_grad_method().kernel()
         self.assertAlmostEqual(abs(g_r - g_u).max(), 0, 7)
 
-    def test_state_average_finite_diff(self):
-        def run(dz=0):
-            mol = gto.M(atom=f'H 0 0 0; H 0 0 {1+dz}; H 0 1 0',
+    # State averaged gradient against FD
+    def test_state_average_fd(self):
+        atom = '''
+        H 0 0 0
+        H 0 0 1
+        H 0 1 0
+        '''
+
+        def run(ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
                         basis='sto-3g', spin=1, verbose=0)
             mf = scf.UHF(mol).run(conv_tol=1e-12)
             mc = mcscf.UCASCI(mf, 3, (2,1))
@@ -759,53 +719,71 @@ class KnownValues(unittest.TestCase):
             return mc.state_average_([.5, .5]).run()
 
         mc = run()
-        grad = mc.nuc_grad_method().kernel()
-        e1 = run(0.001).e_tot
-        e2 = run(-0.001).e_tot
-        ref = (e1-e2) / 0.002 * lib.param.BOHR
-        self.assertLess(abs(grad[1,2] - ref), 1e-6)
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 1e-6)
 
-    def test_zero_active_occupied_spin_sector(self):
-        def run(dz=0):
-            mol = gto.M(atom=f'Li 0 0 0; H 0 0 {1.6+dz}',
-                        basis='sto-3g', charge=1, spin=1, verbose=0)
+    # one-electron against FD
+    def test_emptybeta_fd(self):
+        atom = '''
+        Li 0.000000  0.000000  0.000000
+        H  0.000000  0.000000  1.650000
+        '''
+
+        def run(ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
+                        basis='sto-3g', spin=1, charge=1,
+                        unit='Angstrom', verbose=0)
             mf = scf.UHF(mol).run(conv_tol=1e-12)
             return mcscf.UCASCI(mf, 2, (1,0), ncore=(1,1)).run()
 
         mc = run()
-        grad = mc.nuc_grad_method().kernel()
-        e1 = run(0.001).e_tot
-        e2 = run(-0.001).e_tot
-        ref = (e1-e2) / 0.002 * lib.param.BOHR
-        self.assertLess(abs(grad[1,2] - ref), 1e-6)
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 1e-6)
 
-    def test_zero_active_virtual_spin_sector(self):
-        def run(dz=0):
-            mol = gto.M(atom=f'Li 0 0 0; H 0 0 {1.6+dz}',
-                        basis='sto-3g', charge=1, spin=1, verbose=0)
+    # single orbital single electron (no excitations) edgecase
+    def test_single_determinant(self):
+        atom = '''
+        Li 0.000000  0.000000  0.000000
+        H  0.000000  0.000000  1.650000
+        '''
+
+        def run(ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
+                        basis='sto-3g', spin=1, charge=1,
+                        unit='Angstrom', verbose=0)
             mf = scf.UHF(mol).run(conv_tol=1e-12)
             return mcscf.UCASCI(mf, 1, (1,0), ncore=(1,1)).run()
 
         mc = run()
-        grad = mc.nuc_grad_method().kernel()
-        e1 = run(0.001).e_tot
-        e2 = run(-0.001).e_tot
-        ref = (e1-e2) / 0.002 * lib.param.BOHR
-        self.assertLess(abs(grad[1,2] - ref), 1e-6)
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 1e-6)
 
+    # check UCASCI gradient scanner path against FD
     def test_scanner(self):
-        mol = gto.M(atom='H 0 0 0; H 0 0 1; H 0 1 0',
+        atom = '''
+        H 0 0 0
+        H 0 0 1
+        H 0 1 0
+        '''
+        mol = gto.M(atom=atom,
                     basis='sto-3g', spin=1, verbose=0)
         mf = scf.UHF(mol).run(conv_tol=1e-12)
         mc = mcscf.UCASCI(mf, mf.mo_coeff[0].shape[1], mol.nelec)
         gs = mc.nuc_grad_method().as_scanner()
-        e, grad = gs(mol)
-        e1 = gs.base('H 0 0 0; H 0 0 1.001; H 0 1 0')
-        e2 = gs.base('H 0 0 0; H 0 0 0.999; H 0 1 0')
-        ref = (e1-e2) / 0.002 * lib.param.BOHR
-        self.assertAlmostEqual(e, -1.5056055923848675, 8)
-        self.assertAlmostEqual(grad[1,2], ref, 5)
+        e0 = [None]
+        def analytic_grad():
+            e0[0], grad = gs(mol)
+            return grad
+        _check_fd_grad(
+            self, analytic_grad,
+            lambda ia, ix, dx: gs.base(_move_atom(atom, ia, ix, dx)),
+            mol.natm, 1e-5)
+        self.assertAlmostEqual(e0[0], -1.5056055923848675, 8)
 
+    # Ensure verbose UCASCI gradient finalization runs without error
     def test_verbose_finalize(self):
         mol = gto.M(atom='H 0 0 0; H 0 0 1; H 0 1 0',
                     basis='sto-3g', spin=1, verbose=0)

@@ -14,12 +14,21 @@
 # limitations under the License.
 
 '''
-UCASCI analytical nuclear gradients with unrestricted KS orbitals
+UCASCI analytical nuclear gradients with UKS orbitals
 
-This module implements the UKS-orbital UCASCI gradient formulation.  The
-orbital response is the CPKS response of the underlying UKS reference, with
+The orbital response is the CPKS response of the underlying UKS reference, with
 the associated spin-resolved XC first-derivative terms in the KS orbital-source
 constraints.
+
+Supported functionals include:
+  LDA: lda, lda,vwn, slater,vwn, svwn
+  GGA: pbe, pbe,pbe, b88,p86, bp86, b88,lyp, blyp, pw91,pw91, b97-d
+  global hybrid GGA: b3lyp, b3lyp5, b3p86, b3pw91, pbe0, pbe1pbe, o3lyp, x3lyp
+
+Unsupported functionals include:
+  meta-GGA: tpss, scan, m06-l, m06, m06-2x, mn15
+  range-separated hybrids: cam-b3lyp, wb97x
+  NLC: vv10
 '''
 
 from functools import reduce
@@ -58,6 +67,14 @@ def _check_supported_orbital_source(mc):
     if not isinstance(mc._scf, hf.KohnShamDFT):
         raise RuntimeError('UKS-CASCI gradients require a KohnShamDFT '
                            'reference')
+    if getattr(mc, '_scf_df_source', False):
+        raise NotImplementedError(
+            'UKS-CASCI gradients with density-fitted KS orbitals require '
+            'DF-UKS orbital-response terms')
+    if getattr(mc._scf, 'with_df', None):
+        raise NotImplementedError(
+            'UKS-CASCI gradients with density-fitted KS orbitals require '
+            'DF-UKS orbital-response terms')
     _check_supported_functional(mc)
 
 
@@ -138,8 +155,9 @@ def _casci_orbital_intermediates(mc, mo_coeff, ci, casdm1s, casdm2s):
     eris = casscf.ao2mo(mo_coeff)
 
     # UCASSCF uses the antisymmetric orbital-gradient vector as the orbital
-    # optimization RHS.  The same object is Delta X in the Sherrill CI-gradient
-    # orbital-response term.
+    # optimization RHS.  The same object is Delta X in the Sherrill's notes
+    # for CI-gradient orbital-response term
+    # https://vergil.chemistry.gatech.edu/static/content/cigrad.pdf
     g_orb = umc1step.gen_g_hop(casscf, mo_coeff, None,
                                casdm1s, casdm2s, eris)[0]
     dx = casscf.unpack_uniq_var(g_orb)
