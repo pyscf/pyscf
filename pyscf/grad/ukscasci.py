@@ -253,6 +253,9 @@ def _orbital_response_grad(mc_grad, mo_coeff, dx, atmlst):
         ncore = mc.ncore[s]
         nref = ncore + mc.nelecas[s]
         ncasocc = ncore + mc.ncas
+        # The UKS orbital-gradient matrix is antisymmetric, so each redundant
+        # rotation only needs to be stored once.  The restricted CASCI path
+        # stores both directions because it starts from the unsymmetrized Imat.
         for p in range(ncore, nref):
             for q in range(ncore):
                 zvec[s][p,q] = dx[s][p,q] / (eps[q] - eps[p])

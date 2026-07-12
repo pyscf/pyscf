@@ -47,7 +47,7 @@ def _check_supported_orbital_source(mc):
     if isinstance(mc._scf, hf.KohnShamDFT):
         raise NotImplementedError(
             'CASCI gradients with KS orbitals require the RKS/CPKS '
-            'orbital response, which is not implemented')
+            'orbital response; use pyscf.grad.kscasci')
 
 
 def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
@@ -124,6 +124,8 @@ def _grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None,
     # occupied-virtual source-orbital CPHF/CPKS solve below.
     ee = mo_energy[:,None] - mo_energy
     zvec = numpy.zeros_like(Imat)
+    # ee[p,q] = eps_p - eps_q; dividing by -ee gives the canonical
+    # eps_q - eps_p denominator for these redundant rotation blocks.
     zvec[:ncore,ncore:neleca] = Imat[:ncore,ncore:neleca] / -ee[:ncore,ncore:neleca]
     zvec[ncore:neleca,:ncore] = Imat[ncore:neleca,:ncore] / -ee[ncore:neleca,:ncore]
     zvec[nocc:,neleca:nocc] = Imat[nocc:,neleca:nocc] / -ee[nocc:,neleca:nocc]
@@ -213,6 +215,9 @@ def _grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None,
                 eri1tmp = eri1tmp.reshape(p1-p0,nf,nao,nao)
                 de[k,i] -= numpy.einsum('ijkl,ij,kl', eri1tmp, hf_dm1[p0:p1,q0:q1], zvec_ao) * 2
                 de[k,i] -= numpy.einsum('ijkl,kl,ij', eri1tmp, hf_dm1, zvec_ao[p0:p1,q0:q1]) * 2
+                # Hybrid scaling applies only to the KS source-Fock response
+                # term; the CASCI skeleton below differentiates the bare WFT
+                # Hamiltonian.
                 de[k,i] += hyb * numpy.einsum('ijkl,il,kj', eri1tmp, hf_dm1[p0:p1], zvec_ao[:,q0:q1])
                 de[k,i] += hyb * numpy.einsum('ijkl,jk,il', eri1tmp, hf_dm1[q0:q1], zvec_ao[p0:p1])
 

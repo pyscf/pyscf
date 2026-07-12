@@ -36,6 +36,10 @@ def _check_supported_orbital_source(mc):
             'orbital response; use pyscf.grad.ukscasci')
 
 
+# Present the UCASCI object with the attributes expected by grad.uccsd: the
+# CAS active space is the CC active space, and inactive/external orbitals are
+# hidden through the frozen mask while the temporary occupations define the
+# artificial UHF reference used by the repacked RDM intermediates.
 def _uccsd_env(mc, mo_coeff):
     ncorea, ncoreb = mc.ncore
     neleca, nelecb = mc.nelecas
