@@ -379,6 +379,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(float(vxc[0][0]), -0.6761177630311709, 9)
         self.assertAlmostEqual(float(vxc[1][0]), -0.002949151742087167, 9)
 
+    def test_rsh_coeff_combined_cam_functionals(self):
+        # Combining two distinct HYB_CAM functionals that share the same
+        # omega must not raise. rsh_coeff() checks (for the 2nd and later
+        # RSH components) that the functional is actually CAM-type via
+        # LIBXC_is_cam_rsh, which previously crashed with a ctypes
+        # TypeError due to a wrong argtypes declaration.
+        rsh = dft.libxc.rsh_coeff('0.5*CAM_B3LYP + 0.5*CAM_O3LYP')
+        self.assertAlmostEqual(rsh[0], 0.33, 12)
+
     def test_ityh(self):
         rho = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
         exc, vxc, fxc, kxc = dft.libxc.eval_xc('ityh,', rho, 0, deriv=1)
