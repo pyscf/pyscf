@@ -112,6 +112,36 @@ class KnownValues(unittest.TestCase):
         a = numpy.zeros((0, 5))
         self.assertEqual(lib.unpack_tril(a, axis=0).shape, (0, 0, 5))
 
+    def test_unpack_tril_complex64(self):
+        # unpack_tril for dtypes other than double/complex128 goes through
+        # a pure-Python fallback branch. For HERMITIAN/ANTIHERMI fills with
+        # a complex dtype, the upper triangle must be the conjugate of the
+        # lower triangle, matching the complex128 (ctypes-accelerated)
+        # reference path.
+        numpy.random.seed(2)
+        n = 6
+        nn = n*(n+1)//2
+        idx, idy = numpy.tril_indices(n)
+        diag = (idx == idy)
+
+        # HERMITIAN requires a real diagonal.
+        tril_h = numpy.random.random(nn) + numpy.random.random(nn)*1j
+        tril_h[diag] = tril_h[diag].real
+        tril_h64 = tril_h.astype(numpy.complex64)
+        ref = lib.unpack_tril(tril_h, filltriu=lib.HERMITIAN)
+        out = lib.unpack_tril(tril_h64, filltriu=lib.HERMITIAN)
+        self.assertAlmostEqual(abs(out - out.conj().T).max(), 0, 5)
+        self.assertAlmostEqual(abs(out - ref).max(), 0, 5)
+
+        # ANTIHERMI requires a zero diagonal.
+        tril_a = numpy.random.random(nn) + numpy.random.random(nn)*1j
+        tril_a[diag] = 0
+        tril_a64 = tril_a.astype(numpy.complex64)
+        ref = lib.unpack_tril(tril_a, filltriu=lib.ANTIHERMI)
+        out = lib.unpack_tril(tril_a64, filltriu=lib.ANTIHERMI)
+        self.assertAlmostEqual(abs(out + out.conj().T).max(), 0, 5)
+        self.assertAlmostEqual(abs(out - ref).max(), 0, 5)
+
     def test_unpack_tril_integer(self):
         a = lib.unpack_tril(numpy.arange(6, dtype=numpy.int32))
         self.assertTrue(a.dtype == numpy.int32)

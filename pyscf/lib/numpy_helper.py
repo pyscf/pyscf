@@ -416,10 +416,17 @@ def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
     if (tril.dtype != numpy.double and tril.dtype != numpy.complex128):
         out = numpy.ndarray(shape, tril.dtype, buffer=out)
         idx, idy = numpy.tril_indices(nd)
+        is_complex = numpy.iscomplexobj(tril)
         if filltriu == ANTIHERMI:
-            out[...,idy,idx] = -tril
+            if is_complex:
+                out[...,idy,idx] = -tril.conj()
+            else:
+                out[...,idy,idx] = -tril
         else:
-            out[...,idy,idx] = tril
+            if is_complex and filltriu == HERMITIAN:
+                out[...,idy,idx] = tril.conj()
+            else:
+                out[...,idy,idx] = tril
         out[...,idx,idy] = tril
         return out
 
