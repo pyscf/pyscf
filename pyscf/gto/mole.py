@@ -2911,7 +2911,7 @@ class MoleBase(lib.StreamObject):
         >>> mol.set_rinv_origin(0)
         >>> mol.set_rinv_origin((0,1,0))
         '''
-        self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = coord[:3]
+        self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = coord
         return self
     set_rinv_orig = set_rinv_origin
     set_rinv_orig_ = set_rinv_orig    # for backward compatibility

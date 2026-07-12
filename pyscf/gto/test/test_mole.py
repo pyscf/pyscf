@@ -931,6 +931,18 @@ O    SP
         v = numpy.einsum('pqk->pq', v)
         self.assertAlmostEqual(abs(vref-v).max(), 0, 12)
 
+    def test_set_rinv_origin_scalar(self):
+        # set_rinv_origin(0) is documented as a valid call (see docstring),
+        # matching the behavior of the sibling set_common_origin(0).
+        mol = mol0.copy()
+        mol.set_rinv_origin(0)
+        orig = mol._env[gto.mole.PTR_RINV_ORIG:gto.mole.PTR_RINV_ORIG+3]
+        self.assertAlmostEqual(abs(orig).max(), 0, 12)
+
+        mol.set_rinv_origin((0, 1, 0))
+        orig = mol._env[gto.mole.PTR_RINV_ORIG:gto.mole.PTR_RINV_ORIG+3]
+        self.assertAlmostEqual(abs(orig - numpy.array((0., 1., 0.))).max(), 0, 12)
+
     def test_to_uncontracted_cartesian_basis(self):
         pmol, ctr_coeff = mol0.to_uncontracted_cartesian_basis()
         c = scipy.linalg.block_diag(*ctr_coeff)
