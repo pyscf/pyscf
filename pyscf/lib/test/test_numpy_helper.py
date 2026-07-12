@@ -122,6 +122,22 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.array_equal(a, numpy.array((0,3,4,6,7,8))))
         self.assertTrue(a.dtype == numpy.int32)
 
+    def test_pack_tril_axis0(self):
+        # axis=0 packs the leading two dimensions; they must be square.
+        n = 4
+        mat = numpy.arange(n*n*3.).reshape(n, n, 3)
+        packed = lib.pack_tril(mat, axis=0)
+        self.assertEqual(packed.shape, (n*(n+1)//2, 3))
+        ref = mat[numpy.tril_indices(n)]
+        self.assertAlmostEqual(abs(packed - ref).max(), 0, 12)
+
+        # Non-square leading dimensions must raise instead of silently
+        # returning a wrong-shape / wrong-content result.
+        bad = numpy.arange(2*4*5.).reshape(2, 4, 5)
+        self.assertRaises(ValueError, lib.pack_tril, bad, axis=0)
+        bad2 = numpy.arange(5*3*4.).reshape(5, 3, 4)
+        self.assertRaises(ValueError, lib.pack_tril, bad2, axis=0)
+
     def test_unpack_row(self):
         row = numpy.arange(28.)
         ref = lib.unpack_tril(row)[4]

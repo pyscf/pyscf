@@ -362,6 +362,11 @@ def pack_tril(mat, axis=-1, out=None):
 
     else:  # pack the leading two dimension
         assert (axis == 0)
+        if mat.shape[0] != mat.shape[1]:
+            raise ValueError('pack_tril with axis=0 requires the leading '
+                              'two dimensions to be square, got shape %s'
+                              % (mat.shape,))
+        nd = mat.shape[0]
         out = mat[numpy.tril_indices(nd)]
         return out
 
