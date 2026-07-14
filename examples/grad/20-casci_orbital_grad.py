@@ -2,11 +2,6 @@
 
 '''
 Analytical nuclear gradients of CASCI with HF and restricted KS orbitals.
-
-The restricted example uses RHF orbitals and the unrestricted example uses UHF
-orbitals.  The final restricted example uses RKS orbitals.  UKS-orbital CASCI
-and CASSCF-orbital CASCI gradients require different orbital-response
-formulations and are not handled by these gradient classes.
 '''
 
 from pyscf import gto

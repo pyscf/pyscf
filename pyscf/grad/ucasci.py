@@ -197,7 +197,10 @@ class Gradients(uhf_grad.Gradients):
     grad_elec = grad_elec
 
     def __init__(self, mc):
-        self.state = 0
+        if isinstance(mc, StateAverageMCSCFSolver):
+            self.state = None
+        else:
+            self.state = 0
         uhf_grad.Gradients.__init__(self, mc)
 
     def kernel(self, mo_coeff=None, ci=None, atmlst=None,
@@ -207,8 +210,9 @@ class Gradients(uhf_grad.Gradients):
             if self.base.ci is None:
                 self.base.ci.run()
             ci = self.base.ci
-        if (isinstance(ci, (list, tuple, RANGE_TYPE)) and
-            not isinstance(self.base, StateAverageMCSCFSolver)):
+        if self.state is None:
+            assert state is None
+        elif isinstance(ci, (list, tuple, RANGE_TYPE)):
             if state is None:
                 state = self.state
             else:

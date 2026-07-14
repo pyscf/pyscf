@@ -489,6 +489,20 @@ class KnownValues(unittest.TestCase):
         with self.assertRaisesRegex(NotImplementedError, 'NLC'):
             mc.nuc_grad_method().kernel()
 
+    # AD: Error out for restricted open-shell orbital sources.
+    def test_restricted_open_shell_orbitals_unsupported(self):
+        mol = gto.M(atom='Li 0 0 0', basis='sto-3g', spin=1, verbose=0)
+
+        mf = scf.ROHF(mol).run(conv_tol=1e-12)
+        mc = mcscf.CASCI(mf, 2, 1, ncore=1).run()
+        with self.assertRaisesRegex(NotImplementedError, 'ROHF'):
+            mc.nuc_grad_method().kernel()
+
+        mf = dft.ROKS(mol, xc='lda,vwn').run(conv_tol=1e-12)
+        mc = mcscf.CASCI(mf, 2, 1, ncore=1).run()
+        with self.assertRaisesRegex(NotImplementedError, 'ROKS'):
+            mc.nuc_grad_method().kernel()
+
     def test_casci_grad_excited_state(self):
         mc = mcscf.CASCI(mf, 4, 4)
         mc.fcisolver.nroots = 3

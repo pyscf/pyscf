@@ -34,7 +34,7 @@ from pyscf.lib import logger
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad.mp2 import _shell_prange
 from pyscf.grad import tdrks as tdrks_grad
-from pyscf.scf import cphf, hf
+from pyscf.scf import cphf, hf, rohf
 from pyscf.mcscf.addons import StateAverageMCSCFSolver
 
 if sys.version_info < (3,):
@@ -44,6 +44,9 @@ else:
 
 
 def _check_supported_orbital_source(mc):
+    if isinstance(mc._scf, rohf.ROHF):
+        raise NotImplementedError(
+            'CASCI gradients with ROHF orbitals are not implemented')
     if isinstance(mc._scf, hf.KohnShamDFT):
         raise NotImplementedError(
             'CASCI gradients with KS orbitals require the RKS/CPKS '

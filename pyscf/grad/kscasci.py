@@ -23,11 +23,14 @@ the associated XC first-derivative terms in the KS orbital-source constraints.
 
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import hf
+from pyscf.scf import hf, rohf
 from pyscf.grad import casci as casci_grad
 
 
 def _check_supported_orbital_source(mc):
+    if isinstance(mc._scf, rohf.ROHF):
+        raise NotImplementedError(
+            'CASCI gradients with ROKS orbitals are not implemented')
     if not isinstance(mc._scf, hf.KohnShamDFT):
         raise RuntimeError('KS-CASCI gradients require a KohnShamDFT reference')
 
