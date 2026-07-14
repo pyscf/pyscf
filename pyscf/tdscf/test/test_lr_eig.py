@@ -86,6 +86,23 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(converged[0])
         self.assertAlmostEqual(energy[0], 0.9991663794740591, 12)
 
+    def test_real_eig_uses_raw_residual_when_preconditioner_returns_zero(self):
+        def zero_precond(dx, energy):
+            return numpy.zeros_like(dx)
+
+        converged, energy, _ = _lr_eig.real_eig(
+            self.aop,
+            self.guess,
+            zero_precond,
+            nroots=1,
+            tol_residual=1e-9,
+            max_cycle=30,
+            verbose=logger.Logger(sys.stdout, logger.QUIET),
+        )
+
+        self.assertTrue(converged[0])
+        self.assertAlmostEqual(energy[0], 0.9991663794740591, 12)
+
 
 if __name__ == '__main__':
     unittest.main()
