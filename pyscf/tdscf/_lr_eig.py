@@ -707,6 +707,11 @@ def real_eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=Non
         if x0sym is None:
             V, W = VW_Gram_Schmidt_fill_holder(
                 V_holder[:,:m1], W_holder[:,:m1], X_new, Y_new, lindep)
+            # A dependent preconditioned basis can still leave independent raw Ritz residuals.
+            if len(V) == 0:
+                V, W = VW_Gram_Schmidt_fill_holder(
+                    V_holder[:,:m1], W_holder[:,:m1],
+                    R_x[:,r_index].copy(), R_y[:,r_index].copy(), lindep)
         else:
             xt_ir = xt_ir[r_index]
             xt_orth_ir = []
