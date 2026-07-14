@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import unittest
 import numpy
 from pyscf import lib
@@ -48,9 +49,11 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_ucasscf(self):
         mc = mcscf.UCASSCF(m, 4, 4)
+        # Keep the regression in one CASSCF attraction basin across threaded reductions.
+        mo = numpy.loadtxt(os.path.join(os.path.dirname(__file__), 'ucasscf_h2o_mo.txt')).reshape(2, 13, 13)
         with lib.NamedTemporaryFile() as f:
             mc.chkfile = f.name
-            mc.run()
+            mc.kernel(mo_coeff=mo)
         self.assertAlmostEqual(mc.e_tot, -75.7460662487894, 6)
 
     def test_with_x2c_scanner(self):
