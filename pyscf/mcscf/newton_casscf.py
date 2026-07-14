@@ -539,6 +539,9 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
               stat.imic, norm_gall, norm_gorb, norm_gci,
               numpy.linalg.norm(u-numpy.eye(nmo)),
               numpy.linalg.norm(dci_kf))
+    if numpy.linalg.norm(dxi) < casscf.ah_lindep:
+        # Avoid reusing a degenerate zero AH step as the next macro initial guess.
+        dxi = g_all
     return u, ci_kf, norm_gkf, stat, dxi
 
 

@@ -14,6 +14,8 @@
 # limitations under the License.
 
 import unittest
+from types import SimpleNamespace
+from unittest import mock
 from functools import reduce
 import numpy
 from pyscf import gto, scf, lib, fci
@@ -81,6 +83,31 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
+    def test_zero_ah_step_uses_gradient_as_next_guess(self):
+        fake = SimpleNamespace(
+            max_stepsize=1.0, ah_level_shift=0.0, ah_conv_tol=1e-12,
+            ah_max_cycle=30, ah_lindep=1e-14, ah_start_tol=1.0,
+            ah_start_cycle=0, max_cycle_micro=10, kf_interval=99,
+            kf_trust_region=1.5, ah_grad_trust_region=1.5,
+            fcisolver=SimpleNamespace(nroots=1), mo_coeff=numpy.eye(1),
+            ncore=0, ncas=1, frozen=None, verbose=0, stdout=None,
+            uniq_var_indices=lambda *args: numpy.array([True]),
+        )
+
+        def davidson(*args, **kwargs):
+            yield True, 1, 0.0, numpy.zeros(1), numpy.zeros(1), numpy.zeros(1), 0.0
+
+        with mock.patch.object(newton_casscf, 'gen_g_hop', return_value=(
+                numpy.array([1.0]), lambda u, ci: numpy.array([1.0]),
+                lambda x: x, numpy.ones(1))), \
+             mock.patch.object(newton_casscf.ciah, 'davidson_cc', davidson), \
+             mock.patch.object(newton_casscf, 'extract_rotation',
+                               lambda casscf, dr, u, ci: (u, ci)):
+            *_, next_guess = newton_casscf.update_orb_ci(
+                fake, numpy.eye(1), numpy.ones(1), None, conv_tol_grad=1e-6)
+
+        self.assertAlmostEqual(next_guess[0], 1.0, 15)
+
     def test_gen_g_hop(self):
         numpy.random.seed(1)
         mo = numpy.random.random(mf.mo_coeff.shape)
