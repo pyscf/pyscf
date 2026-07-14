@@ -17,6 +17,7 @@ import unittest
 import copy
 import numpy
 from functools import reduce
+from unittest import mock
 
 from pyscf import lib
 from pyscf import gto
@@ -866,6 +867,55 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(levecs[0][0], 1)
         self.assertEqual(levecs[1][0], 3)
         self.assertEqual(levecs[2][0], 4)
+
+    def test_sort_degenerate_left_right_eigensystem_by_overlap(self):
+        myeom = eom_rccsd.EOMIP(mycc)
+        right_evecs = numpy.eye(2)
+        left_evecs = right_evecs[::-1]
+
+        _, revecs, levecs = eom_rccsd._sort_left_right_eigensystem(
+            myeom, [True, True], [1., 1.], right_evecs,
+            [True, True], [1., 1.], left_evecs)
+
+        self.assertAlmostEqual(numpy.dot(levecs[0], revecs[0]), 1.)
+        self.assertAlmostEqual(numpy.dot(levecs[1], revecs[1]), 1.)
+
+    def test_perturbed_kernel_respects_explicit_left_guess(self):
+        myeom = eom_rccsd.EOMIP(mycc)
+        right_guess = numpy.array([[1., 0.]])
+        left_guess = numpy.array([[0., 1.]])
+        guesses = {}
+
+        def fake_kernel(eom, nroots, koopmans=False, guess=None, left=False,
+                        eris=None, imds=None):
+            guesses[left] = guess
+            return numpy.array([True]), numpy.array([1.]), numpy.array([[1., 0.]])
+
+        with mock.patch.object(eom_rccsd, 'kernel', fake_kernel), \
+             mock.patch.object(myeom, 'ccsd_star_contract', return_value=numpy.array([1.])):
+            eom_rccsd.perturbed_ccsd_kernel(
+                myeom, right_guess=right_guess, left_guess=left_guess, imds=object())
+
+        self.assertIs(guesses[False], right_guess)
+        self.assertIs(guesses[True], left_guess)
+
+    def test_perturbed_kernel_defaults_left_guess_to_right_vectors(self):
+        myeom = eom_rccsd.EOMIP(mycc)
+        right_guess = numpy.array([[1., 0.]])
+        right_vectors = numpy.array([[0., 1.]])
+        guesses = {}
+
+        def fake_kernel(eom, nroots, koopmans=False, guess=None, left=False,
+                        eris=None, imds=None):
+            guesses[left] = guess
+            vectors = numpy.array([[1., 0.]]) if left else right_vectors
+            return numpy.array([True]), numpy.array([1.]), vectors
+
+        with mock.patch.object(eom_rccsd, 'kernel', fake_kernel), \
+             mock.patch.object(myeom, 'ccsd_star_contract', return_value=numpy.array([1.])):
+            eom_rccsd.perturbed_ccsd_kernel(myeom, right_guess=right_guess, imds=object())
+
+        self.assertIs(guesses[True], right_vectors)
 
 #    def test_ea_matvec3(self):
 #        numpy.random.seed(12)

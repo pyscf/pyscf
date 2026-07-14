@@ -146,9 +146,9 @@ def _sort_left_right_eigensystem(eom, right_converged, right_evals, right_evecs,
     '''Ensures the left and right eigenvectors correspond to the same eigenvalue.
 
     Note:
-        Useful for perturbative methods that need both eigenstates.  Right now, just
-        simply checks for equality between left and right eigenvalues, but can be
-        extended to make sure the overlap between states is sufficiently large.
+        Useful for perturbative methods that need both eigenstates. Left and right
+        roots are first matched by eigenvalue, then degenerate candidates are
+        disambiguated by their overlap.
 
     Kwargs:
         eom : :class:`EOM`
@@ -184,15 +184,18 @@ def _sort_left_right_eigensystem(eom, right_converged, right_evals, right_evecs,
                  '    No. Left = %3d, No. Right = %3d.' %
                  (len(left_idx), len(right_idx)))
 
-    for ir_idx, ir in enumerate(right_idx):
-        found = False
-        for il_idx, il in enumerate(left_idx):
-            if abs(right_evals[ir] - left_evals[il]) < tol:
-                found = True
-                srt_right_idx.append(ir)
-                srt_left_idx.append(il)
-                break
-        if found:
+    for ir in right_idx:
+        candidates = [
+            (il_idx, il) for il_idx, il in enumerate(left_idx)
+            if abs(right_evals[ir] - left_evals[il]) < tol
+        ]
+        if candidates:
+            il_idx, il = max(
+                candidates,
+                key=lambda item: abs(np.dot(left_evecs[item[1]], right_evecs[ir])),
+            )
+            srt_right_idx.append(ir)
+            srt_left_idx.append(il)
             left_idx.pop(il_idx)
         else:
             log.warn('No converged left eigenvalue corresponding to right eigenvalue '
@@ -219,8 +222,11 @@ def perturbed_ccsd_kernel(eom, nroots=1, koopmans=False, right_guess=None,
                kernel(eom, nroots, koopmans=koopmans, guess=right_guess, left=False,
                       eris=eris, imds=imds)
     # Left eigenvectors
+    if left_guess is None:
+        # Keep degenerate left roots in the subspace selected by the converged right roots.
+        left_guess = r_v
     l_converged, l_e, l_v = \
-               kernel(eom, nroots, koopmans=koopmans, guess=right_guess, left=True,
+               kernel(eom, nroots, koopmans=koopmans, guess=left_guess, left=True,
                       eris=eris, imds=imds)
 
     e, r_v, l_v = _sort_left_right_eigensystem(eom, r_converged, r_e, r_v, l_converged, l_e, l_v)
