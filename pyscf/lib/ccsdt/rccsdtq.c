@@ -974,9 +974,6 @@ void t4_spin_summation(const double *A, double *B, int64_t nocc4, int64_t nvir,
 
 void t4_spin_summation_single_inplace_(double *A, int64_t nvir, char *pattern, double alpha, double beta)
 {
-    int64_t nvv = nvir * nvir;
-    int64_t nvvv = nvir * nvv;
-
     double p[9];
 
     if (strcmp(pattern, "P4_full") == 0)

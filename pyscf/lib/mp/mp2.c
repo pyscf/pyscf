@@ -501,10 +501,6 @@ void trisolve_parallel_grp(double *low, double *b, const int n, const int nrhs, 
     const char DIAG = 'N';
     const double D1 = 1;
 
-    int i;
-    int info;
-    double * bi;
-
     int igrp, i0, di;
 
 #pragma omp for schedule (dynamic, 4)
