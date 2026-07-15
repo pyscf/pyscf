@@ -20,6 +20,7 @@
 
 
 import numpy as np
+from scipy.optimize import linear_sum_assignment
 
 from pyscf import lib
 from pyscf import ao2mo
@@ -184,23 +185,35 @@ def _sort_left_right_eigensystem(eom, right_converged, right_evals, right_evecs,
                  '    No. Left = %3d, No. Right = %3d.' %
                  (len(left_idx), len(right_idx)))
 
-    for ir in right_idx:
-        candidates = [
-            (il_idx, il) for il_idx, il in enumerate(left_idx)
-            if abs(right_evals[ir] - left_evals[il]) < tol
-        ]
-        if candidates:
-            il_idx, il = max(
-                candidates,
-                key=lambda item: abs(np.dot(left_evecs[item[1]], right_evecs[ir])),
-            )
-            srt_right_idx.append(ir)
-            srt_left_idx.append(il)
-            left_idx.pop(il_idx)
-        else:
-            log.warn('No converged left eigenvalue corresponding to right eigenvalue '
-                     '%.6g (right idx=%3d).\nWill not perform perturbation on this state.'
-                     % (right_evals[ir], ir))
+    if right_idx:
+        overlaps = abs(np.dot(right_evecs[right_idx], left_evecs[left_idx].T))
+        compatible = abs(
+            right_evals[right_idx, None] - left_evals[None, left_idx]
+        ) < tol
+        cost = np.zeros((len(right_idx), len(left_idx) + len(right_idx)))
+        real_cost = cost[:, :len(left_idx)]
+        real_cost[:] = 1
+        if np.any(compatible):
+            scale = overlaps[compatible].max()
+            scaled_overlaps = overlaps / scale if scale else overlaps
+            real_cost[compatible] = -(len(right_idx) + 1) - scaled_overlaps[compatible]
+
+        right_rows, left_cols = linear_sum_assignment(cost)
+        for right_row, left_col in zip(right_rows, left_cols):
+            ir = right_idx[right_row]
+            if left_col < len(left_idx) and compatible[right_row, left_col]:
+                il = left_idx[left_col]
+                overlap = overlaps[right_row, left_col]
+                if overlap < 1e-7:
+                    raise ValueError(
+                        'Refusing EOM left/right roots with near-zero overlap '
+                        f'{overlap:.3g} (left idx={il}, right idx={ir})')
+                srt_right_idx.append(ir)
+                srt_left_idx.append(il)
+            else:
+                log.warn('No converged left eigenvalue corresponding to right eigenvalue '
+                         '%.6g (right idx=%3d).\nWill not perform perturbation on this state.'
+                         % (right_evals[ir], ir))
 
     log.info('Resulting left/right eigenstates:')
     log.info('Left Eigen (idx) <-> Right Eigen (idx)')
@@ -224,7 +237,7 @@ def perturbed_ccsd_kernel(eom, nroots=1, koopmans=False, right_guess=None,
     # Left eigenvectors
     if left_guess is None:
         # Keep degenerate left roots in the subspace selected by the converged right roots.
-        left_guess = r_v
+        left_guess = np.atleast_2d(r_v)
     l_converged, l_e, l_v = \
                kernel(eom, nroots, koopmans=koopmans, guess=left_guess, left=True,
                       eris=eris, imds=imds)
