@@ -1,5 +1,11 @@
 # Windows 64-bit Wheel Packaging
 
+## Scope
+
+This document describes a local Windows wheel build and installed-wheel
+verification path. It does not declare official native Windows support, change
+the main installation guidance, or add a Windows release pipeline.
+
 ## Environment
 
 Install the required tools first:
@@ -92,7 +98,7 @@ Notes:
 - `-Clean` removes the build directory before building the wheel.
 - Build time is approximately 14 minutes on a i5-13600KF.
 
-## Full Installed-Wheel Verification
+## Installed-Wheel Verification
 
 After the wheel has been built, switch to the dedicated test environment and run the installed-wheel sweep:
 
@@ -116,7 +122,6 @@ Notes:
   - `tools/windows/reports/installed-wheel-report.json`
 - Per-directory raw pytest logs are stored under `tools/windows/reports/logs/`.
 - Verification time is approximately 46 minutes on a i5-13600KF.
-- A recent full Windows run finished with two known failures, `pyscf\cc\test` and `pyscf\pbc\tdscf\test`, which currently look like numerical or platform-specific deviations rather than wheel packaging defects.
 
 Useful `verify-installed-wheel.ps1` parameters:
 
@@ -150,6 +155,14 @@ powershell -ExecutionPolicy Bypass -File .\tools\windows\verify-installed-wheel.
   -ExcludeTestRoots pyscf\pbc pyscf\solvent
 ```
 
+## Compatibility
+
+- Runtime DLL fallback handling is used only when `sys.platform == "win32"`.
+- Runtime and support DLLs are staged next to the extension modules in
+  `pyscf/lib`; Linux and macOS library lookup is unchanged.
+- `delvewheel` and a full Windows CI/release matrix are follow-up topics, not
+  part of this local helper.
+
 ## Post-Verification Cleanup
 
 Use the commands below when you want to remove both conda environments and all local build artifacts, so the next packaging and verification run starts from a clean state.
@@ -177,91 +190,4 @@ Remove-Item .\pyscf\lib\*.dll -Force -ErrorAction SilentlyContinue
 # 5. Optional: remove timestamped historical reports and keep only the stable report filenames
 Remove-Item .\tools\windows\reports\installed-wheel-report-*.md -Force -ErrorAction SilentlyContinue
 Remove-Item .\tools\windows\reports\installed-wheel-report-*.json -Force -ErrorAction SilentlyContinue
-```
-
-## Appendix
-
-### `libxcfun.patch` Line-Ending Fix
-
-Cross-platform re-checks showed that `pyscf\lib\libxcfun.patch` was not inherently corrupt:
-
-- A clean Linux checkout and a clean Windows checkout with line-ending conversion disabled produced the same LF-only patch bytes.
-- On both platforms, that LF-only patch passed `git apply --check`, applied cleanly against `xcfun@a89b783`, and did not block a direct patched-`xcfun` build.
-
-The previously observed Windows packaging failure turned out to be checkout-specific:
-
-```text
-error: corrupt patch at line 11
-```
-
-Root cause:
-
-- The Windows global Git configuration used in the packaging environment had `core.autocrlf=true`.
-- The repository did not yet have a `.gitattributes` rule protecting `pyscf\lib\libxcfun.patch`.
-- As a result, a normal Windows checkout rewrote the patch from LF to CRLF.
-- The CRLF worktree copy then failed `git apply --check` against the bundled `xcfun` source tree, even though the LF version of the same patch succeeded.
-
-Fix:
-
-- Add a repository-level `.gitattributes` rule:
-  - `*.patch text eol=lf`
-- Renormalize the worktree copy of `pyscf\lib\libxcfun.patch` so Windows checkouts keep the file in LF form.
-
-Validation:
-
-- `git -C build\temp.win-amd64\deps\src\libxcfun apply --check pyscf\lib\libxcfun.patch` now succeeds on the Windows packaging checkout.
-- A clean Windows wheel build (`tools\windows\build-wheel.ps1 -Clean`) now shows the bundled `xcfun` patch step completing successfully:
-  - `Checking patch CMakeLists.txt...`
-  - `Checking patch src/XCFunctional.cpp...`
-  - `Applied patch CMakeLists.txt cleanly.`
-  - `Applied patch src/XCFunctional.cpp cleanly.`
-- The follow-up installed-wheel verification for `pyscf\dft\test` and `pyscf\tdscf\test` also passed in the dedicated test environment.
-
-Scope:
-
-- This is not a Windows compiler problem.
-- This is not a target-tree problem with `xcfun@a89b783`; the same clean target tree accepted the LF patch and rejected the CRLF worktree copy.
-- The issue only appears on Windows-style checkouts that rewrite the patch line endings before the bundled `xcfun` patch step runs.
-
-Current status:
-
-- The line-ending issue is fixed in this checkout.
-- The bundled `xcfun` patch step now behaves deterministically on the validated Windows build path.
-- The `PATCH_COMMAND` flow is back to the upstream-style `... || true` form now that the worktree patch can be preserved as LF.
-
-Expected benefit:
-
-- The build log matches the real situation: the patch file itself is valid when preserved as LF.
-- Future maintainers are less likely to misdiagnose the issue as a new `xcfun` or compiler regression.
-- The bundled `xcfun` patch step becomes deterministic across clean Linux and Windows checkouts.
-
-Recommended validation for future regressions:
-
-```powershell
-# 0. Set the repository root for this checkout
-$RepoRoot = "C:\path\to\pyscf"
-Set-Location $RepoRoot
-
-# 1. Confirm the worktree copy is LF-only
-python -c "from pathlib import Path; data = Path(r'pyscf/lib/libxcfun.patch').read_bytes(); print(data.count(b'\n'), data.count(b'\r'))"
-
-# 2. Confirm the patch is syntactically valid against the pinned xcfun source tree
-git -C build\temp.win-amd64\deps\src\libxcfun apply --check (Join-Path $RepoRoot "pyscf\lib\libxcfun.patch")
-
-# 3. Rebuild the wheel in the packaging environment with a clean build tree
-conda activate pyscf-win313
-powershell -ExecutionPolicy Bypass -File .\tools\windows\build-wheel.ps1 -Clean
-
-# 4. Reinstall the wheel into the test environment and verify xcfun imports from site-packages
-conda activate pyscf-win313-test
-python -m pip install --force-reinstall .\dist\pyscf-2.13.1-py3-none-win_amd64.whl
-cd $env:TEMP
-python -c "import pyscf; from pyscf import dft; print(pyscf.__file__); print(dft.xcfun.__file__)"
-
-# 5. Re-run the installed-wheel directories that previously depended on xcfun
-Set-Location $RepoRoot
-powershell -ExecutionPolicy Bypass -File .\tools\windows\verify-installed-wheel.ps1 `
-  -SkipBuild `
-  -SkipInstall `
-  -TestRoots 'pyscf\dft\test','pyscf\tdscf\test'
 ```
