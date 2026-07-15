@@ -60,7 +60,7 @@ class KnownValues(unittest.TestCase):
         g = mf.nuc_grad_method().set(sgx_grid_response=True, grid_response=True).kernel()
         mol1 = mol.copy()
         mf_scanner = mf.as_scanner()
-        delta = 1e-4
+        delta = 2e-4
         e1 = mf_scanner(mol1.set_geom_(
             f'O  0. 0. {delta:f}; 1  0. -0.757 0.587; 1  0. 0.757 0.587'
         ))
