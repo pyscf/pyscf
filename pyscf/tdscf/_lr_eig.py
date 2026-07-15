@@ -640,7 +640,8 @@ def real_eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=Non
                 y = y[:,idx]
         except np.linalg.LinAlgError:
             if fresh_start:
-                raise RuntimeError('This error is often caused by a problematic SCF solution, such as a saddle-point solution.')
+                raise RuntimeError('This error is often caused by a problematic '
+                                   'SCF solution, such as a saddle-point solution.')
             # Reuse the last valid Ritz vectors instead of the singular expanded metric.
             log.debug('Singular trial subspace; restart from the previous Ritz vectors')
             fresh_start = True
