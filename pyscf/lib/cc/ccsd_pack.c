@@ -32,18 +32,18 @@ void CCmake_0213(double *out, double *v1, double *v2, int count, int m,
 #pragma omp parallel default(none) \
         shared(count, m, out, v1, v2, a, b)
 {
-        int i, j, k, l, n;
+        int i, j, k, l;
         size_t d2 = m * m;
         size_t d1 = m * m * m;
         double *pv1, *pv2, *pout;
 #pragma omp for schedule (static)
         for (i = 0; i < count; i++) {
-                for (n = 0, j = 0; j < m; j++) {
+                for (j = 0; j < m; j++) {
                 for (k = 0; k < m; k++) {
                         pout = out + d1*i + d2*j + m*k;
                         pv1  = v1  + d1*i + d2*j + m*k;
                         pv2  = v2  + d1*i + d2*k + m*j;
-                        for (l = 0; l < m; l++, n++) {
+                        for (l = 0; l < m; l++) {
                                 pout[l] = pv1[l] * a + pv2[l] * b;
                         }
         } } }
