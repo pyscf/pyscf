@@ -49,7 +49,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_ucasscf(self):
         mc = mcscf.UCASSCF(m, 4, 4)
-        # Keep the regression in one CASSCF attraction basin across threaded reductions.
+        # Use fixed UHF orbitals to make the CASSCF path reproducible.
         mo = numpy.loadtxt(os.path.join(os.path.dirname(__file__), 'ucasscf_h2o_mo.txt')).reshape(2, 13, 13)
         with lib.NamedTemporaryFile() as f:
             mc.chkfile = f.name
