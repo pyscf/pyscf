@@ -362,6 +362,11 @@ def pack_tril(mat, axis=-1, out=None):
 
     else:  # pack the leading two dimension
         assert (axis == 0)
+        if mat.shape[0] != mat.shape[1]:
+            raise ValueError('pack_tril with axis=0 requires the leading '
+                              'two dimensions to be square, got shape %s'
+                              % (mat.shape,))
+        nd = mat.shape[0]
         out = mat[numpy.tril_indices(nd)]
         return out
 
@@ -411,10 +416,17 @@ def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
     if (tril.dtype != numpy.double and tril.dtype != numpy.complex128):
         out = numpy.ndarray(shape, tril.dtype, buffer=out)
         idx, idy = numpy.tril_indices(nd)
+        is_complex = numpy.iscomplexobj(tril)
         if filltriu == ANTIHERMI:
-            out[...,idy,idx] = -tril
+            if is_complex:
+                out[...,idy,idx] = -tril.conj()
+            else:
+                out[...,idy,idx] = -tril
         else:
-            out[...,idy,idx] = tril
+            if is_complex and filltriu == HERMITIAN:
+                out[...,idy,idx] = tril.conj()
+            else:
+                out[...,idy,idx] = tril
         out[...,idx,idy] = tril
         return out
 
