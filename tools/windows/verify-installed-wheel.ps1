@@ -231,6 +231,9 @@ function Stage-TestDirectory {
     $relative = Get-LogicalPath -RepoRoot $RepoRoot -TargetPath $SourceDirectory
     $stageRoot = Join-Path $RunRoot "tests"
     $stagedDirectory = Join-Path $stageRoot (Sanitize-Name $relative)
+    if (Test-Path -LiteralPath $stagedDirectory) {
+        Remove-Item -LiteralPath $stagedDirectory -Recurse -Force
+    }
     New-Item -ItemType Directory -Path $stagedDirectory -Force | Out-Null
     Copy-Item -Path (Join-Path $SourceDirectory '*') -Destination $stagedDirectory -Recurse -Force
 

@@ -1,4 +1,8 @@
+import os
 import pathlib
+import shutil
+import subprocess
+import tempfile
 import unittest
 
 
@@ -7,6 +11,50 @@ VERIFY_WHEEL = REPO_ROOT / "tools" / "windows" / "verify-installed-wheel.ps1"
 
 
 class VerifyInstalledWheelScriptTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("powershell") or shutil.which("pwsh"), "PowerShell is required")
+    def test_staging_recreates_the_target_directory(self):
+        powershell = shutil.which("powershell") or shutil.which("pwsh")
+        command = r'''
+$scriptPath = $env:STAGE_TEST_SCRIPT
+$source = $env:STAGE_TEST_SOURCE
+$runRoot = $env:STAGE_TEST_RUN_ROOT
+$repoRoot = $env:STAGE_TEST_REPO_ROOT
+$tokens = $null
+$errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile(
+    $scriptPath, [ref]$tokens, [ref]$errors)
+foreach ($name in @('Get-LogicalPath', 'Get-RelativePath', 'Sanitize-Name', 'Stage-TestDirectory')) {
+    $node = $ast.FindAll({
+        param($item)
+        $item -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $item.Name -eq $name
+    }, $true)[0]
+    Invoke-Expression $node.Extent.Text
+}
+$first = Stage-TestDirectory -SourceDirectory $source -RunRoot $runRoot -RepoRoot $repoRoot
+$sentinel = Join-Path $first.staged_directory 'sentinel.txt'
+Set-Content -LiteralPath $sentinel -Value 'stale'
+$null = Stage-TestDirectory -SourceDirectory $source -RunRoot $runRoot -RepoRoot $repoRoot
+if (Test-Path -LiteralPath $sentinel) { throw 'stale staged file survived' }
+'''
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            source = root / "repo" / "pyscf" / "demo" / "test"
+            source.mkdir(parents=True)
+            (source / "test_demo.py").write_text("pass\n", encoding="utf-8")
+            env = os.environ.copy()
+            env.update({
+                "STAGE_TEST_SCRIPT": str(VERIFY_WHEEL),
+                "STAGE_TEST_SOURCE": str(source),
+                "STAGE_TEST_RUN_ROOT": str(root / "run"),
+                "STAGE_TEST_REPO_ROOT": str(root / "repo"),
+            })
+            result = subprocess.run(
+                [powershell, "-NoProfile", "-Command", command],
+                capture_output=True, text=True, check=False, env=env,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_script_exists_and_reuses_build_wheel_entrypoint(self):
         text = VERIFY_WHEEL.read_text(encoding="utf-8")
         self.assertIn("build-wheel.ps1", text)
