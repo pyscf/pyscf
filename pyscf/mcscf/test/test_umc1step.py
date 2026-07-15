@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import unittest
 import numpy
 from pyscf import lib
@@ -49,11 +48,10 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_ucasscf(self):
         mc = mcscf.UCASSCF(m, 4, 4)
-        # Use fixed UHF orbitals to make the CASSCF path reproducible.
-        mo = numpy.loadtxt(os.path.join(os.path.dirname(__file__), 'ucasscf_h2o_mo.txt')).reshape(2, 13, 13)
+        mc.conv_tol = 1e-8
         with lib.NamedTemporaryFile() as f:
             mc.chkfile = f.name
-            mc.kernel(mo_coeff=mo)
+            mc.run()
         self.assertAlmostEqual(mc.e_tot, -75.7460662487894, 6)
 
     def test_with_x2c_scanner(self):
