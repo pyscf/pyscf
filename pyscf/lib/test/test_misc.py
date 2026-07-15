@@ -16,8 +16,13 @@
 import unittest
 import numpy
 from pyscf import lib
+from pyscf.lib import misc
 
 class KnownValues(unittest.TestCase):
+    def test_windows_support_dll_candidates_prefer_import_names(self):
+        self.assertEqual(misc._dll_deps['libxc_itrf'], [('libxc', 'xc')])
+        self.assertEqual(misc._dll_deps['libxcfun_itrf'], [('libxcfun', 'xcfun')])
+
     def test_call_in_background_skip(self):
         def bg_raise():
             def raise1():

@@ -100,11 +100,10 @@ _dll_deps = {
     'libpbc':        ['libcint', 'libcgto'],
     'libri':         ['libao2mo', 'libcvhf', 'libcgto', 'libcint'],
     # Windows wheels may bundle lib-prefixed support DLLs, while conda-forge
-    # provides xc.dll and xcfun.dll. Keep both names here so the win32 loader
-    # can try the environment-provided name first and then fall back to the
-    # wheel-bundled filename when needed.
-    'libxc_itrf':    [('xc', 'libxc')],
-    'libxcfun_itrf': [('xcfun', 'libxcfun')],
+    # provides xc.dll and xcfun.dll. Prefer the PE import and bundled names,
+    # then fall back to the environment-provided names.
+    'libxc_itrf':    [('libxc', 'xc')],
+    'libxcfun_itrf': [('libxcfun', 'xcfun')],
 }
 
 def _load_dependency(libname):
