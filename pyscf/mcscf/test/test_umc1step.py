@@ -48,6 +48,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_ucasscf(self):
         mc = mcscf.UCASSCF(m, 4, 4)
+        mc.conv_tol = 1e-8
         with lib.NamedTemporaryFile() as f:
             mc.chkfile = f.name
             mc.run()
