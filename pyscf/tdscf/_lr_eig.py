@@ -612,31 +612,40 @@ def real_eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=Non
         pi[:m1,m0:m1] = -pi_block.T
         pi[m0:m1,:m1] = pi_block
 
-        if x0sym is None:
-            omega, x, y = TDDFT_subspace_eigen_solver(
-                a[:m1,:m1], b[:m1,:m1], sigma[:m1,:m1], pi[:m1,:m1], space_inc)
-        else:
-            # Diagonalize within eash symmetry sectors
-            omega = np.empty(m1)
-            x = np.zeros((m1, m1))
-            y = np.zeros_like(x)
-            v_ir = []
-            i1 = 0
-            for ir in set(xs_ir):
-                idx = np.nonzero(xs_ir[:m1] == ir)[0]
-                _w, _x, _y = TDDFT_subspace_eigen_solver(
-                    a[idx[:,None],idx], b[idx[:,None],idx],
-                    sigma[idx[:,None],idx], pi[idx[:,None],idx], idx.size)
-                i0, i1 = i1, i1 + idx.size
-                omega[i0:i1] = _w
-                x[idx,i0:i1] = _x
-                y[idx,i0:i1] = _y
-                v_ir.append([ir] * _w.size)
-            idx = np.argsort(omega)
-            omega = omega[idx]
-            v_ir = np.hstack(v_ir)[idx]
-            x = x[:,idx]
-            y = y[:,idx]
+        try:
+            if x0sym is None:
+                omega, x, y = TDDFT_subspace_eigen_solver(
+                    a[:m1,:m1], b[:m1,:m1], sigma[:m1,:m1], pi[:m1,:m1], space_inc)
+            else:
+                # Diagonalize within eash symmetry sectors
+                omega = np.empty(m1)
+                x = np.zeros((m1, m1))
+                y = np.zeros_like(x)
+                v_ir = []
+                i1 = 0
+                for ir in set(xs_ir):
+                    idx = np.nonzero(xs_ir[:m1] == ir)[0]
+                    _w, _x, _y = TDDFT_subspace_eigen_solver(
+                        a[idx[:,None],idx], b[idx[:,None],idx],
+                        sigma[idx[:,None],idx], pi[idx[:,None],idx], idx.size)
+                    i0, i1 = i1, i1 + idx.size
+                    omega[i0:i1] = _w
+                    x[idx,i0:i1] = _x
+                    y[idx,i0:i1] = _y
+                    v_ir.append([ir] * _w.size)
+                idx = np.argsort(omega)
+                omega = omega[idx]
+                v_ir = np.hstack(v_ir)[idx]
+                x = x[:,idx]
+                y = y[:,idx]
+        except np.linalg.LinAlgError:
+            if fresh_start:
+                raise RuntimeError('This error is often caused by a problematic '
+                                   'SCF solution, such as a saddle-point solution.')
+            # Reuse the last valid Ritz vectors instead of the singular expanded metric.
+            log.debug('Singular trial subspace; restart from the previous Ritz vectors')
+            fresh_start = True
+            continue
 
         w, e, elast = omega[:space_inc], omega[:nroots], e
         v_sub = x[:,:space_inc]
@@ -718,7 +727,11 @@ def real_eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=Non
 
         if len(V) == 0:
             log.debug(f'Linear dependency in trial subspace. |r| for each state {r_norms}')
-            break
+            if fresh_start:
+                break
+            # Retry once from the current Ritz vectors before declaring the space exhausted.
+            fresh_start = True
+            continue
 
         log.debug1('Generate %d trial vectors. Drop %d vectors',
                    len(V), r_norms.size - len(V))
