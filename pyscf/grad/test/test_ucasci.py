@@ -107,9 +107,6 @@ class KnownValues(unittest.TestCase):
 
         mc = run()
         grad = mc.nuc_grad_method()
-        self.assertIsNone(grad.state)
-        with self.assertRaises(AssertionError):
-            grad.kernel(state=1)
         _check_fd_grad(self, lambda: grad.kernel(),
                        lambda ia, ix, dx: run(ia, ix, dx).e_tot,
                        mc.mol.natm, 1e-6)
@@ -723,7 +720,11 @@ class KnownValues(unittest.TestCase):
             return mc.state_average_([.5, .5]).run()
 
         mc = run()
-        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+        grad = mc.nuc_grad_method()
+        self.assertIsNone(grad.state)
+        with self.assertRaises(AssertionError):
+            grad.kernel(state=1)
+        _check_fd_grad(self, lambda: grad.kernel(),
                        lambda ia, ix, dx: run(ia, ix, dx).e_tot,
                        mc.mol.natm, 1e-6)
 
