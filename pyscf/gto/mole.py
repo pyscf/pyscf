@@ -103,6 +103,8 @@ with open(os.path.abspath(os.path.join(__file__, '..', 'basis', 'bse_meta.json')
     BSE_META = json.load(f)
 del f
 
+NUMBERED_ATOM_LABEL = re.compile("^[0-9]+ [A-Z]")
+
 def M(*args, **kwargs):
     r'''This is a shortcut to build up Mole object.
 
@@ -1731,18 +1733,22 @@ def search_ao_label(mol, label):
     '''
     return _aolabels2baslst(mol, label)
 
+def _compile_label(label: str) -> str:
+    label = re.sub(' +', ' ', label.strip(), count=1)
+    if NUMBERED_ATOM_LABEL.match(label):
+        label = "^" + label
+    return re.compile(label)
+
 def _aolabels2baslst(mol, aolabels_or_baslst, base=BASE):
     if callable(aolabels_or_baslst):
         baslst = [i for i,x in enumerate(mol.ao_labels(base=base))
                   if aolabels_or_baslst(x)]
     elif isinstance(aolabels_or_baslst, str):
-        aolabels = re.sub(' +', ' ', aolabels_or_baslst.strip(), count=1)
-        aolabels = re.compile(aolabels)
+        aolabels = _compile_label(aolabels_or_baslst)
         baslst = [i for i,s in enumerate(mol.ao_labels(base=base))
                   if re.search(aolabels, s)]
     elif len(aolabels_or_baslst) > 0 and isinstance(aolabels_or_baslst[0], str):
-        aolabels = [re.compile(re.sub(' +', ' ', x.strip(), count=1))
-                    for x in aolabels_or_baslst]
+        aolabels = [_compile_label(x) for x in aolabels_or_baslst]
         baslst = [i for i,t in enumerate(mol.ao_labels(base=base))
                   if any(re.search(x, t) for x in aolabels)]
     else:
