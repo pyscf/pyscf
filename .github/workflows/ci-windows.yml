@@ -142,12 +142,12 @@ jobs:
           & $python -VV 2>&1 | Set-Content -LiteralPath "$reportDir/environment.txt" -Encoding utf8
           & $python -m pip freeze | Add-Content -LiteralPath "$reportDir/environment.txt" -Encoding utf8
 
-          # Keep the incomplete staged pyscf test tree behind site-packages during imports.
+          # Keep the incomplete staged pyscf test tree off sys.path during imports.
           Push-Location $launchRoot
           try {
             & $python -c "import pathlib,pyscf; p=pathlib.Path(pyscf.__file__).resolve(); print(p); assert 'site-packages' in str(p); from pyscf import gto,scf; assert abs(scf.RHF(gto.M(atom='H 0 0 0; H 0 0 1.4',unit='Bohr',basis='sto-3g',verbose=0)).kernel()+1.116714325062551)<1e-9"
             if ($LASTEXITCODE -ne 0) { throw 'Installed-wheel import smoke failed' }
-            & $python -m pytest (Join-Path $stageRoot 'pyscf') -s -c pytest.ini --import-mode=append --durations=20 2>&1 | Tee-Object -FilePath "$reportDir/pytest.log"
+            & $python -m pytest (Join-Path $stageRoot 'pyscf') -s -c pytest.ini --import-mode=importlib --durations=20 2>&1 | Tee-Object -FilePath "$reportDir/pytest.log"
             $pytestExitCode = $LASTEXITCODE
           }
           finally {
