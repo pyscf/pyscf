@@ -124,6 +124,7 @@ jobs:
 
           $sourcePackage = (Resolve-Path 'pyscf').Path
           $installedPackage = Join-Path $venv 'Lib\site-packages\pyscf'
+          $sitePackages = Split-Path $installedPackage -Parent
           Get-ChildItem -LiteralPath $sourcePackage -Directory -Recurse |
             Where-Object Name -eq 'test' |
             ForEach-Object {
@@ -131,28 +132,32 @@ jobs:
               $destination = Join-Path $installedPackage $relative
               New-Item -ItemType Directory -Path $destination -Force | Out-Null
               Copy-Item -Path (Join-Path $_.FullName '*') -Destination $destination -Recurse -Force
+              New-Item -ItemType File -Path (Join-Path $destination '__init__.py') -Force | Out-Null
             }
-          Copy-Item -LiteralPath 'pytest.ini' -Destination $launchRoot -Force
+          $pytestConfig = (Resolve-Path 'pytest.ini').Path
+          $pyscfConfig = Join-Path $launchRoot '.pyscf_conf.py'
           @(
             'pbc_tools_pbc_fft_engine = "NUMPY+BLAS"',
             'scf_hf_SCF_mute_chkfile = True'
-          ) | Set-Content -LiteralPath (Join-Path $launchRoot '.pyscf_conf.py') -Encoding utf8
+          ) | Set-Content -LiteralPath $pyscfConfig -Encoding utf8
 
           Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
           Remove-Item Env:PYSCF_EXT_PATH -ErrorAction SilentlyContinue
+          $env:PYSCF_CONFIG_FILE = $pyscfConfig
           & $python -VV 2>&1 | Set-Content -LiteralPath "$reportDir/environment.txt" -Encoding utf8
           & $python -m pip freeze | Add-Content -LiteralPath "$reportDir/environment.txt" -Encoding utf8
 
           # Overlay tests onto the installed wheel without exposing the source tree.
-          Push-Location $launchRoot
+          Push-Location $sitePackages
           try {
             & $python -c "import pathlib,pyscf; p=pathlib.Path(pyscf.__file__).resolve(); print(p); assert 'site-packages' in str(p); from pyscf import gto,scf; assert abs(scf.RHF(gto.M(atom='H 0 0 0; H 0 0 1.4',unit='Bohr',basis='sto-3g',verbose=0)).kernel()+1.116714325062551)<1e-9"
             if ($LASTEXITCODE -ne 0) { throw 'Installed-wheel import smoke failed' }
-            & $python -m pytest $installedPackage -s -c pytest.ini --import-mode=importlib --durations=20 2>&1 | Tee-Object -FilePath "$reportDir/pytest.log"
+            & $python -m pytest pyscf -s -c $pytestConfig --rootdir . --import-mode=prepend --durations=20 2>&1 | Tee-Object -FilePath "$reportDir/pytest.log"
             $pytestExitCode = $LASTEXITCODE
           }
           finally {
             Pop-Location
+            Remove-Item Env:PYSCF_CONFIG_FILE -ErrorAction SilentlyContinue
           }
           $pytestExitCode | Set-Content -LiteralPath "$reportDir/pytest-exit-code.txt" -Encoding ascii
           if ($pytestExitCode -ne 0) { throw "Installed-wheel pytest failed with exit code $pytestExitCode" }
