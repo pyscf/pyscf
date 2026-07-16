@@ -111,11 +111,10 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $reportDir = (Resolve-Path 'tmp/windows-installed-wheel').Path
           $runRoot = Join-Path $env:RUNNER_TEMP 'pyscf-installed-wheel'
-          $stageRoot = Join-Path $runRoot 'stage'
           $launchRoot = Join-Path $runRoot 'launch'
           $venv = Join-Path $runRoot '.venv'
           Remove-Item -LiteralPath $runRoot -Recurse -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Path $stageRoot, $launchRoot -Force | Out-Null
+          New-Item -ItemType Directory -Path $launchRoot -Force | Out-Null
 
           python -m venv $venv
           $python = Join-Path $venv 'Scripts/python.exe'
@@ -123,11 +122,13 @@ jobs:
           & $python -m pip install $wheel 'pytest<9' geometric spglib 'git+https://github.com/jhrmnn/pyberny.git@36a4be9'
           if ($LASTEXITCODE -ne 0) { throw 'Installed-wheel test environment setup failed' }
 
-          Get-ChildItem -LiteralPath 'pyscf' -Directory -Recurse |
+          $sourcePackage = (Resolve-Path 'pyscf').Path
+          $installedPackage = Join-Path $venv 'Lib\site-packages\pyscf'
+          Get-ChildItem -LiteralPath $sourcePackage -Directory -Recurse |
             Where-Object Name -eq 'test' |
             ForEach-Object {
-              $relative = [IO.Path]::GetRelativePath((Get-Location).Path, $_.FullName)
-              $destination = Join-Path $stageRoot $relative
+              $relative = [IO.Path]::GetRelativePath($sourcePackage, $_.FullName)
+              $destination = Join-Path $installedPackage $relative
               New-Item -ItemType Directory -Path $destination -Force | Out-Null
               Copy-Item -Path (Join-Path $_.FullName '*') -Destination $destination -Recurse -Force
             }
@@ -142,12 +143,12 @@ jobs:
           & $python -VV 2>&1 | Set-Content -LiteralPath "$reportDir/environment.txt" -Encoding utf8
           & $python -m pip freeze | Add-Content -LiteralPath "$reportDir/environment.txt" -Encoding utf8
 
-          # Keep the incomplete staged pyscf test tree off sys.path during imports.
+          # Overlay tests onto the installed wheel without exposing the source tree.
           Push-Location $launchRoot
           try {
             & $python -c "import pathlib,pyscf; p=pathlib.Path(pyscf.__file__).resolve(); print(p); assert 'site-packages' in str(p); from pyscf import gto,scf; assert abs(scf.RHF(gto.M(atom='H 0 0 0; H 0 0 1.4',unit='Bohr',basis='sto-3g',verbose=0)).kernel()+1.116714325062551)<1e-9"
             if ($LASTEXITCODE -ne 0) { throw 'Installed-wheel import smoke failed' }
-            & $python -m pytest (Join-Path $stageRoot 'pyscf') -s -c pytest.ini --import-mode=importlib --durations=20 2>&1 | Tee-Object -FilePath "$reportDir/pytest.log"
+            & $python -m pytest $installedPackage -s -c pytest.ini --import-mode=importlib --durations=20 2>&1 | Tee-Object -FilePath "$reportDir/pytest.log"
             $pytestExitCode = $LASTEXITCODE
           }
           finally {
