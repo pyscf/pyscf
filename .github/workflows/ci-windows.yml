@@ -112,9 +112,10 @@ jobs:
           $reportDir = (Resolve-Path 'tmp/windows-installed-wheel').Path
           $runRoot = Join-Path $env:RUNNER_TEMP 'pyscf-installed-wheel'
           $stageRoot = Join-Path $runRoot 'stage'
+          $launchRoot = Join-Path $runRoot 'launch'
           $venv = Join-Path $runRoot '.venv'
           Remove-Item -LiteralPath $runRoot -Recurse -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null
+          New-Item -ItemType Directory -Path $stageRoot, $launchRoot -Force | Out-Null
 
           python -m venv $venv
           $python = Join-Path $venv 'Scripts/python.exe'
@@ -130,22 +131,23 @@ jobs:
               New-Item -ItemType Directory -Path $destination -Force | Out-Null
               Copy-Item -Path (Join-Path $_.FullName '*') -Destination $destination -Recurse -Force
             }
-          Copy-Item -LiteralPath 'pytest.ini' -Destination $stageRoot -Force
+          Copy-Item -LiteralPath 'pytest.ini' -Destination $launchRoot -Force
           @(
             'pbc_tools_pbc_fft_engine = "NUMPY+BLAS"',
             'scf_hf_SCF_mute_chkfile = True'
-          ) | Set-Content -LiteralPath (Join-Path $stageRoot '.pyscf_conf.py') -Encoding utf8
+          ) | Set-Content -LiteralPath (Join-Path $launchRoot '.pyscf_conf.py') -Encoding utf8
 
           Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
           Remove-Item Env:PYSCF_EXT_PATH -ErrorAction SilentlyContinue
           & $python -VV 2>&1 | Set-Content -LiteralPath "$reportDir/environment.txt" -Encoding utf8
           & $python -m pip freeze | Add-Content -LiteralPath "$reportDir/environment.txt" -Encoding utf8
 
-          Push-Location $stageRoot
+          # Keep the incomplete staged pyscf test tree behind site-packages during imports.
+          Push-Location $launchRoot
           try {
             & $python -c "import pathlib,pyscf; p=pathlib.Path(pyscf.__file__).resolve(); print(p); assert 'site-packages' in str(p); from pyscf import gto,scf; assert abs(scf.RHF(gto.M(atom='H 0 0 0; H 0 0 1.4',unit='Bohr',basis='sto-3g',verbose=0)).kernel()+1.116714325062551)<1e-9"
             if ($LASTEXITCODE -ne 0) { throw 'Installed-wheel import smoke failed' }
-            & $python -m pytest pyscf -s -c pytest.ini --durations=20 2>&1 | Tee-Object -FilePath "$reportDir/pytest.log"
+            & $python -m pytest (Join-Path $stageRoot 'pyscf') -s -c pytest.ini --import-mode=append --durations=20 2>&1 | Tee-Object -FilePath "$reportDir/pytest.log"
             $pytestExitCode = $LASTEXITCODE
           }
           finally {
