@@ -2,7 +2,12 @@
 
 
 '''
-PM localization for PBC systems using both Gamma-point and k-point approaches.
+Wannier interpolation using PM localized orbitals.
+
+This example and 34-pm_wannier_interpolation2.py demonstrate how to
+construct Pipek-Mezey Wannier functions (PMWF) for periodic k-point
+calculations. The resulting PMWFs are then used to interpolate the electronic
+band structure.
 '''
 
 import sys

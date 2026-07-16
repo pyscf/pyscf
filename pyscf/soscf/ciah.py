@@ -62,7 +62,7 @@ class CIAHOptimizerMixin:
 
     def unpack_uniq_var(self, v):
         v = v.real
-        nmo = int(numpy.sqrt(v.size*2)) + 1
+        nmo = self.norb
         idx = numpy.tril_indices(nmo, -1)
         mat = numpy.zeros((nmo,nmo))
         mat[idx] = v
@@ -101,7 +101,7 @@ class CIAHOptimizerMixinComplex(CIAHOptimizerMixin):
 
     def unpack_uniq_var(self, v):
         v = v.real
-        nmo = int(numpy.round(((1+4*v.size)**0.5+1)*0.5))
+        nmo = self.norb
         assert( nmo*(nmo-1) == v.size )
         nmo2 = nmo*(nmo-1)//2
         v = v.reshape(-1)
