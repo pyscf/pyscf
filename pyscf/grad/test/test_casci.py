@@ -5,11 +5,14 @@
 
 
 from functools import reduce
+import os
+import time
 import unittest
 import numpy
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
+from pyscf import dft
 from pyscf import mcscf
 from pyscf import ao2mo
 from pyscf.scf import cphf
@@ -17,6 +20,54 @@ from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import casci as casci_grad
 from pyscf.grad import ccsd as ccsd_grad
 from pyscf.grad.mp2 import _shell_prange, has_frozen_orbitals
+
+
+# Helpers for comparing analytic and finite difference gradients
+def _move_atom(atom, ia, ix, dx):
+    coords = []
+    for line in atom.splitlines():
+        if line.strip():
+            sym, x, y, z = line.split()
+            coords.append([sym, float(x), float(y), float(z)])
+    if ia is not None:
+        coords[ia][ix+1] += dx
+    return coords
+
+def _five_point_fd_grad(energy, natm, step=1e-3):
+    ref = numpy.zeros((natm, 3))
+    for ia in range(natm):
+        for ix in range(3):
+            ep2 = energy(ia, ix, 2*step)
+            ep1 = energy(ia, ix, step)
+            em1 = energy(ia, ix, -step)
+            em2 = energy(ia, ix, -2*step)
+            ref[ia,ix] = (-ep2 + 8*ep1 - 8*em1 + em2) / (12*step)
+    return ref * lib.param.BOHR
+
+def _check_fd_grad(test, grad_fn, energy_fn, natm, max_tol, step=1e-3,
+                   rms_tol=None):
+    t0 = time.perf_counter()
+    grad = grad_fn()
+    analytic_sec = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
+    ref = _five_point_fd_grad(energy_fn, natm, step)
+    fd_sec = time.perf_counter() - t0
+
+    err = abs(grad - ref)
+    max_err = err.max()
+    mean_err = err.mean()
+    rms_err = numpy.linalg.norm(err) / err.size**.5
+    if os.environ.get('PYSCF_CASCI_FD_STATS'):
+        label = test.id().rsplit('.', 1)[-1]
+        print('FD_STATS %s max %.6g mean %.6g rms %.6g analytic %.3fs fd %.3fs ratio %.1f' %
+              (label, max_err, mean_err, rms_err, analytic_sec, fd_sec,
+               fd_sec / max(analytic_sec, 1e-12)))
+
+    test.assertLess(max_err, max_tol)
+    if rms_tol is not None:
+        test.assertLess(rms_err, rms_tol)
+    return grad, ref
 
 
 def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
@@ -326,6 +377,131 @@ class KnownValues(unittest.TestCase):
         e1 = mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2'))
         e2 = mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2'))
         self.assertAlmostEqual(g1[1,2], (e1-e2)/0.002*lib.param.BOHR, 5)
+
+    # RKS-CASCI h2o against FD for supported functionals
+    def test_rks_casci_h2o_fd(self):
+        atom = '''
+        O 0.000  0.000 0.000
+        H 0.000  0.800 0.600
+        H 0.000 -0.800 0.600
+        '''
+
+        def run(xc, ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
+                        basis='sto-3g', verbose=0)
+            mf = dft.RKS(mol, xc=xc).run(conv_tol=1e-12)
+            return mcscf.CASCI(mf, 4, 4, ncore=3).run()
+
+        step = 1e-3
+        for xc in ('lda,vwn', 'b88,p86', 'pbe,pbe', 'b3lyp'):
+            mc = run(xc)
+            self.assertEqual(mc.nuc_grad_method().__class__.__module__,
+                             'pyscf.grad.kscasci')
+            self.assertEqual(mc.Gradients().__class__.__module__,
+                             'pyscf.grad.kscasci')
+            _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                           lambda ia, ix, dx: run(xc, ia, ix, dx).e_tot,
+                           mc.mol.natm, 2e-6, step=step)
+
+    # RKS(B3LYP)-CASCI coh2 against FD
+    def test_rks_casci_formaldehyde_fd(self):
+        atom = '''
+        C  0.012000 -0.018000  0.004000
+        O -0.043000  0.026000  1.213000
+        H  0.091000  0.954000 -0.602000
+        H -0.068000 -0.912000 -0.551000
+        '''
+
+        def run(ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
+                        basis='6-31g', verbose=0)
+            mf = dft.RKS(mol, xc='b3lyp').run(conv_tol=1e-11)
+            return mcscf.CASCI(mf, 4, 4, ncore=6).run()
+
+        mc = run()
+        _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                       lambda ia, ix, dx: run(ia, ix, dx).e_tot,
+                       mc.mol.natm, 1e-6, rms_tol=5e-7)
+
+    # RKS-CASCI HCN against FD for LDA and PBE orbitals.
+    def test_rks_casci_hcn_fd(self):
+        atom = '''
+        H  0.052000 -0.031000 -1.066000
+        C  0.011000  0.024000  0.000000
+        N -0.038000 -0.017000  1.154000
+        '''
+
+        def run(xc, ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
+                        basis='6-31g', verbose=0)
+            mf = dft.RKS(mol, xc=xc).run(conv_tol=1e-11)
+            return mcscf.CASCI(mf, 4, 4, ncore=5).run()
+
+        for xc in ('lda,vwn', 'pbe,pbe'):
+            mc = run(xc)
+            _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(),
+                           lambda ia, ix, dx: run(xc, ia, ix, dx).e_tot,
+                           mc.mol.natm, 5e-7, rms_tol=2e-7)
+
+    # RKS-CASCI excited state gradients against FD
+    def test_rks_excited_state_hcn_fd(self):
+        atom = '''
+        H  0.052000 -0.031000 -1.066000
+        C  0.011000  0.024000  0.000000
+        N -0.038000 -0.017000  1.154000
+        '''
+
+        def run(xc, ia=None, ix=None, dx=0):
+            mol = gto.M(atom=_move_atom(atom, ia, ix, dx) if ia is not None else atom,
+                        basis='6-31g', verbose=0)
+            mf = dft.RKS(mol, xc=xc).run(conv_tol=1e-11)
+            mc = mcscf.CASCI(mf, 4, 4, ncore=5)
+            mc.fcisolver.nroots = 2
+            return mc.run()
+
+        step = 5e-4
+        for xc in ('lda,vwn', 'pbe,pbe', 'b3lyp'):
+            mc = run(xc)
+            _check_fd_grad(self, lambda: mc.nuc_grad_method().kernel(state=1),
+                           lambda ia, ix, dx: run(xc, ia, ix, dx).e_tot[1],
+                           mc.mol.natm, 5e-7, step=step, rms_tol=2e-7)
+
+    # Error out when requesting RKS-CASCI gradients for unsupported functionals
+    def test_rks_casci_unsupported_functionals(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 1.0', basis='sto-3g', verbose=0)
+        mf = dft.RKS(mol, xc='lda,vwn').run(conv_tol=1e-12)
+
+        # The SCF object is already converged; only the gradient guard behavior
+        # depends on these fields in this test.
+        mf.xc = 'tpss'
+        mc = mcscf.CASCI(mf, 2, 2).run()
+        with self.assertRaisesRegex(NotImplementedError, 'meta-GGA'):
+            mc.nuc_grad_method().kernel()
+
+        mf.xc = 'cam-b3lyp'
+        mc = mcscf.CASCI(mf, 2, 2).run()
+        with self.assertRaisesRegex(NotImplementedError, 'range-separated'):
+            mc.nuc_grad_method().kernel()
+
+        mf.xc = 'lda,vwn'
+        mf.nlc = 'vv10'
+        mc = mcscf.CASCI(mf, 2, 2).run()
+        with self.assertRaisesRegex(NotImplementedError, 'NLC'):
+            mc.nuc_grad_method().kernel()
+
+    # AD: Error out for restricted open-shell orbital sources.
+    def test_restricted_open_shell_orbitals_unsupported(self):
+        mol = gto.M(atom='Li 0 0 0', basis='sto-3g', spin=1, verbose=0)
+
+        mf = scf.ROHF(mol).run(conv_tol=1e-12)
+        mc = mcscf.CASCI(mf, 2, 1, ncore=1).run()
+        with self.assertRaisesRegex(NotImplementedError, 'ROHF'):
+            mc.nuc_grad_method().kernel()
+
+        mf = dft.ROKS(mol, xc='lda,vwn').run(conv_tol=1e-12)
+        mc = mcscf.CASCI(mf, 2, 1, ncore=1).run()
+        with self.assertRaisesRegex(NotImplementedError, 'ROKS'):
+            mc.nuc_grad_method().kernel()
 
     def test_casci_grad_excited_state(self):
         mc = mcscf.CASCI(mf, 4, 4)

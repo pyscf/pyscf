@@ -238,8 +238,12 @@ def UCASCI(mf_or_mol, ncas, nelecas, ncore=None):
         from pyscf.lib import logger
         logger.warn(mf, f'DF-UCASCI for DFHF method {mf} is not available. '
                     'Normal UCASCI method is called.')
+        df_source = True
         mf = mf.undo_df()
+    else:
+        df_source = False
     mc = ucasci.UCASCI(mf, ncas, nelecas, ncore)
+    mc._scf_df_source = df_source # need flag to reject gradients for DF orbitals
     return mc
 
 

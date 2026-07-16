@@ -340,39 +340,48 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
 
     fswap = lib.H5TmpFile()
     max_memory = mycc.max_memory - lib.current_memory()[0]
-    blksize_a = int(max_memory*.9e6/8/(nao_pair+nmoa**2))
-    blksize_a = min(nvira_pair, max(ccsd.BLKMIN, blksize_a))
-    chunks_a = (int(min(nao_pair, 4e8/blksize_a)), blksize_a)
-    v_aa = fswap.create_dataset('v_aa', (nao_pair,nvira_pair), 'f8',
-                                chunks=chunks_a)
-    for p0, p1 in lib.prange(0, nvira_pair, blksize_a):
-        v_aa[:,p0:p1] = _trans(lib.unpack_tril(dvvvv[p0:p1]*.25), mo_a,
-                               (nocca,nmoa,nocca,nmoa)).T
+    if nvira_pair > 0:
+        blksize_a = int(max_memory*.9e6/8/(nao_pair+nmoa**2))
+        blksize_a = min(nvira_pair, max(ccsd.BLKMIN, blksize_a))
+        chunks_a = (int(min(nao_pair, 4e8/blksize_a)), blksize_a)
+        v_aa = fswap.create_dataset('v_aa', (nao_pair,nvira_pair), 'f8',
+                                    chunks=chunks_a)
+        for p0, p1 in lib.prange(0, nvira_pair, blksize_a):
+            v_aa[:,p0:p1] = _trans(lib.unpack_tril(dvvvv[p0:p1]*.25), mo_a,
+                                   (nocca,nmoa,nocca,nmoa)).T
 
-    v_ba = fswap.create_dataset('v_ab', (nao_pair,nvira_pair), 'f8',
-                                chunks=chunks_a)
-    dvvOP = fswap.create_dataset('dvvOP', (nvira_pair,noccb,nmob), 'f8',
-                                 chunks=(int(min(blksize_a,4e8/nmob)),1,nmob))
-    for i in range(noccb):
-        buf1 = numpy.empty((nmob,nvira,nvira))
-        buf1[:noccb] = dOOvv[i] * .5
-        buf1[noccb:] = dOVvv[i]
-        buf1 = buf1.transpose(1,2,0) + buf1.transpose(2,1,0)
-        dvvOP[:,i] = buf1[numpy.tril_indices(nvira)]
-    for p0, p1 in lib.prange(0, nvira_pair, blksize_a):
-        buf1 = numpy.zeros((p1-p0,nmob,nmob))
-        buf1[:,noccb:,noccb:] = lib.unpack_tril(dvvVV[p0:p1] * .5)
-        buf1[:,:noccb,:] = dvvOP[p0:p1] * .5
-        v_ba[:,p0:p1] = _trans(buf1, mo_b, (0,nmob,0,nmob)).T
+        v_ba = fswap.create_dataset('v_ab', (nao_pair,nvira_pair), 'f8',
+                                    chunks=chunks_a)
+        if noccb > 0:
+            dvvOP = fswap.create_dataset('dvvOP', (nvira_pair,noccb,nmob), 'f8',
+                                         chunks=(int(min(blksize_a,4e8/nmob)),1,nmob))
+            for i in range(noccb):
+                buf1 = numpy.empty((nmob,nvira,nvira))
+                buf1[:noccb] = dOOvv[i] * .5
+                buf1[noccb:] = dOVvv[i]
+                buf1 = buf1.transpose(1,2,0) + buf1.transpose(2,1,0)
+                dvvOP[:,i] = buf1[numpy.tril_indices(nvira)]
+        for p0, p1 in lib.prange(0, nvira_pair, blksize_a):
+            buf1 = numpy.zeros((p1-p0,nmob,nmob))
+            if nvirb > 0:
+                buf1[:,noccb:,noccb:] = lib.unpack_tril(dvvVV[p0:p1] * .5)
+            if noccb > 0:
+                buf1[:,:noccb,:] = dvvOP[p0:p1] * .5
+            v_ba[:,p0:p1] = _trans(buf1, mo_b, (0,nmob,0,nmob)).T
+    else:
+        v_aa = v_ba = None
 
-    blksize_b = int(max_memory*.9e6/8/(nao_pair+nmob**2))
-    blksize_b = min(nvirb_pair, max(ccsd.BLKMIN, blksize_b))
-    chunks_b = (int(min(nao_pair, 4e8/blksize_b)), blksize_b)
-    v_bb = fswap.create_dataset('v_bb', (nao_pair,nvirb_pair), 'f8',
-                                chunks=chunks_b)
-    for p0, p1 in lib.prange(0, nvirb_pair, blksize_b):
-        v_bb[:,p0:p1] = _trans(lib.unpack_tril(dVVVV[p0:p1]*.25), mo_b,
-                               (noccb,nmob,noccb,nmob)).T
+    if nvirb_pair > 0:
+        blksize_b = int(max_memory*.9e6/8/(nao_pair+nmob**2))
+        blksize_b = min(nvirb_pair, max(ccsd.BLKMIN, blksize_b))
+        chunks_b = (int(min(nao_pair, 4e8/blksize_b)), blksize_b)
+        v_bb = fswap.create_dataset('v_bb', (nao_pair,nvirb_pair), 'f8',
+                                    chunks=chunks_b)
+        for p0, p1 in lib.prange(0, nvirb_pair, blksize_b):
+            v_bb[:,p0:p1] = _trans(lib.unpack_tril(dVVVV[p0:p1]*.25), mo_b,
+                                   (noccb,nmob,noccb,nmob)).T
+    else:
+        v_bb = None
     time1 = log.timer_debug1('_rdm2_mo2ao pass 1', *time1)
 
 # transform dm2_ij to get lower triangular (dm2+dm2.transpose(0,1,3,2))
@@ -380,7 +389,11 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
     blksize = min(nao_pair, max(ccsd.BLKMIN, blksize))
     o_aa = fswap.create_dataset('o_aa', (nmoa,nocca,nao_pair), 'f8', chunks=(nocca,nocca,blksize))
     o_ab = fswap.create_dataset('o_ab', (nmoa,nocca,nao_pair), 'f8', chunks=(nocca,nocca,blksize))
-    o_bb = fswap.create_dataset('o_bb', (nmob,noccb,nao_pair), 'f8', chunks=(noccb,noccb,blksize))
+    if noccb > 0:
+        o_bb = fswap.create_dataset('o_bb', (nmob,noccb,nao_pair), 'f8',
+                                    chunks=(noccb,noccb,blksize))
+    else:
+        o_bb = None
     buf1 = numpy.zeros((nocca,nocca,nmoa,nmoa))
     buf1[:,:,:nocca,:nocca] = _cp(doooo) * .25
     buf1[:,:,nocca:,nocca:] = _cp(doovv) * .5
@@ -394,11 +407,12 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
     buf1 = _trans(buf1.reshape(nocca**2,-1), mo_b, (0,nmob,0,nmob))
     o_ab[:nocca] = buf1.reshape(nocca,nocca,nao_pair)
 
-    buf1 = numpy.zeros((noccb,noccb,nmob,nmob))
-    buf1[:,:,:noccb,:noccb] = _cp(dOOOO) * .25
-    buf1[:,:,noccb:,noccb:] = _cp(dOOVV) * .5
-    buf1 = _trans(buf1.reshape(noccb**2,-1), mo_b, (0,nmob,0,nmob))
-    o_bb[:noccb] = buf1.reshape(noccb,noccb,nao_pair)
+    if noccb > 0:
+        buf1 = numpy.zeros((noccb,noccb,nmob,nmob))
+        buf1[:,:,:noccb,:noccb] = _cp(dOOOO) * .25
+        buf1[:,:,noccb:,noccb:] = _cp(dOOVV) * .5
+        buf1 = _trans(buf1.reshape(noccb**2,-1), mo_b, (0,nmob,0,nmob))
+        o_bb[:noccb] = buf1.reshape(noccb,noccb,nao_pair)
 
     dovoo = numpy.asarray(dooov).transpose(2,3,0,1)
     dovOO = numpy.asarray(dOOov).transpose(2,3,0,1)
@@ -422,15 +436,16 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
         buf1 = _trans(buf1, mo_b, (0,nmob,0,nmob))
         o_ab[p0:p1] = buf1.reshape(p1-p0,nocca,nao_pair)
 
-    for p0, p1 in lib.prange(noccb, nmob, noccb):
-        buf1 = numpy.zeros((noccb,p1-p0,nmob,nmob))
-        buf1[:,:,:noccb,:noccb] = dOVOO[:,p0-noccb:p1-noccb]
-        buf1[:,:,noccb:,:noccb] = dOVVO[:,p0-noccb:p1-noccb] * .5
-        buf1[:,:,:noccb,noccb:] = dOVOV[:,p0-noccb:p1-noccb] * .5
-        buf1[:,:,noccb:,noccb:] = dOVVV[:,p0-noccb:p1-noccb]
-        buf1 = buf1.transpose(1,0,3,2).reshape((p1-p0)*noccb,-1)
-        buf1 = _trans(buf1, mo_b, (0,nmob,0,nmob))
-        o_bb[p0:p1] = buf1.reshape(p1-p0,noccb,nao_pair)
+    if noccb > 0:
+        for p0, p1 in lib.prange(noccb, nmob, noccb):
+            buf1 = numpy.zeros((noccb,p1-p0,nmob,nmob))
+            buf1[:,:,:noccb,:noccb] = dOVOO[:,p0-noccb:p1-noccb]
+            buf1[:,:,noccb:,:noccb] = dOVVO[:,p0-noccb:p1-noccb] * .5
+            buf1[:,:,:noccb,noccb:] = dOVOV[:,p0-noccb:p1-noccb] * .5
+            buf1[:,:,noccb:,noccb:] = dOVVV[:,p0-noccb:p1-noccb]
+            buf1 = buf1.transpose(1,0,3,2).reshape((p1-p0)*noccb,-1)
+            buf1 = _trans(buf1, mo_b, (0,nmob,0,nmob))
+            o_bb[p0:p1] = buf1.reshape(p1-p0,noccb,nao_pair)
     time1 = log.timer_debug1('_rdm2_mo2ao pass 2', *time1)
     dovoo = buf1 = None
 
@@ -441,7 +456,8 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
                                 chunks=(int(min(nao_pair,4e8/blksize)),blksize))
     for p0, p1 in lib.prange(0, nao_pair, blksize):
         buf1 = numpy.zeros((p1-p0,nmoa,nmoa))
-        buf1[:,nocca:,nocca:] = lib.unpack_tril(_cp(v_aa[p0:p1]))
+        if nvira > 0:
+            buf1[:,nocca:,nocca:] = lib.unpack_tril(_cp(v_aa[p0:p1]))
         buf1[:,:,:nocca] = o_aa[:,:,p0:p1].transpose(2,0,1)
         buf2 = _trans(buf1, mo_a, (0,nmoa,0,nmoa))
         if p0 > 0:
@@ -455,8 +471,10 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
 
     for p0, p1 in lib.prange(0, nao_pair, blksize):
         buf1 = numpy.zeros((p1-p0,nmob,nmob))
-        buf1[:,noccb:,noccb:] = lib.unpack_tril(_cp(v_bb[p0:p1]))
-        buf1[:,:,:noccb] = o_bb[:,:,p0:p1].transpose(2,0,1)
+        if nvirb > 0:
+            buf1[:,noccb:,noccb:] = lib.unpack_tril(_cp(v_bb[p0:p1]))
+        if noccb > 0:
+            buf1[:,:,:noccb] = o_bb[:,:,p0:p1].transpose(2,0,1)
         buf2 = _trans(buf1, mo_b, (0,nmob,0,nmob))
         if p0 > 0:
             buf1 = _cp(dm2b[:p0,p0:p1])
@@ -469,7 +487,8 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
 
     for p0, p1 in lib.prange(0, nao_pair, blksize):
         buf1 = numpy.zeros((p1-p0,nmoa,nmoa))
-        buf1[:,nocca:,nocca:] = lib.unpack_tril(_cp(v_ba[p0:p1]))
+        if nvira > 0:
+            buf1[:,nocca:,nocca:] = lib.unpack_tril(_cp(v_ba[p0:p1]))
         buf1[:,:,:nocca] = o_ab[:,:,p0:p1].transpose(2,0,1)
         buf2 = _trans(buf1, mo_a, (0,nmoa,0,nmoa))
         dm2a[:,p0:p1] = dm2a[:,p0:p1] + buf2.T

@@ -48,9 +48,10 @@ else:
 def extract_orbs(mo_coeff, ncas, nelecas, ncore):
     ncore_a, ncore_b = ncore
     nocc_a = ncore_a + ncas
-    mo_core = (mo_coeff[0][:,:ncore_a]      , mo_coeff[1][:,:ncore_a]      )
-    mo_cas  = (mo_coeff[0][:,ncore_a:nocc_a], mo_coeff[1][:,ncore_a:nocc_a])
-    mo_vir  = (mo_coeff[0][:,nocc_a:]       , mo_coeff[1][:,nocc_a:]       )
+    nocc_b = ncore_b + ncas
+    mo_core = (mo_coeff[0][:,:ncore_a]      , mo_coeff[1][:,:ncore_b]      )
+    mo_cas  = (mo_coeff[0][:,ncore_a:nocc_a], mo_coeff[1][:,ncore_b:nocc_b])
+    mo_vir  = (mo_coeff[0][:,nocc_a:]       , mo_coeff[1][:,nocc_b:]       )
     return mo_core, mo_cas, mo_vir
 
 def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
@@ -440,6 +441,14 @@ class UCASCI(UCASBase):
         return self.e_tot, self.e_cas, self.ci
 
     as_scanner = as_scanner
+
+    def nuc_grad_method(self):
+        # Select the gradient implementation from the source orbitals.
+        if isinstance(self._scf, scf.hf.KohnShamDFT):
+            from pyscf.grad import ukscasci
+            return ukscasci.Gradients(self)
+        from pyscf.grad import ucasci
+        return ucasci.Gradients(self)
 
 CASCI = UCASCI
 

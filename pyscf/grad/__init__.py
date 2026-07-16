@@ -41,6 +41,7 @@ grad_nuc = rhf.grad_nuc
 
 try:
     from . import casci
+    from . import kscasci
     from . import casscf
     from . import sacasscf
     from . import ccsd
@@ -56,6 +57,8 @@ try:
     from . import uccsd
     #from . import uccsd_t
     from . import ucisd
+    from . import ucasci
+    from . import ukscasci
     from . import uks
     from . import ump2
 

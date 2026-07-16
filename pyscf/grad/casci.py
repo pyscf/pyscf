@@ -33,7 +33,8 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad.mp2 import _shell_prange
-from pyscf.scf import cphf
+from pyscf.grad import tdrks as tdrks_grad
+from pyscf.scf import cphf, hf, rohf
 from pyscf.mcscf.addons import StateAverageMCSCFSolver
 
 if sys.version_info < (3,):
@@ -42,7 +43,24 @@ else:
     RANGE_TYPE = range
 
 
+def _check_supported_orbital_source(mc):
+    if isinstance(mc._scf, rohf.ROHF):
+        raise NotImplementedError(
+            'CASCI gradients with ROHF orbitals are not implemented')
+    if isinstance(mc._scf, hf.KohnShamDFT):
+        raise NotImplementedError(
+            'CASCI gradients with KS orbitals require the RKS/CPKS '
+            'orbital response; use pyscf.grad.kscasci')
+
+
 def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
+    mc = mc_grad.base
+    _check_supported_orbital_source(mc)
+    return _grad_elec(mc_grad, mo_coeff, ci, atmlst, verbose)
+
+
+def _grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None,
+               with_ks_response=False):
     mc = mc_grad.base
     if mo_coeff is None: mo_coeff = mc._scf.mo_coeff
     if ci is None: ci = mc.ci
@@ -65,6 +83,27 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
     assert (neleca == nelecb)
     orbo = mo_coeff[:,:neleca]
     orbv = mo_coeff[:,neleca:]
+    hyb = 1
+    is_ks = with_ks_response
+    if is_ks:
+        if not isinstance(mc._scf, hf.KohnShamDFT):
+            raise RuntimeError('KS-CASCI gradients require a KohnShamDFT '
+                               'reference')
+        ni = mc._scf._numint
+        xctype = ni._xc_type(mc._scf.xc)
+        if xctype == 'MGGA':
+            raise NotImplementedError('RKS-CASCI gradients for meta-GGA '
+                                      'functionals')
+        if xctype not in ('LDA', 'GGA'):
+            raise NotImplementedError('RKS-CASCI gradients for %s functionals' %
+                                      xctype)
+        if mc._scf.do_nlc():
+            raise NotImplementedError('RKS-CASCI gradients for NLC '
+                                      'functionals')
+        omega, _, hyb = ni.rsh_and_hybrid_coeff(mc._scf.xc, mol.spin)
+        if omega != 0:
+            raise NotImplementedError('RKS-CASCI gradients for range-separated '
+                                      'hybrid functionals')
 
     casdm1, casdm2 = mc.fcisolver.make_rdm12(ci, ncas, nelecas)
     dm_core = numpy.dot(mo_core, mo_core.T) * 2
@@ -82,21 +121,30 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
     Imat[:,ncore:nocc] += lib.einsum('uviw,vuwt->it', aapa, casdm2)
     aapa = vj = vk = vhf_c = vhf_a = h1 = None
 
+    # Imat is the CASCI orbital-gradient intermediate.  Rotations inside
+    # closed, active, or external spaces are redundant; the cross-boundary
+    # redundant blocks are handled by orbital-energy denominators before the
+    # occupied-virtual source-orbital CPHF/CPKS solve below.
     ee = mo_energy[:,None] - mo_energy
     zvec = numpy.zeros_like(Imat)
+    # ee[p,q] = eps_p - eps_q; dividing by -ee gives the canonical
+    # eps_q - eps_p denominator for these redundant rotation blocks.
     zvec[:ncore,ncore:neleca] = Imat[:ncore,ncore:neleca] / -ee[:ncore,ncore:neleca]
     zvec[ncore:neleca,:ncore] = Imat[ncore:neleca,:ncore] / -ee[ncore:neleca,:ncore]
     zvec[nocc:,neleca:nocc] = Imat[nocc:,neleca:nocc] / -ee[nocc:,neleca:nocc]
     zvec[neleca:nocc,nocc:] = Imat[neleca:nocc,nocc:] / -ee[neleca:nocc,nocc:]
 
+    # gen_response supplies the source-orbital Hessian action: CPHF for RHF
+    # orbitals and CPKS, including the XC kernel, for RKS orbitals.
+    vresp = mc._scf.gen_response(singlet=None, hermi=1)
     zvec_ao = reduce(numpy.dot, (mo_coeff, zvec+zvec.T, mo_coeff.T))
-    vhf = mc._scf.get_veff(mol, zvec_ao) * 2
+    vhf = vresp(zvec_ao) * 2
     xvo = reduce(numpy.dot, (orbv.T, vhf, orbo))
     xvo += Imat[neleca:,:neleca] - Imat[:neleca,neleca:].T
     def fvind(x):
         x = x.reshape(xvo.shape)
         dm = reduce(numpy.dot, (orbv, x, orbo.T))
-        v = mc._scf.get_veff(mol, dm + dm.T)
+        v = vresp(dm + dm.T)
         v = reduce(numpy.dot, (orbv.T, v, orbo))
         return v * 2
     dm1resp = cphf.solve(fvind, mo_energy, mc._scf.mo_occ, xvo, max_cycle=30)[0]
@@ -107,7 +155,17 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
 
     zvec_ao = reduce(numpy.dot, (mo_coeff, zvec+zvec.T, mo_coeff.T))
     p1 = numpy.dot(mo_coeff[:,:neleca], mo_coeff[:,:neleca].T)
-    vhf_s1occ = reduce(numpy.dot, (p1, mc._scf.get_veff(mol, zvec_ao), p1))
+    vhf_s1occ = reduce(numpy.dot, (p1, vresp(zvec_ao), p1))
+    if is_ks:
+        # RKS-CASCI needs the bare nuclear derivative of the XC source
+        # constraint in addition to the CPKS Hessian action above.
+        max_memory = mc_grad.max_memory - lib.current_memory()[0]
+        fxcz, _, vxc1, _ = tdrks_grad._contract_xc_kernel(
+            mc_grad, mc._scf.xc, zvec_ao, None, True, False, True,
+            max_memory)
+    else:
+        fxcz = None
+        vxc1 = None
 
     Imat[:ncore,ncore:neleca] = 0
     Imat[ncore:neleca,:ncore] = 0
@@ -160,8 +218,11 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
                 eri1tmp = eri1tmp.reshape(p1-p0,nf,nao,nao)
                 de[k,i] -= numpy.einsum('ijkl,ij,kl', eri1tmp, hf_dm1[p0:p1,q0:q1], zvec_ao) * 2
                 de[k,i] -= numpy.einsum('ijkl,kl,ij', eri1tmp, hf_dm1, zvec_ao[p0:p1,q0:q1]) * 2
-                de[k,i] += numpy.einsum('ijkl,il,kj', eri1tmp, hf_dm1[p0:p1], zvec_ao[:,q0:q1])
-                de[k,i] += numpy.einsum('ijkl,jk,il', eri1tmp, hf_dm1[q0:q1], zvec_ao[p0:p1])
+                # Hybrid scaling applies only to the KS source-Fock response
+                # term; the CASCI skeleton below differentiates the bare WFT
+                # Hamiltonian.
+                de[k,i] += hyb * numpy.einsum('ijkl,il,kj', eri1tmp, hf_dm1[p0:p1], zvec_ao[:,q0:q1])
+                de[k,i] += hyb * numpy.einsum('ijkl,jk,il', eri1tmp, hf_dm1[q0:q1], zvec_ao[p0:p1])
 
                 #:vhf1c, vhf1a = mc_grad.get_veff(mol, (dm_core, dm_cas))
                 #:de[k] += numpy.einsum('xij,ij->x', vhf1c[:,p0:p1], casci_dm1[p0:p1]) * 2
@@ -171,6 +232,12 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
                 de[k,i] -= numpy.einsum('ijkl,lk,ij', eri1tmp, dm_cas, dm_core[p0:p1,q0:q1]) * 2
                 de[k,i] += numpy.einsum('ijkl,jk,il', eri1tmp, dm_cas[q0:q1], dm_core[p0:p1])
             eri1 = eri1tmp = None
+
+        if fxcz is not None:
+            de[k] += numpy.einsum('xij,ij->x',
+                                  vxc1[1:,p0:p1], zvec_ao[p0:p1]) * 2
+            de[k] += numpy.einsum('xij,ij->x',
+                                  fxcz[1:,p0:p1], hf_dm1[p0:p1])
 
         de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], im1[p0:p1])
         de[k] -= numpy.einsum('xij,ji->x', s1[:,p0:p1], im1[:,p0:p1])
@@ -255,7 +322,7 @@ class CASCI_GradScanner(lib.GradScanner):
 
 
 class Gradients(rhf_grad.GradientsBase):
-    '''Non-relativistic restricted Hartree-Fock gradients'''
+    '''Non-relativistic RHF-CASCI gradients'''
 
     _keys = {'state'}
 
@@ -350,4 +417,11 @@ class Gradients(rhf_grad.GradientsBase):
 Grad = Gradients
 
 from pyscf import mcscf
-mcscf.casci.CASCI.Gradients = lib.class_as_method(Gradients)
+def _casci_grad_method(mc, *args, **kwargs):
+    # Keep mc.Gradients() source-aware, matching CASCI.nuc_grad_method().
+    if isinstance(mc._scf, hf.KohnShamDFT):
+        from pyscf.grad import kscasci
+        return kscasci.Gradients(mc, *args, **kwargs)
+    return Gradients(mc, *args, **kwargs)
+
+mcscf.casci.CASCI.Gradients = _casci_grad_method

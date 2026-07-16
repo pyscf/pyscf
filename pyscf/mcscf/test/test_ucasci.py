@@ -20,6 +20,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import dft
 from pyscf import fci
+from pyscf import ci
 from pyscf import mcscf
 
 def setUpModule():
@@ -93,6 +94,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(eri1[0]-eri2[0]).max(), 0, 12)
         self.assertAlmostEqual(abs(eri1[1]-eri2[1]).max(), 0, 12)
         self.assertAlmostEqual(abs(eri1[2]-eri2[2]).max(), 0, 12)
+
+    def test_spin_asymmetric_ncore(self):
+        mol1 = gto.M(atom='H 0 0 0; H 0 0 1; H 0 1 0',
+                     basis='sto-3g', spin=1, verbose=0)
+        mf = scf.UHF(mol1).run(conv_tol=1e-12)
+        mc = mcscf.UCASCI(mf, 2, (1,1), ncore=(1,0)).run()
+        myci = ci.UCISD(mf, frozen=[[0], [2]]).run()
+        self.assertAlmostEqual(mc.e_tot, myci.e_tot, 12)
 
     def test_get_veff(self):
         mc1 = mcscf.UCASCI(m.to_rks(), 5, (4,2))
