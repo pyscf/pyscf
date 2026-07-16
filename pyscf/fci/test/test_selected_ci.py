@@ -55,6 +55,18 @@ def tearDownModule():
     del ci_strs, ci_coeff, civec_strs, eri, h1, spin0_ci_strs, spin0_ci_coeff
 
 class KnownValues(unittest.TestCase):
+    def test_SCIvector_array_wrap(self):
+        # A ufunc that returns an array of the same shape (e.g. scalar
+        # multiplication) must preserve the SCIvector type so that the
+        # ._strs attribute tagged onto the array survives the operation.
+        civec = selected_ci._as_SCIvector(ci_coeff.copy(), ci_strs)
+        out = civec * 2.0
+        self.assertIsInstance(out, selected_ci.SCIvector)
+        self.assertTrue(numpy.allclose(out, ci_coeff * 2.0))
+
+        out2 = civec + civec
+        self.assertIsInstance(out2, selected_ci.SCIvector)
+
     def test_select_strs(self):
         myci = selected_ci.SCI()
         myci.select_cutoff = 1e-3
