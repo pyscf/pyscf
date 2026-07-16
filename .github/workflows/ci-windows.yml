@@ -125,6 +125,12 @@ jobs:
           $sourcePackage = (Resolve-Path 'pyscf').Path
           $installedPackage = Join-Path $venv 'Lib\site-packages\pyscf'
           $sitePackages = Split-Path $installedPackage -Parent
+          function Add-PackageMarker($directory) {
+            $marker = Join-Path $directory '__init__.py'
+            if (-not (Test-Path -LiteralPath $marker)) {
+              New-Item -ItemType File -Path $marker | Out-Null
+            }
+          }
           Get-ChildItem -LiteralPath $sourcePackage -Directory -Recurse |
             Where-Object Name -eq 'test' |
             ForEach-Object {
@@ -132,7 +138,13 @@ jobs:
               $destination = Join-Path $installedPackage $relative
               New-Item -ItemType Directory -Path $destination -Force | Out-Null
               Copy-Item -Path (Join-Path $_.FullName '*') -Destination $destination -Recurse -Force
-              New-Item -ItemType File -Path (Join-Path $destination '__init__.py') -Force | Out-Null
+              $packageDirectory = $destination
+              while ($packageDirectory -ne $installedPackage) {
+                Add-PackageMarker $packageDirectory
+                $packageDirectory = Split-Path $packageDirectory -Parent
+              }
+              Get-ChildItem -LiteralPath $destination -Directory -Recurse |
+                ForEach-Object { Add-PackageMarker $_.FullName }
             }
           $pytestConfig = (Resolve-Path 'pytest.ini').Path
           $pyscfConfig = Join-Path $launchRoot '.pyscf_conf.py'
