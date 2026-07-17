@@ -1,4 +1,4 @@
-name: Windows installed wheel
+name: CI Windows
 
 on:
   pull_request:
