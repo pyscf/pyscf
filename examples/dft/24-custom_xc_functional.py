@@ -156,10 +156,9 @@ mf.xc = 'PBE + SLATER*.5, PBE'
 # ---- register_custom_functional_: modify LibXC functional parameters ----
 #
 # register_custom_functional_ registers a custom functional based on an
-# existing LibXC functional with modified parameters. Only the exchange
-# component MGGA_X_TPSS (ID 202) is modified below; MGGA_C_TPSS is
-# unmodified. MGGA_X_TPSS has 7 parameters: _b, _c, _e, _kappa, _mu,
-# _BLOC_a, _BLOC_b.
+# existing LibXC functional with modified parameters. Take TPSS as an example.
+# Only the exchange component MGGA_X_TPSS (ID 202) is modified; MGGA_C_TPSS is
+# unmodified. 
 #
 
 XC_ID_TPSS_X = 202
