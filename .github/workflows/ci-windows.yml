@@ -3,7 +3,9 @@ name: Windows installed wheel
 on:
   pull_request:
     paths:
+      - ".gitattributes"
       - ".github/workflows/ci-windows.yml"
+      - ".github/workflows/ci_windows/**"
       - "MANIFEST.in"
       - "pyproject.toml"
       - "pyscf/**"
@@ -47,140 +49,25 @@ jobs:
         run: python -m pip install build wheel setuptools "cmake<4" ninja
 
       - name: Build and inspect wheel
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $reportDir = 'tmp/windows-installed-wheel'
-          New-Item -ItemType Directory -Path $reportDir -Force | Out-Null
-          Start-Transcript -Path "$reportDir/build.log" -Force | Out-Null
-          try {
-            $ucrt = "${{ steps.msys2.outputs.msys2-location }}\ucrt64"
-            $env:PATH = "$ucrt\bin;$env:PATH"
-            $env:CC = "$ucrt\bin\gcc.exe"
-            $env:CXX = "$ucrt\bin\g++.exe"
-            $env:CMAKE_BUILD_PARALLEL_LEVEL = '4'
-            $env:CMAKE_CONFIGURE_ARGS = "-G Ninja -DCMAKE_C_COMPILER=$env:CC -DCMAKE_CXX_COMPILER=$env:CXX -DBLAS_LIBRARIES=$ucrt\lib\libopenblas.dll.a -DENABLE_XCFUN=ON -DBUILD_XCFUN=ON"
+        run: >-
+          ./.github/workflows/ci_windows/build_wheel.ps1
+          -RuntimeDllDir "${{ steps.msys2.outputs.msys2-location }}\ucrt64\bin"
 
-            Remove-Item -LiteralPath 'build', 'dist' -Recurse -Force -ErrorAction SilentlyContinue
-            Get-ChildItem -LiteralPath 'pyscf/lib' -Filter '*.dll' -File -ErrorAction SilentlyContinue | Remove-Item -Force
-            Get-ChildItem -LiteralPath 'pyscf/lib/deps/bin' -Filter '*.dll' -File -ErrorAction SilentlyContinue | Remove-Item -Force
-
-            @(
-              'libgcc_s_seh-1.dll',
-              'libgomp-1.dll',
-              'libgfortran-5.dll',
-              'libopenblas.dll',
-              'libquadmath-0.dll',
-              'libstdc++-6.dll',
-              'libwinpthread-1.dll'
-            ) | ForEach-Object {
-              Copy-Item -LiteralPath "$ucrt\bin\$_" -Destination 'pyscf/lib' -Force
-            }
-
-            python -m build --wheel --no-isolation --outdir dist .
-            if ($LASTEXITCODE -ne 0) { throw 'Bootstrap wheel build failed' }
-
-            Copy-Item -LiteralPath 'pyscf/lib/deps/bin/libcint.dll' -Destination 'pyscf/lib/libcint.dll' -Force
-            Copy-Item -LiteralPath 'pyscf/lib/deps/bin/libxc.dll' -Destination 'pyscf/lib/libxc.dll' -Force
-            Copy-Item -LiteralPath 'pyscf/lib/deps/bin/libxc.dll' -Destination 'pyscf/lib/xc.dll' -Force
-            $xcfun = @('xcfun.dll', 'libxcfun.dll') |
-              ForEach-Object { "pyscf/lib/deps/bin/$_" } |
-              Where-Object { Test-Path -LiteralPath $_ } |
-              Select-Object -First 1
-            if (-not $xcfun) { throw 'XCFun runtime DLL was not generated' }
-            Copy-Item -LiteralPath $xcfun -Destination 'pyscf/lib/libxcfun.dll' -Force
-            Copy-Item -LiteralPath $xcfun -Destination 'pyscf/lib/xcfun.dll' -Force
-
-            Remove-Item -LiteralPath 'dist' -Recurse -Force
-            python -m build --wheel --no-isolation --outdir dist .
-            if ($LASTEXITCODE -ne 0) { throw 'Final wheel build failed' }
-
-            $wheel = Get-ChildItem -LiteralPath 'dist' -Filter 'pyscf-*.whl' -File | Select-Object -First 1
-            if (-not $wheel) { throw 'Wheel artifact was not created' }
-            $entries = python -c "import json,sys,zipfile; print(json.dumps(zipfile.ZipFile(sys.argv[1]).namelist()))" $wheel.FullName | ConvertFrom-Json
-            $entries | Sort-Object | Set-Content -LiteralPath "$reportDir/wheel-contents.txt" -Encoding utf8
-            foreach ($name in @('libnp_helper.dll', 'libcgto.dll', 'libcint.dll', 'libxc_itrf.dll', 'libxcfun_itrf.dll', 'xc.dll', 'xcfun.dll', 'libopenblas.dll')) {
-              if (-not ($entries -contains "pyscf/lib/$name")) { throw "Wheel is missing pyscf/lib/$name" }
-            }
-          }
-          finally {
-            Stop-Transcript | Out-Null
-          }
+      - name: Upload wheel
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/*.whl
+          archive: false
+          if-no-files-found: error
 
       - name: Install wheel and run staged pytest
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $reportDir = (Resolve-Path 'tmp/windows-installed-wheel').Path
-          $runRoot = Join-Path $env:RUNNER_TEMP 'pyscf-installed-wheel'
-          $launchRoot = Join-Path $runRoot 'launch'
-          $venv = Join-Path $runRoot '.venv'
-          Remove-Item -LiteralPath $runRoot -Recurse -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Path $launchRoot -Force | Out-Null
-
-          python -m venv $venv
-          $python = Join-Path $venv 'Scripts/python.exe'
-          $wheel = (Get-ChildItem -LiteralPath 'dist' -Filter 'pyscf-*.whl' -File | Select-Object -First 1).FullName
-          & $python -m pip install $wheel 'pytest<9' geometric spglib 'git+https://github.com/jhrmnn/pyberny.git@36a4be9'
-          if ($LASTEXITCODE -ne 0) { throw 'Installed-wheel test environment setup failed' }
-
-          $sourcePackage = (Resolve-Path 'pyscf').Path
-          $installedPackage = Join-Path $venv 'Lib\site-packages\pyscf'
-          $sitePackages = Split-Path $installedPackage -Parent
-          function Add-PackageMarker($directory) {
-            $marker = Join-Path $directory '__init__.py'
-            if (-not (Test-Path -LiteralPath $marker)) {
-              New-Item -ItemType File -Path $marker | Out-Null
-            }
-          }
-          Get-ChildItem -LiteralPath $sourcePackage -Directory -Recurse |
-            Where-Object Name -eq 'test' |
-            ForEach-Object {
-              $relative = [IO.Path]::GetRelativePath($sourcePackage, $_.FullName)
-              $destination = Join-Path $installedPackage $relative
-              New-Item -ItemType Directory -Path $destination -Force | Out-Null
-              Copy-Item -Path (Join-Path $_.FullName '*') -Destination $destination -Recurse -Force
-              $packageDirectory = $destination
-              while ($packageDirectory -ne $installedPackage) {
-                Add-PackageMarker $packageDirectory
-                $packageDirectory = Split-Path $packageDirectory -Parent
-              }
-              Get-ChildItem -LiteralPath $destination -Directory -Recurse |
-                ForEach-Object { Add-PackageMarker $_.FullName }
-            }
-          $pytestConfig = (Resolve-Path 'pytest.ini').Path
-          $pyscfConfig = Join-Path $launchRoot '.pyscf_conf.py'
-          @(
-            'pbc_tools_pbc_fft_engine = "NUMPY+BLAS"',
-            'scf_hf_SCF_mute_chkfile = True'
-          ) | Set-Content -LiteralPath $pyscfConfig -Encoding utf8
-
-          Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
-          Remove-Item Env:PYSCF_EXT_PATH -ErrorAction SilentlyContinue
-          $env:PYSCF_CONFIG_FILE = $pyscfConfig
-          & $python -VV 2>&1 | Set-Content -LiteralPath "$reportDir/environment.txt" -Encoding utf8
-          & $python -m pip freeze | Add-Content -LiteralPath "$reportDir/environment.txt" -Encoding utf8
-
-          # Overlay tests onto the installed wheel without exposing the source tree.
-          Push-Location $sitePackages
-          try {
-            & $python -c "import pathlib,pyscf; p=pathlib.Path(pyscf.__file__).resolve(); print(p); assert 'site-packages' in str(p); from pyscf import gto,scf; assert abs(scf.RHF(gto.M(atom='H 0 0 0; H 0 0 1.4',unit='Bohr',basis='sto-3g',verbose=0)).kernel()+1.116714325062551)<1e-9"
-            if ($LASTEXITCODE -ne 0) { throw 'Installed-wheel import smoke failed' }
-            & $python -m pytest pyscf -s -c $pytestConfig --rootdir . --import-mode=prepend --durations=20 2>&1 | Tee-Object -FilePath "$reportDir/pytest.log"
-            $pytestExitCode = $LASTEXITCODE
-          }
-          finally {
-            Pop-Location
-            Remove-Item Env:PYSCF_CONFIG_FILE -ErrorAction SilentlyContinue
-          }
-          $pytestExitCode | Set-Content -LiteralPath "$reportDir/pytest-exit-code.txt" -Encoding ascii
-          if ($pytestExitCode -ne 0) { throw "Installed-wheel pytest failed with exit code $pytestExitCode" }
+        run: ./.github/workflows/ci_windows/verify_installed_wheel.ps1
 
       - name: Upload installed-wheel evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: windows-installed-wheel
+          name: windows-installed-wheel-evidence
           if-no-files-found: error
           include-hidden-files: true
-          path: |
-            dist/*.whl
-            tmp/windows-installed-wheel/**
+          path: tmp/windows-installed-wheel/**

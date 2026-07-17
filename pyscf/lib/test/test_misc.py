@@ -14,10 +14,21 @@
 # limitations under the License.
 
 import unittest
+from unittest import mock
 import numpy
 from pyscf import lib
+from pyscf.lib import misc
 
 class KnownValues(unittest.TestCase):
+    def test_windows_support_dll_candidates_prefer_bundled_names(self):
+        self.assertEqual(misc._dll_deps['libxc_itrf'], [('libxc', 'xc')])
+        self.assertEqual(misc._dll_deps['libxcfun_itrf'], [('libxcfun', 'xcfun')])
+
+        fallback = object()
+        with mock.patch.object(misc, 'load_library', side_effect=[OSError, fallback]) as load:
+            self.assertIs(misc._load_dependency(('libxc', 'xc')), fallback)
+        self.assertEqual([call.args[0] for call in load.call_args_list], ['libxc', 'xc'])
+
     def test_call_in_background_skip(self):
         def bg_raise():
             def raise1():
