@@ -95,6 +95,10 @@ _itrf.xc_func_get_info.restype = ctypes.c_void_p
 _itrf.xc_func_info_get_n_ext_params.argtypes = (ctypes.c_void_p, )
 _itrf.xc_func_info_get_n_ext_params.restype = ctypes.c_int
 _itrf.xc_func_set_ext_params.argtypes = (ctypes.c_void_p, ctypes.POINTER(ctypes.c_double))
+_itrf.xc_func_set_ext_params_name.argtypes = (ctypes.c_void_p, ctypes.c_char_p, ctypes.c_double)
+_itrf.xc_func_set_ext_params_name.restype = None
+_itrf.LIBXC_xc_func_find_ext_params_name.argtypes = (ctypes.c_void_p, ctypes.c_char_p)
+_itrf.LIBXC_xc_func_find_ext_params_name.restype = ctypes.c_int
 
 _XC_FUNC_TYPE_SIZE = _itrf.LIBXC_xc_func_type_size()
 
@@ -1353,14 +1357,24 @@ class XCFunctionalCache:
             self.facs = facs
         if ext_params is not None:
             for xid, param in ext_params.items():
-                param = numpy.asarray(param, dtype=numpy.double)
                 func = obj_by_id[xid]
-                info = _itrf.xc_func_get_info(func)
-                n = _itrf.xc_func_info_get_n_ext_params(info)
-                assert param.size == n, \
-                    f"""Unexpected size of external parameters for functional {xid}.
+                if isinstance(param, dict):
+                    for k, v in param.items():
+                        if _itrf.LIBXC_xc_func_find_ext_params_name(
+                                func, str(k).encode()) < 0:
+                            raise ValueError(
+                                f"Unknown ext_params name '{k}' for functional {xid}.")
+                        _itrf.xc_func_set_ext_params_name(
+                            func, str(k).encode(), float(v))
+                else:
+                    param = numpy.asarray(param, dtype=numpy.double)
+                    info = _itrf.xc_func_get_info(func)
+                    n = _itrf.xc_func_info_get_n_ext_params(info)
+                    assert param.size == n, \
+                        f"""Unexpected size of external parameters for functional {xid}.
 Expected {n} but {param.size} provided."""
-                _itrf.xc_func_set_ext_params(func, param.ctypes.data_as(ctypes.POINTER(ctypes.c_double)))
+                    _itrf.xc_func_set_ext_params(
+                        func, param.ctypes.data_as(ctypes.POINTER(ctypes.c_double)))
         if callable(callback):
             callback(self, obj_by_id, self.spin)
 
