@@ -60,13 +60,6 @@ jobs:
           ./.github/workflows/ci_windows/build_wheel.ps1
           -RuntimeDllDir "${{ steps.msys2.outputs.msys2-location }}\ucrt64\bin"
 
-      - name: Upload wheel
-        uses: actions/upload-artifact@v7
-        with:
-          path: dist/*.whl
-          archive: false
-          if-no-files-found: error
-
       - name: Install wheel and run staged pytest
         run: ./.github/workflows/ci_windows/verify_installed_wheel.ps1
 
