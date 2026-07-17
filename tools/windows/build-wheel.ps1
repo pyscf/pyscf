@@ -211,6 +211,10 @@ try {
     if ($Clean) {
         Remove-Item (Join-Path $RepoRoot "build") -Recurse -Force -ErrorAction SilentlyContinue
         Remove-Item (Join-Path $RepoRoot "dist") -Recurse -Force -ErrorAction SilentlyContinue
+        Get-ChildItem -LiteralPath $LibDir -Filter '*.dll' -File -ErrorAction SilentlyContinue |
+            Remove-Item -Force
+        Get-ChildItem -LiteralPath $DepsBinDir -Filter '*.dll' -File -ErrorAction SilentlyContinue |
+            Remove-Item -Force
     }
     else {
         Remove-Item (Join-Path $RepoRoot "build\\lib") -Recurse -Force -ErrorAction SilentlyContinue

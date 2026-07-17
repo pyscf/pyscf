@@ -95,7 +95,7 @@ Notes:
 - The Windows build now enables `xcfun` explicitly with `-DENABLE_XCFUN=ON -DBUILD_XCFUN=ON` so a reused build directory does not keep an older `OFF` cache entry.
 - On the first `xcfun`-enabled build pass, the script may build the wheel twice: once to let CMake populate `deps\bin\libxcfun.dll`, then again after staging that DLL into `pyscf/lib` for the final wheel payload.
 - When `xcfun` is built, the script stages either `xcfun.dll` or `libxcfun.dll` into `pyscf/lib` so the installed wheel can load it on Windows.
-- `-Clean` removes the build directory before building the wheel.
+- `-Clean` removes the build/dist directories and stale staged DLLs before building the wheel.
 - Build time is approximately 14 minutes on a i5-13600KF.
 
 ## Installed-Wheel Verification
@@ -114,13 +114,15 @@ Notes:
 - The script disables auto-loaded third-party pytest plugins during the installed-wheel sweep so the report only reflects PySCF tests rather than environment-specific plugin behavior.
 - Each source `test` directory is first copied into a temporary run directory under `%TEMP%\pyscf-installed-wheel-<timestamp>` before pytest is invoked.
 - The staged directories are written under `%TEMP%\pyscf-installed-wheel-<timestamp>\tests\...` with sanitized names such as `pyscf__gto__test`, rather than recreating a top-level importable `pyscf` package in the temp root.
-- This staging step keeps the test code from the repository, while `import pyscf` still resolves to the already-installed wheel in the active `pyscf-win313-test` environment rather than the local source checkout.
-- Unlike the upstream CI, this Windows flow is not a source-tree pytest run. The upstream Linux/macOS CI builds from the checkout and then runs source-tree pytest with the repository root on `PYTHONPATH`, while `verify-installed-wheel.ps1` clears `PYTHONPATH`, changes into the temp run root, and validates the installed wheel from `site-packages`.
+- Before installation, the script checks the wheel's required extension, support, and runtime DLL entries and writes `tools/windows/reports/wheel-contents.txt`.
+- This staging step keeps the test code from the repository, while `import pyscf` is required to resolve from the already-installed wheel under `site-packages` in the active `pyscf-win313-test` environment rather than the local source checkout.
+- Unlike the upstream CI, this Windows flow is not a source-tree pytest run. The upstream Linux/macOS CI builds from the checkout and then runs source-tree pytest with the repository root on `PYTHONPATH`, while `verify-installed-wheel.ps1` clears `PYTHONPATH` and `PYSCF_EXT_PATH`, changes into the temp run root, and validates the installed wheel from `site-packages`.
 - Copying the tests into a more complete `pyscf\...\test` package layout inside the temp root is possible, but if that temp tree becomes importable as `pyscf`, the run stops being a clean installed-wheel check and starts drifting toward a source-layout test. For that reason, the current staging keeps only the test directories and avoids materializing a top-level `pyscf` package in the run root.
 - The script writes both reports below by default, and also archives timestamped copies such as `installed-wheel-report-YYYYMMDD-HHMMSS.md` and `installed-wheel-report-YYYYMMDD-HHMMSS.json`:
   - `tools/windows/reports/installed-wheel-report.md`
   - `tools/windows/reports/installed-wheel-report.json`
 - Per-directory raw pytest logs are stored under `tools/windows/reports/logs/`.
+- Reports and logs are written before any failed test directory makes the script exit nonzero.
 - Verification time is approximately 46 minutes on a i5-13600KF.
 
 Useful `verify-installed-wheel.ps1` parameters:

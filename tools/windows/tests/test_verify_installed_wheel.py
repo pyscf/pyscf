@@ -12,6 +12,51 @@ VERIFY_WHEEL = REPO_ROOT / "tools" / "windows" / "verify-installed-wheel.ps1"
 
 class VerifyInstalledWheelScriptTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("powershell") or shutil.which("pwsh"), "PowerShell is required")
+    def test_external_command_capture_preserves_arguments_with_spaces(self):
+        powershell = shutil.which("powershell") or shutil.which("pwsh")
+        command = r'''
+$scriptPath = $env:ARGV_TEST_SCRIPT
+$workDir = $env:ARGV_TEST_WORK_DIR
+$tokens = $null
+$errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile(
+    $scriptPath, [ref]$tokens, [ref]$errors)
+$node = $ast.FindAll({
+    param($item)
+    $item -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+        $item.Name -eq 'Invoke-ExternalCommandCapture'
+}, $true)[0]
+Invoke-Expression $node.Extent.Text
+$helper = Join-Path $workDir 'echo argv.ps1'
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText(
+    $helper, 'param([string]$Value); Write-Output $Value', $utf8NoBom)
+$expected = Join-Path $workDir 'artifact wheel.whl'
+$result = Invoke-ExternalCommandCapture -FilePath $env:ARGV_TEST_POWERSHELL -ArgumentList @(
+    '-NoProfile', '-File', $helper, '-Value', $expected
+)
+if ($result.ExitCode -ne 0) { throw ($result.AllOutput -join "`n") }
+if (($result.StdOut | Select-Object -Last 1) -ne $expected) {
+    throw "argv mismatch: $($result.StdOut -join '|')"
+}
+'''
+        with tempfile.TemporaryDirectory() as tmp:
+            work_dir = pathlib.Path(tmp) / "workspace with spaces"
+            work_dir.mkdir()
+            env = os.environ.copy()
+            env.update({
+                "ARGV_TEST_SCRIPT": str(VERIFY_WHEEL),
+                "ARGV_TEST_WORK_DIR": str(work_dir),
+                "ARGV_TEST_POWERSHELL": powershell,
+            })
+            result = subprocess.run(
+                [powershell, "-NoProfile", "-Command", command],
+                capture_output=True, text=True, check=False, env=env,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which("powershell") or shutil.which("pwsh"), "PowerShell is required")
     def test_staging_recreates_the_target_directory(self):
         powershell = shutil.which("powershell") or shutil.which("pwsh")
         command = r'''
@@ -83,12 +128,28 @@ if (Test-Path -LiteralPath $sentinel) { throw 'stale staged file survived' }
     def test_script_runs_from_temp_root_and_clears_pythonpath(self):
         text = VERIFY_WHEEL.read_text(encoding="utf-8")
         self.assertIn("Remove-Item Env:PYTHONPATH", text)
+        self.assertIn("Remove-Item Env:PYSCF_EXT_PATH", text)
         self.assertIn("Join-Path $env:TEMP", text)
         self.assertIn("Push-Location $RunRoot", text)
         self.assertIn("function Invoke-PythonSnippetCapture", text)
         self.assertIn("UTF8Encoding($false)", text)
         self.assertIn("PYTEST_DISABLE_PLUGIN_AUTOLOAD", text)
         self.assertIn("function Write-PytestConfig", text)
+
+    def test_script_checks_wheel_payload_and_installed_import_path(self):
+        text = VERIFY_WHEEL.read_text(encoding="utf-8")
+        self.assertIn("function Assert-WheelContents", text)
+        self.assertIn("wheel-contents.txt", text)
+        self.assertIn("libnp_helper.dll", text)
+        self.assertIn("libcgto.dll", text)
+        self.assertIn("libxc_itrf.dll", text)
+        self.assertIn("libxcfun_itrf.dll", text)
+        self.assertIn("pyscf/lib/libxc.dll", text)
+        self.assertIn("pyscf/lib/xc.dll", text)
+        self.assertIn("pyscf/lib/libxcfun.dll", text)
+        self.assertIn("pyscf/lib/xcfun.dll", text)
+        self.assertIn("site-packages", text)
+        self.assertIn("package_path", text)
 
     def test_script_discovers_installed_test_directories(self):
         text = VERIFY_WHEEL.read_text(encoding="utf-8")
@@ -128,7 +189,7 @@ if (Test-Path -LiteralPath $sentinel) { throw 'stale staged file survived' }
         self.assertIn("Write-FailureSummary -RepoRoot $RepoRoot -Results $results", text)
         self.assertIn("-CompletedCount $completedCount", text)
         self.assertIn("-TotalCount $totalTests", text)
-        self.assertNotIn('throw "One or more test directories failed. See installed-wheel-report.md for details."', text)
+        self.assertIn('throw "One or more test directories failed. See installed-wheel-report.md for details."', text)
 
     def test_script_supports_optional_test_exclusions(self):
         text = VERIFY_WHEEL.read_text(encoding="utf-8")

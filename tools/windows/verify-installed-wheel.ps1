@@ -82,14 +82,8 @@ function Invoke-ExternalCommandCapture {
     $stdoutPath = [System.IO.Path]::GetTempFileName()
     $stderrPath = [System.IO.Path]::GetTempFileName()
     try {
-        $process = Start-Process `
-            -FilePath $FilePath `
-            -ArgumentList $ArgumentList `
-            -NoNewWindow `
-            -PassThru `
-            -Wait `
-            -RedirectStandardOutput $stdoutPath `
-            -RedirectStandardError $stderrPath
+        & $FilePath @ArgumentList 1> $stdoutPath 2> $stderrPath
+        $exitCode = $LASTEXITCODE
         $stdout = @()
         $stderr = @()
         if (Test-Path $stdoutPath) {
@@ -99,7 +93,7 @@ function Invoke-ExternalCommandCapture {
             $stderr = @(Get-Content $stderrPath -ErrorAction SilentlyContinue)
         }
         return [pscustomobject]@{
-            ExitCode = $process.ExitCode
+            ExitCode = $exitCode
             StdOut = $stdout
             StdErr = $stderr
             AllOutput = @($stdout + $stderr)
@@ -316,6 +310,35 @@ function Get-LatestWheel {
         throw "No wheel was found under dist/. Build the wheel first or omit -SkipBuild."
     }
     return $wheel
+}
+
+function Assert-WheelContents {
+    param(
+        [string]$WheelPath,
+        [string]$ReportDir
+    )
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $archive = [System.IO.Compression.ZipFile]::OpenRead($WheelPath)
+    try {
+        $entries = @($archive.Entries | ForEach-Object { $_.FullName })
+    }
+    finally {
+        $archive.Dispose()
+    }
+
+    New-Item -ItemType Directory -Path $ReportDir -Force | Out-Null
+    $entries | Sort-Object | Set-Content -LiteralPath (Join-Path $ReportDir "wheel-contents.txt") -Encoding UTF8
+    foreach ($name in @("libnp_helper.dll", "libcgto.dll", "libcint.dll", "libxc_itrf.dll", "libxcfun_itrf.dll", "libopenblas.dll")) {
+        if ($entries -notcontains "pyscf/lib/$name") {
+            throw "Wheel is missing pyscf/lib/$name"
+        }
+    }
+    if (($entries -notcontains "pyscf/lib/libxc.dll") -and ($entries -notcontains "pyscf/lib/xc.dll")) {
+        throw 'Wheel is missing pyscf/lib/libxc.dll or pyscf/lib/xc.dll'
+    }
+    if (($entries -notcontains "pyscf/lib/libxcfun.dll") -and ($entries -notcontains "pyscf/lib/xcfun.dll")) {
+        throw 'Wheel is missing pyscf/lib/libxcfun.dll or pyscf/lib/xcfun.dll'
+    }
 }
 
 function Install-Wheel {
@@ -583,6 +606,8 @@ function Write-Reports {
     $lines.Add("## Installed Import")
     $lines.Add("")
     $lines.Add("- Conda environment: $($ImportInfo.env_name)")
+    $lines.Add("- PySCF path: $($ImportInfo.package_path)")
+    $lines.Add("- PySCF lib path: $($ImportInfo.lib_path)")
     foreach ($property in $ImportInfo.packages.PSObject.Properties) {
         $lines.Add("- $($property.Name)==$($property.Value)")
     }
@@ -614,6 +639,7 @@ try {
     }
 
     $wheel = Get-LatestWheel -RepoRoot $RepoRoot
+    Assert-WheelContents -WheelPath $wheel.FullName -ReportDir $ReportDir
 
     if (-not $SkipInstall) {
         Install-Wheel -PythonExe $PythonExe -WheelPath $wheel.FullName
@@ -632,10 +658,13 @@ try {
     $pytestIni = Write-PytestConfig -RunRoot $RunRoot
 
     $env:OMP_NUM_THREADS = "4"
+    $env:OPENBLAS_NUM_THREADS = "4"
     $savedPythonPath = $env:PYTHONPATH
+    $savedPyscfExtPath = $env:PYSCF_EXT_PATH
     $savedPytestAddopts = $env:PYTEST_ADDOPTS
     $savedPytestDisablePluginAutoload = $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD
     Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+    Remove-Item Env:PYSCF_EXT_PATH -ErrorAction SilentlyContinue
     Remove-Item Env:PYTEST_ADDOPTS -ErrorAction SilentlyContinue
     $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1"
 
@@ -650,6 +679,10 @@ import pathlib
 import sys
 import pyscf
 import pyscf.lib
+package_path = pathlib.Path(pyscf.__file__).resolve()
+lib_path = pathlib.Path(pyscf.lib.__file__).resolve()
+if "site-packages" not in {part.lower() for part in package_path.parts}:
+    raise RuntimeError(f"pyscf was not imported from site-packages: {package_path}")
 packages = {}
 for name in ["pyscf", "numpy", "scipy", "h5py", "pytest", "pytest-cov", "pytest-timer", "geometric", "spglib", "pyberny"]:
     try:
@@ -657,7 +690,7 @@ for name in ["pyscf", "numpy", "scipy", "h5py", "pytest", "pytest-cov", "pytest-
     except metadata.PackageNotFoundError:
         pass
 env_name = pathlib.Path(sys.executable).parent.name
-print(json.dumps({"env_name": env_name, "packages": packages}, ensure_ascii=False))
+print(json.dumps({"env_name": env_name, "package_path": str(package_path), "lib_path": str(lib_path), "packages": packages}, ensure_ascii=False))
 '@
         if ($importResult.ExitCode -ne 0) {
             throw "Installed wheel import check failed: $($importResult.AllOutput -join ' ')"
@@ -702,6 +735,12 @@ print(json.dumps({"env_name": env_name, "packages": packages}, ensure_ascii=Fals
         else {
             Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
         }
+        if ($null -ne $savedPyscfExtPath) {
+            $env:PYSCF_EXT_PATH = $savedPyscfExtPath
+        }
+        else {
+            Remove-Item Env:PYSCF_EXT_PATH -ErrorAction SilentlyContinue
+        }
         if ($null -ne $savedPytestAddopts) {
             $env:PYTEST_ADDOPTS = $savedPytestAddopts
         }
@@ -730,6 +769,10 @@ print(json.dumps({"env_name": env_name, "packages": packages}, ensure_ascii=Fals
         -ImportInfo $importInfo
 
     Write-FailureSummary -RepoRoot $RepoRoot -Results $results
+    $failedCount = @($results | Where-Object status -eq "failed").Count
+    if ($failedCount -gt 0) {
+        throw "One or more test directories failed. See installed-wheel-report.md for details."
+    }
 }
 finally {
     $Stopwatch.Stop()

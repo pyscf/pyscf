@@ -9,6 +9,17 @@ GITATTRIBUTES = REPO_ROOT / ".gitattributes"
 
 
 class BuildWheelLayoutTests(unittest.TestCase):
+    def test_clean_build_removes_staged_dlls_before_rebuilding(self):
+        text = BUILD_WHEEL.read_text(encoding="utf-8")
+        self.assertIn(
+            "Get-ChildItem -LiteralPath $LibDir -Filter '*.dll' -File -ErrorAction SilentlyContinue",
+            text,
+        )
+        self.assertIn(
+            "Get-ChildItem -LiteralPath $DepsBinDir -Filter '*.dll' -File -ErrorAction SilentlyContinue",
+            text,
+        )
+
     def test_environment_file_declares_python_313_and_build_frontend(self):
         text = ENVIRONMENT.read_text(encoding="utf-8")
         self.assertIn("python=3.13", text)
