@@ -3,12 +3,18 @@
 '''
 User defined XC functional
 
+Two approaches are demonstrated:
+1. parse_xc: string-based functional composition (combines existing LibXC
+   functionals but cannot modify their internal parameters)
+2. register_custom_functional_: modify a LibXC functional's internal
+   parameters and register it under a custom name
+
 See also
-* The parser parse_xc function implemented in pyscf.dft.libxc
-* Example 24-define_xc_functional.py to input a functional which is not
-  provided in Libxc or XcFun library.
+* pyscf.dft.libxc for implementation details
+* Example 24-define_xc_functional.py to define a completely new functional
 '''
 
+import numpy
 from pyscf import gto
 from pyscf import dft
 
@@ -19,6 +25,8 @@ mol = gto.M(
     H  0.   0.757    0.587 ''',
     basis = 'ccpvdz')
 
+#
+# ---- parse_xc: string-based XC functional composition ----
 #
 # DFT can parse the custom XC functional, following the rules:
 # * The given functional description must be a one-line string.
@@ -143,4 +151,72 @@ mf.xc = 'PBE + SLATER*.5'
 
 # The above input is equivalent to
 mf.xc = 'PBE + SLATER*.5, PBE'
+
+#
+# ---- register_custom_functional_: modify LibXC functional parameters ----
+#
+# register_custom_functional_ registers a custom functional based on an
+# existing LibXC functional with modified parameters. Only the exchange
+# component MGGA_X_TPSS (ID 202) is modified below; MGGA_C_TPSS is
+# unmodified. MGGA_X_TPSS has 7 parameters: _b, _c, _e, _kappa, _mu,
+# _BLOC_a, _BLOC_b.
+#
+
+XC_ID_TPSS_X = 202
+mf = dft.RKS(mol)
+
+#
+# Example 1: Array-style ext_params.
+#
+param_arr = numpy.array([0.15, 0.88491, 0.047, 0.872, 0.16952, 2.0, 0.0])
+dft.libxc.register_custom_functional_(
+    'my-tpss-arr', 'tpss',
+    ext_params={XC_ID_TPSS_X: param_arr})
+
+mf.xc = 'my-tpss-arr'
+e_arr = mf.kernel()
+print('E(my-tpss-arr) = %.15g' % e_arr)
+
+#
+# Example 2: Named-dict ext_params.
+#
+named = {
+    '_b': 0.15, '_c': 0.88491, '_e': 0.047, '_kappa': 0.872,
+    '_mu': 0.16952, '_BLOC_a': 2.0, '_BLOC_b': 0.0,
+}
+dft.libxc.register_custom_functional_(
+    'my-tpss-dict', 'tpss',
+    ext_params={XC_ID_TPSS_X: named})
+
+mf.xc = 'my-tpss-dict'
+e_dict = mf.kernel()
+print('E(my-tpss-dict) = %.15g  (should equal %.15g)' % (e_dict, e_arr))
+
+#
+# Example 3: Partial named-dict ext_params. Omitted keys (_BLOC_a, _BLOC_b)
+# keep native defaults.
+#
+named_partial = {'_b': 0.15, '_c': 0.88491, '_e': 0.047,
+                 '_kappa': 0.872, '_mu': 0.16952}
+dft.libxc.register_custom_functional_(
+    'my-tpss-partial', 'tpss',
+    ext_params={XC_ID_TPSS_X: named_partial})
+
+mf.xc = 'my-tpss-partial'
+e_partial = mf.kernel()
+print('E(my-tpss-partial) = %.15g  (should equal %.15g)' % (e_partial, e_arr))
+
+#
+# Compare with native TPSS.
+#
+mf.xc = 'tpss'
+e_tpss = mf.kernel()
+print('E(tpss) = %.15g' % e_tpss)
+
+#
+# unregister_custom_functional_ removes a custom functional.
+#
+dft.libxc.unregister_custom_functional_('my-tpss-arr')
+dft.libxc.unregister_custom_functional_('my-tpss-dict')
+dft.libxc.unregister_custom_functional_('my-tpss-partial')
 
