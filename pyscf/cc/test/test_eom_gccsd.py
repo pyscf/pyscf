@@ -101,9 +101,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[1], 0.4278908208680482, 5)
         self.assertAlmostEqual(e[2], 0.5022686041399118, 5)
 
-        # Sometimes these tests can fail due to left and right evecs
-        # having small (~zero) overlap, causing numerical error. FIXME
-        e = myeom.ipccsd_star_contract(e, v, lv)
+        e = myeom.ipccsd_star(nroots=3, right_guess=v)
         self.assertAlmostEqual(e[0], 0.4358615224789573, 5)
         self.assertAlmostEqual(e[1], 0.4358615224789594, 5)
         #self.assertAlmostEqual(e[2], 0.5095767839056080, 5)
@@ -136,7 +134,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[1], 0.1905059282334538, 5)
         self.assertAlmostEqual(e[2], 0.2834522921515028, 5)
 
-        e = myeom.eaccsd_star_contract(e, v, lv)
+        e = myeom.eaccsd_star(nroots=3, right_guess=v)
         self.assertAlmostEqual(e[0], 0.1894169322207168, 5)
         self.assertAlmostEqual(e[1], 0.1894169322207168, 5)
         self.assertAlmostEqual(e[2], 0.2820757599337823, 5)
