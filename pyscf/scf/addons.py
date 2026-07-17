@@ -357,21 +357,10 @@ def mom_occ_(mf, occorb, setocc):
 
 mom_occ = mom_occ_
 
-def _project_solve(s, b, lindep=None):
-    '''Solve s x = b where s is an (almost) singular metric matrix.
-
-    The eigenvectors of s whose eigenvalues are smaller than lindep are
-    discarded to avoid the numerical noise being amplified by the nearly
-    singular metric of linearly dependent basis sets (see issue #3015).
-    '''
-    if lindep is None:
-        lindep = PROJECT_LINDEP_THRESHOLD
-    e, v = scipy.linalg.eigh(s)
-    if e[0] > lindep:
-        return lib.cho_solve(s, b, strict_sym_pos=False)
-    mask = e > lindep
-    vk = v[:, mask]
-    return vk.dot(vk.conj().T.dot(b) / e[mask, None])
+def _project_solve(s, b):
+    '''Solve s x = b discarding the nearly singular subspace of the metric s
+    (see issue #3015)'''
+    return lib.safe_solve(s, b, lindep=PROJECT_LINDEP_THRESHOLD)
 
 def project_mo_nr2nr(mol1, mo1, mol2):
     r''' Project orbital coefficients from basis set 1 (C1 for mol1) to basis

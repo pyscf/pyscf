@@ -52,6 +52,24 @@ class KnownValues(unittest.TestCase):
         q, r = linalg_helper._qr(a.T, numpy.dot)
         self.assertAlmostEqual(abs(r.T.dot(q)-a.T).max(), 0, 8)
 
+    def test_safe_solve(self):
+        numpy.random.seed(12)
+        n = 20
+        # well-conditioned: identical to cho_solve
+        a = numpy.random.rand(n,n)
+        a = a.dot(a.conj().T) + numpy.eye(n)
+        b = numpy.random.rand(n,3)
+        x = linalg_helper.safe_solve(a, b)
+        xref = linalg_helper.cho_solve(a, b)
+        self.assertTrue(numpy.array_equal(x, xref))
+
+        # singular: matches the pseudo-inverse solution
+        c = numpy.random.rand(n-2,n)
+        a = c.conj().T.dot(c)
+        x = linalg_helper.safe_solve(a, b, lindep=1e-10)
+        xref = numpy.linalg.pinv(a, rcond=1e-10).dot(b)
+        self.assertAlmostEqual(abs(x-xref).max(), 0, 8)
+
     def test_davidson1(self):
         numpy.random.seed(12)
         n = 100
