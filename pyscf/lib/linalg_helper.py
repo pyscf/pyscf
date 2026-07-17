@@ -1322,24 +1322,27 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
             x1 -= xsi * w[:,None]
         axt = None
 
+        innerprod1_raw = [dot(xi.conj(), xi).real for xi in x1]
+        max_innerprod = max(innerprod1_raw, default=0.)
+
+        log.debug('krylov cycle %d  r = %g', cycle, max_innerprod**.5)
+        if max_innerprod < tol**2:
+            break
+        if max_innerprod < lindep:
+            log.warn('Linear dependence in Krylov subspace before convergence '
+                     '|r|= %.3e > tol= %.1e. Solution may be inaccurate.',
+                     max_innerprod**.5, tol)
+            break
+
         if nroots > 1:
             x1, rmat = _qr(x1, dot, lindep)
             x1 *= rmat.diagonal()[:,None]
             innerprod1 = rmat.diagonal().real ** 2
-        else:
-            innerprod1 = [dot(x1[0].conj(), x1[0]).real]
-        max_innerprod = max(innerprod1, default=0.)
-
-        log.debug('krylov cycle %d  r = %g', cycle, max_innerprod**.5)
-        if max_innerprod < lindep or max_innerprod < tol**2:
-            break
-
-        if nroots > 1:
             mask = (innerprod1 > lindep) & (innerprod1 > tol**2)
             x1 = x1[mask]
             innerprod.extend(innerprod1[mask])
         else:
-            innerprod.append(innerprod1[0])
+            innerprod.append(innerprod1_raw[0])
 
     else:
         raise RuntimeError("Krylov solver failed to converge.")
@@ -1364,10 +1367,37 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     for i in range(nd):
         g[i] = dot(b, numpy.asarray(xs[i]).conj())
 
+    _b = b
     c = numpy.linalg.solve(h, g)
     x = _gen_x0(c, xs)
     if b.ndim == 1:
         x = x[0]
+
+    # Verify true residual (using the un-restored b and x)
+    import math
+    ax = aop(x)
+    if ax.ndim == 1:
+        ax = ax.reshape(1, ax.size)
+    _x = x.reshape(1, -1) if x.ndim == 1 else x
+    _b = _b.reshape(1, -1) if _b.ndim == 1 else _b
+    res = (ax.ravel() + _x.ravel() - _b.ravel())
+    res_norm = math.sqrt(dot(res.conj(), res).real)
+    if res_norm > tol and nroots > 1 and x0 is None:
+        log.warn('Krylov solver reached subspace convergence but true residual '
+                 '|aop(x)+x-b| = %.3e exceeds tolerance %.1e. '
+                 'Falling back to per-root solve.', res_norm, tol)
+        x_out = numpy.empty((nroots, ndim), dtype=x.dtype)
+        for k in range(nroots):
+            x_single = krylov(aop, _b[k:k+1], x0=None, tol=tol,
+                              max_cycle=max_cycle, dot=dot, lindep=lindep,
+                              hermi=hermi, max_memory=max_memory,
+                              verbose=verbose)
+            x_out[k] = x_single[0]
+        return x_out
+    elif res_norm > tol:
+        log.warn('Krylov solver reached subspace convergence but true residual '
+                 '|aop(x)+x-b| = %.3e exceeds requested tolerance %.1e. '
+                 'The solution may be inaccurate.', res_norm, tol)
 
     # Restore the first nroots vectors, which are array b or b-(1+a)x0
     if x0 is not None:

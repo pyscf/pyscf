@@ -170,6 +170,17 @@ class KnownValues(unittest.TestCase):
         c = linalg_helper.krylov(aop, b/a_diag, max_cycle=18, lindep=1e-15)
         self.assertAlmostEqual(abs(c).max(), 0, 9)
 
+    def test_krylov_multiroot_true_residual(self):
+        numpy.random.seed(42)
+        n = 150
+        nroots = 5
+        a = numpy.random.rand(n,n) * .1
+        b = numpy.random.rand(nroots, n)
+        ref = numpy.linalg.solve(numpy.eye(n) + a, b.T).T
+        aop = lambda x: x.dot(a.T)
+        c = linalg_helper.krylov(aop, b, tol=1e-8, max_cycle=60, lindep=1e-14)
+        self.assertAlmostEqual(abs(ref - c).max(), 0, 5)
+
     def test_dgeev(self):
         numpy.random.seed(12)
         n = 100
