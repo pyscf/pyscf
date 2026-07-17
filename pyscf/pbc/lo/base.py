@@ -155,13 +155,15 @@ class KptsOrbitalLocalizer(lib.StreamObject, kciah.SubspaceCIAHOptimizerMixin):
 
 def get_kmesh(cell, kpts, tol=1e-6, nmax=1000):
     scaled_kpts = cell.get_scaled_kpts(kpts-kpts[0])
-    nks = numpy.arange(1,nmax+1)
-    ks = lib.einsum('kx,n->xnk', scaled_kpts, nks)
+    nkpts = len(kpts)
+    nks = numpy.arange(1, min(nkpts, nmax)+1, dtype=scaled_kpts.dtype)
+    ks = numpy.einsum('kx,n->xnk', scaled_kpts, nks)
     mask = numpy.all(abs(ks - numpy.round(ks)) < tol, axis=-1)
     if not numpy.all(numpy.any(mask, axis=-1)):
         raise RuntimeError('Input kmesh is either too large or not a (shifted) regular mesh.')
 
     kmesh = [numpy.where(mask[i])[0][0]+1 for i in range(3)]
+    assert numpy.prod(kmesh) == nkpts
 
     return kmesh
 
