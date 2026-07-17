@@ -251,6 +251,7 @@ if(ENABLE_XCFUN AND BUILD_XCFUN)
   ExternalProject_Add(libxcfun
     GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
     GIT_TAG a89b783
+    UPDATE_DISCONNECTED TRUE
     # This patch adds the xcfun derivative order up to 5
     PATCH_COMMAND git apply --reject ${PROJECT_SOURCE_DIR}/libxcfun.patch
     PREFIX ${PROJECT_BINARY_DIR}/deps
