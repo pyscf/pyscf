@@ -77,6 +77,26 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(mo2[0]).sum(), 83.436359425591888, 11)
         self.assertAlmostEqual(abs(mo2[1]).sum(), 83.436359425591888, 11)
 
+    def test_project_mo_nr2nr_lindep(self):
+        # issue 3015: projecting onto a linearly dependent basis must not
+        # amplify the noise in the near-null space of the overlap matrix
+        mol_ld = mol.copy()
+        mol_ld.basis = {'H': ('6-31g', '6-31g'), 'O': ('6-31g', '6-31g')}
+        mol_ld.build(False, False)
+
+        c2 = addons.project_mo_nr2nr(mol, mf.mo_coeff, mol_ld)
+        self.assertTrue(numpy.all(numpy.isfinite(c2)))
+        s22 = mol_ld.intor_symmetric('int1e_ovlp')
+        # mol's orbitals are exactly representable in mol_ld: the projection
+        # must preserve their orthonormality
+        ovlp = c2.conj().T.dot(s22).dot(c2)
+        self.assertAlmostEqual(abs(ovlp - numpy.eye(mol.nao_nr())).max(), 0, 9)
+
+        dm = scf.hf.init_guess_by_minao(mol_ld)
+        self.assertTrue(abs(dm).max() < 10)
+        nelec = numpy.einsum('ij,ji->', dm, s22)
+        self.assertAlmostEqual(nelec, mol.nelectron, delta=0.1)
+
     def test_project_mo_r2r(self):
         nao = mol.nao_2c()
         c = numpy.random.random((nao*2,nao*2))
