@@ -14,6 +14,7 @@ $runnerTemp = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTe
 $runRoot = Join-Path $runnerTemp 'pyscf-installed-wheel'
 $launchRoot = Join-Path $runRoot 'launch'
 $venv = Join-Path $runRoot '.venv'
+$savedPytestAddopts = $env:PYTEST_ADDOPTS
 
 function Add-PackageMarker([string]$Directory) {
     $marker = Join-Path $Directory '__init__.py'
@@ -41,6 +42,12 @@ try {
         Tee-Object -FilePath (Join-Path $reportDir 'install.log')
     if ($LASTEXITCODE -ne 0) {
         throw 'Installed-wheel test environment setup failed'
+    }
+    $pipCheckOutput = & $python -m pip check 2>&1
+    $pipCheckExitCode = $LASTEXITCODE
+    $pipCheckOutput | Set-Content -LiteralPath (Join-Path $reportDir 'pip-check.txt') -Encoding utf8
+    if ($pipCheckExitCode -ne 0) {
+        throw "Installed-wheel dependency check failed with exit code $pipCheckExitCode"
     }
 
     $sourcePackage = (Resolve-Path 'pyscf').Path
@@ -74,18 +81,35 @@ try {
 
     Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
     Remove-Item Env:PYSCF_EXT_PATH -ErrorAction SilentlyContinue
+    Remove-Item Env:PYTEST_ADDOPTS -ErrorAction SilentlyContinue
     $env:PYSCF_CONFIG_FILE = $pyscfConfig
     & $python -VV 2>&1 | Set-Content -LiteralPath (Join-Path $reportDir 'environment.txt') -Encoding utf8
     & $python -m pip freeze | Add-Content -LiteralPath (Join-Path $reportDir 'environment.txt') -Encoding utf8
 
+    $junitPath = Join-Path $reportDir 'pytest-results.xml'
+    $pytestArgs = @(
+        'pyscf',
+        '-s',
+        '-c', $pytestConfig,
+        '--rootdir', '.',
+        '--import-mode=prepend',
+        '--durations=20',
+        "--junitxml=$junitPath"
+    )
+    @(
+        "pytest.ini SHA256: $((Get-FileHash -LiteralPath $pytestConfig -Algorithm SHA256).Hash.ToLowerInvariant())",
+        "python -m pytest $($pytestArgs -join ' ')"
+    ) | Set-Content -LiteralPath (Join-Path $reportDir 'pytest-selection.txt') -Encoding utf8
+    Copy-Item -LiteralPath $pytestConfig -Destination (Join-Path $reportDir 'pytest.ini') -Force
+
     Push-Location $sitePackages
     try {
-        & $python -c "import pathlib,pyscf,sys; p=pathlib.Path(pyscf.__file__).resolve(); source=pathlib.Path(r'$RepoRoot').resolve(); print(p); assert 'site-packages' in str(p); assert all(pathlib.Path(x or '.').resolve() != source for x in sys.path); from pyscf import gto,scf; assert abs(scf.RHF(gto.M(atom='H 0 0 0; H 0 0 1.4',unit='Bohr',basis='sto-3g',verbose=0)).kernel()+1.116714325062551)<1e-9" 2>&1 |
+        & $python -c "import pathlib,pyscf,sys; p=pathlib.Path(pyscf.__file__).resolve(); source=pathlib.Path(r'$RepoRoot').resolve(); print(p); assert 'site-packages' in str(p); assert all(pathlib.Path(x or '.').resolve() != source for x in sys.path); from pyscf import gto,scf; from pyscf.dft import libxc,xcfun; assert libxc.__file__ and xcfun.__file__; assert abs(scf.RHF(gto.M(atom='H 0 0 0; H 0 0 1.4',unit='Bohr',basis='sto-3g',verbose=0)).kernel()+1.116714325062551)<1e-9" 2>&1 |
             Tee-Object -FilePath (Join-Path $reportDir 'import-smoke.log')
         if ($LASTEXITCODE -ne 0) {
             throw 'Installed-wheel import smoke failed'
         }
-        & $python -m pytest pyscf -s -c $pytestConfig --rootdir . --import-mode=prepend --durations=20 --deselect=pyscf/scf/test/test_addons.py::KnownValues::test_uhf_smearing 2>&1 |
+        & $python -m pytest @pytestArgs 2>&1 |
             Tee-Object -FilePath (Join-Path $reportDir 'pytest.log')
         $pytestExitCode = $LASTEXITCODE
     }
@@ -94,10 +118,40 @@ try {
         Remove-Item Env:PYSCF_CONFIG_FILE -ErrorAction SilentlyContinue
     }
     $pytestExitCode | Set-Content -LiteralPath (Join-Path $reportDir 'pytest-exit-code.txt') -Encoding ascii
+    $pytestSummary = Get-Content -LiteralPath (Join-Path $reportDir 'pytest.log') |
+        Where-Object { $_ -match '\d+ (passed|failed|error|errors|skipped|deselected)' } |
+        Select-Object -Last 1
+    if (-not $pytestSummary) {
+        $pytestSummary = 'pytest summary not found; inspect pytest.log'
+    }
+    $wheelBytes = (Get-Content -LiteralPath (Join-Path $reportDir 'wheel-size.txt') -Raw).Trim()
+    $wheelHash = (Get-Content -LiteralPath (Join-Path $reportDir 'wheel-sha256.txt') -Raw).Trim()
+    $summary = @(
+        '# CI Windows summary',
+        '',
+        "- Wheel: $($wheels[0].Name)",
+        "- Wheel bytes: $wheelBytes",
+        "- Wheel SHA256: $wheelHash",
+        '- pip check: passed',
+        "- pytest exit code: $pytestExitCode",
+        "- pytest: $pytestSummary",
+        '- JUnit: pytest-results.xml'
+    )
+    $summaryPath = Join-Path $reportDir 'summary.md'
+    $summary | Set-Content -LiteralPath $summaryPath -Encoding utf8
+    if ($env:GITHUB_STEP_SUMMARY) {
+        $summary | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding utf8
+    }
     if ($pytestExitCode -ne 0) {
         throw "Installed-wheel pytest failed with exit code $pytestExitCode"
     }
 }
 finally {
+    if ($null -eq $savedPytestAddopts) {
+        Remove-Item Env:PYTEST_ADDOPTS -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:PYTEST_ADDOPTS = $savedPytestAddopts
+    }
     Pop-Location
 }

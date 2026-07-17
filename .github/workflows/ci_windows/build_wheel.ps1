@@ -97,6 +97,18 @@ try {
         $archive.Dispose()
     }
     $entries | Sort-Object | Set-Content -LiteralPath (Join-Path $reportDir 'wheel-contents.txt') -Encoding utf8
+    $distInfoRoots = @($entries |
+        Where-Object { $_ -match '^([^/]+\.dist-info)/' } |
+        ForEach-Object { $Matches[1] } |
+        Sort-Object -Unique)
+    if ($distInfoRoots.Count -ne 1) {
+        throw "Expected exactly one dist-info directory, found $($distInfoRoots.Count)"
+    }
+    foreach ($suffix in @('.dist-info/METADATA', '.dist-info/WHEEL', '.dist-info/RECORD')) {
+        if (-not ($entries -like "*$suffix")) {
+            throw "Wheel is missing $suffix"
+        }
+    }
     foreach ($name in @(
         'libnp_helper.dll',
         'libcgto.dll',
@@ -127,8 +139,11 @@ try {
     if ($wheel.Length -ge 120MB) {
         throw "Wheel is unexpectedly large: $($wheel.Length) bytes"
     }
+    $wheelHash = (Get-FileHash -LiteralPath $wheel.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    $wheelHash | Set-Content -LiteralPath (Join-Path $reportDir 'wheel-sha256.txt') -Encoding ascii
     "Wheel: $($wheel.FullName)" | Tee-Object -FilePath $buildLog -Append
     "Wheel bytes: $($wheel.Length)" | Tee-Object -FilePath $buildLog -Append
+    "Wheel SHA256: $wheelHash" | Tee-Object -FilePath $buildLog -Append
     "Wheel entries: $($entries.Count)" | Tee-Object -FilePath $buildLog -Append
 }
 finally {

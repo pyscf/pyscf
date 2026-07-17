@@ -15,6 +15,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-windows-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   windows-wheel:
     runs-on: windows-latest
@@ -34,6 +38,9 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+
+      - name: Validate CI Windows contract
+        run: python .github/workflows/ci_windows/test_ci_windows_contract.py
 
       - name: Set up MSYS2 UCRT64
         id: msys2
