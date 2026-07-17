@@ -49,12 +49,15 @@ try {
     $openBlasImportLibrary = Join-Path $RuntimeDllDir '..\lib\libopenblas.dll.a'
     $env:CMAKE_CONFIGURE_ARGS = "-G Ninja -DCMAKE_C_COMPILER=$env:CC -DCMAKE_CXX_COMPILER=$env:CXX -DBLAS_LIBRARIES=$openBlasImportLibrary -DENABLE_XCFUN=ON -DBUILD_XCFUN=ON"
 
+    # Do not let DLLs left by an earlier local or bootstrap build enter the wheel.
     Remove-Item -LiteralPath 'build', 'dist' -Recurse -Force -ErrorAction SilentlyContinue
     Get-ChildItem -LiteralPath $libDir -Filter '*.dll' -File -ErrorAction SilentlyContinue |
         Remove-Item -Force
     Get-ChildItem -LiteralPath $depsBinDir -Filter '*.dll' -File -ErrorAction SilentlyContinue |
         Remove-Item -Force
 
+    # Windows resolves dependent DLLs beside the extension modules, not from
+    # the build-only deps\bin directory.
     foreach ($name in @(
         'libgcc_s_seh-1.dll',
         'libgomp-1.dll',
@@ -67,10 +70,13 @@ try {
         Copy-RequiredFile (Join-Path $RuntimeDllDir $name) (Join-Path $libDir $name)
     }
 
+    # The bootstrap pass produces bundled support DLLs. The final pass packages
+    # one normalized copy of each beside the PySCF extension modules.
     Invoke-WheelBuild 'Bootstrap wheel build'
 
     Copy-RequiredFile (Join-Path $depsBinDir 'libcint.dll') (Join-Path $libDir 'libcint.dll')
     Copy-RequiredFile (Join-Path $depsBinDir 'libxc.dll') (Join-Path $libDir 'libxc.dll')
+    # XCFun's installed filename varies by toolchain; expose one stable bundled name.
     $xcfun = @('libxcfun.dll', 'xcfun.dll') |
         ForEach-Object { Join-Path $depsBinDir $_ } |
         Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
@@ -80,6 +86,7 @@ try {
     }
     Copy-Item -LiteralPath $xcfun -Destination (Join-Path $libDir 'libxcfun.dll') -Force
 
+    # Reuse the build tree and external-project stamps; only replace the wheel.
     Remove-Item -LiteralPath 'dist' -Recurse -Force
     Invoke-WheelBuild 'Final wheel build'
 
@@ -88,6 +95,8 @@ try {
         throw "Expected exactly one wheel, found $($wheels.Count)"
     }
     $wheel = $wheels[0]
+    # A successful build can still contain stale or duplicate DLL payloads, so
+    # inspect the archive rather than trusting the build exit code.
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $archive = [IO.Compression.ZipFile]::OpenRead($wheel.FullName)
     try {
@@ -136,6 +145,7 @@ try {
         }
     }
     $wheel.Length | Set-Content -LiteralPath (Join-Path $reportDir 'wheel-size.txt') -Encoding ascii
+    # Duplicate deps\bin payloads previously inflated the validated ~91 MB wheel.
     if ($wheel.Length -ge 120MB) {
         throw "Wheel is unexpectedly large: $($wheel.Length) bytes"
     }

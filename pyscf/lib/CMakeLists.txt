@@ -233,6 +233,7 @@ if(ENABLE_LIBXC AND BUILD_LIBXC)
     URL https://gitlab.com/libxc/libxc/-/archive/7.0.0/libxc-7.0.0.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+    # The wheel needs libxc itself, not its upstream test targets/dependencies.
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1 -DBUILD_TESTING=OFF
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
             -DCMAKE_INSTALL_LIBDIR:PATH=lib
@@ -251,8 +252,11 @@ if(ENABLE_XCFUN AND BUILD_XCFUN)
   ExternalProject_Add(libxcfun
     GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
     GIT_TAG a89b783
+    # CI builds the wheel twice from one tree. Preserve the external-project
+    # stamps so the final packaging pass does not fetch and patch XCFun again.
     UPDATE_DISCONNECTED TRUE
-    # This patch adds the xcfun derivative order up to 5
+    # This patch adds derivatives up to order 5; a rejection must not produce
+    # a silently incomplete wheel.
     PATCH_COMMAND git apply --reject ${PROJECT_SOURCE_DIR}/libxcfun.patch
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps

@@ -14,6 +14,8 @@ include pyscf/lib/deps/lib*/libxcfun.[2-9].dylib
 # windows dynamic libraries
 include pyscf/lib/*.dll
 include pyscf/lib/deps/bin/*.dll
+# The bootstrap build writes support DLLs to deps/bin; package only the
+# normalized copies staged next to the extension modules in pyscf/lib.
 exclude pyscf/lib/deps/bin/libcint.dll
 exclude pyscf/lib/deps/bin/libxc.dll
 exclude pyscf/lib/deps/bin/libxcfun.dll

@@ -1,1 +1,2 @@
+# git apply on Windows rejects patch context rewritten to CRLF.
 *.patch text eol=lf

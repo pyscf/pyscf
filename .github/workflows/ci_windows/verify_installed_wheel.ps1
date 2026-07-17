@@ -56,6 +56,8 @@ try {
     if (-not (Test-Path -LiteralPath $installedPackage -PathType Container)) {
         throw "Installed package was not found: $installedPackage"
     }
+    # Wheels do not ship tests. Overlay only test directories onto the installed
+    # package so production modules and DLLs still come from the wheel.
     Get-ChildItem -LiteralPath $sourcePackage -Directory -Recurse |
         Where-Object Name -eq 'test' |
         ForEach-Object {
@@ -63,6 +65,7 @@ try {
             $destination = Join-Path $installedPackage $relative
             New-Item -ItemType Directory -Path $destination -Force | Out-Null
             Copy-Item -Path (Join-Path $_.FullName '*') -Destination $destination -Recurse -Force
+            # Keep relative imports working without copying source package modules.
             $packageDirectory = $destination
             while ($packageDirectory -ne $installedPackage) {
                 Add-PackageMarker $packageDirectory
@@ -79,6 +82,8 @@ try {
         'scf_hf_SCF_mute_chkfile = True'
     ) | Set-Content -LiteralPath $pyscfConfig -Encoding utf8
 
+    # Inherited paths and pytest options can shadow the wheel or change the
+    # repository's regular test selection.
     Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
     Remove-Item Env:PYSCF_EXT_PATH -ErrorAction SilentlyContinue
     Remove-Item Env:PYTEST_ADDOPTS -ErrorAction SilentlyContinue
@@ -102,6 +107,7 @@ try {
     ) | Set-Content -LiteralPath (Join-Path $reportDir 'pytest-selection.txt') -Encoding utf8
     Copy-Item -LiteralPath $pytestConfig -Destination (Join-Path $reportDir 'pytest.ini') -Force
 
+    # Launch outside the checkout so cwd cannot shadow the installed package.
     Push-Location $sitePackages
     try {
         & $python -c "import pathlib,pyscf,sys; p=pathlib.Path(pyscf.__file__).resolve(); source=pathlib.Path(r'$RepoRoot').resolve(); print(p); assert 'site-packages' in str(p); assert all(pathlib.Path(x or '.').resolve() != source for x in sys.path); from pyscf import gto,scf; from pyscf.dft import libxc,xcfun; assert libxc.__file__ and xcfun.__file__; assert abs(scf.RHF(gto.M(atom='H 0 0 0; H 0 0 1.4',unit='Bohr',basis='sto-3g',verbose=0)).kernel()+1.116714325062551)<1e-9" 2>&1 |
