@@ -144,6 +144,17 @@ class _SmearingSCF:
         del obj.e_zero
         return obj
 
+    def check_convergence(self, envs):
+        energy_converged = abs(envs['e_tot'] - envs['last_hf_e']) < envs['conv_tol']
+        gradient_converged = envs['norm_gorb'] < envs['conv_tol_grad']
+        if self.sigma and self.smearing_method:
+            # Fractional occupations can change the density while the orbital
+            # gradient alone is small.
+            return energy_converged and gradient_converged
+        if envs.get('extra_cycle', False):
+            return energy_converged or gradient_converged
+        return energy_converged and gradient_converged
+
     def get_occ(self, mo_energy=None, mo_coeff=None):
         '''Label the occupancies for each orbital
         '''

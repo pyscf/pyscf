@@ -479,6 +479,37 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 5)
         self.assertAlmostEqual(myhf_s.entropy, 17.11431, 4)
 
+        observed_extra = {
+            'e_tot': -243.086993624352,
+            'last_hf_e': -243.086988432792,
+            'conv_tol': 1e-6,
+            'norm_gorb': 1.08e-5,
+            'conv_tol_grad': 3 * numpy.sqrt(1e-7),
+            'extra_cycle': True,
+        }
+        with self.subTest('smearing requires stable energy after extra cycle'):
+            self.assertTrue(callable(myhf_s.check_convergence))
+            if callable(myhf_s.check_convergence):
+                self.assertFalse(myhf_s.check_convergence(observed_extra))
+
+        extra_checks = 0
+        def reject_first_extra(envs):
+            nonlocal extra_checks
+            energy_converged = abs(envs['e_tot'] - envs['last_hf_e']) < envs['conv_tol']
+            gradient_converged = envs['norm_gorb'] < envs['conv_tol_grad']
+            is_extra = envs.get('extra_cycle', envs['conv_tol'] > myhf_s.conv_tol)
+            if is_extra:
+                extra_checks += 1
+                if extra_checks == 1:
+                    return False
+            return energy_converged and gradient_converged
+
+        myhf_s.check_convergence = reject_first_extra
+        myhf_s.kernel(dm0=myhf_s.make_rdm1())
+        with self.subTest('rejected extra cycle resumes SCF'):
+            self.assertGreaterEqual(extra_checks, 2)
+            self.assertTrue(myhf_s.converged)
+
     def test_rhf_smearing_nelec(self):
         mol = gto.Mole()
         mol.verbose = 5
