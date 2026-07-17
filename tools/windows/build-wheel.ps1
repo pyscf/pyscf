@@ -193,12 +193,14 @@ try {
     $DepsBinDir = Join-Path $RepoRoot 'pyscf\lib\deps\bin'
 
     $RuntimeDllDir = Resolve-RuntimeDllDir -ConfiguredValue $RuntimeDllDir
+    $MsysUsrBin = Join-Path (Split-Path (Split-Path $RuntimeDllDir -Parent) -Parent) 'usr\bin'
     $BootstrapPaths = @(
         $RuntimeDllDir,
         $LibraryBin,
         $ScriptsDir,
         $PythonDir,
-        $env:PATH
+        $env:PATH,
+        $MsysUsrBin
     )
     $BootstrapPaths = $BootstrapPaths | Where-Object { $_ } | Select-Object -Unique
     $env:PATH = $BootstrapPaths -join ';'
@@ -207,6 +209,7 @@ try {
     $NinjaExe = Resolve-NinjaExe -LibraryBin $LibraryBin -ScriptsDir $ScriptsDir
     Require-Command "gcc" | Out-Null
     Require-Command "g++" | Out-Null
+    Require-Command "true" "Install the MSYS2 base utilities under usr\bin." | Out-Null
 
     if ($Clean) {
         Remove-Item (Join-Path $RepoRoot "build") -Recurse -Force -ErrorAction SilentlyContinue

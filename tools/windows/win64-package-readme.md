@@ -92,6 +92,7 @@ Notes:
 
 - The script builds the wheel with `python -m build -x --wheel --no-isolation --outdir dist .`
 - The script stages the required runtime DLLs and bundled support DLLs into `pyscf/lib` before building the wheel.
+- The script adds the matching MSYS2 `usr\bin` to `PATH` so repeated XCFun patch steps use the same base utilities available in CI.
 - The Windows build now enables `xcfun` explicitly with `-DENABLE_XCFUN=ON -DBUILD_XCFUN=ON` so a reused build directory does not keep an older `OFF` cache entry.
 - On the first `xcfun`-enabled build pass, the script may build the wheel twice: once to let CMake populate `deps\bin\libxcfun.dll`, then again after staging that DLL into `pyscf/lib` for the final wheel payload.
 - When `xcfun` is built, the script stages either `xcfun.dll` or `libxcfun.dll` into `pyscf/lib` so the installed wheel can load it on Windows.

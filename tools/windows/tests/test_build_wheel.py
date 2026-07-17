@@ -51,8 +51,10 @@ class BuildWheelLayoutTests(unittest.TestCase):
     def test_build_script_bootstraps_runtime_paths_without_hardcoded_ninja_dirs(self):
         text = BUILD_WHEEL.read_text(encoding="utf-8")
         self.assertIn('$RuntimeDllDir,', text)
+        self.assertIn('$MsysUsrBin', text)
         self.assertIn('$BootstrapPaths = @(', text)
         self.assertIn("$env:PATH = $BootstrapPaths -join ';'", text)
+        self.assertIn('Require-Command "true"', text)
         self.assertNotIn('CommonExtensions\\Microsoft\\CMake\\Ninja', text)
         self.assertNotIn('C:\\Program Files\\Ninja', text)
 
