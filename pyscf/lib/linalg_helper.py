@@ -1218,9 +1218,11 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
 # TODO: new solver with Arnoldi iteration
 # The current implementation fails in polarizability. see
 # https://github.com/pyscf/pyscf/issues/507
+
 def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
            lindep=DSOLVE_LINDEP, callback=None, hermi=False,
-           max_memory=MAX_MEMORY, verbose=logger.WARN):
+           max_memory=MAX_MEMORY, verbose=logger.WARN,
+           gram_schmidt=False, precond=None):
     r'''Krylov subspace method to solve  (1+a) x = b.  Ref:
     J. A. Pople et al, Int. J.  Quantum. Chem.  Symp. 13, 225 (1979).
 
@@ -1278,14 +1280,36 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     nroots, ndim = x1.shape
 
     if nroots > 1:
-        # Not exactly QR, vectors are orthogonal but not normalized
-        x1, rmat = _qr(x1, dot, lindep)
-        x1 *= rmat.diagonal()[:,None]
-        innerprod = (rmat.diagonal().real ** 2).tolist()
-        if innerprod:
-            max_innerprod = max(innerprod)
+        if gram_schmidt:
+            # Compute max_innerprod from raw norms before GS (for convergence check)
+            raw_norms = [dot(x1[i].conj(), x1[i]).real for i in range(nroots)]
+            max_innerprod = max(raw_norms) if raw_norms else 0
+            # Double-pass GS for initial RHS vectors
+            innerprod = []
+            kept = []
+            for j in range(nroots):
+                nrm_sq = dot(x1[j].conj(), x1[j]).real
+                if nrm_sq > lindep:
+                    x1[j] /= nrm_sq ** .5
+                    kept.append(j)
+                    innerprod.append(1.0)
+                    # Orthogonalize remaining vectors
+                    for k in range(j + 1, nroots):
+                        proj = dot(x1[j].conj(), x1[k])
+                        x1[k] -= x1[j] * proj
+                    # Double GS
+                    for k in range(j + 1, nroots):
+                        proj = dot(x1[j].conj(), x1[k])
+                        x1[k] -= x1[j] * proj
+            x1 = x1[kept]
         else:
-            max_innerprod = 0
+            x1, rmat = _qr(x1, dot, lindep)
+            x1 *= rmat.diagonal()[:,None]
+            innerprod = (rmat.diagonal().real ** 2).tolist()
+            if innerprod:
+                max_innerprod = max(innerprod)
+            else:
+                max_innerprod = 0
     else:
         max_innerprod = dot(x1[0].conj(), x1[0]).real
         innerprod = [max_innerprod]
@@ -1334,13 +1358,46 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
                      max_innerprod**.5, tol)
             break
 
+        if precond is not None:
+            for j in range(len(x1)):
+                x1[j] = precond(x1[j])
+
         if nroots > 1:
-            x1, rmat = _qr(x1, dot, lindep)
-            x1 *= rmat.diagonal()[:,None]
-            innerprod1 = rmat.diagonal().real ** 2
-            mask = (innerprod1 > lindep) & (innerprod1 > tol**2)
-            x1 = x1[mask]
-            innerprod.extend(innerprod1[mask])
+            if gram_schmidt:
+                # Double-pass GS for numerical stability (like pyscf-forge)
+                # First pass: orthogonalize against existing subspace
+                for i in range(len(xs)):
+                    xsi = numpy.asarray(xs[i])
+                    w = dot(x1, xsi.conj())
+                    x1 -= xsi[None, :] * w[:, None]
+                # Second pass: re-orthogonalize
+                for i in range(len(xs)):
+                    xsi = numpy.asarray(xs[i])
+                    w = dot(x1, xsi.conj())
+                    x1 -= xsi[None, :] * w[:, None]
+                # Individual filtering with intra-group GS
+                kept = []
+                for j in range(len(x1)):
+                    nrm_sq = dot(x1[j].conj(), x1[j]).real
+                    if nrm_sq > lindep:
+                        x1[j] /= nrm_sq ** .5
+                        kept.append(j)
+                        innerprod.append(1.0)
+                        for k in range(j + 1, len(x1)):
+                            proj = dot(x1[j].conj(), x1[k])
+                            x1[k] -= x1[j] * proj
+                        # Double GS: re-orthogonalize remaining vectors
+                        for k in range(j + 1, len(x1)):
+                            proj = dot(x1[j].conj(), x1[k])
+                            x1[k] -= x1[j] * proj
+                x1 = x1[kept]
+            else:
+                x1, rmat = _qr(x1, dot, lindep)
+                x1 *= rmat.diagonal()[:,None]
+                innerprod1 = rmat.diagonal().real ** 2
+                mask = (innerprod1 > lindep) & (innerprod1 > tol**2)
+                x1 = x1[mask]
+                innerprod.extend(innerprod1[mask])
         else:
             innerprod.append(innerprod1_raw[0])
 
