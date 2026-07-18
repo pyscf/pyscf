@@ -531,6 +531,47 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(f[1] / f_ref[1] - 1).max(), 0, 14)
         self.assertAlmostEqual(abs(f[2] / f_ref[2] - 1).max(), 0, 14)
 
+    def test_set_param_named(self):
+        XC_ID_TPSS_X = 202  # MGGA_X_TPSS
+
+        ao_mgga = dft.numint.eval_ao(mol, mf.grids.coords, deriv=2)
+        rho_mgga = dft.numint.eval_rho(mol, ao_mgga, dm, xctype='MGGA')
+
+        # Array param (matching PTPSS defaults, positional)
+        param_tpss = numpy.array([0.15, 0.88491, 0.047, 0.872, 0.16952, 2.0, 0.0])
+
+        dft.libxc.register_custom_functional_('test_arr', 'MGGA_X_TPSS',
+                                              ext_params={XC_ID_TPSS_X: param_tpss})
+        e_ref, v_ref, f_ref = dft.libxc.eval_xc('test_arr', rho_mgga, 0, deriv=2)[:3]
+
+        # Same params as named dict (lowercase keys)
+        named = {
+            '_b': 0.15, '_c': 0.88491, '_e': 0.047, '_kappa': 0.872,
+            '_mu': 0.16952, '_BLOC_a': 2.0, '_BLOC_b': 0.0,
+        }
+        dft.libxc.register_custom_functional_('test_dict', 'MGGA_X_TPSS',
+                                              ext_params={XC_ID_TPSS_X: named})
+        e_dict, v_dict, f_dict = dft.libxc.eval_xc('test_dict', rho_mgga, 0, deriv=2)[:3]
+
+        self.assertTrue(numpy.allclose(e_ref, e_dict, 1e-7))
+        self.assertTrue(numpy.allclose(v_ref[0], v_dict[0], 1e-7))
+        self.assertTrue(numpy.allclose(f_ref[0], f_dict[0], 1e-7))
+
+        # Partial dict: omit _BLOC_a and _BLOC_b (same as native defaults)
+        named_partial = {'_b': 0.15, '_c': 0.88491, '_e': 0.047,
+                         '_kappa': 0.872, '_mu': 0.16952}
+        dft.libxc.register_custom_functional_('test_partial', 'MGGA_X_TPSS',
+                                              ext_params={XC_ID_TPSS_X: named_partial})
+        e_partial, v_partial, f_partial = dft.libxc.eval_xc(
+            'test_partial', rho_mgga, 0, deriv=2)[:3]
+        self.assertTrue(numpy.allclose(e_ref, e_partial, 1e-7))
+        self.assertTrue(numpy.allclose(v_ref[0], v_partial[0], 1e-7))
+        self.assertTrue(numpy.allclose(f_ref[0], f_partial[0], 1e-7))
+
+        dft.libxc.unregister_custom_functional_('test_arr')
+        dft.libxc.unregister_custom_functional_('test_dict')
+        dft.libxc.unregister_custom_functional_('test_partial')
+
 if __name__ == "__main__":
     print("Test libxc")
     unittest.main()
