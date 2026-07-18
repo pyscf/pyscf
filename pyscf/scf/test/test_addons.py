@@ -77,8 +77,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(mo2[0]).sum(), 83.436359425591888, 11)
         self.assertAlmostEqual(abs(mo2[1]).sum(), 83.436359425591888, 11)
 
-    def test_project_mo_nr2nr_lindep(self):
-        # issue 3015
+    def test_init_guess_by_minao_lindep(self):
+        # issue 3015: near-singular overlap blows up the minao density guess
         mol_ld = gto.M(atom='H 0 0 -3.14; C 0 0 -2.08; C 0 0 -0.69; '
                             'C 0 0 0.69; C 0 0 2.08; H 0 0 3.14',
                        basis='6-311+g', verbose=0)
@@ -89,6 +89,12 @@ class KnownValues(unittest.TestCase):
         nelec = numpy.einsum('ij,ji->', dm, s22)
         self.assertAlmostEqual(nelec, mol_ld.nelectron, delta=0.1)
 
+    def test_project_mo_nr2nr_lindep(self):
+        # issue 3015: near-singular overlap corrupts MO projection
+        mol_ld = gto.M(atom='H 0 0 -3.14; C 0 0 -2.08; C 0 0 -0.69; '
+                            'C 0 0 0.69; C 0 0 2.08; H 0 0 3.14',
+                       basis='6-311+g', verbose=0)
+        s22 = mol_ld.intor_symmetric('int1e_ovlp')
         mol_sm = gto.M(atom=mol_ld.atom, basis='sto-3g', verbose=0)
         mf_sm = scf.RHF(mol_sm).run(conv_tol=1e-10)
         nocc = mol_sm.nelectron // 2
