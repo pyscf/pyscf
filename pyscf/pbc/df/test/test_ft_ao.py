@@ -142,6 +142,12 @@ class KnownValues(unittest.TestCase):
         dat = ft_ao.ft_aopair(cell1, cell1.Gv, aosym='s2')
         self.assertAlmostEqual(abs(dat-ref).sum(), 0, 9)
 
+        g = cell1.Gv[3]
+        ref = ft_ao.ft_aopair(cell1, g.reshape(1,3))
+        dat = ft_ao.ft_aopair(cell1, g)
+        self.assertEqual(dat.shape, ref.shape)
+        self.assertAlmostEqual(abs(ref-dat).max(), 0, 12)
+
     def test_ft_aoao_pdotp(self):
         coords = pdft.gen_grid.gen_uniform_grids(cell1)
         Gv, Gvbase, kws = cell1.get_Gv_weights(cell1.mesh)

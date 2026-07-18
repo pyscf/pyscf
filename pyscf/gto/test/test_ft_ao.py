@@ -126,6 +126,12 @@ class KnownValues(unittest.TestCase):
         dat = ft_ao.ft_ao(mol, Gv, b=b, gxyz=gxyz, Gvbase=Gvbase)
         self.assertTrue(numpy.allclose(ref, dat))
 
+        g = Gv[7]
+        ref = ft_ao.ft_ao(mol, g.reshape(1,3))
+        dat = ft_ao.ft_ao(mol, g)
+        self.assertEqual(dat.shape, ref.shape)
+        self.assertAlmostEqual(abs(ref-dat).max(), 0, 12)
+
     def test_ft_ao2(self):
         numpy.random.seed(12)
         invh = numpy.random.random(3) + numpy.eye(3) * 2.5
@@ -155,6 +161,12 @@ class KnownValues(unittest.TestCase):
         dat1 = ft_ao.ft_aopair(mol, Gv, b=b, gxyz=gxyz, Gvbase=Gvbase)
         self.assertAlmostEqual(lib.fp(dat1), (-5.9794759129252348+8.07254562525371j), 9)
 
+        g = Gv[7]
+        ref = ft_ao.ft_aopair(mol, g.reshape(1,3))
+        dat = ft_ao.ft_aopair(mol, g)
+        self.assertEqual(dat.shape, ref.shape)
+        self.assertAlmostEqual(abs(ref-dat).max(), 0, 12)
+
     def test_ft_aopair2(self):
         numpy.random.seed(12)
         invh = numpy.random.random(3) + numpy.eye(3) * 2.5
@@ -165,6 +177,7 @@ class KnownValues(unittest.TestCase):
 
         dat1 = ft_ao.ft_aopair(mol, Gv, b=b, gxyz=gxyz, Gvbase=Gvbase)
         self.assertAlmostEqual(lib.fp(dat1), (-3.1468496579780125-0.019209667673850885j), 9)
+
 
     def test_ft_aopair_pdotp(self):
         dat = ft_ao.ft_aopair(mol, Gv, intor='GTO_ft_pdotp_sph')
