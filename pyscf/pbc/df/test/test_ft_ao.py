@@ -142,6 +142,12 @@ class KnownValues(unittest.TestCase):
         dat = ft_ao.ft_aopair(cell1, cell1.Gv, aosym='s2')
         self.assertAlmostEqual(abs(dat-ref).sum(), 0, 9)
 
+        g = cell1.Gv[3]
+        ref = ft_ao.ft_aopair(cell1, g.reshape(1,3))
+        dat = ft_ao.ft_aopair(cell1, g)
+        self.assertEqual(dat.shape, ref.shape)
+        self.assertAlmostEqual(abs(ref-dat).max(), 0, 12)
+
     def test_ft_aoao_pdotp(self):
         coords = pdft.gen_grid.gen_uniform_grids(cell1)
         Gv, Gvbase, kws = cell1.get_Gv_weights(cell1.mesh)
@@ -329,17 +335,6 @@ class KnownValues(unittest.TestCase):
         #FIXME: error seems too big
         self.assertAlmostEqual(abs(ref - aopair).max(), 0, 8)
         self.assertAlmostEqual(lib.fp(aopair), (-5.735639500461687-12.425151458809875j), 6)
-
-    def test_ft_aopair_1d_gv(self):
-        # issue 2961: a single G point passed as 1D array of shape (3,)
-        numpy.random.seed(2)
-        k1, k2 = numpy.random.random((2,3))
-        Gv = k2 - k1
-        ref = ft_ao.ft_aopair(cell1, Gv.reshape(1,3), kpti_kptj=[k1,k2],
-                              q=numpy.zeros(3))
-        dat = ft_ao.ft_aopair(cell1, Gv, kpti_kptj=[k1,k2], q=numpy.zeros(3))
-        self.assertEqual(dat.shape, ref.shape)
-        self.assertAlmostEqual(abs(ref-dat).max(), 0, 12)
 
 if __name__ == '__main__':
     print('Full Tests for ft_ao')
