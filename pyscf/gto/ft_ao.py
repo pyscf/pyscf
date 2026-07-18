@@ -44,8 +44,10 @@ def ft_aopair(mol, Gv, shls_slice=None, aosym='s1', b=numpy.eye(3),
     if shls_slice is None:
         shls_slice = (0, mol.nbas, 0, mol.nbas)
 
+    Gv = numpy.asarray(Gv, dtype=numpy.double).reshape(-1,3)
     GvT = numpy.asarray(Gv.T, order='C') + q[:,None]
     nGv = Gv.shape[0]
+
     if (gxyz is None or b is None or Gvbase is None
         # backward compatibility for pyscf-1.2, in which the argument Gvbase is gs
         or (Gvbase is not None and isinstance(Gvbase[0], (int, numpy.integer)))):
@@ -143,6 +145,7 @@ def ft_ao(mol, Gv, shls_slice=None, b=numpy.eye(3),
     '''
     if shls_slice is None:
         shls_slice = (0, mol.nbas)
+    Gv = numpy.asarray(Gv, dtype=numpy.double).reshape(-1,3)
     nGv = Gv.shape[0]
     if (gxyz is None or b is None or Gvbase is None
         # backward compatibility for pyscf-1.2, in which the argument Gvbase is gs

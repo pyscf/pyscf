@@ -330,6 +330,17 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(ref - aopair).max(), 0, 8)
         self.assertAlmostEqual(lib.fp(aopair), (-5.735639500461687-12.425151458809875j), 6)
 
+    def test_ft_aopair_1d_gv(self):
+        # issue 2961: a single G point passed as 1D array of shape (3,)
+        numpy.random.seed(2)
+        k1, k2 = numpy.random.random((2,3))
+        Gv = k2 - k1
+        ref = ft_ao.ft_aopair(cell1, Gv.reshape(1,3), kpti_kptj=[k1,k2],
+                              q=numpy.zeros(3))
+        dat = ft_ao.ft_aopair(cell1, Gv, kpti_kptj=[k1,k2], q=numpy.zeros(3))
+        self.assertEqual(dat.shape, ref.shape)
+        self.assertAlmostEqual(abs(ref-dat).max(), 0, 12)
+
 if __name__ == '__main__':
     print('Full Tests for ft_ao')
     unittest.main()

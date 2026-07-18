@@ -166,6 +166,19 @@ class KnownValues(unittest.TestCase):
         dat1 = ft_ao.ft_aopair(mol, Gv, b=b, gxyz=gxyz, Gvbase=Gvbase)
         self.assertAlmostEqual(lib.fp(dat1), (-3.1468496579780125-0.019209667673850885j), 9)
 
+    def test_ft_ao_1d_gv(self):
+        # issue 2961: a single G point passed as 1D array of shape (3,)
+        g = Gv[7]
+        ref = ft_ao.ft_ao(mol, g.reshape(1,3))
+        dat = ft_ao.ft_ao(mol, g)
+        self.assertEqual(dat.shape, ref.shape)
+        self.assertAlmostEqual(abs(ref-dat).max(), 0, 12)
+
+        ref = ft_ao.ft_aopair(mol, g.reshape(1,3))
+        dat = ft_ao.ft_aopair(mol, g)
+        self.assertEqual(dat.shape, ref.shape)
+        self.assertAlmostEqual(abs(ref-dat).max(), 0, 12)
+
     def test_ft_aopair_pdotp(self):
         dat = ft_ao.ft_aopair(mol, Gv, intor='GTO_ft_pdotp_sph')
         self.assertAlmostEqual(lib.fp(dat), (-80.69687735727976+69.239798150854909j), 9)
