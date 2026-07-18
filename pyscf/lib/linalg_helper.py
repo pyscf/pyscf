@@ -87,31 +87,6 @@ def safe_eigh(h, s, lindep=SAFE_EIGH_LINDEP):
         v = t
     return w, v, seig
 
-def safe_solve(a, b, lindep=SAFE_EIGH_LINDEP):
-    '''Solve a x = b, where a is a symmetric/Hermitian (nearly singular)
-    matrix.  The eigenvectors of a whose eigenvalues are smaller than lindep
-    are discarded to avoid amplifying the numerical noise in the nearly
-    singular subspace.  If a is well-conditioned, this function is identical
-    to cho_solve.
-
-    Args:
-        a : 2D array
-            Complex Hermitian or real symmetric matrix.
-        b : 2D array
-            Right-hand side.
-
-    Kwargs:
-        lindep : float
-            Linear dependency threshold.  Eigenvectors of a with eigenvalues
-            smaller than this threshold are discarded from the solution.
-    '''
-    e, v = scipy.linalg.eigh(a)
-    if e[0] > lindep:
-        return cho_solve(a, b, strict_sym_pos=False)
-    mask = e > lindep
-    vk = v[:, mask]
-    return vk.dot(vk.conj().T.dot(b) / e[mask, None])
-
 def eigh_by_blocks(h, s=None, labels=None):
     '''Solve an ordinary or generalized eigenvalue problem for diagonal blocks.
     The diagonal blocks are extracted based on the given basis "labels".  The

@@ -43,7 +43,6 @@ from pyscf.scf.smearing import (  # noqa
 LINEAR_DEP_THRESHOLD = getattr(__config__, 'scf_addons_remove_linear_dep_threshold', 1e-8)
 CHOLESKY_THRESHOLD = getattr(__config__, 'scf_addons_cholesky_threshold', 1e-10)
 FORCE_PIVOTED_CHOLESKY = getattr(__config__, 'scf_addons_force_cholesky', False)
-PROJECT_LINDEP_THRESHOLD = getattr(__config__, 'scf_addons_project_lindep_threshold', 1e-6)
 LINEAR_DEP_TRIGGER = getattr(__config__, 'scf_addons_remove_linear_dep_trigger', 1e-10)
 
 def frac_occ_(mf, tol=1e-3):
@@ -358,9 +357,12 @@ def mom_occ_(mf, occorb, setocc):
 mom_occ = mom_occ_
 
 def _project_solve(s, b):
-    '''Solve s x = b discarding the nearly singular subspace of the metric s
+    '''Solve s x = b discarding the nearly singular subspace of the metric s,
+    using the same linear dependency threshold as the SCF kernel
     (see issue #3015)'''
-    return lib.safe_solve(s, b, lindep=PROJECT_LINDEP_THRESHOLD)
+    from pyscf.scf import hf
+    X = hf.check_linear_dependency(s)
+    return X.dot(X.conj().T.dot(b))
 
 def project_mo_nr2nr(mol1, mo1, mol2):
     r''' Project orbital coefficients from basis set 1 (C1 for mol1) to basis
@@ -375,9 +377,9 @@ def project_mo_nr2nr(mol1, mo1, mol2):
         C2 = S^{-1}\langle AO2|AO1\rangle C1
 
     Eigenvectors of the AO2 overlap matrix with eigenvalues smaller than
-    ``PROJECT_LINDEP_THRESHOLD`` (default 1e-6) are removed from the
-    projection to avoid noise amplification by nearly linearly dependent
-    basis sets.
+    ``scf_hf_overlap_zero_eigenvalue_threshold`` (default 1e-6) are removed
+    from the projection (same threshold used by the SCF kernel to handle
+    linear dependency in the overlap).
 
     There are three relevant functions:
     :func:`project_mo_nr2nr` is the projection for non-relativistic (scalar) basis.
