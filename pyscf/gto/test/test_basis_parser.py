@@ -61,6 +61,25 @@ class KnownValues(unittest.TestCase):
 
         self.assertEqual(len(gto.basis.load('def2-svp', 'Rn')), 16)
 
+    def test_load_pob_rev2(self):
+        # pob-DZVP-rev2 / pob-TZVP-rev2 all-electron solid-state basis sets
+        # (Oliveira, Peintinger, Laun, Bredow, JCC 2019, 40, 2364), converted
+        # from TURBOMOLE.  Check the contraction pattern: angular momentum per
+        # shell and the number of primitives in each shell.
+        def load(basis_name, element):
+            b = gto.basis.load(basis_name, element)
+            return [x[0] for x in b], [len(x) - 1 for x in b]
+        self.assertEqual(load('pob-DZVP-rev2', 'Li'), ([0, 0, 0, 1], [5, 1, 1, 1]))
+        self.assertEqual(load('pob-DZVP-rev2', 'H'),  ([0, 0, 1], [3, 1, 1]))
+        self.assertEqual(load('pob-TZVP-rev2', 'Li'), ([0, 0, 0, 0, 1], [6, 2, 1, 1, 1]))
+        self.assertEqual(load('pob-TZVP-rev2', 'H'),  ([0, 0, 0, 1], [3, 1, 1, 1]))
+        # name resolution is case- and separator-insensitive
+        self.assertEqual(gto.basis.load('POB-TZVP-rev2', 'Si'),
+                         gto.basis.load('pobtzvprev2', 'Si'))
+        # element outside the (double-zeta) set raises rather than silently
+        # falling back to a different basis
+        self.assertRaises(BasisNotFoundError, gto.basis.load, 'pob-DZVP-rev2', 'Xe')
+
     def test_basis_load_from_file(self):
         ftmp = lib.NamedTemporaryFile()
         ftmp.write('''
