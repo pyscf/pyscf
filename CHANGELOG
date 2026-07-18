@@ -2,7 +2,7 @@ PySCF 2.14.0 (2026-07-17)
 -------------------------
 * Added
   - Gamma-point G0W0 for GWAC
-  - Bethe-Salpeter equation (GSE) for molecular GW module. Support both spin-restricted and spin-unrestricted.
+  - Bethe-Salpeter equation (BSE) for molecular GW module. Support both spin-restricted and spin-unrestricted.
   - KRPA/KURPA: new routine for spin-restricted/unrestricted k-point RPA
   - PBC RPA for smeared systems
   - RCCSDT(Q) correction implementation
