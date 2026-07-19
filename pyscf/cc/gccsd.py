@@ -97,8 +97,8 @@ def energy(cc, t1, t2, eris):
     fock = eris.fock
     e = einsum('ia,ia', fock[:nocc,nocc:], t1)
     eris_oovv = np.array(eris.oovv)
-    e += 0.25*np.einsum('ijab,ijab', t2, eris_oovv)
-    e += 0.5 *np.einsum('ia,jb,ijab', t1, t1, eris_oovv)
+    e += 0.25*einsum('ijab,ijab', t2, eris_oovv)
+    e += 0.5 *einsum('ia,jb,ijab', t1, t1, eris_oovv)
     if abs(e.imag) > 1e-4:
         logger.warn(cc, 'Non-zero imaginary part found in GCCSD energy %s', e)
     return e.real
