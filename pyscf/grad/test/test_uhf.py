@@ -61,6 +61,8 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-14
         e0 = mf.kernel()
         g = grad.UHF(mf).kernel()
+        g1 = grad.UHF(mf).kernel(atmlst=[1])
+        self.assertAlmostEqual(abs(g1 - g[[1]]).max(), 0, 8)
         mf_scanner = mf.as_scanner()
 
         e1 = mf_scanner('''O    0.   0.       0.
