@@ -66,7 +66,6 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
         atmlst = range(mol.natm)
     else:
         de = de[atmlst]
-        atmlst = range(mol.natm)
 
     aoslices = mol.aoslice_by_atom()
     for k, ia in enumerate(atmlst):
