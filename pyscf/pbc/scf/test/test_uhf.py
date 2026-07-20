@@ -148,6 +148,22 @@ class KnownValues(unittest.TestCase):
         mf = cell.KUHF(kpts=cell.make_kpts([2,1,1]))
         self.assertRaises(RuntimeError, mf.run)
 
+    def test_get_occ_no_beta_electrons(self):
+        # nelec = (nocc_a, 0): get_occ used to raise UnboundLocalError because
+        # mo_energy_b was only computed when nocc_b > 0.
+        cell = pgto.M(a=np.eye(3)*3.,
+                      atom='H 0 0 0; H 0 0 1',
+                      basis='6-31g', spin=2)
+        mf = pscf.KUHF(cell, kpts=cell.make_kpts([1,1,1]))
+        self.assertEqual(tuple(mf.nelec), (2, 0))
+        nkpts = len(mf.kpts)
+        nmo = cell.nao
+        mo_energy = np.zeros((2, nkpts, nmo))
+        mo_energy[:] = np.arange(nmo)
+        mo_occ = mf.get_occ(mo_energy)
+        self.assertEqual(mo_occ.shape, (2, nkpts, nmo))
+        self.assertTrue(np.all(mo_occ[1] == 0))
+
 if __name__ == '__main__':
     print("Tests for PBC UHF and PBC KUHF")
     unittest.main()

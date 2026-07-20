@@ -153,9 +153,9 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
                            f'nelec ({nocc_a}, {nocc_b}) > Nmo ({nmo})')
 
     fermi_a = mo_energy_a[nocc_a-1]
+    mo_energy_b = np.sort(mo_energy_kpts[1].ravel())
+    nmo = mo_energy_b.size
     if nocc_b > 0:
-        mo_energy_b = np.sort(mo_energy_kpts[1].ravel())
-        nmo = mo_energy_b.size
         fermi_b = mo_energy_b[nocc_b-1]
     else:
         fermi_b = -np.inf
