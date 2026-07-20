@@ -63,7 +63,7 @@ class KnownValues(unittest.TestCase):
 #[[ 1.43232988e-16 -1.28285681e-16  1.12044750e-02]
 # [-2.57370534e-16  2.34464042e-02 -5.60223751e-03]
 # [ 1.14137546e-16 -2.34464042e-02 -5.60223751e-03]]
-        self.assertAlmostEqual(lib.fp(g1), -0.03843861359532726, 9)
+        self.assertAlmostEqual(lib.fp(g1), -0.03843867425252364, 9)
         self.assertTrue(numpy.allclose(g1, g1_slow, rtol=1e-9, atol=1e-12))
 
         myccs = mycc.as_scanner()
@@ -94,7 +94,7 @@ class KnownValues(unittest.TestCase):
 #[[ 1.07308036e-16 -2.51504538e-15  1.24240141e-02]
 # [-2.21953002e-18 -7.92491838e-02 -6.21200703e-03]
 # [-1.05088506e-16  7.92491838e-02 -6.21200703e-03]]
-        self.assertAlmostEqual(lib.fp(g1), 0.10551838331192571, 9)
+        self.assertAlmostEqual(lib.fp(g1), 0.10551841163553637, 9)
         self.assertTrue(numpy.allclose(g1, g1_slow, rtol=1e-9, atol=1e-12))
 
 if __name__ == "__main__":

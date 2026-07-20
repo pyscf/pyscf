@@ -1279,7 +1279,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
 
     if nroots > 1:
         # Not exactly QR, vectors are orthogonal but not normalized
-        x1, rmat = _qr(x1, dot)
+        x1, rmat = _qr(x1, dot, lindep)
         x1 *= rmat.diagonal()[:,None]
         innerprod = (rmat.diagonal().real ** 2).tolist()
         if innerprod:
@@ -1323,7 +1323,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
         axt = None
 
         if nroots > 1:
-            x1, rmat = _qr(x1, dot)
+            x1, rmat = _qr(x1, dot, lindep)
             x1 *= rmat.diagonal()[:,None]
             innerprod1 = rmat.diagonal().real ** 2
         else:
