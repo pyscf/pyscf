@@ -19,7 +19,7 @@ mol = pyscf.M(atom=[['C', (0, 0, 0)],
 mf = mol.RHF().run()
 
 orbitals = mf.mo_coeff[:,mf.mo_occ>0]
-pm = pyscf.lo.PM(mol, orbitals, mf)
+pm = pyscf.lo.PM(mol, orbitals)
 def print_coeff(local_orb):
     import sys
     idx = mol.search_ao_label(['C 1s', 'C 2s', 'C 2p', 'H 1s'])

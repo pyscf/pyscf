@@ -917,7 +917,7 @@ class SCIvector(numpy.ndarray):
     # Special cases for ndarray when the array was modified (through ufunc)
     def __array_wrap__(self, out, context=None, return_scalar=False):
         if out.shape == self.shape:
-            return out
+            return out.view(SCIvector)
         elif out.shape == ():  # if ufunc returns a scalar
             return out[()]
         else:

@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Setup conda
         uses: s-weigand/setup-conda@v1
         with:

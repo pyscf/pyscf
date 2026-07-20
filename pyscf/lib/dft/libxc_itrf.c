@@ -1132,6 +1132,11 @@ void LIBXC_xc_func_set_params(const int nfn, xc_func_type *fn_obj, const double 
         }
 }
 
+int LIBXC_xc_func_find_ext_params_name(const xc_func_type *p, const char *name)
+{
+        return xc_func_find_ext_params_name(p, name);
+}
+
 xc_func_type *LIBXC_xc_func_init(const int nfn, const int *xc_ids, const int spin)
 {
         int i;
