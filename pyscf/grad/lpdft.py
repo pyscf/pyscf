@@ -370,7 +370,7 @@ def lpdft_HellmanFeynman_grad(
 
 
 class Gradients(sacasscf.Gradients):
-    def __init(self, pdft, state=None):
+    def __init__(self, pdft, state=None):
         super().__init__(pdft, state=state)
 
         if self.state is None and self.nroots == 1:
