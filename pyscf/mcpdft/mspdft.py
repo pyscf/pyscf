@@ -151,7 +151,7 @@ def si_newton (mc, ci=None, objfn=None, max_cyc=None, conv_tol=None,
         d2f_zero = np.abs (d2f) < sing_tol
         df_zero = np.abs (df) < sing_tol
         if np.any (d2f_zero & (~df_zero)):
-            log.warning (f"{hdr} Hess is singular!")
+            log.warn (f"{hdr} Hess is singular!")
         idx_null = d2f_zero & df_zero
         df[idx_null] = 0.0
         d2f[idx_null] = -1e-16

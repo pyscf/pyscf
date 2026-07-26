@@ -650,7 +650,7 @@ class MSPDFTLagPrec (sacasscf_grad.SACASLagPrec):
 
     def do_sing_warn (self):
         if self.sing_warned: return
-        self.log.warning ('Model-space frame-rotation Hessian is singular! '
+        self.log.warn ('Model-space frame-rotation Hessian is singular! '
                         'Response equations may not be solvable to arbitrary '
                         'precision!')
         self.sing_warned = True
