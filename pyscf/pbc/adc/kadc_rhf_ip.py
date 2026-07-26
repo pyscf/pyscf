@@ -578,8 +578,7 @@ def matvec(adc, kshift, M_ij=None, eris=None):
                         ki = kconserv[kc,ka,kb]
                         if eris.ovvv is None:
                             chnk_size = adc.chnk_size
-                            if chnk_size > nocc:
-                                chnk_size = nocc
+                            chnk_size = min(chnk_size, nocc)
                             a = 0
                             for p in range(0,nocc,chnk_size):
                                 eris_ovvv = dfadc.get_ovvv_df(
@@ -620,8 +619,7 @@ def matvec(adc, kshift, M_ij=None, eris=None):
                         ki = kconserv[kb,ka,kc]
                         if eris.ovvv is None:
                             chnk_size = adc.chnk_size
-                            if chnk_size > nocc:
-                                chnk_size = nocc
+                            chnk_size = min(chnk_size, nocc)
                             a = 0
                             for p in range(0,nocc,chnk_size):
 

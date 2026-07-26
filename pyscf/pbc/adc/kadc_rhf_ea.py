@@ -152,8 +152,7 @@ def get_imds(adc, eris=None):
 
                 if eris.ovvv is None:
                     chnk_size = adc.chnk_size
-                    if chnk_size > nocc:
-                        chnk_size = nocc
+                    chnk_size = min(chnk_size, nocc)
                     a = 0
                     for p in range(0,nocc,chnk_size):
                         kd = kconserv[ka,kb,kl]
@@ -389,8 +388,7 @@ def get_imds(adc, eris=None):
                         ke = kconserv[kb,ka,kf]
                         if eris.vvvv is None:
                             chnk_size = adc.chnk_size
-                            if chnk_size > nvir:
-                                chnk_size = nvir
+                            chnk_size = min(chnk_size, nvir)
                             a = 0
                             for p in range(0,nvir,chnk_size):
                                 eris_vvvv = dfadc.get_vvvv_df(
@@ -452,8 +450,7 @@ def get_imds(adc, eris=None):
                                                    t2_1[km,kl,ke].conj(), eris_vvvv[ka,ke,kf], optimize=True)
                         else :
                             chnk_size = adc.chnk_size
-                            if chnk_size > nvir:
-                                chnk_size = nvir
+                            chnk_size = min(chnk_size, nvir)
                             a = 0
                             for p in range(0,nvir,chnk_size):
                                 eris_vvvv = eris.vvvv[kb,ke,ka,p:p+chnk_size]
@@ -610,8 +607,7 @@ def matvec(adc, kshift, M_ab=None, eris=None):
                 ki = kconserv[kb,kshift, kc]
                 if eris.ovvv is None:
                     chnk_size = adc.chnk_size
-                    if chnk_size > nocc:
-                        chnk_size = nocc
+                    chnk_size = min(chnk_size, nocc)
                     a = 0
                     for p in range(0,nocc,chnk_size):
                         eris_ovvv = dfadc.get_ovvv_df(
@@ -765,8 +761,7 @@ def matvec(adc, kshift, M_ab=None, eris=None):
 
                         if eris.ovvv is None:
                             chnk_size = adc.chnk_size
-                            if chnk_size > nocc:
-                                chnk_size = nocc
+                            chnk_size = min(chnk_size, nocc)
                             a = 0
                             for p in range(0,nocc,chnk_size):
                                 ka = kconserv[kz, kd, kl]
@@ -839,8 +834,7 @@ def matvec(adc, kshift, M_ab=None, eris=None):
 
                         if eris.ovvv is None:
                             chnk_size = adc.chnk_size
-                            if chnk_size > nocc:
-                                chnk_size = nocc
+                            chnk_size = min(chnk_size, nocc)
                             a = 0
                             for p in range(0,nocc,chnk_size):
 
@@ -892,8 +886,7 @@ def matvec(adc, kshift, M_ab=None, eris=None):
                         temp_2_1 = np.zeros((nocc,nvir,nvir),dtype=eris.oooo.dtype)
                         if eris.ovvv is None:
                             chnk_size = adc.chnk_size
-                            if chnk_size > nocc:
-                                chnk_size = nocc
+                            chnk_size = min(chnk_size, nocc)
                             a = 0
                             for p in range(0,nocc,chnk_size):
                                 kd = kconserv[kl, kshift, kx]
@@ -1297,8 +1290,7 @@ def ea_contract_r_vvvv(adc,r2,vvvv,ka,kb,kc):
     r2 = np.ascontiguousarray(r2.reshape(nocc,-1))
     r2_vvvv = np.zeros((nvir,nvir,nocc),dtype=r2.dtype)
     chnk_size = adc.chnk_size
-    if chnk_size > nvir:
-        chnk_size = nvir
+    chnk_size = min(chnk_size, nvir)
 
     a = 0
     if isinstance(vvvv, np.ndarray):

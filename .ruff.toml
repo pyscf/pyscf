@@ -48,6 +48,10 @@ ignore = [
     "SIM102",
     # TRY004: TypeError instead of RuntimeError — semantic change, could break handlers
     "TRY004",
+    # B009: getattr with constant attribute — style preference
+    "B009",
+    # PIE808: range(0, n) → range(n) — trivial, not worth diff
+    "PIE808",
 ]
 
 [lint.per-file-ignores]

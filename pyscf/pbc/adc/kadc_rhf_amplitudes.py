@@ -130,8 +130,7 @@ def compute_amplitudes(myadc, eris):
 
                     if eris.ovvv is None:
                         chnk_size = myadc.chnk_size
-                        if chnk_size > nocc:
-                            chnk_size = nocc
+                        chnk_size = min(chnk_size, nocc)
                         a = 0
                         for p in range(0,nocc,chnk_size):
                             eris_ovvv = dfadc.get_ovvv_df(
@@ -322,8 +321,7 @@ def contract_ladder(myadc,t_amp,vvvv,ka,kb,kc):
     t_amp = np.ascontiguousarray(t_amp.reshape(nocc*nocc,nvir*nvir))
     t = np.zeros((nocc,nocc, nvir, nvir),dtype=t_amp.dtype)
     chnk_size = myadc.chnk_size
-    if chnk_size > nvir:
-        chnk_size = nvir
+    chnk_size = min(chnk_size, nvir)
     a = 0
     if isinstance(vvvv, np.ndarray):
         vv1 = vvvv[kc,ka]

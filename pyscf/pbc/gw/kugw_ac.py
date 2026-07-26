@@ -736,10 +736,8 @@ def get_ef(kmf, mo_energy):
         homo = -99.0
         lumo = 99.0
         for k in range(len(kmf.kpts)):
-            if homo < max(mo_energy[0][k][nocca - 1], mo_energy[1][k][noccb - 1]):
-                homo = max(mo_energy[0][k][nocca - 1], mo_energy[1][k][noccb - 1])
-            if lumo > min(mo_energy[0][k][nocca], mo_energy[1][k][noccb]):
-                lumo = min(mo_energy[0][k][nocca], mo_energy[1][k][noccb])
+            homo = max(homo, max(mo_energy[0][k][nocca - 1], mo_energy[1][k][noccb - 1]))
+            lumo = min(lumo, min(mo_energy[0][k][nocca], mo_energy[1][k][noccb]))
         ef = (homo + lumo) / 2.0
     return ef
 
