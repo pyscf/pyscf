@@ -113,18 +113,15 @@ def _contract_vhf_dm(mf_grad, vhf, dm, comp=3, atmlst=None,
     else:
         neighbor_list = lib.c_null_ptr()
     func = getattr(libpbc, "contract_vhf_dm", None)
-    try:
-        func(de.ctypes.data_as(ctypes.c_void_p),
-             vhf.ctypes.data_as(ctypes.c_void_p),
-             dm.ctypes.data_as(ctypes.c_void_p),
-             ctypes.byref(neighbor_list),
-             shls_slice.ctypes.data_as(ctypes.c_void_p),
-             ao_loc.ctypes.data_as(ctypes.c_void_p),
-             shls_atm.ctypes.data_as(ctypes.c_void_p),
-             ctypes.c_int(comp), ctypes.c_int(natm),
-             ctypes.c_int(nbas))
-    except RuntimeError:
-        raise
+    func(de.ctypes.data_as(ctypes.c_void_p),
+         vhf.ctypes.data_as(ctypes.c_void_p),
+         dm.ctypes.data_as(ctypes.c_void_p),
+         ctypes.byref(neighbor_list),
+         shls_slice.ctypes.data_as(ctypes.c_void_p),
+         ao_loc.ctypes.data_as(ctypes.c_void_p),
+         shls_atm.ctypes.data_as(ctypes.c_void_p),
+         ctypes.c_int(comp), ctypes.c_int(natm),
+         ctypes.c_int(nbas))
     free_neighbor_list(neighbor_list)
 
     if atmlst is not None:

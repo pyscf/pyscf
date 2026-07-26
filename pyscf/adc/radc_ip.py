@@ -1358,7 +1358,7 @@ class RADCIP(radc.RADC):
         'max_space', 't2', 'max_cycle',
         'nmo', 'transform_integrals', 'with_df', 'compute_properties',
         'approx_trans_moments', 'E', 'U', 'P', 'X',
-        'evec_print_tol', 'spec_factor_print_tol', 'frozen'
+        'evec_print_tol', 'spec_factor_print_tol', 'frozen',
         '_make_rdm1', 'mo_occ'
     }
 
