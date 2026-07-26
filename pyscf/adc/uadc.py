@@ -24,7 +24,7 @@ Unrestricted algebraic diagrammatic construction
 '''
 
 import numpy as np
-import pyscf.lib as lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.adc import uadc_ao2mo
 from pyscf.adc import uadc_amplitudes

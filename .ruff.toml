@@ -52,6 +52,18 @@ ignore = [
     "B009",
     # PIE808: range(0, n) → range(n) — trivial, not worth diff
     "PIE808",
+    # FURB122: .write() in for-loop → .writelines() — all in pywannier90.py/chgcar.py
+    "FURB122",
+    # W605: invalid escape sequences — all in examples/, zero in pyscf/
+    "W605",
+    # SIM115: context manager for files — long-lived handles, with would close prematurely
+    "SIM115",
+    # SIM114: combine identical if-else bodies — intentional separate branches
+    "SIM114",
+    # BLE001: blind except Exception — requires per-site knowledge to fix properly
+    "BLE001",
+    # PLR1704: redefining argument with local name — may mask real bugs
+    "PLR1704",
 ]
 
 [lint.per-file-ignores]

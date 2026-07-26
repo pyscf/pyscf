@@ -30,7 +30,7 @@ References:
 
 import time
 import numpy as np
-import scipy.linalg.blas as blas
+from scipy.linalg import blas
 
 from pyscf import lib
 from pyscf.lib import logger, temporary_env
