@@ -290,20 +290,20 @@ https://sites.psu.edu/knizia/software/
 '''
 def MakeAtomInfos():
     nCoreX = {"H": 0, "He": 0}
-    for At in "Li Be B C O N F Ne".split(): nCoreX[At] = 1
-    for At in "Na Mg Al Si P S Cl Ar".split(): nCoreX[At] = 5
-    for At in "Na Mg Al Si P S Cl Ar".split(): nCoreX[At] = 5
-    for At in "K Ca".split(): nCoreX[At] = 18//2
-    for At in "Sc Ti V Cr Mn Fe Co Ni Cu Zn".split(): nCoreX[At] = 18//2
-    for At in "Ga Ge As Se Br Kr".split(): nCoreX[At] = 18//2 + 5  # [Ar] and the 5d orbitals.
+    for At in ["Li", "Be", "B", "C", "O", "N", "F", "Ne"]: nCoreX[At] = 1
+    for At in ["Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar"]: nCoreX[At] = 5
+    for At in ["Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar"]: nCoreX[At] = 5
+    for At in ["K", "Ca"]: nCoreX[At] = 18//2
+    for At in ["Sc", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn"]: nCoreX[At] = 18//2
+    for At in ["Ga", "Ge", "As", "Se", "Br", "Kr"]: nCoreX[At] = 18//2 + 5  # [Ar] and the 5d orbitals.
     nAoX = {"H": 1, "He": 1}
-    for At in "Li Be".split(): nAoX[At] = 2
-    for At in "B C O N F Ne".split(): nAoX[At] = 5
-    for At in "Na Mg".split(): nAoX[At] = 3*1 + 1*3
-    for At in "Al Si P S Cl Ar".split(): nAoX[At] = 3*1 + 2*3
-    for At in "K Ca".split(): nAoX[At] = 18//2 + 1
-    for At in "Sc Ti V Cr Mn Fe Co Ni Cu Zn".split(): nAoX[At] = 18//2 + 1 + 5  # 4s, 3d
-    for At in "Ga Ge As Se Br Kr".split(): nAoX[At] = 18//2 + 1 + 5 + 3
+    for At in ["Li", "Be"]: nAoX[At] = 2
+    for At in ["B", "C", "O", "N", "F", "Ne"]: nAoX[At] = 5
+    for At in ["Na", "Mg"]: nAoX[At] = 3*1 + 1*3
+    for At in ["Al", "Si", "P", "S", "Cl", "Ar"]: nAoX[At] = 3*1 + 2*3
+    for At in ["K", "Ca"]: nAoX[At] = 18//2 + 1
+    for At in ["Sc", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn"]: nAoX[At] = 18//2 + 1 + 5  # 4s, 3d
+    for At in ["Ga", "Ge", "As", "Se", "Br", "Kr"]: nAoX[At] = 18//2 + 1 + 5 + 3
 
     AoLabels = {}
 
@@ -315,81 +315,81 @@ def MakeAtomInfos():
         assert (nCore == nCoreX[At])
 
     # atomic orbitals in the MINAO basis: [xx] denotes core orbitals.
-    for At in "H He".split(): SetAo(At, "1s")
-    for At in "Li Be".split(): SetAo(At, "[1s] 2s")
-    for At in "B C O N F Ne".split(): SetAo(At, "[1s] 2s 2px 2py 2pz")
-    for At in "Na Mg".split(): SetAo(At, "[1s] [2s] 3s [2px] [2py] [2pz]")
-    for At in "Al Si P S Cl Ar".split(): SetAo(At, "[1s] [2s] 3s [2px] [2py] [2pz] 3px 3py 3pz")
-    for At in "K Ca".split(): SetAo(At, "[1s] [2s] [3s] 4s [2px] [2py] [2pz] [3px] [3py] [3pz]")
-    for At in "Sc Ti V Cr Mn Fe Co Ni Cu Zn".split(): SetAo(At, "[1s] [2s] [3s] 4s [2px] [2py] [2pz] [3px] [3py] [3pz] 3d0 3d2- 3d1+ 3d2+ 3d1-")
-    for At in "Ga Ge As Se Br Kr".split(): SetAo(At, "[1s] [2s] [3s] 4s [2px] [2py] [2pz] [3px] [3py] [3pz] 4px 4py 4pz [3d0] [3d2-] [3d1+] [3d2+] [3d1-]")
-    for At in "Rb Sr".split():
+    for At in ["H", "He"]: SetAo(At, "1s")
+    for At in ["Li", "Be"]: SetAo(At, "[1s] 2s")
+    for At in ["B", "C", "O", "N", "F", "Ne"]: SetAo(At, "[1s] 2s 2px 2py 2pz")
+    for At in ["Na", "Mg"]: SetAo(At, "[1s] [2s] 3s [2px] [2py] [2pz]")
+    for At in ["Al", "Si", "P", "S", "Cl", "Ar"]: SetAo(At, "[1s] [2s] 3s [2px] [2py] [2pz] 3px 3py 3pz")
+    for At in ["K", "Ca"]: SetAo(At, "[1s] [2s] [3s] 4s [2px] [2py] [2pz] [3px] [3py] [3pz]")
+    for At in ["Sc", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn"]: SetAo(At, "[1s] [2s] [3s] 4s [2px] [2py] [2pz] [3px] [3py] [3pz] 3d0 3d2- 3d1+ 3d2+ 3d1-")
+    for At in ["Ga", "Ge", "As", "Se", "Br", "Kr"]: SetAo(At, "[1s] [2s] [3s] 4s [2px] [2py] [2pz] [3px] [3py] [3pz] 4px 4py 4pz [3d0] [3d2-] [3d1+] [3d2+] [3d1-]")
+    for At in ["Rb", "Sr"]:
         nCoreX[At] = 36//2
         nAoX[At] = nCoreX[At] + 1
         SetAo(At, ' '.join ([shell_str(0,4,1),
                              shell_str(1,3,0),
                              shell_str(2,1,0)]))
-    for At in "Y Zr Nb Mo Tc Ru Rh Pd Ag Cd".split():
+    for At in ["Y", "Zr", "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", "Cd"]:
         nCoreX[At] = 36//2
         nAoX[At] = nCoreX[At] + 1 + 5
         SetAo(At, ' '.join ([shell_str(0,4,1),
                              shell_str(1,3,0),
                              shell_str(2,1,1)]))
-    for At in "In Sn Sb Te I Xe".split():
+    for At in ["In", "Sn", "Sb", "Te", "I", "Xe"]:
         nCoreX[At] = 36//2 + 5
         nAoX[At] = nCoreX[At] + 1 + 3
         SetAo(At, ' '.join ([shell_str(0,4,1),
                              shell_str(1,3,1),
                              shell_str(2,2,0)]))
-    for At in "Cs Ba".split():
+    for At in ["Cs", "Ba"]:
         nCoreX[At] = 54//2
         nAoX[At] = nCoreX[At] + 1
         SetAo(At, ' '.join ([shell_str(0,5,1),
                              shell_str(1,4,0),
                              shell_str(2,2,0)]))
-    for At in "Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu".split():
+    for At in ["Ce", "Pr", "Nd", "Pm", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu"]:
         nCoreX[At] = 54//2
         nAoX[At] = nCoreX[At] + 1 + 5 + 7
         SetAo(At, ' '.join ([shell_str(0,5,1),
                              shell_str(1,4,0),
                              shell_str(2,2,1),
                              shell_str(3,0,1)]))
-    for At in "La Hf Ta W Re Os Ir Pt Au Hg".split():
+    for At in ["La", "Hf", "Ta", "W", "Re", "Os", "Ir", "Pt", "Au", "Hg"]:
         nCoreX[At] = 54//2 + 7
         nAoX[At] = nCoreX[At] + 1 + 5
         SetAo(At, ' '.join ([shell_str(0,5,1),
                              shell_str(1,4,0),
                              shell_str(2,2,1),
                              shell_str(3,1,0)]))
-    for At in "Tl Pb Bi Po At Rn".split():
+    for At in ["Tl", "Pb", "Bi", "Po", "At", "Rn"]:
         nCoreX[At] = 54//2 + 7 + 5
         nAoX[At] = nCoreX[At] + 1 + 3
         SetAo(At, ' '.join ([shell_str(0,5,1),
                              shell_str(1,4,1),
                              shell_str(2,3,0),
                              shell_str(3,1,0)]))
-    for At in "Fr Ra".split():
+    for At in ["Fr", "Ra"]:
         nCoreX[At] = 86//2
         nAoX[At] = nCoreX[At] + 1
         SetAo(At, ' '.join ([shell_str(0,6,1),
                              shell_str(1,5,0),
                              shell_str(2,3,0),
                              shell_str(3,1,0)]))
-    for At in "Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No".split():
+    for At in ["Th", "Pa", "U", "Np", "Pu", "Am", "Cm", "Bk", "Cf", "Es", "Fm", "Md", "No"]:
         nCoreX[At] = 86//2
         nAoX[At] = nCoreX[At] + 1 + 5 + 7
         SetAo(At, ' '.join ([shell_str(0,6,1),
                              shell_str(1,5,0),
                              shell_str(2,3,1),
                              shell_str(3,1,1)]))
-    for At in "Ac Lr Rf Db Sg Bh Hs Mt Ds Rg Cn".split():
+    for At in ["Ac", "Lr", "Rf", "Db", "Sg", "Bh", "Hs", "Mt", "Ds", "Rg", "Cn"]:
         nCoreX[At] = 86//2 + 7
         nAoX[At] = nCoreX[At] + 1 + 5
         SetAo(At, ' '.join ([shell_str(0,6,1),
                              shell_str(1,5,0),
                              shell_str(2,3,1),
                              shell_str(3,2,0)]))
-    for At in "Nh Fl Mc Lv Ts Og".split():
+    for At in ["Nh", "Fl", "Mc", "Lv", "Ts", "Og"]:
         nCoreX[At] = 86//2 + 7 + 5
         nAoX[At] = nCoreX[At] + 1 + 3
         SetAo(At, ' '.join ([shell_str(0,6,1),

@@ -15,7 +15,6 @@
 #
 # Author: Yang Gao <younggao1994@gmail.com>
 
-#
 '''
 Analytical electron-phonon matrix for unrestricted hartree fock
 '''

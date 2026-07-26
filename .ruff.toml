@@ -40,6 +40,14 @@ ignore = [
     "RUF012",
     # RUF100: unused noqa — flake8 needs noqa comments that ruff doesn't agree on
     "RUF100",
+    # B023: functions in loops — all false positives (consumed sync within same iteration)
+    "B023",
+    # B006: mutable default args — mostly intentional defaults in library code
+    "B006",
+    # SIM102: nested if → single if with and — style preference
+    "SIM102",
+    # TRY004: TypeError instead of RuntimeError — semantic change, could break handlers
+    "TRY004",
 ]
 
 [lint.per-file-ignores]
