@@ -295,8 +295,6 @@ class PolEmbed(lib.StreamObject):
         return self
 
     def kernel(self, dm, elec_only=False):
-        '''
-        '''
         if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
             # spin-traced DM for UHF or ROHF
             dm = dm[0] + dm[1]

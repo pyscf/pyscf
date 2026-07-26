@@ -57,6 +57,8 @@ ignore = [
     "SIM103",   # if-return bool → return bool(x)
     "UP030",    # implicit positional format references
     "FURB161",  # bin(x).count('1') → x.bit_count()
+    "PERF102",  # use .keys()/.values() instead of .items()
+    "PLC0206",  # use .items() instead of dict[key] in loop
 
     # ==================================================================
     # ruff 0.16 additions — unlikely to fix / too much to fix
@@ -93,21 +95,17 @@ ignore = [
     "TRY201",   # raise e → bare raise (changes traceback)
     "SIM223",   # False and ... (intentional dead feature gate)
     "PLR1722",  # exit() → sys.exit() (not auto-fixable)
-    "D419",     # empty docstring (needs content)
     "PLR0206",  # property with extra param (intentional caching)
     "PLW1508",  # invalid env var default type (works in practice)
     "PLW0642",  # reassigned self (intentional decorator)
-    "ISC004",   # unparenthesized string concat (bug was fixed)
     "TRY203",   # dead try/except (bug was fixed)
     "PLW0128",  # redeclared variable in unpack (likely intentional)
-    "PLC0206",  # use .items() instead of dict[key] in loop
     "PLW0127",  # self-assignment (potential real bugs)
     "B018",     # useless expression (needs per-site judgment)
     "S110",     # try-except-pass (intentional error suppression)
     "S102",     # exec() (intentional in __config__.py and misc.py)
     "PLW0406",  # module imports itself (intentional pattern)
     "PLC0414",  # useless import alias (import x as x)
-    "PERF102",  # use .keys()/.values() instead of .items()
     "FA100",    # missing from __future__ import annotations
     "B020",     # loop variable overrides outer (actual bug risk)
     "PYI036",   # __exit__ missing exception parameters
