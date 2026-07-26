@@ -447,9 +447,13 @@ class KUHF(khf.KSCF):
             nalpha = (ne + cell.spin) // 2
             nbeta = nalpha - cell.spin
             if nalpha + nbeta != ne:
-                raise RuntimeError('Electron number %d and spin %d are not consistent\n'
-                                   'Note cell.spin = 2S = Nalpha - Nbeta, not 2S+1' %
-                                   (ne, cell.spin))
+                raise RuntimeError(
+                    'Electron number %d and spin %d are not consistent\n'
+                    'Note cell.spin = 2S = Nalpha - Nbeta, not 2S+1.\n'
+                    'For k-point calculations (nkpts=%d), cell.spin must be '
+                    'the per-cell spin multiplied by nkpts: '
+                    'cell.spin = (Nalpha - Nbeta per cell) * nkpts' %
+                    (ne, cell.spin, nkpts))
             return nalpha, nbeta
     @nelec.setter
     def nelec(self, x):
