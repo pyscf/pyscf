@@ -375,7 +375,7 @@ def _jT_f_j(frr, jT_op, *args, **kwargs):
     r''' Apply a jacobian function taking *args to the lower-triangular
     second-derivative array frr'''
     nel = len(frr)
-    nr = int(round(np.sqrt(1 + 8 * nel) - 1)) // 2
+    nr = round(np.sqrt(1 + 8 * nel) - 1) // 2
     rec = kwargs.get('rec', None)
     ngrids = frr[0].shape[-1]
 

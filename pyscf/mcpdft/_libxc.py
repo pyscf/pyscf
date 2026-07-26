@@ -18,7 +18,7 @@ from pyscf.dft.libxc import hybrid_coeff, rsh_coeff
 from pyscf import lib
 
 XC_ALIAS_KEYS = set (XC_ALIAS.keys ())
-XC_TYPE_HDR = tuple (['LDA_','GGA_','MGGA_'])
+XC_TYPE_HDR = ('LDA_','GGA_','MGGA_')
 INTCODES_TYPES = {}
 INTCODES_HYB = []
 for key, val in XC_CODES.items ():

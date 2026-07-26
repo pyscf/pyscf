@@ -80,6 +80,8 @@ ignore = [
     "SIM113",
     # PLR1716: chain boolean comparison — safe fix, defer
     "PLR1716",
+    # SIM223: False and ... → False — intentional dead feature gate code
+    "SIM223",
 ]
 
 [lint.per-file-ignores]
