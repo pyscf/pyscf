@@ -857,7 +857,7 @@ class RDHF(DHF):
             c = emax / emin
             log.debug('cond(S) = %s', c)
             if c > 1e10:
-                log.warning('Singularity detected in the overlap matrix. '
+                log.warn('Singularity detected in the overlap matrix. '
                          'SCF may be inaccurate and difficult to converge.')
 
         if hf.remove_overlap_zero_eigenvalue:

@@ -456,7 +456,7 @@ def analyze(tdobj, verbose=None):
                      f_oscillator[i])
 
         if tdobj.mol.ecp:
-            log.warning("ECP detected. Skipping calculation of transition velocity and "
+            log.warn("ECP detected. Skipping calculation of transition velocity and "
                      "magnetic dipole moments, which have not yet been implemented.")
         else:
             log.info('\n** Transition velocity dipole moments (imaginary part, AU) **')
@@ -844,7 +844,7 @@ class TDBase(lib.StreamObject):
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
         if not self._scf.converged:
-            log.warning('Ground state SCF is not converged')
+            log.warn('Ground state SCF is not converged')
         log.info('\n')
 
     def reset(self, mol=None):
@@ -1256,7 +1256,7 @@ class TDHF(TDBase):
             x, y = z.reshape(2, -1)
             norm = lib.norm(x)**2 - lib.norm(y)**2
             if norm < 0:
-                log.warning('TDDFT amplitudes |X| smaller than |Y|')
+                log.warn('TDDFT amplitudes |X| smaller than |Y|')
             norm = abs(.5/norm) ** .5 # normalize to 0.5 for alpha spin
             return x.reshape(nocc,nvir)*norm, y.reshape(nocc,nvir)*norm
         self.xy = [norm_xy(z) for z in x1]

@@ -41,7 +41,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
     time_0pass = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mol, verbose)
     if '_spinor' not in intor:
-        log.warning('r_ao2mo requires spinor integrals.\n'
+        log.warn('r_ao2mo requires spinor integrals.\n'
                  'Suffix _spinor is added to %s', intor)
         intor = intor + '_spinor'
     intor, comp = gto.moleintor._get_intor_and_comp(mol._add_suffix(intor), comp)

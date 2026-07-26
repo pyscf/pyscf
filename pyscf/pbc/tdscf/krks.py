@@ -50,7 +50,7 @@ def _rebuild_df(td):
     if any(k != 0 for k in td.kshift_lst):
         if isinstance(mf.with_df, df.df.DF):
             if mf.with_df._j_only:
-                log.warning(f'Non-zero kshift is requested for {td.__class__.__name__}, '
+                log.warn(f'Non-zero kshift is requested for {td.__class__.__name__}, '
                          f'recomputing DF integrals with _j_only = False')
                 mf.with_df._j_only = False
                 mf.with_df.build()

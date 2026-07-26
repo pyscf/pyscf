@@ -144,7 +144,7 @@ class Gradients(rhf_grad.GradientsBase):
         log = logger.new_logger(self, verbose)
         log.info('\n')
         if not self.base.converged:
-            log.warning('Ground state %s not converged',
+            log.warn('Ground state %s not converged',
                      self.base.__class__.__name__)
         log.info('******** %s for %s ********',
                  self.__class__, self.base.__class__)

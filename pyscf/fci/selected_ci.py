@@ -389,7 +389,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         ci0 = _as_SCIvector(numpy.ones((1,1)), ci_strs)
         ci0 = myci.enlarge_space(ci0, h2e, norb, nelec)
         if ci0.size < nroots:
-            log.warning('''
+            log.warn('''
   Selected-CI space generated from HF ground state (by double exciting) is not enough for excited states.
   HOMO->LUMO excitations are included in the initial guess.
   NOTE: This may introduce excited states of different symmetry.\n''')

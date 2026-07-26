@@ -177,7 +177,7 @@ class SymAdaptedGHF(ghf.GHF):
             orbsym.append([irrep_id[ir]] * x.shape[1])
 
         if any(c > 1e10 for c in cond):
-            log.warning('Singularity detected in the overlap matrix. '
+            log.warn('Singularity detected in the overlap matrix. '
                      'SCF may be inaccurate and difficult to converge.')
 
         x_orth = hf_symm.so2ao_mo_coeff(symm_orb, xs)

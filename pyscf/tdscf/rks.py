@@ -155,7 +155,7 @@ class CasidaTDDFT(TDDFT, TDA):
             y = (zp - zm) * .5
             norm = lib.norm(x)**2 - lib.norm(y)**2
             if norm < 0:
-                log.warning('TDDFT amplitudes |X| smaller than |Y|')
+                log.warn('TDDFT amplitudes |X| smaller than |Y|')
             norm = abs(.5/norm)**.5  # normalize to 0.5 for alpha spin
             return (x*norm, y*norm)
 

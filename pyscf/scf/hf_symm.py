@@ -521,7 +521,7 @@ class SymAdaptedRHF(hf.RHF):
                 orbsym.append(numpy.repeat(irrep_id[ir], x.shape[1]))
 
         if any(c > 1e10 for c in cond):
-            log.warning('Singularity detected in the overlap matrix. '
+            log.warn('Singularity detected in the overlap matrix. '
                      'SCF may be inaccurate and difficult to converge.')
 
         x_orth = so2ao_mo_coeff(symm_orb, xs)
@@ -1039,10 +1039,10 @@ def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym, title='',
             log.debug('%s%s nocc = %d  HOMO = %.15g  LUMO = %.15g',
                       title, irname, nocc, e_ir[nocc-1], e_ir[nocc])
             if e_ir[nocc-1]+1e-3 > elumo:
-                log.warning('%s%s HOMO %.15g > system LUMO %.15g',
+                log.warn('%s%s HOMO %.15g > system LUMO %.15g',
                          title, irname, e_ir[nocc-1], elumo)
             if e_ir[nocc] < ehomo+1e-3:
-                log.warning('%s%s LUMO %.15g < system HOMO %.15g',
+                log.warn('%s%s LUMO %.15g < system HOMO %.15g',
                          title, irname, e_ir[nocc], ehomo)
         log.debug('   mo_energy = %s', e_ir)
 

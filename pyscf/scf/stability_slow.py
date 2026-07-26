@@ -250,7 +250,7 @@ def ghf_internal(mf, return_status=False, verbose=None):
     log = logger.new_logger(mf, verbose)
 
     if isinstance(mf, KohnShamDFT):
-        log.warning('ghf_internal: Hessian does not include XC contributions.')
+        log.warn('ghf_internal: Hessian does not include XC contributions.')
 
     mo_energy = mf.mo_energy
     mo_coeff = mf.mo_coeff

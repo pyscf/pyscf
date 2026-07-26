@@ -790,7 +790,7 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     mem_now = lib.current_memory()[0]
     max_memory = max(0, mp.max_memory - mem_now)
     if max_memory < mem_basic:
-        log.warning('Not enough memory for integral transformation. '
+        log.warn('Not enough memory for integral transformation. '
                  'Available mem %s MB, required mem %s MB',
                  max_memory, mem_basic)
 
@@ -807,7 +807,7 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     elif getattr(mp._scf, 'with_df', None):
         # To handle the PBC or custom 2-electron with 3-index tensor.
         # Call dfmp2.MP2 for efficient DF-MP2 implementation.
-        log.warning('DF-HF is found. (ia|jb) is computed based on the DF '
+        log.warn('DF-HF is found. (ia|jb) is computed based on the DF '
                  '3-tensor integrals.\n'
                  'You can switch to dfmp2.MP2 for better performance')
         log.debug('transform (ia|jb) with_df')

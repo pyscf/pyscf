@@ -94,8 +94,8 @@ class URPA(dfump2.DFUMP2):
             log.info('Lowest orbital energy difference: % 6.4e', np.min(gap))
 
         if (np.min(gap) < 1e-3):
-            log.warning('RPA code is not well-defined for degenerate systems!')
-            log.warning('Lowest orbital energy difference: % 6.4e', np.min(gap))
+            log.warn('RPA code is not well-defined for degenerate systems!')
+            log.warn('Lowest orbital energy difference: % 6.4e', np.min(gap))
 
         return e_ov
 

@@ -483,7 +483,7 @@ class _RSGDFBuilder(Int3cBuilder):
         sh_ranges = _guess_shell_ranges(cell, buflen, aosym, start=ish0, stop=ish1)
         max_buflen = max([x[2] for x in sh_ranges])
         if max_buflen > buflen:
-            log.warning('memory usage of outcore_auxe2 may be %.2f times over max_memory',
+            log.warn('memory usage of outcore_auxe2 may be %.2f times over max_memory',
                      (max_buflen/buflen - 1))
 
         bufR = np.empty((nkpts_ij, comp, max_buflen, naux))
@@ -930,7 +930,7 @@ class _RSGDFBuilder(Int3cBuilder):
                 del feri['kpts']
                 del feri['aosym']
             if dataname in feri:
-                log.warning(f'Overwritting {dataname} in {cderi_file}.')
+                log.warn(f'Overwritting {dataname} in {cderi_file}.')
                 del feri[dataname]
         else:
             feri = lib.H5FileWrap(cderi_file, 'w')

@@ -597,7 +597,7 @@ def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
             homo = mo_energy[mo_occ>0].max()
             lumo = mo_energy[mo_occ==0].min()
     if lumo is not None and homo > lumo:
-        log.warning('HOMO %s > LUMO %s was found in the canonicalized orbitals.',
+        log.warn('HOMO %s > LUMO %s was found in the canonicalized orbitals.',
                  homo, lumo)
     return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
 

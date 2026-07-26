@@ -181,7 +181,7 @@ def _sort_left_right_eigensystem(eom, right_converged, right_evals, right_evecs,
     left_idx = [idx for idx in range(len(left_evals)) if left_converged[idx]]
     right_idx = [idx for idx in range(len(right_evals)) if right_converged[idx]]
     if len(right_idx) != len(left_idx):
-        log.warning('Number of converged left and right eigenvalues are not equal.\n'
+        log.warn('Number of converged left and right eigenvalues are not equal.\n'
                  '    No. Left = %3d, No. Right = %3d.' %
                  (len(left_idx), len(right_idx)))
 
@@ -211,7 +211,7 @@ def _sort_left_right_eigensystem(eom, right_converged, right_evals, right_evecs,
                 srt_right_idx.append(ir)
                 srt_left_idx.append(il)
             else:
-                log.warning('No converged left eigenvalue corresponding to right eigenvalue '
+                log.warn('No converged left eigenvalue corresponding to right eigenvalue '
                          '%.6g (right idx=%3d).\nWill not perform perturbation on this state.'
                          % (right_evals[ir], ir))
 

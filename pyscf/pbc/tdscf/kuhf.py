@@ -502,7 +502,7 @@ class TDHF(KTDBase):
                 xs, ys = z.reshape(2,-1)
                 norm = lib.norm(xs)**2 - lib.norm(ys)**2
                 if norm < 0:
-                    log.warning('TDDFT amplitudes |X| smaller than |Y|')
+                    log.warn('TDDFT amplitudes |X| smaller than |Y|')
                 norm = abs(norm)**-.5
                 xs *= norm
                 ys *= norm

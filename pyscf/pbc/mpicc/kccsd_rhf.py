@@ -2822,7 +2822,7 @@ class _ERIS:
                 self.ooovRev  = self.feri1['ooovRev']
                 self.ovvvRev  = self.feri1['ovvvRev']
 
-                log.warning('using oovv integrals in memory')
+                log.warn('using oovv integrals in memory')
                 new_oovv = numpy.empty( (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
                 for kp in range(nkpts):
                     for kq in range(nkpts):
@@ -3081,7 +3081,7 @@ class _ERIS:
             self.ooovRev  = self.feri1['ooovRev']
             self.ovvvRev  = self.feri1['ovvvRev']
 
-            log.warning('using oovv integrals in memory')
+            log.warn('using oovv integrals in memory')
             new_oovv = numpy.empty( (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
             for kp in range(nkpts):
                 for kq in range(nkpts):

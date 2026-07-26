@@ -570,7 +570,7 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
             if 'kpts' in feri:
                 del feri['j3c-kptij']
             if dataname in feri:
-                log.warning(f'Overwritting {dataname} in {cderi_file}.')
+                log.warn(f'Overwritting {dataname} in {cderi_file}.')
                 del feri[dataname]
         else:
             feri = lib.H5FileWrap(cderi_file, 'w')

@@ -547,7 +547,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     '''Second order CASSCF driver
     '''
     log = logger.new_logger(casscf, verbose)
-    log.warning('SO-CASSCF (Second order CASSCF) is an experimental feature. '
+    log.warn('SO-CASSCF (Second order CASSCF) is an experimental feature. '
              'Its performance is bad for large systems.')
 
     cput0 = (logger.process_clock(), logger.perf_counter())
@@ -633,7 +633,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         if casscf.natorb:
             # FIXME (pyscf-2.0): Whether to transform natural orbitals in
             # active space when this flag is enabled?
-            log.warning('The attribute natorb of mcscf object affects only the '
+            log.warn('The attribute natorb of mcscf object affects only the '
                      'orbital canonicalization.\n'
                      'If you would like to get natural orbitals in active space '
                      'without touching core and external orbitals, an explicit '
@@ -802,7 +802,7 @@ class CASSCF(mc1step.CASSCF):
         except AttributeError:
             pass
         if self.mo_coeff is None:
-            log.warning('Orbital for CASSCF is not specified.  You probably need '
+            log.warn('Orbital for CASSCF is not specified.  You probably need '
                      'call SCF.kernel() to initialize orbitals.')
         return self
 

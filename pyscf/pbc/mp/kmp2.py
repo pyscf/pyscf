@@ -775,7 +775,7 @@ class KMP2(mp2.MP2):
             mo_coeff = self.mo_coeff
         if mo_energy is None or mo_coeff is None:
             log = logger.Logger(self.stdout, self.verbose)
-            log.warning('mo_coeff, mo_energy are not given.\n'
+            log.warn('mo_coeff, mo_energy are not given.\n'
                      'You may need to call mf.kernel() to generate them.')
             raise RuntimeError
 

@@ -981,7 +981,7 @@ class TDHF(TDBase):
             x, y = z.reshape(2, -1)
             norm = lib.norm(x)**2 - lib.norm(y)**2
             if norm < 0:
-                log.warning('TDDFT amplitudes |X| smaller than |Y|')
+                log.warn('TDDFT amplitudes |X| smaller than |Y|')
             norm = abs(norm)**-.5
             xy.append(((x[:nocca*nvira].reshape(nocca,nvira) * norm,  # X_alpha
                         x[nocca*nvira:].reshape(noccb,nvirb) * norm), # X_beta

@@ -89,7 +89,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
     label = casscf.mol.ao_labels()
     if (isinstance(ci, (list, tuple, RANGE_TYPE)) and
         not isinstance(casscf.fcisolver, addons.StateAverageFCISolver)):
-        log.warning('Mulitple states found in CASCI/CASSCF solver. Density '
+        log.warn('Mulitple states found in CASCI/CASSCF solver. Density '
                  'matrix of the first state is generated in .analyze() function.')
         civec = ci[0]
     else:
@@ -331,12 +331,12 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             mo_coeff1[:,idx] = mo_coeff1[:,idx].dot(c)
 
         if occ2_idx.size > 0:
-            log.warning('Active orbitals %s (occs = %s) are canonicalized with core orbitals',
+            log.warn('Active orbitals %s (occs = %s) are canonicalized with core orbitals',
                      occ2_idx, cas_occ[occ2_idx])
             full_occ2_idx = numpy.append(numpy.arange(ncore), ncore + occ2_idx)
             _diag_subfock_(full_occ2_idx)
         if occ0_idx.size > 0:
-            log.warning('Active orbitals %s (occs = %s) are canonicalized with external orbitals',
+            log.warn('Active orbitals %s (occs = %s) are canonicalized with external orbitals',
                      occ0_idx, cas_occ[occ0_idx])
             full_occ0_idx = numpy.append(ncore + occ0_idx, numpy.arange(nocc, nmo))
             _diag_subfock_(full_occ0_idx)
@@ -476,7 +476,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         if (isinstance(ci, (list, tuple, RANGE_TYPE)) and
                 not isinstance(mc.fcisolver, addons.StateAverageFCISolver)):
             if stav_dm1:
-                log.warning('Mulitple states found in CASCI solver. '
+                log.warn('Mulitple states found in CASCI solver. '
                          'Use state-average 1RDM  to compute the Fock matrix'
                          ' and natural orbitals in the active space.')
                 casdm1 = mc.fcisolver.make_rdm1(ci[0], mc.ncas, mc.nelecas)
@@ -485,7 +485,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                                                      mc.nelecas)
                 casdm1 /= len(ci)
             else:
-                log.warning('Mulitple states found in CASCI solver. '
+                log.warn('Mulitple states found in CASCI solver. '
                          'First state is used to compute the Fock matrix'
                          ' and natural orbitals in active space.')
                 casdm1 = mc.fcisolver.make_rdm1(ci[0], mc.ncas, mc.nelecas)
@@ -859,7 +859,7 @@ class CASBase(lib.StreamObject):
 
         if (getattr(self._scf, 'with_solvent', None) and
             not getattr(self, 'with_solvent', None)):
-            log.warning('''Solvent model %s was found at SCF level but not applied to the CASCI object.
+            log.warn('''Solvent model %s was found at SCF level but not applied to the CASCI object.
 The SCF solvent model will not be applied to the current CASCI calculation.
 To enable the solvent model for CASCI, the following code needs to be called
         from pyscf import solvent
@@ -1163,7 +1163,7 @@ class CASCI(CASBase):
         elif self.natorb:
             # FIXME (pyscf-2.0): Whether to transform natural orbitals in
             # active space when this flag is enabled?
-            log.warning('The attribute .natorb of mcscf object affects only the '
+            log.warn('The attribute .natorb of mcscf object affects only the '
                      'orbital canonicalization.\n'
                      'If you would like to get natural orbitals in active space '
                      'without touching core and external orbitals, an explicit '

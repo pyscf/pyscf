@@ -159,8 +159,8 @@ def energy_mcwfn(mc, mo_coeff=None, ci=None, ot=None, state=0, casdm1s=None,
     log.debug('E_j = %s', E_j)
 
     if abs(hyb_x - hyb_c) > 1e-10:
-        log.warning("exchange and correlation hybridization differ")
-        log.warning("may lead to unphysical results, see https://github.com/pyscf/pyscf-forge/issues/128")
+        log.warn("exchange and correlation hybridization differ")
+        log.warn("may lead to unphysical results, see https://github.com/pyscf/pyscf-forge/issues/128")
 
     # Note: this is not the true exchange energy, but just the HF-like exchange
     E_x = 0.0
@@ -273,7 +273,7 @@ def get_energy_decomposition(mc, mo_coeff=None, ci=None, ot=None, otxc=None,
     if ot is None: ot = mc.otfnal
     if split_x_c is None:
         split_x_c = True
-        log.warning(
+        log.warn(
             'Currently, split_x_c in get_energy_decomposition defaults to '
             'True.\nThis default will change to False in the near future.'
         )

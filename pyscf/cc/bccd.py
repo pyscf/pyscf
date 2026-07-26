@@ -246,7 +246,7 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
             dE = mycc.e_tot - e_tot_last
             e_tot_last = mycc.e_tot
             if not mycc.converged:
-                log.warning("CC not converged")
+                log.warn("CC not converged")
             if u_tot.ndim == 2:
                 t1_norm = la.norm(mycc.t1)
             else:
@@ -259,7 +259,7 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
                 break
             u = get_umat_from_t1(mycc.t1)
         else:
-            log.warning("BCC: not converged, max_cycle reached.")
+            log.warn("BCC: not converged, max_cycle reached.")
 
     # semi-canonicalization
     if canonicalization:

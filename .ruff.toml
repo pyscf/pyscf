@@ -28,8 +28,8 @@ ignore = [
     "B009",     # getattr with constant → attribute access
     "PIE808",   # range(0, n) → range(n)
     "FURB122",  # .write() in loop → .writelines()
-    "W605",     # invalid escape sequences (all in examples/)
     "SIM114",   # combine identical if-else branches
+    "G010",     # log.warn → log.warning — PySCF's Logger uses warn, not warning
     "PIE790",   # unnecessary pass
     "C408",     # tuple()/list()/dict() → literal
     "SIM118",   # key in dict.keys() → key in dict
@@ -44,9 +44,6 @@ ignore = [
     "C405",     # set(tuple) → {set}
     "SIM101",   # merge isinstance calls (same as PLR1711)
     "PLR1711",  # merge isinstance calls (style)
-    "UP034",    # non-PEP-585 annotations (needs from __future__)
-    "I001",     # import sorting (noisy diff)
-    "UP031",    # percent formatting (mostly examples)
     "SIM102",   # nested if merge (style)
     "B006",     # mutable default args (None-then-init pattern)
     "B023",     # functions in loops (all false positives)
@@ -62,13 +59,22 @@ ignore = [
     "UP030",    # implicit positional format references
 
     # ==================================================================
+    # ruff 0.16 additions — unlikely to fix / too much to fix
+    # ==================================================================
+    "I001",     # import sorting (1396 files — massive diff)
+    "UP031",    # percent formatting (1203 lines — cosmetic)
+    "UP034",    # non-PEP-585 annotations (needs from __future__ everywhere)
+    "W605",     # invalid escape sequences (all in examples/)
+    "EXE001",   # shebangs in example scripts (not executables)
+    "B008",     # function call in defaults (fundamental PySCF idiom)
+    "RUF012",   # _keys sets (intentional serialization metadata)
+    "RUF100",   # unused noqa (flake8/ruff disagreement, unresolvable)
+    "N999",     # invalid module names (historical, cannot rename)
+    "RUF059",   # unpacked variables unused (940 instances, mostly benign)
+
+    # ==================================================================
     # ruff 0.16 additions — bug risk / need review
     # ==================================================================
-    "EXE001",   # shebangs in example scripts (not executables)
-    "B008",     # function call in defaults (intentional PySCF idiom)
-    "RUF059",   # unpacked variables unused (mostly benign)
-    "RUF012",   # _keys sets (intentional serialization metadata)
-    "RUF100",   # unused noqa (flake8/ruff disagreement)
     "TRY004",   # TypeError vs RuntimeError (could break handlers)
     "SIM115",   # context manager for files (would close prematurely)
     "BLE001",   # blind except Exception (could hide real errors)
@@ -84,7 +90,6 @@ ignore = [
     "ISC004",   # unparenthesized string concat (bug was fixed)
     "TRY203",   # dead try/except (bug was fixed)
     "PLW0128",  # redeclared variable in unpack (likely intentional)
-    "N999",     # invalid module names (historical, cannot rename)
     "PLC0206",  # property returns non-callable (code smell)
     "PLW0127",  # self-assignment (potential real bugs)
     "B018",     # useless expression (needs per-site judgment)

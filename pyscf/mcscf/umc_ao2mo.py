@@ -246,7 +246,7 @@ class _ERIS:
             max_memory = max(2000, casscf.max_memory*.9-mem_now)
             if ((mem_outcore+mem_now) < casscf.max_memory*.9):
                 if max_memory < mem_basic:
-                    log.warning('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',
+                    log.warn('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',
                              (mem_outcore+mem_now)/.9, casscf.max_memory)
                 (self.jkcpp, self.jkcPP, self.jC_pp, self.jc_PP,
                  self.aapp, self.aaPP, self.AApp, self.AAPP,
