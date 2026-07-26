@@ -19,7 +19,9 @@ k1, k2 = np.random.random((2,3))
 #
 # This is analytic FT to mimic this overlap integration
 #
-s_ft = df.ft_ao.ft_aopair(cell, -k1+k2, kpti_kptj=[k1,k2], q=np.zeros(3))
+# The Gv argument must have shape (1, 3) to avoid NumPy broadcasting errors
+    # that silently produce wrong results (see issue #2961)
+    s_ft = df.ft_ao.ft_aopair(cell, (-k1+k2).reshape(1,3), kpti_kptj=[k1,k2], q=np.zeros(3))
 
 #
 # Test the overlap using numerical integration
