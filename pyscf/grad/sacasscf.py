@@ -400,8 +400,7 @@ class CASSCF_GradScanner(lib.GradScanner):
 class Gradients (lagrange.Gradients):
 
     _keys = {
-        'ngorb', 'nroots', 'spin_states', 'na_states', 'nb_states', 'nroots',
-        'nci', 'state', 'eris', 'weights', 'e_states', 'max_cycle', 'ncas',
+        'ngorb', 'nroots', 'spin_states', 'na_states', 'nb_states', 'nci', 'state', 'eris', 'weights', 'e_states', 'max_cycle', 'ncas',
         'e_cas', 'nelecas', 'mo_occ', 'mo_energy', 'mo_coeff', 'callback',
         'chkfile', 'nlag', 'frozen', 'level_shift', 'extrasym', 'fcisolver',
     }

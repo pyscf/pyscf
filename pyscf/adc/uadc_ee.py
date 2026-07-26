@@ -23996,8 +23996,7 @@ class UADCEE(uadc.UADC):
         'tol_residual', 'conv_tol', 'e_corr', 'method',
         'method_type', 'mo_coeff', 'mo_coeff_hf', 'mo_energy_a', 'mo_energy_b', 'max_memory',
         't1', 't2', 'max_space', 'max_cycle',
-        'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b', 'mo_energy_a',
-        'mo_energy_b', 'nmo_a', 'nmo_b', 'mol', 'transform_integrals',
+        'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b', 'nmo_a', 'nmo_b', 'mol', 'transform_integrals',
         'with_df', 'spec_factor_print_tol', 'evec_print_tol',
         'compute_properties', 'approx_trans_moments', 'E', 'U', 'P', 'X',
         '_make_rdm1', 'frozen', 'mo_occ'
