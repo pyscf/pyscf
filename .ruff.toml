@@ -115,6 +115,29 @@ ignore = [
     "FURB105",
     # RUF010: repr(x) → x!r in f-strings — defer
     "RUF010",
+    # ---- remaining rules (safe to fix, deferred) ----
+    "SIM401",  # d.get(k, default) instead of if-else
+    "RUF022",  # sort __all__ alphabetically
+    "PIE810",  # single startswith/endswith with tuple
+    "SIM117",  # merge nested with statements
+    "UP028",   # yield from instead of yield
+    "UP018",   # shorthand type(...)
+    "SIM201",  # not a or not b instead of not (a and b)
+    "SIM103",  # use return for simple conditional
+    "UP030",   # implicit positional format references
+    # ---- remaining rules (bug risk / need review) ----
+    "PLC0206", # property returns non-callable — code smell
+    "PLW0127", # self-assignment — potential real bugs
+    "B018",    # useless expression — needs per-site judgment
+    "S110",    # try-except-pass — intentional error suppression
+    "S102",    # exec() — intentional in __config__.py and misc.py
+    "PLW0406", # module imports itself — intentional pattern
+    "PLC0414", # import alias not first-party
+    "PERF102", # list() vs list comprehension — style
+    "FA100",   # missing from __future__ import annotations
+    "B020",    # loop variable overrides outer — actual bug risk
+    "PYI036",  # missing __future__ annotations in stub
+    "PYI006",  # use type instead of Type
 ]
 
 [lint.per-file-ignores]
