@@ -111,6 +111,10 @@ ignore = [
     "C405",
     # SIM101: merge isinstance calls — same category as PLR1711
     "SIM101",
+    # FURB105: print('') → print() — defer
+    "FURB105",
+    # RUF010: repr(x) → x!r in f-strings — defer
+    "RUF010",
 ]
 
 [lint.per-file-ignores]
