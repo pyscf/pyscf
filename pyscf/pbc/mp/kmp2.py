@@ -538,6 +538,17 @@ def get_frozen_mask(mp):
 
     '''
     moidx = [np.ones(x.size, dtype=bool) for x in mp.mo_occ]
+
+    # Exclude linearly-dependent orbitals removed during SCF via canonical
+    # orthogonalization (flagged with INVALID_ORBITAL_ENERGY).  get_nmo already
+    # excludes them from the MO count; without this matching exclusion here the
+    # frozen mask has more True entries than get_nmo reports, causing a shape
+    # mismatch in padded_mo_coeff. Fixes #3298.
+    if hasattr(mp, 'mo_energy') and mp.mo_energy is not None:
+        from pyscf.pbc.scf.hf import INVALID_ORBITAL_ENERGY
+        for idx, e in zip(moidx, mp.mo_energy):
+            idx[np.asarray(e) == INVALID_ORBITAL_ENERGY] = False
+
     if mp.frozen is None:
         pass
     elif isinstance(mp.frozen, (int, np.integer)):
