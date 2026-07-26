@@ -64,6 +64,14 @@ ignore = [
     "BLE001",
     # PLR1704: redefining argument with local name — may mask real bugs
     "PLR1704",
+    # PIE790: unnecessary pass — style preference
+    "PIE790",
+    # C408: tuple()/dict()/list() → literal — trivial, manual change
+    "C408",
+    # TRY002: bare Exception → custom exception — needs per-site exception classes
+    "TRY002",
+    # TRY201: raise e → bare raise — changes traceback semantics
+    "TRY201",
 ]
 
 [lint.per-file-ignores]
