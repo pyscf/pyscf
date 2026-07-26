@@ -95,9 +95,14 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
     # the second term is the source of h_ps
     h_ps = numpy.einsum('pqqs->ps', eri)
     eri1 = eri * 2
+    # Guard against divide-by-zero when nelec[i] == 0 (fixes #3091).
+    # When no electrons of a given spin are present, the 2-electron
+    # correction term for that spin is physically zero.
+    alpha_factor = h_ps / nelec[0] if nelec[0] > 0 else 0
+    beta_factor = h_ps / nelec[1] if nelec[1] > 0 else 0
     for k in range(norb):
-        eri1[:,:,k,k] += h_ps/nelec[0]
-        eri1[k,k,:,:] += h_ps/nelec[1]
+        eri1[:,:,k,k] += alpha_factor
+        eri1[k,k,:,:] += beta_factor
     eri1 = ao2mo.restore(4, eri1, norb)
     # (bb|aa)
     libfci.SCIcontract_2e_bbaa(eri1.ctypes.data_as(ctypes.c_void_p),
