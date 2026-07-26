@@ -33,7 +33,7 @@ try:
     from pyscf.tdscf.rks import TDRKS
     from pyscf.tdscf.uks import TDUKS
     from pyscf.tdscf.gks import TDGKS
-except (ImportError, IOError):
+except (OSError, ImportError):
     pass
 
 

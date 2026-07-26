@@ -254,7 +254,7 @@ import ctypes
 from pyscf.lib import load_library
 try:
     libsolvent = load_library('libsolvent')
-except (IOError, NameError):
+except (OSError, NameError):
     libsolvent = None
 
 def get_cds_legacy(smdobj):

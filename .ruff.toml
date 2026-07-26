@@ -88,6 +88,10 @@ ignore = [
     "RET501",
     # FLY002: join → f-string — cosmetic
     "FLY002",
+    # UP036: outdated Python version blocks — needs per-site review
+    "UP036",
+    # PLR1722: exit() → sys.exit() — not auto-fixable
+    "PLR1722",
 ]
 
 [lint.per-file-ignores]

@@ -689,7 +689,7 @@ def _make_eris_outcore(cc, eris, fao2mo):
     return eris
 
 
-class _PhysicistsERIs():
+class _PhysicistsERIs:
     def __init__(self, cell=None):
         self.cell = cell
         self.kpts = None

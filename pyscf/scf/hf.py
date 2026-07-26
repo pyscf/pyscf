@@ -2039,7 +2039,7 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         elif key[:3] == 'chk':
             try:
                 dm = self.init_guess_by_chkfile()
-            except (IOError, KeyError):
+            except (OSError, KeyError):
                 logger.warn(self, 'Fail in reading %s. Use MINAO initial guess',
                             self.chkfile)
                 dm = self.init_guess_by_minao(mol)

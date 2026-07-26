@@ -11,7 +11,7 @@ from . import tools
 from . import x2c
 try:
     from . import dft
-except (ImportError, IOError):
+except (OSError, ImportError):
     pass
 
 # Note the mpicc module implicitly import mpi4py. This module should not be
