@@ -21,123 +21,82 @@ ignore = [
 # Other:
 "E701", "E713", "E721", "E731", "E741", "E275",
     "F401", "F403", "C901", "W391",
-    # ruff 0.16 additions:
-    # EXE001: shebangs in example scripts (documentation, not binaries)
-    "EXE001",
-    # B008: function calls in defaults are idiomatic in PySCF (e.g. getattr, np.zeros)
-    "B008",
-    # UP031: percent-formatting, overwhelmingly in examples — noisy, not a bug
-    "UP031",
-    # PLR1711: merging isinstance calls is a style preference
-    "PLR1711",
-    # UP034: non-PEP-585 annotations require from __future__ imports across many files
-    "UP034",
-    # RUF059: unpacked variables unused (e.g. nocc, nvir = shape where nvir unused), mostly benign
-    "RUF059",
-    # I001: import sorting — adds blank lines between sections, noisy diff
-    "I001",
-    # RUF012: mutable class attributes — _keys sets are intentional serialization metadata
-    "RUF012",
-    # RUF100: unused noqa — flake8 needs noqa comments that ruff doesn't agree on
-    "RUF100",
-    # B023: functions in loops — all false positives (consumed sync within same iteration)
-    "B023",
-    # B006: mutable default args — mostly intentional defaults in library code
-    "B006",
-    # SIM102: nested if → single if with and — style preference
-    "SIM102",
-    # TRY004: TypeError instead of RuntimeError — semantic change, could break handlers
-    "TRY004",
-    # B009: getattr with constant attribute — style preference
-    "B009",
-    # PIE808: range(0, n) → range(n) — trivial, not worth diff
-    "PIE808",
-    # FURB122: .write() in for-loop → .writelines() — all in pywannier90.py/chgcar.py
-    "FURB122",
-    # W605: invalid escape sequences — all in examples/, zero in pyscf/
-    "W605",
-    # SIM115: context manager for files — long-lived handles, with would close prematurely
-    "SIM115",
-    # SIM114: combine identical if-else bodies — intentional separate branches
-    "SIM114",
-    # BLE001: blind except Exception — requires per-site knowledge to fix properly
-    "BLE001",
-    # PLR1704: redefining argument with local name — may mask real bugs
-    "PLR1704",
-    # PIE790: unnecessary pass — style preference
-    "PIE790",
-    # C408: tuple()/dict()/list() → literal — trivial, manual change
-    "C408",
-    # TRY002: bare Exception → custom exception — needs per-site exception classes
-    "TRY002",
-    # TRY201: raise e → bare raise — changes traceback semantics
-    "TRY201",
-    # SIM118: key in dict.keys() → key in dict — explicit intent
-    "SIM118",
-    # PLR1736: list index lookup in enumerate loop — safe fix, defer
-    "PLR1736",
-    # SIM113: use enumerate() for manual index — manual refactor needed
-    "SIM113",
-    # PLR1716: chain boolean comparison — safe fix, defer
-    "PLR1716",
-    # SIM223: False and ... → False — intentional dead feature gate code
-    "SIM223",
-    # RUF051: if k in d: del d[k] → d.pop(k, None) — defer
-    "RUF051",
-    # RET501: return None → return — defer
-    "RET501",
-    # FLY002: join → f-string — cosmetic
-    "FLY002",
-    # UP036: outdated Python version blocks — needs per-site review
-    "UP036",
-    # PLR1722: exit() → sys.exit() — not auto-fixable
-    "PLR1722",
-    # D419: empty docstring — defer
-    "D419",
-    # PLR0206: property with extra parameter — intentional caching pattern
-    "PLR0206",
-    # PLW1508: invalid env var default type — works in practice
-    "PLW1508",
-    # PLW0642: reassigned self — intentional decorator pattern
-    "PLW0642",
-    # ISC004, TRY203: fixed genuine bugs
-    "ISC004",
-    "TRY203",
-    # PLW0128: redeclared variable in tuple unpack — likely intentional duplicate nmo
-    "PLW0128",
-    # N999: invalid module names — historical naming, cannot rename
-    "N999",
-    # C405: set(tuple) → {set} — defer
-    "C405",
-    # SIM101: merge isinstance calls — same category as PLR1711
-    "SIM101",
-    # FURB105: print('') → print() — defer
-    "FURB105",
-    # RUF010: repr(x) → x!r in f-strings — defer
-    "RUF010",
-    # ---- remaining rules (safe to fix, deferred) ----
-    "SIM401",  # d.get(k, default) instead of if-else
-    "RUF022",  # sort __all__ alphabetically
-    "PIE810",  # single startswith/endswith with tuple
-    "SIM117",  # merge nested with statements
-    "UP028",   # yield from instead of yield
-    "UP018",   # shorthand type(...)
-    "SIM201",  # not a or not b instead of not (a and b)
-    "SIM103",  # use return for simple conditional
-    "UP030",   # implicit positional format references
-    # ---- remaining rules (bug risk / need review) ----
-    "PLC0206", # property returns non-callable — code smell
-    "PLW0127", # self-assignment — potential real bugs
-    "B018",    # useless expression — needs per-site judgment
-    "S110",    # try-except-pass — intentional error suppression
-    "S102",    # exec() — intentional in __config__.py and misc.py
-    "PLW0406", # module imports itself — intentional pattern
-    "PLC0414", # import alias not first-party
-    "PERF102", # list() vs list comprehension — style
-    "FA100",   # missing from __future__ import annotations
-    "B020",    # loop variable overrides outer — actual bug risk
-    "PYI036",  # missing __future__ annotations in stub
-    "PYI006",  # use type instead of Type
+
+    # ==================================================================
+    # ruff 0.16 additions — safe to fix, deferred
+    # ==================================================================
+    "B009",     # getattr with constant → attribute access
+    "PIE808",   # range(0, n) → range(n)
+    "FURB122",  # .write() in loop → .writelines()
+    "W605",     # invalid escape sequences (all in examples/)
+    "SIM114",   # combine identical if-else branches
+    "PIE790",   # unnecessary pass
+    "C408",     # tuple()/list()/dict() → literal
+    "SIM118",   # key in dict.keys() → key in dict
+    "PLR1736",  # list index lookup in enumerate loop
+    "SIM113",   # use enumerate() for manual index
+    "PLR1716",  # chain boolean comparison
+    "RUF051",   # d.pop(k, None)
+    "RET501",   # return None → return
+    "FLY002",   # join → f-string
+    "RUF010",   # repr(x) → x!r in f-strings
+    "FURB105",  # print('') → print()
+    "C405",     # set(tuple) → {set}
+    "SIM101",   # merge isinstance calls (same as PLR1711)
+    "PLR1711",  # merge isinstance calls (style)
+    "UP034",    # non-PEP-585 annotations (needs from __future__)
+    "I001",     # import sorting (noisy diff)
+    "UP031",    # percent formatting (mostly examples)
+    "SIM102",   # nested if merge (style)
+    "B006",     # mutable default args (None-then-init pattern)
+    "B023",     # functions in loops (all false positives)
+    "UP036",    # outdated Python version blocks
+    "SIM401",   # d.get(k, default) instead of if-else
+    "RUF022",   # sort __all__ alphabetically
+    "PIE810",   # single startswith/endswith with tuple
+    "SIM117",   # merge nested with statements
+    "UP028",    # yield from instead of yield
+    "UP018",    # shorthand type(...)
+    "SIM201",   # not a or not b instead of not (a and b)
+    "SIM103",   # use return for simple conditional
+    "UP030",    # implicit positional format references
+
+    # ==================================================================
+    # ruff 0.16 additions — bug risk / need review
+    # ==================================================================
+    "EXE001",   # shebangs in example scripts (not executables)
+    "B008",     # function call in defaults (intentional PySCF idiom)
+    "RUF059",   # unpacked variables unused (mostly benign)
+    "RUF012",   # _keys sets (intentional serialization metadata)
+    "RUF100",   # unused noqa (flake8/ruff disagreement)
+    "TRY004",   # TypeError vs RuntimeError (could break handlers)
+    "SIM115",   # context manager for files (would close prematurely)
+    "BLE001",   # blind except Exception (could hide real errors)
+    "PLR1704",  # redefining argument (may mask real bugs)
+    "TRY002",   # bare Exception → custom (needs per-site classes)
+    "TRY201",   # raise e → bare raise (changes traceback)
+    "SIM223",   # False and ... (intentional dead feature gate)
+    "PLR1722",  # exit() → sys.exit() (not auto-fixable)
+    "D419",     # empty docstring (needs content)
+    "PLR0206",  # property with extra param (intentional caching)
+    "PLW1508",  # invalid env var default type (works in practice)
+    "PLW0642",  # reassigned self (intentional decorator)
+    "ISC004",   # unparenthesized string concat (bug was fixed)
+    "TRY203",   # dead try/except (bug was fixed)
+    "PLW0128",  # redeclared variable in unpack (likely intentional)
+    "N999",     # invalid module names (historical, cannot rename)
+    "PLC0206",  # property returns non-callable (code smell)
+    "PLW0127",  # self-assignment (potential real bugs)
+    "B018",     # useless expression (needs per-site judgment)
+    "S110",     # try-except-pass (intentional error suppression)
+    "S102",     # exec() (intentional in __config__.py and misc.py)
+    "PLW0406",  # module imports itself (intentional pattern)
+    "PLC0414",  # import alias not first-party
+    "PERF102",  # list() vs list comprehension (style)
+    "FA100",    # missing from __future__ import annotations
+    "B020",     # loop variable overrides outer (actual bug risk)
+    "PYI036",   # missing __future__ annotations in stub
+    "PYI006",   # use type instead of Type
 ]
 
 [lint.per-file-ignores]
