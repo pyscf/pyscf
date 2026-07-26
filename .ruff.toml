@@ -103,6 +103,14 @@ ignore = [
     # ISC004, TRY203: fixed genuine bugs
     "ISC004",
     "TRY203",
+    # PLW0128: redeclared variable in tuple unpack — likely intentional duplicate nmo
+    "PLW0128",
+    # N999: invalid module names — historical naming, cannot rename
+    "N999",
+    # C405: set(tuple) → {set} — defer
+    "C405",
+    # SIM101: merge isinstance calls — same category as PLR1711
+    "SIM101",
 ]
 
 [lint.per-file-ignores]
