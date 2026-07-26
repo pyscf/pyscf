@@ -227,7 +227,7 @@ TriChloroEthene                        3.422
 TriEthylAmine                          2.3832
 Xylene-mixture                         2.3879
 z-1,2-DiChloroEthene                   9.2
-'''  # noqa: E501
+'''
 
 import ctypes
 import numpy

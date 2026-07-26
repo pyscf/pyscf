@@ -21,7 +21,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.gto import ATM_SLOTS, BAS_SLOTS, ATOM_OF, PTR_COORD
-from pyscf.pbc.lib.kpts_helper import get_kconserv, get_kconserv3  # noqa
+from pyscf.pbc.lib.kpts_helper import get_kconserv, get_kconserv3
 from pyscf.pbc.lib.kpts_helper import intersection
 from pyscf import __config__
 
@@ -69,10 +69,10 @@ def _ifftn_blas(g, mesh):
 
 nproc = lib.num_threads()
 
-def _fftn_wrapper(a):  # noqa
+def _fftn_wrapper(a):
     return scipy.fft.fftn(a, axes=(1,2,3), workers=nproc)
 
-def _ifftn_wrapper(a):  # noqa
+def _ifftn_wrapper(a):
     return scipy.fft.ifftn(a, axes=(1,2,3), workers=nproc)
 
 if FFT_ENGINE == 'FFTW':
@@ -106,10 +106,10 @@ if FFT_ENGINE == 'FFTW':
                ctypes.c_int(rank))
         return out
 
-    def _fftn_wrapper(a):  # noqa
+    def _fftn_wrapper(a):  # noqa: F811
         mesh = a.shape[1:]
         return _complex_fftn_fftw(a, mesh, 'fft')
-    def _ifftn_wrapper(a):  # noqa
+    def _ifftn_wrapper(a):  # noqa: F811
         mesh = a.shape[1:]
         return _complex_fftn_fftw(a, mesh, 'ifft')
 
@@ -119,9 +119,9 @@ elif FFT_ENGINE == 'PYFFTW':
         import pyfftw
         pyfftw.config.PLANNER_EFFORT = 'FFTW_MEASURE'
         pyfftw.interfaces.cache.enable()
-        def _fftn_wrapper(a):  # noqa
+        def _fftn_wrapper(a):
             return pyfftw.interfaces.numpy_fft.fftn(a, axes=(1,2,3), threads=nproc)
-        def _ifftn_wrapper(a):  # noqa
+        def _ifftn_wrapper(a):
             return pyfftw.interfaces.numpy_fft.ifftn(a, axes=(1,2,3), threads=nproc)
     except ImportError:
         print('PyFFTW not installed. SciPy fft module will be used.')
@@ -132,13 +132,13 @@ elif FFT_ENGINE == 'NUMPY+BLAS':
                 167,173,179,181,191,193,197,199,211,223,227,229,233,239,241,251,
                 257,263,269,271,277,281,283,293]
     _EXCLUDE = set(_EXCLUDE + [n*2 for n in _EXCLUDE[:30]] + [n*3 for n in _EXCLUDE[:20]])
-    def _fftn_wrapper(a):  # noqa
+    def _fftn_wrapper(a):
         mesh = a.shape[1:]
         if mesh[0] in _EXCLUDE and mesh[1] in _EXCLUDE and mesh[2] in _EXCLUDE:
             return _fftn_blas(a, mesh)
         else:
             return scipy.fft.fftn(a, axes=(1,2,3), workers=nproc)
-    def _ifftn_wrapper(a):  # noqa
+    def _ifftn_wrapper(a):
         mesh = a.shape[1:]
         if mesh[0] in _EXCLUDE and mesh[1] in _EXCLUDE and mesh[2] in _EXCLUDE:
             return _ifftn_blas(a, mesh)
@@ -146,10 +146,10 @@ elif FFT_ENGINE == 'NUMPY+BLAS':
             return scipy.fft.ifftn(a, axes=(1,2,3), workers=nproc)
 
 elif FFT_ENGINE == 'BLAS':
-    def _fftn_wrapper(a):  # noqa
+    def _fftn_wrapper(a):
         mesh = a.shape[1:]
         return _fftn_blas(a, mesh)
-    def _ifftn_wrapper(a):  # noqa
+    def _ifftn_wrapper(a):
         mesh = a.shape[1:]
         return _ifftn_blas(a, mesh)
 

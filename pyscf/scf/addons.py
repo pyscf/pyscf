@@ -28,7 +28,7 @@ from pyscf.lib.scipy_helper import pivoted_cholesky
 from pyscf import __config__
 # The smearing utilities were moved to a separate module. They were implemented
 # in the addons module. Import them into this namespace for backward compatibility
-from pyscf.scf.smearing import (  # noqa
+from pyscf.scf.smearing import (
     SMEARING_METHOD,
     smearing,
     smearing_,

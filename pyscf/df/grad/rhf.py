@@ -435,7 +435,7 @@ def _gen_metric_solver(int2c, decompose_j2c='CD', lindep=LINEAR_DEP_THRESHOLD):
     mask = w > lindep
     v1 = v[:,mask]
     j2c = lib.dot(v1/w[mask], v1.conj().T)
-    def j2c_solver(v): # noqa: F811
+    def j2c_solver(v):
         if v.ndim == 2:
             return lib.dot(j2c, v)
         else:

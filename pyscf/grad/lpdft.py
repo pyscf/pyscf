@@ -194,8 +194,8 @@ def get_ontop_response(
             logger.info(
                 mc,
                 (
-                    f"L-PDFT gradient memory note: working on {ip1 - ip0} grid points: estimated puvx usage = {puvx_mem:.1f} of {remaining_mem:.1f} "
-                    "remaining MB"
+                    f"L-PDFT gradient memory note: working on {ip1 - ip0} grid points: "
+                    f"estimated puvx usage = {puvx_mem:.1f} of {remaining_mem:.1f} remaining MB"
                 ),
             )
 

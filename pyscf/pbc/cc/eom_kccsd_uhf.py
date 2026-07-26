@@ -29,10 +29,10 @@ from pyscf.lib import logger
 from pyscf.pbc.cc import eom_kccsd_ghf as eom_kgccsd
 from pyscf.pbc.cc import kccsd
 from pyscf.pbc.lib import kpts_helper
-from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.pbc.cc import kintermediates_uhf
 from pyscf.pbc.mp.kump2 import (get_frozen_mask, get_nocc, get_nmo,
-                                padded_mo_coeff, padding_k_idx)  # noqa
+                                padded_mo_coeff, padding_k_idx)
 
 einsum = lib.einsum
 
@@ -1087,9 +1087,9 @@ class _IMDS:
         t1, t2, eris = self.t1, self.t2, self.eris
 
         # 0 or 1 virtuals
-        self.Woooo, self.WooOO, _         , self.WOOOO = kintermediates_uhf.Woooo(self._cc, t1, t2, eris)  # noqa: E501
-        self.Wooov, self.WooOV, self.WOOov, self.WOOOV = kintermediates_uhf.Wooov(self._cc, t1, t2, eris, kconserv)  # noqa: E501
-        self.Woovo, self.WooVO, self.WOOvo, self.WOOVO = kintermediates_uhf.Woovo(self._cc, t1, t2, eris)  # noqa: E501
+        self.Woooo, self.WooOO, _         , self.WOOOO = kintermediates_uhf.Woooo(self._cc, t1, t2, eris)
+        self.Wooov, self.WooOV, self.WOOov, self.WOOOV = kintermediates_uhf.Wooov(self._cc, t1, t2, eris, kconserv)
+        self.Woovo, self.WooVO, self.WOOvo, self.WOOVO = kintermediates_uhf.Woovo(self._cc, t1, t2, eris)
 
         self.made_ip_imds = True
         logger.timer_debug1(self, 'EOM-KUCCSD IP intermediates', *cput0)

@@ -32,7 +32,7 @@ from pyscf import ao2mo
 from pyscf import symm
 from pyscf.lib import logger
 from pyscf.scf import hf_symm
-from pyscf.scf import _response_functions # noqa
+from pyscf.scf import _response_functions
 from pyscf.gto.ppnl_velgauge import get_gth_pp_nl_velgauge_commutator
 from pyscf.data import nist
 from pyscf.tdscf._lr_eig import eigh as lr_eigh, eig as lr_eig, real_eig

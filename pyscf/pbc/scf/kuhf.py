@@ -34,7 +34,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.data import nist
 from pyscf.pbc.scf import addons
-from pyscf.pbc.scf import chkfile  # noqa
+from pyscf.pbc.scf import chkfile
 from pyscf import __config__
 
 PRE_ORTH_METHOD = getattr(__config__, 'pbc_scf_analyze_pre_orth_method', 'ANO')

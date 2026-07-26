@@ -1809,7 +1809,7 @@ class SCF(lib.StreamObject):
     def __getattr__(self, key):
         '''Accessing methods post-HF methods or mean-field properties'''
         # Import all available modules, then retry accessing the attribute
-        from pyscf import __all__  # noqa
+        from pyscf import __all__
         return object.__getattribute__(self, key)
 
     def build(self, mol=None):

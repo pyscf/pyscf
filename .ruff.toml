@@ -36,7 +36,21 @@ ignore = [
     "RUF059",
     # I001: import sorting — adds blank lines between sections, noisy diff
     "I001",
+    # RUF012: mutable class attributes — _keys sets are intentional serialization metadata
+    "RUF012",
+    # RUF100: unused noqa — flake8 needs noqa comments that ruff doesn't agree on
+    "RUF100",
 ]
+
+[lint.per-file-ignores]
+"pyscf/adc/radc_ao2mo.py" = ["E501"]
+"pyscf/adc/uadc_ao2mo.py" = ["E501"]
+"pyscf/gto/mole.py" = ["E501"]
+"pyscf/pbc/cc/eom_kccsd_rhf.py" = ["E501"]
+"pyscf/pbc/cc/kintermediates_uhf.py" = ["E501"]
+"pyscf/pbc/gto/cell.py" = ["E501"]
+"pyscf/solvent/ddcosmo.py" = ["E501"]
+"pyscf/solvent/grad/ddcosmo_grad.py" = ["E501"]
 
 [format]
 # Like Black, indent with spaces, rather than tabs.

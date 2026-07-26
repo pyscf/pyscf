@@ -23,7 +23,7 @@ from pyscf.tdscf import ghf, gks
 from pyscf.x2c import x2c
 from pyscf.x2c import dft as x2c_dft
 # To ensure .gen_response() methods are registered
-from pyscf.x2c import _response_functions  # noqa
+from pyscf.x2c import _response_functions
 from pyscf import __config__
 
 OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_uhf_get_nto_threshold', 0.3)

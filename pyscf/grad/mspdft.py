@@ -519,9 +519,12 @@ class Gradients (mcpdft_grad.Gradients):
             deltaorb, deltaci, deltais = self.unpack_uniq_var (deltax)
             gci_norm = linalg.norm (np.asarray (gci).ravel ())
             deltaci_norm = linalg.norm (np.asarray (deltaci).ravel ())
-            logger.info(self, (f'Lagrange optimization iteration {itvec[0]}, |gorb| = '
-                f'{linalg.norm (gorb)}, |gci| = {gci_norm}, |gis| = {linalg.norm (gis)} |dLorb| = {linalg.norm (deltaorb)}, |dLci| = {deltaci_norm}, |dLis|'
-                f' = {linalg.norm (deltais)}'))
+            dLorb_norm = linalg.norm(deltaorb)
+            dLis_norm = linalg.norm(deltais)
+            logger.info(self,
+                f'Lagrange optimization iteration {itvec[0]}, |gorb| = {linalg.norm(gorb)}, '
+                f'|gci| = {gci_norm}, |gis| = {linalg.norm(gis)} '
+                f'|dLorb| = {dLorb_norm}, |dLci| = {deltaci_norm}, |dLis| = {dLis_norm}')
             _debug_csfs (gci, 'gci')
             _debug_csfs (deltaci, 'dLci')
             Lvec_last[:] = x[:]

@@ -523,7 +523,9 @@ def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logge
                 if batchsize < 1:
                     raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY).')
                 logger.debug2(f'    Batch size: {batchsize:d} (of {nvirt[s1]:d})')
-                logger.debug2(f'      Pij formation - MO {i:d} ({s1_str:s}), batch size {batchsize:d} (of {nvirt[s1]:d})')
+                logger.debug2(
+                    f'      Pij formation - MO {i:d} ({s1_str:s}), '
+                    f'batch size {batchsize:d} (of {nvirt[s1]:d})')
                 for astart in range(0, nvirt[s1], batchsize):
                     aend = min(astart+batchsize, nvirt[s1])
                     tbatch = tiset[:, astart:aend, :]
@@ -546,7 +548,9 @@ def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logge
                     batchsize = min(nocc_act[s2], batchsize)
                     if batchsize < 1:
                         raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY).')
-                    logger.debug2(f'      Gamma ({s2_str:s}) formation - MO {i:d} ({s1_str:s}), batch size {batchsize:d} (of {nocc_act[s2]:d})')
+                    logger.debug2(
+                        f'      Gamma ({s2_str:s}) formation - MO {i:d} ({s1_str:s}), '
+                        f'batch size {batchsize:d} (of {nocc_act[s2]:d})')
                     if s1 == s2:
                         prefactor = 2.0 * pt
                     else:

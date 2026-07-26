@@ -1296,7 +1296,7 @@ def loads(molstr):
     '''Deserialize a str containing a JSON document to a Mole object.
     '''
     # the numpy function array is used by eval function
-    from numpy import array  # noqa
+    from numpy import array
     moldic = json.loads(molstr)
     mol = Mole()
     mol.__dict__.update(moldic)
@@ -2306,7 +2306,7 @@ class MoleBase(lib.StreamObject):
     >>> mol.charge = 1
     >>> mol.build()
     <class 'pyscf.gto.mole.Mole'> has no attributes Charge
-    '''  # noqa: E501
+    '''
 
     output = None
     max_memory = param.MAX_MEMORY
@@ -3788,7 +3788,7 @@ class Mole(MoleBase):
 
         # Import all available modules. Some methods are registered to other
         # classes/modules when importing modules in __all__.
-        from pyscf import __all__  # noqa
+        from pyscf import __all__
         from pyscf import scf, dft
 
         attr_name = key

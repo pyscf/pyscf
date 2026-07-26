@@ -32,9 +32,9 @@ from pyscf.pbc import scf
 from pyscf.cc import uccsd
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.lib.kpts_helper import gamma_point
-from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.pbc.mp.kump2 import (get_frozen_mask, get_nocc, get_nmo,
-                                padded_mo_coeff, padding_k_idx)  # noqa
+                                padded_mo_coeff, padding_k_idx)
 from pyscf.pbc.cc import kintermediates_uhf
 from pyscf import __config__
 

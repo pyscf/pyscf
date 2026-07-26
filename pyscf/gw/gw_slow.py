@@ -253,7 +253,9 @@ def kernel(imds, orbs=None, linearized=False, eta=1e-3, tol=1e-9, method="fallba
     # Check implementation consistency
     _orbs = imds.entire_space
     if not isinstance(_orbs, list) or not len(_orbs) == imds.orb_dims:
-        raise RuntimeError(f"The object returned by 'imds.entire_space' is not a list of length {imds.orb_dims:d}: {repr(_orbs)}")
+        raise RuntimeError(
+            f"The object returned by 'imds.entire_space' is not a list of length {imds.orb_dims:d}: "
+            f"{repr(_orbs)}")
 
     # Assign default value
     if orbs is None:
@@ -305,7 +307,8 @@ def kernel(imds, orbs=None, linearized=False, eta=1e-3, tol=1e-9, method="fallba
                     gw_energies[i_p] = newton(debug, imds.initial_guess(p), tol=tol, maxiter=100)
                 except RuntimeError:
                     logger.warn(imds.td._scf,
-                                f"Failed to converge with newton, using bisect on the interval [{min(debug.x):.3e}, {max(debug.x):.3e}]")
+                                f"Failed to converge with newton, using bisect on the interval "
+                                f"[{min(debug.x):.3e}, {max(debug.x):.3e}]")
                     gw_energies[i_p] = bisect(debug, min(debug.x), max(debug.x), xtol=tol, maxiter=100)
 
     return gw_energies
