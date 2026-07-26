@@ -29,7 +29,6 @@ ignore = [
     "PIE808",   # range(0, n) → range(n)
     "FURB122",  # .write() in loop → .writelines()
     "SIM114",   # combine identical if-else branches
-    "G010",     # log.warn → log.warning — PySCF's Logger uses warn, not warning
     "PIE790",   # unnecessary pass
     "C408",     # tuple()/list()/dict() → literal
     "SIM118",   # key in dict.keys() → key in dict
@@ -54,9 +53,10 @@ ignore = [
     "SIM117",   # merge nested with statements
     "UP028",    # yield from instead of yield
     "UP018",    # shorthand type(...)
-    "SIM201",   # not a or not b instead of not (a and b)
-    "SIM103",   # use return for simple conditional
+    "SIM201",   # not a == b → a != b
+    "SIM103",   # if-return bool → return bool(x)
     "UP030",    # implicit positional format references
+    "FURB161",  # bin(x).count('1') → x.bit_count()
 
     # ==================================================================
     # ruff 0.16 additions — unlikely to fix / too much to fix
@@ -71,6 +71,16 @@ ignore = [
     "RUF100",   # unused noqa (flake8/ruff disagreement, unresolvable)
     "N999",     # invalid module names (historical, cannot rename)
     "RUF059",   # unpacked variables unused (940 instances, mostly benign)
+    "G010",     # log.warn → log.warning — PySCF's Logger defines warn, not warning
+
+    # ==================================================================
+    # ruff 0.16 additions — need newer Python
+    # ==================================================================
+    "UP006",    # Tuple[int] → tuple[int] — requires Python 3.9+
+    "UP007",    # Union[X, Y] → X | Y — requires Python 3.10+
+    "UP035",    # typing.Tuple deprecated — requires Python 3.9+
+    "FURB188",  # str.removeprefix() — requires Python 3.9+
+    "RUF007",   # zip(x[:-1], x[1:]) → itertools.pairwise() — requires Python 3.10+
 
     # ==================================================================
     # ruff 0.16 additions — bug risk / need review
@@ -90,18 +100,18 @@ ignore = [
     "ISC004",   # unparenthesized string concat (bug was fixed)
     "TRY203",   # dead try/except (bug was fixed)
     "PLW0128",  # redeclared variable in unpack (likely intentional)
-    "PLC0206",  # property returns non-callable (code smell)
+    "PLC0206",  # use .items() instead of dict[key] in loop
     "PLW0127",  # self-assignment (potential real bugs)
     "B018",     # useless expression (needs per-site judgment)
     "S110",     # try-except-pass (intentional error suppression)
     "S102",     # exec() (intentional in __config__.py and misc.py)
     "PLW0406",  # module imports itself (intentional pattern)
-    "PLC0414",  # import alias not first-party
-    "PERF102",  # list() vs list comprehension (style)
+    "PLC0414",  # useless import alias (import x as x)
+    "PERF102",  # use .keys()/.values() instead of .items()
     "FA100",    # missing from __future__ import annotations
     "B020",     # loop variable overrides outer (actual bug risk)
-    "PYI036",   # missing __future__ annotations in stub
-    "PYI006",   # use type instead of Type
+    "PYI036",   # __exit__ missing exception parameters
+    "PYI006",   # sys.version_info comparison — use < or >= only
 ]
 
 [lint.per-file-ignores]
