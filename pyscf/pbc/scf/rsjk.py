@@ -337,7 +337,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
         is_complex_dm = dm_imag_max > 1e-6
         if is_complex_dm:
             if dm_imag_max < 1e-2:
-                log.warn('DM in (BvK) cell has small imaginary part.  '
+                log.warning('DM in (BvK) cell has small imaginary part.  '
                          'It may be a signal of symmetry broken in k-point symmetry')
             sc_dm = np.vstack([sc_dm.real, sc_dm.imag])
             self.purify = False
@@ -426,7 +426,7 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             kpts_band = np.reshape(kpts_band, (-1, 3))
             subset_only = intersection(kpts, kpts_band).size == len(kpts_band)
             if not subset_only:
-                log.warn('Approximate J/K matrices at kpts_band '
+                log.warning('Approximate J/K matrices at kpts_band '
                          'with the bvk-cell derived from kpts')
                 expLk = np.exp(1j*np.dot(supmol.bvkmesh_Ls, kpts_band.T))
         vs = lib.einsum('snpRq,Rk->snkpq', vs, expLk)

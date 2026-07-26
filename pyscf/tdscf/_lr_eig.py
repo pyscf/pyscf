@@ -86,7 +86,7 @@ def eigh(aop, x0, precond, tol_residual=1e-5, lindep=1e-12, nroots=1,
 
     max_space = int(max_memory*1e6/8/x0_size / 2 - nroots - space_inc)
     if max_space < nroots * 4 < x0_size:
-        log.warn('Not enough memory to store trial space in _lr_eig.eigh')
+        log.warning('Not enough memory to store trial space in _lr_eig.eigh')
     max_space = max(max_space, nroots * 4)
     max_space = min(max_space, x0_size)
     log.debug(f'Set max_space {max_space}, space_inc {space_inc}')
@@ -224,7 +224,7 @@ def eigh(aop, x0, precond, tol_residual=1e-5, lindep=1e-12, nroots=1,
     x0 = xs[:nroots]
     # Check whether the solver finds enough eigenvectors.
     if len(x0) < min(x0_size, nroots):
-        log.warn(f'Not enough eigenvectors (len(x0)={len(x0)}, nroots={nroots})')
+        log.warning(f'Not enough eigenvectors (len(x0)={len(x0)}, nroots={nroots})')
 
     return conv, e, x0
 
@@ -292,7 +292,7 @@ def eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
 
     max_space = int(max_memory*1e6/8/(2*x0_size) / 2 - space_inc)
     if max_space < nroots * 4 < x0_size:
-        log.warn('Not enough memory to store trial space in _lr_eig.eig')
+        log.warning('Not enough memory to store trial space in _lr_eig.eig')
         max_space = space_inc * 2
     max_space = max(max_space, nroots * 4)
     max_space = min(max_space, x0_size)
@@ -474,7 +474,7 @@ def eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=None,
     # Check whether the solver finds enough eigenvectors.
     h_dim = x0[0].size
     if len(x0) < min(h_dim, nroots):
-        log.warn(f'Not enough eigenvectors (len(x0)={len(x0)}, nroots={nroots})')
+        log.warning(f'Not enough eigenvectors (len(x0)={len(x0)}, nroots={nroots})')
 
     return conv[:nroots], e[:nroots], x0[:nroots]
 
@@ -539,7 +539,7 @@ def real_eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=Non
 
     max_space = int(max_memory*1e6/8/(4*A_size) / 2 - space_inc)
     if max_space < nroots * 4 < A_size:
-        log.warn('Not enough memory to store trial space in _lr_eig.eig')
+        log.warning('Not enough memory to store trial space in _lr_eig.eig')
         max_space = space_inc * 2
     max_space = max(max_space, nroots * 4)
     max_space = min(max_space, A_size)
@@ -752,7 +752,7 @@ def real_eig(aop, x0, precond, tol_residual=1e-5, nroots=1, x0sym=None, pick=Non
 
     # Check whether the solver finds enough eigenvectors.
     if len(x0[0]) < min(A_size, nroots):
-        log.warn(f'Not enough eigenvectors (len(x0)={len(x0[0])}, nroots={nroots})')
+        log.warning(f'Not enough eigenvectors (len(x0)={len(x0[0])}, nroots={nroots})')
 
     return conv[:nroots], e[:nroots], np.hstack(x0)
 

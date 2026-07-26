@@ -576,7 +576,7 @@ def matvec(adc, kshift, M_ij=None, eris=None):
                         temp += 0.25 * lib.einsum('kjbc,akj->abc',
                                                   t2_1[kk,kj,kb], r2[ka,kk], optimize=True)
                         ki = kconserv[kc,ka,kb]
-                        if isinstance(eris.ovvv, type(None)):
+                        if eris.ovvv is None:
                             chnk_size = adc.chnk_size
                             if chnk_size > nocc:
                                 chnk_size = nocc
@@ -618,7 +618,7 @@ def matvec(adc, kshift, M_ij=None, eris=None):
                     for kc in range(nkpts):
                         kb = kconserv[kj, kc, kk]
                         ki = kconserv[kb,ka,kc]
-                        if isinstance(eris.ovvv, type(None)):
+                        if eris.ovvv is None:
                             chnk_size = adc.chnk_size
                             if chnk_size > nocc:
                                 chnk_size = nocc

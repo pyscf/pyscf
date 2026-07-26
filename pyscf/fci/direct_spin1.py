@@ -676,7 +676,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
         civec_size = num_dets
 
     if max_memory < civec_size*6*8e-6:
-        log.warn('Not enough memory for FCI solver. '
+        log.warning('Not enough memory for FCI solver. '
                  'The minimal requirement is %.0f MB', civec_size*60e-6)
 
     if pspace_size >= civec_size and ci0 is None and not davidson_only:

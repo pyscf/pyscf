@@ -1291,8 +1291,8 @@ def eeccsd_matvec_singlet_Hr1(eom, vector, kshift, imds=None):
     kconserv_r1 = eom.get_kconserv_ee_r1(kshift)
 
     if len(vector) != r1_size:
-        raise ValueError("vector length mismatch: expected {0}, "
-                         "found {1}".format(r1_size, len(vector)))
+        raise ValueError(f"vector length mismatch: expected {r1_size}, "
+                         f"found {len(vector)}")
     r1 = vector.reshape(nkpts, nocc, nvir)
 
     Hr1 = np.zeros_like(r1)
@@ -1398,7 +1398,7 @@ def cis_easy(eom, nroots=1, kptlist=None, imds=None, **kwargs):
         evals[k] = eigval
         evecs[k] = eigvec
         for i in range(nroots):
-            print('CIS root {:d} E = {:.16g}'.format(i, eigval[i].real))
+            print(f'CIS root {i:d} E = {eigval[i].real:.16g}')
 
     return evals, evecs
 

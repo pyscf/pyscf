@@ -270,7 +270,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     energy_t = (1. / 36) * energy_t / nkpts
 
     if abs(energy_t.imag) > 1e-4:
-        log.warn('Non-zero imaginary part of CCSD(T) energy was found %s',
+        log.warning('Non-zero imaginary part of CCSD(T) energy was found %s',
                  energy_t.imag)
     log.note('CCSD(T) correction per cell = %.15g', energy_t.real)
     return energy_t.real

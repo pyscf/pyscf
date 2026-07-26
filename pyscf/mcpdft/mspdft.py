@@ -138,11 +138,11 @@ def si_newton (mc, ci=None, objfn=None, max_cyc=None, conv_tol=None,
     u = np.eye (nroots)
     t = np.zeros((nroots,nroots))
     conv = False
-    hdr = '{} intermediate-state'.format (mc.__class__.__name__)
+    hdr = f'{mc.__class__.__name__} intermediate-state'
     f, df, d2f, f_update = objfn (ci=ci)
     for it in range(max_cyc):
-        log.info ("****iter {} ***********".format (it))
-        log.info ("{} objective function value = {}".format (hdr, f))
+        log.info (f"****iter {it} ***********")
+        log.info (f"{hdr} objective function value = {f}")
 
         # Analyze Hessian
         d2f, evecs = linalg.eigh (d2f)
@@ -151,25 +151,25 @@ def si_newton (mc, ci=None, objfn=None, max_cyc=None, conv_tol=None,
         d2f_zero = np.abs (d2f) < sing_tol
         df_zero = np.abs (df) < sing_tol
         if np.any (d2f_zero & (~df_zero)):
-            log.warn ("{} Hess is singular!".format (hdr))
+            log.warning (f"{hdr} Hess is singular!")
         idx_null = d2f_zero & df_zero
         df[idx_null] = 0.0
         d2f[idx_null] = -1e-16
         pos_idx = d2f > 0
         neg_def = np.all (d2f < 0)
-        log.info ("{} Hessian is negative-definite? {}".format (hdr, neg_def))
+        log.info (f"{hdr} Hessian is negative-definite? {neg_def}")
 
         # Analyze gradient
         grad_norm = np.linalg.norm(df)
-        log.info ("{} grad norm = %f".format (hdr), grad_norm)
-        log.info ("{} grad (normal modes) = {}".format (hdr, df))
+        log.info (f"{hdr} grad norm = %f", grad_norm)
+        log.info (f"{hdr} grad (normal modes) = {df}")
 
         # Take step
         df[pos_idx & (np.abs (df/d2f) < nudge_tol)] = nudge_tol
         Dt = df/np.abs (d2f)
         step_norm = np.linalg.norm (Dt)
-        log.info ("{} Hessian eigenvalues: {}".format (hdr, d2f))
-        log.info ("{} step vector (normal modes): {}".format (hdr, Dt))
+        log.info (f"{hdr} Hessian eigenvalues: {d2f}")
+        log.info (f"{hdr} step vector (normal modes): {Dt}")
         t[:] = 0
         t[np.tril_indices(t.shape[0], k = -1)] = np.dot (Dt, evecs.T)
         t = t - t.T
@@ -195,13 +195,13 @@ def si_newton (mc, ci=None, objfn=None, max_cyc=None, conv_tol=None,
         raise (e)
     if mc.verbose >= lib.logger.DEBUG:
         fmt_str = ' ' + ' '.join (['{:5.2f}',]*nroots)
-        log.debug ("{} final overlap matrix:".format (hdr))
+        log.debug (f"{hdr} final overlap matrix:")
         for row in u: log.debug (fmt_str.format (*row))
     if conv:
-        log.note ("{} optimization CONVERGED".format (hdr))
+        log.note (f"{hdr} optimization CONVERGED")
     else:
-        log.note ("{} optimization did not converge after {} "
-                   "cycles".format (hdr, it))
+        log.note (f"{hdr} optimization did not converge after {it} "
+                   "cycles")
 
     return conv, list (ci)
 
@@ -373,9 +373,8 @@ class _MSPDFT (mcpdft.MultiStateMCPDFTSolver):
         self.heff_mcscf = self.make_heff_mcscf ()
         e_mcscf, self.si_mcscf = self._eig_si (self.heff_mcscf)
         if abs (linalg.norm (self.e_mcscf-e_mcscf)) > 1e-9:
-            raise RuntimeError (("Sanity fault: e_mcscf ({}) != "
-                                "self.e_mcscf ({})").format (e_mcscf,
-                                self.e_mcscf))
+            raise RuntimeError ((f"Sanity fault: e_mcscf ({e_mcscf}) != "
+                                f"self.e_mcscf ({self.e_mcscf})"))
         self.hdiag_pdft = self.compute_pdft_energy_(
             otxc=otxc, grids_level=grids_level, grids_attr=grids_attr)[-1]
         self.e_states, self.si_pdft = self._eig_si (self.get_heff_pdft ())
@@ -482,7 +481,7 @@ class _MSPDFT (mcpdft.MultiStateMCPDFTSolver):
         nroots = len (hdiag_pdft)
         log = lib.logger.new_logger (self, self.verbose)
         f, df, d2f = self.diabatizer ()[:3]
-        hdr = '{} diabatic (intermediate)'.format (self.__class__.__name__)
+        hdr = f'{self.__class__.__name__} diabatic (intermediate)'
         log.note ('%s objective function  value = %.15g |grad| = %.7g', hdr, f, linalg.norm (df))
         log.note ('%s average energy  EPDFT = %.15g  EMCSCF = %.15g', hdr,
                   np.dot (self.weights, hdiag_pdft), np.dot (self.weights, hdiag_mcscf))

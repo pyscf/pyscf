@@ -701,7 +701,7 @@ class KSCF(pbchf.SCF):
             x_kpts.append(x)
 
         if any(c > 1e10 for c in cond_kpts):
-            log.warn('Singularity detected in the overlap matrix. '
+            log.warning('Singularity detected in the overlap matrix. '
                      'SCF may be inaccurate and difficult to converge.')
 
         x_orth = x_kpts

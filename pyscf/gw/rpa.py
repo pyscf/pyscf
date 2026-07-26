@@ -88,7 +88,7 @@ def kernel(rpa, eris=None, nw=40, x0=0.5, verbose=None):
     log.timer('RPA corr', *cput1)
 
     if abs(e_corr.imag) > 1e-4:
-        log.warn('Non-zero imaginary part found in %s energy %s', rpa.__class__.__name__, e_corr)
+        log.warning('Non-zero imaginary part found in %s energy %s', rpa.__class__.__name__, e_corr)
     e_corr = e_corr.real
 
     return e_hf, e_corr
@@ -238,8 +238,8 @@ class RPA(dfmp2.DFMP2):
         log.info('Lowest orbital energy difference: % 6.4e', np.min(gap))
 
         if (np.min(gap) < 1e-3):
-            log.warn('RPA code is not well-defined for degenerate systems!')
-            log.warn('Lowest orbital energy difference: % 6.4e', np.min(gap))
+            log.warning('RPA code is not well-defined for degenerate systems!')
+            log.warning('Lowest orbital energy difference: % 6.4e', np.min(gap))
 
         return e_ov
 

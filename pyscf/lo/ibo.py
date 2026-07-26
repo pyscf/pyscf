@@ -196,8 +196,8 @@ def ibo_loc(mol, orbocc, iaos, s, exponent, grad_tol, max_iter,
                     CIb[:,j] = -ss * Ci + cs * Cj
         fGrad = fGrad**.5
 
-        log.debug(" {0:5d} {1:12.8f} {2:11.2e} {3:8.2f}"
-                  .format(it+1, L**(1./exponent), fGrad, logger.perf_counter()-StartTime))
+        log.debug(f" {it+1:5d} {L**(1./exponent):12.8f} {fGrad:11.2e} {logger.perf_counter()-StartTime:8.2f}"
+                  )
         if fGrad < grad_tol:
             Converged = True
             break

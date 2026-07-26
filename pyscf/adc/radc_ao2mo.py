@@ -213,7 +213,7 @@ def transform_integrals_df(myadc):
     Lvo = np.empty((naux,nvir,nocc))
     eris.Lvv = np.empty((naux,nvir,nvir))
     eris.Lov = np.empty((naux,nocc,nvir))
-    if not isinstance(myadc.ncvs, type(None)) and myadc.ncvs > 0:
+    if not (myadc.ncvs is None) and myadc.ncvs > 0:
         ncvs = myadc.ncvs
         eris.Lce = np.empty((naux,ncvs,nvir))
         eris.Lee = eris.Lvv
@@ -230,7 +230,7 @@ def transform_integrals_df(myadc):
         eris.Lov[p0:p1] = Lpq[:,:nocc,nocc:]
         Lvo[p0:p1] = Lpq[:,nocc:,:nocc]
         eris.Lvv[p0:p1] = Lpq[:,nocc:,nocc:]
-        if not isinstance(myadc.ncvs, type(None)) and myadc.ncvs > 0:
+        if not (myadc.ncvs is None) and myadc.ncvs > 0:
             ncvs = myadc.ncvs
             eris.Lce[p0:p1] = Lpq[:,:ncvs,nocc:]
             eris.Lee = eris.Lvv
@@ -239,7 +239,7 @@ def transform_integrals_df(myadc):
     eris.Lov = eris.Lov.reshape(naux,nocc*nvir)
     Lvo = Lvo.reshape(naux,nocc*nvir)
     eris.Lvv = eris.Lvv.reshape(naux,nvir*nvir)
-    if not isinstance(myadc.ncvs, type(None)) and myadc.ncvs > 0:
+    if not (myadc.ncvs is None) and myadc.ncvs > 0:
         ncvs = myadc.ncvs
         eris.Lee = eris.Lvv
         eris.Lce = eris.Lce.reshape(naux,myadc.ncvs*nvir)

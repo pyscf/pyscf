@@ -554,14 +554,14 @@ def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
     logger.info(mf, 'Applying remove_linear_dep_ on SCF object.')
     logger.debug(mf, 'Overlap condition number %g', cond)
     if (cond < 1./numpy.finfo(s.dtype).eps and not force_pivoted_cholesky):
-        logger.info(mf, 'Using canonical orthogonalization with threshold {}'.format(threshold))
+        logger.info(mf, f'Using canonical orthogonalization with threshold {threshold}')
         mf._eigh = _eigh_with_canonical_orth(threshold)
     else:
         assert s.dtype == numpy.float64
         logger.info(mf, 'Using partial Cholesky orthogonalization '
                     '(doi:10.1063/1.5139948, doi:10.1103/PhysRevA.101.032504)')
-        logger.info(mf, 'Using threshold {} for pivoted Cholesky'.format(cholesky_threshold))
-        logger.info(mf, 'Using threshold {} to orthogonalize the subbasis'.format(threshold))
+        logger.info(mf, f'Using threshold {cholesky_threshold} for pivoted Cholesky')
+        logger.info(mf, f'Using threshold {threshold} to orthogonalize the subbasis')
         mf._eigh = _eigh_with_pivot_cholesky(threshold, cholesky_threshold)
     return mf
 remove_linear_dep = remove_linear_dep_

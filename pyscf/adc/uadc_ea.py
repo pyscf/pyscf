@@ -113,7 +113,7 @@ def get_imds(adc, eris=None):
         eris_OVvo = eris.OVvo
         eris_ovVO = eris.ovVO
 
-        if isinstance(eris.ovvv, type(None)):
+        if eris.ovvv is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc_a,chnk_size):
                 eris_ovvv = dfadc.get_ovvv_spin_df(
@@ -133,7 +133,7 @@ def get_imds(adc, eris=None):
             M_ab_a -= lib.einsum('ld,ladb->ab',t1_2_a, eris_ovvv,optimize=True)
             del eris_ovvv
 
-        if isinstance(eris.OVvv, type(None)):
+        if eris.OVvv is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc_b,chnk_size):
                 eris_OVvv = dfadc.get_ovvv_spin_df(
@@ -147,7 +147,7 @@ def get_imds(adc, eris=None):
             M_ab_a += lib.einsum('ld,ldab->ab',t1_2_b, eris_OVvv,optimize=True)
             del eris_OVvv
 
-        if isinstance(eris.OVVV, type(None)):
+        if eris.OVVV is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc_b,chnk_size):
                 eris_OVVV = dfadc.get_ovvv_spin_df(
@@ -165,7 +165,7 @@ def get_imds(adc, eris=None):
             M_ab_b -= lib.einsum('ld,ladb->ab',t1_2_b, eris_OVVV,optimize=True)
             del eris_OVVV
 
-        if isinstance(eris.ovVV, type(None)):
+        if eris.ovVV is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc_a,chnk_size):
                 eris_ovVV = dfadc.get_ovvv_spin_df(
@@ -317,7 +317,7 @@ def get_imds(adc, eris=None):
                 a += k
             M_ab_b  += temp
 
-        elif isinstance(eris.vvvv_p, type(None)):
+        elif eris.vvvv_p is None:
 
             temp = np.zeros((nvir_a,nvir_a))
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
@@ -426,7 +426,7 @@ def get_imds(adc, eris=None):
                 a += k
             M_ab_a  += temp
 
-        elif isinstance(eris.vvvv_p, type(None)):
+        elif eris.vvvv_p is None:
 
             temp = np.zeros((nvir_b,nvir_b))
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
@@ -743,7 +743,7 @@ def matvec(adc, M_ab=None, eris=None):
 ############ ADC(2) a - ibc and ibc - a coupling blocks #########################
 
         temp = np.zeros((nocc_a, nvir_a, nvir_a))
-        if isinstance(eris.ovvv, type(None)):
+        if eris.ovvv is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc_a,chnk_size):
                 eris_ovvv = dfadc.get_ovvv_spin_df(
@@ -765,7 +765,7 @@ def matvec(adc, M_ab=None, eris=None):
         del temp
 
         temp = np.zeros((nocc_b, nvir_a, nvir_b))
-        if isinstance(eris.OVvv, type(None)):
+        if eris.OVvv is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc_b,chnk_size):
                 eris_OVvv = dfadc.get_ovvv_spin_df(
@@ -783,7 +783,7 @@ def matvec(adc, M_ab=None, eris=None):
         del temp
 
         temp = np.zeros((nocc_b, nvir_b, nvir_b))
-        if isinstance(eris.OVVV, type(None)):
+        if eris.OVVV is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc_b,chnk_size):
                 eris_OVVV = dfadc.get_ovvv_spin_df(
@@ -805,7 +805,7 @@ def matvec(adc, M_ab=None, eris=None):
         del temp
 
         temp = np.zeros((nocc_a, nvir_b, nvir_a))
-        if isinstance(eris.ovVV, type(None)):
+        if eris.ovVV is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc_a,chnk_size):
                 eris_ovVV = dfadc.get_ovvv_spin_df(
@@ -1028,7 +1028,7 @@ def matvec(adc, M_ab=None, eris=None):
 
             temp_1_1 = np.zeros((nocc_a,nvir_a,nvir_a))
             temp_1_2 = np.zeros((nocc_a,nvir_a,nvir_a))
-            if isinstance(eris.ovvv, type(None)):
+            if eris.ovvv is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
                 for a,b in lib.prange(0,nocc_a,chnk_size):
                     eris_ovvv = dfadc.get_ovvv_spin_df(
@@ -1086,7 +1086,7 @@ def matvec(adc, M_ab=None, eris=None):
             temp_2_4 = np.zeros((nocc_a,nvir_b,nvir_a))
 
             temp = np.zeros((nocc_a,nvir_b,nvir_b))
-            if isinstance(eris.ovVV, type(None)):
+            if eris.ovVV is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
                 for a,b in lib.prange(0,nocc_a,chnk_size):
                     eris_ovVV = dfadc.get_ovvv_spin_df(
@@ -1170,7 +1170,7 @@ def matvec(adc, M_ab=None, eris=None):
             temp_1_3 = np.zeros((nocc_b,nvir_b,nvir_b))
             temp_1_4 = np.zeros((nocc_b,nvir_b,nvir_b))
 
-            if isinstance(eris.OVVV, type(None)):
+            if eris.OVVV is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
                 for a,b in lib.prange(0,nocc_b,chnk_size):
                     eris_OVVV = dfadc.get_ovvv_spin_df(
@@ -1219,7 +1219,7 @@ def matvec(adc, M_ab=None, eris=None):
             temp_2_2 = np.zeros((nocc_b,nvir_a,nvir_b))
             temp = np.zeros((nocc_b,nvir_a,nvir_a))
 
-            if isinstance(eris.OVvv, type(None)):
+            if eris.OVvv is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
                 for a,b in lib.prange(0,nocc_b,chnk_size):
                     eris_OVvv = dfadc.get_ovvv_spin_df(

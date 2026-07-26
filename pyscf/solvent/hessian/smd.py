@@ -35,7 +35,7 @@ def get_cds(smdobj):
 
     log = logger.new_logger(mol, mol.verbose)
     t1 = (logger.process_clock(), logger.perf_counter())
-    log.warn("Using finite difference scheme for CDS contribution.")
+    log.warning("Using finite difference scheme for CDS contribution.")
     coords = mol.atom_coords(unit='B')
     coords_backup = coords.copy()
     eps = 1e-4

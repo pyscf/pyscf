@@ -283,7 +283,7 @@ class _ERIS:
             self.feri = lib.H5TmpFile()
             max_memory = max(3000, casscf.max_memory*.9-mem_now)
             if max_memory < mem_basic:
-                log.warn('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',
+                log.warning('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',
                          (mem_basic+mem_now)/.9, casscf.max_memory)
             self.j_pc, self.k_pc = \
                     trans_e1_outcore(mol, mo, ncore, ncas, self.feri,

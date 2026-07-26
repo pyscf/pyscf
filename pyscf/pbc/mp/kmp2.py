@@ -416,10 +416,10 @@ def get_nocc(mp, per_kpoint=False):
     '''
     for i, moocc in enumerate(mp.mo_occ):
         if np.any(moocc % 1 != 0):
-            raise RuntimeError("Fractional occupation numbers encountered @ kp={:d}: {}. This may have been caused by "
+            raise RuntimeError(f"Fractional occupation numbers encountered @ kp={i:d}: {moocc}. This may have been caused by "
                                "smearing of occupation numbers in the mean-field calculation. If so, consider "
                                "executing mf.smearing_method = False; mf.mo_occ = mf.get_occ() prior to calling "
-                               "this".format(i, moocc))
+                               "this")
     if mp._nocc is not None:
         return mp._nocc
     elif mp.frozen is None:
@@ -774,7 +774,7 @@ class KMP2(mp2.MP2):
             mo_coeff = self.mo_coeff
         if mo_energy is None or mo_coeff is None:
             log = logger.Logger(self.stdout, self.verbose)
-            log.warn('mo_coeff, mo_energy are not given.\n'
+            log.warning('mo_coeff, mo_energy are not given.\n'
                      'You may need to call mf.kernel() to generate them.')
             raise RuntimeError
 

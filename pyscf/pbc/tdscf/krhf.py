@@ -202,7 +202,7 @@ class KTDBase(TDBase):
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
         if not self._scf.converged:
-            log.warn('Ground state SCF is not converged')
+            log.warning('Ground state SCF is not converged')
         log.info('\n')
 
     def check_sanity(self):
@@ -476,7 +476,7 @@ class TDHF(KTDBase):
             x, y = z.reshape(2,-1)
             norm = lib.norm(x)**2 - lib.norm(y)**2
             if norm < 0:
-                log.warn('TDDFT amplitudes |X| smaller than |Y|')
+                log.warning('TDDFT amplitudes |X| smaller than |Y|')
             norm = abs(.5/norm)**.5
             x *= norm
             y *= norm

@@ -181,7 +181,7 @@ class DF(lib.StreamObject):
                 log.info('_cderi_to_save = %s', cderi_name)
             else:
                 # If cderi needs to be saved in
-                log.warn('Value of _cderi is ignored. DF integrals will be '
+                log.warning('Value of _cderi is ignored. DF integrals will be '
                          'saved in file %s .', cderi_name)
 
             if self._compatible_format:

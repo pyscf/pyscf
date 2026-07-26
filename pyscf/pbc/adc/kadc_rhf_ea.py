@@ -150,7 +150,7 @@ def get_imds(adc, eris=None):
             kb = ka
             for kl in range(nkpts):
 
-                if isinstance(eris.ovvv, type(None)):
+                if eris.ovvv is None:
                     chnk_size = adc.chnk_size
                     if chnk_size > nocc:
                         chnk_size = nocc
@@ -387,7 +387,7 @@ def get_imds(adc, eris=None):
                     for kd in range(nkpts):
                         kf = kconserv[km,kd,kl]
                         ke = kconserv[kb,ka,kf]
-                        if isinstance(eris.vvvv, type(None)):
+                        if eris.vvvv is None:
                             chnk_size = adc.chnk_size
                             if chnk_size > nvir:
                                 chnk_size = nvir
@@ -608,7 +608,7 @@ def matvec(adc, kshift, M_ab=None, eris=None):
         for kb in range(nkpts):
             for kc in range(nkpts):
                 ki = kconserv[kb,kshift, kc]
-                if isinstance(eris.ovvv, type(None)):
+                if eris.ovvv is None:
                     chnk_size = adc.chnk_size
                     if chnk_size > nocc:
                         chnk_size = nocc
@@ -661,7 +661,7 @@ def matvec(adc, kshift, M_ab=None, eris=None):
                             r2_1 = r2.reshape(nkpts,nkpts,nocc,nvir*nvir)
                             s2[ki, kx] += np.dot(r2_1[ki,kw],eris_vvvv[kx,ky,
                                                  kw].T.conj()).reshape(nocc,nvir,nvir)
-                        elif isinstance(eris.vvvv, type(None)):
+                        elif eris.vvvv is None:
                             s2[ki,kx] += ea_contract_r_vvvv(adc,r2[ki,kw],eris.Lvv,kx,ky,kw)
                         else :
                             s2[ki,kx] += ea_contract_r_vvvv(adc,r2[ki,kw],eris.vvvv,kx,ky,kw)
@@ -763,7 +763,7 @@ def matvec(adc, kshift, M_ab=None, eris=None):
                         temp_t2_r2_4 = lib.einsum(
                             'jldw,jwz->lzd',t2_1[kj,kl,kd],r2[kj,kw], optimize=True)
 
-                        if isinstance(eris.ovvv, type(None)):
+                        if eris.ovvv is None:
                             chnk_size = adc.chnk_size
                             if chnk_size > nocc:
                                 chnk_size = nocc
@@ -837,7 +837,7 @@ def matvec(adc, kshift, M_ab=None, eris=None):
                         temp_t2_r2_3 = -lib.einsum('ljzd,jzw->lwd',t2_1_ljz,r2[kj,kz],optimize=True)
                         del t2_1_ljz
 
-                        if isinstance(eris.ovvv, type(None)):
+                        if eris.ovvv is None:
                             chnk_size = adc.chnk_size
                             if chnk_size > nocc:
                                 chnk_size = nocc
@@ -890,7 +890,7 @@ def matvec(adc, kshift, M_ab=None, eris=None):
                         temp = np.zeros((nocc,nvir,nvir),dtype=eris.oooo.dtype)
                         temp_1_1 = np.zeros((nocc,nvir,nvir),dtype=eris.oooo.dtype)
                         temp_2_1 = np.zeros((nocc,nvir,nvir),dtype=eris.oooo.dtype)
-                        if isinstance(eris.ovvv, type(None)):
+                        if eris.ovvv is None:
                             chnk_size = adc.chnk_size
                             if chnk_size > nocc:
                                 chnk_size = nocc

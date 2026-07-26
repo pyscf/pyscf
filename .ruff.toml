@@ -1,5 +1,6 @@
 exclude = [
     "test",
+    "doc_legacy",
 ]
 
 respect-gitignore = true
@@ -19,7 +20,22 @@ ignore = [
 "E401", "E402",
 # Other:
 "E701", "E713", "E721", "E731", "E741", "E275",
-"F401", "F403", "C901", "W391"
+    "F401", "F403", "C901", "W391",
+    # ruff 0.16 additions:
+    # EXE001: shebangs in example scripts (documentation, not binaries)
+    "EXE001",
+    # B008: function calls in defaults are idiomatic in PySCF (e.g. getattr, np.zeros)
+    "B008",
+    # UP031: percent-formatting, overwhelmingly in examples — noisy, not a bug
+    "UP031",
+    # PLR1711: merging isinstance calls is a style preference
+    "PLR1711",
+    # UP034: non-PEP-585 annotations require from __future__ imports across many files
+    "UP034",
+    # RUF059: unpacked variables unused (e.g. nocc, nvir = shape where nvir unused), mostly benign
+    "RUF059",
+    # I001: import sorting — adds blank lines between sections, noisy diff
+    "I001",
 ]
 
 [format]

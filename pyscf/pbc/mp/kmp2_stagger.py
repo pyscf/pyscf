@@ -234,7 +234,7 @@ class KMP2_stagger(kmp2.KMP2):
             #   Choice 1: Use two staggered submeshes of mf.kpts of half size along each dimension
             if np.any( nks % 2) :
                 log = logger.Logger(self.stdout, self.verbose)
-                log.warn(
+                log.warning(
                     'The k-point mesh in the input mf has odd size in certain dimension. \n'
                     'Cannot use its submeshes for staggered mesh calculation!\n'
                     'You may set "flag_submesh" to False')
@@ -314,7 +314,7 @@ class KMP2_stagger(kmp2.KMP2):
             len(self.kpts_idx_occ) != self.nkpts_ov or
             len(np.unique(self.kpts_idx_occ)) != self.nkpts_ov):
             log = logger.Logger(self.stdout, self.verbose)
-            log.warn('Cannot locate the provided occupied/virtual submeshes in the large k-point mesh')
+            log.warning('Cannot locate the provided occupied/virtual submeshes in the large k-point mesh')
             raise RuntimeError
 
     def dump_flags(self):
@@ -340,7 +340,7 @@ class KMP2_stagger(kmp2.KMP2):
     def kernel(self):
         if self.mo_energy is None or self.mo_coeff is None:
             log = logger.Logger(self.stdout, self.verbose)
-            log.warn('mo_coeff, mo_energy are not provided.')
+            log.warning('mo_coeff, mo_energy are not provided.')
             raise RuntimeError
 
         mo_coeff, mo_energy = _add_padding(self, self.mo_coeff, self.mo_energy)

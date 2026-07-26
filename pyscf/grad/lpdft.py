@@ -116,23 +116,21 @@ def get_ontop_response(
         blksize = int(remaining_floats / (ncols * BLKSIZE)) * BLKSIZE
         blksize = max(BLKSIZE, min(blksize, ngrids, BLKSIZE * 1200))
         t1 = logger.timer(
-            mc, "L-PDFT HlFn quadrature atom {} mask and memory setup".format(ia), *t1
+            mc, f"L-PDFT HlFn quadrature atom {ia} mask and memory setup", *t1
         )
         for ip0 in range(0, ngrids, blksize):
             ip1 = min(ngrids, ip0 + blksize)
             mask = gen_grid.make_mask(mol, coords[ip0:ip1])
             logger.info(
                 mc,
-                "L-PDFT gradient atom {} slice {}-{} of {} total".format(
-                    ia, ip0, ip1, ngrids
-                ),
+                f"L-PDFT gradient atom {ia} slice {ip0}-{ip1} of {ngrids} total",
             )
             ao = ot._numint.eval_ao(
                 mol, coords[ip0:ip1], deriv=ot.dens_deriv + 1, non0tab=mask
             )
 
             t1 = logger.timer(
-                mc, "L-PDFT HlFn quadrature atom {} ao grids".format(ia), *t1
+                mc, f"L-PDFT HlFn quadrature atom {ia} ao grids", *t1
             )
 
             if ot.xctype == "LDA":
@@ -147,7 +145,7 @@ def get_ontop_response(
             rho_0 = np.stack((rho_0,) * 2, axis=0)
             delta_rho = rho - rho_0
             t1 = logger.timer(
-                mc, "L-PDFT HlFn quadrature atom {} rho calc".format(ia), *t1
+                mc, f"L-PDFT HlFn quadrature atom {ia} rho calc", *t1
             )
 
             Pi = get_ontop_pair_density(
@@ -158,7 +156,7 @@ def get_ontop_response(
             )
             delta_Pi = Pi - Pi_0
             t1 = logger.timer(
-                mc, "L-PDFT HlFn quadrature atom {} Pi calc".format(ia), *t1
+                mc, f"L-PDFT HlFn quadrature atom {ia} Pi calc", *t1
             )
 
             if ot.xctype == "LDA":
@@ -167,7 +165,7 @@ def get_ontop_response(
             moval_occ = _grid_ao2mo(mol, aoval, mo_occ, mask)
             moval_occ_0 = _grid_ao2mo(mol, aoval, mo_occ_0, mask)
             t1 = logger.timer(
-                mc, "L-PDFT HlFn quadrature atom {} ao2mo grids".format(ia), *t1
+                mc, f"L-PDFT HlFn quadrature atom {ia} ao2mo grids", *t1
             )
 
             aoval = np.ascontiguousarray(
@@ -175,7 +173,7 @@ def get_ontop_response(
             ).transpose(0, 1, 3, 2)
             ao = None
             t1 = logger.timer(
-                mc, "L-PDFT HlFn quadrature atom {} ao grid reshape".format(ia), *t1
+                mc, f"L-PDFT HlFn quadrature atom {ia} ao grid reshape", *t1
             )
 
             eot, vot, fot = ot.eval_ot(
@@ -188,7 +186,7 @@ def get_ontop_response(
             # See the equations...
             eot += contract_vot(vot, delta_rho, delta_Pi)
             t1 = logger.timer(
-                mc, "PDFT HlFn quadrature atom {} eval_ot".format(ia), *t1
+                mc, f"PDFT HlFn quadrature atom {ia} eval_ot", *t1
             )
 
             puvx_mem = 2 * ndpi * (ip1 - ip0) * ncas * ncas * 8 / 1e6
@@ -196,15 +194,15 @@ def get_ontop_response(
             logger.info(
                 mc,
                 (
-                    "L-PDFT gradient memory note: working on {} grid points: estimated puvx usage = {:.1f} of {:.1f} "
+                    f"L-PDFT gradient memory note: working on {ip1 - ip0} grid points: estimated puvx usage = {puvx_mem:.1f} of {remaining_mem:.1f} "
                     "remaining MB"
-                ).format((ip1 - ip0), puvx_mem, remaining_mem),
+                ),
             )
 
             # Weight response
             de_wgt += np.tensordot(eot, w1[atmlst, ..., ip0:ip1], axes=(0, 2))
             t1 = logger.timer(
-                mc, "L-PDFT HlFn quadrature atom {} weight response".format(ia), *t1
+                mc, f"L-PDFT HlFn quadrature atom {ia} weight response", *t1
             )
 
             # The mo_occup values might be screwing me here...
@@ -254,7 +252,7 @@ def get_ontop_response(
             dvxc -= tmp_dxc  # XC response
 
             tmp_dxc = tmp_df = tmp_dv = None
-            t1 = logger.timer(mc, "L-PDFT HlFn quadrature atom {}".format(ia), *t1)
+            t1 = logger.timer(mc, f"L-PDFT HlFn quadrature atom {ia}", *t1)
 
             rho_0 = Pi_0 = rho = Pi = delta_rho = delta_Pi = None
             eot = vot = fot = aoval = moval_occ = moval_occ_0 = None
@@ -344,24 +342,24 @@ def lpdft_HellmanFeynman_grad(
         mf_grad, mol, atmlst, dm1, dme0, coul_term, dvxc
     )
 
-    logger.debug(mc, "L-PDFT Hellmann-Feynman nuclear:\n{}".format(de_nuc))
-    logger.debug(mc, "L-PDFT Hellmann-Feynman hcore component:\n{}".format(de_hcore))
-    logger.debug(mc, "L-PDFT Hellmann-Feynman coulomb component:\n{}".format(de_coul))
-    logger.debug(mc, "L-PDFT Hellmann-Feynman xc component:\n{}".format(de_xc))
+    logger.debug(mc, f"L-PDFT Hellmann-Feynman nuclear:\n{de_nuc}")
+    logger.debug(mc, f"L-PDFT Hellmann-Feynman hcore component:\n{de_hcore}")
+    logger.debug(mc, f"L-PDFT Hellmann-Feynman coulomb component:\n{de_coul}")
+    logger.debug(mc, f"L-PDFT Hellmann-Feynman xc component:\n{de_xc}")
     logger.debug(
-        mc, "L-PDFT Hellmann-Feynman quadrature point component:\n{}".format(de_grid)
+        mc, f"L-PDFT Hellmann-Feynman quadrature point component:\n{de_grid}"
     )
     logger.debug(
-        mc, "L-PDFT Hellmann-Feynman quadrature weight component:\n{}".format(de_wgt)
+        mc, f"L-PDFT Hellmann-Feynman quadrature weight component:\n{de_wgt}"
     )
-    logger.debug(mc, "L-PDFT Hellmann-Feynman renorm component:\n{}".format(de_renorm))
+    logger.debug(mc, f"L-PDFT Hellmann-Feynman renorm component:\n{de_renorm}")
 
     de = de_nuc + de_hcore + de_coul + de_renorm + de_xc + de_grid + de_wgt
 
     if auxbasis_response:
         dvj_aux = dvj_all.aux[:,:,atmlst,:]
         de_aux = dvj_aux[1, 0] + dvj_aux[0, 1] - dvj_aux[1, 1]
-        logger.debug(mc, "L-PDFT Hellmann-Feynman aux component:\n{}".format(de_aux))
+        logger.debug(mc, f"L-PDFT Hellmann-Feynman aux component:\n{de_aux}")
         de += de_aux
 
     logger.timer(mc, "L-PDFT HlFn total", *t0)
@@ -384,16 +382,16 @@ class Gradients(sacasscf.Gradients):
         if isinstance(self.base, casci.CASCI) and not isinstance(
             self.base, mc1step.CASSCF
         ):
-            raise NotImplementedError("{} for CASCI-based MC-PDFT".format(name))
+            raise NotImplementedError(f"{name} for CASCI-based MC-PDFT")
         ot, otxc, nelecas = self.base.otfnal, self.base.otxc, self.base.nelecas
         spin = abs(nelecas[0] - nelecas[1])
         omega, alpha, hyb = ot._numint.rsh_and_hybrid_coeff(otxc, spin=spin)
         hyb_x, hyb_c = hyb
         if hyb_x or hyb_c:
-            raise NotImplementedError("{} for hybrid MC-PDFT functionals".format(name))
+            raise NotImplementedError(f"{name} for hybrid MC-PDFT functionals")
         if omega:
             raise NotImplementedError(
-                "{} for range-separated MC-PDFT functionals".format(name)
+                f"{name} for range-separated MC-PDFT functionals"
             )
 
     def kernel(self, **kwargs):
@@ -486,10 +484,10 @@ class Gradients(sacasscf.Gradients):
         g_all_implicit = newton_casscf.gen_g_hop(fcasscf_sa, mo, ci, feff2, verbose)[0]
 
         # Debug
-        log.debug("g_all explicit orb:\n{}".format(g_all_explicit[: self.ngorb]))
-        log.debug("g_all explicit ci:\n{}".format(g_all_explicit[self.ngorb :]))
-        log.debug("g_all implicit orb:\n{}".format(g_all_implicit[: self.ngorb]))
-        log.debug("g_all implicit ci:\n{}".format(g_all_implicit[self.ngorb :]))
+        log.debug(f"g_all explicit orb:\n{g_all_explicit[: self.ngorb]}")
+        log.debug(f"g_all explicit ci:\n{g_all_explicit[self.ngorb :]}")
+        log.debug(f"g_all implicit orb:\n{g_all_implicit[: self.ngorb]}")
+        log.debug(f"g_all implicit ci:\n{g_all_implicit[self.ngorb :]}")
 
         # Need to remove the SA-SA rotations from g_all_implicit CI contributions
         spin_states = np.asarray(self.spin_states)
@@ -523,8 +521,8 @@ class Gradients(sacasscf.Gradients):
         g_all[self.ngorb :][offs:][:ndet] += g_all_explicit[self.ngorb :]
 
         gorb, gci = self.unpack_uniq_var(g_all)
-        log.debug("g_all orb:\n{}".format(gorb))
-        log.debug("g_all ci:\n{}".format([c.ravel() for c in gci]))
+        log.debug(f"g_all orb:\n{gorb}")
+        log.debug(f"g_all ci:\n{[c.ravel() for c in gci]}")
 
         return g_all
 

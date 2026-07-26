@@ -388,7 +388,7 @@ def matvec(adc, M_ij=None, eris=None):
             temp_singles = np.zeros((nocc))
             temp_doubles = np.zeros((nvir,nvir,nvir))
 
-            if isinstance(eris.ovvv, type(None)):
+            if eris.ovvv is None:
                 chnk_size = radc_ao2mo.calculate_chunk_size(adc)
                 for a,b in lib.prange(0,nocc,chnk_size):
                     eris_ovvv = dfadc.get_ovvv_df(

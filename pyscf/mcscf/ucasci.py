@@ -290,7 +290,7 @@ class UCASBase(CASBase):
         label = self.mol.ao_labels()
         if (isinstance(ci, (list, tuple, RANGE_TYPE)) and
             not isinstance(self.fcisolver, addons.StateAverageFCISolver)):
-            log.warn('Mulitple states found in UCASCI solver. Density '
+            log.warning('Mulitple states found in UCASCI solver. Density '
                      'matrix of first state is generated in .analyze() function.')
             civec = ci[0]
         else:

@@ -506,7 +506,7 @@ class RADC(lib.StreamObject):
             e_exc, v_exc, spec_fac, x, adc_es = self.ee_adc(nroots=nroots, guess=guess, eris=eris)
 
         elif(self.method_type == "ip"):
-            if not isinstance(self.ncvs, type(None)) and self.ncvs > 0:
+            if not (self.ncvs is None) and self.ncvs > 0:
                 e_exc, v_exc, spec_fac, x, adc_es = self.ip_cvs_adc(
                     nroots=nroots, guess=guess, eris=eris)
             else:

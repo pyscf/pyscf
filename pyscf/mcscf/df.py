@@ -314,7 +314,7 @@ class _ERIS:
         mem_now = lib.current_memory()[0]
         max_memory = max(3000, casscf.max_memory*.9-mem_now)
         if max_memory < mem_basic:
-            log.warn('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',
+            log.warning('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',
                      (mem_basic+mem_now)/.9, casscf.max_memory)
 
         t1 = t0 = (logger.process_clock(), logger.perf_counter())

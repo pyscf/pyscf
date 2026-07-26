@@ -128,7 +128,7 @@ def compute_amplitudes(myadc, eris):
                     kd = kconserv[ki, kc, kk]
                     ka = kconserv[kc, kk, kd]
 
-                    if isinstance(eris.ovvv, type(None)):
+                    if eris.ovvv is None:
                         chnk_size = myadc.chnk_size
                         if chnk_size > nocc:
                             chnk_size = nocc
@@ -205,7 +205,7 @@ def compute_amplitudes(myadc, eris):
                     t2_1_a = t2_1[:].reshape(nkpts,nkpts,nkpts,nocc*nocc,nvir*nvir)
                     t2_1_vvvv[ki, kj, ka] += np.dot(t2_1_a[ki,kj,kc],
                                                     eris_vvvv[kc,kd,ka].conj()).reshape(nocc,nocc,nvir,nvir)
-                elif isinstance(eris.vvvv, type(None)):
+                elif eris.vvvv is None:
                     t2_1_vvvv[ki,kj,ka] += contract_ladder(myadc,t2_1[ki,kj,kc],eris.Lvv,ka,kb,kc)
                 else :
                     t2_1_vvvv[ki,kj,ka] += contract_ladder(myadc,t2_1[ki,kj,kc],eris.vvvv,kc,kd,ka)

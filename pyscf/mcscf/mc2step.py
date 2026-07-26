@@ -162,7 +162,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         if casscf.natorb:
             # FIXME (pyscf-2.0): Whether to transform natural orbitals in
             # active space when this flag is enabled?
-            log.warn('The attribute natorb of mcscf object affects only the '
+            log.warning('The attribute natorb of mcscf object affects only the '
                      'orbital canonicalization.\n'
                      'If you would like to get natural orbitals in active space '
                      'without touching core and external orbitals, an explicit '

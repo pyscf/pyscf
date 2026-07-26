@@ -415,7 +415,7 @@ class UCASSCF(ucasci.UCASBase):
                  self.nelecas[0], self.nelecas[1], ncas,
                  ncore[0], ncore[1], nvir_alpha, nvir_beta)
         if ncore[0] != ncore[1]:
-            log.warn('converge might be slow since num alpha core %d != num beta core %d',
+            log.warning('converge might be slow since num alpha core %d != num beta core %d',
                      ncore[0], ncore[1])
         if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))

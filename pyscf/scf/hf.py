@@ -1369,7 +1369,7 @@ def check_linear_dependency(s, log=None):
         c = emax / emin
         log.debug('cond(S) = %s', c)
         if c > 1e10:
-            log.warn('Singularity detected in the overlap matrix. '
+            log.warning('Singularity detected in the overlap matrix. '
                      'SCF may be inaccurate and difficult to converge.')
     if remove_overlap_zero_eigenvalue:
         mask = e > overlap_zero_eigenvalue_threshold
@@ -1449,7 +1449,7 @@ def dip_moment(mol, dm, unit='Debye', origin=None, verbose=logger.NOTE, **kwargs
     log = logger.new_logger(mol, verbose)
 
     if 'unit_symbol' in kwargs:  # pragma: no cover
-        log.warn('Kwarg "unit_symbol" was deprecated. It was replaced by kwarg '
+        log.warning('Kwarg "unit_symbol" was deprecated. It was replaced by kwarg '
                  'unit since PySCF-1.5.')
         unit = kwargs['unit_symbol']
 
@@ -1467,7 +1467,7 @@ def dip_moment(mol, dm, unit='Debye', origin=None, verbose=logger.NOTE, **kwargs
     assert origin.shape == (3,)
 
     if mol.charge != 0:
-        log.warn(f"System has nonzero charge {mol.charge}; the dipole moment is origin-dependent.\n"
+        log.warning(f"System has nonzero charge {mol.charge}; the dipole moment is origin-dependent.\n"
                  f"Location of origin: {origin}")
 
     with mol.with_common_orig(origin):
@@ -1513,7 +1513,7 @@ def quad_moment(mol, dm, unit='DebyeAngstrom', origin=None,
     log = logger.new_logger(mol, verbose)
 
     if 'unit_symbol' in kwargs:  # pragma: no cover
-        log.warn('Kwarg "unit_symbol" was deprecated. It was replaced by kwarg '
+        log.warning('Kwarg "unit_symbol" was deprecated. It was replaced by kwarg '
                  'unit since PySCF-1.5.')
         unit = kwargs['unit_symbol']
 
@@ -1866,7 +1866,7 @@ class SCF(lib.StreamObject):
         x = check_linear_dependency(s, log)
         nao, nmo = x.shape
         if nmo < nao:
-            log.warn(f"{nao - nmo} small eigenvectors of overlap matrix removed "
+            log.warning(f"{nao - nmo} small eigenvectors of overlap matrix removed "
                      "because of linear dependency between AOs.\n")
         return x
 

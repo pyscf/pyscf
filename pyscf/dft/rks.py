@@ -537,7 +537,7 @@ def init_guess_by_vsap(mf, mol=None):
 
     # Form guess orbitals
     mo_energy, mo_coeff = mf.eig(hsap, s)
-    logger.debug(mf, 'VSAP mo energies\n{}'.format(mo_energy))
+    logger.debug(mf, f'VSAP mo energies\n{mo_energy}')
 
     # and guess density
     mo_occ = mf.get_occ(mo_energy, mo_coeff)

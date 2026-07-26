@@ -1091,7 +1091,7 @@ def matvec(adc, M_ij=None, eris=None):
             t2_1_a_ccee = t2_1_a[:ncvs,:ncvs,:,:].copy()
             t2_1_a_ccee_t = t2_1_a_ccee[ij_ind_ncvs[0],ij_ind_ncvs[1],:,:]
 
-            if isinstance(eris.ovvv, type(None)):
+            if eris.ovvv is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             else :
                 chnk_size = ncvs
@@ -1216,7 +1216,7 @@ def matvec(adc, M_ij=None, eris=None):
             t2_1_ab_cvee = t2_1_ab[:ncvs,ncvs:,:,:].copy()
             t2_1_ab_vcee = t2_1_ab[ncvs:,:ncvs,:,:].copy()
 
-            if isinstance(eris.OVVV, type(None)):
+            if eris.OVVV is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             else :
                 chnk_size = ncvs
@@ -1319,7 +1319,7 @@ def matvec(adc, M_ij=None, eris=None):
             del t2_1_b_coee
             del t2_1_b_voee
 
-            if isinstance(eris.ovVV, type(None)):
+            if eris.ovVV is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             else :
                 chnk_size = ncvs
@@ -1356,7 +1356,7 @@ def matvec(adc, M_ij=None, eris=None):
             del temp_1_evc
             del temp_2
 
-            if isinstance(eris.OVvv, type(None)):
+            if eris.OVvv is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             else :
                 chnk_size = ncvs

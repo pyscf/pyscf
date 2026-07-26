@@ -101,7 +101,7 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
     try:
         orbsym = scf.hf_symm.get_orbsym(mc._scf.mol, mo_coeff, s, True)
     except ValueError:
-        log.warn('mc1step_symm symmetrizes input orbitals')
+        log.warning('mc1step_symm symmetrizes input orbitals')
         mo_cor = symm.symmetrize_space(mc.mol, mo_coeff[:,    :ncore], s=s, check=False)
         mo_act = symm.symmetrize_space(mc.mol, mo_coeff[:,ncore:nocc], s=s, check=False)
         mo_vir = symm.symmetrize_space(mc.mol, mo_coeff[:,nocc:     ], s=s, check=False)
@@ -164,7 +164,7 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
         try:
             wfnsym = symm.irrep_id2name(mc.mol.groupname, wfnsym)
         except KeyError:
-            log.warn('mwfnsym Id %s not found in group %s. This might be caused by '
+            log.warning('mwfnsym Id %s not found in group %s. This might be caused by '
                      'the projection from high-symmetry group to D2h symmetry.',
                      wfnsym, mc.mol.groupname)
     if wfnsym is not None:

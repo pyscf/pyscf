@@ -21,7 +21,7 @@ mol = gto.M(
 auxbasis = 'def2-universal-jkfit'
 bl = 1.6
 coord = bl / 2
-mol = gto.M(atom='F 0. 0. -{coord}; F 0. 0. {coord}'.format(coord=coord), basis='ccpvdz')
+mol = gto.M(atom=f'F 0. 0. -{coord}; F 0. 0. {coord}', basis='ccpvdz')
 # Direct K matrix for comparison
 DFJ = True
 OPTK = True

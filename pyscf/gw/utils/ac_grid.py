@@ -555,7 +555,7 @@ class TwoPoleAC(AC_Method):
             )
             if not xopt.success:
                 log = logger.Logger()
-                log.warn('2P-Fit Orb %d not converged, cost function %e' % (p, xopt.cost))
+                log.warning('2P-Fit Orb %d not converged, cost function %e' % (p, xopt.cost))
             coeff[(slice(None, None, None), *idx)] = xopt.x.copy()
         self.coeff = coeff
 

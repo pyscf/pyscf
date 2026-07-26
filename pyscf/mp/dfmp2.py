@@ -220,7 +220,7 @@ def _make_df_eris(mp, mo_coeff=None, ovL=None, ovL_to_save=None, verbose=None):
 
     if with_df._cderi is None:
         if getattr(with_df, 'cell', None) is not None:  # PBC
-            log.warn('PBC mean-field does not support direct DFMP2. Caching AO 3c integrals now.')
+            log.warning('PBC mean-field does not support direct DFMP2. Caching AO 3c integrals now.')
             with_df.build()
             naux = with_df.get_naoaux()
         else:

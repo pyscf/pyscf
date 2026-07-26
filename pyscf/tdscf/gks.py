@@ -147,7 +147,7 @@ class CasidaTDDFT(TDDFT, TDA):
             y = (zp - zm) * .5
             norm = lib.norm(x)**2 - lib.norm(y)**2
             if norm < 0:
-                log.warn('TDDFT amplitudes |X| smaller than |Y|')
+                log.warning('TDDFT amplitudes |X| smaller than |Y|')
             norm = abs(norm)**-.5
             return (x*norm, y*norm)
 

@@ -134,7 +134,7 @@ def get_imds(adc, eris=None):
     if (adc.method == "adc(3)"):
         t2_ccee = t2[1][:]
 
-        if isinstance(eris.ovvv, type(None)):
+        if eris.ovvv is None:
             chnk_size = radc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc,chnk_size):
                 v_ceee = dfadc.get_ovvv_df(adc, eris.Lov, eris.Lvv, a, chnk_size).reshape(-1,nvir,nvir,nvir)
@@ -162,7 +162,7 @@ def get_imds(adc, eris=None):
             M_ab += einsum('Ia,LADa->IDLA', t2_ce, v_ceee, optimize = einsum_type)
             M_ab += einsum('La,IDAa->IDLA', t2_ce, v_ceee, optimize = einsum_type)
 
-        if isinstance(eris.vvvv, type(None)):
+        if eris.vvvv is None:
             chnk_size = radc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nvir,chnk_size):
                 v_eeee = dfadc.get_vvvv_df(adc, eris.Lvv, a, chnk_size).reshape(-1,nvir,nvir,nvir)
@@ -876,7 +876,7 @@ def matvec(adc, M_ab=None, eris=None):
         s[s2:f2] = (D_ijab.reshape(-1))*r[s2:f2]
         del D_ijab
 
-        if isinstance(eris.ovvv, type(None)):
+        if eris.ovvv is None:
             M_11Y0 = np.zeros((nocc,nocc,nvir,nvir))
             chnk_size = radc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc,chnk_size):
@@ -910,7 +910,7 @@ def matvec(adc, M_ab=None, eris=None):
         if (adc.method == "adc(2)-x") or (adc.method == "adc(3)"):
             Y = r2
 
-            if isinstance(eris.vvvv, type(None)):
+            if eris.vvvv is None:
                 s[s2:f2] += radc_amplitudes.contract_ladder(adc,Y,eris.Lvv).reshape(-1)
             elif isinstance(eris.vvvv, list):
                 s[s2:f2] += radc_amplitudes.contract_ladder(adc,Y,eris.vvvv).reshape(-1)
@@ -955,7 +955,7 @@ def matvec(adc, M_ab=None, eris=None):
             s[s1:f1] -= einsum('ijab,ikab,IDkj->ID', Y, t1_ccee, v_ccce, optimize = einsum_type).reshape(-1)
             s[s1:f1] += einsum('ijab,ikba,IDkj->ID', Y, t1_ccee, v_ccce, optimize = einsum_type).reshape(-1)
 
-            if isinstance(eris.ovvv, type(None)):
+            if eris.ovvv is None:
                 chnk_size = radc_ao2mo.calculate_chunk_size(adc)
                 temp = np.zeros((nocc,nvir))
                 for a,b in lib.prange(0,nocc,chnk_size):
@@ -1052,7 +1052,7 @@ def matvec(adc, M_ab=None, eris=None):
             s[s2:f2] += einsum('ia,jJCD,jaiI->IJCD', Y, t1_ccee, v_ccce, optimize = einsum_type).reshape(-1)
             s[s2:f2] -= 2 * einsum('ia,jJCD,iajI->IJCD', Y, t1_ccee, v_ccce, optimize = einsum_type).reshape(-1)
 
-            if isinstance(eris.ovvv, type(None)):
+            if eris.ovvv is None:
                 chnk_size = radc_ao2mo.calculate_chunk_size(adc)
                 temp = np.zeros((nocc,nocc,nvir,nvir))
                 for a,b in lib.prange(0,nocc,chnk_size):

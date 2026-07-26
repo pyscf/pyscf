@@ -71,7 +71,7 @@ def to_berny_log(pyscf_log):
         def emit(self, record):
             pyscf_log.info(record.getMessage())
 
-    log = logging.getLogger('{}.{}'.format(__name__, id(pyscf_log)))
+    log = logging.getLogger(f'{__name__}.{id(pyscf_log)}')
     log.addHandler(PyscfHandler())
     log.setLevel('INFO')
     return log

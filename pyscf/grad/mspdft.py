@@ -173,7 +173,7 @@ def mspdft_heff_HellmanFeynman (mc_grad, atmlst=None, mo=None, ci=None,
             dde = mf_grad.kernel (mo_coeff=mo, mo_energy=mo_energy, mo_occ=mo_occ,
                 atmlst=atmlst)
     de -= dde
-    log.debug ('MS-PDFT gradient off-diagonal H-F terms:\n{}'.format (de))
+    log.debug (f'MS-PDFT gradient off-diagonal H-F terms:\n{de}')
     log.timer ('MS-PDFT gradient off-diagonal H-F terms', *t0)
     return de
 
@@ -293,7 +293,7 @@ class Gradients (mcpdft_grad.Gradients):
         xis = np.dot (xci.conj (), ci.T)
         if symm > -1: xis -= xis.T
         else:
-            assert (np.amax (np.abs (xis + xis.T)) < 1e-8), '{}'.format (xis)
+            assert (np.amax (np.abs (xis + xis.T)) < 1e-8), f'{xis}'
         return xis[np.tril_indices (nroots, k=-1)]
 
     def _separate_is_component (self, xci, ci=None, symm=-1):
@@ -343,8 +343,7 @@ class Gradients (mcpdft_grad.Gradients):
             if self.verbose >= lib.logger.DEBUG:
                 g_orb, g_ci = self.unpack_uniq_var (g_i)
                 g_ci, g_is = self._separate_is_component (g_ci, ci=ci, symm=0)
-                log.debug ('g_is pdft state {} component:\n{} * {}'.format (i,
-                    amp, g_is))
+                log.debug (f'g_is pdft state {i} component:\n{amp} * {g_is}')
 
         # DEBUG
         g_orb_pdft, g_ci = self.unpack_uniq_var (g_all_pdft)
@@ -354,8 +353,8 @@ class Gradients (mcpdft_grad.Gradients):
         g_orb_heff, g_is_heff = mspdft_heff_response (self, mo=mo, ci=ci,
             si_bra=si_bra, si_ket=si_ket, eris=eris)
 
-        log.debug ('g_is pdft total component:\n{}'.format (g_is_pdft))
-        log.debug ('g_is heff component:\n{}'.format (g_is_heff))
+        log.debug (f'g_is pdft total component:\n{g_is_pdft}')
+        log.debug (f'g_is heff component:\n{g_is_heff}')
 
         # Combine
         g_orb = g_orb_pdft + g_orb_heff
@@ -436,7 +435,7 @@ class Gradients (mcpdft_grad.Gradients):
 
         # Fix messed-up counting of the nuclear part
         de_nuc = mf_grad.grad_nuc (self.mol, atmlst)
-        log.debug ('MS-PDFT gradient n-n terms:\n{}'.format (de_nuc))
+        log.debug (f'MS-PDFT gradient n-n terms:\n{de_nuc}')
         de = si_diag.sum () * de_nuc.copy ()
 
         # Diagonal: PDFT component
@@ -445,17 +444,16 @@ class Gradients (mcpdft_grad.Gradients):
             de_i = mcpdft_grad.Gradients.get_ham_response (self, state=i,
                 mo=mo, ci=ci, veff1=v1, veff2=v2, eris=eris, mf_grad=mf_grad,
                 verbose=0, **kwargs) - de_nuc
-            log.debug ('MS-PDFT gradient int-state {} EPDFT terms:\n{}'.format
-                (i, de_i))
-            log.debug ('Factor for these terms: {}'.format (amp))
+            log.debug (f'MS-PDFT gradient int-state {i} EPDFT terms:\n{de_i}')
+            log.debug (f'Factor for these terms: {amp}')
             de += amp * de_i
-        log.debug ('MS-PDFT gradient diag H-F terms:\n{}'.format (de))
+        log.debug (f'MS-PDFT gradient diag H-F terms:\n{de}')
 
         # Off-diagonal: heff component
         de_o = mspdft_heff_HellmanFeynman (self, mo_coeff=mo, ci=ci,
             si_bra=si_bra, si_ket=si_ket, eris=eris, state=state,
             mf_grad=mf_grad, **kwargs)
-        log.debug ('MS-PDFT gradient offdiag H-F terms:\n{}'.format (de_o))
+        log.debug (f'MS-PDFT gradient offdiag H-F terms:\n{de_o}')
         de += de_o
 
         return de
@@ -478,8 +476,7 @@ class Gradients (mcpdft_grad.Gradients):
         # Double-check Lvec_v sanity
         Lvec_orb, Lvec_ci = self.unpack_uniq_var (Lvec_v)
         Lvec_is2 = self._get_is_component (Lvec_ci, symm=0)
-        assert (np.amax (np.abs (Lvec_is2)) < 1e-8), '{} {}'.format (Lvec_is,
-            Lvec_is2)
+        assert (np.amax (np.abs (Lvec_is2)) < 1e-8), f'{Lvec_is} {Lvec_is2}'
 
         # Orbital and CI components
         de_Lv = sacasscf_grad.Gradients.get_LdotJnuc (self, Lvec_v,
@@ -497,8 +494,7 @@ class Gradients (mcpdft_grad.Gradients):
             rhf_grad._write(self, self.mol, de_Lis, atmlst)
         logger.info (self,
             '----------------------------------------------------------------')
-        t0 = logger.timer (self, '{} gradient Lagrange IS response'.format (
-            self.base.__class__.__name__), *t0)
+        t0 = logger.timer (self, f'{self.base.__class__.__name__} gradient Lagrange IS response', *t0)
         return de_Lv + de_Lis
 
     def get_lagrange_callback (self, Lvec_last, itvec, geff_op):
@@ -511,7 +507,7 @@ class Gradients (mcpdft_grad.Gradients):
                 xci_p = transf.vec_csf2det (xci_csf, normalize=False)
                 xci_bs_norm = linalg.norm (np.concatenate (
                     [x.ravel () - y.ravel () for x, y in zip (xci_p, xci)]))
-                log.debug ('Broken-spin |{}| = {}'.format (tag, xci_bs_norm))
+                log.debug (f'Broken-spin |{tag}| = {xci_bs_norm}')
         else:
             def _debug_csfs (xci, tag):
                 pass
@@ -523,11 +519,9 @@ class Gradients (mcpdft_grad.Gradients):
             deltaorb, deltaci, deltais = self.unpack_uniq_var (deltax)
             gci_norm = linalg.norm (np.asarray (gci).ravel ())
             deltaci_norm = linalg.norm (np.asarray (deltaci).ravel ())
-            logger.info(self, ('Lagrange optimization iteration {}, |gorb| = '
-                '{}, |gci| = {}, |gis| = {} |dLorb| = {}, |dLci| = {}, |dLis|'
-                ' = {}').format (itvec[0], linalg.norm (gorb),
-                gci_norm, linalg.norm (gis), linalg.norm (deltaorb),
-                deltaci_norm, linalg.norm (deltais)))
+            logger.info(self, (f'Lagrange optimization iteration {itvec[0]}, |gorb| = '
+                f'{linalg.norm (gorb)}, |gci| = {gci_norm}, |gis| = {linalg.norm (gis)} |dLorb| = {linalg.norm (deltaorb)}, |dLci| = {deltaci_norm}, |dLis|'
+                f' = {linalg.norm (deltais)}'))
             _debug_csfs (gci, 'gci')
             _debug_csfs (deltaci, 'dLci')
             Lvec_last[:] = x[:]
@@ -573,8 +567,8 @@ class Gradients (mcpdft_grad.Gradients):
             xci_norm = np.sqrt (xci_norm)
             for ix, (norm, ss, multip) in enumerate (zip (xci_norm, xci_ss,
                     xci_multip)):
-                log.debug ((' State {} norm = {:.7e} ; <S^2> = {:.7f} ; 2S+1'
-                            ' = {:.7f}').format (ix, norm, ss, multip))
+                log.debug ((f' State {ix} norm = {norm:.7e} ; <S^2> = {ss:.7f} ; 2S+1'
+                            f' = {multip:.7f}'))
             ovlp = np.zeros ((nroots, nroots), dtype=xci[0].dtype)
             for i, j in product (range (nroots), repeat=2):
                 if self.spin_states[i] != self.spin_states[j]: continue
@@ -584,26 +578,23 @@ class Gradients (mcpdft_grad.Gradients):
             for row in ovlp: log.debug (fmt_str.format (*row))
         _debug_csfs (ci, 'CI vector', normalize=True)
         borb, bci, bis = self.unpack_uniq_var (bvec)
-        log.debug ('Orbital rotation gradient (b) norm = {:.6e}'.format (
-            linalg.norm (borb)))
+        log.debug (f'Orbital rotation gradient (b) norm = {linalg.norm (borb):.6e}')
         _debug_cispace (bci, 'CI gradient (b)')
         _debug_csfs (bci, 'CI gradient (b)')
         Aorb, Aci = self.unpack_uniq_var (Adiag)
-        log.debug ('Orbital rotation Hessian (A) diagonal norm = {:.7e}'.format
-            (linalg.norm (Aorb)))
+        log.debug (f'Orbital rotation Hessian (A) diagonal norm = {linalg.norm (Aorb):.7e}')
         _debug_cispace (Aci, 'CI Hessian (A) diagonal')
         _debug_csfs (Aci, 'CI Hessian (A) diagonal')
         Lorb, Lci, Lis = self.unpack_uniq_var (Lvec)
-        log.debug ('Orbital rotation Lagrange vector (x) norm = {:.7e}'.format
-            (linalg.norm (Lorb)))
+        log.debug (f'Orbital rotation Lagrange vector (x) norm = {linalg.norm (Lorb):.7e}')
         _debug_cispace (Lci, 'CI Lagrange (x) vector')
         _debug_csfs (Lci, 'CI Lagrange (x) vector')
-        log.debug ('{} Constraint Jacobian (A):'.format (self.base.__class__.__name__))
+        log.debug (f'{self.base.__class__.__name__} Constraint Jacobian (A):')
         fmt = ' ' + ' '.join (['{:12.5e}' for i in range (self.nis)])
         for row in d2f: log.debug (fmt.format (*row))
         log.debug (' {:>12s} {:>12s}'.format ('Gradient (b)', 'Vector (x)'))
         for g, v in zip (bis, Lis):
-            log.debug (' {:12.5e} {:12.5e}'.format (g, v))
+            log.debug (f' {g:12.5e} {v:12.5e}')
 
 class MSPDFTLagPrec (sacasscf_grad.SACASLagPrec):
     ''' Solve IS part exactly, then do everything else the same '''
@@ -627,8 +618,7 @@ class MSPDFTLagPrec (sacasscf_grad.SACASLagPrec):
         self.d2f=d2f
         self.d2f_evals, self.d2f_evecs = linalg.eigh (d2f)
         idx_sing = np.abs (self.d2f_evals) < self.sing_tol
-        self.log.debug ('IS component Hessian eigenvalues: {}'.format (
-            self.d2f_evals))
+        self.log.debug (f'IS component Hessian eigenvalues: {self.d2f_evals}')
         if np.any (idx_sing): self.do_sing_warn ()
         self.d2f_evals = self.d2f_evals[~idx_sing]
         self.d2f_evecs = self.d2f_evecs[:,~idx_sing]
@@ -657,7 +647,7 @@ class MSPDFTLagPrec (sacasscf_grad.SACASLagPrec):
 
     def do_sing_warn (self):
         if self.sing_warned: return
-        self.log.warn ('Model-space frame-rotation Hessian is singular! '
+        self.log.warning ('Model-space frame-rotation Hessian is singular! '
                         'Response equations may not be solvable to arbitrary '
                         'precision!')
         self.sing_warned = True

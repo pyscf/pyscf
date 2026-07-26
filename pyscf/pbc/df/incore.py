@@ -321,7 +321,7 @@ class Int3cBuilder(lib.StreamObject):
                 kk_mask[reindex_k] = True
                 kk_mask = kk_mask.reshape(nkpts, nkpts)
                 if not np.all(kk_mask == kk_mask.T):
-                    log.warn('aosym=s2 not found in required kpts pairs')
+                    log.warning('aosym=s2 not found in required kpts pairs')
 
         expLk = np.exp(1j*np.dot(supmol.bvkmesh_Ls, kpts.T))
         expLkR = np.asarray(expLk.real, order='C')

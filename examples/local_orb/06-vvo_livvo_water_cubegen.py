@@ -36,24 +36,24 @@ ovlpS = mol.intor_symmetric('int1e_ovlp')
 iaos = iao.iao(mol, orbocc)
 iaos = orth.vec_lowdin(iaos, ovlpS)
 for i in range(iaos.shape[1]):
-    tools.cubegen.orbital(mol, 'h2o_cmo_{:02d}.cube'.format(i+1), mocoeff[:,i])
+    tools.cubegen.orbital(mol, f'h2o_cmo_{i+1:02d}.cube', mocoeff[:,i])
 
 # plot intrinsic atomic orbitals
 for i in range(iaos.shape[1]):
-    tools.cubegen.orbital(mol, 'h2o_iao_{:02d}.cube'.format(i+1), iaos[:,i])
+    tools.cubegen.orbital(mol, f'h2o_iao_{i+1:02d}.cube', iaos[:,i])
 
 # plot intrinsic bonding orbitals
 count = 0
 ibos = lo.ibo.ibo(mol, orbocc, locmethod='IBO')
 for i in range(ibos.shape[1]):
     count += 1
-    tools.cubegen.orbital(mol, 'h2o_ibo_{:02d}.cube'.format(count), ibos[:,i])
+    tools.cubegen.orbital(mol, f'h2o_ibo_{count:02d}.cube', ibos[:,i])
 
 # plot valence virtual orbitals and localized valence virtual orbitals
 vvo = lo.vvo.vvo(mol, orbocc, orbvirt)
 livvo = lo.vvo.livvo(mol, orbocc, orbvirt)
 for i in range(vvo.shape[1]):
     count += 1
-    tools.cubegen.orbital(mol, 'h2o_vvo_{:02d}.cube'.format(count), vvo[:,i])
-    tools.cubegen.orbital(mol, 'h2o_livvo_{:02d}.cube'.format(count), livvo[:,i])
+    tools.cubegen.orbital(mol, f'h2o_vvo_{count:02d}.cube', vvo[:,i])
+    tools.cubegen.orbital(mol, f'h2o_livvo_{count:02d}.cube', livvo[:,i])
 

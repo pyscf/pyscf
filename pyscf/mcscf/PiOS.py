@@ -110,7 +110,7 @@ def MakePiOS(mol,mf,PiAtomsList, nPiOcc=None,nPiVirt=None):
     S2 = mol2.intor_symmetric("int1e_ovlp")
     S12 = gto.intor_cross('int1e_ovlp', mol, mol2)
     SMo = mdot(C.T, S1, C)
-    print("    MO deviation from orthogonality  {:8.2e} \n".format(rmsd(SMo - np.eye(SMo.shape[0]))))
+    print(f"    MO deviation from orthogonality  {rmsd(SMo - np.eye(SMo.shape[0])):8.2e} \n")
 
     # make arrays of occupation numbers and orbital eigenvalues.
     Occ = mf.mo_occ
@@ -122,12 +122,12 @@ def MakePiOS(mol,mf,PiAtomsList, nPiOcc=None,nPiVirt=None):
     else:
         nOcc = np.sum(Occ == 2)+np.sum(Occ == 1)
         n1=np.sum(Occ == 1)
-        print("    Number of singly occupied orbitals      {} ".format(n1))
+        print(f"    Number of singly occupied orbitals      {n1} ")
 
     nVir = np.sum(Occ == 0)
     assert (nOcc + nVir == nOrb)
-    print("    Number of occupied orbitals      {} ".format(nOcc))
-    print("    Number of unoccupied orbitals    {} ".format(nVir))
+    print(f"    Number of occupied orbitals      {nOcc} ")
+    print(f"    Number of unoccupied orbitals    {nVir} ")
 
     # Compute Fock matrix from orbital eigenvalues (SCF has to be fully converged)
     Fock = mdot(S1, C, np.diag(Eps), C.T, S1.T)
@@ -161,10 +161,10 @@ def MakePiOS(mol,mf,PiAtomsList, nPiOcc=None,nPiVirt=None):
         SmhTargetIb = MakeSmh(STargetIb)
         STargetIbVir = mdot(SmhTargetIb, CTargetIb.T, S1, CVir)
         U,sig,Vt = np.linalg.svd(STargetIbVir, full_matrices=False)
-        print("    Number of target MINAO basis fn     {}\n".format(CTargetIb.shape[1]))
+        print(f"    Number of target MINAO basis fn     {CTargetIb.shape[1]}\n")
 
-        print("SIbVir Singular Values (n={})".format(len(sig)))
-        print("    [{}]".format(', '.join('{:.4f}'.format(k) for k in sig)))
+        print(f"SIbVir Singular Values (n={len(sig)})")
+        print("    [{}]".format(', '.join(f'{k:.4f}' for k in sig)))
 
 
         assert (np.abs(sig[nIbVir-1] - 1.0) < 1e-4)
@@ -215,13 +215,13 @@ def MakePiOS(mol,mf,PiAtomsList, nPiOcc=None,nPiVirt=None):
         ew, ev = np.linalg.eigh(SAct)
         print("    CAct initial overlap (if all ~approx 1, then the initial "
               "active orbitals are near-orthogonal. That is good.)")
-        print("    [{}]".format(', '.join('{:.4f}'.format(k) for k in ew)))
+        print("    [{}]".format(', '.join(f'{k:.4f}' for k in ew)))
 
         CAct = np.dot(CAct, MakeSmh(SAct))
         CAct = SemiCanonicalize(CAct, Fock, S1, "active")
 
-    print("    Number of Active Electrons     {} ".format(nElec))
-    print("    Number of Active Orbitals      {} ".format( CAct.shape[1]))
+    print(f"    Number of Active Electrons     {nElec} ")
+    print(f"    Number of Active Orbitals      {CAct.shape[1]} ")
 
     # make new non-active occupied and non-active virtual orbitals,
     # in order to rebuild a full MO matrix.
@@ -236,7 +236,7 @@ def MakePiOS(mol,mf,PiAtomsList, nPiOcc=None,nPiVirt=None):
         nRest = COrb1.shape[1] - CAct.shape[1]
         if 0:
             for i in range(len(ew)):
-                print("{:4} {:15.6f}  {}".format(i,ew[i], i == nRest))
+                print(f"{i:4} {ew[i]:15.6f}  {i == nRest}")
         assert (np.abs(ew[nRest-1] - 0.0) < 1e-8)
         assert (np.abs(ew[nRest] - 1.0) < 1e-8)
         CNewOrb1 = np.dot(COrb1, ev[:,:nRest])
@@ -252,9 +252,9 @@ def MakePiOS(mol,mf,PiAtomsList, nPiOcc=None,nPiVirt=None):
         SMo = mdot(COrbNew.T, S1, COrbNew)
         COrbNew = np.dot(COrbNew, MakeSmh(SMo))
 
-    print("    Number of Core Orbitals        {} ".format(CNewClo.shape[1]))
-    print("    Number of Virtual Orbitals     {} ".format(CNewExt.shape[1]))
-    print("    Total Number of Orbitals       {} ".format(COrbNew.shape[1]))
+    print(f"    Number of Core Orbitals        {CNewClo.shape[1]} ")
+    print(f"    Number of Virtual Orbitals     {CNewExt.shape[1]} ")
+    print(f"    Total Number of Orbitals       {COrbNew.shape[1]} ")
 
     return CNewClo.shape[1],CAct.shape[1],CNewExt.shape[1],nElec, COrbNew
 
@@ -312,10 +312,10 @@ def GetPzOrientation(iTargetAtoms, Coords_, Elements_):
     ew *= -1
 
     print("Target Atom List:")
-    print("[{}]".format(', '.join('{}'.format(k) for k in iTargetAtoms)))
+    print("[{}]".format(', '.join(f'{k}' for k in iTargetAtoms)))
 
     print("Elements        :")
-    print("[{}]".format(', '.join('{}'.format(k) for k in Elements)))
+    print("[{}]".format(', '.join(f'{k}' for k in Elements)))
 
 
     # direction of smallest spatial extend (last one) should be
@@ -422,7 +422,7 @@ def GetNumPiElec(iAt, Elements,Coords):
     nPiTab = _NumPiElec.get(At, None)
     if nPiTab is not None:
         return nPiTab
-    print(" ...determining formal number of pi-electrons for {} (not in table).".format(At.Label))
+    print(f" ...determining formal number of pi-electrons for {At.Label} (not in table).")
 
     # find number of bonded partners
     iBonded = []
@@ -449,7 +449,7 @@ def GetNumPiElec(iAt, Elements,Coords):
         elif nBonds == 3:
             # two sigma bond (1e each) + 1 lone pairs in x/y planes (2e) -> 2e left for pi system
             return 2
-    raise Exception("GetNumPiElec({}): {} with {} bonds not tabulated :(".format(iAt, At,  nBonds))
+    raise Exception(f"GetNumPiElec({iAt}): {At} with {nBonds} bonds not tabulated :(")
 
 
 def SemiCanonicalize(COut, Fock, S1, Name, Print=True):
@@ -457,31 +457,31 @@ def SemiCanonicalize(COut, Fock, S1, Name, Print=True):
     SOrb = mdot(COut.T, S1, COut)
     fErr = rmsd(SOrb - np.eye(nOrb))
     if fErr > 1e-8:
-        print("    SemiCan: Orbital deviation from orthogonality  {:8.2e} \n".format(fErr))
+        print(f"    SemiCan: Orbital deviation from orthogonality  {fErr:8.2e} \n")
         raise Exception("Orbitals not orthogonal.")
     FockMo = mdot(COut.T, Fock, COut)
     ew,ev = np.linalg.eigh(FockMo)
     if Print:
-        print("    Semi-canonicalized orbital energies ({} subspace)".format(Name))
-        print("    [{}]".format(', '.join('{:.4f}'.format(k) for k in ew)))
+        print(f"    Semi-canonicalized orbital energies ({Name} subspace)")
+        print("    [{}]".format(', '.join(f'{k:.4f}' for k in ew)))
     return np.dot(COut, ev)
 
 
 def MakeOverlappingOrbSubspace(Space, Name, COrb, nOrbExpected,  CTargetIb, S1, Fock):
-    print("\n -- Constructing MO subspace space {}/{}.".format(Space, Name))
+    print(f"\n -- Constructing MO subspace space {Space}/{Name}.")
     STargetIb = mdot(CTargetIb.T, S1, CTargetIb)
     SmhTargetIb = MakeSmh(STargetIb)
 
     STargetIbVir = mdot(SmhTargetIb, CTargetIb.T, S1, COrb)
     U,sig,Vt = np.linalg.svd(STargetIbVir, full_matrices=False)
 
-    print("    S[{},{}] singular Values (n={}, nThr={})".format(Space, Name, len(sig), nOrbExpected))
-    print("    [{}]".format(', '.join('{:.4f}'.format(k) for k in sig)))
-    print("    Sigma[{}]                         {:.4f} (should be 1)".format(nOrbExpected-1, sig[nOrbExpected-1]))
+    print(f"    S[{Space},{Name}] singular Values (n={len(sig)}, nThr={nOrbExpected})")
+    print("    [{}]".format(', '.join(f'{k:.4f}' for k in sig)))
+    print(f"    Sigma[{nOrbExpected-1}]                         {sig[nOrbExpected-1]:.4f} (should be 1)")
     if nOrbExpected < len(sig):
-        print("    Sigma[{}]                         {:.4f} (should be 0)".format(nOrbExpected, sig[nOrbExpected]))
+        print(f"    Sigma[{nOrbExpected}]                         {sig[nOrbExpected]:.4f} (should be 0)")
         if sig[nOrbExpected-1] < 0.8 or sig[nOrbExpected] > 0.5:
-            raise Exception("{} orbital construction okay?".format(Space))
+            raise Exception(f"{Space} orbital construction okay?")
 
     V = Vt.T
     COut = np.dot(COrb, V[:,:nOrbExpected])
@@ -493,7 +493,7 @@ def MakeOverlappingOrbSubspace(Space, Name, COrb, nOrbExpected,  CTargetIb, S1, 
 def MakePiSystemOrbitals(TargetName, iTargetAtomsForPlane_,
                          iTargetAtomsForBasis_,Elements,Coords, CIb, Shells,
                          S1, S12, S2, Fock, COcc, CVir):
-    print("\n *** TARGET: {}\n".format(TargetName))
+    print(f"\n *** TARGET: {TargetName}\n")
     # convert from 1-based atom indices to 0-based indices.
     iTargetAtomsForPlane = np.array(iTargetAtomsForPlane_) - 1
     if iTargetAtomsForBasis_ is None:
@@ -508,10 +508,10 @@ def MakePiSystemOrbitals(TargetName, iTargetAtomsForPlane_,
     for iAt in iTargetAtomsForBasis:
         nPiElec += GetNumPiElec(iAt, Elements,Coords)
 
-    print("    Formal number of elec in pi-system      {} ".format(nPiElec))
+    print(f"    Formal number of elec in pi-system      {nPiElec} ")
 
     if (nPiElec % 2) != 0:
-        raise Exception("Got {} pi electrons. Shouldn't this be an even number?".format(nPiElec))
+        raise Exception(f"Got {nPiElec} pi electrons. Shouldn't this be an even number?")
 
     # idea: make full pi system for target AOs (via IAOs)
     # then we do know how many occupied and virtual pi
@@ -523,12 +523,12 @@ def MakePiSystemOrbitals(TargetName, iTargetAtomsForPlane_,
 
     CTargetIb = np.dot(CIb, CAoMix)
     nTargetIb = CAoMix.shape[1]
-    print("    Number of target MINAO basis fn      {} ".format(nTargetIb))
+    print(f"    Number of target MINAO basis fn      {nTargetIb} ")
 
-    print("    size of CIb1          {} ".format(CIb.shape[0]))
-    print("    size of CAomix1       {} ".format(CAoMix.shape[0]))
-    print("    size of CIb2          {} ".format(CIb.shape[1]))
-    print("    size of CAomix2       {} ".format(CAoMix.shape[1]))
+    print(f"    size of CIb1          {CIb.shape[0]} ")
+    print(f"    size of CAomix1       {CAoMix.shape[0]} ")
+    print(f"    size of CIb2          {CIb.shape[1]} ")
+    print(f"    size of CAomix2       {CAoMix.shape[1]} ")
 
 
     nOccOrbExpected=nPiElec//2

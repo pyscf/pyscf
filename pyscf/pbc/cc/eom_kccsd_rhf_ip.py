@@ -55,7 +55,7 @@ def vector_to_amplitudes(cc_or_eom, vec, kshift=0):
     """IP vector to apmplitudes."""
     expected_vs = vector_size(cc_or_eom, kshift)
     if expected_vs != len(vec):
-        raise ValueError("The size of the vector passed {:d} should be exactly {:d}".format(len(vec), expected_vs))
+        raise ValueError(f"The size of the vector passed {len(vec):d} should be exactly {expected_vs:d}")
 
     itr = iter_12(cc_or_eom, kshift)
 

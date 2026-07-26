@@ -144,9 +144,8 @@ def kernel(ot, dm1s, cascm2, mo_coeff, ncore, ncas,
     ngrids = ot.grids.coords.shape[0]
     ngrids_blk = int(ngrids / BLKSIZE) * BLKSIZE
     pdft_blksize = max(BLKSIZE, min(pdft_blksize, ngrids_blk, BLKSIZE * 1200))
-    logger.debug(ot, ('{} MB used of {} available; block size of {} chosen'
-                      'for grid with {} points').format(current_memory()[0], max_memory,
-                                                        pdft_blksize, ngrids))
+    logger.debug(ot, (f'{current_memory()[0]} MB used of {max_memory} available; block size of {pdft_blksize} chosen'
+                      f'for grid with {ngrids} points'))
 
     # The actual loop
     for ao, mask, weight, coords in ni.block_loop(ot.mol, ot.grids, nao,

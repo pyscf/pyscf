@@ -338,7 +338,7 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
 
         if max_buflen > buflen and nchunks == 1:
             # Only meaningful when chunking did not bring usage under budget.
-            log.warn('memory usage of outcore_auxe2 may be %.2f times over max_memory',
+            log.warning('memory usage of outcore_auxe2 may be %.2f times over max_memory',
                      (max_buflen/buflen - 1))
         if nchunks > 1:
             log.debug('outcore_auxe2: splitting %d kpt pairs into %d chunks '

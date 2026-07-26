@@ -49,8 +49,8 @@ import cppe
 from packaging.version import parse as _parse_version
 min_version = '0.3.1'
 if _parse_version(cppe.__version__) < _parse_version(min_version):
-    raise ModuleNotFoundError("cppe version {} is required at least. "
-                              "Version {} was found.".format(min_version, cppe.__version__))
+    raise ModuleNotFoundError(f"cppe version {min_version} is required at least. "
+                              f"Version {cppe.__version__} was found.")
 
 from pyscf import lib
 from pyscf.lib import logger

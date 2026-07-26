@@ -494,7 +494,7 @@ def matvec(adc, M_ij=None, eris=None):
             temp_evc -= 0.25 * lib.einsum('jibc,aij->abc',t2_1_cvee, r2_evc, optimize=True)
             temp_evc += 0.25 * lib.einsum('jibc,aji->abc',t2_1_vcee, r2_evc, optimize=True)
 
-            if isinstance(eris.ovvv, type(None)):
+            if eris.ovvv is None:
                 chnk_size = radc_ao2mo.calculate_chunk_size(adc)
             else:
                 chnk_size = nocc

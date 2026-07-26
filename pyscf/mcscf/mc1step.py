@@ -492,7 +492,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         if casscf.natorb:
             # FIXME (pyscf-2.0): Whether to transform natural orbitals in
             # active space when this flag is enabled?
-            log.warn('The attribute natorb of mcscf object affects only the '
+            log.warning('The attribute natorb of mcscf object affects only the '
                      'orbital canonicalization.\n'
                      'If you would like to get natural orbitals in active space '
                      'without touching core and external orbitals, an explicit '
@@ -832,7 +832,7 @@ class CASSCF(casci.CASBase):
 
         if (getattr(self._scf, 'with_solvent', None) and
             not getattr(self, 'with_solvent', None)):
-            log.warn('''Solvent model %s was found at SCF level but not applied to the CASSCF object.
+            log.warning('''Solvent model %s was found at SCF level but not applied to the CASSCF object.
 The SCF solvent model will not be applied to the current CASSCF calculation.
 To enable the solvent model for CASSCF, the following code needs to be called
         from pyscf import solvent
