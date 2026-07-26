@@ -9,7 +9,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v7
     - name: Install ruff
-      run: pip install ruff
+      run: pip install "ruff<0.16.0"
     - name: Check style
       run: ruff check --config .ruff.toml pyscf
     - name: Check NumPy
