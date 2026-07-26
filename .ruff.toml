@@ -82,6 +82,12 @@ ignore = [
     "PLR1716",
     # SIM223: False and ... → False — intentional dead feature gate code
     "SIM223",
+    # RUF051: if k in d: del d[k] → d.pop(k, None) — defer
+    "RUF051",
+    # RET501: return None → return — defer
+    "RET501",
+    # FLY002: join → f-string — cosmetic
+    "FLY002",
 ]
 
 [lint.per-file-ignores]
