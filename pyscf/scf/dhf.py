@@ -220,9 +220,12 @@ def get_ovlp(mol):
 
     s = mol.intor_symmetric('int1e_ovlp_spinor')
     t = mol.intor_symmetric('int1e_spsp_spinor')
+    u = mol.intor_symmetric("int1e_sp_spinor")
     s1e = numpy.zeros((n4c, n4c), numpy.complex128)
     s1e[:n2c,:n2c] = s
     s1e[n2c:,n2c:] = t * (.5/c)**2
+    s1e[:n2c, n2c:] = u * (0.5 / c)
+    s1e[n2c:, :n2c] = u.conj().T * (0.5 / c)
     return s1e
 
 make_rdm1 = hf.make_rdm1
