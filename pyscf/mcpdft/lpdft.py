@@ -658,7 +658,19 @@ class _LPDFTMix(_LPDFT):
         return [c for ci_irrep in adiabat_ci for c in ci_irrep]
 
     def nuc_grad_method(self, state=None):
-        raise NotImplementedError("MultiState Mix LPDFT nuclear gradients")
+        from pyscf.mcscf import mc1step
+        from pyscf.mcscf.df import _DFCASSCF
+
+        if not isinstance(self, mc1step.CASSCF):
+            raise NotImplementedError("CASCI-based LPDFT nuclear gradients")
+        elif getattr(self, "frozen", None) is not None:
+            raise NotImplementedError("LPDFT nuclear gradients with frozen orbitals")
+        elif isinstance(self, _DFCASSCF):
+            from pyscf.df.grad.lpdft_mix import Gradients
+        else:
+            from pyscf.grad.lpdft_mix import Gradients
+
+        return Gradients(self, state=state)
 
 
 def linear_multi_state(mc, weights=(0.5, 0.5), **kwargs):

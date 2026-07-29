@@ -501,7 +501,9 @@ class Gradients(sacasscf.Gradients):
             gci_root = gci_implicit[root].ravel()
 
             assert root in idx
-            ci_proj = np.asarray([ci[i].ravel() for i in idx])
+            ci_proj = np.asarray([ci[i].ravel() for i in idx if np.shape(ci[i]) == np.shape(gci_implicit[root])])
+            if ci_proj.size == 0:    #prevent crash if no compativle CI vectors for projection against
+                continue
             gci_sa = np.dot(ci_proj, gci_root)
             gci_root -= np.dot(gci_sa, ci_proj)
 
