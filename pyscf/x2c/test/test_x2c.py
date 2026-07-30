@@ -318,7 +318,7 @@ C     F
 
         mol = gto.M(atom='He')
         for cls in ('RHF', 'UHF', 'RKS', 'UKS'):
-            mf = getattr(mol, cls).sfx2c1e()
+            mf = getattr(mol, cls)().sfx2c1e()
             check(mf.to_rks(), 'RKS')
             check(mf.to_uks(), 'UKS')
             check(mf.to_gks(), 'GKS')
