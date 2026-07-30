@@ -44,16 +44,24 @@ bs.plot(filename='C-bands.png')
 
 # Compute density of states using ASE's DOS module
 from ase.dft.dos import DOS
-dos = DOS(ase_atom.calc, width=0.1, window=(-10, 10), npts=1000)
-weights = dos.get_dos()
+
+# Gaussian smearing DOS
+dos_gauss = DOS(ase_atom.calc, width=0.1, window=(-10, 10), npts=1000)
+d_gauss = dos_gauss.get_dos()
+
+# Tetrahedron method DOS (width=0.0)
+dos_tetra = DOS(ase_atom.calc, width=0.0, window=(-10, 10), npts=1000)
+d_tetra = dos_tetra.get_dos()
 
 # Plot DOS
 import matplotlib.pyplot as plt
 fig, ax = plt.subplots(figsize=(6, 4))
-ax.plot(dos.energies, weights)
+ax.plot(dos_gauss.energies, d_gauss, label='Gaussian (0.1 eV)')
+ax.plot(dos_tetra.energies, d_tetra, label='Tetrahedron')
 ax.set_xlabel('Energy (eV)')
 ax.set_ylabel('DOS')
 ax.set_title('Density of States')
+ax.legend()
 fig.savefig('dos.png')
 
 exit()
