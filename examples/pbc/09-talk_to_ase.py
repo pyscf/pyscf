@@ -24,13 +24,13 @@ ase_atom=Diamond(symbol='C', latticeconstant=3.5668)
 cell = pyscf_ase.cell_from_ase(ase_atom)
 cell.basis = 'gth-szv'
 cell.pseudo = 'gth-pade'
-cell.verbose = 0
+cell.verbose = 4
 cell.build()
 
 # Set up a template calculation, which will be used for the ASE calculator.
 # Additional variables can be assigned to the template method.
 # E.g. SCF with k-point sampling can be set to
-mf = cell.KRKS(xc='lda,vwn', kpts=cell.make_kpts([2,2,2]))
+mf = cell.KRKS(xc='pbe', kpts=cell.make_kpts([2,2,2]))
 
 # Once this is setup, ASE is used for everything from this point on
 ase_atom.calc = pyscf_ase.PySCF(method=mf)
@@ -42,6 +42,21 @@ print("ASE energy (should avoid re-evaluation)", ase_atom.get_potential_energy()
 bs = ase_atom.calc.band_structure()
 bs.plot(filename='C-bands.png')
 
+# Compute density of states using ASE's DOS module
+from ase.dft.dos import DOS
+dos = DOS(ase_atom.calc, width=0.1, window=(-10, 10), npts=1000)
+weights = dos.get_dos()
+
+# Plot DOS
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots(figsize=(6, 4))
+ax.plot(dos.energies, weights)
+ax.set_xlabel('Energy (eV)')
+ax.set_ylabel('DOS')
+ax.set_title('Density of States')
+fig.savefig('dos.png')
+
+exit()
 # Compute equation of state
 ase_cell=ase_atom.cell
 volumes = []
