@@ -149,6 +149,7 @@ def gen_ft_kernel(supmol, aosym='s1', intor='GTO_ft_ovlp', comp=1,
         '''
         cput0 = logger.process_clock(), logger.perf_counter()
         assert q.ndim == 1
+        Gv = np.asarray(Gv, dtype=np.double).reshape(-1,3)
         if kptjs is None:
             if _expLk is None:
                 expLkR = np.ones((nimgs,1))

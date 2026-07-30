@@ -2,7 +2,8 @@
 
 
 '''
-PM localization for PBC systems using both Gamma-point and k-point approaches.
+PM localization for PBC systems using both Gamma-point and k-point approaches,
+with the goal of generating *real-valued* Wannier functions.
 '''
 
 import sys
@@ -49,17 +50,24 @@ cell.verbose = 4
 cell.build()
 
 kmesh = [3,3,3]
-kpts = cell.make_kpts(kmesh)
-nkpts = len(kpts)
+kpts = cell.make_kpts(kmesh, time_reversal_symmetry=True)   # enforcing real supercell orbitals
+nkpts = kpts.nkpts
 
 mf = scf.KRKS(cell, kpts=kpts).set(xc='pbe').run()
 
 
-''' k-point-based PM localization (complex rotations)
+''' k-point-based PM localization (real rotations)
 '''
 nocc = cell.nelectron // 2
 mo = np.asarray([x[:,:nocc] for x in mf.mo_coeff])
-mlo = lo.KPM(cell, mo, kpts)    # k-point PM with complex rotations
+mlo = lo.KPMReal(cell, mo, kpts)    # k-point PM with real rotations
+
+# checking initial WFs are real
+wann_coeff = mlo.get_wannier_function()
+log.info('')
+log.info('Initial WF imag part: %.3e', abs(wann_coeff.imag).max())
+log.info('')
+
 mlo.kernel()
 
 # stability check
@@ -69,16 +77,21 @@ while True:
         break
     mlo.kernel(mo)
 
-# get wannier function
+# checking localized WFs are real
 wann_coeff = mlo.get_wannier_function()
+log.info('')
+log.info('Localized WF imag part: %.3e', abs(wann_coeff.imag).max())
+log.info('')
 
 
-''' Supercell-based PM localization (complex rotations)
+''' Supercell-based PM localization (real rotations)
 '''
 mo = np.asarray([x[:,:nocc] for x in mf.mo_coeff])
-mo_s = lo.base.wannierization(cell, kpts, mo)   # Initial WF in supercell
+mo = lo.base.remove_trs_mo(mo, kpts)    # (nkpts_ibz,nao,norb) -> (nkpts,nao,norb)
+mo_s = lo.base.wannierization(cell, kpts.kpts, mo)  # Initial WF in supercell
+mo_s = mo_s.real    # We know it's real
 cell_s = tools.super_cell(cell, kmesh)
-mlo_s = mol_lo.PMComplex(cell_s, mo_s)  # PM with complex rotations
+mlo_s = mol_lo.PM(cell_s, mo_s) # PM with real rotations
 mlo_s.kernel()
 
 # stability check
