@@ -95,7 +95,12 @@ void CVHFdot_rs1(int (*intor)(), void (**fjk)(),
         int idm, ksh, lsh, dk, dl, dijkl;
         int shls[4];
         double complex *pv;
-        double *dms_cond[n_dm+1];
+        /* CVHFrkbssll_vkscreen fills 3*((n_dm+2)/3) entries, which is
+         * n_dm+2 when n_dm is not a multiple of 3.  That happens in the
+         * hermi=0 branch of dhf._call_veff_ssll, where n_dm is 4 times the
+         * number of density matrices.  Size the array for the worst case;
+         * n_dm+1 overflows the stack. */
+        double *dms_cond[n_dm+2];
         double dm_atleast;
         void (*pf)();
 
@@ -145,7 +150,12 @@ static void dot_rs2sub(int (*intor)(), void (**fjk)(),
         int idm, ksh, lsh, dk, dl, dijkl;
         int shls[4];
         double complex *pv;
-        double *dms_cond[n_dm+1];
+        /* CVHFrkbssll_vkscreen fills 3*((n_dm+2)/3) entries, which is
+         * n_dm+2 when n_dm is not a multiple of 3.  That happens in the
+         * hermi=0 branch of dhf._call_veff_ssll, where n_dm is 4 times the
+         * number of density matrices.  Size the array for the worst case;
+         * n_dm+1 overflows the stack. */
+        double *dms_cond[n_dm+2];
         double dm_atleast;
         void (*pf)();
 
@@ -224,7 +234,12 @@ void CVHFdot_rs8(int (*intor)(), void (**fjk)(),
         int idm, ksh, lsh, dk, dl, dijkl;
         int shls[4];
         double complex *pv;
-        double *dms_cond[n_dm+1];
+        /* CVHFrkbssll_vkscreen fills 3*((n_dm+2)/3) entries, which is
+         * n_dm+2 when n_dm is not a multiple of 3.  That happens in the
+         * hermi=0 branch of dhf._call_veff_ssll, where n_dm is 4 times the
+         * number of density matrices.  Size the array for the worst case;
+         * n_dm+1 overflows the stack. */
+        double *dms_cond[n_dm+2];
         double dm_atleast;
         void (*pf)();
 
