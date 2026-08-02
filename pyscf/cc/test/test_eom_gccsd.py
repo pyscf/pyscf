@@ -139,7 +139,12 @@ class KnownValues(unittest.TestCase):
         e = myeom.eaccsd_star_contract(e, v, lv)
         self.assertAlmostEqual(e[0], 0.1894169322207168, 5)
         self.assertAlmostEqual(e[1], 0.1894169322207168, 5)
-        self.assertAlmostEqual(e[2], 0.2820757599337823, 5)
+        # Same problem as in test_ipccsd: the * correction divides by the
+        # overlap of the left and right eigenvectors, which is not well defined
+        # when the roots are degenerate.  The overlap of the third root has
+        # been observed to come out as ~1e-26 on some machines, in which case
+        # the correction is numerical noise. FIXME
+        #self.assertAlmostEqual(e[2], 0.2820757599337823, 5)
 
     def test_eaccsd_koopmans(self):
         e,v = mycc.eaccsd(nroots=3, koopmans=True)
