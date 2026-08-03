@@ -236,11 +236,12 @@ if(ENABLE_LIBXC AND BUILD_LIBXC)
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
             -DCMAKE_INSTALL_LIBDIR:PATH=lib
-            -DENABLE_FORTRAN=0 -DDISABLE_KXC=0 -DDISABLE_LXC=1
+            -DENABLE_FORTRAN=0 -DMAXORDER=3
+            -DBUILD_TESTING=OFF
             -DCMAKE_C_CREATE_SHARED_LIBRARY=${C_LINK_TEMPLATE}
             -DENABLE_XHOST:STRING=${BUILD_MARCH_NATIVE}
             -DCMAKE_C_COMPILER:STRING=${CMAKE_C_COMPILER}
-	    -DCMAKE_POLICY_VERSION_MINIMUM=3.5 # remove when libxc update version min in next release
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 # remove when libxc update version min in next release
   )
   add_dependencies(xc_itrf libxc)
   add_dependencies(dft libxc)
