@@ -1145,10 +1145,14 @@ def _parse_poscar(string):
     a = lines[2:5]
     lattice_vectors = np.array([np.fromstring(ax, sep=' ') for ax in a])
     lattice_vectors *= scale
-    atom_position_type = lines[7].strip().lower()
-    if atom_position_type == 'cartesian':
+    atom_position_line = 7
+    atom_position_type = lines[atom_position_line].strip().lower()
+    if atom_position_type.startswith('s'):
+        atom_position_line += 1
+        atom_position_type = lines[atom_position_line].strip().lower()
+    if atom_position_type.startswith(('c', 'k')):
         fractional = False
-    elif atom_position_type == 'direct':
+    elif atom_position_type.startswith('d'):
         fractional = True
     else:
         raise RuntimeError('Error reading VASP geometry due to '
@@ -1159,15 +1163,15 @@ def _parse_poscar(string):
     for atom, count in zip(lines[5].split(), lines[6].split()):
         unique_atoms[atom] = int(count)
         natm += int(count)
-    start = end = 8
+    start = end = atom_position_line + 1
     elements = []
     coords = []
     for atom_type in unique_atoms:
         count = unique_atoms[atom_type]
         start, end = end, end + count
         elements.extend([atom_type] * count)
-        r = np.fromstring(' '.join(lines[start:end]), sep=' ')
-        coords.append(r.reshape(count, 3))
+        r = np.loadtxt(lines[start:end], usecols=(0, 1, 2), ndmin=2)
+        coords.append(r)
     coords = np.vstack(coords)
     assert len(coords) == len(elements)
     return lattice_vectors, elements, coords, fractional

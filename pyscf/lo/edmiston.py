@@ -28,8 +28,10 @@ from pyscf.lo import boys
 
 class EdmistonRuedenberg(boys.OrbitalLocalizer):
 
-    def get_jk(self, u):
-        mo_coeff = numpy.dot(self.mo_coeff, u)
+    maximize = True
+
+    def get_jk(self, u=None):
+        mo_coeff = self.rotate_orb(u)
         nmo = mo_coeff.shape[1]
         dms = [numpy.einsum('i,j->ij', mo_coeff[:,i], mo_coeff[:,i]) for i in range(nmo)]
         vj, vk = hf.get_jk(self.mol, dms, hermi=1)
@@ -37,17 +39,17 @@ class EdmistonRuedenberg(boys.OrbitalLocalizer):
         vk = numpy.asarray([reduce(numpy.dot, (mo_coeff.T, v, mo_coeff)) for v in vk])
         return vj, vk
 
-    def gen_g_hop(self, u):
+    def gen_g_hop(self, u=None):
         vj, vk = self.get_jk(u)
 
         g0 = numpy.einsum('iip->pi', vj)
-        g = -self.pack_uniq_var(g0-g0.T) * 2
+        g = -self.pack_uniq_var(g0-g0.T) * 4
 
         h_diag = numpy.einsum('ipp->pi', vj) * 2
         g_diag = g0.diagonal()
         h_diag-= g_diag + g_diag.reshape(-1,1)
         h_diag+= numpy.einsum('ipp->pi', vk) * 4
-        h_diag = -self.pack_uniq_var(h_diag) * 2
+        h_diag = -self.pack_uniq_var(h_diag) * 4
 
         g0 = g0 + g0.T
 
@@ -57,33 +59,18 @@ class EdmistonRuedenberg(boys.OrbitalLocalizer):
             hx+= numpy.einsum('qi,iqp->pi', x, vk) * 2
             hx-= numpy.einsum('qp,piq->pi', x, vj) * 2
             hx-= numpy.einsum('qp,piq->pi', x, vk) * 2
-            return -self.pack_uniq_var(hx-hx.T)
+            return -self.pack_uniq_var(hx-hx.T) * 2
 
         return g, h_op, h_diag
 
-    def get_grad(self, u):
+    def get_grad(self, u=None):
         vj, vk = self.get_jk(u)
         g0 = numpy.einsum('iip->pi', vj)
-        g = -self.pack_uniq_var(g0-g0.T) * 2
+        g = -self.pack_uniq_var(g0-g0.T) * 4
         return g
 
-    def cost_function(self, u):
+    def cost_function(self, u=None):
         vj, vk = self.get_jk(u)
         return numpy.einsum('iii->', vj)
 
 ER = Edmiston = EdmistonRuedenberg
-
-if __name__ == '__main__':
-    from pyscf import gto, scf
-
-    mol = gto.Mole()
-    mol.atom = '''
-         He   0.    0.     0.2
-         H    0.   -0.5   -0.4
-         H    0.    0.5   -0.4
-      '''
-    mol.basis = 'sto-3g'
-    mol.build()
-    mf = scf.RHF(mol).run()
-
-    mo = ER(mol).kernel(mf.mo_coeff[:,:2], verbose=4)

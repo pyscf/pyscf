@@ -7,7 +7,7 @@ cd ./pyscf/lib
 mkdir build; cd build
 #cmake -DBUILD_LIBXC=OFF -DBUILD_XCFUN=OFF ..
 cmake ..
-make -j4
+make -j8
 cd ..
 rm -Rf build
 cd ../..

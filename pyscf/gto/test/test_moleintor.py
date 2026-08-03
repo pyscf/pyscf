@@ -227,6 +227,23 @@ class KnownValues(unittest.TestCase):
                 jp += dj
             ip += di
 
+    def test_intor_r2e_spinor_shape(self):
+        """Regression test for spinor 4-center integral shape in getints4c.
+
+        The bug produced shape[::-1] for spinor integrals, which only reveals
+        itself when shell-slice dimensions are asymmetric (naoi != naol etc.).
+        shls_slice (0,1, 0,2, 0,3, 0,4) gives naoi=2,naoj=4,naok=6,naol=8.
+        Buggy code returns (8,6,4,2) and (3,8,6,4,2); fixed code (2,4,6,8) and (3,2,4,6,8).
+        """
+        mol = gto.M(atom='H 0 -0.7 0; H 0 0.7 0', basis='631g')
+        ao_loc = mol.ao_loc_2c()
+        shls_slice = (0, 1, 0, 2, 0, 3, 0, mol.nbas)
+        expected = tuple(int(ao_loc[i1] - ao_loc[i0])
+                         for i0, i1 in zip(shls_slice[::2], shls_slice[1::2]))
+
+        self.assertEqual(mol.intor('int2e_spinor', shls_slice=shls_slice).shape, expected)
+        self.assertEqual(mol.intor('int2e_ip1_spinor', shls_slice=shls_slice).shape, (3,) + expected)
+
     def test_input_cint(self):
         '''Compatibility to old cint functions
         '''

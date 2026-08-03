@@ -448,12 +448,12 @@ class AFTDFMixin:
             shls_slice = (0, cell.nbas, 0, cell.nbas)
         if aosym == 's2':
             assert (shls_slice[2] == 0)
-            i0 = ao_loc[shls_slice[0]]
-            i1 = ao_loc[shls_slice[1]]
+            i0 = int(ao_loc[shls_slice[0]])
+            i1 = int(ao_loc[shls_slice[1]])
             nij = i1*(i1+1)//2 - i0*(i0+1)//2
         else:
-            ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
-            nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
+            ni = int(ao_loc[shls_slice[1]]) - int(ao_loc[shls_slice[0]])
+            nj = int(ao_loc[shls_slice[3]]) - int(ao_loc[shls_slice[2]])
             nij = ni*nj
 
         if blksize is None:
@@ -517,12 +517,12 @@ class AFTDFMixin:
             shls_slice = (0, cell.nbas, 0, cell.nbas)
         if aosym == 's2':
             assert (shls_slice[2] == 0)
-            i0 = ao_loc[shls_slice[0]]
-            i1 = ao_loc[shls_slice[1]]
+            i0 = int(ao_loc[shls_slice[0]])
+            i1 = int(ao_loc[shls_slice[1]])
             nij = i1*(i1+1)//2 - i0*(i0+1)//2
         else:
-            ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
-            nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
+            ni = int(ao_loc[shls_slice[1]]) - int(ao_loc[shls_slice[0]])
+            nj = int(ao_loc[shls_slice[3]]) - int(ao_loc[shls_slice[2]])
             nij = ni*nj
 
         if bvk_kmesh is None:
