@@ -34,13 +34,15 @@
 # DOI: 10.1021/acs.jctc.8b01089
 #
 # This function evaluates the effective charge of a neutral atom,
-# given by exchange-only LDA on top of spherically symmetric
-# unrestricted Hartree-Fock calculations as described in
+# Z(r) = Z - r [v_Hartree(r) + v_x(r)], from spherically symmetric
+# spin-restricted exchange-only LDA calculations. The occupations are
+# those found by the fractional occupation optimizer, which for the d
+# and f blocks are generally not integers. See
 #
 # S. Lehtola, L. Visscher, E. Engel, Efficient implementation of the
 # superposition of atomic potentials initial guess for electronic
-# structure calculations in Gaussian basis sets, J. Chem. Phys., in
-# press (2020).
+# structure calculations in Gaussian basis sets, J. Chem. Phys. 152,
+# 144105 (2020). DOI: 10.1063/5.0004046
 #
 # The potentials have been calculated for the ground-states of
 # spherically symmetric atoms at the non-relativistic level of theory
@@ -69,13 +71,15 @@ def sap_effective_charge(Z, r):
     DOI: 10.1021/acs.jctc.8b01089
 
     This function evaluates the effective charge of a neutral atom,
-    given by exchange-only LDA on top of spherically symmetric
-    unrestricted Hartree-Fock calculations as described in
+    Z(r) = Z - r [v_Hartree(r) + v_x(r)], from spherically symmetric
+    spin-restricted exchange-only LDA calculations. The occupations are
+    those found by the fractional occupation optimizer, which for the d
+    and f blocks are generally not integers. See
 
     S. Lehtola, L. Visscher, E. Engel, Efficient implementation of the
     superposition of atomic potentials initial guess for electronic
-    structure calculations in Gaussian basis sets, J. Chem. Phys., in
-    press (2020).
+    structure calculations in Gaussian basis sets, J. Chem. Phys. 152,
+    144105 (2020). DOI: 10.1063/5.0004046
 
     The potentials have been calculated for the ground-states of
     spherically symmetric atoms at the non-relativistic level of theory
@@ -100,17 +104,22 @@ def sap_effective_charge(Z, r):
 
     if Z < 1:
         return 0.0
-    if Z >= sap_Zeff.shape[1]:
+    # Row 0 holds the radial grid, rows 1..Z the tabulated charges
+    if Z >= sap_Zeff.shape[0]:
         raise ValueError('Atoms beyond Og are not supported')
     if numpy.any(r < 0.0):
         raise ValueError('Distance cannot be negative')
 
+    # Outside the tabulation the atom is unscreened as far as the guess
+    # is concerned; numpy.interp would instead clamp to the last value
+    rmax = sap_Zeff[0,-1]
+
     if r.ndim == 0:
-        if r >= sap_Zeff.shape[0]:
+        if r >= rmax:
             return 0.0
         # Linear interpolation
         return numpy.interp(r, sap_Zeff[0,:], sap_Zeff[Z,:])
     else:
         v = numpy.interp(r, sap_Zeff[0,:], sap_Zeff[Z,:])
-        v[r >= sap_Zeff.shape[0]] = 0.
+        v[r >= rmax] = 0.
         return v

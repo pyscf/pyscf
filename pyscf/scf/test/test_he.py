@@ -79,9 +79,9 @@ class KnownValues_NR(unittest.TestCase):
             basis = {"N": '6-31g'}
         )
         result = atom_hf.get_atm_nrhf(mol)
-        self.assertAlmostEqual(result['N'][0], -53.823206125468346, 9)
+        self.assertAlmostEqual(result['N'][0], -53.823206125468325, 9)
         result = atom_ks.get_atm_nrks(mol)
-        self.assertAlmostEqual(result['N'][0], -53.53518426665269, 9)
+        self.assertAlmostEqual(result['N'][0], -53.53518426524961, 9)
 
     def test_invalid_occupancy(self):
         mol = gto.M(atom='He 0 0 1',

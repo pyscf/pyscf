@@ -600,15 +600,15 @@ class KnownValues(unittest.TestCase):
 
     def test_init_guess_by_vsap(self):
         dm = dft.RKS(h2o).get_init_guess(key='vsap')
-        self.assertAlmostEqual(lib.fp(dm), 1.7285100188309719, 9)
+        self.assertAlmostEqual(lib.fp(dm), 1.7932974975956224, 9)
 
         dm = dft.ROKS(h2osym).get_init_guess(key='vsap')
         self.assertEqual(dm.ndim, 3)
-        self.assertAlmostEqual(lib.fp(dm), 1.9698972986009409, 9)
+        self.assertAlmostEqual(lib.fp(dm), 2.016944367063486, 9)
 
         dm = dft.UKS(h2osym).init_guess_by_vsap()
         self.assertEqual(dm.ndim, 3)
-        self.assertAlmostEqual(lib.fp(dm), 1.9698972986009409, 9)
+        self.assertAlmostEqual(lib.fp(dm), 2.016944367063483, 9)
 
     def test_init(self):
         mol_r = h2o
