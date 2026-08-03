@@ -56,6 +56,7 @@ ignore = [
     "FURB161",  # bin(x).count('1') → x.bit_count()
     "PERF102",  # use .keys()/.values() instead of .items()
     "PLC0206",  # use .items() instead of dict[key] in loop
+    "PLC0414",  # useless import alias (import x as x)
 
     # ==================================================================
     # ruff 0.16 additions — ignored (unnecessary)
@@ -107,7 +108,6 @@ ignore = [
     "S110",     # try-except-pass (intentional error suppression)
     "S102",     # exec() (intentional in __config__.py and misc.py)
     "PLW0406",  # module imports itself (intentional pattern)
-    "PLC0414",  # useless import alias (import x as x)
     "FA100",    # missing from __future__ import annotations
     "B020",     # loop variable overrides outer (actual bug risk)
     "PYI036",   # __exit__ missing exception parameters
