@@ -104,8 +104,13 @@ class KnownValues(unittest.TestCase):
         dm = numpy.random.random((2,nao,nao))
         dfobj = df.DF(mol)
         vj, vk = dfobj.get_jk(dm, hermi=0, omega=1.1)
-        self.assertAlmostEqual(lib.fp(vj), -181.5033531437091, 4)
-        self.assertAlmostEqual(lib.fp(vk), -37.78854217974532, 4)
+        # The long-range Coulomb metric of the JK-fit auxiliary basis is
+        # severely linearly dependent (condition number ~1e19) and has
+        # eigenvalues straddling the 1e-7 linear dependency threshold used by
+        # DF, so these fingerprints are only reproducible to about 1e-4 across
+        # LAPACK implementations.
+        self.assertAlmostEqual(lib.fp(vj), -181.5033531437091, 3)
+        self.assertAlmostEqual(lib.fp(vk), -37.78854217974532, 3)
 
         vj1, vk1 = scf.hf.get_jk(mol, dm, hermi=0, omega=1.1)
         self.assertAlmostEqual(abs(vj-vj1).max(), 0, 2)
