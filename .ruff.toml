@@ -26,7 +26,6 @@ ignore = [
     # ruff 0.16 additions — safe to fix, deferred
     # ==================================================================
     "B009",     # getattr with constant → attribute access
-    "PIE808",   # range(0, n) → range(n)
     "FURB122",  # .write() in loop → .writelines()
     "SIM114",   # combine identical if-else branches
     "PIE790",   # unnecessary pass
@@ -39,7 +38,6 @@ ignore = [
     "RET501",   # return None → return
     "FLY002",   # join → f-string
     "RUF010",   # repr(x) → x!r in f-strings
-    "FURB105",  # print('') → print()
     "C405",     # set(tuple) → {set}
     "SIM101",   # merge isinstance calls (same as PLR1711)
     "PLR1711",  # merge isinstance calls (style)
@@ -48,7 +46,6 @@ ignore = [
     "B023",     # functions in loops (all false positives)
     "UP036",    # outdated Python version blocks
     "SIM401",   # d.get(k, default) instead of if-else
-    "RUF022",   # sort __all__ alphabetically
     "PIE810",   # single startswith/endswith with tuple
     "SIM117",   # merge nested with statements
     "UP028",    # yield from instead of yield
@@ -59,6 +56,13 @@ ignore = [
     "FURB161",  # bin(x).count('1') → x.bit_count()
     "PERF102",  # use .keys()/.values() instead of .items()
     "PLC0206",  # use .items() instead of dict[key] in loop
+
+    # ==================================================================
+    # ruff 0.16 additions — ignored (unnecessary)
+    # ==================================================================
+    "RUF022",   # sort __all__ alphabetically — ordering is intentional, no value
+    "PIE808",   # range(0, n) → range(n) — explicit range is fine
+    "FURB105",  # print('') → print() — identical
 
     # ==================================================================
     # ruff 0.16 additions — unlikely to fix / too much to fix
