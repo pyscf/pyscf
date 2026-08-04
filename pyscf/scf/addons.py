@@ -356,6 +356,14 @@ def mom_occ_(mf, occorb, setocc):
 
 mom_occ = mom_occ_
 
+def _project_solve(s, b):
+    '''Solve s x = b discarding the nearly singular subspace of the metric s,
+    using the same linear dependency threshold as the SCF kernel
+    (see issue #3015)'''
+    from pyscf.scf import hf
+    X = hf.check_linear_dependency(s)
+    return X.dot(X.conj().T.dot(b))
+
 def project_mo_nr2nr(mol1, mo1, mol2):
     r''' Project orbital coefficients from basis set 1 (C1 for mol1) to basis
     set 2 (C2 for mol2).
@@ -368,6 +376,11 @@ def project_mo_nr2nr(mol1, mo1, mol2):
 
         C2 = S^{-1}\langle AO2|AO1\rangle C1
 
+    Eigenvectors of the AO2 overlap matrix with eigenvalues smaller than
+    ``scf_hf_overlap_zero_eigenvalue_threshold`` (default 1e-6) are removed
+    from the projection (same threshold used by the SCF kernel to handle
+    linear dependency in the overlap).
+
     There are three relevant functions:
     :func:`project_mo_nr2nr` is the projection for non-relativistic (scalar) basis.
     :func:`project_mo_nr2r` projects from non-relativistic to relativistic basis.
@@ -376,10 +389,9 @@ def project_mo_nr2nr(mol1, mo1, mol2):
     s22 = mol2.intor_symmetric('int1e_ovlp')
     s21 = mole.intor_cross('int1e_ovlp', mol2, mol1)
     if isinstance(mo1, numpy.ndarray) and mo1.ndim == 2:
-        return lib.cho_solve(s22, numpy.dot(s21, mo1), strict_sym_pos=False)
+        return _project_solve(s22, numpy.dot(s21, mo1))
     else:
-        return [lib.cho_solve(s22, numpy.dot(s21, x), strict_sym_pos=False)
-                for x in mo1]
+        return [_project_solve(s22, numpy.dot(s21, x)) for x in mo1]
 
 @lib.with_doc(project_mo_nr2nr.__doc__)
 def project_mo_nr2r(mol1, mo1, mol2):
@@ -393,10 +405,9 @@ def project_mo_nr2r(mol1, mo1, mol2):
     # so DM = mo2[:,:nocc] * 1 * mo2[:,:nocc].H
     if isinstance(mo1, numpy.ndarray) and mo1.ndim == 2:
         mo2 = numpy.dot(s21, mo1)
-        return lib.cho_solve(s22, mo2, strict_sym_pos=False)
+        return _project_solve(s22, mo2)
     else:
-        return [lib.cho_solve(s22, numpy.dot(s21, x), strict_sym_pos=False)
-                for x in mo1]
+        return [_project_solve(s22, numpy.dot(s21, x)) for x in mo1]
 
 @lib.with_doc(project_mo_nr2nr.__doc__)
 def project_mo_r2r(mol1, mo1, mol2):
@@ -405,8 +416,8 @@ def project_mo_r2r(mol1, mo1, mol2):
     s21 = mole.intor_cross('int1e_ovlp_spinor', mol2, mol1)
     t21 = mole.intor_cross('int1e_spsp_spinor', mol2, mol1)
     n2c = s21.shape[1]
-    pl = lib.cho_solve(s22, s21, strict_sym_pos=False)
-    ps = lib.cho_solve(t22, t21, strict_sym_pos=False)
+    pl = _project_solve(s22, s21)
+    ps = _project_solve(t22, t21)
     if isinstance(mo1, numpy.ndarray) and mo1.ndim == 2:
         return numpy.vstack((numpy.dot(pl, mo1[:n2c]),
                              numpy.dot(ps, mo1[n2c:])))
@@ -435,7 +446,7 @@ def project_dm_nr2nr(mol1, dm1, mol2):
     '''
     s22 = mol2.intor_symmetric('int1e_ovlp')
     s21 = mole.intor_cross('int1e_ovlp', mol2, mol1)
-    p21 = lib.cho_solve(s22, s21, strict_sym_pos=False)
+    p21 = _project_solve(s22, s21)
     if isinstance(dm1, numpy.ndarray) and dm1.ndim == 2:
         return reduce(numpy.dot, (p21, dm1, p21.conj().T))
     else:
@@ -451,7 +462,7 @@ def project_dm_nr2r(mol1, dm1, mol2):
     s21 = numpy.dot(ua.T.conj(), s21) + numpy.dot(ub.T.conj(), s21) # (*)
     # mo2: alpha, beta have been summed in Eq. (*)
     # so DM = mo2[:,:nocc] * 1 * mo2[:,:nocc].H
-    p21 = lib.cho_solve(s22, s21, strict_sym_pos=False)
+    p21 = _project_solve(s22, s21)
     if isinstance(dm1, numpy.ndarray) and dm1.ndim == 2:
         return reduce(numpy.dot, (p21, dm1, p21.conj().T))
     else:
@@ -463,8 +474,8 @@ def project_dm_r2r(mol1, dm1, mol2):
     t22 = mol2.intor_symmetric('int1e_spsp_spinor')
     s21 = mole.intor_cross('int1e_ovlp_spinor', mol2, mol1)
     t21 = mole.intor_cross('int1e_spsp_spinor', mol2, mol1)
-    pl = lib.cho_solve(s22, s21, strict_sym_pos=False)
-    ps = lib.cho_solve(t22, t21, strict_sym_pos=False)
+    pl = _project_solve(s22, s21)
+    ps = _project_solve(t22, t21)
     p21 = scipy.linalg.block_diag(pl, ps)
     if isinstance(dm1, numpy.ndarray) and dm1.ndim == 2:
         return reduce(numpy.dot, (p21, dm1, p21.conj().T))
