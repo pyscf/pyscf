@@ -36,10 +36,12 @@ Total reorganisation energy
     :math:`\\lambda = \\sum_k \\lambda_k`.  Together with the 0-0 energy this
     fixes the classical Stokes shift, :math:`\\approx 2\\lambda` in the
     equal-frequency (linear-coupling) limit.
-Vertical energy
-    :math:`E_{\\rm vert} = E_{00} + \\lambda - ({\\rm ZPE}_f - {\\rm ZPE}_i)` in
-    the linear-coupling limit.  Reported as a diagnostic only; individual
-    vibronic lines are **never** placed using it.
+Vertical energies
+    :math:`E^{\\rm vert}_{\\rm abs} = E_{\\rm ad} + \\lambda_f` and
+    :math:`E^{\\rm vert}_{\\rm em} = E_{\\rm ad} - \\lambda_i`, the gap between the
+    two harmonic surfaces at the initial-state and at the final-state minimum.
+    Exact within the harmonic model; see :func:`vertical_energies`.  Reported as
+    diagnostics only -- individual vibronic lines are **never** placed with them.
 
 .. warning::
 
@@ -57,6 +59,7 @@ from pyscf.vibronic import units
 __all__ = [
     'huang_rhys_analysis', 'dump_duschinsky', 'dump_result',
     'mode_contributions', 'sum_rule_report', 'stokes_shift',
+    'reorganization_energies', 'vertical_energies',
 ]
 
 
@@ -137,19 +140,109 @@ def mode_contributions(result, nmode_max=None):
     }
 
 
+def reorganization_energies(dusch):
+    '''The two reorganisation energies of the state pair, in Hartree.
+
+    ``lambda_f`` is measured on the **final**-state surface at the initial-state
+    minimum, and ``lambda_i`` on the **initial**-state surface at the
+    final-state minimum:
+
+    .. math::
+
+        \\lambda_f = \\tfrac12 \\sum_k \\omega_{f,k}^2 K_k^2, \\qquad
+        \\lambda_i = \\tfrac12 \\sum_j \\omega_{i,j}^2 \\,(J^{+}K)_j^2 .
+
+    The first follows from :math:`Q_f = K` when :math:`Q_i = 0`; the second from
+    :math:`Q_i = -J^{+}K` when :math:`Q_f = 0`.  Both are exact within the
+    harmonic model -- no linear-coupling assumption is made, and they differ
+    whenever the two states' frequencies differ.
+
+    Note ``lambda_f`` equals ``sum_k S_k * omega_f,k``, i.e.
+    :attr:`Duschinsky.total_reorganization_energy`.
+
+    Returns:
+        dict with ``lambda_f``, ``lambda_i``, ``lambda_f_modes``,
+        ``lambda_i_modes``.
+    '''
+    freq_f = numpy.asarray(dusch.freq_f, dtype=float)
+    freq_i = numpy.asarray(dusch.freq_i, dtype=float)
+    k_vec = numpy.asarray(dusch.K, dtype=float)
+    lam_f_modes = 0.5 * freq_f ** 2 * k_vec ** 2
+
+    j = numpy.asarray(dusch.J, dtype=float)
+    # Q_i at the final-state minimum: solve J Q_i = -K in the least-squares
+    # sense, which is exact when J has full column rank.
+    q_i = -numpy.linalg.pinv(j).dot(k_vec)
+    lam_i_modes = 0.5 * freq_i ** 2 * q_i ** 2
+    return {
+        'lambda_f': float(numpy.nansum(lam_f_modes)),
+        'lambda_i': float(numpy.nansum(lam_i_modes)),
+        'lambda_f_modes': lam_f_modes,
+        'lambda_i_modes': lam_i_modes,
+    }
+
+
+def vertical_energies(dusch, e_adiabatic):
+    '''Vertical absorption and emission energies, in Hartree.
+
+    These are **diagnostics only**.  Individual vibronic lines are never placed
+    with them: line positions come from :math:`E_{00}` plus the vibrational
+    quanta (see :mod:`pyscf.vibronic`).
+
+    With the initial state the lower one and
+    :math:`E_{\\rm ad} = E^{\\rm elec}_f - E^{\\rm elec}_i`,
+
+    .. math::
+
+        E^{\\rm vert}_{\\rm abs} = E_{\\rm ad} + \\lambda_f, \\qquad
+        E^{\\rm vert}_{\\rm em}  = E_{\\rm ad} - \\lambda_i,
+
+    the gap between the two harmonic surfaces evaluated at the initial-state and
+    at the final-state minimum respectively (see
+    :func:`reorganization_energies`).  Both are exact within the harmonic model.
+
+    Distinguish these clearly from the adiabatic energy (bottom of well to
+    bottom of well) and from :math:`E_{00}` (zero-point corrected origin); the
+    four are different quantities and only the last two place spectral lines.
+
+    Returns:
+        dict with ``e_adiabatic``, ``vertical_absorption``,
+        ``vertical_emission``, ``stokes_shift`` (their difference,
+        :math:`\\lambda_f + \\lambda_i`), ``lambda_f`` and ``lambda_i``.
+    '''
+    e_ad = float(e_adiabatic)
+    lam = reorganization_energies(dusch)
+    e_abs = e_ad + lam['lambda_f']
+    e_em = e_ad - lam['lambda_i']
+    return {
+        'e_adiabatic': e_ad,
+        'vertical_absorption': e_abs,
+        'vertical_emission': e_em,
+        'stokes_shift': e_abs - e_em,
+        'lambda_f': lam['lambda_f'],
+        'lambda_i': lam['lambda_i'],
+    }
+
+
 def stokes_shift(dusch):
-    '''Classical Stokes shift estimate, :math:`2\\lambda`, in Hartree.
+    '''Harmonic vertical Stokes shift :math:`\\lambda_f + \\lambda_i`, in Hartree.
+
+    This is the separation of the two *vertical* energies (see
+    :func:`vertical_energies`), which is exact within the harmonic model and
+    correctly accounts for the frequency change between the states.  In the
+    equal-frequency (linear-coupling) limit it reduces to the familiar
+    :math:`2\\lambda`.
 
     .. warning::
 
-        This is the **linear-coupling (equal-frequency) estimate only**.  It
-        ignores the frequency change between the two states and the Duschinsky
-        rotation entirely, so it is a rough diagnostic, not a prediction.  When
-        the two states' frequencies differ appreciably, take the peak positions
-        from the computed absorption and emission spectra instead.
+        It is still a *vertical* quantity, not a prediction of the observed
+        peak-to-peak separation: the maxima of the computed band shapes are
+        shifted from the vertical energies by the vibronic envelope.  For the
+        peak separation, broaden the computed absorption and emission spectra
+        and take their maxima -- as ``examples/vibronic/04`` does.
     '''
-    lam = float(numpy.sum(numpy.asarray(dusch.huang_rhys) * numpy.asarray(dusch.freq_f)))
-    return 2.0 * lam
+    lam = reorganization_energies(dusch)
+    return lam['lambda_f'] + lam['lambda_i']
 
 
 def sum_rule_report(result, warn_below=0.9):
@@ -248,6 +341,14 @@ def dump_result(result, verbose=None, nline=20, unit='cm-1'):
     log.note('  0-0 energy E_00           = %.8f Eh = %.4f eV = %.1f cm^-1 = %.1f nm',
              result.e_00, units.au2ev(result.e_00), units.au2wavenumber(result.e_00),
              units.au2nm(result.e_00))
+    if result.duschinsky is not None:
+        vert = vertical_energies(result.duschinsky, result.e_adiabatic)
+        log.note('  vertical absorption       = %.8f Eh = %.4f eV   (diagnostic only)',
+                 vert['vertical_absorption'], units.au2ev(vert['vertical_absorption']))
+        log.note('  vertical emission         = %.8f Eh = %.4f eV   (diagnostic only)',
+                 vert['vertical_emission'], units.au2ev(vert['vertical_emission']))
+        log.note('  vertical Stokes shift     = %.8f Eh = %.1f cm^-1',
+                 vert['stokes_shift'], units.au2wavenumber(vert['stokes_shift']))
     log.note('  temperature               = %.2f K', result.temperature)
     log.note('  states stored             = %d', result.nstate)
 

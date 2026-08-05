@@ -84,12 +84,17 @@ max_e = spec_e.x[spec_e.y.argmax()]
 print('\nStokes shift from the computed band maxima: %.1f cm^-1 = %.3f eV'
       % (max_a - max_e, units.au2ev(units.wavenumber2au(max_a - max_e))))
 
-# For comparison, the crude linear-coupling estimate 2*lambda.  It ignores the
-# frequency change and the Duschinsky rotation, so it is only a rough guide --
-# prefer the band maxima above.
-lam2 = vibronic.analysis.stokes_shift(absorp.duschinsky)
-print('linear-coupling estimate 2*lambda:          %.1f cm^-1 = %.3f eV'
-      % (units.au2wavenumber(lam2), units.au2ev(lam2)))
+# For comparison, the *vertical* Stokes shift lambda_f + lambda_i.  It is exact
+# within the harmonic model, but it is a vertical quantity: the band maxima are
+# displaced from the vertical energies by the vibronic envelope, so the two
+# numbers are not expected to coincide.
+vert = vibronic.analysis.vertical_energies(absorp.duschinsky, absorp.e_adiabatic)
+print('vertical Stokes shift lambda_f + lambda_i:  %.1f cm^-1 = %.3f eV'
+      % (units.au2wavenumber(vert['stokes_shift']),
+         units.au2ev(vert['stokes_shift'])))
+print('  vertical absorption %.4f eV, vertical emission %.4f eV (diagnostics only)'
+      % (units.au2ev(vert['vertical_absorption']),
+         units.au2ev(vert['vertical_emission'])))
 
 # ---- the wrong-order request must be refused ------------------------------
 try:

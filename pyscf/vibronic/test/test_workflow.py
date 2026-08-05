@@ -607,6 +607,50 @@ class KnownValues(unittest.TestCase):
         contrib = vibronic.analysis.mode_contributions(fc.result)
         self.assertEqual(len(contrib['mode']), 1)
 
+    def test_vertical_energies_against_direct_surface_evaluation(self):
+        '''Vertical energies are the gap between the two harmonic surfaces,
+        evaluated at each minimum in turn.  Checked here against a direct
+        evaluation, and against the ordering
+        E_vert_emission < E_adiabatic < E_vert_absorption.
+        '''
+        mi = diatomic_model(2.2, 0.30, mass=(12.0, 12.0), energy=-20.0)
+        mf = diatomic_model(2.6, 0.20, mass=(12.0, 12.0), energy=-19.5)
+        fc = vibronic.FranckCondon(mi, None, mf, None)
+        fc.run(max_quanta=10)
+        dus = fc.duschinsky
+
+        vert = vibronic.analysis.vertical_energies(dus, fc.e_adiabatic)
+        # direct: V_f - E_f_min = 0.5 sum w_f^2 Q_f^2, and Q_f = K at Q_i = 0
+        lam_f = 0.5 * float(numpy.sum(dus.freq_f ** 2 * dus.K ** 2))
+        # at the final minimum Q_f = 0, so Q_i = -J^-1 K
+        q_i = numpy.linalg.solve(dus.J, -dus.K)
+        lam_i = 0.5 * float(numpy.sum(dus.freq_i ** 2 * q_i ** 2))
+
+        self.assertAlmostEqual(vert['lambda_f'], lam_f, 14)
+        self.assertAlmostEqual(vert['lambda_i'], lam_i, 14)
+        self.assertAlmostEqual(vert['vertical_absorption'], fc.e_adiabatic + lam_f, 14)
+        self.assertAlmostEqual(vert['vertical_emission'], fc.e_adiabatic - lam_i, 14)
+        self.assertLess(vert['vertical_emission'], fc.e_adiabatic)
+        self.assertLess(fc.e_adiabatic, vert['vertical_absorption'])
+        self.assertAlmostEqual(vert['stokes_shift'], lam_f + lam_i, 14)
+        self.assertAlmostEqual(vibronic.analysis.stokes_shift(dus),
+                               vert['stokes_shift'], 14)
+        # lambda_f is the same quantity Duschinsky already reports
+        self.assertAlmostEqual(vert['lambda_f'], dus.total_reorganization_energy, 14)
+        # the frequencies differ, so the two reorganisation energies must too
+        self.assertGreater(abs(lam_f - lam_i) / lam_f, 1e-3)
+
+    def test_stokes_shift_reduces_to_two_lambda_for_equal_frequencies(self):
+        '''In the equal-frequency (linear-coupling) limit the harmonic vertical
+        Stokes shift must collapse to the familiar 2*lambda.'''
+        mi = diatomic_model(2.2, 0.30, mass=(12.0, 12.0), energy=-20.0)
+        mf = diatomic_model(2.6, 0.30, mass=(12.0, 12.0), energy=-19.5)
+        fc = vibronic.FranckCondon(mi, None, mf, None)
+        fc.run(max_quanta=10)
+        dus = fc.duschinsky
+        lam = float(numpy.sum(dus.huang_rhys * dus.freq_f))
+        self.assertAlmostEqual(vibronic.analysis.stokes_shift(dus), 2 * lam, 14)
+
     def test_determinism(self):
         mi = diatomic_model(2.2, 0.30, mass=(12.0, 12.0), energy=-20.0)
         mf = diatomic_model(2.5, 0.26, mass=(12.0, 12.0), energy=-19.5)
