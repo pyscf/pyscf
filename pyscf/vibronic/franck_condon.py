@@ -813,7 +813,9 @@ class FranckCondonResult(lib.StreamObject):
             Boltzmann population of the initial vibrational state.
         sum_rule : float
             ``sum_v population * |<v_f|v_i>|^2`` over the *enumerated* space,
-            computed before intensity pruning.  Tends to 1 from below.
+            computed before intensity pruning.  It converges from below to
+            :attr:`sum_rule_target`, which is ``1/|det J|`` and equals 1 only
+            when ``J`` is orthogonal.  See :attr:`sum_rule_target`.
         truncation : dict
             Enumeration/pruning bookkeeping.
         freq_i, freq_f : (n_i,), (n_f,) float
@@ -863,9 +865,54 @@ class FranckCondonResult(lib.StreamObject):
         from pyscf.vibronic import spectrum
         return spectrum.stick_spectrum(self, kind=kind, **kwargs)
 
+    @property
+    def sum_rule_target(self):
+        r'''The exact value the closure rule converges to, ``1/|det J|``.
+
+        The final-state eigenfunctions are complete in :math:`Q_f` space, so
+        :math:`\sum_v \psi_f^v(Q_f)\psi_f^v(Q_f') = \delta(Q_f - Q_f')`.
+        Substituting :math:`Q_f = J Q_i + K` and integrating over :math:`Q_i`,
+
+        .. math::
+
+            \sum_{v_f} |\langle v_f | 0_i \rangle|^2
+              = \frac{1}{|\det J|} \int \mathrm{d}Q_i\, |\psi_i(Q_i)|^2
+              = \frac{1}{|\det J|} .
+
+        So the familiar statement "the Franck-Condon factors sum to one" holds
+        **only when** :math:`J` is orthogonal, i.e. when both electronic states
+        span the same vibrational subspace.  Two different equilibrium
+        geometries have slightly different rotational subspaces, so in practice
+        :math:`|\det J|` deviates from 1 by ~1e-3 and the sum rule converges to
+        a correspondingly shifted value.  Comparing the computed sum against 1
+        rather than against this target would misreport that shift as an
+        enumeration error.
+
+        Returns 1.0 when no Duschinsky object is attached or ``J`` is not
+        square, since ``det J`` is then undefined.
+        '''
+        dus = self.duschinsky
+        if dus is None:
+            return 1.0
+        j = numpy.asarray(getattr(dus, 'J', None))
+        if j.ndim != 2 or j.shape[0] != j.shape[1] or j.size == 0:
+            return 1.0
+        det = abs(numpy.linalg.det(j))
+        if det <= 0:
+            return 1.0
+        return 1.0 / det
+
+    @property
+    def sum_rule_deficit(self):
+        '''``sum_rule_target - sum_rule``: the intensity missed by the
+        enumeration.  Positive for an incomplete enumeration, ~0 when converged.
+        '''
+        return self.sum_rule_target - self.sum_rule
+
     def summary(self):
         '''Multi-line human-readable summary reporting the sum rule honestly.'''
         tr = self.truncation
+        target = self.sum_rule_target
         lines = []
         lines.append('FranckCondonResult: %d state(s), n_i = %d, n_f = %d, T = %.3f K'
                      % (self.nstate, self.freq_i.size, self.freq_f.size, self.temperature))
@@ -873,8 +920,9 @@ class FranckCondonResult(lib.StreamObject):
                      % (self.e_adiabatic, self.zpe_i, self.zpe_f))
         lines.append('  E_00        = %.10f Eh = %.2f cm^-1 = %.4f eV'
                      % (self.e_00, units.au2wavenumber(self.e_00), units.au2ev(self.e_00)))
-        lines.append('  sum rule    = %.8f  (deficit %.3e)' % (self.sum_rule, 1.0 - self.sum_rule))
-        if self.sum_rule < 0.9:
+        lines.append('  sum rule    = %.8f  (target 1/|det J| = %.8f, deficit %.3e)'
+                     % (self.sum_rule, target, target - self.sum_rule))
+        if self.sum_rule < 0.9 * target:
             lines.append('  *** WARNING: the enumerated space captures less than 90% of the '
                          'intensity; increase max_quanta / max_modes_excited. ***')
         lines.append('  enumeration : n_enumerated = %s, n_kept = %s, n_skipped = %s, '
@@ -1057,14 +1105,20 @@ def franck_condon_factors(freq_i, freq_f, J, K, e_adiabatic=0.0, max_quanta=4,
         truncation, duschinsky=duschinsky, temperature=temperature,
         verbose=verbose, stdout=stdout)
 
-    if sum_rule < 0.9:
-        log.warn('Franck-Condon sum rule is only %.6f; the enumerated space misses '
-                 '%.2f%% of the intensity.  Increase max_quanta or max_modes_excited.',
-                 sum_rule, 100.0 * (1.0 - sum_rule))
+    # The closure rule converges to 1/|det J|, not to 1 (see
+    # FranckCondonResult.sum_rule_target), so completeness must be judged
+    # against that target.
+    target = res.sum_rule_target
+    if sum_rule < 0.9 * target:
+        log.warn('Franck-Condon sum rule is only %.6f of a target %.6f (= 1/|det J|); '
+                 'the enumerated space misses %.2f%% of the intensity.  Increase '
+                 'max_quanta or max_modes_excited.',
+                 sum_rule, target, 100.0 * (1.0 - sum_rule / target))
     if truncation.get('truncated'):
         log.warn('%d enumerated state(s) were dropped by max_states=%s.',
                  truncation.get('n_skipped'), truncation.get('max_states'))
-    log.debug('Franck-Condon: %d state(s) stored, sum rule %.8f', res.nstate, sum_rule)
+    log.debug('Franck-Condon: %d state(s) stored, sum rule %.8f (target %.8f)',
+              res.nstate, sum_rule, target)
     return res
 
 
