@@ -302,7 +302,7 @@ class BroadeningTests(unittest.TestCase):
         grid, signal = sp.broaden(st.energies, st.intensities, profile='gaussian',
                                   width=300.0, unit='cm-1', npoints=200001,
                                   padding=8000.0)
-        area = float(numpy.trapz(signal, grid))
+        area = float(sp.trapezoid(signal, grid))
         # measured relative error 2e-15
         self.assertAlmostEqual(area / st.total_intensity, 1.0, 8)
 
@@ -324,13 +324,13 @@ class BroadeningTests(unittest.TestCase):
             grid, signal = sp.broaden(st.energies, st.intensities,
                                       profile='lorentzian', width=300.0, unit='cm-1',
                                       npoints=400001, padding=padding)
-            area = float(numpy.trapz(signal, grid))
+            area = float(sp.trapezoid(signal, grid))
             self.assertAlmostEqual(area, 1.0, places)
         # by contrast the Gaussian is converged with modest padding
         grid, signal = sp.broaden(st.energies, st.intensities, profile='gaussian',
                                   width=300.0, unit='cm-1', npoints=200001,
                                   padding=5000.0)
-        self.assertAlmostEqual(float(numpy.trapz(signal, grid)), 1.0, 10)
+        self.assertAlmostEqual(float(sp.trapezoid(signal, grid)), 1.0, 10)
 
     def test_single_stick_recovers_the_profile(self):
         '''One unit stick broadens to exactly the normalised profile.'''

@@ -33,6 +33,7 @@ from pyscf import gto, scf, lib
 from pyscf import vibronic
 from pyscf.vibronic import units
 from pyscf.vibronic.normal_modes import HarmonicModel
+from pyscf.vibronic.spectrum import trapezoid
 
 
 def diatomic_model(bond, force_const, mass=(1.00794, 1.00794), energy=0.0):
@@ -365,7 +366,7 @@ class KnownValues(unittest.TestCase):
         # default 5*width is what keeps the edge lineshapes inside the grid.
         spec = sticks.broaden(profile='gaussian', width=200, unit='cm-1',
                               npoints=40001)
-        area = numpy.trapz(spec.y, spec.x)
+        area = trapezoid(spec.y, spec.x)
         self.assertAlmostEqual(area / sticks.intensities.sum(), 1.0, 6)
 
         # the low-level function takes stick positions in Hartree and must agree
@@ -379,7 +380,7 @@ class KnownValues(unittest.TestCase):
         # area guarantee is conditional on the grid covering the lineshapes
         narrow = sticks.broaden(profile='gaussian', width=200, unit='cm-1',
                                 npoints=40001, padding=12.0)
-        self.assertLess(numpy.trapz(narrow.y, narrow.x) / sticks.intensities.sum(),
+        self.assertLess(trapezoid(narrow.y, narrow.x) / sticks.intensities.sum(),
                         0.99)
 
     # ------------------------------------------------------------- temperature

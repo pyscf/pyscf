@@ -52,7 +52,7 @@ from pyscf.vibronic import units
 
 __all__ = [
     'StickSpectrum', 'BroadenedSpectrum',
-    'stick_spectrum', 'broaden',
+    'stick_spectrum', 'broaden', 'trapezoid',
     'gaussian_profile', 'lorentzian_profile',
 ]
 
@@ -111,12 +111,29 @@ def lorentzian_profile(x, x0, fwhm):
 _PROFILE_FUNCS = {'gaussian': gaussian_profile, 'lorentzian': lorentzian_profile}
 
 
+def trapezoid(y, x):
+    '''Trapezoidal integral of ``y`` over the (not necessarily uniform) grid ``x``.
+
+    Written out explicitly rather than calling ``numpy.trapz``, which NumPy 2.0
+    removed in favour of ``numpy.trapezoid``, while PySCF still supports
+    ``numpy>=1.13``.  Using neither name keeps this working on every supported
+    NumPy version.
+    '''
+    y = numpy.asarray(y, dtype=float)
+    x = numpy.asarray(x, dtype=float)
+    if y.shape != x.shape:
+        raise ValueError('y %s and x %s must have the same shape' % (y.shape, x.shape))
+    if y.size < 2:
+        return 0.0
+    return float(0.5 * numpy.sum((y[1:] + y[:-1]) * (x[1:] - x[:-1])))
+
+
 class BroadenedSpectrum(object):
     '''Convoluted spectrum on a grid.
 
     Attributes:
         x : (npoints,) grid, in ``unit``.
-        y : (npoints,) signal, per unit of ``x``.  ``trapz(y, x)`` equals the
+        y : (npoints,) signal, per unit of ``x``.  ``trapezoid(y, x)`` equals the
             total stick intensity (up to the profile truncation).
         unit : str
         kind : 'absorption' | 'emission' | None
@@ -135,7 +152,7 @@ class BroadenedSpectrum(object):
     @property
     def area(self):
         '''Numerically integrated area, which should match the stick total.'''
-        return float(numpy.trapz(self.y, self.x))
+        return trapezoid(self.y, self.x)
 
     def to_unit(self, unit):
         '''Return a new :class:`BroadenedSpectrum` with ``x`` in ``unit``.
@@ -392,7 +409,7 @@ def broaden(energies, intensities, profile='gaussian', width=300.0, unit='cm-1',
     Returns:
         ``(grid, signal)``, both ``(npoints,)`` arrays.  ``grid`` is in
         ``unit`` and ``signal`` is intensity per unit of ``unit``, so that
-        ``numpy.trapz(signal, grid)`` reproduces ``sum(intensities)``.
+        ``trapezoid(signal, grid)`` reproduces ``sum(intensities)``.
 
     A :class:`BroadenedSpectrum` wrapper is returned by
     :meth:`StickSpectrum.broaden`.

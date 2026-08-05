@@ -125,7 +125,7 @@ from pyscf.vibronic.franck_condon import (
     overlap_1d, overlap_1d_table, overlap_00, multimode_overlaps, huang_rhys)
 from pyscf.vibronic.spectrum import (
     StickSpectrum, BroadenedSpectrum, stick_spectrum, broaden,
-    gaussian_profile, lorentzian_profile)
+    gaussian_profile, lorentzian_profile, trapezoid)
 from pyscf.vibronic.workflow import FranckCondon
 
 __all__ = [
@@ -144,5 +144,5 @@ __all__ = [
     'huang_rhys',
     # spectra
     'StickSpectrum', 'BroadenedSpectrum', 'stick_spectrum', 'broaden',
-    'gaussian_profile', 'lorentzian_profile',
+    'gaussian_profile', 'lorentzian_profile', 'trapezoid',
 ]

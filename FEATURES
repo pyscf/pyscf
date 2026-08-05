@@ -164,6 +164,23 @@
   - Analytical nuclear hessian with implicit solvent models (PCM)
 
 
+* Vibronic spectroscopy
+
+  - Harmonic normal-mode analysis in atomic units, with Eckart-frame
+    alignment, translation/rotation projection and isotopic substitution
+  - Duschinsky transformation Q_f = J Q_i + K between two electronic states,
+    with orthogonality, subspace-overlap and displacement diagnostics, and
+    mode correlation treating degenerate modes as subspaces
+  - Harmonic Franck-Condon factors for general Duschinsky mixing, frequency
+    changes and equilibrium displacement (Doktorov recursion)
+  - Class-based final-state enumeration with intensity pruning and explicit
+    truncation reporting
+  - Vibronic absorption and emission stick spectra, hot bands at finite
+    temperature, and Gaussian/Lorentzian broadening
+  - Method-independent interface: consumes geometries, Hessians and energies
+    from any electronic-structure method
+
+
 * Properties
 
   - Non-relativistic RHF, UHF, RKS, UKS NMR shielding

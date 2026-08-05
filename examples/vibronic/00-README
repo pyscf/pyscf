@@ -1,0 +1,52 @@
+Harmonic Franck-Condon vibronic spectroscopy (pyscf.vibronic)
+=============================================================
+
+01-normal_modes.py
+    Harmonic normal modes in true atomic units, the HarmonicModel object,
+    isotopic substitution, and a cross-check against pyscf.hessian.thermo.
+
+02-duschinsky.py
+    The Duschinsky transformation Q_f = J Q_i + K between two electronic
+    states: Eckart alignment, the J matrix and K displacement, Huang-Rhys
+    factors, the full diagnostic set, and mode correlation with degenerate
+    subspaces treated as blocks.
+
+03-franck_condon_absorption.py
+    A full absorption spectrum: state enumeration, sum-rule convergence,
+    stick spectrum with assignments, and Gaussian/Lorentzian broadening.
+
+04-franck_condon_emission.py
+    Emission, the sign convention that distinguishes it from absorption,
+    the Stokes shift from the computed band maxima, and hot bands at finite
+    temperature.
+
+05-model_and_low_level_api.py
+    The low-level API driven by raw arrays (freq_i, freq_f, J, K) with no
+    Mole and no Hessian: analytic 1-D limits, a two-mode model with genuine
+    Duschinsky mixing, what the closure rule really converges to, and the
+    enumeration/broadening functions used directly.
+
+Notes
+-----
+* The two electronic states must each be at their OWN optimised geometry,
+  with a Hessian computed at that geometry.  A harmonic model of a
+  non-stationary structure is not meaningful, so imaginary frequencies raise
+  by default (pass allow_imaginary=True to override, as the examples do for
+  their deliberately approximate model geometries).
+
+* For ABSORPTION pass the lower state as `initial`; for EMISSION pass the
+  excited state as `initial`.  Requesting the wrong `kind` raises ValueError
+  rather than producing negative photon energies.
+
+* Examples 3 and 4 use two SCF states at different geometries as a cheap
+  stand-in for a ground/excited pair.  In production the excited state would
+  come from an excited-state optimisation and Hessian.  pyscf.vibronic only
+  ever sees geometries, Hessians and energies, so it is independent of the
+  method that produced them (TDDFT, CASSCF, EOM-CC, or an external program).
+
+* Everything is harmonic and within the Condon approximation.  There is no
+  VPT2, no anharmonicity, and no Herzberg-Teller correction, so these
+  numbers are not converged spectroscopic predictions.
+
+* matplotlib is NOT a dependency.  The plotting in examples 3 and 4 is
+  guarded by try/except and is skipped if matplotlib is missing.
