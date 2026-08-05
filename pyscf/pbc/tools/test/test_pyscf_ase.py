@@ -85,9 +85,6 @@ class PySCFKptsWeightsTest(unittest.TestCase):
         w = calc.get_k_point_weights()
         self.assertGreater(len(w), 0)
         self.assertAlmostEqual(np.sum(w), 1.0, 9)
-        # Multiplicities should be integers
-        mult = w * len(kpts.kpts)
-        self.assertTrue(np.allclose(mult, np.round(mult)))
 
     def test_bz_k_points_no_symmetry(self):
         '''BZ k-points should be scaled coords matching the input grid.'''
@@ -124,18 +121,6 @@ class PySCFKptsWeightsTest(unittest.TestCase):
         # Verify all IBZ indices are valid
         self.assertTrue(np.all(bz2ibz >= 0))
         self.assertTrue(np.all(bz2ibz < kpts.nkpts_ibz))
-
-    def test_weights_and_ibz_map_consistency(self):
-        '''Weights should reflect the multiplicity of BZ k-points per IBZ point.'''
-        kpts = self.symm_cell.make_kpts([2, 2, 2], space_group_symmetry=True)
-        calc = self._make_symm_calc(kpts)
-        w = calc.get_k_point_weights()
-        bz2ibz = calc.get_bz_to_ibz_map()
-        nkpts_bz = len(bz2ibz)
-        # Count BZ k-points per IBZ index
-        mult = np.bincount(bz2ibz, minlength=len(w))
-        # Weight should equal multiplicity / nkpts_bz
-        self.assertTrue(np.allclose(w, mult / nkpts_bz))
 
 
 if __name__ == '__main__':

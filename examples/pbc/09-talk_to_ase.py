@@ -7,6 +7,7 @@ here we try to compute an equation of state.
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
 from pyscf.pbc.tools import pyscf_ase
 
 import ase
@@ -41,7 +42,8 @@ print("ASE energy (should avoid re-evaluation)", ase_atom.get_potential_energy()
 
 # Plot band structure and save to figure C-bands.png
 bs = ase_atom.calc.band_structure()
-bs.plot(filename='C-bands.png', emax=20, emin=-20)
+ax = bs.plot(filename='C-bands.png', emax=20, emin=-20)
+plt.close(ax.figure)
 
 # Compute density of states using ASE's DOS module
 from ase.dft.dos import DOS
@@ -55,22 +57,24 @@ dos_tetra = DOS(ase_atom.calc, width=0.0, window=(-20, 20), npts=1000)
 d_tetra = dos_tetra.get_dos()
 
 # Plot DOS
-import matplotlib.pyplot as plt
-fig, ax = plt.subplots(figsize=(6, 4))
-ax.plot(dos_gauss.energies, d_gauss, label='Gaussian (0.1 eV)')
-ax.plot(dos_tetra.energies, d_tetra, label='Tetrahedron')
-ax.set_xlabel('Energy (eV)')
-ax.set_ylabel('DOS')
-ax.set_title('Density of States')
-ax.legend()
-fig.savefig('dos.png')
+def plot_dos(d_gauss, d_tetra, energies):
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.plot(energies, d_gauss, label='Gaussian (0.1 eV)')
+    ax.plot(energies, d_tetra, label='Tetrahedron')
+    ax.set_xlabel('Energy (eV)')
+    ax.set_ylabel('DOS')
+    ax.set_title('Density of States')
+    ax.legend()
+    fig.savefig('dos.png')
+    plt.close(fig)
 
-exit()
+plot_dos(d_gauss, d_tetra, dos_gauss.energies)
+
 # Compute equation of state
 ase_cell=ase_atom.cell
 volumes = []
 energies = []
-for x in np.linspace(0.95, 1.2, 5):
+for x in np.linspace(0.95, 1.15, 5):
     ase_atom.set_cell(ase_cell * x, scale_atoms = True)
     print("[x: %f, E: %f]" % (x, ase_atom.get_potential_energy()))
     volumes.append(ase_atom.get_volume())
