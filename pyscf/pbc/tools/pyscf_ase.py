@@ -331,4 +331,5 @@ class PySCF(Calculator):
         if not method.istype('UHF'):
             e_k = e_k[None]
         fermi = self.get_fermi_level()
-        return BandStructure(standard_path, e_k, fermi)
+        e_k -= fermi
+        return BandStructure(standard_path, e_k, 0.0)
