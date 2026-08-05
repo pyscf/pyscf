@@ -16,7 +16,7 @@ import unittest
 import numpy as np
 
 try:
-    from ase.lattice.cubic import Diamond
+    from ase.build import bulk
     from pyscf.pbc.tools import pyscf_ase
     HAVE_ASE = True
 except ImportError:
@@ -25,7 +25,7 @@ except ImportError:
 
 def _make_cell():
     '''Build a minimal diamond cell for testing via cell_from_ase.'''
-    ase_atom = Diamond(symbol='C', latticeconstant=3.5668)
+    ase_atom = bulk('C', 'diamond', a=3.5668)
     cell = pyscf_ase.cell_from_ase(ase_atom)
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
@@ -37,7 +37,7 @@ def _make_cell():
 
 def _make_symm_cell():
     '''Build a minimal diamond cell with space group symmetry enabled.'''
-    ase_atom = Diamond(symbol='C', latticeconstant=3.5668)
+    ase_atom = bulk('C', 'diamond', a=3.5668)
     cell = pyscf_ase.cell_from_ase(ase_atom)
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
