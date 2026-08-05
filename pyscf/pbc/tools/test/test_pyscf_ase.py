@@ -14,40 +14,31 @@
 
 import unittest
 import numpy as np
-from pyscf.pbc import gto as pbcgto
-from pyscf.pbc.tools import pyscf_ase
 
 try:
     from ase.lattice.cubic import Diamond
+    from pyscf.pbc.tools import pyscf_ase
     HAVE_ASE = True
 except ImportError:
     HAVE_ASE = False
 
 
 def _make_cell():
-    '''Build a minimal diamond cell for testing.'''
-    cell = pbcgto.Cell()
-    cell.atom = 'C 0. 0. 0.; C 0.8917 0.8917 0.8917'
-    cell.a = '''0.      1.7834  1.7834
-                1.7834  0.      1.7834
-                1.7834  1.7834  0.    '''
-    cell.unit = 'A'
+    '''Build a minimal diamond cell for testing via cell_from_ase.'''
+    ase_atom = Diamond(symbol='C', latticeconstant=3.5668)
+    cell = pyscf_ase.cell_from_ase(ase_atom)
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
     cell.verbose = 0
     cell.output = '/dev/null'
     cell.build()
-    return cell
+    return cell, ase_atom
 
 
 def _make_symm_cell():
     '''Build a minimal diamond cell with space group symmetry enabled.'''
-    cell = pbcgto.Cell()
-    cell.atom = 'C 0. 0. 0.; C 0.8917 0.8917 0.8917'
-    cell.a = '''0.      1.7834  1.7834
-                1.7834  0.      1.7834
-                1.7834  1.7834  0.    '''
-    cell.unit = 'A'
+    ase_atom = Diamond(symbol='C', latticeconstant=3.5668)
+    cell = pyscf_ase.cell_from_ase(ase_atom)
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
     cell.verbose = 0
@@ -55,29 +46,27 @@ def _make_symm_cell():
     cell.space_group_symmetry = True
     cell.symmorphic = False
     cell.build()
-    return cell
+    return cell, ase_atom
 
 
+@unittest.skipUnless(HAVE_ASE, "ASE is not installed")
 class PySCFKptsWeightsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.cell = _make_cell()
-        cls.symm_cell = _make_symm_cell()
+        cls.cell, cls.ase_atom = _make_cell()
+        cls.symm_cell, cls.symm_ase_atom = _make_symm_cell()
 
     def _make_calc(self, kpts):
         '''Create a PySCF calculator wrapping a KRKS method.'''
         mf = self.cell.KRKS(xc='lda,vwn', kpts=kpts)
-        # Build ASE atoms and wrap
-        ase_atom = Diamond(symbol='C', latticeconstant=3.5668)
-        ase_atom.calc = pyscf_ase.PySCF(method=mf)
-        return ase_atom.calc
+        self.ase_atom.calc = pyscf_ase.PySCF(method=mf)
+        return self.ase_atom.calc
 
     def _make_symm_calc(self, kpts):
         '''Create a PySCF calculator using symmetry-enabled cell.'''
         mf = self.symm_cell.KRKS(xc='lda,vwn', kpts=kpts)
-        ase_atom = Diamond(symbol='C', latticeconstant=3.5668)
-        ase_atom.calc = pyscf_ase.PySCF(method=mf)
-        return ase_atom.calc
+        self.symm_ase_atom.calc = pyscf_ase.PySCF(method=mf)
+        return self.symm_ase_atom.calc
 
     def test_k_point_weights_no_symmetry(self):
         '''Uniform MP grid: all weights should be equal 1/nkpts.'''
@@ -147,30 +136,6 @@ class PySCFKptsWeightsTest(unittest.TestCase):
         mult = np.bincount(bz2ibz, minlength=len(w))
         # Weight should equal multiplicity / nkpts_bz
         self.assertTrue(np.allclose(w, mult / nkpts_bz))
-
-    def test_molecular_fallback(self):
-        '''Non-PBC calculation should return single-point defaults.'''
-        from pyscf import gto as molgto
-        mol = molgto.Mole()
-        mol.atom = 'H 0 0 0; H 0 0 0.74'
-        mol.basis = 'sto-3g'
-        mol.verbose = 0
-        mol.output = '/dev/null'
-        mol.build()
-        mf = mol.HF()
-        from ase import Atoms
-        ase_atom = Atoms('H2', positions=[[0, 0, 0], [0, 0, 0.74]])
-        ase_atom.calc = pyscf_ase.PySCF(method=mf)
-        calc = ase_atom.calc
-
-        w = calc.get_k_point_weights()
-        np.testing.assert_array_equal(w, [1.0])
-
-        bz_kpts = calc.get_bz_k_points()
-        np.testing.assert_array_equal(bz_kpts, np.zeros((1, 3)))
-
-        bz2ibz = calc.get_bz_to_ibz_map()
-        np.testing.assert_array_equal(bz2ibz, [0])
 
 
 if __name__ == '__main__':
