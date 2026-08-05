@@ -223,7 +223,7 @@ def dynamic_level_shift_(mf, factor=1.):
     '''
     old_get_fock = mf.get_fock
     mf._last_e = None
-    def get_fock(h1e, s1e, vhf, dm, cycle=-1, diis=None,
+    def get_fock(h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
                  diis_start_cycle=None, level_shift_factor=None, damp_factor=None,
                  fock_last=None):
         if cycle > 0 or diis is not None:
