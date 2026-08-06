@@ -657,14 +657,15 @@ def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
             assert (numpy.all(ao_loc[k0:k1]-ao_loc[k0] == ao_loc[l0:l1]-ao_loc[l0]))
         else:
             nkl = [naok, naol]
-        shape = [comp] + nij + nkl
 
         if '_spinor' in intor_name:
+            shape = nij + nkl + [comp]
             drv = libcgto.GTOr4c_drv
             fill = libcgto.GTOr4c_fill_s1
-            out = numpy.ndarray(shape[::-1], dtype=numpy.complex128, buffer=out, order='F')
+            out = numpy.ndarray(shape, dtype=numpy.complex128, buffer=out, order='F')
             out = numpy.rollaxis(out, -1, 0)
         else:
+            shape = [comp] + nij + nkl
             drv = libcgto.GTOnr2e_fill_drv
             fill = getattr(libcgto, 'GTOnr2e_fill_'+aosym)
             out = numpy.ndarray(shape, buffer=out)

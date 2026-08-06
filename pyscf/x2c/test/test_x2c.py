@@ -318,7 +318,7 @@ C     F
 
         mol = gto.M(atom='He')
         for cls in ('RHF', 'UHF', 'RKS', 'UKS'):
-            mf = getattr(mol, cls).sfx2c1e()
+            mf = getattr(mol, cls)().sfx2c1e()
             check(mf.to_rks(), 'RKS')
             check(mf.to_uks(), 'UKS')
             check(mf.to_gks(), 'GKS')
@@ -332,6 +332,21 @@ C     F
         mf = mol.GKS().sfx2c1e()
         check(mf.to_ghf(), 'GHF')
         check(mf.to_gks(), 'GKS')
+
+    def test_soscf(self):
+        mol = gto.Mole()
+        mol.verbose = 5
+        mol.output = '/dev/null'
+        mol.atom = '''
+        H     0.   0.    0.
+        H     0.  -0.7   0.7
+        H     0.   0.7   0.7'''
+        mol.basis = '6-31g'
+        mol.spin = 1
+        mol.build()
+        mf = mol.UKS(xc='lda,').run()
+        mf1 = mol.UKS(xc='lda,').newton().run()
+        self.assertAlmostEqual(mf.e_tot, mf1.e_tot, 9)
 
 if __name__ == "__main__":
     print("Full Tests for x2c")

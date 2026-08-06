@@ -59,6 +59,16 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mf.e_tot, -3.3634535013441855, 8)
         mf.analyze()
 
+    def test_kuhf_uhf_limit (self):
+        cell0 = pgto.Cell()
+        cell0.spin = 2
+        cell0.build(atom="H 0 0 0; H 0 0 1", basis="6-31g", a=np.diag([3.0, 3.0, 5.0]), output='/dev/null', verbose=0)
+        mf0 = pscf.UHF(cell0).density_fit().run ()
+        kpts0 = cell0.make_kpts((1,1,1))
+        kmf0 = pscf.KUHF(cell0, kpts=kpts0).density_fit().run ()
+        self.assertAlmostEqual (mf0.e_tot, kmf0.e_tot, 6)
+        self.assertAlmostEqual (mf0.scf_summary['gap'], kmf0.scf_summary['gap'], 6)
+
     def test_kuhf_vs_uhf(self):
         np.random.seed(1)
         k = np.random.random(3)

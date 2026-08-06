@@ -28,8 +28,12 @@ def setUpModule():
     global h1, h2, c0, ci0, norb, nelec, e0
     hfile = os.path.realpath(os.path.join(__file__, '..', 'spin_op_hamiltonian.h5'))
     with h5py.File(hfile, 'r') as f:
-        h1 = lib.unpack_tril(f['h1'][:])
-        h2 = f['h2'][:]
+        # h5py hands out the data in the byte order of the file, which is
+        # little-endian.  On big-endian machines the resulting arrays are not
+        # native float64, and the FCI solvers, which pass the integrals to C
+        # code, reject them.  Convert to the native byte order here.
+        h1 = lib.unpack_tril(numpy.asarray(f['h1'][:], dtype=numpy.float64))
+        h2 = numpy.asarray(f['h2'][:], dtype=numpy.float64)
 
     norb = 10
     nelec = (5,5)
