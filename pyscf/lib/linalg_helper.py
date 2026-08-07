@@ -1238,7 +1238,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
         tol : float
             Tolerance to terminate the operation aop(x).
         max_cycle : int
-            Max number of iterations per Krylov subspace build.
+            max number of iterations.
         lindep : float
             Linear dependency threshold.  The function is terminated when the
             smallest eigenvalue of the metric of the trial vectors is lower
@@ -1290,140 +1290,117 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     if fallback_tol is None:
         fallback_tol = 10 * tol
 
-    b_1d = b.ndim == 1
-    _b = b
-    b_work = b.reshape(1, b.size) if b_1d else b
-    nroots, ndim = b_work.shape
+    x1 = b
+    if x1.ndim == 1:
+        x1 = x1.reshape(1, x1.size)
+    nroots, ndim = x1.shape
+    _b = x1.copy()   # 2D right-hand side, for the true-residual check
 
-    x_accum = numpy.zeros_like(b_work)
+    if nroots > 1:
+        # Not exactly QR, vectors are orthogonal but not normalized
+        x1, rmat = _qr(x1, dot, lindep)
+        x1 *= rmat.diagonal()[:,None]
+        innerprod = (rmat.diagonal().real ** 2).tolist()
+        if innerprod:
+            max_innerprod = max(innerprod)
+        else:
+            max_innerprod = 0
+    else:
+        max_innerprod = dot(x1[0].conj(), x1[0]).real
+        innerprod = [max_innerprod]
+
+    if max_innerprod < tol**2:
+        # The right-hand side is below the tolerance: the zero vector is an
+        # acceptable solution.  (lindep is not used here because a residual
+        # below lindep but above tol still needs a correction during restart.)
+        if x0 is None:
+            return numpy.zeros_like(b)
+        else:
+            return x0
+
+    _incore = max_memory*1e6/b.nbytes > 14
+    log.debug1('max_memory %d  incore %s', max_memory, _incore)
+    if _incore:
+        xs = []
+        ax = []
+    else:
+        xs = _Xlist()
+        ax = _Xlist()
+
     max_cycle = min(max_cycle, ndim)
-    r_norm = 0.0
     subspace_exhausted = False
+    for cycle in range(max_cycle):
+        axt = aop(x1)
+        if axt.ndim == 1:
+            axt = axt.reshape(1,ndim)
+        xs.extend(x1)
+        ax.extend(axt)
+        if callable(callback):
+            callback(cycle, xs, ax)
 
-    for irc in range(restart + 1):
-        # Raw norm of the current RHS (= residual of the accumulated solution)
-        b_norm_max = 0.0
-        for k in range(nroots):
-            b_norm_max = max(b_norm_max, abs(dot(b_work[k].conj(), b_work[k]).real))
-        b_norm_max = b_norm_max ** .5
-
-        x1 = b_work
+        x1 = axt.copy()
+        for i in range(len(xs)):
+            xsi = numpy.asarray(xs[i])
+            w = dot(axt, xsi.conj()) / innerprod[i]
+            x1 -= xsi * w[:,None]
+        axt = None
 
         if nroots > 1:
             x1, rmat = _qr(x1, dot, lindep)
             x1 *= rmat.diagonal()[:,None]
-            innerprod = (rmat.diagonal().real ** 2).tolist()
-            max_innerprod = max(innerprod) if innerprod else 0
+            innerprod1 = rmat.diagonal().real ** 2
         else:
-            max_innerprod = dot(x1[0].conj(), x1[0]).real
-            innerprod = [max_innerprod]
+            innerprod1 = [dot(x1[0].conj(), x1[0]).real]
+        max_innerprod = max(innerprod1, default=0.)
 
-        # RHS is (numerically) zero, or all trial directions were dropped:
-        # no further Krylov progress is possible.
-        if b_norm_max < tol or max_innerprod == 0 or len(x1) == 0:
-            r_norm = b_norm_max
+        log.debug('krylov cycle %d  r = %g', cycle, max_innerprod**.5)
+        if max_innerprod < lindep or max_innerprod < tol**2:
             break
 
-        _incore = max_memory*1e6/b.nbytes > 14
-        log.debug1('max_memory %d  incore %s', max_memory, _incore)
-        if _incore:
-            xs = []
-            ax = []
+        if nroots > 1:
+            mask = (innerprod1 > lindep) & (innerprod1 > tol**2)
+            x1 = x1[mask]
+            innerprod.extend(innerprod1[mask])
         else:
-            xs = _Xlist()
-            ax = _Xlist()
+            innerprod.append(innerprod1[0])
+    else:
+        # max_cycle exhausted without reaching tol or linear dependence
+        subspace_exhausted = True
 
-        subspace_exhausted = False
-        for cycle in range(max_cycle):
-            axt = aop(x1)
-            if axt.ndim == 1:
-                axt = axt.reshape(1, ndim)
-            xs.extend(x1)
-            ax.extend(axt)
-            if callable(callback):
-                callback(cycle, xs, ax)
-
-            x1 = axt.copy()
-            for i in range(len(xs)):
-                xsi = numpy.asarray(xs[i])
-                w = dot(axt, xsi.conj()) / innerprod[i]
-                x1 -= xsi * w[:,None]
-            axt = None
-
-            innerprod1_raw = [dot(xi.conj(), xi).real for xi in x1]
-            max_innerprod = max(innerprod1_raw, default=0.)
-
-            log.debug('krylov cycle %d  r = %g', cycle, max_innerprod**.5)
-            if max_innerprod < tol**2:
-                break
-            if max_innerprod < lindep:
-                log.warn('Linear dependence in Krylov subspace before convergence '
-                         '|r|= %.3e > tol= %.1e. Solution may be inaccurate.',
-                         max_innerprod**.5, tol)
-                break
-
-            if nroots > 1:
-                x1, rmat = _qr(x1, dot, lindep)
-                x1 *= rmat.diagonal()[:,None]
-                innerprod1 = rmat.diagonal().real ** 2
-                mask = (innerprod1 > lindep) & (innerprod1 > tol**2)
-                x1 = x1[mask]
-                innerprod.extend(innerprod1[mask])
-            else:
-                innerprod.append(innerprod1_raw[0])
+    nd = len(xs)
+    h = numpy.empty((nd,nd), dtype=x1.dtype)
+    for i in range(nd):
+        xi = numpy.asarray(xs[i])
+        if hermi:
+            for j in range(i+1):
+                h[i,j] = dot(xi.conj(), ax[j])
+                h[j,i] = h[i,j].conj()
         else:
-            # max_cycle exhausted without reaching tol or linear dependence
-            subspace_exhausted = True
+            for j in range(nd):
+                h[i,j] = dot(xi.conj(), ax[j])
+        xi = None
+    # Add the contribution of I in (1+a)
+    for i in range(nd):
+        h[i,i] += innerprod[i]
 
-        nd = len(xs)
-        if nd == 0:
-            r_norm = max_innerprod ** .5
-            break
+    g = numpy.zeros((nd,nroots), dtype=x1.dtype)
+    for i in range(nd):
+        g[i] = dot(b, numpy.asarray(xs[i]).conj())
 
-        h = numpy.empty((nd, nd), dtype=x1.dtype)
-        for i in range(nd):
-            xi = numpy.asarray(xs[i])
-            if hermi:
-                for j in range(i+1):
-                    h[i,j] = dot(xi.conj(), ax[j])
-                    h[j,i] = h[i,j].conj()
-            else:
-                for j in range(nd):
-                    h[i,j] = dot(xi.conj(), ax[j])
-            xi = None
-        # Add the contribution of I in (1+a)
-        for i in range(nd):
-            h[i,i] += innerprod[i]
+    c = numpy.linalg.solve(h, g)
+    x = _gen_x0(c, xs)
 
-        g = numpy.zeros((nd, nroots), dtype=x1.dtype)
-        for i in range(nd):
-            g[i] = dot(b_work, numpy.asarray(xs[i]).conj())
-
-        c = numpy.linalg.solve(h, g)
-        x_partial = _gen_x0(c, xs)
-
-        # Cheap true residual: r = b_work - x_partial - aop(x_partial)
-        # where aop(x_partial) = sum_j c[j] * ax[j], all stored, no extra
-        # matvec call needed.
-        ax_comb = numpy.zeros_like(x_partial)
-        for j in range(nd):
-            ax_comb += c[j][:,None] * numpy.asarray(ax[j])
-        r = b_work - x_partial - ax_comb
-
-        x_accum += x_partial
-
-        r_norm = 0.0
-        for k in range(nroots):
-            r_norm = max(r_norm, abs(dot(r[k].conj(), r[k]).real))
-        r_norm = r_norm ** .5
-        log.debug('krylov restart %d  |r| = %g', irc, r_norm)
-        if r_norm < tol:
-            break
-        b_work = r
-
-    x = x_accum
-    if b_1d:
-        x = x[0]
+    # Verify the true residual (1+a)x - b without an extra matvec call.
+    # Since ax = aop(xs) was stored during the iteration, aop(x) =
+    # sum_j c[j] * ax[j].
+    ax_comb = numpy.zeros_like(x)
+    for j in range(nd):
+        ax_comb += c[j][:,None] * numpy.asarray(ax[j])
+    r = _b - x - ax_comb
+    r_norm = 0.0
+    for k in range(nroots):
+        r_norm = max(r_norm, abs(dot(r[k].conj(), r[k]).real))
+    r_norm = r_norm ** .5
 
     if r_norm > fallback_tol and nroots > 1 and x0 is None:
         log.warn('Krylov solver reached subspace convergence but true residual '
@@ -1437,12 +1414,25 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
                               verbose=verbose, restart=restart)
             x_out[k] = x_single[0]
         x = x_out
+    elif r_norm > tol and restart > 0:
+        # Restarted Krylov: solve (1+a) dx = r and accumulate.  The residual
+        # lies in the slow eigenspace of (1+a); its Krylov subspace is
+        # generally not A-invariant, so further progress is possible.
+        log.debug('krylov restart, |r| = %g', r_norm)
+        dx = krylov(aop, r, x0=None, tol=tol, max_cycle=max_cycle, dot=dot,
+                    lindep=lindep, callback=callback, hermi=hermi,
+                    max_memory=max_memory, verbose=verbose,
+                    restart=restart-1, fallback_tol=fallback_tol)
+        x = x + dx
     elif r_norm > tol:
         log.warn('Krylov solver reached subspace convergence but true residual '
                  '|aop(x)+x-b| = %.3e exceeds requested tolerance %.1e. '
                  'The solution may be inaccurate.', r_norm, tol)
         if subspace_exhausted:
             raise RuntimeError("Krylov solver failed to converge.")
+
+    if b.ndim == 1:
+        x = x[0]
 
     # Restore the first nroots vectors, which are array b or b-(1+a)x0
     if x0 is not None:
