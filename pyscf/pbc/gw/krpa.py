@@ -706,10 +706,9 @@ def get_rpa_exx(rpa, acfd=False, correction_only=False):
     ex : double
         exchange energy
     """
-    mo_coeff = np.array(_mo_frozen(rpa, rpa._scf.mo_coeff))
-    mo_occ = np.array(_mo_occ_frozen(rpa, rpa._scf.mo_occ))
+    mo_coeff = np.asarray(rpa._scf.mo_coeff)
+    mo_occ = np.asarray(rpa._scf.mo_occ)
 
-    nocc = rpa.nocc
     nao = rpa._scf.mo_coeff[0].shape[0]
     nkpts = rpa.nkpts
     kpts = rpa.kpts
@@ -771,9 +770,13 @@ def get_rpa_exx(rpa, acfd=False, correction_only=False):
                 # ex -= np.einsum('Lij,Lij->', Lij_occ.reshape(-1, nocc, nocc), Lij.reshape(-1, nocc, nocc).conj())
                 ex -= blas.zdotc(Lij_occ.ravel(), Lij.ravel())
             else:
-                moij, ijslice = _conc_mos(mo_coeff[km][:, :nocc], mo_coeff[kn][:, :nocc])[2:]
+                nocc_i = np.count_nonzero(mo_occ[km])
+                nocc_j = np.count_nonzero(mo_occ[kn])
+                moij, ijslice = _conc_mos(
+                    mo_coeff[km][:, :nocc_i],
+                    mo_coeff[kn][:, :nocc_j],
+                )[2:]
                 Lij = r_e2(Lpq_ao, moij, ijslice, tao=[], ao_loc=None, out=Lij)
-                # ex -= np.einsum('Lij,Lij->', Lij.reshape(-1, nocc, nocc), Lij.reshape(-1, nocc, nocc).conj())
                 ex -= blas.zdotc(Lij.ravel(), Lij.ravel())
 
     ex = ex.real
