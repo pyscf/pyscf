@@ -141,8 +141,12 @@ class KnownValues(unittest.TestCase):
         # silently return an inaccurate response for near-parallel
         # right-hand sides (symmetric Hessian perturbations), which would
         # corrupt the analytical Hessian and its harmonic frequencies.
-        # Reference frequencies were recorded from a run validated against
-        # the finite-difference Hessian (max |analytical - numerical| ~3e-4).
+        # Reference frequencies are the most strict analytical values
+        # (fallback_tol = tol = 1e-9): the analytical Hessian matrix agrees
+        # with the finite-difference Hessian to ~2e-4 au.  The default
+        # solver (fallback_tol = 1000*tol) is within ~1.2e-3 cm^-1 of this
+        # strict limit, while the pre-fix solver is ~3-4e-3 cm^-1 off,
+        # caught by atol=2e-3.
         mf = dft.RKS(mol)
         mf.conv_tol = 1e-14
         mf.xc = 'b3lyp'
@@ -151,7 +155,7 @@ class KnownValues(unittest.TestCase):
         freqs = thermo.harmonic_analysis(mol, hess)['freq_wavenumber'].real
         freqs = numpy.sort(freqs[freqs > 100])
         numpy.testing.assert_allclose(
-            freqs, [1613.060608, 3874.952600, 4006.022541], atol=2e-3)
+            freqs, [1613.059373, 3874.953453, 4006.022814], atol=2e-3)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()
