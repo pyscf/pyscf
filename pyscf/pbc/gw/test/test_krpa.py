@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import numpy as np
 import pytest
 
 from pyscf.pbc import df, gto, scf
@@ -86,3 +87,32 @@ def test_krpa_with_fc_outcore(diamond_krhf):
 
     assert rpa.e_corr == pytest.approx(-0.20723389722097715, abs=1e-6)
     assert rpa.e_tot == pytest.approx(-10.716348738655793, abs=1e-6)
+
+
+def test_krpa_get_idx_metal():
+    from pyscf.pbc.gw.krpa import get_idx_metal
+    cases = [
+        ([2.0, 1.5, 0.5, 0.0], ([0], [1, 2], [3])),
+        ([1.9, 0.7, 0.0], ([], [0, 1], [2])),
+        ([2.0, 1.2, 0.1], ([0], [1, 2], [])),
+        ([1.9, 1.0, 0.1], ([], [0, 1, 2], [])),
+    ]
+    for mo_occ, expected in cases:
+        result = tuple(list(idx) for idx in get_idx_metal(np.asarray(mo_occ)))
+        assert result == expected
+
+
+def test_krpa_get_rho_response_metal_all_fractional():
+    from pyscf.pbc.gw.krpa import get_rho_response_metal
+    omega = 0.7
+    mo_energy = np.array([[-1.0, -0.2, 0.8]])
+    mo_occ = np.array([[1.8, 1.0, 0.2]])
+    Lpq = [np.arange(18).reshape(2, 3, 3).astype(np.complex128) / 20]
+
+    eia = mo_energy[0, :, None] - mo_energy[0, None, :]
+    fia = mo_occ[0, :, None] - mo_occ[0, None, :]
+    weight = eia * fia / (omega**2 + eia**2)
+    expected = np.einsum("Pia,ia,Qia->PQ", Lpq[0], weight, Lpq[0].conj())
+
+    result = get_rho_response_metal(omega, mo_energy, mo_occ, Lpq, [0])
+    np.testing.assert_allclose(result, expected)

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import numpy as np
 import pytest
 
 from pyscf.pbc import df, gto, scf
@@ -83,3 +84,36 @@ def test_kurpa_with_fc_outcore(hydrogen_kuhf):
     rpa.kernel()
 
     assert rpa.e_corr == pytest.approx(-0.04295466718074476, abs=1e-6)
+
+
+def test_kurpa_get_idx_metal():
+    from pyscf.pbc.gw.kurpa import get_idx_metal
+    cases = [
+        ([1.0, 0.75, 0.25, 0.0], ([0], [1, 2], [3])),
+        ([0.9, 0.35, 0.0], ([], [0, 1], [2])),
+        ([1.0, 0.6, 0.05], ([0], [1, 2], [])),
+        ([0.9, 0.5, 0.1], ([], [0, 1, 2], [])),
+    ]
+    for mo_occ, expected in cases:
+        result = tuple(list(idx) for idx in get_idx_metal(np.asarray(mo_occ)))
+        assert result == expected
+
+
+def test_kurpa_get_rho_response_metal_all_fractional():
+    from pyscf.pbc.gw.kurpa import get_rho_response_metal
+    omega = 0.7
+    mo_energy = np.array([[[-1.0, -0.2, 0.8]], [[-0.9, 0.1, 1.0]]])
+    mo_occ = np.array([[[0.9, 0.5, 0.1]], [[0.8, 0.4, 0.2]]])
+    Lpq = np.arange(36).reshape(1, 2, 2, 3, 3).astype(np.complex128) / 20
+
+    expected = np.zeros((2, 2), dtype=np.complex128)
+    for spin in range(2):
+        eia = mo_energy[spin, 0, :, None] - mo_energy[spin, 0, None, :]
+        fia = mo_occ[spin, 0, :, None] - mo_occ[spin, 0, None, :]
+        weight = eia * fia / (omega**2 + eia**2)
+        expected += np.einsum(
+            "Pia,ia,Qia->PQ", Lpq[0, spin], weight, Lpq[0, spin].conj()
+        )
+
+    result = get_rho_response_metal(omega, mo_energy, mo_occ, Lpq, [0])
+    np.testing.assert_allclose(result, expected)

@@ -139,9 +139,15 @@ def get_idx_metal(mo_occ, threshold=1.0e-6):
     idx_vir : list
         list of virtual orbital indexes
     """
-    idx_occ = np.where(mo_occ > 2.0 - threshold)[0]
-    idx_vir = np.where(mo_occ < threshold)[0]
-    idx_frac = list(range(idx_occ[-1] + 1, idx_vir[0]))
+    mo_occ = np.asarray(mo_occ)
+
+    mask_occ = mo_occ > 2.0 - threshold
+    mask_vir = mo_occ < threshold
+    mask_frac = ~(mask_occ | mask_vir)
+
+    idx_occ = np.where(mask_occ)[0]
+    idx_frac = np.where(mask_frac)[0]
+    idx_vir = np.where(mask_vir)[0]
 
     return idx_occ, idx_frac, idx_vir
 
@@ -183,14 +189,20 @@ def get_rho_response_metal(omega, mo_energy, mo_occ, Lpq, kidx):
     for i in range(nkpts):
         # Find ka that conserves with ki and kL (-ki+ka+kL=G)
         a = kidx[i]
-        idx_occ_i, _, idx_vir_i = get_idx_metal(mo_occ[i])
-        idx_occ_a, idx_frac_a, idx_vir_a = get_idx_metal(mo_occ[a])
 
-        # merge index
-        idx_i = slice(idx_occ_i[0], idx_vir_i[0])
-        idx_a = slice(idx_occ_a[-1] + 1, idx_vir_a[-1] + 1)
+        idx_occ_i, idx_frac_i, _ = get_idx_metal(mo_occ[i])
+        idx_occ_a, idx_frac_a, _ = get_idx_metal(mo_occ[a])
+
         nocc_i = len(idx_occ_i)
+        nfrac_i = len(idx_frac_i)
+        nocc_a = len(idx_occ_a)
         nfrac_a = len(idx_frac_a)
+
+        # occupied + fractional
+        idx_i = slice(0, nocc_i + nfrac_i)
+
+        # fractional + virtual
+        idx_a = slice(nocc_a, len(mo_occ[a]))
 
         eia = mo_energy[i, idx_i, None] - mo_energy[a, None, idx_a]
         fia = (mo_occ[i][idx_i, None] - mo_occ[a][None, idx_a]) / 2.0

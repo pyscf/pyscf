@@ -139,9 +139,15 @@ def get_idx_metal(mo_occ, threshold=1.0e-6):
     idx_vir : list
         list of virtual orbital indexes
     """
-    idx_occ = np.where(mo_occ > 1.0 - threshold)[0]
-    idx_vir = np.where(mo_occ < threshold)[0]
-    idx_frac = list(range(idx_occ[-1] + 1, idx_vir[0]))
+    mo_occ = np.asarray(mo_occ)
+
+    mask_occ = mo_occ > 1.0 - threshold
+    mask_vir = mo_occ < threshold
+    mask_frac = ~(mask_occ | mask_vir)
+
+    idx_occ = np.where(mask_occ)[0]
+    idx_frac = np.where(mask_frac)[0]
+    idx_vir = np.where(mask_vir)[0]
 
     return idx_occ, idx_frac, idx_vir
 
