@@ -1222,7 +1222,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
 def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
            lindep=DSOLVE_LINDEP, callback=None, hermi=False,
            max_memory=MAX_MEMORY, verbose=logger.WARN,
-           restart=2, fallback_tol=None):
+           restart=1, fallback_tol=None):
     r'''Krylov subspace method to solve  (1+a) x = b.  Ref:
     J. A. Pople et al, Int. J.  Quantum. Chem.  Symp. 13, 225 (1979).
 
@@ -1251,8 +1251,8 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
             callback function can access all local variables in the current
             environment.
         restart : int
-            Number of additional Krylov subspace builds (restarted Krylov /
-            GMRES(m)).  When the subspace becomes linearly dependent
+            Number of additional Krylov subspace builds (restarted Krylov).
+            When the subspace becomes linearly dependent
             (A-invariant) before the residual reaches ``tol``, the solve is
             restarted from the current residual, whose Krylov subspace is
             generally not A-invariant and can make further progress.  Only
