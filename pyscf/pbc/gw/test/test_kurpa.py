@@ -117,3 +117,66 @@ def test_kurpa_get_rho_response_metal_all_fractional():
 
     result = get_rho_response_metal(omega, mo_energy, mo_occ, Lpq, [0])
     np.testing.assert_allclose(result, expected)
+
+
+@pytest.fixture(scope="module")
+def water_kuhf():
+    cell = gto.Cell()
+    cell.build(
+        unit="angstrom",
+        atom="""
+        O          0.00000        0.00000        0.11779
+        H          0.00000        0.75545       -0.47116
+        H          0.00000       -0.75545       -0.47116
+        """,
+        a=np.eye(3) * 5,
+        verbose=0,
+        output="/dev/null",
+        pseudo=None,
+        basis="cc-pvdz",
+        precision=1e-12,
+    )
+
+    kpts = cell.make_kpts([1, 1, 1], scaled_center=[0, 0, 0])
+    gdf = df.RSGDF(cell, kpts)
+    gdf.build()
+
+    kmf = scf.KUHF(cell, kpts).rs_density_fit()
+    kmf.with_df = gdf
+    kmf.conv_tol = 1e-12
+
+    yield kmf
+
+    cell.stdout.close()
+
+
+def test_kurpa_exx_with_frozen(water_kuhf):
+    ''' Check that HF exchange energy calculated inside KURPA agrees with that from
+        `mf.get_jk` for both non-smeared and smeared cases and with or without frozen.
+
+        NOTE: KURPA currently ignores the `frozen` attribute, so this test does not
+        test frozen-orbital behavior at the moment. Any future implementation of
+        frozen-orbital support in KURPA should ensure that this test continues to pass.
+    '''
+    kmf = water_kuhf
+
+    for sigma_ev in [0., 1.]:
+        if sigma_ev > 1e-4:
+            scf.addons.smearing_(kmf, sigma=sigma_ev/27.211399, method='fermi')
+
+        kmf.kernel()
+
+        from pyscf.pbc.gw.kurpa import get_rpa_exx
+        rpa = KURPA(kmf, frozen=0)
+        mf = rpa._scf
+        dm = mf.make_rdm1()
+        vk = mf.get_k(dm_kpts=dm)
+        e_x_ref = np.einsum('skij,skji->', vk, dm).real * -0.5 / len(mf.kpts)
+        e_x = get_rpa_exx(rpa)
+
+        assert e_x == pytest.approx(e_x_ref, abs=1e-6)
+
+        rpa = KURPA(kmf, frozen=2)
+        e_x = get_rpa_exx(rpa)
+
+        assert e_x == pytest.approx(e_x_ref, abs=1e-6)
