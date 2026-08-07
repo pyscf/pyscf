@@ -17,6 +17,7 @@ import unittest
 import numpy
 from pyscf import gto, dft, lib
 from pyscf import grad, hessian
+from pyscf.hessian import thermo
 try:
     from pyscf.dispersion import dftd3, dftd4
 except (ImportError, OSError):
@@ -134,6 +135,23 @@ class KnownValues(unittest.TestCase):
         e0 = mf.kernel()
         hess = mf.Hessian().kernel()
         self.assertAlmostEqual(lib.fp(hess), -0.7590878171493624, 4)
+
+    def test_b3lyp_hess_hard(self):
+        # Regression for issue #2702: the CPHF Krylov solver must not
+        # silently return an inaccurate response for near-parallel
+        # right-hand sides (symmetric Hessian perturbations), which would
+        # corrupt the analytical Hessian and its harmonic frequencies.
+        # Reference frequencies were recorded from a run validated against
+        # the finite-difference Hessian (max |analytical - numerical| ~3e-4).
+        mf = dft.RKS(mol)
+        mf.conv_tol = 1e-14
+        mf.xc = 'b3lyp'
+        e0 = mf.kernel()
+        hess = mf.Hessian().kernel()
+        freqs = thermo.harmonic_analysis(mol, hess)['freq_wavenumber'].real
+        freqs = numpy.sort(freqs[freqs > 100])
+        numpy.testing.assert_allclose(
+            freqs, [1613.060608, 3874.952600, 4006.022541], atol=2e-3)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()

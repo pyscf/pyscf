@@ -1260,7 +1260,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
         fallback_tol : float
             Threshold above which a multi-root solve falls back to solving
             each right-hand side in its own Krylov subspace.  Defaults to
-            ``10*tol``.  The per-root fallback is only triggered when the
+            ``1000*tol``.  The per-root fallback is only triggered when the
             true residual exceeds this value, to avoid the extra matvec cost
             for nearly-converged solutions.
 
@@ -1285,10 +1285,12 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     if not (isinstance(b, numpy.ndarray) and b.ndim == 1):
         b = numpy.asarray(b)
 
+    n_matvec = 0
     if x0 is not None:
         b = b - (x0 + aop(x0))
+        n_matvec += 1
     if fallback_tol is None:
-        fallback_tol = 10 * tol
+        fallback_tol = 1000 * tol
 
     x1 = b
     if x1.ndim == 1:
@@ -1331,6 +1333,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     subspace_exhausted = False
     for cycle in range(max_cycle):
         axt = aop(x1)
+        n_matvec += len(x1)
         if axt.ndim == 1:
             axt = axt.reshape(1,ndim)
         xs.extend(x1)
@@ -1406,14 +1409,9 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
         log.warn('Krylov solver reached subspace convergence but true residual '
                  '|aop(x)+x-b| = %.3e exceeds tolerance %.1e. '
                  'Falling back to per-root solve.', r_norm, tol)
-        x_out = numpy.empty((nroots, ndim), dtype=x.dtype)
-        for k in range(nroots):
-            x_single = krylov(aop, _b[k:k+1], x0=None, tol=tol,
-                              max_cycle=max_cycle, dot=dot, lindep=lindep,
-                              hermi=hermi, max_memory=max_memory,
-                              verbose=verbose, restart=restart)
-            x_out[k] = x_single[0]
-        x = x_out
+        x = _per_rhs_refine(aop, _b, xs, ax, innerprod, c, fallback_tol,
+                            lindep, max_cycle, dot, hermi, max_memory,
+                            verbose, restart)
     elif r_norm > tol and restart > 0:
         # Restarted Krylov: solve (1+a) dx = r and accumulate.  The residual
         # lies in the slow eigenspace of (1+a); its Krylov subspace is
@@ -1431,6 +1429,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
         if subspace_exhausted:
             raise RuntimeError("Krylov solver failed to converge.")
 
+    log.debug('krylov: %d matvecs', n_matvec)
     if b.ndim == 1:
         x = x[0]
 
@@ -1438,6 +1437,127 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     if x0 is not None:
         x += x0
     return x
+
+
+def _per_rhs_refine(aop, _b, xs, ax, innerprod, c, fallback_tol, lindep,
+                    max_cycle, dot, hermi, max_memory, verbose, restart):
+    '''Refine a failed multi-root Krylov solution by solving each RHS in its
+    own Krylov subspace that reuses the shared subspace (warm start).  All
+    active RHS share a single batched matvec per cycle, so the extra matvec
+    cost is small.
+
+    Args:
+        xs, ax, innerprod : shared Krylov subspace from a multi-root solve
+            (xs[j] are orthogonal-but-not-normalized basis vectors, ax[j] =
+            aop(xs[j]), innerprod[j] = ||xs[j]||^2).
+        c : (nd, nroots) Galerkin coefficients of the shared solve, where
+            x_k = sum_j c[j,k] * xs[j].
+
+    Returns:
+        x : (nroots, ndim) refined solution.
+    '''
+    nroots, ndim = _b.shape
+    nd = len(xs)
+    x_accum = numpy.empty((nroots, ndim), dtype=_b.dtype)
+
+    # Shared-subspace Galerkin solution per RHS and its cheap true residual
+    ax_comb = numpy.zeros((nroots, ndim), dtype=_b.dtype)
+    for j in range(nd):
+        ax_comb += c[j][:,None] * numpy.asarray(ax[j])
+    for k in range(nroots):
+        x_accum[k] = _gen_x0(c[:,k], xs)
+    res = _b - x_accum - ax_comb
+
+    # Per-RHS copies of the shared subspace
+    xs_k = [list(xs) for _ in range(nroots)]
+    ax_k = [list(ax) for _ in range(nroots)]
+    ip_k = [list(innerprod) for _ in range(nroots)]
+
+    active = [True] * nroots
+    dir1 = [[] for _ in range(nroots)]
+    for k in range(nroots):
+        rk = res[k]
+        rnorm = abs(dot(rk.conj(), rk).real) ** .5
+        if rnorm < fallback_tol:
+            active[k] = False
+            continue
+        # initial trial direction: residual orthogonalized vs shared subspace
+        x = rk.copy()
+        for i in range(nd):
+            x -= numpy.asarray(xs[i]) * dot(rk, numpy.asarray(xs[i]).conj()) / innerprod[i]
+        nsq = abs(dot(x.conj(), x).real)
+        if nsq > lindep:
+            x /= nsq ** .5
+            dir1[k].append(x)
+
+    for cycle in range(max_cycle):
+        if not any(active):
+            break
+        # collect active directions for a single batched matvec
+        dir_vecs = []
+        dir_to_rhs = []
+        for k in range(nroots):
+            if active[k]:
+                for v in dir1[k]:
+                    dir_vecs.append(v)
+                    dir_to_rhs.append(k)
+        if not dir_vecs:
+            break  # stalled: no new directions possible
+        X = numpy.array(dir_vecs)
+        AX = aop(X)
+
+        new_dir1 = [[] for _ in range(nroots)]
+        for idx, k in enumerate(dir_to_rhs):
+            x1 = X[idx]
+            a1 = AX[idx]
+            xs_k[k].append(x1)
+            ax_k[k].append(a1)
+            ip_k[k].append(abs(dot(x1.conj(), x1).real))
+            # next direction: orthogonalize the image against this root's subspace
+            x_new = a1.copy()
+            for i in range(len(xs_k[k])):
+                x_new -= numpy.asarray(xs_k[k][i]) * dot(a1, numpy.asarray(xs_k[k][i]).conj()) / ip_k[k][i]
+            nsq = abs(dot(x_new.conj(), x_new).real)
+            if nsq > lindep:
+                x_new /= nsq ** .5
+                new_dir1[k].append(x_new)
+
+        # per-RHS Galerkin solve + convergence
+        for k in range(nroots):
+            if not active[k]:
+                continue
+            nd_k = len(xs_k[k])
+            if nd_k == 0:
+                continue
+            h_k = numpy.empty((nd_k, nd_k), dtype=_b.dtype)
+            for i in range(nd_k):
+                for j in range(nd_k):
+                    h_k[i,j] = dot(numpy.asarray(xs_k[k][i]).conj(), ax_k[k][j])
+                h_k[i,i] += ip_k[k][i]
+            g_k = numpy.empty(nd_k, dtype=_b.dtype)
+            for i in range(nd_k):
+                g_k[i] = dot(_b[k], numpy.asarray(xs_k[k][i]).conj())
+            ck = numpy.linalg.solve(h_k, g_k)
+            xk = _gen_x0(ck, xs_k[k])
+            axc = numpy.zeros_like(xk)
+            for j in range(nd_k):
+                axc += ck[j] * numpy.asarray(ax_k[k][j])
+            rk = _b[k] - xk - axc
+            rnorm = abs(dot(rk.conj(), rk).real) ** .5
+            if rnorm < fallback_tol:
+                x_accum[k] = xk
+                active[k] = False
+        dir1 = new_dir1
+
+    # stalled RHS: fresh single-RHS solve
+    for k in range(nroots):
+        if active[k]:
+            x_single = krylov(aop, _b[k:k+1], x0=None, tol=fallback_tol,
+                              max_cycle=max_cycle, dot=dot, lindep=lindep,
+                              hermi=hermi, max_memory=max_memory,
+                              verbose=verbose, restart=restart)
+            x_accum[k] = x_single[0]
+    return x_accum
 
 
 def solve(aop, b, precond=None, tol=1e-12, max_cycle=60, dot=numpy.dot,
