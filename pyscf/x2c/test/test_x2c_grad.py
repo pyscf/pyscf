@@ -121,7 +121,7 @@ def get_h1_s1(mol, ia):
     t1 = mol.intor('int1e_ipkin', comp=3)
     v1 = mol.intor('int1e_ipnuc', comp=3)
     w1 = mol.intor('int1e_ipspnucsp', comp=12).reshape(3,4,nao,nao)[:,3]
-    with mol.with_rinv_origin(mol.atom_coord(ia)):
+    with mol.with_rinv_at_nucleus(ia):
         rinv1 = -8*mol.intor('int1e_iprinv', comp=3)
         prinvp1 = -8*mol.intor('int1e_ipsprinvsp', comp=12).reshape(3,4,nao,nao)[:,3]
     n2 = nao * 2

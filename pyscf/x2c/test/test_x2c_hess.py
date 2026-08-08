@@ -112,7 +112,7 @@ def get_h1_s1(mol, ia):
     t1 = mol.intor('int1e_ipkin', comp=3)
     v1 = mol.intor('int1e_ipnuc', comp=3)
     w1 = mol.intor('int1e_ipspnucsp', comp=12).reshape(3,4,nao,nao)[:,3]
-    with mol.with_rinv_origin(mol.atom_coord(ia)):
+    with mol.with_rinv_at_nucleus(ia):
         z = -mol.atom_charge(ia)
         rinv1 = z*mol.intor('int1e_iprinv', comp=3)
         prinvp1 = z*mol.intor('int1e_ipsprinvsp', comp=12).reshape(3,4,nao,nao)[:,3]
@@ -162,7 +162,7 @@ def get_h2_s2(mol, ia, ja):
     v2ao = numpy.zeros_like(s2aa)
     w2ao = numpy.zeros_like(s2aa)
     if ia == ja:
-        with mol.with_rinv_origin(mol.atom_coord(ia)):
+        with mol.with_rinv_at_nucleus(ia):
             z = mol.atom_charge(ia)
             rinv2aa = z*mol.intor('int1e_ipiprinv', comp=9).reshape(3,3,nao,nao)
             rinv2ab = z*mol.intor('int1e_iprinvip', comp=9).reshape(3,3,nao,nao)
