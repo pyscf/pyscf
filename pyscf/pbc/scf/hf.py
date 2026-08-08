@@ -766,7 +766,7 @@ class SCF(mol_hf.SCF):
             # When computing CDERI for GDF (also RSJK), the LR part is not
             # evaluated. CDERI is constructed with full-range Coulomb directly.
             # Nuclear repulsion should be computed the same way.
-            isinstance(self.with_df, df.GDF) or self.rsjk is not None):
+            (isinstance(self.with_df, df.GDF) or self.rsjk is not None)):
             from pyscf.gto.mole import classical_coulomb_energy
             return classical_coulomb_energy(cell)
         return cell.enuc
