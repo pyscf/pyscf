@@ -805,6 +805,10 @@ def get_kconserv_ria_efficient(cell, kpts, tol=1e-12):
 
         (k(m) - k(n) - k(kshift)) \dot a = 2n\pi
     """
+    # The conservation table is built for momentum transfers, which are invariant
+    # under a uniform shift of all k-points.
+    kpts = kpts - kpts[0]
+
     nkpts = kpts.shape[0]
     a = cell.lattice_vectors() / (2 * np.pi)
 

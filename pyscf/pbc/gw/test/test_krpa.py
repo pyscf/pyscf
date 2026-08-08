@@ -118,6 +118,31 @@ def test_krpa_get_rho_response_metal_all_fractional():
     np.testing.assert_allclose(result, expected)
 
 
+def test_krpa_kconserv_shifted_kmesh():
+    ''' This test checks if the kconserv table constructed by `get_kconserv_ria_efficient`
+        remains invariant to a rigid shift of a given k-mesh.
+    '''
+    from pyscf.pbc.gw.krpa import get_kconserv_ria_efficient
+
+    cell = gto.Cell()
+    cell.build(
+        a=np.eye(3) * 3,
+        atom="H 0 0 0",
+        basis="sto-3g",
+        spin=1,
+        verbose=0,
+    )
+    kmesh = [2, 2, 2]
+    kpts = cell.make_kpts(kmesh, scaled_center=[0, 0, 0])
+    shifted_kpts = cell.make_kpts(
+        kmesh, scaled_center=[0.6223 / 2, 0.2953 / 2, 0]
+    )
+
+    reference = get_kconserv_ria_efficient(cell, kpts)
+    result = get_kconserv_ria_efficient(cell, shifted_kpts)
+    np.testing.assert_array_equal(result, reference)
+
+
 @pytest.fixture(scope="module")
 def water_krhf():
     cell = gto.Cell()
