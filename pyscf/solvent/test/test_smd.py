@@ -227,6 +227,30 @@ H -0.595 -0.476 -0.824
         _check_smd(atom, 2.1279, solvent='water')
         _check_smd(atom, -0.9778, solvent='toluene')
 
+class OpticalDielectric(unittest.TestCase):
+    def test_eps_optical_from_solvent_db(self):
+        # issue #3372
+        for solvent in ('water', 'toluene', 'methanol', 'tetrahydrofuran'):
+            smdobj = smd.SMD(mol, solvent=solvent)
+            n = smd.solvent_db[solvent][0]
+            self.assertAlmostEqual(smdobj.get_eps_optical(), n**2, 12)
+
+    def test_eps_optical_from_sol_desc(self):
+        smdobj = smd.SMD(mol)
+        smdobj.sol_desc = smd.solvent_db['toluene']
+        self.assertAlmostEqual(smdobj.get_eps_optical(), 1.4961**2, 12)
+
+    def test_eps_optical_overwrite(self):
+        smdobj = smd.SMD(mol, solvent='toluene')
+        smdobj.eps_optical = 1.78
+        self.assertAlmostEqual(smdobj.get_eps_optical(), 1.78, 12)
+
+    def test_eps_optical_unknown_solvent(self):
+        # n is unknown. The value of water is assumed.
+        smdobj = smd.SMD(mol)
+        smdobj.eps = 2.3741
+        self.assertAlmostEqual(smdobj.get_eps_optical(), 1.78, 12)
+
 if __name__ == "__main__":
     print("Full Tests for SMDs")
     unittest.main()
