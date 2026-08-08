@@ -204,6 +204,7 @@ class ddPCM(ddcosmo.DDCOSMO):
         logger.info(self, 'lmax = %s'         , self.lmax)
         logger.info(self, 'eta = %s'          , self.eta)
         logger.info(self, 'eps = %s'          , self.eps)
+        logger.info(self, 'eps_optical = %s'  , self.eps_optical)
         logger.info(self, 'frozen = %s'       , self.frozen)
         logger.info(self, 'equilibrium_solvation = %s', self.equilibrium_solvation)
         logger.debug2(self, 'radii_table %s', self.radii_table)

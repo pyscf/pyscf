@@ -255,6 +255,42 @@ class KnownValues(unittest.TestCase):
         #es_get_ab = diagonalize_u(a, b)[0]
         #assert np.linalg.norm(es_get_ab - es) < 1e-10
 
+    def test_eps_optical_default(self):
+        # eps_optical defaults to the value of water
+        mf = self.mf
+        td = mf.TDA(equilibrium_solvation=False)
+        self.assertAlmostEqual(td.with_solvent.eps, 1.78, 12)
+        # The ground state solvent must not be modified
+        self.assertAlmostEqual(mf.with_solvent.eps, 78, 12)
+        self.assertIsNone(mf.with_solvent.eps_optical)
+
+    def test_eps_optical(self):
+        # issue #3372
+        mf = self.mf
+        eps_optical = 1.4961**2 # toluene
+        with lib.temporary_env(mf.with_solvent, eps_optical=eps_optical):
+            td = mf.TDA(equilibrium_solvation=False)
+        self.assertAlmostEqual(td.with_solvent.eps, eps_optical, 12)
+        es = td.kernel(nstates=5)[0]
+
+        # Equivalent to overriding the excited state eps by hand
+        td_ref = mf.TDA(equilibrium_solvation=False)
+        td_ref.with_solvent.reset()
+        td_ref.with_solvent.eps = eps_optical
+        td_ref.with_solvent.build()
+        es_ref = td_ref.kernel(nstates=5)[0]
+        self.assertAlmostEqual(abs(es - es_ref).max(), 0, 9)
+
+        es_water = mf.TDA(equilibrium_solvation=False).kernel(nstates=5)[0]
+        self.assertTrue(abs(es - es_water).max() > 1e-5)
+
+    def test_eps_optical_equilibrium_solvation(self):
+        # Equilibrium solvation is governed by the static eps
+        mf = self.mf
+        with lib.temporary_env(mf.with_solvent, eps_optical=1.4961**2):
+            td = mf.TDA(equilibrium_solvation=True)
+        self.assertAlmostEqual(td.with_solvent.eps, 78, 12)
+
 
 if __name__ == "__main__":
     print("Full Tests for PCM TDDFT")

@@ -287,6 +287,13 @@ class PCM(lib.StreamObject):
         The dielectric constant of the solvent. Default is 78.3553, the dielectric constant
         for water.
 
+    eps_optical : float
+        The optical (high-frequency) dielectric constant of the solvent, i.e. the square of
+        its refractive index. It is only used by the non-equilibrium solvation of excited
+        states (see `equilibrium_solvation`). If left unset, the value of water
+        (eps_optical=1.78) is applied and a warning is issued whenever `eps` indicates a
+        solvent other than water. Default is None.
+
     frozen : bool
         Whether to freeze the potential produced by the solvent during SCF iterations or
         other convergence processes. When frozen=True is set, the solvent is
@@ -303,9 +310,8 @@ class PCM(lib.StreamObject):
         Affects TDDFT and other excited state computations. Controls whether the solvent
         relaxes rapidly with respect to the electron density of the excited state.
         For vertical excitations, it is recommended to set this to False, as the solvent
-        typically does not fully relax. In some software packages (e.g., Q-Chem),
-        non-equilibrium solvation is applied with an optical dielectric constant of
-        eps=1.78. Default is False.
+        typically does not fully relax. The non-equilibrium solvation is then applied with
+        the optical dielectric constant `eps_optical`. Default is False.
 
     state_id : int
         Specifies the target state in excited state calculations.
@@ -342,12 +348,13 @@ class PCM(lib.StreamObject):
     _keys = {
         'method', 'vdw_scale', 'surface', 'r_probe',
         'mol', 'radii_table', 'lebedev_order',
-        'eps', 'max_cycle', 'conv_tol', 'state_id', 'frozen',
+        'eps', 'eps_optical', 'max_cycle', 'conv_tol', 'state_id', 'frozen',
         'equilibrium_solvation', 'e', 'v', 'v_grids_n',
         'surface_discretization_method',
     }
 
     kernel = ddcosmo.DDCOSMO.kernel
+    get_eps_optical = ddcosmo.DDCOSMO.get_eps_optical
 
     def __init__(self, mol):
         self.mol = mol
@@ -360,7 +367,8 @@ class PCM(lib.StreamObject):
         self.r_probe = 0.0
         self.radii_table = None
         self.lebedev_order = 29
-        self.eps = 78.3553
+        self.eps = ddcosmo.EPS_WATER
+        self.eps_optical = None
         self.surface_discretization_method = "SWIG"
 
         self.max_cycle = 20
@@ -386,6 +394,7 @@ class PCM(lib.StreamObject):
         logger.info(self, 'lebedev_order = %s (%d grids per sphere)',
                     self.lebedev_order, gen_grid.LEBEDEV_ORDER[self.lebedev_order])
         logger.info(self, 'eps = %s'          , self.eps)
+        logger.info(self, 'eps_optical = %s'  , self.eps_optical)
         logger.info(self, 'frozen = %s'       , self.frozen)
         #logger.info(self, 'equilibrium_solvation = %s', self.equilibrium_solvation)
         return self
