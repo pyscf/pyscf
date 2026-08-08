@@ -671,10 +671,12 @@ def _for_tdscf(method, solvent_obj=None, dm=None, equilibrium_solvation=False):
         solvent_obj.equilibrium_solvation = equilibrium_solvation
         if not equilibrium_solvation:
             # The vertical excitation is a fast process, applying non-equilibrium
-            # solvation with optical dielectric constant eps=1.78
+            # solvation with the optical dielectric constant of the solvent
             # TODO: reset() can be skipped. Most intermeidates can be reused.
+            eps_optical = solvent_obj.get_eps_optical()
             solvent_obj.reset()
-            solvent_obj.eps = 1.78
+            solvent_obj.eps_optical = eps_optical
+            solvent_obj.eps = eps_optical
             solvent_obj.build()
 
     if isinstance(method, _Solvation):
@@ -756,7 +758,8 @@ class TDSCFWithSolvent(_Solvation):
         # The redistributed surface charge is computed by solving
         #     K^{-1} R (dm_response)
         # using a different dielectric constant. The optical dielectric constant
-        # (eps=1.78, see QChem manual) is a suitable choice for the excited state.
+        # of the solvent (see QChem manual) is a suitable choice for the
+        # excited state.
         if not self.with_solvent.equilibrium_solvation:
             # Solvent with optical dielectric constant, for evaluating the
             # response of the fast solvent part
