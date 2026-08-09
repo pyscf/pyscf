@@ -21,6 +21,10 @@ C extensions and helper functions
 
 from pyscf.lib import parameters
 param = parameters
+# Bind the submodule here rather than relying on pyscf.gto.mole importing it.
+# Code such as pyscf.fci.direct_spin1_symm reaches for lib.exceptions, which
+# only resolved because some other module happened to have imported it first.
+from pyscf.lib import exceptions
 from pyscf.lib import numpy_helper
 from pyscf.lib import linalg_helper
 from pyscf.lib import scipy_helper
