@@ -196,7 +196,7 @@ class Gradients(casci_grad.Gradients):
         log = logger.new_logger(self, verbose)
         if ci is None:
             if self.base.ci is None:
-                self.base.ci.run()
+                self.base.run()
             ci = self.base.ci
 
         if atmlst is None:
