@@ -505,6 +505,37 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 5)
         self.assertAlmostEqual(myhf_s.entropy, 17.11431, 4)
 
+        extra_checks = 0
+        rejected_extra_energy = None
+        continued_from_rejected_extra = None
+
+        def reject_first_extra(envs):
+            nonlocal extra_checks
+            nonlocal rejected_extra_energy
+            nonlocal continued_from_rejected_extra
+            energy_converged = (
+                abs(envs['e_tot'] - envs['last_hf_e']) < envs['conv_tol'])
+            gradient_converged = envs['norm_gorb'] < envs['conv_tol_grad']
+            is_extra = envs.get(
+                'extra_cycle', envs['conv_tol'] > myhf_s.conv_tol)
+            if (rejected_extra_energy is not None and not is_extra
+                    and continued_from_rejected_extra is None):
+                continued_from_rejected_extra = (
+                    abs(envs['last_hf_e'] - rejected_extra_energy) < 1e-12)
+            if is_extra:
+                extra_checks += 1
+                if extra_checks == 1:
+                    rejected_extra_energy = envs['e_tot']
+                    return False
+            return energy_converged and gradient_converged
+
+        myhf_s.check_convergence = reject_first_extra
+        myhf_s.kernel(dm0=myhf_s.make_rdm1())
+        with self.subTest('rejected extra cycle resumes SCF'):
+            self.assertGreaterEqual(extra_checks, 2)
+            self.assertTrue(continued_from_rejected_extra)
+            self.assertTrue(myhf_s.converged)
+
     def test_rhf_smearing_nelec(self):
         mol = gto.Mole()
         mol.verbose = 5
