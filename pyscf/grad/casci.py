@@ -357,7 +357,7 @@ class Gradients(rhf_grad.GradientsBase):
         log = logger.new_logger(self, verbose)
         if ci is None:
             if self.base.ci is None:
-                self.base.ci.run()
+                self.base.run()
             ci = self.base.ci
         if self.state is None:  # state average MCSCF calculations
             assert (state is None)
