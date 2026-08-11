@@ -505,6 +505,29 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 5)
         self.assertAlmostEqual(myhf_s.entropy, 17.11431, 4)
 
+        observed_extra = {
+            'e_tot': -243.086993624352,
+            'last_hf_e': -243.086988432792,
+            'conv_tol': 1e-6,
+            'norm_gorb': 1.08e-5,
+            'conv_tol_grad': 3 * numpy.sqrt(1e-7),
+            'extra_cycle': True,
+        }
+        with self.subTest('active smearing requires stable energy'):
+            self.assertTrue(callable(myhf_s.check_convergence))
+            self.assertFalse(myhf_s.check_convergence(observed_extra))
+
+        saved_sigma = myhf_s.sigma
+        try:
+            myhf_s.sigma = 0
+            with self.subTest('inactive smearing keeps extra-cycle OR'):
+                self.assertTrue(myhf_s.check_convergence(observed_extra))
+            main_envs = dict(observed_extra, extra_cycle=False)
+            with self.subTest('inactive smearing keeps main-cycle AND'):
+                self.assertFalse(myhf_s.check_convergence(main_envs))
+        finally:
+            myhf_s.sigma = saved_sigma
+
         extra_checks = 0
         rejected_extra_energy = None
         continued_from_rejected_extra = None
