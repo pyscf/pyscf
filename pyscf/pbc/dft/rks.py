@@ -78,10 +78,10 @@ def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
                             kpt, kpts_band, max_memory=max_memory)
     logger.info(ks, 'nelec by numeric integration = %s', n)
     if ks.do_nlc():
-        if ni.libxc.is_nlc(ks.xc):
+        if ni.is_nlc(ks.xc):
             xc = ks.xc
         else:
-            assert ni.libxc.is_nlc(ks.nlc)
+            assert ni.is_nlc(ks.nlc)
             xc = ks.nlc
         n, enlc, vnlc = ni.nr_nlc_vxc(cell, ks.nlcgrids, xc, dm, 0, hermi, kpt,
                                       max_memory=max_memory)
@@ -99,7 +99,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
         ecoul = None
         if ground_state:
             ecoul = numpy.einsum('ij,ji', dm, vj).real * .5
-    if ni.libxc.is_hybrid_xc(ks.xc):
+    if ni.is_hybrid_xc(ks.xc):
         vxc -= .5 * vk
         if ground_state:
             exc -= numpy.einsum('ij,ji->', dm, vk).real * .25
@@ -110,7 +110,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
 def _patch_df_beckegrids(density_fit):
     def new_df(self, auxbasis=None, with_df=None, *args, **kwargs):
         mf = density_fit(self, auxbasis, with_df, *args, **kwargs)
-        mf.with_df._j_only = not self._numint.libxc.is_hybrid_xc(self.xc)
+        mf.with_df._j_only = not self._numint.is_hybrid_xc(self.xc)
         mf.grids = gen_grid.BeckeGrids(self.cell)
         mf.grids.level = getattr(__config__, 'dft_rks_RKS_grids_level',
                                  mf.grids.level)
@@ -142,7 +142,7 @@ def gen_response(mf, mo_coeff=None, mo_occ=None,
     cell = mf.cell
     kpt = mf.kpt
     ni = mf._numint
-    hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+    hybrid = ni.is_hybrid_xc(mf.xc)
     j_in_xc = getattr(ni, 'xc_with_j', False)
 
     if with_nlc and mf.do_nlc():
@@ -211,7 +211,7 @@ def _get_jk(mf, cell, dm, hermi, kpt, kpts_band=None, with_j=True):
     '''J and Exx matrix. Note, Exx here is a scaled HF K term.'''
     ni = mf._numint
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=cell.spin)
-    hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+    hybrid = ni.is_hybrid_xc(mf.xc)
     vj = vk = None
     if not hybrid:
         if hermi == 2 or not with_j:

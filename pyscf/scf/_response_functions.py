@@ -45,9 +45,8 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
     mol = mf.mol
     if isinstance(mf, hf.KohnShamDFT):
         ni = mf._numint
-        ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
-        hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+        hybrid = ni.is_hybrid_xc(mf.xc)
 
         if singlet is None: # for ground state orbital hessian
             spin = 0
@@ -182,9 +181,8 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
     mol = mf.mol
     if isinstance(mf, hf.KohnShamDFT):
         ni = mf._numint
-        ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
-        hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+        hybrid = ni.is_hybrid_xc(mf.xc)
 
         rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
                                             mo_coeff, mo_occ, 1)
@@ -259,9 +257,8 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
         from pyscf.dft import numint2c, r_numint
         ni = mf._numint
         assert isinstance(ni, (numint2c.NumInt2C, r_numint.RNumInt))
-        ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
-        hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+        hybrid = ni.is_hybrid_xc(mf.xc)
 
         rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc, mo_coeff, mo_occ, 1)
         dm0 = None

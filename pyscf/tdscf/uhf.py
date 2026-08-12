@@ -245,9 +245,7 @@ def get_ab(mf, frozen=None,  mo_energy=None, mo_coeff=None, mo_occ=None):
         b_ab += numpy.einsum('iajb->iajb', eri_ab[:nocc_a,nocc_a:,:nocc_b,nocc_b:])
 
     if isinstance(mf, scf.hf.KohnShamDFT):
-        from pyscf.dft import xc_deriv
         ni = mf._numint
-        ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
 
         add_hf_(a, b, hyb)

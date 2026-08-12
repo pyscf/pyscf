@@ -64,7 +64,7 @@ class KROKS(rks.KohnShamDFT, krohf.KROHF):
         from pyscf.pbc import scf, df
         out = self._transfer_attrs_(scf.KROHF(self.cell, self.kpts))
         # Pure functionals only construct J-type integrals. Enable all integrals for KHF.
-        if (not self._numint.libxc.is_hybrid_xc(self.xc) and
+        if (not self._numint.is_hybrid_xc(self.xc) and
             len(self.kpts) > 1 and getattr(self.with_df, '_j_only', False)):
             out.with_df._j_only = False
             out.with_df.reset()

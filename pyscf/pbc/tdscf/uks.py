@@ -35,7 +35,7 @@ TDDFTNoHybrid = CasidaTDDFT
 
 def tddft(mf, frozen=None):
     '''Driver to create TDDFT or CasidaTDDFT object'''
-    if mf._numint.libxc.is_hybrid_xc(mf.xc):
+    if mf._numint.is_hybrid_xc(mf.xc):
         return TDDFT(mf, frozen)
     else:
         return CasidaTDDFT(mf, frozen)
