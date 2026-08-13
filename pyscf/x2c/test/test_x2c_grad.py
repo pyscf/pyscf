@@ -335,7 +335,7 @@ class KnownValues(unittest.TestCase):
             h1 = hcore_deriv(0)
             self.assertAlmostEqual(abs(h1[2]-ha_ref).max(), 0, 6)
             self.assertAlmostEqual(lib.fp(h1), -1.4802587171126063, 9)
-            
+
             mol.build(nucmod='G')
             hcore_deriv = sfx2c1e_grad.gen_sf_hfw(mol)
             h1_G = hcore_deriv(0)

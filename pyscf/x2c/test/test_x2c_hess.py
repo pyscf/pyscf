@@ -712,7 +712,7 @@ class KnownValues(unittest.TestCase):
             h2_ref = (ha1_deriv_1(0)[2] - ha1_deriv_2(0)[2]) / 0.0002 * lib.param.BOHR
             self.assertAlmostEqual(abs(h2[2,2]-h2_ref).max(), 0, 6)
             self.assertAlmostEqual(lib.fp(h2), 33.718665748856324, 9)
-            
+
             mol.build(nucmod='G')
             h2_deriv = sfx2c1e_hess.gen_sf_hfw(mol)
             ha2_deriv = sfx2c1e_hess.gen_sf_hfw(mol, approx='ATOM1E')
