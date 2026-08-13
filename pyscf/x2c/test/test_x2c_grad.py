@@ -180,6 +180,16 @@ def get_x1(mol, ia):
           for i in range(3)]
     return numpy.asarray(x1)
 
+def set_nuc_mod(mols, nucmod):
+    for mol in mols:
+        mol.build(nucmod=nucmod)
+    return mols
+
+def reset_nuc_mod(mols):
+    for mol in mols:
+        mol.build(nucmod=None)
+    return mols
+
 def setUpModule():
     global mol, mol1, mol2
     mol1 = gto.M(
@@ -214,59 +224,68 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_x1(self):
         with lib.light_speed(10) as c:
-            x_1 = get_x0(mol1)
-            x_2 = get_x0(mol2)
-            x1_ref = (x_1 - x_2) / 0.0002 * lib.param.BOHR
-            x1t = get_x1(mol, 0)
-            self.assertAlmostEqual(abs(x1t[2]-x1_ref).max(), 0, 7)
+            for nucmod in [None, 'G']:
+                set_nuc_mod([mol, mol1, mol2], nucmod)
+                x_1 = get_x0(mol1)
+                x_2 = get_x0(mol2)
+                x1_ref = (x_1 - x_2) / 0.0002 * lib.param.BOHR
+                x1t = get_x1(mol, 0)
+                self.assertAlmostEqual(abs(x1t[2]-x1_ref).max(), 0, 7)
 
-            x0 = get_x0(mol)
-            h0, s0 = get_h0_s0(mol)
-            e0, c0 = scipy.linalg.eigh(h0, s0)
-            get_h1_etc = sfx2c1e_grad._gen_first_order_quantities(mol, e0, c0, x0)
-            x1 = get_h1_etc(0)[4]
-            self.assertAlmostEqual(abs(x1-x1t).max(), 0, 9)
+                x0 = get_x0(mol)
+                h0, s0 = get_h0_s0(mol)
+                e0, c0 = scipy.linalg.eigh(h0, s0)
+                get_h1_etc = sfx2c1e_grad._gen_first_order_quantities(mol, e0, c0, x0)
+                x1 = get_h1_etc(0)[4]
+                self.assertAlmostEqual(abs(x1-x1t).max(), 0, 9)
+                reset_nuc_mod([mol, mol1, mol2])
 
     def test_R1(self):
         with lib.light_speed(10) as c:
-            R_1 = get_R(mol1)
-            R_2 = get_R(mol2)
-            R1_ref = (R_1 - R_2) / 0.0002 * lib.param.BOHR
-            R1t = get_r1(mol, 0, 2)
-            self.assertAlmostEqual(abs(R1t-R1_ref).max(), 0, 7)
+            for nucmod in [None, 'G']:
+                set_nuc_mod([mol, mol1, mol2], nucmod)
+                R_1 = get_R(mol1)
+                R_2 = get_R(mol2)
+                R1_ref = (R_1 - R_2) / 0.0002 * lib.param.BOHR
+                R1t = get_r1(mol, 0, 2)
+                self.assertAlmostEqual(abs(R1t-R1_ref).max(), 0, 7)
 
-            x0 = get_x0(mol)
-            h0, s0 = get_h0_s0(mol)
-            e0, c0 = scipy.linalg.eigh(h0, s0)
-            get_h1_etc = sfx2c1e_grad._gen_first_order_quantities(mol, e0, c0, x0)
-            R1 = get_h1_etc(0)[6][2]
-            self.assertAlmostEqual(abs(R1-R1t).max(), 0, 9)
+                x0 = get_x0(mol)
+                h0, s0 = get_h0_s0(mol)
+                e0, c0 = scipy.linalg.eigh(h0, s0)
+                get_h1_etc = sfx2c1e_grad._gen_first_order_quantities(mol, e0, c0, x0)
+                R1 = get_h1_etc(0)[6][2]
+                self.assertAlmostEqual(abs(R1-R1t).max(), 0, 9)
+                reset_nuc_mod([mol, mol1, mol2])
 
     def test_hfw(self):
         with lib.light_speed(10) as c:
-            x2c_1 = sfx2c1e.SpinFreeX2C(mol1)
-            x2c_2 = sfx2c1e.SpinFreeX2C(mol2)
-            x2cobj = sfx2c1e.SpinFreeX2C(mol)
-            fh_ref = (x2c_1.get_hcore() - x2c_2.get_hcore()) / 0.0002 * lib.param.BOHR
-            fh = x2cobj.hcore_deriv_generator(deriv=1)
-            self.assertAlmostEqual(abs(fh(0)[2] - fh_ref).max(), 0, 7)
+            for nucmod in [None, 'G']:
+                set_nuc_mod([mol, mol1, mol2], nucmod)
+                x2c_1 = sfx2c1e.SpinFreeX2C(mol1)
+                x2c_2 = sfx2c1e.SpinFreeX2C(mol2)
+                x2cobj = sfx2c1e.SpinFreeX2C(mol)
+                fh_ref = (x2c_1.get_hcore() - x2c_2.get_hcore()) / 0.0002 * lib.param.BOHR
+                fh = x2cobj.hcore_deriv_generator(deriv=1)
+                self.assertAlmostEqual(abs(fh(0)[2] - fh_ref).max(), 0, 7)
 
-            x2c_1.xuncontract = 0
-            x2c_2.xuncontract = 0
-            x2cobj.xuncontract =0
-            fh_ref = (x2c_1.get_hcore() - x2c_2.get_hcore()) / 0.0002 * lib.param.BOHR
-            fh = x2cobj.hcore_deriv_generator(deriv=1)
-            self.assertAlmostEqual(abs(fh(0)[2] - fh_ref).max(), 0, 7)
-            x2c_1.xuncontract = 1
-            x2c_2.xuncontract = 1
-            x2cobj.xuncontract =1
+                x2c_1.xuncontract = 0
+                x2c_2.xuncontract = 0
+                x2cobj.xuncontract =0
+                fh_ref = (x2c_1.get_hcore() - x2c_2.get_hcore()) / 0.0002 * lib.param.BOHR
+                fh = x2cobj.hcore_deriv_generator(deriv=1)
+                self.assertAlmostEqual(abs(fh(0)[2] - fh_ref).max(), 0, 7)
+                x2c_1.xuncontract = 1
+                x2c_2.xuncontract = 1
+                x2cobj.xuncontract =1
 
-            x2c_1.approx = 'ATOM1E'
-            x2c_2.approx = 'ATOM1E'
-            x2cobj.approx = 'ATOM1E'
-            fh_ref = (x2c_1.get_hcore() - x2c_2.get_hcore()) / 0.0002 * lib.param.BOHR
-            fh = x2cobj.hcore_deriv_generator(deriv=1)
-            self.assertAlmostEqual(abs(fh(0)[2] - fh_ref).max(), 0, 7)
+                x2c_1.approx = 'ATOM1E'
+                x2c_2.approx = 'ATOM1E'
+                x2cobj.approx = 'ATOM1E'
+                fh_ref = (x2c_1.get_hcore() - x2c_2.get_hcore()) / 0.0002 * lib.param.BOHR
+                fh = x2cobj.hcore_deriv_generator(deriv=1)
+                self.assertAlmostEqual(abs(fh(0)[2] - fh_ref).max(), 0, 7)
+                reset_nuc_mod([mol, mol1, mol2])
 
     def test_hcore(self):
         with lib.light_speed(10) as c:
@@ -279,6 +298,9 @@ class KnownValues(unittest.TestCase):
             )
             h_1 = sfx2c1e.SpinFreeX2CHelper(mol).set(xuncontract=False).get_hcore()
             ha_1 = sfx2c1e.SpinFreeX2CHelper(mol).set(xuncontract=False, approx='ATOM1E').get_hcore()
+            mol.build(nucmod='G')
+            h_1_G = sfx2c1e.SpinFreeX2CHelper(mol).set(xuncontract=False).get_hcore()
+            ha_1_G = sfx2c1e.SpinFreeX2CHelper(mol).set(xuncontract=False, approx='ATOM1E').get_hcore()
 
             mol = gto.M(
                 verbose = 0,
@@ -291,6 +313,11 @@ class KnownValues(unittest.TestCase):
             ha_2 = sfx2c1e.SpinFreeX2CHelper(mol).set(xuncontract=False, approx='ATOM1E').get_hcore()
             h_ref = (h_1 - h_2) / 0.0002 * lib.param.BOHR
             ha_ref = (ha_1 - ha_2) / 0.0002 * lib.param.BOHR
+            mol.build(nucmod='G')
+            h_2_G = sfx2c1e.SpinFreeX2CHelper(mol).set(xuncontract=False).get_hcore()
+            ha_2_G = sfx2c1e.SpinFreeX2CHelper(mol).set(xuncontract=False, approx='ATOM1E').get_hcore()
+            h_ref_G = (h_1_G - h_2_G) / 0.0002 * lib.param.BOHR
+            ha_ref_G = (ha_1_G- ha_2_G) / 0.0002 * lib.param.BOHR
 
             mol = gto.M(
                 verbose = 0,
@@ -308,6 +335,17 @@ class KnownValues(unittest.TestCase):
             h1 = hcore_deriv(0)
             self.assertAlmostEqual(abs(h1[2]-ha_ref).max(), 0, 6)
             self.assertAlmostEqual(lib.fp(h1), -1.4802587171126063, 9)
+            
+            mol.build(nucmod='G')
+            hcore_deriv = sfx2c1e_grad.gen_sf_hfw(mol)
+            h1_G = hcore_deriv(0)
+            self.assertAlmostEqual(abs(h1_G[2]-h_ref_G).max(), 0, 6)
+
+            self.assertAlmostEqual(lib.fp(h1_G), -1.4618393307480488, 9)
+            hcore_deriv = sfx2c1e_grad.gen_sf_hfw(mol, approx='atom1e')
+            h1_G = hcore_deriv(0)
+            self.assertAlmostEqual(abs(h1_G[2]-ha_ref_G).max(), 0, 6)
+            self.assertAlmostEqual(lib.fp(h1_G), -1.4802587779486163, 9)
 
 if __name__ == "__main__":
     print("Full Tests for sfx2c1e gradients")
