@@ -490,11 +490,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(myhf_s.e_tot, -244.9873314, 5)
         self.assertAlmostEqual(myhf_s.entropy, 0, 3)
 
-        myhf_s = scf.UHF(mol)
+        myhf_s = scf.UHF(mol.set(verbose=4))
         myhf_s = addons.smearing_(myhf_s, sigma=0.01, method='fermi', fix_spin=True)
         myhf_s.sigma = 0.1
         myhf_s.fix_spin = False
-        myhf_s.conv_tol = 1e-7
+        myhf_s.conv_tol = 1e-8
         myhf_s.kernel()
         self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 5)
         self.assertAlmostEqual(myhf_s.entropy, 17.11431, 4)
