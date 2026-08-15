@@ -94,6 +94,18 @@ class KnownValues(unittest.TestCase):
         mf = mol.GKS(xc='pbe')
         pickle.loads(pickle.dumps(mf))
 
+    def test_exceptions_bound_by_package(self):
+        # lib.exceptions must be bound by pyscf/lib/__init__.py itself. It used
+        # to resolve only because pyscf.gto.mole imports it, so a freshly
+        # executed pyscf.lib lacked the attribute and code doing
+        # "raise lib.exceptions.WfnSymmetryError" raised AttributeError instead.
+        # pytest --import-mode=importlib re-imports the package that way.
+        import importlib
+        spec = importlib.util.find_spec('pyscf.lib')
+        fresh = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fresh)
+        self.assertTrue(hasattr(fresh, 'exceptions'))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -19,6 +19,13 @@ name: CI
 #      - completed
 on: [push, pull_request]
 
+# Superseded runs on a branch are cancelled rather than left to finish; pushing
+# twice in quick succession otherwise leaves two multi-hour runs competing for
+# runners. Runs on master are always allowed to complete.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
 jobs:
   linux-build:
     runs-on: ${{ matrix.os }}
@@ -40,7 +47,29 @@ jobs:
         uses: codecov/codecov-action@v7
         with:
           token: ${{secrets.CODECOV_TOKEN}}
-  
+
+  # The job above runs every worker single threaded, which leaves the OpenMP
+  # kernels untested. This one keeps threads on so that threaded code paths are
+  # still covered, over the modules whose C extensions actually contain OpenMP
+  # pragmas, and skips the slow ones to stay well inside the main job's runtime.
+  linux-build-multithread:
+    runs-on: ubuntu-latest
+    env:
+      OMP_NUM_THREADS: 2
+      PYTEST_JOBS: 2
+      TEST_PATHS: >-
+        pyscf/lib pyscf/gto pyscf/ao2mo pyscf/scf pyscf/dft pyscf/mp
+        pyscf/cc pyscf/mcscf pyscf/agf2
+        pyscf/pbc/scf pyscf/pbc/df pyscf/pbc/dft
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install and Test
+        run: ./.github/workflows/run_ci.sh
+
   linux-build-aarch64:
     runs-on: ${{ matrix.os }}
     strategy:
