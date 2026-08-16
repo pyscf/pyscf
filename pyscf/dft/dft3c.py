@@ -19,7 +19,6 @@ Composite 3c methods: B97-3c and r2SCAN-3c
 '''
 
 from pyscf import lib
-from pyscf.lib import logger
 
 # method name -> (basis, xc)
 _DFT3C_METHODS = {
@@ -44,12 +43,11 @@ def dft3c(mf, method='b97-3c', **kwargs):
         correction, in the def2-mTZVPP basis.
         S. Grimme et al., J. Chem. Phys. 154, 064103 (2021).
 
-    The molecular basis is set to the tailored basis of the method (with a
-    warning if the molecule already carries a basis) and ``mf.xc`` is set to
-    the method name, from which the dispersion and gCP/SRB corrections are
-    derived automatically.  The RI-J auxiliary basis (def2-mTZVPP-RIJ) is
-    resolved from the basis_set_exchange package at runtime when density
-    fitting is enabled.
+    The molecular basis is set to the tailored basis of the method and
+    ``mf.xc`` is set to the method name, from which the dispersion and
+    gCP/SRB corrections are derived automatically.  The RI-J auxiliary
+    basis (def2-mTZVPP-RIJ) is resolved from the basis_set_exchange
+    package at runtime when density fitting is enabled.
 
     The method returns a new DFT3C object; the input object is not
     modified.  Density fitting can be applied before or after the 3c
@@ -97,9 +95,6 @@ class DFT3C:
             raise NotImplementedError(
                 f'Unknown 3c method {method}. Supported methods: b97-3c, r2scan-3c.')
         basis, xc = _DFT3C_METHODS[method_lower]
-        if self.mol.basis is not None:
-            logger.warn(self, 'The molecular basis %s is replaced by %s for '
-                        'the %s method.', self.mol.basis, basis, method_lower)
         self.mol.basis = basis
         self.mol.build()
         self.xc = xc
@@ -107,6 +102,14 @@ class DFT3C:
             # density_fit was applied before dft3c.  Rebuild the density
             # fitting object for the 3c basis with the RI-J auxiliary basis.
             self.with_df = _make_df(self)
+
+    @property
+    def method(self):
+        return self.method3c
+    @method.setter
+    def method(self, value):
+        self.method3c = value
+        self._apply_dft3c(value)
 
     def undo_dft3c(self):
         '''Remove the DFT3C mixin'''

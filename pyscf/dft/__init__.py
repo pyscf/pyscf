@@ -93,6 +93,27 @@ def UKS(mol, xc='LDA,VWN'):
         return uks_symm.UKS(mol, xc)
 UKS.__doc__ = uks.UKS.__doc__
 
+def RKS3C(mol, method='b97-3c'):
+    '''Create a RKS object with the composite 3c method applied.
+
+    Examples:
+
+    >>> mf = mol.RKS3C().density_fit().run()
+    >>> mf = mol.RKS3C(method='r2scan-3c').density_fit().run()
+
+    See :func:`pyscf.dft.dft3c.dft3c` for the supported methods.
+    '''
+    return RKS(mol).dft3c(method)
+RKS3C.__doc__ = rks.RKS.__doc__ + RKS3C.__doc__
+
+def UKS3C(mol, method='b97-3c'):
+    '''Create a UKS object with the composite 3c method applied.
+
+    See :func:`pyscf.dft.dft3c.dft3c` for the supported methods.
+    '''
+    return UKS(mol).dft3c(method)
+UKS3C.__doc__ = uks.UKS.__doc__ + UKS3C.__doc__
+
 def GKS(mol, xc='LDA,VWN'):
     if not mol.symmetry or mol.groupname == 'C1':
         return gks.GKS(mol, xc)

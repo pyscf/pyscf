@@ -171,6 +171,30 @@ class TestDFT3C(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             dft.RKS(mol).dft3c('b97-3c').dft3c('r2scan-3c')
 
+    def test_mol_rks3c(self):
+        # mol.RKS3C() convenience, like mol.RKS()
+        dft = __import__('pyscf.dft', fromlist=['RKS'])
+        mol = gto.M(atom='H 0 0 0; H 0 0 1', verbose=0)
+        mf = mol.RKS3C()
+        self.assertEqual(mf.method, 'b97-3c')
+        self.assertEqual(mf.mol.basis, 'def2mtzvp')
+        self.assertEqual(mf.xc, 'b97-3c')
+
+        # the method kwarg goes through the mol dispatch
+        mf = mol.RKS3C(method='r2scan-3c')
+        self.assertEqual(mf.method, 'r2scan-3c')
+        self.assertEqual(mf.mol.basis, 'def2mtzvpp')
+        self.assertEqual(mf.xc, 'r2scan-3c')
+
+        # module factory with positional method
+        self.assertEqual(dft.RKS3C(mol, 'r2scan-3c').method, 'r2scan-3c')
+
+        # UKS3C on an open-shell molecule
+        o = gto.M(atom='O 0 0 0', spin=2, verbose=0)
+        mu = o.UKS3C()
+        self.assertEqual(mu.method, 'b97-3c')
+        self.assertEqual(mu.xc, 'b97-3c')
+
     def test_dft3c_auto_auxbasis(self):
         # density_fit() without explicit auxbasis picks def2-mTZVPP-RIJ
         # through the bse_meta.json jfit record
