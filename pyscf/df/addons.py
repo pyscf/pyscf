@@ -40,7 +40,7 @@ USE_VERSION_26_AUXBASIS = True
 
 # Obtained from http://www.psicode.org/psi4manual/master/basissets_byfamily.html
 DEFAULT_AUXBASIS = {
-    # AO basis       JK-fit                     MP2-fit
+    # AO basis       JK-fit                     MP2-fit                J-fit
     'ccpvdz'      : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
     'augccpvdz'   : ('aug-cc-pvdz-jkfit'      , 'aug-cc-pvdz-ri'     ),
     'ccpvtz'      : ('cc-pvtz-jkfit'          , 'cc-pvtz-ri'         ),
@@ -52,10 +52,10 @@ DEFAULT_AUXBASIS = {
     'def2svp'     : ('def2-svp-jkfit'         , 'def2-svp-ri'        ),
     'def2svpd'    : ('def2-svp-jkfit'         , 'def2-svpd-ri'       ),
     'def2tzvp'    : ('def2-tzvp-jkfit'        , 'def2-tzvp-ri'       ),
-    'def2mtzvp'   : ('def2-tzvp-jkfit'        , 'def2-tzvp-ri'       ),
+    'def2mtzvp'   : ('def2-tzvp-jkfit'        , 'def2-tzvp-ri'       , 'def2-mTZVPP-RIJ'),
     'def2tzvpd'   : ('def2-tzvp-jkfit'        , 'def2-tzvpd-ri'      ),
     'def2tzvpp'   : ('def2-tzvpp-jkfit'       , 'def2-tzvpp-ri'      ),
-    'def2mtzvpp'  : ('def2-tzvpp-jkfit'       , 'def2-tzvpp-ri'      ),
+    'def2mtzvpp'  : ('def2-tzvpp-jkfit'       , 'def2-tzvpp-ri'      , 'def2-mTZVPP-RIJ'),
     'def2tzvppd'  : ('def2-tzvpp-jkfit'       , 'def2-tzvppd-ri'     ),
     'def2qzvp'    : ('def2-qzvp-jkfit'        , 'def2-qzvp-ri'       ),
     #'def2qzvpd'   : ('def2-qzvp-jkfit'        , None                 ),
@@ -355,6 +355,12 @@ def predefined_auxbasis(mol, basis, xc='HF', mp2fit=False):
             auxbasis = DEFAULT_AUXBASIS[pyscf_basis_alias][0]
             logger.debug(mol, f'Psi4 predefined JKFIT basis set {auxbasis} for {xc}')
             return auxbasis
+        elif len(DEFAULT_AUXBASIS[pyscf_basis_alias]) > 2:
+            # The optional J-fit column for local and semi-local functionals
+            auxbasis = DEFAULT_AUXBASIS[pyscf_basis_alias][2]
+            if auxbasis:
+                logger.debug(mol, f'Psi4 predefined JFIT basis set {auxbasis} for {xc}')
+                return auxbasis
     return bse_predefined_auxbasis(mol, basis, xc, mp2fit)
 
 del (DFBASIS, ETB_BETA, FIRST_ETB_ELEMENT)

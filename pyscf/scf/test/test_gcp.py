@@ -105,7 +105,7 @@ class TestDFT3C(unittest.TestCase):
         dft = __import__('pyscf.dft', fromlist=['RKS'])
         mol = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587',
                     basis='def2mtzvp', verbose=0)
-        mf = dft.RKS(mol).dft3c('b97-3c')
+        mf = dft.RKS(mol).dft3c('b97-3c').density_fit()
         mf.conv_tol = 1e-10
         e = mf.kernel()
         self.assertAlmostEqual(e, -76.398062389459, 8)
@@ -116,7 +116,7 @@ class TestDFT3C(unittest.TestCase):
         dft = __import__('pyscf.dft', fromlist=['RKS'])
         mol = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587',
                     basis='def2mtzvpp', verbose=0)
-        mf = dft.RKS(mol).dft3c('r2scan-3c')
+        mf = dft.RKS(mol).dft3c('r2scan-3c').density_fit()
         mf.conv_tol = 1e-10
         e = mf.kernel()
         self.assertAlmostEqual(e, -76.418863218329, 8)
@@ -128,16 +128,48 @@ class TestDFT3C(unittest.TestCase):
         dft = __import__('pyscf.dft', fromlist=['RKS'])
         mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='def2mtzvp', verbose=0)
         mf = dft.RKS(mol).dft3c('b97-3c')
+        self.assertEqual(mf.method3c, 'b97-3c')
         self.assertEqual(mf.mol.basis, 'def2mtzvp')
-        self.assertEqual(mf.auxbasis, 'def2-mTZVPP-RIJ')
+        self.assertEqual(mf.xc, 'b97-3c')
+        # density fitting after dft3c picks the RI-J auxiliary basis
+        self.assertEqual(mf.density_fit().auxbasis, 'def2-mTZVPP-RIJ')
 
         mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='def2mtzvpp', verbose=0)
         mf = dft.RKS(mol).dft3c('r2scan-3c')
+        self.assertEqual(mf.method3c, 'r2scan-3c')
         self.assertEqual(mf.mol.basis, 'def2mtzvpp')
-        self.assertEqual(mf.auxbasis, 'def2-mTZVPP-RIJ')
+        self.assertEqual(mf.xc, 'r2scan-3c')
+        self.assertEqual(mf.density_fit().auxbasis, 'def2-mTZVPP-RIJ')
 
         with self.assertRaises(NotImplementedError):
             dft.RKS(mol).dft3c('pbeh-3c')
+
+    def test_dft3c_density_fit_order(self):
+        # density fitting can be applied before or after dft3c
+        dft = __import__('pyscf.dft', fromlist=['RKS'])
+        mol = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587',
+                    basis='def2mtzvp', verbose=0)
+        mf1 = dft.RKS(mol).dft3c('b97-3c').density_fit()
+        mf1.conv_tol = 1e-10
+        e1 = mf1.kernel()
+
+        mol2 = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587',
+                     basis='def2mtzvp', verbose=0)
+        mf2 = dft.RKS(mol2).density_fit().dft3c('b97-3c')
+        mf2.conv_tol = 1e-10
+        e2 = mf2.kernel()
+        self.assertEqual(mf2.with_df.auxbasis, 'def2-mTZVPP-RIJ')
+        self.assertAlmostEqual(e1, e2, 8)
+
+    def test_dft3c_undo(self):
+        dft = __import__('pyscf.dft', fromlist=['RKS'])
+        mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='def2mtzvp', verbose=0)
+        mf = dft.RKS(mol).dft3c('b97-3c')
+        obj = mf.undo_dft3c()
+        self.assertFalse(hasattr(obj, 'method3c'))
+        # applying dft3c twice raises
+        with self.assertRaises(RuntimeError):
+            dft.RKS(mol).dft3c('b97-3c').dft3c('r2scan-3c')
 
     def test_dft3c_auto_auxbasis(self):
         # density_fit() without explicit auxbasis picks def2-mTZVPP-RIJ
@@ -158,7 +190,7 @@ class TestDFT3C(unittest.TestCase):
         mf.gcp = False
         mf.conv_tol = 1e-10
         e = mf.kernel()
-        self.assertAlmostEqual(e, -1.150646252054, 6)
+        self.assertAlmostEqual(e, -1.150635605714, 6)
 
 
 if __name__ == "__main__":
