@@ -277,18 +277,18 @@ def dft3c(mf, method='b97-3c', df=True):
 
     B97-3c
         B97 functional (libxc GGA_XC_B97_3C) with the D3(BJ) dispersion
-        correction and the gCP short-range basis correction, in the
-        def2-mTZVP basis with the def2-mTZVP RI-J auxiliary basis.
+        correction and the SRB correction, in the def2-mTZVP basis with
+        the def2-mTZVP RI-J auxiliary basis.
         J. G. Brandenburg et al., J. Chem. Phys. 148, 064104 (2018).
 
     r2SCAN-3c
-        r2SCAN functional with the D4 dispersion correction and the gCP
-        short-range basis correction, in the def2-mTZVPP basis with the
-        def2-mTZVPP RI-J auxiliary basis.
+        r2SCAN functional with the D4 dispersion correction and the
+        gCP correction, in the def2-mTZVPP basis with the def2-mTZVPP
+        RI-J auxiliary basis.
         S. Grimme et al., J. Chem. Phys. 154, 064103 (2021).
 
-    The dispersion and gCP corrections are derived from mf.xc automatically.
-    The dispersion and gCP corrections require the pyscf-dispersion package
+    The dispersion and gCP/SRB corrections are derived from mf.xc automatically.
+    They require the pyscf-dispersion package
     (``pip install pyscf-dispersion``).  The RI-J auxiliary basis
     (def2-mTZVPP-RIJ) is resolved from the basis_set_exchange package at
     runtime (``pip install basis-set-exchange``), if it is not found in the

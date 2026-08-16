@@ -15,7 +15,7 @@
 #
 
 '''
-gradient of the gCP (short-range basis correction) for HF and DFT
+gradient of the gCP/SRB correction for HF and DFT
 '''
 
 import numpy as np
@@ -23,7 +23,7 @@ from pyscf.lib import logger
 from pyscf.scf.gcp import check_gcp, parse_gcp
 
 def get_gcp(mf_grad, gcp=None, verbose=None):
-    '''gradient of the gCP (short-range basis correction)'''
+    '''gradient of the gCP/SRB correction'''
     mf = mf_grad.base
     mol = mf.mol
     if not check_gcp(mf, gcp):

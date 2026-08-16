@@ -61,13 +61,13 @@ _white_list = {
     'wb97x-3c': ('wb97x-v', False, 'd4:wb97x-3c'),
     'wb97x_3c': ('wb97x-v', False, 'd4:wb97x-3c'),
     # B97-3c is parameterized together with its D3(BJ) dispersion correction
-    # and the gCP short-range basis correction.  The full libxc canonical
+    # and the SRB correction.  The full libxc canonical
     # name behaves the same as the shorthand spellings.
     'b97-3c': ('b97-3c', False, 'd3bj:b97-3c'),
     'b97_3c': ('b97-3c', False, 'd3bj:b97-3c'),
     'gga_xc_b97_3c': ('b97-3c', False, 'd3bj:b97-3c'),
     # r2SCAN-3c is parameterized together with its D4 dispersion correction
-    # and the gCP short-range basis correction.
+    # and the gCP correction.
     'r2scan-3c': ('r2scan', False, 'd4:r2scan-3c'),
     'r2scan_3c': ('r2scan', False, 'd4:r2scan-3c'),
     # CF22D is parameterized together with its D3 (zero-damping) dispersion

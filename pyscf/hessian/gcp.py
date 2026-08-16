@@ -15,7 +15,7 @@
 #
 
 '''
-Hessian of the gCP (short-range basis correction) for HF and DFT
+Hessian of the gCP/SRB correction for HF and DFT
 '''
 
 import numpy as np

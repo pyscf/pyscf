@@ -15,12 +15,18 @@
 #
 
 '''
-short-range basis correction (gCP/SRB) for HF and DFT
+gCP/SRB correction for HF and DFT
 
-The geometrical counterpoise correction (gCP) is a short-range basis
-correction (SRB) used by composite methods like B97-3c and r2SCAN-3c.
-The correction is evaluated with the GCP module of simple-dftd3, which is
-shipped with the pyscf-dispersion package.
+The composite 3c methods (B97-3c, r2SCAN-3c) include a basis set
+incompleteness correction.  Depending on the method parameters, the GCP
+module of simple-dftd3 evaluates the original geometrical counterpoise
+correction (gCP, Kruse & Grimme, J. Chem. Phys. 136, 154101 (2012))
+and/or the short-range basis correction (SRB) variant: B97-3c uses the
+SRB variant (in addition to the gCP potential), while r2SCAN-3c uses the
+gCP potential with refitted parameters.  Both are distinct corrections
+exposed through the same interface by the pyscf-dispersion package.
+Following that interface, the correction is referred to as gCP in the
+attribute and method names below (mf.gcp, do_gcp, get_gcp).
 '''
 
 from pyscf.lib import logger
@@ -48,8 +54,8 @@ GCP_METHODS = {
 def parse_gcp(xc_code):
     '''Extract the (gcp method, gcp basis) from the xc code.
 
-    Returns None if the xc code is not a composite 3c method with a gCP
-    correction.
+    Returns None if the xc code is not a composite 3c method with a
+    gCP/SRB correction.
     '''
     if not isinstance(xc_code, str):
         return None
@@ -59,7 +65,7 @@ def parse_gcp(xc_code):
     return None
 
 def check_gcp(mf, gcp=None):
-    '''Check if the gCP (short-range basis) correction should be applied.
+    '''Check if the gCP/SRB correction should be applied.
 
     Args:
         mf : SCF object
@@ -68,7 +74,7 @@ def check_gcp(mf, gcp=None):
             If False, the correction is disabled.
 
     Returns:
-        bool: True if the gCP correction is enabled and the method supports it.
+        bool: True if the gCP/SRB correction is enabled and the method supports it.
     '''
     if gcp is None:
         gcp = getattr(mf, 'gcp', None)
@@ -86,7 +92,7 @@ def check_gcp(mf, gcp=None):
 
 def get_gcp(mf, gcp=None, verbose=None):
     '''
-    Calculate the gCP (short-range basis correction) energy.
+    Calculate the gCP/SRB correction energy.
 
     Args:
         mf : SCF object
@@ -96,7 +102,7 @@ def get_gcp(mf, gcp=None, verbose=None):
         verbose : int, optional
 
     Returns:
-        float: the gCP correction energy in Hartree.
+        float: the gCP/SRB correction energy in Hartree.
     '''
     if not check_gcp(mf, gcp):
         return 0.
