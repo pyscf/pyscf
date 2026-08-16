@@ -73,6 +73,44 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(e0[:3] - eref[:3]).max(), 0, 8)
         self.assertAlmostEqual(abs(numpy.abs(x0[:3]) - abs(u[:,:3].T)).max(), 0, 5)
 
+    def test_davidson_precond_shift(self):
+        # Each root has to be corrected with its own eigenvalue estimate,
+        # (H - e_k) t_k = -r_k, not with the shift of the lowest root.
+        numpy.random.seed(12)
+        n = 100
+        nroots = 3
+        a = numpy.random.rand(n,n) * .1
+        a = a + a.conj().T + numpy.diag(numpy.arange(n)*1.)
+        eref = scipy.linalg.eigh(a)[0][:nroots]
+
+        shifts = []
+        def precond(dx, e, x0):
+            shifts.append(e)
+            diagd = a.diagonal() - (e - 1e-3)
+            diagd[abs(diagd)<1e-8] = 1e-8
+            return dx/diagd
+
+        checked = [False]
+        def check_shifts(envs):
+            e = envs['e']
+            for shift in shifts:
+                self.assertTrue(numpy.any(abs(e - shift) < 1e-14))
+            if len(shifts) > 1:
+                # Every root corrected in this cycle must have been given a
+                # different shift. Preconditioning them all with e[0] would
+                # collapse these to a single value.
+                self.assertEqual(len(set(shifts)), len(shifts))
+                checked[0] = True
+            shifts.clear()
+
+        def aop(x):
+            return numpy.dot(a, numpy.asarray(x).T).T
+        x0 = numpy.eye(n)[:nroots]
+        e0 = linalg_helper.davidson1(aop, x0, precond, nroots=nroots,
+                                     max_cycle=100, callback=check_shifts)[1]
+        self.assertAlmostEqual(abs(e0 - eref).max(), 0, 8)
+        self.assertTrue(checked[0])
+
     def test_davidson_diag_matrix(self):
         numpy.random.seed(12)
         n = 100

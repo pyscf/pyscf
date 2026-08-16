@@ -526,7 +526,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         # remove subspace linear dependency
         for k, ek in enumerate(e):
             if (not conv[k]) and dx_norm[k]**2 > lindep:
-                xt[k] = precond(xt[k], e[0], x0[k])
+                xt[k] = precond(xt[k], ek, x0[k])
                 xt[k] *= dot(xt[k].conj(), xt[k]).real ** -.5
             elif not conv[k]:
                 # Remove linearly dependent vector
@@ -887,7 +887,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
         # remove subspace linear dependency
         for k, ek in enumerate(e):
             if (not conv[k]) and dx_norm[k]**2 > lindep:
-                xt[k] = precond(xt[k], e[0], x0[k])
+                xt[k] = precond(xt[k], ek, x0[k])
                 xt[k] *= dot(xt[k].conj(), xt[k]).real ** -.5
             elif not conv[k]:
                 # Remove linearly dependent vector
@@ -1187,6 +1187,10 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
         # remove subspace linear dependency
         for k, ek in enumerate(e):
             if dx_norm[k]**2 > lindep:
+                # Unlike davidson1, the shift stays at e[0] here. The diagonal
+                # preconditioner models diag(A) - e, while the residual of the
+                # generalized problem is A x_k - e_k B x_k. Shifting per root
+                # amplifies that mismatch and costs convergence for type=2.
                 xt[k] = precond(xt[k], e[0], x0[k])
                 xt[k] *= dot(xt[k].conj(), xt[k]).real ** -.5
             else:
