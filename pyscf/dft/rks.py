@@ -270,6 +270,57 @@ def define_xc_(ks, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
 def _dft_common_init_(mf, xc='LDA,VWN'):
     raise DeprecationWarning
 
+def dft3c(mf, method='b97-3c', df=True):
+    '''Setup a composite 3c method on the Kohn-Sham object.
+
+    Supported methods:
+
+    B97-3c
+        B97 functional (libxc GGA_XC_B97_3C) with the D3(BJ) dispersion
+        correction and the gCP short-range basis correction, in the
+        def2-mTZVP basis with the def2-mTZVP RI-J auxiliary basis.
+        J. G. Brandenburg et al., J. Chem. Phys. 148, 064104 (2018).
+
+    r2SCAN-3c
+        r2SCAN functional with the D4 dispersion correction and the gCP
+        short-range basis correction, in the def2-mTZVPP basis with the
+        def2-mTZVPP RI-J auxiliary basis.
+        S. Grimme et al., J. Chem. Phys. 154, 064103 (2021).
+
+    The dispersion and gCP corrections are derived from mf.xc automatically.
+    The dispersion and gCP corrections require the pyscf-dispersion package
+    (``pip install pyscf-dispersion``).  The RI-J auxiliary basis
+    (def2-mTZVPP-RIJ) is resolved from the basis_set_exchange package at
+    runtime (``pip install basis-set-exchange``), if it is not found in the
+    local basis library.
+
+    Examples:
+
+    >>> mf = dft.RKS(mol).dft3c('b97-3c').run()
+    >>> mf = dft.UKS(mol).dft3c('r2scan-3c').run()
+    '''
+    method_lower = method.lower().replace('_', '-')
+    if method_lower == 'b97-3c':
+        basis, xc = 'def2mtzvp', 'b97-3c'
+    elif method_lower == 'r2scan-3c':
+        basis, xc = 'def2mtzvpp', 'r2scan-3c'
+    else:
+        raise NotImplementedError(
+            f'Unknown 3c method {method}. Supported methods: b97-3c, r2scan-3c.')
+
+    if mf.mol.basis is not None:
+        logger.warn(mf, 'The molecular basis %s is replaced by %s for the %s '
+                    'method.', mf.mol.basis, basis, method_lower)
+    mf.mol.basis = basis
+    mf.mol.build()
+    mf.xc = xc
+    if df:
+        # The RI-J auxiliary basis of the 3c methods is available in
+        # basis_set_exchange under the name def2-mTZVPP-RIJ.  It is resolved
+        # at runtime when it is not found in the local basis library.
+        mf = mf.density_fit(auxbasis='def2-mTZVPP-RIJ')
+    return mf
+
 class KohnShamDFT:
     '''
     Attributes for Kohn-Sham DFT:
@@ -327,7 +378,7 @@ class KohnShamDFT:
     -76.415443079840458
     '''
 
-    _keys = {'xc', 'nlc', 'grids', 'disp', 'nlcgrids', 'small_rho_cutoff'}
+    _keys = {'xc', 'nlc', 'grids', 'disp', 'gcp', 'nlcgrids', 'small_rho_cutoff'}
 
     # Use rho to filter grids
     small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff', 0)
@@ -337,6 +388,7 @@ class KohnShamDFT:
         self.xc = xc
         self.nlc = ''
         self.disp = None
+        self.gcp = None
         self.grids = gen_grid.Grids(self.mol)
         self.grids.level = getattr(
             __config__, 'dft_rks_RKS_grids_level', self.grids.level)
@@ -486,6 +538,13 @@ class KohnShamDFT:
         self.grids.reset(mol)
         self.nlcgrids.reset(mol)
         return self
+
+    def dft3c(self, method='b97-3c', **kwargs):
+        '''Setup a composite 3c method (B97-3c or r2SCAN-3c) on this object.
+
+        See :func:`pyscf.dft.rks.dft3c` for details.
+        '''
+        return dft3c(self, method=method, **kwargs)
 
     def check_sanity(self):
         out = super().check_sanity()

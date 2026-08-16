@@ -472,7 +472,8 @@ def parse_xc(description):
         return parse_xc('%s,%s' % tuple(description))
 
     description = description.upper()
-    if '-D3' in description or '-D4' in description:
+    if ('-D3' in description or '-D4' in description or
+            description.endswith(('-3C', '_3C'))):
         from pyscf.scf.dispersion import parse_dft
         description, _, _ = parse_dft(description)
         description = description.upper()

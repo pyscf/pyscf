@@ -50,7 +50,8 @@ XC_MAP = {'wb97m-d3bj': 'wb97m',
 # - wb97x-d is not supported yet
 # - wb97*-d3bj is wb97*-v with d3bj
 # - wb97x-d3 is not supported yet
-# - 3c method is not supported yet
+# - 3c methods: b97-3c, r2scan-3c and wb97x-3c are supported; other 3c
+#   methods are not supported yet
 
 # These xc functionals need special treatments
 _white_list = {
@@ -58,6 +59,17 @@ _white_list = {
     'b97m-d3bj': ('b97m-v', False, 'd3bj'),
     'wb97x-d3bj': ('wb97x-v', False, 'd3bj'),
     'wb97x-3c': ('wb97x-v', False, 'd4:wb97x-3c'),
+    'wb97x_3c': ('wb97x-v', False, 'd4:wb97x-3c'),
+    # B97-3c is parameterized together with its D3(BJ) dispersion correction
+    # and the gCP short-range basis correction.  The full libxc canonical
+    # name behaves the same as the shorthand spellings.
+    'b97-3c': ('b97-3c', False, 'd3bj:b97-3c'),
+    'b97_3c': ('b97-3c', False, 'd3bj:b97-3c'),
+    'gga_xc_b97_3c': ('b97-3c', False, 'd3bj:b97-3c'),
+    # r2SCAN-3c is parameterized together with its D4 dispersion correction
+    # and the gCP short-range basis correction.
+    'r2scan-3c': ('r2scan', False, 'd4:r2scan-3c'),
+    'r2scan_3c': ('r2scan', False, 'd4:r2scan-3c'),
     # CF22D is parameterized together with its D3 (zero-damping) dispersion
     # correction, so it is enabled by default. The cf22d damping parameters
     # are shipped with simple-dftd3 (>=1.2.1) under zero damping.
@@ -86,10 +98,12 @@ def parse_dft(xc_code):
     if method_lower in _black_list:
         raise NotImplementedError(f'{method_lower} is not supported yet.')
 
-    if method_lower.endswith('-3c'):
-        if method_lower == "wb97x-3c":
+    if method_lower.endswith(('-3c', '_3c')):
+        if method_lower in _white_list:
             return _white_list[method_lower]
-        raise NotImplementedError('Only wb97x-3c is supported for now. Other 3c methods are not supported yet.')
+        raise NotImplementedError('Only wb97x-3c, b97-3c and r2scan-3c are '
+                                  'supported for now. Other 3c methods are not '
+                                  'supported yet.')
 
     if method_lower == 'wb97x-d4' and not DFTD4_RECOMMENDATIONS:
         xc, nlc, disp = _white_list[method_lower]

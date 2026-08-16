@@ -274,6 +274,21 @@ class KnownValues(unittest.TestCase):
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
 
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_finite_diff_rks_b97_3c_grad(self):
+        # gradient of the B97-3c composite method (XC + D3(BJ) + gCP)
+        mol1 = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587',
+                     basis='def2mtzvp', verbose=0)
+        mf = dft.RKS(mol1, xc='b97-3c')
+        mf.conv_tol = 1e-12
+        mf.kernel()
+        g = mf.nuc_grad_method().set(grid_response=True).kernel()
+
+        mf_scanner = mf.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; H  0. -0.757 0.587; H  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; H  0. -0.757 0.587; H  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
+
     def test_finite_diff_rks_grad_lko(self):
         g = mf2.nuc_grad_method().set(grid_response=True).kernel()
         mol1 = mol.copy()

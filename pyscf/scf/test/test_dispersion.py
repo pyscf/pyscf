@@ -65,6 +65,37 @@ class TestDispersionLogic(unittest.TestCase):
         # wb97x-3c -> d4, 3body=True (from whitelist)
         self.assertEqual(dispersion.parse_disp('wb97x-3c'), ('wb97x-3c', 'd4', True))
 
+        # b97-3c -> d3bj, no 3-body (from whitelist)
+        self.assertEqual(dispersion.parse_disp('b97-3c'), ('b97-3c', 'd3bj', False))
+
+        # r2scan-3c -> d4, 3body=True (from whitelist)
+        self.assertEqual(dispersion.parse_disp('r2scan-3c'), ('r2scan-3c', 'd4', True))
+
+        # underscore spellings are equivalent to the dash spellings
+        self.assertEqual(dispersion.parse_disp('b97_3c'), ('b97-3c', 'd3bj', False))
+        self.assertEqual(dispersion.parse_disp('r2scan_3c'), ('r2scan-3c', 'd4', True))
+
+    def test_parse_dft_3c_spellings(self):
+        # Issue #3399: all spellings of a supported 3c method must resolve to
+        # the same (xc, nlc, disp) triple, and unsupported 3c methods must
+        # raise for every spelling.
+        self.assertEqual(dispersion.parse_dft('b97-3c'), ('b97-3c', False, 'd3bj:b97-3c'))
+        self.assertEqual(dispersion.parse_dft('b97_3c'), ('b97-3c', False, 'd3bj:b97-3c'))
+        self.assertEqual(dispersion.parse_dft('gga_xc_b97_3c'), ('b97-3c', False, 'd3bj:b97-3c'))
+        self.assertEqual(dispersion.parse_dft('r2scan-3c'), ('r2scan', False, 'd4:r2scan-3c'))
+        self.assertEqual(dispersion.parse_dft('r2scan_3c'), ('r2scan', False, 'd4:r2scan-3c'))
+        self.assertEqual(dispersion.parse_dft('wb97x-3c'), ('wb97x-v', False, 'd4:wb97x-3c'))
+        self.assertEqual(dispersion.parse_dft('wb97x_3c'), ('wb97x-v', False, 'd4:wb97x-3c'))
+
+        with self.assertRaises(NotImplementedError):
+            dispersion.parse_dft('pbeh-3c')
+        with self.assertRaises(NotImplementedError):
+            dispersion.parse_dft('pbeh_3c')
+        with self.assertRaises(NotImplementedError):
+            dispersion.parse_dft('hf-3c')
+        with self.assertRaises(NotImplementedError):
+            dispersion.parse_dft('hf_3c')
+
     def test_parse_disp_errors(self):
         # Unknown disp version
         with self.assertRaises(ValueError):

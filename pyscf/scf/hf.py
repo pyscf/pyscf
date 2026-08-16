@@ -33,6 +33,7 @@ from pyscf.scf import diis
 from pyscf.scf import _vhf
 from pyscf.scf import chkfile
 from pyscf.scf import dispersion
+from pyscf.scf import gcp
 from pyscf.scf import smearing
 from pyscf import __config__
 
@@ -315,6 +316,14 @@ def energy_tot(mf, dm=None, h1e=None, vhf=None):
             e_disp = mf.get_dispersion()
             mf.scf_summary['dispersion'] = e_disp
             e_tot += e_disp
+
+    if mf.do_gcp():
+        if 'gcp' in mf.scf_summary:
+            e_tot += mf.scf_summary['gcp']
+        else:
+            e_gcp = mf.get_gcp()
+            mf.scf_summary['gcp'] = e_gcp
+            e_tot += e_gcp
 
     return e_tot
 
@@ -2054,6 +2063,9 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
 
     do_disp = dispersion.check_disp
     get_dispersion = dispersion.get_dispersion
+
+    do_gcp = gcp.check_gcp
+    get_gcp = gcp.get_gcp
 
     smearing = smearing.smearing
 
