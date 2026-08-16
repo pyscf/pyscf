@@ -38,7 +38,7 @@ FIRST_ETB_ELEMENT = getattr(__config__, 'df_addons_aug_start_at', 36)  # 'Rb'
 # functions. It may cause higher errors in ERI integrals.
 USE_VERSION_26_AUXBASIS = True
 
-# Obtained from http://www.psicode.org/psi4manual/master/basissets_byfamily.html
+# Adapted from http://www.psicode.org/psi4manual/master/basissets_byfamily.html
 DEFAULT_AUXBASIS = {
     # AO basis       JK-fit                     MP2-fit                J-fit
     'ccpvdz'      : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
@@ -356,10 +356,10 @@ def predefined_auxbasis(mol, basis, xc='HF', mp2fit=False):
             logger.debug(mol, f'Psi4 predefined JKFIT basis set {auxbasis} for {xc}')
             return auxbasis
         elif len(DEFAULT_AUXBASIS[pyscf_basis_alias]) > 2:
-            # The optional J-fit column for local and semi-local functionals
+            # The optional J-fit column for pure functionals
             auxbasis = DEFAULT_AUXBASIS[pyscf_basis_alias][2]
             if auxbasis:
-                logger.debug(mol, f'Psi4 predefined JFIT basis set {auxbasis} for {xc}')
+                logger.debug(mol, f'predefined JFIT basis set {auxbasis} for {xc}')
                 return auxbasis
     return bse_predefined_auxbasis(mol, basis, xc, mp2fit)
 

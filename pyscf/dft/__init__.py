@@ -114,6 +114,22 @@ def UKS3C(mol, method='b97-3c'):
     return UKS(mol).dft3c(method)
 UKS3C.__doc__ = uks.UKS.__doc__ + UKS3C.__doc__
 
+def ROKS3C(mol, method='b97-3c'):
+    '''Create a ROKS object with the composite 3c method applied.
+
+    See :func:`pyscf.dft.dft3c.dft3c` for the supported methods.
+    '''
+    return ROKS(mol).dft3c(method)
+ROKS3C.__doc__ = roks.ROKS.__doc__ + ROKS3C.__doc__
+
+def GKS3C(mol, method='b97-3c'):
+    '''Create a GKS object with the composite 3c method applied.
+
+    See :func:`pyscf.dft.dft3c.dft3c` for the supported methods.
+    '''
+    return GKS(mol).dft3c(method)
+GKS3C.__doc__ = gks.GKS.__doc__ + GKS3C.__doc__
+
 def GKS(mol, xc='LDA,VWN'):
     if not mol.symmetry or mol.groupname == 'C1':
         return gks.GKS(mol, xc)

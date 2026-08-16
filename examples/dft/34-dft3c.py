@@ -44,9 +44,11 @@ print('r2SCAN-3c total energy = %.12f' % mf.e_tot)
 # mol.RKS3C(method='r2scan-3c') is equivalent
 #mf = mol.RKS3C(method='r2scan-3c').density_fit()
 
-# For open-shell systems, use UKS3C
+# For open-shell systems, UKS3C, ROKS3C and GKS3C are available
 #mol = gto.M(atom='O 0 0 0', spin=2)
 #mf = mol.UKS3C().run()
+#mf = mol.ROKS3C().run()
+#mf = mol.GKS3C().run()
 
 #
 # The dispersion and gCP/SRB corrections are derived from mf.xc and can be

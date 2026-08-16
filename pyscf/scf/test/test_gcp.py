@@ -195,6 +195,11 @@ class TestDFT3C(unittest.TestCase):
         self.assertEqual(mu.method, 'b97-3c')
         self.assertEqual(mu.xc, 'b97-3c')
 
+        # RKS3C on an open-shell molecule dispatches to ROKS internally
+        self.assertIn('ROKS', type(o.RKS3C()).__name__)
+        self.assertEqual(o.ROKS3C().method, 'b97-3c')
+        self.assertEqual(o.GKS3C().method, 'b97-3c')
+
     def test_dft3c_auto_auxbasis(self):
         # density_fit() without explicit auxbasis picks def2-mTZVPP-RIJ
         # through the bse_meta.json jfit record
