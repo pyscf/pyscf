@@ -20,7 +20,7 @@ Hessian of the gCP/SRB correction for HF and DFT
 
 import numpy as np
 from pyscf.lib import logger
-from pyscf.scf.gcp import check_gcp, parse_gcp
+from pyscf.scf.gcp import check_gcp, _resolve_gcp, _method_of
 
 def get_gcp(hessobj, gcp=None):
     mf = hessobj.base
@@ -33,10 +33,10 @@ def get_gcp(hessobj, gcp=None):
     if gcp is None:
         gcp = getattr(mf, 'gcp', None)
 
-    method = getattr(mf, 'xc', 'hf')
-    gcp_method, gcp_basis = parse_gcp(method)
-    if gcp_method is None:
+    resolved = _resolve_gcp(_method_of(mf), gcp)
+    if resolved is None:
         return h_gcp
+    gcp_method, gcp_basis = resolved
 
     try:
         from pyscf.dispersion import gcp as _gcp

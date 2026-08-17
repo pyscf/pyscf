@@ -61,6 +61,34 @@ def parse_gcp(xc_code):
         return GCP_METHODS[method_lower]
     return None
 
+def _resolve_gcp(method, gcp):
+    '''Resolve the (gcp method, gcp basis) for a gCP request.
+
+    An explicit gCP request is given as a string, following the `disp`
+    convention: a gCP method key of the simple-dftd3 parameter table
+    (e.g. 'b973c', 'r2scan3c') or 'method:basis' to also select the basis
+    key (e.g. 'b973c:def2mtzvp').  Otherwise the method is derived from
+    the xc code `method`.  Returns None if no gCP/SRB correction applies.
+    '''
+    if isinstance(gcp, str):
+        method_, _, basis = gcp.partition(':')
+        method_ = method_.lower()
+        if basis:
+            basis = basis.lower()
+        else:
+            basis = None
+        return (method_, basis) if method_ else None
+    return parse_gcp(method)
+
+def _method_of(mf):
+    # To prevent mf.do_gcp() triggering the SCF.__getattr__ method, do not
+    # use method = getattr(mf, 'xc', 'hf').
+    if isinstance(mf, scf.hf.KohnShamDFT):
+        return mf.xc
+    else:
+        # Set the gcp method for both HF and MCSCF to 'hf'
+        return 'hf'
+
 def check_gcp(mf, gcp=None):
     '''Check if the gCP/SRB correction should be applied.
 
@@ -69,23 +97,21 @@ def check_gcp(mf, gcp=None):
         gcp : bool or str, optional
             If None, uses mf.gcp.
             If False, the correction is disabled.
+            If a string, it is an explicit gCP method key of the
+            simple-dftd3 parameter table (e.g. 'b973c', 'r2scan3c'), or
+            'method:basis' to also select the basis key.
 
     Returns:
-        bool: True if the gCP/SRB correction is enabled and the method supports it.
+        bool: True if the gCP/SRB correction is enabled.
     '''
     if gcp is None:
         gcp = getattr(mf, 'gcp', None)
     if gcp is False or gcp == 0:
         return False
-
-    # To prevent mf.do_gcp() triggering the SCF.__getattr__ method, do not use
-    # method = getattr(mf, 'xc', 'hf').
-    if isinstance(mf, scf.hf.KohnShamDFT):
-        method = mf.xc
-    else:
-        # Set the gcp method for both HF and MCSCF to 'hf'
-        method = 'hf'
-    return parse_gcp(method) is not None
+    if isinstance(gcp, str):
+        # An explicit customized gCP request
+        return bool(gcp)
+    return _resolve_gcp(_method_of(mf), gcp) is not None
 
 def get_gcp(mf, gcp=None, verbose=None):
     '''
@@ -96,6 +122,9 @@ def get_gcp(mf, gcp=None, verbose=None):
         gcp : bool or str, optional
             If None, uses mf.gcp.
             If False, the correction is disabled.
+            If a string, it is an explicit gCP method key of the
+            simple-dftd3 parameter table (e.g. 'b973c', 'r2scan3c'), or
+            'method:basis' to also select the basis key.
         verbose : int, optional
 
     Returns:
@@ -107,10 +136,10 @@ def get_gcp(mf, gcp=None, verbose=None):
     if gcp is None:
         gcp = getattr(mf, 'gcp', None)
 
-    method = getattr(mf, 'xc', 'hf')
-    gcp_method, gcp_basis = parse_gcp(method)
-    if gcp_method is None:
+    resolved = _resolve_gcp(_method_of(mf), gcp)
+    if resolved is None:
         return 0.
+    gcp_method, gcp_basis = resolved
 
     if _gcp is None:
         raise RuntimeError('gCP not available. Install them with '

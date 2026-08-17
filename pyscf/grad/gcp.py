@@ -20,7 +20,7 @@ gradient of the gCP/SRB correction for HF and DFT
 
 import numpy as np
 from pyscf.lib import logger
-from pyscf.scf.gcp import check_gcp, parse_gcp
+from pyscf.scf.gcp import check_gcp, _resolve_gcp, _method_of
 
 def get_gcp(mf_grad, gcp=None, verbose=None):
     '''gradient of the gCP/SRB correction'''
@@ -32,10 +32,10 @@ def get_gcp(mf_grad, gcp=None, verbose=None):
     if gcp is None:
         gcp = getattr(mf, 'gcp', None)
 
-    method = getattr(mf, 'xc', 'hf')
-    gcp_method, gcp_basis = parse_gcp(method)
-    if gcp_method is None:
+    resolved = _resolve_gcp(_method_of(mf), gcp)
+    if resolved is None:
         return np.zeros([mol.natm,3])
+    gcp_method, gcp_basis = resolved
 
     try:
         from pyscf.dispersion import gcp as _gcp

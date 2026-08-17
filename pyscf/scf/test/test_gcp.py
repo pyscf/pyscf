@@ -89,6 +89,24 @@ class TestGCPEnergy(unittest.TestCase):
         e = gcp_mod.get_gcp(mf)
         self.assertAlmostEqual(e, 0.0002982079859909563, 10)
 
+    def test_get_gcp_override(self):
+        # an explicit gCP method string overrides the xc-derived method,
+        # following the disp convention
+        mf = _make_ks('b3lyp')  # no gCP derived from xc
+        self.assertFalse(gcp_mod.check_gcp(mf))
+        self.assertTrue(gcp_mod.check_gcp(mf, gcp='b973c'))
+        e = gcp_mod.get_gcp(mf, gcp='b973c')
+        self.assertAlmostEqual(e, -0.000818489452022319, 10)
+
+        # 'method:basis' selects both
+        e = gcp_mod.get_gcp(mf, gcp='b973c:def2mtzvp')
+        self.assertAlmostEqual(e, -0.000818489452022319, 10)
+        e = gcp_mod.get_gcp(mf, gcp='r2scan3c')
+        self.assertAlmostEqual(e, 0.0002982079859909563, 10)
+
+        # disabled explicitly
+        self.assertEqual(gcp_mod.get_gcp(mf, gcp=False), 0.)
+
     def test_get_gcp_gradient(self):
         mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='def2mtzvp', verbose=0)
         model = disp_gcp.GCP(mol, method='b973c', basis='def2mtzvp')
