@@ -115,9 +115,16 @@ class DFT3C:
         basis, xc, ecp, auxbasis = _DFT3C_METHODS[method_lower]
         self.mol.basis = basis
         if ecp is not None:
-            # The ECPs of the basis are defined only for the heavy elements.
-            # Set the ECP per element from the BSE record so that light
-            # elements without an ECP are not looked up.
+            # The ECPs of the basis are defined only for the heavy elements,
+            # so the ECP is set per element from the BSE record instead of
+            # as a single string for the whole molecule.  The whole-molecule
+            # form `mol.ecp = ecp` does not work here: `load_ecp` resolves
+            # the name through basis_set_exchange, and its BSE fallback
+            # raises BasisNotFoundError for elements without an ECP (the
+            # file-based path would return None and be skipped by
+            # format_ecp).  Setting the ECP per element only for the atoms
+            # that have one avoids that error and any "ECP not found"
+            # stderr noise.
             from pyscf.gto.basis import bse as bse_mod
             if bse_mod.basis_set_exchange is None:
                 raise RuntimeError('basis_set_exchange is required for the '
