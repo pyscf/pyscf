@@ -22,6 +22,10 @@ try:
     from pyscf.dispersion import dftd3, dftd4
 except (ImportError, OSError):
     dftd3 = dftd4 = None
+try:
+    import basis_set_exchange
+except ImportError:
+    basis_set_exchange = None
 
 
 RCUT_LKO = 5.0
@@ -290,9 +294,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
 
     @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    @unittest.skipIf(basis_set_exchange is None, 'BSE not installed')
     def test_finite_diff_df_rks_b97_3c_grad(self):
         # gradient of the B97-3c composite method with density fitting
-        # (RI-J with the def2-mTZVPP-RIJ auxiliary basis)
+        # (RI-J with the def2-mTZVPP-RIJ auxiliary basis, fetched from BSE)
         mol1 = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587',
                      basis='def2mtzvp', verbose=0)
         mf = dft.RKS(mol1, xc='b97-3c').density_fit()
