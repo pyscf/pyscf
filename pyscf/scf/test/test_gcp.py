@@ -49,7 +49,8 @@ class TestParseGCP(unittest.TestCase):
         self.assertEqual(gcp_mod.parse_gcp('gga_xc_b97_3c'), ('b973c', 'def2mtzvp'))
         self.assertEqual(gcp_mod.parse_gcp('r2scan-3c'), ('r2scan3c', 'def2mtzvpp'))
         self.assertEqual(gcp_mod.parse_gcp('r2scan_3c'), ('r2scan3c', 'def2mtzvpp'))
-        self.assertEqual(gcp_mod.parse_gcp('wb97x-3c'), ('wb97x3c', None))
+        # wB97X-3c has no gCP/SRB correction
+        self.assertIsNone(gcp_mod.parse_gcp('wb97x-3c'))
         self.assertIsNone(gcp_mod.parse_gcp('b3lyp'))
         self.assertIsNone(gcp_mod.parse_gcp(None))
 
@@ -179,7 +180,6 @@ class TestDFT3C(unittest.TestCase):
         self.assertEqual(mf.method, 'b97-3c')
         self.assertEqual(mf.mol.basis, 'def2mtzvp')
         self.assertEqual(mf.xc, 'b97-3c')
-
         # the method kwarg goes through the mol dispatch
         mf = mol.RKS3C(method='r2scan-3c')
         self.assertEqual(mf.method, 'r2scan-3c')
@@ -199,6 +199,33 @@ class TestDFT3C(unittest.TestCase):
         self.assertIn('ROKS', type(o.RKS3C()).__name__)
         self.assertEqual(o.ROKS3C().method, 'b97-3c')
         self.assertEqual(o.GKS3C().method, 'b97-3c')
+
+    def test_dft3c_wb97x_3c(self):
+        # wB97X-3c: wB97X-V + D4 in the ECP-based Grimme vDZP basis, no gCP
+        dft = __import__('pyscf.dft', fromlist=['RKS'])
+        mol = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587', verbose=0)
+        mf = mol.RKS3C(method='wb97x-3c')
+        self.assertEqual(mf.method, 'wb97x-3c')
+        self.assertEqual(mf.mol.basis, 'Grimme vDZP')
+        self.assertEqual(mf.xc, 'wb97x-3c')
+        # ECPs are set per element; light elements without an ECP are skipped
+        self.assertNotIn('H', mf.mol.ecp)
+        self.assertTrue(mf.mol.ecp)
+        # VV10 NLC is replaced by D4; no gCP/SRB correction
+        self.assertFalse(mf.do_nlc())
+        self.assertTrue(mf.do_disp())
+        self.assertFalse(mf.do_gcp())
+
+        mf.conv_tol = 1e-10
+        e = mf.kernel()
+        self.assertAlmostEqual(e, -17.270909745768, 8)
+        self.assertAlmostEqual(mf.scf_summary['dispersion'], -0.000263630665, 8)
+        self.assertNotIn('gcp', mf.scf_summary)
+
+        # density fitting has no dedicated auxiliary basis and falls back
+        # to even-tempered functions
+        mol2 = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587', verbose=0)
+        self.assertIsNone(dft.RKS(mol2).dft3c('wb97x-3c').density_fit().auxbasis)
 
     def test_dft3c_auto_auxbasis(self):
         # density_fit() without explicit auxbasis picks def2-mTZVPP-RIJ

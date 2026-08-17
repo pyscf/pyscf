@@ -4,17 +4,18 @@ import pyscf
 from pyscf import gto, dft
 
 '''
-Composite 3c methods: B97-3c and r2SCAN-3c.
+Composite 3c methods: B97-3c, r2SCAN-3c and wB97X-3c.
 
 B97-3c (J. Chem. Phys. 148, 064104 (2018)): B97 + D3(BJ) + SRB in
 def2-mTZVP.  r2SCAN-3c (J. Chem. Phys. 154, 064103 (2021)): r2SCAN + D4 +
-gCP in def2-mTZVPP.
+gCP in def2-mTZVPP.  wB97X-3c (J. Chem. Phys. 158, 014103 (2023)):
+wB97X-V + D4 in the ECP-based Grimme vDZP basis (no gCP).
 
 The methods are set up with dft3c() or the mol.RKS3C()/mol.UKS3C()
-conveniences.  The molecular basis, the XC functional, and (via mf.xc)
-the dispersion and gCP/SRB corrections are configured automatically;
-density_fit() selects the RI-J auxiliary basis (def2-mTZVPP-RIJ)
-automatically.
+conveniences.  The molecular basis (and ECPs), the XC functional, and
+(via mf.xc) the dispersion and gCP/SRB corrections are configured
+automatically; density_fit() selects the RI-J auxiliary basis
+(def2-mTZVPP-RIJ) automatically for B97-3c and r2SCAN-3c.
 
 This example requires the pyscf-dispersion and basis-set-exchange
 packages.
@@ -49,6 +50,15 @@ print('r2SCAN-3c total energy = %.12f' % mf.e_tot)
 #mf = mol.UKS3C().run()
 #mf = mol.ROKS3C().run()
 #mf = mol.GKS3C().run()
+
+#
+# wB97X-3c: wB97X-V + D4 in the ECP-based Grimme vDZP basis (no gCP).
+# It has no dedicated auxiliary basis; density_fit() falls back to
+# even-tempered functions, and exact J/K without density fitting is the
+# natural default.  An auto-aux basis can be requested explicitly.
+#
+#mf = mol.RKS3C(method='wb97x-3c').run()
+#mf = mol.RKS3C(method='wb97x-3c').density_fit(auxbasis='autoaux').run()
 
 #
 # The dispersion and gCP/SRB corrections are derived from mf.xc and can be

@@ -46,9 +46,6 @@ GCP_METHODS = {
     'gga_xc_b97_3c': ('b973c', 'def2mtzvp'),
     'r2scan-3c': ('r2scan3c', 'def2mtzvpp'),
     'r2scan_3c': ('r2scan3c', 'def2mtzvpp'),
-    # wB97X-3c is defined without the gCP correction (its gCP energy is zero)
-    'wb97x-3c': ('wb97x3c', None),
-    'wb97x_3c': ('wb97x3c', None),
 }
 
 def parse_gcp(xc_code):
