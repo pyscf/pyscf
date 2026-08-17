@@ -57,7 +57,8 @@ mc.conv_tol = 1e-12
 mc.verbose = 4
 
 mx = mp.MP2(mf, frozen=10).run()
-mo = mf.mo_coeff @ np.linalg.eigh(mx.make_rdm1())[1][:, ::-1]
+# make symmetry-adapted natural orbtials
+mo = mf.mo_coeff @ mrpt.caspt2.disjoint_eigh(mx.make_rdm1())[1][:, ::-1]
 
 mc.kernel(mo)
 print('=== E(CASSCF) = %15.8f  REF = %15.8f' % (mc.e_tot, -385.75332172))
@@ -88,7 +89,8 @@ mc.fcisolver.conv_tol = 1e-14
 mc.conv_tol = 1e-12
 mc.verbose = 4
 mx = mp.MP2(mf, frozen=10).run()
-mo = mf.mo_coeff @ np.linalg.eigh(mx.make_rdm1())[1][:, ::-1]
+# make symmetry-adapted natural orbtials
+mo = mf.mo_coeff @ mrpt.caspt2.disjoint_eigh(mx.make_rdm1())[1][:, ::-1]
 mc.kernel(mo)
 print('=== E(DF-CASSCF) = %15.8f  REF = %15.8f' % (mc.e_tot, -385.75280633))
 
