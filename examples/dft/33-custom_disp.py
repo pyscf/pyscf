@@ -152,6 +152,11 @@ print("  basis = 'Grimme vDZP'")
 print("  ecp   = 'Grimme vDZP', please specify it for each element that needs ecp")
 print("  To load the Grimme vDZP basis/ECP, install basis-set-exchange:")
 print("      pip install basis-set-exchange")
+print()
+print('  Note: the same setup can be done in one step with the composite')
+print("        method helper: mol.RKS3C(method='wb97x-3c') or")
+print("        dft.RKS(mol).dft3c('wb97x-3c')  (basis, ECPs, xc and dispersion")
+print('        are configured automatically; see examples/dft/34-dft3c.py).')
 
 mol_3c = pyscf.M(
     atom=atom,
