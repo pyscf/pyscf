@@ -45,6 +45,17 @@ def get_veff(ks_grad, dm=None, kpts=None):
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, ks_grad.max_memory*.9-mem_now)
+
+    # Opt-in (ks_grad.use_ao_cache, default False): precompute the uniform-grid
+    # AOs once and reuse them across the XC and Coulomb derivative passes of this
+    # gradient. The cache is stored on the numint object and automatically used
+    # by block_loop.
+    if ks_grad.use_ao_cache:
+        ao_deriv = 2 if ni._xc_type(mf.xc) in ('GGA', 'MGGA') else 1
+        ni.set_ao_cache(cell, grids, ao_deriv, kpts=kpts, max_memory=max_memory)
+    else:
+        ni.ao_cache = None
+
     if ks_grad.grid_response:
         raise NotImplementedError
     else:
@@ -117,7 +128,9 @@ def get_vxc(ni, cell, grids, xc_code, dms, kpts, kpts_band=None, relativity=0, h
         return -vmat
 
 class Gradients(rhf_grad.Gradients):
-    _keys = {'grid_response', 'grids'}
+    _keys = {'grid_response', 'grids', 'use_ao_cache'}
+
+    use_ao_cache = False
 
     def __init__(self, mf):
         rhf_grad.Gradients.__init__(self, mf)
