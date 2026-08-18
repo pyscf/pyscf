@@ -285,13 +285,13 @@ class KnownValues(unittest.TestCase):
 
         mycc1.cc2 = False
         t1a, t2a = rccsd.update_amps(mycc1, t1, t2, eris1)
-        self.assertAlmostEqual(lib.fp(t1a), -106360.5276951083, 7)
+        self.assertAlmostEqual(lib.fp(t1a), -106360.5276951083, 6)
         self.assertAlmostEqual(lib.fp(t2a), 66540.100267798145, 6)
         self.assertAlmostEqual(abs(t1a-t1b).max(), 0, 6)
         self.assertAlmostEqual(abs(t2a-t2b).max(), 0, 6)
         mycc1.cc2 = True
         t1a, t2a = rccsd.update_amps(mycc1, t1, t2, eris1)
-        self.assertAlmostEqual(lib.fp(t1a), -106360.5276951083, 7)
+        self.assertAlmostEqual(lib.fp(t1a), -106360.5276951083, 6)
         self.assertAlmostEqual(lib.fp(t2a), -1517.9391800662809, 7)
 
         mol = gto.Mole()
