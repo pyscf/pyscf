@@ -69,6 +69,12 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_nosymm_sa4_newton (self):
         mc = mcscf.CASSCF (m, 4, 4).state_average_([0.25,]*4).newton ()
+        # The eight-place total-energy assertion requires the converged-energy
+        # scatter to stay below 0.5e-8.  With the default conv_tol=1e-7 the
+        # gradient threshold sqrt(conv_tol)~3.2e-4 permits a legitimate energy
+        # spread of ~g^2 ~ 1e-8, so the default tolerance cannot guarantee the
+        # asserted precision.
+        mc.conv_tol = 1e-8
         mo = mc.sort_mo([4,5,6,10], base=1)
         mc.kernel(mo)
         self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 8)
