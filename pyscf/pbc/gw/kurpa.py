@@ -81,9 +81,9 @@ def kernel(rpa, mo_energy, mo_coeff, nw=None, with_e_hf=None):
         uhf.with_df = rpa._scf.with_df
         with temporary_env(rpa.with_df, verbose=0), temporary_env(rpa.mol, verbose=0):
             dm = rpa._scf.make_rdm1()
-            vj = uhf.get_j(uhf.cell, dm)
+            vj = rpa._scf.get_j(uhf.cell, dm)
             vj_tot = vj[0] + vj[1]
-            e_1e = 1.0 / len(rpa.kpts) * lib.einsum('kij,kji', dm[0] + dm[1], uhf.get_hcore()).real
+            e_1e = 1.0 / len(rpa.kpts) * lib.einsum('kij,kji', dm[0] + dm[1], rpa._scf.get_hcore()).real
             e_j = 0.5 / len(rpa.kpts) * lib.einsum('kij,kji', dm[0] + dm[1], vj_tot).real
             e_x = get_rpa_exx(rpa, acfd=rpa.acfd_exx, correction_only=False)
             e_nuc = rpa._scf.energy_nuc()
