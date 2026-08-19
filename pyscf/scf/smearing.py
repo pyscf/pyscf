@@ -148,6 +148,22 @@ class _SmearingSCF:
     def pre_kernel(self, envs):
         self._e_free_prev = self.e_free
 
+    def check_convergence(self, envs):
+        '''Convergence check of the main SCF loop.
+
+        Smearing minimizes the free energy e_free = E - sigma*S, so the main
+        loop requires both the plain energy and the free energy to be
+        converged (issue #3379).
+        '''
+        if (self.sigma and self.smearing_method
+                and self.e_free is not None and self._e_free_prev is not None):
+            dE = abs(envs['e_tot'] - envs['last_hf_e'])
+            dF = abs(self.e_free - self._e_free_prev)
+            return (dE < envs['conv_tol'] and dF < envs['conv_tol']
+                    and envs['norm_gorb'] < envs['conv_tol_grad'])
+        return (abs(envs['e_tot'] - envs['last_hf_e']) < envs['conv_tol']
+                and envs['norm_gorb'] < envs['conv_tol_grad'])
+
     def check_extra_convergence(self, envs):
         '''Convergence check of the extra (conv_check) cycle.
 
