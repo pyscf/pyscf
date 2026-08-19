@@ -270,6 +270,17 @@ def check_disp(mf, disp=None):
         raise ValueError(f"Unknown dispersion version {disp_version}.")
     return True
 
+def make_dftd4_model(mol, method, atm):
+    '''Create the DFTD4 dispersion model for the given method.
+
+    The D4 correction of r2SCAN-3c uses a custom EEQ charge model 
+    (ga=2.0, gc=1.0).  This special case is applied in the dftd4 program but is not encoded in
+    the damping parameter table, so it has to be applied explicitly.
+    '''
+    if method == 'r2scan-3c':
+        return dftd4.DFTD4Dispersion(mol, xc=method, atm=atm, ga=2.0, gc=1.0)
+    return dftd4.DFTD4Dispersion(mol, xc=method, atm=atm)
+
 def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
     '''
     Calculate the dispersion correction energy.
@@ -327,7 +338,7 @@ def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
             raise RuntimeError('dftd4 not available. Install them with `pip install pyscf-dispersion`')
         logger.info(mf, "Calc dispersion correction with DFTD4.")
         logger.info(mf, f"Parameters: xc={method}, atm={with_3body}")
-        d4_model = dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body)
+        d4_model = make_dftd4_model(mol, method, with_3body)
         res = d4_model.get_dispersion()
         e_d4 = res.get('energy')
         mf.scf_summary['dispersion'] = e_d4

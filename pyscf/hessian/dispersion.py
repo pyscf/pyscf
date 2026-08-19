@@ -23,7 +23,7 @@ Hessian of dispersion correction for HF and DFT
 
 import numpy as np
 from pyscf.lib import logger
-from pyscf.scf.dispersion import check_disp, parse_disp
+from pyscf.scf.dispersion import check_disp, parse_disp, make_dftd4_model
 
 def get_dispersion(hessobj, disp=None, with_3body=None):
     mf = hessobj.base
@@ -84,13 +84,13 @@ def get_dispersion(hessobj, disp=None, with_3body=None):
             for j in range(3):
                 coords[i,j] += eps
                 mol.set_geom_(coords, unit='Bohr')
-                d4_model = dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body)
+                d4_model = make_dftd4_model(mol, method, with_3body)
                 res = d4_model.get_dispersion(grad=True)
                 g1 = res.get('gradient')
 
                 coords[i,j] -= 2.0*eps
                 mol.set_geom_(coords, unit='Bohr')
-                d4_model = dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body)
+                d4_model = make_dftd4_model(mol, method, with_3body)
                 res = d4_model.get_dispersion(grad=True)
                 g2 = res.get('gradient')
 

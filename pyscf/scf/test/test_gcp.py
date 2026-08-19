@@ -138,9 +138,30 @@ class TestDFT3C(unittest.TestCase):
         mf = dft.RKS(mol).dft3c('r2scan-3c').density_fit()
         mf.conv_tol = 1e-10
         e = mf.kernel()
-        self.assertAlmostEqual(e, -76.418863218329, 8)
-        self.assertAlmostEqual(mf.scf_summary['dispersion'], -6.028310675027e-05, 8)
+        self.assertAlmostEqual(e, -76.418888685035, 8)
+        self.assertAlmostEqual(mf.scf_summary['dispersion'], -8.574981232398e-05, 8)
         self.assertAlmostEqual(mf.scf_summary['gcp'], 0.001801492550, 8)
+
+    def test_r2scan_3c_d4_custom_charge_model(self):
+        # The D4 correction of r2SCAN-3c uses a custom EEQ charge model
+        # (ga=2.0, gc=1.0).  This is a special case of the dftd4 program
+        # (app/driver.f90) that is not encoded in the damping parameter
+        # table.
+        from pyscf.dispersion import dftd4
+
+        from pyscf.scf import dispersion as disp_mod
+        mol = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587',
+                    basis='def2mtzvpp', verbose=0)
+        ref_model = dftd4.DFTD4Dispersion(mol, xc='r2scan-3c', atm=True,
+                                          ga=2.0, gc=1.0)
+        e_ref = ref_model.get_dispersion()['energy']
+        model = disp_mod.make_dftd4_model(mol, 'r2scan-3c', True)
+        e = model.get_dispersion()['energy']
+        self.assertAlmostEqual(e, e_ref, 12)
+        # the default charge model gives a different (incorrect) value
+        default_model = dftd4.DFTD4Dispersion(mol, xc='r2scan-3c', atm=True)
+        self.assertNotAlmostEqual(default_model.get_dispersion()['energy'],
+                                  e_ref, 6)
 
     def test_dft3c_basis(self):
         # B97-3c -> def2-mTZVP, r2SCAN-3c -> def2-mTZVPP, shared RI-J auxbasis
