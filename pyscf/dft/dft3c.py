@@ -30,7 +30,7 @@ _DFT3C_METHODS = {
     'wb97x-3c': ('Grimme vDZP', 'wb97x-3c', 'Grimme vDZP', None),
 }
 
-def dft3c(mf, method='b97-3c', **kwargs):
+def dft3c(mf, method='b97-3c'):
     '''Apply a composite 3c method to the Kohn-Sham object.
 
     The composite 3c methods combine an XC functional with a dispersion
@@ -63,9 +63,11 @@ def dft3c(mf, method='b97-3c', **kwargs):
     auxiliary basis and density fitting falls back to even-tempered
     functions (an auto-aux basis can be requested explicitly).
 
-    The method returns a new DFT3C object; the input object is not
-    modified.  Density fitting can be applied before or after the 3c
-    setup:
+    The method returns a new DFT3C object; the input SCF object itself is
+    not modified.  Note however that the underlying Mole object is rebuilt
+    in place with the basis (and ECPs, for wB97X-3c) of the method, since
+    the returned object shares ``mf.mol``.  Density fitting can be applied
+    before or after the 3c setup:
 
     >>> mf = dft.RKS(mol).dft3c('b97-3c').density_fit().run()
     >>> mf = dft.RKS(mol).density_fit().dft3c('b97-3c').run()
@@ -82,7 +84,7 @@ def dft3c(mf, method='b97-3c', **kwargs):
     name = mf_class.__name__
     if issubclass(mf_class, DFT3C):
         raise RuntimeError('Object %s already has the DFT3C mixin' % name)
-    dft3cmf = DFT3C(mf, method, **kwargs)
+    dft3cmf = DFT3C(mf, method)
     return lib.set_class(dft3cmf, (DFT3C, mf_class))
 
 # 1. A tag to label the derived SCF class
@@ -106,6 +108,12 @@ class DFT3C:
         self.method3c = method
         self._apply_dft3c(method)
 
+    def dump_flags(self, verbose=None):
+        logger = lib.logger.new_logger(self, verbose)
+        logger.info('******** %s flags ********', self.__class__.__name__)
+        logger.info('method3c = %s', self.method3c)
+        return super().dump_flags(verbose)
+
     def _apply_dft3c(self, method):
         method_lower = method.lower().replace('_', '-')
         if method_lower not in _DFT3C_METHODS:
@@ -114,7 +122,12 @@ class DFT3C:
                 f'b97-3c, r2scan-3c, wb97x-3c.')
         basis, xc, ecp, auxbasis = _DFT3C_METHODS[method_lower]
         self.mol.basis = basis
-        if ecp is not None:
+        if ecp is None:
+            # Clear any ECPs left over from a previous 3c method so that
+            # switching e.g. wb97x-3c -> b97-3c does not keep the ECPs of
+            # the all-electron basis.
+            self.mol.ecp = {}
+        else:
             # The ECPs of the basis are defined only for the heavy elements,
             # so the ECP is set per element from the BSE record instead of
             # as a single string for the whole molecule.  The whole-molecule
@@ -149,7 +162,11 @@ class DFT3C:
         self._apply_dft3c(value)
 
     def undo_dft3c(self):
-        '''Remove the DFT3C mixin'''
+        '''Remove the DFT3C mixin
+
+        Note the molecular basis (and ECPs) set by the 3c method is not
+        restored to the state before ``dft3c`` was applied.
+        '''
         obj = lib.view(self, lib.drop_class(self.__class__, DFT3C))
         del obj.method3c
         return obj

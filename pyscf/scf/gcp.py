@@ -86,7 +86,8 @@ def _method_of(mf):
     if isinstance(mf, scf.hf.KohnShamDFT):
         return mf.xc
     else:
-        # Set the gcp method for both HF and MCSCF to 'hf'
+        # HF-based methods (and post-HF mean fields without .xc) have no
+        # xc-derived gCP correction; parse_gcp('hf') is always None.
         return 'hf'
 
 def check_gcp(mf, gcp=None):

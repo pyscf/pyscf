@@ -245,6 +245,11 @@ class TestDFT3C(unittest.TestCase):
         mol2 = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587', verbose=0)
         self.assertIsNone(dft.RKS(mol2).dft3c('wb97x-3c').density_fit().auxbasis)
 
+        # switching to an all-electron 3c method clears the ECPs
+        mf.method = 'b97-3c'
+        self.assertEqual(mf.mol.ecp, {})
+        self.assertEqual(mf.mol.basis, 'def2mtzvp')
+
     def test_dft3c_auto_auxbasis(self):
         # density_fit() without explicit auxbasis picks def2-mTZVPP-RIJ
         # through the bse_meta.json jfit record
