@@ -244,6 +244,54 @@ class KnownValues(unittest.TestCase):
         ref = FFTDF(cell, kpts=kpts).get_jk(dm, kpts=kpts)[1]
         self.assertAlmostEqual(abs(ref-vk).max(), 0, 7)
 
+    def test_jk_kpts_band_subset(self):
+        # Issue #3391. The k-point symmetry adapted SCF asks for J/K at the IBZ
+        # k-points, i.e. kpts_band is a subset of kpts. That must not fall back
+        # to the generic (and much slower) band code.
+        kpts = cell.make_kpts([2,2,2])
+        numpy.random.seed(1)
+        nao = cell.nao_nr()
+        dm = numpy.random.random((len(kpts),nao,nao))
+        dm = dm + dm.transpose(0,2,1)
+        mydf = aft.AFTDF(cell, kpts)
+        mydf.mesh = [11]*3
+
+        band_idx = [0, 3, 5]
+        kpts_band = kpts[band_idx]
+        self.assertEqual(list(aft_jk._sub_kpts_idx(kpts, kpts_band)), band_idx)
+
+        vj_ref = aft_jk.get_j_kpts(mydf, dm, 1, kpts)[band_idx]
+        vk_ref = aft_jk.get_k_kpts(mydf, dm, 1, kpts, exxdiv='ewald')[band_idx]
+        vj = aft_jk.get_j_kpts(mydf, dm, 1, kpts, kpts_band)
+        vk = aft_jk.get_k_kpts(mydf, dm, 1, kpts, kpts_band, exxdiv='ewald')
+        self.assertEqual(vj.shape, vj_ref.shape)
+        self.assertEqual(vk.shape, vk_ref.shape)
+        self.assertAlmostEqual(abs(vj-vj_ref).max(), 0, 12)
+        self.assertAlmostEqual(abs(vk-vk_ref).max(), 0, 12)
+
+        # A single band k-point may be given with shape (3,)
+        vk = aft_jk.get_k_kpts(mydf, dm, 1, kpts, kpts[3])
+        vk_ref = aft_jk.get_k_kpts(mydf, dm, 1, kpts)[3]
+        self.assertEqual(vk.shape, vk_ref.shape)
+        self.assertAlmostEqual(abs(vk-vk_ref).max(), 0, 12)
+
+        # Two sets of density matrices
+        dms = numpy.array([dm, dm*.5])
+        vk = aft_jk.get_k_kpts(mydf, dms, 1, kpts, kpts_band)
+        vk_ref = aft_jk.get_k_kpts(mydf, dms, 1, kpts)[:,band_idx]
+        self.assertEqual(vk.shape, vk_ref.shape)
+        self.assertAlmostEqual(abs(vk-vk_ref).max(), 0, 12)
+
+        # Genuine band k-points still go through the band code
+        kpts_band = numpy.array([[.1, .2, .3], [0., 0., 0.]])
+        self.assertIs(aft_jk._sub_kpts_idx(kpts, kpts_band), None)
+        vj = aft_jk.get_j_kpts(mydf, dm, 1, kpts, kpts_band)
+        vk = aft_jk.get_k_kpts(mydf, dm, 1, kpts, kpts_band)
+        vj_ref = aft_jk.get_j_for_bands(mydf, dm, 1, kpts, kpts_band)
+        vk_ref = aft_jk.get_k_for_bands(mydf, dm, 1, kpts, kpts_band)
+        self.assertAlmostEqual(abs(vj-vj_ref).max(), 0, 12)
+        self.assertAlmostEqual(abs(vk-vk_ref).max(), 0, 12)
+
     def test_update_vk(self):
         L = 5.
         cell = gto.Cell()
