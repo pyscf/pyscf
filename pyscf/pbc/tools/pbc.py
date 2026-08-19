@@ -524,6 +524,8 @@ def precompute_exx(cell, kpts=None, precision=None, precision_fft=None, nimgs=No
     log = lib.logger.Logger(cell.stdout, cell.verbose)
     log.debug('# Precomputing Wigner-Seitz EXX kernel')
 
+    cput0 = log.init_timer()
+
     if kpts is None: kpts = np.zeros((1, 3))
     kpts = np.reshape(kpts, (-1, 3))
     kmesh = np.asarray(get_kmesh(cell, kpts), dtype=int)
@@ -539,6 +541,8 @@ def precompute_exx(cell, kpts=None, precision=None, precision_fft=None, nimgs=No
         precision = float(precision)
     assert 0 < precision < 1
 
+    log.debug('# precision = %.15g', precision)
+
     if precision_fft is None:
         precision_fft = getattr(__config__, 'pbc_tools_pbc_vcut_ws_precision_fft', None)
         if precision_fft is None:
@@ -546,11 +550,15 @@ def precompute_exx(cell, kpts=None, precision=None, precision_fft=None, nimgs=No
     precision_fft = float(precision_fft)
     assert 0 < precision_fft < 1
 
+    log.debug('# precision_fft = %.15g', precision_fft)
+
     if nimgs is None:
         nimgs = getattr(__config__, 'pbc_tools_pbc_vcut_ws_nimgs', [3, 3, 3])
     nimgs = np.asarray(nimgs, dtype=int)
     assert nimgs.shape == (3,)
     assert np.all(nimgs > 0)
+
+    log.debug('# nimgs = %s', nimgs)
 
     kcell = pbcgto.Cell()
     kcell.atom = 'H 0. 0. 0.'
@@ -564,7 +572,7 @@ def precompute_exx(cell, kpts=None, precision=None, precision_fft=None, nimgs=No
 
     log_precision = -np.log(precision)
     alpha = np.sqrt(log_precision) / Rin
-    log.info('WS alpha = %s', alpha)
+    log.debug('# WS alpha = %s', alpha)
 
     log_precision_fft = -np.log(precision_fft)
     Gmax = 2 * alpha * np.sqrt(log_precision_fft)
@@ -613,6 +621,9 @@ def precompute_exx(cell, kpts=None, precision=None, precision_fft=None, nimgs=No
               'q'    : kcell.Gv,
               'vq'   : vG.real.copy()}
     log.debug('# Finished precomputing')
+
+    log.timer('Wigner-Seitz EXX precomputing', *cput0)
+
     return ws_exx
 
 
