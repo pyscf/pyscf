@@ -39,11 +39,21 @@ class KnownValues(unittest.TestCase):
         cell.output = '/dev/null'
         cell.build()
         mf = khf.KRHF(cell, exxdiv='vcut_ws')
+
+        # isotropic k-mesh
         mf.kpts = cell.make_kpts([2,2,2])
         coulG = tools.get_coulG(cell, mf.kpts[2], True, mf, gs=[5,5,5])
         coulG = coulG.reshape([11]*3)
         coulG[:,5,:] = 0
-        self.assertAlmostEqual(lib.fp(coulG), 1.3245365170998518+0j, 9)
+        self.assertAlmostEqual(lib.fp(coulG), 1.3415512608007418+0j, 9)
+
+        # anisotropic k-mesh
+        mf._ws_exx = None   # remove precomputing
+        mf.kpts = cell.make_kpts([1,2,3])
+        coulG = tools.get_coulG(cell, mf.kpts[2], True, mf, gs=[5,5,5])
+        coulG = coulG.reshape([11]*3)
+        coulG[:,5,:] = 0
+        self.assertAlmostEqual(lib.fp(coulG), -15.809448382668005+0j, 9)
 
     def test_unconventional_ws_cell(self):
         cell = pbcgto.Cell()
@@ -54,7 +64,23 @@ class KnownValues(unittest.TestCase):
                     0.5, 0  , 1.8'''
         cell.build()
         kpts = cell.make_kpts([1,1,1])
-        self.assertRaises(RuntimeError, tools.precompute_exx, cell, kpts)
+
+        # assert that using a small nimgs raise RuntimeError
+        self.assertRaises(RuntimeError, tools.precompute_exx, cell, kpts, nimgs=[1,1,1])
+
+        # but using the new default nimgs=[3,3,3] gives no error
+        res = tools.precompute_exx(cell, kpts)
+        self.assertAlmostEqual(lib.fp(res['vq']), 44.672318849250274+0j, 9)
+
+    def test_ws_inradius(self):
+        a = np.array([[2.0, 0.0, 0.0],
+                      [1.2, 1.0, 0.0],
+                      [0.0, 0.0, 3.0]])
+        ref = 0.5 * np.linalg.norm(a[0] - a[1])
+        self.assertAlmostEqual(tools.get_ws_inradius(a, [1,1,1]), ref, 12)
+
+        a = np.diag([2.0, 3.0, 4.0])
+        self.assertAlmostEqual(tools.get_ws_inradius(a, [2,1,3]), 1.5, 12)
 
     def test_coulG(self):
         numpy.random.seed(19)
