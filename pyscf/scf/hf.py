@@ -224,7 +224,9 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
         conv_tol = conv_tol * 10
         conv_tol_grad = conv_tol_grad * 3
-        if callable(mf.check_convergence):
+        if callable(mf.check_extra_convergence):
+            scf_conv = mf.check_extra_convergence(locals())
+        elif callable(mf.check_convergence):
             scf_conv = mf.check_convergence(locals())
         elif abs(e_tot-last_hf_e) < conv_tol or norm_gorb < conv_tol_grad:
             scf_conv = True
@@ -1709,6 +1711,11 @@ class SCF(lib.StreamObject):
             An extra cycle to check convergence after SCF iterations.
         check_convergence : function(envs) => bool
             A hook for overloading convergence criteria in SCF iterations.
+        check_extra_convergence : function(envs) => bool
+            A hook for overloading the convergence criteria of the extra
+            (conv_check) cycle.  The envs dict carries the relaxed tolerances
+            (conv_tol*10, conv_tol_grad*3).  If set, it takes precedence over
+            check_convergence for the extra cycle.
 
     Saved results:
 
@@ -2065,6 +2072,11 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
     #   f(envs) => bool
     # to check_convergence can overwrite the default convergence criteria
     check_convergence = None
+    # A hook for overloading the convergence criteria of the extra (conv_check)
+    # cycle.  The envs dict carries the relaxed convergence tolerances
+    # (conv_tol*10, conv_tol_grad*3).  If set, it takes precedence over
+    # check_convergence for the extra cycle.
+    check_extra_convergence = None
 
     def scf(self, dm0=None, **kwargs):
         '''SCF main driver

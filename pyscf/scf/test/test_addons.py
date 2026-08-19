@@ -496,14 +496,20 @@ class KnownValues(unittest.TestCase):
         myhf_s.fix_spin = False
         myhf_s.conv_tol = 1e-7
         myhf_s.kernel()
-        self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 5)
-        self.assertAlmostEqual(myhf_s.entropy, 17.11431, 4)
+        # With sigma=0.1 the near-degenerate 3d manifold makes the plain
+        # energy E vary by ~7e-6 across (free-energy-degenerate) thread-noise
+        # solutions, while e_free = E - sigma*S is pinned to ~1e-8.
+        # Assert e_free tightly and E/entropy loosely. 
+        self.assertAlmostEqual(myhf_s.e_free, -244.7984202573, 7)
+        self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 4)
+        self.assertAlmostEqual(myhf_s.entropy, 17.11431, 3)
         self.assertTrue(myhf_s.converged)
 
         myhf_s.mu = -0.2482816
         myhf_s.kernel(dm0=myhf_s.make_rdm1())
-        self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 5)
-        self.assertAlmostEqual(myhf_s.entropy, 17.11431, 4)
+        self.assertAlmostEqual(myhf_s.e_free, -244.7984202573, 7)
+        self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 4)
+        self.assertAlmostEqual(myhf_s.entropy, 17.11431, 3)
 
     def test_rhf_smearing_nelec(self):
         mol = gto.Mole()
