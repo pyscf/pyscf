@@ -19,6 +19,7 @@ Composite 3c methods: B97-3c, r2SCAN-3c and wB97X-3c
 '''
 
 from pyscf import lib
+from pyscf.lib import logger
 
 # method name -> (basis, xc, ecp, auxbasis)
 _DFT3C_METHODS = {
@@ -59,9 +60,11 @@ def dft3c(mf, method='b97-3c'):
     which the dispersion and gCP/SRB corrections are derived
     automatically.  The RI-J auxiliary basis (def2-mTZVPP-RIJ) of B97-3c
     and r2SCAN-3c is resolved from the basis_set_exchange package at
-    runtime when density fitting is enabled; wB97X-3c has no dedicated
-    auxiliary basis and density fitting falls back to even-tempered
-    functions (an auto-aux basis can be requested explicitly).
+    runtime when density fitting is enabled; without basis_set_exchange,
+    density fitting falls back to even-tempered functions.  wB97X-3c has
+    no dedicated auxiliary basis and density fitting always falls back to
+    even-tempered functions (an auto-aux basis can be requested
+    explicitly).
 
     The method returns a new DFT3C object; the input SCF object itself is
     not modified.  Note however that the underlying Mole object is rebuilt
@@ -176,6 +179,16 @@ def _make_df(mf):
     from pyscf import df
     from pyscf.scf import dhf
     auxbasis = _DFT3C_METHODS[mf.method3c.lower().replace('_', '-')][3]
+    if auxbasis is not None:
+        # The RI-J auxiliary basis is resolved from basis_set_exchange at
+        # runtime.  Without the package, fall back to the even-tempered
+        # basis instead of failing at the basis load.
+        from pyscf.gto.basis import bse
+        if bse.basis_set_exchange is None:
+            logger.warn(mf, 'basis_set_exchange not available; density '
+                        'fitting falls back to the even-tempered auxiliary '
+                        'basis.')
+            auxbasis = None
     if isinstance(mf, dhf.UHF):
         with_df = df.DF4C(mf.mol, auxbasis)
     else:

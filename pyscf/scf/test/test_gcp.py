@@ -252,13 +252,45 @@ class TestDFT3C(unittest.TestCase):
 
     def test_dft3c_auto_auxbasis(self):
         # density_fit() without explicit auxbasis picks def2-mTZVPP-RIJ
-        # through the bse_meta.json jfit record
+        # through the DEFAULT_AUXBASIS_JFIT_BSE record
         dft = __import__('pyscf.dft', fromlist=['RKS'])
         mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='def2mtzvp', verbose=0)
         mf = dft.RKS(mol)
         mf.xc = 'b97-3c'
         mf = mf.density_fit()
         self.assertEqual(mf.auxbasis, 'def2-mTZVPP-RIJ')
+
+        mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='def2mtzvpp', verbose=0)
+        self.assertEqual(dft.RKS(mol).dft3c('r2scan-3c').density_fit().auxbasis,
+                         'def2-mTZVPP-RIJ')
+
+    def test_dft3c_no_bse_fallback(self):
+        # Without basis_set_exchange, the RI-J auxiliary basis falls back
+        # to the even-tempered basis instead of failing.
+        from pyscf.df.addons import predefined_auxbasis
+        from pyscf.gto.basis import bse
+        dft = __import__('pyscf.dft', fromlist=['RKS'])
+
+        saved = bse.basis_set_exchange
+        bse.basis_set_exchange = None
+        try:
+            # the manual density_fit path falls back to the even-tempered basis
+            mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='def2mtzvp', verbose=0)
+            self.assertIsNone(predefined_auxbasis(mol, 'def2mtzvp', 'b97-3c'))
+            # the hybrid path still uses the bundled JK-fit basis
+            self.assertEqual(predefined_auxbasis(mol, 'def2mtzvp', 'b3lyp'),
+                             'def2-tzvp-jkfit')
+            # density_fit after dft3c builds with the etb fallback
+            mf = dft.RKS(mol).dft3c('b97-3c').density_fit()
+            mf.with_df.build()
+            self.assertIsNotNone(mf.with_df.auxmol)
+            # density_fit before dft3c rebuilds with_df with the etb fallback
+            mol2 = gto.M(atom='H 0 0 0; H 0 0 1', basis='def2mtzvp', verbose=0)
+            mf2 = dft.RKS(mol2).density_fit().dft3c('b97-3c')
+            mf2.with_df.build()
+            self.assertIsNotNone(mf2.with_df.auxmol)
+        finally:
+            bse.basis_set_exchange = saved
 
     def test_dft3c_switches(self):
         # disp=gcp=False gives the XC-only energy
