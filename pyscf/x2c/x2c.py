@@ -836,22 +836,24 @@ def _get_r(s, snesc):
     r = reduce(numpy.dot, (v, r, v.conj().T))
     return r
 
-def _eigh_standard_robust(a):
-    """Standard Hermitian diagonalization with a driver cascade.
+def _eigh_with_fallback(a, drivers=('evd', 'ev')):
+    """Standard Hermitian diagonalization with driver fallbacks.
 
-    The default scipy driver (evr, MRRR) can abort with an internal error on
-    matrices whose eigenvalue clusters sit at the rounding threshold, which is
-    exactly the regime of the linear-dependency fallback paths below.  The
-    divide-and-conquer and QR drivers do not share this failure mode, so fall
-    back to them instead of aborting the X2C construction.
+    The scipy default driver (evr) can abort with a LinAlgError on
+    ill-conditioned matrices such as the nearly singular metrics handled by
+    the linear-dependency paths below.  Retry with the requested alternative
+    drivers, whose failure characteristics differ from evr's, instead of
+    aborting the X2C construction.
     """
     try:
         return scipy.linalg.eigh(a)
     except scipy.linalg.LinAlgError:
-        try:
-            return scipy.linalg.eigh(a, driver='evd')
-        except scipy.linalg.LinAlgError:
-            return scipy.linalg.eigh(a, driver='ev')
+        for i, driver in enumerate(drivers):
+            try:
+                return scipy.linalg.eigh(a, driver=driver)
+            except scipy.linalg.LinAlgError:
+                if i == len(drivers) - 1:
+                    raise
 
 
 def _x2c1e_xmatrix(t, v, w, s, c):
@@ -873,7 +875,7 @@ def _x2c1e_xmatrix(t, v, w, s, c):
         cs = a[nao:,nao:]
         x = scipy.linalg.solve(cl.T, cs.T).T  # B = XA
     except scipy.linalg.LinAlgError:
-        d, t = _eigh_standard_robust(m)
+        d, t = _eigh_with_fallback(m)
         idx = d>LINEAR_DEP_THRESHOLD
         t = t[:,idx] / numpy.sqrt(d[idx])
         tht = reduce(numpy.dot, (t.T.conj(), h, t))
@@ -906,7 +908,7 @@ def _x2c1e_get_hcore(t, v, w, s, c):
         # cs = a[nao:,nao:]
         e = e[nao:]
     except scipy.linalg.LinAlgError:
-        d, t = _eigh_standard_robust(m)
+        d, t = _eigh_with_fallback(m)
         idx = d>LINEAR_DEP_THRESHOLD
         t = t[:,idx] / numpy.sqrt(d[idx])
         tht = reduce(numpy.dot, (t.T.conj(), h, t))
