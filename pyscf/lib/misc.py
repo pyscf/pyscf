@@ -99,15 +99,31 @@ _dll_deps = {
     'libdft':        ['libcvhf', 'libcgto', 'libcint'],
     'libpbc':        ['libcint', 'libcgto'],
     'libri':         ['libao2mo', 'libcvhf', 'libcgto', 'libcint'],
-    'libxc_itrf':    ['xc'],
-    'libxcfun_itrf': ['xcfun'],
+    # Windows wheels may bundle lib-prefixed support DLLs, while conda-forge
+    # provides xc.dll and xcfun.dll. Prefer the bundled names, then fall back
+    # to the environment-provided names.
+    'libxc_itrf':    [('libxc', 'xc')],
+    'libxcfun_itrf': [('libxcfun', 'xcfun')],
 }
+
+def _load_dependency(libname):
+    if isinstance(libname, str):
+        return load_library(libname)
+    if isinstance(libname, tuple):
+        for candidate in libname:
+            try:
+                return load_library(candidate)
+            except OSError:
+                pass
+        raise OSError(f'Library candidates {libname} not found')
+
+    raise TypeError(f'Unsupported dependency spec: {libname!r}')
 
 @functools.lru_cache(128)
 def load_library(libname):
     lib = None
+    _loaderpath = os.path.dirname(__file__)
     try:
-        _loaderpath = os.path.dirname(__file__)
         lib = numpy.ctypeslib.load_library(libname, _loaderpath)
     except OSError:
         pass
@@ -136,7 +152,7 @@ def load_library(libname):
             raise OSError(f'Library {libname} not found')
 
     if sys.platform == 'win32' and libname in _dll_deps:
-        deps = [load_library(d) for d in _dll_deps[libname]]
+        deps = [_load_dependency(d) for d in _dll_deps[libname]]
         lib = make_dll_wrapper(lib, *deps)
     return lib
 
