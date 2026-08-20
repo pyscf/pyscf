@@ -33,19 +33,25 @@ H        0.000000   -0.755453   -0.471161''')
 mf = mol.RKS3C().density_fit()
 mf.kernel()
 print('B97-3c  total energy = %.12f' % mf.e_tot)
+# The dispersion and gCP/SRB corrections are applied automatically and
+# are reported in mf.scf_summary.
+print('  E(disp) = %.12f  E(gCP/SRB) = %.12f'
+      % (mf.scf_summary['dispersion'], mf.scf_summary['gcp']))
 
 #
-# The same setup via dft3c(); the method can be selected explicitly.
-# The default method is b97-3c.
+# The method can be selected explicitly, for dft3c() as well as for
+# mol.RKS3C(method=...).  The default method is b97-3c.
 #
 mf = dft.RKS(mol).dft3c('r2scan-3c').density_fit()
 mf.kernel()
 print('r2SCAN-3c total energy = %.12f' % mf.e_tot)
 
-# mol.RKS3C(method='r2scan-3c') is equivalent
-#mf = mol.RKS3C(method='r2scan-3c').density_fit()
+# mol.RKS3C(method='r2scan-3c') is the equivalent of the above
+mf = mol.RKS3C(method='r2scan-3c').density_fit()
+mf.kernel()
+print('r2SCAN-3c total energy = %.12f' % mf.e_tot)
 
-# For open-shell systems, UKS3C, ROKS3C and GKS3C are available
+# UKS3C, ROKS3C and GKS3C are available
 #mol = gto.M(atom='O 0 0 0', spin=2)
 #mf = mol.UKS3C().run()
 #mf = mol.ROKS3C().run()
@@ -53,23 +59,9 @@ print('r2SCAN-3c total energy = %.12f' % mf.e_tot)
 
 #
 # wB97X-3c: wB97X-V + D4 in the ECP-based Grimme vDZP basis (no gCP).
-# It has no dedicated auxiliary basis; density_fit() falls back to
-# even-tempered functions, and exact J/K without density fitting is the
-# natural default.  An auto-aux basis can be requested explicitly.
+# density_fit() uses the def2 universal JK-fit basis.
 #
 #mf = mol.RKS3C(method='wb97x-3c').run()
-#mf = mol.RKS3C(method='wb97x-3c').density_fit(auxbasis='autoaux').run()
-
-#
-# The dispersion and gCP/SRB corrections are derived from mf.xc and can be
-# toggled separately.  Setting disp=gcp=False gives the plain XC energy.
-#
-mf = mol.RKS3C()
-mf.disp = False
-mf.gcp = False
-mf = mf.density_fit()
-mf.kernel()
-print('B97-3c  XC-only (DF)   = %.12f' % mf.e_tot)
 
 #
 # All spellings of the composite method are equivalent: b97-3c, b97_3c and
