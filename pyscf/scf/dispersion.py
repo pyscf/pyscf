@@ -50,7 +50,8 @@ XC_MAP = {'wb97m-d3bj': 'wb97m',
 # - wb97x-d is not supported yet
 # - wb97*-d3bj is wb97*-v with d3bj
 # - wb97x-d3 is not supported yet
-# - 3c method is not supported yet
+# - 3c methods: b97-3c, r2scan-3c and wb97x-3c are supported; other 3c
+#   methods are not supported yet
 
 # These xc functionals need special treatments
 _white_list = {
@@ -58,6 +59,18 @@ _white_list = {
     'b97m-d3bj': ('b97m-v', False, 'd3bj'),
     'wb97x-d3bj': ('wb97x-v', False, 'd3bj'),
     'wb97x-3c': ('wb97x-v', False, 'd4:wb97x-3c'),
+    'wb97x_3c': ('wb97x-v', False, 'd4:wb97x-3c'),
+    # B97-3c is parameterized together with its D3(BJ) dispersion correction
+    # (including the ATM three-body term, as specified in the B97-3c paper)
+    # and the SRB correction.  The full libxc canonical name behaves the same
+    # as the shorthand spellings.
+    'b97-3c': ('b97-3c', False, 'd3bjatm:b97-3c'),
+    'b97_3c': ('b97-3c', False, 'd3bjatm:b97-3c'),
+    'gga_xc_b97_3c': ('b97-3c', False, 'd3bjatm:b97-3c'),
+    # r2SCAN-3c is parameterized together with its D4 dispersion correction
+    # and the gCP correction.
+    'r2scan-3c': ('r2scan', False, 'd4:r2scan-3c'),
+    'r2scan_3c': ('r2scan', False, 'd4:r2scan-3c'),
     # CF22D is parameterized together with its D3 (zero-damping) dispersion
     # correction, so it is enabled by default. The cf22d damping parameters
     # are shipped with simple-dftd3 (>=1.2.1) under zero damping.
@@ -86,10 +99,12 @@ def parse_dft(xc_code):
     if method_lower in _black_list:
         raise NotImplementedError(f'{method_lower} is not supported yet.')
 
-    if method_lower.endswith('-3c'):
-        if method_lower == "wb97x-3c":
+    if method_lower.endswith(('-3c', '_3c')):
+        if method_lower in _white_list:
             return _white_list[method_lower]
-        raise NotImplementedError('Only wb97x-3c is supported for now. Other 3c methods are not supported yet.')
+        raise NotImplementedError('Only wb97x-3c, b97-3c and r2scan-3c are '
+                                  'supported for now. Other 3c methods are not '
+                                  'supported yet.')
 
     if method_lower == 'wb97x-d4' and not DFTD4_RECOMMENDATIONS:
         xc, nlc, disp = _white_list[method_lower]
@@ -256,6 +271,17 @@ def check_disp(mf, disp=None):
         raise ValueError(f"Unknown dispersion version {disp_version}.")
     return True
 
+def make_dftd4_model(mol, method, atm):
+    '''Create the DFTD4 dispersion model for the given method.
+
+    The D4 correction of r2SCAN-3c uses a custom EEQ charge model (ga=2.0, gc=1.0).
+    This special case is applied in the dftd4 program but is not encoded in
+    the damping parameter table, so it has to be applied explicitly.
+    '''
+    if method == 'r2scan-3c':
+        return dftd4.DFTD4Dispersion(mol, xc=method, atm=atm, ga=2.0, gc=1.0)
+    return dftd4.DFTD4Dispersion(mol, xc=method, atm=atm)
+
 def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
     '''
     Calculate the dispersion correction energy.
@@ -313,7 +339,7 @@ def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
             raise RuntimeError('dftd4 not available. Install them with `pip install pyscf-dispersion`')
         logger.info(mf, "Calc dispersion correction with DFTD4.")
         logger.info(mf, f"Parameters: xc={method}, atm={with_3body}")
-        d4_model = dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body)
+        d4_model = make_dftd4_model(mol, method, with_3body)
         res = d4_model.get_dispersion()
         e_d4 = res.get('energy')
         mf.scf_summary['dispersion'] = e_d4
