@@ -81,8 +81,7 @@ class Gradients (rhf_grad.GradientsBase):
         rhf_grad.GradientsBase.__init__(self, method)
 
     def debug_lagrange (self, Lvec, bvec, Aop, Adiag, **kwargs):
-        logger.debug (self, "{} gradient Lagrange factor debugging not enabled".format (
-            self.base.__class__.__name__))
+        logger.debug (self, f"{self.base.__class__.__name__} gradient Lagrange factor debugging not enabled")
 
     def get_lagrange_callback (self, Lvec_last, itvec, geff_op):
         def my_call (x):
@@ -135,7 +134,7 @@ class Gradients (rhf_grad.GradientsBase):
                                 'converged' if info_int == 0 else 'not converged',
                                 it[0], linalg.norm (my_geff (Lvec)), linalg.norm (Lvec)))
         if info_int < 0:
-            logger.info (self, 'Lagrange multiplier determination error code {}'.format (info_int))
+            logger.info (self, f'Lagrange multiplier determination error code {info_int}')
         return (info_int==0), Lvec, bvec, Aop, Adiag
 
     def kernel (self, level_shift=None, **kwargs):

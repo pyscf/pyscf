@@ -25,7 +25,7 @@ from pyscf.tdscf._lr_eig import eigh as lr_eigh, eig as lr_eig
 from pyscf.pbc import scf
 from pyscf.pbc.tdscf.krhf import KTDBase, _get_e_ia
 from pyscf.pbc.lib.kpts_helper import is_gamma_point, get_kconserv_ria, conj_mapping
-from pyscf.pbc.scf import _response_functions  # noqa
+from pyscf.pbc.scf import _response_functions
 from pyscf import __config__
 
 REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_uhf_TDDFT_pick_eig_threshold', 1e-3)

@@ -109,19 +109,18 @@ class DFUMP2(DFRMP2):
         if not logger:
             logger = lib.logger.new_logger(self)
         logger.info('')
-        logger.info('******** {0:s} ********'.format(repr(self.__class__)))
-        logger.info('nmo = {0:d}'.format(self.nmo))
-        logger.info('nocc = {0:d}, {1:d}'.format(self.nocc[0], self.nocc[1]))
+        logger.info(f'******** {repr(self.__class__):s} ********')
+        logger.info(f'nmo = {self.nmo:d}')
+        logger.info(f'nocc = {self.nocc[0]:d}, {self.nocc[1]:d}')
         nfrozen = np.count_nonzero(self.frozen_mask[0])
-        logger.info('no. of frozen = {0:d}'.format(nfrozen))
+        logger.info(f'no. of frozen = {nfrozen:d}')
         frozen_tmp = np.arange(self.nmo)[self.frozen_mask[0]]
-        logger.debug('frozen (alpha) = {0}'.format(frozen_tmp))
+        logger.debug(f'frozen (alpha) = {frozen_tmp}')
         frozen_tmp = np.arange(self.nmo)[self.frozen_mask[1]]
-        logger.debug('frozen (beta) = {0}'.format(frozen_tmp))
-        logger.info('basis = {0:s}'.format(repr(self.mol.basis)))
-        logger.info('auxbasis = {0:s}'.format(repr(self.auxmol.basis)))
-        logger.info('max_memory = {0:.1f} MB (current use {1:.1f} MB)'.
-                    format(self.max_memory, lib.current_memory()[0]))
+        logger.debug(f'frozen (beta) = {frozen_tmp}')
+        logger.info(f'basis = {repr(self.mol.basis):s}')
+        logger.info(f'auxbasis = {repr(self.auxmol.basis):s}')
+        logger.info(f'max_memory = {self.max_memory:.1f} MB (current use {lib.current_memory()[0]:.1f} MB)')
 
     def calculate_energy(self):
         '''
@@ -142,7 +141,7 @@ class DFUMP2(DFRMP2):
         logger.info('Calculating DF-MP2 energy')
         self.e_corr = emp2_uhf(self._intsfile, self.mo_energy, self.frozen_mask,
                                logger, ps=self.ps, pt=self.pt)
-        logger.note('DF-MP2 correlation energy: {0:.14f}'.format(self.e_corr))
+        logger.note(f'DF-MP2 correlation energy: {self.e_corr:.14f}')
         log.timer('kernel', *cput1)
         log.timer(self.__class__.__name__, *cput0)
         return self.e_corr
@@ -223,8 +222,7 @@ class DFUMP2(DFRMP2):
             f = ints3c_cholesky(self.mol, self.auxmol, Co, Cv, self.max_memory, logger)
             intsfile.append(f)
         self._intsfile = intsfile
-        logger.info('Stored in files:\n{0:s}\n{1:s}'.
-                    format(self._intsfile[0].filename, self._intsfile[1].filename))
+        logger.info(f'Stored in files:\n{self._intsfile[0].filename:s}\n{self._intsfile[1].filename:s}')
 
     def delete(self):
         '''
@@ -262,8 +260,8 @@ class SCSDFUMP2(DFUMP2):
         if not logger:
             logger = lib.logger.new_logger(self)
         super().dump_flags(logger=logger)
-        logger.info('pt(scs) = {0:.6f}'.format(self.pt))
-        logger.info('ps(scs) = {0:.6f}'.format(self.ps))
+        logger.info(f'pt(scs) = {self.pt:.6f}')
+        logger.info(f'ps(scs) = {self.ps:.6f}')
 
 
 SCSMP2 = SCSUMP2 = SCSDFMP2 = SCSDFUMP2
@@ -294,11 +292,11 @@ def emp2_uhf(intsfiles, mo_energy, frozen_mask, logger, ps=1.0, pt=1.0):
     nvirt = np.array([ints_a.shape[2], ints_b.shape[2]])
 
     logger.debug('    UHF-DF-MP2 energy routine')
-    logger.debug('    Occupied orbitals: {0:d}, {1:d}'.format(nocc[0], nocc[1]))
-    logger.debug('    Virtual orbitals:  {0:d}, {1:d}'.format(nvirt[0], nvirt[1]))
-    logger.debug('    Frozen orbitals:   {0:d}'.format(nfrozen))
-    logger.debug('    Integrals (alpha) from file: {0:s}'.format(intsfiles[0].filename))
-    logger.debug('    Integrals (beta)  from file: {0:s}'.format(intsfiles[1].filename))
+    logger.debug(f'    Occupied orbitals: {nocc[0]:d}, {nocc[1]:d}')
+    logger.debug(f'    Virtual orbitals:  {nvirt[0]:d}, {nvirt[1]:d}')
+    logger.debug(f'    Frozen orbitals:   {nfrozen:d}')
+    logger.debug(f'    Integrals (alpha) from file: {intsfiles[0].filename:s}')
+    logger.debug(f'    Integrals (beta)  from file: {intsfiles[1].filename:s}')
 
     mo_energy_masked = mo_energy[~frozen_mask].reshape((2, -1))
 
@@ -327,7 +325,7 @@ def emp2_uhf(intsfiles, mo_energy, frozen_mask, logger, ps=1.0, pt=1.0):
                 DE = mo_energy_masked[s, i] + mo_energy_masked[s, j] - Eab
                 Tab = (Kab - Kab.T) / DE
                 energy_contrib += pt * lib.einsum('ab,ab', Tab, Kab)
-        logger.debug('      E = {0:.14f}'.format(energy_contrib))
+        logger.debug(f'      E = {energy_contrib:.14f}')
         energy_total += energy_contrib
 
     # opposite-spin energy
@@ -348,10 +346,10 @@ def emp2_uhf(intsfiles, mo_energy, frozen_mask, logger, ps=1.0, pt=1.0):
             DE = mo_energy_masked[0, i] + mo_energy_masked[1, j] - Eab
             Tab = Kab / DE
             energy_contrib += ps * lib.einsum('ab,ab', Tab, Kab)
-    logger.debug('      E = {0:.14f}'.format(energy_contrib))
+    logger.debug(f'      E = {energy_contrib:.14f}')
     energy_total += energy_contrib
 
-    logger.debug('    DF-MP2 correlation energy: {0:.14f}'.format(energy_total))
+    logger.debug(f'    DF-MP2 correlation energy: {energy_total:.14f}')
     return energy_total
 
 
@@ -452,11 +450,11 @@ def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logge
         raise ValueError('numbers of frozen, occupied and virtual orbitals inconsistent')
 
     logger.debug('    Density matrix contributions for DF-MP2')
-    logger.debug('    Occupied orbitals: {0:d}, {1:d}'.format(nocc[0], nocc[1]))
-    logger.debug('    Virtual orbitals:  {0:d}, {1:d}'.format(nvirt[0], nvirt[1]))
-    logger.debug('    Frozen orbitals:   {0:d}'.format(nfrozen))
-    logger.debug('    Three center integrals (alpha) from file: {0:s}'.format(intsfiles[0].filename))
-    logger.debug('    Three center integrals (beta) from file: {0:s}'.format(intsfiles[1].filename))
+    logger.debug(f'    Occupied orbitals: {nocc[0]:d}, {nocc[1]:d}')
+    logger.debug(f'    Virtual orbitals:  {nvirt[0]:d}, {nvirt[1]:d}')
+    logger.debug(f'    Frozen orbitals:   {nfrozen:d}')
+    logger.debug(f'    Three center integrals (alpha) from file: {intsfiles[0].filename:s}')
+    logger.debug(f'    Three center integrals (beta) from file: {intsfiles[1].filename:s}')
 
     GammaFile, LT = None, None
     if calcGamma:
@@ -466,7 +464,7 @@ def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logge
         GammaFile = lib.H5TmpFile(libver='latest')
         GammaFile.create_dataset('Gamma_alpha', (nocc_act[0], naux, nvirt[0]), dtype='f8')
         GammaFile.create_dataset('Gamma_beta', (nocc_act[1], naux, nvirt[1]), dtype='f8')
-        logger.debug('    Storing 3c2e density in file: {0:s}'.format(GammaFile.filename))
+        logger.debug(f'    Storing 3c2e density in file: {GammaFile.filename:s}')
         # We will need LT = L^T, where L L^T = V
         LT = scipy.linalg.cholesky(auxmol.intor('int2c2e'), lower=False)
 
@@ -483,8 +481,8 @@ def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logge
 
             s1_str = ('alpha', 'beta')[s1]
             s2_str = ('alpha', 'beta')[s2]
-            logger.debug('    {0:s}-{1:s} pairs'.format(s1_str, s2_str))
-            logger.debug('    Storing amplitudes in temporary file: {0:s}'.format(tfile.filename))
+            logger.debug(f'    {s1_str:s}-{s2_str:s} pairs')
+            logger.debug(f'    Storing amplitudes in temporary file: {tfile.filename:s}')
 
             # Precompute Eab[a, b] = mo_energy[a] + mo_energy[b] for division with numpy.
             Eab = np.zeros((nvirt[s1], nvirt[s2]))
@@ -524,9 +522,10 @@ def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logge
                 batchsize = min(nvirt[s1], batchsize)
                 if batchsize < 1:
                     raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY).')
-                logger.debug2('    Batch size: {0:d} (of {1:d})'.format(batchsize, nvirt[s1]))
-                logger.debug2('      Pij formation - MO {0:d} ({1:s}), batch size {2:d} (of {3:d})'.
-                              format(i, s1_str, batchsize, nvirt[s1]))
+                logger.debug2(f'    Batch size: {batchsize:d} (of {nvirt[s1]:d})')
+                logger.debug2(
+                    f'      Pij formation - MO {i:d} ({s1_str:s}), '
+                    f'batch size {batchsize:d} (of {nvirt[s1]:d})')
                 for astart in range(0, nvirt[s1], batchsize):
                     aend = min(astart+batchsize, nvirt[s1])
                     tbatch = tiset[:, astart:aend, :]
@@ -549,8 +548,9 @@ def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logge
                     batchsize = min(nocc_act[s2], batchsize)
                     if batchsize < 1:
                         raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY).')
-                    logger.debug2('      Gamma ({0:s}) formation - MO {1:d} ({2:s}), batch size {3:d} (of {4:d})'.
-                                  format(s2_str, i, s1_str, batchsize, nocc_act[s2]))
+                    logger.debug2(
+                        f'      Gamma ({s2_str:s}) formation - MO {i:d} ({s1_str:s}), '
+                        f'batch size {batchsize:d} (of {nocc_act[s2]:d})')
                     if s1 == s2:
                         prefactor = 2.0 * pt
                     else:
@@ -621,8 +621,8 @@ def solve_cphf_uhf(mf, Lvo, max_cycle, tol, logger):
         logger : Logger object
     '''
     logger.info('Solving the CPHF response equations')
-    logger.info('Max. iterations: {0:d}'.format(max_cycle))
-    logger.info('Convergence tolerance: {0:.3g}'.format(tol))
+    logger.info(f'Max. iterations: {max_cycle:d}')
+    logger.info(f'Convergence tolerance: {tol:.3g}')
 
     # Currently we need to make the CPHF solver somewhat more talkative to see anything at all.
     cphf_verbose = logger.verbose

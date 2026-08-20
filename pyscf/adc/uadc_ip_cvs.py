@@ -1091,7 +1091,7 @@ def matvec(adc, M_ij=None, eris=None):
             t2_1_a_ccee = t2_1_a[:ncvs,:ncvs,:,:].copy()
             t2_1_a_ccee_t = t2_1_a_ccee[ij_ind_ncvs[0],ij_ind_ncvs[1],:,:]
 
-            if isinstance(eris.ovvv, type(None)):
+            if eris.ovvv is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             else :
                 chnk_size = ncvs
@@ -1216,7 +1216,7 @@ def matvec(adc, M_ij=None, eris=None):
             t2_1_ab_cvee = t2_1_ab[:ncvs,ncvs:,:,:].copy()
             t2_1_ab_vcee = t2_1_ab[ncvs:,:ncvs,:,:].copy()
 
-            if isinstance(eris.OVVV, type(None)):
+            if eris.OVVV is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             else :
                 chnk_size = ncvs
@@ -1319,7 +1319,7 @@ def matvec(adc, M_ij=None, eris=None):
             del t2_1_b_coee
             del t2_1_b_voee
 
-            if isinstance(eris.ovVV, type(None)):
+            if eris.ovVV is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             else :
                 chnk_size = ncvs
@@ -1356,7 +1356,7 @@ def matvec(adc, M_ij=None, eris=None):
             del temp_1_evc
             del temp_2
 
-            if isinstance(eris.OVvv, type(None)):
+            if eris.OVvv is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             else :
                 chnk_size = ncvs
@@ -2987,8 +2987,7 @@ class UADCIPCVS(uadc.UADC):
         'tol_residual','conv_tol', 'e_corr', 'method',
         'method_type', 'mo_coeff', 'mo_coeff_hf', 'mo_energy_b', 'max_memory',
         't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle',
-        'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b', 'mo_coeff', 'mo_energy_a',
-        'mo_energy_b', 'nmo_a', 'nmo_b', 'mol', 'transform_integrals',
+        'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b', 'nmo_a', 'nmo_b', 'mol', 'transform_integrals',
         'with_df', 'spec_factor_print_tol', 'evec_print_tol', 'ncvs',
         'compute_properties', 'approx_trans_moments', 'E', 'U', 'P', 'X',
         'compute_spin_square', '_make_rdm1', 'frozen', 'mo_occ'

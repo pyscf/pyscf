@@ -15,7 +15,6 @@
 #
 # Author: Yang Gao <younggao1994@gmail.com>
 
-#
 '''
 electron-phonon matrix from finite difference
 '''

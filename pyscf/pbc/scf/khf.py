@@ -38,7 +38,7 @@ from pyscf.lib import logger
 from pyscf.data import nist
 from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import smearing
-from pyscf.pbc.scf import chkfile  # noqa
+from pyscf.pbc.scf import chkfile
 from pyscf.pbc import tools
 from pyscf.pbc import df
 from pyscf.pbc.scf.rsjk import RangeSeparatedJKBuilder

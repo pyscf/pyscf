@@ -15,7 +15,7 @@ from pyscf.lib import logger
 from pyscf import scf, lib
 import numpy as np
 
-class Chooser():
+class Chooser:
     """
     Chooser Class
     Implements the ranked-orbital selection scheme outlined in https://doi.org/10.1021/acs.jctc.1c00037
@@ -253,7 +253,7 @@ class Chooser():
 
         return nactorbs, nactel, casorbs, active_idx
 
-class APC():
+class APC:
 
     """
     APC Class

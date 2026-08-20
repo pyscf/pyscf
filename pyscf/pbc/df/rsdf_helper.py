@@ -546,7 +546,7 @@ def _get_3c2e_Rcuts_for_d(mol, auxmol, ish, jsh, dij, omega, precision,
 # sanity check for estimators
     ESTIMATOR = estimator.upper()
     if ESTIMATOR not in ["ISF0", "ISF", "ISFQ0", "ISFQL", "ME"]:
-        raise RuntimeError("Unknown estimator requested {}".format(estimator))
+        raise RuntimeError(f"Unknown estimator requested {estimator}")
 
 # get bas info
     nbasaux = auxmol.nbas

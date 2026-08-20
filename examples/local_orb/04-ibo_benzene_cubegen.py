@@ -48,7 +48,7 @@ Print the IBOS into Gausian Cube files
 '''
 
 for i in range(ibo.shape[1]):
-    tools.cubegen.orbital(mol, 'benzene_ibo1_{:02d}.cube'.format(i+1), ibo[:,i])
+    tools.cubegen.orbital(mol, f'benzene_ibo1_{i+1:02d}.cube', ibo[:,i])
 
 '''
 Population Analysis with IAOS
@@ -72,5 +72,5 @@ mo_occ = mf.mo_coeff[:,mf.mo_occ>0]
 iaos = lo.iao.iao(mol, mo_occ)
 ibo = lo.ibo.ibo(mol, mo_occ, locmethod='PM', iaos=iaos).kernel()
 for i in range(ibo.shape[1]):
-    tools.cubegen.orbital(mol, 'benzene_ibo2_{:02d}.cube'.format(i+1), ibo[:,i])
+    tools.cubegen.orbital(mol, f'benzene_ibo2_{i+1:02d}.cube', ibo[:,i])
 

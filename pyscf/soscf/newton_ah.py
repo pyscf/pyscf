@@ -33,7 +33,7 @@ from pyscf.scf import addons
 from pyscf.scf import hf_symm, uhf_symm, ghf_symm
 from pyscf.scf import hf, rohf, uhf, dhf
 # import _response_functions to load gen_response methods in SCF class
-from pyscf.scf import _response_functions  # noqa
+from pyscf.scf import _response_functions
 from pyscf.soscf import ciah
 from pyscf import __config__
 

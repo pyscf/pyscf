@@ -583,10 +583,8 @@ class NVTBerendson(_Integrator):
 
         # Limit the velocity scaling to reasonable values
         # (taken from ase md/nvtberendson.py)
-        if scl_temp > 1.1:
-            scl_temp = 1.1
-        if scl_temp < 0.9:
-            scl_temp = 0.9
+        scl_temp = min(scl_temp, 1.1)
+        scl_temp = max(scl_temp, 0.9)
 
         self.veloc = self.veloc * scl_temp
         return

@@ -18,7 +18,7 @@ from pyscf.dft.libxc import hybrid_coeff, rsh_coeff
 from pyscf import lib
 
 XC_ALIAS_KEYS = set (XC_ALIAS.keys ())
-XC_TYPE_HDR = tuple (['LDA_','GGA_','MGGA_'])
+XC_TYPE_HDR = ('LDA_','GGA_','MGGA_')
 INTCODES_TYPES = {}
 INTCODES_HYB = []
 for key, val in XC_CODES.items ():
@@ -34,11 +34,11 @@ INTCODES_HYB = set (INTCODES_HYB)
 class XCSplitError (RuntimeError):
     def __init__(self, xc):
         super().__init__('')
-        self.path = '{}->?'.format (xc)
+        self.path = f'{xc}->?'
     def __str__(self):
         return self.message + '\npath = ' + self.path
     def extend (self, xc):
-        self.path = self.path[:-1] + '{}->?'.format (xc)
+        self.path = self.path[:-1] + f'{xc}->?'
     def __call__(self, message):
         self.message = message
         return self
@@ -71,8 +71,7 @@ def split_x_c_comma (xc):
             elif xc_type == 'K':
                 raise myerr ('Kinetic energy functional')
             else:
-                raise myerr ('Unknown functional type {} for code {}'.format (
-                    xc_type, xc_int))
+                raise myerr (f'Unknown functional type {xc_type} for code {xc_int}')
         elif xc in XC_KEYS:
             xc = XC_CODES[xc]
         else:
@@ -124,12 +123,12 @@ def _parse_xc_formula (xc_code):
 def assemble_xc_formula (facs, terms):
     code = []
     for fac, term in zip (facs, terms):
-        if fac==1.0: code.append ('{:s}'.format (term))
-        elif fac==-1.0: code.append ('-{:s}'.format (term))
+        if fac==1.0: code.append (f'{term:s}')
+        elif fac==-1.0: code.append (f'-{term:s}')
         elif fac==0.0: continue
         else:
-            fac = '{:.16f}'.format (round (fac,14))
+            fac = f'{round (fac,14):.16f}'
             fac = fac.rstrip ('0').rstrip ('.')
-            code.append ('{:s}*{:s}'.format (fac, term))
+            code.append (f'{fac:s}*{term:s}')
     code = '+'.join (code).replace ('+-','-')
     return code

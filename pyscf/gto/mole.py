@@ -1180,7 +1180,7 @@ def tot_electrons(mol):
     else:
         nelectron = sum(charge(a[0]) for a in format_atom(mol.atom))
     nelectron -= mol.charge
-    nelectron_int = int(round(nelectron))
+    nelectron_int = round(nelectron)
 
     if abs(nelectron - nelectron_int) > 1e-4:
         logger.warn(mol, 'Found fractional number of electrons %f. Round it to %d',
@@ -1296,7 +1296,7 @@ def loads(molstr):
     '''Deserialize a str containing a JSON document to a Mole object.
     '''
     # the numpy function array is used by eval function
-    from numpy import array  # noqa
+    from numpy import array
     moldic = json.loads(molstr)
     mol = Mole()
     mol.__dict__.update(moldic)
@@ -2306,7 +2306,7 @@ class MoleBase(lib.StreamObject):
     >>> mol.charge = 1
     >>> mol.build()
     <class 'pyscf.gto.mole.Mole'> has no attributes Charge
-    '''  # noqa: E501
+    '''
 
     output = None
     max_memory = param.MAX_MEMORY
@@ -2770,7 +2770,7 @@ class MoleBase(lib.StreamObject):
                 self.stdout.write('\n')
                 self.stdout.write('\n')
                 finput.close()
-            except IOError:
+            except OSError:
                 logger.warn(self, 'input file does not exist')
 
         self.stdout.write('\n'.join(lib.misc.format_sys_info()))
@@ -3788,7 +3788,7 @@ class Mole(MoleBase):
 
         # Import all available modules. Some methods are registered to other
         # classes/modules when importing modules in __all__.
-        from pyscf import __all__  # noqa
+        from pyscf import __all__
         from pyscf import scf, dft
 
         attr_name = key

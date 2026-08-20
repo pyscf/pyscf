@@ -21,14 +21,14 @@ import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.cc.kccsd_rhf import vector_to_nested, nested_to_vector
-from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.pbc.cc import eom_kccsd_ghf as eom_kgccsd
 from pyscf.pbc.cc import kintermediates_rhf as imdk
 from pyscf.pbc.cc.kccsd_rhf import _get_epq
 from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
-                               padded_mo_coeff, padding_k_idx)  # noqa
+                               padded_mo_coeff, padding_k_idx)
 
 einsum = lib.einsum
 
@@ -1291,8 +1291,8 @@ def eeccsd_matvec_singlet_Hr1(eom, vector, kshift, imds=None):
     kconserv_r1 = eom.get_kconserv_ee_r1(kshift)
 
     if len(vector) != r1_size:
-        raise ValueError("vector length mismatch: expected {0}, "
-                         "found {1}".format(r1_size, len(vector)))
+        raise ValueError(f"vector length mismatch: expected {r1_size}, "
+                         f"found {len(vector)}")
     r1 = vector.reshape(nkpts, nocc, nvir)
 
     Hr1 = np.zeros_like(r1)
@@ -1398,7 +1398,7 @@ def cis_easy(eom, nroots=1, kptlist=None, imds=None, **kwargs):
         evals[k] = eigval
         evecs[k] = eigvec
         for i in range(nroots):
-            print('CIS root {:d} E = {:.16g}'.format(i, eigval[i].real))
+            print(f'CIS root {i:d} E = {eigval[i].real:.16g}')
 
     return evals, evecs
 
@@ -1609,7 +1609,7 @@ class _IMDS:
             vovv_dest = self._fimd.create_dataset('vovv', (nkpts, nkpts, nkpts, nvir, nocc, nvir, nvir), t1.dtype.char)
             vvvo_dest = self._fimd.create_dataset('vvvo', (nkpts, nkpts, nkpts, nvir, nvir, nvir, nocc), t1.dtype.char)
             if eris.vvvv is not None:
-                vvvv_dest = self._fimd.create_dataset('vvvv', (nkpts, nkpts, nkpts, nvir, nvir, nvir, nvir), t1.dtype.char)  # noqa: E501
+                vvvv_dest = self._fimd.create_dataset('vvvv', (nkpts, nkpts, nkpts, nvir, nvir, nvir, nvir), t1.dtype.char)
         else:
             vovv_dest = vvvo_dest = vvvv_dest = None
 

@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -203,7 +202,7 @@ XC_CODES.update({
     'REVPBE0'       : '.25*HF + .75*PBE_R, PBE',
     'B1B95'         : 440,
     'TPSS0'         : '.25*HF + .75*TPSS, TPSS',
-})  # noqa: E501
+})
 
 if getattr(__config__, 'B3LYP_WITH_VWN5', False):
     XC_CODES['B3P86' ] = 'B3P86V5'
@@ -539,7 +538,7 @@ def parse_xc(description):
     Returns:
         decoded XC description, with the data structure
         (hybrid, alpha, omega), ((libxc-Id, fac), (libxc-Id, fac), ...)
-    '''  # noqa: E501
+    '''
 
     hyb = [0, 0, 0]  # hybrid, alpha, omega (== SR_HF, LR_HF, omega)
     if description is None:
@@ -861,7 +860,7 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=Non
           | v3tau3[:,4]         = (u_u_u, u_u_d, u_d_d, d_d_d)
 
         see also libxc_itrf.c
-    '''  # noqa: E501
+    '''
     outbuf = _eval_xc(xc_code, rho, spin, deriv, omega)
     exc = outbuf[0]
     vxc = fxc = kxc = None

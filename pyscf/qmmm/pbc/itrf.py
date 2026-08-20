@@ -753,10 +753,10 @@ class QMMMGrad:
         Tija, Tijab, Tijabc = grad_Tij(R, r)
         qm_ewovrl_grad -= lib.einsum('i,ijx,j->ix', qm_charges, Tija, qm_charges)
         qm_ewovrl_grad += lib.einsum('i,ijxa,ja->ix', qm_charges, Tijab, qm_dipoles)
-        qm_ewovrl_grad -= lib.einsum('i,ijxa,ja->jx', qm_charges, Tijab, qm_dipoles) #
+        qm_ewovrl_grad -= lib.einsum('i,ijxa,ja->jx', qm_charges, Tijab, qm_dipoles)
         qm_ewovrl_grad += lib.einsum('ia,ijxab,jb->ix', qm_dipoles, Tijabc, qm_dipoles)
         qm_ewovrl_grad -= lib.einsum('i,ijxab,jab->ix', qm_charges, Tijabc, qm_quads) / 3
-        qm_ewovrl_grad += lib.einsum('i,ijxab,jab->jx', qm_charges, Tijabc, qm_quads) / 3 #
+        qm_ewovrl_grad += lib.einsum('i,ijxab,jab->jx', qm_charges, Tijabc, qm_quads) / 3
 
         # ewald real-space sum
         # NOTE here I assume ewald real-space sum is over all qm images
@@ -770,10 +770,10 @@ class QMMMGrad:
         Tijabc = Tijabc.reshape(len(qm_coords), len(qm_coords), len(Lall), 3, 3, 3)
         qm_ewovrl_grad += lib.einsum('i,ijLx,j->ix', qm_charges, Tija, qm_charges)
         qm_ewovrl_grad -= lib.einsum('i,ijLxa,ja->ix', qm_charges, Tijab, qm_dipoles)
-        qm_ewovrl_grad += lib.einsum('i,ijLxa,ja->jx', qm_charges, Tijab, qm_dipoles) #
+        qm_ewovrl_grad += lib.einsum('i,ijLxa,ja->jx', qm_charges, Tijab, qm_dipoles)
         qm_ewovrl_grad -= lib.einsum('ia,ijLxab,jb->ix', qm_dipoles, Tijabc, qm_dipoles)
         qm_ewovrl_grad += lib.einsum('i,ijLxab,jab->ix', qm_charges, Tijabc, qm_quads) / 3
-        qm_ewovrl_grad -= lib.einsum('i,ijLxab,jab->jx', qm_charges, Tijabc, qm_quads) / 3 #
+        qm_ewovrl_grad -= lib.einsum('i,ijLxab,jab->jx', qm_charges, Tijabc, qm_quads) / 3
 
         cput2 = logger.timer(self, 'grad_ewald real-space', *cput1)
 

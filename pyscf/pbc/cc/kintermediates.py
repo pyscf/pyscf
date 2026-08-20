@@ -23,9 +23,9 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.lib import kpts_helper
 import numpy
-from pyscf.lib.parameters import LARGE_DENOM  # noqa
+from pyscf.lib.parameters import LARGE_DENOM
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
-                               padded_mo_coeff, padding_k_idx)  # noqa
+                               padded_mo_coeff, padding_k_idx)
 from pyscf.pbc.cc.kccsd_rhf import _get_epq
 from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
 

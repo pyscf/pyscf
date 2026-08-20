@@ -133,7 +133,7 @@ def get_ontop_pair_density (ot, rho, ao, cascm2, mo_cas, deriv=0,
             Pi[ideriv] += (gridkern[ideriv] * wrk0).sum ((1,2)) * 2
             # r_1aij, P_0aij -> P_1a
             t0 = logger.timer_debug1 (ot, 'otpd second cumulant 1st derivative'
-                ' ({})'.format (ideriv), *t0)
+                f' ({ideriv})', *t0)
     if deriv > 1: # The fifth slot is allocated to the "off-top Laplacian,"
         # i.e., nabla_(r1-r2)^2 Pi(r1,r2)|(r1=r2)
         # nabla_off^2 Pi = 1/2 d^ik_jl * ([nabla_r^2 phi_i] phi_j phi_k phi_l

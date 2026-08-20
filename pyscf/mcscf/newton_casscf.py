@@ -56,7 +56,7 @@ def _pack_ci_get_H (mc, mo, ci0):
                 y, x = x[:c.size], x[c.size:]
                 z.append (y)
             return z
-        assert (len (ci0) == mc.fcisolver.nroots), '{} {}'.format (len (ci0), mc.fcisolver.nroots)
+        assert (len (ci0) == mc.fcisolver.nroots), f'{len (ci0)} {mc.fcisolver.nroots}'
     ncas = mc.ncas
     nelecas = mc.nelecas
 

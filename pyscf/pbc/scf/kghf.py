@@ -23,8 +23,8 @@ Generalized Hartree-Fock for periodic systems with k-point sampling
 from functools import reduce
 import numpy as np
 import scipy.linalg
-import pyscf.scf.hf as mol_hf  # noqa
-import pyscf.scf.ghf as mol_ghf  # noqa
+import pyscf.scf.hf as mol_hf
+import pyscf.scf.ghf as mol_ghf
 import pyscf.scf.uhf as mol_uhf
 from pyscf import lib
 from pyscf.lib import logger

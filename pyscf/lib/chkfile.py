@@ -158,7 +158,7 @@ def load_mol(chkfile):
     >>> lib.chkfile.load_mol('He.chk')
     <pyscf.gto.mole.Mole object at 0x7fdcd94d7f50>
     '''
-    from numpy import array  # noqa
+    from numpy import array
     from pyscf import gto
     try:
         with h5py.File(chkfile, 'r') as fh5:

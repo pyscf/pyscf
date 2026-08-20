@@ -56,8 +56,7 @@ class _ERIS:
                                  dtype=mo_coeff.dtype)
             self.j_pc = np.zeros((self.nmo, ncore), dtype=mo_coeff.dtype)
         else:
-            raise NotImplementedError("method={} for pdft_eff2".format(
-                self.method))
+            raise NotImplementedError(f"method={self.method} for pdft_eff2")
 
     def _accumulate(self, ot, ao, weight, rho_c, rho_a, eff_Pi,
                     non0tab=None, shls_slice=None, ao_loc=None):
@@ -66,8 +65,7 @@ class _ERIS:
         if self.method.lower() == 'incore':
             self._accumulate_ppaa_incore(*args)
         else:
-            raise NotImplementedError("method={} for pdft_eff2".format(
-                self.method))
+            raise NotImplementedError(f"method={self.method} for pdft_eff2")
         self._accumulate_j_pc(*args)
 
     def _accumulate_vhf_c(self, ot, ao, weight, rho_c, rho_a, eff_Pi,
@@ -154,8 +152,7 @@ class _ERIS:
         if self.method.lower() == 'incore':
             ftpt_fns.append(self._ftpt_ppaa_incore)
         else:
-            raise NotImplementedError("method={} for pdft_eff2".format(
-                self.method))
+            raise NotImplementedError(f"method={self.method} for pdft_eff2")
         if self.verbose > logger.DEBUG:
             ftpt_fns.append(self._ftpt_j_pc)
         ncol = 0
@@ -167,8 +164,7 @@ class _ERIS:
             self.ppaa = np.ascontiguousarray(self.papa.transpose(0, 2, 1, 3))
             self.k_pc = self.j_pc.copy()
         else:
-            raise NotImplementedError("method={} for pdft_eff2".format(
-                self.method))
+            raise NotImplementedError(f"method={self.method} for pdft_eff2")
         self.k_pc = self.j_pc.copy()
 
 
@@ -411,10 +407,8 @@ def _contract_ao_eff_ao(ao, vao, symm=False):
     '''
     ao = ao.transpose(0, 2, 1)
     vao = vao.transpose(0, 2, 1)
-    assert ao.flags.c_contiguous, 'shape = {} ; strides = {}'.format(
-        ao.shape, ao.strides)
-    assert vao.flags.c_contiguous, 'shape = {} ; strides = {}'.format(
-        vao.shape, vao.strides)
+    assert ao.flags.c_contiguous, f'shape = {ao.shape} ; strides = {ao.strides}'
+    assert vao.flags.c_contiguous, f'shape = {vao.shape} ; strides = {vao.strides}'
 
     nderiv = vao.shape[0]
     if symm:
@@ -439,10 +433,8 @@ def _contract_ao1_ao2(ao1, ao2, nderiv, symm=False):
     # Evaluate P_ij(r) = AO_i(r) * AO_j(r) and its derivatives on a grid
     ao1 = ao1.transpose(0, 2, 1)
     ao2 = ao2.transpose(0, 2, 1)
-    assert (ao1.flags.c_contiguous), 'shape = {} ; strides = {}'.format(
-        ao1.shape, ao1.strides)
-    assert (ao2.flags.c_contiguous), 'shape = {} ; strides = {}'.format(
-        ao2.shape, ao2.strides)
+    assert (ao1.flags.c_contiguous), f'shape = {ao1.shape} ; strides = {ao1.strides}'
+    assert (ao2.flags.c_contiguous), f'shape = {ao2.shape} ; strides = {ao2.strides}'
     if symm:  # TODO: C implementation of this slow indexing
         ix_p, ix_q = np.tril_indices(ao1.shape[1])
         ao1 = ao1[:nderiv, ix_p]

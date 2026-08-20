@@ -31,7 +31,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import newton_ah
-from pyscf.pbc.scf import _response_functions  # noqa
+from pyscf.pbc.scf import _response_functions
 
 def rhf_stability(mf, internal=True, external=False, verbose=None, return_status=False):
     mo_i = mo_e = None

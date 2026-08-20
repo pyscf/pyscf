@@ -31,9 +31,9 @@ _get_jk = rhf_hess._get_jk
 _make_vhfopt = rhf_hess._make_vhfopt
 
 # import _response_functions to load gen_response methods in SCF class
-from pyscf.scf import _response_functions  # noqa
+from pyscf.scf import _response_functions
 # import pyscf.grad.uhf to activate nuc_grad_method method
-from pyscf.grad import uhf  # noqa
+from pyscf.grad import uhf
 
 
 def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
