@@ -29,10 +29,14 @@ except ImportError:
 
 _HAS_GCP = disp_gcp is not None
 
+skip_gcp = unittest.skipIf(not _HAS_GCP, 'pyscf-dispersion not installed')
+skip_bse = unittest.skipIf(basis_set_exchange is None,
+                           'basis_set_exchange not installed')
 
-@unittest.skipIf(not _HAS_GCP, 'pyscf-dispersion not installed')
-@unittest.skipIf(basis_set_exchange is None, 'basis_set_exchange not installed')
+
 class TestDFT3C(unittest.TestCase):
+    @skip_gcp
+    @skip_bse
     def test_dft3c_b97_3c_energy(self):
         mol = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587',
                     basis='def2mtzvp', verbose=0)
@@ -43,6 +47,8 @@ class TestDFT3C(unittest.TestCase):
         self.assertAlmostEqual(mf.scf_summary['dispersion'], -0.0008472063436585, 8)
         self.assertAlmostEqual(mf.scf_summary['gcp'], -0.005630371832, 8)
 
+    @skip_gcp
+    @skip_bse
     def test_dft3c_r2scan_3c_energy(self):
         mol = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587',
                     basis='def2mtzvpp', verbose=0)
@@ -53,6 +59,7 @@ class TestDFT3C(unittest.TestCase):
         self.assertAlmostEqual(mf.scf_summary['dispersion'], -8.574981232398e-05, 8)
         self.assertAlmostEqual(mf.scf_summary['gcp'], 0.001801492550, 8)
 
+    @skip_gcp
     def test_r2scan_3c_d4_custom_charge_model(self):
         # The D4 correction of r2SCAN-3c uses a custom EEQ charge model
         # (ga=2.0, gc=1.0).  This is a special case of the dftd4 program
@@ -74,6 +81,7 @@ class TestDFT3C(unittest.TestCase):
         self.assertNotAlmostEqual(default_model.get_dispersion()['energy'],
                                   e_ref, 6)
 
+    @skip_bse
     def test_dft3c_basis(self):
         # B97-3c -> def2-mTZVP, r2SCAN-3c -> def2-mTZVPP, shared RI-J auxbasis
         mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='def2mtzvp', verbose=0)
@@ -94,6 +102,8 @@ class TestDFT3C(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             dft.RKS(mol).dft3c('pbeh-3c')
 
+    @skip_gcp
+    @skip_bse
     def test_dft3c_density_fit_order(self):
         # density fitting can be applied before or after dft3c
         mol = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587',
@@ -110,6 +120,8 @@ class TestDFT3C(unittest.TestCase):
         self.assertEqual(mf2.with_df.auxbasis, 'def2-mTZVPP-RIJ')
         self.assertAlmostEqual(e1, e2, 8)
 
+    @skip_gcp
+    @skip_bse
     def test_dft3c_wb97x_3c_density_fit_order(self):
         # wB97X-3c density fitting uses the bundled universal JK-fit basis
         # in both orderings and gives the same energy
@@ -162,6 +174,8 @@ class TestDFT3C(unittest.TestCase):
         self.assertEqual(o.ROKS3C().method, 'b97-3c')
         self.assertEqual(o.GKS3C().method, 'b97-3c')
 
+    @skip_gcp
+    @skip_bse
     def test_dft3c_wb97x_3c(self):
         # wB97X-3c: wB97X-V + D4 in the ECP-based Grimme vDZP basis, no gCP
         mol = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587', verbose=0)
@@ -193,6 +207,7 @@ class TestDFT3C(unittest.TestCase):
         self.assertEqual(mf.mol.ecp, {})
         self.assertEqual(mf.mol.basis, 'def2mtzvp')
 
+    @skip_bse
     def test_dft3c_auto_auxbasis(self):
         # density_fit() without explicit auxbasis picks def2-mTZVPP-RIJ
         # through the DEFAULT_AUXBASIS_JFIT_BSE record
