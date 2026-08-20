@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+#
+# Author: Shirong Wang <srwang20@fudan.edu.cn>
+#
 
 import pyscf
 from pyscf import gto, dft

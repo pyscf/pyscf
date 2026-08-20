@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# Author: Shirong Wang <srwang20@fudan.edu.cn>
+#
 
 '''
 gradient of the gCP/SRB correction for HF and DFT

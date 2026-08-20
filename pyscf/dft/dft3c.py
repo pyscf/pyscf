@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# Author: Shirong Wang <srwang20@fudan.edu.cn>
+#
 
 '''
 Composite 3c methods: B97-3c, r2SCAN-3c and wB97X-3c
