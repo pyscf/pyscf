@@ -366,11 +366,8 @@ def predefined_auxbasis(mol, basis, xc='HF', mp2fit=False):
             logger.debug(mol, f'Psi4 predefined JKFIT basis set {auxbasis} for {xc}')
             return auxbasis
     if pyscf_basis_alias in DEFAULT_AUXBASIS_JFIT_BSE:
-        # The J-fit basis is only available through basis_set_exchange.
-        # Fall back to bse_predefined_auxbasis (and eventually the
-        # even-tempered basis) if it is not installed.
         from pyscf.gto.basis import bse
-        if bse.basis_set_exchange is not None:
+        if bse.basis_set_exchange is not None and not is_hybrid_xc(xc):
             auxbasis = DEFAULT_AUXBASIS_JFIT_BSE[pyscf_basis_alias]
             logger.debug(mol, f'predefined JFIT basis set {auxbasis} for {xc}')
             return auxbasis
