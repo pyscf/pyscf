@@ -2073,9 +2073,7 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
     # to check_convergence can overwrite the default convergence criteria
     check_convergence = None
     # A hook for overloading the convergence criteria of the extra (conv_check)
-    # cycle.  The envs dict carries the relaxed convergence tolerances
-    # (conv_tol*10, conv_tol_grad*3).  If set, it takes precedence over
-    # check_convergence for the extra cycle.
+    # cycle.
     check_extra_convergence = None
 
     def scf(self, dm0=None, **kwargs):

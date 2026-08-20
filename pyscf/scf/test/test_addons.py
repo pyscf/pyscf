@@ -497,11 +497,9 @@ class KnownValues(unittest.TestCase):
         myhf_s.conv_tol = 1e-9
         myhf_s.kernel()
         # With sigma=0.1 the near-degenerate 3d manifold makes the plain
-        # energy E vary by ~7e-6 across (free-energy-degenerate) thread-noise
-        # solutions, while e_free = E - sigma*S is pinned to ~1e-8 (see
-        # issue #3379). Assert e_free tightly and E/entropy loosely.  The
-        # extra cycle certifies convergence on e_free, so converged is
-        # reliable.  
+        # energy E vary a lot (free-energy-degenerate), while 
+        # e_free = E - sigma*S is more stable (see
+        # issue #3379). Assert e_free tightly and E/entropy loosely.
         self.assertAlmostEqual(myhf_s.e_free, -244.7984202573, 7)
         self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 4)
         self.assertAlmostEqual(myhf_s.entropy, 17.11431, 3)
