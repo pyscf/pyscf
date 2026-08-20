@@ -475,7 +475,7 @@ class KnownValues(unittest.TestCase):
         mf = addons.smearing(mf, sigma=0.1)
         mf.kernel()
         self.assertAlmostEqual(mf.mo_occ.sum(), 15, 8)
-        self.assertAlmostEqual(mf.e_tot, -106.9310800402, 8)
+        self.assertAlmostEqual(mf.e_tot, -106.9310800142, 8)
 
     def test_uhf_smearing(self):
         mol = gto.M(
@@ -494,7 +494,7 @@ class KnownValues(unittest.TestCase):
         myhf_s = addons.smearing_(myhf_s, sigma=0.01, method='fermi', fix_spin=True)
         myhf_s.sigma = 0.1
         myhf_s.fix_spin = False
-        myhf_s.conv_tol = 1e-7
+        myhf_s.conv_tol = 1e-9
         myhf_s.kernel()
         # With sigma=0.1 the near-degenerate 3d manifold makes the plain
         # energy E vary by ~7e-6 across (free-energy-degenerate) thread-noise

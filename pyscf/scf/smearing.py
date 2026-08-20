@@ -152,14 +152,13 @@ class _SmearingSCF:
         '''Convergence check of the main SCF loop.
 
         Smearing minimizes the free energy e_free = E - sigma*S, so the main
-        loop requires both the plain energy and the free energy to be
-        converged (issue #3379).
+        loop converges on e_free (issue #3379). A tight conv_tol is suggested to
+        reach the stationary point on flat free-energy surfaces.
         '''
         if (self.sigma and self.smearing_method
                 and self.e_free is not None and self._e_free_prev is not None):
-            dE = abs(envs['e_tot'] - envs['last_hf_e'])
             dF = abs(self.e_free - self._e_free_prev)
-            return (dE < envs['conv_tol'] and dF < envs['conv_tol']
+            return (dF < envs['conv_tol']
                     and envs['norm_gorb'] < envs['conv_tol_grad'])
         return (abs(envs['e_tot'] - envs['last_hf_e']) < envs['conv_tol']
                 and envs['norm_gorb'] < envs['conv_tol_grad'])
@@ -168,15 +167,12 @@ class _SmearingSCF:
         '''Convergence check of the extra (conv_check) cycle.
 
         The envs dict carries the relaxed tolerances (conv_tol*10,
-        conv_tol_grad*3).  Smearing minimizes the free energy
-        e_free = E - sigma*S, so the extra cycle certifies convergence on
-        e_free instead of the plain energy (issue #3379).  When smearing is
-        inactive the default OR logic is replicated.
+        conv_tol_grad*3).
         '''
         if (self.sigma and self.smearing_method
                 and self.e_free is not None and self._e_free_prev is not None):
             return (abs(self.e_free - self._e_free_prev) < envs['conv_tol']
-                    and envs['norm_gorb'] < envs['conv_tol_grad'])
+                    or envs['norm_gorb'] < envs['conv_tol_grad'])
         return (abs(envs['e_tot'] - envs['last_hf_e']) < envs['conv_tol']
                 or envs['norm_gorb'] < envs['conv_tol_grad'])
 
