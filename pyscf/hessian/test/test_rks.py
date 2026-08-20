@@ -17,6 +17,7 @@ import unittest
 import numpy
 from pyscf import gto, dft, lib
 from pyscf import grad, hessian
+from pyscf.hessian import thermo
 try:
     from pyscf.dispersion import dftd3, dftd4
 except (ImportError, OSError):
@@ -141,6 +142,23 @@ class KnownValues(unittest.TestCase):
         e2 = g_scanner(pmol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
         #FIXME: errors seems too big
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 3)
+
+    def test_b3lyp_hess_hard(self):
+        # Regression for issue #2702: the CPHF Krylov solver must not
+        # silently return an inaccurate response for near-parallel
+        # right-hand sides (symmetric Hessian perturbations), which would
+        # corrupt the analytical Hessian and its harmonic frequencies.
+        # Reference frequencies are the most strict analytical values
+        # (fallback_tol = tol = 1e-9).
+        mf = dft.RKS(mol)
+        mf.conv_tol = 1e-14
+        mf.xc = 'b3lyp'
+        e0 = mf.kernel()
+        hess = mf.Hessian().kernel()
+        freqs = thermo.harmonic_analysis(mol, hess)['freq_wavenumber'].real
+        freqs = numpy.sort(freqs[freqs > 100])
+        numpy.testing.assert_allclose(
+            freqs, [1613.059373, 3874.953453, 4006.022814], atol=2e-3)
 
     @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
     def test_finite_diff_b3lyp_d3_hess_high_cost(self):

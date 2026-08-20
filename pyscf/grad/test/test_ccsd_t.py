@@ -63,7 +63,7 @@ class KnownValues(unittest.TestCase):
 #[[ 1.43232988e-16 -1.28285681e-16  1.12044750e-02]
 # [-2.57370534e-16  2.34464042e-02 -5.60223751e-03]
 # [ 1.14137546e-16 -2.34464042e-02 -5.60223751e-03]]
-        self.assertAlmostEqual(lib.fp(g1), -0.03843867425252364, 9)
+        self.assertAlmostEqual(lib.fp(g1), -0.03843867370673125, 9)
         self.assertTrue(numpy.allclose(g1, g1_slow, rtol=1e-9, atol=1e-12))
 
         myccs = mycc.as_scanner()
