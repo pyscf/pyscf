@@ -61,7 +61,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     dme0+= numpy.einsum('pi,qi,i->pq', moccb, moccb, mo_eb)
 
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
-    hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+    hybrid = ni.is_hybrid_xc(mf.xc)
     de2, ej, ek = uhf_hess._partial_hess_ejk(hessobj, mo_energy, mo_coeff, mo_occ,
                                              atmlst, max_memory, verbose,
                                              with_k=hybrid)
@@ -138,9 +138,8 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
 
     mf = hessobj.base
     ni = mf._numint
-    ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
-    hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+    hybrid = ni.is_hybrid_xc(mf.xc)
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)

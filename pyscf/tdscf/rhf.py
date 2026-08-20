@@ -189,7 +189,6 @@ def get_ab(mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
 
     if isinstance(mf, scf.hf.KohnShamDFT):
         ni = mf._numint
-        ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
 
         add_hf_(a, b, hyb)

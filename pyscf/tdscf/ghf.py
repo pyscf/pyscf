@@ -172,9 +172,7 @@ def get_ab(mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
         return a, b
 
     if isinstance(mf, scf.hf.KohnShamDFT):
-        from pyscf.dft import xc_deriv
         ni = mf._numint
-        ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         if mf.do_nlc():
             raise NotImplementedError('DKS-TDDFT NLC functional')
 
