@@ -350,9 +350,14 @@ class SMD(pcm.PCM):
         Affects TDDFT and other excited state computations. Controls whether the solvent
         relaxes rapidly with respect to the electron density of the excited state.
         For vertical excitations, it is recommended to set this to False, as the solvent
-        typically does not fully relax. In some software packages (e.g., Q-Chem),
-        non-equilibrium solvation is applied with an optical dielectric constant of
-        eps=1.78. Default is False.
+        typically does not fully relax. The non-equilibrium solvation is then applied with
+        the optical dielectric constant `eps_optical`. Default is False.
+
+    eps_optical : float
+        The optical (high-frequency) dielectric constant of the solvent, i.e. the square of
+        its refractive index. It is only used by the non-equilibrium solvation of excited
+        states (see `equilibrium_solvation`). If left unset, it is derived from the
+        refractive index of `solvent` in the SMD solvent database. Default is None.
 
     state_id : int
         Specifies the target state in excited state calculations.
@@ -378,7 +383,7 @@ class SMD(pcm.PCM):
     _keys = {
         'method', 'vdw_scale', 'sasa_ng',
         'mol', 'radii_table', 'lebedev_order', 'lmax', 'eta',
-        'solvent', 'eps', 'max_cycle', 'conv_tol', 'state_id', 'frozen',
+        'solvent', 'eps', 'eps_optical', 'max_cycle', 'conv_tol', 'state_id', 'frozen',
         'frozen_dm0_for_finite_difference_without_response',
         'equilibrium_solvation', 'solvent_descriptors',
         'surface', 'intopt', 'e', 'v', 'v_grids_n', 'e_cds',
@@ -400,6 +405,7 @@ class SMD(pcm.PCM):
         self.solvent_descriptors = None
         self.radii_table = None
         self.eps = None
+        self.eps_optical = None
         self.surface_discretization_method = "SWIG"
         self.max_cycle = 20
         self.conv_tol = 1e-7
@@ -460,6 +466,20 @@ class SMD(pcm.PCM):
         self.v_grids_n = np.dot(atom_charges, v_ng)
         return self
 
+    def get_eps_optical(self):
+        '''The optical (high-frequency) dielectric constant of the solvent.
+
+        Unless .eps_optical is set explicitly, it is evaluated as n**2 from the
+        refractive index n of the solvent (see .sol_desc).
+        '''
+        if self.eps_optical is not None:
+            return self.eps_optical
+        n = (self.solvent_descriptors or solvent_db[self.solvent])[0]
+        if not n:
+            # Neither .solvent nor .sol_desc was specified. n is unknown.
+            return pcm.PCM.get_eps_optical(self)
+        return n**2
+
     @property
     def sol_desc(self):
         return self.solvent_descriptors
@@ -489,6 +509,7 @@ class SMD(pcm.PCM):
         logger.info(self, '******** %s ********', self.__class__)
         logger.info(self, 'sasa_ng = %s', self.sasa_ng)
         logger.info(self, 'eps = %s'   , self.eps or eps)
+        logger.info(self, 'eps_optical = %s', self.eps_optical)
         logger.info(self, 'frozen = %s', self.frozen)
         logger.info(self, '---------- SMD solvent descriptors -------')
         logger.info(self, f'n     = {n}')

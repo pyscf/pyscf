@@ -133,7 +133,6 @@ H          0.96345360     1.30488291    -0.10782263
     mol.build(0, 0)
     e2 = myccs(mol)
     e2 += myccs.ccsd_t()
-    # FIXME: disagreements between analytical value and finite difference value
     print(g1[0,0], (e1-e2)/0.002)
 #CCSD
 #H   0.0113620114            0.0664344363            0.0029855587

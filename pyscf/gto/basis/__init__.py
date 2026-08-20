@@ -323,6 +323,8 @@ ALIAS = {
 # All-electron basis designed for periodic calculations, available in Crystal
     'pobtzvp'       :  'pob-tzvp.dat',
     'pobtzvpp'      :  'pob-tzvpp.dat',
+    'pobdzvprev2'   :  'pob-dzvp-rev2.dat',
+    'pobtzvprev2'   :  'pob-tzvp-rev2.dat',
     'crystalccpvdz' :  'crystal-cc-pvdz.dat',
 # ccECP
     'ccecp'         : join('ccecp-basis', 'ccECP', 'ccECP.dat'   ),

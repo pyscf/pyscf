@@ -81,9 +81,9 @@ def kernel(rpa, mo_energy, mo_coeff, nw=None, with_e_hf=None):
         uhf.with_df = rpa._scf.with_df
         with temporary_env(rpa.with_df, verbose=0), temporary_env(rpa.mol, verbose=0):
             dm = rpa._scf.make_rdm1()
-            vj = uhf.get_j(uhf.cell, dm)
+            vj = rpa._scf.get_j(uhf.cell, dm)
             vj_tot = vj[0] + vj[1]
-            e_1e = 1.0 / len(rpa.kpts) * lib.einsum('kij,kji', dm[0] + dm[1], uhf.get_hcore()).real
+            e_1e = 1.0 / len(rpa.kpts) * lib.einsum('kij,kji', dm[0] + dm[1], rpa._scf.get_hcore()).real
             e_j = 0.5 / len(rpa.kpts) * lib.einsum('kij,kji', dm[0] + dm[1], vj_tot).real
             e_x = get_rpa_exx(rpa, acfd=rpa.acfd_exx, correction_only=False)
             e_nuc = rpa._scf.energy_nuc()
@@ -139,9 +139,15 @@ def get_idx_metal(mo_occ, threshold=1.0e-6):
     idx_vir : list
         list of virtual orbital indexes
     """
-    idx_occ = np.where(mo_occ > 1.0 - threshold)[0]
-    idx_vir = np.where(mo_occ < threshold)[0]
-    idx_frac = list(range(idx_occ[-1] + 1, idx_vir[0]))
+    mo_occ = np.asarray(mo_occ)
+
+    mask_occ = mo_occ > 1.0 - threshold
+    mask_vir = mo_occ < threshold
+    mask_frac = ~(mask_occ | mask_vir)
+
+    idx_occ = np.where(mask_occ)[0]
+    idx_frac = np.where(mask_frac)[0]
+    idx_vir = np.where(mask_vir)[0]
 
     return idx_occ, idx_frac, idx_vir
 
@@ -527,7 +533,6 @@ def get_rpa_exx(rpa, acfd=False, correction_only=False):
     mo_coeff = np.asarray(rpa._scf.mo_coeff)
     mo_occ = np.asarray(rpa._scf.mo_occ)
 
-    nocc = rpa.nocc
     nspin, _, nao, _ = mo_coeff.shape
     nkpts = rpa.nkpts
     kpts = rpa.kpts
@@ -590,9 +595,13 @@ def get_rpa_exx(rpa, acfd=False, correction_only=False):
                     # ex -= np.einsum('Lij,Lij->', Lij_occ.reshape(-1, nocc, nocc), Lij.reshape(-1, nocc, nocc).conj())
                     ex -= blas.zdotc(Lij_occ.ravel(), Lij.ravel())
                 else:
-                    moij, ijslice = _conc_mos(mo_coeff[s][km][:, :nocc[s]], mo_coeff[s][kn][:, :nocc[s]])[2:]
+                    nocc_i = np.count_nonzero(mo_occ[s][km])
+                    nocc_j = np.count_nonzero(mo_occ[s][kn])
+                    moij, ijslice = _conc_mos(
+                        mo_coeff[s][km][:, :nocc_i],
+                        mo_coeff[s][kn][:, :nocc_j],
+                    )[2:]
                     Lij = _ao2mo.r_e2(Lpq_ao, moij, ijslice, tao=[], ao_loc=None, out=Lij)
-                    # ex -= np.einsum('Lij,Lij->', Lij.reshape(-1, nocc, nocc), Lij.reshape(-1, nocc, nocc).conj())
                     ex -= blas.zdotc(Lij.ravel(), Lij.ravel())
 
     ex = ex.real
@@ -640,7 +649,11 @@ class KURPA(KRPA):
     @property
     def nocc(self):
         mo_occ = self._scf.mo_occ
-        return (int(np.sum(mo_occ[0][0])), int(np.sum(mo_occ[1][0])))
+        nocc_a, nocc_b = [
+            int(np.rint(np.sum(mo_occ[s]) / self.nkpts))
+            for s in range(2)
+        ]
+        return nocc_a, nocc_b
 
     @nocc.setter
     def nocc(self, n):

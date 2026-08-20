@@ -42,3 +42,16 @@ td.kernel()
 #
 td.with_solvent.equilibrium_solvation = False
 td.kernel()
+
+#
+# Non-equilibrium solvation is governed by the optical dielectric constant of
+# the solvent, the square of its refractive index. Unless .eps_optical is
+# assigned, the value of water (1.78) is assumed. The SMD model derives
+# .eps_optical from its solvent database automatically.
+#
+mf = mol.RHF().ddCOSMO()
+mf.with_solvent.eps = 7.4257           # tetrahydrofuran
+mf.with_solvent.eps_optical = 1.405**2
+mf.run()
+td = mf.TDA()
+td.kernel()

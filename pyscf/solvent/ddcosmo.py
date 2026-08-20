@@ -241,6 +241,13 @@ from pyscf.symm import sph
 
 from pyscf.solvent import _attach_solvent
 
+# Static (zero-frequency) dielectric constant of water at 298 K
+EPS_WATER = 78.3553
+
+# Optical (high-frequency) dielectric constant of water, roughly the square of
+# its refractive index. See the QChem manual, the non-equilibrium PCM section.
+EPS_OPTICAL_WATER = 1.78
+
 @lib.with_doc(_attach_solvent._for_scf.__doc__)
 def ddcosmo_for_scf(mf, solvent_obj=None, dm=None):
     if solvent_obj is None:
@@ -612,8 +619,8 @@ def atoms_with_vdw_overlap(atm_id, atom_coords, r_vdw):
 class ddCOSMO(lib.StreamObject):
     _keys = {
         'mol', 'radii_table', 'atom_radii', 'lebedev_order', 'lmax', 'eta',
-        'eps', 'grids', 'max_cycle', 'conv_tol', 'state_id', 'frozen',
-        'equilibrium_solvation', 'e', 'v',
+        'eps', 'eps_optical', 'grids', 'max_cycle', 'conv_tol', 'state_id',
+        'frozen', 'equilibrium_solvation', 'e', 'v',
     }
 
     def __init__(self, mol):
@@ -629,7 +636,12 @@ class ddCOSMO(lib.StreamObject):
         self.lebedev_order = 17
         self.lmax = 6  # max angular momentum of spherical harmonics basis
         self.eta = .1  # regularization parameter
-        self.eps = 78.3553
+        self.eps = EPS_WATER
+
+        # Square of the refractive index of the solvent, used by the
+        # non-equilibrium solvation (see .get_eps_optical)
+        self.eps_optical = None
+
         self.grids = Grids(mol)
 
         # The maximum iterations and convergence tolerance to update solvent
@@ -697,6 +709,24 @@ class ddCOSMO(lib.StreamObject):
     def vpcm(self, val):
         self.v_solvent = val
 
+    def get_eps_optical(self):
+        '''The optical (high-frequency) dielectric constant of the solvent.
+
+        Only the fast, electronic part of the solvent polarization follows a
+        vertical excitation. Its response is governed by the optical dielectric
+        constant rather than the static one (see .equilibrium_solvation).
+        '''
+        if self.eps_optical is not None:
+            return self.eps_optical
+        # .eps is None in the SMD model when eps is taken from solvent_db
+        if self.eps is not None and abs(self.eps - EPS_WATER) > 1e-6:
+            logger.warn(self, 'eps_optical was not specified for eps=%g. The '
+                        'optical dielectric constant of water (%g) is applied '
+                        'in the non-equilibrium solvation. Please set '
+                        '.eps_optical to the square of the refractive index of '
+                        'the solvent in use.', self.eps, EPS_OPTICAL_WATER)
+        return EPS_OPTICAL_WATER
+
     def __setattr__(self, key, val):
         if key in ('radii_table', 'atom_radii', 'lebedev_order', 'lmax',
                    'eta', 'eps', 'grids'):
@@ -710,6 +740,7 @@ class ddCOSMO(lib.StreamObject):
         logger.info(self, 'lmax = %s'         , self.lmax)
         logger.info(self, 'eta = %s'          , self.eta)
         logger.info(self, 'eps = %s'          , self.eps)
+        logger.info(self, 'eps_optical = %s'  , self.eps_optical)
         logger.info(self, 'frozen = %s'       , self.frozen)
         logger.info(self, 'equilibrium_solvation = %s', self.equilibrium_solvation)
         logger.debug2(self, 'radii_table %s', self.radii_table)

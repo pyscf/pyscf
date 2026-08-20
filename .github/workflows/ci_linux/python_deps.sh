@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 python -m pip install --upgrade pip
-pip install "numpy!=1.16,!=1.17" "scipy!=1.5" h5py pytest pytest-cov pytest-timer
+pip install "numpy!=1.16,!=1.17" "scipy!=1.5" h5py pytest pytest-cov pytest-timer pytest-xdist
 pip install git+https://github.com/jhrmnn/pyberny.git@36a4be9
 pip install --no-deps pyscf-dispersion==1.5.0
 pip install geometric

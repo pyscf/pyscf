@@ -83,8 +83,8 @@ def kernel(rpa, mo_energy, mo_coeff, nw=None, with_e_hf=None):
         rhf.with_df = rpa._scf.with_df
         with temporary_env(rpa.with_df, verbose=0), temporary_env(rhf.mol, verbose=0):
             dm = rpa._scf.make_rdm1()
-            e_1e = 1.0 / len(rpa.kpts) * lib.einsum('kij,kji', dm, rhf.get_hcore()).real
-            e_j = 0.5 / len(rpa.kpts) * lib.einsum('kij,kji', dm, rhf.get_j(rhf.cell, dm)).real
+            e_1e = 1.0 / len(rpa.kpts) * lib.einsum('kij,kji', dm, rpa._scf.get_hcore()).real
+            e_j = 0.5 / len(rpa.kpts) * lib.einsum('kij,kji', dm, rpa._scf.get_j(rhf.cell, dm)).real
             e_x = get_rpa_exx(rpa, acfd=rpa.acfd_exx, correction_only=False)
             e_nuc = rpa._scf.energy_nuc()
             e_hf = e_1e + e_j + e_x + e_nuc
@@ -139,9 +139,15 @@ def get_idx_metal(mo_occ, threshold=1.0e-6):
     idx_vir : list
         list of virtual orbital indexes
     """
-    idx_occ = np.where(mo_occ > 2.0 - threshold)[0]
-    idx_vir = np.where(mo_occ < threshold)[0]
-    idx_frac = list(range(idx_occ[-1] + 1, idx_vir[0]))
+    mo_occ = np.asarray(mo_occ)
+
+    mask_occ = mo_occ > 2.0 - threshold
+    mask_vir = mo_occ < threshold
+    mask_frac = ~(mask_occ | mask_vir)
+
+    idx_occ = np.where(mask_occ)[0]
+    idx_frac = np.where(mask_frac)[0]
+    idx_vir = np.where(mask_vir)[0]
 
     return idx_occ, idx_frac, idx_vir
 
@@ -183,14 +189,20 @@ def get_rho_response_metal(omega, mo_energy, mo_occ, Lpq, kidx):
     for i in range(nkpts):
         # Find ka that conserves with ki and kL (-ki+ka+kL=G)
         a = kidx[i]
-        idx_occ_i, _, idx_vir_i = get_idx_metal(mo_occ[i])
-        idx_occ_a, idx_frac_a, idx_vir_a = get_idx_metal(mo_occ[a])
 
-        # merge index
-        idx_i = slice(idx_occ_i[0], idx_vir_i[0])
-        idx_a = slice(idx_occ_a[-1] + 1, idx_vir_a[-1] + 1)
+        idx_occ_i, idx_frac_i, _ = get_idx_metal(mo_occ[i])
+        idx_occ_a, idx_frac_a, _ = get_idx_metal(mo_occ[a])
+
         nocc_i = len(idx_occ_i)
+        nfrac_i = len(idx_frac_i)
+        nocc_a = len(idx_occ_a)
         nfrac_a = len(idx_frac_a)
+
+        # occupied + fractional
+        idx_i = slice(0, nocc_i + nfrac_i)
+
+        # fractional + virtual
+        idx_a = slice(nocc_a, len(mo_occ[a]))
 
         eia = mo_energy[i, idx_i, None] - mo_energy[a, None, idx_a]
         fia = (mo_occ[i][idx_i, None] - mo_occ[a][None, idx_a]) / 2.0
@@ -694,10 +706,9 @@ def get_rpa_exx(rpa, acfd=False, correction_only=False):
     ex : double
         exchange energy
     """
-    mo_coeff = np.array(_mo_frozen(rpa, rpa._scf.mo_coeff))
-    mo_occ = np.array(_mo_occ_frozen(rpa, rpa._scf.mo_occ))
+    mo_coeff = np.asarray(rpa._scf.mo_coeff)
+    mo_occ = np.asarray(rpa._scf.mo_occ)
 
-    nocc = rpa.nocc
     nao = rpa._scf.mo_coeff[0].shape[0]
     nkpts = rpa.nkpts
     kpts = rpa.kpts
@@ -759,9 +770,13 @@ def get_rpa_exx(rpa, acfd=False, correction_only=False):
                 # ex -= np.einsum('Lij,Lij->', Lij_occ.reshape(-1, nocc, nocc), Lij.reshape(-1, nocc, nocc).conj())
                 ex -= blas.zdotc(Lij_occ.ravel(), Lij.ravel())
             else:
-                moij, ijslice = _conc_mos(mo_coeff[km][:, :nocc], mo_coeff[kn][:, :nocc])[2:]
+                nocc_i = np.count_nonzero(mo_occ[km])
+                nocc_j = np.count_nonzero(mo_occ[kn])
+                moij, ijslice = _conc_mos(
+                    mo_coeff[km][:, :nocc_i],
+                    mo_coeff[kn][:, :nocc_j],
+                )[2:]
                 Lij = r_e2(Lpq_ao, moij, ijslice, tao=[], ao_loc=None, out=Lij)
-                # ex -= np.einsum('Lij,Lij->', Lij.reshape(-1, nocc, nocc), Lij.reshape(-1, nocc, nocc).conj())
                 ex -= blas.zdotc(Lij.ravel(), Lij.ravel())
 
     ex = ex.real
@@ -790,6 +805,10 @@ def get_kconserv_ria_efficient(cell, kpts, tol=1e-12):
 
         (k(m) - k(n) - k(kshift)) \dot a = 2n\pi
     """
+    # The conservation table is built for momentum transfers, which are invariant
+    # under a uniform shift of all k-points.
+    kpts = kpts - kpts[0]
+
     nkpts = kpts.shape[0]
     a = cell.lattice_vectors() / (2 * np.pi)
 
