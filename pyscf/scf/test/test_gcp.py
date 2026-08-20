@@ -127,8 +127,8 @@ class TestDFT3C(unittest.TestCase):
         mf = dft.RKS(mol).dft3c('b97-3c').density_fit()
         mf.conv_tol = 1e-10
         e = mf.kernel()
-        self.assertAlmostEqual(e, -76.398062389459, 8)
-        self.assertAlmostEqual(mf.scf_summary['dispersion'], -0.000847206575, 8)
+        self.assertAlmostEqual(e, -76.398062389227, 8)
+        self.assertAlmostEqual(mf.scf_summary['dispersion'], -0.0008472063436585, 8)
         self.assertAlmostEqual(mf.scf_summary['gcp'], -0.005630371832, 8)
 
     def test_dft3c_r2scan_3c_energy(self):
@@ -201,6 +201,23 @@ class TestDFT3C(unittest.TestCase):
         self.assertEqual(mf2.with_df.auxbasis, 'def2-mTZVPP-RIJ')
         self.assertAlmostEqual(e1, e2, 8)
 
+    def test_dft3c_wb97x_3c_density_fit_order(self):
+        # wB97X-3c density fitting uses the bundled universal JK-fit basis
+        # in both orderings and gives the same energy
+        dft = __import__('pyscf.dft', fromlist=['RKS'])
+        mol = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587', verbose=0)
+        mf1 = dft.RKS(mol).dft3c('wb97x-3c').density_fit()
+        mf1.conv_tol = 1e-10
+        e1 = mf1.kernel()
+
+        mol2 = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587', verbose=0)
+        mf2 = dft.RKS(mol2).density_fit().dft3c('wb97x-3c')
+        mf2.conv_tol = 1e-10
+        e2 = mf2.kernel()
+        self.assertEqual(mf2.with_df.auxbasis, 'def2-universal-jkfit')
+        self.assertAlmostEqual(e1, e2, 8)
+        self.assertAlmostEqual(e1, -17.270931628544, 8)
+
     def test_dft3c_undo(self):
         dft = __import__('pyscf.dft', fromlist=['RKS'])
         mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='def2mtzvp', verbose=0)
@@ -261,10 +278,10 @@ class TestDFT3C(unittest.TestCase):
         self.assertAlmostEqual(mf.scf_summary['dispersion'], -0.000263630665, 8)
         self.assertNotIn('gcp', mf.scf_summary)
 
-        # density fitting has no dedicated auxiliary basis and falls back
-        # to even-tempered functions
+        # density fitting uses the bundled universal JK-fit basis
         mol2 = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587', verbose=0)
-        self.assertIsNone(dft.RKS(mol2).dft3c('wb97x-3c').density_fit().auxbasis)
+        self.assertEqual(dft.RKS(mol2).dft3c('wb97x-3c').density_fit().auxbasis,
+                         'def2-universal-jkfit')
 
         # switching to an all-electron 3c method clears the ECPs
         mf.method = 'b97-3c'

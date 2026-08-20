@@ -61,11 +61,12 @@ _white_list = {
     'wb97x-3c': ('wb97x-v', False, 'd4:wb97x-3c'),
     'wb97x_3c': ('wb97x-v', False, 'd4:wb97x-3c'),
     # B97-3c is parameterized together with its D3(BJ) dispersion correction
-    # and the SRB correction.  The full libxc canonical
-    # name behaves the same as the shorthand spellings.
-    'b97-3c': ('b97-3c', False, 'd3bj:b97-3c'),
-    'b97_3c': ('b97-3c', False, 'd3bj:b97-3c'),
-    'gga_xc_b97_3c': ('b97-3c', False, 'd3bj:b97-3c'),
+    # (including the ATM three-body term, as specified in the B97-3c paper)
+    # and the SRB correction.  The full libxc canonical name behaves the same
+    # as the shorthand spellings.
+    'b97-3c': ('b97-3c', False, 'd3bjatm:b97-3c'),
+    'b97_3c': ('b97-3c', False, 'd3bjatm:b97-3c'),
+    'gga_xc_b97_3c': ('b97-3c', False, 'd3bjatm:b97-3c'),
     # r2SCAN-3c is parameterized together with its D4 dispersion correction
     # and the gCP correction.
     'r2scan-3c': ('r2scan', False, 'd4:r2scan-3c'),
@@ -273,8 +274,8 @@ def check_disp(mf, disp=None):
 def make_dftd4_model(mol, method, atm):
     '''Create the DFTD4 dispersion model for the given method.
 
-    The D4 correction of r2SCAN-3c uses a custom EEQ charge model 
-    (ga=2.0, gc=1.0).  This special case is applied in the dftd4 program but is not encoded in
+    The D4 correction of r2SCAN-3c uses a custom EEQ charge model (ga=2.0, gc=1.0).
+    This special case is applied in the dftd4 program but is not encoded in
     the damping parameter table, so it has to be applied explicitly.
     '''
     if method == 'r2scan-3c':

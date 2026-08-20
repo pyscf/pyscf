@@ -25,10 +25,9 @@ from pyscf.lib import logger
 _DFT3C_METHODS = {
     'b97-3c': ('def2mtzvp', 'b97-3c', None, 'def2-mTZVPP-RIJ'),
     'r2scan-3c': ('def2mtzvpp', 'r2scan-3c', None, 'def2-mTZVPP-RIJ'),
-    # wB97X-3c uses the ECP-based Grimme vDZP basis; it has no dedicated
-    # auxiliary basis (density fitting falls back to even-tempered
-    # functions; an auto-aux basis can be requested explicitly).
-    'wb97x-3c': ('Grimme vDZP', 'wb97x-3c', 'Grimme vDZP', None),
+    # wB97X-3c uses the ECP-based Grimme vDZP basis.  Density fitting uses
+    # the bundled universal JK-fit basis (as in gpu4pyscf).
+    'wb97x-3c': ('Grimme vDZP', 'wb97x-3c', 'Grimme vDZP', 'def2-universal-jkfit'),
 }
 
 def dft3c(mf, method='b97-3c'):

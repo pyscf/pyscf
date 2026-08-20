@@ -61,6 +61,9 @@ DEFAULT_AUXBASIS = {
     #'def2qzvpd'   : ('def2-qzvp-jkfit'        , None                 ),
     'def2qzvpp'   : ('def2-qzvpp-jkfit'       , 'def2-qzvpp-ri'      ),
     'def2qzvppd'  : ('def2-qzvpp-jkfit'       , 'def2-qzvppd-ri'     ),
+    # Grimme vDZP (ECP-based, used by wB97X-3c); the universal JK-fit is
+    # the density-fitting basis of choice for the composite 3c methods
+    'grimmevdzp'  : ('def2-universal-jkfit'   , None                 ),
     'sto3g'       : ('def2-svp-jkfit'         , 'def2-svp-ri'        ),
     '321g'        : ('def2-svp-jkfit'         , 'def2-svp-ri'        ),
     '631g'        : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
