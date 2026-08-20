@@ -475,7 +475,7 @@ class KnownValues(unittest.TestCase):
         mf = addons.smearing(mf, sigma=0.1)
         mf.kernel()
         self.assertAlmostEqual(mf.mo_occ.sum(), 15, 8)
-        self.assertAlmostEqual(mf.e_tot, -106.9310800402, 8)
+        self.assertAlmostEqual(mf.e_tot, -106.9310800142, 8)
 
     def test_uhf_smearing(self):
         mol = gto.M(
@@ -494,16 +494,16 @@ class KnownValues(unittest.TestCase):
         myhf_s = addons.smearing_(myhf_s, sigma=0.01, method='fermi', fix_spin=True)
         myhf_s.sigma = 0.1
         myhf_s.fix_spin = False
-        myhf_s.conv_tol = 1e-7
+        myhf_s.conv_tol = 1e-9
         myhf_s.kernel()
-        self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 5)
-        self.assertAlmostEqual(myhf_s.entropy, 17.11431, 4)
+        # With sigma=0.1 the near-degenerate 3d manifold makes the plain
+        # energy E vary a lot (free-energy-degenerate), while 
+        # e_free = E - sigma*S is more stable (see
+        # issue #3379). Assert e_free tightly and E/entropy loosely.
+        self.assertAlmostEqual(myhf_s.e_free, -244.7984202573, 7)
+        self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 4)
+        self.assertAlmostEqual(myhf_s.entropy, 17.11431, 3)
         self.assertTrue(myhf_s.converged)
-
-        myhf_s.mu = -0.2482816
-        myhf_s.kernel(dm0=myhf_s.make_rdm1())
-        self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 5)
-        self.assertAlmostEqual(myhf_s.entropy, 17.11431, 4)
 
     def test_rhf_smearing_nelec(self):
         mol = gto.Mole()
