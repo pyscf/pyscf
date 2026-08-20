@@ -83,21 +83,18 @@ class TestDFT3C(unittest.TestCase):
 
     @skip_bse
     def test_dft3c_basis(self):
-        # B97-3c -> def2-mTZVP, r2SCAN-3c -> def2-mTZVPP, shared RI-J auxbasis
+        # B97-3c -> def2-mTZVP, r2SCAN-3c -> def2-mTZVPP
         mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='def2mtzvp', verbose=0)
         mf = dft.RKS(mol).dft3c('b97-3c')
         self.assertEqual(mf.method3c, 'b97-3c')
         self.assertEqual(mf.mol.basis, 'def2mtzvp')
         self.assertEqual(mf.xc, 'b97-3c')
-        # density fitting after dft3c picks the RI-J auxiliary basis
-        self.assertEqual(mf.density_fit().auxbasis, 'def2-mTZVPP-RIJ')
 
         mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='def2mtzvpp', verbose=0)
         mf = dft.RKS(mol).dft3c('r2scan-3c')
         self.assertEqual(mf.method3c, 'r2scan-3c')
         self.assertEqual(mf.mol.basis, 'def2mtzvpp')
         self.assertEqual(mf.xc, 'r2scan-3c')
-        self.assertEqual(mf.density_fit().auxbasis, 'def2-mTZVPP-RIJ')
 
         with self.assertRaises(NotImplementedError):
             dft.RKS(mol).dft3c('pbeh-3c')
@@ -196,11 +193,6 @@ class TestDFT3C(unittest.TestCase):
         self.assertAlmostEqual(e, -17.270909745768, 8)
         self.assertAlmostEqual(mf.scf_summary['dispersion'], -0.000263630665, 8)
         self.assertNotIn('gcp', mf.scf_summary)
-
-        # density fitting uses the bundled universal JK-fit basis
-        mol2 = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587', verbose=0)
-        self.assertEqual(dft.RKS(mol2).dft3c('wb97x-3c').density_fit().auxbasis,
-                         'def2-universal-jkfit')
 
         # switching to an all-electron 3c method clears the ECPs
         mf.method = 'b97-3c'

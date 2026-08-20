@@ -93,6 +93,41 @@ def UKS(mol, xc='LDA,VWN'):
         return uks_symm.UKS(mol, xc)
 UKS.__doc__ = uks.UKS.__doc__
 
+def GKS(mol, xc='LDA,VWN'):
+    if not mol.symmetry or mol.groupname == 'C1':
+        return gks.GKS(mol, xc)
+    else:
+        return gks_symm.GKS(mol, xc)
+GKS.__doc__ = gks.GKS.__doc__
+
+def DKS(mol, xc='LDA,VWN'):
+    from pyscf.scf import dhf
+    if dhf.zquatev and mol.spin == 0:
+        return dks.RDKS(mol, xc=xc)
+    else:
+        return dks.UDKS(mol, xc=xc)
+UDKS = dks.UDKS
+RDKS = dks.RDKS
+
+def X2C(mol, *args):
+    '''X2C Kohn-Sham'''
+    from pyscf.scf import dhf
+    from pyscf.x2c import dft
+    if dhf.zquatev and mol.spin == 0:
+        return dft.RKS(mol, *args)
+    else:
+        return dft.UKS(mol, *args)
+X2C_KS = X2C
+
+def RKSpU(mol, xc='LDA,VWN', **kwargs):
+    from pyscf.dft import rkspu
+    return rkspu.RKSpU(mol, xc=xc, **kwargs)
+
+def UKSpU(mol, xc='LDA,VWN', **kwargs):
+    from pyscf.dft import ukspu
+    return ukspu.UKSpU(mol, xc=xc, **kwargs)
+
+
 def RKS3C(mol, method='b97-3c'):
     '''Create a RKS object with the composite 3c method applied.
 
@@ -129,37 +164,3 @@ def GKS3C(mol, method='b97-3c'):
     '''
     return GKS(mol).dft3c(method)
 GKS3C.__doc__ = gks.GKS.__doc__ + GKS3C.__doc__
-
-def GKS(mol, xc='LDA,VWN'):
-    if not mol.symmetry or mol.groupname == 'C1':
-        return gks.GKS(mol, xc)
-    else:
-        return gks_symm.GKS(mol, xc)
-GKS.__doc__ = gks.GKS.__doc__
-
-def DKS(mol, xc='LDA,VWN'):
-    from pyscf.scf import dhf
-    if dhf.zquatev and mol.spin == 0:
-        return dks.RDKS(mol, xc=xc)
-    else:
-        return dks.UDKS(mol, xc=xc)
-UDKS = dks.UDKS
-RDKS = dks.RDKS
-
-def X2C(mol, *args):
-    '''X2C Kohn-Sham'''
-    from pyscf.scf import dhf
-    from pyscf.x2c import dft
-    if dhf.zquatev and mol.spin == 0:
-        return dft.RKS(mol, *args)
-    else:
-        return dft.UKS(mol, *args)
-X2C_KS = X2C
-
-def RKSpU(mol, xc='LDA,VWN', **kwargs):
-    from pyscf.dft import rkspu
-    return rkspu.RKSpU(mol, xc=xc, **kwargs)
-
-def UKSpU(mol, xc='LDA,VWN', **kwargs):
-    from pyscf.dft import ukspu
-    return ukspu.UKSpU(mol, xc=xc, **kwargs)
