@@ -55,6 +55,39 @@ class KnownValues(unittest.TestCase):
         coulG[:,5,:] = 0
         self.assertAlmostEqual(lib.fp(coulG), -15.809448382668005+0j, 9)
 
+        # reciprocal vector outside the WS FFT mesh
+        ws_exx = mf._ws_exx
+        alpha = ws_exx['alpha']
+        mesh = np.asarray(ws_exx['kcell'].mesh)
+        Gv = mesh[0] * ws_exx['kcell'].reciprocal_vectors()[[0]]
+        coulG = tools.get_coulG(
+            cell, exx=True, mf=mf, Gv=Gv, wrap_around=False)
+
+        q2 = np.dot(Gv[0], Gv[0])
+        ref = 4*np.pi/q2 * (1 - np.exp(-q2/(4*alpha**2)))
+        self.assertAlmostEqual(coulG[0], ref, 12)
+
+        # arbitrary band k-point
+        mf._ws_exx = None
+        mf.kpts = cell.make_kpts([2,2,2])
+        kpt_band = cell.get_abs_kpts([.12, .23, .34])
+        Gv = np.zeros((1,3))
+
+        for kpt in mf.kpts:
+            q = kpt - kpt_band
+            coulG = tools.get_coulG(
+                cell, q, True, mf, Gv=Gv, wrap_around=False)
+
+            ws_exx = mf._ws_exx
+            q2 = np.dot(q, q)
+            alpha = ws_exx['alpha']
+            ref = 4*np.pi/q2 * (1 - np.exp(-q2/(4*alpha**2)))
+            ref += ws_exx['kcell'].vol / len(ws_exx['vR']) * np.dot(
+                ws_exx['vR'], np.cos(np.dot(ws_exx['r_mic'], q)))
+            self.assertAlmostEqual(coulG[0], ref, 10)
+
+        self.assertEqual(len(ws_exx['vq_cache']), 1)
+
     def test_unconventional_ws_cell(self):
         cell = pbcgto.Cell()
         cell.atom = 'He'

@@ -388,21 +388,38 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             mf._ws_exx = precompute_exx(cell, kpts)
         exx_alpha = mf._ws_exx['alpha']
         exx_kcell = mf._ws_exx['kcell']
-        exx_q = mf._ws_exx['q']
-        exx_vq = mf._ws_exx['vq']
 
         with np.errstate(divide='ignore',invalid='ignore'):
             coulG = 4*np.pi/absG2*(1.0 - np.exp(-absG2/(4*exx_alpha**2)))
         coulG[absG2==0] = np.pi / exx_alpha**2
         # Index k+Gv into the precomputed vq and add on
         gxyz = np.dot(kG, exx_kcell.lattice_vectors().T)/(2*np.pi)
-        gxyz = gxyz.round(decimals=6).astype(int)
+        shift = (gxyz[0] + .5) % 1 - .5
+        gxyz_int = np.rint(gxyz - shift).astype(int)
+        if abs(gxyz - gxyz_int - shift).max() > 1e-6:
+            raise RuntimeError('k+G vectors are incompatible with the FFT mesh')
+
+        no_shift = abs(shift).max() < 1e-9
+        if no_shift:
+            exx_vq = mf._ws_exx['vq']
+        else:
+            key = tuple(np.round(shift, 12))
+            cache = mf._ws_exx['vq_cache']
+            if key not in cache:
+                delta = np.dot(shift, exx_kcell.reciprocal_vectors())
+                phase = np.exp(-1j * np.dot(mf._ws_exx['r_mic'], delta))
+                vG = (exx_kcell.vol / len(phase)) * fftk(
+                    mf._ws_exx['vR'], exx_kcell.mesh, phase)
+                cache[key] = vG.real.copy()
+            exx_vq = cache[key]
+
         mesh = np.asarray(exx_kcell.mesh)
-        gxyz = (gxyz + mesh)%mesh
+        gxyz = (gxyz_int + mesh)%mesh
         qidx = (gxyz[:,0]*mesh[1] + gxyz[:,1])*mesh[2] + gxyz[:,2]
-        #qidx = [np.linalg.norm(exx_q-kGi,axis=1).argmin() for kGi in kG]
-        maxqv = abs(exx_q).max(axis=0)
-        is_lt_maxqv = (abs(kG) <= maxqv).all(axis=1)
+        lower = -(mesh // 2)
+        upper = (mesh - 1) // 2
+        is_lt_maxqv = ((gxyz_int >= lower) &
+                       (gxyz_int <= upper)).all(axis=1)
         coulG = coulG.astype(exx_vq.dtype)
         coulG[is_lt_maxqv] += exx_vq[qidx[is_lt_maxqv]]
 
@@ -588,8 +605,13 @@ def precompute_exx(cell, kpts=None, precision=None, precision_fft=None, nimgs=No
     ])
     images = np.dot(images_coord, kcell.a)
     r = np.full(kngs, np.inf)
+    r_mic = np.empty_like(rs)
     for image in images:
-        np.minimum(r, lib.norm(rs - image, axis=1), out=r)
+        dr = rs - image
+        r1 = lib.norm(dr, axis=1)
+        mask = r1 < r
+        r[mask] = r1[mask]
+        r_mic[mask] = dr[mask]
 
     # Check the image search against a range guaranteed to be exhaustive.
     Lc = 1. / lib.norm(np.linalg.inv(kcell.a), axis=0)
@@ -619,7 +641,10 @@ def precompute_exx(cell, kpts=None, precision=None, precision_fft=None, nimgs=No
     ws_exx = {'alpha': alpha,
               'kcell': kcell,
               'q'    : kcell.Gv,
-              'vq'   : vG.real.copy()}
+              'vq'   : vG.real.copy(),
+              'vR'   : vR,
+              'r_mic': r_mic,
+              'vq_cache': {}}
     log.debug('# Finished precomputing')
 
     log.timer('Wigner-Seitz EXX precomputing', *cput0)
