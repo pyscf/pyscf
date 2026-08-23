@@ -41,7 +41,7 @@ def _get_fcisolver (mc, ci, state=0):
     nroots = getattr (mc.fcisolver, 'nroots', 1)
     fcisolver = mc.fcisolver
     solver_state_index = state
-    if nroots>1: ci = ci[state]
+    if isinstance(ci, (list, tuple)): ci = ci[state]
     if isinstance (mc.fcisolver, StateAverageMixFCISolver):
         p0 = 0
         fcisolver = None

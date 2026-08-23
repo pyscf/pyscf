@@ -506,7 +506,7 @@ class _PDFT:
         if len(grids_attr): self.grids.__dict__.update(**grids_attr)
         if verbose is None: verbose = self.verbose
         self.verbose = self.otfnal.verbose = verbose
-        nroots = getattr(self.fcisolver, 'nroots', 1)
+        nroots = len(self.ci) if isinstance(self.ci, (list, tuple)) else 1
         epdft = [self.energy_tot(mo_coeff=self.mo_coeff, ci=self.ci, state=ix,
                                  logger_tag='MC-PDFT state {}'.format(ix))
                  for ix in range(nroots)]
