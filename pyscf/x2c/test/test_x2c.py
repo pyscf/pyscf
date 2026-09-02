@@ -19,6 +19,7 @@
 import numpy
 import scipy.linalg
 import unittest
+import unittest.mock
 from pyscf import gto
 from pyscf import scf
 from pyscf import lib
@@ -140,6 +141,24 @@ class KnownValues(unittest.TestCase):
         h1 = myx2c.with_x2c.picture_change((v, w*(.5/c)**2-t), t)
         href = myx2c.with_x2c.get_hcore()
         self.assertAlmostEqual(abs(href - h1).max(), 0, 9)
+
+    def test_x2c1e_hcore_lindep_fallback(self):
+        # Deterministically cover the linear-dependency fallback of
+        # _x2c1e_get_hcore on every platform: force the generalized eigh to
+        # fail the way a non-positive-definite metric does, and verify the
+        # fallback reproduces the direct-path hcore.
+        mol1 = gto.M(atom='C', basis='cc-pvdz', verbose=0)
+        x2c_obj = x2c.X2C(mol1)
+        href = x2c_obj.get_hcore()
+        eigh0 = scipy.linalg.eigh
+        def eigh_no_generalized(a, b=None, *args, **kwargs):
+            if b is not None:
+                raise scipy.linalg.LinAlgError('forced generalized failure')
+            return eigh0(a, *args, **kwargs)
+        with unittest.mock.patch.object(scipy.linalg, 'eigh',
+                                        eigh_no_generalized):
+            hfb = x2c_obj.get_hcore()
+        self.assertAlmostEqual(abs(href - hfb).max(), 0, 7)
 
     def test_lindep_xbasis(self):
         mol = gto.M(atom='C', basis='''

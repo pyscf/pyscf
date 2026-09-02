@@ -111,7 +111,7 @@ def gen_sf_hfw(mol, approx='1E'):
         v2cc = numpy.zeros_like(s2aa)
         w2cc = numpy.zeros_like(s2aa)
         if ia == ja:
-            with mol.with_rinv_origin(mol.atom_coord(ia)):
+            with mol.with_rinv_at_nucleus(ia):
                 z = mol.atom_charge(ia)
                 rinv2aa = z*mol.intor('int1e_ipiprinv', comp=9).reshape(3,3,nao,nao)
                 rinv2ab = z*mol.intor('int1e_iprinvip', comp=9).reshape(3,3,nao,nao)

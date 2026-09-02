@@ -34,13 +34,35 @@ from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df.df_jk import (_format_dms, _format_kpts_band, _format_jks,
                                 _ewald_exxdiv_for_G0)
 from pyscf.pbc.lib.kpts_helper import (is_zero, group_by_conj_pairs,
-                                       kk_adapted_iter)
+                                       kk_adapted_iter, KPT_DIFF_TOL)
 from pyscf.pbc.tools import k2gamma
 from pyscf.pbc.df.incore import libpbc
 
+def _sub_kpts_idx(kpts, kpts_band):
+    '''Indices of kpts_band within kpts, if every band k-point is also a member
+    of kpts. Returns None otherwise.
+
+    The k-point symmetry adapted SCF drivers call get_jk with kpts_band set to
+    the IBZ k-points, which are a subset of the full BZ mesh. Detecting this
+    lets the optimized *_kpts algorithms be used instead of the generic (and
+    much slower) band code.
+    '''
+    if kpts_band is None:
+        return None
+    kpts = numpy.reshape(kpts, (-1,3))
+    band = numpy.reshape(kpts_band, (-1,3))
+    dk = abs(band[:,None,:] - kpts).max(axis=2)
+    idx = dk.argmin(axis=1)
+    if dk[numpy.arange(len(band)),idx].max() > KPT_DIFF_TOL:
+        return None
+    return idx
+
 def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
+    band_idx = None
     if kpts_band is not None:
-        return get_j_for_bands(mydf, dm_kpts, hermi, kpts, kpts_band)
+        band_idx = _sub_kpts_idx(kpts, kpts_band)
+        if band_idx is None:
+            return get_j_for_bands(mydf, dm_kpts, hermi, kpts, kpts_band)
 
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
@@ -58,6 +80,8 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
 
     if is_zero(kpts):
         vj_kpts = vj_kpts.real.copy()
+    if band_idx is not None:
+        vj_kpts = vj_kpts[:,band_idx]
     return _format_jks(vj_kpts, dm_kpts, kpts_band, kpts)
 
 def _update_vj_(vj_kpts, Gpq, dms, coulG, weight=None):
@@ -134,8 +158,11 @@ def get_j_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
 
 def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                exxdiv=None):
+    band_idx = None
     if kpts_band is not None:
-        return get_k_for_bands(mydf, dm_kpts, hermi, kpts, kpts_band, exxdiv)
+        band_idx = _sub_kpts_idx(kpts, kpts_band)
+        if band_idx is None:
+            return get_k_for_bands(mydf, dm_kpts, hermi, kpts, kpts_band, exxdiv)
 
     cpu0 = cpu1 = logger.process_clock(), logger.perf_counter()
     log = logger.new_logger(mydf)
@@ -290,6 +317,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
             if k != k_conj:
                 vk_kpts[:,k_conj] = vk_kpts[:,k].conj()
     log.timer_debug1('get_k_kpts', *cpu0)
+    if band_idx is not None:
+        return _format_jks(vk_kpts[:,band_idx], dm_kpts, kpts_band, kpts)
     return vk_kpts.reshape(dm_kpts.shape)
 
 def get_k_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,

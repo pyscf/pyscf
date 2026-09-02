@@ -43,7 +43,7 @@ jobs:
       - name: Install and Test
         run: ./.github/workflows/run_ci.sh
       - name: Upload to codecov
-        if: matrix.python-version == '3.12'
+        if: matrix.python-version == '3.8' && matrix.os == 'ubuntu-latest'
         uses: codecov/codecov-action@v7
         with:
           token: ${{secrets.CODECOV_TOKEN}}
@@ -58,9 +58,9 @@ jobs:
       OMP_NUM_THREADS: 2
       PYTEST_JOBS: 2
       TEST_PATHS: >-
-        pyscf/lib pyscf/gto pyscf/ao2mo pyscf/scf pyscf/dft pyscf/mp
-        pyscf/cc pyscf/mcscf pyscf/agf2
-        pyscf/pbc/scf pyscf/pbc/df pyscf/pbc/dft
+        pyscf/agf2 pyscf/ao2mo pyscf/cc pyscf/dft pyscf/gto pyscf/lib
+        pyscf/mcpdft pyscf/mcscf pyscf/mp pyscf/scf pyscf/tdscf
+        pyscf/pbc/df pyscf/pbc/dft pyscf/pbc/scf
     steps:
       - uses: actions/checkout@v7
       - name: Set up Python

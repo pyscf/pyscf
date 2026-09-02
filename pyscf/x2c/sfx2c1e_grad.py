@@ -108,7 +108,7 @@ def _gen_h1_s1(mol):
         h1 = numpy.zeros((3,n2,n2), dtype=v1.dtype)
         m1 = numpy.zeros((3,n2,n2), dtype=v1.dtype)
         ish0, ish1, i0, i1 = aoslices[ia]
-        with mol.with_rinv_origin(mol.atom_coord(ia)):
+        with mol.with_rinv_at_nucleus(ia):
             z = mol.atom_charge(ia)
             rinv1   = -z*mol.intor('int1e_iprinv', comp=3)
             prinvp1 = -z*mol.intor('int1e_ipprinvp', comp=3)

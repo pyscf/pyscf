@@ -114,6 +114,51 @@ def ipccsd_diag(eom, imds=None):
     vector = eom.amplitudes_to_vector(Hr1, Hr2)
     return vector
 
+def _biorthonormalize_degenerate_left_evecs(eom, evals, evecs, levecs,
+                                            nmo, nocc, deg_tol=1e-6):
+    """Rotate left eigenvectors within each degenerate cluster so that the
+    left/right amplitude overlap matrix becomes the identity.
+
+    The left and right eigenvectors come from two independent Davidson
+    solves.  Within a degenerate cluster each solve returns an arbitrary
+    basis of the same subspace, so the index-wise overlap <l_i|r_i> used by
+    the star contraction is not well defined and can become arbitrarily
+    small, amplifying the residual error of the Davidson vectors.  Solving
+    L' = S^{-1} L with S_ij = <l_i|r_j> gives <l'_i|r_j> = delta_ij, which
+    makes the per-root contraction independent of the arbitrary bases (for
+    symmetry-induced degeneracies the star correction is proportional to
+    the identity within the cluster).  Non-degenerate roots are returned
+    unchanged.
+    """
+    evals = np.atleast_1d(np.asarray(evals))
+    evecs = np.atleast_2d(np.asarray(evecs))
+    levecs = np.atleast_2d(np.asarray(levecs)).copy()
+    nroots = len(evals)
+
+    def overlap(lvec, rvec):
+        l1, l2 = eom.vector_to_amplitudes(lvec, nmo, nocc)
+        r1, r2 = eom.vector_to_amplitudes(rvec, nmo, nocc)
+        return np.dot(l1.ravel(), r1.ravel()) + 0.5 * np.dot(l2.ravel(), r2.ravel())
+
+    i0 = 0
+    while i0 < nroots:
+        i1 = i0 + 1
+        while i1 < nroots and abs(evals[i1] - evals[i1-1]) < deg_tol:
+            i1 += 1
+        if i1 - i0 > 1:
+            cluster = range(i0, i1)
+            ovlp = np.array([[overlap(levecs[i], evecs[j]) for j in cluster]
+                             for i in cluster])
+            if 1. / np.linalg.cond(ovlp) < 1e-10:
+                raise ValueError(
+                    'Left and right eigenvectors of the degenerate cluster '
+                    f'{list(cluster)} have a near-singular overlap matrix; '
+                    'the star correction is not defined for this input.')
+            levecs[i0:i1] = np.linalg.solve(ovlp, levecs[i0:i1])
+        i0 = i1
+    return levecs
+
+
 def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=None):
     """
     Returns:
@@ -177,6 +222,10 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=No
     e_star = []
     ipccsd_evecs, lipccsd_evecs = [np.atleast_2d(x) for x in [ipccsd_evecs, lipccsd_evecs]]
     ipccsd_evals = np.atleast_1d(ipccsd_evals)
+    ipccsd_evals = np.atleast_1d(ipccsd_evals)
+    ipccsd_evecs = np.atleast_2d(ipccsd_evecs)
+    lipccsd_evecs = _biorthonormalize_degenerate_left_evecs(
+        eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, nmo, nocc)
     for ip_eval, ip_evec, ip_levec in zip(ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
         # Enforcing <L|R> = 1
         l1, l2 = eom.vector_to_amplitudes(ip_levec, nmo, nocc)
@@ -402,6 +451,8 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=No
     e_star = []
     eaccsd_evecs, leaccsd_evecs = [np.atleast_2d(x) for x in [eaccsd_evecs, leaccsd_evecs]]
     eaccsd_evals = np.atleast_1d(eaccsd_evals)
+    leaccsd_evecs = _biorthonormalize_degenerate_left_evecs(
+        eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, nmo, nocc)
     for ea_eval, ea_evec, ea_levec in zip(eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
         # Enforcing <L|R> = 1
         l1, l2 = eom.vector_to_amplitudes(ea_levec, nmo, nocc)

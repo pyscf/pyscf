@@ -121,6 +121,21 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[2], 0.50226873136932748, 5)
 
 
+    def test_ipccsd_star_degenerate_left_gauge(self):
+        # The degenerate pair spans a two-dimensional subspace in which two
+        # independent Davidson solves may return any basis.  Swapping the two
+        # left vectors emulates the worst such gauge; the star correction must
+        # stay at its reference value instead of dividing by a near-zero
+        # left/right overlap.
+        myeom = eom_gccsd.EOMIP(mycc)
+        e, v = myeom.ipccsd(nroots=3)
+        el, lv = myeom.ipccsd(nroots=3, left=True)
+        lv = numpy.asarray(lv).copy()
+        lv[[0, 1]] = lv[[1, 0]]
+        estar = myeom.ipccsd_star_contract(e, v, lv)
+        self.assertAlmostEqual(estar[0], 0.4358615224789573, 5)
+        self.assertAlmostEqual(estar[1], 0.4358615224789594, 5)
+
     def test_eaccsd(self):
         e,v = mycc.eaccsd(nroots=1)
         self.assertAlmostEqual(e, 0.19050592141957523, 5)
@@ -145,6 +160,17 @@ class KnownValues(unittest.TestCase):
         # been observed to come out as ~1e-26 on some machines, in which case
         # the correction is numerical noise. FIXME
         #self.assertAlmostEqual(e[2], 0.2820757599337823, 5)
+
+    def test_eaccsd_star_degenerate_left_gauge(self):
+        # Same gauge-invariance guard as test_ipccsd_star_degenerate_left_gauge.
+        myeom = eom_gccsd.EOMEA(mycc)
+        e, v = myeom.eaccsd(nroots=3)
+        el, lv = myeom.eaccsd(nroots=3, left=True)
+        lv = numpy.asarray(lv).copy()
+        lv[[0, 1]] = lv[[1, 0]]
+        estar = myeom.eaccsd_star_contract(e, v, lv)
+        self.assertAlmostEqual(estar[0], 0.1894169322207168, 5)
+        self.assertAlmostEqual(estar[1], 0.1894169322207168, 5)
 
     def test_eaccsd_koopmans(self):
         e,v = mycc.eaccsd(nroots=3, koopmans=True)
