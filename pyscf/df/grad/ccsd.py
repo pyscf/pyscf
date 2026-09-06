@@ -302,13 +302,22 @@ class Gradients(ccsd_grad.Gradients):
     auxbasis_response = True
 
     def __init__(self, mycc):
+        # The correlation part of this assembly is density fitted, while the
+        # HF reference part is delegated to mycc._scf (get_veff for the
+        # Z-vector equation, nuc_grad_method for h1, S1 and the separable
+        # 2-PDM).  Both halves have to differentiate the same energy
+        # expression, so the reference must be a density-fitting SCF object.
+        # dfccsd.RCCSD accepts a conventional-ERI mean field and builds its own
+        # with_df, which would mix the two.
+        assert isinstance(mycc._scf, df.df_jk._DFHF), (
+            'DF-CCSD gradients require a density-fitting SCF reference. '
+            'Use cc.CCSD(mf.density_fit()) rather than dfccsd.RCCSD(mf).')
         ccsd_grad.Gradients.__init__(self, mycc)
         self.with_df = getattr(mycc, 'with_df', None) or mycc._scf.with_df
 
     def check_sanity(self):
         ccsd_grad.Gradients.check_sanity(self)
-        assert getattr(self.base, 'with_df', None) is not None or \
-                getattr(self.base._scf, 'with_df', None) is not None
+        assert isinstance(self.base._scf, df.df_jk._DFHF)
 
     grad_elec = grad_elec
 

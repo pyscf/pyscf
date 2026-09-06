@@ -104,6 +104,15 @@ class KnownValues(unittest.TestCase):
         g_conv = ccsd_grad.Gradients(mycc).kernel()
         self.assertTrue(abs(g_df - g_conv).max() > 1e-6)
 
+    def test_requires_df_scf_reference(self):
+        # dfccsd.RCCSD accepts a conventional-ERI mean field and builds its own
+        # with_df.  The HF half of the gradient would then differentiate the
+        # exact ERIs while the correlation half differentiates the fitted ones.
+        from pyscf.cc import dfccsd
+        mol = make_mol()
+        mycc = dfccsd.RCCSD(scf.RHF(mol).run())
+        self.assertRaises(AssertionError, mycc.nuc_grad_method)
+
     def test_df_uccsd_grad_not_implemented(self):
         mol = gto.M(atom='H 0 0 0; F 0 0 1.1', basis='sto-3g', verbose=0)
         mf = scf.UHF(mol).density_fit(auxbasis=AUXBASIS).run()
