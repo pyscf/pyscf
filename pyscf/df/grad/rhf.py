@@ -85,10 +85,7 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True,
     t0 = (logger.process_clock (), logger.perf_counter ())
     if mol is None: mol = mf_grad.mol
     if dm is None: dm = mf_grad.base.make_rdm1()
-    with_df = mf_grad.base.with_df
-    auxmol = with_df.auxmol
-    if auxmol is None:
-        auxmol = df.addons.make_auxmol(with_df.mol, with_df.auxbasis)
+    auxmol = _make_auxmol(mf_grad.base.with_df, mol)
     nbas, nao, naux = mol.nbas, mol.nao, auxmol.nao
     aux_loc = auxmol.ao_loc
 
@@ -248,10 +245,7 @@ def get_j(mf_grad, mol=None, dm=None, hermi=0):
     if dm is None: dm = mf_grad.base.make_rdm1()
     t0 = (logger.process_clock (), logger.perf_counter ())
 
-    with_df = mf_grad.base.with_df
-    auxmol = with_df.auxmol
-    if auxmol is None:
-        auxmol = df.addons.make_auxmol(with_df.mol, with_df.auxbasis)
+    auxmol = _make_auxmol(mf_grad.base.with_df, mol)
     nbas = mol.nbas
 
     get_int3c_s2 = _int3c_wrapper(mol, auxmol, 'int3c2e', 's2ij')
@@ -329,6 +323,25 @@ def get_j(mf_grad, mol=None, dm=None, hermi=0):
 
     logger.timer(mf_grad, 'df vj', *t0)
     return vj
+
+def _make_auxmol(with_df, mol):
+    '''The auxiliary basis of with_df, carrying the range-separation
+    parameter of mol.
+
+    The 3-center integrals are evaluated in the environment of mol and auxmol
+    concatenated (see _int3c_wrapper), which takes omega from mol, while the
+    2-center metric (P|Q) is evaluated with auxmol alone.  Were omega set on
+    mol only (as inside a mol.with_range_coulomb context), the two factors of
+    the fitted operator would correspond to different interactions.
+    '''
+    auxmol = with_df.auxmol
+    if auxmol is None:
+        # make_auxmol copies mol._env[:PTR_ENV_START], omega included
+        auxmol = df.addons.make_auxmol(with_df.mol, with_df.auxbasis)
+    if auxmol.omega != mol.omega:
+        auxmol = auxmol.copy()
+        auxmol.omega = mol.omega
+    return auxmol
 
 def _int3c_wrapper(mol, auxmol, intor, aosym):
     ''' Convenience wrapper for getints '''
