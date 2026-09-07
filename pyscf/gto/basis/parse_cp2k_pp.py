@@ -48,14 +48,14 @@ def parse(string, symb=None):
     '''
     blocks = _split_blocks(string)
     if symb is not None:
-        pseudotxt = _search_gthpp_block(blocks, symb)
-        if not pseudotxt:
+        raw_data = _search_gthpp_block(blocks, symb)
+        if not raw_data:
             raise BasisNotFoundError(f'Pseudopotential not found for {symb}.')
     elif blocks:
-        pseudotxt = blocks[0].splitlines()
+        raw_data = blocks[0]
     else:
         raise BasisNotFoundError('Not pseudo potential data')
-    return _parse(pseudotxt)
+    return _parse(raw_data)
 
 def load(pseudofile, symb, suffix=None):
     '''Parse the *pseudofile's entry* for atom 'symb', return an internal
@@ -72,7 +72,7 @@ def _load_GTH_POTENTIALS(pp_name, symb, pp_dir, with_soc=False):
         with open(f'{pp_dir}/{pp_file}', 'r') as searchfile:
             blocks = _split_blocks(searchfile.read())
         for block in blocks:
-            header = block.splitlines()[0].split()
+            header = block[0].split()
             if header[0] == symb and pp_name in header[1:]:
                 return _parse(block)
     raise BasisNotFoundError(
@@ -160,12 +160,15 @@ def _parse(plines):
                     kproj_p_ij.append(float(k))
             kproj.append(_unpack_triu(kproj_p_ij))
 
-    pseudo_params = [nelecs,
-                     rloc, nexp, cexp,
-                     nproj_types]
     if has_soc:
+        pseudo_params = [nelecs,
+                         rloc, nexp, cexp,
+                         (nproj_types, 'SOC')]
         pseudo_params.extend(zip(r, nproj, hproj, kproj))
     else:
+        pseudo_params = [nelecs,
+                         rloc, nexp, cexp,
+                         nproj_types]
         pseudo_params.extend(zip(r, nproj, hproj))
     return pseudo_params
 

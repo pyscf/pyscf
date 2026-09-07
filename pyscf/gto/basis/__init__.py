@@ -803,7 +803,7 @@ def load_ecp(filename_or_basisname, symb):
 
 # PP_NAME_PATTERN follows the convention of CP2K orbital basis and pseudo names
 # https://pierre-24.github.io/cp2k-basis/users/basis_sets_and_pseudos
-PP_NAME_PATTERN = re.compile(r'^GTH-[A-Z0-9]+-q\d+$')
+PP_NAME_PATTERN = re.compile(r'^GTH-[A-Z0-9]+(-SOC)?-q\d+$')
 
 def load_pseudo(filename_or_basisname, symb):
     '''Parses PP database file
@@ -816,8 +816,10 @@ def load_pseudo(filename_or_basisname, symb):
         # Note: the default *-GTH basis for Na has been changed, compared to
         # eariler versions. The default one in earlier versions are renamed to
         # *-GTH-q9_old in the new database (see GTH_POTENTIALS).
+        with_soc = 'SOC' in filename_or_basisname
+        filename_or_basisname = filename_or_basisname.replace('-SOC', '')
         return parse_cp2k_pp._load_GTH_POTENTIALS(
-            filename_or_basisname, symb, _GTH_PP_DIR)
+            filename_or_basisname, symb, _GTH_PP_DIR, with_soc)
 
     # TODO: remove the lagecy parser, except gth-hf-rev. gth-hf-rev data are not
     # available in the GTH_POTENTIALS or POTENTIAL_UZH databases
@@ -829,18 +831,17 @@ def load_pseudo(filename_or_basisname, symb):
     try:
         return parse_cp2k_pp.parse(filename_or_basisname, symb)
     except BasisNotFoundError:
-        pass
-
-    if not ENFORCE_ELEMENT_MATCH:
-        out = parse_cp2k_pp.parse(filename_or_basisname)
-        warnings.warn(
-            f'The pseudo string does not explicitly match the element {symb}. '
-            'It is stilled parsed and assigned to {symb} without enforcing '
-            'element matching. If you want to enforce a strict match '
-            'between the ECP input and elements, set\n'
-            '    gto_basis_enforce_element_match = True\n'
-            'in ~/.pyscf_conf.py')
-        return out
+        if not ENFORCE_ELEMENT_MATCH:
+            out = parse_cp2k_pp.parse(filename_or_basisname)
+            warnings.warn(
+                f'The pseudo string does not explicitly match the element {symb}. '
+                'It is stilled parsed and assigned to {symb} without enforcing '
+                'element matching. If you want to enforce a strict match '
+                'between the ECP input and elements, set\n'
+                '    gto_basis_enforce_element_match = True\n'
+                'in ~/.pyscf_conf.py')
+            return out
+        raise
 
 def _load_external(module, filename_or_basisname, symb, **kwargs):
     '''Try to read basis from given file'''

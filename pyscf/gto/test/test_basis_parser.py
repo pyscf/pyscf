@@ -621,6 +621,28 @@ ECP,I,46,4,3;
         pp = parse_cp2k_pp._load_GTH_POTENTIALS('GTH-LDA-q2', 'Be', pp_dir)
         assert pp[0] == [2]
 
+    def test_cp2k_soc_parser(self):
+        p = gto.basis.load_pseudo('GTH-PBE-SOC-q6', 'Te')
+        self.assertEqual(p[4][1], 'SOC')
+        scalar = gto.basis.load_pseudo('gth-pbe-q6','Te')
+        self.assertIsInstance(scalar[4], int)
+        self.assertEqual(len(scalar), 5+scalar[4])
+        self.assertEqual(scalar, gto.basis.load_pseudo('GTH-PBE-q6','Te'))
+        self.assertNotIsInstance(scalar[-1], dict)
+        u = gto.basis.load_pseudo('GTH-LDA-SOC-q32','U')
+        self.assertAlmostEqual(u[6][2][0][0], -7.23487214)
+        self.assertAlmostEqual(u[6][3][0][0], 25.56783598)
+
+    def test_zero_soc(self):
+        pp = parser.parse('''
+He GTH-BLYP-q2 GTH-BLYP
+    2
+     0.20000000    2    -9.14737128     1.71197792
+    0  SOC
+''')
+        self.assertEqual(pp[4], (0, 'SOC'))
+        self.assertEqual(len(pp), 5)
+
 if __name__ == "__main__":
     print("test basis module")
     unittest.main()
