@@ -14,6 +14,7 @@
 
 import unittest
 import numpy as np
+import pyscf
 import pyscf.dft
 from pyscf import lib
 from pyscf.pbc import gto as pbcgto
@@ -91,7 +92,7 @@ def get_pp_nl(cell, kpt=np.zeros(3)):
             continue
         pp = cell._pseudo[symb]
         for l, proj in enumerate(pp[5:]):
-            rl, nl, hl = proj
+            rl, nl, hl = proj[:3]
             if nl > 0:
                 hl = np.asarray(hl)
                 fakemol._bas[0,pyscf.gto.ANG_OF] = l
@@ -281,6 +282,50 @@ He
         grad = pp_int.vppnl_nuc_grad(cell, dm)[1,2]
         grad_fd = np.einsum("ij,ij->", v_fd, dm)
         self.assertAlmostEqual(abs(grad - grad_fd), 0, 7)
+
+    def test_pp_soc(self):
+        np.random.seed(4)
+        cell = pyscf.M(
+            atom = 'He  1.  .1  .3; He  .0  .8  1.1',
+            a = np.eye(3) * 4 + np.random.rand(3,3)*.5,
+            basis = { 'He': [[0, (0.8, 1.0)],
+                             [1, (1.2, 1.0)],
+                             [2, (0.9, 1.0)]]},
+            pseudo = '''
+He
+    2
+     0.40000000    3    -1.98934751    -0.75604821    0.95604821
+    2  SOC
+     0.29482550    3     1.23870466    .855         .3
+                                       .71         -1.1
+                                                    .9
+     0.32235865    2     2.25670239    -0.39677748
+                                        0.93894690
+                         0.15           0.12
+                                        0.25''')
+        kmesh = [3, 1, 4]
+        kpts = cell.make_kpts(kmesh)
+        dat = pp_int.get_pp_soc_components(cell, kpts)
+        assert abs(lib.fp(dat) - 1.0485888724761192) < 1e-12
+
+    def test_pp_soc_scf(self):
+        cell = pyscf.M(
+            atom='''
+     H    0.0     -0.5     -4.5
+     Te   0.5      0.0      4.5
+     H    0.0      0.5     -4.5''',
+            a=np.diag([12, 6, 8]),
+            basis={'H': 'DZVP-GTH', 'Te': 'SZV-MOLOPT-SR-GTH'},
+            pseudo={'H': 'GTH-PBE-q1', 'Te': 'GTH-SOC-PBE-q6'},
+            ke_cutoff=200,
+        )
+        kmesh = [1,4,4]
+        kpts = cell.make_kpts(kmesh)
+        cell.verbose = 4
+        mf = cell.KGKS(xc='pbe', kpts=kpts)
+        mf = mf.multigrid_numint()
+        mf.run()
+        assert abs(mf.e_tot - -0.421729576905) < 1e-7
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.pseudo")

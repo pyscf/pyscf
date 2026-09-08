@@ -152,7 +152,7 @@ def _parse(plines):
         if has_soc:
             if p == 0:
                 # kproj are only defined for r(2) and higher
-                kproj.append([[]])
+                kproj.append([])
                 continue
             kproj_p_ij = []
             for i in range(nl):

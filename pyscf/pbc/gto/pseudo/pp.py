@@ -123,7 +123,7 @@ def get_gth_projG(cell, Gvs):
         h_ia = []
         proj_ia = []
         for l,proj in enumerate(pp[5:]):
-            rl, nl, hl = proj
+            rl, nl, hl = proj[:3]
             h_ia.append( np.array(hl) )
             proj_ia_l = []
             for m in range(-l,l+1):
@@ -257,7 +257,7 @@ def get_pp(cell, kpt=np.zeros(3)):
             continue
         pp = cell._pseudo[symb]
         for l, proj in enumerate(pp[5:]):
-            rl, nl, hl = proj
+            rl, nl, hl = proj[:3]
             if nl > 0:
                 hl = np.asarray(hl)
                 fakemol._bas[0,mole.ANG_OF] = l

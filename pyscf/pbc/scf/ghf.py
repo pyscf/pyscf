@@ -99,6 +99,8 @@ def get_jk(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
 
 class GHF(pbchf.SCF):
     '''GHF class for PBCs at a single point (default: gamma point).
+
+    Set with_soc=True to add ECP and GTH pseudopotential spin-orbit terms.
     '''
     _keys = {'with_soc'}
 
@@ -127,10 +129,16 @@ class GHF(pbchf.SCF):
         if kpt is None: kpt = self.kpt
         hcore = pbchf.SCF.get_hcore(self, cell, kpt)
         hcore = scipy.linalg.block_diag(hcore, hcore)
-        if self.with_soc and cell.has_ecp_soc():
-            from pyscf.pbc.gto.ecp import ecp_int
-            # The ECP SOC contribution = <|1j * s * U_SOC|>
-            hcore = hcore + ecp_int(cell, kpt, intor='ECPso')
+        if self.with_soc:
+            if cell._pseudo:
+                vl_soc = pp_int.get_pp_soc(cell, kpt.reshape(1, 3))[0]
+                s = .5 * lib.PauliMatrices
+                vl_soc = np.einsum('sxy,spq->xpyq', 1j * s, vl_soc)
+                hcore = hcore + vl_soc.reshape(hcore.shape)
+            elif cell.has_ecp_soc():
+                hcore = hcore + ecp_int(cell, kpt, intor='ECPso')
+            else:
+                raise NotImplementedError
         return hcore
 
     def get_ovlp(self, cell=None, kpt=None):

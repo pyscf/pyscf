@@ -31,6 +31,7 @@ from pyscf import lib
 from pyscf import gto
 from pyscf import __config__
 from pyscf.pbc.lib.kpts_helper import gamma_point
+from pyscf.symm.sph import sph_pure2real
 
 EPS_PPL = getattr(__config__, "pbc_gto_pseudo_eps_ppl", 1e-2)
 HL_TABLE_SLOTS = 7
@@ -405,6 +406,20 @@ def _contract_ppnl_nuc_grad(cell, fakecell, dms, hl_blocks, ppnl_half, ppnl_half
     return grad_tot
 
 
+def _sorted_fake_cell_vnl(cell, type='scalar'):
+    fakecell, hl_blocks = fake_cell_vnl(cell, type)
+    hl_dims = np.asarray([len(hl) for hl in hl_blocks])
+    ls = fakecell._bas[:,gto.ANG_OF]
+    # groupby [hl_dim, l]
+    label = np.stack((hl_dims, ls)).T
+    pattern, inv_idx, counts = np.unique(
+        label, return_inverse=True, return_counts=True, axis=0)
+    idx = np.argsort(inv_idx)
+    fakecell._bas = fakecell._bas[idx]
+    hl_blocks = [hl_blocks[i] for i in idx]
+    splits = np.append(0, counts).cumsum()
+    return fakecell, hl_blocks, pattern, splits
+
 def get_pp_nl(cell, kpts=None):
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
@@ -412,31 +427,46 @@ def get_pp_nl(cell, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
     nkpts = len(kpts_lst)
 
-    fakecell, hl_blocks = fake_cell_vnl(cell)
+    # pattern stores the unique [hl_dim, l] combinations
+    fakecell, hl_blocks, pattern, splits = _sorted_fake_cell_vnl(cell)
+
     ppnl_half = _int_vnl(cell, fakecell, hl_blocks, kpts_lst)
-    nao = cell.nao_nr()
 
     if gamma_point(kpts_lst):
         return _contract_ppnl(cell, fakecell, hl_blocks, ppnl_half, kpts=kpts)
 
-    buf = numpy.empty((3*9*nao), dtype=numpy.complex128)
+    nao = cell.nao
+    is_gamma_point = kpts is None or gamma_point(kpts)
+    if is_gamma_point:
+        ppnl = np.zeros((nao, nao))
+    else:
+        ppnl = np.zeros((nkpts, nao, nao), dtype=np.complex128)
 
-    # We set this equal to zeros in case hl_blocks loop is skipped
-    # and ppnl is returned
-    ppnl = numpy.zeros((nkpts,nao,nao), dtype=numpy.complex128)
-    for k, kpt in enumerate(kpts_lst):
-        offset = [0] * 3
-        for ib, hl in enumerate(hl_blocks):
-            l = fakecell.bas_angular(ib)
-            nd = 2 * l + 1
-            hl_dim = hl.shape[0]
-            ilp = numpy.ndarray((hl_dim,nd,nao), dtype=numpy.complex128, buffer=buf)
+    hl_offset = [0] * 3
+    for ii, (i0, i1) in enumerate(zip(splits[:-1], splits[1:])):
+        hl_dim, l = pattern[ii]
+        nd = 2 * l + 1
+        hl_block = np.stack(hl_blocks[i0:i1])
+        n_hl = len(hl_block)
+
+        if is_gamma_point:
+            ilp = np.empty((n_hl, hl_dim, nd, nao))
             for i in range(hl_dim):
-                p0 = offset[i]
-                ilp[i] = ppnl_half[i][k][p0:p0+nd]
-                offset[i] = p0 + nd
-            ppnl[k] += numpy.einsum('ilp,ij,jlq->pq', ilp.conj(), hl, ilp)
-
+                p0 = hl_offset[i]
+                p1 = p0 + n_hl * nd
+                ilp[:,i] = ppnl_half[i][:,p0:p1].reshape(n_hl, nd, nao).real
+                hl_offset[i] = p1
+            tmp = lib.einsum('nij,njlq->nilq', hl_block, ilp)
+            ppnl += lib.einsum('nilp,nilq->pq', ilp, tmp)
+        else:
+            ilp = np.empty((nkpts, n_hl, hl_dim, nd, nao), dtype=np.complex128)
+            for i in range(hl_dim):
+                p0 = hl_offset[i]
+                p1 = p0 + n_hl * nd
+                ilp[:,:,i] = ppnl_half[i][:,p0:p1].reshape(nkpts, n_hl, nd, nao)
+                hl_offset[i] = p1
+            tmp = lib.einsum('nij,knjlq->knilq', hl_block, ilp)
+            ppnl += lib.einsum('knilp,knilq->kpq', ilp.conj(), tmp)
     return ppnl
 
 
@@ -574,17 +604,23 @@ _PLI_FAC = 1/numpy.sqrt(numpy.array((
     (1, 63.75, 6359.0625),  # l = 6,
     (1, 80.75, 9750.5625))))# l = 7,
 
-def fake_cell_vnl(cell):
+def fake_cell_vnl(cell, type='scalar'):
     '''Generate fake cell for V_{nl}.
 
     gaussian function p_i^l Y_{lm}
+
+    Args:
+        type: 'scalar' or 'soc'
     '''
+    do_soc = type.lower() == 'soc'
+
     fake_env = [cell.atom_coords().ravel()]
     fake_atm = cell._atm.copy()
     fake_atm[:,gto.PTR_COORD] = numpy.arange(0, cell.natm*3, 3)
     ptr = cell.natm * 3
     fake_bas = []
     hl_blocks = []
+    kl_blocks = []
     for ia in range(cell.natm):
         if cell.atom_charge(ia) == 0:  # pass ghost atoms
             continue
@@ -592,8 +628,20 @@ def fake_cell_vnl(cell):
         symb = cell.atom_symbol(ia)
         if symb in cell._pseudo:
             pp = cell._pseudo[symb]
-            # nproj_types = pp[4]
-            for l, (rl, nl, hl) in enumerate(pp[5:]):
+            if do_soc:
+                if do_soc and isinstance(pp[4], int):
+                    raise ValueError(f'SOC requested for {symb} but its GTH potential has no SOC data.')
+
+            for l, proj in enumerate(pp[5:]):
+                if do_soc:
+                    rl, nl, _, hl = proj[:4]
+                    hl = np.asarray(hl)
+                    if hl.size == 0:
+                        continue
+                else:
+                    rl, nl, hl = proj[:3]
+                    hl = np.asarray(hl)
+                assert nl <= 3
                 if nl > 0:
                     alpha = .5 / rl**2
                     norm = gto.gto_norm(l, alpha)
@@ -609,8 +657,8 @@ def fake_cell_vnl(cell):
 #     ------------------------------------------ = ----------------------------------
 #      r_l^{l+(4i-1)/2} sqrt(Gamma(l+(4i-1)/2))     sqrt(Gamma(l+2i-1/2)) r_l^{2i-2}
 #
-                    fac = numpy.array([_PLI_FAC[l,i]/rl**(i*2) for i in range(nl)])
-                    hl = numpy.einsum('i,ij,j->ij', fac, numpy.asarray(hl), fac)
+                    fac = _PLI_FAC[l,:nl]/rl**(2*np.arange(nl))
+                    hl = fac[:,None] * hl * fac
                     hl_blocks.append(hl)
                     ptr += 2
 
@@ -673,3 +721,84 @@ def _int_vnl(cell, fakecell, hl_blocks, kpts, intors=None, comp=1):
            int_ket(fakecell._bas[hl_dims>1], intors[1]),
            int_ket(fakecell._bas[hl_dims>2], intors[2]))
     return out
+
+def _angmom_matrix(l):
+    r'''Computes the angular-momentum matrices in the real spherical-harmonic basis.
+
+        Im(<lm| L_a |lm'>) for a = x, y, z
+
+    These matrices are required by Eq. (18) of Hartwigsen, Goedecker, and
+    Hutter, Phys. Rev. B 58, 3641 (1998).
+
+    See also the angmom function implemented in CP2K aobasis/ai_angmom.F
+    '''
+    m = np.arange(-l, l+1)
+    Lplus = (l*(l+1) - m*(m+1))**.5
+    Lminus = (l*(l+1) - m*(m-1))**.5
+    Lplus = np.diag(Lplus[:-1], -1)
+    Lminus = np.diag(Lminus[1:], 1)
+    Lx = (Lplus + Lminus) / 2
+    Ly = (Lplus - Lminus) / 2j
+    Lz = np.diag(m)
+    Ls = np.stack([Lx, Ly, Lz])
+    u = sph_pure2real(l, reorder_p=True)
+    return np.einsum('mi,xmn,nj->xij', u.conj(), Ls, u).imag
+
+def get_pp_soc_components(cell, kpts=None):
+    r'''The three GTH SOC integrals W_x, W_y, W_z in real-spherical GTO basis.
+
+    W_a = Im(<AO|\Delta V_l^{SO} |AO>)
+        = sum_{lijm} <AO|p_i^l,lm> k_ij^l Im(<p_j^l,lm|L_a|AO>)
+        = sum_{lijmm'} <AO|p_i^l,lm> k_ij^l Im(<lm|L_a|lm'>)<p_j^l,lm'|AO>
+
+    The SOC term in Hcore can be constructed as
+
+        H_SOC = i/2 * \sigma dot W
+
+    References:
+        [1] Hartwigsen, Goedecker, and Hutter, Phys. Rev. B 58, 3641 (1998).
+        [2] CP2K build_core_ppnl function in core_pnnl.F
+
+    Returns:
+        (nkpts,3,nao,nao) array for W_a. W_a is real and antisymmetric for
+        gamma point and complex for k-points.
+    '''
+    if kpts is None:
+        kpts = np.zeros((1, 3))
+    else:
+        kpts = kpts.reshape(-1, 3)
+    nkpts = len(kpts)
+
+    fakecell, kl_blocks, pattern, splits = _sorted_fake_cell_vnl(cell, type='soc')
+    ppnl_half = _int_vnl(cell, fakecell, kl_blocks, kpts)
+
+    lmax = pattern[:,1].max()
+    Lmm = [_angmom_matrix(l) for l in range(lmax+1)]
+
+    nao = cell.nao
+    vl_soc = np.zeros((nkpts, 3, nao, nao), dtype=np.complex128)
+
+    kl_offset = [0] * 3
+    for ii, (i0, i1) in enumerate(zip(splits[:-1], splits[1:])):
+        kl_dim, l = pattern[ii]
+        if l == 0:
+            assert kl_dim.size == 0
+            continue
+
+        nd = 2 * l + 1
+        kl_block = np.stack(kl_blocks[i0:i1])
+        n_kl = len(kl_block)
+        ilp = np.empty((nkpts, n_kl, kl_dim, nd, nao), dtype=np.complex128)
+        for i in range(kl_dim):
+            p0 = kl_offset[i]
+            p1 = p0 + n_kl * nd
+            ilp[:,:,i] = ppnl_half[i][:,p0:p1].reshape(nkpts, n_kl, nd, nao)
+            kl_offset[i] = p1
+
+        vl_soc += lib.einsum(
+            'ktimp,tij,amn,ktjnq->kapq', ilp.conj(), kl_blocks, Lmm[l], ilp,
+            optimize=True)
+
+    if kpts is None or gamma_point(kpts):
+        vl_soc = vl_soc[0].real
+    return vl_soc
