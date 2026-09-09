@@ -584,7 +584,8 @@ class Gradients (lagrange.Gradients):
             self, state=state, atmlst=atmlst, verbose=verbose, mo=mo, ci=ci, eris=eris,
             mf_grad=mf_grad, e_states=e_states, level_shift=level_shift, **kwargs)
 
-    def get_wfn_response (self, atmlst=None, state=None, verbose=None, mo=None, ci=None, **kwargs):
+    def get_wfn_response (self, atmlst=None, state=None, verbose=None, mo=None, ci=None,
+                          eris=None, **kwargs):
         if state is None: state = self.state
         if atmlst is None: atmlst = self.atmlst
         if verbose is None: verbose = self.verbose
@@ -594,7 +595,8 @@ class Gradients (lagrange.Gradients):
         fcasscf = self.make_fcasscf (state)
         fcasscf.mo_coeff = mo
         fcasscf.ci = ci[state]
-        eris = fcasscf.ao2mo (mo)
+        if eris is None:
+            eris = fcasscf.ao2mo (mo)
         g_all_state = newton_casscf.gen_g_hop (fcasscf, mo, ci[state], eris, verbose)[0]
         g_all = np.zeros (self.nlag)
         g_all[:self.ngorb] = g_all_state[:self.ngorb]
