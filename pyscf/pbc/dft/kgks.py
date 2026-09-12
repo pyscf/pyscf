@@ -62,10 +62,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
     if ks.do_nlc():
         raise NotImplementedError(f'NLC functional {ks.xc} + {ks.nlc}')
 
-    hybrid = ni.libxc.is_hybrid_xc(ks.xc)
-
     # TODO GKS with hybrid functional
-    hybrid = ks._numint.libxc.is_hybrid_xc(ks.xc)
+    hybrid = ni.is_hybrid_xc(ks.xc)
     if hybrid:
         raise NotImplementedError
 
@@ -164,7 +162,7 @@ class KGKS(rks.KohnShamDFT, kghf.KGHF):
         out = self._transfer_attrs_(scf.KGHF(self.cell, self.kpts))
 
         # Pure functionals only construct J-type integrals. Enable all integrals for KHF.
-        if (not self._numint.libxc.is_hybrid_xc(self.xc) and
+        if (not self._numint.is_hybrid_xc(self.xc) and
             len(self.kpts) > 1 and getattr(self.with_df, '_j_only', False)):
             out.with_df._j_only = False
             out.with_df.reset()

@@ -101,7 +101,7 @@ class CasidaTDDFT(TDDFT, TDA):
         cpu0 = (lib.logger.process_clock(), lib.logger.perf_counter())
         mol = self.mol
         mf = self._scf
-        if mf._numint.libxc.is_hybrid_xc(mf.xc):
+        if mf._numint.is_hybrid_xc(mf.xc):
             raise RuntimeError('%s cannot be used with hybrid functional'
                                % self.__class__)
         self.check_sanity()
@@ -168,7 +168,7 @@ TDDFTNoHybrid = CasidaTDDFT
 
 def tddft(mf, frozen=None):
     '''Driver to create TDDFT or CasidaTDDFT object'''
-    if (not mf._numint.libxc.is_hybrid_xc(mf.xc) and
+    if (not mf._numint.is_hybrid_xc(mf.xc) and
         # Casida formula can be applied for real orbitals only
         mf.mo_coeff.dtype == numpy.double and mf.collinear[0] != 'm'):
         return CasidaTDDFT(mf, frozen)

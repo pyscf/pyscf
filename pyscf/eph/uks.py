@@ -127,9 +127,8 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
     mol = ephobj.mol
     mf = ephobj.base
     ni = mf._numint
-    ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
     omg, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
-    hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+    hybrid = ni.is_hybrid_xc(mf.xc)
 
     vnuc_deriv = ephobj.vnuc_generator(mol)
     aoslices = mol.aoslice_by_atom()
