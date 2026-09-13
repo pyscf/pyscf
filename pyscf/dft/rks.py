@@ -327,7 +327,7 @@ class KohnShamDFT:
     -76.415443079840458
     '''
 
-    _keys = {'xc', 'nlc', 'grids', 'disp', 'nlcgrids', 'small_rho_cutoff'}
+    _keys = {'xc', 'nlc', 'grids', 'disp', 'gcp', 'nlcgrids', 'small_rho_cutoff'}
 
     # Use rho to filter grids
     small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff', 0)
@@ -337,6 +337,7 @@ class KohnShamDFT:
         self.xc = xc
         self.nlc = ''
         self.disp = None
+        self.gcp = None
         self.grids = gen_grid.Grids(self.mol)
         self.grids.level = getattr(
             __config__, 'dft_rks_RKS_grids_level', self.grids.level)
@@ -486,6 +487,21 @@ class KohnShamDFT:
         self.grids.reset(mol)
         self.nlcgrids.reset(mol)
         return self
+
+    def dft3c(self, method='b97-3c'):
+        '''Apply a composite 3c method (B97-3c, r2SCAN-3c or wB97X-3c) to
+        this object.
+
+        The method returns a new DFT3C object; the underlying Mole object
+        is rebuilt in place with the tailored basis of the method.  Density
+        fitting can be applied before or after the 3c setup, e.g.
+        ``mf.dft3c('b97-3c').density_fit().run()`` or
+        ``mf.density_fit().dft3c('b97-3c').run()``.
+
+        See :func:`pyscf.dft.dft3c.dft3c` for details.
+        '''
+        from pyscf.dft.dft3c import dft3c as dft3c_
+        return dft3c_(self, method=method)
 
     def check_sanity(self):
         out = super().check_sanity()

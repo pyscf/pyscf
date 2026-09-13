@@ -11,6 +11,7 @@ if [ $version == '3.12' ]; then
     pip install spglib
     pip install pytblis
     pip install git+https://github.com/sunqm/zquatev
+    pip install basis-set-exchange
 fi
 
 #cppe

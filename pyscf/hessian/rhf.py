@@ -569,6 +569,8 @@ class HessianBase(lib.StreamObject):
         self.de = de + self.hess_nuc(self.mol, atmlst=atmlst)
         if self.base.do_disp():
             self.de += self.get_dispersion()
+        if self.base.do_gcp():
+            self.de += self.get_gcp()
         return self.de
     hess = kernel
 

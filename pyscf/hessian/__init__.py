@@ -26,5 +26,6 @@ try:
     from . import rks
     from . import uks
     from . import dispersion
+    from . import gcp
 except (ImportError, IOError):
     pass

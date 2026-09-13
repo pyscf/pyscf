@@ -550,7 +550,8 @@ def parse_xc(description):
         return parse_xc('%s,%s' % tuple(description))
 
     description = description.upper()
-    if '-D3' in description or '-D4' in description:
+    if ('-D3' in description or '-D4' in description or
+            description.endswith(('-3C', '_3C'))):
         from pyscf.scf.dispersion import parse_dft
         description, _, _ = parse_dft(description)
         description = description.upper()
@@ -692,6 +693,7 @@ _NAME_WITH_DASH = {'SR-HF'    : 'SR_HF',
                    'B97-1'    : 'B97_1',
                    'B97-2'    : 'B97_2',
                    'B97-3'    : 'B97_3',
+                   'B97-3C'   : 'B97_3C',
                    'B97-K'    : 'B97_K',
                    'B97-D'    : 'B97_D',
                    'HCTH-93'  : 'HCTH_93',
