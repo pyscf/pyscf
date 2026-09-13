@@ -3,6 +3,11 @@
 Load this template when writing, modifying, or reviewing Python code in PySCF.
 Customize as needed.
 
+- Resolve routine implementation choices using nearby code and existing APIs.
+  Ask when an unresolved scientific convention or requirement materially affects
+  the result; do not silently invent units, normalization factors, or reference
+  values.
+
 ## Implementation
 
 - PySCF favors compact scientific code. Keep implementations concise while
@@ -17,9 +22,10 @@ Customize as needed.
 - Reuse existing PySCF utilities before adding equivalent third-party helpers.
 - Use PySCF's logger for diagnostic output rather than Python's standard
   `logging` module or `print` statements.
-- Import hierarchy: `data`, `gto`, `lib`, and `tools` are foundational modules.
-  Prefer dependencies from higher-level modules toward these foundations, and
-  avoid introducing reverse dependencies.
+- Keep dependency direction consistent with the existing module structure.
+  `data`, `gto`, `lib`, and `tools` are foundational modules. Reuse them where
+  appropriate. Chek their existing imports before adding a dependency. Avoid
+  introducing dependencies from foundational code into method-specific modules.
 - Prefer module-scope imports. When circular imports arise, resolve them
   through appropriate dependency boundaries or localized imports rather than
   adding eager imports to package `__init__.py` files. Only expose new
@@ -29,6 +35,10 @@ Customize as needed.
   prefer creating a new instance unless in-place updates are
   performance-critical or required by the API. Use the returned object
   explicitly, even when the operation mutates in place.
+- When introducing new attributes with immutable defaults, consider class-level
+  defaults when consistent with the surrounding class. Extensions such as
+  gpu4pyscf may reuse PySCF methods without running the corresponding PySCF
+  `__init__` method to initialize attributes.
 
 ## Formatting and linting
 
