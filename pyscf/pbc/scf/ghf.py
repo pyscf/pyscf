@@ -27,6 +27,7 @@ from pyscf.lib import logger
 import pyscf.scf.ghf as mol_ghf
 from pyscf.pbc.scf import hf as pbchf
 from pyscf.pbc.scf import addons
+from pyscf.pbc.gto.pseudo import pp_int
 from pyscf import __config__
 
 

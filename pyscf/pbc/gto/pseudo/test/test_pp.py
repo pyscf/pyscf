@@ -305,28 +305,62 @@ He
                                         0.25''')
         kmesh = [3, 1, 4]
         kpts = cell.make_kpts(kmesh)
-        dat = pp_int.get_pp_soc_components(cell, kpts)
+        dat = pp_int.get_pp_soc(cell, kpts)
         assert abs(lib.fp(dat) - 1.0485888724761192) < 1e-12
+
+    def test_pp_scalar_soc_mixed(self):
+        pass
 
     def test_pp_soc_scf(self):
         cell = pyscf.M(
-            atom='''
-     H    0.0     -0.5     -4.5
-     Te   0.5      0.0      4.5
-     H    0.0      0.5     -4.5''',
-            a=np.diag([12, 6, 8]),
-            basis={'H': 'DZVP-GTH', 'Te': 'SZV-MOLOPT-SR-GTH'},
-            pseudo={'H': 'GTH-PBE-q1', 'Te': 'GTH-SOC-PBE-q6'},
-            ke_cutoff=200,
+            a = '''
+            0.0 3.0 3.0
+            3.0 0.0 3.0
+            3.0 3.0 0.0''',
+            atom='''Pb 0.0 0.0 0.0
+            S 3.0 3.0 3.0
+            ''',
+            basis={
+                'Pb': 'DZVP-MOLOPT-PBE-GTH-q4',
+                'S': 'DZVP-MOLOPT-PBE-GTH-q6',
+            },
+            pseudo={
+                'Pb': 'GTH-SOC-PBE-q4',
+                'S': 'GTH-SOC-PBE-q6',
+            },
+            mesh = [45]*3,
         )
-        kmesh = [1,4,4]
-        kpts = cell.make_kpts(kmesh)
         cell.verbose = 4
-        mf = cell.KGKS(xc='pbe', kpts=kpts)
-        mf = mf.multigrid_numint()
+        mf = cell.KGKS(xc='svwn')
+        mf.with_soc = True
         mf.run()
-        assert abs(mf.e_tot - -0.421729576905) < 1e-7
+        assert abs(mf.e_tot - -13.6107739669978) < 1e-6
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.pseudo")
-    unittest.main()
+    #unittest.main()
+
+    if 1:#def test_pp_soc_scf(self):
+        cell = pyscf.M(
+            a = '''
+            0.0 3.0 3.0
+            3.0 0.0 3.0
+            3.0 3.0 0.0''',
+            atom='''Pb 0.0 0.0 0.0
+            S 3.0 3.0 3.0
+            ''',
+            basis={
+                'Pb': 'DZVP-MOLOPT-PBE-GTH-q4',
+                'S': 'DZVP-MOLOPT-PBE-GTH-q6',
+            },
+            pseudo={
+                'Pb': 'GTH-SOC-PBE-q4',
+                'S': 'GTH-SOC-PBE-q6',
+            },
+            mesh = [45]*3,
+        )
+        cell.verbose = 4
+        mf = cell.KGKS(xc='svwn')
+        mf.with_soc = True
+        mf.run()
+        assert abs(mf.e_tot - -13.6107739669978) < 1e-6
