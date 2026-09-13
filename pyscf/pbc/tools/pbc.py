@@ -687,8 +687,7 @@ def get_ws_inradius(a, kmesh):
         m = np.asarray(m)
         r2 = m @ G @ m
 
-        if r2 < best2:
-            best2 = r2
+        best2 = min(best2, r2)
 
     return 0.5 * np.sqrt(best2)
 
