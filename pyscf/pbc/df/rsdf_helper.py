@@ -1241,7 +1241,7 @@ def wrap_int3c_nospltbas(cell, auxcell, omega, shlpr_mask, prescreening_data,
             libpbc.CINTdel_pairdata_optimizer(cintopt)
 
     cfunc_prefix = "PBCsr3c"
-    if not (gamma_point(kptij_lst) or bvk_kmesh is None):
+    if not gamma_point(kptij_lst) and bvk_kmesh is not None:
         cfunc_prefix += "_bvk"
     fill = "%s_%s%s" % (cfunc_prefix, kk_type, aosym[:2])
     drv = getattr(libpbc, "%s_%s_drv"%(cfunc_prefix,kk_type))
