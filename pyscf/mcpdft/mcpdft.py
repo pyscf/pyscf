@@ -19,7 +19,9 @@ from pyscf import ao2mo, fci, mcscf, lib, __config__
 from pyscf.lib import logger
 from pyscf.dft import gen_grid
 from pyscf.mcscf import mc1step
-from pyscf.mcscf.addons import StateAverageMCSCFSolver, StateAverageMixFCISolver
+from pyscf.mcscf.addons import (StateAverageMCSCFSolver,
+                                StateAverageMixFCISolver,
+                                StateSpecificFCISolver)
 from pyscf.mcscf.df import _DFCASSCF, _DFCAS
 from pyscf.mcpdft import pdft_veff, pdft_feff
 from pyscf.mcpdft.otfnal import transfnal, get_transfnal
@@ -506,10 +508,16 @@ class _PDFT:
         if len(grids_attr): self.grids.__dict__.update(**grids_attr)
         if verbose is None: verbose = self.verbose
         self.verbose = self.otfnal.verbose = verbose
-        nroots = getattr(self.fcisolver, 'nroots', 1)
-        epdft = [self.energy_tot(mo_coeff=self.mo_coeff, ci=self.ci, state=ix,
-                                 logger_tag=f'MC-PDFT state {ix}')
-                 for ix in range(nroots)]
+        if isinstance(self.fcisolver, StateSpecificFCISolver):
+            nroots = 1
+            epdft = [self.energy_tot(mo_coeff=self.mo_coeff, ci=self.ci,
+                                     state=self.fcisolver.state,
+                                     logger_tag='MC-PDFT state {self.fcisolver.state}')]
+        else:
+            nroots = getattr(self.fcisolver, 'nroots', 1)
+            epdft = [self.energy_tot(mo_coeff=self.mo_coeff, ci=self.ci, state=ix,
+                                     logger_tag='MC-PDFT state {ix}')
+                     for ix in range(nroots)]
         self.e_ot = [e_ot for e_tot, e_ot in epdft]
         if isinstance(self, StateAverageMCSCFSolver):
             e_states = [e_tot for e_tot, e_ot in epdft]

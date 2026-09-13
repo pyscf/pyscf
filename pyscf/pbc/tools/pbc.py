@@ -388,21 +388,45 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             mf._ws_exx = precompute_exx(cell, kpts)
         exx_alpha = mf._ws_exx['alpha']
         exx_kcell = mf._ws_exx['kcell']
-        exx_q = mf._ws_exx['q']
-        exx_vq = mf._ws_exx['vq']
 
         with np.errstate(divide='ignore',invalid='ignore'):
             coulG = 4*np.pi/absG2*(1.0 - np.exp(-absG2/(4*exx_alpha**2)))
         coulG[absG2==0] = np.pi / exx_alpha**2
         # Index k+Gv into the precomputed vq and add on
         gxyz = np.dot(kG, exx_kcell.lattice_vectors().T)/(2*np.pi)
-        gxyz = gxyz.round(decimals=6).astype(int)
+        shift = (gxyz[0] + .5) % 1 - .5
+        gxyz_int = np.rint(gxyz - shift).astype(int)
+        if abs(gxyz - gxyz_int - shift).max() > 1e-6:
+            raise RuntimeError('k+G vectors are incompatible with the FFT mesh')
+
+        no_shift = abs(shift).max() < 1e-9
+        if no_shift:
+            exx_vq = mf._ws_exx['vq']
+        else:
+            key = tuple(np.round(shift, 12))
+            cache = mf._ws_exx['vq_cache']
+            if key not in cache:
+                ''' Note: A grid point on the WS boundary can have multiple degenerate r_mic.
+                    The current implementation in `precompute_exx` selects only one of them
+                    deterministically. These boundary points have zero measure in the continuous
+                    integral, so their contribution vanishes as the FFT mesh is refined. Future
+                    implementation may want to collect all degenerate r_mic's and average their
+                    phases (i.e., similar to how Wannier interpolation handles boundary images).
+                '''
+                delta = np.dot(shift, exx_kcell.reciprocal_vectors())
+                phase = np.exp(-1j * np.dot(mf._ws_exx['r_mic'], delta))
+                vG = (exx_kcell.vol / len(phase)) * fftk(
+                    mf._ws_exx['vR'], exx_kcell.mesh, phase)
+                cache[key] = vG.real.copy()
+            exx_vq = cache[key]
+
         mesh = np.asarray(exx_kcell.mesh)
-        gxyz = (gxyz + mesh)%mesh
+        gxyz = (gxyz_int + mesh)%mesh
         qidx = (gxyz[:,0]*mesh[1] + gxyz[:,1])*mesh[2] + gxyz[:,2]
-        #qidx = [np.linalg.norm(exx_q-kGi,axis=1).argmin() for kGi in kG]
-        maxqv = abs(exx_q).max(axis=0)
-        is_lt_maxqv = (abs(kG) <= maxqv).all(axis=1)
+        lower = -(mesh // 2)
+        upper = (mesh - 1) // 2
+        is_lt_maxqv = ((gxyz_int >= lower) &
+                       (gxyz_int <= upper)).all(axis=1)
         coulG = coulG.astype(exx_vq.dtype)
         coulG[is_lt_maxqv] += exx_vq[qidx[is_lt_maxqv]]
 
@@ -486,65 +510,187 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts, omega=0)
     return coulG
 
-def precompute_exx(cell, kpts=None):
+
+def precompute_exx(cell, kpts=None, precision=None, nimgs=None):
+    '''Precompute the Wigner-Seitz truncated EXX kernel.
+
+    The long-range part of the kernel is constructed with the minimum-image
+    convention and range separation of Eq. (A4) in Phys. Rev. B 87, 165122
+    (2013). The short-range part is evaluated analytically in :func:`get_coulG`.
+
+    Args:
+        cell : :class:`pyscf.pbc.gto.Cell`
+            Primitive cell.
+        kpts : (nkpts, 3) array_like
+            Complete regular k-point mesh. Defaults to the Gamma point.
+        precision : float
+            Accuracy threshold used to set the range-separation parameter ``alpha``.
+            Defaults to ``min(cell.precision, 1e-11)``, where the default value
+            1e-11 follows the PRB paper above.
+        nimgs : (3,) array_like of int
+            Initial number of lattice images searched in each direction on
+            both sides of the Born-von Karman cell. The search range is
+            automatically enlarged when needed. Defaults to [3,3,3], which
+            can be overwritten by setting the `__config__` attribute
+            "pbc_tools_pbc_vcut_ws_nimgs".
+
+    Returns:
+        dict
+            Range-separation parameter, Born-von Karman cell, reciprocal
+            vectors, and the numerical long-range kernel.
+    '''
     from pyscf.pbc import gto as pbcgto
-    from pyscf.pbc.dft import gen_grid
+    from pyscf.pbc.lo.base import get_kmesh
+
     log = lib.logger.Logger(cell.stdout, cell.verbose)
-    log.debug("# Precomputing Wigner-Seitz EXX kernel")
-    Nk = get_monkhorst_pack_size(cell, kpts)
-    log.debug("# Nk = %s", Nk)
+    log.debug('# Precomputing Wigner-Seitz EXX kernel')
+
+    cput0 = log.init_timer()
+
+    if kpts is None: kpts = np.zeros((1, 3))
+    kpts = np.reshape(kpts, (-1, 3))
+    kmesh = np.asarray(get_kmesh(cell, kpts), dtype=int)
+    scaled_kpts = cell.get_scaled_kpts(kpts - kpts[0])
+    scaled_kpts = np.rint(scaled_kpts * kmesh).astype(int) % kmesh
+    if len(np.unique(scaled_kpts, axis=0)) != len(kpts):
+        raise RuntimeError('Input k-points do not form a complete regular mesh')
+    log.debug('# kmesh = %s', kmesh)
+
+    if precision is None:
+        precision = min(cell.precision, 1e-11)
+    else:
+        precision = float(precision)
+    assert 0 < precision < 1
+
+    log.debug('# precision = %.15g', precision)
+
+    if nimgs is None:
+        nimgs = getattr(__config__, 'pbc_tools_pbc_vcut_ws_nimgs', [3, 3, 3])
+    nimgs = np.asarray(nimgs, dtype=int)
+    assert nimgs.shape == (3,)
+    assert np.all(nimgs > 0)
+
+    log.debug('# nimgs = %s', nimgs)
 
     kcell = pbcgto.Cell()
     kcell.atom = 'H 0. 0. 0.'
     kcell.spin = 1
     kcell.unit = 'B'
     kcell.verbose = 0
-    kcell.a = cell.lattice_vectors() * Nk
-    Lc = 1.0/lib.norm(np.linalg.inv(kcell.a), axis=0)
-    log.debug("# Lc = %s", Lc)
-    Rin = Lc.min() / 2.0
-    log.debug("# Rin = %s", Rin)
-    # ASE:
-    alpha = 5./Rin # sqrt(-ln eps) / Rc, eps ~ 10^{-11}
-    log.info("WS alpha = %s", alpha)
-    kcell.mesh = np.array([4*int(L*alpha*3.0) for L in Lc])  # ~ [120,120,120]
-    # QE:
-    #alpha = 3./Rin * np.sqrt(0.5)
-    #kcell.mesh = (4*alpha*np.linalg.norm(kcell.a,axis=1)).astype(int)
-    log.debug("# kcell.mesh FFT = %s", kcell.mesh)
+    kcell.a = np.einsum('xi,x->xi', cell.lattice_vectors(), kmesh)
+
+    Rin = get_ws_inradius(cell.lattice_vectors(), kmesh)
+    log.debug('# Rin = %s', Rin)
+
+    log_precision = -np.log(precision)
+    alpha = np.sqrt(log_precision) / Rin
+    log.debug('# WS alpha = %s', alpha)
+
+    Gmax = 2 * alpha * np.sqrt(log_precision)
+    kcell.mesh = cutoff_to_mesh(kcell.a, Gmax**2 * 0.5)
+    log.debug('# kcell.mesh FFT = %s', kcell.mesh)
+
     rs = kcell.get_uniform_grids(wrap_around=False)
     kngs = len(rs)
-    log.debug("# kcell kngs = %d", kngs)
-    corners_coord = lib.cartesian_prod(([0, 1], [0, 1], [0, 1]))
-    corners = np.dot(corners_coord, kcell.a)
-    #vR = np.empty(kngs)
-    #for i, rv in enumerate(rs):
-    #    # Minimum image convention to corners of kcell parallelepiped
-    #    r = lib.norm(rv-corners, axis=1).min()
-    #    if np.isclose(r, 0.):
-    #        vR[i] = 2*alpha / np.sqrt(np.pi)
-    #    else:
-    #        vR[i] = scipy.special.erf(alpha*r) / r
-    r = np.min([lib.norm(rs-c, axis=1) for c in corners], axis=0)
+    log.debug('# kcell kngs = %d', kngs)
+
+    images_coord = lib.cartesian_prod([
+        range(-n, n + 1) for n in nimgs
+    ])
+    images = np.dot(images_coord, kcell.a)
+    r = np.full(kngs, np.inf)
+    for image in images:
+        np.minimum(r, lib.norm(rs - image, axis=1), out=r)
+
+    # Determine an image search range guaranteed to be exhaustive.
+    Lc = 1. / lib.norm(np.linalg.inv(kcell.a), axis=0)
+    nimgs_ref = np.floor(r.max() / Lc).astype(int) + 1
+    log.debug('# nimgs_ref = %s', nimgs_ref)
+
+    images_ref_coord = lib.cartesian_prod([
+        range(-n, n + 1) for n in nimgs_ref
+    ])
+    r.fill(np.inf)
+    r_mic = np.empty_like(rs)
+    for image_coord in images_ref_coord:
+        image = np.dot(image_coord, kcell.a)
+        dr = rs - image
+        r1 = lib.norm(dr, axis=1)
+        mask = r1 < r
+        r[mask] = r1[mask]
+        r_mic[mask] = dr[mask]
+
     vR = scipy.special.erf(alpha*r) / (r+1e-200)
     vR[r<1e-9] = 2*alpha / np.sqrt(np.pi)
     vG = (kcell.vol/kngs) * fft(vR, kcell.mesh)
 
     if abs(vG.imag).max() > 1e-6:
-        # vG should be real in regular lattice. If imaginary part is observed,
-        # this probably means a ws cell was built from a unconventional
-        # lattice. The SR potential erfc(alpha*r) for the charge in the center
-        # of ws cell decays to the region out of ws cell. The Ewald-sum based
-        # on the minimum image convention cannot be used to build the kernel
-        # Eq (12) of PRB 87, 165122
         raise RuntimeError('Unconventional lattice was found')
 
     ws_exx = {'alpha': alpha,
               'kcell': kcell,
               'q'    : kcell.Gv,
-              'vq'   : vG.real.copy()}
-    log.debug("# Finished precomputing")
+              'vq'   : vG.real.copy(),
+              'vR'   : vR,
+              'r_mic': r_mic,
+              'vq_cache': {}}
+    log.debug('# Finished precomputing')
+
+    log.timer('Wigner-Seitz EXX precomputing', *cput0)
+
     return ws_exx
+
+
+def get_ws_inradius(a, kmesh):
+    ''' Wigner-Seitz inradius of the BvK superlattice.
+
+    Parameters
+    ----------
+    a : (3, 3) array_like
+        Primitive lattice vectors stored by rows.
+    kmesh : (3,) array_like of int
+        k-point mesh, e.g. (3, 3, 1).
+
+    Returns
+    -------
+    Rin : float
+        Inradius of the BvK Wigner-Seitz cell, in the same
+        length unit as `a`.
+    '''
+    from itertools import product
+
+    a = np.asarray(a, dtype=float)
+    kmesh = np.asarray(kmesh, dtype=int)
+
+    # BvK lattice vectors, stored by rows
+    A = kmesh[:, None] * a
+
+    # Metric in lattice-coordinate space:
+    # |m @ A|^2 = m @ G @ m
+    G = A @ A.T
+
+    # The shortest lattice vector cannot be longer than
+    # the shortest generating vector.
+    best2 = np.min(np.diag(G))
+
+    # If lambda_min is the smallest eigenvalue of G,
+    # m @ G @ m >= lambda_min * |m|^2.
+    # Therefore any vector shorter than our current upper
+    # bound must satisfy |m| <= sqrt(best2/lambda_min).
+    lam_min = np.linalg.eigvalsh(G)[0]
+    mmax = int(np.ceil(np.sqrt(best2 / lam_min)))
+
+    for m in product(range(-mmax, mmax + 1), repeat=3):
+        if m == (0, 0, 0):
+            continue
+
+        m = np.asarray(m)
+        r2 = m @ G @ m
+
+        if r2 < best2:
+            best2 = r2
+
+    return 0.5 * np.sqrt(best2)
 
 
 def madelung(cell, kpts=None, omega=None):

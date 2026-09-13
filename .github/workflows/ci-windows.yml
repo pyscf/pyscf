@@ -22,13 +22,14 @@ concurrency:
 jobs:
   windows-wheel:
     runs-on: windows-latest
-    timeout-minutes: 300
+    timeout-minutes: 120
     defaults:
       run:
         shell: pwsh
     env:
-      OMP_NUM_THREADS: "4"
-      OPENBLAS_NUM_THREADS: "4"
+      # One thread per pytest worker process; OpenMP is covered by the Linux job.
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
       PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
 
     steps:

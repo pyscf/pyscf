@@ -38,7 +38,7 @@ try {
     if ($wheels.Count -ne 1) {
         throw "Expected exactly one wheel, found $($wheels.Count)"
     }
-    & $python -m pip install $wheels[0].FullName 'pytest<9' geometric spglib 'git+https://github.com/jhrmnn/pyberny.git@36a4be9' 2>&1 |
+    & $python -m pip install $wheels[0].FullName 'pytest<9' pytest-xdist geometric spglib 'git+https://github.com/jhrmnn/pyberny.git@36a4be9' 2>&1 |
         Tee-Object -FilePath (Join-Path $reportDir 'install.log')
     if ($LASTEXITCODE -ne 0) {
         throw 'Installed-wheel test environment setup failed'
@@ -91,13 +91,23 @@ try {
     & $python -VV 2>&1 | Set-Content -LiteralPath (Join-Path $reportDir 'environment.txt') -Encoding utf8
     & $python -m pip freeze | Add-Content -LiteralPath (Join-Path $reportDir 'environment.txt') -Encoding utf8
 
+    # PYTEST_JOBS: "auto" is one worker per core, "0" runs serially. loadfile
+    # keeps a file's tests on one worker, for the chkfiles some of them write
+    # relative to cwd. The job disables plugin autoload, so -p xdist is needed.
+    $pytestJobs = if ($env:PYTEST_JOBS) { $env:PYTEST_JOBS } else { 'auto' }
+    $parallelArgs = @()
+    if ($pytestJobs -ne '0') {
+        $parallelArgs = @('-p', 'xdist', '-n', $pytestJobs, '--dist', 'loadfile')
+    }
+
     $junitPath = Join-Path $reportDir 'pytest-results.xml'
     $pytestArgs = @(
         'pyscf',
         '-s',
         '-c', $pytestConfig,
         '--rootdir', '.',
-        '--import-mode=prepend',
+        '--import-mode=prepend'
+    ) + $parallelArgs + @(
         '--durations=20',
         "--junitxml=$junitPath"
     )

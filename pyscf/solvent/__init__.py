@@ -130,11 +130,14 @@ def PE(method_or_mol, solvent_obj=None, dm=None):
 def PCM(method_or_mol, solvent_obj=None, dm=None):
     '''Initialize PCM model.
 
+    The solvent can be specified by its name, or through the attributes of the
+    PCM object (see pcm.PCM).
+
     Examples:
 
     >>> mf = PCM(scf.RHF(mol))
     >>> mf.kernel()
-    >>> sol = PCM(mol)
+    >>> sol = PCM(mol, 'toluene')
     >>> mc = PCM(CASCI(mf, 6, 6), sol)
     >>> mc.kernel()
     '''
@@ -143,6 +146,8 @@ def PCM(method_or_mol, solvent_obj=None, dm=None):
     from pyscf import tdscf
 
     if isinstance(method_or_mol, gto.mole.Mole):
+        if isinstance(solvent_obj, str):
+            return pcm.PCM(method_or_mol, solvent_obj)
         return pcm.PCM(method_or_mol)
 
     method = method_or_mol
@@ -162,21 +167,27 @@ def PCM(method_or_mol, solvent_obj=None, dm=None):
 PCM = PCM
 
 def SMD(method_or_mol, solvent_obj=None, dm=None):
-    '''Initialize PCM model.
+    '''Initialize SMD model.
+
+    The solvent can be specified by its name, or through the attributes of the
+    SMD object (see smd.SMD).
 
     Examples:
 
-    >>> mf = PCM(scf.RHF(mol))
+    >>> mf = SMD(scf.RHF(mol))
+    >>> mf.with_solvent.solvent = 'water'
     >>> mf.kernel()
-    >>> sol = PCM(mol)
-    >>> mc = PCM(CASCI(mf, 6, 6), sol)
-    >>> mc.kernel()
+    >>> sol = SMD(mol, 'toluene')
+    >>> mf = SMD(scf.RHF(mol), sol)
+    >>> mf.kernel()
     '''
     from pyscf import gto
     from pyscf import scf
 
     method = method_or_mol
     if isinstance(method, gto.mole.Mole):
+        if isinstance(solvent_obj, str):
+            return smd.SMD(method, solvent_obj)
         return smd.SMD(method)
     elif isinstance(method, scf.hf.SCF):
         return smd.smd_for_scf(method, solvent_obj, dm)
