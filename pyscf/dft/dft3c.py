@@ -109,7 +109,6 @@ class DFT3C:
 
     def __init__(self, mf, method='b97-3c'):
         self.__dict__.update(mf.__dict__)
-        self.method3c = method
         self._apply_dft3c(method)
 
     def dump_flags(self, verbose=None):
@@ -119,18 +118,33 @@ class DFT3C:
         return super().dump_flags(verbose)
 
     def _apply_dft3c(self, method):
+        self.method3c = method
         method_lower = method.lower().replace('_', '-')
         if method_lower not in _DFT3C_METHODS:
             raise NotImplementedError(
                 f'Unknown 3c method {method}. Supported methods: '
                 f'b97-3c, r2scan-3c, wb97x-3c.')
         basis, xc, ecp, auxbasis = _DFT3C_METHODS[method_lower]
-        self.mol.basis = basis
+        mol = self.mol
+        if mol.ecp:
+            raise RuntimeError('ECP overwritten by 3c method initialization')
+        dft3c_basis_sets = [x[0] for x in _DFT3C_METHODS.values()]
+        if (mol.basis == 'sto-3g' # the default basis of Mole class
+            or mol.basis in dft3c_basis_sets):
+            pass
+        else:
+            raise RuntimeError('Basis overwritten by 3c method initialization')
+        if mol.basis != basis:
+            # Existing orbital coefficients are used to construct initial guess
+            # DM. Invalidate this initial guess if basis set not matched.
+            self.mo_coeff = self.mo_occ = None
+        mol = mol.copy()
+        mol.basis = basis
         if ecp is None:
             # Clear any ECPs left over from a previous 3c method so that
             # switching e.g. wb97x-3c -> b97-3c does not keep the ECPs of
             # the all-electron basis.
-            self.mol.ecp = {}
+            mol.ecp = {}
         else:
             # The ECPs of the basis are defined only for the heavy elements,
             # so the ECP is set per element from the BSE record instead of
@@ -146,12 +160,13 @@ class DFT3C:
             if bse_mod.basis_set_exchange is None:
                 raise RuntimeError('basis_set_exchange is required for the '
                                    'ECPs of the %s basis' % ecp)
-            atoms = sorted({a[0] for a in self.mol._atom})
+            atoms = sorted({a[0] for a in mol._atom})
             bse_obj = bse_mod.basis_set_exchange.api.get_basis(ecp, elements=atoms)
             ecp_basis = bse_mod._ecp_basis(bse_obj)
-            self.mol.ecp = {a: ecp for a in ecp_basis}
-        self.mol.build()
+            mol.ecp = {a: ecp for a in ecp_basis}
+        mol.build(False, False)
         self.xc = xc
+        self.reset(mol)
         if getattr(self, 'with_df', None) is not None:
             # density_fit was applied before dft3c.  Rebuild the density
             # fitting object for the 3c basis and auxiliary basis.
@@ -162,7 +177,6 @@ class DFT3C:
         return self.method3c
     @method.setter
     def method(self, value):
-        self.method3c = value
         self._apply_dft3c(value)
 
     def undo_dft3c(self):
