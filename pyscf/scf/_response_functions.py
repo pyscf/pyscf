@@ -26,7 +26,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf, rohf, uhf, ghf, dhf
 
-def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, dm0=None,
+def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
                       singlet=None, hermi=0, max_memory=None, with_nlc=True):
     '''Generate a function to compute the product of RHF response function and
     RHF density matrices.
@@ -183,7 +183,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, dm0=None,
     return vind
 
 
-def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None, dm0=None,
+def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
                       with_j=True, hermi=0, max_memory=None, with_nlc=True):
     '''Generate a function to compute the product of UHF response function and
     UHF density matrices.
@@ -267,7 +267,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None, dm0=None,
     return vind
 
 
-def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None, dm0=None,
+def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
                       with_j=True, hermi=0, max_memory=None, with_nlc=True):
     '''Generate a function to compute the product of GHF response function and
     GHF density matrices.
@@ -364,7 +364,7 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None, dm0=None,
     return vind
 
 
-def _gen_dhf_response(mf, mo_coeff=None, mo_occ=None, dm0=None,
+def _gen_dhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
                       with_j=True, hermi=0, max_memory=None, with_nlc=True):
     '''Generate a function to compute the product of DHF response function and
     DHF density matrices.
