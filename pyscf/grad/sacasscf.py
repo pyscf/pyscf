@@ -468,9 +468,8 @@ def Lorb_Lci_dot_dgorb_dgci_dx (Lorb, Lci, weights, mc, mo_coeff=None, ci=None,
     nao, nmo, nao_pair = common['nao'], common['nmo'], common['nao_pair']
     mo_core, mo_cas = common['mo_core'], common['mo_cas']
     dm_core, s0_inv, aapa = common['dm_core'], common['s0_inv'], common['aapa']
-    moL_core = orbital_response['moL_core']
     moL_cas = orbital_response['moL_cas']
-    casdm1, casdm2 = orbital_response['casdm1'], orbital_response['casdm2']
+    _, casdm2 = orbital_response['casdm1'], orbital_response['casdm2']
     dm_cas = orbital_response['dm_cas']
     dmL_core = orbital_response['dmL_core']
     dmL_cas = orbital_response['dmL_cas']
@@ -725,9 +724,10 @@ class CASSCF_GradScanner(lib.GradScanner):
 class Gradients (lagrange.Gradients):
 
     _keys = {
-        'ngorb', 'nroots', 'spin_states', 'na_states', 'nb_states', 'nci', 'state', 'eris', 'weights', 'e_states', 'max_cycle', 'ncas',
-        'e_cas', 'nelecas', 'mo_occ', 'mo_energy', 'mo_coeff', 'callback',
-        'chkfile', 'nlag', 'frozen', 'level_shift', 'extrasym', 'fcisolver',
+        'ngorb', 'nroots', 'spin_states', 'na_states', 'nb_states', 'nci', 'state',
+        'eris', 'weights', 'e_states', 'max_cycle', 'ncas','e_cas', 'nelecas',
+        'mo_occ', 'mo_energy', 'mo_coeff', 'callback', 'chkfile', 'nlag', 'frozen',
+        'level_shift', 'extrasym', 'fcisolver',
     }
 
     def __init__(self, mc, state=None):
@@ -1086,7 +1086,8 @@ class Gradients (lagrange.Gradients):
             deltaorb, deltaci = self.unpack_uniq_var (deltax)
             gci = np.concatenate ([g.ravel () for g in gci])
             deltaci = np.concatenate ([d.ravel () for d in deltaci])
-            logger.info(self, (f'Lagrange optimization iteration {itvec[0]}, |gorb| = {linalg.norm (gorb)}, |gci| = {linalg.norm (gci)}, '
+            logger.info(self, (f'Lagrange optimization iteration {itvec[0]}, \
+                               |gorb| = {linalg.norm (gorb)}, |gci| = {linalg.norm (gci)}, '
                                f'|dLorb| = {linalg.norm (deltaorb)}, |dLci| = {linalg.norm (deltaci)}'))
             Lvec_last[:] = x[:]
         return my_call
