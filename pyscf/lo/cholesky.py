@@ -94,4 +94,4 @@ if __name__ == "__main__":
     numpy.set_printoptions(precision=3, suppress=True, sign=' ')
     for i in range(nocc):
         li = numpy.argsort(abs(mo_loc[:, i]))
-        print('{0:3d}    {1}'. format(i, mo_loc[li[:-6:-1], i]))
+        print(f'{i:3d}    {mo_loc[li[:-6:-1], i]}')

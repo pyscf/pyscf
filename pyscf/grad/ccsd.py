@@ -55,6 +55,13 @@ def grad_elec(cc_grad, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=Non
     log = logger.new_logger(mycc, verbose)
     time0 = logger.process_clock(), logger.perf_counter()
 
+    if getattr(mycc._scf, 'with_df', None) is not None:
+        log.warn('The reference of %s is density fitted, but this function '
+                 'contracts the 2-particle density matrix with the exact '
+                 'four-index ERI derivatives. The result is not a derivative '
+                 'of the density-fitted energy. Use '
+                 'pyscf.df.grad.ccsd.Gradients instead.', mycc)
+
     log.debug('Build ccsd rdm1 intermediates')
     if d1 is None:
         d1 = ccsd_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2)

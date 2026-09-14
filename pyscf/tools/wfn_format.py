@@ -207,7 +207,6 @@ if __name__ == '__main__':
     occ = mf.mo_occ[mf.mo_occ > 0]
     with open('n2_hf.wfn', 'w') as f2:
         write_mo(f2, mol, coeff, energy, occ)
-#
     mc = mcscf.CASSCF(mf, 10, 10)
     mc.kernel()
     nmo = mc.ncore + mc.ncas

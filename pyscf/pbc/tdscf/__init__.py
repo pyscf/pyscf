@@ -27,7 +27,7 @@ try:
     from pyscf.pbc.tdscf import uks
     from pyscf.pbc.tdscf import krks
     from pyscf.pbc.tdscf import kuks
-except (ImportError, IOError):
+except (OSError, ImportError):
     pass
 
 def TDHF(mf):

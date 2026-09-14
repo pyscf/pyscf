@@ -94,8 +94,7 @@ class Gradients (rhf_grad.GradientsBase):
         rhf_grad.GradientsBase.__init__(self, method)
 
     def debug_lagrange (self, Lvec, bvec, Aop, Adiag, **kwargs):
-        logger.debug (self, "{} gradient Lagrange factor debugging not enabled".format (
-            self.base.__class__.__name__))
+        logger.debug (self, f"{self.base.__class__.__name__} gradient Lagrange factor debugging not enabled")
 
     def get_lagrange_callback (self, Lvec_last, itvec, geff_op):
         def my_call (x):

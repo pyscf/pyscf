@@ -512,12 +512,11 @@ class _PDFT:
             nroots = 1
             epdft = [self.energy_tot(mo_coeff=self.mo_coeff, ci=self.ci,
                                      state=self.fcisolver.state,
-                                     logger_tag='MC-PDFT state {}'.format(
-                                         self.fcisolver.state))]
+                                     logger_tag='MC-PDFT state {self.fcisolver.state}')]
         else:
             nroots = getattr(self.fcisolver, 'nroots', 1)
             epdft = [self.energy_tot(mo_coeff=self.mo_coeff, ci=self.ci, state=ix,
-                                     logger_tag='MC-PDFT state {}'.format(ix))
+                                     logger_tag='MC-PDFT state {ix}')
                      for ix in range(nroots)]
         self.e_ot = [e_ot for e_tot, e_ot in epdft]
         if isinstance(self, StateAverageMCSCFSolver):

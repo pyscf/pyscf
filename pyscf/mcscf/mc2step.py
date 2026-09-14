@@ -18,7 +18,7 @@
 
 
 import numpy
-import pyscf.lib.logger as logger
+from pyscf.lib import logger
 from pyscf.mcscf import mc1step
 
 

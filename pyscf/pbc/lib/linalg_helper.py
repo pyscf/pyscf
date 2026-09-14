@@ -420,7 +420,6 @@ class Arnoldi:
         idx = w.real.argsort()
         v = v[:,idx]
         w = w[idx].real
-#
         imag_norm = np.linalg.norm(w.imag)
         if imag_norm > 1e-12:
             print(" *************************************************** ")
@@ -429,7 +428,6 @@ class Arnoldi:
         #print "Imaginary norm eigenvectors = ", np.linalg.norm(v.imag)
         #print "Imaginary norm eigenvalue   = ", np.linalg.norm(w.imag)
         #print "eigenvalues = ", w[:min(self.currentSize,7)]
-#
         self.sol[:self.currentSize] = v[:,self.ciEig]
         self.evecs[:self.currentSize,:self.currentSize] = v
         self.eigs[:self.currentSize] = w[:self.currentSize]

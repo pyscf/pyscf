@@ -21,7 +21,7 @@ import numpy
 import logging
 from pyscf import lib
 from pyscf.geomopt.addons import (as_pyscf_method, dump_mol_geometry,
-                                  symmetrize)  # noqa
+                                  symmetrize)
 from pyscf import __config__
 from pyscf.grad.rhf import GradientsBase
 
@@ -71,7 +71,7 @@ def to_berny_log(pyscf_log):
         def emit(self, record):
             pyscf_log.info(record.getMessage())
 
-    log = logging.getLogger('{}.{}'.format(__name__, id(pyscf_log)))
+    log = logging.getLogger(f'{__name__}.{id(pyscf_log)}')
     log.addHandler(PyscfHandler())
     log.setLevel('INFO')
     return log

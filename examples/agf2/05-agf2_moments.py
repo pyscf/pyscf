@@ -16,7 +16,6 @@ Default AGF2 corresponds to the AGF2(1,0) method outlined in the papers:
   - O. J. Backhouse and G. H. Booth, J. Chem. Theory Comput., 16, 6294 (2020).
 '''
 
-from __future__ import print_function
 from pyscf import gto, scf, agf2, mp
 
 mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='6-31g')

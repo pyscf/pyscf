@@ -1513,7 +1513,7 @@ def git_info(repo_path):
     try:
         with open(os.path.join(repo_path, '.git', 'ORIG_HEAD'), 'r') as f:
             orig_head = f.read().strip()
-    except IOError:
+    except OSError:
         pass
 
     try:
@@ -1525,7 +1525,7 @@ def git_info(repo_path):
             branch = os.path.basename(head)
             with open(os.path.join(repo_path, '.git', head.split(' ')[1]), 'r') as f:
                 head = f.read().strip()
-    except IOError:
+    except OSError:
         pass
     return orig_head, head, branch
 
@@ -1536,8 +1536,8 @@ def format_sys_info():
     result = [
         f'System: {platform.uname()}  Threads {num_threads()}',
         f'Python {sys.version}',
-        f'numpy {numpy.__version__}  scipy {scipy.__version__}  '
-        f'h5py {h5py.__version__}',
+        (f'numpy {numpy.__version__}  scipy {scipy.__version__}  '
+         f'h5py {h5py.__version__}'),
         f'Date: {time.ctime()}',
         f'PySCF version {pyscf.__version__}',
         f'PySCF path  {info["path"]}',

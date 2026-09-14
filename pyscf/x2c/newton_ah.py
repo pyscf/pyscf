@@ -22,7 +22,7 @@ from pyscf import lib
 from pyscf.scf import hf
 from pyscf.x2c import x2c
 # To ensure .gen_response() methods are registered
-from pyscf.x2c import _response_functions  # noqa
+from pyscf.x2c import _response_functions
 from pyscf.soscf import newton_ah
 
 gen_g_hop_x2chf = newton_ah.gen_g_hop_dhf

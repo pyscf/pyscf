@@ -49,8 +49,8 @@ ibo = lo.ibo.ibo(cell, mo_occ, iaos=a)
 Generates IBO files as VASP Chgcars
 '''
 for i in range(ibo.shape[1]):
-    chgcar.orbital(cell, 'diamond_ibo{:02d}.chgcar'.format(i+1), ibo[:,i])
-    print("wrote cube {:02d}".format(i+1))
+    chgcar.orbital(cell, f'diamond_ibo{i+1:02d}.chgcar', ibo[:,i])
+    print(f"wrote cube {i+1:02d}")
 
 '''
 Makes Population Analysis with IAOs

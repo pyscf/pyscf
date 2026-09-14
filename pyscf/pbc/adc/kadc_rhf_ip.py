@@ -18,7 +18,7 @@
 
 import time
 import numpy as np
-import pyscf.ao2mo as ao2mo
+from pyscf import ao2mo
 import pyscf.adc
 import pyscf.adc.radc
 from pyscf.adc import radc_ao2mo
@@ -39,7 +39,7 @@ from pyscf.pbc.mp.kmp2 import (get_nocc, get_nmo, padding_k_idx,_padding_k_idx,
 from pyscf.pbc.cc.kccsd_rhf import _get_epq
 from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
 from pyscf.pbc.lib import kpts_helper
-from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 
 from pyscf.pbc import tools
 import h5py
@@ -576,10 +576,9 @@ def matvec(adc, kshift, M_ij=None, eris=None):
                         temp += 0.25 * lib.einsum('kjbc,akj->abc',
                                                   t2_1[kk,kj,kb], r2[ka,kk], optimize=True)
                         ki = kconserv[kc,ka,kb]
-                        if isinstance(eris.ovvv, type(None)):
+                        if eris.ovvv is None:
                             chnk_size = adc.chnk_size
-                            if chnk_size > nocc:
-                                chnk_size = nocc
+                            chnk_size = min(chnk_size, nocc)
                             a = 0
                             for p in range(0,nocc,chnk_size):
                                 eris_ovvv = dfadc.get_ovvv_df(
@@ -618,10 +617,9 @@ def matvec(adc, kshift, M_ij=None, eris=None):
                     for kc in range(nkpts):
                         kb = kconserv[kj, kc, kk]
                         ki = kconserv[kb,ka,kc]
-                        if isinstance(eris.ovvv, type(None)):
+                        if eris.ovvv is None:
                             chnk_size = adc.chnk_size
-                            if chnk_size > nocc:
-                                chnk_size = nocc
+                            chnk_size = min(chnk_size, nocc)
                             a = 0
                             for p in range(0,nocc,chnk_size):
 

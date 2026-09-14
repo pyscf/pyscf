@@ -27,9 +27,9 @@ from pyscf.pbc import scf
 from pyscf.cc import gccsd
 from pyscf.cc import ccsd
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nmo, get_nocc,
-                               padded_mo_coeff, padding_k_idx)  # noqa
+                               padded_mo_coeff, padding_k_idx)
 from pyscf.pbc.cc import kintermediates as imdk
-from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.pbc.lib import kpts_helper
 
 DEBUG = False

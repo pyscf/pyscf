@@ -2607,7 +2607,7 @@ class UCCSDT(ccsd.CCSDBase):
         'blksize_o_aab', 'blksize_v_aab', 'einsum_backend', 'tamps', 'unique_tamps_map', 't2c_map_6f_oa',
         't2c_mask_6f_oa', 't2c_map_2f_oa', 't2c_mask_2f_oa', 't2c_map_6f_va', 't2c_mask_6f_va', 't2c_map_2f_va',
         't2c_mask_2f_va', 't2c_map_6f_ob', 't2c_mask_6f_ob', 't2c_map_2f_ob', 't2c_mask_2f_ob', 't2c_map_6f_vb',
-        't2c_mask_6f_vb', 't2c_map_2f_vb', 't2c_mask_2f_vb', 'unique_tamps_map'
+        't2c_mask_6f_vb', 't2c_map_2f_vb', 't2c_mask_2f_vb'
     }
 
     @property

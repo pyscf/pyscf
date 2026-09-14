@@ -26,5 +26,5 @@ try:
     from . import rks
     from . import uks
     from . import dispersion
-except (ImportError, IOError):
+except (OSError, ImportError):
     pass

@@ -23,7 +23,7 @@ Co-iterative augmented hessian second order SCF solver (CIAH-SOSCF)
 from functools import reduce
 import numpy
 from pyscf import lib
-from pyscf.pbc.scf import _response_functions  # noqa
+from pyscf.pbc.scf import _response_functions
 from pyscf.soscf import newton_ah
 
 def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):

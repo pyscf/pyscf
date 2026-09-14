@@ -27,3 +27,11 @@ per-file-ignores =
     pyscf/pbc/mpicc/kccsd_rhf.py: E501
     pyscf/pbc/mpicc/kintermediates_rhf.py: E501
     pyscf/pbc/tools/pywannier90.py: E501
+    pyscf/adc/radc_ao2mo.py: E501
+    pyscf/adc/uadc_ao2mo.py: E501
+    pyscf/gto/mole.py: E501
+    pyscf/pbc/cc/eom_kccsd_rhf.py: E501
+    pyscf/pbc/cc/kintermediates_uhf.py: E501
+    pyscf/pbc/gto/cell.py: E501
+    pyscf/solvent/ddcosmo.py: E501
+    pyscf/solvent/grad/ddcosmo_grad.py: E501
