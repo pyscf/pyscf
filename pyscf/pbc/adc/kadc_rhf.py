@@ -18,7 +18,7 @@
 
 import time
 import numpy as np
-import pyscf.ao2mo as ao2mo
+from pyscf import ao2mo
 import pyscf.adc
 import pyscf.adc.radc
 from pyscf.adc import radc_ao2mo
@@ -39,7 +39,7 @@ from pyscf.pbc.mp.kmp2 import (get_nocc, get_nmo, padding_k_idx,_padding_k_idx,
 from pyscf.pbc.cc.kccsd_rhf import _get_epq
 from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
 from pyscf.pbc.lib import kpts_helper
-from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 
 import h5py
 import tempfile

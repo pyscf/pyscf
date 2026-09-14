@@ -17,7 +17,7 @@
 Generate X2C-SCF response functions
 '''
 
-from pyscf.x2c import _response_functions  # noqa
+from pyscf.x2c import _response_functions
 from pyscf.scf.stability import dhf_stability
 
 def x2chf_stability(mf, verbose=None, return_status=False):

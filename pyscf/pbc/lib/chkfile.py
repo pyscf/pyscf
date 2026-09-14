@@ -19,8 +19,8 @@
 import h5py
 import pyscf.pbc.gto
 import pyscf.lib.chkfile
-from pyscf.lib.chkfile import load_chkfile_key, load  # noqa
-from pyscf.lib.chkfile import dump_chkfile_key, dump, save  # noqa
+from pyscf.lib.chkfile import load_chkfile_key, load
+from pyscf.lib.chkfile import dump_chkfile_key, dump, save
 
 def load_cell(chkfile):
     '''Load Cell object from chkfile.
@@ -45,7 +45,7 @@ def load_cell(chkfile):
         try:
             cell = pyscf.pbc.gto.loads(fh5['mol'][()])
         except Exception:
-            from numpy import array  # noqa
+            from numpy import array
             celldic = eval(fh5['mol'][()])
             cell = pyscf.pbc.gto.cell.unpack(celldic)
             cell.build(False, False)

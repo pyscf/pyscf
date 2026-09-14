@@ -79,7 +79,7 @@ def transform_trans(op, a, b):
     return np.dot(op, P.T)
 
 
-class SPGElement():
+class SPGElement:
     '''
     Matrix representation of space group operations
 

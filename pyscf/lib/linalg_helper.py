@@ -916,8 +916,8 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
     if numpy.any(enorm):
         warnings.warn("{:d} davidson root{_s}: {} {_has} very small norm{_s}: {}".format(
             enorm.sum(),
-            ", ".join("#{:d}".format(i) for i in numpy.argwhere(enorm)[:, 0]),
-            ", ".join("{:.3e}".format(i) for i in xnorm[enorm]),
+            ", ".join(f"#{i:d}" for i in numpy.argwhere(enorm)[:, 0]),
+            ", ".join(f"{i:.3e}" for i in xnorm[enorm]),
             _s='s' if enorm.sum() > 1 else "",
             _has="have" if enorm.sum() > 1 else "has a",
         ))

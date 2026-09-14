@@ -18,7 +18,7 @@
 
 import time
 import numpy as np
-import pyscf.ao2mo as ao2mo
+from pyscf import ao2mo
 import pyscf.adc
 import pyscf.adc.radc
 from pyscf.adc import radc_ao2mo
@@ -38,7 +38,7 @@ from pyscf.pbc.mp.kmp2 import (get_nocc, get_nmo, padding_k_idx,_padding_k_idx,
 from pyscf.pbc.cc.kccsd_rhf import _get_epq
 from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
 from pyscf.pbc.lib import kpts_helper
-from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 
 from pyscf.pbc import tools
 import h5py
@@ -128,10 +128,9 @@ def compute_amplitudes(myadc, eris):
                     kd = kconserv[ki, kc, kk]
                     ka = kconserv[kc, kk, kd]
 
-                    if isinstance(eris.ovvv, type(None)):
+                    if eris.ovvv is None:
                         chnk_size = myadc.chnk_size
-                        if chnk_size > nocc:
-                            chnk_size = nocc
+                        chnk_size = min(chnk_size, nocc)
                         a = 0
                         for p in range(0,nocc,chnk_size):
                             eris_ovvv = dfadc.get_ovvv_df(
@@ -205,7 +204,7 @@ def compute_amplitudes(myadc, eris):
                     t2_1_a = t2_1[:].reshape(nkpts,nkpts,nkpts,nocc*nocc,nvir*nvir)
                     t2_1_vvvv[ki, kj, ka] += np.dot(t2_1_a[ki,kj,kc],
                                                     eris_vvvv[kc,kd,ka].conj()).reshape(nocc,nocc,nvir,nvir)
-                elif isinstance(eris.vvvv, type(None)):
+                elif eris.vvvv is None:
                     t2_1_vvvv[ki,kj,ka] += contract_ladder(myadc,t2_1[ki,kj,kc],eris.Lvv,ka,kb,kc)
                 else :
                     t2_1_vvvv[ki,kj,ka] += contract_ladder(myadc,t2_1[ki,kj,kc],eris.vvvv,kc,kd,ka)
@@ -322,8 +321,7 @@ def contract_ladder(myadc,t_amp,vvvv,ka,kb,kc):
     t_amp = np.ascontiguousarray(t_amp.reshape(nocc*nocc,nvir*nvir))
     t = np.zeros((nocc,nocc, nvir, nvir),dtype=t_amp.dtype)
     chnk_size = myadc.chnk_size
-    if chnk_size > nvir:
-        chnk_size = nvir
+    chnk_size = min(chnk_size, nvir)
     a = 0
     if isinstance(vvvv, np.ndarray):
         vv1 = vvvv[kc,ka]

@@ -16,7 +16,7 @@ from pyscf.pbc import scf as pbcscf
 import pyscf.cc
 import pyscf.pbc.cc as pbcc
 from pyscf.pbc.lib import kpts_helper
-import pyscf.pbc.cc.kccsd_t_rhf as kccsd_t_rhf
+from pyscf.pbc.cc import kccsd_t_rhf
 
 cell = pbcgto.Cell()
 cell.atom = [['H', (0.000000000, 0.000000000, 0.000000000)],

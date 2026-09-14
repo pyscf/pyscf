@@ -32,7 +32,7 @@ from pyscf.dft import numint, gen_grid
 
 
 # import pyscf.grad.rks to activate nuc_grad_method method
-from pyscf.grad import rks  # noqa
+from pyscf.grad import rks
 
 
 min_grid_blksize = 128*128

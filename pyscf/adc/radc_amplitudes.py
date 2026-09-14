@@ -85,7 +85,7 @@ def compute_amplitudes(myadc, eris):
         # Compute second-order singles t1 (tij)
         t1_2 = np.zeros((nocc,nvir))
 
-        if isinstance(eris.ovvv, type(None)):
+        if eris.ovvv is None:
             chnk_size = radc_ao2mo.calculate_chunk_size(myadc)
             for a,b in lib.prange(0,nocc,chnk_size):
                 eris_ovvv = dfadc.get_ovvv_df(
@@ -195,7 +195,7 @@ def compute_amplitudes(myadc, eris):
         t1_3 -= 0.5*lib.einsum('mlad,ldmi->ia',t2_2[:],eris_ovoo,optimize=True)
         t1_3 -=     lib.einsum('lmad,mdli->ia',t2_2[:],eris_ovoo,optimize=True)
 
-        if isinstance(eris.ovvv, type(None)):
+        if eris.ovvv is None:
             chnk_size = radc_ao2mo.calculate_chunk_size(myadc)
             for a,b in lib.prange(0,nocc,chnk_size):
                 eris_ovvv = dfadc.get_ovvv_df(

@@ -15,7 +15,6 @@
 #
 # Author: Yang Gao <younggao1994@gmail.com>
 
-#
 '''
 Non-relativistic analytical nuclear gradients for unrestricted Hartree Fock with kpoints sampling
 '''

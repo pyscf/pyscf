@@ -27,7 +27,7 @@ import geometric.molecule
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.geomopt.addons import (as_pyscf_method, dump_mol_geometry,
-                                  symmetrize)  # noqa
+                                  symmetrize)
 from pyscf import __config__
 from pyscf.grad.rhf import GradientsBase
 

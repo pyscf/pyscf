@@ -303,12 +303,9 @@ def diab_grad (mc_grad, Lis, atmlst=None, mo=None, ci=None, eris=None,
     de_aux = (np.trace (dvj_aux, offset=nroots, axis1=0, axis2=1)
             + np.trace (dvj_aux, offset=-nroots, axis1=0, axis2=1))
 
-    logger.debug (mc, "CMS-PDFT Lis lagrange direct component:\n{}".format (
-        de_direct))
-    logger.debug (mc, "CMS-PDFT Lis lagrange renorm component:\n{}".format (
-        de_renorm))
-    logger.debug (mc, "CMS-PDFT Lis lagrange auxbasis component:\n{}".format (
-        de_aux))
+    logger.debug (mc, f"CMS-PDFT Lis lagrange direct component:\n{de_direct}")
+    logger.debug (mc, f"CMS-PDFT Lis lagrange renorm component:\n{de_renorm}")
+    logger.debug (mc, f"CMS-PDFT Lis lagrange auxbasis component:\n{de_aux}")
     de = de_direct + de_aux + de_renorm
     return de
 

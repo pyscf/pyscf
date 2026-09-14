@@ -87,7 +87,7 @@ def get_imds(adc, eris=None):
 
         eris_oovv = eris.oovv
 
-        if isinstance(eris.ovvv, type(None)):
+        if eris.ovvv is None:
             chnk_size = radc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc,chnk_size):
                 eris_ovvv = dfadc.get_ovvv_df(adc, eris.Lov, eris.Lvv,
@@ -420,7 +420,7 @@ def matvec(adc, M_ab=None, eris=None):
 ############## ADC(2) a - ibc and ibc - a coupling blocks #########################
 
         temp_doubles = np.zeros((nocc,nvir,nvir))
-        if isinstance(eris.ovvv, type(None)):
+        if eris.ovvv is None:
             chnk_size = radc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc,chnk_size):
                 eris_ovvv = dfadc.get_ovvv_df(adc, eris.Lov, eris.Lvv,
@@ -527,7 +527,7 @@ def matvec(adc, M_ab=None, eris=None):
             temp = np.zeros((nocc,nvir,nvir))
             temp_1_1 = np.zeros((nocc,nvir,nvir))
             temp_2_1 = np.zeros((nocc,nvir,nvir))
-            if isinstance(eris.ovvv, type(None)):
+            if eris.ovvv is None:
                 chnk_size = radc_ao2mo.calculate_chunk_size(adc)
                 for a,b in lib.prange(0,nocc,chnk_size):
                     eris_ovvv = dfadc.get_ovvv_df(
