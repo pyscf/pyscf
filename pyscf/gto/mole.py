@@ -2513,19 +2513,24 @@ class MoleBase(lib.StreamObject):
                 To define basis set.
             nucmod : dict or str
                 Nuclear model.  If given, overwrite :attr:`Mole.nucmod`
-            charge : int
+            charge : int or float
                 Charge of molecule. It affects the electron numbers
                 If given, overwrite :attr:`Mole.charge`
-            spin : int
+                Must be an integer unless :attr:`Mole.nelec_frac` is true
+            spin : int or float
                 2S, num. alpha electrons - num. beta electrons to control
                 multiplicity. If setting spin = None , multiplicity will be
                 guessed based on the neutral molecule.
                 If given, overwrite :attr:`Mole.spin`
+                Must be an integer unless :attr:`Mole.nelec_frac` is true
             symmetry : bool or str
                 Whether to use symmetry.  If given a string of point group
                 name, the given point group symmetry will be used.
             magmom : list
                 Collinear spin of each atom. Default is [0.0,]*natm
+            nelec_frac: bool
+                Whether non-integer charge and spin numbers should be allowed.
+                Correctness of results not guaranteed; use with caution.
 
         '''
         if isinstance(dump_input, str):
