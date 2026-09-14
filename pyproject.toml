@@ -62,8 +62,9 @@ pyqmc = ["pyqmc"]
 bse = ["basis-set-exchange"]
 dispersion = ["pyscf-dispersion"]
 ccpy = ["coupled-cluster-py"]
+trexio = ["trexio"]
 
-all = ["pyscf[forge,geomopt,doci,properties,semiempirical,cppe,pyqmc,bse,dispersion,ccpy]"]
+all = ["pyscf[forge,geomopt,doci,properties,semiempirical,cppe,pyqmc,bse,dispersion,ccpy,trexio]"]
 
 # extras which should not be installed by "all" components
 cornell_shci = ["pyscf-cornell-shci"]
