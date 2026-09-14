@@ -1187,7 +1187,7 @@ def tot_electrons(mol):
         if abs(nelectron - nelectron_int) > 1e-4:
             logger.warn(mol, 'Found fractional number of electrons %f, but expected an integer. Round it to %d',
                         nelectron, nelectron_int)
-        nelectron = nelectron_int
+        nelectron = int(nelectron_int)
 
     return nelectron
 
@@ -2402,7 +2402,7 @@ class MoleBase(lib.StreamObject):
             nalpha = (ne + self.spin) / 2
             nbeta = nalpha - self.spin
         assert (nalpha >= 0 and nbeta >= 0)
-        if nalpha + nbeta != ne:
+        if not np.isclose(nalpha + nbeta, ne):
             raise RuntimeError('Electron number %g and spin %g are not consistent\n'
                                'Note mol.spin = 2S = Nalpha - Nbeta, not 2S+1' %
                                (ne, self.spin))
@@ -2809,7 +2809,7 @@ class MoleBase(lib.StreamObject):
         self.stdout.write('[INPUT] num. atoms = %d\n' % self.natm)
         self.stdout.write('[INPUT] num. electrons = %g\n' % self.nelectron)
         self.stdout.write('[INPUT] charge = %g\n' % self.charge)
-        self.stdout.write('[INPUT] spin (= nelec alpha-beta = 2S) = %d\n' % self.spin)
+        self.stdout.write('[INPUT] spin (= nelec alpha-beta = 2S) = %g\n' % self.spin)
         self.stdout.write('[INPUT] symmetry %s subgroup %s\n' %
                           (self.symmetry, self.symmetry_subgroup))
         self.stdout.write('[INPUT] Mole.unit = %s\n' % self.unit)
