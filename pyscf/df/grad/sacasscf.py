@@ -304,8 +304,9 @@ def _grad_elec_df_response_direct(mc, mf_grad, dms, pair_weights,
     '''Directly contract all DF response terms into atomic gradients.
 
     This follows the direct-contraction layout used in
-    ``gpu4pyscf/df/grad/jk.py:get_grad_vjk``: derivative three-center
-    integrals are generated once and immediately contracted into forces.
+    ``gpu4pyscf/df/grad/rhf.py:_jk_energy_per_atom``: derivative
+    three-center integrals are generated once and immediately contracted
+    into forces.
     ``pair_weights[i,j]`` selects the one-particle density pairs required by
     the SA-CASSCF response, avoiding the dense nset-by-nset auxiliary tensor.
     The active-space DF-RDM2 terms share the same ip1 and ip2 integral loops.
@@ -529,7 +530,7 @@ def _grad_elec_df_response_direct(mc, mf_grad, dms, pair_weights,
     auxslices = auxmol.aoslice_by_atom()
     de_aux = np.asarray([de_aux[p0:p1].sum(axis=0)
                          for p0, p1 in auxslices[:,2:]])
-    atmlst = np.asarray(list(atmlst))
+    atmlst = np.asarray(list(atmlst), dtype=int)
     return np.ascontiguousarray(de_ao[atmlst] + de_aux[atmlst])
 
 
@@ -587,7 +588,11 @@ def Lorb_Lci_dot_dgorb_dgci_dx(Lorb, Lci, weights, mc, mo_coeff=None,
     jk_dms = (dm_core, dm_cas, dmL_core, dmL_cas, dm_cas_ci)
     if with_ham_response:
         jk_dms += (dm_cas_ham,)
-    vj, vk = mc._scf.get_jk(mol, jk_dms)
+
+    # Note that this can be problematic if the mc and mf have different auxbasis.
+    # vj, vk = mc._scf.get_jk(mol, jk_dms)
+    # I have replaced with the mc.get_jk call.
+    vj, vk = mc.get_jk(mol, jk_dms)
     vhf = vj - vk * .5
     vhf_c, vhf_a, vhfL_c, vhfL_a, vhf_a_ci = vhf[:5]
     h1 = mc.get_hcore()
