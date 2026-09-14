@@ -1023,7 +1023,10 @@ def compute_lhs_preconditioner(ncore, ncas, nvir, ortho_us, rdms, rdm_mats, ipea
 
 def basis_orthogonalize(ncore, ncas, nvir, rdms, ortho_thrds=1E-10):
     i, j, k = np.ogrid[:ncas], *np.ogrid[:ncas, :ncas]
-    trunc_f = lambda m, tol: [v[:, x] * w[x] ** -0.5 for w, v in [disjoint_eigh(m)] for x in [w > tol]][0]
+    def trunc_f(m, tol):
+        w, v = disjoint_eigh(m)
+        x = w > tol
+        return v[:, x] * w[x] ** -0.5
 
     mat = rdms[2].transpose(3, 5, 0, 1, 2, 4).copy()
     mat[:, :, i, :, :, i] += rdms[1].transpose(3, 2, 1, 0)
