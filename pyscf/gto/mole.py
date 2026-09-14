@@ -878,6 +878,7 @@ def conc_mol(mol1, mol2):
     mol3.symmetry = False
     mol3.symmetry_subgroup = None
     mol3.cart = mol1.cart and mol2.cart
+    mol3.nelec_frac = mol1.nelec_frac or mol2.nelec_frac
 
     mol3._atom = mol1._atom + mol2._atom
     mol3.atom = mol3._atom
@@ -1182,10 +1183,13 @@ def tot_electrons(mol):
     nelectron -= mol.charge
     nelectron_int = round(nelectron)
 
-    if abs(nelectron - nelectron_int) > 1e-4:
-        logger.warn(mol, 'Found fractional number of electrons %f. Round it to %d',
-                    nelectron, nelectron_int)
-    return nelectron_int
+    if not mol.nelec_frac:
+        if abs(nelectron - nelectron_int) > 1e-4:
+            logger.warn(mol, 'Found fractional number of electrons %f, but expected an integer. Round it to %d',
+                        nelectron, nelectron_int)
+        nelectron = nelectron_int
+
+    return nelectron
 
 def copy(mol, deep=True):
     '''Deepcopy of the given :class:`Mole` object
@@ -1239,6 +1243,7 @@ def pack(mol):
             'pseudo'  : mol.pseudo,
             '_nelectron': mol._nelectron,
             'magmom'  : mol.magmom,
+            'nelec_frac': mol.nelec_frac,
             'verbose' : mol.verbose}
     return mdic
 def unpack(moldic):
@@ -2326,12 +2331,17 @@ class MoleBase(lib.StreamObject):
     symmetry = False
     symmetry_subgroup = None
 
+    # Whether to allow a fractional number of electrons.
+    # The default is false.
+    nelec_frac = False
+
     # Store the keys appeared in the module.  It is used to check misinput attributes
     _keys = {
         'verbose', 'unit', 'incore_anyway', 'output', 'max_memory',
         'cart', 'charge', 'spin', 'symmetry', 'symmetry_subgroup',
         'atom', 'basis', 'nucmod', 'ecp', 'nucprop', 'magmom', 'pseudo',
         'groupname', 'topgroup', 'symm_orb', 'irrep_id', 'irrep_name',
+        'nelec_frac'
     }
 
     def __init__(self):
@@ -2385,11 +2395,15 @@ class MoleBase(lib.StreamObject):
     @property
     def nelec(self):
         ne = self.nelectron
-        nalpha = (ne + self.spin) // 2
-        nbeta = nalpha - self.spin
+        if not self.nelec_frac:
+            nalpha = (ne + self.spin) // 2
+            nbeta = nalpha - self.spin
+        else:
+            nalpha = (ne + self.spin) / 2
+            nbeta = nalpha - self.spin
         assert (nalpha >= 0 and nbeta >= 0)
         if nalpha + nbeta != ne:
-            raise RuntimeError('Electron number %d and spin %d are not consistent\n'
+            raise RuntimeError('Electron number %g and spin %g are not consistent\n'
                                'Note mol.spin = 2S = Nalpha - Nbeta, not 2S+1' %
                                (ne, self.spin))
         return nalpha, nbeta
@@ -2477,7 +2491,7 @@ class MoleBase(lib.StreamObject):
               verbose=None, output=None, max_memory=None,
               atom=None, basis=None, unit=None, nucmod=None, ecp=None, pseudo=None,
               charge=None, spin=0, symmetry=None, symmetry_subgroup=None,
-              cart=None, magmom=None):
+              cart=None, magmom=None, nelec_frac=None):
         '''Setup molecule and initialize some control parameters.  Whenever you
         change the value of the attributes of :class:`Mole`, you need call
         this function to refresh the internal data of Mole.
@@ -2534,6 +2548,7 @@ class MoleBase(lib.StreamObject):
         if symmetry_subgroup is not None: self.symmetry_subgroup = symmetry_subgroup
         if cart is not None: self.cart = cart
         if magmom is not None: self.magmom = magmom
+        if nelec_frac is not None: self.nelec_frac = nelec_frac
 
         if parse_arg:
             _update_from_cmdargs_(self)
@@ -2792,8 +2807,8 @@ class MoleBase(lib.StreamObject):
         if self.verbose >= logger.DEBUG:
             self.stdout.write('[INPUT] max_memory = %s \n' % self.max_memory)
         self.stdout.write('[INPUT] num. atoms = %d\n' % self.natm)
-        self.stdout.write('[INPUT] num. electrons = %d\n' % self.nelectron)
-        self.stdout.write('[INPUT] charge = %d\n' % self.charge)
+        self.stdout.write('[INPUT] num. electrons = %g\n' % self.nelectron)
+        self.stdout.write('[INPUT] charge = %g\n' % self.charge)
         self.stdout.write('[INPUT] spin (= nelec alpha-beta = 2S) = %d\n' % self.spin)
         self.stdout.write('[INPUT] symmetry %s subgroup %s\n' %
                           (self.symmetry, self.symmetry_subgroup))

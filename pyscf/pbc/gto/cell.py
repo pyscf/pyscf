@@ -961,8 +961,14 @@ def tot_electrons(cell, nkpts=1):
         nelectron = cell.atom_charges().sum() * nkpts - cell.charge
     else: # Custom cell.nelectron stands for num. electrons per cell
         nelectron = cell._nelectron * nkpts
-    # Round off to the nearest integer
-    nelectron = int(nelectron+0.5)
+    if not cell.nelec_frac:
+        # Round off to the nearest integer
+        nelectron_int = int(round(nelectron))
+        if abs(nelectron - nelectron_int) > 1e-4:
+            logger.warn(cell, 'Found fractional number of electrons %f, but expected an integer. Round it to %d',
+                        nelectron, nelectron_int)
+        nelectron = nelectron_int
+
     return nelectron
 
 def _mesh_inf_vaccum(cell):
@@ -1395,15 +1401,20 @@ class Cell(mole.MoleBase):
     def ew_cut(self, val):
         warnings.warn("ew_cut is no longer stored in the cell object. Setting it has no effect")
 
-    @property
+    @mole.MoleBase.nelec.getter
     def nelec(self):
         ne = self.nelectron
-        nalpha = (ne + self.spin) // 2
-        nbeta = nalpha - self.spin
+        if not self.nelec_frac:
+            nalpha = (ne + self.spin) // 2
+            nbeta = nalpha - self.spin
+        else:
+            nalpha = (ne + self.spin) / 2
+            nbeta = nalpha - self.spin
+
         # nelec method defined in Mole class raises error when the attributes .spin
         # and .nelectron are inconsistent.  In PBC, when the system has even number of
         # k-points, it is valid that .spin is odd while .nelectron is even.
-        if nalpha + nbeta != ne:
+        if not np.isclose(nalpha + nbeta, ne, atol=0.0, rtol=1e-10):
             warnings.warn('Electron number %d and spin %d are not consistent '
                           'in cell\n' % (ne, self.spin))
         return nalpha, nbeta
