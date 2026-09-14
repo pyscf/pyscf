@@ -303,10 +303,13 @@ def _grad_elec_df_response_direct(mc, mf_grad, dms, pair_weights,
                                   auxbasis_response=True):
     '''Directly contract all DF response terms into atomic gradients.
 
-    This follows the direct-contraction layout used in
-    ``gpu4pyscf/df/grad/rhf.py:_jk_energy_per_atom``: derivative
-    three-center integrals are generated once and immediately contracted
-    into forces.
+    This specializes ``pyscf.df.grad.rhf.get_jk`` by contracting only the
+    selected density pairs directly into atomic gradients, while sharing the
+    three-center integral passes with the active-space DF-RDM2 response.  The
+    direct-contraction strategy was also used by
+    ``gpu4pyscf/df/grad/jk.py:get_grad_vjk`` in GPU4PySCF commit
+    ``69036d5181a16c534565092342b341e6a409fb33``.
+
     ``pair_weights[i,j]`` selects the one-particle density pairs required by
     the SA-CASSCF response, avoiding the dense nset-by-nset auxiliary tensor.
     The active-space DF-RDM2 terms share the same ip1 and ip2 integral loops.
