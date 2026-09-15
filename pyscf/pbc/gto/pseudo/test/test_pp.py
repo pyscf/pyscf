@@ -13,10 +13,11 @@
 # limitations under the License.
 
 import unittest
+import os
 import numpy as np
 import pyscf
 import pyscf.dft
-from pyscf import lib
+from pyscf import lib, gto
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import tools
 from pyscf.pbc.dft import gen_grid
@@ -311,7 +312,7 @@ He
     def test_pp_scalar_soc_mixed(self):
         pass
 
-    def test_pp_soc_scf(self):
+    def test_pp_soc_integrals_vs_cp2k(self):
         cell = pyscf.M(
             a = '''
             0.0 3.0 3.0
@@ -328,39 +329,22 @@ He
                 'Pb': 'GTH-SOC-PBE-q4',
                 'S': 'GTH-SOC-PBE-q6',
             },
-            mesh = [45]*3,
         )
-        cell.verbose = 4
-        mf = cell.KGKS(xc='svwn')
-        mf.with_soc = True
-        mf.run()
-        assert abs(mf.e_tot - -13.6107739669978) < 1e-6
+        ao_loc = cell.ao_loc
+        nao = ao_loc[-1]
+        dims = ao_loc[1:] - ao_loc[:-1]
+        ao_ls = np.repeat(cell._bas[:,gto.ANG_OF], dims)
+        idx = np.arange(nao)
+        p_idx = idx[ao_ls == 1].reshape(-1, 3)[:,[1,2,0]] # to py, pz, px order
+        idx[ao_ls == 1] = p_idx.ravel()
+
+        # CP2K_V_SOC = <|1/2 r x grad|>
+        # PySCF pp_soc computes Im(L) = <|-(r cross grad)|> = -2 CP2K_V_SOC
+        path = os.path.abspath(__file__ + '/../cp2k_pp_soc.txt')
+        cp2k_V_SOC = np.loadtxt(path).reshape(3, nao, nao)
+        w = pp_int.get_pp_soc(cell)[0][:, idx[:,None], idx]
+        assert abs(w*-.5 - cp2k_V_SOC).max() < 1e-12
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.pseudo")
-    #unittest.main()
-
-    if 1:#def test_pp_soc_scf(self):
-        cell = pyscf.M(
-            a = '''
-            0.0 3.0 3.0
-            3.0 0.0 3.0
-            3.0 3.0 0.0''',
-            atom='''Pb 0.0 0.0 0.0
-            S 3.0 3.0 3.0
-            ''',
-            basis={
-                'Pb': 'DZVP-MOLOPT-PBE-GTH-q4',
-                'S': 'DZVP-MOLOPT-PBE-GTH-q6',
-            },
-            pseudo={
-                'Pb': 'GTH-SOC-PBE-q4',
-                'S': 'GTH-SOC-PBE-q6',
-            },
-            mesh = [45]*3,
-        )
-        cell.verbose = 4
-        mf = cell.KGKS(xc='svwn')
-        mf.with_soc = True
-        mf.run()
-        assert abs(mf.e_tot - -13.6107739669978) < 1e-6
+    unittest.main()

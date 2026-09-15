@@ -744,7 +744,7 @@ def _angmom_matrix(l):
     u = sph_pure2real(l, reorder_p=True)
     return np.einsum('mi,xmn,nj->xij', u.conj(), Ls, u).imag
 
-def get_pp_soc(cell, kpts):
+def get_pp_soc(cell, kpts=None):
     r'''Evaluates three GTH SOC integrals W_x, W_y, W_z in real-spherical GTO basis.
 
     W_a = Im(<AO|\Delta V_l^{SO} |AO>)
