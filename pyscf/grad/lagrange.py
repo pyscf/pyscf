@@ -66,17 +66,6 @@ class Gradients (rhf_grad.GradientsBase):
 
     ####################### Child classes SHOULD overwrite the methods below ######################
 
-    def get_nuc_response (self, Lvec, **kwargs):
-        '''Return the total nuclear response of the Lagrangian.
-
-        The default implementation evaluates the Hamiltonian and Lagrange
-        responses separately. Child classes may override this method to
-        contract both contributions in a single pass.
-        '''
-        ham_response = self.get_ham_response (**kwargs)
-        LdotJnuc = self.get_LdotJnuc (Lvec, **kwargs)
-        return ham_response + LdotJnuc
-
     _keys = {
         'Lvec', 'nlag', 'level_shift', 'conv_atol', 'conv_rtol', 'max_cycle',
         'l_iter', 'l_hop_setup', 'l_hop_init', 'l_hop_solve',
@@ -181,7 +170,6 @@ class Gradients (rhf_grad.GradientsBase):
     def kernel (self, level_shift=None, **kwargs):
         cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.new_logger(self, self.verbose)
-        verbose = kwargs.get('verbose', self.verbose)
         if 'atmlst' in kwargs:
             self.atmlst = kwargs['atmlst']
         #self.natm = len (self.atmlst)
@@ -197,28 +185,23 @@ class Gradients (rhf_grad.GradientsBase):
             self.debug_lagrange (self.Lvec, bvec, Aop, Adiag, **kwargs)
             cput1 = logger.timer (self, 'Lagrange gradient multiplier solution', *cput0)
 
-        # Keep the separate path at high verbosity so method-specific
-        # implementations can print their orbital and CI response components.
-        if verbose >= logger.DEBUG1:
-            ham_response = self.get_ham_response (**kwargs)
-            if self.verbose >= logger.INFO:
-                logger.info(self, '--------------- %s gradient Hamiltonian response ---------------',
-                            self.base.__class__.__name__)
-                rhf_grad._write(self, self.mol, ham_response, self.atmlst)
-                logger.info(self, '----------------------------------------------')
-                cput1 = logger.timer (
-                    self, 'Lagrange gradient Hellmann-Feynman determination', *cput1)
+        ham_response = self.get_ham_response (**kwargs)
+        if self.verbose >= logger.INFO:
+            logger.info(self, '--------------- %s gradient Hamiltonian response ---------------',
+                        self.base.__class__.__name__)
+            rhf_grad._write(self, self.mol, ham_response, self.atmlst)
+            logger.info(self, '----------------------------------------------')
+            cput1 = logger.timer (
+                self, 'Lagrange gradient Hellmann-Feynman determination', *cput1)
 
-            LdotJnuc = self.get_LdotJnuc (self.Lvec, **kwargs)
-            if self.verbose >= logger.INFO:
-                logger.info(self, '--------------- %s gradient Lagrange response ---------------',
-                            self.base.__class__.__name__)
-                rhf_grad._write(self, self.mol, LdotJnuc, self.atmlst)
-                logger.info(self, '----------------------------------------------')
-                logger.timer (self, 'Lagrange gradient Jacobian', *cput1)
-            self.de = ham_response + LdotJnuc
-        else:
-            self.de = self.get_nuc_response (self.Lvec, **kwargs)
+        LdotJnuc = self.get_LdotJnuc (self.Lvec, **kwargs)
+        if self.verbose >= logger.INFO:
+            logger.info(self, '--------------- %s gradient Lagrange response ---------------',
+                        self.base.__class__.__name__)
+            rhf_grad._write(self, self.mol, LdotJnuc, self.atmlst)
+            logger.info(self, '----------------------------------------------')
+            logger.timer (self, 'Lagrange gradient Jacobian', *cput1)
+        self.de = ham_response + LdotJnuc
         log.timer('Lagrange gradients', *cput0)
         self._finalize()
         return self.de
