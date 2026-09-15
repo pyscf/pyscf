@@ -683,9 +683,9 @@ def Lorb_Lci_dot_dgorb_dgci_dx(Lorb, Lci, weights, mc, mo_coeff=None,
         de_renorm[k] -= np.einsum(
             'xij,ij->x', s1[:,p0:p1], dme0_total[p0:p1]) * 2
 
-    lib.logger.debug(mc, 'Combined DF hcore component:\n%s', de_hcore)
-    lib.logger.debug(mc, 'Combined DF renorm component:\n%s', de_renorm)
-    lib.logger.debug(mc, 'Combined direct DF component:\n%s', de_df)
+    lib.logger.debug(mc, f'Combined DF hcore component:\n{de_hcore}')
+    lib.logger.debug(mc, f'Combined DF renorm component:\n{de_renorm}')
+    lib.logger.debug(mc, f'Combined direct DF component:\n{de_df}')
     lib.logger.timer(mc, 'Combined DF SA-CASSCF response', *t0)
     return de_hcore + de_renorm + de_df
 

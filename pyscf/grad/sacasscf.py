@@ -604,8 +604,8 @@ def Lorb_Lci_dot_dgorb_dgci_dx (Lorb, Lci, weights, mc, mo_coeff=None, ci=None,
     blksize = int(max_memory*.9e6/8 /
                   (4*(aoslices[:,3]-aoslices[:,2]).max()*nao_pair))
     blksize = min(nao, max(2, blksize))
-    logger.info(mc, 'Combined SA-CASSCF response memory remaining for eri manipulation: '
-                '%f MB; using blocksize = %d', max_memory, blksize)
+    logger.info(mc, f'Combined SA-CASSCF response memory remaining for eri manipulation: '
+                f'{max_memory:f} MB; using blocksize = {blksize:d}')
     t0 = logger.timer(mc, 'Combined SA-CASSCF response 1-electron part', *t0)
 
     for k, ia in enumerate(atmlst):
@@ -629,8 +629,9 @@ def Lorb_Lci_dot_dgorb_dgci_dx (Lorb, Lci, weights, mc, mo_coeff=None, ci=None,
                              shls_slice=shls_slice).reshape(3,p1-p0,nf,nao_pair)
             de_eri[k] -= np.einsum('xijw,ijw->x', eri1, dm2_ao) * 2
             eri1 = dm2_ao = None
-            t0 = logger.timer(mc, 'Combined SA-CASSCF response atom {} ({},{}|{})'.format(
-                ia, p1-p0, nf, nao_pair), *t0)
+            t0 = logger.timer(
+                mc, f'Combined SA-CASSCF response atom {ia} '
+                f'({p1-p0},{nf}|{nao_pair})', *t0)
 
         # Orbital-response derivative J/K terms.
         de_eri[k] += np.einsum('xij,ij->x', vhf1c[:,p0:p1], dm1L[p0:p1]) * 2
@@ -648,9 +649,9 @@ def Lorb_Lci_dot_dgorb_dgci_dx (Lorb, Lci, weights, mc, mo_coeff=None, ci=None,
                                     dm1_ham[p0:p1]) * 2
             de_eri[k] += np.einsum('xij,ij->x', vhf1a_ham[:,p0:p1],
                                     dm_core[p0:p1]) * 2
-    logger.debug(mc, 'Combined Lagrange hcore component:\n{}'.format(de_hcore))
-    logger.debug(mc, 'Combined Lagrange renorm component:\n{}'.format(de_renorm))
-    logger.debug(mc, 'Combined Lagrange eri component:\n{}'.format(de_eri))
+    logger.debug(mc, f'Combined Lagrange hcore component:\n{de_hcore}')
+    logger.debug(mc, f'Combined Lagrange renorm component:\n{de_renorm}')
+    logger.debug(mc, f'Combined Lagrange eri component:\n{de_eri}')
     return de_hcore + de_renorm + de_eri
 
 def as_scanner(mcscf_grad, state=None):
