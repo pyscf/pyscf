@@ -1008,42 +1008,6 @@ class Gradients (lagrange.Gradients):
 
         return de_Lci + de_Lorb
 
-    def get_nuc_response (self, Lvec, state=None, atmlst=None, verbose=None,
-                          mo=None, ci=None, eris=None, mf_grad=None, **kwargs):
-        '''Return the combined SA-CASSCF nuclear response.
-
-        The target-state Hamiltonian, orbital Lagrange, and CI Lagrange
-        contributions are contracted in one derivative-integral pass.
-        '''
-        if state is None: state = self.state
-        if atmlst is None: atmlst = self.atmlst
-        if verbose is None: verbose = self.verbose
-        if mo is None: mo = self.base.mo_coeff
-        if ci is None: ci = self.base.ci
-        if eris is None and self.eris is None:
-            eris = self.eris = self.base.ao2mo(mo)
-        elif eris is None:
-            eris = self.eris
-        if mf_grad is None:
-            mf_grad = self.base._scf.nuc_grad_method()
-
-        Lorb, Lci = self.unpack_uniq_var(Lvec)
-        fcasscf = self.make_fcasscf(state)
-        fcasscf.mo_coeff = mo
-        fcasscf.ci = ci[state]
-        lagrange_intermediates = make_sa_lagrange_response_intermediates(
-            Lorb, Lci, self.base, mo_coeff=mo, ci=ci, eris=eris)
-
-        de = Lorb_Lci_dot_dgorb_dgci_dx(
-            Lorb, Lci, self.weights, self.base, mo_coeff=mo, ci=ci,
-            atmlst=atmlst, mf_grad=mf_grad, eris=eris, verbose=verbose,
-            fcasscf=fcasscf, ci_state=ci[state],
-            lagrange_intermediates=lagrange_intermediates)
-        de += self.grad_nuc(atmlst=atmlst)
-        if self.mol.symmetry:
-            de = self.symmetrize(de, atmlst)
-        return de
-
     def debug_lagrange (self, Lvec, bvec, Aop, Adiag, state=None, mo=None, ci=None, **kwargs):
         # This needs to be rewritten substantially to work properly with state_average_mix
         if state is None: state = self.state
