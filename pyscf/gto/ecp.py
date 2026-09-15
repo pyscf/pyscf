@@ -156,31 +156,3 @@ def core_configuration(nelec_core, atom_symbol=None):
         raise RuntimeError('Core configuration for %d core electrons is not available.' % nelec_core)
     coreshell = [int(x) for x in conf_dic[nelec_core][::2]]
     return coreshell
-
-
-if __name__ == '__main__':
-    from pyscf import gto, scf
-
-    mol = gto.M(atom='''
- Cu 0. 0. 0.
- H  0.  0. -1.56
- H  0.  0.  1.56
-''',
-                basis={'Cu':'lanl2dz', 'H':'sto3g'},
-                ecp = {'cu':'lanl2dz'},
-                #basis={'Cu':'crenbs', 'H':'sto3g'},
-                #ecp = {'cu':'crenbs'},
-                charge=-1,
-                verbose=4)
-    mf = scf.RHF(mol)
-    print(mf.kernel(), -196.09477546034623)
-
-    mol = gto.M(atom='''
- Na 0. 0. 0.
- H  0.  0.  1.
-''',
-                basis={'Na':'lanl2dz', 'H':'sto3g'},
-                ecp = {'Na':'lanl2dz'},
-                verbose=0)
-    mf = scf.RHF(mol)
-    print(mf.kernel(), -0.45002315562861461)

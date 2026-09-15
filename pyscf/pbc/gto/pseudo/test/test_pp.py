@@ -13,9 +13,11 @@
 # limitations under the License.
 
 import unittest
+import os
 import numpy as np
+import pyscf
 import pyscf.dft
-from pyscf import lib
+from pyscf import lib, gto
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import tools
 from pyscf.pbc.dft import gen_grid
@@ -91,7 +93,7 @@ def get_pp_nl(cell, kpt=np.zeros(3)):
             continue
         pp = cell._pseudo[symb]
         for l, proj in enumerate(pp[5:]):
-            rl, nl, hl = proj
+            rl, nl, hl = proj[:3]
             if nl > 0:
                 hl = np.asarray(hl)
                 fakemol._bas[0,pyscf.gto.ANG_OF] = l
@@ -281,6 +283,67 @@ He
         grad = pp_int.vppnl_nuc_grad(cell, dm)[1,2]
         grad_fd = np.einsum("ij,ij->", v_fd, dm)
         self.assertAlmostEqual(abs(grad - grad_fd), 0, 7)
+
+    def test_pp_soc(self):
+        np.random.seed(4)
+        cell = pyscf.M(
+            atom = 'He  1.  .1  .3; He  .0  .8  1.1',
+            a = np.eye(3) * 4 + np.random.rand(3,3)*.5,
+            basis = { 'He': [[0, (0.8, 1.0)],
+                             [1, (1.2, 1.0)],
+                             [2, (0.9, 1.0)]]},
+            pseudo = '''
+He
+    2
+     0.40000000    3    -1.98934751    -0.75604821    0.95604821
+    2  SOC
+     0.29482550    3     1.23870466    .855         .3
+                                       .71         -1.1
+                                                    .9
+     0.32235865    2     2.25670239    -0.39677748
+                                        0.93894690
+                         0.15           0.12
+                                        0.25''')
+        kmesh = [3, 1, 4]
+        kpts = cell.make_kpts(kmesh)
+        dat = pp_int.get_pp_soc(cell, kpts)
+        assert abs(lib.fp(dat) - 1.0485888724761192) < 1e-12
+
+    def test_pp_scalar_soc_mixed(self):
+        pass
+
+    def test_pp_soc_integrals_vs_cp2k(self):
+        cell = pyscf.M(
+            a = '''
+            0.0 3.0 3.0
+            3.0 0.0 3.0
+            3.0 3.0 0.0''',
+            atom='''Pb 0.0 0.0 0.0
+            S 3.0 3.0 3.0
+            ''',
+            basis={
+                'Pb': 'DZVP-MOLOPT-PBE-GTH-q4',
+                'S': 'DZVP-MOLOPT-PBE-GTH-q6',
+            },
+            pseudo={
+                'Pb': 'GTH-SOC-PBE-q4',
+                'S': 'GTH-SOC-PBE-q6',
+            },
+        )
+        ao_loc = cell.ao_loc
+        nao = ao_loc[-1]
+        dims = ao_loc[1:] - ao_loc[:-1]
+        ao_ls = np.repeat(cell._bas[:,gto.ANG_OF], dims)
+        idx = np.arange(nao)
+        p_idx = idx[ao_ls == 1].reshape(-1, 3)[:,[1,2,0]] # to py, pz, px order
+        idx[ao_ls == 1] = p_idx.ravel()
+
+        # CP2K_V_SOC = <|1/2 r x grad|>
+        # PySCF pp_soc computes Im(L) = <|-(r cross grad)|> = -2 CP2K_V_SOC
+        path = os.path.abspath(__file__ + '/../cp2k_pp_soc.txt')
+        cp2k_V_SOC = np.loadtxt(path).reshape(3, nao, nao)
+        w = pp_int.get_pp_soc(cell)[0][:, idx[:,None], idx]
+        assert abs(w*-.5 - cp2k_V_SOC).max() < 1e-12
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.pseudo")
