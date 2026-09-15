@@ -620,7 +620,6 @@ def fake_cell_vnl(cell, type='scalar'):
     ptr = cell.natm * 3
     fake_bas = []
     hl_blocks = []
-    kl_blocks = []
     for ia in range(cell.natm):
         if cell.atom_charge(ia) == 0:  # pass ghost atoms
             continue
