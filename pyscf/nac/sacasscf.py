@@ -5,7 +5,6 @@ from pyscf.fci import direct_spin1
 from pyscf.mcscf import newton_casscf
 from pyscf.grad import casscf as casscf_grad
 from pyscf.grad import sacasscf as sacasscf_grad
-from pyscf.grad import lagrange
 from functools import reduce
 
 # The extension from gradients -> NACs has three basic steps:
@@ -129,10 +128,6 @@ class NonAdiabaticCouplings (sacasscf_grad.Gradients):
         if state is not None:
             assert len(state) == 2, "derivative couplings are defined between 2 states"
         sacasscf_grad.Gradients.__init__(self, mc, state=state)
-
-    def get_nuc_response(self, Lvec, **kwargs):
-        '''Use the generic separate response for nonadiabatic couplings.'''
-        return lagrange.Gradients.get_nuc_response(self, Lvec, **kwargs)
 
     def make_fcasscf_nacs (self, state=None, casscf_attr=None,
                            fcisolver_attr=None):
