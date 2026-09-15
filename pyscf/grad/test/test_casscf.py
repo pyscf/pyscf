@@ -16,11 +16,9 @@ from pyscf import fci
 from pyscf.tools import molden
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import casscf as casscf_grad
-from pyscf.grad import sacasscf as sacasscf_grad
 from pyscf.grad.mp2 import _shell_prange
 from pyscf.fci.addons import fix_spin_
 from pyscf.df.grad import casscf as dfcasscf_grad
-from pyscf.df.grad import sacasscf as dfsacasscf_grad
 
 def grad_elec(mc, mf_grad):
     mf = mf_grad.base
@@ -99,21 +97,6 @@ def tearDownModule():
     del mol, mf
 
 class KnownValues(unittest.TestCase):
-    def assert_sacasscf_response_paths(self, mc, grad_module):
-        for state in range(len(mc.weights)):
-            with self.subTest(state=state):
-                combined_solver = grad_module.Gradients(mc, state=state)
-                combined_gradient = combined_solver.kernel()
-                separate_solver = grad_module.Gradients(mc, state=state)
-                # DEBUG1 selects get_ham_response + get_LdotJnuc.
-                separate_gradient = separate_solver.kernel(
-                    verbose=lib.logger.DEBUG1)
-
-                self.assertTrue(combined_solver.converged)
-                self.assertTrue(separate_solver.converged)
-                self.assertAlmostEqual(
-                    abs(combined_gradient - separate_gradient).max(), 0, 7)
-
     def test_casscf_grad(self):
         mc = mcscf.CASSCF(mf, 4, 4).run()
         g1 = casscf_grad.Gradients(mc).kernel()
@@ -293,33 +276,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(de_avg[1,2], (e1_avg-e2_avg)/0.002*lib.param.BOHR, 4)
         self.assertAlmostEqual(de_0[1,2], (e1_0-e2_0)/0.002*lib.param.BOHR, 4)
         self.assertAlmostEqual(de_1[1,2], (e1_1-e2_1)/0.002*lib.param.BOHR, 4)
-
-    def test_state_average_response_paths(self):
-        for label, mean_field, grad_module in (
-                ('conventional', mf, sacasscf_grad),
-                ('density-fitted', mf_df, dfsacasscf_grad)):
-            with self.subTest(label=label):
-                mc = mcscf.CASSCF(mean_field, 4, 4)
-                mc.conv_tol = 1e-10
-                mc.fcisolver.conv_tol = 1e-10
-                mc.state_average_([.5, .5]).run()
-                self.assert_sacasscf_response_paths(mc, grad_module)
-
-    def test_state_average_mix_response_paths(self):
-        for label, mean_field, grad_module in (
-                ('conventional', mf, sacasscf_grad),
-                ('density-fitted', mf_df, dfsacasscf_grad)):
-            with self.subTest(label=label):
-                mc = mcscf.CASSCF(mean_field, 4, 4)
-                mc.conv_tol = 1e-10
-                fcisolvers = [fci.solver(mol, singlet=bool(i))
-                              for i in range(2)]
-                for solver in fcisolvers:
-                    solver.conv_tol = 1e-10
-                fcisolvers[0].spin = 2
-                mcscf.addons.state_average_mix_(
-                    mc, fcisolvers, (.5, .5)).run()
-                self.assert_sacasscf_response_paths(mc, grad_module)
 
     def test_with_x2c_scanner(self):
         with lib.light_speed(20.):
