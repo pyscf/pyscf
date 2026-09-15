@@ -18,7 +18,6 @@ from pyscf.grad import rks as rks_grad
 from pyscf.dft import gen_grid
 from pyscf.lib import logger, pack_tril, current_memory, einsum, tag_array
 from pyscf.grad import sacasscf
-from pyscf.grad import lagrange
 from pyscf.mcscf.casci import cas_natorb
 
 from pyscf.mcpdft.pdft_eff import _contract_eff_rho
@@ -422,10 +421,6 @@ class Gradients (sacasscf.Gradients):
             raise NotImplementedError (
                 f"{name} for range-separated MC-PDFT functionals"
             )
-
-    def get_nuc_response(self, Lvec, **kwargs):
-        '''Use the generic separate response for MC-PDFT gradients.'''
-        return lagrange.Gradients.get_nuc_response(self, Lvec, **kwargs)
 
     def get_wfn_response (self, state=None, verbose=None, mo=None,
             ci=None, veff1=None, veff2=None, nlag=None, **kwargs):

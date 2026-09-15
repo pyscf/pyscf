@@ -29,9 +29,6 @@ class Gradients (mspdft_grad.Gradients):
         self.auxbasis_response = True
         mspdft_grad.Gradients.__init__(self, pdft)
 
-    def get_nuc_response(self, Lvec, **kwargs):
-        return mspdft_grad.Gradients.get_nuc_response(self, Lvec, **kwargs)
-
     def make_fcasscf (self, state=None, casscf_attr={}, fcisolver_attr={}):
         fcasscf = sacasscf_grad.Gradients.make_fcasscf (self, state=state,
             casscf_attr=casscf_attr, fcisolver_attr=fcisolver_attr)
@@ -53,4 +50,3 @@ class Gradients (mspdft_grad.Gradients):
          Lci_dot_dgci_dx=dfsacasscf_grad.Lci_dot_dgci_dx,
          Lorb_dot_dgorb_dx=dfsacasscf_grad.Lorb_dot_dgorb_dx):
             return mspdft_grad.Gradients.get_LdotJnuc (self, Lvec, **kwargs)
-

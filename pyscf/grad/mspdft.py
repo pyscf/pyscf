@@ -239,10 +239,6 @@ class Gradients (mcpdft_grad.Gradients):
     def diab_grad (self, Lis, **kwargs):
         return self._diab_grad (self, Lis, **kwargs)
 
-    def get_nuc_response(self, Lvec, **kwargs):
-        '''Use the generic separate response for MS-PDFT gradients.'''
-        return mcpdft_grad.Gradients.get_nuc_response(self, Lvec, **kwargs)
-
     def kernel (self, state=None, mo=None, ci=None, si=None, _freeze_is=False,
             **kwargs):
         '''Cache the Hamiltonian and effective Hamiltonian terms, and
