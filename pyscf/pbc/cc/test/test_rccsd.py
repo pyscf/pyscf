@@ -107,6 +107,42 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(original.call_count, 1)
         self.assertIs(original.call_args.args[3], shifted_eris)
 
+    def test_direct_update(self):
+        mycc = cc.RCCSD(mf)
+        mycc.direct = True
+        mycc.max_cycle = 1
+        with mock.patch.object(ccsd, 'update_amps',
+                               side_effect=AssertionError('PBC direct uses RCCSD')) as fast:
+            with mock.patch.object(rccsd, 'update_amps', wraps=rccsd.update_amps) as original:
+                mycc.kernel(eris=eris)
+        self.assertEqual(fast.call_count, 0)
+        self.assertEqual(original.call_count, 1)
+        self.assertIs(original.call_args.args[3], eris)
+
+    def test_gamma_builds_eris(self):
+        mycc = cc.RCCSD(mf)
+        mycc.max_cycle = 1
+        with mock.patch.object(mycc, 'ao2mo', return_value=eris) as ao2mo:
+            with mock.patch.object(ccsd, 'update_amps', wraps=ccsd.update_amps) as fast:
+                mycc.kernel()
+        ao2mo.assert_called_once_with(mycc.mo_coeff)
+        self.assertEqual(fast.call_count, 1)
+        self.assertEqual(eris.ovvv.ndim, 4)
+
+    def test_custom_update(self):
+        mycc = cc.RCCSD(mf)
+        mycc.max_cycle = 1
+
+        def custom_update(t1, t2, supplied_eris):
+            self.assertIs(supplied_eris, eris)
+            return rccsd.update_amps(mycc, t1, t2, supplied_eris)
+
+        mycc.update_amps = mock.Mock(side_effect=custom_update)
+        with mock.patch.object(ccsd, 'update_amps', wraps=ccsd.update_amps) as fast:
+            mycc.kernel(eris=eris)
+        self.assertEqual(mycc.update_amps.call_count, 1)
+        self.assertEqual(fast.call_count, 0)
+
     def test_complex_orbitals_at_gamma(self):
         phases = np.exp(1j * np.linspace(0, .3, mf.mo_coeff.shape[1]))
         mycc = cc.RCCSD(mf, mo_coeff=mf.mo_coeff * phases)

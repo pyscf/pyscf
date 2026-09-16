@@ -35,12 +35,13 @@ class RCCSD(rccsd.RCCSD):
             return self.e_corr, self.t1, self.t2
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
-        if (gamma_point(self._scf.kpt) and not self.cc2 and
+        if (gamma_point(self._scf.kpt) and not self.cc2 and not self.direct and
+            getattr(self.update_amps, '__func__', None) is RCCSD.update_amps and
             not any(numpy.iscomplexobj(x) for x in
                     (self.mo_coeff, eris.fock, eris.ovvv, t1, t2))):
             # Only the ground-state iterations use packed ovvv. Keep the
             # caller's ERIs in the full layout used by RCCSD(T), lambda and EOM.
-            packed_eris = ccsd._ChemistsERIs()
+            packed_eris = _GammaRealERIs()
             packed_eris.__dict__.update(eris.__dict__)
             nocc, nvir = eris.ovvv.shape[:2]
             packed_eris.ovvv = lib.pack_tril(
@@ -50,7 +51,7 @@ class RCCSD(rccsd.RCCSD):
         return rccsd.RCCSD.ccsd(self, t1, t2, eris)
 
     def update_amps(self, t1, t2, eris):
-        if eris.ovvv.ndim == 3:
+        if isinstance(eris, _GammaRealERIs):
             return ccsd.update_amps(self, t1, t2, eris)
         return rccsd.update_amps(self, t1, t2, eris)
 
@@ -78,6 +79,9 @@ class RCCSD(rccsd.RCCSD):
         madelung = tools.madelung(self._scf.cell, self._scf.kpt)
         eris.mo_energy = _adjust_occ(eris.mo_energy, eris.nocc, -madelung)
         return eris
+
+class _GammaRealERIs(ccsd._ChemistsERIs):
+    """Temporary packed ERIs for the Gamma-point real CCSD iterations."""
 
 class UCCSD(uccsd.UCCSD):
     def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
