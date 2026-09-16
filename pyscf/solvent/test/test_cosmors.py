@@ -18,7 +18,8 @@
 
 import unittest
 import io, re
-from pyscf import gto, dft
+import numpy
+from pyscf import gto, scf, dft
 from pyscf.solvent import pcm, cosmors
 from pyscf.data.nist import BOHR as _BOHR
 
@@ -82,6 +83,70 @@ class TestCosmoRS(unittest.TestCase):
         self.assertAlmostEqual(ps['energies']['e_tot'], -112.953044138, 5)
         self.assertAlmostEqual(ps['energies']['e_diel'], -0.0023256022, 5)
         self.assertAlmostEqual(ps['pcm_data']['area'] * _BOHR**2, 64.848604, 2)
+
+    def test_occ_charge_split_is_exact(self):
+        # The COSMO equations are linear in the surface potential, so the
+        # nuclear and electronic charges must add back up to the full solution.
+        smod = mf0.with_solvent
+        K = smod._intermediates['K']
+        R = smod._intermediates['R']
+        v = smod._intermediates['v_grids']
+        v_nuc = smod.v_grids_n
+        q_nuc = numpy.linalg.solve(K, R.dot(v_nuc))
+        q_elec = numpy.linalg.solve(K, R.dot(v - v_nuc))
+        self.assertAlmostEqual(
+            abs(q_nuc + q_elec - smod._intermediates['q']).max(), 0, 10)
+
+    def test_occ_sum_rule(self):
+        # After the correction the total screening charge must equal the exact
+        # Gauss value -f_eps * Q, for neutral and charged solutes alike.
+        for charge, spin, atom in ((0, 0, 'O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587'),
+                                   (-1, 0, 'O 0 0 0; H 0 0 0.97')):
+            m = gto.M(atom=atom, basis='6-31g', charge=charge, spin=spin,
+                      verbose=0, output='/dev/null')
+            cm = pcm.PCM(m)
+            cm.eps = float('inf')
+            cm.method = 'C-PCM'
+            cm.lebedev_order = 29
+            cm.verbose = 0
+            mf = scf.RHF(m).PCM(cm)
+            mf.kernel()
+            ps = cosmors.get_pcm_parameters(mf)
+            f_eps = ps['pcm_data']['f_eps']
+            self.assertAlmostEqual(ps['screening_charge']['total'],
+                                   -f_eps * charge, 9)
+            # the uncorrected sum misses it, so the test is not vacuous
+            self.assertTrue(abs(ps['screening_charge']['correction']) > 1e-4)
+            m.stdout.close()
+
+    def test_occ_values(self):
+        occ = cosmors.get_outlying_charge_correction(mf0)
+        self.assertAlmostEqual(occ['f_nuc'], 1.0016847551, 6)
+        self.assertAlmostEqual(occ['f_elec'], 1.0019332410, 6)
+        ps = cosmors.get_pcm_parameters(mf0)
+        self.assertAlmostEqual(ps['energies']['e_diel_corr'], -0.0023399469, 7)
+        self.assertAlmostEqual(ps['energies']['e_tot_corr'], -112.9530584825, 5)
+        # the correction shifts the segment charges without being a no-op
+        seg = ps['segments']
+        self.assertTrue(
+            abs(numpy.array(seg['charge_corr']) - numpy.array(seg['charge'])).max() > 1e-8)
+        self.assertAlmostEqual(
+            abs(numpy.array(seg['sigma_corr']) * numpy.array(seg['area'])
+                - numpy.array(seg['charge_corr'])).max(), 0, 12)
+
+    def test_occ_unsupported_model(self):
+        # Only C-PCM and COSMO have R proportional to the identity. The others
+        # must refuse rather than report a wrong correction.
+        for method in ('IEF-PCM', 'SS(V)PE'):
+            cm = pcm.PCM(mol)
+            cm.eps = float('inf')
+            cm.method = method
+            cm.lebedev_order = 29
+            cm.verbose = 0
+            mf = dft.RKS(mol, xc='b3lyp').PCM(cm)
+            mf.kernel()
+            self.assertRaises(NotImplementedError,
+                              cosmors.get_outlying_charge_correction, mf)
 
     def test_sas_volume(self):
         V1 = cosmors.get_sas_volume(mf0.with_solvent.surface, step = 0.2) * _BOHR**3

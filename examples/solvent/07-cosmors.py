@@ -31,12 +31,15 @@ mol = gto.M(atom=coords, basis='6-31G*', verbose=1)
 cm = pcm.PCM(mol)
 cm.eps = float('inf') # f_epsilon = 1 is required for COSMO-RS
 cm.method = 'C-PCM' # or COSMO, IEF-PCM, SS(V)PE, see https://manual.q-chem.com/5.4/topic_pcm-em.html
+                    # outlying charge correction requires C-PCM or COSMO
 cm.lebedev_order = 29 # lebedev grids on the cavity surface, lebedev_order=29  <--> # of grids = 302
 
 
 #%% COSMO-files
 
-# Please note, that outlying charge correction is not implemented yet
+# The corrected charges and energies in the COSMO-file carry the outlying
+# charge correction. It is available for C-PCM and COSMO; the other models
+# raise NotImplementedError.
 
 # run DFT SCF (any level of theory is OK, though DFT is optimal)
 mf = dft.RKS(mol, xc='b3lyp')
