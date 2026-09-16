@@ -25,6 +25,10 @@ else
   PARALLEL="-n $PYTEST_JOBS --dist loadfile"
 fi
 
+# try to reduce oversubscription caused by OPENBLAS_THREAD_SERVER
+export OPENBLAS_THREAD_TIMEOUT=4
+export OMP_WAIT_POLICY=passive
+
 mkdir -p pyscftmpdir
 echo 'pbc_tools_pbc_fft_engine = "NUMPY+BLAS"' > .pyscf_conf.py
 echo "dftd3_DFTD3PATH = './pyscf/lib/deps/lib'" >> .pyscf_conf.py
