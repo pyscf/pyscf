@@ -39,7 +39,7 @@ from pyscf.grad import rhf as rhf_grad
 from pyscf.grad.mp2 import _shell_prange
 from pyscf.mcscf.addons import StateAverageMCSCFSolver
 
-def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
+def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None, eris=None):
     mc = mc_grad.base
     if mo_coeff is None: mo_coeff = mc.mo_coeff
     if ci is None: ci = mc.ci
@@ -71,11 +71,11 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
 # gfock = Generalized Fock, Adv. Chem. Phys., 69, 63
     dm_core = numpy.dot(mo_core, mo_core.T) * 2
     dm_cas = reduce(numpy.dot, (mo_cas, casdm1, mo_cas.T))
-    # MRH flag: this is one of my kludges
-    # It would be better to just pass the ERIS object used in orbital optimization
-    # But I am too lazy at the moment
-    aapa = ao2mo.kernel(mol, (mo_cas, mo_cas, mo_occ, mo_cas), compact=False)
-    aapa = aapa.reshape(ncas,ncas,nocc,ncas)
+    if eris is None:
+        aapa = ao2mo.kernel(mol, (mo_cas, mo_cas, mo_occ, mo_cas), compact=False)
+        aapa = aapa.reshape(ncas,ncas,nocc,ncas)
+    else:
+        aapa = numpy.asarray(eris.papa[ncore:ncore+ncas,:,:nocc])
     vj, vk = mc._scf.get_jk(mol, (dm_core, dm_cas))
     h1 = mc.get_hcore()
     vhf_c = vj[0] - vk[0] * .5
@@ -192,7 +192,7 @@ class Gradients(casci_grad.Gradients):
 
     grad_elec = grad_elec
 
-    def kernel(self, mo_coeff=None, ci=None, atmlst=None, verbose=None):
+    def kernel(self, mo_coeff=None, ci=None, atmlst=None, verbose=None, eris=None):
         log = logger.new_logger(self, verbose)
         if ci is None:
             if self.base.ci is None:
@@ -209,7 +209,7 @@ class Gradients(casci_grad.Gradients):
         if self.verbose >= logger.INFO:
             self.dump_flags()
 
-        de = self.grad_elec(mo_coeff, ci, atmlst, log)
+        de = self.grad_elec(mo_coeff, ci, atmlst, log, eris=eris)
         self.de = de = de + self.grad_nuc(atmlst=atmlst)
         if self.mol.symmetry:
             self.de = self.symmetrize(self.de, atmlst)

@@ -673,4 +673,3 @@ if __name__ == '__main__':
     mc = mc.multi_state ([1.0/3,]*3, 'cms').run ()
     mc_grad = Gradients (mc)
     de = np.stack ([mc_grad.kernel (state=i) for i in range (3)], axis=0)
-

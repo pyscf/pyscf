@@ -50,5 +50,3 @@ class Gradients (mspdft_grad.Gradients):
          Lci_dot_dgci_dx=dfsacasscf_grad.Lci_dot_dgci_dx,
          Lorb_dot_dgorb_dx=dfsacasscf_grad.Lorb_dot_dgorb_dx):
             return mspdft_grad.Gradients.get_LdotJnuc (self, Lvec, **kwargs)
-
-
