@@ -37,6 +37,21 @@ print('Analytical Hessian:')
 print(mol.RHF().run().Hessian().kernel())
 
 #
+# Hessian for a method that has an analytic gradient but no analytic second
+# derivative. TDDFT is the common case: excited-state vibrational frequencies
+# are only reachable this way.
+#
+mf = mol.RKS(xc='pbe0')
+mf.grids.level = 5      # a Hessian needs a finer grid than the default
+mf.grids.prune = None
+mf.run(conv_tol=1e-13)
+td = mf.TDA().run(nstates=5)
+# Build the scanner to pin the root being differentiated
+H = finite_diff.kernel(td.nuc_grad_method().as_scanner(state=1))
+print('Finite difference Hessian of the first excited state:')
+print(H)
+
+#
 # Finite difference Gradients as a PySCF builtin Gradients object
 #
 mf = mol.RHF()
