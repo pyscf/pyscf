@@ -50,7 +50,6 @@ ignore = [
     "UP030",    # implicit positional format references
     "FURB161",  # bin(x).count('1') → x.bit_count()
     "PLC0206",  # use .items() instead of dict[key] in loop
-    "PLC0414",  # useless import alias (import x as x)
 
     # ==================================================================
     # ruff 0.16 additions — ignored (unnecessary)
