@@ -1393,7 +1393,7 @@ def get_trans_moments_orbital(adc, orb, spin="alpha"):
     if spin == "alpha":
         # placehold
 
-######## ADC(2) part  ############################################
+        ######## ADC(2) part  ############################################
 
         t2_1_a = adc.t2[0][0][:]
         t2_1_ab = adc.t2[0][1][:]
