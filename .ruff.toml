@@ -49,7 +49,6 @@ ignore = [
     "SIM103",   # if-return bool → return bool(x)
     "UP030",    # implicit positional format references
     "FURB161",  # bin(x).count('1') → x.bit_count()
-    "PERF102",  # use .keys()/.values() instead of .items()
     "PLC0206",  # use .items() instead of dict[key] in loop
     "PLC0414",  # useless import alias (import x as x)
 
