@@ -37,7 +37,7 @@ ignore = [
     "FLY002",   # join → f-string
     "RUF010",   # repr(x) → x!r in f-strings
     "C405",     # set(tuple) → {set}
-    "PLR1711",  # merge isinstance calls (style)
+    "PLR1711",  # return None → return
     "SIM102",   # nested if merge (style)
     "B006",     # mutable default args (None-then-init pattern)
     "B023",     # functions in loops (all false positives)
@@ -47,7 +47,6 @@ ignore = [
     "SIM117",   # merge nested with statements
     "UP028",    # yield from instead of yield
     "UP030",    # implicit positional format references
-    "FURB161",  # bin(x).count('1') → x.bit_count()
     "PLC0206",  # use .items() instead of dict[key] in loop
 
     # ==================================================================
@@ -79,6 +78,7 @@ ignore = [
     "UP035",    # typing.Tuple deprecated — requires Python 3.9+
     "FURB188",  # str.removeprefix() — requires Python 3.9+
     "RUF007",   # zip(x[:-1], x[1:]) → itertools.pairwise() — requires Python 3.10+
+    "FURB161",  # bin(x).count('1') → x.bit_count() — requires Python 3.10+
 
     # ==================================================================
     # ruff 0.16 additions — bug risk / need review
