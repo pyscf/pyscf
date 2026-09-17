@@ -17,7 +17,42 @@ name: CI
 #      - Lint
 #    types:
 #      - completed
-on: [push, pull_request]
+
+# Mirror the path filters of ci-windows.yml: CI runs only when files that can
+# affect the build or the tests change, so doc/example/tooling-only PRs do not
+# occupy runners. workflow_dispatch forces a run that the filters skipped.
+on:
+  push:
+    paths:
+      - ".coveragerc"
+      - ".codecov.yml"
+      - ".gitattributes"
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/ci_linux/**"
+      - ".github/workflows/ci_macos/**"
+      - ".github/workflows/run_ci.sh"
+      - ".github/workflows/run_tests.sh"
+      - "MANIFEST.in"
+      - "pyproject.toml"
+      - "pyscf/**"
+      - "pytest.ini"
+      - "setup.py"
+  pull_request:
+    paths:
+      - ".coveragerc"
+      - ".codecov.yml"
+      - ".gitattributes"
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/ci_linux/**"
+      - ".github/workflows/ci_macos/**"
+      - ".github/workflows/run_ci.sh"
+      - ".github/workflows/run_tests.sh"
+      - "MANIFEST.in"
+      - "pyproject.toml"
+      - "pyscf/**"
+      - "pytest.ini"
+      - "setup.py"
+  workflow_dispatch:
 
 # Superseded runs on a branch are cancelled rather than left to finish; pushing
 # twice in quick succession otherwise leaves two multi-hour runs competing for
