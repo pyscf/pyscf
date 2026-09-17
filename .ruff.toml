@@ -19,7 +19,7 @@ ignore = [
 # Imports:
 "E401", "E402",
 # Other:
-"E701", "E713", "E721", "E731", "E741", "E275",
+"E701", "E713", "E731", "E741", "E275",
     "F401", "F403", "C901", "W391",
 
     # ==================================================================
@@ -108,7 +108,6 @@ ignore = [
     "S110",     # try-except-pass (intentional error suppression)
     "S102",     # exec() (intentional in __config__.py and misc.py)
     "PLW0406",  # module imports itself (intentional pattern)
-    "FA100",    # missing from __future__ import annotations
     "B020",     # loop variable overrides outer (actual bug risk)
     "PYI036",   # __exit__ missing exception parameters
     "PYI006",   # sys.version_info comparison — use < or >= only
