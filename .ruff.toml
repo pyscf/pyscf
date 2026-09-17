@@ -100,7 +100,6 @@ ignore = [
     "PLW0406",  # module imports itself (intentional pattern)
     "B020",     # loop variable overrides outer (actual bug risk)
     "PYI036",   # __exit__ missing exception parameters
-    "PYI006",   # sys.version_info comparison — use < or >= only
 ]
 
 [lint.per-file-ignores]

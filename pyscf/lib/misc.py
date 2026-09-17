@@ -420,7 +420,7 @@ def prange_split(n_total, n_sections):
 
 izip = zip
 
-if sys.version_info > (3, 8):
+if sys.version_info >= (3, 8):
     from math import comb
 else:
     import math
