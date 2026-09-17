@@ -42,7 +42,6 @@ ignore = [
     "B023",     # functions in loops (all false positives)
     "UP036",    # outdated Python version blocks
     "SIM401",   # d.get(k, default) instead of if-else
-    "PIE810",   # single startswith/endswith with tuple
     "SIM117",   # merge nested with statements
     "UP028",    # yield from instead of yield
     "UP030",    # implicit positional format references

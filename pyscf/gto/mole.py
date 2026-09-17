@@ -946,8 +946,7 @@ def intor_cross(intor, mol1, mol2, comp=None, grids=None):
 
     shls_slice = (0, nbas1, nbas1, nbas1+nbas2)
 
-    if (intor.endswith('_sph') or intor.startswith('cint') or
-        intor.endswith('_spinor') or intor.endswith('_cart')):
+    if (intor.endswith(('_sph', '_spinor', '_cart')) or intor.startswith('cint')):
         return moleintor.getints(intor, atmc, basc, envc, shls_slice, comp, 0)
     elif mol1.cart == mol2.cart:
         intor = mol1._add_suffix(intor)
