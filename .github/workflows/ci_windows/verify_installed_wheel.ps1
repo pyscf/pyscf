@@ -101,8 +101,8 @@ try {
     }
 
     # try to reduce oversubscription caused by OPENBLAS_THREAD_SERVER
-    set $env:OPENBLAS_THREAD_TIMEOUT = 4
-    set $env:OMP_WAIT_POLICY = 'passive'
+    $env:OPENBLAS_THREAD_TIMEOUT = 4
+    $env:OMP_WAIT_POLICY = 'passive'
 
     $junitPath = Join-Path $reportDir 'pytest-results.xml'
     $pytestArgs = @(
