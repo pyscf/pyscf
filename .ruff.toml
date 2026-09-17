@@ -46,7 +46,6 @@ ignore = [
     "PIE810",   # single startswith/endswith with tuple
     "SIM117",   # merge nested with statements
     "UP028",    # yield from instead of yield
-    "SIM103",   # if-return bool → return bool(x)
     "UP030",    # implicit positional format references
     "FURB161",  # bin(x).count('1') → x.bit_count()
     "PLC0206",  # use .items() instead of dict[key] in loop
@@ -70,6 +69,7 @@ ignore = [
     "N999",     # invalid module names (historical, cannot rename)
     "RUF059",   # unpacked variables unused (940 instances, mostly benign)
     "G010",     # log.warn → log.warning — PySCF's Logger defines warn, not warning
+    "SIM103",   # if-return bool → return bool(x) — fix will make maintaining harder
 
     # ==================================================================
     # ruff 0.16 additions — need newer Python
