@@ -50,7 +50,6 @@ class GroupElement(ABC):
         '''
         Inverse of the group element.
         '''
-        pass
 
 
 class PGElement(GroupElement):

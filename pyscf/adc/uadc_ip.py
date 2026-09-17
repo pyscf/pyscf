@@ -1077,7 +1077,7 @@ def get_trans_moments_orbital(adc, orb, spin="alpha"):
 ######## spin = alpha  ############################################
 
     if spin == "alpha":
-        pass  # placeholder to mute flake8 warning
+        # placeholder to mute flake8 warning
 
 ######## ADC(2) 1h part  ############################################
 
@@ -1160,7 +1160,7 @@ def get_trans_moments_orbital(adc, orb, spin="alpha"):
 ######## spin = beta  ############################################
 
     else:
-        pass  # placeholder
+        # placeholder
 
 ######## ADC(2) 1h part  ############################################
 

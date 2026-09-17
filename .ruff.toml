@@ -28,7 +28,6 @@ ignore = [
     "B009",     # getattr with constant → attribute access
     "FURB122",  # .write() in loop → .writelines()
     "SIM114",   # combine identical if-else branches
-    "PIE790",   # unnecessary pass
     "C408",     # tuple()/list()/dict() → literal
     "SIM118",   # key in dict.keys() → key in dict
     "PLR1736",  # list index lookup in enumerate loop
