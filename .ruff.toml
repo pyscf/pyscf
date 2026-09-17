@@ -37,7 +37,6 @@ ignore = [
     "FLY002",   # join → f-string
     "RUF010",   # repr(x) → x!r in f-strings
     "C405",     # set(tuple) → {set}
-    "SIM101",   # merge isinstance calls (same as PLR1711)
     "PLR1711",  # merge isinstance calls (style)
     "SIM102",   # nested if merge (style)
     "B006",     # mutable default args (None-then-init pattern)
