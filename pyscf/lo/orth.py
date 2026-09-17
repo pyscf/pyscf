@@ -149,7 +149,7 @@ def project_to_atomic_orbitals(mol, ref_basis):
     aos = {}
     atm = gto.Mole()
     atmp = gto.Mole()
-    for symb in mol._basis.keys():
+    for symb in mol._basis:
         stdsymb = gto.mole._std_symbol(symb)
         atm._atm, atm._bas, atm._env = \
                 atm.make_env([[stdsymb,(0,0,0)]], {stdsymb:mol._basis[symb]}, [])

@@ -29,7 +29,6 @@ ignore = [
     "FURB122",  # .write() in loop → .writelines()
     "SIM114",   # combine identical if-else branches
     "C408",     # tuple()/list()/dict() → literal
-    "SIM118",   # key in dict.keys() → key in dict
     "SIM113",   # use enumerate() for manual index
     "PLR1716",  # chain boolean comparison
     "RUF051",   # d.pop(k, None)
