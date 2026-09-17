@@ -47,6 +47,93 @@ class KnownValues(unittest.TestCase):
         v = vind(scipy.linalg.block_diag(*dm1))
         self.assertAlmostEqual(abs(v - ref).max(), 0, 12)
 
+    def _check_dm0_response(self, mf, dm1, with_nlc):
+        dm0 = mf.make_rdm1()
+        vind_mo = mf.gen_response(mf.mo_coeff, mf.mo_occ, with_nlc=with_nlc)
+        vind_dm0 = mf.gen_response(dm0=dm0, with_nlc=with_nlc)
+        self.assertAlmostEqual(abs(vind_mo(dm1) - vind_dm0(dm1)).max(), 0, 10)
+
+    def test_rhf_response_dm0(self):
+        mol = gto.M(
+            verbose = 0,
+            atom = [
+            ["O" , (0. , 0.     , 0.)],
+            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. , 0.757  , 0.587)]],
+            basis = '631g')
+        nao = mol.nao
+        dm1 = np.random.rand(nao, nao)
+        dm1 = dm1 + dm1.T
+
+        mf = mol.RHF().run()
+        self._check_dm0_response(mf, dm1, with_nlc=True)
+
+        mf = mol.RKS(xc='wb97mv').run()
+        mf.nlcgrids.level = 0
+        self._check_dm0_response(mf, dm1, with_nlc=True)
+
+    def test_uhf_response_dm0(self):
+        mol = gto.M(
+            verbose = 0,
+            atom = [
+            ["O" , (0. , 0.     , 0.)],
+            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. , 0.757  , 0.587)]],
+            charge = 1,
+            spin = 1,
+            basis = '631g')
+        nao = mol.nao
+        dm1 = np.random.rand(2, nao, nao)
+        dm1 = dm1 + dm1.transpose(0, 2, 1)
+
+        mf = mol.UHF().run()
+        self._check_dm0_response(mf, dm1, with_nlc=True)
+
+        mf = mol.UKS(xc='wb97mv').run()
+        mf.nlcgrids.level = 0
+        self._check_dm0_response(mf, dm1, with_nlc=True)
+
+    def test_ghf_response_dm0(self):
+        mol = gto.M(
+            verbose = 0,
+            atom = [
+            ["O" , (0. , 0.     , 0.)],
+            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. , 0.757  , 0.587)]],
+            charge = 1,
+            spin = 1,
+            basis = '631g')
+
+        mf = mol.GHF().run()
+        n2c = mf.mo_coeff.shape[0]
+        dm1 = np.random.rand(n2c, n2c)
+        dm1 = dm1 + dm1.T
+        self._check_dm0_response(mf, dm1, with_nlc=True)
+
+        mf = mol.GKS(xc='wb97mv').run()
+        mf.nlcgrids.level = 0
+        n2c = mf.mo_coeff.shape[0]
+        dm1 = np.random.rand(n2c, n2c)
+        dm1 = dm1 + dm1.T
+        self._check_dm0_response(mf, dm1, with_nlc=True)
+
+    def test_dhf_response_dm0(self):
+        mol = gto.M(
+            verbose = 0,
+            atom = [
+            ["O" , (0. , 0.     , 0.)],
+            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. , 0.757  , 0.587)]],
+            charge = 1,
+            spin = 1,
+            basis = '631g')
+
+        mf = mol.DHF().run()
+        n4c = mf.mo_coeff.shape[0]
+        dm1 = np.random.rand(n4c, n4c) + 1j * np.random.rand(n4c, n4c)
+        dm1 = dm1 + dm1.conj().T
+        self._check_dm0_response(mf, dm1, with_nlc=True)
+
 if __name__ == "__main__":
     print("Full Tests for response_functions")
     unittest.main()
