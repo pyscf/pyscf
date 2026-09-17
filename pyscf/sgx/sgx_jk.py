@@ -1389,8 +1389,8 @@ def _gen_k_direct(mol, aosym, direct_scf_tol,
             vk = numpy.zeros((len(fg),ncomp,nao,ngrids))[:,0]
         assert fg.flags.c_contiguous
         for i, dm in enumerate(fg):
-            assert fg[i].flags.c_contiguous
-            assert fg[i].shape == (ao_loc[-1], ngrids)
+            assert dm.flags.c_contiguous
+            assert dm.shape == (ao_loc[-1], ngrids)
             dmsptr.append(dm.ctypes.data_as(ctypes.c_void_p))
             vjkptr.append(vk[i].ctypes.data_as(ctypes.c_void_p))
             fjk.append(_vhf._fpointer('SGXnr'+aosym+'_ijg_gj_gi'))

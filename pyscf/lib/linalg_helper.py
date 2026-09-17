@@ -441,7 +441,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 
         axt = aop(xt)
         for k, xi in enumerate(xt):
-            xs.append(xt[k])
+            xs.append(xi)
             ax.append(axt[k])
         rnow = len(xt)
         head, space = space, space+rnow
@@ -804,7 +804,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
 
         axt = aop(xt)
         for k, xi in enumerate(xt):
-            xs.append(xt[k])
+            xs.append(xi)
             ax.append(axt[k])
         rnow = len(xt)
         head, space = space, space+rnow
@@ -1104,7 +1104,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
         if type > 1:
             axt = abop(bxt)[0]
         for k, xi in enumerate(xt):
-            xs.append(xt[k])
+            xs.append(xi)
             ax.append(axt[k])
             bx.append(bxt[k])
         rnow = len(xt)

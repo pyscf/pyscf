@@ -30,7 +30,6 @@ ignore = [
     "SIM114",   # combine identical if-else branches
     "C408",     # tuple()/list()/dict() → literal
     "SIM118",   # key in dict.keys() → key in dict
-    "PLR1736",  # list index lookup in enumerate loop
     "SIM113",   # use enumerate() for manual index
     "PLR1716",  # chain boolean comparison
     "RUF051",   # d.pop(k, None)
