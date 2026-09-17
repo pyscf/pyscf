@@ -46,7 +46,6 @@ ignore = [
     "PIE810",   # single startswith/endswith with tuple
     "SIM117",   # merge nested with statements
     "UP028",    # yield from instead of yield
-    "UP018",    # shorthand type(...)
     "SIM201",   # not a == b → a != b
     "SIM103",   # if-return bool → return bool(x)
     "UP030",    # implicit positional format references
