@@ -570,8 +570,8 @@ class Gradients (mcpdft_grad.Gradients):
             xci_norm = np.sqrt (xci_norm)
             for ix, (norm, ss, multip) in enumerate (zip (xci_norm, xci_ss,
                     xci_multip)):
-                log.debug ((f' State {ix} norm = {norm:.7e} ; <S^2> = {ss:.7f} ; 2S+1'
-                            f' = {multip:.7f}'))
+                log.debug (f' State {ix} norm = {norm:.7e} ; <S^2> = {ss:.7f} ; 2S+1'
+                            f' = {multip:.7f}')
             ovlp = np.zeros ((nroots, nroots), dtype=xci[0].dtype)
             for i, j in product (range (nroots), repeat=2):
                 if self.spin_states[i] != self.spin_states[j]: continue

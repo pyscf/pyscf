@@ -560,7 +560,7 @@ def matvec(adc, M_ij=None, eris=None):
         cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(adc.stdout, adc.verbose)
 
-        s = np.zeros((dim))
+        s = np.zeros(dim)
 
         r_a = r[s_a:f_a]
         r_b = r[s_b:f_b]
@@ -1097,7 +1097,7 @@ def matvec(adc, M_ij=None, eris=None):
                 chnk_size = ncvs
 
             a = 0
-            temp_singles = np.zeros((ncvs))
+            temp_singles = np.zeros(ncvs)
             temp_doubles = np.zeros((nvir_a, nvir_a, nvir_a))
             r_aaa_ecc = r_aaa_ecc.reshape(nvir_a,-1)
 
@@ -1221,7 +1221,7 @@ def matvec(adc, M_ij=None, eris=None):
             else :
                 chnk_size = ncvs
             a = 0
-            temp_singles = np.zeros((ncvs))
+            temp_singles = np.zeros(ncvs)
             temp_doubles = np.zeros((nvir_b, nvir_b, nvir_b))
             r_bbb_ecc = r_bbb_ecc.reshape(nvir_b,-1)
             temp_1_ecc = lib.einsum('Pbc,aP->abc',t2_1_b_ccee_t,r_bbb_ecc, optimize=True)
@@ -1658,7 +1658,7 @@ def get_trans_moments_orbital(adc, orb, spin="alpha"):
     s_bbb_ecv = f_bbb_ecc
     f_bbb_ecv = s_bbb_ecv + n_doubles_bbb_ecv
 
-    T = np.zeros((dim))
+    T = np.zeros(dim)
 
 ######## spin = alpha  ############################################
     if spin=="alpha":

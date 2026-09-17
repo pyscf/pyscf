@@ -715,7 +715,7 @@ def matvec(adc, M_ab=None, eris=None):
         cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(adc.stdout, adc.verbose)
 
-        s = np.zeros((dim))
+        s = np.zeros(dim)
 
         r_a = r[s_a:f_a]
         r_b = r[s_b:f_b]
@@ -1386,7 +1386,7 @@ def get_trans_moments_orbital(adc, orb, spin="alpha"):
     s_bbb = f_aba
     f_bbb = s_bbb + n_doubles_bbb
 
-    T = np.zeros((dim))
+    T = np.zeros(dim)
 
 ######## spin = alpha  ############################################
 

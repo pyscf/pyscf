@@ -582,7 +582,7 @@ def _get_init_guess(na, nb, nroots, hdiag, nelec):
         else:
             addrs = numpy.argpartition(hdiag, nroots-1)[:nroots]
         for addr in addrs:
-            x = numpy.zeros((na*nb))
+            x = numpy.zeros(na*nb)
             x[addr] = 1
             ci0.append(x.view(FCIvector))
 

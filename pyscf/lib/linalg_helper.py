@@ -598,7 +598,7 @@ def pick_real_eigs(w, v, nroots, envs):
     abs_imag = abs(w.imag)
     # Grab `nroots` number of e with small(est) imaginary components
     max_imag_tol = max(threshold, numpy.sort(abs_imag)[min(w.size,nroots)-1])
-    real_idx = numpy.where((abs_imag <= max_imag_tol))[0]
+    real_idx = numpy.where(abs_imag <= max_imag_tol)[0]
     nbelow_thresh = numpy.count_nonzero(abs_imag[real_idx] < threshold)
     if nbelow_thresh < nroots and w.size >= nroots:
         warnings.warn('Only %d eigenvalues (out of %3d requested roots) with imaginary part < %4.3g.\n'
