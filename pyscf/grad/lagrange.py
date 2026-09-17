@@ -68,6 +68,8 @@ class Gradients (rhf_grad.GradientsBase):
 
     _keys = {
         'Lvec', 'nlag', 'level_shift', 'conv_atol', 'conv_rtol', 'max_cycle',
+        'l_iter', 'l_hop_setup', 'l_hop_init', 'l_hop_solve',
+        'l_hop_validation', 'l_hop_total',
     }
 
     def __init__(self, method, nlag):
@@ -110,32 +112,60 @@ class Gradients (rhf_grad.GradientsBase):
 
     def solve_lagrange (self, Lvec_guess=None, level_shift=None, **kwargs):
         bvec = self.get_wfn_response (**kwargs)
-        Aop, Adiag = self.get_Aop_Adiag (**kwargs)
-        def my_geff (x):
-            return bvec + Aop (x)
+        raw_Aop, Adiag = self.get_Aop_Adiag (**kwargs)
+        hop_count = [0]
+        def Aop (x):
+            hop_count[0] += 1
+            return raw_Aop (x)
         Lvec_last = np.zeros_like (bvec)
-        def my_Lvec_last ():
-            return Lvec_last
         precond = self.get_lagrange_precond (Adiag, level_shift=level_shift, **kwargs)
         it = np.asarray ([0])
         logger.debug(self, 'Lagrange multiplier determination initial gradient norm: %.8g',
                      linalg.norm(bvec))
-        my_call = self.get_lagrange_callback (Lvec_last, it, my_geff)
-        Aop_obj = sparse_linalg.LinearOperator ((self.nlag,self.nlag), matvec=Aop,
-                                                dtype=bvec.dtype)
-        prec_obj = sparse_linalg.LinearOperator ((self.nlag,self.nlag), matvec=precond,
-                                                 dtype=bvec.dtype)
-        x0_guess = self.get_init_guess (bvec, Adiag, Aop, precond)
-        Lvec, info_int = _cg(Aop_obj, -bvec, x0=x0_guess,
-                             tol=self.conv_rtol, atol=self.conv_atol,
-                             maxiter=self.max_cycle, callback=my_call, M=prec_obj)
-        logger.info (self, ('Lagrange multiplier determination {} after {} iterations\n'
-                            '   |geff| = {}, |Lvec| = {}').format (
-                                'converged' if info_int == 0 else 'not converged',
-                                it[0], linalg.norm (my_geff (Lvec)), linalg.norm (Lvec)))
+        # Preserve the existing one-argument callback API.  geff_op reads the
+        # residual already available inside CG instead of applying Aop again.
+        geff_ref = [None]
+        callback = self.get_lagrange_callback (
+            Lvec_last, it, lambda x: geff_ref[0])
+        def callback_with_residual (x, residual):
+            # CG solves A L = -b, so residual = -b - A L = -geff.
+            geff_ref[0] = -residual
+            callback (x)
+
+        self.l_hop_setup = hop_count[0]
+        init_guess_start = hop_count[0]
+        if Lvec_guess is None:
+            Lvec_guess = self.get_init_guess (bvec, Adiag, Aop, precond)
+        self.l_hop_init = hop_count[0] - init_guess_start
+
+        solve_start = hop_count[0]
+        Lvec, info_int, recursive_residual = _cg_with_residual (
+            Aop, -bvec, Lvec_guess, precond, self.conv_rtol,
+            self.conv_atol, self.max_cycle, callback=callback_with_residual)
+        self.l_hop_solve = hop_count[0] - solve_start
+
+        validation_start = hop_count[0]
+        geff = bvec + Aop (Lvec)
+        self.l_hop_validation = hop_count[0] - validation_start
+        self.l_hop_total = hop_count[0]
+        self.l_iter = int (it[0])
+        conv_tol = max(float(self.conv_atol),
+                       float(self.conv_rtol) * linalg.norm(bvec))
+        converged = linalg.norm(geff) <= conv_tol
+        logger.debug(self, 'Lagrange recursive/exact residual difference: %.8g',
+                     linalg.norm(geff + recursive_residual))
+        logger.info (self, ('Lagrange multiplier determination %s after %d iterations\n'
+                            '   |geff| = %s, |Lvec| = %s\n'
+                            '   Hessian products: setup %d, initial guess %d, '
+                            'solve %d, validation %d, total %d'),
+                     'converged' if converged else 'not converged',
+                     it[0], linalg.norm(geff), linalg.norm(Lvec),
+                     self.l_hop_setup, self.l_hop_init,
+                     self.l_hop_solve, self.l_hop_validation,
+                     self.l_hop_total)
         if info_int < 0:
-            logger.info (self, f'Lagrange multiplier determination error code {info_int}')
-        return (info_int==0), Lvec, bvec, Aop, Adiag
+            logger.info (self, 'Lagrange multiplier determination error code %s', info_int)
+        return converged, Lvec, bvec, raw_Aop, Adiag
 
     def kernel (self, level_shift=None, **kwargs):
         cput0 = (logger.process_clock(), logger.perf_counter())
@@ -161,7 +191,8 @@ class Gradients (rhf_grad.GradientsBase):
                         self.base.__class__.__name__)
             rhf_grad._write(self, self.mol, ham_response, self.atmlst)
             logger.info(self, '----------------------------------------------')
-            cput1 = logger.timer (self, 'Lagrange gradient Hellmann-Feynman determination', *cput1)
+            cput1 = logger.timer (
+                self, 'Lagrange gradient Hellmann-Feynman determination', *cput1)
 
         LdotJnuc = self.get_LdotJnuc (self.Lvec, **kwargs)
         if self.verbose >= logger.INFO:
@@ -169,8 +200,7 @@ class Gradients (rhf_grad.GradientsBase):
                         self.base.__class__.__name__)
             rhf_grad._write(self, self.mol, LdotJnuc, self.atmlst)
             logger.info(self, '----------------------------------------------')
-            cput1 = logger.timer (self, 'Lagrange gradient Jacobian', *cput1)
-
+            logger.timer (self, 'Lagrange gradient Jacobian', *cput1)
         self.de = ham_response + LdotJnuc
         log.timer('Lagrange gradients', *cput0)
         self._finalize()
@@ -190,6 +220,47 @@ class LagPrec :
         Adiagd[abs(Adiagd)<1e-8] = 1e-8
         x /= Adiagd
         return x
+
+def _cg_with_residual(Aop, bvec, x0, precond, tol, atol, maxiter,
+                      callback=None):
+    '''Preconditioned CG whose callback receives the current residual.'''
+    x = np.array(x0, copy=True)
+    rhs = np.asarray(bvec)
+    conv_tol = max(float(atol), float(tol) * linalg.norm(rhs))
+    residual = rhs - Aop(x)
+    search = None
+    rz_last = None
+
+    for _ in range(maxiter):
+        if linalg.norm(residual) <= conv_tol:
+            return x, 0, residual
+        # Some PySCF preconditioners modify their argument in place.
+        zvec = np.asarray(precond(residual.copy()))
+        rz = np.vdot(residual, zvec)
+        rz_scale = linalg.norm(residual) * linalg.norm(zvec)
+        if (not np.isfinite(rz) or rz_scale == 0 or
+                abs(rz) <= np.finfo(float).eps * rz_scale):
+            return x, -1, residual
+        if search is None:
+            search = zvec.copy()
+        else:
+            search *= rz / rz_last
+            search += zvec
+        hsearch = Aop(search)
+        curvature = np.vdot(search, hsearch)
+        curvature_scale = linalg.norm(search) * linalg.norm(hsearch)
+        if (not np.isfinite(curvature) or curvature_scale == 0 or
+                abs(curvature) <= np.finfo(float).eps * curvature_scale):
+            return x, -1, residual
+        alpha = rz / curvature
+        x += alpha * search
+        residual -= alpha * hsearch
+        rz_last = rz
+        if callback is not None:
+            callback(x, residual)
+    if linalg.norm(residual) <= conv_tol:
+        return x, 0, residual
+    return x, maxiter, residual
 
 if int (scipy.__version__.split('.')[1]) >= 14: # scipy 1.14
     def _cg(A, b, x0=None, *, tol=1e-05, atol=0.0, maxiter=None, M=None, callback=None):

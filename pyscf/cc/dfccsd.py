@@ -48,6 +48,10 @@ class RCCSD(ccsd.CCSD):
         assert (not self.direct)
         return ccsd.CCSD._add_vvvv(self, t1, t2, eris, out, with_ovvv, t2sym)
 
+    def nuc_grad_method(self):
+        from pyscf.df.grad import ccsd as dfccsd_grad
+        return dfccsd_grad.Gradients(self)
+
 DFCCSD = DFRCCSD = RCCSD
 
 from pyscf import scf

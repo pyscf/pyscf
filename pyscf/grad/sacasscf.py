@@ -400,9 +400,10 @@ class CASSCF_GradScanner(lib.GradScanner):
 class Gradients (lagrange.Gradients):
 
     _keys = {
-        'ngorb', 'nroots', 'spin_states', 'na_states', 'nb_states', 'nci', 'state', 'eris', 'weights', 'e_states', 'max_cycle', 'ncas',
-        'e_cas', 'nelecas', 'mo_occ', 'mo_energy', 'mo_coeff', 'callback',
-        'chkfile', 'nlag', 'frozen', 'level_shift', 'extrasym', 'fcisolver',
+        'ngorb', 'nroots', 'spin_states', 'na_states', 'nb_states', 'nci', 'state',
+        'eris', 'weights', 'e_states', 'max_cycle', 'ncas','e_cas', 'nelecas',
+        'mo_occ', 'mo_energy', 'mo_coeff', 'callback', 'chkfile', 'nlag', 'frozen',
+        'level_shift', 'extrasym', 'fcisolver',
     }
 
     def __init__(self, mc, state=None):
@@ -584,7 +585,8 @@ class Gradients (lagrange.Gradients):
             self, state=state, atmlst=atmlst, verbose=verbose, mo=mo, ci=ci, eris=eris,
             mf_grad=mf_grad, e_states=e_states, level_shift=level_shift, **kwargs)
 
-    def get_wfn_response (self, atmlst=None, state=None, verbose=None, mo=None, ci=None, **kwargs):
+    def get_wfn_response (self, atmlst=None, state=None, verbose=None, mo=None, ci=None,
+                          eris=None, **kwargs):
         if state is None: state = self.state
         if atmlst is None: atmlst = self.atmlst
         if verbose is None: verbose = self.verbose
@@ -594,7 +596,8 @@ class Gradients (lagrange.Gradients):
         fcasscf = self.make_fcasscf (state)
         fcasscf.mo_coeff = mo
         fcasscf.ci = ci[state]
-        eris = fcasscf.ao2mo (mo)
+        if eris is None:
+            eris = fcasscf.ao2mo (mo)
         g_all_state = newton_casscf.gen_g_hop (fcasscf, mo, ci[state], eris, verbose)[0]
         g_all = np.zeros (self.nlag)
         g_all[:self.ngorb] = g_all_state[:self.ngorb]
@@ -637,7 +640,8 @@ class Gradients (lagrange.Gradients):
         fcasscf_grad = casscf_grad.Gradients (self.make_fcasscf (state))
         # Mute some misleading messages
         fcasscf_grad._finalize = lambda: None
-        return fcasscf_grad.kernel (mo_coeff=mo, ci=ci[state], atmlst=atmlst, verbose=verbose)
+        return fcasscf_grad.kernel (mo_coeff=mo, ci=ci[state], atmlst=atmlst,
+                                    verbose=verbose, eris=eris)
 
     def get_LdotJnuc (self, Lvec, state=None, atmlst=None, verbose=None, mo=None, ci=None,
                       eris=None, mf_grad=None, **kwargs):
@@ -722,7 +726,8 @@ class Gradients (lagrange.Gradients):
             deltaorb, deltaci = self.unpack_uniq_var (deltax)
             gci = np.concatenate ([g.ravel () for g in gci])
             deltaci = np.concatenate ([d.ravel () for d in deltaci])
-            logger.info(self, (f'Lagrange optimization iteration {itvec[0]}, |gorb| = {linalg.norm (gorb)}, |gci| = {linalg.norm (gci)}, '
+            logger.info(self, (f'Lagrange optimization iteration {itvec[0]}, \
+                               |gorb| = {linalg.norm (gorb)}, |gci| = {linalg.norm (gci)}, '
                                f'|dLorb| = {linalg.norm (deltaorb)}, |dLci| = {linalg.norm (deltaci)}'))
             Lvec_last[:] = x[:]
         return my_call
