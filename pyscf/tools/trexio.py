@@ -85,10 +85,10 @@ def to_trexio(
     filename : str
         Path to the output TREXIO file.  An existing file (HDF5 backend) or
         directory (text backend) at this path is removed before writing.
-    backend : {'h5', 'hdf5', 'text', 'txt', 'auto'}, optional
+    backend : {'h5', 'hdf5', 'text', 'txt'}, optional
         TREXIO backend.  ``'h5'``/``'hdf5'`` produces a single HDF5 binary
         file (default).  ``'text'``/``'txt'`` produces a directory of plain
-        text files.  ``'auto'`` lets TREXIO detect the format from *filename*.
+        text files.
     write_ao_eri : bool, optional
         *SCF only.*  When ``True``, write the AO-basis one-electron integrals
         (overlap, kinetic, nuclear attraction, core Hamiltonian stored as
@@ -440,9 +440,7 @@ def _trexio_backend_const(backend='h5'):
         return trexio.TREXIO_HDF5
     if key in ('text', 'txt'):
         return trexio.TREXIO_TEXT
-    if key == 'auto':
-        return trexio.TREXIO_AUTO
-    raise ValueError("backend must be one of 'h5', 'hdf5', 'text', 'txt', or 'auto'")
+    raise ValueError("backend must be one of 'h5', 'hdf5', 'text', or 'txt'")
 
 
 def _mol_to_trexio(mol, trexio_file):

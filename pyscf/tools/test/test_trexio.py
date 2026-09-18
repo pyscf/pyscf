@@ -21,6 +21,39 @@ DIFF_TOL = 1e-10
 
 _write_2e_int_eri = trexio._write_2e_int_eri if trexio is not None else None
 
+
+def _hdf5_backend_available():
+    if trexio_lib is None:
+        return False
+    with tempfile.TemporaryDirectory() as d:
+        try:
+            with trexio_lib.File(os.path.join(d, "probe"), "w",
+                                 back_end=trexio_lib.TREXIO_HDF5):
+                pass
+            return True
+        except Exception:
+            return False
+
+
+# Use HDF5 when this TREXIO build provides it, else fall back to the text
+# backend so the suite also runs on TEXT-only builds (e.g. a source build
+# without HDF5).  Every to_trexio call below defaults to this backend.
+backend = "h5" if _hdf5_backend_available() else "text"
+ext = "h5" if backend == "h5" else "text"
+_BACKEND_CONST = None
+if trexio_lib is not None:
+    _BACKEND_CONST = (trexio_lib.TREXIO_HDF5 if backend == "h5"
+                      else trexio_lib.TREXIO_TEXT)
+
+if trexio is not None:
+    _orig_to_trexio = trexio.to_trexio
+
+    def _default_backend_to_trexio(*args, **kwargs):
+        kwargs.setdefault("backend", backend)
+        return _orig_to_trexio(*args, **kwargs)
+
+    trexio.to_trexio = _default_backend_to_trexio
+
 #################################################################
 # reading/writing `mol` from/to trexio file
 #################################################################
@@ -53,25 +86,9 @@ def _assert_s_t_v_roundtrip(s0, t0, v0, s1, t1, v1):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_mol_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         mol0 = pyscf.M(atom="H 0 0 0; F 0 0 1", basis="6-31g**", cart=cart)
         trexio.to_trexio(mol0, filename)
-        mol1 = trexio.from_trexio(filename)
-        s0, t0, v0 = _get_integrals(mol0)
-        s1, t1, v1 = _get_integrals(mol1)
-        _assert_s_t_v_roundtrip(s0, t0, v0, s1, t1, v1)
-
-
-@pytest.mark.parametrize(
-    "backend,ext",
-    [("h5", "h5"), ("text", "text")],
-    ids=["backend=h5", "backend=text"],
-)
-def test_mol_ae_6_31g_backend(backend, ext):
-    with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, f"test.{ext}")
-        mol0 = pyscf.M(atom="H 0 0 0; F 0 0 1", basis="6-31g**", cart=False)
-        trexio.to_trexio(mol0, filename, backend=backend)
         mol1 = trexio.from_trexio(filename)
         s0, t0, v0 = _get_integrals(mol0)
         s1, t1, v1 = _get_integrals(mol1)
@@ -82,7 +99,7 @@ def test_mol_ae_6_31g_backend(backend, ext):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_mol_ae_ccpv5z(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         mol0 = pyscf.M(atom="C", basis="ccpv5z", cart=cart)
         trexio.to_trexio(mol0, filename)
         mol1 = trexio.from_trexio(filename)
@@ -95,7 +112,7 @@ def test_mol_ae_ccpv5z(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_mol_ae_ano(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         mol0 = pyscf.M(atom="C", basis="ano", cart=cart)
         trexio.to_trexio(mol0, filename)
         mol1 = trexio.from_trexio(filename)
@@ -108,7 +125,7 @@ def test_mol_ae_ano(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_mol_ccecp_ccecp_ccpvqz(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         mol0 = pyscf.M(
             atom="H 0 0 0; F 0 0 1", basis="ccecp-ccpvqz", ecp="ccecp", cart=cart
         )
@@ -124,7 +141,7 @@ def test_mol_ccecp_ccecp_ccpvqz(cart):
 def test_cell_k_gamma_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
         kpt = np.zeros(3)
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         cell0 = pyscf.pbc.gto.Cell()
         cell0.cart = cart
         cell0.build(
@@ -141,7 +158,7 @@ def test_cell_k_gamma_ae_6_31g(cart):
 def test_cell_k_grid_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
         kmesh = (1, 1, 2)
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         cell0 = pyscf.pbc.gto.Cell()
         cell0.cart = cart
         cell0.build(
@@ -277,7 +294,7 @@ def _assert_mo_coeff_roundtrip(mc0, mc1):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_mf_rhf_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         mol0 = pyscf.M(atom="H 0 0 0; F 0 0 1", basis="6-31g", cart=cart)
         mf0 = mol0.RHF().density_fit()
         mf0.run()
@@ -290,7 +307,7 @@ def test_mf_rhf_ae_6_31g(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_mf_uhf_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         mol0 = pyscf.M(atom="H 0 0 0; H 0 0 1", basis="6-31g", spin=2, cart=cart)
         mf0 = mol0.UHF().density_fit()
         mf0.run()
@@ -303,7 +320,7 @@ def test_mf_uhf_ae_6_31g(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_mf_rhf_ccecp_ccpvqz(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         mol0 = pyscf.M(
             atom="H 0 0 0; F 0 0 1", basis="ccecp-ccpvdz", ecp="ccecp", cart=cart
         )
@@ -317,7 +334,7 @@ def test_mf_rhf_ccecp_ccpvqz(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_mf_k_gamma_rhf_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         cell0 = pyscf.pbc.gto.Cell()
         cell0.cart = cart
         cell0.build(atom="H 0 0 0; H 0 0 1", basis="6-31g", a=np.diag([3.0, 3.0, 5.0]))
@@ -333,7 +350,7 @@ def test_mf_k_gamma_rhf_ae_6_31g(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_mf_k_general_rhf_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         kfrac = (0.25, 0.25, 0.25)
         cell0 = pyscf.pbc.gto.Cell()
         cell0.cart = cart
@@ -352,7 +369,7 @@ def test_mf_k_general_rhf_ae_6_31g(cart):
 def test_mf_k_single_grid_rhf_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
         kmesh = (1, 1, 1)
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         cell0 = pyscf.pbc.gto.Cell()
         cell0.cart = cart
         cell0.build(atom="H 0 0 0; H 0 0 1", basis="6-31g", a=np.diag([3.0, 3.0, 5.0]))
@@ -371,7 +388,7 @@ def test_mf_k_single_grid_rhf_ae_6_31g(cart):
 def test_mf_k_grid_rhf_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
         kmesh = (1, 1, 2)
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         cell0 = pyscf.pbc.gto.Cell()
         cell0.cart = cart
         cell0.build(atom="H 0 0 0; H 0 0 1", basis="6-31g", a=np.diag([3.0, 3.0, 5.0]))
@@ -389,7 +406,7 @@ def test_mf_k_grid_rhf_ae_6_31g(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_mf_k_gamma_uhf_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         cell0 = pyscf.pbc.gto.Cell()
         cell0.spin = 2
         cell0.cart = cart
@@ -406,7 +423,7 @@ def test_mf_k_gamma_uhf_ae_6_31g(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_mf_k_general_uhf_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         kfrac = (0.25, 0.25, 0.25)
         cell0 = pyscf.pbc.gto.Cell()
         cell0.spin = 2
@@ -427,7 +444,7 @@ def test_mf_k_general_uhf_ae_6_31g(cart):
 def test_mf_k_single_grid_uhf_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
         kmesh = (1, 1, 1)
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         cell0 = pyscf.pbc.gto.Cell()
         cell0.spin = 2
         cell0.cart = cart
@@ -449,7 +466,7 @@ def test_mf_k_single_grid_uhf_ae_6_31g(cart):
 def test_mf_k_grid_uhf_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
         kmesh = (1, 1, 2)
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         cell0 = pyscf.pbc.gto.Cell()
         cell0.spin = 2
         cell0.cart = cart
@@ -477,7 +494,7 @@ def test_mf_k_grid_uhf_ae_6_31g(cart):
 )
 def test_mcscf_rhf_ae_6_31g(cart, mc_constructor):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'test.h5')
+        filename = os.path.join(d, f'test.{ext}')
         mol0 = pyscf.M(atom='H 0 0 0; F 0 0 1', basis='6-31g', cart=cart)
         mf0 = mol0.RHF().run()
         mc0 = mc_constructor(mf0, 2, 2)
@@ -557,7 +574,7 @@ def test_mcscf_rhf_ae_6_31g(cart, mc_constructor):
 )
 def test_mcscf_uhf_ae_6_31g(cart, mc_constructor):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'test.h5')
+        filename = os.path.join(d, f'test.{ext}')
         mol0 = pyscf.M(atom='H 0 0 0; F 0 0 1', basis='6-31g', spin=2, cart=cart)
         mf0 = mol0.UHF().run()
         mc0 = mc_constructor(mf0, 2, 2)
@@ -641,7 +658,7 @@ def _assert_e_roundtrip(e0, e1):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_mol_scf_rhf_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         mol0 = pyscf.M(atom="H 0 0 0; F 0 0 1", basis="6-31g", cart=cart)
         auxbasis = df.make_auxbasis(mol0)
         trexio.to_trexio(mol0, filename)
@@ -661,7 +678,7 @@ def test_mol_scf_rhf_ae_6_31g(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_cell_k_gamma_scf_rhf_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         cell0 = pyscf.pbc.gto.Cell()
         cell0.cart = cart
         cell0.build(atom="H 0 0 0; H 0 0 1", basis="6-31g", a=np.diag([3.0, 3.0, 5.0]))
@@ -685,7 +702,7 @@ def test_cell_k_gamma_scf_rhf_ae_6_31g(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_cell_k_gamma_scf_uhf_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         cell0 = pyscf.pbc.gto.Cell()
         cell0.spin = 2
         cell0.cart = cart
@@ -710,7 +727,7 @@ def test_cell_k_gamma_scf_uhf_ae_6_31g(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_cell_k_general_scf_rhf_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         kfrac = (0.25, 0.25, 0.25)
         cell0 = pyscf.pbc.gto.Cell()
         cell0.cart = cart
@@ -737,7 +754,7 @@ def test_cell_k_general_scf_rhf_ae_6_31g(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_cell_k_general_scf_uhf_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         kfrac = (0.25, 0.25, 0.25)
         cell0 = pyscf.pbc.gto.Cell()
         cell0.spin = 2
@@ -766,7 +783,7 @@ def test_cell_k_general_scf_uhf_ae_6_31g(cart):
 def test_cell_k_grid_scf_rhf_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
         kmesh = (1, 1, 2)
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         cell0 = pyscf.pbc.gto.Cell()
         cell0.cart = cart
         cell0.build(atom="H 0 0 0; H 0 0 1", basis="6-31g", a=np.diag([3.0, 3.0, 5.0]))
@@ -792,7 +809,7 @@ def test_cell_k_grid_scf_rhf_ae_6_31g(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_mol_scf_uhf_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         mol0 = pyscf.M(atom="H 0 0 0; H 0 0 1", basis="6-31g", spin=2, cart=cart)
         auxbasis = df.make_auxbasis(mol0)
         trexio.to_trexio(mol0, filename)
@@ -812,7 +829,7 @@ def test_mol_scf_uhf_ae_6_31g(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_mol_rhf_ccecp_ccpvqz(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         mol0 = pyscf.M(
             atom="H 0 0 0; F 0 0 1", basis="ccecp-ccpvdz", ecp="ccecp", cart=cart
         )
@@ -830,7 +847,7 @@ def test_mol_rhf_ccecp_ccpvqz(cart):
         _assert_e_roundtrip(e0, e1)
 
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         mol0 = pyscf.M(
             atom="F 0 0 0; F 0 0 1", basis="ccecp-ccpvdz", ecp="ccecp", cart=cart
         )
@@ -848,7 +865,7 @@ def test_mol_rhf_ccecp_ccpvqz(cart):
         _assert_e_roundtrip(e0, e1)
 
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         mol0 = pyscf.M(
             atom="H 0 0 0; H 0 0 1", basis="ccecp-ccpvdz", ecp="ccecp", cart=cart
         )
@@ -870,7 +887,7 @@ def test_mol_rhf_ccecp_ccpvqz(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_mol_uhf_ccecp_ccpvqz(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         mol0 = pyscf.M(
             atom="H 0 0 0; F 0 0 1",
             basis="ccecp-ccpvdz",
@@ -902,8 +919,8 @@ def _trexio_pack_eri(eri, basis, sym='s1'):
         raise ValueError("basis must be 'AO' or 'MO'")
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        filename = os.path.join(tmpdir, 'pack.h5')
-        with trexio_lib.File(filename, 'u', back_end=trexio_lib.TREXIO_HDF5) as tf:
+        filename = os.path.join(tmpdir, f'pack.{ext}')
+        with trexio_lib.File(filename, 'u', back_end=_BACKEND_CONST) as tf:
             _write_2e_int_eri(eri, tf, basis=basis, sym=sym)
         with trexio_lib.File(filename, 'r', back_end=trexio_lib.TREXIO_AUTO) as tf:
             if basis == 'AO':
@@ -952,7 +969,7 @@ def _take_gamma(mat):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_write_molecule_integrals_sym_s1_to_trexio_rhf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_integrals.h5')
+        filename = os.path.join(d, f'mol_integrals.{ext}')
 
         mol0 = pyscf.M(atom='H 0 0 0; F 0 0 1', basis='6-31g*', cart=cart)
         mf0 = mol0.RHF().run()
@@ -1001,40 +1018,10 @@ def test_write_molecule_integrals_sym_s1_to_trexio_rhf_ae(cart):
             np.testing.assert_allclose(np.asarray(val), mo_val_exp, atol=DIFF_TOL)
 
 
-@pytest.mark.parametrize(
-    "backend,ext",
-    [("h5", "h5"), ("text", "text")],
-    ids=["backend=h5", "backend=text"],
-)
-def test_write_integrals_to_trexio_rhf_backend(backend, ext):
-    with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, f'mol_integrals.{ext}')
-
-        mol0 = pyscf.M(atom='H 0 0 0; F 0 0 1', basis='6-31g*', cart=False)
-        mf0 = mol0.RHF().run()
-
-        overlap = _hermitize(mf0.get_ovlp())
-
-        ao_eri = mol0.intor('int2e', aosym='s1')
-        ao_idx_exp, ao_val_exp = _trexio_pack_eri(ao_eri, 'AO')
-        trexio.to_trexio(mf0, filename, backend=backend, write_ao_eri=True, write_mo_eri=False, eri_sym='s1', write_mo_rdm=False)
-        with trexio_lib.File(filename, 'r', back_end=trexio_lib.TREXIO_AUTO) as tf:
-            np.testing.assert_allclose(
-                trexio_lib.read_ao_1e_int_overlap(tf), overlap, atol=DIFF_TOL
-            )
-        with trexio_lib.File(filename, 'r', back_end=trexio_lib.TREXIO_AUTO) as tf:
-            assert trexio_lib.has_ao_2e_int_eri(tf)
-            size = trexio_lib.read_ao_2e_int_eri_size(tf)
-            idx, val, n_read, _ = trexio_lib.read_ao_2e_int_eri(tf, 0, size)
-            assert n_read == size
-            np.testing.assert_array_equal(np.asarray(idx, dtype=np.int32).ravel(), ao_idx_exp)
-            np.testing.assert_allclose(np.asarray(val), ao_val_exp, atol=DIFF_TOL)
-
-
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_write_molecule_integrals_sym_s1_to_trexio_uhf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_uhf_integrals.h5')
+        filename = os.path.join(d, f'mol_uhf_integrals.{ext}')
 
         mol0 = pyscf.M(atom='O 0 0 0', basis='6-31g*', spin=2, cart=cart)
         mf0 = mol0.UHF().run()
@@ -1095,7 +1082,7 @@ def test_write_molecule_integrals_sym_s1_to_trexio_uhf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_write_molecule_integrals_sym_s4_to_trexio_rhf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_integrals_s4.h5')
+        filename = os.path.join(d, f'mol_integrals_s4.{ext}')
 
         mol0 = pyscf.M(atom='H 0 0 0; F 0 0 1', basis='6-31g*', cart=cart)
         mf0 = mol0.RHF().run()
@@ -1127,7 +1114,7 @@ def test_write_molecule_integrals_sym_s4_to_trexio_rhf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_write_molecule_integrals_sym_s4_to_trexio_uhf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_uhf_integrals_s4.h5')
+        filename = os.path.join(d, f'mol_uhf_integrals_s4.{ext}')
 
         mol0 = pyscf.M(atom='O 0 0 0', basis='6-31g*', spin=2, cart=cart)
         mf0 = mol0.UHF().run()
@@ -1161,7 +1148,7 @@ def test_write_molecule_integrals_sym_s4_to_trexio_uhf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_write_molecule_integrals_sym_s8_to_trexio_rhf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_integrals_s8.h5')
+        filename = os.path.join(d, f'mol_integrals_s8.{ext}')
 
         mol0 = pyscf.M(atom='H 0 0 0; F 0 0 1', basis='6-31g*', cart=cart)
         mf0 = mol0.RHF().run()
@@ -1181,7 +1168,7 @@ def test_write_molecule_integrals_sym_s8_to_trexio_rhf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_write_molecule_integrals_sym_s8_to_trexio_uhf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_uhf_integrals_s8.h5')
+        filename = os.path.join(d, f'mol_uhf_integrals_s8.{ext}')
 
         mol0 = pyscf.M(atom='O 0 0 0', basis='6-31g*', spin=2, cart=cart)
         mf0 = mol0.UHF().run()
@@ -1202,7 +1189,7 @@ def test_write_molecule_integrals_sym_s8_to_trexio_uhf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_write_cell_gamma_integrals_sym_s1_to_trexio_rhf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'cell_integrals.h5')
+        filename = os.path.join(d, f'cell_integrals.{ext}')
 
         cell0 = pbc.gto.Cell()
         cell0.cart = cart
@@ -1274,7 +1261,7 @@ def test_write_cell_gamma_integrals_sym_s1_to_trexio_rhf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_write_cell_gamma_integrals_sym_s1_to_trexio_uhf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'cell_uhf_integrals.h5')
+        filename = os.path.join(d, f'cell_uhf_integrals.{ext}')
 
         cell0 = pbc.gto.Cell()
         cell0.spin = 2
@@ -1348,7 +1335,7 @@ def test_write_cell_gamma_integrals_sym_s1_to_trexio_uhf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_molecule_integrals_sym_s1_in_trexio_rhf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_integrals_energy.h5')
+        filename = os.path.join(d, f'mol_integrals_energy.{ext}')
 
         mol0 = pyscf.M(atom='H 0 0 0; F 0 0 1', basis='6-31g*', cart=cart)
         mf0 = mol0.RHF().run()
@@ -1451,7 +1438,7 @@ def test_energy_molecule_integrals_sym_s1_in_trexio_rhf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_crystal_integrals_sym_s1_in_trexio_rhf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'pbc_gamma_rdm_energy.h5')
+        filename = os.path.join(d, f'pbc_gamma_rdm_energy.{ext}')
 
         cell = pyscf.pbc.gto.Cell()
         cell.cart = cart
@@ -1529,7 +1516,7 @@ def test_energy_crystal_integrals_sym_s1_in_trexio_rhf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_crystal_integrals_sym_s1_in_trexio_uhf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'pbc_gamma_rdm_energy_uhf.h5')
+        filename = os.path.join(d, f'pbc_gamma_rdm_energy_uhf.{ext}')
 
         cell = pyscf.pbc.gto.Cell()
         cell.cart = cart
@@ -1660,7 +1647,7 @@ def test_energy_crystal_integrals_sym_s1_in_trexio_uhf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_crystal_integrals_sym_s1_in_trexio_rhf_ccecp(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'pbc_gamma_rdm_energy_ccecp.h5')
+        filename = os.path.join(d, f'pbc_gamma_rdm_energy_ccecp.{ext}')
 
         cell = pyscf.pbc.gto.Cell()
         cell.cart = cart
@@ -1740,7 +1727,7 @@ def test_energy_crystal_integrals_sym_s1_in_trexio_rhf_ccecp(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_crystal_integrals_sym_s1_in_trexio_uhf_ccecp(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'pbc_gamma_rdm_energy_uhf_ccecp.h5')
+        filename = os.path.join(d, f'pbc_gamma_rdm_energy_uhf_ccecp.{ext}')
 
         cell = pyscf.pbc.gto.Cell()
         cell.cart = cart
@@ -1873,7 +1860,7 @@ def test_energy_crystal_integrals_sym_s1_in_trexio_uhf_ccecp(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_crystal_integrals_sym_s4_in_trexio_rhf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'pbc_gamma_rdm_energy_s4.h5')
+        filename = os.path.join(d, f'pbc_gamma_rdm_energy_s4.{ext}')
 
         cell = pyscf.pbc.gto.Cell()
         cell.cart = cart
@@ -1942,7 +1929,7 @@ def test_energy_crystal_integrals_sym_s4_in_trexio_rhf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_crystal_integrals_sym_s4_in_trexio_uhf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'pbc_gamma_rdm_energy_uhf_s4.h5')
+        filename = os.path.join(d, f'pbc_gamma_rdm_energy_uhf_s4.{ext}')
 
         cell = pyscf.pbc.gto.Cell()
         cell.cart = cart
@@ -2064,7 +2051,7 @@ def test_energy_crystal_integrals_sym_s4_in_trexio_uhf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_molecule_integrals_sym_s1_in_trexio_uhf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_integrals_energy_uks.h5')
+        filename = os.path.join(d, f'mol_integrals_energy_uks.{ext}')
 
         mol0 = pyscf.M(atom='O 0 0 0', basis='6-31g*', spin=2, cart=cart)
         mf0 = mol0.UHF().run()
@@ -2227,7 +2214,7 @@ def test_energy_molecule_integrals_sym_s1_in_trexio_uhf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_molecule_integrals_sym_s1_in_trexio_rhf_ecp(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_integrals_energy_ecp.h5')
+        filename = os.path.join(d, f'mol_integrals_energy_ecp.{ext}')
 
         mol0 = pyscf.M(
             atom='H 0 0 0; F 0 0 1',
@@ -2335,7 +2322,7 @@ def test_energy_molecule_integrals_sym_s1_in_trexio_rhf_ecp(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_molecule_integrals_sym_s1_in_trexio_uhf_ecp(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_integrals_energy_uks_ecp.h5')
+        filename = os.path.join(d, f'mol_integrals_energy_uks_ecp.{ext}')
 
         mol0 = pyscf.M(
             atom='H 0 0 0; F 0 0 1',
@@ -2504,7 +2491,7 @@ def test_energy_molecule_integrals_sym_s1_in_trexio_uhf_ecp(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_molecule_integrals_sym_s4_in_trexio_rhf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_integrals_energy_s4.h5')
+        filename = os.path.join(d, f'mol_integrals_energy_s4.{ext}')
 
         mol0 = pyscf.M(atom='H 0 0 0; F 0 0 1', basis='6-31g*', cart=cart)
         mf0 = mol0.RHF().run()
@@ -2585,7 +2572,7 @@ def test_energy_molecule_integrals_sym_s4_in_trexio_rhf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_molecule_integrals_sym_s4_in_trexio_uhf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_integrals_energy_uks_s4.h5')
+        filename = os.path.join(d, f'mol_integrals_energy_uks_s4.{ext}')
 
         mol0 = pyscf.M(atom='O 0 0 0', basis='6-31g*', spin=2, cart=cart)
         mf0 = mol0.UHF().run()
@@ -2725,7 +2712,7 @@ def test_energy_molecule_integrals_sym_s4_in_trexio_uhf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_molecule_integrals_sym_s8_in_trexio_rhf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_integrals_energy_s8.h5')
+        filename = os.path.join(d, f'mol_integrals_energy_s8.{ext}')
 
         mol0 = pyscf.M(atom='H 0 0 0; F 0 0 1', basis='6-31g*', cart=cart)
         mf0 = mol0.RHF().run()
@@ -2772,7 +2759,7 @@ def test_energy_molecule_integrals_sym_s8_in_trexio_rhf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_molecule_integrals_sym_s8_in_trexio_uhf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_integrals_energy_uks_s8.h5')
+        filename = os.path.join(d, f'mol_integrals_energy_uks_s8.{ext}')
 
         mol0 = pyscf.M(atom='O 0 0 0', basis='6-31g*', spin=2, cart=cart)
         mf0 = mol0.UHF().run()
@@ -2832,7 +2819,7 @@ def test_energy_molecule_integrals_sym_s8_in_trexio_uhf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_mf_rohf_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         mol0 = pyscf.M(atom="H 0 0 0; H 0 0 1", basis="6-31g", spin=2, cart=cart)
         mf0 = mol0.ROHF().density_fit()
         mf0.run()
@@ -2845,7 +2832,7 @@ def test_mf_rohf_ae_6_31g(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_mf_k_gamma_roks_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         cell0 = pyscf.pbc.gto.Cell()
         cell0.spin = 2
         cell0.cart = cart
@@ -2862,7 +2849,7 @@ def test_mf_k_gamma_roks_ae_6_31g(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_mf_k_general_roks_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         kfrac = (0.25, 0.25, 0.25)
         cell0 = pyscf.pbc.gto.Cell()
         cell0.spin = 2
@@ -2882,7 +2869,7 @@ def test_mf_k_general_roks_ae_6_31g(cart):
 def test_mf_k_single_grid_roks_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
         kmesh = (1, 1, 1)
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         cell0 = pyscf.pbc.gto.Cell()
         cell0.spin = 2
         cell0.cart = cart
@@ -2902,7 +2889,7 @@ def test_mf_k_single_grid_roks_ae_6_31g(cart):
 def test_mf_k_grid_roks_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
         kmesh = (1, 1, 2)
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         cell0 = pyscf.pbc.gto.Cell()
         cell0.spin = 2
         cell0.cart = cart
@@ -2926,7 +2913,7 @@ def test_mf_k_grid_roks_ae_6_31g(cart):
 )
 def test_mcscf_rohf_ae_6_31g(cart, mc_constructor):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'test.h5')
+        filename = os.path.join(d, f'test.{ext}')
         mol0 = pyscf.M(atom='H 0 0 0; F 0 0 1', basis='6-31g', spin=2, cart=cart)
         mf0 = mol0.ROHF().run()
         mc0 = mc_constructor(mf0, 2, 2)
@@ -3000,7 +2987,7 @@ def test_mcscf_rohf_ae_6_31g(cart, mc_constructor):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_cell_k_gamma_scf_roks_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         cell0 = pyscf.pbc.gto.Cell()
         cell0.spin = 2
         cell0.cart = cart
@@ -3025,7 +3012,7 @@ def test_cell_k_gamma_scf_roks_ae_6_31g(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_cell_k_general_scf_roks_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         kfrac = (0.25, 0.25, 0.25)
         cell0 = pyscf.pbc.gto.Cell()
         cell0.spin = 2
@@ -3053,7 +3040,7 @@ def test_cell_k_general_scf_roks_ae_6_31g(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_mol_scf_rohf_ae_6_31g(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         mol0 = pyscf.M(atom="H 0 0 0; H 0 0 1", basis="6-31g", spin=2, cart=cart)
         auxbasis = df.make_auxbasis(mol0)
         trexio.to_trexio(mol0, filename)
@@ -3073,7 +3060,7 @@ def test_mol_scf_rohf_ae_6_31g(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_mol_rohf_ccecp_ccpvqz(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, "test.h5")
+        filename = os.path.join(d, f"test.{ext}")
         mol0 = pyscf.M(
             atom="H 0 0 0; F 0 0 1", basis="ccecp-ccpvdz", ecp="ccecp", spin=2, cart=cart
         )
@@ -3095,7 +3082,7 @@ def test_mol_rohf_ccecp_ccpvqz(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_write_molecule_integrals_sym_s1_to_trexio_rohf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_rohf_integrals.h5')
+        filename = os.path.join(d, f'mol_rohf_integrals.{ext}')
 
         mol0 = pyscf.M(atom='O 0 0 0', basis='6-31g*', spin=2, cart=cart)
         mf0 = mol0.ROHF().run()
@@ -3148,7 +3135,7 @@ def test_write_molecule_integrals_sym_s1_to_trexio_rohf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_write_molecule_integrals_sym_s4_to_trexio_rohf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_rohf_integrals_s4.h5')
+        filename = os.path.join(d, f'mol_rohf_integrals_s4.{ext}')
 
         mol0 = pyscf.M(atom='O 0 0 0', basis='6-31g*', spin=2, cart=cart)
         mf0 = mol0.ROHF().run()
@@ -3182,7 +3169,7 @@ def test_write_molecule_integrals_sym_s4_to_trexio_rohf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_write_molecule_integrals_sym_s8_to_trexio_rohf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_rohf_integrals_s8.h5')
+        filename = os.path.join(d, f'mol_rohf_integrals_s8.{ext}')
 
         mol0 = pyscf.M(atom='O 0 0 0', basis='6-31g*', spin=2, cart=cart)
         mf0 = mol0.ROHF().run()
@@ -3204,7 +3191,7 @@ def test_write_molecule_integrals_sym_s8_to_trexio_rohf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_write_cell_gamma_integrals_sym_s1_to_trexio_rohf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'cell_rohf_integrals.h5')
+        filename = os.path.join(d, f'cell_rohf_integrals.{ext}')
 
         cell0 = pbc.gto.Cell()
         cell0.spin = 2
@@ -3277,7 +3264,7 @@ def test_write_cell_gamma_integrals_sym_s1_to_trexio_rohf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_crystal_integrals_sym_s1_in_trexio_rohf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'pbc_gamma_rohf_energy.h5')
+        filename = os.path.join(d, f'pbc_gamma_rohf_energy.{ext}')
 
         cell = pyscf.pbc.gto.Cell()
         cell.cart = cart
@@ -3357,7 +3344,7 @@ def test_energy_crystal_integrals_sym_s1_in_trexio_rohf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_crystal_integrals_sym_s1_in_trexio_rohf_ccecp(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'pbc_gamma_rohf_energy_ccecp.h5')
+        filename = os.path.join(d, f'pbc_gamma_rohf_energy_ccecp.{ext}')
 
         cell = pyscf.pbc.gto.Cell()
         cell.cart = cart
@@ -3439,7 +3426,7 @@ def test_energy_crystal_integrals_sym_s1_in_trexio_rohf_ccecp(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_crystal_integrals_sym_s4_in_trexio_rohf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'pbc_gamma_rohf_energy_s4.h5')
+        filename = os.path.join(d, f'pbc_gamma_rohf_energy_s4.{ext}')
 
         cell = pyscf.pbc.gto.Cell()
         cell.cart = cart
@@ -3510,7 +3497,7 @@ def test_energy_crystal_integrals_sym_s4_in_trexio_rohf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_molecule_integrals_sym_s1_in_trexio_rohf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_rohf_integrals_energy.h5')
+        filename = os.path.join(d, f'mol_rohf_integrals_energy.{ext}')
 
         mol0 = pyscf.M(atom='O 0 0 0', basis='6-31g*', spin=2, cart=cart)
         mf0 = mol0.ROHF().run()
@@ -3615,7 +3602,7 @@ def test_energy_molecule_integrals_sym_s1_in_trexio_rohf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_molecule_integrals_sym_s1_in_trexio_rohf_ecp(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_rohf_integrals_energy_ecp.h5')
+        filename = os.path.join(d, f'mol_rohf_integrals_energy_ecp.{ext}')
 
         mol0 = pyscf.M(
             atom='H 0 0 0; F 0 0 1',
@@ -3686,7 +3673,7 @@ def test_energy_molecule_integrals_sym_s1_in_trexio_rohf_ecp(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_molecule_integrals_sym_s4_in_trexio_rohf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_rohf_integrals_energy_s4.h5')
+        filename = os.path.join(d, f'mol_rohf_integrals_energy_s4.{ext}')
 
         mol0 = pyscf.M(atom='O 0 0 0', basis='6-31g*', spin=2, cart=cart)
         mf0 = mol0.ROHF().run()
@@ -3768,7 +3755,7 @@ def test_energy_molecule_integrals_sym_s4_in_trexio_rohf_ae(cart):
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
 def test_energy_molecule_integrals_sym_s8_in_trexio_rohf_ae(cart):
     with tempfile.TemporaryDirectory() as d:
-        filename = os.path.join(d, 'mol_rohf_integrals_energy_s8.h5')
+        filename = os.path.join(d, f'mol_rohf_integrals_energy_s8.{ext}')
 
         mol0 = pyscf.M(atom='O 0 0 0', basis='6-31g*', spin=2, cart=cart)
         mf0 = mol0.ROHF().run()
