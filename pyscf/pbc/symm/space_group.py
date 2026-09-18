@@ -93,7 +93,7 @@ class SPGElement:
     '''
     def __init__(self,
                  rot=np.eye(3, dtype=np.int32),
-                 trans=np.zeros((3)), dimension=3):
+                 trans=np.zeros(3), dimension=3):
         self.rot = np.asarray(rot)
         self.trans = np.asarray(trans)
         self.dimension = dimension

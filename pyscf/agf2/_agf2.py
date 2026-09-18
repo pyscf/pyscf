@@ -71,8 +71,8 @@ def build_mats_ragf2_incore(qeri, e_occ, e_vir, os_factor=1.0, ss_factor=1.0):
     e_i = np.asarray(e_occ, order='C')
     e_a = np.asarray(e_vir, order='C')
 
-    vv = np.zeros((nmo*nmo))
-    vev = np.zeros((nmo*nmo))
+    vv = np.zeros(nmo*nmo)
+    vev = np.zeros(nmo*nmo)
 
     rank, size = mpi_helper.rank, mpi_helper.size
     istart = rank * nocc // size
@@ -162,8 +162,8 @@ def build_mats_dfragf2_incore(qxi, qja, e_occ, e_vir, os_factor=1.0, ss_factor=1
 
     rank, size = mpi_helper.rank, mpi_helper.size
 
-    vv = np.zeros((nmo*nmo))
-    vev = np.zeros((nmo*nmo))
+    vv = np.zeros(nmo*nmo)
+    vev = np.zeros(nmo*nmo)
 
     start = rank * nocc // size
     end = nocc if rank == (size-1) else (rank+1) * nocc // size
@@ -213,8 +213,8 @@ def build_mats_dfragf2_lowmem(qxi, qja, e_occ, e_vir, os_factor=1.0, ss_factor=1
 
     rank, size = mpi_helper.rank, mpi_helper.size
 
-    vv = np.zeros((nmo*nmo))
-    vev = np.zeros((nmo*nmo))
+    vv = np.zeros(nmo*nmo)
+    vev = np.zeros(nmo*nmo)
 
     start = rank * (nocc * nocc) // size
     end = nocc*nocc if rank == (size-1) else (rank+1) * (nocc*nocc) // size
@@ -310,8 +310,8 @@ def build_mats_uagf2_incore(qeri, e_occ, e_vir, os_factor=1.0, ss_factor=1.0):
     e_a = np.asarray(e_vir[0], order='C')
     e_A = np.asarray(e_vir[1], order='C')
 
-    vv = np.zeros((nmo*nmo))
-    vev = np.zeros((nmo*nmo))
+    vv = np.zeros(nmo*nmo)
+    vev = np.zeros(nmo*nmo)
 
     rank, size = mpi_helper.rank, mpi_helper.size
     istart = rank * noa // size
@@ -419,8 +419,8 @@ def build_mats_dfuagf2_incore(qxi, qja, e_occ, e_vir, os_factor=1.0, ss_factor=1
     e_a = np.asarray(e_vir[0], order='C')
     e_A = np.asarray(e_vir[1], order='C')
 
-    vv = np.zeros((nmo*nmo))
-    vev = np.zeros((nmo*nmo))
+    vv = np.zeros(nmo*nmo)
+    vev = np.zeros(nmo*nmo)
 
     rank, size = mpi_helper.rank, mpi_helper.size
     istart = rank * noa // size
@@ -481,8 +481,8 @@ def build_mats_dfuagf2_lowmem(qxi, qja, e_occ, e_vir, os_factor=1.0, ss_factor=1
     e_a = np.asarray(e_vir[0], order='C')
     e_A = np.asarray(e_vir[1], order='C')
 
-    vv = np.zeros((nmo*nmo))
-    vev = np.zeros((nmo*nmo))
+    vv = np.zeros(nmo*nmo)
+    vev = np.zeros(nmo*nmo)
 
     rank, size = mpi_helper.rank, mpi_helper.size
     nomax = max(noa, nob)

@@ -540,7 +540,7 @@ def _make_eris_incore(cc, eris, fao2mo):
     kptlist = kqrts.kqrts_ibz[:,:3][:,[0,2,1]] #chemists' notation
     khelper.build_symm_map(kptlist=kptlist)
 
-    for (iki, ika, ikj) in khelper.symm_map.keys():
+    for (iki, ika, ikj) in khelper.symm_map:
         ikb = kconserv[iki, ika, ikj]
         eri_kpt = fao2mo((mo_coeff[iki],mo_coeff[ika],mo_coeff[ikj],mo_coeff[ikb]),
                          (kpts[iki],kpts[ika],kpts[ikj],kpts[ikb]), compact=False)
@@ -666,7 +666,7 @@ def _make_eris_outcore(cc, eris, fao2mo):
         kconserv = khelper.kconserv
         kptlist = kqrts.kqrts_ibz[:,:3][:,[0,2,1]] #chemists' notation
         khelper.build_symm_map(kptlist=kptlist)
-        for (ikp, ikq, ikr) in khelper.symm_map.keys():
+        for (ikp, ikq, ikr) in khelper.symm_map:
             iks = kconserv[ikp, ikq, ikr]
             orbv_p = mo_coeff[ikp][:, nocc:]
             orbv_q = mo_coeff[ikq][:, nocc:]

@@ -406,7 +406,7 @@ def matvec(adc, M_ab=None, eris=None):
         cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(adc.stdout, adc.verbose)
 
-        s = np.zeros((dim))
+        s = np.zeros(dim)
 
         r1 = r[s1:f1]
         r2 = r[s2:f2]
@@ -655,7 +655,7 @@ def get_trans_moments_orbital(adc, orb):
     s2 = f1
     f2 = s2 + n_doubles
 
-    T = np.zeros((dim))
+    T = np.zeros(dim)
 
 ######## ADC(2) part  ############################################
 

@@ -1545,7 +1545,7 @@ def quad_moment(mol, dm, unit='DebyeAngstrom', origin=None,
         log.note('Traceless quadrupole moment (AU):')
 
     with numpy.printoptions(precision=5, floatmode='fixed'):
-        log.note(str())
+        log.note('')
 
     return tot_q_traceless
 

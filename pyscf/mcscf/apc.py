@@ -158,7 +158,7 @@ class Chooser:
 
             nactos = len(os_idx)
             nactdocc = int((nactel - nactos)/2)
-            nactvirt = int((norbs - nactdocc - nactos))
+            nactvirt = int(norbs - nactdocc - nactos)
 
             actdocc_idx = docc_idx[np.argsort(entropies[docc_idx])[-nactdocc:]]
             actvirt_idx = virt_idx[np.argsort(entropies[virt_idx])[-nactvirt:]]
@@ -359,7 +359,7 @@ class APC:
             cis = apcs_o
             cis2 = cis**2
             sumci2 = np.sum(cis2)
-            norm = np.sqrt((sumci2 + 1))
+            norm = np.sqrt(sumci2 + 1)
             cisnorm = cis/norm
 
             #Square Normalized APCs to calculate entropies:

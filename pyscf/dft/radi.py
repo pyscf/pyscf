@@ -79,7 +79,7 @@ def delley(n, *args, **kwargs):
     for i in range(1, n+1):
         xi = rfac * numpy.log(1-(i*step)**2)
         r[i-1] = xi
-        dri = rfac * (-2.0*i*(step)**2) / ((1-(i*step)**2)) # d xi / dr
+        dri = rfac * (-2.0*i*(step)**2) / (1-(i*step)**2) # d xi / dr
         dr[i-1] = dri
     return r, dr
 gauss_legendre = delley

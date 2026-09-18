@@ -384,8 +384,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         log.debug2('get_k_kpts: build K from dm')
         dmsR = numpy.asarray(dms.real, order='C')
         dmsI = numpy.asarray(dms.imag, order='C')
-        bufR = numpy.empty((mydf.blockdim*nao**2))
-        bufI = numpy.empty((mydf.blockdim*nao**2))
+        bufR = numpy.empty(mydf.blockdim*nao**2)
+        bufI = numpy.empty(mydf.blockdim*nao**2)
         max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
         def make_kpt(ki, kj, swap_2e, inverse_idx=None):
             kpti = kpts[ki]
@@ -454,8 +454,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         skmoI_mask = numpy.asarray(
             [[(skmoI[i,k].size > 0) and (numpy.abs(skmoI[i,k]).max() > cell.precision)
             for k in range(nkpts)] for i in range(nset)])
-        bufR = numpy.empty((mydf.blockdim*nao**2))
-        bufI = numpy.empty((mydf.blockdim*nao**2))
+        bufR = numpy.empty(mydf.blockdim*nao**2)
+        bufI = numpy.empty(mydf.blockdim*nao**2)
         max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
         def make_kpt(ki, kj, swap_2e, inverse_idx=None):
             kpti = kpts[ki]
@@ -535,8 +535,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         skmoI_mask = numpy.asarray([[max(abs(skmo1I[i,k]).max(),
                                          abs(skmo2I[i,k]).max()) > cell.precision
                                      for k in range(nkpts)] for i in range(nset)])
-        bufR = numpy.empty((mydf.blockdim*nao**2))
-        bufI = numpy.empty((mydf.blockdim*nao**2))
+        bufR = numpy.empty(mydf.blockdim*nao**2)
+        bufI = numpy.empty(mydf.blockdim*nao**2)
         max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
         def make_kpt(ki, kj, swap_2e, inverse_idx=None):
             kpti = kpts[ki]
@@ -796,10 +796,10 @@ def get_k_kpts_kshift(mydf, dm_kpts, kshift, hermi=0, kpts=numpy.zeros((1,3)), k
         log.debug2('get_k_kpts: build K from dm')
         dmsR = numpy.asarray(dms.real, order='C')
         dmsI = numpy.asarray(dms.imag, order='C')
-        bufR = numpy.empty((mydf.blockdim*nao**2))
-        bufI = numpy.empty((mydf.blockdim*nao**2))
-        bufR1 = numpy.empty((mydf.blockdim*nao**2))
-        bufI1 = numpy.empty((mydf.blockdim*nao**2))
+        bufR = numpy.empty(mydf.blockdim*nao**2)
+        bufI = numpy.empty(mydf.blockdim*nao**2)
+        bufR1 = numpy.empty(mydf.blockdim*nao**2)
+        bufI1 = numpy.empty(mydf.blockdim*nao**2)
         max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
         def make_kpt(ki, kj, swap_2e, inverse_idx=None):
             if inverse_idx:
@@ -894,10 +894,10 @@ def get_k_kpts_kshift(mydf, dm_kpts, kshift, hermi=0, kpts=numpy.zeros((1,3)), k
         skmoI_mask = numpy.asarray([[max(abs(skmo1I[i,k]).max(),
                                          abs(skmo2I[i,k]).max()) > cell.precision
                                      for k in range(nkpts)] for i in range(nset)])
-        bufR = numpy.empty((mydf.blockdim*nao**2))
-        bufI = numpy.empty((mydf.blockdim*nao**2))
-        bufR1 = numpy.empty((mydf.blockdim*nao**2))
-        bufI1 = numpy.empty((mydf.blockdim*nao**2))
+        bufR = numpy.empty(mydf.blockdim*nao**2)
+        bufI = numpy.empty(mydf.blockdim*nao**2)
+        bufR1 = numpy.empty(mydf.blockdim*nao**2)
+        bufI1 = numpy.empty(mydf.blockdim*nao**2)
         max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
         def make_kpt(ki, kj, swap_2e, inverse_idx=None):
             if inverse_idx:
@@ -1167,8 +1167,8 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
 
         vkR = numpy.zeros((nset,nao,nao))
         vkI = numpy.zeros((nset,nao,nao))
-        buf1R = numpy.empty((mydf.blockdim*nao**2))
-        buf1I = numpy.zeros((mydf.blockdim*nao**2))
+        buf1R = numpy.empty(mydf.blockdim*nao**2)
+        buf1I = numpy.zeros(mydf.blockdim*nao**2)
         if smoR is None:
             # K ~ 'iLj,lLk*,li->kj' + 'lLk*,iLj,li->kj'
             #:pLq = (LpqR + LpqI.reshape(-1,nao,nao)*1j).transpose(1,0,2)
@@ -1176,8 +1176,8 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
             #:vk += numpy.dot(pLq.reshape(-1,nao).conj().T, tmp.reshape(-1,nao))
             log.debug2('get_jk: build K from dm')
             k_real = gamma_point(kpt) and not numpy.iscomplexobj(dms)
-            buf2R = numpy.empty((mydf.blockdim*nao**2))
-            buf2I = numpy.empty((mydf.blockdim*nao**2))
+            buf2R = numpy.empty(mydf.blockdim*nao**2)
+            buf2I = numpy.empty(mydf.blockdim*nao**2)
             if k_real:
                 def contract_k(pLqR, pLqI, sign):
                     nrow = pLqR.shape[1]
@@ -1187,7 +1187,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                         lib.ddot(pLqR.reshape(-1,nao).T, tmpR.reshape(-1,nao),
                                  sign, vkR[i], 1)
             else:
-                buf2I = numpy.empty((mydf.blockdim*nao**2))
+                buf2I = numpy.empty(mydf.blockdim*nao**2)
                 def contract_k(pLqR, pLqI, sign):
                     nrow = pLqR.shape[1]
                     tmpR = numpy.ndarray((nao,nrow*nao), buffer=buf2R)
@@ -1204,7 +1204,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
             log.debug2('get_jk: rank(dm) = %d / %d', nmo, nao)
             smoI_mask = numpy.asarray([abs(moI).max() > cell.precision for moI in smoI])
             k_real = gamma_point(kpt) and not numpy.any(smoI_mask)
-            buf2R = numpy.empty((mydf.blockdim*nao*nmo))
+            buf2R = numpy.empty(mydf.blockdim*nao*nmo)
             if k_real:
                 def contract_k(pLqR, pLqI, sign):
                     nrow = pLqR.shape[1]
@@ -1215,7 +1215,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                                  sign, vkR[i], 1)
                     tmpR = None
             else:
-                buf2I = numpy.empty((mydf.blockdim*nao*nmo))
+                buf2I = numpy.empty(mydf.blockdim*nao*nmo)
                 def contract_k(pLqR, pLqI, sign):
                     nrow = pLqR.shape[1]
                     tmpR = numpy.ndarray((nmo,nrow*nao), buffer=buf2R)
@@ -1238,7 +1238,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                                            abs(mo2I).max()) > cell.precision
                                        for mo1I,mo2I in zip(smo1I,smo2I)])
             k_real = gamma_point(kpt) and not numpy.any(smoI_mask)
-            buf2R = numpy.empty((mydf.blockdim*nao*nmo*2))
+            buf2R = numpy.empty(mydf.blockdim*nao*nmo*2)
             buf3R = buf2R[buf2R.size//2:]
             if k_real:
                 def contract_k(pLqR, pLqI, sign):
@@ -1252,7 +1252,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                                  sign, vkR[i], 1)
                     tmp1R = tmp2R = None
             else:
-                buf2I = numpy.empty((mydf.blockdim*nao*nmo*2))
+                buf2I = numpy.empty(mydf.blockdim*nao*nmo*2)
                 buf3I = buf2I[buf2I.size//2:]
                 def contract_k(pLqR, pLqI, sign):
                     nrow = pLqR.shape[1]

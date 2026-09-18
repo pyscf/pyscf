@@ -333,7 +333,7 @@ def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
     ao_loc = None
     kconserv = kpts_helper.get_kconserv(cell, kpts)
     for uniq_id, kpt in enumerate(uniq_kpts):
-        q = uniq_kpts[uniq_id]
+        q = kpt
         adapted_ji_idx = numpy.where(uniq_inverse == uniq_id)[0]
         kptjs = kptjs_lst[adapted_ji_idx]
         coulG = mydf.weighted_coulG(q, False, mydf.mesh)

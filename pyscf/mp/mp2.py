@@ -853,8 +853,8 @@ def _ao2mo_ovov(mp, orbo, orbv, feri, max_memory=2000, verbose=None):
     log.debug('max_memory %s MB (dmax = %s) required disk space %g MB',
               max_memory, dmax, nocc**2*(nao*(nao+dmax)/2+nvir**2)*8/1e6)
 
-    buf_i = numpy.empty((nocc*dmax**2*nao))
-    buf_li = numpy.empty((nocc**2*dmax**2))
+    buf_i = numpy.empty(nocc*dmax**2*nao)
+    buf_li = numpy.empty(nocc**2*dmax**2)
     buf1 = numpy.empty_like(buf_li)
 
     fint = gto.moleintor.getints4c

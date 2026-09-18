@@ -441,7 +441,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 
         axt = aop(xt)
         for k, xi in enumerate(xt):
-            xs.append(xt[k])
+            xs.append(xi)
             ax.append(axt[k])
         rnow = len(xt)
         head, space = space, space+rnow
@@ -598,7 +598,7 @@ def pick_real_eigs(w, v, nroots, envs):
     abs_imag = abs(w.imag)
     # Grab `nroots` number of e with small(est) imaginary components
     max_imag_tol = max(threshold, numpy.sort(abs_imag)[min(w.size,nroots)-1])
-    real_idx = numpy.where((abs_imag <= max_imag_tol))[0]
+    real_idx = numpy.where(abs_imag <= max_imag_tol)[0]
     nbelow_thresh = numpy.count_nonzero(abs_imag[real_idx] < threshold)
     if nbelow_thresh < nroots and w.size >= nroots:
         warnings.warn('Only %d eigenvalues (out of %3d requested roots) with imaginary part < %4.3g.\n'
@@ -804,7 +804,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
 
         axt = aop(xt)
         for k, xi in enumerate(xt):
-            xs.append(xt[k])
+            xs.append(xi)
             ax.append(axt[k])
         rnow = len(xt)
         head, space = space, space+rnow
@@ -1104,7 +1104,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
         if type > 1:
             axt = abop(bxt)[0]
         for k, xi in enumerate(xt):
-            xs.append(xt[k])
+            xs.append(xi)
             ax.append(axt[k])
             bx.append(bxt[k])
         rnow = len(xt)

@@ -233,7 +233,6 @@ def original_becke(g):
 #    g = (3 - g**2) * g * .5
 #    g = (3 - g**2) * g * .5
 #    return g
-    pass
 
 def becke_lko(g):
     '''
@@ -249,7 +248,6 @@ def becke_lko(g):
     This is a placeholder function. The actual implementation is provided in the
     C routine VXCgen_grid_lko.
     '''
-    pass
 
 def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
                      level=3, prune=nwchem_prune, **kwargs):
