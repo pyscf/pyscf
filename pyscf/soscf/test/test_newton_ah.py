@@ -230,6 +230,21 @@ class KnownValues(unittest.TestCase):
         nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), eref, 9)
 
+    def test_nr_rks_second_grids(self):
+        '''second_grids are used in the orbital hessian of the second order solver'''
+        mf = dft.RKS(h2o_z0)
+        mf.xc = 'b3lyp'
+        eref = mf.kernel()
+        mf.set_second_grids(1)
+        mf.max_cycle = 1
+        mf.conv_check = False
+        mf.kernel()
+        nr = scf.newton(mf)
+        nr.max_cycle = 3
+        nr.conv_tol_grad = 1e-5
+        self.assertAlmostEqual(nr.kernel(), eref, 8)
+        mf.second_grids = None
+
     def test_rks_gen_g_hop(self):
         mf = dft.RKS(h2o_z0)
         mf.grids.build()

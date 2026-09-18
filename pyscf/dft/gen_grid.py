@@ -742,6 +742,27 @@ class Grids(lib.StreamObject):
     to_gpu = lib.to_gpu
 
 
+def sg1_grids(mol, atom_grid=(50, 194)):
+    '''SG1 grids for SCF linear response functions (cf. pyscf#2520).
+
+    It can be assigned to mf.second_grids:
+
+    >>> mf.second_grids = dft.gen_grid.sg1_grids(mol)
+
+    Kwargs:
+        atom_grid : tuple (radial, angular)
+            (radial, angular) grids for all atoms.
+
+    Returns:
+        An unbuilt Grids object. It is built automatically when response
+        functions use it.
+    '''
+    grids = Grids(mol)
+    grids.prune = sg1_prune
+    grids.atom_grid = atom_grid
+    return grids
+
+
 def _default_rad(nuc, level=3):
     '''Number of radial grids '''
     tab   = numpy.array( (2 , 10, 18, 36, 54, 86, 118))
