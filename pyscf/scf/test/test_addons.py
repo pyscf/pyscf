@@ -549,6 +549,66 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(mf.mo_occ - mf_smear.mo_occ).max(), 0, 5)
         self.assertAlmostEqual(e_frac, e_smear, 9)
 
+    def test_rhf_smearing_fractionalcharge(self):
+        mol = gto.Mole()
+        mol.verbose = 5
+        mol.output = '/dev/null'
+        mol.atom = '''
+            7      0.   0  -0.7
+            7      0.   0   0.7'''
+        mol.basis = 'cc-pvdz'
+        mol.charge = 0.3
+        mol.nelec_frac = True
+        mol.build()
+        mf_smear = scf.RHF(mol)
+        mf_smear = addons.smearing(mf_smear, sigma=1e-1, method='fermi')
+        mf_smear.kernel()
+        self.assertAlmostEqual(mf_smear.mo_occ.sum(), mol.nelectron, 9)
+        self.assertAlmostEqual(mf_smear.mo_occ.sum(), 13.7, 9)
+
+    def test_uhf_smearing_fractionalcharge(self):
+        mol = gto.Mole()
+        mol.verbose = 5
+        mol.output = '/dev/null'
+        mol.atom = '''
+            7      0.   0  -0.7
+            7      0.   0   0.7'''
+        mol.basis = 'cc-pvdz'
+        mol.charge = -0.5
+        mol.spin = 0.8
+        mol.nelec_frac = True
+        mol.build()
+        mf = scf.UHF(mol)
+        mf = addons.smearing(mf, sigma=0.1, method='fermi')
+        mf.fix_spin = True
+        mf.kernel()
+        self.assertAlmostEqual(mf.mo_occ[0].sum(), 7.65, 6)
+        self.assertAlmostEqual(mf.mo_occ[1].sum(), 6.85, 6)
+
+        mf.fix_spin = False
+        mf.kernel()
+        self.assertAlmostEqual(mf.mo_occ[0].sum(), 7.25, 6)
+        self.assertAlmostEqual(mf.mo_occ[1].sum(), 7.25, 6)
+
+    def test_rohf_smearing_fractionalcharge(self):
+        mol = gto.Mole()
+        mol.verbose = 5
+        mol.output = '/dev/null'
+        mol.atom = '''
+            7      0.   0  -0.7
+            7      0.   0   0.7'''
+        mol.basis = 'cc-pvdz'
+        mol.charge = -0.5
+        mol.spin = 0.8
+        mol.nelec_frac = True
+        mol.build()
+        mf = scf.ROHF(mol)
+        mf = addons.smearing(mf, sigma=0.1, method='fermi')
+
+        mf.fix_spin = False
+        mf.kernel()
+        self.assertAlmostEqual(mf.mo_occ.sum(), 14.5, 6)
+
     def test_smearing_mu0(self):
         def _hubbard_hamilts_pbc(L, U):
             h1e = numpy.zeros((L, L))
