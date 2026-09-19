@@ -137,49 +137,73 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
     if getattr(fock_ao, 'focka', None) is None:
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
         fock_ao = mf.get_fock(h1e, dm=dm0)
-    fock_ao = fock_ao.focka, fock_ao.fockb
-    mo_occa = occidxa = [occ > 0 for occ in mo_occ]
-    mo_occb = occidxb = [occ ==2 for occ in mo_occ]
-    ug, uh_op, uh_diag = gen_g_hop_uhf(mf, (mo_coeff,)*2, (mo_occa,mo_occb),
-                                       fock_ao, None)
-
     nkpts = len(mo_occ)
-    idx_var_a = []
-    idx_var_b = []
-    p0 = 0
+    focka = [reduce(numpy.dot, (c.conj().T, f, c))
+             for c, f in zip(mo_coeff, fock_ao.focka)]
+    fockb = [reduce(numpy.dot, (c.conj().T, f, c))
+             for c, f in zip(mo_coeff, fock_ao.fockb)]
+    mo_occa = occidxa = [occ > 0 for occ in mo_occ]
+    mo_occb = occidxb = [occ == 2 for occ in mo_occ]
+    viridxa = [~occ for occ in occidxa]
+    viridxb = [~occ for occ in occidxb]
+    uniq_var_a = [viridxa[k][:,None] & occidxa[k] for k in range(nkpts)]
+    uniq_var_b = [viridxb[k][:,None] & occidxb[k] for k in range(nkpts)]
+    uniq_ab = [uniq_var_a[k] | uniq_var_b[k] for k in range(nkpts)]
+    orboa = [mo_coeff[k][:,occidxa[k]] for k in range(nkpts)]
+    orbob = [mo_coeff[k][:,occidxb[k]] for k in range(nkpts)]
+    orbva = [mo_coeff[k][:,viridxa[k]] for k in range(nkpts)]
+    orbvb = [mo_coeff[k][:,viridxb[k]] for k in range(nkpts)]
+
+    g = []
+    h_diag = []
     for k in range(nkpts):
-        viridxa = ~occidxa[k]
-        viridxb = ~occidxb[k]
-        uniq_var_a = viridxa[:,None] & occidxa[k]
-        uniq_var_b = viridxb[:,None] & occidxb[k]
-        uniq_ab = uniq_var_a | uniq_var_b
-        nmo = len(mo_occ[k])
+        g1 = numpy.zeros_like(focka[k])
+        g1[uniq_var_a[k]] = focka[k][uniq_var_a[k]]
+        g1[uniq_var_b[k]] += fockb[k][uniq_var_b[k]]
+        g.append(g1[uniq_ab[k]])
+        ea = focka[k].diagonal().real
+        eb = fockb[k].diagonal().real
+        h1 = numpy.zeros_like(focka[k].real)
+        h1[uniq_var_a[k]] = (ea[:,None] - ea)[uniq_var_a[k]]
+        h1[uniq_var_b[k]] += (eb[:,None] - eb)[uniq_var_b[k]]
+        h_diag.append(h1[uniq_ab[k]])
 
-        n_uniq_ab = numpy.count_nonzero(uniq_ab)
-        idx_array = numpy.zeros((nmo,nmo), dtype=int)
-        idx_array[uniq_ab] = numpy.arange(n_uniq_ab)
-        idx_var_a.append(p0 + idx_array[uniq_var_a])
-        idx_var_b.append(p0 + idx_array[uniq_var_b])
-        p0 += n_uniq_ab
+    vind = mf.gen_response((mo_coeff,)*2, (mo_occa, mo_occb), hermi=1)
 
-    idx_var_a = numpy.hstack(idx_var_a)
-    idx_var_b = numpy.hstack(idx_var_b)
-    nvars = p0
-
-    def sum_ab(x):
-        x1 = numpy.zeros(nvars, dtype=x.dtype)
-        x1[idx_var_a]  = x[:len(idx_var_a)]
-        x1[idx_var_b] += x[len(idx_var_a):]
-        return x1
-
-    g = sum_ab(ug)
-    h_diag = sum_ab(uh_diag)
     def h_op(x):
-        # unpack ROHF rotation parameters
-        x1 = numpy.hstack((x[idx_var_a], x[idx_var_b]))
-        return sum_ab(uh_op(x1))
+        dm1a, dm1b = [], []
+        kappa = []
+        p0 = 0
+        for k in range(nkpts):
+            p1 = p0 + numpy.count_nonzero(uniq_ab[k])
+            nmo = len(mo_occ[k])
+            x1 = numpy.zeros((nmo,nmo), dtype=x.dtype)
+            x1[uniq_ab[k]] = x[p0:p1]
+            x1a = x1[uniq_var_a[k]].reshape(orbva[k].shape[1], orboa[k].shape[1])
+            x1b = x1[uniq_var_b[k]].reshape(orbvb[k].shape[1], orbob[k].shape[1])
+            d1a = reduce(numpy.dot, (orbva[k], x1a, orboa[k].conj().T))
+            d1b = reduce(numpy.dot, (orbvb[k], x1b, orbob[k].conj().T))
+            dm1a.append(d1a+d1a.conj().T)
+            dm1b.append(d1b+d1b.conj().T)
+            kappa.append(x1-x1.conj().T)
+            p0 = p1
+        v1a, v1b = vind(numpy.asarray((dm1a, dm1b)))
 
-    return g, h_op, h_diag
+        hx = []
+        for k in range(nkpts):
+            # Keep the shared rotation's oo/vv contributions for each spin.
+            hmat_a = focka[k].dot(kappa[k]) - kappa[k].dot(focka[k])
+            hmat_b = fockb[k].dot(kappa[k]) - kappa[k].dot(fockb[k])
+            c = mo_coeff[k]
+            hmat_a += reduce(numpy.dot, (c.conj().T, v1a[k], c))
+            hmat_b += reduce(numpy.dot, (c.conj().T, v1b[k], c))
+            h1 = numpy.zeros_like(hmat_a)
+            h1[uniq_var_a[k]] = hmat_a[uniq_var_a[k]]
+            h1[uniq_var_b[k]] += hmat_b[uniq_var_b[k]]
+            hx.append(h1[uniq_ab[k]])
+        return numpy.hstack(hx)
+
+    return numpy.hstack(g), h_op, numpy.hstack(h_diag)
 
 
 # Be careful with the parameter ordering conventions are different for the
