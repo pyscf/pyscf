@@ -115,38 +115,81 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
 
 def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
                    with_symmetry=True):
+    mol = mf.mol
+    mo_coeff0 = mo_coeff
+    if getattr(mf, '_scf', None) and mf._scf.mol != mol:
+        # TODO: construct vind with dual-basis treatment
+        mo_coeff = addons.project_mo_nr2nr(mf._scf.mol, mo_coeff, mol)
+
     if getattr(fock_ao, 'focka', None) is None:
+        if getattr(mf, '_scf', None) and mf._scf.mol != mol:
+            h1e = mf.get_hcore(mol)
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
         fock_ao = mf.get_fock(h1e, dm=dm0)
-    fock_ao = fock_ao.focka, fock_ao.fockb
+        focka = reduce(numpy.dot, (mo_coeff.conj().T, fock_ao.focka, mo_coeff))
+        fockb = reduce(numpy.dot, (mo_coeff.conj().T, fock_ao.fockb, mo_coeff))
+    else:
+        focka = reduce(numpy.dot, (mo_coeff0.conj().T, fock_ao.focka, mo_coeff0))
+        fockb = reduce(numpy.dot, (mo_coeff0.conj().T, fock_ao.fockb, mo_coeff0))
     mo_occa = occidxa = mo_occ > 0
-    mo_occb = occidxb = mo_occ ==2
-    ug, uh_op, uh_diag = gen_g_hop_uhf(mf, (mo_coeff,)*2, (mo_occa,mo_occb),
-                                       fock_ao, None, with_symmetry)
-
+    mo_occb = occidxb = mo_occ == 2
     viridxa = ~occidxa
     viridxb = ~occidxb
     uniq_var_a = viridxa[:,None] & occidxa
     uniq_var_b = viridxb[:,None] & occidxb
     uniq_ab = uniq_var_a | uniq_var_b
     nmo = mo_coeff.shape[-1]
-    nocca = numpy.count_nonzero(mo_occa)
-    nvira = nmo - nocca
+    orboa = mo_coeff[:,occidxa]
+    orbob = mo_coeff[:,occidxb]
+    orbva = mo_coeff[:,viridxa]
+    orbvb = mo_coeff[:,viridxb]
 
-    def sum_ab(x):
-        x1 = numpy.zeros((nmo,nmo), dtype=x.dtype)
-        x1[uniq_var_a]  = x[:nvira*nocca]
-        x1[uniq_var_b] += x[nvira*nocca:]
-        return x1[uniq_ab]
+    g = numpy.zeros_like(focka)
+    g[uniq_var_a] = focka[uniq_var_a]
+    g[uniq_var_b] += fockb[uniq_var_b]
+    g = g[uniq_ab]
+    ea = focka.diagonal().real
+    eb = fockb.diagonal().real
+    h_diag = numpy.zeros_like(focka.real)
+    h_diag[uniq_var_a] = (ea[:,None] - ea)[uniq_var_a]
+    h_diag[uniq_var_b] += (eb[:,None] - eb)[uniq_var_b]
+    h_diag = h_diag[uniq_ab]
 
-    g = sum_ab(ug)
-    h_diag = sum_ab(uh_diag)
+    if with_symmetry and mol.symmetry:
+        orbsym = hf_symm.get_orbsym(mol, mo_coeff)
+        sym_forbid = (orbsym[:,None] != orbsym)[uniq_ab]
+        g[sym_forbid] = 0
+        h_diag[sym_forbid] = 0
+
+    vind = mf.gen_response((mo_coeff,)*2, (mo_occa, mo_occb),
+                           hermi=1, with_nlc=False)
+
     def h_op(x):
+        if with_symmetry and mol.symmetry:
+            x = x.copy()
+            x[sym_forbid] = 0
         x1 = numpy.zeros((nmo,nmo), dtype=x.dtype)
-        # unpack ROHF rotation parameters
         x1[uniq_ab] = x
-        x1 = numpy.hstack((x1[uniq_var_a],x1[uniq_var_b]))
-        return sum_ab(uh_op(x1))
+        x1a = x1[uniq_var_a].reshape(orbva.shape[1], orboa.shape[1])
+        x1b = x1[uniq_var_b].reshape(orbvb.shape[1], orbob.shape[1])
+        d1a = reduce(numpy.dot, (orbva, x1a, orboa.conj().T))
+        d1b = reduce(numpy.dot, (orbvb, x1b, orbob.conj().T))
+        dm1 = numpy.array((d1a+d1a.conj().T, d1b+d1b.conj().T))
+        v1a, v1b = vind(dm1)
+
+        # Keep the shared rotation's oo/vv contributions for each spin.
+        kappa = hf.unpack_uniq_var(x, mo_occ)
+        hmat_a = focka.dot(kappa) - kappa.dot(focka)
+        hmat_b = fockb.dot(kappa) - kappa.dot(fockb)
+        hmat_a += reduce(numpy.dot, (mo_coeff.conj().T, v1a, mo_coeff))
+        hmat_b += reduce(numpy.dot, (mo_coeff.conj().T, v1b, mo_coeff))
+        hx = numpy.zeros_like(hmat_a)
+        hx[uniq_var_a] = hmat_a[uniq_var_a]
+        hx[uniq_var_b] += hmat_b[uniq_var_b]
+        hx = hx[uniq_ab]
+        if with_symmetry and mol.symmetry:
+            hx[sym_forbid] = 0
+        return hx
 
     return g, h_op, h_diag
 

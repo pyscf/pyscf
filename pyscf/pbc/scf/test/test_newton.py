@@ -18,10 +18,13 @@
 
 import unittest
 import numpy
+import scipy.linalg
 from pyscf import lib
+from pyscf.scf import hf
 from pyscf.pbc import gto
 from pyscf.pbc import scf
 from pyscf.pbc import dft
+from pyscf.pbc.scf import newton_ah
 
 def setUpModule():
     global cell
@@ -139,6 +142,33 @@ class KnowValues(unittest.TestCase):
         mf.conv_tol_grad = 1e-4
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -10.5309059210831, 7)
+
+    def test_krohf_hop_finite_difference(self):
+        cell1 = cell.copy()
+        cell1.spin = 2
+        cell1.mesh = [9]*3
+        kpts = cell1.make_kpts([2,1,1], scaled_center=[0.13,0.07,0.03])
+        mf = scf.KROHF(cell1, kpts, exxdiv=None)
+        rng = numpy.random.default_rng(12)
+        nao = cell1.nao
+        a = rng.normal(size=(2,nao,nao)) + 1j*rng.normal(size=(2,nao,nao))
+        _, coeff = mf.eig(a + a.conj().transpose(0,2,1), mf.get_ovlp())
+        occ = numpy.array([[2,2,2,1,1,0,0,0], [2,2,2,2,0,0,0,0]])
+        fock = mf.get_fock(s1e=mf.get_ovlp(), dm=mf.make_rdm1(coeff, occ))
+        g, hop, _ = newton_ah.gen_g_hop_rohf(mf, coeff, occ, fock)
+        x = rng.normal(size=g.size) + 1j*rng.normal(size=g.size)
+        x /= numpy.linalg.norm(x)
+        eps = 1e-5
+        cp, cm = [], []
+        p0 = 0
+        for c, o in zip(coeff, occ):
+            p1 = p0 + numpy.count_nonzero(hf.uniq_var_indices(o))
+            kappa = hf.unpack_uniq_var(x[p0:p1], o)
+            cp.append(c.dot(scipy.linalg.expm(eps * kappa)))
+            cm.append(c.dot(scipy.linalg.expm(-eps * kappa)))
+            p0 = p1
+        fd = (mf.get_grad(cp, occ) - mf.get_grad(cm, occ)) / (2 * eps)
+        self.assertAlmostEqual(numpy.linalg.norm(fd - hop(x)), 0., 6)
 
     def test_nr_krks_lda(self):
         mf = dft.KRKS(cell, cell.make_kpts([2,1,1]))
