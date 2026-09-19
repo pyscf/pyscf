@@ -22,7 +22,7 @@ Mole class for MM particles
 
 import numpy
 from pyscf import gto
-from pyscf.gto.mole import is_au
+from pyscf.gto.mole import is_au, make_ecp_env
 from pyscf.data.elements import charge
 from pyscf.lib import param
 
@@ -45,7 +45,7 @@ class Mole(gto.Mole):
             rho(r) = charge * Norm * exp(-zeta * r^2)
 
     '''
-    def __init__(self, atoms, charges=None, zeta=None):
+    def __init__(self, atoms, charges=None, zeta=None, ecp=None):
         gto.Mole.__init__(self)
         self.atom = self._atom = atoms
         self.unit = 'Bohr'
@@ -75,6 +75,10 @@ class Mole(gto.Mole):
             self._env = numpy.append(self._env, zeta)
             _atm[:,gto.PTR_ZETA] = gto.PTR_ENV_START + natm*4 + numpy.arange(natm)
 
+        if ecp is not None:
+            self._ecp = self.format_ecp(ecp)
+            _atm, self._ecpbas, self._env = make_ecp_env(self, _atm, self._ecp, self._env)
+
         self._atm = _atm
         self._built = True
 
@@ -84,7 +88,7 @@ class Mole(gto.Mole):
         else:
             return numpy.full(self.natm, 1e16)
 
-def create_mm_mol(atoms_or_coords, charges=None, radii=None, unit='Angstrom'):
+def create_mm_mol(atoms_or_coords, charges=None, radii=None, unit='Angstrom', ecp=None):
     '''Create an MM object based on the given coordinates and charges of MM
     particles.
 
@@ -122,4 +126,4 @@ def create_mm_mol(atoms_or_coords, charges=None, radii=None, unit='Angstrom'):
         if not is_au(unit):
             radii = radii / param.BOHR
         zeta = 1 / radii**2
-    return Mole(atoms, charges=charges, zeta=zeta)
+    return Mole(atoms, charges=charges, zeta=zeta, ecp=ecp)
