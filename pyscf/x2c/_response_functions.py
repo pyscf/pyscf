@@ -20,12 +20,12 @@ Generate X2C-SCF response functions
 from pyscf.x2c import x2c
 from pyscf.scf._response_functions import _gen_ghf_response
 
-def _gen_x2chf_response(mf, mo_coeff=None, mo_occ=None,
+def _gen_x2chf_response(mf, mo_coeff=None, mo_occ=None, dm0=None,
                         with_j=True, hermi=0, max_memory=None, with_nlc=True):
     '''Generate a function to compute the product of X2C-HF response function
     and density matrices.
     '''
-    return _gen_ghf_response(mf, mo_coeff, mo_occ, with_j, hermi, max_memory,
+    return _gen_ghf_response(mf, mo_coeff, mo_occ, dm0, with_j, hermi, max_memory,
                              with_nlc=with_nlc)
 
 x2c.UHF.gen_response = _gen_x2chf_response
