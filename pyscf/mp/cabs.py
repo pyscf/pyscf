@@ -31,12 +31,17 @@ from pyscf.scf import hf
 
 
 def find_cabs(mol, auxmol, lindep=1e-8):
-    """Project an auxiliary basis to the complement of the orbital basis."""
+    """Project an auxiliary basis to the complement of the orbital basis.
+
+    The orbital space uses the standard SCF overlap cutoff. ``lindep`` applies
+    to the projected auxiliary space.
+    """
     cabs_mol = gto.conc_mol(mol, auxmol)
     nao = mol.nao_nr()
     s = cabs_mol.intor_symmetric('int1e_ovlp')
 
-    ls12 = scipy.linalg.solve(s[:nao, :nao], s[:nao, nao:], assume_a='pos')
+    obs_coeff = hf.check_linear_dependency(s[:nao, :nao])
+    ls12 = obs_coeff.dot(obs_coeff.conj().T.dot(s[:nao, nao:]))
     s[nao:, nao:] -= s[nao:, :nao].dot(ls12)
     w, v = scipy.linalg.eigh(s[nao:, nao:])
     c2 = v[:, w > lindep] / numpy.sqrt(w[w > lindep])

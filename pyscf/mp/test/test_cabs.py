@@ -18,9 +18,11 @@ from functools import reduce
 import os
 import numpy
 from pyscf import gto
+from pyscf import lib
 from pyscf import lo
 from pyscf import scf
 from pyscf.mp import cabs
+from pyscf.scf import hf
 
 
 def setUpModule():
@@ -59,6 +61,48 @@ class KnownValues(unittest.TestCase):
         c = numpy.hstack((c1,cabs_coeff))
         s = reduce(numpy.dot, (c.T, cabs_mol.intor('int1e_ovlp_sph'), c))
         self.assertAlmostEqual(numpy.linalg.norm(s-numpy.eye(c.shape[1])), 0, 8)
+
+    def test_redundant_orbital_basis(self):
+        basis = gto.basis.load('sto-3g', 'He')
+        refs = []
+        corrections = []
+        for orbital_basis in (basis, basis + basis):
+            mol = gto.M(atom='He 0 0 0', basis={'He': orbital_basis}, verbose=0)
+            mf = scf.RHF(mol).run(conv_tol=1e-12)
+            self.assertTrue(mf.converged)
+            self.assertEqual(mf.mo_coeff.shape[1], 1)
+            refs.append(mf.e_tot)
+            corrections.append(cabs.energy_singles(mf, 'cc-pvdz', frozen=0))
+        self.assertAlmostEqual(refs[0], refs[1], 12)
+        self.assertAlmostEqual(corrections[0], corrections[1], 12)
+
+    def test_find_cabs_truncated_orbital_basis(self):
+        mol = gto.M(atom='He 0 0 0',
+                    basis={'He': [[0, [1., 1.]], [0, [1.001, 1.]]]},
+                    verbose=0)
+        auxmol = cabs.make_cabs_auxmol(mol, 'cc-pvdz')
+        # The small overlap eigenvalue is about 1.9e-7.
+        for cutoff, nmo in ((1e-6, 1), (1e-8, 2)):
+            with self.subTest(cutoff=cutoff), lib.temporary_env(
+                    hf, overlap_zero_eigenvalue_threshold=cutoff):
+                mf = scf.RHF(mol).run(conv_tol=1e-9)
+                self.assertTrue(mf.converged)
+                self.assertEqual(mf.mo_coeff.shape[1], nmo)
+                cabs_mol, coeff = cabs.find_cabs(mol, auxmol)
+                s = cabs_mol.intor_symmetric('int1e_ovlp')
+                mo = numpy.zeros((s.shape[0], nmo))
+                mo[:mol.nao_nr()] = mf.mo_coeff
+                numpy.testing.assert_allclose(
+                    coeff.T @ s @ coeff, numpy.eye(coeff.shape[1]), atol=1e-8)
+                numpy.testing.assert_allclose(mo.T @ s @ coeff, 0, atol=1e-8)
+
+                # Project the auxiliary functions using the actual SCF MOs.
+                # Their residual must lie entirely in the returned CABS space.
+                aux = numpy.eye(s.shape[0])[:, mol.nao_nr():]
+                residual = aux - mo @ (mo.T @ s @ aux)
+                overlap = residual.T @ s @ coeff
+                numpy.testing.assert_allclose(
+                    residual.T @ s @ residual, overlap @ overlap.T, atol=1e-8)
 
     def test_rhf_cabs_singles(self):
         mol = gto.Mole(atom='''
