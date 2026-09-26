@@ -634,7 +634,7 @@ ECP,I,46,4,3;
         self.assertAlmostEqual(u[6][3][0][0], 25.56783598)
 
     def test_zero_soc(self):
-        pp = parser.parse('''
+        pp = parse_cp2k_pp.parse('''
 He GTH-BLYP-q2 GTH-BLYP
     2
      0.20000000    2    -9.14737128     1.71197792

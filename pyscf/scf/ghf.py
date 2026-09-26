@@ -408,8 +408,6 @@ class GHF(hf.SCF):
                 s = .5 * lib.PauliMatrices
                 ecpso = numpy.einsum('sxy,spq->xpyq', -1j * s, mol.intor('ECPso'))
                 hcore = hcore + ecpso.reshape(hcore.shape)
-            else:
-                raise NotImplementedError
         return hcore
 
     def get_ovlp(self, mol=None):
