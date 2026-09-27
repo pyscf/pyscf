@@ -627,9 +627,9 @@ def fake_cell_vnl(cell, type='scalar'):
         symb = cell.atom_symbol(ia)
         if symb in cell._pseudo:
             pp = cell._pseudo[symb]
-            if do_soc:
-                if do_soc and isinstance(pp[4], int):
-                    raise ValueError(f'SOC requested for {symb} but its GTH potential has no SOC data.')
+            if do_soc and isinstance(pp[4], int):
+                # Scalar-only potentials contribute no SOC projectors.
+                continue
 
             for l, proj in enumerate(pp[5:]):
                 if do_soc:
@@ -768,14 +768,15 @@ def get_pp_soc(cell, kpts=None):
         kpts = kpts.reshape(-1, 3)
     nkpts = len(kpts)
 
+    nao = cell.nao
+    vl_soc = np.zeros((nkpts, 3, nao, nao), dtype=np.complex128)
     fakecell, kl_blocks, pattern, splits = _sorted_fake_cell_vnl(cell, type='soc')
+    if not kl_blocks:
+        return vl_soc
     ppnl_half = _int_vnl(cell, fakecell, kl_blocks, kpts)
 
     lmax = pattern[:,1].max()
     Lmm = [_angmom_matrix(l) for l in range(lmax+1)]
-
-    nao = cell.nao
-    vl_soc = np.zeros((nkpts, 3, nao, nao), dtype=np.complex128)
 
     kl_offset = [0] * 3
     for ii, (i0, i1) in enumerate(zip(splits[:-1], splits[1:])):

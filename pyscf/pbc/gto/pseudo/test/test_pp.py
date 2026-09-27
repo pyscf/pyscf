@@ -309,9 +309,6 @@ He
         dat = pp_int.get_pp_soc(cell, kpts)
         assert abs(lib.fp(dat) - 1.0485888724761192) < 1e-12
 
-    def test_pp_scalar_soc_mixed(self):
-        pass
-
     def test_pp_soc_integrals_vs_cp2k(self):
         cell = pyscf.M(
             a = '''
@@ -344,6 +341,53 @@ He
         cp2k_V_SOC = np.loadtxt(path).reshape(3, nao, nao)
         w = pp_int.get_pp_soc(cell)[0][:, idx[:,None], idx]
         assert abs(w*-.5 - cp2k_V_SOC).max() < 1e-12
+
+    def test_pp_scalar_soc_mixed(self):
+        cell = pyscf.M(
+            a = '''
+            0.0 3.0 3.0
+            3.0 0.0 3.0
+            3.0 3.0 0.0''',
+            atom='''Pb 0.0 0.0 0.0
+            S 3.0 3.0 3.0
+            ''',
+            basis={
+                'Pb': 'DZVP-MOLOPT-PBE-GTH-q4',
+                'S': 'DZVP-MOLOPT-PBE-GTH-q6',
+            },
+            pseudo={
+                'Pb': 'GTH-SOC-PBE-q4',
+                'S': 'GTH-PBE-q6',
+            },
+        )
+        mf = cell.GHF()
+        mf.with_soc = True
+        h = mf.get_hcore()
+        self.assertAlmostEqual(lib.fp(h), 0.4445452615133345+0.011423142532064764j, 8)
+
+    def test_with_soc_for_scalar_pp_high_cost(self):
+        cell = pyscf.M(
+            a = '''
+            0.0 3.0 3.0
+            3.0 0.0 3.0
+            3.0 3.0 0.0''',
+            atom='''Pb 0.0 0.0 0.0
+            S 3.0 3.0 3.0
+            ''',
+            basis={
+                'Pb': 'DZVP-MOLOPT-PBE-GTH-q4',
+                'S': 'DZVP-MOLOPT-PBE-GTH-q6',
+            },
+            pseudo={
+                'Pb': 'GTH-PBE-q4',
+                'S': 'GTH-PBE-q6',
+            },
+        )
+        mf_ref = cell.RHF().run()
+        mf = cell.GHF().run()
+        mf.with_soc = True
+        e_tot = mf.kernel()
+        self.assertAlmostEqual(mf_ref.e_tot, mf.e_tot, 8)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.pseudo")
