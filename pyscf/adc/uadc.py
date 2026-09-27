@@ -381,6 +381,26 @@ def get_frozen_mask(myadc):
         raise NotImplementedError
     return moidx
 
+def _mo_splitter(myadc):
+    maskact = myadc.get_frozen_mask()
+    maskact_a = maskact[0]
+    maskact_b = maskact[1]
+    maskocc_a = myadc.mo_occ[0]>1e-6
+    maskocc_b = myadc.mo_occ[1]>1e-6
+    masks_a = [
+        maskocc_a & ~maskact_a,    # frz occ
+        maskocc_a &  maskact_a,    # act occ
+        ~maskocc_a &  maskact_a,    # act vir
+        ~maskocc_a & ~maskact_a,    # frz vir
+    ]
+    masks_b = [
+        maskocc_b & ~maskact_b,    # frz occ
+        maskocc_b &  maskact_b,    # act occ
+        ~maskocc_b &  maskact_b,    # act vir
+        ~maskocc_b & ~maskact_b,    # frz vir
+    ]
+    masks = (masks_a, masks_b)
+    return masks
 
 class UADC(lib.StreamObject):
     '''Ground state calculations
@@ -421,16 +441,16 @@ class UADC(lib.StreamObject):
     _keys = {
         'tol_residual','conv_tol', 'e_corr', 'method', 'method_type', 'mo_coeff',
         'mo_coeff_hf', 'mol', 'mo_energy_a', 'mo_energy_b', 'incore_complete',
-        'scf_energy', 'e_tot', 't1', 't2', 'frozen', 'chkfile',
+        'mo_energy_hf', 'scf_energy', 'e_tot', 't1', 't2', 'frozen', 'chkfile',
         'max_space', 'mo_occ', 'max_cycle', 'imds', 'with_df', 'compute_properties',
         'approx_trans_moments', 'evec_print_tol', 'spec_factor_print_tol',
         'E', 'U', 'P', 'X', 'ncvs', 'dip_mom', 'dip_mom_nuc',
         'compute_spin_square', 'f_ov',
         'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b',
-        'if_heri_eris'
+        'if_heri_eris', 'if_naf', 'thresh_naf', 'naux', 'eris'
     }
 
-    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None, f_ov=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None, mo_energy=None, f_ov=None):
 
         if 'dft' in str(mf.__module__):
             raise NotImplementedError('DFT reference for UADC')
@@ -457,19 +477,18 @@ class UADC(lib.StreamObject):
         self.f_ov = f_ov
         self._nmo = None
         self._nocc = mf.nelec
-        self.mo_occ = mo_occ
 
         if isinstance(mf, scf.rohf.ROHF):
 
             logger.info(mf, "\nROHF reference detected in ADC")
 
-            mo_occa = (mo_occ>1e-8).astype(np.double)
-            mo_occb = mo_occ - mo_occa
-            self.mo_occ = [mo_occa, mo_occb]
+            mo_occa = (mf.mo_occ>1e-8).astype(np.double)
+            self.mo_occ = [mo_occa, mf.mo_occ - mo_occa]
             if_canonical = False
         else:
-            self.mo_energy_a = mf.mo_energy[0]
-            self.mo_energy_b = mf.mo_energy[1]
+            self.mo_occ = mo_occ
+            self.mo_energy_a, self.mo_energy_b = mf.mo_energy
+            self.mo_energy_hf = (self.mo_energy_a, self.mo_energy_b)
 
         if mo_coeff is None:
             mo_coeff = mf.mo_coeff
@@ -479,25 +498,17 @@ class UADC(lib.StreamObject):
 
                 if_canonical = True
                 mo_a = mo_coeff.copy()
-                nalpha = mf.mol.nelec[0]
-                nbeta = mf.mol.nelec[1]
+                nalpha, nbeta = mf.mol.nelec
 
                 h1e = mf.get_hcore()
                 dm = mf.make_rdm1()
                 vhf = mf.get_veff(mf.mol, dm)
 
-                fock_a = h1e + vhf[0]
-                fock_b = h1e + vhf[1]
+                fock_a = np.dot(mo_a.T,np.dot(h1e + vhf[0], mo_a))
+                fock_b = np.dot(mo_a.T,np.dot(h1e + vhf[1], mo_a))
 
-                if nalpha > nbeta:
-                    ndocc = nbeta
-                    nsocc = nalpha - nbeta
-                else:
-                    ndocc = nalpha
-                    nsocc = nbeta - nalpha
-
-                fock_a = np.dot(mo_a.T,np.dot(fock_a, mo_a))
-                fock_b = np.dot(mo_a.T,np.dot(fock_b, mo_a))
+                ndocc = min(nalpha, nbeta)
+                nsocc = abs(nalpha - nbeta)
 
                 # Semicanonicalize Ca using fock_a, nocc_a -> Ca, mo_energy_a, U_a, f_ov_a
                 mo_a_coeff, mo_energy_a, f_ov_a, f_aa = self.semi_canonicalize_orbitals(
@@ -507,12 +518,10 @@ class UADC(lib.StreamObject):
                 mo_b_coeff, mo_energy_b, f_ov_b, f_bb = self.semi_canonicalize_orbitals(fock_b, ndocc, mo_a)
 
                 mo_coeff = [mo_a_coeff, mo_b_coeff]
-
-                f_ov = [f_ov_a, f_ov_b]
-
-                self.f_ov = f_ov
+                self.f_ov = [f_ov_a, f_ov_b]
                 self.mo_energy_a = mo_energy_a.copy()
                 self.mo_energy_b = mo_energy_b.copy()
+                self.mo_energy_hf = (self.mo_energy_a,self.mo_energy_b)
 
         elif isinstance(mf, scf.rohf.ROHF) and f_ov is None:
             raise ValueError("f_ov must be provided when mo_coeff is given for ROHF reference")
@@ -526,29 +535,24 @@ class UADC(lib.StreamObject):
         self.if_heri_eris = False
         if frozen is None:
             self._nmo = (mo_coeff[0].shape[1], mo_coeff[1].shape[1])
-        elif hasattr(frozen, '__len__'):
+        elif not hasattr(frozen, '__len__'):
+            raise NotImplementedError("each element of frozen should be None, an integer or a array-like object")
+        else:
             if len(frozen) != 2:
                 raise NotImplementedError("frozen should be announced as None or a array-like object with two elements")
-            elif isinstance(frozen, list) or isinstance(frozen, np.ndarray):
-                self.frozen = frozen = tuple(frozen)
+            self.frozen = frozen = tuple(frozen)
 
-            if frozen[0] is None:
-                nmo_a = mo_coeff[0].shape[1]
-            elif isinstance(frozen[0], (int, np.integer)):
-                nmo_a = mo_coeff[0].shape[1]-frozen[0]
-            elif hasattr(frozen[0], '__len__'):
-                nmo_a = mo_coeff[0].shape[1]-len(frozen[0])
-            else:
-                raise NotImplementedError
-            if frozen[1] is None:
-                nmo_b = mo_coeff[1].shape[1]
-            elif isinstance(frozen[1], (int, np.integer)):
-                nmo_b = mo_coeff[1].shape[1]-frozen[1]
-            elif hasattr(frozen[1], '__len__'):
-                nmo_b = mo_coeff[1].shape[1]-len(frozen[1])
-            else:
-                raise NotImplementedError
-            self._nmo = (nmo_a, nmo_b)
+            self._nmo = []
+            for frz, nmo in zip(frozen, (mo_coeff[0].shape[1], mo_coeff[1].shape[1])):
+                if frz is None:
+                    self._nmo.append(nmo)
+                elif isinstance(frz, (int, np.integer)):
+                    self._nmo.append(nmo - frz)
+                elif hasattr(frz, '__len__'):
+                    self._nmo.append(nmo - len(frz))
+                else:
+                    raise NotImplementedError
+            self._nmo = tuple(self._nmo)
 
             (mask_a,mask_b) = self.get_frozen_mask()
             maskocc_a = self.mo_occ[0]>1e-6
@@ -564,34 +568,30 @@ class UADC(lib.StreamObject):
                 if isinstance(self._scf, scf.rohf.ROHF):
                     vir_a = ~maskocc_a & mask_a
                     vir_b = ~maskocc_b & mask_b
-                    f_ov_a, f_ov_b = self.f_ov
-                    f_ov_a_tmp = f_ov_a[occ_a[:mf.nelec[0]],:]
-                    f_ov_a = f_ov_a_tmp[:,vir_a[mf.nelec[0]:]]
-                    f_ov_b_tmp = f_ov_b[occ_b[:mf.nelec[1]],:]
-                    f_ov_b = f_ov_b_tmp[:,vir_b[mf.nelec[1]:]]
-                    self.f_ov = [f_ov_a, f_ov_b]
+                    self.f_ov = [fov[occ[:n],:][:, vir[n:]] for fov, occ, vir, n in
+                                 zip(self.f_ov, (occ_a, occ_b), (vir_a, vir_b), mf.nelec)]
+            elif mo_energy is not None:
+                self.mo_energy_a = mo_energy[0][mask_a]
+                self.mo_energy_b = mo_energy[1][mask_b]
             else:
                 h1e = mf.get_hcore()
                 dm = scf.uhf.make_rdm1(mo_coeff, self.mo_occ)
                 vhf = scf.uhf.get_veff(mf.mol, dm)
-                fock_a = h1e + vhf[0]
-                fock_b = h1e + vhf[1]
-                fock_a = self.mo_coeff[0].conj().T.dot(fock_a).dot(self.mo_coeff[0])
-                fock_b = self.mo_coeff[1].conj().T.dot(fock_b).dot(self.mo_coeff[1])
-                (self.mo_energy_a,self.mo_energy_b) = (fock_a.diagonal().real,fock_b.diagonal().real)
+                (self.mo_energy_a, self.mo_energy_b) = [
+                    c.conj().T.dot(h1e + v).dot(c).diagonal().real
+                    for c, v in zip(self.mo_coeff, vhf)]
                 self.scf_energy = self._scf.energy_tot(dm=dm, vhf=vhf)
-        else:
-            raise NotImplementedError("each element of frozen should be None, an integer or a array-like object")
 
         self._nvir = (self._nmo[0] - self._nocc[0], self._nmo[1] - self._nocc[1])
-        self.nocc_a = self._nocc[0]
-        self.nocc_b = self._nocc[1]
-        self.nvir_a = self._nvir[0]
-        self.nvir_b = self._nvir[1]
+        self.nocc_a, self.nocc_b = self._nocc
+        self.nvir_a, self.nvir_b = self._nvir
         if self.nocc_a == 0 or self.nocc_b == 0:
             raise ValueError("No occupied alpha or beta orbitals found")
         if self.nvir_a == 0 or self.nvir_b == 0:
             raise ValueError("No virtual alpha or beta orbitals found")
+        self.naux = None
+        self.if_naf = False
+        self.thresh_naf = 1e-2
 
         self.chkfile = mf.chkfile
         self.method = "adc(2)"
@@ -602,26 +602,16 @@ class UADC(lib.StreamObject):
         self.evec_print_tol = 0.1
         self.spec_factor_print_tol = 0.1
         self.ncvs = None
+        self.eris = None
 
-        self.E = None
-        self.U = None
-        self.P = None
+        self.E = self.U = self.P = None
         self.X = (None,)
 
         self.compute_spin_square = False
 
         dip_ints = -self.mol.intor('int1e_r',comp=3)
-        dip_mom_a = np.zeros((dip_ints.shape[0], self._nmo[0], self._nmo[0]))
-        dip_mom_b = np.zeros((dip_ints.shape[0], self._nmo[1], self._nmo[1]))
-
-        for i in range(dip_ints.shape[0]):
-            dip = dip_ints[i,:,:]
-            dip_mom_a[i,:,:] = np.dot(self.mo_coeff[0].T, np.dot(dip, self.mo_coeff[0]))
-            dip_mom_b[i,:,:] = np.dot(self.mo_coeff[1].T, np.dot(dip, self.mo_coeff[1]))
-
-        self.dip_mom = []
-        self.dip_mom.append(dip_mom_a)
-        self.dip_mom.append(dip_mom_b)
+        self.dip_mom = [lib.einsum('xpq,pi,qj->xij', dip_ints, c, c)
+                        for c in self.mo_coeff]
 
         charges = self.mol.atom_charges()
         coords  = self.mol.atom_coords()
@@ -632,6 +622,8 @@ class UADC(lib.StreamObject):
     transform_integrals = uadc_ao2mo.transform_integrals_incore
     make_ref_rdm1 = make_ref_rdm1
     get_frozen_mask = get_frozen_mask
+    _mo_splitter = _mo_splitter
+
 
     def semi_canonicalize_orbitals(self, f, nocc, C):
 
@@ -673,7 +665,7 @@ class UADC(lib.StreamObject):
                     self.max_memory, lib.current_memory()[0])
         return self
 
-    def kernel_gs(self):
+    def kernel_gs(self, eris=None):
         assert(self.mo_coeff is not None)
         assert(self.mo_occ is not None)
 
@@ -714,26 +706,29 @@ class UADC(lib.StreamObject):
                 logger.info(self, 'Frozen Orbital List (Beta): %s', self.frozen[1])
         logger.info(self, '*****************************************')
 
-        if getattr(self, 'with_df', None) or getattr(self._scf, 'with_df', None):
-            if getattr(self, 'with_df', None):
-                self.with_df = self.with_df
-            else:
-                self.with_df = self._scf.with_df
+        if eris is None:
+            if getattr(self, 'with_df', None) or getattr(self._scf, 'with_df', None):
+                if getattr(self, 'with_df', None):
+                    self.with_df = self.with_df
+                else:
+                    self.with_df = self._scf.with_df
 
-            def df_transform():
-                return uadc_ao2mo.transform_integrals_df(self)
-            self.transform_integrals = df_transform
-        elif (self._scf._eri is None or
-              (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
-            def outcore_transform():
-                return uadc_ao2mo.transform_integrals_outcore(self)
-            self.transform_integrals = outcore_transform
+                def df_transform():
+                    return uadc_ao2mo.transform_integrals_df(self)
+                self.transform_integrals = df_transform
+            elif (self._scf._eri is None or
+                    (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
+                def outcore_transform():
+                    return uadc_ao2mo.transform_integrals_outcore(self)
+                self.transform_integrals = outcore_transform
 
-        eris = self.transform_integrals()
+            eris = self.transform_integrals()
 
         self.e_corr, self.t1, self.t2 = uadc_amplitudes.compute_amplitudes_energy(
             self, eris=eris, verbose=self.verbose)
         self._finalize()
+        if self.if_heri_eris:
+            self.eris = eris
 
         return self.e_corr, self.t1, self.t2
 
@@ -820,9 +815,9 @@ class UADC(lib.StreamObject):
 
         self._adc_es = adc_es
         if self.if_heri_eris:
-            return e_exc, v_exc, spec_fac, X, eris
-        else:
-            return e_exc, v_exc, spec_fac, X
+            self.eris = eris
+
+        return e_exc, v_exc, spec_fac, X
 
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''

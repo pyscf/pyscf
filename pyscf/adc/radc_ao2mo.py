@@ -47,7 +47,8 @@ def transform_integrals_incore(myadc):
     if ((myadc.method == "adc(2)" and myadc.method_type == "ee" and myadc.approx_trans_moments is False)
         or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False)
         or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is True and myadc.method_type in ("ea","ee"))
-        or (myadc.method == "adc(3)")):
+        or (myadc.method == "adc(3)")
+        or myadc.if_heri_eris):
         eris.vvvv = ao2mo.general(myadc._scf._eri, (vir, vir, vir, vir),
                                 compact=False).reshape(nvir, nvir, nvir, nvir)
         eris.vvvv = np.ascontiguousarray(eris.vvvv.transpose(0,2,1,3))
@@ -159,7 +160,8 @@ def transform_integrals_outcore(myadc):
     if ((myadc.method == "adc(2)" and myadc.method_type == "ee" and myadc.approx_trans_moments is False)
         or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False)
         or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is True and myadc.method_type in ("ea","ee"))
-        or (myadc.method == "adc(3)")):
+        or (myadc.method == "adc(3)")
+        or myadc.if_heri_eris):
 
         eris.vvvv = []
 
@@ -243,6 +245,21 @@ def transform_integrals_df(myadc):
         ncvs = myadc.ncvs
         eris.Lee = eris.Lvv
         eris.Lce = eris.Lce.reshape(naux,myadc.ncvs*nvir)
+
+    if myadc.if_naf:
+        W = lib.ddot(Loo, Loo.T) + lib.ddot(eris.Lov,eris.Lov.T) + lib.ddot(Lvo,Lvo.T) + lib.ddot(eris.Lvv,eris.Lvv.T)
+        n,N = np.linalg.eigh(W)
+        N_trunc = N[:,n>myadc.thresh_naf].T
+        myadc.naux = N_trunc.shape[0]
+        log.info(f"origin naux is {naux}||naf naux is {myadc.naux}")
+        Loo = lib.ddot(N_trunc,Loo)
+        eris.Lov = lib.ddot(N_trunc,eris.Lov)
+        Lvo = lib.ddot(N_trunc,Lvo)
+        eris.Lvv = lib.ddot(N_trunc,eris.Lvv)
+        if myadc.ncvs is not None and myadc.ncvs > 0:
+            ncvs = myadc.ncvs
+            eris.Lee = eris.Lvv
+            eris.Lce = eris.Lov.reshape(myadc.naux,nocc,nvir)[:,:ncvs,:]
 
     eris.feri1 = lib.H5TmpFile()
     eris.oooo = eris.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), 'f8')

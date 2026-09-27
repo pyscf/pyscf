@@ -36,16 +36,18 @@ from pyscf.adc import uadc_ip
 from pyscf.adc import uadc_ip_cvs
 from pyscf.adc import uadc_ea
 from pyscf.adc import uadc_ee
+from pyscf.adc import radc_fno
+from pyscf.adc import uadc_fno
 
 
-def ADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
+def ADC(mf, frozen=None, mo_coeff=None, mo_occ=None, mo_energy=None, f_ov=None):
 
     if mf.istype('UHF'):
-        return UADC(mf, frozen, mo_coeff, mo_occ)
+        return UADC(mf, frozen, mo_coeff, mo_occ, mo_energy)
     elif mf.istype('ROHF'):
-        return UADC(mf, frozen, mo_coeff, mo_occ)
+        return UADC(mf, frozen, mo_coeff, mo_occ, mo_energy, f_ov)
     elif mf.istype('RHF'):
-        return RADC(mf, frozen, mo_coeff, mo_occ)
+        return RADC(mf, frozen, mo_coeff, mo_occ, mo_energy)
     else :
         raise RuntimeError('ADC code only supports RHF, ROHF, and UHF references')
 
@@ -53,21 +55,37 @@ def ADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
 ADC.__doc__ = uadc.UADC.__doc__
 
 
-def UADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
+def UADC(mf, frozen=None, mo_coeff=None, mo_occ=None, mo_energy=None, f_ov=None):
 
     if not (mf.istype('UHF') or mf.istype('ROHF')):
         mf = mf.to_uhf()
 
-    return uadc.UADC(mf, frozen, mo_coeff, mo_occ)
+    return uadc.UADC(mf, frozen, mo_coeff, mo_occ, mo_energy, f_ov)
 
 UADC.__doc__ = uadc.UADC.__doc__
 
-def RADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
+def RADC(mf, frozen=None, mo_coeff=None, mo_occ=None, mo_energy=None):
 
     mf = mf.remove_soscf()
     if not mf.istype('RHF'):
         mf = mf.to_rhf()
 
-    return radc.RADC(mf, frozen, mo_coeff, mo_occ)
+    return radc.RADC(mf, frozen, mo_coeff, mo_occ, mo_energy)
 
 RADC.__doc__ = radc.RADC.__doc__
+
+def ADC2FNO(mf, frozen=None, mo_coeff=None, mo_occ=None, mo_energy=None, f_ov=None):
+    #J. Chem. Phys. 159, 084113 (2023)
+
+    if mf.istype('UHF'):
+        return uadc_fno.UADC2FNO(mf, frozen, mo_coeff, mo_occ, mo_energy)
+    elif mf.istype('ROHF'):
+        return uadc_fno.UADC2FNO(mf, frozen, mo_coeff, mo_occ, mo_energy, f_ov)
+    elif mf.istype('RHF'):
+        return radc_fno.RADC2FNO(mf, frozen, mo_coeff, mo_occ, mo_energy)
+    else :
+        raise RuntimeError('ADC2FNO code only supports RHF, ROHF, and UHF references')
+
+ADC2FNO.__doc__ = uadc_fno.UADC2FNO.__doc__
+
+
