@@ -208,7 +208,7 @@ def to_trexio(
     elif os.path.isdir(filename):
         shutil.rmtree(filename)
     back_end = _trexio_backend_const(backend)
-    if isinstance(obj, gto.Mole) or isinstance(obj, pbcgto.Cell):
+    if isinstance(obj, (gto.Mole, pbcgto.Cell)):
         with trexio.File(filename, "u", back_end=back_end) as tf:
             _mol_to_trexio(obj, tf)
     elif isinstance(obj, scf.hf.SCF):
