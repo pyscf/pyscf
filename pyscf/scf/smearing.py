@@ -133,6 +133,7 @@ class _SmearingSCF:
         self.entropy = None
         self.e_free = None
         self.e_zero = None
+        self._e_free_prev = None
 
     def undo_smearing(self):
         obj = lib.view(self, lib.drop_class(self.__class__, _SmearingSCF))
@@ -143,6 +144,37 @@ class _SmearingSCF:
         del obj.e_free
         del obj.e_zero
         return obj
+
+    def pre_kernel(self, envs):
+        self._e_free_prev = self.e_free
+
+    def check_convergence(self, envs):
+        '''Convergence check of the main SCF loop.
+
+        Smearing minimizes the free energy e_free = E - sigma*S, so the main
+        loop converges on e_free (issue #3379). A tight conv_tol is suggested to
+        reach the stationary point on flat free-energy surfaces.
+        '''
+        if (self.sigma and self.smearing_method
+                and self.e_free is not None and self._e_free_prev is not None):
+            dF = abs(self.e_free - self._e_free_prev)
+            return (dF < envs['conv_tol']
+                    and envs['norm_gorb'] < envs['conv_tol_grad'])
+        return (abs(envs['e_tot'] - envs['last_hf_e']) < envs['conv_tol']
+                and envs['norm_gorb'] < envs['conv_tol_grad'])
+
+    def check_extra_convergence(self, envs):
+        '''Convergence check of the extra (conv_check) cycle.
+
+        The envs dict carries the relaxed tolerances (conv_tol*10,
+        conv_tol_grad*3).
+        '''
+        if (self.sigma and self.smearing_method
+                and self.e_free is not None and self._e_free_prev is not None):
+            return (abs(self.e_free - self._e_free_prev) < envs['conv_tol']
+                    or envs['norm_gorb'] < envs['conv_tol_grad'])
+        return (abs(envs['e_tot'] - envs['last_hf_e']) < envs['conv_tol']
+                or envs['norm_gorb'] < envs['conv_tol_grad'])
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
         '''Label the occupancies for each orbital
@@ -256,6 +288,7 @@ class _SmearingSCF:
     def energy_tot(self, dm=None, h1e=None, vhf=None):
         e_tot = self.energy_elec(dm, h1e, vhf)[0] + self.energy_nuc()
         if self.sigma and self.smearing_method and self.entropy is not None:
+            self._e_free_prev = self.e_free
             self.e_free = e_tot - self.sigma * self.entropy
             self.e_zero = e_tot - self.sigma * self.entropy * .5
             logger.info(self, '    Total E(T) = %.15g  Free energy = %.15g  E0 = %.15g',
