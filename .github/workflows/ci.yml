@@ -111,7 +111,7 @@ jobs:
       fail-fast: true
       matrix:
         os: [ubuntu-latest]
-        pyver: [cp39-cp39]
+        pyver: [cp313-cp313]
     env:
       img: quay.io/pypa/manylinux2014_aarch64
     steps:
