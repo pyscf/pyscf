@@ -22,6 +22,7 @@ import scipy.linalg
 import tempfile
 from pyscf import gto
 from pyscf.soscf import ciah
+from pyscf.soscf import newton_ah
 from pyscf import scf
 from pyscf import dft
 
@@ -132,6 +133,33 @@ class KnownValues(unittest.TestCase):
         nr.max_cycle = 2
         nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), -75.5783963795897, 9)
+
+    def test_rohf_hop_finite_difference(self):
+        mf = scf.ROHF(h2o_z1)
+        rng = numpy.random.default_rng(12)
+        # Random orbitals orthonormal in the AO overlap metric; no SCF run.
+        a = rng.normal(size=(h2o_z1.nao, h2o_z1.nao))
+        energy, coeff = mf.eig(a + a.T, mf.get_ovlp())
+        occ = mf.get_occ(energy, coeff)
+        _, hop, _ = newton_ah.gen_g_hop_rohf(mf, coeff, occ)
+        x = rng.normal(size=numpy.count_nonzero(scf.hf.uniq_var_indices(occ)))
+        x /= numpy.linalg.norm(x)
+        y = rng.normal(size=x.size)
+        y /= numpy.linalg.norm(y)
+        kx = scf.hf.unpack_uniq_var(x, occ)
+        ky = scf.hf.unpack_uniq_var(y, occ)
+
+        def energy(s, t):
+            c = coeff.dot(scipy.linalg.expm(s * kx + t * ky))
+            return mf.energy_tot(dm=mf.make_rdm1(c, occ))
+
+        eps = 1e-4
+        fd = (energy(eps, eps) - energy(eps, -eps)
+              - energy(-eps, eps) + energy(-eps, -eps)) / (4 * eps**2)
+        hx, hy = hop(x), hop(y)
+        self.assertAlmostEqual(x.dot(hy), y.dot(hx), 10)
+        # PySCF's orbital gradient and Hessian are half the energy derivatives.
+        self.assertAlmostEqual(fd / 2, x.dot(hy), 5)
 
 
     def test_nr_uhf(self):
