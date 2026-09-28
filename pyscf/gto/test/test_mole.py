@@ -1033,6 +1033,28 @@ H           1.00000000        1.00000000        0.00000000
         v = mol.intor('int1e_nuc')
         self.assertAlmostEqual(abs(ref-v).max(), 0, 12)
 
+    def test_fractional_nelec(self):
+        mol = gto.M(
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]],
+            nelec_frac=True,
+            charge=0.5)
+        self.assertEqual(mol.nelectron, 1.5)
+        neleca, nelecb = mol.nelec
+        self.assertEqual(neleca, 0.75)
+        self.assertEqual(nelecb, 0.75)
+
+        mol = gto.M(
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]],
+            nelec_frac=True,
+            charge=0.5,
+            spin=0.5)
+        self.assertEqual(mol.nelectron, 1.5)
+        neleca, nelecb = mol.nelec
+        self.assertEqual(neleca, 1.0)
+        self.assertEqual(nelecb, 0.5)
+
     def test_fromstring(self):
         mol = gto.Mole()
         mol.fromstring('2\n\nH 0 0 1\nH 0 -1 0')
