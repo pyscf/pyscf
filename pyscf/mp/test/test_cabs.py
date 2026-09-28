@@ -72,7 +72,8 @@ class KnownValues(unittest.TestCase):
             self.assertTrue(mf.converged)
             self.assertEqual(mf.mo_coeff.shape[1], 1)
             refs.append(mf.e_tot)
-            corrections.append(cabs.energy_singles(mf, 'cc-pvdz', frozen=0))
+            corrections.append(cabs.energy_singles(
+                mf, 'cc-pvdz', frozen=0, remove_linear_dep=True))
         self.assertAlmostEqual(refs[0], refs[1], 12)
         self.assertAlmostEqual(corrections[0], corrections[1], 12)
 
@@ -88,8 +89,13 @@ class KnownValues(unittest.TestCase):
                 mf = scf.RHF(mol).run(conv_tol=1e-9)
                 self.assertTrue(mf.converged)
                 self.assertEqual(mf.mo_coeff.shape[1], nmo)
-                cabs_mol, coeff = cabs.find_cabs(mol, auxmol)
+                cabs_mol, default_coeff = cabs.find_cabs(mol, auxmol)
                 s = cabs_mol.intor_symmetric('int1e_ovlp')
+                # By default, CABS remains orthogonal to the full orbital basis,
+                # even when SCF has discarded a nearly dependent direction.
+                numpy.testing.assert_allclose(
+                    s[:mol.nao_nr()] @ default_coeff, 0, atol=1e-8)
+                _, coeff = cabs.find_cabs(mol, auxmol, remove_linear_dep=True)
                 mo = numpy.zeros((s.shape[0], nmo))
                 mo[:mol.nao_nr()] = mf.mo_coeff
                 numpy.testing.assert_allclose(
