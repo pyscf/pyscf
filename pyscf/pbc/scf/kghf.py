@@ -32,6 +32,8 @@ from pyscf.pbc.scf import khf
 from pyscf.pbc.scf import ghf as pbcghf
 from pyscf.pbc.scf import addons
 from pyscf.pbc.df.df_jk import _format_jks
+from pyscf.pbc.gto.pseudo import pp_int
+from pyscf.pbc.gto.ecp import ecp_int
 from pyscf.data import nist
 from pyscf import __config__
 
@@ -197,6 +199,9 @@ def _cast_mol_init_guess(fn):
 
 class KGHF(khf.KSCF):
     '''PBC GHF with k-point sampling (default: gamma point).
+
+    Set with_soc=True to add ECP and GTH pseudopotential spin-orbit terms.
+    GTH atoms must then use explicit SOC data, e.g. pseudo='gth-pbe-soc'.
     '''
     _keys = {'with_soc'}
 
@@ -222,10 +227,17 @@ class KGHF(khf.KSCF):
         if kpts is None: kpts = self.kpts
         hcore = khf.KSCF.get_hcore(self, cell, kpts)
         hcore = lib.asarray([scipy.linalg.block_diag(h, h) for h in hcore])
-        if self.with_soc and cell.has_ecp_soc():
-            from pyscf.pbc.gto.ecp import ecp_int
-            # The ECP SOC contribution = <|1j * s * U_SOC|>
-            hcore = hcore + ecp_int(cell, kpts, intor='ECPso')
+        if self.with_soc:
+            if cell._pseudo:
+                vl_soc = pp_int.get_pp_soc(cell, kpts)
+                s = .5 * lib.PauliMatrices
+                vl_soc = np.einsum('sxy,kspq->kxpyq', 1j * s, vl_soc)
+                hcore = hcore + vl_soc.reshape(hcore.shape)
+            elif cell.has_ecp_soc():
+                # The ECP SOC contribution = <|1j * s * U_SOC|>
+                hcore = hcore + ecp_int(cell, kpts, intor='ECPso')
+            else:
+                raise NotImplementedError
         return hcore
 
     def get_ovlp(self, cell=None, kpts=None):
