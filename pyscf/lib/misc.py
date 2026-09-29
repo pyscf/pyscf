@@ -420,7 +420,7 @@ def prange_split(n_total, n_sections):
 
 izip = zip
 
-if sys.version_info > (3, 8):
+if sys.version_info >= (3, 8):
     from math import comb
 else:
     import math
@@ -680,7 +680,6 @@ class StreamObject:
         anything related to the method (such as the energy, the wave-function,
         the DFT mesh grids etc.).
         '''
-        pass
 
     def pre_kernel(self, envs):
         '''
@@ -688,7 +687,6 @@ class StreamObject:
         Internal variables are exposed to pre_kernel through the "envs"
         dictionary.  Return value of pre_kernel function is not required.
         '''
-        pass
 
     def post_kernel(self, envs):
         '''
@@ -696,7 +694,6 @@ class StreamObject:
         variables are exposed to post_kernel through the "envs" dictionary.
         Return value of post_kernel function is not required.
         '''
-        pass
 
     def run(self, *args, **kwargs):
         '''

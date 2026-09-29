@@ -530,7 +530,7 @@ def davidson(auxspc, phys, chempot=None, nroots=1, which='SM', tol=1e-14, maxite
 
     matvec = lambda x: auxspc.dot(phys, np.asarray(x))
     diag = np.concatenate([np.diag(phys), auxspc.energy])
-    guess = [np.zeros((dim)) for n in range(nroots)]
+    guess = [np.zeros(dim) for n in range(nroots)]
 
     mask = np.argsort(abs_op(diag))[::order]
     for i in range(nroots):
@@ -561,7 +561,7 @@ def _band_lanczos(se_occ, n=0, max_memory=None):
 
     q = np.zeros((bandwidth, naux))
     t = np.zeros((bandwidth, bandwidth))
-    r = np.zeros((naux))
+    r = np.zeros(naux)
 
     # cholesky qr factorisation of v.T
     coupling = se_occ.coupling

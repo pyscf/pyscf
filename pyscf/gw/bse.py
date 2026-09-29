@@ -1502,7 +1502,7 @@ def _get_lpq_bar(nocc, mo_energy, Lpq):
         X *= 2.0
 
     # calculate the inverse dielectric function
-    InvD = np.linalg.inv((np.eye(naux) - X))
+    InvD = np.linalg.inv(np.eye(naux) - X)
 
     # calculate the auxiliary matrix
     Lpq_bar = einsum('PQ,sQmn->sPmn', InvD, Lpq)
@@ -1551,7 +1551,7 @@ def _get_lpq_bar_by_block(nocc, mo_energy, Lii, Lia):
         X *= 2.0
 
     # calculate the inverse dielectric function
-    InvD = np.linalg.inv((np.eye(naux) - X))
+    InvD = np.linalg.inv(np.eye(naux) - X)
 
     Lia_bar = []
     Lii_bar = []

@@ -729,7 +729,7 @@ def svd_cut(mat,thresh):
     bdim = r
     rkep = r
     u2 = np.zeros((d1,bdim))
-    s2 = np.zeros((bdim))
+    s2 = np.zeros(bdim)
     v2 = np.zeros((bdim,d2))
     u2[:,:rkep] = u[:,:rkep]
     s2[:rkep] = sig[:rkep]

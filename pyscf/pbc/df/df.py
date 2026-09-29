@@ -933,7 +933,7 @@ def _hstack_datasets(data_to_stack, slices=numpy.s_[:]):
     res_shape = list(data_to_stack[0].shape)
     dset_shapes = [x.shape for x in data_to_stack]
 
-    if not (isinstance(slices, tuple) or isinstance(slices, list)):
+    if not isinstance(slices, (tuple, list)):
         # If slices is not a tuple, we assume it is a single slice acting on axis 0 only.
         slices = (slices,)
 

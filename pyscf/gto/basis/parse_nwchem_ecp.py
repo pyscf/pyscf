@@ -57,7 +57,7 @@ def parse(string, symb=None):
         for dat in raw_data[i:]:
             dat = dat.strip()
             if dat: # remove empty lines
-                if ((dat[0].isalpha() and dat.split(None, 1)[0].upper() != symb.upper())):
+                if (dat[0].isalpha() and dat.split(None, 1)[0].upper() != symb.upper()):
                     break
                 else:
                     seg.append(dat)
@@ -141,7 +141,7 @@ def _search_ecp(basisfile, symb):
     for dat in fdata[i:]:
         dat = dat.strip()
         if dat:  # remove empty lines
-            if ((dat[0].isalpha() and dat.split(None, 1)[0].upper() != symb.upper())):
+            if (dat[0].isalpha() and dat.split(None, 1)[0].upper() != symb.upper()):
                 return seg
             else:
                 seg.append(dat)

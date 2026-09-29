@@ -468,9 +468,7 @@ PP_ALIAS = {
 }
 
 def _is_pople_basis(basis):
-    return (basis.startswith('631') or
-            basis.startswith('321') or
-            basis.startswith('431'))
+    return basis.startswith(('631', '321', '431'))
 
 _BASIS_DIR = os.path.dirname(__file__)
 _GTH_BASIS_DIR = os.path.abspath(f'{pyscf.__file__}/../pbc/gto/basis')
@@ -598,7 +596,7 @@ def _truncate(basis, contr_scheme, symb, split_name):
                         n_saved += n_save
             assert n_saved == n_keep, ("@{} implies {} l={} function(s), but" +
                                        "only {} in {}:{}").format(split_name[1],
-                                                                  contr_scheme[l],
+                                                                  n_keep,
                                                                   l, n_saved, symb,
                                                                   split_name[0])
     return contr_b

@@ -392,7 +392,7 @@ class _IntPPBuilder(Int3cBuilder):
 
         r0 = cell.rcut  # initial guess
         rcut = []
-        for lk, fake_cell in fake_cells.items():
+        for fake_cell in fake_cells.values():
             nuc_exps = np.hstack(fake_cell.bas_exps())
             ak_idx = nuc_exps.argmin()
             ak = nuc_exps[ak_idx]

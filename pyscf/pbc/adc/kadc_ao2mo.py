@@ -60,10 +60,10 @@ def transform_integrals_incore(myadc):
     eris.ovvv = np.empty((nkpts, nkpts, nkpts, nocc, nvir, nvir, nvir), dtype=dtype)
     eris.ovvo = np.empty((nkpts, nkpts, nkpts, nocc, nvir, nvir, nocc), dtype=dtype)
 
-    for (ikp, ikq, ikr) in khelper.symm_map.keys():
-        iks = kconserv[ikp, ikq, ikr]
-        eri_kpt = fao2mo((mo_coeff[ikp], mo_coeff[ikq], mo_coeff[ikr], mo_coeff[iks]),
-                         (kpts[ikp], kpts[ikq], kpts[ikr], kpts[iks]), compact=False)
+    for (ikp,ikq,ikr) in khelper.symm_map:
+        iks = kconserv[ikp,ikq,ikr]
+        eri_kpt = fao2mo((mo_coeff[ikp],mo_coeff[ikq],mo_coeff[ikr],mo_coeff[iks]),
+                         (kpts[ikp],kpts[ikq],kpts[ikr],kpts[iks]), compact=False)
         if dtype == np.float64:
             eri_kpt = eri_kpt.real
         eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
@@ -159,7 +159,7 @@ def transform_integrals_outcore(myadc):
     if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)"):
         mem_now = lib.current_memory()[0]
         if nvir ** 4 * 16 / 1e6 + mem_now < myadc.max_memory:
-            for (ikp, ikq, ikr) in khelper.symm_map.keys():
+            for (ikp, ikq, ikr) in khelper.symm_map:
                 iks = kconserv[ikp, ikq, ikr]
                 orbv_p = mo_coeff[ikp][:, nocc:]
                 orbv_q = mo_coeff[ikq][:, nocc:]
@@ -177,7 +177,7 @@ def transform_integrals_outcore(myadc):
         else:
             # raise MemoryError('Minimal memory requirements %s MB'
             #                  % (mem_now + nvir ** 4 / 1e6 * 16 * 2))
-            for (ikp, ikq, ikr) in khelper.symm_map.keys():
+            for (ikp, ikq, ikr) in khelper.symm_map:
                 for a in range(nvir):
                     orbva_p = orbv_p[:, a].reshape(-1, 1)
                     buf_kpt = fao2mo((orbva_p, orbv_q, orbv_r, orbv_s),
