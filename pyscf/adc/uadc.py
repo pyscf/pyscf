@@ -76,7 +76,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
         guess = adc.get_init_guess(nroots, diag, ascending = True)
     elif isinstance(guess, str) and guess == "cis" and adc.method_type == "ee":
         guess = adc.get_init_guess(nroots, diag, ascending = True, type="cis", eris=eris)
-    elif isinstance(guess, np.ndarray) or isinstance(guess, list):
+    elif isinstance(guess, (np.ndarray, list)):
         guess = adc.get_init_guess(nroots, diag, ascending = True, type = "read", ini = guess)
     else:
         raise NotImplementedError("Guess type not implemented")

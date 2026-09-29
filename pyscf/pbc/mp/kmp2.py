@@ -539,6 +539,10 @@ def get_frozen_mask(mp):
 
     '''
     moidx = [np.ones(x.size, dtype=bool) for x in mp.mo_occ]
+    if getattr(mp, 'mo_energy', None) is not None:
+        from pyscf.pbc.scf.hf import INVALID_ORBITAL_ENERGY
+        for k, idx in enumerate(moidx):
+            idx[np.asarray(mp.mo_energy[k]) == INVALID_ORBITAL_ENERGY] = False
     if mp.frozen is None:
         pass
     elif isinstance(mp.frozen, (int, np.integer)):

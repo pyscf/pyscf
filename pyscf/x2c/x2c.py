@@ -259,7 +259,6 @@ class SpinorX2CHelper(X2CHelperBase):
     '''2-component X2c (including spin-free and spin-dependent terms) in
     the j-adapted spinor basis.
     '''
-    pass
 
 X2C = SpinorX2CHelper
 

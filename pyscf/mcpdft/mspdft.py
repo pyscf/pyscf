@@ -373,8 +373,8 @@ class _MSPDFT (mcpdft.MultiStateMCPDFTSolver):
         self.heff_mcscf = self.make_heff_mcscf ()
         e_mcscf, self.si_mcscf = self._eig_si (self.heff_mcscf)
         if abs (linalg.norm (self.e_mcscf-e_mcscf)) > 1e-9:
-            raise RuntimeError ((f"Sanity fault: e_mcscf ({e_mcscf}) != "
-                                f"self.e_mcscf ({self.e_mcscf})"))
+            raise RuntimeError (f"Sanity fault: e_mcscf ({e_mcscf}) != "
+                                f"self.e_mcscf ({self.e_mcscf})")
         self.hdiag_pdft = self.compute_pdft_energy_(
             otxc=otxc, grids_level=grids_level, grids_attr=grids_attr)[-1]
         self.e_states, self.si_pdft = self._eig_si (self.get_heff_pdft ())

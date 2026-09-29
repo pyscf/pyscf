@@ -83,7 +83,7 @@ def _pack_ci_get_H (mc, mo, ci0):
                 nelec = mc.fcisolver._get_nelec (solver, nelecas)
                 op = solver.absorb_h1e (h1, h2, ncas, nelec, 0.5) if h1 is not None else h2
                 if solver.nroots == 1: ci = [ci]
-                hci.extend ((solver.contract_2e (op, c, ncas, nelec, link_index=linkstrl[ix]).ravel () for c in ci))
+                hci.extend (solver.contract_2e (op, c, ncas, nelec, link_index=linkstrl[ix]).ravel () for c in ci)
             return hci
 
         def _Hdiag (h1, h2):
@@ -500,9 +500,9 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
             elif (stat.imic >= max_cycle or norm_gall < conv_tol_grad*.3):
                 break
 
-            elif ((ikf >= max(casscf.kf_interval, casscf.kf_interval-numpy.log(norm_dr+1e-7)) or
+            elif (ikf >= max(casscf.kf_interval, casscf.kf_interval-numpy.log(norm_dr+1e-7)) or
                    # Insert keyframe if the keyframe and the estimated grad are too different
-                   norm_gall < norm_gkf/casscf.kf_trust_region)):
+                   norm_gall < norm_gkf/casscf.kf_trust_region):
                 ikf = 0
                 u, ci_kf = extract_rotation(casscf, dr, u, ci_kf)
                 dr[:] = 0

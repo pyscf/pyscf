@@ -266,7 +266,7 @@ def get_rpa_ecorr(rpa, freqs, wts):
                     # Pi = np.eye(naux) - Pi
                     blas.zdscal(-1.0, Pi_fc.ravel(), overwrite_x=1)
                     np.fill_diagonal(Pi_fc, np.diagonal(Pi_fc) + 1.0)
-                    ec_w += np.linalg.slogdet((Pi_fc))[1]
+                    ec_w += np.linalg.slogdet(Pi_fc)[1]
                     e_corr += 1.0 / (2.0 * np.pi) * 1.0 / nkpts * 1.0 / nq_pts * ec_w * wts[w]
             else:
                 # First, compute ec_w = Tr(Pi) + |log(det(I-Pi))|
@@ -275,7 +275,7 @@ def get_rpa_ecorr(rpa, freqs, wts):
                 # Pi = np.eye(naux) - Pi
                 blas.zdscal(-1.0, Pi.ravel(), overwrite_x=1)
                 np.fill_diagonal(Pi, np.diagonal(Pi) + 1.0)
-                ec_w += np.linalg.slogdet((Pi))[1]
+                ec_w += np.linalg.slogdet(Pi)[1]
                 e_corr += 1.0 / (2.0 * np.pi) * 1.0 / nkpts * ec_w * wts[w]
 
     return e_corr.real

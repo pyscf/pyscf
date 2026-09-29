@@ -89,7 +89,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
             nmoa -= np.sum(~mask[ab][0])
             nmob -= np.sum(~mask[ab][1])
 
-        e = np.zeros((naux))
+        e = np.zeros(naux)
         v = np.zeros((nmoa, naux))
 
         falph = np.sqrt(ss_factor)

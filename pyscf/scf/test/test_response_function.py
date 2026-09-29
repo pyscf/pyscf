@@ -17,10 +17,76 @@ import unittest
 import numpy as np
 import scipy.linalg
 from pyscf import lib
-from pyscf import gto
+from pyscf import dft, gto
 from pyscf.scf import _response_functions
 
 class KnownValues(unittest.TestCase):
+    def test_rks_second_grids(self):
+        mol = gto.M(
+            verbose = 5,
+            output = '/dev/null',
+            atom = 'O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587',
+            basis = '631g')
+        mf = mol.RKS(xc='b3lyp').run(conv_tol=1e-11)
+
+        td0 = mf.TDA()
+        td0.nstates = 3
+        e_ref = td0.kernel()[0]
+
+        # By default second_grids is None and response functions use mf.grids
+        self.assertIsNone(mf.second_grids)
+
+        # An unbuilt copy of mf.grids gives the same response
+        grids_copy = dft.gen_grid.Grids(mol)
+        grids_copy.level = mf.grids.level
+        grids_copy.prune = mf.grids.prune
+        mf.second_grids = grids_copy
+        td1 = mf.TDA()
+        td1.nstates = 3
+        self.assertAlmostEqual(abs(td1.kernel()[0] - e_ref).max(), 0, 9)
+        mf.second_grids = None
+
+        # A level-1 secondary grid gives very similar excitations
+        mf.set_second_grids(1)
+        td2 = mf.TDA()
+        td2.nstates = 3
+        e2 = td2.kernel()[0]
+        self.assertTrue(mf.second_grids.coords.shape[0] < mf.grids.coords.shape[0])
+        self.assertAlmostEqual(abs(e2 - e_ref).max(), 0, 4)
+        mf.second_grids = None
+
+        # The sg1 scheme builds an SG1 grid
+        mf.set_second_grids('sg1')
+        self.assertEqual(mf.second_grids.prune, dft.gen_grid.sg1_prune)
+        self.assertEqual(mf.second_grids.atom_grid, (50, 194))
+        td3 = mf.TDA()
+        td3.nstates = 3
+        e3 = td3.kernel()[0]
+        self.assertAlmostEqual(abs(e3 - e_ref).max(), 0, 4)
+        mf.second_grids = None
+
+    def test_uks_second_grids_vind(self):
+        mol = gto.M(
+            verbose = 5,
+            output = '/dev/null',
+            atom = 'O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587',
+            basis = '631g')
+        mf = mol.UKS(xc='pbe').run()
+        nao = mol.nao
+        np.random.seed(1)
+        dm1 = np.random.rand(2, nao, nao)
+
+        mf.set_second_grids(1)
+        second_grids = mf.second_grids
+        v1 = mf.gen_response()(dm1)
+        mf.second_grids = None
+        # The grids kwarg of gen_response bypasses mf.second_grids
+        v2 = mf.gen_response(grids=second_grids)(dm1)
+        self.assertAlmostEqual(abs(v1 - v2).max(), 0, 12)
+        v3 = mf.gen_response(grids=mf.grids)(dm1)
+        v4 = mf.gen_response()(dm1)
+        self.assertAlmostEqual(abs(v3 - v4).max(), 0, 12)
+
     def test_gks_nlc(self):
         mol = gto.M(
             verbose = 5,

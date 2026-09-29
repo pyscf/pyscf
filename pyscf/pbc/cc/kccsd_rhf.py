@@ -795,7 +795,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             #self.vvvv = np.empty((nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype=dtype)
             self.vvvv = cc._scf.with_df.ao2mo_7d(orbv, factor=1./nkpts).transpose(0,2,1,3,5,4,6)
 
-            for (ikp,ikq,ikr) in khelper.symm_map.keys():
+            for (ikp,ikq,ikr) in khelper.symm_map:
                 iks = kconserv[ikp,ikq,ikr]
                 eri_kpt = fao2mo((mo_coeff[ikp],mo_coeff[ikq],mo_coeff[ikr],mo_coeff[iks]),
                                  (kpts[ikp],kpts[ikq],kpts[ikr],kpts[iks]), compact=False)
@@ -894,7 +894,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                 _init_df_eris(cc, self)
 
             elif nvir ** 4 * 16 / 1e6 + mem_now < cc.max_memory:
-                for (ikp, ikq, ikr) in khelper.symm_map.keys():
+                for (ikp, ikq, ikr) in khelper.symm_map:
                     iks = kconserv[ikp, ikq, ikr]
                     orbv_p = mo_coeff[ikp][:, nocc:]
                     orbv_q = mo_coeff[ikq][:, nocc:]
@@ -911,7 +911,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             else:
                 raise MemoryError('Minimal memory requirements %s MB'
                                   % (mem_now + nvir ** 4 / 1e6 * 16 * 2))
-                for (ikp, ikq, ikr) in khelper.symm_map.keys():
+                for (ikp, ikq, ikr) in khelper.symm_map:
                     for a in range(nvir):
                         orbva_p = orbv_p[:, a].reshape(-1, 1)
                         buf_kpt = fao2mo((orbva_p, orbv_q, orbv_r, orbv_s),
