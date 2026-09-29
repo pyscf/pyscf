@@ -21,6 +21,7 @@ from pyscf.mp import mp2
 from pyscf.mp import dfmp2
 from pyscf.mp import ump2
 from pyscf.mp import dfump2
+from pyscf.mp import dfromp2
 from pyscf.mp import gmp2
 from pyscf.mp import dfgmp2
 from pyscf.mp import cabs
@@ -40,6 +41,8 @@ def RMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if mf.istype('UHF'):
         raise RuntimeError('RMP2 cannot be used with UHF method.')
     elif mf.istype('ROHF'):
+        if getattr(mf, 'with_df', None) and mo_coeff is None and mo_occ is None:
+            return dfromp2.DFROMP2(mf, frozen)
         lib.logger.warn(mf, 'RMP2 method does not support ROHF method. ROHF object '
                         'is converted to UHF object and UMP2 method is called.')
         return UMP2(mf, frozen, mo_coeff, mo_occ)
@@ -64,6 +67,19 @@ def UMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
     else:
         return ump2.UMP2(mf, frozen, mo_coeff, mo_occ)
 UMP2.__doc__ = ump2.UMP2.__doc__
+
+def ROMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
+    '''Semi-canonical ROMP2 with density fitting for ROHF/ROKS references.
+
+    Note: only the DF (density-fitting) implementation is available. If the
+    mean-field object has no ``with_df`` attribute, a DF object with the
+    default MP2 fitting basis is created automatically.
+    '''
+    mf = mf.remove_soscf()
+    if not mf.istype('ROHF'):
+        raise RuntimeError('ROMP2 requires an ROHF (or ROKS) reference.')
+    return dfromp2.DFROMP2(mf, frozen, mo_coeff, mo_occ)
+ROMP2.__doc__ = dfromp2.DFROMP2.__doc__
 
 def GMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
     mf = mf.remove_soscf()
