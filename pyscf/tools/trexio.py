@@ -41,6 +41,10 @@ except ImportError:
         'See https://github.com/TREX-CoE/trexio/blob/master/python/README.md'
     )
 
+# Tolerance used by from_trexio when checking that the basis in a TREXIO file
+# follows PySCF's conventions (normalized contractions, ao_normalization).
+NORM_TOL = 1e-8
+
 
 def to_trexio(
     obj, filename, backend="h5",
@@ -234,7 +238,7 @@ def to_trexio(
 
 
 def from_trexio(filename):
-    """Reconstruct a PySCF molecule or crystal object from a TREXIO file.
+    r"""Reconstruct a PySCF molecule or crystal object from a TREXIO file.
 
     Reads nuclear geometry, basis set, spin, symmetry, ECP (if present), and
     — for periodic systems — the lattice vectors from *filename*, and returns
@@ -259,11 +263,26 @@ def from_trexio(filename):
     ------
     AssertionError
         If the ``basis_type`` stored in the file is not ``"Gaussian"``.
+    NotImplementedError
+        If the file does not follow the conventions a :class:`Mole` can
+        represent: every contracted function must be normalized, and
+        ``ao_normalization`` must match PySCF's angular factors (see Notes).
     trexio.Error
         If a required TREXIO field is missing or the file cannot be opened.
 
     Notes
     -----
+    * The contracted functions are built from the product
+      ``shell_factor * prim_factor * coefficient``, as the TREXIO
+      specification leaves the distribution of the normalization among these
+      factors free.  Since :meth:`~pyscf.gto.Mole.build` renormalizes every
+      contraction, only files whose contracted functions are normalized can
+      be read; others are rejected instead of being silently rescaled.
+    * ``ao_normalization`` must equal PySCF's convention:
+      :math:`\sqrt{(2l+1)/4\pi}` for spherical AOs, and for Cartesian AOs
+      the same factor for s and p and 1 for higher shells (libcint
+      normalizes only s and p Cartesian functions).  A :class:`Mole` has no
+      per-AO scale factors that could absorb a different convention.
     * Coordinates are read in Bohr and stored with ``mol.unit = 'Bohr'``.
     * Each nucleus is assigned a unique label of the form ``<symbol><index>``
       (e.g. ``"H0"``, ``"H1"``, ``"O2"``) so that atoms of the same element
@@ -409,13 +428,64 @@ def from_trexio(filename):
 
         nuc_idx = trexio.read_basis_nucleus_index(tf).tolist()
         ls = trexio.read_basis_shell_ang_mom(tf).tolist()
-        prim2sh = trexio.read_basis_shell_index(tf).tolist()
-        exps = trexio.read_basis_exponent(tf).tolist()
-        coef = trexio.read_basis_coefficient(tf).tolist()
+        prim2sh = trexio.read_basis_shell_index(tf)
+        exps = trexio.read_basis_exponent(tf)
+        # TREXIO defines each contracted radial function through the product
+        # shell_factor * prim_factor * coefficient and leaves the distribution
+        # of the normalization among the three factors free.
+        coef = (
+            trexio.read_basis_shell_factor(tf)[prim2sh]
+            * trexio.read_basis_prim_factor(tf)
+            * trexio.read_basis_coefficient(tf)
+        )
 
         basis = {}
         exps = _group_by(exps, prim2sh)
         coef = _group_by(coef, prim2sh)
+        for ib, (l, e, c) in enumerate(zip(ls, exps, coef)):
+            # Mole.build() renormalizes every contraction, so a Mole can only
+            # represent normalized contracted functions.
+            ee = gto.gaussian_int(2 * l + 2, e[:, None] + e[None, :])
+            norm = np.sqrt(c @ ee @ c)
+            if abs(norm - 1) > NORM_TOL:
+                raise NotImplementedError(
+                    f"Shell {ib} in {filename} is not normalized (norm = {norm}). "
+                    "PySCF can only read TREXIO files whose contracted functions "
+                    "are normalized."
+                )
+            # make_bas_env() multiplies each primitive by gto_norm; divide it
+            # out so that the product above is what ends up in mol._env.
+            coef[ib] = c / gto.gto_norm(l, e)
+
+        if trexio.has_ao_normalization(tf):
+            # ao_normalization is a per-AO factor.  A Mole holds no such array
+            # (the angular factors are fixed inside libcint), so only files
+            # following PySCF's convention can be read.
+            ao_shell = trexio.read_ao_shell(tf)
+            ao_norm = trexio.read_ao_normalization(tf)
+            ref_shell = []
+            ref_norm = []
+            for ib, l in enumerate(ls):
+                if mol.cart:
+                    nao = (l + 1) * (l + 2) // 2
+                    fac = np.sqrt((2 * l + 1) / (4 * np.pi)) if l <= 1 else 1.0
+                else:
+                    nao = 2 * l + 1
+                    fac = np.sqrt((2 * l + 1) / (4 * np.pi))
+                ref_shell += [ib] * nao
+                ref_norm += [fac] * nao
+            if (
+                len(ao_shell) != len(ref_shell)
+                or not np.array_equal(ao_shell, ref_shell)
+                or not np.allclose(ao_norm, ref_norm, rtol=NORM_TOL, atol=0)
+            ):
+                raise NotImplementedError(
+                    f"ao_normalization/ao_shell in {filename} do not follow "
+                    "PySCF's AO convention (normalized real spherical harmonics, "
+                    "or Cartesian functions with only s and p normalized). "
+                    "PySCF cannot represent per-AO normalization factors."
+                )
+
         p1 = 0
         for ia, at_ls in enumerate(_group_by(ls, nuc_idx)):
             p0, p1 = p1, p1 + at_ls.size
