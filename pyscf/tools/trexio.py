@@ -238,7 +238,7 @@ def to_trexio(
 
 
 def from_trexio(filename):
-    """Reconstruct a PySCF molecule or crystal object from a TREXIO file.
+    r"""Reconstruct a PySCF molecule or crystal object from a TREXIO file.
 
     Reads nuclear geometry, basis set, spin, symmetry, ECP (if present), and
     — for periodic systems — the lattice vectors from *filename*, and returns
