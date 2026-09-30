@@ -71,7 +71,10 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
     emp2_ss = emp2_ss.real
     emp2_os = emp2_os.real
-    emp2 = lib.tag_array(emp2_ss+emp2_os, e_corr_ss=emp2_ss, e_corr_os=emp2_os)
+    # The canonical reference satisfies Brillouin's theorem, hence T1 = 0
+    mp.t1 = numpy.zeros((nocc,nvir), dtype=eris.ovov.dtype)
+    emp2 = lib.tag_array(emp2_ss+emp2_os, e_corr_ss=emp2_ss, e_corr_os=emp2_os,
+                         e_corr_singles=0)
 
     return emp2.real, t2
 
@@ -82,30 +85,35 @@ def _iterative_kernel(mp, eris, verbose=None):
     log = logger.new_logger(mp, verbose)
 
     emp2, t2 = mp.init_amps(eris=eris)
+    t1 = mp.t1
     log.info('Init E(MP2) = %.15g', emp2)
 
     adiis = lib.diis.DIIS(mp)
 
     conv = False
     for istep in range(mp.max_cycle):
-        t2new = mp.update_amps(t2, eris)
+        t1new, t2new = mp.update_amps(t1, t2, eris)
 
-        if isinstance(t2new, numpy.ndarray):
-            normt = numpy.linalg.norm(t2new - t2)
-            t2 = None
-            t2new = adiis.update(t2new)
-        else: # UMP2
-            normt = numpy.linalg.norm([numpy.linalg.norm(t2new[i] - t2[i])
-                                       for i in range(3)])
-            t2 = None
-            t2shape = [x.shape for x in t2new]
-            t2new = numpy.hstack([x.ravel() for x in t2new])
-            t2new = adiis.update(t2new)
-            t2new = lib.split_reshape(t2new, t2shape)
+        if isinstance(t2new, numpy.ndarray):  # RMP2
+            normt = (numpy.linalg.norm(t1new - t1) +
+                     numpy.linalg.norm(t2new - t2))
+            shapes = [t1new.shape, t2new.shape]
+            amp = numpy.hstack((t1new.ravel(), t2new.ravel()))
+            amp = adiis.update(amp)
+            t1new, t2new = lib.split_reshape(amp, shapes)
+        else:  # UMP2
+            normt = (sum(numpy.linalg.norm(t1new[i] - t1[i]) for i in range(2)) +
+                     sum(numpy.linalg.norm(t2new[i] - t2[i]) for i in range(3)))
+            shapes = [x.shape for x in t1new + t2new]
+            amp = numpy.hstack([x.ravel() for x in t1new + t2new])
+            amp = adiis.update(amp)
+            amp = lib.split_reshape(amp, shapes)
+            t1new, t2new = amp[:2], amp[2:]
 
-        t2, t2new = t2new, None
+        t1, t2 = t1new, t2new
+        mp.t1, mp.t2 = t1, t2
         emp2, e_last = mp.energy(t2, eris), emp2
-        log.info('cycle = %d  E_corr(MP2) = %.15g  dE = %.9g  norm(t2) = %.6g',
+        log.info('cycle = %d  E_corr(MP2) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
                  istep+1, emp2, emp2 - e_last, normt)
         cput1 = log.timer('MP2 iter', *cput1)
         if abs(emp2-e_last) < mp.conv_tol and normt < mp.conv_tol_normt:
@@ -115,18 +123,33 @@ def _iterative_kernel(mp, eris, verbose=None):
     return conv, emp2, t2
 
 def energy(mp, t2, eris):
-    '''MP2 energy'''
+    '''MP2 energy including the first-order singles (T1) contribution.
+
+    For non-HF references the occupied-virtual Fock block does not vanish and
+    T1 gives an explicit contribution E_singles = sum_ia f_ai t1_ia (twice this
+    sum for the spin-traced closed-shell density). See P. J. Knowles et al.,
+    Chem. Phys. Lett. 186, 130 (1991) and J. P. Finley, K. Hirao,
+    Chem. Phys. Lett. 328, 51 (2000), Eq. (60).
+    '''
     nocc, nvir = t2.shape[1:3]
     eris_ovov = numpy.asarray(eris.ovov).reshape(nocc,nvir,nocc,nvir)
     ed = numpy.einsum('ijab,iajb', t2, eris_ovov) * 2
     ex = -numpy.einsum('ijab,ibja', t2, eris_ovov)
     emp2_ss = (ed*0.5 + ex).real
     emp2_os = ed.real*0.5
-    emp2 = lib.tag_array(emp2_ss+emp2_os, e_corr_ss=emp2_ss, e_corr_os=emp2_os)
+
+    t1 = getattr(mp, 't1', None)
+    if t1 is None:
+        e_singles = 0.
+    else:
+        fov = numpy.asarray(eris.fock)[:nocc,nocc:]
+        e_singles = numpy.einsum('ia,ia->', fov, t1).real * 2
+    emp2 = lib.tag_array(emp2_ss+emp2_os+e_singles, e_corr_ss=emp2_ss,
+                         e_corr_os=emp2_os, e_corr_singles=e_singles)
     return emp2
 
-def update_amps(mp, t2, eris):
-    '''Update non-canonical MP2 amplitudes'''
+def update_amps(mp, t1, t2, eris):
+    '''Update non-canonical MP2 amplitudes (T1 and T2)'''
     #assert (isinstance(eris, _ChemistsERIs))
     nocc, nvir = t2.shape[1:3]
     fock = eris.fock
@@ -135,6 +158,7 @@ def update_amps(mp, t2, eris):
 
     foo = fock[:nocc,:nocc] - numpy.diag(mo_e_o)
     fvv = fock[nocc:,nocc:] - numpy.diag(mo_e_v)
+    fov = fock[:nocc,nocc:]
     t2new  = lib.einsum('ijac,bc->ijab', t2, fvv)
     t2new -= lib.einsum('ki,kjab->ijab', foo, t2)
     t2new = t2new + t2new.transpose(1,0,3,2)
@@ -145,18 +169,29 @@ def update_amps(mp, t2, eris):
 
     eia = mo_e_o[:,None] - mo_e_v
     t2new /= lib.direct_sum('ia,jb->ijab', eia, eia)
-    return t2new
+
+    # First-order singles. The T1 equation is decoupled from T2 when the
+    # zeroth-order Hamiltonian is block diagonal between occupied and virtual
+    # (Finley & Hirao, Chem. Phys. Lett. 328, 51 (2000), Eq. (50)):
+    #   (eps_i - eps_a) t1_ia = f_ai - sum_j foo_ji t1_ja + sum_b fvv_ab t1_ib
+    t1new  = lib.einsum('ab,ib->ia', fvv, t1)
+    t1new -= lib.einsum('ji,ja->ia', foo, t1)
+    t1new += fov
+    t1new /= eia
+    return t1new, t2new
 
 
 def make_rdm1(mp, t2=None, eris=None, ao_repr=False, with_frozen=True):
     r'''Spin-traced one-particle density matrix.
-    The occupied-virtual orbital response is not included.
 
     dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
 
     The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
     The contraction between 1-particle Hamiltonian and rdm1 is
     E = einsum('pq,qp', h1, rdm1)
+
+    For a non-Hartree-Fock reference the first-order singles amplitudes T1
+    contribute to the occupied-virtual block of the density.
 
     Kwargs:
         ao_repr : boolean
@@ -167,7 +202,11 @@ def make_rdm1(mp, t2=None, eris=None, ao_repr=False, with_frozen=True):
     doo, dvv = _gamma1_intermediates(mp, t2, eris)
     nocc = doo.shape[0]
     nvir = dvv.shape[0]
-    dov = numpy.zeros((nocc,nvir), dtype=doo.dtype)
+    t1 = getattr(mp, 't1', None)
+    if t1 is None:
+        dov = numpy.zeros((nocc,nvir), dtype=doo.dtype)
+    else:
+        dov = numpy.asarray(t1, dtype=doo.dtype)
     dvo = dov.T
     return ccsd_rdm._make_rdm1(mp, (doo, dov, dvo, dvv), with_frozen=with_frozen,
                                ao_repr=ao_repr)
@@ -516,7 +555,7 @@ class MP2Base(lib.StreamObject):
     _keys = {
         'max_cycle', 'conv_tol', 'conv_tol_normt', 'mol', 'max_memory',
         'frozen', 'level_shift', 'mo_coeff', 'mo_occ', 'e_hf', 'e_corr',
-        'e_corr_ss', 'e_corr_os', 't2',
+        'e_corr_ss', 'e_corr_os', 'e_corr_singles', 't1', 't2',
     }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
@@ -549,6 +588,8 @@ class MP2Base(lib.StreamObject):
         self.e_corr = None
         self.e_corr_ss = None
         self.e_corr_os = None
+        self.e_corr_singles = None
+        self.t1 = None
         self.t2 = None
 
     @property
@@ -644,6 +685,7 @@ class MP2Base(lib.StreamObject):
 
         self.e_corr_ss = getattr(self.e_corr, 'e_corr_ss', 0)
         self.e_corr_os = getattr(self.e_corr, 'e_corr_os', 0)
+        self.e_corr_singles = getattr(self.e_corr, 'e_corr_singles', 0)
         self.e_corr = float(self.e_corr)
 
         log.timer(self.__class__.__name__, *cput0)

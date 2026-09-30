@@ -282,7 +282,17 @@ class KnownValues(unittest.TestCase):
     def test_non_canonical_mp2(self):
         mf = scf.UHF(mol).run(max_cycle=1)
         pt = mp.MP2(mf)
-        self.assertAlmostEqual(pt.kernel()[0], -0.1707921460057042, 7)
+        e = pt.kernel()[0]
+        self.assertAlmostEqual(e, -0.1949781959138, 7)
+        # first-order singles (T1) of the non-HF reference
+        self.assertAlmostEqual(pt.e_corr_singles, -0.024186048914, 7)
+        # the doubles part is unchanged by the T1 treatment
+        self.assertAlmostEqual(e - pt.e_corr_singles, -0.1707921460057042, 7)
+        # T1 enters the occupied-virtual blocks of the 1-RDM (per spin)
+        dm1a, dm1b = pt.make_rdm1()
+        nocca, noccb = pt.nocc
+        self.assertAlmostEqual(abs(dm1a[:nocca,nocca:] - pt.t1[0]).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm1b[:noccb,noccb:] - pt.t1[1]).max(), 0, 9)
 
 
 

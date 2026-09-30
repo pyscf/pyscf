@@ -220,7 +220,12 @@ class KnownValues(unittest.TestCase):
     def test_non_canonical_mp2(self):
         mf = scf.GHF(mol).run(max_cycle=1)
         pt = mp.MP2(mf)
-        self.assertAlmostEqual(pt.kernel()[0], -0.12714840392411947, 7)
+        e = pt.kernel()[0]
+        self.assertAlmostEqual(e, -0.1775406695485, 7)
+        # first-order singles (T1) of the non-HF reference
+        self.assertAlmostEqual(pt.e_corr_singles, -0.0503922640769, 7)
+        # the doubles part is unchanged by the T1 treatment
+        self.assertAlmostEqual(e - pt.e_corr_singles, -0.12714840392411947, 7)
 
     def test_gmp2_with_df(self):
         pt = mp.GMP2(gmf).density_fit()

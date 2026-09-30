@@ -104,12 +104,16 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
     emp2_ss = emp2_ss.real
     emp2_os = emp2_os.real
-    emp2 = lib.tag_array(emp2_ss+emp2_os, e_corr_ss=emp2_ss, e_corr_os=emp2_os)
+    # The canonical reference satisfies Brillouin's theorem, hence T1 = 0
+    mp.t1 = (numpy.zeros((nocca,nvira), dtype=eris.ovov.dtype),
+             numpy.zeros((noccb,nvirb), dtype=eris.ovov.dtype))
+    emp2 = lib.tag_array(emp2_ss+emp2_os, e_corr_ss=emp2_ss, e_corr_os=emp2_os,
+                         e_corr_singles=0)
 
     return emp2, t2
 
 def energy(mp, t2, eris):
-    '''MP2 energy'''
+    '''UMP2 energy including the first-order singles (T1) contribution'''
     t2aa, t2ab, t2bb = t2
     nocca, noccb, nvira, nvirb = t2ab.shape
     eris_ovov = numpy.asarray(eris.ovov).reshape(nocca,nvira,nocca,nvira)
@@ -123,12 +127,23 @@ def energy(mp, t2, eris):
     e    = ess + eos
     if abs(e.imag) > 1e-4:
         logger.warn(mp, 'Non-zero imaginary part found in UMP2 energy %s', e)
-    e = lib.tag_array(e.real, e_corr_ss=ess.real, e_corr_os=eos.real)
+
+    t1 = getattr(mp, 't1', None)
+    if t1 is None:
+        e_singles = 0.
+    else:
+        t1a, t1b = t1
+        focka, fockb = eris.fock
+        e_singles = (numpy.einsum('ia,ia->', focka[:nocca,nocca:], t1a) +
+                     numpy.einsum('ia,ia->', fockb[:noccb,noccb:], t1b)).real
+    e = lib.tag_array(e.real + e_singles, e_corr_ss=ess.real, e_corr_os=eos.real,
+                      e_corr_singles=e_singles)
     return e
 
-def update_amps(mp, t2, eris):
-    '''Update non-canonical MP2 amplitudes'''
+def update_amps(mp, t1, t2, eris):
+    '''Update non-canonical MP2 amplitudes (T1 and T2)'''
     #assert (isinstance(eris, _ChemistsERIs))
+    t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     nocca, noccb, nvira, nvirb = t2ab.shape
     mo_ea_o = eris.mo_energy[0][:nocca]
@@ -141,6 +156,8 @@ def update_amps(mp, t2, eris):
     foob = fockb[:noccb,:noccb] - numpy.diag(mo_eb_o)
     fvva = focka[nocca:,nocca:] - numpy.diag(mo_ea_v)
     fvvb = fockb[noccb:,noccb:] - numpy.diag(mo_eb_v)
+    foVa = focka[:nocca,nocca:]
+    foVb = fockb[:noccb,noccb:]
 
     u2aa  = lib.einsum('ijae,be->ijab', t2aa, fvva)
     u2bb  = lib.einsum('ijae,be->ijab', t2bb, fvvb)
@@ -165,7 +182,17 @@ def update_amps(mp, t2, eris):
     u2aa /= lib.direct_sum('ia+jb->ijab', eia_a, eia_a)
     u2ab /= lib.direct_sum('ia+jb->ijab', eia_a, eia_b)
     u2bb /= lib.direct_sum('ia+jb->ijab', eia_b, eia_b)
-    return u2aa, u2ab, u2bb
+
+    # First-order singles (Finley & Hirao, CPL 328, 51 (2000), Eq. (50))
+    t1anew  = lib.einsum('ab,ib->ia', fvva, t1a)
+    t1anew -= lib.einsum('ji,ja->ia', fooa, t1a)
+    t1anew += foVa
+    t1anew /= eia_a
+    t1bnew  = lib.einsum('ab,ib->ia', fvvb, t1b)
+    t1bnew -= lib.einsum('ji,ja->ia', foob, t1b)
+    t1bnew += foVb
+    t1bnew /= eia_b
+    return (t1anew, t1bnew), (u2aa, u2ab, u2bb)
 
 
 def get_nocc(mp):
@@ -247,22 +274,27 @@ def get_frozen_mask(mp):
 
 def make_rdm1(mp, t2=None, ao_repr=False, with_frozen=True):
     r'''
-    One-particle spin density matrices dm1a, dm1b in MO basis (the
-    occupied-virtual blocks due to the orbital response contribution are not
-    included).
+    One-particle spin density matrices dm1a, dm1b in MO basis.
 
     dm1a[p,q] = <q_alpha^\dagger p_alpha>
     dm1b[p,q] = <q_beta^\dagger p_beta>
 
     The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+
+    For a non-Hartree-Fock reference the first-order singles amplitudes T1
+    contribute to the occupied-virtual blocks of the densities.
     '''
     from pyscf.cc import uccsd_rdm
     if t2 is None: t2 = mp.t2
     assert t2 is not None
     doo, dvv = _gamma1_intermediates(mp, t2)
     nocca, noccb, nvira, nvirb = t2[1].shape
-    dov = numpy.zeros((nocca,nvira))
-    dOV = numpy.zeros((noccb,nvirb))
+    t1 = getattr(mp, 't1', None)
+    if t1 is None:
+        dov = numpy.zeros((nocca,nvira))
+        dOV = numpy.zeros((noccb,nvirb))
+    else:
+        dov, dOV = t1[0], t1[1]
     d1 = (doo, (dov, dOV), (dov.T, dOV.T), dvv)
     return uccsd_rdm._make_rdm1(mp, d1, with_frozen=with_frozen, ao_repr=ao_repr)
 

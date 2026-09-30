@@ -58,18 +58,28 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
         if with_t2:
             t2[i] = t2i
 
+    # The canonical reference satisfies Brillouin's theorem, hence T1 = 0
+    mp.t1 = numpy.zeros((nocc,nvir), dtype=eris.oovv.dtype)
+
     return emp2.real, t2
 
 def energy(mp, t2, eris):
-    '''MP2 energy'''
+    '''MP2 energy including the first-order singles (T1) contribution'''
     eris_oovv = numpy.array(eris.oovv)
     e = 0.25*numpy.einsum('ijab,ijab', t2, eris_oovv)
     if abs(e.imag) > 1e-4:
         logger.warn(mp, 'Non-zero imaginary part found in GMP2 energy %s', e)
-    return e.real
+    nocc, nvir = t2.shape[1:3]
+    t1 = getattr(mp, 't1', None)
+    if t1 is None:
+        e_singles = 0.
+    else:
+        fov = numpy.asarray(eris.fock)[:nocc,nocc:]
+        e_singles = numpy.einsum('ia,ia->', fov, t1).real
+    return lib.tag_array(e.real + e_singles, e_corr_singles=e_singles)
 
-def update_amps(mp, t2, eris):
-    '''Update non-canonical MP2 amplitudes'''
+def update_amps(mp, t1, t2, eris):
+    '''Update non-canonical MP2 amplitudes (T1 and T2)'''
     #assert (isinstance(eris, _PhysicistsERIs))
     nocc, nvir = t2.shape[1:3]
     fock = eris.fock
@@ -78,6 +88,7 @@ def update_amps(mp, t2, eris):
 
     foo = fock[:nocc,:nocc] - numpy.diag(mo_e_o)
     fvv = fock[nocc:,nocc:] - numpy.diag(mo_e_v)
+    fov = fock[:nocc,nocc:]
     t2new  = lib.einsum('ijac,bc->ijab', t2, fvv)
     t2new -= lib.einsum('ki,kjab->ijab', foo, t2)
     t2new = t2new + t2new.transpose(1,0,3,2)
@@ -85,7 +96,13 @@ def update_amps(mp, t2, eris):
 
     eia = mo_e_o[:,None] - mo_e_v
     t2new /= lib.direct_sum('ia,jb->ijab', eia, eia)
-    return t2new
+
+    # First-order singles (Finley & Hirao, CPL 328, 51 (2000), Eq. (50))
+    t1new  = lib.einsum('ab,ib->ia', fvv, t1)
+    t1new -= lib.einsum('ji,ja->ia', foo, t1)
+    t1new += fov
+    t1new /= eia
+    return t1new, t2new
 
 
 def make_rdm1(mp, t2=None, ao_repr=False, with_frozen=True):
@@ -105,7 +122,11 @@ def make_rdm1(mp, t2=None, ao_repr=False, with_frozen=True):
     assert t2 is not None
     doo, dvv = _gamma1_intermediates(mp, t2)
     nocc, nvir = t2.shape[1:3]
-    dov = numpy.zeros((nocc,nvir))
+    t1 = getattr(mp, 't1', None)
+    if t1 is None:
+        dov = numpy.zeros((nocc,nvir))
+    else:
+        dov = numpy.asarray(t1)
     d1 = doo, dov, dov.T, dvv
     return gccsd_rdm._make_rdm1(mp, d1, with_frozen=with_frozen, ao_repr=ao_repr)
 
