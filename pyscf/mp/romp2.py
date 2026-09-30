@@ -86,9 +86,14 @@ def semi_canonicalize(mf, verbose=None):
         c_vir = mo_coeff[:, viridx]
         f_oo = reduce(lib.dot, (c_occ.conj().T, f, c_occ))
         f_vv = reduce(lib.dot, (c_vir.conj().T, f, c_vir))
-        _, uo = scipy.linalg.eigh(f_oo)
-        _, uv = scipy.linalg.eigh(f_vv)
-        c_semi = np.hstack((np.dot(c_occ, uo), np.dot(c_vir, uv)))
+        # eigh on an empty block is not portable across LAPACK versions
+        if c_occ.shape[1] > 0:
+            _, uo = scipy.linalg.eigh(f_oo)
+            c_occ = np.dot(c_occ, uo)
+        if c_vir.shape[1] > 0:
+            _, uv = scipy.linalg.eigh(f_vv)
+            c_vir = np.dot(c_vir, uv)
+        c_semi = np.hstack((c_occ, c_vir))
         f_semi = reduce(lib.dot, (c_semi.conj().T, f, c_semi))
         mo_coeff_semi.append(c_semi)
         mo_energy_semi.append(np.ascontiguousarray(f_semi.diagonal().real))
@@ -172,7 +177,8 @@ class ROMP2(ump2.UMP2):
             Default value is True.
     '''
 
-    _keys = ump2.UMP2._keys | {'e_corr_singles', 'include_singles', 'fock_semi'}
+    _keys = ump2.UMP2._keys | {'e_corr_singles', 'include_singles', 'fock_semi',
+                               'mo_energy'}
 
     include_singles = getattr(__config__, 'mp_romp2_include_singles', True)
 

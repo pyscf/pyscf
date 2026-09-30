@@ -84,6 +84,19 @@ class KnownValues(unittest.TestCase):
         self.assertLess(pt.e_corr, pt_frozen.e_corr)
         mol.stdout.close()
 
+    def test_empty_blocks(self):
+        # a one-electron system has an empty virtual block (and an empty
+        # occupied block in the beta channel); the semi-canonicalization must
+        # not diagonalize zero-sized blocks
+        mol = _make_mol('H', 1, basis='sto-3g')
+        mf = scf.ROHF(mol).run(conv_tol=1e-12)
+        pt = mp.ROMP2(mf).run()
+        self.assertAlmostEqual(pt.e_corr, 0, 10)
+        self.assertAlmostEqual(pt.e_corr_singles, 0, 10)
+        pt_df = mp.ROMP2(mf.density_fit()).run()
+        self.assertTrue(isinstance(pt_df, mp.dfromp2.DFROMP2))
+        mol.stdout.close()
+
 
 if __name__ == "__main__":
     print("Full Tests for ROMP2")
