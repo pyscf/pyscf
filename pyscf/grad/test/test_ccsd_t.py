@@ -96,6 +96,26 @@ class KnownValues(unittest.TestCase):
 # [-1.05088506e-16  7.92491838e-02 -6.21200703e-03]]
         self.assertAlmostEqual(lib.fp(g1), 0.10551841163553637, 9)
         self.assertTrue(numpy.allclose(g1, g1_slow, rtol=1e-9, atol=1e-12))
+    def test_ccsd_t_grad_solves_t_lambda(self):
+        '''Without l1, l2 the CCSD(T) gradient must solve the CCSD(T) lambda,
+        not reuse the CCSD lambda stored by mycc.solve_lambda.'''
+        # own molecule: test_ccsd_t_grad leaves the module's mol displaced
+        pmol = gto.M(atom=[[8, (0., 0., 0.)], [1, (0., -0.757, 0.587)], [1, (0., 0.757, 0.587)]],
+                     basis='631g', verbose=0)
+        pmf = scf.RHF(pmol).run(conv_tol=1e-12)
+        mycc = cc.ccsd.CCSD(pmf)
+        mycc.conv_tol = 1e-10
+        mycc.conv_tol_normt = 1e-8
+        eris = mycc.ao2mo()
+        ecc, t1, t2 = mycc.kernel(eris=eris)
+        conv, l1, l2 = ccsd_t_lambda.kernel(mycc, eris, t1, t2)
+        g_ref = ccsd_t_grad.Gradients(mycc).kernel(t1, t2, l1, l2, eris=eris)
+        mycc.solve_lambda(eris=eris)
+        g1 = ccsd_t_grad.Gradients(mycc).kernel()
+        self.assertAlmostEqual(abs(g1 - g_ref).max(), 0, 7)
+        g2 = ccsd_t_grad.Gradients(mycc).grad_elec()
+        g2 += ccsd_t_grad.Gradients(mycc).grad_nuc()
+        self.assertAlmostEqual(abs(g2 - g_ref).max(), 0, 7)
 
 if __name__ == "__main__":
     print("Tests for CCSD(T) gradients")
