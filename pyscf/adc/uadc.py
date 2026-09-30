@@ -421,6 +421,16 @@ class UADC(lib.StreamObject):
             are excluded from the calculation.
             Note, the `frozen` attribute is immutable and cannot be modified
             after object instantiation.
+        naux : int
+            Number of auxiliary basis functions for density fitting. Default is None.
+        if_naf : bool
+            Use natural auxiliary functions (NAF) for density fitting. Default is False.
+        thresh_naf : float
+            Threshold for the natural auxiliary functions. Default is 1e-2.
+        eris : object
+            Electron repulsion integrals in MO basis. Default is None.
+        if_heri_eris : bool
+            Save the ERIs in MO basis. Default is False.
 
     Saved results
 

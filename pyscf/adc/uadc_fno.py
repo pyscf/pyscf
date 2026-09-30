@@ -28,10 +28,21 @@ from pyscf import scf
 from pyscf.data.nist import HARTREE2EV
 
 class UADC2FNO(uadc.UADC):
-    #J. Chem. Phys. 159, 084113 (2023)
+    '''Unrestricted ADC-based frozen natural orbital (FNO) generator.
+    The open-shell OSFNO variant follows P. Pokhilko, D. Izmodenov, and
+    A. I. Krylov, J. Chem. Phys. 152, 034105 (2020).
+    See :class:`pyscf.adc.radc_fno.RADC2FNO` for the common FNO attributes.
+
+    Attributes:
+        if_osfno : bool
+            Truncate the alpha and beta virtual spaces as natural-orbital pairs
+            from the SVD of the singlet density, always keeping the virtual
+            partners of the singly occupied orbitals. Default is False.
+    '''
     _keys = uadc.UADC._keys | {'delta_e', 'delta_e_corr', 'e_can', 'v_can', 'e_corr_can',
                                'mo_energy', 'rdm1_ss', 'ref_state', 'trans_guess',
-                               'p_can', 'p_ssfno', 'delta_e_qp', 'is_qp', 'if_osfno'}
+                               'p_can', 'p_ssfno', 'delta_e_qp', 'is_qp', 'if_osfno',
+                               'if_ref_qp'}
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None, mo_energy=None, f_ov=None):
         super().__init__(mf, frozen, mo_coeff, mo_occ, mo_energy, f_ov)
@@ -46,7 +57,7 @@ class UADC2FNO(uadc.UADC):
         self.e_corr_can = None
         self.rdm1_ss = None
         self.ref_state = None
-        self.if_naf = False
+        self.if_ref_qp = False
         self.trans_guess = False
         self.if_osfno = False
 
@@ -107,12 +118,13 @@ class UADC2FNO(uadc.UADC):
         else:
             self.e_ssfno,self.v_ssfno,self.p_ssfno,_ = adc_ssfno.kernel(nroots,guess,eris)
             self.delta_e = self.e_can - self.e_ssfno
-            mask_fno = self.p_ssfno > self.is_qp
-            mask_can = self.p_can > self.is_qp
-            e_can_qp = self.e_can[mask_can]
-            e_ssfno_qp = self.e_ssfno[mask_fno]
-            n_qp = min(len(e_can_qp), len(e_ssfno_qp))
-            self.delta_e_qp = e_can_qp[:n_qp] - e_ssfno_qp[:n_qp]
+            if self.if_ref_qp and self.method_type in ('ip', 'ea'):
+                mask_fno = self.p_ssfno > self.is_qp
+                mask_can = self.p_can > self.is_qp
+                e_can_qp = self.e_can[mask_can]
+                e_ssfno_qp = self.e_ssfno[mask_fno]
+                n_qp = min(len(e_can_qp), len(e_ssfno_qp))
+                self.delta_e_qp = e_can_qp[:n_qp] - e_ssfno_qp[:n_qp]
         self.naux = adc_ssfno.naux
         self.eris = adc_ssfno.eris
         self.delta_e_corr = self.e_corr_can - adc_ssfno.e_corr
@@ -139,8 +151,13 @@ class UADC2FNO(uadc.UADC):
             rdm1_gs_a = rdm1_gs[0]
             rdm1_gs_b = rdm1_gs[1]
             rdm1_es = self.make_rdm1(ao_repr=self.if_osfno)
-            rdm1_es_a = rdm1_es[0][self.ref_state - 1]
-            rdm1_es_b = rdm1_es[1][self.ref_state - 1]
+            if self.if_ref_qp and self.method_type in ('ip', 'ea'):
+                qp_idx = np.where(self.p_can > self.is_qp)[0]
+                state = qp_idx[self.ref_state - 1]
+            else:
+                state = self.ref_state - 1
+            rdm1_es_a = rdm1_es[0][state]
+            rdm1_es_b = rdm1_es[1][state]
             self.rdm1_ss = (rdm1_es_a + rdm1_gs_a, rdm1_es_b + rdm1_gs_b)
         else:
             self.rdm1_ss = rdm1_gs

@@ -22,10 +22,50 @@ from pyscf.adc import radc
 from pyscf import __config__
 
 class RADC2FNO(radc.RADC):
-    #J. Chem. Phys. 159, 084113 (2023)
+    '''ADC-based frozen natural orbital (FNO) generator for spin-restricted
+    references, following J. Chem. Phys. 159, 084113 (2023).
+
+    Attributes:
+        delta_e : list of floats
+            Additive correction to the excitation energies.
+        delta_e_corr : float
+            Additive correction to the ground state correlation energy.
+        delta_e_qp : float
+            Additive correction to the quasiparticle energies.
+        if_ref_qp : bool
+            When True, ref_state counts quasiparticle states in IP/EA
+            calculations, identified by spec. factor larger than is_qp, and
+            delta_e_qp is computed. Default is False.
+        is_qp : float
+            Threshold for the spec. factor to determine whether an IP/EA state
+            is a quasiparticle state. Default value is 0.5.
+        e_can : list of floats
+            Canonical ADC excitation energies.
+        v_can : array
+            Canonical ADC eigenvectors.
+        p_can : array
+            Canonical ADC spec. factor/oscillator strength.
+        p_ssfno : array
+            State-specific FNO ADC spec. factor/oscillator strength.
+        e_corr_can : float
+            Canonical ADC correlation energy.
+        rdm1_ss : array
+            State-specific one-particle reduced density matrix.
+        ref_state : int
+            Target state for the state-specific RDM1. ref_state = 0 (default)
+            is the ground state; ref_state = n is the nth root, or the nth
+            quasiparticle state in IP/EA when if_ref_qp is True.
+        trans_guess : bool
+            Whether to use the canonical eigenvectors as the initial guess for the FNO ADC calculation.
+            Only for IP and when the number of core-valence separation is 0. Default value is False.
+
+    After kernel() or kernel_gs(), frozen, mo_coeff, mo_occ, and mo_energy
+    describe the truncated FNO space to be passed to a target correlated method.
+    '''
+
     _keys = radc.RADC._keys | {'delta_e', 'delta_e_corr', 'e_can', 'v_can', 'e_corr_can',
-                               'mo_energy', 'rdm1_ss', 'ref_state', 'trans_guess',
-                               'p_can', 'p_ssfno', 'delta_e_qp', 'is_qp'}
+                               'rdm1_ss', 'ref_state', 'trans_guess',
+                               'p_can', 'p_ssfno', 'delta_e_qp', 'is_qp', 'if_ref_qp'}
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None, mo_energy=None):
         super().__init__(mf, frozen, mo_coeff, mo_occ, mo_energy)
@@ -40,7 +80,7 @@ class RADC2FNO(radc.RADC):
         self.e_corr_can = None
         self.rdm1_ss = None
         self.ref_state = None
-        self.if_naf = False
+        self.if_ref_qp = False
         self.trans_guess = False
 
     def kernel_gs(self, eris=None, thresh = 1e-4, pct_occ=None, nvir_act=None):
@@ -99,12 +139,13 @@ class RADC2FNO(radc.RADC):
         else:
             self.e_ssfno,self.v_ssfno,self.p_ssfno,_ = adc_ssfno.kernel(nroots,guess,eris)
             self.delta_e = self.e_can - self.e_ssfno
-            mask_fno = self.p_ssfno > self.is_qp
-            mask_can = self.p_can > self.is_qp
-            e_can_qp = self.e_can[mask_can]
-            e_ssfno_qp = self.e_ssfno[mask_fno]
-            n_qp = min(len(e_can_qp), len(e_ssfno_qp))
-            self.delta_e_qp = e_can_qp[:n_qp] - e_ssfno_qp[:n_qp]
+            if self.if_ref_qp and self.method_type in ('ip', 'ea'):
+                mask_fno = self.p_ssfno > self.is_qp
+                mask_can = self.p_can > self.is_qp
+                e_can_qp = self.e_can[mask_can]
+                e_ssfno_qp = self.e_ssfno[mask_fno]
+                n_qp = min(len(e_can_qp), len(e_ssfno_qp))
+                self.delta_e_qp = e_can_qp[:n_qp] - e_ssfno_qp[:n_qp]
         self.naux = adc_ssfno.naux
         self.eris = adc_ssfno.eris
         self.delta_e_corr = self.e_corr_can - adc_ssfno.e_corr
@@ -128,7 +169,12 @@ class RADC2FNO(radc.RADC):
         rdm1_gs = self.make_ref_rdm1()
         self.e_corr_can = self.e_corr
         if self.ref_state is not None and self.ref_state > 0:
-            rdm1_es = self.make_rdm1()[self.ref_state - 1]
+            if self.if_ref_qp and self.method_type in ('ip', 'ea'):
+                qp_idx = np.where(self.p_can > self.is_qp)[0]
+                state = qp_idx[self.ref_state - 1]
+            else:
+                state = self.ref_state - 1
+            rdm1_es = self.make_rdm1()[state]
             self.rdm1_ss = rdm1_es + rdm1_gs
         else:
             self.rdm1_ss = rdm1_gs

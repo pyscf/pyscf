@@ -64,10 +64,24 @@ def _pick(param, i):
 
 
 class RADC2FNO(kadc_rhf.RADC):
-    # J. Chem. Phys. 159, 084113 (2023)
+    '''k-point ADC-based frozen natural orbital (FNO) generator, following
+    arXiv:2609.13098 (2026). See :class:`pyscf.adc.radc_fno.RADC2FNO` for the
+    common FNO attributes.
+
+    Attributes:
+        mode : str
+            'min' (default) keeps a common number of active virtuals at every
+            k point; 'per_kpt' truncates each k point independently.
+        e_corr_fno : float or list of floats
+            FNO correlation energy for each truncation threshold.
+
+    kernel() and kernel_gs() accept lists of thresholds (thresh, pct_occ,
+    nvir_act); the FNO space is then generated for each threshold from a
+    single canonical calculation, and the output attributes become lists.
+    '''
     _keys = kadc_rhf.RADC._keys | {'delta_e', 'e_can', 'v_can', 'e_corr_can',
-                                   'rdm1_ss', 'trans_guess', 'mode', 'ref_state',
-                                   'if_adc2_guess', 'delta_e_corr', 'p_can',
+                                   'rdm1_ss', 'mode', 'ref_state',
+                                   'delta_e_corr', 'p_can',
                                    'if_ref_qp', 'delta_e_qp', 'is_qp',
                                    'e_corr_fno'}
 
@@ -82,11 +96,9 @@ class RADC2FNO(kadc_rhf.RADC):
         self.p_can = None
         self.e_corr_can = None
         self.rdm1_ss = None
-        self.trans_guess = False
         self.mode = "min"
         self.ref_state = None
         self.if_ref_qp = True
-        self.if_adc2_guess = False
         self.e_corr_fno = None
 
     def _reset_adc_state(self):
@@ -260,14 +272,15 @@ class RADC2FNO(kadc_rhf.RADC):
             self.e_ssfno, self.v_ssfno, self.p_ssfno, _ = kadc_rhf.RADC.kernel(
                 self, nroots, guess=guess, kptlist=kptlist)
             self.delta_e = self.e_can - self.e_ssfno
-            self.delta_e_qp = []
-            mask_fno = self.p_ssfno > self.is_qp
-            mask_can = self.p_can > self.is_qp
-            for kpt in kptlist:
-                e_can_qp_k = self.e_can[kpt][mask_can[kpt]]
-                e_ssfno_qp_k = self.e_ssfno[kpt][mask_fno[kpt]]
-                n_qp = min(len(e_can_qp_k), len(e_ssfno_qp_k))
-                self.delta_e_qp.append(e_can_qp_k[:n_qp] - e_ssfno_qp_k[:n_qp])
+            if self.if_ref_qp:
+                self.delta_e_qp = []
+                mask_fno = self.p_ssfno > self.is_qp
+                mask_can = self.p_can > self.is_qp
+                for kpt in kptlist:
+                    e_can_qp_k = self.e_can[kpt][mask_can[kpt]]
+                    e_ssfno_qp_k = self.e_ssfno[kpt][mask_fno[kpt]]
+                    n_qp = min(len(e_can_qp_k), len(e_ssfno_qp_k))
+                    self.delta_e_qp.append(e_can_qp_k[:n_qp] - e_ssfno_qp_k[:n_qp])
         self.delta_e_corr = self.e_corr_can - self.e_corr
 
     def correct(self, e, i=None):
