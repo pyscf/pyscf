@@ -642,6 +642,9 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
                 self._kpts.reset(cell)
             self.cell = cell
         self._rsh_df = {}
+        # _ws_exx may be attached to AFTDF by weighted_coulG() in
+        # pyscf/pbc/df/aft.py
+        self.__dict__.pop('_ws_exx', None)
         return self
 
     def check_sanity(self):
