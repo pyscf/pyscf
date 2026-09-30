@@ -601,12 +601,12 @@ class KnownValues(unittest.TestCase):
         mf_scanner(cell1)
 
         e2 = mf_scanner(cell2)
-        self.assertEqual(mf_scanner.with_df.mesh, [15, 15, 15])
+        assert np.array_equal(mf_scanner.with_df.mesh, [15, 15, 15])
         mf2 = cell2.RHF().run()
         self.assertAlmostEqual(e2, mf2.e_tot, 9)
 
         e1 = mf_scanner(cell1)
-        self.assertEqual(mf_scanner.with_df.mesh, [7, 7, 7])
+        assert np.array_equal(mf_scanner.with_df.mesh, [7, 7, 7])
         self.assertAlmostEqual(e1, mf1.e_tot, 9)
 
 
