@@ -641,7 +641,11 @@ class MP2Base(lib.StreamObject):
     @property
     def emp2_scs(self):
         # J. Chem. Phys. 118, 9095 (2003)
-        return self.e_corr_ss*1./3. + self.e_corr_os*1.2
+        # The first-order singles (non-HF references) are added unscaled: the
+        # SCS factors apply to the same/opposite-spin components of the
+        # double-excitation correlation energy.
+        return (self.e_corr_ss*1./3. + self.e_corr_os*1.2 +
+                (self.e_corr_singles or 0))
 
     @property
     def e_tot(self):
