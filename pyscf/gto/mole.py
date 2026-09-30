@@ -2646,20 +2646,28 @@ class MoleBase(lib.StreamObject):
                 logger.warn(self, f'ECP not specified. The basis set {self.basis} '
                             f'include an ECP. Recommended ECP: {ecp}.')
         elif isinstance(self.basis, dict) and isinstance(self.ecp, dict):
-            _basis = self.basis
-            if 'default' in _basis:
-                uniq_atoms = {a[0] for a in self._atom}
-                basis = _parse_default_basis(_basis, uniq_atoms)
-            else:
-                basis = _basis
+            uniq_atoms = {a[0] for a in self._atom}
+            basis = _parse_default_basis(self.basis, uniq_atoms)
+            # The keys of .basis and .ecp may be nuclear charges, lower case
+            # symbols or labelled symbols, so they cannot be compared directly.
+            # build() has already resolved the 'default' entry of .ecp,
+            # normalized its keys with _atom_symbol and dropped the elements
+            # whose ECP data could not be loaded; the result is self._ecp.
+            # self._ecp is only refreshed when .ecp is set, hence the guard.
+            ecp_defined = set(self._ecp) if self.ecp else set()
             for element, basname in basis.items():
-                if isinstance(basname, str) and not self.ecp.get(element):
-                    ecp, ecp_atoms = bse_predefined_ecp(basname, element)
-                    if ecp_atoms:
-                        logger.warn(self, f'ECP for {element} not specified. '
-                                    f'The basis set {basname} include an ECP. '
-                                    f'Recommended ECP: {ecp}.')
-            basis = None
+                if not isinstance(basname, str):
+                    continue
+                symb = _atom_symbol(element)
+                # make_ecp_env assigns the ECP of the plain element to labelled
+                # atoms such as Au1 when the label itself is absent from .ecp
+                if symb in ecp_defined or _rm_digit(symb) in ecp_defined:
+                    continue
+                ecp_name, ecp_atoms = bse_predefined_ecp(basname, symb)
+                if ecp_atoms:
+                    logger.warn(self, f'ECP for {symb} not specified. '
+                                f'The basis set {basname} include an ECP. '
+                                f'Recommended ECP: {ecp_name}.')
         return self
 
     def _build_symmetry(self, *args, **kwargs):
