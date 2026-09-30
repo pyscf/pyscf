@@ -80,7 +80,6 @@ if __name__ == '__main__':
     from pyscf import scf
     from pyscf import cc
     from pyscf.cc import uccsd_t
-    from pyscf.cc import uccsd_t_lambda
 
     mol = gto.M(
         verbose = 0,
