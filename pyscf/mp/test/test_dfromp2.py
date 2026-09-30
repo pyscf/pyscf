@@ -55,6 +55,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(pt.e_corr_os, -0.25685885, 7)
         self.assertAlmostEqual(pt.e_corr_singles, -0.01236550, 7)
         self.assertAlmostEqual(pt.e_tot, mf.e_tot + pt.e_corr, 9)
+        # SCS: the singles term is added unscaled to the scaled doubles
+        self.assertAlmostEqual(pt.emp2_scs, pt.e_corr_singles +
+                               pt.e_corr_ss/3. + pt.e_corr_os*1.2, 9)
         mol.stdout.close()
 
     # NH3+ doublet, def2-SVP, def2-universal-JKFIT auxiliary basis.
