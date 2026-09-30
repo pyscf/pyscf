@@ -58,6 +58,11 @@ class KnownValues(unittest.TestCase):
         # SCS: the singles term is added unscaled to the scaled doubles
         self.assertAlmostEqual(pt.emp2_scs, pt.e_corr_singles +
                                pt.e_corr_ss/3. + pt.e_corr_os*1.2, 9)
+        # the singles amplitudes T1 enter the occupied-virtual RDM block
+        dm1a, dm1b = pt.make_rdm1()
+        nocca, noccb = pt.nocc
+        self.assertAlmostEqual(abs(dm1a[:nocca,nocca:] - pt.t1[0]).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm1b[:noccb,noccb:] - pt.t1[1]).max(), 0, 9)
         mol.stdout.close()
 
     # NH3+ doublet, def2-SVP, def2-universal-JKFIT auxiliary basis.

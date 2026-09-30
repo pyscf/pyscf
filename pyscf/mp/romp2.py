@@ -111,6 +111,26 @@ def semi_canonicalize(mf, verbose=None):
     return mo_coeff_semi, mo_energy_semi, mo_occ_semi, fock_semi
 
 
+def singles_amps(mp, fock_semi=None):
+    '''First-order singles amplitudes of the semi-canonical ROMP2,
+
+        t1_ia = F^s_ai / (e_i - e_a)      (i in occ_s, a in vir_s)
+
+    per spin, in UHF format and restricted to the non-frozen active space
+    (the beta virtual space includes the singly occupied orbitals).'''
+    if fock_semi is None:
+        fock_semi = mp.fock_semi
+    mask_frozen = mp.get_frozen_mask()
+    t1 = []
+    for s in [0, 1]:
+        occidx = (mp.mo_occ[s] > 1e-6) & mask_frozen[s]
+        viridx = (mp.mo_occ[s] <= 1e-6) & mask_frozen[s]
+        f_ai = fock_semi[s][np.ix_(viridx, occidx)]
+        denom = mp.mo_energy[s][viridx][:, None] - mp.mo_energy[s][occidx]
+        t1.append((-f_ai / denom).T)
+    return tuple(t1)
+
+
 def e_singles(mp, fock_semi=None):
     '''Second-order singles correction of the semi-canonical ROMP2.
 
@@ -124,22 +144,24 @@ def e_singles(mp, fock_semi=None):
         fock_semi = mp.fock_semi
     mask_frozen = mp.get_frozen_mask()
     e = 0.
-    for s in [0, 1]:
+    for s, t1 in enumerate(singles_amps(mp, fock_semi)):
         occidx = (mp.mo_occ[s] > 1e-6) & mask_frozen[s]
         viridx = (mp.mo_occ[s] <= 1e-6) & mask_frozen[s]
-        f_ai = fock_semi[s][viridx][:, occidx]
-        denom = (mp.mo_energy[s][viridx][:, None] - mp.mo_energy[s][occidx])
-        e += np.einsum('ai,ai->', f_ai.conj() * f_ai, -1. / denom).real
+        f_ai = fock_semi[s][np.ix_(viridx, occidx)]
+        e += np.einsum('ai,ia->', f_ai, t1).real
     return e
 
 
 def add_singles(mp, e_corr):
     '''Add the second-order singles correction to the doubles correlation
-    energy and tag the result with the correlation energy components.'''
+    energy and tag the result with the correlation energy components.  The T1
+    amplitudes are stored on ``mp.t1`` so that they enter the RDMs.'''
     if mp.include_singles:
         mp.e_corr_singles = e_singles(mp, mp.fock_semi)
+        mp.t1 = singles_amps(mp, mp.fock_semi)
     else:
         mp.e_corr_singles = 0.
+        mp.t1 = None
     return lib.tag_array(e_corr + mp.e_corr_singles,
                          e_corr_ss=e_corr.e_corr_ss,
                          e_corr_os=e_corr.e_corr_os,
