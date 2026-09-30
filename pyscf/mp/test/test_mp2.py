@@ -298,7 +298,8 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(mp.MP2(mf0), mp.mp2.RMP2))
         self.assertTrue(isinstance(mp.MP2(mf1), mp.ump2.UMP2))
         self.assertTrue(isinstance(mp.MP2(dfmf0), mp.dfmp2.DFMP2))
-        self.assertTrue(isinstance(mp.MP2(dfmf1), mp.dfump2.DFUMP2))
+        # ROHF references are handled by the semi-canonical ROMP2
+        self.assertTrue(isinstance(mp.MP2(dfmf1), mp.dfromp2.DFROMP2))
         self.assertTrue(isinstance(mp.MP2(mf0.newton()), mp.mp2.RMP2))
         self.assertTrue(isinstance(mp.MP2(mf1.newton()), mp.ump2.UMP2))
 
