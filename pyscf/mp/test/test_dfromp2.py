@@ -18,6 +18,7 @@ Semi-canonical DF-ROMP2 for ROHF references
 '''
 
 import unittest
+import numpy
 from pyscf import gto, scf, mp, lib
 
 
@@ -59,10 +60,17 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(pt.emp2_scs, pt.e_corr_singles +
                                pt.e_corr_ss/3. + pt.e_corr_os*1.2, 9)
         # the singles amplitudes T1 enter the occupied-virtual RDM block
+        # (linearly and via the t1.t2 cross term, cf. ucisd.make_rdm1)
         dm1a, dm1b = pt.make_rdm1()
         nocca, noccb = pt.nocc
-        self.assertAlmostEqual(abs(dm1a[:nocca,nocca:] - pt.t1[0]).max(), 0, 9)
-        self.assertAlmostEqual(abs(dm1b[:noccb,noccb:] - pt.t1[1]).max(), 0, 9)
+        t1a, t1b = pt.t1
+        t2aa, t2ab, t2bb = pt.t2
+        crossa = (numpy.einsum('jb,ijab->ai', t1a.conj(), t2aa) +
+                  numpy.einsum('jb,ijab->ai', t1b.conj(), t2ab))
+        crossb = (numpy.einsum('jb,ijab->ai', t1b.conj(), t2bb) +
+                  numpy.einsum('jb,jiba->ai', t1a.conj(), t2ab))
+        self.assertAlmostEqual(abs(dm1a[:nocca,nocca:] - (t1a + crossa.T)).max(), 0, 8)
+        self.assertAlmostEqual(abs(dm1b[:noccb,noccb:] - (t1b + crossb.T)).max(), 0, 8)
         mol.stdout.close()
 
     # NH3+ doublet, def2-SVP, def2-universal-JKFIT auxiliary basis.

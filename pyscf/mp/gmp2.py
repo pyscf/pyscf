@@ -125,9 +125,17 @@ def make_rdm1(mp, t2=None, ao_repr=False, with_frozen=True):
     t1 = getattr(mp, 't1', None)
     if t1 is None:
         dov = numpy.zeros((nocc,nvir))
+        dvo = dov.T
     else:
-        dov = numpy.asarray(t1)
-    d1 = doo, dov, dov.T, dvv
+        # First-order singles (non-HF references, issue #1687). The
+        # occupied-virtual block includes the t1 amplitude and the t1.t2
+        # cross term (cf. gcisd._gamma1_intermediates); the occ/vir blocks
+        # (t1^2) are in _gamma1_intermediates.
+        dvo = numpy.asarray(t1).T
+        if t2 is not None:
+            dvo = dvo + lib.einsum('jb,ijab->ai', t1.conj(), t2)
+        dov = dvo.T.conj()
+    d1 = doo, dov, dvo, dvv
     return gccsd_rdm._make_rdm1(mp, d1, with_frozen=with_frozen, ao_repr=ao_repr)
 
 def _gamma1_intermediates(mp, t2):

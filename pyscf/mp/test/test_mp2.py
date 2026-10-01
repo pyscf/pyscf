@@ -155,6 +155,27 @@ class KnownValues(unittest.TestCase):
         e1+= mol.energy_nuc()
         self.assertAlmostEqual(e1, pt.e_tot, 8)
 
+    def test_non_canonical_mp2_rdm_vs_cisd(self):
+        # The MP2 density for a non-HF reference (T1 + T2 wavefunction)
+        # equals the CISD density of the truncated wavefunction, i.e.
+        # cisd.make_rdm1 with civec = [1, t1, t2] (issue #1687).
+        from pyscf.ci import cisd
+        mf = scf.RHF(mol).run()
+        nocc = mol.nelectron // 2
+        ct, st = numpy.cos(0.4), numpy.sin(0.4)
+        c = mf.mo_coeff.copy()
+        cocc, cvir = c[:,nocc-1].copy(), c[:,nocc].copy()
+        c[:,nocc-1], c[:,nocc] = ct*cocc + st*cvir, -st*cocc + ct*cvir
+        mfr = scf.RHF(mol)
+        mfr.__dict__.update(mf.__dict__)
+        mfr.mo_coeff = c
+        mfr.converged = False
+        pt = mp.MP2(mfr).run(conv_tol=1e-10)
+        civec = numpy.concatenate([[1.0], pt.t1.ravel(), pt.t2.ravel()])
+        ci = cisd.CISD(mf)
+        dm1_cisd = cisd.make_rdm1(ci, civec, nmo=pt.nmo, nocc=pt.nocc)
+        self.assertAlmostEqual(abs(pt.make_rdm1() - dm1_cisd).max(), 0, 8)
+
     def test_mp2_with_df(self):
         nocc = mol.nelectron//2
         nmo = mf.mo_energy.size
@@ -330,11 +351,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(pt.e_corr_singles, -0.05273798131339, 7)
         # the doubles part is unchanged by the T1 treatment
         self.assertAlmostEqual(e - pt.e_corr_singles, -0.20447991367138338, 7)
-        # T1 enters the occupied-virtual block of the (spin-traced) 1-RDM
+        # T1 enters the occupied-virtual block of the (spin-traced) 1-RDM:
+        # linearly and via the t1.t2 cross term. The full density equals
+        # cisd.make_rdm1 with civec = [1, t1, t2].
         t1 = pt.t1
         dm1 = pt.make_rdm1()
         nocc = pt.nocc
-        self.assertAlmostEqual(abs(dm1[:nocc,nocc:] - 2*t1).max(), 0, 9)
+        cross = (2*numpy.einsum('jb,ijab->ai', t1.conj(), pt.t2) -
+                 numpy.einsum('jb,ijba->ai', t1.conj(), pt.t2))
+        self.assertAlmostEqual(abs(dm1[:nocc,nocc:] - 2*(t1 + cross.T)).max(), 0, 9)
         # ... and quadratically to the occ/vir blocks (issue #1687)
         pt.t1 = None
         dm1_0 = pt.make_rdm1()

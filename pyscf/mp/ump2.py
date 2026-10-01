@@ -291,11 +291,26 @@ def make_rdm1(mp, t2=None, ao_repr=False, with_frozen=True):
     nocca, noccb, nvira, nvirb = t2[1].shape
     t1 = getattr(mp, 't1', None)
     if t1 is None:
-        dov = numpy.zeros((nocca,nvira))
-        dOV = numpy.zeros((noccb,nvirb))
+        dova = numpy.zeros((nocca,nvira))
+        dovb = numpy.zeros((noccb,nvirb))
+        dvoa, dvob = dova.T, dovb.T
     else:
-        dov, dOV = t1[0], t1[1]
-    d1 = (doo, (dov, dOV), (dov.T, dOV.T), dvv)
+        # First-order singles (non-HF references, issue #1687). The
+        # occupied-virtual blocks include the t1 amplitudes and the t1.t2
+        # cross terms (cf. ucisd._gamma1_intermediates); the occ/vir blocks
+        # (t1^2) are in _gamma1_intermediates.
+        t1a, t1b = t1
+        dvoa = t1a.T
+        dvob = t1b.T
+        if t2 is not None:
+            t2aa, t2ab, t2bb = t2
+            dvoa = dvoa + lib.einsum('jb,ijab->ai', t1a.conj(), t2aa) \
+                        + lib.einsum('jb,ijab->ai', t1b.conj(), t2ab)
+            dvob = dvob + lib.einsum('jb,ijab->ai', t1b.conj(), t2bb) \
+                        + lib.einsum('jb,jiba->ai', t1a.conj(), t2ab)
+        dova = dvoa.T.conj()
+        dovb = dvob.T.conj()
+    d1 = (doo, (dova, dovb), (dvoa, dvob), dvv)
     return uccsd_rdm._make_rdm1(mp, d1, with_frozen=with_frozen, ao_repr=ao_repr)
 
 def _gamma1_intermediates(mp, t2):

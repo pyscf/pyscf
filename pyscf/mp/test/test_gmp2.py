@@ -226,12 +226,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(pt.e_corr_singles, -0.0503922640769, 7)
         # the doubles part is unchanged by the T1 treatment
         self.assertAlmostEqual(e - pt.e_corr_singles, -0.12714840392411947, 7)
-        # T1 enters the 1-RDM: linearly in the ov block, quadratically in the
-        # occ/vir blocks (spin-orbital, issue #1687)
+        # T1 enters the 1-RDM: linearly and via the t1.t2 cross term in the ov
+        # block, and quadratically in the occ/vir blocks. The full density
+        # equals gcisd.make_rdm1 with civec = amplitudes_to_cisdvec(1, t1, t2).
         t1 = pt.t1
         dm1 = pt.make_rdm1()
         nocc = pt.nocc
-        self.assertAlmostEqual(abs(dm1[:nocc,nocc:] - t1).max(), 0, 9)
+        cross = numpy.einsum('jb,ijab->ai', t1.conj(), pt.t2)
+        self.assertAlmostEqual(abs(dm1[:nocc,nocc:] - (t1 + cross.T)).max(), 0, 9)
         pt.t1 = None
         dm1_0 = pt.make_rdm1()
         pt.t1 = t1

@@ -288,12 +288,20 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(pt.e_corr_singles, -0.024186048914, 7)
         # the doubles part is unchanged by the T1 treatment
         self.assertAlmostEqual(e - pt.e_corr_singles, -0.1707921460057042, 7)
-        # T1 enters the occupied-virtual blocks of the 1-RDM (per spin)
+        # T1 enters the occupied-virtual blocks of the 1-RDM: linearly and via
+        # the t1.t2 cross terms. The full density equals ucisd.make_rdm1 with
+        # civec = amplitudes_to_cisdvec(1, t1, t2).
         t1 = pt.t1
         dm1a, dm1b = pt.make_rdm1()
         nocca, noccb = pt.nocc
-        self.assertAlmostEqual(abs(dm1a[:nocca,nocca:] - t1[0]).max(), 0, 9)
-        self.assertAlmostEqual(abs(dm1b[:noccb,noccb:] - t1[1]).max(), 0, 9)
+        t1a, t1b = t1
+        t2aa, t2ab, t2bb = pt.t2
+        crossa = (numpy.einsum('jb,ijab->ai', t1a.conj(), t2aa) +
+                  numpy.einsum('jb,ijab->ai', t1b.conj(), t2ab))
+        crossb = (numpy.einsum('jb,ijab->ai', t1b.conj(), t2bb) +
+                  numpy.einsum('jb,jiba->ai', t1a.conj(), t2ab))
+        self.assertAlmostEqual(abs(dm1a[:nocca,nocca:] - (t1a + crossa.T)).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm1b[:noccb,noccb:] - (t1b + crossb.T)).max(), 0, 9)
         # ... and quadratically to the occ/vir blocks (issue #1687)
         pt.t1 = None
         dm1a0, dm1b0 = pt.make_rdm1()
