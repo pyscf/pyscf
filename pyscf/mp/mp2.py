@@ -355,8 +355,19 @@ def make_rdm2(mp, t2=None, eris=None, ao_repr=False):
 
     Note the contraction between ERIs (in Chemist's notation) and rdm2 is
     E = einsum('pqrs,pqrs', eri, rdm2)
+
+    This energy contract holds when the reference satisfies Brillouin's
+    theorem (f_ov = 0).  The T1 contributions to the 2-RDM are not included,
+    so for a non-canonical reference (f_ov != 0) a warning is issued.
     '''
     if t2 is None: t2 = mp.t2
+    t1 = getattr(mp, 't1', None)
+    if t1 is not None:
+        t1 = t1 if isinstance(t1, (tuple, list)) else (t1,)
+        if max(numpy.abs(numpy.asarray(x)).max() for x in t1) > 1e-8:
+            logger.warn(mp, 'The 2-RDM does not include the first-order '
+                            'singles (T1): its energy contraction is only '
+                            'valid for a reference with f_ov = 0.')
     nmo = nmo0 = mp.nmo
     nocc = nocc0 = mp.nocc
     nvir = nmo - nocc
