@@ -180,6 +180,40 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mmp.e_corr, eref, 8)
 
 
+    def test_dfmp2_non_canonical(self):
+        # Non-canonical reference: converged HF orbitals rotated between the
+        # occupied and virtual spaces, so that the occupied-virtual Fock block
+        # is nonzero and the first-order singles (T1) contribute (issue #1687).
+        # The same (identical) orbitals are used for the DF and 4-center
+        # calculations, so the results agree within the fitting error.
+        mol1 = gto.M(atom='O 0 0 0; H 0 0 0.96; H 0.93 0 0.24', basis='sto-3g',
+                     verbose=0)
+        mf1 = scf.RHF(mol1).run()
+        nocc = mol1.nelectron // 2
+        ct, st = numpy.cos(0.4), numpy.sin(0.4)
+        c = mf1.mo_coeff.copy()
+        cocc, cvir = c[:,nocc-1].copy(), c[:,nocc].copy()
+        c[:,nocc-1], c[:,nocc] = ct*cocc + st*cvir, -st*cocc + ct*cvir
+
+        mfr = scf.RHF(mol1)
+        mfr.__dict__.update(mf1.__dict__)
+        mfr.mo_coeff = c
+        mfr.converged = False
+        pt = mp.MP2(mfr).run(conv_tol=1e-10)
+
+        mfd = scf.RHF(mol1).density_fit()
+        mfd.__dict__.update(mf1.__dict__)
+        mfd.mo_coeff = c
+        mfd.converged = False
+        mmp = mp.dfmp2.DFMP2(mfd)
+        mmp.conv_tol = 1e-10
+        mmp.kernel()
+        self.assertTrue(mmp.converged)
+        self.assertAlmostEqual(abs(mmp.e_corr - pt.e_corr), 0, 4)
+        # t1 depends only on the Fock matrix, hence identical for DF and 4c
+        self.assertAlmostEqual(abs(mmp.t1 - pt.t1).max(), 0, 4)
+        self.assertAlmostEqual(mmp.e_corr_singles, pt.e_corr_singles, 4)
+
 if __name__ == "__main__":
     print("Full Tests for dfmp2")
     unittest.main()
