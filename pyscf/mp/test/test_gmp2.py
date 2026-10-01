@@ -226,6 +226,19 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(pt.e_corr_singles, -0.0503922640769, 7)
         # the doubles part is unchanged by the T1 treatment
         self.assertAlmostEqual(e - pt.e_corr_singles, -0.12714840392411947, 7)
+        # T1 enters the 1-RDM: linearly in the ov block, quadratically in the
+        # occ/vir blocks (spin-orbital, issue #1687)
+        t1 = pt.t1
+        dm1 = pt.make_rdm1()
+        nocc = pt.nocc
+        self.assertAlmostEqual(abs(dm1[:nocc,nocc:] - t1).max(), 0, 9)
+        pt.t1 = None
+        dm1_0 = pt.make_rdm1()
+        pt.t1 = t1
+        self.assertAlmostEqual(abs((dm1[:nocc,:nocc] - dm1_0[:nocc,:nocc]) +
+                                   numpy.einsum('ia,ja->ij', t1, t1)).max(), 0, 9)
+        self.assertAlmostEqual(abs((dm1[nocc:,nocc:] - dm1_0[nocc:,nocc:]) -
+                                   numpy.einsum('ia,ic->ac', t1, t1.conj())).max(), 0, 9)
 
     def test_gmp2_with_df(self):
         pt = mp.GMP2(gmf).density_fit()

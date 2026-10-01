@@ -133,6 +133,13 @@ def make_rdm1(mp, t2=None, ao_repr=False, with_frozen=True):
 def _gamma1_intermediates(mp, t2):
     doo = lib.einsum('imef,jmef->ij', t2.conj(), t2) *-.5
     dvv = lib.einsum('mnea,mneb->ab', t2, t2.conj()) * .5
+    # First-order singles (non-HF references, issue #1687): the t1^2
+    # corrections to the occupied/virtual blocks (cf. the c1^2 terms of
+    # gcisd._gamma1_intermediates). The t1.t2 cross terms are not included.
+    t1 = getattr(mp, 't1', None)
+    if t1 is not None:
+        doo -= lib.einsum('ia,ka->ik', t1.conj(), t1)
+        dvv += lib.einsum('ia,ic->ac', t1, t1.conj())
     return doo, dvv
 
 # spin-orbital rdm2 in Chemist's notation

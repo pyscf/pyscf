@@ -239,6 +239,14 @@ def _gamma1_intermediates(mp, t2=None, eris=None):
                 - lib.einsum('jca,jbc->ba', l2i, t2i)
         dm1occ += lib.einsum('iab,jab->ij', l2i, t2i) * 2 \
                 - lib.einsum('iab,jba->ij', l2i, t2i)
+    # First-order singles (non-HF references, issue #1687): the t1^2
+    # correction to the occupied/virtual blocks of the spin-traced density
+    # (cf. the c1^2 terms of cisd._gamma1_intermediates). The t1.t2 cross
+    # terms are not included.
+    t1 = getattr(mp, 't1', None)
+    if t1 is not None:
+        dm1occ += lib.einsum('ia,ka->ik', t1.conj(), t1)
+        dm1vir += lib.einsum('ia,ic->ac', t1, t1.conj())
     return -dm1occ, dm1vir
 
 

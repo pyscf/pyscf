@@ -289,10 +289,20 @@ class KnownValues(unittest.TestCase):
         # the doubles part is unchanged by the T1 treatment
         self.assertAlmostEqual(e - pt.e_corr_singles, -0.1707921460057042, 7)
         # T1 enters the occupied-virtual blocks of the 1-RDM (per spin)
+        t1 = pt.t1
         dm1a, dm1b = pt.make_rdm1()
         nocca, noccb = pt.nocc
-        self.assertAlmostEqual(abs(dm1a[:nocca,nocca:] - pt.t1[0]).max(), 0, 9)
-        self.assertAlmostEqual(abs(dm1b[:noccb,noccb:] - pt.t1[1]).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm1a[:nocca,nocca:] - t1[0]).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm1b[:noccb,noccb:] - t1[1]).max(), 0, 9)
+        # ... and quadratically to the occ/vir blocks (issue #1687)
+        pt.t1 = None
+        dm1a0, dm1b0 = pt.make_rdm1()
+        pt.t1 = t1
+        t1a, t1b = t1
+        self.assertAlmostEqual(abs((dm1a[:nocca,:nocca] - dm1a0[:nocca,:nocca]) +
+                                   numpy.einsum('ia,ja->ij', t1a, t1a)).max(), 0, 9)
+        self.assertAlmostEqual(abs((dm1b[:noccb,:noccb] - dm1b0[:noccb,:noccb]) +
+                                   numpy.einsum('ia,ja->ij', t1b, t1b)).max(), 0, 9)
 
 
 
