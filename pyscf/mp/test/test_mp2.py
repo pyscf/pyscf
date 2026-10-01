@@ -160,13 +160,15 @@ class KnownValues(unittest.TestCase):
         # equals the CISD density of the truncated wavefunction, i.e.
         # cisd.make_rdm1 with civec = [1, t1, t2] (issue #1687).
         from pyscf.ci import cisd
-        mf = scf.RHF(mol).run()
-        nocc = mol.nelectron // 2
+        mol1 = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587',
+                     basis='sto-3g', verbose=0)
+        mf = scf.RHF(mol1).run()
+        nocc = mol1.nelectron // 2
         ct, st = numpy.cos(0.4), numpy.sin(0.4)
         c = mf.mo_coeff.copy()
         cocc, cvir = c[:,nocc-1].copy(), c[:,nocc].copy()
         c[:,nocc-1], c[:,nocc] = ct*cocc + st*cvir, -st*cocc + ct*cvir
-        mfr = scf.RHF(mol)
+        mfr = scf.RHF(mol1)
         mfr.__dict__.update(mf.__dict__)
         mfr.mo_coeff = c
         mfr.converged = False

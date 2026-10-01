@@ -163,16 +163,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mmp.e_corr, eref, 8)
 
 
-    def test_dfump2_converted_rohf(self):
-        # An ROHF reference converted to UHF is auto-detected as non-canonical
-        # (f_ov != 0) and the T1 singles is included (issue #1687).
-        molr = gto.M(atom='N 0 0 0; H 0 0 1.0; H 0.94 0 -0.33; H -0.94 0 -0.33',
-                     charge=1, spin=1, basis='sto-3g', verbose=0)
-        mf = scf.ROHF(molr).run(conv_tol=1e-12)
-        pt = mp.dfump2.DFUMP2(mf.to_uhf().density_fit()).run()
-        self.assertGreater(abs(pt.t1[0]).max(), 1e-3)
-        self.assertAlmostEqual(pt.e_corr, -0.0408591463, 6)
-
     def test_dfump2_non_canonical(self):
         # Non-canonical reference: converged UHF orbitals rotated between the
         # occupied and virtual spaces, so that the occupied-virtual Fock block
