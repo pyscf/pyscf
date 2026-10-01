@@ -156,8 +156,8 @@ def update_amps(mp, t1, t2, eris):
     foob = fockb[:noccb,:noccb] - numpy.diag(mo_eb_o)
     fvva = focka[nocca:,nocca:] - numpy.diag(mo_ea_v)
     fvvb = fockb[noccb:,noccb:] - numpy.diag(mo_eb_v)
-    foVa = focka[:nocca,nocca:]
-    foVb = fockb[:noccb,noccb:]
+    foVa = focka[nocca:,:nocca].T
+    foVb = fockb[noccb:,:noccb].T
 
     u2aa  = lib.einsum('ijae,be->ijab', t2aa, fvva)
     u2bb  = lib.einsum('ijae,be->ijab', t2bb, fvvb)

@@ -74,7 +74,7 @@ def energy(mp, t2, eris):
     if t1 is None:
         e_singles = 0.
     else:
-        fov = numpy.asarray(eris.fock)[:nocc,nocc:]
+        fov = numpy.asarray(eris.fock)[nocc:,:nocc].T
         e_singles = numpy.einsum('ia,ia->', fov, t1).real
     return lib.tag_array(e.real + e_singles, e_corr_singles=e_singles)
 
@@ -88,7 +88,7 @@ def update_amps(mp, t1, t2, eris):
 
     foo = fock[:nocc,:nocc] - numpy.diag(mo_e_o)
     fvv = fock[nocc:,nocc:] - numpy.diag(mo_e_v)
-    fov = fock[:nocc,nocc:]
+    fov = fock[nocc:,:nocc].T
     t2new  = lib.einsum('ijac,bc->ijab', t2, fvv)
     t2new -= lib.einsum('ki,kjab->ijab', foo, t2)
     t2new = t2new + t2new.transpose(1,0,3,2)
