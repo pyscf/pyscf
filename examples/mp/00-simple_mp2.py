@@ -8,7 +8,7 @@ A simple example to run MP2 calculation.
 
 MP2 for closed-shell (RHF), unrestricted (UHF) and generalized (GHF)
 references.  For a restricted open-shell (ROHF) reference the restricted
-open-shell MP2 (ROMP2) is used; see 01-non_canonical_mp2.py.
+open-shell MP2 (ROMP2) should be used; see 01-non_canonical_mp2.py.
 '''
 
 import pyscf
@@ -21,7 +21,7 @@ mol = pyscf.M(
 mf = mol.RHF().run()
 mf.MP2().run()
 
-# Unrestricted and generalized MP2 (open-shell reference)
+# Unrestricted and generalized MP2
 mol = pyscf.M(
     atom = 'O 0 0 0; H 0 0 0.97',
     basis = 'ccpvdz',
@@ -32,6 +32,3 @@ mf.MP2().run()
 
 mf = mol.GHF().run()
 mf.MP2().run()
-
-# Restricted open-shell MP2 (ROMP2)
-# See 01-non_canonical_mp2.py

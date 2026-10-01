@@ -6,8 +6,7 @@ MP2 with a non-canonical (non-Brillouin) reference, and ROMP2 for ROHF.
 When the reference orbitals do not diagonalize the mean-field Fock matrix, the
 occupied-virtual Fock block f_ov is nonzero and Brillouin's theorem does not
 hold.  The first-order wavefunction then contains single excitations (T1),
-which contribute E_singles = sum_ia f_ai t1_ia to the MP2 correlation energy,
-and MP2 is solved iteratively.
+which contribute to the MP2 correlation energy, and MP2 is solved iteratively.
 
 Note that f_ov != 0 is the condition, not non-HF orbitals per se: a canonical
 Kohn-Sham reference is non-HF but has f_ov = 0 (no T1), and localized HF
@@ -62,7 +61,7 @@ print('ROMP2              E_corr = %.9f  E_singles = %.9f'
 pt = mp.UMP2(mf.to_uhf()).run()
 print('UMP2(to_uhf)       E_corr = %.9f' % pt.e_corr)
 
-# Previous behavior: UMP2 on the ROHF orbitals without the T1 singles.
+# Previous behavior (before #3471): UMP2 on the ROHF orbitals without the T1 singles.
 pt = mp.UMP2(mf.to_uhf())
 pt.exclude_t1 = True
 pt.run()
