@@ -295,7 +295,7 @@ def make_rdm1(mp, t2=None, ao_repr=False, with_frozen=True):
         dovb = numpy.zeros((noccb,nvirb))
         dvoa, dvob = dova.T, dovb.T
     else:
-        # First-order singles (non-HF references, issue #1687). The
+        # First-order singles (f_ov != 0 references, issue #1687). The
         # occupied-virtual blocks include the t1 amplitudes and the t1.t2
         # cross terms (cf. ucisd._gamma1_intermediates); the occ/vir blocks
         # (t1^2) are in _gamma1_intermediates.
@@ -324,7 +324,7 @@ def _gamma1_intermediates(mp, t2):
     dvva += lib.einsum('mnae,mnbe->ba', t2ab.conj(), t2ab)
     dvvb  = lib.einsum('mnae,mnbe->ba', t2bb.conj(), t2bb) * .5
     dvvb += lib.einsum('mnea,mneb->ba', t2ab.conj(), t2ab)
-    # First-order singles (non-HF references, issue #1687): the t1^2
+    # First-order singles (f_ov != 0 references, issue #1687): the t1^2
     # corrections to the occupied/virtual blocks (cf. the c1^2 terms of
     # ucisd._gamma1_intermediates). The t1.t2 cross terms are not included.
     t1 = getattr(mp, 't1', None)

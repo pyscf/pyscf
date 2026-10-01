@@ -125,11 +125,9 @@ def _iterative_kernel(mp, eris, verbose=None):
 def energy(mp, t2, eris):
     '''MP2 energy including the first-order singles (T1) contribution.
 
-    For non-HF references the occupied-virtual Fock block does not vanish and
-    T1 gives an explicit contribution E_singles = sum_ia f_ai t1_ia (twice this
-    sum for the spin-traced closed-shell density). See P. J. Knowles et al.,
-    Chem. Phys. Lett. 186, 130 (1991) and J. P. Finley, K. Hirao,
-    Chem. Phys. Lett. 328, 51 (2000), Eq. (60).
+    T1 = f_ai/(e_i - e_a); it vanishes when the reference satisfies
+    Brillouin's theorem (occupied-virtual Fock block f_ov = 0), e.g. for
+    canonical HF or a localized (converged) HF reference.
     '''
     nocc, nvir = t2.shape[1:3]
     eris_ovov = numpy.asarray(eris.ovov).reshape(nocc,nvir,nocc,nvir)
@@ -208,7 +206,7 @@ def make_rdm1(mp, t2=None, eris=None, ao_repr=False, with_frozen=True):
         dvo = dov.T
     else:
         if t2 is None: t2 = mp.t2
-        # First-order singles (non-HF references, issue #1687). The
+        # First-order singles (f_ov != 0 references, issue #1687). The
         # occupied-virtual block includes the t1 amplitude and the t1.t2
         # cross term (cf. cisd._gamma1_intermediates); the occ/vir blocks
         # (t1^2) are in _gamma1_intermediates.
@@ -249,7 +247,7 @@ def _gamma1_intermediates(mp, t2=None, eris=None):
                 - lib.einsum('jca,jbc->ba', l2i, t2i)
         dm1occ += lib.einsum('iab,jab->ij', l2i, t2i) * 2 \
                 - lib.einsum('iab,jba->ij', l2i, t2i)
-    # First-order singles (non-HF references, issue #1687): the t1^2
+    # First-order singles (f_ov != 0 references, issue #1687): the t1^2
     # correction to the occupied/virtual blocks of the spin-traced density
     # (cf. the c1^2 terms of cisd._gamma1_intermediates). The t1.t2 cross
     # terms are not included.
@@ -659,7 +657,7 @@ class MP2Base(lib.StreamObject):
     @property
     def emp2_scs(self):
         # J. Chem. Phys. 118, 9095 (2003)
-        # The first-order singles (non-HF references) are added unscaled: the
+        # The first-order singles (f_ov != 0 references) are added unscaled: the
         # SCS factors apply to the same/opposite-spin components of the
         # double-excitation correlation energy.
         return (self.e_corr_ss*1./3. + self.e_corr_os*1.2 +

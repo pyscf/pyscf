@@ -156,7 +156,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1, pt.e_tot, 8)
 
     def test_non_canonical_mp2_rdm_vs_cisd(self):
-        # The MP2 density for a non-HF reference (T1 + T2 wavefunction)
+        # The MP2 density for a f_ov != 0 reference (T1 + T2 wavefunction)
         # equals the CISD density of the truncated wavefunction, i.e.
         # cisd.make_rdm1 with civec = [1, t1, t2] (issue #1687).
         from pyscf.ci import cisd
@@ -347,7 +347,7 @@ class KnownValues(unittest.TestCase):
         pt = mp.MP2(mf)
         e = pt.kernel()[0]
         self.assertAlmostEqual(e, -0.2572178933021, 7)
-        # first-order singles (T1) of the non-HF reference
+        # first-order singles (T1) of the f_ov != 0 reference
         self.assertAlmostEqual(pt.e_corr_singles, -0.05273798131339, 7)
         # the doubles part is unchanged by the T1 treatment
         self.assertAlmostEqual(e - pt.e_corr_singles, -0.20447991367138338, 7)

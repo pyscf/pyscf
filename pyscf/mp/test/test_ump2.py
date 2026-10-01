@@ -284,7 +284,7 @@ class KnownValues(unittest.TestCase):
         pt = mp.MP2(mf)
         e = pt.kernel()[0]
         self.assertAlmostEqual(e, -0.1949781959138, 7)
-        # first-order singles (T1) of the non-HF reference
+        # first-order singles (T1) of the f_ov != 0 reference
         self.assertAlmostEqual(pt.e_corr_singles, -0.024186048914, 7)
         # the doubles part is unchanged by the T1 treatment
         self.assertAlmostEqual(e - pt.e_corr_singles, -0.1707921460057042, 7)
