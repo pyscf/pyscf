@@ -236,6 +236,11 @@ class ROMP2(ump2.UMP2):
             self._scf = scf_saved
         return eris
 
+    def _reference_is_canonical(self):
+        # The semi-canonicalization is handled inside this method; always
+        # use the (non-iterative) init_amps path for a converged reference.
+        return True
+
     def kernel(self, mo_energy=None, mo_coeff=None, eris=None,
                with_t2=WITH_T2):
         if mo_coeff is not None or mo_energy is not None:

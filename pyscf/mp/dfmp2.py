@@ -155,7 +155,7 @@ def energy(mp, t2, eris):
     nocc, nvir = t2.shape[1:3]
     fock = _get_fock_mo(mp, eris)
     t1 = getattr(mp, 't1', None)
-    if t1 is None:
+    if t1 is None or getattr(mp, 'exclude_t1', False):
         e_singles = 0.
     else:
         e_singles = 2 * np.einsum('ia,ia->', fock[:nocc,nocc:], t1).real
@@ -196,10 +196,13 @@ def update_amps(mp, t1, t2, eris):
 
     t2new /= lib.direct_sum('ia,jb->ijab', eia, eia)
 
-    t1new  = lib.einsum('ab,ib->ia', fvv, t1)
-    t1new -= lib.einsum('ji,ja->ia', foo, t1)
-    t1new += fov
-    t1new /= eia
+    if getattr(mp, 'exclude_t1', False):
+        t1new = np.zeros_like(t1)
+    else:
+        t1new  = lib.einsum('ab,ib->ia', fvv, t1)
+        t1new -= lib.einsum('ji,ja->ia', foo, t1)
+        t1new += fov
+        t1new /= eia
     return t1new, t2new
 
 

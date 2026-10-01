@@ -129,7 +129,7 @@ def energy(mp, t2, eris):
         logger.warn(mp, 'Non-zero imaginary part found in UMP2 energy %s', e)
 
     t1 = getattr(mp, 't1', None)
-    if t1 is None:
+    if t1 is None or getattr(mp, 'exclude_t1', False):
         e_singles = 0.
     else:
         t1a, t1b = t1
@@ -184,14 +184,18 @@ def update_amps(mp, t1, t2, eris):
     u2bb /= lib.direct_sum('ia+jb->ijab', eia_b, eia_b)
 
     # First-order singles (Finley & Hirao, CPL 328, 51 (2000), Eq. (50))
-    t1anew  = lib.einsum('ab,ib->ia', fvva, t1a)
-    t1anew -= lib.einsum('ji,ja->ia', fooa, t1a)
-    t1anew += foVa
-    t1anew /= eia_a
-    t1bnew  = lib.einsum('ab,ib->ia', fvvb, t1b)
-    t1bnew -= lib.einsum('ji,ja->ia', foob, t1b)
-    t1bnew += foVb
-    t1bnew /= eia_b
+    if getattr(mp, 'exclude_t1', False):
+        t1anew = numpy.zeros_like(t1a)
+        t1bnew = numpy.zeros_like(t1b)
+    else:
+        t1anew  = lib.einsum('ab,ib->ia', fvva, t1a)
+        t1anew -= lib.einsum('ji,ja->ia', fooa, t1a)
+        t1anew += foVa
+        t1anew /= eia_a
+        t1bnew  = lib.einsum('ab,ib->ia', fvvb, t1b)
+        t1bnew -= lib.einsum('ji,ja->ia', foob, t1b)
+        t1bnew += foVb
+        t1bnew /= eia_b
     return (t1anew, t1bnew), (u2aa, u2ab, u2bb)
 
 
@@ -581,7 +585,8 @@ class _ChemistsERIs(mp2._ChemistsERIs):
         mo_b = mo_coeff[1][:,mo_idx[1]]
         self.mo_coeff = (mo_a, mo_b)
 
-        if mo_coeff is mp._scf.mo_coeff and mp._scf.converged:
+        if (mo_coeff is mp._scf.mo_coeff and mp._scf.converged and
+                (mp.exclude_t1 or mp._reference_is_canonical())):
             self.mo_energy = (mp._scf.mo_energy[0][mo_idx[0]],
                               mp._scf.mo_energy[1][mo_idx[1]])
             self.fock = (numpy.diag(self.mo_energy[0]),

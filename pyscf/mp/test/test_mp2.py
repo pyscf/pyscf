@@ -342,6 +342,21 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(pt.mol is mol1)
         self.assertTrue(pt.with_df.mol is mol1)
 
+    def test_rohf_converted_ump2(self):
+        # An ROHF reference converted to UHF is detected as non-canonical
+        # (f_ov != 0): the first-order singles T1 is included automatically
+        # (issue #1687).  exclude_t1 reproduces the previous behavior.
+        molr = gto.M(atom='N 0 0 0; H 0 0 1.0; H 0.94 0 -0.33; H -0.94 0 -0.33',
+                     charge=1, spin=1, basis='sto-3g', verbose=0)
+        mf = scf.ROHF(molr).run(conv_tol=1e-12)
+        pt = mp.UMP2(mf.to_uhf()).run()
+        self.assertGreater(abs(pt.t1[0]).max(), 1e-3)
+        self.assertAlmostEqual(pt.e_corr, -0.0408661865, 8)
+        pt1 = mp.UMP2(mf.to_uhf())
+        pt1.exclude_t1 = True
+        pt1.run()
+        self.assertAlmostEqual(pt1.e_corr, -0.0389434158, 8)
+
     def test_non_canonical_mp2(self):
         mf = scf.RHF(mol).run(max_cycle=1)
         pt = mp.MP2(mf)

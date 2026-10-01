@@ -71,7 +71,7 @@ def energy(mp, t2, eris):
         logger.warn(mp, 'Non-zero imaginary part found in GMP2 energy %s', e)
     nocc, nvir = t2.shape[1:3]
     t1 = getattr(mp, 't1', None)
-    if t1 is None:
+    if t1 is None or getattr(mp, 'exclude_t1', False):
         e_singles = 0.
     else:
         fov = numpy.asarray(eris.fock)[nocc:,:nocc].T
@@ -98,10 +98,13 @@ def update_amps(mp, t1, t2, eris):
     t2new /= lib.direct_sum('ia,jb->ijab', eia, eia)
 
     # First-order singles (Finley & Hirao, CPL 328, 51 (2000), Eq. (50))
-    t1new  = lib.einsum('ab,ib->ia', fvv, t1)
-    t1new -= lib.einsum('ji,ja->ia', foo, t1)
-    t1new += fov
-    t1new /= eia
+    if getattr(mp, 'exclude_t1', False):
+        t1new = numpy.zeros_like(t1)
+    else:
+        t1new  = lib.einsum('ab,ib->ia', fvv, t1)
+        t1new -= lib.einsum('ji,ja->ia', foo, t1)
+        t1new += fov
+        t1new /= eia
     return t1new, t2new
 
 
@@ -295,7 +298,8 @@ class _PhysicistsERIs:
                 mo_coeff = lib.tag_array(mo_coeff, orbspin=self.orbspin)
         self.mo_coeff = mo_coeff
 
-        if mp_mo_coeff is mp._scf.mo_coeff and mp._scf.converged:
+        if (mp_mo_coeff is mp._scf.mo_coeff and mp._scf.converged and
+                (mp.exclude_t1 or mp._reference_is_canonical())):
             self.mo_energy = mp._scf.mo_energy[mo_idx]
             self.fock = numpy.diag(self.mo_energy)
         else:

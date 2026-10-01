@@ -205,7 +205,7 @@ def energy(mp, t2, eris):
     nocca, noccb, nvira, nvirb = t2ab.shape
     focka, fockb = _get_fock_uhf(mp, eris)
     t1 = getattr(mp, 't1', None)
-    if t1 is None:
+    if t1 is None or getattr(mp, 'exclude_t1', False):
         e_singles = 0.
     else:
         t1a, t1b = t1
@@ -281,14 +281,18 @@ def update_amps(mp, t1, t2, eris):
     u2bb /= lib.direct_sum('ia+jb->ijab', eia_b, eia_b)
 
     # First-order singles (Finley & Hirao, CPL 328, 51 (2000), Eq. (50))
-    t1anew  = lib.einsum('ab,ib->ia', fvva, t1a)
-    t1anew -= lib.einsum('ji,ja->ia', fooa, t1a)
-    t1anew += foVa
-    t1anew /= eia_a
-    t1bnew  = lib.einsum('ab,ib->ia', fvvb, t1b)
-    t1bnew -= lib.einsum('ji,ja->ia', foob, t1b)
-    t1bnew += foVb
-    t1bnew /= eia_b
+    if getattr(mp, 'exclude_t1', False):
+        t1anew = np.zeros_like(t1a)
+        t1bnew = np.zeros_like(t1b)
+    else:
+        t1anew  = lib.einsum('ab,ib->ia', fvva, t1a)
+        t1anew -= lib.einsum('ji,ja->ia', fooa, t1a)
+        t1anew += foVa
+        t1anew /= eia_a
+        t1bnew  = lib.einsum('ab,ib->ia', fvvb, t1b)
+        t1bnew -= lib.einsum('ji,ja->ia', foob, t1b)
+        t1bnew += foVb
+        t1bnew /= eia_b
     return (t1anew, t1bnew), (u2aa, u2ab, u2bb)
 
 

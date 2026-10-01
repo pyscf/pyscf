@@ -80,6 +80,23 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
 
 # Iteratively solve MP2 if non-canonical HF is provided
+def _is_canonical_reference(mp):
+    '''Whether the reference is canonical, i.e. its orbitals diagonalize the
+    mean-field Fock.  A spin-paired object with different alpha/beta
+    occupations (e.g. an ROHF wavefunction converted to UHF) is non-canonical:
+    the alpha/beta Fock matrices are not diagonal in the shared orbital basis
+    and the first-order singles (T1) does not vanish.'''
+    coeff = mp.mo_coeff
+    if not (isinstance(coeff, numpy.ndarray) and coeff.ndim == 3):
+        return True
+    occ = numpy.asarray(mp.mo_occ)
+    if occ.ndim == 2:
+        if not numpy.array_equal(occ[0], occ[1]) and \
+                numpy.allclose(coeff[0], coeff[1]):
+            return False
+    return True
+
+
 def _iterative_kernel(mp, eris, verbose=None):
     cput1 = cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mp, verbose)
@@ -137,7 +154,7 @@ def energy(mp, t2, eris):
     emp2_os = ed.real*0.5
 
     t1 = getattr(mp, 't1', None)
-    if t1 is None:
+    if t1 is None or getattr(mp, 'exclude_t1', False):
         e_singles = 0.
     else:
         fov = numpy.asarray(eris.fock)[nocc:,:nocc].T
@@ -172,10 +189,13 @@ def update_amps(mp, t1, t2, eris):
     # zeroth-order Hamiltonian is block diagonal between occupied and virtual
     # (Finley & Hirao, Chem. Phys. Lett. 328, 51 (2000), Eq. (50)):
     #   (eps_i - eps_a) t1_ia = f_ai - sum_j foo_ji t1_ja + sum_b fvv_ab t1_ib
-    t1new  = lib.einsum('ab,ib->ia', fvv, t1)
-    t1new -= lib.einsum('ji,ja->ia', foo, t1)
-    t1new += fov
-    t1new /= eia
+    if getattr(mp, 'exclude_t1', False):
+        t1new = numpy.zeros_like(t1)
+    else:
+        t1new  = lib.einsum('ab,ib->ia', fvv, t1)
+        t1new -= lib.einsum('ji,ja->ia', foo, t1)
+        t1new += fov
+        t1new /= eia
     return t1new, t2new
 
 
@@ -567,11 +587,12 @@ class MP2Base(lib.StreamObject):
     max_cycle = getattr(__config__, 'cc_ccsd_CCSD_max_cycle', 50)
     conv_tol = getattr(__config__, 'cc_ccsd_CCSD_conv_tol', 1e-7)
     conv_tol_normt = getattr(__config__, 'cc_ccsd_CCSD_conv_tol_normt', 1e-5)
+    exclude_t1 = getattr(__config__, 'mp_mp2_exclude_t1', False)
 
     _keys = {
         'max_cycle', 'conv_tol', 'conv_tol_normt', 'mol', 'max_memory',
-        'frozen', 'level_shift', 'mo_coeff', 'mo_occ', 'e_hf', 'e_corr',
-        'e_corr_ss', 'e_corr_os', 'e_corr_singles', 't1', 't2',
+        'frozen', 'level_shift', 'exclude_t1', 'mo_coeff', 'mo_occ', 'e_hf',
+        'e_corr', 'e_corr_ss', 'e_corr_os', 'e_corr_singles', 't1', 't2',
     }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
@@ -672,6 +693,12 @@ class MP2Base(lib.StreamObject):
         # J. Chem. Phys. 118, 9095 (2003)
         return self.e_hf + self.emp2_scs
 
+    def _reference_is_canonical(self):
+        '''Whether the reference orbitals are canonical (diagonalize the
+        mean-field Fock).  Overridden by methods that handle non-canonical
+        references themselves (e.g. ROMP2).'''
+        return _is_canonical_reference(self)
+
     def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         '''
         Args:
@@ -696,7 +723,7 @@ class MP2Base(lib.StreamObject):
 
         cput1 = log.timer('ao2mo', *cput1)
 
-        if self._scf.converged:
+        if self._scf.converged and (self.exclude_t1 or self._reference_is_canonical()):
             self.e_corr, self.t2 = self.init_amps(mo_energy, mo_coeff, eris, with_t2)
         else:
             self.converged, self.e_corr, self.t2 = _iterative_kernel(self, eris)
@@ -825,7 +852,8 @@ class _ChemistsERIs:
         self.mo_coeff = _mo_without_core(mp, mo_coeff)
         self.mol = mp.mol
 
-        if mo_coeff is mp._scf.mo_coeff and mp._scf.converged:
+        if (mo_coeff is mp._scf.mo_coeff and mp._scf.converged and
+                (mp.exclude_t1 or mp._reference_is_canonical())):
             # The canonical MP2 from a converged SCF result. Rebuilding fock
             # can be skipped
             self.mo_energy = _mo_energy_without_core(mp, mp._scf.mo_energy)
