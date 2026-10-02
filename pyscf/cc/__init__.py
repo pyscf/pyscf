@@ -97,6 +97,7 @@ def RCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     from pyscf import lib
     from pyscf.df.df_jk import _DFHF
     from pyscf.cc import dfccsd
+    from pyscf.cc import cmplx_dfccsd
 
     if mf.istype('UHF'):
         raise RuntimeError('RCCSD cannot be used with UHF method.')
@@ -111,7 +112,10 @@ def RCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
         mf = mf.to_rhf()
 
     if isinstance(mf, _DFHF) and mf.with_df:
-        return dfccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
+        if numpy.iscomplexobj(mo_coeff) or numpy.iscomplexobj(mf.mo_coeff):
+            return cmplx_dfccsd.cRCCSD(mf, frozen, mo_coeff, mo_occ)
+        else:
+            return dfccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
 
     elif numpy.iscomplexobj(mo_coeff) or numpy.iscomplexobj(mf.mo_coeff):
         return rccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
