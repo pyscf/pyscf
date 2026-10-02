@@ -205,6 +205,7 @@ XC = XC_CODES = {
 'B3LYP'         : 'B3LYPG',
 'B3LYP5'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN5C',
 'B3LYPG'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN3C', # B3LYP-VWN3 used by Gaussian and libxc
+'BHHLYP'        : '.5*HF + .5*B88 + LYP',
 #'O3LYP'         : '.1161*HF + .9262*SLATER + .8133*OPTXCORR + .81*LYP + .19*VWN5C',  # Mol. Phys. 99 607
 #'O3LYPG'        : '.1161*HF + .9262*SLATER + .8133*OPTXCORR + .81*LYP + .19*VWN3C',
 # libxc implementation as below, see also discussion in https://gitlab.com/libxc/libxc/issues/47
