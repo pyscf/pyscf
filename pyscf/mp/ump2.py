@@ -104,12 +104,16 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
     emp2_ss = emp2_ss.real
     emp2_os = emp2_os.real
-    emp2 = lib.tag_array(emp2_ss+emp2_os, e_corr_ss=emp2_ss, e_corr_os=emp2_os)
+    # The canonical reference satisfies Brillouin's theorem, hence T1 = 0
+    mp.t1 = (numpy.zeros((nocca,nvira), dtype=eris.ovov.dtype),
+             numpy.zeros((noccb,nvirb), dtype=eris.ovov.dtype))
+    emp2 = lib.tag_array(emp2_ss+emp2_os, e_corr_ss=emp2_ss, e_corr_os=emp2_os,
+                         e_corr_singles=0)
 
     return emp2, t2
 
 def energy(mp, t2, eris):
-    '''MP2 energy'''
+    '''UMP2 energy including the first-order singles (T1) contribution'''
     t2aa, t2ab, t2bb = t2
     nocca, noccb, nvira, nvirb = t2ab.shape
     eris_ovov = numpy.asarray(eris.ovov).reshape(nocca,nvira,nocca,nvira)
@@ -123,12 +127,23 @@ def energy(mp, t2, eris):
     e    = ess + eos
     if abs(e.imag) > 1e-4:
         logger.warn(mp, 'Non-zero imaginary part found in UMP2 energy %s', e)
-    e = lib.tag_array(e.real, e_corr_ss=ess.real, e_corr_os=eos.real)
+
+    t1 = getattr(mp, 't1', None)
+    if t1 is None or getattr(mp, 'exclude_t1', False):
+        e_singles = 0.
+    else:
+        t1a, t1b = t1
+        focka, fockb = eris.fock
+        e_singles = (numpy.einsum('ia,ia->', focka[:nocca,nocca:], t1a) +
+                     numpy.einsum('ia,ia->', fockb[:noccb,noccb:], t1b)).real
+    e = lib.tag_array(e.real + e_singles, e_corr_ss=ess.real, e_corr_os=eos.real,
+                      e_corr_singles=e_singles)
     return e
 
-def update_amps(mp, t2, eris):
-    '''Update non-canonical MP2 amplitudes'''
+def update_amps(mp, t1, t2, eris):
+    '''Update non-canonical MP2 amplitudes (T1 and T2)'''
     #assert (isinstance(eris, _ChemistsERIs))
+    t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     nocca, noccb, nvira, nvirb = t2ab.shape
     mo_ea_o = eris.mo_energy[0][:nocca]
@@ -141,6 +156,8 @@ def update_amps(mp, t2, eris):
     foob = fockb[:noccb,:noccb] - numpy.diag(mo_eb_o)
     fvva = focka[nocca:,nocca:] - numpy.diag(mo_ea_v)
     fvvb = fockb[noccb:,noccb:] - numpy.diag(mo_eb_v)
+    foVa = focka[nocca:,:nocca].T
+    foVb = fockb[noccb:,:noccb].T
 
     u2aa  = lib.einsum('ijae,be->ijab', t2aa, fvva)
     u2bb  = lib.einsum('ijae,be->ijab', t2bb, fvvb)
@@ -165,7 +182,21 @@ def update_amps(mp, t2, eris):
     u2aa /= lib.direct_sum('ia+jb->ijab', eia_a, eia_a)
     u2ab /= lib.direct_sum('ia+jb->ijab', eia_a, eia_b)
     u2bb /= lib.direct_sum('ia+jb->ijab', eia_b, eia_b)
-    return u2aa, u2ab, u2bb
+
+    # First-order singles (Finley & Hirao, CPL 328, 51 (2000), Eq. (50))
+    if getattr(mp, 'exclude_t1', False):
+        t1anew = numpy.zeros_like(t1a)
+        t1bnew = numpy.zeros_like(t1b)
+    else:
+        t1anew  = lib.einsum('ab,ib->ia', fvva, t1a)
+        t1anew -= lib.einsum('ji,ja->ia', fooa, t1a)
+        t1anew += foVa
+        t1anew /= eia_a
+        t1bnew  = lib.einsum('ab,ib->ia', fvvb, t1b)
+        t1bnew -= lib.einsum('ji,ja->ia', foob, t1b)
+        t1bnew += foVb
+        t1bnew /= eia_b
+    return (t1anew, t1bnew), (u2aa, u2ab, u2bb)
 
 
 def get_nocc(mp):
@@ -247,23 +278,43 @@ def get_frozen_mask(mp):
 
 def make_rdm1(mp, t2=None, ao_repr=False, with_frozen=True):
     r'''
-    One-particle spin density matrices dm1a, dm1b in MO basis (the
-    occupied-virtual blocks due to the orbital response contribution are not
-    included).
+    One-particle spin density matrices dm1a, dm1b in MO basis.
 
     dm1a[p,q] = <q_alpha^\dagger p_alpha>
     dm1b[p,q] = <q_beta^\dagger p_beta>
 
     The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+
+    For a non-Hartree-Fock reference the first-order singles amplitudes T1
+    contribute to the occupied-virtual blocks of the densities.
     '''
     from pyscf.cc import uccsd_rdm
     if t2 is None: t2 = mp.t2
     assert t2 is not None
     doo, dvv = _gamma1_intermediates(mp, t2)
     nocca, noccb, nvira, nvirb = t2[1].shape
-    dov = numpy.zeros((nocca,nvira))
-    dOV = numpy.zeros((noccb,nvirb))
-    d1 = (doo, (dov, dOV), (dov.T, dOV.T), dvv)
+    t1 = getattr(mp, 't1', None)
+    if t1 is None:
+        dova = numpy.zeros((nocca,nvira))
+        dovb = numpy.zeros((noccb,nvirb))
+        dvoa, dvob = dova.T, dovb.T
+    else:
+        # First-order singles (f_ov != 0 references, issue #1687). The
+        # occupied-virtual blocks include the t1 amplitudes and the t1.t2
+        # cross terms (cf. ucisd._gamma1_intermediates); the occ/vir blocks
+        # (t1^2) are in _gamma1_intermediates.
+        t1a, t1b = t1
+        dvoa = t1a.T
+        dvob = t1b.T
+        if t2 is not None:
+            t2aa, t2ab, t2bb = t2
+            dvoa = dvoa + lib.einsum('jb,ijab->ai', t1a.conj(), t2aa) \
+                        + lib.einsum('jb,ijab->ai', t1b.conj(), t2ab)
+            dvob = dvob + lib.einsum('jb,ijab->ai', t1b.conj(), t2bb) \
+                        + lib.einsum('jb,jiba->ai', t1a.conj(), t2ab)
+        dova = dvoa.T.conj()
+        dovb = dvob.T.conj()
+    d1 = (doo, (dova, dovb), (dvoa, dvob), dvv)
     return uccsd_rdm._make_rdm1(mp, d1, with_frozen=with_frozen, ao_repr=ao_repr)
 
 def _gamma1_intermediates(mp, t2):
@@ -277,6 +328,16 @@ def _gamma1_intermediates(mp, t2):
     dvva += lib.einsum('mnae,mnbe->ba', t2ab.conj(), t2ab)
     dvvb  = lib.einsum('mnae,mnbe->ba', t2bb.conj(), t2bb) * .5
     dvvb += lib.einsum('mnea,mneb->ba', t2ab.conj(), t2ab)
+    # First-order singles (f_ov != 0 references, issue #1687): the t1^2
+    # corrections to the occupied/virtual blocks (cf. the c1^2 terms of
+    # ucisd._gamma1_intermediates). The t1.t2 cross terms are not included.
+    t1 = getattr(mp, 't1', None)
+    if t1 is not None:
+        t1a, t1b = t1
+        dooa -= lib.einsum('ia,ka->ik', t1a.conj(), t1a)
+        doob -= lib.einsum('ia,ka->ik', t1b.conj(), t1b)
+        dvva += lib.einsum('ia,ic->ac', t1a, t1a.conj())
+        dvvb += lib.einsum('ia,ic->ac', t1b, t1b.conj())
     return ((dooa, doob), (dvva, dvvb))
 
 
@@ -374,8 +435,18 @@ def make_rdm2(mp, t2=None, ao_repr=False):
     eri_ab[p,q,r,s] = ( p_alpha q_alpha | r_beta s_beta )
     eri_ba[p,q,r,s] = ( p_beta q_beta | r_alpha s_alpha )
     eri_bb[p,q,r,s] = ( p_beta q_beta | r_beta s_beta )
+
+    The energy contract holds when the reference satisfies Brillouin's
+    theorem (f_ov = 0).  The T1 contributions to the 2-RDM are not included.
     '''
     if t2 is None: t2 = mp.t2
+    t1 = getattr(mp, 't1', None)
+    if t1 is not None:
+        t1 = t1 if isinstance(t1, (tuple, list)) else (t1,)
+        if max(numpy.abs(numpy.asarray(x)).max() for x in t1) > 1e-8:
+            logger.warn(mp, 'The 2-RDM does not include the first-order '
+                            'singles (T1): its energy contraction is only '
+                            'valid for a reference with f_ov = 0.')
     assert t2 is not None
     nmoa, nmob = nmoa0, nmob0 = mp.nmo
     nocca, noccb = nocca0, noccb0 = mp.nocc
@@ -524,7 +595,8 @@ class _ChemistsERIs(mp2._ChemistsERIs):
         mo_b = mo_coeff[1][:,mo_idx[1]]
         self.mo_coeff = (mo_a, mo_b)
 
-        if mo_coeff is mp._scf.mo_coeff and mp._scf.converged:
+        if (mo_coeff is mp._scf.mo_coeff and mp._scf.converged and
+                (mp.exclude_t1 or mp._reference_is_canonical())):
             self.mo_energy = (mp._scf.mo_energy[0][mo_idx[0]],
                               mp._scf.mo_energy[1][mo_idx[1]])
             self.fock = (numpy.diag(self.mo_energy[0]),
