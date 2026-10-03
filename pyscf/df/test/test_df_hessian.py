@@ -47,6 +47,21 @@ class KnownValues(unittest.TestCase):
         h1 = scf.RHF(mol).density_fit().run().Hessian().kernel()
         self.assertAlmostEqual(abs(href - h1).max(), 0, 3)
 
+    def test_hess_in_range_coulomb_context(self):
+        # omega set on mol has to reach the metric (P|Q) as well as the
+        # 3-center integrals (P|uv), as for the gradients in issue #3434
+        omega = 0.3
+        mf = scf.RHF(mol).density_fit().run()
+        hobj = mf.Hessian()
+        with mf.with_df.range_coulomb(omega):
+            eref = hobj.partial_hess_elec()
+            h1ref = numpy.asarray(hobj.make_h1(mf.mo_coeff, mf.mo_occ))
+        with mol.with_range_coulomb(omega):
+            e1 = hobj.partial_hess_elec()
+            h1 = numpy.asarray(hobj.make_h1(mf.mo_coeff, mf.mo_occ))
+        self.assertAlmostEqual(abs(eref - e1).max(), 0, 9)
+        self.assertAlmostEqual(abs(h1ref - h1).max(), 0, 9)
+
     def test_rks_lda_hess(self):
         href = mol.RKS.run(xc='lda,vwn').Hessian().kernel()
         df_h = mol.RKS.density_fit().run(xc='lda,vwn').Hessian()
