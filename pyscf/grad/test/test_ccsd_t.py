@@ -53,7 +53,12 @@ class KnownValues(unittest.TestCase):
         # gives the dipole as -dE/dF, compared with central differences of the
         # CCSD(T) energy with the field on electrons and nuclei.
         from pyscf.cc import ccsd_t_lambda
-        mycc = cc.CCSD(mf)
+        mol1 = gto.M(atom=[[8, (0., 0., 0.)], [1, (0., -0.757, 0.587)], [1, (0., 0.757, 0.587)]],
+                     basis='631g', verbose=0)
+        mf1 = scf.RHF(mol1)
+        mf1.conv_tol_grad = 1e-8
+        mf1.kernel()
+        mycc = cc.CCSD(mf1)
         mycc.conv_tol = 1e-10
         mycc.conv_tol_normt = 1e-8
         mycc.kernel()
@@ -62,16 +67,16 @@ class KnownValues(unittest.TestCase):
         g = ccsd_t_grad.Gradients(mycc)
         g.kernel(mycc.t1, mycc.t2, l1, l2, eris)
         mu = g.dip_moment(unit='AU', verbose=0)
-        r = mol.intor('int1e_r', comp=3)
-        h0 = scf.hf.get_hcore(mol)
-        nuc = numpy.einsum('a,ax->x', mol.atom_charges(), mol.atom_coords())
+        r = mol1.intor('int1e_r', comp=3)
+        h0 = scf.hf.get_hcore(mol1)
+        nuc = numpy.einsum('a,ax->x', mol1.atom_charges(), mol1.atom_coords())
 
         def e_field(fvec):
-            mf1 = scf.RHF(mol)
-            mf1.conv_tol = 1e-12
-            mf1.get_hcore = lambda *args, **kwargs: h0 + numpy.einsum('x,xij->ij', fvec, r)
-            mf1.kernel()
-            cc1 = cc.CCSD(mf1)
+            mff = scf.RHF(mol1)
+            mff.conv_tol = 1e-12
+            mff.get_hcore = lambda *args, **kwargs: h0 + numpy.einsum('x,xij->ij', fvec, r)
+            mff.kernel()
+            cc1 = cc.CCSD(mff)
             cc1.conv_tol = 1e-10
             cc1.conv_tol_normt = 1e-8
             cc1.kernel()
