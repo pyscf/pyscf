@@ -161,7 +161,7 @@ def pprpa_get_trial_vector(pprpa, ntri):
 
     max_orb_sum = 1.0e15
 
-    class pair():
+    class pair:
         def __init__(self):
             self.p = -1
             self.q = -1
@@ -410,7 +410,7 @@ def pprpa_expand_space(
             tri_vec[ntri] = residue[iroot] / numpy.sqrt(abs(inp))
             ntri = ntri + 1
 
-    conv = True if ntri_old == ntri else False
+    conv = ntri_old == ntri
     return conv, ntri
 
 
