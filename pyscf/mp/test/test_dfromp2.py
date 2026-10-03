@@ -59,8 +59,14 @@ class KnownValues(unittest.TestCase):
         # SCS: the singles term is added unscaled to the scaled doubles
         self.assertAlmostEqual(pt.emp2_scs, pt.e_corr_singles +
                                pt.e_corr_ss/3. + pt.e_corr_os*1.2, 9)
+        mol.stdout.close()
+
+    def test_o2_triplet_rdm(self):
         # the singles amplitudes T1 enter the occupied-virtual RDM block
         # (linearly and via the t1.t2 cross term, cf. ucisd.make_rdm1)
+        mol = _make_mol('O 0 0 0; O 0 0 1.2222', 2)
+        mf = _make_mf(mol)
+        pt = mf.DFROMP2().run()
         dm1a, dm1b = pt.make_rdm1()
         nocca, noccb = pt.nocc
         t1a, t1b = pt.t1

@@ -368,16 +368,25 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(pt.e_corr_singles, -0.05273798131339, 7)
         # the doubles part is unchanged by the T1 treatment
         self.assertAlmostEqual(e - pt.e_corr_singles, -0.20447991367138338, 7)
-        # T1 enters the occupied-virtual block of the (spin-traced) 1-RDM:
-        # linearly and via the t1.t2 cross term. The full density equals
-        # cisd.make_rdm1 with civec = [1, t1, t2].
+        # SCS: the singles term is added unscaled
+        self.assertAlmostEqual(pt.emp2_scs, pt.e_corr_singles +
+                               pt.e_corr_ss/3. + pt.e_corr_os*1.2, 9)
+
+    def test_non_canonical_mp2_rdm(self):
+        # T1 enters the occupied-virtual block of the (spin-traced) 1-RDM
+        # linearly and via the t1.t2 cross term, and quadratically in the
+        # occ/vir blocks (issue #1687). The full density equals
+        # cisd.make_rdm1 with civec = [1, t1, t2]
+        # (see test_non_canonical_mp2_rdm_vs_cisd).
+        mf = scf.RHF(mol).run(max_cycle=1)
+        pt = mp.MP2(mf)
+        pt.kernel()
         t1 = pt.t1
         dm1 = pt.make_rdm1()
         nocc = pt.nocc
         cross = (2*numpy.einsum('jb,ijab->ai', t1.conj(), pt.t2) -
                  numpy.einsum('jb,ijba->ai', t1.conj(), pt.t2))
         self.assertAlmostEqual(abs(dm1[:nocc,nocc:] - 2*(t1 + cross.T)).max(), 0, 9)
-        # ... and quadratically to the occ/vir blocks (issue #1687)
         pt.t1 = None
         dm1_0 = pt.make_rdm1()
         pt.t1 = t1
@@ -385,9 +394,6 @@ class KnownValues(unittest.TestCase):
                                    2*numpy.einsum('ia,ja->ij', t1, t1)).max(), 0, 9)
         self.assertAlmostEqual(abs((dm1[nocc:,nocc:] - dm1_0[nocc:,nocc:]) -
                                    2*numpy.einsum('ia,ic->ac', t1, t1.conj())).max(), 0, 9)
-        # SCS: the singles term is added unscaled
-        self.assertAlmostEqual(pt.emp2_scs, pt.e_corr_singles +
-                               pt.e_corr_ss/3. + pt.e_corr_os*1.2, 9)
 
 
 if __name__ == "__main__":
