@@ -31,6 +31,8 @@ def rks_fine(mol):
     mf = dft.RKS(mol, xc='pbe0')
     # A Hessian needs a much finer grid than the default; the grid error is
     # independent of the displacement and otherwise swamps everything else.
+    # The analytic Hessian has no grid response either (#3339), so comparing
+    # against it is only precise on a fine grid.
     mf.grids.level = 5
     mf.grids.prune = None
     return mf.run(conv_tol=1e-13)
@@ -125,7 +127,8 @@ class KnownValues(unittest.TestCase):
     def test_hessian_against_analytic(self):
         ref = scf.RHF(h2o()).run(conv_tol=1e-14).Hessian().kernel()
         dat = finite_diff.kernel(scf.RHF(h2o()).set(conv_tol=1e-14).Gradients())
-        self.assertLess(abs(dat - ref).max(), 2e-6)
+        # Varies between 4e-7 and 2e-6 from run to run
+        self.assertLess(abs(dat - ref).max(), 5e-6)
 
     def test_hessian_is_symmetric(self):
         dat = finite_diff.kernel(scf.RHF(h2o()).set(conv_tol=1e-14).Gradients())
@@ -136,10 +139,16 @@ class KnownValues(unittest.TestCase):
         # falls inside, so without pinning the displaced geometry keeps the
         # full group and the wavefunction is symmetry-adapted to a group it
         # no longer has.
+        mol = h2o(symmetry=True)
+        coords = mol.atom_coords()
+        coords[1,0] += 1e-3   # out of plane; still detected as C2v
+        self.assertEqual(mol.set_geom_(coords, inplace=False, unit='Bohr').groupname, 'C2v')
+        self.assertEqual(finite_diff._displace(mol, coords).groupname, 'C1')
+
         ref = scf.RHF(h2o()).run(conv_tol=1e-14).Hessian().kernel()
         mf = scf.RHF(h2o(symmetry=True)).set(conv_tol=1e-14)
         dat = finite_diff.kernel(mf.Gradients())
-        self.assertLess(abs(dat - ref).max(), 2e-6)
+        self.assertLess(abs(dat - ref).max(), 5e-6)
 
     def test_rks_hessian_against_analytic(self):
         mol = pyscf.M(atom='H 0 0 0; F 0 0 1.1', basis='sto-3g', verbose=0)
@@ -178,6 +187,44 @@ class KnownValues(unittest.TestCase):
         log = out.getvalue()
         self.assertIn('conv_tol', log)
         self.assertIn('DFT grid', log)
+
+    def test_open_shell_state_tracking(self):
+        # alpha and beta amplitudes have different shapes
+        out = io.StringIO()
+        mol = h2o(charge=1, spin=1)
+        mol.verbose = 4
+        mol.stdout = out
+        mf = dft.UKS(mol, xc='pbe0').run(conv_tol=1e-12)
+        td = mf.TDA().set(conv_tol=1e-8).run(nstates=3)
+        h = finite_diff.kernel(td.nuc_grad_method().as_scanner(state=1))
+        self.assertTrue(numpy.isfinite(h).all())
+        self.assertNotIn('reference state now', out.getvalue())
+
+    def test_state_tracking_degenerate_orbitals(self):
+        # The displacement rotates the degenerate pi orbitals of HCN
+        # arbitrarily. Amplitudes have to be compared in a common MO basis.
+        mol = pyscf.M(atom='H 0 0 -1.065; C 0 0 0; N 0 0 1.156',
+                      basis='sto-3g', verbose=0)
+        mf = dft.RKS(mol, xc='pbe0').run(conv_tol=1e-12)
+        td = mf.TDA().set(conv_tol=1e-8).run(nstates=5)
+        scan = td.nuc_grad_method().as_scanner(state=2)
+        ref = finite_diff._reference_state(scan)
+        coords = mol.atom_coords()
+        coords[1,0] += 1e-3
+        scan(mol.set_geom_(coords, unit='Bohr', symmetry='C1', inplace=False))
+        ovlp = finite_diff._state_overlaps(ref, scan.base)
+        self.assertEqual(numpy.argmax(ovlp), 1)
+        self.assertAlmostEqual(ovlp[1], 1, 4)
+
+    def test_caller_left_at_reference_geometry(self):
+        # The scanner shares the grids of the mean field it was made from
+        mol = pyscf.M(atom='H 0 0 0; F 0 0 1.1', basis='sto-3g', verbose=0)
+        mf = dft.RKS(mol, xc='pbe0').run(conv_tol=1e-12)
+        g0 = mf.Gradients().kernel()
+        finite_diff.kernel(mf)
+        self.assertEqual(mol.unit.lower(), 'angstrom')
+        g1 = mf.Gradients().kernel()
+        self.assertAlmostEqual(abs(g1 - g0).max(), 0, 12)
 
 
 if __name__ == "__main__":

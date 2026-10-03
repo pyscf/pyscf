@@ -40,7 +40,11 @@ from pyscf.hessian.rhf import HessianBase
 DISPLACEMENT = 1e-3
 
 # Coarser DFT grids leave an error that does not shrink with the displacement
-# and that exceeds the finite difference error itself.
+# and that exceeds the finite difference error itself. On H2O/STO-3G PBE0,
+# against a level 9 unpruned grid, the RKS Hessian differenced from gradients
+# is off by 1.1e-04 on the default grid and 2.6e-05 at level 5 unpruned, where
+# the error of the displacement is 3e-06. Grid response on the gradients
+# removes part of it, leaving 3.2e-05 on the default grid.
 GRID_LEVEL = 5
 
 
@@ -99,47 +103,85 @@ def _check_sanity(method, displacement, hessian):
                     'differences. The grid error does not shrink with the '
                     'displacement. Use grids.level >= %d and grids.prune = None.',
                     grids.level, grids.prune is not None, GRID_LEVEL)
+        if getattr(method, 'grid_response', None) is False:
+            logger.warn(mol, 'Setting grid_response = True on the gradients '
+                        'also reduces the grid error.')
 
-def _flatten_xy(xy):
-    '''Excitation amplitudes of one state as a normalised vector'''
-    x, y = xy
-    x = np.asarray(x).ravel()
-    y = np.asarray(y).ravel()
-    if y.size == x.size:
-        x = np.concatenate([x, y])
-    norm = np.linalg.norm(x)
-    if norm > 0:
-        x = x / norm
-    return x
+def _spin_blocks(a, nspin):
+    '''Amplitudes of one state split into spin channels.  TDA has y = 0.'''
+    if nspin == 1:
+        a = [a]
+    return [None if np.isscalar(i) else np.asarray(i) for i in a]
 
 def _reference_state(scan):
-    '''Amplitudes of the root being differentiated, for tracking it'''
+    '''The root being differentiated, and the MOs its amplitudes are in'''
     state = getattr(scan, 'state', None)
-    xy = getattr(getattr(scan, 'base', None), 'xy', None)
-    if state is None or not xy:
+    td = getattr(scan, 'base', None)
+    xy = getattr(td, 'xy', None)
+    mf = getattr(td, '_scf', None)
+    if state is None or not xy or mf is None:
         return None
-    return _flatten_xy(xy[state - 1])
+    mo_coeff = np.asarray(mf.mo_coeff)
+    if mo_coeff.shape[-2] != mf.mol.nao:
+        return None  # e.g. GHF, whose MOs span both spins
+    return mf.mol.copy(), mo_coeff.copy(), np.asarray(mf.mo_occ).copy(), xy[state-1]
 
-def _track_state(scan, ref_xy, mol):
-    '''Warn when the tuned root is no longer the one being differentiated.
+def _state_overlaps(ref, td):
+    '''|<ref|I>| for every root I of td at the displaced geometry.
 
-    Excited states can change order under displacement.  Amplitudes carry an
-    arbitrary sign and are expressed in the displaced MO basis, so compare
-    their magnitudes; over these displacements the MO basis barely moves.
+    The amplitudes of the two geometries are in different MO bases, which can
+    differ by phases and, for degenerate orbitals, arbitrary rotations.  The
+    reference amplitudes are carried over through the overlap of the occupied
+    and of the virtual MOs across the two geometries.
     '''
-    if ref_xy is None:
+    mol0, c0, occ0, (x0, y0) = ref
+    mf = td._scf
+    c1 = np.asarray(mf.mo_coeff)
+    occ1 = np.asarray(mf.mo_occ)
+    s = gto.intor_cross('int1e_ovlp', mol0, mf.mol)
+    nspin = 1 if c0.ndim == 2 else 2
+    if nspin == 1:
+        c0, c1, occ0, occ1 = [c0], [c1], [occ0], [occ1]
+
+    def dot(xa, ya, xb, yb):
+        v = sum(np.vdot(a, b) for a, b in zip(xa, xb))
+        # The RPA metric
+        v -= sum(np.vdot(a, b) for a, b in zip(ya, yb)
+                 if a is not None and b is not None)
+        return v
+
+    x0 = _spin_blocks(x0, nspin)
+    y0 = _spin_blocks(y0, nspin)
+    n0 = abs(dot(x0, y0, x0, y0))
+    for i in range(nspin):
+        o0, v0 = occ0[i] > 0, occ0[i] == 0
+        o1, v1 = occ1[i] > 0, occ1[i] == 0
+        socc = c0[i][:,o0].T.dot(s).dot(c1[i][:,o1])
+        svir = c0[i][:,v0].T.dot(s).dot(c1[i][:,v1])
+        x0[i] = socc.T.dot(x0[i]).dot(svir)
+        if y0[i] is not None:
+            y0[i] = socc.T.dot(y0[i]).dot(svir)
+
+    ovlp = []
+    for x, y in td.xy:
+        x = _spin_blocks(x, nspin)
+        y = _spin_blocks(y, nspin)
+        ovlp.append(abs(dot(x0, y0, x, y)) / np.sqrt(n0 * abs(dot(x, y, x, y))))
+    return ovlp
+
+def _track_state(scan, ref, mol):
+    '''Warn when the root being differentiated is no longer the reference state'''
+    if ref is None or not getattr(scan.base, 'xy', None):
         return
-    xy = getattr(scan.base, 'xy', None)
-    if not xy:
-        return
-    ovlp = [abs(np.dot(ref_xy, _flatten_xy(i))) for i in xy]
+    ovlp = _state_overlaps(ref, scan.base)
     best = int(np.argmax(ovlp))
     state = scan.state - 1
     if best != state:
-        logger.warn(mol, 'Root %d now overlaps state %d more strongly (%.3f vs '
-                    '%.3f). The states have swapped order and the result '
-                    'differences across the crossing.',
-                    state + 1, best + 1, ovlp[best], ovlp[state])
+        logger.warn(mol, 'The reference state now best matches root %d rather '
+                    'than root %d (overlap %.3f vs %.3f). The states have '
+                    'crossed, or a degenerate pair has been split, and the '
+                    'result differences across it.',
+                    best + 1, state + 1, ovlp[best], ovlp[state])
 
 
 def kernel(method, displacement=DISPLACEMENT):
@@ -171,6 +213,7 @@ def kernel(method, displacement=DISPLACEMENT):
         logger.info(mol, 'Computing finite-difference gradients for %s', method)
         de = np.empty((natm,3))
     _check_sanity(method, displacement, hessian)
+    caller_mf = _mean_field(method)
 
     # Mole.atom_coords is in Bohr; a template in Bohr keeps set_geom_ from
     # announcing a unit change on every displacement.
@@ -189,12 +232,12 @@ def kernel(method, displacement=DISPLACEMENT):
             method.base = method.base.copy()
 
     if scan is not None:
-        ref_xy = _reference_state(scan)
+        ref_state = _reference_state(scan)
         def evaluate(r):
             res = scan(_displace(work, r))
             if not scan.converged:
                 raise RuntimeError('%s not converged' % scan)
-            _track_state(scan, ref_xy, mol)
+            _track_state(scan, ref_state, mol)
             return res[1] if hessian else res
     else:
         logger.info(mol, '%s.as_scanner not found. Initial guess may not be '
@@ -225,7 +268,10 @@ def kernel(method, displacement=DISPLACEMENT):
                 de[i,x] = (e1 - e2) / (2*displacement)
                 atom_coords[i,x] = original_coords[i,x]
     finally:
-        mol.set_geom_(original_coords, unit='Bohr')
+        # Scanners share grids and density fitting objects with the method
+        # they were made from, leaving them built for the last displacement
+        if hasattr(caller_mf, 'reset'):
+            caller_mf.reset(caller_mf.mol)
 
     if hessian:
         # Hessian is stored as (N,N,3,3)
