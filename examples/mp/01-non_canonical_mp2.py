@@ -8,10 +8,9 @@ occupied-virtual Fock block f_ov is nonzero and Brillouin's theorem does not
 hold.  The first-order wavefunction then contains single excitations (T1),
 which contribute to the MP2 correlation energy, and MP2 is solved iteratively.
 
-Note that f_ov != 0 is the condition, not non-HF orbitals per se: a canonical
-Kohn-Sham reference is non-HF but has f_ov = 0 (no T1), and localized HF
-orbitals are non-canonical within the occupied/virtual blocks yet still have
-f_ov = 0.  See issue #1687.
+Note that f_ov != 0 is the condition: localized HF orbitals are non-canonical
+within the occupied/virtual blocks yet still have f_ov = 0 (no T1).
+See issue #1687.
 
 For an ROHF reference, mf.MP2() returns the restricted open-shell MP2 (ROMP2)
 implementation, which semi-canonicalizes the ROHF orbitals and includes the T1
@@ -32,8 +31,9 @@ H    0.   -0.757   0.587
 H    0.   0.757    0.587''',
 basis='cc-pvdz', verbose=4)
 
-# Kohn-Sham orbitals converted to an HF object.  They are not canonical for the
-# HF Fock (f_ov != 0), so MP2 is solved iteratively with the T1 singles.
+# Orbitals from a non-HF SCF, converted to an HF object: they are not
+# canonical for the HF Fock (f_ov != 0), so MP2 is solved iteratively with
+# the T1 singles.
 mf = mol.RKS().run()
 mf = mf.to_hf()
 
