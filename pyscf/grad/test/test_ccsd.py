@@ -46,6 +46,36 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
+    def test_dip_moment_vs_finite_field(self):
+        # The relaxed density kept by the gradient gives the dipole as -dE/dF
+        # (field on electrons and nuclei); compared with central differences of
+        # the CCSD energy.
+        mycc = cc.CCSD(mf)
+        mycc.conv_tol = 1e-10
+        mycc.conv_tol_normt = 1e-8
+        mycc.kernel()
+        g = mycc.Gradients()
+        g.kernel()
+        mu = g.dip_moment(unit='AU', verbose=0)
+        r = mol.intor('int1e_r', comp=3)
+        h0 = scf.hf.get_hcore(mol)
+        nuc = numpy.einsum('a,ax->x', mol.atom_charges(), mol.atom_coords())
+
+        def e_field(fvec):
+            mf1 = scf.RHF(mol)
+            mf1.conv_tol = 1e-12
+            mf1.get_hcore = lambda *args, **kwargs: h0 + numpy.einsum('x,xij->ij', fvec, r)
+            mf1.kernel()
+            cc1 = cc.CCSD(mf1)
+            cc1.conv_tol = 1e-10
+            cc1.conv_tol_normt = 1e-8
+            cc1.kernel()
+            return cc1.e_tot - numpy.dot(fvec, nuc)
+
+        F = 1e-4
+        mu_ff = numpy.array([-(e_field(F*e) - e_field(-F*e)) / (2*F) for e in numpy.eye(3)])
+        self.assertAlmostEqual(abs(mu - mu_ff).max(), 0, 5)
+
     def test_ccsd_grad(self):
         mycc = cc.ccsd.CCSD(mf)
         mycc.max_memory = 1
