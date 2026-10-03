@@ -34,7 +34,9 @@ def grad_elec(cc_grad, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=Non
     fd2intermediate = lib.H5TmpFile()
     d2 = ccsd_t_rdm._gamma2_outcore(mycc, t1, t2, l1, l2, eris,
                                     fd2intermediate, True)
-    cc_grad = ccsd_grad.Gradients(mycc)
+    # Call the CCSD module function on this object (not on a fresh
+    # ccsd_grad.Gradients), so that attributes it sets, such as the relaxed
+    # density rdm1_relaxed, land on the gradient object the caller holds.
     de = ccsd_grad.grad_elec(cc_grad, t1, t2, l1, l2, eris, atmlst,
                              d1, d2, verbose)
     return de
