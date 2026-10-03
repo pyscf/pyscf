@@ -97,6 +97,19 @@ def _is_canonical_reference(mp):
     return True
 
 
+def _no_active_pairs(mp, mo_occ=None):
+    '''Whether no spin channel has both occupied and virtual orbitals.  The
+    MP2 correlation energy is then exactly zero (e.g. a one-electron atom),
+    and the amplitude kernels can be skipped.'''
+    if mo_occ is None:
+        mo_occ = mp.mo_occ
+    occ = numpy.asarray(mo_occ)
+    if occ.ndim == 1:
+        return not ((occ > 0).any() and (occ == 0).any())
+    return all(not ((occ[s] > 0).any() and (occ[s] == 0).any())
+               for s in range(occ.shape[0]))
+
+
 def _iterative_kernel(mp, eris, verbose=None):
     cput1 = cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mp, verbose)
@@ -728,6 +741,21 @@ class MP2Base(lib.StreamObject):
         self.e_hf = self.get_e_hf(mo_coeff=mo_coeff)
 
         cput1 = log.timer('ehf', *cput1)
+
+        if _no_active_pairs(self):
+            # Degenerate active space: no occupied-virtual pair in any spin
+            # channel (e.g. a one-electron atom).  The correlation energy is
+            # exactly zero and the amplitude/integral kernels, which may not
+            # support zero-sized blocks, are skipped.
+            log.note('No occupied-virtual pair; %s correlation energy is 0',
+                     self.__class__.__name__)
+            self.converged = True
+            self.e_corr_ss = self.e_corr_os = self.e_corr_singles = 0
+            self.e_corr = 0.
+            self.t1 = None
+            self.t2 = None
+            self._finalize()
+            return self.e_corr, self.t2
 
         if eris is None:
             eris = self.ao2mo(mo_coeff)

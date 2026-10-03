@@ -17,7 +17,6 @@
 Semi-canonical ROMP2 for ROHF references with 4-center integrals
 '''
 
-import sys
 import unittest
 from pyscf import gto, scf, mp, lib
 
@@ -85,9 +84,6 @@ class KnownValues(unittest.TestCase):
         self.assertLess(pt.e_corr, pt_frozen.e_corr)
         mol.stdout.close()
 
-    @unittest.skipIf(sys.platform == 'darwin',
-                     'hangs on the macOS runner (native call never returns); '
-                     'diagnostic skip, see PR #3471')
     def test_empty_blocks(self):
         # a one-electron system has an empty virtual block (and an empty
         # occupied block in the beta channel); the semi-canonicalization must
