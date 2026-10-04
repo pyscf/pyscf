@@ -2215,6 +2215,20 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         if s is None: s = self.get_ovlp(mol)
         return mulliken_pop(mol, dm, s=s, verbose=verbose)
 
+    def hirshfeld_charges(self, mol=None, dm=None, grids=None, verbose=logger.DEBUG):
+        '''Hirshfeld charges. See scf.hirshfeld.hirshfeld_charges'''
+        from pyscf.scf import hirshfeld
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        return hirshfeld.hirshfeld_charges(mol, dm, grids, verbose)
+
+    def cm5_charges(self, mol=None, dm=None, grids=None, verbose=logger.DEBUG):
+        '''Charge Model 5 (CM5) charges. See scf.hirshfeld.cm5_charges'''
+        from pyscf.scf import hirshfeld
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        return hirshfeld.cm5_charges(mol, dm, grids, verbose=verbose)
+
     @lib.with_doc(mulliken_meta.__doc__)
     def mulliken_meta(self, mol=None, dm=None, verbose=logger.DEBUG,
                       pre_orth_method=PRE_ORTH_METHOD, s=None):
