@@ -115,8 +115,10 @@ class KnownValues(unittest.TestCase):
         n4c = n2c * 2
         mo1 = numpy.random.random((n4c,n4c)) + numpy.random.random((n4c,n4c))*1j
         mo2 = addons.project_mo_r2r(mol, [mo1,mo1], mol_dz)
-        self.assertAlmostEqual(abs(mo2[0]).sum(), 2159.3715489514038, 11)
-        self.assertAlmostEqual(abs(mo2[1]).sum(), 2159.3715489514038, 11)
+        # 9 decimal places of a sum of about 2e3 is 13 significant figures,
+        # above the roundoff of the summation
+        self.assertAlmostEqual(abs(mo2[0]).sum(), 2159.3715489514038, 9)
+        self.assertAlmostEqual(abs(mo2[1]).sum(), 2159.3715489514038, 9)
 
     def test_project_mo_nr2r(self):
         numpy.random.seed(15)
