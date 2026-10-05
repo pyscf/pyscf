@@ -50,4 +50,11 @@ Reusable guidance for PySCF development. Paths below are relative to the reposit
 
 ## Skills
 
-- When a task explicitly selects a skill, read the corresponding template in `agent-recipes/skills/` or the user's customized version before applying it.
+- Optional templates are available in `agent-recipes/skills/`:
+  `pyscf-coding-style.template.md` for Python development and
+  `pyscf-pr-review.template.md` for contribution review.
+- When a template is relevant, ask whether the user wants to load it or use a
+  customized version, unless they have already expressed a preference. Do not
+  load templates automatically or repeat the question once answered.
+- Read and apply the version the user selects. Templates can be read directly;
+  they do not need to be installed as skills.
