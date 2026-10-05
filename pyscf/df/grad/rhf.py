@@ -546,14 +546,22 @@ class Gradients(rhf_grad.Gradients):
 
     def get_jk(self, mol=None, dm=None, hermi=0, with_j=True, with_k=True,
                omega=None):
+        if mol is None:
+            mol = self.mol
         if omega is None:
+            omega = mol.omega or None
+        if not omega:
             return get_jk(self, mol, dm, hermi, with_j, with_k)
 
         with self.base.with_df.range_coulomb(omega):
             return get_jk(self, mol, dm, hermi, with_j, with_k)
 
     def get_j(self, mol=None, dm=None, hermi=0, omega=None):
+        if mol is None:
+            mol = self.mol
         if omega is None:
+            omega = mol.omega or None
+        if not omega:
             return get_j(self, mol, dm, hermi)
 
         with self.base.with_df.range_coulomb(omega):

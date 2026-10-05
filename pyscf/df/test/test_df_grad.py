@@ -177,6 +177,23 @@ class KnownValues(unittest.TestCase):
         g1 = mc.nuc_grad_method ().kernel (state=1)
         self.assertAlmostEqual(abs(gref - g1).max(), 0, 4)
 
+    def test_df_grad_range_coulomb_ctx(self):
+        # The fitting metric must see the same range separation as the
+        # 3-center integrals inside mol.with_range_coulomb (gh-3434).
+        mol = gto.M(
+            atom="O 0 0 0; H 0 0.757 0.587; H 0 -0.757 0.587",
+            basis="def2-svp", verbose=0)
+        mf = scf.RHF(mol).density_fit()
+        mf.kernel()
+        g = mf.nuc_grad_method()
+        dm = mf.make_rdm1()
+        k_arg = numpy.asarray(g.get_k(mol, dm, omega=0.3))
+        k_full = numpy.asarray(g.get_k(mol, dm))
+        with mol.with_range_coulomb(0.3):
+            k_ctx = numpy.asarray(g.get_k(mol, dm))
+        self.assertAlmostEqual(abs(k_ctx - k_arg).max(), 0, 10)
+        self.assertGreater(abs(k_ctx - k_full).max(), 1e-2)
+
 if __name__ == "__main__":
     print("Full Tests for df.grad")
     unittest.main()
