@@ -56,5 +56,7 @@ Reusable guidance for PySCF development. Paths below are relative to the reposit
 - When a template is relevant, ask whether the user wants to load it or use a
   customized version, unless they have already expressed a preference. Do not
   load templates automatically or repeat the question once answered.
+- Make this question visible in the normal chat response, naming the template
+  path and offering the template.
 - Read and apply the version the user selects. Templates can be read directly;
   they do not need to be installed as skills.
