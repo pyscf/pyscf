@@ -1,7 +1,7 @@
 # PySCF Python coding style
 
-Load this template when writing, modifying, or reviewing Python code in PySCF.
-Customize as needed.
+Load this template when writing, modifying, or reviewing Python code in PySCF,
+including tests. Customize as needed.
 
 - Resolve routine implementation choices using nearby code and existing APIs.
   Ask when an unresolved scientific convention or requirement materially affects
@@ -46,6 +46,20 @@ Customize as needed.
   compact conventions. Do not mechanically apply generic PEP 8 formatting.
 - Break long numerical calls and Boolean expressions at logical boundaries,
   matching the surrounding continuation-line indentation.
+
+## Test readability
+
+- Apply the same readability standards to tests as to implementation code.
+  A reader should be able to identify the setup, behavior under test, and
+  expected result without tracing through layers of helpers.
+- Use descriptive test and variable names that explain the case being tested.
+  Add a short comment when the scientific setup or regression is not obvious.
+- Keep setup and assertions straightforward. Break complicated expressions
+  into meaningful intermediate values, and make actual and expected results
+  easy to distinguish.
+- Make assertion failures easy to interpret. In loops or parameterized tests,
+  identify the failing case. Explain non-obvious reference values and tolerances
+  near the comparison or shared definition.
 
 ## Documentation
 

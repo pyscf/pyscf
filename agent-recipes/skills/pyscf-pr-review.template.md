@@ -71,6 +71,10 @@ review or validation gaps.
 - Check that a human reader familiar with the method can understand the code.
 - Avoid complicated long expressions. Break them into understandable
   algorithmic steps where appropriate.
+- Review tests for readability too. Check that the setup, behavior under test,
+  and expected results are clear, names describe the cases, and assertion
+  failures identify what went wrong. Helpers, loops, and parameterization
+  should make the tests easier to understand rather than obscure their purpose.
 
 ## Scientific validation
 
