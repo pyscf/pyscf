@@ -49,6 +49,11 @@ Customize as needed.
 
 ## Documentation
 
+- Treat functions and classes listed in a module's `__all__` as public APIs.
+  Absence from `__all__` does not by itself make an API private.
+- Give public APIs clear docstrings describing their purpose, inputs, outputs,
+  and important parameters, attributes, and defaults. Explain shapes, units,
+  and limitations where relevant.
 - Document non-obvious assumptions.
 - For functions outside the public API, a short docstring explaining their
   purpose is sufficient.

@@ -25,8 +25,11 @@ review or validation gaps.
 - Check that a new feature includes a runnable example demonstrating important
   flags, attributes, and options, with comments explaining what the settings
   do and why they are used.
-- Document important public parameters, attributes, defaults, return values,
-  and limitations.
+- Treat functions and classes listed in a module's `__all__` as public APIs.
+  Absence from `__all__` does not by itself make an API private.
+- Check that public APIs have clear docstrings describing their purpose,
+  inputs, outputs, and important parameters, attributes, and defaults. Explain
+  shapes, units, and limitations where relevant.
 - Explain intentional changes to public behavior and provide migration guidance
   when replacing an existing API.
 
@@ -49,8 +52,13 @@ review or validation gaps.
   that cached state is handled properly.
 - Check initialization paths, particularly supplied intermediates that bypass
   an ordinary setup step.
+- When rejecting an unsupported feature or option combination, provide an error
+  message that clearly identifies the limitation.
 - Remove debugging code accidentally left in the contribution, such as
   breakpoints and temporary diagnostic output.
+- Normal computation follows established assumptions. Unless targeting special
+  systems, trivial checks and speculative handling of extreme corner cases can
+  be skipped.
 
 ## Performance
 
@@ -63,12 +71,6 @@ review or validation gaps.
 - Check that a human reader familiar with the method can understand the code.
 - Avoid complicated long expressions. Break them into understandable
   algorithmic steps where appropriate.
-
-## Unnecessary checks and extreme cases
-
-- Normal computation follows established assumptions. Unless targeting special
-  systems, trivial checks and speculative handling of extreme corner cases are
-  not necessary.
 
 ## Scientific validation
 
