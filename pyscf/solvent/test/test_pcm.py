@@ -156,7 +156,7 @@ class KnownValues(unittest.TestCase):
         mf = scf.RHF(mol0).run()
         mc1 = solvent.PCM(mcscf.CASSCF(mf, 2, 2)).run(conv_tol=1e-9)
         e1 = mc1.e_tot
-        assert numpy.abs(e1 - -74.9709884530835) < 1e-8
+        assert numpy.abs(e1 - -74.9704130833207) < 1e-8
 
     def test_ccsd(self):
         mf = scf.RHF(mol0).PCM()

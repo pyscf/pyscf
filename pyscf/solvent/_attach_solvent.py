@@ -337,7 +337,7 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         self._e_tot_without_solvent = e_tot
 
         log.debug('Computing corrections to the total energy.')
-        dm = self.make_rdm1(ci=fcivec, ao_repr=True)
+        dm = self.make_rdm1(mo_coeff=mo_coeff, ci=fcivec, ao_repr=True)
 
         with_solvent = self.with_solvent
         if with_solvent.e is not None:
