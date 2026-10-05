@@ -53,10 +53,15 @@ Reusable guidance for PySCF development. Paths below are relative to the reposit
 - Optional templates are available in `agent-recipes/skills/`:
   `pyscf-coding-style.template.md` for Python development and
   `pyscf-pr-review.template.md` for contribution review.
-- When a template is relevant, ask whether the user wants to load it or use a
-  customized version, unless they have already expressed a preference. Do not
-  load templates automatically or repeat the question once answered.
-- Make this question visible in the normal chat response, naming the template
-  path and offering the template.
+- Before starting a task with a relevant template, offer to use the repository
+  template (recommended), use a customized version supplied by the user, or
+  continue without a template. Name the exact template path and briefly explain
+  its purpose.
+- Ask using a structured user-input prompt when available. Otherwise, ask in a
+  standalone final chat message and wait for the reply. Do not place the
+  template-selection question only in a progress update.
+- Wait for the selection before beginning the review or implementation.
+- If the user has already expressed a preference or explicitly requested a
+  template, honor that choice without asking again.
 - Read and apply the version the user selects. Templates can be read directly;
   they do not need to be installed as skills.
