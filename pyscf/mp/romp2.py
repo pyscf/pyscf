@@ -25,7 +25,7 @@ pyscf.mp.dfromp2):
   beta Fock in the doubly occupied and singly+virtual blocks), plus the
   spin Fock matrices in the semi-canonical basis.
 - e_singles: the second-order singles correction
-  E_singles = sum_s sum_{i in occ_s, a in vir_s} -F^s_ai^2 / (e_a - e_i)
+  E_singles = sum_s sum_{i in occ_s, a in vir_s} -|F^s_ai|^2 / (e_a - e_i)
   where the beta virtual space includes the singly occupied orbitals.
 - ROMP2: the class using conventional 4-center integrals (doubles from the
   UMP2 kernel evaluated with the semi-canonical orbitals).
@@ -134,7 +134,7 @@ def singles_amps(mp, fock_semi=None):
 def e_singles(mp, fock_semi=None):
     '''Second-order singles correction of the semi-canonical ROMP2.
 
-    E_singles = sum_s sum_{i in occ_s, a in vir_s} -F^s_ai^2 / (e_a - e_i)
+    E_singles = sum_s sum_{i in occ_s, a in vir_s} -|F^s_ai|^2 / (e_a - e_i)
 
     where occ_s/vir_s are the occupied/virtual spaces of the spin-resolved
     Fock matrices (the beta virtual space includes the singly occupied
@@ -148,7 +148,7 @@ def e_singles(mp, fock_semi=None):
         occidx = (mp.mo_occ[s] > 1e-6) & mask_frozen[s]
         viridx = (mp.mo_occ[s] <= 1e-6) & mask_frozen[s]
         f_ai = fock_semi[s][np.ix_(viridx, occidx)]
-        e += np.einsum('ai,ia->', f_ai, t1).real
+        e += np.einsum('ai,ia->', f_ai.conj(), t1).real
     return e
 
 

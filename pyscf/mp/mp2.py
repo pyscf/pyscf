@@ -170,7 +170,7 @@ def energy(mp, t2, eris):
     if t1 is None or getattr(mp, 'exclude_t1', False):
         e_singles = 0.
     else:
-        fov = numpy.asarray(eris.fock)[nocc:,:nocc].T
+        fov = numpy.asarray(eris.fock)[:nocc,nocc:]
         e_singles = numpy.einsum('ia,ia->', fov, t1).real * 2
     emp2 = lib.tag_array(emp2_ss+emp2_os+e_singles, e_corr_ss=emp2_ss,
                          e_corr_os=emp2_os, e_corr_singles=e_singles)
