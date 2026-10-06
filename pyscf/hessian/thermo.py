@@ -150,7 +150,7 @@ def thermo(model, freq, temperature=298.15, pressure=101325,
             w = 1/(1 + (qrrho_freq0/freq)^4).
         qrrho_enthalpy : bool
             Quasi-RRHO vibrational energy of Li et al., J. Phys. Chem. C
-            119, 4566 (2015). The energy of each mode, zero-point energy
+            119, 1840 (2015). The energy of each mode, zero-point energy
             included, interpolates between the harmonic oscillator and RT/2
             with the same weight.
         qrrho_freq0 : float
