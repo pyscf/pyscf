@@ -25,6 +25,10 @@ else
   PARALLEL="-n $PYTEST_JOBS --dist loadfile"
 fi
 
+# try to reduce oversubscription caused by OPENBLAS_THREAD_SERVER
+export OPENBLAS_THREAD_TIMEOUT=4
+export OMP_WAIT_POLICY=passive
+
 mkdir -p pyscftmpdir
 echo 'pbc_tools_pbc_fft_engine = "NUMPY+BLAS"' > .pyscf_conf.py
 echo "dftd3_DFTD3PATH = './pyscf/lib/deps/lib'" >> .pyscf_conf.py
@@ -34,12 +38,12 @@ echo 'TMPDIR = "./pyscftmpdir"' >> .pyscf_conf.py
 version=$(python -c 'import sys; print("{0}.{1}".format(*sys.version_info[:2]))')
 # pytest-cov on Python 3.12 consumes huge memory
 if [ "$RUNNER_OS" == "Linux" ] && [ $version != "3.12" ]; then
-  pytest -s -c pytest.ini $PARALLEL \
+  pytest -s -c pytest.ini --timeout=900 $PARALLEL \
     --durations=20 \
     --cov-report xml --cov-report term --cov-config .coveragerc --cov pyscf \
     $TEST_PATHS
 else
-  pytest -s -c pytest.ini $PARALLEL --durations=20 $TEST_PATHS
+  pytest -s -c pytest.ini --timeout=900 $PARALLEL --durations=20 $TEST_PATHS
 fi
 
 pytest_status=$?

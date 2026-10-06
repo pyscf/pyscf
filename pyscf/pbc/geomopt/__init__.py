@@ -16,8 +16,5 @@
 from pyscf.geomopt.addons import as_pyscf_method
 
 def optimize(method, *args, **kwargs):
-    try:
-        from pyscf.pbc.geomopt import geometric_solver as geom
-    except ImportError as e1:
-        raise e1
+    from pyscf.pbc.geomopt import geometric_solver as geom
     return geom.optimize(method, *args, **kwargs)

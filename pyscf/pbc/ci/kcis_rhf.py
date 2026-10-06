@@ -544,7 +544,7 @@ class _CIS_ERIS:
                     (nkpts, nkpts, nkpts, nvir, nocc, nocc, nvir), dtype=dtype
                 )
 
-                for (ikp, ikq, ikr) in khelper.symm_map.keys():
+                for (ikp, ikq, ikr) in khelper.symm_map:
                     iks = kconserv[ikp, ikq, ikr]
                     eri_kpt = fao2mo(
                         (mo_coeff[ikp], mo_coeff[ikq], mo_coeff[ikr], mo_coeff[iks]),

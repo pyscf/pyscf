@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -355,7 +354,7 @@ def is_hybrid_xc(xc_code):
     elif numpy.issubdtype(type(xc_code), numpy.integer):
         return False
     else:
-        return any((is_hybrid_xc(x) for x in xc_code))
+        return any(is_hybrid_xc(x) for x in xc_code)
 
 def is_meta_gga(xc_code):
     return xc_type(xc_code) == 'MGGA'

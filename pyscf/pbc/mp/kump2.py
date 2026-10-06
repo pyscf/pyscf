@@ -193,11 +193,11 @@ def get_nocc(mp, per_kpoint=False):
         for i, moocc in enumerate(mp.mo_occ[spin]):
             if np.any(moocc % 1 != 0):
                 raise RuntimeError(
-                    "Fractional occupation numbers encountered @ kp={:d}: {}.  "
+                    f"Fractional occupation numbers encountered @ kp={i:d}: {moocc}.  "
                     "This may have been caused by smearing of occupation numbers "
                     "in the mean-field calculation. If so, consider executing "
                     "mf.smearing_method = False; mf.mo_occ = mf.get_occ() prior "
-                    "to calling this".format(i, moocc))
+                    "to calling this")
     if mp._nocc is not None:
         return mp._nocc
 

@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,7 +27,7 @@ from pyscf.lib.scipy_helper import pivoted_cholesky
 from pyscf import __config__
 # The smearing utilities were moved to a separate module. They were implemented
 # in the addons module. Import them into this namespace for backward compatibility
-from pyscf.scf.smearing import (  # noqa
+from pyscf.scf.smearing import (
     SMEARING_METHOD,
     smearing,
     smearing_,
@@ -565,14 +564,14 @@ def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
     logger.info(mf, 'Applying remove_linear_dep_ on SCF object.')
     logger.debug(mf, 'Overlap condition number %g', cond)
     if (cond < 1./numpy.finfo(s.dtype).eps and not force_pivoted_cholesky):
-        logger.info(mf, 'Using canonical orthogonalization with threshold {}'.format(threshold))
+        logger.info(mf, f'Using canonical orthogonalization with threshold {threshold}')
         mf._eigh = _eigh_with_canonical_orth(threshold)
     else:
         assert s.dtype == numpy.float64
         logger.info(mf, 'Using partial Cholesky orthogonalization '
                     '(doi:10.1063/1.5139948, doi:10.1103/PhysRevA.101.032504)')
-        logger.info(mf, 'Using threshold {} for pivoted Cholesky'.format(cholesky_threshold))
-        logger.info(mf, 'Using threshold {} to orthogonalize the subbasis'.format(threshold))
+        logger.info(mf, f'Using threshold {cholesky_threshold} for pivoted Cholesky')
+        logger.info(mf, f'Using threshold {threshold} to orthogonalize the subbasis')
         mf._eigh = _eigh_with_pivot_cholesky(threshold, cholesky_threshold)
     return mf
 remove_linear_dep = remove_linear_dep_
@@ -618,6 +617,7 @@ def convert_to_uhf(mf, out=None, remove_df=False):
     from pyscf import scf
     from pyscf import dft
     assert (isinstance(mf, scf.hf.SCF))
+    mf = _without_soscf(mf, remove_df)
 
     logger.debug(mf, 'Converting %s to UHF', mf.__class__)
 
@@ -629,15 +629,7 @@ def convert_to_uhf(mf, out=None, remove_df=False):
         out = _update_mf_without_soscf(mf, out, remove_df)
 
     elif mf.istype('UHF'):
-        # Remove with_df for SOSCF method because the post-HF code checks the
-        # attribute .with_df to identify whether an SCF object is DF-SCF method.
-        # with_df in SOSCF is used in orbital hessian approximation only.  For the
-        # returned SCF object, whether with_df exists in SOSCF has no effects on the
-        # mean-field energy and other properties.
-        if getattr(mf, '_scf', None):
-            return _update_mf_without_soscf(mf, mf._scf.copy(), remove_df)
-        else:
-            return mf.copy()
+        return mf.copy()
 
     else:
         known_cls = {
@@ -654,16 +646,19 @@ def convert_to_uhf(mf, out=None, remove_df=False):
 
     return _update_mo_to_uhf_(mf, out)
 
-def _object_without_soscf(mf, known_class, remove_df=False):
-    '''Create a new SCF object, excluding the SOSCF base class'''
+def _without_soscf(mf, remove_df=False):
     from pyscf.soscf import newton_ah
     from pyscf.df.df_jk import _DFHF
     if isinstance(mf, newton_ah._CIAH_SOSCF):
         mf = mf.undo_soscf()
-
     if remove_df and isinstance(mf, _DFHF):
         mf = mf.undo_df()
+    return mf
 
+
+def _object_without_soscf(mf, known_class, remove_df=False):
+    '''Create a new SCF object, excluding the SOSCF base class'''
+    mf = _without_soscf(mf, remove_df)
     for old_cls in mf.__class__.__mro__:
         if old_cls in known_class:
             break
@@ -681,19 +676,11 @@ def _object_without_soscf(mf, known_class, remove_df=False):
 
 def _update_mf_without_soscf(mf, out, remove_df=False):
     '''Update an SCF object, excluding the SOSCF base class'''
-    from pyscf.soscf import newton_ah
-    mf_dic = dict(mf.__dict__)
-
-    # if mf is SOSCF object, avoid to overwrite the with_df method
-    # FIXME: it causes bug when converting pbc-SOSCF.
-    if isinstance(mf, newton_ah._CIAH_SOSCF):
-        mf_dic.pop('_scf')
-        if not hasattr(mf._scf, 'with_df'):
-            mf_dic.pop('with_df', None)
-    if remove_df:
-        mf_dic.pop('with_df', None)
-
-    out.__dict__.update(mf_dic)
+    from pyscf.df.df_jk import _DFHF
+    if remove_df and isinstance(out, _DFHF):
+        raise ValueError('remove_df=True requires an out object without density fitting')
+    mf = _without_soscf(mf, remove_df)
+    out.__dict__.update(mf.__dict__)
     return out
 
 def convert_to_rhf(mf, out=None, remove_df=False):
@@ -713,11 +700,12 @@ def convert_to_rhf(mf, out=None, remove_df=False):
             This conversion is not applied by default.
 
     Returns:
-        An unrestricted SCF object
+        A restricted SCF object
     '''
     from pyscf import scf
     from pyscf import dft
     assert (isinstance(mf, scf.hf.SCF))
+    mf = _without_soscf(mf, remove_df)
 
     logger.debug(mf, 'Converting %s to RHF', mf.__class__)
 
@@ -733,12 +721,9 @@ def convert_to_rhf(mf, out=None, remove_df=False):
         assert out.istype('RHF')
         out = _update_mf_without_soscf(mf, out, remove_df)
 
-    elif (mf.istype('RHF') or
+    elif ((mf.istype('RHF') and not mf.istype('ROHF')) or
           (nelec[0] != nelec[1] and mf.istype('ROHF'))):
-        if getattr(mf, '_scf', None):
-            return _update_mf_without_soscf(mf, mf._scf.copy(), remove_df)
-        else:
-            return mf.copy()
+        return mf.copy()
 
     else:
         if nelec[0] == nelec[1]:
@@ -785,6 +770,7 @@ def convert_to_ghf(mf, out=None, remove_df=False):
     from pyscf import scf
     from pyscf import dft
     assert (isinstance(mf, scf.hf.SCF))
+    mf = _without_soscf(mf, remove_df)
 
     logger.debug(mf, 'Converting %s to GHF', mf.__class__)
 
@@ -793,10 +779,7 @@ def convert_to_ghf(mf, out=None, remove_df=False):
         out = _update_mf_without_soscf(mf, out, remove_df)
 
     elif mf.istype('GHF'):
-        if getattr(mf, '_scf', None):
-            return _update_mf_without_soscf(mf, mf._scf.copy(), remove_df)
-        else:
-            return mf.copy()
+        out = mf.copy()
 
     else:
         known_cls = {
@@ -815,6 +798,10 @@ def convert_to_ghf(mf, out=None, remove_df=False):
         }
         out = _object_without_soscf(mf, known_cls, remove_df)
 
+    if out.istype('GKS'):
+        from pyscf.dft.numint2c import NumInt2C
+        if not isinstance(out._numint, NumInt2C):
+            out._numint = NumInt2C()
     return _update_mo_to_ghf_(mf, out)
 
 def _update_mo_to_uhf_(mf, mf1):
@@ -826,16 +813,24 @@ def _update_mo_to_uhf_(mf, mf1):
         mf1.mo_coeff = mf.mo_coeff
         mf1.mo_energy = mf.mo_energy
     elif getattr(mf, 'kpts', None) is None:  # RHF/ROHF
-        mf1.mo_occ = numpy.array((mf.mo_occ>0, mf.mo_occ==2), dtype=numpy.double)
+        if mf.istype('ROHF'):
+            mf1.mo_occ = numpy.array((mf.mo_occ>0, mf.mo_occ==2), dtype=numpy.double)
+        else:
+            occ = mf.mo_occ
+            mf1.mo_occ = numpy.array((occ*.5, occ*.5))
         # ROHF orbital energies, not canonical UHF orbital energies
         mo_ea = getattr(mf.mo_energy, 'mo_ea', mf.mo_energy)
         mo_eb = getattr(mf.mo_energy, 'mo_eb', mf.mo_energy)
         mf1.mo_energy = numpy.array((mo_ea, mo_eb))
         mf1.mo_coeff = numpy.array((mf.mo_coeff, mf.mo_coeff))
     else:  # This to handle KRHF object
-        mf1.mo_occ = numpy.array([
-            [numpy.asarray(occ> 0, dtype=numpy.double) for occ in mf.mo_occ],
-            [numpy.asarray(occ==2, dtype=numpy.double) for occ in mf.mo_occ]])
+        if mf.istype('KROHF'):
+            mf1.mo_occ = numpy.array([
+                [numpy.asarray(occ> 0, dtype=numpy.double) for occ in mf.mo_occ],
+                [numpy.asarray(occ==2, dtype=numpy.double) for occ in mf.mo_occ]])
+        else:
+            occ = numpy.asarray(mf.mo_occ) * .5
+            mf1.mo_occ = numpy.array((occ, occ))
         mo_ea = getattr(mf.mo_energy, 'mo_ea', mf.mo_energy)
         mo_eb = getattr(mf.mo_energy, 'mo_eb', mf.mo_energy)
         mf1.mo_energy = numpy.array((mo_ea, mo_eb))
@@ -870,16 +865,24 @@ def _update_mo_to_ghf_(mf, mf1):
 
     if mf.istype('KSCF'):
         raise NotImplementedError('KSCF')
+    elif mf.istype('GHF'):
+        return mf1
     elif mf.istype('RHF'):
         nao, nmo = mf.mo_coeff.shape
-        orbspin = get_ghf_orbspin(mf.mo_energy, mf.mo_occ, True)
+        if mf.istype('ROHF'):
+            mo_occa = mf.mo_occ > 0
+            mo_occb = mf.mo_occ == 2
+            orbspin = get_ghf_orbspin(mf.mo_energy, mf.mo_occ, True)
+        else:
+            mo_occa = mo_occb = mf.mo_occ * .5
+            orbspin = numpy.tile(numpy.array([0, 1]), nmo)
 
         mf1.mo_energy = numpy.empty(nmo*2)
         mf1.mo_energy[orbspin==0] = mf.mo_energy
         mf1.mo_energy[orbspin==1] = mf.mo_energy
         mf1.mo_occ = numpy.empty(nmo*2)
-        mf1.mo_occ[orbspin==0] = mf.mo_occ > 0
-        mf1.mo_occ[orbspin==1] = mf.mo_occ == 2
+        mf1.mo_occ[orbspin==0] = mo_occa
+        mf1.mo_occ[orbspin==1] = mo_occb
 
         mo_coeff = numpy.zeros((nao*2,nmo*2), dtype=mf.mo_coeff.dtype)
         mo_coeff[:nao,orbspin==0] = mf.mo_coeff

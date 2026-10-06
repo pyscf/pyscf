@@ -212,7 +212,7 @@ def _unpack_sigma_vector(packed, deriv1=None, deriv2=None):
     #   J[2,nabla rhoa] = 0
     #   J[2,nabla rhob] = 2 * nabla rhob
     if len(packed) > 5:
-        raise RuntimeError("{} {}".format(len(packed), [p.shape for p in packed[:5]]))
+        raise RuntimeError(f"{len(packed)} {[p.shape for p in packed[:5]]}")
     ncol1 = 1
     if deriv1 is not None and len(packed) > 2:
         ncol1 += deriv1.shape[0]
@@ -375,7 +375,7 @@ def _jT_f_j(frr, jT_op, *args, **kwargs):
     r''' Apply a jacobian function taking *args to the lower-triangular
     second-derivative array frr'''
     nel = len(frr)
-    nr = int(round(np.sqrt(1 + 8 * nel) - 1)) // 2
+    nr = round(np.sqrt(1 + 8 * nel) - 1) // 2
     rec = kwargs.get('rec', None)
     ngrids = frr[0].shape[-1]
 

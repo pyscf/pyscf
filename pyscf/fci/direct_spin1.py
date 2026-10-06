@@ -582,7 +582,7 @@ def _get_init_guess(na, nb, nroots, hdiag, nelec):
         else:
             addrs = numpy.argpartition(hdiag, nroots-1)[:nroots]
         for addr in addrs:
-            x = numpy.zeros((na*nb))
+            x = numpy.zeros(na*nb)
             x[addr] = 1
             ci0.append(x.view(FCIvector))
 
@@ -1071,7 +1071,7 @@ class FCIBase(lib.StreamObject):
         nelec = _unpack_nelec(nelec, self.spin)
         return addons.large_ci(fcivec, norb, nelec, tol, return_strs)
 
-    def contract_ss(self, fcivec, norb, nelec):  # noqa: F811
+    def contract_ss(self, fcivec, norb, nelec):
         nelec = _unpack_nelec(nelec, self.spin)
         return contract_ss(fcivec, norb, nelec)
 

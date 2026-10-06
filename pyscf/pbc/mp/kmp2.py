@@ -416,10 +416,11 @@ def get_nocc(mp, per_kpoint=False):
     '''
     for i, moocc in enumerate(mp.mo_occ):
         if np.any(moocc % 1 != 0):
-            raise RuntimeError("Fractional occupation numbers encountered @ kp={:d}: {}. This may have been caused by "
-                               "smearing of occupation numbers in the mean-field calculation. If so, consider "
-                               "executing mf.smearing_method = False; mf.mo_occ = mf.get_occ() prior to calling "
-                               "this".format(i, moocc))
+            raise RuntimeError(
+                f"Fractional occupation numbers encountered @ kp={i:d}: {moocc}. "
+                "This may have been caused by smearing of occupation numbers in the mean-field "
+                "calculation. If so, consider executing mf.smearing_method = False; "
+                "mf.mo_occ = mf.get_occ() prior to calling this")
     if mp._nocc is not None:
         return mp._nocc
     elif mp.frozen is None:
@@ -538,6 +539,10 @@ def get_frozen_mask(mp):
 
     '''
     moidx = [np.ones(x.size, dtype=bool) for x in mp.mo_occ]
+    if getattr(mp, 'mo_energy', None) is not None:
+        from pyscf.pbc.scf.hf import INVALID_ORBITAL_ENERGY
+        for k, idx in enumerate(moidx):
+            idx[np.asarray(mp.mo_energy[k]) == INVALID_ORBITAL_ENERGY] = False
     if mp.frozen is None:
         pass
     elif isinstance(mp.frozen, (int, np.integer)):

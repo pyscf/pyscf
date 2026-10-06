@@ -39,4 +39,3 @@ class Gradients (dfsacasscf_grad.Gradients, lpdft_grad.Gradients):
     get_init_guess = lpdft_grad.Gradients.get_init_guess
     get_otp_gradient_response = lpdft_grad.Gradients.get_otp_gradient_response
     get_Aop_Adiag = lpdft_grad.Gradients.get_Aop_Adiag
-

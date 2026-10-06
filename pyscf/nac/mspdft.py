@@ -84,7 +84,7 @@ class NonAdiabaticCouplings (mspdft_grad.Gradients):
         g_model -= g_model.T
         g_model *= self.base.e_states[bra]-self.base.e_states[ket]
         g_model = g_model[np.tril_indices (nroots, k=-1)]
-        log.debug ("NACs g_is additional component:\n{}".format (g_model))
+        log.debug (f"NACs g_is additional component:\n{g_model}")
         return self.pack_uniq_var (g_orb, g_ci, g_is+g_model)
 
     def get_ham_response (self, **kwargs):
@@ -94,7 +94,7 @@ class NonAdiabaticCouplings (mspdft_grad.Gradients):
             verbose = kwargs.get ('verbose', self.verbose)
             log = lib.logger.new_logger (self, verbose)
             nac_model = self.nac_model (**kwargs)
-            log.info ('NACs model-state contribution:\n{}'.format (nac_model))
+            log.info (f'NACs model-state contribution:\n{nac_model}')
             nac += nac_model
         return nac
 

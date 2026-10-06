@@ -284,6 +284,13 @@ class KnownValues(unittest.TestCase):
         es_water = mf.TDA(equilibrium_solvation=False).kernel(nstates=5)[0]
         self.assertTrue(abs(es - es_water).max() > 1e-5)
 
+    def test_eps_optical_from_solvent_name(self):
+        # issue #3413. The solvent name determines eps and eps_optical
+        mf = self.mf.mol.RHF().PCM('toluene')
+        self.assertAlmostEqual(mf.with_solvent.eps, 2.3741, 12)
+        td = mf.TDA(equilibrium_solvation=False)
+        self.assertAlmostEqual(td.with_solvent.eps, 1.4961**2, 12)
+
     def test_eps_optical_equilibrium_solvation(self):
         # Equilibrium solvation is governed by the static eps
         mf = self.mf

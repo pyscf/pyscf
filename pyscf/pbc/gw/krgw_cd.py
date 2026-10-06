@@ -143,10 +143,8 @@ def get_sigma_diag(gw, ep, kp, p, Wmn, Del_00, Del_P0, freqs, wts, qij, q_abs):
     homo = -99.
     lumo = 99.
     for k in range(nkpts):
-        if homo < gw._scf.mo_energy[k][nocc-1]:
-            homo = gw._scf.mo_energy[k][nocc-1]
-        if lumo > gw._scf.mo_energy[k][nocc]:
-            lumo = gw._scf.mo_energy[k][nocc]
+        homo = max(homo, gw._scf.mo_energy[k][nocc-1])
+        lumo = min(lumo, gw._scf.mo_energy[k][nocc])
     ef = (homo+lumo)/2.
 
     nmo = gw.nmo

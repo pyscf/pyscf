@@ -524,7 +524,7 @@ def matvec(adc, M_ij=None, eris=None):
         cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(adc.stdout, adc.verbose)
 
-        s = np.zeros((dim))
+        s = np.zeros(dim)
 
         r_a = r[s_a:f_a]
         r_b = r[s_b:f_b]
@@ -730,12 +730,12 @@ def matvec(adc, M_ij=None, eris=None):
             t2_1_a = adc.t2[0][0][:]
             t2_1_ab = adc.t2[0][1][:]
 
-            temp_singles = np.zeros((nocc_a))
+            temp_singles = np.zeros(nocc_a)
             temp_doubles = np.zeros((nvir_a, nvir_a, nvir_a))
             r_aaa = r_aaa.reshape(nvir_a,-1)
             t2_1_a_t = t2_1_a[ij_ind_a[0],ij_ind_a[1],:,:]
             temp_1 = lib.einsum('pbc,ap->abc',t2_1_a_t,r_aaa, optimize=True)
-            if isinstance(eris.ovvv, type(None)):
+            if eris.ovvv is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
                 for a,b in lib.prange(0,nocc_a,chnk_size):
                     eris_ovvv = dfadc.get_ovvv_spin_df(
@@ -803,12 +803,12 @@ def matvec(adc, M_ij=None, eris=None):
 
             t2_1_b = adc.t2[0][2][:]
 
-            temp_singles = np.zeros((nocc_b))
+            temp_singles = np.zeros(nocc_b)
             temp_doubles = np.zeros((nvir_b, nvir_b, nvir_b))
             r_bbb = r_bbb.reshape(nvir_b,-1)
             t2_1_b_t = t2_1_b[ij_ind_b[0],ij_ind_b[1],:,:]
             temp_1 = lib.einsum('pbc,ap->abc',t2_1_b_t,r_bbb, optimize=True)
-            if isinstance(eris.OVVV, type(None)):
+            if eris.OVVV is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
                 a = 0
                 for a,b in lib.prange(0,nocc_b,chnk_size):
@@ -877,7 +877,7 @@ def matvec(adc, M_ij=None, eris=None):
 
             temp_1 = lib.einsum('kjcb,ajk->abc',t2_1_ab,r_bab, optimize=True)
             temp_2 = np.zeros((nvir_a, nvir_b, nvir_b))
-            if isinstance(eris.ovVV, type(None)):
+            if eris.ovVV is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
                 for a,b in lib.prange(0,nocc_a,chnk_size):
                     eris_ovVV = dfadc.get_ovvv_spin_df(
@@ -899,7 +899,7 @@ def matvec(adc, M_ij=None, eris=None):
 
             temp_1 = lib.einsum('jkbc,ajk->abc',t2_1_ab,r_aba, optimize=True)
             temp_2 = np.zeros((nvir_a, nvir_b, nvir_a))
-            if isinstance(eris.OVvv, type(None)):
+            if eris.OVvv is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
                 a = 0
                 for a,b in lib.prange(0,nocc_b,chnk_size):
@@ -1072,14 +1072,14 @@ def get_trans_moments_orbital(adc, orb, spin="alpha"):
     s_bbb = f_aba
     f_bbb = s_bbb + n_doubles_bbb
 
-    T = np.zeros((dim))
+    T = np.zeros(dim)
 
 ######## spin = alpha  ############################################
 
     if spin == "alpha":
-        pass  # placeholder to mute flake8 warning
+        # placeholder to mute flake8 warning
 
-######## ADC(2) 1h part  ############################################
+        ######## ADC(2) 1h part  ############################################
 
         t2_1_a = adc.t2[0][0][:]
         t2_1_ab = adc.t2[0][1][:]
@@ -1160,9 +1160,9 @@ def get_trans_moments_orbital(adc, orb, spin="alpha"):
 ######## spin = beta  ############################################
 
     else:
-        pass  # placeholder
+        # placeholder
 
-######## ADC(2) 1h part  ############################################
+        ######## ADC(2) 1h part  ############################################
 
         t2_1_b = adc.t2[0][2][:]
         t2_1_ab = adc.t2[0][1][:]
@@ -2097,7 +2097,7 @@ class UADCIP(uadc.UADC):
         'tol_residual','conv_tol', 'e_corr', 'method',
         'method_type', 'mo_coeff', 'mo_energy_b', 'max_memory',
         't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle',
-        'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b', 'mo_coeff', 'mo_coeff_hf',
+        'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b', 'mo_coeff_hf',
         'nmo_a', 'nmo_b', 'mol', 'transform_integrals',
         'with_df', 'spec_factor_print_tol', 'evec_print_tol',
         'compute_properties', 'approx_trans_moments', 'E', 'U', 'P', 'X',

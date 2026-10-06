@@ -405,10 +405,10 @@ def _update_vk_(vk, Gpq, dms, wcoulG, kpti_idx, kptj_idx, swap_2e,
     dmsR, dmsI = dms
     nG = len(wcoulG)
     n_dm, nkpts, nao = vkR.shape[:3]
-    bufR = np.empty((nG*nao**2))
-    bufI = np.empty((nG*nao**2))
-    buf1R = np.empty((nG*nao**2))
-    buf1I = np.empty((nG*nao**2))
+    bufR = np.empty(nG*nao**2)
+    bufI = np.empty(nG*nao**2)
+    buf1R = np.empty(nG*nao**2)
+    buf1I = np.empty(nG*nao**2)
     iLkR = np.ndarray((nao,nG,nao), buffer=buf1R)
     iLkI = np.ndarray((nao,nG,nao), buffer=buf1I)
 
@@ -496,10 +496,10 @@ def _update_vk_dmf(vk, Gpq, dmf, wcoulG, kpti_idx, kptj_idx, swap_2e,
     dmfR, dmfI = dmf
     nG = len(wcoulG)
     n_dm, nkpts, nao, nocc = dmfR.shape
-    bufR = np.empty((nG*nao**2))
-    bufI = np.empty((nG*nao**2))
-    bufR1 = np.empty((nG*nao*nocc))
-    bufI1 = np.empty((nG*nao*nocc))
+    bufR = np.empty(nG*nao**2)
+    bufI = np.empty(nG*nao**2)
+    bufR1 = np.empty(nG*nao*nocc)
+    bufI1 = np.empty(nG*nao*nocc)
 
     for k, (ki, kj) in enumerate(zip(kpti_idx, kptj_idx)):
         # case 1: k_pq = (pi|iq)

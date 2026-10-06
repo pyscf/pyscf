@@ -321,7 +321,7 @@ def matvec(adc, M_ij=None, eris=None):
         cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(adc.stdout, adc.verbose)
 
-        s = np.zeros((dim))
+        s = np.zeros(dim)
 
         r1 = r[s1:f1]
         r2 = r[s2:f2]
@@ -385,10 +385,10 @@ def matvec(adc, M_ij=None, eris=None):
 
             temp_1 = lib.einsum('kjcb,ajk->abc',t2_1,r2, optimize=True)
 
-            temp_singles = np.zeros((nocc))
+            temp_singles = np.zeros(nocc)
             temp_doubles = np.zeros((nvir,nvir,nvir))
 
-            if isinstance(eris.ovvv, type(None)):
+            if eris.ovvv is None:
                 chnk_size = radc_ao2mo.calculate_chunk_size(adc)
                 for a,b in lib.prange(0,nocc,chnk_size):
                     eris_ovvv = dfadc.get_ovvv_df(
@@ -527,7 +527,7 @@ def get_trans_moments_orbital(adc, orb):
     s2 = f1
     f2 = s2 + n_doubles
 
-    T = np.zeros((dim))
+    T = np.zeros(dim)
 
 ######## ADC(2) 1h part  ############################################
     if orb < nocc:
@@ -1358,7 +1358,7 @@ class RADCIP(radc.RADC):
         'max_space', 't2', 'max_cycle',
         'nmo', 'transform_integrals', 'with_df', 'compute_properties',
         'approx_trans_moments', 'E', 'U', 'P', 'X',
-        'evec_print_tol', 'spec_factor_print_tol', 'frozen'
+        'evec_print_tol', 'spec_factor_print_tol', 'frozen',
         '_make_rdm1', 'mo_occ'
     }
 

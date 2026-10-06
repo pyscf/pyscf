@@ -6,7 +6,7 @@ distribution at 300K. Run an NVE BOMD simulation using this initial velocity.
 '''
 
 import pyscf
-import pyscf.md as md
+from pyscf import md
 
 # Ethylene molecule
 mol = pyscf.M(verbose=3,

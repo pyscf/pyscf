@@ -1156,7 +1156,7 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
             logger.note(self, 'SCF not converged.')
             logger.note(self, 'SCF energy = %.15g after %d cycles  '
                         '<S^2> = %.8g  2S+1 = %.8g',
-                        self.e_tot, self.max_cycle, ss, s)
+                        self.e_tot, self.cycles, ss, s)
         return self
 
     def convert_from_(self, mf):

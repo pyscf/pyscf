@@ -88,6 +88,31 @@ class KnownValues(unittest.TestCase):
         g1 = mol.RKS(xc='wb97').density_fit().run().nuc_grad_method().kernel()
         self.assertAlmostEqual(abs(gref - g1).max(), 0, 4)
 
+    def test_rsh_get_k_in_range_coulomb_context(self):
+        # issue #3434: omega set on mol has to reach the metric (P|Q) as well
+        # as the 3-center integrals (P|uv)
+        omega = 0.3
+        mf = scf.RHF(mol).density_fit().run()
+        g = mf.nuc_grad_method()
+        dm = mf.make_rdm1()
+        kref = g.get_k(mol, dm, omega=omega)
+        with mol.with_range_coulomb(omega):
+            k1 = g.get_k(mol, dm)
+        self.assertAlmostEqual(abs(kref - k1).max(), 0, 9)
+        self.assertAlmostEqual(abs(kref.aux - k1.aux).max(), 0, 9)
+
+    def test_rsh_get_j(self):
+        # the long-range metric (P|Q) is too ill-conditioned for a
+        # positive-definite solve
+        omega = 0.3
+        mf = scf.RHF(mol).density_fit().run()
+        g = mf.nuc_grad_method()
+        dm = mf.make_rdm1()
+        jref = g.get_jk(mol, dm, with_k=False, omega=omega)[0]
+        j1 = g.get_j(mol, dm, omega=omega)
+        self.assertAlmostEqual(abs(jref - j1).max(), 0, 9)
+        self.assertAlmostEqual(abs(jref.aux - j1.aux).max(), 0, 9)
+
     def test_rks_mgga_grad(self):
         gref = mol.RKS(xc='m06').run().nuc_grad_method().kernel()
         g1 = mol.RKS(xc='m06').density_fit().run().nuc_grad_method().kernel()

@@ -191,8 +191,7 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
             # MRH: I still don't understand why there is a minus here!
             de_eri[k] -= np.einsum('xijw,ijw->x', eri1, dm2_ao) * 2
             eri1 = dm2_ao = None
-            t0 = logger.timer (mc, 'SA-CASSCF Lorb_dot_dgorb atom {} ({},{}|{})'.format (ia, p1-p0,
-                               nf, nao_pair), *t0)
+            t0 = logger.timer (mc, f'SA-CASSCF Lorb_dot_dgorb atom {ia} ({p1-p0},{nf}|{nao_pair})', *t0)
         # MRH: core-core and core-active 2RDM terms
         de_eri[k] += np.einsum('xij,ij->x', vhf1c[:,p0:p1], dm1L[p0:p1]) * 2
         de_eri[k] += np.einsum('xij,ij->x', vhf1cL[:,p0:p1], dm1[p0:p1]) * 2
@@ -206,9 +205,9 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
     # on the other hand, mf_grad.hcore_generator computes the actual derivative of
     # h1 for both indices and with the correct sign
 
-    logger.debug (mc, "Orb lagrange hcore component:\n{}".format (de_hcore))
-    logger.debug (mc, "Orb lagrange renorm component:\n{}".format (de_renorm))
-    logger.debug (mc, "Orb lagrange eri component:\n{}".format (de_eri))
+    logger.debug (mc, f"Orb lagrange hcore component:\n{de_hcore}")
+    logger.debug (mc, f"Orb lagrange renorm component:\n{de_renorm}")
+    logger.debug (mc, f"Orb lagrange eri component:\n{de_eri}")
     de = de_hcore + de_renorm + de_eri
 
     return de
@@ -319,15 +318,14 @@ def Lci_dot_dgci_dx (Lci, weights, mc, mo_coeff=None, ci=None, atmlst=None, mf_g
                              shls_slice=shls_slice).reshape(3,p1-p0,nf,nao_pair)
             de_eri[k] -= np.einsum('xijw,ijw->x', eri1, dm2_ao) * 2
             eri1 = dm2_ao = None
-            t0 = logger.timer (mc, 'SA-CASSCF Lci_dot_dgci atom {} ({},{}|{})'.format (ia, p1-p0,
-                               nf, nao_pair), *t0)
+            t0 = logger.timer (mc, f'SA-CASSCF Lci_dot_dgci atom {ia} ({p1-p0},{nf}|{nao_pair})', *t0)
         # MRH: dm1 -> dm_cas in the line below. Also eliminate core-core terms
         de_eri[k] += np.einsum('xij,ij->x', vhf1c[:,p0:p1], dm_cas[p0:p1]) * 2
         de_eri[k] += np.einsum('xij,ij->x', vhf1a[:,p0:p1], dm_core[p0:p1]) * 2
 
-    logger.debug (mc, "CI lagrange hcore component:\n{}".format (de_hcore))
-    logger.debug (mc, "CI lagrange renorm component:\n{}".format (de_renorm))
-    logger.debug (mc, "CI lagrange eri component:\n{}".format (de_eri))
+    logger.debug (mc, f"CI lagrange hcore component:\n{de_hcore}")
+    logger.debug (mc, f"CI lagrange renorm component:\n{de_renorm}")
+    logger.debug (mc, f"CI lagrange eri component:\n{de_eri}")
     de = de_hcore + de_renorm + de_eri
     return de
 
@@ -402,10 +400,10 @@ class CASSCF_GradScanner(lib.GradScanner):
 class Gradients (lagrange.Gradients):
 
     _keys = {
-        'ngorb', 'nroots', 'spin_states', 'na_states', 'nb_states', 'nroots',
-        'nci', 'state', 'eris', 'weights', 'e_states', 'max_cycle', 'ncas',
-        'e_cas', 'nelecas', 'mo_occ', 'mo_energy', 'mo_coeff', 'callback',
-        'chkfile', 'nlag', 'frozen', 'level_shift', 'extrasym', 'fcisolver',
+        'ngorb', 'nroots', 'spin_states', 'na_states', 'nb_states', 'nci', 'state',
+        'eris', 'weights', 'e_states', 'max_cycle', 'ncas','e_cas', 'nelecas',
+        'mo_occ', 'mo_energy', 'mo_coeff', 'callback', 'chkfile', 'nlag', 'frozen',
+        'level_shift', 'extrasym', 'fcisolver',
     }
 
     def __init__(self, mc, state=None):
@@ -446,8 +444,7 @@ class Gradients (lagrange.Gradients):
             self.weights = np.asarray (mc.weights)
         if np.amax (self.weights) - np.amin (self.weights) > 1e-8:
             raise NotImplementedError ("Unequal weights in SA-CASSCF gradients")
-        assert (len (self.weights) == self.nroots), '{} {} {}'.format (
-            mc.fcisolver.__class__, self.weights, self.nroots)
+        assert (len (self.weights) == self.nroots), f'{mc.fcisolver.__class__} {self.weights} {self.nroots}'
         lagrange.Gradients.__init__(self, mc, self.ngorb+self.nci)
         self.max_cycle = mc.max_cycle_macro
 
@@ -588,7 +585,8 @@ class Gradients (lagrange.Gradients):
             self, state=state, atmlst=atmlst, verbose=verbose, mo=mo, ci=ci, eris=eris,
             mf_grad=mf_grad, e_states=e_states, level_shift=level_shift, **kwargs)
 
-    def get_wfn_response (self, atmlst=None, state=None, verbose=None, mo=None, ci=None, **kwargs):
+    def get_wfn_response (self, atmlst=None, state=None, verbose=None, mo=None, ci=None,
+                          eris=None, **kwargs):
         if state is None: state = self.state
         if atmlst is None: atmlst = self.atmlst
         if verbose is None: verbose = self.verbose
@@ -598,7 +596,8 @@ class Gradients (lagrange.Gradients):
         fcasscf = self.make_fcasscf (state)
         fcasscf.mo_coeff = mo
         fcasscf.ci = ci[state]
-        eris = fcasscf.ao2mo (mo)
+        if eris is None:
+            eris = fcasscf.ao2mo (mo)
         g_all_state = newton_casscf.gen_g_hop (fcasscf, mo, ci[state], eris, verbose)[0]
         g_all = np.zeros (self.nlag)
         g_all[:self.ngorb] = g_all_state[:self.ngorb]
@@ -641,7 +640,8 @@ class Gradients (lagrange.Gradients):
         fcasscf_grad = casscf_grad.Gradients (self.make_fcasscf (state))
         # Mute some misleading messages
         fcasscf_grad._finalize = lambda: None
-        return fcasscf_grad.kernel (mo_coeff=mo, ci=ci[state], atmlst=atmlst, verbose=verbose)
+        return fcasscf_grad.kernel (mo_coeff=mo, ci=ci[state], atmlst=atmlst,
+                                    verbose=verbose, eris=eris)
 
     def get_LdotJnuc (self, Lvec, state=None, atmlst=None, verbose=None, mo=None, ci=None,
                       eris=None, mf_grad=None, **kwargs):
@@ -670,8 +670,7 @@ class Gradients (lagrange.Gradients):
                      self.base.__class__.__name__)
         if verbose >= logger.INFO: rhf_grad._write(self, self.mol, de_Lci, atmlst)
         logger.info (self, '----------------------------------------------------------------')
-        t0 = logger.timer (self, '{} gradient Lagrange CI response'.format (
-            self.base.__class__.__name__), *t0)
+        t0 = logger.timer (self, f'{self.base.__class__.__name__} gradient Lagrange CI response', *t0)
 
         # Orb part
         de_Lorb = Lorb_dot_dgorb_dx(Lorb, self.base, mo_coeff=mo, ci=ci,
@@ -680,8 +679,7 @@ class Gradients (lagrange.Gradients):
                      self.base.__class__.__name__)
         if verbose >= logger.INFO: rhf_grad._write(self, self.mol, de_Lorb, atmlst)
         logger.info (self, '---------------------------------------------------------------------')
-        t0 = logger.timer (self, '{} gradient Lagrange orbital response'.format (
-            self.base.__class__.__name__), *t0)
+        t0 = logger.timer (self, f'{self.base.__class__.__name__} gradient Lagrange orbital response', *t0)
 
         return de_Lci + de_Lorb
 
@@ -703,18 +701,15 @@ class Gradients (lagrange.Gradients):
             xci_multip = [np.sqrt (x+.25) - .5 for x in xci_ss]
             for ix, (norm, ss, multip) in enumerate (zip (xci_norm, xci_ss, xci_multip)):
                 logger.debug (self,
-                              ' State {} {} norm = {:.7e} ; <S^2> = {:.7f} ; 2S+1 = {:.7f}'.format(
-                                  ix, label, norm, ss, multip))
+                              f' State {ix} {label} norm = {norm:.7e} ; <S^2> = {ss:.7f} ; 2S+1 = {multip:.7f}')
         borb, bci = self.unpack_uniq_var (bvec)
-        logger.debug (self, 'Orbital rotation gradient norm = {:.7e}'.format (linalg.norm (borb)))
+        logger.debug (self, f'Orbital rotation gradient norm = {linalg.norm (borb):.7e}')
         _debug_cispace (bci, 'CI gradient')
         Aorb, Aci = self.unpack_uniq_var (Adiag)
-        logger.debug (self, 'Orbital rotation Hamiltonian diagonal norm = {:.7e}'.format (
-            linalg.norm (Aorb)))
+        logger.debug (self, f'Orbital rotation Hamiltonian diagonal norm = {linalg.norm (Aorb):.7e}')
         _debug_cispace (Aci, 'Hamiltonian diagonal')
         Lorb, Lci = self.unpack_uniq_var (Lvec)
-        logger.debug (self, 'Orbital rotation Lagrange vector norm = {:.7e}'.format (
-            linalg.norm (Lorb)))
+        logger.debug (self, f'Orbital rotation Lagrange vector norm = {linalg.norm (Lorb):.7e}')
         _debug_cispace (Lci, 'Lagrange vector')
 
     def get_lagrange_precond (self, Adiag, level_shift=None, ci=None, **kwargs):
@@ -731,10 +726,9 @@ class Gradients (lagrange.Gradients):
             deltaorb, deltaci = self.unpack_uniq_var (deltax)
             gci = np.concatenate ([g.ravel () for g in gci])
             deltaci = np.concatenate ([d.ravel () for d in deltaci])
-            logger.info(self, ('Lagrange optimization iteration {}, |gorb| = {}, |gci| = {}, '
-                               '|dLorb| = {}, |dLci| = {}').format (
-                                   itvec[0], linalg.norm (gorb), linalg.norm (gci),
-                                   linalg.norm (deltaorb), linalg.norm (deltaci)))
+            logger.info(self, (f'Lagrange optimization iteration {itvec[0]}, \
+                               |gorb| = {linalg.norm (gorb)}, |gci| = {linalg.norm (gci)}, '
+                               f'|dLorb| = {linalg.norm (deltaorb)}, |dLci| = {linalg.norm (deltaci)}'))
             Lvec_last[:] = x[:]
         return my_call
 
