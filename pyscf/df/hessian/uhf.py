@@ -77,6 +77,9 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     auxmol = with_df.auxmol
     if auxmol is None:
         auxmol = df.addons.make_auxmol(with_df.mol, with_df.auxbasis)
+    if auxmol.omega != mol.omega:
+        auxmol = auxmol.copy()
+        auxmol.omega = mol.omega
     naux = auxmol.nao
     nbas = mol.nbas
     auxslices = auxmol.aoslice_by_atom()
@@ -417,6 +420,9 @@ def _gen_jk(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None,
     auxmol = with_df.auxmol
     if auxmol is None:
         auxmol = df.addons.make_auxmol(with_df.mol, with_df.auxbasis)
+    if auxmol.omega != mol.omega:
+        auxmol = auxmol.copy()
+        auxmol.omega = mol.omega
     nbas = mol.nbas
     auxslices = auxmol.aoslice_by_atom()
     aux_loc = auxmol.ao_loc
