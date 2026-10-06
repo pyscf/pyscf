@@ -331,13 +331,15 @@ class Cube:
                 from pyscf.pbc.gto import Cell
                 d = data.split()
                 nx = int(d[0])
-                x_vec = numpy.array([float(x) for x in d[1:]]) * nx
+                x_vec = numpy.array([float(x) for x in d[1:]])
                 if isinstance(self.mol, Cell):
                     # Use an asymmetric mesh for tiling unit cells
+                    x_vec *= nx
                     xs = numpy.linspace(0, 1, nx, endpoint=False)
                 else:
                     # Use endpoint=True to get a symmetric mesh
                     # see also the discussion https://github.com/sunqm/pyscf/issues/154
+                    x_vec *= nx - 1
                     xs = numpy.linspace(0, 1, nx, endpoint=True)
                 return x_vec, nx, xs
             self.box = numpy.zeros((3,3))
