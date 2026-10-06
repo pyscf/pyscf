@@ -61,6 +61,12 @@ review or validation gaps.
 - Normal computation follows established assumptions. Unless targeting special
   systems, trivial checks and speculative handling of extreme corner cases can
   be skipped.
+- For complex-valued orbitals or wavefunction coefficients, derive the required
+  conjugation from the bra/ket definitions and tensor index conventions. Pay
+  particular attention to formulas inherited from real-valued methods, where
+  missing conjugation is invisible.
+- Check that contractions, tensor symmetries, and intermediate dtypes preserve
+  the intended complex-valued expressions.
 
 ## Performance
 
