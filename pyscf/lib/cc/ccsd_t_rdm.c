@@ -291,7 +291,7 @@ int CCsd_t_lambda_intermediates(int nocc, int nvir, const double *mo_energy,
         double *rb = (jo_a == NULL) ? NULL : jo_a + (size_t)noo * nvir;                          /* [i][j] for the current b */
         double *g = (jo_a == NULL) ? NULL : rb + noo;                                            /* ovov[j,b,k,c] as [j][k] */
         double *l1_a = (jo_a == NULL) ? NULL : g + noo;
-        int a, b, c, e, m;
+        int a, b, c, e, m, i, j, k;
         size_t nn;
 
         if (w == NULL || jo_a == NULL) {
