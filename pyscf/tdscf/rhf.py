@@ -317,6 +317,8 @@ def get_nto(tdobj, state=1, threshold=OUTPUT_THRESHOLD, verbose=None):
         basis. The first N_occ NTOs are occupied NTOs and the rest are virtual
         NTOs.
     '''
+    assert not numpy.iscomplexobj(tdobj.xy[0][0])
+
     if state == 0:
         logger.warn(tdobj, 'Excited state starts from 1. '
                     'Set state=1 for first excited state.')
@@ -418,6 +420,7 @@ def get_nto(tdobj, state=1, threshold=OUTPUT_THRESHOLD, verbose=None):
 
 
 def analyze(tdobj, verbose=None):
+    assert not numpy.iscomplexobj(tdobj.xy[0][0])
     log = logger.new_logger(tdobj, verbose)
     mol = tdobj.mol
     mask = tdobj.get_frozen_mask()
@@ -631,6 +634,7 @@ def _charge_center(mol):
 def _contract_multipole(tdobj, ints, hermi=True, xy=None):
     '''ints is the integral tensor of a spin-independent operator'''
     if xy is None: xy = tdobj.xy
+    assert not numpy.iscomplexobj(tdobj.xy[0][0])
     nstates = len(xy)
     pol_shape = ints.shape[:-2]
     nao = ints.shape[-1]
@@ -677,7 +681,7 @@ def oscillator_strength(tdobj, e=None, xy=None, gauge='length', order=0):
 
             quad = .5 * transition_velocity_quadrupole(tdobj, xy)
             f_quad = numpy.einsum('s,sxy,sxy->s', e, quad.conj(), quad)
-            f_quad-= 1./3 * numpy.einsum('s,sxx,sxx->s', e, quad, quad)
+            f_quad-= 1./3 * numpy.einsum('s,sxx,sxx->s', e, quad.conj(), quad)
             f_quad = nist.ALPHA**2/20 * f_quad.real
             f += f_quad
             logger.debug(tdobj, '    First order correction to oscillator '

@@ -412,8 +412,9 @@ def get_nto(tdobj, state=1, threshold=OUTPUT_THRESHOLD, verbose=None):
 
     cis_t1 = tdobj.xy[state_id][0]
     cis_t1 = cis_t1 / numpy.linalg.norm(cis_t1)
-    nto_o, w, nto_vT = numpy.linalg.svd(cis_t1)
-    nto_v = nto_vT.conj().T
+    # AO transition density is Cv @ X.T @ Co.conj().T.
+    nto_v, w, nto_oT = numpy.linalg.svd(cis_t1.T)
+    nto_o = nto_oT.conj().T
     weights = w**2
 
     def _set_phase_(c):
@@ -496,7 +497,7 @@ def analyze(tdobj, verbose=None):
             for i, ei in enumerate(tdobj.e):
                 v = trans_v[i].real
                 log.info('%3d    %11.4f %11.4f %11.4f %11.4f %11.4f',
-                         i+1, v[0], v[1], v[2], numpy.dot(v, v), f_v[i])
+                         i+1, v[0], v[1], v[2], numpy.vdot(trans_v[i], trans_v[i]).real, f_v[i])
 
             log.info('\n** Transition magnetic dipole moments (imaginary part, AU) **')
             log.info('state          X           Y           Z')
