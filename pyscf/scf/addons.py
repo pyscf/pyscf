@@ -700,7 +700,7 @@ def convert_to_rhf(mf, out=None, remove_df=False):
             This conversion is not applied by default.
 
     Returns:
-        An unrestricted SCF object
+        A restricted SCF object
     '''
     from pyscf import scf
     from pyscf import dft
