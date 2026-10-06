@@ -661,22 +661,22 @@ def oscillator_strength(tdobj, e=None, xy=None, gauge='length', order=0):
 
     if gauge == 'length':
         trans_dip = transition_dipole(tdobj, xy)
-        f = 2./3. * numpy.einsum('s,sx,sx->s', e, trans_dip, trans_dip)
+        f = 2./3. * numpy.einsum('s,sx,sx->s', e, trans_dip.conj(), trans_dip).real
         return f
 
     else:  # velocity gauge
         # Ref. JCP, 143, 234103
         trans_dip = transition_velocity_dipole(tdobj, xy)
-        f = 2./3. * numpy.einsum('s,sx,sx->s', 1./e, trans_dip, trans_dip)
+        f = 2./3. * numpy.einsum('s,sx,sx->s', 1./e, trans_dip.conj(), trans_dip).real
 
         if order > 0:
             m_dip = .5 * transition_magnetic_dipole(tdobj, xy)
-            f_m = numpy.einsum('s,sx,sx->s', e, m_dip, m_dip)
+            f_m = numpy.einsum('s,sx,sx->s', e, m_dip.conj(), m_dip)
             f_m = nist.ALPHA**2/6 * f_m.real
             f += f_m
 
             quad = .5 * transition_velocity_quadrupole(tdobj, xy)
-            f_quad = numpy.einsum('s,sxy,sxy->s', e, quad, quad)
+            f_quad = numpy.einsum('s,sxy,sxy->s', e, quad.conj(), quad)
             f_quad-= 1./3 * numpy.einsum('s,sxx,sxx->s', e, quad, quad)
             f_quad = nist.ALPHA**2/20 * f_quad.real
             f += f_quad
@@ -686,13 +686,13 @@ def oscillator_strength(tdobj, e=None, xy=None, gauge='length', order=0):
 
         if order > 1:
             m_quad = -1./6 * 1j*transition_magnetic_quadrupole(tdobj, xy)
-            f_m = numpy.einsum('s,sy,szx,xyz->s', e, trans_dip*1j, m_quad,
+            f_m = numpy.einsum('s,sy,szx,xyz->s', e, trans_dip.conj()*1j, m_quad,
                                lib.LeviCivita)
             f_m = nist.ALPHA**3/9 * f_m.real
             f += f_m
 
             o_pol = -1./6 * 1j*transition_velocity_octupole(tdobj, xy)
-            f_o = numpy.einsum('s,sy,sxxy->s', e, trans_dip*1j, o_pol)
+            f_o = numpy.einsum('s,sy,sxxy->s', e, trans_dip.conj()*1j, o_pol)
             f_o = -2*nist.ALPHA**2/45 * f_o.real
             f += f_o
             logger.debug(tdobj, '    Second order correction to oscillator '
