@@ -1100,6 +1100,7 @@ def eomee_ccsd_singlet(eom, nroots=1, koopmans=False, guess=None,
             Whether to solve for the left eigenvectors instead of the right
             ones.
     '''
+    eom.v_left = None
     eom.converged, eom.e, eom.v \
             = kernel(eom, nroots, koopmans, guess, left=left, eris=eris,
                      imds=imds, diag=diag)
