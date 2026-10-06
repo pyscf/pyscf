@@ -47,7 +47,3 @@ Reusable guidance for PySCF development. Paths below are relative to the reposit
   drafting.
 - Do not create pull requests against the upstream repository unless explicitly
   asked.
-
-## Skills
-
-- When a task explicitly selects a skill, read the corresponding template in `agent-recipes/skills/` or the user's customized version before applying it.
