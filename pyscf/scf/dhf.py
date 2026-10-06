@@ -213,7 +213,7 @@ def get_hcore(mol):
     h1e[n2c:,n2c:] = wn * (.25/c**2) - t
     return h1e
 
-def get_ovlp(mol):
+def get_ovlp(mol, offdiagonal = False):
     n2c = mol.nao_2c()
     n4c = n2c * 2
     c = lib.param.LIGHT_SPEED
@@ -223,6 +223,10 @@ def get_ovlp(mol):
     s1e = numpy.zeros((n4c, n4c), numpy.complex128)
     s1e[:n2c,:n2c] = s
     s1e[n2c:,n2c:] = t * (.5/c)**2
+    if offdiagonal:
+        u = mol.intor_symmetric("int1e_sp_spinor")
+        s1e[:n2c, n2c:] = u * (0.5 / c)
+        s1e[n2c:, :n2c] = u.conj().T * (0.5 / c)
     return s1e
 
 make_rdm1 = hf.make_rdm1
