@@ -62,6 +62,23 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(eref - e1).max(), 0, 9)
         self.assertAlmostEqual(abs(h1ref - h1).max(), 0, 9)
 
+    def test_uhf_hess_in_range_coulomb_context(self):
+        omega = 0.3
+        mol1 = mol.copy()
+        mol1.charge = 1
+        mol1.spin = 1
+        mol1.build()
+        mf = scf.UHF(mol1).density_fit().run()
+        hobj = mf.Hessian()
+        with mf.with_df.range_coulomb(omega):
+            eref = hobj.partial_hess_elec()
+            h1ref = numpy.asarray(hobj.make_h1(mf.mo_coeff, mf.mo_occ))
+        with mol1.with_range_coulomb(omega):
+            e1 = hobj.partial_hess_elec()
+            h1 = numpy.asarray(hobj.make_h1(mf.mo_coeff, mf.mo_occ))
+        self.assertAlmostEqual(abs(eref - e1).max(), 0, 9)
+        self.assertAlmostEqual(abs(h1ref - h1).max(), 0, 9)
+
     def test_rks_lda_hess(self):
         href = mol.RKS.run(xc='lda,vwn').Hessian().kernel()
         df_h = mol.RKS.density_fit().run(xc='lda,vwn').Hessian()
