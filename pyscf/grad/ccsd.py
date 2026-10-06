@@ -426,6 +426,7 @@ def _cp(a):
     return numpy.asarray(a, order='C')
 
 class Gradients(rhf_grad.GradientsBase):
+    _keys = {'rdm1_relaxed'}
 
     grad_elec = grad_elec
 
