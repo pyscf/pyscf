@@ -402,8 +402,9 @@ def _gen_dhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
     '''Generate a function to compute the product of DHF response function and
     DHF density matrices.
     '''
-    return _gen_ghf_response(mf, mo_coeff, mo_occ, with_j, hermi, max_memory,
-                             with_nlc, grids)
+    return _gen_ghf_response(mf, mo_coeff, mo_occ, dm0=dm0, with_j=with_j,
+                             hermi=hermi, max_memory=max_memory,
+                             with_nlc=with_nlc, grids=grids)
 
 
 hf.RHF.gen_response = _gen_rhf_response
