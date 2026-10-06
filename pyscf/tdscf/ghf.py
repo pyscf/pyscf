@@ -518,11 +518,14 @@ def _contract_multipole(tdobj, ints, hermi=True, xy=None):
 
     # The operator acts on the alpha and the beta components of the
     # spin-orbitals alike
-    ints = (numpy.einsum('...pq,pi,qj->...ij', ints, orbo[:nao], orbv[:nao].conj()) +
-            numpy.einsum('...pq,pi,qj->...ij', ints, orbo[nao:], orbv[nao:].conj()))
-    pol = numpy.array([numpy.einsum('...ij,ij->...', ints, x) for x, y in xy])
+    ints = (numpy.einsum('...pq,pi,qa->...ia', ints, orbo[:nao].conj(), orbv[:nao]) +
+            numpy.einsum('...pq,pi,qa->...ia', ints, orbo[nao:].conj(), orbv[nao:]))
+    pol = numpy.array([numpy.einsum('...ia,ia->...', ints, x) for x, y in xy])
     if isinstance(xy[0][1], numpy.ndarray):
-        pol_y = numpy.array([numpy.einsum('...ij,ij->...', ints, y) for x, y in xy])
+        # X_ia and Y_ia have opposite phases. Transition density matrix for Y transforms
+        # as orbo * Y * orbv.conj().T
+        ints = ints.conj()
+        pol_y = numpy.array([numpy.einsum('...ia,ia->...', ints, y) for x, y in xy])
         if hermi:
             pol += pol_y
         else:  # anti-Hermitian
