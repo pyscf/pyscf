@@ -210,7 +210,7 @@ class VelGaugePPNLHelper:
         else:
             comp = 1
             intors = self.intors
-        ft_data = list(self.ft_data[intor_name] for intor_name in intors)
+        ft_data = [self.ft_data[intor_name] for intor_name in intors]
 
         # Normally you only need one point in reciprocal space at a time.
         # (this corresponds to one value of the vector potential A)

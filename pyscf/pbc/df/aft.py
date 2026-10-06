@@ -392,7 +392,7 @@ class _IntPPBuilder(Int3cBuilder):
 
         r0 = cell.rcut  # initial guess
         rcut = []
-        for lk, fake_cell in fake_cells.items():
+        for fake_cell in fake_cells.values():
             nuc_exps = np.hstack(fake_cell.bas_exps())
             ak_idx = nuc_exps.argmin()
             ak = nuc_exps[ak_idx]
@@ -642,6 +642,9 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
                 self._kpts.reset(cell)
             self.cell = cell
         self._rsh_df = {}
+        # _ws_exx may be attached to AFTDF by weighted_coulG() in
+        # pyscf/pbc/df/aft.py
+        self.__dict__.pop('_ws_exx', None)
         return self
 
     def check_sanity(self):

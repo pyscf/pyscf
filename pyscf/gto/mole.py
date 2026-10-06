@@ -946,8 +946,7 @@ def intor_cross(intor, mol1, mol2, comp=None, grids=None):
 
     shls_slice = (0, nbas1, nbas1, nbas1+nbas2)
 
-    if (intor.endswith('_sph') or intor.startswith('cint') or
-        intor.endswith('_spinor') or intor.endswith('_cart')):
+    if (intor.endswith(('_sph', '_spinor', '_cart')) or intor.startswith('cint')):
         return moleintor.getints(intor, atmc, basc, envc, shls_slice, comp, 0)
     elif mol1.cart == mol2.cart:
         intor = mol1._add_suffix(intor)
@@ -1180,7 +1179,7 @@ def tot_electrons(mol):
     else:
         nelectron = sum(charge(a[0]) for a in format_atom(mol.atom))
     nelectron -= mol.charge
-    nelectron_int = int(round(nelectron))
+    nelectron_int = round(nelectron)
 
     if abs(nelectron - nelectron_int) > 1e-4:
         logger.warn(mol, 'Found fractional number of electrons %f. Round it to %d',
@@ -1296,7 +1295,7 @@ def loads(molstr):
     '''Deserialize a str containing a JSON document to a Mole object.
     '''
     # the numpy function array is used by eval function
-    from numpy import array  # noqa
+    from numpy import array
     moldic = json.loads(molstr)
     mol = Mole()
     mol.__dict__.update(moldic)
@@ -2306,7 +2305,7 @@ class MoleBase(lib.StreamObject):
     >>> mol.charge = 1
     >>> mol.build()
     <class 'pyscf.gto.mole.Mole'> has no attributes Charge
-    '''  # noqa: E501
+    '''
 
     output = None
     max_memory = param.MAX_MEMORY
@@ -2647,20 +2646,28 @@ class MoleBase(lib.StreamObject):
                 logger.warn(self, f'ECP not specified. The basis set {self.basis} '
                             f'include an ECP. Recommended ECP: {ecp}.')
         elif isinstance(self.basis, dict) and isinstance(self.ecp, dict):
-            _basis = self.basis
-            if 'default' in _basis:
-                uniq_atoms = {a[0] for a in self._atom}
-                basis = _parse_default_basis(_basis, uniq_atoms)
-            else:
-                basis = _basis
+            uniq_atoms = {a[0] for a in self._atom}
+            basis = _parse_default_basis(self.basis, uniq_atoms)
+            # The keys of .basis and .ecp may be nuclear charges, lower case
+            # symbols or labelled symbols, so they cannot be compared directly.
+            # build() has already resolved the 'default' entry of .ecp,
+            # normalized its keys with _atom_symbol and dropped the elements
+            # whose ECP data could not be loaded; the result is self._ecp.
+            # self._ecp is only refreshed when .ecp is set, hence the guard.
+            ecp_defined = set(self._ecp) if self.ecp else set()
             for element, basname in basis.items():
-                if isinstance(basname, str) and not self.ecp.get(element):
-                    ecp, ecp_atoms = bse_predefined_ecp(basname, element)
-                    if ecp_atoms:
-                        logger.warn(self, f'ECP for {element} not specified. '
-                                    f'The basis set {basname} include an ECP. '
-                                    f'Recommended ECP: {ecp}.')
-            basis = None
+                if not isinstance(basname, str):
+                    continue
+                symb = _atom_symbol(element)
+                # make_ecp_env assigns the ECP of the plain element to labelled
+                # atoms such as Au1 when the label itself is absent from .ecp
+                if symb in ecp_defined or _rm_digit(symb) in ecp_defined:
+                    continue
+                ecp_name, ecp_atoms = bse_predefined_ecp(basname, symb)
+                if ecp_atoms:
+                    logger.warn(self, f'ECP for {symb} not specified. '
+                                f'The basis set {basname} include an ECP. '
+                                f'Recommended ECP: {ecp_name}.')
         return self
 
     def _build_symmetry(self, *args, **kwargs):
@@ -2770,7 +2777,7 @@ class MoleBase(lib.StreamObject):
                 self.stdout.write('\n')
                 self.stdout.write('\n')
                 finput.close()
-            except IOError:
+            except OSError:
                 logger.warn(self, 'input file does not exist')
 
         self.stdout.write('\n'.join(lib.misc.format_sys_info()))
@@ -3788,7 +3795,7 @@ class Mole(MoleBase):
 
         # Import all available modules. Some methods are registered to other
         # classes/modules when importing modules in __all__.
-        from pyscf import __all__  # noqa
+        from pyscf import __all__
         from pyscf import scf, dft
 
         attr_name = key

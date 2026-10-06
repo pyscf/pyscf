@@ -38,7 +38,7 @@ def setUpModule():
     '''
     basis = 'def2-svp'
 
-    mol = pyscf.M(atom=atom, basis=basis, max_memory=32000,
+    mol = pyscf.M(atom=atom, basis=basis, max_memory=4000,
                   output='/dev/null', verbose=1)
 
 def tearDownModule():

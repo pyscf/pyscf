@@ -24,7 +24,7 @@ Unrestricted algebraic diagrammatic construction
 '''
 
 import numpy as np
-import pyscf.lib as lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.adc import uadc_ao2mo
 from pyscf.adc import radc_ao2mo
@@ -150,7 +150,7 @@ def compute_amplitudes(myadc, eris):
         t1_2_a = np.zeros((nocc_a,nvir_a))
         t1_2_b = np.zeros((nocc_b,nvir_b))
 
-        if isinstance(eris.ovvv, type(None)):
+        if eris.ovvv is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
             for a,b in lib.prange(0,nocc_a,chnk_size):
                 eris_ovvv = dfadc.get_ovvv_spin_df(
@@ -194,7 +194,7 @@ def compute_amplitudes(myadc, eris):
             t1_2_a -= lib.einsum('ld,liad->ia',t1_1_a,eris.oovv, optimize = True)
             t1_2_a += lib.einsum('ld,iadl->ia',t1_1_b,eris.ovVO, optimize = True)
 
-        if isinstance(eris.OVvv, type(None)):
+        if eris.OVvv is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
             for a,b in lib.prange(0,nocc_b,chnk_size):
                 eris_OVvv = dfadc.get_ovvv_spin_df(
@@ -206,7 +206,7 @@ def compute_amplitudes(myadc, eris):
             t1_2_a += lib.einsum('kdac,ikcd->ia',eris_OVvv,t2_1_ab[:],optimize=True)
             del eris_OVvv
 
-        if isinstance(eris.ovVV, type(None)):
+        if eris.ovVV is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
             for a,b in lib.prange(0,nocc_a,chnk_size):
                 eris_ovVV = dfadc.get_ovvv_spin_df(
@@ -248,7 +248,7 @@ def compute_amplitudes(myadc, eris):
             t1_2_b -= lib.einsum('ld,liad->ia',t1_1_b,eris.OOVV, optimize = True)
             t1_2_b += lib.einsum('ld,ldai->ia',t1_1_a,eris.ovVO, optimize = True)
 
-        if isinstance(eris.OVVV, type(None)):
+        if eris.OVVV is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
             for a,b in lib.prange(0,nocc_b,chnk_size):
                 eris_OVVV = dfadc.get_ovvv_spin_df(
@@ -331,7 +331,7 @@ def compute_amplitudes(myadc, eris):
             t2_2_a -= lib.einsum('lb,iajl->ijab',t1_1_a,eris.ovoo, optimize = True)
             t2_2_a += lib.einsum('lb,jail->ijab',t1_1_a,eris.ovoo, optimize = True)
 
-            if isinstance(eris.ovvv, type(None)):
+            if eris.ovvv is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
                 for a,b in lib.prange(0,nocc_a,chnk_size):
                     eris_ovvv = dfadc.get_ovvv_spin_df(
@@ -389,7 +389,7 @@ def compute_amplitudes(myadc, eris):
             t2_2_b -= lib.einsum('lb,iajl->ijab',t1_1_b,eris.OVOO, optimize = True)
             t2_2_b += lib.einsum('lb,jail->ijab',t1_1_b,eris.OVOO, optimize = True)
 
-            if isinstance(eris.OVVV, type(None)):
+            if eris.OVVV is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
                 for a,b in lib.prange(0,nocc_b,chnk_size):
                     eris_OVVV = dfadc.get_ovvv_spin_df(
@@ -435,7 +435,7 @@ def compute_amplitudes(myadc, eris):
             t2_2_ab -= lib.einsum('la,jbil->ijab',t1_1_a,eris.OVoo, optimize = True)
             t2_2_ab -= lib.einsum('lb,iajl->ijab',t1_1_b,eris.ovOO, optimize = True)
 
-            if isinstance(eris.OVvv, type(None)):
+            if eris.OVvv is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
                 for a,b in lib.prange(0,nocc_b,chnk_size):
                     eris_OVvv = dfadc.get_ovvv_spin_df(
@@ -448,7 +448,7 @@ def compute_amplitudes(myadc, eris):
                 t2_2_ab += lib.einsum('id,jbad->ijab',t1_1_a,eris_OVvv, optimize = True)
                 del eris_OVvv
 
-            if isinstance(eris.ovVV, type(None)):
+            if eris.ovVV is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
                 for a,b in lib.prange(0,nocc_a,chnk_size):
                     eris_ovVV = dfadc.get_ovvv_spin_df(
@@ -541,7 +541,7 @@ def compute_amplitudes(myadc, eris):
         t1_3_b += 0.5*lib.einsum('lmad,ldmi->ia',t2_2_b,eris_OVOO,optimize=True)
         t1_3_b -=     lib.einsum('mlda,mdli->ia',t2_2_ab,eris_ovOO,optimize=True)
 
-        if isinstance(eris.ovvv, type(None)):
+        if eris.ovvv is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
             for a,b in lib.prange(0,nocc_a,chnk_size):
                 eris_ovvv = dfadc.get_ovvv_spin_df(
@@ -609,7 +609,7 @@ def compute_amplitudes(myadc, eris):
                                       t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
             del eris_ovvv
 
-        if isinstance(eris.OVVV, type(None)):
+        if eris.OVVV is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
             for a,b in lib.prange(0,nocc_b,chnk_size):
                 eris_OVVV = dfadc.get_ovvv_spin_df(
@@ -674,7 +674,7 @@ def compute_amplitudes(myadc, eris):
                                       t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
             del eris_OVVV
 
-        if isinstance(eris.ovVV, type(None)):
+        if eris.ovVV is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
             for a,b in lib.prange(0,nocc_a,chnk_size):
                 eris_ovVV = dfadc.get_ovvv_spin_df(
@@ -711,7 +711,7 @@ def compute_amplitudes(myadc, eris):
             t1_3_a -= lib.einsum('lmef,iedf,lmad->ia',t2_1_ab[:],eris_ovVV,t2_1_ab[:],optimize=True)
             del eris_ovVV
 
-        if isinstance(eris.OVvv, type(None)):
+        if eris.OVvv is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
             for a,b in lib.prange(0,nocc_b,chnk_size):
                 eris_OVvv = dfadc.get_ovvv_spin_df(

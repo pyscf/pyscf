@@ -39,11 +39,54 @@ class KnownValues(unittest.TestCase):
         cell.output = '/dev/null'
         cell.build()
         mf = khf.KRHF(cell, exxdiv='vcut_ws')
+
+        # isotropic k-mesh
         mf.kpts = cell.make_kpts([2,2,2])
         coulG = tools.get_coulG(cell, mf.kpts[2], True, mf, gs=[5,5,5])
         coulG = coulG.reshape([11]*3)
         coulG[:,5,:] = 0
-        self.assertAlmostEqual(lib.fp(coulG), 1.3245365170998518+0j, 9)
+        self.assertAlmostEqual(lib.fp(coulG), 1.3415512608007418+0j, 9)
+
+        # anisotropic k-mesh
+        mf._ws_exx = None   # remove precomputing
+        mf.kpts = cell.make_kpts([1,2,3])
+        coulG = tools.get_coulG(cell, mf.kpts[2], True, mf, gs=[5,5,5])
+        coulG = coulG.reshape([11]*3)
+        coulG[:,5,:] = 0
+        self.assertAlmostEqual(lib.fp(coulG), -15.809448382668005+0j, 9)
+
+        # reciprocal vector outside the WS FFT mesh
+        ws_exx = mf._ws_exx
+        alpha = ws_exx['alpha']
+        mesh = np.asarray(ws_exx['kcell'].mesh)
+        Gv = mesh[0] * ws_exx['kcell'].reciprocal_vectors()[[0]]
+        coulG = tools.get_coulG(
+            cell, exx=True, mf=mf, Gv=Gv, wrap_around=False)
+
+        q2 = np.dot(Gv[0], Gv[0])
+        ref = 4*np.pi/q2 * (1 - np.exp(-q2/(4*alpha**2)))
+        self.assertAlmostEqual(coulG[0], ref, 12)
+
+        # arbitrary band k-point
+        mf._ws_exx = None
+        mf.kpts = cell.make_kpts([2,2,2])
+        kpt_band = cell.get_abs_kpts([.12, .23, .34])
+        Gv = np.zeros((1,3))
+
+        for kpt in mf.kpts:
+            q = kpt - kpt_band
+            coulG = tools.get_coulG(
+                cell, q, True, mf, Gv=Gv, wrap_around=False)
+
+            ws_exx = mf._ws_exx
+            q2 = np.dot(q, q)
+            alpha = ws_exx['alpha']
+            ref = 4*np.pi/q2 * (1 - np.exp(-q2/(4*alpha**2)))
+            ref += ws_exx['kcell'].vol / len(ws_exx['vR']) * np.dot(
+                ws_exx['vR'], np.cos(np.dot(ws_exx['r_mic'], q)))
+            self.assertAlmostEqual(coulG[0], ref, 10)
+
+        self.assertEqual(len(ws_exx['vq_cache']), 1)
 
     def test_unconventional_ws_cell(self):
         cell = pbcgto.Cell()
@@ -54,7 +97,20 @@ class KnownValues(unittest.TestCase):
                     0.5, 0  , 1.8'''
         cell.build()
         kpts = cell.make_kpts([1,1,1])
-        self.assertRaises(RuntimeError, tools.precompute_exx, cell, kpts)
+
+        # but using the new default nimgs=[3,3,3] gives no error
+        res = tools.precompute_exx(cell, kpts)
+        self.assertAlmostEqual(lib.fp(res['vq']), 44.672318849250274+0j, 9)
+
+    def test_ws_inradius(self):
+        a = np.array([[2.0, 0.0, 0.0],
+                      [1.2, 1.0, 0.0],
+                      [0.0, 0.0, 3.0]])
+        ref = 0.5 * np.linalg.norm(a[0] - a[1])
+        self.assertAlmostEqual(tools.get_ws_inradius(a, [1,1,1]), ref, 12)
+
+        a = np.diag([2.0, 3.0, 4.0])
+        self.assertAlmostEqual(tools.get_ws_inradius(a, [2,1,3]), 1.5, 12)
 
     def test_coulG(self):
         numpy.random.seed(19)

@@ -254,7 +254,6 @@ class _ChemistsERIs(uagf2._ChemistsERIs):
     MO tensors are stored in tril from, we only need QMO tensors
     in low-symmetry
     '''
-    pass
 
 def _make_mo_eris_incore(agf2, mo_coeff=None):
     ''' Returns _ChemistsERIs

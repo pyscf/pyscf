@@ -24,7 +24,7 @@ Unrestricted algebraic diagrammatic construction
 '''
 
 import numpy as np
-import pyscf.lib as lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.adc import uadc_ao2mo
 from pyscf.adc import uadc_amplitudes
@@ -76,7 +76,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
         guess = adc.get_init_guess(nroots, diag, ascending = True)
     elif isinstance(guess, str) and guess == "cis" and adc.method_type == "ee":
         guess = adc.get_init_guess(nroots, diag, ascending = True, type="cis", eris=eris)
-    elif isinstance(guess, np.ndarray) or isinstance(guess, list):
+    elif isinstance(guess, (np.ndarray, list)):
         guess = adc.get_init_guess(nroots, diag, ascending = True, type = "read", ini = guess)
     else:
         raise NotImplementedError("Guess type not implemented")
@@ -529,7 +529,7 @@ class UADC(lib.StreamObject):
         elif hasattr(frozen, '__len__'):
             if len(frozen) != 2:
                 raise NotImplementedError("frozen should be announced as None or a array-like object with two elements")
-            elif isinstance(frozen, list) or isinstance(frozen, np.ndarray):
+            elif isinstance(frozen, (list, np.ndarray)):
                 self.frozen = frozen = tuple(frozen)
 
             if frozen[0] is None:
@@ -809,7 +809,7 @@ class UADC(lib.StreamObject):
 
         elif(self.method_type == "ip"):
 
-            if not isinstance(self.ncvs, type(None)) and self.ncvs > 0:
+            if self.ncvs is not None and self.ncvs > 0:
                 e_exc, v_exc, spec_fac, X, adc_es = self.ip_cvs_adc(
                     nroots=nroots, guess=guess, eris=eris)
             else:

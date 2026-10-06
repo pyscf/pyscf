@@ -155,6 +155,29 @@ class KnownValues(unittest.TestCase):
         e1+= mol.energy_nuc()
         self.assertAlmostEqual(e1, pt.e_tot, 8)
 
+    def test_non_canonical_mp2_rdm_vs_cisd(self):
+        # The MP2 density for a f_ov != 0 reference (T1 + T2 wavefunction)
+        # equals the CISD density of the truncated wavefunction, i.e.
+        # cisd.make_rdm1 with civec = [1, t1, t2] (issue #1687).
+        from pyscf.ci import cisd
+        mol1 = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587',
+                     basis='sto-3g', verbose=0)
+        mf = scf.RHF(mol1).run()
+        nocc = mol1.nelectron // 2
+        ct, st = numpy.cos(0.4), numpy.sin(0.4)
+        c = mf.mo_coeff.copy()
+        cocc, cvir = c[:,nocc-1].copy(), c[:,nocc].copy()
+        c[:,nocc-1], c[:,nocc] = ct*cocc + st*cvir, -st*cocc + ct*cvir
+        mfr = scf.RHF(mol1)
+        mfr.__dict__.update(mf.__dict__)
+        mfr.mo_coeff = c
+        mfr.converged = False
+        pt = mp.MP2(mfr).run(conv_tol=1e-10)
+        civec = numpy.concatenate([[1.0], pt.t1.ravel(), pt.t2.ravel()])
+        ci = cisd.CISD(mf)
+        dm1_cisd = cisd.make_rdm1(ci, civec, nmo=pt.nmo, nocc=pt.nocc)
+        self.assertAlmostEqual(abs(pt.make_rdm1() - dm1_cisd).max(), 0, 8)
+
     def test_mp2_with_df(self):
         nocc = mol.nelectron//2
         nmo = mf.mo_energy.size
@@ -298,7 +321,8 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(mp.MP2(mf0), mp.mp2.RMP2))
         self.assertTrue(isinstance(mp.MP2(mf1), mp.ump2.UMP2))
         self.assertTrue(isinstance(mp.MP2(dfmf0), mp.dfmp2.DFMP2))
-        self.assertTrue(isinstance(mp.MP2(dfmf1), mp.dfump2.DFUMP2))
+        # ROHF references are handled by the semi-canonical ROMP2
+        self.assertTrue(isinstance(mp.MP2(dfmf1), mp.dfromp2.DFROMP2))
         self.assertTrue(isinstance(mp.MP2(mf0.newton()), mp.mp2.RMP2))
         self.assertTrue(isinstance(mp.MP2(mf1.newton()), mp.ump2.UMP2))
 
@@ -320,10 +344,56 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(pt.mol is mol1)
         self.assertTrue(pt.with_df.mol is mol1)
 
+    def test_rohf_converted_ump2(self):
+        # An ROHF reference converted to UHF is detected as non-canonical
+        # (f_ov != 0): the first-order singles T1 is included automatically
+        # (issue #1687).  exclude_t1 reproduces the previous behavior.
+        molr = gto.M(atom='N 0 0 0; H 0 0 1.0; H 0.94 0 -0.33; H -0.94 0 -0.33',
+                     charge=1, spin=1, basis='sto-3g', verbose=0)
+        mf = scf.ROHF(molr).run(conv_tol=1e-12)
+        pt = mp.UMP2(mf.to_uhf()).run()
+        self.assertGreater(abs(pt.t1[0]).max(), 1e-3)
+        self.assertAlmostEqual(pt.e_corr, -0.0408661865, 8)
+        pt1 = mp.UMP2(mf.to_uhf())
+        pt1.exclude_t1 = True
+        pt1.run()
+        self.assertAlmostEqual(pt1.e_corr, -0.0389434158, 8)
+
     def test_non_canonical_mp2(self):
         mf = scf.RHF(mol).run(max_cycle=1)
         pt = mp.MP2(mf)
-        self.assertAlmostEqual(pt.kernel()[0], -0.20447991367138338, 7)
+        e = pt.kernel()[0]
+        self.assertAlmostEqual(e, -0.2572178933021, 7)
+        # first-order singles (T1) of the f_ov != 0 reference
+        self.assertAlmostEqual(pt.e_corr_singles, -0.05273798131339, 7)
+        # the doubles part is unchanged by the T1 treatment
+        self.assertAlmostEqual(e - pt.e_corr_singles, -0.20447991367138338, 7)
+        # SCS: the singles term is added unscaled
+        self.assertAlmostEqual(pt.emp2_scs, pt.e_corr_singles +
+                               pt.e_corr_ss/3. + pt.e_corr_os*1.2, 9)
+
+    def test_non_canonical_mp2_rdm(self):
+        # T1 enters the occupied-virtual block of the (spin-traced) 1-RDM
+        # linearly and via the t1.t2 cross term, and quadratically in the
+        # occ/vir blocks (issue #1687). The full density equals
+        # cisd.make_rdm1 with civec = [1, t1, t2]
+        # (see test_non_canonical_mp2_rdm_vs_cisd).
+        mf = scf.RHF(mol).run(max_cycle=1)
+        pt = mp.MP2(mf)
+        pt.kernel()
+        t1 = pt.t1
+        dm1 = pt.make_rdm1()
+        nocc = pt.nocc
+        cross = (2*numpy.einsum('jb,ijab->ai', t1.conj(), pt.t2) -
+                 numpy.einsum('jb,ijba->ai', t1.conj(), pt.t2))
+        self.assertAlmostEqual(abs(dm1[:nocc,nocc:] - 2*(t1 + cross.T)).max(), 0, 9)
+        pt.t1 = None
+        dm1_0 = pt.make_rdm1()
+        pt.t1 = t1
+        self.assertAlmostEqual(abs((dm1[:nocc,:nocc] - dm1_0[:nocc,:nocc]) +
+                                   2*numpy.einsum('ia,ja->ij', t1, t1)).max(), 0, 9)
+        self.assertAlmostEqual(abs((dm1[nocc:,nocc:] - dm1_0[nocc:,nocc:]) -
+                                   2*numpy.einsum('ia,ic->ac', t1, t1.conj())).max(), 0, 9)
 
 
 if __name__ == "__main__":

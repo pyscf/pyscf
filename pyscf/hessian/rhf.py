@@ -31,9 +31,9 @@ from pyscf.scf import _vhf, hf
 from pyscf.scf import cphf
 
 # import _response_functions to load gen_response methods in SCF class
-from pyscf.scf import _response_functions  # noqa
+from pyscf.scf import _response_functions
 # import pyscf.grad.rhf to activate nuc_grad_method method
-from pyscf.grad import rhf  # noqa
+from pyscf.grad import rhf
 
 
 def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,

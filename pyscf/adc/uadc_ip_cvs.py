@@ -560,7 +560,7 @@ def matvec(adc, M_ij=None, eris=None):
         cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(adc.stdout, adc.verbose)
 
-        s = np.zeros((dim))
+        s = np.zeros(dim)
 
         r_a = r[s_a:f_a]
         r_b = r[s_b:f_b]
@@ -1091,13 +1091,13 @@ def matvec(adc, M_ij=None, eris=None):
             t2_1_a_ccee = t2_1_a[:ncvs,:ncvs,:,:].copy()
             t2_1_a_ccee_t = t2_1_a_ccee[ij_ind_ncvs[0],ij_ind_ncvs[1],:,:]
 
-            if isinstance(eris.ovvv, type(None)):
+            if eris.ovvv is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             else :
                 chnk_size = ncvs
 
             a = 0
-            temp_singles = np.zeros((ncvs))
+            temp_singles = np.zeros(ncvs)
             temp_doubles = np.zeros((nvir_a, nvir_a, nvir_a))
             r_aaa_ecc = r_aaa_ecc.reshape(nvir_a,-1)
 
@@ -1216,12 +1216,12 @@ def matvec(adc, M_ij=None, eris=None):
             t2_1_ab_cvee = t2_1_ab[:ncvs,ncvs:,:,:].copy()
             t2_1_ab_vcee = t2_1_ab[ncvs:,:ncvs,:,:].copy()
 
-            if isinstance(eris.OVVV, type(None)):
+            if eris.OVVV is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             else :
                 chnk_size = ncvs
             a = 0
-            temp_singles = np.zeros((ncvs))
+            temp_singles = np.zeros(ncvs)
             temp_doubles = np.zeros((nvir_b, nvir_b, nvir_b))
             r_bbb_ecc = r_bbb_ecc.reshape(nvir_b,-1)
             temp_1_ecc = lib.einsum('Pbc,aP->abc',t2_1_b_ccee_t,r_bbb_ecc, optimize=True)
@@ -1319,7 +1319,7 @@ def matvec(adc, M_ij=None, eris=None):
             del t2_1_b_coee
             del t2_1_b_voee
 
-            if isinstance(eris.ovVV, type(None)):
+            if eris.ovVV is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             else :
                 chnk_size = ncvs
@@ -1356,7 +1356,7 @@ def matvec(adc, M_ij=None, eris=None):
             del temp_1_evc
             del temp_2
 
-            if isinstance(eris.OVvv, type(None)):
+            if eris.OVvv is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             else :
                 chnk_size = ncvs
@@ -1658,7 +1658,7 @@ def get_trans_moments_orbital(adc, orb, spin="alpha"):
     s_bbb_ecv = f_bbb_ecc
     f_bbb_ecv = s_bbb_ecv + n_doubles_bbb_ecv
 
-    T = np.zeros((dim))
+    T = np.zeros(dim)
 
 ######## spin = alpha  ############################################
     if spin=="alpha":
@@ -2987,8 +2987,7 @@ class UADCIPCVS(uadc.UADC):
         'tol_residual','conv_tol', 'e_corr', 'method',
         'method_type', 'mo_coeff', 'mo_coeff_hf', 'mo_energy_b', 'max_memory',
         't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle',
-        'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b', 'mo_coeff', 'mo_energy_a',
-        'mo_energy_b', 'nmo_a', 'nmo_b', 'mol', 'transform_integrals',
+        'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b', 'nmo_a', 'nmo_b', 'mol', 'transform_integrals',
         'with_df', 'spec_factor_print_tol', 'evec_print_tol', 'ncvs',
         'compute_properties', 'approx_trans_moments', 'E', 'U', 'P', 'X',
         'compute_spin_square', '_make_rdm1', 'frozen', 'mo_occ'

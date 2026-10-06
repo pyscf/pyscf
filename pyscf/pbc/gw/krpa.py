@@ -29,7 +29,7 @@ References:
 """
 
 import numpy as np
-import scipy.linalg.blas as blas
+from scipy.linalg import blas
 import time
 
 from pyscf import lib

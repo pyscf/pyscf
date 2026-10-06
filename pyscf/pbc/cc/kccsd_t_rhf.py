@@ -30,7 +30,7 @@ from pyscf.lib import logger
 from pyscf.lib.parameters import LARGE_DENOM
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
-                               padded_mo_coeff, padding_k_idx)  # noqa
+                               padded_mo_coeff, padding_k_idx)
 
 #einsum = np.einsum
 einsum = lib.einsum
@@ -439,9 +439,9 @@ def create_t3_eris(mycc, kconserv, eris, tmpfile='tmp_t3_eris.h5'):
     dtype = np.result_type(eris_vovv, eris_oovv, eris_ooov, t2)
     if not check_read_success(feri_tmp_filename):
         feri_tmp = lib.H5TmpFile(feri_tmp_filename, 'w', **h5py_kwargs)
-        t2T_out = feri_tmp.create_dataset('t2T', (nkpts,nkpts,nkpts,nvir,nvir,nocc,nocc), dtype=dtype)  # noqa: E501
-        eris_vvop_out = feri_tmp.create_dataset('vvop', (nkpts,nkpts,nkpts,nvir,nvir,nocc,nmo), dtype=dtype)  # noqa: E501
-        eris_vooo_C_out = feri_tmp.create_dataset('vooo_C', (nkpts,nkpts,nkpts,nvir,nocc,nocc,nocc), dtype=dtype)  # noqa: E501
+        t2T_out = feri_tmp.create_dataset('t2T', (nkpts,nkpts,nkpts,nvir,nvir,nocc,nocc), dtype=dtype)
+        eris_vvop_out = feri_tmp.create_dataset('vvop', (nkpts,nkpts,nkpts,nvir,nvir,nocc,nmo), dtype=dtype)
+        eris_vooo_C_out = feri_tmp.create_dataset('vooo_C', (nkpts,nkpts,nkpts,nvir,nocc,nocc,nocc), dtype=dtype)
 
         transpose_t2(t2, nkpts, nocc, nvir, kconserv, out=t2T_out)
         create_eris_vvop(eris_vovv, eris_oovv, nkpts, nocc, nvir, kconserv, out=eris_vvop_out)

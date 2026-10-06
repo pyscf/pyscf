@@ -46,7 +46,8 @@ from pyscf.df.grad.casdm2_util import (solve_df_rdm2, grad_elec_dferi,
                                        grad_elec_auxresponse_dferi)
 from pyscf.mcscf.addons import StateAverageMCSCFSolver
 
-def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
+def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None,
+              eris=None):
     mc = mc_grad.base
     with_df = mc.with_df
     if mo_coeff is None: mo_coeff = mc.mo_coeff
@@ -81,8 +82,12 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
     # MRH flag: this is one of my kludges
     # It would be better to just pass the ERIS object used in orbital optimization
     # But I am too lazy at the moment
-    aapa = with_df.ao2mo ((mo_cas, mo_cas, mo_occ, mo_cas), compact=False)
-    aapa = aapa.reshape(ncas,ncas,nocc,ncas)
+    if eris is None:
+        aapa = with_df.ao2mo((mo_cas, mo_cas, mo_occ, mo_cas),
+                             compact=False)
+        aapa = aapa.reshape(ncas,ncas,nocc,ncas)
+    else:
+        aapa = numpy.asarray(eris.papa[ncore:ncore+ncas,:,:nocc])
     vj, vk = mc._scf.get_jk(mol, (dm_core, dm_cas))
     h1 = mc.get_hcore()
     vhf_c = vj[0] - vk[0] * .5
@@ -196,7 +201,8 @@ class Gradients(casci_grad.Gradients):
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
-    def kernel (self, mo_coeff=None, ci=None, atmlst=None, verbose=None):
+    def kernel (self, mo_coeff=None, ci=None, atmlst=None, verbose=None,
+                eris=None):
         log = logger.new_logger(self, verbose)
         if atmlst is None:
             atmlst = self.atmlst
@@ -208,7 +214,7 @@ class Gradients(casci_grad.Gradients):
         if self.verbose >= logger.INFO:
             self.dump_flags()
 
-        de = self.grad_elec(mo_coeff, ci, atmlst, log)
+        de = self.grad_elec(mo_coeff, ci, atmlst, log, eris=eris)
         self.de = de = de + self.grad_nuc(atmlst=atmlst)
         if self.mol.symmetry:
             self.de = self.symmetrize(self.de, atmlst)

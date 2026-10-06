@@ -276,24 +276,22 @@ def mcpdft_HellmanFeynman_grad (mc, ot, veff1, veff2, mo_coeff=None, ci=None,
         remaining_floats = (max_memory - current_memory()[0]) * 1e6 / 8
         blksize = int (remaining_floats / (ncols*BLKSIZE)) * BLKSIZE
         blksize = max (BLKSIZE, min (blksize, ngrids, BLKSIZE*1200))
-        t1 = logger.timer (mc, 'PDFT HlFn quadrature atom {} mask and memory '
-            'setup'.format (ia), *t1)
+        t1 = logger.timer (mc, f'PDFT HlFn quadrature atom {ia} mask and memory '
+            'setup', *t1)
 
         for ip0 in range(0, ngrids, blksize):
             ip1 = min(ngrids, ip0 + blksize)
             mask = gen_grid.make_mask(mol, coords[ip0:ip1])
             logger.info(
                 mc,
-                ("PDFT gradient atom {} slice {}-{} of {} total").format(
-                    ia, ip0, ip1, ngrids
-                ),
+                (f"PDFT gradient atom {ia} slice {ip0}-{ip1} of {ngrids} total"),
             )
 
             ao = ot._numint.eval_ao(mol, coords[ip0:ip1], deriv=ao_deriv, non0tab=mask)
 
             # Need 1st derivs for LDA, 2nd for GGA, etc.
             t1 = logger.timer(
-                mc, ("PDFT HlFn quadrature atom {} ao " "grids").format(ia), *t1
+                mc, (f"PDFT HlFn quadrature atom {ia} ao " "grids"), *t1
             )
             # Slice down ao so as not to confuse the rho and Pi generators
             if ot.xctype == "LDA":
@@ -303,41 +301,41 @@ def mcpdft_HellmanFeynman_grad (mc, ot, veff1, veff2, mo_coeff=None, ci=None,
             elif ot.xctype == "MGGA":
                 aoval = ao[:4]
             else:
-                raise ValueError("Unknown xctype: {}".format(ot.xctype))
+                raise ValueError(f"Unknown xctype: {ot.xctype}")
 
             rho = make_rho (0, aoval, mask, ot.xctype) / 2.0
             rho = np.stack ((rho,)*2, axis=0)
-            t1 = logger.timer (mc, ('PDFT HlFn quadrature atom {} rho '
-                'calc').format (ia), *t1)
+            t1 = logger.timer (mc, (f'PDFT HlFn quadrature atom {ia} rho '
+                'calc'), *t1)
             Pi = get_ontop_pair_density (ot, rho, aoval, twoCDM, mo_cas,
                 ot.Pi_deriv, mask)
-            t1 = logger.timer (mc, ('PDFT HlFn quadrature atom {} Pi '
-                'calc').format (ia), *t1)
+            t1 = logger.timer (mc, (f'PDFT HlFn quadrature atom {ia} Pi '
+                'calc'), *t1)
 
             # TODO: consistent format requirements for shape of ao grid
             if ot.xctype == 'LDA':
                 aoval = ao[:1]
             moval_occ = _grid_ao2mo (mol, aoval, mo_occ, mask)
-            t1 = logger.timer (mc, ('PDFT HlFn quadrature atom {} ao2mo '
-                'grid').format (ia), *t1)
+            t1 = logger.timer (mc, (f'PDFT HlFn quadrature atom {ia} ao2mo '
+                'grid'), *t1)
             aoval = np.ascontiguousarray ([ao[ix].transpose (0,2,1)
                 for ix in idx[:,:ndao]]).transpose (0,1,3,2)
             ao = None
-            t1 = logger.timer (mc, ('PDFT HlFn quadrature atom {} ao grid '
-                'reshape').format (ia), *t1)
+            t1 = logger.timer (mc, (f'PDFT HlFn quadrature atom {ia} ao grid '
+                'reshape'), *t1)
             eot, vot = ot.eval_ot (rho, Pi, weights=w0[ip0:ip1])[:2]
-            t1 = logger.timer (mc, ('PDFT HlFn quadrature atom {} '
-                'eval_ot').format (ia), *t1)
+            t1 = logger.timer (mc, (f'PDFT HlFn quadrature atom {ia} '
+                'eval_ot'), *t1)
             puvx_mem = 2 * ndpi * (ip1-ip0) * ncas * ncas * 8 / 1e6
             remaining_mem = max_memory - current_memory ()[0]
-            logger.info (mc, ('PDFT gradient memory note: working on {} grid '
-                'points; estimated puvx usage = {:.1f} of {:.1f} remaining '
-                'MB').format ((ip1-ip0), puvx_mem, remaining_mem))
+            logger.info (mc, (f'PDFT gradient memory note: working on {ip1-ip0} grid '
+                f'points; estimated puvx usage = {puvx_mem:.1f} of {remaining_mem:.1f} remaining '
+                'MB'))
 
             # Weight response
             de_wgt += np.tensordot (eot, w1[atmlst,...,ip0:ip1], axes=(0,2))
-            t1 = logger.timer (mc, ('PDFT HlFn quadrature atom {} weight '
-                'response').format (ia), *t1)
+            t1 = logger.timer (mc, (f'PDFT HlFn quadrature atom {ia} weight '
+                'response'), *t1)
 
             # Find the atoms that are a part of the atomlist
             # grid correction shouldn't be added if they aren't there
@@ -351,7 +349,7 @@ def mcpdft_HellmanFeynman_grad (mc, ot, veff1, veff2, mo_coeff=None, ci=None,
             dvxc -= tmp_dv #XC response
 
             tmp_dv = None
-            t1 = logger.timer (mc, ('PDFT HlFn quadrature atom {}').format (ia), *t1)
+            t1 = logger.timer (mc, (f'PDFT HlFn quadrature atom {ia}'), *t1)
 
             rho = Pi = eot = vot = aoval = moval_occ = None
             gc.collect ()
@@ -365,31 +363,26 @@ def mcpdft_HellmanFeynman_grad (mc, ot, veff1, veff2, mo_coeff=None, ci=None,
     de_hcore *= ot_hyb
     de_coul *= ot_hyb
 
-    logger.debug (mc, "MC-PDFT Hellmann-Feynman nuclear:\n{}".format (de_nuc))
-    logger.debug (mc, "MC-PDFT Hellmann-Feynman hcore component:\n{}".format (
-        de_hcore))
-    logger.debug (mc, "MC-PDFT Hellmann-Feynman coulomb component:\n{}".format
-        (de_coul))
-    logger.debug (mc, "MC-PDFT Hellmann-Feynman xc component:\n{}".format (
-        de_xc))
+    logger.debug (mc, f"MC-PDFT Hellmann-Feynman nuclear:\n{de_nuc}")
+    logger.debug (mc, f"MC-PDFT Hellmann-Feynman hcore component:\n{de_hcore}")
+    logger.debug (mc, f"MC-PDFT Hellmann-Feynman coulomb component:\n{de_coul}")
+    logger.debug (mc, f"MC-PDFT Hellmann-Feynman xc component:\n{de_xc}")
     logger.debug (mc, ("MC-PDFT Hellmann-Feynman quadrature point component:"
-        "\n{}").format (de_grid))
+        f"\n{de_grid}"))
     logger.debug (mc, ("MC-PDFT Hellmann-Feynman quadrature weight component:"
-        "\n{}").format (de_wgt))
-    logger.debug (mc, "MC-PDFT Hellmann-Feynman renorm component:\n{}".format (
-        de_renorm))
+        f"\n{de_wgt}"))
+    logger.debug (mc, f"MC-PDFT Hellmann-Feynman renorm component:\n{de_renorm}")
 
     de = de_nuc + de_hcore + de_coul + de_renorm + de_xc + de_grid + de_wgt
 
 
     if auxbasis_response:
         de += de_aux
-        logger.debug (mc, "MC-PDFT Hellmann-Feynman aux component:\n{}".format
-            (de_aux))
+        logger.debug (mc, f"MC-PDFT Hellmann-Feynman aux component:\n{de_aux}")
 
     if cas_hyb > 1e-11:
         de += de_cas
-        logger.debug(mc, "MC-PDFT Hellmann-Feynman CAS component:\n{}".format(de_cas))
+        logger.debug(mc, f"MC-PDFT Hellmann-Feynman CAS component:\n{de_cas}")
 
     t1 = logger.timer (mc, 'PDFT HlFn total', *t0)
 
@@ -413,7 +406,7 @@ class Gradients (sacasscf.Gradients):
         if (isinstance (self.base, casci.CASCI) and not
             isinstance (self.base, mc1step.CASSCF)):
             raise NotImplementedError (
-                "{} for CASCI-based MC-PDFT".format (name)
+                f"{name} for CASCI-based MC-PDFT"
             )
         ot, otxc, nelecas = self.base.otfnal, self.base.otxc, self.base.nelecas
         spin = abs (nelecas[0]-nelecas[1])
@@ -422,11 +415,11 @@ class Gradients (sacasscf.Gradients):
         hyb_x, hyb_c = hyb
         if abs(hyb_x - hyb_c) >1e-11:
             raise NotImplementedError (
-                "{} for hybrid MC-PDFT functionals with different exchange, correlation".format (name)
+                f"{name} for hybrid MC-PDFT functionals with different exchange, correlation"
             )
         if omega:
             raise NotImplementedError (
-                "{} for range-separated MC-PDFT functionals".format (name)
+                f"{name} for range-separated MC-PDFT functionals"
             )
 
     def get_wfn_response (self, state=None, verbose=None, mo=None,
@@ -495,8 +488,8 @@ class Gradients (sacasscf.Gradients):
         gci[offs:][:ndet] += gci_state
 
         # Debug
-        log.debug("g_all mo:\n{}".format(g_all[:self.ngorb]))
-        log.debug("g_all CI:\n{}".format(g_all[self.ngorb:]))
+        log.debug(f"g_all mo:\n{g_all[:self.ngorb]}")
+        log.debug(f"g_all CI:\n{g_all[self.ngorb:]}")
 
         return g_all
 
@@ -552,14 +545,12 @@ class Gradients (sacasscf.Gradients):
             A_sa[idx_null] = sing_tol
             x0_sa = -b_sa / A_sa # Hessian is diagonal so: easy
             ovlp = ci_blk.conjugate () @ b_ci_blk.T
-            logger.debug (self, 'Linear response SA-SA part:\n{}'.format (
-                ovlp))
-            logger.debug (self, 'Linear response SA-CI norms:\n{}'.format (
-                linalg.norm (b_ci_blk.T - ci_blk.T @ ovlp, axis=1)))
+            logger.debug (self, f'Linear response SA-SA part:\n{ovlp}')
+            logger.debug (self, f'Linear response SA-CI norms:\n{linalg.norm (b_ci_blk.T - ci_blk.T @ ovlp, axis=1)}')
             if self.ngorb: logger.debug (self, 'Linear response orbital '
-                'norms:\n{}'.format (linalg.norm (bvec[:self.ngorb])))
+                f'norms:\n{linalg.norm (bvec[:self.ngorb])}')
             logger.debug (self, 'SA-SA Lagrange multiplier for root '
-                '{}:\n{}'.format (state, x0_sa))
+                f'{state}:\n{x0_sa}')
             x0_orb, x0_ci = self.unpack_uniq_var (x0)
             x0_ci[state] = np.dot (x0_sa, ci_blk).reshape (
                 self.na_states[state], self.nb_states[state])
@@ -569,7 +560,7 @@ class Gradients (sacasscf.Gradients):
         r0_ci_blk = np.asarray ([r0_ci[i].ravel () for i in idx_spin])
         ovlp = ci_blk.conjugate () @ r0_ci_blk.T
         logger.debug (self, 'Lagrange residual SA-SA part after solving SA-SA'
-            ' part:\n{}'.format (ovlp))
+            f' part:\n{ovlp}')
         logger.debug (self, 'Lagrange residual SA-CI norms after solving SA-SA'
             ' part:\n{}'.format (linalg.norm (r0_ci_blk.T - ci_blk.T @ ovlp,
             axis=1)))
@@ -581,7 +572,7 @@ class Gradients (sacasscf.Gradients):
         r1_ci_blk = np.asarray ([r1_ci[i].ravel () for i in idx_spin])
         ovlp = ci_blk.conjugate () @ r1_ci_blk.T
         logger.debug (self, 'Lagrange residual SA-SA part after first '
-            'precondition:\n{}'.format (ovlp))
+            f'precondition:\n{ovlp}')
         logger.debug (self, 'Lagrange residual SA-CI norms after first '
             'precondition:\n{}'.format (linalg.norm (r1_ci_blk.T - ci_blk.T @ ovlp,
             axis=1)))

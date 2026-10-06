@@ -420,7 +420,7 @@ def prange_split(n_total, n_sections):
 
 izip = zip
 
-if sys.version_info > (3, 8):
+if sys.version_info >= (3, 8):
     from math import comb
 else:
     import math
@@ -680,7 +680,6 @@ class StreamObject:
         anything related to the method (such as the energy, the wave-function,
         the DFT mesh grids etc.).
         '''
-        pass
 
     def pre_kernel(self, envs):
         '''
@@ -688,7 +687,6 @@ class StreamObject:
         Internal variables are exposed to pre_kernel through the "envs"
         dictionary.  Return value of pre_kernel function is not required.
         '''
-        pass
 
     def post_kernel(self, envs):
         '''
@@ -696,7 +694,6 @@ class StreamObject:
         variables are exposed to post_kernel through the "envs" dictionary.
         Return value of post_kernel function is not required.
         '''
-        pass
 
     def run(self, *args, **kwargs):
         '''
@@ -1513,7 +1510,7 @@ def git_info(repo_path):
     try:
         with open(os.path.join(repo_path, '.git', 'ORIG_HEAD'), 'r') as f:
             orig_head = f.read().strip()
-    except IOError:
+    except OSError:
         pass
 
     try:
@@ -1525,7 +1522,7 @@ def git_info(repo_path):
             branch = os.path.basename(head)
             with open(os.path.join(repo_path, '.git', head.split(' ')[1]), 'r') as f:
                 head = f.read().strip()
-    except IOError:
+    except OSError:
         pass
     return orig_head, head, branch
 
@@ -1536,8 +1533,8 @@ def format_sys_info():
     result = [
         f'System: {platform.uname()}  Threads {num_threads()}',
         f'Python {sys.version}',
-        f'numpy {numpy.__version__}  scipy {scipy.__version__}  '
-        f'h5py {h5py.__version__}',
+        (f'numpy {numpy.__version__}  scipy {scipy.__version__}  '
+         f'h5py {h5py.__version__}'),
         f'Date: {time.ctime()}',
         f'PySCF version {pyscf.__version__}',
         f'PySCF path  {info["path"]}',

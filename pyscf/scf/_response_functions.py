@@ -27,7 +27,8 @@ from pyscf.lib import logger
 from pyscf.scf import hf, rohf, uhf, ghf, dhf
 
 def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
-                      singlet=None, hermi=0, max_memory=None, with_nlc=True):
+                      singlet=None, hermi=0, max_memory=None, with_nlc=True,
+                      grids=None):
     '''Generate a function to compute the product of RHF response function and
     RHF density matrices.
 
@@ -37,6 +38,9 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
             it is used in TDDFT response kernel.
         with_nlc (boolean) : NLC contribution is typically very small. This flag
         allows to skip NLC contribution.
+        grids (Grids object) : Grids for the XC response kernel of DFT
+            functionals. If not specified, the secondary grid
+            ``mf.second_grids`` is used if available, otherwise ``mf.grids``.
     '''
     assert isinstance(mf, hf.RHF) and not isinstance(mf, (uhf.UHF, rohf.ROHF))
 
@@ -46,6 +50,12 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
     mol = mf.mol
     if isinstance(mf, hf.KohnShamDFT):
         ni = mf._numint
+        if grids is None:
+            grids = getattr(mf, 'second_grids', None)
+        if grids is None:
+            grids = mf.grids
+        if grids.coords is None:
+            grids.build(with_non0tab=True)
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
         hybrid = ni.libxc.is_hybrid_xc(mf.xc)
@@ -55,10 +65,10 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
         else:
             spin = 1
         if mo_coeff is not None and mo_occ is not None:
-            rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
+            rho0, vxc, fxc = ni.cache_xc_kernel(mol, grids, mf.xc,
                                                 mo_coeff, mo_occ, spin)
         else:
-            rho0, vxc, fxc = ni.cache_xc_kernel1(mol, mf.grids, mf.xc,
+            rho0, vxc, fxc = ni.cache_xc_kernel1(mol, grids, mf.xc,
                                                  dm0, spin)
 
         if max_memory is None:
@@ -75,7 +85,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
                 if hermi == 2:
                     v1 = numpy.zeros_like(dm1)
                 else:
-                    v1 = ni.nr_rks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
+                    v1 = ni.nr_rks_fxc(mol, grids, mf.xc, dm0, dm1, 0, hermi,
                                        rho0, vxc, fxc, max_memory=max_memory)
                     if with_nlc and mf.do_nlc():
                         # Cannot import at top due to circular dependency
@@ -115,7 +125,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
                     v1 = numpy.zeros_like(dm1)
                 else:
                     # nr_rks_fxc_st requires alpha of dm1, dm1*.5 should be scaled
-                    v1 = ni.nr_rks_fxc_st(mol, mf.grids, mf.xc, dm0, dm1, hermi, True,
+                    v1 = ni.nr_rks_fxc_st(mol, grids, mf.xc, dm0, dm1, hermi, True,
                                           rho0, vxc, fxc, max_memory=max_memory)
                     if with_nlc and mf.do_nlc():
                         # Cannot import at top due to circular dependency
@@ -154,7 +164,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
                     v1 = numpy.zeros_like(dm1)
                 else:
                     # nr_rks_fxc_st requires alpha of dm1, dm1*.5 should be scaled
-                    v1 = ni.nr_rks_fxc_st(mol, mf.grids, mf.xc, dm0, dm1, hermi, False,
+                    v1 = ni.nr_rks_fxc_st(mol, grids, mf.xc, dm0, dm1, hermi, False,
                                           rho0, vxc, fxc, max_memory=max_memory)
                     if with_nlc and mf.do_nlc():
                         pass # fxc = 0, do nothing
@@ -184,9 +194,15 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
 
 
 def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
-                      with_j=True, hermi=0, max_memory=None, with_nlc=True):
+                      with_j=True, hermi=0, max_memory=None, with_nlc=True,
+                      grids=None):
     '''Generate a function to compute the product of UHF response function and
     UHF density matrices.
+
+    Kwargs:
+        grids (Grids object) : Grids for the XC response kernel of DFT
+            functionals. If not specified, the secondary grid
+            ``mf.second_grids`` is used if available, otherwise ``mf.grids``.
     '''
     assert isinstance(mf, (uhf.UHF, rohf.ROHF))
     if dm0 is None:
@@ -195,16 +211,20 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
     mol = mf.mol
     if isinstance(mf, hf.KohnShamDFT):
         ni = mf._numint
+        if grids is None:
+            grids = getattr(mf, 'second_grids', None)
+        if grids is None:
+            grids = mf.grids
+        if grids.coords is None:
+            grids.build(with_non0tab=True)
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
         hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
         if mo_coeff is not None and mo_occ is not None:
-            rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
-                                                mo_coeff, mo_occ, 1)
+            rho0, vxc, fxc = ni.cache_xc_kernel(mol, grids, mf.xc, mo_coeff, mo_occ, 1)
         else:
-            rho0, vxc, fxc = ni.cache_xc_kernel1(mol, mf.grids, mf.xc,
-                                                 dm0, 1)
+            rho0, vxc, fxc = ni.cache_xc_kernel1(mol, grids, mf.xc, dm0, 1)
 
         if max_memory is None:
             mem_now = lib.current_memory()[0]
@@ -217,7 +237,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
             if hermi == 2:
                 v1 = numpy.zeros_like(dm1)
             else:
-                v1 = ni.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
+                v1 = ni.nr_uks_fxc(mol, grids, mf.xc, dm0, dm1, 0, hermi,
                                    rho0, vxc, fxc, max_memory=max_memory)
                 if with_nlc and mf.do_nlc():
                     # Cannot import at top due to circular dependency
@@ -268,9 +288,15 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
 
 
 def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
-                      with_j=True, hermi=0, max_memory=None, with_nlc=True):
+                      with_j=True, hermi=0, max_memory=None, with_nlc=True,
+                      grids=None):
     '''Generate a function to compute the product of GHF response function and
     GHF density matrices.
+
+    Kwargs:
+        grids (Grids object) : Grids for the XC response kernel of DFT
+            functionals. If not specified, the secondary grid
+            ``mf.second_grids`` is used if available, otherwise ``mf.grids``.
     '''
     if dm0 is None:
         if mo_coeff is None: mo_coeff = mf.mo_coeff
@@ -280,14 +306,20 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
         from pyscf.dft import numint2c, r_numint
         ni = mf._numint
         assert isinstance(ni, (numint2c.NumInt2C, r_numint.RNumInt))
+        if grids is None:
+            grids = getattr(mf, 'second_grids', None)
+        if grids is None:
+            grids = mf.grids
+        if grids.coords is None:
+            grids.build(with_non0tab=True)
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
         hybrid = ni.libxc.is_hybrid_xc(mf.xc)
 
         if mo_coeff is not None and mo_occ is not None:
-            rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc, mo_coeff, mo_occ, 1)
+            rho0, vxc, fxc = ni.cache_xc_kernel(mol, grids, mf.xc, mo_coeff, mo_occ, 1)
         else:
-            rho0, vxc, fxc = ni.cache_xc_kernel1(mol, mf.grids, mf.xc, dm0, 1)
+            rho0, vxc, fxc = ni.cache_xc_kernel1(mol, grids, mf.xc, dm0, 1)
 
         if max_memory is None:
             mem_now = lib.current_memory()[0]
@@ -300,7 +332,7 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
             if hermi == 2:
                 v1 = numpy.zeros_like(dm1)
             else:
-                v1 = ni.get_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, 0, hermi,
+                v1 = ni.get_fxc(mol, grids, mf.xc, dm0, dm1, 0, 0, hermi,
                                 rho0, vxc, fxc, max_memory=max_memory)
                 if with_nlc and mf.do_nlc():
                     from pyscf.hessian.rks import get_vnlc_resp, get_vnlc_resp1
@@ -365,11 +397,13 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
 
 
 def _gen_dhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
-                      with_j=True, hermi=0, max_memory=None, with_nlc=True):
+                      with_j=True, hermi=0, max_memory=None, with_nlc=True,
+                      grids=None):
     '''Generate a function to compute the product of DHF response function and
     DHF density matrices.
     '''
-    return _gen_ghf_response(mf, mo_coeff, mo_occ, dm0, with_j, hermi, max_memory)
+    return _gen_ghf_response(mf, mo_coeff, mo_occ, with_j, hermi, max_memory,
+                             with_nlc, grids)
 
 
 hf.RHF.gen_response = _gen_rhf_response

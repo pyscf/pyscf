@@ -19,6 +19,7 @@ import numpy as np
 from pyscf import lib
 from pyscf.mcscf.addons import StateAverageFCISolver
 from pyscf.mcscf.addons import StateAverageMixFCISolver
+from pyscf.mcscf.addons import StateSpecificFCISolver
 from scipy import linalg
 
 # DMRG solvers require special handling but dmrgscf is not always installed
@@ -41,7 +42,10 @@ def _get_fcisolver (mc, ci, state=0):
     nroots = getattr (mc.fcisolver, 'nroots', 1)
     fcisolver = mc.fcisolver
     solver_state_index = state
-    if nroots>1: ci = ci[state]
+    # StateSpecificFCISolver stores a single CI vector (the target state)
+    # even though its nroots equals state+1, so do not index it by state.
+    if nroots>1 and not isinstance (fcisolver, StateSpecificFCISolver):
+        ci = ci[state]
     if isinstance (mc.fcisolver, StateAverageMixFCISolver):
         p0 = 0
         fcisolver = None

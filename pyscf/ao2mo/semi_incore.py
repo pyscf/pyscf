@@ -154,14 +154,14 @@ def general(eri, mo_coeffs, erifile, dataname='eri_mo',
     chunk_size = min(nao_pair, max(4, int(ioblk_size*1e6/8/nao_pair)))
 
     log.debug('Memory information:')
-    log.debug('  IOBLK_SIZE (MB): {}  chunk_size: {}'
-              .format(ioblk_size, chunk_size))
-    log.debug('  Final disk eri size (MB): {:.3g}'
-              .format(nij_pair*nkl_pair*typesize))
-    log.debug('  Half transformed eri size (MB): {:.3g}'
-              .format(nij_pair*nao_pair*typesize))
-    log.debug('  RAM buffer (MB): {:.3g}'
-              .format(nij_pair*IOBLK_SIZE*typesize*2))
+    log.debug(f'  IOBLK_SIZE (MB): {ioblk_size}  chunk_size: {chunk_size}'
+              )
+    log.debug(f'  Final disk eri size (MB): {nij_pair*nkl_pair*typesize:.3g}'
+              )
+    log.debug(f'  Half transformed eri size (MB): {nij_pair*nao_pair*typesize:.3g}'
+              )
+    log.debug(f'  RAM buffer (MB): {nij_pair*IOBLK_SIZE*typesize*2:.3g}'
+              )
 
     if eri_ao.size == nao_pair**2: # 4-fold symmetry
         # half_e1 first transforms the indices which are contiguous in memory

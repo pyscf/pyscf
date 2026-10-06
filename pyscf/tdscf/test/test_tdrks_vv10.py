@@ -28,10 +28,10 @@ def setUpModule():
     '''
     basis = 'def2-svp'
 
-    mol = pyscf.M(atom=atom, basis=basis, max_memory=32000,
+    mol = pyscf.M(atom=atom, basis=basis, max_memory=4000,
                   output='/dev/null', verbose=1)
 
-    unrestricted_mol = pyscf.M(atom=atom, charge=1, spin=1, basis=basis, max_memory=32000,
+    unrestricted_mol = pyscf.M(atom=atom, charge=1, spin=1, basis=basis, max_memory=4000,
                                output='/dev/null', verbose=1)
 
     excitation_energy_threshold = 1e-6

@@ -124,9 +124,9 @@ def general(mydf, mo_coeffs, kpts=None,
 
     if gamma_point(kptijkl) and allreal:
         ao = mydf._numint.eval_ao(cell, coords, kpti)[0]
-        if ((iden_coeffs(mo_coeffs[0], mo_coeffs[1]) and
+        if (iden_coeffs(mo_coeffs[0], mo_coeffs[1]) and
              iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
-             iden_coeffs(mo_coeffs[0], mo_coeffs[3]))):
+             iden_coeffs(mo_coeffs[0], mo_coeffs[3])):
             moiT = mojT = numpy.asarray(lib.dot(mo_coeffs[0].T,ao.T), order='C')
             ao = None
             max_memory = max_memory - moiT.nbytes*1e-6
@@ -391,7 +391,7 @@ def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
     fswap = lib.H5TmpFile()
     kconserv = kpts_helper.get_kconserv(cell, kpts)
     for uniq_id, kpt in enumerate(uniq_kpts):
-        q = uniq_kpts[uniq_id]
+        q = kpt
         adapted_ji_idx = numpy.where(uniq_inverse == uniq_id)[0]
         ki = adapted_ji_idx[0] // nkpts
         kj = adapted_ji_idx[0] % nkpts

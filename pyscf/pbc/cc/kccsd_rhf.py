@@ -29,9 +29,9 @@ import pyscf.cc
 import pyscf.cc.ccsd
 from pyscf.pbc import scf
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
-                               padded_mo_coeff, padding_k_idx)  # noqa
+                               padded_mo_coeff, padding_k_idx)
 from pyscf.pbc.cc import kintermediates_rhf as imdk
-from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf.pbc.df import GDF, RSGDF
@@ -795,7 +795,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             #self.vvvv = np.empty((nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype=dtype)
             self.vvvv = cc._scf.with_df.ao2mo_7d(orbv, factor=1./nkpts).transpose(0,2,1,3,5,4,6)
 
-            for (ikp,ikq,ikr) in khelper.symm_map.keys():
+            for (ikp,ikq,ikr) in khelper.symm_map:
                 iks = kconserv[ikp,ikq,ikr]
                 eri_kpt = fao2mo((mo_coeff[ikp],mo_coeff[ikq],mo_coeff[ikr],mo_coeff[iks]),
                                  (kpts[ikp],kpts[ikq],kpts[ikr],kpts[iks]), compact=False)
@@ -894,7 +894,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                 _init_df_eris(cc, self)
 
             elif nvir ** 4 * 16 / 1e6 + mem_now < cc.max_memory:
-                for (ikp, ikq, ikr) in khelper.symm_map.keys():
+                for (ikp, ikq, ikr) in khelper.symm_map:
                     iks = kconserv[ikp, ikq, ikr]
                     orbv_p = mo_coeff[ikp][:, nocc:]
                     orbv_q = mo_coeff[ikq][:, nocc:]
@@ -911,7 +911,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             else:
                 raise MemoryError('Minimal memory requirements %s MB'
                                   % (mem_now + nvir ** 4 / 1e6 * 16 * 2))
-                for (ikp, ikq, ikr) in khelper.symm_map.keys():
+                for (ikp, ikq, ikr) in khelper.symm_map:
                     for a in range(nvir):
                         orbva_p = orbv_p[:, a].reshape(-1, 1)
                         buf_kpt = fao2mo((orbva_p, orbv_q, orbv_r, orbv_s),

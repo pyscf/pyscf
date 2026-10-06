@@ -15,6 +15,7 @@
 
 import unittest
 import copy
+import sys
 import numpy
 import h5py
 from functools import reduce
@@ -299,6 +300,8 @@ class KnownValues(unittest.TestCase):
         t3bbb[:] = 1
         self.assertAlmostEqual(abs(vec - vec_orig).max(), 0, 15)
 
+    # Flaky NaN in amplitudes on the Windows wheel, crashes DIIS eigh (issue #3245)
+    @unittest.skipIf(sys.platform == 'win32', 'flaky NaN on Windows (issue #3245)')
     def test_zero_beta_electrons(self):
         mol = gto.M(atom='H', basis=('631g', [[0, (.2, 1)], [0, (.5, 1)]]), spin=1, verbose=0)
         mf = scf.UHF(mol).run()

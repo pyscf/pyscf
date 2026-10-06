@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import io
 import unittest
 from functools import reduce
 import numpy
@@ -97,6 +98,67 @@ C    SP
         mol1.x = None
         mol1.copy = None
         mol1.check_sanity()
+
+    def test_check_sanity_ecp_keys(self):
+        # Issue: the ECP sanity check compared the raw keys of .basis and .ecp,
+        # while Mole.build normalizes both with _atom_symbol. Nuclear charges or
+        # lower case symbols in .ecp therefore produced a spurious warning even
+        # though the ECP was applied.
+        def ecp_warnings(basis, ecp):
+            mol = gto.Mole()
+            mol.atom = 'Au 0 0 0; Sb 0 0 2.6'
+            mol.basis = basis
+            mol.ecp = ecp
+            mol.verbose = 4
+            mol.stdout = io.StringIO()
+            mol.build(dump_input=False)
+            msgs = [line for line in mol.stdout.getvalue().splitlines()
+                    if 'not specified' in line]
+            return mol, msgs
+
+        # def2-SVPD replaces 60 core electrons on Au and 28 on Sb
+        symbol_keys = {'Au': 'def2-SVPD', 'Sb': 'def2-SVPD'}
+        equivalent = [
+            symbol_keys,
+            {'79': 'def2-SVPD', '51': 'def2-SVPD'},   # nuclear charges
+            {79: 'def2-SVPD', 51: 'def2-SVPD'},       # integer keys
+            {'au': 'def2-SVPD', 'sb': 'def2-SVPD'},   # lower case
+            {'default': 'def2-SVPD'},                 # default entry
+        ]
+        for ecp in equivalent:
+            mol, msgs = ecp_warnings({'default': 'def2-SVPD'}, ecp)
+            self.assertEqual(msgs, [])
+            self.assertEqual(mol.nelectron, 42)
+            self.assertEqual(mol.atom_nelec_core(0), 60)
+            self.assertEqual(mol.atom_nelec_core(1), 28)
+
+        # the keys of .basis are normalized as well
+        mol, msgs = ecp_warnings({'79': 'def2-SVPD', '51': 'def2-SVPD'},
+                                 symbol_keys)
+        self.assertEqual(msgs, [])
+        self.assertEqual(mol.nelectron, 42)
+
+        # a genuinely missing ECP must still be reported
+        mol, msgs = ecp_warnings({'default': 'def2-SVPD'}, {'Sb': 'def2-SVPD'})
+        self.assertEqual(len(msgs), 1)
+        self.assertIn('ECP for Au not specified', msgs[0])
+        self.assertEqual(mol.nelectron, 102)
+
+        mol, msgs = ecp_warnings({'default': 'def2-SVPD'}, {})
+        self.assertEqual(len(msgs), 2)
+        self.assertEqual(mol.nelectron, 130)
+
+        # labelled atoms inherit the ECP of the plain element in make_ecp_env
+        mol = gto.Mole()
+        mol.atom = 'Au1 0 0 0; Au2 0 0 2.6'
+        mol.basis = {'default': 'def2-SVPD'}
+        mol.ecp = {'Au': 'def2-SVPD'}
+        mol.verbose = 4
+        mol.stdout = io.StringIO()
+        mol.build(dump_input=False)
+        self.assertEqual(mol.atom_nelec_core(0), 60)
+        self.assertEqual(mol.atom_nelec_core(1), 60)
+        self.assertNotIn('not specified', mol.stdout.getvalue())
 
     def test_nao_range(self):
         self.assertEqual(mol0.nao_nr_range(1,4), (2, 7))

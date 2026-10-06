@@ -145,7 +145,7 @@ def solve_df_rdm2 (mc_or_mc_grad, mo_cas=None, ci=None, casdm2=None):
             nmo_pair = nmo[2] * nmo[3]
             int3c = int3c.reshape (naux, nmo_pair)
         else:
-            raise RuntimeError ('int3c.shape = {}'.format (int3c.shape))
+            raise RuntimeError (f'int3c.shape = {int3c.shape}')
         dm2 = dm2.reshape (nmo[0]*nmo[1], nmo_pair).T
         int3c_dm2 = np.dot (int3c, dm2)
         dfcasdm2.append (linalg.cho_solve (int2c, int3c_dm2).reshape (naux, nmo[0], nmo[1]))
@@ -217,7 +217,7 @@ def energy_elec_dferi (mc, mo_cas=None, ci=None, dfcasdm2=None, casdm2=None):
     elif len (mo_cas) == 4:
         mo_cas = tuple (mo_cas)
     else:
-        raise RuntimeError ('Invalid shape of np.asarray (mo_cas): {}'.format (mo_cas.shape))
+        raise RuntimeError (f'Invalid shape of np.asarray (mo_cas): {mo_cas.shape}')
     nmo = [mo.shape[1] for mo in mo_cas]
     if ci is None: ci = mc.ci
     if dfcasdm2 is None: dfcasdm2 = solve_df_rdm2 (mc, mo_cas=mo_cas[2:], ci=ci, casdm2=casdm2)
@@ -277,7 +277,7 @@ def gfock_dferi (mc, mo_cas=None, ci=None, dfcasdm2=None, casdm2=None, max_memor
     elif len (mo_cas) == 4:
         mo_cas = tuple (mo_cas)
     else:
-        raise RuntimeError ('Invalid shape of np.asarray (mo_cas): {}'.format (mo_cas.shape))
+        raise RuntimeError (f'Invalid shape of np.asarray (mo_cas): {mo_cas.shape}')
     if ci is None: ci = mc.ci
     if dfcasdm2 is None: dfcasdm2 = solve_df_rdm2 (mc, mo_cas=mo_cas[2:], ci=ci, casdm2=casdm2)
     dfcasdm2 = np.asarray (dfcasdm2)
@@ -338,7 +338,7 @@ def grad_elec_auxresponse_dferi (mc_grad, mo_cas=None, ci=None, dfcasdm2=None, c
     elif len (mo_cas) == 4:
         mo_cas = tuple (mo_cas)
     else:
-        raise RuntimeError ('Invalid shape of np.asarray (mo_cas): {}'.format (mo_cas.shape))
+        raise RuntimeError (f'Invalid shape of np.asarray (mo_cas): {mo_cas.shape}')
     nmo = [mo.shape[1] for mo in mo_cas]
     if atmlst is None: atmlst = list (range (mol.natm))
     if ci is None: ci = mc.ci
@@ -350,7 +350,7 @@ def grad_elec_auxresponse_dferi (mc_grad, mo_cas=None, ci=None, dfcasdm2=None, c
     # Shape dfcasdm2
     mosym, nmo_pair, mo_conc, mo_slice = _conc_mos(mo_cas[0], mo_cas[1], compact=True)
     if 's2' in mosym:
-        assert (nmo[0] == nmo[1]), 'How did I get {} with nmo[0] = {} and nmo[1] = {}'.format (mosym, nmo[0], nmo[1])
+        assert (nmo[0] == nmo[1]), f'How did I get {mosym} with nmo[0] = {nmo[0]} and nmo[1] = {nmo[1]}'
         dfcasdm2 = dfcasdm2.reshape (nset*naux, nmo[0], nmo[1])
         dfcasdm2 += dfcasdm2.transpose (0,2,1)
         diag_idx = np.arange(nmo[0])
@@ -436,7 +436,7 @@ def grad_elec_dferi (mc_grad, mo_cas=None, ci=None, dfcasdm2=None, casdm2=None, 
     elif len (mo_cas) == 4:
         mo_cas = tuple (mo_cas)
     else:
-        raise RuntimeError ('Invalid shape of np.asarray (mo_cas): {}'.format (mo_cas.shape))
+        raise RuntimeError (f'Invalid shape of np.asarray (mo_cas): {mo_cas.shape}')
     nmo = [mo.shape[1] for mo in mo_cas]
     if atmlst is None: atmlst = list (range (mol.natm))
     if ci is None: ci = mc.ci
@@ -495,8 +495,7 @@ if __name__ == '__main__':
     e2_ref = np.dot (casdm2.ravel (), eri_cas.ravel ()) / 2
     e2_test = energy_elec_dferi (mc, mo_cas=mo_cas, casdm2=casdm2)[0]
     e2_err = e2_test - e2_ref
-    print ("Testing full energy calculation: e2_test - e2_ref = {:13.6e} - {:13.6e} = {:13.6e}".format (
-           e2_test, e2_ref, e2_err))
+    print (f"Testing full energy calculation: e2_test - e2_ref = {e2_test:13.6e} - {e2_ref:13.6e} = {e2_err:13.6e}")
 
     # 2-RDM slices (see: SA-CASSCF gradients)
     eri_cas_sl = eri_cas[0:2,1:3,0:4,1:6]
@@ -505,8 +504,7 @@ if __name__ == '__main__':
     e2_ref = np.dot (casdm2_sl.ravel (), eri_cas_sl.ravel ())
     e2_test = energy_elec_dferi (mc, mo_cas=mo_cas_sl, casdm2=casdm2_sl)[0] * 2
     e2_err = e2_test - e2_ref
-    print ("Testing slice calculation: e2_test - e2_ref = {:13.6e} - {:13.6e} = {:13.6e}".format (
-           e2_test, e2_ref, e2_err))
+    print (f"Testing slice calculation: e2_test - e2_ref = {e2_test:13.6e} - {e2_ref:13.6e} = {e2_err:13.6e}")
 
     # 2-RDM slice complex conjugate
     casdm2_sl = casdm2[1:3,0:2,1:6,0:4]
@@ -514,11 +512,9 @@ if __name__ == '__main__':
     mo_cas_sl = (mo_cas[:,1:3], mo_cas[:,0:2], mo_cas[:,1:6], mo_cas[:,0:4])
     e2_test = np.dot (casdm2_sl.ravel (), eri_cas_sl.ravel ())
     e2_err = e2_test - e2_ref
-    print ("Testing slice c.c. ERI: e2_test - e2_ref = {:13.6e} - {:13.6e} = {:13.6e}".format (
-           e2_test, e2_ref, e2_err))
+    print (f"Testing slice c.c. ERI: e2_test - e2_ref = {e2_test:13.6e} - {e2_ref:13.6e} = {e2_err:13.6e}")
     e2_test = energy_elec_dferi (mc, mo_cas=mo_cas_sl, casdm2=casdm2_sl)[0] * 2
-    print ("Testing slice c.c. DFERI: e2_test - e2_ref = {:13.6e} - {:13.6e} = {:13.6e}".format (
-           e2_test, e2_ref, e2_err))
+    print (f"Testing slice c.c. DFERI: e2_test - e2_ref = {e2_test:13.6e} - {e2_ref:13.6e} = {e2_err:13.6e}")
 
     # 2-RDM slice electron interchange
     casdm2_sl = casdm2[0:4,1:6,0:2,1:3]
@@ -526,11 +522,9 @@ if __name__ == '__main__':
     mo_cas_sl = (mo_cas[:,0:4], mo_cas[:,1:6], mo_cas[:,0:2], mo_cas[:,1:3])
     e2_test = np.dot (casdm2_sl.ravel (), eri_cas_sl.ravel ())
     e2_err = e2_test - e2_ref
-    print ("Testing slice 1<->2 ERI: e2_test - e2_ref = {:13.6e} - {:13.6e} = {:13.6e}".format (
-           e2_test, e2_ref, e2_err))
+    print (f"Testing slice 1<->2 ERI: e2_test - e2_ref = {e2_test:13.6e} - {e2_ref:13.6e} = {e2_err:13.6e}")
     e2_test = energy_elec_dferi (mc, mo_cas=mo_cas_sl, casdm2=casdm2_sl)[0] * 2
-    print ("Testing slice 1<->2 DFERI: e2_test - e2_ref = {:13.6e} - {:13.6e} = {:13.6e}".format (
-           e2_test, e2_ref, e2_err))
+    print (f"Testing slice 1<->2 DFERI: e2_test - e2_ref = {e2_test:13.6e} - {e2_ref:13.6e} = {e2_err:13.6e}")
 
     mc_grad_conv = mcscf.CASSCF (scf.RHF (mol).run (), 11, 16)
     mc_grad_conv.conv_tol = 1e-10

@@ -23,8 +23,8 @@ Generalized Hartree-Fock for periodic systems with k-point sampling
 from functools import reduce
 import numpy as np
 import scipy.linalg
-import pyscf.scf.hf as mol_hf  # noqa
-import pyscf.scf.ghf as mol_ghf  # noqa
+import pyscf.scf.hf as mol_hf
+import pyscf.scf.ghf as mol_ghf
 import pyscf.scf.uhf as mol_uhf
 from pyscf import lib
 from pyscf.lib import logger
@@ -149,7 +149,7 @@ def _make_rdm1_meta(cell, dm_ao_kpts, kpts, pre_orth_method, s):
     from pyscf.lo import orth
     from pyscf.pbc.tools import k2gamma
 
-    kmesh = k2gamma.kpts_to_kmesh(cell, kpts-kpts[0])
+    kmesh = k2gamma.kpts_to_kmesh(cell, kpts-kpts[0], bound_by_supmol=False)
     nkpts, nso = dm_ao_kpts.shape[:2]
     nao = nso // 2
     scell, phase = k2gamma.get_phase(cell, kpts, kmesh)

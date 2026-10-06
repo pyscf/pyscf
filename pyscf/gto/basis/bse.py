@@ -126,9 +126,9 @@ def _print_basis_information(basis):
     version = basis['version']
     revision_description = basis['revision_description']
     revision_date = basis['revision_date']
-    print('{} basis set, version {}'.format(name, version))
-    print('Last revised on {}'.format(revision_date))
-    print('Revision description: {}'.format(revision_description))
+    print(f'{name} basis set, version {version}')
+    print(f'Last revised on {revision_date}')
+    print(f'Revision description: {revision_description}')
 
 def get_basis(name, elements):
     '''
@@ -183,7 +183,7 @@ if __name__ == '__main__':
     #print('O 6-31G basis, BSE format\n{}'.format(o631gbas))
     _print_basis_information(o631gbas)
     o631gorb, o631gref = _orbital_basis(o631gbas)
-    print('O 6-31G orbital basis, PySCF format\n{}'.format(o631gorb))
+    print(f'O 6-31G orbital basis, PySCF format\n{o631gorb}')
     print('Literature references')
     for ref in o631gref:
         print(references.reference_text(ref, reference_data[ref]))
@@ -193,9 +193,9 @@ if __name__ == '__main__':
     #print('Na LANL2DZ basis, BSE format\n{}'.format(nalanl2dzbas))
     _print_basis_information(nalanl2dzbas)
     nalanl2dzorb, nalanl2dzref = _orbital_basis(nalanl2dzbas)
-    print('Na LANL2DZ orbital basis, PySCF format\n{}'.format(nalanl2dzorb))
+    print(f'Na LANL2DZ orbital basis, PySCF format\n{nalanl2dzorb}')
     nalanl2dzecp = _ecp_basis(nalanl2dzbas)
-    print('Na LANL2DZ ECP basis, PySCF format\n{}'.format(nalanl2dzecp))
+    print(f'Na LANL2DZ ECP basis, PySCF format\n{nalanl2dzecp}')
     print('Literature references')
     for ref in nalanl2dzref:
         print(references.reference_text(ref, reference_data[ref]))
