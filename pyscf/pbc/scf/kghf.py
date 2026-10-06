@@ -201,7 +201,7 @@ class KGHF(khf.KSCF):
     '''PBC GHF with k-point sampling (default: gamma point).
 
     Set with_soc=True to add ECP and GTH pseudopotential spin-orbit terms.
-    GTH atoms must then use explicit SOC data, e.g. pseudo='gth-pbe-soc'.
+    GTH atoms must then use explicit SOC data, e.g. pseudo='GTH-PBE-SOC-q4'.
     '''
     _keys = {'with_soc'}
 
@@ -233,11 +233,9 @@ class KGHF(khf.KSCF):
                 s = .5 * lib.PauliMatrices
                 vl_soc = np.einsum('sxy,kspq->kxpyq', 1j * s, vl_soc)
                 hcore = hcore + vl_soc.reshape(hcore.shape)
-            elif cell.has_ecp_soc():
+            if cell.has_ecp_soc():
                 # The ECP SOC contribution = <|1j * s * U_SOC|>
                 hcore = hcore + ecp_int(cell, kpts, intor='ECPso')
-            else:
-                raise NotImplementedError
         return hcore
 
     def get_ovlp(self, cell=None, kpts=None):

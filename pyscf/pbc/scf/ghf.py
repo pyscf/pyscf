@@ -137,10 +137,8 @@ class GHF(pbchf.SCF):
                 s = .5 * lib.PauliMatrices
                 vl_soc = np.einsum('sxy,spq->xpyq', 1j * s, vl_soc)
                 hcore = hcore + vl_soc.reshape(hcore.shape)
-            elif cell.has_ecp_soc():
+            if cell.has_ecp_soc():
                 hcore = hcore + ecp_int(cell, kpt, intor='ECPso')
-            else:
-                raise NotImplementedError
         return hcore
 
     def get_ovlp(self, cell=None, kpt=None):

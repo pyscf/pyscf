@@ -1,3 +1,6 @@
+# GTH_SOC_POTENTIALS copied from
+# https://github.com/cp2k/cp2k/blob/master/data/GTH_SOC_POTENTIALS
+#
 ################################################################################
 #
 # Potential database file for CP2K/Quickstep with spin-orbit coupling parameters
