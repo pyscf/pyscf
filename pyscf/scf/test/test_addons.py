@@ -333,6 +333,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(addons.convert_to_rhf(sym_mf_u), scf.hf_symm.ROHF))
         self.assertTrue(isinstance(addons.convert_to_uhf(sym_mf_u), scf.uhf_symm.UHF))
         self.assertTrue(isinstance(addons.convert_to_ghf(sym_mf_u), scf.ghf_symm.GHF))
+        self.assertEqual(type(addons.convert_to_rhf(mol.ROHF())), scf.hf.RHF)
 
         mf1 = mf.copy()
         self.assertTrue(isinstance(mf1.convert_from_(mf), scf.rhf.RHF))
@@ -425,6 +426,18 @@ class KnownValues(unittest.TestCase):
         #self.assertTrue(isinstance(addons.convert_to_rhf(scf.GHF(mol).density_fit().newton()), df_jk._DFHF))
         #self.assertTrue(isinstance(addons.convert_to_uhf(scf.GHF(mol).density_fit().newton()), df_jk._DFHF))
         self.assertTrue(isinstance(addons.convert_to_ghf(scf.GHF(mol).density_fit().newton()), df_jk._DFHF))
+
+    def test_conversion_gks_numint(self):
+        from pyscf.dft.numint2c import NumInt2C
+        for symmetry in (False, True):
+            m = gto.M(atom='H 0 0 0; H 0 0 1', symmetry=symmetry, verbose=0)
+            for source in (dft.RKS, dft.ROKS, dft.UKS):
+                obj = source(m)
+                assert isinstance(obj.to_gks()._numint, NumInt2C)
+
+            obj = dft.GKS(m)
+            obj.collinear = 'ncol'
+            assert obj.to_gks()._numint is obj._numint
 
     def test_get_ghf_orbspin(self):
         orbspin = addons.get_ghf_orbspin(mf.mo_energy, mf.mo_occ)
