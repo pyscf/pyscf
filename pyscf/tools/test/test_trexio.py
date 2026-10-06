@@ -135,6 +135,96 @@ def test_mol_ccecp_ccecp_ccpvqz(cart):
         s1, t1, v1 = _get_integrals(mol1)
         _assert_s_t_v_roundtrip(s0, t0, v0, s1, t1, v1)
 
+## helper to make a non-PySCF-convention basis
+def _make_non_pyscf_convention_basis(filename, modify, group="basis"):
+    """Turn the basis (or ao) group of a file written by ``to_trexio`` into
+    one that does not follow PySCF's conventions (prim_factor == gto_norm,
+    shell_factor == 1, normalized contractions, ao_normalization equal to
+    libcint's angular factors), by applying ``modify`` to its fields and
+    writing them back.  Emulates a file produced by another program, which
+    the round-trip tests can never exercise."""
+    names = {
+        "basis": ["type", "prim_num", "shell_num", "nucleus_index",
+                  "shell_ang_mom", "shell_factor", "shell_index", "exponent",
+                  "coefficient", "prim_factor"],
+        "ao": ["cartesian", "num", "shell", "normalization"],
+    }[group]
+    with trexio_lib.File(filename, "u", back_end=_BACKEND_CONST) as tf:
+        fields = {f: getattr(trexio_lib, f"read_{group}_{f}")(tf) for f in names}
+        modify(fields)
+        getattr(trexio_lib, f"delete_{group}")(tf)
+        for f, v in fields.items():
+            getattr(trexio_lib, f"write_{group}_{f}")(tf, v)
+
+
+## The TREXIO spec fixes only the product shell_factor * prim_factor *
+## coefficient; a file that distributes the normalization differently from
+## to_trexio describes the same AOs and must be read identically.
+@pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
+def test_from_trexio_normalization_redistributed(cart):
+    with tempfile.TemporaryDirectory() as d:
+        filename = os.path.join(d, f"test.{ext}")
+        mol0 = pyscf.M(atom="H 0 0 0; F 0 0 1", basis="6-31g**", cart=cart)
+        trexio.to_trexio(mol0, filename)
+
+        def modify(f):
+            shell_factor = 2.0 * np.ones_like(f["shell_factor"])
+            coefficient = f["coefficient"] * f["prim_factor"]
+            coefficient /= shell_factor[f["shell_index"]]
+            f["shell_factor"] = shell_factor
+            f["prim_factor"] = np.ones_like(f["prim_factor"])
+            f["coefficient"] = coefficient
+
+        _make_non_pyscf_convention_basis(filename, modify)
+        mol1 = trexio.from_trexio(filename)
+        s0, t0, v0 = _get_integrals(mol0)
+        s1, t1, v1 = _get_integrals(mol1)
+        _assert_s_t_v_roundtrip(s0, t0, v0, s1, t1, v1)
+
+
+## PySCF renormalizes every contraction, so a file whose contracted functions
+## are not normalized (valid TREXIO, but outside what a Mole can represent)
+## must be rejected instead of silently returning a rescaled basis.
+@pytest.mark.parametrize("field", ["coefficient", "shell_factor"])
+def test_from_trexio_rejects_unnormalized_contraction(field):
+    with tempfile.TemporaryDirectory() as d:
+        filename = os.path.join(d, f"test.{ext}")
+        mol0 = pyscf.M(atom="H 0 0 0; F 0 0 1", basis="6-31g**")
+        trexio.to_trexio(mol0, filename)
+
+        def modify(f):
+            f[field] = 3.0 * f[field]
+
+        _make_non_pyscf_convention_basis(filename, modify)
+        with pytest.raises(NotImplementedError):
+            trexio.from_trexio(filename)
+
+
+## ao_normalization is a per-AO factor.  A Mole holds no such array: the
+## angular factors are fixed in libcint, and a per-shell scale would be
+## removed by the contraction renormalization.  A file whose
+## ao_normalization differs from PySCF's convention must therefore be
+## rejected, whether the difference is uniform within a shell or not.
+@pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
+@pytest.mark.parametrize("mode", ["uniform", "per_ao"])
+def test_from_trexio_rejects_foreign_ao_normalization(cart, mode):
+    with tempfile.TemporaryDirectory() as d:
+        filename = os.path.join(d, f"test.{ext}")
+        mol0 = pyscf.M(atom="H 0 0 0; F 0 0 1", basis="6-31g**", cart=cart)
+        trexio.to_trexio(mol0, filename)
+
+        def modify(f):
+            scale = np.ones_like(f["normalization"])
+            if mode == "uniform":
+                scale[:] = 2.0
+            else:
+                scale[1::2] = 2.0
+            f["normalization"] = f["normalization"] * scale
+
+        _make_non_pyscf_convention_basis(filename, modify, group="ao")
+        with pytest.raises(NotImplementedError):
+            trexio.from_trexio(filename)
+
 
 ## PBC, k=gamma, segment contraction (6-31g), all-electron
 @pytest.mark.parametrize("cart", [False, True], ids=["cart=false", "cart=true"])
