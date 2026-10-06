@@ -14,6 +14,8 @@ review or validation gaps.
 - Check that relevant programs and literature are properly cited. Connect
   non-obvious algorithms and scientific conventions to their references in
   comments or docstrings where useful.
+- Verify that cited references exist, links or identifiers point to the intended
+  sources, and those sources support the associated claims.
 - For constants, parameter tables, or databases, check that sources are cited
   and that license or redistribution concerns are addressed. Flag unclear
   permissions rather than assuming that a citation establishes permission.
@@ -81,6 +83,9 @@ review or validation gaps.
 - Check that claims in the PR description and examples accurately describe the
   implemented method and its capabilities.
 - For a bug fix, check that a regression test exercises the failing behavior.
+- Check whether unit tests exercise important branches and code blocks in the
+  new or modified code. Verify that assertions check the intended behavior,
+  rather than merely executing those paths.
 - Use small, deterministic systems and cover relevant supported branches.
   Avoid an exhaustive combination of methods and options without a reason.
 
