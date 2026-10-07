@@ -345,7 +345,7 @@ def _get_pp_nonloc_strain_derivatives(cell, mesh, dm_kpts, kpts=None):
                 pp = cell._pseudo[symb]
                 p1 = 0
                 for l, proj in enumerate(pp[5:]):
-                    rl, nl, hl = proj
+                    rl, nl, hl = proj[:3]
                     if nl > 0:
                         fakemol._bas[0,gto.ANG_OF] = l
                         fakemol._env[ptr+3] = .5*rl**2
@@ -365,7 +365,7 @@ def _get_pp_nonloc_strain_derivatives(cell, mesh, dm_kpts, kpts=None):
                     rho = SPG_lm_aoGs.dot(dm).dot(SPG_lm_aoGs.conj().T).real
                     p1 = 0
                     for l, proj in enumerate(pp[5:]):
-                        rl, nl, hl = proj
+                        rl, nl, hl = proj[:3]
                         if nl > 0:
                             nf = l * 2 + 1
                             p0, p1 = p1, p1+nl*nf
