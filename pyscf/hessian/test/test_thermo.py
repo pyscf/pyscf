@@ -114,6 +114,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(results['G_tot'][0] - rrho['G_tot'][0],
                                results['H_tot'][0] - rrho['H_tot'][0]
                                - 298.15 * (results['S_tot'][0] - rrho['S_tot'][0]), 12)
+        self.assertEqual(results['qrrho_freq0'], (100., 'cm^-1'))
+        results = thermo.thermo(mf, freq_au, 298.15, 101325, qrrho=True,
+                                qrrho_freq0=50.)
+        self.assertEqual(results['qrrho_freq0'][0], 50.)
+        self.assertNotAlmostEqual(results['S_vib'][0] * conv, 98.4478, 2)
         thermo.dump_thermo(mol, results)
 
 if __name__ == "__main__":

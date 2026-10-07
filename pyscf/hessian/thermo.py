@@ -245,6 +245,7 @@ def thermo(model, freq, temperature=298.15, pressure=101325,
         e_vib = weight * e_vib + (1 - weight) * .5 * R_Eh * temperature
     results['qrrho'] = (qrrho, '')
     results['qrrho_enthalpy'] = (qrrho_enthalpy, '')
+    results['qrrho_freq0'] = (qrrho_freq0, 'cm^-1')
 
     results['S_vib' ] = (s_vib.sum(), 'Eh/K')
     results['Cv_vib'] = results['Cp_vib'] = (R_Eh * (e * rt**2/(1-e)**2).sum(), 'Eh/K')
@@ -350,9 +351,11 @@ def dump_thermo(mol, results):
     dump('Zero-point energy (ZPE) %.5f [Eh]   %.3f [J/mol]\n'
          % (results['ZPE'][0], results['ZPE'][0] * nist.HARTREE2J * nist.AVOGADRO))
     if results.get('qrrho', (False,))[0]:
-        dump('Quasi-RRHO vibrational entropy (Grimme)\n')
+        dump('Quasi-RRHO vibrational entropy (Grimme), freq0 = %.1f [cm^-1]\n'
+             % results['qrrho_freq0'][0])
     if results.get('qrrho_enthalpy', (False,))[0]:
-        dump('Quasi-RRHO vibrational energy (Head-Gordon)\n')
+        dump('Quasi-RRHO vibrational energy (Head-Gordon), freq0 = %.1f [cm^-1]\n'
+             % results['qrrho_freq0'][0])
 
     keys = ('tot', 'elec', 'trans', 'rot', 'vib')
     dump('                    %s\n' % ' '.join('%10s'%x for x in keys))
