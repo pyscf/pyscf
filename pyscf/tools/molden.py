@@ -457,7 +457,7 @@ def header(mol, fout, ignore_h=IGNORE_H):
     if mol.cart:
         fout.write('[6d]\n[10f]\n[15g]\n')
     else:
-        fout.write('[5d]\n[7f]\n[9g]\n')
+        fout.write('[5d7f]\n[9g]\n')
 
     if mol.has_ecp():  # See https://github.com/zorkzou/Molden2AIM
         fout.write('[core]\n')
