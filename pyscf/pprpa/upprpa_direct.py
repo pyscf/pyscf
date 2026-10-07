@@ -119,7 +119,7 @@ def ao2mo(pprpa):
         pprpa: ppRPA object.
 
     Returns:
-        Lpq (double ndarray): three-center DF matrices in MO active space.
+        Lpq (list): three-center DF matrices in MO active space.
     """
     mf = pprpa._scf
     mo_coeff = numpy.asarray(mf.mo_coeff)
@@ -163,7 +163,7 @@ def ao2mo(pprpa):
                 aosym='s2', out=Lpq_b)
             Lpq_a = Lpq_a.reshape(naux, nmo_act[0], nmo_act[0])
             Lpq_b = Lpq_b.reshape(naux, nmo_act[1], nmo_act[1])
-            return numpy.asarray([Lpq_a, Lpq_b])
+            return [Lpq_a, Lpq_b]
         else:
             logger.warn(pprpa, 'Memory may not be enough!')
             raise NotImplementedError
@@ -204,7 +204,7 @@ def ao2mo(pprpa):
             Lpq_b.append(tmp_b)
         Lpq_a = numpy.vstack(Lpq_a).reshape(-1, nmo_act[0], nmo_act[0])
         Lpq_b = numpy.vstack(Lpq_b).reshape(-1, nmo_act[1], nmo_act[1])
-        eri_3d = numpy.asarray([Lpq_a, Lpq_b])
+        eri_3d = [Lpq_a, Lpq_b]
 
         return eri_3d
 
@@ -580,7 +580,7 @@ class UppRPADirect(StreamObject):
         nvir_act = self.nvir_act
         self.mo_energy_act = (
             self.mo_energy[0][nocc[0]-nocc_act[0]:nocc[0]+nvir_act[0]],
-            self.mo_energy[0][nocc[1]-nocc_act[1]:nocc[1]+nvir_act[1]])
+            self.mo_energy[1][nocc[1]-nocc_act[1]:nocc[1]+nvir_act[1]])
         if self.mu is None:
             self.mu = get_chemical_potential(self.nocc, self.mo_energy)
         return

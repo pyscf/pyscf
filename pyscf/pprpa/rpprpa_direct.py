@@ -458,7 +458,7 @@ def pprpa_print_direct_eigenvector(pprpa, multi, exci0, exci, xy):
         pairs = numpy.argwhere(full > pprpa.print_thresh)
         for a, b in pairs:
             pprpa_print_a_pair(
-                pprpa, s_pp=True, p=a+nocc_fro+nocc_act, q=b+nocc_fro+nocc_act,
+                pprpa, is_pp=True, p=a+nocc_fro+nocc_act, q=b+nocc_fro+nocc_act,
                 percentage=full[a, b])
 
         logger.info(pprpa, "")
@@ -518,7 +518,7 @@ def analyze_pprpa_direct(pprpa):
                 pprpa, multi="s", exci0=exci0, exci=pprpa.exci_s, xy=pprpa.xy_s)
         else:
             logger.info(pprpa, "only triplet results found.")
-            exci0 = pprpa.exci_s[oo_dim_t if pprpa.nelec == "n-2" else oo_dim_t-1]
+            exci0 = pprpa.exci_t[oo_dim_t if pprpa.nelec == "n-2" else oo_dim_t-1]
             pprpa_print_direct_eigenvector(
                 pprpa, multi="t", exci0=exci0, exci=pprpa.exci_t, xy=pprpa.xy_t)
     return

@@ -126,10 +126,10 @@ def kernel(pprpa):
         logger.info(pprpa, "add %d new trial vectors.", ntri - ntri_old)
 
         iter += 1
-        if conv is True:
+        if conv:
             break
 
-    assert conv is True, "ppRPA Davidson is not converged!"
+    assert conv, "ppRPA Davidson is not converged!"
     logger.info(
         pprpa, "\nppRPA Davidson converged in %d iterations, final subspace size = %d",
         iter, nprod)
@@ -365,12 +365,12 @@ def pprpa_expand_space(
     conv_record = numpy.zeros(shape=[nroot], dtype=bool)
     max_residue = 0
     for i in range(nroot):
-        max_residue = max(max_residue, abs(numpy.max(residue[i])))
+        max_residue = max(max_residue, abs(residue[i]).max())
         if len(residue[i][abs(residue[i]) > residue_thresh]) == 0:
             conv_record[i] = True
         else:
             conv_record[i] = False
-    nconv = len(conv_record[conv_record is True])
+    nconv = conv_record.sum()
     logger.info(pprpa, "max residue = %.6e", max_residue)
     if nconv == nroot:
         return True, ntri
@@ -385,7 +385,7 @@ def pprpa_expand_space(
     # Schmidt orthogonalization
     ntri_old = ntri
     for iroot in range(nroot):
-        if conv_record[iroot] is True:
+        if conv_record[iroot]:
             continue
 
         # convert residuals
@@ -690,4 +690,3 @@ class RppRPADavidson(StreamObject):
             self.xy_t = self.xy.copy()
         self.exci = self.xy = None
         return
-
