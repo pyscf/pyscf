@@ -13,24 +13,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy
+from fractions import Fraction
+
+import wignernj
 
 def cg_spin(l, jdouble, mjdouble, spin):
-    '''Clebsch Gordon coefficient of <l,m,1/2,spin|j,mj>'''
-    ll1 = 2 * l + 1
-    if jdouble == 2*l+1:
-        if spin > 0:
-            c = numpy.sqrt(.5*(ll1+mjdouble)/ll1)
-        else:
-            c = numpy.sqrt(.5*(ll1-mjdouble)/ll1)
-    elif jdouble == 2*l-1:
-        if spin > 0:
-            c =-numpy.sqrt(.5*(ll1-mjdouble)/ll1)
-        else:
-            c = numpy.sqrt(.5*(ll1+mjdouble)/ll1)
-    else:
-        c = 0
-    return c
+    '''Clebsch Gordon coefficient of <l,m,1/2,spin|j,mj>
+
+    The angular momenta j and mj are given as twice their value, so that
+    half-integers are represented exactly; spin is +1 for alpha and -1 for
+    beta, i.e. twice the value of ms.  m is fixed by mj = m + ms.
+
+    Evaluated exactly with libwignernj (S. Lehtola, Comput. Phys. Commun.
+    329, 110342 (2026), doi:10.1016/j.cpc.2026.110342).
+    '''
+    return wignernj.clebsch_gordan(Fraction(l), Fraction(mjdouble - spin, 2),
+                                   Fraction(1, 2), Fraction(spin, 2),
+                                   Fraction(jdouble, 2), Fraction(mjdouble, 2))
 
 
 if __name__ == '__main__':
