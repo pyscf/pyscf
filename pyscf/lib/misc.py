@@ -420,14 +420,7 @@ def prange_split(n_total, n_sections):
 
 izip = zip
 
-if sys.version_info >= (3, 8):
-    from math import comb
-else:
-    import math
-    def comb(n, k):
-        if k < 0 or k > n:
-            return 0
-        return math.factorial(n) // math.factorial(n-k) // math.factorial(k)
+from math import comb
 
 def map_with_prefetch(func, *iterables):
     '''
