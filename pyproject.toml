@@ -26,6 +26,7 @@ classifiers = [
   'Operating System :: POSIX',
   'Operating System :: Unix',
   'Operating System :: MacOS',
+  'Operating System :: Microsoft :: Windows',
 ]
 
 maintainers = [{ name = "Qiming Sun", email = "osirpt.sun@gmail.com" }]
