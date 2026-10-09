@@ -888,7 +888,7 @@ class UHF(hf.SCF):
 
     def dump_flags(self, verbose=None):
         hf.SCF.dump_flags(self, verbose)
-        logger.info(self, 'number electrons alpha = %d  beta = %d', *self.nelec)
+        logger.info(self, 'number electrons alpha = %g  beta = %g', *self.nelec)
 
     def eig(self, fock, s, overwrite=False, x=None):
         e_a, c_a = self._eigh(fock[0], s, x=x)

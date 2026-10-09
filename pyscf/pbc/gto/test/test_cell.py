@@ -854,6 +854,15 @@ loop_
         print(cl._bas[:,2] == [5, 5])
         print(cl._pseudo['Be'][0] == [2, 0, 0, 0])
 
+
+    def test_fractional_nelec(self):
+        cl = pgto.M(
+            a = np.eye(3) * 4.,
+            atom = 'He 0 0 1',
+            basis = [[0, [1, 1]]], nelec_frac=True, charge=0.5)
+        self.assertEqual(cl.nelectron, 1.5)
+        self.assertEqual(pgto.tot_electrons(cl, nkpts=3), 5.5)
+
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")
     unittest.main()
