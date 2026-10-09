@@ -102,6 +102,17 @@ class KnownValues(unittest.TestCase):
     def tearDownClass(cls):
         dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
 
+    def test_unsupported_grid_response(self):
+        for cls in (dft.RKS, dft.UKS):
+            mf = cls(mol)
+            for method in (mf, mf.density_fit()):
+                with self.subTest(method=type(method).__name__):
+                    hess = method.Hessian().set(grid_response=True)
+                    with self.assertRaisesRegex(NotImplementedError, 'grid response'):
+                        hess.partial_hess_elec()
+                    with self.assertRaisesRegex(NotImplementedError, 'grid response'):
+                        hess.make_h1(None, None)
+
     def test_rks_hess_atmlst(self):
         mf = dft.RKS(mol)
         mf.xc = 'pbe0'
