@@ -68,6 +68,6 @@ all = ["pyscf[forge,geomopt,doci,properties,semiempirical,cppe,pyqmc,bse,dispers
 
 # extras which should not be installed by "all" components
 cornell_shci = ["pyscf-cornell-shci"]
-fciqmcscf = ["pyscf-fciqmc"]
+fciqmcscf = ["pyscf-fciqmc"] # broken
 tblis = ["pyscf-tblis"]
 shciscf = ["pyscf-shciscf"] # broken
