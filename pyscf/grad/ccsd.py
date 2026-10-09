@@ -179,6 +179,10 @@ def grad_elec(cc_grad, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=Non
     # Hartree-Fock part contribution
     dm1p = hf_dm1 + dm1*2
     dm1 += hf_dm1
+    # The relaxed one-particle density (AO basis, SCF part included) that the
+    # Hellmann-Feynman term below contracts with h1: it is dE/dh, so one-electron
+    # properties such as the dipole moment follow from it without a second solve.
+    cc_grad.rdm1_relaxed = dm1
     zeta += rhf_grad.make_rdm1e(mo_energy, mo_coeff, mycc.mo_occ)
 
     for k, ia in enumerate(atmlst):
@@ -422,6 +426,7 @@ def _cp(a):
     return numpy.asarray(a, order='C')
 
 class Gradients(rhf_grad.GradientsBase):
+    _keys = {'rdm1_relaxed'}
 
     grad_elec = grad_elec
 
@@ -459,6 +464,18 @@ class Gradients(rhf_grad.GradientsBase):
     def grad_nuc(self, mol=None, atmlst=None):
         mf_grad = self.base._scf.nuc_grad_method()
         return mf_grad.grad_nuc(mol, atmlst)
+
+    def dip_moment(self, mol=None, unit='Debye', verbose=logger.NOTE, **kwargs):
+        '''Dipole moment from the relaxed CC density formed by the last gradient
+        evaluation (the density whose contraction with h1 gives the Hellmann-Feynman
+        term, i.e. -dE/dF); orbital response included. Call kernel() first.
+        '''
+        if mol is None: mol = self.mol
+        dm = getattr(self, 'rdm1_relaxed', None)
+        if dm is None:
+            raise RuntimeError('No relaxed density yet: run kernel() first; '
+                               'the gradient evaluation forms it.')
+        return self.base._scf.dip_moment(mol, dm, unit, verbose=verbose, **kwargs)
 
     as_scanner = as_scanner
 
