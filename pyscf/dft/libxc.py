@@ -202,6 +202,7 @@ XC_CODES.update({
     'REVPBE0'       : '.25*HF + .75*PBE_R, PBE',
     'B1B95'         : 440,
     'TPSS0'         : '.25*HF + .75*TPSS, TPSS',
+    'BHHLYP'        : 'BHANDHLYP',
 })
 
 if getattr(__config__, 'B3LYP_WITH_VWN5', False):
