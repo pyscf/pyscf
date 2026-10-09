@@ -133,7 +133,29 @@ def rotation_const(mass, atom_coords, unit='GHz'):
     return e
 
 
-def thermo(model, freq, temperature=298.15, pressure=101325):
+# Average moment of inertia (kg m^2) of the free rotor in the quasi-RRHO
+# entropy of Grimme, Chem. Eur. J. 18, 9955 (2012)
+QRRHO_BAV = 1e-44
+
+def thermo(model, freq, temperature=298.15, pressure=101325,
+           qrrho=False, qrrho_enthalpy=False, qrrho_freq0=100.):
+    '''Thermochemistry in the rigid-rotor harmonic-oscillator (RRHO)
+    approximation
+
+    Kwargs:
+        qrrho : bool
+            Quasi-RRHO vibrational entropy of Grimme, Chem. Eur. J. 18, 9955
+            (2012). The entropy of each mode interpolates between the
+            harmonic oscillator and a free rotor, with the weight
+            w = 1/(1 + (qrrho_freq0/freq)^4).
+        qrrho_enthalpy : bool
+            Quasi-RRHO vibrational energy of Li et al., J. Phys. Chem. C
+            119, 1840 (2015). The energy of each mode, zero-point energy
+            included, interpolates between the harmonic oscillator and RT/2
+            with the same weight.
+        qrrho_freq0 : float
+            The frequency (cm^-1) at which the weight is 1/2.
+    '''
     mol = model.mol
     atom_coords = mol.atom_coords()
     mass = mol.atom_mass_list(isotope_avg=True)
@@ -207,10 +229,27 @@ def thermo(model, freq, temperature=298.15, pressure=101325):
     ZPE = R_Eh * .5 * vib_temperature.sum()
     results['ZPE'] = (ZPE, 'Eh')
 
-    results['S_vib' ] = (R_Eh * (rt*e/(1-e) - numpy.log(1-e)).sum(), 'Eh/K')
+    s_vib = R_Eh * (rt*e/(1-e) - numpy.log(1-e))
+    e_vib = R_Eh * vib_temperature * (.5 + e / (1-e))
+    if qrrho or qrrho_enthalpy:
+        freq_cm = vib_temperature * kB / (h * nist.LIGHT_SPEED_SI * 100)
+        weight = 1. / (1. + (qrrho_freq0 / freq_cm)**4)
+    if qrrho:
+        # Entropy of a free rotor with the moment of inertia mu' of a rotor
+        # of the same frequency, damped towards QRRHO_BAV
+        mu = h / (8 * numpy.pi**2 * freq_cm * nist.LIGHT_SPEED_SI * 100)
+        mu = mu * QRRHO_BAV / (mu + QRRHO_BAV)
+        s_rot = R_Eh * (.5 + .5 * numpy.log(8 * numpy.pi**3 * mu * kB * temperature / h**2))
+        s_vib = weight * s_vib + (1 - weight) * s_rot
+    if qrrho_enthalpy:
+        e_vib = weight * e_vib + (1 - weight) * .5 * R_Eh * temperature
+    results['qrrho'] = (qrrho, '')
+    results['qrrho_enthalpy'] = (qrrho_enthalpy, '')
+    results['qrrho_freq0'] = (qrrho_freq0, 'cm^-1')
+
+    results['S_vib' ] = (s_vib.sum(), 'Eh/K')
     results['Cv_vib'] = results['Cp_vib'] = (R_Eh * (e * rt**2/(1-e)**2).sum(), 'Eh/K')
-    results['E_vib' ] = results['H_vib' ] = \
-            (ZPE + R_Eh * temperature * (rt * e / (1-e)).sum(), 'Eh')
+    results['E_vib' ] = results['H_vib' ] = (e_vib.sum(), 'Eh')
 
     results['G_elec' ] = (results['H_elec' ][0] - temperature * results['S_elec' ][0], 'Eh')
     results['G_trans'] = (results['H_trans'][0] - temperature * results['S_trans'][0], 'Eh')
@@ -311,6 +350,12 @@ def dump_thermo(mol, results):
     dump('Symmetry number %d\n' % results['sym_number'][0])
     dump('Zero-point energy (ZPE) %.5f [Eh]   %.3f [J/mol]\n'
          % (results['ZPE'][0], results['ZPE'][0] * nist.HARTREE2J * nist.AVOGADRO))
+    if results.get('qrrho', (False,))[0]:
+        dump('Quasi-RRHO vibrational entropy (Grimme), freq0 = %.1f [cm^-1]\n'
+             % results['qrrho_freq0'][0])
+    if results.get('qrrho_enthalpy', (False,))[0]:
+        dump('Quasi-RRHO vibrational energy (Head-Gordon), freq0 = %.1f [cm^-1]\n'
+             % results['qrrho_freq0'][0])
 
     keys = ('tot', 'elec', 'trans', 'rot', 'vib')
     dump('                    %s\n' % ' '.join('%10s'%x for x in keys))

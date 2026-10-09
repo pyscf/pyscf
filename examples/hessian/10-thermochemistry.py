@@ -46,3 +46,13 @@ print(thermo_info['G_tot' ])
 print('Heat capacity at 298.15 K')
 print(thermo_info['Cv_tot'])
 
+
+# Quasi-RRHO treatment of low-frequency modes. qrrho=True interpolates the
+# vibrational entropy of each mode between the harmonic oscillator and a free
+# rotor (Grimme, Chem. Eur. J. 18, 9955 (2012)); qrrho_enthalpy=True does the
+# same for the vibrational energy (Li et al., J. Phys. Chem. C 119, 1840
+# (2015)). The two regimes are switched at qrrho_freq0 = 100 cm^-1.
+thermo_info = thermo.thermo(mf, freq_info['freq_au'], 298.15, 101325,
+                            qrrho=True, qrrho_enthalpy=True)
+print('Quasi-RRHO Gibbs free energy at 298.15 K')
+print(thermo_info['G_tot'])
