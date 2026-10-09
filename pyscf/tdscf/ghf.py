@@ -32,9 +32,11 @@ from pyscf.lib import logger
 from pyscf.tdscf import rhf
 from pyscf.tdscf._lr_eig import eigh as lr_eigh, eig as lr_eig
 from pyscf.scf import ghf_symm
+from pyscf.data import nist
 from pyscf import __config__
 
 OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_rhf_get_nto_threshold', 0.3)
+MO_BASE = getattr(__config__, 'MO_BASE', 1)
 REAL_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_pick_eig_threshold', 1e-4)
 
 
@@ -364,13 +366,172 @@ def get_ab(mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
     return a, b
 
 def get_nto(tdobj, state=1, threshold=OUTPUT_THRESHOLD, verbose=None):
-    raise NotImplementedError('get_nto')
+    r'''
+    Natural transition orbital analysis.
+
+    The transition amplitudes X[i,a] between occupied and virtual
+    spin-orbitals are brought to diagonal form through SVD
+    :math:`X = O \sqrt{\lambda} V^\dagger`. O and V are occupied and virtual
+    natural transition orbitals, and :math:`\lambda` the weights of the
+    occupied-virtual pairs.
+
+    Ref: Martin, R. L., JCP, 118, 4775-4777
+
+    The excitation part (X) is normalized to 1. The de-excitation part (Y)
+    is ignored.
+
+    Args:
+        state : int
+            Excited state ID.  state = 1 means the first excited state.
+            If state < 0, state ID is counted from the last excited state.
+
+    Kwargs:
+        threshold : float
+            Above which the NTO coefficients will be printed in the output.
+
+    Returns:
+        A list (weights, NTOs). NTOs are spin-orbitals in the AO basis, the
+        alpha components followed by the beta components. The first N_occ
+        NTOs are occupied NTOs and the rest are virtual NTOs.
+    '''
+    if state == 0:
+        logger.warn(tdobj, 'Excited state starts from 1. '
+                    'Set state=1 for first excited state.')
+        state_id = state
+    elif state < 0:
+        state_id = state
+    else:
+        state_id = state - 1
+
+    mask = tdobj.get_frozen_mask()
+    mo_coeff = tdobj._scf.mo_coeff[:, mask]
+    mo_occ = tdobj._scf.mo_occ[mask]
+    orbo = mo_coeff[:,mo_occ==1]
+    orbv = mo_coeff[:,mo_occ==0]
+    nocc = orbo.shape[1]
+
+    cis_t1 = tdobj.xy[state_id][0]
+    cis_t1 = cis_t1 / numpy.linalg.norm(cis_t1)
+    # AO transition density is Cv @ X.T @ Co.conj().T.
+    nto_v, w, nto_oT = numpy.linalg.svd(cis_t1.T)
+    nto_o = nto_oT.conj().T
+    weights = w**2
+
+    def _set_phase_(c):
+        idx = numpy.argmax(abs(c.real), axis=0)
+        c[:,c[idx,numpy.arange(c.shape[1])].real<0] *= -1
+    _set_phase_(nto_o)
+    _set_phase_(nto_v)
+
+    nto_coeff = numpy.hstack((numpy.dot(orbo, nto_o), numpy.dot(orbv, nto_v)))
+
+    log = logger.new_logger(tdobj, verbose)
+    if log.verbose >= logger.INFO:
+        log.info('State %d: %g eV  NTO largest component %s',
+                 state_id+1, tdobj.e[state_id]*nist.HARTREE2EV, weights[0])
+        fmt = '%' + str(lib.param.OUTPUT_DIGITS) + 'f (MO #%d)'
+        o_idx = numpy.where(abs(nto_o[:,0]) > threshold)[0]
+        v_idx = numpy.where(abs(nto_v[:,0]) > threshold)[0]
+        log.info('    occ-NTO: ' +
+                 ' + '.join([(fmt % (nto_o[i,0].real, i+MO_BASE))
+                             for i in o_idx]))
+        log.info('    vir-NTO: ' +
+                 ' + '.join([(fmt % (nto_v[i,0].real, i+MO_BASE+nocc))
+                             for i in v_idx]))
+    return weights, nto_coeff
 
 def analyze(tdobj, verbose=None):
-    raise NotImplementedError('analyze')
+    log = logger.new_logger(tdobj, verbose)
+    mol = tdobj.mol
+    mask = tdobj.get_frozen_mask()
+    mo_occ = tdobj._scf.mo_occ[mask]
+    nocc = numpy.count_nonzero(mo_occ == 1)
+
+    e_ev = numpy.asarray(tdobj.e) * nist.HARTREE2EV
+    e_wn = numpy.asarray(tdobj.e) * nist.HARTREE2WAVENUMBER
+    wave_length = 1e7/e_wn
+
+    log.note('\n** Excitation energies and oscillator strengths **')
+
+    if mol.symmetry:
+        x_sym = _get_x_sym_table(tdobj)
+    else:
+        x_sym = None
+
+    f_oscillator = tdobj.oscillator_strength()
+    for i, ei in enumerate(tdobj.e):
+        x, y = tdobj.xy[i]
+        if x_sym is None:
+            log.note('Excited State %3d: %12.5f eV %9.2f nm  f=%.4f',
+                     i+1, e_ev[i], wave_length[i], f_oscillator[i])
+        else:
+            wfnsym = rhf._analyze_wfnsym(tdobj, x_sym, x)
+            log.note('Excited State %3d: %4s %12.5f eV %9.2f nm  f=%.4f',
+                     i+1, wfnsym, e_ev[i], wave_length[i], f_oscillator[i])
+
+        if log.verbose >= logger.INFO:
+            # The magnitude for complex amplitudes
+            xv = x if numpy.isrealobj(x) else abs(x)
+            for o, v in zip(* numpy.where(abs(x) > 0.1)):
+                log.info('    %4d -> %-4d %12.5f',
+                         o+MO_BASE, v+MO_BASE+nocc, xv[o,v])
+
+    if log.verbose >= logger.INFO:
+        log.info('\n** Transition electric dipole moments (AU) **')
+        log.info('state          X           Y           Z        Dip. S.      Osc.')
+        trans_dip = tdobj.transition_dipole()
+        for i, ei in enumerate(tdobj.e):
+            dip = trans_dip[i]
+            log.info('%3d    %11.4f %11.4f %11.4f %11.4f %11.4f',
+                     i+1, dip[0].real, dip[1].real, dip[2].real,
+                     numpy.dot(dip, dip.conj()).real, f_oscillator[i])
+
+        if mol.ecp:
+            log.warn("ECP detected. Skipping calculation of transition velocity and "
+                     "magnetic dipole moments, which have not yet been implemented.")
+        else:
+            log.info('\n** Transition velocity dipole moments (imaginary part, AU) **')
+            log.info('state          X           Y           Z        Dip. S.      Osc.')
+            trans_v = tdobj.transition_velocity_dipole()
+            f_v = tdobj.oscillator_strength(gauge='velocity', order=0)
+            for i, ei in enumerate(tdobj.e):
+                v = trans_v[i].real
+                log.info('%3d    %11.4f %11.4f %11.4f %11.4f %11.4f',
+                         i+1, v[0], v[1], v[2], numpy.vdot(trans_v[i], trans_v[i]).real, f_v[i])
+
+            log.info('\n** Transition magnetic dipole moments (imaginary part, AU) **')
+            log.info('state          X           Y           Z')
+            trans_m = tdobj.transition_magnetic_dipole()
+            for i, ei in enumerate(tdobj.e):
+                m = trans_m[i].real
+                log.info('%3d    %11.4f %11.4f %11.4f', i+1, m[0], m[1], m[2])
+    return tdobj
 
 def _contract_multipole(tdobj, ints, hermi=True, xy=None):
-    raise NotImplementedError
+    '''ints is the integral tensor of a spin-independent operator'''
+    if xy is None: xy = tdobj.xy
+    mask = tdobj.get_frozen_mask()
+    mo_coeff = tdobj._scf.mo_coeff[:, mask]
+    mo_occ = tdobj._scf.mo_occ[mask]
+    orbo = mo_coeff[:,mo_occ==1]
+    orbv = mo_coeff[:,mo_occ==0]
+    nao = ints.shape[-1]
+
+    # The operator acts on the alpha and the beta components of the
+    # spin-orbitals alike
+    ints = (numpy.einsum('...pq,pi,qa->...ia', ints, orbo[:nao].conj(), orbv[:nao]) +
+            numpy.einsum('...pq,pi,qa->...ia', ints, orbo[nao:].conj(), orbv[nao:]))
+    pol = numpy.array([numpy.einsum('...ia,ia->...', ints, x) for x, y in xy])
+    if isinstance(xy[0][1], numpy.ndarray):
+        # X_ia and Y_ia have opposite phases. Transition density matrix for Y transforms
+        # as orbo * Y * orbv.conj().T
+        ints = ints.conj()
+        pol_y = numpy.array([numpy.einsum('...ia,ia->...', ints, y) for x, y in xy])
+        if hermi:
+            pol += pol_y
+        else:  # anti-Hermitian
+            pol -= pol_y
+    return pol
 
 
 class TDBase(rhf.TDBase):
