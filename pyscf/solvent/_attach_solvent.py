@@ -337,19 +337,23 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         self._e_tot_without_solvent = e_tot
 
         log.debug('Computing corrections to the total energy.')
-        dm = self.make_rdm1(ci=fcivec, ao_repr=True)
+        dm = self.make_rdm1(mo_coeff=mo_coeff, ci=fcivec, ao_repr=True)
 
         with_solvent = self.with_solvent
+        edup = None
         if with_solvent.e is not None:
+            # Must be evaluated before kernel() overwrites with_solvent.v
             edup = numpy.einsum('ij,ji->', with_solvent.v, dm)
-            e_tot = e_tot - edup + with_solvent.e
-            log.info('Removing duplication %.15g, '
-                     'adding E(solvent) = %.15g to total energy:\n'
-                     '    E(CASSCF+solvent) = %.15g', edup, with_solvent.e, e_tot)
 
         # Update solvent effects for next iteration if needed
         if not with_solvent.frozen:
             with_solvent.e, with_solvent.v = with_solvent.kernel(dm)
+
+        if edup is not None:
+            e_tot = e_tot - edup + with_solvent.e
+            log.info('Removing duplication %.15g, '
+                     'adding E(solvent) = %.15g to total energy:\n'
+                     '    E(CASSCF+solvent) = %.15g', edup, with_solvent.e, e_tot)
 
         return e_tot, e_cas, fcivec
 
