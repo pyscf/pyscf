@@ -350,7 +350,7 @@ class Cube:
             for ia in range(natm):
                 d = f.readline().split()
                 atoms.append([int(d[0]), [float(x) for x in d[2:]]])
-            self.mol = gto.M(atom=atoms, unit='Bohr')
+            self.mol = gto.M(atom=atoms, unit='Bohr', spin=None)
 
             data = f.read()
         cube_data = numpy.array([float(x) for x in data.split()])

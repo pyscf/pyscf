@@ -84,6 +84,15 @@ class KnownValues(unittest.TestCase):
             cc1.read(ftmp.name)
             self.assertAlmostEqual(abs(cc1.get_coords() - cc.get_coords()).max(), 0, 5)
 
+    def test_read_odd_electron_mol(self):
+        mol1 = gto.M(atom='H 0 0 0', spin=1, basis='sto-3g', unit='Bohr')
+        with lib.NamedTemporaryFile() as ftmp:
+            cc = cubegen.Cube(mol1, nx=5, ny=5, nz=5, margin=2.0)
+            cc.write(numpy.zeros((5,5,5)), ftmp.name)
+            cc1 = cubegen.Cube(mol1)
+            cc1.read(ftmp.name)
+            self.assertEqual(cc1.mol.spin, 1)
+
     def test_rho_with_pbc(self):
         from pyscf.pbc.gto import Cell
         cell = Cell()
