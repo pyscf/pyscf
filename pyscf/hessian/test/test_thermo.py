@@ -90,6 +90,19 @@ class KnownValues(unittest.TestCase):
         thermo.dump_thermo(mol, results)
         self.assertAlmostEqual(results['E_0K'][0], -74.93727546, 7)
 
+    def test_harmonic_analysis_asymmetric_hessian(self):
+        mol = gto.M(atom='O 0 0 0; H 0 .757 .587; H 0 -.757 .587', basis='sto-3g',
+                    verbose=0)
+        hess = mol.HF().run(conv_tol=1e-11).Hessian().kernel()
+        ref = thermo.harmonic_analysis(mol, hess)
+        # an antisymmetric part, as an analytic Hessian converged to a finite
+        # tolerance carries (e.g. 6e-5 Eh/bohr^2 for a UKS/B3LYP cation)
+        noise = numpy.random.RandomState(1).rand(*hess.shape) * 1e-3
+        noise = noise - noise.transpose(1,0,3,2)
+        results = thermo.harmonic_analysis(mol, hess + noise)
+        self.assertAlmostEqual(abs(results['freq_wavenumber'] - ref['freq_wavenumber']).max(), 0, 8)
+        self.assertAlmostEqual(abs(abs(results['norm_mode']) - abs(ref['norm_mode'])).max(), 0, 8)
+
     def test_qrrho(self):
         mol = gto.M(atom='O 0 0 0; H 0 .757 .587; H 0 -.757 .587', basis='sto-3g',
                     verbose=0)

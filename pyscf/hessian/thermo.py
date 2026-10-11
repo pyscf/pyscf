@@ -54,6 +54,9 @@ def harmonic_analysis(mol, hess, exclude_trans=True, exclude_rot=True,
 
     mass_hess = numpy.einsum('pqxy,p,q->pqxy', hess, mass**-.5, mass**-.5)
     h = mass_hess.transpose(0,2,1,3).reshape(natm*3,natm*3)
+    # Analytic Hessians are symmetric only to the CPHF and grid tolerances;
+    # eigh reads one triangle, so symmetrize first.
+    h = (h + h.T) * .5
 
     TR = _get_TR(mass, atom_coords)
     TRspace = []
