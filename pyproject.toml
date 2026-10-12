@@ -15,8 +15,6 @@ classifiers = [
   'License :: OSI Approved :: Apache Software License',
   'Programming Language :: C',
   'Programming Language :: Python',
-  'Programming Language :: Python :: 3.7',
-  'Programming Language :: Python :: 3.8',
   'Programming Language :: Python :: 3.9',
   'Programming Language :: Python :: 3.10',
   'Programming Language :: Python :: 3.11',
@@ -28,6 +26,7 @@ classifiers = [
   'Operating System :: POSIX',
   'Operating System :: Unix',
   'Operating System :: MacOS',
+  'Operating System :: Microsoft :: Windows',
 ]
 
 maintainers = [{ name = "Qiming Sun", email = "osirpt.sun@gmail.com" }]
@@ -36,7 +35,7 @@ authors = [{ name = "Qiming Sun", email = "osirpt.sun@gmail.com" }]
 
 license = { text = "Apache-2.0" }
 
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 dependencies = [
   'numpy>=1.13,!=1.16,!=1.17',
   'scipy>=1.6.0',
