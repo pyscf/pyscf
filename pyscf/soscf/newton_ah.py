@@ -702,6 +702,8 @@ class _CIAH_SOSCF:
     }
 
     def __init__(self, mf):
+        assert not mf.istype('_SmearingSCF'), \
+            'Smearing with second order SCF is not supported'
         self.__dict__.update(mf.__dict__)
         self._scf = mf
 
