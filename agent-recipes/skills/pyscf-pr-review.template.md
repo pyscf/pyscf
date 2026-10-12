@@ -92,6 +92,19 @@ review or validation gaps.
 - Check whether unit tests exercise important branches and code blocks in the
   new or modified code. Verify that assertions check the intended behavior,
   rather than merely executing those paths.
+- Evaluate new tests by their practical value: which realistic bug would they
+  catch, or which important scientific result or behavioral contract would
+  they protect? Do not request tests solely to increase code coverage or
+  execute each new branch.
+- Verify that assertions check meaningful results and behavior. Flag tests that
+  enforce incidental details or internal data layout unless they are part of an
+  important behavioral contract.
+- Question elaborate mock setups and artificial states created only to reach
+  new code. Prefer small, representative inputs and minimal mocking; when
+  isolation is needed, check that the behavior under test remains real.
+- Identify redundant or low-value tests and suggest simplifying, consolidating,
+  or removing them. Check for missing tests when a concrete, realistic failure
+  would otherwise go undetected.
 - Use small, deterministic systems and cover relevant supported branches.
   Avoid an exhaustive combination of methods and options without a reason.
 

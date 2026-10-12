@@ -47,8 +47,21 @@ including tests. Customize as needed.
 - Break long numerical calls and Boolean expressions at logical boundaries,
   matching the surrounding continuation-line indentation.
 
-## Test readability
+## Test value and readability
 
+- Add tests for their practical value: catching realistic bugs or protecting
+  important scientific results and behavioral contracts. Avoid coverage-driven
+  tests: Flag tests that merely exercise newly added code without protecting
+  meaningful behavior.
+- Assert meaningful results and behavior. Avoid enforcing incidental details
+  or internal data layout unless they are part of an important behavioral
+  contract.
+- Use small, representative inputs and minimal mocking. Avoid elaborate mock
+  setups or artificial states created only to reach newly added code. Mocks
+  are useful when isolating a dependency is necessary to test a meaningful
+  contract; keep the behavior being tested real.
+- Reuse or extend existing tests when they can protect the relevant behavior
+  clearly, rather than adding redundant cases.
 - Apply the same readability standards to tests as to implementation code.
   A reader should be able to identify the setup, behavior under test, and
   expected result without tracing through layers of helpers.
