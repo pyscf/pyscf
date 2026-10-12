@@ -310,6 +310,37 @@ class KnownValues(unittest.TestCase):
         e2ref = finite_partial_diff(mf)
         self.assertAlmostEqual(abs(e2-e2ref).max(), 0, 6)
 
+    def test_cphf_residual(self):
+        # issue #2702: lib.krylov may stop before the multi-root CPHF
+        # solution satisfies its equations; solve_withs1 corrects it.
+        mf = dft.RKS(mol)
+        mf.xc = 'b3lyp'
+        mf.conv_tol = 1e-11
+        mf.kernel()
+        mo_energy, mo_coeff, mo_occ = mf.mo_energy, mf.mo_coeff, mf.mo_occ
+        hobj = mf.Hessian()
+        h1ao = hobj.make_h1(mo_coeff, mo_occ)
+        mo1 = hobj.solve_mo1(mo_energy, mo_coeff, mo_occ, h1ao)[0]
+
+        occ, vir = mo_occ > 0, mo_occ == 0
+        mocc = mo_coeff[:,occ]
+        e_ai = 1 / (mo_energy[vir,None] - mo_energy[occ])
+        fx = hessian.rhf.gen_vind(mf, mo_coeff, mo_occ)
+        s1a = -mol.intor('int1e_ipovlp', comp=3)
+        ovlp = mf.get_ovlp()
+        resid = 0
+        for ia, (_, _, p0, p1) in enumerate(mol.aoslice_by_atom()):
+            s1ao = numpy.zeros((3,) + ovlp.shape)
+            s1ao[:,p0:p1] += s1a[:,p0:p1]
+            s1ao[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
+            s1 = lib.einsum('pq,xqr,ri->xpi', mo_coeff.T, s1ao, mocc)
+            h1 = lib.einsum('pq,xqr,ri->xpi', mo_coeff.T, h1ao[ia], mocc)
+            x = lib.einsum('pq,qr,xri->xpi', mo_coeff.T, ovlp, mo1[ia])
+            r = (x[:,vir] / e_ai + h1[:,vir] - s1[:,vir] * mo_energy[occ]
+                 + fx(x)[:,vir])
+            resid = max(resid, abs(r * e_ai).max())
+        self.assertLess(resid, 1e-7)
+
 
 if __name__ == "__main__":
     print("Full Tests for RKS Hessian")

@@ -135,9 +135,27 @@ def solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
                      hermi=hermi, verbose=log)
     mo1 = mo1.reshape(-1, nmo, nocc)
     mo1[:,occidx] = mo1base[:,occidx]
+    v1 = fvind(mo1).reshape(-1, nmo, nocc)
+
+    # With many right-hand sides, lib.krylov can stop on the norm of its last
+    # trial vector while the solution is still far from the equations it
+    # solves (issue #2702). The residual is checked with the induced potential
+    # needed below anyway; when it exceeds tol, one more Krylov solve on the
+    # residual corrects the solution (defect correction).
+    r = numpy.zeros_like(mo1)
+    r[:,viridx] = (mo1base[:,viridx] - mo1[:,viridx]
+                   - (v1[:,viridx] - level_shift * mo1[:,viridx]) * e_ai)
+    r = r.reshape(-1, nmo*nocc)
+    rnorm = numpy.linalg.norm(r, axis=1).max(initial=0)
+    if rnorm > tol:
+        log.debug('CPHF residual %g after krylov, correcting', rnorm)
+        mo1 += lib.krylov(vind_vo, r, tol=tol, max_cycle=max_cycle,
+                          lindep=lindep, hermi=hermi,
+                          verbose=log).reshape(-1, nmo, nocc)
+        v1 = fvind(mo1).reshape(-1, nmo, nocc)
     log.timer('krylov solver in CPHF', *t0)
 
-    hs += fvind(mo1).reshape(-1, nmo, nocc)
+    hs += v1
     mo1[:,viridx] = hs[:,viridx] / (e_i - e_a[:,None])
 
     # mo_e1 has the same symmetry as the first order Fock matrix (hermitian or
