@@ -134,11 +134,15 @@ def _get_x_sym_table(td):
     orbsym = orbsym % 10  # convert to D2h irreps
     return orbsym[mo_occ==2,None] ^ orbsym[mo_occ==0]
 
-def get_ab(mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
+def get_ab(mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None,
+           singlet=True):
     r'''A and B matrices for TDDFT response function.
 
     A[i,a,j,b] = \delta_{ab}\delta_{ij}(E_a - E_i) + (ai||jb)
     B[i,a,j,b] = (ai||bj)
+
+    For triplet excitations (singlet=False), the Coulomb term vanishes and
+    the exchange-correlation kernel is f_aa - f_ab in place of f_aa + f_ab.
 
     Ref: Chem Phys Lett, 256, 454
     '''
@@ -181,11 +185,19 @@ def get_ab(mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
     def add_hf_(a, b, hyb=1):
         eri_mo = ao2mo.general(mol, [orbo,mo,mo,mo], compact=False)
         eri_mo = eri_mo.reshape(nocc,nmo,nmo,nmo)
-        a += numpy.einsum('iabj->iajb', eri_mo[:nocc,nocc:,nocc:,:nocc]) * 2
+        if singlet:
+            a += numpy.einsum('iabj->iajb', eri_mo[:nocc,nocc:,nocc:,:nocc]) * 2
+            b += numpy.einsum('iajb->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * 2
         a -= numpy.einsum('ijba->iajb', eri_mo[:nocc,:nocc,nocc:,nocc:]) * hyb
-
-        b += numpy.einsum('iajb->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * 2
         b -= numpy.einsum('jaib->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * hyb
+
+    def eval_fxc(rho, xctype):
+        '''Half of the kernel f_aa + f_ab (singlet) or f_aa - f_ab (triplet)'''
+        if singlet:
+            return ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
+        fxc = ni.eval_xc_eff(mf.xc, (rho*.5, rho*.5), deriv=2, xctype=xctype,
+                             spin=1)[2]
+        return (fxc[0,:,0] - fxc[0,:,1]) * .5
 
     if isinstance(mf, scf.hf.KohnShamDFT):
         ni = mf._numint
@@ -212,7 +224,7 @@ def get_ab(mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
             for ao, mask, weight, coords \
                     in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
                 rho = make_rho(0, ao, mask, xctype)
-                fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
+                fxc = eval_fxc(rho, xctype)
                 wfxc = fxc[0,0] * weight
 
                 rho_o = lib.einsum('rp,pi->ri', ao, orbo)
@@ -228,7 +240,7 @@ def get_ab(mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
             for ao, mask, weight, coords \
                     in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
                 rho = make_rho(0, ao, mask, xctype)
-                fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
+                fxc = eval_fxc(rho, xctype)
                 wfxc = fxc * weight
                 rho_o = lib.einsum('xrp,pi->xri', ao, orbo)
                 rho_v = lib.einsum('xrp,pi->xri', ao, orbv)
@@ -250,7 +262,7 @@ def get_ab(mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
             for ao, mask, weight, coords \
                     in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
                 rho = make_rho(0, ao, mask, xctype)
-                fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
+                fxc = eval_fxc(rho, xctype)
                 wfxc = fxc * weight
                 rho_o = lib.einsum('xrp,pi->xri', ao, orbo)
                 rho_v = lib.einsum('xrp,pi->xri', ao, orbv)
@@ -871,7 +883,7 @@ class TDBase(lib.StreamObject):
     def get_ab(self, mf=None, frozen=None):
         if mf is None: mf = self._scf
         if frozen is None: frozen = self.frozen
-        return get_ab(mf, frozen=frozen)
+        return get_ab(mf, frozen=frozen, singlet=self.singlet)
 
     def get_precond(self, hdiag):
         def precond(x, e, *args):

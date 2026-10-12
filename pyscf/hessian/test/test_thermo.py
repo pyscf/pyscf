@@ -17,6 +17,7 @@ import unittest
 import numpy
 from pyscf import gto, lib
 from pyscf.hessian import thermo
+from pyscf.data import nist
 
 class KnownValues(unittest.TestCase):
     def test_TR(self):
@@ -88,6 +89,37 @@ class KnownValues(unittest.TestCase):
         results = thermo.thermo(mf, results['freq_au'], 298.15, 101325)
         thermo.dump_thermo(mol, results)
         self.assertAlmostEqual(results['E_0K'][0], -74.93727546, 7)
+
+    def test_qrrho(self):
+        mol = gto.M(atom='O 0 0 0; H 0 .757 .587; H 0 -.757 .587', basis='sto-3g',
+                    verbose=0)
+        mf = mol.HF().run()
+        freq_cm = numpy.array([10., 25., 50., 80., 100., 150., 300., 1600., 3700.])
+        au2hz = (nist.HARTREE2J / (nist.ATOMIC_MASS * nist.BOHR_SI**2))**.5 / (2 * numpy.pi)
+        freq_au = freq_cm * nist.LIGHT_SPEED_SI * 100 / au2hz
+        conv = nist.HARTREE2J * nist.AVOGADRO  # Eh to J/mol
+
+        rrho = thermo.thermo(mf, freq_au, 298.15, 101325)
+        self.assertAlmostEqual(rrho['S_vib'][0] * conv, 127.4515, 3)
+
+        # References from GoodVibes 3 (calc_rrho_entropy, calc_freerot_entropy,
+        # calc_damp and calc_qRRHO_energy with a cutoff of 100 cm^-1). The
+        # relative differences of 1e-7 come from the physical constants.
+        results = thermo.thermo(mf, freq_au, 298.15, 101325, qrrho=True)
+        self.assertAlmostEqual(results['S_vib'][0] * conv / 98.4478, 1, 5)
+        self.assertAlmostEqual(results['E_vib'][0], rrho['E_vib'][0], 12)
+        results = thermo.thermo(mf, freq_au, 298.15, 101325, qrrho=True,
+                                qrrho_enthalpy=True)
+        self.assertAlmostEqual(results['E_vib'][0] * conv / 44239.5553, 1, 6)
+        self.assertAlmostEqual(results['G_tot'][0] - rrho['G_tot'][0],
+                               results['H_tot'][0] - rrho['H_tot'][0]
+                               - 298.15 * (results['S_tot'][0] - rrho['S_tot'][0]), 12)
+        self.assertEqual(results['qrrho_freq0'], (100., 'cm^-1'))
+        results = thermo.thermo(mf, freq_au, 298.15, 101325, qrrho=True,
+                                qrrho_freq0=50.)
+        self.assertEqual(results['qrrho_freq0'][0], 50.)
+        self.assertNotAlmostEqual(results['S_vib'][0] * conv, 98.4478, 2)
+        thermo.dump_thermo(mol, results)
 
 if __name__ == "__main__":
     print("Full Tests for RHF Hessian")

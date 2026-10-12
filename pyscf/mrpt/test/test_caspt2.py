@@ -172,13 +172,16 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mcsa.e_tot, -7.31040024150554, 5)
         e_tots = [-7.705310980116393, -7.331345990369886, -7.276966640063838, -7.201366333952514]
         e_corrs = [-0.055354234346437, -0.072478006575832, -0.083993983140532, -0.061562754412204]
+        # Roots 1/2 of the SA-CASSCF are near-degenerate; the per-root CASPT2
+        # correction depends on the rotation within that subspace, which
+        # varies with platform BLAS (observed spread ~1e-5, issue #3245)
         for root, (e_tot_ref, e_corr_ref) in enumerate(zip(e_tots, e_corrs)):
             mr = caspt2.CASPT2(mcsa, frozen=2, ipea_shift=0.0, root=root)
             mr.conv_tol_normt = 1e-12
             mr.max_cycle = 20
             e_tot, e_corr = mr.kernel()
-            self.assertAlmostEqual(e_tot, e_tot_ref, 5)
-            self.assertAlmostEqual(e_corr, e_corr_ref, 5)
+            self.assertAlmostEqual(e_tot, e_tot_ref, 4)
+            self.assertAlmostEqual(e_corr, e_corr_ref, 4)
 
     def test_o2_triplet(self):
         mol = gto.M(atom='O 0 0 0; O 0 0 1.207', basis='3-21g', spin=2, symmetry='d2h', verbose=0)

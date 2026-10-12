@@ -121,6 +121,91 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
     return emp2, t2
 
 
+def _get_fock_mo(mp, eris):
+    '''Fock matrix in the active MO basis, for non-canonical MP2 iterations.
+    Cached on the DF eris object.'''
+    if getattr(eris, 'fock', None) is not None:
+        return eris.fock
+    mf = mp._scf
+    dm = mf.make_rdm1(mp.mo_coeff, mp.mo_occ)
+    vhf = mf.get_veff(dm=dm)
+    fockao = mf.get_fock(vhf=vhf, dm=dm)
+    moc = np.hstack((eris.occ_coeff, eris.vir_coeff))
+    eris.fock = reduce(lib.dot, (moc.conj().T, fockao, moc))
+    return eris.fock
+
+
+def _iter_ovov(mp, eris):
+    '''Yield (i0, i1, j0, j1, v) blocks with v[i,a,j,b] = (ia|jb) contracted
+    from the DF 3-index integrals, with memory-bounded i/j batching.'''
+    nocc, nvir, naux = eris.nocc, eris.nvir, eris.naux
+    mem = max(mp.max_memory - lib.current_memory()[0], 2000) * 1e6 / 8
+    blk = max(1, int((mem*.5)**.5 / nvir))
+    for i0, i1 in lib.prange(0, nocc, blk):
+        iaL = eris.get_occ_blk(i0, i1).reshape((i1-i0)*nvir, naux)
+        for j0, j1 in lib.prange(0, nocc, blk):
+            ovL_j = np.asarray(eris.ovL[j0*nvir:j1*nvir], order='C')
+            v = lib.dot(iaL, ovL_j.T).reshape(i1-i0, nvir, j1-j0, nvir)
+            yield i0, i1, j0, j1, v
+
+
+def energy(mp, t2, eris):
+    '''DF-MP2 energy including the first-order singles (T1) contribution.
+    Used by the non-canonical (iterative) kernel.'''
+    nocc, nvir = t2.shape[1:3]
+    fock = _get_fock_mo(mp, eris)
+    t1 = getattr(mp, 't1', None)
+    if t1 is None or getattr(mp, 'exclude_t1', False):
+        e_singles = 0.
+    else:
+        e_singles = 2 * np.einsum('ia,ia->', fock[:nocc,nocc:], t1).real
+
+    ed = ex = 0.
+    for i0, i1, j0, j1, v in _iter_ovov(mp, eris):
+        ed += 2 * np.einsum('ijab,iajb->', t2[i0:i1,j0:j1], v)
+        ex -= np.einsum('ijab,iajb->', t2[i0:i1,j0:j1], v.transpose(0,3,2,1))
+    emp2_ss = ed*.5 + ex
+    emp2_os = ed*.5
+    return lib.tag_array(emp2_ss+emp2_os+e_singles, e_corr_ss=emp2_ss,
+                         e_corr_os=emp2_os, e_corr_singles=e_singles)
+
+
+def update_amps(mp, t1, t2, eris):
+    '''Update non-canonical DF-MP2 amplitudes (T1 and T2).
+
+    The T2 equation is the full-Fock (nondiagonal Fock) pair equation; the T1
+    equation is the first-order singles equation of Finley & Hirao,
+    CPL 328, 51 (2000), Eq. (50). Integrals are contracted blockwise from the
+    DF 3-index tensors.
+    '''
+    nocc, nvir = t2.shape[1:3]
+    fock = _get_fock_mo(mp, eris)
+    mo_e_o = fock.diagonal()[:nocc].real
+    mo_e_v = fock.diagonal()[nocc:].real + mp.level_shift
+    foo = fock[:nocc,:nocc] - np.diag(mo_e_o)
+    fvv = fock[nocc:,nocc:] - np.diag(mo_e_v)
+    fov = fock[nocc:,:nocc].T
+    eia = mo_e_o[:,None] - mo_e_v
+
+    t2new  = lib.einsum('ijac,bc->ijab', t2, fvv)
+    t2new -= lib.einsum('ki,kjab->ijab', foo, t2)
+    t2new = t2new + t2new.transpose(1,0,3,2)
+
+    for i0, i1, j0, j1, v in _iter_ovov(mp, eris):
+        t2new[i0:i1,j0:j1] += v.conj().transpose(0,2,1,3)
+
+    t2new /= lib.direct_sum('ia,jb->ijab', eia, eia)
+
+    if getattr(mp, 'exclude_t1', False):
+        t1new = np.zeros_like(t1)
+    else:
+        t1new  = lib.einsum('ab,ib->ia', fvv, t1)
+        t1new -= lib.einsum('ji,ja->ia', foo, t1)
+        t1new += fov
+        t1new /= eia
+    return t1new, t2new
+
+
 class DFRMP2(mp2.RMP2):
     _keys = {'with_df', 'mo_energy', 'force_outcore'}
 
@@ -178,11 +263,15 @@ class DFRMP2(mp2.RMP2):
         raise NotImplementedError
 
     # For non-canonical MP2
-    def update_amps(self, t2, eris):
-        raise NotImplementedError
+    energy = energy
+    update_amps = update_amps
 
     def init_amps(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
-        return kernel(self, mo_energy, mo_coeff, eris, with_t2)
+        emp2, t2 = kernel(self, mo_energy, mo_coeff, eris, with_t2)
+        if with_t2:
+            nocc, nvir = t2.shape[1:3]
+            self.t1 = np.zeros((nocc, nvir))
+        return emp2, t2
 
     Gradients = NotImplemented
 

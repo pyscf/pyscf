@@ -517,6 +517,50 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(mc.ci[0,0]), .984513596, 5)
         self.assertAlmostEqual(abs(mc.ci[1,1]), .175308242, 5)
 
+    # issue #3091
+    def test_contract_2e_empty_spin(self):
+        norb = 5
+        numpy.random.seed(3)
+        h1 = numpy.random.random((norb,norb))
+        h1 = h1 + h1.T
+        eri = numpy.random.random((norb,)*4)
+        eri = eri + eri.transpose(1,0,2,3)
+        eri = eri + eri.transpose(0,1,3,2)
+        eri = ao2mo.restore(8, eri + eri.transpose(2,3,0,1), norb)
+        for nelec in [(1, 0), (0, 1), (3, 0), (0, 3)]:
+            strs = (cistring.make_strings(range(norb), nelec[0]),
+                    cistring.make_strings(range(norb), nelec[1]))
+            ci0 = numpy.random.random((len(strs[0]), len(strs[1])))
+            h2e = direct_spin1.absorb_h1e(h1, eri, norb, nelec, .5)
+            ref = direct_spin1.contract_2e(h2e, ci0, norb, nelec)
+            with numpy.errstate(all='raise'):
+                ci1 = selected_ci.contract_2e(
+                    h2e, selected_ci.as_SCIvector(ci0, strs), norb, nelec)
+            self.assertAlmostEqual(abs(ci1 - ref).max(), 0, 12)
+
+        # The reproducer of the issue, H2+ with one alpha electron
+        h1 = numpy.array([[-1.2473, 0.], [0., -0.4813]])
+        eri = numpy.array([[0.6728, 0., 0.662],
+                           [0., 0.1818, 0.],
+                           [0.662, 0., 0.6958]])
+        strs = (numpy.array([1, 2]), numpy.array([0]))
+        ci0 = fci.as_SCIvector(numpy.array([[1.], [0.]]), strs)
+        h2e = direct_spin1.absorb_h1e(h1, eri, 2, (1, 0), .5)
+        ci1 = selected_ci.contract_2e(h2e, ci0, 2, (1, 0))
+        self.assertAlmostEqual(abs(ci1 - h1[:,:1]).max(), 0, 12)
+
+    def test_kernel_empty_spin(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 1.1', basis='6-31g', charge=1,
+                    spin=1, verbose=0)
+        mf = scf.ROHF(mol).run()
+        h1 = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
+        eri = ao2mo.kernel(mol, mf.mo_coeff)
+        norb = mf.mo_coeff.shape[1]
+        efci = direct_spin1.kernel(h1, eri, norb, (1, 0))[0]
+        for nelec in [(1, 0), (0, 1)]:
+            e = selected_ci.kernel(h1, eri, norb, nelec)[0]
+            self.assertAlmostEqual(e, efci, 9)
+
 
 def gen_des_linkstr(strs, norb, nelec):
     '''Given intermediates, the link table to generate input strs

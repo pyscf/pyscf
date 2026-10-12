@@ -71,41 +71,79 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
     emp2_ss = emp2_ss.real
     emp2_os = emp2_os.real
-    emp2 = lib.tag_array(emp2_ss+emp2_os, e_corr_ss=emp2_ss, e_corr_os=emp2_os)
+    # The canonical reference satisfies Brillouin's theorem, hence T1 = 0
+    mp.t1 = numpy.zeros((nocc,nvir), dtype=eris.ovov.dtype)
+    emp2 = lib.tag_array(emp2_ss+emp2_os, e_corr_ss=emp2_ss, e_corr_os=emp2_os,
+                         e_corr_singles=0)
 
     return emp2.real, t2
 
 
 # Iteratively solve MP2 if non-canonical HF is provided
+def _is_canonical_reference(mp):
+    '''Whether the reference is canonical, i.e. its orbitals diagonalize the
+    mean-field Fock.  A spin-paired object with different alpha/beta
+    occupations (e.g. an ROHF wavefunction converted to UHF) is non-canonical:
+    the alpha/beta Fock matrices are not diagonal in the shared orbital basis
+    and the first-order singles (T1) does not vanish.'''
+    coeff = mp.mo_coeff
+    if not (isinstance(coeff, numpy.ndarray) and coeff.ndim == 3):
+        return True
+    occ = numpy.asarray(mp.mo_occ)
+    if occ.ndim == 2:
+        if not numpy.array_equal(occ[0], occ[1]) and \
+                numpy.allclose(coeff[0], coeff[1]):
+            return False
+    return True
+
+
+def _no_active_pairs(mp, mo_occ=None):
+    '''Whether no spin channel has both occupied and virtual orbitals.  The
+    MP2 correlation energy is then exactly zero (e.g. a one-electron atom),
+    and the amplitude kernels can be skipped.'''
+    if mo_occ is None:
+        mo_occ = mp.mo_occ
+    occ = numpy.asarray(mo_occ)
+    if occ.ndim == 1:
+        return not ((occ > 0).any() and (occ == 0).any())
+    return all(not ((occ[s] > 0).any() and (occ[s] == 0).any())
+               for s in range(occ.shape[0]))
+
+
 def _iterative_kernel(mp, eris, verbose=None):
     cput1 = cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mp, verbose)
 
     emp2, t2 = mp.init_amps(eris=eris)
+    t1 = mp.t1
     log.info('Init E(MP2) = %.15g', emp2)
 
     adiis = lib.diis.DIIS(mp)
 
     conv = False
     for istep in range(mp.max_cycle):
-        t2new = mp.update_amps(t2, eris)
+        t1new, t2new = mp.update_amps(t1, t2, eris)
 
-        if isinstance(t2new, numpy.ndarray):
-            normt = numpy.linalg.norm(t2new - t2)
-            t2 = None
-            t2new = adiis.update(t2new)
-        else: # UMP2
-            normt = numpy.linalg.norm([numpy.linalg.norm(t2new[i] - t2[i])
-                                       for i in range(3)])
-            t2 = None
-            t2shape = [x.shape for x in t2new]
-            t2new = numpy.hstack([x.ravel() for x in t2new])
-            t2new = adiis.update(t2new)
-            t2new = lib.split_reshape(t2new, t2shape)
+        if isinstance(t2new, numpy.ndarray):  # RMP2
+            normt = (numpy.linalg.norm(t1new - t1) +
+                     numpy.linalg.norm(t2new - t2))
+            shapes = [t1new.shape, t2new.shape]
+            amp = numpy.hstack((t1new.ravel(), t2new.ravel()))
+            amp = adiis.update(amp)
+            t1new, t2new = lib.split_reshape(amp, shapes)
+        else:  # UMP2
+            normt = (sum(numpy.linalg.norm(t1new[i] - t1[i]) for i in range(2)) +
+                     sum(numpy.linalg.norm(t2new[i] - t2[i]) for i in range(3)))
+            shapes = [x.shape for x in t1new + t2new]
+            amp = numpy.hstack([x.ravel() for x in t1new + t2new])
+            amp = adiis.update(amp)
+            amp = lib.split_reshape(amp, shapes)
+            t1new, t2new = amp[:2], amp[2:]
 
-        t2, t2new = t2new, None
+        t1, t2 = t1new, t2new
+        mp.t1, mp.t2 = t1, t2
         emp2, e_last = mp.energy(t2, eris), emp2
-        log.info('cycle = %d  E_corr(MP2) = %.15g  dE = %.9g  norm(t2) = %.6g',
+        log.info('cycle = %d  E_corr(MP2) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
                  istep+1, emp2, emp2 - e_last, normt)
         cput1 = log.timer('MP2 iter', *cput1)
         if abs(emp2-e_last) < mp.conv_tol and normt < mp.conv_tol_normt:
@@ -115,18 +153,31 @@ def _iterative_kernel(mp, eris, verbose=None):
     return conv, emp2, t2
 
 def energy(mp, t2, eris):
-    '''MP2 energy'''
+    '''MP2 energy including the first-order singles (T1) contribution.
+
+    T1 = f_ai/(e_i - e_a); it vanishes when the reference satisfies
+    Brillouin's theorem (occupied-virtual Fock block f_ov = 0), e.g. for
+    canonical HF or a localized (converged) HF reference.
+    '''
     nocc, nvir = t2.shape[1:3]
     eris_ovov = numpy.asarray(eris.ovov).reshape(nocc,nvir,nocc,nvir)
     ed = numpy.einsum('ijab,iajb', t2, eris_ovov) * 2
     ex = -numpy.einsum('ijab,ibja', t2, eris_ovov)
     emp2_ss = (ed*0.5 + ex).real
     emp2_os = ed.real*0.5
-    emp2 = lib.tag_array(emp2_ss+emp2_os, e_corr_ss=emp2_ss, e_corr_os=emp2_os)
+
+    t1 = getattr(mp, 't1', None)
+    if t1 is None or getattr(mp, 'exclude_t1', False):
+        e_singles = 0.
+    else:
+        fov = numpy.asarray(eris.fock)[:nocc,nocc:]
+        e_singles = numpy.einsum('ia,ia->', fov, t1).real * 2
+    emp2 = lib.tag_array(emp2_ss+emp2_os+e_singles, e_corr_ss=emp2_ss,
+                         e_corr_os=emp2_os, e_corr_singles=e_singles)
     return emp2
 
-def update_amps(mp, t2, eris):
-    '''Update non-canonical MP2 amplitudes'''
+def update_amps(mp, t1, t2, eris):
+    '''Update non-canonical MP2 amplitudes (T1 and T2)'''
     #assert (isinstance(eris, _ChemistsERIs))
     nocc, nvir = t2.shape[1:3]
     fock = eris.fock
@@ -135,6 +186,7 @@ def update_amps(mp, t2, eris):
 
     foo = fock[:nocc,:nocc] - numpy.diag(mo_e_o)
     fvv = fock[nocc:,nocc:] - numpy.diag(mo_e_v)
+    fov = fock[nocc:,:nocc].T
     t2new  = lib.einsum('ijac,bc->ijab', t2, fvv)
     t2new -= lib.einsum('ki,kjab->ijab', foo, t2)
     t2new = t2new + t2new.transpose(1,0,3,2)
@@ -145,18 +197,32 @@ def update_amps(mp, t2, eris):
 
     eia = mo_e_o[:,None] - mo_e_v
     t2new /= lib.direct_sum('ia,jb->ijab', eia, eia)
-    return t2new
+
+    # First-order singles. The T1 equation is decoupled from T2 when the
+    # zeroth-order Hamiltonian is block diagonal between occupied and virtual
+    # (Finley & Hirao, Chem. Phys. Lett. 328, 51 (2000), Eq. (50)):
+    #   (eps_i - eps_a) t1_ia = f_ai - sum_j foo_ji t1_ja + sum_b fvv_ab t1_ib
+    if getattr(mp, 'exclude_t1', False):
+        t1new = numpy.zeros_like(t1)
+    else:
+        t1new  = lib.einsum('ab,ib->ia', fvv, t1)
+        t1new -= lib.einsum('ji,ja->ia', foo, t1)
+        t1new += fov
+        t1new /= eia
+    return t1new, t2new
 
 
 def make_rdm1(mp, t2=None, eris=None, ao_repr=False, with_frozen=True):
     r'''Spin-traced one-particle density matrix.
-    The occupied-virtual orbital response is not included.
 
     dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
 
     The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
     The contraction between 1-particle Hamiltonian and rdm1 is
     E = einsum('pq,qp', h1, rdm1)
+
+    For a non-Hartree-Fock reference the first-order singles amplitudes T1
+    contribute to the occupied-virtual block of the density.
 
     Kwargs:
         ao_repr : boolean
@@ -167,8 +233,22 @@ def make_rdm1(mp, t2=None, eris=None, ao_repr=False, with_frozen=True):
     doo, dvv = _gamma1_intermediates(mp, t2, eris)
     nocc = doo.shape[0]
     nvir = dvv.shape[0]
-    dov = numpy.zeros((nocc,nvir), dtype=doo.dtype)
-    dvo = dov.T
+    t1 = getattr(mp, 't1', None)
+    if t1 is None:
+        dov = numpy.zeros((nocc,nvir), dtype=doo.dtype)
+        dvo = dov.T
+    else:
+        if t2 is None: t2 = mp.t2
+        # First-order singles (f_ov != 0 references, issue #1687). The
+        # occupied-virtual block includes the t1 amplitude and the t1.t2
+        # cross term (cf. cisd._gamma1_intermediates); the occ/vir blocks
+        # (t1^2) are in _gamma1_intermediates.
+        t1 = numpy.asarray(t1, dtype=doo.dtype)
+        dvo = t1.T
+        if t2 is not None:
+            dvo = dvo + lib.einsum('jb,ijab->ai', t1.conj(), t2) * 2 \
+                      - lib.einsum('jb,ijba->ai', t1.conj(), t2)
+        dov = dvo.T.conj()
     return ccsd_rdm._make_rdm1(mp, (doo, dov, dvo, dvv), with_frozen=with_frozen,
                                ao_repr=ao_repr)
 
@@ -200,6 +280,14 @@ def _gamma1_intermediates(mp, t2=None, eris=None):
                 - lib.einsum('jca,jbc->ba', l2i, t2i)
         dm1occ += lib.einsum('iab,jab->ij', l2i, t2i) * 2 \
                 - lib.einsum('iab,jba->ij', l2i, t2i)
+    # First-order singles (f_ov != 0 references, issue #1687): the t1^2
+    # correction to the occupied/virtual blocks of the spin-traced density
+    # (cf. the c1^2 terms of cisd._gamma1_intermediates). The t1.t2 cross
+    # terms are not included.
+    t1 = getattr(mp, 't1', None)
+    if t1 is not None:
+        dm1occ += lib.einsum('ia,ka->ik', t1.conj(), t1)
+        dm1vir += lib.einsum('ia,ic->ac', t1, t1.conj())
     return -dm1occ, dm1vir
 
 
@@ -280,8 +368,19 @@ def make_rdm2(mp, t2=None, eris=None, ao_repr=False):
 
     Note the contraction between ERIs (in Chemist's notation) and rdm2 is
     E = einsum('pqrs,pqrs', eri, rdm2)
+
+    This energy contract holds when the reference satisfies Brillouin's
+    theorem (f_ov = 0).  The T1 contributions to the 2-RDM are not included,
+    so for a non-canonical reference (f_ov != 0) a warning is issued.
     '''
     if t2 is None: t2 = mp.t2
+    t1 = getattr(mp, 't1', None)
+    if t1 is not None:
+        t1 = t1 if isinstance(t1, (tuple, list)) else (t1,)
+        if max(numpy.abs(numpy.asarray(x)).max() for x in t1) > 1e-8:
+            logger.warn(mp, 'The 2-RDM does not include the first-order '
+                            'singles (T1): its energy contraction is only '
+                            'valid for a reference with f_ov = 0.')
     nmo = nmo0 = mp.nmo
     nocc = nocc0 = mp.nocc
     nvir = nmo - nocc
@@ -512,11 +611,12 @@ class MP2Base(lib.StreamObject):
     max_cycle = getattr(__config__, 'cc_ccsd_CCSD_max_cycle', 50)
     conv_tol = getattr(__config__, 'cc_ccsd_CCSD_conv_tol', 1e-7)
     conv_tol_normt = getattr(__config__, 'cc_ccsd_CCSD_conv_tol_normt', 1e-5)
+    exclude_t1 = getattr(__config__, 'mp_mp2_exclude_t1', False)
 
     _keys = {
         'max_cycle', 'conv_tol', 'conv_tol_normt', 'mol', 'max_memory',
-        'frozen', 'level_shift', 'mo_coeff', 'mo_occ', 'e_hf', 'e_corr',
-        'e_corr_ss', 'e_corr_os', 't2',
+        'frozen', 'level_shift', 'exclude_t1', 'mo_coeff', 'mo_occ', 'e_hf',
+        'e_corr', 'e_corr_ss', 'e_corr_os', 'e_corr_singles', 't1', 't2',
     }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
@@ -549,6 +649,8 @@ class MP2Base(lib.StreamObject):
         self.e_corr = None
         self.e_corr_ss = None
         self.e_corr_os = None
+        self.e_corr_singles = None
+        self.t1 = None
         self.t2 = None
 
     @property
@@ -600,7 +702,11 @@ class MP2Base(lib.StreamObject):
     @property
     def emp2_scs(self):
         # J. Chem. Phys. 118, 9095 (2003)
-        return self.e_corr_ss*1./3. + self.e_corr_os*1.2
+        # The first-order singles (f_ov != 0 references) are added unscaled: the
+        # SCS factors apply to the same/opposite-spin components of the
+        # double-excitation correlation energy.
+        return (self.e_corr_ss*1./3. + self.e_corr_os*1.2 +
+                (getattr(self, 'e_corr_singles', 0) or 0))
 
     @property
     def e_tot(self):
@@ -610,6 +716,12 @@ class MP2Base(lib.StreamObject):
     def e_tot_scs(self):
         # J. Chem. Phys. 118, 9095 (2003)
         return self.e_hf + self.emp2_scs
+
+    def _reference_is_canonical(self):
+        '''Whether the reference orbitals are canonical (diagonalize the
+        mean-field Fock).  Overridden by methods that handle non-canonical
+        references themselves (e.g. ROMP2).'''
+        return _is_canonical_reference(self)
 
     def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         '''
@@ -630,12 +742,27 @@ class MP2Base(lib.StreamObject):
 
         cput1 = log.timer('ehf', *cput1)
 
+        if _no_active_pairs(self):
+            # Degenerate active space: no occupied-virtual pair in any spin
+            # channel (e.g. a one-electron atom).  The correlation energy is
+            # exactly zero and the amplitude/integral kernels, which may not
+            # support zero-sized blocks, are skipped.
+            log.note('No occupied-virtual pair; %s correlation energy is 0',
+                     self.__class__.__name__)
+            self.converged = True
+            self.e_corr_ss = self.e_corr_os = self.e_corr_singles = 0
+            self.e_corr = 0.
+            self.t1 = None
+            self.t2 = None
+            self._finalize()
+            return self.e_corr, self.t2
+
         if eris is None:
             eris = self.ao2mo(mo_coeff)
 
         cput1 = log.timer('ao2mo', *cput1)
 
-        if self._scf.converged:
+        if self._scf.converged and (self.exclude_t1 or self._reference_is_canonical()):
             self.e_corr, self.t2 = self.init_amps(mo_energy, mo_coeff, eris, with_t2)
         else:
             self.converged, self.e_corr, self.t2 = _iterative_kernel(self, eris)
@@ -644,6 +771,7 @@ class MP2Base(lib.StreamObject):
 
         self.e_corr_ss = getattr(self.e_corr, 'e_corr_ss', 0)
         self.e_corr_os = getattr(self.e_corr, 'e_corr_os', 0)
+        self.e_corr_singles = getattr(self.e_corr, 'e_corr_singles', 0)
         self.e_corr = float(self.e_corr)
 
         log.timer(self.__class__.__name__, *cput0)
@@ -763,7 +891,8 @@ class _ChemistsERIs:
         self.mo_coeff = _mo_without_core(mp, mo_coeff)
         self.mol = mp.mol
 
-        if mo_coeff is mp._scf.mo_coeff and mp._scf.converged:
+        if (mo_coeff is mp._scf.mo_coeff and mp._scf.converged and
+                (mp.exclude_t1 or mp._reference_is_canonical())):
             # The canonical MP2 from a converged SCF result. Rebuilding fock
             # can be skipped
             self.mo_energy = _mo_energy_without_core(mp, mp._scf.mo_energy)

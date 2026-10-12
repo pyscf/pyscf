@@ -41,6 +41,10 @@ except ImportError:
         'See https://github.com/TREX-CoE/trexio/blob/master/python/README.md'
     )
 
+# Tolerance used by from_trexio when checking that the basis in a TREXIO file
+# follows PySCF's conventions (normalized contractions, ao_normalization).
+NORM_TOL = 1e-8
+
 
 def to_trexio(
     obj, filename, backend="h5",
@@ -234,7 +238,7 @@ def to_trexio(
 
 
 def from_trexio(filename):
-    """Reconstruct a PySCF molecule or crystal object from a TREXIO file.
+    r"""Reconstruct a PySCF molecule or crystal object from a TREXIO file.
 
     Reads nuclear geometry, basis set, spin, symmetry, ECP (if present), and
     — for periodic systems — the lattice vectors from *filename*, and returns
@@ -259,11 +263,26 @@ def from_trexio(filename):
     ------
     AssertionError
         If the ``basis_type`` stored in the file is not ``"Gaussian"``.
+    NotImplementedError
+        If the file does not follow the conventions a :class:`Mole` can
+        represent: every contracted function must be normalized, and
+        ``ao_normalization`` must match PySCF's angular factors (see Notes).
     trexio.Error
         If a required TREXIO field is missing or the file cannot be opened.
 
     Notes
     -----
+    * The contracted functions are built from the product
+      ``shell_factor * prim_factor * coefficient``, as the TREXIO
+      specification leaves the distribution of the normalization among these
+      factors free.  Since :meth:`~pyscf.gto.Mole.build` renormalizes every
+      contraction, only files whose contracted functions are normalized can
+      be read; others are rejected instead of being silently rescaled.
+    * ``ao_normalization`` must equal PySCF's convention:
+      :math:`\sqrt{(2l+1)/4\pi}` for spherical AOs, and for Cartesian AOs
+      the same factor for s and p and 1 for higher shells (libcint
+      normalizes only s and p Cartesian functions).  A :class:`Mole` has no
+      per-AO scale factors that could absorb a different convention.
     * Coordinates are read in Bohr and stored with ``mol.unit = 'Bohr'``.
     * Each nucleus is assigned a unique label of the form ``<symbol><index>``
       (e.g. ``"H0"``, ``"H1"``, ``"O2"``) so that atoms of the same element
@@ -409,13 +428,64 @@ def from_trexio(filename):
 
         nuc_idx = trexio.read_basis_nucleus_index(tf).tolist()
         ls = trexio.read_basis_shell_ang_mom(tf).tolist()
-        prim2sh = trexio.read_basis_shell_index(tf).tolist()
-        exps = trexio.read_basis_exponent(tf).tolist()
-        coef = trexio.read_basis_coefficient(tf).tolist()
+        prim2sh = trexio.read_basis_shell_index(tf)
+        exps = trexio.read_basis_exponent(tf)
+        # TREXIO defines each contracted radial function through the product
+        # shell_factor * prim_factor * coefficient and leaves the distribution
+        # of the normalization among the three factors free.
+        coef = (
+            trexio.read_basis_shell_factor(tf)[prim2sh]
+            * trexio.read_basis_prim_factor(tf)
+            * trexio.read_basis_coefficient(tf)
+        )
 
         basis = {}
         exps = _group_by(exps, prim2sh)
         coef = _group_by(coef, prim2sh)
+        for ib, (l, e, c) in enumerate(zip(ls, exps, coef)):
+            # Mole.build() renormalizes every contraction, so a Mole can only
+            # represent normalized contracted functions.
+            ee = gto.gaussian_int(2 * l + 2, e[:, None] + e[None, :])
+            norm = np.sqrt(c @ ee @ c)
+            if abs(norm - 1) > NORM_TOL:
+                raise NotImplementedError(
+                    f"Shell {ib} in {filename} is not normalized (norm = {norm}). "
+                    "PySCF can only read TREXIO files whose contracted functions "
+                    "are normalized."
+                )
+            # make_bas_env() multiplies each primitive by gto_norm; divide it
+            # out so that the product above is what ends up in mol._env.
+            coef[ib] = c / gto.gto_norm(l, e)
+
+        if trexio.has_ao_normalization(tf):
+            # ao_normalization is a per-AO factor.  A Mole holds no such array
+            # (the angular factors are fixed inside libcint), so only files
+            # following PySCF's convention can be read.
+            ao_shell = trexio.read_ao_shell(tf)
+            ao_norm = trexio.read_ao_normalization(tf)
+            ref_shell = []
+            ref_norm = []
+            for ib, l in enumerate(ls):
+                if mol.cart:
+                    nao = (l + 1) * (l + 2) // 2
+                    fac = np.sqrt((2 * l + 1) / (4 * np.pi)) if l <= 1 else 1.0
+                else:
+                    nao = 2 * l + 1
+                    fac = np.sqrt((2 * l + 1) / (4 * np.pi))
+                ref_shell += [ib] * nao
+                ref_norm += [fac] * nao
+            if (
+                len(ao_shell) != len(ref_shell)
+                or not np.array_equal(ao_shell, ref_shell)
+                or not np.allclose(ao_norm, ref_norm, rtol=NORM_TOL, atol=0)
+            ):
+                raise NotImplementedError(
+                    f"ao_normalization/ao_shell in {filename} do not follow "
+                    "PySCF's AO convention (normalized real spherical harmonics, "
+                    "or Cartesian functions with only s and p normalized). "
+                    "PySCF cannot represent per-AO normalization factors."
+                )
+
         p1 = 0
         for ia, at_ls in enumerate(_group_by(ls, nuc_idx)):
             p0, p1 = p1, p1 + at_ls.size
@@ -543,10 +613,23 @@ def _mol_to_trexio(mol, trexio_file):
                 continue
 
             # atom_symbol is superior to atom_pure_symbol
-            try:
+            if atom_symbol in mol._ecp:
                 z_core, ecp_list = mol._ecp[atom_symbol]
-            except KeyError:
+            elif chemical_symbol in mol._ecp:
                 z_core, ecp_list = mol._ecp[chemical_symbol]
+            else:
+                # This atom carries no ECP, as for the light atoms of a
+                # molecule where only the heavy ones do.  TREXIO expects an
+                # entry for every nucleus, so write a vanishing ECP.
+                ecp_num += 1
+                ecp_max_ang_mom_plus_1.append(1)
+                ecp_z_core.append(0)
+                ecp_nucleus_index.append(nuc_index)
+                ecp_ang_mom.append(0)
+                ecp_coefficient.append(0.0)
+                ecp_exponent.append(1.0)
+                ecp_power.append(0)
+                continue
 
             # ecp zcore
             ecp_z_core.append(z_core)
@@ -1432,7 +1515,9 @@ def _write_2e_eri(
                 eri_ao = ao2mo.restore(4, eri_ao, nao)
             elif sym == 's8':
                 eri_ao = ao2mo.restore(8, eri_ao, nao)
-            _write_2e_int_eri(np.ascontiguousarray(eri_ao), trexio_file, 'AO', sym=sym)
+            _write_2e_int_eri(np.ascontiguousarray(eri_ao), trexio_file, 'AO',
+                              sym=sym,
+                              ao_map=np.argsort(_order_ao_index(mf.cell)))
         else:
             # Molecular AO
             eri_ao = None
@@ -1449,16 +1534,31 @@ def _write_2e_eri(
             else:
                 eri_ao = mf.mol.intor('int2e', aosym=sym)
             eri_ao = _require_real_2e(eri_ao)
-            _write_2e_int_eri(np.ascontiguousarray(eri_ao), trexio_file, 'AO', sym=sym)
+            _write_2e_int_eri(np.ascontiguousarray(eri_ao), trexio_file, 'AO',
+                              sym=sym,
+                              ao_map=np.argsort(_order_ao_index(mf.mol)))
 
 
-def _write_2e_int_eri(eri, trexio_file, basis='MO', sym='s1'):
+def _write_2e_int_eri(eri, trexio_file, basis='MO', sym='s1', ao_map=None):
+    """Write ERIs as (index quadruplet, value) records.
+
+    ``ao_map`` optionally renumbers the indices, which are AO indices when
+    ``basis == 'AO'``.  It is the inverse of :func:`_order_ao_index`, so that
+    PySCF AO ``p`` is written as TREXIO AO ``ao_map[p]``.  Applying it to the
+    index arrays keeps the packing intact and needs no permuted copy of the
+    integral tensor.
+    """
     basis = basis.upper()
     sym = sym.lower()
     if basis not in ['MO', 'AO']:
         raise ValueError("basis must be 'MO' or 'AO'")
     if sym not in ('s1', 's4', 's8'):
         raise ValueError("sym must be 's1', 's4', or 's8'")
+
+    def _map_idx(idx):
+        if ao_map is None:
+            return idx
+        return ao_map[idx].astype(np.int32)
 
     def _pair_from_tril(n):
         i, j = np.tril_indices(n)
@@ -1487,6 +1587,7 @@ def _write_2e_int_eri(eri, trexio_file, basis='MO', sym='s1'):
         else:
             if not trexio.has_mo_num(tf):
                 trexio.write_mo_num(tf, n)
+        idx = _map_idx(idx)
         if basis == 'MO':
             trexio.write_mo_2e_int_eri(tf, 0, num_integrals, idx, eri.ravel())
         else:
@@ -1524,7 +1625,7 @@ def _write_2e_int_eri(eri, trexio_file, basis='MO', sym='s1'):
             j = pair_j[ij]
             k = pair_i[kl]
             l = pair_j[kl]
-            idx = np.stack([i, k, j, l], axis=1).astype(np.int32).ravel()
+            idx = _map_idx(np.stack([i, k, j, l], axis=1).astype(np.int32).ravel())
             val = eri[ij, kl].ravel()
 
             if basis == 'MO':
@@ -1567,7 +1668,7 @@ def _write_2e_int_eri(eri, trexio_file, basis='MO', sym='s1'):
         j = pair_j[ij]
         k = pair_i[kl]
         l = pair_j[kl]
-        idx = np.stack([i, k, j, l], axis=1).astype(np.int32).ravel()
+        idx = _map_idx(np.stack([i, k, j, l], axis=1).astype(np.int32).ravel())
         val = eri[offset:end]
 
         if basis == 'MO':
@@ -1690,9 +1791,13 @@ def _write_1e_eri(
         if len(getattr(cell, '_ecpbas', [])) > 0:
             from pyscf.pbc.gto import ecp
             ecp_mat = _as_matrix(ecp.ecp_int(cell), 'AO ECP potential')
-            potential += ecp_mat
 
+        # ao_1e_int.potential_n_e is the bare electron-nucleus attraction; the
+        # ECP is a separate TREXIO quantity and enters only the core
+        # Hamiltonian, so that consumers do not count it twice.
         core = kinetic + potential
+        if ecp_mat is not None:
+            core = core + ecp_mat
     else:
         mol = mf.mol
         overlap = _as_matrix(mf.get_ovlp(), 'AO overlap')
@@ -1700,8 +1805,10 @@ def _write_1e_eri(
         potential = _as_matrix(mol.intor('int1e_nuc'), 'AO potential')
         if mol._ecp:
             ecp_mat = _as_matrix(mol.intor('ECPscalar'), 'AO ECP potential')
-            potential += ecp_mat
+        # See the comment in the PBC branch above.
         core = kinetic + potential
+        if ecp_mat is not None:
+            core = core + ecp_mat
 
     overlap = np.ascontiguousarray(_reject_complex_1e(_hermitize(overlap), 'overlap'))
     kinetic = np.ascontiguousarray(_reject_complex_1e(_hermitize(kinetic), 'kinetic'))
@@ -1711,9 +1818,17 @@ def _write_1e_eri(
         ecp_mat = np.ascontiguousarray(_reject_complex_1e(_hermitize(ecp_mat), 'ecp'))
 
     if basis == 'AO':
-        _write_1e_int_eri(overlap, kinetic, potential, core, trexio_file, 'AO')
+        # mo.coefficient is stored in TREXIO's AO order (see _order_ao_index);
+        # the AO integrals have to be expressed in that same order.
+        idx = _order_ao_index(mf.cell if is_pbc else mf.mol)
+        _write_1e_int_eri(_reorder_ao_matrix(overlap, idx),
+                          _reorder_ao_matrix(kinetic, idx),
+                          _reorder_ao_matrix(potential, idx),
+                          _reorder_ao_matrix(core, idx),
+                          trexio_file, 'AO')
         if ecp_mat is not None:
-            trexio.write_ao_1e_int_ecp(trexio_file, ecp_mat)
+            trexio.write_ao_1e_int_ecp(trexio_file,
+                                       _reorder_ao_matrix(ecp_mat, idx))
         return
 
     if is_uhf_like:
@@ -2105,6 +2220,15 @@ def _order_ao_index(mol):
             idx.append(cache_by_l[l] + off)
             off += l * 2 + 1
     return np.hstack(idx)
+
+
+def _reorder_ao_matrix(mat, idx):
+    """Permute both AO indices of an AO-basis matrix into TREXIO's AO order.
+
+    ``idx`` is the array returned by :func:`_order_ao_index`, i.e. TREXIO AO
+    ``a`` is PySCF AO ``idx[a]``.
+    """
+    return np.ascontiguousarray(mat[np.ix_(idx, idx)])
 
 
 def _group_by(a, keys):

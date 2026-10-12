@@ -491,13 +491,10 @@ class KohnShamDFT:
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        from pyscf.dft import numint2c
         mf = scf.addons.convert_to_ghf(self)
         if xc is not None:
             mf.xc = xc
         mf.converged = xc == self.xc and mf.converged
-        if not isinstance(mf._numint, numint2c.NumInt2C):
-            mf._numint = numint2c.NumInt2C()
         return mf
 
     def reset(self, mol=None):
