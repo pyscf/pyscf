@@ -210,7 +210,7 @@ def grad_qv(pcmobj, dm, q_sym = None):
     exponents    = pcmobj.surface['charge_exp']
 
     max_memory = pcmobj.max_memory - lib.current_memory()[0]
-    blksize = int(max(max_memory*.9e6/8/nao**2/3, 400))
+    blksize = int(max(max_memory*.9e6/8/nao**2/3, 8))
     ngrids = q_sym.shape[0]
     int3c2e_ip1 = mol._add_suffix('int3c2e_ip1')
     cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, int3c2e_ip1)
