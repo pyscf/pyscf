@@ -83,6 +83,7 @@ class KnownValues(unittest.TestCase):
 
     def test_get_eri_gamma_high_cost(self):
         odf = mdf.MDF(cell)
+        odf._prefer_ccdf = True
         odf.linear_dep_threshold = 1e-7
         odf.auxbasis = 'weigend'
         odf.mesh = (11,)*3
