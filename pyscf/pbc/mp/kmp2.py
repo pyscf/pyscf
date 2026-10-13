@@ -88,15 +88,21 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
 
     mem_per_i = (nkpts + 4) * nocc * nvir**2 * dsize / 1e6
     if mp.blksize is not None:
-        blksize = min(nocc, max(1, int(mp.blksize)))
+        blksize = int(mp.blksize)
     else:
-        blksize = min(nocc, int((mem_avail - mem_fixed) / mem_per_i))
-    if blksize < 1:
-        raise MemoryError('Insufficient memory! MP2 needs at least %d MB '
-                          '(fixed %d MB + %d MB per occupied orbital), currently available %d MB'
-                          % (mem_fixed + mem_per_i, mem_fixed, mem_per_i, mem_avail))
+        blksize = int((mem_avail - mem_fixed) / mem_per_i)
+    blksize = max(1, min(nocc, blksize))
+    mem_est = mem_fixed + blksize * mem_per_i
     log.info('KMP2 occupied block size = %d (of %d), estimated memory %d MB (available %d MB)',
-             blksize, nocc, mem_fixed + blksize * mem_per_i, mem_avail)
+             blksize, nocc, mem_est, mem_avail)
+    if mem_est > mem_avail:
+        raise MemoryError('Insufficient memory! KMP2 with occupied block size %d needs %d MB '
+                          '(fixed %d MB + %d MB per occupied orbital), currently available %d MB. '
+                          'Reduce blksize or increase max_memory.'
+                          % (blksize, mem_est, mem_fixed, mem_per_i, mem_avail))
+    occ_blocks = list(lib.prange(0, nocc, blksize))
+    log.debug('KMP2 occupied blocks: %s', occ_blocks)
+    mp._occ_blocks = occ_blocks
 
     fao2mo = mp._scf.with_df.ao2mo
     kconserv = mp.khelper.kconserv
@@ -121,7 +127,7 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
     emp2_ss = emp2_os = 0.
     for ki in range(nkpts):
         for kj in range(nkpts):
-            for i0, i1 in lib.prange(0, nocc, blksize):
+            for i0, i1 in occ_blocks:
                 ni = i1 - i0
                 oovv_ij = oovv_buf[:,:ni]
                 for ka in range(nkpts):
