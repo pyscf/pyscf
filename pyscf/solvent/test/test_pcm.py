@@ -186,9 +186,9 @@ H  0. 0.757  0.587''', basis='sto3g')
         finally:
             df.incore.aux_e2 = orig_aux_e2
 
-        self.assertGreater(len(blk_grids), 1)
-        self.assertEqual(max(n_alive), 0)
-        self.assertLessEqual(max(blk_grids), 8)
+        self.assertGreater(len(blk_grids), 1, 'single block, test ineffective')
+        self.assertEqual(max(n_alive), 0, 'v_nj of previous block still alive')
+        self.assertLessEqual(max(blk_grids), 8, 'block size exceeds budget')
 
         cm.max_memory = 2000
         epcm_ref, vmat_ref = cm._get_vind(dm[None])
