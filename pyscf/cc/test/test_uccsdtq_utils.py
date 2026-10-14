@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# Author: Yuhao Chen <chenyuhao@shu.edu.cn>
 # Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
 
 import os

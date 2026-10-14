@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+/* Author: Yuhao Chen <chenyuhao@shu.edu.cn> */
+
 /* Direct connected CCSDTQ contractions.  Python supplies exact rational
  * spin-summed descriptors derived from independent Wick enumeration.
  * Each OpenMP iteration owns one independent amplitude and its full-storage

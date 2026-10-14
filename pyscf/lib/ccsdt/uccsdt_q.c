@@ -29,6 +29,8 @@
  * team.  Each task has a fixed arithmetic order regardless of its worker.
  */
 
+/* Author: Yuhao Chen <chenyuhao@shu.edu.cn> */
+
 #include <stdint.h>
 #include <stddef.h>
 #include <stdlib.h>

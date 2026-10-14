@@ -1,4 +1,5 @@
 # Copyright 2014-2026 The PySCF Developers. All Rights Reserved.
+# Author: Yuhao Chen <chenyuhao@shu.edu.cn>
 
 """Empty spin sectors must not allocate six-index residual workspaces."""
 

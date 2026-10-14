@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Author: Yuhao Chen <chenyuhao@shu.edu.cn>
+
 """Independent operator and contraction checks for the small-system oracles."""
 
 from itertools import combinations, permutations, product

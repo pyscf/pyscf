@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Author: Yuhao Chen <chenyuhao@shu.edu.cn>
+
 """Blocked binary-contraction backend versus the direct native evaluator."""
 
 from functools import lru_cache

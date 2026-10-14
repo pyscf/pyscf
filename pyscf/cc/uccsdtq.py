@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Author: Yuhao Chen <chenyuhao@shu.edu.cn>
+
 '''Full iterative CCSDTQ for real unrestricted Hartree--Fock references.
 
 T1 and T2 use the full native UCCSDT spin blocks.  T3 and T4 are compact
@@ -20,6 +22,35 @@ aaaa, aaab, aabb, bbba, bbbb; same-spin occupied and virtual groups are
 stored as strictly increasing combinations in this module.  The highm
 variant stores full T3 and T4.  All ranks enter the connected CC equations and
 are iterated to convergence; e_tot is the CCSDTQ total energy.
+
+The T1-dressed Fock matrix, integrals, and R1--R3 contractions come from the
+existing UCCSDT implementations.  Quadruples contributions use the connected
+seeds in _uccsdtq_terms.TERMS.  Spin and permutation descriptors are cached
+and evaluated by either a direct scalar engine or a factorized, blocked
+BLAS engine.  These engines share the algebra; their agreement is a check
+of the execution strategies, not an independent derivation of the equations.
+Independent determinant-space BCH and FCI checks are provided in the tests.
+
+quadruples_backend='auto' selects the direct engine for small excitation
+spaces and the blocked engine when its work estimate exceeds the crossover.
+The direct engine has no BLAS intermediates and can become expensive as the
+occupied and virtual spaces grow.  The blocked engine bounds intermediate
+workspaces, but the stored amplitudes and full four-index ERIs still limit
+feasible sizes.  Neither backend is a GPU or out-of-core algorithm.
+
+cc.UCCSDTQ accepts RHF references by conversion to UHF.  cc.CCSDTQ dispatches
+UHF and ROHF-to-UHF references here.  Frozen occupied and virtual orbitals,
+including different alpha/beta lists, use the existing UCCSDT conventions.
+Real noncanonical orbitals are supported; complex orbitals, GHF references,
+and iterative damping are not.  T4 is excluded from DIIS by default;
+do_diis_max_t=True includes it.
+
+The inherited integral transformation materializes full MO ERIs, including
+when reconstructing them from a density-fitted SCF reference.  There is no
+dedicated density-fitted quadruples algorithm.  max_memory controls workspace
+checks and blocking; it is not an operating-system memory limit.
+
+See examples/cc/68-uccsdtq.py for a calculation seeded from converged CCSDT.
 '''
 
 import ctypes

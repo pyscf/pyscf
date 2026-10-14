@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Author: Yuhao Chen <chenyuhao@shu.edu.cn>
+
 """T4 denominators for packed/full spin blocks and strided residuals."""
 
 from itertools import combinations

@@ -10,6 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Author: Yuhao Chen <chenyuhao@shu.edu.cn>
+
 """Bounded native gather/GEMM/scatter primitives for CCSDTQ."""
 import ctypes
 from types import SimpleNamespace

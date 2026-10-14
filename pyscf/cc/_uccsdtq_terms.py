@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Author: Yuhao Chen <chenyuhao@shu.edu.cn>
+
 """Connected spin-orbital CCSDTQ seeds for T1-dressed F and V.
 
 All terms require the UNNORMALIZED external antisymmetrizer A_occ A_vir.

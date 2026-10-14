@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+/* Author: Yuhao Chen <chenyuhao@shu.edu.cn> */
+
 /* Bounded gather, BLAS contraction and scatter primitives for CCSDTQ.
  * The Python planner supplies tile bounds, factorization and cache lifetime.
  * These routines allocate no memory and never form full spin-orbital T4.
@@ -57,8 +59,17 @@ int UCCSDTQomp_threads(void)
 extern int openblas_get_parallel(void) __attribute__((weak));
 #endif
 
-/* Query only the BLAS providing the actual dgemm symbol. Another OpenBLAS
- * elsewhere in the process must not enable outer threads around MKL, etc. */
+/* This optional probe only decides whether outer OpenMP workers may each
+ * call GEMM. Only a positively identified serial OpenBLAS (return value 0)
+ * enables that path; a threaded library, an unknown vendor, missing symbols,
+ * or a platform without dladdr disables it. The ordinary linked GEMM path
+ * remains available regardless of the probe result.
+ *
+ * Compare the providers of dgemm and the threading query: NumPy can load a
+ * second OpenBLAS into the same process, whose setting says nothing about
+ * this GEMM. The probe never changes a BLAS thread count. This conservative
+ * fallback avoids nested teams without requiring a vendor-specific API for
+ * MKL, Accelerate, or other BLAS implementations. */
 int UCCSDTQblas_parallel(void)
 {
 #ifdef UCCSDTQ_HAVE_DLADDR

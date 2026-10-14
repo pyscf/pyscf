@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Author: Yuhao Chen <chenyuhao@shu.edu.cn>
+
 """Independent determinant-space BCH oracle for CCSDTQ equation validation.
 
 The routines in this module are deliberately independent of the production

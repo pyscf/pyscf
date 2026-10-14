@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Author: Yuhao Chen <chenyuhao@shu.edu.cn>
+
 """Direct C/OpenMP spin-blocked contractions for UCCSDTQ.
 
 This first native engine prioritizes bounded workspace and transparent

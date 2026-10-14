@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Author: Yuhao Chen <chenyuhao@shu.edu.cn>
+
 """Storage and restart helpers for UHF CCSDTQ.
 
 The rank-four blocks follow :mod:`pyscf.cc.uccsdt`'s interleaved

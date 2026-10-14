@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# Author: Yuhao Chen <chenyuhao@shu.edu.cn>
 
 '''
 Conventional UCCSDT[Q] and UCCSDT(Q) for canonical, real UHF orbitals.

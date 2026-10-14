@@ -12,7 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-'''Full iterative UCCSDTQ with full native spin-block T3/T4 storage.'''
+# Author: Yuhao Chen <chenyuhao@shu.edu.cn>
+
+'''Full iterative UCCSDTQ with full native spin-block T3/T4 storage.
+
+This class selects the full-storage paths of the shared UCCSDTQ solver.
+The parent uses upstream uccsdt_highm for R1--R3 and passes the selected
+layout to the quadruples engines, vectorization, and denominator routines.
+Sharing those equations avoids a second copy of the quadruples term table;
+this is a storage variant, not an independent equation implementation.
+'''
 
 from pyscf.cc import uccsdtq
 

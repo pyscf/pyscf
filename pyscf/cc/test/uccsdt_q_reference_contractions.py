@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Author: Yuhao Chen <chenyuhao@shu.edu.cn>
+
 """Small-system spin-orbital reference for the conventional CCSDT(Q).
 
 Inputs are real antisymmetric amplitudes T2[ijab], T3[ijkabc], and

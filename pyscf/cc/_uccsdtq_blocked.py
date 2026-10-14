@@ -10,13 +10,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Author: Yuhao Chen <chenyuhao@shu.edu.cn>
+
 '''Factorized, memory-bounded spin-block CCSDTQ contractions.
 
 Connected star diagrams are contracted as binary tensor products.  Four-index
 intermediates are reused; six-index intermediates are built in occupied batches
 and consumed by every term using that batch before release.  Compact T4 is read
-only into bounded matrix panels.  The direct implementation remains a separate
-numerical oracle, including its exact rational spin/permutation descriptors.
+only into bounded matrix panels.  The direct implementation supplies shared
+spin/permutation descriptors and a scalar execution cross-check.  Independent
+equation validation uses the determinant-space BCH reference in the tests.
 '''
 
 from collections import OrderedDict

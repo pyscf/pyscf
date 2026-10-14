@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# Author: Yuhao Chen <chenyuhao@shu.edu.cn>
 
 '''
 Fully iterative UCCSDTQ for a small open-shell molecule.

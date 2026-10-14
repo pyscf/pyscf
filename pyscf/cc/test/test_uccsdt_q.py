@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Author: Yuhao Chen <chenyuhao@shu.edu.cn>
+
 """UHF quadruples corrections against independent determinant calculations."""
 
 import copy
@@ -27,7 +29,7 @@ from pyscf import cc, gto, scf
 from pyscf.lib import logger
 from pyscf.cc import uccsdt, uccsdt_q
 from pyscf.cc.test import uccsdt_q_reference as reference
-from pyscf.cc.test import uccsdt_q_slow as slow
+from pyscf.cc.test import uccsdt_q_reference_contractions as contractions
 from pyscf.cc.test.test_uccsdt_q_reference import random_inputs
 
 
@@ -92,7 +94,7 @@ class KnownValues(unittest.TestCase):
         for nalpha in range(5):
             mycc, eris = random_native(nalpha)
             inputs = reference.spinorbital_inputs(mycc, eris)
-            expanded = slow.terms(inputs['v'], inputs['t2'], inputs['t3'])
+            expanded = contractions.terms(inputs['v'], inputs['t2'], inputs['t3'])
             spins = (0,) * nalpha + (1,) * (4 - nalpha)
             virtual = [np.arange(nalpha) if s == 0 else np.arange(nalpha, 4)
                        for s in spins]

@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Author: Yuhao Chen <chenyuhao@shu.edu.cn>
+
 """Independent operator and contraction checks for the small-system oracles."""
 
 from itertools import combinations, permutations
@@ -21,7 +23,7 @@ import unittest
 import numpy as np
 
 from pyscf.cc.test import uccsdt_q_reference as reference
-from pyscf.cc.test import uccsdt_q_slow as slow
+from pyscf.cc.test import uccsdt_q_reference_contractions as contractions
 
 
 def random_inputs(nalpha, seed=21):
@@ -67,7 +69,7 @@ class KnownValues(unittest.TestCase):
                 v, t2, t3, eps, spin, _ = random_inputs(nalpha)
                 bracket, paren, details = reference.determinant_kernel(
                     v, t2, t3, eps, spin, 4, True)
-                sb, sp, terms = slow.kernel(v, t2, t3, eps, True)
+                sb, sp, terms = contractions.kernel(v, t2, t3, eps, True)
                 np.testing.assert_allclose([bracket, paren], [sb, sp], atol=1e-11, rtol=1e-10)
                 self.assertAlmostEqual(details['reference_vn'], 0., 11)
                 qidx = np.flatnonzero(details['ranks'] == 4)[0]
@@ -97,7 +99,7 @@ class KnownValues(unittest.TestCase):
                     v_block, t2, t3, eps, spin, 4, True)
                 qidx = np.flatnonzero(details['ranks'] == 4)[0]
                 _, sign = reference._apply(15, (0, 1, 2, 3), (4, 5, 6, 7))
-                terms = slow.terms(v_block, t2, t3)
+                terms = contractions.terms(v_block, t2, t3)
                 if key == 'l2':
                     actual = details['left2'][qidx] / sign
                 elif key in ('vvov', 'vooo'):

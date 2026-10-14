@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Author: Yuhao Chen <chenyuhao@shu.edu.cn>
+
 '''Conventional UHF-CCSDT[Q] and UHF-CCSDT(Q) for canonical real orbitals.
 
 The second returned correction includes [Q].  Integrals are the original
@@ -20,6 +22,15 @@ The five connected right-moment seeds below represent
 P4 (V_N T3 + (V_N T2**2 / 2)_C)|0>.  Their occupied and virtual indices
 are separately antisymmetrized before selecting spin blocks.  No full T4
 or full spin-orbital T3 is constructed by this module.
+
+UCCSDT.ccsdt_q(tamps=None, eris=None) returns ([Q], (Q)) without changing
+the CCSDT amplitudes, integrals, e_corr, or e_tot.  Add only the second value
+to the CCSDT energy for UCCSDT(Q).  Both compact and full native T3 layouts
+and the existing frozen-orbital specifications are supported.  Inputs must
+be real double precision and the UHF Fock matrices must be canonical.
+Reuse the original AO-to-MO integrals through eris to avoid another
+transformation.  The method has no dedicated density-fitted, out-of-core,
+or GPU correction algorithm.  See examples/cc/67-uccsdt_q.py for usage.
 
 Y. J. Bomble et al., J. Chem. Phys. 123, 054101 (2005).
 DOI: 10.1063/1.1950567.

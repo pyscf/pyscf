@@ -14,5 +14,6 @@
 
 add_library(ccsdt SHARED rccsdt.c uccsdt.c rccsdtq.c uccsdt_q.c uccsdtq.c uccsdtq_blocked.c)
 set_target_properties(ccsdt PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
+# Blocked quadruples use GEMM and an optional, conservative BLAS threading probe.
 target_link_libraries(ccsdt ${BLAS_LIBRARIES} ${OPENMP_C_PROPERTIES} ${CMAKE_DL_LIBS})
 
