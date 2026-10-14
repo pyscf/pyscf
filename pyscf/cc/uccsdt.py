@@ -664,6 +664,8 @@ def compute_r1r2_uhf(mycc, imds, t2):
 
 def r1r2_add_t3_tri_uhf_(mycc, imds, r1, r2, t3):
     '''Add the T3 contributions to r1 and r2. T3 amplitudes are stored in triangular form.'''
+    if not any(x.size for x in t3):
+        return
     backend = mycc.einsum_backend
     einsum = functools.partial(_einsum, backend)
     nocca, noccb = mycc.nocc
@@ -1018,6 +1020,8 @@ def intermediates_t3_add_t3_tri_uhf(mycc, imds, t3):
     return imds
 
 def compute_r3aaa_tri_uhf(mycc, imds, t2, t3):
+    if t3[0].size == 0:
+        return np.zeros_like(t3[0])
     time1 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
 
@@ -1253,6 +1257,8 @@ def compute_r3aaa_tri_uhf(mycc, imds, t2, t3):
     return r3aaa
 
 def compute_r3bbb_tri_uhf(mycc, imds, t2, t3):
+    if t3[3].size == 0:
+        return np.zeros_like(t3[3])
     time1 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
 
@@ -1488,6 +1494,8 @@ def compute_r3bbb_tri_uhf(mycc, imds, t2, t3):
     return r3bbb
 
 def compute_r3aab_tri_uhf(mycc, imds, t2, t3):
+    if t3[1].size == 0:
+        return np.zeros_like(t3[1])
     time1 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
 
@@ -1683,6 +1691,8 @@ def compute_r3aab_tri_uhf(mycc, imds, t2, t3):
     return r3aab
 
 def compute_r3bba_tri_uhf(mycc, imds, t2, t3):
+    if t3[2].size == 0:
+        return np.zeros_like(t3[2])
     time1 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     backend = mycc.einsum_backend
@@ -2221,10 +2231,14 @@ def _ao2mo_ucc(mycc, mo_coeff=None):
     elif getattr(mycc._scf, 'with_df', None):
         logger.note(mycc, '_make_df_eris_incore_' + mycc.__class__.__name__)
         return _make_df_eris_incore_ucc(mycc, mo_coeff)
-    else:
+    elif mycc.mol.nelectron == 1:
         # NOTE: Handle the special case of a single-electron system
         logger.note(mycc, '_make_empty_eris_' + mycc.__class__.__name__)
         return _make_empty_eris_ucc(mycc, mo_coeff)
+    else:
+        raise NotImplementedError('UCCSDT requires cached AO integrals or density fitting; '
+                                  'out-of-core AO2MO is not implemented. Supply precomputed '
+                                  'ERIs explicitly instead of using an empty integral tensor.')
 
 def restore_from_diis_(mycc, diis_file, inplace=True):
     '''Reuse an existed DIIS object in the CC calculation (UHF case).
@@ -2722,8 +2736,10 @@ class UCCSDT(ccsd.CCSDBase):
         self._finalize()
         return self.e_corr, self.tamps
 
-    def ccsdt_q(self, tamps, eris=None):
-        raise NotImplementedError
+    def ccsdt_q(self, tamps=None, eris=None):
+        '''Return the [Q] and complete (Q) corrections to the CCSDT energy.'''
+        from pyscf.cc import uccsdt_q
+        return uccsdt_q.kernel(self, eris, tamps, self.verbose)
 
 
 class _PhysicistsERIs:

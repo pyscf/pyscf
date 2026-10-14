@@ -78,6 +78,7 @@ from pyscf.cc import qcisd
 from pyscf.cc import rccsdt, rccsdt_highm
 from pyscf.cc import uccsdt, uccsdt_highm
 from pyscf.cc import rccsdtq, rccsdtq_highm
+from pyscf.cc import uccsdtq, uccsdtq_highm
 from pyscf import scf
 
 def CCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
@@ -310,7 +311,7 @@ UCCSDT.__doc__ = uccsdt.UCCSDT.__doc__
 
 def CCSDTQ(mf, frozen=None, mo_coeff=None, mo_occ=None, compact_tamps=True):
     if mf.istype('UHF'):
-        raise NotImplementedError("UCCSDTQ not implemented")
+        return UCCSDTQ(mf, frozen, mo_coeff, mo_occ, compact_tamps=compact_tamps)
     elif mf.istype('GHF'):
         raise NotImplementedError("GCCSDTQ not implemented")
     else:
@@ -329,7 +330,7 @@ def RCCSDTQ(mf, frozen=None, mo_coeff=None, mo_occ=None, compact_tamps=True):
     elif mf.istype('ROHF'):
         lib.logger.warn(mf, 'RCCSDTQ method does not support ROHF method. ROHF object '
                         'is converted to UHF object and regular UCCSDTQ method is called.')
-        raise NotImplementedError('UCCSDTQ method is not implemented')
+        return UCCSDTQ(mf, frozen, mo_coeff, mo_occ, compact_tamps=compact_tamps)
 
     mf = mf.remove_soscf()
     if not mf.istype('RHF'):
@@ -352,3 +353,25 @@ def RCCSDTQ(mf, frozen=None, mo_coeff=None, mo_occ=None, compact_tamps=True):
         else:
             return rccsdtq_highm.RCCSDTQ(mf, frozen, mo_coeff, mo_occ)
 RCCSDTQ.__doc__ = rccsdtq.RCCSDTQ.__doc__
+
+
+def UCCSDTQ(mf, frozen=None, mo_coeff=None, mo_occ=None, compact_tamps=True):
+    import numpy
+    from pyscf import lib
+    from pyscf.df.df_jk import _DFHF
+
+    mf = mf.remove_soscf()
+    if mf.istype('GHF'):
+        raise NotImplementedError('UCCSDTQ does not support GHF references')
+    if not mf.istype('UHF'):
+        mf = mf.to_uhf()
+    if any(numpy.iscomplexobj(c) for c in mf.mo_coeff):
+        raise NotImplementedError('UCCSDTQ does not support complex numbers')
+    if mo_coeff is not None and any(numpy.iscomplexobj(c) for c in mo_coeff):
+        raise NotImplementedError('UCCSDTQ does not support complex numbers')
+    if isinstance(mf, _DFHF) and mf.with_df:
+        lib.logger.warn(mf, 'UCCSDTQ does not support density fitting. The ERIs have been rebuilt in-core, '
+                            'and the UCCSDTQ calculation will proceed without density fitting.')
+    cls = uccsdtq.UCCSDTQ if compact_tamps else uccsdtq_highm.UCCSDTQ
+    return cls(mf, frozen, mo_coeff, mo_occ)
+UCCSDTQ.__doc__ = uccsdtq.UCCSDTQ.__doc__

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(ccsdt SHARED rccsdt.c uccsdt.c rccsdtq.c)
+add_library(ccsdt SHARED rccsdt.c uccsdt.c rccsdtq.c uccsdt_q.c uccsdtq.c uccsdtq_blocked.c)
 set_target_properties(ccsdt PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
-target_link_libraries(ccsdt ${OPENMP_C_PROPERTIES})
+target_link_libraries(ccsdt ${BLAS_LIBRARIES} ${OPENMP_C_PROPERTIES} ${CMAKE_DL_LIBS})
 
