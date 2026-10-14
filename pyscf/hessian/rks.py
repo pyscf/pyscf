@@ -44,6 +44,8 @@ contract = numpy.einsum
 
 def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                       atmlst=None, max_memory=4000, verbose=None):
+    if hessobj.grid_response:
+        raise NotImplementedError('CPU RKS Hessian grid response is not implemented')
     log = logger.new_logger(hessobj, verbose)
     time0 = t1 = (logger.process_clock(), logger.perf_counter())
 
@@ -118,6 +120,8 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     return de2
 
 def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
+    if hessobj.grid_response:
+        raise NotImplementedError('CPU RKS Hessian grid response is not implemented')
     mol = hessobj.mol
     if atmlst is None:
         atmlst = range(mol.natm)
@@ -2106,7 +2110,11 @@ def _check_mgga_grids(grids):
 
 
 class Hessian(rhf_hess.HessianBase):
-    '''Non-relativistic RKS hessian'''
+    '''Non-relativistic RKS hessian.
+
+    Grid response is not implemented for this CPU Hessian.
+    Setting grid_response=True raises NotImplementedError.
+    '''
 
     _keys = {'grids', 'grid_response'}
 
