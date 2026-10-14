@@ -27,8 +27,8 @@ from math import comb, factorial
 import numpy as np
 from scipy import sparse
 
-# int.bit_count is available only on Python 3.10 and newer.
-_bit_count = getattr(int, 'bit_count', lambda bits: bin(bits).count('1'))
+def _bit_count(bits):
+    return bin(int(bits)).count('1')
 
 
 def _parity(order):
