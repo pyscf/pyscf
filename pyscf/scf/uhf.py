@@ -355,7 +355,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
         lumo = lumo_b = mo_energy[1,e_idx_b[n_b]]
         lumo_a = None
         if n_a < nmo:
-            lumo_a = mo_energy[1,e_idx_a[n_a]]
+            lumo_a = mo_energy[0,e_idx_a[n_a]]
             lumo = min(lumo, lumo_a)
         gap = (lumo - homo) * nist.HARTREE2EV
         mf.scf_summary['gap'] = gap
