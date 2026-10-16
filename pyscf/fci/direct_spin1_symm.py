@@ -411,6 +411,60 @@ def _sv_associated_det(ci_str, degen_mapping):
             nelec += 1
     return cistring.str2addr(degen_mapping.size, nelec, ci_str1), sign
 
+def _gen_sigma_v_swap(nelec, orbsym, sym_allowed_idx):
+    '''Permutation and signs of the sigma_v operation in the compressed
+    (symmetry-allowed) CI subspace.
+
+    Returns (swap_idx, swap_sign). For each symmetry-allowed determinant
+    (addressed in the compressed ordering ``np.hstack(sym_allowed_idx)``),
+    ``swap_idx`` is the address of its sigma_v partner (the Ex, Ey swapped
+    determinant) and ``swap_sign`` the permutation sign of the swap. The
+    partner of a Sigma-state determinant is always symmetry allowed. For
+    determinants of non-zero orbital momentum (e.g. the components of Delta
+    states) the partner is outside the subspace; they have no contribution
+    to Sigma states and are assigned swap_idx = -1.
+    '''
+    neleca, nelecb = _unpack_nelec(nelec)
+    strsa = strsb = cistring.gen_strings4orblist(range(orbsym.size), neleca)
+    if neleca != nelecb:
+        strsb = cistring.gen_strings4orblist(range(orbsym.size), nelecb)
+    na, nb = strsa.size, strsb.size
+    degen_mapping = orbsym.degen_mapping
+    sv_a = np.zeros(na, dtype=np.int32)
+    sg_a = np.ones(na)
+    sv_b = np.zeros(nb, dtype=np.int32)
+    sg_b = np.ones(nb)
+    for k in range(na):
+        sv_a[k], sg_a[k] = _sv_associated_det(strsa[k], degen_mapping)
+    for k in range(nb):
+        sv_b[k], sg_b[k] = _sv_associated_det(strsb[k], degen_mapping)
+    s_idx = np.hstack(sym_allowed_idx)
+    pos = np.full(na * nb, -1, dtype=np.int32)
+    pos[s_idx] = np.arange(s_idx.size, dtype=np.int32)
+    aa, bb = s_idx // nb, s_idx % nb
+    swap_idx = pos[sv_a[aa] * nb + sv_b[bb]]
+    swap_sign = sg_a[aa] * sg_b[bb]
+    return swap_idx, swap_sign
+
+def _project_sigma_v(c, swap_idx, swap_sign, wfnsym):
+    '''Project CI vector(s) in the compressed (symmetry-allowed) ordering onto
+    the sigma_v symmetry sector of wfnsym (positive for A1-type, negative for
+    A2-type Sigma states). Determinants without an in-space sigma_v partner
+    are dropped. The projector commutes with the sigma_v-symmetric
+    Hamiltonian, so applying it to the Hamiltonian contraction confines the
+    CI iteration to the requested Sigma symmetry.
+    '''
+    p = -1. if wfnsym % 10 in (1, 4) else 1.
+    c = np.asarray(c)
+    mask = swap_idx >= 0
+    last = [slice(None)] * c.ndim
+    last[-1] = mask
+    src = [slice(None)] * c.ndim
+    src[-1] = swap_idx[mask]
+    proj = np.zeros_like(c)
+    proj[tuple(last)] = (c[tuple(last)] + p * swap_sign[mask] * c[tuple(src)]) * .5
+    return proj
+
 def _strs_angular_momentum(strs, orbsym):
     # angular momentum for each orbital
     orb_l = (orbsym // 10) * 2
@@ -636,7 +690,7 @@ def guess_wfnsym(solver, norb, nelec, fcivec=None, orbsym=None, wfnsym=None, **k
                 fcivec = [fcivec]
             if all(abs(c.reshape(na, nb)[mask]).max() < 1e-5 for c in fcivec):
                 raise lib.exceptions.WfnSymmetryError(
-                    'Input wfnsym {wfnsym} is not consistent with fcivec coefficients')
+                    f'Input wfnsym {wfnsym} is not consistent with fcivec coefficients')
     return wfnsym
 
 def sym_allowed_indices(nelec, orbsym, wfnsym):
@@ -786,6 +840,8 @@ class FCISolver(direct_spin1.FCISolver):
         self.nelec = nelec = _unpack_nelec(nelec, self.spin)
         link_index = direct_spin1._unpack(norb, nelec, None)
 
+        hop = None
+        wfnsym_req = None
         if getattr(self.mol, 'groupname', None) in ('Dooh', 'Coov'):
             if not hasattr(orbsym, 'degen_mapping'):
                 degen_mapping = map_degeneracy(h1e.diagonal(), orbsym)
@@ -797,6 +853,54 @@ class FCISolver(direct_spin1.FCISolver):
                     'Incomplete 2D-irrep orbitals for cylindrical symmetry.\n'
                     f'orbsym = {orbsym}. '
                     f'Retry {self.__class__} with D2h subgroup symmetry.')
+
+            # For Sigma states, the D2h-allowed determinant subspace contains
+            # both Sigma+ and Sigma- components. The CI iteration (seeded by
+            # the numerical noise of the sigma_v symmetry in the integrals)
+            # may converge to the component in the wrong sigma_v sector
+            # (issue #3031). The initial guess and the Hamiltonian contraction
+            # are projected below to confine the iteration in the requested
+            # sigma_v sector.
+            if wfnsym is not None:
+                wfnsym_req = _id_wfnsym(self, norb, nelec, orbsym, wfnsym)
+            if (wfnsym_req is not None
+                    and symm.basis.linearmole_irrep2momentum(wfnsym_req) == 0):
+                self.sym_allowed_idx = sym_allowed_indices(nelec, orbsym, wfnsym_req)
+                s_idx_req = np.hstack(self.sym_allowed_idx)
+                swap_idx, swap_sign = _gen_sigma_v_swap(nelec, orbsym,
+                                                        self.sym_allowed_idx)
+                na = cistring.num_strings(norb, nelec[0])
+                nb = cistring.num_strings(norb, nelec[1])
+                if ci0 is not None:
+                    if isinstance(ci0, np.ndarray):
+                        ci0_list, single = [ci0], True
+                    else:
+                        ci0_list, single = list(ci0), False
+                    ci0_proj = []
+                    for c in ci0_list:
+                        if c.size == na * nb:
+                            c_comp = np.asarray(c).ravel()[s_idx_req]
+                        elif c.size == s_idx_req.size:
+                            c_comp = np.asarray(c).ravel()
+                        else:
+                            ci0_proj.append(c)
+                            continue
+                        c_proj = _project_sigma_v(c_comp, swap_idx, swap_sign,
+                                                  wfnsym_req)
+                        if (np.linalg.norm(c_proj) <
+                                1e-2 * np.linalg.norm(c_comp) + 1e-200):
+                            ci0_proj = None
+                            break
+                        c_full = np.zeros(na * nb)
+                        c_full[s_idx_req] = c_proj
+                        ci0_proj.append(
+                            c_full.reshape(na, nb).view(direct_spin1.FCIvector))
+                    if ci0_proj is None:
+                        logger.warn(self, 'Initial guess does not have overlap with '
+                                    'wfnsym %s. Rebuild initial guess.', wfnsym)
+                        ci0 = None
+                    else:
+                        ci0 = ci0_proj[0] if single else ci0_proj
 
         wfnsym_ir = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
         self.sym_allowed_idx = sym_allowed_indices(nelec, orbsym, wfnsym_ir)
@@ -826,10 +930,22 @@ class FCISolver(direct_spin1.FCISolver):
             hdiag = self.make_hdiag(h1e, eri, norb, nelec, compress=False)
             ci0 = self.get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym_ir)
 
+        if (wfnsym_req is not None
+                and symm.basis.linearmole_irrep2momentum(wfnsym_req) == 0):
+            # Project the Hamiltonian contraction onto the requested sigma_v
+            # sector so that the Davidson expansion vectors cannot leave the
+            # sector (see comment above).
+            h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)
+            def hop(c):
+                hc = self.contract_2e(h2e, c, norb, nelec, link_index)
+                return _project_sigma_v(np.asarray(hc).ravel(), swap_idx,
+                                        swap_sign, wfnsym_ir)
+
         with lib.temporary_env(self, wfnsym=wfnsym_ir):
             e, c = direct_spin1.kernel_ms1(
                 self, h1e, eri, norb, nelec, ci0, link_index, tol, lindep, max_cycle,
-                max_space, nroots, davidson_only, pspace_size, ecore=ecore, **kwargs)
+                max_space, nroots, davidson_only, pspace_size, hop=hop, ecore=ecore,
+                **kwargs)
 
         na = link_index[0].shape[0]
         nb = link_index[1].shape[0]
