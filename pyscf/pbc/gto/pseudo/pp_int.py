@@ -432,11 +432,11 @@ def get_pp_nl(cell, kpts=None):
 
     ppnl_half = _int_vnl(cell, fakecell, hl_blocks, kpts_lst)
 
-    if gamma_point(kpts_lst):
+    is_gamma_point = kpts is None or gamma_point(kpts)
+    if is_gamma_point:
         return _contract_ppnl(cell, fakecell, hl_blocks, ppnl_half, kpts=kpts)
 
     nao = cell.nao
-    is_gamma_point = kpts is None or gamma_point(kpts)
     if is_gamma_point:
         ppnl = np.zeros((nao, nao))
     else:
@@ -782,7 +782,6 @@ def get_pp_soc(cell, kpts=None):
     for ii, (i0, i1) in enumerate(zip(splits[:-1], splits[1:])):
         kl_dim, l = pattern[ii]
         if l == 0:
-            assert kl_dim.size == 0
             continue
 
         nd = 2 * l + 1

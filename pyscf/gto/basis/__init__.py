@@ -813,7 +813,7 @@ def load_pseudo(filename_or_basisname, symb):
         # Note: the default *-GTH basis for Na has been changed, compared to
         # eariler versions. The default one in earlier versions are renamed to
         # *-GTH-q9_old in the new database (see GTH_POTENTIALS).
-        with_soc = 'SOC' in filename_or_basisname
+        with_soc = 'SOC' in filename_or_basisname.upper()
         filename_or_basisname = filename_or_basisname.replace('-SOC', '')
         return parse_cp2k_pp._load_GTH_POTENTIALS(
             filename_or_basisname, symb, _GTH_PP_DIR, with_soc)
