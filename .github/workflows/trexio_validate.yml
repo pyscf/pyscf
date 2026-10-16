@@ -1,0 +1,64 @@
+# Validate the TREXIO files that pyscf.tools.trexio writes.
+#
+# trexio-validate recomputes the contents of a TREXIO file from the basis set
+# stored in it, using libcint, and compares the result with the stored data.
+# It therefore checks the conversion against the TREXIO specification rather
+# than against PySCF's own conventions, which a round trip through PySCF's
+# reader cannot do.
+#
+# This lives in its own workflow, and only runs when the TREXIO code changes,
+# so that building the validator does not slow the main CI down. The
+# regression tests in pyscf/tools/test/test_trexio.py need no validator and
+# run in the main CI as usual.
+name: TREXIO validate
+
+on:
+  push:
+    paths:
+      - "pyscf/tools/trexio.py"
+      - "pyscf/tools/test/test_trexio.py"
+      - "pyscf/tools/test/test_trexio_validate.py"
+      - ".github/workflows/trexio_validate.yml"
+      - ".github/workflows/ci_linux/trexio_validate.sh"
+  pull_request:
+    paths:
+      - "pyscf/tools/trexio.py"
+      - "pyscf/tools/test/test_trexio.py"
+      - "pyscf/tools/test/test_trexio_validate.py"
+      - ".github/workflows/trexio_validate.yml"
+      - ".github/workflows/ci_linux/trexio_validate.sh"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+jobs:
+  trexio-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install system dependencies
+        run: |
+          sudo apt-get -qq update
+          ./.github/workflows/ci_linux/deps_apt.sh
+          # TREXIO reads .h5 files only when it is built against HDF5.
+          sudo apt-get -qq install libhdf5-dev
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "numpy!=1.16,!=1.17" "scipy!=1.5" h5py pytest trexio
+      - name: Build PySCF
+        run: ./.github/workflows/ci_linux/build_pyscf.sh
+      - name: Build trexio-validate
+        run: ./.github/workflows/ci_linux/trexio_validate.sh
+      - name: Validate the files written by pyscf.tools.trexio
+        run: |
+          export PYTHONPATH=$PWD:$PYTHONPATH
+          export OMP_NUM_THREADS=1
+          pytest -q pyscf/tools/test/test_trexio_validate.py \
+                    pyscf/tools/test/test_trexio.py

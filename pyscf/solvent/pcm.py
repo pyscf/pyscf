@@ -569,7 +569,11 @@ class PCM(lib.StreamObject):
         nset = dms.shape[0]
         v_grids_e = numpy.empty([nset, ngrids])
         max_memory = self.max_memory - lib.current_memory()[0]
-        blksize = int(max(max_memory*.9e6/8/nao**2, 400))
+        # The floor of 8 grids per block bounds the Python overhead of the
+        # block loop. It must not exceed what the remaining memory allows,
+        # otherwise a single v_nj buffer (nao**2 * blksize * 8 bytes) can
+        # exceed the memory budget for large systems.
+        blksize = int(max(max_memory*.9e6/8/nao**2, 8))
         int3c2e = mol._add_suffix('int3c2e')
         cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, int3c2e)
         for p0, p1 in lib.prange(0, ngrids, blksize):
@@ -578,6 +582,8 @@ class PCM(lib.StreamObject):
             v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s1', cintopt=cintopt)
             for i in range(nset):
                 v_grids_e[i,p0:p1] = numpy.einsum('ijL,ij->L',v_nj, dms[i])
+            # Free up v_nj to stay within mem limits
+            del v_nj
 
         return v_grids_e
 
@@ -591,7 +597,7 @@ class PCM(lib.StreamObject):
         nset = q.shape[0]
         vmat = numpy.zeros([nset,nao,nao])
         max_memory = self.max_memory - lib.current_memory()[0]
-        blksize = int(max(max_memory*.9e6/8/nao**2, 400))
+        blksize = int(max(max_memory*.9e6/8/nao**2, 8))
 
         int3c2e = mol._add_suffix('int3c2e')
         cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, int3c2e)
@@ -601,6 +607,8 @@ class PCM(lib.StreamObject):
             v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s1', cintopt=cintopt)
             for i in range(nset):
                 vmat[i] += -numpy.einsum('ijL,L->ij', v_nj, q[i,p0:p1])
+            # Free up v_nj to stay within mem limits
+            del v_nj
         return vmat
 
     def nuc_grad_method(self, grad_method):

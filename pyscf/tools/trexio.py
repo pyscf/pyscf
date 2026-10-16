@@ -613,10 +613,23 @@ def _mol_to_trexio(mol, trexio_file):
                 continue
 
             # atom_symbol is superior to atom_pure_symbol
-            try:
+            if atom_symbol in mol._ecp:
                 z_core, ecp_list = mol._ecp[atom_symbol]
-            except KeyError:
+            elif chemical_symbol in mol._ecp:
                 z_core, ecp_list = mol._ecp[chemical_symbol]
+            else:
+                # This atom carries no ECP, as for the light atoms of a
+                # molecule where only the heavy ones do.  TREXIO expects an
+                # entry for every nucleus, so write a vanishing ECP.
+                ecp_num += 1
+                ecp_max_ang_mom_plus_1.append(1)
+                ecp_z_core.append(0)
+                ecp_nucleus_index.append(nuc_index)
+                ecp_ang_mom.append(0)
+                ecp_coefficient.append(0.0)
+                ecp_exponent.append(1.0)
+                ecp_power.append(0)
+                continue
 
             # ecp zcore
             ecp_z_core.append(z_core)
@@ -1502,7 +1515,9 @@ def _write_2e_eri(
                 eri_ao = ao2mo.restore(4, eri_ao, nao)
             elif sym == 's8':
                 eri_ao = ao2mo.restore(8, eri_ao, nao)
-            _write_2e_int_eri(np.ascontiguousarray(eri_ao), trexio_file, 'AO', sym=sym)
+            _write_2e_int_eri(np.ascontiguousarray(eri_ao), trexio_file, 'AO',
+                              sym=sym,
+                              ao_map=np.argsort(_order_ao_index(mf.cell)))
         else:
             # Molecular AO
             eri_ao = None
@@ -1519,16 +1534,31 @@ def _write_2e_eri(
             else:
                 eri_ao = mf.mol.intor('int2e', aosym=sym)
             eri_ao = _require_real_2e(eri_ao)
-            _write_2e_int_eri(np.ascontiguousarray(eri_ao), trexio_file, 'AO', sym=sym)
+            _write_2e_int_eri(np.ascontiguousarray(eri_ao), trexio_file, 'AO',
+                              sym=sym,
+                              ao_map=np.argsort(_order_ao_index(mf.mol)))
 
 
-def _write_2e_int_eri(eri, trexio_file, basis='MO', sym='s1'):
+def _write_2e_int_eri(eri, trexio_file, basis='MO', sym='s1', ao_map=None):
+    """Write ERIs as (index quadruplet, value) records.
+
+    ``ao_map`` optionally renumbers the indices, which are AO indices when
+    ``basis == 'AO'``.  It is the inverse of :func:`_order_ao_index`, so that
+    PySCF AO ``p`` is written as TREXIO AO ``ao_map[p]``.  Applying it to the
+    index arrays keeps the packing intact and needs no permuted copy of the
+    integral tensor.
+    """
     basis = basis.upper()
     sym = sym.lower()
     if basis not in ['MO', 'AO']:
         raise ValueError("basis must be 'MO' or 'AO'")
     if sym not in ('s1', 's4', 's8'):
         raise ValueError("sym must be 's1', 's4', or 's8'")
+
+    def _map_idx(idx):
+        if ao_map is None:
+            return idx
+        return ao_map[idx].astype(np.int32)
 
     def _pair_from_tril(n):
         i, j = np.tril_indices(n)
@@ -1557,6 +1587,7 @@ def _write_2e_int_eri(eri, trexio_file, basis='MO', sym='s1'):
         else:
             if not trexio.has_mo_num(tf):
                 trexio.write_mo_num(tf, n)
+        idx = _map_idx(idx)
         if basis == 'MO':
             trexio.write_mo_2e_int_eri(tf, 0, num_integrals, idx, eri.ravel())
         else:
@@ -1594,7 +1625,7 @@ def _write_2e_int_eri(eri, trexio_file, basis='MO', sym='s1'):
             j = pair_j[ij]
             k = pair_i[kl]
             l = pair_j[kl]
-            idx = np.stack([i, k, j, l], axis=1).astype(np.int32).ravel()
+            idx = _map_idx(np.stack([i, k, j, l], axis=1).astype(np.int32).ravel())
             val = eri[ij, kl].ravel()
 
             if basis == 'MO':
@@ -1637,7 +1668,7 @@ def _write_2e_int_eri(eri, trexio_file, basis='MO', sym='s1'):
         j = pair_j[ij]
         k = pair_i[kl]
         l = pair_j[kl]
-        idx = np.stack([i, k, j, l], axis=1).astype(np.int32).ravel()
+        idx = _map_idx(np.stack([i, k, j, l], axis=1).astype(np.int32).ravel())
         val = eri[offset:end]
 
         if basis == 'MO':
@@ -1760,9 +1791,13 @@ def _write_1e_eri(
         if len(getattr(cell, '_ecpbas', [])) > 0:
             from pyscf.pbc.gto import ecp
             ecp_mat = _as_matrix(ecp.ecp_int(cell), 'AO ECP potential')
-            potential += ecp_mat
 
+        # ao_1e_int.potential_n_e is the bare electron-nucleus attraction; the
+        # ECP is a separate TREXIO quantity and enters only the core
+        # Hamiltonian, so that consumers do not count it twice.
         core = kinetic + potential
+        if ecp_mat is not None:
+            core = core + ecp_mat
     else:
         mol = mf.mol
         overlap = _as_matrix(mf.get_ovlp(), 'AO overlap')
@@ -1770,8 +1805,10 @@ def _write_1e_eri(
         potential = _as_matrix(mol.intor('int1e_nuc'), 'AO potential')
         if mol._ecp:
             ecp_mat = _as_matrix(mol.intor('ECPscalar'), 'AO ECP potential')
-            potential += ecp_mat
+        # See the comment in the PBC branch above.
         core = kinetic + potential
+        if ecp_mat is not None:
+            core = core + ecp_mat
 
     overlap = np.ascontiguousarray(_reject_complex_1e(_hermitize(overlap), 'overlap'))
     kinetic = np.ascontiguousarray(_reject_complex_1e(_hermitize(kinetic), 'kinetic'))
@@ -1781,9 +1818,17 @@ def _write_1e_eri(
         ecp_mat = np.ascontiguousarray(_reject_complex_1e(_hermitize(ecp_mat), 'ecp'))
 
     if basis == 'AO':
-        _write_1e_int_eri(overlap, kinetic, potential, core, trexio_file, 'AO')
+        # mo.coefficient is stored in TREXIO's AO order (see _order_ao_index);
+        # the AO integrals have to be expressed in that same order.
+        idx = _order_ao_index(mf.cell if is_pbc else mf.mol)
+        _write_1e_int_eri(_reorder_ao_matrix(overlap, idx),
+                          _reorder_ao_matrix(kinetic, idx),
+                          _reorder_ao_matrix(potential, idx),
+                          _reorder_ao_matrix(core, idx),
+                          trexio_file, 'AO')
         if ecp_mat is not None:
-            trexio.write_ao_1e_int_ecp(trexio_file, ecp_mat)
+            trexio.write_ao_1e_int_ecp(trexio_file,
+                                       _reorder_ao_matrix(ecp_mat, idx))
         return
 
     if is_uhf_like:
@@ -2175,6 +2220,15 @@ def _order_ao_index(mol):
             idx.append(cache_by_l[l] + off)
             off += l * 2 + 1
     return np.hstack(idx)
+
+
+def _reorder_ao_matrix(mat, idx):
+    """Permute both AO indices of an AO-basis matrix into TREXIO's AO order.
+
+    ``idx`` is the array returned by :func:`_order_ao_index`, i.e. TREXIO AO
+    ``a`` is PySCF AO ``idx[a]``.
+    """
+    return np.ascontiguousarray(mat[np.ix_(idx, idx)])
 
 
 def _group_by(a, keys):

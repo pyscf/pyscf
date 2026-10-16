@@ -50,3 +50,39 @@ trexio.to_trexio(
     ci_threshold=1e-3,
 )
 
+
+# 5. Check that the written file is valid
+#
+# trexio-validate (https://github.com/TREX-CoE/trexio-validate) recomputes the
+# contents of a TREXIO file from the basis set stored in that same file, using
+# libcint, and compares the result with the stored data.  It checks the file
+# against the TREXIO specification rather than against PySCF's own
+# conventions, so it catches mistakes in the AO ordering, the normalization
+# and the index order of the integrals that reading the file back into PySCF
+# would not reveal.
+#
+# It is not on PyPI; build it from source (see the test module
+# pyscf/tools/test/test_trexio_validate.py for the cmake invocation) and
+# either put its Python module on PYTHONPATH or its executable on PATH.
+
+from pyscf import gto, scf
+from pyscf.tools import trexio
+mol = gto.M(atom='H 0 0 0; F 0 0 1.8', basis='cc-pvdz', verbose=0)
+mf = scf.RHF(mol).run()
+trexio.to_trexio(mf, 'hf_ao.h5', write_ao_eri=True, eri_sym='s8')
+
+try:
+    import trexio_validate
+except ImportError:
+    print('trexio-validate is not installed; skipping the validation')
+else:
+    report = trexio_validate.validate_file('hf_ao.h5',
+                                           require=['mo_orthonormality',
+                                                    'ao_1e_int_overlap',
+                                                    'ao_2e_int_eri'])
+    print(report)
+    report.raise_for_failure()
+
+# From the command line, the same check is
+#
+#     trexio-validate --require mo_orthonormality,ao_1e_int_overlap hf_ao.h5
