@@ -67,6 +67,12 @@ including tests. Customize as needed.
   expected result without tracing through layers of helpers.
 - Use descriptive test and variable names that explain the case being tested.
   Add a short comment when the scientific setup or regression is not obvious.
+- Prefer plain, explicit tests with one focused behavior per test function.
+  Avoid nested loops that combine multiple methods, options, or behaviors in
+  one test. Write separate, descriptively named tests with explicit setup and
+  assertions when that makes the cases easier to understand; modest repetition
+  is preferable to a compact but difficult-to-follow test matrix. Use a simple
+  loop or parameterization only when it makes closely related cases clearer.
 - Keep setup and assertions straightforward. Break complicated expressions
   into meaningful intermediate values, and make actual and expected results
   easy to distinguish.

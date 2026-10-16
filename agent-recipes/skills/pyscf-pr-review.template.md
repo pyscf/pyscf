@@ -83,6 +83,12 @@ review or validation gaps.
   and expected results are clear, names describe the cases, and assertion
   failures identify what went wrong. Helpers, loops, and parameterization
   should make the tests easier to understand rather than obscure their purpose.
+- Prefer plain, explicit tests with one focused behavior per test function.
+  Flag nested loops that combine multiple methods, options, or behaviors and
+  make the cases difficult to follow. Suggest separate, descriptively named
+  tests with explicit setup and assertions, accepting modest repetition for
+  clarity. Simple loops or parameterization are appropriate when they make
+  closely related cases easier to understand.
 
 ## Scientific validation
 
