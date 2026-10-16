@@ -1,3 +1,52 @@
+PySCF 2.15.0 (2026-10-16)
+-------------------------
+* Added
+  - Internally contracted CASPT2, including density fitting and IPEA shift (#3401)
+  - Analytic nuclear gradients for spin-restricted DF-CCSD and DF-CCSD(T), including auxiliary basis response (#3426)
+  - Analytic nuclear gradients for GHF with spin-free Hamiltonians and GKS with collinear XC functionals (#3420)
+  - TREXIO interface transferred from PySCF-forge to pyscf.tools (#3454)
+  - Secondary grids for SCF response functions, configurable through set_second_grids (#3439)
+  - ASE density of states interface (#3376)
+  - pob-DZVP-rev2 and pob-TZVP-rev2 all-electron solid-state basis sets (#3337)
+  - Support specifying the solvent name in PCM (#3416)
+* Improvements
+  - Faster Gamma-point PBC RCCSD using the optimized real CCSD kernel (#3452)
+  - Improved efficiency of SA-CASSCF nuclear gradients, including density fitting (#3444)
+  - Use the optimized AFT algorithm when kpts_band is a subset of kpts (#3392)
+  - Updated pbc.tools.precompute_exx for exchange singularity corrections and band calculations (#3412)
+  - Updated SAP potentials from fractionally occupied exchange-only LDA calculations (#3367)
+  - Updated LibXC to 7.1.2 (#3336)
+* Fixes
+  - Missing orbital-rotation response terms in ROHF and KROHF second-order SCF solvers (#3448)
+  - State-specific CASCI/CASSCF MC-PDFT, including excited-state density matrices with DMRG solvers (#3440)
+  - KMP2 frozen-orbital masks now exclude orbitals marked with INVALID_ORBITAL_ENERGY (#3451)
+  - Recover the full Monkhorst-Pack mesh for meta-Lowdin population analysis in KRHF, KUHF and KGHF (#3450)
+  - Corrected Ba polarization shells in def2 and ma-def2 basis sets, missing Mn f shells and I f/g exponents in def2-QZVPD and def2-QZVPPD (#3382)
+  - UHF non-convergence messages report the actual number of completed cycles
+  - Unsupported DF-UCCSD analytic gradients now raise NotImplementedError instead of returning gradients inconsistent with the density-fitted energy (#3426)
+  - Premature Krylov termination in CPHF and UCPHF for near-dependent right-hand sides (#3334)
+  - Basis projection and MINAO initial guesses with nearly linearly dependent basis sets (#3333)
+  - X2C analytic gradients and Hessians with finite nucleus models (#3397)
+  - X2C diagonalization fallback for nearly linearly dependent basis sets (#3405)
+  - EOM-GCCSD star corrections for degenerate roots (#3404)
+  - Mixed-spin block of the UCCSD(T) response density (#3387)
+  - KRPA/KURPA occupation handling, exact exchange and momentum conservation for shifted k-point meshes (#3385, #3408)
+  - Use the solvent optical dielectric constant in non-equilibrium TDDFT (#3386)
+  - L-PDFT CI vectors with state-average mix solvers and gradient initialization (#3432, #3345)
+  - CASCI/CASSCF gradients when the reference calculation has not yet been run (#3394)
+  - Normalize the initial CIAH trial vector to prevent premature termination (#3406)
+  - KUHF occupations when there are no beta electrons (#3348)
+  - Nuclear energy evaluation with the PBC RSJK builder (#3388)
+  - Integer overflow in AFT orbital-pair counts (#3356)
+  - Shape handling for spinor four-center integrals (#3370)
+  - Stack overflow in relativistic direct J/K screening (#3369)
+  - Incorrect broadcasting in ft_ao and ft_aopair for a single reciprocal-space vector (#3340)
+  - POSCAR reader (#3364)
+  - Reduce Coov symmetry to C2v (#3422)
+  - Allow get_fock without arguments when dynamic level shifting is enabled (#3063)
+  - PYSCF_DISABLE_EVAL environment variable to disable eval-based behavior (#3363)
+
+
 PySCF 2.14.0 (2026-07-17)
 -------------------------
 * Added
