@@ -65,6 +65,7 @@ def ecp_int(cell, kpts=None, intor='ECPscalar'):
                 mat[k] = mat[k].real
     else:
         comp = 3
+        # Evaluate integrals < 1j * l * U_SO >
         int3c = dfbuilder.gen_int3c_kernel(intor, aosym='s1', comp=comp,
                                            j_only=True, return_complex=True)
         mat = int3c(shls_slice)
