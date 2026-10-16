@@ -44,7 +44,8 @@ from pyscf.fci import direct_spin1
 from pyscf.fci import direct_spin1_symm
 from pyscf.fci.direct_spin1_symm import (
     _sv_associated_det, _strs_angular_momentum, _cyl_sym_orbital_rotation,
-    _validate_degen_mapping, _gen_sigma_v_swap, _project_sigma_v)
+    _validate_degen_mapping, _gen_sigma_v_swap, _project_sigma_v,
+    _project_init_guess_sigma_v)
 from pyscf.fci import direct_nosym
 from pyscf.fci import addons
 from pyscf import __config__
@@ -579,48 +580,28 @@ class FCISolver(direct_spin1_symm.FCISolver):
         # both Sigma+ and Sigma- components. The CI iteration (seeded by
         # the numerical noise of the sigma_v symmetry in the integrals)
         # may converge to the component in the wrong sigma_v sector
-        # (issue #3031). The initial guess and the Hamiltonian contraction
-        # are projected below to confine the iteration in the requested
-        # sigma_v sector.
+        # (issue #3031). The initial guess, the Davidson preconditioner and
+        # the Hamiltonian contraction are projected below to confine the
+        # iteration in the requested sigma_v sector.
         wfnsym_req = None
         if wfnsym is not None:
             wfnsym_req = direct_spin1_symm._id_wfnsym(self, norb, nelec, orbsym, wfnsym)
         if (wfnsym_req is not None
                 and symm.basis.linearmole_irrep2momentum(wfnsym_req) == 0):
+            # Note: the sym_allowed_indices convention of this module (E+/-,
+            # complex orbitals) differs from direct_spin1_symm. The swap
+            # tables must be built on the same convention.
             sym_allowed_idx_req = sym_allowed_indices(nelec, orbsym, wfnsym_req)
+            self.sym_allowed_idx = sym_allowed_idx_req
             s_idx_req = np.hstack(sym_allowed_idx_req)
-            swap_idx, swap_sign = _gen_sigma_v_swap(nelec, orbsym, sym_allowed_idx_req)
+            swap_idx, swap_sign = _gen_sigma_v_swap(nelec, orbsym,
+                                                    sym_allowed_idx_req)
             na_req = cistring.num_strings(norb, nelec[0])
             nb_req = cistring.num_strings(norb, nelec[1])
             if ci0 is not None:
-                if isinstance(ci0, np.ndarray):
-                    ci0_list, single = [ci0], True
-                else:
-                    ci0_list, single = list(ci0), False
-                ci0_proj = []
-                for c in ci0_list:
-                    if c.size == na_req * nb_req:
-                        c_comp = np.asarray(c).ravel()[s_idx_req]
-                    elif c.size == s_idx_req.size:
-                        c_comp = np.asarray(c).ravel()
-                    else:
-                        ci0_proj.append(c)
-                        continue
-                    c_proj = _project_sigma_v(c_comp, swap_idx, swap_sign, wfnsym_req)
-                    if (np.linalg.norm(c_proj) <
-                            1e-2 * np.linalg.norm(c_comp) + 1e-200):
-                        ci0_proj = None
-                        break
-                    c_full = np.zeros(na_req * nb_req)
-                    c_full[s_idx_req] = c_proj
-                    ci0_proj.append(
-                        c_full.reshape(na_req, nb_req).view(direct_spin1.FCIvector))
-                if ci0_proj is None:
-                    logger.warn(self, 'Initial guess does not have overlap with '
-                                'wfnsym %s. Rebuild initial guess.', wfnsym)
-                    ci0 = None
-                else:
-                    ci0 = ci0_proj[0] if single else ci0_proj
+                ci0 = _project_init_guess_sigma_v(
+                    self, ci0, na_req, nb_req, s_idx_req, swap_idx, swap_sign,
+                    wfnsym_req)
 
         wfnsym_ir = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
         if symm.basis.linearmole_irrep2momentum(wfnsym_ir) == 0:
@@ -640,19 +621,30 @@ class FCISolver(direct_spin1_symm.FCISolver):
             link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
 
         hop = None
+        env = {'wfnsym': wfnsym_ir}
         if (wfnsym_req is not None
                 and symm.basis.linearmole_irrep2momentum(wfnsym_req) == 0):
-            # Project the Hamiltonian contraction onto the requested sigma_v
-            # sector so that the Davidson expansion vectors cannot leave the
-            # sector (see comment above).
+            # Project the Hamiltonian contraction and the output of the
+            # Davidson preconditioner onto the requested sigma_v sector, so
+            # that no expansion vector of the Davidson iteration can leave
+            # the sector (see comment above).
             h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)
             def hop(c):
                 hc = self.contract_2e(h2e, c, norb, nelec,
                                       (link_indexa, link_indexb))
                 return _project_sigma_v(np.asarray(hc).ravel(), swap_idx,
-                                        swap_sign, wfnsym_ir)
+                                        swap_sign, wfnsym_req)
+            make_precond = self.make_precond
+            def make_precond_sigma_v(hdiag, pspaceig=None, pspaceci=None,
+                                     addr=None):
+                precond = make_precond(hdiag, pspaceig, pspaceci, addr)
+                def precond_sigma_v(r, e0, x0, *args, **kwargs):
+                    return _project_sigma_v(precond(r, e0, x0, *args, **kwargs),
+                                            swap_idx, swap_sign, wfnsym_req)
+                return precond_sigma_v
+            env['make_precond'] = make_precond_sigma_v
 
-        with lib.temporary_env(self, wfnsym=wfnsym_ir):
+        with lib.temporary_env(self, **env):
             e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0,
                                            (link_indexa,link_indexb),
                                            tol, lindep, max_cycle, max_space,

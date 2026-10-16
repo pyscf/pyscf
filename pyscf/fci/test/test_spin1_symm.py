@@ -258,6 +258,23 @@ Li    P
             mc.ncas, mc.nelecas, mc.ci, mc.fcisolver.orbsym, None)
         self.assertEqual(wfnsym, 4)  # 4 = A2u
 
+    def test_o2_sigma_wfnsym_casci_a2g(self):
+        # Regression for the sigma_v projection of the Davidson iteration:
+        # out-of-sector expansion vectors (amplified by the diagonal
+        # preconditioner) must not push the iteration onto the excited A2g
+        # state (-148.8361218)
+        mol = gto.M(atom='O 0 0 0; O 0 0 1.1', basis='ccpvdz',
+                    symmetry=True, spin=2)
+        mf = scf.RHF(mol).run()
+        for _ in range(5):
+            mc = mcscf.CASCI(mf, 8, 12)
+            mc.fcisolver.wfnsym = 'A2g'
+            mc.kernel()
+            self.assertAlmostEqual(mc.e_tot, -149.655458292, 6)
+            wfnsym = mc.fcisolver.guess_wfnsym(
+                mc.ncas, mc.nelecas, mc.ci, mc.fcisolver.orbsym, None)
+            self.assertEqual(wfnsym, 1)  # 1 = A2g
+
     def test_o2_sigma_wfnsym_cyl_sym(self):
         mol = gto.M(atom='O 0 0 0; O 0 0 1.1', basis='ccpvdz',
                     symmetry=True, spin=2)

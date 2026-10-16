@@ -32,6 +32,7 @@ direct_nosym        No            No             No                 Yes
 
 import sys
 import ctypes
+from math import comb
 import numpy
 import numpy as np
 from pyscf import ao2mo
@@ -411,6 +412,22 @@ def _sv_associated_det(ci_str, degen_mapping):
             nelec += 1
     return cistring.str2addr(degen_mapping.size, nelec, ci_str1), sign
 
+def _strs2addr(strs, nelec, norb):
+    '''Address of each string in the (deterministic) cistring ordering,
+    computed with the combination ranking, vectorized over all strings'''
+    C = np.zeros((norb + 2, nelec + 2), dtype=np.int64)
+    for i in range(norb + 2):
+        for k in range(nelec + 2):
+            C[i, k] = comb(i, k)
+    addr = np.zeros(strs.size, dtype=np.int64)
+    popcount = np.zeros(strs.size, dtype=np.int64)
+    for i in range(norb):
+        occ = (strs >> i) & 1
+        mask = occ == 1
+        addr[mask] += C[i, popcount[mask] + 1]
+        popcount += occ
+    return addr
+
 def _gen_sigma_v_swap(nelec, orbsym, sym_allowed_idx):
     '''Permutation and signs of the sigma_v operation in the compressed
     (symmetry-allowed) CI subspace.
@@ -425,24 +442,35 @@ def _gen_sigma_v_swap(nelec, orbsym, sym_allowed_idx):
     to Sigma states and are assigned swap_idx = -1.
     '''
     neleca, nelecb = _unpack_nelec(nelec)
-    strsa = strsb = cistring.gen_strings4orblist(range(orbsym.size), neleca)
+    norb = orbsym.size
+    strsa = strsb = cistring.gen_strings4orblist(range(norb), neleca)
     if neleca != nelecb:
-        strsb = cistring.gen_strings4orblist(range(orbsym.size), nelecb)
-    na, nb = strsa.size, strsb.size
-    degen_mapping = orbsym.degen_mapping
-    sv_a = np.zeros(na, dtype=np.int32)
-    sg_a = np.ones(na)
-    sv_b = np.zeros(nb, dtype=np.int32)
-    sg_b = np.ones(nb)
-    for k in range(na):
-        sv_a[k], sg_a[k] = _sv_associated_det(strsa[k], degen_mapping)
-    for k in range(nb):
-        sv_b[k], sg_b[k] = _sv_associated_det(strsb[k], degen_mapping)
+        strsb = cistring.gen_strings4orblist(range(norb), nelecb)
+    degen_mapping = np.asarray(orbsym.degen_mapping)
+
+    def swap_strs(strs, neleca):
+        '''Exchange the two orbitals of each degenerate pair and the
+        permutation sign of the exchanges, vectorized over all strings'''
+        sv = strs.copy()
+        sign = np.ones(strs.size)
+        for i, j in enumerate(degen_mapping):
+            if i <= j:
+                continue
+            occ_i = (strs >> i) & 1
+            occ_j = (strs >> j) & 1
+            # exchange bits i and j
+            sv = sv - (occ_i << i) - (occ_j << j) + (occ_i << j) + (occ_j << i)
+            # the exchange of two occupied orbitals flips the permutation sign
+            sign[(occ_i == 1) & (occ_j == 1)] *= -1
+        return _strs2addr(sv, neleca, norb), sign
+
+    addr_a, sg_a = swap_strs(strsa, neleca)
+    addr_b, sg_b = swap_strs(strsb, nelecb)
     s_idx = np.hstack(sym_allowed_idx)
-    pos = np.full(na * nb, -1, dtype=np.int32)
+    pos = np.full(strsa.size * strsb.size, -1, dtype=np.int32)
     pos[s_idx] = np.arange(s_idx.size, dtype=np.int32)
-    aa, bb = s_idx // nb, s_idx % nb
-    swap_idx = pos[sv_a[aa] * nb + sv_b[bb]]
+    aa, bb = s_idx // strsb.size, s_idx % strsb.size
+    swap_idx = pos[addr_a[aa] * strsb.size + addr_b[bb]]
     swap_sign = sg_a[aa] * sg_b[bb]
     return swap_idx, swap_sign
 
@@ -464,6 +492,37 @@ def _project_sigma_v(c, swap_idx, swap_sign, wfnsym):
     proj = np.zeros_like(c)
     proj[tuple(last)] = (c[tuple(last)] + p * swap_sign[mask] * c[tuple(src)]) * .5
     return proj
+
+def _project_init_guess_sigma_v(fci, ci0, na, nb, s_idx, swap_idx, swap_sign,
+                                wfnsym_req):
+    '''Project CI initial guesses onto the sigma_v symmetry sector of
+    wfnsym_req. A guess vector without sufficient overlap with the sector
+    (e.g. a converged CI of the other Sigma component) carries no information
+    for the requested state; the projection is then discarded and None is
+    returned so that the caller rebuilds a proper initial guess.
+    '''
+    if isinstance(ci0, np.ndarray):
+        ci0_list, single = [ci0], True
+    else:
+        ci0_list, single = list(ci0), False
+    ci0_proj = []
+    for c in ci0_list:
+        if c.size == na * nb:
+            c_comp = np.asarray(c).ravel()[s_idx]
+        elif c.size == s_idx.size:
+            c_comp = np.asarray(c).ravel()
+        else:
+            ci0_proj.append(c)
+            continue
+        c_proj = _project_sigma_v(c_comp, swap_idx, swap_sign, wfnsym_req)
+        if np.linalg.norm(c_proj) < 1e-2 * np.linalg.norm(c_comp) + 1e-200:
+            logger.warn(fci, 'Initial guess does not have overlap with wfnsym %s. '
+                        'Rebuild initial guess.', wfnsym_req)
+            return None
+        c_full = np.zeros(na * nb)
+        c_full[s_idx] = c_proj
+        ci0_proj.append(c_full.reshape(na, nb).view(direct_spin1.FCIvector))
+    return ci0_proj[0] if single else ci0_proj
 
 def _strs_angular_momentum(strs, orbsym):
     # angular momentum for each orbital
@@ -858,9 +917,9 @@ class FCISolver(direct_spin1.FCISolver):
             # both Sigma+ and Sigma- components. The CI iteration (seeded by
             # the numerical noise of the sigma_v symmetry in the integrals)
             # may converge to the component in the wrong sigma_v sector
-            # (issue #3031). The initial guess and the Hamiltonian contraction
-            # are projected below to confine the iteration in the requested
-            # sigma_v sector.
+            # (issue #3031). The initial guess, the Davidson preconditioner
+            # and the Hamiltonian contraction are projected below to confine
+            # the iteration in the requested sigma_v sector.
             if wfnsym is not None:
                 wfnsym_req = _id_wfnsym(self, norb, nelec, orbsym, wfnsym)
             if (wfnsym_req is not None
@@ -872,35 +931,9 @@ class FCISolver(direct_spin1.FCISolver):
                 na = cistring.num_strings(norb, nelec[0])
                 nb = cistring.num_strings(norb, nelec[1])
                 if ci0 is not None:
-                    if isinstance(ci0, np.ndarray):
-                        ci0_list, single = [ci0], True
-                    else:
-                        ci0_list, single = list(ci0), False
-                    ci0_proj = []
-                    for c in ci0_list:
-                        if c.size == na * nb:
-                            c_comp = np.asarray(c).ravel()[s_idx_req]
-                        elif c.size == s_idx_req.size:
-                            c_comp = np.asarray(c).ravel()
-                        else:
-                            ci0_proj.append(c)
-                            continue
-                        c_proj = _project_sigma_v(c_comp, swap_idx, swap_sign,
-                                                  wfnsym_req)
-                        if (np.linalg.norm(c_proj) <
-                                1e-2 * np.linalg.norm(c_comp) + 1e-200):
-                            ci0_proj = None
-                            break
-                        c_full = np.zeros(na * nb)
-                        c_full[s_idx_req] = c_proj
-                        ci0_proj.append(
-                            c_full.reshape(na, nb).view(direct_spin1.FCIvector))
-                    if ci0_proj is None:
-                        logger.warn(self, 'Initial guess does not have overlap with '
-                                    'wfnsym %s. Rebuild initial guess.', wfnsym)
-                        ci0 = None
-                    else:
-                        ci0 = ci0_proj[0] if single else ci0_proj
+                    ci0 = _project_init_guess_sigma_v(self, ci0, na, nb, s_idx_req,
+                                                      swap_idx, swap_sign,
+                                                      wfnsym_req)
 
         wfnsym_ir = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
         self.sym_allowed_idx = sym_allowed_indices(nelec, orbsym, wfnsym_ir)
@@ -930,18 +963,29 @@ class FCISolver(direct_spin1.FCISolver):
             hdiag = self.make_hdiag(h1e, eri, norb, nelec, compress=False)
             ci0 = self.get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym_ir)
 
+        env = {'wfnsym': wfnsym_ir}
         if (wfnsym_req is not None
                 and symm.basis.linearmole_irrep2momentum(wfnsym_req) == 0):
-            # Project the Hamiltonian contraction onto the requested sigma_v
-            # sector so that the Davidson expansion vectors cannot leave the
-            # sector (see comment above).
+            # Project the Hamiltonian contraction and the output of the
+            # Davidson preconditioner onto the requested sigma_v sector, so
+            # that no expansion vector of the Davidson iteration can leave
+            # the sector (see comment above).
             h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)
             def hop(c):
                 hc = self.contract_2e(h2e, c, norb, nelec, link_index)
                 return _project_sigma_v(np.asarray(hc).ravel(), swap_idx,
-                                        swap_sign, wfnsym_ir)
+                                        swap_sign, wfnsym_req)
+            make_precond = self.make_precond
+            def make_precond_sigma_v(hdiag, pspaceig=None, pspaceci=None,
+                                     addr=None):
+                precond = make_precond(hdiag, pspaceig, pspaceci, addr)
+                def precond_sigma_v(r, e0, x0, *args, **kwargs):
+                    return _project_sigma_v(precond(r, e0, x0, *args, **kwargs),
+                                            swap_idx, swap_sign, wfnsym_req)
+                return precond_sigma_v
+            env['make_precond'] = make_precond_sigma_v
 
-        with lib.temporary_env(self, wfnsym=wfnsym_ir):
+        with lib.temporary_env(self, **env):
             e, c = direct_spin1.kernel_ms1(
                 self, h1e, eri, norb, nelec, ci0, link_index, tol, lindep, max_cycle,
                 max_space, nroots, davidson_only, pspace_size, hop=hop, ecore=ecore,
