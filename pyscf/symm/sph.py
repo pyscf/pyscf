@@ -19,6 +19,7 @@ Spherical harmonics
 
 import numpy
 import scipy.linalg
+import wignernj
 from pyscf.symm.cg import cg_spin
 
 def real_sph_vec(r, lmax, reorder_p=False):
@@ -115,37 +116,22 @@ def sph_pure2real(l, reorder_p=True):
     O(-1) = i/\sqrt(2){Y(-1) + Y(1)};   O(1) = 1/\sqrt(2){Y(-1) - Y(1)}
     O(-2) = i/\sqrt(2){Y(-2) - Y(2)};   O(2) = 1/\sqrt(2){Y(-2) + Y(2)}
 
+    The transformation is obtained from libwignernj (S. Lehtola, Comput. Phys.
+    Commun. 329, 110342 (2026), doi:10.1016/j.cpc.2026.110342), which returns
+    the basis-vector matrix C of O_m = \sum_m' C(m,m') Y_m'; U is its
+    transpose.  Both use the Condon-Shortley phase convention.
+
     Kwargs:
         reorder_p (bool): Whether the p functions are in the (x,y,z) order.
 
     Returns:
         2D array U_{complex,real}
     '''
-    n = 2 * l + 1
-    u = numpy.zeros((n,n), dtype=complex)
-    sqrthfr = numpy.sqrt(.5)
-    sqrthfi = numpy.sqrt(.5)*1j
-
+    c = numpy.array(wignernj.real_ylm_in_complex_ylm(l), dtype=numpy.complex128)
     if reorder_p and l == 1:
-        u[1,2] = 1
-        u[0,1] =  sqrthfi
-        u[2,1] =  sqrthfi
-        u[0,0] =  sqrthfr
-        u[2,0] = -sqrthfr
-    else:
-        u[l,l] = 1
-        for m in range(1, l+1, 2):
-            u[l-m,l-m] =  sqrthfi
-            u[l+m,l-m] =  sqrthfi
-            u[l-m,l+m] =  sqrthfr
-            u[l+m,l+m] = -sqrthfr
-        for m in range(2, l+1, 2):
-            u[l-m,l-m] =  sqrthfi
-            u[l+m,l-m] = -sqrthfi
-            u[l-m,l+m] =  sqrthfr
-            u[l+m,l+m] =  sqrthfr
-
-    return u
+        # (y,z,x) -> (x,y,z)
+        c = c[[2,0,1]]
+    return c.T
 
 def sph_real2pure(l, reorder_p=True):
     '''
