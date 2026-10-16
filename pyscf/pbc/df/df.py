@@ -61,12 +61,31 @@ from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder, _RSNucBuilder, LINEAR_DEP_T
 from pyscf import __config__
 
 
-def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
-    r'''Generate a cell object using the density fitting auxbasis as
-    the basis set. The normalization coefficients of the auxiliary cell are
-    different to the regular (square-norm) convention. To simplify the
-    compensated charge algorithm, they are normalized against
-    \int (r^l e^{-ar^2} r^2 dr
+def make_modrho_basis(cell, auxbasis=None, drop_eta=None,
+                      normalize_multipoles=True):
+    r'''Construct an auxiliary cell for periodic Gaussian density fitting.
+
+    Args:
+        cell : pyscf.pbc.gto.Cell
+            Built cell containing the atomic structure and orbital basis.
+
+    Kwargs:
+        auxbasis : str, dict, list or tuple, optional
+            Auxiliary basis in the same format as `Cell.basis`. If None,
+            auxiliary basis set will be automatically selected or generated
+            according to the orbital basis set `cell.basis`.
+        drop_eta : float, optional
+            Discard primitive Gaussians with exponents smaller than this value.
+            Remove shells with no remaining primitives.
+            Keep all primitives if set to None.
+        normalize_multipoles : bool, optional
+            If enabled, normalize each contraction of angular momentum l so that
+            its radial multipole integral
+                \int_0^\infty r^{2l+2} \sum_p c_p e^{-a_p r^2} dr
+            equals 1/sqrt(4*pi). This simplifies compensated-charge integrals.
+
+    Returns:
+        An instance of pyscf.pbc.gto.Cell
     '''
     auxcell = incore.make_auxcell(cell, auxbasis)
 
@@ -94,14 +113,17 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
             pe = auxcell._bas[ib,gto.PTR_EXP]
             auxcell._bas[ib,gto.NPRIM_OF] = np
             _env[pe:pe+np] = es
-# int1 is the multipole value. l*2+2 is due to the radial part integral
-# \int (r^l e^{-ar^2} * Y_{lm}) (r^l Y_{lm}) r^2 dr d\Omega
-            int1 = gto.gaussian_int(l*2+2, es)
-            s = numpy.einsum('pi,p->i', cs, int1)
-# The auxiliary basis normalization factor is not a must for density expansion.
-# half_sph_norm here to normalize the monopole (charge).  This convention can
-# simplify the formulism of \int \bar{\rho}, see function auxbar.
-            cs = numpy.einsum('pi,i->pi', cs, half_sph_norm/s)
+            if normalize_multipoles:
+                # int1 is the multipole value. l*2+2 is due to the radial part integral
+                # \int (r^l e^{-ar^2} * Y_{lm}) (r^l Y_{lm}) r^2 dr d\Omega
+                int1 = gto.gaussian_int(l*2+2, es)
+                s = numpy.einsum('pi,p->i', cs, int1)
+                # The auxiliary basis normalization factor is not a must for density expansion.
+                # half_sph_norm here to normalize the monopole (charge).  This convention can
+                # simplify the formulism of \int \bar{\rho}, see function auxbar.
+                cs = numpy.einsum('pi,i->pi', cs, half_sph_norm/s)
+            else:
+                cs = gto.mole._nomalize_contracted_ao(l, es, cs)
             _env[ptr:ptr+np*nc] = cs.T.ravel()
 
             steep_shls.append(ib)
@@ -265,8 +287,13 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         self.check_sanity()
         self.dump_flags()
 
-        self.auxcell = make_modrho_basis(self.cell, self.auxbasis,
-                                         self.exp_to_discard)
+        # Charge normalization makes charge-compensated DF integrals simpler.
+        # However, it gives compact auxiliary functions much larger
+        # coefficients, making the two-center Coulomb metric more ill-conditioned.
+        # Other algorithms should not use this normalization.
+        self.auxcell = make_auxcell(
+            self.cell, self.auxbasis, self.exp_to_discard,
+            normalize_multipoles=self._prefer_ccdf)
 
         if with_j3c and self._cderi_to_save is not None:
             if isinstance(self._cderi_to_save, str):
