@@ -543,7 +543,9 @@ class KohnShamDFT:
 
     def check_sanity(self):
         out = super().check_sanity()
-        if self.do_nlc() and self.do_disp() and self._numint.libxc.is_nlc(self.xc):
+        if (self.do_nlc() and self.do_disp() and self._numint.libxc.is_nlc(self.xc)
+            # COACH combines VV10 with three-body contributions from D4
+            and self.xc.upper() != 'COACH'):
             import warnings
             warnings.warn(
                 f'nlc-type xc {self.xc} and disp {self.disp} may lead to'
