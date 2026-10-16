@@ -44,8 +44,7 @@ from pyscf.fci import direct_spin1
 from pyscf.fci import direct_spin1_symm
 from pyscf.fci.direct_spin1_symm import (
     _sv_associated_det, _strs_angular_momentum, _cyl_sym_orbital_rotation,
-    _validate_degen_mapping, _gen_sigma_v_swap, _project_sigma_v,
-    _project_init_guess_sigma_v)
+    _validate_degen_mapping, _gen_sigma_v_swap, _kernel_sigma_v)
 from pyscf.fci import direct_nosym
 from pyscf.fci import addons
 from pyscf import __config__
@@ -580,30 +579,29 @@ class FCISolver(direct_spin1_symm.FCISolver):
         # both Sigma+ and Sigma- components. The CI iteration (seeded by
         # the numerical noise of the sigma_v symmetry in the integrals)
         # may converge to the component in the wrong sigma_v sector
-        # (issue #3031). The initial guess, the Davidson preconditioner and
-        # the Hamiltonian contraction are projected below to confine the
-        # iteration in the requested sigma_v sector.
+        # (issue #3031). Sigma states are solved in a sigma_v-adapted
+        # determinant basis (see direct_spin1_symm._kernel_sigma_v), so that
+        # the iteration is confined in the requested sigma_v sector by
+        # construction. Note: the sym_allowed_indices convention of this
+        # module (E+/-, complex orbitals) differs from direct_spin1_symm;
+        # the sigma_v tables must be built on the same convention.
         wfnsym_req = None
         if wfnsym is not None:
             wfnsym_req = direct_spin1_symm._id_wfnsym(self, norb, nelec, orbsym, wfnsym)
-        if (wfnsym_req is not None
-                and symm.basis.linearmole_irrep2momentum(wfnsym_req) == 0):
-            # Note: the sym_allowed_indices convention of this module (E+/-,
-            # complex orbitals) differs from direct_spin1_symm. The swap
-            # tables must be built on the same convention.
+        sigma_v = (wfnsym_req is not None
+                   and symm.basis.linearmole_irrep2momentum(wfnsym_req) == 0)
+        if sigma_v:
             sym_allowed_idx_req = sym_allowed_indices(nelec, orbsym, wfnsym_req)
             self.sym_allowed_idx = sym_allowed_idx_req
-            s_idx_req = np.hstack(sym_allowed_idx_req)
             swap_idx, swap_sign = _gen_sigma_v_swap(nelec, orbsym,
                                                     sym_allowed_idx_req)
-            na_req = cistring.num_strings(norb, nelec[0])
-            nb_req = cistring.num_strings(norb, nelec[1])
-            if ci0 is not None:
-                ci0 = _project_init_guess_sigma_v(
-                    self, ci0, na_req, nb_req, s_idx_req, swap_idx, swap_sign,
-                    wfnsym_req)
 
-        wfnsym_ir = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
+        # For a Sigma state the initial guess is projected onto the requested
+        # sigma_v sector by _kernel_sigma_v, so the strict consistency check of
+        # guess_wfnsym is not applied (a guess converged to the other Sigma
+        # component is discarded and replaced by a proper initial guess there).
+        wfnsym_ir = self.guess_wfnsym(norb, nelec, None if sigma_v else ci0,
+                                      orbsym, wfnsym, **kwargs)
         if symm.basis.linearmole_irrep2momentum(wfnsym_ir) == 0:
             # sym_allowed_idx does not distinguish Sigma+ and Sigma-
             # components (e.g. A2g and A2u)
@@ -620,40 +618,36 @@ class FCISolver(direct_spin1_symm.FCISolver):
         else:
             link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
 
-        hop = None
-        env = {'wfnsym': wfnsym_ir}
-        if (wfnsym_req is not None
-                and symm.basis.linearmole_irrep2momentum(wfnsym_req) == 0):
-            # Project the Hamiltonian contraction and the output of the
-            # Davidson preconditioner onto the requested sigma_v sector, so
-            # that no expansion vector of the Davidson iteration can leave
-            # the sector (see comment above).
+        s_idx = np.hstack(self.sym_allowed_idx)
+        if sigma_v:
+            # Solve the Sigma state in the sigma_v-adapted determinant basis.
+            # max_space is resolved inside _kernel_sigma_v.
+            hdiag = self.make_hdiag(h1e, eri, norb, nelec, compress=False)
+            precond_base = self.make_precond(hdiag[s_idx])
             h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)
-            def hop(c):
-                hc = self.contract_2e(h2e, c, norb, nelec,
-                                      (link_indexa, link_indexb))
-                return _project_sigma_v(np.asarray(hc).ravel(), swap_idx,
-                                        swap_sign, wfnsym_req)
-            make_precond = self.make_precond
-            def make_precond_sigma_v(hdiag, pspaceig=None, pspaceci=None,
-                                     addr=None):
-                precond = make_precond(hdiag, pspaceig, pspaceci, addr)
-                def precond_sigma_v(r, e0, x0, *args, **kwargs):
-                    return _project_sigma_v(precond(r, e0, x0, *args, **kwargs),
-                                            swap_idx, swap_sign, wfnsym_req)
-                return precond_sigma_v
-            env['make_precond'] = make_precond_sigma_v
-
-        with lib.temporary_env(self, **env):
-            e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0,
-                                           (link_indexa,link_indexb),
-                                           tol, lindep, max_cycle, max_space,
-                                           nroots, davidson_only, pspace_size,
-                                           hop=hop, ecore=ecore, **kwargs)
+            def hop_det(c):
+                return self.contract_2e(h2e, c, norb, nelec,
+                                        (link_indexa, link_indexb))
+            def guess_fn():
+                return self.get_init_guess(norb, nelec, nroots, hdiag,
+                                           orbsym, wfnsym_ir)
+            with lib.temporary_env(self, wfnsym=wfnsym_ir):
+                e, c = direct_spin1_symm._kernel_sigma_v(
+                    self, hop_det, precond_base, guess_fn, ci0,
+                    link_indexa.shape[0] * link_indexb.shape[0],
+                    s_idx, swap_idx, swap_sign, wfnsym_req,
+                    tol, lindep, max_cycle, max_space, nroots, ecore,
+                    **kwargs)
+        else:
+            with lib.temporary_env(self, wfnsym=wfnsym_ir):
+                e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0,
+                                               (link_indexa,link_indexb),
+                                               tol, lindep, max_cycle, max_space,
+                                               nroots, davidson_only, pspace_size,
+                                               ecore=ecore, **kwargs)
 
         na = link_indexa.shape[0]
         nb = link_indexb.shape[0]
-        s_idx = np.hstack(self.sym_allowed_idx)
         if nroots > 1:
             c, c_raw = [], c
             for vec in c_raw:
