@@ -24,13 +24,18 @@ mf.kernel()
 mc = mcscf.CASSCF(mf, 8, 12)
 mc.fcisolver.wfnsym = 'A2u'
 mc.kernel()
-print('Triplet Sigma_u^- %.15g  ref = -149.383495797891' % mc.e_tot)
+print('Triplet Sigma_u^- %.15g  ref = -149.217106540676' % mc.e_tot)
 
 # Specify CI wfn spatial symmetry and spin symmetry
+# A fresh CASSCF object is needed for the quintet state. If the converged
+# triplet CI (an eigenfunction of the spin-penalty shifted Hamiltonian) were
+# reused as the FCI initial guess, the Davidson iteration would be unable to
+# leave the triplet state.
+mc = mcscf.CASSCF(mf, 8, 12)
 mc.fix_spin_(ss=6)  # Quintet, ss = S*(S+1) = 6
 mc.fcisolver.wfnsym = 'A2u'
 mc.kernel()
-print('Quintet Sigma_u^- %.15g  ref = -148.920732172378' % mc.e_tot)
+print('Quintet Sigma_u^- %.15g  ref = -148.920732172365' % mc.e_tot)
 
 
 #
