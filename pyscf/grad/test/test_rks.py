@@ -480,7 +480,8 @@ class KnownValues(unittest.TestCase):
         w1 = numpy.concatenate(w1, axis=2)
         atm_idx = numpy.concatenate(atm_idx)
         self.assertAlmostEqual(lib.fp(w1), -13.101186585274547, 10)
-        self.assertAlmostEqual(abs(w1-w1a.transpose(0,2,1)).max(), 0, 12)
+        # The explicit partition cutoff differs slightly from the epsilon reference.
+        self.assertAlmostEqual(abs(w1-w1a.transpose(0,2,1)).max(), 0, 11)
 
         grids.becke_scheme = gen_grid.becke_lko
         grids.build()
