@@ -54,7 +54,7 @@ def get_jk(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
         jk_shape = (dm.shape[0], nband, nso, nso)
 
     dmaa = dms[:,:nao,:nao]
-    dmab = dms[:,nao:,:nao]
+    dmab = dms[:,:nao,nao:]
     dmbb = dms[:,nao:,nao:]
     if with_k:
         if hermi:
