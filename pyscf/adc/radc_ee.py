@@ -1949,9 +1949,9 @@ class RADCEE(radc.RADC):
         'method_type', 'mo_coeff', 'mo_coeff_hf', 'mo_energy', 'max_memory',
         't1', 't2', 'max_space', 'max_cycle',
         'nocc', 'nvir', 'nmo', 'mol', 'transform_integrals',
-        'with_df', 'dip_mom','spec_factor_print_tol', 'evec_print_tol',
-        'compute_properties', 'approx_trans_moments', 'E', 'U', 'P', 'X',
-        '_make_rdm1', 'frozen', 'mo_occ'
+        'with_df', 'if_naf', 'naux', 'dip_mom','spec_factor_print_tol', 'evec_print_tol',
+        '_make_rdm1', 'frozen', 'mo_occ',
+        'compute_properties', 'approx_trans_moments', 'E', 'U', 'P', 'X'
     }
 
     def __init__(self, adc):
@@ -1988,6 +1988,8 @@ class RADCEE(radc.RADC):
         self.X = None
         self.evec_print_tol = adc.evec_print_tol
         self.spec_factor_print_tol = adc.spec_factor_print_tol
+        self.if_naf = adc.if_naf
+        self.naux = adc.naux
         self.frozen = adc.frozen
         self.mo_occ = adc.mo_occ
         self._adc_es = self

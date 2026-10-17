@@ -3028,6 +3028,8 @@ class UADCIPCVS(uadc.UADC):
         self.ncvs = adc.ncvs
         self.frozen = adc.frozen
         self.mo_occ = adc.mo_occ
+        self.if_naf = adc.if_naf
+        self.naux = adc.naux
 
         self.compute_properties = adc.compute_properties
         self.approx_trans_moments = adc.approx_trans_moments

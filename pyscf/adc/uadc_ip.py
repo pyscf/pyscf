@@ -1675,7 +1675,7 @@ def make_rdm1_eigenvectors(adc, L, R):
     R_aba = R_aba.reshape(nvir_a,nocc_a,nocc_b)
     R_bab = R_bab.reshape(nvir_b,nocc_b,nocc_a)
 
-######### block- ij
+# block- ij
     rdm1_a[occ_list_a,occ_list_a] =  np.einsum('m,m->',L_a,R_a,optimize=True)
     rdm1_a[:nocc_a,:nocc_a] -= np.einsum('i,j->ij',L_a,R_a,optimize=True)
     rdm1_a[occ_list_a,occ_list_a] += np.einsum('m,m->',L_b,R_b,optimize=True)
@@ -1738,7 +1738,7 @@ def make_rdm1_eigenvectors(adc, L, R):
     rdm1_b[:nocc_b,:nocc_b] += 0.5* \
         np.einsum('g,i,hjcd,hgcd->ij',R_b,L_b,t2_1_ab,t2_1_ab,optimize=True)
 
-########## block- ab
+# block- ab
 
     rdm1_a[nocc_a:,nocc_a:] = 0.5*np.einsum('atu,btu->ab', L_aaa_u,R_aaa_u,optimize=True)
     rdm1_a[nocc_a:,nocc_a:] += np.einsum('atu,btu->ab', L_aba,R_aba,optimize=True)
@@ -1766,7 +1766,7 @@ def make_rdm1_eigenvectors(adc, L, R):
     rdm1_b[nocc_b:,nocc_b:] -= np.einsum('g,h,mhcb,mgca->ab', L_b,R_b,t2_1_ab,t2_1_ab,optimize=True)
     rdm1_b[nocc_b:,nocc_b:] -= np.einsum('g,h,hmcb,gmca->ab', L_a,R_a,t2_1_ab,t2_1_ab,optimize=True)
 
-#######G^100#### block- ia
+# G^100#### block- ia
     rdm1_a[:nocc_a,nocc_a:] = -np.einsum('n,ani->ia', R_a,L_aaa_u,optimize=True)
     rdm1_a[:nocc_a,nocc_a:] += np.einsum('n,ain->ia', R_b,L_aba,optimize=True)
 
@@ -1795,13 +1795,13 @@ def make_rdm1_eigenvectors(adc, L, R):
     rdm1_b[:nocc_b,nocc_b:] += np.einsum('g,g,ia->ia', L_a,R_a,t1_2_b,optimize=True)
     rdm1_b[:nocc_b,nocc_b:] -= np.einsum('g,i,ga->ia', R_b,L_b,t1_2_b,optimize=True)
 
-############ block- ai
+# block- ai
     rdm1_a[nocc_a:,:nocc_a] = rdm1_a[:nocc_a,nocc_a:].T
     rdm1_b[nocc_b:,:nocc_b] = rdm1_b[:nocc_b,nocc_b:].T
 
     ####### ADC(3) SPIN ADAPTED EXCITED STATE OPDM WITH SQA ################
     if adc.method == "adc(3)":
-        ### Redudant Variables used for names from SQA
+        # Redudant Variables used for names from SQA
         t2_2_a = adc.t2[1][0][:]
         t2_2_ab = adc.t2[1][1][:]
         t2_2_b = adc.t2[1][2][:]
@@ -1814,7 +1814,7 @@ def make_rdm1_eigenvectors(adc, L, R):
 
         ###################################################
 
-############# block- ij
+# block- ij
         ### 030 ###
         rdm1_a[:nocc_a, :nocc_a] += 1/4 * np.einsum('J,i,Ijab,ijab->IJ', L_a, R_a, t2_1_a, t2_2_a, optimize = True)
         rdm1_a[:nocc_a, :nocc_a] += 1/4 * np.einsum('J,i,ijab,Ijab->IJ', L_a, R_a, t2_1_a, t2_2_a, optimize = True)
@@ -1871,7 +1871,7 @@ def make_rdm1_eigenvectors(adc, L, R):
 
         #----------------------------------------------------------------------------------------------------------#
 
-############# block- ab
+# block- ab
         ### 030 ###
         rdm1_a[nocc_a:, nocc_a:] += 1/2 * np.einsum('i,i,jkAa,jkBa->AB', L_a, R_a, t2_1_a, t2_2_a, optimize = True)
         rdm1_a[nocc_a:, nocc_a:] += 1/2 * np.einsum('i,i,jkBa,jkAa->AB', L_a, R_a, t2_1_a, t2_2_a, optimize = True)
@@ -1915,7 +1915,7 @@ def make_rdm1_eigenvectors(adc, L, R):
         rdm1_b[nocc_b:, nocc_b:] -= np.einsum('Aij,i,jB->AB', L_bbb_u, R_b, t1_2_b, optimize = True)
 
         #----------------------------------------------------------------------------------------------------------#
-############# block- ia
+# block- ia
         ### 030 ###
         rdm1_a[:nocc_a, nocc_a:] -= np.einsum('i,I,iA->IA', L_a, R_a, t1_3_a, optimize = True)
         rdm1_a[:nocc_a, nocc_a:] += np.einsum('i,i,IA->IA', L_a, R_a, t1_3_a, optimize = True)
@@ -2049,7 +2049,7 @@ def make_rdm1_eigenvectors(adc, L, R):
                                                     L_b, R_bbb_u, t2_1_b, t2_1_b, optimize = True)
 
         #----------------------------------------------------------------------------------------------------------#
-############# block- ai
+# block- ai
         rdm1_a[nocc_a:,:nocc_a] = rdm1_a[:nocc_a,nocc_a:].T
         rdm1_b[nocc_b:,:nocc_b] = rdm1_b[:nocc_b,nocc_b:].T
 
@@ -2101,7 +2101,7 @@ class UADCIP(uadc.UADC):
         'nmo_a', 'nmo_b', 'mol', 'transform_integrals',
         'with_df', 'spec_factor_print_tol', 'evec_print_tol',
         'compute_properties', 'approx_trans_moments', 'E', 'U', 'P', 'X',
-        'compute_spin_square', '_make_rdm1', 'mo_occ'
+        'compute_spin_square', '_make_rdm1', 'mo_occ', 'if_naf', 'naux'
     }
 
     def __init__(self, adc):
@@ -2139,6 +2139,8 @@ class UADCIP(uadc.UADC):
         self.approx_trans_moments = adc.approx_trans_moments
         self.mo_occ = adc.mo_occ
 
+        self.if_naf = adc.if_naf
+        self.naux = adc.naux
         self.spec_factor_print_tol = adc.spec_factor_print_tol
         self.evec_print_tol = adc.evec_print_tol
 

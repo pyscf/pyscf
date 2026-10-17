@@ -33,7 +33,7 @@ from pyscf.lib import logger
 from pyscf.pbc.adc import kadc_ao2mo
 from pyscf.pbc.adc import dfadc
 from pyscf import __config__
-from pyscf.pbc.mp.kmp2 import (get_nocc, get_nmo, padding_k_idx,_padding_k_idx,
+from pyscf.pbc.mp.kmp2 import (get_nocc, get_nmo, padding_k_idx, _padding_k_idx,
                                padded_mo_coeff, get_frozen_mask, _add_padding)
 from pyscf.pbc.cc.kccsd_rhf import _get_epq
 from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
@@ -50,10 +50,13 @@ import tempfile
 #        Chemist's  oovv(ijab) : ki - kj + ka - kb
 #        Amplitudes t2(ijab)  : ki + kj - ka - kba
 
-def compute_amplitudes_energy(myadc, eris, verbose=None):
+def compute_amplitudes_energy(myadc, eris, verbose=None, if_corr=True):
 
-    t1,t2,myadc.imds.t2_1_vvvv = myadc.compute_amplitudes(eris)
-    e_corr = myadc.compute_energy(t2, eris)
+    t1, t2, myadc.imds.t2_1_vvvv = myadc.compute_amplitudes(eris)
+    if if_corr:
+        e_corr = myadc.compute_energy(t2, eris)
+    else:
+        e_corr = 0.
 
     return e_corr, t1, t2
 
@@ -74,13 +77,19 @@ def compute_amplitudes(myadc, eris):
     kpts = myadc.kpts
     madelung = tools.madelung(cell, kpts)
 
+    # release the scratch file from a previous kernel call, if any
+    myadc._close_amp_scratch()
+
     # Compute first-order doubles t2 (tijab)
     tf = tempfile.TemporaryFile()
     f = h5py.File(tf, 'a')
-    t2_1 = f.create_dataset('t2_1', (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
+    # keep the handles so RADC.__del__ can close them when the amplitudes die
+    myadc._amp_h5file = f
+    myadc._amp_tmpfile = tf
+    t2_1 = f.create_dataset('t2_1', (nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype=eris.ovov.dtype)
 
-    mo_energy =  myadc.mo_energy
-    mo_coeff =  myadc.mo_coeff
+    mo_energy = myadc.mo_energy
+    mo_coeff = myadc.mo_coeff
     mo_coeff, mo_energy = _add_padding(myadc, mo_coeff, mo_energy)
 
     mo_e_o = [mo_energy[k][:nocc] for k in range(nkpts)]
@@ -98,20 +107,20 @@ def compute_amplitudes(myadc, eris):
 
         kb = kconserv[ki, ka, kj]
         # For discussion of LARGE_DENOM, see t1new update above
-        eia = _get_epq([0,nocc,ki,mo_e_o,nonzero_opadding],
-                       [0,nvir,ka,mo_e_v,nonzero_vpadding],
-                       fac=[1.0,-1.0])
+        eia = _get_epq([0, nocc, ki, mo_e_o, nonzero_opadding],
+                       [0, nvir, ka, mo_e_v, nonzero_vpadding],
+                       fac=[1.0, -1.0])
 
-        ejb = _get_epq([0,nocc,kj,mo_e_o,nonzero_opadding],
-                       [0,nvir,kb,mo_e_v,nonzero_vpadding],
-                       fac=[1.0,-1.0])
+        ejb = _get_epq([0, nocc, kj, mo_e_o, nonzero_opadding],
+                       [0, nvir, kb, mo_e_v, nonzero_vpadding],
+                       fac=[1.0, -1.0])
         eijab = eia[:, None, :, None] + ejb[:, None, :]
 
-        t2_1[ki,kj,ka] = eris.ovov[ki,ka,kj].conj().transpose((0,2,1,3)) / eijab
+        t2_1[ki, kj, ka] = eris.ovov[ki, ka, kj].conj().transpose((0, 2, 1, 3)) / eijab
 
         if ka != kb:
             eijba = eijab.transpose(0, 1, 3, 2)
-            t2_1[ki, kj, kb] = eris.ovov[ki,kb,kj].conj().transpose((0,2,1,3)) / eijba
+            t2_1[ki, kj, kb] = eris.ovov[ki, kb, kj].conj().transpose((0, 2, 1, 3)) / eijba
 
         touched[ki, kj, ka] = touched[ki, kj, kb] = True
 
@@ -120,7 +129,7 @@ def compute_amplitudes(myadc, eris):
     t1_2 = None
     if myadc.approx_trans_moments is False or myadc.method == "adc(3)":
         # Compute second-order singles t1 (tij)
-        t1_2 = np.zeros((nkpts,nocc,nvir), dtype=t2_1.dtype)
+        t1_2 = np.zeros((nkpts, nocc, nvir), dtype=t2_1.dtype)
         eris_ovoo = eris.ovoo
         for ki in range(nkpts):
             for kk in range(nkpts):
@@ -132,53 +141,55 @@ def compute_amplitudes(myadc, eris):
                         chnk_size = myadc.chnk_size
                         chnk_size = min(chnk_size, nocc)
                         a = 0
-                        for p in range(0,nocc,chnk_size):
+                        for p in range(0, nocc, chnk_size):
                             eris_ovvv = dfadc.get_ovvv_df(
-                                myadc, eris.Lov[kk,kd], eris.Lvv[ka,kc], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
+                                myadc, eris.Lov[kk, kd], eris.Lvv[ka, kc],
+                                p, chnk_size).reshape(-1, nvir, nvir, nvir) / nkpts
                             k = eris_ovvv.shape[0]
-                            t1_2[ki] += 1.5*lib.einsum('kdac,ikcd->ia',
-                                                       eris_ovvv,t2_1[ki,kk,kc,:,a:a+k],optimize=True)
-                            t1_2[ki] -= 0.5*lib.einsum('kdac,kicd->ia',
-                                                       eris_ovvv,t2_1[kk,ki,kc,a:a+k,:],optimize=True)
+                            t1_2[ki] += 1.5 * lib.einsum('kdac,ikcd->ia',
+                                                         eris_ovvv, t2_1[ki, kk, kc, :, a:a + k], optimize=True)
+                            t1_2[ki] -= 0.5 * lib.einsum('kdac,kicd->ia',
+                                                         eris_ovvv, t2_1[kk, ki, kc, a:a + k, :], optimize=True)
                             del eris_ovvv
                             eris_ovvv = dfadc.get_ovvv_df(
-                                myadc, eris.Lov[kk,kc], eris.Lvv[ka,kd], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
-                            t1_2[ki] -= 0.5*lib.einsum('kcad,ikcd->ia',
-                                                       eris_ovvv,t2_1[ki,kk,kc,:,a:a+k],optimize=True)
-                            t1_2[ki] += 0.5*lib.einsum('kcad,kicd->ia',
-                                                       eris_ovvv,t2_1[kk,ki,kc,a:a+k,:],optimize=True)
+                                myadc, eris.Lov[kk, kc], eris.Lvv[ka, kd],
+                                p, chnk_size).reshape(-1, nvir, nvir, nvir) / nkpts
+                            t1_2[ki] -= 0.5 * lib.einsum('kcad,ikcd->ia',
+                                                         eris_ovvv, t2_1[ki, kk, kc, :, a:a + k], optimize=True)
+                            t1_2[ki] += 0.5 * lib.einsum('kcad,kicd->ia',
+                                                         eris_ovvv, t2_1[kk, ki, kc, a:a + k, :], optimize=True)
                             del eris_ovvv
                             a += k
                     else:
                         eris_ovvv = eris.ovvv[:]
-                        t1_2[ki] += 1.5*lib.einsum('kdac,ikcd->ia',
-                                                   eris_ovvv[kk,kd,ka],t2_1[ki,kk,kc],optimize=True)
-                        t1_2[ki] -= 0.5*lib.einsum('kdac,kicd->ia',
-                                                   eris_ovvv[kk,kd,ka],t2_1[kk,ki,kc],optimize=True)
-                        t1_2[ki] -= 0.5*lib.einsum('kcad,ikcd->ia',
-                                                   eris_ovvv[kk,kc,ka],t2_1[ki,kk,kc],optimize=True)
-                        t1_2[ki] += 0.5*lib.einsum('kcad,kicd->ia',
-                                                   eris_ovvv[kk,kc,ka],t2_1[kk,ki,kc],optimize=True)
+                        t1_2[ki] += 1.5 * lib.einsum('kdac,ikcd->ia',
+                                                     eris_ovvv[kk, kd, ka], t2_1[ki, kk, kc], optimize=True)
+                        t1_2[ki] -= 0.5 * lib.einsum('kdac,kicd->ia',
+                                                     eris_ovvv[kk, kd, ka], t2_1[kk, ki, kc], optimize=True)
+                        t1_2[ki] -= 0.5 * lib.einsum('kcad,ikcd->ia',
+                                                     eris_ovvv[kk, kc, ka], t2_1[ki, kk, kc], optimize=True)
+                        t1_2[ki] += 0.5 * lib.einsum('kcad,kicd->ia',
+                                                     eris_ovvv[kk, kc, ka], t2_1[kk, ki, kc], optimize=True)
                         del eris_ovvv
 
                 for kl in range(nkpts):
                     kc = kconserv[kk, ki, kl]
                     ka = kconserv[kl, kc, kk]
 
-                    t1_2[ki] -= 1.5*lib.einsum('lcki,klac->ia',
-                                               eris_ovoo[kl,kc,kk],t2_1[kk,kl,ka],optimize=True)
-                    t1_2[ki] += 0.5*lib.einsum('lcki,lkac->ia',
-                                               eris_ovoo[kl,kc,kk],t2_1[kl,kk,ka],optimize=True)
-                    t1_2[ki] -= 0.5*lib.einsum('kcli,lkac->ia',
-                                               eris_ovoo[kk,kc,kl],t2_1[kl,kk,ka],optimize=True)
-                    t1_2[ki] += 0.5*lib.einsum('kcli,klac->ia',
-                                               eris_ovoo[kk,kc,kl],t2_1[kk,kl,ka],optimize=True)
+                    t1_2[ki] -= 1.5 * lib.einsum('lcki,klac->ia',
+                                                 eris_ovoo[kl, kc, kk], t2_1[kk, kl, ka], optimize=True)
+                    t1_2[ki] += 0.5 * lib.einsum('lcki,lkac->ia',
+                                                 eris_ovoo[kl, kc, kk], t2_1[kl, kk, ka], optimize=True)
+                    t1_2[ki] -= 0.5 * lib.einsum('kcli,lkac->ia',
+                                                 eris_ovoo[kk, kc, kl], t2_1[kl, kk, ka], optimize=True)
+                    t1_2[ki] += 0.5 * lib.einsum('kcli,klac->ia',
+                                                 eris_ovoo[kk, kc, kl], t2_1[kk, kl, ka], optimize=True)
 
         for ki in range(nkpts):
             ka = ki
-            eia = _get_epq([0,nocc,ki,mo_e_o,nonzero_opadding],
-                           [0,nvir,ka,mo_e_v,nonzero_vpadding],
-                           fac=[1.0,-1.0])
+            eia = _get_epq([0, nocc, ki, mo_e_o, nonzero_opadding],
+                           [0, nvir, ka, mo_e_v, nonzero_vpadding],
+                           fac=[1.0, -1.0])
             t1_2[ki] = t1_2[ki] / eia
 
         cput0 = log.timer_debug1("Completed t1_2 amplitude calculation", *cput0)
@@ -190,7 +201,7 @@ def compute_amplitudes(myadc, eris):
     if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)"):
         # Compute second-order doubles t2 (tijab)
         t2_1_vvvv = f.create_dataset(
-            't2_1_vvvv', (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
+            't2_1_vvvv', (nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype=eris.ovov.dtype)
         eris_oooo = eris.oooo
         eris_ovvo = eris.ovvo
         eris_oovv = eris.oovv
@@ -200,17 +211,17 @@ def compute_amplitudes(myadc, eris):
             for ki in range(nkpts):
                 kj = kconserv[ka, ki, kb]
                 if isinstance(eris.vvvv, np.ndarray):
-                    eris_vvvv = eris.vvvv.reshape(nkpts,nkpts,nkpts,nvir*nvir,nvir*nvir)
-                    t2_1_a = t2_1[:].reshape(nkpts,nkpts,nkpts,nocc*nocc,nvir*nvir)
-                    t2_1_vvvv[ki, kj, ka] += np.dot(t2_1_a[ki,kj,kc],
-                                                    eris_vvvv[kc,kd,ka].conj()).reshape(nocc,nocc,nvir,nvir)
+                    eris_vvvv = eris.vvvv.reshape(nkpts, nkpts, nkpts, nvir * nvir, nvir * nvir)
+                    t2_1_a = t2_1[:].reshape(nkpts, nkpts, nkpts, nocc * nocc, nvir * nvir)
+                    t2_1_vvvv[ki, kj, ka] += np.dot(t2_1_a[ki, kj, kc],
+                                                    eris_vvvv[kc, kd, ka].conj()).reshape(nocc, nocc, nvir, nvir)
                 elif eris.vvvv is None:
-                    t2_1_vvvv[ki,kj,ka] += contract_ladder(myadc,t2_1[ki,kj,kc],eris.Lvv,ka,kb,kc)
-                else :
-                    t2_1_vvvv[ki,kj,ka] += contract_ladder(myadc,t2_1[ki,kj,kc],eris.vvvv,kc,kd,ka)
+                    t2_1_vvvv[ki, kj, ka] += contract_ladder(myadc, t2_1[ki, kj, kc], eris.Lvv, ka, kb, kc)
+                else:
+                    t2_1_vvvv[ki, kj, ka] += contract_ladder(myadc, t2_1[ki, kj, kc], eris.vvvv, kc, kd, ka)
 
-        t2_2 = f.create_dataset('t2_2', (nkpts,nkpts,nkpts,nocc,nocc,
-                                nvir,nvir), dtype=eris.ovov.dtype)
+        t2_2 = f.create_dataset('t2_2', (nkpts, nkpts, nkpts, nocc, nocc,
+                                nvir, nvir), dtype=eris.ovov.dtype)
         t2_2 = t2_1_vvvv[:]
 
         if myadc.exxdiv is not None:
@@ -219,63 +230,63 @@ def compute_amplitudes(myadc, eris):
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
             for kk in range(nkpts):
 
-                kc = kconserv[ki,ka,kk]
-                kb = kconserv[kj,kk,kc]
-                t2_2[ki,kj,ka] -= lib.einsum('kjbc,kica->ijab',
-                                             eris_oovv[kk,kj,kb],t2_1[kk,ki,kc],optimize=True)
+                kc = kconserv[ki, ka, kk]
+                kb = kconserv[kj, kk, kc]
+                t2_2[ki, kj, ka] -= lib.einsum('kjbc,kica->ijab',
+                                               eris_oovv[kk, kj, kb], t2_1[kk, ki, kc], optimize=True)
 
-                kc = kconserv[kk,ka,kj]
-                kb = kconserv[ki,kk,kc]
-                t2_2[ki,kj,ka] -= lib.einsum('kibc,jkca->ijab',
-                                             eris_oovv[kk,ki,kb],t2_1[kj,kk,kc],optimize=True)
+                kc = kconserv[kk, ka, kj]
+                kb = kconserv[ki, kk, kc]
+                t2_2[ki, kj, ka] -= lib.einsum('kibc,jkca->ijab',
+                                               eris_oovv[kk, ki, kb], t2_1[kj, kk, kc], optimize=True)
 
-                kc = kconserv[ka,kj,kk]
-                kb = kconserv[ki,kc,kk]
-                t2_2[ki,kj,ka] -= lib.einsum('kjac,ikcb->ijab',
-                                             eris_oovv[kk,kj,ka],t2_1[ki,kk,kc],optimize=True)
+                kc = kconserv[ka, kj, kk]
+                kb = kconserv[ki, kc, kk]
+                t2_2[ki, kj, ka] -= lib.einsum('kjac,ikcb->ijab',
+                                               eris_oovv[kk, kj, ka], t2_1[ki, kk, kc], optimize=True)
 
-                kc = kconserv[ka,ki,kk]
-                kb = kconserv[kk,kc,kj]
-                t2_2[ki,kj,ka] -= lib.einsum('kiac,kjcb->ijab',
-                                             eris_oovv[kk,ki,ka],t2_1[kk,kj,kc],optimize=True)
+                kc = kconserv[ka, ki, kk]
+                kb = kconserv[kk, kc, kj]
+                t2_2[ki, kj, ka] -= lib.einsum('kiac,kjcb->ijab',
+                                               eris_oovv[kk, ki, ka], t2_1[kk, kj, kc], optimize=True)
 
             for kl in range(nkpts):
-                kk = kconserv[kj,kl,ki]
-                t2_2[ki,kj,ka] += lib.einsum('kilj,klab->ijab',
-                                             eris_oooo[kk,ki,kl],t2_1[kk,kl,ka],optimize=True)
+                kk = kconserv[kj, kl, ki]
+                t2_2[ki, kj, ka] += lib.einsum('kilj,klab->ijab',
+                                               eris_oooo[kk, ki, kl], t2_1[kk, kl, ka], optimize=True)
 
             for kk in range(nkpts):
 
-                kc = kconserv[ki,ka,kk]
-                kb = kconserv[kc,kk,kj]
+                kc = kconserv[ki, ka, kk]
+                kb = kconserv[kc, kk, kj]
 
-                t2_2[ki,kj,ka] += 2 * lib.einsum('kcbj,kica->ijab',
-                                                 eris_ovvo[kk,kc,kb],t2_1[kk,ki,kc],optimize=True)
-                kc = kconserv[kk,ka,ki]
-                t2_2[ki,kj,ka] -= lib.einsum('kcbj,ikca->ijab',
-                                             eris_ovvo[kk,kc,kb],t2_1[ki,kk,kc],optimize=True)
+                t2_2[ki, kj, ka] += 2 * lib.einsum('kcbj,kica->ijab',
+                                                   eris_ovvo[kk, kc, kb], t2_1[kk, ki, kc], optimize=True)
+                kc = kconserv[kk, ka, ki]
+                t2_2[ki, kj, ka] -= lib.einsum('kcbj,ikca->ijab',
+                                               eris_ovvo[kk, kc, kb], t2_1[ki, kk, kc], optimize=True)
 
-                kc = kconserv[kk,ki,ka]
-                kb = kconserv[kk,kj,kc]
-                t2_2[ki,kj,ka] += 2 * lib.einsum('kcai,kjcb->ijab',
-                                                 eris_ovvo[kk,kc,ka],t2_1[kk,kj,kc],optimize=True)
+                kc = kconserv[kk, ki, ka]
+                kb = kconserv[kk, kj, kc]
+                t2_2[ki, kj, ka] += 2 * lib.einsum('kcai,kjcb->ijab',
+                                                   eris_ovvo[kk, kc, ka], t2_1[kk, kj, kc], optimize=True)
 
-                kc = kconserv[kk,ki,ka]
-                kb = kconserv[kj,kk,kc]
-                t2_2[ki,kj,ka] -= lib.einsum('kcai,jkcb->ijab',
-                                             eris_ovvo[kk,kc,ka],t2_1[kj,kk,kc],optimize=True)
+                kc = kconserv[kk, ki, ka]
+                kb = kconserv[kj, kk, kc]
+                t2_2[ki, kj, ka] -= lib.einsum('kcai,jkcb->ijab',
+                                               eris_ovvo[kk, kc, ka], t2_1[kj, kk, kc], optimize=True)
 
             kb = kconserv[ki, ka, kj]
-            eia = _get_epq([0,nocc,ki,mo_e_o,nonzero_opadding],
-                           [0,nvir,ka,mo_e_v,nonzero_vpadding],
-                           fac=[1.0,-1.0])
+            eia = _get_epq([0, nocc, ki, mo_e_o, nonzero_opadding],
+                           [0, nvir, ka, mo_e_v, nonzero_vpadding],
+                           fac=[1.0, -1.0])
 
-            ejb = _get_epq([0,nocc,kj,mo_e_o,nonzero_opadding],
-                           [0,nvir,kb,mo_e_v,nonzero_vpadding],
-                           fac=[1.0,-1.0])
+            ejb = _get_epq([0, nocc, kj, mo_e_o, nonzero_opadding],
+                           [0, nvir, kb, mo_e_v, nonzero_vpadding],
+                           fac=[1.0, -1.0])
             eijab = eia[:, None, :, None] + ejb[:, None, :]
 
-            t2_2[ki,kj,ka] /= eijab
+            t2_2[ki, kj, ka] /= eijab
 
         cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
 
@@ -301,15 +312,15 @@ def compute_energy(myadc, t2, eris):
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
 
-        emp2 += 2 * lib.einsum('ijab,iajb', t2_amp[ki,kj,ka], eris_ovov[ki,ka,kj],optimize=True)
-        emp2 -= 1 * lib.einsum('ijab,jaib', t2_amp[ki,kj,ka], eris_ovov[kj,ka,ki],optimize=True)
+        emp2 += 2 * lib.einsum('ijab,iajb', t2_amp[ki, kj, ka], eris_ovov[ki, ka, kj], optimize=True)
+        emp2 -= 1 * lib.einsum('ijab,jaib', t2_amp[ki, kj, ka], eris_ovov[kj, ka, ki], optimize=True)
 
     del t2_amp
     emp2 = emp2.real / nkpts
     return emp2
 
 
-def contract_ladder(myadc,t_amp,vvvv,ka,kb,kc):
+def contract_ladder(myadc, t_amp, vvvv, ka, kb, kc):
 
     nocc = myadc.nocc
     nmo = myadc.nmo
@@ -318,26 +329,26 @@ def contract_ladder(myadc,t_amp,vvvv,ka,kb,kc):
     kconserv = myadc.khelper.kconserv
 
     kd = kconserv[ka, kc, kb]
-    t_amp = np.ascontiguousarray(t_amp.reshape(nocc*nocc,nvir*nvir))
-    t = np.zeros((nocc,nocc, nvir, nvir),dtype=t_amp.dtype)
+    t_amp = np.ascontiguousarray(t_amp.reshape(nocc * nocc, nvir * nvir))
+    t = np.zeros((nocc, nocc, nvir, nvir), dtype=t_amp.dtype)
     chnk_size = myadc.chnk_size
     chnk_size = min(chnk_size, nvir)
     a = 0
     if isinstance(vvvv, np.ndarray):
-        vv1 = vvvv[kc,ka]
-        vv2 = vvvv[kd,kb]
-        for p in range(0,nvir,chnk_size):
-            vvvv_p = dfadc.get_vvvv_df(myadc, vv1, vv2, p, chnk_size)/nkpts
-            vvvv_p = vvvv_p.reshape(-1,nvir*nvir)
+        vv1 = vvvv[kc, ka]
+        vv2 = vvvv[kd, kb]
+        for p in range(0, nvir, chnk_size):
+            vvvv_p = dfadc.get_vvvv_df(myadc, vv1, vv2, p, chnk_size) / nkpts
+            vvvv_p = vvvv_p.reshape(-1, nvir * nvir)
             k = vvvv_p.shape[0]
-            t += np.dot(t_amp[:,a:a+k],vvvv_p.conj()).reshape(nocc,nocc,nvir,nvir)
+            t += np.dot(t_amp[:, a:a + k], vvvv_p.conj()).reshape(nocc, nocc, nvir, nvir)
             del vvvv_p
             a += k
-    else :
-        for p in range(0,nvir,chnk_size):
-            vvvv_p = vvvv[ka,kb,kc,p:p+chnk_size,:,:,:].reshape(-1,nvir*nvir)
+    else:
+        for p in range(0, nvir, chnk_size):
+            vvvv_p = vvvv[ka, kb, kc, p:p + chnk_size, :, :, :].reshape(-1, nvir * nvir)
             k = vvvv_p.shape[0]
-            t += np.dot(t_amp[:,a:a+k],vvvv_p.conj()).reshape(nocc,nocc,nvir,nvir)
+            t += np.dot(t_amp[:, a:a + k], vvvv_p.conj()).reshape(nocc, nocc, nvir, nvir)
             del vvvv_p
             a += k
 

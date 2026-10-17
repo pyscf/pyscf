@@ -74,7 +74,8 @@ def transform_integrals_incore(myadc):
     if ((myadc.method == "adc(2)" and myadc.method_type == "ee" and myadc.approx_trans_moments is False)
         or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False)
         or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is True and myadc.method_type in ("ea","ee"))
-        or (myadc.method == "adc(3)")):
+        or (myadc.method == "adc(3)")
+        or myadc.if_heri_eris):
 
         eris.vvvv_p = ao2mo.general(myadc._scf._eri, (vir_a, vir_a, vir_a, vir_a),
                                     compact=False).reshape(nvir_a, nvir_a, nvir_a, nvir_a)
@@ -223,7 +224,8 @@ def transform_integrals_outcore(myadc):
     if ((myadc.method == "adc(2)" and myadc.method_type == "ee" and myadc.approx_trans_moments is False)
         or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False)
         or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is True and myadc.method_type in ("ea","ee"))
-        or (myadc.method == "adc(3)")):
+        or (myadc.method == "adc(3)")
+        or myadc.if_heri_eris):
 
         cput2 = logger.process_clock(), logger.perf_counter()
 
@@ -404,6 +406,31 @@ def transform_integrals_df(myadc):
     eris.LOV = eris.LOV.reshape(naux,nocc_b*nvir_b)
     LVO = LVO.reshape(naux,nocc_b*nvir_b)
 
+    if myadc.if_naf:
+        eris.Lvv = eris.Lvv.reshape(naux,nvir_a*nvir_a)
+        eris.LVV = eris.LVV.reshape(naux,nvir_b*nvir_b)
+        W_a = lib.ddot(Loo, Loo.T) + lib.ddot(eris.Lov,eris.Lov.T) + lib.ddot(Lvo,Lvo.T) + lib.ddot(eris.Lvv,eris.Lvv.T)
+        W_b = lib.ddot(LOO, LOO.T) + lib.ddot(eris.LOV,eris.LOV.T) + lib.ddot(LVO,LVO.T) + lib.ddot(eris.LVV,eris.LVV.T)
+        W = (W_a + W_b)/2
+        n,N = np.linalg.eigh(W)
+        N_trunc = N[:,n>myadc.thresh_naf].T
+        myadc.naux = N_trunc.shape[0]
+        log.info(f"origin naux is {naux}||naf naux is {myadc.naux}")
+        Loo = lib.ddot(N_trunc,Loo)
+        eris.Lov = lib.ddot(N_trunc,eris.Lov)
+        Lvo = lib.ddot(N_trunc,Lvo)
+        eris.Lvv = lib.ddot(N_trunc,eris.Lvv)
+        LOO = lib.ddot(N_trunc,LOO)
+        eris.LOV = lib.ddot(N_trunc,eris.LOV)
+        LVO = lib.ddot(N_trunc,LVO)
+        eris.LVV = lib.ddot(N_trunc,eris.LVV)
+
+        eris.Lvv = eris.Lvv.reshape(myadc.naux,nvir_a,nvir_a)
+        eris.LVV = eris.LVV.reshape(myadc.naux,nvir_b,nvir_b)
+        if myadc.ncvs is not None and myadc.ncvs > 0:
+            eris.Lee = eris.Lvv
+            eris.LEE = eris.LVV
+
     eris.Lee_p = Lvv_p = lib.pack_tril(eris.Lvv)
     eris.LEE_p = LVV_p = lib.pack_tril(eris.LVV)
 
@@ -474,10 +501,17 @@ def transform_integrals_df(myadc):
     eris.OVoo[:] = lib.ddot(eris.LOV.T, Loo).reshape(nocc_b,nvir_b,nocc_a,nocc_a)
     eris.OVvo[:] = lib.ddot(eris.LOV.T, Lvo).reshape(nocc_b,nvir_b,nvir_a,nocc_a)
 
-    eris.Lov = eris.Lov.reshape(naux,nocc_a,nvir_a)
-    eris.LOV = eris.LOV.reshape(naux,nocc_b,nvir_b)
-    eris.Lvv = eris.Lvv.reshape(naux,nvir_a,nvir_a)
-    eris.LVV = eris.LVV.reshape(naux,nvir_b,nvir_b)
+    if not myadc.if_naf:
+        eris.Lov = eris.Lov.reshape(naux,nocc_a,nvir_a)
+        eris.LOV = eris.LOV.reshape(naux,nocc_b,nvir_b)
+        eris.Lvv = eris.Lvv.reshape(naux,nvir_a,nvir_a)
+        eris.LVV = eris.LVV.reshape(naux,nvir_b,nvir_b)
+    else:
+        eris.Lov = eris.Lov.reshape(myadc.naux,nocc_a,nvir_a)
+        eris.LOV = eris.LOV.reshape(myadc.naux,nocc_b,nvir_b)
+        if myadc.ncvs is not None and myadc.ncvs > 0:
+            eris.Lce = eris.Lov[:,:myadc.ncvs,:]
+            eris.LCE = eris.LOV[:,:myadc.ncvs,:]
 
     log.timer('DF-ADC integral transformation', *cput0)
 
