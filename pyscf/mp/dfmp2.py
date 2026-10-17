@@ -534,9 +534,13 @@ def _init_mp_df_eris_direct(with_df, occ_coeff, vir_coeff, max_memory, h5obj=Non
     # precompute for fitting
     j2c = fill_2c2e(mol, auxmol)
     try:
-        m2c = np.asfortranarray(scipy.linalg.cholesky(j2c, lower=True))
+        m2c = np.asfortranarray(scipy.linalg.cholesky(j2c, lower=True,
+                                                      overwrite_a=True))
         tag = 'cd'
     except scipy.linalg.LinAlgError:
+        # Reconstruct j2c. The "overwrite_a" flag in cholesky decomposition will
+        # destroy the j2c matrix.
+        j2c = fill_2c2e(mol, auxmol)
         e, u = np.linalg.eigh(j2c)
         cond = abs(e).max() / abs(e).min()
         keep = abs(e) > THRESH_LINDEP
