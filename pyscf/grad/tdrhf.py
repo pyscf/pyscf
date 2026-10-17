@@ -234,7 +234,7 @@ class TDSCF_GradScanner(lib.GradScanner):
     def converged(self):
         td_scanner = self.base
         return all((td_scanner._scf.converged,
-                    td_scanner.converged[self.state]))
+                    td_scanner.converged[self.state-1]))
 
 
 class Gradients(rhf_grad.GradientsBase):
