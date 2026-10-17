@@ -592,7 +592,6 @@ def get_frozen_mask(mp):
 
 
 def _add_padding(mp, mo_coeff, mo_energy):
-    nmo = mp.nmo
     mo_coeff = padded_mo_coeff(mp, mo_coeff)
     mo_energy = padded_mo_energy(mp, mo_energy)
     return mo_coeff, mo_energy
