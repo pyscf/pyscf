@@ -7,6 +7,7 @@ Force the FCI solver of CASSCF solving particular spin state.
 from pyscf import scf
 from pyscf import gto
 from pyscf import mcscf
+from pyscf.fci import direct_spin1_cyl_sym
 
 mol = gto.M(
     atom = '''
@@ -20,8 +21,16 @@ mol = gto.M(
 mf = scf.RHF(mol)
 mf.kernel()
 
-# Specify CI wfn spatial symmetry by assigning fcisolver.wfnsym
+# Specify CI wfn spatial symmetry by assigning fcisolver.wfnsym.
+#
+# For a linear molecule (Dinfh), a Sigma state cannot be labeled by the D2h
+# subgroup alone: the sigma_v (+) and (-) components of Sigma share the same
+# D2h irrep (for example Sigma_u- and a Delta_u component both descend to Au).
+# Requesting wfnsym='A2u' from the default (D2h) solver may therefore land on
+# the wrong component or fail with WfnSymmetryError. Use the cylindrical
+# symmetry solver to target the Sigma state unambiguously.
 mc = mcscf.CASSCF(mf, 8, 12)
+mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
 mc.fcisolver.wfnsym = 'A2u'
 mc.kernel()
 print('Triplet Sigma_u^- %.15g  ref = -149.217106540676' % mc.e_tot)
@@ -32,6 +41,7 @@ print('Triplet Sigma_u^- %.15g  ref = -149.217106540676' % mc.e_tot)
 # reused as the FCI initial guess, the Davidson iteration would be unable to
 # leave the triplet state.
 mc = mcscf.CASSCF(mf, 8, 12)
+mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
 mc.fix_spin_(ss=6)  # Quintet, ss = S*(S+1) = 6
 mc.fcisolver.wfnsym = 'A2u'
 mc.kernel()

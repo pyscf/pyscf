@@ -127,10 +127,8 @@ class KnownValues(unittest.TestCase):
                                2.6910275883606078, 4)
 
         mc.wfnsym = 'A2u'
-        # The stored CI (of a different symmetry) is discarded and the FCI
-        # initial guess is rebuilt for the requested wfnsym (issue #3031)
-        emc = mc.kernel()[0]
-        self.assertAlmostEqual(emc, -108.67333497051136, 7)
+        # raised by mc.fcisolver.guess_wfnsym
+        self.assertRaises(RuntimeError, mc.kernel)
 
     def test_casci_from_uhf(self):
         mf = scf.UHF(mol)
@@ -169,10 +167,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(emc, -108.74508322877787, 7)
 
         mc.wfnsym = 'A2u'
-        # The stored E2uy CI has no overlap with the requested A2u symmetry.
-        # It is discarded and the FCI initial guess is rebuilt (issue #3031)
-        emc = mc.mc1step()[0]
-        self.assertAlmostEqual(emc, -108.69019443475308, 7)
+        with self.assertRaises(lib.exceptions.WfnSymmetryError):
+            mc.mc1step()
         mc.ci = None
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.69019443475308, 7)

@@ -21,7 +21,6 @@ from pyscf import scf
 from pyscf import ao2mo
 from pyscf import fci
 from pyscf.fci import cistring, direct_spin1, direct_spin1_symm
-from pyscf.fci import direct_spin1_cyl_sym
 from pyscf import mcscf
 
 def setUpModule():
@@ -239,72 +238,6 @@ Li    P
         ci0[1,1] = ci0[2,2] = .5**.5 # corresponding to (E+)(E-') + (E-)(E+') => A1
         mc.kernel(mo, ci0=ci0)
         self.assertAlmostEqual(mc.e_cas, -4.205889578214524, 9)
-
-    def test_o2_sigma_wfnsym_casci(self):
-        # The D2h-allowed determinant space of a Dooh molecule contains both
-        # the Sigma- (A2u) state and sigma_v-even components (Sigma+, Delta).
-        # The latter can be lower in energy. Without projecting the CI
-        # iteration on the requested sigma_v sector, the Davidson solver
-        # converges to the wrong component (issue #3031).
-        mol = gto.M(atom='O 0 0 0; O 0 0 1.1', basis='ccpvdz',
-                    symmetry=True, spin=2)
-        mf = scf.RHF(mol).run()
-        mc = mcscf.CASCI(mf, 8, 12)
-        mc.fcisolver.wfnsym = 'A2u'
-        mc.kernel()
-        # sigma_v-even component in the same (D2h Au) space is -149.3622833
-        self.assertAlmostEqual(mc.e_tot, -149.135407727633, 7)
-        wfnsym = mc.fcisolver.guess_wfnsym(
-            mc.ncas, mc.nelecas, mc.ci, mc.fcisolver.orbsym, None)
-        self.assertEqual(wfnsym, 4)  # 4 = A2u
-
-    def test_o2_sigma_wfnsym_casci_a2g(self):
-        # Regression for the sigma_v projection of the Davidson iteration:
-        # out-of-sector expansion vectors (amplified by the diagonal
-        # preconditioner) must not push the iteration onto the excited A2g
-        # state (-148.8361218)
-        mol = gto.M(atom='O 0 0 0; O 0 0 1.1', basis='ccpvdz',
-                    symmetry=True, spin=2)
-        mf = scf.RHF(mol).run()
-        for _ in range(5):
-            mc = mcscf.CASCI(mf, 8, 12)
-            mc.fcisolver.wfnsym = 'A2g'
-            mc.kernel()
-            self.assertAlmostEqual(mc.e_tot, -149.655458292, 6)
-            wfnsym = mc.fcisolver.guess_wfnsym(
-                mc.ncas, mc.nelecas, mc.ci, mc.fcisolver.orbsym, None)
-            self.assertEqual(wfnsym, 1)  # 1 = A2g
-
-    def test_o2_sigma_wfnsym_cyl_sym(self):
-        mol = gto.M(atom='O 0 0 0; O 0 0 1.1', basis='ccpvdz',
-                    symmetry=True, spin=2)
-        mf = scf.RHF(mol).run()
-        mc = mcscf.CASCI(mf, 8, 12)
-        mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
-        mc.fcisolver.wfnsym = 'A2u'
-        mc.kernel()
-        self.assertAlmostEqual(mc.e_tot, -149.135407727633, 7)
-
-    def test_o2_sigma_wfnsym_casscf(self):
-        mol = gto.M(atom='O 0 0 0; O 0 0 1.1', basis='ccpvdz',
-                    symmetry=True, spin=2)
-        mf = scf.RHF(mol).run()
-        mc = mcscf.CASSCF(mf, 8, 12)
-        mc.fcisolver.wfnsym = 'A2u'
-        mc.kernel()
-        self.assertAlmostEqual(mc.e_tot, -149.217106540676, 6)
-
-        # The quintet state must be solved with a fresh initial guess. The
-        # converged triplet CI is an eigenfunction of the spin-penalty
-        # shifted Hamiltonian; using it as initial guess, the Davidson
-        # iteration cannot leave the triplet state.
-        mc = mcscf.CASSCF(mf, 8, 12)
-        mc.fix_spin_(ss=6)
-        mc.fcisolver.wfnsym = 'A2u'
-        mc.kernel()
-        self.assertAlmostEqual(mc.e_tot, -148.920732172365, 6)
-        ss = mc.fcisolver.spin_square(mc.ci, mc.ncas, mc.nelecas)[0]
-        self.assertAlmostEqual(ss, 6, 5)
 
 if __name__ == "__main__":
     print("Full Tests for spin1-symm")

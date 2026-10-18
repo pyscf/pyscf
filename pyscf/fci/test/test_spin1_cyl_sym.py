@@ -237,6 +237,41 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(casci((3, 3)), -149.56827649707, 9)
         self.assertAlmostEqual(casci((2, 4)), -149.56827649707, 9)
 
+    # issue 3031
+    def test_sigma_wfnsym(self):
+        # The D2h subgroup cannot distinguish the two sigma_v components of a
+        # Sigma state of a linear molecule (Sigma+ and Sigma- share the same
+        # subgroup irrep); only the cylindrical-symmetry solver resolves them
+        # (it has to be requested explicitly).
+        mol = gto.M(atom='O 0 0 0; O 0 0 1.1', basis='ccpvdz',
+                    symmetry=True, spin=2)
+        mf = scf.RHF(mol).run()
+
+        mc = mcscf.CASCI(mf, 8, 12)
+        mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
+        mc.fcisolver.wfnsym = 'A2u'
+        self.assertAlmostEqual(mc.kernel()[0], -149.135407728053, 7)
+
+        mc = mcscf.CASCI(mf, 8, 12)
+        mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
+        mc.fcisolver.wfnsym = 'A2g'
+        self.assertAlmostEqual(mc.kernel()[0], -149.655458292535, 7)
+
+        mc = mcscf.CASSCF(mf, 8, 12)
+        mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
+        mc.fcisolver.wfnsym = 'A2u'
+        self.assertAlmostEqual(mc.kernel()[0], -149.217106541146, 6)
+
+        # A fresh CASSCF object is needed for the quintet. The converged
+        # triplet CI is an eigenfunction of the spin-penalty shifted
+        # Hamiltonian; used as the FCI initial guess, the Davidson iteration
+        # cannot leave the triplet state.
+        mc = mcscf.CASSCF(mf, 8, 12)
+        mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
+        mc.fix_spin_(ss=6)
+        mc.fcisolver.wfnsym = 'A2u'
+        self.assertAlmostEqual(mc.kernel()[0], -148.920732172369, 6)
+
 if __name__ == "__main__":
     print("Full Tests for spin1-symm")
     unittest.main()
