@@ -624,6 +624,7 @@ ECP,I,46,4,3;
     def test_cp2k_soc_parser(self):
         p = gto.basis.load_pseudo('GTH-PBE-SOC-q6', 'Te')
         self.assertEqual(p[4][1], 'SOC')
+        self.assertEqual(gto.basis.load_pseudo('gth-soc-pbe-q6', 'Te'), p)
         scalar = gto.basis.load_pseudo('gth-pbe-q6','Te')
         self.assertIsInstance(scalar[4], int)
         self.assertEqual(len(scalar), 5+scalar[4])

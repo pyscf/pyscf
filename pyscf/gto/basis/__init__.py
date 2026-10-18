@@ -800,7 +800,7 @@ def load_ecp(filename_or_basisname, symb):
 
 # PP_NAME_PATTERN follows the convention of CP2K orbital basis and pseudo names
 # https://pierre-24.github.io/cp2k-basis/users/basis_sets_and_pseudos
-PP_NAME_PATTERN = re.compile(r'^GTH(-SOC)?-[A-Z0-9]+(-SOC)?-q\d+$')
+PP_NAME_PATTERN = re.compile(r'^GTH(-SOC)?-[A-Z0-9]+(-SOC)?-Q\d+$')
 
 def load_pseudo(filename_or_basisname, symb):
     '''Parses PP database file
@@ -809,14 +809,15 @@ def load_pseudo(filename_or_basisname, symb):
     if os.path.isfile(filename_or_basisname):
         return _load_external(parse_cp2k_pp, filename_or_basisname, symb)
 
-    if re.fullmatch(PP_NAME_PATTERN, filename_or_basisname):
+    name = filename_or_basisname.upper()
+    if re.fullmatch(PP_NAME_PATTERN, name):
         # Note: the default *-GTH basis for Na has been changed, compared to
         # eariler versions. The default one in earlier versions are renamed to
         # *-GTH-q9_old in the new database (see GTH_POTENTIALS).
-        with_soc = 'SOC' in filename_or_basisname.upper()
-        filename_or_basisname = filename_or_basisname.replace('-SOC', '')
+        with_soc = 'SOC' in name
+        name = name.replace('-SOC', '').replace('-Q', '-q')
         return parse_cp2k_pp._load_GTH_POTENTIALS(
-            filename_or_basisname, symb, _GTH_PP_DIR, with_soc)
+            name, symb, _GTH_PP_DIR, with_soc)
 
     # TODO: remove the lagecy parser, except gth-hf-rev. gth-hf-rev data are not
     # available in the GTH_POTENTIALS or POTENTIAL_UZH databases
