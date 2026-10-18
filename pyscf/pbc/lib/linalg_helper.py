@@ -54,7 +54,10 @@ def eigs(matvec, size, nroots, x0=None, Adiag=None, guess=False, verbose=logger.
 
     if method == 'davidson':
         if guess:
-            conv, e, c, niter = davidson_guess(matvec, size, nroots, Adiag)
+            e, c, niter = davidson_guess(matvec, size, nroots, Adiag)
+            conv = all(np.linalg.norm(c[:,i]) > 0 and
+                       np.linalg.norm(matvec(c[:,i]) - e[i]*c[:,i]) < 1e-6
+                       for i in range(nroots))
         else:
             conv, e, c, niter = davidson(matvec, size, nroots, x0, Adiag, verbose)
         return conv, e, c
@@ -234,19 +237,10 @@ def davidson_guess(mult_by_A,N,neig,Adiag=None):
             Atilde = np.dot(b.conj().transpose(),Ab)
             lamda, alpha = diagonalize_asymm(Atilde)
 
-            overlap_guess_j_max = -99
-            target = 0
-            for j, overlap_guess_j in enumerate(alpha[0,:]):
-                if overlap_guess_j > overlap_guess_j_max:
-                    overlap_guess_j_max = overlap_guess_j
-                    target = j
+            target = np.argmax(abs(alpha[0,:]))
 
             lamda_k = lamda[target]
             alpha_k = alpha[:,target]
-
-            if M == Mmax:
-                print(" -- M reached Mmax")
-                break
 
             q = np.dot( Ab-lamda_k*b, alpha_k )
             if np.linalg.norm(q) < tol:
@@ -254,6 +248,10 @@ def davidson_guess(mult_by_A,N,neig,Adiag=None):
                 evecs[:,guess] = np.dot(b,alpha_k)
                 Mtot += M
                 print(" -- Converged in", M, "iterations")
+                break
+
+            if M == Mmax:
+                print(" -- M reached Mmax")
                 break
 
             for i in range(N):

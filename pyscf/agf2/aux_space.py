@@ -124,6 +124,7 @@ class AuxiliarySpace:
         out[sp,sp] = phys
         out[sp,sa] = self.coupling
         out[sa,sp] = self.coupling.conj().T
+        out[sa,sa] = 0
         out[sa,sa][np.diag_indices(self.naux)] = self.energy - chempot
 
         return out
@@ -153,7 +154,7 @@ class AuxiliarySpace:
         vec = np.asarray(vec)
         input_shape = vec.shape
         vec = vec.reshape((self.nphys+self.naux, -1))
-        dtype = np.result_type(self.coupling.dtype, vec.dtype)
+        dtype = np.result_type(phys.dtype, self.energy.dtype, self.coupling.dtype, vec.dtype)
 
         sp = slice(None, self.nphys)
         sa = slice(self.nphys, None)
@@ -165,7 +166,7 @@ class AuxiliarySpace:
         out[sp]  = np.dot(phys, vec[sp])
         out[sp] += np.dot(self.coupling, vec[sa])
 
-        out[sa]  = np.dot(vec[sp].T, self.coupling).conj().T
+        out[sa]  = np.dot(self.coupling.conj().T, vec[sp])
         out[sa] += (self.energy[:,None] - chempot) * vec[sa]
 
         out = out.reshape(input_shape)
@@ -340,7 +341,7 @@ class SelfEnergy(AuxiliarySpace):
         '''
 
         gf = self.get_greens_function(phys)
-        return gf.make_rdm1(phys, chempot=chempot, occupancy=occupancy)
+        return gf.make_rdm1(chempot=chempot, occupancy=occupancy)
 
     def compress(self, phys=None, n=(None, 0), tol=1e-12):
         ''' Compress the auxiliaries via moments of the particle and
@@ -528,7 +529,7 @@ def davidson(auxspc, phys, chempot=None, nroots=1, which='SM', tol=1e-14, maxite
     else:
         order = -1
 
-    matvec = lambda x: auxspc.dot(phys, np.asarray(x))
+    matvec = lambda x: auxspc.dot(phys, np.asarray(x).T).T
     diag = np.concatenate([np.diag(phys), auxspc.energy])
     guess = [np.zeros(dim) for n in range(nroots)]
 

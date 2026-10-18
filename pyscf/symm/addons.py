@@ -381,7 +381,7 @@ def symmetrize_multidim(mol, mo, s=None,
         idx = find_symmetric_mo(moso, ovlpso)
         if sum(idx) != csym.shape[1]:
             raise ValueError('Number of symmetry-adapted MOs in not equal to dimensionality '
-                             'of irrep %s: %d != %d' % (mol.irrep_name[irrep], csym.shape[1], sum(idx)))
+                             'of irrep %s: %d != %d' % (irrep, csym.shape[1], sum(idx)))
         mo1.append(mo[:, idx])
     for partners in irreps_mdim:
         SALC_ao_partners = []
@@ -398,7 +398,7 @@ def symmetrize_multidim(mol, mo, s=None,
             mo_irrep = mo[:, idx]
             if sum(idx) != csym.shape[1]:
                 raise ValueError('Number of symmetry-adapted MOs in not equal to dimensionality '
-                                 'of irrep %s: %d != %d' % (mol.irrep_name[irrep], csym.shape[1], sum(idx)))
+                                 'of irrep %s: %d != %d' % (irrep, csym.shape[1], sum(idx)))
             # rotate MO to symm-adapted AO
             SALC_mo = numpy.dot(csym.T.conj(), mo_irrep)
             SALC_mo_partners.append(SALC_mo)

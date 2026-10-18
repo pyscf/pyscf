@@ -85,9 +85,9 @@ def density(cell, outfile, dm, nx=60, ny=60, nz=60, resolution=RESOLUTION):
         if isinstance(cell, pbcgto.cell.Cell):
             ao = cell.pbc_eval_gto('GTOval', coords[ip0:ip1])
         else:
-            ao = cell.eval_gto('GTOval', coords[ip0:ip1])
+            ao = cc.mol.eval_gto('GTOval', coords[ip0:ip1])
         rho[ip0:ip1] = lib.einsum('pi,ij,pj->p', ao, dm, ao)
-    rho = rho.reshape(nx,ny,nz)
+    rho = rho.reshape(cc.nx,cc.ny,cc.nz)
 
     cc.write(rho, outfile)
 
@@ -141,9 +141,9 @@ def orbital(cell, outfile, coeff, nx=60, ny=60, nz=60, resolution=RESOLUTION):
         if isinstance(cell, pbcgto.cell.Cell):
             ao = cell.pbc_eval_gto('GTOval', coords[ip0:ip1])
         else:
-            ao = cell.eval_gto('GTOval', coords[ip0:ip1])
+            ao = cc.mol.eval_gto('GTOval', coords[ip0:ip1])
         orb_on_grid[ip0:ip1] = numpy.dot(ao, coeff)
-    orb_on_grid = orb_on_grid.reshape(nx,ny,nz)
+    orb_on_grid = orb_on_grid.reshape(cc.nx,cc.ny,cc.nz)
 
     cc.write(orb_on_grid, outfile, comment='Orbital value in real space (1/Bohr^3)')
 
@@ -163,8 +163,8 @@ class CHGCAR(cubegen.Cube):
                             'available for Molecule. Lattice (in Bohr)\n'
                             '%s\nand FFT grids %s are applied.',
                             self.box, (nx,ny,nz))
-            self.mol = cell
-            cell = cell.view(pbcgto.Cell)
+            self.mol = cell.copy()
+            cell = self.mol.view(pbcgto.Cell)
             if (isinstance(cell.unit, str) and
                     cell.unit.startswith(('B','b','au','AU'))):
                 cell.a = self.box
