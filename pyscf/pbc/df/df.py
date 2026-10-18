@@ -291,58 +291,59 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         # However, it gives compact auxiliary functions much larger
         # coefficients, making the two-center Coulomb metric more ill-conditioned.
         # Other algorithms should not use this normalization.
-        self.auxcell = make_auxcell(
-            self.cell, self.auxbasis, self.exp_to_discard,
-            normalize_multipoles=self._prefer_ccdf)
+        if self._prefer_ccdf or cell.omega > 0:
+            # Only _CCGDFBuilder supports long-range integrals.
+            auxcell = self.auxcell = make_auxcell(
+                self.cell, self.auxbasis, self.exp_to_discard,
+                normalize_multipoles=True)
+            dfbuilder = _CCGDFBuilder(cell, auxcell, kpts_union)
+            dfbuilder.eta = self.eta
+        else:
+            auxcell = self.auxcell = make_auxcell(
+                self.cell, self.auxbasis, self.exp_to_discard,
+                normalize_multipoles=False)
+            dfbuilder = _RSGDFBuilder(cell, auxcell, kpts_union)
 
-        if with_j3c and self._cderi_to_save is not None:
-            if isinstance(self._cderi_to_save, str):
-                cderi = self._cderi_to_save
+        if not with_j3c or self._cderi_to_save is None:
+            return
+
+        if isinstance(self._cderi_to_save, str):
+            cderi = self._cderi_to_save
+        else:
+            cderi = self._cderi_to_save.name
+        if isinstance(self._cderi, str):
+            if self._cderi == cderi and os.path.isfile(cderi):
+                logger.warn(self, 'File %s (specified by ._cderi) is '
+                            'overwritten by GDF initialization.', cderi)
+                # On Windows, close the handle before os.remove to avoid
+                # permission error.
+                if sys.platform == 'win32':
+                    self._cderi_to_save.close()
+                os.remove(cderi)
             else:
-                cderi = self._cderi_to_save.name
-            if isinstance(self._cderi, str):
-                if self._cderi == cderi and os.path.isfile(cderi):
-                    logger.warn(self, 'File %s (specified by ._cderi) is '
-                                'overwritten by GDF initialization.', cderi)
-                    # On Windows, close the handle before os.remove to avoid
-                    # permission error.
-                    if sys.platform == 'win32':
-                        self._cderi_to_save.close()
-                    os.remove(cderi)
-                else:
-                    logger.warn(self, 'Value of ._cderi is ignored. '
-                                'DF integrals will be saved in file %s .', cderi)
-            self._cderi = cderi
-            t1 = (logger.process_clock(), logger.perf_counter())
-            self._make_j3c(self.cell, self.auxcell, None, cderi)
-            t1 = logger.timer_debug1(self, 'j3c', *t1)
-        return self
+                logger.warn(self, 'Value of ._cderi is ignored. '
+                            'DF integrals will be saved in file %s .', cderi)
+        self._cderi = cderi
 
-    def _make_j3c(self, cell=None, auxcell=None, kptij_lst=None, cderi_file=None):
-        if cell is None: cell = self.cell
-        if auxcell is None: auxcell = self.auxcell
-        if cderi_file is None: cderi_file = self._cderi_to_save
+        t1 = (logger.process_clock(), logger.perf_counter())
+        cell = self.cell
 
-        # Remove duplicated k-points. Duplicated kpts may lead to a buffer
-        # located in incore.wrap_int3c larger than necessary. Integral code
-        # only fills necessary part of the buffer, leaving some space in the
-        # buffer unfilled.
+        # Remove overlaps between the sampling and band k-points. Duplicate
+        # k-points can cause incore.wrap_int3c to allocate an oversized buffer
+        # that the integral code leaves partially unfilled.
         if self.kpts_band is None:
             kpts_union = self.kpts
         else:
             kpts_union = unique(numpy.vstack([self.kpts, self.kpts_band]))[0]
 
-        if self._prefer_ccdf or cell.omega > 0:
-            # For long-range integrals _CCGDFBuilder is the only option
-            dfbuilder = _CCGDFBuilder(cell, auxcell, kpts_union)
-            dfbuilder.eta = self.eta
-        else:
-            dfbuilder = _RSGDFBuilder(cell, auxcell, kpts_union)
         dfbuilder.mesh = self.mesh
         dfbuilder.linear_dep_threshold = self.linear_dep_threshold
         j_only = self._j_only or len(kpts_union) == 1
-        dfbuilder.make_j3c(cderi_file, j_only=j_only, dataname=self._dataname,
-                           kptij_lst=kptij_lst)
+        dfbuilder.make_j3c(cderi, j_only=j_only, dataname=self._dataname,
+                           kptij_lst=None)
+
+        t1 = logger.timer_debug1(self, 'j3c', *t1)
+        return self
 
     def cderi_array(self, label=None):
         '''
