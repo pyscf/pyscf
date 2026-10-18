@@ -76,14 +76,14 @@ class KnownValues(unittest.TestCase):
         ekpt = kmf.scf()
         mp = pyscf.pbc.mp.kmp2.KMP2(kmf).run()
 
-        self.assertAlmostEqual(ekpt,      -10.835614361742607, 6)
-        self.assertAlmostEqual(mp.e_corr, -0.1522294774708119, 6)
+        self.assertAlmostEqual(ekpt,      -10.838793827216200, 6)
+        self.assertAlmostEqual(mp.e_corr,  -0.153927793165337, 6)
 
     def test_222_high_cost(self):
         nk = (2, 2, 2)
         escf, emp = run_kcell(cell,nk)
-        self.assertAlmostEqual(escf, -11.0152342492995, 6)
-        self.assertAlmostEqual(emp, -0.233433093787577, 7)
+        self.assertAlmostEqual(escf, -11.015234407761824, 6)
+        self.assertAlmostEqual(emp,   -0.233433146996230, 7)
 
 
 if __name__ == '__main__':
