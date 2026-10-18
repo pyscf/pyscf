@@ -417,7 +417,6 @@ I F
         ref = scf.hf.dip_moment(mol, spatial_dm)
         assert abs(mf.dip_moment(dm=dm) - ref).max() < 1e-10
 
-        spatial_dm = dm[:nao,:nao] + dm[nao:,nao:]
         ref = scf.hf.quad_moment(mol, spatial_dm, verbose=0)
         assert abs(mf.quad_moment(dm=dm) - ref).max() < 1e-10
 
