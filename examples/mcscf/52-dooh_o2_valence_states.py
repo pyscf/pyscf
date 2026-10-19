@@ -14,8 +14,7 @@ Muller, Dallos, Lischka, Dubrovay, Szalay, Theor. Chem. Acc. 105, 227 (2001).
 
 from pyscf import gto, scf, mcscf
 from pyscf.fci import direct_spin1_cyl_sym
-
-HA2CM = 219474.631  # cm^-1 per hartree
+from pyscf.data.nist import HARTREE2WAVENUMBER
 
 def term_value(R, nelecas, wfnsym, singlet=False):
     # The closed-shell (spin=0) RHF solution of O2 is unstable, so the
@@ -58,7 +57,7 @@ for label, R, nelecas, wfnsym, singlet, exp in states:
         e = e0
     else:
         e = term_value(R, nelecas, wfnsym, singlet)
-    te = (e - e0) * HA2CM
+    te = (e - e0) * HARTREE2WAVENUMBER
     if exp is None:
         print('%-14s %10.0f %10s %10s' % (label, te, '-', '-'))
     else:
