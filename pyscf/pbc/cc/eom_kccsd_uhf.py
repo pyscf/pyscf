@@ -328,21 +328,21 @@ def ipccsd_diag(eom, kshift, imds=None):
         #fOO = eris.fock[1][:,:nocc_b,:nocc_b]
         #fvv = eris.fock[0][:,:nvir_a,:nvir_a]
         #fVV = eris.fock[1][:,:nvir_b,:nvir_b]
-        for ki in range(nkpts):
-            for kj in range(nkpts):
-                ka = kconserv[ki,kshift,kj]
-                Hr2aaa[ki,kj]  = imds.Fvv[ka].diagonal()
-                Hr2aaa[ki,kj] -= imds.Foo[ki].diagonal()[:,None,None]
-                Hr2aaa[ki,kj] -= imds.Foo[kj].diagonal()[None,:,None]
-                Hr2bbb[ki,kj]  = imds.FVV[ka].diagonal()
-                Hr2bbb[ki,kj] -= imds.FOO[ki].diagonal()[:,None,None]
-                Hr2bbb[ki,kj] -= imds.FOO[kj].diagonal()[None,:,None]
-                Hr2aba[ki,kj]  = imds.Fvv[ka].diagonal()
-                Hr2aba[ki,kj] -= imds.Foo[ki].diagonal()[:,None,None]
-                Hr2aba[ki,kj] -= imds.FOO[kj].diagonal()[None,:,None]
-                Hr2bab[ki,kj]  = imds.FVV[ka].diagonal()
-                Hr2bab[ki,kj] -= imds.FOO[ki].diagonal()[:,None,None]
-                Hr2bab[ki,kj] -= imds.Foo[kj].diagonal()[None,:,None]
+        # for ki in range(nkpts):
+        #     for kj in range(nkpts):
+        #         ka = kconserv[ki,kshift,kj]
+        #         Hr2aaa[ki,kj]  = imds.Fvv[ka].diagonal()
+        #         Hr2aaa[ki,kj] -= imds.Foo[ki].diagonal()[:,None,None]
+        #         Hr2aaa[ki,kj] -= imds.Foo[kj].diagonal()[None,:,None]
+        #         Hr2bbb[ki,kj]  = imds.FVV[ka].diagonal()
+        #         Hr2bbb[ki,kj] -= imds.FOO[ki].diagonal()[:,None,None]
+        #         Hr2bbb[ki,kj] -= imds.FOO[kj].diagonal()[None,:,None]
+        #         Hr2aba[ki,kj]  = imds.Fvv[ka].diagonal()
+        #         Hr2aba[ki,kj] -= imds.Foo[ki].diagonal()[:,None,None]
+        #         Hr2aba[ki,kj] -= imds.FOO[kj].diagonal()[None,:,None]
+        #         Hr2bab[ki,kj]  = imds.FVV[ka].diagonal()
+        #         Hr2bab[ki,kj] -= imds.FOO[ki].diagonal()[:,None,None]
+        #         Hr2bab[ki,kj] -= imds.Foo[kj].diagonal()[None,:,None]
     else:
         for ka in range(nkpts):
             for ki in range(nkpts):

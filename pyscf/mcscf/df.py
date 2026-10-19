@@ -140,7 +140,7 @@ class _DFCAS:
             paaa = self.with_df.ao2mo([mo1, mo1_cas, mo1_cas, mo1_cas], compact=False)
             return paaa.reshape(nmo,ncas,ncas,ncas)
         else:
-            return super()._exact_paaa(mol, u, out)
+            return super()._exact_paaa(mo, u, out)
 
     def nuc_grad_method(self):
         raise NotImplementedError
