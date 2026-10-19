@@ -867,22 +867,3 @@ def ascint3(intor_name):
     if not intor_name.endswith(('_sph', '_cart', '_spinor', '_ssc')):
         intor_name = intor_name + '_spinor'
     return intor_name
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None
-
-    mol.atom.extend([
-        ["H", (0,  0, 0  )],
-        ["H", (0,  0, 1  )],
-    ])
-    mol.basis = {"H": 'cc-pvdz'}
-    mol.build()
-    mol.set_rinv_origin(mol.atom_coord(0))
-    for i in range(mol.nbas):
-        for j in range(mol.nbas):
-            print(i, j, getints_by_shell('int1e_prinvxp_sph', (i,j),
-                                         mol._atm, mol._bas, mol._env, 3))

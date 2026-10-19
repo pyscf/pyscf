@@ -68,13 +68,13 @@ class GMP2(gmp2.GMP2):
                 eri += with_df.ao2mo((orbob,orbvb,orbob,orbvb), kpt)
                 eri1 = with_df.ao2mo((orboa,orbva,orbob,orbvb), kpt)
                 eri += eri1
-                eri += eri1.transpose(2,3,0,1)
+                eri += eri1.T
                 eri = eri.reshape(nocc,nvir,nocc,nvir)
             else:
                 co = orboa + orbob
                 cv = orbva + orbvb
                 eri = with_df.ao2mo((co,cv,co,cv), kpt).reshape(nocc,nvir,nocc,nvir)
-                sym_forbid = (orbspin[:nocc,None] != orbspin[nocc:])
+                sym_forbid = (orbspin[:,None] != orbv.orbspin)  # Separate occupied/virtual tags
                 eri[sym_forbid,:,:] = 0
                 eri[:,:,sym_forbid] = 0
             return eri

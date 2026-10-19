@@ -830,25 +830,3 @@ def mgs_ortho(vlst,rlst,crit_indp,iop=0):
         if VERBOSE: print(' final nindp from mgs_ortho =', nindp,
                           ' diffIden=', diff)
     return nindp, vlst2
-
-if __name__ == '__main__':
-    N = 200
-    neig = 4
-    A = np.zeros((N,N))
-    k = N/2
-    for ii in range(N):
-        i = ii+1
-        for jj in range(N):
-            j = jj+1
-            if j <= k:
-                A[ii,jj] = i*(i==j)-(i-j-k**2)
-            else:
-                A[ii,jj] = i*(i==j)+(i-j-k**2)
-    def matvec(x):
-        return np.dot(A,x)
-
-    e,c = eigs(matvec,N,neig,Adiag=np.diag(A))
-    print("# davidson evals =", e)
-
-    e,c = diagonalize_asymm(A)
-    print("# numpy evals =", e.real[:neig])

@@ -191,12 +191,3 @@ def dump_mo(mol, c, label=None,
     dump_rec(mol.stdout, c, label, None, ncol, digits, start)
 
 del (BASE)
-
-
-if __name__ == '__main__':
-    import sys
-    import numpy
-    c = numpy.random.random((16,16))
-    label = ['A%5d' % i for i in range(16)]
-    dump_tri(sys.stdout, c, label, 10, 2, 1)
-    dump_rec(sys.stdout, c, None, label, start=1)

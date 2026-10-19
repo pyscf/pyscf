@@ -671,30 +671,3 @@ def _init_cis_df_eris(cis, eris):
     log.timer_debug1("transforming DF-CIS integrals", *cput0)
 
     return eris
-
-
-if __name__ == "__main__":
-    from pyscf.pbc import gto, ci
-
-    cell = gto.Cell()
-    cell.atom = """
-    C 0.000000000000   0.000000000000   0.000000000000
-    C 1.685068664391   1.685068664391   1.685068664391
-    """
-    cell.basis = "gth-szv"
-    cell.pseudo = "gth-pade"
-    cell.a = """
-    0.000000000, 3.370137329, 3.370137329
-    3.370137329, 0.000000000, 3.370137329
-    3.370137329, 3.370137329, 0.000000000"""
-    cell.unit = "B"
-    cell.verbose = 7
-    cell.build()
-
-    # Running HF and MP2 with 1x1x2 Monkhorst-Pack k-point mesh
-    kmf = scf.KRHF(cell, kpts=cell.make_kpts([1, 1, 2]), exxdiv=None)
-    ehf = kmf.kernel()
-
-    mycis = ci.KCIS(kmf)
-    e_cis, v_cis = mycis.kernel(nroots=1, kptlist=[0])
-    print(e_cis[0] - 0.2239201285373249)

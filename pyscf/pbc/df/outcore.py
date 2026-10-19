@@ -208,7 +208,7 @@ def _aux_e2(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', c
         nao_pair = nij
 
     buflen = max(8, int(max_memory*.47e6/16/(nkptij*ni*nj*comp)))
-    auxdims = int(aux_loc[shls_slice[4]+1:shls_slice[5]+1] - aux_loc[shls_slice[4]:shls_slice[5]])
+    auxdims = aux_loc[shls_slice[4]+1:shls_slice[5]+1] - aux_loc[shls_slice[4]:shls_slice[5]]
     auxranges = balance_segs(auxdims, buflen)
     buflen = max([x[2] for x in auxranges])
     int3c = wrap_int3c(cell, auxcell, intor, 's1', comp, kptij_lst)

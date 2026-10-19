@@ -244,13 +244,3 @@ def cart2spinor(l):
     '''Cartesian to spinor for angular moment l'''
     from pyscf import gto
     return gto.cart2spinor_l(l)
-
-
-if __name__ == '__main__':
-    for l in range(3):
-        print(sph_pure2real(l))
-        print(sph_real2pure(l))
-
-    for l in range(3):
-        print(sph2spinor(l)[0])
-        print(sph2spinor(l)[1])

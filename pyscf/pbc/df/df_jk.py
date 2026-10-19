@@ -1115,7 +1115,12 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     dms = _format_dms(dm, kpt.reshape(1, 3))
     nset, _, nao = dms.shape[:3]
     dms = dms.reshape(nset,nao,nao)
-    j_real = gamma_point(kpt)
+    # At Gamma, the AO integrals are real and symmetric in the density indices.
+    # For Hermitian dm, its imaginary part is antisymmetric and cancels in J.
+    # A complex transition dm can have an imaginary symmetric part, which
+    # contributes to J and must be retained even at Gamma.
+    dm_is_real = not numpy.iscomplexobj(dm)
+    j_real = (hermi == 1 or dm_is_real) and gamma_point(kpt)
     kptii = numpy.asarray((kpt,kpt))
     dmsR = dms.real.reshape(nset,nao,nao)
     dmsI = dms.imag.reshape(nset,nao,nao)
@@ -1496,57 +1501,3 @@ def _ewald_exxdiv_for_G0(cell, kpts, dms, vk, kpts_band=None):
             for kp in member(kpt, kpts_band.reshape(-1,3)):
                 for i,dm in enumerate(dms):
                     vk[i,kp] += madelung * reduce(numpy.dot, (s[k], dm[k], s[k]))
-
-
-if __name__ == '__main__':
-    import pyscf.pbc.gto as pgto
-    import pyscf.pbc.scf as pscf
-
-    L = 5.
-    n = 11
-    cell = pgto.Cell()
-    cell.a = numpy.diag([L,L,L])
-    cell.mesh = numpy.array([n,n,n])
-
-    cell.atom = '''C    3.    2.       3.
-                   C    1.    1.       1.'''
-    #cell.basis = {'He': [[0, (1.0, 1.0)]]}
-    #cell.basis = '631g'
-    #cell.basis = {'He': [[0, (2.4, 1)], [1, (1.1, 1)]]}
-    cell.basis = 'ccpvdz'
-    cell.verbose = 0
-    cell.build(0,0)
-    cell.verbose = 5
-
-    mf = pscf.RHF(cell)
-    dm = mf.get_init_guess()
-    auxbasis = 'weigend'
-    #from pyscf import df
-    #auxbasis = df.addons.aug_etb_for_dfbasis(cell, beta=1.5, start_at=0)
-    #from pyscf.pbc.df import mdf
-    #mf.with_df = mdf.MDF(cell)
-    #mf.auxbasis = auxbasis
-    mf = density_fit(mf, auxbasis)
-    mf.with_df.mesh = (n,) * 3
-    vj = mf.with_df.get_jk(dm, exxdiv=mf.exxdiv, with_k=False)[0]
-    print(numpy.einsum('ij,ji->', vj, dm), 'ref=46.698942480902062')
-    vj, vk = mf.with_df.get_jk(dm, exxdiv=mf.exxdiv)
-    print(numpy.einsum('ij,ji->', vj, dm), 'ref=46.698942480902062')
-    print(numpy.einsum('ij,ji->', vk, dm), 'ref=37.348163681114187')
-    print(numpy.einsum('ij,ji->', mf.get_hcore(cell), dm), 'ref=-75.5758086593503')
-
-    kpts = cell.make_kpts([2]*3)[:4]
-    from pyscf.pbc.df import DF
-    with_df = DF(cell, kpts)
-    with_df.auxbasis = 'weigend'
-    with_df.mesh = [n] * 3
-    dms = numpy.array([dm]*len(kpts))
-    vj, vk = with_df.get_jk(dms, exxdiv=mf.exxdiv, kpts=kpts)
-    print(numpy.einsum('ij,ji->', vj[0], dms[0]) - 46.69784067248350)
-    print(numpy.einsum('ij,ji->', vj[1], dms[1]) - 46.69814992718212)
-    print(numpy.einsum('ij,ji->', vj[2], dms[2]) - 46.69526120279135)
-    print(numpy.einsum('ij,ji->', vj[3], dms[3]) - 46.69570739526301)
-    print(numpy.einsum('ij,ji->', vk[0], dms[0]) - 37.26974254415191)
-    print(numpy.einsum('ij,ji->', vk[1], dms[1]) - 37.27001407288309)
-    print(numpy.einsum('ij,ji->', vk[2], dms[2]) - 37.27000643285160)
-    print(numpy.einsum('ij,ji->', vk[3], dms[3]) - 37.27010299675364)

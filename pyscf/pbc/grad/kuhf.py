@@ -101,23 +101,3 @@ class Gradients(krhf_grad.GradientsBase):
     as_scanner = krhf_grad.Gradients.as_scanner
     _finalize = krhf_grad.Gradients._finalize
     kernel = krhf_grad.Gradients.kernel
-
-
-
-if __name__=='__main__':
-    from pyscf.pbc import scf
-    cell = gto.Cell()
-    cell.atom = [['He', [0.0, 0.0, 0.0]], ['He', [1, 1.1, 1.2]]]
-    cell.basis = 'gth-dzv'
-    cell.a = np.eye(3) * 3
-    cell.unit='bohr'
-    cell.pseudo='gth-pade'
-    cell.verbose=4
-    cell.build()
-
-    nmp = [1,1,3]
-    kpts = cell.make_kpts(nmp)
-    kmf = scf.KUHF(cell, kpts, exxdiv=None)
-    kmf.kernel()
-    mygrad = Gradients(kmf)
-    mygrad.kernel()

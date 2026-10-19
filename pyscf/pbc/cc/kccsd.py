@@ -803,31 +803,3 @@ class _IMDS:
 
 
 scf.kghf.KGHF.CCSD = lib.class_as_method(KGCCSD)
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-
-    cell = gto.Cell()
-    cell.atom='''
-    C 0.000000000000   0.000000000000   0.000000000000
-    C 1.685068664391   1.685068664391   1.685068664391
-    '''
-    cell.basis = 'gth-szv'
-    cell.pseudo = 'gth-pade'
-    cell.a = '''
-    0.000000000, 3.370137329, 3.370137329
-    3.370137329, 0.000000000, 3.370137329
-    3.370137329, 3.370137329, 0.000000000'''
-    cell.unit = 'B'
-    cell.verbose = 5
-    cell.build()
-
-    # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
-    kmf = scf.KRHF(cell, kpts=cell.make_kpts([1,1,2]), exxdiv=None)
-    ehf = kmf.kernel()
-    kmf = scf.addons.convert_to_ghf(kmf)
-
-    mycc = KGCCSD(kmf)
-    ecc, t1, t2 = mycc.kernel()
-    print(ecc - -0.155298393321855)

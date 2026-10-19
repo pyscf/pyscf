@@ -179,7 +179,7 @@ class GWAC(GWAC_mol):
             Lpq = None
             Lpq = nr_e2(LpqR.reshape(-1, nao, nao), mo, ijslice, aosym='s1', mosym='s1', out=Lpq)
             eri_3d.append(Lpq)
-        eri_3d = np.vstack(eri_3d).reshape(-1, nislice, njslice)
+        eri_3d = np.vstack(eri_3d).reshape(naux, nislice, njslice)  # Empty orbital blocks are valid.
 
         return eri_3d
 
