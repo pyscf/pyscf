@@ -486,12 +486,13 @@ def bse_davidson(
         Laa_diag = [np.diagonal(Laa[s], axis1=1, axis2=2) for s in range(nspin)]
         Lii_bar_diag = [np.diagonal(Lii_bar[s], axis1=0, axis2=2) for s in range(nspin)]
         v_iaia = [
-            2 / nspin * np.vecdot(Lia[s].reshape(-1, nocc[s] * nvir[s]).T, Lia[s].reshape(-1, nocc[s] * nvir[s]).T)
+            (2 / nspin * np.einsum('Pia,Pia->ia', Lia[s].conj(), Lia[s])).ravel()
             for s in range(nspin)
         ]
         Wiiaa = [(Lii_bar_diag[s].T @ Laa_diag[s]).reshape(nocc[s] * nvir[s]) for s in range(nspin)]
         Wiaia = [
-            np.vecdot(Lia_bar[s].reshape(-1, nocc[s] * nvir[s]).T, Lia[s].reshape(-1, nocc[s] * nvir[s]).T).reshape(
+            np.einsum('pi,pi->i', Lia_bar[s].reshape(-1, nocc[s] * nvir[s]).conj(),
+                      Lia[s].reshape(-1, nocc[s] * nvir[s])).reshape(
                 nocc[s] * nvir[s]
             )
             for s in range(nspin)

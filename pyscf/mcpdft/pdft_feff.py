@@ -198,15 +198,20 @@ def lazy_kernel(ot, dm1s, cascm2, c_dm1s, c_cascm2, mo_cas, hermi=1, max_memory=
 
     t0 = (logger.process_clock(), logger.perf_counter())
 
-    make_rho = tuple(ni._gen_rho_evaluator(ot.mol, dm1s[i, :, :], hermi) for i
-        in range(2))
-    make_crho = tuple(ni._gen_rho_evaluator(ot.mol, c_dm1s[i, :, :], hermi) for
-        i in range(2))
+    # Keep both spin densities together: slicing dm1s[i] drops its mo_coeff
+    # and mo_occ tags. With these tags, _gen_rho_evaluator uses eval_rho2
+    # (orbitals and occupations); without them it uses eval_rho (the AO
+    # density matrix). These equivalent expressions can differ by roundoff,
+    # which on-top second derivatives can amplify near sensitive density
+    # ratios. Preserve the tags here, as in kernel(), so the reference and
+    # optimized paths use the same density evaluation.
+    make_rho = ni._gen_rho_evaluator(ot.mol, dm1s, hermi)[0]
+    make_crho = ni._gen_rho_evaluator(ot.mol, c_dm1s, hermi)[0]
 
     for ao, mask, weight, coords in ni.block_loop(ot.mol, ot.grids, nao,
                                                   dens_deriv, max_memory):
-        rho = np.asarray([m[0](0, ao, mask, xctype) for m in make_rho])
-        crho = np.asarray([m[0](0, ao, mask, xctype) for m in make_crho])
+        rho = np.asarray([make_rho(i, ao, mask, xctype) for i in range(2)])
+        crho = np.asarray([make_crho(i, ao, mask, xctype) for i in range(2)])
         t0 = logger.timer(ot, 'untransformed density', *t0)
         Pi = get_ontop_pair_density(ot, rho, ao, cascm2, mo_cas, dens_deriv,
                                     mask)

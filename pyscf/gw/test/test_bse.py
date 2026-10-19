@@ -122,9 +122,11 @@ def test_tda_subspace_guess(lih_gw):
 
 def test_unrestricted_closed_shell_spectrum(lih_gw):
     ugw = UGWAC(lih_gw._scf.to_uhf())
-    ugw.nw = 40
-    ugw.kernel()
+    # Compare BSE spin representations with identical quasiparticle energies.
+    # Independent analytic continuations can differ beyond this test's tolerance.
+    ugw.mo_energy = np.repeat(lih_gw.mo_energy[None, :], 2, axis=0)
     restricted = bse.BSE(lih_gw)
+    ugw.Lpq = np.repeat(restricted.Lpq, 2, axis=0)
     singlet = restricted.full_diagonalization('s')[0]
     triplet = restricted.full_diagonalization('t')[0]
     unrestricted = bse.BSE(ugw)

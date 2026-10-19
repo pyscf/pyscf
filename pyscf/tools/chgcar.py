@@ -156,6 +156,7 @@ class CHGCAR(cubegen.Cube):
     '''  Read-write of the Vasp CHGCAR files  '''
     def __init__(self, cell, nx=60, ny=60, nz=60, resolution=RESOLUTION,
                  margin=BOX_MARGIN):
+        self.mol = cell
         if not isinstance(cell, pbcgto.cell.Cell):
             coord = cell.atom_coords()
             box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + margin*2
