@@ -92,3 +92,11 @@ mf_opt2._scf.exxdiv = None
 mf_opt3 = scf.KRHF(cell, kpts).density_fit().newton()
 mf_opt3.exxdiv = None
 # mf_opt3.kernel()
+
+# Internal stability probes rotations within the chosen spin restriction;
+# external stability probes the additional symmetry-breaking directions.
+# Use the undecorated, converged HF objects prepared above. KRKS/KUKS use
+# the same rhf_stability/uhf_stability interfaces with their DFT response.
+from pyscf.pbc.scf import stability
+stability.rhf_stability(krhf, internal=True, external=True)
+stability.uhf_stability(kuhf, internal=True, external=True)

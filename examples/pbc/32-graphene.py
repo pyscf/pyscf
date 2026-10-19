@@ -108,3 +108,7 @@ print(e)
 print('Timing (AFTDF) (FFTDF) (GDF)   (MDF)')
 print(t)
 
+# For constraints on localized-orbital populations (including IAOs), see
+# ../1-advanced/033-constrained_dft.py, which supports periodic references.
+# The deprecated pyscf.pbc.dft.cdft module only applies a fixed orbital bias;
+# it does not optimize a Lagrange multiplier to reach a target population.

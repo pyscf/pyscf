@@ -40,3 +40,20 @@ gcc = mf.to_ghf().CCSD().run()
 gcc.solve_lambda()
 print('UCCSD lambda blocks', len(ucc.l1), len(ucc.l2))
 print('GCCSD lambda shapes', gcc.l1.shape, gcc.l2.shape)
+
+# The same collinear RHF reference was converted above, so the lambda
+# amplitudes can be compared after unpacking the generalized spin orbitals.
+# orbspin records their actual ordering; do not assume alternating spins.
+from pyscf.cc import addons, uccsd_t_lambda
+orbspin = gcc.mo_coeff.orbspin
+l1a, l1b = addons.spin2spatial(gcc.l1, orbspin)
+l2aa, l2ab, l2bb = addons.spin2spatial(gcc.l2, orbspin)
+print('UCCSD/GCCSD alpha lambda difference', abs(l1a - ucc.l1[0]).max())
+print('UCCSD/GCCSD mixed-spin lambda difference', abs(l2ab - ucc.l2[1]).max())
+gl1 = addons.spatial2spin(ucc.l1, orbspin)
+print('Converted UCCSD/GCCSD lambda difference', abs(gl1 - gcc.l1).max())
+
+# Supply converged amplitudes and reuse MO integrals explicitly.
+ueris = ucc.ao2mo()
+conv, ul1, ul2 = uccsd_t_lambda.kernel(ucc, ueris, ucc.t1, ucc.t2)
+print('UCCSD(T) lambda converged', conv)

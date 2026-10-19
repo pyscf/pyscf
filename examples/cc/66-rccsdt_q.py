@@ -28,6 +28,10 @@ mycc1 = cc.RCCSDT(mf, compact_tamps=True)
 # from pyscf.data.elements import chemcore
 # mf = scf.RHF(mol).density_fit().run()
 # mycc1 = cc.RCCSDT(mf, frozen=chemcore(mol), compact_tamps=True)
+# mycc1.blksize = 2
+# mycc1.do_diis_max_t = False  # Exclude the highest-rank amplitudes from DIIS.
+# These options change memory/convergence behavior; DF and freezing core also
+# change the energy, so the reference values below would need updating.
 # mycc1.blksize_oovv = mycc1.blksize_oooo = 2  # Lower peak memory.
 mycc1.conv_tol = 1e-10
 mycc1.conv_tol_normt = 1e-8

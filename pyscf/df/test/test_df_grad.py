@@ -219,6 +219,21 @@ class KnownValues(unittest.TestCase):
                                        [fock], atol=1e-10)
         numpy.testing.assert_allclose(casdm2_util.gfock_dferi(mc), [c@fock@c.T], atol=1e-10)
 
+        # Unequal slices exercise the four distinct orbital spaces used in
+        # state-averaged response contractions, without assuming pair symmetry.
+        slices = (slice(0, 1), slice(1, 3), slice(0, 3), slice(1, 2))
+        orbitals = tuple(c[:, s] for s in slices)
+        sliced_dm2 = dm2[slices]
+        expected = numpy.einsum('ijkl,ijkl', eri[slices], sliced_dm2) * .5
+        result = casdm2_util.energy_elec_dferi(
+            mc, mo_cas=orbitals, casdm2=sliced_dm2)
+        numpy.testing.assert_allclose(result, [expected], atol=1e-10, rtol=0)
+        # Exchanging the two electron pairs must leave the contraction intact.
+        result = casdm2_util.energy_elec_dferi(
+            mc, mo_cas=orbitals[2:] + orbitals[:2],
+            casdm2=sliced_dm2.transpose(2, 3, 0, 1))
+        numpy.testing.assert_allclose(result, [expected], atol=1e-10, rtol=0)
+
 
 if __name__ == "__main__":
     print("Full Tests for df.grad")
