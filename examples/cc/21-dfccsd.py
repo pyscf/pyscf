@@ -59,3 +59,13 @@ print(e)
 print(e[0] - 0.16737533537691762)
 print(e[1] - 0.24027732497703608)
 print(e[2] - 0.50917096186773469)
+
+# Neutral excitations can reuse the same density-fitted RCCSD calculation.
+print('DF-RCCSD EE energies', mycc.eeccsd(nroots=1)[0])
+
+# UHF density fitting also supports UCCSD and IP/EA/EE-EOM-CCSD.
+umf = scf.UHF(mol).density_fit().run()
+ucc = cc.UCCSD(umf).run()
+print('DF-UCCSD correlation energy', ucc.e_corr)
+print('DF-UCCSD IP/EA/EE', ucc.ipccsd(nroots=1)[0],
+      ucc.eaccsd(nroots=1)[0], ucc.eeccsd(nroots=1)[0])

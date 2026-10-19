@@ -31,6 +31,11 @@ print(kpts)
 kmf = scf.KRHF(cell, kpts)
 kmf.kernel()
 
+# Generalized HF also accepts symmetry-reduced k-points, including time
+# reversal symmetry as requested when the k-point mesh was built above.
+kgmf = scf.KGHF(cell, kpts)
+kgmf.kernel()
+
 kmf = dft.KRKS(cell, kpts)
 kmf.xc = 'camb3lyp'
 kmf.kernel()

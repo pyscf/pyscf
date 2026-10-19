@@ -31,3 +31,12 @@ print(cc.l2.shape)
 #
 from pyscf.cc import ccsd_t_lambda_slow as ccsd_t_lambda
 conv, l1, l2 = ccsd_t_lambda.kernel(cc, cc.ao2mo(), cc.t1, cc.t2, tol=1e-8)
+
+# UCCSD and GCCSD solve their lambda equations through the same interface.
+# The spin-resolved UCCSD amplitudes are tuples; GCCSD uses spin orbitals.
+ucc = mf.to_uhf().CCSD().run()
+ucc.solve_lambda()
+gcc = mf.to_ghf().CCSD().run()
+gcc.solve_lambda()
+print('UCCSD lambda blocks', len(ucc.l1), len(ucc.l2))
+print('GCCSD lambda shapes', gcc.l1.shape, gcc.l2.shape)

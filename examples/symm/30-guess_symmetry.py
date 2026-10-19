@@ -6,6 +6,40 @@ from functools import reduce
 import numpy
 from pyscf import gto, symm, scf
 
+# The low-level detection API reports the point group and orientation before
+# Mole.build rotates coordinates into its symmetry-adapted frame.
+water_atoms = [['O', (1., 0., 0.)],
+               ['H', (0., -.757, .587)], ['H', (0., .757, .587)]]
+group, origin, axes = symm.geom.detect_symm(water_atoms)
+aligned_atoms = gto.format_atom(water_atoms, origin, axes)
+print('Water point group and equivalent atoms:', group,
+      symm.geom.symm_identical_atoms(group, aligned_atoms))
+water = gto.M(atom=aligned_atoms, basis='ccpvdz')
+_, irrep_ids = symm.basis.symm_adapted_basis(water, group)
+print('Symmetry-adapted basis irreps:', irrep_ids)
+
+# Linear molecules have their own symmetry-adapted basis construction.
+linear = gto.M(atom='H 0 0 -1; H 0 0 0; H 0 0 1',
+               basis='ccpvtz', charge=1)
+linear_group, linear_origin, linear_axes = symm.geom.detect_symm(linear._atom)
+_, linear_irreps = symm.basis.symm_adapted_basis(
+    linear, linear_group, linear_origin, linear_axes)
+print('Linear point group and basis irreps:', linear_group, linear_irreps)
+
+# For a high-symmetry structure, subgroup maps the detected group to the
+# supported Abelian subgroup used for orbital symmetry labels.
+octahedron = [['H', xyz] for xyz in [(0, 0, 0), (1, 0, 0), (-1, 0, 0),
+                                     (0, 1, 0), (0, -1, 0), (0, 0, 1),
+                                     (0, 0, -1)]]
+high_group, _, high_axes = symm.geom.detect_symm(octahedron)
+print('Detected group and Abelian subgroup:', high_group,
+      symm.geom.subgroup(high_group, high_axes)[0])
+
+# route selects orbital indices whose irrep product matches a target symmetry.
+# The integer irrep IDs use bitwise XOR for the direct product in D2h.
+orbsym = [0, 3, 0, 2, 5, 6]
+print('Three-orbital route to irrep 7:', symm.route(7, 3, orbsym))
+
 '''
 Pseudo symmetry for molecules which are slightly distorted from the symmetric
 geometry.

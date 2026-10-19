@@ -24,6 +24,13 @@ mf.nuc_grad_method().run()
 mf.xc = 'scan'
 mf.kernel()
 
+# The per-object setting also works for open-shell restricted KS.
+open_shell = gto.M(atom='O 0 0 0', basis='sto3g', spin=2)
+roks = dft.ROKS(open_shell)
+roks._numint.libxc = dft.xcfun
+roks.xc = 'b88,lyp'
+roks.kernel()
+
 #
 # Scheme 2: Change the default XC library globally.  All DFT calculations will
 # call xcfun for XC functional values.

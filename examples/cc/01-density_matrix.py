@@ -55,3 +55,29 @@ conv, l1, l2 = ccsd_t_lambda.kernel(mycc, eris, mycc.t1, mycc.t2)
 dm1 = ccsd_t_rdm.make_rdm1(mycc, mycc.t1, mycc.t2, l1, l2, eris=eris)
 dm2 = ccsd_t_rdm.make_rdm2(mycc, mycc.t1, mycc.t2, l1, l2, eris=eris)
 
+# Open-shell UCCSD returns alpha/beta 1-RDMs and aa/ab/bb 2-RDMs.
+# GCCSD instead returns spin-orbital arrays, including with GHF references.
+ucc = cc.UCCSD(mf.to_uhf()).run()
+ucc.solve_lambda()
+dm1a, dm1b = ucc.make_rdm1()
+dm2aa, dm2ab, dm2bb = ucc.make_rdm2()
+gcc = cc.GCCSD(mf.to_ghf()).run()
+gcc.solve_lambda()
+gdm1, gdm2 = gcc.make_rdm1(), gcc.make_rdm2()
+print('UCCSD density shapes', dm1a.shape, dm1b.shape, dm2ab.shape)
+print('GCCSD density shapes', gdm1.shape, gdm2.shape)
+
+# Perturbative triples also contribute to UCCSD(T) and GCCSD(T) RDMs.
+# Their lambda and RDM routines use the same amplitudes and MO integrals.
+from pyscf.cc import uccsd_t_lambda, uccsd_t_rdm
+from pyscf.cc import gccsd_t_lambda, gccsd_t_rdm
+ueris = ucc.ao2mo()
+_, ul1, ul2 = uccsd_t_lambda.kernel(ucc, ueris)
+udm1 = uccsd_t_rdm.make_rdm1(ucc, ucc.t1, ucc.t2, ul1, ul2, ueris)
+udm2 = uccsd_t_rdm.make_rdm2(ucc, ucc.t1, ucc.t2, ul1, ul2, ueris)
+geris = gcc.ao2mo()
+_, gl1, gl2 = gccsd_t_lambda.kernel(gcc, geris)
+gdm1_t = gccsd_t_rdm.make_rdm1(gcc, gcc.t1, gcc.t2, gl1, gl2, geris)
+gdm2_t = gccsd_t_rdm.make_rdm2(gcc, gcc.t1, gcc.t2, gl1, gl2, geris)
+print('UCCSD(T) and GCCSD(T) RDM shapes',
+      udm1[0].shape, udm2[1].shape, gdm1_t.shape, gdm2_t.shape)

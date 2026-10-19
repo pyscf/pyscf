@@ -30,6 +30,14 @@ mf = mol.RHF().run()
 # Option 1: Utilize the dfmp2.DFMP2 implementation via the mf.DFMP2 function
 mf.DFMP2().run()
 
+# Select an auxiliary basis and freeze the lowest occupied orbital.
+from pyscf import df
+pt = mf.DFMP2()
+pt.with_df = df.DF(mol)
+pt.with_df.auxbasis = 'weigend'
+pt.frozen = 1
+pt.run()
+
 # When mean-field calculation is a density fitting HF method, the .DFMP2()
 # method is identical to the standard .MP2 method
 mf = mf.density_fit().run()

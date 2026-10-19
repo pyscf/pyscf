@@ -71,3 +71,14 @@ mf.irrep_nelec = {'s+0': 7,
                   'd-2': 1, 'd-1': 1, 'd+0': 1, 'd+1': 1, 'd+2': 1}
 mf.run()
 mf.analyze()
+
+# GHF supports the same irrep occupation constraint. For an open-shell O2-
+# calculation, one electron can be assigned explicitly to A1u:
+mol = gto.M(atom='O 0 0 0; O 0 0 1', basis='ccpvdz',
+            symmetry=True, charge=-1, spin=1)
+mf = scf.GHF(mol)
+mf.irrep_nelec['A1u'] = 1
+mf.kernel()
+# Canonicalization retains the symmetry labels on the GHF orbitals.
+mf.canonicalize(mf.mo_coeff, mf.mo_occ)
+mf.analyze()

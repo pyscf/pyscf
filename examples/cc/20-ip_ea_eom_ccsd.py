@@ -32,6 +32,17 @@ eS = mycc.eomee_ccsd_singlet(nroots=1)[0]
 # S->T excitation
 eT = mycc.eomee_ccsd_triplet(nroots=1)[0]
 
+# The reference Python RCCSD implementation also exposes perturbative
+# EOM-CCSD* corrections from matched left and right eigenvectors.
+from pyscf.cc import rccsd_slow
+slowcc = rccsd_slow.RCCSD(mf).run()
+eip, rip = slowcc.ipccsd(nroots=1)
+_, lip = slowcc.ipccsd(nroots=1, left=True)
+eea, rea = slowcc.eaccsd(nroots=1)
+_, lea = slowcc.eaccsd(nroots=1, left=True)
+print('IP/EA-EOM-CCSD*', slowcc.ipccsd_star_contract(eip, rip, lip),
+      slowcc.eaccsd_star_contract(eea, rea, lea))
+
 
 # Triplet
 

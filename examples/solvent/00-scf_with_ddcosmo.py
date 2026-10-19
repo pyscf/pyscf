@@ -30,4 +30,14 @@ from pyscf import solvent
 mf = mf.ddCOSMO()
 # Adjust solvent model by modifying the attribute .with_solvent
 mf.with_solvent.eps = 32.613  # methanol dielectric constant
+# Set eps = -1 for the conductor limit of the dielectric model.
+# mf.with_solvent.eps = -1
 mf.run()
+
+# The solvent object also accepts a density matrix directly and returns the
+# solvation energy together with its AO potential matrix. This is useful when
+# incorporating the solvent response in a custom SCF procedure.
+dm = scf.RHF(mol).run().make_rdm1()
+ddpcm = solvent.ddPCM(mol)
+e_solvent, v_solvent = ddpcm.kernel(dm)
+print('ddPCM energy and potential shape:', e_solvent, v_solvent.shape)

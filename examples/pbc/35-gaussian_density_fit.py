@@ -46,6 +46,23 @@ auxbasis = {'C': ('weigend', [[2, (0.5, 1)]])}
 mf = scf.RHF(cell).density_fit(auxbasis=auxbasis)
 mf.kernel()
 
+# The fitting objects can also build Coulomb (J) and exchange (K) matrices
+# directly from a density matrix, at Gamma or over a k-point mesh.
+dm = mf.make_rdm1()
+kpts_jk = cell.make_kpts([2, 1, 1])
+dm_k = np.asarray([dm] * len(kpts_jk))
+for fitting_class in (df.GDF, df.MDF):
+    fitting = fitting_class(cell)
+    fitting.auxbasis = auxbasis
+    vj, vk = fitting.get_jk(dm, exxdiv=mf.exxdiv)
+    print(fitting_class.__name__, 'Gamma J/K:',
+          np.einsum('ij,ji->', vj, dm), np.einsum('ij,ji->', vk, dm))
+
+    fitting = fitting_class(cell, kpts_jk)
+    fitting.auxbasis = auxbasis
+    vj, vk = fitting.get_jk(dm_k, kpts=kpts_jk, exxdiv=mf.exxdiv)
+    print(fitting_class.__name__, 'k-point J/K shapes:', vj.shape, vk.shape)
+
 
 #
 # df.aug_etb is a shortcut function to create even-tempered gaussian basis
@@ -112,4 +129,3 @@ for LpqR, LpqI, sign in a_gdf.sr_loop((kpt,kpt), compact=False):
 
 from pyscf import lib
 eri = lib.einsum('lpq,lrs->pqrs', A_lpq, A_lpq)
-

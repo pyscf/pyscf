@@ -8,6 +8,7 @@ In most scenario, it should be used with pseudo potential.
 '''
 
 from pyscf.pbc import gto, scf, dft
+from pyscf.pbc import grad
 import numpy
 
 cell = gto.M(
@@ -34,9 +35,29 @@ kpts = cell.make_kpts(nk)
 kmf = scf.KRHF(cell, kpts)
 kmf.kernel()
 
+# A direct generalized HF calculation at one selected k-point. This also
+# allows spin mixing, unlike converting a converged restricted solution.
+ghf = scf.GHF(cell, kpt=kpts[7])
+ghf.kernel()
+
+# Generalized HF can also sample a full k-point mesh.
+kgmf = scf.KGHF(cell, cell.make_kpts([2, 1, 1]))
+kgmf.kernel()
+# For scalar relativistic one-electron terms, use kgmf.sfx2c1e().kernel().
+
+# Analytical k-point HF gradients are available for both spin restrictions.
+grad_kpts = cell.make_kpts([1, 1, 3])
+krhf = scf.KRHF(cell, grad_kpts, exxdiv=None).run()
+print('KRHF gradients:', grad.krhf.Gradients(krhf).kernel())
+kuhf = scf.KUHF(cell, grad_kpts, exxdiv=None).run()
+print('KUHF gradients:', grad.kuhf.Gradients(kuhf).kernel())
+
 kmf = dft.KRKS(cell, kpts)
 # Turn to the atomic grids if you like
 kmf.grids = dft.gen_grid.BeckeGrids(cell)
+kmf.grids.build()
+# The quadrature weights cover one unit cell; their sum approaches its volume.
+print('Becke grid weight sum and cell volume:', kmf.grids.weights.sum(), cell.vol)
 kmf.xc = 'm06,m06'
 kmf.kernel()
 
@@ -47,6 +68,10 @@ kmf.kernel()
 #
 mf = scf.KRHF(cell, kpts).newton()
 mf.kernel()
+
+# The second-order solver also works with unrestricted k-point HF.
+umf = scf.KUHF(cell, cell.make_kpts([2, 1, 1])).newton()
+umf.kernel()
 
 # When you are using the newton solver for the pbc mean-field, make sure
 # you are setting the same exxdiv for mean-field object before and after decorating the mean-field
