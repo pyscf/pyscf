@@ -25,6 +25,18 @@ from pyscf.fci import direct_spin1_cyl_sym
 from pyscf import mcscf
 from pyscf.symm.basis import linearmole_irrep2momentum
 
+def _sigma_v_parity(solver, ci):
+    '''Expectation value of the sigma_v swap for a converged CI vector'''
+    s_idx = np.hstack(solver.sym_allowed_idx)
+    c = np.asarray(ci).ravel()[s_idx]
+    swap_idx, swap_sign = direct_spin1_cyl_sym._gen_sigma_v_swap(
+        solver.nelec, solver.orbsym, solver.sym_allowed_idx)
+    sv = np.zeros_like(c)
+    ok = swap_idx >= 0
+    sv[ok] = swap_sign[ok] * c[swap_idx[ok]]
+    return c.dot(sv) / c.dot(c)
+
+
 class KnownValues(unittest.TestCase):
     def test_contract_2e(self):
         mol = gto.M(
@@ -238,7 +250,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(casci((2, 4)), -149.56827649707, 9)
 
     # issue 3031
-    def test_sigma_wfnsym(self):
+    def test_sigma_irreps(self):
         # The D2h subgroup cannot distinguish the two sigma_v components of a
         # Sigma state of a linear molecule (Sigma+ and Sigma- share the same
         # subgroup irrep); only the cylindrical-symmetry solver resolves them
@@ -246,16 +258,28 @@ class KnownValues(unittest.TestCase):
         mol = gto.M(atom='O 0 0 0; O 0 0 1.1', basis='ccpvdz',
                     symmetry=True, spin=2)
         mf = scf.RHF(mol).run()
+        ref = {'A1g': (-148.559637618, +1.),  # Sigma_g+
+               'A2g': (-149.655458293, -1.),  # Sigma_g-
+               'A1u': (-149.356508884, +1.),  # Sigma_u+
+               'A2u': (-149.135407728, -1.)}  # Sigma_u-
+        for wfnsym, (eref, parity) in ref.items():
+            mc = mcscf.CASCI(mf, 8, 12)
+            mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
+            mc.fcisolver.wfnsym = wfnsym
+            self.assertAlmostEqual(mc.kernel()[0], eref, 7)
+            self.assertAlmostEqual(_sigma_v_parity(mc.fcisolver, mc.ci),
+                                   parity, 6)
+            avg, var = direct_spin1_cyl_sym.angular_momentum(
+                mc.ci, mc.ncas, mc.nelecas, mc.fcisolver.orbsym)
+            self.assertAlmostEqual(avg, 0, 6)
+            self.assertAlmostEqual(var, 0, 6)
 
-        mc = mcscf.CASCI(mf, 8, 12)
-        mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
-        mc.fcisolver.wfnsym = 'A2u'
-        self.assertAlmostEqual(mc.kernel()[0], -149.135407728053, 7)
-
-        mc = mcscf.CASCI(mf, 8, 12)
-        mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
-        mc.fcisolver.wfnsym = 'A2g'
-        self.assertAlmostEqual(mc.kernel()[0], -149.655458292535, 7)
+    def test_sigma_spin(self):
+        # Sigma states of any spin multiplicity: Sz is fixed by nelec and the
+        # spin penalty selects the requested S.
+        mol = gto.M(atom='O 0 0 0; O 0 0 1.1', basis='ccpvdz',
+                    symmetry=True, spin=2)
+        mf = scf.RHF(mol).run()
 
         mc = mcscf.CASSCF(mf, 8, 12)
         mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
@@ -271,6 +295,44 @@ class KnownValues(unittest.TestCase):
         mc.fix_spin_(ss=6)
         mc.fcisolver.wfnsym = 'A2u'
         self.assertAlmostEqual(mc.kernel()[0], -148.920732172369, 6)
+        ss = mc.fcisolver.spin_square(mc.ci, mc.ncas, mc.nelecas)[0]
+        self.assertAlmostEqual(ss, 6, 5)
+
+    def test_sigma_coov(self):
+        # Cinfv: A1 is Sigma+, A2 is Sigma-
+        mol = gto.M(atom='C 0 0 0; O 0 0 1.2', basis='ccpvdz',
+                    symmetry=True)
+        mf = scf.RHF(mol).run()
+        for wfnsym, eref, parity in [('A1', -112.788251706, +1.),
+                                     ('A2', -112.459070348, -1.)]:
+            mc = mcscf.CASCI(mf, 6, 6)
+            mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
+            mc.fcisolver.wfnsym = wfnsym
+            self.assertAlmostEqual(mc.kernel()[0], eref, 7)
+            self.assertAlmostEqual(_sigma_v_parity(mc.fcisolver, mc.ci),
+                                   parity, 6)
+            avg, var = direct_spin1_cyl_sym.angular_momentum(
+                mc.ci, mc.ncas, mc.nelecas, mc.fcisolver.orbsym)
+            self.assertAlmostEqual(avg, 0, 6)
+            self.assertAlmostEqual(var, 0, 6)
+
+    def test_pi_delta(self):
+        # Pi and Delta components are selected by their angular momentum M
+        mol = gto.M(atom='O 0 0 0; O 0 0 1.1', basis='ccpvdz',
+                    symmetry=True, spin=2)
+        mf = scf.RHF(mol).run()
+        for wfnsym, eref, mom in [('E1ux', -149.113211854, 1),
+                                  ('E1uy', -149.113211854, -1),
+                                  ('E2ux', -149.362283330, 2),
+                                  ('E2uy', -149.362283330, -2)]:
+            mc = mcscf.CASCI(mf, 8, 12)
+            mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
+            mc.fcisolver.wfnsym = wfnsym
+            self.assertAlmostEqual(mc.kernel()[0], eref, 7)
+            avg, var = direct_spin1_cyl_sym.angular_momentum(
+                mc.ci, mc.ncas, mc.nelecas, mc.fcisolver.orbsym)
+            self.assertAlmostEqual(avg, mom, 6)
+            self.assertAlmostEqual(var, 0, 6)
 
 if __name__ == "__main__":
     print("Full Tests for spin1-symm")

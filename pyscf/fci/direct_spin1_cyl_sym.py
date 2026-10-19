@@ -53,6 +53,27 @@ from pyscf import __config__
 libfci = direct_spin1.libfci
 
 
+def angular_momentum(fcivec, norb, nelec, orbsym):
+    '''Expectation value and variance of the total orbital angular momentum
+
+    M = sum_i m_i over the occupied spin orbitals, for a CI vector in the full
+    (na, nb) determinant space (e.g. as returned by :meth:`FCISolver.kernel`).
+    The variance vanishes when the CI vector is an eigenstate of M.
+
+    Returns (M, var(M)).
+    '''
+    neleca, nelecb = direct_spin1._unpack_nelec(nelec)
+    strsa = cistring.gen_strings4orblist(range(norb), neleca)
+    strsb = cistring.gen_strings4orblist(range(norb), nelecb)
+    a_l = _strs_angular_momentum(strsa, orbsym)
+    b_l = _strs_angular_momentum(strsb, orbsym)
+    c = np.asarray(fcivec).ravel().reshape(strsa.size, strsb.size)
+    p = c**2
+    m = a_l[:, None] + b_l[None, :]
+    avg = (p * m).sum() / p.sum()
+    return avg, (p * (m - avg)**2).sum() / p.sum()
+
+
 def _strs2addr(strs, nelec, norb):
     '''Address of each string in the (deterministic) cistring ordering,
     computed with the combination ranking, vectorized over all strings'''
