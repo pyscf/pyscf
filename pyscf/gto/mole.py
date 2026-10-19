@@ -702,6 +702,28 @@ def format_ecp(ecp_tab):
                   ((exp_1, c_1),  # for r^2
                    ...))))),
        ...}
+
+    For the scalar ECP, l=-1 denotes the local (UL) potential; l>=0 denotes a
+    semilocal channel with angular projector `\sum_m |lm><lm|`.
+
+    Relativistic ECPs may also include the spin-orbit operator
+
+    H^{\mathrm{SO}} = \hat{\mathbf{s}} \cdot \sum_l
+        2/(2l+1) U_SO(r) \sum_{mm'} |lm><lm|\hat{\mathbf{l}} |lm'><lm'|
+
+    See more details in NWChem ECP overview (https://nwchemgit.github.io/ECP.html#overview).
+    The radial SOC potential, 2/(2l+1) U_SO(r), is fit into Gaussians.
+    These fitting coefficients are stored in the third column of each Gaussian
+    term, alongside the scalar coefficient::
+
+        {atom: (nelec,
+                ((l, (((exp_1, c_1, c_soc_1), ...),  # r^0
+                      ((exp_1, c_1, c_soc_1), ...),  # r^1
+                      ((exp_1, c_1, c_soc_1), ...),  # r^2
+                      ...)),
+
+    The scalar and SOC coefficients share the exponent and radial order.
+    `c_soc` already includes the factor 2/(2*l+1).
     '''
     fmt_ecp = {}
     for atom, atom_ecp in ecp_tab.items():
@@ -721,7 +743,8 @@ def format_ecp(ecp_tab):
     return fmt_ecp
 
 def format_pseudo(pseudo_tab):
-    r'''Convert the input :attr:`pseudo` (dict) to the internal data format::
+    r'''Convert the input :attr:`pseudo` (dict) to the internal data format. The
+    scalar potential is structured as::
 
        { atom: ( (nelec_s, nele_p, nelec_d, ...),
                 rloc, nexp, (cexp_1, cexp_2, ..., cexp_nexp),
@@ -734,6 +757,27 @@ def format_pseudo(pseudo_tab):
                 ... ) )
                 )
         ... }
+
+    GTH potentials with spin-orbit coupling (SOC) data use a two-item header
+    (nproj_types, 'SOC') at index 4 and append a SOC matrix kproj to each
+    angular-momentum channel::
+
+       { atom: ( (nelec_s, nele_p, nelec_d, ...),
+                rloc, nexp, (cexp_1, cexp_2, ..., cexp_nexp),
+                (nproj_types, 'SOC'),
+                (r1, nproj1, ( (hproj1[1,1], hproj1[1,2], ..., hproj1[1,nproj1]),
+                               (hproj1[2,1], hproj1[2,2], ..., hproj1[2,nproj1]),
+                               ...
+                               (hproj1[nproj1,1], hproj1[nproj1,2], ...        ) ),
+                             ( (kproj1[1,1], kproj1[1,2], ..., kproj1[1,nproj1]),
+                               (kproj1[2,1], kproj1[2,2], ..., kproj1[2,nproj1]),
+                               ...
+                               (kproj1[nproj1,1], kproj1[nproj1,2], ...        ) )),
+                ... ) )
+                )
+        ... }
+
+    Each kproj is a symmetric matrix, with the same shape as hproj in the same channel.
 
     Args:
         pseudo_tab : dict
