@@ -25,6 +25,7 @@ from pyscf import dft
 from pyscf import ao2mo
 from pyscf import df
 from pyscf import mcscf
+from pyscf.df.grad import casdm2_util
 
 def setUpModule():
     global mol
@@ -201,6 +202,23 @@ class KnownValues(unittest.TestCase):
         mc = mcscf.CASSCF (mf.density_fit(),8,6).state_average_([.5,.5]).run()
         g1 = mc.nuc_grad_method ().kernel (state=1)
         self.assertAlmostEqual(abs(gref - g1).max(), 0, 4)
+
+    def test_cas_density_energy_and_generalized_fock(self):
+        mol = gto.M(atom='Li 0 0 0; H 0 0 1.6', basis='sto-3g', verbose=0)
+        mf = scf.RHF(mol).density_fit(auxbasis='weigend').run()
+        mc = mcscf.CASCI(mf, 3, 2).run()
+        c = mc.mo_coeff[:, mc.ncore:mc.ncore+mc.ncas]
+        dm2 = mc.fcisolver.make_rdm12(mc.ci, mc.ncas, mc.nelecas)[1]
+        eri = mc.with_df.ao2mo(c, compact=False).reshape((mc.ncas,)*4)
+        energy = numpy.einsum('ijkl,ijkl', eri, dm2)*.5
+        fock = numpy.einsum('iklm,jklm->ij', eri, dm2)
+        for orbitals in (c, (c, c), (c, c, c, c)):
+            numpy.testing.assert_allclose(casdm2_util.energy_elec_dferi(mc, mo_cas=orbitals),
+                                       [energy], atol=1e-10)
+            numpy.testing.assert_allclose(casdm2_util.gfock_dferi(mc, mo_cas=orbitals, ao_basis=False),
+                                       [fock], atol=1e-10)
+        numpy.testing.assert_allclose(casdm2_util.gfock_dferi(mc), [c@fock@c.T], atol=1e-10)
+
 
 if __name__ == "__main__":
     print("Full Tests for df.grad")

@@ -55,7 +55,7 @@ class KnownValues(unittest.TestCase):
     def test_gccsd(self):
         self.assertAlmostEqual(gcc1.e_corr, -0.10805861695870976, 6)
 
-    def test_frozen(self):
+    def test_frozen_high_cost(self):
         mol = gto.Mole()
         mol.atom = [['O', (0.,   0., 0.)],
                     ['O', (1.21, 0., 0.)]]

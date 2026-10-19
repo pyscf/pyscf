@@ -18,41 +18,46 @@
 
 import unittest
 import numpy as np
+from scipy.linalg import eigh
 from pyscf.lib.misc import finger
 from pyscf.pbc import gto
 from pyscf.pbc import scf
 from pyscf.pbc.scf import khf, kuhf
 from pyscf.pbc.lib import kpts as libkpts
 
-def setUpModule():
-    global cell, cell1, kpts0, kmf
-    cell = gto.Cell()
-    cell.atom = """
-        Si  0.0 0.0 0.0
-        Si  1.3467560987 1.3467560987 1.3467560987
-    """
-    cell.a = [[0.0, 2.6935121974, 2.6935121974],
-              [2.6935121974, 0.0, 2.6935121974],
-              [2.6935121974, 2.6935121974, 0.0]]
-    cell.basis = 'gth-szv'
-    cell.pseudo  = 'gth-pade'
-    cell.mesh = [20,] * 3
-    cell.space_group_symmetry = True
-    cell.build()
 
-    cell1 = cell.copy()
-    cell1.build(symmorphic=True)
-
-    kpts0 = cell.make_kpts([3,3,3])
-    kmf = scf.KRKS(cell, kpts0)
-    kmf.max_cycle=1
-    kmf.kernel()
-
-def tearDownModule():
-    global cell, cell1, kpts0, kmf
-    del cell, cell1, kpts0, kmf
 
 class KnownValues(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        global cell, cell1, kpts0, kmf
+        cell = gto.Cell()
+        cell.atom = """
+            Si  0.0 0.0 0.0
+            Si  1.3467560987 1.3467560987 1.3467560987
+        """
+        cell.a = [[0.0, 2.6935121974, 2.6935121974],
+                  [2.6935121974, 0.0, 2.6935121974],
+                  [2.6935121974, 2.6935121974, 0.0]]
+        cell.basis = 'gth-szv'
+        cell.pseudo  = 'gth-pade'
+        cell.mesh = [20,] * 3
+        cell.space_group_symmetry = True
+        cell.build()
+
+        cell1 = cell.copy()
+        cell1.build(symmorphic=True)
+
+        kpts0 = cell.make_kpts([3,3,3])
+        kmf = scf.KRKS(cell, kpts0)
+        kmf.max_cycle=1
+        kmf.kernel()
+
+    @classmethod
+    def tearDownClass(cls):
+        global cell, cell1, kpts0, kmf
+        del cell, cell1, kpts0, kmf
+
     def test_make_kpts_ibz(self):
         kmesh = [16,16,16]
         kpts = cell.make_kpts(kmesh, space_group_symmetry=True)
@@ -88,7 +93,7 @@ class KnownValues(unittest.TestCase):
         kpts5 = cell.make_kpts(kmesh, time_reversal_symmetry=True)
         self.assertEqual(kpts5.nkpts_ibz, 2052)
 
-    def test_transform(self):
+    def test_transform_high_cost(self):
         kpts = libkpts.make_kpts(cell, kpts0, space_group_symmetry=True, time_reversal_symmetry=True)
         dms_ibz = kmf.make_rdm1()[kpts.ibz2bz]
         dms_bz = kpts.transform_dm(dms_ibz)
@@ -141,6 +146,61 @@ class KnownValues(unittest.TestCase):
             rho += kpts.symmetrize_density(rho_k, k, cell.mesh)
         rho *= 1.0 / kpts.nkpts
         self.assertAlmostEqual(abs(rho - rho0).max(), 0, 8)
+
+
+class SmallCellTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.cell = gto.M(atom='He 0 0 0', a=np.eye(3)*3,
+                         basis=[[0, [.8, 1]], [1, [.5, 1]]],
+                         space_group_symmetry=True, mesh=[19]*3, precision=1e-7, verbose=0)
+        cls.kpts = cls.cell.make_kpts([3, 1, 1], space_group_symmetry=True,
+                                      time_reversal_symmetry=True)
+        mf = scf.KRHF(cls.cell, cls.kpts.kpts)
+        cls.hcore = np.asarray(mf.get_hcore())
+        cls.overlap = np.asarray(mf.get_ovlp())
+        pairs = [eigh(cls.hcore[i], cls.overlap[i]) for i in cls.kpts.ibz2bz]
+        cls.energy = np.array([p[0] for p in pairs])
+        cls.coeff = np.array([p[1] for p in pairs])
+
+    def test_operator_transformation(self):
+        k = self.kpts
+        h_ibz = self.hcore[k.ibz2bz]
+        np.testing.assert_allclose(k.transform_1e_operator(h_ibz), self.hcore, atol=1e-8)
+        spin = k.transform_1e_operator(np.array([h_ibz, 2*h_ibz]))
+        np.testing.assert_allclose(spin, [self.hcore, 2*self.hcore], atol=2e-8)
+
+    def test_single_kpoint_orbitals(self):
+        for ik in range(self.kpts.nkpts):
+            mo = libkpts.transform_mo_coeff_k(self.kpts, self.coeff, ik)
+            e = self.energy[self.kpts.bz2ibz[ik]]
+            np.testing.assert_allclose(mo.conj().T @ self.overlap[ik] @ mo, np.eye(4), atol=1e-10)
+            np.testing.assert_allclose(self.hcore[ik] @ mo, (self.overlap[ik] @ mo)*e, atol=1e-8)
+
+    def test_reference_cell_density(self):
+        dm = np.einsum('ki,kj->kij', self.coeff[:, :, 0], self.coeff[:, :, 0].conj())
+        full = self.kpts.transform_dm(dm)
+        actual = self.kpts.dm_at_ref_cell(dm)
+        np.testing.assert_allclose(actual, np.mean(full, axis=0), atol=1e-12)
+        np.testing.assert_allclose(actual.imag, 0, atol=1e-12)
+
+    def test_little_group_representations(self):
+        groups, indices = self.kpts.little_cogroups()
+        for ik, group in enumerate(groups):
+            chi = self.kpts.little_cogroup_rep(ik, 0).chi
+            self.assertAlmostEqual(np.vdot(chi, chi).real, group.order, places=9)
+            np.testing.assert_array_equal(np.sort(indices[ik]), np.arange(group.order))
+        self.assertIs(self.kpts.little_cogroups()[0], groups)
+
+    def test_df_pair_list(self):
+        pairs = self.kpts.make_gdf_kptij_lst_jk()
+        def key(a):
+            return tuple(np.round(a, 10).ravel())
+        expected = {key([k, k]) for k in self.kpts.kpts}
+        expected.update(key([ki, kj]) for ki in self.kpts.kpts_ibz for kj in self.kpts.kpts)
+        self.assertEqual({key(p) for p in pairs}, expected)
+        self.assertEqual(len(pairs), len(expected))
+
 
 
 if __name__ == "__main__":

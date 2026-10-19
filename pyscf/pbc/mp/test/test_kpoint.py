@@ -19,6 +19,7 @@ import numpy as np
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pbcscf
 import pyscf.pbc.mp
+from pyscf.pbc import mp, cc
 import pyscf.pbc.mp.kmp2
 
 
@@ -148,7 +149,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ekmp2, -0.016333989667540873, 6)
         self.assertAlmostEqual(mymp.e_tot, 2.329841269381374, 6)
 
-    def test_rdm1(self):
+    def test_rdm1_high_cost(self):
         cell = pbcgto.Cell()
         cell.atom = '''Al 0 0 0'''
         cell.basis = 'gth-szv'
@@ -190,6 +191,27 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(ekpt2, -1.2053666821021261, 7)
         self.assertAlmostEqual(mp.e_corr, -6.9881475423322723e-06, 9)
+
+
+    def test_generalized_spin_energies(self):
+        cell = pbcgto.M(atom='H 0 0 0; H 0 0 .74', a=np.eye(3)*4,
+                     basis='gth-szv', pseudo='gth-pade', mesh=[11]*3,
+                     precision=1e-7, verbose=0)
+        mf = pbcscf.RHF(cell, exxdiv=None).density_fit(auxbasis='weigend').run(conv_tol=1e-11)
+        generalized = mf.to_ghf()
+        self.assertAlmostEqual(mp.GMP2(generalized).kernel()[0],
+                               mp.RMP2(mf).kernel()[0], places=10)
+        # A global spin rotation mixes alpha and beta without changing the state.
+        mixed = generalized.copy()
+        c = np.asarray(generalized.mo_coeff).reshape(2, cell.nao, -1)
+        rotation = np.array([[np.cos(.3), -np.sin(.3)], [np.sin(.3), np.cos(.3)]])
+        mixed.mo_coeff = np.einsum('st,tpi->spi', rotation, c).reshape(generalized.mo_coeff.shape)
+        self.assertAlmostEqual(mp.GMP2(mixed).kernel()[0], mp.RMP2(mf).kernel()[0], places=10)
+        ref = cc.RCCSD(mf).run(conv_tol=1e-11)
+        spin = cc.GCCSD(generalized).run(conv_tol=1e-11)
+        self.assertTrue(ref.converged and spin.converged)
+        self.assertAlmostEqual(spin.e_corr, ref.e_corr, places=9)
+
 
 
 if __name__ == '__main__':

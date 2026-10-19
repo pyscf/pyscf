@@ -26,7 +26,7 @@ import pyscf.dft
 
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.dft import gen_grid
-from pyscf.pbc.dft import numint
+from pyscf.pbc.dft import numint, numint2c
 import pyscf.pbc
 pyscf.pbc.DEBUG = False
 
@@ -424,6 +424,99 @@ class KnownValues(unittest.TestCase):
         n, e, v = numint.nr_nlc_vxc(ni, h2o, grids, 'wB97M_V', dm[0]*2, hermi=0)
         self.assertAlmostEqual(e, 0.042436, 4)
         self.assertAlmostEqual(lib.fp([v, v]), 0.0229223, 4)
+
+
+    def check_numint2c_cache(self, xc, collinear='col', kmesh=False):
+        self.cell = pbcgto.M(atom='He 0 0 0', a=np.eye(3)*2.5,
+                         basis=[[0, [1., 1.]], [0, [.3, 1.]]],
+                         precision=1e-7, mesh=[7]*3, verbose=0)
+        self.grids = gen_grid.UniformGrids(self.cell).build()
+        self.coeff = np.eye(4)
+        self.occ = np.array([.7, .3, .5, .2])
+        self.dm = np.diag(self.occ)
+        if kmesh:
+            kpts = self.cell.make_kpts([2, 1, 1])
+            ni = numint2c.KNumInt2C(kpts)
+            coeff = np.array([self.coeff]*2)
+            occ = np.array([self.occ]*2)
+            dm = np.array([self.dm]*2)
+            kw = {'kpts': kpts}
+        else:
+            ni = numint2c.NumInt2C()
+            coeff, occ, dm = self.coeff, self.occ, self.dm
+            kw = {}
+        ni.collinear = collinear
+        orbital_cache = ni.cache_xc_kernel(self.cell, self.grids, xc, coeff, occ, **kw)
+        density_cache = ni.cache_xc_kernel1(self.cell, self.grids, xc, dm, **kw)
+        for actual, expected in zip(density_cache, orbital_cache):
+            np.testing.assert_allclose(actual, expected, atol=1e-10, rtol=1e-10)
+        rho = ni.get_rho(self.cell, dm, self.grids, **kw)
+        cached = density_cache[0]
+        total = cached.sum(axis=0) if collinear == 'col' else cached[0]
+        if total.ndim == 2:
+            total = total[0]
+        np.testing.assert_allclose(rho, total, atol=1e-10)
+
+    def test_numint2c_cache_gamma_lda(self):
+        self.check_numint2c_cache('LDA,VWN')
+
+    def test_numint2c_cache_gamma_gga(self):
+        self.check_numint2c_cache('PBE')
+
+    def test_numint2c_cache_gamma_mgga(self):
+        self.check_numint2c_cache('TPSS')
+
+    def test_numint2c_cache_kpoints_mgga(self):
+        self.check_numint2c_cache('TPSS', kmesh=True)
+
+    def test_numint2c_cache_gamma_noncollinear_lda(self):
+        self.check_numint2c_cache('LDA,VWN', collinear='ncol')
+
+    def test_numint2c_cache_kpoints_lda(self):
+        self.check_numint2c_cache('LDA,VWN', kmesh=True)
+
+    def test_numint2c_cache_kpoints_gga(self):
+        self.check_numint2c_cache('PBE', kmesh=True)
+
+    def test_numint2c_cache_kpoints_noncollinear_lda(self):
+        self.check_numint2c_cache('LDA,VWN', collinear='ncol', kmesh=True)
+
+
+    def check_signed_density(self, xc, occupations, lapl=True):
+        self.cell = pbcgto.M(atom='He 0 0 0', a=np.eye(3)*3,
+                         basis=[[0, [.8, 1]], [1, [.5, 1]]], verbose=0)
+        rng = np.random.default_rng(31)
+        coords = rng.uniform(.1, 2, size=(20, 3))
+        self.ao = numint.eval_ao(self.cell, coords, kpt=np.array([.1, .2, .3]), deriv=2)
+        self.mo = rng.normal(size=(4, 4))+1j*rng.normal(size=(4, 4))
+        ao = self.ao[0] if xc == 'LDA' else self.ao
+        occ = np.asarray(occupations)
+        dm = (self.mo*occ) @ self.mo.conj().T
+        ref = numint.eval_rho(self.cell, ao, dm, xctype=xc, hermi=1, with_lapl=lapl)
+        actual = numint.eval_rho2(self.cell, ao, self.mo, occ, xctype=xc, with_lapl=lapl)
+        np.testing.assert_allclose(actual, ref, atol=1e-11)
+        if xc == 'MGGA':
+            grad = self.ao[1:4] @ self.mo
+            tau = np.einsum('xgi,i,xgi->g', grad.conj(), occ, grad).real * .5
+            np.testing.assert_allclose(actual[-1], tau, atol=1e-11)
+
+    def test_signed_density_lda(self):
+        self.check_signed_density('LDA', [1., -.3, 0., .2])
+
+    def test_signed_density_gga(self):
+        self.check_signed_density('GGA', [1., -.3, 0., .2])
+
+    def test_signed_density_mgga_laplacian(self):
+        self.check_signed_density('MGGA', [1., -.3, 0., .2])
+
+    def test_signed_density_mgga_without_laplacian(self):
+        self.check_signed_density('MGGA', [1., -.3, 0., .2], lapl=False)
+
+    def test_signed_density_negative_density(self):
+        for xc in ('LDA', 'GGA', 'MGGA'):
+            with self.subTest(xc=xc):
+                self.check_signed_density(xc, [-1., -.3, 0., -.2])
+        self.check_signed_density('MGGA', [-1., -.3, 0., -.2], lapl=False)
 
 
 if __name__ == '__main__':

@@ -193,7 +193,7 @@ class KnownValues(unittest.TestCase):
         #FIXME: errors seems too big
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 2)
 
-    def test_finite_diff_m06l_hess(self):
+    def test_finite_diff_m06l_hess_high_cost(self):
         mf = dft.UKS(mol)
         mf.conv_tol = 1e-14
         mf.xc = 'm06l'
@@ -279,6 +279,40 @@ class KnownValues(unittest.TestCase):
         e2 += hobj.hess_nuc(h4)
         e2ref = finite_partial_diff(mf)
         self.assertAlmostEqual(abs(e2-e2ref).max(), 0, 6)
+
+    def make_mgga_reference(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 1.4', unit='Bohr', basis='6-31g', verbose=0)
+        mf = dft.RKS(mol, xc='m06l')
+        mf.grids.level = 1
+        mf.conv_tol = 1e-12
+        mf.kernel()
+        return mf
+
+    def test_mgga_closed_shell_hessian(self):
+        mf = self.make_mgga_reference()
+        rh = mf.Hessian().kernel()
+        uh = mf.to_uks().Hessian().kernel()
+        numpy.testing.assert_allclose(uh, rh, atol=1e-8)
+        numpy.testing.assert_allclose(uh, uh.transpose(1, 0, 3, 2), atol=1e-10)
+
+    def test_mgga_fixed_grid_force_derivative(self):
+        mf = self.make_mgga_reference().to_uks()
+        hess = mf.Hessian().kernel()
+        coords = mf.mol.atom_coords()
+        eps = 1e-4
+        forces = []
+        for sign in (1, -1):
+            displaced = coords.copy()
+            displaced[1, 2] += sign*eps
+            mol = mf.mol.set_geom_(displaced, unit='Bohr', inplace=False)
+            other = dft.UKS(mol, xc=mf.xc)
+            # The analytic Hessian differentiates with quadrature points fixed.
+            other.grids.coords = mf.grids.coords.copy()
+            other.grids.weights = mf.grids.weights.copy()
+            other.conv_tol = 1e-12
+            other.kernel(dm0=mf.make_rdm1())
+            forces.append(other.nuc_grad_method().kernel())
+        numpy.testing.assert_allclose(hess[1, :, 2, :], (forces[0]-forces[1])/(2*eps), atol=2e-6)
 
 
 if __name__ == "__main__":

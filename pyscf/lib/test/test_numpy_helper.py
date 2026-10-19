@@ -16,6 +16,8 @@
 #
 
 import unittest
+import pickle
+from pyscf.lib import numpy_helper
 import numpy
 import scipy.linalg
 import itertools
@@ -360,6 +362,79 @@ class KnownValues(unittest.TestCase):
         refval = a * b[None, ...] + c
         testval = lib.broadcast_mul(a, b, out=c)
         self.assertTrue(numpy.allclose(testval, refval))
+
+    def test_padded_coefficients(self):
+        arrays = [numpy.arange(6).reshape(3, 2), numpy.ones((3, 1))*1j, numpy.empty((3, 0))]
+        out = numpy_helper.stack_with_padding(arrays)
+        self.assertEqual(out.dtype, numpy.complex128)
+        for i, a in enumerate(arrays):
+            numpy.testing.assert_array_equal(out[i, :, :a.shape[1]], a)
+            numpy.testing.assert_array_equal(out[i, :, a.shape[1]:], 0)
+        with self.assertRaises(ValueError):
+            numpy_helper.stack_with_padding([])
+
+    def test_grouped_reductions(self):
+        labels = numpy.array(['b', 'a', 'b', 'c', 'a'])
+        values = numpy.array([3., 2., -1., 4., 1.])
+        numpy.testing.assert_array_equal(numpy_helper.groupby(labels, values, 'min'), [1., -1., 4.])
+        numpy.testing.assert_array_equal(numpy_helper.groupby(labels, values, 'argmin'), [4, 2, 3])
+        numpy.testing.assert_array_equal(numpy_helper.groupby(labels, values, 'max'), [2., 3., 4.])
+        numpy.testing.assert_array_equal(numpy_helper.groupby(labels, values, 'sum'), [3., 2., 4.])
+        vectors = numpy.stack([values, 2*values], axis=1)
+        numpy.testing.assert_array_equal(numpy_helper.groupby(labels, vectors, 'sum'), [[3, 6], [2, 4], [4, 8]])
+
+    def test_scaled_einsum(self):
+        a = numpy.arange(12.).reshape(3, 4)
+        b = numpy.arange(8.).reshape(4, 2)
+        for alpha, beta in ((1, .3), (.4, .3), (.4, 0)):
+            with self.subTest(alpha=alpha, beta=beta):
+                out = numpy.ones((3, 2))
+                result = numpy_helper._numpy_einsum('ij,jk->ik', a, b, out=out, alpha=alpha, beta=beta)
+                self.assertIs(result, out)
+                numpy.testing.assert_allclose(result, alpha*(a @ b)+beta)
+        numpy.testing.assert_allclose(numpy_helper._numpy_einsum('ij,jk->ik', a, b, alpha=1j), 1j*(a @ b))
+
+    def test_tagged_array_pickle(self):
+        a = numpy_helper.tag_array(numpy.eye(3), mo_occ=numpy.array([2., 0., 0.]), description='density')
+        restored = pickle.loads(pickle.dumps(a))
+        numpy.testing.assert_array_equal(restored, a)
+        numpy.testing.assert_array_equal(restored.mo_occ, a.mo_occ)
+        self.assertEqual(restored.description, a.description)
+
+    def test_complex_block_sum(self):
+        a = numpy.arange(30).reshape(5, 6)*(1+2j)
+        rows, cols = [0, 2, 5], [0, 1, 4, 6]
+        ref = [[a[i:j, k:l].sum() for k, l in zip(cols[:-1], cols[1:])]
+               for i, j in zip(rows[:-1], rows[1:])]
+        numpy.testing.assert_allclose(numpy_helper.condense('sum', a, rows, cols), ref)
+
+    def test_singular_solve(self):
+        a = numpy.diag([2., 0., 3.]).astype(complex)
+        b = numpy.array([1j, 0., 3.])
+        numpy.testing.assert_allclose(numpy_helper.solve_lineq_by_SVD(a, b), numpy.linalg.pinv(a) @ b)
+        numpy.testing.assert_array_equal(numpy_helper.solve_lineq_by_SVD(a*0, b), b*0)
+
+    def test_mixed_dtype_matrix_accumulation(self):
+        a = numpy.arange(12.).reshape(3, 4)
+        b = numpy.arange(8.).reshape(4, 2)
+        for left, right in ((a, b*(1+.2j)), (a*(1+.2j), b),
+                            (a.astype(numpy.float32), b.astype(numpy.float32))):
+            for beta in (0., .3):
+                with self.subTest(left=left.dtype, right=right.dtype, beta=beta):
+                    out = numpy.full((3, 2), 2, dtype=numpy.result_type(left, right))
+                    actual = numpy_helper.dot(left, right, alpha=.4, beta=beta, c=out)
+                    numpy.testing.assert_allclose(actual, .4*(left @ right)+2*beta, rtol=1e-6)
+
+    def test_inplace_complex_tensor_transpose(self):
+        a = numpy.arange(18.).reshape(2, 3, 3)*(1+.2j)
+        ref = a.transpose(0, 2, 1).copy()
+        result = numpy_helper.transpose(a, axes=(0, 2, 1), inplace=True)
+        self.assertIs(result, a)
+        numpy.testing.assert_array_equal(result, ref)
+
+    def test_batched_hermitian_sum(self):
+        a = numpy.arange(18.).reshape(2, 3, 3)*(1+.2j)
+        numpy.testing.assert_allclose(numpy_helper.hermi_sum(a, axes=(0, 2, 1)), a+a.conj().transpose(0, 2, 1))
 if __name__ == "__main__":
     print("Full Tests for numpy_helper")
     unittest.main()

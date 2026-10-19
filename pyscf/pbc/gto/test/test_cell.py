@@ -23,7 +23,7 @@ import numpy as np
 from pyscf import gto
 from pyscf import lib
 from pyscf.pbc import gto as pgto
-from pyscf.pbc.gto import ecp
+from pyscf.pbc.gto import ecp, neighborlist
 from pyscf.pbc.tools import pbc as pbctools
 from pyscf.pbc.gto import ewald_methods
 
@@ -853,6 +853,65 @@ loop_
         print(cl.nbas == 2)
         print(cl._bas[:,2] == [5, 5])
         print(cl._pseudo['Be'][0] == [2, 0, 0, 0])
+
+
+    def test_cross_overlap_derivatives(self):
+        cell = pgto.M(atom='He 0 0 0', a=np.eye(3)*3, basis=[[0, [.5, 1]], [1, [.4, 1]]],
+                     precision=1e-10, verbose=0)
+        other = cell.set_geom_(cell.atom_coords()+[.2, -.1, .3], unit='Bohr', inplace=False)
+        kpt = np.array([.13, -.08, .04])
+        first = pgto.intor_cross('int1e_ovlp', cell, other, kpts=[kpt], kderiv=1)[0]
+        second = pgto.intor_cross('int1e_ovlp', cell, other, kpts=[kpt], kderiv=2)[0].reshape(3, 3, cell.nao, other.nao)
+        step = 1e-5
+        for axis in range(3):
+            dk = np.eye(3)[axis]*step
+            plus = pgto.intor_cross('int1e_ovlp', cell, other, kpt=kpt+dk)
+            minus = pgto.intor_cross('int1e_ovlp', cell, other, kpt=kpt-dk)
+            np.testing.assert_allclose(first[axis], (plus-minus)/(2*step), atol=2e-9, rtol=1e-8)
+            plus = pgto.intor_cross('int1e_ovlp', cell, other, kpts=[kpt+dk], kderiv=1)[0]
+            minus = pgto.intor_cross('int1e_ovlp', cell, other, kpts=[kpt-dk], kderiv=1)[0]
+            np.testing.assert_allclose(second[axis], (plus-minus)/(2*step), atol=2e-8, rtol=1e-8)
+
+
+    def make_screened_cross_cells(self):
+        self.a = pgto.M(atom='He .1 .2 .3', a=np.eye(3)*3,
+                      basis=[[0, [.8, 1]], [1, [.5, 1]]],
+                      precision=1e-10, verbose=0)
+        self.b = pgto.M(atom='He .2 .3 .4', a=self.a.a,
+                      basis=[[0, [.7, 1]], [0, [.4, 1]]],
+                      precision=1e-10, verbose=0)
+        self.kpts = self.a.make_kpts([2, 1, 1])
+
+    def test_screened_cross_overlap(self):
+        self.make_screened_cross_cells()
+        actual = pgto.cell._intor_cross_screened('int1e_ovlp', self.a, self.b, kpts=self.kpts)
+        expected = pgto.intor_cross('int1e_ovlp', self.a, self.b, kpts=self.kpts)
+        np.testing.assert_allclose(actual, expected, atol=1e-10)
+
+    def test_screened_cross_derivative_shell_slice(self):
+        self.make_screened_cross_cells()
+        options = dict(kpt=self.kpts[1], shls_slice=(1, 2, 0, 1))
+        actual = pgto.cell._intor_cross_screened('int1e_ipovlp', self.a, self.b, **options)
+        expected = pgto.intor_cross('int1e_ipovlp', self.a, self.b, **options)
+        np.testing.assert_allclose(actual, expected, atol=1e-10)
+
+    def test_screened_hermitian_gamma_kinetic(self):
+        self.make_screened_cross_cells()
+        actual = pgto.cell._intor_cross_screened('int1e_kin', self.a, self.a, hermi=1)
+        expected = self.a.pbc_intor('int1e_kin', hermi=1)
+        np.testing.assert_allclose(actual, expected, atol=1e-10)
+        self.assertFalse(np.iscomplexobj(actual))
+
+    def test_screened_reused_neighbor_list(self):
+        self.make_screened_cross_cells()
+        opt = neighborlist.NeighborListOpt(self.a)
+        translations = self.a.get_lattice_Ls(rcut=max(self.a.rcut, self.b.rcut))
+        opt.build(self.a, self.b, translations, set_optimizer=False)
+        actual = pgto.cell._intor_cross_screened('int1e_ovlp', self.a, self.b,
+                                          kpts=self.kpts, neighbor_list=opt.nl)
+        expected = pgto.intor_cross('int1e_ovlp', self.a, self.b, kpts=self.kpts)
+        np.testing.assert_allclose(actual, expected, atol=1e-10)
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")

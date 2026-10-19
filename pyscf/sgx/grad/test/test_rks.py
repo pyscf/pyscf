@@ -71,7 +71,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.abs(g.sum(axis=0)).sum(), 0, 12)
         self.assertAlmostEqual(g[0,2], (e1-e2)/(2*delta)*lib.param.BOHR, order)
 
-    def test_finite_diff_grad(self):
+    def test_finite_diff_grad_high_cost(self):
         self._check_finite_diff_grad(ALL_SETTINGS[0], ALL_PRECISIONS[0], "PBE0")
         self._check_finite_diff_grad(ALL_SETTINGS[0], ALL_PRECISIONS[0], "HSE06")
         self._check_finite_diff_grad(ALL_SETTINGS[0], ALL_PRECISIONS[0], "WB97X")

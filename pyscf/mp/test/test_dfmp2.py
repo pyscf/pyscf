@@ -214,6 +214,27 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(mmp.t1 - pt.t1).max(), 0, 4)
         self.assertAlmostEqual(mmp.e_corr_singles, pt.e_corr_singles, 4)
 
+    def test_redundant_auxiliary_metric(self):
+        mol = gto.M(atom='Li 0 0 0; H 0 0 1.6', basis='sto-3g', verbose=0)
+        mf = scf.RHF(mol).run(conv_tol=1e-12)
+        basis = [[0, [1., 1]], [0, [.3, 1]], [1, [.5, 1]]]
+        redundant = basis + [basis[0]]
+        ref = mp.dfmp2.DFMP2(mf)
+        ref.with_df.auxbasis = basis
+        energy = ref.kernel()[0]
+        for disk in (False, True):
+            with self.subTest(disk=disk):
+                obj = mp.dfmp2.DFMP2(mf)
+                obj.with_df.auxbasis = redundant
+                obj.force_outcore = disk
+                obj.max_memory = 4000
+                value = obj.kernel()[0]
+                self.assertAlmostEqual(value, energy, places=10)
+                dm = np.asarray(obj.make_rdm1())
+                self.assertTrue(np.all(np.isfinite(dm)))
+                self.assertAlmostEqual(np.trace(dm) if dm.ndim == 2 else
+                                       sum(np.trace(x) for x in dm), mol.nelectron, places=10)
+
 if __name__ == "__main__":
     print("Full Tests for dfmp2")
     unittest.main()

@@ -14,7 +14,9 @@
 # limitations under the License.
 
 import unittest
-from pyscf import lib, gto, scf
+import tempfile
+import numpy as np
+from pyscf import lib, gto, scf, mcscf
 from pyscf.tools import molden
 
 def setUpModule():
@@ -128,6 +130,45 @@ Ne   1   10     0.00000000000000     0.00000000000000     0.00000000000000
             ftmp.flush()
             mol = molden.load(ftmp.name)[0]
         self.assertEqual(mol._bas[:,1].tolist(), [0, 0, 0, 1, 1, 2, 0])
+
+
+    def test_unrestricted_checkpoint(self):
+        mol = gto.M(atom='Li 0 0 0', basis='sto-3g', spin=1, verbose=0)
+        with tempfile.NamedTemporaryFile() as chk, tempfile.NamedTemporaryFile() as output:
+            mf = scf.UHF(mol)
+            mf.chkfile = chk.name
+            mf.run(conv_tol=1e-12)
+            molden.from_chkfile(output.name, chk.name)
+            restored, energy, coeff, occ, _, _ = molden.load(output.name)
+            self.assertEqual(restored.nelec, mol.nelec)
+            np.testing.assert_allclose(coeff, mf.mo_coeff, atol=1e-12)
+            np.testing.assert_allclose(occ, mf.mo_occ, atol=1e-12)
+            np.testing.assert_allclose(energy, mf.mo_energy, atol=1e-10)
+
+    def test_custom_checkpoint_key(self):
+        mol = gto.M(atom='He 0 0 0', basis='6-31g', verbose=0)
+        mf = scf.RHF(mol).run()
+        with tempfile.NamedTemporaryFile() as chk, tempfile.NamedTemporaryFile() as output:
+            scf.chkfile.save_mol(mol, chk.name)
+            scf.chkfile.dump(chk.name, 'orbitals', {'mo_coeff': mf.mo_coeff,
+                                                 'mo_energy': mf.mo_energy, 'mo_occ': mf.mo_occ})
+            molden.from_chkfile(output.name, chk.name, key='orbitals/mo_coeff')
+            _, energy, coeff, occ, _, _ = molden.load(output.name)
+            np.testing.assert_allclose(coeff, mf.mo_coeff, atol=1e-12)
+            np.testing.assert_allclose(energy, mf.mo_energy, atol=1e-10)
+            np.testing.assert_allclose(occ, mf.mo_occ, atol=1e-12)
+
+    def test_cas_natural_orbitals(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 1.4', basis='6-31g', verbose=0)
+        mc = mcscf.CASSCF(scf.RHF(mol).run(), 2, 2).run()
+        ref = mc.make_rdm1()
+        with tempfile.NamedTemporaryFile() as output:
+            molden.from_mcscf(mc, output.name, cas_natorb=True)
+            _, _, coeff, occ, _, _ = molden.load(output.name)
+            # Molden occupations are printed to five decimal places.
+            bound = 5.1e-6 * np.linalg.norm(coeff, 2)**2
+            np.testing.assert_allclose((coeff*occ) @ coeff.T, ref, atol=bound, rtol=0)
+            self.assertAlmostEqual(np.sum(occ), mol.nelectron, places=10)
 
 if __name__ == "__main__":
     print("Full Tests for molden")

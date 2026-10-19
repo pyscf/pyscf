@@ -1,7 +1,11 @@
 # .coveragerc to control coverage.py
 [run]
 branch = True
-omit = */dmrgscf/*
+omit = */test/*
+    */tools/ring.py
+    */pbc/ao2mo/*
+    */tests/*
+    */dmrgscf/*
     */fciqmcscf/*
     */shciscf/*
     */xianci/*
@@ -23,6 +27,10 @@ omit = */dmrgscf/*
 disable_warnings = include-ignored
 
 [report]
+omit = */test/*
+    */tools/ring.py
+    */pbc/ao2mo/*
+    */tests/*
 # Regexes for lines to exclude from consideration
 exclude_lines =
     # Have to re-enable the standard pragma

@@ -198,6 +198,25 @@ class KnowValues(unittest.TestCase):
         self.assertRaises(KeyError, symm.basis.so3_irrep_id2symb, 729)
 
 
+    def check_linear_irrep_completeness(self, atoms, group):
+        basis = [[l, [.8, 1]] for l in range(5)]
+        mol = gto.M(atom=atoms, basis=basis, symmetry=group, verbose=0)
+        orbitals = numpy.hstack(mol.symm_orb)
+        numpy.testing.assert_allclose(orbitals@orbitals.T, numpy.eye(mol.nao), atol=1e-12)
+        overlap = mol.intor('int1e_ovlp')
+        kinetic = mol.intor('int1e_kin')
+        for i, left in enumerate(mol.symm_orb):
+            for right in mol.symm_orb[:i]:
+                numpy.testing.assert_allclose(left.T@overlap@right, 0, atol=1e-12)
+                numpy.testing.assert_allclose(left.T@kinetic@right, 0, atol=1e-12)
+
+    def test_dooh_high_l_completeness(self):
+        self.check_linear_irrep_completeness('He 0 0 -2; Ne 0 0 0; He 0 0 2', 'Dooh')
+
+    def test_coov_high_l_completeness(self):
+        self.check_linear_irrep_completeness('Ne 0 0 0; He 0 0 2', 'Coov')
+
+
 if __name__ == "__main__":
     print("Full Tests symm.basis")
     unittest.main()

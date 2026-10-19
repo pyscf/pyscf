@@ -185,6 +185,46 @@ class KnownValues(unittest.TestCase):
         rho = ni.get_rho(mol, dm, grids)
         self.assertAlmostEqual(lib.fp(rho), -361.4682369790235, 8)
 
+    def check_potential(self, kind, nvar):
+        mol = gto.M(atom='He 0 0 0', basis=[[0, [.8, 1]], [1, [.4, 1]]], verbose=0)
+        rng = numpy.random.default_rng(42)
+        coords = rng.normal(size=(17, 3))
+        ao = mol.eval_gto('GTOval_spinor_deriv1', coords)
+        weights = rng.uniform(.1, .3, len(coords))
+        pauli = numpy.array([numpy.eye(2), [[0, 1], [1, 0]],
+                          [[0, -1j], [1j, 0]], [[1, 0], [0, -1]]])
+        fn = getattr(r_numint, '_mcol_'+kind+'_vxc_mat')
+        hermi = 0
+        for large in (True, False):
+            with self.subTest(large_component=large):
+                v = rng.normal(size=(4, nvar, len(coords)))
+                v = v + 1j*rng.normal(size=v.shape)
+                expected = numpy.zeros((mol.nao_2c(),)*2, dtype=complex)
+                for q in range(4):
+                    spin = pauli[q] * (-1 if q and not large else 1)
+                    def term(left, right, w):
+                        return numpy.einsum('st,sgi,tgj,g->ij', spin, left.conj(), right, weights*w)
+                    expected += term(ao[:, 0], ao[:, 0], v[q, 0])
+                    if nvar > 1:
+                        for axis in range(1, 4):
+                            expected += term(ao[:, axis], ao[:, 0], v[q, axis])
+                            expected += term(ao[:, 0], ao[:, axis], v[q, axis])
+                            if nvar == 5:
+                                expected += .5*term(ao[:, axis], ao[:, axis], v[q, 4])
+                values = ao[:, 0] if nvar == 1 else ao
+                actual = fn(mol, values, weights, None, v, None,
+                            (0, mol.nbas), mol.ao_loc_2c(), hermi, on_LL=large)
+                numpy.testing.assert_allclose(actual, expected, atol=1e-12)
+
+    def test_mcol_lda_complex_potential(self):
+        self.check_potential('lda', 1)
+
+    def test_mcol_gga_complex_potential(self):
+        self.check_potential('gga', 4)
+
+    def test_mcol_mgga_complex_potential(self):
+        self.check_potential('mgga', 5)
+
 
 if __name__ == "__main__":
     print("Test r_numint")

@@ -433,6 +433,26 @@ class KnownValues(unittest.TestCase):
         ecisd, civec = myci.kernel()
         self.assertAlmostEqual(ecisd, 0, 9)
 
+    def test_rotated_two_electron_states(self):
+        rng = numpy.random.default_rng(17)
+        # For two electrons the CISD expansion spans the full CI space.
+        bra, ket = rng.normal(size=(2, 4, 4))
+        bra, ket = bra+bra.T, ket+ket.T
+        bra /= numpy.linalg.norm(bra)
+        ket /= numpy.linalg.norm(ket)
+        ub = numpy.linalg.qr(rng.normal(size=(4, 4)))[0]
+        uk = numpy.linalg.qr(rng.normal(size=(4, 4)))[0]
+        rb = fci.addons.transform_ci_for_orbital_rotation(bra, 4, 2, ub)
+        rk = fci.addons.transform_ci_for_orbital_rotation(ket, 4, 2, uk)
+        cb = cisd.from_fcivec(rb, 4, 2)
+        ck = cisd.from_fcivec(rk, 4, 2)
+        actual = cisd.overlap(cb, ck, 4, 1, s=ub.T @ uk)
+        self.assertAlmostEqual(actual, numpy.vdot(bra, ket), places=12)
+        self.assertAlmostEqual(cisd.overlap(cb, cb, 4, 1, s=numpy.eye(4)), 1, places=12)
+        numpy.testing.assert_allclose(cisd.to_fcivec(cb, 4, 2), rb, atol=1e-12)
+
+
+
 def t1_strs_ref(norb, nelec):
     nocc = nelec
     hf_str = int('1'*nocc, 2)
@@ -507,6 +527,7 @@ def t4_strs_ref(norb, nelec):
                                     addrs.append(fci.cistring.str2addr(norb, nocc, str4))
                                     signs.append(sign)
     return numpy.asarray(addrs), numpy.asarray(signs)
+
 
 
 if __name__ == "__main__":
