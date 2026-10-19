@@ -307,12 +307,12 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                 cell, self.auxbasis, self.exp_to_discard,
                 normalize_multipoles=True)
             dfbuilder = _CCGDFBuilder(cell, auxcell, kpts_union)
-            dfbuilder.eta = self.eta
         else:
             auxcell = self.auxcell = make_auxcell(
                 cell, self.auxbasis, self.exp_to_discard,
                 normalize_multipoles=False)
             dfbuilder = _RSGDFBuilder(cell, auxcell, kpts_union)
+        dfbuilder.eta = self.eta
         dfbuilder.mesh = self.mesh
         dfbuilder.linear_dep_threshold = self.linear_dep_threshold
 

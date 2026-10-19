@@ -87,7 +87,6 @@ class KnownValues(unittest.TestCase):
         odf.linear_dep_threshold = 1e-7
         odf.auxbasis = 'weigend'
         odf.mesh = (11,)*3
-        odf.eta = 0.154728892598
         eri0000 = odf.get_eri()
         self.assertTrue(eri0000.dtype == numpy.double)
         self.assertAlmostEqual(eri0000.real.sum(), 140.52553833398147, 7)
