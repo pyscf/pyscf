@@ -61,12 +61,31 @@ from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder, _RSNucBuilder, LINEAR_DEP_T
 from pyscf import __config__
 
 
-def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
-    r'''Generate a cell object using the density fitting auxbasis as
-    the basis set. The normalization coefficients of the auxiliary cell are
-    different to the regular (square-norm) convention. To simplify the
-    compensated charge algorithm, they are normalized against
-    \int (r^l e^{-ar^2} r^2 dr
+def make_modrho_basis(cell, auxbasis=None, drop_eta=None,
+                      normalize_multipoles=True):
+    r'''Construct an auxiliary cell for periodic Gaussian density fitting.
+
+    Args:
+        cell : pyscf.pbc.gto.Cell
+            Built cell containing the atomic structure and orbital basis.
+
+    Kwargs:
+        auxbasis : str, dict, list or tuple, optional
+            Auxiliary basis in the same format as `Cell.basis`. If None,
+            auxiliary basis set will be automatically selected or generated
+            according to the orbital basis set `cell.basis`.
+        drop_eta : float, optional
+            Discard primitive Gaussians with exponents smaller than this value.
+            Remove shells with no remaining primitives.
+            Keep all primitives if set to None.
+        normalize_multipoles : bool, optional
+            If enabled, normalize each contraction of angular momentum l so that
+            its radial multipole integral
+                \int_0^\infty r^{2l+2} \sum_p c_p e^{-a_p r^2} dr
+            equals 1/sqrt(4*pi). This simplifies compensated-charge integrals.
+
+    Returns:
+        An instance of pyscf.pbc.gto.Cell
     '''
     auxcell = incore.make_auxcell(cell, auxbasis)
 
@@ -94,14 +113,17 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
             pe = auxcell._bas[ib,gto.PTR_EXP]
             auxcell._bas[ib,gto.NPRIM_OF] = np
             _env[pe:pe+np] = es
-# int1 is the multipole value. l*2+2 is due to the radial part integral
-# \int (r^l e^{-ar^2} * Y_{lm}) (r^l Y_{lm}) r^2 dr d\Omega
-            int1 = gto.gaussian_int(l*2+2, es)
-            s = numpy.einsum('pi,p->i', cs, int1)
-# The auxiliary basis normalization factor is not a must for density expansion.
-# half_sph_norm here to normalize the monopole (charge).  This convention can
-# simplify the formulism of \int \bar{\rho}, see function auxbar.
-            cs = numpy.einsum('pi,i->pi', cs, half_sph_norm/s)
+            if normalize_multipoles:
+                # int1 is the multipole value. l*2+2 is due to the radial part integral
+                # \int (r^l e^{-ar^2} * Y_{lm}) (r^l Y_{lm}) r^2 dr d\Omega
+                int1 = gto.gaussian_int(l*2+2, es)
+                s = numpy.einsum('pi,p->i', cs, int1)
+                # The auxiliary basis normalization factor is not a must for density expansion.
+                # half_sph_norm here to normalize the monopole (charge).  This convention can
+                # simplify the formulism of \int \bar{\rho}, see function auxbar.
+                cs = numpy.einsum('pi,i->pi', cs, half_sph_norm/s)
+            else:
+                cs = gto.mole._nomalize_contracted_ao(l, es, cs)
             _env[ptr:ptr+np*nc] = cs.T.ravel()
 
             steep_shls.append(ib)
@@ -264,9 +286,35 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 
         self.check_sanity()
         self.dump_flags()
+        cell = self.cell
 
-        self.auxcell = make_modrho_basis(self.cell, self.auxbasis,
-                                         self.exp_to_discard)
+        # Remove overlaps between the sampling and band k-points. Duplicate
+        # k-points can cause incore.wrap_int3c to allocate an oversized buffer
+        # that the integral code leaves partially unfilled.
+        if self.kpts_band is None:
+            kpts_union = self.kpts
+        else:
+            kpts_union = unique(numpy.vstack([self.kpts, self.kpts_band]))[0]
+        j_only = self._j_only or len(kpts_union) == 1
+
+        # Charge normalization makes charge-compensated DF integrals simpler.
+        # However, it gives compact auxiliary functions much larger
+        # coefficients, making the two-center Coulomb metric more ill-conditioned.
+        # Other algorithms should not use this normalization.
+        if self._prefer_ccdf or cell.omega > 0:
+            # Only _CCGDFBuilder supports long-range integrals.
+            auxcell = self.auxcell = make_auxcell(
+                cell, self.auxbasis, self.exp_to_discard,
+                normalize_multipoles=True)
+            dfbuilder = _CCGDFBuilder(cell, auxcell, kpts_union)
+        else:
+            auxcell = self.auxcell = make_auxcell(
+                cell, self.auxbasis, self.exp_to_discard,
+                normalize_multipoles=False)
+            dfbuilder = _RSGDFBuilder(cell, auxcell, kpts_union)
+        dfbuilder.eta = self.eta
+        dfbuilder.mesh = self.mesh
+        dfbuilder.linear_dep_threshold = self.linear_dep_threshold
 
         if with_j3c and self._cderi_to_save is not None:
             if isinstance(self._cderi_to_save, str):
@@ -285,37 +333,14 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                 else:
                     logger.warn(self, 'Value of ._cderi is ignored. '
                                 'DF integrals will be saved in file %s .', cderi)
-            self._cderi = cderi
+
             t1 = (logger.process_clock(), logger.perf_counter())
-            self._make_j3c(self.cell, self.auxcell, None, cderi)
+            self._cderi = cderi
+            dfbuilder.make_j3c(cderi, j_only=j_only, dataname=self._dataname,
+                               kptij_lst=None)
+
             t1 = logger.timer_debug1(self, 'j3c', *t1)
         return self
-
-    def _make_j3c(self, cell=None, auxcell=None, kptij_lst=None, cderi_file=None):
-        if cell is None: cell = self.cell
-        if auxcell is None: auxcell = self.auxcell
-        if cderi_file is None: cderi_file = self._cderi_to_save
-
-        # Remove duplicated k-points. Duplicated kpts may lead to a buffer
-        # located in incore.wrap_int3c larger than necessary. Integral code
-        # only fills necessary part of the buffer, leaving some space in the
-        # buffer unfilled.
-        if self.kpts_band is None:
-            kpts_union = self.kpts
-        else:
-            kpts_union = unique(numpy.vstack([self.kpts, self.kpts_band]))[0]
-
-        if self._prefer_ccdf or cell.omega > 0:
-            # For long-range integrals _CCGDFBuilder is the only option
-            dfbuilder = _CCGDFBuilder(cell, auxcell, kpts_union)
-            dfbuilder.eta = self.eta
-        else:
-            dfbuilder = _RSGDFBuilder(cell, auxcell, kpts_union)
-        dfbuilder.mesh = self.mesh
-        dfbuilder.linear_dep_threshold = self.linear_dep_threshold
-        j_only = self._j_only or len(kpts_union) == 1
-        dfbuilder.make_j3c(cderi_file, j_only=j_only, dataname=self._dataname,
-                           kptij_lst=kptij_lst)
 
     def cderi_array(self, label=None):
         '''
