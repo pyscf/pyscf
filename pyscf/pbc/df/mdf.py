@@ -22,6 +22,8 @@ Ref:
 J. Chem. Phys. 147, 164119 (2017)
 '''
 
+import os
+import sys
 import numpy as np
 import h5py
 import scipy.linalg
@@ -97,9 +99,76 @@ class MDF(df.GDF):
             excludes=('_cderi_to_save', '_cderi', '_rsh_df'), reset_state=True)
 
     def build(self, j_only=None, with_j3c=True, kpts_band=None):
-        df.GDF.build(self, j_only, with_j3c, kpts_band)
+        if j_only is not None:
+            self._j_only = j_only
+        if self.kpts_band is not None:
+            self.kpts_band = np.reshape(self.kpts_band, (-1,3))
+        if kpts_band is not None:
+            kpts_band = np.reshape(kpts_band, (-1,3))
+            if self.kpts_band is None:
+                self.kpts_band = kpts_band
+            else:
+                self.kpts_band = unique(np.vstack((self.kpts_band,kpts_band)))[0]
+
+        self.check_sanity()
+        self.dump_flags()
         cell = self.cell
-        if any(x % 2 == 0 for x in self.mesh[:cell.dimension]):
+
+        # Remove overlaps between the sampling and band k-points. Duplicate
+        # k-points can cause incore.wrap_int3c to allocate an oversized buffer
+        # that the integral code leaves partially unfilled.
+        if self.kpts_band is None:
+            kpts_union = self.kpts
+        else:
+            kpts_union = unique(np.vstack([self.kpts, self.kpts_band]))[0]
+        j_only = self._j_only or len(kpts_union) == 1
+
+        # Charge normalization makes charge-compensated DF integrals simpler.
+        # However, it gives compact auxiliary functions much larger
+        # coefficients, making the two-center Coulomb metric more ill-conditioned.
+        # Other algorithms should not use this normalization.
+        if self._prefer_ccdf or cell.omega > 0:
+            # Only _CCMDFBuilder supports long-range integrals.
+            auxcell = self.auxcell = df.make_auxcell(
+                cell, self.auxbasis, self.exp_to_discard,
+                normalize_multipoles=True)
+            dfbuilder = _CCMDFBuilder(cell, auxcell, kpts_union)
+        else:
+            auxcell = self.auxcell = df.make_auxcell(
+                cell, self.auxbasis, self.exp_to_discard,
+                normalize_multipoles=False)
+            dfbuilder = _RSMDFBuilder(cell, auxcell, kpts_union)
+        dfbuilder.eta = self.eta
+        dfbuilder.mesh = self.mesh
+        dfbuilder.linear_dep_threshold = self.linear_dep_threshold
+
+        if with_j3c and self._cderi_to_save is not None:
+            if isinstance(self._cderi_to_save, str):
+                cderi = self._cderi_to_save
+            else:
+                cderi = self._cderi_to_save.name
+            if isinstance(self._cderi, str):
+                if self._cderi == cderi and os.path.isfile(cderi):
+                    logger.warn(self, 'File %s (specified by ._cderi) is '
+                                'overwritten by GDF initialization.', cderi)
+                    # On Windows, close the handle before os.remove to avoid
+                    # permission error.
+                    if sys.platform == 'win32':
+                        self._cderi_to_save.close()
+                    os.remove(cderi)
+                else:
+                    logger.warn(self, 'Value of ._cderi is ignored. '
+                                'DF integrals will be saved in file %s .', cderi)
+
+            t1 = (logger.process_clock(), logger.perf_counter())
+            self._cderi = cderi
+            dfbuilder.make_j3c(cderi, j_only=j_only, dataname=self._dataname,
+                               kptij_lst=None)
+            # Use the same mesh for the Gaussian and plane-wave parts.
+            self.mesh = dfbuilder.mesh
+            t1 = logger.timer_debug1(self, 'j3c', *t1)
+
+        if self.mesh is not None and any(x % 2 == 0 for x in self.mesh[:cell.dimension]):
             # Even number in mesh can produce planewaves without counterparts
             # (see np.fft.fftfreq). MDF mesh is typically not enough to capture
             # all basis. The singular planewaves can break the symmetry in
@@ -107,35 +176,6 @@ class MDF(df.GDF):
             # hermitian of J and K matrices
             logger.warn(self, 'MDF with even number in mesh may have significant errors')
         return self
-
-    def _make_j3c(self, cell=None, auxcell=None, kptij_lst=None, cderi_file=None):
-        if cell is None: cell = self.cell
-        if auxcell is None: auxcell = self.auxcell
-        if cderi_file is None: cderi_file = self._cderi_to_save
-
-        # Remove duplicated k-points. Duplicated kpts may lead to a buffer
-        # located in incore.wrap_int3c larger than necessary. Integral code
-        # only fills necessary part of the buffer, leaving some space in the
-        # buffer unfilled.
-        if self.kpts_band is None:
-            kpts_union = self.kpts
-        else:
-            kpts_union = unique(np.vstack([self.kpts, self.kpts_band]))[0]
-
-        if self._prefer_ccdf or cell.omega > 0:
-            # For long-range integrals _CCMDFBuilder is the only option
-            dfbuilder = _CCMDFBuilder(cell, auxcell, kpts_union)
-        else:
-            dfbuilder = _RSMDFBuilder(cell, auxcell, kpts_union)
-            dfbuilder.eta = self.eta
-        dfbuilder.mesh = self.mesh
-        dfbuilder.linear_dep_threshold = self.linear_dep_threshold
-        j_only = self._j_only or len(kpts_union) == 1
-        dfbuilder.make_j3c(cderi_file, j_only=j_only, dataname=self._dataname,
-                           kptij_lst=kptij_lst)
-
-        # mdf.mesh must be the mesh to generate cderi
-        self.mesh = dfbuilder.mesh
 
     def weighted_coulG(self, kpt=np.zeros(3), exx=False, mesh=None, omega=None):
         # In PySCF-2.10 and earlier versions, certain contributions at the edges
