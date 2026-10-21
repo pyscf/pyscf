@@ -787,7 +787,7 @@ def load_ecp(filename_or_basisname, symb):
             out = parse_nwchem_ecp.parse(filename_or_basisname)
             warnings.warn(
                 f'The ECP input does not explicitly match the element {symb}. '
-                'It is stilled parsed and assigned to {symb} without enforcing '
+                f'It is stilled parsed and assigned to {symb} without enforcing '
                 'element matching. If you want to enforce a strict match '
                 'between the ECP input and elements, set\n'
                 '    gto_basis_enforce_element_match = True\n'
