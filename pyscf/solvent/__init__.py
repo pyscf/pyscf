@@ -153,6 +153,8 @@ def PCM(method_or_mol, solvent_obj=None, dm=None):
     method = method_or_mol
     if isinstance(method, scf.hf.SCF):
         return pcm.pcm_for_scf(method, solvent_obj, dm)
+    elif hasattr(method, 'otfnal'):
+        return pcm.pcm_for_pdft(method, solvent_obj, dm)
     elif isinstance(method, mcscf.casci.CASBase):
         if isinstance(method, mcscf.mc1step.CASSCF):
             return pcm.pcm_for_casscf(method, solvent_obj, dm)
