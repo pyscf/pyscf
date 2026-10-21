@@ -30,9 +30,9 @@ from pyscf.solvent._attach_solvent import _Solvation, _for_casscf
 
 '''
 Refer to the following paper for the definition of MC-PDFT+PCM and L-PDFT+PCM algorithms:
-A. Choudhury, M. R. Hermes, D. G. Truhlar, L. Gagliardi; Vertical 
-Excitation Energies in Solution via a Two-Time-Scale Solvation Model Coupled to 
-Pair-Density Functional Theory. J. Chem. Theory Comput. 2026; 
+A. Choudhury, M. R. Hermes, D. G. Truhlar, L. Gagliardi; Vertical
+Excitation Energies in Solution via a Two-Time-Scale Solvation Model Coupled to
+Pair-Density Functional Theory. J. Chem. Theory Comput. 2026;
 https://doi.org/10.1021/acs.jctc.6c01690
 '''
 def _for_mcpdft(mc, solvent_obj, dm=None):
