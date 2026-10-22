@@ -888,6 +888,40 @@ O    SP
         self.assertEqual(mol_large.search_ao_label("H 1s").tolist(), list(range(22)))
         self.assertEqual(mol_large.search_ao_label("1s").tolist(), list(range(22)))
 
+    def test_rebuild_without_ecp(self):
+        mol = gto.M(atom='Na 0 0 0', basis='lanl2dz', ecp='lanl2dz',
+                    spin=1, verbose=0)
+        self.assertTrue(mol.has_ecp())
+        mol.ecp = {}
+        mol.build(False, False)
+        ref = gto.M(atom='Na 0 0 0', basis='lanl2dz', spin=1, verbose=0)
+        self.assertEqual(mol._ecp, {})
+        self.assertEqual(mol._ecpbas.shape, (0, gto.BAS_SLOTS))
+        self.assertEqual(mol._ecpbas.dtype, numpy.dtype(numpy.int32))
+        self.assertFalse(mol.has_ecp())
+        self.assertEqual(mol.nelectron, 11)
+        numpy.testing.assert_allclose(mol.intor('int1e_nuc'),
+                                      ref.intor('int1e_nuc'), atol=1e-12)
+
+    def test_rebuild_atom_without_applicable_ecp(self):
+        mol = gto.M(atom='Na 0 0 0; H 0 0 2', basis='lanl2dz',
+                    ecp='lanl2dz', verbose=0)
+        atom = mol.copy()
+        atom.atom = 'H 0 0 0'
+        atom.spin = 1
+        atom.build(False, False)
+        ref = gto.M(atom='H 0 0 0', basis='lanl2dz', spin=1, verbose=0)
+        self.assertEqual(atom._ecp, {})
+        self.assertEqual(atom._ecpbas.shape, (0, gto.BAS_SLOTS))
+        self.assertFalse(atom.has_ecp())
+        self.assertTrue(mol.has_ecp())
+        numpy.testing.assert_allclose(atom.intor('int1e_nuc'),
+                                      ref.intor('int1e_nuc'), atol=1e-12)
+        atom.atom = 'Na 0 0 0'
+        atom.build(False, False)
+        self.assertTrue(atom.has_ecp())
+        self.assertEqual(atom.nelectron, 1)
+
     def test_input_ecp(self):
         mol1 = gto.Mole()
         mol1.atom = mol0.atom

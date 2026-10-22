@@ -2568,6 +2568,10 @@ class MoleBase(lib.StreamObject):
         if self.pseudo:
             self.ecp, self.pseudo = classify_ecp_pseudo(self, self.ecp, self.pseudo)
 
+        # Rebuilding may remove all ECPs or leave only atoms without an ECP.
+        # The old ECP table refers to the previous integral environment.
+        self._ecp = {}
+        self._ecpbas = numpy.zeros((0, BAS_SLOTS), dtype=numpy.int32)
         if self.ecp:
             # Unless explicitly input, ECP should not be assigned to ghost atoms
             atoms_wo_ghost = [a for a in uniq_atoms if not is_ghost_atom(a)]
