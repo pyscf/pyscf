@@ -1583,18 +1583,28 @@ def unpack_uniq_var(dx, mo_occ):
 
 
 def as_scanner(mf):
-    '''Generating a scanner/solver for HF PES.
+    '''Create a callable SCF object for scanning a potential energy surface.
 
-    The returned solver is a function. This function requires one argument
-    "mol" as input and returns total HF energy.
+    Args:
+        mf : SCF object
+            HF or Kohn-Sham object supplying the calculation settings and
+            any existing orbitals.
 
-    The solver will automatically use the results of last calculation as the
-    initial guess of the new calculation.  All parameters assigned in the
-    SCF object (DIIS, conv_tol, max_memory etc) are automatically applied in
-    the solver.
+    Returns:
+        A callable SCF object. Calling ``scanner(mol_or_geom, **kwargs)``
+        runs SCF and returns the total energy in Hartree. The first argument
+        can be a Mole object or a geometry accepted by :meth:`Mole.set_geom_`;
+        geometry coordinates use the scanner molecule's unit. Keyword
+        arguments are passed to ``kernel``. If ``mf`` is already a scanner,
+        it is returned unchanged.
 
-    Note scanner has side effects.  It may change many underlying objects
-    (_scf, with_df, with_x2c, ...) during calculation.
+    The scanner retains settings such as DIIS and convergence thresholds.
+    It reuses the previous density when the AO layouts match, or attempts
+    to read a checkpoint guess otherwise. An explicit ``dm0`` overrides
+    this reuse. Results are stored on the scanner after each call.
+
+    The scanner shallow-copies the original object's attributes. Scanning
+    may therefore modify shared objects such as ``with_df`` and ``with_x2c``.
 
     Examples:
 
@@ -2014,6 +2024,32 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
     from_chk.__doc__ = init_guess_by_chkfile.__doc__
 
     def get_init_guess(self, mol=None, key='minao', **kwargs):
+        '''Construct an initial SCF density matrix in the AO basis.
+
+        Kwargs:
+            mol : Mole object or None
+                Molecule for the guess. Defaults to ``self.mol``. The
+                checkpoint guess uses ``self.mol`` and ``self.chkfile``.
+            key : str or ndarray
+                Guess method, case-insensitive: ``'minao'`` (default),
+                ``'atom'``, ``'huckel'``, ``'mod_huckel'``, ``'1e'`` (or
+                ``'hcore'``), ``'sap'``, or ``'chkfile'``. ``'vsap'`` is also
+                available for DFT objects implementing that guess. Unrecognized
+                strings fall back to MINAO. A non-string value is returned
+                unchanged, allowing a density matrix to be supplied directly.
+            **kwargs :
+                Additional arguments passed to ``init_guess_by_sap`` when
+                ``key='sap'``.
+
+        Returns:
+            Initial density matrix. For restricted nonrelativistic methods,
+            this is a spin-summed array of shape ``(nao, nao)``; unrestricted
+            methods return alpha and beta matrices of shape ``(2, nao, nao)``.
+            Generalized and relativistic methods use their spin-orbital basis.
+
+        A checkpoint that cannot be read because of an OSError or missing
+        data (KeyError) falls back to the MINAO guess.
+        '''
         if not isinstance(key, str):
             return key
 
@@ -2067,11 +2103,30 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
     check_convergence = None
 
     def scf(self, dm0=None, **kwargs):
-        '''SCF main driver
+        '''Run SCF and store the energy, orbitals, and convergence status.
 
         Kwargs:
-            dm0 : ndarray
-                If given, it will be used as the initial guess density matrix
+            dm0 : ndarray or None
+                Initial density matrix in the AO basis. For restricted
+                nonrelativistic methods, use a spin-summed ``(nao, nao)``
+                array; for unrestricted methods, use alpha and beta matrices
+                of shape ``(2, nao, nao)``. Generalized and relativistic
+                methods use their spin-orbital basis. If omitted, existing
+                ``mo_coeff`` and ``mo_occ`` provide the guess when available;
+                otherwise ``self.init_guess`` selects the guess method.
+            **kwargs :
+                Additional options for :func:`pyscf.scf.hf.kernel`, such as
+                ``dump_chk``. Set convergence controls on the SCF object,
+                for example ``mf.conv_tol = 1e-9``.
+
+        Returns:
+            Total energy in Hartree, including nuclear repulsion. The energy
+            is returned even if SCF does not converge; check ``self.converged``.
+            Results are saved in ``e_tot``, ``mo_energy`` (Hartree),
+            ``mo_coeff``, and ``mo_occ``.
+
+        This method is also available as ``kernel``. Use ``run`` to return
+        the SCF object instead of the energy.
 
         Examples:
 
@@ -2250,6 +2305,27 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         return nbf**4/1e6+lib.current_memory()[0] < self.max_memory*.95
 
     def density_fit(self, auxbasis=None, with_df=None, only_dfj=False):
+        '''Return a density-fitting SCF object without running a calculation.
+
+        Kwargs:
+            auxbasis : str or dict or None
+                Auxiliary basis in the same format as ``mol.basis``. By
+                default, select a suitable fitting basis or generate an
+                even-tempered basis; see :func:`pyscf.df.df_jk.density_fit`.
+            with_df : DF object or None
+                Existing fitting object. If supplied, ``auxbasis`` is ignored.
+                Otherwise a new fitting object is created.
+            only_dfj : bool
+                Fit only the Coulomb matrix J and evaluate exchange K with
+                four-center integrals. Default is False (fit both J and K).
+
+        Returns:
+            A new SCF object with settings shallow-copied from this object
+            and the fitting object stored in ``with_df``.
+
+        Apply density fitting before adding a solvent model so that response
+        and nuclear-gradient methods use the appropriate implementation.
+        '''
         import pyscf.df.df_jk
         if self.istype('_Solvation'):
             logger.warn(self,
@@ -2276,13 +2352,31 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         raise NotImplementedError
 
     def sfx2c1e(self):
+        '''Return an SCF object with the spin-free one-electron X2C Hamiltonian.
+
+        The scalar relativistic correction modifies the core Hamiltonian;
+        two-electron integrals are unchanged. The X2C helper is stored in
+        ``with_x2c``. No SCF calculation is run. An existing spin-free X2C
+        object is reused; otherwise the returned object shallow-copies the
+        current settings. Also available as ``x2c1e`` and ``x2c``.
+
+        See :func:`pyscf.x2c.sfx2c1e.sfx2c1e` for details.
+        '''
         import pyscf.x2c.sfx2c1e
         return pyscf.x2c.sfx2c1e.sfx2c1e(self)
     x2c1e = sfx2c1e
     x2c = x2c1e
 
     def newton(self):
-        '''Create an SOSCF object based on the mean-field object'''
+        '''Return a CIAH second-order SCF solver using the current settings.
+
+        Existing orbitals supply the initial guess when available; a previous
+        SCF calculation is optional. Call ``kernel`` or ``run`` on the returned
+        object to optimize the orbitals. If this object is already a CIAH
+        solver, it is returned unchanged.
+
+        See :func:`pyscf.soscf.newton_ah.newton` for details.
+        '''
         from pyscf.soscf import newton_ah
         return newton_ah.newton(self)
 

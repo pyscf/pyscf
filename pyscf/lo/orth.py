@@ -41,7 +41,25 @@ def schmidt(s):
                                          overwrite_b=False).conj().T
 
 def vec_lowdin(c, s=1):
-    ''' lowdin orth for the metric c.T*s*c and get x, then c*x'''
+    '''Symmetrically orthonormalize column vectors in a supplied metric.
+
+    Args:
+        c : (nao, nvec) ndarray
+            Column vectors, real or complex, expressed in the original basis.
+        s : (nao, nao) ndarray or scalar
+            Overlap metric. The default scalar 1 uses the Euclidean metric.
+
+    Returns:
+        A new (nao, nvec) coefficient array, obtained as
+        ``c @ lowdin(c.conj().T @ s @ c)`` for an array metric. For a
+        positive-definite vector overlap, the returned columns obey
+        ``c_orth.conj().T @ s @ c_orth = I``.
+
+    Eigenvalues of the vector overlap at or below 1e-15 are discarded in
+    its inverse square root. The number of columns is unchanged in that
+    case, so linearly dependent inputs do not yield a full orthonormal set.
+    The input arrays are not modified.
+    '''
     #u, w, vh = numpy.linalg.svd(c)
     #return numpy.dot(u, vh)
     # svd is slower than eigh
@@ -273,28 +291,42 @@ def pre_orth_ao_atm_scf(mol):
 
 
 def orth_ao(mf_or_mol, method=ORTH_METHOD, pre_orth_ao=REF_BASIS, s=None, adjust_phase=True):
-    '''Orthogonalize AOs
+    '''Construct orthogonal atomic orbitals in the original AO basis.
+
+    Args:
+        mf_or_mol : Mole, Cell, or SCF object
+            Molecule or Gamma-point cell defining the AO basis, or a mean-field
+            object. The ``'nao'`` method requires a mean-field object with a
+            density matrix available through ``make_rdm1``.
 
     Kwargs:
         method : str
-            One of
-            | lowdin : Symmetric orthogonalization
-            | meta-lowdin : Lowdin orth within core, valence, virtual space separately
-                            (JCTC, 10, 3784)
-            | NAO
+            ``'lowdin'`` for symmetric orthogonalization, ``'meta_lowdin'``
+            (also ``'meta-lowdin'``) for separate core, valence, and Rydberg
+            orthogonalization, or ``'nao'`` for natural atomic orbitals.
+            Matching is case-insensitive. The default is ``'meta_lowdin'``,
+            configurable through ``lo_orth_orth_ao_method``.
+        pre_orth_ao : ndarray, str, dict, or None
+            (nao, nao) coefficients restoring AO character before Lowdin or
+            meta-Lowdin orthogonalization. A basis name, filename, or basis
+            dictionary generates these coefficients by projection onto that
+            reference basis. Default is ``'ANO'``, configurable through
+            ``lo_orth_pre_orth_ao_method``. None skips the projection. This
+            argument is not used by the NAO branch.
+        s : (nao, nao) ndarray or None
+            AO overlap matrix. By default compute it from the molecule or
+            from the cell at Gamma.
+        adjust_phase : bool
+            Default True. For float64 output, flip columns whose diagonal
+            coefficient is negative. Complex coefficients are not adjusted.
 
-        pre_orth_ao: numpy.ndarray or basis str or basis dict
-            Basis functions may not have AO characters. This variable is the
-            coefficients to restore AO characters for arbitrary basis. If a
-            string of basis name (can be the filename of a basis set) or a
-            dict of basis sets are given, they are interpreted as the
-            reference basis (by default ANO basis) that the projection
-            coefficients are generated based on.  Skip this projection step by
-            setting this variable to None.
+    Returns:
+        (nao, nao) coefficients of the orthogonal AOs in the original basis.
+        For a nonsingular overlap, ``C.conj().T @ s @ C`` is the identity.
+        Lowdin eigenvalues at or below 1e-15 are discarded, so a singular
+        overlap cannot produce a full orthonormal set.
 
-        adjust_phase : boolean
-            If set True and if real-valued orbitals, the sign of diagonal orb coeff matrix
-            is adjusted to positive. Defaul is True.
+    The meta-Lowdin construction is described in JCTC, 10, 3784.
     '''
     from pyscf import scf
     from pyscf.lo import nao

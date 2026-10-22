@@ -828,34 +828,48 @@ def make_kpts(cell, nks, wrap_around=WRAP_AROUND, with_gamma_point=WITH_GAMMA,
               scaled_center=None,
               space_group_symmetry=False, time_reversal_symmetry=False,
               **kwargs):
-    '''Given number of kpoints along x,y,z , generate kpoints
+    '''Generate a uniform mesh of k-points in reciprocal space.
 
     Args:
-        nks : (3,) ndarray
+        cell : Cell
+            Built cell defining the reciprocal lattice.
+        nks : sequence of three positive ints
+            Number of points along each reciprocal lattice direction.
 
     Kwargs:
         wrap_around : bool
-            To ensure all kpts are in first Brillouin zone.
+            Map unshifted fractional coordinates >= 0.5 to negative values,
+            placing them in [-0.5, 0.5). Default False, configurable through
+            ``pbc_gto_cell_make_kpts_wrap_around``. The center shift is applied
+            afterwards, so shifted points are not wrapped again.
         with_gamma_point : bool
-            Whether to shift Monkhorst-pack grid to include gamma-point.
-        scaled_center : (3,) array
-            Shift all points in the Monkhorst-pack grid to be centered on
-            scaled_center, given as the zeroth index of the returned kpts.
-            Scaled meaning that the k-points are scaled to a grid from
-            [-1,1] x [-1,1] x [-1,1]
+            Default True: use fractional coordinates ``arange(n) / n`` on
+            each axis. False uses ``(arange(n) + 0.5) / n - 0.5`` unless
+            ``scaled_center`` is supplied. Configurable through
+            ``pbc_gto_cell_make_kpts_with_gamma``.
+        scaled_center : (3,) array-like or None
+            Shift in fractions of reciprocal lattice vectors, whose default
+            normalization includes 2*pi. Supplying a center forces the
+            Gamma-containing mesh before shifting; the first point is the
+            supplied center. None uses zero shift.
         space_group_symmetry : bool
-            Whether to consider space group symmetry
+            Default False. Return symmetry-reduced k-point information using
+            the cell's space group. Requires a cell built with
+            ``cell.space_group_symmetry = True``.
         time_reversal_symmetry : bool
-            Whether to consider time reversal symmetry
+            Default False. Include time-reversal symmetry in the k-point
+            reduction.
+        **kwargs :
+            Currently unused.
 
     Returns:
-        kpts in absolute value (unit 1/Bohr).  Gamma point is placed at the
-        first place in the k-points list;
-        instance of :class:`KPoints` if k-point symmetry is considered
+        With both symmetry flags False, an (prod(nks), 3) array of absolute
+        k-points in inverse Bohr. Gamma is first when ``with_gamma_point``
+        is True and the center is zero. With either symmetry flag True,
+        return a :class:`pyscf.pbc.lib.kpts.KPoints` object containing the
+        full mesh, irreducible mesh, weights, and symmetry mappings.
 
-    Examples:
-
-    >>> cell.make_kpts((4,4,4))
+    The cell and its existing k-point settings are not modified.
     '''
     ks_each_axis = []
     for n in nks:
@@ -1904,15 +1918,21 @@ class Cell(mole.MoleBase):
         return np.dot(self.atom_coords(), np.linalg.inv(a))
 
     def reciprocal_vectors(self, norm_to=2*np.pi):
-        r'''
-        .. math::
+        '''Return reciprocal lattice vectors as rows of a (3, 3) array.
 
-            \begin{align}
-            \mathbf{b_1} &= 2\pi \frac{\mathbf{a_2} \times \mathbf{a_3}}{\mathbf{a_1} \cdot (\mathbf{a_2} \times \mathbf{a_3})} \\
-            \mathbf{b_2} &= 2\pi \frac{\mathbf{a_3} \times \mathbf{a_1}}{\mathbf{a_2} \cdot (\mathbf{a_3} \times \mathbf{a_1})} \\
-            \mathbf{b_3} &= 2\pi \frac{\mathbf{a_1} \times \mathbf{a_2}}{\mathbf{a_3} \cdot (\mathbf{a_1} \times \mathbf{a_2})}
-            \end{align}
+        Kwargs:
+            norm_to : float
+                Dot-product normalization between direct and reciprocal vectors.
+                Default is 2*pi. With direct vectors ``a`` in Bohr and returned
+                vectors ``b``, ``a @ b.T = norm_to * I``.
 
+        Returns:
+            Reciprocal vectors in inverse Bohr, independent of ``self.unit``.
+            The result is ``norm_to * inv(self.lattice_vectors().T)``.
+
+        For dimension 1, all three direct lattice vectors must be mutually
+        orthogonal. For dimension 2, the third must be perpendicular to the
+        first two. These conditions are checked by assertions.
         '''
         a = self.lattice_vectors()
         if self.dimension == 1:
@@ -1926,30 +1946,40 @@ class Cell(mole.MoleBase):
         return norm_to * b
 
     def get_abs_kpts(self, scaled_kpts):
-        '''Get absolute k-points (in 1/Bohr), given "scaled" k-points in
-        fractions of lattice vectors.
+        '''Convert fractional reciprocal coordinates to absolute k-points.
 
         Args:
-            scaled_kpts : (nkpts, 3) ndarray of floats
+            scaled_kpts : (nkpts, 3) or (3,) array-like
+                Dimensionless coefficients of the reciprocal lattice vectors,
+                which include the conventional 2*pi normalization. Coordinates
+                need not be wrapped to a particular reciprocal unit cell.
 
         Returns:
-            abs_kpts : (nkpts, 3) ndarray of floats
+            Absolute Cartesian k-points in inverse Bohr, with the same shape
+            as the input. Computes ``scaled_kpts @ self.reciprocal_vectors()``.
+            Neither the input nor the cell is modified.
         '''
         return np.dot(scaled_kpts, self.reciprocal_vectors())
 
     def get_scaled_kpts(self, abs_kpts, kpts_in_ibz=True):
-        '''Get scaled k-points, given absolute k-points in 1/Bohr.
+        '''Convert absolute k-points to fractional reciprocal coordinates.
 
         Args:
-            abs_kpts : (nkpts, 3) ndarray of floats or :class:`KPoints` object
+            abs_kpts : (nkpts, 3) or (3,) array-like, or KPoints
+                Absolute Cartesian k-points in inverse Bohr, or a symmetry-aware
+                :class:`pyscf.pbc.lib.kpts.KPoints` object.
 
+        Kwargs:
             kpts_in_ibz : bool
-                If True, return k-points in IBZ; otherwise, return k-points in BZ.
-                Default value is True. This has effects only if abs_kpts is a
-                :class:`KPoints` object
+                For a KPoints object, return its irreducible-zone coordinates if
+                True (default), or full-zone coordinates if False. Ignored for
+                an array input.
 
         Returns:
-            scaled_kpts : (nkpts, 3) ndarray of floats
+            Dimensionless fractions of reciprocal lattice vectors with 2*pi
+            normalization. Array input retains its shape and is not wrapped.
+            KPoints input returns its stored (nkpts, 3) coordinate array for
+            the selected mesh; that array is not copied.
         '''
         from pyscf.pbc.lib.kpts import KPoints
         if isinstance(abs_kpts, KPoints):

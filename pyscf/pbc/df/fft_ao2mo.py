@@ -100,7 +100,42 @@ def get_eri(mydf, kpts=None,
 
 def general(mydf, mo_coeffs, kpts=None,
             compact=getattr(__config__, 'pbc_df_ao2mo_general_compact', True)):
-    '''General MO integral transformation'''
+    '''Transform periodic FFT density-fitting integrals to molecular orbitals.
+
+    Args:
+        mydf : FFTDF object
+            Density-fitting object defining the cell, integration mesh, and
+            numerical AO evaluator. The cell must have dimension 2 or 3 and
+            must not use ``low_dim_ft_type='inf_vacuum'``.
+        mo_coeffs : ndarray or sequence of four ndarrays
+            One (nao, nmo) coefficient matrix used for all four indices, or
+            four matrices of shapes (nao, ni), (nao, nj), (nao, nk), and
+            (nao, nl), corresponding to the four k-points. Coefficients for
+            the first and third indices are complex-conjugated.
+
+    Kwargs:
+        kpts : (4, 3) or (3,) array-like or None
+            Absolute k-points (ki, kj, kk, kl) in inverse Bohr. A single
+            vector is repeated four times; None selects four Gamma points,
+            independently of ``mydf.kpts``. Requires momentum conservation
+            ``-ki + kj - kk + kl = G`` for a reciprocal lattice vector G.
+        compact : bool
+            Pack both orbital pairs when all four coefficient matrices are
+            equal and real and all k-points are Gamma. Default True,
+            configurable through ``pbc_df_ao2mo_general_compact``. Other
+            cases produce unpacked pairs even when this option is True.
+
+    Returns:
+        Chemists' notation (ij|kl) integrals in Hartree as a pair matrix.
+        Unpacked shape is (ni*nj, nk*nl); the packed shape is (npair, npair),
+        where ``npair = nmo*(nmo+1)//2``. Values are real for real Gamma-point
+        orbitals and complex otherwise. If momentum is not conserved, emits
+        a warning and returns zeros of shape (ni, nj, nk, nl).
+
+    Available as ``FFTDF.ao2mo`` and ``FFTDF.get_mo_eri``. Uses ``mydf.mesh``
+    for numerical integration and allocates the full transformed integrals
+    in memory. Input orbital coefficients are not modified.
+    '''
     from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
     warn_pbc2d_eri(mydf)
     cell = mydf.cell

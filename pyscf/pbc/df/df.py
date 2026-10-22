@@ -366,7 +366,38 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 
     def sr_loop(self, kpti_kptj=numpy.zeros((2,3)), max_memory=2000,
                 compact=True, blksize=None, aux_slice=None):
-        '''Short range part'''
+        '''Iterate over Gaussian density-fitting three-index tensor blocks.
+
+        Kwargs:
+            kpti_kptj : (2, 3) array-like
+                Pair of absolute k-points in inverse Bohr. Defaults to Gamma
+                for both AO indices. The stored tensor must contain this pair.
+            max_memory : float
+                Memory budget in MB used to choose the block size when
+                ``blksize`` is None. Default is 2000.
+            compact : bool
+                Default True. Pack the AO pair into its lower triangle when
+                both k-points are Gamma; otherwise preserve the stored packing.
+                With False, unpack equal-k-point tensors to ``nao**2`` columns.
+                Unequal-k-point pairs are full.
+            blksize : int or None
+                Number of auxiliary rows per block. None estimates it from
+                available memory and ``self.blockdim``, with a minimum of 16.
+            aux_slice : pair of ints or None
+                Optional half-open auxiliary-row interval (start, stop).
+                None iterates over all rows. Applied separately to each sign
+                sector for a two-dimensional truncated Coulomb interaction.
+
+        Yields:
+            (LpqR, LpqI, sign), with real and imaginary float arrays of shape
+            (naux_block, nao_pair). Packed pairs use ``nao*(nao+1)//2`` columns;
+            full pairs use ``nao**2``. Together they represent ``LpqR + 1j*LpqI``.
+            The metric sign is +1, or -1 for the negative sector of a 2D
+            truncated Coulomb interaction; retain it when reconstructing ERIs.
+
+        Builds and stores the DF tensor if ``self._cderi`` is not initialized.
+        All positive-metric blocks precede any negative-metric blocks.
+        '''
         if self._cderi is None:
             self.build(j_only=self._j_only)
         cell = self.cell
@@ -595,7 +626,18 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             yield LpqR
 
     def get_naoaux(self):
-        '''The dimension of auxiliary basis at gamma point'''
+        '''Return the auxiliary dimension of the stored DF tensor.
+
+        Returns:
+            Integer number of auxiliary rows, obtained from the tensor rather
+            than from the nominal auxiliary basis. For stored 2D truncated
+            Coulomb tensors, includes both positive and negative metric sectors.
+
+        If the tensor is not initialized, calls ``build(j_only=self._j_only)``
+        first. For file-backed tensors, reads the first stored k-point-pair
+        block; the result is not a separate dimension for every k-point pair.
+        For a user-supplied ndarray, reads its auxiliary axis directly.
+        '''
 # determine naoaux with self._cderi, because DF object may be used as CD
 # object when self._cderi is provided.
         if self._cderi is None:

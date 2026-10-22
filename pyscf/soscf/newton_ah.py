@@ -988,7 +988,18 @@ class _SecondOrderRHF(_CIAH_SOSCF):
     gen_g_hop = gen_g_hop_rhf
 
 def newton(mf):
-    '''Co-iterative augmented hessian (CIAH) second order SCF solver
+    '''Create a co-iterative augmented Hessian (CIAH) second-order SCF solver.
+
+    Args:
+        mf : SCF object
+            HF or Kohn-Sham object providing the method, settings, and any
+            available orbitals. A preceding SCF calculation is optional.
+
+    Returns:
+        A second-order SCF object. Call its ``kernel`` or ``run`` method to
+        optimize the orbitals. Existing attributes are shallow-copied and
+        the original mean-field object is retained as ``_scf``. If ``mf`` is
+        already a CIAH solver, return it unchanged.
 
     Examples:
 

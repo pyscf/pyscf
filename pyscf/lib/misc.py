@@ -642,7 +642,7 @@ SANITY_CHECK = getattr(__config__, 'SANITY_CHECK', True)
 class StreamObject:
     '''For most methods, there are three stream functions to pipe computing stream:
 
-    1 ``.set_`` function to update object attributes, eg
+    1 ``.set`` function to update object attributes, eg
     ``mf = scf.RHF(mol).set(conv_tol=1e-5)`` is identical to proceed in two steps
     ``mf = scf.RHF(mol); mf.conv_tol=1e-5``
 
@@ -689,21 +689,47 @@ class StreamObject:
         '''
 
     def run(self, *args, **kwargs):
-        '''
-        Call the kernel function of current object.  `args` will be passed
-        to kernel function.  `kwargs` will be used to update the attributes of
-        current object.  The return value of method run is the object itself.
-        This allows a series of functions/methods to be executed in pipe.
+        '''Set attributes, execute the kernel, and return the current object.
+
+        Args:
+            *args :
+                Positional arguments passed to :meth:`kernel`.
+
+        Kwargs:
+            **kwargs :
+                Attributes to set before calling the kernel. These keywords
+                are not passed to the kernel; use ``kernel`` directly to
+                supply keyword arguments to the calculation.
+
+        Returns:
+            The current object, with calculation results stored in its
+            attributes, for chaining further method calls.
+
+        Examples:
+
+        >>> from pyscf import gto, scf
+        >>> mol = gto.M(atom='H 0 0 0; H 0 0 1', verbose=0)
+        >>> mf = scf.RHF(mol).run(conv_tol=1e-9)
         '''
         self.set(**kwargs)
         self.kernel(*args)
         return self
 
     def set(self, *args, **kwargs):
-        '''
-        Update the attributes of the current object.  The return value of
-        method set is the object itself.  This allows a series of
-        functions/methods to be executed in pipe.
+        '''Update attributes in place and return the current object.
+
+        Args:
+            *args :
+                Unsupported positional arguments are ignored with a warning.
+
+        Kwargs:
+            **kwargs :
+                Attribute names and values assigned with ``setattr``. New
+                attributes may be added; names and values are not validated.
+
+        Returns:
+            The current object, allowing calls such as
+            ``mf.set(conv_tol=1e-9).run()``.
         '''
         if args:
             warnings.warn('method set() only supports keyword arguments.\n'
@@ -724,10 +750,26 @@ class StreamObject:
     __call__ = set
 
     def apply(self, fn, *args, **kwargs):
-        '''
-        Apply the fn to rest arguments:  return ``fn(*args, **kwargs)``.  The
-        return value of method set is the object itself.  This allows a series
-        of functions/methods to be executed in pipe.
+        '''Call a function or constructor with this object as its first argument.
+
+        Args:
+            fn : callable
+                Function or class called as ``fn(self, *args, **kwargs)``.
+            *args :
+                Additional positional arguments passed to ``fn``.
+
+        Kwargs:
+            **kwargs :
+                Additional keyword arguments passed to ``fn``.
+
+        Returns:
+            The result returned by ``fn``, which may be a different object.
+
+        Examples:
+
+        >>> from pyscf import gto, scf, mp
+        >>> mol = gto.M(atom='H 0 0 0; H 0 0 1', verbose=0)
+        >>> pt = mol.apply(scf.RHF).run().apply(mp.MP2).run()
         '''
         return fn(self, *args, **kwargs)
 

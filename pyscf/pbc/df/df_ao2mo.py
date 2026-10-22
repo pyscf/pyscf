@@ -31,6 +31,35 @@ from pyscf import __config__
 
 def get_eri(mydf, kpts=None,
             compact=getattr(__config__, 'pbc_df_ao2mo_get_eri_compact', True)):
+    '''Reconstruct periodic AO electron-repulsion integrals from DF tensors.
+
+    Args:
+        mydf : GDF object
+            Gaussian density-fitting object providing the three-index tensor.
+            Builds the tensor if it is not initialized.
+
+    Kwargs:
+        kpts : (4, 3) or (3,) array-like or None
+            Absolute k-points (ki, kj, kk, kl) in inverse Bohr. A single
+            vector is used for all four indices; None means four Gamma
+            points, independently of ``mydf.kpts``. Momentum must satisfy
+            ``-ki + kj - kk + kl = G`` for a reciprocal lattice vector G.
+        compact : bool
+            At Gamma, return lower-triangular AO-pair packing if True.
+            Default True, configurable through ``pbc_df_ao2mo_get_eri_compact``.
+            Away from Gamma, the result is always unpacked.
+
+    Returns:
+        Chemists' notation (ij|kl) integrals in Hartree. At Gamma with
+        ``compact=True``, a real (npair, npair) matrix, where
+        ``npair = nao*(nao+1)//2``. Otherwise shape (nao**2, nao**2), with
+        complex values away from Gamma. If momentum is not conserved,
+        emits a warning and returns a zero array of shape (nao, nao, nao, nao).
+
+    Available as ``GDF.get_eri`` and ``GDF.get_ao_eri``. Reconstructing all
+    four-index integrals requires memory proportional to the fourth power
+    of the AO basis size.
+    '''
     if mydf._cderi is None:
         mydf.build()
 

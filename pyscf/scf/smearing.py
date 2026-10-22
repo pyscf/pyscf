@@ -23,7 +23,63 @@ from pyscf import __config__
 SMEARING_METHOD = getattr(__config__, 'pbc_scf_addons_smearing_method', 'fermi')
 
 def smearing(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
-    '''Fermi-Dirac or Gaussian smearing'''
+    '''Apply fractional orbital occupations using Fermi-Dirac or Gaussian smearing.
+
+    Args:
+        mf : SCF object
+            HF or Kohn-Sham object. K-point calculations are dispatched to
+            :func:`pyscf.pbc.scf.smearing.smearing`. Second-order SCF solvers
+            are not supported. Molecular ROHF/ROKS objects are converted to
+            RHF/RKS; use UHF/UKS to constrain the spin populations.
+
+    Kwargs:
+        sigma : float or None
+            Positive smearing width in Hartree. For Fermi-Dirac smearing,
+            this is the electronic temperature times the Boltzmann constant,
+            ``k_B T``. None (default) or zero disables smearing.
+        method : str
+            ``'fermi'`` for Fermi-Dirac occupations or ``'gauss'`` (also
+            ``'gaussian'``) for Gaussian occupations. The default is
+            ``'fermi'``, configurable through
+            ``pbc_scf_addons_smearing_method``. Matching is case-insensitive;
+            any nonempty string other than ``'fermi'`` selects Gaussian
+            smearing. None or an empty string disables smearing.
+        mu0 : float or pair of floats or None
+            Fixed chemical potential in Hartree, rather than an initial guess
+            for its optimization. With None (default), optimize the chemical
+            potential to preserve the electron number. With a fixed value,
+            the electron number may change. For UHF/UKS with ``fix_spin=True``,
+            a pair sets separate alpha and beta potentials; a scalar sets
+            both to the same value.
+        fix_spin : bool
+            For UHF/UKS, use separate alpha and beta chemical potentials.
+            When ``mu0`` is None, this preserves the populations in ``mf.nelec``.
+            Default is False, which uses a common chemical potential and
+            allows the spin polarization to change. Not supported for
+            ROHF/ROKS; otherwise ignored for restricted calculations.
+
+    Returns:
+        An SCF object with smearing enabled, without running SCF. Attributes
+        are shallow-copied from ``mf``; an already decorated object is reused.
+        Adjust ``sigma``, ``smearing_method``, ``mu0``, and ``fix_spin`` on the
+        returned object to change the smearing settings for subsequent runs.
+
+    After a calculation with active smearing, ``entropy`` contains the
+    dimensionless entropy (in units of the Boltzmann constant for Fermi-Dirac
+    smearing), or the analogous Gaussian correction. ``e_free`` is
+    ``e_tot - sigma * entropy`` and ``e_zero`` is the extrapolated energy
+    ``e_tot - sigma * entropy / 2``. All energies are in Hartree. The SCF
+    ``kernel`` returns ``e_tot``, not ``e_free``. These correction attributes
+    are initialized to None and are not updated while smearing is disabled.
+
+    Examples:
+
+    >>> from pyscf import gto, scf
+    >>> mol = gto.M(atom='H 0 0 0; H 0 0 1', verbose=0)
+    >>> mf = scf.RHF(mol).smearing(sigma=0.01, method='fermi').run()
+    >>> mf.sigma = 0.001
+    >>> energy = mf.kernel()
+    '''
     if isinstance(mf, _SmearingSCF):
         mf.sigma = sigma
         mf.method = method
@@ -57,6 +113,15 @@ def smearing(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
                          (_SmearingSCF, mf.__class__))
 
 def smearing_(mf, *args, **kwargs):
+    '''Apply smearing in place and return the original SCF object.
+
+    ``mf`` is the SCF object to modify. Additional positional and keyword
+    arguments are passed to :func:`smearing`: ``sigma``, ``method``, ``mu0``,
+    and ``fix_spin``. See that function for units, defaults, and limitations.
+
+    This replaces ``mf.__class__`` and ``mf.__dict__``, so all references to
+    ``mf`` see the change. No SCF calculation is run.
+    '''
     mf1 = smearing(mf, *args, **kwargs)
     mf.__class__ = mf1.__class__
     mf.__dict__ = mf1.__dict__

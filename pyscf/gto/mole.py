@@ -106,9 +106,17 @@ del f
 NUMBERED_ATOM_LABEL = re.compile("^[0-9]+ [A-Z]")
 
 def M(*args, **kwargs):
-    r'''This is a shortcut to build up Mole object.
+    r'''Create and build a Mole object.
 
-    Args: Same to :func:`Mole.build`
+    Positional and keyword arguments are passed to :meth:`Mole.build`.
+    Common keywords include ``atom`` (geometry), ``basis`` (orbital basis),
+    ``charge`` (net molecular charge), and ``spin`` (the number of alpha
+    electrons minus the number of beta electrons, or 2S). Coordinates are
+    in Angstrom unless ``unit`` specifies otherwise.
+
+    Returns:
+        A built :class:`Mole` object, ready for integral evaluation or use
+        in a calculation. This is equivalent to ``Mole().build(*args, **kwargs)``.
 
     Examples:
 
@@ -3783,6 +3791,32 @@ class MoleBase(lib.StreamObject):
         return sph.sph2spinor_coeff(self)
 
     def apply(self, fn, *args, **kwargs):
+        '''Apply a callable or a named calculation method to this molecule.
+
+        Args:
+            fn : callable or str
+                A function or class called as ``fn(self, *args, **kwargs)``,
+                or a method name such as ``'RHF'`` or ``'CCSD'``. String names
+                are converted to uppercase and resolved on this molecule.
+            *args :
+                Additional positional arguments for the callable or method.
+
+        Kwargs:
+            **kwargs :
+                Additional keyword arguments for the callable or method.
+
+        Returns:
+            The result of the callable or named method, usually a calculation
+            object. Call its ``run`` or ``kernel`` method to run the target
+            calculation. Named post-SCF methods may first run SCF to prepare
+            the required reference wavefunction.
+
+        Examples:
+
+        >>> from pyscf import gto
+        >>> mol = gto.M(atom='H 0 0 0; H 0 0 1', verbose=0)
+        >>> mf = mol.apply('RHF').run()
+        '''
         if callable(fn):
             return lib.StreamObject.apply(self, fn, *args, **kwargs)
         elif isinstance(fn, str):

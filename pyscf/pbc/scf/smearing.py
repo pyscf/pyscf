@@ -164,7 +164,52 @@ class _SmearingKSCF(mol_addons._SmearingSCF):
             return _get_grad_tril(mo_coeff_kpts, mo_occ_kpts, fock)
 
 def smearing(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
-    '''Fermi-Dirac or Gaussian smearing'''
+    '''Apply fractional occupations across the sampled k-points.
+
+    Args:
+        mf : SCF object
+            Periodic HF or Kohn-Sham object. KROHF/KROKS is not supported.
+            Objects without k-point sampling are passed to
+            :func:`pyscf.scf.smearing.smearing`.
+
+    Kwargs:
+        sigma : float or None
+            Positive smearing width in Hartree; for Fermi-Dirac smearing,
+            ``sigma = k_B T``. None (default) or zero disables smearing.
+        method : str
+            ``'fermi'`` for Fermi-Dirac occupations or ``'gauss'`` (also
+            ``'gaussian'``) for Gaussian occupations. Defaults to ``'fermi'``
+            unless configured by ``pbc_scf_addons_smearing_method``. Matching
+            is case-insensitive; any other nonempty string selects Gaussian
+            smearing. None or an empty string disables smearing.
+        mu0 : float or pair of floats or None
+            Fixed chemical potential in Hartree. With None (default), optimize
+            the potential over all sampled k-points to preserve the electron
+            number. A fixed value allows the electron number to change.
+            For KUHF/KUKS with ``fix_spin=True``, a pair sets alpha and beta
+            potentials separately; a scalar sets both to the same value.
+        fix_spin : bool
+            For KUHF/KUKS, use separate alpha and beta chemical potentials
+            across the k-points. With ``mu0=None``, preserve the spin
+            populations in ``mf.nelec``. Default is False, allowing spin
+            polarization to change at a common chemical potential.
+
+    Returns:
+        An SCF object with smearing enabled. Attributes are shallow-copied;
+        an already decorated object is updated and returned unchanged in
+        identity. No SCF calculation is run.
+
+    After a calculation with active smearing, ``entropy`` is normalized per
+    unit cell, including spin degeneracy. The energy attributes (Hartree per
+    cell) satisfy ``e_free = e_tot - sigma * entropy`` and
+    ``e_zero = e_tot - sigma * entropy / 2``. ``kernel`` returns ``e_tot``.
+    See :func:`pyscf.scf.smearing.smearing` for the entropy convention and
+    behavior when smearing is disabled.
+
+    With symmetry-adapted KPoints, occupations are determined over the full
+    Brillouin-zone mesh and checked for consistency with the k-point symmetry.
+    See ``examples/pbc/23-smearing.py`` for a complete calculation.
+    '''
     from pyscf.pbc.scf import khf
     assert not mf.istype('KROHF'), 'Smearing for KROHF/KROKS is not supported'
     if not isinstance(mf, khf.KSCF):
@@ -186,6 +231,15 @@ def smearing(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
                          (_SmearingKSCF, mf.__class__))
 
 def smearing_(mf, *args, **kwargs):
+    '''Apply periodic smearing in place and return the original SCF object.
+
+    ``mf`` is the SCF object to modify. Additional positional and keyword
+    arguments are passed to :func:`smearing`: ``sigma``, ``method``, ``mu0``,
+    and ``fix_spin``. See that function for units, defaults, and limitations.
+
+    This replaces ``mf.__class__`` and ``mf.__dict__``, so all references to
+    ``mf`` see the change. No SCF calculation is run.
+    '''
     mf1 = smearing(mf, *args, **kwargs)
     mf.__class__ = mf1.__class__
     mf.__dict__ = mf1.__dict__
