@@ -528,6 +528,37 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(cell.nao_nr(), 21) # 4 + 2 + 2 + 13
         self.assertTrue(len(cell._pseudo) == 1)  # only O in ecp
 
+    def test_rebuild_without_lattice_symmetry(self):
+        cell = pgto.M(atom='He 0 0 0', a=np.eye(3)*4, basis='sto3g',
+                      space_group_symmetry=True, verbose=0)
+        self.assertEqual(cell.lattice_symmetry.nop, 48)
+        cell.build(False, False, a=np.diag([4., 5., 6.]),
+                   space_group_symmetry=False)
+        self.assertIsNone(cell.lattice_symmetry)
+        cell.build(False, False, space_group_symmetry=True)
+        self.assertEqual(cell.lattice_symmetry.nop, 8)
+        kpts = cell.make_kpts([3, 3, 3], space_group_symmetry=True)
+        self.assertEqual(kpts.nkpts_ibz, 8)
+
+    def test_exp_to_discard_symmetry(self):
+        cell = pgto.Cell()
+        cell.exp_to_discard = .2
+        cell.build(False, False, atom='He 0 0 0', a=np.eye(3)*4,
+                   basis={'He': [[0, [2., 1.]], [0, [.1, 1.]]]},
+                   symmetry=True, verbose=0)
+        ref = pgto.M(atom='He 0 0 0', a=np.eye(3)*4,
+                     basis={'He': [[0, [2., 1.]]]}, symmetry=True, verbose=0)
+        self.assertEqual(cell.nao, 1)
+        numpy.testing.assert_allclose(numpy.hstack(cell.symm_orb),
+                                      numpy.hstack(ref.symm_orb), atol=1e-12)
+        cell.exp_to_discard = None
+        cell.build(False, False)
+        self.assertEqual(numpy.hstack(cell.symm_orb).shape, (2, 2))
+        cell.exp_to_discard = .2
+        cell.build(False, False)
+        numpy.testing.assert_allclose(numpy.hstack(cell.symm_orb),
+                                      numpy.hstack(ref.symm_orb), atol=1e-12)
+
     def test_exp_to_discard(self):
         cell = pgto.Cell(
             atom = 'Li 0 0 0; Li 1.5 1.5 1.5',
