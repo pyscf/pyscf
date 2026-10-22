@@ -41,6 +41,11 @@ class KnownValues(unittest.TestCase):
                          (join('pople-basis', '6-311+G.dat'), join('pople-basis', '6-311G-polarization-d.dat')))
         self.assertRaises(KeyError, gto.basis._parse_pople_basis, '631g++', 'C')
 
+    def test_is_pople_basis(self):
+        for basis in ('631g', '631g**', '631+g(d,p)', '6311g', '321g', '431g'):
+            self.assertTrue(gto.basis._is_pople_basis(basis))
+        self.assertFalse(gto.basis._is_pople_basis('6311gststrifit'))
+
     def test_basis_load(self):
         self.assertRaises(RuntimeError, gto.basis.load, 'abas', 'H')
 
