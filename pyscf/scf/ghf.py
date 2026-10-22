@@ -360,6 +360,14 @@ def dip_moment(mol, dm, unit_symbol='Debye', origin=None, verbose=logger.NOTE):
     dmb = dm[nao:,nao:]
     return hf.dip_moment(mol, dma+dmb, unit=unit_symbol, verbose=verbose, origin=origin)
 
+
+def quad_moment(mol, dm, unit='DebyeAngstrom', origin=None, verbose=logger.NOTE):
+    """Quadrupole moment from the spin-summed spatial AO density."""
+    nao = mol.nao_nr()
+    dma = dm[:nao,:nao]
+    dmb = dm[nao:,nao:]
+    return hf.quad_moment(mol, dma+dmb, unit=unit, origin=origin, verbose=verbose)
+
 canonicalize = hf.canonicalize
 
 def guess_orbspin(mo_coeff):
@@ -400,11 +408,14 @@ class GHF(hf.SCF):
         hcore = hf.get_hcore(mol)
         hcore = scipy.linalg.block_diag(hcore, hcore)
 
-        if self.with_soc and mol.has_ecp_soc():
-            # The ECP SOC contribution = <|1j * s * U_SOC|>
-            s = .5 * lib.PauliMatrices
-            ecpso = numpy.einsum('sxy,spq->xpyq', -1j * s, mol.intor('ECPso'))
-            hcore = hcore + ecpso.reshape(hcore.shape)
+        if self.with_soc:
+            if mol._pseudo:
+                raise NotImplementedError
+            elif mol.has_ecp_soc():
+                # The ECP SOC integrals = <|1j * s * U_SOC|>
+                s = .5 * lib.PauliMatrices
+                ecpso = numpy.einsum('sxy,spq->xpyq', -1j * s, mol.intor('ECPso'))
+                hcore = hcore + ecpso.reshape(hcore.shape)
         return hcore
 
     def get_ovlp(self, mol=None):
@@ -536,6 +547,13 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         return dip_moment(mol, dm, unit_symbol, origin=origin, verbose=verbose)
+
+    @lib.with_doc(hf.quad_moment.__doc__)
+    def quad_moment(self, mol=None, dm=None, unit='DebyeAngstrom', origin=None,
+                    verbose=logger.NOTE):
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        return quad_moment(mol, dm, unit=unit, origin=origin, verbose=verbose)
 
     def convert_from_(self, mf):
         '''Create GHF object based on the RHF/UHF object'''
