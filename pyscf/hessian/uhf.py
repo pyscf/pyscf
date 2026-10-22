@@ -239,6 +239,7 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao,
               fx=None, atmlst=None, max_memory=4000, verbose=None,
               max_cycle=50, level_shift=0):
     mol = mf.mol
+    log = logger.new_logger(mf, verbose)
     if atmlst is None: atmlst = range(mol.natm)
 
     nao, nmo = mo_coeff[0].shape
@@ -283,7 +284,8 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao,
         s1vo = (numpy.vstack(s1voa), numpy.vstack(s1vob))
         tol = mf.conv_tol_cpscf * (ia1 - ia0)
         mo1, e1 = ucphf.solve(fx, mo_energy, mo_occ, h1vo, s1vo,
-                              max_cycle=max_cycle, level_shift=level_shift, tol=tol)
+                              max_cycle=max_cycle, level_shift=level_shift, tol=tol,
+                              verbose=log)
         mo1a = numpy.einsum('pq,xqi->xpi', mo_coeff[0], mo1[0]).reshape(-1,3,nao,nocca)
         mo1b = numpy.einsum('pq,xqi->xpi', mo_coeff[1], mo1[1]).reshape(-1,3,nao,noccb)
         e1a = e1[0].reshape(-1,3,nocca,nocca)
@@ -379,7 +381,7 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
         h1voa = reduce(numpy.dot, (mo_coeff[0].T, h1aoa, mocca))
         h1vob = reduce(numpy.dot, (mo_coeff[1].T, h1aob, moccb))
         mo1, mo_e1 = ucphf.solve(fvind, mo_energy, mo_occ,
-                                 (h1voa,h1vob), (s1voa,s1vob))
+                                 (h1voa,h1vob), (s1voa,s1vob), verbose=log)
         mo1a = numpy.dot(mo_coeff[0], mo1[0])
         mo1b = numpy.dot(mo_coeff[1], mo1[1])
         mo_e1a = mo_e1[0].reshape(nocca,nocca)
