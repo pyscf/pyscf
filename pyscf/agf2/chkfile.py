@@ -97,7 +97,7 @@ def load_agf2(chkfile):
                      SelfEnergy(seb['energy'], seb['coupling'], chempot=seb['chempot']))
         del (dic['sea'], dic['seb'])
 
-    if 'ngf' in dic:
+    if 'ngf' in dic or 'nse' in dic:
         dic['nmom'] = (dic.pop('ngf', None), dic.pop('nse', None))
 
     if 'frozena' in dic:

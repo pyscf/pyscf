@@ -166,7 +166,7 @@ class AuxiliarySpace:
         out[sp]  = np.dot(phys, vec[sp])
         out[sp] += np.dot(self.coupling, vec[sa])
 
-        out[sa]  = np.dot(vec[sp].T, self.coupling).conj().T
+        out[sa]  = np.dot(self.coupling.conj().T, vec[sp])
         out[sa] += (self.energy[:,None] - chempot) * vec[sa]
 
         out = out.reshape(input_shape)
@@ -529,7 +529,8 @@ def davidson(auxspc, phys, chempot=None, nroots=1, which='SM', tol=1e-14, maxite
     else:
         order = -1
 
-    matvec = lambda x: auxspc.dot(phys, np.asarray(x))
+    # Davidson batches vectors by row; dot expects vectors in columns.
+    matvec = lambda x: auxspc.dot(phys, np.asarray(x).T).T
     diag = np.concatenate([np.diag(phys), auxspc.energy])
     guess = [np.zeros(dim) for n in range(nroots)]
 

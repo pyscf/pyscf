@@ -2606,7 +2606,9 @@ class MoleBase(lib.StreamObject):
         if self.basis:
             _basis = _parse_default_basis(self.basis, uniq_atoms)
             self._basis = self.format_basis(_basis)
-        else:
+        elif basis is not None:
+            # An explicit empty basis clears it. With no basis argument,
+            # preserve preformatted _basis used by Molden/TREXIO readers.
             self._basis = {}
         env = self._env[:PTR_ENV_START]
         self._atm, self._bas, self._env = \
