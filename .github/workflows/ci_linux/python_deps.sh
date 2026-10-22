@@ -9,8 +9,13 @@ pip install trexio
 version=$(python -c 'import sys; version=sys.version_info[:2]; print("{0}.{1}".format(*version))')
 
 if [ $version == '3.12' ]; then
-    pip install spglib
     pip install pytblis
+fi
+
+# Include symmetry and quaternion eigensolver support in the nightly suite,
+# independently of the Python version selected by that workflow.
+if [ "$version" = '3.12' ] || [ "${INSTALL_NIGHTLY_DEPS:-false}" = 'true' ]; then
+    pip install spglib
     pip install git+https://github.com/sunqm/zquatev
     pip install basis-set-exchange
 fi

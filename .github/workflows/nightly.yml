@@ -1,0 +1,47 @@
+name: Nightly tests
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+      timezone: America/Los_Angeles
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  linux-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      OMP_NUM_THREADS: 1
+      OPENBLAS_NUM_THREADS: 1
+      MKL_NUM_THREADS: 1
+      # Let xdist choose one worker per detected CPU core.
+      PYTEST_JOBS: auto
+      INSTALL_NIGHTLY_DEPS: 'true'
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - name: Build and run tests including high-cost cases
+        # Override only the keyword filter; retain the other pytest.ini exclusions.
+        # Allow longer individual tests than the regular CI's 15-minute limit.
+        run: |
+          set -o pipefail
+          ./.github/workflows/run_ci.sh -k "not _skip" --timeout=3600 --junitxml=nightly-tests.xml 2>&1 | tee nightly-tests.log
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-linux-test-results
+          path: |
+            nightly-tests.log
+            nightly-tests.xml
+          retention-days: 14

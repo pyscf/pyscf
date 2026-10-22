@@ -15,6 +15,8 @@ ulimit -s 20000
 PYTEST_JOBS=${PYTEST_JOBS:-auto}
 # Which tests to run.
 TEST_PATHS=${TEST_PATHS:-pyscf}
+# Additional command-line arguments override pytest.ini selection or defaults,
+# e.g. -k "not _skip" includes high-cost tests in the nightly workflow.
 
 if [ "$PYTEST_JOBS" = "0" ]; then
   PARALLEL=""
@@ -43,9 +45,9 @@ if [ "$RUN_COVERAGE" = "true" ]; then
   pytest -s -c pytest.ini --timeout=900 $PARALLEL \
     --durations=20 \
     --cov-report xml --cov-report term --cov-config .coveragerc --cov pyscf \
-    $TEST_PATHS
+    $TEST_PATHS "$@"
 else
-  pytest -s -c pytest.ini --timeout=900 $PARALLEL --durations=20 $TEST_PATHS
+  pytest -s -c pytest.ini --timeout=900 $PARALLEL --durations=20 $TEST_PATHS "$@"
 fi
 
 pytest_status=$?
