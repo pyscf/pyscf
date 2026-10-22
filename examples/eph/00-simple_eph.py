@@ -43,8 +43,9 @@ mat, omega = myeph.kernel()
 print(mat.shape, omega)
 
 # Closed-shell unrestricted EPH gives alpha and beta coupling matrices.
-uhf = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587',
-            basis='sto3g').UHF().run()
+water = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587',
+              basis='sto3g')
+uhf = water.UHF().run()
 (eph_a, eph_b), omega_uhf = eph.EPH(uhf).kernel()
 print('UHF alpha/beta difference:', np.linalg.norm(eph_a - eph_b))
 rhf_ao, _ = eph.EPH(water.RHF().run()).kernel()

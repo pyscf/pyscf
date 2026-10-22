@@ -43,6 +43,10 @@ rks.xc = 'b3lyp'
 print(type(rks).__name__, rks.kernel())
 
 open_shell = pyscf.M(atom='O 0 0 0', basis='cc-pvdz', spin=2, symmetry=True)
-for ks in (open_shell.ROKS(), open_shell.UKS()):
-    ks.xc = 'b3lyp'
-    print(type(ks).__name__, ks.kernel())
+roks = open_shell.ROKS()
+roks.xc = 'b3lyp'
+print(type(roks).__name__, roks.kernel())
+
+uks = open_shell.UKS()
+uks.xc = 'b3lyp'
+print(type(uks).__name__, uks.kernel())

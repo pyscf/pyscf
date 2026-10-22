@@ -112,6 +112,7 @@ class SymAdaptedGHF(ghf.GHF):
         return self
 
     def build(self, mol=None):
+        assert not self.with_soc, 'Symmetry-adapted GHF does not support spin-orbit coupling'
         if mol is None: mol = self.mol
         if not mol.symmetry:
             raise RuntimeError('mol.symmetry not enabled')

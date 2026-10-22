@@ -2,10 +2,8 @@
 
 import unittest
 import numpy as np
-import pytest
 from pyscf.pbc import gto, dft, df, scf
 from pyscf.pbc.gw import krgw_ac, krgw_cd
-from pyscf.pbc.gw.test.test_krgw_ac import h2_hf, run_small_gw
 
 
 def setUpModule():
@@ -79,14 +77,23 @@ class KnownValues(unittest.TestCase):
         selected.kernel(nw=32, orbs=[1], kptlist=[0])
         self.assertAlmostEqual(selected.mo_energy[0, 1], low.mo_energy[0, 1], places=8)
 
+    def test_contour_deformation_matches_analytic_continuation(self):
+        cell = gto.M(atom='H 0 0 0; H 0 0 .74', a=np.eye(3)*4,
+                     basis='gth-szv', pseudo='gth-pade', mesh=[11]*3,
+                     precision=1e-6, verbose=0)
+        mf = scf.KRHF(cell, cell.make_kpts([1, 1, 1]), exxdiv=None)
+        mf = mf.density_fit(auxbasis='weigend').run(conv_tol=1e-10)
+        ref = krgw_ac.KRGWAC(mf)
+        ref.fc = False
+        ref.nw = 32
+        ref.ac_pade_npts = 12
+        ref.kernel()
+        self.assertTrue(np.isfinite(ref.mo_energy).all())
+        cd = krgw_cd.KRGWCD(mf)
+        cd.fc = False
+        cd.kernel(nw=32)
+        np.testing.assert_allclose(cd.mo_energy, ref.mo_energy, atol=2e-6)
+
 if __name__ == '__main__':
     print('Full Tests for KRGW')
     unittest.main()
-
-
-def test_contour_deformation_matches_analytic_continuation(h2_hf):
-    ref = run_small_gw(h2_hf, krgw_ac.KRGWAC)
-    cd = krgw_cd.KRGWCD(h2_hf)
-    cd.fc = False
-    cd.kernel(nw=32)
-    np.testing.assert_allclose(cd.mo_energy, ref.mo_energy, atol=2e-6)

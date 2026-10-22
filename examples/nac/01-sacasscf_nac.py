@@ -98,20 +98,4 @@ mc_grad = mc.nuc_grad_method()
 print ("Ground-state gradient:\n", mc_grad.kernel(state=0))
 print ("Excited-state gradient:\n", mc_grad.kernel(state=1))
 
-# CMS-PDFT has the same NAC options. Use standard PySCF quadrature grids;
-# reproducing external-program reference values may require matching grids.
-from pyscf import mcpdft
-cms = mcpdft.CASSCF(mf, 'ftLDA,VWN3', 2, 2, grids_level=3)
-cms.fix_spin_(ss=0)
-cms = cms.multi_state([0.5, 0.5], 'cms').run(conv_tol=1e-10)
-cms_nacs = cms.nac_method()
-print('CMS-PDFT state energies', cms.e_states)
-# ETFs omit the CSF contribution. Multiplying by the energy difference
-# yields the finite coupling numerator used near an intersection.
-print('CMS-PDFT NAC with CSF contribution', cms_nacs.kernel(state=(0, 1)))
-print('CMS-PDFT NAC with ETFs', cms_nacs.kernel(state=(0, 1), use_etfs=True))
-print('CMS-PDFT energy-scaled NAC with ETFs',
-      cms_nacs.kernel(state=(0, 1), use_etfs=True, mult_ediff=True))
-cms_grad = cms.nuc_grad_method()
-print('CMS-PDFT ground-state gradient', cms_grad.kernel(state=0))
-print('CMS-PDFT excited-state gradient', cms_grad.kernel(state=1))
+# See 02-mspdft_nac.py for CMS-PDFT couplings and state gradients.

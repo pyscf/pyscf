@@ -30,17 +30,11 @@ assert err < 1e-6
 mf = mol.apply('UKS').x2c().run()
 h = mf.Hessian().kernel()
 
-# Density-fitted RHF, RKS, UHF, and UKS also provide analytical Hessians.
+# Density-fitted UKS also provides analytical Hessians.
 # auxbasis_response=2 includes both first- and second-order responses of the
 # auxiliary basis, rather than holding that basis fixed.
-for method in (scf.RHF, dft.RKS):
-    mf = method(mol).density_fit().run()
-    h = mf.Hessian().set(auxbasis_response=2).kernel()
-    print(method.__name__, h.shape)
-
 open_shell_mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='631g',
                        charge=1, spin=1)
-for method in (scf.UHF, dft.UKS):
-    mf = method(open_shell_mol).density_fit().run()
-    h = mf.Hessian().set(auxbasis_response=2).kernel()
-    print(method.__name__, h.shape)
+mf = dft.UKS(open_shell_mol).density_fit().run()
+h = mf.Hessian().set(auxbasis_response=2).kernel()
+print('UKS', h.shape)

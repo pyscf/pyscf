@@ -2,7 +2,11 @@
 [run]
 branch = True
 omit = */test/*
+    */dft/LebedevGrid.py
+    */gto/basis/dyall-basis/*
     */tools/ring.py
+    */tools/c60struct.py
+    */tools/wfn_format.py
     */pbc/ao2mo/*
     */tests/*
     */dmrgscf/*
@@ -28,7 +32,11 @@ disable_warnings = include-ignored
 
 [report]
 omit = */test/*
+    */dft/LebedevGrid.py
+    */gto/basis/dyall-basis/*
     */tools/ring.py
+    */tools/c60struct.py
+    */tools/wfn_format.py
     */pbc/ao2mo/*
     */tests/*
 # Regexes for lines to exclude from consideration

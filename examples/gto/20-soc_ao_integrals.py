@@ -26,12 +26,6 @@ for atm_id in range(mol.natm):
     chg = mol.atom_charge(atm_id)
     mat -= chg * mol.intor('int1e_prinvxp_sph')
 
-# For an individual shell pair, intor_by_shell uses the same rinv origin.
-# The three leading entries are the x, y, z spin-orbit components.
-mol.set_rinv_origin(mol.atom_coord(0))
-shell_soc = mol.intor_by_shell('int1e_prinvxp_sph', (0, 0))
-print('shell SOC shape', shell_soc.shape)
-
 # J Chem Phys, 122, 034107, Eq (3)
 mat = mol.intor('int2e_p1vxp1_sph')  # (3,n*n,n*n) array, 3 for x,y,z components
 

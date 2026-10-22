@@ -561,7 +561,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(hc), (-1.9053243731138183+2.785112360342188j), 7)
 
 
-    def make_matrix_reference(self):
+    def make_eom_reference(self):
         cell = gto.M(atom='H 0 0 0; H 0 0 .74', a=np.eye(3)*4,
                      basis='gth-szv', pseudo='gth-pade', mesh=[11]*3,
                      precision=1e-6, verbose=0)
@@ -569,8 +569,10 @@ class KnownValues(unittest.TestCase):
         mf = mf.density_fit(auxbasis='weigend').run(conv_tol=1e-11)
         self.cc = kccsd_rhf.RCCSD(mf).run(conv_tol=1e-10)
 
-    def check_matrix(self, method):
-        self.make_matrix_reference()
+    def check_matvec_and_eigensolver(self, method):
+        # The dense matrix is built from matvec, so this checks linearity and
+        # eigensolver consistency, not independent reference matrix elements.
+        self.make_eom_reference()
         partition = None
         obj = method(self.cc)
         obj.partition = partition
@@ -586,14 +588,14 @@ class KnownValues(unittest.TestCase):
         for e, v in zip(energy[0], vectors[0]):
             np.testing.assert_allclose(matrix @ v, e*v, atol=1e-6)
 
-    def test_ip_dense_matrix(self):
-        self.check_matrix(eom_kccsd_rhf.EOMIP)
+    def test_ip_matvec_and_eigensolver(self):
+        self.check_matvec_and_eigensolver(eom_kccsd_rhf.EOMIP)
 
-    def test_ea_dense_matrix(self):
-        self.check_matrix(eom_kccsd_rhf.EOMEA)
+    def test_ea_matvec_and_eigensolver(self):
+        self.check_matvec_and_eigensolver(eom_kccsd_rhf.EOMEA)
 
-    def test_ee_singlet_dense_matrix(self):
-        self.check_matrix(eom_kccsd_rhf.EOMEESinglet)
+    def test_ee_singlet_matvec_and_eigensolver(self):
+        self.check_matvec_and_eigensolver(eom_kccsd_rhf.EOMEESinglet)
 
 
     def test_triples_intermediates(self):

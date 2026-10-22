@@ -6,7 +6,6 @@ Mulliken population analysis with NAO
 
 import numpy
 from pyscf import gto, scf, lo
-from pyscf.lo.nao import _prenao_sub, _core_val_ryd_list
 from functools import reduce
 
 x = .63
@@ -35,16 +34,13 @@ mo = numpy.linalg.solve(C, mf.mo_coeff)
 dm = mf.make_rdm1(mo, mf.mo_occ)
 mf.mulliken_pop(mol, dm, numpy.eye(mol.nao_nr()))
 
-# The pre-NAO step diagonalizes the atomic density blocks. Its occupations
-# and the final NAO occupations expose how density is distributed by shell.
-s = mf.get_ovlp()
-p = reduce(numpy.dot, (s, mf.make_rdm1(), s))
-pre_nao_occ, _ = _prenao_sub(mol, p, s)
-print('Pre-NAO occupations:', pre_nao_occ)
-print('NAO occupations:', reduce(numpy.dot, (C.T, p, C)).diagonal())
-print('Core, valence and Rydberg shells:', _core_val_ryd_list(mol))
-
 # For transition metals, the core/valence/Rydberg partition used to construct
-# NAOs can be adjusted before calling lo.orth_ao or lo.nao.nao. For example,
-# include a second d shell in the Fe valence space:
-# lo.nao.set_atom_conf('Fe', 'double d')
+# NAOs can be adjusted before calling lo.orth_ao or lo.nao.nao.
+# These settings change the global configuration for the element. Successive
+# calls retain unspecified shell counts, so the following changes accumulate.
+# String descriptions leave the core unchanged and set the named valence shells:
+# lo.nao.set_atom_conf('Fe', '1s1d')      # Set one s and one d valence shell.
+# lo.nao.set_atom_conf('Fe', 'double d')  # Set two d valence shells.
+# lo.nao.set_atom_conf('Fe', 'double p')  # Set two p valence shells.
+# lo.nao.set_atom_conf('Fe', 'polarize')  # Add the first absent angular momentum
+#                                      # shell (an f shell in this sequence).

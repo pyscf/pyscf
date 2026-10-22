@@ -72,8 +72,10 @@ mf.irrep_nelec = {'s+0': 7,
 mf.run()
 mf.analyze()
 
-# GHF supports the same irrep occupation constraint. For an open-shell O2-
-# calculation, one electron can be assigned explicitly to A1u:
+# Symmetry-adapted GHF supports irrep occupation constraints only without
+# spin-orbit coupling: keep with_soc disabled (the default is None).
+# Its spatial symmetry adaptation does not support SOC.
+# For an open-shell O2- calculation, assign one electron explicitly to A1u:
 mol = gto.M(atom='O 0 0 0; O 0 0 1', basis='ccpvdz',
             symmetry=True, charge=-1, spin=1)
 mf = scf.GHF(mol)
