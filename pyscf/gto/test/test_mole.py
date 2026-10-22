@@ -922,6 +922,52 @@ O    SP
         self.assertTrue(atom.has_ecp())
         self.assertEqual(atom.nelectron, 1)
 
+    def test_rebuild_without_pseudo(self):
+        from pyscf.scf.hf import get_hcore
+        mol = gto.M(atom='C 0 0 0', basis='sto3g', pseudo='gth-pade',
+                    verbose=0)
+        self.assertEqual(mol.nelectron, 4)
+        mol.build(False, False, pseudo={})
+        ref = gto.M(atom='C 0 0 0', basis='sto3g', verbose=0)
+        self.assertFalse(mol.has_ecp())
+        self.assertEqual(mol.nelectron, ref.nelectron)
+        numpy.testing.assert_allclose(get_hcore(mol), get_hcore(ref), atol=1e-12)
+
+    def test_rebuild_without_atoms(self):
+        mol = gto.M(atom='He 0 0 0', verbose=0)
+        mol.build(False, False, atom=[])
+        self.assertEqual(mol.natm, 0)
+        self.assertEqual(mol.nao, 0)
+        self.assertEqual(mol.nelectron, 0)
+        self.assertEqual(mol._atom, [])
+        mol.build(False, False, atom='He 0 0 0')
+        self.assertEqual(mol.natm, 1)
+        self.assertEqual(mol.nao, 1)
+
+    def test_rebuild_without_basis(self):
+        mol = gto.M(atom='He 0 0 0', verbose=0)
+        mol.build(False, False, basis={})
+        self.assertEqual(mol.natm, 1)
+        self.assertEqual(mol.nao, 0)
+        self.assertEqual(mol._basis, {})
+        mol.build(False, False, basis='sto3g')
+        self.assertEqual(mol.nao, 1)
+
+    def test_rebuild_without_symmetry(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 1', symmetry=True, verbose=0)
+        self.assertEqual(mol.groupname, 'Dooh')
+        mol.build(False, False, atom='He 0 0 0', symmetry=False)
+        self.assertEqual(mol.groupname, 'C1')
+        self.assertEqual(mol.topgroup, 'C1')
+        self.assertIsNone(mol.symm_orb)
+        self.assertIsNone(mol.irrep_id)
+        self.assertIsNone(mol.irrep_name)
+        self.assertIsNone(mol._symm_orig)
+        self.assertIsNone(mol._symm_axes)
+        mol.build(False, False, symmetry=True)
+        self.assertEqual(mol.groupname, 'SO3')
+        self.assertEqual(numpy.hstack(mol.symm_orb).shape, (1, 1))
+
     def test_input_ecp(self):
         mol1 = gto.Mole()
         mol1.atom = mol0.atom
