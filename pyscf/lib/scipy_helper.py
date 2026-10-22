@@ -45,6 +45,8 @@ else:
             L[rank:, :] = 0
         return L, piv-1, rank
 
+__all__ = ['pivoted_cholesky', 'pivoted_cholesky_python']
+
 
 def pivoted_cholesky(A, tol=-1.0, lower=False):
     '''

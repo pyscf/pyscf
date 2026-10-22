@@ -33,6 +33,8 @@ from pyscf.pbc.grad.rks_stress import (
     _get_pp_nonloc_strain_derivatives,
     ewald)
 
+__all__ = ['UniformGrids', 'FFTDF', 'KNumInt']
+
 def get_vxc(ks_grad, cell, dm_kpts, kpts, with_j=False, with_nuc=False):
     '''Strain derivatives for Coulomb and XC at gamma point
 

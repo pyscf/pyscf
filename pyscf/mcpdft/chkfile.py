@@ -20,6 +20,8 @@ from pyscf.lib.chkfile import load_mol, load, dump
 from pyscf.lib import H5FileWrap
 from pyscf.mcscf.addons import StateAverageMixFCISolver
 
+__all__ = ['H5FileWrap', 'StateAverageMixFCISolver']
+
 
 def load_pdft(chkfile):
     return load_mol(chkfile), load(chkfile, "pdft")

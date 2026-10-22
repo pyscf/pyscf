@@ -27,6 +27,11 @@ from pyscf.lib import logger
 from functools import reduce
 from pyscf import scf
 
+__all__ = [
+    'SCFWithSolvent', 'CASSCFWithSolvent', 'CASCIWithSolvent', 'PostSCFWithSolvent',
+    'TDSCFWithSolvent',
+]
+
 def _for_scf(mf, solvent_obj, dm=None):
     '''Add solvent model to SCF (HF and DFT) method.
 

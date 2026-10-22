@@ -39,6 +39,8 @@ from pyscf.pbc.df.ft_ao import estimate_rcut, ExtendedMole, _RangeSeparatedCell
 from pyscf.pbc.gto.pseudo.pp_int import fake_cell_vnl
 from pyscf.pbc.tools import k2gamma
 
+__all__ = ['VelGaugePPNLHelper', 'ExtendedMole']
+
 
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 1.0)
 # kecut=10 can roughly converge GTO with alpha=0.5

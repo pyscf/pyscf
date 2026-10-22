@@ -18,6 +18,8 @@ from pyscf.mp import mp2
 from pyscf.mp import ump2
 from pyscf.mp import gmp2
 
+__all__ = ['RMP2', 'UMP2', 'GMP2']
+
 class RMP2(mp2.RMP2):
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         if abs(mf.kpt).max() > 1e-9:

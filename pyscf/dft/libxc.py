@@ -43,6 +43,16 @@ from pyscf.dft.xc.utils import remove_dup, format_xc_code
 from pyscf.dft import xc_deriv
 from pyscf import __config__
 
+__all__ = [
+    'libxc_version', 'parse_xc', 'eval_xc', 'eval_xc1', 'eval_xc_eff',
+    'XC_CODES', 'XC_KEYS', 'XC_ALIAS', 'xc_reference', 'xc_type', 'is_lda',
+    'is_hybrid_xc', 'is_meta_gga', 'is_gga', 'is_nlc', 'needs_laplacian',
+    'max_deriv_order', 'hybrid_coeff', 'nlc_coeff', 'rsh_coeff',
+    'parse_xc_name', 'define_xc', 'define_xc_',
+    'register_custom_functional_', 'update_custom_functional_',
+    'unregister_custom_functional_',
+]
+
 _itrf = lib.load_library('libxc_itrf')
 _itrf.LIBXC_is_lda.restype = ctypes.c_int
 _itrf.LIBXC_is_gga.restype = ctypes.c_int

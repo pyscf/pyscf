@@ -29,6 +29,8 @@ from pyscf.dft.numint import libdft
 from pyscf import __config__
 import ctypes
 
+__all__ = ['Gradients', 'Grad']
+
 
 def get_veff(ks_grad, mol=None, dm=None):
     '''

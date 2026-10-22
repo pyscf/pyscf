@@ -35,6 +35,8 @@ except ModuleNotFoundError:
     class CSFFCISolver:
         pass
 
+__all__ = ['make_rdm12_heff_offdiag', 'get_diabfns', 'Gradients', 'MSPDFTLagPrec']
+
 CONV_TOL_DIABATIZE = getattr(__config__, 'mcpdft_mspdft_conv_tol_diabatize', 1e-8)
 SING_TOL_DIABATIZE = getattr(__config__, 'mcpdft_mspdft_sing_tol_diabatize', 1e-8)
 SING_STEP_TOL = getattr(__config__, 'grad_mspdft_sing_step_tol', 2*math.pi)

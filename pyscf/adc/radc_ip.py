@@ -31,6 +31,8 @@ from pyscf.adc import dfadc
 from pyscf import symm
 from pyscf.data.nist import HARTREE2EV
 
+__all__ = ['RADCIP']
+
 
 def get_imds(adc, eris=None):
 

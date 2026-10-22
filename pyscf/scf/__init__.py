@@ -120,7 +120,23 @@ from pyscf.scf import dispersion
 from pyscf.scf.diis import DIIS, CDIIS, EDIIS, ADIIS
 from pyscf.scf.uhf import spin_square
 from pyscf.scf.hf import get_init_guess
-from pyscf.scf.addons import *
+from pyscf.scf.addons import pivoted_cholesky, smearing, smearing_
+from pyscf.scf.addons import (
+    lib, mole, logger, frac_occ_, frac_occ, dynamic_occ_, dynamic_occ,
+    dynamic_level_shift_, dynamic_level_shift, float_occ_, dynamic_sz_, float_occ,
+    follow_state_, follow_state, mom_occ_, mom_occ, project_mo_nr2nr, project_mo_nr2r,
+    project_mo_r2r, project_dm_nr2nr, project_dm_nr2r, project_dm_r2r, canonical_orth_,
+    partial_cholesky_orth_, remove_linear_dep_, remove_linear_dep, convert_to_uhf,
+    convert_to_rhf, convert_to_ghf, get_ghf_orbspin, fast_newton
+)
+from pyscf.scf.addons import (
+    CHOLESKY_THRESHOLD, FORCE_PIVOTED_CHOLESKY, SMEARING_METHOD,
+)
+
+__all__ = [
+    'density_fit', 'newton', 'DIIS', 'CDIIS', 'EDIIS', 'ADIIS', 'DHF', 'GHF', 'HF',
+    'RHF', 'RKS', 'ROHF', 'UHF', 'UKS', 'sfx2c1e',
+]
 
 
 def HF(mol, *args):
@@ -203,9 +219,46 @@ def sfx2c1e(mf):
 sfx2c = sfx2c1e
 
 def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
+    '''Create a density-fitting version of an SCF object.
+
+    Args:
+        mf : SCF object
+            Mean-field object to which density fitting is applied.
+
+    Kwargs:
+        auxbasis : str or dict or None
+            Auxiliary basis. None selects a suitable default fitting basis.
+        with_df : DF object or None
+            Existing fitting object; if supplied, ``auxbasis`` is ignored.
+        only_dfj : bool
+            Fit only Coulomb J, using four-center integrals for exchange K.
+            Default is False, which fits both J and K.
+
+    Returns:
+        The density-fitting SCF object returned by ``mf.density_fit``.
+
+    Notes:
+        No SCF calculation is run.
+
+    See :meth:`pyscf.scf.hf.SCF.density_fit` for details.
+    '''
     return mf.density_fit(auxbasis, with_df, only_dfj)
 
 def newton(mf):
+    '''Create a CIAH second-order SCF solver from an HF or Kohn-Sham object.
+
+    Args:
+        mf : SCF object
+            Mean-field object providing settings and any available orbitals.
+
+    Returns:
+        A second-order SCF object, or ``mf`` itself if already a CIAH solver.
+
+    Notes:
+        Call ``kernel`` or ``run`` on the result to perform the calculation.
+
+    See :func:`pyscf.soscf.newton_ah.newton` for details.
+    '''
     from pyscf.soscf import newton_ah
     return newton_ah.newton(mf)
 

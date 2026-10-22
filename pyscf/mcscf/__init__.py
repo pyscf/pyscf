@@ -174,7 +174,15 @@ casci_uhf = ucasci  # for backward compatibility
 from pyscf.mcscf import umc1step
 mc1step_uhf = umc1step  # for backward compatibility
 from pyscf.mcscf.addons import *
+from pyscf.mcscf.addons import lib, gto, logger, fci, scf, symm
 from pyscf.mcscf import chkfile
+
+__all__ = [
+    'StateAverageMCSCFSolver', 'StateAverageFCISolver', 'StateAverageMCSCF',
+    'StateSpecificFCISolver', 'StateAverageMixFCISolver_solver_args',
+    'StateAverageMixFCISolver_state_args', 'StateAverageMixFCISolver', 'CASCI',
+    'CASSCF', 'DFCASCI', 'DFCASSCF', 'UCASCI', 'UCASSCF',
+]
 
 def CASSCF(mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
     from pyscf import gto

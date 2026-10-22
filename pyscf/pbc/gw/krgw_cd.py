@@ -41,6 +41,8 @@ from pyscf.pbc import df, dft, scf
 from pyscf.pbc.mp.kmp2 import get_nocc, get_nmo, get_frozen_mask
 from pyscf import __config__
 
+__all__ = ['KRGWCD']
+
 einsum = lib.einsum
 
 def kernel(gw, mo_energy, mo_coeff, orbs=None,

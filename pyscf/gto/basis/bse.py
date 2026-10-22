@@ -10,6 +10,8 @@ try:
 except ImportError:
     basis_set_exchange = None
 
+__all__ = ['get_basis']
+
 
 def _orbital_basis(basis, make_general=False):
     '''Extracts the orbital basis from the BSE format in PySCF format'''

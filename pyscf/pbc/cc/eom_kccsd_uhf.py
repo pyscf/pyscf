@@ -34,6 +34,8 @@ from pyscf.pbc.cc import kintermediates_uhf
 from pyscf.pbc.mp.kump2 import (get_frozen_mask, get_nocc, get_nmo,
                                 padded_mo_coeff, padding_k_idx)
 
+__all__ = ['EOMIP', 'EOMEA']
+
 einsum = lib.einsum
 
 ########################################

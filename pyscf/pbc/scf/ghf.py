@@ -31,6 +31,8 @@ from pyscf.pbc.gto.pseudo import pp_int
 from pyscf.pbc.gto.ecp import ecp_int
 from pyscf import __config__
 
+__all__ = ['GHF']
+
 
 def get_jk(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
            with_j=True, with_k=True, **kwargs):

@@ -49,6 +49,23 @@ def parse(string, optimize=True):
     return _parse(raw_basis, optimize)
 
 def load(basisfile, symb, optimize=True):
+    '''Load the orbital basis for one element from a Gaussian file.
+
+    Args:
+        basisfile : str or path-like
+            File containing basis data in Gaussian format.
+        symb : str
+            Element symbol identifying the basis section, for example ``'C'``.
+
+    Kwargs:
+        optimize : bool
+            Combine contractions that have the same angular momentum and
+            primitive exponents. Default True.
+
+    Returns:
+        Basis data in PySCF's internal format, as described in
+        :func:`pyscf.gto.mole.format_basis`.
+    '''
     raw_basis = search_seg(basisfile, symb)
     #if not raw_basis:
     #    raise BasisNotFoundError('Basis not found for  %s  in  %s' % (symb, basisfile))

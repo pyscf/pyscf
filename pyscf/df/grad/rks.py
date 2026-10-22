@@ -28,6 +28,8 @@ from pyscf.lib import logger
 from pyscf.grad import rks as rks_grad
 from pyscf.df.grad import rhf as df_rhf_grad
 
+__all__ = ['Gradients', 'Grad']
+
 
 def get_veff(ks_grad, mol=None, dm=None):
     '''Coulomb + XC functional

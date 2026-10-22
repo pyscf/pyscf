@@ -26,9 +26,42 @@ from pyscf.lib import logger
 from pyscf.cc import ccsd_lambda
 from pyscf.cc import uccsd_lambda
 
+__all__ = ['make_intermediates', 'update_lambda']
+
 
 def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
            max_cycle=50, tol=1e-8, verbose=logger.INFO):
+    '''Solve the unrestricted CCSD(T) lambda equations.
+
+    Args:
+        mycc : CCSD object
+            CCSD solver supplying amplitudes, orbital information, DIIS
+            settings, and integral transformations.
+
+    Kwargs:
+        eris : MO integral object or None
+            Precomputed CCSD integrals, normally from ``mycc.ao2mo()``.
+        t1, t2 : arrays or tuples of arrays, or None
+            Converged CC amplitudes (dimensionless). None uses ``mycc.t1`` or
+            ``mycc.t2``. Singles are (t1a, t1b), with shapes (noa, nva)
+            and (nob, nvb).
+            Doubles are (t2aa, t2ab, t2bb) with shapes (noa, noa, nva, nva),
+            (noa, nob, nva, nvb), and (nob, nob, nvb, nvb).
+        l1, l2 : tuples of ndarrays or None
+            Initial lambda amplitudes, with the same shapes as t1 and t2.
+        max_cycle : int
+            Maximum lambda iterations. Default 50.
+        tol : float
+            Stop when the norm of the change in the lambda amplitudes is below
+            this value. The norm is computed after packing the amplitudes
+            into a vector. Default 1e-8.
+        verbose : int or Logger
+
+    Returns:
+        (converged, l1, l2). ``converged`` is True if the iteration reached
+        the requested tolerance. ``l1`` and ``l2`` are the final lambda
+        amplitudes, with the same shapes as t1 and t2.
+    '''
     return ccsd_lambda.kernel(mycc, eris, t1, t2, l1, l2, max_cycle, tol,
                               verbose, make_intermediates, update_lambda)
 

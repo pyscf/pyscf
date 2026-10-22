@@ -29,6 +29,11 @@ from pyscf.pbc.dft.gen_grid import make_mask, BLKSIZE
 from pyscf.pbc.lib.kpts_helper import is_zero, KPT_DIFF_TOL
 from pyscf.pbc.lib.kpts import KPoints
 
+__all__ = [
+    'nr_rks', 'nr_uks', 'nr_rks_vxc', 'nr_uks_vxc', 'NumInt', 'KNumInt', 'KPoints',
+    'eval_ao', 'eval_ao_kpts',
+]
+
 
 def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shls_slice=None,
             non0tab=None, cutoff=None, out=None, verbose=None):

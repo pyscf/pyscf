@@ -18,4 +18,5 @@
 
 from pyscf.qmmm import itrf
 from pyscf.qmmm.itrf import *
+from pyscf.qmmm.itrf import pyscf, lib, gto, df, scf, mcscf, grad, logger, mm_mole
 from pyscf.qmmm.mm_mole import Mole, create_mm_mol

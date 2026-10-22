@@ -24,6 +24,11 @@ from pyscf.fci import direct_spin1
 from pyscf import mcpdft
 from pyscf import __config__
 
+__all__ = [
+    'make_heff_mcscf', 'si_newton', 'get_diabfns', 'multi_state',
+    'StateAverageMCSCFSolver', 'StateAverageMixFCISolver',
+]
+
 # API for general multi-state MC-PDFT method object
 # In principle, various forms can be implemented: CMS, XMS, etc.
 

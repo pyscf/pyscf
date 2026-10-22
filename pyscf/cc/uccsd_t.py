@@ -28,6 +28,27 @@ from pyscf.lib import logger
 from pyscf.cc import _ccsd
 
 def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
+    '''Evaluate energy correction for UCCSD(T).
+
+    Args:
+        mycc : UCCSD object
+            Solver supplying occupied counts, memory and I/O settings, and
+            amplitudes when they are omitted below.
+        eris : unrestricted CCSD MO integral object
+            Precomputed UCCSD integrals, normally from ``mycc.ao2mo()``.
+
+    Kwargs:
+        t1 : pair of ndarrays or None
+            (t1a, t1b) with shapes (noa, nva), (nob, nvb). None uses mycc.t1.
+        t2 : triple of ndarrays or None
+            (t2aa, t2ab, t2bb) with shapes (noa, noa, nva, nva),
+            (noa, nob, nva, nvb), and (nob, nob, nvb, nvb).
+            None uses mycc.t2.
+        verbose : int or Logger
+
+    Returns:
+        The real triples correction in Hartree, to add to the CCSD energy.
+    '''
     cpu1 = cpu0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mycc, verbose)
     if t1 is None: t1 = mycc.t1

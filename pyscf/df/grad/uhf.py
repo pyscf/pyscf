@@ -28,6 +28,8 @@ from pyscf.lib import logger
 from pyscf.grad import uhf as uhf_grad
 from pyscf.df.grad import rhf as df_rhf_grad
 
+__all__ = ['Gradients', 'Grad']
+
 
 class Gradients(uhf_grad.Gradients):
     '''Unrestricted density-fitting Hartree-Fock gradients'''

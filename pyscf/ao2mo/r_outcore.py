@@ -23,6 +23,8 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo import outcore
 from pyscf import __config__
 
+__all__ = ['general']
+
 IOBLK_SIZE = getattr(__config__, 'ao2mo_outcore_ioblk_size', 256)  # 256 MB
 IOBUF_WORDS = getattr(__config__, 'ao2mo_outcore_iobuf_words', 1e8)  # 1.6 GB
 IOBUF_ROW_MIN = getattr(__config__, 'ao2mo_outcore_row_min', 160)

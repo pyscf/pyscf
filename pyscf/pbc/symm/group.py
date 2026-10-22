@@ -22,6 +22,8 @@ from pyscf import lib
 from pyscf.pbc.symm import geom
 from pyscf.pbc.symm.tables import SchoenfliesNotation
 
+__all__ = ['GroupElement', 'PGElement', 'FiniteGroup', 'PointGroup', 'Representation']
+
 def _round_zero(a, tol=1e-9):
     a[np.where(abs(a) < tol)] = 0
     return a

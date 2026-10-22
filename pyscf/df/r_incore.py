@@ -20,6 +20,8 @@ import numpy
 from pyscf import gto
 from pyscf.df import incore
 
+__all__ = ['cholesky_eri']
+
 # (ij|L)
 def aux_e2(mol, auxmol, intor='int3c2e_spinor', aosym='s1', comp=None, hermi=0):
     intor, comp = gto.moleintor._get_intor_and_comp(mol._add_suffix(intor), comp)

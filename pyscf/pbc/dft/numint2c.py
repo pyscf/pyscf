@@ -30,6 +30,8 @@ from pyscf.dft import numint2c
 from pyscf.pbc.dft import numint as pnumint
 from pyscf.pbc.lib.kpts import KPoints
 
+__all__ = ['NumInt2C', 'KNumInt2C', 'KPoints']
+
 
 class NumInt2C(lib.StreamObject, numint.LibXCMixin):
     '''Numerical integration methods for 2-component basis (used by GKS)'''

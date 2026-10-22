@@ -29,6 +29,11 @@ from pyscf.cc import ccsd
 from pyscf.cc import rintermediates as imd
 from pyscf import __config__
 
+__all__ = [
+    'EOM', 'EOMIP', 'EOMIP_Ta', 'EOMEA', 'EOMEA_Ta', 'EOMEE', 'EOMEESinglet',
+    'EOMEETriplet', 'EOMEESpinFlip',
+]
+
 
 def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
            eris=None, imds=None, **kwargs):

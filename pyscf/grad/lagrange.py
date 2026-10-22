@@ -22,6 +22,8 @@ from pyscf.lib import logger
 from pyscf.grad import rhf as rhf_grad
 from pyscf.soscf import ciah
 
+__all__ = ['Gradients', 'LagPrec']
+
 default_level_shift = getattr(__config__, 'grad_lagrange_Gradients_level_shift', 1e-8)
 default_conv_atol = getattr (__config__, 'grad_lagrange_Gradients_conv_atol', 1e-12)
 default_conv_rtol = getattr (__config__, 'grad_lagrange_Gradients_conv_rtol', 1e-7)

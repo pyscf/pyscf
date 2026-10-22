@@ -39,6 +39,8 @@ from pyscf.df.hessian.rhf import _load_dim0, _pinv
 from pyscf.df.grad.rhf import (_int3c_wrapper, _gen_metric_solver,
                                _make_auxmol, LINEAR_DEP_THRESHOLD)
 
+__all__ = ['Hessian']
+
 
 def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                       atmlst=None, max_memory=4000, verbose=None):

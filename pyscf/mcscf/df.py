@@ -26,6 +26,8 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.mcscf.casci import CASCI
 from pyscf import df
 
+__all__ = ['CASCI', 'approx_hessian']
+
 
 def density_fit(casscf, auxbasis=None, with_df=None):
     '''Generate DF-CASSCF for given CASSCF object.  It is done by overwriting

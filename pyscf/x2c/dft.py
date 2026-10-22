@@ -20,6 +20,8 @@ X2C 2-component DFT methods
 from pyscf.x2c import x2c
 from pyscf.dft import dks
 
+__all__ = ['UKS', 'X2C_UKS', 'RKS', 'X2C_RKS']
+
 class UKS(dks.KohnShamDFT, x2c.UHF):
     def __init__(self, mol, xc='LDA,VWN'):
         x2c.UHF.__init__(self, mol)

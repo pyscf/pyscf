@@ -27,6 +27,12 @@ from pyscf.mp.mp2 import get_nocc, get_nmo
 from pyscf.pbc.df.fft_ao2mo import _format_kpts
 from pyscf.scf.hf import KohnShamDFT
 
+__all__ = [
+    'diagonalize_pprpa_singlet', 'diagonalize_pprpa_triplet', 'ij2index',
+    'inner_product', 'get_chemical_potential', 'ao2mo', 'RppRPADirect', 'StreamObject',
+    'KohnShamDFT',
+]
+
 
 def diagonalize_pprpa_singlet(nocc, mo_energy, Lpq, mu=None):
     """Diagonalize singlet ppRPA matrix.

@@ -22,6 +22,8 @@ import numpy as np
 from numpy.lib.mixins import NDArrayOperatorsMixin
 from pyscf import lib
 
+__all__ = ['KsymmArray']
+
 
 def empty(shape, dtype=float, order='C', metadata=None):
     if metadata is None:

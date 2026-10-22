@@ -43,6 +43,12 @@ from pyscf.gw.utils.ac_grid import _get_scaled_legendre_roots
 from pyscf.pbc.gw.krgw_ac import get_rho_response, get_rho_response_head, get_rho_response_wing, get_qij, \
     _mo_occ_frozen, _mo_energy_frozen, _mo_frozen
 
+__all__ = [
+    'kernel', 'get_idx_metal', 'get_rho_response_metal', 'get_rpa_ecorr',
+    'get_rpa_ecorr_outcore', 'get_rpa_ecorr_outcore_metal', 'get_rpa_ecorr_w',
+    'get_rpa_exx', 'KRPA', 'temporary_env',
+]
+
 
 einsum = lib.einsum
 

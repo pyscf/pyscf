@@ -27,6 +27,8 @@ from pyscf.grad import rohf as rohf_grad
 from pyscf.grad import uhf as uhf_grad
 from pyscf.grad import uks as uks_grad
 
+__all__ = ['Gradients', 'Grad']
+
 
 class Gradients(rks_grad.Gradients):
     '''Non-relativistic ROHF gradients
