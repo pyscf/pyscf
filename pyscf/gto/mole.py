@@ -106,7 +106,7 @@ del f
 NUMBERED_ATOM_LABEL = re.compile("^[0-9]+ [A-Z]")
 
 def M(*args, **kwargs):
-    r'''Create and build a Mole object.
+    r'''This is a shortcut to build up Mole object.
 
     Positional and keyword arguments are passed to :meth:`Mole.build`.
     Common keywords include ``atom`` (geometry), ``basis`` (orbital basis),
@@ -3157,21 +3157,29 @@ class MoleBase(lib.StreamObject):
         '''Update geometry
 
         Args:
-            atoms_or_coords : list, str, or numpy.ndarray
+            atoms_or_coords : list, str or ndarray
                 When specified in list or str, it is processed as the Mole.atom
                 attribute. If inputing a (N, 3) numpy array, this array
                 represents the coordinates of the atoms in the molecule.
 
         Kwargs:
-            unit : str
+            unit : str or number or None
                 The unit for the input `atoms_or_coords`. If specified, mol.unit
                 will be updated to this value. If not provided, the current
                 mol.unit will be used for the input `atoms_or_coords`.
-            symmetry : bool
+            symmetry : bool or str or None
                 Whether to enable point group symmetry. If not specified, the
                 current mol.symmetry setting will be used.
             inplace : bool
                 Whether to overwrite the existing Mole object.
+
+        Returns:
+            The molecule with the new geometry: self if inplace=True, or a new
+            Mole object otherwise.
+
+        Notes:
+            Updates the geometry and associated molecular data. Attributes of
+            the Mole object may be shared.
         '''
         if inplace:
             mol = self

@@ -770,6 +770,21 @@ def make_rdm12(casscf, mo_coeff=None, ci=None):
 
 def get_fock(casscf, mo_coeff=None, ci=None):
     '''Generalized Fock matrix in AO representation
+
+    Args:
+        casscf : CASCI or CASSCF object
+
+    Kwargs:
+        mo_coeff : (nao, nmo) ndarray or None
+            Orbitals ordered as core, active, then external. None uses
+            casscf.mo_coeff.
+        ci : CI coefficients or None
+            Active-space wavefunction in the format accepted by the FCI
+            solver.
+
+    Returns:
+        The (nao, nao) generalized Fock matrix in the AO basis.
+        For a state-averaged solver, it uses the state-averaged density.
     '''
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     if _is_uhf_mo(mo_coeff):
@@ -1455,7 +1470,30 @@ class StateAverageMixFCISolver(StateAverageFCISolver):
     transform_ci_for_orbital_rotation = None
 
 def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
-    '''State-average CASSCF over multiple FCI solvers.
+    '''Configure state-averaged CASSCF using several FCI solvers.
+
+    Args:
+        casscf : CASSCF object
+
+        fcisolvers : sequence of FCI solver objects
+            Solvers for the states to average, each with its own nroots setting.
+            Solvers may use different spin or spatial-symmetry settings.
+
+    Kwargs:
+        weights : sequence of floats
+            One weight per state, ordered by solver and then by root within
+            that solver. The length must equal the sum of solver.nroots.
+            Weights should sum to one; they are used as supplied.
+
+    Returns:
+        A CASSCF object configured for the weighted average of the selected
+        states.
+
+    Notes:
+        The returned object shares attributes with casscf and reuses the
+        supplied FCI solvers. Running it can update those solvers' results.
+        After a calculation, attributes e_states and ci contain the energies and
+        CI solutions in the same order as weights.
     '''
     nroots = sum(solver.nroots for solver in fcisolvers)
     assert (nroots == len(weights))

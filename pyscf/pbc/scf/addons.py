@@ -306,7 +306,22 @@ def convert_to_ghf(mf, out=None):
         return out
 
 def convert_to_kscf(mf, out=None):
-    '''Convert gamma point SCF object to k-point SCF object
+    '''Convert a single-k-point SCF object to the k-point solver representation.
+
+    Args:
+        mf : periodic SCF object
+            HF or Kohn-Sham object at a single k-point
+
+    Kwargs:
+        out : k-point SCF object or None
+            Optional output object to update with the converted settings.
+
+    Returns:
+        The k-point SCF object
+
+    Notes:
+        Attributes of the return object may be shared with mf.
+        Conversion does not run SCF or add sampling points.
     '''
     from pyscf.pbc import scf, dft
     if not isinstance(mf, scf.khf.KSCF):

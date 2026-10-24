@@ -30,12 +30,39 @@ PROJECT_ECP_BASIS = getattr(__config__, 'lo_orth_project_ecp_basis', True)
 
 
 def lowdin(s):
-    ''' new basis is |mu> c^{lowdin}_{mu i} '''
+    '''Compute the Lowdin orthogonalization matrix for an overlap matrix.
+
+    Args:
+        s : (n, n) ndarray
+            Real symmetric or complex Hermitian overlap matrix.
+
+    Returns:
+        An (n, n) matrix C equal to the inverse square root of s on the
+        retained eigenspace. If all eigenvalues exceed the cutoff,
+        C.conj().T @ s @ C is the identity.
+
+    Notes:
+        Eigenvalues at or below 1e-15 are treated as zero in the inverse square
+        root. The result remains square; a rank-deficient overlap cannot give
+        a full orthonormal basis.
+    '''
     e, v = scipy.linalg.eigh(s)
     idx = e > 1e-15
     return numpy.dot(v[:,idx]/numpy.sqrt(e[idx]), v[:,idx].conj().T)
 
 def schmidt(s):
+    '''Compute the Schmidt orthogonalization matrix for an overlap matrix.
+
+    Args:
+        s : (n, n) ndarray
+            Positive-definite, real symmetric or complex Hermitian overlap.
+
+    Returns:
+        An (n, n) matrix C satisfying C.conj().T @ s @ C = I.
+
+    Raises:
+        numpy.linalg.LinAlgError: If the overlap is not positive definite.
+    '''
     c = numpy.linalg.cholesky(s)
     return scipy.linalg.solve_triangular(c, numpy.eye(c.shape[1]), lower=True,
                                          overwrite_b=False).conj().T
@@ -68,14 +95,50 @@ def vec_lowdin(c, s=1):
     return numpy.dot(c, lowdin(reduce(numpy.dot, (c.conj().T,s,c))))
 
 def vec_schmidt(c, s=1):
-    ''' schmidt orth for the metric c.T*s*c and get x, then c*x'''
+    '''Orthonormalize column vectors using the Schmidt method.
+
+    Args:
+        c : (nao, nvec) ndarray
+            Real or complex column vectors in the original basis.
+
+    Kwargs:
+        s : (nao, nao) ndarray or scalar
+            Overlap matrix of the original basis. Default 1 assumes an
+            orthonormal basis. A scalar is treated
+            as this default, not as a scale factor.
+
+    Returns:
+        Orthonormalized columns. With an array overlap, the shape is
+        (nao, nvec) and C.conj().T @ s @ C = I. With the default metric,
+        the shape is (nao, min(nao, nvec)).
+
+    Notes:
+        With an array overlap, c.conj().T @ s @ c must be positive definite.
+        Linearly dependent input columns do not define a full basis for their
+        requested span.
+    '''
     if isinstance(s, numpy.ndarray):
         return numpy.dot(c, schmidt(reduce(numpy.dot, (c.conj().T,s,c))))
     else:
         return numpy.linalg.qr(c)[0]
 
 def weight_orth(s, weight):
-    ''' new basis is |mu> c_{mu i}, c = w[(wsw)^{-1/2}]'''
+    '''Orthogonalize basis functions after scaling them by weights.
+
+    Args:
+        s : (n, n) ndarray
+            Overlap matrix of the original basis.
+        weight : (n,) ndarray
+            Real scale factor for each basis function.
+
+    Returns:
+        An (n, n) coefficient matrix C = W @ lowdin(W @ s @ W), where W is
+        diagonal with the given weights. If all eigenvalues of the weighted
+        overlap exceed the lowdin cutoff, C.conj().T @ s @ C = I.
+
+    Notes:
+        The eigenvalue cutoff and rank limitations are those of lowdin.
+    '''
     s1 = weight[:,None] * s * weight
     c = lowdin(s1)
     return weight[:,None] * c
@@ -293,34 +356,33 @@ def pre_orth_ao_atm_scf(mol):
 
 
 def orth_ao(mf_or_mol, method=ORTH_METHOD, pre_orth_ao=REF_BASIS, s=None, adjust_phase=True):
-    '''Construct orthogonal atomic orbitals in the original AO basis.
+    '''Orthogonalize AOs
 
     Args:
         mf_or_mol : Mole, Cell, or SCF object
             Molecule or Gamma-point cell defining the AO basis, or a mean-field
-            object. The ``'nao'`` method requires a mean-field object with a
-            density matrix available through ``make_rdm1``.
+            object. The ``'nao'`` method requires a mean-field object.
 
     Kwargs:
         method : str
-            ``'lowdin'`` for symmetric orthogonalization, ``'meta_lowdin'``
-            (also ``'meta-lowdin'``) for separate core, valence, and Rydberg
-            orthogonalization, or ``'nao'`` for natural atomic orbitals.
-            Matching is case-insensitive. The default is ``'meta_lowdin'``,
-            configurable through ``lo_orth_orth_ao_method``.
-        pre_orth_ao : ndarray, str, dict, or None
-            (nao, nao) coefficients restoring AO character before Lowdin or
-            meta-Lowdin orthogonalization. A basis name, filename, or basis
-            dictionary generates these coefficients by projection onto that
-            reference basis. Default is ``'ANO'``, configurable through
-            ``lo_orth_pre_orth_ao_method``. None skips the projection. This
-            argument is not used by the NAO branch.
-        s : (nao, nao) ndarray or None
-            AO overlap matrix. By default compute it from the molecule or
-            from the cell at Gamma.
-        adjust_phase : bool
-            Default True. For float64 output, flip columns whose diagonal
-            coefficient is negative. Complex coefficients are not adjusted.
+            One of
+            | lowdin : Symmetric orthogonalization
+            | meta-lowdin : Lowdin orth within core, valence, virtual space separately
+                            (JCTC, 10, 3784)
+            | NAO
+
+        pre_orth_ao: numpy.ndarray or basis str or basis dict
+            Basis functions may not have AO characters. This variable is the
+            coefficients to restore AO characters for arbitrary basis. If a
+            string of basis name (can be the filename of a basis set) or a
+            dict of basis sets are given, they are interpreted as the
+            reference basis (by default ANO basis) that the projection
+            coefficients are generated based on.  Skip this projection step by
+            setting this variable to None.
+
+        adjust_phase : boolean
+            If set True and if real-valued orbitals, the sign of diagonal orb coeff matrix
+            is adjusted to positive. Defaul is True.
 
     Returns:
         (nao, nao) coefficients of the orthogonal AOs in the original basis.

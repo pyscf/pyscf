@@ -46,11 +46,28 @@ LINEAR_DEP_TRIGGER = getattr(__config__, 'scf_addons_remove_linear_dep_trigger',
 
 def frac_occ_(mf, tol=1e-3):
     '''
-    Addons for SCF methods to assign fractional occupancy for degenerated
-    occupied HOMOs.
+    Assign fractional occupancy for degenerated occupied HOMOs.
 
-    Examples::
+    When the HOMO and LUMO are degenerate within tol,
+    the electrons at the HOMO are shared equally among the degenerate
+    orbitals. RHF also uses fractional occupations for an odd electron
+    count. UHF and ROHF treat alpha and beta populations separately.
 
+    Args:
+        mf : SCF object
+            Molecular HF or Kohn-Sham object.
+
+    Kwargs:
+        tol : float
+            Energy tolerance in Hartree for treating orbitals as degenerate.
+
+    Returns:
+        The modified mf object.
+
+    Notes:
+        mf.get_occ is overloaded. For ROHF, mf.get_grad is also replaced.
+
+    Examples:
         >>> mf = gto.M(atom='O 0 0 0; O 0 0 1', verbose=4).RHF()
         >>> mf = scf.addons.frac_occ(mf)
         >>> mf.run()
@@ -192,6 +209,26 @@ frac_occ = frac_occ_
 def dynamic_occ_(mf, tol=1e-3):
     '''
     Dynamically adjust the occupancy to avoid degeneracy between HOMO and LUMO
+
+    If the HOMO-LUMO gap is smaller than tol, orbitals within tol of the
+    LUMO are left empty. Lower orbitals are doubly occupied. Otherwise the
+    original occupation rule is used.
+    This can reduce the number of electrons represented by the occupations;
+    the molecule's charge setting is not changed.
+
+    Args:
+        mf : RHF or RKS object
+            Restricted molecular mean-field object with virtual orbitals.
+
+    Kwargs:
+        tol : float
+            Energy tolerance for degeneracy, in Hartree.
+
+    Returns:
+        The modified mf object.
+
+    Notes:
+        mf.get_occ is overloaded.
     '''
     assert mf.istype('RHF')
     old_get_occ = mf.get_occ
@@ -217,8 +254,23 @@ def dynamic_occ_(mf, tol=1e-3):
 dynamic_occ = dynamic_occ_
 
 def dynamic_level_shift_(mf, factor=1.):
-    '''Dynamically change the level shift in each SCF cycle.  The level shift
+    '''Dynamically adjust the level shift in each SCF cycle.  The level shift
     value is set to (HF energy change * factor)
+
+    Args:
+        mf : SCF object
+            HF or Kohn-Sham object.
+
+    Kwargs:
+        factor : float
+            Dimensionless scale factor. The level shift is the absolute change
+            in electronic energy multiplied by factor.
+
+    Returns:
+        The modified mf object.
+
+    Notes:
+        mf.get_fock is overloaded.
     '''
     old_get_fock = mf.get_fock
     mf._last_e = None
@@ -244,6 +296,21 @@ def float_occ_(mf):
     '''
     For UHF, allowing the Sz value being changed during SCF iteration.
     Determine occupation of alpha and beta electrons based on energy spectrum
+
+    Occupations are chosen from the combined alpha and beta orbital energies
+    while keeping the total electron count fixed. The alpha count includes
+    levels within 1e-3 Hartree above the combined HOMO. mf.nelec is updated when
+    the spin populations change.
+
+    Args:
+        mf : UHF or UKS object
+            Unrestricted molecular mean-field object.
+
+    Returns:
+        The modified mf object.
+
+    Notes:
+        mf.get_occ is overloaded.
     '''
     from pyscf.scf import uhf
     assert mf.istype('UHF')
@@ -267,6 +334,28 @@ def float_occ_(mf):
 dynamic_sz_ = float_occ = float_occ_
 
 def follow_state_(mf, occorb=None):
+    '''Choose occupied orbitals by their overlap with the previous SCF step.
+
+    At each step, the nocc orbitals with the largest overlap with the reference
+    occupied space receive occupation 2. These selected orbitals become the
+    reference for the next step. Use mom_occ_ to keep a fixed reference instead.
+
+    Args:
+        mf : RHF or RKS object
+            Closed-shell molecular mean-field object with real orbitals.
+
+    Kwargs:
+        occorb : (nao, nocc) ndarray or None
+            Initial occupied orbitals in the AO basis. nocc is half the
+            electron count. By default, the first step uses mf.get_occ to
+            choose the occupied orbitals.
+
+    Returns:
+        The modified mf object.
+
+    Notes:
+        mf.get_occ is overloaded.
+    '''
     occstat = [occorb]
     old_get_occ = mf.get_occ
     def get_occ(mo_energy, mo_coeff=None):
@@ -289,7 +378,31 @@ follow_state = follow_state_
 
 def mom_occ_(mf, occorb, setocc):
     '''Use maximum overlap method to determine occupation number for each orbital in every
-    iteration.'''
+    iteration.
+
+    Each step selects the required number of orbitals by overlap with the
+    reference occupied space. The reference stays fixed; use follow_state_ to
+    update it at each step instead.
+
+    Args:
+        mf : SCF object
+            UHF, ROHF, GHF or DHF object, or a corresponding Kohn-Sham object.
+        occorb : ndarray or pair of ndarrays
+            Reference orbital coefficients, shape (nao, nmo).
+            For UHF, two arrays should be supplied for alpha and beta spin
+            For ROHF, supply one shared matrix.
+            For GHF or DHF, use one matrix in the solver's spin-orbital basis.
+        setocc : ndarray
+            Reference occupations, with values 0 or 1. Shape should be
+            consistent with the number of orbitals in occorb.
+            For ROHF, the alpha count minus the beta count must equal mol.spin.
+
+    Returns:
+        The modified mf object.
+
+    Notes:
+        mf.get_occ is overloaded.
+    '''
     from pyscf.scf import uhf, rohf
     log = logger.Logger(mf.stdout, mf.verbose)
     if mf.istype('UHF'):

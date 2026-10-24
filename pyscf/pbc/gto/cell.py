@@ -1909,29 +1909,38 @@ class Cell(mole.MoleBase):
         return a
 
     def get_scaled_atom_coords(self, a=None):
-        ''' Get scaled atomic coordinates.
+        '''Express atomic positions as fractions of the lattice vectors.
+
+        Kwargs:
+            a : (3, 3) ndarray or None
+                Lattice vectors as rows, in Bohr.
+
+        Returns:
+            An (natm, 3) array of dimensionless fractional coordinates.
+
+        Notes:
+            Coordinates are not wrapped into the unit cell.
         '''
         if a is None:
             a = self.lattice_vectors()
         return np.dot(self.atom_coords(), np.linalg.inv(a))
 
     def reciprocal_vectors(self, norm_to=2*np.pi):
-        '''Return reciprocal lattice vectors as rows of a (3, 3) array.
+        r'''Return reciprocal lattice vectors as rows of a (3, 3) array.
 
         Kwargs:
             norm_to : float
                 Dot-product normalization between direct and reciprocal vectors.
-                Default is 2*pi. With direct vectors ``a`` in Bohr and returned
-                vectors ``b``, ``a @ b.T = norm_to * I``.
+                Default is 2*pi. For lattice vectors ``a``,
+                ``a @ b.T = norm_to * I``.
 
         Returns:
-            Reciprocal vectors in inverse Bohr, independent of ``self.unit``.
-            The result is ``norm_to * inv(self.lattice_vectors().T)``.
+            Reciprocal vectors in atomic unit.
 
         Notes:
             For dimension 1, all three direct lattice vectors must be mutually
             orthogonal. For dimension 2, the third must be perpendicular to the
-            first two. These conditions are checked by assertions.
+            first two.
         '''
         a = self.lattice_vectors()
         if self.dimension == 1:
@@ -1945,39 +1954,31 @@ class Cell(mole.MoleBase):
         return norm_to * b
 
     def get_abs_kpts(self, scaled_kpts):
-        '''Convert fractional reciprocal coordinates to absolute k-points.
+        '''Get absolute k-points (in 1/Bohr), given "scaled" k-points in
+        fractions of lattice vectors.
 
         Args:
             scaled_kpts : (nkpts, 3) or (3,) array-like
                 Dimensionless coefficients of the reciprocal lattice vectors,
-                which include the conventional 2*pi normalization. Coordinates
-                need not be wrapped to a particular reciprocal unit cell.
+                which include the conventional 2*pi normalization.
 
         Returns:
-            Absolute Cartesian k-points in inverse Bohr, with the same shape
-            as the input. Computes ``scaled_kpts @ self.reciprocal_vectors()``.
+            Absolute Cartesian k-points, an array of shape (nkpts, 3)
         '''
         return np.dot(scaled_kpts, self.reciprocal_vectors())
 
     def get_scaled_kpts(self, abs_kpts, kpts_in_ibz=True):
-        '''Convert absolute k-points to fractional reciprocal coordinates.
+        '''Get scaled k-points, given absolute k-points in 1/Bohr.
 
         Args:
             abs_kpts : (nkpts, 3) or (3,) array-like, or KPoints
-                Absolute Cartesian k-points in inverse Bohr, or a symmetry-aware
+                Absolute Cartesian k-points, or a symmetry-aware
                 :class:`pyscf.pbc.lib.kpts.KPoints` object.
 
         Kwargs:
             kpts_in_ibz : bool
                 For a KPoints object, return its irreducible-zone coordinates if
-                True (default), or full-zone coordinates if False. Ignored for
-                an array input.
-
-        Returns:
-            Dimensionless fractions of reciprocal lattice vectors with 2*pi
-            normalization. Array input retains its shape and is not wrapped.
-            KPoints input returns its stored (nkpts, 3) coordinate array for
-            the selected mesh; that array is not copied.
+                True (default), or full-zone coordinates if False.
         '''
         from pyscf.pbc.lib.kpts import KPoints
         if isinstance(abs_kpts, KPoints):

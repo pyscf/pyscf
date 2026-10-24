@@ -97,7 +97,7 @@ including tests. Customize as needed.
   explain obvious behavior, or enumerate hypothetical misuse.
 - Treat side-effect-free behavior as the default. Omit routine statements that
   inputs are unchanged.
-- Describe required data rather. No need to describe how the data is prepared.
+- Describe required data, not how data are prepared.
 - Verify descriptions against the implementation. Distinguish scientific
   expectations, such as converged amplitudes, from conditions the code checks.
   Document non-obvious assumptions needed for correct use.

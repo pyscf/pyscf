@@ -150,7 +150,48 @@ def from_chkfile(filename, chkfile, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
 
 def from_integrals(filename, h1e, h2e, nmo, nelec, nuc=0, ms=0, orbsym=None,
                    tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
-    '''Convert the given 1-electron and 2-electron integrals to FCIDUMP format'''
+    '''Write one- and two-electron integrals to an FCIDUMP file.
+
+    Args:
+        filename : str or path-like
+            Output file name.
+        h1e : (nmo, nmo) ndarray
+            Real one-electron integrals in Hartree.
+        h2e : ndarray
+            Real two-electron integrals (ij|kl) in Hartree. Supply the full
+            nmo**4 array, a fourfold-packed (npair, npair) matrix, or an
+            eightfold-packed vector of length npair*(npair+1)//2, where
+            npair = nmo*(nmo+1)//2.
+        nmo : int
+            Number of spatial orbitals.
+        nelec : int or pair of ints
+            Total electron count or (nalpha, nbeta). A pair also sets the
+            header's MS2 field to abs(nalpha - nbeta).
+
+    Kwargs:
+        nuc : float
+            Constant energy term in Hartree, usually nuclear repulsion.
+        ms : int
+            Header MS2 value when nelec is an integer. Ignored when nelec
+            is a pair.
+        orbsym : sequence of ints or None
+            One symmetry label per orbital, written as supplied. Default writes
+            label 1 for every orbital.
+        tol : float
+            Write integrals only when their absolute value exceeds tol.
+            Default 1e-15 Hartree, configurable through fcidump_write_tol.
+        float_format : str
+            Percent-format string for floating-point values.
+
+    Returns:
+        None.
+
+    Notes:
+        Overwrites the output file if file is already existed.
+
+        Orbital indices in the file start at 1.
+        The constant energy term is always written, regardless of tol.
+    '''
     with open(filename, 'w') as fout:
         write_head(fout, nmo, nelec, ms, orbsym)
         write_eri(fout, h2e, nmo, tol=tol, float_format=float_format)
@@ -161,13 +202,39 @@ def from_integrals(filename, h1e, h2e, nmo, nelec, nuc=0, ms=0, orbsym=None,
 def from_mo(mol, filename, mo_coeff, orbsym=None,
             tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
             molpro_orbsym=MOLPRO_ORBSYM, ms=0):
-    '''Use the given MOs to transform the 1-electron and 2-electron integrals
-    then dump them to FCIDUMP.
+    '''Transform molecular integrals to the supplied orbitals and write FCIDUMP.
+
+    Args:
+        mol : Mole
+            Molecule defining the AO integrals and electron counts.
+        filename : str or path-like
+            Output file name.
+        mo_coeff : (nao, nmo) ndarray
+            Real spatial-orbital coefficients in the AO basis.
 
     Kwargs:
-        molpro_orbsym (bool): Whether to dump the orbsym in Molpro orbsym
-            convention as documented in
-            https://www.molpro.net/info/current/doc/manual/node36.html
+        orbsym : sequence of ints or None
+            Orbital symmetry labels in the desired output convention.
+            Explicit labels are written unchanged. Default uses the orbsym
+            attribute of mo_coeff, when available, and converts those labels
+            according to molpro_orbsym. Without labels, every orbital uses 1.
+        tol : float
+            Integral threshold.
+        float_format : str
+            Percent-format string for values.
+        molpro_orbsym : bool
+            Convert labels taken from mo_coeff to Molpro numbering, if set to True.
+            Linear-group labels are reduced to D2h or C2v labels.
+        ms : int
+            Ignored: the molecule's (nalpha, nbeta) counts determine MS2.
+
+    Returns:
+        None.
+
+    Notes:
+        Overwrites the output file if file is already existed.
+
+        This writer is intended for molecular, real spatial orbitals.
     '''
     if getattr(mol, '_mesh', None):
         raise NotImplementedError('PBC system')
@@ -187,10 +254,28 @@ def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
     '''Use the given SCF object to transform the 1-electron and 2-electron
     integrals then dump them to FCIDUMP.
 
+    Args:
+        mf : SCF object
+            Mean-field object with mo_coeff as a real float64 array of shape
+            (nao, nmo). Separate alpha and beta orbital arrays are not supported.
+        filename : str or path-like
+            Output file name.
+
     Kwargs:
-        molpro_orbsym (bool): Whether to dump the orbsym in Molpro orbsym
-            convention as documented in
-            https://www.molpro.net/info/current/doc/manual/node36.html
+        tol : float
+            Integral threshold.
+        float_format : str
+            Percent-format string for values.
+        molpro_orbsym : bool
+            Convert the orbitals' symmetry labels to Molpro numbering when
+            Linear-group labels are reduced to D2h or C2v labels. If no labels
+            are attached to mo_coeff, all orbitals are assigned label 1.
+
+    Returns:
+        None.
+
+    Notes:
+        Overwrites the output file if file is already existed.
     '''
     mol = mf.mol
     mo_coeff = mf.mo_coeff

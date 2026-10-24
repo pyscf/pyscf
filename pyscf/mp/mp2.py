@@ -215,19 +215,36 @@ def update_amps(mp, t1, t2, eris):
 def make_rdm1(mp, t2=None, eris=None, ao_repr=False, with_frozen=True):
     r'''Spin-traced one-particle density matrix.
 
-    dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
+    The MO convention is
+    dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>.
 
-    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
-    The contraction between 1-particle Hamiltonian and rdm1 is
-    E = einsum('pq,qp', h1, rdm1)
-
-    For a non-Hartree-Fock reference the first-order singles amplitudes T1
-    contribute to the occupied-virtual block of the density.
+    Args:
+        mp : MP2 object
+            Restricted MP2 object with orbital and frozen-orbital settings.
 
     Kwargs:
-        ao_repr : boolean
-            Whether to transform 1-particle density matrix to AO
-            representation.
+        t2 : (nocc, nocc, nvir, nvir) ndarray or None
+            None uses mp.t2. If no amplitudes are stored, they are computed from eris.
+        eris : MO integral object or None
+            MO integrals for evaluating amplitudes when t2 is unavailable.
+            None evaluates the required integrals automatically.
+        ao_repr : bool
+            Whether to return the density matrix in the AO basis.
+        with_frozen : bool
+            Whether to include frozen orbitals and their reference occupations.
+
+    Returns:
+        A density matrix of shape (nmo, nmo) in the selected MO space, or
+        (nao, nao) for AO output.
+
+    Notes:
+        The density convention follows McWeeney, Eq. (5.4.20).
+        The contraction between 1-particle Hamiltonian and rdm1 is
+        E = einsum('pq,qp', h1, rdm1)
+
+        For a non-Hartree-Fock reference, the first-order singles amplitudes T1
+        is stored in mp.t1. It also contributes to the occupied-virtual block of
+        the density.
     '''
     from pyscf.cc import ccsd_rdm
     doo, dvv = _gamma1_intermediates(mp, t2, eris)
@@ -364,14 +381,36 @@ def make_rdm2(mp, t2=None, eris=None, ao_repr=False):
     r'''
     Spin-traced two-particle density matrix in MO basis
 
-    dm2[p,q,r,s] = \sum_{sigma,tau} <p_sigma^\dagger r_tau^\dagger s_tau q_sigma>
-
-    Note the contraction between ERIs (in Chemist's notation) and rdm2 is
-    E = einsum('pqrs,pqrs', eri, rdm2)
+    The MO convention is
+    dm2[p,q,r,s] = sum_{sigma,tau} <p_sigma^\dagger r_tau^\dagger s_tau q_sigma>.
+    With chemists' integrals, the two-electron energy contribution is
+    0.5 * einsum('pqrs,pqrs', eri, dm2).
 
     This energy contract holds when the reference satisfies Brillouin's
     theorem (f_ov = 0).  The T1 contributions to the 2-RDM are not included,
     so for a non-canonical reference (f_ov != 0) a warning is issued.
+
+    Args:
+        mp : MP2 object
+            Restricted MP2 object with orbital and frozen-orbital settings.
+
+    Kwargs:
+        t2 : (nocc, nocc, nvir, nvir) ndarray or None
+            None uses mp.t2.
+            If no amplitudes are stored, they are computed from eris.
+        eris : MO integral object or None
+            MO integrals for evaluating amplitudes when t2 is unavailable.
+            None evaluates the required integrals automatically.
+        ao_repr : bool
+            Whether to return the density matrix in the AO basis.
+
+    Returns:
+        An array of shape (nmo, nmo, nmo, nmo), including frozen orbitals,
+        or (nao, nao, nao, nao) for AO output.
+
+    Notes:
+        The full four-index array is allocated in memory. The reference and
+        frozen-orbital contributions are included.
     '''
     if t2 is None: t2 = mp.t2
     t1 = getattr(mp, 't1', None)

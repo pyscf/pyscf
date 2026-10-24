@@ -711,14 +711,35 @@ class Grids(lib.StreamObject):
     make_mask = lib.module_method(make_mask, absences=['cutoff'])
 
     def prune_by_density_(self, rho, threshold=0):
-        '''Prune grids if the electron density on the grid is small'''
+        '''Prune grids if the electron density on the grid is small
+
+        Args:
+            rho : (ngrids,) ndarray
+                Electron density in electrons per Bohr cubed at the current grid
+                points.
+
+        Kwargs:
+            threshold : float
+                Electron-count threshold. A point is retained when
+                abs(rho[i] * weights[i]) > threshold / ngrids.
+                Default 0 disables pruning.
+
+        Returns:
+            The modified Grids object.
+
+        Notes:
+            This function updates several attributes, including the grid
+            coordinates, weights, atom labels and screening masks.
+
+            The final grid may include zero-weight padding points.
+        '''
         if threshold == 0:
             return self
 
         mol = self.mol
         n = numpy.dot(rho, self.weights)
         if abs(n-mol.nelectron) < NELEC_ERROR_TOL*n:
-            rho *= self.weights
+            rho = rho * self.weights
             idx = abs(rho) > threshold / self.weights.size
             logger.debug(self, 'Drop grids %d',
                          self.weights.size - numpy.count_nonzero(idx))

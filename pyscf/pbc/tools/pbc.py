@@ -958,8 +958,16 @@ def cutoff_to_mesh(a, cutoff):
     return mesh
 
 def mesh_to_cutoff(a, mesh):
-    '''
-    Convert #grid points to KE cutoff
+    '''Convert an FFT mesh to kinetic-energy cutoffs along lattice directions.
+
+    Args:
+        a : (3, 3) ndarray
+            Real-space lattice vectors as rows.
+        mesh : sequence of three ints
+            Number of FFT grid points along each lattice direction.
+
+    Returns:
+        A (3,) array of kinetic-energy cutoffs.
     '''
     # Search the minimal x,y,z requiring |x*b[0]+y*b[1]+z*b[2]|^2 > 2 * cutoff
     b = 2 * np.pi * np.linalg.inv(a.T)

@@ -1335,7 +1335,39 @@ class CCSD(CCSDBase):
 
     def make_rdm1(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False,
                   with_frozen=True, with_mf=True):
-        '''Un-relaxed 1-particle density matrix in MO space'''
+        '''Un-relaxed 1-particle density matrix
+
+        Kwargs:
+            t1, t2 : ndarrays or None
+                CC amplitudes with shapes (nocc, nvir) and
+                (nocc, nocc, nvir, nvir) for the correlated orbitals.
+                None uses self.t1 or self.t2.
+            l1, l2 : ndarrays or None
+                Lambda amplitudes with the same shapes as t1 and t2.
+                None uses the stored self.l1 or self.l2.
+            ao_repr : bool
+                Return DM in AO representation. Returns MO representation by
+                default.
+            with_frozen : bool
+                Include frozen orbitals when True (default). False uses only the
+                correlated MO space. For AO output (ao_repr=True), this
+                parameter should set to True.
+            with_mf : bool
+                Include the doubly occupied reference contribution when True
+                (default). False returns only the correlation correction.
+
+        Returns:
+            A matrix of shape (nmo, nmo) in the selected MO space, or (nao, nao)
+            for AO output. The convention is
+            dm1[p,q] = <q_alpha^dagger p_alpha> + <q_beta^dagger p_beta>.
+            The one-electron energy is einsum('pq,qp', h1, dm1).
+
+        Notes:
+            If no l1 is supplied or stored, both lambda amplitudes are computed
+            and stored on the CCSD object, along with their convergence status.
+
+            Orbital-response contributions are not included.
+        '''
         from pyscf.cc import ccsd_rdm
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
@@ -1347,10 +1379,41 @@ class CCSD(CCSDBase):
 
     def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False,
                   with_frozen=True, with_dm1=True):
-        '''2-particle density matrix in MO space.  The density matrix is
-        stored as
+        '''Compute the unrelaxed, spin-summed CCSD two-particle density matrix.
 
-        dm2[p,r,q,s] = <p^+ q^+ s r>
+        Kwargs:
+            t1, t2 : ndarrays or None
+                CC amplitudes with shapes (nocc, nvir) and
+                (nocc, nocc, nvir, nvir) for the correlated orbitals.
+                None uses self.t1 or self.t2.
+            l1, l2 : ndarrays or None
+                Lambda amplitudes with the same shapes as t1 and t2.
+                None uses the stored self.l1 or self.l2.
+            ao_repr : bool
+                Return AO indices when True. Default False returns MO indices.
+            with_frozen : bool
+                Include frozen orbitals when True (default). False uses only the
+                correlated MO space. For AO output (ao_repr=True), this
+                parameter should set to True.
+            with_dm1 : bool
+                Include the reference and one-particle-density contributions
+                when True (default). False omits these terms; the result is then
+                only part of the full two-particle density.
+
+        Returns:
+            An array of shape (nmo, nmo, nmo, nmo) in the selected MO space,
+            or (nao, nao, nao, nao) for AO output. The MO convention is
+            dm2[p,r,q,s] = <p^+ q^+ s r>, summed over spins. Indices follow
+            chemists' integral ordering: the two-electron energy contribution is
+            0.5 * einsum('pqrs,pqrs', eri, dm2) for the full density.
+
+        Notes:
+            If no l1 is supplied or stored, both lambda amplitudes are computed
+            and stored on the CCSD object, along with their convergence status.
+
+            Orbital-response contributions are not included.
+
+            The full four-index density array is allocated in memory.
         '''
         from pyscf.cc import ccsd_rdm
         if t1 is None: t1 = self.t1
