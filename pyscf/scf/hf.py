@@ -2215,6 +2215,22 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         if s is None: s = self.get_ovlp(mol)
         return mulliken_pop(mol, dm, s=s, verbose=verbose)
 
+    def mayer_bond_order(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):
+        '''Mayer bond orders. See scf.analyze.mayer_bond_order'''
+        from pyscf.scf import analyze
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        if s is None: s = self.get_ovlp(mol)
+        return analyze.mayer_bond_order(mol, dm, s=s, verbose=verbose)
+
+    def wiberg_bond_order(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):
+        '''Wiberg bond indices. See scf.analyze.wiberg_bond_order'''
+        from pyscf.scf import analyze
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        if s is None: s = self.get_ovlp(mol)
+        return analyze.wiberg_bond_order(mol, dm, s=s, verbose=verbose)
+
     @lib.with_doc(mulliken_meta.__doc__)
     def mulliken_meta(self, mol=None, dm=None, verbose=logger.DEBUG,
                       pre_orth_method=PRE_ORTH_METHOD, s=None):
