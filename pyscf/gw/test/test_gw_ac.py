@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import os
 import tempfile
 import pytest
 import numpy as np
@@ -108,9 +109,10 @@ def _check_continuation(obj):
     np.testing.assert_allclose(obj.ac_eval(target[0]), expected[..., 0], atol=1e-7)
     np.testing.assert_allclose(obj[0, 1].ac_eval(target), expected[0, 1], atol=1e-7)
     np.testing.assert_allclose(obj.diagonal().ac_eval(target), expected[[0, 1], [0, 1]], atol=1e-7)
-    with tempfile.NamedTemporaryFile(suffix='.h5') as f:
-        obj.save(f.name)
-        restored = ac_grid.load_ac(f.name)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        checkpoint = os.path.join(tmpdir, 'checkpoint.h5')
+        obj.save(checkpoint)
+        restored = ac_grid.load_ac(checkpoint)
         np.testing.assert_array_equal(restored.ac_eval(target), obj.ac_eval(target))
 
 
