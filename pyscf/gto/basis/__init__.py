@@ -468,7 +468,10 @@ PP_ALIAS = {
 }
 
 def _is_pople_basis(basis):
-    return basis.startswith(('631', '321', '431'))
+    return re.fullmatch(
+        r'(?:6311?|321|431)\+{0,2}g(?:\*{1,2}|s{1,2})?(?:\([a-z0-9,]+\))?',
+        basis,
+    ) is not None
 
 _BASIS_DIR = os.path.dirname(__file__)
 _GTH_BASIS_DIR = os.path.abspath(f'{pyscf.__file__}/../pbc/gto/basis')
