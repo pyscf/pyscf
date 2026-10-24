@@ -118,17 +118,3 @@ def make20(b):
         coord.append(p4)
         p4 = numpy.dot(p4, rot72)
     return numpy.array(coord)
-
-
-if __name__ == '__main__':
-    b5 = 1.46
-    b6 = 1.38
-    for c in make60(b5, b6):
-        print(c)
-
-    b = 1.4
-    for c in make12(b):
-        print(c)
-
-    for c in make20(b):
-        print(c)

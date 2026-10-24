@@ -280,25 +280,3 @@ class BeckeGrids(dft.gen_grid.Grids):
     to_gpu = lib.to_gpu
 
 AtomicGrids = BeckeGrids
-
-
-if __name__ == '__main__':
-    import pyscf.pbc.gto as pgto
-
-    n = 7
-    cell = pgto.Cell()
-    cell.a = '''
-    4   0   0
-    0   4   0
-    0   0   4
-    '''
-    cell.mesh = [n,n,n]
-
-    cell.atom = '''He     0.    0.       1.
-                   He     1.    0.       1.'''
-    cell.basis = {'He': [[0, (1.0, 1.0)]]}
-    cell.build()
-    g = BeckeGrids(cell)
-    g.build()
-    print(g.weights.sum())
-    print(cell.vol)

@@ -79,6 +79,19 @@ class KnownValues(unittest.TestCase):
         et = mycc.qcisd_t()
         self.assertAlmostEqual(mycc.e_tot+et, -128.6788843055109, 6)
 
+    def test_damped_iteration(self):
+        mol = gto.M(atom='Li 0 0 0; H 0 0 1.6', basis='sto-3g', verbose=0)
+        mf = scf.RHF(mol).run(conv_tol=1e-12)
+        ref = qcisd.QCISD(mf).run(conv_tol=1e-11, conv_tol_normt=1e-9)
+        obj = qcisd.QCISD(mf)
+        obj.iterative_damping = .8
+        conv, energy, t1, t2 = qcisd.kernel(obj, tol=1e-11, tolnormt=1e-9)
+        self.assertTrue(conv and ref.converged)
+        self.assertAlmostEqual(energy, ref.e_corr, places=10)
+        np.testing.assert_allclose(t1, ref.t1, atol=1e-8)
+        np.testing.assert_allclose(t2, ref.t2, atol=1e-8)
+
+
 if __name__ == "__main__":
     print("Full Tests for CCD")
     unittest.main()

@@ -23,6 +23,7 @@ import unittest.mock
 from pyscf import gto
 from pyscf import scf
 from pyscf import lib
+from pyscf.data import nist
 from pyscf.x2c import x2c
 
 def setUpModule():
@@ -366,6 +367,69 @@ C     F
         mf = mol.UKS(xc='lda,').run()
         mf1 = mol.UKS(xc='lda,').newton().run()
         self.assertAlmostEqual(mf.e_tot, mf1.e_tot, 9)
+
+
+    def test_dipole_spin_representation(self):
+        mol = gto.M(atom='F 0 0 0; H 0 0 .9', basis='sto-3g', verbose=0)
+        mf = scf.RHF(mol).sfx2c1e().run(conv_tol=1e-11)
+        ref = mf.dip_moment(unit='AU', verbose=0)
+        numpy.testing.assert_allclose(mf.dip_moment(verbose=0), ref*nist.AU2DEBYE, atol=1e-10)
+        for spin in (mf.to_uhf(), mf.to_ghf()):
+            numpy.testing.assert_allclose(spin.dip_moment(unit='AU', verbose=0), ref, atol=1e-10)
+        uncorrected = scf.hf.dip_moment(mol, mf.make_rdm1(), unit='AU', verbose=0)
+        numpy.testing.assert_allclose(mf.dip_moment(unit='AU', picture_change=False, verbose=0),
+                                   uncorrected, atol=1e-10)
+        moved = mol.set_geom_(mol.atom_coords()+[.3, -.2, .1], unit='Bohr', inplace=False)
+        shifted = scf.RHF(moved).sfx2c1e()
+        numpy.testing.assert_allclose(shifted.dip_moment(dm=mf.make_rdm1(), unit='AU', verbose=0),
+                                   ref, atol=1e-9)
+
+
+    def check_picture_change(self, spin_orbital=False, atomic=False):
+        self.mol = gto.M(atom='F 0 0 0; H 0 0 .9', basis='sto-3g', verbose=0)
+        cls = x2c.SpinOrbitalX2CHelper if spin_orbital else x2c.SpinorX2CHelper
+        helper = cls(self.mol)
+        helper.xuncontract = False
+        if atomic:
+            helper.approx = 'ATOM1E'
+        c = lib.param.LIGHT_SPEED
+        if spin_orbital:
+            s = scipy.linalg.block_diag(*([self.mol.intor('int1e_ovlp')]*2))
+            t = scipy.linalg.block_diag(*([self.mol.intor('int1e_kin')]*2))
+            v = scipy.linalg.block_diag(*([self.mol.intor('int1e_nuc')]*2))
+            w = x2c._sigma_dot(self.mol.intor('int1e_spnucsp'))
+        else:
+            s = self.mol.intor('int1e_ovlp_spinor')
+            t = self.mol.intor('int1e_spsp_spinor')*.5
+            v = self.mol.intor('int1e_nuc_spinor')
+            w = self.mol.intor('int1e_spnucsp_spinor')
+        metric = helper.picture_change((s, t/(2*c*c)))
+        numpy.testing.assert_allclose(metric, s, atol=1e-10)
+        potential = (v, w/(4*c*c)-t)
+        h = helper.picture_change(potential, t)
+        numpy.testing.assert_allclose(h, helper.get_hcore(), atol=1e-9)
+        if not atomic:
+            h4 = numpy.block([[v, t], [t, potential[1]]])
+            s4 = scipy.linalg.block_diag(s, t/(2*c*c))
+            spectrum = scipy.linalg.eigvalsh(h4, s4)[len(s):]
+            numpy.testing.assert_allclose(scipy.linalg.eigvalsh(h, s), spectrum, atol=1e-9)
+        # Vector-valued operators obey the same linear transformation.
+        odd = numpy.array([t, t*.3, -t*.4])
+        vector = helper.picture_change(odd_operator=odd)
+        scalar = helper.picture_change(odd_operator=t)
+        numpy.testing.assert_allclose(vector, numpy.array([scalar, scalar*.3, -scalar*.4]), atol=1e-11)
+
+    def test_picture_change_spinor(self):
+        self.check_picture_change()
+
+    def test_picture_change_spin_orbital(self):
+        self.check_picture_change(spin_orbital=True)
+
+    def test_picture_change_atomic_spinor(self):
+        self.check_picture_change(atomic=True)
+
+    def test_picture_change_atomic_spin_orbital(self):
+        self.check_picture_change(spin_orbital=True, atomic=True)
 
 if __name__ == "__main__":
     print("Full Tests for x2c")

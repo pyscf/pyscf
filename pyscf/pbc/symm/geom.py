@@ -219,33 +219,3 @@ def get_crystal_class(cell, ops=None, tol=SYMPREC):
     if crystal_class is None or laue_class is None:
         raise RuntimeError("Unable to determine crystal class.")
     return crystal_class, laue_class
-
-
-if __name__ == "__main__":
-    from pyscf.pbc import gto
-    cell = gto.Cell()
-    cell.atom = """
-      Cu 1.000000     1.00000      0.0000
-      O  0.000000     1.00000      0.0000
-      O  1.000000     2.00000      0.0000
-      Cu 1.000000     3.00000      0.0000
-      O  1.000000     4.00000      0.0000
-      O  2.000000     3.00000      0.0000
-      Cu 3.000000     3.00000      0.0000
-      O  4.000000     3.00000      0.0000
-      O  3.000000     2.00000      0.0000
-      Cu 3.000000     1.00000      0.0000
-      O  3.000000     0.00000      0.0000
-      O  2.000000     1.00000      0.0000
-    """
-    cell.a = [[4.0, 0., 0.], [0., 4.0, 0.], [0., 0., 16.0]]
-    cell.dimension = 2
-    cell.magmom = [1, 1, -1, -1, 1, -1, 1, 1, -1, -1, 1, -1]
-    cell.build()
-
-    ops = search_space_group_ops(cell)
-    for op in ops:
-        print(op)
-
-    point_group = get_crystal_class(cell, ops=ops)[0]
-    print(point_group)

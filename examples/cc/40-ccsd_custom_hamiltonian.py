@@ -40,3 +40,15 @@ mycc = cc.RCCSD(mf)
 mycc.kernel()
 e,v = mycc.ipccsd(nroots=3)
 print(e)
+
+# Complex MO coefficients require the complex-capable restricted solver.
+# Orbital phases leave this Hamiltonian and the resulting energy unchanged.
+# Explicit rccsd.RCCSD also makes the implementation choice clear.
+from pyscf.cc import rccsd
+complex_mo = mf.mo_coeff.astype(complex) * numpy.exp(0.2j * numpy.arange(n))
+# The complex in-core transformation needs the full AO integral tensor,
+# rather than the symmetry-packed tensor used for the real calculation.
+complex_mf = mf.copy()
+complex_mf._eri = ao2mo.restore(1, mf._eri, n)
+complex_cc = rccsd.RCCSD(complex_mf, mo_coeff=complex_mo).run()
+print('Real and complex-orbital RCCSD total energies', mycc.e_tot, complex_cc.e_tot)

@@ -224,6 +224,18 @@ class KnownValues(unittest.TestCase):
         e2 = mfs(mol.set_geom_('Cu 0 0 -0.001; H 0 0 1.5'))[1]
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/0.002*lib.param.BOHR).max(), 0, 5)
 
+    def test_hessian_vector_product(self):
+        mol = gto.M(atom='Li 0 0 0; H 0 0 1.6', basis='sto-3g', verbose=0)
+        mf = scf.RHF(mol).run(conv_tol=1e-12)
+        obj = mf.Hessian()
+        tensor = obj.kernel()
+        matrix = tensor.transpose(0, 2, 1, 3).reshape(6, 6)
+        hop, _ = obj.gen_hop()
+        for displacement in numpy.random.default_rng(9).normal(size=(3, 6)):
+            numpy.testing.assert_allclose(hop(displacement), matrix @ displacement, atol=1e-8)
+        for displacement in numpy.tile(numpy.eye(3), (1, 2)):
+            numpy.testing.assert_allclose(hop(displacement), 0, atol=1e-8)
+
 #        mfs = mf.nuc_grad_method().as_scanner()
 #        e1 = mfs(mol.set_geom_('Cu 0 0 0; H 0 0 1.5001'))[1]
 #        e2 = mfs(mol.set_geom_('Cu 0 0 0; H 0 0 1.4999'))[1]

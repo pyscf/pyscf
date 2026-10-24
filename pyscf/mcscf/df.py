@@ -140,7 +140,7 @@ class _DFCAS:
             paaa = self.with_df.ao2mo([mo1, mo1_cas, mo1_cas, mo1_cas], compact=False)
             return paaa.reshape(nmo,ncas,ncas,ncas)
         else:
-            return super()._exact_paaa(mol, u, out)
+            return super()._exact_paaa(mo, u, out)
 
     def nuc_grad_method(self):
         raise NotImplementedError
@@ -403,55 +403,3 @@ def _mem_usage(ncore, ncas, nmo):
 def prange(start, end, step):
     for i in range(start, end, step):
         yield i, min(i+step, end)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-    from pyscf import mcscf
-    from pyscf.mcscf import addons
-
-    mol = gto.Mole()
-    mol.atom = [
-        ['O', ( 0., 0.    , 0.   )],
-        ['H', ( 0., -0.757, 0.587)],
-        ['H', ( 0., 0.757 , 0.587)],]
-    mol.basis = {'H': 'cc-pvdz',
-                 'O': 'cc-pvdz',}
-    mol.build()
-
-    m = scf.RHF(mol)
-    ehf = m.scf()
-    mc = approx_hessian(mcscf.CASSCF(m, 6, 4))
-    mc.verbose = 4
-    mo = addons.sort_mo(mc, m.mo_coeff, (3,4,6,7,8,9), 1)
-    emc = mc.kernel(mo)[0]
-    print(ehf, emc, emc-ehf)
-    #-76.0267656731 -76.0873922924 -0.0606266193028
-    print(emc - -76.0873923174, emc - -76.0926176464)
-
-    mc = approx_hessian(mcscf.CASSCF(m, 6, (3,1)))
-    mc.verbose = 4
-    emc = mc.mc2step(mo)[0]
-    print(emc - -75.7155632535814)
-
-    mf = scf.density_fit(m)
-    mf.kernel()
-    #mc = density_fit(mcscf.CASSCF(mf, 6, 4))
-    #mc = mcscf.CASSCF(mf, 6, 4)
-    mc = mcscf.DFCASSCF(mf, 6, 4)
-    mc.verbose = 4
-    mo = addons.sort_mo(mc, mc.mo_coeff, (3,4,6,7,8,9), 1)
-    emc = mc.kernel(mo)[0]
-    print(emc, 'ref = -76.0917567904955', emc - -76.0917567904955)
-    mc.with_dep4 = True
-    mc.max_cycle_micro = 10
-    emc = mc.kernel(mo)[0]
-    print(emc, 'ref = -76.0917567904955', emc - -76.0917567904955)
-
-    #mc = density_fit(mcscf.CASCI(mf, 6, 4))
-    #mc = mcscf.CASCI(mf, 6, 4)
-    mc = mcscf.DFCASCI(mf, 6, 4)
-    mo = addons.sort_mo(mc, mc.mo_coeff, (3,4,6,7,8,9), 1)
-    emc = mc.kernel(mo)[0]
-    print(emc, 'ref = -76.0476686258461', emc - -76.0476686258461)

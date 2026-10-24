@@ -1741,6 +1741,10 @@ class Cell(mole.MoleBase):
                         '%d contracted functions', nprim_drop, nctr_drop)
             #logger.debug1(self, 'Old shells %s', steep_shls)
 
+            if self.symmetry:
+                # MoleBase.build initialized symmetry with the unpruned basis.
+                self._build_symmetry()
+
         if self.rcut is None or self._rcut_from_build:
             self._rcut = estimate_rcut(self, self.precision)
             self._rcut_from_build = True
@@ -1774,6 +1778,8 @@ class Cell(mole.MoleBase):
         if self.space_group_symmetry:
             _check_mesh_symm = not self._mesh_from_build
             self.build_lattice_symmetry(check_mesh_symmetry=_check_mesh_symm)
+        else:
+            self.lattice_symmetry = None
 
         if dump_input and not _built and self.verbose > logger.NOTE:
             self.dump_input()

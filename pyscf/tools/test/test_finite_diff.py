@@ -37,6 +37,19 @@ def rks_fine(mol):
     mf.grids.prune = None
     return mf.run(conv_tol=1e-13)
 
+class HarmonicEnergy(pyscf.lib.StreamObject):
+    def __init__(self, mol):
+        self.mol = mol
+        self.converged = True
+
+    def reset(self, mol):
+        self.mol = mol
+        return self
+
+    def kernel(self):
+        return .5*numpy.sum(self.mol.atom_coords()**2)
+
+
 class KnownValues(unittest.TestCase):
     def test_grad_scanner(self):
         mol = pyscf.M(atom='H 0 0 0; H 0 0 1', verbose=0)
@@ -225,6 +238,17 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(mol.unit.lower(), 'angstrom')
         g1 = mf.Gradients().kernel()
         self.assertAlmostEqual(abs(g1 - g0).max(), 0, 12)
+
+
+    def test_energy_callback(self):
+        mol = gto.M(atom='He .2 -.3 .4', unit='Bohr', basis='sto-3g', verbose=0)
+        method = HarmonicEnergy(mol)
+        numpy.testing.assert_allclose(finite_diff.kernel(method), mol.atom_coords(), atol=1e-12)
+        self.assertIs(method.mol, mol)
+        method.converged = False
+        with self.assertRaisesRegex(RuntimeError, 'not converged'):
+            finite_diff.kernel(method)
+        self.assertIs(method.mol, mol)
 
 
 if __name__ == "__main__":

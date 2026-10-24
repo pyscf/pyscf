@@ -33,3 +33,14 @@ mo = numpy.linalg.solve(C, mf.mo_coeff)
 #
 dm = mf.make_rdm1(mo, mf.mo_occ)
 mf.mulliken_pop(mol, dm, numpy.eye(mol.nao_nr()))
+
+# For transition metals, the core/valence/Rydberg partition used to construct
+# NAOs can be adjusted before calling lo.orth_ao or lo.nao.nao.
+# These settings change the global configuration for the element. Successive
+# calls retain unspecified shell counts, so the following changes accumulate.
+# String descriptions leave the core unchanged and set the named valence shells:
+# lo.nao.set_atom_conf('Fe', '1s1d')      # Set one s and one d valence shell.
+# lo.nao.set_atom_conf('Fe', 'double d')  # Set two d valence shells.
+# lo.nao.set_atom_conf('Fe', 'double p')  # Set two p valence shells.
+# lo.nao.set_atom_conf('Fe', 'polarize')  # Add the first absent angular momentum
+#                                      # shell (an f shell in this sequence).

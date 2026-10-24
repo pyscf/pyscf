@@ -266,7 +266,7 @@ class KnownValues(unittest.TestCase):
         mf0.kernel()
         self.assertAlmostEqual(mf0.e_tot, mf.e_tot, 9)
 
-    def test_to_khf(self):
+    def test_to_khf_high_cost(self):
         cell = pbcgto.Cell()
         cell.atom = '''
             H 0 0 0

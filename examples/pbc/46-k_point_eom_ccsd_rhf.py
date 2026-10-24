@@ -15,7 +15,7 @@ Excitation energies from the two sets of calculations should match.
 
 import numpy as np
 from pyscf.cc import eom_rccsd as mol_eom_rccsd
-from pyscf.pbc import gto, scf, cc
+from pyscf.pbc import gto, scf, cc, ci
 from pyscf.pbc.cc import eom_kccsd_rhf as eom_krccsd
 from pyscf.pbc.tools.pbc import super_cell
 from pyscf.cc.rccsd import RCCSD
@@ -74,6 +74,9 @@ kpts = cell.make_kpts(nmp)
 kmf = scf.KRHF(cell, kpts=kpts, exxdiv=None).density_fit()
 ekrhf = kmf.kernel()
 
+# K-point CIS gives a lower-cost singles-only excitation for comparison.
+ecis, vcis = ci.KCIS(kmf).kernel(nroots=1, kptlist=[0])
+
 # KRCCSD
 mycc = cc.KRCCSD(kmf)
 ekrcc, t1, t2 = mycc.kernel()
@@ -101,6 +104,7 @@ eee = np.sort(np.hstack(eee[:]))
 eee_mol = np.array(eee_mol)
 
 print("PBC KRHF Energy:", ekrhf)
+print("PBC KCIS roots:", ecis)
 print("PBC RHF Energy :", erhf)
 print("PBC KRCCSD Energy        :", ekrcc)
 print("Mol RCCSD Energy per cell:", ercc / np.prod(nmp))

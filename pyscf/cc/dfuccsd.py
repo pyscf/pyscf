@@ -283,39 +283,3 @@ def _make_df_eris(mycc, mo_coeff=None):
 
     log.timer('DF-UCCSD integral transformation', *cput0)
     return eris
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-
-    mol = gto.Mole()
-    mol.atom = [
-        [8 , (0. , 0.     , 0.)],
-        [1 , (0. , -0.757 , 0.587)],
-        [1 , (0. , 0.757  , 0.587)]]
-
-    mol.basis = 'cc-pvdz'
-    mol.build()
-    mf = scf.UHF(mol).density_fit('weigend').run()
-    mycc = UCCSD(mf).run()
-    print(mycc.e_corr - -0.2133709727796199)
-
-    print("IP energies... (right eigenvector)")
-    e,v = mycc.ipccsd(nroots=8)
-    print(e)
-    print(e[0] - 0.4336428577342009)
-    print(e[2] - 0.5188000951518845)
-    print(e[4] - 0.6785158684375829)
-
-    print("EA energies... (right eigenvector)")
-    e,v = mycc.eaccsd(nroots=8)
-    print(e)
-    print(e[0] - 0.1673013569134136)
-    print(e[2] - 0.2399984284491973)
-    print(e[4] - 0.5096018470162480)
-
-    e, v = mycc.eeccsd(nroots=4)
-    print(e[0] - 0.2757563806054133)
-    print(e[1] - 0.2757563806171079)
-    print(e[2] - 0.2757563806183815)
-    print(e[3] - 0.3006896721085447)

@@ -497,6 +497,34 @@ class KnownValues(unittest.TestCase):
         e = mscan(mol)
         self.assertAlmostEqual(e, -108.84390277715984, 8)
 
+    def check_old_projection(self, unrestricted=False, core=True):
+        old_mol = gto.M(atom='Li 0 0 0; H 0 0 1.5', basis='sto-3g', verbose=0)
+        old = scf.RHF(old_mol).run(conv_tol=1e-11)
+        new_mol = gto.M(atom='Li 0 0 0; H 0 0 1.5', basis='6-31g', verbose=0)
+        new = scf.RHF(new_mol).run(conv_tol=1e-11)
+        mf = new.to_uhf() if unrestricted else new
+        mc = mcscf.UCASSCF(mf, 2, 2) if unrestricted else mcscf.CASSCF(mf, 2, 2)
+        if not core:
+            mc = mcscf.CASSCF(mf, 4, 4)
+        initial = [old.mo_coeff]*2 if unrestricted else old.mo_coeff
+        mo = mcscf.addons.project_init_guess_old(mc, initial, prev_mol=old_mol)
+        orbitals = mo if unrestricted else [mo]
+        for c in orbitals:
+            numpy.testing.assert_allclose(c.T @ mf.get_ovlp() @ c, numpy.eye(new_mol.nao), atol=1e-10)
+            if core:
+                self.assertAlmostEqual(abs(c[:, 0] @ mf.get_ovlp() @ new.mo_coeff[:, 0]), 1, places=10)
+        same = mcscf.addons.project_init_guess_old(mc, numpy.asarray(mo))
+        numpy.testing.assert_allclose(same, mo, atol=1e-12)
+
+    def test_old_restricted_projection(self):
+        self.check_old_projection()
+
+    def test_old_unrestricted_projection(self):
+        self.check_old_projection(unrestricted=True)
+
+    def test_old_no_core_projection(self):
+        self.check_old_projection(core=False)
+
 
 if __name__ == "__main__":
     print("Full Tests for mcscf.addons")

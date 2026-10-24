@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import unittest
+import numpy as np
 from pyscf import gto, scf
 from pyscf.solvent import ddpcm
 
@@ -57,6 +58,24 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(mf.with_solvent.mol is mol1)
         self.assertTrue(mf._scf.with_df.mol is mol1)
         self.assertTrue(mf._scf.with_solvent.mol is mol1)
+
+
+    def test_reusable_solver(self):
+        mol = gto.M(atom='H 0 0 0; F 0 0 .92', basis='sto-3g', verbose=0)
+        dm = scf.RHF(mol).run().make_rdm1()
+        pcm = ddpcm.DDPCM(mol)
+        pcm.lmax = 2
+        pcm.lebedev_order = 7
+        pcm.grids.level = 0
+        solve = ddpcm.gen_ddpcm_solver(pcm)
+        density = dm*.8
+        e, v = solve(density)
+        eref, vref = pcm.kernel(density)
+        self.assertAlmostEqual(e, eref, places=11)
+        np.testing.assert_allclose(v, vref, atol=1e-11)
+        np.testing.assert_allclose(v, v.T, atol=1e-12)
+        self.assertAlmostEqual(ddpcm.energy(pcm, dm), pcm.kernel(dm)[0], places=11)
+
 
 if __name__ == "__main__":
     print("Full Tests for ddpcm")

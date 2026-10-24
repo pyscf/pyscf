@@ -337,29 +337,3 @@ class RCCSDTQ(rccsdtq.RCCSDTQ):
     do_tri_max_t = property(lambda self: False)
 
     update_amps_ = update_amps_rccsdtq_
-
-
-if __name__ == "__main__":
-
-    from pyscf import gto, scf
-
-    mol = gto.M(atom="N 0 0 0; N 0 0 1.1", basis="sto3g", verbose=3)
-    mf = scf.RHF(mol)
-    mf.level_shift = 0.0
-    mf.conv_tol = 1e-14
-    mf.max_cycle = 1000
-    mf.kernel()
-    print()
-    ref_ecorr = -0.157579406507473
-    frozen = 0
-    mycc = RCCSDTQ(mf, frozen=frozen)
-    mycc.set_einsum_backend('numpy')
-    mycc.conv_tol = 1e-12
-    mycc.conv_tol_normt = 1e-10
-    mycc.max_cycle = 100
-    mycc.verbose = 5
-    mycc.do_diis_max_t = True
-    mycc.incore_complete = True
-    mycc.kernel()
-    print("E_corr: % .10f    Ref: % .10f    Diff: % .10e"%(mycc.e_corr, ref_ecorr, mycc.e_corr - ref_ecorr))
-    print()

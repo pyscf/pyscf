@@ -23,6 +23,32 @@ from pyscf.grad.mp2 import _shell_prange, has_frozen_orbitals
 
 
 # Helpers for comparing analytic and finite difference gradients
+def _check_dft_bond_gradient(test, unrestricted=False, state=0):
+    def solve(distance):
+        mol = gto.M(atom=f'Li 0 0 0; H 0 0 {distance}', unit='Bohr',
+                    basis='sto-3g', spin=2 if unrestricted else 0, verbose=0)
+        mf = dft.UKS(mol) if unrestricted else dft.RKS(mol)
+        mf.xc = 'pbe'
+        mf.grids.atom_grid = (75, 302)
+        mf.grids.prune = None
+        mf.run(conv_tol=1e-12)
+        mc = mcscf.UCASCI(mf, 3, (2, 0)) if unrestricted else mcscf.CASCI(mf, 2, 2)
+        mc.fcisolver.nroots = state+1
+        mc.fcisolver.conv_tol = 1e-12
+        return mc.run()
+    mc = solve(3.)
+    gradient = mc.nuc_grad_method()
+    actual = gradient.kernel(state=state) if state else gradient.kernel()
+    step = 1e-3
+    plus, minus = solve(3.+step), solve(3.-step)
+    ep = numpy.atleast_1d(plus.e_tot)[state]
+    em = numpy.atleast_1d(minus.e_tot)[state]
+    test.assertAlmostEqual(actual[1, 2], (ep-em)/(2*step), delta=2e-5)
+    # Cylindrical symmetry makes the transverse forces vanish.
+    numpy.testing.assert_allclose(actual[:, :2], 0, atol=1e-7)
+
+
+
 def _move_atom(atom, ia, ix, dx):
     coords = []
     for line in atom.splitlines():
@@ -379,7 +405,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(g1[1,2], (e1-e2)/0.002*lib.param.BOHR, 5)
 
     # RKS-CASCI h2o against FD for supported functionals
-    def test_rks_casci_h2o_fd(self):
+    def test_rks_casci_h2o_fd_high_cost(self):
         atom = '''
         O 0.000  0.000 0.000
         H 0.000  0.800 0.600
@@ -404,7 +430,7 @@ class KnownValues(unittest.TestCase):
                            mc.mol.natm, 2e-6, step=step)
 
     # RKS(B3LYP)-CASCI coh2 against FD
-    def test_rks_casci_formaldehyde_fd(self):
+    def test_rks_casci_formaldehyde_fd_high_cost(self):
         atom = '''
         C  0.012000 -0.018000  0.004000
         O -0.043000  0.026000  1.213000
@@ -424,7 +450,7 @@ class KnownValues(unittest.TestCase):
                        mc.mol.natm, 1e-6, rms_tol=5e-7)
 
     # RKS-CASCI HCN against FD for LDA and PBE orbitals.
-    def test_rks_casci_hcn_fd(self):
+    def test_rks_casci_hcn_fd_high_cost(self):
         atom = '''
         H  0.052000 -0.031000 -1.066000
         C  0.011000  0.024000  0.000000
@@ -444,7 +470,7 @@ class KnownValues(unittest.TestCase):
                            mc.mol.natm, 5e-7, rms_tol=2e-7)
 
     # RKS-CASCI excited state gradients against FD
-    def test_rks_excited_state_hcn_fd(self):
+    def test_rks_excited_state_hcn_fd_high_cost(self):
         atom = '''
         H  0.052000 -0.031000 -1.066000
         C  0.011000  0.024000  0.000000
@@ -644,6 +670,12 @@ class KnownValues(unittest.TestCase):
         grad.max_memory = 0
         nuc_grad = grad.kernel()
         self.assertAlmostEqual(lib.fp(nuc_grad), 0.09424065197659935, 7)
+
+    def test_rks_ground_state(self):
+        _check_dft_bond_gradient(self)
+
+    def test_rks_excited_state(self):
+        _check_dft_bond_gradient(self, state=1)
 
 
 if __name__ == "__main__":

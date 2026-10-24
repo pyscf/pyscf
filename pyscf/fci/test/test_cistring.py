@@ -233,6 +233,10 @@ class KnownValues(unittest.TestCase):
                            for addr1 in link[:,2]])
         self.assertEqual(parity, links[:,:,3].tolist())
 
+    def test_orbital_subset_bit_positions(self):
+        numpy.testing.assert_array_equal(cistring.make_strings(range(2, 5), 2), [12, 20, 24])
+        numpy.testing.assert_array_equal(cistring.make_strings(range(4), 2), [3, 5, 6, 9, 10, 12])
+
 def t1strs(norb, nelec):
     nocc = nelec
     hf_str = int('1'*nocc, 2)

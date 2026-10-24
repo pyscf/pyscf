@@ -54,7 +54,7 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
 
-    def test_ee_adc2(self):
+    def test_ee_adc2_high_cost(self):
         myadc.method = "adc(2)"
 
         myadc.method_type = "ee"
@@ -78,7 +78,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(spin[2],2.00106977 , 5)
         self.assertAlmostEqual(spin[3],2.00686787 , 5)
 
-    def test_ee_adc2x(self):
+    def test_ee_adc2x_high_cost(self):
         myadc.method = "adc(2)-x"
         myadc.max_memory = 20
         myadc.incore_complete = False
@@ -101,7 +101,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(spin[2],2.00102490 , 5)
         self.assertAlmostEqual(spin[3],2.00393732 , 5)
 
-    def test_ee_adc3(self):
+    def test_ee_adc3_high_cost(self):
         myadc.method = "adc(3)"
         myadc.max_memory = 20
         myadc.incore_complete = False

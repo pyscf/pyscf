@@ -13,6 +13,8 @@
 # limitations under the License.
 
 import unittest
+from pyscf import gto
+from pyscf.pbc.df import rsdf_helper
 import numpy
 from pyscf import lib
 import pyscf.pbc
@@ -146,6 +148,37 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(vk - kref).max(), 0, 7)
         self.assertAlmostEqual(lib.fp(vj), 2.383648833459583, 7)
         self.assertAlmostEqual(lib.fp(vk), 1.553598328349400, 7)
+
+
+    def test_schwarz_two_center(self):
+        basis = [[0, [1.2, .7, .1], [.3, .2, .8]], [1, [.5, 1.]]]
+        for keep in (False, True):
+            with self.subTest(keep_one_contraction=keep):
+                safe = rsdf_helper._get_schwartz_data(basis, .5, keep1ctr=keep, safe=True)
+                direct = rsdf_helper._get_schwartz_data(basis, .5, keep1ctr=keep, safe=False)
+                numpy.testing.assert_allclose(safe, direct, atol=1e-12)
+                self.assertTrue(numpy.all(safe > 0))
+                screened = rsdf_helper._get_schwartz_data(basis, 1., keep1ctr=keep, safe=False)
+                self.assertTrue(numpy.all(screened < direct))
+
+    def test_cutoff_precision(self):
+        mol = gto.M(atom='H 0 0 0; H 1 0 0', unit='Bohr',
+                    basis=[[0, [.8, 1]], [1, [.5, 1]]], verbose=0)
+        aux = gto.M(atom='He 0 0 0', basis=[[0, [.4, 1]], [1, [.3, 1]]], verbose=0)
+        with mol.with_range_coulomb(-.5):
+            eri = mol.intor('int2e', shls_slice=(1, 2, 3, 4, 1, 2, 3, 4))
+        qij = numpy.linalg.norm(eri)**.5
+        for estimator in ('ME', 'ISF', 'ISF0', 'ISFQ0', 'ISFQL'):
+            with self.subTest(estimator=estimator):
+                args = (mol, aux, 1, 3, 1., .5)
+                loose = rsdf_helper._get_3c2e_Rcuts_for_d(*args, 1e-6, estimator, qij, Rprec=.05)
+                tight = rsdf_helper._get_3c2e_Rcuts_for_d(*args, 1e-9, estimator, qij, Rprec=.05)
+                uncorrected = rsdf_helper._get_3c2e_Rcuts_for_d(
+                    *args, 1e-6, estimator, qij, Rprec=.05, eta_correct=False, R_correct=False)
+                self.assertTrue(numpy.all(numpy.isfinite(tight)))
+                self.assertTrue(numpy.all(tight > loose))
+                self.assertTrue(numpy.all(loose >= uncorrected))
+                self.assertTrue(numpy.all(uncorrected > 0))
 
 if __name__ == '__main__':
     print("Full Tests for rsdf")

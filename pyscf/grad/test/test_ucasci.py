@@ -8,7 +8,7 @@ from pyscf import dft
 from pyscf import mcscf
 from pyscf import ci
 from pyscf.lib import logger
-from pyscf.grad.test.test_casci import _check_fd_grad
+from pyscf.grad.test.test_casci import _check_fd_grad, _check_dft_bond_gradient
 from pyscf.grad.test.test_casci import _move_atom
 
 
@@ -530,7 +530,7 @@ class KnownValues(unittest.TestCase):
                        mc.mol.natm, 3e-6)
 
     # CH2 triplet against FD with UKS(pbe,pbe)
-    def test_uks_ch2_fd(self):
+    def test_uks_ch2_fd_high_cost(self):
         atom = '''
         C  0.000000  0.000000  0.000000
         H  0.000000  0.000000  1.080000
@@ -798,6 +798,9 @@ class KnownValues(unittest.TestCase):
         grad.verbose = logger.NOTE
         de = grad.kernel()
         self.assertEqual(de.shape, (3,3))
+
+    def test_uks_open_shell(self):
+        _check_dft_bond_gradient(self, unrestricted=True)
 
 
 if __name__ == "__main__":

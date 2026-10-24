@@ -14,6 +14,9 @@
 # limitations under the License.
 
 import unittest
+import os
+import tempfile
+from types import SimpleNamespace
 from unittest import mock
 import numpy
 from pyscf import lib
@@ -116,6 +119,37 @@ class KnownValues(unittest.TestCase):
         fresh = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(fresh)
         self.assertTrue(hasattr(fresh, 'exceptions'))
+
+    def test_background_error_propagates_on_exit(self):
+        def fail():
+            raise ValueError('background computation failed')
+        with self.assertRaisesRegex(lib.ThreadRuntimeError, 'background computation failed'):
+            with lib.call_in_background(fail, sync=False) as evaluate:
+                evaluate()
+
+    def test_temporary_attributes_restore_after_error(self):
+        obj = SimpleNamespace(value=3)
+        with self.assertRaisesRegex(ValueError, 'abort'):
+            with lib.temporary_env(obj, value=5, new_value=7):
+                self.assertEqual((obj.value, obj.new_value), (5, 7))
+                with lib.temporary_env(obj, value=11):
+                    self.assertEqual(obj.value, 11)
+                self.assertEqual(obj.value, 5)
+                raise ValueError('abort')
+        self.assertEqual(obj.value, 3)
+        self.assertFalse(hasattr(obj, 'new_value'))
+
+    def test_hdf5_options_restore_and_readonly(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filename = os.path.join(tmpdir, 'options.h5')
+            with lib.h5filewrite_options(libver='latest'):
+                with lib.H5FileWrap(filename, 'w') as f:
+                    f['values'] = numpy.arange(5)
+            # A write-only driver option must not leak into a read-only open.
+            with lib.h5filewrite_options(driver='core', backing_store=False):
+                with lib.H5FileWrap(filename, 'r') as f:
+                    self.assertNotEqual(f.driver, 'core')
+                    numpy.testing.assert_array_equal(f['values'], numpy.arange(5))
 
 
 if __name__ == "__main__":

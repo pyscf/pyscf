@@ -116,7 +116,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 40.38829604487761, 6)
         self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 40.51548534697557, 6)
 
-    def test_ee_adc3(self):
+    def test_ee_adc3_high_cost(self):
         myadc.method = "adc(3)"
 
         e,v,p,x = myadc.kernel(nroots=4)
@@ -143,7 +143,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 40.62687509720155, 6)
         self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 40.67459269393425, 6)
 
-    def test_ee_adc3_frozen(self):
+    def test_ee_adc3_frozen_high_cost(self):
         myadc_fr.method = "adc(3)"
 
         myadc_fr.method_type = "ee"

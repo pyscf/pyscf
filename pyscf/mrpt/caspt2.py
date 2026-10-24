@@ -1452,30 +1452,3 @@ class ICCASPT2(lib.StreamObject):
         return self.e_tot, self.e_corr
 
 CASPT2 = ICCASPT2
-
-if __name__ == "__main__":
-
-    from pyscf import gto, scf, mcscf
-
-    mol = gto.M(atom='O 0 0 0; O 0 0 1.207', basis='cc-pvdz', spin=2, symmetry='d2h', verbose=3)
-    mf = scf.RHF(mol).run(conv_tol=1E-16)
-
-    mc = mcscf.CASSCF(mf, 6, 8)
-    mc.fcisolver.conv_tol = 1e-14
-    mc.conv_tol = 1e-12
-    mc.canonicalization = True
-    mc.natorb = True
-    mc.kernel()
-    assert abs(mc.e_tot - -149.708657771235039) < 1E-8
-
-    mr = CASPT2(mc, frozen=0, ipea_shift=0.0, root=0)
-    mr.einsum_backend = 'numpy'
-    mr.verbose = 4
-    mr.max_cycle = 20
-    mr.kernel()
-    assert abs(mr.e_tot - -149.98063465606262) < 1E-8
-
-    mr.io_method = 'outcore'
-    mr.io_blksize = 3
-    mr.kernel()
-    assert abs(mr.e_tot - -149.98063465606262) < 1E-8

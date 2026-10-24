@@ -26,6 +26,12 @@ mc.fcisolver.wfnsym = 'A2u'
 mc.kernel()
 print('Triplet Sigma_u^- %.15g  ref = -149.383495797891' % mc.e_tot)
 
+# Newton CASSCF also preserves the selected spatial symmetry. An explicit
+# (nalpha, nbeta) tuple selects the active-space spin projection.
+mc_newton = mcscf.CASSCF(mf, 8, (7, 5)).newton()
+mc_newton.fcisolver.wfnsym = 'A2u'
+mc_newton.kernel(mc.mo_coeff, mc.ci)
+
 # Specify CI wfn spatial symmetry and spin symmetry
 mc.fix_spin_(ss=6)  # Quintet, ss = S*(S+1) = 6
 mc.fcisolver.wfnsym = 'A2u'
@@ -66,4 +72,3 @@ mc.kernel(mo)
 
 mc.fix_spin_(shift=.5, ss=0)
 mc.kernel(mo)
-

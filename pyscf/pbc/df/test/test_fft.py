@@ -17,7 +17,7 @@ import numpy
 import numpy as np
 
 from pyscf.pbc import gto as pgto
-from pyscf.pbc.df import fft, aft
+from pyscf.pbc.df import fft, aft, fft_ao2mo
 
 
 ##################################################
@@ -912,6 +912,40 @@ class KnownValues(unittest.TestCase):
             dm=dm, kpts=kpts, with_j=False, exxdiv=exx)[1]
         e2 = np.einsum('kij,kji->', vk, dm)
         assert abs((e1 - e2) / disp / nkpts - dat[0, 2]) < 1e-6
+
+
+    def check_pairs(self, kpts, compact=False):
+        self.cell = pgto.M(atom='He 0 0 0', a=np.eye(3)*3,
+                         basis=[[0, [.8, 1]], [1, [.5, 1]]], mesh=[9]*3, verbose=0)
+        self.df = fft.FFTDF(self.cell)
+        rng = np.random.default_rng(39)
+        self.coeff = np.linalg.qr(rng.normal(size=(4, 4)))[0]
+        coeff = self.coeff
+        actual = fft_ao2mo.get_mo_pairs_G(self.df, (coeff, coeff), kpts=kpts, compact=compact)
+        coords = self.cell.get_uniform_grids()
+        ao = self.df._numint.eval_ao(self.cell, coords, kpts=kpts)
+        left, right = (a @ coeff for a in ao)
+        product = left.conj()[:, :, None]*right[:, None, :]
+        product = product * np.exp(-1j*coords @ (kpts[1]-kpts[0]))[:, None, None]
+        expected = np.fft.fftn(product.reshape(9, 9, 9, 4, 4), axes=(0, 1, 2)).reshape(-1, 4, 4)
+        if compact:
+            rows, cols = np.tril_indices(4)
+            expected = expected[:, rows, cols]
+        else:
+            expected = expected.reshape(-1, 16)
+        np.testing.assert_allclose(actual, expected, atol=1e-11)
+
+    def test_mo_pairs_gamma_packed(self):
+        self.check_pairs(np.zeros((2, 3)), compact=True)
+
+    def test_mo_pairs_gamma_full(self):
+        self.check_pairs(np.zeros((2, 3)))
+
+    def test_mo_pairs_non_gamma(self):
+        self.check_pairs(np.array([[.1, .2, .0], [.1, .2, .0]]))
+
+    def test_mo_pairs_momentum_transfer(self):
+        self.check_pairs(np.array([[.1, .2, .0], [.2, .0, .1]]))
 
 
 if __name__ == '__main__':

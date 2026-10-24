@@ -44,6 +44,11 @@ mo = mc.sort_mo([17,20,21,22,23,30])
 mc.kernel(mo)
 print('E(CAS) = %.12f, ref = -230.845892901370' % mc.e_tot)
 
+# DFCASCI uses a fitted CAS Hamiltonian without orbital optimization.
+ci = mcscf.DFCASCI(mf, 6, 6, auxbasis='ccpvtzfit')
+ci.kernel(mo)
+print('E(DF-CASCI) = %.12f' % ci.e_tot)
+
 #
 # Assign DF basis
 #
@@ -51,4 +56,3 @@ mc = mcscf.DFCASSCF(mf, 6, 6, auxbasis='ccpvtzfit')
 mo = mc.sort_mo([17,20,21,22,23,30])
 mc.kernel(mo)
 print('E(CAS) = %.12f, ref = -230.845892901370' % mc.e_tot)
-

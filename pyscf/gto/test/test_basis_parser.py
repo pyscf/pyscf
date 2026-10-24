@@ -19,7 +19,7 @@ from functools import reduce
 import numpy
 from pyscf import gto
 from pyscf import lib
-from pyscf.gto.basis import parse_molpro
+from pyscf.gto.basis import parse_molpro, parse_bfd_pp
 from pyscf.gto.basis import parse_gaussian
 from pyscf.gto.basis import parse_cp2k, parse_cp2k_pp
 from pyscf.lib.exceptions import BasisNotFoundError
@@ -620,6 +620,30 @@ ECP,I,46,4,3;
         assert pp[0] == [4]
         pp = parse_cp2k_pp._load_GTH_POTENTIALS('GTH-LDA-q2', 'Be', pp_dir)
         assert pp[0] == [2]
+
+    def test_bfd_carbon_basis(self):
+        self.assertEqual(parse_bfd_pp.parse('C', 'vdz'), gto.basis.load('bfdvdz', 'C'))
+
+    def test_bfd_silicon_basis(self):
+        self.assertEqual(parse_bfd_pp.parse('Si', 'vtz'), gto.basis.load('bfdvtz', 'Si'))
+
+    def test_bfd_carbon_ecp(self):
+        self.check_bfd_ecp('C')
+
+    def test_bfd_silicon_ecp(self):
+        self.check_bfd_ecp('Si')
+
+    def check_bfd_ecp(self, symbol):
+        # Converted tables pad absent radial powers; compare their actual integrals.
+        raw = gto.M(atom=f'{symbol} 0 0 0', basis='bfdvdz',
+                    ecp={symbol: parse_bfd_pp.parse_ecp(symbol)}, verbose=0)
+        converted = gto.M(atom=f'{symbol} 0 0 0', basis='bfdvdz', ecp='bfd', verbose=0)
+        self.assertEqual(raw.nelectron, converted.nelectron)
+        numpy.testing.assert_allclose(raw.intor('ECPscalar'), converted.intor('ECPscalar'), atol=1e-12)
+
+    def test_bfd_missing_element(self):
+        with self.assertRaises(BasisNotFoundError):
+            parse_bfd_pp.parse_ecp('Unknown')
 
     def test_cp2k_soc_parser(self):
         p = gto.basis.load_pseudo('GTH-PBE-SOC-q6', 'Te')

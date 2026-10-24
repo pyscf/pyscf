@@ -543,35 +543,3 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
 
     time0 = log.timer_debug1('update l1 l2', *time0)
     return (u1a,u1b), (u2aa,u2ab,u2bb)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-    from pyscf.cc import gccsd
-
-    mol = gto.Mole()
-    mol.atom = [
-        [8 , (0. , 0.     , 0.)],
-        [1 , (0. , -0.757 , 0.587)],
-        [1 , (0. , 0.757  , 0.587)]]
-    mol.basis = '631g'
-    mol.spin = 2
-    mol.build()
-    mf = scf.UHF(mol).run()
-    mycc = gccsd.GCCSD(scf.addons.convert_to_ghf(mf))
-    eris = mycc.ao2mo()
-    mycc.kernel()
-    l1, l2 = mycc.solve_lambda(mycc.t1, mycc.t2, eris=eris)
-    l1ref = mycc.spin2spatial(l1, mycc.mo_coeff.orbspin)
-    l2ref = mycc.spin2spatial(l2, mycc.mo_coeff.orbspin)
-
-    mycc = uccsd.UCCSD(mf)
-    eris = mycc.ao2mo()
-    mycc.kernel()
-    conv, l1, l2 = kernel(mycc, eris, mycc.t1, mycc.t2, tol=1e-8)
-    print(abs(l1[0]-l1ref[0]).max())
-    print(abs(l1[1]-l1ref[1]).max())
-    print(abs(l2[0]-l2ref[0]).max())
-    print(abs(l2[1]-l2ref[1]).max())
-    print(abs(l2[2]-l2ref[2]).max())
