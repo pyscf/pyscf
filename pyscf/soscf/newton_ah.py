@@ -993,13 +993,15 @@ def newton(mf):
     Args:
         mf : SCF object
             HF or Kohn-Sham object providing the method, settings, and any
-            available orbitals. A preceding SCF calculation is optional.
+            available orbitals. You do not need to run SCF first.
 
     Returns:
-        A second-order SCF object. Call its ``kernel`` or ``run`` method to
-        optimize the orbitals. Existing attributes are shallow-copied and
-        the original mean-field object is retained as ``_scf``. If ``mf`` is
-        already a CIAH solver, return it unchanged.
+        A second-order SCF object with the original SCF object stored as
+        ``_scf``. If mf is already a CIAH solver, returns mf itself.
+
+    Notes:
+        Call ``kernel`` or ``run`` on the result to optimize the orbitals.
+        Existing attributes are copied by reference and may be shared.
 
     Examples:
 

@@ -848,10 +848,10 @@ def make_kpts(cell, nks, wrap_around=WRAP_AROUND, with_gamma_point=WITH_GAMMA,
             ``scaled_center`` is supplied. Configurable through
             ``pbc_gto_cell_make_kpts_with_gamma``.
         scaled_center : (3,) array-like or None
-            Shift in fractions of reciprocal lattice vectors, whose default
-            normalization includes 2*pi. Supplying a center forces the
-            Gamma-containing mesh before shifting; the first point is the
-            supplied center. None uses zero shift.
+            Mesh center in fractional reciprocal coordinates. Reciprocal
+            lattice vectors include the usual factor of 2*pi. If supplied,
+            start with a Gamma-containing mesh and shift it so that its
+            first point is this center. None leaves the mesh unshifted.
         space_group_symmetry : bool
             Default False. Return symmetry-reduced k-point information using
             the cell's space group. Requires a cell built with
@@ -868,8 +868,6 @@ def make_kpts(cell, nks, wrap_around=WRAP_AROUND, with_gamma_point=WITH_GAMMA,
         is True and the center is zero. With either symmetry flag True,
         return a :class:`pyscf.pbc.lib.kpts.KPoints` object containing the
         full mesh, irreducible mesh, weights, and symmetry mappings.
-
-    The cell and its existing k-point settings are not modified.
     '''
     ks_each_axis = []
     for n in nks:
@@ -1930,9 +1928,10 @@ class Cell(mole.MoleBase):
             Reciprocal vectors in inverse Bohr, independent of ``self.unit``.
             The result is ``norm_to * inv(self.lattice_vectors().T)``.
 
-        For dimension 1, all three direct lattice vectors must be mutually
-        orthogonal. For dimension 2, the third must be perpendicular to the
-        first two. These conditions are checked by assertions.
+        Notes:
+            For dimension 1, all three direct lattice vectors must be mutually
+            orthogonal. For dimension 2, the third must be perpendicular to the
+            first two. These conditions are checked by assertions.
         '''
         a = self.lattice_vectors()
         if self.dimension == 1:
@@ -1957,7 +1956,6 @@ class Cell(mole.MoleBase):
         Returns:
             Absolute Cartesian k-points in inverse Bohr, with the same shape
             as the input. Computes ``scaled_kpts @ self.reciprocal_vectors()``.
-            Neither the input nor the cell is modified.
         '''
         return np.dot(scaled_kpts, self.reciprocal_vectors())
 

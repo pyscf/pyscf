@@ -640,24 +640,27 @@ def generate_pickle_methods(excludes=(), reset_state=False):
 
 SANITY_CHECK = getattr(__config__, 'SANITY_CHECK', True)
 class StreamObject:
-    '''For most methods, there are three stream functions to pipe computing stream:
+    '''Provide methods for setting up and running calculations in a chain.
 
-    1 ``.set`` function to update object attributes, eg
-    ``mf = scf.RHF(mol).set(conv_tol=1e-5)`` is identical to proceed in two steps
-    ``mf = scf.RHF(mol); mf.conv_tol=1e-5``
+    ``set(**kwargs)`` sets attributes and returns the same object. For example,
+    ``mf.set(conv_tol=1e-5)`` is equivalent to ``mf.conv_tol = 1e-5``.
 
-    2 ``.run`` function to execute the kernel function (the function arguments
-    are passed to kernel function).  If keyword arguments is given, it will first
-    call ``.set`` function to update object attributes then execute the kernel
-    function.  Eg
-    ``mf = scf.RHF(mol).run(dm_init, conv_tol=1e-5)`` is identical to three steps
-    ``mf = scf.RHF(mol); mf.conv_tol=1e-5; mf.kernel(dm_init)``
+    ``run(*args, **kwargs)`` sets attributes from the keyword arguments, passes
+    positional arguments to ``kernel``, and returns the same object. Thus,
+    ``scf.RHF(mol).run(dm_init, conv_tol=1e-5)`` is equivalent to::
 
-    3 ``.apply`` function to apply the given function/class to the current object
-    (function arguments and keyword arguments are passed to the given function).
-    Eg
-    ``mol.apply(scf.RHF).run().apply(mcscf.CASSCF, 6, 4, frozen=4)`` is identical to
-    ``mf = scf.RHF(mol); mf.kernel(); mcscf.CASSCF(mf, 6, 4, frozen=4)``
+        mf = scf.RHF(mol)
+        mf.conv_tol = 1e-5
+        mf.kernel(dm_init)
+
+    ``apply(fn, *args, **kwargs)`` calls a function or class with this object
+    as its first argument and returns the result. For example,
+    ``mol.apply(scf.RHF).run().apply(mcscf.CASSCF, 6, 4, frozen=4)`` is
+    equivalent to::
+
+        mf = scf.RHF(mol)
+        mf.kernel()
+        mcscf.CASSCF(mf, 6, 4, frozen=4)
     '''
 
     verbose = 0

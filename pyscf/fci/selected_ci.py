@@ -334,6 +334,55 @@ def kernel_fixed_space(myci, h1e, eri, norb, nelec, ci_strs, ci0=None,
                        tol=None, lindep=None, max_cycle=None, max_space=None,
                        nroots=None, davidson_only=None,
                        max_memory=None, verbose=None, ecore=0, **kwargs):
+    '''Solve the CI problem using a fixed set of selected determinants.
+
+    Args:
+        myci : SelectedCI object
+            Selected-CI solver that provides the Hamiltonian operations and
+            eigensolver settings.
+        h1e : (norb, norb) ndarray
+            One-electron Hamiltonian in the orbital basis, in Hartree.
+        eri : ndarray
+            Two-electron integrals in chemists' ordering, in Hartree. Full
+            or packed forms accepted by ``ao2mo.restore`` may be supplied.
+        norb : int
+            Number of spatial orbitals.
+        nelec : int or pair of ints
+            Total electron count or (nalpha, nbeta). For a total count, the
+            solver's spin setting determines the alpha and beta counts.
+        ci_strs : pair of integer arrays
+            Alpha and beta occupation bit strings. Every pair of one alpha
+            string and one beta string defines a selected determinant.
+            The calculation uses only these determinants.
+
+    Kwargs:
+        ci0 : SCIvector or None
+            Initial guess
+        tol : float or None
+            Eigensolver convergence tolerance; None uses ``myci.conv_tol``.
+        lindep : float or None
+            Linear-dependence threshold; None uses ``myci.lindep``.
+        max_cycle : int or None
+            Maximum iterations; None uses ``myci.max_cycle``.
+        max_space : int or None
+            Davidson subspace limit; None uses ``myci.max_space``.
+        nroots : int or None
+            Number of roots; None uses ``myci.nroots``.
+        davidson_only : bool or None
+            Currently unused by this function.
+        max_memory : float or None
+            Eigensolver memory budget in MB; None uses ``myci.max_memory``.
+        verbose : int or Logger or None
+            Logging control; None uses the solver's verbosity.
+        ecore : float
+            Constant energy added to every eigenvalue, in Hartree. Default 0.
+        **kwargs :
+            Additional options passed to ``myci.eig``.
+
+    Returns:
+        (energy, ci), a scalar energy in Hartree and an SCIvector for one root.
+        For multiple roots, returns an energy array and a list of SCIvectors.
+    '''
     log = logger.new_logger(myci, verbose)
     if tol is None: tol = myci.conv_tol
     if lindep is None: lindep = myci.lindep
@@ -723,6 +772,27 @@ def contract_ss(civec_strs, norb, nelec):
     return _as_SCIvector(ci1, ci_strs)
 
 def to_fci(civec_strs, norb, nelec):
+    '''Convert selected-CI coefficients to a full FCI coefficient array.
+
+    Args:
+        civec_strs : SCIvector
+            Real selected-CI coefficients of shape (nstr_alpha, nstr_beta),
+            with alpha/beta occupation bit strings stored in ``._strs``.
+        norb : int
+            Number of spatial orbitals.
+        nelec : int or pair of ints
+            Total electron count or (nalpha, nbeta). An integer uses the
+            smallest possible spin: equal alpha and beta counts for an even
+            number of electrons, or one extra alpha electron for an odd count.
+
+    Returns:
+        A new dense array of shape (binomial(norb, nalpha),
+        binomial(norb, nbeta)) in PySCF FCI string ordering. Coefficients for
+        unselected determinants are zero.
+
+    Notes:
+        No normalization is performed.
+    '''
     ci_coeff, nelec, ci_strs = _unpack(civec_strs, nelec)
     addrsa = [cistring.str2addr(norb, nelec[0], x) for x in ci_strs[0]]
     addrsb = [cistring.str2addr(norb, nelec[1], x) for x in ci_strs[1]]

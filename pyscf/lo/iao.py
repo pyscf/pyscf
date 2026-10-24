@@ -42,10 +42,10 @@ def iao(mol, orbocc, minao=MINAO, kpts=None, lindep_threshold=1e-8):
 
     Args:
         mol : Mole or Cell
-            System defining the original AO basis.
+            Molecule or periodic cell with the original AO basis.
         orbocc : ndarray or sequence of ndarrays
-            Occupied orbital coefficients, orthonormal in the AO overlap
-            metric. Use shape (nao, nocc) for a molecule or a single k-point;
+            Occupied orbital coefficients satisfying
+            ``orbocc.conj().T @ S @ orbocc = I``, where S is the AO overlap. Use shape (nao, nocc) for a molecule or a single k-point;
             for a k-point list, supply one (nao, nocc_k) array per k-point.
 
     Kwargs:
@@ -68,9 +68,9 @@ def iao(mol, orbocc, minao=MINAO, kpts=None, lindep_threshold=1e-8):
         for a k-point list. Here nref is the number of reference-basis AOs;
         ghost atoms are omitted from the reference molecule.
 
-    To orthonormalize the result, use ``orth.vec_lowdin(c, s)`` with the
-    corresponding AO overlap, separately at each k-point when applicable.
-    Input orbitals are not modified.
+    Notes:
+        To orthonormalize the result, use ``orth.vec_lowdin(c, s)`` with the
+        corresponding AO overlap, separately at each k-point when applicable.
     '''
     if mol.has_ecp() and minao == 'minao':
         logger.warn(mol, 'ECP/PP is used. MINAO is not a good reference AO basis in IAO.')

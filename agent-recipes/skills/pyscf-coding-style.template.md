@@ -84,10 +84,38 @@ including tests. Customize as needed.
 
 - Treat functions and classes listed in a module's `__all__` as public APIs.
   Absence from `__all__` does not by itself make an API private.
-- Give public APIs clear docstrings describing their purpose, inputs, outputs,
-  and important parameters, attributes, and defaults. Explain shapes, units,
-  and limitations where relevant.
-- Document non-obvious assumptions.
+- Describe the API contract: what the function does, what callers provide,
+  and what they receive. Include implementation details only when needed for
+  correct use. Scale the detail to the function; do not explain every branch.
+- Start with a short sentence describing the purpose. Use plain language,
+  direct verbs, and one main point per sentence. Preserve established
+  scientific terminology and the maintainer's deliberate simplifications.
+- Follow the surrounding docstring format. Use `Args` and `Kwargs` for
+  parameter meanings, accepted types, important defaults, and the behavior of
+  `None`. Include units, array shapes, and index conventions where relevant.
+- Keep `Returns` (or `Yields`) focused on the returned values: meaning, type,
+  shape, units, tuple order, and differences controlled by options. State
+  whether the result is a new object or the input object when that matters.
+- Put execution details, side effects, shared state, limitations, and usage
+  advice in `Notes`, not `Returns`. For example, "No SCF optimization is
+  performed" belongs in `Notes`. Use `Raises` for important error conditions.
+- Make `Notes` optional. Do not add it merely to repeat parameter descriptions,
+  explain obvious behavior, or enumerate hypothetical misuse.
+- Document actual side effects, including modified inputs, changed object
+  attributes, shared mutable data, and file writes. Treat side-effect-free
+  behavior as the default; omit routine statements that inputs are unchanged.
+- Describe required data rather than prescribing an unnecessary workflow.
+  For example, CC amplitudes may be passed explicitly or loaded from elsewhere;
+  do not say "Run CCSD first" unless that step is actually required.
+- Verify descriptions against the implementation, including delegated behavior.
+  Distinguish scientific expectations, such as converged amplitudes, from
+  conditions the code checks. Do not imply validation or automatic computation
+  that is absent. Document non-obvious assumptions needed for correct use.
+- Refer to existing documentation for shared formats and conventions instead
+  of duplicating it. Add examples when they clarify non-obvious usage.
+- Keep terminology and structure consistent across related APIs, while
+  preserving differences between restricted, unrestricted, generalized,
+  molecular, and periodic implementations.
 - For functions outside the public API, a short docstring explaining their
   purpose is sufficient.
 - Update documentation when changing parameters, return values, supported

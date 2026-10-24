@@ -41,13 +41,14 @@ def schmidt(s):
                                          overwrite_b=False).conj().T
 
 def vec_lowdin(c, s=1):
-    '''Symmetrically orthonormalize column vectors in a supplied metric.
+    '''Orthonormalize column vectors using the Lowdin method.
 
     Args:
         c : (nao, nvec) ndarray
             Column vectors, real or complex, expressed in the original basis.
         s : (nao, nao) ndarray or scalar
-            Overlap metric. The default scalar 1 uses the Euclidean metric.
+            Overlap matrix of the original basis. The default, 1, assumes
+            that the original basis is orthonormal.
 
     Returns:
         A new (nao, nvec) coefficient array, obtained as
@@ -55,10 +56,11 @@ def vec_lowdin(c, s=1):
         positive-definite vector overlap, the returned columns obey
         ``c_orth.conj().T @ s @ c_orth = I``.
 
-    Eigenvalues of the vector overlap at or below 1e-15 are discarded in
-    its inverse square root. The number of columns is unchanged in that
-    case, so linearly dependent inputs do not yield a full orthonormal set.
-    The input arrays are not modified.
+    Notes:
+        Overlap eigenvalues at or below 1e-15 are treated as zero when computing
+        the inverse square root. The result still has nvec columns. If the
+        input vectors are linearly dependent, these columns cannot all be
+        orthonormal.
     '''
     #u, w, vh = numpy.linalg.svd(c)
     #return numpy.dot(u, vh)
@@ -323,10 +325,11 @@ def orth_ao(mf_or_mol, method=ORTH_METHOD, pre_orth_ao=REF_BASIS, s=None, adjust
     Returns:
         (nao, nao) coefficients of the orthogonal AOs in the original basis.
         For a nonsingular overlap, ``C.conj().T @ s @ C`` is the identity.
+
+    Notes:
         Lowdin eigenvalues at or below 1e-15 are discarded, so a singular
         overlap cannot produce a full orthonormal set.
-
-    The meta-Lowdin construction is described in JCTC, 10, 3784.
+        The meta-Lowdin construction is described in JCTC, 10, 3784.
     '''
     from pyscf import scf
     from pyscf.lo import nao

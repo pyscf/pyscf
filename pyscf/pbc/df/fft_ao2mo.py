@@ -104,8 +104,7 @@ def general(mydf, mo_coeffs, kpts=None,
 
     Args:
         mydf : FFTDF object
-            Density-fitting object defining the cell, integration mesh, and
-            numerical AO evaluator. The cell must have dimension 2 or 3 and
+            FFT density-fitting object with the cell and integration mesh. The cell must have dimension 2 or 3 and
             must not use ``low_dim_ft_type='inf_vacuum'``.
         mo_coeffs : ndarray or sequence of four ndarrays
             One (nao, nmo) coefficient matrix used for all four indices, or
@@ -127,14 +126,16 @@ def general(mydf, mo_coeffs, kpts=None,
 
     Returns:
         Chemists' notation (ij|kl) integrals in Hartree as a pair matrix.
-        Unpacked shape is (ni*nj, nk*nl); the packed shape is (npair, npair),
+        The shape is (ni*nj, nk*nl) for full orbital pairs, or (npair, npair)
+        for packed pairs,
         where ``npair = nmo*(nmo+1)//2``. Values are real for real Gamma-point
         orbitals and complex otherwise. If momentum is not conserved, emits
         a warning and returns zeros of shape (ni, nj, nk, nl).
 
-    Available as ``FFTDF.ao2mo`` and ``FFTDF.get_mo_eri``. Uses ``mydf.mesh``
-    for numerical integration and allocates the full transformed integrals
-    in memory. Input orbital coefficients are not modified.
+    Notes:
+        Available as ``FFTDF.ao2mo`` and ``FFTDF.get_mo_eri``. Uses ``mydf.mesh``
+        for numerical integration and allocates the full transformed integrals
+        in memory.
     '''
     from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
     warn_pbc2d_eri(mydf)

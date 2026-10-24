@@ -45,7 +45,7 @@ def get_eri(mydf, kpts=None,
             points, independently of ``mydf.kpts``. Momentum must satisfy
             ``-ki + kj - kk + kl = G`` for a reciprocal lattice vector G.
         compact : bool
-            At Gamma, return lower-triangular AO-pair packing if True.
+            At Gamma, store only pairs with i >= j when True.
             Default True, configurable through ``pbc_df_ao2mo_get_eri_compact``.
             Away from Gamma, the result is always unpacked.
 
@@ -56,9 +56,9 @@ def get_eri(mydf, kpts=None,
         complex values away from Gamma. If momentum is not conserved,
         emits a warning and returns a zero array of shape (nao, nao, nao, nao).
 
-    Available as ``GDF.get_eri`` and ``GDF.get_ao_eri``. Reconstructing all
-    four-index integrals requires memory proportional to the fourth power
-    of the AO basis size.
+    Notes:
+        Available as ``GDF.get_eri`` and ``GDF.get_ao_eri``. The full integral array can be large:
+        its memory use grows as the fourth power of the number of AOs.
     '''
     if mydf._cderi is None:
         mydf.build()

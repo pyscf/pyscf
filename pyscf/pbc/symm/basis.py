@@ -107,6 +107,22 @@ def _gram_schmidt(v, tol=1e-9):
     return u
 
 def symm_adapted_basis(cell, kpts, tol=1e-9):
+    '''Construct symmetry-adapted AO bases at irreducible k-points.
+
+    Args:
+        cell : Cell
+            Built periodic cell supplying the AO basis and atomic positions.
+        kpts : KPoints
+            A built KPoints object with irreducible k-points
+
+    Kwargs:
+        tol : float
+            Discard projected columns and imaginary parts smaller than this
+            threshold.
+
+    Returns:
+        (symm_orb, irrep_ids)
+    '''
     sos_ks = []
     irrep_ids_ks = []
     Dmats = kpts.Dmats

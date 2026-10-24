@@ -60,12 +60,15 @@ def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
             electron each. Pass explicit occupations for restricted orbitals.
         ignore_h : bool
             Omit AOs with angular momentum l >= 5. Default True, configurable
-            through ``molden_ignore_h``. Removing these components can change
-            orbital norms. If False, unsupported angular momenta raise an error.
+            through ``molden_ignore_h``. Removing these components can leave
+            orbitals unnormalized. If False, unsupported angular momenta raise an error.
 
     Returns:
-        None. Writes the orbitals in Molden AO order. Call :func:`header`
-        first when constructing a complete file. Input arrays are not modified.
+        None.
+
+    Notes:
+        Writes the orbitals in Molden AO order. Call :func:`header`
+        first when constructing a complete file.
     '''
     from pyscf.symm import label_orb_symm
     if mol.cart:
@@ -143,8 +146,7 @@ def from_mo(mol, filename, mo_coeff, spin='Alpha', symm=None, ene=None,
             orbitals. False raises an error for unsupported angular momenta.
 
     Returns:
-        None. The output file is closed after writing. The molecule and
-        coefficient array are not modified.
+        None.
     '''
     with open(filename, 'w') as f:
         header(mol, f, ignore_h)
@@ -169,9 +171,7 @@ def from_scf(mf, filename, ignore_h=IGNORE_H):
             error for unsupported angular momenta.
 
     Returns:
-        None. The file is closed after writing. See :func:`orbital_coeff` for
-        AO ordering and normalization conventions. Complex spinor orbitals
-        are not supported by this writer.
+        None.
     '''
     dump_scf(mf, filename, ignore_h)
 
@@ -520,7 +520,8 @@ def header(mol, fout, ignore_h=IGNORE_H):
             Molecule supplying atomic coordinates, basis functions, and any
             ECP core-electron counts. Coordinates are written in Bohr.
         fout : writable text stream
-            Destination, left open for subsequent orbital sections.
+            Output stream. It is left open so that orbital sections can be
+            written afterwards.
 
     Kwargs:
         ignore_h : bool
@@ -529,9 +530,7 @@ def header(mol, fout, ignore_h=IGNORE_H):
             orbitals with :func:`orbital_coeff`.
 
     Returns:
-        None. Writes the format marker, atoms, GTO basis, spherical/Cartesian
-        convention, and ECP core information when present. Does not modify
-        the input molecule or write orbital coefficients.
+        None.
     '''
     if ignore_h:
         mol = remove_high_l(mol)[0]
@@ -584,6 +583,21 @@ def order_ao_index(mol):
     #
     #  9G: G 0, G+1, G-1, G+2, G-2, G+3, G-3, G+4, G-4
     # 15G: xxxx yyyy zzzz xxxy xxxz yyyx yyyz zzzx zzzy xxyy xxzz yyzz xxyz yyxz zzxy
+    '''Return the indices needed to reorder PySCF AOs for a Molden file.
+
+    Args:
+        mol : Mole
+            Molecule defining shell order, contractions, and spherical or
+            Cartesian AOs through ``mol.cart``.
+
+    Returns:
+        A list of zero-based AO indices. For an orbital coefficient matrix
+        ``C`` in PySCF order, ``C[idx, :]`` has Molden AO order.
+
+    Raises:
+        RuntimeError: If the basis contains angular momentum l >= 5.
+            The supported ordering includes s, p, d, f, and g functions.
+    '''
     idx = []
     off = 0
     if mol.cart:

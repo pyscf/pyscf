@@ -152,6 +152,24 @@ def search_space_group_ops(cell, rotations=None, tol=SYMPREC):
 
 
 def get_crystal_class(cell, ops=None, tol=SYMPREC):
+    '''Identify the crystal point group and its Laue class.
+
+    Args:
+        cell : Cell
+            Built cell defining the lattice and atomic structure.
+
+    Kwargs:
+        ops : sequence of space-group operations or None
+            If None, find operations from the cell using
+            :func:`search_space_group_ops`.
+        tol : float
+            Length tolerance for the symmetry search, in Bohr. Default 1e-6.
+            Effective only when ``ops`` is None.
+
+    Returns:
+        (crystal_class, laue_class), two strings naming the crystal point
+        group and its Laue class.
+    '''
     if ops is None:
         ops = search_space_group_ops(cell, tol=tol)
     rotations = [op.rot for op in ops]

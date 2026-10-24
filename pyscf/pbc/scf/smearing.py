@@ -195,20 +195,24 @@ def smearing(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
             polarization to change at a common chemical potential.
 
     Returns:
-        An SCF object with smearing enabled. Attributes are shallow-copied;
-        an already decorated object is updated and returned unchanged in
-        identity. No SCF calculation is run.
+        An SCF object configured to use smearing. If mf already uses smearing,
+        returns mf itself.
 
-    After a calculation with active smearing, ``entropy`` is normalized per
-    unit cell, including spin degeneracy. The energy attributes (Hartree per
-    cell) satisfy ``e_free = e_tot - sigma * entropy`` and
-    ``e_zero = e_tot - sigma * entropy / 2``. ``kernel`` returns ``e_tot``.
-    See :func:`pyscf.scf.smearing.smearing` for the entropy convention and
-    behavior when smearing is disabled.
+    Notes:
+        Call ``run`` or ``kernel`` to start SCF. Attributes are copied by
+        reference from ``mf`` and may be shared. If ``mf`` already uses smearing,
+        its settings are updated.
 
-    With symmetry-adapted KPoints, occupations are determined over the full
-    Brillouin-zone mesh and checked for consistency with the k-point symmetry.
-    See ``examples/pbc/23-smearing.py`` for a complete calculation.
+        After a calculation with active smearing, ``entropy`` is normalized per
+        unit cell, including spin degeneracy. The energy attributes (Hartree per
+        cell) satisfy ``e_free = e_tot - sigma * entropy`` and
+        ``e_zero = e_tot - sigma * entropy / 2``. ``kernel`` returns ``e_tot``.
+        See :func:`pyscf.scf.smearing.smearing` for the entropy convention and
+        behavior when smearing is disabled.
+
+        With symmetry-adapted KPoints, occupations are determined over the full
+        Brillouin-zone mesh and checked for consistency with the k-point symmetry.
+        See ``examples/pbc/23-smearing.py`` for a complete calculation.
     '''
     from pyscf.pbc.scf import khf
     assert not mf.istype('KROHF'), 'Smearing for KROHF/KROKS is not supported'

@@ -345,6 +345,25 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
 # reduce to D2h and its subgroups
 # FIXME, CPL, 209, 506
 def get_subgroup(gpname, axes):
+    '''Choose the subgroup and coordinate frame used for molecular symmetry.
+
+    Args:
+        gpname : str
+            Detected point-group name, normally from :func:`detect_symm`.
+        axes : (3, 3) ndarray
+            Symmetry axes as rows, in the original Cartesian frame.
+
+    Returns:
+        (subgroup_name, subgroup_axes). For D2h subgroups and the special
+        groups SO3, Dooh and Coov, the group is kept. For other groups,
+        choose a supported subgroup and adjust the axes if needed.
+
+    Notes:
+        The returned axes may share the input array.
+
+        This selects a subgroup rather than detecting symmetry from coordinates.
+        Also available as ``subgroup``.
+    '''
     if gpname in ('D2h', 'D2' , 'C2h', 'C2v', 'C2' , 'Ci' , 'Cs' , 'C1'):
         return gpname, axes
     elif gpname in ('SO3',):
@@ -471,7 +490,30 @@ def symm_ops(gpname, axes=None):
     return opdic
 
 def symm_identical_atoms(gpname, atoms):
-    '''Symmetry identical atoms'''
+    '''Find groups of atoms that are equivalent under the given symmetry.
+
+    Args:
+        gpname : str
+            Supported point group in its standard orientation, including
+            D2h subgroups and the linear groups ``'Dooh'`` and ``'Coov'``.
+        atoms : sequence
+            Formatted atom records ``[(symbol, (x, y, z)), ...]``. Coordinates
+            must already be centered and aligned with the symmetry axes.
+            Use Bohr coordinates to match the usual molecular convention.
+
+    Returns:
+        A list of lists of zero-based atom indices. Each inner list contains
+        atoms whose positions are related by symmetry.
+
+    Raises:
+        PointGroupSymmetryError: If coordinates are incompatible with a finite
+            point group.
+
+    Notes:
+        Atoms are matched by position only; their element symbols are not
+        checked. Use ``detect_symm`` and ``gto.format_atom`` to center and align
+        the coordinates before calling this function.
+    '''
     # from pyscf import gto
     # Dooh Coov for linear molecule
     if gpname == 'Dooh':

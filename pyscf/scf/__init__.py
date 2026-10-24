@@ -220,6 +220,8 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
 
     Returns:
         The density-fitting SCF object returned by ``mf.density_fit``.
+
+    Notes:
         No SCF calculation is run.
 
     See :meth:`pyscf.scf.hf.SCF.density_fit` for details.
@@ -235,6 +237,8 @@ def newton(mf):
 
     Returns:
         A second-order SCF object, or ``mf`` itself if already a CIAH solver.
+
+    Notes:
         Call ``kernel`` or ``run`` on the result to perform the calculation.
 
     See :func:`pyscf.soscf.newton_ah.newton` for details.

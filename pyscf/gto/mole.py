@@ -3796,8 +3796,9 @@ class MoleBase(lib.StreamObject):
         Args:
             fn : callable or str
                 A function or class called as ``fn(self, *args, **kwargs)``,
-                or a method name such as ``'RHF'`` or ``'CCSD'``. String names
-                are converted to uppercase and resolved on this molecule.
+                or a method name such as ``'RHF'`` or ``'CCSD'``. Names are
+                converted to uppercase and used to look up a method on this
+                molecule.
             *args :
                 Additional positional arguments for the callable or method.
 
@@ -3807,9 +3808,12 @@ class MoleBase(lib.StreamObject):
 
         Returns:
             The result of the callable or named method, usually a calculation
-            object. Call its ``run`` or ``kernel`` method to run the target
-            calculation. Named post-SCF methods may first run SCF to prepare
-            the required reference wavefunction.
+            object.
+
+        Notes:
+            Call ``run`` or ``kernel`` on the result to run the calculation.
+            Named post-SCF methods may first run SCF to prepare the required
+            reference wavefunction.
 
         Examples:
 

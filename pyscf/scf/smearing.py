@@ -27,7 +27,7 @@ def smearing(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
 
     Args:
         mf : SCF object
-            HF or Kohn-Sham object. K-point calculations are dispatched to
+            HF or Kohn-Sham object. For k-point calculations, this calls
             :func:`pyscf.pbc.scf.smearing.smearing`. Second-order SCF solvers
             are not supported. Molecular ROHF/ROKS objects are converted to
             RHF/RKS; use UHF/UKS to constrain the spin populations.
@@ -45,8 +45,8 @@ def smearing(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
             any nonempty string other than ``'fermi'`` selects Gaussian
             smearing. None or an empty string disables smearing.
         mu0 : float or pair of floats or None
-            Fixed chemical potential in Hartree, rather than an initial guess
-            for its optimization. With None (default), optimize the chemical
+            Chemical potential in Hartree. If supplied, this value is kept
+            fixed during the calculation. With None (default), optimize the chemical
             potential to preserve the electron number. With a fixed value,
             the electron number may change. For UHF/UKS with ``fix_spin=True``,
             a pair sets separate alpha and beta potentials; a scalar sets
@@ -59,18 +59,23 @@ def smearing(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):
             ROHF/ROKS; otherwise ignored for restricted calculations.
 
     Returns:
-        An SCF object with smearing enabled, without running SCF. Attributes
-        are shallow-copied from ``mf``; an already decorated object is reused.
-        Adjust ``sigma``, ``smearing_method``, ``mu0``, and ``fix_spin`` on the
-        returned object to change the smearing settings for subsequent runs.
+        An SCF object configured to use smearing. If mf already uses smearing,
+        returns mf itself.
 
-    After a calculation with active smearing, ``entropy`` contains the
-    dimensionless entropy (in units of the Boltzmann constant for Fermi-Dirac
-    smearing), or the analogous Gaussian correction. ``e_free`` is
-    ``e_tot - sigma * entropy`` and ``e_zero`` is the extrapolated energy
-    ``e_tot - sigma * entropy / 2``. All energies are in Hartree. The SCF
-    ``kernel`` returns ``e_tot``, not ``e_free``. These correction attributes
-    are initialized to None and are not updated while smearing is disabled.
+    Notes:
+        Call ``run`` or ``kernel`` to start SCF. Attributes are copied by
+        reference from ``mf`` and may be shared. If ``mf`` already uses smearing,
+        its settings are updated.
+        Adjust ``sigma``, ``smearing_method``, ``mu0``, and ``fix_spin`` on the
+        returned object to change the settings for later runs.
+
+        After a calculation with active smearing, ``entropy`` contains the
+        dimensionless entropy (in units of the Boltzmann constant for Fermi-Dirac
+        smearing), or the analogous Gaussian correction. ``e_free`` is
+        ``e_tot - sigma * entropy`` and ``e_zero`` is the extrapolated energy
+        ``e_tot - sigma * entropy / 2``. All energies are in Hartree. The SCF
+        ``kernel`` returns ``e_tot``, not ``e_free``. These correction attributes
+        are initialized to None and are not updated while smearing is disabled.
 
     Examples:
 

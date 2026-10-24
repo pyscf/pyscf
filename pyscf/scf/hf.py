@@ -1598,13 +1598,15 @@ def as_scanner(mf):
         arguments are passed to ``kernel``. If ``mf`` is already a scanner,
         it is returned unchanged.
 
-    The scanner retains settings such as DIIS and convergence thresholds.
-    It reuses the previous density when the AO layouts match, or attempts
-    to read a checkpoint guess otherwise. An explicit ``dm0`` overrides
-    this reuse. Results are stored on the scanner after each call.
+    Notes:
+        The scanner retains settings such as DIIS and convergence thresholds.
+        It reuses the previous density when the AO layouts match, or attempts
+        to read a checkpoint guess otherwise. An explicit ``dm0`` overrides
+        this reuse. Results are stored on the scanner after each call.
 
-    The scanner shallow-copies the original object's attributes. Scanning
-    may therefore modify shared objects such as ``with_df`` and ``with_x2c``.
+        The scanner shares some attributes with the original SCF object.
+        Calling it may therefore modify shared objects such as ``with_df``
+        and ``with_x2c``.
 
     Examples:
 
@@ -2047,8 +2049,9 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
             methods return alpha and beta matrices of shape ``(2, nao, nao)``.
             Generalized and relativistic methods use their spin-orbital basis.
 
-        A checkpoint that cannot be read because of an OSError or missing
-        data (KeyError) falls back to the MINAO guess.
+        Notes:
+            A checkpoint that cannot be read because of an OSError or missing
+            data (KeyError) falls back to the MINAO guess.
         '''
         if not isinstance(key, str):
             return key
@@ -2122,11 +2125,12 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         Returns:
             Total energy in Hartree, including nuclear repulsion. The energy
             is returned even if SCF does not converge; check ``self.converged``.
-            Results are saved in ``e_tot``, ``mo_energy`` (Hartree),
-            ``mo_coeff``, and ``mo_occ``.
 
-        This method is also available as ``kernel``. Use ``run`` to return
-        the SCF object instead of the energy.
+        Notes:
+            Results are saved in ``e_tot``, ``mo_energy`` (Hartree), ``mo_coeff``,
+            and ``mo_occ``.
+            This method is also available as ``kernel``. Use ``run`` to return
+            the SCF object instead of the energy.
 
         Examples:
 
@@ -2320,11 +2324,12 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
                 four-center integrals. Default is False (fit both J and K).
 
         Returns:
-            A new SCF object with settings shallow-copied from this object
-            and the fitting object stored in ``with_df``.
+            A new SCF object with the fitting object stored in ``with_df``.
 
-        Apply density fitting before adding a solvent model so that response
-        and nuclear-gradient methods use the appropriate implementation.
+        Notes:
+            Other attributes are copied by reference and may be shared with this
+            object. Apply density fitting before adding a solvent model so that
+            response and nuclear-gradient methods use the appropriate implementation.
         '''
         import pyscf.df.df_jk
         if self.istype('_Solvation'):

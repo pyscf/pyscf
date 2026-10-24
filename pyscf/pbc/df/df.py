@@ -366,7 +366,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 
     def sr_loop(self, kpti_kptj=numpy.zeros((2,3)), max_memory=2000,
                 compact=True, blksize=None, aux_slice=None):
-        '''Iterate over Gaussian density-fitting three-index tensor blocks.
+        '''Read the Gaussian density-fitting tensor one block at a time.
 
         Kwargs:
             kpti_kptj : (2, 3) array-like
@@ -384,19 +384,22 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                 Number of auxiliary rows per block. None estimates it from
                 available memory and ``self.blockdim``, with a minimum of 16.
             aux_slice : pair of ints or None
-                Optional half-open auxiliary-row interval (start, stop).
-                None iterates over all rows. Applied separately to each sign
-                sector for a two-dimensional truncated Coulomb interaction.
+                Auxiliary rows to read, from start (included) to stop (excluded).
+                None iterates over all rows. For a two-dimensional truncated Coulomb
+                interaction, the same range is read from the positive and
+                negative parts of the tensor.
 
         Yields:
             (LpqR, LpqI, sign), with real and imaginary float arrays of shape
             (naux_block, nao_pair). Packed pairs use ``nao*(nao+1)//2`` columns;
             full pairs use ``nao**2``. Together they represent ``LpqR + 1j*LpqI``.
-            The metric sign is +1, or -1 for the negative sector of a 2D
-            truncated Coulomb interaction; retain it when reconstructing ERIs.
+            ``sign`` is +1, except for the negative part of a 2D truncated
+            Coulomb interaction, where it is -1. Include this sign when
+            reconstructing electron-repulsion integrals.
 
-        Builds and stores the DF tensor if ``self._cderi`` is not initialized.
-        All positive-metric blocks precede any negative-metric blocks.
+        Notes:
+            Builds and stores the DF tensor if ``self._cderi`` is not initialized.
+            All positive-metric blocks precede any negative-metric blocks.
         '''
         if self._cderi is None:
             self.build(j_only=self._j_only)
@@ -626,17 +629,18 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             yield LpqR
 
     def get_naoaux(self):
-        '''Return the auxiliary dimension of the stored DF tensor.
+        '''Return the number of auxiliary rows in the stored DF tensor.
 
         Returns:
-            Integer number of auxiliary rows, obtained from the tensor rather
-            than from the nominal auxiliary basis. For stored 2D truncated
+            Number of auxiliary rows in the tensor. This can differ from the
+            number of functions in the auxiliary basis. For stored 2D truncated
             Coulomb tensors, includes both positive and negative metric sectors.
 
-        If the tensor is not initialized, calls ``build(j_only=self._j_only)``
-        first. For file-backed tensors, reads the first stored k-point-pair
-        block; the result is not a separate dimension for every k-point pair.
-        For a user-supplied ndarray, reads its auxiliary axis directly.
+        Notes:
+            If the tensor is not initialized, calls ``build(j_only=self._j_only)``
+            first. For file-backed tensors, reads the first stored k-point-pair
+            block; the result is not a separate dimension for every k-point pair.
+            For a user-supplied ndarray, reads its auxiliary axis directly.
         '''
 # determine naoaux with self._cderi, because DF object may be used as CD
 # object when self._cderi is provided.

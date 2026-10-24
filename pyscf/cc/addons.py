@@ -18,8 +18,29 @@ from pyscf import lib
 from pyscf.cc.bccd import bccd_kernel_
 
 def spatial2spin(tx, orbspin=None):
-    '''Convert T1/T2 of spatial orbital representation to T1/T2 of
-    spin-orbital representation
+    '''Convert spatial-orbital T1 or T2 amplitudes to spin-orbital amplitudes.
+
+    Args:
+        tx : ndarray or tuple of ndarrays
+            RCCSD: T1 of shape (nocc, nvir) or T2 of shape (nocc, nocc, nvir, nvir).
+            UCCSD: T1 = (t1a, t1b), or T2 = (t2aa, t2ab, t2bb);
+            doubles have shapes (noa, noa, nva, nva), (noa, nob, nva, nvb), and
+            (nob, nob, nvb, nvb).
+
+    Kwargs:
+        orbspin : (nocc_total + nvir_total,) ndarray or None
+            Spin labels (0 for alpha, 1 for beta), ordered as occupied then
+            virtual spin orbitals. Their counts must match the input blocks.
+            None assumes alternating alpha/beta labels and matching alpha
+            and beta occupied/virtual dimensions.
+
+    Returns:
+        A T1 array of shape (nocc_total, nvir_total), or a T2 array of shape
+        (nocc_total, nocc_total, nvir_total, nvir_total). The spin labels
+        are stored in the array's ``orbspin`` attribute.
+
+    Notes:
+        Also applies to lambda amplitudes with the same index conventions.
     '''
     if isinstance(tx, numpy.ndarray) and tx.ndim == 2:
         # RCCSD t1 amplitudes
@@ -83,7 +104,27 @@ def spatial2spin(tx, orbspin=None):
 spatial2spinorb = spatial2spin
 
 def spin2spatial(tx, orbspin):
-    '''Convert T1/T2 in spin-orbital basis to T1/T2 in spatial orbital basis
+    '''Split spin-orbital T1 or T2 amplitudes into alpha and beta blocks.
+
+    Args:
+        tx : ndarray
+            T1 of shape (nocc, nvir) or T2 of shape (nocc, nocc, nvir, nvir),
+            with spin-orbital indices.
+        orbspin : (nocc + nvir,) ndarray
+            Spin labels, 0 for alpha and 1 for beta, ordered as occupied
+            orbitals followed by virtual orbitals.
+
+    Returns:
+        For singles, (t1a, t1b) with shapes (noa, nva) and (nob, nvb).
+        For doubles, (t2aa, t2ab, t2bb) with shapes (noa, noa, nva, nva),
+        (noa, nob, nva, nvb), and (nob, nob, nvb, nvb). The dimensions are
+        determined from ``orbspin``.
+
+    Notes:
+        Only blocks that conserve alpha and beta spin are extracted. Spin-flip
+        blocks are ignored, even if they contain nonzero amplitudes.
+
+        Also applies to lambda amplitudes with the same index conventions.
     '''
     if tx.ndim == 2:  # t1
         nocc, nvir = tx.shape
@@ -142,6 +183,28 @@ def convert_to_uccsd(mycc):
     return ucc
 
 def convert_to_gccsd(mycc):
+    '''Convert an RCCSD or UCCSD object and its amplitudes to GCCSD.
+
+    Args:
+        mycc : CCSD object
+            Restricted or unrestricted CCSD object with ``t1`` and ``t2``
+            available. Explicit overrides of ``_nocc`` and ``_nmo`` must be
+            None.
+
+    Returns:
+        A GCCSD object with a generalized HF reference and spin-orbital
+        ``t1`` and ``t2`` using the reference's ``orbspin`` ordering.
+        If mycc is already a GCCSD object, returns mycc itself.
+
+    Notes:
+        No SCF or CCSD optimization is performed. Integer frozen-orbital
+        counts are doubled.
+
+        Other attributes are copied by reference and may be shared with the
+        original object. Only the reference orbitals, occupations and T
+        amplitudes are converted. Recompute any stored lambda amplitudes and
+        intermediates before using them with the new spin-orbital basis.
+    '''
     from pyscf.cc import gccsd
     if isinstance(mycc, gccsd.GCCSD):
         return mycc
