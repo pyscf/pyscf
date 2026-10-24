@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 
-import os
-import tempfile
 import numpy as np
 import pytest
 
-from pyscf import dft, gto, scf
+from pyscf import lib, dft, gto, scf
 from pyscf.gw.qsgw import QSGW
 from pyscf.gw.uqsgw import UQSGW
 
@@ -61,8 +59,8 @@ def _check_restart(mode):
     mf = scf.RHF(mol).run(conv_tol=1e-12)
     energies = []
     for cls, reference in ((QSGW, mf), (UQSGW, mf.to_uhf())):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            checkpoint = os.path.join(tmpdir, 'checkpoint.h5')
+        with lib.NamedTemporaryFile(suffix='.h5') as tmp:
+            checkpoint = tmp.name
             obj = cls(reference)
             obj.mode = mode
             obj.nw = 32

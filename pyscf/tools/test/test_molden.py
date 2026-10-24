@@ -14,8 +14,6 @@
 # limitations under the License.
 
 import unittest
-import os
-import tempfile
 import numpy as np
 from pyscf import lib, gto, scf, mcscf
 from pyscf.tools import molden
@@ -135,9 +133,9 @@ Ne   1   10     0.00000000000000     0.00000000000000     0.00000000000000
 
     def test_unrestricted_checkpoint(self):
         mol = gto.M(atom='Li 0 0 0', basis='sto-3g', spin=1, verbose=0)
-        with tempfile.TemporaryDirectory() as tmpdir:
-            chk = os.path.join(tmpdir, 'checkpoint.h5')
-            output = os.path.join(tmpdir, 'orbitals.molden')
+        with lib.NamedTemporaryFile() as chkfile, lib.NamedTemporaryFile() as moldenfile:
+            chk = chkfile.name
+            output = moldenfile.name
             mf = scf.UHF(mol)
             mf.chkfile = chk
             mf.run(conv_tol=1e-12)
@@ -151,9 +149,9 @@ Ne   1   10     0.00000000000000     0.00000000000000     0.00000000000000
     def test_custom_checkpoint_key(self):
         mol = gto.M(atom='He 0 0 0', basis='6-31g', verbose=0)
         mf = scf.RHF(mol).run()
-        with tempfile.TemporaryDirectory() as tmpdir:
-            chk = os.path.join(tmpdir, 'checkpoint.h5')
-            output = os.path.join(tmpdir, 'orbitals.molden')
+        with lib.NamedTemporaryFile() as chkfile, lib.NamedTemporaryFile() as moldenfile:
+            chk = chkfile.name
+            output = moldenfile.name
             scf.chkfile.save_mol(mol, chk)
             scf.chkfile.dump(chk, 'orbitals', {'mo_coeff': mf.mo_coeff,
                                             'mo_energy': mf.mo_energy, 'mo_occ': mf.mo_occ})
@@ -167,8 +165,8 @@ Ne   1   10     0.00000000000000     0.00000000000000     0.00000000000000
         mol = gto.M(atom='H 0 0 0; H 0 0 1.4', basis='6-31g', verbose=0)
         mc = mcscf.CASSCF(scf.RHF(mol).run(), 2, 2).run()
         ref = mc.make_rdm1()
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output = os.path.join(tmpdir, 'orbitals.molden')
+        with lib.NamedTemporaryFile() as moldenfile:
+            output = moldenfile.name
             molden.from_mcscf(mc, output, cas_natorb=True)
             _, _, coeff, occ, _, _ = molden.load(output)
             # Molden occupations are printed to five decimal places.

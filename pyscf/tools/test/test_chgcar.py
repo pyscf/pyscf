@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """CHGCAR grid coordinates, file ordering, and sampled fields."""
-import tempfile
 import unittest
 
 import numpy as np
@@ -34,9 +33,9 @@ def read_field(path, natm):
 
 class KnownValues(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.path = tmp.name + '/CHGCAR'
+        tmp = lib.NamedTemporaryFile()
+        self.addCleanup(tmp.close)
+        self.path = tmp.name
 
     def test_periodic_grid_and_file(self):
         cell = pbcgto.M(atom='He 0 0 0; H 1 0 0; H 0 1 0', basis='sto-3g',

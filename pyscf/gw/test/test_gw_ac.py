@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 
-import os
-import tempfile
 import pytest
 import numpy as np
-from pyscf import gto, dft, scf
+from pyscf import lib, gto, dft, scf
 from pyscf.gw.gw_ac import GWAC
 from pyscf.gw.ugw_ac import UGWAC
 from pyscf.gw.utils import ac_grid
@@ -109,8 +107,8 @@ def _check_continuation(obj):
     np.testing.assert_allclose(obj.ac_eval(target[0]), expected[..., 0], atol=1e-7)
     np.testing.assert_allclose(obj[0, 1].ac_eval(target), expected[0, 1], atol=1e-7)
     np.testing.assert_allclose(obj.diagonal().ac_eval(target), expected[[0, 1], [0, 1]], atol=1e-7)
-    with tempfile.TemporaryDirectory() as tmpdir:
-        checkpoint = os.path.join(tmpdir, 'checkpoint.h5')
+    with lib.NamedTemporaryFile(suffix='.h5') as tmp:
+        checkpoint = tmp.name
         obj.save(checkpoint)
         restored = ac_grid.load_ac(checkpoint)
         np.testing.assert_array_equal(restored.ac_eval(target), obj.ac_eval(target))

@@ -14,8 +14,6 @@
 # limitations under the License.
 
 import unittest
-import os
-import tempfile
 from types import SimpleNamespace
 from unittest import mock
 import numpy
@@ -140,8 +138,8 @@ class KnownValues(unittest.TestCase):
         self.assertFalse(hasattr(obj, 'new_value'))
 
     def test_hdf5_options_restore_and_readonly(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            filename = os.path.join(tmpdir, 'options.h5')
+        with lib.NamedTemporaryFile(suffix='.h5') as tmp:
+            filename = tmp.name
             with lib.h5filewrite_options(libver='latest'):
                 with lib.H5FileWrap(filename, 'w') as f:
                     f['values'] = numpy.arange(5)
