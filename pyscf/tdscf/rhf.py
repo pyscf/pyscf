@@ -732,7 +732,7 @@ def photoabsorption_cross_section(tdobj, e=None, xy=None, gauge='length', freqs=
 
 
 def as_scanner(td):
-    '''Generating a scanner/solver for TDA/TDHF/TDDFT PES.
+    '''Create a scanner/solver for TDA, TDHF or TDDFT object.
 
     The returned solver is a function. This function requires one argument
     "mol" as input and returns total TDA/TDHF/TDDFT energy.
@@ -745,15 +745,24 @@ def as_scanner(td):
     Note scanner has side effects.  It may change many underlying objects
     (_scf, with_df, with_x2c, ...) during calculation.
 
-    Examples::
+    The scanner's e attribute contains excitation energies, while e_tot
+    contains total excited-state energies.
 
+    Args:
+        td : time-dependent mean-field object
+            Solver providing the reference calculation and excited-state settings.
+
+    Returns:
+        A callable solver. Calling scanner(mol_or_geom, **kwargs) returns an
+        array of total excited-state energies in Hartree: the reference SCF
+        energy plus each excitation energy.
+
+    Examples:
         >>> from pyscf import gto, scf, tdscf
-        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
-        >>> td_scanner = tdscf.TDHF(scf.RHF(mol)).as_scanner()
-        >>> de = td_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
-        [ 0.34460866  0.34460866  0.7131453 ]
-        >>> de = td_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
-        [ 0.14844013  0.14844013  0.47641829]
+        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', verbose=0)
+        >>> scanner = tdscf.TDHF(scf.RHF(mol)).as_scanner()
+        >>> total_energies = scanner('H 0 0 0; F 0 0 1.1')
+        >>> excitation_energies = scanner.e
     '''
     if isinstance(td, lib.SinglePointScanner):
         return td
@@ -782,6 +791,44 @@ class TD_Scanner(lib.SinglePointScanner):
 
 
 class TDBase(lib.StreamObject):
+    '''Common settings and results for time-dependent mean-field calculations.
+
+    Args:
+        mf : SCF object
+            HF or Kohn-Sham reference, stored as _scf. mol refers to mf.mol.
+
+    Kwargs:
+        frozen : int, sequence of ints or None
+            Orbitals excluded from excitations. For a restricted reference,
+            an integer excludes that many orbitals from the start of the MO
+            list; a sequence gives zero-based orbital indices.
+
+    Input Attributes:
+        nstates : int
+            Number of excited states requested. Default 3.
+        singlet : bool
+            Whether to compute singlet or triplet excitations for restricted
+            references. True (default) for singlet.
+        conv_tol : float
+            Convergence threshold for the residual norm of each state.
+            Default 1e-5.
+        max_cycle : int
+            Maximum number of excited-state solver iterations. Default 100.
+        wfnsym : str, int or None
+            Target spatial symmetry. If not set, all symmetries are included.
+        chkfile : str or None
+            Checkpoint file for excitation energies and amplitudes. Initially
+            taken from mf.chkfile.
+
+    Saved results:
+        e : (nstates,) ndarray
+            Excitation energies in Hartree.
+        xy : list
+            One (X, Y) amplitude pair per state. See the concrete solver's
+            documentation for shapes and normalization.
+        converged : (nstates,) ndarray of bool
+            Whether each state reached the convergence threshold.
+    '''
     conv_tol = getattr(__config__, 'tdscf_rhf_TDA_conv_tol', 1e-5)
     nstates = getattr(__config__, 'tdscf_rhf_TDA_nstates', 3)
     singlet = getattr(__config__, 'tdscf_rhf_TDA_singlet', True)
@@ -934,30 +981,39 @@ class TDBase(lib.StreamObject):
         raise NotImplementedError
 
 class TDA(TDBase):
-    '''Tamm-Dancoff approximation
+    '''Tamm-Dancoff approximation for a restricted HF or Kohn-Sham reference.
+
+    Args:
+        mf : RHF or RKS object
+            Mean-field reference. See TDBase for shared settings and constructor
+            side effects.
+
+    Kwargs:
+        frozen : int, sequence of ints or None
+            Orbitals excluded from excitations. An integer excludes that many
+            orbitals from the start of the MO list. A sequence gives zero-based
+            MO indices, including occupied or virtual orbitals.
 
     Input Attributes:
         conv_tol : float
-            Convergence is achieved when the norm of the residual for a state is
-            below this threshold. Default is 1e-5.
+            Convergence threshold for the residual norm of each state.
+            Default 1e-5.
         nstates : int
-            Number of TD states to be computed. Default is 3.
-        frozen : int or list
-            Orbitals indices to be frozen during the TDDFT diagonalization.
-        wfnsym : str
-            The irrep name
+            Number of excited states requested. Default 3.
+        singlet : bool
+            True for singlet excitations (default), False for triplets.
+        wfnsym : str, int or None
+            Target spatial symmetry. None allows all symmetries.
 
     Saved results:
-
-        converged : bool array
-            Indicates whether each excited state is converged.
-        e : 1D array
-            Excitation energy for each excited state.
-        xy : A list of two 2D arrays
-            The two 2D arrays are Excitation coefficients X (shape [nocc,nvir])
-            and de-excitation coefficients Y (shape [nocc,nvir]) for each
-            excited state.  (X,Y) are normalized to 1/2 in RHF/RKS methods and
-            normalized to 1 for UHF/UKS methods. In the TDA calculation, Y = 0.
+        converged : (nstates,) ndarray of bool
+            Whether each excited state reached the convergence threshold.
+        e : (nstates,) ndarray
+            Excitation energies in Hartree.
+        xy : list of pairs
+            One (X, Y) pair per state. X has shape (nocc, nvir), excluding
+            frozen orbitals, and Y is the scalar 0. For RHF/RKS, sum(abs(X)**2)
+            is 1/2; the unrestricted TDA convention uses normalization 1.
     '''
 
     def gen_vind(self, mf=None):

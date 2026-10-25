@@ -445,7 +445,28 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
 
 
 class HessianBase(lib.StreamObject):
-    '''Non-relativistic restricted Hartree-Fock hessian'''
+    '''Base class for nonrelativistic restricted Hartree-Fock nuclear Hessians.
+
+    Args:
+        method : calculation object
+            Method whose energy is differentiated. Stored as base. mol refers
+            to the same molecule as method.mol.
+
+    Input Attributes:
+        atmlst : sequence of ints
+            Zero-based atom indices for both atom axes of the Hessian.
+            Defaults (None) selects all atoms.
+        max_cycle : int
+            Maximum number of iterations for the orbital-response solve.
+            Default 50.
+        level_shift : float
+            Level shift for the orbital-response solve, in Hartree. Default 0.
+
+    Saved results:
+        de : (nselected, nselected, 3, 3) ndarray
+            Nuclear energy Hessian in Hartree/Bohr**2. The first two axes label
+            atoms in atmlst order; the last two label Cartesian directions.
+    '''
 
     # Max. number of iterations for Krylov solver
     max_cycle = 50
@@ -458,11 +479,11 @@ class HessianBase(lib.StreamObject):
         'mol', 'base', 'atmlst', 'de', 'max_cycle', 'level_shift'
     }
 
-    def __init__(self, scf_method):
-        self.verbose = scf_method.verbose
-        self.stdout = scf_method.stdout
-        self.mol = scf_method.mol
-        self.base = scf_method
+    def __init__(self, method):
+        self.verbose = method.verbose
+        self.stdout = method.stdout
+        self.mol = method.mol
+        self.base = method
         self.max_memory = self.mol.max_memory
         self.atmlst = range(self.mol.natm)
         self.de = numpy.zeros((0,0,3,3))  # (A,B,dR_A,dR_B)

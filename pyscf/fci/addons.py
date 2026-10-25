@@ -27,7 +27,30 @@ PENALTY = getattr(__config__, 'fci_addons_fix_spin_shift', 0.2)
 
 
 def large_ci(ci, norb, nelec, tol=LARGE_CI_TOL, return_strs=RETURN_STRS):
-    '''Search for the largest CI coefficients
+    '''Find CI coefficients whose absolute values exceed a threshold.
+
+    Args:
+        ci : ndarray
+            CI coefficients in PySCF determinant order, with shape (na, nb)
+            or the equivalent flattened array. na and nb are the numbers of
+            alpha and beta occupation strings.
+        norb : int
+            Number of spatial orbitals.
+        nelec : int or pair of ints
+            Total electron count or (nalpha, nbeta). An integer assigns
+            nelec // 2 electrons to beta and the remainder to alpha.
+
+    Kwargs:
+        tol : float
+            Threshold on abs(ci).
+        return_strs : bool
+            Return binary occupation strings when it is set to True.
+            Returns arrays of zero-based occupied-orbital indices when False.
+
+    Returns:
+        A list of (coefficient, alpha_occupation, beta_occupation) tuples in
+        determinant-index order. If no coefficient exceeds tol, the list
+        contains the coefficient with the largest absolute value.
     '''
     neleca, nelecb = _unpack_nelec(nelec)
     na = cistring.num_strings(norb, neleca)
@@ -480,7 +503,24 @@ def cre_b(ci0, norb, neleca_nelecb, ap_id):
     return ci1
 
 def det_overlap(string1, string2, norb, s=None):
-    '''Determinants overlap on non-orthogonal one-particle basis'''
+    '''Compute the overlap of two determinants in one spin sector.
+
+    Args:
+        string1, string2 : int or str
+            Occupation bit masks, as integers or binary strings such as
+            '0b101'. Bit i represents orbital i. Both determinants must have
+            the same electron count.
+        norb : int
+            Number of orbitals in each one-particle basis.
+
+    Kwargs:
+        s : (norb, norb) ndarray or None
+            Cross-overlap matrix: s[i,j] is the overlap of bra orbital i with
+            ket orbital j. If it is None, the orthonormal orbital basis is assumed.
+
+    Returns:
+        The scalar determinant overlap.
+    '''
     if s is None:  # orthogonal basis with s_ij = delta_ij
         return float(string1 == string2)
     else:
@@ -500,11 +540,33 @@ def det_overlap(string1, string2, norb, s=None):
         return numpy.linalg.det(s1)
 
 def overlap(bra, ket, norb, nelec, s=None):
-    '''Overlap between two CI wavefunctions
+    '''Compute the overlap between two CI wavefunctions.
 
     Args:
-        s : 2D array or a list of 2D array
-            The overlap matrix of non-orthogonal one-particle basis
+        bra, ket : ndarray
+            CI coefficients in PySCF determinant order, with shape (na, nb)
+            or equivalent flattened arrays. Both use the same orbital and
+            electron counts.
+        norb : int
+            Number of spatial orbitals in each basis.
+        nelec : int or pair of ints
+            Total electron count or (nalpha, nbeta). An integer assigns
+            nelec // 2 electrons to beta and the remainder to alpha.
+
+    Kwargs:
+        s : ndarray, pair of ndarrays or None
+            The overlap matrix of non-orthogonal one-particle basis.
+            If alpha and beta orbitals are different, two (norb, norb) matrices
+            can be supplied. Rows of the overlap matrix label bra orbitals and
+            columns label ket orbitals. If it is set to None, orthonormal basis
+            is assumed. See transform_ci for the transformation convention.
+
+    Returns:
+        A scalar
+
+    Notes:
+        For complex cross-orbital overlaps S[i,j] = <bra_i|ket_j>, supply
+        s = S.conj(), since the transformed bra is conjugated in the overlap.
     '''
     if s is not None:
         bra = transform_ci_for_orbital_rotation(bra, norb, nelec, s)
@@ -559,25 +621,34 @@ class SpinPenaltyFCISolver:
         ci1 += ci0.reshape(fcivec.shape)
         return ci1
 
-def fix_spin(fciobj, shift=PENALTY, ss=None, **kwargs):
-    r'''If FCI solver cannot stay on spin eigenfunction, this function can
-    add a shift to the states which have wrong spin.
+def fix_spin(fciobj, shift=PENALTY, ss=None):
+    r'''Add an energy penalty to favor a target total spin in an FCI calculation.
 
     .. math::
 
         (H + shift*S^2) |\Psi\rangle = E |\Psi\rangle
 
     Args:
-        fciobj : An instance of :class:`FCISolver`
+        fciobj : FCI solver object
+            Solver to configure. The direct_uhf solver is not supported.
 
     Kwargs:
         shift : float
-            Level shift for states which have different spin
-        ss : number
-            S^2 expection value == s*(s+1)
+            Penalty strength.
+        ss : float or None
+            Target S*(S+1). If not specified (None), the lowest spin state is
+            targeted.
 
-    Returns
-            A modified FCI object based on fciobj.
+    Returns:
+        An FCI solver with the spin penalty. If fciobj already has this
+        penalty, returns the same object with updated settings.
+
+    Notes:
+        The penalty favors the target spin but does not guarantee convergence
+        to a state with that spin.
+        Other settings may be shared with fciobj. The returned solver uses
+        Davidson diagonalization. It has additional attributes ss_penalty and
+        ss_value for the penalty.
     '''
     import types
     from pyscf.fci import direct_uhf
@@ -587,12 +658,7 @@ def fix_spin(fciobj, shift=PENALTY, ss=None, **kwargs):
     if isinstance (fciobj, types.ModuleType):
         raise DeprecationWarning('fix_spin should be applied on FCI object only')
 
-    if 'ss_value' in kwargs:
-        sys.stderr.write('fix_spin_: kwarg "ss_value" will be removed in future release. '
-                         'It was replaced by "ss"\n')
-        ss_value = kwargs['ss_value']
-    else:
-        ss_value = ss
+    ss_value = ss
 
     if isinstance (fciobj, SpinPenaltyFCISolver):
         # recursion avoidance
@@ -604,6 +670,9 @@ def fix_spin(fciobj, shift=PENALTY, ss=None, **kwargs):
                          (SpinPenaltyFCISolver, fciobj.__class__))
 
 def fix_spin_(fciobj, shift=.1, ss=None):
+    '''Apply a spin penalty to an FCI solver in place.
+    Its functionality is identical to :func:`fix_spin`.
+    '''
     sp_fci = fix_spin(fciobj, shift, ss)
     fciobj.__class__ = sp_fci.__class__
     fciobj.__dict__ = sp_fci.__dict__
@@ -639,11 +708,24 @@ def transform_ci(ci, nelec, u):
     CI_new = fci.kernel(u^T*h1*u, ...) = transform_ci_for_orbital_rotation(CI_old, u)
 
     Args:
-        u : 2D array or a list of 2D array
-            the orbital rotation to transform the old one-particle basis to new
-            one-particle basis. If u is not a squared matrix, the resultant CI
-            coefficients array may have different shape to the input CI
-            coefficients.
+        ci : ndarray
+            CI coefficients in PySCF determinant order, with shape
+            (binomial(norb_old, nalpha), binomial(norb_old, nbeta))
+        nelec : int or pair of ints
+            Total electron count or (nalpha, nbeta). An integer assigns
+            nelec // 2 electrons to beta and the remainder to alpha.
+        u : ndarray or pair of ndarrays
+            Orbital transformation of shape (norb_old, norb_new). Rows refer
+            to old orbitals and columns to new orbitals. Supply one matrix
+            for both spins or separate alpha and beta matrices of the same
+            shape.
+
+    Returns:
+        CI coefficients with shape (binomial(norb_new, nalpha),
+        binomial(norb_new, nbeta)), in PySCF determinant order.
+
+    Notes:
+        The result is not renormalized.
     '''
     neleca, nelecb = _unpack_nelec(nelec)
     if isinstance(u, numpy.ndarray) and u.ndim == 2:

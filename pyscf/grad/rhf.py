@@ -319,8 +319,24 @@ class SCF_GradScanner(lib.GradScanner):
 
 
 class GradientsBase(lib.StreamObject):
-    '''
-    Basic nuclear gradient functions for non-relativistic methods
+    '''Base class for nonrelativistic nuclear energy gradients.
+
+    Args:
+        method : calculation object
+            Method whose energy is differentiated. Stored as base; mol refers
+            to the same molecule as method.mol.
+
+    Input Attributes:
+        atmlst : sequence of ints or None
+            Zero-based atom indices, in the desired output order. Default (None)
+            selects all atoms.
+        unit : str
+            Gradient unit. Only atomic units (Hartree/Bohr) are supported.
+
+    Saved results:
+        de : (nselected, 3) ndarray
+            Nuclear energy gradient in Hartree/Bohr. This is the derivative of
+            the energy, not the force.
     '''
 
     _keys = {'mol', 'base', 'unit', 'atmlst', 'de'}
