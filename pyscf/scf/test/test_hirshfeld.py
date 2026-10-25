@@ -17,6 +17,7 @@ import unittest
 import numpy
 from pyscf import gto
 from pyscf import scf
+from pyscf import dft
 from pyscf.scf import hirshfeld
 
 def setUpModule():
@@ -79,6 +80,19 @@ class KnownValues(unittest.TestCase):
         q = mf.cm5_charges(verbose=0)
         self.assertAlmostEqual(abs(q - [-0.6918981, 0.3459490, 0.3459490]).max(), 0, 6)
         self.assertAlmostEqual(q.sum(), 0, 6)
+
+        self.assertRaises(ValueError, hirshfeld.cm5_charges, mol)
+
+    def test_dft_grids(self):
+        # DFT methods integrate the charges on their own grid
+        mf = dft.RKS(mol, xc='b3lyp')
+        mf.grids.level = 1
+        mf.run()
+        q = mf.hirshfeld_charges(verbose=0)
+        q1 = hirshfeld.hirshfeld_charges(mol, mf.make_rdm1(), mf.grids, verbose=0)
+        self.assertAlmostEqual(abs(q - q1).max(), 0, 12)
+        q1 = hirshfeld.hirshfeld_charges(mol, mf.make_rdm1(), verbose=0)
+        self.assertTrue(abs(q - q1).max() > 1e-6)
 
 
 if __name__ == "__main__":

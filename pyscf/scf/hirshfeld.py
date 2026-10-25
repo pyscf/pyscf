@@ -156,9 +156,13 @@ def cm5_charges(mol, dm=None, grids=None, hirshfeld=None, verbose=logger.DEBUG):
 
         dm : ndarray
             Density matrix, from which the Hirshfeld charges are computed when
-            they are not given
+            they are not given. Required unless hirshfeld is given
 
     Kwargs:
+        grids : an instance of :class:`dft.gen_grid.Grids`
+            The integration grid for the Hirshfeld charges, see
+            hirshfeld_charges
+
         hirshfeld : 1D array
             Hirshfeld charges, as returned by hirshfeld_charges
 
@@ -167,6 +171,8 @@ def cm5_charges(mol, dm=None, grids=None, hirshfeld=None, verbose=logger.DEBUG):
     '''
     log = logger.new_logger(mol, verbose)
     if hirshfeld is None:
+        if dm is None:
+            raise ValueError('cm5_charges requires either dm or hirshfeld')
         hirshfeld = hirshfeld_charges(mol, dm, grids, verbose=logger.QUIET)
     charges = numpy.array(hirshfeld, dtype=float)
     # Atomic numbers of the elements, 0 for ghost atoms

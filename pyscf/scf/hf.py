@@ -2236,6 +2236,9 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         from pyscf.scf import hirshfeld
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
+        if grids is None and mol is self.mol:
+            # Reuse the integration grid of DFT methods
+            grids = getattr(self, 'grids', None)
         return hirshfeld.hirshfeld_charges(mol, dm, grids, verbose)
 
     def cm5_charges(self, mol=None, dm=None, grids=None, verbose=logger.DEBUG):
@@ -2243,6 +2246,9 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         from pyscf.scf import hirshfeld
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
+        if grids is None and mol is self.mol:
+            # Reuse the integration grid of DFT methods
+            grids = getattr(self, 'grids', None)
         return hirshfeld.cm5_charges(mol, dm, grids, verbose=verbose)
 
     @lib.with_doc(mulliken_meta.__doc__)
