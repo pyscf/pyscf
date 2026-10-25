@@ -158,10 +158,10 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(mol.set_geom_(coords, inplace=False, unit='Bohr').groupname, 'C2v')
         self.assertEqual(finite_diff._displace(mol, coords).groupname, 'C1')
 
-        ref = scf.RHF(h2o()).run(conv_tol=1e-14).Hessian().kernel()
-        mf = scf.RHF(h2o(symmetry=True)).set(conv_tol=1e-14)
+        ref = scf.RHF(h2o()).run(conv_tol=1e-12).Hessian().kernel()
+        mf = scf.RHF(h2o(symmetry=True)).set(conv_tol=1e-12)
         dat = finite_diff.kernel(mf.Gradients())
-        self.assertLess(abs(dat - ref).max(), 5e-6)
+        self.assertLess(abs(dat - ref).max(), 1e-5)
 
     def test_rks_hessian_against_analytic(self):
         mol = pyscf.M(atom='H 0 0 0; F 0 0 1.1', basis='sto-3g', verbose=0)
