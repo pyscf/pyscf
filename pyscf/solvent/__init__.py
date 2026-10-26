@@ -19,11 +19,14 @@ from pyscf.solvent import smd
 def ddCOSMO(method_or_mol, solvent_obj=None, dm=None):
     '''Initialize ddCOSMO model.
 
+    The solvent can be specified by its name, or through the attributes of the
+    ddCOSMO object (see ddcosmo.ddCOSMO).
+
     Examples:
 
     >>> mf = ddCOSMO(scf.RHF(mol))
     >>> mf.kernel()
-    >>> sol = ddCOSMO(mol)
+    >>> sol = ddCOSMO(mol, 'toluene')
     >>> mc = ddCOSMO(CASCI(mf, 6, 6), sol)
     >>> mc.kernel()
     '''
@@ -32,6 +35,8 @@ def ddCOSMO(method_or_mol, solvent_obj=None, dm=None):
     from pyscf import tdscf
 
     if isinstance(method_or_mol, gto.mole.Mole):
+        if isinstance(solvent_obj, str):
+            return ddcosmo.DDCOSMO(method_or_mol, solvent_obj)
         return ddcosmo.DDCOSMO(method_or_mol)
 
     method = method_or_mol
@@ -52,11 +57,14 @@ DDCOSMO = ddCOSMO
 def ddPCM(method_or_mol, solvent_obj=None, dm=None):
     '''Initialize ddPCM model.
 
+    The solvent can be specified by its name, or through the attributes of the
+    ddPCM object (see ddpcm.ddPCM).
+
     Examples:
 
     >>> mf = ddPCM(scf.RHF(mol))
     >>> mf.kernel()
-    >>> sol = ddPCM(mol)
+    >>> sol = ddPCM(mol, 'toluene')
     >>> mc = ddPCM(CASCI(mf, 6, 6), sol)
     >>> mc.kernel()
     '''
@@ -66,6 +74,8 @@ def ddPCM(method_or_mol, solvent_obj=None, dm=None):
     from pyscf.solvent import ddpcm
 
     if isinstance(method_or_mol, gto.mole.Mole):
+        if isinstance(solvent_obj, str):
+            return ddpcm.DDPCM(method_or_mol, solvent_obj)
         return ddpcm.DDPCM(method_or_mol)
 
     method = method_or_mol

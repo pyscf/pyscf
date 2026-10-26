@@ -31,3 +31,19 @@ mf = mf.ddCOSMO()
 # Adjust solvent model by modifying the attribute .with_solvent
 mf.with_solvent.eps = 32.613  # methanol dielectric constant
 mf.run()
+
+# Instead of assigning the dielectric constant, the solvent can be specified by
+# its name. This sets .eps as well as .eps_optical, the optical dielectric
+# constant required by the non-equilibrium solvation of excited states.
+# Available solvents are the keys of pyscf.solvent.smd.solvent_db
+mf.with_solvent.solvent = 'methanol'
+print(mf.with_solvent.eps, mf.with_solvent.eps_optical)
+mf.with_solvent.solvent = 'DMSO'   # names are matched case-insensitively
+print(mf.with_solvent.eps, mf.with_solvent.eps_optical)
+
+# The solvent name can also be given to the .ddCOSMO() and .ddPCM() methods of
+# a mean-field object
+mf = scf.RHF(mol).ddCOSMO('methanol')
+mf.run()
+mf = scf.RHF(mol).ddPCM('methanol')
+mf.run()
