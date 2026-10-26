@@ -25,6 +25,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.cc import ccsd_lambda
 from pyscf.cc import uccsd_lambda
+from pyscf.cc import uccsd_t_blocked
 
 
 def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
@@ -43,6 +44,12 @@ def make_intermediates(mycc, t1, t2, eris):
                 - w.transpose(1,0,2,3,4,5))
 
     imds = uccsd_lambda.make_intermediates(mycc, t1, t2, eris)
+
+    blksize = uccsd_t_blocked.block_size(mycc, t2[1])
+    if blksize is not None:
+        (imds.l1a_t, imds.l1b_t, imds.l2aa_t, imds.l2ab_t,
+         imds.l2bb_t) = uccsd_t_blocked.lambda_intermediates(mycc, t1, t2, eris, blksize)
+        return imds
 
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
