@@ -66,13 +66,12 @@ def get_imds(adc, eris=None):
     # Second-order terms
     t2_1 = t2[0][:]
 
-    M_ab -= lib.einsum('lmad,lbdm->ab',t2_1, eris_ovvo,optimize=True)
+    temp = lib.einsum('lmad,lbdm->ab',t2_1,eris_ovvo, optimize=True)
+    M_ab -= temp + temp.T
+    del temp
     M_ab += 0.5 * lib.einsum('mlad,lbdm->ab',t2_1, eris_ovvo,optimize=True)
-    #M_ab -= 0.5 *        lib.einsum('lmad,lbdm->ab',t2_1, eris_ovvo,optimize=True)
 
-    M_ab -= lib.einsum('lmbd,ladm->ab',t2_1, eris_ovvo,optimize=True)
     M_ab += 0.5 * lib.einsum('mlbd,ladm->ab',t2_1, eris_ovvo,optimize=True)
-    #M_ab -= 0.5 *        lib.einsum('lmbd,ladm->ab',t2_1, eris_ovvo,optimize=True)
 
     del t2_1
     cput0 = log.timer_debug1("Completed M_ab second-order terms ADC(2) calculation", *cput0)
@@ -102,10 +101,11 @@ def get_imds(adc, eris=None):
         cput0 = log.timer_debug1("Completed M_ab ovvv ADC(3) calculation", *cput0)
         t2_2 = t2[1][:]
 
-        M_ab -= lib.einsum('lmad,lbdm->ab',t2_2, eris_ovvo,optimize=True)
+        temp = lib.einsum('lmad,lbdm->ab',t2_2,eris_ovvo, optimize=True)
+        M_ab -= temp + temp.T
+        del temp
         M_ab += 0.5 * lib.einsum('mlad,lbdm->ab',t2_2, eris_ovvo,optimize=True)
 
-        M_ab -= lib.einsum('lmbd,ladm->ab',t2_2,eris_ovvo,optimize=True)
         M_ab += 0.5 * lib.einsum('mlbd,ladm->ab',t2_2,eris_ovvo,optimize=True)
         t2_1 = t2[0][:]
 

@@ -134,16 +134,15 @@ def get_imds(adc, eris=None):
         t1_2_a, t1_2_b = t1[0]
 
         M_ij_a += 2 * lib.einsum('ld,ldji->ij',t1_2_a, eris_oecc, optimize=True)
-        M_ij_a -= lib.einsum('ld,jdil->ij',t1_2_a, eris_ceco, optimize=True)
+        temp = lib.einsum('ld,jdil->ij',t1_2_a, eris_ceco, optimize=True)
+        M_ij_a -= temp + temp.T
         M_ij_a += 2 * lib.einsum('ld,ldji->ij',t1_2_b, eris_OEcc, optimize=True)
 
         M_ij_b += 2 * lib.einsum('ld,ldji->ij',t1_2_b, eris_OECC, optimize=True)
-        M_ij_b -= lib.einsum('ld,jdil->ij',t1_2_b, eris_CECO, optimize=True)
+        temp = lib.einsum('ld,jdil->ij',t1_2_b, eris_CECO, optimize=True)
+        M_ij_b -= temp + temp.T
+        del temp
         M_ij_b += 2 * lib.einsum('ld,ldji->ij',t1_2_a, eris_oeCC, optimize=True)
-
-        M_ij_a -= lib.einsum('ld,idjl->ij',t1_2_a, eris_ceco, optimize=True)
-
-        M_ij_b -= lib.einsum('ld,idjl->ij',t1_2_b, eris_CECO, optimize=True)
 
         del t1_2_a
         del t1_2_b

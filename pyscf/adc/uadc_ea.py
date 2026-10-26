@@ -657,8 +657,8 @@ def get_imds(adc, eris=None):
             temp = lib.einsum('ijAa,ikab,jkBb->AB', eris_oovv, t2_1_a, t2_1_a, optimize=True)
             M_ab_a += temp + temp.T
             M_ab_a += lib.einsum('ijab,ikAb,jkBa->AB', eris_oovv, t2_1_a, t2_1_a, optimize=True)
-            M_ab_a -= 1/4 *  lib.einsum('ijkl,ikAa,jlBa->AB', eris_oooo, t2_1_a, t2_1_a, optimize=True)
-            M_ab_a += 1/4 *  lib.einsum('ijkl,ikAa,ljBa->AB', eris_oooo, t2_1_a, t2_1_a, optimize=True)
+            temp = lib.einsum('ijkl,ikAa,jlBa->AB', eris_oooo, t2_1_a, t2_1_a, optimize=True)
+            M_ab_a -= 1/4 * (temp + temp.T)
             M_ab_a += lib.einsum('iABj,jkab,ikab->AB', eris_ovvo, t2_1_ab, t2_1_ab, optimize=True)
             temp = lib.einsum('iAaj,jkab,ikBb->AB', eris_ovvo, t2_1_ab, t2_1_ab, optimize=True)
             M_ab_a -= temp + temp.T
@@ -816,8 +816,8 @@ def get_imds(adc, eris=None):
             temp = lib.einsum('ijAa,ikab,jkBb->AB', eris_OOVV, t2_1_b, t2_1_b, optimize=True)
             M_ab_b += temp + temp.T
             M_ab_b += lib.einsum('ijab,ikAb,jkBa->AB', eris_OOVV, t2_1_b, t2_1_b, optimize=True)
-            M_ab_b -= 1/4 *  lib.einsum('ijkl,ikAa,jlBa->AB', eris_OOOO, t2_1_b, t2_1_b, optimize=True)
-            M_ab_b += 1/4 *  lib.einsum('ijkl,ikAa,ljBa->AB', eris_OOOO, t2_1_b, t2_1_b, optimize=True)
+            temp = lib.einsum('ijkl,ikAa,jlBa->AB', eris_OOOO, t2_1_b, t2_1_b, optimize=True)
+            M_ab_b -= 1/4 * (temp + temp.T)
             temp = lib.einsum('A,ia,jB,ijaA->AB', e_vir_b, t1_1_a, t1_1_b, t2_1_ab, optimize=True)
             M_ab_b -= 1/3 * (temp + temp.T)
             temp = lib.einsum('A,ia,jA,ijaB->AB', e_vir_b, t1_1_a, t1_1_b, t2_1_ab, optimize=True)

@@ -67,10 +67,11 @@ def get_imds(adc, eris=None):
     # Second-order terms
     t2_1 = t2[0][:]
 
-    M_ij += lib.einsum('ilde,jdel->ij',t2_1, eris_ovvo,optimize=True)
+    temp = lib.einsum('ilde,jdel->ij',t2_1,eris_ovvo, optimize=True)
+    M_ij += temp + temp.T
+    del temp
     M_ij -= 0.5 * lib.einsum('lide,jdel->ij',t2_1, eris_ovvo,optimize=True)
 
-    M_ij += lib.einsum('jlde,idel->ij',t2_1, eris_ovvo,optimize=True)
     M_ij -= 0.5 * lib.einsum('ljde,idel->ij',t2_1, eris_ovvo,optimize=True)
 
     del t2_1
@@ -84,15 +85,17 @@ def get_imds(adc, eris=None):
         eris_oooo = eris.oooo
 
         M_ij += 4 * lib.einsum('ld,ldji->ij',t1_2, eris_ovoo,optimize=True)
-        M_ij -= lib.einsum('ld,jdli->ij',t1_2, eris_ovoo,optimize=True)
+        temp = lib.einsum('ld,jdli->ij',t1_2,eris_ovoo, optimize=True)
+        M_ij -= temp + temp.T
 
-        M_ij -= lib.einsum('ld,idlj->ij',t1_2, eris_ovoo,optimize=True)
         t2_2 = t2[1][:]
 
-        M_ij += lib.einsum('ilde,jdel->ij',t2_2, eris_ovvo,optimize=True)
+        temp = lib.einsum('ilde,jdel->ij',t2_2,eris_ovvo, optimize=True)
+        M_ij += temp + temp.T
+        del temp
+
         M_ij -= 0.5 * lib.einsum('lide,jdel->ij',t2_2, eris_ovvo,optimize=True)
 
-        M_ij += lib.einsum('jlde,ledi->ij',t2_2, eris_ovvo,optimize=True)
         M_ij -= 0.5 * lib.einsum('ljde,ledi->ij',t2_2, eris_ovvo,optimize=True)
         t2_1 = t2[0][:]
 
