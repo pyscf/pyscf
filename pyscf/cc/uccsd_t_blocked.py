@@ -28,7 +28,12 @@ their einsum strings, operands and factors; _acc cuts each operand on the
 block's virtual letters. r6 and the j<->k swap of r4 act on the occupied axes
 only and stay inside a block; p6 and the (j,b)<->(k,c) swap of r4 move the
 virtual indices, so w and v are evaluated at the permuted blocks (_permuted).
+Where rw and wvd are symmetric under these permutations (the lambda and gamma2
+terms, gamma1's same-spin cases) they are formed once per unordered block
+triple and the other orderings are read as transposes (_symmetry, _orbit).
 """
+
+from __future__ import annotations
 
 import itertools
 import time
@@ -54,10 +59,14 @@ INTEGRALS = ("ovvv", "OVVV", "ovVV", "OVvv", "ovoo", "OVOO", "ovOO", "OVoo", "ov
 UNPACKED = {"ovvv": "get_ovvv", "OVVV": "get_OVVV", "ovVV": "get_ovVV", "OVvv": "get_OVvv"}
 SIX = ("rw", "rw*", "wvd", "wvd*")
 # Arrays of o**3 v**3 the whole-array code holds at once (w, v, d3, rw, wvd and a
-# temporary), and of o**3 B**3 a block step holds (w and v at up to six permuted
-# blocks, their sums, rw, wvd, d3)
+# temporary); of o**3 B**3 a block step holds (w and v at up to six permuted
+# blocks, their sums, rw, wvd, d3), and of o**3 v B**2 for the blocks along one
+# index that gamma1's paired terms hold. The block counts are tracemalloc peaks
+# of this code on H2O+/aug-cc-pVDZ at five block sizes (at most 14 and 8.3),
+# with a margin.
 WHOLE_ARRAYS = 6
 BLOCK_ARRAYS = 16
+PAIRED_ARRAYS = 10
 
 Blocks = tuple[slice, slice, slice]
 Fn = Callable[[Blocks], np.ndarray]
@@ -69,11 +78,12 @@ def block_size(mycc, t2ab):
     otherwise the largest block size B whose step fits (at least 1)."""
     nocca, noccb, nvira, nvirb = t2ab.shape
     o, v = max(nocca, noccb), max(nvira, nvirb)
-    free = max(0, mycc.max_memory - lib.current_memory()[0])
+    # both paths hold the four o*v**3 integral blocks unpacked
+    free = max(0, mycc.max_memory - lib.current_memory()[0] - 4 * o * v**3 * 8e-6)
     if WHOLE_ARRAYS * o**3 * v**3 * 8e-6 <= free:
         return None
     for b in range(v, 0, -1):
-        if (BLOCK_ARRAYS * b**3 + 2 * v * b**2) * o**3 * 8e-6 <= free:
+        if (BLOCK_ARRAYS * b**3 + PAIRED_ARRAYS * v * b**2) * o**3 * 8e-6 <= free:
             return b
     logger.warn(mycc, "UCCSD(T) intermediates: block size 1 exceeds max_memory %d MB", mycc.max_memory)
     return 1
@@ -90,7 +100,7 @@ def _cut(letters: str, arr: np.ndarray, where: dict[str, slice]) -> np.ndarray:
 
 def _term(spec: str, x: np.ndarray, y: np.ndarray, blocks: Blocks) -> np.ndarray:
     """One of pyscf's w/v terms 'X,Y->ijkabc', restricted to the virtual blocks."""
-    where = dict(zip(spec.split("->")[1][3:], blocks, strict=True))
+    where = dict(zip(spec.split("->")[1][3:], blocks))
     lx, ly = spec.split("->")[0].split(",")
     return np.einsum(spec, _cut(lx, x, where), _cut(ly, y, where), optimize=True)
 
@@ -99,9 +109,7 @@ def _acc(out: np.ndarray, spec: str, operands: tuple, where: dict[str, slice], s
     """out += scale · einsum(spec, …): the six-index operands are block arrays already; every other operand and the
     output are cut on `where`."""
     ins, lz = spec.split("->")
-    cut = [
-        x if len(letters) == 6 else _cut(letters, x, where) for letters, x in zip(ins.split(","), operands, strict=True)
-    ]
+    cut = [x if len(letters) == 6 else _cut(letters, x, where) for letters, x in zip(ins.split(","), operands)]
     out[tuple(where.get(ch, slice(None)) for ch in lz)] += scale * np.einsum(spec, *cut, optimize=True)
 
 
@@ -153,7 +161,7 @@ def _r4(f: Fn, blocks: Blocks) -> np.ndarray:
 
 def _d3(e: tuple[np.ndarray, np.ndarray, np.ndarray], blocks: Blocks) -> np.ndarray:
     """lib.direct_sum('ia+jb+kc->ijkabc', e0, e1, e2) on the block."""
-    e0, e1, e2 = (x[:, b] for x, b in zip(e, blocks, strict=True))
+    e0, e1, e2 = (x[:, b] for x, b in zip(e, blocks))
     return e0[:, None, None, :, None, None] + e1[None, :, None, None, :, None] + e2[None, None, :, None, None, :]
 
 
@@ -319,7 +327,7 @@ def _resolve(name: str, rw: np.ndarray, wvd: np.ndarray, s: Inputs) -> np.ndarra
 
 def _six_letters(term: Term) -> list[str]:
     _, spec, names, _ = term
-    return [letters for letters, n in zip(spec.split("->")[0].split(","), names, strict=True) if n in SIX]
+    return [letters for letters, n in zip(spec.split("->")[0].split(","), names) if n in SIX]
 
 
 # the sweeps
@@ -371,7 +379,7 @@ def _local_sweep(case: Case, pair: Pair, terms: list[Term], s: Inputs, out: dict
             rw_t, wvd_t = rw.transpose(axes), wvd.transpose(axes)
             for term in terms:
                 target, spec, names, scale = term
-                where = dict(zip(_six_letters(term)[0][3:], t, strict=True))
+                where = dict(zip(_six_letters(term)[0][3:], t))
                 _acc(out[target], spec, tuple(_resolve(n, rw_t, wvd_t, s) for n in names), where, scale)
 
 
@@ -388,11 +396,11 @@ def _paired_sweep(case: Case, pair: Pair, term: Term, s: Inputs, out: dict, size
         for blk in along:
             b: list[slice] = [slice(None)] * 3
             b[p - 3] = blk
-            for k, sl in zip(others, fixed, strict=True):
+            for k, sl in zip(others, fixed):
                 b[k - 3] = sl
             held.append(pair(case, (b[0], b[1], b[2])))
-        shared = {lx[k]: sl for k, sl in zip(others, fixed, strict=True)}
-        for (bx, (rwx, wvx)), (by, (rwy, wvy)) in itertools.product(zip(along, held, strict=True), repeat=2):
+        shared = {lx[k]: sl for k, sl in zip(others, fixed)}
+        for (bx, (rwx, wvx)), (by, (rwy, wvy)) in itertools.product(zip(along, held), repeat=2):
             x, y = _resolve(names[0], rwx, wvx, s), _resolve(names[1], rwy, wvy, s)
             _acc(out[target], spec, (x, y), {lx[p]: bx, ly[p]: by} | shared, scale)
 
