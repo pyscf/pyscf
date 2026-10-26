@@ -3018,7 +3018,7 @@ if __name__ == '__main__':
     dm = mf.get_init_guess(key='minao')
 
     numpy.random.seed(1)
-    dm1 = numpy.random.random((dm.shape))
+    dm1 = numpy.random.random(dm.shape)
     dm1 = lib.hermi_triu(dm1)
     res = mf._numint.nr_vxc(mol, mf.grids, mf.xc, dm1, spin=0)
     print(res[1] - -37.084047825971282)

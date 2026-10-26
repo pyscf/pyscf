@@ -52,7 +52,7 @@ select_ci = selected_ci  # for backward compatibility
 from pyscf.fci import selected_ci_spin0
 from pyscf.fci import selected_ci_symm
 from pyscf.fci import selected_ci_spin0_symm
-from pyscf.fci.selected_ci import SelectedCI, SCI, SCIvector
+from pyscf.fci.selected_ci import SelectedCI, SCI, SCIvector, as_SCIvector
 
 def solver(mol=None, singlet=False, symm=None):
     if mol and symm is None:

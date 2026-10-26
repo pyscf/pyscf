@@ -1554,7 +1554,7 @@ def quad_moment(mol, dm, unit='DebyeAngstrom', origin=None,
         log.note('Traceless quadrupole moment (AU):')
 
     with numpy.printoptions(precision=5, floatmode='fixed'):
-        log.note(str())
+        log.note('')
 
     return tot_q_traceless
 
@@ -1818,7 +1818,7 @@ class SCF(lib.StreamObject):
     def __getattr__(self, key):
         '''Accessing methods post-HF methods or mean-field properties'''
         # Import all available modules, then retry accessing the attribute
-        from pyscf import __all__  # noqa
+        from pyscf import __all__
         return object.__getattribute__(self, key)
 
     def build(self, mol=None):
@@ -2048,7 +2048,7 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         elif key[:3] == 'chk':
             try:
                 dm = self.init_guess_by_chkfile()
-            except (IOError, KeyError):
+            except (OSError, KeyError):
                 logger.warn(self, 'Fail in reading %s. Use MINAO initial guess',
                             self.chkfile)
                 dm = self.init_guess_by_minao(mol)
@@ -2226,6 +2226,22 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         if dm is None: dm = self.make_rdm1()
         if s is None: s = self.get_ovlp(mol)
         return mulliken_pop(mol, dm, s=s, verbose=verbose)
+
+    def mayer_bond_order(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):
+        '''Mayer bond orders. See scf.analyze.mayer_bond_order'''
+        from pyscf.scf import analyze
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        if s is None: s = self.get_ovlp(mol)
+        return analyze.mayer_bond_order(mol, dm, s=s, verbose=verbose)
+
+    def wiberg_bond_order(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):
+        '''Wiberg bond indices. See scf.analyze.wiberg_bond_order'''
+        from pyscf.scf import analyze
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        if s is None: s = self.get_ovlp(mol)
+        return analyze.wiberg_bond_order(mol, dm, s=s, verbose=verbose)
 
     @lib.with_doc(mulliken_meta.__doc__)
     def mulliken_meta(self, mol=None, dm=None, verbose=logger.DEBUG,

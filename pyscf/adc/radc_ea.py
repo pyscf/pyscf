@@ -87,7 +87,7 @@ def get_imds(adc, eris=None):
 
         eris_oovv = eris.oovv
 
-        if isinstance(eris.ovvv, type(None)):
+        if eris.ovvv is None:
             chnk_size = radc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc,chnk_size):
                 eris_ovvv = dfadc.get_ovvv_df(adc, eris.Lov, eris.Lvv,
@@ -406,7 +406,7 @@ def matvec(adc, M_ab=None, eris=None):
         cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(adc.stdout, adc.verbose)
 
-        s = np.zeros((dim))
+        s = np.zeros(dim)
 
         r1 = r[s1:f1]
         r2 = r[s2:f2]
@@ -420,7 +420,7 @@ def matvec(adc, M_ab=None, eris=None):
 ############## ADC(2) a - ibc and ibc - a coupling blocks #########################
 
         temp_doubles = np.zeros((nocc,nvir,nvir))
-        if isinstance(eris.ovvv, type(None)):
+        if eris.ovvv is None:
             chnk_size = radc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc,chnk_size):
                 eris_ovvv = dfadc.get_ovvv_df(adc, eris.Lov, eris.Lvv,
@@ -527,7 +527,7 @@ def matvec(adc, M_ab=None, eris=None):
             temp = np.zeros((nocc,nvir,nvir))
             temp_1_1 = np.zeros((nocc,nvir,nvir))
             temp_2_1 = np.zeros((nocc,nvir,nvir))
-            if isinstance(eris.ovvv, type(None)):
+            if eris.ovvv is None:
                 chnk_size = radc_ao2mo.calculate_chunk_size(adc)
                 for a,b in lib.prange(0,nocc,chnk_size):
                     eris_ovvv = dfadc.get_ovvv_df(
@@ -655,7 +655,7 @@ def get_trans_moments_orbital(adc, orb):
     s2 = f1
     f2 = s2 + n_doubles
 
-    T = np.zeros((dim))
+    T = np.zeros(dim)
 
 ######## ADC(2) part  ############################################
 
@@ -1480,7 +1480,7 @@ class RADCEA(radc.RADC):
     _keys = {
         'tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff',
         'mo_coeff_hf', 'mo_energy', 't1', 'max_space', 't2', 'max_cycle',
-        'nmo', 'transform_integrals', 'with_df', 'compute_properties',
+        'nmo', 'transform_integrals', 'with_df', 'if_naf', 'naux', 'compute_properties',
         'approx_trans_moments', 'E', 'U', 'P', 'X',
         'evec_print_tol', 'spec_factor_print_tol',
         '_make_rdm1', 'frozen', 'mo_occ'
@@ -1518,6 +1518,9 @@ class RADCEA(radc.RADC):
 
         self.evec_print_tol = adc.evec_print_tol
         self.spec_factor_print_tol = adc.spec_factor_print_tol
+
+        self.if_naf = adc.if_naf
+        self.naux = adc.naux
 
         self.E = adc.E
         self.U = adc.U

@@ -318,6 +318,19 @@ class KohnShamDFT:
             Drop grids if their contribution to total electrons smaller than
             this cutoff value.  Default is 1e-7.
 
+        second_grids : Grids object
+            Secondary grids for SCF linear response functions (CPHF, TDDFT,
+            second-order SCF solvers, stability analysis, etc). If set, it is
+            used by ``mf.gen_response`` in place of ``self.grids``. A coarser
+            grid like level 1 is often sufficiently accurate.
+            Default is None (response functions use ``self.grids``).
+            Easy to assign with the helper method ``mf.set_second_grids``
+            (level 1 by default; 'sg1' for the SG1 standard grid).
+
+            >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.2')
+            >>> mf = dft.RKS(mol).run()
+            >>> mf.set_second_grids(1)
+
     Examples:
 
     >>> mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz', verbose=0)
@@ -327,7 +340,8 @@ class KohnShamDFT:
     -76.415443079840458
     '''
 
-    _keys = {'xc', 'nlc', 'grids', 'disp', 'gcp', 'nlcgrids', 'small_rho_cutoff'}
+    _keys = {'xc', 'nlc', 'grids', 'disp', 'gcp', 'nlcgrids', 'small_rho_cutoff',
+             'second_grids'}
 
     # Use rho to filter grids
     small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff', 0)
@@ -344,6 +358,7 @@ class KohnShamDFT:
         self.nlcgrids = gen_grid.Grids(self.mol)
         self.nlcgrids.level = getattr(
             __config__, 'dft_rks_RKS_nlcgrids_level', self.nlcgrids.level)
+        self.second_grids = None
 ##################################################
 # don't modify the following attributes, they are not input options
         self._numint = numint.NumInt()
@@ -378,6 +393,10 @@ class KohnShamDFT:
             self.nlcgrids.dump_flags(verbose)
 
         log.info('small_rho_cutoff = %g', self.small_rho_cutoff)
+
+        if self.second_grids is not None:
+            log.info('** Secondary grids for response functions **')
+            self.second_grids.dump_flags(verbose)
         return self
 
     define_xc_ = define_xc_
@@ -473,19 +492,54 @@ class KohnShamDFT:
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        from pyscf.dft import numint2c
         mf = scf.addons.convert_to_ghf(self)
         if xc is not None:
             mf.xc = xc
         mf.converged = xc == self.xc and mf.converged
-        if not isinstance(mf._numint, numint2c.NumInt2C):
-            mf._numint = numint2c.NumInt2C()
         return mf
 
     def reset(self, mol=None):
         hf.SCF.reset(self, mol)
         self.grids.reset(mol)
         self.nlcgrids.reset(mol)
+        if self.second_grids is not None:
+            self.second_grids.reset(mol)
+        return self
+
+    def set_second_grids(self, level=1):
+        '''Assign the secondary grids for SCF linear response functions.
+
+        The secondary grids are used to evaluate the XC response kernels
+        of linear response properties (TDDFT, CPHF, Hessian, second-order
+        SCF solver, etc.). A coarser grid than the ground-state default
+        (level 3) is usually sufficiently accurate.
+
+        Args:
+            level : int or str or gen_grid.Grids
+                An int builds a gen_grid.Grids of the given level.
+                Useful values are 1 (recommended, supported for all
+                elements) and 2 (finer, closer to the ground-state grid).
+                'sg1' builds the SG1 standard grid (prune=sg1_prune,
+                atom_grid=(50,194)); SG1 radii are tabulated for Z <= 18
+                only. Other level numbers are allowed but generally do not
+                make much sense. A pre-built Grids object is used as-is.
+
+        Examples:
+
+        >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.2')
+        >>> mf = dft.RKS(mol).run()
+        >>> mf.set_second_grids(1)   # or mf.set_second_grids('sg1')
+        '''
+        if isinstance(level, str):
+            if level.lower() != 'sg1':
+                raise ValueError(f'Unknown second_grids scheme {level!r}.')
+            self.second_grids = gen_grid.sg1_grids(self.mol)
+        elif isinstance(level, gen_grid.Grids):
+            self.second_grids = level
+        else:
+            grids = gen_grid.Grids(self.mol)
+            grids.level = int(level)
+            self.second_grids = grids
         return self
 
     def dft3c(self, method='b97-3c'):
@@ -505,7 +559,9 @@ class KohnShamDFT:
 
     def check_sanity(self):
         out = super().check_sanity()
-        if self.do_nlc() and self.do_disp() and self._numint.libxc.is_nlc(self.xc):
+        if (self.do_nlc() and self.do_disp() and self._numint.libxc.is_nlc(self.xc)
+            # COACH combines VV10 with three-body contributions from D4
+            and self.xc.upper() != 'COACH'):
             import warnings
             warnings.warn(
                 f'nlc-type xc {self.xc} and disp {self.disp} may lead to'
@@ -553,7 +609,7 @@ def init_guess_by_vsap(mf, mol=None):
 
     # Form guess orbitals
     mo_energy, mo_coeff = mf.eig(hsap, s)
-    logger.debug(mf, 'VSAP mo energies\n{}'.format(mo_energy))
+    logger.debug(mf, f'VSAP mo energies\n{mo_energy}')
 
     # and guess density
     mo_occ = mf.get_occ(mo_energy, mo_coeff)

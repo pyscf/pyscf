@@ -16,6 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import io
 import unittest
 import numpy
 from pyscf import lib, gto, scf, dft
@@ -214,6 +215,61 @@ class KnownValues(unittest.TestCase):
         mask = td.get_frozen_mask()
         self.assertEqual(mask.sum(), 24)
 
+    def test_transition_moments(self):
+        # The singlets of a closed-shell GHF reproduce RHF, and the triplets
+        # carry no transition moment. All excited states are solved for, so
+        # that every singlet is found.
+        h2o = gto.M(atom='O 0 0 0; H 0 -.757 .587; H 0 .757 .587',
+                    basis='sto-3g', verbose=0)
+        rmf = scf.RHF(h2o).run(conv_tol=1e-11)
+        gmf = scf.GHF(h2o).run(conv_tol=1e-11)
+        nocc = numpy.count_nonzero(rmf.mo_occ > 0)
+        nsinglet = nocc * (rmf.mo_occ.size - nocc)
+        nstates = nsinglet * 4  # singlets and the three triplet components
+        for method in ('TDA', 'TDHF'):
+            rtd = getattr(rmf, method)().run(nstates=nsinglet)
+            gtd = getattr(gmf, method)().set(conv_tol=1e-9).run(nstates=nstates)
+            self.assertEqual(gtd.e.size, nstates)
+            f_ghf = gtd.oscillator_strength()
+            singlets = [numpy.argmin(abs(gtd.e - e)) for e in rtd.e]
+            self.assertAlmostEqual(abs(gtd.e[singlets] - rtd.e).max(), 0, 7)
+            self.assertAlmostEqual(abs(f_ghf[singlets] - rtd.oscillator_strength()).max(), 0, 7)
+            triplets = numpy.setdiff1d(numpy.arange(nstates), singlets)
+            self.assertEqual(triplets.size, nsinglet * 3)
+            self.assertAlmostEqual(abs(f_ghf[triplets]).max(), 0, 9)
+            self.assertAlmostEqual(abs(abs(gtd.transition_velocity_dipole()[singlets]) -
+                                       abs(rtd.transition_velocity_dipole())).max(), 0, 6)
+            self.assertAlmostEqual(abs(abs(gtd.transition_magnetic_dipole()[singlets]) -
+                                       abs(rtd.transition_magnetic_dipole())).max(), 0, 6)
+
+        # A GHF singlet splits each NTO weight of RHF between alpha and beta
+        rtd = rmf.TDA().run(nstates=nsinglet)
+        gtd = gmf.TDA().set(conv_tol=1e-9).run(nstates=nstates)
+        w_rhf = rtd.get_nto(1, verbose=0)[0]
+        w_ghf, nto = gtd.get_nto(numpy.argmin(abs(gtd.e - rtd.e[0])) + 1, verbose=0)
+        self.assertAlmostEqual(abs(w_ghf[:4].reshape(2,2).sum(axis=1) - w_rhf[:2]).max(), 0, 7)
+        self.assertEqual(nto.shape, gmf.mo_coeff.shape)
+
+        # Open-shell GHF reproduces UHF
+        ion = gto.M(atom='O 0 0 0; H 0 -.757 .587; H 0 .757 .587', basis='sto-3g',
+                    charge=1, spin=1, verbose=0)
+        gmf = scf.GHF(ion).run(conv_tol=1e-11)
+        nocc = numpy.count_nonzero(gmf.mo_occ > 0)
+        utd = scf.UHF(ion).run(conv_tol=1e-11).TDA().run(nstates=3)
+        gtd = gmf.TDA().set(conv_tol=1e-9).run(nstates=nocc*(gmf.mo_occ.size-nocc))
+        idx = [numpy.argmin(abs(gtd.e - e)) for e in utd.e]
+        self.assertAlmostEqual(abs(gtd.e[idx] - utd.e).max(), 0, 6)
+        self.assertAlmostEqual(abs(gtd.oscillator_strength()[idx] -
+                                   utd.oscillator_strength()).max(), 0, 7)
+
+    def test_analyze(self):
+        td = mf_bp86.TDA().run(nstates=4)
+        td.verbose = 4
+        td.stdout = io.StringIO()
+        td.analyze()
+        out = td.stdout.getvalue()
+        self.assertEqual(out.count('Excited State'), 4)
+        self.assertIn('Transition magnetic dipole moments', out)
 
 if __name__ == "__main__":
     print("Full Tests for TD-GKS")

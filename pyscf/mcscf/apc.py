@@ -15,7 +15,7 @@ from pyscf.lib import logger
 from pyscf import scf, lib
 import numpy as np
 
-class Chooser():
+class Chooser:
     """
     Chooser Class
     Implements the ranked-orbital selection scheme outlined in https://doi.org/10.1021/acs.jctc.1c00037
@@ -158,7 +158,7 @@ class Chooser():
 
             nactos = len(os_idx)
             nactdocc = int((nactel - nactos)/2)
-            nactvirt = int((norbs - nactdocc - nactos))
+            nactvirt = int(norbs - nactdocc - nactos)
 
             actdocc_idx = docc_idx[np.argsort(entropies[docc_idx])[-nactdocc:]]
             actvirt_idx = virt_idx[np.argsort(entropies[virt_idx])[-nactvirt:]]
@@ -253,7 +253,7 @@ class Chooser():
 
         return nactorbs, nactel, casorbs, active_idx
 
-class APC():
+class APC:
 
     """
     APC Class
@@ -359,7 +359,7 @@ class APC():
             cis = apcs_o
             cis2 = cis**2
             sumci2 = np.sum(cis2)
-            norm = np.sqrt((sumci2 + 1))
+            norm = np.sqrt(sumci2 + 1)
             cisnorm = cis/norm
 
             #Square Normalized APCs to calculate entropies:

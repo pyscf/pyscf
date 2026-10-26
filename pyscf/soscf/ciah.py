@@ -263,6 +263,22 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
     heff = numpy.zeros((max_cycle+nx+1,max_cycle+nx+1), dtype=x0.dtype)
     ovlp = numpy.eye(max_cycle+nx+1, dtype=x0.dtype)
     if nx == 0:
+        # The initial trial vector is often recycled from the last (possibly
+        # tiny) micro step of the previous macro iteration.  Feeding it
+        # unnormalized makes the subspace metric singular
+        # (seig ~ |x0|^2 < lindep), so safe_eigh discards the only expansion
+        # direction: the solver then returns an exact zero step and
+        # terminates on its first iteration before any useful direction can
+        # be added.  Normalization removes the scale pathology while keeping
+        # the direction; the generalized subspace problem is invariant to
+        # the scaling of a basis vector.
+        norm_x0 = numpy.linalg.norm(x0)
+        if norm_x0 == 0:
+            # No direction information at all; start from the gradient.
+            x0 = g_op()
+            norm_x0 = numpy.linalg.norm(x0)
+        if norm_x0 > 0:
+            x0 = x0 / norm_x0
         xs.append(x0)
         ax.append(h_op(x0))
     else:

@@ -79,7 +79,7 @@ def transform_trans(op, a, b):
     return np.dot(op, P.T)
 
 
-class SPGElement():
+class SPGElement:
     '''
     Matrix representation of space group operations
 
@@ -93,7 +93,7 @@ class SPGElement():
     '''
     def __init__(self,
                  rot=np.eye(3, dtype=np.int32),
-                 trans=np.zeros((3)), dimension=3):
+                 trans=np.zeros(3), dimension=3):
         self.rot = np.asarray(rot)
         self.trans = np.asarray(trans)
         self.dimension = dimension

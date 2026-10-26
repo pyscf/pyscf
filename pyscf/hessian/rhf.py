@@ -31,9 +31,9 @@ from pyscf.scf import _vhf, hf
 from pyscf.scf import cphf
 
 # import _response_functions to load gen_response methods in SCF class
-from pyscf.scf import _response_functions  # noqa
+from pyscf.scf import _response_functions
 # import pyscf.grad.rhf to activate nuc_grad_method method
-from pyscf.grad import rhf  # noqa
+from pyscf.grad import rhf
 
 
 def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
@@ -294,6 +294,7 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao,
             See also the function gen_vind.
     '''
     mol = mf.mol
+    log = logger.new_logger(mf, verbose)
     if atmlst is None: atmlst = range(mol.natm)
 
     nao, nmo = mo_coeff.shape
@@ -329,7 +330,8 @@ def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao,
         s1vo = numpy.vstack(s1vo)
         tol = mf.conv_tol_cpscf * (ia1 - ia0)
         mo1, e1 = cphf.solve(fx, mo_energy, mo_occ, h1vo, s1vo,
-                             max_cycle=max_cycle, level_shift=level_shift, tol=tol)
+                             max_cycle=max_cycle, level_shift=level_shift, tol=tol,
+                             verbose=log)
         mo1 = numpy.einsum('pq,xqi->xpi', mo_coeff, mo1).reshape(-1,3,nao,nocc)
         e1 = e1.reshape(-1,3,nocc,nocc)
 
@@ -424,7 +426,7 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
 
         s1vo = reduce(numpy.dot, (mo_coeff.T, s1ao, mocc))
         h1vo = reduce(numpy.dot, (mo_coeff.T, h1ao, mocc))
-        mo1, mo_e1 = cphf.solve(fvind, mo_energy, mo_occ, h1vo, s1vo)
+        mo1, mo_e1 = cphf.solve(fvind, mo_energy, mo_occ, h1vo, s1vo, verbose=log)
         mo1 = numpy.dot(mo_coeff, mo1)
         mo_e1 = mo_e1.reshape(nocc,nocc)
         dm1 = numpy.einsum('pi,qi->pq', mo1, mocc)

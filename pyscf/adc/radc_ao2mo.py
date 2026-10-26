@@ -19,7 +19,7 @@
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 
 import numpy as np
-import pyscf.ao2mo as ao2mo
+from pyscf import ao2mo
 from pyscf import lib
 from pyscf.lib import logger
 
@@ -37,17 +37,18 @@ def transform_integrals_incore(myadc):
 
     eris = lambda:None
 
-    eris.oooo = ao2mo.general(myadc._scf._eri, (occ, occ, occ, occ), compact=False).reshape(nocc, nocc, nocc, nocc).copy()  # noqa: E501
-    eris.ovoo = ao2mo.general(myadc._scf._eri, (occ, vir, occ, occ), compact=False).reshape(nocc, nvir, nocc, nocc).copy()  # noqa: E501
-    eris.oovv = ao2mo.general(myadc._scf._eri, (occ, occ, vir, vir), compact=False).reshape(nocc, nocc, nvir, nvir).copy()  # noqa: E501
-    eris.ovvo = ao2mo.general(myadc._scf._eri, (occ, vir, vir, occ), compact=False).reshape(nocc, nvir, nvir, nocc).copy()  # noqa: E501
-    eris.ovvv = ao2mo.general(myadc._scf._eri, (occ, vir, vir, vir), compact=True).reshape(nocc, nvir, -1).copy()  # noqa: E501
+    eris.oooo = ao2mo.general(myadc._scf._eri, (occ, occ, occ, occ), compact=False).reshape(nocc, nocc, nocc, nocc).copy()
+    eris.ovoo = ao2mo.general(myadc._scf._eri, (occ, vir, occ, occ), compact=False).reshape(nocc, nvir, nocc, nocc).copy()
+    eris.oovv = ao2mo.general(myadc._scf._eri, (occ, occ, vir, vir), compact=False).reshape(nocc, nocc, nvir, nvir).copy()
+    eris.ovvo = ao2mo.general(myadc._scf._eri, (occ, vir, vir, occ), compact=False).reshape(nocc, nvir, nvir, nocc).copy()
+    eris.ovvv = ao2mo.general(myadc._scf._eri, (occ, vir, vir, vir), compact=True).reshape(nocc, nvir, -1).copy()
     eris.vvvv = None
 
     if ((myadc.method == "adc(2)" and myadc.method_type == "ee" and myadc.approx_trans_moments is False)
         or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False)
         or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is True and myadc.method_type in ("ea","ee"))
-        or (myadc.method == "adc(3)")):
+        or (myadc.method == "adc(3)")
+        or myadc.if_heri_eris):
         eris.vvvv = ao2mo.general(myadc._scf._eri, (vir, vir, vir, vir),
                                 compact=False).reshape(nvir, nvir, nvir, nvir)
         eris.vvvv = np.ascontiguousarray(eris.vvvv.transpose(0,2,1,3))
@@ -159,7 +160,8 @@ def transform_integrals_outcore(myadc):
     if ((myadc.method == "adc(2)" and myadc.method_type == "ee" and myadc.approx_trans_moments is False)
         or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False)
         or (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is True and myadc.method_type in ("ea","ee"))
-        or (myadc.method == "adc(3)")):
+        or (myadc.method == "adc(3)")
+        or myadc.if_heri_eris):
 
         eris.vvvv = []
 
@@ -213,7 +215,7 @@ def transform_integrals_df(myadc):
     Lvo = np.empty((naux,nvir,nocc))
     eris.Lvv = np.empty((naux,nvir,nvir))
     eris.Lov = np.empty((naux,nocc,nvir))
-    if not isinstance(myadc.ncvs, type(None)) and myadc.ncvs > 0:
+    if myadc.ncvs is not None and myadc.ncvs > 0:
         ncvs = myadc.ncvs
         eris.Lce = np.empty((naux,ncvs,nvir))
         eris.Lee = eris.Lvv
@@ -230,7 +232,7 @@ def transform_integrals_df(myadc):
         eris.Lov[p0:p1] = Lpq[:,:nocc,nocc:]
         Lvo[p0:p1] = Lpq[:,nocc:,:nocc]
         eris.Lvv[p0:p1] = Lpq[:,nocc:,nocc:]
-        if not isinstance(myadc.ncvs, type(None)) and myadc.ncvs > 0:
+        if myadc.ncvs is not None and myadc.ncvs > 0:
             ncvs = myadc.ncvs
             eris.Lce[p0:p1] = Lpq[:,:ncvs,nocc:]
             eris.Lee = eris.Lvv
@@ -239,10 +241,25 @@ def transform_integrals_df(myadc):
     eris.Lov = eris.Lov.reshape(naux,nocc*nvir)
     Lvo = Lvo.reshape(naux,nocc*nvir)
     eris.Lvv = eris.Lvv.reshape(naux,nvir*nvir)
-    if not isinstance(myadc.ncvs, type(None)) and myadc.ncvs > 0:
+    if myadc.ncvs is not None and myadc.ncvs > 0:
         ncvs = myadc.ncvs
         eris.Lee = eris.Lvv
         eris.Lce = eris.Lce.reshape(naux,myadc.ncvs*nvir)
+
+    if myadc.if_naf:
+        W = lib.ddot(Loo, Loo.T) + lib.ddot(eris.Lov,eris.Lov.T) + lib.ddot(Lvo,Lvo.T) + lib.ddot(eris.Lvv,eris.Lvv.T)
+        n,N = np.linalg.eigh(W)
+        N_trunc = N[:,n>myadc.thresh_naf].T
+        myadc.naux = N_trunc.shape[0]
+        log.info(f"origin naux is {naux}||naf naux is {myadc.naux}")
+        Loo = lib.ddot(N_trunc,Loo)
+        eris.Lov = lib.ddot(N_trunc,eris.Lov)
+        Lvo = lib.ddot(N_trunc,Lvo)
+        eris.Lvv = lib.ddot(N_trunc,eris.Lvv)
+        if myadc.ncvs is not None and myadc.ncvs > 0:
+            ncvs = myadc.ncvs
+            eris.Lee = eris.Lvv
+            eris.Lce = eris.Lov.reshape(myadc.naux,nocc,nvir)[:,:ncvs,:]
 
     eris.feri1 = lib.H5TmpFile()
     eris.oooo = eris.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), 'f8')

@@ -227,7 +227,7 @@ TriChloroEthene                        3.422
 TriEthylAmine                          2.3832
 Xylene-mixture                         2.3879
 z-1,2-DiChloroEthene                   9.2
-'''  # noqa: E501
+'''
 
 import ctypes
 import numpy
@@ -451,7 +451,7 @@ def make_phi(pcmobj, dm, r_vdw, ui, ylm_1sph, with_nuc=True):
             v_phi[:,ia] = numpy.einsum('z,zp->p', atom_charges, 1./lib.norm(d_rs,axis=2))
 
     max_memory = pcmobj.max_memory - lib.current_memory()[0]
-    blksize = int(max(max_memory*.9e6/8/nao**2, 400))
+    blksize = int(max(max_memory*.9e6/8/nao**2, 8))
 
     cav_coords = cav_coords[extern_point_idx]
     v_phi_e = numpy.empty((n_dm, cav_coords.shape[0]))
@@ -461,6 +461,8 @@ def make_phi(pcmobj, dm, r_vdw, ui, ylm_1sph, with_nuc=True):
         fakemol = gto.fakemol_for_charges(cav_coords[i0:i1])
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s2ij', cintopt=cintopt)
         v_phi_e[:,i0:i1] = numpy.einsum('nx,xk->nk', tril_dm, v_nj)
+        # Free up v_nj to stay within mem limits
+        del v_nj
     v_phi[:,extern_point_idx] -= v_phi_e
 
     phi = -numpy.einsum('n,xn,jn,ijn->ijx', weights_1sph, ylm_1sph, ui, v_phi)
@@ -547,7 +549,7 @@ def make_psi_vmat(pcmobj, dm, r_vdw, ui, ylm_1sph, cached_pol, Xvec, L,
     xi_jn = xi_jn[:,extern_point_idx]
 
     max_memory = pcmobj.max_memory - lib.current_memory()[0]
-    blksize = int(max(max_memory*.9e6/8/nao**2, 400))
+    blksize = int(max(max_memory*.9e6/8/nao**2, 8))
 
     cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, 'int3c2e')
     vmat_tril = 0
@@ -556,6 +558,8 @@ def make_psi_vmat(pcmobj, dm, r_vdw, ui, ylm_1sph, cached_pol, Xvec, L,
         v_nj = df.incore.aux_e2(mol, fakemol, intor='int3c2e', aosym='s2ij',
                                 cintopt=cintopt)
         vmat_tril += numpy.einsum('xn,in->ix', v_nj, xi_jn[:,i0:i1])
+        # Free up v_nj to stay within mem limits
+        del v_nj
     vmat += lib.unpack_tril(vmat_tril)
 
     if is_single_dm:

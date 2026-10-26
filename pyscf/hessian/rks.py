@@ -32,7 +32,7 @@ from pyscf.dft import numint, gen_grid
 
 
 # import pyscf.grad.rks to activate nuc_grad_method method
-from pyscf.grad import rks  # noqa
+from pyscf.grad import rks
 
 
 min_grid_blksize = 128*128
@@ -44,6 +44,8 @@ contract = numpy.einsum
 
 def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                       atmlst=None, max_memory=4000, verbose=None):
+    if hessobj.grid_response:
+        raise NotImplementedError('CPU RKS Hessian grid response is not implemented')
     log = logger.new_logger(hessobj, verbose)
     time0 = t1 = (logger.process_clock(), logger.perf_counter())
 
@@ -118,6 +120,8 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     return de2
 
 def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
+    if hessobj.grid_response:
+        raise NotImplementedError('CPU RKS Hessian grid response is not implemented')
     mol = hessobj.mol
     if atmlst is None:
         atmlst = range(mol.natm)
@@ -1838,17 +1842,6 @@ def _get_vnlc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
     return vmat
 
 def get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1s, max_memory):
-    """
-        Equation notation follows:
-        Liang J, Feng X, Liu X, Head-Gordon M. Analytical harmonic vibrational frequencies with
-        VV10-containing density functionals: Theory, efficient implementation, and
-        benchmark assessments. J Chem Phys. 2023 May 28;158(20):204109. doi: 10.1063/5.0152838.
-
-        mo_coeff, mo_occ are 0-th order
-        dm1s is first order
-
-        TODO: check the effect of different grid, using mf.nlcgrids right now
-    """
     if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
         mocc = mo_coeff[:,mo_occ>0]
         mo_occ = mo_occ[mo_occ > 0]
@@ -1862,6 +1855,21 @@ def get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1s, max_memory):
         mo_occ_a = mo_occ[0][mo_occ[0] > 0]
         mo_occ_b = mo_occ[1][mo_occ[1] > 0]
         dm0 = (mocc_a * mo_occ_a) @ mocc_a.T + (mocc_b * mo_occ_b) @ mocc_b.T
+
+    return get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory)
+
+def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory):
+    """
+        Equation notation follows:
+        Liang J, Feng X, Liu X, Head-Gordon M. Analytical harmonic vibrational frequencies with
+        VV10-containing density functionals: Theory, efficient implementation, and
+        benchmark assessments. J Chem Phys. 2023 May 28;158(20):204109. doi: 10.1063/5.0152838.
+
+        mo_coeff, mo_occ are 0-th order
+        dm1s is first order
+
+        TODO: check the effect of different grid, using mf.nlcgrids right now
+    """
     dm0 = numpy.asarray(dm0.real, order='C')
 
     output_in_2d = False
@@ -2106,7 +2114,11 @@ def _check_mgga_grids(grids):
 
 
 class Hessian(rhf_hess.HessianBase):
-    '''Non-relativistic RKS hessian'''
+    '''Non-relativistic RKS hessian.
+
+    Grid response is not implemented for this CPU Hessian.
+    Setting grid_response=True raises NotImplementedError.
+    '''
 
     _keys = {'grids', 'grid_response'}
 

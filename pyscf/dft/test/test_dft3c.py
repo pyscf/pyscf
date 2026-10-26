@@ -73,7 +73,7 @@ class TestDFT3C(unittest.TestCase):
         ref_model = dftd4.DFTD4Dispersion(mol, xc='r2scan-3c', atm=True,
                                           ga=2.0, gc=1.0)
         e_ref = ref_model.get_dispersion()['energy']
-        model = disp_mod.make_dftd4_model(mol, 'r2scan-3c', True)
+        model = disp_mod._make_d4_model(mol, 'r2scan-3c', True)
         e = model.get_dispersion()['energy']
         self.assertAlmostEqual(e, e_ref, 12)
         # the default charge model gives a different (incorrect) value

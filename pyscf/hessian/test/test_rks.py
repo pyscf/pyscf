@@ -102,6 +102,17 @@ class KnownValues(unittest.TestCase):
     def tearDownClass(cls):
         dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
 
+    def test_unsupported_grid_response(self):
+        for cls in (dft.RKS, dft.UKS):
+            mf = cls(mol)
+            for method in (mf, mf.density_fit()):
+                with self.subTest(method=type(method).__name__):
+                    hess = method.Hessian().set(grid_response=True)
+                    with self.assertRaisesRegex(NotImplementedError, 'grid response'):
+                        hess.partial_hess_elec()
+                    with self.assertRaisesRegex(NotImplementedError, 'grid response'):
+                        hess.make_h1(None, None)
+
     def test_rks_hess_atmlst(self):
         mf = dft.RKS(mol)
         mf.xc = 'pbe0'
@@ -126,6 +137,25 @@ class KnownValues(unittest.TestCase):
         e2 = g_scanner(pmol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
         #FIXME: errors seems too big
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 3)
+
+    def test_second_grids_hess(self):
+        mf = dft.RKS(mol)
+        mf.xc = 'b3lyp5'
+        mf.conv_tol = 1e-14
+        mf.kernel()
+        hess = mf.Hessian().kernel()
+
+        # second_grids == grids reproduces the default hessian
+        mf.second_grids = mf.grids
+        hess1 = mf.Hessian().kernel()
+        self.assertAlmostEqual(abs(hess - hess1).max(), 0, 7)
+        mf.second_grids = None
+
+        # A coarse (level-1) secondary grid changes the CPHF response only
+        mf.set_second_grids(1)
+        hess2 = mf.Hessian().kernel()
+        self.assertAlmostEqual(abs(hess - hess2).max(), 0, 4)
+        mf.second_grids = None
 
     def test_finite_diff_b3lyp_hess(self):
         mf = dft.RKS(mol)

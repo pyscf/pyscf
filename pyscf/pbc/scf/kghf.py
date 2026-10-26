@@ -23,8 +23,8 @@ Generalized Hartree-Fock for periodic systems with k-point sampling
 from functools import reduce
 import numpy as np
 import scipy.linalg
-import pyscf.scf.hf as mol_hf  # noqa
-import pyscf.scf.ghf as mol_ghf  # noqa
+import pyscf.scf.hf as mol_hf
+import pyscf.scf.ghf as mol_ghf
 import pyscf.scf.uhf as mol_uhf
 from pyscf import lib
 from pyscf.lib import logger
@@ -32,6 +32,8 @@ from pyscf.pbc.scf import khf
 from pyscf.pbc.scf import ghf as pbcghf
 from pyscf.pbc.scf import addons
 from pyscf.pbc.df.df_jk import _format_jks
+from pyscf.pbc.gto.pseudo import pp_int
+from pyscf.pbc.gto.ecp import ecp_int
 from pyscf.data import nist
 from pyscf import __config__
 
@@ -55,7 +57,7 @@ def get_jk(mf, cell=None, dm_kpts=None, hermi=0, kpts=None, kpts_band=None,
     dms = dm_kpts.reshape(-1,nkpts,nso,nso)
 
     dmaa = dms[:,:,:nao,:nao]
-    dmab = dms[:,:,nao:,:nao]
+    dmab = dms[:,:,:nao,nao:]
     dmbb = dms[:,:,nao:,nao:]
     if with_k:
         if hermi:
@@ -149,7 +151,7 @@ def _make_rdm1_meta(cell, dm_ao_kpts, kpts, pre_orth_method, s):
     from pyscf.lo import orth
     from pyscf.pbc.tools import k2gamma
 
-    kmesh = k2gamma.kpts_to_kmesh(cell, kpts-kpts[0])
+    kmesh = k2gamma.kpts_to_kmesh(cell, kpts-kpts[0], bound_by_supmol=False)
     nkpts, nso = dm_ao_kpts.shape[:2]
     nao = nso // 2
     scell, phase = k2gamma.get_phase(cell, kpts, kmesh)
@@ -197,6 +199,9 @@ def _cast_mol_init_guess(fn):
 
 class KGHF(khf.KSCF):
     '''PBC GHF with k-point sampling (default: gamma point).
+
+    Set with_soc=True to add ECP and GTH pseudopotential spin-orbit terms.
+    GTH atoms must then use explicit SOC data, e.g. pseudo='GTH-PBE-SOC-q4'.
     '''
     _keys = {'with_soc'}
 
@@ -222,10 +227,15 @@ class KGHF(khf.KSCF):
         if kpts is None: kpts = self.kpts
         hcore = khf.KSCF.get_hcore(self, cell, kpts)
         hcore = lib.asarray([scipy.linalg.block_diag(h, h) for h in hcore])
-        if self.with_soc and cell.has_ecp_soc():
-            from pyscf.pbc.gto.ecp import ecp_int
-            # The ECP SOC contribution = <|1j * s * U_SOC|>
-            hcore = hcore + ecp_int(cell, kpts, intor='ECPso')
+        if self.with_soc:
+            if cell._pseudo:
+                vl_soc = pp_int.get_pp_soc(cell, kpts)
+                s = .5 * lib.PauliMatrices
+                vl_soc = np.einsum('sxy,kspq->kxpyq', 1j * s, vl_soc)
+                hcore = hcore + vl_soc.reshape(hcore.shape)
+            if cell.has_ecp_soc():
+                # The ECP SOC contribution = <|1j * s * U_SOC|>
+                hcore = hcore + ecp_int(cell, kpts, intor='ECPso')
         return hcore
 
     def get_ovlp(self, cell=None, kpts=None):

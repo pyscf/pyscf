@@ -100,7 +100,7 @@ def get_err_vec_orth(s, d, f, Corth):
         errvec = []
         for i in range(f.shape[0]):
             sdf = reduce(lib.dot, (Corth[i].conj().T, s[i], d[i], f[i], Corth[i]))
-            errvec.append((sdf.conj().T - sdf))
+            errvec.append(sdf.conj().T - sdf)
         if hasattr(Corth, 'orbsym'):
             orbsym = Corth.orbsym
             sym_forbid = orbsym[:,None] != orbsym

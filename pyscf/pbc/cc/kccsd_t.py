@@ -26,10 +26,10 @@ from pyscf.lib.misc import tril_product
 from pyscf.pbc import scf
 from pyscf.pbc.lib import kpts_helper
 from pyscf.lib.numpy_helper import cartesian_prod
-from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
-                               padded_mo_coeff, padding_k_idx)  # noqa
+                               padded_mo_coeff, padding_k_idx)
 
 #einsum = np.einsum
 einsum = lib.einsum

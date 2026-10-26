@@ -27,5 +27,5 @@ try:
     from . import uks
     from . import dispersion
     from . import gcp
-except (ImportError, IOError):
+except (OSError, ImportError):
     pass

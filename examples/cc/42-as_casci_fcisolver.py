@@ -14,7 +14,7 @@ Inside the wrapper function, the CCSD code is the same as the example
 import numpy
 from pyscf import gto, scf, cc, ao2mo, mcscf
 
-class AsFCISolver(object):
+class AsFCISolver:
     def __init__(self):
         self.mycc = None
 

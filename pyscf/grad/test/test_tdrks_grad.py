@@ -164,6 +164,27 @@ class KnownValues(unittest.TestCase):
         g1 = tdg.kernel(state=3)
         self.assertAlmostEqual(g1[0,2], -1.55778110e-01, 6)
 
+    def test_second_grids_tda_grad(self):
+        mf = dft.RKS(mol).set(xc='b3lyp', conv_tol=1e-11)
+        mf.kernel()
+        td = tdscf.TDA(mf).run(nstates=nstates)
+        g0 = td.nuc_grad_method().kernel(state=1)
+
+        # second_grids equal to mf.grids reproduces the default gradient
+        mf.second_grids = mf.grids
+        td = tdscf.TDA(mf).run(nstates=nstates)
+        g1 = td.nuc_grad_method().kernel(state=1)
+        self.assertAlmostEqual(abs(g1 - g0).max(), 0, 7)
+        mf.second_grids = None
+
+        # A level-1 secondary grid gives a very similar gradient
+        mf.set_second_grids(1)
+        td = tdscf.TDA(mf).run(nstates=nstates)
+        g2 = td.nuc_grad_method().kernel(state=1)
+        self.assertTrue(mf.second_grids.coords.shape[0] < mf.grids.coords.shape[0])
+        self.assertAlmostEqual(abs(g2 - g0).max(), 0, 5)
+        mf.second_grids = None
+
     def test_range_separated_high_cost(self):
         if not hasattr(dft, 'xcfun'):
             raise unittest.SkipTest('PySCF not built with XCFun.')

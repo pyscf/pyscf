@@ -188,10 +188,10 @@ def make_rdm1(fcivec, norb, nelec, opt=None):
     fcivec = fcivec.reshape(na,na)
     rdm1 = numpy.zeros((norb,norb))
     for str0, tab in enumerate(link_index):
-        for a, i, str1, sign in link_index[str0]:
+        for a, i, str1, sign in tab:
             rdm1[a,i] += sign * numpy.dot(fcivec[str1],fcivec[str0])
     for str0, tab in enumerate(link_index):
-        for a, i, str1, sign in link_index[str0]:
+        for a, i, str1, sign in tab:
             rdm1[a,i] += sign * numpy.dot(fcivec[:,str1],fcivec[:,str0])
     return rdm1
 
@@ -205,7 +205,7 @@ def make_rdm12(fcivec, norb, nelec, opt=None):
     rdm2 = numpy.zeros((norb,norb,norb,norb))
     for str0, tab in enumerate(link_index):
         t1 = numpy.zeros((na,norb,norb))
-        for a, i, str1, sign in link_index[str0]:
+        for a, i, str1, sign in tab:
             t1[:,i,a] += sign * fcivec[str1,:]
 
         for k, tab in enumerate(link_index):

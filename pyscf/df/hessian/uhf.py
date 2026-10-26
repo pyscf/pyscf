@@ -33,12 +33,11 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
-from pyscf import df
 from pyscf.hessian import rhf as rhf_hess
 from pyscf.hessian import uhf as uhf_hess
 from pyscf.df.hessian.rhf import _load_dim0, _pinv
 from pyscf.df.grad.rhf import (_int3c_wrapper, _gen_metric_solver,
-                               LINEAR_DEP_THRESHOLD)
+                               _make_auxmol, LINEAR_DEP_THRESHOLD)
 
 
 def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
@@ -74,9 +73,7 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     dme0+= numpy.einsum('pi,qi,i->pq', moccb, moccb, mo_eb)
 
     with_df = hessobj.base.with_df
-    auxmol = with_df.auxmol
-    if auxmol is None:
-        auxmol = df.addons.make_auxmol(with_df.mol, with_df.auxbasis)
+    auxmol = _make_auxmol(with_df, mol)
     naux = auxmol.nao
     nbas = mol.nbas
     auxslices = auxmol.aoslice_by_atom()
@@ -414,9 +411,7 @@ def _gen_jk(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None,
         atmlst = range(mol.natm)
 
     with_df = hessobj.base.with_df
-    auxmol = with_df.auxmol
-    if auxmol is None:
-        auxmol = df.addons.make_auxmol(with_df.mol, with_df.auxbasis)
+    auxmol = _make_auxmol(with_df, mol)
     nbas = mol.nbas
     auxslices = auxmol.aoslice_by_atom()
     aux_loc = auxmol.ao_loc

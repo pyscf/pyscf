@@ -75,6 +75,8 @@ _white_list = {
     # correction, so it is enabled by default. The cf22d damping parameters
     # are shipped with simple-dftd3 (>=1.2.1) under zero damping.
     'cf22d': ('cf22d', '', 'd3zero'),
+    # COACH combines VV10 with an ATM-only D4 correction.
+    'coach': ('coach', '', 'd4:coach'),
     'b97m-d4': ('b97m_v', False, 'd4:b97m'),
     'wb97m-d4': ('wb97m_v', False, 'd4:wb97m'),
     'wb97x-d4': ('wb97x_v', False, 'd4:wb97x'),
@@ -271,16 +273,27 @@ def check_disp(mf, disp=None):
         raise ValueError(f"Unknown dispersion version {disp_version}.")
     return True
 
-def make_dftd4_model(mol, method, atm):
-    '''Create the DFTD4 dispersion model for the given method.
+def _make_d4_model(mol, method, with_3body):
+    '''Construct a D4 model with the same parameters for all derivatives.'''
+    if dftd4 is None:
+        raise RuntimeError('dftd4 not available. Install it with `pip install pyscf-dispersion`')
+    if method.lower() == 'r2scan-3c':
+        # r2SCAN-3c uses a custom EEQ charge model, which is not encoded
+        # in the D4 damping parameter table.
+        return dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body, ga=2.0, gc=1.0)
+    if method.lower() == 'coach':
+        # D4_PARAMS in the COACH authors' reference implementation:
+        # https://github.com/JiashuLiang/COACH/blob/main/FunctionalCOACH/coach_pyscf.py
+        # Reference: J. Liang and M. Head-Gordon, "Reaching for the performance
+        # limit of hybrid density functional theory for molecular chemistry" (2026)
+        #
+        # Initialize with a known method, then replace all damping parameters.
+        model = dftd4.DFTD4Dispersion(mol, xc='hf', atm=with_3body)
+        model.set_param(s6=0.0, s8=0.0, s9=float(with_3body),
+                        a1=0.215, a2=5.8, alp=16.0)
+        return model
+    return dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body)
 
-    The D4 correction of r2SCAN-3c uses a custom EEQ charge model (ga=2.0, gc=1.0).
-    This special case is applied in the dftd4 program but is not encoded in
-    the damping parameter table, so it has to be applied explicitly.
-    '''
-    if method == 'r2scan-3c':
-        return dftd4.DFTD4Dispersion(mol, xc=method, atm=atm, ga=2.0, gc=1.0)
-    return dftd4.DFTD4Dispersion(mol, xc=method, atm=atm)
 
 def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
     '''
@@ -339,7 +352,7 @@ def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
             raise RuntimeError('dftd4 not available. Install them with `pip install pyscf-dispersion`')
         logger.info(mf, "Calc dispersion correction with DFTD4.")
         logger.info(mf, f"Parameters: xc={method}, atm={with_3body}")
-        d4_model = make_dftd4_model(mol, method, with_3body)
+        d4_model = _make_d4_model(mol, method, with_3body)
         res = d4_model.get_dispersion()
         e_d4 = res.get('energy')
         mf.scf_summary['dispersion'] = e_d4
