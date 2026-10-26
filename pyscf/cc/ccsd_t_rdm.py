@@ -106,10 +106,7 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
     '''intermediates tensors for gamma2 are sorted in Chemist's notation
     '''
     log = logger.Logger(mycc.stdout, mycc.verbose)
-
-    if (numpy.iscomplexobj(t1) or numpy.iscomplexobj(t2) or numpy.iscomplexobj(eris)
-        or numpy.iscomplexobj(l1) or numpy.iscomplexobj(l2)):
-        raise ValueError("_gamma2_intermediates does not support complex-valued inputs (t1, t2, l1, l2, or eris)")
+    _check_real('_gamma2_intermediates', t1, t2, l1, l2, eris)
 
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
             ccsd_rdm._gamma2_intermediates(mycc, t1, t2, l1, l2)
@@ -136,7 +133,30 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
     return dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov
 
 def _gamma2_outcore(mycc, t1, t2, l1, l2, eris, h5fobj, compress_vvvv=False):
-    return _gamma2_intermediates(mycc, t1, t2, l1, l2, eris, compress_vvvv)
+    '''_gamma2_intermediates with the blocks in h5fobj: the CCSD part from
+    ccsd_rdm._gamma2_outcore, so dvvvv (nvir**4) is never held in memory, and
+    the (T) terms added to dovov, dooov and dovvv in h5fobj. dvvov is None, as
+    in ccsd_rdm._gamma2_outcore.
+    '''
+    log = logger.Logger(mycc.stdout, mycc.verbose)
+    _check_real('_gamma2_outcore', t1, t2, l1, l2, eris)
+
+    d2 = ccsd_rdm._gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv)
+    if eris is None: eris = mycc.ao2mo()
+
+    time0 = logger.process_clock(), logger.perf_counter()
+    dovov_t, dooov_t, dovvv_t = _t3_intermediates(t1, t2, eris, with_gamma1=False)[3:]
+    log.timer_debug1("ccsd_t rdm _gamma2_outcore (T) part", *time0)
+    for key, d_t in (('dovov', dovov_t), ('dooov', dooov_t), ('dovvv', dovvv_t)):
+        d = h5fobj[key]
+        for i in range(d.shape[0]):
+            d[i] = d[i] + d_t[i]
+    return d2
+
+def _check_real(caller, t1, t2, l1, l2, eris):
+    if (numpy.iscomplexobj(t1) or numpy.iscomplexobj(t2) or numpy.iscomplexobj(eris)
+        or numpy.iscomplexobj(l1) or numpy.iscomplexobj(l2)):
+        raise ValueError(f"{caller} does not support complex-valued inputs (t1, t2, l1, l2, or eris)")
 
 def make_rdm1(mycc, t1, t2, l1, l2, eris=None, ao_repr=False):
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2, eris)
