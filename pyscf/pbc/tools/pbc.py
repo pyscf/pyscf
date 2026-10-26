@@ -922,8 +922,13 @@ def _build_supcell_(supcell, cell, Ls):
     # For atom pointers in each image, shift natm*image_id
     _bas[:,:,ATOM_OF] += np.arange(nimgs)[:,None] * cell.natm
 
+    # repeats ECP for every image
+    _ecpbas = np.repeat(cell._ecpbas[None,:,:], nimgs, axis=0)
+    _ecpbas[:,:,ATOM_OF] += np.arange(nimgs)[:,None] * cell.natm
+
     supcell._atm = np.asarray(_atm, dtype=np.int32)
     supcell._bas = np.asarray(_bas.reshape(-1, BAS_SLOTS), dtype=np.int32)
+    supcell._ecpbas = np.asarray(_ecpbas.reshape(-1, BAS_SLOTS), dtype=np.int32)
     supcell._env = _env
 
     if isinstance(supcell, pbcgto.Cell) and getattr(supcell, 'space_group_symmetry', False):
