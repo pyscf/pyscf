@@ -745,6 +745,26 @@ class KnownValues(unittest.TestCase):
         mycc.run()
         self.assertAlmostEqual(mycc.e_tot, -100.07710261186985, 7)
 
+    def test_gamma2_outcore(self):
+        # the vvvv blocks of _gamma2_outcore are written to h5fobj (compressed
+        # or not) and every block equals _gamma2_intermediates
+        mycc = cc.UCCSD(mf_s2).run(conv_tol=1e-10)
+        l1, l2 = mycc.solve_lambda()
+        for max_memory in (4000, 1):
+            mycc.max_memory = max_memory
+            for compress_vvvv in (False, True):
+                ref = uccsd_rdm._gamma2_intermediates(mycc, mycc.t1, mycc.t2, l1, l2, compress_vvvv)
+                f = lib.H5TmpFile()
+                d2 = uccsd_rdm._gamma2_outcore(mycc, mycc.t1, mycc.t2, l1, l2, f, compress_vvvv)
+                for k in (0, 1, 3):
+                    self.assertIsInstance(d2[1][k], h5py.Dataset)
+                for blocks_ref, blocks in zip(ref, d2):
+                    for r, d in zip(blocks_ref, blocks):
+                        if r is None:
+                            self.assertIsNone(d)
+                        else:
+                            self.assertAlmostEqual(abs(numpy.asarray(d) - r).max(), 0, 12)
+
 if __name__ == "__main__":
     print("Full Tests for UCCSD")
     unittest.main()

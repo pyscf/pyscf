@@ -210,6 +210,17 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(g), 0.10105388861195158, 6)
 
 
+    def test_uccsd_grad_finite_diff(self):
+        mol1 = gto.M(atom=mol.atom, basis='631g', spin=2, verbose=0)
+        mycc = cc.UCCSD(scf.UHF(mol1).run(conv_tol=1e-12)).run(conv_tol=1e-10)
+        g1 = uccsd_grad.Gradients(mycc).kernel()
+        scanner = mycc.as_scanner()
+        e = []
+        for dz in (1e-3, -1e-3):
+            mol1.set_geom_([['O', (0., 0., dz)], mol.atom[1], mol.atom[2]])
+            e.append(scanner(mol1))
+        self.assertAlmostEqual(g1[0,2], (e[0] - e[1]) / 2e-3 * lib.param.BOHR, 6)
+
 if __name__ == "__main__":
     print("Tests for CCSD gradients")
     unittest.main()

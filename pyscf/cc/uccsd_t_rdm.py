@@ -135,23 +135,47 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
 def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
                           compress_vvvv=False):
     d2 = uccsd_rdm._gamma2_intermediates(mycc, t1, t2, l1, l2)
+    _add_t3_gamma2(mycc, t1, t2, eris, d2)
 
+    if compress_vvvv:
+        nocca, noccb, nvira, nvirb = t2[1].shape
+        idxa = numpy.tril_indices(nvira)
+        idxa = idxa[0] * nvira + idxa[1]
+        idxb = numpy.tril_indices(nvirb)
+        idxb = idxb[0] * nvirb + idxb[1]
+        dvvvv, dvvVV, dVVvv, dVVVV = d2[1]
+        dvvvv = dvvvv + dvvvv.transpose(1,0,2,3)
+        dvvvv = lib.take_2d(dvvvv.reshape(nvira**2,nvira**2), idxa, idxa)
+        dvvvv *= .5
+        dvvVV = dvvVV + dvvVV.transpose(1,0,2,3)
+        dvvVV = lib.take_2d(dvvVV.reshape(nvira**2,nvirb**2), idxa, idxb)
+        dvvVV *= .5
+        dVVVV = dVVVV + dVVVV.transpose(1,0,2,3)
+        dVVVV = lib.take_2d(dVVVV.reshape(nvirb**2,nvirb**2), idxb, idxb)
+        dVVVV *= .5
+        d2 = (d2[0], (dvvvv, dvvVV, dVVvv, dVVVV)) + d2[2:]
+
+    return d2
+
+def _gamma2_outcore(mycc, t1, t2, l1, l2, eris, h5fobj, compress_vvvv=False):
+    '''_gamma2_intermediates with the vvvv blocks in h5fobj
+    (uccsd_rdm._gamma2_outcore).'''
+    d2 = uccsd_rdm._gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv)
+    _add_t3_gamma2(mycc, t1, t2, eris, d2)
+    return d2
+
+def _add_t3_gamma2(mycc, t1, t2, eris, d2):
+    '''Add the (T) terms to the UCCSD gamma2 intermediates d2, in place; none of
+    them touches a vvvv block.'''
     if eris is None: eris = mycc.ao2mo()
 
     dovov, dovOV, dOVov, dOVOV = d2[0]
-    dvvvv, dvvVV, dVVvv, dVVVV = d2[1]
-    doooo, dooOO, dOOoo, dOOOO = d2[2]
-    doovv, dooVV, dOOvv, dOOVV = d2[3]
-    dovvo, dovVO, dOVvo, dOVVO = d2[4]
-    dvvov, dvvOV, dVVov, dVVOV = d2[5]
     dovvv, dovVV, dOVvv, dOVVV = d2[6]
     dooov, dooOV, dOOov, dOOOV = d2[7]
 
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     nocca, noccb, nvira, nvirb = t2ab.shape
-    nmoa = eris.focka.shape[0]
-    nmob = eris.fockb.shape[0]
     mo_ea, mo_eb = eris.mo_energy
     eia = mo_ea[:nocca,None] - mo_ea[nocca:]
     eIA = mo_eb[:noccb,None] - mo_eb[noccb:]
@@ -237,37 +261,6 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
     dOVOV += numpy.einsum('ia,ijkabc->jbkc', t1a, rw.conj()) * .25
     dovOV += numpy.einsum('jb,ijkabc->iakc', t1b, rw.conj()) * .25
     #dOVov += numpy.einsum('jb,ijkabc->kcia', t1b, rw.conj()) * .25
-
-    if compress_vvvv:
-        nmoa, nmob = mycc.nmo
-        nocca, noccb, nvira, nvirb = t2ab.shape
-        idxa = numpy.tril_indices(nvira)
-        idxa = idxa[0] * nvira + idxa[1]
-        idxb = numpy.tril_indices(nvirb)
-        idxb = idxb[0] * nvirb + idxb[1]
-        dvvvv = dvvvv + dvvvv.transpose(1,0,2,3)
-        dvvvv = lib.take_2d(dvvvv.reshape(nvira**2,nvira**2), idxa, idxa)
-        dvvvv *= .5
-        dvvVV = dvvVV + dvvVV.transpose(1,0,2,3)
-        dvvVV = lib.take_2d(dvvVV.reshape(nvira**2,nvirb**2), idxa, idxb)
-        dvvVV *= .5
-        dVVVV = dVVVV + dVVVV.transpose(1,0,2,3)
-        dVVVV = lib.take_2d(dVVVV.reshape(nvirb**2,nvirb**2), idxb, idxb)
-        dVVVV *= .5
-
-        d2 = ((dovov, dovOV, dOVov, dOVOV),
-              (dvvvv, dvvVV, dVVvv, dVVVV),
-              (doooo, dooOO, dOOoo, dOOOO),
-              (doovv, dooVV, dOOvv, dOOVV),
-              (dovvo, dovVO, dOVvo, dOVVO),
-              (dvvov, dvvOV, dVVov, dVVOV),
-              (dovvv, dovVV, dOVvv, dOVVV),
-              (dooov, dooOV, dOOov, dOOOV))
-
-    return d2
-
-def _gamma2_outcore(mycc, t1, t2, l1, l2, eris, h5fobj, compress_vvvv=False):
-    return _gamma2_intermediates(mycc, t1, t2, l1, l2, eris, compress_vvvv)
 
 def make_rdm1(mycc, t1, t2, l1, l2, eris=None, ao_repr=False):
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2, eris)
