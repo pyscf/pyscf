@@ -32,6 +32,8 @@ from pyscf import __config__
 from pyscf.lo.orth import vec_lowdin
 from pyscf.data.elements import is_ghost_atom
 
+__all__ = ['iao']
+
 # Alternately, use ANO for minao
 # orthogonalize iao with coefficients obtained by
 #     vec_lowdin(iao_coeff, mol.intor('int1e_ovlp'))

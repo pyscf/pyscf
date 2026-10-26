@@ -24,6 +24,8 @@ from pyscf.data import elements
 from pyscf.scf import atom_hf, ADIIS
 from pyscf.dft import rks
 
+__all__ = ['AtomSphAverageRKS', 'AtomSphericAverageRKS', 'ADIIS']
+
 def get_atm_nrks(mol, atomic_configuration=elements.NRSRHFS_CONFIGURATION, xc='slater', grid=(100, 434)):
     elements = {a[0] for a in mol._atom}
     logger.info(mol, 'Spherically averaged atomic KS for %s', elements)

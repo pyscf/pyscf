@@ -39,6 +39,16 @@ from pyscf.scf.smearing import (
     _SmearingSCF,
 )
 
+__all__ = [
+    'frac_occ_', 'frac_occ', 'dynamic_occ_', 'dynamic_occ', 'dynamic_level_shift_',
+    'dynamic_level_shift', 'float_occ_', 'dynamic_sz_', 'float_occ', 'follow_state_',
+    'follow_state', 'mom_occ_', 'mom_occ', 'project_mo_nr2nr', 'project_mo_nr2r',
+    'project_mo_r2r', 'project_dm_nr2nr', 'project_dm_nr2r', 'project_dm_r2r',
+    'canonical_orth_', 'partial_cholesky_orth_', 'remove_linear_dep_',
+    'remove_linear_dep', 'convert_to_uhf', 'convert_to_rhf', 'convert_to_ghf',
+    'get_ghf_orbspin', 'fast_newton',
+]
+
 LINEAR_DEP_THRESHOLD = getattr(__config__, 'scf_addons_remove_linear_dep_threshold', 1e-8)
 CHOLESKY_THRESHOLD = getattr(__config__, 'scf_addons_cholesky_threshold', 1e-10)
 FORCE_PIVOTED_CHOLESKY = getattr(__config__, 'scf_addons_force_cholesky', False)

@@ -35,6 +35,8 @@ from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import ccsd as ccsd_grad
 from pyscf.grad.mp2 import has_frozen_orbitals
 
+__all__ = ['Gradients', 'Grad']
+
 #
 # Note: only works with canonical orbitals
 # Non-canonical formula refers to JCP 95, 2639 (1991); DOI:10.1063/1.460916

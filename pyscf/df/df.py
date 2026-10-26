@@ -37,6 +37,8 @@ from pyscf.ao2mo.incore import _conc_mos, iden_coeffs
 from pyscf.ao2mo.outcore import _load_from_h5g
 from pyscf import __config__
 
+__all__ = ['DF', 'GDF', 'DF4C', 'GDF4C']
+
 class DF(lib.StreamObject):
     r'''
     Store three-index density-fitting integrals.

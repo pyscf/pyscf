@@ -38,6 +38,10 @@ from pyscf.data.elements import _std_symbol_without_ghost
 from pyscf.data.elements import charge as elements_proton
 from pyscf import __config__
 
+__all__ = [
+    'sg1_prune', 'nwchem_prune', 'sgx_prune', 'gen_atomic_grids', 'Grids', 'sg1_grids',
+]
+
 libdft = lib.load_library('libdft')
 
 GROUP_BOX_SIZE = 1.2

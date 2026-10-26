@@ -58,6 +58,14 @@ from pyscf.lib.exceptions import PointGroupSymmetryError
 from pyscf.symm.param import OPERATOR_TABLE
 from pyscf import __config__
 
+__all__ = [
+    'parallel_vectors', 'argsort_coords', 'sort_coords', 'rotation_mat', 'householder',
+    'closest_axes', 'alias_axes', 'detect_symm', 'get_subgroup', 'subgroup',
+    'as_subgroup', 'symm_ops', 'symm_identical_atoms', 'check_symm', 'check_given_symm',
+    'shift_atom', 'is_identical_geometry', 'casimir_tensors', 'RotationAxisNotFound',
+    'SymmSys', 'PointGroupSymmetryError',
+]
+
 TOLERANCE = getattr(__config__, 'symm_geom_tol', 1e-5)
 
 

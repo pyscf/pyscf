@@ -43,6 +43,10 @@ from pyscf.fci import direct_spin1
 from pyscf.fci import rdm
 from pyscf import __config__
 
+__all__ = [
+    'kernel_fixed_space', 'to_fci', 'SelectedCI', 'SCI', 'SCIvector', 'as_SCIvector',
+]
+
 libfci = direct_spin1.libfci
 
 @lib.with_doc(direct_spin1.contract_2e.__doc__)

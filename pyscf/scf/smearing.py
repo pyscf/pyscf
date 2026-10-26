@@ -20,6 +20,8 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import __config__
 
+__all__ = ['smearing', 'smearing_']
+
 SMEARING_METHOD = getattr(__config__, 'pbc_scf_addons_smearing_method', 'fermi')
 
 def smearing(mf, sigma=None, method=SMEARING_METHOD, mu0=None, fix_spin=False):

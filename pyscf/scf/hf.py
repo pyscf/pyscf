@@ -36,6 +36,12 @@ from pyscf.scf import dispersion
 from pyscf.scf import smearing
 from pyscf import __config__
 
+__all__ = [
+    'energy_elec', 'init_guess_by_minao', 'init_guess_by_sap', 'make_sap', 'make_rdm1',
+    'make_rdm2', 'get_jk', 'get_veff', 'get_grad', 'as_scanner', 'SCF_Scanner', 'SCF',
+    'KohnShamDFT', 'RHF', 'get_hcore', 'get_ovlp',
+]
+
 
 WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
 PRE_ORTH_METHOD = getattr(__config__, 'scf_analyze_pre_orth_method', 'ANO')

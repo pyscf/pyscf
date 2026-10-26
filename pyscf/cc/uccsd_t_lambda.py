@@ -26,6 +26,8 @@ from pyscf.lib import logger
 from pyscf.cc import ccsd_lambda
 from pyscf.cc import uccsd_lambda
 
+__all__ = ['make_intermediates', 'update_lambda']
+
 
 def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
            max_cycle=50, tol=1e-8, verbose=logger.INFO):

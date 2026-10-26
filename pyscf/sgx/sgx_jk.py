@@ -53,6 +53,8 @@ from pyscf.dft.numint import BLKSIZE, NBINS, libdft, \
     SWITCH_SIZE, _scale_ao, _dot_ao_ao_sparse
 import time
 
+__all__ = ['SGXData']
+
 
 libdft.SGXreturn_blksize.restype = int
 SGX_BLKSIZE = libdft.SGXreturn_blksize()

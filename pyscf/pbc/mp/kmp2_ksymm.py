@@ -25,6 +25,8 @@ from pyscf.lib import logger, einsum
 from pyscf.lib.parameters import LARGE_DENOM
 from pyscf.pbc.mp import kmp2
 
+__all__ = ['make_rdm1', 'KsymAdaptedKMP2', 'KRMP2', 'KMP2']
+
 WITH_T2 = getattr(__config__, 'mp_mp2_with_t2', False)
 
 def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):

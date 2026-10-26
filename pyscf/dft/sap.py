@@ -61,6 +61,8 @@
 import numpy
 from pyscf.dft.sap_data import sap_Zeff
 
+__all__ = ['sap_effective_charge']
+
 def sap_effective_charge(Z, r):
     '''
     Calculates the effective charge for the superposition of atomic potentials.

@@ -28,6 +28,8 @@ from pyscf import gto
 from pyscf.lib import logger
 from pyscf import __config__
 
+__all__ = ['orbital_coeff', 'from_mo', 'from_scf', 'header', 'order_ao_index', 'load']
+
 IGNORE_H = getattr(__config__, 'molden_ignore_h', True)
 
 

@@ -21,6 +21,12 @@ from pyscf.fci import cistring
 from pyscf import symm
 from pyscf import __config__
 
+__all__ = [
+    'large_ci', 'symm_initguess', 'symmetrize_wfn', 'guess_wfnsym', 'det_overlap',
+    'overlap', 'fix_spin', 'transform_ci', 'civec_spinless_repr_generator',
+    'civec_spinless_repr', 'cre_a', 'cre_b', 'des_a', 'des_b', 'fix_spin_',
+]
+
 LARGE_CI_TOL = getattr(__config__, 'fci_addons_large_ci_tol', 0.1)
 RETURN_STRS = getattr(__config__, 'fci_addons_large_ci_return_strs', True)
 PENALTY = getattr(__config__, 'fci_addons_fix_spin_shift', 0.2)

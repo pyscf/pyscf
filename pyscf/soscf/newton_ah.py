@@ -37,6 +37,8 @@ from pyscf.scf import _response_functions
 from pyscf.soscf import ciah
 from pyscf import __config__
 
+__all__ = ['newton', 'project_mol']
+
 WITH_EX_EY_DEGENERACY = getattr(__config__, 'soscf_newton_ah_Ex_Ey_degeneracy', True)
 
 

@@ -29,6 +29,8 @@ from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.df import fft
 from pyscf.pbc.dft.multigrid import _backend_c as backend
 
+__all__ = ['KPoints']
+
 PP_WITH_RHO_CORE = getattr(__config__, 'pbc_dft_multigrid_pp_with_rho_core', True)
 
 

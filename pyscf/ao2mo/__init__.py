@@ -38,6 +38,8 @@ from pyscf.ao2mo import r_outcore
 from pyscf.ao2mo import nrr_outcore
 from pyscf.ao2mo.addons import load, restore
 
+__all__ = ['full', 'general', 'kernel', 'get_ao_eri', 'get_mo_eri']
+
 def full(eri_or_mol, mo_coeff, erifile=None, dataname='eri_mo', intor='int2e',
          *args, **kwargs):
     r'''MO integral transformation. The four indices (ij|kl) are transformed

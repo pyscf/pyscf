@@ -17,6 +17,8 @@ import ctypes
 import numpy
 from pyscf import lib
 
+__all__ = ['PBCOpt']
+
 libpbc = lib.load_library('libpbc')
 def _fpointer(name):
     return ctypes.addressof(getattr(libpbc, name))

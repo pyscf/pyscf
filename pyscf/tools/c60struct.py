@@ -15,6 +15,8 @@
 from functools import reduce
 import numpy
 
+__all__ = ['make60']
+
 
 def rotmatz(ang):
     c = numpy.cos(ang)

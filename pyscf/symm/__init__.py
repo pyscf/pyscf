@@ -28,5 +28,8 @@ from pyscf.symm import basis
 from pyscf.symm import cg
 
 from pyscf.symm.geom import *
+from pyscf.symm.geom import mole, norm, logger, OPERATOR_TABLE, TOLERANCE
 from pyscf.symm.basis import *
+from pyscf.symm.basis import lib, PointGroupSymmetryError, Dmatrix
 from pyscf.symm.addons import *
+from pyscf.symm.addons import lib, logger, MULTI_IRREPS

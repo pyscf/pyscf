@@ -33,6 +33,8 @@ from pyscf.sgx import sgx_jk
 from pyscf.df import df_jk
 from pyscf import __config__
 
+__all__ = ['sgx_fit', 'SGX']
+
 def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
     '''For the given SCF object, update the J, K matrix constructor with
     corresponding SGX or density fitting integrals.

@@ -23,6 +23,8 @@ from pyscf import __config__
 from pyscf import lib
 from pyscf.gto import mole
 
+__all__ = ['get_crystal_class', 'search_space_group_ops']
+
 SYMPREC = getattr(__config__, 'pbc_symm_space_group_symprec', 1e-6)  # this has the unit of length
 
 

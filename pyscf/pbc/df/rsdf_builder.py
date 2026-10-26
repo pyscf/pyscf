@@ -50,6 +50,8 @@ from pyscf.pbc.lib.kpts_helper import (is_zero, member, kk_adapted_iter,
                                        members_with_wrap_around, KPT_DIFF_TOL)
 from pyscf import __config__
 
+__all__ = ['Int3cBuilder']
+
 OMEGA_MIN = 0.08
 INDEX_MIN = -10000
 LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-10)

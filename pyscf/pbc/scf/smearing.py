@@ -20,6 +20,8 @@ from pyscf.scf import addons as mol_addons
 from pyscf.pbc import tools
 from pyscf.pbc.lib.kpts import KPoints
 
+__all__ = ['smearing', 'smearing_', 'KPoints']
+
 SMEARING_METHOD = mol_addons.SMEARING_METHOD
 
 def _get_grad_tril(mo_coeff_kpts, mo_occ_kpts, fock):

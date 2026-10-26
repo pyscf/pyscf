@@ -21,6 +21,8 @@ from pyscf.lib import logger
 from pyscf import lo
 from pyscf import __config__
 
+__all__ = ['mo_comps']
+
 BASE = getattr(__config__, 'BASE', 0)
 MAP_TOL = getattr(__config__, 'mo_mapping_mo_map_tol', 0.5)
 ORTH_METHOD = getattr(__config__, 'mo_mapping_mo_comps_orth_method', 'meta_lowdin')

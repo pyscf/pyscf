@@ -40,6 +40,8 @@ from pyscf.pbc.dft import multigrid
 from pyscf.pbc.lib.kpts import KPoints
 from pyscf import __config__
 
+__all__ = ['KohnShamDFT', 'RKS', 'KPoints']
+
 
 def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
              kpt=None, kpts_band=None):

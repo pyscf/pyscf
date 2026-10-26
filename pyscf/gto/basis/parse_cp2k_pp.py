@@ -25,6 +25,8 @@ import re
 from pyscf.lib.exceptions import BasisNotFoundError
 import numpy as np
 
+__all__ = ['BasisNotFoundError', 'parse']
+
 def parse(string, symb=None):
     '''Parse the pseudo text *string* which is in CP2K format, return an internal
     basis format which can be assigned to :attr:`Cell.pseudo`

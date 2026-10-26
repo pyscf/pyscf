@@ -33,6 +33,8 @@ try:
 except ImportError:
     dispersion = dftd3 = dftd4 = None
 
+__all__ = ['parse_disp', 'check_disp', 'get_dispersion']
+
 DFTD4_RECOMMENDATIONS = getattr(__config__, 'DFTD4_RECOMMENDATIONS', False)
 
 # supported dispersion corrections

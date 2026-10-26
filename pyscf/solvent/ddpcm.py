@@ -35,6 +35,8 @@ from pyscf.solvent import ddcosmo
 from pyscf.symm import sph
 from pyscf.solvent import _attach_solvent
 
+__all__ = ['ddPCM', 'DDPCM']
+
 warnings.warn('Module ddPCM is under testing')
 
 

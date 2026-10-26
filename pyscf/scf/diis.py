@@ -27,6 +27,8 @@ import scipy.optimize
 from pyscf import lib
 from pyscf.lib import logger
 
+__all__ = ['CDIIS', 'SCFDIIS', 'SCF_DIIS', 'DIIS', 'EDIIS', 'ADIIS', 'get_err_vec']
+
 DEBUG = False
 
 # J. Mol. Struct. 114, 31-34 (1984); DOI:10.1016/S0022-2860(84)87198-7

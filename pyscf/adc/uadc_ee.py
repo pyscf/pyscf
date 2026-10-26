@@ -32,6 +32,8 @@ from pyscf.adc import dfadc
 from pyscf import scf
 from pyscf.data.nist import HARTREE2EV
 
+__all__ = ['UADCEE', 'get_spin_square']
+
 
 def get_imds(adc, eris=None):
 

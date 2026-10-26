@@ -19,6 +19,8 @@ Extension to scipy.linalg module developed for PBC branch.
 import numpy as np
 import scipy.linalg
 
+__all__ = ['Arnoldi']
+
 def davidson_nosymm(matvec,size,nroots,Adiag=None):
     '''Davidson diagonalization method to solve A c = E c
     when A is not Hermitian.

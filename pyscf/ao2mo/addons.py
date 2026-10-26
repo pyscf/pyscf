@@ -21,6 +21,11 @@ import numpy
 import h5py
 from pyscf import lib
 
+__all__ = [
+    'load',
+    'restore',
+]
+
 libao2mo = lib.load_library('libao2mo')
 
 class load:

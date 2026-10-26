@@ -35,6 +35,8 @@ from pyscf.mp import dfump2
 
 from pyscf.gw.rpa import RPA
 
+__all__ = ['URPA', 'RPA']
+
 einsum = lib.einsum
 
 

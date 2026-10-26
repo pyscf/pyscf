@@ -30,6 +30,8 @@ from pyscf.scf import cphf
 from pyscf.grad import rks as rks_grad
 from pyscf.grad import tdrhf
 
+__all__ = ['Gradients', 'Grad']
+
 
 #
 # Given Y = 0, TDDFT gradients (XAX+XBY+YBX+YAY)^1 turn to TDA gradients (XAX)^1

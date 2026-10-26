@@ -83,6 +83,25 @@ if sys.platform.startswith('linux'):
 from pyscf.lib import parameters as param
 from pyscf import __config__
 
+__all__ = [
+    'c_double_p', 'c_int_p', 'c_null_ptr', 'load_library', 'make_dll_wrapper',
+    'current_memory', 'num_threads', 'with_omp_threads', 'with_multiproc_nproc',
+    'c_int_arr', 'f_int_arr', 'c_double_arr', 'f_double_arr', 'member', 'remove_dup',
+    'remove_if', 'find_if', 'arg_first_match', 'flatten', 'prange', 'prange_tril',
+    'prange_split', 'map_with_prefetch', 'index_tril_to_pair', 'tril_product',
+    'square_mat_in_trilu_indices', 'capture_stdout', 'ctypes_stdout', 'quite_run',
+    'omnimethod', 'view', 'generate_pickle_methods', 'StreamObject', 'check_sanity',
+    'with_doc', 'alias', 'module_method', 'class_as_method', 'invalid_method',
+    'make_class', 'set_class', 'drop_class', 'replace_class', 'overwrite_mro',
+    'ProcessWithReturnValue', 'ProcessRuntimeError', 'ThreadWithReturnValue',
+    'ThreadWithTraceBack', 'ThreadRuntimeError', 'background_thread',
+    'background_process', 'background', 'bg_thread', 'bg_process',
+    'call_in_background', 'H5FileWrap', 'H5TmpFile', 'NamedTemporaryFile',
+    'fingerprint', 'fp', 'ndpointer', 'SinglePointScanner', 'GradScanner',
+    'temporary_env', 'light_speed', 'h5filewrite_options', 'repo_info', 'git_info',
+    'format_sys_info', 'isinteger', 'issequence', 'isintsequence', 'to_gpu',
+]
+
 if h5py.version.version[:4] == '2.2.':
     sys.stderr.write('h5py-%s is found in your environment. '
                      'h5py-%s has bug in threading mode.\n'

@@ -60,6 +60,8 @@ from pyscf.pbc.df.gdf_builder import libpbc, _CCGDFBuilder, _CCNucBuilder
 from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder, _RSNucBuilder, LINEAR_DEP_THR
 from pyscf import __config__
 
+__all__ = ['make_modrho_basis', 'make_auxcell', 'GDF', 'DF', 'CDERIArray', 'KPoints']
+
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=None,
                       normalize_multipoles=True):

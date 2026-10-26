@@ -50,6 +50,17 @@ elif EINSUM_BACKEND == 'pyscf-tblis':
 else:
     raise ValueError(f"Unknown einsum backend: {EINSUM_BACKEND}")
 
+__all__ = [
+    'contract', 'einsum', 'pack_tril', 'unpack_tril', 'unpack_row', 'hermi_triu',
+    'solve_lineq_by_SVD', 'take_2d', 'takebak_2d', 'inplace_transpose_scale',
+    'transpose', 'transpose_sum', 'hermi_sum', 'ddot', 'zdot', 'zdotNN', 'zdotCN',
+    'zdotNC', 'dot', 'frompointer', 'leading_dimension_order', 'cond', 'cartesian_prod',
+    'direct_sum', 'condense', 'expm', 'omatcopy', 'zeros', 'entrywise_mul',
+    'broadcast_mul', 'ndarray_pointer_2d', 'NPArrayWithTag', 'tag_array',
+    'split_reshape', 'locs_to_indices', 'cleanse', 'base_repr_int', 'inv_base_repr_int',
+    'isin_1d', 'groupby', 'stack_with_padding',
+]
+
 _np_helper = misc.load_library('libnp_helper')
 
 BLOCK_DIM = 192

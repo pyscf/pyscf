@@ -28,6 +28,8 @@ from pyscf.pbc.grad import kuhf as uhf_grad
 from pyscf.dft import numint
 from pyscf.pbc import gto
 
+__all__ = ['Gradients']
+
 
 def get_veff(ks_grad, dm=None, kpts=None):
     mf = ks_grad.base

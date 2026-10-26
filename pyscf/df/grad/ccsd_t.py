@@ -24,6 +24,8 @@ from pyscf import lib
 from pyscf.cc import ccsd_t_rdm
 from pyscf.df.grad import ccsd as dfccsd_grad
 
+__all__ = ['Gradients', 'Grad']
+
 # Only works with canonical orbitals
 def grad_elec(cc_grad, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
               verbose=lib.logger.INFO):

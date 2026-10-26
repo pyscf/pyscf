@@ -241,6 +241,8 @@ from pyscf.symm import sph
 
 from pyscf.solvent import _attach_solvent
 
+__all__ = ['ddCOSMO', 'DDCOSMO', 'Grids', 'make_L', 'make_fi', 'make_grids_one_sphere']
+
 # Static (zero-frequency) dielectric constant of water at 298 K
 EPS_WATER = 78.3553
 

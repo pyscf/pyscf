@@ -32,6 +32,8 @@ from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile
 from pyscf import __config__
 
+__all__ = ['UHF']
+
 
 def init_guess_by_chkfile(cell, chkfile_name, project=None, kpt=None):
     '''Read the HF results from checkpoint file and make the density matrix

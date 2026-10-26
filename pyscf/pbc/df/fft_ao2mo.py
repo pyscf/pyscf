@@ -41,6 +41,8 @@ from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique
 from pyscf import __config__
 
+__all__ = ['general']
+
 
 def get_eri(mydf, kpts=None,
             compact=getattr(__config__, 'pbc_df_ao2mo_get_eri_compact', True)):

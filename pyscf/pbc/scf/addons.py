@@ -36,6 +36,11 @@ from pyscf.pbc.scf.smearing import (
     _SmearingKSCF
 )
 
+__all__ = [
+    'convert_to_kscf', 'convert_to_khf', 'convert_to_ghf', 'convert_to_uhf',
+    'slab_dipole_correction',
+]
+
 def project_mo_nr2nr(cell1, mo1, cell2, kpts=None):
     r''' Project orbital coefficients
 

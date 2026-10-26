@@ -29,6 +29,8 @@ from pyscf.pbc.symm import space_group
 from pyscf.pbc.symm.space_group import SYMPREC, XYZ
 from pyscf.pbc.tools import pbc as pbctools
 
+__all__ = ['Symmetry', 'transform_mo_coeff']
+
 def get_Dmat(op, l):
     '''
     Get Wigner D-matrix

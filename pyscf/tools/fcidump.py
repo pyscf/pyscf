@@ -27,6 +27,8 @@ from pyscf import ao2mo
 from pyscf import symm
 from pyscf import __config__
 
+__all__ = ['from_integrals', 'from_mo', 'from_scf', 'read', 'to_scf']
+
 DEFAULT_FLOAT_FORMAT = getattr(__config__, 'fcidump_float_format', ' %.16g')
 TOL = getattr(__config__, 'fcidump_write_tol', 1e-15)
 

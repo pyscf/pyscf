@@ -35,6 +35,8 @@ from pyscf.cc import _ccsd
 from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, get_e_hf, _mo_without_core
 from pyscf import __config__
 
+__all__ = ['CCSD_Scanner', 'CCSDBase', 'CCSD', 'CC', 'RCCSD']
+
 BLKMIN = getattr(__config__, 'cc_ccsd_blkmin', 4)
 MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 

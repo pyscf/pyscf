@@ -35,6 +35,8 @@ from pyscf.pbc.lib.kpts_helper import unique, round_to_fbz
 from pyscf.pbc.tools.pbc import get_monkhorst_pack_size
 from pyscf.pbc.df.df import CDERIArray
 
+__all__ = ['kernel', 'KMP2_stagger', 'CDERIArray']
+
 #   Kernel function for computing the MP2 energy
 def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
     """Computes k-point RMP2 energy using the staggered mesh method

@@ -24,6 +24,8 @@ from pyscf.lib import logger
 from pyscf import gto
 from pyscf import __config__
 
+__all__ = ['lowdin', 'schmidt', 'vec_lowdin', 'vec_schmidt', 'weight_orth', 'orth_ao']
+
 REF_BASIS = getattr(__config__, 'lo_orth_pre_orth_ao_method', 'ANO')
 ORTH_METHOD = getattr(__config__, 'lo_orth_orth_ao_method', 'meta_lowdin')
 PROJECT_ECP_BASIS = getattr(__config__, 'lo_orth_project_ecp_basis', True)

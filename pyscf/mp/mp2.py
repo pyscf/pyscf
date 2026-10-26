@@ -27,6 +27,8 @@ from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf import __config__
 
+__all__ = ['make_rdm1', 'make_rdm2', 'MP2_Scanner', 'MP2Base', 'RMP2', 'MP2']
+
 WITH_T2 = getattr(__config__, 'mp_mp2_with_t2', True)
 
 

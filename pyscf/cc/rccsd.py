@@ -37,6 +37,8 @@ from pyscf.cc import rintermediates as imd
 from pyscf.mp import mp2
 from pyscf import __config__
 
+__all__ = ['RCCSD']
+
 BLKMIN = getattr(__config__, 'cc_ccsd_blkmin', 4)
 MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 

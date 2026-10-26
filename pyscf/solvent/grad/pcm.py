@@ -28,6 +28,8 @@ from pyscf import gto, df
 from pyscf.solvent.pcm import PI, switch_h, PCM
 from pyscf.grad import rhf as rhf_grad
 
+__all__ = ['WithSolventGrad', 'PCM']
+
 def grad_switch_h(x):
     ''' first derivative of h(x)'''
     dy = 30.0*x**2 - 60.0*x**3 + 30.0*x**4

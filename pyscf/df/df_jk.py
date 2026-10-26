@@ -24,6 +24,8 @@ from pyscf import scf
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 
+__all__ = ['density_fit']
+
 DEBUG = False
 
 libri = lib.load_library('libri')

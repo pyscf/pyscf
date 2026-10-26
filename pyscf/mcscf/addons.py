@@ -28,6 +28,17 @@ from pyscf import scf
 from pyscf import symm
 from pyscf import __config__
 
+__all__ = [
+    'sort_mo', 'select_mo_by_irrep', 'caslst_by_irrep', 'sort_mo_by_irrep',
+    'make_natural_orbitals', 'project_init_guess', 'project_init_guess_old',
+    'make_rdm1', 'make_rdm1s', 'get_spin_square', 'make_spin_casdm1', 'make_rdm12',
+    'get_fock', 'cas_natorb', 'map2hf', 'spin_square', 'StateAverageMCSCFSolver',
+    'state_average', 'StateAverageFCISolver', 'StateAverageMCSCF', 'state_average_',
+    'state_specific_', 'state_specific', 'StateSpecificFCISolver',
+    'StateAverageMixFCISolver_solver_args', 'StateAverageMixFCISolver_state_args',
+    'StateAverageMixFCISolver', 'state_average_mix', 'state_average_mix_',
+]
+
 BASE = getattr(__config__, 'mcscf_addons_sort_mo_base', 1)
 MAP2HF_TOL = getattr(__config__, 'mcscf_addons_map2hf_tol', 0.4)
 

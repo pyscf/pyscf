@@ -25,6 +25,8 @@ from pyscf.scf import hf_symm
 from pyscf.dft import rks
 from pyscf.dft import uks
 
+__all__ = ['SymAdaptedRKS', 'RKS', 'SymAdaptedROKS', 'ROKS']
+
 
 class SymAdaptedRKS(rks.KohnShamDFT, hf_symm.SymAdaptedRHF):
     ''' Restricted Kohn-Sham '''

@@ -20,6 +20,11 @@ import sys
 import json
 import h5py
 
+__all__ = [
+    'load', 'load_chkfile_key', 'dump', 'dump_chkfile_key', 'save', 'load_mol',
+    'save_mol', 'dump_mol',
+]
+
 if sys.version_info < (3,):
     RANGE_TYPE = list
 else:

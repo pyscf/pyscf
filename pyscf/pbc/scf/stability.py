@@ -33,6 +33,8 @@ from pyscf.lib import logger
 from pyscf.pbc.scf import newton_ah
 from pyscf.pbc.scf import _response_functions
 
+__all__ = ['rhf_stability', 'uhf_stability']
+
 def rhf_stability(mf, internal=True, external=False, verbose=None, return_status=False):
     '''Check whether orbital rotations can lower a KRHF or KRKS energy.
 

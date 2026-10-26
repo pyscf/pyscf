@@ -31,6 +31,8 @@ from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
 from pyscf import scf
 from pyscf.soscf import ciah
 
+__all__ = ['CASSCF']
+
 def _pack_ci_get_H (mc, mo, ci0):
     # MRH 06/24/2020: get wrapped Hci and Hdiag functions for
     # SA and SA-mix case. Put ci in a consistent format: list of raveled CI vecs

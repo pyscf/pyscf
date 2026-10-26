@@ -17,6 +17,8 @@ import numpy
 from pyscf import lib
 from pyscf.cc.bccd import bccd_kernel_
 
+__all__ = ['spatial2spin', 'spatial2spinorb', 'spin2spatial', 'convert_to_gccsd']
+
 def spatial2spin(tx, orbspin=None):
     '''Convert spatial-orbital T1 or T2 amplitudes to spin-orbital amplitudes.
 

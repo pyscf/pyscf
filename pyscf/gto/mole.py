@@ -53,6 +53,29 @@ from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON, \
 from pyscf.lib.exceptions import BasisNotFoundError, PointGroupSymmetryError
 import warnings
 
+__all__ = [
+    'M', 'gaussian_int', 'gto_norm', 'cart2sph', 'cart2spinor_kappa', 'cart2j_kappa',
+    'cart2spinor_l', 'cart2j_l', 'sph2spinor_kappa', 'sph2spinor_l',
+    'ao_rotation_matrix', 'atom_types', 'format_atom', 'format_basis',
+    'uncontracted_basis', 'uncontract', 'to_uncontracted_cartesian_basis',
+    'decontract_basis', 'format_ecp', 'format_pseudo', 'expand_etb', 'expand_etbs',
+    'etbs', 'conc_env', 'conc_mol', 'intor_cross', 'make_atm_env', 'make_bas_env',
+    'make_env', 'make_ecp_env', 'tot_electrons', 'copy', 'pack', 'unpack', 'dumps',
+    'loads', 'len_spinor', 'len_cart', 'npgto_nr', 'nao_nr', 'nao_cart', 'nao_nr_range',
+    'nao_2c', 'nao_2c_range', 'ao_loc_nr', 'ao_loc_2c', 'time_reversal_map',
+    'classical_coulomb_energy', 'energy_nuc', 'inter_distance', 'sph_labels',
+    'spheric_labels', 'spherical_labels', 'cart_labels', 'ao_labels', 'spinor_labels',
+    'search_ao_label', 'search_shell_id', 'search_ao_nr', 'search_ao_r',
+    'offset_2c_by_atom', 'aoslice_by_atom', 'offset_nr_by_atom', 'same_basis_set',
+    'same_mol', 'is_same_mol', 'chiral_mol', 'inertia_moment', 'atom_mass_list',
+    'condense_to_shell', 'get_overlap_cond', 'tostring', 'tofile', 'fromfile',
+    'fromstring', 'is_au', 'MoleBase', 'Mole', 'from_zmatrix', 'zmat2cart', 'zmat',
+    'cart2zmat', 'dyall_nuc_mod', 'filatov_nuc_mod', 'fakemol_for_charges',
+    'fakemol_for_cgtf_charge', 'classify_ecp_pseudo', 'bse_predefined_ecp',
+    'extract_pgto_params', 'most_diffuse_pgto', 'BasisNotFoundError',
+    'PointGroupSymmetryError',
+]
+
 
 # for _atm, _bas, _env
 CHARGE_OF  = 0

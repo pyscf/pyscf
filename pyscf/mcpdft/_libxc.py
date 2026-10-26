@@ -17,6 +17,8 @@ from pyscf.dft.libxc import XC_ALIAS, XC_CODES, XC_KEYS
 from pyscf.dft.libxc import hybrid_coeff, rsh_coeff
 from pyscf import lib
 
+__all__ = ['XCSplitError', 'split_x_c_comma']
+
 XC_ALIAS_KEYS = set (XC_ALIAS.keys ())
 XC_TYPE_HDR = ('LDA_','GGA_','MGGA_')
 INTCODES_TYPES = {}

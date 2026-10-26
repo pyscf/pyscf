@@ -22,6 +22,8 @@ from pyscf.lib.chkfile import load_chkfile_key, load
 from pyscf.lib.chkfile import dump_chkfile_key, dump, save
 from pyscf.lib.chkfile import load_mol, save_mol
 
+__all__ = ['H5FileWrap']
+
 def load_scf(chkfile):
     return load_mol(chkfile), load(chkfile, 'scf')
 
