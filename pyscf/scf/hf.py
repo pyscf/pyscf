@@ -460,11 +460,13 @@ def init_guess_by_minao(mol):
 
     occ = []
     new_atom = []
+    nelec_ecp = []
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
         if not gto.is_ghost_atom(symb):
             occ.append(occdic[symb])
             new_atom.append(mol._atom[ia])
+            nelec_ecp.append(nelec_ecp_dic[symb])
 
     if not occ:
         # A system with only ghost atoms. (issue 3155)
@@ -481,6 +483,22 @@ def init_guess_by_minao(mol):
 
     #: dm = addons.project_dm_nr2nr(pmol, numpy.diag(occ), mol)
     mo = addons.project_mo_nr2nr(pmol, numpy.eye(pmol.nao), mol)
+
+    # Restore the norm lost when projecting onto the basis of ECP atoms
+    if any(nelec_ecp):
+        s = mol.intor_symmetric('int1e_ovlp')
+        for ia, (p0, p1) in enumerate(pmol.aoslice_by_atom()[:,2:]):
+            if nelec_ecp[ia] == 0:
+                continue
+            idx = numpy.arange(p0, p1)[occ[p0:p1] > 0]
+            c = mo[:,idx]
+            w, v = numpy.linalg.eigh(c.conj().T.dot(s).dot(c))
+            if w[0] > 1e-8:
+                mo[:,idx] = lib.dot(c, (v / numpy.sqrt(w)).dot(v.conj().T))
+            else:
+                logger.debug(mol, 'Projected MINAO orbitals of atom %d are '
+                             'linearly dependent and not orthonormalized', ia)
+
     dm = lib.dot(mo*occ, mo.conj().T)
 # normalize electron number
 #    s = mol.intor_symmetric('int1e_ovlp')
