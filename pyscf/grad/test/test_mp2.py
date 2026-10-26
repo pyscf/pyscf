@@ -176,6 +176,30 @@ class KnownValues(unittest.TestCase):
         g = mol.RHF.run().MP2().run().Gradients().kernel()
         self.assertAlmostEqual(lib.fp(g), -0.03568120792884476, 6)
 
+    def test_shell_prange_without_empty_blocks(self):
+        # A shell wider than the block (a generally contracted shell, or little
+        # free memory) used to close the block before it, which was empty when
+        # that shell came first, and the gradient's reshape of it raised.
+        mol1 = gto.M(atom=mol.atom, basis='cc-pvtz')
+        offsets = mol1.offset_nr_by_atom()
+        for blksize in (1, 2, 5, 13, 1000):
+            for shl0, shl1, p0, p1 in offsets:
+                blocks = list(mp2_grad._shell_prange(mol1, shl0, shl1, blksize))
+                self.assertTrue(all(nf > 0 for b0, b1, nf in blocks))
+                self.assertTrue(all(b1 > b0 for b0, b1, nf in blocks))
+                self.assertEqual([b[0] for b in blocks[1:]], [b[1] for b in blocks[:-1]])
+                self.assertEqual(blocks[0][0], shl0)
+                self.assertEqual(blocks[-1][1], shl1)
+                self.assertEqual(sum(b[2] for b in blocks), p1 - p0)
+
+    def test_grad_with_little_memory(self):
+        mol1 = gto.M(atom=mol.atom, basis='ccpvdz', verbose=0)
+        pt = mol1.RHF().run(conv_tol=1e-10).MP2().run()
+        g_ref = pt.nuc_grad_method().kernel(pt.t2)
+        pt.max_memory = 1
+        g1 = pt.nuc_grad_method().kernel(pt.t2)
+        self.assertAlmostEqual(abs(g1 - g_ref).max(), 0, 9)
+
 
 if __name__ == "__main__":
     print("Tests for MP2 gradients")
