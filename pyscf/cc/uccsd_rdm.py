@@ -369,16 +369,18 @@ def _vvvv_to_h5(cc, h5fobj, key, tau, lam, fac, compress_vvvv):
     log = logger.Logger(cc.stdout, cc.verbose)
     nv1, nv2 = tau.shape[2:]
     dtype = numpy.result_type(tau, lam)
-    max_memory = max(0, cc.max_memory - lib.current_memory()[0])
-    blksize = min(nv1, max(ccsd.BLKMIN, int(max_memory*.9e6/8/(3*nv1*nv2**2))))
-    log.debug1('%s in h5fobj: block size = %d, nvir = %d in %d blocks',
-               key, blksize, nv1, (nv1+blksize-1)//blksize)
     if compress_vvvv:
         idx2 = numpy.tril_indices(nv2)
         idx2 = idx2[0] * nv2 + idx2[1]
         dset = h5fobj.create_dataset(key, (nv1*(nv1+1)//2, nv2*(nv2+1)//2), dtype)
     else:
         dset = h5fobj.create_dataset(key, (nv1,nv1,nv2,nv2), dtype)
+    if nv1 == 0 or nv2 == 0:  # a spin block without virtual orbitals
+        return dset
+    max_memory = max(0, cc.max_memory - lib.current_memory()[0])
+    blksize = min(nv1, max(ccsd.BLKMIN, int(max_memory*.9e6/8/(3*nv1*nv2**2))))
+    log.debug1('%s in h5fobj: block size = %d, nvir = %d in %d blocks',
+               key, blksize, nv1, (nv1+blksize-1)//blksize)
     for p0, p1 in lib.prange(0, nv1, blksize):
         d1_pq = einsum('ijpr,ijqs->pqrs', tau[:,:,p0:p1], lam) * fac
         d1_qp = einsum('ijqr,ijps->pqrs', tau, lam[:,:,p0:p1]) * fac
