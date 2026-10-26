@@ -134,6 +134,19 @@ class TestCosmoRS(unittest.TestCase):
             abs(numpy.array(seg['sigma_corr']) * numpy.array(seg['area'])
                 - numpy.array(seg['charge_corr'])).max(), 0, 12)
 
+    def test_occ_vacuum(self):
+        cm = pcm.PCM(mol)
+        cm.eps = 1.0
+        cm.method = 'C-PCM'
+        cm.lebedev_order = 29
+        cm.verbose = 0
+        mf = scf.RHF(mol).PCM(cm)
+        mf.kernel()
+        occ = cosmors.get_outlying_charge_correction(mf)
+        self.assertAlmostEqual(abs(occ['q']).max(), 0, 12)
+        self.assertAlmostEqual(occ['e_diel'], 0, 12)
+        self.assertTrue(numpy.isfinite([occ['f_nuc'], occ['f_elec']]).all())
+
     def test_occ_unsupported_model(self):
         # Only C-PCM and COSMO have R proportional to the identity. The others
         # must refuse rather than report a wrong correction.

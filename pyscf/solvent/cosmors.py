@@ -227,25 +227,26 @@ def get_outlying_charge_correction(mf):
             'is what makes the screening-charge sum rules well defined.')
 
     K = pcmobj._intermediates['K']
-    R = pcmobj._intermediates['R']
     f_eps = pcmobj._intermediates['f_epsilon']
     v_grids = pcmobj._intermediates['v_grids']
     v_nuc = pcmobj.v_grids_n
 
     # The COSMO equations are linear in the surface potential, so the screening
     # charges split into nuclear and electronic parts along with it.
-    q_nuc = _np.linalg.solve(K, R.dot(v_nuc))
-    q_elec = _np.linalg.solve(K, R.dot(v_grids - v_nuc))
+    # Conductor charges are used so that eps = 1 stays finite.
+    q_nuc = -_np.linalg.solve(K, v_nuc)
+    q_elec = -_np.linalg.solve(K, v_grids - v_nuc)
 
     Q_nuc = float(mf.mol.atom_charges().sum())
     Q_elec = -float(mf.mol.nelectron)
-    f_nuc = -f_eps * Q_nuc / q_nuc.sum()
-    f_elec = -f_eps * Q_elec / q_elec.sum()
-    q_corr = f_nuc * q_nuc + f_elec * q_elec
+    f_nuc = -Q_nuc / q_nuc.sum()
+    f_elec = -Q_elec / q_elec.sum()
+    q0_corr = f_nuc * q_nuc + f_elec * q_elec
 
     # Regenerate the potential from the corrected charges: K q = R v with
     # R = -f_eps I inverts to v = -K q / f_eps.
-    v_corr = -K.dot(q_corr) / f_eps
+    v_corr = -K.dot(q0_corr)
+    q_corr = f_eps * q0_corr
     e_diel_corr = 0.5 * float(_np.dot(q_corr, v_corr))
 
     return {
