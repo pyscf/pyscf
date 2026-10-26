@@ -25,6 +25,8 @@ from pyscf.cc import gccsd, gccsd_t
 from pyscf.cc import uccsd_t_slow
 from pyscf.cc import uccsd_t_lambda
 from pyscf.cc import uccsd_t_rdm
+from pyscf.cc import uccsd_rdm
+from pyscf.cc import uccsd_t_blocked
 from pyscf.cc import ccsd_t_lambda_slow as ccsd_t_lambda
 from pyscf.cc import ccsd_t_rdm_slow as ccsd_t_rdm
 
@@ -249,6 +251,46 @@ class KnownValues(unittest.TestCase):
                             self.assertIsNone(d)
                         else:
                             self.assertAlmostEqual(abs(numpy.asarray(d) - r).max(), 0, 12)
+
+    def test_blocked_t3_intermediates(self):
+        # the (T) terms over blocks of the virtual indices equal the
+        # whole-array ones; a small max_memory makes the public functions
+        # take the blocked path
+        mol1 = gto.M(atom=mol.atom, basis='631g', spin=2, verbose=0)
+        mycc = cc.UCCSD(scf.UHF(mol1).run(conv_tol=1e-12))
+        mycc.run(conv_tol=1e-10, conv_tol_normt=1e-8)
+        eris = mycc.ao2mo()
+        t1, t2 = mycc.t1, mycc.t2
+        l1, l2 = mycc.solve_lambda(eris=eris)
+        self.assertIsNone(uccsd_t_blocked.block_size(mycc, t2[1]))
+        ref_l = uccsd_t_lambda.make_intermediates(mycc, t1, t2, eris)
+        ref_l = (ref_l.l1a_t, ref_l.l1b_t, ref_l.l2aa_t, ref_l.l2ab_t, ref_l.l2bb_t)
+        ref_g1 = uccsd_t_rdm._t3_gamma1(t1, t2, eris)
+        ref_d1 = uccsd_t_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2, eris, for_grad=True)
+        ref_d2 = uccsd_t_rdm._gamma2_intermediates(mycc, t1, t2, l1, l2, eris)
+
+        def close(ref, got):
+            for r, g in zip(ref, got):
+                if isinstance(r, tuple):
+                    close(r, g)
+                elif r is None:
+                    self.assertIsNone(g)
+                else:
+                    self.assertAlmostEqual(abs(numpy.asarray(g) - r).max(), 0, 12)
+
+        for blksize in (1, 3, 100):
+            close(ref_l, uccsd_t_blocked.lambda_intermediates(mycc, t1, t2, eris, blksize))
+            close(ref_g1, uccsd_t_blocked.gamma1_intermediates(mycc, t1, t2, eris, blksize))
+            d2 = uccsd_rdm._gamma2_intermediates(mycc, t1, t2, l1, l2)
+            uccsd_t_blocked.add_gamma2(mycc, t1, t2, eris, d2, blksize)
+            close(ref_d2, d2)
+
+        mycc.max_memory = 1
+        self.assertIsNotNone(uccsd_t_blocked.block_size(mycc, t2[1]))
+        imds = uccsd_t_lambda.make_intermediates(mycc, t1, t2, eris)
+        close(ref_l, (imds.l1a_t, imds.l1b_t, imds.l2aa_t, imds.l2ab_t, imds.l2bb_t))
+        close(ref_d1, uccsd_t_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2, eris, for_grad=True))
+        close(ref_d2, uccsd_t_rdm._gamma2_intermediates(mycc, t1, t2, l1, l2, eris))
 
 if __name__ == "__main__":
     print("Full Tests for UCCSD(T)")

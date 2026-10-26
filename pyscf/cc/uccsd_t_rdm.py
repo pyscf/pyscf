@@ -19,12 +19,43 @@
 import numpy
 from pyscf import lib
 from pyscf.cc import uccsd_rdm
+from pyscf.cc import uccsd_t_blocked
 
 def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
     d1 = uccsd_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2)
 
     if eris is None: eris = mycc.ao2mo()
 
+    blksize = uccsd_t_blocked.block_size(mycc, t2[1])
+    if blksize is None:
+        goo, gOO, gvv, gVV, gvo, gVO = _t3_gamma1(t1, t2, eris)
+    else:
+        goo, gOO, gvv, gVV, gvo, gVO = uccsd_t_blocked.gamma1_intermediates(mycc, t1, t2, eris, blksize)
+    nocca, noccb, nvira, nvirb = t2[1].shape
+
+    doo, dOO = d1[0]
+    dov, dOV = d1[1]
+    dvo, dVO = d1[2]
+    dvv, dVV = d1[3]
+
+    if for_grad:
+        doo -= goo
+        dOO -= gOO
+        dvv += gvv
+        dVV += gVV
+    else:
+        doo[numpy.diag_indices(nocca)] -= goo.diagonal()
+        dOO[numpy.diag_indices(noccb)] -= gOO.diagonal()
+        dvv[numpy.diag_indices(nvira)] += gvv.diagonal()
+        dVV[numpy.diag_indices(nvirb)] += gVV.diagonal()
+
+    dvo += gvo
+    dVO += gVO
+
+    return d1
+
+def _t3_gamma1(t1, t2, eris):
+    '''The (T) terms of _gamma1_intermediates with whole ijkabc arrays.'''
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     nocca, noccb, nvira, nvirb = t2ab.shape
@@ -110,26 +141,7 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
     gVO += numpy.einsum('ikac,ijkabc->bj', t2ab.conj(), rw) * .5
     gvo += numpy.einsum('jkbc,ijkabc->ai', t2bb.conj(), rw) * .125
 
-    doo, dOO = d1[0]
-    dov, dOV = d1[1]
-    dvo, dVO = d1[2]
-    dvv, dVV = d1[3]
-
-    if for_grad:
-        doo -= goo
-        dOO -= gOO
-        dvv += gvv
-        dVV += gVV
-    else:
-        doo[numpy.diag_indices(nocca)] -= goo.diagonal()
-        dOO[numpy.diag_indices(noccb)] -= gOO.diagonal()
-        dvv[numpy.diag_indices(nvira)] += gvv.diagonal()
-        dVV[numpy.diag_indices(nvirb)] += gVV.diagonal()
-
-    dvo += gvo
-    dVO += gVO
-
-    return d1
+    return goo, gOO, gvv, gVV, gvo, gVO
 
 # gamma2 intermediates in Chemist's notation
 def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
@@ -168,6 +180,11 @@ def _add_t3_gamma2(mycc, t1, t2, eris, d2):
     '''Add the (T) terms to the UCCSD gamma2 intermediates d2, in place; none of
     them touches a vvvv block.'''
     if eris is None: eris = mycc.ao2mo()
+
+    blksize = uccsd_t_blocked.block_size(mycc, t2[1])
+    if blksize is not None:
+        uccsd_t_blocked.add_gamma2(mycc, t1, t2, eris, d2, blksize)
+        return
 
     dovov, dovOV, dOVov, dOVOV = d2[0]
     dovvv, dovVV, dOVvv, dOVVV = d2[6]
