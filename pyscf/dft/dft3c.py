@@ -88,8 +88,9 @@ def dft3c(mf, method='b97-3c'):
     name = mf_class.__name__
     if issubclass(mf_class, DFT3C):
         raise RuntimeError('Object %s already has the DFT3C mixin' % name)
-    dft3cmf = DFT3C(mf, method)
-    return lib.set_class(dft3cmf, (DFT3C, mf_class))
+    dft3cmf = lib.set_class(DFT3C(mf), (DFT3C, mf_class))
+    dft3cmf._apply_dft3c(method)
+    return dft3cmf
 
 # 1. A tag to label the derived SCF class
 # 2. A hook to register DFT3C specific methods
@@ -107,9 +108,10 @@ class DFT3C:
 
     _keys = {'method3c'}
 
-    def __init__(self, mf, method='b97-3c'):
+    def __init__(self, mf):
+        if mf.mol.ecp:
+            raise RuntimeError('ECP overwritten by 3c method initialization')
         self.__dict__.update(mf.__dict__)
-        self._apply_dft3c(method)
 
     def dump_flags(self, verbose=None):
         logger = lib.logger.new_logger(self, verbose)
@@ -126,8 +128,6 @@ class DFT3C:
                 f'b97-3c, r2scan-3c, wb97x-3c.')
         basis, xc, ecp, auxbasis = _DFT3C_METHODS[method_lower]
         mol = self.mol
-        if mol.ecp:
-            raise RuntimeError('ECP overwritten by 3c method initialization')
         dft3c_basis_sets = [x[0] for x in _DFT3C_METHODS.values()]
         if (mol.basis == 'sto-3g' # the default basis of Mole class
             or mol.basis in dft3c_basis_sets):

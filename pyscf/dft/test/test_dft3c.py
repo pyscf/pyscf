@@ -135,6 +135,14 @@ class TestDFT3C(unittest.TestCase):
         self.assertAlmostEqual(e1, e2, 8)
         self.assertAlmostEqual(e1, -17.270931628544, 8)
 
+    def test_dft3c_rejects_existing_ecp(self):
+        mol = gto.M(atom='Na 0 0 0', basis='lanl2dz', ecp='lanl2dz',
+                    spin=1, verbose=0)
+        mf = dft.UKS(mol)
+        with self.assertRaisesRegex(RuntimeError, 'ECP overwritten'):
+            mf.dft3c('b97-3c')
+        self.assertEqual(mol.ecp, 'lanl2dz')
+
     def test_dft3c_undo(self):
         mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='def2mtzvp', verbose=0)
         mf = dft.RKS(mol).dft3c('b97-3c')
