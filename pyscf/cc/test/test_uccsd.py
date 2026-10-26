@@ -765,6 +765,26 @@ class KnownValues(unittest.TestCase):
                         else:
                             self.assertAlmostEqual(abs(numpy.asarray(d) - r).max(), 0, 12)
 
+    def test_gamma2_outcore_without_alpha_virtuals(self):
+        # a spin block without virtual orbitals gives empty vvvv blocks in
+        # h5fobj, as it gives empty arrays in core
+        nocca = int(mf_s2.mo_occ[0].sum())
+        mycc = cc.UCCSD(mf_s2, frozen=[list(range(nocca, mol_s2.nao)), []]).run(conv_tol=1e-10)
+        l1, l2 = mycc.solve_lambda()
+        mycc.max_memory = 1
+        for compress_vvvv in (False, True):
+            ref = uccsd_rdm._gamma2_intermediates(mycc, mycc.t1, mycc.t2, l1, l2, compress_vvvv)
+            f = lib.H5TmpFile()
+            d2 = uccsd_rdm._gamma2_outcore(mycc, mycc.t1, mycc.t2, l1, l2, f, compress_vvvv)
+            for blocks_ref, blocks in zip(ref, d2):
+                for r, d in zip(blocks_ref, blocks):
+                    if r is None:
+                        self.assertIsNone(d)
+                    else:
+                        self.assertEqual(numpy.asarray(d).shape, r.shape)
+                        if r.size:
+                            self.assertAlmostEqual(abs(numpy.asarray(d) - r).max(), 0, 12)
+
 if __name__ == "__main__":
     print("Full Tests for UCCSD")
     unittest.main()
