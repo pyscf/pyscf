@@ -1356,9 +1356,17 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
             for j in range(nd):
                 h[i,j] = dot(xi.conj(), ax[j])
         xi = None
-    # Add the contribution of I in (1+a)
+    # Add the contribution of I in (1+a): the overlap of the trial vectors. A single
+    # Gram-Schmidt pass leaves vectors near lindep not exactly orthogonal, so their
+    # overlap is not diag(innerprod).
     for i in range(nd):
-        h[i,i] += innerprod[i]
+        xi = numpy.asarray(xs[i])
+        for j in range(i+1):
+            sij = dot(xi.conj(), numpy.asarray(xs[j]))
+            h[i,j] += sij
+            if j != i:
+                h[j,i] += sij.conj()
+        xi = None
 
     g = numpy.zeros((nd,nroots), dtype=x1.dtype)
     for i in range(nd):
