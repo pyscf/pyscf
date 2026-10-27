@@ -181,16 +181,14 @@ class KnownValues(unittest.TestCase):
         # free memory) used to close the block before it, which was empty when
         # that shell came first, and the gradient's reshape of it raised.
         mol1 = gto.M(atom=mol.atom, basis='cc-pvtz')
-        offsets = mol1.offset_nr_by_atom()
         for blksize in (1, 2, 5, 13, 1000):
-            for shl0, shl1, p0, p1 in offsets:
-                blocks = list(mp2_grad._shell_prange(mol1, shl0, shl1, blksize))
+            with self.subTest(blksize=blksize):
+                blocks = list(mp2_grad._shell_prange(mol1, 0, mol1.nbas, blksize))
                 self.assertTrue(all(nf > 0 for b0, b1, nf in blocks))
-                self.assertTrue(all(b1 > b0 for b0, b1, nf in blocks))
-                self.assertEqual([b[0] for b in blocks[1:]], [b[1] for b in blocks[:-1]])
-                self.assertEqual(blocks[0][0], shl0)
-                self.assertEqual(blocks[-1][1], shl1)
-                self.assertEqual(sum(b[2] for b in blocks), p1 - p0)
+                # the blocks cover every shell once, in order
+                self.assertEqual([b[0] for b in blocks], [0] + [b[1] for b in blocks[:-1]])
+                self.assertEqual(blocks[-1][1], mol1.nbas)
+                self.assertEqual(sum(nf for b0, b1, nf in blocks), mol1.nao)
 
     def test_grad_with_little_memory(self):
         mol1 = gto.M(atom=mol.atom, basis='ccpvdz', verbose=0)
