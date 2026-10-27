@@ -746,24 +746,23 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mycc.e_tot, -100.07710261186985, 7)
 
     def test_gamma2_outcore(self):
-        # the vvvv blocks of _gamma2_outcore are written to h5fobj (compressed
-        # or not) and every block equals _gamma2_intermediates
+        # with max_memory = 1 the vvvv blocks of _gamma2_outcore are written to
+        # h5fobj in many slabs; every block equals _gamma2_intermediates
         mycc = cc.UCCSD(mf_s2).run(conv_tol=1e-10)
         l1, l2 = mycc.solve_lambda()
-        for max_memory in (4000, 1):
-            mycc.max_memory = max_memory
-            for compress_vvvv in (False, True):
-                ref = uccsd_rdm._gamma2_intermediates(mycc, mycc.t1, mycc.t2, l1, l2, compress_vvvv)
-                f = lib.H5TmpFile()
-                d2 = uccsd_rdm._gamma2_outcore(mycc, mycc.t1, mycc.t2, l1, l2, f, compress_vvvv)
-                for k in (0, 1, 3):
-                    self.assertIsInstance(d2[1][k], h5py.Dataset)
-                for blocks_ref, blocks in zip(ref, d2):
-                    for r, d in zip(blocks_ref, blocks):
-                        if r is None:
-                            self.assertIsNone(d)
-                        else:
-                            self.assertAlmostEqual(abs(numpy.asarray(d) - r).max(), 0, 12)
+        mycc.max_memory = 1
+        for compress_vvvv in (False, True):
+            ref = uccsd_rdm._gamma2_intermediates(mycc, mycc.t1, mycc.t2, l1, l2, compress_vvvv)
+            f = lib.H5TmpFile()
+            d2 = uccsd_rdm._gamma2_outcore(mycc, mycc.t1, mycc.t2, l1, l2, f, compress_vvvv)
+            for k in (0, 1, 3):
+                self.assertIsInstance(d2[1][k], h5py.Dataset)
+            for i, j in numpy.ndindex(len(ref), 4):
+                with self.subTest(compress_vvvv=compress_vvvv, block=(i, j)):
+                    if ref[i][j] is None:
+                        self.assertIsNone(d2[i][j])
+                    else:
+                        self.assertAlmostEqual(abs(numpy.asarray(d2[i][j]) - ref[i][j]).max(), 0, 12)
 
     def test_gamma2_outcore_without_alpha_virtuals(self):
         # a spin block without virtual orbitals gives empty vvvv blocks in
@@ -776,14 +775,14 @@ class KnownValues(unittest.TestCase):
             ref = uccsd_rdm._gamma2_intermediates(mycc, mycc.t1, mycc.t2, l1, l2, compress_vvvv)
             f = lib.H5TmpFile()
             d2 = uccsd_rdm._gamma2_outcore(mycc, mycc.t1, mycc.t2, l1, l2, f, compress_vvvv)
-            for blocks_ref, blocks in zip(ref, d2):
-                for r, d in zip(blocks_ref, blocks):
-                    if r is None:
-                        self.assertIsNone(d)
-                    else:
-                        self.assertEqual(numpy.asarray(d).shape, r.shape)
-                        if r.size:
-                            self.assertAlmostEqual(abs(numpy.asarray(d) - r).max(), 0, 12)
+            for k in range(4):
+                with self.subTest(compress_vvvv=compress_vvvv, vvvv_block=k):
+                    if ref[1][k] is None:
+                        self.assertIsNone(d2[1][k])
+                        continue
+                    self.assertEqual(numpy.asarray(d2[1][k]).shape, ref[1][k].shape)
+                    if ref[1][k].size:
+                        self.assertAlmostEqual(abs(numpy.asarray(d2[1][k]) - ref[1][k]).max(), 0, 12)
 
 if __name__ == "__main__":
     print("Full Tests for UCCSD")
