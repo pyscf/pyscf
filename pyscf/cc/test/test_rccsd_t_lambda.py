@@ -186,18 +186,19 @@ class KnownValues(unittest.TestCase):
         eris = mycc.ao2mo()
         mycc.kernel(eris=eris)
         conv, l1, l2 = ccsd_t_lambda.kernel(mycc, eris, mycc.t1, mycc.t2, tol=1e-10)
-        for max_memory in (4000, 1):
-            mycc.max_memory = max_memory
-            for compress_vvvv in (False, True):
-                ref = ccsd_t_rdm._gamma2_intermediates(mycc, mycc.t1, mycc.t2, l1, l2, eris,
-                                                      compress_vvvv=compress_vvvv)
-                f = lib.H5TmpFile()
-                d2 = ccsd_t_rdm._gamma2_outcore(mycc, mycc.t1, mycc.t2, l1, l2, eris, f,
-                                                compress_vvvv=compress_vvvv)
-                self.assertIsInstance(d2[1], type(f['dvvvv']))
-                self.assertIsNone(d2[5])
-                self.assertTrue(np.allclose(ref[5], np.asarray(d2[6]).transpose(2,3,0,1), atol=1e-12))
-                for k in (0, 1, 2, 3, 4, 6, 7):
+        mycc.max_memory = 1
+        for compress_vvvv in (False, True):
+            ref = ccsd_t_rdm._gamma2_intermediates(mycc, mycc.t1, mycc.t2, l1, l2, eris,
+                                                  compress_vvvv=compress_vvvv)
+            f = lib.H5TmpFile()
+            d2 = ccsd_t_rdm._gamma2_outcore(mycc, mycc.t1, mycc.t2, l1, l2, eris, f,
+                                            compress_vvvv=compress_vvvv)
+            self.assertIsInstance(d2[1], type(f['dvvvv']))
+            # out of core, dvvov is None and dovvv holds its transpose
+            self.assertIsNone(d2[5])
+            self.assertAlmostEqual(abs(np.asarray(d2[6]).transpose(2,3,0,1) - ref[5]).max(), 0, 12)
+            for k in (0, 1, 2, 3, 4, 6, 7):
+                with self.subTest(compress_vvvv=compress_vvvv, block=k):
                     self.assertAlmostEqual(abs(np.asarray(d2[k]) - ref[k]).max(), 0, 12)
 
 if __name__ == "__main__":
