@@ -135,7 +135,7 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
 def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
                           compress_vvvv=False):
     d2 = uccsd_rdm._gamma2_intermediates(mycc, t1, t2, l1, l2)
-    _add_t3_gamma2(mycc, t1, t2, eris, d2)
+    d2 = _add_t3_gamma2(mycc, t1, t2, eris, d2)
 
     if compress_vvvv:
         nocca, noccb, nvira, nvirb = t2[1].shape
@@ -161,12 +161,11 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, eris, h5fobj, compress_vvvv=False):
     '''_gamma2_intermediates with the vvvv blocks in h5fobj
     (uccsd_rdm._gamma2_outcore).'''
     d2 = uccsd_rdm._gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv)
-    _add_t3_gamma2(mycc, t1, t2, eris, d2)
-    return d2
+    return _add_t3_gamma2(mycc, t1, t2, eris, d2)
 
 def _add_t3_gamma2(mycc, t1, t2, eris, d2):
-    '''Add the (T) terms to the UCCSD gamma2 intermediates d2, in place; none of
-    them touches a vvvv block.'''
+    '''Add the (T) terms to the UCCSD gamma2 intermediates d2 in place and
+    return d2; none of them touches a vvvv block.'''
     if eris is None: eris = mycc.ao2mo()
 
     dovov, dovOV, dOVov, dOVOV = d2[0]
@@ -261,6 +260,7 @@ def _add_t3_gamma2(mycc, t1, t2, eris, d2):
     dOVOV += numpy.einsum('ia,ijkabc->jbkc', t1a, rw.conj()) * .25
     dovOV += numpy.einsum('jb,ijkabc->iakc', t1b, rw.conj()) * .25
     #dOVov += numpy.einsum('jb,ijkabc->kcia', t1b, rw.conj()) * .25
+    return d2
 
 def make_rdm1(mycc, t1, t2, l1, l2, eris=None, ao_repr=False):
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2, eris)
