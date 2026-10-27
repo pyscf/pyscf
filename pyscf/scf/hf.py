@@ -500,9 +500,6 @@ def init_guess_by_minao(mol):
                              'linearly dependent and not orthonormalized', ia)
 
     dm = lib.dot(mo*occ, mo.conj().T)
-# normalize electron number
-#    s = mol.intor_symmetric('int1e_ovlp')
-#    dm *= mol.nelectron / (dm*s).sum()
     return lib.tag_array(dm, mo_coeff=mo, mo_occ=occ)
 
 
