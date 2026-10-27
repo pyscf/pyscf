@@ -182,8 +182,7 @@ def _add_t3_gamma2(mycc, t1, t2, eris, d2):
 
     blksize = uccsd_t_blocked.block_size(mycc, t2[1])
     if blksize is not None:
-        uccsd_t_blocked.add_gamma2(mycc, t1, t2, eris, d2, blksize)
-        return
+        return uccsd_t_blocked.add_gamma2(mycc, t1, t2, eris, d2, blksize)
 
     dovov, dovOV, dOVov, dOVOV = d2[0]
     dovvv, dovVV, dOVvv, dOVVV = d2[6]

@@ -250,45 +250,114 @@ class KnownValues(unittest.TestCase):
                     else:
                         self.assertAlmostEqual(abs(numpy.asarray(d2[i][j]) - ref[i][j]).max(), 0, 12)
 
-    def test_blocked_t3_intermediates(self):
-        # the (T) terms over blocks of the virtual indices equal the
-        # whole-array ones; a small max_memory makes the public functions
-        # take the blocked path
-        mol1 = gto.M(atom=mol.atom, basis='631g', spin=2, verbose=0)
-        mycc = cc.UCCSD(scf.UHF(mol1).run(conv_tol=1e-12))
-        mycc.run(conv_tol=1e-10, conv_tol_normt=1e-8)
+    # The blocked (T) terms are compared with the whole-array code at one
+    # virtual orbital per block, at three, and with every virtual in one block.
+    def test_blocked_lambda_intermediates(self):
+        mycc = cc.UCCSD(mf).run(conv_tol=1e-10, conv_tol_normt=1e-8)
+        eris = mycc.ao2mo()
+        imds = uccsd_t_lambda.make_intermediates(mycc, mycc.t1, mycc.t2, eris)
+        ref = {'l1a': imds.l1a_t, 'l1b': imds.l1b_t, 'l2aa': imds.l2aa_t, 'l2ab': imds.l2ab_t, 'l2bb': imds.l2bb_t}
+        for blksize in (1, 3, 100):
+            got = uccsd_t_blocked.lambda_intermediates(mycc, mycc.t1, mycc.t2, eris, blksize)
+            for name, x in zip(ref, got):
+                with self.subTest(blksize=blksize, intermediate=name):
+                    self.assertAlmostEqual(abs(x - ref[name]).max(), 0, 12)
+
+    def test_blocked_gamma1_intermediates(self):
+        mycc = cc.UCCSD(mf).run(conv_tol=1e-10, conv_tol_normt=1e-8)
+        eris = mycc.ao2mo()
+        ref = uccsd_t_rdm._t3_gamma1(mycc.t1, mycc.t2, eris)
+        for blksize in (1, 3, 100):
+            got = uccsd_t_blocked.gamma1_intermediates(mycc, mycc.t1, mycc.t2, eris, blksize)
+            for name, r, x in zip(('goo', 'gOO', 'gvv', 'gVV', 'gvo', 'gVO'), ref, got):
+                with self.subTest(blksize=blksize, intermediate=name):
+                    self.assertAlmostEqual(abs(x - r).max(), 0, 12)
+
+    def test_blocked_gamma2_intermediates(self):
+        mycc = cc.UCCSD(mf).run(conv_tol=1e-10, conv_tol_normt=1e-8)
+        eris = mycc.ao2mo()
+        l1, l2 = mycc.solve_lambda(eris=eris)
+        ref = uccsd_t_rdm._gamma2_intermediates(mycc, mycc.t1, mycc.t2, l1, l2, eris)
+        for blksize in (1, 3, 100):
+            d2 = uccsd_rdm._gamma2_intermediates(mycc, mycc.t1, mycc.t2, l1, l2)
+            d2 = uccsd_t_blocked.add_gamma2(mycc, mycc.t1, mycc.t2, eris, d2, blksize)
+            for i, j in numpy.ndindex(len(ref), 4):
+                with self.subTest(blksize=blksize, block=(i, j)):
+                    if ref[i][j] is None:
+                        self.assertIsNone(d2[i][j])
+                    else:
+                        self.assertAlmostEqual(abs(d2[i][j] - ref[i][j]).max(), 0, 12)
+
+    def test_blocked_path_with_little_memory(self):
+        # with max_memory = 1 make_intermediates, _gamma1_intermediates and
+        # _gamma2_intermediates take the blocked path; their results do not change
+        mycc = cc.UCCSD(mf).run(conv_tol=1e-10, conv_tol_normt=1e-8)
         eris = mycc.ao2mo()
         t1, t2 = mycc.t1, mycc.t2
         l1, l2 = mycc.solve_lambda(eris=eris)
-        self.assertIsNone(uccsd_t_blocked.block_size(mycc, t2[1]))
-        ref_l = uccsd_t_lambda.make_intermediates(mycc, t1, t2, eris)
-        ref_l = (ref_l.l1a_t, ref_l.l1b_t, ref_l.l2aa_t, ref_l.l2ab_t, ref_l.l2bb_t)
-        ref_g1 = uccsd_t_rdm._t3_gamma1(t1, t2, eris)
+        imds = uccsd_t_lambda.make_intermediates(mycc, t1, t2, eris)
+        ref_l = (imds.l1a_t, imds.l1b_t, imds.l2aa_t, imds.l2ab_t, imds.l2bb_t)
         ref_d1 = uccsd_t_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2, eris, for_grad=True)
         ref_d2 = uccsd_t_rdm._gamma2_intermediates(mycc, t1, t2, l1, l2, eris)
 
-        def close(ref, got):
-            for r, g in zip(ref, got):
-                if isinstance(r, tuple):
-                    close(r, g)
-                elif r is None:
-                    self.assertIsNone(g)
-                else:
-                    self.assertAlmostEqual(abs(numpy.asarray(g) - r).max(), 0, 12)
-
-        for blksize in (1, 3, 100):
-            close(ref_l, uccsd_t_blocked.lambda_intermediates(mycc, t1, t2, eris, blksize))
-            close(ref_g1, uccsd_t_blocked.gamma1_intermediates(mycc, t1, t2, eris, blksize))
-            d2 = uccsd_rdm._gamma2_intermediates(mycc, t1, t2, l1, l2)
-            uccsd_t_blocked.add_gamma2(mycc, t1, t2, eris, d2, blksize)
-            close(ref_d2, d2)
-
         mycc.max_memory = 1
-        self.assertIsNotNone(uccsd_t_blocked.block_size(mycc, t2[1]))
         imds = uccsd_t_lambda.make_intermediates(mycc, t1, t2, eris)
-        close(ref_l, (imds.l1a_t, imds.l1b_t, imds.l2aa_t, imds.l2ab_t, imds.l2bb_t))
-        close(ref_d1, uccsd_t_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2, eris, for_grad=True))
-        close(ref_d2, uccsd_t_rdm._gamma2_intermediates(mycc, t1, t2, l1, l2, eris))
+        d1 = uccsd_t_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2, eris, for_grad=True)
+        d2 = uccsd_t_rdm._gamma2_intermediates(mycc, t1, t2, l1, l2, eris)
+        for k, x in enumerate((imds.l1a_t, imds.l1b_t, imds.l2aa_t, imds.l2ab_t, imds.l2bb_t)):
+            with self.subTest(lambda_intermediate=k):
+                self.assertAlmostEqual(abs(x - ref_l[k]).max(), 0, 12)
+        for i, j in numpy.ndindex(4, 2):
+            with self.subTest(d1_block=(i, j)):
+                self.assertAlmostEqual(abs(d1[i][j] - ref_d1[i][j]).max(), 0, 12)
+        for i, j in numpy.ndindex(len(ref_d2), 4):
+            with self.subTest(d2_block=(i, j)):
+                if ref_d2[i][j] is None:
+                    self.assertIsNone(d2[i][j])
+                else:
+                    self.assertAlmostEqual(abs(d2[i][j] - ref_d2[i][j]).max(), 0, 12)
+
+    def test_blocked_t3_intermediates_complex(self):
+        # complex amplitudes and integrals: the conjugations of the blocked
+        # gamma1 and gamma2 terms are those of the whole-array code. Any
+        # complex input will do; only the two implementations are compared.
+        numpy.random.seed(3)
+        nocca, noccb, nvira, nvirb = 3, 2, 4, 5
+        dims = {'o': nocca, 'O': noccb, 'v': nvira, 'V': nvirb}
+
+        def rand(key):
+            shape = [dims[x] for x in key]
+            return (numpy.random.random(shape) - .5 + (numpy.random.random(shape) - .5) * 1j) * .1
+
+        eris = cc.uccsd._ChemistsERIs()
+        for key in ('ovvv', 'OVVV', 'ovVV', 'OVvv', 'ovoo', 'OVOO', 'ovOO', 'OVoo', 'ovov', 'OVOV', 'ovOV'):
+            setattr(eris, key, rand(key))
+        eris.focka = numpy.diag(numpy.arange(nocca + nvira, dtype=float)).astype(complex)
+        eris.focka[nocca:, :nocca] = rand('vo')
+        eris.fockb = numpy.diag(numpy.arange(noccb + nvirb, dtype=float)).astype(complex)
+        eris.fockb[noccb:, :noccb] = rand('VO')
+        eris.mo_energy = (eris.focka.diagonal().real, eris.fockb.diagonal().real)
+        t1 = rand('ov'), rand('OV')
+        t2 = rand('oovv'), rand('oOvV'), rand('OOVV')
+        mycc = cc.UCCSD(scf.UHF(gto.M()))
+
+        ref = uccsd_t_rdm._t3_gamma1(t1, t2, eris)
+        got = uccsd_t_blocked.gamma1_intermediates(mycc, t1, t2, eris, 2)
+        for name, r, x in zip(('goo', 'gOO', 'gvv', 'gVV', 'gvo', 'gVO'), ref, got):
+            with self.subTest(intermediate=name):
+                self.assertAlmostEqual(abs(x - r).max(), 0, 12)
+
+        def zero_d2():
+            def group(*keys):
+                return tuple(numpy.zeros([dims[x] for x in key], dtype=complex) for key in keys)
+            return ((group('ovov', 'ovOV', 'OVov', 'OVOV'),) + (None,) * 5
+                    + (group('ovvv', 'ovVV', 'OVvv', 'OVVV'), group('ooov', 'ooOV', 'OOov', 'OOOV')))
+
+        ref = uccsd_t_rdm._add_t3_gamma2(mycc, t1, t2, eris, zero_d2())
+        got = uccsd_t_blocked.add_gamma2(mycc, t1, t2, eris, zero_d2(), 2)
+        for i, j in ((0, 0), (0, 1), (0, 3), (6, 0), (6, 1), (6, 2), (6, 3), (7, 0), (7, 1), (7, 2), (7, 3)):
+            with self.subTest(d2_block=(i, j)):
+                self.assertAlmostEqual(abs(got[i][j] - ref[i][j]).max(), 0, 12)
 
 if __name__ == "__main__":
     print("Full Tests for UCCSD(T)")
