@@ -50,6 +50,26 @@ import tempfile
 #        Chemist's  oovv(ijab) : ki - kj + ka - kb
 #        Amplitudes t2(ijab)  : ki + kj - ka - kba
 
+class _AmplitudeStorage:
+    def __init__(self, myadc, dtype):
+        mem_needed = kadc_ao2mo._amplitude_memory(myadc, dtype)
+        mem_now = lib.current_memory()[0]
+        self.incore = (myadc.incore_complete or
+                       mem_now + mem_needed < myadc.max_memory * .9)
+        self.file = None
+        self.tmpfile = None
+        if not self.incore:
+            self.tmpfile = tempfile.TemporaryFile()
+            self.file = h5py.File(self.tmpfile, 'a')
+        myadc._amp_h5file = self.file
+        myadc._amp_tmpfile = self.tmpfile
+
+    def create_dataset(self, name, shape, dtype=None):
+        if self.file is None:
+            return np.zeros(shape, dtype=dtype)
+        return self.file.create_dataset(name, shape, dtype=dtype)
+
+
 def compute_amplitudes_energy(myadc, eris, verbose=None, if_corr=True):
 
     t1, t2, myadc.imds.t2_1_vvvv = myadc.compute_amplitudes(eris)
@@ -79,14 +99,16 @@ def compute_amplitudes(myadc, eris):
 
     # release the scratch file from a previous kernel call, if any
     myadc._close_amp_scratch()
+    myadc.t1 = None
+    myadc.t2 = None
+    myadc._adc_es = None
+    myadc.imds.t2_1_vvvv = None
 
     # Compute first-order doubles t2 (tijab)
-    tf = tempfile.TemporaryFile()
-    f = h5py.File(tf, 'a')
-    # keep the handles so RADC.__del__ can close them when the amplitudes die
-    myadc._amp_h5file = f
-    myadc._amp_tmpfile = tf
-    t2_1 = f.create_dataset('t2_1', (nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype=eris.ovov.dtype)
+    t2_shape = (nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir)
+    f = _AmplitudeStorage(myadc, eris.ovov.dtype)
+    log.info('using %s amplitude storage', 'incore' if f.incore else 'HDF5')
+    t2_1 = f.create_dataset('t2_1', t2_shape, dtype=eris.ovov.dtype)
 
     mo_energy = myadc.mo_energy
     mo_coeff = myadc.mo_coeff
@@ -220,9 +242,7 @@ def compute_amplitudes(myadc, eris):
                 else:
                     t2_1_vvvv[ki, kj, ka] += contract_ladder(myadc, t2_1[ki, kj, kc], eris.vvvv, kc, kd, ka)
 
-        t2_2 = f.create_dataset('t2_2', (nkpts, nkpts, nkpts, nocc, nocc,
-                                nvir, nvir), dtype=eris.ovov.dtype)
-        t2_2 = t2_1_vvvv[:]
+        t2_2 = np.array(t2_1_vvvv, copy=True)
 
         if myadc.exxdiv is not None:
             t2_2 -= 2.0 * madelung * t2_1
@@ -305,7 +325,7 @@ def compute_energy(myadc, t2, eris):
 
     emp2 = 0.0
     eris_ovov = eris.ovov
-    t2_amp = t2[0][:]
+    t2_amp = np.array(t2[0], copy=True)
 
     if (myadc.method == "adc(3)"):
         t2_amp += t2[1][:]
@@ -332,6 +352,8 @@ def contract_ladder(myadc, t_amp, vvvv, ka, kb, kc):
     t_amp = np.ascontiguousarray(t_amp.reshape(nocc * nocc, nvir * nvir))
     t = np.zeros((nocc, nocc, nvir, nvir), dtype=t_amp.dtype)
     chnk_size = myadc.chnk_size
+    if chnk_size is None:
+        chnk_size = myadc.get_chnk_size()
     chnk_size = min(chnk_size, nvir)
     a = 0
     if isinstance(vvvv, np.ndarray):
