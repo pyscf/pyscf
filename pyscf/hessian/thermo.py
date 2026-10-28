@@ -251,7 +251,8 @@ def thermo(model, freq, temperature=298.15, pressure=101325,
         qrrho_bav = QRRHO_BAV
     elif isinstance(qrrho_bav, str):
         if qrrho_bav.lower() != 'molecule':
-            raise ValueError(f'Unknown qrrho_bav {qrrho_bav}')
+            raise ValueError(f'Unknown qrrho_bav {qrrho_bav!r}. Valid values are '
+                             "'molecule' or a moment of inertia in kg m^2")
         # One third of the trace of the inertia tensor
         qrrho_bav = (2./3 * numpy.einsum('z,zr,zr->', mass, atom_coords, atom_coords)
                      * nist.ATOMIC_MASS * nist.BOHR_SI**2)
