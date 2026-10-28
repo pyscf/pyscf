@@ -39,6 +39,19 @@ including tests. Customize as needed.
   defaults when consistent with the surrounding class. Extensions such as
   gpu4pyscf may reuse PySCF methods without running the corresponding PySCF
   `__init__` method to initialize attributes.
+- Prioritize correct algorithmic logic for supported inputs and documented
+  assumptions. Trust established internal invariants; avoid redundant checks,
+  speculative fallbacks, and handling of states that valid callers cannot
+  produce.
+- Add validation or recovery only for a concrete failure mode relevant to the
+  API contract or supported use cases. Validate at the appropriate boundary
+  rather than repeating checks throughout internal code.
+- Prefer a clear failure to a silent fallback. If an operation cannot meet its
+  contract, let the error propagate or raise an informative exception.
+- Respect function contracts when reusing code. Prefer an implementation whose
+  contract fits the operation, or explicitly generalize the existing function's
+  contract and implementation. Do not infer support from implementation details
+  or carefully tuned parameters that happen to produce the desired result.
 
 ## Formatting and linting
 
@@ -49,8 +62,14 @@ including tests. Customize as needed.
 
 ## Test value and readability
 
+- Keep test complexity proportional to the behavior and risk being tested.
+  Prefer direct setup and assertions; introduce fixtures, factories, helper
+  layers, or parameter matrices only when they materially simplify meaningful
+  tests. Avoid building a test framework for a small change or duplicating the
+  implementation to compute expected results.
 - Add tests for their practical value: catching realistic bugs or protecting
-  important scientific results and behavioral contracts. Avoid coverage-driven
+  important scientific results and behavioral contracts.
+  Avoid coverage-driven
   tests: Flag tests that merely exercise newly added code without protecting
   meaningful behavior.
 - Assert meaningful results and behavior. Avoid enforcing incidental details
