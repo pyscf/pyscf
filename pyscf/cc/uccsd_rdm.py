@@ -19,7 +19,9 @@
 
 import numpy
 from pyscf import lib
+from pyscf.lib import logger
 from pyscf import ao2mo
+from pyscf.cc import ccsd
 
 #einsum = numpy.einsum
 einsum = lib.einsum
@@ -81,8 +83,8 @@ def _gamma1_intermediates(cc, t1, t2, l1, l2):
 
     return ((dooa, doob), (dova, dovb), (dvoa, dvob), (dvva, dvvb))
 
-# gamma2 intermediates in Chemist's notation
-#TODO: hold d2 intermediates in h5fobj
+# gamma2 intermediates in Chemist's notation. With h5fobj, the vvvv blocks are
+# written to it (_gamma2_vvvv_outcore); the other blocks are held in memory.
 def _gamma2_outcore(cc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
@@ -167,10 +169,6 @@ def _gamma2_outcore(cc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     goOvV = goOvV.conj()
     gOOVV = gOOVV.conj()
 
-    gvvvv = einsum('ijab,ijcd->abcd', tauaa, l2aa) * .125
-    gvVvV = einsum('ijab,ijcd->abcd', tauab, l2ab) * .25
-    gVVVV = einsum('ijab,ijcd->abcd', taubb, l2bb) * .125
-
     goooo = einsum('ijab,klab->ijkl', l2aa, tauaa) * .125
     goOoO = einsum('ijab,klab->ijkl', l2ab, tauab) * .25
     gOOOO = einsum('ijab,klab->ijkl', l2bb, taubb) * .125
@@ -215,10 +213,11 @@ def _gamma2_outcore(cc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     gOvVv = einsum('ja,jibc->iacb', .5  * l1a, tauab)
     gOVVV = einsum('ja,ijcb->iacb', .25 * l1b, taubb)
 
-    govvv += einsum('bcad,id->iabc', gvvvv, t1a)
-    goVvV -= einsum('bcda,id->iabc', gvVvV, t1a) * 2
-    gOvVv -= einsum('cbad,id->iabc', gvVvV, t1b) * 2
-    gOVVV += einsum('bcad,id->iabc', gVVVV, t1b)
+    # the vvvv intermediates contracted with t1, through l2*t1 (no vvvv array)
+    govvv += einsum('jkbc,jkai->iabc', tauaa, einsum('jkad,id->jkai', l2aa, t1a)) * .125
+    goVvV -= einsum('jKbc,jKai->iabc', tauab, einsum('jKda,id->jKai', l2ab, t1a)) * .5
+    gOvVv -= einsum('jKcb,jKai->iabc', tauab, einsum('jKad,id->jKai', l2ab, t1b)) * .5
+    gOVVV += einsum('jkbc,jkai->iabc', taubb, einsum('jkad,id->jkai', l2bb, t1b)) * .125
 
     tmpa  = numpy.einsum('kakb->ab', miajb) * .25
     tmpa += numpy.einsum('kakb->ab', mIaJb) * .25
@@ -264,33 +263,28 @@ def _gamma2_outcore(cc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     gOvOv += einsum('kIaC,JC,kb->IbJa', l2ab, t1b, t1a)
 
     dovov = goovv.transpose(0,2,1,3) - goovv.transpose(0,3,1,2)
-    dvvvv = gvvvv.transpose(0,2,1,3) - gvvvv.transpose(0,3,1,2)
     doooo = goooo.transpose(0,2,1,3) - goooo.transpose(0,3,1,2)
     dovvv = govvv.transpose(0,2,1,3) - govvv.transpose(0,3,1,2)
     dooov = gooov.transpose(0,2,1,3) - gooov.transpose(1,2,0,3)
     dovvo = govvo.transpose(0,2,1,3)
     dovov =(dovov + dovov.transpose(2,3,0,1)) * .5
-    dvvvv = dvvvv + dvvvv.transpose(1,0,3,2).conj()
     doooo = doooo + doooo.transpose(1,0,3,2).conj()
     dovvo =(dovvo + dovvo.transpose(3,2,1,0).conj()) * .5
     doovv =-dovvo.transpose(0,3,2,1)
     dvvov = None
 
     dOVOV = gOOVV.transpose(0,2,1,3) - gOOVV.transpose(0,3,1,2)
-    dVVVV = gVVVV.transpose(0,2,1,3) - gVVVV.transpose(0,3,1,2)
     dOOOO = gOOOO.transpose(0,2,1,3) - gOOOO.transpose(0,3,1,2)
     dOVVV = gOVVV.transpose(0,2,1,3) - gOVVV.transpose(0,3,1,2)
     dOOOV = gOOOV.transpose(0,2,1,3) - gOOOV.transpose(1,2,0,3)
     dOVVO = gOVVO.transpose(0,2,1,3)
     dOVOV =(dOVOV + dOVOV.transpose(2,3,0,1)) * .5
-    dVVVV = dVVVV + dVVVV.transpose(1,0,3,2).conj()
     dOOOO = dOOOO + dOOOO.transpose(1,0,3,2).conj()
     dOVVO =(dOVVO + dOVVO.transpose(3,2,1,0).conj()) * .5
     dOOVV =-dOVVO.transpose(0,3,2,1)
     dVVOV = None
 
     dovOV = goOvV.transpose(0,2,1,3)
-    dvvVV = gvVvV.transpose(0,2,1,3) * 2
     dooOO = goOoO.transpose(0,2,1,3) * 2
     dovVV = goVvV.transpose(0,2,1,3)
     dooOV = goOoV.transpose(0,2,1,3)
@@ -302,7 +296,6 @@ def _gamma2_outcore(cc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     dooVV = goVoV.transpose(0,2,1,3)
     dOOvv = gOvOv.transpose(0,2,1,3)
 
-    dvvVV = dvvVV + dvvVV.transpose(1,0,3,2).conj()
     dooOO = dooOO + dooOO.transpose(1,0,3,2).conj()
     dovVO = (dovVO + dOVvo.transpose(3,2,1,0).conj()) * .5
     dooVV =-(dooVV + dooVV.transpose(1,0,3,2).conj()) * .5
@@ -315,8 +308,36 @@ def _gamma2_outcore(cc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     dOOvv =-(dOOvv + dOOvv.transpose(1,0,3,2).conj()) * .5
     dVVov = None
 
+    if h5fobj is None:
+        dvvvv, dvvVV, dVVVV = _gamma2_vvvv_incore(tauaa, tauab, taubb, l2aa, l2ab, l2bb,
+                                                  compress_vvvv)
+    else:
+        dvvvv, dvvVV, dVVVV = _gamma2_vvvv_outcore(cc, tauaa, tauab, taubb, l2aa, l2ab, l2bb,
+                                                   h5fobj, compress_vvvv)
+
+    return ((dovov, dovOV, dOVov, dOVOV),
+            (dvvvv, dvvVV, dVVvv, dVVVV),
+            (doooo, dooOO, dOOoo, dOOOO),
+            (doovv, dooVV, dOOvv, dOOVV),
+            (dovvo, dovVO, dOVvo, dOVVO),
+            (dvvov, dvvOV, dVVov, dVVOV),
+            (dovvv, dovVV, dOVvv, dOVVV),
+            (dooov, dooOV, dOOov, dOOOV))
+
+def _gamma2_vvvv_incore(tauaa, tauab, taubb, l2aa, l2ab, l2bb, compress_vvvv):
+    '''dvvvv, dvvVV and dVVVV of _gamma2_outcore, held in memory.'''
+    gvvvv = einsum('ijab,ijcd->abcd', tauaa, l2aa) * .125
+    gvVvV = einsum('ijab,ijcd->abcd', tauab, l2ab) * .25
+    gVVVV = einsum('ijab,ijcd->abcd', taubb, l2bb) * .125
+    dvvvv = gvvvv.transpose(0,2,1,3) - gvvvv.transpose(0,3,1,2)
+    dvvvv = dvvvv + dvvvv.transpose(1,0,3,2).conj()
+    dVVVV = gVVVV.transpose(0,2,1,3) - gVVVV.transpose(0,3,1,2)
+    dVVVV = dVVVV + dVVVV.transpose(1,0,3,2).conj()
+    dvvVV = gvVvV.transpose(0,2,1,3) * 2
+    dvvVV = dvvVV + dvvVV.transpose(1,0,3,2).conj()
+
     if compress_vvvv:
-        nocca, noccb, nvira, nvirb = t2ab.shape
+        nvira, nvirb = tauab.shape[2:]
         idxa = numpy.tril_indices(nvira)
         idxa = idxa[0] * nvira + idxa[1]
         idxb = numpy.tril_indices(nvirb)
@@ -330,15 +351,47 @@ def _gamma2_outcore(cc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
         dVVVV = dVVVV + dVVVV.transpose(1,0,2,3)
         dVVVV = lib.take_2d(dVVVV.reshape(nvirb**2,nvirb**2), idxb, idxb)
         dVVVV *= .5
+    return dvvvv, dvvVV, dVVVV
 
-    return ((dovov, dovOV, dOVov, dOVOV),
-            (dvvvv, dvvVV, dVVvv, dVVVV),
-            (doooo, dooOO, dOOoo, dOOOO),
-            (doovv, dooVV, dOOvv, dOOVV),
-            (dovvo, dovVO, dOVvo, dOVVO),
-            (dvvov, dvvOV, dVVov, dVVOV),
-            (dovvv, dovVV, dOVvv, dOVVV),
-            (dooov, dooOV, dOOov, dOOOV))
+def _gamma2_vvvv_outcore(cc, tauaa, tauab, taubb, l2aa, l2ab, l2bb, h5fobj, compress_vvvv):
+    '''dvvvv, dvvVV and dVVVV of _gamma2_outcore as datasets of h5fobj, formed
+    per block of their first index.'''
+    return (_vvvv_to_h5(cc, h5fobj, 'dvvvv', tauaa, l2aa - l2aa.transpose(0,1,3,2), .125, compress_vvvv),
+            _vvvv_to_h5(cc, h5fobj, 'dvvVV', tauab, l2ab, .5, compress_vvvv),
+            _vvvv_to_h5(cc, h5fobj, 'dVVVV', taubb, l2bb - l2bb.transpose(0,1,3,2), .125, compress_vvvv))
+
+def _vvvv_to_h5(cc, h5fobj, key, tau, lam, fac, compress_vvvv):
+    '''One vvvv block as _gamma2_vvvv_incore forms it, D2 = D1 + D1.transpose(1,0,3,2).conj()
+    with D1[p,q,r,s] = fac * sum_ij tau[i,j,p,r] lam[i,j,q,s], and compressed as
+    (D2 + D2.transpose(1,0,2,3))/2 on both pairs; written to h5fobj[key] for a
+    block of p at a time from the two contractions giving D1[p,q] and D1[q,p].
+    '''
+    log = logger.Logger(cc.stdout, cc.verbose)
+    nv1, nv2 = tau.shape[2:]
+    dtype = numpy.result_type(tau, lam)
+    if compress_vvvv:
+        idx2 = numpy.tril_indices(nv2)
+        idx2 = idx2[0] * nv2 + idx2[1]
+        dset = h5fobj.create_dataset(key, (nv1*(nv1+1)//2, nv2*(nv2+1)//2), dtype)
+    else:
+        dset = h5fobj.create_dataset(key, (nv1,nv1,nv2,nv2), dtype)
+    if nv1 == 0 or nv2 == 0:  # a spin block without virtual orbitals
+        return dset
+    max_memory = max(0, cc.max_memory - lib.current_memory()[0])
+    blksize = min(nv1, max(ccsd.BLKMIN, int(max_memory*.9e6/8/(3*nv1*nv2**2))))
+    log.debug1('%s in h5fobj: block size = %d, nvir = %d in %d blocks',
+               key, blksize, nv1, (nv1+blksize-1)//blksize)
+    for p0, p1 in lib.prange(0, nv1, blksize):
+        d1_pq = einsum('ijpr,ijqs->pqrs', tau[:,:,p0:p1], lam) * fac
+        d1_qp = einsum('ijqr,ijps->pqrs', tau, lam[:,:,p0:p1]) * fac
+        if compress_vvvv:
+            d3 = d1_pq + d1_qp
+            d3 = (d3 + d3.transpose(0,1,3,2).conj()) * .5
+            rows = numpy.hstack([(p-p0)*nv1 + numpy.arange(p+1) for p in range(p0, p1)])
+            dset[p0*(p0+1)//2:p1*(p1+1)//2] = lib.take_2d(d3.reshape((p1-p0)*nv1, nv2**2), rows, idx2)
+        else:
+            dset[p0:p1] = d1_pq + d1_qp.transpose(0,1,3,2).conj()
+    return dset
 
 def _gamma2_intermediates(cc, t1, t2, l1, l2, compress_vvvv=False):
     #TODO: h5fobj = lib.H5TmpFile()
