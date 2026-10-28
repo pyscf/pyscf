@@ -146,7 +146,7 @@ def rotation_const(mass, atom_coords, unit='GHz'):
 QRRHO_BAV = 1e-44
 
 def thermo(model, freq, temperature=298.15, pressure=101325,
-           qrrho=False, qrrho_enthalpy=False, qrrho_freq0=100.):
+           qrrho=False, qrrho_enthalpy=False, qrrho_freq0=100., qrrho_bav=None):
     '''Thermochemistry in the rigid-rotor harmonic-oscillator (RRHO)
     approximation
 
@@ -163,6 +163,11 @@ def thermo(model, freq, temperature=298.15, pressure=101325,
             with the same weight.
         qrrho_freq0 : float
             The frequency (cm^-1) at which the weight is 1/2.
+        qrrho_bav : float or str
+            The average moment of inertia (kg m^2) that limits the free
+            rotor moment in the quasi-RRHO entropy. The default is
+            QRRHO_BAV. 'molecule' uses the mean principal moment of inertia
+            of the molecule, as in the xtb program.
     '''
     mol = model.mol
     atom_coords = mol.atom_coords()
@@ -242,11 +247,20 @@ def thermo(model, freq, temperature=298.15, pressure=101325,
     if qrrho or qrrho_enthalpy:
         freq_cm = vib_temperature * kB / (h * nist.LIGHT_SPEED_SI * 100)
         weight = 1. / (1. + (qrrho_freq0 / freq_cm)**4)
+    if qrrho_bav is None:
+        qrrho_bav = QRRHO_BAV
+    elif isinstance(qrrho_bav, str):
+        if qrrho_bav.lower() != 'molecule':
+            raise ValueError(f'Unknown qrrho_bav {qrrho_bav!r}. Valid values are '
+                             "'molecule' or a moment of inertia in kg m^2")
+        # One third of the trace of the inertia tensor
+        qrrho_bav = (2./3 * numpy.einsum('z,zr,zr->', mass, atom_coords, atom_coords)
+                     * nist.ATOMIC_MASS * nist.BOHR_SI**2)
     if qrrho:
         # Entropy of a free rotor with the moment of inertia mu' of a rotor
-        # of the same frequency, damped towards QRRHO_BAV
+        # of the same frequency, damped towards qrrho_bav
         mu = h / (8 * numpy.pi**2 * freq_cm * nist.LIGHT_SPEED_SI * 100)
-        mu = mu * QRRHO_BAV / (mu + QRRHO_BAV)
+        mu = mu * qrrho_bav / (mu + qrrho_bav)
         s_rot = R_Eh * (.5 + .5 * numpy.log(8 * numpy.pi**3 * mu * kB * temperature / h**2))
         s_vib = weight * s_vib + (1 - weight) * s_rot
     if qrrho_enthalpy:
@@ -254,6 +268,7 @@ def thermo(model, freq, temperature=298.15, pressure=101325,
     results['qrrho'] = (qrrho, '')
     results['qrrho_enthalpy'] = (qrrho_enthalpy, '')
     results['qrrho_freq0'] = (qrrho_freq0, 'cm^-1')
+    results['qrrho_bav'] = (qrrho_bav, 'kg m^2')
 
     results['S_vib' ] = (s_vib.sum(), 'Eh/K')
     results['Cv_vib'] = results['Cp_vib'] = (R_Eh * (e * rt**2/(1-e)**2).sum(), 'Eh/K')
@@ -359,8 +374,9 @@ def dump_thermo(mol, results):
     dump('Zero-point energy (ZPE) %.5f [Eh]   %.3f [J/mol]\n'
          % (results['ZPE'][0], results['ZPE'][0] * nist.HARTREE2J * nist.AVOGADRO))
     if results.get('qrrho', (False,))[0]:
-        dump('Quasi-RRHO vibrational entropy (Grimme), freq0 = %.1f [cm^-1]\n'
-             % results['qrrho_freq0'][0])
+        dump('Quasi-RRHO vibrational entropy (Grimme), freq0 = %.1f [cm^-1], '
+             'B_av = %.4g [kg m^2]\n'
+             % (results['qrrho_freq0'][0], results['qrrho_bav'][0]))
     if results.get('qrrho_enthalpy', (False,))[0]:
         dump('Quasi-RRHO vibrational energy (Head-Gordon), freq0 = %.1f [cm^-1]\n'
              % results['qrrho_freq0'][0])

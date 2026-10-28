@@ -121,6 +121,28 @@ class KnownValues(unittest.TestCase):
         self.assertNotAlmostEqual(results['S_vib'][0] * conv, 98.4478, 2)
         thermo.dump_thermo(mol, results)
 
+    def test_qrrho_bav(self):
+        mol = gto.M(atom='O 0 0 0; H 0 .757 .587; H 0 -.757 .587', basis='sto-3g',
+                    verbose=0)
+        mf = mol.HF().run()
+        freq_cm = numpy.array([10., 25., 50., 80., 100., 150., 300., 1600., 3700.])
+        au2hz = (nist.HARTREE2J / (nist.ATOMIC_MASS * nist.BOHR_SI**2))**.5 / (2 * numpy.pi)
+        freq_au = freq_cm * nist.LIGHT_SPEED_SI * 100 / au2hz
+
+        default = thermo.thermo(mf, freq_au, qrrho=True)
+        self.assertEqual(default['qrrho_bav'], (thermo.QRRHO_BAV, 'kg m^2'))
+
+        results = thermo.thermo(mf, freq_au, qrrho=True, qrrho_bav='molecule')
+        rot_const = default['rot_const'][0] * 1e9
+        bav = (nist.PLANCK / (8 * numpy.pi**2 * rot_const)).mean()
+        self.assertAlmostEqual(results['qrrho_bav'][0] / bav, 1, 9)
+        self.assertTrue(results['S_vib'][0] < default['S_vib'][0])
+
+        results1 = thermo.thermo(mf, freq_au, qrrho=True, qrrho_bav=bav)
+        self.assertAlmostEqual(results1['S_vib'][0], results['S_vib'][0], 12)
+        self.assertRaises(ValueError, thermo.thermo, mf, freq_au, qrrho=True,
+                          qrrho_bav='conf')
+
 if __name__ == "__main__":
     print("Full Tests for RHF Hessian")
     unittest.main()
