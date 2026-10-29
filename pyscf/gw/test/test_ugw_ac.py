@@ -26,3 +26,11 @@ def test_ugw_ac(h2o_cation_uhf):
     assert gw.mo_energy[0][5] == pytest.approx(-0.15525786, abs=1e-5)
     assert gw.mo_energy[1][3] == pytest.approx(-0.99401046, abs=1e-5)
     assert gw.mo_energy[1][4] == pytest.approx(-0.42543725, abs=1e-5)
+
+def test_ugw_ac_smearing_ef():
+    from pyscf.gw.gw_ac import GWAC
+    mol = gto.M(atom='H 0 0 0; H 0 0 0.741', basis='sto-3g', verbose=0)
+    mf = scf.UHF(mol).smearing(sigma=0.02, method='fermi').run()
+    mf_r = scf.RHF(mol).smearing(sigma=0.02, method='fermi').run()
+    ef = UGWAC(mf).get_ef()
+    assert ef == pytest.approx(GWAC(mf_r).get_ef(), abs=1e-8)
