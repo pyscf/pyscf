@@ -2599,6 +2599,10 @@ class MoleBase(lib.StreamObject):
 
         if self.atom:
             self._atom = self.format_atom(self.atom, unit=self.unit)
+        if self._atom:
+            atom_coords = np.asarray([a[1] for a in self._atom])
+            if not np.all(np.isfinite(atom_coords)):
+                raise ValueError('Atom coordinates must contain only finite values')
         uniq_atoms = {a[0] for a in self._atom}
 
         if self.basis:

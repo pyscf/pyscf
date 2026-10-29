@@ -174,6 +174,11 @@ C    SP
         self.assertEqual(mol0.search_ao_nr(2, 1, -1, 1), 30)
         mol0.cart = False
 
+    def test_nonfinite_atom_coordinates_rejected(self):
+        for value in (numpy.nan, numpy.inf, -numpy.inf):
+            with self.assertRaisesRegex(ValueError, "finite"):
+                gto.M(atom=[["H", [value, 0, 0]]], basis="sto-3g", spin=1)
+
     def test_atom_types(self):
         atoms = [['H0', ( 0, 0, 0)],
                  ['H1', ( 0, 0, 0)],
