@@ -1667,6 +1667,10 @@ class Cell(mole.MoleBase):
         if self.a is None:
             raise RuntimeError('Lattice parameters not specified')
 
+        lattice_vectors = self.lattice_vectors()
+        if not np.all(np.isfinite(lattice_vectors)):
+            raise ValueError('Lattice vectors must contain only finite values')
+
         if self.dimension == 1 and self.low_dim_ft_type != 'inf_vacuum':
             raise RuntimeError('Uniform grids for dimension=1 not supported')
 

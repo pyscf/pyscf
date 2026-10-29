@@ -55,6 +55,17 @@ def tearDownModule():
     del cl, cl1
 
 class KnownValues(unittest.TestCase):
+
+    def test_nonfinite_lattice_vectors_rejected(self):
+        for value in (numpy.nan, numpy.inf, -numpy.inf):
+            cell = pgto.Cell()
+            cell.atom = "H 0 0 0"
+            cell.a = numpy.array([[value, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float)
+            cell.basis = "gth-szv"
+            cell.pseudo = "gth-pade"
+            with self.assertRaisesRegex(ValueError, "finite"):
+                cell.build()
+
     def test_nimgs(self):
         self.assertTrue(list(cl.get_nimgs(9e-1)), [1,1,1])
         self.assertTrue(list(cl.get_nimgs(1e-2)), [2,2,2])
