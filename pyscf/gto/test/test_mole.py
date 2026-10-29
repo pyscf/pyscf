@@ -352,6 +352,11 @@ C    SP
         self.assertEqual(atoms[0], 'H')
         self.assertTrue(numpy.allclose(atoms[1], [0, 0, 1.]))
 
+    def test_format_basis_rejects_invalid_exponents(self):
+        for exponent in (0.0, -1.0, numpy.nan, numpy.inf):
+            with self.assertRaises(ValueError):
+                gto.format_basis({"H": [[0, [exponent, 1.0]]]})
+
     def test_format_basis(self):
         mol = gto.M(atom = '''O 0 0 0; 1 0 1 0; H 0 0 1''',
                     basis = {8: 'ccpvdz'})

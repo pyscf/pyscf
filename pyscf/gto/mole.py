@@ -458,6 +458,14 @@ def format_basis(basis_tab, sort_basis=True):
         _basis = basis_converter(symb, atom_basis)
         if len(_basis) == 0:
             raise BasisNotFoundError('Basis not found for  %s' % symb)
+        for shell in _basis:
+            primitives = shell[1:]
+            if primitives and isinstance(primitives[0], (int, numpy.integer)):
+                primitives = primitives[1:]
+            for primitive in primitives:
+                exponent = float(primitive[0])
+                if not numpy.isfinite(exponent) or exponent <= 0:
+                    raise ValueError('Basis exponents must be finite and positive')
 
         # Sort basis according to angular momentum. This is important for method
         # decontract_basis, which assumes that basis functions with the same
