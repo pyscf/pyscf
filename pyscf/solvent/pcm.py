@@ -79,10 +79,40 @@ def pcm_for_post_scf(method, solvent_obj=None, dm=None):
 
 pcm_for_tdscf = _attach_solvent._for_tdscf
 
+@lib.with_doc(_attach_solvent._for_mcpdft.__doc__)
+def pcm_for_mcpdft(mc, solvent_obj=None, dm=None):
+    solvent_obj = _as_solvent_obj(solvent_obj, mc.mol)
+    if solvent_obj is None:
+        if isinstance(getattr(mc._scf, 'with_solvent', None), PCM):
+            solvent_obj = mc._scf.with_solvent
+        else:
+            solvent_obj = PCM(mc.mol)
+    return _attach_solvent._for_mcpdft(mc, solvent_obj, dm)
+
+@lib.with_doc(_attach_solvent._for_lpdft.__doc__)
+def pcm_for_lpdft(mc, solvent_obj=None, dm=None):
+    solvent_obj = _as_solvent_obj(solvent_obj, mc.mol)
+    if solvent_obj is None:
+        if isinstance(getattr(mc._scf, 'with_solvent', None), PCM):
+            solvent_obj = mc._scf.with_solvent
+        else:
+            solvent_obj = PCM(mc.mol)
+    return _attach_solvent._for_lpdft(mc, solvent_obj, dm)
+
+def pcm_for_pdft(mc, solvent_obj=None, dm=None):
+    '''Dispatch an PDFT object to the appropriate solvent wrapper.'''
+    from pyscf import mcpdft
+    if isinstance(mc, mcpdft.MultiStateMCPDFTSolver):
+        if not hasattr(mc, 'get_lpdft_ham'):
+            raise NotImplementedError(
+                'PCM solvation is not available for MS-PDFT other than L-PDFT')
+        return pcm_for_lpdft(mc, solvent_obj, dm)
+    return pcm_for_mcpdft(mc, solvent_obj, dm)
 
 # Inject PCM to other methods
 from pyscf import scf
-from pyscf import mcscf
+from pyscf import mcscf, mcpdft
+from pyscf.mcpdft.mcpdft import _PDFT
 from pyscf import mp, ci, cc
 from pyscf import tdscf
 scf.hf.SCF.PCM    = scf.hf.SCF.PCM    = pcm_for_scf
@@ -92,6 +122,8 @@ cc.ccsd.CCSD.PCM  = cc.ccsd.CCSD.PCM  = pcm_for_post_scf
 tdscf.rhf.TDBase.PCM = tdscf.rhf.TDBase.PCM = pcm_for_tdscf
 mcscf.casci.CASCI.PCM = mcscf.casci.CASCI.PCM = pcm_for_casci
 mcscf.mc1step.CASSCF.PCM = mcscf.mc1step.CASSCF.PCM = pcm_for_casscf
+_PDFT.PCM = pcm_for_pdft
+mcpdft.MultiStateMCPDFTSolver.PCM = pcm_for_pdft
 
 # TABLE II,  J. Chem. Phys. 122, 194110 (2005)
 XI = {
@@ -355,6 +387,13 @@ class PCM(lib.StreamObject):
         for polarizable continuum models: The switching/Gaussian approach. The Journal of
         Chemical Physics 2010, 133. https://doi.org/10.1063/1.3511297
 
+    refdm : ndarray
+        The reference ground-state density matrix.
+        Only required for excited-state SS-CASSCF in non-equilibrium solvation.
+
+    rfroot : int
+        The state used for (fast) solvent response in a SA-CASSCF.
+
     Saved Results:
     --------------
     e_tot : float
@@ -378,10 +417,9 @@ class PCM(lib.StreamObject):
         'mol', 'radii_table', 'lebedev_order', 'solvent',
         'eps', 'eps_optical', 'max_cycle', 'conv_tol', 'state_id', 'frozen',
         'equilibrium_solvation', 'e', 'v', 'v_grids_n',
-        'surface_discretization_method',
+        'surface_discretization_method', 'refdm', 'rfroot'
     }
 
-    kernel = ddcosmo.DDCOSMO.kernel
     get_eps_optical = ddcosmo.DDCOSMO.get_eps_optical
 
     def __init__(self, mol, solvent=None):
@@ -416,6 +454,10 @@ class PCM(lib.StreamObject):
         self.e = None
         self.v = None
         self._dm = None
+
+        # additional attributes for nonequilibrium solvation
+        self.refdm = None
+        self.rfroot = None
 
     def __setattr__(self, key, val):
         if key == 'solvent' and val:
@@ -610,6 +652,27 @@ class PCM(lib.StreamObject):
             # Free up v_nj to stay within mem limits
             del v_nj
         return vmat
+
+    def solvation_type(self):
+        '''The solvation scheme implied by .refdm, .rfroot and
+        .equilibrium_solvation. 'default' is the standard equilibrium kernel.
+        '''
+        if self.rfroot is not None:
+            return 'sa_eq' if self.equilibrium_solvation else 'sa_neq'
+        if self.refdm is not None and not self.equilibrium_solvation:
+            return 'ss_neq'
+        return 'default'
+
+    def kernel(self, dm):
+        '''A single shot solvent effects for given density matrix.
+        '''
+        mode = self.solvation_type()
+        if mode == 'default':
+            return ddcosmo.DDCOSMO.kernel(self, dm)
+        from pyscf.solvent._state_solvation import _kernels
+        logger.debug(self, 'PCM solvation mode: %s', mode)
+        self._dm = dm
+        return _kernels[mode](self, dm)
 
     def nuc_grad_method(self, grad_method):
         raise DeprecationWarning('Use the make_grad_object function from '
