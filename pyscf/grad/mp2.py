@@ -259,7 +259,8 @@ def _shell_prange(mol, start, stop, blksize):
     ib0 = start
     for ib, now in zip(range(start, stop), dims):
         nao += now
-        if nao > blksize:
+        # a shell wider than blksize forms a block of its own: never an empty block
+        if nao > blksize and ib > ib0:
             yield (ib0, ib, nao-now)
             ib0 = ib
             nao = now

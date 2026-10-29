@@ -109,6 +109,23 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(auxbasis['O'], 'cc-pvdz-ri')
         self.assertEqual(auxbasis['H'], 'cc-pvdz-ri')
 
+        basis = '6-311G**'
+        mol = gto.M(
+            verbose=0,
+            atom='O 0 0 0; H 0 0 0.96; H 0.9 0 0',
+            basis=basis,
+        )
+        auxbasis = df.addons.make_auxbasis(mol, mp2fit=True)
+        self.assertEqual(auxbasis['O'], 'cc-pvtz-ri')
+        self.assertEqual(auxbasis['H'], 'cc-pvtz-ri')
+
+        mol = gto.M(
+            verbose=0,
+            atom='O 0 0 0; H 0 0 0.96; H 0.9 0 0',
+            basis={'default': basis},
+        )
+        self.assertEqual(df.addons.make_auxbasis(mol, mp2fit=True), auxbasis)
+
         mol = gto.M(
             verbose = 0,
             atom = '''O     0    0.       0.
