@@ -339,6 +339,11 @@ C    SP
         mol1 = gto.M(atom=ftmp.name)
         self.assertEqual(mol1.natm, 2)
 
+    def test_unknown_length_unit_rejected(self):
+        for unit in ('nm', 'bogus', 'Angstroms'):
+            with self.assertRaises(ValueError):
+                gto.format_atom('H 0 0 0', unit=unit)
+
     def test_format_atom(self):
         atoms = [['h' , 0,1,1], "O1  0. 0. 0.", [1, 1.,1.,0.],]
         self.assertTrue(numpy.allclose(gto.mole.format_atom(atoms, unit='Ang')[0][1],

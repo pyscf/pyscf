@@ -2217,10 +2217,12 @@ def is_au(unit):
 def _length_in_au(unit):
     '''Converts the input unit string into its length in A.U.'''
     if isinstance(unit, str):
-        if is_au(unit):
-            unit = 1.
-        else:
-            unit = 1/param.BOHR
+        unit = unit.strip().lower()
+        if unit in ('b', 'bohr', 'au'):
+            return 1.
+        if unit in ('a', 'angstrom', 'ang'):
+            return 1/param.BOHR
+        raise ValueError('Unknown length unit: %s. Use Bohr/AU or Angstrom/Ang.' % unit)
     else:
         unit = 1./unit
     return unit
