@@ -1664,6 +1664,11 @@ class Cell(mole.MoleBase):
         if symmorphic is not None:
             self.symmorphic = symmorphic
 
+        if self.low_dim_ft_type not in (None, 'inf_vacuum', 'analytic_2d_1'):
+            raise ValueError(
+                "low_dim_ft_type must be None, 'inf_vacuum', or 'analytic_2d_1'"
+            )
+
         if self.a is None:
             raise RuntimeError('Lattice parameters not specified')
 
