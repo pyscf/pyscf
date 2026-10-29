@@ -1664,6 +1664,24 @@ class Cell(mole.MoleBase):
         if symmorphic is not None:
             self.symmorphic = symmorphic
 
+        # The FFT/grid routines require exactly three positive integer mesh
+        # sizes.  Without this check, zero, negative, and fractional values
+        # are accepted here and fail later (or silently create an empty grid).
+        if self.mesh is not None and not self._mesh_from_build:
+            try:
+                mesh_array = np.asarray(self.mesh)
+                valid_mesh = (
+                    mesh_array.shape == (3,)
+                    and np.all(np.isfinite(mesh_array))
+                    and np.all(mesh_array == np.floor(mesh_array))
+                    and np.all(mesh_array > 0)
+                )
+            except (TypeError, ValueError):
+                valid_mesh = False
+            if not valid_mesh:
+                raise ValueError("mesh must contain three positive integers")
+            self.mesh = mesh_array.astype(np.int32)
+
         if self.a is None:
             raise RuntimeError('Lattice parameters not specified')
 
