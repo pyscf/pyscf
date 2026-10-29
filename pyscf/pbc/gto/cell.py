@@ -1652,6 +1652,8 @@ class Cell(mole.MoleBase):
         if dimension is not None: self.dimension = dimension
         if fractional is not None: self.fractional = fractional
         if precision is not None: self.precision = precision
+        if not np.isfinite(self.precision) or self.precision <= 0:
+            raise ValueError('precision must be a positive finite value')
         if rcut is not None: self.rcut = rcut
         if ke_cutoff is not None: self.ke_cutoff = ke_cutoff
         if low_dim_ft_type is not None: self.low_dim_ft_type = low_dim_ft_type

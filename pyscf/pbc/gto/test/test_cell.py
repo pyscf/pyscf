@@ -55,6 +55,17 @@ def tearDownModule():
     del cl, cl1
 
 class KnownValues(unittest.TestCase):
+    def test_invalid_precision_rejected(self):
+        for precision in (numpy.nan, numpy.inf, -1e-5, 0.0):
+            cell = pgto.Cell()
+            cell.atom = "H 0 0 0"
+            cell.a = numpy.eye(3)
+            cell.basis = "gth-szv"
+            cell.pseudo = "gth-pade"
+            cell.precision = precision
+            with self.assertRaisesRegex(ValueError, "positive finite"):
+                cell.build()
+
     def test_nimgs(self):
         self.assertTrue(list(cl.get_nimgs(9e-1)), [1,1,1])
         self.assertTrue(list(cl.get_nimgs(1e-2)), [2,2,2])
