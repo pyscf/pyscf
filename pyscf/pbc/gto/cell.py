@@ -1664,6 +1664,20 @@ class Cell(mole.MoleBase):
         if symmorphic is not None:
             self.symmorphic = symmorphic
 
+        if self.ke_cutoff is not None:
+            try:
+                cutoff = float(self.ke_cutoff)
+                valid_cutoff = (
+                    not isinstance(self.ke_cutoff, (bool, np.bool_))
+                    and np.isfinite(cutoff)
+                    and cutoff >= 0.0
+                )
+            except (TypeError, ValueError):
+                valid_cutoff = False
+            if not valid_cutoff:
+                raise ValueError("ke_cutoff must be a finite non-negative number")
+            self.ke_cutoff = cutoff
+
         if self.a is None:
             raise RuntimeError('Lattice parameters not specified')
 
