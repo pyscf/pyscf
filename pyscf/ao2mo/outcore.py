@@ -349,8 +349,9 @@ def half_e1(mol, mo_coeffs, swapfile,
     Args:
         mol : :class:`Mole` object
             AO integrals will be generated in terms of mol._atm, mol._bas, mol._env
-        mo_coeff : ndarray
-            Transform (ij|kl) with the same set of orbitals.
+        mo_coeffs : list of ndarray
+            Orbital coefficients. The first two sets transform the indices i
+            and j of (ij|kl).
         swapfile : str or h5py File or h5py Group object
             To store the transformed integrals, in HDF5 format.  The transformed
             integrals are saved in blocks.
@@ -519,16 +520,8 @@ def full_iofree(mol, mo_coeff, intor='int2e', aosym='s4', comp=None,
             AO integrals will be generated in terms of mol._atm, mol._bas, mol._env
         mo_coeff : ndarray
             Transform (ij|kl) with the same set of orbitals.
-        erifile : str
-            To store the transformed integrals, in HDF5 format.
 
     Kwargs
-        dataname : str
-            The dataset name in the erifile (ref the hierarchy of HDF5 format
-            http://www.hdfgroup.org/HDF5/doc1.6/UG/09_Groups.html).  By assigning
-            different dataname, the existed integral file can be reused.  If
-            the erifile contains the dataname, the new integrals data will
-            overwrite the old one.
         intor : str
             Name of the 2-electron integral.  Ref to :func:`getints_by_shell`
             for the complete list of available 2-electron integral names

@@ -62,7 +62,7 @@ def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
     TODO: - Implement simplifications for real orbitals.
 
     Args:
-        mo_coeff: length-2 list of (nao,nmo) ndarrays
+        mo_coeffs: length-2 list of (nao,nmo) ndarrays
             The two sets of MO coefficients to use in calculating the
             product ``|ij)``.
 
@@ -115,7 +115,7 @@ def get_mo_pairs_invG(cell, mo_coeffs, kpts=None, q=None):
     TODO: - Implement simplifications for real orbitals.
 
     Args:
-        mo_coeff: length-2 list of (nao,nmo) ndarrays
+        mo_coeffs: length-2 list of (nao,nmo) ndarrays
             The two sets of MO coefficients to use in calculating the
             product ``|ij)``.
 

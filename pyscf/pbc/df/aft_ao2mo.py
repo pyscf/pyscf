@@ -264,7 +264,7 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None,
     '''Calculate forward fourier transform (G|ij) of all MO pairs.
 
     Args:
-        mo_coeff: length-2 list of (nao,nmo) ndarrays
+        mo_coeffs: length-2 list of (nao,nmo) ndarrays
             The two sets of MO coefficients to use in calculating the
             product |ij).
 
