@@ -1664,6 +1664,14 @@ class Cell(mole.MoleBase):
         if symmorphic is not None:
             self.symmorphic = symmorphic
 
+        # Periodic dimensionality is defined only for 0D, 1D, 2D, and 3D
+        # cells.  Reject other values before low-dimensional branches use
+        # them to select boundary conditions and vacuum treatment.
+        if (isinstance(self.dimension, (bool, np.bool_))
+                or not isinstance(self.dimension, (int, np.integer))
+                or self.dimension not in (0, 1, 2, 3)):
+            raise ValueError("dimension must be an integer in the range 0..3")
+
         if self.a is None:
             raise RuntimeError('Lattice parameters not specified')
 
