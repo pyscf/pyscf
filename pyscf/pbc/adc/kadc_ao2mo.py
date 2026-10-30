@@ -256,7 +256,6 @@ def transform_integrals_df(myadc):
                 Lpq_mo[ki, kj] = out.reshape(-1, nmo, nmo)
                 # local naux for ki,kj pair
                 nL = Lpq_mo[ki, kj].shape[0]
-                print(ki,kj,Lpq_mo[ki, kj].shape,Lpq_ao.shape,naux)
 
                 Loo[ki, kj, :nL] = Lpq_mo[ki, kj][:, :nocc, :nocc]
                 eris.Lov[ki, kj, :nL] = Lpq_mo[ki, kj][:, :nocc, nocc:]
