@@ -510,6 +510,38 @@ class KnownValues(unittest.TestCase):
             v1 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(abs(ref - v1).max(), 0, 7)
 
+
+    def test_cartesian_compensation(self):
+        basis = [[l, [.8, .7, .2], [.3, .1, .6]] for l in range(4)]
+        cell = pgto.M(atom='He 0 0 0; He 1 .2 0', a=np.eye(3)*5,
+                     basis=basis, cart=True, verbose=0)
+        spherical = cell.copy()
+        spherical.cart = False
+        cart, fuse_cart = gdf_builder.fuse_auxcell(cell, .15)
+        sph, fuse_sph = gdf_builder.fuse_auxcell(spherical, .15)
+        coords = np.random.default_rng(18).normal(size=(7, 3))
+        cart_values = cart.eval_gto('GTOval_cart', coords).T
+        sph_values = sph.eval_gto('GTOval_sph', coords).T
+        expected = fuse_sph(sph_values.copy())
+        np.testing.assert_allclose(fuse_cart(cart_values.copy()), expected, atol=1e-12)
+        np.testing.assert_allclose(fuse_cart(cart_values.T.copy(), axis=1),
+                                   expected.T, atol=1e-12)
+        np.testing.assert_allclose(fuse_cart(cart_values[:, 0].copy()),
+                                   expected[:, 0], atol=1e-12)
+        phase = np.exp(1j*coords[:, 0])
+        np.testing.assert_allclose(fuse_cart(cart_values*phase),
+                                   expected*phase, atol=1e-12)
+        np.testing.assert_allclose(fuse_sph(sph_values.T.copy(), axis=1),
+                                   expected.T, atol=1e-12)
+
+    def test_molecular_limit(self):
+        cell = pgto.M(atom='He 0 0 0', basis='sto-3g', a=np.eye(3)*5,
+                     dimension=0, verbose=0)
+        fused, fuse = gdf_builder.fuse_auxcell(cell, .2)
+        overlap = cell.intor('int1e_ovlp')
+        self.assertIs(fused, cell)
+        np.testing.assert_array_equal(fuse(overlap), overlap)
+
 if __name__ == '__main__':
     print("Full Tests for gdf_builder")
     unittest.main()

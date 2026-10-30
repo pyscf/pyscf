@@ -1146,34 +1146,3 @@ scf.rohf.ROHF.CISD = None
 
 def _cp(a):
     return numpy.asarray(a, order='C')
-
-
-if __name__ == '__main__':
-    from pyscf import ao2mo
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.atom = [
-        ['O', ( 0., 0.    , 0.   )],
-        ['H', ( 0., -0.757, 0.587)],
-        ['H', ( 0., 0.757 , 0.587)],]
-    mol.basis = 'sto3g'
-    mol.build()
-    mf = scf.RHF(mol).run()
-    myci = CISD(mf)
-    eris = ccsd._make_eris_outcore(myci, mf.mo_coeff)
-    ecisd, civec = myci.kernel(eris=eris)
-    print(ecisd - -0.048878084082066106)
-
-    nmo = myci.nmo
-    nocc = myci.nocc
-    rdm1 = myci.make_rdm1(civec)
-    rdm2 = myci.make_rdm2(civec)
-    h1e = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
-    h2e = ao2mo.kernel(mf._eri, mf.mo_coeff)
-    h2e = ao2mo.restore(1, h2e, nmo)
-    e2 = (numpy.einsum('ij,ji', h1e, rdm1) +
-          numpy.einsum('ijkl,ijkl', h2e, rdm2) * .5)
-    print(ecisd + mf.e_tot - mol.energy_nuc() - e2)   # = 0
-
-    print(abs(rdm1 - numpy.einsum('ijkk->ji', rdm2)/(mol.nelectron-1)).sum())

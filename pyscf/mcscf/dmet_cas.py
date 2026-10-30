@@ -230,26 +230,3 @@ def symmetrize(mol, e, c, s, log):
     return c
 
 del (THRESHOLD, OCC_CUTOFF, BASE, ORTH_METHOD, CANONICALIZE, FREEZE_IMP)
-
-if __name__ == '__main__':
-    from pyscf import mcscf
-
-    mol = gto.M(
-        verbose = 0,
-        atom = '''
-           H    0.000000,  0.500000,  1.5
-           O    0.000000,  0.000000,  1.
-           O    0.000000,  0.000000, -1.
-           H    0.000000, -0.500000, -1.5''',
-        basis = 'ccpvdz',
-    )
-
-    mf = scf.RHF(mol)
-    mf.scf()
-
-    aolst = [i for i,s in enumerate(mol.ao_labels()) if 'H 1s' in s]
-    dm = mf.make_rdm1()
-    ncas, nelecas, mo = guess_cas(mf, dm, aolst, verbose=4)
-    mc = mcscf.CASSCF(mf, ncas, nelecas).set(verbose=4)
-    emc = mc.kernel(mo)[0]
-    print(emc,)

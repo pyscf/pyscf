@@ -3,6 +3,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import numpy
 from pyscf import gto, scf, ao2mo
 
 '''
@@ -24,6 +25,12 @@ eri_4fold = ao2mo.kernel(mol, orb)
 print('MO integrals (ij|kl) with 4-fold symmetry i>=j, k>=l have shape %s' %
       str(eri_4fold.shape))
 
+# With AO integrals held in memory, the full and general transformations
+# agree when all four MO spaces are the same.
+eri_incore = ao2mo.incore.full(myhf._eri, orb)
+eri_general = ao2mo.incore.general(myhf._eri, (orb,) * 4)
+print('Incore full/general agree:', numpy.allclose(eri_incore, eri_general))
+
 
 #
 # Starting from PySCF-1.7, the MO integrals can be computed with the code
@@ -37,4 +44,3 @@ mol = pyscf.M(
 )
 orb = mol.RHF().run().mo_coeff
 eri_4fold = mol.ao2mo(orb)
-

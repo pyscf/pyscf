@@ -446,23 +446,3 @@ def dump_normal_mode(mol, results):
         dump('Normal mode            %s\n' % ('       x     y     z'*(col1-col0)))
         for j, at in enumerate(symbols):
             dump('    %4d%4s               %s\n' % (j, at, mode_inline(j, col0, col1)))
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import hessian
-    mol = gto.M(atom='O 0 0 0; H 0 .757 .587; H 0 -.757 .587')
-
-    mass = mol.atom_mass_list(isotope_avg=True)
-    r = mol.atom_coords() - numpy.random.random((1,3))
-    print(rotation_const(mass, r, 'GHz'))
-    print(rotation_const(mass[1:], r[1:], 'GHz'))
-    print(rotation_const(mass[2:], r[2:], 'GHz'))
-
-    mf = mol.apply('HF').run()
-    hess = hessian.RHF(mf).kernel()
-    results = harmonic_analysis(mol, hess)
-    dump_normal_mode(mol, results)
-
-    results = thermo(mf, results['freq_au'], 298.15, 101325)
-    dump_thermo(mol, results)

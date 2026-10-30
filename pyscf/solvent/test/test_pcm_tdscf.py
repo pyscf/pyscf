@@ -14,7 +14,7 @@
 
 import unittest
 import numpy as np
-from pyscf import lib, gto
+from pyscf import lib, gto, dft
 from pyscf.tdscf import rhf, rks
 
 
@@ -189,7 +189,7 @@ class KnownValues(unittest.TestCase):
         #es_get_ab = diagonalize_tda(a)[0]
         #assert np.linalg.norm(es_get_ab - es) < 1e-10
 
-    def test_b3lyp_CPCM(self):
+    def test_b3lyp_CPCM_high_cost(self):
         mf = self.mf_b3lyp_nodf
         td = mf.TDDFT(equilibrium_solvation=False)
         es = td.kernel(nstates=5)[0]
@@ -210,7 +210,7 @@ class KnownValues(unittest.TestCase):
         #es_get_ab = diagonalize_tda(a)[0]
         #assert np.linalg.norm(es_get_ab - es) < 1e-10
 
-    def test_b3lyp_IEFPCM(self):
+    def test_b3lyp_IEFPCM_high_cost(self):
         mf = self.mf_b3lyp_nodf_iefpcm
         td = mf.TDDFT(equilibrium_solvation=False)
         es = td.kernel(nstates=5)[0]
@@ -243,7 +243,7 @@ class KnownValues(unittest.TestCase):
         #es_get_ab = diagonalize_u(a, b)[0]
         #assert np.linalg.norm(es_get_ab - es) < 1e-10
 
-    def test_unrestricted_b3lyp_CPCM(self):
+    def test_unrestricted_b3lyp_CPCM_high_cost(self):
         mf = self.mf_b3lyp_nodf_u
         td = mf.TDDFT(equilibrium_solvation=False)
         es = td.kernel(nstates=5)[0]
@@ -297,6 +297,27 @@ class KnownValues(unittest.TestCase):
         with lib.temporary_env(mf.with_solvent, eps_optical=1.4961**2):
             td = mf.TDA(equilibrium_solvation=True)
         self.assertAlmostEqual(td.with_solvent.eps, 78, 12)
+
+
+class SmallSystemResponse(unittest.TestCase):
+    def test_pcm_tda_response(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 .8', basis='6-31g', verbose=0)
+        for method in ('C-PCM', 'IEF-PCM'):
+            with self.subTest(solvent=method):
+                mf = dft.RKS(mol, xc='b3lyp').PCM()
+                mf.grids.atom_grid = (20, 86)
+                mf.with_solvent.method = method
+                mf.with_solvent.lebedev_order = 7
+                mf.run(conv_tol=1e-11)
+                td = mf.TDA(equilibrium_solvation=False)
+                td.conv_tol = 1e-9
+                energies = td.kernel(nstates=2)[0]
+                vind, diagonal = td.gen_vind()
+                roots = np.linalg.eigvals(vind(np.eye(len(diagonal))).T)
+                roots = np.sort(roots.real[(abs(roots.imag)<1e-8) & (roots.real>1e-4)])
+                np.testing.assert_allclose(energies, roots[:2], atol=1e-8)
+                self.assertTrue(np.all(td.converged))
+
 
 
 if __name__ == "__main__":

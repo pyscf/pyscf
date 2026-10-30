@@ -33,6 +33,13 @@ mf.kernel()
 mf = scf.RHF(mol).density_fit(auxbasis='weigend')
 mf.kernel()
 
+# The same decorator supports relativistic SCF. For DFT, only_dfj fits the
+# Coulomb term while evaluating exchange without density fitting.
+mf_4c = df.density_fit(scf.DHF(mol), auxbasis='weigend')
+mf_4c.kernel()
+mf_j_only = df.density_fit(scf.UKS(mol), auxbasis='weigend', only_dfj=True)
+mf_j_only.kernel()
+
 # DF method can be switched off by assigning None to with_df object
 mf.with_df = None
 mf.kernel()

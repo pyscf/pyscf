@@ -21,6 +21,7 @@ from pyscf import gto, scf, lib, symm
 from pyscf import cc
 from pyscf.cc import uccsd_t
 from pyscf.cc import gccsd_t
+from pyscf.cc import addons, ccsd_t_rdm_slow, gccsd_t_rdm
 
 def setUpModule():
     global mol, mol1, mf, myucc, mygcc
@@ -106,6 +107,34 @@ class KnownValues(unittest.TestCase):
         gcc = cc.gccsd.GCCSD(scf.GHF(gto.M()))
         self.assertAlmostEqual(gccsd_t.kernel(gcc, eris, t1, t2),
                                (-104.15886718888137+0.30739952563327672j), 9)
+
+    def test_closed_shell_density_matrices(self):
+        mol = gto.M(atom='Li 0 0 0; H 0 0 1.6', basis='sto-3g', verbose=0)
+        mf = scf.RHF(mol).run(conv_tol=1e-12)
+        restricted = cc.CCSD(mf).run(conv_tol=1e-10)
+        restricted.solve_lambda()
+        eris = restricted.ao2mo()
+        args = (restricted.t1, restricted.t2, restricted.l1, restricted.l2)
+        ref1 = ccsd_t_rdm_slow.make_rdm1(restricted, *args, eris=eris)
+        ref2 = ccsd_t_rdm_slow.make_rdm2(restricted, *args, eris=eris)
+        generalized = addons.convert_to_gccsd(restricted)
+        orbspin = generalized.mo_coeff.orbspin
+        l1 = addons.spatial2spin(restricted.l1, orbspin)
+        l2 = addons.spatial2spin(restricted.l2, orbspin)
+        args = (generalized.t1, generalized.t2, l1, l2)
+        dm1 = gccsd_t_rdm.make_rdm1(generalized, *args)
+        dm2 = gccsd_t_rdm.make_rdm2(generalized, *args)
+        ia, ib = numpy.where(orbspin == 0)[0], numpy.where(orbspin == 1)[0]
+        spin_sum1 = dm1[numpy.ix_(ia, ia)] + dm1[numpy.ix_(ib, ib)]
+        mixed = dm2[numpy.ix_(ia, ia, ib, ib)]
+        spin_sum2 = (dm2[numpy.ix_(ia, ia, ia, ia)] + dm2[numpy.ix_(ib, ib, ib, ib)]
+                     + mixed + mixed.transpose(2, 3, 0, 1))
+        numpy.testing.assert_allclose(spin_sum1, ref1, atol=1e-10)
+        numpy.testing.assert_allclose(spin_sum2, ref2, atol=1e-10)
+        self.assertAlmostEqual(numpy.trace(dm1), mol.nelectron, places=10)
+        ao = gccsd_t_rdm.make_rdm1(generalized, *args, ao_repr=True)
+        numpy.testing.assert_allclose(ao, generalized.mo_coeff @ dm1 @ generalized.mo_coeff.T,
+                                   atol=1e-10)
 
 
 if __name__ == "__main__":

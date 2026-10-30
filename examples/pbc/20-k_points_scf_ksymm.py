@@ -31,6 +31,11 @@ print(kpts)
 kmf = scf.KRHF(cell, kpts)
 kmf.kernel()
 
+# Generalized HF also accepts symmetry-reduced k-points, including time
+# reversal symmetry as requested when the k-point mesh was built above.
+kgmf = scf.KGHF(cell, kpts)
+kgmf.kernel()
+
 kmf = dft.KRKS(cell, kpts)
 kmf.xc = 'camb3lyp'
 kmf.kernel()
@@ -85,3 +90,20 @@ kumf = scf.KUHF(cell, kpts)
 #      which should be computed by turning off the symmstry options
 kumf = scf.addons.smearing_(kumf, sigma=0.001, method='fermi',fix_spin=True)
 kumf.kernel()
+
+# Inspect the space-group operations and symmetry-adapted AO basis directly.
+from pyscf.pbc.symm import space_group, geom, basis
+sg = space_group.SpaceGroup(cell).build()
+print('Crystal point group', sg.groupname['point_group_symbol'])
+print('First space-group operation', sg.ops[0])
+ops = geom.search_space_group_ops(cell)
+print('Crystal class', geom.get_crystal_class(cell, ops=ops)[0])
+symm_orbitals, irrep_ids = basis.symm_adapted_basis(cell, kpts)
+print('Number of symmetry blocks at the first irreducible k-point',
+      len(symm_orbitals[0]))
+# Atom-wise magmom labels restrict operations to ones respecting that pattern.
+# This is a geometry/symmetry query; it does not perform a magnetic SCF run.
+magnetic_cell = cell.copy()
+magnetic_cell.magmom = [1., -1.]
+magnetic_group = space_group.SpaceGroup(magnetic_cell).build()
+print('Operations preserving magnetic labels', len(magnetic_group.ops))

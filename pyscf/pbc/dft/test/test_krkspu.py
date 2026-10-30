@@ -22,7 +22,7 @@ import numpy as np
 from pyscf import lib
 from pyscf.pbc import gto as pgto
 from pyscf.pbc import dft as pdft
-from pyscf.pbc.dft import krkspu
+from pyscf.pbc.dft import krkspu, kukspu
 
 def setUpModule():
     global cell
@@ -59,7 +59,7 @@ class KnownValues(unittest.TestCase):
         e1 = mf.kernel()
         self.assertAlmostEqual(e1, -10.694460059491741, 8)
 
-    def test_KRKSpU_ksymm(self):
+    def test_KRKSpU_ksymm_high_cost(self):
         cell1 = cell.copy()
         cell1.basis = 'gth-szv'
         cell1.mesh = [16,]*3
@@ -120,6 +120,29 @@ class KnownValues(unittest.TestCase):
 
         uresp = krkspu.linear_response_u(mf, (0.03, 0.08))
         self.assertAlmostEqual(uresp, 6.279179, 2)
+
+
+    def test_closed_shell_response(self):
+        cell = pgto.M(atom='H 0 0 0; H 0 0 .9', a=np.eye(3)*4,
+                     basis='gth-szv', pseudo='gth-pade', mesh=[11]*3,
+                     precision=1e-7, verbose=0)
+        kpts = cell.make_kpts([1, 1, 1])
+        options = dict(U_idx=['0 H 1s'], U_val=[1.], C_ao_lo='minao', minao_ref='gth-szv')
+        mf = pdft.KRKSpU(cell, kpts, **options).density_fit(auxbasis='weigend')
+        mf.xc = 'lda,vwn'
+        mf.run(conv_tol=1e-11)
+        umf = pdft.KUKSpU(cell, kpts, **options).density_fit(auxbasis='weigend')
+        umf.xc = mf.xc
+        umf.run(conv_tol=1e-11)
+        self.assertTrue(mf.converged and umf.converged)
+        self.assertAlmostEqual(mf.e_tot, umf.e_tot, places=9)
+        ref = krkspu.linear_response_u(mf, (.02, .04))
+        actual = kukspu.linear_response_u(umf, (.02, .04))
+        self.assertGreater(ref, 0.)
+        self.assertAlmostEqual(actual, ref, places=6)
+        # The fitted response should be stable as the perturbation is halved.
+        small = krkspu.linear_response_u(mf, (.01, .02))
+        np.testing.assert_allclose(small, ref, rtol=1e-4)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.krkspu")

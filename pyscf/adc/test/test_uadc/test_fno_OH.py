@@ -163,6 +163,31 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(len(ADCFG.frozen[1]), 5)
         self.assertAlmostEqual(ADCFG.delta_e_corr, -0.0103985555, 6)
 
+    def test_rohf_fno_metric_and_energy(self):
+        # ROHF-derived FNOs retain orthonormality and recover the canonical
+        # ADC(2) correlation energy after the frozen-space correction.
+        mol = gto.M(atom='Li 0 0 0; H 0 0 1.6', charge=1, spin=1,
+                    basis='sto-3g', verbose=0)
+        mf = scf.ROHF(mol).run(conv_tol=1e-12)
+        canonical = adc.ADC(mf)
+        canonical.method = 'adc(2)'
+        canonical.kernel_gs()
+        overlap = mf.get_ovlp()
+        for spin_adapted in (False, True):
+            with self.subTest(open_shell_fno=spin_adapted):
+                natural = adc.ADC2FNO(mf)
+                natural.if_osfno = spin_adapted
+                natural.kernel_gs(pct_occ=.9)
+                self.assertTrue(any(len(frozen) for frozen in natural.frozen))
+                for coeff in natural.mo_coeff:
+                    np.testing.assert_allclose(coeff.T@overlap@coeff, np.eye(mol.nao), atol=1e-10)
+                reduced = adc.UADC(mf, natural.frozen, natural.mo_coeff, natural.mo_occ,
+                                   natural.mo_energy, natural.f_ov)
+                reduced.method = 'adc(2)'
+                reduced.kernel_gs()
+                self.assertAlmostEqual(natural.correct_corr(reduced.e_corr), canonical.e_corr, places=9)
+
+
 if __name__ == "__main__":
     print("FNO/OSFNO calculations for UADC for open-shell OH molecule")
     unittest.main()

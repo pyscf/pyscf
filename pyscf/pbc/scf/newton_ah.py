@@ -303,29 +303,3 @@ def newton(mf):
     else:
         cls = _SecondOrderKRHF
     return lib.set_class(cls(mf), (cls, mf.__class__))
-
-if __name__ == '__main__':
-    import pyscf.pbc.gto as pbcgto
-    import pyscf.pbc.scf as pscf
-    cell = pbcgto.Cell()
-    cell.atom = '''
-    He 0 0 1
-    He 1 0 1
-    '''
-    cell.basis = 'ccpvdz'
-    cell.a = numpy.eye(3) * 4
-    cell.mesh = [11] * 3
-    cell.verbose = 4
-    cell.build()
-    nks = [2,1,1]
-    mf = pscf.KRHF(cell, cell.make_kpts(nks))
-    mf.max_cycle = 2
-    mf.kernel()
-    mf.max_cycle = 5
-    pscf.newton(mf).kernel()
-
-    mf = pscf.KUHF(cell, cell.make_kpts(nks))
-    mf.max_cycle = 2
-    mf.kernel()
-    mf.max_cycle = 5
-    pscf.newton(mf).kernel()

@@ -17,7 +17,8 @@
 import unittest
 import numpy as np
 from pyscf import lib
-from pyscf.pbc import gto, scf, tdscf
+from pyscf.pbc import gto, scf, dft, tdscf
+from pyscf.pbc.tdscf import kuhf
 from pyscf import gto as molgto, scf as molscf, tdscf as moltdscf
 from pyscf.data.nist import HARTREE2EV as unitev
 
@@ -178,6 +179,49 @@ class WaterBigBox(unittest.TestCase):
 
     def test_tdhf(self):
         self.kernel(tdscf.KTDHF, moltdscf.TDHF)
+
+
+class SmallCellResponse(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cell = gto.M(atom='Be 0 0 0', a=np.eye(3)*3,
+                     basis=[[0, [.8, 1]], [0, [.3, 1]], [1, [.5, 1]]],
+                     mesh=[15]*3, precision=1e-8, verbose=0)
+        cls.mf = scf.KRHF(cell, cell.make_kpts([1, 1, 1]), exxdiv=None)
+        cls.mf = cls.mf.density_fit(auxbasis='weigend').run(conv_tol=1e-11).to_uhf()
+
+    def check_ab(self, xc=None):
+        mf = self.mf
+        if xc is not None:
+            mf = mf.to_ks(xc=xc)
+            mf.grids = dft.gen_grid.UniformGrids(mf.cell).build()
+            # Shift the quadrature away from nuclear zero-gradient points.
+            mf.grids.coords += np.sum(mf.cell.lattice_vectors(), axis=0) / 30
+        a, b = kuhf.get_ab(mf)
+        def blocks(tensors):
+            aa, ab, bb = [x.reshape(6, 6) for x in tensors]
+            return np.block([[aa, ab], [ab.conj().T, bb]])
+        a, b = blocks(a), blocks(b)
+        tda = kuhf.TDA(mf)
+        vind, diag = tda.gen_vind(mf)
+        np.testing.assert_allclose(vind(np.eye(len(diag))).T, a, atol=1e-8)
+        td = kuhf.TDHF(mf)
+        vind, diag = td.gen_vind(mf)
+        full = np.block([[a, b], [-b.conj(), -a.conj()]])
+        np.testing.assert_allclose(vind(np.eye(len(diag))).T, full, atol=1e-8)
+
+    def test_hf(self):
+        self.check_ab()
+
+    def test_lda(self):
+        self.check_ab('lda,vwn')
+
+    def test_gga(self):
+        self.check_ab('pbe')
+
+    def test_mgga(self):
+        self.check_ab('tpss')
+
 
 
 if __name__ == "__main__":

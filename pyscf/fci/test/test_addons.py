@@ -404,6 +404,13 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(fci.addons.cre_b(a6+b6, 4, (2,2), 2)), 30.522245459279716, 12)
         self.assertAlmostEqual(lib.fp(fci.addons.cre_b(a6+b6, 4, (2,2), 3)), -57.04404450083064, 12)
 
+    def test_generalized_closed_shell_energy(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 .74', basis='sto-3g', verbose=0)
+        mf = scf.RHF(mol).run(conv_tol=1e-12)
+        ref = fci.FCI(mf).kernel()[0]
+        actual = fci.FCI(mf.to_ghf()).kernel()[0]
+        self.assertAlmostEqual(actual, ref, places=10)
+
 
 if __name__ == "__main__":
     print("Full Tests for fci.addons")

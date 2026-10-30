@@ -56,6 +56,34 @@ class KnownValues(unittest.TestCase):
                 self.assertTrue(numpy.allclose(refk[1], f['eri_mo/1'][:].T))
                 self.assertTrue(numpy.allclose(refk[2], f['eri_mo/2'][:].T))
 
+
+    def make_storage_reference(self):
+        self.cell = pgto.M(atom='He 0 0 0', a=numpy.eye(3)*3,
+                         basis=[[0, [.8, 1]], [1, [.5, 1]]],
+                         precision=1e-7, verbose=0)
+        self.aux = incore.make_auxcell(self.cell, [[0, [.6, 1]], [1, [.4, 1]]])
+        kpts = self.cell.make_kpts([2, 1, 1])
+        self.pairs = numpy.array([[kpts[0], kpts[0]], [kpts[0], kpts[1]], [kpts[1], kpts[1]]])
+
+    def test_auxiliary_last(self):
+        self.make_storage_reference()
+        ref = incore.aux_e2(self.cell, self.aux, aosym='s1', kptij_lst=self.pairs)
+        with lib.H5TmpFile() as f:
+            outcore._aux_e2(self.cell, self.aux, f, aosym='s1', kptij_lst=self.pairs, max_memory=.01)
+            for k in range(3):
+                group = f['eri_mo/%d' % k]
+                actual = numpy.concatenate([group[str(i)][:] for i in range(len(group))], axis=-1)
+                numpy.testing.assert_allclose(actual, ref[k], atol=1e-11)
+
+    def test_auxiliary_first_derivative(self):
+        self.make_storage_reference()
+        ref = incore.aux_e2(self.cell, self.aux, intor='int3c2e_ip1', aosym='s1', kptij_lst=self.pairs)
+        with lib.H5TmpFile() as f:
+            outcore.aux_e1(self.cell, self.aux, f, intor='int3c2e_ip1', aosym='s1',
+                           kptij_lst=self.pairs, max_memory=.01)
+            for k in range(3):
+                numpy.testing.assert_allclose(f['eri_mo/%d' % k][:], ref[k].transpose(0, 2, 1), atol=1e-11)
+
 if __name__ == '__main__':
     print("Full Tests for pbc.df.outcore")
     unittest.main()

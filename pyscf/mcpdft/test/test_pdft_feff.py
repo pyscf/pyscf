@@ -164,7 +164,7 @@ def case(kv, mc):
 
 class KnownValues(unittest.TestCase):
 
-    def test_dvot(self):
+    def test_dvot_high_cost(self):
         np.random.seed(1)
         for mol, mf in zip(("H2", "LiH"), (h2, lih)):
             for state, nel in zip(('Singlet', 'Triplet'), (2, (2, 0))):
@@ -261,6 +261,22 @@ class KnownValues(unittest.TestCase):
                                           term=term):
                             self.assertAlmostEqual(lib.fp(test), lib.fp(ref),
                                                    delta=1e-6)
+
+    def test_translated_and_fully_translated_response(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 1.2', basis='6-31g', verbose=0)
+        mf = scf.RHF(mol).run(conv_tol=1e-11)
+        state = np.random.get_state()
+        self.addCleanup(np.random.set_state, state)
+        np.random.seed(1)
+        for functional in ('tPBE', 'ftPBE'):
+            with self.subTest(functional=functional):
+                mc = mcpdft.CASSCF(mf, functional, 2, 2, grids_level=0).run()
+                case(self, mc)
+                gradient = mc.nuc_grad_method().kernel()
+                scanner = mc.nuc_grad_method().as_scanner()
+                energy, scanned = scanner(mol)
+                self.assertAlmostEqual(energy, mc.e_tot, places=8)
+                np.testing.assert_allclose(scanned, gradient, atol=1e-7)
 
 
 if __name__ == "__main__":

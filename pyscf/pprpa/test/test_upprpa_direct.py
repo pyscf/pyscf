@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 
 import pytest
+import numpy as np
+from pyscf.pbc import gto as pbcgto, scf as pbcscf
+from pyscf.pprpa.rpprpa_direct import RppRPADirect
 from pyscf import gto, dft
 from pyscf.pprpa.upprpa_direct import UppRPADirect
 
@@ -109,3 +112,20 @@ def test_correlation_all(h2o_cation_uks):
     etot, _, ec = pp.energy_tot()
     assert ec == pytest.approx(-0.1408680803, abs=1e-7)
     assert etot == pytest.approx(-75.6995433844, abs=1e-7)
+
+
+def test_gamma_spin_decomposition():
+    cell = pbcgto.M(atom='He 0 0 0', a=np.eye(3)*4,
+                 basis=[[0, [.8, 1]], [1, [.5, 1]]],
+                 mesh=[19]*3, precision=1e-7, verbose=0)
+    mf = pbcscf.RHF(cell, exxdiv=None).density_fit(auxbasis='weigend').run(conv_tol=1e-11)
+    ref = RppRPADirect(mf)
+    ref.kernel('s')
+    ref.kernel('t')
+    spin = UppRPADirect(mf.to_uhf())
+    spin.kernel()
+    np.testing.assert_allclose(spin.exci[0], ref.exci_t, atol=1e-9)
+    np.testing.assert_allclose(spin.exci[1], ref.exci_t, atol=1e-9)
+    np.testing.assert_allclose(np.sort(spin.exci[2]),
+                               np.sort(np.concatenate([ref.exci_s, ref.exci_t])), atol=1e-9)
+    assert sum(spin.ec) == pytest.approx(ref.ec_s+ref.ec_t, abs=5e-10, rel=0)

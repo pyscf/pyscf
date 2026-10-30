@@ -282,6 +282,33 @@ class KnownValues(unittest.TestCase):
         assert abs(mf.kpts.kpts_ibz - ref.kpts_ibz).max() < 1e-9
 
 
+    def check_closed_shell(self, xc, spin_classes):
+        cell = pbcgto.M(atom='H 0 0 0; H 0 0 .9', a=np.eye(3)*4,
+                     basis='gth-szv', pseudo='gth-pade', mesh=[11]*3,
+                     precision=1e-7, verbose=0)
+        kpts = cell.make_kpts([2, 1, 1])
+        mf = pbcdft.KRKS(cell, kpts).density_fit(auxbasis='weigend')
+        mf.xc = xc
+        mf.run(conv_tol=1e-10)
+        self.assertTrue(mf.converged)
+        for cls in spin_classes:
+            with self.subTest(spin=cls.__name__):
+                other = cls(cell, kpts).density_fit(auxbasis='weigend')
+                other.xc = mf.xc
+                other.run(conv_tol=1e-10)
+                self.assertTrue(other.converged)
+                self.assertAlmostEqual(other.e_tot, mf.e_tot, places=8)
+        newton = mf.newton().run(conv_tol=1e-10)
+        self.assertTrue(newton.converged)
+        self.assertAlmostEqual(newton.e_tot, mf.e_tot, places=9)
+
+    def test_range_separated_closed_shell(self):
+        self.check_closed_shell('hse06', (pbcdft.KUKS,))
+
+    def test_generalized_closed_shell(self):
+        self.check_closed_shell('pbe', (pbcdft.KGKS,))
+
+
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.krks")
     unittest.main()

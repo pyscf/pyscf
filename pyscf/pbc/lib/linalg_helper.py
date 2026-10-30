@@ -54,7 +54,10 @@ def eigs(matvec, size, nroots, x0=None, Adiag=None, guess=False, verbose=logger.
 
     if method == 'davidson':
         if guess:
-            conv, e, c, niter = davidson_guess(matvec, size, nroots, Adiag)
+            e, c, niter = davidson_guess(matvec, size, nroots, Adiag)
+            conv = all(np.linalg.norm(c[:,i]) > 0 and
+                       np.linalg.norm(matvec(c[:,i]) - e[i]*c[:,i]) < 1e-6
+                       for i in range(nroots))
         else:
             conv, e, c, niter = davidson(matvec, size, nroots, x0, Adiag, verbose)
         return conv, e, c
@@ -234,19 +237,10 @@ def davidson_guess(mult_by_A,N,neig,Adiag=None):
             Atilde = np.dot(b.conj().transpose(),Ab)
             lamda, alpha = diagonalize_asymm(Atilde)
 
-            overlap_guess_j_max = -99
-            target = 0
-            for j, overlap_guess_j in enumerate(alpha[0,:]):
-                if overlap_guess_j > overlap_guess_j_max:
-                    overlap_guess_j_max = overlap_guess_j
-                    target = j
+            target = np.argmax(abs(alpha[0,:]))
 
             lamda_k = lamda[target]
             alpha_k = alpha[:,target]
-
-            if M == Mmax:
-                print(" -- M reached Mmax")
-                break
 
             q = np.dot( Ab-lamda_k*b, alpha_k )
             if np.linalg.norm(q) < tol:
@@ -254,6 +248,10 @@ def davidson_guess(mult_by_A,N,neig,Adiag=None):
                 evecs[:,guess] = np.dot(b,alpha_k)
                 Mtot += M
                 print(" -- Converged in", M, "iterations")
+                break
+
+            if M == Mmax:
+                print(" -- M reached Mmax")
                 break
 
             for i in range(N):
@@ -832,25 +830,3 @@ def mgs_ortho(vlst,rlst,crit_indp,iop=0):
         if VERBOSE: print(' final nindp from mgs_ortho =', nindp,
                           ' diffIden=', diff)
     return nindp, vlst2
-
-if __name__ == '__main__':
-    N = 200
-    neig = 4
-    A = np.zeros((N,N))
-    k = N/2
-    for ii in range(N):
-        i = ii+1
-        for jj in range(N):
-            j = jj+1
-            if j <= k:
-                A[ii,jj] = i*(i==j)-(i-j-k**2)
-            else:
-                A[ii,jj] = i*(i==j)+(i-j-k**2)
-    def matvec(x):
-        return np.dot(A,x)
-
-    e,c = eigs(matvec,N,neig,Adiag=np.diag(A))
-    print("# davidson evals =", e)
-
-    e,c = diagonalize_asymm(A)
-    print("# numpy evals =", e.real[:neig])

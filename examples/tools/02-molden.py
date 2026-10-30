@@ -4,6 +4,7 @@
 #
 
 import sys
+import numpy
 from pyscf import gto, scf
 from pyscf import lo
 from pyscf.tools import molden
@@ -45,6 +46,14 @@ with open('C6H6mo.molden', 'w') as f1:
 #
 c_loc_orth = lo.orth.orth_ao(mol)
 molden.from_mo(mol, 'C6H6loc.molden', c_loc_orth)
+
+# The writer reorders AO coefficients to Molden convention. Read the file back
+# to obtain orbitals in PySCF's AO order, and inspect the writer's AO mapping.
+print('Molden AO order:', molden.order_ao_index(mol))
+loaded_mol, mo_energy, loaded_mo, mo_occ, irrep_labels, spins = \
+    molden.parse('C6H6mo.molden')
+print('Read back %d orbitals on %d AOs' % (loaded_mo.shape[1], loaded_mol.nao_nr()))
+print('First orbital agrees:', numpy.allclose(loaded_mo[:, 0], mf.mo_coeff[:, 0]))
 
 
 #

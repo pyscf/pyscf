@@ -401,7 +401,7 @@ def make_gf(gw, omega, eta, fullsigma=True, mode='linear'):
     else:
         for s in range(2):
             for iw in range(len(omega)):
-                for i in range(len(gw._scf.mo_energy)):
+                for i in range(nmo):  # Apply the static correction to every orbital.
                     sigma_diff[s, i, i, iw] += gw.vk[s, i, i] - gw.vxc[s, i, i]
 
     for s in range(2):

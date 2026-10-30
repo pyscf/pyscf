@@ -145,7 +145,7 @@ def eigh_by_blocks(h, s=None, labels=None):
     if s is None:
         p0 = 0
         for label in set(labels):
-            idx = labels == label
+            idx = numpy.where(labels == label)[0]
             e, c = scipy.linalg.eigh(h[idx[:,None],idx])
             cs[idx,p0:p0+e.size] = c
             es.append(e)
@@ -153,7 +153,7 @@ def eigh_by_blocks(h, s=None, labels=None):
     else:
         p0 = 0
         for label in set(labels):
-            idx = labels == label
+            idx = numpy.where(labels == label)[0]
             e, c = scipy.linalg.eigh(h[idx[:,None],idx], s[idx[:,None],idx])
             cs[idx,p0:p0+e.size] = c
             es.append(e)

@@ -608,6 +608,19 @@ class KnownValues(unittest.TestCase):
         for (idx, equiv_idx) in zip(indices, equiv_indices):
             self.assertTrue((idx == equiv_idx).all())
 
+    def test_spin_chain_rule_and_inverse(self):
+        rng = np.random.default_rng(12)
+        chain = np.array([[1, 1], [1, -1]])
+        for order in (1, 2, 3, 4):
+            with self.subTest(order=order):
+                original = rng.normal(size=(2, 3)*order+(7,))
+                expected = original.copy()
+                for axis in range(0, 2*order, 2):
+                    expected = np.moveaxis(np.tensordot(chain, expected, axes=(1, axis)), 0, axis)
+                actual = xc_deriv.ts2ud(original.copy())
+                np.testing.assert_allclose(actual, expected, atol=1e-12)
+                np.testing.assert_allclose(xc_deriv.ud2ts(actual.copy()), original, atol=1e-12)
+
 if __name__ == "__main__":
     print("Test xc_deriv")
     unittest.main()
