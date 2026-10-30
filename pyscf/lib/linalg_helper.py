@@ -1356,15 +1356,27 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
             for j in range(nd):
                 h[i,j] = dot(xi.conj(), ax[j])
         xi = None
-    # Add the contribution of I in (1+a)
+    # Add the contribution of I in (1+a): the overlap of the trial vectors. A single
+    # Gram-Schmidt pass leaves vectors near lindep not exactly orthogonal, so their
+    # overlap is not diag(innerprod).
+    s = numpy.empty((nd,nd), dtype=x1.dtype)
     for i in range(nd):
-        h[i,i] += innerprod[i]
+        xi = numpy.asarray(xs[i])
+        for j in range(i+1):
+            s[i,j] = dot(xi.conj(), numpy.asarray(xs[j]))
+            s[j,i] = s[i,j].conj()
+        xi = None
+    h += s
 
     g = numpy.zeros((nd,nroots), dtype=x1.dtype)
     for i in range(nd):
         g[i] = dot(b, numpy.asarray(xs[i]).conj())
 
-    c = numpy.linalg.solve(h, g)
+    # The trial vectors can be linearly dependent to working precision, which makes h
+    # singular. Solve in the eigenvectors of the overlap above lindep.
+    e, u = numpy.linalg.eigh(s)
+    t = u[:,e > lindep] / numpy.sqrt(e[e > lindep])
+    c = t.dot(numpy.linalg.solve(t.conj().T.dot(h).dot(t), t.conj().T.dot(g)))
     x = _gen_x0(c, xs)
     if b.ndim == 1:
         x = x[0]
