@@ -218,7 +218,7 @@ def transform_integrals_df(myadc):
 
     kconserv = myadc.khelper.kconserv
 
-    with_df = myadc.with_df
+    # with_df = myadc.with_df
     # naux = with_df.get_naoaux()
     # get largest naxu across all ki,kj pairs
     with df._load3c(myadc._scf.with_df._cderi, 'j3c') as fload:
