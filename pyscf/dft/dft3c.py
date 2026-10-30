@@ -83,6 +83,11 @@ def dft3c(mf, method='b97-3c'):
     and the RI-J auxiliary basis are resolved from the
     basis_set_exchange package at runtime
     (``pip install basis-set-exchange``).
+
+    Note:
+        DFT3C is not intended for use with relativistic methods such as X2C.
+        For simplicity, this restriction is not checked at runtime. Users must
+        avoid applying relativistic methods with dft3c().
     '''
     mf_class = mf.__class__
     name = mf_class.__name__
