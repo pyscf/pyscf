@@ -229,10 +229,10 @@ def transform_integrals_df(myadc):
 
     eris.dtype = dtype = np.result_type(dtype)
     eris.Lpq_mo = Lpq_mo = np.empty((nkpts, nkpts), dtype=object)
-    Loo = np.empty((nkpts, nkpts, naux, nocc, nocc), dtype=dtype)
-    Lvo = np.empty((nkpts, nkpts, naux, nvir, nocc), dtype=dtype)
-    eris.Lvv = np.empty((nkpts, nkpts, naux, nvir, nvir), dtype=dtype)
-    eris.Lov = np.empty((nkpts, nkpts, naux, nocc, nvir), dtype=dtype)
+    Loo = np.zeros((nkpts, nkpts, naux, nocc, nocc), dtype=dtype)
+    Lvo = np.zeros((nkpts, nkpts, naux, nvir, nocc), dtype=dtype)
+    eris.Lvv = np.zeros((nkpts, nkpts, naux, nvir, nvir), dtype=dtype)
+    eris.Lov = np.zeros((nkpts, nkpts, naux, nocc, nvir), dtype=dtype)
 
     eris.vvvv = None
     eris.ovvv = None
