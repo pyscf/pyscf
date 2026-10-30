@@ -88,9 +88,8 @@ def dft3c(mf, method='b97-3c'):
     name = mf_class.__name__
     if issubclass(mf_class, DFT3C):
         raise RuntimeError('Object %s already has the DFT3C mixin' % name)
-    dft3cmf = lib.set_class(DFT3C(mf), (DFT3C, mf_class))
-    dft3cmf._apply_dft3c(method)
-    return dft3cmf
+    cls = lib.make_class((DFT3C, mf_class))
+    return cls(mf, method)
 
 # 1. A tag to label the derived SCF class
 # 2. A hook to register DFT3C specific methods
@@ -108,10 +107,11 @@ class DFT3C:
 
     _keys = {'method3c'}
 
-    def __init__(self, mf):
+    def __init__(self, mf, method='b97-3c'):
         if mf.mol.ecp:
             raise RuntimeError('ECP overwritten by 3c method initialization')
         self.__dict__.update(mf.__dict__)
+        self._apply_dft3c(method)
 
     def dump_flags(self, verbose=None):
         logger = lib.logger.new_logger(self, verbose)
@@ -166,11 +166,18 @@ class DFT3C:
             mol.ecp = {a: ecp for a in ecp_basis}
         mol.build(False, False)
         self.xc = xc
-        self.reset(mol)
         if getattr(self, 'with_df', None) is not None:
-            # density_fit was applied before dft3c.  Rebuild the density
-            # fitting object for the 3c basis and auxiliary basis.
-            self.with_df = _make_df(self)
+            if auxbasis == 'def2-mTZVPP-RIJ':
+                from pyscf.gto.basis import bse
+                if bse.basis_set_exchange is None:
+                    logger.warn(self, 'basis_set_exchange not available; density '
+                                'fitting falls back to the even-tempered auxiliary '
+                                'basis.')
+                    auxbasis = None
+            # Preserve DF settings without resetting the input object's DF.
+            self.with_df = self.with_df.copy()
+            self.with_df.auxbasis = auxbasis
+        self.reset(mol)
 
     @property
     def method(self):
@@ -188,27 +195,3 @@ class DFT3C:
         obj = lib.view(self, lib.drop_class(self.__class__, DFT3C))
         del obj.method3c
         return obj
-
-
-def _make_df(mf):
-    from pyscf import df
-    from pyscf.scf import dhf
-    auxbasis = _DFT3C_METHODS[mf.method3c.lower().replace('_', '-')][3]
-    if auxbasis is not None:
-        # The RI-J auxiliary basis is resolved from basis_set_exchange at
-        # runtime.  Without the package, fall back to the even-tempered
-        # basis instead of failing at the basis load.
-        from pyscf.gto.basis import bse
-        if bse.basis_set_exchange is None:
-            logger.warn(mf, 'basis_set_exchange not available; density '
-                        'fitting falls back to the even-tempered auxiliary '
-                        'basis.')
-            auxbasis = None
-    if isinstance(mf, dhf.UHF):
-        with_df = df.DF4C(mf.mol, auxbasis)
-    else:
-        with_df = df.DF(mf.mol, auxbasis)
-    with_df.max_memory = mf.max_memory
-    with_df.stdout = mf.stdout
-    with_df.verbose = mf.verbose
-    return with_df
