@@ -16,7 +16,7 @@
 import unittest
 from functools import reduce
 import numpy
-from pyscf import lib, gto, scf, dft, ao2mo, df
+from pyscf import lib, gto, scf, dft, ao2mo, df, solvent
 from pyscf.solvent import ddcosmo
 from pyscf.solvent import _attach_solvent
 from pyscf.symm import sph
@@ -518,6 +518,73 @@ class SolventWithDefaultGrids(unittest.TestCase):
         self.assertAlmostEqual(abs(ref - td.e).max(), 0, 7)
 
 # TODO: add tests for direct-scf, ROHF, ROKS, .newton(), and their mixes
+
+
+class NamedSolvent(unittest.TestCase):
+    def test_solvent_name(self):
+        cm = ddcosmo.DDCOSMO(mol, 'toluene')
+        self.assertEqual(cm.solvent, 'toluene')
+        self.assertAlmostEqual(cm.eps, 2.3741, 12)
+        self.assertAlmostEqual(cm.eps_optical, 1.4961**2, 12)
+        self.assertAlmostEqual(cm.get_eps_optical(), 1.4961**2, 12)
+
+    def test_default_solvent(self):
+        cm = ddcosmo.DDCOSMO(mol)
+        self.assertEqual(cm.solvent, '')
+        self.assertAlmostEqual(cm.eps, 78.3553, 12)
+        self.assertIsNone(cm.eps_optical)
+
+    def test_water_matches_default_eps(self):
+        # Naming water must not change eps away from the default
+        cm = ddcosmo.DDCOSMO(mol, 'water')
+        self.assertAlmostEqual(cm.eps, ddcosmo.EPS_WATER, 12)
+
+    def test_assign_solvent(self):
+        cm = ddcosmo.DDCOSMO(mol)
+        cm.solvent = 'acetonitrile'
+        self.assertAlmostEqual(cm.eps, 35.688, 12)
+        self.assertAlmostEqual(cm.eps_optical, 1.3442**2, 12)
+        # eps and eps_optical can be overwritten afterwards
+        cm.eps = 35.9
+        self.assertAlmostEqual(cm.eps, 35.9, 12)
+        self.assertEqual(cm.solvent, 'acetonitrile')
+
+    def test_solvent_name_matching(self):
+        for name, ref in (('Water', 'water'),
+                          ('DMSO', 'dimethylsulfoxide'),
+                          ('thf', 'tetrahydrofuran'),
+                          ('hexane', 'n-hexane'),
+                          ('N,N-DiMethylFormamide', 'N,N-dimethylformamide'),
+                          ('carbontetrachloride', 'carbon tetrachloride')):
+            self.assertEqual(ddcosmo.DDCOSMO(mol, name).solvent, ref)
+
+    def test_unknown_solvent(self):
+        self.assertRaises(RuntimeError, ddcosmo.DDCOSMO, mol, 'unobtainium')
+
+    def test_solvent_energy(self):
+        cm = ddcosmo.DDCOSMO(mol, 'acetonitrile')
+        e_tot = scf.RHF(mol).ddCOSMO(cm).kernel()
+
+        cm_ref = ddcosmo.DDCOSMO(mol)
+        cm_ref.eps = 35.688
+        e_ref = scf.RHF(mol).ddCOSMO(cm_ref).kernel()
+        self.assertAlmostEqual(e_tot, e_ref, 12)
+
+    def test_solvent_name_in_constructor(self):
+        e_tot = scf.RHF(mol).ddCOSMO('acetonitrile').kernel()
+        e_ref = scf.RHF(mol).ddCOSMO(ddcosmo.DDCOSMO(mol, 'acetonitrile')).kernel()
+        self.assertAlmostEqual(e_tot, e_ref, 12)
+        e_ref = solvent.ddCOSMO(scf.RHF(mol), 'acetonitrile').kernel()
+        self.assertAlmostEqual(e_tot, e_ref, 12)
+        self.assertEqual(solvent.ddCOSMO(mol, 'acetonitrile').solvent, 'acetonitrile')
+
+    def test_solvent_updated_after_build(self):
+        cm = ddcosmo.DDCOSMO(mol, 'water')
+        cm.build()
+        self.assertTrue(cm._intermediates)
+        cm.solvent = 'toluene'
+        # The intermediates were computed for water. They have to be discarded.
+        self.assertFalse(cm._intermediates)
 
 
 if __name__ == "__main__":

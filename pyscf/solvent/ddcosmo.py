@@ -227,7 +227,7 @@ TriChloroEthene                        3.422
 TriEthylAmine                          2.3832
 Xylene-mixture                         2.3879
 z-1,2-DiChloroEthene                   9.2
-'''  # noqa: E501
+'''
 
 import ctypes
 import numpy
@@ -240,15 +240,33 @@ from pyscf.data import radii
 from pyscf.symm import sph
 
 from pyscf.solvent import _attach_solvent
+from pyscf.solvent import _solvent_data
+
+# Static (zero-frequency) dielectric constant of water at 298 K
+EPS_WATER = 78.3553
+
+# Optical (high-frequency) dielectric constant of water, roughly the square of
+# its refractive index. See the QChem manual, the non-equilibrium PCM section.
+EPS_OPTICAL_WATER = 1.78
+
+def _as_solvent_obj(solvent_obj, mol):
+    '''Allows the solvent model to be specified by the name of the solvent,
+    e.g. mf.ddCOSMO('toluene')
+    '''
+    if isinstance(solvent_obj, str):
+        solvent_obj = DDCOSMO(mol, solvent_obj)
+    return solvent_obj
 
 @lib.with_doc(_attach_solvent._for_scf.__doc__)
 def ddcosmo_for_scf(mf, solvent_obj=None, dm=None):
+    solvent_obj = _as_solvent_obj(solvent_obj, mf.mol)
     if solvent_obj is None:
         solvent_obj = DDCOSMO(mf.mol)
     return _attach_solvent._for_scf(mf, solvent_obj, dm)
 
 @lib.with_doc(_attach_solvent._for_casscf.__doc__)
 def ddcosmo_for_casscf(mc, solvent_obj=None, dm=None):
+    solvent_obj = _as_solvent_obj(solvent_obj, mc.mol)
     if solvent_obj is None:
         if isinstance(getattr(mc._scf, 'with_solvent', None), DDCOSMO):
             solvent_obj = mc._scf.with_solvent
@@ -258,6 +276,7 @@ def ddcosmo_for_casscf(mc, solvent_obj=None, dm=None):
 
 @lib.with_doc(_attach_solvent._for_casci.__doc__)
 def ddcosmo_for_casci(mc, solvent_obj=None, dm=None):
+    solvent_obj = _as_solvent_obj(solvent_obj, mc.mol)
     if solvent_obj is None:
         if isinstance(getattr(mc._scf, 'with_solvent', None), DDCOSMO):
             solvent_obj = mc._scf.with_solvent
@@ -267,6 +286,7 @@ def ddcosmo_for_casci(mc, solvent_obj=None, dm=None):
 
 @lib.with_doc(_attach_solvent._for_post_scf.__doc__)
 def ddcosmo_for_post_scf(method, solvent_obj=None, dm=None):
+    solvent_obj = _as_solvent_obj(solvent_obj, method.mol)
     if solvent_obj is None:
         if isinstance(getattr(method._scf, 'with_solvent', None), DDCOSMO):
             solvent_obj = method._scf.with_solvent
@@ -444,7 +464,7 @@ def make_phi(pcmobj, dm, r_vdw, ui, ylm_1sph, with_nuc=True):
             v_phi[:,ia] = numpy.einsum('z,zp->p', atom_charges, 1./lib.norm(d_rs,axis=2))
 
     max_memory = pcmobj.max_memory - lib.current_memory()[0]
-    blksize = int(max(max_memory*.9e6/8/nao**2, 400))
+    blksize = int(max(max_memory*.9e6/8/nao**2, 8))
 
     cav_coords = cav_coords[extern_point_idx]
     v_phi_e = numpy.empty((n_dm, cav_coords.shape[0]))
@@ -454,6 +474,8 @@ def make_phi(pcmobj, dm, r_vdw, ui, ylm_1sph, with_nuc=True):
         fakemol = gto.fakemol_for_charges(cav_coords[i0:i1])
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s2ij', cintopt=cintopt)
         v_phi_e[:,i0:i1] = numpy.einsum('nx,xk->nk', tril_dm, v_nj)
+        # Free up v_nj to stay within mem limits
+        del v_nj
     v_phi[:,extern_point_idx] -= v_phi_e
 
     phi = -numpy.einsum('n,xn,jn,ijn->ijx', weights_1sph, ylm_1sph, ui, v_phi)
@@ -540,7 +562,7 @@ def make_psi_vmat(pcmobj, dm, r_vdw, ui, ylm_1sph, cached_pol, Xvec, L,
     xi_jn = xi_jn[:,extern_point_idx]
 
     max_memory = pcmobj.max_memory - lib.current_memory()[0]
-    blksize = int(max(max_memory*.9e6/8/nao**2, 400))
+    blksize = int(max(max_memory*.9e6/8/nao**2, 8))
 
     cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, 'int3c2e')
     vmat_tril = 0
@@ -549,6 +571,8 @@ def make_psi_vmat(pcmobj, dm, r_vdw, ui, ylm_1sph, cached_pol, Xvec, L,
         v_nj = df.incore.aux_e2(mol, fakemol, intor='int3c2e', aosym='s2ij',
                                 cintopt=cintopt)
         vmat_tril += numpy.einsum('xn,in->ix', v_nj, xi_jn[:,i0:i1])
+        # Free up v_nj to stay within mem limits
+        del v_nj
     vmat += lib.unpack_tril(vmat_tril)
 
     if is_single_dm:
@@ -610,13 +634,44 @@ def atoms_with_vdw_overlap(atm_id, atom_coords, r_vdw):
     return atoms_nearby
 
 class ddCOSMO(lib.StreamObject):
+    '''The domain decomposition COSMO model.
+
+    Examples:
+
+    >>> mf = mol.RHF().ddCOSMO()
+    >>> mf.with_solvent.solvent = 'toluene'
+    >>> mf.kernel()
+
+    Attributes controlling the solvent:
+
+    solvent : str
+        The name of the solvent. Assigning this attribute applies the dielectric constant
+        and the refractive index of the solvent to `eps` and `eps_optical`, which can be
+        overwritten afterwards. Supported solvents can be accessed via the variable
+        `pyscf.solvent.smd.solvent_db`. Their names are matched case-insensitively,
+        ignoring spaces and hyphens, and common abbreviations (such as "DMSO") are
+        recognized as well. Default is '' (the parameters of water are then applied).
+
+    eps : float
+        The dielectric constant of the solvent. Default is 78.3553, the dielectric constant
+        for water. It is overwritten by `solvent` if a solvent name is specified.
+
+    eps_optical : float
+        The optical (high-frequency) dielectric constant of the solvent, i.e. the square of
+        its refractive index. It is only used by the non-equilibrium solvation of excited
+        states (see `equilibrium_solvation`). It is assigned by `solvent` if a solvent name
+        is specified. Otherwise, the value of water (eps_optical=1.78) is applied and a
+        warning is issued whenever `eps` indicates a solvent other than water.
+        Default is None.
+    '''
+
     _keys = {
         'mol', 'radii_table', 'atom_radii', 'lebedev_order', 'lmax', 'eta',
-        'eps', 'grids', 'max_cycle', 'conv_tol', 'state_id', 'frozen',
-        'equilibrium_solvation', 'e', 'v',
+        'solvent', 'eps', 'eps_optical', 'grids', 'max_cycle', 'conv_tol',
+        'state_id', 'frozen', 'equilibrium_solvation', 'e', 'v',
     }
 
-    def __init__(self, mol):
+    def __init__(self, mol, solvent=None):
         self.mol = mol
         self.stdout = mol.stdout
         self.verbose = mol.verbose
@@ -629,7 +684,16 @@ class ddCOSMO(lib.StreamObject):
         self.lebedev_order = 17
         self.lmax = 6  # max angular momentum of spherical harmonics basis
         self.eta = .1  # regularization parameter
-        self.eps = 78.3553
+        self.eps = EPS_WATER
+
+        # Square of the refractive index of the solvent, used by the
+        # non-equilibrium solvation (see .get_eps_optical)
+        self.eps_optical = None
+
+        # Assigning .solvent overwrites .eps and .eps_optical with the
+        # parameters of the solvent (see .__setattr__)
+        self.solvent = solvent or ''
+
         self.grids = Grids(mol)
 
         # The maximum iterations and convergence tolerance to update solvent
@@ -697,9 +761,41 @@ class ddCOSMO(lib.StreamObject):
     def vpcm(self, val):
         self.v_solvent = val
 
+    def get_eps_optical(self):
+        '''The optical (high-frequency) dielectric constant of the solvent.
+
+        Only the fast, electronic part of the solvent polarization follows a
+        vertical excitation. Its response is governed by the optical dielectric
+        constant rather than the static one (see .equilibrium_solvation).
+        '''
+        if self.eps_optical is not None:
+            return self.eps_optical
+        # .eps is None in the SMD model when eps is taken from solvent_db
+        if self.eps is not None and abs(self.eps - EPS_WATER) > 1e-6:
+            logger.warn(self, 'eps_optical was not specified for eps=%g. The '
+                        'optical dielectric constant of water (%g) is applied '
+                        'in the non-equilibrium solvation. Please set '
+                        '.eps_optical to the square of the refractive index of '
+                        'the solvent in use.', self.eps, EPS_OPTICAL_WATER)
+        return EPS_OPTICAL_WATER
+
+    def _set_solvent(self, solvent):
+        '''Applies the dielectric constant and the refractive index of the
+        solvent found in the solvent database. Returns the name of the solvent
+        as it is stored in the database.
+        '''
+        name = _solvent_data.resolve_solvent_name(solvent)
+        n, _, _, _, _, eps = _solvent_data.solvent_db[name][:6]
+        # Assigning .eps discards the intermediates cached for the old solvent
+        self.eps = eps
+        self.eps_optical = n**2
+        return name
+
     def __setattr__(self, key, val):
-        if key in ('radii_table', 'atom_radii', 'lebedev_order', 'lmax',
-                   'eta', 'eps', 'grids'):
+        if key == 'solvent' and val:
+            val = self._set_solvent(val)
+        elif key in ('radii_table', 'atom_radii', 'lebedev_order', 'lmax',
+                     'eta', 'eps', 'grids'):
             self.reset()
         super(DDCOSMO, self).__setattr__(key, val)
 
@@ -709,7 +805,11 @@ class ddCOSMO(lib.StreamObject):
                     self.lebedev_order, gen_grid.LEBEDEV_ORDER[self.lebedev_order])
         logger.info(self, 'lmax = %s'         , self.lmax)
         logger.info(self, 'eta = %s'          , self.eta)
+        solvent = getattr(self, 'solvent', '')
+        if solvent:
+            logger.info(self, 'solvent = %s'  , solvent)
         logger.info(self, 'eps = %s'          , self.eps)
+        logger.info(self, 'eps_optical = %s'  , self.eps_optical)
         logger.info(self, 'frozen = %s'       , self.frozen)
         logger.info(self, 'equilibrium_solvation = %s', self.equilibrium_solvation)
         logger.debug2(self, 'radii_table %s', self.radii_table)

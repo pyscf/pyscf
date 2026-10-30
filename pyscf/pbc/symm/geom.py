@@ -95,7 +95,7 @@ def search_space_group_ops(cell, rotations=None, tol=SYMPREC):
     atmgrp = mole.atom_types(cell._atom, magmom=cell.magmom)
     atmgrp_spin_inv = {}  # spin up and down inverted
     has_spin = False
-    for atm in atmgrp.keys():
+    for atm in atmgrp:
         if atm[-2:] == '_u':
             has_spin = True
             atmgrp_spin_inv[atm] = atmgrp[atm[:-2] + '_d']

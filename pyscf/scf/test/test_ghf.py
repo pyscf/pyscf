@@ -18,6 +18,7 @@
 
 import unittest
 import numpy
+import numpy as np
 import scipy.linalg
 from functools import reduce
 
@@ -96,6 +97,7 @@ def spin_square(mol, mo):
     return ss
 
 class KnownValues(unittest.TestCase):
+
     def test_init_guess_minao(self):
         dm = mf.get_init_guess(mol, key='minao')
         self.assertEqual(dm.shape, (48,48))
@@ -404,6 +406,19 @@ I F
         # from DIRAC19. See issue #744
         ref = -11.76034990661
         self.assertAlmostEqual(mf.e_tot, ref, 9)
+
+    def test_multipoles(self):
+        mf = mol.UHF().to_ghf()
+        nao = mol.nao
+        np.random.seed(1)
+        dm = np.random.rand(nao*2, nao*2) + np.random.rand(nao*2, nao*2) * .5j
+        dm = dm + dm.conj().T
+        spatial_dm = dm[:nao,:nao] + dm[nao:,nao:]
+        ref = scf.hf.dip_moment(mol, spatial_dm)
+        assert abs(mf.dip_moment(dm=dm) - ref).max() < 1e-10
+
+        ref = scf.hf.quad_moment(mol, spatial_dm, verbose=0)
+        assert abs(mf.quad_moment(dm=dm) - ref).max() < 1e-10
 
 
 if __name__ == "__main__":

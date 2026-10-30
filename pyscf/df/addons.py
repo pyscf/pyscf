@@ -175,7 +175,10 @@ def make_auxbasis(mol, *, xc='HF', mp2fit=False):
     auxbasis = {}
     if isinstance(mol.basis, str):
         _basis = {a: mol.basis for a in uniq_atoms}
-        default_auxbasis = predefined_auxbasis(mol, mol.basis, xc, mp2fit)
+        balias = _format_basis_name(mol.basis)
+        if gto.basis._is_pople_basis(balias):
+            balias = balias.split('g')[0] + 'g'
+        default_auxbasis = predefined_auxbasis(mol, balias, xc, mp2fit)
         if default_auxbasis:
             auxbasis = {a: default_auxbasis for a in uniq_atoms}
             logger.debug(mol, 'Default auxbasis %s is applied universally', default_auxbasis)

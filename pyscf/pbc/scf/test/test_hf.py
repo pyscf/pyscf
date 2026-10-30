@@ -18,6 +18,7 @@
 
 import unittest
 import numpy
+import numpy as np
 from pyscf import lib
 from pyscf.scf import atom_hf
 from pyscf.pbc import gto as pbcgto
@@ -585,6 +586,28 @@ class KnownValues(unittest.TestCase):
         rpop, rchg = mf.analyze()[0]
         self.assertAlmostEqual(lib.fp(rpop), 0.0110475, 4)
         self.assertAlmostEqual(abs(rchg).max(), 0, 7)
+
+    def test_scanner(self):
+        cell1 = pbcgto.M(
+            a=np.eye(3)*4,
+            atom='H 0 0 0; H 0 0 1.', basis='gth-szv',
+            pseudo='gth-pbe', mesh=[7, 7, 7])
+
+        cell2 = cell1.set_geom_('H 0 0 0; H 0 0 1.5', inplace=False)
+        cell2.mesh = [15, 15, 15]
+
+        mf1 = cell1.RHF().run()
+        mf_scanner = mf1.as_scanner()
+        mf_scanner(cell1)
+
+        e2 = mf_scanner(cell2)
+        assert np.array_equal(mf_scanner.with_df.mesh, [15, 15, 15])
+        mf2 = cell2.RHF().run()
+        self.assertAlmostEqual(e2, mf2.e_tot, 9)
+
+        e1 = mf_scanner(cell1)
+        assert np.array_equal(mf_scanner.with_df.mesh, [7, 7, 7])
+        self.assertAlmostEqual(e1, mf1.e_tot, 9)
 
 
 if __name__ == '__main__':

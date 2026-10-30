@@ -92,7 +92,7 @@ def d2h_compat_irrep_id(mol, msym_symm_orb):
         if len(block_abelian_id) > 1:
             raise NotImplementedError('There is no unique mapping from non-Abelian to Abelian subgroup')
         d2h_id = block_abelian_id[0]
-        if d2h_id not in abelian_irrep_id_dict.keys():
+        if d2h_id not in abelian_irrep_id_dict:
             msym_irrep_id.append(d2h_id)
             abelian_irrep_id_dict[d2h_id] = 1
         else:

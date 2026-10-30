@@ -30,7 +30,7 @@ http://dx.doi.org/10.1021/ct400280b
 F. Lipparini, G. Scalmani, L. Lagardere, B. Stamm, E. Cances, Y. Maday, J.-P.Piquemal, M. J. Frisch, B. Mennucci
 J. Chem. Phys., 141, 184108 (2014)
 http://dx.doi.org/10.1063/1.4901304
-'''  # noqa: E501
+'''
 
 import numpy
 from pyscf import lib
@@ -44,7 +44,7 @@ from pyscf.solvent._attach_solvent import _Solvation
 from pyscf.solvent.grad.pcm import make_grad_object
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import rks as rks_grad
-from pyscf.grad import tdrhf as tdrhf_grad  # noqa
+from pyscf.grad import tdrhf as tdrhf_grad
 
 def kernel(pcmobj, dm, verbose=None):
     mol = pcmobj.mol

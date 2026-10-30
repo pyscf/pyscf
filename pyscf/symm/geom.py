@@ -669,7 +669,7 @@ class SymmSys:
             r0 = self.atoms[lst,1:]
             r1 = numpy.dot(r0, op)
             # FIXME: compare whether two sets of coordinates are identical
-            yield all((_vec_in_vecs(x, r0) for x in r1))
+            yield all(_vec_in_vecs(x, r0) for x in r1)
 
     def has_icenter(self):
         return all(self.symmetric_for(-1))
@@ -735,8 +735,8 @@ class SymmSys:
                 seen[where1] = True
                 seen[where2] = True
 
-                vk = _normalize((numpy.einsum('ix->x', vecs[where1]) -
-                                 numpy.einsum('ix->x', vecs[where2])))
+                vk = _normalize(numpy.einsum('ix->x', vecs[where1]) -
+                                 numpy.einsum('ix->x', vecs[where2]))
                 for n in (set(ns[where1]) | set(ns[where2])):
                     possible_cn.append((vk,n))
         return possible_cn

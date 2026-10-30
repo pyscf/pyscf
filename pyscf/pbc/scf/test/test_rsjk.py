@@ -17,6 +17,7 @@ import unittest
 import numpy as np
 import scipy.linalg
 from pyscf import lib
+from pyscf.gto.mole import classical_coulomb_energy
 from pyscf.pbc.gto import Cell
 from pyscf.pbc.df import FFTDF
 from pyscf.pbc.tools import k2gamma
@@ -331,6 +332,54 @@ class KnownValues(unittest.TestCase):
         )
         kmf = cell.RHF().jk_method('RS')
         kmf.run()
+
+    def test_energy_nuc(self):
+        '''Periodic systems must use the Ewald lattice sum for the nuclear
+        repulsion when the RSJK builder is enabled (issue #3371). Only a 0D
+        cell uses the real-space Coulomb energy.
+        '''
+        cell = Cell().build(
+             a = np.eye(3)*1.8,
+             atom = '''He     0.      0.      0.
+                       He     0.4917  0.4917  0.4917''',
+             basis = {'He': [[0, [2.5, 1]]]},
+             precision = 1e-9,
+             verbose = 0,
+        )
+        self.assertAlmostEqual(cell.enuc, -3.743066102133448, 9)
+        mf = cell.RHF().jk_method('RS')
+        self.assertAlmostEqual(mf.energy_nuc(), cell.enuc, 9)
+        kmf = cell.KRHF(kpts=cell.make_kpts([2,1,1])).jk_method('RS')
+        self.assertAlmostEqual(kmf.energy_nuc(), cell.enuc, 9)
+
+        cell0 = Cell().build(
+             a = np.eye(3)*8,
+             atom = 'He 0. 0. 0.; He 0. 0. 1.5',
+             basis = {'He': [[0, [2.5, 1]]]},
+             dimension = 0,
+             precision = 1e-9,
+             verbose = 0,
+        )
+        mf0 = cell0.RHF().jk_method('RS')
+        self.assertAlmostEqual(mf0.energy_nuc(),
+                               classical_coulomb_energy(cell0), 9)
+
+    def test_rhf_rsjk_vs_fftdf(self):
+        '''RSJK must reproduce the total energy of the default JK builder
+        (issue #3371).
+        '''
+        cell = Cell().build(
+             a = np.eye(3)*1.8,
+             atom = '''He     0.      0.      0.
+                       He     0.4917  0.4917  0.4917''',
+             basis = {'He': [[0, [2.5, 1]]]},
+             precision = 1e-9,
+             verbose = 0,
+        )
+        e_rs = cell.RHF().jk_method('RS').run().e_tot
+        e_ref = cell.RHF().run().e_tot
+        self.assertAlmostEqual(e_rs, e_ref, 7)
+        self.assertAlmostEqual(e_rs, -1.642545959039, 7)
 
 if __name__ == '__main__':
     print("Full Tests for rsjk")

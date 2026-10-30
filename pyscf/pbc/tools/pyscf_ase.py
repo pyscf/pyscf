@@ -160,6 +160,9 @@ class PySCF(Calculator):
             # Scanner can utilize the initial guess from previous calculations
             self.method_scan = method.as_scanner()
 
+    def set_atoms(self, atoms):
+        self.atoms = atoms
+
     def set(self, **kwargs):
         changed_parameters = Calculator.set(self, **kwargs)
         if changed_parameters:
@@ -265,6 +268,51 @@ class PySCF(Calculator):
             assert kpt == 0
         return occ
 
+    def get_k_point_weights(self):
+        '''Returns 1D array of k-point integration weights (IBZ weights summing to 1).
+
+        Used by ASE's DOS module (ase.dft.dos.DOS) for Brillouin zone integration.
+        '''
+        method = self.method if self.method_scan is None else self.method_scan
+        kpts = getattr(method, 'kpts', None)
+
+        if kpts is None:
+            # Non-periodic calculation - single k-point
+            return np.array([1.0])
+
+        if hasattr(kpts, 'weights_ibz'):
+            # Symmetry-adapted k-points (KPoints object with IBZ weights)
+            return np.asarray(kpts.weights_ibz)
+
+        # Plain k-point array (no symmetry reduction)
+        nkpts = len(kpts)
+        if nkpts == 0:
+            return np.array([1.0])
+        return np.full(nkpts, 1.0 / nkpts)
+
+    def get_bz_k_points(self):
+        '''Returns full BZ k-points in scaled (fractional) coordinates.'''
+        method = self.method if self.method_scan is None else self.method_scan
+        kpts = getattr(method, 'kpts', None)
+        if kpts is None:
+            return np.zeros((1, 3))
+        if hasattr(kpts, 'kpts_scaled'):
+            # KPoints object (symmetry): full BZ scaled coords
+            return np.asarray(kpts.kpts_scaled)
+        # Plain k-point array: convert absolute -> scaled
+        return method.cell.get_scaled_kpts(np.asarray(kpts))
+
+    def get_bz_to_ibz_map(self):
+        '''Returns mapping array: bz2ibz[k_bz] -> k_ibz index.'''
+        method = self.method if self.method_scan is None else self.method_scan
+        kpts = getattr(method, 'kpts', None)
+        if kpts is None:
+            return np.array([0])
+        if hasattr(kpts, 'bz2ibz'):
+            return np.asarray(kpts.bz2ibz, dtype=int)
+        nkpts = len(kpts)
+        return np.arange(nkpts, dtype=int)
+
     def get_number_of_spins(self):
         method = self.method if self.method_scan is None else self.method_scan
         if method.istype('UHF'):
@@ -279,8 +327,9 @@ class PySCF(Calculator):
         method = self.method if self.method_scan is None else self.method_scan
         standard_path = self.atoms.cell.bandpath()
         band_kpts = method.cell.get_abs_kpts(standard_path.kpts)
-        e_k = np.array(method.get_bands(band_kpts)[0])
+        e_k = np.array(method.get_bands(band_kpts)[0]) * HARTREE2EV
         if not method.istype('UHF'):
             e_k = e_k[None]
         fermi = self.get_fermi_level()
-        return BandStructure(standard_path, e_k, fermi)
+        e_k -= fermi
+        return BandStructure(standard_path, e_k, 0.0)

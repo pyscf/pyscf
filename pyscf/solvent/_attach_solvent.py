@@ -337,19 +337,23 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         self._e_tot_without_solvent = e_tot
 
         log.debug('Computing corrections to the total energy.')
-        dm = self.make_rdm1(ci=fcivec, ao_repr=True)
+        dm = self.make_rdm1(mo_coeff=mo_coeff, ci=fcivec, ao_repr=True)
 
         with_solvent = self.with_solvent
+        edup = None
         if with_solvent.e is not None:
+            # Must be evaluated before kernel() overwrites with_solvent.v
             edup = numpy.einsum('ij,ji->', with_solvent.v, dm)
-            e_tot = e_tot - edup + with_solvent.e
-            log.info('Removing duplication %.15g, '
-                     'adding E(solvent) = %.15g to total energy:\n'
-                     '    E(CASSCF+solvent) = %.15g', edup, with_solvent.e, e_tot)
 
         # Update solvent effects for next iteration if needed
         if not with_solvent.frozen:
             with_solvent.e, with_solvent.v = with_solvent.kernel(dm)
+
+        if edup is not None:
+            e_tot = e_tot - edup + with_solvent.e
+            log.info('Removing duplication %.15g, '
+                     'adding E(solvent) = %.15g to total energy:\n'
+                     '    E(CASSCF+solvent) = %.15g', edup, with_solvent.e, e_tot)
 
         return e_tot, e_cas, fcivec
 
@@ -671,10 +675,12 @@ def _for_tdscf(method, solvent_obj=None, dm=None, equilibrium_solvation=False):
         solvent_obj.equilibrium_solvation = equilibrium_solvation
         if not equilibrium_solvation:
             # The vertical excitation is a fast process, applying non-equilibrium
-            # solvation with optical dielectric constant eps=1.78
+            # solvation with the optical dielectric constant of the solvent
             # TODO: reset() can be skipped. Most intermeidates can be reused.
+            eps_optical = solvent_obj.get_eps_optical()
             solvent_obj.reset()
-            solvent_obj.eps = 1.78
+            solvent_obj.eps_optical = eps_optical
+            solvent_obj.eps = eps_optical
             solvent_obj.build()
 
     if isinstance(method, _Solvation):
@@ -756,7 +762,8 @@ class TDSCFWithSolvent(_Solvation):
         # The redistributed surface charge is computed by solving
         #     K^{-1} R (dm_response)
         # using a different dielectric constant. The optical dielectric constant
-        # (eps=1.78, see QChem manual) is a suitable choice for the excited state.
+        # of the solvent (see QChem manual) is a suitable choice for the
+        # excited state.
         if not self.with_solvent.equilibrium_solvation:
             # Solvent with optical dielectric constant, for evaluating the
             # response of the fast solvent part

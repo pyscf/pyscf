@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +15,6 @@
 # Modified from  https://github.com/adrn/mpipool
 #
 
-from __future__ import (division, print_function, absolute_import,
-                        unicode_literals)
 
 __all__ = ["MPIPool", "MPIPoolException"]
 
@@ -57,9 +54,9 @@ class MPIPool:
             import platform
             node = platform.node()
             if self.rank == 0:
-                print('Master: host {0} PID {1}'.format(node, os.getpid()))
+                print(f'Master: host {node} PID {os.getpid()}')
             else:
-                print('Worker: host {0} PID {1}'.format(node, os.getpid()))
+                print(f'Worker: host {node} PID {os.getpid()}')
 
     def is_master(self):
         """
@@ -82,18 +79,18 @@ class MPIPool:
             # Event loop.
             # Sit here and await instructions.
             if self.debug:
-                print("Worker {0} waiting for task.".format(self.rank))
+                print(f"Worker {self.rank} waiting for task.")
 
             # Blocking receive to wait for instructions.
             task = self.comm.bcast()
             if self.debug:
-                print("Worker {0} got task {1}.".format(self.rank, task))
+                print(f"Worker {self.rank} got task {task}.")
 
             # Check if message is special sentinel signaling end.
             # If so, stop.
             if isinstance(task, _close_pool_message):
                 if self.debug:
-                    print("Worker {0} close.".format(self.rank))
+                    print(f"Worker {self.rank} close.")
 # Handle global import lock for multithreading, see
 #   http://stackoverflow.com/questions/12389526/import-inside-of-a-python-thread
 #   https://docs.python.org/3.4/library/imp.html#imp.lock_held
@@ -110,9 +107,9 @@ class MPIPool:
             elif isinstance(task, _function_wrapper):
                 code = marshal.loads(task.func_code)
                 if self.debug:
-                    print('function {0}'.format(code))
-                    print("Worker {0} replaced its task function: {1}."
-                          .format(self.rank, self.function))
+                    print(f'function {code}')
+                    print(f"Worker {self.rank} replaced its task function: {self.function}."
+                          )
                 self.function = types.FunctionType(code, globals())
 
             else:  # message are function args
@@ -125,8 +122,8 @@ class MPIPool:
 
         if function is not self.function:
             if self.debug:
-                print("Master replacing pool function with {0}."
-                      .format(function))
+                print(f"Master replacing pool function with {function}."
+                      )
 
             # Tell all the workers what function to use.
             self.function = function

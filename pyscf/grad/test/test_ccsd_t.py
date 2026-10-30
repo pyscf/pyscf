@@ -48,6 +48,44 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
+    def test_dip_moment_vs_finite_field(self):
+        # The relaxed CCSD(T) density kept by the gradient (with the (T) lambda)
+        # gives the dipole as -dE/dF, compared with central differences of the
+        # CCSD(T) energy with the field on electrons and nuclei.
+        from pyscf.cc import ccsd_t_lambda
+        mol1 = gto.M(atom=[[8, (0., 0., 0.)], [1, (0., -0.757, 0.587)], [1, (0., 0.757, 0.587)]],
+                     basis='631g', verbose=0)
+        mf1 = scf.RHF(mol1)
+        mf1.conv_tol_grad = 1e-8
+        mf1.kernel()
+        mycc = cc.CCSD(mf1)
+        mycc.conv_tol = 1e-10
+        mycc.conv_tol_normt = 1e-8
+        mycc.kernel()
+        eris = mycc.ao2mo()
+        conv, l1, l2 = ccsd_t_lambda.kernel(mycc, eris, mycc.t1, mycc.t2, tol=1e-8)
+        g = ccsd_t_grad.Gradients(mycc)
+        g.kernel(mycc.t1, mycc.t2, l1, l2, eris)
+        mu = g.dip_moment(unit='AU', verbose=0)
+        r = mol1.intor('int1e_r', comp=3)
+        h0 = scf.hf.get_hcore(mol1)
+        nuc = numpy.einsum('a,ax->x', mol1.atom_charges(), mol1.atom_coords())
+
+        def e_field(fvec):
+            mff = scf.RHF(mol1)
+            mff.conv_tol = 1e-12
+            mff.get_hcore = lambda *args, **kwargs: h0 + numpy.einsum('x,xij->ij', fvec, r)
+            mff.kernel()
+            cc1 = cc.CCSD(mff)
+            cc1.conv_tol = 1e-10
+            cc1.conv_tol_normt = 1e-8
+            cc1.kernel()
+            return cc1.e_tot + cc1.ccsd_t() - numpy.dot(fvec, nuc)
+
+        F = 1e-4
+        mu_ff = numpy.array([-(e_field(F*e) - e_field(-F*e)) / (2*F) for e in numpy.eye(3)])
+        self.assertAlmostEqual(abs(mu - mu_ff).max(), 0, 5)
+
     def test_ccsd_t_grad(self):
         mycc = cc.ccsd.CCSD(mf)
         mycc.max_memory = 1
@@ -96,6 +134,26 @@ class KnownValues(unittest.TestCase):
 # [-1.05088506e-16  7.92491838e-02 -6.21200703e-03]]
         self.assertAlmostEqual(lib.fp(g1), 0.10551841163553637, 9)
         self.assertTrue(numpy.allclose(g1, g1_slow, rtol=1e-9, atol=1e-12))
+    def test_ccsd_t_grad_solves_t_lambda(self):
+        '''Without l1, l2 the CCSD(T) gradient must solve the CCSD(T) lambda,
+        not reuse the CCSD lambda stored by mycc.solve_lambda.'''
+        # own molecule: test_ccsd_t_grad leaves the module's mol displaced
+        pmol = gto.M(atom=[[8, (0., 0., 0.)], [1, (0., -0.757, 0.587)], [1, (0., 0.757, 0.587)]],
+                     basis='631g', verbose=0)
+        pmf = scf.RHF(pmol).run(conv_tol=1e-12)
+        mycc = cc.ccsd.CCSD(pmf)
+        mycc.conv_tol = 1e-10
+        mycc.conv_tol_normt = 1e-8
+        eris = mycc.ao2mo()
+        ecc, t1, t2 = mycc.kernel(eris=eris)
+        conv, l1, l2 = ccsd_t_lambda.kernel(mycc, eris, t1, t2)
+        g_ref = ccsd_t_grad.Gradients(mycc).kernel(t1, t2, l1, l2, eris=eris)
+        mycc.solve_lambda(eris=eris)
+        g1 = ccsd_t_grad.Gradients(mycc).kernel()
+        self.assertAlmostEqual(abs(g1 - g_ref).max(), 0, 7)
+        g2 = ccsd_t_grad.Gradients(mycc).grad_elec()
+        g2 += ccsd_t_grad.Gradients(mycc).grad_nuc()
+        self.assertAlmostEqual(abs(g2 - g_ref).max(), 0, 7)
 
 if __name__ == "__main__":
     print("Tests for CCSD(T) gradients")

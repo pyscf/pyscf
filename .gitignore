@@ -28,6 +28,7 @@ var/
 
 # Calculation examples
 *.molden
+/examples/pbc/*.png
 
 # Installer logs
 pip-log.txt

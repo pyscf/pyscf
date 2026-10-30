@@ -14,12 +14,14 @@
 # limitations under the License.
 
 import unittest
+import warnings
+import numpy as np
 import pyscf
-from pyscf import gto, scf
+from pyscf import gto, scf, lib, dft
 from pyscf.scf import dispersion
 
 
-class KnownKS(scf.hf.KohnShamDFT):
+class KnownKS(dft.KohnShamDFT):
     def __init__(self, xc='b3lyp'):
         self.xc = xc
         self.disp = None
@@ -136,6 +138,17 @@ class TestDispersionLogic(unittest.TestCase):
             # mf.nlc = False
             # mf.disp = 'd4:wb97x-2008'
             self.assertAlmostEqual(mf.e_tot, -76.3377143469286, 8)
+
+    def test_parse_coach(self):
+        xc = 'COACH'
+        self.assertEqual(dispersion.parse_dft(xc), ('coach', '', 'd4:coach'))
+        self.assertEqual(dispersion.parse_disp(xc), ('coach', 'd4', True))
+        self.assertTrue(dispersion.check_disp(KnownKS(xc)))
+        self.assertEqual(dispersion.parse_disp(xc, 'd4:pbe'), ('pbe', 'd4', True))
+
+        with lib.temporary_env(dispersion, dftd4=None):
+            with self.assertRaisesRegex(RuntimeError, 'pip install pyscf-dispersion'):
+                dispersion._make_d4_model(None, 'coach', True)
 
 if __name__ == "__main__":
     unittest.main()

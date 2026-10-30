@@ -100,7 +100,14 @@ class KnownValues(unittest.TestCase):
         mf = dks.UDKS(mol)
         mf.collinear = 'ncol'
         veff = mf.get_veff(mol, dm4c_guess)
-        self.assertAlmostEqual(lib.fp(veff), 6.831445865173151-28.252983015580064j, 8)
+        # The random guess density matrix is not a physical density matrix: the
+        # spin densities it produces are negative on 5% of the grid points, so
+        # the correlation potential is evaluated in the fully polarized limit,
+        # where it suffers from catastrophic cancellation.  libxc 7.1 rounds
+        # differently there than the libxc 7.0 the reference value was computed
+        # with, and the difference is amplified by the 1/|m| factors of the
+        # non-collinear kernel: the fingerprint moves by 4e-6.
+        self.assertAlmostEqual(lib.fp(veff), 6.831445865173151-28.252983015580064j, 4)
 
     def test_collinear_dks_lda_high_cost(self):
         mf = dks.UDKS(mol)
@@ -118,7 +125,8 @@ class KnownValues(unittest.TestCase):
     def test_collinear_dks_lda_veff(self):
         mf = dks.UDKS(mol)
         veff = mf.get_veff(mol, dm4c_guess)
-        self.assertAlmostEqual(lib.fp(veff), 6.0513153425666815-27.01477415630974j, 8)
+        # See comment above for unphysicality of test density
+        self.assertAlmostEqual(lib.fp(veff), 6.0513153425666815-27.01477415630974j, 6)
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_dks_lda(self):

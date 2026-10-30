@@ -113,7 +113,7 @@ def get_imds(adc, eris=None):
         eris_OVvo = eris.OVvo
         eris_ovVO = eris.ovVO
 
-        if isinstance(eris.ovvv, type(None)):
+        if eris.ovvv is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc_a,chnk_size):
                 eris_ovvv = dfadc.get_ovvv_spin_df(
@@ -133,7 +133,7 @@ def get_imds(adc, eris=None):
             M_ab_a -= lib.einsum('ld,ladb->ab',t1_2_a, eris_ovvv,optimize=True)
             del eris_ovvv
 
-        if isinstance(eris.OVvv, type(None)):
+        if eris.OVvv is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc_b,chnk_size):
                 eris_OVvv = dfadc.get_ovvv_spin_df(
@@ -147,7 +147,7 @@ def get_imds(adc, eris=None):
             M_ab_a += lib.einsum('ld,ldab->ab',t1_2_b, eris_OVvv,optimize=True)
             del eris_OVvv
 
-        if isinstance(eris.OVVV, type(None)):
+        if eris.OVVV is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc_b,chnk_size):
                 eris_OVVV = dfadc.get_ovvv_spin_df(
@@ -165,7 +165,7 @@ def get_imds(adc, eris=None):
             M_ab_b -= lib.einsum('ld,ladb->ab',t1_2_b, eris_OVVV,optimize=True)
             del eris_OVVV
 
-        if isinstance(eris.ovVV, type(None)):
+        if eris.ovVV is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc_a,chnk_size):
                 eris_ovVV = dfadc.get_ovvv_spin_df(
@@ -317,7 +317,7 @@ def get_imds(adc, eris=None):
                 a += k
             M_ab_b  += temp
 
-        elif isinstance(eris.vvvv_p, type(None)):
+        elif eris.vvvv_p is None:
 
             temp = np.zeros((nvir_a,nvir_a))
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
@@ -426,7 +426,7 @@ def get_imds(adc, eris=None):
                 a += k
             M_ab_a  += temp
 
-        elif isinstance(eris.vvvv_p, type(None)):
+        elif eris.vvvv_p is None:
 
             temp = np.zeros((nvir_b,nvir_b))
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
@@ -715,7 +715,7 @@ def matvec(adc, M_ab=None, eris=None):
         cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(adc.stdout, adc.verbose)
 
-        s = np.zeros((dim))
+        s = np.zeros(dim)
 
         r_a = r[s_a:f_a]
         r_b = r[s_b:f_b]
@@ -743,7 +743,7 @@ def matvec(adc, M_ab=None, eris=None):
 ############ ADC(2) a - ibc and ibc - a coupling blocks #########################
 
         temp = np.zeros((nocc_a, nvir_a, nvir_a))
-        if isinstance(eris.ovvv, type(None)):
+        if eris.ovvv is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc_a,chnk_size):
                 eris_ovvv = dfadc.get_ovvv_spin_df(
@@ -765,7 +765,7 @@ def matvec(adc, M_ab=None, eris=None):
         del temp
 
         temp = np.zeros((nocc_b, nvir_a, nvir_b))
-        if isinstance(eris.OVvv, type(None)):
+        if eris.OVvv is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc_b,chnk_size):
                 eris_OVvv = dfadc.get_ovvv_spin_df(
@@ -783,7 +783,7 @@ def matvec(adc, M_ab=None, eris=None):
         del temp
 
         temp = np.zeros((nocc_b, nvir_b, nvir_b))
-        if isinstance(eris.OVVV, type(None)):
+        if eris.OVVV is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc_b,chnk_size):
                 eris_OVVV = dfadc.get_ovvv_spin_df(
@@ -805,7 +805,7 @@ def matvec(adc, M_ab=None, eris=None):
         del temp
 
         temp = np.zeros((nocc_a, nvir_b, nvir_a))
-        if isinstance(eris.ovVV, type(None)):
+        if eris.ovVV is None:
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
             for a,b in lib.prange(0,nocc_a,chnk_size):
                 eris_ovVV = dfadc.get_ovvv_spin_df(
@@ -1028,7 +1028,7 @@ def matvec(adc, M_ab=None, eris=None):
 
             temp_1_1 = np.zeros((nocc_a,nvir_a,nvir_a))
             temp_1_2 = np.zeros((nocc_a,nvir_a,nvir_a))
-            if isinstance(eris.ovvv, type(None)):
+            if eris.ovvv is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
                 for a,b in lib.prange(0,nocc_a,chnk_size):
                     eris_ovvv = dfadc.get_ovvv_spin_df(
@@ -1086,7 +1086,7 @@ def matvec(adc, M_ab=None, eris=None):
             temp_2_4 = np.zeros((nocc_a,nvir_b,nvir_a))
 
             temp = np.zeros((nocc_a,nvir_b,nvir_b))
-            if isinstance(eris.ovVV, type(None)):
+            if eris.ovVV is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
                 for a,b in lib.prange(0,nocc_a,chnk_size):
                     eris_ovVV = dfadc.get_ovvv_spin_df(
@@ -1170,7 +1170,7 @@ def matvec(adc, M_ab=None, eris=None):
             temp_1_3 = np.zeros((nocc_b,nvir_b,nvir_b))
             temp_1_4 = np.zeros((nocc_b,nvir_b,nvir_b))
 
-            if isinstance(eris.OVVV, type(None)):
+            if eris.OVVV is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
                 for a,b in lib.prange(0,nocc_b,chnk_size):
                     eris_OVVV = dfadc.get_ovvv_spin_df(
@@ -1219,7 +1219,7 @@ def matvec(adc, M_ab=None, eris=None):
             temp_2_2 = np.zeros((nocc_b,nvir_a,nvir_b))
             temp = np.zeros((nocc_b,nvir_a,nvir_a))
 
-            if isinstance(eris.OVvv, type(None)):
+            if eris.OVvv is None:
                 chnk_size = uadc_ao2mo.calculate_chunk_size(adc)
                 for a,b in lib.prange(0,nocc_b,chnk_size):
                     eris_OVvv = dfadc.get_ovvv_spin_df(
@@ -1386,14 +1386,14 @@ def get_trans_moments_orbital(adc, orb, spin="alpha"):
     s_bbb = f_aba
     f_bbb = s_bbb + n_doubles_bbb
 
-    T = np.zeros((dim))
+    T = np.zeros(dim)
 
 ######## spin = alpha  ############################################
 
     if spin == "alpha":
-        pass  # placehold
+        # placehold
 
-######## ADC(2) part  ############################################
+        ######## ADC(2) part  ############################################
 
         t2_1_a = adc.t2[0][0][:]
         t2_1_ab = adc.t2[0][1][:]
@@ -1471,7 +1471,7 @@ def get_trans_moments_orbital(adc, orb, spin="alpha"):
 ######### spin = beta  ############################################
 
     else:
-        pass  # placehold
+        # placehold
 
         t2_1_b = adc.t2[0][2][:]
         t2_1_ab = adc.t2[0][1][:]
@@ -1974,7 +1974,7 @@ def make_rdm1_eigenvectors(adc, L, R):
     R_aba = R_aba.reshape(nocc_a,nvir_b,nvir_a)
     R_bab = R_bab.reshape(nocc_b,nvir_a,nvir_b)
 
-######### block- ij
+# block- ij
     rdm1_a[occ_list_a, occ_list_a]  = np.einsum('a,a->', L_a, R_a, optimize = True)
     rdm1_a[occ_list_a, occ_list_a] += np.einsum('a,a->', L_b, R_b, optimize = True)
 
@@ -2011,7 +2011,7 @@ def make_rdm1_eigenvectors(adc, L, R):
     rdm1_b[occ_list_b, occ_list_b] += np.einsum('iab,iab->', L_bab, R_bab, optimize = True)
     rdm1_b[occ_list_b, occ_list_b] += 1/2 * np.einsum('iab,iab->', L_bbb_u, R_bbb_u, optimize = True)
 
-########## block- ab
+# block- ab
     rdm1_a[nocc_a:, nocc_a:]  = np.einsum('A,B->AB', L_a, R_a, optimize = True)
 
     rdm1_b[nocc_b:, nocc_b:]  = np.einsum('A,B->AB', L_b, R_b, optimize = True)
@@ -2046,7 +2046,7 @@ def make_rdm1_eigenvectors(adc, L, R):
     rdm1_b[nocc_b:, nocc_b:] += np.einsum('iaA,iaB->AB', L_bab, R_bab, optimize = True)
     rdm1_b[nocc_b:, nocc_b:] += np.einsum('iAa,iBa->AB', L_bbb_u, R_bbb_u, optimize = True)
 
-#######G^100#### block- ia
+# G^100#### block- ia
     rdm1_a[:nocc_a, nocc_a:] =- np.einsum('a,A,Ia->IA', L_a, R_a, t1_2_a, optimize = True)
     rdm1_a[:nocc_a, nocc_a:] += np.einsum('a,a,IA->IA', L_a, R_a, t1_2_a, optimize = True)
     rdm1_a[:nocc_a, nocc_a:] += np.einsum('a,a,IA->IA', L_b, R_b, t1_2_a, optimize = True)
@@ -2075,13 +2075,13 @@ def make_rdm1_eigenvectors(adc, L, R):
     rdm1_b[:nocc_b, nocc_b:] -= 1/2 * np.einsum('iab,A,Iiab->IA', L_bbb_u, R_b, t2_1_b, optimize = True)
     rdm1_b[:nocc_b, nocc_b:] += np.einsum('iab,a,IiAb->IA', L_bbb_u, R_b, t2_1_b, optimize = True)
 
-############ block- ai
+# block- ai
     rdm1_a[nocc_a:,:nocc_a] = rdm1_a[:nocc_a,nocc_a:].T
     rdm1_b[nocc_b:,:nocc_b] = rdm1_b[:nocc_b,nocc_b:].T
 
     ####### ADC(3) SPIN ADAPTED EXCITED STATE OPDM WITH SQA ################
     if adc.method == "adc(3)":
-        ### Redudant Variables used for names from SQA
+        # Redudant Variables used for names from SQA
         t2_2_a = adc.t2[1][0][:]
         t2_2_ab = adc.t2[1][1][:]
         t2_2_b = adc.t2[1][2][:]
@@ -2094,7 +2094,7 @@ def make_rdm1_eigenvectors(adc, L, R):
 
         ###################################################
 
-############# block- ij
+# block- ij
         ### 030 ###
         rdm1_a[:nocc_a, :nocc_a] -= 1/2 * np.einsum('a,a,Iibc,Jibc->IJ', L_a, R_a, t2_1_a, t2_2_a, optimize = True)
         rdm1_a[:nocc_a, :nocc_a] -= 1/2 * np.einsum('a,a,Jibc,Iibc->IJ', L_a, R_a, t2_1_a, t2_2_a, optimize = True)
@@ -2143,7 +2143,7 @@ def make_rdm1_eigenvectors(adc, L, R):
 
         #----------------------------------------------------------------------------------------------------------#
 
-############# block- ab
+# block- ab
         ### 030 ###
         rdm1_a[nocc_a:, nocc_a:] -= 1/4 * np.einsum('A,a,ijBb,ijab->AB', L_a, R_a, t2_1_a, t2_2_a, optimize = True)
         rdm1_a[nocc_a:, nocc_a:] -= 1/4 * np.einsum('A,a,ijab,ijBb->AB', L_a, R_a, t2_1_a, t2_2_a, optimize = True)
@@ -2203,7 +2203,7 @@ def make_rdm1_eigenvectors(adc, L, R):
         rdm1_b[nocc_b:, nocc_b:] += 1/2 * np.einsum('iaA,a,iB->AB', L_bbb_u, R_b, t1_2_b, optimize = True)
 
         #----------------------------------------------------------------------------------------------------------#
-############# block- ia
+# block- ia
         ### 030 ###
         rdm1_a[:nocc_a, nocc_a:] -= np.einsum('a,A,Ia->IA', L_a, R_a, t1_3_a, optimize = True)
         rdm1_a[:nocc_a, nocc_a:] += np.einsum('a,a,IA->IA', L_a, R_a, t1_3_a, optimize = True)
@@ -2380,7 +2380,7 @@ def make_rdm1_eigenvectors(adc, L, R):
         rdm1_b[:nocc_b, nocc_b:] += 1/4 * np.einsum('a,ibc,IjAa,ijbc->IA',
                                                     L_b, R_bbb_u, t2_1_b, t2_1_b, optimize = True)
 
-############ block- ai
+# block- ai
         rdm1_a[nocc_a:,:nocc_a] = rdm1_a[:nocc_a,nocc_a:].T
         rdm1_b[nocc_b:,:nocc_b] = rdm1_b[:nocc_b,nocc_b:].T
 
@@ -2430,11 +2430,10 @@ class UADCEA(uadc.UADC):
         'tol_residual','conv_tol', 'e_corr', 'method',
         'method_type', 'mo_coeff', 'mo_coeff_hf', 'mo_energy_b', 'max_memory',
         't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle',
-        'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b', 'mo_coeff', 'mo_energy_a',
-        'mo_energy_b', 'nmo_a', 'nmo_b', 'mol', 'transform_integrals',
+        'nocc_a', 'nocc_b', 'nvir_a', 'nvir_b', 'nmo_a', 'nmo_b', 'mol', 'transform_integrals',
         'with_df', 'spec_factor_print_tol', 'evec_print_tol',
         'compute_properties', 'approx_trans_moments', 'E', 'U', 'P', 'X',
-        'compute_spin_square', '_make_rdm1', 'frozen', 'mo_occ'
+        'compute_spin_square', '_make_rdm1', 'frozen', 'mo_occ', 'if_naf', 'naux'
     }
 
     def __init__(self, adc):
@@ -2472,6 +2471,8 @@ class UADCEA(uadc.UADC):
         self.approx_trans_moments = adc.approx_trans_moments
         self.frozen = adc.frozen
         self.mo_occ = adc.mo_occ
+        self.if_naf = adc.if_naf
+        self.naux = adc.naux
 
         self.spec_factor_print_tol = adc.spec_factor_print_tol
         self.evec_print_tol = adc.evec_print_tol

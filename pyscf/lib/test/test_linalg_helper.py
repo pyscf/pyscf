@@ -157,6 +157,25 @@ class KnownValues(unittest.TestCase):
         residual = abs(aop(c) + c - b).max()
         self.assertLess(residual, tol)
 
+    def test_krylov_dependent_trial_vectors(self):
+        # Two right-hand sides are combinations of the others up to 1e-7. The solve
+        # keeps seven trial vectors in six dimensions, so their overlap, and with it
+        # the projected matrix, is singular.
+        tol = 1e-8
+        lindep = max(tol**2, numpy.finfo(float).eps)
+        numpy.random.seed(14)
+        n = 6
+        a = numpy.random.random((n, n)) * .1
+        a = a + a.T
+        base = numpy.random.randn(4, n)
+        mix = numpy.random.randn(2, 4)
+        b = numpy.vstack([base, mix.dot(base) + 1e-7 * numpy.random.randn(2, n)])
+        ref = numpy.linalg.solve(numpy.eye(n) + a, b.T).T
+
+        aop = lambda x: x.dot(a.T)
+        c = linalg_helper.krylov(aop, b, tol=tol, lindep=lindep)
+        self.assertAlmostEqual(abs(ref - c).max(), 0, 9)
+
     def test_krylov_zero_force(self):
         numpy.random.seed(10)
         n = 2

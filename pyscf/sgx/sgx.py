@@ -461,7 +461,7 @@ class SGX(lib.StreamObject):
         # In the RSH-integral temporary treatment, recursively rebuild SGX
         # objects in _rsh_df.
         if self._rsh_df:
-            for k, v in self._rsh_df.items():
+            for v in self._rsh_df.values():
                 v.build(level)
         return self
 

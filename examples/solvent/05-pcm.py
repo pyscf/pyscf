@@ -20,6 +20,19 @@ cm.eps = 32.613  # methanol dielectric constant
 cm.method = 'C-PCM' # or COSMO, IEF-PCM, SS(V)PE, see https://manual.q-chem.com/5.4/topic_pcm-em.html
 cm.lebedev_order = 29 # lebedev grids on the cavity surface, lebedev_order=29  <--> # of grids = 302
 
+# Instead of assigning the dielectric constant, the solvent can be specified by
+# its name. This sets cm.eps as well as cm.eps_optical, the optical dielectric
+# constant required by the non-equilibrium solvation of excited states.
+# Available solvents are the keys of pyscf.solvent.smd.solvent_db
+cm = pcm.PCM(mol, 'methanol')
+print(cm.eps, cm.eps_optical)
+cm.solvent = 'DMSO'   # names are matched case-insensitively
+print(cm.eps, cm.eps_optical)
+
+# The solvent name can also be given to the .PCM() method of a mean-field object
+mf = scf.RHF(mol).PCM('methanol')
+mf.kernel()
+
 # Hartree-Fock with PCM models
 mf = scf.RHF(mol).PCM(cm)
 mf.kernel()

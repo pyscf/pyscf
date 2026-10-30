@@ -358,7 +358,7 @@ def cdft(mf, constraints, V_0=None, lo_method='lowdin', alpha=0.2, tol=1e-5,
     return mf, orb_pop
 
 
-class Constraints(object):
+class Constraints:
     '''
     Attributes:
         site_indices: the orbital indices on which electron population to be

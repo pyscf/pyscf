@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import io
 import unittest
 import numpy
 from pyscf import gto, scf, lib
@@ -41,6 +42,15 @@ def tearDownModule():
     del mol
 
 class KnownValues(unittest.TestCase):
+    def test_cphf_iterations_are_logged(self):
+        # solve_mo1 passes the Hessian's logger to the CPHF solver, so its Krylov cycles reach the Hessian's stdout
+        mf = scf.UHF(mol).run()
+        hobj = mf.Hessian()
+        hobj.verbose = 5
+        hobj.stdout = io.StringIO()
+        hobj.kernel()
+        self.assertIn('krylov cycle', hobj.stdout.getvalue())
+
     def test_uhf_hess(self):
         mf = scf.UHF(mol)
         mf.conv_tol = 1e-14

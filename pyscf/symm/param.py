@@ -45,7 +45,6 @@ OPERATOR_TABLE = {
     'C1' : ('E',                                              ),
 }
 
-#
 IRREP_ID_TABLE = {      # bin for XOR
     'D2h': {'Ag' : 0,   # 000
             'B1g': 1,   # 001

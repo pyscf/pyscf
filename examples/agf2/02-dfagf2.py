@@ -48,4 +48,4 @@ for i in range(3):
     for j in range(mol.natm):
         dipole[i] += mol.atom_charge(j) * mol.atom_coord(j)[i]
 
-print('Dipole moment from AGF2: {} {} {}'.format(dipole[0], dipole[1], dipole[2]))
+print(f'Dipole moment from AGF2: {dipole[0]} {dipole[1]} {dipole[2]}')

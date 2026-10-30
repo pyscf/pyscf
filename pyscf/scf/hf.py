@@ -460,11 +460,13 @@ def init_guess_by_minao(mol):
 
     occ = []
     new_atom = []
+    nelec_ecp = []
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
         if not gto.is_ghost_atom(symb):
             occ.append(occdic[symb])
             new_atom.append(mol._atom[ia])
+            nelec_ecp.append(nelec_ecp_dic[symb])
 
     if not occ:
         # A system with only ghost atoms. (issue 3155)
@@ -481,10 +483,23 @@ def init_guess_by_minao(mol):
 
     #: dm = addons.project_dm_nr2nr(pmol, numpy.diag(occ), mol)
     mo = addons.project_mo_nr2nr(pmol, numpy.eye(pmol.nao), mol)
+
+    # Restore the norm lost when projecting onto the basis of ECP atoms
+    if any(nelec_ecp):
+        s = mol.intor_symmetric('int1e_ovlp')
+        for ia, (p0, p1) in enumerate(pmol.aoslice_by_atom()[:,2:]):
+            if nelec_ecp[ia] == 0:
+                continue
+            idx = numpy.arange(p0, p1)[occ[p0:p1] > 0]
+            c = mo[:,idx]
+            w, v = numpy.linalg.eigh(c.conj().T.dot(s).dot(c))
+            if w[0] > 1e-8:
+                mo[:,idx] = lib.dot(c, (v / numpy.sqrt(w)).dot(v.conj().T))
+            else:
+                logger.debug(mol, 'Projected MINAO orbitals of atom %d are '
+                             'linearly dependent and not orthonormalized', ia)
+
     dm = lib.dot(mo*occ, mo.conj().T)
-# normalize electron number
-#    s = mol.intor_symmetric('int1e_ovlp')
-#    dm *= mol.nelectron / (dm*s).sum()
     return lib.tag_array(dm, mo_coeff=mo, mo_occ=occ)
 
 
@@ -1545,7 +1560,7 @@ def quad_moment(mol, dm, unit='DebyeAngstrom', origin=None,
         log.note('Traceless quadrupole moment (AU):')
 
     with numpy.printoptions(precision=5, floatmode='fixed'):
-        log.note(str())
+        log.note('')
 
     return tot_q_traceless
 
@@ -1809,7 +1824,7 @@ class SCF(lib.StreamObject):
     def __getattr__(self, key):
         '''Accessing methods post-HF methods or mean-field properties'''
         # Import all available modules, then retry accessing the attribute
-        from pyscf import __all__  # noqa
+        from pyscf import __all__
         return object.__getattribute__(self, key)
 
     def build(self, mol=None):
@@ -2039,7 +2054,7 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         elif key[:3] == 'chk':
             try:
                 dm = self.init_guess_by_chkfile()
-            except (IOError, KeyError):
+            except (OSError, KeyError):
                 logger.warn(self, 'Fail in reading %s. Use MINAO initial guess',
                             self.chkfile)
                 dm = self.init_guess_by_minao(mol)
@@ -2214,6 +2229,42 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         if dm is None: dm = self.make_rdm1()
         if s is None: s = self.get_ovlp(mol)
         return mulliken_pop(mol, dm, s=s, verbose=verbose)
+
+    def mayer_bond_order(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):
+        '''Mayer bond orders. See scf.analyze.mayer_bond_order'''
+        from pyscf.scf import analyze
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        if s is None: s = self.get_ovlp(mol)
+        return analyze.mayer_bond_order(mol, dm, s=s, verbose=verbose)
+
+    def wiberg_bond_order(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):
+        '''Wiberg bond indices. See scf.analyze.wiberg_bond_order'''
+        from pyscf.scf import analyze
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        if s is None: s = self.get_ovlp(mol)
+        return analyze.wiberg_bond_order(mol, dm, s=s, verbose=verbose)
+
+    def hirshfeld_charges(self, mol=None, dm=None, grids=None, verbose=logger.DEBUG):
+        '''Hirshfeld charges. See scf.hirshfeld.hirshfeld_charges'''
+        from pyscf.scf import hirshfeld
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        if grids is None and mol is self.mol:
+            # Reuse the integration grid of DFT methods
+            grids = getattr(self, 'grids', None)
+        return hirshfeld.hirshfeld_charges(mol, dm, grids, verbose)
+
+    def cm5_charges(self, mol=None, dm=None, grids=None, verbose=logger.DEBUG):
+        '''Charge Model 5 (CM5) charges. See scf.hirshfeld.cm5_charges'''
+        from pyscf.scf import hirshfeld
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        if grids is None and mol is self.mol:
+            # Reuse the integration grid of DFT methods
+            grids = getattr(self, 'grids', None)
+        return hirshfeld.cm5_charges(mol, dm, grids, verbose=verbose)
 
     @lib.with_doc(mulliken_meta.__doc__)
     def mulliken_meta(self, mol=None, dm=None, verbose=logger.DEBUG,
