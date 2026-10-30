@@ -32,6 +32,7 @@ of direct_spin1_symm.
 
 import functools
 import ctypes
+from math import comb
 import numpy
 import numpy as np
 from pyscf import lib
@@ -50,6 +51,237 @@ from pyscf.fci import addons
 from pyscf import __config__
 
 libfci = direct_spin1.libfci
+
+
+def angular_momentum(fcivec, norb, nelec, orbsym):
+    '''Expectation value and variance of the total orbital angular momentum
+
+    M = sum_i m_i over the occupied spin orbitals, for a CI vector in the full
+    (na, nb) determinant space (e.g. as returned by :meth:`FCISolver.kernel`).
+    The variance vanishes when the CI vector is an eigenstate of M.
+
+    Returns (M, var(M)).
+    '''
+    neleca, nelecb = direct_spin1._unpack_nelec(nelec)
+    strsa = cistring.gen_strings4orblist(range(norb), neleca)
+    strsb = cistring.gen_strings4orblist(range(norb), nelecb)
+    a_l = _strs_angular_momentum(strsa, orbsym)
+    b_l = _strs_angular_momentum(strsb, orbsym)
+    c = np.asarray(fcivec).ravel().reshape(strsa.size, strsb.size)
+    p = c**2
+    m = a_l[:, None] + b_l[None, :]
+    avg = (p * m).sum() / p.sum()
+    return avg, (p * (m - avg)**2).sum() / p.sum()
+
+
+def _strs2addr(strs, nelec, norb):
+    '''Address of each string in the (deterministic) cistring ordering,
+    computed with the combination ranking, vectorized over all strings'''
+    C = np.zeros((norb + 2, nelec + 2), dtype=np.int64)
+    for i in range(norb + 2):
+        for k in range(nelec + 2):
+            C[i, k] = comb(i, k)
+    addr = np.zeros(strs.size, dtype=np.int64)
+    popcount = np.zeros(strs.size, dtype=np.int64)
+    for i in range(norb):
+        occ = (strs >> i) & 1
+        mask = occ == 1
+        addr[mask] += C[i, popcount[mask] + 1]
+        popcount += occ
+    return addr
+
+
+def _gen_sigma_v_swap(nelec, orbsym, sym_allowed_idx):
+    '''Permutation and signs of the sigma_v operation in the compressed
+    (symmetry-allowed) CI subspace.
+
+    Returns (swap_idx, swap_sign). For each symmetry-allowed determinant
+    (addressed in the compressed ordering ``np.hstack(sym_allowed_idx)``),
+    ``swap_idx`` is the address of its sigma_v partner (the Ex, Ey swapped
+    determinant) and ``swap_sign`` the permutation sign of the swap. The
+    partner of a Sigma-state determinant is always symmetry allowed. For
+    determinants of non-zero orbital momentum (e.g. the components of Delta
+    states) the partner is outside the subspace; they have no contribution
+    to Sigma states and are assigned swap_idx = -1.
+    '''
+    neleca, nelecb = direct_spin1._unpack_nelec(nelec)
+    norb = orbsym.size
+    strsa = strsb = cistring.gen_strings4orblist(range(norb), neleca)
+    if neleca != nelecb:
+        strsb = cistring.gen_strings4orblist(range(norb), nelecb)
+    degen_mapping = np.asarray(orbsym.degen_mapping)
+
+    def swap_strs(strs, neleca):
+        '''Exchange the two orbitals of each degenerate pair and the
+        permutation sign of the exchanges, vectorized over all strings'''
+        sv = strs.copy()
+        sign = np.ones(strs.size)
+        for i, j in enumerate(degen_mapping):
+            if i <= j:
+                continue
+            occ_i = (strs >> i) & 1
+            occ_j = (strs >> j) & 1
+            # exchange bits i and j
+            sv = sv - (occ_i << i) - (occ_j << j) + (occ_i << j) + (occ_j << i)
+            # the exchange of two occupied orbitals flips the permutation sign
+            sign[(occ_i == 1) & (occ_j == 1)] *= -1
+        return _strs2addr(sv, neleca, norb), sign
+
+    addr_a, sg_a = swap_strs(strsa, neleca)
+    addr_b, sg_b = swap_strs(strsb, nelecb)
+    s_idx = np.hstack(sym_allowed_idx)
+    pos = np.full(strsa.size * strsb.size, -1, dtype=np.int32)
+    pos[s_idx] = np.arange(s_idx.size, dtype=np.int32)
+    aa, bb = s_idx // strsb.size, s_idx % strsb.size
+    swap_idx = pos[addr_a[aa] * strsb.size + addr_b[bb]]
+    swap_sign = sg_a[aa] * sg_b[bb]
+    return swap_idx, swap_sign
+
+
+def _gen_sigma_v_basis(swap_idx, swap_sign, wfnsym):
+    '''Basis of the sigma_v sector of wfnsym in the compressed
+    (symmetry-allowed) determinant ordering.
+
+    The sigma_v operation (cf. :func:`_gen_sigma_v_swap`) partitions the
+    symmetry-allowed determinants of a Sigma state into sigma_v-associated
+    pairs and self-associated determinants (sigma_v eigenfunctions). The
+    requested sector is spanned by
+
+    * the self-associated determinants whose sigma_v eigenvalue matches the
+      requested sector (A1-type: +1, A2-type: -1), and
+    * one (+/-) combination per sigma_v-associated pair,
+
+    e.g. (E+)(E-') + (E-)(E+') for A1 and (E+)(E-') - (E-)(E+') for A2.
+    Determinants without an in-space partner have non-zero orbital momentum;
+    they carry no Sigma-state weight and are dropped.
+
+    Returns (idx1, w1, idx2, w2): the two determinant addresses and weights
+    of each sector basis vector, such that for a sector coefficient vector c
+    the determinant-space vector is ``v[idx1] = c*w1; v[idx2] += c*w2`` and
+    the analysis of a determinant-space vector v is
+    ``c = v[idx1]*w1 + v[idx2]*w2``.
+    '''
+    p = -1. if wfnsym % 10 in (1, 4) else 1.
+    nsym = swap_idx.size
+    addr = np.arange(nsym)
+    self_mask = swap_idx == addr
+    pair_mask = (~self_mask) & (swap_idx >= 0)
+    # each sigma_v-associated pair is represented by its lower address
+    reps = pair_mask & (swap_idx > addr)
+    keep_self = self_mask & (swap_sign == p)
+    idx1 = np.concatenate([addr[keep_self], addr[reps]]).astype(np.int32)
+    idx2 = np.concatenate([addr[keep_self], swap_idx[reps]]).astype(np.int32)
+    w1 = np.concatenate([np.ones(keep_self.sum()), np.full(reps.sum(), .5**.5)])
+    w2 = np.concatenate([np.zeros(keep_self.sum()), p * swap_sign[reps] * .5**.5])
+    return idx1, w1, idx2, w2
+
+
+def _kernel_sigma_v(fci, hop_det, precond_base, guess_fn, ci0, ndet,
+                    s_idx, swap_idx, swap_sign, wfnsym_req,
+                    tol, lindep, max_cycle, max_space, nroots, ecore,
+                    max_memory=None, verbose=None, **kwargs):
+    '''Diagonalize the Hamiltonian strictly within the sigma_v sector of
+    wfnsym_req, using the sigma_v-adapted determinant basis of
+    :func:`_gen_sigma_v_basis`.
+
+    For Sigma states of Dooh/Coov molecules, the D2h-allowed determinant
+    space contains both the Sigma+ and the Sigma- components. Transforming
+    the CI vectors to the sigma_v-adapted basis confines the Davidson
+    iteration to the requested component by construction; the working
+    operator is the Hamiltonian restricted to the sector and is nonsingular
+    (issue #3031).
+
+    Args:
+        fci : FCISolver object (for the eigensolver, threads and logging)
+        hop_det : callable. Hamiltonian contraction in the compressed
+            symmetry-allowed determinant ordering
+        precond_base : callable. Davidson preconditioner in the same ordering
+        guess_fn : callable. Returns initial guesses (list) in the same
+            ordering
+        ci0 : initial guesses as full-size or compressed vectors, or None
+
+    Returns (e, c): energies (with ecore) and CI vectors in the compressed
+    symmetry-allowed ordering.
+    '''
+    log = logger.new_logger(fci, verbose)
+    idx1, w1, idx2, w2 = _gen_sigma_v_basis(swap_idx, swap_sign, wfnsym_req)
+    nsym = swap_idx.size
+
+    def synth(c):
+        v = np.zeros(nsym)
+        v[idx1] = c * w1
+        v[idx2] += c * w2
+        return v
+
+    def analyz(v):
+        v = np.asarray(v).ravel()
+        return v[idx1] * w1 + v[idx2] * w2
+
+    def hop(c):
+        return analyz(hop_det(synth(c)))
+
+    def precond(c, e0, x0, *args, **kwargs):
+        return analyz(precond_base(synth(c), e0, x0, *args, **kwargs))
+
+    if ci0 is None:
+        ci0_det = guess_fn()
+    else:
+        if isinstance(ci0, np.ndarray):
+            ci0 = [ci0]
+        ci0_det = []
+        for c in ci0:
+            c = np.asarray(c).ravel()
+            if c.size == ndet:
+                ci0_det.append(c[s_idx])
+            elif c.size == nsym:
+                ci0_det.append(c)
+            else:
+                ci0_det = None
+                break
+        if ci0_det is None:
+            ci0_det = guess_fn()
+    x0 = [analyz(c) for c in ci0_det]
+    if any(np.linalg.norm(x) < 1e-2 * np.linalg.norm(c) + 1e-200
+           for x, c in zip(x0, ci0_det)):
+        # the guess has no overlap with the requested sigma_v sector
+        # (e.g. a converged CI of the other component); rebuild it
+        logger.warn(fci, 'Initial guess does not have overlap with wfnsym %s. '
+                    'Rebuild initial guess.', wfnsym_req)
+        x0 = [analyz(c) for c in guess_fn()]
+    if len(x0) < nroots:
+        # If the provided initial guesses are accidentally eigenvectors of the
+        # system, the Davidson solver may fail to find enough roots as it is
+        # unable to generate more subspace basis from ci0 (cf. kernel_ms1).
+        x0.extend(analyz(c) for c in guess_fn()[len(x0):])
+    x0 = [x / np.linalg.norm(x) for x in x0]
+
+    if tol is None: tol = fci.conv_tol
+    if lindep is None: lindep = fci.lindep
+    if max_cycle is None: max_cycle = fci.max_cycle
+    if max_space is None:
+        max_space = fci.max_space
+        if max_space == FCISolver.max_space:
+            max_space = 20 + 7 * nroots
+            if getattr(fci, 'ss_penalty', None):
+                # The spin-penalty (cf. fix_spin_) is a large non-diagonal
+                # perturbation which the diagonal preconditioner does not know
+                # about. A larger subspace is needed for its iteration.
+                max_space = len(idx1) + 12
+    if max_memory is None:
+        max_memory = fci.max_memory - lib.current_memory()[0]
+    tol_residual = getattr(fci, 'conv_tol_residual', None)
+    with lib.with_omp_threads(fci.threads):
+        e, c = fci.eig(hop, x0, precond, tol=tol, lindep=lindep,
+                       max_cycle=max_cycle, max_space=max_space, nroots=nroots,
+                       max_memory=max_memory, verbose=log, follow_state=True,
+                       tol_residual=tol_residual, **kwargs)
+    if nroots > 1:
+        e = [ei + ecore for ei in e]
+        c = [synth(np.asarray(x).ravel()) for x in c]
+    else:
+        e = e + ecore
+        c = synth(np.asarray(c).ravel())
+    return e, c
 
 def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0):
     if orbsym is None:
@@ -471,11 +703,10 @@ def _dm_wrapper(fn_rdm):
         return dm.real.copy()
 
     @functools.wraps(fn_rdm)
-    def make_dm(self, fcivec, norb, nelec, *args, **kwargs):
-        nelec = direct_spin1._unpack_nelec(nelec, self.spin)
-        dms = fn_rdm(fcivec, norb, nelec, *args, **kwargs)
+    def make_dm(self, *args, **kwargs):
+        dms = fn_rdm(*args, **kwargs)
         orbsym = self.orbsym
-        degen_mapping = self.orbsym.degen_mapping
+        degen_mapping = orbsym.degen_mapping
         u = _cyl_sym_orbital_rotation(orbsym, degen_mapping)
         if isinstance(dms, np.ndarray):
             return transform(dms, u)
@@ -575,9 +806,36 @@ class FCISolver(direct_spin1_symm.FCISolver):
         # The nosym version fci contraction is required
         eri = eri.real.copy()
 
-        wfnsym_ir = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
-        if wfnsym_ir in (1, 4):
-            # sym_allowed_idx does not distinguish A2g and A2u
+        # For Sigma states, the D2h-allowed determinant subspace contains
+        # both Sigma+ and Sigma- components. The CI iteration (seeded by
+        # the numerical noise of the sigma_v symmetry in the integrals)
+        # may converge to the component in the wrong sigma_v sector
+        # (issue #3031). Sigma states are solved in a sigma_v-adapted
+        # determinant basis (see _kernel_sigma_v), so that
+        # the iteration is confined in the requested sigma_v sector by
+        # construction. Note: the sym_allowed_indices convention of this
+        # module (E+/-, complex orbitals) differs from direct_spin1_symm;
+        # the sigma_v tables must be built on the same convention.
+        wfnsym_req = None
+        if wfnsym is not None:
+            wfnsym_req = direct_spin1_symm._id_wfnsym(self, norb, nelec, orbsym, wfnsym)
+        sigma_v = (wfnsym_req is not None
+                   and symm.basis.linearmole_irrep2momentum(wfnsym_req) == 0)
+        if sigma_v:
+            sym_allowed_idx_req = sym_allowed_indices(nelec, orbsym, wfnsym_req)
+            self.sym_allowed_idx = sym_allowed_idx_req
+            swap_idx, swap_sign = _gen_sigma_v_swap(nelec, orbsym,
+                                                    sym_allowed_idx_req)
+
+        # For a Sigma state the initial guess is projected onto the requested
+        # sigma_v sector by _kernel_sigma_v, so the strict consistency check of
+        # guess_wfnsym is not applied (a guess converged to the other Sigma
+        # component is discarded and replaced by a proper initial guess there).
+        wfnsym_ir = self.guess_wfnsym(norb, nelec, None if sigma_v else ci0,
+                                      orbsym, wfnsym, **kwargs)
+        if symm.basis.linearmole_irrep2momentum(wfnsym_ir) == 0:
+            # sym_allowed_idx does not distinguish Sigma+ and Sigma-
+            # components (e.g. A2g and A2u)
             davidson_only = True
         self.sym_allowed_idx = sym_allowed_indices(nelec, orbsym, wfnsym_ir)
         self.orbsym = orbsym
@@ -591,16 +849,36 @@ class FCISolver(direct_spin1_symm.FCISolver):
         else:
             link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
 
-        with lib.temporary_env(self, wfnsym=wfnsym_ir):
-            e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0,
-                                           (link_indexa,link_indexb),
-                                           tol, lindep, max_cycle, max_space,
-                                           nroots, davidson_only, pspace_size,
-                                           ecore=ecore, **kwargs)
+        s_idx = np.hstack(self.sym_allowed_idx)
+        if sigma_v:
+            # Solve the Sigma state in the sigma_v-adapted determinant basis.
+            # max_space is resolved inside _kernel_sigma_v.
+            hdiag = self.make_hdiag(h1e, eri, norb, nelec, compress=False)
+            precond_base = self.make_precond(hdiag[s_idx])
+            h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)
+            def hop_det(c):
+                return self.contract_2e(h2e, c, norb, nelec,
+                                        (link_indexa, link_indexb))
+            def guess_fn():
+                return self.get_init_guess(norb, nelec, nroots, hdiag,
+                                           orbsym, wfnsym_ir)
+            with lib.temporary_env(self, wfnsym=wfnsym_ir):
+                e, c = _kernel_sigma_v(
+                    self, hop_det, precond_base, guess_fn, ci0,
+                    link_indexa.shape[0] * link_indexb.shape[0],
+                    s_idx, swap_idx, swap_sign, wfnsym_req,
+                    tol, lindep, max_cycle, max_space, nroots, ecore,
+                    **kwargs)
+        else:
+            with lib.temporary_env(self, wfnsym=wfnsym_ir):
+                e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0,
+                                               (link_indexa,link_indexb),
+                                               tol, lindep, max_cycle, max_space,
+                                               nroots, davidson_only, pspace_size,
+                                               ecore=ecore, **kwargs)
 
         na = link_indexa.shape[0]
         nb = link_indexb.shape[0]
-        s_idx = np.hstack(self.sym_allowed_idx)
         if nroots > 1:
             c, c_raw = [], c
             for vec in c_raw:
