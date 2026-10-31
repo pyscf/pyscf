@@ -218,17 +218,21 @@ def transform_integrals_df(myadc):
 
     kconserv = myadc.khelper.kconserv
 
-    with_df = myadc.with_df
-    naux = with_df.get_naoaux()
+    # with_df = myadc.with_df
+    # naux = with_df.get_naoaux()
+    # get largest naxu across all ki,kj pairs
+    with df._load3c(myadc._scf.with_df._cderi, 'j3c') as fload:
+        naux = max(np.asarray(fload(kpti, kptj)).shape[0] for kpti in kpts for kptj in kpts)
+
     def eris():
         return None
 
     eris.dtype = dtype = np.result_type(dtype)
     eris.Lpq_mo = Lpq_mo = np.empty((nkpts, nkpts), dtype=object)
-    Loo = np.empty((nkpts, nkpts, naux, nocc, nocc), dtype=dtype)
-    Lvo = np.empty((nkpts, nkpts, naux, nvir, nocc), dtype=dtype)
-    eris.Lvv = np.empty((nkpts, nkpts, naux, nvir, nvir), dtype=dtype)
-    eris.Lov = np.empty((nkpts, nkpts, naux, nocc, nvir), dtype=dtype)
+    Loo = np.zeros((nkpts, nkpts, naux, nocc, nocc), dtype=dtype)
+    Lvo = np.zeros((nkpts, nkpts, naux, nvir, nocc), dtype=dtype)
+    eris.Lvv = np.zeros((nkpts, nkpts, naux, nvir, nvir), dtype=dtype)
+    eris.Lov = np.zeros((nkpts, nkpts, naux, nocc, nvir), dtype=dtype)
 
     eris.vvvv = None
     eris.ovvv = None
@@ -250,11 +254,13 @@ def transform_integrals_df(myadc):
                         Lpq_ao = lib.unpack_tril(Lpq_ao).astype(np.complex128)
                     out = _ao2mo.r_e2(Lpq_ao, mo, (0, nmo, nmo, nmo + nmo), tao, ao_loc)
                 Lpq_mo[ki, kj] = out.reshape(-1, nmo, nmo)
+                # local naux for ki,kj pair
+                nL = Lpq_mo[ki, kj].shape[0]
 
-                Loo[ki, kj] = Lpq_mo[ki, kj][:, :nocc, :nocc]
-                eris.Lov[ki, kj] = Lpq_mo[ki, kj][:, :nocc, nocc:]
-                Lvo[ki, kj] = Lpq_mo[ki, kj][:, nocc:, :nocc]
-                eris.Lvv[ki, kj] = Lpq_mo[ki, kj][:, nocc:, nocc:]
+                Loo[ki, kj, :nL] = Lpq_mo[ki, kj][:, :nocc, :nocc]
+                eris.Lov[ki, kj, :nL] = Lpq_mo[ki, kj][:, :nocc, nocc:]
+                Lvo[ki, kj, :nL] = Lpq_mo[ki, kj][:, nocc:, :nocc]
+                eris.Lvv[ki, kj, :nL] = Lpq_mo[ki, kj][:, nocc:, nocc:]
 
     if myadc.if_naf:
         Loo_big = Loo.transpose(2, 0, 1, 3, 4).reshape(naux, -1)
