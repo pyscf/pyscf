@@ -1418,7 +1418,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
         log.warn('Krylov solver reached subspace convergence but true residual '
                  '|aop(x)+x-b| = %.3e exceeds tolerance %.1e. '
                  'Falling back to per-root solve.', r_norm, tol)
-        x = _per_rhs_refine(aop, _b, xs, ax, innerprod, c, tol, lindep,
+        x = _per_rhs_refine(aop, _b, xs, ax, innerprod, c, g, tol, lindep,
                             max_cycle, dot, hermi, max_memory,
                             verbose, restart)
     elif r_norm > tol and restart > 0:
@@ -1448,7 +1448,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     return x
 
 
-def _per_rhs_refine(aop, _b, xs, ax, innerprod, c, tol, lindep,
+def _per_rhs_refine(aop, _b, xs, ax, innerprod, c, g, tol, lindep,
                     max_cycle, dot, hermi, max_memory, verbose, restart):
     '''Refine a failed multi-root Krylov solution by solving each RHS in its
     own Krylov subspace that reuses the shared subspace (warm start).  All
@@ -1462,29 +1462,33 @@ def _per_rhs_refine(aop, _b, xs, ax, innerprod, c, tol, lindep,
             aop(xs[j]), innerprod[j] = ||xs[j]||^2).
         c : (nd, nroots) Galerkin coefficients of the shared solve, where
             x_k = sum_j c[j,k] * xs[j].
+        g : (nd, nroots) projections of the RHS on the shared subspace,
+            g[i,k] = <xs_i|b_k>.
 
     Returns:
         x : (nroots, ndim) refined solution.
     '''
     nroots, ndim = _b.shape
+    nd = len(xs)
     dtype = _b.dtype
     x_accum = numpy.empty((nroots, ndim), dtype=dtype)
 
-    # Shared subspace as dense arrays for BLAS operations.  Matrix products
-    # use the standard inner product (matmul with explicit conj), matching
-    # the default dot=numpy.dot convention of the main solver.
+    # Shared subspace as dense arrays for BLAS operations, stored once and
+    # shared by all roots.  Matrix products use the standard inner product
+    # (matmul with explicit conj), matching the default dot=numpy.dot
+    # convention of the main solver.
     Xs = numpy.array(xs, dtype=dtype)        # (nd, ndim)
     AXs = numpy.array(ax, dtype=dtype)       # (nd, ndim)
     ip = numpy.asarray(innerprod)
+    hs = Xs.conj() @ (Xs + AXs).T            # shared [:nd,:nd] block of h_k
 
     # Shared-subspace Galerkin solution per RHS and its cheap true residual
     x_accum[:] = c.T @ Xs
     res = _b - x_accum - c.T @ AXs
 
-    # Per-RHS extensions of the shared subspace
+    # Per-RHS extensions of the shared subspace (small, one row per cycle)
     ext_X = [[] for _ in range(nroots)]
     ext_AX = [[] for _ in range(nroots)]
-    ext_ip = [[] for _ in range(nroots)]
 
     active = [True] * nroots
     dir1 = [[] for _ in range(nroots)]
@@ -1501,11 +1505,6 @@ def _per_rhs_refine(aop, _b, xs, ax, innerprod, c, tol, lindep,
         if nsq > lindep:
             x /= nsq ** .5
             dir1[k].append(x)
-
-    # Per-root stacked subspace caches, rebuilt when a root gains a vector
-    sub_X = [None] * nroots
-    sub_AX = [None] * nroots
-    sub_ip = [None] * nroots
 
     for cycle in range(max_cycle):
         if not any(active):
@@ -1529,31 +1528,41 @@ def _per_rhs_refine(aop, _b, xs, ax, innerprod, c, tol, lindep,
             a1 = AX[idx]
             ext_X[k].append(x1)
             ext_AX[k].append(a1)
-            ext_ip[k].append(abs(dot(x1.conj(), x1).real))
-            # stacked subspace of this root (shared + extensions)
-            sub_X[k] = numpy.vstack((Xs, numpy.array(ext_X[k], dtype=dtype)))
-            sub_AX[k] = numpy.vstack((AXs, numpy.array(ext_AX[k], dtype=dtype)))
-            sub_ip[k] = numpy.concatenate((ip, numpy.asarray(ext_ip[k])))
-            # next direction: orthogonalize the image against this root's subspace
-            x_new = a1 - ((sub_X[k].conj() @ a1) / sub_ip[k]) @ sub_X[k]
+            Xe = numpy.array(ext_X[k], dtype=dtype)
+            AXe = numpy.array(ext_AX[k], dtype=dtype)
+            ipe = numpy.asarray([abs(dot(x.conj(), x).real)
+                                 for x in ext_X[k]])
+            # next direction: orthogonalize the image against the root's
+            # subspace [Xs; Xe]
+            x_new = a1 - ((Xs.conj() @ a1) / ip) @ Xs \
+                       - ((Xe.conj() @ a1) / ipe) @ Xe
             nsq = abs(dot(x_new.conj(), x_new).real)
             if nsq > lindep:
                 x_new /= nsq ** .5
                 new_dir1[k].append(x_new)
 
-        # per-RHS Galerkin solve + convergence.  The projected system uses the
-        # full overlap of the trial vectors, as in the main solve.
+        # per-RHS Galerkin solve + convergence.  The projected system of
+        # (1+a) in the subspace [Xs; Xe] is assembled from the shared block
+        # (computed once) and small extension blocks; the full overlap of
+        # the trial vectors is included, as in the main solve.
         for k in range(nroots):
-            if not active[k]:
+            if not active[k] or not ext_X[k]:
                 continue
-            if sub_X[k] is None:
-                continue
-            h_k = (sub_X[k].conj() @ sub_AX[k].T
-                   + sub_X[k].conj() @ sub_X[k].T)
-            g_k = sub_X[k].conj() @ _b[k]
+            Xe = numpy.array(ext_X[k], dtype=dtype)
+            AXe = numpy.array(ext_AX[k], dtype=dtype)
+            ne = len(ext_X[k])
+            nd_k = nd + ne
+            h_k = numpy.empty((nd_k, nd_k), dtype=dtype)
+            h_k[:nd,:nd] = hs
+            h_k[:nd,nd:] = Xs.conj() @ (Xe + AXe).T
+            h_k[nd:,:nd] = Xe.conj() @ (Xs + AXs).T
+            h_k[nd:,nd:] = Xe.conj() @ (Xe + AXe).T
+            g_k = numpy.empty(nd_k, dtype=dtype)
+            g_k[:nd] = g[:,k]
+            g_k[nd:] = Xe.conj() @ _b[k]
             ck = numpy.linalg.solve(h_k, g_k)
-            xk = ck @ sub_X[k]
-            rk = _b[k] - xk - ck @ sub_AX[k]
+            xk = ck[:nd] @ Xs + ck[nd:] @ Xe
+            rk = _b[k] - xk - (ck[:nd] @ AXs + ck[nd:] @ AXe)
             rnorm = abs(dot(rk.conj(), rk).real) ** .5
             if rnorm < tol:
                 x_accum[k] = xk
