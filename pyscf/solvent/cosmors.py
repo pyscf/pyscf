@@ -202,9 +202,18 @@ def get_outlying_charge_correction(mf):
     own. IEF-PCM and SS(V)PE do not have that structure; note that in the
     conductor limit required for COSMO-RS files, IEF-PCM reduces to C-PCM.
 
+    This implementation scales the nuclear and electronic screening charges
+    separately, then regenerates the surface potential from the corrected
+    charges. Unlike the auxiliary outer-cavity correction of Klamt and Jonas,
+    this approach does not construct an auxiliary cavity.
+
     References:
         A. Klamt, V. Jonas, J. Chem. Phys. 105, 9972 (1996)
         https://doi.org/10.1063/1.472829
+
+        R. P. Soares, D. Mejia-Rodriguez, and E. Apra,
+        J. Chem. Theory Comput. 21, 11573 (2025).
+        https://doi.org/10.1021/acs.jctc.5c01368
 
     Arguments:
         mf: processed SCF with PCM solvation
