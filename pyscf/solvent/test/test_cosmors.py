@@ -18,6 +18,7 @@
 
 import unittest
 import io, re
+import numpy
 from pyscf import gto, dft
 from pyscf.solvent import pcm, cosmors
 from pyscf.data.nist import BOHR as _BOHR
@@ -85,9 +86,22 @@ class TestCosmoRS(unittest.TestCase):
 
     def test_sas_volume(self):
         V1 = cosmors.get_sas_volume(mf0.with_solvent.surface, step = 0.2) * _BOHR**3
-        self.assertAlmostEqual(V1, 46.391962, 3)
+        self.assertAlmostEqual(V1, 46.730588, 3)
         V2 = cosmors.get_sas_volume(mf0.with_solvent.surface, step = 0.05) * _BOHR**3
-        self.assertAlmostEqual(V2, 46.497054, 3)
+        self.assertAlmostEqual(V2, 46.770533, 3)
+
+    def test_unite_intervals_keeps_enclosing_interval(self):
+        self.assertEqual(cosmors._unite_intervals([[0., 3.], [1., 2.]]), [[0., 3.]])
+        self.assertEqual(cosmors._unite_intervals([[2., 4.], [0., 1.], [.5, 2.5]]), [[0., 4.]])
+        self.assertEqual(cosmors._unite_intervals([[0., 1.], [2., 3.]]), [[0., 1.], [2., 3.]])
+
+    def test_sas_volume_of_enclosed_sphere(self):
+        # a small sphere inside a large one adds nothing to the volume
+        surface = {'atom_coords': numpy.array([[0., 0., 0.], [0., 0., .5]]),
+                   'R_vdw': numpy.array([2., .5]),
+                   'gslice_by_atom': [[0, 1], [1, 2]]}
+        V = cosmors.get_sas_volume(surface, step=0.05)
+        self.assertAlmostEqual(V, 4/3 * numpy.pi * 2.**3, 1)
 
 
 if __name__ == "__main__":

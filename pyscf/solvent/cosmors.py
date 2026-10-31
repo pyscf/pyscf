@@ -73,7 +73,7 @@ def _unite_intervals(intervals):
     united = []
     for begin, end in sorted(intervals):
         if united and united[-1][1] >= begin:
-            united[-1][1] = end
+            united[-1][1] = max(united[-1][1], end)
         else:
             united.append([begin, end])
 
