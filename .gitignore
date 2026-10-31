@@ -81,7 +81,6 @@ OneRDM*
 
 # Memoization and caching
 tmp/
-.cortexkit/
 
 # IDEs
 .idea/
