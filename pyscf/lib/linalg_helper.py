@@ -1222,7 +1222,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
 def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
            lindep=DSOLVE_LINDEP, callback=None, hermi=False,
            max_memory=MAX_MEMORY, verbose=logger.WARN,
-           restart=1, fallback_tol=None):
+           restart=1):
     r'''Krylov subspace method to solve  (1+a) x = b.  Ref:
     J. A. Pople et al, Int. J.  Quantum. Chem.  Symp. 13, 225 (1979).
 
@@ -1255,13 +1255,10 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
             When the subspace becomes linearly dependent
             (A-invariant) before the residual reaches ``tol``, the solve is
             restarted from the current residual, whose Krylov subspace is
-            generally not A-invariant and can make further progress.  Only
-            used when the first subspace build fails to reach ``tol``.
-        fallback_tol : float
-            Threshold above which a multi-root solve falls back to solving
-            each right-hand side in its own Krylov subspace.  Defaults to
-            ``1000*tol``.  ``fallback_tol`` only decides whether the
-            fallback runs; the per-RHS solves are then refined to ``tol``.
+            generally not A-invariant and can make further progress.  Used
+            for single-root solves when the first subspace build fails to
+            reach ``tol``, and inside the per-root fallback for stalled
+            right-hand sides.
 
     Returns:
         x : ndarray like b
@@ -1288,9 +1285,6 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     if x0 is not None:
         b = b - (x0 + aop(x0))
         n_matvec += 1
-    if fallback_tol is None:
-        fallback_tol = 1000 * tol
-
     x1 = b
     if x1.ndim == 1:
         x1 = x1.reshape(1, x1.size)
@@ -1416,12 +1410,16 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
         r_norm = max(r_norm, abs(dot(r[k].conj(), r[k]).real))
     r_norm = r_norm ** .5
 
-    if r_norm > fallback_tol and nroots > 1 and x0 is None:
+    if r_norm > tol and nroots > 1 and x0 is None:
+        # The shared subspace cannot resolve the near-parallel right-hand
+        # sides.  Re-solve each RHS in its own subspace, which verifies the
+        # per-root residual to tol (the restart below has no such guarantee:
+        # a restarted shared subspace can close prematurely again).
         log.warn('Krylov solver reached subspace convergence but true residual '
                  '|aop(x)+x-b| = %.3e exceeds tolerance %.1e. '
                  'Falling back to per-root solve.', r_norm, tol)
-        x = _per_rhs_refine(aop, _b, xs, ax, innerprod, c, fallback_tol,
-                            tol, lindep, max_cycle, dot, hermi, max_memory,
+        x = _per_rhs_refine(aop, _b, xs, ax, innerprod, c, tol, lindep,
+                            max_cycle, dot, hermi, max_memory,
                             verbose, restart)
     elif r_norm > tol and restart > 0:
         # Restarted Krylov: solve (1+a) dx = r and accumulate.  The residual
@@ -1431,7 +1429,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
         dx = krylov(aop, r, x0=None, tol=tol, max_cycle=max_cycle, dot=dot,
                     lindep=lindep, callback=callback, hermi=hermi,
                     max_memory=max_memory, verbose=verbose,
-                    restart=restart-1, fallback_tol=fallback_tol)
+                    restart=restart-1)
         x = x + dx
     elif r_norm > tol:
         log.warn('Krylov solver reached subspace convergence but true residual '
@@ -1450,13 +1448,13 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     return x
 
 
-def _per_rhs_refine(aop, _b, xs, ax, innerprod, c, fallback_tol, tol, lindep,
+def _per_rhs_refine(aop, _b, xs, ax, innerprod, c, tol, lindep,
                     max_cycle, dot, hermi, max_memory, verbose, restart):
     '''Refine a failed multi-root Krylov solution by solving each RHS in its
     own Krylov subspace that reuses the shared subspace (warm start).  All
     active RHS share a single batched matvec per cycle, so the extra matvec
-    cost is small.  ``fallback_tol`` only decides whether the fallback runs;
-    each root is refined to ``tol``.
+    cost is small.  Each root is refined to ``tol``; RHS that stall are
+    re-solved by a fresh single-RHS Krylov solve.
 
     Args:
         xs, ax, innerprod : shared Krylov subspace from a multi-root solve

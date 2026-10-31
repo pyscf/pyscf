@@ -178,8 +178,11 @@ class KnownValues(unittest.TestCase):
         # silently return an inaccurate response for near-parallel
         # right-hand sides (symmetric Hessian perturbations), which would
         # corrupt the analytical Hessian and its harmonic frequencies.
-        # Reference frequencies are the most strict analytical values
-        # (fallback_tol = tol = 1e-9).
+        # Reference frequencies are the most strict analytical values,
+        # recorded with the per-root fallback driven to tol = 1e-9.  The
+        # default solver reproduces them (its per-RHS fallback refines to
+        # tol), while the pre-fix solver is ~3e-3 cm^-1 off, caught by
+        # atol=2e-3.
         mf = dft.RKS(mol)
         mf.conv_tol = 1e-14
         mf.xc = 'b3lyp'

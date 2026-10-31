@@ -219,18 +219,17 @@ class KnownValues(unittest.TestCase):
     def test_krylov_near_parallel_fallback(self):
         # Near-parallel right-hand sides: the shared Krylov subspace cannot
         # resolve the two solutions, so the per-root fallback must recover.
-        # A loose lindep makes the initial QR drop the perpendicular component,
-        # unlike test_krylov_near_dependent_roots which tightens lindep.  The
-        # per-root refinement targets the (relaxed) fallback_tol.
+        # A loose lindep makes the initial QR drop the perpendicular component
+        # (norm^2 9e-16 < lindep=1e-13), which no Krylov subspace can then
+        # represent; that imposes a residual floor above tol (~2.7e-9 here).
+        # The fallback drives the residual down to that floor.
         tol = 1e-9
-        fallback_tol = 10 * tol
         a = numpy.diag([.1, .2])
         b = numpy.array([[1., 0.], [1., 3e-8]])
         aop = lambda x: x.dot(a.T)
-        c = linalg_helper.krylov(aop, b, tol=tol, lindep=1e-13,
-                                 fallback_tol=fallback_tol, verbose=0)
+        c = linalg_helper.krylov(aop, b, tol=tol, lindep=1e-13, verbose=0)
         residual = abs(aop(c) + c - b).max()
-        self.assertLess(residual, fallback_tol)
+        self.assertLess(residual, 10 * tol)
 
     def test_dgeev(self):
         numpy.random.seed(12)
