@@ -149,32 +149,27 @@ class _SmearingSCF:
         self._e_free_prev = self.e_free
 
     def check_convergence(self, envs):
-        '''Convergence check of the main SCF loop.
+        '''Convergence check of the SCF iterations.
 
-        Smearing minimizes the free energy e_free = E - sigma*S, so the main
-        loop converges on e_free (issue #3379). A tight conv_tol is suggested to
+        Smearing minimizes the free energy e_free = E - sigma*S, so the SCF
+        converges on e_free (issue #3379). A tight conv_tol is suggested to
         reach the stationary point on flat free-energy surfaces.
+
+        When the extra (conv_check) cycle is performed after the SCF
+        iterations, ``envs['scf_conv']`` is True. The extra cycle applies the
+        default OR logic between the energy and gradient criteria.
         '''
         if (self.sigma and self.smearing_method
                 and self.e_free is not None and self._e_free_prev is not None):
             dF = abs(self.e_free - self._e_free_prev)
-            return (dF < envs['conv_tol']
-                    and envs['norm_gorb'] < envs['conv_tol_grad'])
-        return (abs(envs['e_tot'] - envs['last_hf_e']) < envs['conv_tol']
-                and envs['norm_gorb'] < envs['conv_tol_grad'])
+        else:
+            dF = abs(envs['e_tot'] - envs['last_hf_e'])
 
-    def check_extra_convergence(self, envs):
-        '''Convergence check of the extra (conv_check) cycle.
+        if envs.get('scf_conv'):
+            # The additional convergence check performed in the extra cycle
+            return dF < envs['conv_tol'] or envs['norm_gorb'] < envs['conv_tol_grad']
 
-        The envs dict carries the relaxed tolerances (conv_tol*10,
-        conv_tol_grad*3).
-        '''
-        if (self.sigma and self.smearing_method
-                and self.e_free is not None and self._e_free_prev is not None):
-            return (abs(self.e_free - self._e_free_prev) < envs['conv_tol']
-                    or envs['norm_gorb'] < envs['conv_tol_grad'])
-        return (abs(envs['e_tot'] - envs['last_hf_e']) < envs['conv_tol']
-                or envs['norm_gorb'] < envs['conv_tol_grad'])
+        return dF < envs['conv_tol'] and envs['norm_gorb'] < envs['conv_tol_grad']
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
         '''Label the occupancies for each orbital

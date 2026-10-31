@@ -224,9 +224,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
         conv_tol = conv_tol * 10
         conv_tol_grad = conv_tol_grad * 3
-        if callable(mf.check_extra_convergence):
-            scf_conv = mf.check_extra_convergence(locals())
-        elif callable(mf.check_convergence):
+        if callable(mf.check_convergence):
             scf_conv = mf.check_convergence(locals())
         elif abs(e_tot-last_hf_e) < conv_tol or norm_gorb < conv_tol_grad:
             scf_conv = True
@@ -1547,7 +1545,7 @@ def quad_moment(mol, dm, unit='DebyeAngstrom', origin=None,
         log.note('Traceless quadrupole moment (AU):')
 
     with numpy.printoptions(precision=5, floatmode='fixed'):
-        log.note(str())
+        log.note('')
 
     return tot_q_traceless
 
@@ -1711,11 +1709,6 @@ class SCF(lib.StreamObject):
             An extra cycle to check convergence after SCF iterations.
         check_convergence : function(envs) => bool
             A hook for overloading convergence criteria in SCF iterations.
-        check_extra_convergence : function(envs) => bool
-            A hook for overloading the convergence criteria of the extra
-            (conv_check) cycle.  The envs dict carries the relaxed tolerances
-            (conv_tol*10, conv_tol_grad*3).  If set, it takes precedence over
-            check_convergence for the extra cycle.
 
     Saved results:
 
@@ -1816,7 +1809,7 @@ class SCF(lib.StreamObject):
     def __getattr__(self, key):
         '''Accessing methods post-HF methods or mean-field properties'''
         # Import all available modules, then retry accessing the attribute
-        from pyscf import __all__  # noqa
+        from pyscf import __all__
         return object.__getattribute__(self, key)
 
     def build(self, mol=None):
@@ -2046,7 +2039,7 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         elif key[:3] == 'chk':
             try:
                 dm = self.init_guess_by_chkfile()
-            except (IOError, KeyError):
+            except (OSError, KeyError):
                 logger.warn(self, 'Fail in reading %s. Use MINAO initial guess',
                             self.chkfile)
                 dm = self.init_guess_by_minao(mol)
@@ -2072,9 +2065,6 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
     #   f(envs) => bool
     # to check_convergence can overwrite the default convergence criteria
     check_convergence = None
-    # A hook for overloading the convergence criteria of the extra (conv_check)
-    # cycle.
-    check_extra_convergence = None
 
     def scf(self, dm0=None, **kwargs):
         '''SCF main driver
@@ -2224,6 +2214,22 @@ This is the Gaussian fit version as described in doi:10.1063/5.0004046.''')
         if dm is None: dm = self.make_rdm1()
         if s is None: s = self.get_ovlp(mol)
         return mulliken_pop(mol, dm, s=s, verbose=verbose)
+
+    def mayer_bond_order(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):
+        '''Mayer bond orders. See scf.analyze.mayer_bond_order'''
+        from pyscf.scf import analyze
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        if s is None: s = self.get_ovlp(mol)
+        return analyze.mayer_bond_order(mol, dm, s=s, verbose=verbose)
+
+    def wiberg_bond_order(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):
+        '''Wiberg bond indices. See scf.analyze.wiberg_bond_order'''
+        from pyscf.scf import analyze
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        if s is None: s = self.get_ovlp(mol)
+        return analyze.wiberg_bond_order(mol, dm, s=s, verbose=verbose)
 
     @lib.with_doc(mulliken_meta.__doc__)
     def mulliken_meta(self, mol=None, dm=None, verbose=logger.DEBUG,
