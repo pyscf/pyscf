@@ -1469,7 +1469,6 @@ def _per_rhs_refine(aop, _b, xs, ax, innerprod, c, fallback_tol, tol, lindep,
         x : (nroots, ndim) refined solution.
     '''
     nroots, ndim = _b.shape
-    nd = len(xs)
     dtype = _b.dtype
     x_accum = numpy.empty((nroots, ndim), dtype=dtype)
 
