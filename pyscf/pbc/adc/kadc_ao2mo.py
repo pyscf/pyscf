@@ -28,15 +28,18 @@ import h5py
 import tempfile
 
 
-def _eri_storage(myadc, eris):
+def _amplitude_memory(myadc, dtype):
     nocc = myadc.nocc
     nvir = myadc.nmo - nocc
     second_order = ((myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False)
                     or myadc.method == "adc(3)")
     mem_factor = 4 if second_order else 2
+    return (mem_factor * myadc.nkpts ** 3 * nocc ** 2 * nvir ** 2 * np.dtype(dtype).itemsize / 1e6)
+
+
+def _eri_storage(myadc, eris):
     dtype = getattr(eris, 'dtype', myadc.mo_coeff[0].dtype)
-    mem_left = (myadc.max_memory * .9 - lib.current_memory()[0]
-                - mem_factor * myadc.nkpts ** 3 * nocc ** 2 * nvir ** 2 * np.dtype(dtype).itemsize / 1e6)
+    mem_left = (myadc.max_memory * .9 - lib.current_memory()[0] - _amplitude_memory(myadc, dtype))
     eris.feri = getattr(eris, 'feri', None)
 
     def create(name, shape, dtype):
@@ -203,6 +206,11 @@ def transform_integrals_outcore(myadc):
             # raise MemoryError('Minimal memory requirements %s MB'
             #                  % (mem_now + nvir ** 4 / 1e6 * 16 * 2))
             for (ikp, ikq, ikr) in khelper.symm_map:
+                iks = kconserv[ikp, ikq, ikr]
+                orbv_p = mo_coeff[ikp][:, nocc:]
+                orbv_q = mo_coeff[ikq][:, nocc:]
+                orbv_r = mo_coeff[ikr][:, nocc:]
+                orbv_s = mo_coeff[iks][:, nocc:]
                 for a in range(nvir):
                     orbva_p = orbv_p[:, a].reshape(-1, 1)
                     buf_kpt = fao2mo((orbva_p, orbv_q, orbv_r, orbv_s),

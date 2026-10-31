@@ -50,6 +50,49 @@ import tempfile
 #        Chemist's  oovv(ijab) : ki - kj + ka - kb
 #        Amplitudes t2(ijab)  : ki + kj - ka - kba
 
+
+def _batch_contract(script, a, a_indices, b, b_indices, out, buffer, alpha=1):
+    compatible = (buffer is not None and isinstance(a, np.ndarray) and isinstance(b, np.ndarray)
+                  and a.flags.c_contiguous and b.flags.c_contiguous
+                  and a.dtype == b.dtype == out.dtype == buffer.dtype)
+    block_size = max(int(np.prod(a.shape[3:])), int(np.prod(b.shape[3:])))
+    block_size *= a.dtype.itemsize
+    batch_size = min(buffer.shape[0], buffer.nbytes // (2 * block_size)) if compatible else 0
+
+    if batch_size < 2:
+        for ia, ib in zip(zip(*a_indices), zip(*b_indices)):
+            result = lib.einsum(script, a[ia], b[ib], optimize=True)
+            if alpha != 1:
+                result *= alpha
+            out += result
+        return out
+
+    lhs, rhs = script.split('->')
+    a_sub, b_sub = lhs.split(',')
+    batch_script = f'x{a_sub},x{b_sub}->{rhs}'
+    flat_buffer = buffer.reshape(-1)
+    half = flat_buffer.size // 2
+    nkpts = buffer.shape[0]
+    for start in range(0, nkpts, batch_size):
+        stop = min(start + batch_size, nkpts)
+        count = stop - start
+        a_shape = (count,) + a.shape[3:]
+        b_shape = (count,) + b.shape[3:]
+        buf_a = flat_buffer[:int(np.prod(a_shape))].reshape(a_shape)
+        buf_b = flat_buffer[half:half + int(np.prod(b_shape))].reshape(b_shape)
+        source_a = a.reshape((nkpts ** 3,) + a.shape[3:])
+        source_b = b.reshape((nkpts ** 3,) + b.shape[3:])
+        idx_a = np.ravel_multi_index(tuple(x[start:stop] for x in a_indices), (nkpts,) * 3)
+        idx_b = np.ravel_multi_index(tuple(x[start:stop] for x in b_indices), (nkpts,) * 3)
+        np.take(source_a, idx_a, axis=0, out=buf_a)
+        np.take(source_b, idx_b, axis=0, out=buf_b)
+        result = lib.einsum(batch_script, buf_a, buf_b, optimize=True)
+        if alpha != 1:
+            result *= alpha
+        out += result
+    return out
+
+
 class _AmplitudeStorage:
     def __init__(self, myadc, dtype):
         mem_needed = kadc_ao2mo._amplitude_memory(myadc, dtype)
@@ -121,6 +164,13 @@ def compute_amplitudes(myadc, eris):
     nonzero_opadding, nonzero_vpadding = padding_k_idx(myadc, kind="split")
 
     kconserv = myadc.khelper.kconserv
+    k_index = np.arange(nkpts)
+    buffer = None
+    batch_arrays = (t2_1, eris.ovoo, eris.oooo, eris.oovv, eris.ovvo)
+    use_batch = all(isinstance(x, np.ndarray) and x.flags.c_contiguous and x.dtype == t2_1.dtype
+                    for x in batch_arrays)
+    if nkpts > 1 and (myadc.approx_trans_moments is False or myadc.method == 'adc(3)') and use_batch:
+        buffer = np.empty(t2_shape, dtype=t2_1.dtype)
     touched = np.zeros((nkpts, nkpts, nkpts), dtype=bool)
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
@@ -194,18 +244,19 @@ def compute_amplitudes(myadc, eris):
                                                      eris_ovvv[kk, kc, ka], t2_1[kk, ki, kc], optimize=True)
                         del eris_ovvv
 
-                for kl in range(nkpts):
-                    kc = kconserv[kk, ki, kl]
-                    ka = kconserv[kl, kc, kk]
+                kl = k_index
+                kc = kconserv[kk, ki, kl]
+                ka = kconserv[kl, kc, kk]
+                kk_index = np.full(nkpts, kk)
 
-                    t1_2[ki] -= 1.5 * lib.einsum('lcki,klac->ia',
-                                                 eris_ovoo[kl, kc, kk], t2_1[kk, kl, ka], optimize=True)
-                    t1_2[ki] += 0.5 * lib.einsum('lcki,lkac->ia',
-                                                 eris_ovoo[kl, kc, kk], t2_1[kl, kk, ka], optimize=True)
-                    t1_2[ki] -= 0.5 * lib.einsum('kcli,lkac->ia',
-                                                 eris_ovoo[kk, kc, kl], t2_1[kl, kk, ka], optimize=True)
-                    t1_2[ki] += 0.5 * lib.einsum('kcli,klac->ia',
-                                                 eris_ovoo[kk, kc, kl], t2_1[kk, kl, ka], optimize=True)
+                _batch_contract('lcki,klac->ia', eris_ovoo, (kl, kc, kk_index),
+                                   t2_1, (kk_index, kl, ka), t1_2[ki], buffer, alpha=-1.5)
+                _batch_contract('lcki,lkac->ia', eris_ovoo, (kl, kc, kk_index),
+                                   t2_1, (kl, kk_index, ka), t1_2[ki], buffer, alpha=.5)
+                _batch_contract('kcli,lkac->ia', eris_ovoo, (kk_index, kc, kl),
+                                   t2_1, (kl, kk_index, ka), t1_2[ki], buffer, alpha=-.5)
+                _batch_contract('kcli,klac->ia', eris_ovoo, (kk_index, kc, kl),
+                                   t2_1, (kk_index, kl, ka), t1_2[ki], buffer, alpha=.5)
 
         for ki in range(nkpts):
             ka = ki
@@ -248,53 +299,56 @@ def compute_amplitudes(myadc, eris):
             t2_2 -= 2.0 * madelung * t2_1
 
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
-            for kk in range(nkpts):
+            kk = k_index
+            ki_index = np.full(nkpts, ki)
+            kj_index = np.full(nkpts, kj)
+            ka_index = np.full(nkpts, ka)
+            out = t2_2[ki, kj, ka]
 
-                kc = kconserv[ki, ka, kk]
-                kb = kconserv[kj, kk, kc]
-                t2_2[ki, kj, ka] -= lib.einsum('kjbc,kica->ijab',
-                                               eris_oovv[kk, kj, kb], t2_1[kk, ki, kc], optimize=True)
+            kc = kconserv[ki, ka, kk]
+            kb = kconserv[kj, kk, kc]
+            _batch_contract('kjbc,kica->ijab', eris_oovv, (kk, kj_index, kb),
+                               t2_1, (kk, ki_index, kc), out, buffer, alpha=-1)
 
-                kc = kconserv[kk, ka, kj]
-                kb = kconserv[ki, kk, kc]
-                t2_2[ki, kj, ka] -= lib.einsum('kibc,jkca->ijab',
-                                               eris_oovv[kk, ki, kb], t2_1[kj, kk, kc], optimize=True)
+            kc = kconserv[kk, ka, kj]
+            kb = kconserv[ki, kk, kc]
+            _batch_contract('kibc,jkca->ijab', eris_oovv, (kk, ki_index, kb),
+                               t2_1, (kj_index, kk, kc), out, buffer, alpha=-1)
 
-                kc = kconserv[ka, kj, kk]
-                kb = kconserv[ki, kc, kk]
-                t2_2[ki, kj, ka] -= lib.einsum('kjac,ikcb->ijab',
-                                               eris_oovv[kk, kj, ka], t2_1[ki, kk, kc], optimize=True)
+            kc = kconserv[ka, kj, kk]
+            kb = kconserv[ki, kc, kk]
+            _batch_contract('kjac,ikcb->ijab', eris_oovv, (kk, kj_index, ka_index),
+                               t2_1, (ki_index, kk, kc), out, buffer, alpha=-1)
 
-                kc = kconserv[ka, ki, kk]
-                kb = kconserv[kk, kc, kj]
-                t2_2[ki, kj, ka] -= lib.einsum('kiac,kjcb->ijab',
-                                               eris_oovv[kk, ki, ka], t2_1[kk, kj, kc], optimize=True)
+            kc = kconserv[ka, ki, kk]
+            kb = kconserv[kk, kc, kj]
+            _batch_contract('kiac,kjcb->ijab', eris_oovv, (kk, ki_index, ka_index),
+                               t2_1, (kk, kj_index, kc), out, buffer, alpha=-1)
 
-            for kl in range(nkpts):
-                kk = kconserv[kj, kl, ki]
-                t2_2[ki, kj, ka] += lib.einsum('kilj,klab->ijab',
-                                               eris_oooo[kk, ki, kl], t2_1[kk, kl, ka], optimize=True)
+            kl = k_index
+            kk = kconserv[kj, kl, ki]
+            _batch_contract('kilj,klab->ijab', eris_oooo, (kk, ki_index, kl),
+                               t2_1, (kk, kl, ka_index), out, buffer, alpha=1)
 
-            for kk in range(nkpts):
+            kk = k_index
+            kc = kconserv[ki, ka, kk]
+            kb = kconserv[kc, kk, kj]
+            _batch_contract('kcbj,kica->ijab', eris_ovvo, (kk, kc, kb),
+                               t2_1, (kk, ki_index, kc), out, buffer, alpha=2)
 
-                kc = kconserv[ki, ka, kk]
-                kb = kconserv[kc, kk, kj]
+            kc = kconserv[kk, ka, ki]
+            _batch_contract('kcbj,ikca->ijab', eris_ovvo, (kk, kc, kb),
+                               t2_1, (ki_index, kk, kc), out, buffer, alpha=-1)
 
-                t2_2[ki, kj, ka] += 2 * lib.einsum('kcbj,kica->ijab',
-                                                   eris_ovvo[kk, kc, kb], t2_1[kk, ki, kc], optimize=True)
-                kc = kconserv[kk, ka, ki]
-                t2_2[ki, kj, ka] -= lib.einsum('kcbj,ikca->ijab',
-                                               eris_ovvo[kk, kc, kb], t2_1[ki, kk, kc], optimize=True)
+            kc = kconserv[kk, ki, ka]
+            kb = kconserv[kk, kj, kc]
+            _batch_contract('kcai,kjcb->ijab', eris_ovvo, (kk, kc, ka_index),
+                               t2_1, (kk, kj_index, kc), out, buffer, alpha=2)
 
-                kc = kconserv[kk, ki, ka]
-                kb = kconserv[kk, kj, kc]
-                t2_2[ki, kj, ka] += 2 * lib.einsum('kcai,kjcb->ijab',
-                                                   eris_ovvo[kk, kc, ka], t2_1[kk, kj, kc], optimize=True)
-
-                kc = kconserv[kk, ki, ka]
-                kb = kconserv[kj, kk, kc]
-                t2_2[ki, kj, ka] -= lib.einsum('kcai,jkcb->ijab',
-                                               eris_ovvo[kk, kc, ka], t2_1[kj, kk, kc], optimize=True)
+            kc = kconserv[kk, ki, ka]
+            kb = kconserv[kj, kk, kc]
+            _batch_contract('kcai,jkcb->ijab', eris_ovvo, (kk, kc, ka_index),
+                               t2_1, (kj_index, kk, kc), out, buffer, alpha=-1)
 
             kb = kconserv[ki, ka, kj]
             eia = _get_epq([0, nocc, ki, mo_e_o, nonzero_opadding],
