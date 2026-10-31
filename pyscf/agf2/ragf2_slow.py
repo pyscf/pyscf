@@ -69,7 +69,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
         mask = ragf2.get_frozen_mask(agf2)
         nmo -= np.sum(~mask)
 
-    e = np.zeros((naux))
+    e = np.zeros(naux)
     v = np.zeros((nmo, naux))
 
     fpos = np.sqrt(0.5 * os_factor)

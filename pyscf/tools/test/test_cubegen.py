@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import unittest
+import numpy
 from pyscf import lib, gto, scf
 from pyscf.tools import cubegen
 
@@ -74,6 +75,23 @@ class KnownValues(unittest.TestCase):
                                   nx=10, ny=10, nz=10, resolution=0.5)
             self.assertEqual(rho.shape, (12,18,15))
             self.assertAlmostEqual(lib.fp(rho), -1.007950007160415, 5)
+
+    def test_read_mol_coords(self):
+        with lib.NamedTemporaryFile() as ftmp:
+            cc = cubegen.Cube(mol, nx=11, ny=12, nz=13)
+            cc.write(numpy.zeros((11,12,13)), ftmp.name)
+            cc1 = cubegen.Cube(mol)
+            cc1.read(ftmp.name)
+            self.assertAlmostEqual(abs(cc1.get_coords() - cc.get_coords()).max(), 0, 5)
+
+    def test_read_odd_electron_mol(self):
+        mol1 = gto.M(atom='H 0 0 0', spin=1, basis='sto-3g', unit='Bohr')
+        with lib.NamedTemporaryFile() as ftmp:
+            cc = cubegen.Cube(mol1, nx=5, ny=5, nz=5, margin=2.0)
+            cc.write(numpy.zeros((5,5,5)), ftmp.name)
+            cc1 = cubegen.Cube(mol1)
+            cc1.read(ftmp.name)
+            self.assertEqual(cc1.mol.spin, 1)
 
     def test_rho_with_pbc(self):
         from pyscf.pbc.gto import Cell

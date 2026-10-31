@@ -51,6 +51,14 @@ class UCCSD(uccsd.UCCSD):
         assert (not self.direct)
         return uccsd.UCCSD._add_vvVV(self, t1, t2, eris, out)
 
+    def nuc_grad_method(self):
+        raise NotImplementedError(
+            'Analytic nuclear gradients for DF-UCCSD are not available. '
+            'pyscf.grad.uccsd differentiates the exact four-index ERIs and '
+            'would not be consistent with the density-fitted energy.')
+
+    Gradients = NotImplemented
+
 DFCCSD = DFUCCSD = UCCSD
 
 from pyscf import scf

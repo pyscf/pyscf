@@ -55,3 +55,11 @@ mf.with_solvent.eps_optical = 1.405**2
 mf.run()
 td = mf.TDA()
 td.kernel()
+
+#
+# The PCM and SMD models can look up both dielectric constants in the solvent
+# database (see examples/solvent/05-pcm.py)
+#
+mf = mol.RHF().PCM('tetrahydrofuran').run()
+td = mf.TDA()
+td.kernel()

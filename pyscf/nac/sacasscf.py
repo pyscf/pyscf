@@ -56,7 +56,7 @@ def grad_elec_active (mc_grad, mo_coeff=None, ci=None, atmlst=None,
                             verbose=0)
     de -= grad_elec_core (mc_grad, mo_coeff=mo_coeff, atmlst=atmlst,
                           eris=eris, mf_grad=mf_grad)
-    log.debug ('CASSCF active-orbital gradient:\n{}'.format (de))
+    log.debug (f'CASSCF active-orbital gradient:\n{de}')
     log.timer ('CASSCF active-orbital gradient', *t0)
     return de
 

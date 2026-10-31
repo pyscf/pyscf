@@ -199,6 +199,7 @@ class KnownValues(unittest.TestCase):
         mol = gto.M(atom='Cu 0 0 0; H 0 0 1.5', basis='lanl2dz',
                     ecp='lanl2dz', symmetry=True, verbose=0)
         mf = scf.RHF(mol)
+        mf.conv_tol = 1e-12
         g_scan = mf.nuc_grad_method().as_scanner().as_scanner()
         g = g_scan(mol.atom)[1]
         self.assertAlmostEqual(lib.fp(g), -0.012310573162997052, 7)

@@ -19,7 +19,6 @@ from pyscf.grad import casscf as casscf_grad
 from pyscf.grad.mp2 import _shell_prange
 from pyscf.fci.addons import fix_spin_
 from pyscf.df.grad import casscf as dfcasscf_grad
-from pyscf.df.grad import sacasscf as dfsacasscf_grad
 
 def grad_elec(mc, mf_grad):
     mf = mf_grad.base

@@ -233,7 +233,6 @@ def original_becke(g):
 #    g = (3 - g**2) * g * .5
 #    g = (3 - g**2) * g * .5
 #    return g
-    pass
 
 def becke_lko(g):
     '''
@@ -249,7 +248,6 @@ def becke_lko(g):
     This is a placeholder function. The actual implementation is provided in the
     C routine VXCgen_grid_lko.
     '''
-    pass
 
 def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
                      level=3, prune=nwchem_prune, **kwargs):
@@ -742,6 +740,27 @@ class Grids(lib.StreamObject):
         return self
 
     to_gpu = lib.to_gpu
+
+
+def sg1_grids(mol, atom_grid=(50, 194)):
+    '''SG1 grids for SCF linear response functions (cf. pyscf#2520).
+
+    It can be assigned to mf.second_grids:
+
+    >>> mf.second_grids = dft.gen_grid.sg1_grids(mol)
+
+    Kwargs:
+        atom_grid : tuple (radial, angular)
+            (radial, angular) grids for all atoms.
+
+    Returns:
+        An unbuilt Grids object. It is built automatically when response
+        functions use it.
+    '''
+    grids = Grids(mol)
+    grids.prune = sg1_prune
+    grids.atom_grid = atom_grid
+    return grids
 
 
 def _default_rad(nuc, level=3):

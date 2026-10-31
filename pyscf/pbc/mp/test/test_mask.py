@@ -101,6 +101,34 @@ class KnownValues(unittest.TestCase):
         self.assertListEqual(nocc, [1, 3, 2])
         self.assertListEqual(nmo, [2, 4, 4])
 
+    def test_invalid_orbital_energy_mask_matches_nmo(self):
+        from pyscf.pbc.scf.hf import INVALID_ORBITAL_ENERGY
+        from pyscf.pbc.mp.kmp2 import padded_mo_coeff
+        inv = INVALID_ORBITAL_ENERGY
+        mp = fake_mp(frozen=None, mo_occ=[np.array([2., 2., 0., 0., 0.])], nkpts=1)
+        mp.mo_energy = np.array([[-1., -0.4, 0.1, inv, inv]])
+        nmo = get_nmo(mp, per_kpoint=True)
+        mask = get_frozen_mask(mp)
+        self.assertListEqual(nmo, [3])
+        self.assertListEqual([int(x.sum()) for x in mask], [3])
+        self.assertTrue(np.array_equal(mask[0], np.array([True, True, True, False, False])))
+        mp.nmo = get_nmo(mp)
+        nao = 4
+        mo_coeff = [np.arange(nao * 5, dtype=float).reshape(nao, 5)]
+        pad = padded_mo_coeff(mp, mo_coeff)
+        self.assertEqual(pad.shape, (1, nao, 3))
+
+        mp_ok = fake_mp(frozen=None, mo_occ=[np.array([2., 2., 0., 0., 0.])], nkpts=1)
+        mp_ok.mo_energy = np.array([[-1., -0.4, 0.1, 0.2, 0.3]])
+        self.assertListEqual(get_nmo(mp_ok, per_kpoint=True), [5])
+        self.assertListEqual([int(x.sum()) for x in get_frozen_mask(mp_ok)], [5])
+
+        mp2 = fake_mp(frozen=None,
+                      mo_occ=[np.array([2., 0.]), np.array([2., 0.])], nkpts=2)
+        mp2.mo_energy = np.array([[-1., inv], [0.2, 0.3]])
+        self.assertListEqual(get_nmo(mp2, per_kpoint=True), [1, 2])
+        self.assertListEqual([int(x.sum()) for x in get_frozen_mask(mp2)], [1, 2])
+
 if __name__ == '__main__':
     print("Full mask test")
     unittest.main()

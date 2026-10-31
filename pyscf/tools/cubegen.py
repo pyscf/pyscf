@@ -300,23 +300,23 @@ class Cube:
             f.write(comment+'\n')
             f.write(f'PySCF Version: {pyscf.__version__}  Date: {time.ctime()}\n')
             f.write(f'{mol.natm:5d}')
-            f.write('%12.6f%12.6f%12.6f\n' % tuple(self.boxorig.tolist()))
+            f.write('%12.6f %12.6f %12.6f\n' % tuple(self.boxorig.tolist()))
             dx = self.xs[-1] if len(self.xs) == 1 else self.xs[1]
             dy = self.ys[-1] if len(self.ys) == 1 else self.ys[1]
             dz = self.zs[-1] if len(self.zs) == 1 else self.zs[1]
             delta = (self.box.T * [dx,dy,dz]).T
-            f.write(f'{self.nx:5d}{delta[0,0]:12.6f}{delta[0,1]:12.6f}{delta[0,2]:12.6f}\n')
-            f.write(f'{self.ny:5d}{delta[1,0]:12.6f}{delta[1,1]:12.6f}{delta[1,2]:12.6f}\n')
-            f.write(f'{self.nz:5d}{delta[2,0]:12.6f}{delta[2,1]:12.6f}{delta[2,2]:12.6f}\n')
+            f.write(f'{self.nx:5d} {delta[0,0]:12.6f} {delta[0,1]:12.6f} {delta[0,2]:12.6f}\n')
+            f.write(f'{self.ny:5d} {delta[1,0]:12.6f} {delta[1,1]:12.6f} {delta[1,2]:12.6f}\n')
+            f.write(f'{self.nz:5d} {delta[2,0]:12.6f} {delta[2,1]:12.6f} {delta[2,2]:12.6f}\n')
             for ia in range(mol.natm):
                 atmsymb = mol.atom_symbol(ia)
-                f.write('%5d%12.6f' % (gto.charge(atmsymb), 0.))
-                f.write('%12.6f%12.6f%12.6f\n' % tuple(coord[ia]))
+                f.write('%5d %12.6f' % (gto.charge(atmsymb), 0.))
+                f.write('%12.6f %12.6f %12.6f\n' % tuple(coord[ia]))
 
             for ix in range(self.nx):
                 for iy in range(self.ny):
                     for iz0, iz1 in lib.prange(0, self.nz, 6):
-                        fmt = '%13.5E' * (iz1-iz0) + '\n'
+                        fmt = '%13.5E ' * (iz1-iz0) + '\n'
                         f.write(fmt % tuple(field[ix,iy,iz0:iz1].tolist()))
 
     def read(self, cube_file):
@@ -331,13 +331,15 @@ class Cube:
                 from pyscf.pbc.gto import Cell
                 d = data.split()
                 nx = int(d[0])
-                x_vec = numpy.array([float(x) for x in d[1:]]) * nx
+                x_vec = numpy.array([float(x) for x in d[1:]])
                 if isinstance(self.mol, Cell):
                     # Use an asymmetric mesh for tiling unit cells
+                    x_vec *= nx
                     xs = numpy.linspace(0, 1, nx, endpoint=False)
                 else:
                     # Use endpoint=True to get a symmetric mesh
                     # see also the discussion https://github.com/sunqm/pyscf/issues/154
+                    x_vec *= nx - 1
                     xs = numpy.linspace(0, 1, nx, endpoint=True)
                 return x_vec, nx, xs
             self.box = numpy.zeros((3,3))
@@ -348,7 +350,7 @@ class Cube:
             for ia in range(natm):
                 d = f.readline().split()
                 atoms.append([int(d[0]), [float(x) for x in d[2:]]])
-            self.mol = gto.M(atom=atoms, unit='Bohr')
+            self.mol = gto.M(atom=atoms, unit='Bohr', spin=None)
 
             data = f.read()
         cube_data = numpy.array([float(x) for x in data.split()])

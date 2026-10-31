@@ -35,17 +35,17 @@ dm_re = pt.make_rdm1_relaxed(ao_repr=True)
 print('')
 print('HF dipole moment:')
 dip = mf.dip_moment()   # 2.10
-print('Absolute value: {0:.3f} Debye'.format(norm(dip)))
+print(f'Absolute value: {norm(dip):.3f} Debye')
 
 print('')
 print('Unrelaxed MP2 dipole moment:')
 dip = mf.dip_moment(dm=dm_ur)   # 2.07
-print('Absolute value: {0:.3f} Debye'.format(norm(dip)))
+print(f'Absolute value: {norm(dip):.3f} Debye')
 
 print('')
 print('Relaxed MP2 dipole moment:')
 dip = mf.dip_moment(dm=dm_re)   # 1.90
-print('Absolute value: {0:.3f} Debye'.format(norm(dip)))
+print(f'Absolute value: {norm(dip):.3f} Debye')
 
 print('')
 print('Experimental reference: 1.870 Debye')

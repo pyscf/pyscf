@@ -152,8 +152,7 @@ def _aux_e2(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', c
     Three-index integral tensor (kptij_idx, nao_pair, naux) or four-index
     integral tensor (kptij_idx, comp, nao_pair, naux) are stored on disk.
 
-    **This function should be only used by df and mdf initialization function
-    _make_j3c**
+    **For internal use during GDF and MDF initialization only.**
 
     Args:
         kptij_lst : ``(*,2,3)`` array
@@ -225,11 +224,8 @@ def _aux_e2(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', c
     kptjs = kptij_lst[:,1]
     kpt_ji = kptjs - kptis
     uniq_kpts, uniq_index, uniq_inverse = unique(kpt_ji)
-    # sorted_ij_idx: Sort and group the kptij_lst according to the ordering in
-    # df._make_j3c to reduce the data fragment in the hdf5 file.  When datasets
-    # are written to hdf5, they are saved sequentially. If the integral data are
-    # saved as the order of kptij_lst, removing the datasets in df._make_j3c will
-    # lead to disk space fragment that can not be reused.
+    # Group k-point pairs by momentum transfer so that related integral
+    # datasets are stored consecutively in the HDF5 file.
     sorted_ij_idx = numpy.hstack([numpy.where(uniq_inverse == k)[0]
                                   for k, kpt in enumerate(uniq_kpts)])
     tril_idx = numpy.tril_indices(ni)

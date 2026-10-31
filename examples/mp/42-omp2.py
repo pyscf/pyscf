@@ -9,7 +9,7 @@ See also pyscf/example/cc/42-as_casci_fcisolver.py
 import numpy
 from pyscf import gto, scf, mp, mcscf
 
-class MP2AsFCISolver(object):
+class MP2AsFCISolver:
     def kernel(self, h1, h2, norb, nelec, ci0=None, ecore=0, **kwargs):
         fakemol = gto.M(verbose=0)
         fakemol.nelectron = sum(nelec)

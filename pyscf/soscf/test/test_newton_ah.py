@@ -21,6 +21,8 @@ import numpy
 import scipy.linalg
 import tempfile
 from pyscf import gto
+from pyscf.soscf import ciah
+from pyscf.soscf import newton_ah
 from pyscf import scf
 from pyscf import dft
 
@@ -132,6 +134,33 @@ class KnownValues(unittest.TestCase):
         nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), -75.5783963795897, 9)
 
+    def test_rohf_hop_finite_difference(self):
+        mf = scf.ROHF(h2o_z1)
+        rng = numpy.random.default_rng(12)
+        # Random orbitals orthonormal in the AO overlap metric; no SCF run.
+        a = rng.normal(size=(h2o_z1.nao, h2o_z1.nao))
+        energy, coeff = mf.eig(a + a.T, mf.get_ovlp())
+        occ = mf.get_occ(energy, coeff)
+        _, hop, _ = newton_ah.gen_g_hop_rohf(mf, coeff, occ)
+        x = rng.normal(size=numpy.count_nonzero(scf.hf.uniq_var_indices(occ)))
+        x /= numpy.linalg.norm(x)
+        y = rng.normal(size=x.size)
+        y /= numpy.linalg.norm(y)
+        kx = scf.hf.unpack_uniq_var(x, occ)
+        ky = scf.hf.unpack_uniq_var(y, occ)
+
+        def energy(s, t):
+            c = coeff.dot(scipy.linalg.expm(s * kx + t * ky))
+            return mf.energy_tot(dm=mf.make_rdm1(c, occ))
+
+        eps = 1e-4
+        fd = (energy(eps, eps) - energy(eps, -eps)
+              - energy(-eps, eps) + energy(-eps, -eps)) / (4 * eps**2)
+        hx, hy = hop(x), hop(y)
+        self.assertAlmostEqual(x.dot(hy), y.dot(hx), 10)
+        # PySCF's orbital gradient and Hessian are half the energy derivatives.
+        self.assertAlmostEqual(fd / 2, x.dot(hy), 5)
+
 
     def test_nr_uhf(self):
         mf = scf.UHF(h2o_z1)
@@ -228,6 +257,21 @@ class KnownValues(unittest.TestCase):
         nr.max_cycle = 3
         nr.conv_tol_grad = 1e-5
         self.assertAlmostEqual(nr.kernel(), eref, 9)
+
+    def test_nr_rks_second_grids(self):
+        '''second_grids are used in the orbital hessian of the second order solver'''
+        mf = dft.RKS(h2o_z0)
+        mf.xc = 'b3lyp'
+        eref = mf.kernel()
+        mf.set_second_grids(1)
+        mf.max_cycle = 1
+        mf.conv_check = False
+        mf.kernel()
+        nr = scf.newton(mf)
+        nr.max_cycle = 3
+        nr.conv_tol_grad = 1e-5
+        self.assertAlmostEqual(nr.kernel(), eref, 8)
+        mf.second_grids = None
 
     def test_rks_gen_g_hop(self):
         mf = dft.RKS(h2o_z0)
@@ -388,6 +432,30 @@ class KnownValues(unittest.TestCase):
         mol = gto.M(atom='He', basis='sto3g')
         mf = mol.RHF().newton().run()
         self.assertAlmostEqual(mf.e_tot, -2.80778395753997, 9)
+
+
+class KnownValuesCIAH(unittest.TestCase):
+    def test_davidson_cc_tiny_initial_guess(self):
+        # A recycled initial trial vector with norm ~1e-14 must not collapse
+        # the subspace metric: the solver has to take a genuine step and
+        # reduce the residual instead of returning an exact zero step on its
+        # first iteration.
+        numpy.random.seed(1)
+        n = 8
+        a = numpy.random.rand(n, n)
+        h = a.T.dot(a) + numpy.eye(n) * 2
+        g = numpy.random.rand(n)
+        h_op = lambda x: h.dot(x)
+        g_op = lambda: g
+        precond = lambda dx, w: dx
+        x0 = numpy.random.rand(n) * 1e-14
+        xtrial = None
+        for conv, itr, w, xtrial, hx, dx, seig in ciah.davidson_cc(
+                h_op, g_op, precond, x0, tol=1e-12):
+            if conv:
+                break
+        self.assertTrue(numpy.linalg.norm(xtrial) > 1e-6)
+        self.assertTrue(numpy.linalg.norm(dx) < 1e-5)
 
 
 if __name__ == "__main__":

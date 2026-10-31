@@ -35,7 +35,9 @@ from pyscf.df.grad import rhf as dfrhf_grad
 from pyscf.fci.direct_spin1 import _unpack_nelec
 from pyscf.fci.spin_op import spin_square0
 from pyscf.fci import cistring
-from pyscf.df.grad.casdm2_util import solve_df_rdm2, grad_elec_dferi, grad_elec_auxresponse_dferi
+from pyscf.df.grad.casdm2_util import (solve_df_rdm2,
+                                      grad_elec_dferi,
+                                      grad_elec_auxresponse_dferi)
 
 def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, eris=None, verbose=None,
                        auxbasis_response=True):
@@ -185,10 +187,10 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
     # on the other hand, mf_grad.hcore_generator computes the actual derivative of
     # h1 for both indices and with the correct sign
 
-    lib.logger.debug (mc, "Orb lagrange hcore component:\n{}".format (de_hcore))
-    lib.logger.debug (mc, "Orb lagrange renorm component:\n{}".format (de_renorm))
-    lib.logger.debug (mc, "Orb lagrange eri component:\n{}".format (de_eri))
-    lib.logger.debug (mc, "Orb lagrange aux component:\n{}".format (de_aux))
+    lib.logger.debug (mc, f"Orb lagrange hcore component:\n{de_hcore}")
+    lib.logger.debug (mc, f"Orb lagrange renorm component:\n{de_renorm}")
+    lib.logger.debug (mc, f"Orb lagrange eri component:\n{de_eri}")
+    lib.logger.debug (mc, f"Orb lagrange aux component:\n{de_aux}")
     de = de_hcore + de_renorm + de_eri + de_aux
 
     return de
@@ -283,12 +285,13 @@ def Lci_dot_dgci_dx (Lci, weights, mc, mo_coeff=None, ci=None, atmlst=None, mf_g
         de_eri[k] += np.einsum('xij,ij->x', vhf1c[:,p0:p1], dm_cas[p0:p1]) * 2
         de_eri[k] += np.einsum('xij,ij->x', vhf1a[:,p0:p1], dm_core[p0:p1]) * 2
 
-    lib.logger.debug (mc, "CI lagrange hcore component:\n{}".format (de_hcore))
-    lib.logger.debug (mc, "CI lagrange renorm component:\n{}".format (de_renorm))
-    lib.logger.debug (mc, "CI lagrange eri component:\n{}".format (de_eri))
-    lib.logger.debug (mc, "CI lagrange aux component:\n{}".format (de_aux))
+    lib.logger.debug (mc, f"CI lagrange hcore component:\n{de_hcore}")
+    lib.logger.debug (mc, f"CI lagrange renorm component:\n{de_renorm}")
+    lib.logger.debug (mc, f"CI lagrange eri component:\n{de_eri}")
+    lib.logger.debug (mc, f"CI lagrange aux component:\n{de_aux}")
     de = de_hcore + de_renorm + de_eri + de_aux
     return de
+
 
 def as_scanner(mcscf_grad, state=None):
     '''Generating a nuclear gradients scanner/solver (for geometry optimizer).

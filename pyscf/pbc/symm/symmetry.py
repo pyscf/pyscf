@@ -129,7 +129,7 @@ def check_mesh_symmetry(cell, ops, mesh=None, tol=SYMPREC,
     else:
         return rm_list
 
-class Symmetry():
+class Symmetry:
     '''
     Symmetry info of a crystal.
 

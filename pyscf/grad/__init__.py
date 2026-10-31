@@ -32,10 +32,12 @@ from . import rhf
 from . import dhf
 from . import uhf
 from . import rohf
+from . import ghf
 from .rhf import Gradients as RHF
 from .dhf import Gradients as DHF
 from .uhf import Gradients as UHF
 from .rohf import Gradients as ROHF
+from .ghf import Gradients as GHF
 
 grad_nuc = rhf.grad_nuc
 
@@ -61,11 +63,14 @@ try:
     from . import ukscasci
     from . import uks
     from . import ump2
+    from . import gks
 
     from .rks import Gradients as RKS
     from .uks import Gradients as UKS
     from .roks import Gradients as ROKS
+    from .gks import Gradients as GKS
     from . import dispersion
+    from . import gcp
 
 except (ImportError, OSError):
     pass

@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -206,6 +205,7 @@ XC = XC_CODES = {
 'B3LYP'         : 'B3LYPG',
 'B3LYP5'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN5C',
 'B3LYPG'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN3C', # B3LYP-VWN3 used by Gaussian and libxc
+'BHHLYP'        : '.5*HF + .5*B88 + LYP',
 #'O3LYP'         : '.1161*HF + .9262*SLATER + .8133*OPTXCORR + .81*LYP + .19*VWN5C',  # Mol. Phys. 99 607
 #'O3LYPG'        : '.1161*HF + .9262*SLATER + .8133*OPTXCORR + .81*LYP + .19*VWN3C',
 # libxc implementation as below, see also discussion in https://gitlab.com/libxc/libxc/issues/47
@@ -355,7 +355,7 @@ def is_hybrid_xc(xc_code):
     elif numpy.issubdtype(type(xc_code), numpy.integer):
         return False
     else:
-        return any((is_hybrid_xc(x) for x in xc_code))
+        return any(is_hybrid_xc(x) for x in xc_code)
 
 def is_meta_gga(xc_code):
     return xc_type(xc_code) == 'MGGA'
@@ -472,8 +472,14 @@ def parse_xc(description):
         return parse_xc('%s,%s' % tuple(description))
 
     description = description.upper()
-    if '-D3' in description or '-D4' in description:
+    if ('-D3' in description or '-D4' in description or
+            description.endswith(('-3C', '_3C'))):
         from pyscf.scf.dispersion import parse_dft
+        if description.endswith(('-3C', '_3C')):
+            raise NotImplementedError(
+                f'Composite 3c methods ({description}) are only supported '
+                'by the libxc backend, which appears to be unavailable '
+                'in this environment.')
         description, _, _ = parse_dft(description)
         description = description.upper()
 

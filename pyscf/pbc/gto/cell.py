@@ -32,7 +32,7 @@ from pyscf.dft import radi
 from pyscf.lib import logger
 from pyscf.gto import mole
 from pyscf.gto import moleintor
-from pyscf.gto.mole import conc_env, is_au # noqa
+from pyscf.gto.mole import conc_env, is_au
 from pyscf.pbc.gto import _pbcintor
 from pyscf.pbc.gto.eval_gto import eval_gto as pbc_eval_gto
 from pyscf.pbc.tools import pbc as pbctools
@@ -132,7 +132,7 @@ def dumps(cell):
 def loads(cellstr):
     '''Deserialize a str containing a JSON document to a Cell object.
     '''
-    from numpy import array  # noqa
+    from numpy import array
     celldic = json.loads(cellstr)
     cell = Cell()
     cell.__dict__.update(celldic)
@@ -1421,7 +1421,7 @@ class Cell(mole.MoleBase):
 
         # Import all available modules. Some methods are registered to other
         # classes/modules when importing modules in __all__.
-        from pyscf.pbc import __all__  # noqa
+        from pyscf.pbc import __all__
         from pyscf.pbc import scf, dft
         from pyscf.dft import XC
 
@@ -1907,7 +1907,7 @@ class Cell(mole.MoleBase):
             \mathbf{b_3} &= 2\pi \frac{\mathbf{a_1} \times \mathbf{a_2}}{\mathbf{a_3} \cdot (\mathbf{a_1} \times \mathbf{a_2})}
             \end{align}
 
-        '''  # noqa: E501
+        '''
         a = self.lattice_vectors()
         if self.dimension == 1:
             assert (abs(np.dot(a[0], a[1])) < 1e-9 and

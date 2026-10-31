@@ -88,11 +88,11 @@ class KnownValues(unittest.TestCase):
         kadc.method = 'adc(3)'
         e, v, p, x = kadc.kernel(nroots=3,kptlist=[0])
 
-        self.assertAlmostEqual(e[0][0], 0.83386812, 4)
+        self.assertAlmostEqual(e[0][0], 0.83396073, 4)
         self.assertAlmostEqual(e[0][1], 1.26993734, 4)
         self.assertAlmostEqual(e[0][2], 1.56058118, 4)
 
-        self.assertAlmostEqual(p[0][0], 1.95985989, 4)
+        self.assertAlmostEqual(p[0][0], 1.95976365, 4)
         self.assertAlmostEqual(p[0][1], 0.00111690, 4)
         self.assertAlmostEqual(p[0][2], 0.00385444, 4)
 

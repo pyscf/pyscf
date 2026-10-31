@@ -401,7 +401,7 @@ def _convert_orbsym(mol, orbsym, molpro_orbsym):
         if groupname == 'Dooh':
             groupname = 'D2h'
         elif groupname == 'Coov':
-            groupname = 'D2h'
+            groupname = 'C2v'
         else:
             raise RuntimeError(f'Unsupported point group symmetry {mol.groupname}')
         lib.logger.warn(mol, 'FCIDUMP does not support point group symmetry %s. '
