@@ -329,18 +329,11 @@ def is_lda(xc_code):
 def is_hybrid_xc(xc_code):
     if xc_code is None:
         return False
-    if not isinstance(xc_code, str) and not numpy.issubdtype(type(xc_code), numpy.integer):
+    if not isinstance(xc_code, (str, int, numpy.integer)):
         return any(is_hybrid_xc(x) for x in xc_code)
     if rsh_coeff(xc_code) != (0, 0, 0):
         return True
     if hybrid_coeff(xc_code) != 0:
-        return True
-    return False
-
-def _is_hybrid_xc(xc_objs, hyb, facs, xc_code):
-    if _hybrid_coeff(xc_objs, hyb, facs) != 0:
-        return True
-    if _rsh_coeff(xc_objs, hyb, facs, xc_code) != (0, 0, 0):
         return True
     return False
 
@@ -356,8 +349,7 @@ def is_gga(xc_code):
 
 def is_nlc(xc_code):
     # identify nlc by xc_code itself if enable_nlc is None
-    if isinstance(xc_code, str) or \
-            numpy.issubdtype(type(xc_code), numpy.integer):
+    if isinstance(xc_code, (str, int, numpy.integer)):
         xc = _get_xc(xc_code)
         return xc.is_nlc
     else:
