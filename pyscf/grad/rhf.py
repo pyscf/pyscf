@@ -460,6 +460,8 @@ class GradientsBase(lib.StreamObject):
             self.de = self.symmetrize(self.de, atmlst)
         if self.base.do_disp():
             self.de += self.get_dispersion()
+        if self.base.do_gcp():
+            self.de += self.get_gcp()
         logger.timer(self, 'SCF gradients', *cput0)
         self._finalize()
         return self.de
