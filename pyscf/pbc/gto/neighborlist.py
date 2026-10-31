@@ -162,7 +162,7 @@ def neighbor_list_to_ndarray(cell, cell1, nl):
     return np.asarray(Ls_list), np.asarray(Ls_idx)
 
 
-class NeighborListOpt():
+class NeighborListOpt:
     def __init__(self, cell):
         self.cell = cell
         self.nl = None

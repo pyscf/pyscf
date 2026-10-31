@@ -546,7 +546,7 @@ def _get_3c2e_Rcuts_for_d(mol, auxmol, ish, jsh, dij, omega, precision,
 # sanity check for estimators
     ESTIMATOR = estimator.upper()
     if ESTIMATOR not in ["ISF0", "ISF", "ISFQ0", "ISFQL", "ME"]:
-        raise RuntimeError("Unknown estimator requested {}".format(estimator))
+        raise RuntimeError(f"Unknown estimator requested {estimator}")
 
 # get bas info
     nbasaux = auxmol.nbas
@@ -984,8 +984,7 @@ def _aux_e2_nospltbas(cell, auxcell_or_auxbasis, omega, erifile,
     Three-index integral tensor (kptij_idx, nao_pair, naux) or four-index
     integral tensor (kptij_idx, comp, nao_pair, naux) are stored on disk.
 
-    **This function should be only used by RSGDF initialization function
-    _make_j3c**
+    **For internal use during RSGDF initialization only.**
 
     Args:
         kptij_lst : ``(*,2,3)`` array
@@ -1138,11 +1137,6 @@ maximum memory %.2f MB. Try giving PySCF more memory."""
     kptjs = kptij_lst[:,1]
     kpt_ji = kptjs - kptis
     uniq_kpts, uniq_index, uniq_inverse = unique(kpt_ji)
-# sorted_ij_idx: Sort and group the kptij_lst according to the ordering in
-# df._make_j3c to reduce the data fragment in the hdf5 file.  When datasets
-# are written to hdf5, they are saved sequentially. If the integral data are
-# saved as the order of kptij_lst, removing the datasets in df._make_j3c will
-# lead to holes that can not be reused.
     sorted_ij_idx = np.hstack([np.where(uniq_inverse == k)[0]
                                   for k, kpt in enumerate(uniq_kpts)])
 
@@ -1241,7 +1235,7 @@ def wrap_int3c_nospltbas(cell, auxcell, omega, shlpr_mask, prescreening_data,
             libpbc.CINTdel_pairdata_optimizer(cintopt)
 
     cfunc_prefix = "PBCsr3c"
-    if not (gamma_point(kptij_lst) or bvk_kmesh is None):
+    if not gamma_point(kptij_lst) and bvk_kmesh is not None:
         cfunc_prefix += "_bvk"
     fill = "%s_%s%s" % (cfunc_prefix, kk_type, aosym[:2])
     drv = getattr(libpbc, "%s_%s_drv"%(cfunc_prefix,kk_type))

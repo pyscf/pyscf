@@ -14,8 +14,8 @@
 # limitations under the License.
 
 import unittest
-from pyscf import gto, scf
-from pyscf.solvent import ddpcm
+from pyscf import gto, scf, solvent
+from pyscf.solvent import ddcosmo, ddpcm
 
 def setUpModule():
     global mol
@@ -57,6 +57,50 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(mf.with_solvent.mol is mol1)
         self.assertTrue(mf._scf.with_df.mol is mol1)
         self.assertTrue(mf._scf.with_solvent.mol is mol1)
+
+class NamedSolvent(unittest.TestCase):
+    def test_solvent_name(self):
+        cm = ddpcm.DDPCM(mol, 'toluene')
+        self.assertEqual(cm.solvent, 'toluene')
+        self.assertAlmostEqual(cm.eps, 2.3741, 12)
+        self.assertAlmostEqual(cm.eps_optical, 1.4961**2, 12)
+        self.assertAlmostEqual(cm.get_eps_optical(), 1.4961**2, 12)
+
+    def test_default_solvent(self):
+        cm = ddpcm.DDPCM(mol)
+        self.assertEqual(cm.solvent, '')
+        self.assertAlmostEqual(cm.eps, ddcosmo.EPS_WATER, 12)
+        self.assertIsNone(cm.eps_optical)
+
+    def test_unknown_solvent(self):
+        self.assertRaises(RuntimeError, ddpcm.DDPCM, mol, 'unobtainium')
+
+    def test_solvent_energy(self):
+        cm = ddpcm.DDPCM(mol, 'acetonitrile')
+        e_tot = scf.RHF(mol).ddPCM(cm).kernel()
+
+        cm_ref = ddpcm.DDPCM(mol)
+        cm_ref.eps = 35.688
+        e_ref = scf.RHF(mol).ddPCM(cm_ref).kernel()
+        self.assertAlmostEqual(e_tot, e_ref, 12)
+
+    def test_solvent_name_in_constructor(self):
+        e_tot = scf.RHF(mol).ddPCM('acetonitrile').kernel()
+        e_ref = scf.RHF(mol).ddPCM(ddpcm.DDPCM(mol, 'acetonitrile')).kernel()
+        self.assertAlmostEqual(e_tot, e_ref, 12)
+        e_ref = solvent.ddPCM(scf.RHF(mol), 'acetonitrile').kernel()
+        self.assertAlmostEqual(e_tot, e_ref, 12)
+        self.assertEqual(solvent.ddPCM(mol, 'acetonitrile').solvent, 'acetonitrile')
+
+    def test_solvent_updated_after_build(self):
+        cm = ddpcm.DDPCM(mol, 'water')
+        cm.build()
+        A_diele = cm._intermediates['A_diele']
+        cm.solvent = 'toluene'
+        # A_diele was computed for water. The intermediates have to be discarded.
+        self.assertFalse(cm._intermediates)
+        cm.build()
+        self.assertTrue(abs(cm._intermediates['A_diele'] - A_diele).max() > 1e-6)
 
 if __name__ == "__main__":
     print("Full Tests for ddpcm")

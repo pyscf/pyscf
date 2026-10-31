@@ -166,6 +166,136 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
     return emp2, t2
 
 
+def _get_fock_uhf(mp, eris):
+    '''Fock matrices in the active MO basis, for non-canonical MP2 iterations.
+    Cached on the DF eris object.'''
+    if getattr(eris, 'fock', None) is not None:
+        return eris.fock
+    mf = mp._scf
+    dm = mf.make_rdm1(mp.mo_coeff, mp.mo_occ)
+    vhf = mf.get_veff(dm=dm)
+    fockao = mf.get_fock(vhf=vhf, dm=dm)
+    fock = []
+    for s in [0,1]:
+        moc = np.hstack((eris.occ_coeff[s], eris.vir_coeff[s]))
+        fock.append(reduce(lib.dot, (moc.conj().T, fockao[s], moc)))
+    eris.fock = tuple(fock)
+    return eris.fock
+
+
+def _iter_ovov(mp, eris, sa, sb):
+    '''Yield (i0, i1, j0, j1, v) blocks with v[i,a,j,b] = (i^sa a^sa | j^sb b^sb)
+    contracted from the DF 3-index integrals, memory-bounded by i/j batching.'''
+    nocc, nvir, naux = eris.nocc[sa], eris.nvir[sa], eris.naux
+    mem = max(mp.max_memory - lib.current_memory()[0], 2000) * 1e6 / 8
+    blk = max(1, int((mem*.5)**.5 / nvir))
+    for i0, i1 in lib.prange(0, nocc, blk):
+        iaL = eris.get_occ_blk(sa, i0, i1).reshape((i1-i0)*nvir, naux)
+        nj, nvj = eris.nocc[sb], eris.nvir[sb]
+        for j0, j1 in lib.prange(0, nj, blk):
+            ovL_j = np.asarray(eris.ovL[sb][j0*nvj:j1*nvj], order='C')
+            v = lib.dot(iaL, ovL_j.T).reshape(i1-i0, nvir, j1-j0, nvj)
+            yield i0, i1, j0, j1, v
+
+
+def energy(mp, t2, eris):
+    '''DF-UMP2 energy including the first-order singles (T1) contribution.
+    Used by the non-canonical (iterative) kernel.'''
+    t2aa, t2ab, t2bb = t2
+    nocca, noccb, nvira, nvirb = t2ab.shape
+    focka, fockb = _get_fock_uhf(mp, eris)
+    t1 = getattr(mp, 't1', None)
+    if t1 is None or getattr(mp, 'exclude_t1', False):
+        e_singles = 0.
+    else:
+        t1a, t1b = t1
+        e_singles = (np.einsum('ia,ia->', focka[:nocca,nocca:], t1a) +
+                     np.einsum('ia,ia->', fockb[:noccb,noccb:], t1b)).real
+
+    ess = eos = 0.
+    for i0, i1, j0, j1, v in _iter_ovov(mp, eris, 0, 0):
+        ess += .25 * np.einsum('ijab,iajb->', t2aa[i0:i1,j0:j1], v)
+        ess -= .25 * np.einsum('ijab,iajb->', t2aa[i0:i1,j0:j1], v.transpose(0,3,2,1))
+    for i0, i1, j0, j1, v in _iter_ovov(mp, eris, 0, 1):
+        eos += np.einsum('iJaB,iaJB->', t2ab[i0:i1,j0:j1], v)
+    for i0, i1, j0, j1, v in _iter_ovov(mp, eris, 1, 1):
+        ess += .25 * np.einsum('ijab,iajb->', t2bb[i0:i1,j0:j1], v)
+        ess -= .25 * np.einsum('ijab,iajb->', t2bb[i0:i1,j0:j1], v.transpose(0,3,2,1))
+
+    e = lib.tag_array(ess + eos + e_singles, e_corr_ss=ess, e_corr_os=eos,
+                      e_corr_singles=e_singles)
+    if abs(e.imag) > 1e-4:
+        logger.warn(mp, 'Non-zero imaginary part found in UMP2 energy %s', e)
+    return e
+
+
+def update_amps(mp, t1, t2, eris):
+    '''Update non-canonical DF-UMP2 amplitudes (T1 and T2).
+
+    The T2 equation is the full-Fock (nondiagonal Fock) amplitude equation;
+    the T1 equation is the first-order singles equation of Finley & Hirao,
+    CPL 328, 51 (2000), Eq. (50). Integrals are contracted blockwise from the
+    DF 3-index tensors.
+    '''
+    t1a, t1b = t1
+    t2aa, t2ab, t2bb = t2
+    nocca, noccb, nvira, nvirb = t2ab.shape
+    focka, fockb = _get_fock_uhf(mp, eris)
+    mo_ea_o = focka.diagonal()[:nocca].real
+    mo_ea_v = focka.diagonal()[nocca:].real + mp.level_shift
+    mo_eb_o = fockb.diagonal()[:noccb].real
+    mo_eb_v = fockb.diagonal()[noccb:].real + mp.level_shift
+
+    fooa = focka[:nocca,:nocca] - np.diag(mo_ea_o)
+    foob = fockb[:noccb,:noccb] - np.diag(mo_eb_o)
+    fvva = focka[nocca:,nocca:] - np.diag(mo_ea_v)
+    fvvb = fockb[noccb:,noccb:] - np.diag(mo_eb_v)
+    foVa = focka[nocca:,:nocca].T
+    foVb = fockb[noccb:,:noccb].T
+
+    u2aa  = lib.einsum('ijae,be->ijab', t2aa, fvva)
+    u2bb  = lib.einsum('ijae,be->ijab', t2bb, fvvb)
+    u2ab  = lib.einsum('iJaE,BE->iJaB', t2ab, fvvb)
+    u2ab += lib.einsum('iJeA,be->iJbA', t2ab, fvva)
+    u2aa -= lib.einsum('imab,mj->ijab', t2aa, fooa)
+    u2bb -= lib.einsum('imab,mj->ijab', t2bb, foob)
+    u2ab -= lib.einsum('iMaB,MJ->iJaB', t2ab, foob)
+    u2ab -= lib.einsum('mIaB,mj->jIaB', t2ab, fooa)
+
+    for i0, i1, j0, j1, v in _iter_ovov(mp, eris, 0, 0):
+        v = v.conj() * .5
+        u2aa[i0:i1,j0:j1] += v.transpose(0,2,1,3) - v.transpose(0,2,3,1)
+    for i0, i1, j0, j1, v in _iter_ovov(mp, eris, 0, 1):
+        u2ab[i0:i1,j0:j1] += v.conj().transpose(0,2,1,3)
+    for i0, i1, j0, j1, v in _iter_ovov(mp, eris, 1, 1):
+        v = v.conj() * .5
+        u2bb[i0:i1,j0:j1] += v.transpose(0,2,1,3) - v.transpose(0,2,3,1)
+
+    u2aa = u2aa + u2aa.transpose(1,0,3,2)
+    u2bb = u2bb + u2bb.transpose(1,0,3,2)
+
+    eia_a = lib.direct_sum('i-a->ia', mo_ea_o, mo_ea_v)
+    eia_b = lib.direct_sum('i-a->ia', mo_eb_o, mo_eb_v)
+    u2aa /= lib.direct_sum('ia+jb->ijab', eia_a, eia_a)
+    u2ab /= lib.direct_sum('ia+jb->ijab', eia_a, eia_b)
+    u2bb /= lib.direct_sum('ia+jb->ijab', eia_b, eia_b)
+
+    # First-order singles (Finley & Hirao, CPL 328, 51 (2000), Eq. (50))
+    if getattr(mp, 'exclude_t1', False):
+        t1anew = np.zeros_like(t1a)
+        t1bnew = np.zeros_like(t1b)
+    else:
+        t1anew  = lib.einsum('ab,ib->ia', fvva, t1a)
+        t1anew -= lib.einsum('ji,ja->ia', fooa, t1a)
+        t1anew += foVa
+        t1anew /= eia_a
+        t1bnew  = lib.einsum('ab,ib->ia', fvvb, t1b)
+        t1bnew -= lib.einsum('ji,ja->ia', foob, t1b)
+        t1bnew += foVb
+        t1bnew /= eia_b
+    return (t1anew, t1bnew), (u2aa, u2ab, u2bb)
+
+
 class DFUMP2(ump2.UMP2):
     _keys = dfmp2.DFRMP2._keys
 
@@ -205,11 +335,15 @@ class DFUMP2(ump2.UMP2):
         raise NotImplementedError
 
     # For non-canonical MP2
-    def update_amps(self, t2, eris):
-        raise NotImplementedError
+    energy = energy
+    update_amps = update_amps
 
     def init_amps(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
-        return kernel(self, mo_energy, mo_coeff, eris, with_t2)
+        emp2, t2 = kernel(self, mo_energy, mo_coeff, eris, with_t2)
+        if with_t2:
+            nocca, noccb, nvira, nvirb = t2[1].shape
+            self.t1 = (np.zeros((nocca, nvira)), np.zeros((noccb, nvirb)))
+        return emp2, t2
 
     Gradients = NotImplemented
 

@@ -23,7 +23,7 @@ UCASSCF (CASSCF without spin-degeneracy between alpha and beta orbitals)
 
 
 import numpy
-import pyscf.lib.logger as logger
+from pyscf.lib import logger
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
            ci0=None, callback=None, verbose=None, dump_chk=True):

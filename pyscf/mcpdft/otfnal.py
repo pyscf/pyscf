@@ -696,7 +696,7 @@ class transfnal (otfnal):
             exc1 *= rho_t1[:,0,:].sum (0)
             vxc1 =  tfnal_derivs._unpack_vxc_sigma (vxc1, rho_t1, self.dens_deriv)
             df_lbl = ('rhoa', 'rhob', "rhoa'", "rhob'")[:2*(1+int(nvr>1))]
-            _v_err_report (self, 'eval_xc {}'.format (p), df_lbl, rho_t0[0], rho_t0[1], exc, vxc,
+            _v_err_report (self, f'eval_xc {p}', df_lbl, rho_t0[0], rho_t0[1], exc, vxc,
                 vxc_p, fxc, exc1, vxc1, drho_t, weights)
 
             # ~~~ eval_ot compare ~~~
@@ -737,7 +737,7 @@ class transfnal (otfnal):
                 dderiv=dderiv, weights=weights, _unpack_vot=True)[:2]
             #vot1 = tfnal_derivs._unpack_sigma_vector (vot1, d1, d2)
             df_lbl = ('rho', 'Pi', "rho'", "Pi'")[:ndf]
-            _v_err_report (self, 'eval_ot {}'.format (p), df_lbl, rho_tot, Pi, eot, vot_u, vot_p, fot,
+            _v_err_report (self, f'eval_ot {p}', df_lbl, rho_tot, Pi, eot, vot_u, vot_p, fot,
                 eot1, vot1, (drho, dPi), weights)
 
         return eot, vot, fot
@@ -1093,8 +1093,7 @@ def make_scaled_fnal (xc_code, hyb_x = 0, hyb_c = 0, fnal_x = None,
     if fnal_c is None: fnal_c = 1 - hyb_c
 
     if _libxc.is_hybrid_xc (xc_code):
-        raise RuntimeError ('Functional {} is already a hybrid!'.format (
-            xc_code))
+        raise RuntimeError (f'Functional {xc_code} is already a hybrid!')
     x_code, c_code = _libxc.split_x_c_comma (xc_code)
 
     x_facs, x_terms = _libxc.parse_xc_formula (x_code)

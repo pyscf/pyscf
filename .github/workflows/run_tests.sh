@@ -25,21 +25,27 @@ else
   PARALLEL="-n $PYTEST_JOBS --dist loadfile"
 fi
 
+# try to reduce oversubscription caused by OPENBLAS_THREAD_SERVER
+export OPENBLAS_THREAD_TIMEOUT=4
+export OMP_WAIT_POLICY=passive
+
 mkdir -p pyscftmpdir
 echo 'pbc_tools_pbc_fft_engine = "NUMPY+BLAS"' > .pyscf_conf.py
 echo "dftd3_DFTD3PATH = './pyscf/lib/deps/lib'" >> .pyscf_conf.py
 echo "scf_hf_SCF_mute_chkfile = True" >> .pyscf_conf.py
 echo 'TMPDIR = "./pyscftmpdir"' >> .pyscf_conf.py
 
-version=$(python -c 'import sys; print("{0}.{1}".format(*sys.version_info[:2]))')
-# pytest-cov on Python 3.12 consumes huge memory
-if [ "$RUNNER_OS" == "Linux" ] && [ $version != "3.12" ]; then
-  pytest -s -c pytest.ini $PARALLEL \
+# pytest-cov (and the codecov upload of its report) runs only in the CI job
+# that sets RUN_COVERAGE: the 3.9 leg of the linux-build matrix. Every other
+# job runs bare: under xdist the coverage instrumentation costs significant
+# runtime and memory.
+if [ "$RUN_COVERAGE" = "true" ]; then
+  pytest -s -c pytest.ini --timeout=900 $PARALLEL \
     --durations=20 \
     --cov-report xml --cov-report term --cov-config .coveragerc --cov pyscf \
     $TEST_PATHS
 else
-  pytest -s -c pytest.ini $PARALLEL --durations=20 $TEST_PATHS
+  pytest -s -c pytest.ini --timeout=900 $PARALLEL --durations=20 $TEST_PATHS
 fi
 
 pytest_status=$?

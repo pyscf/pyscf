@@ -118,6 +118,22 @@ class KnownValues(unittest.TestCase):
         gu = uccsd_t_grad.Gradients(ucc).kernel(ucc.t1, ucc.t2, ul1, ul2, eris=ueris)
 
         self.assertAlmostEqual(abs(gu - gr).max(), 0, 7)
+    def test_uccsd_t_grad_solves_t_lambda(self):
+        '''Without l1, l2 the UCCSD(T) gradient must solve the UCCSD(T) lambda,
+        not reuse the UCCSD lambda stored by mycc.solve_lambda.'''
+        pmol = gto.M(atom=mol.atom, basis='631g', spin=2, verbose=0)
+        pmf = scf.UHF(pmol).run(conv_tol=1e-12)
+        mycc = cc.uccsd.UCCSD(pmf)
+        mycc.conv_tol = 1e-10
+        mycc.conv_tol_normt = 1e-8
+        eris = mycc.ao2mo()
+        ecc, t1, t2 = mycc.kernel(eris=eris)
+        conv, l1, l2 = uccsd_t_lambda.kernel(mycc, eris, t1, t2)
+        g_ref = uccsd_t_grad.Gradients(mycc).kernel(t1, t2, l1, l2, eris=eris)
+        mycc.solve_lambda(eris=eris)
+        g1 = uccsd_t_grad.Gradients(mycc).kernel()
+        self.assertAlmostEqual(abs(g1 - g_ref).max(), 0, 7)
+        self.assertAlmostEqual(g1[0,2], _fd_z(mycc), 5)
 
 if __name__ == "__main__":
     print("Tests for UCCSD(T) gradients")

@@ -15,7 +15,8 @@ H        0.000000   -0.9353074360871938   -1.082500
             ''',
             verbose = 4)
 
-# Hartree-Fock with PCM models
+# Hartree-Fock with SMD models. The solvent name can also be given directly to
+# the .SMD() method, i.e. scf.RHF(mol).SMD('water')
 mf = scf.RHF(mol).SMD()
 mf.with_solvent.solvent = 'water'
 mf.kernel()

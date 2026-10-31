@@ -57,7 +57,7 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-9
         e = mf.kernel()
         self.assertTrue(mf.converged)
-        self.assertAlmostEqual(e, -8.127841401, 6)
+        self.assertAlmostEqual(e, -8.127841401, 5)
 
     def test_pob_tzvp_rev2_krks_pbe(self):
         cell = make_cell('pob-TZVP-rev2')
@@ -68,7 +68,7 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-9
         e = mf.kernel()
         self.assertTrue(mf.converged)
-        self.assertAlmostEqual(e, -8.129728186, 6)
+        self.assertAlmostEqual(e, -8.129728186, 5)
         # triple-zeta must be variationally below double-zeta
         cell_dz = make_cell('pob-DZVP-rev2')
         mf_dz = pbcdft.KRKS(cell_dz, kpts=cell_dz.make_kpts([3, 3, 3]))

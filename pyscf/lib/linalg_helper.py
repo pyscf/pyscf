@@ -441,7 +441,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 
         axt = aop(xt)
         for k, xi in enumerate(xt):
-            xs.append(xt[k])
+            xs.append(xi)
             ax.append(axt[k])
         rnow = len(xt)
         head, space = space, space+rnow
@@ -598,7 +598,7 @@ def pick_real_eigs(w, v, nroots, envs):
     abs_imag = abs(w.imag)
     # Grab `nroots` number of e with small(est) imaginary components
     max_imag_tol = max(threshold, numpy.sort(abs_imag)[min(w.size,nroots)-1])
-    real_idx = numpy.where((abs_imag <= max_imag_tol))[0]
+    real_idx = numpy.where(abs_imag <= max_imag_tol)[0]
     nbelow_thresh = numpy.count_nonzero(abs_imag[real_idx] < threshold)
     if nbelow_thresh < nroots and w.size >= nroots:
         warnings.warn('Only %d eigenvalues (out of %3d requested roots) with imaginary part < %4.3g.\n'
@@ -804,7 +804,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
 
         axt = aop(xt)
         for k, xi in enumerate(xt):
-            xs.append(xt[k])
+            xs.append(xi)
             ax.append(axt[k])
         rnow = len(xt)
         head, space = space, space+rnow
@@ -916,8 +916,8 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=20,
     if numpy.any(enorm):
         warnings.warn("{:d} davidson root{_s}: {} {_has} very small norm{_s}: {}".format(
             enorm.sum(),
-            ", ".join("#{:d}".format(i) for i in numpy.argwhere(enorm)[:, 0]),
-            ", ".join("{:.3e}".format(i) for i in xnorm[enorm]),
+            ", ".join(f"#{i:d}" for i in numpy.argwhere(enorm)[:, 0]),
+            ", ".join(f"{i:.3e}" for i in xnorm[enorm]),
             _s='s' if enorm.sum() > 1 else "",
             _has="have" if enorm.sum() > 1 else "has a",
         ))
@@ -1104,7 +1104,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
         if type > 1:
             axt = abop(bxt)[0]
         for k, xi in enumerate(xt):
-            xs.append(xt[k])
+            xs.append(xi)
             ax.append(axt[k])
             bx.append(bxt[k])
         rnow = len(xt)
@@ -1356,15 +1356,27 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
             for j in range(nd):
                 h[i,j] = dot(xi.conj(), ax[j])
         xi = None
-    # Add the contribution of I in (1+a)
+    # Add the contribution of I in (1+a): the overlap of the trial vectors. A single
+    # Gram-Schmidt pass leaves vectors near lindep not exactly orthogonal, so their
+    # overlap is not diag(innerprod).
+    s = numpy.empty((nd,nd), dtype=x1.dtype)
     for i in range(nd):
-        h[i,i] += innerprod[i]
+        xi = numpy.asarray(xs[i])
+        for j in range(i+1):
+            s[i,j] = dot(xi.conj(), numpy.asarray(xs[j]))
+            s[j,i] = s[i,j].conj()
+        xi = None
+    h += s
 
     g = numpy.zeros((nd,nroots), dtype=x1.dtype)
     for i in range(nd):
         g[i] = dot(b, numpy.asarray(xs[i]).conj())
 
-    c = numpy.linalg.solve(h, g)
+    # The trial vectors can be linearly dependent to working precision, which makes h
+    # singular. Solve in the eigenvectors of the overlap above lindep.
+    e, u = numpy.linalg.eigh(s)
+    t = u[:,e > lindep] / numpy.sqrt(e[e > lindep])
+    c = t.dot(numpy.linalg.solve(t.conj().T.dot(h).dot(t), t.conj().T.dot(g)))
     x = _gen_x0(c, xs)
     if b.ndim == 1:
         x = x[0]

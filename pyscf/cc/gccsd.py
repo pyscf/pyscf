@@ -126,7 +126,7 @@ class GCCSD(ccsd.CCSDBase):
         nocc = self.nocc
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         eijab = lib.direct_sum('ia,jb->ijab', eia, eia)
-        t1 = eris.fock[:nocc,nocc:] / eia
+        t1 = eris.fock[:nocc,nocc:].conj() / eia
         eris_oovv = np.asarray(eris.oovv)
         t2 = eris_oovv.conj() / eijab
         self.emp2 = 0.25*einsum('ijab,ijab', t2, eris_oovv).real

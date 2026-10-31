@@ -36,9 +36,9 @@ scisolver.max_cycle = 100
 scisolver.conv_tol = 1e-8
 e, civec = scisolver.kernel(h1e_mo, eri_mo, norb, nelec)
 e_sci = e + e_nuc # add nuclear energy
-print("Selected CI energy: {}".format(e_sci))
+print(f"Selected CI energy: {e_sci}")
 
 # Compared to FCI
 fcisolver = fci.FCI(mf)
 e_fci, fcivec = fcisolver.kernel() 
-print("Difference compared to FCI: {}".format(e_fci - e_sci))
+print(f"Difference compared to FCI: {e_fci - e_sci}")

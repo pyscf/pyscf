@@ -3205,16 +3205,13 @@ class _IMDS:
 
         self.W1voov = self.fint2.create_dataset('W1voov', (nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), dtype=ds_type)
         self.W2voov = self.fint2.create_dataset('W2voov', (nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), dtype=ds_type)
-#
         #self.Wvoov  = self.fint2.create_dataset('Wvoov',  (nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), dtype=ds_type)
         self.WvoovR1 = self.fint2.create_dataset('WvoovR1',  (nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), dtype=ds_type)
         self.Wvvvv   = self.fint2.create_dataset('Wvvvv',  (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype=ds_type)
         self.W1ovov  = self.fint2.create_dataset('W1ovov',  (nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=ds_type)
         self.W2ovov  = self.fint2.create_dataset('W2ovov',  (nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=ds_type)
-#
         #self.Wovov  = self.fint2.create_dataset('Wovov',   (nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=ds_type)
         self.WovovRev  = self.fint2.create_dataset('WovovRev',   (nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=ds_type)
-#
         #self.Wvvvo  = self.fint2.create_dataset('Wvvvo',  (nkpts,nkpts,nkpts,nvir,nvir,nvir,nocc), dtype=ds_type)
         self.WvvvoR1  = self.fint2.create_dataset('WvvvoR1',  (nkpts,nkpts,nkpts,nvir,nvir,nvir,nocc), dtype=ds_type)
 
@@ -3230,7 +3227,6 @@ class _IMDS:
 
         self.W1voov = imdk.W1voov(cc,t1,t2,eris,self.fint2)
         self.W2voov = imdk.W2voov(cc,t1,t2,eris,self.fint2)
-#
         #self.Wvoov = imdk.Wvoov(cc,t1,t2,eris,self.fint2)
         self.WvoovR1 = imdk.WvoovR1(cc,t1,t2,eris,self.fint2)
 
@@ -3244,11 +3240,9 @@ class _IMDS:
 
         self.W1ovov = imdk.W1ovov(cc,t1,t2,eris,self.fint2)
         self.W2ovov = imdk.W2ovov(cc,t1,t2,eris,self.fint2)
-#
         #self.Wovov  = imdk.Wovov(cc,t1,t2,eris,self.fint2)
         self.WovovRev  = imdk.WovovRev(cc,t1,t2,eris,self.fint2)
 
-#
         #self.Wvvvo = imdk.Wvvvo(cc,t1,t2,eris,self.fint2)
         self.WvvvoR1 = imdk.WvvvoR1(cc,t1,t2,eris,self.fint2)
 
@@ -3262,16 +3256,13 @@ class _IMDS:
         #self.Wovvo  = self.fint2['Wovvo' ]
         self.W1voov = self.fint2['W1voov']
         self.W2voov = self.fint2['W2voov']
-#
         #self.Wvoov  = self.fint2['Wvoov' ]
         self.WvoovR1  = self.fint2['WvoovR1' ]
         self.Wvvvv  = self.fint2['Wvvvv' ]
         self.W1ovov = self.fint2['W1ovov']
         self.W2ovov = self.fint2['W2ovov']
-#
         #self.Wovov  = self.fint2['Wovov' ]
         self.WovovRev  = self.fint2['WovovRev' ]
-#
         #self.Wvvvo  = self.fint2['Wvvvo' ]
         self.WvvvoR1  = self.fint2['WvvvoR1' ]
 
