@@ -93,24 +93,17 @@ def _batch_contract(script, a, a_indices, b, b_indices, out, buffer, alpha=1):
     return out
 
 
-class _AmplitudeStorage:
-    def __init__(self, myadc, dtype):
-        mem_needed = kadc_ao2mo._amplitude_memory(myadc, dtype)
-        mem_now = lib.current_memory()[0]
-        self.incore = (myadc.incore_complete or
-                       mem_now + mem_needed < myadc.max_memory * .9)
-        self.file = None
-        self.tmpfile = None
-        if not self.incore:
-            self.tmpfile = tempfile.TemporaryFile()
-            self.file = h5py.File(self.tmpfile, 'a')
-        myadc._amp_h5file = self.file
-        myadc._amp_tmpfile = self.tmpfile
-
-    def create_dataset(self, name, shape, dtype=None):
-        if self.file is None:
-            return np.zeros(shape, dtype=dtype)
-        return self.file.create_dataset(name, shape, dtype=dtype)
+def _amplitude_storage(myadc, dtype):
+    mem_needed = kadc_ao2mo._amplitude_memory(myadc, dtype)
+    mem_now = lib.current_memory()[0]
+    if (myadc.incore_complete or mem_now + mem_needed < myadc.max_memory * .9):
+        myadc._amp_h5file = myadc._amp_tmpfile = None
+        return None, lambda name, shape, dtype: np.zeros(shape, dtype=dtype)
+    tmpfile = tempfile.TemporaryFile()
+    file = h5py.File(tmpfile, 'a')
+    myadc._amp_h5file = file
+    myadc._amp_tmpfile = tmpfile
+    return file, file.create_dataset
 
 
 def compute_amplitudes_energy(myadc, eris, verbose=None, if_corr=True):
@@ -149,9 +142,9 @@ def compute_amplitudes(myadc, eris):
 
     # Compute first-order doubles t2 (tijab)
     t2_shape = (nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir)
-    f = _AmplitudeStorage(myadc, eris.ovov.dtype)
-    log.info('using %s amplitude storage', 'incore' if f.incore else 'HDF5')
-    t2_1 = f.create_dataset('t2_1', t2_shape, dtype=eris.ovov.dtype)
+    f, create_dataset = _amplitude_storage(myadc, eris.ovov.dtype)
+    log.info('using %s amplitude storage', 'incore' if f is None else 'HDF5')
+    t2_1 = create_dataset('t2_1', t2_shape, dtype=eris.ovov.dtype)
 
     mo_energy = myadc.mo_energy
     mo_coeff = myadc.mo_coeff
@@ -171,13 +164,11 @@ def compute_amplitudes(myadc, eris):
                     for x in batch_arrays)
     if nkpts > 1 and (myadc.approx_trans_moments is False or myadc.method == 'adc(3)') and use_batch:
         buffer = np.empty(t2_shape, dtype=t2_1.dtype)
-    touched = np.zeros((nkpts, nkpts, nkpts), dtype=bool)
-
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
-        if touched[ki, kj, ka]:
+        kb = kconserv[ki, ka, kj]
+        if ki > kj or (ki == kj and ka > kb):
             continue
 
-        kb = kconserv[ki, ka, kj]
         # For discussion of LARGE_DENOM, see t1new update above
         eia = _get_epq([0, nocc, ki, mo_e_o, nonzero_opadding],
                        [0, nvir, ka, mo_e_v, nonzero_vpadding],
@@ -188,13 +179,10 @@ def compute_amplitudes(myadc, eris):
                        fac=[1.0, -1.0])
         eijab = eia[:, None, :, None] + ejb[:, None, :]
 
-        t2_1[ki, kj, ka] = eris.ovov[ki, ka, kj].conj().transpose((0, 2, 1, 3)) / eijab
-
-        if ka != kb:
-            eijba = eijab.transpose(0, 1, 3, 2)
-            t2_1[ki, kj, kb] = eris.ovov[ki, kb, kj].conj().transpose((0, 2, 1, 3)) / eijba
-
-        touched[ki, kj, ka] = touched[ki, kj, kb] = True
+        value = eris.ovov[ki, ka, kj].conj().transpose((0, 2, 1, 3)) / eijab
+        t2_1[ki, kj, ka] = value
+        if ki != kj or ka != kb:
+            t2_1[kj, ki, kb] = value.transpose(1, 0, 3, 2)
 
     cput0 = log.timer_debug1("Completed t2_1 amplitude calculation", *cput0)
 
@@ -273,7 +261,7 @@ def compute_amplitudes(myadc, eris):
 
     if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)"):
         # Compute second-order doubles t2 (tijab)
-        t2_1_vvvv = f.create_dataset(
+        t2_1_vvvv = create_dataset(
             't2_1_vvvv', (nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype=eris.ovov.dtype)
         eris_oooo = eris.oooo
         eris_ovvo = eris.ovvo
@@ -283,15 +271,20 @@ def compute_amplitudes(myadc, eris):
             kd = kconserv[ka, kc, kb]
             for ki in range(nkpts):
                 kj = kconserv[ka, ki, kb]
+                if ki > kj or (ki == kj and ka > kb):
+                    continue
                 if isinstance(eris.vvvv, np.ndarray):
                     eris_vvvv = eris.vvvv.reshape(nkpts, nkpts, nkpts, nvir * nvir, nvir * nvir)
                     t2_1_a = t2_1[:].reshape(nkpts, nkpts, nkpts, nocc * nocc, nvir * nvir)
-                    t2_1_vvvv[ki, kj, ka] += np.dot(t2_1_a[ki, kj, kc],
-                                                    eris_vvvv[kc, kd, ka].conj()).reshape(nocc, nocc, nvir, nvir)
+                    value = np.dot(t2_1_a[ki, kj, kc],
+                                   eris_vvvv[kc, kd, ka].conj()).reshape(nocc, nocc, nvir, nvir)
                 elif eris.vvvv is None:
-                    t2_1_vvvv[ki, kj, ka] += contract_ladder(myadc, t2_1[ki, kj, kc], eris.Lvv, ka, kb, kc)
+                    value = contract_ladder(myadc, t2_1[ki, kj, kc], eris.Lvv, ka, kb, kc)
                 else:
-                    t2_1_vvvv[ki, kj, ka] += contract_ladder(myadc, t2_1[ki, kj, kc], eris.vvvv, kc, kd, ka)
+                    value = contract_ladder(myadc, t2_1[ki, kj, kc], eris.vvvv, kc, kd, ka)
+                t2_1_vvvv[ki, kj, ka] += value
+                if ki != kj or ka != kb:
+                    t2_1_vvvv[kj, ki, kb] += value.transpose(1, 0, 3, 2)
 
         t2_2 = np.array(t2_1_vvvv, copy=True)
 
@@ -299,6 +292,9 @@ def compute_amplitudes(myadc, eris):
             t2_2 -= 2.0 * madelung * t2_1
 
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+            kb = kconserv[ki, ka, kj]
+            if ki > kj or (ki == kj and ka > kb):
+                continue
             kk = k_index
             ki_index = np.full(nkpts, ki)
             kj_index = np.full(nkpts, kj)
@@ -360,7 +356,10 @@ def compute_amplitudes(myadc, eris):
                            fac=[1.0, -1.0])
             eijab = eia[:, None, :, None] + ejb[:, None, :]
 
-            t2_2[ki, kj, ka] /= eijab
+            out /= eijab
+            t2_2[ki, kj, ka] = out
+            if ki != kj or ka != kb:
+                t2_2[kj, ki, kb] = out.transpose(1, 0, 3, 2)
 
         cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
 
