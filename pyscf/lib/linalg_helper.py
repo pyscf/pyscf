@@ -1349,8 +1349,12 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
             innerprod1 = [dot(x1[0].conj(), x1[0]).real]
         max_innerprod = max(innerprod1, default=0.)
 
-        log.debug('krylov cycle %d  r = %g', cycle, max_innerprod**.5)
-        if max_innerprod < lindep or max_innerprod < tol**2:
+        log.debug('krylov cycle %d  r = %g, subspace=%d', cycle, max_innerprod**.5, len(xs))
+        if max_innerprod < lindep:
+            log.debug('krylov iteration stopped for linear dependence.')
+            break
+        elif max_innerprod < tol**2:
+            log.debug('krylov iteration stopped for small xs residual.')
             break
 
         if nroots > 1:
@@ -1362,6 +1366,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     else:
         # max_cycle exhausted without reaching tol or linear dependence
         subspace_exhausted = True
+        log.debug('krylov iteration stopped for max_cycle exhausted.')
 
     nd = len(xs)
     h = numpy.empty((nd,nd), dtype=x1.dtype)
@@ -1405,10 +1410,8 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     for j in range(nd):
         ax_comb += c[j][:,None] * numpy.asarray(ax[j])
     r = _b - x - ax_comb
-    r_norm = 0.0
-    for k in range(nroots):
-        r_norm = max(r_norm, abs(dot(r[k].conj(), r[k]).real))
-    r_norm = r_norm ** .5
+    rnorms = numpy.asarray([abs(dot(rk.conj(), rk).real)**.5 for rk in r])
+    r_norm = rnorms.max()
 
     if r_norm > tol and nroots > 1 and x0 is None:
         # The shared subspace cannot resolve the near-parallel right-hand
@@ -1418,6 +1421,8 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
         log.warn('Krylov solver reached subspace convergence but true residual '
                  '|aop(x)+x-b| = %.3e exceeds tolerance %.1e. '
                  'Falling back to per-root solve.', r_norm, tol)
+        log.debug('unconverged RHS=%d', numpy.count_nonzero(rnorms > tol))
+        log.debug('Starting krylov per-RHS fallback')
         x = _per_rhs_refine(aop, _b, xs, ax, innerprod, c, g, tol, lindep,
                             max_cycle, dot, hermi, max_memory,
                             verbose, restart)
@@ -1425,12 +1430,13 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
         # Restarted Krylov: solve (1+a) dx = r and accumulate.  The residual
         # lies in the slow eigenspace of (1+a); its Krylov subspace is
         # generally not A-invariant, so further progress is possible.
-        log.debug('krylov restart, |r| = %g', r_norm)
+        log.debug('krylov restart, |r| = %g, remaining restart=%d', r_norm, restart)
         dx = krylov(aop, r, x0=None, tol=tol, max_cycle=max_cycle, dot=dot,
                     lindep=lindep, callback=callback, hermi=hermi,
                     max_memory=max_memory, verbose=verbose,
                     restart=restart-1)
         x = x + dx
+        log.debug('krylov restart completed')
     elif r_norm > tol:
         log.warn('Krylov solver reached subspace convergence but true residual '
                  '|aop(x)+x-b| = %.3e exceeds requested tolerance %.1e. '
@@ -1564,6 +1570,8 @@ def _per_rhs_refine(aop, _b, xs, ax, innerprod, c, g, tol, lindep,
             xk = ck[:nd] @ Xs + ck[nd:] @ Xe
             rk = _b[k] - xk - (ck[:nd] @ AXs + ck[nd:] @ AXe)
             rnorm = abs(dot(rk.conj(), rk).real) ** .5
+            log.debug1('krylov fallback for rhs %d, cycle %d, |r| = %g',
+                       k, cycle, rnorm)
             if rnorm < tol:
                 x_accum[k] = xk
                 active[k] = False
@@ -1572,6 +1580,7 @@ def _per_rhs_refine(aop, _b, xs, ax, innerprod, c, g, tol, lindep,
     # stalled RHS: fresh single-RHS solve
     for k in range(nroots):
         if active[k]:
+            log.debug('krylov fallback for rhs %d not converged. Restart a fresh krylov solver', k)
             x_single = krylov(aop, _b[k:k+1], x0=None, tol=tol,
                               max_cycle=max_cycle, dot=dot, lindep=lindep,
                               hermi=hermi, max_memory=max_memory,
