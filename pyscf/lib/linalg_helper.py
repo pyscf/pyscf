@@ -1474,6 +1474,7 @@ def _per_rhs_refine(aop, _b, xs, ax, innerprod, c, g, tol, lindep,
     Returns:
         x : (nroots, ndim) refined solution.
     '''
+    log = logger.new_logger(verbose=verbose)
     nroots, ndim = _b.shape
     nd = len(xs)
     dtype = _b.dtype
