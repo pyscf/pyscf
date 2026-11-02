@@ -110,6 +110,8 @@ def _gen_sigma_v_swap(nelec, orbsym, sym_allowed_idx):
     if neleca != nelecb:
         strsb = cistring.gen_strings4orblist(range(norb), nelecb)
     degen_mapping = np.asarray(orbsym.degen_mapping)
+    assert np.all(np.abs(degen_mapping - np.arange(norb)) <= 1), \
+        'swap_strs requires degenerate orbital to have adjacent indices.'
 
     def swap_strs(strs, neleca):
         '''Exchange the two orbitals of each degenerate pair and the
@@ -704,7 +706,7 @@ def _dm_wrapper(fn_rdm):
 
     @functools.wraps(fn_rdm)
     def make_dm(self, *args, **kwargs):
-        dms = fn_rdm(*args, **kwargs)
+        dms = fn_rdm(self, *args, **kwargs)
         orbsym = self.orbsym
         degen_mapping = orbsym.degen_mapping
         u = _cyl_sym_orbital_rotation(orbsym, degen_mapping)
@@ -763,14 +765,14 @@ class FCISolver(direct_spin1_symm.FCISolver):
     make_hdiag = direct_spin1_symm.FCISolver.make_hdiag
     guess_wfnsym = guess_wfnsym
 
-    make_rdm1 = _dm_wrapper(direct_spin1.make_rdm1)
-    make_rdm1s = _dm_wrapper(direct_spin1.make_rdm1s)
-    make_rdm12 = _dm_wrapper(direct_spin1.make_rdm12)
-    make_rdm12s = _dm_wrapper(direct_spin1.make_rdm12s)
-    trans_rdm1 = _dm_wrapper(direct_spin1.trans_rdm1)
-    trans_rdm1s = _dm_wrapper(direct_spin1.trans_rdm1s)
-    trans_rdm12 = _dm_wrapper(direct_spin1.trans_rdm12)
-    trans_rdm12s = _dm_wrapper(direct_spin1.trans_rdm12s)
+    make_rdm1 = _dm_wrapper(direct_spin1.FCISolver.make_rdm1)
+    make_rdm1s = _dm_wrapper(direct_spin1.FCISolver.make_rdm1s)
+    make_rdm12 = _dm_wrapper(direct_spin1.FCISolver.make_rdm12)
+    make_rdm12s = _dm_wrapper(direct_spin1.FCISolver.make_rdm12s)
+    trans_rdm1 = _dm_wrapper(direct_spin1.FCISolver.trans_rdm1)
+    trans_rdm1s = _dm_wrapper(direct_spin1.FCISolver.trans_rdm1s)
+    trans_rdm12 = _dm_wrapper(direct_spin1.FCISolver.trans_rdm12)
+    trans_rdm12s = _dm_wrapper(direct_spin1.FCISolver.trans_rdm12s)
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
