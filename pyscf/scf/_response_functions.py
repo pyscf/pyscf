@@ -56,9 +56,8 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
             grids = mf.grids
         if grids.coords is None:
             grids.build(with_non0tab=True)
-        ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
-        hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+        hybrid = ni.is_hybrid_xc(mf.xc)
 
         if singlet is None: # for ground state orbital hessian
             spin = 0
@@ -217,9 +216,8 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
             grids = mf.grids
         if grids.coords is None:
             grids.build(with_non0tab=True)
-        ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
-        hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+        hybrid = ni.is_hybrid_xc(mf.xc)
 
         if mo_coeff is not None and mo_occ is not None:
             rho0, vxc, fxc = ni.cache_xc_kernel(mol, grids, mf.xc, mo_coeff, mo_occ, 1)
@@ -312,9 +310,8 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
             grids = mf.grids
         if grids.coords is None:
             grids.build(with_non0tab=True)
-        ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
-        hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+        hybrid = ni.is_hybrid_xc(mf.xc)
 
         if mo_coeff is not None and mo_occ is not None:
             rho0, vxc, fxc = ni.cache_xc_kernel(mol, grids, mf.xc, mo_coeff, mo_occ, 1)

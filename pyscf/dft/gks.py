@@ -78,10 +78,10 @@ def get_veff(ks, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
                                  hermi=hermi, max_memory=max_memory)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         if ks.do_nlc():
-            if ni.libxc.is_nlc(ks.xc):
+            if ni.is_nlc(ks.xc):
                 xc = ks.xc
             else:
-                assert ni.libxc.is_nlc(ks.nlc)
+                assert ni.is_nlc(ks.nlc)
                 xc = ks.nlc
             n, enlc, vnlc = ni.nr_nlc_vxc(mol, ks.nlcgrids, xc, dm,
                                           hermi=hermi, max_memory=max_memory)
@@ -97,7 +97,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
         _dm = numpy.asarray(dm) - numpy.asarray(dm_last)
     else:
         _dm = dm
-    if not ni.libxc.is_hybrid_xc(ks.xc):
+    if not ni.is_hybrid_xc(ks.xc):
         vk = None
         vj = ks.get_j(mol, _dm, hermi)
         if incremental_jk:

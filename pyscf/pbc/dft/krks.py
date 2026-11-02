@@ -73,10 +73,10 @@ def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
                             kpts, kpts_band, max_memory=max_memory)
     logger.info(ks, 'nelec by numeric integration = %s', n)
     if ks.do_nlc():
-        if ni.libxc.is_nlc(ks.xc):
+        if ni.is_nlc(ks.xc):
             xc = ks.xc
         else:
-            assert ni.libxc.is_nlc(ks.nlc)
+            assert ni.is_nlc(ks.nlc)
             xc = ks.nlc
         n, enlc, vnlc = ni.nr_nlc_vxc(cell, ks.nlcgrids, xc, dm, 0, hermi, kpts,
                                       max_memory=max_memory)
@@ -96,7 +96,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
         ecoul = None
         if ground_state:
             ecoul = np.einsum('Kij,Kji', dm, vj) * .5 * weight
-    if ni.libxc.is_hybrid_xc(ks.xc):
+    if ni.is_hybrid_xc(ks.xc):
         vxc -= .5 * vk
         if ground_state:
             exc -= np.einsum('Kij,Kji', dm, vk).real * .25 * weight
@@ -145,7 +145,7 @@ def gen_response(mf, mo_coeff=None, mo_occ=None, singlet=None, hermi=0,
     cell = mf.cell
     kpts = mf.kpts
     ni = mf._numint
-    hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+    hybrid = ni.is_hybrid_xc(mf.xc)
     j_in_xc = getattr(ni, 'xc_with_j', False)
 
     if with_nlc and mf.do_nlc():
@@ -222,7 +222,7 @@ def _get_jk(mf, cell, dm, hermi, kpts, kpts_band=None, with_j=True, kshift=0):
 
     ni = mf._numint
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=cell.spin)
-    hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+    hybrid = ni.is_hybrid_xc(mf.xc)
     if not hybrid:
         if hermi == 2 or not with_j:
             vj = 0
@@ -277,7 +277,7 @@ class KRKS(rks.KohnShamDFT, khf.KRHF):
         from pyscf.pbc import scf, df
         out = self._transfer_attrs_(scf.KRHF(self.cell, self.kpts))
         # Pure functionals only construct J-type integrals. Enable all integrals for KHF.
-        if (not self._numint.libxc.is_hybrid_xc(self.xc) and
+        if (not self._numint.is_hybrid_xc(self.xc) and
             len(self.kpts) > 1 and getattr(self.with_df, '_j_only', False)):
             out.with_df._j_only = False
             out.with_df.reset()

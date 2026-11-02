@@ -205,7 +205,7 @@ def kernel(mf_grad):
     with_df = mf.with_df
     assert isinstance(with_df, FFTDF)
     ni = mf._numint
-    if ni.libxc.is_hybrid_xc(mf.xc):
+    if ni.is_hybrid_xc(mf.xc):
         raise NotImplementedError('Stress tensor for hybrid DFT')
     if hasattr(mf, 'U_idx'):
         raise NotImplementedError('Stress tensor for DFT+U')

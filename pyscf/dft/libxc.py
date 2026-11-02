@@ -329,21 +329,11 @@ def is_lda(xc_code):
 def is_hybrid_xc(xc_code):
     if xc_code is None:
         return False
-    elif isinstance(xc_code, str):
-        if 'HF' in xc_code:
-            return True
-        xc = _get_xc(xc_code)
-        return _is_hybrid_xc(xc.xc_objs, xc.hyb, xc.facs, xc_code)
-    elif numpy.issubdtype(type(xc_code), numpy.integer):
-        xc = _get_xc(xc_code)
-        return _is_hybrid_xc(xc.xc_objs, xc.hyb, xc.facs, xc_code)
-    else:
+    if not isinstance(xc_code, (str, int, numpy.integer)):
         return any(is_hybrid_xc(x) for x in xc_code)
-
-def _is_hybrid_xc(xc_objs, hyb, facs, xc_code):
-    if _hybrid_coeff(xc_objs, hyb, facs) != 0:
+    if rsh_coeff(xc_code) != (0, 0, 0):
         return True
-    if _rsh_coeff(xc_objs, hyb, facs, xc_code) != (0, 0, 0):
+    if hybrid_coeff(xc_code) != 0:
         return True
     return False
 
@@ -359,8 +349,7 @@ def is_gga(xc_code):
 
 def is_nlc(xc_code):
     # identify nlc by xc_code itself if enable_nlc is None
-    if isinstance(xc_code, str) or \
-            numpy.issubdtype(type(xc_code), numpy.integer):
+    if isinstance(xc_code, (str, int, numpy.integer)):
         xc = _get_xc(xc_code)
         return xc.is_nlc
     else:
@@ -1541,4 +1530,3 @@ def unregister_custom_functional_(xc_code):
         del _CUSTOM_FUNC_U[xc_code]
     except KeyError:
         pass
-
