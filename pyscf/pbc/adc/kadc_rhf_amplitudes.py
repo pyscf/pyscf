@@ -221,7 +221,7 @@ def compute_amplitudes(myadc, eris):
                             del eris_ovvv
                             a += k
                     else:
-                        eris_ovvv = eris.ovvv[:]
+                        eris_ovvv = eris.ovvv
                         t1_2[ki] += 1.5 * lib.einsum('kdac,ikcd->ia',
                                                      eris_ovvv[kk, kd, ka], t2_1[ki, kk, kc], optimize=True)
                         t1_2[ki] -= 0.5 * lib.einsum('kdac,kicd->ia',
@@ -267,24 +267,25 @@ def compute_amplitudes(myadc, eris):
         eris_ovvo = eris.ovvo
         eris_oovv = eris.oovv
 
+        if isinstance(eris.vvvv, np.ndarray):
+            eris_vvvv = eris.vvvv.reshape(nkpts, nkpts, nkpts, nvir * nvir, nvir * nvir)
+            t2_1_a = t2_1[:].reshape(nkpts, nkpts, nkpts, nocc * nocc, nvir * nvir)
         for ka, kb, kc in kpts_helper.loop_kkk(nkpts):
             kd = kconserv[ka, kc, kb]
-            for ki in range(nkpts):
-                kj = kconserv[ka, ki, kb]
-                if ki > kj or (ki == kj and ka > kb):
-                    continue
-                if isinstance(eris.vvvv, np.ndarray):
-                    eris_vvvv = eris.vvvv.reshape(nkpts, nkpts, nkpts, nvir * nvir, nvir * nvir)
-                    t2_1_a = t2_1[:].reshape(nkpts, nkpts, nkpts, nocc * nocc, nvir * nvir)
+            if isinstance(eris.vvvv, np.ndarray):
+                for ki in range(nkpts):
+                    kj = kconserv[ka, ki, kb]
+                    if ki > kj or (ki == kj and ka > kb):
+                        continue
                     value = np.dot(t2_1_a[ki, kj, kc],
                                    eris_vvvv[kc, kd, ka].conj()).reshape(nocc, nocc, nvir, nvir)
-                elif eris.vvvv is None:
-                    value = contract_ladder(myadc, t2_1[ki, kj, kc], eris.Lvv, ka, kb, kc)
-                else:
-                    value = contract_ladder(myadc, t2_1[ki, kj, kc], eris.vvvv, kc, kd, ka)
-                t2_1_vvvv[ki, kj, ka] += value
-                if ki != kj or ka != kb:
-                    t2_1_vvvv[kj, ki, kb] += value.transpose(1, 0, 3, 2)
+                    t2_1_vvvv[ki, kj, ka] += value
+                    if ki != kj or ka != kb:
+                        t2_1_vvvv[kj, ki, kb] += value.transpose(1, 0, 3, 2)
+            elif eris.vvvv is None:
+                contract_ladder(myadc, t2_1, t2_1_vvvv, eris.Lvv, ka, kb, kc)
+            else:
+                contract_ladder(myadc, t2_1, t2_1_vvvv, eris.vvvv, ka, kb, kc)
 
         t2_2 = np.array(t2_1_vvvv, copy=True)
 
@@ -393,17 +394,13 @@ def compute_energy(myadc, t2, eris):
     return emp2
 
 
-def contract_ladder(myadc, t_amp, vvvv, ka, kb, kc):
-
+def contract_ladder(myadc, t2_1, t2_1_vvvv, vvvv, ka, kb, kc):
     nocc = myadc.nocc
     nmo = myadc.nmo
     nvir = nmo - nocc
     nkpts = myadc.nkpts
     kconserv = myadc.khelper.kconserv
-
     kd = kconserv[ka, kc, kb]
-    t_amp = np.ascontiguousarray(t_amp.reshape(nocc * nocc, nvir * nvir))
-    t = np.zeros((nocc, nocc, nvir, nvir), dtype=t_amp.dtype)
     chnk_size = myadc.chnk_size
     if chnk_size is None:
         chnk_size = myadc.get_chnk_size()
@@ -412,19 +409,21 @@ def contract_ladder(myadc, t_amp, vvvv, ka, kb, kc):
     if isinstance(vvvv, np.ndarray):
         vv1 = vvvv[kc, ka]
         vv2 = vvvv[kd, kb]
-        for p in range(0, nvir, chnk_size):
+    for p in range(0, nvir, chnk_size):
+        if isinstance(vvvv, np.ndarray):
             vvvv_p = dfadc.get_vvvv_df(myadc, vv1, vv2, p, chnk_size) / nkpts
-            vvvv_p = vvvv_p.reshape(-1, nvir * nvir)
-            k = vvvv_p.shape[0]
-            t += np.dot(t_amp[:, a:a + k], vvvv_p.conj()).reshape(nocc, nocc, nvir, nvir)
-            del vvvv_p
-            a += k
-    else:
-        for p in range(0, nvir, chnk_size):
-            vvvv_p = vvvv[ka, kb, kc, p:p + chnk_size, :, :, :].reshape(-1, nvir * nvir)
-            k = vvvv_p.shape[0]
-            t += np.dot(t_amp[:, a:a + k], vvvv_p.conj()).reshape(nocc, nocc, nvir, nvir)
-            del vvvv_p
-            a += k
-
-    return t
+        else:
+            vvvv_p = vvvv[ka, kb, kc, p:p + chnk_size, :, :, :]
+        vvvv_p = vvvv_p.reshape(-1, nvir * nvir).conj()
+        k = vvvv_p.shape[0]
+        for ki in range(nkpts):
+            kj = kconserv[ka, ki, kb]
+            if ki > kj or (ki == kj and ka > kb):
+                continue
+            t_amp = np.ascontiguousarray(t2_1[ki, kj, kc].reshape(nocc * nocc, nvir * nvir))
+            value = np.dot(t_amp[:, a:a + k], vvvv_p).reshape(nocc, nocc, nvir, nvir)
+            t2_1_vvvv[ki, kj, ka] += value
+            if ki != kj or ka != kb:
+                t2_1_vvvv[kj, ki, kb] += value.transpose(1, 0, 3, 2)
+        a += k
+        del vvvv_p
