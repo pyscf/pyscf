@@ -311,8 +311,7 @@ def mcfun_eval_xc_adapter(ni, xc_code):
                     verbose=None, spin=None):
         return mcfun.eval_xc_eff(
             fn_eval_xc, rho, deriv, spin_samples=ni.spin_samples,
-            collinear_threshold=ni.collinear_thrd,
-            collinear_samples=ni.collinear_samples, workers=nproc)
+            workers=nproc)
     return eval_xc_eff
 
 def _mcol_lda_vxc_mat(mol, ao, weight, rho, vxc, mask, shls_slice, ao_loc, hermi):
@@ -503,8 +502,6 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
     #   'mcol' (multi-collinear)
     collinear = getattr(__config__, 'dft_numint_RnumInt_collinear', 'col')
     spin_samples = getattr(__config__, 'dft_numint_RnumInt_spin_samples', 770)
-    collinear_thrd = getattr(__config__, 'dft_numint_RnumInt_collinear_thrd', 0.99)
-    collinear_samples = getattr(__config__, 'dft_numint_RnumInt_collinear_samples', 200)
 
     make_mask = staticmethod(numint.make_mask)
     eval_ao = staticmethod(numint.eval_ao)

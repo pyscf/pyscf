@@ -35,8 +35,6 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
     '''Numerical integration methods for 2-component basis (used by GKS)'''
     collinear         = numint2c.NumInt2C.collinear
     spin_samples      = numint2c.NumInt2C.spin_samples
-    collinear_thrd    = numint2c.NumInt2C.collinear_thrd
-    collinear_samples = numint2c.NumInt2C.collinear_samples
 
     make_mask = lib.invalid_method('make_mask')
     eval_ao = staticmethod(pnumint.eval_ao)
@@ -331,8 +329,6 @@ class KNumInt2C(lib.StreamObject, numint.LibXCMixin):
 
     collinear         = numint2c.NumInt2C.collinear
     spin_samples      = numint2c.NumInt2C.spin_samples
-    collinear_thrd    = numint2c.NumInt2C.collinear_thrd
-    collinear_samples = numint2c.NumInt2C.collinear_samples
 
     make_mask = lib.invalid_method('make_mask')
     eval_ao = staticmethod(pnumint.eval_ao_kpts)
