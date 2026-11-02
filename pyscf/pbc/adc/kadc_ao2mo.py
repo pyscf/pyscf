@@ -255,7 +255,6 @@ def transform_integrals_df(myadc):
                 eris.Lvv[ki, kj] = Lpq_mo[ki, kj][:, nocc:, nocc:]
 
     if myadc.if_naf:
-       
         naux = max(Lpq.shape[0] for Lpq in Lpq_mo.flat)
         Lpq_mo_padded = np.zeros((nkpts, nkpts, naux, nmo, nmo), dtype=dtype)
         for ki in range(nkpts):
