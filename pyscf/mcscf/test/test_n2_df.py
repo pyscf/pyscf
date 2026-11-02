@@ -240,6 +240,25 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(msym.density_fit().CASSCF(2, 2), df._DFCASSCF))
         self.assertTrue(isinstance(msym.density_fit().CASSCF(2, 2), mcscf.mc1step_symm.CASSCF))
 
+    def test_exact_paaa_without_df(self):
+        mol = gto.M(atom='Li 0 0 0; H 0 0 1.6', basis='sto-3g', verbose=0)
+        mf = scf.RHF(mol).run()
+        mc = mcscf.CASSCF(mf, 3, 2).density_fit()
+        # Disabling DF on the decorated object must restore exact integrals.
+        mc.with_df = None
+        nmo = mf.mo_coeff.shape[1]
+        generator = numpy.zeros((nmo, nmo))
+        generator[0, 1], generator[1, 0] = .2, -.2
+        rotation = scipy.linalg.expm(generator)
+        mo = mf.mo_coeff @ rotation
+        active = mo[:, mc.ncore:mc.ncore + mc.ncas]
+        expected = ao2mo.general(mol, (mo, active, active, active), compact=False)
+        expected = expected.reshape(nmo, mc.ncas, mc.ncas, mc.ncas)
+        output = numpy.empty(expected.size)
+        actual = mc._exact_paaa(mf.mo_coeff, rotation, out=output)
+        numpy.testing.assert_allclose(actual, expected, atol=1e-12, rtol=0)
+        self.assertTrue(numpy.shares_memory(actual, output))
+
 
 if __name__ == "__main__":
     print("Full Tests for density fitting N2")

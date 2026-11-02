@@ -197,21 +197,3 @@ class KsymAdaptedKGHF(khf_ksymm.KsymAdaptedKSCF, kghf.KGHF):
     orbsym = property(get_orbsym)
 
 KGHF = KsymAdaptedKGHF
-
-if __name__ == "__main__":
-    from pyscf.pbc import gto, scf
-    cell = gto.Cell()
-    cell.atom = '''
-        H 0 0 0
-        H 1 0 0
-        H 0 1 0
-        H 0 0 1
-    '''
-    cell.a = np.eye(3)*2
-    cell.basis = [[0, [1.2, 1]]]
-    cell.verbose = 5
-    cell.build()
-
-    kpts = cell.make_kpts([2,2,1],space_group_symmetry=True,time_reversal_symmetry=True)
-    mf = scf.KGHF(cell, kpts)
-    mf.kernel()

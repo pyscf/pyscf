@@ -316,28 +316,3 @@ class KGHF(khf.KSCF):
         return self._transfer_attrs_(dft.KGKS(self.cell, self.kpts, xc=xc))
 
 del (WITH_META_LOWDIN, PRE_ORTH_METHOD)
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-
-    cell = gto.Cell()
-    cell.atom = '''
-    H 0 0 0
-    H 1 0 0
-    H 0 1 0
-    H 0 1 1
-    '''
-    cell.a = np.eye(3)*2
-    cell.basis = [[0, [1.2, 1]]]
-    cell.verbose = 4
-    cell.build()
-
-    kpts = cell.make_kpts([2,1,1])
-    mf = KGHF(cell, kpts=kpts)
-    mf.kernel()
-
-    # x2c1e decorator to KGHF class.
-    #mf = KGHF(cell, kpts=kpts).x2c1e()
-    # or
-    #mf = KGHF(cell, kpts=kpts).sfx2c1e()
-    #mf.kernel()

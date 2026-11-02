@@ -554,30 +554,3 @@ def remove_high_l(mol, mo_coeff=None):
 
     idx = numpy.hstack(idx)
     return pmol, mo_coeff[idx]
-
-
-if __name__ == '__main__':
-    from pyscf import scf
-    import tempfile
-    mol = gto.Mole()
-    mol.verbose = 5
-    mol.output = None  # 'out_gho'
-    mol.atom = [['C', (0.,0.,0.)],
-                ['H', ( 1, 1, 1)],
-                ['H', (-1,-1, 1)],
-                ['H', ( 1,-1,-1)],
-                ['H', (-1, 1,-1)], ]
-    mol.basis = {
-        'C': 'sto-3g',
-        'H': 'sto-3g'}
-    mol.build(dump_input=False)
-    m = scf.RHF(mol)
-    m.scf()
-    header(mol, mol.stdout)
-    print(order_ao_index(mol))
-    orbital_coeff(mol, mol.stdout, m.mo_coeff)
-
-    ftmp = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
-    from_mo(mol, ftmp.name, m.mo_coeff)
-
-    print(parse(ftmp.name))

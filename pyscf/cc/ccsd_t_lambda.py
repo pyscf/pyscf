@@ -93,32 +93,3 @@ def t3_symm_ip_py(A, nocc3, nvir, pattern, alpha=1.0, beta=0.0):
         ctypes.c_double(beta)
     )
     return A
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.atom = [
-        [8 , (0. , 0.     , 0.)],
-        [1 , (0. , -0.757 , 0.587)],
-        [1 , (0. , 0.757  , 0.587)]]
-
-    mol.basis = 'cc-pvdz'
-    mol.build()
-    rhf = scf.RHF(mol)
-    rhf.conv_tol = 1e-16
-    rhf.scf()
-
-    mcc = ccsd.CCSD(rhf)
-    mcc.conv_tol = 1e-12
-    ecc, t1, t2 = mcc.kernel()
-    #l1, l2 = mcc.solve_lambda()
-    #print(numpy.linalg.norm(l1)-0.0132626841292)
-    #print(numpy.linalg.norm(l2)-0.212575609057)
-
-    conv, l1, l2 = kernel(mcc, mcc.ao2mo(), t1, t2, tol=1e-8)
-    print(numpy.linalg.norm(l1)-0.013575484203926739)
-    print(numpy.linalg.norm(l2)-0.22029981372536928)

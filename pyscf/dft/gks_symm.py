@@ -59,30 +59,3 @@ class GKS(rks.KohnShamDFT, ghf_symm.GHF):
         raise NotImplementedError
 
     to_gpu = lib.to_gpu
-
-
-if __name__ == '__main__':
-    import numpy
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.verbose = 3
-    mol.atom = 'H 0 0 0; H 0 0 1; O .5 .6 .2'
-    mol.symmetry = True
-    mol.basis = 'ccpvdz'
-    mol.build()
-
-    mf = GKS(mol)
-    mf.xc = 'b3lyp'
-    mf.kernel()
-
-    dm = mf.init_guess_by_1e(mol)
-    dm = dm + 0j
-    nao = mol.nao_nr()
-    numpy.random.seed(12)
-    dm[:nao,nao:] = numpy.random.random((nao,nao)) * .1j
-    dm[nao:,:nao] = dm[:nao,nao:].T.conj()
-    mf.kernel(dm)
-    mf.canonicalize(mf.mo_coeff, mf.mo_occ)
-    mf.analyze()
-    print(mf.spin_square())
-    print(mf.e_tot - -76.2760114849027)

@@ -489,32 +489,3 @@ class Hessian(rhf_hess.Hessian):
     make_h1 = make_h1
 
 #TODO: Insert into DF class
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None
-    mol.atom = [
-        [1 , (1. ,  0.     , 0.000)],
-        [1 , (0. ,  1.     , 0.000)],
-        [1 , (0. , -1.517  , 1.177)],
-        [1 , (0. ,  1.517  , 1.177)] ]
-    mol.basis = '631g'
-    mol.unit = 'B'
-    mol.build()
-    mf = scf.RHF(mol).density_fit()
-    mf.conv_tol = 1e-14
-    mf.scf()
-    n3 = mol.natm * 3
-    hobj = Hessian(mf)
-    e2 = hobj.kernel()
-    ref = scf.RHF(mol).run().Hessian().kernel()
-    print(abs(e2-ref).max())
-    print(lib.finger(e2) - 0.7232739558365785)
-    e2 = hobj.set(auxbasis_response=2).kernel()
-    print(abs(e2-ref).max())
-    print(lib.finger(e2) - 0.72321237584876141)

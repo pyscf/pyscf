@@ -1052,30 +1052,3 @@ def _ao2mo_ovov(mp, orbo, orbv, feri, max_memory=2000, verbose=None):
     return h5dat
 
 del (WITH_T2)
-
-
-if __name__ == '__main__':
-    from pyscf import scf
-    mol = gto.Mole()
-    mol.atom = [
-        [8 , (0. , 0.     , 0.)],
-        [1 , (0. , -0.757 , 0.587)],
-        [1 , (0. , 0.757  , 0.587)]]
-
-    mol.basis = 'cc-pvdz'
-    mol.build()
-    mf = scf.RHF(mol).run()
-
-    pt = MP2(mf)
-    emp2, t2 = pt.kernel()
-    print(emp2 - -0.204019967288338)
-    pt.max_memory = 1
-    emp2, t2 = pt.kernel()
-    print(emp2 - -0.204019967288338)
-
-    pt = MP2(scf.density_fit(mf, 'weigend'))
-    print(pt.kernel()[0] - -0.204254500454)
-
-    mf = scf.RHF(mol).run(max_cycle=1)
-    pt = MP2(mf)
-    print(pt.kernel()[0] - -0.204479914961218)

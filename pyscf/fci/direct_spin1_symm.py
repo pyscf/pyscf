@@ -317,7 +317,7 @@ def get_init_guess_cyl_sym(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
                 # However, this may also incorrectly remove the A2 repr, see the
                 # explanation in issue #2291.
                 # In this case, the direct_spin1_cyl_sym solver can be used to
-                # solve A2. See example mcscf/18-o2_spatial_spin_symmetry.py
+                # solve A2. See example mcscf/18-sz_degeneracy.py
                 continue
             x = ca[:,None] * cb
 

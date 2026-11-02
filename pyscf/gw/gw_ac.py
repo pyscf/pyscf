@@ -501,9 +501,9 @@ def get_sigma_outcore(gw, orbs, quad_freqs, quad_wts, ef, mo_energy, mo_coeff, m
 
     Pi = np.zeros(shape=[nw, naux, naux], dtype=np.double)
     if hasattr(gw._scf, 'sigma'):
-        nseg = nmo // gw.segsize + 1
+        nseg = (nmo + gw.segsize - 1) // gw.segsize  # No empty trailing block.
     else:
-        nseg = nocc // gw.segsize + 1
+        nseg = (nocc + gw.segsize - 1) // gw.segsize
     for i in range(nseg):
         if hasattr(gw._scf, 'sigma'):
             orb_start = i * gw.segsize
@@ -547,7 +547,7 @@ def get_sigma_outcore(gw, orbs, quad_freqs, quad_wts, ef, mo_energy, mo_coeff, m
         naux_ones = np.ones((1, naux))
 
     emo = omega[None] - mo_energy_g[:, None]
-    nseg = nmo // gw.segsize + 1
+    nseg = (nmo + gw.segsize - 1) // gw.segsize  # No empty trailing block.
     for i in range(nseg):
         if gw.verbose >= 4:
             gw.stdout.write(f'{i:4d} ')
@@ -1124,7 +1124,7 @@ class GWAC(lib.StreamObject):
             sigma_diff = np.zeros_like(gf0)
             for iw in range(len(omega)):
                 for i in range(len(mo_energy)):
-                    sigma[i, i, iw] = self.acobj[i].ac_eval(omega + 1j * eta)
+                    sigma[i, i, iw] = self.acobj[i].ac_eval(omega[iw] + 1j * eta)
                     sigma_diff[i, i, iw] = sigma[i, i, iw] + self.vk[i, i] - self.vxc[i, i]
 
         for iw in range(len(omega)):

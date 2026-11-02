@@ -472,8 +472,14 @@ def parse_xc(description):
         return parse_xc('%s,%s' % tuple(description))
 
     description = description.upper()
-    if '-D3' in description or '-D4' in description:
+    if ('-D3' in description or '-D4' in description or
+            description.endswith(('-3C', '_3C'))):
         from pyscf.scf.dispersion import parse_dft
+        if description.endswith(('-3C', '_3C')):
+            raise NotImplementedError(
+                f'Composite 3c methods ({description}) are only supported '
+                'by the libxc backend, which appears to be unavailable '
+                'in this environment.')
         description, _, _ = parse_dft(description)
         description = description.upper()
 

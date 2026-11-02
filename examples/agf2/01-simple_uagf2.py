@@ -30,3 +30,8 @@ gf2.ipagf2(nroots=3)
 
 # Print the first 3 electron affinities
 gf2.eaagf2(nroots=3)
+
+# The same unrestricted calculation can use density fitting for the AGF2
+# integrals. A density-fitted UHF reference is also supported.
+gf2_df = gf2.density_fit()
+gf2_df.run()

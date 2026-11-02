@@ -177,6 +177,19 @@ class KnownValues(unittest.TestCase):
         e2 = g_scanner(pmol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 4)
 
+    def test_hessian_vector_product(self):
+        mol = gto.M(atom='Li 0 0 0; H 0 0 1.6', basis='sto-3g', verbose=0)
+        mf = scf.RHF(mol).run(conv_tol=1e-12)
+        mf = mf.to_uhf()
+        obj = mf.Hessian()
+        tensor = obj.kernel()
+        matrix = tensor.transpose(0, 2, 1, 3).reshape(6, 6)
+        hop, _ = obj.gen_hop()
+        for displacement in numpy.random.default_rng(9).normal(size=(3, 6)):
+            numpy.testing.assert_allclose(hop(displacement), matrix @ displacement, atol=1e-8)
+        for displacement in numpy.tile(numpy.eye(3), (1, 2)):
+            numpy.testing.assert_allclose(hop(displacement), 0, atol=1e-8)
+
 if __name__ == "__main__":
     print("Full Tests for UHF Hessian")
     unittest.main()

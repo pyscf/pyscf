@@ -155,27 +155,3 @@ def kernel(mf, disp=1e-4, mo_rep=False):
     else:
         mat = np.einsum('xJ,xspq->sJpq', vec, vmat)
     return mat, omega
-
-if __name__ == '__main__':
-    cell = gto.Cell()
-    cell.atom='''
-    C 0.000000000000   0.000000000000   0.000000000000
-    C 1.685068664391   1.685068664391   1.685068664391
-    '''
-    cell.basis = 'gth-szv'
-    cell.pseudo = 'gth-pade'
-    cell.a = '''
-    0.000000000, 3.370137329, 3.370137329
-    3.370137329, 0.000000000, 3.370137329
-    3.370137329, 3.370137329, 0.000000000'''
-    cell.unit = 'B'
-    cell.verbose = 4
-    cell.build()
-
-    kpts = cell.make_kpts([1,1,1])
-    mf = dft.KRKS(cell, kpts)
-    mf.conv_tol = 1e-14
-    mf.conv_tol_grad = 1e-8
-    mf.kernel()
-
-    vmat, omega = kernel(mf, mo_rep=True)

@@ -74,7 +74,7 @@ class KnownValues(unittest.TestCase):
     def tearDownClass(cls):
         radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
 
-    def test_KGKS(self):
+    def test_KGKS_high_cost(self):
         # In the absence of off diagonal blocks in the spin space, dft.KGKS should reproduce the dft.KRKS results
         # Reference from dft.KRKS
         # mf = dft.KRKS(cell, kpts)

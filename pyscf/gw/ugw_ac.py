@@ -514,9 +514,9 @@ def get_sigma_outcore(gw, orbs, quad_freqs, quad_wts, ef, mo_energy, mo_coeff,
     Pi = np.zeros(shape=[nquadfreqs, naux, naux], dtype=np.double)
     for s in range(2):
         if hasattr(gw._scf, 'sigma'):
-            nseg = nmo // gw.segsize + 1
+            nseg = (nmo + gw.segsize - 1) // gw.segsize  # No empty trailing block.
         else:
-            nseg = nocc[s] // gw.segsize + 1
+            nseg = (nocc[s] + gw.segsize - 1) // gw.segsize
         for i in range(nseg):
             if hasattr(gw._scf, 'sigma'):
                 orb_start = i * gw.segsize
@@ -563,7 +563,7 @@ def get_sigma_outcore(gw, orbs, quad_freqs, quad_wts, ef, mo_energy, mo_coeff,
         Wmn = None
         naux_ones = np.ones((1, naux))
 
-    nseg = nmo // gw.segsize + 1
+    nseg = (nmo + gw.segsize - 1) // gw.segsize  # No empty trailing block.
     for s in range(2):
         logger.info(gw, 'Starting spin %d get_sigma_diag_outcore main loop with %d segments.', s, nseg)
         emo = omega[None, :] - mo_energy_g[s, :, None]
@@ -1062,8 +1062,8 @@ class UGWAC(GWAC):
             sigma_diff = np.zeros_like(gf0)
             for s in range(2):
                 for iw in range(len(omega)):
-                    for i in range(len(mo_energy)):
-                        sigma[s, i, i, iw] = self.acobj[s, i].ac_eval(omega + 1j * eta)
+                    for i in range(len(mo_energy[s])):
+                        sigma[s, i, i, iw] = self.acobj[s, i].ac_eval(omega[iw] + 1j * eta)
                         sigma_diff[s, i, i, iw] = sigma[s, i, i, iw] + self.vk[s, i, i] - self.vxc[s, i, i]
 
         for s in range(2):

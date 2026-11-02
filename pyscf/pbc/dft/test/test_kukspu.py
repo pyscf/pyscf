@@ -59,7 +59,7 @@ class KnownValues(unittest.TestCase):
         e1 = mf.kernel()
         self.assertAlmostEqual(e1, -10.694460059491741, 8)
 
-    def test_KUKSpU_ksymm(self):
+    def test_KUKSpU_ksymm_high_cost(self):
         cell1 = cell.copy()
         cell1.basis = 'gth-szv'
         cell1.mesh = [16,]*3
@@ -93,7 +93,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(vxc.E_U, 0.07587726255165786, 11)
         self.assertAlmostEqual(lib.fp(vxc), 6.37407828665724, 8)
 
-    def test_KUKSpU_linear_response(self):
+    def test_KUKSpU_linear_response_high_cost(self):
         cell = pgto.Cell()
         cell.unit = 'A'
         cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'

@@ -30,6 +30,15 @@ mf = mol.UHF().run()
 # Option 1: Utilize the dfump2.DFMP2 implementation via the mf.DFMP2 function
 mf.DFMP2().run()
 
+# The unrestricted implementation supports the same auxiliary-basis and
+# frozen-orbital controls.
+from pyscf import df
+pt = mf.DFMP2()
+pt.with_df = df.DF(mol)
+pt.with_df.auxbasis = 'weigend'
+pt.frozen = 1
+pt.run()
+
 # When mean-field calculation is a density fitting HF method, the .DFMP2()
 # method is identical to the standard .MP2 method
 mf = mf.density_fit().run()

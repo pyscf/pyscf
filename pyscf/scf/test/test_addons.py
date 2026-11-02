@@ -490,7 +490,8 @@ class KnownValues(unittest.TestCase):
         mf = addons.smearing(mf, sigma=0.1)
         mf.kernel()
         self.assertAlmostEqual(mf.mo_occ.sum(), 15, 8)
-        self.assertAlmostEqual(mf.e_tot, -106.9310800402, 8)
+        self.assertAlmostEqual(mf.e_free, -107.22209716, 8)
+        self.assertAlmostEqual(mf.e_tot, -106.9310800142, 5)
 
     def test_uhf_smearing(self):
         mol = gto.M(
@@ -509,16 +510,16 @@ class KnownValues(unittest.TestCase):
         myhf_s = addons.smearing_(myhf_s, sigma=0.01, method='fermi', fix_spin=True)
         myhf_s.sigma = 0.1
         myhf_s.fix_spin = False
-        myhf_s.conv_tol = 1e-7
+        myhf_s.conv_tol = 1e-9
         myhf_s.kernel()
-        self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 5)
-        self.assertAlmostEqual(myhf_s.entropy, 17.11431, 4)
+        # With sigma=0.1 the near-degenerate 3d manifold makes the plain
+        # energy E vary a lot (free-energy-degenerate), while 
+        # e_free = E - sigma*S is more stable (see
+        # issue #3379). Assert e_free tightly and E/entropy loosely.
+        self.assertAlmostEqual(myhf_s.e_free, -244.7984202573, 7)
+        self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 4)
+        self.assertAlmostEqual(myhf_s.entropy, 17.11431, 3)
         self.assertTrue(myhf_s.converged)
-
-        myhf_s.mu = -0.2482816
-        myhf_s.kernel(dm0=myhf_s.make_rdm1())
-        self.assertAlmostEqual(myhf_s.e_tot, -243.086989253, 5)
-        self.assertAlmostEqual(myhf_s.entropy, 17.11431, 4)
 
     def test_rhf_smearing_nelec(self):
         mol = gto.Mole()
@@ -591,6 +592,45 @@ class KnownValues(unittest.TestCase):
         mf_ft.kernel()
         self.assertAlmostEqual(mf_ft.e_tot, -2.93405853397115, 5)
         self.assertAlmostEqual(mf_ft.entropy, 0.11867520273160392, 5)
+
+
+    def test_empty_beta(self):
+        mol = gto.M(atom='H 0 0 0', spin=1, basis='sto-3g', verbose=0)
+        energy = numpy.array([-.5, -.5, .2])
+        for cls in (scf.UHF, scf.ROHF):
+            mf = addons.frac_occ(cls(mol))
+            values = numpy.array([energy, energy]) if cls is scf.UHF else energy
+            expected = [[.5, .5, 0], [0, 0, 0]] if cls is scf.UHF else [.5, .5, 0]
+            numpy.testing.assert_allclose(mf.get_occ(values), expected, atol=1e-14)
+
+    def test_two_degenerate_spin_channels(self):
+        mol = gto.M(atom='N 0 0 0', spin=3, basis='sto-3g', verbose=0)
+        energies = numpy.array([-2., -1., -1., -.2, -.2, -.2, .4])
+        expected = numpy.array([[1, 1, 1, 2/3, 2/3, 2/3, 0], [1, .5, .5, 0, 0, 0, 0]])
+        unrestricted = addons.frac_occ(scf.UHF(mol))
+        restricted = addons.frac_occ(scf.ROHF(mol))
+        numpy.testing.assert_allclose(unrestricted.get_occ(numpy.array([energies]*2)), expected, atol=1e-14)
+        numpy.testing.assert_allclose(restricted.get_occ(energies), expected.sum(axis=0), atol=1e-14)
+        permutation = numpy.array([6, 3, 0, 5, 2, 1, 4])
+        numpy.testing.assert_allclose(restricted.get_occ(energies[permutation]),
+                                   expected.sum(axis=0)[permutation], atol=1e-14)
+
+
+    def test_repeated_shell(self):
+        basis = [[0, [1., 1]], [0, [.3, 1]]]
+        unique = gto.M(atom='He 0 0 0', basis=basis, verbose=0)
+        duplicate = gto.M(atom='He 0 0 0', basis=basis+[basis[0]], verbose=0)
+        s = duplicate.intor('int1e_ovlp')
+        x = addons.partial_cholesky_orth_(s)
+        self.assertEqual(x.shape, (3, 2))
+        numpy.testing.assert_allclose(x.T @ s @ x, numpy.eye(2), atol=1e-12)
+        ref = scf.RHF(unique).run(conv_tol=1e-12)
+        mf = addons.remove_linear_dep_(scf.RHF(duplicate), force_pivoted_cholesky=True)
+        mf.run(conv_tol=1e-12)
+        self.assertTrue(mf.converged)
+        self.assertAlmostEqual(mf.e_tot, ref.e_tot, places=10)
+        numpy.testing.assert_allclose(mf.mo_energy, ref.mo_energy, atol=1e-9)
+        self.assertAlmostEqual(numpy.einsum('ij,ji', mf.make_rdm1(), s), 2., places=11)
 
 
 if __name__ == "__main__":

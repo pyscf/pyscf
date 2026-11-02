@@ -48,7 +48,7 @@ def make_cell(basis):
 
 
 class KnownValues(unittest.TestCase):
-    def test_pob_dzvp_rev2_krks_pbe(self):
+    def test_pob_dzvp_rev2_krks_pbe_high_cost(self):
         cell = make_cell('pob-DZVP-rev2')
         self.assertEqual(cell.nao_nr(), 11)   # Li(6) + H(5)
         mf = pbcdft.KRKS(cell, kpts=cell.make_kpts([3, 3, 3]))
@@ -59,7 +59,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(mf.converged)
         self.assertAlmostEqual(e, -8.127841401, 5)
 
-    def test_pob_tzvp_rev2_krks_pbe(self):
+    def test_pob_tzvp_rev2_krks_pbe_high_cost(self):
         cell = make_cell('pob-TZVP-rev2')
         self.assertEqual(cell.nao_nr(), 13)   # Li(7) + H(6)
         mf = pbcdft.KRKS(cell, kpts=cell.make_kpts([3, 3, 3]))
@@ -76,6 +76,27 @@ class KnownValues(unittest.TestCase):
         mf_dz.xc = 'PBE'
         mf_dz.conv_tol = 1e-9
         self.assertTrue(e < mf_dz.kernel())
+
+
+    def check_basis(self, basis, nao):
+        cell = make_cell(basis)
+        self.assertEqual(cell.nao_nr(), nao)
+        energies = []
+        for cls in (pbcdft.RKS, pbcdft.KRKS):
+            mf = cls(cell).density_fit(auxbasis='weigend')
+            mf.xc = 'pbe'
+            mf.grids = pbcdft.gen_grid.BeckeGrids(cell)
+            mf.grids.atom_grid = (20, 86)
+            mf.run(conv_tol=1e-10)
+            self.assertTrue(mf.converged)
+            energies.append(mf.e_tot)
+        self.assertAlmostEqual(*energies, places=8)
+
+    def test_gamma_double_zeta(self):
+        self.check_basis('pob-DZVP-rev2', 11)
+
+    def test_gamma_triple_zeta(self):
+        self.check_basis('pob-TZVP-rev2', 13)
 
 
 if __name__ == '__main__':

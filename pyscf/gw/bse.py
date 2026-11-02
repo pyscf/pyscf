@@ -221,7 +221,9 @@ def davidson_restart(Mp, Mm, tri_vec, nvec_pair_to_save, e_min=0.0):
         # Write out the left and right vectors in the full space to a temporary file.
         # They're written to disk because they may be too large to fit in memory.
         with lib.H5TmpFile() as chkf:
-            dset = chkf.create_dataset('tri_vec', shape=(2 * nvec_pair_to_save, full_dim), fillvalue=0)
+            # HDF5 defaults to float32 when only a shape is supplied.
+            dset = chkf.create_dataset('tri_vec', shape=(2 * nvec_pair_to_save, full_dim),
+                                      dtype=tri_vec.dtype, fillvalue=0)
             blksize = 10
             buf = np.empty((blksize, full_dim))
             for i in range(0, nvec_pair_to_save, blksize):
@@ -275,7 +277,8 @@ def davidson_restart(Mp, Mm, tri_vec, nvec_pair_to_save, e_min=0.0):
         # Write out the left and right vectors in the full space to a temporary file.
         # They're written to disk because they may be too large to fit in memory.
         with lib.H5TmpFile() as chkf:
-            dset = chkf.create_dataset('tri_vec', shape=(nvec_pair_to_save, full_dim), fillvalue=0)
+            dset = chkf.create_dataset('tri_vec', shape=(nvec_pair_to_save, full_dim),
+                                      dtype=tri_vec.dtype, fillvalue=0)
             blksize = 10
             buf = np.empty((blksize, full_dim))
             for i in range(0, nvec_pair_to_save, blksize):
@@ -318,11 +321,14 @@ def davidson_save_checkpoint(chkfile, tri_vec, amb_prod, apb_prod, nprod):
     full_dim = tri_vec.shape[1]
     with h5py.File(chkfile, 'a') as chkf:
         if 'tri_vec' not in chkf:
-            chkf.create_dataset('tri_vec', data=tri_vec, maxshape=(None, full_dim), chunks=(1, full_dim))
-            chkf.create_dataset('amb_prod', data=amb_prod, maxshape=(None, full_dim), chunks=(1, full_dim))
-            chkf.create_dataset('apb_prod', data=apb_prod, maxshape=(None, full_dim), chunks=(1, full_dim))
+            # Only the first nprod rows are valid; the remaining rows are workspace.
+            chkf.create_dataset('tri_vec', data=tri_vec[:nprod], maxshape=(None, full_dim), chunks=(1, full_dim))
+            chkf.create_dataset('amb_prod', data=amb_prod[:nprod], maxshape=(None, full_dim), chunks=(1, full_dim))
+            chkf.create_dataset('apb_prod', data=apb_prod[:nprod], maxshape=(None, full_dim), chunks=(1, full_dim))
         else:
             old_ntri = chkf['tri_vec'].shape[0]
+            if nprod == old_ntri:
+                return
             # Discard old contents if we're overwriting.
             if nprod < old_ntri:
                 old_ntri = 0
@@ -480,12 +486,13 @@ def bse_davidson(
         Laa_diag = [np.diagonal(Laa[s], axis1=1, axis2=2) for s in range(nspin)]
         Lii_bar_diag = [np.diagonal(Lii_bar[s], axis1=0, axis2=2) for s in range(nspin)]
         v_iaia = [
-            2 / nspin * np.vecdot(Lia[s].reshape(-1, nocc[s] * nvir[s]).T, Lia[s].reshape(-1, nocc[s] * nvir[s]).T)
+            (2 / nspin * np.einsum('Pia,Pia->ia', Lia[s].conj(), Lia[s])).ravel()
             for s in range(nspin)
         ]
         Wiiaa = [(Lii_bar_diag[s].T @ Laa_diag[s]).reshape(nocc[s] * nvir[s]) for s in range(nspin)]
         Wiaia = [
-            np.vecdot(Lia_bar[s].reshape(-1, nocc[s] * nvir[s]).T, Lia[s].reshape(-1, nocc[s] * nvir[s]).T).reshape(
+            np.einsum('pi,pi->i', Lia_bar[s].reshape(-1, nocc[s] * nvir[s]).conj(),
+                      Lia[s].reshape(-1, nocc[s] * nvir[s])).reshape(
                 nocc[s] * nvir[s]
             )
             for s in range(nspin)

@@ -261,35 +261,3 @@ def set_atom_conf(element, description):
     AOSHELL[charge] = [c_conf, cv_conf]
     sys.stderr.write('Update %s conf: core %s core+valence %s\n' %
                      (element, c_conf, cv_conf))
-
-
-if __name__ == "__main__":
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.verbose = 1
-    mol.output = 'out_nao'
-    mol.atom.extend([
-        ['O' , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ])
-    mol.basis = {'H': '6-31g',
-                 'O': '6-31g',}
-    mol.build()
-
-    mf = scf.RHF(mol)
-    mf.scf()
-
-    s = mol.intor_symmetric('int1e_ovlp_sph')
-    p = reduce(numpy.dot, (s, mf.make_rdm1(), s))
-    o0, c0 = _prenao_sub(mol, p, s)
-    print(o0)
-    print(abs(c0).sum() - 21.848915907988854)
-
-    c = nao(mol, mf)
-    print(reduce(numpy.dot, (c.T, p, c)).diagonal())
-    print(_core_val_ryd_list(mol))
-
-    set_atom_conf('Fe', '1s1d')      # core 3s2p0d0f core+valence 4s2p1d0f
-    set_atom_conf('Fe', 'double d')  # core 3s2p0d0f core+valence 4s2p2d0f
-    set_atom_conf('Fe', 'double p')  # core 3s2p0d0f core+valence 4s4p2d0f
-    set_atom_conf('Fe', 'polarize')  # core 3s2p0d0f core+valence 4s4p2d1f

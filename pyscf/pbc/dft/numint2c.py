@@ -85,7 +85,7 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
             dm_a = dm[:nao,:nao].copy('C')
             dm_b = dm[nao:,nao:].copy('C')
             ni = self._to_numint1c()
-            with_lapl = True
+            with_lapl = False  # Only first AO derivatives are available for MGGA.
             hermi = 1
             rhoa = []
             rhob = []
@@ -136,7 +136,7 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
             dm_a = dm[:nao,:nao].copy('C')
             dm_b = dm[nao:,nao:].copy('C')
             ni = self._to_numint1c()
-            with_lapl = True
+            with_lapl = False  # Only first AO derivatives are available for MGGA.
             rhoa = []
             rhob = []
             for ao_k1, ao_k2, mask, weight, coords \
@@ -388,12 +388,14 @@ class KNumInt2C(lib.StreamObject, numint.LibXCMixin):
         '''Compute the 0th order density, Vxc and fxc.  They can be used in TDDFT,
         DFT hessian module etc.
         '''
+        mo_coeff = mo_coeff_kpts
+        mo_occ = mo_occ_kpts
         if kpts is None:
             kpts = np.zeros((1,3))
         elif isinstance(kpts, KPoints):
-            kpts = kpts.kpts
             mo_coeff = kpts.transform_mo_coeff(mo_coeff_kpts)
             mo_occ = kpts.transform_mo_occ(mo_occ_kpts)
+            kpts = kpts.kpts
         xctype = self._xc_type(xc_code)
         if xctype in ('GGA', 'MGGA'):
             ao_deriv = 1
@@ -420,12 +422,12 @@ class KNumInt2C(lib.StreamObject, numint.LibXCMixin):
         else:
             # rhoa and rhob must be real
             dm_a = [(mo[:nao]*occ).dot(mo[:nao].conj().T)
-                    for mo, occ in zip(mo_coeff_kpts, mo_occ_kpts)]
+                    for mo, occ in zip(mo_coeff, mo_occ)]
             dm_b = [(mo[nao:]*occ).dot(mo[nao:].conj().T)
-                    for mo, occ in zip(mo_coeff_kpts, mo_occ_kpts)]
+                    for mo, occ in zip(mo_coeff, mo_occ)]
             hermi = 1
             ni = self._to_numint1c()
-            with_lapl = True
+            with_lapl = False  # Only first AO derivatives are available for MGGA.
             hermi = 1
             rhoa = []
             rhob = []
@@ -453,7 +455,7 @@ class KNumInt2C(lib.StreamObject, numint.LibXCMixin):
             ao_deriv = 1
         else:
             ao_deriv = 0
-        n2c = dm_kpts.shape[0]
+        n2c = dm_kpts.shape[-1]
         nao = n2c // 2
 
         if self.collinear[0] in ('m', 'n'):  # mcol or ncol
@@ -476,7 +478,7 @@ class KNumInt2C(lib.StreamObject, numint.LibXCMixin):
             dm_a = dm_kpts[:,:nao,:nao].copy('C')
             dm_b = dm_kpts[:,nao:,nao:].copy('C')
             ni = self._to_numint1c()
-            with_lapl = True
+            with_lapl = False  # Only first AO derivatives are available for MGGA.
             rhoa = []
             rhob = []
             for ao_k1, ao_k2, mask, weight, coords \

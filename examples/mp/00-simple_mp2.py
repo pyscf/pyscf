@@ -19,7 +19,11 @@ mol = pyscf.M(
     basis = 'ccpvdz')
 
 mf = mol.RHF().run()
-mf.MP2().run()
+pt = mf.MP2().run()
+
+# The low-memory MP2 path gives the same correlation energy.
+pt.max_memory = 1
+print('Low-memory MP2 correlation energy:', pt.kernel()[0])
 
 # Unrestricted and generalized MP2
 mol = pyscf.M(

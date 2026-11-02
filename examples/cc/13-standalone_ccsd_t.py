@@ -36,3 +36,16 @@ mycc.__dict__.update(scf.chkfile.load('h10.chk', 'cc'))
 eris = mycc.ao2mo()
 ccsd_t.kernel(mycc, eris)
 
+# Re-express the same restricted amplitudes in unrestricted spin blocks.
+# No new SCF or CCSD optimization is needed for this representation change.
+from pyscf.cc import uccsd_t, addons
+ucc = cc.UCCSD(mf.to_uhf())
+t1 = (mycc.t1, mycc.t1)
+same_spin = mycc.t2 - mycc.t2.transpose(1, 0, 2, 3)
+t2 = (same_spin, mycc.t2, same_spin)
+uet = uccsd_t.kernel(ucc, ucc.ao2mo(), t1, t2)
+# Conversion to GCCSD likewise preserves the reference and amplitudes.
+gcc = addons.convert_to_gccsd(mycc)
+get = gcc.ccsd_t()
+print('Restricted, unrestricted, generalized triples corrections',
+      ccsd_t.kernel(mycc, eris), uet, get)

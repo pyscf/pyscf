@@ -344,28 +344,3 @@ class UCCSDT(uccsdt.UCCSDT):
     do_tri_max_t = property(lambda self: False)
 
     update_amps_ = update_amps_uccsdt_
-
-
-if __name__ == "__main__":
-
-    from pyscf import gto, scf, df
-
-    mol = gto.M(atom="O 0 0 0; O 0 0 1.21", basis='631g', verbose=0, spin=2)
-    mf = scf.UHF(mol)
-    mf.level_shift = 0.0
-    mf.conv_tol = 1e-14
-    mf.max_cycle = 1000
-    mf.kernel()
-
-    ref_ecorr = -0.2413923134881862
-    mycc = UCCSDT(mf, frozen=0)
-    mycc.set_einsum_backend('numpy')
-    mycc.conv_tol = 1e-12
-    mycc.conv_tol_normt = 1e-10
-    mycc.max_cycle = 100
-    mycc.verbose = 5
-    mycc.do_diis_max_t = True
-    mycc.incore_complete = True
-    ecorr, tamps = mycc.kernel()
-    print("E_corr: % .10f    Ref: % .10f    Diff: % .10e"%(mycc.e_corr, ref_ecorr, mycc.e_corr - ref_ecorr))
-    print()

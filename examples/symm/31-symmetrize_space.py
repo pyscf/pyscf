@@ -49,3 +49,10 @@ virt_orb = symm.symmetrize_space(mol, mo[:,nocc:])
 irrep_ids = symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, virt_orb)
 print('Virtual orbital symmetry: %s' % irrep_ids)
 
+# If orbitals are mixed across irreps, symmetrize_orb restores each orbital's
+# dominant irrep; symmetrize_space above instead rotates an entire subspace.
+mixed_mo = mo.copy()
+mixed_mo[:, 0] += .01 * mo[:, 1]
+repaired_mo = symm.symmetrize_orb(mol, mixed_mo)
+print('Repaired orbital irreps:',
+      symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, repaired_mo))

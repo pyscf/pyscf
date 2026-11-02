@@ -73,7 +73,7 @@ def pipek_stability_jacobi(mlo, verbose=None, return_status=False, Rmax=10):
     phase = numpy.exp(1j * numpy.dot(Rs, kpts.T))
     phase_bvk = numpy.exp(1j * numpy.dot(Rs_bvk, kpts.T))
 
-    latvec_bvk = lib.einsum('ix,i->ix', cell.lattice_vectors(), kmesh)
+    latvec_bvk = cell.lattice_vectors() * numpy.asarray(kmesh)[:, None]
     def get_shift_map(Rs, R0, logacc=8):
         ''' Mapping Rs-R0 back to Rs using BvK lattice vectors
 

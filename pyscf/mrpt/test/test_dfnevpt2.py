@@ -16,6 +16,9 @@
 # Author: Bhavnesh Jangid <jangidbhavnesh@uchicago.edu>
 
 import unittest
+import h5py
+import numpy as np
+from pyscf import df
 from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
@@ -75,6 +78,35 @@ class KnownValues(unittest.TestCase):
         # I needed to loosen this threshold, because it is causing test failure on
         # macos-build.
         self.assertAlmostEqual(mp1.e_corr, -0.256916544254705, delta=1e-4)
+
+    def check_blocks(self, ncas, nelecas):
+        mol = gto.M(atom='Li 0 0 0; H 0 0 1.6', basis='sto-3g', verbose=0)
+        self.mf = scf.RHF(mol).run(conv_tol=1e-12)
+        self.df = df.DF(mol, auxbasis='weigend').build()
+        self.eri = self.df.ao2mo(self.mf.mo_coeff, compact=False).reshape([6]*4)
+
+        mc = mcscf.CASCI(self.mf, ncas, nelecas)
+        core, occ = mc.ncore, mc.ncore+mc.ncas
+        papa, ppaa, pacv, disk = dfnevpt2._dfnevpt2_eris_outcore(mc, self.mf.mo_coeff, self.df)
+        try:
+            np.testing.assert_allclose(papa, self.eri[:, core:occ, :, core:occ], atol=1e-11)
+            np.testing.assert_allclose(ppaa, self.eri[:, :, core:occ, core:occ], atol=1e-11)
+            np.testing.assert_allclose(pacv, self.eri[:, core:occ, :core, occ:], atol=1e-11)
+            with h5py.File(disk.name, 'r') as f:
+                actual = f['eri_mo'][:]
+            expected = self.eri[:core, occ:, :core, occ:].reshape(core*(6-occ), -1) if core*(6-occ) else np.zeros((0, 0))
+            np.testing.assert_allclose(actual, expected, atol=1e-11)
+        finally:
+            disk.close()
+
+    def test_core_active_virtual_blocks(self):
+        self.check_blocks(2, 2)
+
+    def test_no_core(self):
+        self.check_blocks(4, 4)
+
+    def test_no_virtual(self):
+        self.check_blocks(5, 2)
 
 if __name__ == "__main__":
     print("Full Tests for df-nevpt2")

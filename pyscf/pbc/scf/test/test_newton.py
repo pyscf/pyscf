@@ -213,7 +213,7 @@ class KnowValues(unittest.TestCase):
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -10.446717855794008, 8)
 
-    def test_nr_krks_rsh(self):
+    def test_nr_krks_rsh_high_cost(self):
         mf = dft.KRKS(cell, cell.make_kpts([2,1,1]))
         mf.xc = 'camb3lyp'
         mf = mf.newton()
@@ -251,7 +251,7 @@ class KnowValues(unittest.TestCase):
         g, hop, hdiag = mf.gen_g_hop(mo, mo_occ, [mf.get_hcore()]*2)
         self.assertAlmostEqual(numpy.linalg.norm(hop(dm1)), 28.01954683540594, 6)
 
-    def test_exxdiv_treatment_newton(self):
+    def test_exxdiv_treatment_newton_high_cost(self):
         mf_fo = scf.KRHF(cell, cell.make_kpts([2,1,1]))
         mf_fo.exxdiv = None
         mf_fo.conv_tol_grad = 1e-4

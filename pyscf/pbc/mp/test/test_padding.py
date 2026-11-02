@@ -20,6 +20,7 @@ from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pbcscf
 import pyscf.pbc.mp
 import pyscf.pbc.mp.kmp2
+from pyscf.pbc.mp.kmp2 import KMP2, padding_k_idx
 
 
 def setUpModule():
@@ -54,7 +55,7 @@ def run_kcell(cell, nk):
     return ekpt, mp.e_corr
 
 class KnownValues(unittest.TestCase):
-    def test_211(self):
+    def test_211_high_cost(self):
         cell1 = cell.copy()
         cell1.basis = 'gth-dzv'
         cell1.mesh = [17] * 3
@@ -84,6 +85,28 @@ class KnownValues(unittest.TestCase):
         escf, emp = run_kcell(cell,nk)
         self.assertAlmostEqual(escf, -11.015234407761824, 6)
         self.assertAlmostEqual(emp,   -0.233433146996230, 7)
+
+
+    def test_density_with_frozen_virtual_padding(self):
+        cell = pbcgto.M(atom='He 0 0 0', a=np.eye(3)*3,
+                     basis=[[0, [2., 1]], [0, [.8, 1]], [0, [.3, 1]]],
+                     mesh=[15]*3, precision=1e-7, verbose=0)
+        kpts = cell.make_kpts([2, 1, 1])
+        mf = pbcscf.KRHF(cell, kpts).density_fit(auxbasis='weigend').run(conv_tol=1e-11)
+        self.assertTrue(mf.converged)
+        for frozen in (None, [[], [2]]):
+            with self.subTest(frozen=frozen):
+                mp = KMP2(mf, frozen=frozen).run()
+                self.assertLess(mp.e_corr, 0)
+                dm = mp.make_rdm1(kind='padded')
+                np.testing.assert_allclose(dm, np.asarray(dm).conj().transpose(0, 2, 1), atol=1e-12)
+                self.assertAlmostEqual(np.trace(dm, axis1=1, axis2=2).sum().real/len(kpts), 2., places=10)
+                compact = mp.make_rdm1(kind='compact')
+                for padded, active, idx in zip(dm, compact, padding_k_idx(mp, kind='joint')):
+                    np.testing.assert_allclose(padded[np.ix_(idx, idx)], active, atol=1e-12)
+                if frozen is not None:
+                    self.assertEqual(compact[1].shape, (2, 2))
+                    self.assertEqual(compact[0].shape, (3, 3))
 
 
 if __name__ == '__main__':

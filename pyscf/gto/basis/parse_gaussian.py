@@ -118,6 +118,3 @@ def _parse(raw_basis, optimize=True):
 
     basis_sorted = remove_zero(basis_sorted)
     return basis_sorted
-
-if __name__ == '__main__':
-    print(load('def2-qzvp-jkfit.gbs', 'C'))

@@ -77,10 +77,19 @@ ekrhf = kmf.kernel()
 # KGCCSD
 mycc = cc.KGCCSD(kmf)
 ekgcc, t1, t2 = mycc.kernel()
+# The same converged amplitudes also give the perturbative triples correction.
+et = mycc.ccsd_t()
 
 # EOM-EE-KGCCSD
 myeomee = eom_kgccsd.EOMEE(mycc)
 eee, vee = myeomee.kernel(nroots=nroots_test)
+
+# Charged excitations at the first k-point: remove an electron (IP) or add
+# one (EA). Koopmans guesses can help select the desired EA roots.
+eip, vip = eom_kgccsd.EOMIP(mycc).ipccsd(nroots=2, kptlist=[0])
+myeomea = eom_kgccsd.EOMEA(mycc)
+myeomea.max_cycle = 100
+eea, vea = myeomea.eaccsd(nroots=2, koopmans=True, kptlist=[0])
 
 # Supercell
 scell = super_cell(cell, nmp)
@@ -101,6 +110,9 @@ eee_mol, vee_mol = myeomee.kernel(nroots=nroots_test*np.prod(nmp))
 print("PBC KRHF Energy:", ekrhf)
 print("PBC RHF Energy :", erhf)
 print("PBC KGCCSD Energy        :", ekgcc)
+print("PBC KGCCSD(T) correction :", et)
 print("Mol GCCSD Energy per cell:", egcc / np.prod(nmp))
 print("PBC EOMEE roots:", eee)
+print("PBC EOMIP roots:", eip)
+print("PBC EOMEA roots:", eea)
 print("Mol EOMEE roots:", eee_mol)

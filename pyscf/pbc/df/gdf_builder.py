@@ -946,10 +946,16 @@ def fuse_auxcell(auxcell, eta):
                         Lpq_sph[s0:s1] = Lpq[c0:c1]
                     else:
                         Lpq_cart = np.asarray(Lpq[c0:c1], order='C')
-                        c2s_fn(Lpq_sph[s0:s1].ctypes.data_as(ctypes.c_void_p),
-                               ctypes.c_int(npq * auxcell.bas_nctr(i)),
-                               Lpq_cart.ctypes.data_as(ctypes.c_void_p),
-                               ctypes.c_int(l))
+                        # The shell is stored as (nctr, nd, npq), with a separate
+                        # Cartesian angular block for each radial contraction.
+                        # Processing each shell separately when nctr > 1.
+                        for ic in range(auxcell.bas_nctr(i)):
+                            out = Lpq_sph[s0+ic*(2*l+1):s0+(ic+1)*(2*l+1)]
+                            buf = Lpq_cart[ic*nd:(ic+1)*nd]
+                            c2s_fn(out.ctypes.data_as(ctypes.c_void_p),
+                                   ctypes.c_int(npq),
+                                   buf.ctypes.data_as(ctypes.c_void_p),
+                                   ctypes.c_int(l))
             if axis == 1 and Lpq.ndim == 2:
                 Lpq_sph = lib.transpose(Lpq_sph)
             return Lpq_sph

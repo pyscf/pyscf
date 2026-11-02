@@ -24,6 +24,15 @@ ref_e_q_bracket = -0.0005026220700017348
 ref_e_q_paren = -0.0005490746450078632
 
 mycc1 = cc.RCCSDT(mf, compact_tamps=True)
+# For a larger system, density fit the SCF reference and freeze core orbitals:
+# from pyscf.data.elements import chemcore
+# mf = scf.RHF(mol).density_fit().run()
+# mycc1 = cc.RCCSDT(mf, frozen=chemcore(mol), compact_tamps=True)
+# mycc1.blksize = 2
+# mycc1.do_diis_max_t = False  # Exclude the highest-rank amplitudes from DIIS.
+# These options change memory/convergence behavior; DF and freezing core also
+# change the energy, so the reference values below would need updating.
+# mycc1.blksize_oovv = mycc1.blksize_oooo = 2  # Lower peak memory.
 mycc1.conv_tol = 1e-10
 mycc1.conv_tol_normt = 1e-8
 mycc1.verbose = 5

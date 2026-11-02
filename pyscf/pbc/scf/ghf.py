@@ -184,25 +184,3 @@ class GHF(pbchf.SCF):
         return self
 
     to_gpu = lib.to_gpu
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    from pyscf.pbc import scf
-
-    cell = gto.Cell()
-    cell.atom = '''
-    H 0 0 0
-    H 1 0 0
-    H 0 1 0
-    H 0 1 1
-    '''
-    cell.a = np.eye(3)*2
-    cell.basis = [[0, [1.2, 1]]]
-    cell.verbose = 4
-    cell.build()
-
-    kpts = cell.make_kpts([2,2,2])
-    mf = scf.RHF(cell, kpt=kpts[7]).run()
-    mf = GHF(cell, kpt=kpts[7])
-    mf.kernel()

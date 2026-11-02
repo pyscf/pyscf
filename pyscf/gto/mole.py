@@ -2599,11 +2599,17 @@ class MoleBase(lib.StreamObject):
 
         if self.atom:
             self._atom = self.format_atom(self.atom, unit=self.unit)
+        else:
+            self._atom = []
         uniq_atoms = {a[0] for a in self._atom}
 
         if self.basis:
             _basis = _parse_default_basis(self.basis, uniq_atoms)
             self._basis = self.format_basis(_basis)
+        elif basis is not None:
+            # An explicit empty basis clears it. With no basis argument,
+            # preserve preformatted _basis used by Molden/TREXIO readers.
+            self._basis = {}
         env = self._env[:PTR_ENV_START]
         self._atm, self._bas, self._env = \
                 self.make_env(self._atom, self._basis, env, self.nucmod,
@@ -2612,6 +2618,10 @@ class MoleBase(lib.StreamObject):
         if self.pseudo:
             self.ecp, self.pseudo = classify_ecp_pseudo(self, self.ecp, self.pseudo)
 
+        # Rebuilding may remove all ECPs or leave only atoms without an ECP.
+        # The old ECP table refers to the previous integral environment.
+        self._ecp = {}
+        self._ecpbas = numpy.zeros((0, BAS_SLOTS), dtype=numpy.int32)
         if self.ecp:
             # Unless explicitly input, ECP should not be assigned to ghost atoms
             atoms_wo_ghost = [a for a in uniq_atoms if not is_ghost_atom(a)]
@@ -2621,6 +2631,7 @@ class MoleBase(lib.StreamObject):
                 self._atm, self._ecpbas, self._env = \
                         self.make_ecp_env(self._atm, self._ecp, self._env)
 
+        self._pseudo = {}
         if self.pseudo:
             # Unless explicitly input, PP should not be assigned to ghost atoms
             atoms_wo_ghost = [a for a in uniq_atoms if not is_ghost_atom(a)]
@@ -2662,6 +2673,11 @@ class MoleBase(lib.StreamObject):
 
         if self.symmetry:
             self._build_symmetry()
+        else:
+            self.topgroup = self.groupname = 'C1'
+            self.symm_orb = None
+            self.irrep_id = self.irrep_name = None
+            self._symm_orig = self._symm_axes = None
 
         if dump_input and not self._built and self.verbose > logger.NOTE:
             self.dump_input()

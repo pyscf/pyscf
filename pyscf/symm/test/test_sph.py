@@ -20,7 +20,7 @@ import numpy as np
 from numpy import pi, sqrt
 from pyscf import gto
 from pyscf import symm
-from pyscf.symm import sph
+from pyscf.symm import sph, cg
 
 def setUpModule():
     global h2o
@@ -117,6 +117,27 @@ class KnownValues(unittest.TestCase):
         ref = real_sph_ref(r, 5)
         ylm = sph.real_sph_vec(r, 5)
         self.assertAlmostEqual(abs(ref - numpy.vstack(ylm).T).max(), 0, 14)
+
+
+    def test_clebsch_gordan_normalization_and_phase(self):
+        for kappa in list(range(-4, 0)) + list(range(1, 4)):
+            l = -kappa-1 if kappa < 0 else kappa
+            j = 2*l+1 if kappa < 0 else 2*l-1
+            for mj in range(-j, j+1, 2):
+                with self.subTest(kappa=kappa, mj=mj):
+                    up, down = cg.cg_spin(l, j, mj, 1), cg.cg_spin(l, j, mj, -1)
+                    self.assertAlmostEqual(up**2+down**2, 1., places=14)
+                    self.assertGreaterEqual(down, 0.)
+                    self.assertGreaterEqual(up if kappa < 0 else -up, 0.)
+
+    def test_spherical_and_spinor_unitarity(self):
+        for l in range(3):
+            with self.subTest(l=l):
+                u, v = sph.sph_pure2real(l), sph.sph_real2pure(l)
+                np.testing.assert_allclose(u @ v, np.eye(2*l+1), atol=1e-14)
+                up, down = sph.sph2spinor(l)
+                spinor = np.vstack((up, down))
+                np.testing.assert_allclose(spinor.conj().T @ spinor, np.eye(4*l+2), atol=1e-14)
 
 
 if __name__ == "__main__":

@@ -41,3 +41,22 @@ assert (abs(grad).sum()<1e-5) # making sure the geometry is relaxed
 myeph = eph.EPH(mf)
 mat, omega = myeph.kernel()
 print(mat.shape, omega)
+
+# Closed-shell unrestricted EPH gives alpha and beta coupling matrices.
+water = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587',
+              basis='sto3g')
+uhf = water.UHF().run()
+(eph_a, eph_b), omega_uhf = eph.EPH(uhf).kernel()
+print('UHF alpha/beta difference:', np.linalg.norm(eph_a - eph_b))
+rhf_ao, _ = eph.EPH(water.RHF().run()).kernel()
+print('UHF/RHF AO difference by mode:',
+      [min(np.linalg.norm(a - r), np.linalg.norm(a + r))
+       for a, r in zip(eph_a, rhf_ao)])
+
+# The same spin-resolved interface works with unrestricted KS.
+uks = dft.UKS(mol, xc='pbe,pbe').run()
+(eph_a, eph_b), omega_uks = eph.EPH(uks).kernel()
+print('UKS alpha/beta difference:', np.linalg.norm(eph_a - eph_b))
+print('UKS/RKS AO difference by mode:',
+      [min(np.linalg.norm(a - r), np.linalg.norm(a + r))
+       for a, r in zip(eph_a, mat)])

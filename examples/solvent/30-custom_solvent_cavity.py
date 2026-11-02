@@ -69,3 +69,18 @@ sol.get_atomic_radii = lambda: cavity_radii
 mf = mol.RHF().QMMM(coords, charges)
 mf = mf.ddCOSMO(sol)
 mf.run()
+
+
+# To inspect the ddCOSMO cavity equations directly, build the matrix L from
+# the same sphere grid and cavity radii used by the solvent object.
+from pyscf.solvent import ddcosmo
+from pyscf.symm import sph
+
+water = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='sto3g')
+sol = solvent.ddCOSMO(water)
+radii = sol.get_atomic_radii()
+sphere_coords, _ = ddcosmo.make_grids_one_sphere(sol.lebedev_order)
+ylm = numpy.vstack(sph.real_sph_vec(sphere_coords, sol.lmax, True))
+fi = ddcosmo.make_fi(sol, radii)
+cavity_matrix = ddcosmo.make_L(sol, radii, ylm, fi)
+print('ddCOSMO cavity matrix shape:', cavity_matrix.shape)

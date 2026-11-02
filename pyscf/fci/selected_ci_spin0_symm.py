@@ -119,34 +119,3 @@ class SelectedCI(selected_ci_symm.SelectedCI):
     enlarge_space = selected_ci_spin0.enlarge_space
 
 SCI = SelectedCI
-
-
-if __name__ == '__main__':
-    from functools import reduce
-    from pyscf import gto
-    from pyscf import scf
-    from pyscf import symm
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None
-    mol.atom = [
-        ['O', ( 0., 0.    , 0.   )],
-        ['H', ( 0., -0.757, 0.587)],
-        ['H', ( 0., 0.757 , 0.587)],]
-    mol.basis = 'sto-3g'
-    mol.symmetry = 1
-    mol.build()
-    m = scf.RHF(mol).run()
-
-    norb = m.mo_coeff.shape[1]
-    nelec = mol.nelectron - 2
-    h1e = reduce(numpy.dot, (m.mo_coeff.T, scf.hf.get_hcore(mol), m.mo_coeff))
-    eri = ao2mo.incore.full(m._eri, m.mo_coeff)
-    orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, m.mo_coeff)
-
-    myci = SelectedCI().set(orbsym=orbsym)
-    e1, c1 = myci.kernel(h1e, eri, norb, nelec)
-    myci = direct_spin1_symm.FCISolver().set(orbsym=orbsym)
-    e2, c2 = myci.kernel(h1e, eri, norb, nelec)
-    print(e1 - e2)

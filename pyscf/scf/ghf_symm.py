@@ -112,6 +112,7 @@ class SymAdaptedGHF(ghf.GHF):
         return self
 
     def build(self, mol=None):
+        assert not self.with_soc, 'Symmetry-adapted GHF does not support spin-orbit coupling'
         if mol is None: mol = self.mol
         if not mol.symmetry:
             raise RuntimeError('mol.symmetry not enabled')
@@ -362,26 +363,3 @@ def get_orbsym(mol, mo_coeff, s=None, check=False, symm_orb=None, irrep_id=None)
         orbsym = symm.label_orb_symm(mol, irrep_id, symm_orb,
                                      mo_a, s, check)
     return numpy.asarray(orbsym)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.build(
-        verbose = 1,
-        output = None,
-        atom = [['O', (0.,0.,0.)],
-                ['O', (0.,0.,1.)], ],
-        basis = {'O': 'ccpvdz'},
-        symmetry = True,
-        charge = -1,
-        spin = 1
-    )
-
-    method = GHF(mol)
-    method.verbose = 5
-    method.irrep_nelec['A1u'] = 1
-    energy = method.kernel()
-    print(energy - -126.117033823738)
-    method.canonicalize(method.mo_coeff, method.mo_occ)
-    method.analyze()

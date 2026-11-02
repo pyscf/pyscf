@@ -78,3 +78,14 @@ mf.verbose = 4
 # in mf._scf object.
 mf.mol = soscf.newton_ah.project_mol(mf.mol, dual_basis='ccpvdz')
 mf.kernel()
+
+# Newton optimization is also available for generalized HF. Starting from a
+# one-cycle UHF calculation is useful when a cheap initial orbital set exists.
+mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='6-31g')
+mf = scf.UHF(mol).run(max_cycle=1)
+mf = mf.newton().run(mf.mo_coeff, mf.mo_occ)
+
+# Density fitting can be applied to the second-order solver as well.
+mf = scf.UHF(mol).newton().density_fit(auxbasis='weigend')
+mf.kernel()
+scf.GHF(mol).newton().kernel()

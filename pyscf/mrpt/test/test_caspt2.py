@@ -220,7 +220,7 @@ class KnownValues(unittest.TestCase):
         mr.kernel()
         self.assertAlmostEqual(mr.e_tot, -148.999916301282497, 6) # openmolcas -148.9999122653
 
-    def test_h2o_pbc(self):
+    def test_h2o_pbc_high_cost(self):
         from pyscf.pbc import gto, scf
 
         cell = gto.Cell()

@@ -116,6 +116,30 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(eci[1][0], 1.5164275, 5)
 
 
+    def test_direct_and_stored_spectra(self):
+        cell = gto.M(atom='H 0 0 0; H 0 0 .74', a=np.eye(3)*4,
+                     basis='gth-szv', pseudo='gth-pade', mesh=[11]*3,
+                     precision=1e-7, verbose=0)
+        mf = scf.KRHF(cell, cell.make_kpts([2, 1, 1]), exxdiv=None)
+        mf = mf.density_fit(auxbasis='weigend').run(conv_tol=1e-11)
+        ref = ci.KCIS(mf)
+        ref.davidson = False
+        ref.build_full_H = True
+        er, _ = ref.kernel(nroots=2)
+        direct = ci.KCIS(mf)
+        direct.direct = True
+        ed, _ = direct.kernel(nroots=2)
+        np.testing.assert_allclose(ed, er, atol=1e-9)
+        direct.davidson = False
+        direct.build_full_H = False
+        em, _ = direct.kernel(nroots=2)
+        np.testing.assert_allclose(em, er, atol=1e-9)
+        disk = ci.KCIS(mf)
+        disk.max_memory = 0
+        eo, _ = disk.kernel(nroots=2)
+        np.testing.assert_allclose(eo, er, atol=1e-9)
+
+
 if __name__ == "__main__":
     print("Full Tests for PBC CIS")
     unittest.main()

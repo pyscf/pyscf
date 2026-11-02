@@ -23,6 +23,7 @@
 #   3. L-PDFT gradients for multi_state_mix type objects.
 
 import unittest
+import numpy as np
 
 from pyscf import scf, gto, df, dft, lib
 from pyscf import mcpdft
@@ -265,6 +266,21 @@ class KnownValues(unittest.TestCase):
             with self.subTest(state=i):
                 de = mc_grad.kernel(state=i)[1, 0]
                 self.assertAlmostEqual(de, NUM_REF[i], 5)
+
+    def test_rohf_spin_specification(self):
+        mol = gto.M(atom='Li 0 0 0; H 0 0 1.4', basis='sto-3g', spin=2, verbose=0)
+        mf = scf.ROHF(mol).run(conv_tol=1e-11)
+        # Include both degenerate pi orbitals in the active space.
+        results = []
+        for electrons in (2, (2, 0)):
+            mc = mcpdft.CASSCF(mf, 'ftPBE', 4, electrons, grids_level=0)
+            mc = mc.multi_state([1/3]*3, 'lin').fix_spin_(ss=2, shift=2)
+            mc.conv_tol = 1e-10
+            mc.run()
+            self.assertTrue(mc.converged)
+            results.append((mc.e_states, mc.nuc_grad_method().kernel(state=0)))
+        np.testing.assert_allclose(results[0][0], results[1][0], atol=1e-8)
+        np.testing.assert_allclose(results[0][1], results[1][1], atol=1e-7)
 
     def test_rohf_sanity (self):
         n_states = 3

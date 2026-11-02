@@ -30,6 +30,8 @@ from pyscf import solvent
 mf = mf.ddCOSMO()
 # Adjust solvent model by modifying the attribute .with_solvent
 mf.with_solvent.eps = 32.613  # methanol dielectric constant
+# Set eps = -1 for the conductor limit of the dielectric model.
+# mf.with_solvent.eps = -1
 mf.run()
 
 # Instead of assigning the dielectric constant, the solvent can be specified by

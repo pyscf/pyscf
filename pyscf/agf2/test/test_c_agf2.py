@@ -78,6 +78,23 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(np.max(np.absolute(vv1-vv2)), 0.0, 8)
         self.assertAlmostEqual(np.max(np.absolute(vev1-vev2)), 0.0, 8)
 
+    def test_c_dfuagf2_lowmem(self):
+        # Unequal spin dimensions and isolated spin contributions exercise
+        # the low-memory contractions against the Python reference.
+        rng = np.random.default_rng(37)
+        qxi = (rng.normal(size=(5, 12)), rng.normal(size=(5, 8)))
+        qja = (rng.normal(size=(5, 6)), rng.normal(size=(5, 6)))
+        occ = (np.array([-1.2, -.8, -.3]), np.array([-1.1, -.5]))
+        vir = (np.array([.2, .7]), np.array([.3, .6, 1.]))
+        for ss, os in ((1., 1.), (0., 1.2), (.4, 0.)):
+            with self.subTest(same_spin=ss, opposite_spin=os):
+                ref = _agf2.build_mats_dfuagf2_outcore(qxi, qja, occ, vir, os_factor=os, ss_factor=ss)
+                for builder in (_agf2.build_mats_dfuagf2_incore, _agf2.build_mats_dfuagf2_lowmem):
+                    actual = builder(qxi, qja, occ, vir, os_factor=os, ss_factor=ss)
+                    np.testing.assert_allclose(actual, ref, atol=1e-10)
+                self.assertGreater(np.linalg.eigvalsh(ref[0]).min(), -1e-10)
+                np.testing.assert_allclose(ref[1], ref[1].T, atol=1e-10)
+
 
 if __name__ == '__main__':
     print('AGF2 C implementations')

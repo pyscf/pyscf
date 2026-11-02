@@ -20,9 +20,9 @@ copied from GPU4PySCF with modification for CPU
 
 import numpy as np
 from pyscf.data import radii
-from pyscf.solvent import pcm, smd
+from pyscf.solvent import pcm, smd_experiment as smd
 from pyscf.solvent.grad import pcm as pcm_grad
-from pyscf.solvent.smd import (
+from pyscf.solvent.smd_experiment import (
     sigma_water, sigma_n, sigma_alpha, sigma_beta, r_zz, swtich_function,
     hartree2kcal, solvent_db)
 

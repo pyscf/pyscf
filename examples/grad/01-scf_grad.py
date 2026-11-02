@@ -37,3 +37,9 @@ mf.kernel()
 from pyscf import grad
 g = mf.Gradients()
 g.kernel()
+
+# Four-component Dirac-HF also provides analytic nuclear gradients.
+# Use the physical speed of light; changing it is useful for regression
+# tests but is unnecessary for a normal relativistic calculation.
+dhf = scf.DHF(mol).run()
+print('Dirac-HF gradient', dhf.nuc_grad_method().kernel())

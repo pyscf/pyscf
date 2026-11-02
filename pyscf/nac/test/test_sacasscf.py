@@ -140,6 +140,13 @@ class KnownValues(unittest.TestCase):
         # z_is:     yes
         mc_grad = diatomic('Li', 'H', 1.5, 'STO-3G', 2, 2, 2)
 
+        # OpenMolcas state energies from the original sacasscf.py demo:
+        # LiH at 1.5 Angstrom, STO-3G, two equally weighted singlet CAS(2,2)
+        # states. The references were printed to eight decimal places.
+        np.testing.assert_allclose(mc_grad.base.e_states,
+                                   [-7.85629118, -7.72175252],
+                                   rtol=0, atol=1e-7)
+
         # OpenMolcas v23.02 - PC
         de_ref = np.array([[1.83701729060390E-01, -6.91462064586138E-02],
                            [9.14842536971979E-02, -9.14842536971979E-02]])

@@ -1142,7 +1142,7 @@ def make_rdm1_linear(gw, ao_repr=False):
     assert gw.sigmaI is not None
     assert gw.rdm is True and gw.fullsigma is True
     assert gw.frozen is None or gw.frozen == 0
-    sigmaI = gw.sigmaI[:, :, :, 1:]
+    sigmaI = gw.sigmaI[..., 1:]
     freqs = 1j * gw.freqs
     wts = gw.wts
     nmo = gw.nmo
@@ -1154,33 +1154,31 @@ def make_rdm1_linear(gw, ao_repr=False):
                 for ib, b in enumerate(gw.orbs):
                     sigma[k, a, b, :] = sigmaI[k, ia, ib, :]
     else:
-        sigma = sigmaI
+        sigma = sigmaI.copy()  # Do not modify the cached correlation self-energy.
 
     for iw in range(len(freqs)):
-        sigma[:, :, :, iw] += gw.vk - gw.vxc
+        sigma[..., iw] += gw.vk - gw.vxc
     gf0 = get_g0_k(freqs, np.array(gw._scf.mo_energy) - gw.ef, eta=0)
     gf = np.array(gf0, copy=True)
     for k in range(nkpts):
         for iw in range(len(freqs)):
-            gf[k, :, :, iw] = reduce(np.matmul, (gf0[k, :, :, iw], sigma[k, :, :, iw], gf0[k, :, :, iw]))
+            gf[k, :, :, iw] += reduce(np.matmul, (gf0[k, :, :, iw], sigma[k, :, :, iw], gf0[k, :, :, iw]))
 
     # GW density matrix
-    rdm1 = np.zeros(shape=[nkpts, nmo, nmo], dtype=np.double)
+    rdm1 = np.zeros(shape=[nkpts, nmo, nmo], dtype=np.complex128)
     for k in range(nkpts):
-        rdm1[k] = 2.0 / np.pi * einsum('ijw,w->ij', gf[k], wts).real + np.eye(nmo)
+        rdm1[k] = 2.0 / np.pi * einsum('ijw,w->ij', gf[k], wts) + np.eye(nmo)
         logger.info(gw, 'GW particle number @ k%d = %s', k, np.trace(rdm1[k]))
 
     # Symmetrize density matrix
     for k in range(nkpts):
-        rdm1[k] = 0.5 * (rdm1[k] + rdm1[k].T)
+        rdm1[k] = 0.5 * (rdm1[k] + rdm1[k].conj().T)
 
     if ao_repr is True:
-        ovlp = gw._scf.get_ovlp()
-        for k in range(nkpts):
-            CS = np.matmul(ovlp, gw._scf.mo_coeff[k])
-            rdm1[k] = reduce(np.matmul, (CS, rdm1[k], CS.conj().T))
+        coeff = np.asarray(gw._scf.mo_coeff)
+        rdm1 = coeff @ rdm1 @ coeff.conj().swapaxes(-1, -2)
 
-    return rdm1
+    return np.real_if_close(rdm1)
 
 
 def _mo_energy_frozen(gw, mo_energy):

@@ -20,10 +20,16 @@ mol = gto.M(
 mf = mol.RHF().run()
 hessian = mf.Hessian().kernel()
 
+# Rotational constants in GHz from isotope-averaged atomic masses.
+print(thermo.rotation_const(mol.atom_mass_list(isotope_avg=True),
+                            mol.atom_coords(), 'GHz'))
+
 # Frequency analysis
 freq_info = thermo.harmonic_analysis(mf.mol, hessian)
+thermo.dump_normal_mode(mol, freq_info)
 # Thermochemistry analysis at 298.15 K and 1 atmospheric pressure
 thermo_info = thermo.thermo(mf, freq_info['freq_au'], 298.15, 101325)
+thermo.dump_thermo(mol, thermo_info)
 
 print('Rotation constant')
 print(thermo_info['rot_const'])

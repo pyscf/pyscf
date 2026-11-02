@@ -72,25 +72,3 @@ class ROKS(rks.KohnShamDFT, rohf.ROHF):
         return self._transfer_attrs_(self.mol.ROHF())
 
     to_gpu = lib.to_gpu
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf.dft import xcfun
-    mol = gto.Mole()
-    mol.verbose = 7
-    mol.output = '/dev/null'#'out_rks'
-
-    mol.atom.extend([['He', (0.,0.,0.)], ])
-    mol.basis = { 'He': 'cc-pvdz'}
-    #mol.grids = { 'He': (10, 14),}
-    mol.build()
-
-    m = ROKS(mol).run()
-    m.xc = 'b88,lyp'
-    print(m.scf())  # -2.8978518405
-
-    m = ROKS(mol)
-    m._numint.libxc = xcfun
-    m.xc = 'b88,lyp'
-    print(m.scf())  # -2.8978518405

@@ -2,7 +2,10 @@
 Direct RPA correlation energy
 '''
 
+import numpy as np
+from scipy import linalg
 from pyscf import gto, dft, gw
+from pyscf.gw import urpa
 
 mol = gto.M(
     atom = """
@@ -30,3 +33,33 @@ import pyscf.gw.rpa
 rpa = gw.rpa.dRPA(mf)
 rpa.max_memory = 50
 rpa.kernel()
+
+# On a small system, compare the frequency-integrated correlation energy
+# against the plasmon-sum expression from the RPA excitation matrix.
+small_mol = gto.M(atom='H 0 0 0; H 0 0 0.74', basis='sto3g')
+small_mf = dft.RKS(small_mol, xc='pbe').run()
+small_rpa = gw.rpa.RPA(small_mf)
+eris = small_rpa.ao2mo()
+e_corr = small_rpa.kernel(eris=eris)
+e_ov = -small_rpa.make_e_ov()
+nov = e_ov.size
+v_ov = np.asarray(eris.get_ov_blk(0, nov).T, order='C')
+interaction = 2 * v_ov.T.dot(v_ov)
+a = np.diag(e_ov) + interaction
+b = interaction
+rpa_matrix = np.block([[a, b], [-b.conj(), -a.conj()]])
+positive = linalg.eigvals(rpa_matrix).real
+positive = positive[positive > 0]
+plasmon_sum = .5 * (positive.sum() - np.trace(a))
+print('RPA frequency integration / plasmon sum:', e_corr, plasmon_sum)
+
+# URPA also accepts both closed-shell and open-shell unrestricted references.
+closed_mf = dft.UKS(small_mol, xc='pbe').run()
+closed_rpa = urpa.URPA(closed_mf).run()
+print('Closed-shell restricted / unrestricted RPA:',
+      e_corr, closed_rpa.e_corr)
+
+open_mol = gto.M(atom='F 0 0 0', basis='sto3g', spin=1)
+open_mf = dft.UKS(open_mol, xc='pbe0').run()
+open_rpa = urpa.URPA(open_mf).run()
+print('Open-shell unrestricted RPA:', open_rpa.e_corr)

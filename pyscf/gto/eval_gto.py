@@ -238,11 +238,3 @@ _GTO_EVAL_FUNCTIONS = {
     'GTOval_r2'             : (1, 1 ),
     'GTOval_r4'             : (1, 1 ),
 }
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz')
-    coords = numpy.random.random((100,3))
-    ao_value = eval_gto(mol, "GTOval_sph", coords)
-    print(ao_value.shape)
