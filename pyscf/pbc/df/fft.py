@@ -34,6 +34,8 @@ from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import is_zero
 from pyscf import __config__
 
+__all__ = ['FFTDF', 'KPoints']
+
 KE_SCALING = getattr(__config__, 'pbc_df_aft_ke_cutoff_scaling', 0.75)
 
 

@@ -45,6 +45,8 @@ from pyscf.grad import ucasci as ucasci_grad
 from pyscf.grad import kscasci as kscasci_grad
 from pyscf.grad.mp2 import _shell_prange
 
+__all__ = ['Gradients', 'Grad']
+
 
 def _check_supported_functional(mc):
     ni = mc._scf._numint

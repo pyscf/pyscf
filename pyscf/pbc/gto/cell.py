@@ -38,6 +38,15 @@ from pyscf.pbc.gto.eval_gto import eval_gto as pbc_eval_gto
 from pyscf.pbc.tools import pbc as pbctools
 from pyscf import __config__
 
+__all__ = [
+    'M', 'C', 'pack', 'unpack', 'dumps', 'loads', 'conc_cell', 'intor_cross',
+    'get_nimgs', 'bas_rcut', 'estimate_rcut', 'estimate_ke_cutoff',
+    'error_for_ke_cutoff', 'get_bounding_sphere', 'get_Gv', 'get_Gv_weights', 'get_SI',
+    'get_ewald_params', 'ewald', 'energy_nuc', 'make_kpts', 'get_uniform_grids',
+    'gen_uniform_grids', 'tot_electrons', 'pgf_rcut', 'rcut_by_shells', 'tostring',
+    'tofile', 'fromfile', 'fromstring', 'Cell',
+]
+
 INTEGRAL_PRECISION = getattr(__config__, 'pbc_gto_cell_Cell_precision', 1e-8)
 WRAP_AROUND = getattr(__config__, 'pbc_gto_cell_make_kpts_wrap_around', False)
 WITH_GAMMA = getattr(__config__, 'pbc_gto_cell_make_kpts_with_gamma', True)
@@ -828,34 +837,46 @@ def make_kpts(cell, nks, wrap_around=WRAP_AROUND, with_gamma_point=WITH_GAMMA,
               scaled_center=None,
               space_group_symmetry=False, time_reversal_symmetry=False,
               **kwargs):
-    '''Given number of kpoints along x,y,z , generate kpoints
+    '''Generate a uniform mesh of k-points in reciprocal space.
 
     Args:
-        nks : (3,) ndarray
+        cell : Cell
+            Built cell defining the reciprocal lattice.
+        nks : sequence of three positive ints
+            Number of points along each reciprocal lattice direction.
 
     Kwargs:
         wrap_around : bool
-            To ensure all kpts are in first Brillouin zone.
+            Map unshifted fractional coordinates >= 0.5 to negative values,
+            placing them in [-0.5, 0.5). Default False, configurable through
+            ``pbc_gto_cell_make_kpts_wrap_around``. The center shift is applied
+            afterwards, so shifted points are not wrapped again.
         with_gamma_point : bool
-            Whether to shift Monkhorst-pack grid to include gamma-point.
-        scaled_center : (3,) array
-            Shift all points in the Monkhorst-pack grid to be centered on
-            scaled_center, given as the zeroth index of the returned kpts.
-            Scaled meaning that the k-points are scaled to a grid from
-            [-1,1] x [-1,1] x [-1,1]
+            Default True: use fractional coordinates ``arange(n) / n`` on
+            each axis. False uses ``(arange(n) + 0.5) / n - 0.5`` unless
+            ``scaled_center`` is supplied. Configurable through
+            ``pbc_gto_cell_make_kpts_with_gamma``.
+        scaled_center : (3,) array-like or None
+            Mesh center in fractional reciprocal coordinates. Reciprocal
+            lattice vectors include the usual factor of 2*pi. If supplied,
+            start with a Gamma-containing mesh and shift it so that its
+            first point is this center. None leaves the mesh unshifted.
         space_group_symmetry : bool
-            Whether to consider space group symmetry
+            Default False. Return symmetry-reduced k-point information using
+            the cell's space group. Requires a cell built with
+            ``cell.space_group_symmetry = True``.
         time_reversal_symmetry : bool
-            Whether to consider time reversal symmetry
+            Default False. Include time-reversal symmetry in the k-point
+            reduction.
+        **kwargs :
+            Currently unused.
 
     Returns:
-        kpts in absolute value (unit 1/Bohr).  Gamma point is placed at the
-        first place in the k-points list;
-        instance of :class:`KPoints` if k-point symmetry is considered
-
-    Examples:
-
-    >>> cell.make_kpts((4,4,4))
+        With both symmetry flags False, an (prod(nks), 3) array of absolute
+        k-points in inverse Bohr. Gamma is first when ``with_gamma_point``
+        is True and the center is zero. With either symmetry flag True,
+        return a :class:`pyscf.pbc.lib.kpts.KPoints` object containing the
+        full mesh, irreducible mesh, weights, and symmetry mappings.
     '''
     ks_each_axis = []
     for n in nks:
@@ -1897,22 +1918,38 @@ class Cell(mole.MoleBase):
         return a
 
     def get_scaled_atom_coords(self, a=None):
-        ''' Get scaled atomic coordinates.
+        '''Express atomic positions as fractions of the lattice vectors.
+
+        Kwargs:
+            a : (3, 3) ndarray or None
+                Lattice vectors as rows, in Bohr.
+
+        Returns:
+            An (natm, 3) array of dimensionless fractional coordinates.
+
+        Notes:
+            Coordinates are not wrapped into the unit cell.
         '''
         if a is None:
             a = self.lattice_vectors()
         return np.dot(self.atom_coords(), np.linalg.inv(a))
 
     def reciprocal_vectors(self, norm_to=2*np.pi):
-        r'''
-        .. math::
+        r'''Return reciprocal lattice vectors as rows of a (3, 3) array.
 
-            \begin{align}
-            \mathbf{b_1} &= 2\pi \frac{\mathbf{a_2} \times \mathbf{a_3}}{\mathbf{a_1} \cdot (\mathbf{a_2} \times \mathbf{a_3})} \\
-            \mathbf{b_2} &= 2\pi \frac{\mathbf{a_3} \times \mathbf{a_1}}{\mathbf{a_2} \cdot (\mathbf{a_3} \times \mathbf{a_1})} \\
-            \mathbf{b_3} &= 2\pi \frac{\mathbf{a_1} \times \mathbf{a_2}}{\mathbf{a_3} \cdot (\mathbf{a_1} \times \mathbf{a_2})}
-            \end{align}
+        Kwargs:
+            norm_to : float
+                Dot-product normalization between direct and reciprocal vectors.
+                Default is 2*pi. For lattice vectors ``a``,
+                ``a @ b.T = norm_to * I``.
 
+        Returns:
+            Reciprocal vectors in atomic unit.
+
+        Notes:
+            For dimension 1, all three direct lattice vectors must be mutually
+            orthogonal. For dimension 2, the third must be perpendicular to the
+            first two.
         '''
         a = self.lattice_vectors()
         if self.dimension == 1:
@@ -1930,10 +1967,12 @@ class Cell(mole.MoleBase):
         fractions of lattice vectors.
 
         Args:
-            scaled_kpts : (nkpts, 3) ndarray of floats
+            scaled_kpts : (nkpts, 3) or (3,) array-like
+                Dimensionless coefficients of the reciprocal lattice vectors,
+                which include the conventional 2*pi normalization.
 
         Returns:
-            abs_kpts : (nkpts, 3) ndarray of floats
+            Absolute Cartesian k-points, an array of shape (nkpts, 3)
         '''
         return np.dot(scaled_kpts, self.reciprocal_vectors())
 
@@ -1941,15 +1980,14 @@ class Cell(mole.MoleBase):
         '''Get scaled k-points, given absolute k-points in 1/Bohr.
 
         Args:
-            abs_kpts : (nkpts, 3) ndarray of floats or :class:`KPoints` object
+            abs_kpts : (nkpts, 3) or (3,) array-like, or KPoints
+                Absolute Cartesian k-points, or a symmetry-aware
+                :class:`pyscf.pbc.lib.kpts.KPoints` object.
 
+        Kwargs:
             kpts_in_ibz : bool
-                If True, return k-points in IBZ; otherwise, return k-points in BZ.
-                Default value is True. This has effects only if abs_kpts is a
-                :class:`KPoints` object
-
-        Returns:
-            scaled_kpts : (nkpts, 3) ndarray of floats
+                For a KPoints object, return its irreducible-zone coordinates if
+                True (default), or full-zone coordinates if False.
         '''
         from pyscf.pbc.lib.kpts import KPoints
         if isinstance(abs_kpts, KPoints):

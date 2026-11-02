@@ -23,6 +23,8 @@ from pyscf.lib import param
 from pyscf.data import elements
 from pyscf.scf import hf, rohf, addons
 
+__all__ = ['AtomSphAverageRHF', 'AtomSphericAverageRHF', 'AtomHF1e']
+
 
 def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
     elements = {a[0] for a in mol._atom}

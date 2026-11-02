@@ -36,6 +36,8 @@ from pyscf.cc.rccsdt import (_einsum, t3_spin_summation_inplace_, update_t1_fock
                             compute_r1r2, r1r2_divide_e_, intermediates_t3, _PhysicistsERIs, _IMDS)
 from pyscf import __config__
 
+__all__ = ['RCCSDT']
+
 
 _libccsdt = lib.load_library('libccsdt')
 

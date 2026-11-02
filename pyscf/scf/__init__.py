@@ -203,9 +203,46 @@ def sfx2c1e(mf):
 sfx2c = sfx2c1e
 
 def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
+    '''Create a density-fitting version of an SCF object.
+
+    Args:
+        mf : SCF object
+            Mean-field object to which density fitting is applied.
+
+    Kwargs:
+        auxbasis : str or dict or None
+            Auxiliary basis. None selects a suitable default fitting basis.
+        with_df : DF object or None
+            Existing fitting object; if supplied, ``auxbasis`` is ignored.
+        only_dfj : bool
+            Fit only Coulomb J, using four-center integrals for exchange K.
+            Default is False, which fits both J and K.
+
+    Returns:
+        The density-fitting SCF object returned by ``mf.density_fit``.
+
+    Notes:
+        No SCF calculation is run.
+
+    See :meth:`pyscf.scf.hf.SCF.density_fit` for details.
+    '''
     return mf.density_fit(auxbasis, with_df, only_dfj)
 
 def newton(mf):
+    '''Create a CIAH second-order SCF solver from an HF or Kohn-Sham object.
+
+    Args:
+        mf : SCF object
+            Mean-field object providing settings and any available orbitals.
+
+    Returns:
+        A second-order SCF object, or ``mf`` itself if already a CIAH solver.
+
+    Notes:
+        Call ``kernel`` or ``run`` on the result to perform the calculation.
+
+    See :func:`pyscf.soscf.newton_ah.newton` for details.
+    '''
     from pyscf.soscf import newton_ah
     return newton_ah.newton(mf)
 

@@ -30,6 +30,8 @@ https://doi.org/10.1063/1.2360264
 import numpy as np
 from pyscf.lib.scipy_helper import pivoted_cholesky
 
+__all__ = ['cholesky_mos']
+
 
 def cholesky_mos(mo_coeff):
     '''

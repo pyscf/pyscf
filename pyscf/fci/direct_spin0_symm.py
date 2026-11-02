@@ -45,6 +45,8 @@ from pyscf.fci import direct_spin1_symm
 from pyscf.fci import addons
 from pyscf import __config__
 
+__all__ = ['FCISolver', 'FCI']
+
 libfci = direct_spin1.libfci
 
 def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0):

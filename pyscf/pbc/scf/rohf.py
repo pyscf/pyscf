@@ -31,6 +31,8 @@ from pyscf.pbc.scf import hf as pbchf
 from pyscf.pbc.scf import uhf as pbcuhf
 from pyscf import __config__
 
+__all__ = ['ROHF']
+
 
 get_fock = mol_rohf.get_fock
 get_occ = mol_rohf.get_occ

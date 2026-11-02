@@ -28,6 +28,8 @@ from pyscf.lo import orth
 from pyscf.lo import ibo
 from pyscf import __config__
 
+__all__ = ['livvo', 'vvo']
+
 
 def vvo(mol, orbocc, orbvirt, iaos=None, s=None, verbose=None):
     '''Valence Virtual Orbitals ref. 10.1021/acs.jctc.7b00493

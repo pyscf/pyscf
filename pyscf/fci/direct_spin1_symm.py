@@ -46,6 +46,8 @@ from pyscf.fci.spin_op import contract_ss
 from pyscf.fci.addons import _unpack_nelec
 from pyscf import __config__
 
+__all__ = ['FCISolver', 'FCI']
+
 libfci = direct_spin1.libfci
 
 TOTIRREPS = 8

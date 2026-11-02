@@ -27,6 +27,8 @@ from pyscf.grad.rhf import GradientsBase
 
 from berny import Berny, geomlib, coords
 
+__all__ = ['GeometryOptimizer', 'GradientsBase', 'optimize']
+
 # Overwrite pyberny's atomic unit
 coords.angstrom = 1./lib.param.BOHR
 

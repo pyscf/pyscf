@@ -18,6 +18,8 @@
 
 from pyscf.pbc.grad import uhf
 
+__all__ = ['Gradients']
+
 
 class Gradients(uhf.Gradients):
     '''Non-relativistic Gamma-point unrestricted Kohn-Sham DFT gradients'''

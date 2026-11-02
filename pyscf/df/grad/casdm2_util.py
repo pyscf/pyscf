@@ -31,6 +31,11 @@ from pyscf.ao2mo.incore import _conc_mos
 from pyscf import __config__
 from functools import reduce
 
+__all__ = [
+    'get_int3c_mo', 'solve_df_rdm2', 'energy_elec_dferi', 'grad_elec_auxresponse_dferi',
+    'grad_elec_dferi', 'GradientsBase',
+]
+
 def get_int3c_mo (mol, auxmol, mo_coeff, compact=getattr(__config__, 'df_df_DF_ao2mo_compact', True), max_memory=None):
     ''' Evaluate (P|uv) c_ui c_vj -> (P|ij)
 

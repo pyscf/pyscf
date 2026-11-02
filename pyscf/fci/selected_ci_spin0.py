@@ -23,6 +23,8 @@ from pyscf import ao2mo
 from pyscf.fci import direct_spin1
 from pyscf.fci import selected_ci
 
+__all__ = ['SelectedCI', 'SCI']
+
 libfci = direct_spin1.libfci
 
 def contract_2e(eri, civec_strs, norb, nelec, link_index=None):

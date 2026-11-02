@@ -34,6 +34,8 @@ from pyscf import dft
 from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, _mo_without_core
 from pyscf import __config__
 
+__all__ = ['GWExact']
+
 einsum = lib.einsum
 
 BLKMIN = getattr(__config__, 'cc_ccsd_blkmin', 4)

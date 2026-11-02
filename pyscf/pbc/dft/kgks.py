@@ -38,6 +38,8 @@ from pyscf.pbc.dft.numint2c import KNumInt2C
 from pyscf.dft import gks as mol_ks
 from pyscf import __config__
 
+__all__ = ['KGKS', 'KNumInt2C']
+
 def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
              kpts=None, kpts_band=None):
     '''Coulomb + XC functional for KGKS

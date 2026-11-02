@@ -46,6 +46,8 @@ from pyscf.pbc.cc.eom_kccsd_ghf import mask_frozen_ip
 
 from mpi4py import MPI
 
+__all__ = ['RCCSD', 'CCSD']
+
 #einsum = np.einsum
 einsum = lib.einsum
 

@@ -33,6 +33,8 @@ from pyscf.cc.addons import spatial2spin, spin2spatial
 from pyscf.ci import cisd
 from pyscf.ci import ucisd
 
+__all__ = ['GCISD', 'CISD']
+
 
 def make_diagonal(myci, eris):
     nocc = myci.nocc

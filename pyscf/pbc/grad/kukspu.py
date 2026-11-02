@@ -23,6 +23,8 @@ from pyscf.pbc.dft.krkspu import _set_U, _make_minao_lo, reference_mol
 from pyscf.pbc.grad import kuks as kuks_grad
 from pyscf.pbc.grad.krkspu import generate_first_order_local_orbitals
 
+__all__ = ['Gradients']
+
 def _hubbard_U_deriv1(mf, dm=None, kpts=None):
     assert mf.alpha is None
     assert mf.C_ao_lo is None

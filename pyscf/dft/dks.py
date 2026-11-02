@@ -29,6 +29,8 @@ from pyscf.dft import rks
 from pyscf.dft import gks
 from pyscf.dft import r_numint
 
+__all__ = ['KohnShamDFT', 'DKS', 'UKS', 'UDKS', 'RDKS', 'RKS']
+
 
 @lib.with_doc(gks.get_veff.__doc__)
 def get_veff(ks, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):

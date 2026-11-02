@@ -27,6 +27,8 @@ from pyscf.dft.gen_grid import (sg1_prune, nwchem_prune, treutler_prune,
                                 stratmann, original_becke, gen_atomic_grids,
                                 BLKSIZE, NBINS, CUTOFF)
 
+__all__ = ['UniformGrids', 'BeckeGrids', 'AtomicGrids']
+
 libpbc = lib.load_library('libpbc')
 
 def make_mask(cell, coords, relativity=0, shls_slice=None, cutoff=None,

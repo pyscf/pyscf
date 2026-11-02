@@ -37,6 +37,8 @@ from pyscf.pbc.gto.ecp import ecp_int
 from pyscf.data import nist
 from pyscf import __config__
 
+__all__ = ['KGHF']
+
 WITH_META_LOWDIN = getattr(__config__, 'pbc_scf_analyze_with_meta_lowdin', True)
 PRE_ORTH_METHOD = getattr(__config__, 'pbc_scf_analyze_pre_orth_method', 'ANO')
 

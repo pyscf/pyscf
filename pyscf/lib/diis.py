@@ -28,6 +28,8 @@ from pyscf.lib import misc
 from pyscf.lib import numpy_helper
 from pyscf import __config__
 
+__all__ = ['DIIS', 'restore']
+
 INCORE_SIZE = getattr(__config__, 'lib_diis_incore_size', 10000000)  # 80 MB
 BLOCK_SIZE  = getattr(__config__, 'lib_diis_block_size', 20000000)  # ~ 160/320 MB
 

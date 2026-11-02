@@ -23,6 +23,8 @@ from pyscf.lib import logger
 from pyscf.pbc.dft import krkspu, krks_ksymm
 from pyscf.pbc.lib import kpts as libkpts
 
+__all__ = ['KsymAdaptedKRKSpU', 'KRKSpU']
+
 def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
              kpts=None, kpts_band=None):
     """

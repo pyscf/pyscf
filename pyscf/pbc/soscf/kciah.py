@@ -24,6 +24,8 @@ from pyscf import __config__
 
 from pyscf.soscf.ciah import CIAHOptimizerMixin, expmat
 
+__all__ = ['SubspaceCIAHOptimizerMixin', 'CIAHOptimizerMixin']
+
 
 class SubspaceCIAHOptimizerMixin(CIAHOptimizerMixin):
     r''' Base class for unitary rotations with direct sum structure:

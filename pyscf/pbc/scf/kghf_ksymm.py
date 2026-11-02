@@ -27,6 +27,8 @@ from pyscf.pbc.scf import khf_ksymm
 from pyscf.pbc.df.df_jk import _format_jks
 from pyscf.data import nist
 
+__all__ = ['KsymAdaptedKGHF', 'KGHF']
+
 def get_jk(mf, cell=None, dm_kpts=None, hermi=0, kpts=None, kpts_band=None,
            with_j=True, with_k=True, **kwargs):
     if isinstance(kpts, np.ndarray):

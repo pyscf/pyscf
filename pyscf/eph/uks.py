@@ -30,6 +30,8 @@ from pyscf.eph import rhf as rhf_eph
 from pyscf.eph.uhf import uhf_deriv_generator
 from pyscf.data.nist import MP_ME
 
+__all__ = ['EPH']
+
 CUTOFF_FREQUENCY = rhf_eph.CUTOFF_FREQUENCY
 KEEP_IMAG_FREQUENCY = rhf_eph.KEEP_IMAG_FREQUENCY
 

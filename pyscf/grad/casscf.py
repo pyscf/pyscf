@@ -39,6 +39,8 @@ from pyscf.grad import rhf as rhf_grad
 from pyscf.grad.mp2 import _shell_prange
 from pyscf.mcscf.addons import StateAverageMCSCFSolver
 
+__all__ = ['CASSCF_GradScanner', 'Gradients', 'Grad', 'StateAverageMCSCFSolver']
+
 def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None, eris=None):
     mc = mc_grad.base
     if mo_coeff is None: mo_coeff = mc.mo_coeff

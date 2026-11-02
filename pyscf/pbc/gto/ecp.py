@@ -27,6 +27,8 @@ from pyscf import gto
 from pyscf.pbc.gto.cell import _split_basis
 from pyscf.pbc.df import incore
 
+__all__ = ['ecp_int']
+
 
 def ecp_int(cell, kpts=None, intor='ECPscalar'):
     assert intor in ('ECPscalar', 'ECPso')

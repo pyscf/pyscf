@@ -28,6 +28,8 @@ from pyscf.scf._response_functions import _gen_rhf_response
 from pyscf import __config__
 from pyscf.data.nist import HARTREE2WAVENUMBER, MP_ME
 
+__all__ = ['EPH']
+
 CUTOFF_FREQUENCY = getattr(__config__, 'eph_cutoff_frequency', 80)  # 80 cm-1
 KEEP_IMAG_FREQUENCY = getattr(__config__, 'eph_keep_imaginary_frequency', False)
 IMAG_CUTOFF_FREQUENCY = getattr(__config__, 'eph_imag_cutoff_frequency', 1e-4)

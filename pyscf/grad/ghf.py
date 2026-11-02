@@ -26,6 +26,8 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.grad import rhf as rhf_grad
 
+__all__ = ['Gradients', 'Grad']
+
 
 def _spin_block_dms(dm):
     '''Real density matrices that the derivative J and K integrals are

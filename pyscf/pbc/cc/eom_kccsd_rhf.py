@@ -30,6 +30,11 @@ from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
                                padded_mo_coeff, padding_k_idx)
 
+__all__ = [
+    'EOMIP', 'EOMIP_Ta', 'EOMEA', 'EOMEA_Ta', 'join_indices', 'EOMEE', 'EOMEESinglet',
+    'EOMEETriplet', 'EOMEESpinFlip',
+]
+
 einsum = lib.einsum
 
 ########################################

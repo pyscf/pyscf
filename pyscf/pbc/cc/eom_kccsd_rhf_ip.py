@@ -21,6 +21,8 @@ from pyscf.pbc.cc import kccsd_rhf
 
 import numpy as np
 
+__all__ = ['VectorSplitter', 'VectorComposer']
+
 
 def iter_12(cc_or_eom, k):
     """Iterates over IP index slices."""

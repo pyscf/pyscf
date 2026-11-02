@@ -33,6 +33,8 @@ from pyscf.agf2 import chkfile as chkutil
 from pyscf.agf2.chempot import binsearch_chempot, minimize_chempot
 from pyscf.mp.mp2 import get_frozen_mask as _get_frozen_mask
 
+__all__ = ['RAGF2']
+
 BLKMIN = getattr(__config__, 'agf2_blkmin', 1)
 
 

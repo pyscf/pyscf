@@ -43,6 +43,8 @@ from pyscf.pbc.x2c import sfx2c1e
 from pyscf.pbc.lib.kpts_helper import is_zero
 from pyscf import __config__
 
+__all__ = ['x2c1e_gscf', 'X2C1E_GSCF', 'SpinOrbitalX2C1EHelper', 'get_pbc_pvxp']
+
 def x2c1e_gscf(mf):
     '''
     For the given *GHF* object, it generates X2C1E-GSCF object in spin-orbital basis

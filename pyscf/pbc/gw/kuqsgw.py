@@ -42,6 +42,8 @@ from pyscf.gw.utils.ac_grid import _get_scaled_legendre_roots, PadeAC, TwoPoleAC
 from pyscf.pbc.gw.kugw_ac import _mo_frozen, _mo_energy_frozen, _mo_occ_frozen, get_sigma, get_ef, set_frozen_orbs
 from pyscf.pbc.gw.krqsgw import KRQSGW
 
+__all__ = ['KUQSGW', 'temporary_env', 'PadeAC', 'TwoPoleAC', 'KRQSGW']
+
 
 def kernel(gw):
     mf = gw._scf

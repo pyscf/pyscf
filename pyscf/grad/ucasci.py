@@ -18,6 +18,8 @@ from pyscf.grad import uccsd as uccsd_grad
 from pyscf import ao2mo
 from pyscf.mcscf.addons import StateAverageMCSCFSolver
 
+__all__ = ['Gradients', 'Grad', 'StateAverageMCSCFSolver']
+
 RANGE_TYPE = range
 
 
