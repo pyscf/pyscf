@@ -56,7 +56,7 @@ def kpts_to_kmesh(cell, kpts, precision=None, rcut=None, bound_by_supmol=True):
                                     return_index=True)[1]
         uniq_floats = floats[uniq_floats_idx]
         if bound_by_supmol:
-            denom = int(kmesh[i])
+            denom = max(int(kmesh[i]) + 10, len(uniq_floats))
         else:
             denom = max(int(kmesh[i]), len(uniq_floats))
         fracs = [Fraction(x).limit_denominator(denom) for x in uniq_floats]
