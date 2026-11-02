@@ -20,17 +20,6 @@ from pyscf.gto import mole
 from pyscf.gto import basis
 from pyscf.gto.basis import parse, load, parse_ecp, load_ecp
 from pyscf.gto.mole import *
-from pyscf.gto.mole import (
-    lib, param, elements, logger, cmd_args, moleintor, core_configuration, ELEMENTS,
-    ELEMENTS_PROTON, charge, is_ghost_atom, CHARGE_OF, PTR_COORD, NUC_MOD_OF, PTR_ZETA,
-    PTR_FRAC_CHARGE, PTR_RADIUS, ATM_SLOTS, ATOM_OF, ANG_OF, NPRIM_OF, NCTR_OF,
-    RADI_POWER, KAPPA_OF, SO_TYPE_OF, PTR_EXP, PTR_COEFF, BAS_SLOTS, PTR_EXPCUTOFF,
-    PTR_COMMON_ORIG, PTR_RINV_ORIG, PTR_RINV_ZETA, PTR_RANGE_OMEGA, PTR_F12_ZETA,
-    PTR_GTG_ZETA, NGRIDS, PTR_GRIDS, AS_RINV_ORIG_ATOM, AS_ECPBAS_OFFSET, AS_NECPBAS,
-    PTR_ENV_START, NUC_POINT, NUC_GAUSS, NUC_FRAC_CHARGE, NUC_ECP, BASE, NORMALIZE_GTO,
-    DISABLE_EVAL, ARGPARSE, DUMPINPUT, BSE_META, NUMBERED_ATOM_LABEL, contract,
-    contracted_basis, CHECK_GEOM
-)
 from pyscf.gto.moleintor import getints, getints_by_shell
 from pyscf.gto.eval_gto import eval_gto
 from pyscf.gto import ecp

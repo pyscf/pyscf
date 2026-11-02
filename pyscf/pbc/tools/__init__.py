@@ -13,9 +13,4 @@
 # limitations under the License.
 
 from pyscf.pbc.tools.pbc import *
-from pyscf.pbc.tools.pbc import (
-    lib, logger, ATM_SLOTS, BAS_SLOTS, ATOM_OF, PTR_COORD, get_kconserv, get_kconserv3,
-    intersection, FFT_ENGINE, nproc
-)
 from pyscf.pbc.tools.print_funcs import *
-from pyscf.pbc.tools.print_funcs import logger

@@ -31,20 +31,8 @@ from pyscf.lib import scipy_helper
 from pyscf.lib import logger
 from pyscf.lib import misc
 from pyscf.lib.misc import *
-from pyscf.lib.misc import (
-    param, izip, comb, SANITY_CHECK, bg, bp, ASYNC_IO, finger, omniobj
-)
 from pyscf.lib.numpy_helper import *
-from pyscf.lib.numpy_helper import (
-    asarray, EINSUM_MAX_SIZE, EINSUM_BACKEND, BLOCK_DIM, PLAIN, HERMITIAN, ANTIHERMI,
-    SYMMETRIC, LeviCivita, PauliMatrices, LINEAR_DEP_THRESHOLD, Ylm
-)
-from pyscf.lib.numpy_helper import norm
 from pyscf.lib.linalg_helper import *
-from pyscf.lib.linalg_helper import (
-    SAFE_EIGH_LINDEP, DAVIDSON_LINDEP, DSOLVE_LINDEP, MAX_MEMORY,
-    SORT_EIG_BY_SIMILARITY, PROJECT_OUT_CONV_EIGS, FOLLOW_STATE
-)
 from pyscf.lib.scipy_helper import *
 from pyscf.lib import chkfile
 from pyscf.lib import diis

@@ -174,19 +174,9 @@ casci_uhf = ucasci  # for backward compatibility
 from pyscf.mcscf import umc1step
 mc1step_uhf = umc1step  # for backward compatibility
 from pyscf.mcscf.addons import *
-from pyscf.mcscf.addons import lib, gto, logger, fci, scf, symm
 from pyscf.mcscf import chkfile
 
-__all__ = [
-    'StateAverageMCSCFSolver', 'StateAverageFCISolver', 'StateAverageMCSCF',
-    'StateSpecificFCISolver', 'StateAverageMixFCISolver_solver_args',
-    'StateAverageMixFCISolver_state_args', 'StateAverageMixFCISolver', 'CASCI',
-    'CASSCF', 'DFCASCI', 'DFCASSCF', 'UCASCI', 'UCASSCF',
-]
-
 def CASSCF(mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
-    from pyscf import gto
-    from pyscf import scf
     from pyscf.df.df_jk import _DFHF
     if isinstance(mf_or_mol, gto.MoleBase):
         mf = mf_or_mol.RHF()
@@ -208,8 +198,6 @@ RCASSCF = CASSCF
 
 
 def CASCI(mf_or_mol, ncas, nelecas, ncore=None):
-    from pyscf import gto
-    from pyscf import scf
     from pyscf.df.df_jk import _DFHF
     if isinstance(mf_or_mol, gto.MoleBase):
         mf = mf_or_mol.RHF()
@@ -232,8 +220,6 @@ RCASCI = CASCI
 
 
 def UCASCI(mf_or_mol, ncas, nelecas, ncore=None):
-    from pyscf import gto
-    from pyscf import scf
     from pyscf.df.df_jk import _DFHF
     if isinstance(mf_or_mol, gto.MoleBase):
         mf = mf_or_mol.UHF()
@@ -256,8 +242,6 @@ def UCASCI(mf_or_mol, ncas, nelecas, ncore=None):
 
 
 def UCASSCF(mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
-    from pyscf import gto
-    from pyscf import scf
     from pyscf.df.df_jk import _DFHF
     if isinstance(mf_or_mol, gto.MoleBase):
         mf = mf_or_mol.UHF()
@@ -281,8 +265,6 @@ def newton(mc):
 from pyscf.mcscf import df
 def DFCASSCF(mf_or_mol, ncas, nelecas, auxbasis=None, ncore=None,
              frozen=None):
-    from pyscf import gto
-    from pyscf import scf
     if isinstance(mf_or_mol, gto.MoleBase):
         mf = mf_or_mol.RHF().density_fit()
     else:
@@ -298,8 +280,6 @@ def DFCASSCF(mf_or_mol, ncas, nelecas, auxbasis=None, ncore=None,
     return df.density_fit(mc, auxbasis)
 
 def DFCASCI(mf_or_mol, ncas, nelecas, auxbasis=None, ncore=None):
-    from pyscf import gto
-    from pyscf import scf
     if isinstance(mf_or_mol, gto.MoleBase):
         mf = mf_or_mol.RHF().density_fit()
     else:

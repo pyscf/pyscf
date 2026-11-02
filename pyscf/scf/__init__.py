@@ -120,23 +120,7 @@ from pyscf.scf import dispersion
 from pyscf.scf.diis import DIIS, CDIIS, EDIIS, ADIIS
 from pyscf.scf.uhf import spin_square
 from pyscf.scf.hf import get_init_guess
-from pyscf.scf.addons import pivoted_cholesky, smearing, smearing_
-from pyscf.scf.addons import (
-    lib, mole, logger, frac_occ_, frac_occ, dynamic_occ_, dynamic_occ,
-    dynamic_level_shift_, dynamic_level_shift, float_occ_, dynamic_sz_, float_occ,
-    follow_state_, follow_state, mom_occ_, mom_occ, project_mo_nr2nr, project_mo_nr2r,
-    project_mo_r2r, project_dm_nr2nr, project_dm_nr2r, project_dm_r2r, canonical_orth_,
-    partial_cholesky_orth_, remove_linear_dep_, remove_linear_dep, convert_to_uhf,
-    convert_to_rhf, convert_to_ghf, get_ghf_orbspin, fast_newton
-)
-from pyscf.scf.addons import (
-    CHOLESKY_THRESHOLD, FORCE_PIVOTED_CHOLESKY, SMEARING_METHOD,
-)
-
-__all__ = [
-    'density_fit', 'newton', 'DIIS', 'CDIIS', 'EDIIS', 'ADIIS', 'DHF', 'GHF', 'HF',
-    'RHF', 'RKS', 'ROHF', 'UHF', 'UKS', 'sfx2c1e',
-]
+from pyscf.scf.addons import *
 
 
 def HF(mol, *args):

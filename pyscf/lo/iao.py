@@ -47,7 +47,8 @@ def iao(mol, orbocc, minao=MINAO, kpts=None, lindep_threshold=1e-8):
             Molecule or periodic cell with the original AO basis.
         orbocc : ndarray or sequence of ndarrays
             Occupied orbital coefficients satisfying
-            ``orbocc.conj().T @ S @ orbocc = I``, where S is the AO overlap. Use shape (nao, nocc) for a molecule or a single k-point;
+            ``orbocc.conj().T @ S @ orbocc = I``, where S is the AO overlap.
+            Use shape (nao, nocc) for a molecule or a single k-point;
             for a k-point list, supply one (nao, nocc_k) array per k-point.
 
     Kwargs:

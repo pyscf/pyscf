@@ -13,4 +13,3 @@
 # limitations under the License.
 
 from .eris import *
-from .eris import df, lib, gen_uniform_grids, eval_ao, tools, logger
