@@ -116,3 +116,16 @@ for i, c in enumerate(fcivec):
     print('state = %d, E = %.9f, S^2=%.4f' %
           (i, e[i], fci.spin_op.spin_square(c, norb, nelec)[0]))
 
+# Measure spin on a subset of orbitals. local_spin returns S^2 and 2S+1.
+# The orbital coefficients and AO overlap define the selected region.
+print('Local spin on oxygen orbitals:',
+      fci.spin_op.local_spin(fcivec[0], norb, nelec,
+                             m.mo_coeff, m.get_ovlp(), range(5)))
+
+# contract_ss applies S^2 to the CI vector. Its expectation value agrees
+# with spin_square for a normalized vector.
+ci = numpy.zeros((4, 4))
+ci[0, 0] = 1
+print('S^2 from operator and spin_square:',
+      numpy.einsum('ij,ij->', ci, fci.spin_op.contract_ss(ci, 4, (3, 1))),
+      fci.spin_op.spin_square(ci, 4, (3, 1))[0])

@@ -13,6 +13,10 @@ mol = gto.M(atom='''
             basis={'Na':'lanl2dz', 'H':'sto3g'},
             ecp = {'Na':'lanl2dz'})
 
+# Run SCF with the ECP. This NaH setup gives about -0.45002316 Hartree.
+mf = scf.RHF(mol).run()
+print('NaH LANL2DZ ECP RHF energy:', mf.e_tot)
+
 
 mol = gto.M(atom='''
  Na 0. 0. 0.

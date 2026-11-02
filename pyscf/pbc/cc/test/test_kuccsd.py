@@ -15,9 +15,12 @@
 #
 
 import unittest
+from types import SimpleNamespace
+from pyscf.pbc.cc import kintermediates_uhf as imd
 import numpy
 import numpy as np
-from pyscf import lib
+from pyscf import lib, cc
+from pyscf.cc import uccsd_rdm
 from pyscf import lo
 from pyscf.pbc import gto
 from pyscf.pbc import scf
@@ -414,6 +417,72 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(np.linalg.norm(dm1a),        1.622541608251682, 7)
         self.assertAlmostEqual(np.linalg.norm(dm1b),        1.622541545604457, 7)
         self.assertAlmostEqual(np.linalg.norm(dm1a - dm1b), 0.088686084829135, 7)
+
+    def test_gamma_density(self):
+        cell = gto.M(atom='H 0 0 0; H 0 0 .74', a=np.eye(3)*4,
+                     basis='gth-szv', pseudo='gth-pade', mesh=[11]*3,
+                     precision=1e-7, verbose=0)
+        gamma = scf.UHF(cell, exxdiv=None).density_fit(auxbasis='weigend').run(conv_tol=1e-11)
+        mf = scf.addons.convert_to_kscf(gamma)
+        molcc = cc.UCCSD(gamma).run(conv_tol=1e-10)
+        t1, t2 = molcc.t1, molcc.t2
+        obj = kccsd_uhf.UCCSD(mf)
+        obj.t1 = tuple(t[None] for t in t1)
+        obj.t2 = tuple(t[None, None, None] for t in t2)
+        dm = np.asarray(kuccsd_rdm.make_rdm1(obj, obj.t1, obj.t2))
+        reference = uccsd_rdm.make_rdm1(molcc, t1, t2,
+                                       tuple(t.conj() for t in t1), tuple(t.conj() for t in t2))
+        np.testing.assert_allclose(dm[:, 0], reference, atol=1e-10)
+        np.testing.assert_allclose(np.trace(dm, axis1=-2, axis2=-1), 1, atol=1e-10)
+        ao = np.asarray(kuccsd_rdm.make_rdm1(obj, obj.t1, obj.t2, ao_repr=True))
+        c = np.asarray(mf.mo_coeff)
+        np.testing.assert_allclose(ao, c @ dm @ c.conj().swapaxes(-1, -2), atol=1e-10)
+
+
+    def make_intermediate_reference(self):
+        cell = gto.M(atom='Li 0 0 0; H 0 0 1.6', a=np.eye(3)*4,
+                     basis='gth-szv', pseudo='gth-pade', mesh=[11]*3,
+                     precision=1e-7, verbose=0)
+        mf = scf.KUHF(cell, cell.make_kpts([2, 1, 1]), exxdiv=None)
+        mf = mf.density_fit(auxbasis='weigend').run(conv_tol=1e-11)
+        self.cc = kccsd_uhf.UCCSD(mf)
+        self.eris = self.cc.ao2mo()
+        _, t1, t2 = self.cc.init_amps(self.eris)
+        self.t1, self.t2 = self.cc.update_amps(t1, t2, self.eris)
+
+    def test_blockwise_wovvo(self):
+        self.make_intermediate_reference()
+        full = imd.cc_Wovvo(self.cc, self.t1, self.t2, self.eris)
+        for k0 in range(2):
+            for k2 in range(2):
+                block = imd._cc_Wovvo_k0k2(self.cc, self.t1, self.t2, self.eris, k0, k2)
+                for spin, (actual, expected) in enumerate(zip(block, full)):
+                    with self.subTest(k0=k0, k2=k2, spin=spin):
+                        np.testing.assert_allclose(actual, expected[k0, :, k2], atol=1e-10)
+
+    def test_spin_conversion(self):
+        self.make_intermediate_reference()
+        nocc = self.cc.nocc
+        nmo = self.cc.nmo
+        self.assertEqual(nocc[0], nocc[1])
+        self.assertEqual(nmo[0], nmo[1])
+        metadata = SimpleNamespace(nocc=nocc, cell=self.cc._scf.cell, kpts=self.cc.kpts)
+        orbspin = np.tile([0, 1], (2, nmo[0]))
+        rng = np.random.default_rng(11)
+        shape = (2, 2, 2, nocc[0], nmo[0]-nocc[0], nocc[0], nmo[0]-nocc[0])
+        blocks = [rng.normal(size=shape)+1j*rng.normal(size=shape) for _ in range(6)]
+        spin = imd._eri_spatial2spin(blocks, 'ovov', metadata, orbspin, cross_ab=True)
+        restored = imd._eri_spin2spatial(spin, 'ovov', metadata, nocc, orbspin, cross_ab=True)
+        for actual, expected in zip(restored, blocks):
+            np.testing.assert_array_equal(actual, expected)
+        fock = (self.eris.fock[0][:, :nocc[0], :nocc[0]],
+                self.eris.fock[1][:, :nocc[1], :nocc[1]])
+        spin = imd._eri_spatial2spin(fock, 'oo', metadata, orbspin)
+        restored = imd._eri_spin2spatial(spin, 'oo', metadata, nocc, orbspin)
+        for actual, expected in zip(restored, fock):
+            np.testing.assert_array_equal(actual, expected)
+        np.testing.assert_array_equal(spin[:, ::2, 1::2], 0)
+
 
 if __name__ == '__main__':
     print("KUCCSD tests")

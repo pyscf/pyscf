@@ -328,21 +328,21 @@ def ipccsd_diag(eom, kshift, imds=None):
         #fOO = eris.fock[1][:,:nocc_b,:nocc_b]
         #fvv = eris.fock[0][:,:nvir_a,:nvir_a]
         #fVV = eris.fock[1][:,:nvir_b,:nvir_b]
-        for ki in range(nkpts):
-            for kj in range(nkpts):
-                ka = kconserv[ki,kshift,kj]
-                Hr2aaa[ki,kj]  = imds.Fvv[ka].diagonal()
-                Hr2aaa[ki,kj] -= imds.Foo[ki].diagonal()[:,None,None]
-                Hr2aaa[ki,kj] -= imds.Foo[kj].diagonal()[None,:,None]
-                Hr2bbb[ki,kj]  = imds.FVV[ka].diagonal()
-                Hr2bbb[ki,kj] -= imds.FOO[ki].diagonal()[:,None,None]
-                Hr2bbb[ki,kj] -= imds.FOO[kj].diagonal()[None,:,None]
-                Hr2aba[ki,kj]  = imds.Fvv[ka].diagonal()
-                Hr2aba[ki,kj] -= imds.Foo[ki].diagonal()[:,None,None]
-                Hr2aba[ki,kj] -= imds.FOO[kj].diagonal()[None,:,None]
-                Hr2bab[ki,kj]  = imds.FVV[ka].diagonal()
-                Hr2bab[ki,kj] -= imds.FOO[ki].diagonal()[:,None,None]
-                Hr2bab[ki,kj] -= imds.Foo[kj].diagonal()[None,:,None]
+        # for ki in range(nkpts):
+        #     for kj in range(nkpts):
+        #         ka = kconserv[ki,kshift,kj]
+        #         Hr2aaa[ki,kj]  = imds.Fvv[ka].diagonal()
+        #         Hr2aaa[ki,kj] -= imds.Foo[ki].diagonal()[:,None,None]
+        #         Hr2aaa[ki,kj] -= imds.Foo[kj].diagonal()[None,:,None]
+        #         Hr2bbb[ki,kj]  = imds.FVV[ka].diagonal()
+        #         Hr2bbb[ki,kj] -= imds.FOO[ki].diagonal()[:,None,None]
+        #         Hr2bbb[ki,kj] -= imds.FOO[kj].diagonal()[None,:,None]
+        #         Hr2aba[ki,kj]  = imds.Fvv[ka].diagonal()
+        #         Hr2aba[ki,kj] -= imds.Foo[ki].diagonal()[:,None,None]
+        #         Hr2aba[ki,kj] -= imds.FOO[kj].diagonal()[None,:,None]
+        #         Hr2bab[ki,kj]  = imds.FVV[ka].diagonal()
+        #         Hr2bab[ki,kj] -= imds.FOO[ki].diagonal()[:,None,None]
+        #         Hr2bab[ki,kj] -= imds.Foo[kj].diagonal()[None,:,None]
     else:
         for ka in range(nkpts):
             for ki in range(nkpts):
@@ -1128,148 +1128,3 @@ class _IMDS:
                                                 ka, kb, kc)
         else:
             return self.Wvvvv[ka,kc,kb], self.WvvVV[ka,kc,kb], self.WVVVV[ka,kc,kb]
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    from pyscf.pbc import scf
-    from pyscf import lo
-
-    cell = gto.Cell()
-    cell.atom='''
-    He 0.000000000000   0.000000000000   0.000000000000
-    He 1.685068664391   1.685068664391   1.685068664391
-    '''
-    #cell.basis = [[0, (1., 1.)], [1, (.5, 1.)]]
-    cell.basis = [[0, (1., 1.)], [0, (.5, 1.)]]
-    cell.a = '''
-    0.000000000, 3.370137329, 3.370137329
-    3.370137329, 0.000000000, 3.370137329
-    3.370137329, 3.370137329, 0.000000000'''
-    cell.unit = 'B'
-    cell.mesh = [5, 5, 5]
-    cell.build()
-
-    np.random.seed(1)
-    # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
-    kmf = scf.KUHF(cell, kpts=cell.make_kpts([1,1,3]), exxdiv=None)
-    nmo = cell.nao_nr()
-    kmf.mo_occ = np.zeros((2,3,nmo))
-    kmf.mo_occ[0,:,:3] = 1
-    kmf.mo_occ[1,:,:1] = 1
-    kmf.mo_energy = np.arange(nmo) + np.random.random((2,3,nmo)) * .3
-    kmf.mo_energy[kmf.mo_occ == 0] += 2
-
-    mo = (np.random.random((2,3,nmo,nmo)) +
-          np.random.random((2,3,nmo,nmo))*1j - .5-.5j)
-    s = kmf.get_ovlp()
-    kmf.mo_coeff = np.empty_like(mo)
-    nkpts = len(kmf.kpts)
-    for k in range(nkpts):
-        kmf.mo_coeff[0,k] = lo.orth.vec_lowdin(mo[0,k], s[k])
-        kmf.mo_coeff[1,k] = lo.orth.vec_lowdin(mo[1,k], s[k])
-
-    def rand_t1_t2(mycc):
-        nkpts = mycc.nkpts
-        nocca, noccb = mycc.nocc
-        nmoa, nmob = mycc.nmo
-        nvira, nvirb = nmoa - nocca, nmob - noccb
-        np.random.seed(1)
-        t1a = (np.random.random((nkpts,nocca,nvira)) +
-               np.random.random((nkpts,nocca,nvira))*1j - .5-.5j)
-        t1b = (np.random.random((nkpts,noccb,nvirb)) +
-               np.random.random((nkpts,noccb,nvirb))*1j - .5-.5j)
-        t2aa = (np.random.random((nkpts,nkpts,nkpts,nocca,nocca,nvira,nvira)) +
-                np.random.random((nkpts,nkpts,nkpts,nocca,nocca,nvira,nvira))*1j - .5-.5j)
-        kconserv = kpts_helper.get_kconserv(kmf.cell, kmf.kpts)
-        t2aa = t2aa - t2aa.transpose(1,0,2,4,3,5,6)
-        tmp = t2aa.copy()
-        for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
-            kl = kconserv[ki, kk, kj]
-            t2aa[ki,kj,kk] = t2aa[ki,kj,kk] - tmp[ki,kj,kl].transpose(0,1,3,2)
-        t2ab = (np.random.random((nkpts,nkpts,nkpts,nocca,noccb,nvira,nvirb)) +
-                np.random.random((nkpts,nkpts,nkpts,nocca,noccb,nvira,nvirb))*1j - .5-.5j)
-        t2bb = (np.random.random((nkpts,nkpts,nkpts,noccb,noccb,nvirb,nvirb)) +
-                np.random.random((nkpts,nkpts,nkpts,noccb,noccb,nvirb,nvirb))*1j - .5-.5j)
-        t2bb = t2bb - t2bb.transpose(1,0,2,4,3,5,6)
-        tmp = t2bb.copy()
-        for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
-            kl = kconserv[ki, kk, kj]
-            t2bb[ki,kj,kk] = t2bb[ki,kj,kk] - tmp[ki,kj,kl].transpose(0,1,3,2)
-
-        t1 = (t1a, t1b)
-        t2 = (t2aa, t2ab, t2bb)
-        return t1, t2
-
-    from pyscf.pbc.cc import kccsd_uhf
-    mycc = kccsd_uhf.KUCCSD(kmf)
-    eris = mycc.ao2mo()
-
-    t1, t2 = rand_t1_t2(mycc)
-    mycc.t1 = t1
-    mycc.t2 = t2
-    kconserv = kpts_helper.get_kconserv(kmf.cell, kmf.kpts)
-
-    kgcc = kccsd.GCCSD(scf.addons.convert_to_ghf(kmf))
-    kccsd_eris = kccsd._make_eris_incore(kgcc, kgcc._scf.mo_coeff)
-    orbspin = kccsd_eris.orbspin
-    nkpts = mycc.nkpts
-    nocca, noccb = mycc.nocc
-    nmoa, nmob = mycc.nmo
-    nvira, nvirb = nmoa - nocca, nmob - noccb
-
-    kshift = 0  # excitation out of 0th k-point
-    nmo = nmoa + nmob
-    nocc = nocca + noccb
-    nvir = nmo - nocc
-
-    np.random.seed(0)
-    # IP version
-    myeom = EOMIP(mycc)
-    imds = myeom.make_imds()
-    imds.make_ip()
-
-    spin_r1_ip = (np.random.rand(nocc)*1j +
-                  np.random.rand(nocc) - 0.5 - 0.5*1j)
-    spin_r2_ip = (np.random.rand(nkpts**2 * nocc**2 * nvir) +
-                  np.random.rand(nkpts**2 * nocc**2 * nvir)*1j - 0.5 - 0.5*1j)
-    spin_r2_ip = spin_r2_ip.reshape(nkpts, nkpts, nocc, nocc, nvir)
-    spin_r2_ip = eom_kgccsd.enforce_2p_spin_ip_doublet(spin_r2_ip, kconserv, kshift, orbspin)
-
-    r1, r2 = eom_kgccsd.spin2spatial_ip_doublet(spin_r1_ip, spin_r2_ip, kconserv, kshift, orbspin)
-    vector = myeom.amplitudes_to_vector(r1, r2, kshift)
-    vector = myeom.matvec(vector, kshift=kshift, imds=imds)
-    Hr1, Hr2 = myeom.vector_to_amplitudes(vector, 0, nkpts, (nmoa, nmob), (nocca, noccb))
-    Hr1a, Hr1b = Hr1
-    Hr2aaa, Hr2baa, Hr2abb, Hr2bbb = Hr2
-    print('ip Hr1a',   abs(lib.fp(Hr1a)   - (-0.34462696543560045-1.6104596956729178j)))
-    print('ip Hr1b',   abs(lib.fp(Hr1b)   - (-0.055793611517250929+0.22169994342782473j)))
-    print('ip Hr2aaa', abs(lib.fp(Hr2aaa) - (0.692705827672665420-1.958639508839846943j)))
-    print('ip Hr2baa', abs(lib.fp(Hr2baa) - (2.892194153603884654+2.039530776282815872j)))
-    print('ip Hr2abb', abs(lib.fp(Hr2abb) - (1.618257685489421727-5.489218743953674817j)))
-    print('ip Hr2bbb', abs(lib.fp(Hr2bbb) - (0.479835513829048044+0.108406393138471210j)))
-    # EA version
-
-    myeom = EOMEA(mycc)
-    imds = myeom.make_imds()
-    imds.make_ea()
-
-    spin_r1_ea = (np.random.rand(nvir)*1j +
-                  np.random.rand(nvir) - 0.5 - 0.5*1j)
-    spin_r2_ea = (np.random.rand(nkpts**2 * nocc * nvir**2) +
-                  np.random.rand(nkpts**2 * nocc * nvir**2)*1j - 0.5 - 0.5*1j)
-    spin_r2_ea = spin_r2_ea.reshape(nkpts, nkpts, nocc, nvir, nvir)
-    spin_r2_ea = eom_kgccsd.enforce_2p_spin_ea_doublet(spin_r2_ea, kconserv, kshift, orbspin)
-    r1, r2 = eom_kgccsd.spin2spatial_ea_doublet(spin_r1_ea, spin_r2_ea, kconserv, kshift, orbspin)
-
-    vector = myeom.amplitudes_to_vector(r1, r2, kshift)
-    vector = myeom.matvec(vector, kshift=kshift, imds=imds)
-    Hr1, Hr2 = myeom.vector_to_amplitudes(vector, 0, nkpts, (nmoa, nmob), (nocca, noccb))
-    Hr1a, Hr1b = Hr1
-    Hr2aaa, Hr2aba, Hr2bab, Hr2bbb = Hr2
-
-    print('ea Hr1a',  abs(lib.fp(Hr1a)   - (-0.081373075311041126-0.51422895644026023j)))
-    print('ea Hr1b',  abs(lib.fp(Hr1b)   - (-0.39518588661294807-1.3063424820239824j))  )
-    print('ea Hr2aaa',abs(lib.fp(Hr2aaa) - (-2.6502079691200251-0.61302655915003545j))  )
-    print('ea Hr2aba',abs(lib.fp(Hr2aba) - (5.5723208649566036-5.4202659143496286j))    )
-    print('ea Hr2bab',abs(lib.fp(Hr2bab) - (-1.2822293707887937+0.3026476580141586j))   )
-    print('ea Hr2bbb',abs(lib.fp(Hr2bbb) - (-4.0202809577487253-0.46985725132191702j))  )

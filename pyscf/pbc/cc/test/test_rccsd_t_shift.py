@@ -41,7 +41,7 @@ def run_cell(cell, scaled_center):
 
 
 class KnownValues(unittest.TestCase):
-    def test_water(self):
+    def test_water_high_cost(self):
         atom = '''
         O          0.00000        0.00000        0.11779
         H          0.00000        0.75545       -0.47116

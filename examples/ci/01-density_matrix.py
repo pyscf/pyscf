@@ -50,3 +50,20 @@ charge_center = (numpy.einsum('z,zx->x', mol.atom_charges(), mol.atom_coords())
 with mol.with_common_origin(charge_center):
     t_dip = numpy.einsum('xij,ji->x', mol.intor('int1e_r'), t_dm1)
 print(t_dip)
+
+# Generalized CISD returns spin-orbital RDMs. Convert the same collinear
+# reference so that each MO retains an alpha/beta label in orbspin.
+gci = ci.GCISD(mf.to_ghf()).run()
+gdm1, gdm2 = gci.make_rdm1(), gci.make_rdm2()
+cg = gci.mo_coeff
+nao = mol.nao_nr()
+spatial = cg[:nao] + cg[nao:]
+orbspin = cg.orbspin
+allowed = orbspin[:, None] == orbspin[None, :]
+geri = ao2mo.kernel(mol, spatial, compact=False).reshape(gdm2.shape)
+geri *= allowed[:, :, None, None] * allowed[None, None, :, :]
+gh1 = (spatial.conj().T @ mf.get_hcore() @ spatial) * allowed
+energy = (numpy.einsum('pq,qp', gh1, gdm1)
+          + .5 * numpy.einsum('pqrs,pqrs', geri, gdm2) + mol.energy_nuc())
+print('GCISD RDM energy and total energy', energy, gci.e_tot)
+# The spin-filtering shortcut above does not apply to spin-mixed GHF orbitals.

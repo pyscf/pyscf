@@ -4,7 +4,9 @@ import numpy as np
 import pytest
 
 from pyscf.pbc import df, gto, scf
+from pyscf.pbc.gw import krpa, kurpa
 from pyscf.pbc.gw.krpa import KRPA
+from pyscf.pbc.gw.test.test_krgw_ac import h2_hf
 
 
 @pytest.fixture(scope="module")
@@ -40,7 +42,7 @@ def diamond_krhf():
     cell.stdout.close()
 
 
-def test_krpa_no_fc(diamond_krhf):
+def test_krpa_no_fc_high_cost(diamond_krhf):
     rpa = KRPA(diamond_krhf)
     rpa.fc = False
     rpa.kernel()
@@ -49,7 +51,7 @@ def test_krpa_no_fc(diamond_krhf):
     assert rpa.e_tot == pytest.approx(-10.694392044197565, abs=1e-6)
 
 
-def test_krpa_no_fc_outcore(diamond_krhf):
+def test_krpa_no_fc_outcore_high_cost(diamond_krhf):
     rpa = KRPA(diamond_krhf)
     rpa.outcore = True
     rpa.segsize = 2
@@ -69,7 +71,7 @@ def test_krpa_acfd_exx_high_cost(diamond_krhf):
     assert rpa.e_tot == pytest.approx(-10.694392045437178, abs=1e-6)
 
 
-def test_krpa_with_fc(diamond_krhf):
+def test_krpa_with_fc_high_cost(diamond_krhf):
     rpa = KRPA(diamond_krhf)
     rpa.fc = True
     rpa.kernel()
@@ -78,7 +80,7 @@ def test_krpa_with_fc(diamond_krhf):
     assert rpa.e_tot == pytest.approx(-10.716348738655793, abs=1e-6)
 
 
-def test_krpa_with_fc_outcore(diamond_krhf):
+def test_krpa_with_fc_outcore_high_cost(diamond_krhf):
     rpa = KRPA(diamond_krhf)
     rpa.fc = True
     rpa.outcore = True
@@ -89,7 +91,7 @@ def test_krpa_with_fc_outcore(diamond_krhf):
     assert rpa.e_tot == pytest.approx(-10.716348738655793, abs=1e-6)
 
 
-def test_krpa_get_idx_metal():
+def test_krpa_get_idx_metal_high_cost():
     from pyscf.pbc.gw.krpa import get_idx_metal
     cases = [
         ([2.0, 1.5, 0.5, 0.0], ([0], [1, 2], [3])),
@@ -102,7 +104,7 @@ def test_krpa_get_idx_metal():
         assert result == expected
 
 
-def test_krpa_get_rho_response_metal_all_fractional():
+def test_krpa_get_rho_response_metal_all_fractional_high_cost():
     from pyscf.pbc.gw.krpa import get_rho_response_metal
     omega = 0.7
     mo_energy = np.array([[-1.0, -0.2, 0.8]])
@@ -118,7 +120,7 @@ def test_krpa_get_rho_response_metal_all_fractional():
     np.testing.assert_allclose(result, expected)
 
 
-def test_krpa_kconserv_shifted_kmesh():
+def test_krpa_kconserv_shifted_kmesh_high_cost():
     ''' This test checks if the kconserv table constructed by `get_kconserv_ria_efficient`
         remains invariant to a rigid shift of a given k-mesh.
     '''
@@ -174,7 +176,7 @@ def water_krhf():
     cell.stdout.close()
 
 
-def test_krpa_exx_with_frozen(water_krhf):
+def test_krpa_exx_with_frozen_high_cost(water_krhf):
     ''' Check that HF exchange energy calculated inside KRPA agrees with that from
         `mf.get_jk` for both non-smeared and smeared cases and with or without frozen.
     '''
@@ -200,3 +202,78 @@ def test_krpa_exx_with_frozen(water_krhf):
         e_x = get_rpa_exx(rpa)
 
         assert e_x == pytest.approx(e_x_ref, abs=1e-6)
+
+
+def test_rpa_acfd_exchange_matches_hf(h2_hf):
+    conventional = krpa.get_rpa_exx(krpa.KRPA(h2_hf), acfd=False)
+    acfd = krpa.get_rpa_exx(krpa.KRPA(h2_hf), acfd=True)
+    np.testing.assert_allclose(acfd, conventional, atol=1e-10)
+
+
+def test_rpa_outcore_energy(h2_hf):
+    ref = krpa.KRPA(h2_hf)
+    ref.fc = False
+    ref.kernel(nw=24)
+    out = krpa.KRPA(h2_hf)
+    out.fc = False
+    out.outcore = True
+    out.segsize = 1
+    out.kernel(nw=24)
+    assert ref.e_corr < 0.
+    assert out.e_corr == pytest.approx(ref.e_corr, abs=5e-11, rel=0)
+    assert out.e_tot == pytest.approx(out.e_hf + out.e_corr, abs=5e-13, rel=0)
+
+
+def test_rpa_finite_size_outcore_energy(h2_hf):
+    ref = krpa.KRPA(h2_hf)
+    ref.fc = True
+    ref.kernel(nw=24)
+    out = krpa.KRPA(h2_hf)
+    out.fc = True
+    out.outcore = True
+    out.segsize = 1
+    out.kernel(nw=24)
+    assert out.e_corr == pytest.approx(ref.e_corr, abs=5e-10, rel=0)
+
+
+def test_rpa_unrestricted_closed_shell_limit(h2_hf):
+    ref = krpa.KRPA(h2_hf)
+    out = kurpa.KURPA(h2_hf.to_uhf())
+    ref.fc = out.fc = False
+    ref.kernel(nw=24)
+    out.kernel(nw=24)
+    assert out.e_corr == pytest.approx(ref.e_corr, abs=5e-11, rel=0)
+    assert out.e_tot == pytest.approx(ref.e_tot, abs=5e-11, rel=0)
+    out.outcore = True
+    out.segsize = 1
+    out.kernel(nw=24)
+    assert out.e_corr == pytest.approx(ref.e_corr, abs=5e-11, rel=0)
+
+
+def test_rpa_fractional_occupation_outcore(h2_hf):
+    mf = scf.addons.smearing_(h2_hf.copy(), sigma=.2).run()
+    assert np.any((mf.mo_occ[0] > .01) & (mf.mo_occ[0] < 1.99))
+    ref = krpa.KRPA(mf)
+    ref.kernel(nw=24)
+    assert not (ref.fc)
+    out = krpa.KRPA(mf)
+    out.outcore = True
+    out.segsize = 1
+    out.kernel(nw=24)
+    assert out.e_corr == pytest.approx(ref.e_corr, abs=5e-11, rel=0)
+    assert out.e_tot == pytest.approx(ref.e_tot, abs=5e-11, rel=0)
+
+
+def test_unrestricted_rpa_fractional_occupation_outcore(h2_hf):
+    mf = scf.addons.smearing_(h2_hf.copy(), sigma=.2).run()
+    ref = krpa.KRPA(mf)
+    ref.kernel(nw=24)
+    out = kurpa.KURPA(mf.to_uhf())
+    out.kernel(nw=24)
+    assert not (out.fc)
+    assert out.e_corr == pytest.approx(ref.e_corr, abs=5e-11, rel=0)
+    out.outcore = True
+    out.segsize = 1
+    out.kernel(nw=24)
+    assert out.e_corr == pytest.approx(ref.e_corr, abs=5e-11, rel=0)
+    assert out.e_tot == pytest.approx(ref.e_tot, abs=5e-11, rel=0)

@@ -930,30 +930,3 @@ def _refine(axes):
     if numpy.linalg.det(axes) < 0:
         axes[y_id] *= -1
     return axes
-
-
-if __name__ == "__main__":
-    atom = [["O" , (1. , 0.    , 0.   ,)],
-            ['H' , (0. , -.757 , 0.587,)],
-            ['H' , (0. , 0.757 , 0.587,)] ]
-    gpname, orig, axes = detect_symm(atom)
-    atom = shift_atom(atom, orig, axes)
-    print(gpname, symm_identical_atoms(gpname, atom))
-
-    atom = [['H', (0,0,0)], ['H', (0,0,-1)], ['H', (0,0,1)]]
-    gpname, orig, axes = detect_symm(atom)
-    print(gpname, orig, axes)
-    atom = shift_atom(atom, orig, axes)
-    print(gpname, symm_identical_atoms(gpname, atom))
-
-    atom = [['H', (0., 0., 0.)],
-            ['H', (0., 0., 1.)],
-            ['H', (0., 1., 0.)],
-            ['H', (1., 0., 0.)],
-            ['H', (-1, 0., 0.)],
-            ['H', (0.,-1., 0.)],
-            ['H', (0., 0.,-1.)]]
-    gpname, orig, axes = detect_symm(atom)
-    print(gpname, orig, axes)
-    atom = shift_atom(atom, orig, axes)
-    print(gpname, symm_identical_atoms(subgroup(gpname, axes)[0], atom))

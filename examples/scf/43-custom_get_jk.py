@@ -46,3 +46,17 @@ mf.get_jk = get_jk
 mf.kernel()
 print('Approximate HF total energy =', mf.e_tot)
 
+# The direct JK builder accepts einsum-like contraction descriptions and
+# avoids materializing four-index integrals. Multiple contractions can share
+# one integral evaluation; derivative integrals return three Cartesian blocks.
+from pyscf.scf import jk
+dm = mf.make_rdm1()
+vj, vk = jk.get_jk(mol, (dm, dm), ('ijkl,ji->kl', 'ijkl,jk->il'))
+j_deriv = jk.get_jk(mol, dm, 'ijkl,lk->ij', intor='int2e_ip1',
+                    aosym='s2kl', comp=3)
+print('Direct J/K and derivative shapes', vj.shape, vk.shape, j_deriv.shape)
+# Different molecules can supply the four integral slots, for example the
+# Coulomb potential of mol's density evaluated in a second molecule's basis.
+probe = gto.M(atom='He 3 0 0', basis='sto-3g')
+j_cross = jk.get_jk((probe, probe, mol, mol), dm, 'ijkl,lk->ij')
+print('Intermolecular Coulomb matrix', j_cross)

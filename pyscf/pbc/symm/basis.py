@@ -128,34 +128,3 @@ def symm_adapted_basis(cell, kpts, tol=1e-9):
         sos_ks.append(sos)
         irrep_ids_ks.append(irrep_ids)
     return sos_ks, irrep_ids_ks
-
-if __name__ == "__main__":
-    from pyscf.pbc import gto
-    cell = gto.Cell()
-    cell.atom = [['O' , (1. , 0.    , 0.   ,)],
-                 ['H' , (0. , -.757 , 0.587,)],
-                 ['H' , (0. , 0.757 , 0.587,)]]
-    cell.a = [[1., 0., 0.],
-              [0., 1., 0.],
-              [0., 0., 1.]]
-    cell.basis = 'ccpvdz'
-    cell.verbose = 5
-    cell.space_group_symmetry = True
-    cell.symmorphic = True
-    cell.build()
-    kpts = cell.make_kpts([1,1,1], space_group_symmetry=True)
-    so = symm_adapted_basis(cell, kpts)[0][0]
-
-    from pyscf import gto as mol_gto
-    from pyscf.symm import geom as mol_geom
-    from pyscf.symm.basis import symm_adapted_basis as mol_symm_adapted_basis
-    mol = cell.copy()
-    gpname, origin, axes = mol_geom.detect_symm(mol._atom)
-    atoms = mol_gto.format_atom(cell._atom, origin, axes)
-    mol.build(False, False, atom=atoms)
-    mol_so = mol_symm_adapted_basis(mol, gpname)[0]
-
-    print(abs(so[0] - mol_so[0]).max())
-    print(abs(so[1] - mol_so[1]).max())
-    print(abs(so[2] - mol_so[3]).max())
-    print(abs(so[3] - mol_so[2]).max())

@@ -66,37 +66,3 @@ def kernel(cc, eris, t1=None, t2=None, verbose=logger.INFO):
                 et += numpy.einsum('ijk,ijk', w, v.conj())
     et /= 2
     return et
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-    from pyscf import cc
-
-    mol = gto.Mole()
-    mol.atom = [
-        [8 , (0. , 0.     , 0.)],
-        [1 , (0. , -.957 , .587)],
-        [1 , (0.2,  .757 , .487)]]
-
-    mol.basis = '631g'
-    mol.build()
-    mf = scf.RHF(mol).run(conv_tol=1e-1)
-    mycc = cc.CCSD(mf).set(conv_tol=1e-11).run()
-    et = mycc.ccsd_t()
-
-    mycc = cc.GCCSD(mf.to_ghf()).set(conv_tol=1e-11).run()
-    eris = mycc.ao2mo()
-    print(kernel(mycc, eris) - et)
-
-    numpy.random.seed(1)
-    mf.mo_coeff = numpy.random.random(mf.mo_coeff.shape) - .9
-    mycc = cc.GCCSD(mf.to_ghf())
-    eris = mycc.ao2mo()
-    nocc = 10
-    nvir = mol.nao_nr() * 2 - nocc
-    t1 = numpy.random.random((nocc,nvir))*.1 - .2
-    t2 = numpy.random.random((nocc,nocc,nvir,nvir))*.1 - .2
-    t2 = t2 - t2.transpose(1,0,2,3)
-    t2 = t2 - t2.transpose(0,1,3,2)
-    print(kernel(mycc, eris, t1, t2) - 263713.3945021223)

@@ -76,18 +76,20 @@ def density(cell, outfile, dm, nx=60, ny=60, nz=60, resolution=RESOLUTION):
 
     '''
     cc = CHGCAR(cell, nx=nx, ny=ny, nz=nz, resolution=resolution)
+    is_pbc = isinstance(cell, pbcgto.cell.Cell)
+    cell = cc.mol
 
     coords = cc.get_coords()
     ngrids = cc.get_ngrids()
     blksize = min(8000, ngrids)
     rho = numpy.empty(ngrids)
     for ip0, ip1 in lib.prange(0, ngrids, blksize):
-        if isinstance(cell, pbcgto.cell.Cell):
+        if is_pbc:
             ao = cell.pbc_eval_gto('GTOval', coords[ip0:ip1])
         else:
             ao = cell.eval_gto('GTOval', coords[ip0:ip1])
         rho[ip0:ip1] = lib.einsum('pi,ij,pj->p', ao, dm, ao)
-    rho = rho.reshape(nx,ny,nz)
+    rho = rho.reshape(cc.nx,cc.ny,cc.nz)
 
     cc.write(rho, outfile)
 
@@ -132,18 +134,20 @@ def orbital(cell, outfile, coeff, nx=60, ny=60, nz=60, resolution=RESOLUTION):
 
     '''
     cc = CHGCAR(cell, nx=nx, ny=ny, nz=nz, resolution=resolution)
+    is_pbc = isinstance(cell, pbcgto.cell.Cell)
+    cell = cc.mol
 
     coords = cc.get_coords()
     ngrids = cc.get_ngrids()
     blksize = min(8000, ngrids)
     orb_on_grid = numpy.empty(ngrids)
     for ip0, ip1 in lib.prange(0, ngrids, blksize):
-        if isinstance(cell, pbcgto.cell.Cell):
+        if is_pbc:
             ao = cell.pbc_eval_gto('GTOval', coords[ip0:ip1])
         else:
             ao = cell.eval_gto('GTOval', coords[ip0:ip1])
         orb_on_grid[ip0:ip1] = numpy.dot(ao, coeff)
-    orb_on_grid = orb_on_grid.reshape(nx,ny,nz)
+    orb_on_grid = orb_on_grid.reshape(cc.nx,cc.ny,cc.nz)
 
     cc.write(orb_on_grid, outfile, comment='Orbital value in real space (1/Bohr^3)')
 
@@ -152,6 +156,7 @@ class CHGCAR(cubegen.Cube):
     '''  Read-write of the Vasp CHGCAR files  '''
     def __init__(self, cell, nx=60, ny=60, nz=60, resolution=RESOLUTION,
                  margin=BOX_MARGIN):
+        self.mol = cell
         if not isinstance(cell, pbcgto.cell.Cell):
             coord = cell.atom_coords()
             box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + margin*2
@@ -163,8 +168,8 @@ class CHGCAR(cubegen.Cube):
                             'available for Molecule. Lattice (in Bohr)\n'
                             '%s\nand FFT grids %s are applied.',
                             self.box, (nx,ny,nz))
-            self.mol = cell
-            cell = cell.view(pbcgto.Cell)
+            self.mol = cell.copy()
+            cell = self.mol.view(pbcgto.Cell)
             if (isinstance(cell.unit, str) and
                     cell.unit.startswith(('B','b','au','AU'))):
                 cell.a = self.box
@@ -237,13 +242,3 @@ class CHGCAR(cubegen.Cube):
 
     def read(self, chgcar_file):
         raise NotImplementedError
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import scf
-    from pyscf.tools import chgcar
-    cell = gto.M(atom='H 0 0 0; H 0 0 1', a=numpy.eye(3)*3)
-    mf = scf.RHF(cell).run()
-    chgcar.density(cell, 'h2.CHGCAR', mf.make_rdm1())  # makes total density
-    chgcar.orbital(cell, 'h2_mo1.CHGCAR', mf.mo_coeff[:,0])  # makes mo#1 (sigma)
-    chgcar.orbital(cell, 'h2_mo2.CHGCAR', mf.mo_coeff[:,1])  # makes mo#2 (sigma*)

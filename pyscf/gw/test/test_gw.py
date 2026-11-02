@@ -2,9 +2,9 @@
 
 import unittest
 import numpy as np
-from pyscf import gto, dft, tdscf
+from pyscf import gto, dft, tdscf, scf
 from pyscf import gw
-from pyscf.gw import rpa
+from pyscf.gw import rpa, gw_exact
 
 def setUpModule():
     global mol, mf
@@ -92,6 +92,18 @@ class KnownValues(unittest.TestCase):
         rpa_obj.kernel()
         self.assertAlmostEqual(rpa_obj.e_tot,  -76.26651423730257, 6)
         self.assertAlmostEqual(rpa_obj.e_corr, -0.307830040357800, 6)
+
+    def test_integral_storage(self):
+        mol = gto.M(atom='Li 0 0 0; H 0 0 1.6', basis='sto-3g', verbose=0)
+        mf = scf.RHF(mol).run(conv_tol=1e-11)
+        gw = gw_exact.GWExact(mf)
+        ref = gw_exact._make_eris_incore(gw)
+        out = gw_exact._make_eris_outcore(gw)
+        for name in ('oooo', 'ovoo', 'ovov', 'oovv', 'ovvo', 'ovvv'):
+            with self.subTest(block=name):
+                np.testing.assert_allclose(getattr(out, name)[:], getattr(ref, name), atol=1e-12)
+        out.feri1.close()
+
 
 if __name__ == "__main__":
     print("Full Tests for GW")

@@ -44,7 +44,7 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
 
-    def test_osfno_gs(self):
+    def test_osfno_gs_high_cost(self):
         ADCFG = adc.ADC2FNO(mf).set(verbose=0)
         ADCFG.if_osfno = True
         ADCFG.kernel_gs(pct_occ=0.90)
@@ -64,7 +64,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(np.abs(ova - np.eye(ova.shape[0])).max(), 0, 9)
         self.assertAlmostEqual(np.abs(ovb - np.eye(ovb.shape[0])).max(), 0, 9)
 
-    def test_osfno_ee(self):
+    def test_osfno_ee_high_cost(self):
         ADCFG = adc.ADC2FNO(mf).set(verbose=0, method_type='ee')
         ADCFG.if_osfno = True
         ADCFG.kernel(nroots=4, pct_occ=0.90)
@@ -88,7 +88,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(spin[2], 2.00094714, 3)
         self.assertAlmostEqual(spin[3], 2.00243634, 3)
 
-    def test_fno_vs_osfno_spin_contamination(self):
+    def test_fno_vs_osfno_spin_contamination_high_cost(self):
         adc_can = adc.UADC(mf)
         adc_can.verbose = 0
         adc_can.method = 'adc(3)'

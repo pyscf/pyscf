@@ -840,51 +840,48 @@ def make_rdm1_linear(gw, ao_repr=False):
     assert gw.sigmaI is not None
     assert gw.rdm is True and gw.fullsigma is True
     assert gw.frozen is None or gw.frozen == 0
-    sigmaI = gw.sigmaI[:, :, :, 1:]
+    sigmaI = gw.sigmaI[..., 1:]
     freqs = 1j * gw.freqs
     wts = gw.wts
-    nmo = gw.nmo
+    nmo = gw.nmo[0]
     nkpts = gw.nkpts
     if len(gw.orbs) != nmo:
-        sigma = np.zeros(shape=[nkpts, nmo, nmo, len(freqs)], dtype=sigmaI.dtype)
+        sigma = np.zeros(shape=[2, nkpts, nmo, nmo, len(freqs)], dtype=sigmaI.dtype)
         for s in range(2):
             for k in range(nkpts):
                 for ia, a in enumerate(gw.orbs):
                     for ib, b in enumerate(gw.orbs):
                         sigma[s, k, a, b, :] = sigmaI[s, k, ia, ib, :]
     else:
-        sigma = sigmaI
+        sigma = sigmaI.copy()  # Do not modify the cached correlation self-energy.
 
     for iw in range(len(freqs)):
-        sigma[:, :, :, iw] += gw.vk - gw.vxc
+        sigma[..., iw] += gw.vk - gw.vxc
     gf0 = get_g0_k(freqs, np.array(gw._scf.mo_energy) - gw.ef, eta=0)
     gf = np.array(gf0, copy=True)
     for s in range(2):
         for k in range(nkpts):
             for iw in range(len(freqs)):
-                gf[s, k, :, :, iw] = gf0[s, k, :, :, iw] @ sigma[s, k, :, :, iw] @ gf0[s, k, :, :, iw]
+                gf[s, k, :, :, iw] += gf0[s, k, :, :, iw] @ sigma[s, k, :, :, iw] @ gf0[s, k, :, :, iw]
 
     # GW density matrix
-    rdm1 = np.zeros(shape=[2, nkpts, nmo, nmo], dtype=np.double)
+    rdm1 = np.zeros(shape=[2, nkpts, nmo, nmo], dtype=np.complex128)
     for s in range(2):
         for k in range(nkpts):
-            rdm1[s, k] = (1.0 / np.pi) * einsum('ijw, w -> ij', gf[s, k], wts).real + np.eye(nmo) * 0.5
+            rdm1[s, k] = (1.0 / np.pi) * einsum('ijw, w -> ij', gf[s, k], wts) + np.eye(nmo) * 0.5
             channel = "spin-up" if s == 0 else "spin-down"
             logger.info(gw, 'GW particle number %s @ k%d = %s', channel, k, np.trace(rdm1[s, k]))
 
     # Symmetrize density matrix
     for s in range(2):
         for k in range(nkpts):
-            rdm1[s, k] = 0.5 * (rdm1[s, k] + rdm1[s, k].T)
+            rdm1[s, k] = 0.5 * (rdm1[s, k] + rdm1[s, k].conj().T)
 
     if ao_repr is True:
-        ovlp = gw._scf.get_ovlp()
-        for s in range(2):
-            for k in range(nkpts):
-                CS = np.matmul(ovlp, gw._scf.mo_coeff[s, k])
-                rdm1[s, k] = reduce(np.matmul, (CS, rdm1[s, k], CS.conj().T))
+        coeff = np.asarray(gw._scf.mo_coeff)
+        rdm1 = coeff @ rdm1 @ coeff.conj().swapaxes(-1, -2)
 
-    return rdm1
+    return np.real_if_close(rdm1)
 
 
 def _mo_energy_frozen(gw, mo_energy):

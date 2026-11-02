@@ -194,7 +194,7 @@ class KnownValues(unittest.TestCase):
         kmf.kernel()
         self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 9)
 
-    def test_rsh_df(self):
+    def test_rsh_df_high_cost(self):
         kpts0 = He.make_kpts(nk, with_gamma_point=False)
         kmf0 = krks.KRKS(He, kpts=kpts0).density_fit()
         kmf0.xc = 'camb3lyp'

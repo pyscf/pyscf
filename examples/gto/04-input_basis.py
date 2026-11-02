@@ -14,6 +14,8 @@ This example covers different ways to input basis
 10. Even tempered gaussian basis.
 11. Combining multiple basis sets into one basis set.
 12. Internal format (not recommended)
+
+See 32-basis_format.py for Gaussian, NWChem, and Molpro file formats.
 '''
 
 import os

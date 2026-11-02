@@ -26,6 +26,10 @@ tools.dump_mat.dump_mo(mol, orb)
 dm = numpy.eye(3)
 tools.dump_mat.dump_tri(sys.stdout, dm)
 
+# Custom row labels, column width, precision, and starting index.
+labels = ['A%5d' % i for i in range(3)]
+tools.dump_mat.dump_tri(sys.stdout, dm, labels, ncol=10, digits=2, start=1)
+
 #
 # Print rectangular matrix
 #

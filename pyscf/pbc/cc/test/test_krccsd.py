@@ -18,6 +18,7 @@
 #
 
 import unittest
+from pyscf.pbc.cc import kccsd_rhf
 import numpy as np
 
 from pyscf import lib
@@ -1109,6 +1110,33 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[0][1], -4.235233956876479, 6)
         self.assertAlmostEqual(e[0][2], -3.477663568390151, 6)
         self.assertAlmostEqual(e[0][3], -3.459133332687474, 6)
+
+
+    def test_disk_intermediates(self):
+        cell = pbcgto.M(atom='Li 0 0 0; H 0 0 1.6', a=np.eye(3)*4,
+                     basis='gth-szv', pseudo='gth-pade', mesh=[11]*3,
+                     precision=1e-7, verbose=0)
+        mf = pbcscf.KRHF(cell, cell.make_kpts([2, 1, 1]), exxdiv=None)
+        mf = mf.density_fit(auxbasis='weigend').run(conv_tol=1e-11)
+        cc = kccsd_rhf.RCCSD(mf)
+        cc.direct = False
+        eris = cc.ao2mo()
+        _, t1, t2 = cc.init_amps(eris)
+        cc.t1, cc.t2 = cc.update_amps(t1, t2, eris)
+        ref = eom_kccsd_rhf._IMDS(cc, eris=eris)
+        ref.make_ip()
+        ref.make_ea()
+        cc.eris = kccsd_rhf._ERIS(cc, method='outcore')
+        actual = kccsd_rhf._IMDS(cc)
+        actual.make_ip()
+        actual.make_ea()
+        for name in ('Loo', 'Lvv', 'Fov', 'Wovov', 'Wovvo', 'Woovv',
+                     'Woooo', 'Wooov', 'Wovoo', 'Wvovv', 'Wvvvv', 'Wvvvo'):
+            with self.subTest(intermediate=name):
+                np.testing.assert_allclose(np.asarray(getattr(actual, name)),
+                                           np.asarray(getattr(ref, name)), atol=1e-10)
+        actual._fimd.close()
+        cc.eris.feri1.close()
 
 if __name__ == '__main__':
     print("Full kpoint_rhf test")
