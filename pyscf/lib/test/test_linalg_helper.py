@@ -157,6 +157,25 @@ class KnownValues(unittest.TestCase):
         residual = abs(aop(c) + c - b).max()
         self.assertLess(residual, tol)
 
+    def test_krylov_dependent_trial_vectors(self):
+        # Two right-hand sides are combinations of the others up to 1e-7. The solve
+        # keeps seven trial vectors in six dimensions, so their overlap, and with it
+        # the projected matrix, is singular.
+        tol = 1e-8
+        lindep = max(tol**2, numpy.finfo(float).eps)
+        numpy.random.seed(14)
+        n = 6
+        a = numpy.random.random((n, n)) * .1
+        a = a + a.T
+        base = numpy.random.randn(4, n)
+        mix = numpy.random.randn(2, 4)
+        b = numpy.vstack([base, mix.dot(base) + 1e-7 * numpy.random.randn(2, n)])
+        ref = numpy.linalg.solve(numpy.eye(n) + a, b.T).T
+
+        aop = lambda x: x.dot(a.T)
+        c = linalg_helper.krylov(aop, b, tol=tol, lindep=lindep)
+        self.assertAlmostEqual(abs(ref - c).max(), 0, 9)
+
     def test_krylov_zero_force(self):
         numpy.random.seed(10)
         n = 2
@@ -169,6 +188,48 @@ class KnownValues(unittest.TestCase):
         aop = lambda x: (a.dot(x.T).T/a_diag)
         c = linalg_helper.krylov(aop, b/a_diag, max_cycle=18, lindep=1e-15)
         self.assertAlmostEqual(abs(c).max(), 0, 9)
+
+    def test_krylov_multiroot_true_residual(self):
+        numpy.random.seed(42)
+        n = 150
+        nroots = 5
+        a = numpy.random.rand(n,n) * .1
+        b = numpy.random.rand(nroots, n)
+        ref = numpy.linalg.solve(numpy.eye(n) + a, b.T).T
+        aop = lambda x: x.dot(a.T)
+        c = linalg_helper.krylov(aop, b, tol=1e-8, max_cycle=60, lindep=1e-14)
+        self.assertAlmostEqual(abs(ref - c).max(), 0, 5)
+
+    def test_krylov_restart_recovers(self):
+        # A truncated Krylov subspace (small max_cycle) cannot reach the
+        # tolerance in a single build.  Restarting from the residual re-seeds
+        # the subspace and accumulates the solution across builds.
+        rng = numpy.random.RandomState(0)
+        n = 60
+        a = rng.randn(n,n) * .1 + numpy.diag(rng.randn(n) * .05)
+        b = rng.randn(n)
+        tol = 1e-8
+        aop = lambda x: x.dot(a.T)
+        with self.assertRaises(RuntimeError):
+            linalg_helper.krylov(aop, b, tol=tol, max_cycle=12, restart=0)
+        c = linalg_helper.krylov(aop, b, tol=tol, max_cycle=12, restart=3,
+                                 verbose=0)
+        self.assertLess(abs(aop(c) + c - b).max(), 1e-6)
+
+    def test_krylov_near_parallel_fallback(self):
+        # Near-parallel right-hand sides: the shared Krylov subspace cannot
+        # resolve the two solutions, so the per-root fallback must recover.
+        # A loose lindep makes the initial QR drop the perpendicular component
+        # (norm^2 9e-16 < lindep=1e-13), which no Krylov subspace can then
+        # represent; that imposes a residual floor above tol (~2.7e-9 here).
+        # The fallback drives the residual down to that floor.
+        tol = 1e-9
+        a = numpy.diag([.1, .2])
+        b = numpy.array([[1., 0.], [1., 3e-8]])
+        aop = lambda x: x.dot(a.T)
+        c = linalg_helper.krylov(aop, b, tol=tol, lindep=1e-13, verbose=0)
+        residual = abs(aop(c) + c - b).max()
+        self.assertLess(residual, 10 * tol)
 
     def test_dgeev(self):
         numpy.random.seed(12)

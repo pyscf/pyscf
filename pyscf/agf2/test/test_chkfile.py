@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Checkpoint round trips without an AGF2 iteration or SCF calculation."""
-import tempfile
 from types import SimpleNamespace
 import unittest
 
@@ -27,9 +26,9 @@ from pyscf.agf2.aux_space import GreensFunction, SelfEnergy
 
 class KnownValues(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.path = tmp.name + '/agf2.h5'
+        tmp = lib.NamedTemporaryFile(suffix='.h5')
+        self.addCleanup(tmp.close)
+        self.path = tmp.name
         self.mol = gto.M(atom='He', basis='sto-3g', verbose=0)
         self.gf = GreensFunction([-1., .5], [[.8, .6j]], chempot=.1)
         self.se = SelfEnergy([-2., 1.], [[.2, .3j]], chempot=.1)

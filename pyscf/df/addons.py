@@ -40,7 +40,7 @@ FIRST_ETB_ELEMENT = getattr(__config__, 'df_addons_aug_start_at', 36)  # 'Rb'
 # functions. It may cause higher errors in ERI integrals.
 USE_VERSION_26_AUXBASIS = True
 
-# Obtained from http://www.psicode.org/psi4manual/master/basissets_byfamily.html
+# Adapted from http://www.psicode.org/psi4manual/master/basissets_byfamily.html
 DEFAULT_AUXBASIS = {
     # AO basis       JK-fit                     MP2-fit
     'ccpvdz'      : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
@@ -63,6 +63,9 @@ DEFAULT_AUXBASIS = {
     #'def2qzvpd'   : ('def2-qzvp-jkfit'        , None                 ),
     'def2qzvpp'   : ('def2-qzvpp-jkfit'       , 'def2-qzvpp-ri'      ),
     'def2qzvppd'  : ('def2-qzvpp-jkfit'       , 'def2-qzvppd-ri'     ),
+    # Grimme vDZP (ECP-based, used by wB97X-3c); the universal JK-fit is
+    # the density-fitting basis of choice for the composite 3c methods
+    'grimmevdzp'  : ('def2-universal-jkfit'   , None                 ),
     'sto3g'       : ('def2-svp-jkfit'         , 'def2-svp-ri'        ),
     '321g'        : ('def2-svp-jkfit'         , 'def2-svp-ri'        ),
     '631g'        : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
@@ -71,6 +74,13 @@ DEFAULT_AUXBASIS = {
     '6311g'       : ('cc-pvtz-jkfit'          , 'cc-pvtz-ri'         ),
     '6311+g'      : ('heavy-aug-cc-pvtz-jkfit', 'heavyaug-cc-pvtz-ri'),
     '6311++g'     : ('aug-cc-pvtz-jkfit'      , 'aug-cc-pvtz-ri'     ),
+}
+
+# J-fit auxiliary basis sets that are only available through the
+# basis_set_exchange package (not bundled with PySCF).
+DEFAULT_AUXBASIS_JFIT_BSE = {
+    'def2mtzvp'   : 'def2-mTZVPP-RIJ',
+    'def2mtzvpp'  : 'def2-mTZVPP-RIJ',
 }
 
 class load(ao2mo.load):
@@ -177,7 +187,10 @@ def make_auxbasis(mol, *, xc='HF', mp2fit=False):
     auxbasis = {}
     if isinstance(mol.basis, str):
         _basis = {a: mol.basis for a in uniq_atoms}
-        default_auxbasis = predefined_auxbasis(mol, mol.basis, xc, mp2fit)
+        balias = _format_basis_name(mol.basis)
+        if gto.basis._is_pople_basis(balias):
+            balias = balias.split('g')[0] + 'g'
+        default_auxbasis = predefined_auxbasis(mol, balias, xc, mp2fit)
         if default_auxbasis:
             auxbasis = {a: default_auxbasis for a in uniq_atoms}
             logger.debug(mol, 'Default auxbasis %s is applied universally', default_auxbasis)
@@ -356,6 +369,12 @@ def predefined_auxbasis(mol, basis, xc='HF', mp2fit=False):
         elif is_hybrid_xc(xc):
             auxbasis = DEFAULT_AUXBASIS[pyscf_basis_alias][0]
             logger.debug(mol, f'Psi4 predefined JKFIT basis set {auxbasis} for {xc}')
+            return auxbasis
+    if pyscf_basis_alias in DEFAULT_AUXBASIS_JFIT_BSE:
+        from pyscf.gto.basis import bse
+        if bse.basis_set_exchange is not None and not is_hybrid_xc(xc):
+            auxbasis = DEFAULT_AUXBASIS_JFIT_BSE[pyscf_basis_alias]
+            logger.debug(mol, f'predefined JFIT basis set {auxbasis} for {xc}')
             return auxbasis
     return bse_predefined_auxbasis(mol, basis, xc, mp2fit)
 

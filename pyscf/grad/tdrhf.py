@@ -317,6 +317,21 @@ class Gradients(rhf_grad.GradientsBase):
         self.de = de = de + self.grad_nuc(atmlst=atmlst)
         if self.mol.symmetry:
             self.de = self.symmetrize(self.de, atmlst)
+
+        # Geometry-only corrections enter the total excited-state energy
+        # through the SCF energy, but are absent from grad_elec and grad_nuc.
+        mf = self.base._scf
+        if mf.do_disp() or mf.do_gcp():
+            mf_grad = mf.Gradients()
+            correction = 0
+            if mf.do_disp():
+                correction = mf_grad.get_dispersion()
+            if mf.do_gcp():
+                correction += mf_grad.get_gcp()
+            if atmlst is not None:
+                correction = correction[atmlst]
+            self.de += correction
+
         self._finalize()
         return self.de
 

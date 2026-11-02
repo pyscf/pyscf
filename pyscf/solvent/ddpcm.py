@@ -40,14 +40,24 @@ __all__ = ['ddPCM', 'DDPCM']
 warnings.warn('Module ddPCM is under testing')
 
 
+def _as_solvent_obj(solvent_obj, mol):
+    '''Allows the solvent model to be specified by the name of the solvent,
+    e.g. mf.ddPCM('toluene')
+    '''
+    if isinstance(solvent_obj, str):
+        solvent_obj = DDPCM(mol, solvent_obj)
+    return solvent_obj
+
 @lib.with_doc(_attach_solvent._for_scf.__doc__)
 def ddpcm_for_scf(mf, solvent_obj=None, dm=None):
+    solvent_obj = _as_solvent_obj(solvent_obj, mf.mol)
     if solvent_obj is None:
         solvent_obj = DDPCM(mf.mol)
     return _attach_solvent._for_scf(mf, solvent_obj, dm)
 
 @lib.with_doc(_attach_solvent._for_casscf.__doc__)
 def ddpcm_for_casscf(mc, solvent_obj=None, dm=None):
+    solvent_obj = _as_solvent_obj(solvent_obj, mc.mol)
     if solvent_obj is None:
         if isinstance(getattr(mc._scf, 'with_solvent', None), DDPCM):
             solvent_obj = mc._scf.with_solvent
@@ -57,6 +67,7 @@ def ddpcm_for_casscf(mc, solvent_obj=None, dm=None):
 
 @lib.with_doc(_attach_solvent._for_casci.__doc__)
 def ddpcm_for_casci(mc, solvent_obj=None, dm=None):
+    solvent_obj = _as_solvent_obj(solvent_obj, mc.mol)
     if solvent_obj is None:
         if isinstance(getattr(mc._scf, 'with_solvent', None), DDPCM):
             solvent_obj = mc._scf.with_solvent
@@ -66,6 +77,7 @@ def ddpcm_for_casci(mc, solvent_obj=None, dm=None):
 
 @lib.with_doc(_attach_solvent._for_post_scf.__doc__)
 def ddpcm_for_post_scf(method, solvent_obj=None, dm=None):
+    solvent_obj = _as_solvent_obj(solvent_obj, method.mol)
     if solvent_obj is None:
         if isinstance(getattr(method._scf, 'with_solvent', None), DDPCM):
             solvent_obj = method._scf.with_solvent
@@ -192,8 +204,19 @@ def make_A(pcmobj, r_vdw, ylm_1sph, ui):
     return Amat
 
 class ddPCM(ddcosmo.DDCOSMO):
-    def __init__(self, mol):
-        ddcosmo.DDCOSMO.__init__(self, mol)
+    '''The domain decomposition PCM model.
+
+    The solvent can be specified by its name, see ddcosmo.ddCOSMO.
+
+    Examples:
+
+    >>> mf = mol.RHF().ddPCM()
+    >>> mf.with_solvent.solvent = 'toluene'
+    >>> mf.kernel()
+    '''
+
+    def __init__(self, mol, solvent=None):
+        ddcosmo.DDCOSMO.__init__(self, mol, solvent)
         self.method = 'ddPCM'
 
     def dump_flags(self, verbose=None):
@@ -205,6 +228,9 @@ class ddPCM(ddcosmo.DDCOSMO):
                     self.lebedev_order, gen_grid.LEBEDEV_ORDER[self.lebedev_order])
         logger.info(self, 'lmax = %s'         , self.lmax)
         logger.info(self, 'eta = %s'          , self.eta)
+        solvent = getattr(self, 'solvent', '')
+        if solvent:
+            logger.info(self, 'solvent = %s'  , solvent)
         logger.info(self, 'eps = %s'          , self.eps)
         logger.info(self, 'eps_optical = %s'  , self.eps_optical)
         logger.info(self, 'frozen = %s'       , self.frozen)

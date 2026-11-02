@@ -70,6 +70,7 @@ try:
     from .roks import Gradients as ROKS
     from .gks import Gradients as GKS
     from . import dispersion
+    from . import gcp
 
 except (ImportError, OSError):
     pass

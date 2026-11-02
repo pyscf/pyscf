@@ -387,8 +387,7 @@ def follow_state_(mf, occorb=None):
 follow_state = follow_state_
 
 def mom_occ_(mf, occorb, setocc):
-    '''Use maximum overlap method to determine occupation number for each orbital in every
-    iteration.
+    '''Use the initial maximum overlap method (IMOM) to determine orbital occupations.
 
     Each step selects the required number of orbitals by overlap with the
     reference occupied space. The reference stays fixed; use follow_state_ to
@@ -437,7 +436,7 @@ def mom_occ_(mf, occorb, setocc):
             nocc_b = int(numpy.sum(setocc[1]))
             s_a = reduce(numpy.dot, (coef_occ_a.conj().T, mf.get_ovlp(), mo_coeff[0]))
             s_b = reduce(numpy.dot, (coef_occ_b.conj().T, mf.get_ovlp(), mo_coeff[1]))
-            #choose a subset of mo_coeff, which maximizes <old|now>
+            # Compare each candidate with the initial occupied orbitals.
             idx_a = numpy.argsort(numpy.einsum('ij,ij->j', s_a, s_a))[::-1]
             idx_b = numpy.argsort(numpy.einsum('ij,ij->j', s_b, s_b))[::-1]
             mo_occ[0,idx_a[:nocc_a]] = 1.
@@ -468,7 +467,7 @@ def mom_occ_(mf, occorb, setocc):
             mo_occ = numpy.zeros_like(setocc)
             nocc = int(setocc.sum())
             s = occorb[:,setocc>0].conj().T.dot(mf.get_ovlp()).dot(mo_coeff)
-            #choose a subset of mo_coeff, which maximizes <old|now>
+            # Compare each candidate with the initial occupied orbitals.
             idx = numpy.argsort(numpy.einsum('ij,ij->j', s, s))[::-1]
             mo_occ[idx[:nocc]] = 1.
             return mo_occ

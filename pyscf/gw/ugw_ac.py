@@ -956,7 +956,7 @@ class UGWAC(GWAC):
 
         if hasattr(self._scf, 'sigma'):
             f_occ = _fermi_smearing_occ if self._scf.smearing_method.lower() == 'fermi' else _gaussian_smearing_occ
-            ef = _smearing_optimize(f_occ, np.hstack(mo_energy), self._scf.mol.nelectron, self._scf.sigma)[0][0]
+            ef = _smearing_optimize(f_occ, np.hstack(mo_energy), self._scf.mol.nelectron, self._scf.sigma)[0]
 
         else:
             # working with full space mo_energy and nocc here

@@ -180,10 +180,98 @@ def _lot(mf):
 
 
 
+#%% Outlying charge correction
+
+def get_outlying_charge_correction(mf):
+    '''Outlying charge correction for the COSMO screening charges.
+
+    Part of the solute electron density lies outside the cavity, so the
+    computed screening charges fall short of the total surface charge that
+    Gauss's law requires,
+
+        sum(q_nuc)  = -f_eps * Q_nuc
+        sum(q_elec) = -f_eps * Q_elec
+
+    where Q_nuc and Q_elec are the total nuclear and electronic charges of the
+    solute. The correction restores both sum rules by scaling the nuclear and
+    electronic screening charges separately, and then regenerates the surface
+    potential from the corrected charges. Correcting the potential as well as
+    the charges is what makes the corrected dielectric energy accurate.
+
+    Only C-PCM and COSMO are supported. Their response matrix is a multiple of
+    the identity, R = -f_eps * I, so the screening charges are a uniform f_eps
+    scaling of the conductor charges and the sum rules above are the model's
+    own. IEF-PCM and SS(V)PE do not have that structure; note that in the
+    conductor limit required for COSMO-RS files, IEF-PCM reduces to C-PCM.
+
+    This implementation scales the nuclear and electronic screening charges
+    separately, then regenerates the surface potential from the corrected
+    charges. Unlike the auxiliary outer-cavity correction of Klamt and Jonas,
+    this approach does not construct an auxiliary cavity.
+
+    References:
+        A. Klamt, V. Jonas, J. Chem. Phys. 105, 9972 (1996)
+        https://doi.org/10.1063/1.472829
+
+        R. P. Soares, D. Mejia-Rodriguez, and E. Apra,
+        J. Chem. Theory Comput. 21, 11573 (2025).
+        https://doi.org/10.1021/acs.jctc.5c01368
+
+    Arguments:
+        mf: processed SCF with PCM solvation
+
+    Returns:
+        dict: corrected screening charges ('q'), corrected dielectric energy
+            in Hartree ('e_diel'), and the two scaling factors ('f_nuc',
+            'f_elec')
+
+    Raises:
+        NotImplementedError: for solvent models other than C-PCM and COSMO
+
+    '''
+    pcmobj = mf.with_solvent
+    method = pcmobj.method.upper()
+    if method not in ('C-PCM', 'CPCM', 'COSMO'):
+        raise NotImplementedError(
+            f'Outlying charge correction for {pcmobj.method}. Only C-PCM and '
+            'COSMO have a response matrix proportional to the identity, which '
+            'is what makes the screening-charge sum rules well defined.')
+
+    K = pcmobj._intermediates['K']
+    f_eps = pcmobj._intermediates['f_epsilon']
+    v_grids = pcmobj._intermediates['v_grids']
+    v_nuc = pcmobj.v_grids_n
+
+    # The COSMO equations are linear in the surface potential, so the screening
+    # charges split into nuclear and electronic parts along with it.
+    # Conductor charges are used so that eps = 1 stays finite.
+    q_nuc = -_np.linalg.solve(K, v_nuc)
+    q_elec = -_np.linalg.solve(K, v_grids - v_nuc)
+
+    Q_nuc = float(mf.mol.atom_charges().sum())
+    Q_elec = -float(mf.mol.nelectron)
+    f_nuc = -Q_nuc / q_nuc.sum()
+    f_elec = -Q_elec / q_elec.sum()
+    q0_corr = f_nuc * q_nuc + f_elec * q_elec
+
+    # Regenerate the potential from the corrected charges: K q = R v with
+    # R = -f_eps I inverts to v = -K q / f_eps.
+    v_corr = -K.dot(q0_corr)
+    q_corr = f_eps * q0_corr
+    e_diel_corr = 0.5 * float(_np.dot(q_corr, v_corr))
+
+    return {
+        'q': q_corr,
+        'e_diel': e_diel_corr,
+        'f_nuc': float(f_nuc),
+        'f_elec': float(f_elec)
+    }
+
 def get_pcm_parameters(mf, step=0.2):
     '''Returns a dictionary containing the main PCM computation parameters.
-    All physical parameters are expressed in atomic units (a.u.).
-    Please also note, that outlying charge correction is not implemented yet.
+    All physical parameters are expressed in atomic units (a.u.). The corrected
+    quantities carry the outlying charge correction, see
+    :func:`get_outlying_charge_correction`.
 
     Arguments:
         mf: processed SCF with PCM solvation
@@ -220,6 +308,12 @@ def get_pcm_parameters(mf, step=0.2):
     areas = mf.with_solvent.surface['area']
     potentials = mf.with_solvent._intermediates['v_grids']
 
+    # outlying charge correction
+    occ = get_outlying_charge_correction(mf)
+    charges_corr = occ['q']
+    E_diel_corr = occ['e_diel']
+    E_tot_corr = E_tot - E_diel + E_diel_corr
+
     # output
     params = {
         'pyscf_version': __version__,
@@ -232,14 +326,14 @@ def get_pcm_parameters(mf, step=0.2):
         },
         'screening_charge': {
             'cosmo': float(sum(charges)),
-            'correction': 0.0,
-            'total': float(sum(charges))
+            'correction': float(sum(charges_corr) - sum(charges)),
+            'total': float(sum(charges_corr))
         },
         'energies': {
             'e_tot': float(E_tot),
-            'e_tot_corr': float(E_tot), # TODO: implement OCC
+            'e_tot_corr': float(E_tot_corr),
             'e_diel': float(E_diel),
-            'e_diel_corr': float(E_diel) # TODO: implement OCC
+            'e_diel_corr': float(E_diel_corr)
         },
         'atoms': {
             'atom_index': atom_idxs,
@@ -256,10 +350,10 @@ def get_pcm_parameters(mf, step=0.2):
             'y': s_ys,
             'z': s_zs,
             'charge': charges.tolist(),
-            'charge_corr': charges.tolist(), # TODO: implement OCC
+            'charge_corr': charges_corr.tolist(),
             'area': areas.tolist(),
             'sigma': (charges / areas).tolist(),
-            'sigma_corr': (charges / areas).tolist(), # TODO: implement OCC
+            'sigma_corr': (charges_corr / areas).tolist(),
             'potential': potentials.tolist(),
         }
     }
@@ -269,8 +363,9 @@ def get_pcm_parameters(mf, step=0.2):
 
 
 def write_cosmo_file(fout, mf, step=0.2, volume=None):
-    '''Saves COSMO file in Turbomole format. Please note, that outlying charge
-    correction is not implemented yet
+    '''Saves COSMO file in Turbomole format. The corrected charges and energies
+    carry the outlying charge correction, see
+    :func:`get_outlying_charge_correction`.
 
     Arguments:
         fout: writable file object

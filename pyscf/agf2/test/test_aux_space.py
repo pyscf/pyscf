@@ -13,11 +13,11 @@
 # limitations under the License.
 
 """Auxiliary-space identities on small, deterministic matrices."""
-import tempfile
 import unittest
 
 import numpy as np
 
+from pyscf import lib
 from pyscf.agf2 import aux_space
 
 
@@ -102,10 +102,10 @@ class KnownValues(unittest.TestCase):
         np.testing.assert_allclose(self.se.dot(phys, vector), expected, atol=1e-14)
 
     def test_checkpoint(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with lib.NamedTemporaryFile(suffix='.h5') as tmp:
             for key in (None, 'nested/self_energy'):
                 with self.subTest(key=key):
-                    path = tmp + '/aux.h5'
+                    path = tmp.name
                     self.se.save(path, key=key)
                     restored = aux_space.SelfEnergy.load(path, key=key)
                     self.assertEqual(restored.chempot, self.se.chempot)

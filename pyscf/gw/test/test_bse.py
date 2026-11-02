@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 
-import tempfile
 import numpy as np
 from scipy import linalg
 import pytest
-from pyscf import dft, gto, scf
+from pyscf import lib, dft, gto, scf
 from pyscf.gw import bse
 from pyscf.gw.bse import BSE
 from pyscf.gw.gw_ac import GWAC
@@ -142,19 +141,20 @@ def test_unrestricted_closed_shell_spectrum(lih_gw):
 def test_checkpoint_growth_and_restart():
     rng = np.random.default_rng(8)
     arrays = [rng.standard_normal((6, 8)) for _ in range(3)]
-    with tempfile.NamedTemporaryFile(suffix='.h5') as f:
-        bse.davidson_save_checkpoint(f.name, *arrays, 2)
+    with lib.NamedTemporaryFile(suffix='.h5') as tmp:
+        checkpoint = tmp.name
+        bse.davidson_save_checkpoint(checkpoint, *arrays, 2)
         loaded = [np.zeros_like(a) for a in arrays]
-        assert bse.davidson_load_from_checkpoint(f.name, *loaded) == 2
-        bse.davidson_save_checkpoint(f.name, *arrays, 6)
-        bse.davidson_save_checkpoint(f.name, *arrays, 6)
+        assert bse.davidson_load_from_checkpoint(checkpoint, *loaded) == 2
+        bse.davidson_save_checkpoint(checkpoint, *arrays, 6)
+        bse.davidson_save_checkpoint(checkpoint, *arrays, 6)
         loaded = [np.zeros_like(a) for a in arrays]
-        assert bse.davidson_load_from_checkpoint(f.name, *loaded) == 6
+        assert bse.davidson_load_from_checkpoint(checkpoint, *loaded) == 6
         for actual, expected in zip(loaded, arrays):
             np.testing.assert_array_equal(actual, expected)
         # A restart overwrites a larger previous Davidson space.
-        bse.davidson_save_checkpoint(f.name, *arrays, 3)
-        assert bse.davidson_load_from_checkpoint(f.name, *loaded, nload=2) == 2
+        bse.davidson_save_checkpoint(checkpoint, *arrays, 3)
+        assert bse.davidson_load_from_checkpoint(checkpoint, *loaded, nload=2) == 2
         for actual, expected in zip(loaded, arrays):
             np.testing.assert_array_equal(actual[:2], expected[:2])
 

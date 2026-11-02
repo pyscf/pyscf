@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 
-import tempfile
 import numpy as np
 import pytest
 
-from pyscf import dft, gto, scf
+from pyscf import lib, dft, gto, scf
 from pyscf.gw.qsgw import QSGW
 from pyscf.gw.uqsgw import UQSGW
 
@@ -60,14 +59,15 @@ def _check_restart(mode):
     mf = scf.RHF(mol).run(conv_tol=1e-12)
     energies = []
     for cls, reference in ((QSGW, mf), (UQSGW, mf.to_uhf())):
-        with tempfile.NamedTemporaryFile(suffix='.h5') as checkpoint:
+        with lib.NamedTemporaryFile(suffix='.h5') as tmp:
+            checkpoint = tmp.name
             obj = cls(reference)
             obj.mode = mode
             obj.nw = 32
             obj.ac_pade_npts = 8
             obj.max_cycle = 50
             obj.conv_tol = 1e-9
-            obj.chkfile = checkpoint.name
+            obj.chkfile = checkpoint
             obj.kernel()
             saved = obj.mo_energy.copy()
             restart = cls(reference)
@@ -76,7 +76,7 @@ def _check_restart(mode):
             restart.ac_pade_npts = 8
             restart.max_cycle = 50
             restart.conv_tol = 1e-9
-            restart.chkfile = checkpoint.name
+            restart.chkfile = checkpoint
             restart.load_chkfile = True
             restart.outcore = True
             restart.kernel()
