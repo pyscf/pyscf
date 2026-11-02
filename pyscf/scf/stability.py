@@ -337,9 +337,8 @@ def _gen_hop_rhf_external(mf, with_symmetry=True, verbose=None):
         orbsym = hf_symm.get_orbsym(mol, mo_coeff)
         sym_forbid = orbsym[viridx].reshape(-1,1) != orbsym[occidx]
 
-    h1e = mf.get_hcore()
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-    fock_ao = h1e + mf.get_veff(mol, dm0)
+    fock_ao = mf.get_fock(dm = dm0)
     fock = reduce(numpy.dot, (mo_coeff.conj().T, fock_ao, mo_coeff))
     foo = fock[occidx[:,None],occidx]
     fvv = fock[viridx[:,None],viridx]
@@ -523,9 +522,8 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
         sym_forbidb = orbsymb[viridxb].reshape(-1,1) != orbsymb[occidxb]
         sym_forbid1 = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
-    h1e = mf.get_hcore()
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-    fock_ao = h1e + mf.get_veff(mol, dm0)
+    fock_ao = mf.get_fock(dm = dm0)
     focka = reduce(numpy.dot, (mo_coeff[0].conj().T, fock_ao[0], mo_coeff[0]))
     fockb = reduce(numpy.dot, (mo_coeff[1].conj().T, fock_ao[1], mo_coeff[1]))
     fooa = focka[occidxa[:,None],occidxa]
