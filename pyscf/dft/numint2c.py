@@ -219,8 +219,8 @@ def _ncol_lda_vxc_mat(mol, ao, weight, rho, vxc, mask, shls_slice, ao_loc, hermi
     aow = _scale_ao(ao, ws*my, out=aow)  # My
     tmpy = _dot_ao_ao(mol, ao, aow, mask, shls_slice, ao_loc)
     if hermi:
-        # conj(mx+my*1j) == mx-my*1j, tmpx and tmpy should be real
-        matba = (tmpx + tmpx.T) + (tmpy + tmpy.T) * 1j
+        # Bloch AOs can be complex. The caller supplies the alpha-beta adjoint.
+        matba = (tmpx + tmpx.conj().T) + (tmpy + tmpy.conj().T) * 1j
         matab = np.zeros_like(matba)
     else:
         # conj(mx+my*1j) != mx-my*1j, tmpx and tmpy should be complex
@@ -331,8 +331,8 @@ def _mcol_lda_vxc_mat(mol, ao, weight, rho, vxc, mask, shls_slice, ao_loc, hermi
     aow = _scale_ao(ao, wmy[0], out=aow)  # My
     tmpy = _dot_ao_ao(mol, ao, aow, mask, shls_slice, ao_loc)
     if hermi:
-        # conj(mx+my*1j) == mx-my*1j, tmpx and tmpy should be real
-        matba = (tmpx + tmpx.T) + (tmpy + tmpy.T) * 1j
+        # Bloch AOs can be complex. The caller supplies the alpha-beta adjoint.
+        matba = (tmpx + tmpx.conj().T) + (tmpy + tmpy.conj().T) * 1j
         matab = np.zeros_like(matba)
     else:
         # conj(mx+my*1j) != mx-my*1j, tmpx and tmpy should be complex
@@ -364,8 +364,8 @@ def _mcol_gga_vxc_mat(mol, ao, weight, rho, vxc, mask, shls_slice, ao_loc, hermi
     tmpy = _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
     if hermi:
         assert vxc.dtype == np.double
-        # conj(mx+my*1j) == mx-my*1j, tmpx and tmpy should be real
-        matba = (tmpx + tmpx.T) + (tmpy + tmpy.T) * 1j
+        # Bloch AOs can be complex. The caller supplies the alpha-beta adjoint.
+        matba = (tmpx + tmpx.conj().T) + (tmpy + tmpy.conj().T) * 1j
         matab = np.zeros_like(matba)
     else:
         # conj(mx+my*1j) != mx-my*1j, tmpx and tmpy should be complex
@@ -409,8 +409,8 @@ def _mcol_mgga_vxc_mat(mol, ao, weight, rho, vxc, mask, shls_slice, ao_loc, herm
     tmpy += _tau_dot(mol, ao, ao, wmy[tau_idx], mask, shls_slice, ao_loc)
     if hermi:
         assert vxc.dtype == np.double
-        # conj(mx+my*1j) == mx-my*1j, tmpx and tmpy should be real
-        matba = (tmpx + tmpx.T) + (tmpy + tmpy.T) * 1j
+        # Bloch AOs can be complex. The caller supplies the alpha-beta adjoint.
+        matba = (tmpx + tmpx.conj().T) + (tmpy + tmpy.conj().T) * 1j
         matab = np.zeros_like(matba)
     else:
         # conj(mx+my*1j) != mx-my*1j, tmpx and tmpy should be complex

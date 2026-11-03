@@ -550,6 +550,8 @@ class KNumInt2C(lib.StreamObject, numint.LibXCMixin):
         else:
             raise NotImplementedError(f'KNUMINT2C.get_vxc for functional {xc_code}')
 
+        if hermi:
+            vmat = vmat + vmat.conj().transpose(0,1,3,2)
         if dms.ndim == 3:
             vmat = vmat[0]
             nelec = nelec[0]
@@ -601,6 +603,8 @@ class KNumInt2C(lib.StreamObject, numint.LibXCMixin):
         else:
             raise NotImplementedError(f'numint2c.get_fxc for functional {xc_code}')
 
+        if hermi:
+            vmat = vmat + vmat.conj().transpose(0,1,3,2)
         if dms.ndim == 3:
             vmat = vmat[0]
         return vmat
