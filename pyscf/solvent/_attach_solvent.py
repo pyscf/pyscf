@@ -160,11 +160,18 @@ class SCFWithSolvent(_Solvation):
         # stability analysis, SOSCF, polarizability and Hessian).
         vind = self.undo_solvent().gen_response(*args, **kwargs)
         is_uhf = isinstance(self, scf.uhf.UHF)
+        is_ghf = isinstance(self, scf.ghf.GHF)
         def vind_with_solvent(dm1):
             v = vind(dm1)
             if self.with_solvent.equilibrium_solvation:
                 if is_uhf:
                     v += self.with_solvent._B_dot_x(dm1[0]+dm1[1])
+                elif is_ghf:
+                    nao = dm1.shape[-1] // 2
+                    dm1_sf = dm1[..., :nao, :nao] + dm1[..., nao:, nao:]
+                    v_solvent = self.with_solvent._B_dot_x(dm1_sf)
+                    v[..., :nao, :nao] += v_solvent
+                    v[..., nao:, nao:] += v_solvent
                 else:
                     v += self.with_solvent._B_dot_x(dm1)
             return v

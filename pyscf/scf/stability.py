@@ -199,7 +199,8 @@ def ghf_stability(mf, verbose=None, return_status=False,
     log = logger.new_logger(mf, verbose)
     with_symmetry = True
     # Hessian might be incorrect. see https://github.com/pyscf/pyscf/issues/2591
-    g, hop, hdiag = newton_ah.gen_g_hop_ghf(mf, mf.mo_coeff, mf.mo_occ)
+    g, hop, hdiag = newton_ah.gen_g_hop_ghf(mf, mf.mo_coeff, mf.mo_occ,
+                                            with_nlc=True)
     hdiag *= 2
     stable = True
     def precond(dx, e, x0):
@@ -252,7 +253,8 @@ def dhf_stability(mf, verbose=None, return_status=False,
         stable or unstable) is returned.
     '''
     log = logger.new_logger(mf, verbose)
-    g, hop, hdiag = newton_ah.gen_g_hop_dhf(mf, mf.mo_coeff, mf.mo_occ)
+    g, hop, hdiag = newton_ah.gen_g_hop_dhf(mf, mf.mo_coeff, mf.mo_occ,
+                                            with_nlc=True)
     hdiag *= 2
     stable = True
     def precond(dx, e, x0):
@@ -284,7 +286,7 @@ def rhf_internal(mf, with_symmetry=True, verbose=None, return_status=False,
                  nroots=STAB_NROOTS, tol=STAB_TOL):
     log = logger.new_logger(mf, verbose)
     g, hop, hdiag = newton_ah.gen_g_hop_rhf(mf, mf.mo_coeff, mf.mo_occ,
-                                            with_symmetry=with_symmetry)
+                                            with_symmetry=with_symmetry, with_nlc=True)
     hdiag *= 2
     def precond(dx, e, x0):
         hdiagd = hdiag - e
@@ -433,7 +435,7 @@ def rohf_internal(mf, with_symmetry=True, verbose=None, return_status=False,
                   nroots=STAB_NROOTS, tol=STAB_TOL):
     log = logger.new_logger(mf, verbose)
     g, hop, hdiag = newton_ah.gen_g_hop_rohf(mf, mf.mo_coeff, mf.mo_occ,
-                                             with_symmetry=with_symmetry)
+                                             with_symmetry=with_symmetry, with_nlc=True)
     hdiag *= 2
     def precond(dx, e, x0):
         hdiagd = hdiag - e
@@ -469,7 +471,7 @@ def uhf_internal(mf, with_symmetry=True, verbose=None, return_status=False,
                  nroots=STAB_NROOTS, tol=STAB_TOL):
     log = logger.new_logger(mf, verbose)
     g, hop, hdiag = newton_ah.gen_g_hop_uhf(mf, mf.mo_coeff, mf.mo_occ,
-                                            with_symmetry=with_symmetry)
+                                            with_symmetry=with_symmetry, with_nlc=True)
     hdiag *= 2
     def precond(dx, e, x0):
         hdiagd = hdiag - e
@@ -574,8 +576,12 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
     if with_symmetry and mol.symmetry:
         hdiag2[sym_forbid2] = 0
 
-    vresp1 = mf.gen_response(with_j=False, hermi=0)
-    # Spin flip GHF solution is not considered
+    gmf = mf.to_ghf()
+    if isinstance(gmf, hf.KohnShamDFT):
+        # The collinear kernel ignores transverse magnetic components.
+        gmf.collinear = 'mcol'
+    vresp1 = gmf.gen_response(with_j=False, hermi=1)
+    nao = mo_coeff[0].shape[0]
     def hop_uhf2ghf(x1):
         if with_symmetry and mol.symmetry:
             x1 = x1.copy()
@@ -589,10 +595,13 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
 
         d1ab = reduce(numpy.dot, (orbva, x1ab, orbob.conj().T))
         d1ba = reduce(numpy.dot, (orbvb, x1ba, orboa.conj().T))
-        dm1 = numpy.array((d1ab+d1ba.conj().T, d1ba+d1ab.conj().T))
+        # Spin mixing changes the off-diagonal blocks of dm
+        dm1 = numpy.zeros((2*nao, 2*nao), dtype=d1ab.dtype)
+        dm1[:nao, nao:] = d1ab + d1ba.conj().T
+        dm1[nao:, :nao] = dm1[:nao, nao:].conj().T
         v1 = vresp1(dm1)
-        x2ab += reduce(numpy.dot, (orbva.conj().T, v1[0], orbob))
-        x2ba += reduce(numpy.dot, (orbvb.conj().T, v1[1], orboa))
+        x2ab += reduce(numpy.dot, (orbva.conj().T, v1[:nao,nao:], orbob)).real
+        x2ba += reduce(numpy.dot, (orbvb.conj().T, v1[nao:,:nao], orboa)).real
         x2 = numpy.hstack((x2ab.real.ravel(), x2ba.real.ravel()))
         if with_symmetry and mol.symmetry:
             x2[sym_forbid2] = 0
