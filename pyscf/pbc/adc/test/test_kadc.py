@@ -62,17 +62,17 @@ class KnownValues(unittest.TestCase):
             for i in range(len(kpts)):
                 for j in range(len(kpts)):
                     naux[i, j] = np.asarray(fload(kpts[i], kpts[j])).shape[0]
-
         self.assertNotEqual(np.min(naux), np.max(naux))
 
         myadc  = adc.KRADC(_kmf)
         e_mp, _, _  = myadc.kernel_gs()
         self.assertAlmostEqual(e_mp, -0.12693279428563944, 4)
-            
+
         myadc.if_naf = True
         e_mp_naf, _, _  = myadc.kernel_gs()
         self.assertAlmostEqual(e_mp_naf, -0.12628398876690958, 4)
-        
+
+        # Test full NAF with exact ADC(2)
         myadc.thresh_naf = 1e-6
         e_mp_naf, _, _  = myadc.kernel_gs()
         self.assertAlmostEqual(e_mp_naf, e_mp, 6)
