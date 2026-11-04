@@ -634,23 +634,23 @@ def uhf_external(mf, with_symmetry=True, verbose=None, return_status=False,
     stable = not (e3 < -1e-5)
     dump_status(log, stable, f'{mf.__class__}', 'UHF/UKS -> GHF/GKS')
     mo = scipy.linalg.block_diag(*mf.mo_coeff)
+    occidxa = numpy.where(mf.mo_occ[0]> 0)[0]
+    viridxa = numpy.where(mf.mo_occ[0]==0)[0]
+    occidxb = numpy.where(mf.mo_occ[1]> 0)[0]
+    viridxb = numpy.where(mf.mo_occ[1]==0)[0]
+    nocca = len(occidxa)
+    nvira = len(viridxa)
+    noccb = len(occidxb)
+    nvirb = len(viridxb)
+    nmo = nocca + nvira
     if not stable:
-        occidxa = numpy.where(mf.mo_occ[0]> 0)[0]
-        viridxa = numpy.where(mf.mo_occ[0]==0)[0]
-        occidxb = numpy.where(mf.mo_occ[1]> 0)[0]
-        viridxb = numpy.where(mf.mo_occ[1]==0)[0]
-        nocca = len(occidxa)
-        nvira = len(viridxa)
-        noccb = len(occidxb)
-        nvirb = len(viridxb)
-        nmo = nocca + nvira
         dx = numpy.zeros((nmo*2,nmo*2))
         dx[viridxa[:,None],nmo+occidxb] = v[:nvira*noccb].reshape(nvira,noccb)
         dx[nmo+viridxb[:,None],occidxa] = v[nvira*noccb:].reshape(nvirb,nocca)
         u = newton_ah.expmat(dx - dx.conj().T)
         mo = numpy.dot(mo, u)
-        mo = numpy.hstack([mo[:,:nocca], mo[:,nmo:nmo+noccb],
-                           mo[:,nocca:nmo], mo[:,nmo+noccb:]])
+    mo = numpy.hstack([mo[:,:nocca], mo[:,nmo:nmo+noccb],
+                        mo[:,nocca:nmo], mo[:,nmo+noccb:]])
     if return_status:
         return mo, stable
     else:
