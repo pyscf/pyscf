@@ -195,7 +195,7 @@ class QMMMSCF(QMMM):
             if mm_mol.charge_model != 'gaussian':
                 nuc += q2*(charges/r).sum()
             else:
-                # * MM paritcles may be defined as a spreaded distribution. The
+                # * MM particles may be defined as a spreaded distribution. The
                 # charge distribution may overlap to QM atoms and slightly affect
                 # the interaction.
                 nuc += q2*(charges*erf(expnts*r)/r).sum()

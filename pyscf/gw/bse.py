@@ -1254,7 +1254,7 @@ def get_davidson_trial_vector(bse, ntri, nocc, mo_energy, e_min=0.0, delta=0.0, 
 def get_davidson_trial_vector_diag(
     ntri, multi, nocc, mo_energy, Lpq, nocc_sub=50, nvir_sub=150, e_min=0.0, delta=0.0, TDA=False
 ):
-    """Get trial vectors from subspace diagnoalization.
+    """Get trial vectors from subspace diagonalization.
 
     Parameters
     ----------
@@ -1767,7 +1767,7 @@ class BSE(lib.StreamObject):
         self.multi = None  # multiplicity
         self.nroot = 10  # the number of desired roots
         self.trial = 'identity'  # mode to initialize trial vector
-        self.nocc_sub = 50  # number of occpuied orbitals in the trial vector subspace
+        self.nocc_sub = 50  # number of occupied orbitals in the trial vector subspace
         self.nvir_sub = 150  # number of virtual orbitals in the trial vector subspace
         self.max_vec = 12 * self.nroot  # max allowed subspace size
         self.max_iter = 100  # max Davidson iteration

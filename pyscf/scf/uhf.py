@@ -765,7 +765,7 @@ def det_ovlp(mo1, mo2, occ1, occ2, ovlp):
 
     Args:
         mo1, mo2 : 2D ndarrays
-            Molecualr orbital coefficients
+            Molecular orbital coefficients
         occ1, occ2: 2D ndarrays
             occupation numbers
 
@@ -796,7 +796,7 @@ def make_asym_dm(mo1, mo2, occ1, occ2, x):
 
     Args:
         mo1, mo2 : 2D ndarrays
-            Molecualr orbital coefficients
+            Molecular orbital coefficients
         occ1, occ2: 2D ndarrays
             Occupation numbers
         x: 2D ndarrays

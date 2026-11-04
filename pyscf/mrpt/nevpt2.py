@@ -744,8 +744,8 @@ example examples/dmrg/32-dmrg_casscf_nevpt2_for_FeS.py''')
         ncas = self.ncas
         nocc = ncore + ncas
 
-        #By defaut, _mc is canonicalized for the first root.
-        #For SC-NEVPT based on compressed MPS perturber functions, _mc was already canonicalized.
+        # By default, _mc is canonicalized for the first root.
+        # For SC-NEVPT based on compressed MPS perturber functions, _mc was already canonicalized.
         if (not self.canonicalized):
             # Need to assign roots differently if we have more than one root
             # See issue #1081 (https://github.com/pyscf/pyscf/issues/1081) for more details

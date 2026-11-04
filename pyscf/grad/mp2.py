@@ -187,7 +187,7 @@ def grad_elec(mp_grad, t2, atmlst=None, verbose=logger.INFO):
     return de
 
 def has_frozen_orbitals(post_hf):
-    '''Test if frozen orbitlas are enabled in a post-HF object.'''
+    '''Test if frozen orbitals are enabled in a post-HF object.'''
     with_frozen = False
     if getattr(post_hf, 'frozen', None) is not None:
         if isinstance(post_hf.frozen, (int, numpy.integer)):

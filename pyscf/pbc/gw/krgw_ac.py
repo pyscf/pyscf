@@ -1337,7 +1337,7 @@ class KRGWAC(lib.StreamObject):
         self.nkpts = len(self.kpts)  # number of k-points
         self.mo_energy = None  # orbital energy
         self.mo_coeff = None  # orbital coefficient
-        self.mo_occ = None  # occupiation number
+        self.mo_occ = None  # occupation number
 
         # results
         self.vk = None  # exchange matrix in MO

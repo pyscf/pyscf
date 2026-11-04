@@ -618,7 +618,7 @@ class PCM(lib.StreamObject):
 
     def grad(self, dm):
         '''Computes the Jacobian for the energy associated with the solvent,
-        including the derivatives of the solvent itsself and the interactions
+        including the derivatives of the solvent itself and the interactions
         between the solvent and the charge density of the solute.
         '''
         from pyscf.solvent.grad.pcm import grad_qv, grad_nuc, grad_solver
@@ -633,7 +633,7 @@ class PCM(lib.StreamObject):
 
     def hess(self, dm):
         '''Computes the Hessian for the energy associated with the solvent,
-        including the derivatives of the solvent itsself and the interactions
+        including the derivatives of the solvent itself and the interactions
         between the solvent and the charge density of the solute.
         '''
         from pyscf.solvent.hessian.pcm import (

@@ -37,7 +37,7 @@ from pyscf.fci.direct_spin1 import _unpack_nelec
 #       For each site, {0,1,...,nphonon} gives nphonon+1 possible confs
 # t for hopping, shape = (nsite,nsite)
 # u
-# g for the electorn-phonon coupling
+# g for the electron-phonon coupling
 # hpp for phonon-phonon interaction: (nsite,nsite)
 def contract_all(t, u, g, hpp, ci0, nsite, nelec, nphonon):
     ci1  = contract_1e        (t  , ci0, nsite, nelec, nphonon)

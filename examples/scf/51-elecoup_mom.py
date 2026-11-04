@@ -6,7 +6,7 @@
 Calculate the effective electronic coupling based on single determinant diabatic
 states.
 
-Here the diabatic states are calcuated by mom-SCF(HF or DFT). And the direct
+Here the diabatic states are calculated by mom-SCF(HF or DFT). And the direct
 electronic coupling is obtained using Hartree-Fock formlism and it can use both
 HF and DFT wave functions because of their single determinant form.  Within
 mom-SCF, it is supposed to evaluate the electronic coupling between any two

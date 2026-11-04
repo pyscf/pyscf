@@ -216,7 +216,7 @@ PySCF 2.10.0 (2025-07-15)
   - The MultigridFFTDF class has been removed. The multigrid functionality has
     been migrated to the MultigridNumInt class.
   - The outputs of get_nuc and get_pp methods of the FFTDF, AFTDF, and GDF
-    classes have been changed. They now return high-dimensiontal arrays that are
+    classes have been changed. They now return high-dimensional arrays that are
     adapted to k-points by default.
 
 
