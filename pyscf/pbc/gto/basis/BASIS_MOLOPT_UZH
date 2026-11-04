@@ -7178,7 +7178,7 @@ Rn DZVP-MOLOPT-PBE0-GTH-q8 DZVP-MOLOPT-HYB-GTH-q8
          0.07201268134969    -5.23716894773667E-02     7.65174109804047E-01    -6.02321112279887E-01     4.25669796712309E-01     7.77383407855533E-02
 
 #############################################################################################################################
-#  MOLOPT basis sets optimized for all-electron calcuations or with PBE small-core pseudopotentials 
+#  MOLOPT basis sets optimized for all-electron calculations or with PBE small-core pseudopotentials 
 #############################################################################################################################
 #
 #   SVP-MOLOPT-GGA-ae     SVP-MOLOPT-GGA-qX

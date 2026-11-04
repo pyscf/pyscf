@@ -774,7 +774,7 @@ class GWAC(lib.StreamObject):
         self._nmo = None  # number of orbitals (exclude frozen orbitals)
         self.orbs_frz = None  # list of orbital index in non-frozen orbitals
         self.mo_energy = np.array(mf.mo_energy, copy=True)  # quasiparticle energy
-        self.mo_coeff = np.array(mf.mo_coeff, copy=True)  # quasiparticle orbtial coefficient
+        self.mo_coeff = np.array(mf.mo_coeff, copy=True)  # quasiparticle orbital coefficient
         self.mo_occ = np.array(mf.mo_occ, copy=True)  # quasiparticle orbital occupation
         self.Lpq = None  # three-center density-fitting matrix in MO
 
@@ -1023,7 +1023,7 @@ class GWAC(lib.StreamObject):
         Ec = 2.0 * np.trace(g_sigma).real
 
         # Compute HF energy using DFT density matrix
-        # NOTE: this definitation can be wrong
+        # NOTE: this definition can be wrong
         # TODO: update HF-energy with MRGW functions
         dm = self._scf.make_rdm1()
         rhf = scf.RHF(self.mol)

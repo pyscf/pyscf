@@ -3978,7 +3978,7 @@ class Mole(MoleBase):
         return ao2mo.kernel(self, mo_coeffs, erifile, dataname, intor, **kwargs)
 
     def to_cell(self, box=None, dimension=3, margin=None):
-        '''This function places a molecule in a three-dimensiontal box with
+        '''This function places a molecule in a three-dimensional box with
         periodic boundary conditions.
 
         If the `box` parameter is not specified, the molecule will positioned in

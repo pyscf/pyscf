@@ -53,7 +53,7 @@ mf.init_guess = '1e'
 mf.kernel()
 
 #
-# This is the default initial guess.  It is the superpostion from atomic
+# This is the default initial guess.  It is the superposition from atomic
 # density.  The atomic density is projected from MINAO basis.
 #
 mf = scf.RHF(mol)
@@ -61,7 +61,7 @@ mf.init_guess = 'minao'
 mf.kernel()
 
 #
-# Another way to build the atomic density superpostion.  The atomic density is
+# Another way to build the atomic density superposition.  The atomic density is
 # generated from occupantion averaged atomic HF calculation.
 #
 mf = scf.RHF(mol)

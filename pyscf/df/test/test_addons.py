@@ -43,7 +43,7 @@ class KnownValues(unittest.TestCase):
 
         auxbasis = df.addons.autoaux(mol)
         self.assertEqual(len(auxbasis['O']), 37)
-        # If basis-set-exchange pacakge is installed, this test will fail.
+        # If basis-set-exchange package is installed, this test will fail.
         # bse-0.9 produces 13 shells due to round-off errors.
         # The correct number of generated basis functions should be 12.
         if bse.basis_set_exchange:

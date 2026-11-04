@@ -1238,7 +1238,7 @@ def caspt2_kernel(mc, ortho_thrds, frozen, ipea_shift, log, backend, canonicaliz
 
     if precond or ipea_shift != 0.0:
         rdms, fock, h1e, eris = canonicalize_active_orbitals(ncore, ncas, rdms, fock, h1e, eris)
-        cput0 = log.timer(name + ' active orbtials canonicalization', *cput0)
+        cput0 = log.timer(name + ' active orbitals canonicalization', *cput0)
 
     rdm_mats, ortho_us, shapes = basis_orthogonalize(ncore, ncas, nvir, rdms, ortho_thrds)
     shapes = shapes if io_method == 'incore' else [(0, 0), (0, 0)] + shapes[2:]

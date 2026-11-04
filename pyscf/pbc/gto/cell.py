@@ -1593,7 +1593,7 @@ class Cell(mole.MoleBase):
         c = np.array([a[1] for a in _atoms]).dot(_a)
         return [(a[0], r) for a, r in zip(_atoms, c.tolist())]
 
-#Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
+# Note: Exclude dump_input, parse_arg, basis from kwargs to avoid parsing twice
     def build(self, dump_input=True, parse_arg=mole.ARGPARSE,
               a=None, mesh=None, ke_cutoff=None, precision=None, nimgs=None,
               h=None, dimension=None, rcut= None, low_dim_ft_type=None,
@@ -1609,7 +1609,7 @@ class Cell(mole.MoleBase):
                 The real-space cell lattice vectors. Each row represents
                 a lattice vector.
             fractional : bool
-                Whether the atom postions are specified in fractional coordinates.
+                Whether the atom positions are specified in fractional coordinates.
                 The default value is False, which means the coordinates are
                 interpreted as Cartesian coordinate.
             mesh : (3,) ndarray of ints

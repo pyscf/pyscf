@@ -351,7 +351,7 @@ def create_mm_mol(atoms_or_coords, a, charges=None, radii=None,
         charges : 1D array
             The charges of MM atoms.
         radii : 1D array
-            The Gaussian charge distribuction radii of MM atoms.
+            The Gaussian charge distribution radii of MM atoms.
         unit : string
             The unit of the input. Default is 'Angstrom'.
     '''

@@ -958,7 +958,7 @@ class ddCOSMO(lib.StreamObject):
 
     def grad(self, dm):
         '''Computes the Jacobian for the energy associated with the solvent,
-        including the derivatives of the solvent itsself and the interactions
+        including the derivatives of the solvent itself and the interactions
         between the solvent and the charge density of the solute.
         '''
         from pyscf.solvent.grad import ddcosmo_grad

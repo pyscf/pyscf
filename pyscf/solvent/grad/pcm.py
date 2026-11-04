@@ -407,7 +407,7 @@ def grad_solver(pcmobj, dm):
 
 def make_grad_object(base_method):
     '''Create nuclear gradients object with solvent contributions for the given
-    solvent-attached method based on its gradients method in vaccum
+    solvent-attached method based on its gradients method in vacuum
     '''
     from pyscf.solvent._attach_solvent import _Solvation
     if isinstance(base_method, rhf_grad.GradientsBase):

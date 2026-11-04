@@ -1137,7 +1137,7 @@ def _grad_ne(pcmobj, dm, r_vdw, ui, ylm_1sph, cached_pol, L):
     return de
 
 def _grad_ee(pcmobj, dm1, dm2, r_vdw, ui, ylm_1sph, cached_pol, L):
-    '''electron density-electorn density term'''
+    '''electron density-electron density term'''
     mol = pcmobj.mol
     mol = pcmobj.mol
     natm = mol.natm

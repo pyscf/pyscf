@@ -115,7 +115,7 @@ def get_jk_grad(sgx, dm, hermi=1, with_j=True, with_k=True,
     else:
         proj_dm = dms.copy()
 
-    t1 = logger.timer_debug1(mol, "sgX initialziation", *t0)
+    t1 = logger.timer_debug1(mol, "sgX initialization", *t0)
     vj = numpy.zeros_like(dms)
     dvj = numpy.zeros((dms.shape[0], 3,) + dms.shape[1:])
     vk = numpy.zeros_like(dms)
@@ -383,7 +383,7 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
                 tmp[:] *= 0.5 * weights
             else:
                 # If gv or ao is small, ignore shell-block. If EITHER is
-                # signficant at all, don't ignore. NOTE this is overly
+                # significant at all, don't ignore. NOTE this is overly
                 # conservative but matches the approach for energy/potential
                 mask3 = numpy.uint8(127) * numpy.logical_or(mask, mask2)
                 tmp = ni._dot_ao_dm_sparse(
