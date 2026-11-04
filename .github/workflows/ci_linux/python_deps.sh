@@ -2,7 +2,8 @@
 python -m pip install --upgrade pip
 pip install "numpy!=1.16,!=1.17" "scipy!=1.5" h5py pytest pytest-cov pytest-timer pytest-xdist pytest-timeout
 pip install pyberny
-pip install --no-deps pyscf-dispersion==1.5.0
+# pyscf-dispersion 1.6.0 has not been released on PyPI yet.
+pip install --no-deps git+https://github.com/pyscf/dispersion.git@78ae53d4c40a632aa4fb86be5315db1c8eb01e0e
 pip install geometric
 pip install trexio
 

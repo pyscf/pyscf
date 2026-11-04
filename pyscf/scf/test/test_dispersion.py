@@ -33,8 +33,8 @@ class KnownHF(scf.hf.SCF):
 
 
 class TestDispersionLogic(unittest.TestCase):
+    @unittest.skipIf(dispersion.dftd3 is None, 'DFTD3 not installed')
     def test_d3cso(self):
-        self.assertEqual(dispersion.parse_disp('pbe-d3cso'), ('pbe', 'd3cso', False))
         # simple-dftd3 test/unit/test_param.f90::test_d3cso_mb01 (MB16-43/01)
         mol = gto.M(atom='''
             Na -1.85528263484662 +3.58670515364616 -2.41763729306344
@@ -58,6 +58,8 @@ class TestDispersionLogic(unittest.TestCase):
         ref = -0.025368289609215090
         self.assertAlmostEqual(mf.get_dispersion(), ref, 12)
 
+    @unittest.skipIf(dispersion.dftd3 is None or dispersion.dftd4 is None,
+                     'DFTD3 or DFTD4 not installed')
     def test_dispersion_ghost_atoms(self):
         real_atoms = 'O 0 0 0; H 0 0 1; H 0 1 0'
         ghost_atoms = 'ghost-H 2 0 0; O 0 0 0; X-H 0 2 0; H 0 0 1; H 0 1 0'
@@ -133,6 +135,7 @@ class TestDispersionLogic(unittest.TestCase):
 
         # wb97x-d3bj -> d3bj
         self.assertEqual(dispersion.parse_disp('wb97x-d3bj'), ('wb97x', 'd3bj', False))
+        self.assertEqual(dispersion.parse_disp('pbe-d3cso'), ('pbe', 'd3cso', False))
 
         # wb97x-d4s -> d4s
         self.assertEqual(dispersion.parse_disp('wb97x-d4s'), ('wb97x', 'd4s', True))
