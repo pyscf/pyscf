@@ -73,7 +73,7 @@ def get_veff(ks_grad, mol=None, dm=None):
 
     dm_j, dm_k = ghf_grad._spin_block_dms(dm)
     vj = ks_grad.get_j(mol, dm_j)
-    if not ni1c.libxc.is_hybrid_xc(mf.xc):
+    if not ni1c.is_hybrid_xc(mf.xc):
         vk = None
     else:
         omega, alpha, hyb = ni1c.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
