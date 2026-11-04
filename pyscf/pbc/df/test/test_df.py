@@ -23,7 +23,7 @@ from pyscf.pbc import gto as pgto
 from pyscf.pbc import scf as pscf
 from pyscf.pbc.df import df, aug_etb, FFTDF, mdf
 from pyscf.pbc.df import gdf_builder
-from pyscf.pbc.tools import k2gamma
+from pyscf.pbc.tools import k2gamma, make_test_cell
 from pyscf.pbc.lib.kpts_helper import get_kconserv, kk_adapted_iter
 #from mpi4pyscf.pbc.df import df
 pyscf.pbc.DEBUG = False
@@ -307,6 +307,27 @@ Li  P
                     dat = kmdf.get_eri(kpts[[i,j,k,l]])
                     ref = FFTDF(cell, kpts).get_eri(kpts[[i,j,k,l]])
                     self.assertAlmostEqual(abs(dat-ref).max(), 0, 2)
+
+    # issue 3579: per-k-pair linear-dependency removal gives stored cderi non-uniform naux
+    def test_nonuniform_naux(self):
+        cell = make_test_cell.test_cell_n3_diffuse()
+        self.addCleanup(cell.stdout.close)
+        kpts = cell.make_kpts([1,1,2], with_gamma_point=True)
+        mydf = df.DF(cell, kpts=kpts)
+        mydf.auxbasis = 'aug-cc-pvtz-ri'
+        mydf.build()
+
+        cderi_array = mydf.cderi_array()
+        naux = []
+        with df._load3c(mydf._cderi, 'j3c') as fload:
+            for ki, kpti in enumerate(kpts):
+                for kj, kptj in enumerate(kpts):
+                    ref = numpy.asarray(fload(kpti, kptj))
+                    dat = cderi_array[ki,kj]
+                    self.assertEqual(dat.shape, ref.shape)
+                    self.assertAlmostEqual(abs(dat - ref).max(), 0, 12)
+                    naux.append(ref.shape[0])
+        self.assertNotEqual(max(naux), min(naux))
 
 if __name__ == '__main__':
     print("Full Tests for df")
