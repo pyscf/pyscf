@@ -22,6 +22,7 @@ Hessian of the gCP/SRB correction for HF and DFT
 
 import numpy as np
 from pyscf.lib import logger
+from pyscf.scf.dispersion import _get_dispersion_mol
 from pyscf.scf.gcp import check_gcp, _resolve_gcp, _method_of
 
 def get_gcp(hessobj, gcp=None):
@@ -46,28 +47,19 @@ def get_gcp(hessobj, gcp=None):
         print('gCP not available. Install them with `pip install pyscf-dispersion`')
         raise
 
+    mol, atom_idx = _get_dispersion_mol(mol)
+    nreal = len(atom_idx)
+    if nreal == 0:
+        return h_gcp
+
     logger.info(mf, 'Calc gCP correction with method %s, basis %s.',
                 gcp_method, gcp_basis)
-    logger.warn(mf, 'gCP does not support analytical Hessian, using finite difference')
-    coords = hessobj.mol.atom_coords()
-    mol = mol.copy()
-    eps = 1e-5
-    for i in range(natm):
-        for j in range(3):
-            coords[i,j] += eps
-            mol.set_geom_(coords, unit='Bohr')
-            gcp_model = _gcp.GCP(mol, method=gcp_method, basis=gcp_basis)
-            res = gcp_model.get_counterpoise(grad=True)
-            g1 = res.get('gradient')
-
-            coords[i,j] -= 2.0*eps
-            mol.set_geom_(coords, unit='Bohr')
-            gcp_model = _gcp.GCP(mol, method=gcp_method, basis=gcp_basis)
-            res = gcp_model.get_counterpoise(grad=True)
-            g2 = res.get('gradient')
-
-            coords[i,j] += eps
-            h_gcp[i,:,j,:] = (g1 - g2)/(2.0*eps)
+    gcp_model = _gcp.GCP(mol, method=gcp_method, basis=gcp_basis)
+    if not hasattr(gcp_model, 'get_hessian'):
+        raise RuntimeError('gCP analytical Hessian requires pyscf-dispersion >= 1.6.0. '
+                           'Upgrade with `pip install -U pyscf-dispersion`.')
+    res = gcp_model.get_hessian()
+    h_gcp[np.ix_(atom_idx,atom_idx)] = res['hessian'].reshape(nreal,3,nreal,3).transpose(0,2,1,3)
     return h_gcp
 
 # Inject to Hessian class

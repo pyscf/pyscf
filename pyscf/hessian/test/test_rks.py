@@ -342,6 +342,76 @@ class KnownValues(unittest.TestCase):
         e2ref = finite_partial_diff(mf)
         self.assertAlmostEqual(abs(e2-e2ref).max(), 0, 6)
 
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_d3_hessian(self):
+        mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', verbose=0)
+        mf = mol.RKS(xc='pbe')
+        coords = mol.atom_coords()
+        eps = 1e-4
+        for version in ['d3bj', 'd3cso', 'd3bjatm']:
+            with self.subTest(version=version):
+                mf.disp = version
+                analytic = mf.Hessian().get_dispersion()
+                self.assertEqual(analytic.shape, (3, 3, 3, 3))
+                numerical = numpy.zeros_like(analytic)
+                for i in range(mol.natm):
+                    for j in range(3):
+                        coords1 = coords.copy()
+                        coords1[i,j] += eps
+                        mol1 = mol.set_geom_(coords1, unit='Bohr', inplace=False)
+                        mf1 = mol1.RKS(xc='pbe')
+                        mf1.disp = version
+                        g1 = mf1.nuc_grad_method().get_dispersion()
+                        coords1[i,j] -= 2*eps
+                        mol1 = mol.set_geom_(coords1, unit='Bohr', inplace=False)
+                        mf1 = mol1.RKS(xc='pbe')
+                        mf1.disp = version
+                        g2 = mf1.nuc_grad_method().get_dispersion()
+                        numerical[i,:,j,:] = (g1 - g2)/(2*eps)
+                numpy.testing.assert_allclose(analytic, numerical, atol=1e-7, rtol=0)
+
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_get_gcp_hessian(self):
+        mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', verbose=0)
+        mf = mol.RKS()
+        coords = mol.atom_coords()
+        eps = 1e-4
+        for method in ['b973c', 'r2scan3c']:
+            with self.subTest(method=method):
+                mf.gcp = method
+                analytic = mf.Hessian().get_gcp()
+                self.assertEqual(analytic.shape, (3, 3, 3, 3))
+                numerical = numpy.zeros_like(analytic)
+                for i in range(mol.natm):
+                    for j in range(3):
+                        coords1 = coords.copy()
+                        coords1[i,j] += eps
+                        mol1 = mol.set_geom_(coords1, unit='Bohr', inplace=False)
+                        mf1 = mol1.RKS()
+                        mf1.gcp = method
+                        g1 = mf1.nuc_grad_method().get_gcp()
+                        coords1[i,j] -= 2*eps
+                        mol1 = mol.set_geom_(coords1, unit='Bohr', inplace=False)
+                        mf1 = mol1.RKS()
+                        mf1.gcp = method
+                        g2 = mf1.nuc_grad_method().get_gcp()
+                        numerical[i,:,j,:] = (g1 - g2)/(2*eps)
+                numpy.testing.assert_allclose(analytic, numerical, atol=1e-7, rtol=0)
+
+    @unittest.skipIf(dftd3 is None or dftd4 is None, "requires the dftd3 and dftd4 libraries")
+    def test_dispersion_ghost_atoms(self):
+        mol = gto.M(atom='ghost-H 2 0 0; O 0 0 0; X-H 0 2 0; H 0 0 1; H 0 1 0', verbose=0)
+        real_mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', verbose=0)
+        mf = mol.RKS(xc='pbe')
+        real_mf = real_mol.RKS(xc='pbe')
+        atom_idx = [1,3,4]
+        for version in ['d3bj', 'd4']:
+            with self.subTest(version=version):
+                mf.disp = real_mf.disp = version
+                expected = numpy.zeros([5,5,3,3])
+                expected[numpy.ix_(atom_idx,atom_idx)] = real_mf.Hessian().get_dispersion()
+                numpy.testing.assert_allclose(mf.Hessian().get_dispersion(), expected, atol=1e-10, rtol=0)
+
 
 if __name__ == "__main__":
     print("Full Tests for RKS Hessian")

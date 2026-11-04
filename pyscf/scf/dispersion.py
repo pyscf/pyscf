@@ -22,9 +22,10 @@ dispersion correction for HF and DFT
 '''
 
 import warnings
+import numpy as np
 from functools import lru_cache
 from pyscf.lib import logger
-from pyscf import scf
+from pyscf import scf, gto
 from pyscf import __config__
 
 try:
@@ -36,7 +37,7 @@ except ImportError:
 DFTD4_RECOMMENDATIONS = getattr(__config__, 'DFTD4_RECOMMENDATIONS', False)
 
 # supported dispersion corrections
-DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']
+DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd3cso', 'd4']
 # XC names for dftd3 and dftd4 inputs
 XC_MAP = {'wb97m-d3bj': 'wb97m',
           'b97m-d3bj': 'b97m',
@@ -273,6 +274,17 @@ def check_disp(mf, disp=None):
         raise ValueError(f"Unknown dispersion version {disp_version}.")
     return True
 
+def _get_dispersion_mol(mol):
+    atom_idx = np.array([i for i in range(mol.natm)
+                         if not gto.is_ghost_atom(mol.atom_symbol(i))], dtype=int)
+    if 0 < len(atom_idx) < mol.natm:
+        coords = mol.atom_coords()[atom_idx]
+        if getattr(mol, 'fractional', False):
+            coords = np.linalg.solve(mol.lattice_vectors().T, coords.T).T
+        atoms = [(mol.atom_symbol(i), r) for i, r in zip(atom_idx, coords)]
+        mol = mol.set_geom_(atoms, unit='Bohr', symmetry=False, inplace=False)
+    return mol, atom_idx
+
 def _make_d4_model(mol, method, with_3body):
     '''Construct a D4 model with the same parameters for all derivatives.'''
     if dftd4 is None:
@@ -332,7 +344,10 @@ def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
     if with_3body is None:
         with_3body = disp_with_3body
 
-    mol = mf.mol
+    mol, atom_idx = _get_dispersion_mol(mf.mol)
+    if len(atom_idx) == 0:
+        mf.scf_summary['dispersion'] = 0.
+        return 0.
 
     # for dftd3
     if disp_version[:2].upper() == 'D3':

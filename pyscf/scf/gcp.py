@@ -32,6 +32,7 @@ attribute and method names below (mf.gcp, do_gcp, get_gcp).
 '''
 
 from pyscf.lib import logger
+from pyscf.scf.dispersion import _get_dispersion_mol
 from pyscf import scf
 
 try:
@@ -148,7 +149,10 @@ def get_gcp(mf, gcp=None, verbose=None):
         raise RuntimeError('gCP not available. Install them with '
                            '`pip install pyscf-dispersion`')
 
-    mol = mf.mol
+    mol, atom_idx = _get_dispersion_mol(mf.mol)
+    if len(atom_idx) == 0:
+        mf.scf_summary['gcp'] = 0.
+        return 0.
     logger.info(mf, 'Calc gCP correction with method %s, basis %s.',
                 gcp_method, gcp_basis)
     gcp_model = _gcp.GCP(mol, method=gcp_method, basis=gcp_basis)
