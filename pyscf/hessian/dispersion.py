@@ -58,7 +58,7 @@ def get_dispersion(hessobj, disp=None, with_3body=None):
         logger.info(mf, f"Parameters: xc={method}, version={disp_version}, atm={with_3body}")
         d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
         if not hasattr(d3_model, 'get_hessian'):
-            raise RuntimeError('DFTD3 analytical Hessian requires pyscf-dispersion >= 1.6.0. '
+            raise RuntimeError('DFTD3 analytical Hessian requires pyscf-dispersion >= 1.7.0. '
                                'Upgrade with `pip install -U pyscf-dispersion`.')
         res = d3_model.get_hessian()
         h_disp[np.ix_(atom_idx,atom_idx)] = res['hessian'].reshape(nreal,3,nreal,3).transpose(0,2,1,3)

@@ -56,7 +56,7 @@ def get_gcp(hessobj, gcp=None):
                 gcp_method, gcp_basis)
     gcp_model = _gcp.GCP(mol, method=gcp_method, basis=gcp_basis)
     if not hasattr(gcp_model, 'get_hessian'):
-        raise RuntimeError('gCP analytical Hessian requires pyscf-dispersion >= 1.6.0. '
+        raise RuntimeError('gCP analytical Hessian requires pyscf-dispersion >= 1.7.0. '
                            'Upgrade with `pip install -U pyscf-dispersion`.')
     res = gcp_model.get_hessian()
     h_gcp[np.ix_(atom_idx,atom_idx)] = res['hessian'].reshape(nreal,3,nreal,3).transpose(0,2,1,3)

@@ -121,6 +121,9 @@ def get_gcp(mf, gcp=None, verbose=None):
     '''
     Calculate the gCP/SRB correction energy.
 
+    Ghost atoms are excluded from the gCP/SRB calculation. A molecule containing
+    only ghosts has zero correction.
+
     Args:
         mf : SCF object
         gcp : bool or str, optional

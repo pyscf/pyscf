@@ -59,7 +59,7 @@ semiempirical = ['pyscf-semiempirical']
 cppe = ["cppe"]
 pyqmc = ["pyqmc"]
 bse = ["basis-set-exchange"]
-dispersion = ["pyscf-dispersion>=1.6.0"]
+dispersion = ["pyscf-dispersion>=1.7.0"]
 ccpy = ["coupled-cluster-py"]
 trexio = ["trexio"]
 

@@ -275,6 +275,13 @@ def check_disp(mf, disp=None):
     return True
 
 def _get_dispersion_mol(mol):
+    '''Return the dispersion molecule and original indices of non-ghost atoms.
+
+    Ghost atoms are identified by their symbols. The input molecule is not
+    modified. If both real and ghost atoms are present, return a copy without
+    ghosts. If all atoms are ghosts, return the input molecule and an empty
+    index array; callers must skip the correction.
+    '''
     atom_idx = np.array([i for i in range(mol.natm)
                          if not gto.is_ghost_atom(mol.atom_symbol(i))], dtype=int)
     if 0 < len(atom_idx) < mol.natm:
@@ -310,6 +317,9 @@ def _make_d4_model(mol, method, with_3body):
 def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
     '''
     Calculate the dispersion correction energy.
+
+    Ghost atoms are excluded from the dispersion model, including coordination
+    number evaluation. A molecule containing only ghosts has zero correction.
 
     Args:
         mf : SCF object
