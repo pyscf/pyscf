@@ -491,7 +491,7 @@ class KnownValues(unittest.TestCase):
 
         assert abs(test_hessian - reference_hessian).max() < 6e-3
 
-    def test_vv10_only_hessian_density_fitting(self):
+    def test_vv10_only_hessian_density_fitting_high_cost(self):
         mf = make_mf(mol, nlcgrid=(6, 50), vv10_only = True, density_fitting = True)
 
         print('test_vv10_only_hessian_density_fitting')

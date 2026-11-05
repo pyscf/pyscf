@@ -77,15 +77,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install and Test
         run: ./.github/workflows/run_ci.sh
-        env:
-          # The 3.9 leg is the only one that generates coverage (and uploads it
-          # to codecov in the step below); all other legs run bare pytest.
-          RUN_COVERAGE: ${{ matrix.python-version == '3.9' }}
-      - name: Upload to codecov
-        if: matrix.python-version == '3.9' && matrix.os == 'ubuntu-latest'
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{secrets.CODECOV_TOKEN}}
 
   # The job above runs every worker single threaded, which leaves the OpenMP
   # kernels untested. This one keeps threads on so that threaded code paths are
@@ -127,7 +118,7 @@ jobs:
         run: |
             docker run --rm -v ${{ github.workspace }}:/src/pyscf:rw --workdir=/src/pyscf ${{ env.img }} \
             bash -exc '/opt/python/${{ matrix.pyver }}/bin/pip install --upgrade pip setuptools && \
-            /opt/python/${{ matrix.pyver }}/bin/pip install "numpy!=1.16,!=1.17" "scipy!=1.5" h5py==3.10 pytest pytest-cov pytest-timer pyberny geometric && \
+            /opt/python/${{ matrix.pyver }}/bin/pip install "numpy!=1.16,!=1.17" "scipy!=1.5" h5py==3.10 pytest pytest-cov pyberny geometric && \
             yum install -y epel-release && \
             yum-config-manager --enable epel && \
             yum install -y openblas-devel gcc cmake curl && \

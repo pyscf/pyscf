@@ -81,7 +81,7 @@ def check_mode(mf, mode, finite_size):
     np.testing.assert_allclose(spin.vsig[0], ref.vsig, atol=2e-7)
 
 
-def test_mode_a_finite_size(heh_hf):
+def test_mode_a_finite_size_high_cost(heh_hf):
     check_mode(heh_hf, 'a', True)
 
 

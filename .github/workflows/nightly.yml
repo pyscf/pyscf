@@ -24,6 +24,7 @@ jobs:
       # Let xdist choose one worker per detected CPU core.
       PYTEST_JOBS: auto
       INSTALL_NIGHTLY_DEPS: 'true'
+      RUN_COVERAGE: 'true'
     steps:
       - uses: actions/checkout@v7
       - name: Set up Python
@@ -44,4 +45,9 @@ jobs:
           path: |
             nightly-tests.log
             nightly-tests.xml
+            coverage.xml
           retention-days: 14
+      - name: Upload to codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{secrets.CODECOV_TOKEN}}
