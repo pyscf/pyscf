@@ -1,4 +1,4 @@
-PySCF 2.15.0 (2026-10-31)
+PySCF 2.15.0 (2026-11-05)
 -------------------------
 * Added
   - Internally contracted CASPT2, including density fitting and IPEA shift (#3401)
@@ -109,6 +109,7 @@ PySCF 2.15.0 (2026-10-31)
   - Smearing SCF convergence uses the free-energy change and orbital gradient in the main SCF loop, instead of the total-energy change (#3410)
   - Restored standard auxiliary-basis normalization for periodic range-separated density fitting (#3510)
   - Density-matrix keyword for SCF response functions (#3415)
+  - Add NumInt.is_hybrid_xc and NumInt.is_nlc to replace the direct calls to functions in the libxc module (#3396)
 
 
 PySCF 2.14.0 (2026-07-17)
