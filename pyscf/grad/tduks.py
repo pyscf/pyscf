@@ -98,7 +98,7 @@ def grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
             _contract_xc_kernel(td_grad, mf.xc, (dmxpya,dmxpyb),
                                 (dmzooa,dmzoob), True, True, max_memory)
 
-    if ni.libxc.is_hybrid_xc(mf.xc):
+    if ni.is_hybrid_xc(mf.xc):
         dm = (dmzooa, dmxpya+dmxpya.T, dmxmya-dmxmya.T,
               dmzoob, dmxpyb+dmxpyb.T, dmxmyb-dmxmyb.T)
         vj, vk = mf.get_jk(mol, dm, hermi=0)
@@ -215,7 +215,7 @@ def grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
     oo0b = reduce(numpy.dot, (orbob, orbob.T))
     as_dm1 = oo0a + oo0b + (dmz1dooa + dmz1doob) * .5
 
-    if ni.libxc.is_hybrid_xc(mf.xc):
+    if ni.is_hybrid_xc(mf.xc):
         dm = (oo0a, dmz1dooa+dmz1dooa.T, dmxpya+dmxpya.T, dmxmya-dmxmya.T,
               oo0b, dmz1doob+dmz1doob.T, dmxpyb+dmxpyb.T, dmxmyb-dmxmyb.T)
         vj, vk = td_grad.get_jk(mol, dm)

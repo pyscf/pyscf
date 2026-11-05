@@ -2737,6 +2737,18 @@ class LibXCMixin:
     def rsh_coeff(self, xc_code):
         return self.libxc.rsh_coeff(xc_code)
 
+    def is_hybrid_xc(self, xc_code):
+        if xc_code is None:
+            return False
+        if self.rsh_coeff(xc_code) != (0, 0, 0):
+            return True
+        if self.hybrid_coeff(xc_code) != 0:
+            return True
+        return False
+
+    def is_nlc(self, xc_code):
+        return self.libxc.is_nlc(xc_code)
+
     @lib.with_doc(libxc.eval_xc.__doc__)
     def eval_xc(self, xc_code, rho, spin=0, relativity=0, deriv=1, omega=None,
                 verbose=None):

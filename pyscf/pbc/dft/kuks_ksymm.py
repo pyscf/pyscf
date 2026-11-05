@@ -55,10 +55,10 @@ def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
                             max_memory=max_memory)
     logger.info(ks, 'nelec by numeric integration = %s', n)
     if ks.do_nlc():
-        if ni.libxc.is_nlc(ks.xc):
+        if ni.is_nlc(ks.xc):
             xc = ks.xc
         else:
-            assert ni.libxc.is_nlc(ks.nlc)
+            assert ni.is_nlc(ks.nlc)
             xc = ks.nlc
         n, enlc, vnlc = ni.nr_nlc_vxc(cell, ks.nlcgrids, xc, dm[0]+dm[1],
                                       0, hermi, kpts, max_memory=max_memory)
@@ -77,7 +77,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
         ecoul = None
         if ground_state:
             ecoul = np.einsum('K,nKij,Kji->', weight, dm, vj) * .5
-    if ni.libxc.is_hybrid_xc(ks.xc):
+    if ni.is_hybrid_xc(ks.xc):
         vxc -= vk
         if ground_state:
             exc -= np.einsum('K,nKij,nKji->', weight, dm, vk).real * .5

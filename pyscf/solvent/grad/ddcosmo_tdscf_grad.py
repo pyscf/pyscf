@@ -306,7 +306,7 @@ def tdrks_grad_elec(td_grad, x_y, singlet=True, atmlst=None,
             tdrks_grad._contract_xc_kernel(td_grad, mf.xc, dmxpy,
                                            dmzoo, True, True, singlet, max_memory)
 
-    if ni.libxc.is_hybrid_xc(mf.xc):
+    if ni.is_hybrid_xc(mf.xc):
         dm = (dmzoo, dmxpy+dmxpy.T, dmxmy-dmxmy.T)
         vj, vk = mf.get_jk(mol, dm, hermi=0)
         if with_solvent.equilibrium_solvation:
@@ -392,7 +392,7 @@ def tdrks_grad_elec(td_grad, x_y, singlet=True, atmlst=None,
 
     dmz1doo = z1ao + dmzoo
     oo0 = reduce(numpy.dot, (orbo, orbo.T))
-    if ni.libxc.is_hybrid_xc(mf.xc):
+    if ni.is_hybrid_xc(mf.xc):
         dm = (oo0, dmz1doo+dmz1doo.T, dmxpy+dmxpy.T, dmxmy-dmxmy.T)
         vj, vk = td_grad.get_jk(mol, dm)
         vk *= hyb
@@ -715,7 +715,7 @@ def tduks_grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.I
             tduks_grad._contract_xc_kernel(td_grad, mf.xc, (dmxpya,dmxpyb),
                                            (dmzooa,dmzoob), True, True, max_memory)
 
-    if ni.libxc.is_hybrid_xc(mf.xc):
+    if ni.is_hybrid_xc(mf.xc):
         dm = (dmzooa, dmxpya+dmxpya.T, dmxmya-dmxmya.T,
               dmzoob, dmxpyb+dmxpyb.T, dmxmyb-dmxmyb.T)
         vj, vk = mf.get_jk(mol, dm, hermi=0)
@@ -845,7 +845,7 @@ def tduks_grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.I
     oo0b = reduce(numpy.dot, (orbob, orbob.T))
     as_dm1 = oo0a + oo0b + (dmz1dooa + dmz1doob) * .5
 
-    if ni.libxc.is_hybrid_xc(mf.xc):
+    if ni.is_hybrid_xc(mf.xc):
         dm = (oo0a, dmz1dooa+dmz1dooa.T, dmxpya+dmxpya.T, dmxmya-dmxmya.T,
               oo0b, dmz1doob+dmz1doob.T, dmxpyb+dmxpyb.T, dmxmyb-dmxmyb.T)
         vj, vk = td_grad.get_jk(mol, dm)
