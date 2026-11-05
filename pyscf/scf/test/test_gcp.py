@@ -104,14 +104,22 @@ class TestGCPEnergy(unittest.TestCase):
         # disabled explicitly
         self.assertEqual(gcp_mod.get_gcp(mf, gcp=False), 0.)
 
-    def test_get_gcp_gradient(self):
-        mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='def2mtzvp', verbose=0)
-        model = disp_gcp.GCP(mol, method='b973c', basis='def2mtzvp')
-        out = model.get_counterpoise(grad=True)
-        self.assertAlmostEqual(np.linalg.norm(out['gradient']),
-                               0.0028068213098591467, 8)
-        self.assertAlmostEqual(np.linalg.norm(out['virial']),
-                               0.0037505817348592453, 8)
+    def test_get_gcp_ghost_atoms(self):
+        mol = gto.M(atom='H 0 0 0; ghost-H 0 1 0; H 0 0 1', verbose=0)
+        real_mol = gto.M(atom='H 0 0 0; H 0 0 1', verbose=0)
+        mf = mol.RHF()
+        real_mf = real_mol.RHF()
+        mf.gcp = real_mf.gcp = 'b973c'
+        coords = mol.atom_coords().copy()
+        self.assertAlmostEqual(mf.get_gcp(), real_mf.get_gcp(), 12)
+        self.assertEqual(mol.natm, 3)
+        np.testing.assert_array_equal(mol.atom_coords(), coords)
+
+    def test_get_gcp_all_ghost_atoms(self):
+        mol = gto.M(atom='ghost-H 0 0 0; X-H 0 0 1', verbose=0)
+        mf = mol.RHF()
+        mf.gcp = 'b973c'
+        self.assertEqual(mf.get_gcp(), 0.)
 
 
 if __name__ == "__main__":

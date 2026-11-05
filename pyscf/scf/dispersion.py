@@ -22,6 +22,7 @@ dispersion correction for HF and DFT
 '''
 
 import warnings
+import numpy as np
 from functools import lru_cache
 from pyscf.lib import logger
 from pyscf import scf
@@ -36,7 +37,7 @@ except ImportError:
 DFTD4_RECOMMENDATIONS = getattr(__config__, 'DFTD4_RECOMMENDATIONS', False)
 
 # supported dispersion corrections
-DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']
+DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd3cso', 'd4']
 # XC names for dftd3 and dftd4 inputs
 XC_MAP = {'wb97m-d3bj': 'wb97m',
           'b97m-d3bj': 'b97m',
@@ -273,6 +274,23 @@ def check_disp(mf, disp=None):
         raise ValueError(f"Unknown dispersion version {disp_version}.")
     return True
 
+def _get_dispersion_mol(mol):
+    '''Return the dispersion molecule and original indices of non-ghost atoms.
+
+    Atoms with zero effective nuclear charge are excluded. The input molecule
+    is not modified. For a mixture of real and ghost atoms, return a copy
+    without ghosts. If all atoms are ghosts, return the input molecule and an
+    empty index array; callers must skip the correction.
+    '''
+    atom_idx = np.where(mol.atom_charges() != 0)[0]
+    if 0 < len(atom_idx) < mol.natm:
+        coords = mol.atom_coords()[atom_idx]
+        if getattr(mol, 'fractional', False):
+            coords = np.linalg.solve(mol.lattice_vectors().T, coords.T).T
+        atoms = [(mol.atom_symbol(i), r) for i, r in zip(atom_idx, coords)]
+        mol = mol.set_geom_(atoms, unit='Bohr', symmetry=False, inplace=False)
+    return mol, atom_idx
+
 def _make_d4_model(mol, method, with_3body):
     '''Construct a D4 model with the same parameters for all derivatives.'''
     if dftd4 is None:
@@ -298,6 +316,9 @@ def _make_d4_model(mol, method, with_3body):
 def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
     '''
     Calculate the dispersion correction energy.
+
+    Ghost atoms are excluded from the dispersion model, including coordination
+    number evaluation. A molecule containing only ghosts has zero correction.
 
     Args:
         mf : SCF object
@@ -332,7 +353,10 @@ def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
     if with_3body is None:
         with_3body = disp_with_3body
 
-    mol = mf.mol
+    mol, atom_idx = _get_dispersion_mol(mf.mol)
+    if len(atom_idx) == 0:
+        mf.scf_summary['dispersion'] = 0.
+        return 0.
 
     # for dftd3
     if disp_version[:2].upper() == 'D3':

@@ -1017,6 +1017,31 @@ class KnownValues(unittest.TestCase):
 
         assert numpy.abs(numpy.max(test_gradient - ref_gradient)) < 1e-9
 
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_get_gcp_gradient(self):
+        from pyscf.dispersion import gcp
+        mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='def2mtzvp', verbose=0)
+        model = gcp.GCP(mol, method='b973c', basis='def2mtzvp')
+        out = model.get_counterpoise(grad=True)
+        self.assertAlmostEqual(numpy.linalg.norm(out['gradient']),
+                               0.0028068213098591467, 8)
+        self.assertAlmostEqual(numpy.linalg.norm(out['virial']),
+                               0.0037505817348592453, 8)
+
+    @unittest.skipIf(dftd3 is None or dftd4 is None, "requires the dftd3 and dftd4 libraries")
+    def test_dispersion_ghost_atoms(self):
+        mol = gto.M(atom='ghost-H 2 0 0; O 0 0 0; X-H 0 2 0; H 0 0 1; H 0 1 0', verbose=0)
+        real_mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', verbose=0)
+        mf = mol.RKS(xc='pbe')
+        real_mf = real_mol.RKS(xc='pbe')
+        atom_idx = [1,3,4]
+        for version in ['d3bj', 'd4']:
+            with self.subTest(version=version):
+                mf.disp = real_mf.disp = version
+                expected = numpy.zeros([5,3])
+                expected[atom_idx] = real_mf.nuc_grad_method().get_dispersion()
+                numpy.testing.assert_allclose(mf.nuc_grad_method().get_dispersion(), expected, atol=1e-12, rtol=0)
+
 
 if __name__ == "__main__":
     print("Full Tests for RKS Gradients")
