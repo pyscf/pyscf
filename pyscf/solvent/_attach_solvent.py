@@ -240,6 +240,14 @@ def _for_casscf(mc, solvent_obj, dm=None):
         mc.with_solvent = solvent_obj
         return mc
 
+    from pyscf.mcscf.addons import StateAverageFCISolver
+    if isinstance(mc.fcisolver, StateAverageFCISolver):
+        if dm is not None:
+            raise NotImplementedError(
+                'A frozen solvent potential is not supported for '
+                'state-averaged CASSCF')
+        solvent_obj.state_id = None
+
     if dm is not None:
         solvent_obj.e, solvent_obj.v = solvent_obj.kernel(dm)
         solvent_obj.frozen = True
@@ -249,12 +257,13 @@ def _for_casscf(mc, solvent_obj, dm=None):
     return lib.set_class(sol_cas, (CASSCFWithSolvent, mc.__class__), name)
 
 class CASSCFWithSolvent(_Solvation):
-    _keys = {'with_solvent'}
+    _keys = {'with_solvent','_e_states_corrected'}
 
     def __init__(self, mc, solvent):
         self.__dict__.update(mc.__dict__)
         self.with_solvent = solvent
         self._e_tot_without_solvent = 0
+        self._e_states_corrected = 0
 
     def undo_solvent(self):
         cls = self.__class__
@@ -262,6 +271,7 @@ class CASSCFWithSolvent(_Solvation):
         obj = lib.view(self, lib.drop_class(cls, CASSCFWithSolvent, name_mixin))
         del obj.with_solvent
         del obj._e_tot_without_solvent
+        del obj._e_states_corrected
         return obj
 
     def dump_flags(self, verbose=None):
@@ -299,11 +309,22 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
 # should be almost the same to the CASSCF density of the last macro iteration.
         with_solvent = self.with_solvent
         if not with_solvent.frozen:
-            # Code to mimic dm = self.make_rdm1(ci=fcivec)
-            mocore = mo[:,:self.ncore]
-            mocas = mo[:,self.ncore:self.ncore+self.ncas]
-            dm = reduce(numpy.dot, (mocas, casdm1, mocas.T))
-            dm += numpy.dot(mocore, mocore.T) * 2
+            from pyscf.mcscf.addons import StateAverageFCISolver
+            if isinstance(self.fcisolver, StateAverageFCISolver):
+                _sa_casdms = StateAverageFCISolver.states_make_rdm1(self.fcisolver, fcivec, self.ncas, self.nelecas)
+                dm = []
+                for _sa_casdm in _sa_casdms:
+                    mocore = mo[:,:self.ncore]
+                    mocas = mo[:,self.ncore:self.ncore+self.ncas]
+                    _sa_1rdm = numpy.dot(mocore, mocore.conj().T) * 2
+                    _sa_1rdm = _sa_1rdm + reduce(numpy.dot, (mocas, _sa_casdm, mocas.conj().T))
+                    dm.append(_sa_1rdm)
+            else:
+                # Code to mimic dm = self.make_rdm1(ci=fcivec)
+                mocore = mo[:,:self.ncore]
+                mocas = mo[:,self.ncore:self.ncore+self.ncas]
+                dm = reduce(numpy.dot, (mocas, casdm1, mocas.T))
+                dm += numpy.dot(mocore, mocore.T) * 2
             with_solvent.e, with_solvent.v = with_solvent.kernel(dm)
 
         return casdm1, casdm2, gci, fcivec
@@ -321,6 +342,17 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
             hcore += self.with_solvent.v
         return hcore
 
+    def _finalize(self):
+        from pyscf.mcscf.addons import StateAverageFCISolver
+        if isinstance(self.fcisolver, StateAverageFCISolver):
+            try:
+                self.e_states = self._e_states_corrected
+            except AttributeError as e:
+                self.fcisolver.e_states = self._e_states_corrected
+                assert (self.e_states is self._e_states_corrected), str(e)
+        super()._finalize()
+        return self
+
     def casci(self, mo_coeff, ci0=None, eris=None, verbose=None, envs=None):
         log = logger.new_logger(self, verbose)
         log.debug('Running CASCI with solvent. Note the total energy '
@@ -336,24 +368,55 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
                                              verbose, envs)
         self._e_tot_without_solvent = e_tot
 
-        log.debug('Computing corrections to the total energy.')
-        dm = self.make_rdm1(mo_coeff=mo_coeff, ci=fcivec, ao_repr=True)
-
         with_solvent = self.with_solvent
+        from pyscf.mcscf.addons import StateAverageFCISolver
+        if isinstance(self.fcisolver, StateAverageFCISolver):
+            _sa_casdms = StateAverageFCISolver.states_make_rdm1(
+                self.fcisolver, fcivec, self.ncas, self.nelecas)
+            mocore = mo_coeff[:,:self.ncore]
+            mocas = mo_coeff[:,self.ncore:self.ncore+self.ncas]
+            dm = []
+            for _sa_casdm in _sa_casdms:
+                _sa_1rdm = numpy.dot(mocore, mocore.conj().T) * 2
+                _sa_1rdm += reduce(numpy.dot, (mocas, _sa_casdm, mocas.conj().T))
+                dm.append(_sa_1rdm)
+        else:
+            dm = self.make_rdm1(mo_coeff=mo_coeff, ci=fcivec, ao_repr=True)
+
+        log.debug('Computing corrections to the total energy.')
+
         edup = None
         if with_solvent.e is not None:
             # Must be evaluated before kernel() overwrites with_solvent.v
-            edup = numpy.einsum('ij,ji->', with_solvent.v, dm)
+            if isinstance(self.fcisolver, StateAverageFCISolver):
+                edup = [numpy.einsum('ij,ji->', with_solvent.v, d) for d in dm]
+            else:
+                edup = numpy.einsum('ij,ji->', with_solvent.v, dm)
 
         # Update solvent effects for next iteration if needed
         if not with_solvent.frozen:
             with_solvent.e, with_solvent.v = with_solvent.kernel(dm)
 
         if edup is not None:
-            e_tot = e_tot - edup + with_solvent.e
-            log.info('Removing duplication %.15g, '
-                     'adding E(solvent) = %.15g to total energy:\n'
-                     '    E(CASSCF+solvent) = %.15g', edup, with_solvent.e, e_tot)
+            if isinstance(self.fcisolver, StateAverageFCISolver):
+                _e_states = self.e_states.copy()
+                for i in range(len(_e_states)):
+                    _e_states[i] += with_solvent.e[i] - edup[i]
+                    log.debug('Removing duplication %.15g, '
+                              'adding E(solvent) = %.15g to total energy\n',
+                              edup[i], with_solvent.e[i])
+                self._e_states_corrected = _e_states.copy()
+                e_tot = numpy.einsum('i,i->', _e_states, self.weights)
+                log.info('State-averaged E(CASSCF+solvent) = %.15g', e_tot)
+                for i, ei in enumerate(_e_states):
+                    log.info('  State %d  weight %g  E(CASSCF+solvent) = %.15g',
+                             i, self.weights[i], ei)
+            else:
+                e_tot = e_tot - edup + with_solvent.e
+                log.debug('Removing duplication %.15g, '
+                          'adding E(solvent) = %.15g to total energy\n',
+                          edup, with_solvent.e)
+                log.info('E(CASSCF+solvent) = %.15g', e_tot)
 
         return e_tot, e_cas, fcivec
 
@@ -808,3 +871,7 @@ class TDSCFWithSolvent(_Solvation):
         obj = self.undo_solvent().to_gpu()
         obj = _for_tdscf(obj, self.with_solvent)
         return lib.to_gpu(self, obj)
+
+# The MC-PDFT and L-PDFT wrappers live in _attach_solvent_post_mcscf and are
+# re-exported here. This import must stay at the end of the file
+from pyscf.solvent._attach_solvent_post_mcscf import _for_mcpdft, MCPDFTWithSolvent, _for_lpdft, LPDFTWithSolvent
