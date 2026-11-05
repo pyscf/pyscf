@@ -2,7 +2,7 @@
 python -m pip install --upgrade pip
 pip install "numpy!=1.16,!=1.17" "scipy!=1.5" h5py pytest pytest-cov pytest-timer pytest-xdist pytest-timeout
 pip install pyberny
-pip install --no-deps pyscf-dispersion==1.5.0
+pip install --no-deps pyscf-dispersion==1.7.0
 pip install geometric
 pip install trexio
 

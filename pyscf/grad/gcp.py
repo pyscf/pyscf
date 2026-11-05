@@ -22,6 +22,7 @@ gradient of the gCP/SRB correction for HF and DFT
 
 import numpy as np
 from pyscf.lib import logger
+from pyscf.scf.dispersion import _get_dispersion_mol
 from pyscf.scf.gcp import check_gcp, _resolve_gcp, _method_of
 
 def get_gcp(mf_grad, gcp=None, verbose=None):
@@ -45,11 +46,17 @@ def get_gcp(mf_grad, gcp=None, verbose=None):
         print('gCP not available. Install them with `pip install pyscf-dispersion`')
         raise
 
+    mol, atom_idx = _get_dispersion_mol(mol)
+    g_gcp = np.zeros([mf.mol.natm,3])
+    if len(atom_idx) == 0:
+        return g_gcp
+
     logger.info(mf, 'Calc gCP correction with method %s, basis %s.',
                 gcp_method, gcp_basis)
     gcp_model = _gcp.GCP(mol, method=gcp_method, basis=gcp_basis)
     res = gcp_model.get_counterpoise(grad=True)
-    return res.get('gradient')
+    g_gcp[atom_idx] = res['gradient']
+    return g_gcp
 
 # Inject to Gradient
 from pyscf import grad
