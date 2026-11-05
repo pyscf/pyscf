@@ -55,7 +55,7 @@ def get_gcp(mf_grad, gcp=None, verbose=None):
                 gcp_method, gcp_basis)
     gcp_model = _gcp.GCP(mol, method=gcp_method, basis=gcp_basis)
     res = gcp_model.get_counterpoise(grad=True)
-    g_gcp[atom_idx] = res.get('gradient')
+    g_gcp[atom_idx] = res['gradient']
     return g_gcp
 
 # Inject to Gradient

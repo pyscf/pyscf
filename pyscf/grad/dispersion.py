@@ -56,14 +56,14 @@ def get_dispersion(mf_grad, disp=None, with_3body=None, verbose=None):
         logger.info(mf, f"Parameters: xc={method}, version={disp_version}, atm={with_3body}")
         d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
         res = d3_model.get_dispersion(grad=True)
-        g_disp[atom_idx] = res.get('gradient')
+        g_disp[atom_idx] = res['gradient']
         return g_disp
     elif disp_version[:2].upper() == 'D4':
         logger.info(mf, "Calc dispersion correction with DFTD4.")
         logger.info(mf, f"Parameters: xc={method}, atm={with_3body}")
         d4_model = _make_d4_model(mol, method, with_3body)
         res = d4_model.get_dispersion(grad=True)
-        g_disp[atom_idx] = res.get('gradient')
+        g_disp[atom_idx] = res['gradient']
         return g_disp
     else:
         raise RuntimeError(f'dispersion correction: {disp_version} is not supported.')

@@ -25,7 +25,7 @@ import warnings
 import numpy as np
 from functools import lru_cache
 from pyscf.lib import logger
-from pyscf import scf, gto
+from pyscf import scf
 from pyscf import __config__
 
 try:
@@ -277,13 +277,12 @@ def check_disp(mf, disp=None):
 def _get_dispersion_mol(mol):
     '''Return the dispersion molecule and original indices of non-ghost atoms.
 
-    Ghost atoms are identified by their symbols. The input molecule is not
-    modified. If both real and ghost atoms are present, return a copy without
-    ghosts. If all atoms are ghosts, return the input molecule and an empty
-    index array; callers must skip the correction.
+    Atoms with zero effective nuclear charge are excluded. The input molecule
+    is not modified. For a mixture of real and ghost atoms, return a copy
+    without ghosts. If all atoms are ghosts, return the input molecule and an
+    empty index array; callers must skip the correction.
     '''
-    atom_idx = np.array([i for i in range(mol.natm)
-                         if not gto.is_ghost_atom(mol.atom_symbol(i))], dtype=int)
+    atom_idx = np.where(mol.atom_charges() != 0)[0]
     if 0 < len(atom_idx) < mol.natm:
         coords = mol.atom_coords()[atom_idx]
         if getattr(mol, 'fractional', False):
