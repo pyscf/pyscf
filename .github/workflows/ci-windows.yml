@@ -9,6 +9,7 @@ on:
       - "MANIFEST.in"
       - "pyproject.toml"
       - "pyscf/**"
+      - "pytest.ini"
       - "setup.py"
   workflow_dispatch:
 
