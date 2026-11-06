@@ -35,8 +35,6 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
     '''Numerical integration methods for 2-component basis (used by GKS)'''
     collinear         = numint2c.NumInt2C.collinear
     spin_samples      = numint2c.NumInt2C.spin_samples
-    collinear_thrd    = numint2c.NumInt2C.collinear_thrd
-    collinear_samples = numint2c.NumInt2C.collinear_samples
 
     make_mask = lib.invalid_method('make_mask')
     eval_ao = staticmethod(pnumint.eval_ao)
@@ -331,8 +329,6 @@ class KNumInt2C(lib.StreamObject, numint.LibXCMixin):
 
     collinear         = numint2c.NumInt2C.collinear
     spin_samples      = numint2c.NumInt2C.spin_samples
-    collinear_thrd    = numint2c.NumInt2C.collinear_thrd
-    collinear_samples = numint2c.NumInt2C.collinear_samples
 
     make_mask = lib.invalid_method('make_mask')
     eval_ao = staticmethod(pnumint.eval_ao_kpts)
@@ -554,6 +550,8 @@ class KNumInt2C(lib.StreamObject, numint.LibXCMixin):
         else:
             raise NotImplementedError(f'KNUMINT2C.get_vxc for functional {xc_code}')
 
+        if hermi:
+            vmat = vmat + vmat.conj().transpose(0,1,3,2)
         if dms.ndim == 3:
             vmat = vmat[0]
             nelec = nelec[0]
@@ -605,6 +603,8 @@ class KNumInt2C(lib.StreamObject, numint.LibXCMixin):
         else:
             raise NotImplementedError(f'numint2c.get_fxc for functional {xc_code}')
 
+        if hermi:
+            vmat = vmat + vmat.conj().transpose(0,1,3,2)
         if dms.ndim == 3:
             vmat = vmat[0]
         return vmat
