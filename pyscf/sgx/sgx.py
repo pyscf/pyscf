@@ -521,8 +521,9 @@ class SGX(lib.StreamObject):
 
             with lib.temporary_env(rsh_df, _full_dm=self._full_dm):
                 with rsh_df.mol.with_range_coulomb(omega):
-                    return rsh_df.get_jk(dm, hermi, with_j, with_k,
-                                         direct_scf_tol)
+                    return rsh_df.get_jk(dm, hermi=hermi, vhfopt=vhfopt,
+                                         with_j=with_j, with_k=with_k,
+                                         direct_scf_tol=direct_scf_tol)
 
         if with_j and (self.dfj or self.direct_j):
             if self.dfj:
