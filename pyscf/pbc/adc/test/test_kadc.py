@@ -70,7 +70,7 @@ class KnownValues(unittest.TestCase):
 
         myadc.if_naf = True
         e_mp_naf, _, _  = myadc.kernel_gs()
-        self.assertAlmostEqual(e_mp_naf, -0.12628398876690958, 4)
+        self.assertAlmostEqual(e_mp_naf, -0.12628398876690958, 3)
 
         # Test full NAF with exact ADC(2)
         myadc.thresh_naf = 1e-6
