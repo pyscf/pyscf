@@ -15,6 +15,8 @@
 
 import unittest
 import numpy
+from io import StringIO
+import re
 from pyscf import lib, gto, scf
 from pyscf import ao2mo
 from pyscf.scf import stability
@@ -249,6 +251,119 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(s, 1., 9)
         self.assertAlmostEqual(abs(mf1.mo_coeff-mo).max(), 0, 9)
 
+    def test_rhf_pcm_stability(self):
+        with StringIO() as output:
+            mol = gto.M(
+                atom = """
+                    H 0 0 0
+                    H 0.1 0.2 2.0
+                """,
+                basis = "3-21g",
+                verbose = 0,
+            )
+            mol.stdout = output
+            mol.verbose = 4
+
+            mf = mol.RHF()
+            mf = mf.PCM()
+            mf.with_solvent.method = "IEF-PCM"
+            mf.with_solvent.eps = 40.0
+            mf.with_solvent.lebedev = 7
+            mf.conv_tol = 1e-10
+            test_energy = mf.kernel()
+
+            _, _, test_stable_i, test_stable_e = mf.stability(external = True, return_status = True, tol = 1e-10)
+
+            test_internal_eigenvalue = None
+            test_real2complex_eigenvalue = None
+            test_external_eigenvalue = None
+            log_text = output.getvalue()
+            for line in log_text.splitlines():
+                if "lowest eigs of" in line:
+                    numbers = [float(x) for group in re.findall(r"\[([^\]]+)\]", line) for x in group.split()]
+                    numbers = numpy.array(numbers)
+                    if line.startswith("rhf_internal"):
+                        test_internal_eigenvalue = numbers
+                    elif line.startswith("rhf_real2complex"):
+                        test_real2complex_eigenvalue = numbers
+                    elif line.startswith("rhf_external"):
+                        test_external_eigenvalue = numbers
+                    else:
+                        raise ValueError("Unknown eigenvalue type: " + line)
+            assert test_internal_eigenvalue is not None, "Failed to extract internal eigenvalues"
+            assert test_real2complex_eigenvalue is not None, "Failed to extract real2complex eigenvalues"
+            assert test_external_eigenvalue is not None, "Failed to extract external eigenvalues"
+
+        # This is a consistency test
+        ref_energy = -0.907413006623217
+        ref_internal_eigenvalue = numpy.array([0.66617773, 5.10498022, 5.38456179])
+        ref_real2complex_eigenvalue = numpy.array([0.11047111, 1.13278198, 1.20570252])
+        ref_external_eigenvalue = numpy.array([-0.25035192,  0.9869568,   1.09259991])
+        assert numpy.abs(test_energy - ref_energy) < 1e-9
+        assert numpy.max(numpy.abs(test_internal_eigenvalue - ref_internal_eigenvalue)) < 1e-6
+        assert numpy.max(numpy.abs(test_real2complex_eigenvalue - ref_real2complex_eigenvalue)) < 1e-6
+        assert numpy.max(numpy.abs(test_external_eigenvalue - ref_external_eigenvalue)) < 1e-6
+
+        assert test_stable_i is True
+        assert test_stable_e is False
+
+    def test_uhf_pcm_stability(self):
+        with StringIO() as output:
+            mol = gto.M(
+                atom = """
+                    C 0 0 0
+                    N 0.1 0.2 1.5
+                """,
+                basis = "sto-6g",
+                charge = 0,
+                spin = 1,
+                verbose = 0,
+            )
+            mol.stdout = output
+            mol.verbose = 4
+
+            mf = mol.UHF()
+            mf = mf.PCM()
+            mf.with_solvent.method = "C-PCM"
+            mf.with_solvent.eps = 40.0
+            mf.with_solvent.lebedev = 7
+            mf.conv_tol = 1e-10
+            test_energy = mf.kernel()
+
+            _, _, test_stable_i, test_stable_e = mf.stability(external = True, return_status = True, tol = 1e-10)
+
+            test_internal_eigenvalue = None
+            test_real2complex_eigenvalue = None
+            test_external_eigenvalue = None
+            log_text = output.getvalue()
+            for line in log_text.splitlines():
+                if "lowest eigs of" in line:
+                    numbers = [float(x) for group in re.findall(r"\[([^\]]+)\]", line) for x in group.split()]
+                    numbers = numpy.array(numbers)
+                    if line.startswith("uhf_internal"):
+                        test_internal_eigenvalue = numbers
+                    elif line.startswith("uhf_real2complex"):
+                        test_real2complex_eigenvalue = numbers
+                    elif line.startswith("uhf_external"):
+                        test_external_eigenvalue = numbers
+                    else:
+                        raise ValueError("Unknown eigenvalue type: " + line)
+            assert test_internal_eigenvalue is not None, "Failed to extract internal eigenvalues"
+            assert test_real2complex_eigenvalue is not None, "Failed to extract real2complex eigenvalues"
+            assert test_external_eigenvalue is not None, "Failed to extract external eigenvalues"
+
+        # This is a consistency test
+        ref_energy = -91.8005196942055
+        ref_internal_eigenvalue = numpy.array([-3.42921846e-01, -4.56479905e-02, -1.80435227e-06])
+        ref_real2complex_eigenvalue = numpy.array([0.0084204,  0.03314679, 0.0400318])
+        ref_external_eigenvalue = numpy.array([-1.80332502e-01, -2.22394823e-02,  3.19966466e-07])
+        assert numpy.abs(test_energy - ref_energy) < 1e-9
+        assert numpy.max(numpy.abs(test_internal_eigenvalue - ref_internal_eigenvalue)) < 1e-6
+        assert numpy.max(numpy.abs(test_real2complex_eigenvalue - ref_real2complex_eigenvalue)) < 1e-6
+        assert numpy.max(numpy.abs(test_external_eigenvalue - ref_external_eigenvalue)) < 1e-6
+
+        assert test_stable_i is False
+        assert test_stable_e is False
 
 if __name__ == "__main__":
     print("Full Tests for stability")
