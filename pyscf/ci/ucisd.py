@@ -158,7 +158,9 @@ def contract(myci, civec, eris):
     t0 -= numpy.einsum('jaib,ijab', eris_ovov, c2aa) * .25
     t0 += numpy.einsum('iajb,ijab', eris_OVOV, c2bb) * .25
     t0 -= numpy.einsum('jaib,ijab', eris_OVOV, c2bb) * .25
-    t0 += numpy.einsum('iajb,ijab', eris_ovOV, c2ab)
+    # Empty mixed-spin tensors contribute zero without reading their storage.
+    if c2ab.size:
+        t0 += numpy.einsum('iajb,ijab', eris_ovOV, c2ab)
     eris_ovov = eris_ovOV = eris_OVOV = None
 
     #:tmp = einsum('imae,mbej->ijab', c2, eris.ovvo)
