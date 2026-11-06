@@ -1,6 +1,16 @@
 name: CI Windows
 
 on:
+  push:
+    paths:
+      - ".gitattributes"
+      - ".github/workflows/ci-windows.yml"
+      - ".github/workflows/ci_windows/**"
+      - "MANIFEST.in"
+      - "pyproject.toml"
+      - "pyscf/**"
+      - "pytest.ini"
+      - "setup.py"
   pull_request:
     paths:
       - ".gitattributes"
