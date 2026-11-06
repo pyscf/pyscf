@@ -24,6 +24,7 @@ requirements:
   run:
     - python
     - mkl
+    - libgomp  # [linux]
     - numpy>=1.13
     - scipy!=1.5
     - h5py>=2.7
