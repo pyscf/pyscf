@@ -186,9 +186,9 @@ jobs:
   # Windows wheel publishing (follow-up to #3328). A single py3-none-win_amd64
   # wheel is built once, smoke-installed on several Python versions, then
   # uploaded. There is no per-version build matrix: the C libraries are loaded
-  # via ctypes, so the wheel is independent of the CPython ABI. Supported
-  # Python versions are constrained by the package's Requires-Python metadata
-  # and the availability of compatible dependencies.
+  # via ctypes, so the wheel is independent of the CPython ABI. Runtime
+  # compatibility depends on compatible NumPy, SciPy and h5py versions;
+  # Requires-Python separately declares the range accepted by installers.
   release-pypi-windows-build:
     runs-on: windows-latest
     defaults:
