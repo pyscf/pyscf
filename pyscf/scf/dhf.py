@@ -26,6 +26,7 @@ import ctypes
 import numpy
 from pyscf import lib
 from pyscf import gto
+from pyscf import spinor
 from pyscf.lib import logger
 from pyscf.data import nist
 from pyscf.scf import hf, ghf
@@ -826,25 +827,11 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
 UHF = UDHF = DHF
 
 
-def kramers_eigh(mol, h, s=None):
-    '''HC = SCE (or HC = CE) for Kramers-symmetric matrices in the spinor AO
-    basis, two- or four-component.  The eigenvectors come in Kramers pairs in
-    consecutive columns (see :func:`pyscf.lib.kramers.eigh`).'''
-    four_component = h.shape[0] != mol.nao_2c()
-    idx = _kramers_pair_sort_ao_idx(mol, four_component)
-    if s is not None:
-        s = s[idx[:,None],idx]
-    e, c = lib.kramers.eigh(h[idx[:,None],idx], s, iop=1)
-    mo = numpy.empty_like(c)
-    mo[idx] = c
-    return e, mo
-
-
 class HF1e(DHF):
     scf = hf._hf1e_scf
 
     def _eigh(self, h, s, overwrite=False, x=None):
-        return kramers_eigh(self.mol, h, s)
+        return spinor.kramers.eigh(self.mol, h, s, iop=1)
 
 
 class RDHF(DHF):
@@ -856,9 +843,8 @@ class RDHF(DHF):
 
     def check_linear_dependency(self, s, verbose=None):
         log = logger.new_logger(self, verbose)
-        idx = _kramers_pair_sort_ao_idx(self.mol, four_component=True)
-        s = s[idx[:,None], idx]
-        e, v = lib.kramers.eigh(s)
+        # iop=0: the columns of x form a Kramers basis, as _eigh requires
+        e, v = spinor.kramers.eigh(self.mol, s)
         if log is not None:
             abs_e = abs(e)
             emax = abs_e.max()
@@ -874,13 +860,11 @@ class RDHF(DHF):
             x = v[:,mask] / numpy.sqrt(e[mask])
         else:
             x = v / numpy.sqrt(e)
-        x1 = numpy.empty_like(x)
-        x1[idx] = x
-        return x1
+        return x
 
     def _eigh(self, h, s, overwrite=False, x=None):
         if x is None:
-            return kramers_eigh(self.mol, h, s)
+            return spinor.kramers.eigh(self.mol, h, s, iop=1)
         else:
             h = x.conj().T.dot(h).dot(x)
             e, c = lib.kramers.eigh(h, iop=1)
@@ -1151,13 +1135,4 @@ class _VHFOpt(_vhf._VHFOpt):
                 mol._bas.ctypes, ctypes.c_int(nbas), mol._env.ctypes)
         self.dm_cond = dm_cond
 
-def _kramers_pair_sort_ao_idx(mol, four_component=True):
-    trmaps = mol.time_reversal_map()
-    idxA = numpy.where(trmaps > 0)[0]
-    idxB = trmaps[idxA] - 1
-    if four_component:
-        n = trmaps.size
-        idx = numpy.hstack((idxA,idxA+n,idxB,idxB+n))
-    else:
-        idx = numpy.hstack((idxA,idxB))
-    return idx
+_kramers_pair_sort_ao_idx = spinor.kramers.pair_sort_ao_idx
