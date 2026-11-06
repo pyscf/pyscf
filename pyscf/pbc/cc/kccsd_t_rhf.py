@@ -424,8 +424,11 @@ def create_eris_vooo(ooov, nkpts, nocc, nvir, kconserv, out=None):
     return out
 
 
-def create_t3_eris(mycc, kconserv, eris, tmpfile='tmp_t3_eris.h5'):
-    '''Create/transpose necessary eri integrals needed for fast read-in by CCSD(T).'''
+def create_t3_eris(mycc, kconserv, eris, tmpfile=None):
+    '''Create/transpose necessary eri integrals needed for fast read-in by CCSD(T).
+
+    If tmpfile is None, use a unique temporary file that is deleted on close.
+    '''
     eris_vovv, eris_oovv, eris_ooov, t2 = eris
     nkpts = mycc.nkpts
     nocc = mycc.nocc
@@ -437,7 +440,8 @@ def create_t3_eris(mycc, kconserv, eris, tmpfile='tmp_t3_eris.h5'):
     h5py_kwargs = {}
     feri_tmp_filename = tmpfile
     dtype = np.result_type(eris_vovv, eris_oovv, eris_ooov, t2)
-    if not check_read_success(feri_tmp_filename):
+    # Each calculation needs its own file when no filename is supplied.
+    if tmpfile is None or not check_read_success(feri_tmp_filename):
         feri_tmp = lib.H5TmpFile(feri_tmp_filename, 'w', **h5py_kwargs)
         t2T_out = feri_tmp.create_dataset('t2T', (nkpts,nkpts,nkpts,nvir,nvir,nocc,nocc), dtype=dtype)
         eris_vvop_out = feri_tmp.create_dataset('vvop', (nkpts,nkpts,nkpts,nvir,nvir,nocc,nmo), dtype=dtype)
@@ -448,9 +452,10 @@ def create_t3_eris(mycc, kconserv, eris, tmpfile='tmp_t3_eris.h5'):
         create_eris_vooo(eris_ooov, nkpts, nocc, nvir, kconserv, out=eris_vooo_C_out)
 
         feri_tmp.attrs['completed'] = True
-        feri_tmp.close()
+        feri_tmp.flush()
+    else:
+        feri_tmp = lib.H5TmpFile(feri_tmp_filename, 'r', **h5py_kwargs)
 
-    feri_tmp = lib.H5TmpFile(feri_tmp_filename, 'r', **h5py_kwargs)
     t2T = feri_tmp['t2T']
     eris_vvop = feri_tmp['vvop']
     eris_vooo_C = feri_tmp['vooo_C']
