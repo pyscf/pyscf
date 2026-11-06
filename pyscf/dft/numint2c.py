@@ -219,8 +219,8 @@ def _ncol_lda_vxc_mat(mol, ao, weight, rho, vxc, mask, shls_slice, ao_loc, hermi
     aow = _scale_ao(ao, ws*my, out=aow)  # My
     tmpy = _dot_ao_ao(mol, ao, aow, mask, shls_slice, ao_loc)
     if hermi:
-        # conj(mx+my*1j) == mx-my*1j, tmpx and tmpy should be real
-        matba = (tmpx + tmpx.T) + (tmpy + tmpy.T) * 1j
+        # Bloch AOs can be complex. The caller supplies the alpha-beta adjoint.
+        matba = (tmpx + tmpx.conj().T) + (tmpy + tmpy.conj().T) * 1j
         matab = np.zeros_like(matba)
     else:
         # conj(mx+my*1j) != mx-my*1j, tmpx and tmpy should be complex
@@ -311,8 +311,7 @@ def mcfun_eval_xc_adapter(ni, xc_code):
                     verbose=None, spin=None):
         return mcfun.eval_xc_eff(
             fn_eval_xc, rho, deriv, spin_samples=ni.spin_samples,
-            collinear_threshold=ni.collinear_thrd,
-            collinear_samples=ni.collinear_samples, workers=nproc)
+            workers=nproc)
     return eval_xc_eff
 
 def _mcol_lda_vxc_mat(mol, ao, weight, rho, vxc, mask, shls_slice, ao_loc, hermi):
@@ -332,8 +331,8 @@ def _mcol_lda_vxc_mat(mol, ao, weight, rho, vxc, mask, shls_slice, ao_loc, hermi
     aow = _scale_ao(ao, wmy[0], out=aow)  # My
     tmpy = _dot_ao_ao(mol, ao, aow, mask, shls_slice, ao_loc)
     if hermi:
-        # conj(mx+my*1j) == mx-my*1j, tmpx and tmpy should be real
-        matba = (tmpx + tmpx.T) + (tmpy + tmpy.T) * 1j
+        # Bloch AOs can be complex. The caller supplies the alpha-beta adjoint.
+        matba = (tmpx + tmpx.conj().T) + (tmpy + tmpy.conj().T) * 1j
         matab = np.zeros_like(matba)
     else:
         # conj(mx+my*1j) != mx-my*1j, tmpx and tmpy should be complex
@@ -365,8 +364,8 @@ def _mcol_gga_vxc_mat(mol, ao, weight, rho, vxc, mask, shls_slice, ao_loc, hermi
     tmpy = _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
     if hermi:
         assert vxc.dtype == np.double
-        # conj(mx+my*1j) == mx-my*1j, tmpx and tmpy should be real
-        matba = (tmpx + tmpx.T) + (tmpy + tmpy.T) * 1j
+        # Bloch AOs can be complex. The caller supplies the alpha-beta adjoint.
+        matba = (tmpx + tmpx.conj().T) + (tmpy + tmpy.conj().T) * 1j
         matab = np.zeros_like(matba)
     else:
         # conj(mx+my*1j) != mx-my*1j, tmpx and tmpy should be complex
@@ -410,8 +409,8 @@ def _mcol_mgga_vxc_mat(mol, ao, weight, rho, vxc, mask, shls_slice, ao_loc, herm
     tmpy += _tau_dot(mol, ao, ao, wmy[tau_idx], mask, shls_slice, ao_loc)
     if hermi:
         assert vxc.dtype == np.double
-        # conj(mx+my*1j) == mx-my*1j, tmpx and tmpy should be real
-        matba = (tmpx + tmpx.T) + (tmpy + tmpy.T) * 1j
+        # Bloch AOs can be complex. The caller supplies the alpha-beta adjoint.
+        matba = (tmpx + tmpx.conj().T) + (tmpy + tmpy.conj().T) * 1j
         matab = np.zeros_like(matba)
     else:
         # conj(mx+my*1j) != mx-my*1j, tmpx and tmpy should be complex
@@ -503,8 +502,6 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
     #   'mcol' (multi-collinear)
     collinear = getattr(__config__, 'dft_numint_RnumInt_collinear', 'col')
     spin_samples = getattr(__config__, 'dft_numint_RnumInt_spin_samples', 770)
-    collinear_thrd = getattr(__config__, 'dft_numint_RnumInt_collinear_thrd', 0.99)
-    collinear_samples = getattr(__config__, 'dft_numint_RnumInt_collinear_samples', 200)
 
     make_mask = staticmethod(numint.make_mask)
     eval_ao = staticmethod(numint.eval_ao)

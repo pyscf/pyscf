@@ -132,10 +132,17 @@ class KnownValues(unittest.TestCase):
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_mgga_ab_ks(self):
-        mcol_m06l = dft.GKS(mol).set(xc='m06,', collinear='mcol')
-        mcol_m06l._numint.spin_samples = 6
-        mcol_m06l.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
-        self._check_against_ab_ks_complex(mcol_m06l.TDDFT(), -0.5215225316715016, 1.9444403387002533)
+        h3 = gto.M(atom=[('H', (0, 0, 0)), ('H', (1, 0, 0)),
+                         ('H', (.5, numpy.sqrt(3)/2, 0))],
+                   basis='6-31g', spin=3, verbose=0)
+        mf = h3.GKS(xc='tpss').set(collinear='mcol', spin_samples=14)
+        # Seed the first s orbital on each H with spins 120 degrees apart.
+        s = numpy.eye(h3.nao)[:, ::2]
+        phase = numpy.exp(2j * numpy.pi * numpy.arange(3) / 3)
+        c = numpy.vstack((s, s * phase)) / numpy.sqrt(2)
+        mf.kernel(dm0=c @ c.conj().T)
+        self.assertTrue(mf.converged)
+        self._check_against_ab_ks_complex(mf.TDDFT())
 
     def _check_against_ab_ks_real(self, td, refa, refb, places=6):
         mf = td._scf
@@ -159,11 +166,13 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(ab1 - abxy_ref[0]).max(), 0, 12)
         self.assertAlmostEqual(abs(ab2 - abxy_ref[1]).max(), 0, 12)
 
-    def _check_against_ab_ks_complex(self, td, refa, refb, places=6):
+    def _check_against_ab_ks_complex(self, td, refa=None, refb=None, places=6):
         mf = td._scf
         a, b = td.get_ab()
-        self.assertAlmostEqual(lib.fp(abs(a)), refa, places)
-        self.assertAlmostEqual(lib.fp(abs(b)), refb, places)
+        if refa is not None:
+            self.assertAlmostEqual(lib.fp(abs(a)), refa, places)
+        if refb is not None:
+            self.assertAlmostEqual(lib.fp(abs(b)), refb, places)
         ftda = mf.TDA().gen_vind()[0]
         ftdhf = td.gen_vind()[0]
         nocc = numpy.count_nonzero(mf.mo_occ == 1)

@@ -40,6 +40,19 @@ def tearDownModule():
     global cell
     del cell
 
+def noncollinear_h3():
+    d = 1.5
+    h = np.sqrt(3) * d / 2
+    cell = pbcgto.Cell(atom=[('H', (0, 0, 0)), ('H', (d, 0, 0)), ('H', (d/2, h, 0))],
+                       a=[[3*d, 0, 0], [1.5*d, 3*h, 0], [0, 0, 3*d]],
+                       basis='6-31g', spin=3, mesh=[31]*3, verbose=0).build()
+    # Three local spins 120 degrees apart in the plane normal to (1,1,1).
+    sx, sy, sz = (3*np.eye(3) - 1) / np.sqrt(6)
+    up = np.sqrt((1 + sz)/2)
+    s = np.eye(cell.nao)[:, ::2]  # first s orbital on each H
+    c = np.vstack((s * up, s * ((sx + 1j*sy) / (2*up))))
+    return cell, c @ c.conj().T
+
 class KnownValues(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -59,12 +72,10 @@ class KnownValues(unittest.TestCase):
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_gks_gga(self):
-        mf = cell.GKS().density_fit()
-        mf.xc = 'pbe'
-        mf.collinear = 'mcol'
-        mf._numint.spin_samples = 6
-        mf.run()
-        self.assertAlmostEqual(mf.e_tot, -0.7331713336996268, 7)
+        h3, dm = noncollinear_h3()
+        mf = h3.GKS().set(xc='pbe', collinear='mcol', spin_samples=14)
+        mf.kernel(dm0=dm)
+        self.assertAlmostEqual(mf.e_tot, -1.5416409316, 6)
 
     def test_ncol_x2c_gks_lda(self):
         mf = cell.GKS().x2c()

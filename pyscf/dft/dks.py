@@ -70,8 +70,6 @@ class KohnShamDFT(rks.KohnShamDFT):
         logger.info(self, 'collinear = %s', self._numint.collinear)
         if self._numint.collinear[0] == 'm':
             logger.info(self, 'mcfun spin_samples = %s', self._numint.spin_samples)
-            logger.info(self, 'mcfun collinear_thrd = %s', self._numint.collinear_thrd)
-            logger.info(self, 'mcfun collinear_samples = %s', self._numint.collinear_samples)
         return self
 
     get_veff = gks.get_veff

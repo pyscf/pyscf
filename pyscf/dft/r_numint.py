@@ -680,8 +680,6 @@ class RNumInt(lib.StreamObject, numint.LibXCMixin):
     #   'mcol' (multi-collinear)
     collinear = getattr(__config__, 'dft_numint_RnumInt_collinear', 'col')
     spin_samples = getattr(__config__, 'dft_numint_RnumInt_spin_samples', 770)
-    collinear_thrd = getattr(__config__, 'dft_numint_RnumInt_collinear_thrd', 0.99)
-    collinear_samples = getattr(__config__, 'dft_numint_RnumInt_collinear_samples', 200)
 
     get_rho = get_rho
     cache_xc_kernel = cache_xc_kernel
