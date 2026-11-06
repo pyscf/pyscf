@@ -612,16 +612,13 @@ class UHF(SCF):
 X2C_UHF = UHF
 
 class RHF(SCF):
-    def __init__(self, mol):
-        super().__init__(mol)
-        if dhf.zquatev is None:
-            raise RuntimeError('zquatev library is required to perform Kramers-restricted X2C-RHF')
-
     def check_linear_dependency(self, s, verbose=None):
         log = logger.new_logger(self, verbose)
         idx = dhf._kramers_pair_sort_ao_idx(self.mol, four_component=False)
         s = s[idx[:,None], idx]
-        e, v = dhf.zquatev.eigh(s)
+        e, v = lib.kramers.eigh(s)
+        e = numpy.hstack((e[0::2], e[1::2]))
+        v = numpy.hstack((v[:,0::2], v[:,1::2]))
         if log is not None:
             abs_e = abs(e)
             emax = abs_e.max()
