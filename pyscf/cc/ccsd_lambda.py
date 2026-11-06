@@ -35,6 +35,34 @@ from pyscf.cc import _ccsd
 def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
            max_cycle=50, tol=1e-8, verbose=logger.INFO,
            fintermediates=None, fupdate=None):
+    '''Solve the restricted CCSD lambda equations.
+
+    Args:
+        mycc : CCSD object
+            CCSD solver supplying amplitudes, orbital information, DIIS
+            settings, and integral transformations.
+
+    Kwargs:
+        eris : MO integral object or None
+            Precomputed CCSD integrals, normally from ``mycc.ao2mo()``.
+        t1, t2 : ndarrays or None
+            Converged CC amplitudes (dimensionless). None uses ``mycc.t1`` or
+            ``mycc.t2``.
+        l1, l2 : ndarrays or None
+            Initial lambda amplitudes, with the same shapes as t1 and t2.
+        max_cycle : int
+            Maximum lambda iterations. Default 50.
+        tol : float
+            Stop when the norm of the change in the lambda amplitudes is below
+            this value. The norm is computed after packing the amplitudes
+            into a vector. Default 1e-8.
+        verbose : int or Logger
+
+    Returns:
+        (converged, l1, l2). ``converged`` is True if the iteration reached
+        the requested tolerance. ``l1`` and ``l2`` are the final lambda
+        amplitudes, with the same shapes as t1 and t2.
+    '''
     if eris is None: eris = mycc.ao2mo()
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mycc, verbose)

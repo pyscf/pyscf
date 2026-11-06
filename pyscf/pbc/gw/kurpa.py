@@ -44,6 +44,11 @@ from pyscf.pbc.gw.kugw_ac import get_rho_response, get_rho_response_metal, get_r
     get_rho_response_wing, get_qij
 from pyscf.pbc.gw.krpa import KRPA, rho_accum_inner, rho_wing_accum_inner, get_rpa_ecorr_w, get_kconserv_ria_efficient
 
+__all__ = [
+    'kernel', 'get_idx_metal', 'get_rpa_ecorr', 'get_rpa_ecorr_outcore',
+    'get_rpa_ecorr_outcore_metal', 'get_rpa_exx', 'KURPA', 'temporary_env', 'KRPA',
+]
+
 
 def kernel(rpa, mo_energy, mo_coeff, nw=None, with_e_hf=None):
     """RPA correlation and total energy

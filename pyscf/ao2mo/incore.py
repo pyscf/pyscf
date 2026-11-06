@@ -23,6 +23,8 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 
+__all__ = ['full', 'general']
+
 BLOCK = 56
 
 def full(eri_ao, mo_coeff, verbose=0, compact=True, **kwargs):

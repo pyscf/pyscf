@@ -26,6 +26,8 @@ from pyscf.solvent import _solvent_data
 from pyscf.solvent._attach_solvent import _for_scf
 from pyscf.lib import logger
 
+__all__ = ['SMD']
+
 @lib.with_doc(_for_scf.__doc__)
 def smd_for_scf(mf, solvent_obj=None, dm=None):
     if isinstance(solvent_obj, str):

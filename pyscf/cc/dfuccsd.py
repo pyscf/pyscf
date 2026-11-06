@@ -23,6 +23,8 @@ from pyscf.cc import ccsd
 from pyscf.cc import dfccsd
 from pyscf import __config__
 
+__all__ = ['UCCSD', 'DFCCSD', 'DFUCCSD']
+
 MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 
 class UCCSD(uccsd.UCCSD):

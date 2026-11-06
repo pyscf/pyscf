@@ -60,6 +60,8 @@ from pyscf import df
 from pyscf.solvent import _attach_solvent
 from pyscf.data import elements
 
+__all__ = ['TDSCFWithSolvent', 'PolEmbed']
+
 
 @lib.with_doc(_attach_solvent._for_scf.__doc__)
 def pe_for_scf(mf, solvent_obj, dm=None):

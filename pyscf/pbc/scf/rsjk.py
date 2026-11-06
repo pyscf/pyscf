@@ -44,6 +44,8 @@ from pyscf.pbc.lib.kpts_helper import (is_zero, kk_adapted_iter,
                                        group_by_conj_pairs, intersection)
 from pyscf import __config__
 
+__all__ = ['RangeSeparatedJKBuilder', 'RangeSeparationJKBuilder']
+
 # Threshold of steep bases and local bases
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 1.0)
 OMEGA_MIN = rsdf_builder.OMEGA_MIN

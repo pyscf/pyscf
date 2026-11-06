@@ -34,6 +34,8 @@ from pyscf.lib import logger
 from pyscf.data import elements
 from pyscf import __config__
 
+__all__ = ['set_atom_conf']
+
 # Note the valence space for Li, Be may need include 2p, Al..Cl may need 3d ...
 # This is No. of shells, not the atomic configurations
 #     core       core+valence

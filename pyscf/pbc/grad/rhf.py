@@ -27,6 +27,8 @@ from pyscf.pbc.gto.pseudo import pp_int
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf.pbc.dft.multigrid import MultiGridNumInt2
 
+__all__ = ['GradientsBase', 'Gradients', 'MultiGridNumInt2']
+
 SCREEN_VHF_DM_CONTRA = getattr(__config__, 'pbc_rhf_grad_screen_vhf_dm_contract', True)
 libpbc = lib.load_library('libpbc')
 

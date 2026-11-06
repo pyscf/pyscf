@@ -32,6 +32,8 @@ from pyscf.pbc.tools import pbc as pbctools
 from pyscf import __config__
 from pyscf.pbc.gto import _pbcintor
 
+__all__ = ['Int3cBuilder']
+
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 2.5)
 KECUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_kecut_threshold', 10.0)
 LOG_ADJUST = 32

@@ -28,6 +28,14 @@ from pyscf.pbc.lib.kpts_helper import is_zero, member, round_to_fbz, KPT_DIFF_TO
 from pyscf.pbc.lib import kpts_helper
 from numpy.linalg import inv
 
+__all__ = [
+    'make_ktuples_ibz', 'map_k_points_fast', 'map_kpts_tuples', 'transform_mo_coeff',
+    'transform_mo_coeff_k', 'transform_single_mo_coeff', 'transform_dm',
+    'dm_at_ref_cell', 'transform_1e_operator', 'transform_fock',
+    'check_mo_occ_symmetry', 'get_rotation_mat_for_mos', 'make_kpts', 'KPoints',
+    'MORotationMatrix', 'KQuartets', 'PGElement', 'PointGroup', 'Representation',
+]
+
 libpbc = lib.load_library('libpbc')
 
 def is_gamma_point(kpt_or_kpts):

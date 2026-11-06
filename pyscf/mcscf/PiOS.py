@@ -27,6 +27,8 @@ import numpy as np
 import numpy.linalg as la
 from pyscf import gto
 
+__all__ = ['mdot', 'MakePiOS']
+
 def mdot(*args):
     """chained matrix product: mdot(A,B,C,..) = A*B*C*...
     No attempt is made to optimize the contraction order."""

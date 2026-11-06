@@ -40,6 +40,8 @@ from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, get_e_hf, _mo_witho
 from pyscf.cc import ccsd
 from pyscf import __config__
 
+__all__ = ['RCCSDT']
+
 
 _libccsdt = lib.load_library('libccsdt')
 

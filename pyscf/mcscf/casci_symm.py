@@ -27,6 +27,8 @@ from pyscf.mcscf import casci
 from pyscf.mcscf import addons
 from pyscf.scf.hf_symm import map_degeneracy
 
+__all__ = ['SymAdaptedCASCI', 'CASCI']
+
 class SymAdaptedCASCI(casci.CASCI):
     def __init__(self, mf_or_mol, ncas=0, nelecas=0, ncore=None):
         casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)

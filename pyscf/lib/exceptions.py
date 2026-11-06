@@ -15,6 +15,11 @@
 
 '''Errors and exceptions'''
 
+__all__ = [
+    'BasisNotFoundError', 'PointGroupSymmetryError', 'WfnSymmetryError',
+    'LinearDependencyError', 'DeprecationWarning',
+]
+
 class BasisNotFoundError(RuntimeError):
     pass
 

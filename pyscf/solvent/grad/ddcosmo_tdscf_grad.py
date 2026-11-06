@@ -45,6 +45,8 @@ from pyscf.grad import tdrks as tdrks_grad
 from pyscf.grad import tduks as tduks_grad
 from pyscf.scf import cphf, ucphf
 
+__all__ = ['WithSolventGrad']
+
 
 def make_grad_object(td_base_method):
     '''For td_method in vacuum, add td of solvent pcmobj'''

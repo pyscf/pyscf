@@ -22,6 +22,8 @@ from scipy import linalg
 from pyscf.mcpdft import _dms
 from pyscf.fci import direct_spin1
 
+__all__ = ['fock_h1e_for_cas', 'make_fock_mcscf', 'solve_safock']
+
 
 def fock_h1e_for_cas(mc, sa_casdm1, mo_coeff=None, ncas=None, ncore=None):
     '''Compute the CAS SA Fock Matrix 1-electron integrals.

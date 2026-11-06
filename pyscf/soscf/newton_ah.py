@@ -37,6 +37,8 @@ from pyscf.scf import _response_functions
 from pyscf.soscf import ciah
 from pyscf import __config__
 
+__all__ = ['newton', 'project_mol']
+
 WITH_EX_EY_DEGENERACY = getattr(__config__, 'soscf_newton_ah_Ex_Ey_degeneracy', True)
 
 
@@ -988,7 +990,20 @@ class _SecondOrderRHF(_CIAH_SOSCF):
     gen_g_hop = gen_g_hop_rhf
 
 def newton(mf):
-    '''Co-iterative augmented hessian (CIAH) second order SCF solver
+    '''Create a co-iterative augmented Hessian (CIAH) second-order SCF solver.
+
+    Args:
+        mf : SCF object
+            HF or Kohn-Sham object providing the method, settings, and any
+            available orbitals. You do not need to run SCF first.
+
+    Returns:
+        A second-order SCF object with the original SCF object stored as
+        ``_scf``. If mf is already a CIAH solver, returns mf itself.
+
+    Notes:
+        Call ``kernel`` or ``run`` on the result to optimize the orbitals.
+        Existing attributes are copied by reference and may be shared.
 
     Examples:
 

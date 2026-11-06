@@ -33,6 +33,8 @@ from pyscf.lib import logger
 from pyscf.hessian import uks as uks_hess
 from pyscf.df.hessian import uhf as df_uhf_hess
 
+__all__ = ['Hessian']
+
 
 def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                       atmlst=None, max_memory=4000, verbose=None):

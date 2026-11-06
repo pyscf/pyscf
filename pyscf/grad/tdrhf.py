@@ -29,6 +29,8 @@ from pyscf.grad import rhf as rhf_grad
 from pyscf.scf import cphf
 from pyscf import __config__
 
+__all__ = ['TDSCF_GradScanner', 'Gradients', 'Grad']
+
 
 def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
               max_memory=2000, verbose=logger.INFO):

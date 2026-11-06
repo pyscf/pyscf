@@ -83,6 +83,25 @@ if sys.platform.startswith('linux'):
 from pyscf.lib import parameters as param
 from pyscf import __config__
 
+__all__ = [
+    'c_double_p', 'c_int_p', 'c_null_ptr', 'load_library', 'make_dll_wrapper',
+    'current_memory', 'num_threads', 'with_omp_threads', 'with_multiproc_nproc',
+    'c_int_arr', 'f_int_arr', 'c_double_arr', 'f_double_arr', 'member', 'remove_dup',
+    'remove_if', 'find_if', 'arg_first_match', 'flatten', 'prange', 'prange_tril',
+    'prange_split', 'map_with_prefetch', 'index_tril_to_pair', 'tril_product',
+    'square_mat_in_trilu_indices', 'capture_stdout', 'ctypes_stdout', 'quite_run',
+    'omnimethod', 'view', 'generate_pickle_methods', 'StreamObject', 'check_sanity',
+    'with_doc', 'alias', 'module_method', 'class_as_method', 'invalid_method',
+    'make_class', 'set_class', 'drop_class', 'replace_class', 'overwrite_mro',
+    'ProcessWithReturnValue', 'ProcessRuntimeError', 'ThreadWithReturnValue',
+    'ThreadWithTraceBack', 'ThreadRuntimeError', 'background_thread',
+    'background_process', 'background', 'bg_thread', 'bg_process',
+    'call_in_background', 'H5FileWrap', 'H5TmpFile', 'NamedTemporaryFile',
+    'fingerprint', 'fp', 'ndpointer', 'SinglePointScanner', 'GradScanner',
+    'temporary_env', 'light_speed', 'h5filewrite_options', 'repo_info', 'git_info',
+    'format_sys_info', 'isinteger', 'issequence', 'isintsequence', 'to_gpu',
+]
+
 if h5py.version.version[:4] == '2.2.':
     sys.stderr.write('h5py-%s is found in your environment. '
                      'h5py-%s has bug in threading mode.\n'
@@ -640,24 +659,27 @@ def generate_pickle_methods(excludes=(), reset_state=False):
 
 SANITY_CHECK = getattr(__config__, 'SANITY_CHECK', True)
 class StreamObject:
-    '''For most methods, there are three stream functions to pipe computing stream:
+    '''Provide methods for setting up and running calculations in a chain.
 
-    1 ``.set_`` function to update object attributes, eg
-    ``mf = scf.RHF(mol).set(conv_tol=1e-5)`` is identical to proceed in two steps
-    ``mf = scf.RHF(mol); mf.conv_tol=1e-5``
+    ``set(**kwargs)`` sets attributes and returns the same object. For example,
+    ``mf.set(conv_tol=1e-5)`` is equivalent to ``mf.conv_tol = 1e-5``.
 
-    2 ``.run`` function to execute the kernel function (the function arguments
-    are passed to kernel function).  If keyword arguments is given, it will first
-    call ``.set`` function to update object attributes then execute the kernel
-    function.  Eg
-    ``mf = scf.RHF(mol).run(dm_init, conv_tol=1e-5)`` is identical to three steps
-    ``mf = scf.RHF(mol); mf.conv_tol=1e-5; mf.kernel(dm_init)``
+    ``run(*args, **kwargs)`` sets attributes from the keyword arguments, passes
+    positional arguments to ``kernel``, and returns the same object. Thus,
+    ``scf.RHF(mol).run(dm_init, conv_tol=1e-5)`` is equivalent to::
 
-    3 ``.apply`` function to apply the given function/class to the current object
-    (function arguments and keyword arguments are passed to the given function).
-    Eg
-    ``mol.apply(scf.RHF).run().apply(mcscf.CASSCF, 6, 4, frozen=4)`` is identical to
-    ``mf = scf.RHF(mol); mf.kernel(); mcscf.CASSCF(mf, 6, 4, frozen=4)``
+        mf = scf.RHF(mol)
+        mf.conv_tol = 1e-5
+        mf.kernel(dm_init)
+
+    ``apply(fn, *args, **kwargs)`` calls a function or class with this object
+    as its first argument and returns the result. For example,
+    ``mol.apply(scf.RHF).run().apply(mcscf.CASSCF, 6, 4, frozen=4)`` is
+    equivalent to::
+
+        mf = scf.RHF(mol)
+        mf.kernel()
+        mcscf.CASSCF(mf, 6, 4, frozen=4)
     '''
 
     verbose = 0
@@ -689,21 +711,47 @@ class StreamObject:
         '''
 
     def run(self, *args, **kwargs):
-        '''
-        Call the kernel function of current object.  `args` will be passed
-        to kernel function.  `kwargs` will be used to update the attributes of
-        current object.  The return value of method run is the object itself.
-        This allows a series of functions/methods to be executed in pipe.
+        '''Set attributes, execute the kernel, and return the current object.
+
+        Args:
+            *args :
+                Positional arguments passed to :meth:`kernel`.
+
+        Kwargs:
+            **kwargs :
+                Attributes to set before calling the kernel. These keywords
+                are not passed to the kernel; use ``kernel`` directly to
+                supply keyword arguments to the calculation.
+
+        Returns:
+            The current object, with calculation results stored in its
+            attributes, for chaining further method calls.
+
+        Examples:
+
+        >>> from pyscf import gto, scf
+        >>> mol = gto.M(atom='H 0 0 0; H 0 0 1', verbose=0)
+        >>> mf = scf.RHF(mol).run(conv_tol=1e-9)
         '''
         self.set(**kwargs)
         self.kernel(*args)
         return self
 
     def set(self, *args, **kwargs):
-        '''
-        Update the attributes of the current object.  The return value of
-        method set is the object itself.  This allows a series of
-        functions/methods to be executed in pipe.
+        '''Update attributes in place and return the current object.
+
+        Args:
+            *args :
+                Unsupported positional arguments are ignored with a warning.
+
+        Kwargs:
+            **kwargs :
+                Attribute names and values assigned with ``setattr``. New
+                attributes may be added; names and values are not validated.
+
+        Returns:
+            The current object, allowing calls such as
+            ``mf.set(conv_tol=1e-9).run()``.
         '''
         if args:
             warnings.warn('method set() only supports keyword arguments.\n'
@@ -724,10 +772,26 @@ class StreamObject:
     __call__ = set
 
     def apply(self, fn, *args, **kwargs):
-        '''
-        Apply the fn to rest arguments:  return ``fn(*args, **kwargs)``.  The
-        return value of method set is the object itself.  This allows a series
-        of functions/methods to be executed in pipe.
+        '''Call a function or constructor with this object as its first argument.
+
+        Args:
+            fn : callable
+                Function or class called as ``fn(self, *args, **kwargs)``.
+            *args :
+                Additional positional arguments passed to ``fn``.
+
+        Kwargs:
+            **kwargs :
+                Additional keyword arguments passed to ``fn``.
+
+        Returns:
+            The result returned by ``fn``, which may be a different object.
+
+        Examples:
+
+        >>> from pyscf import gto, scf, mp
+        >>> mol = gto.M(atom='H 0 0 0; H 0 0 1', verbose=0)
+        >>> pt = mol.apply(scf.RHF).run().apply(mp.MP2).run()
         '''
         return fn(self, *args, **kwargs)
 

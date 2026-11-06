@@ -29,6 +29,8 @@ from pyscf.mcscf import casci, mc1step, mc_ao2mo
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 
+__all__ = ['NEVPT']
+
 libmc = lib.load_library('libmcscf')
 
 NUMERICAL_ZERO = 1e-14

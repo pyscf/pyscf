@@ -52,6 +52,11 @@ from pyscf.fci.spin_op import contract_ss
 from pyscf.fci.addons import _unpack_nelec, civec_spinless_repr
 from pyscf import __config__
 
+__all__ = [
+    'FCIBase', 'FCISolver', 'FCI', 'FCIvector', 'contract_2e', 'make_rdm1234s',
+    'make_rdm123s', 'pspace',
+]
+
 libfci = cistring.libfci
 
 def contract_1e(f1e, fcivec, norb, nelec, link_index=None):

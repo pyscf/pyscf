@@ -26,6 +26,8 @@ from pyscf.dft import numint
 from pyscf import lib
 from pyscf.lib import logger
 
+__all__ = ['Gradients']
+
 
 def get_veff(ks_grad, dm=None, kpts=None):
     mf = ks_grad.base

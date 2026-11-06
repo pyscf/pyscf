@@ -25,6 +25,8 @@ from pyscf.pbc.grad import krhf as krhf_grad
 from pyscf.pbc import gto
 from pyscf.pbc.gto.pseudo import pp_int
 
+__all__ = ['Gradients']
+
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     mf = mf_grad.base
     cell = mf_grad.cell

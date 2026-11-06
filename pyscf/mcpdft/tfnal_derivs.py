@@ -17,6 +17,8 @@ import numpy as np
 from scipy import linalg
 from pyscf.lib import logger
 
+__all__ = ['contract_vot']
+
 
 def _reshape_vxc_sigma(vxc0, dens_deriv):
     # d/drho, d/dsigma -> d/drho, d/drho'

@@ -37,6 +37,8 @@ from pyscf.grad import tdrks as tdrks_grad
 from pyscf.scf import cphf, hf, rohf
 from pyscf.mcscf.addons import StateAverageMCSCFSolver
 
+__all__ = ['CASCI_GradScanner', 'Gradients', 'Grad', 'StateAverageMCSCFSolver']
+
 if sys.version_info < (3,):
     RANGE_TYPE = list
 else:

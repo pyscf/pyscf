@@ -39,6 +39,8 @@ from pyscf.df.grad.casdm2_util import (solve_df_rdm2,
                                       grad_elec_dferi,
                                       grad_elec_auxresponse_dferi)
 
+__all__ = ['CASSCF_GradScanner', 'Gradients', 'StateAverageMCSCFSolver']
+
 def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, eris=None, verbose=None,
                        auxbasis_response=True):
     ''' Modification of pyscf.grad.casscf.kernel to compute instead the orbital

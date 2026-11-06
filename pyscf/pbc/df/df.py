@@ -60,6 +60,8 @@ from pyscf.pbc.df.gdf_builder import libpbc, _CCGDFBuilder, _CCNucBuilder
 from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder, _RSNucBuilder, LINEAR_DEP_THR
 from pyscf import __config__
 
+__all__ = ['make_modrho_basis', 'make_auxcell', 'GDF', 'DF', 'CDERIArray', 'KPoints']
+
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=None,
                       normalize_multipoles=True):
@@ -366,7 +368,41 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 
     def sr_loop(self, kpti_kptj=numpy.zeros((2,3)), max_memory=2000,
                 compact=True, blksize=None, aux_slice=None):
-        '''Short range part'''
+        '''Read the Gaussian density-fitting tensor one block at a time.
+
+        Kwargs:
+            kpti_kptj : (2, 3) array-like
+                Pair of absolute k-points in inverse Bohr. Defaults to Gamma
+                for both AO indices. The stored tensor must contain this pair.
+            max_memory : float
+                Memory budget in MB used to choose the block size when
+                ``blksize`` is None. Default is 2000.
+            compact : bool
+                Default True. Pack the AO pair into its lower triangle when
+                both k-points are Gamma; otherwise preserve the stored packing.
+                With False, unpack equal-k-point tensors to ``nao**2`` columns.
+                Unequal-k-point pairs are full.
+            blksize : int or None
+                Number of auxiliary rows per block. None estimates it from
+                available memory and ``self.blockdim``, with a minimum of 16.
+            aux_slice : pair of ints or None
+                Auxiliary rows to read, from start (included) to stop (excluded).
+                None iterates over all rows. For a two-dimensional truncated Coulomb
+                interaction, the same range is read from the positive and
+                negative parts of the tensor.
+
+        Yields:
+            (LpqR, LpqI, sign), with real and imaginary float arrays of shape
+            (naux_block, nao_pair). Packed pairs use ``nao*(nao+1)//2`` columns;
+            full pairs use ``nao**2``. Together they represent ``LpqR + 1j*LpqI``.
+            ``sign`` is +1, except for the negative part of a 2D truncated
+            Coulomb interaction, where it is -1. Include this sign when
+            reconstructing electron-repulsion integrals.
+
+        Notes:
+            Builds and stores the DF tensor if ``self._cderi`` is not initialized.
+            All positive-metric blocks precede any negative-metric blocks.
+        '''
         if self._cderi is None:
             self.build(j_only=self._j_only)
         cell = self.cell
@@ -595,7 +631,19 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             yield LpqR
 
     def get_naoaux(self):
-        '''The dimension of auxiliary basis at gamma point'''
+        '''Return the number of auxiliary rows in the stored DF tensor.
+
+        Returns:
+            Number of auxiliary rows in the tensor. This can differ from the
+            number of functions in the auxiliary basis. For stored 2D truncated
+            Coulomb tensors, includes both positive and negative metric sectors.
+
+        Notes:
+            If the tensor is not initialized, calls ``build(j_only=self._j_only)``
+            first. For file-backed tensors, reads the first stored k-point-pair
+            block; the result is not a separate dimension for every k-point pair.
+            For a user-supplied ndarray, reads its auxiliary axis directly.
+        '''
 # determine naoaux with self._cderi, because DF object may be used as CD
 # object when self._cderi is provided.
         if self._cderi is None:

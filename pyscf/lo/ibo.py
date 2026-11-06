@@ -33,6 +33,8 @@ from pyscf.lo import iao
 from pyscf.lo import orth, pipek
 from pyscf import __config__
 
+__all__ = ['ibo']
+
 MINAO = getattr(__config__, 'lo_iao_minao', 'minao')
 
 def ibo(mol, orbocc, locmethod='IBO', iaos=None, s=None,

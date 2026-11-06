@@ -26,6 +26,8 @@ from pyscf.mcscf import addons
 from pyscf import fci
 from pyscf.soscf.newton_ah import _force_SO3_degeneracy_, _force_Ex_Ey_degeneracy_
 
+__all__ = ['SymAdaptedCASSCF', 'CASSCF']
+
 
 class SymAdaptedCASSCF(mc1step.CASSCF):
     __doc__ = mc1step.CASSCF.__doc__

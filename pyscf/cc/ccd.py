@@ -25,6 +25,8 @@ from pyscf.cc import ccsd
 from pyscf.cc import ccsd_lambda
 from pyscf.cc import ccsd_rdm
 
+__all__ = ['CCD']
+
 class CCD(ccsd.CCSD):
     def update_amps(self, t1, t2, eris):
         t1, t2 = ccsd.update_amps(self, t1, t2, eris)

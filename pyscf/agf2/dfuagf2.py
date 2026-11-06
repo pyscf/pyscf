@@ -30,6 +30,8 @@ from pyscf import ao2mo, df
 from pyscf.agf2 import uagf2, dfragf2, mpi_helper, _agf2
 from pyscf.agf2 import aux_space as aux
 
+__all__ = ['DFUAGF2']
+
 BLKMIN = getattr(__config__, 'agf2_blkmin', 100)
 
 

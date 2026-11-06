@@ -37,9 +37,11 @@ from pyscf.ao2mo.incore import _conc_mos, iden_coeffs
 from pyscf.ao2mo.outcore import _load_from_h5g
 from pyscf import __config__
 
+__all__ = ['DF', 'GDF', 'DF4C', 'GDF4C']
+
 class DF(lib.StreamObject):
     r'''
-    Object to hold 3-index tensor
+    Store three-index density-fitting integrals.
 
     Input Attributes:
         auxbasis : str or dict
@@ -212,6 +214,16 @@ class DF(lib.StreamObject):
         return self
 
     def loop(self, blksize=None):
+        '''Read the density-fitting tensor one block at a time.
+
+        Kwargs:
+            blksize : int or None
+                Maximum number of auxiliary rows per block. None uses self.blockdim.
+
+        Yields:
+            Arrays of shape (naux_block, nao*(nao+1)//2). Each row contains the
+            lower triangle of an AO pair matrix, in PySCF packed order.
+        '''
         if self._cderi is None:
             self.build()
         if blksize is None:
@@ -259,6 +271,36 @@ class DF(lib.StreamObject):
     def get_jk(self, dm, hermi=1, with_j=True, with_k=True,
                direct_scf_tol=getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13),
                omega=None):
+        '''Compute Coulomb and exchange matrices using density fitting.
+
+        Args:
+            dm : ndarray
+                AO density matrix of shape (nao, nao), or a batch with shape
+                (..., nao, nao). Real and complex densities are supported.
+
+        Kwargs:
+            hermi : int
+                Density-matrix symmetry flag: 1 for Hermitian, 0 for a general
+                matrix. Default 1.
+            with_j, with_k : bool
+                Request Coulomb J and exchange K, respectively.
+            direct_scf_tol : float
+                Integral-screening tolerance for the direct J build.
+            omega : float or None
+                Range-separation parameter in inverse Bohr. Positive values
+                select the long-range interaction erf(omega*r)/r; negative
+                values select the short-range interaction erfc(abs(omega)*r)/r.
+                Zero selects the full 1/r interaction.
+                None (default) uses the molecule's omega setting.
+
+        Returns:
+            (vj, vk), the Coulomb and exchange matrices in Hartree. Each
+            requested matrix has the same shape as dm.
+
+        Notes:
+            Ignore the return entry for any matrix that was not requested;
+            its value is unspecified.
+        '''
         if omega is None:
             return df_jk.get_jk(self, dm, hermi, with_j, with_k, direct_scf_tol)
 
@@ -267,6 +309,13 @@ class DF(lib.StreamObject):
             return df_jk.get_jk(rsh_df, dm, hermi, with_j, with_k, direct_scf_tol)
 
     def get_eri(self):
+        '''Reconstruct AO electron-repulsion integrals from the fitting tensor.
+
+        Returns:
+            Real integrals (ij|kl) in Hartree, in eightfold packed order. The
+            one-dimensional array has length npair*(npair+1)//2, where
+            npair = nao*(nao+1)//2.
+        '''
         nao = self.mol.nao_nr()
         nao_pair = nao * (nao+1) // 2
         ao_eri = numpy.zeros((nao_pair,nao_pair))
@@ -277,6 +326,23 @@ class DF(lib.StreamObject):
 
     def ao2mo(self, mo_coeffs,
               compact=getattr(__config__, 'df_df_DF_ao2mo_compact', True)):
+        '''Transform density-fitted electron-repulsion integrals to the MO basis.
+
+        Args:
+            mo_coeffs : ndarray or sequence of four ndarrays
+                Real MO coefficients in the AO basis. Supply one (nao, nmo)
+                matrix for all four indices, or four matrices with shapes
+                (nao, ni), (nao, nj), (nao, nk), and (nao, nl).
+
+        Kwargs:
+            compact : bool
+                Pack an orbital pair when its two coefficient matrices are equal.
+
+        Returns:
+            A real matrix of integrals (ij|kl) in Hartree. Without packing,
+            its shape is (ni*nj, nk*nl). A packed pair of n orbitals has
+            n*(n+1)//2 entries. The two pairs are packed independently.
+        '''
         if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:
             mo_coeffs = (mo_coeffs,) * 4
         ijmosym, nij_pair, moij, ijslice = _conc_mos(mo_coeffs[0], mo_coeffs[1], compact)
@@ -297,8 +363,28 @@ class DF(lib.StreamObject):
 
     @contextlib.contextmanager
     def range_coulomb(self, omega):
-        '''Creates a temporary density fitting object for RSH-DF integrals.
-        In this context, only LR or SR integrals for mol and auxmol are computed.
+        '''Creates a temporary density fitting context for RSH-DF integrals.
+        In this context, either LR or SR integrals for mol and auxmol are computed.
+
+        Args:
+            omega : float or None
+                Range-separation parameter in inverse Bohr. Positive values
+                select the long-range interaction erf(omega*r)/r; negative
+                values select the short-range interaction erfc(abs(omega)*r)/r.
+                Zero selects the full 1/r interaction.
+
+        Yields:
+            A DF object
+
+        Notes:
+            Temporarily changes omega on the shared molecule and auxiliary
+            molecule, then restores their settings on exit. Use the yielded
+            DF object and its mol attribute only inside the with block when
+            computing integrals.
+
+        Examples:
+            >>> with mydf.range_coulomb(0.3) as rsh_df:
+            ...     vj, vk = rsh_df.get_jk(dm)
         '''
         if omega is None:
             omega = 0

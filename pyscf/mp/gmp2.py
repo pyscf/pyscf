@@ -25,6 +25,8 @@ from pyscf.mp import mp2
 from pyscf import scf
 from pyscf import __config__
 
+__all__ = ['GMP2', 'MP2']
+
 WITH_T2 = getattr(__config__, 'mp_gmp2_with_t2', True)
 
 

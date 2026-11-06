@@ -60,7 +60,36 @@ def tot_parity_odd(op, l, m):
         gx,gy,gz = param.SPHERIC_GTO_PARITY_ODD[l][l+m]
         return (ox and gx) ^ (oy and gy) ^ (oz and gz)
 
-def symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
+def symm_adapted_basis(mol, gpname, orig=None, coordinates=None):
+    '''Build symmetry-adapted orbitals from atomic orbitals (AOs).
+
+    Args:
+        mol : Mole
+            Molecule with its geometry and AO basis already built.
+        gpname : str
+            Supported point-group name: a subgroup of D2h, ``'Dooh'``,
+            ``'Coov'``, or ``'SO3'``. Use a supported subgroup for other groups.
+
+    Kwargs:
+        orig : (3,) array-like or None
+            Symmetry origin in Bohr, subtracted from atomic coordinates.
+            Default is None, which does not shift molecular coordinates.
+        coordinates : (3, 3) ndarray or None
+            Rows give the three symmetry axes, as returned by
+            ``geom.detect_symm``. None keeps the current orientation.
+            After shifting and rotating, the molecule must be in the
+            standard orientation for ``gpname``.
+
+    Returns:
+        (symm_orb, irrep_ids).
+        ``symm_orb`` contains one coefficient matrix per symmetry type
+        (irreducible representation, or irrep). Each matrix has shape
+        (nao, nao_irrep); its columns give the orbitals in the original AO
+        basis. ``irrep_ids`` gives the matching PySCF symmetry labels.
+    '''
+    if orig is None:
+        orig = numpy.zeros(3)
+
     if gpname == 'SO3':
         return so3_symm_adapted_basis(mol, gpname, orig, coordinates)
     elif gpname in ('Dooh', 'Coov'):
@@ -337,7 +366,7 @@ def so3_irrep_id2symb(irrep_id):
             rn = -rn
         return f'{_ANGULAR[l]}{rn:+d}'
 
-def so3_symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
+def so3_symm_adapted_basis(mol, gpname, orig=None, coordinates=None):
     assert gpname == 'SO3'
     assert mol.natm == 1
 
@@ -503,10 +532,12 @@ def linearmole_irrep2momentum(irrep_id):
         l *= -1
     return l
 
-def linearmole_symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
+def linearmole_symm_adapted_basis(mol, gpname, orig=None, coordinates=None):
     assert (gpname in ('Dooh', 'Coov'))
     assert (not mol.cart)
 
+    if orig is None:
+        orig = numpy.zeros(3)
     if coordinates is None:
         coordinates = numpy.eye(3)
     prop_atoms = mol.format_atom(mol._atom, orig, coordinates, 'Bohr')

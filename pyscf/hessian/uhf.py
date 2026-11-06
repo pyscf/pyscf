@@ -35,6 +35,8 @@ from pyscf.scf import _response_functions
 # import pyscf.grad.uhf to activate nuc_grad_method method
 from pyscf.grad import uhf
 
+__all__ = ['Hessian']
+
 
 def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
               mo1=None, mo_e1=None, h1ao=None,

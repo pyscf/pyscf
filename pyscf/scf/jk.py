@@ -30,6 +30,8 @@ from pyscf import gto
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 
+__all__ = ['get_jk']
+
 
 def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
            aosym='s1', comp=None, hermi=0, shls_slice=None,

@@ -19,6 +19,8 @@ import numpy as np
 
 from pyscf import data, md
 
+__all__ = ['MaxwellBoltzmannVelocity']
+
 def MaxwellBoltzmannVelocity(mol, T=298.15, rng=md.rng):
     """Computes velocities for a molecular structure using
         a Maxwell-Boltzmann distribution.

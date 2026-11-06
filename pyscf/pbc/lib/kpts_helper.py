@@ -25,6 +25,11 @@ import numpy as np
 from pyscf import lib
 from pyscf import __config__
 
+__all__ = [
+    'is_trim', 'VectorComposer', 'VectorSplitter', 'KptsHelper', 'KPointSymmetryError',
+    'get_kconserv',
+]
+
 KPT_DIFF_TOL = getattr(__config__, 'pbc_lib_kpts_helper_kpt_diff_tol', 1e-6)
 
 

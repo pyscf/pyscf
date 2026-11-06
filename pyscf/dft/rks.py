@@ -34,6 +34,8 @@ from pyscf.dft import gen_grid
 from pyscf.dft import numint
 from pyscf import __config__
 
+__all__ = ['KohnShamDFT', 'RKS']
+
 def get_veff(ks, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
     '''Coulomb + XC functional
 

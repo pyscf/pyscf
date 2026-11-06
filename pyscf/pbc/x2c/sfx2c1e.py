@@ -39,6 +39,8 @@ from pyscf.pbc.scf import ghf, khf, kghf
 from pyscf.pbc.lib.kpts_helper import is_zero
 from pyscf import __config__
 
+__all__ = ['sfx2c1e', 'sfx2c', 'SFX2C1E_SCF', 'PBCX2CHelper', 'SpinFreeX2CHelper']
+
 
 def sfx2c1e(mf):
     '''Spin-free X2C.

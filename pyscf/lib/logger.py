@@ -90,6 +90,8 @@ else:
 from pyscf.lib import parameters as param
 import pyscf.__config__
 
+__all__ = ['Logger', 'new_logger', 'debug', 'info', 'note']
+
 DEBUG4 = param.VERBOSE_DEBUG + 4
 DEBUG3 = param.VERBOSE_DEBUG + 3
 DEBUG2 = param.VERBOSE_DEBUG + 2

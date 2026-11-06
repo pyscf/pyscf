@@ -29,6 +29,11 @@ from pyscf.pprpa.rpprpa_direct import inner_product, ij2index, \
     pprpa_orthonormalize_eigenvector, \
     pprpa_print_a_pair, diagonalize_pprpa_triplet
 
+__all__ = [
+    'get_chemical_potential', 'ao2mo', 'diagonalize_pprpa_subspace_diff_spin',
+    'UppRPADirect', 'StreamObject', 'KohnShamDFT',
+]
+
 
 def upprpa_orthonormalize_eigenvector(subspace, nocc, exci, xy):
     """Orthonormalize U-ppRPA eigenvectors.

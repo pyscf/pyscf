@@ -26,6 +26,11 @@ from pyscf.mcpdft import pdft_veff, tfnal_derivs, _libxc, _dms, pdft_feff, pdft_
 from pyscf.mcpdft.otpd import get_ontop_pair_density
 from pyscf import __config__
 
+__all__ = [
+    'energy_ot', 'otfnal', 'transfnal', 'ftransfnal', 'colle_salvetti_corr',
+    'make_scaled_fnal', 'Grids', 'NumInt', 'make_hybrid_fnal',
+]
+
 FT_R0 = getattr(__config__, 'mcpdft_otfnal_ftransfnal_R0', 0.9)
 FT_R1 = getattr(__config__, 'mcpdft_otfnal_ftransfnal_R1', 1.15)
 FT_A = getattr(__config__, 'mcpdft_otfnal_ftransfnal_A', -475.60656009)

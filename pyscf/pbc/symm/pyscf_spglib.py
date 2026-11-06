@@ -20,6 +20,7 @@ Interface to spglib
 '''
 import spglib
 from packaging.version import parse as _parse_version
+
 if _parse_version(spglib.__version__) < _parse_version('1.15.1'):
     msg = ('spglib outdated. Install or update with:\n\t pip install -U spglib')
     raise ImportError(msg)

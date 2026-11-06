@@ -133,6 +133,8 @@ def run_hess(mfset, disp):
 
 
 def kernel(mf, disp=1e-4, mo_rep=False):
+    '''Compute Gamma-point electron-phonon couplings by central finite differences.
+    '''
     if not mf.converged: mf.kernel()
     mo_coeff = np.asarray(mf.mo_coeff)
     RESTRICTED= (mo_coeff.ndim==3)

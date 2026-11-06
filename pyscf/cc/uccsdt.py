@@ -42,6 +42,8 @@ from pyscf.cc import ccsd, _ccsd
 from pyscf.cc.rccsdt import _einsum, run_diis, _finalize, dump_flags, kernel, format_size
 from pyscf import __config__
 
+__all__ = ['UCCSDT']
+
 
 _libccsdt = lib.load_library('libccsdt')
 

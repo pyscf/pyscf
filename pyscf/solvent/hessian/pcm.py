@@ -26,6 +26,8 @@ from pyscf.solvent.pcm import PI, switch_h
 from pyscf.solvent.grad.pcm import grad_qv, grad_nuc, get_dD_dS, get_dF_dA, grad_switch_h
 from pyscf.lib import logger
 
+__all__ = ['WithSolventHess']
+
 def gradgrad_switch_h(x):
     ''' 2nd derivative of h(x) '''
     ddy = 60.0*x - 180.0*x**2 + 120.0*x**3

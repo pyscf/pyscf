@@ -35,6 +35,8 @@ from pyscf.scf import cphf
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad.mp2 import _shell_prange, _index_frozen_active, has_frozen_orbitals
 
+__all__ = ['CCSD_GradScanner', 'Gradients', 'Grad']
+
 
 #
 # Note: only works with canonical orbitals

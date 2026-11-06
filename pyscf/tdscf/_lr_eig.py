@@ -21,6 +21,8 @@ from pyscf.lib import logger
 from pyscf.lib.exceptions import LinearDependencyError
 from pyscf.lib.linalg_helper import _sort_elast, _outprod_to_subspace
 
+__all__ = ['LinearDependencyError']
+
 # Add at most 20 states in each iteration
 MAX_SPACE_INC = 20
 

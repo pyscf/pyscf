@@ -27,6 +27,8 @@ from pyscf.dft import gks
 from pyscf.dft import rks
 from pyscf.dft.numint2c import NumInt2C
 
+__all__ = ['GKS', 'NumInt2C']
+
 
 class GKS(rks.KohnShamDFT, ghf_symm.GHF):
     ''' Restricted Kohn-Sham '''

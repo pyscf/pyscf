@@ -35,6 +35,8 @@ from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
                                padded_mo_coeff, padding_k_idx)
 
+__all__ = ['EOMIP', 'EOMIP_Ta', 'EOMEA', 'EOMEA_Ta', 'EOMEE']
+
 einsum = lib.einsum
 
 def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,

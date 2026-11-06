@@ -40,6 +40,8 @@ from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
 
 from pyscf.gw.gw_ac import GWAC as GWAC_mol
 
+__all__ = ['GWAC', 'GWAC_mol']
+
 
 class GWAC(GWAC_mol):
     def __init__(self, mf, frozen=None, auxbasis=None):

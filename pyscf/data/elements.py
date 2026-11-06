@@ -15,6 +15,8 @@
 
 import numpy
 
+__all__ = ['chemcore']
+
 ELEMENTS = [
     'X',  # Ghost
     'H' , 'He', 'Li', 'Be', 'B' , 'C' , 'N' , 'O' , 'F' , 'Ne',

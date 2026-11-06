@@ -35,6 +35,8 @@ from pyscf.mcscf import mc_ao2mo
 import numpy as np, scipy, h5py
 import functools, time
 
+__all__ = ['ICCASPT2', 'CASPT2', 'disjoint_eigh']
+
 def _einsum(einsum_backend, script, *tensors, alpha=1.0, beta=0.0, out=None):
     assert einsum_backend in ['pytblis', 'numpy']
     if einsum_backend == 'pytblis':

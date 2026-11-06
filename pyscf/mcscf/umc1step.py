@@ -35,6 +35,8 @@ from pyscf.mcscf import umc_ao2mo
 from pyscf.mcscf import chkfile
 from pyscf import __config__
 
+__all__ = ['UCASSCF', 'CASSCF']
+
 #FIXME:  when the number of core orbitals are different for alpha and beta,
 # the convergence are very unstable and slow
 

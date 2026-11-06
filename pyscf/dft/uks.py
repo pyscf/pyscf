@@ -27,6 +27,8 @@ from pyscf.lib import logger
 from pyscf.scf import hf, uhf
 from pyscf.dft import rks
 
+__all__ = ['UKS']
+
 def get_veff(ks, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
     '''Coulomb + XC functional for UKS.  See pyscf/dft/rks.py
     :func:`get_veff` fore more details.
