@@ -337,9 +337,8 @@ def _gen_hop_rhf_external(mf, with_symmetry=True, verbose=None):
         orbsym = hf_symm.get_orbsym(mol, mo_coeff)
         sym_forbid = orbsym[viridx].reshape(-1,1) != orbsym[occidx]
 
-    h1e = mf.get_hcore()
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-    fock_ao = h1e + mf.get_veff(mol, dm0)
+    fock_ao = mf.get_fock(dm = dm0)
     fock = reduce(numpy.dot, (mo_coeff.conj().T, fock_ao, mo_coeff))
     foo = fock[occidx[:,None],occidx]
     fvv = fock[viridx[:,None],viridx]
@@ -523,9 +522,8 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
         sym_forbidb = orbsymb[viridxb].reshape(-1,1) != orbsymb[occidxb]
         sym_forbid1 = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
-    h1e = mf.get_hcore()
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-    fock_ao = h1e + mf.get_veff(mol, dm0)
+    fock_ao = mf.get_fock(dm = dm0)
     focka = reduce(numpy.dot, (mo_coeff[0].conj().T, fock_ao[0], mo_coeff[0]))
     fockb = reduce(numpy.dot, (mo_coeff[1].conj().T, fock_ao[1], mo_coeff[1]))
     fooa = focka[occidxa[:,None],occidxa]
@@ -636,23 +634,23 @@ def uhf_external(mf, with_symmetry=True, verbose=None, return_status=False,
     stable = not (e3 < -1e-5)
     dump_status(log, stable, f'{mf.__class__}', 'UHF/UKS -> GHF/GKS')
     mo = scipy.linalg.block_diag(*mf.mo_coeff)
+    occidxa = numpy.where(mf.mo_occ[0]> 0)[0]
+    viridxa = numpy.where(mf.mo_occ[0]==0)[0]
+    occidxb = numpy.where(mf.mo_occ[1]> 0)[0]
+    viridxb = numpy.where(mf.mo_occ[1]==0)[0]
+    nocca = len(occidxa)
+    nvira = len(viridxa)
+    noccb = len(occidxb)
+    nvirb = len(viridxb)
+    nmo = nocca + nvira
     if not stable:
-        occidxa = numpy.where(mf.mo_occ[0]> 0)[0]
-        viridxa = numpy.where(mf.mo_occ[0]==0)[0]
-        occidxb = numpy.where(mf.mo_occ[1]> 0)[0]
-        viridxb = numpy.where(mf.mo_occ[1]==0)[0]
-        nocca = len(occidxa)
-        nvira = len(viridxa)
-        noccb = len(occidxb)
-        nvirb = len(viridxb)
-        nmo = nocca + nvira
         dx = numpy.zeros((nmo*2,nmo*2))
         dx[viridxa[:,None],nmo+occidxb] = v[:nvira*noccb].reshape(nvira,noccb)
         dx[nmo+viridxb[:,None],occidxa] = v[nvira*noccb:].reshape(nvirb,nocca)
         u = newton_ah.expmat(dx - dx.conj().T)
         mo = numpy.dot(mo, u)
-        mo = numpy.hstack([mo[:,:nocca], mo[:,nmo:nmo+noccb],
-                           mo[:,nocca:nmo], mo[:,nmo+noccb:]])
+    mo = numpy.hstack([mo[:,:nocca], mo[:,nmo:nmo+noccb],
+                        mo[:,nocca:nmo], mo[:,nmo+noccb:]])
     if return_status:
         return mo, stable
     else:
