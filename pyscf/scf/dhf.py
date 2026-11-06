@@ -826,14 +826,25 @@ employing the updated GWH rule from doi:10.1021/ja00480a005.''')
 UHF = UDHF = DHF
 
 
+def kramers_eigh(mol, h, s=None):
+    '''HC = SCE (or HC = CE) for Kramers-symmetric matrices in the spinor AO
+    basis, two- or four-component.  The eigenvectors come in Kramers pairs in
+    consecutive columns (see :func:`pyscf.lib.kramers.eigh`).'''
+    four_component = h.shape[0] != mol.nao_2c()
+    idx = _kramers_pair_sort_ao_idx(mol, four_component)
+    if s is not None:
+        s = s[idx[:,None],idx]
+    e, c = lib.kramers.eigh(h[idx[:,None],idx], s)
+    mo = numpy.empty_like(c)
+    mo[idx] = c
+    return e, mo
+
+
 class HF1e(DHF):
     scf = hf._hf1e_scf
 
     def _eigh(self, h, s, overwrite=False, x=None):
-        if zquatev:
-            return zquatev.solve_KR_FCSCE(self.mol, h, s)
-        else:
-            return DHF._eigh(self, h, s)
+        return kramers_eigh(self.mol, h, s)
 
 
 class RDHF(DHF):
@@ -841,15 +852,17 @@ class RDHF(DHF):
     def __init__(self, mol):
         if mol.nelectron.__mod__(2) != 0:
             raise ValueError('Invalid electron number %i.' % mol.nelectron)
-        if zquatev is None:
-            raise RuntimeError('zquatev library is required to perform Kramers-restricted DHF')
         UHF.__init__(self, mol)
 
     def check_linear_dependency(self, s, verbose=None):
         log = logger.new_logger(self, verbose)
         idx = _kramers_pair_sort_ao_idx(self.mol, four_component=True)
         s = s[idx[:,None], idx]
-        e, v = zquatev.eigh(s)
+        e, v = lib.kramers.eigh(s)
+        # Kramers pairs (u, Tu) -> block order (u..., Tu...), so that x spans
+        # a Kramers basis as required by lib.kramers.eigh in _eigh
+        e = numpy.hstack((e[0::2], e[1::2]))
+        v = numpy.hstack((v[:,0::2], v[:,1::2]))
         if log is not None:
             abs_e = abs(e)
             emax = abs_e.max()
@@ -871,12 +884,10 @@ class RDHF(DHF):
 
     def _eigh(self, h, s, overwrite=False, x=None):
         if x is None:
-            if h.dtype != s.dtype:
-                s = s.astype(h.dtype)
-            return zquatev.solve_KR_FCSCE(self.mol, h, s)
+            return kramers_eigh(self.mol, h, s)
         else:
             h = x.conj().T.dot(h).dot(x)
-            e, c = zquatev.eigh(h, iop=1)
+            e, c = lib.kramers.eigh(h)
             return e, x.dot(c)
 
     def x2c1e(self):
