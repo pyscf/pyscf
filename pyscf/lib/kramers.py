@@ -61,7 +61,7 @@ BACKEND = getattr(__config__, 'lib_kramers_eigh_backend', 'auto')
 BLOCK_SIZE = getattr(__config__, 'lib_kramers_eigh_block_size', 32)
 
 
-def eigh(h, s=None, backend=None, lindep=1e-14):
+def eigh(h, s=None, backend=None, lindep=1e-14, iop=0):
     '''Eigenvalues and eigenvectors of a Hermitian matrix with the quaternion
     structure, HC = CE, or of the generalized problem HC = SCE.
 
@@ -79,14 +79,19 @@ def eigh(h, s=None, backend=None, lindep=1e-14):
             For the generalized problem with an S that is not positive
             definite: eigenvectors of S with eigenvalues below
             lindep * max(eig(S)) are removed.
+        iop : int
+            Order of the eigenvectors, as in zquatev.eigh.  0: the Kramers
+            basis order of the input, (u_1..u_m, Tu_1..Tu_m), so that the
+            vectors can serve as a Kramers basis themselves.  1: pairs in
+            consecutive columns, (u_1, Tu_1, u_2, Tu_2, ...).
 
     Returns:
-        e : (m,) array
-            Eigenvalues in ascending order, each one twice (m = 2n, or less
+        e : (2m,) array
+            Eigenvalues, each one twice, ascending in u_k (m = n, or less
             when linearly dependent vectors of S were removed).
-        c : (2n, m) array
-            Eigenvectors, c[:,2k+1] = T c[:,2k], orthonormal (in the metric
-            S for the generalized problem).
+        c : (2n, 2m) array
+            Eigenvectors, orthonormal (in the metric S for the generalized
+            problem), Tu_k exactly the time reversal of u_k.
     '''
     h = numpy.asarray(h)
     n2 = h.shape[0]
@@ -102,6 +107,11 @@ def eigh(h, s=None, backend=None, lindep=1e-14):
         e, c = _eigh_generalized(hi, si, backend, lindep)
     out = numpy.empty_like(c)
     out[inter] = c
+    if iop == 0:
+        e = numpy.hstack((e[0::2], e[1::2]))
+        out = numpy.hstack((out[:,0::2], out[:,1::2]))
+    elif iop != 1:
+        raise ValueError('iop must be 0 or 1')
     return e, out
 
 

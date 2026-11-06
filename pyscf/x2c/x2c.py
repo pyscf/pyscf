@@ -617,8 +617,6 @@ class RHF(SCF):
         idx = dhf._kramers_pair_sort_ao_idx(self.mol, four_component=False)
         s = s[idx[:,None], idx]
         e, v = lib.kramers.eigh(s)
-        e = numpy.hstack((e[0::2], e[1::2]))
-        v = numpy.hstack((v[:,0::2], v[:,1::2]))
         if log is not None:
             abs_e = abs(e)
             emax = abs_e.max()

@@ -59,13 +59,13 @@ class KnownValues(unittest.TestCase):
             h = _structured(n, n)
             ref = numpy.linalg.eigvalsh(h)
             for backend in BACKENDS:
-                e, c = kramers.eigh(h, backend=backend)
+                e, c = kramers.eigh(h, backend=backend, iop=1)
                 self._check(h, None, e, c)
                 self.assertAlmostEqual(abs(e - ref).max(), 0, 10)
 
     def test_block_size(self):
         h = _structured(50, 1)
-        e0, c0 = kramers.eigh(h, backend='numpy')
+        e0, c0 = kramers.eigh(h, backend='numpy', iop=1)
         for nb in (1, 7, 64):
             e, c = kramers._eigh_householder(kramers._symmetrize(
                 h[kramers._interleave_index(50)[:,None], kramers._interleave_index(50)]), nb)
@@ -74,11 +74,11 @@ class KnownValues(unittest.TestCase):
     def test_degenerate(self):
         # every eigenvalue four-fold (two Kramers pairs)
         n = 60
-        u = kramers.eigh(_structured(n, 3), backend='numpy')[1]
+        u = kramers.eigh(_structured(n, 3), backend='numpy', iop=1)[1]
         lev = numpy.repeat(numpy.arange(n // 2), 4).astype(float)
         h = (u * lev).dot(u.conj().T)
         for backend in BACKENDS:
-            e, c = kramers.eigh(h, backend=backend)
+            e, c = kramers.eigh(h, backend=backend, iop=1)
             self._check(h, None, e, c)
             self.assertAlmostEqual(abs(e - lev).max(), 0, 11)
 
@@ -89,7 +89,7 @@ class KnownValues(unittest.TestCase):
         s = m.dot(m.conj().T) + .1 * numpy.eye(2*n)
         ref = scipy.linalg.eigh(h, s, eigvals_only=True)
         for backend in BACKENDS:
-            e, c = kramers.eigh(h, s, backend=backend)
+            e, c = kramers.eigh(h, s, backend=backend, iop=1)
             self._check(h, s, e, c)
             self.assertAlmostEqual(abs(e - ref).max(), 0, 9)
 
@@ -97,31 +97,43 @@ class KnownValues(unittest.TestCase):
         # S with a two-pair null space: canonical orthogonalization
         n = 30
         h = _structured(n, 6)
-        u = kramers.eigh(_structured(n, 7), backend='numpy')[1]
+        u = kramers.eigh(_structured(n, 7), backend='numpy', iop=1)[1]
         w = numpy.repeat(numpy.r_[0, 0, numpy.linspace(.5, 2, n-2)], 2)
         s = (u * w).dot(u.conj().T)
         self.assertRaises(numpy.linalg.LinAlgError, scipy.linalg.cholesky, s)
         for backend in BACKENDS:
-            e, c = kramers.eigh(h, s, backend=backend)
+            e, c = kramers.eigh(h, s, backend=backend, iop=1)
             self._check(h, s, e, c, nvec=2*n-4)
 
     def test_backends_agree(self):
         if len(BACKENDS) < 2:
             self.skipTest('zquatev not installed')
         h = _structured(40, 8)
-        e0, c0 = kramers.eigh(h, backend='numpy')
-        e1, c1 = kramers.eigh(h, backend='zquatev')
+        e0, c0 = kramers.eigh(h, backend='numpy', iop=1)
+        e1, c1 = kramers.eigh(h, backend='zquatev', iop=1)
         self.assertAlmostEqual(abs(e0 - e1).max(), 0, 11)
         # the same eigenspaces: |<c0_k|c1_k>| of the Kramers pair is 1
         ov = c0.conj().T.dot(c1)
         p = abs(ov[0::2,0::2])**2 + abs(ov[0::2,1::2])**2
         self.assertAlmostEqual(abs(numpy.diag(p) - 1).max(), 0, 9)
 
+    def test_iop(self):
+        # iop=0: (u_1..u_n, Tu_1..Tu_n), the same vectors as iop=1
+        n = 30
+        h = _structured(n, 11)
+        for backend in BACKENDS:
+            e1, c1 = kramers.eigh(h, backend=backend, iop=1)
+            e0, c0 = kramers.eigh(h, backend=backend, iop=0)
+            self.assertAlmostEqual(abs(e0 - numpy.hstack((e1[0::2], e1[1::2]))).max(), 0, 14)
+            self.assertAlmostEqual(abs(c0 - numpy.hstack((c1[:,0::2], c1[:,1::2]))).max(), 0, 14)
+            self.assertAlmostEqual(abs(c0[:,n:] - _time_reversal(c0[:,:n])).max(), 0, 14)
+        self.assertRaises(ValueError, kramers.eigh, h, iop=2)
+
     def test_symmetrization(self):
         # tiny deviations from the structure are removed
         h = _structured(20, 9)
-        e0 = kramers.eigh(h, backend='numpy')[0]
-        e1, c1 = kramers.eigh(h + 1e-10 * _structured(20, 10).real, backend='numpy')
+        e0 = kramers.eigh(h, backend='numpy', iop=1)[0]
+        e1, c1 = kramers.eigh(h + 1e-10 * _structured(20, 10).real, backend='numpy', iop=1)
         self.assertAlmostEqual(abs(c1[:,1::2] - _time_reversal(c1[:,0::2])).max(), 0, 14)
         self.assertAlmostEqual(abs(e1 - e0).max(), 0, 8)
 

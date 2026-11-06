@@ -834,7 +834,7 @@ def kramers_eigh(mol, h, s=None):
     idx = _kramers_pair_sort_ao_idx(mol, four_component)
     if s is not None:
         s = s[idx[:,None],idx]
-    e, c = lib.kramers.eigh(h[idx[:,None],idx], s)
+    e, c = lib.kramers.eigh(h[idx[:,None],idx], s, iop=1)
     mo = numpy.empty_like(c)
     mo[idx] = c
     return e, mo
@@ -859,10 +859,6 @@ class RDHF(DHF):
         idx = _kramers_pair_sort_ao_idx(self.mol, four_component=True)
         s = s[idx[:,None], idx]
         e, v = lib.kramers.eigh(s)
-        # Kramers pairs (u, Tu) -> block order (u..., Tu...), so that x spans
-        # a Kramers basis as required by lib.kramers.eigh in _eigh
-        e = numpy.hstack((e[0::2], e[1::2]))
-        v = numpy.hstack((v[:,0::2], v[:,1::2]))
         if log is not None:
             abs_e = abs(e)
             emax = abs_e.max()
@@ -887,7 +883,7 @@ class RDHF(DHF):
             return kramers_eigh(self.mol, h, s)
         else:
             h = x.conj().T.dot(h).dot(x)
-            e, c = lib.kramers.eigh(h)
+            e, c = lib.kramers.eigh(h, iop=1)
             return e, x.dot(c)
 
     def x2c1e(self):
