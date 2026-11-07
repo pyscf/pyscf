@@ -100,7 +100,6 @@ class KnownValues(unittest.TestCase):
         g = mf.get_grad(mf.mo_coeff, mf.mo_occ)
         self.assertAlmostEqual(abs(g).max(), 0, 5)
 
-    @unittest.skipIf(scf.dhf.zquatev is None, 'requires zquatev')
     def test_rhf(self):
         mol = gto.M(
             verbose = 5,
