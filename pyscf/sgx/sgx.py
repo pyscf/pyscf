@@ -510,6 +510,8 @@ class SGX(lib.StreamObject):
             else:
                 rsh_df = self.copy()
                 rsh_df._rsh_df = None  # to avoid circular reference
+                # Do not retain the parent's temporary density in the cache.
+                rsh_df._full_dm = None
                 # Not all attributes need to be reset. Resetting _vjopt
                 # because it is used by get_j method of regular DF object.
                 rsh_df._vjopt = None
@@ -517,9 +519,11 @@ class SGX(lib.StreamObject):
                 self._rsh_df[key] = rsh_df
                 logger.info(self, 'Create RSH-SGX object %s for omega=%s', rsh_df, omega)
 
-            with rsh_df.mol.with_range_coulomb(omega):
-                return rsh_df.get_jk(dm, hermi, with_j, with_k,
-                                     direct_scf_tol)
+            with lib.temporary_env(rsh_df, _full_dm=self._full_dm):
+                with rsh_df.mol.with_range_coulomb(omega):
+                    return rsh_df.get_jk(dm, hermi=hermi, vhfopt=vhfopt,
+                                         with_j=with_j, with_k=with_k,
+                                         direct_scf_tol=direct_scf_tol)
 
         if with_j and (self.dfj or self.direct_j):
             if self.dfj:
