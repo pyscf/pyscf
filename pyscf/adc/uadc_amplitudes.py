@@ -350,7 +350,7 @@ def compute_amplitudes(myadc, eris):
         elif isinstance(eris.VVVV_p, list) :
             t2_1_vvvv_b = contract_ladder_antisym(myadc,t2_1_b[:],eris.VVVV_p, pack = False)
         else:
-            t2_1_vvvv_b = contract_ladder(myadc, t2_1_b[:], (eris.LVV, eris.LVV))
+            t2_1_vvvv_b = contract_ladder_antisym(myadc, t2_1_b[:], eris.LVV, pack = False)
 
         if not isinstance(eris.oooo, np.ndarray):
             t2_1_vvvv_b = h5cache_t2.create_dataset('t2_1_vvvv_b', data=t2_1_vvvv_b)
