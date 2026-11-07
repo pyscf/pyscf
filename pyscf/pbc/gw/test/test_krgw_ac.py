@@ -221,7 +221,7 @@ def test_density_closed_shell_limit(h2_hf):
     assert dm[0, 1, 1] < .5
 
 
-def test_finite_size_grid_closed_shell_limit(h2_hf):
+def test_finite_size_grid_closed_shell_limit_high_cost(h2_hf):
     ref = run_small_gw(h2_hf, krgw_ac.KRGWAC, fc=True, fc_grid=True)
     spin = run_small_gw(h2_hf, kugw_ac.KUGWAC, unrestricted=True, fc=True, fc_grid=True)
     np.testing.assert_allclose(spin.mo_energy[0], ref.mo_energy, atol=2e-7)

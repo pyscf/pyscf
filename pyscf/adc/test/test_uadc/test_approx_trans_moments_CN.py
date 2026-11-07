@@ -60,7 +60,7 @@ def rdms_test(dm_a,dm_b):
 
 class KnownValues(unittest.TestCase):
 
-    def test_ee_adc2(self):
+    def test_ee_adc2_high_cost(self):
         myadc.method = "adc(2)"
         myadc.method_type = "ee"
         myadc.approx_trans_moments = True
@@ -136,7 +136,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 33.25789146072936, 6)
         self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 33.25789146072935, 6)
 
-    def test_ee_adc2_frozen(self):
+    def test_ee_adc2_frozen_high_cost(self):
         myadc_fr.method = "adc(2)"
         myadc_fr.method_type = "ee"
         myadc_fr.approx_trans_moments = True
