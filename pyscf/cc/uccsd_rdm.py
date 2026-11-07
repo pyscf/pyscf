@@ -361,11 +361,8 @@ def _gamma2_vvvv_outcore(cc, tauaa, tauab, taubb, l2aa, l2ab, l2bb, h5fobj, comp
             _vvvv_to_h5(cc, h5fobj, 'dVVVV', taubb, l2bb - l2bb.transpose(0,1,3,2), .125, compress_vvvv))
 
 def _vvvv_to_h5(cc, h5fobj, key, tau, lam, fac, compress_vvvv):
-    '''One vvvv block as _gamma2_vvvv_incore forms it, D2 = D1 + D1.transpose(1,0,3,2).conj()
-    with D1[p,q,r,s] = fac * sum_ij tau[i,j,p,r] lam[i,j,q,s], and compressed as
-    (D2 + D2.transpose(1,0,2,3))/2 on both pairs; written to h5fobj[key] for a
-    block of p at a time from the two contractions giving D1[p,q] and D1[q,p].
-    '''
+    '''Write one vvvv block of _gamma2_vvvv_incore to h5fobj[key], one block of
+    its first index at a time.'''
     log = logger.Logger(cc.stdout, cc.verbose)
     nv1, nv2 = tau.shape[2:]
     dtype = numpy.result_type(tau, lam)
