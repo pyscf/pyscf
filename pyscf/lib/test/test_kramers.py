@@ -94,16 +94,18 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(abs(e - ref).max(), 0, 9)
 
     def test_singular_overlap(self):
-        # S with a two-pair null space: canonical orthogonalization
+        # S with a two-pair null space, the linear dependencies removed on
+        # request (lindep): canonical orthogonalization
         n = 30
         h = _structured(n, 6)
         u = kramers.eigh(_structured(n, 7), backend='numpy', iop=1)[1]
         w = numpy.repeat(numpy.r_[0, 0, numpy.linspace(.5, 2, n-2)], 2)
         s = (u * w).dot(u.conj().T)
-        self.assertRaises(numpy.linalg.LinAlgError, scipy.linalg.cholesky, s)
         for backend in BACKENDS:
-            e, c = kramers.eigh(h, s, backend=backend, iop=1)
+            e, c = kramers.eigh(h, s, backend=backend, iop=1, lindep=1e-6)
             self._check(h, s, e, c, nvec=2*n-4)
+        # lindep has no meaning for the standard problem
+        self.assertRaises(ValueError, kramers.eigh, h, lindep=1e-6)
 
     def test_backends_agree(self):
         if len(BACKENDS) < 2:

@@ -35,8 +35,10 @@ if it is installed, otherwise with the quaternion Householder
 tridiagonalization implemented here (blocked as LAPACK zhetrd/zlatrd, the
 back-transformation in the compact WY form).  The generalized problem
 HC = SCE is reduced to a standard one with the Cholesky factor of S, which
-has the quaternion structure as well; when S is numerically not positive
-definite, canonical orthogonalization is used instead.
+has the quaternion structure as well; as scipy.linalg.eigh, it raises
+LinAlgError if S is not positive definite.  With ``lindep``, canonical
+orthogonalization is used instead and the linear dependencies of S are
+removed.
 
 The backend can be chosen with the argument ``backend`` or with
 ``lib_kramers_eigh_backend`` in the pyscf config ('auto', 'zquatev' or
@@ -61,7 +63,7 @@ BACKEND = getattr(__config__, 'lib_kramers_eigh_backend', 'auto')
 BLOCK_SIZE = getattr(__config__, 'lib_kramers_eigh_block_size', 32)
 
 
-def eigh(h, s=None, backend=None, lindep=1e-14, iop=0):
+def eigh(h, s=None, backend=None, iop=0, lindep=None):
     '''Eigenvalues and eigenvectors of a Hermitian matrix with the quaternion
     structure, HC = CE, or of the generalized problem HC = SCE.
 
@@ -69,26 +71,30 @@ def eigh(h, s=None, backend=None, lindep=1e-14, iop=0):
         h : (2n, 2n) array
             Hermitian, in the Kramers basis (phi_1..phi_n, T phi_1..T phi_n).
         s : (2n, 2n) array, optional
-            Hermitian positive (semi)definite, in the same basis.
+            Hermitian positive definite (semidefinite with lindep), in the
+            same basis.
 
     Kwargs:
         backend : str
             'zquatev', 'numpy' or 'auto' (zquatev when installed).  Default
             from the config ``lib_kramers_eigh_backend``.
-        lindep : float
-            For the generalized problem with an S that is not positive
-            definite: eigenvectors of S with eigenvalues below
-            lindep * max(eig(S)) are removed.
         iop : int
             Order of the eigenvectors, as in zquatev.eigh.  0: the Kramers
             basis order of the input, (u_1..u_m, Tu_1..Tu_m), so that the
             vectors can serve as a Kramers basis themselves.  1: pairs in
             consecutive columns, (u_1, Tu_1, u_2, Tu_2, ...).
+        lindep : float
+            Generalized problem only.  If given, the linear dependencies of S
+            are removed: canonical orthogonalization drops the eigenvectors
+            of S with eigenvalues below lindep (as
+            scf.hf.check_linear_dependency), so fewer than 2n eigenvectors
+            may be returned.  Default None: Cholesky factorization of S,
+            LinAlgError if S is not positive definite.
 
     Returns:
         e : (2m,) array
             Eigenvalues, each one twice, ascending in u_k (m = n, or less
-            when linearly dependent vectors of S were removed).
+            when lindep removed linearly dependent vectors of S).
         c : (2n, 2m) array
             Eigenvectors, orthonormal (in the metric S for the generalized
             problem), Tu_k exactly the time reversal of u_k.
@@ -100,6 +106,8 @@ def eigh(h, s=None, backend=None, lindep=1e-14, iop=0):
     inter = _interleave_index(n2 // 2)
     hi = _symmetrize(h[inter[:, None], inter])
     if s is None:
+        if lindep is not None:
+            raise ValueError('lindep applies to the generalized problem only')
         e, c = _eigh_standard(hi, backend)
     else:
         s = numpy.asarray(s)
@@ -169,14 +177,10 @@ def _eigh_standard(h, backend=None):
     return _eigh_householder(h)
 
 
-def _eigh_generalized(h, s, backend=None, lindep=1e-14):
+def _eigh_generalized(h, s, backend=None, lindep=None):
     '''HC = SCE, h and s in the interleaved basis (structured).'''
-    try:
+    if lindep is None:
         l = scipy.linalg.cholesky(s, lower=True)
-    except numpy.linalg.LinAlgError:
-        l = None
-
-    if l is not None:
         # The Cholesky factor has the quaternion structure: the diagonal 2x2
         # blocks of S and of its Schur complements are real multiples of the
         # unit matrix.  Impose it exactly.
@@ -188,9 +192,9 @@ def _eigh_generalized(h, s, backend=None, lindep=1e-14):
         c = numpy.empty_like(cp)
         c[:, 0::2] = scipy.linalg.solve_triangular(l, cp[:, 0::2], lower=True, trans='C')
     else:
-        # canonical orthogonalization
+        # canonical orthogonalization, removing the linear dependencies
         es, vs = _eigh_standard(s, backend)
-        mask = es > lindep * es.max()
+        mask = es > lindep
         x = vs[:, mask] / numpy.sqrt(es[mask])
         hx = x.conj().T.dot(h).dot(x)
         e, cp = _eigh_standard(_symmetrize(hx), backend)
