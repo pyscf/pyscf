@@ -28,6 +28,27 @@ from pyscf import ao2mo
 
 
 class KnownValues(unittest.TestCase):
+    def test_contract_empty_spin_channel(self):
+        for spin in (2, -2):
+            with self.subTest(spin=spin):
+                mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='3-21g',
+                            spin=spin, verbose=0)
+                myci = ci.CISD(scf.UHF(mol).run())
+                eris = myci.ao2mo()
+                self.assertEqual(eris.ovOV.size, 0)
+                civec = numpy.linspace(.1, .9, myci.vector_size())
+                shape = eris.ovOV.shape
+                eris.ovOV = numpy.ndarray(shape, buffer=numpy.zeros(1),
+                                          strides=(0, 0, 0, 0))
+                expected = myci.contract(civec, eris)
+                # A zero-element tensor must not read its backing storage.
+                eris.ovOV = numpy.ndarray(shape, buffer=numpy.full(1, numpy.nan),
+                                          strides=(0, 0, 0, 0))
+                actual = myci.contract(civec, eris)
+                self.assertTrue(numpy.isfinite(expected).all())
+                self.assertTrue(numpy.isfinite(actual).all())
+                numpy.testing.assert_allclose(actual, expected, atol=1e-12, rtol=0)
+
     def test_from_fcivec(self):
         myci = scf.UHF(gto.M()).apply(ci.CISD)
         nocca, noccb = nelec = (3,2)
