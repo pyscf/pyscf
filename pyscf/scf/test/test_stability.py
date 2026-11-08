@@ -112,22 +112,6 @@ def gen_hop_uhf_external(mf):
         return h2.dot(x)
     return hop1, hop2
 
-def stability_with_eigenvalues(mf):
-    # Record the real solver results before logging rounds their values.
-    eigenvalues = []
-    davidson = lib.davidson
-
-    def record_eigenvalues(*args, **kwargs):
-        e, v = davidson(*args, **kwargs)
-        eigenvalues.append(numpy.array(e, copy=True))
-        return e, v
-
-    with lib.temporary_env(lib, davidson=record_eigenvalues):
-        _, _, stable_i, stable_e = mf.stability(
-            external=True, return_status=True, nroots=3, tol=1e-10)
-    # The calls are internal, real-to-complex, then external stability.
-    return stable_i, stable_e, eigenvalues
-
 def setUpModule():
     global mol, mf
     mol = gto.M(atom='O 0 0 0; O 0 0 1.2222', basis='631g*', symmetry=1,
@@ -265,6 +249,45 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(s, 1., 9)
         self.assertAlmostEqual(abs(mf1.mo_coeff-mo).max(), 0, 9)
 
+    def test_stability_scf_summary(self):
+        mol = gto.M(atom='H 0 0 0; H 0.1 0.2 2.0', basis='3-21g', verbose=0)
+        for method in (scf.RHF, scf.UHF):
+            with self.subTest(method=method):
+                mf1 = method(mol).run(conv_tol=1e-12)
+                energies = mf1.scf_summary.copy()
+                summary = mf1.scf_summary
+                _, _, stable_i, _ = mf1.stability(return_status=True, nroots=1)
+                internal = summary['stability_internal']
+                self.assertEqual(internal.shape, (1,))
+                self.assertEqual(stable_i, internal[0] >= -1e-5)
+                self.assertEqual(set(summary), set(energies) | {'stability_internal'})
+
+                _, _, _, stable_e = mf1.stability(
+                    internal=False, external=True, return_status=True, nroots=1)
+                real2complex = summary['stability_real2complex']
+                external = summary['stability_external']
+                self.assertEqual(real2complex.shape, (1,))
+                self.assertEqual(external.shape, (1,))
+                self.assertEqual(stable_e, external[0] >= -1e-5)
+                self.assertIs(summary['stability_internal'], internal)
+
+                mf1.stability(nroots=3)
+                self.assertEqual(summary['stability_internal'].shape, (3,))
+                self.assertIsNot(summary['stability_internal'], internal)
+                self.assertIs(summary['stability_real2complex'], real2complex)
+                self.assertIs(summary['stability_external'], external)
+                internal = summary['stability_internal']
+
+                mf1.stability(internal=False, external=True, nroots=3)
+                self.assertIs(summary['stability_internal'], internal)
+                self.assertEqual(summary['stability_real2complex'].shape, (3,))
+                self.assertEqual(summary['stability_external'].shape, (3,))
+                self.assertIsNot(summary['stability_real2complex'], real2complex)
+                self.assertIsNot(summary['stability_external'], external)
+                self.assertEqual({key: summary[key] for key in energies}, energies)
+                mf1.reset()
+                self.assertEqual(mf1.scf_summary, {})
+
     def test_rhf_pcm_stability(self):
         mol = gto.M(
             atom = """
@@ -283,10 +306,11 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-10
         test_energy = mf.kernel()
 
-        test_stable_i, test_stable_e, eigenvalues = stability_with_eigenvalues(mf)
-        self.assertEqual(len(eigenvalues), 3)
-        (test_internal_eigenvalue, test_real2complex_eigenvalue,
-         test_external_eigenvalue) = eigenvalues
+        _, _, test_stable_i, test_stable_e = mf.stability(
+            external=True, return_status=True, nroots=3, tol=1e-10)
+        test_internal_eigenvalue = mf.scf_summary['stability_internal']
+        test_real2complex_eigenvalue = mf.scf_summary['stability_real2complex']
+        test_external_eigenvalue = mf.scf_summary['stability_external']
 
         # This is a consistency test
         ref_energy = -0.907413006623217
@@ -321,10 +345,11 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-10
         test_energy = mf.kernel()
 
-        test_stable_i, test_stable_e, eigenvalues = stability_with_eigenvalues(mf)
-        self.assertEqual(len(eigenvalues), 3)
-        (test_internal_eigenvalue, test_real2complex_eigenvalue,
-         test_external_eigenvalue) = eigenvalues
+        _, _, test_stable_i, test_stable_e = mf.stability(
+            external=True, return_status=True, nroots=3, tol=1e-10)
+        test_internal_eigenvalue = mf.scf_summary['stability_internal']
+        test_real2complex_eigenvalue = mf.scf_summary['stability_real2complex']
+        test_external_eigenvalue = mf.scf_summary['stability_external']
 
         # This is a consistency test
         ref_energy = -91.8005196942055
