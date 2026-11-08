@@ -200,11 +200,10 @@ class KnownValues(unittest.TestCase):
         self.assertRaises(RuntimeError, dks.to_uks)
         self.assertRaises(RuntimeError, dks.to_gks)
 
-        if scf.dhf.zquatev is not None:
-            self.assertTrue(isinstance(dhf.to_dhf(), scf.dhf.RDHF))
-            self.assertTrue(isinstance(dhf.to_dks(), dft.dks.RDKS))
-            self.assertTrue(isinstance(dks.to_dhf(), scf.dhf.RDHF))
-            self.assertTrue(isinstance(dks.to_dks('pbe'), dft.dks.RDKS))
+        self.assertTrue(isinstance(dhf.to_dhf(), scf.dhf.RDHF))
+        self.assertTrue(isinstance(dhf.to_dks(), dft.dks.RDKS))
+        self.assertTrue(isinstance(dks.to_dhf(), scf.dhf.RDHF))
+        self.assertTrue(isinstance(dks.to_dks('pbe'), dft.dks.RDKS))
         self.assertTrue(isinstance(dhf.to_dhf(), scf.dhf.DHF))
         self.assertTrue(isinstance(dhf.to_dks(), dft.dks.DKS))
         self.assertTrue(isinstance(dks.to_dhf(), scf.dhf.DHF))

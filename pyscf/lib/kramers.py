@@ -26,9 +26,10 @@ has the quaternion structure
     H = [[A, B], [-B^*, A^*]],    A = A^+,  B = -B^T,
 
 and the time reversal acts on a vector [p; q] as T [p; q] = [-q^*; p^*].
-The eigenvalues are doubly degenerate.  The eigenvectors are returned in
-Kramers pairs (u, Tu) in consecutive columns; the pairing is exact by
-construction.
+The eigenvalues are doubly degenerate.  The eigenvectors come in Kramers
+pairs (u_k, Tu_k), exact by construction, ordered as the Kramers basis,
+(u_1..u_n, Tu_1..Tu_n), or with iop=1 in consecutive columns,
+(u_1, Tu_1, u_2, Tu_2, ...).
 
 The standard problem is solved with zquatev (https://github.com/sunqm/zquatev)
 if it is installed, otherwise with the quaternion Householder

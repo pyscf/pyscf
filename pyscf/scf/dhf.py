@@ -34,15 +34,6 @@ from pyscf.scf import _vhf
 from pyscf.scf import chkfile
 from pyscf import __config__
 
-zquatev = None
-if getattr(__config__, 'scf_dhf_SCF_zquatev', True):
-    try:
-        # Install zquatev with
-        # pip install git+https://github.com/sunqm/zquatev
-        import zquatev
-    except ImportError:
-        pass
-
 DEBUG = False
 
 
