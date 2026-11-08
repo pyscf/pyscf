@@ -257,33 +257,37 @@ class KnownValues(unittest.TestCase):
                 energies = mf1.scf_summary.copy()
                 summary = mf1.scf_summary
                 _, _, stable_i, _ = mf1.stability(return_status=True, nroots=1)
-                internal = summary['stability_internal']
+                eigenvalues = summary['stability_eigenvalue']
+                self.assertEqual(set(eigenvalues), {'internal'})
+                internal = eigenvalues['internal']
                 self.assertEqual(internal.shape, (1,))
                 self.assertEqual(stable_i, internal[0] >= -1e-5)
-                self.assertEqual(set(summary), set(energies) | {'stability_internal'})
+                self.assertEqual(set(summary), set(energies) | {'stability_eigenvalue'})
 
                 _, _, _, stable_e = mf1.stability(
                     internal=False, external=True, return_status=True, nroots=1)
-                real2complex = summary['stability_real2complex']
-                external = summary['stability_external']
+                self.assertEqual(set(eigenvalues),
+                                 {'internal', 'real2complex', 'external'})
+                real2complex = eigenvalues['real2complex']
+                external = eigenvalues['external']
                 self.assertEqual(real2complex.shape, (1,))
                 self.assertEqual(external.shape, (1,))
                 self.assertEqual(stable_e, external[0] >= -1e-5)
-                self.assertIs(summary['stability_internal'], internal)
+                self.assertIs(eigenvalues['internal'], internal)
 
                 mf1.stability(nroots=3)
-                self.assertEqual(summary['stability_internal'].shape, (3,))
-                self.assertIsNot(summary['stability_internal'], internal)
-                self.assertIs(summary['stability_real2complex'], real2complex)
-                self.assertIs(summary['stability_external'], external)
-                internal = summary['stability_internal']
+                self.assertEqual(eigenvalues['internal'].shape, (3,))
+                self.assertIsNot(eigenvalues['internal'], internal)
+                self.assertIs(eigenvalues['real2complex'], real2complex)
+                self.assertIs(eigenvalues['external'], external)
+                internal = eigenvalues['internal']
 
                 mf1.stability(internal=False, external=True, nroots=3)
-                self.assertIs(summary['stability_internal'], internal)
-                self.assertEqual(summary['stability_real2complex'].shape, (3,))
-                self.assertEqual(summary['stability_external'].shape, (3,))
-                self.assertIsNot(summary['stability_real2complex'], real2complex)
-                self.assertIsNot(summary['stability_external'], external)
+                self.assertIs(eigenvalues['internal'], internal)
+                self.assertEqual(eigenvalues['real2complex'].shape, (3,))
+                self.assertEqual(eigenvalues['external'].shape, (3,))
+                self.assertIsNot(eigenvalues['real2complex'], real2complex)
+                self.assertIsNot(eigenvalues['external'], external)
                 self.assertEqual({key: summary[key] for key in energies}, energies)
                 mf1.reset()
                 self.assertEqual(mf1.scf_summary, {})
@@ -308,9 +312,10 @@ class KnownValues(unittest.TestCase):
 
         _, _, test_stable_i, test_stable_e = mf.stability(
             external=True, return_status=True, nroots=3, tol=1e-10)
-        test_internal_eigenvalue = mf.scf_summary['stability_internal']
-        test_real2complex_eigenvalue = mf.scf_summary['stability_real2complex']
-        test_external_eigenvalue = mf.scf_summary['stability_external']
+        eigenvalues = mf.scf_summary['stability_eigenvalue']
+        test_internal_eigenvalue = eigenvalues['internal']
+        test_real2complex_eigenvalue = eigenvalues['real2complex']
+        test_external_eigenvalue = eigenvalues['external']
 
         # This is a consistency test
         ref_energy = -0.907413006623217
@@ -347,9 +352,10 @@ class KnownValues(unittest.TestCase):
 
         _, _, test_stable_i, test_stable_e = mf.stability(
             external=True, return_status=True, nroots=3, tol=1e-10)
-        test_internal_eigenvalue = mf.scf_summary['stability_internal']
-        test_real2complex_eigenvalue = mf.scf_summary['stability_real2complex']
-        test_external_eigenvalue = mf.scf_summary['stability_external']
+        eigenvalues = mf.scf_summary['stability_eigenvalue']
+        test_internal_eigenvalue = eigenvalues['internal']
+        test_real2complex_eigenvalue = eigenvalues['real2complex']
+        test_external_eigenvalue = eigenvalues['external']
 
         # This is a consistency test
         ref_energy = -91.8005196942055
