@@ -10265,21 +10265,29 @@ def make_rdm1_eigenvectors(adc, L, R):
     ####### ADC(2)-x SPIN ADAPTED EXCITED STATE OPDM WITH SQA ################
     if adc.method == "adc(3)" or adc.method == "adc(2)-x":
         if isinstance(adc._scf, scf.rohf.ROHF):
-            rdm1_a[:nocc_a, nocc_a:] += 1/2 * lib.einsum('ijab,Iiab,jA->IA', L_aaaa_u, R_aaaa_u, t1_1_a, optimize = True)
-            rdm1_a[:nocc_a, nocc_a:] += 1/2 * lib.einsum('ijab,ijAa,Ib->IA', L_aaaa_u, R_aaaa_u, t1_1_a, optimize = True)
-            rdm1_a[:nocc_a, nocc_a:] += 1/4 * lib.einsum('ijab,ijab,IA->IA', L_aaaa_u, R_aaaa_u, t1_1_a, optimize = True)
+            rdm1_a[:nocc_a, nocc_a:] += 1/2 * lib.einsum('ijab,Iiab,jA->IA', L_aaaa_u, R_aaaa_u,
+                t1_1_a, optimize=True)
+            rdm1_a[:nocc_a, nocc_a:] += 1/2 * lib.einsum('ijab,ijAa,Ib->IA', L_aaaa_u, R_aaaa_u,
+                t1_1_a, optimize=True)
+            rdm1_a[:nocc_a, nocc_a:] += 1/4 * lib.einsum('ijab,ijab,IA->IA', L_aaaa_u, R_aaaa_u,
+                t1_1_a, optimize=True)
             rdm1_a[:nocc_a, nocc_a:] -= lib.einsum('ijab,Ijab,iA->IA', L_ab, R_ab, t1_1_a, optimize = True)
             rdm1_a[:nocc_a, nocc_a:] -= lib.einsum('ijab,ijAb,Ia->IA', L_ab, R_ab, t1_1_a, optimize = True)
             rdm1_a[:nocc_a, nocc_a:] += lib.einsum('ijab,ijab,IA->IA', L_ab, R_ab, t1_1_a, optimize = True)
-            rdm1_a[:nocc_a, nocc_a:] += 1/4 * lib.einsum('ijab,ijab,IA->IA', L_bbbb_u, R_bbbb_u, t1_1_a, optimize = True)
+            rdm1_a[:nocc_a, nocc_a:] += 1/4 * lib.einsum('ijab,ijab,IA->IA', L_bbbb_u, R_bbbb_u,
+                t1_1_a, optimize=True)
 
-            rdm1_b[:nocc_b, nocc_b:] += 1/4 * lib.einsum('ijab,ijab,IA->IA', L_aaaa_u, R_aaaa_u, t1_1_b, optimize = True)
+            rdm1_b[:nocc_b, nocc_b:] += 1/4 * lib.einsum('ijab,ijab,IA->IA', L_aaaa_u, R_aaaa_u,
+                t1_1_b, optimize=True)
             rdm1_b[:nocc_b, nocc_b:] -= lib.einsum('ijab,iIab,jA->IA', L_ab, R_ab, t1_1_b, optimize = True)
             rdm1_b[:nocc_b, nocc_b:] -= lib.einsum('ijab,ijaA,Ib->IA', L_ab, R_ab, t1_1_b, optimize = True)
             rdm1_b[:nocc_b, nocc_b:] += lib.einsum('ijab,ijab,IA->IA', L_ab, R_ab, t1_1_b, optimize = True)
-            rdm1_b[:nocc_b, nocc_b:] += 1/2 * lib.einsum('ijab,Iiab,jA->IA', L_bbbb_u, R_bbbb_u, t1_1_b, optimize = True)
-            rdm1_b[:nocc_b, nocc_b:] += 1/2 * lib.einsum('ijab,ijAa,Ib->IA', L_bbbb_u, R_bbbb_u, t1_1_b, optimize = True)
-            rdm1_b[:nocc_b, nocc_b:] += 1/4 * lib.einsum('ijab,ijab,IA->IA', L_bbbb_u, R_bbbb_u, t1_1_b, optimize = True)
+            rdm1_b[:nocc_b, nocc_b:] += 1/2 * lib.einsum('ijab,Iiab,jA->IA', L_bbbb_u, R_bbbb_u,
+                t1_1_b, optimize=True)
+            rdm1_b[:nocc_b, nocc_b:] += 1/2 * lib.einsum('ijab,ijAa,Ib->IA', L_bbbb_u, R_bbbb_u,
+                t1_1_b, optimize=True)
+            rdm1_b[:nocc_b, nocc_b:] += 1/4 * lib.einsum('ijab,ijab,IA->IA', L_bbbb_u, R_bbbb_u,
+                t1_1_b, optimize=True)
 
         rdm1_a[nocc_a:,:nocc_a] = rdm1_a[:nocc_a,nocc_a:].T
         rdm1_b[nocc_b:,:nocc_b] = rdm1_b[:nocc_b,nocc_b:].T
@@ -12788,7 +12796,8 @@ def get_spin_square(adc):
                 S2 -= 2 * lib.einsum('ijab,jkbc,id,ac,kd', L_ab, R_bbbb_u, S_ov_ab, S_vv_ab, t1_1_b, optimize=True)
                 S2 -= lib.einsum('ijab,ijac,kb,dc,kd', L_bbbb_u, R_bbbb_u, S_ov_ab, S_vv_ab, t1_1_a, optimize=True)
                 # block IjdJ & IblJ
-                S2 -= 1/2 * lib.einsum('ijab,ijab,kl,kc,lc', L_aaaa_u, R_aaaa_u, S_oo_ab, S_ov_ab, t1_1_b, optimize=True)
+                S2 -= 1/2 * lib.einsum('ijab,ijab,kl,kc,lc', L_aaaa_u, R_aaaa_u, S_oo_ab, S_ov_ab,
+                    t1_1_b, optimize=True)
                 S2 += lib.einsum('ijab,ikab,kl,jc,lc', L_aaaa_u, R_aaaa_u, S_oo_ab, S_ov_ab, t1_1_b, optimize=True)
                 S2 += 2 * lib.einsum('ijab,ikac,kj,lb,lc', L_ab, R_aaaa_u, S_oo_ab, S_ov_ab, t1_1_a, optimize=True)
                 S2 -= 2 * lib.einsum('ijab,ijab,kl,kc,lc', L_ab, R_ab, S_oo_ab, S_ov_ab, t1_1_b, optimize=True)
@@ -12798,11 +12807,13 @@ def get_spin_square(adc):
                 S2 -= 2 * lib.einsum('ijab,kjac,kl,ib,lc', L_ab, R_ab, S_oo_ab, S_ov_ab, t1_1_b, optimize=True)
                 S2 -= 2 * lib.einsum('ijab,klab,kj,ic,lc', L_ab, R_ab, S_oo_ab, S_ov_ab, t1_1_b, optimize=True)
                 S2 += 2 * lib.einsum('ijab,kica,kj,lb,lc', L_bbbb_u, R_ab, S_oo_ab, S_ov_ab, t1_1_a, optimize=True)
-                S2 -= 1/2 * lib.einsum('ijab,ijab,kl,kc,lc', L_bbbb_u, R_bbbb_u, S_oo_ab, S_ov_ab, t1_1_b, optimize=True)
+                S2 -= 1/2 * lib.einsum('ijab,ijab,kl,kc,lc', L_bbbb_u, R_bbbb_u, S_oo_ab, S_ov_ab,
+                    t1_1_b, optimize=True)
                 S2 += lib.einsum('ijab,ijac,kl,kb,lc', L_bbbb_u, R_bbbb_u, S_oo_ab, S_ov_ab, t1_1_b, optimize=True)
                 S2 += lib.einsum('ijab,ikab,lj,lc,kc', L_bbbb_u, R_bbbb_u, S_oo_ab, S_ov_ab, t1_1_b, optimize=True)
                 # block IjlB & AjlJ
-                S2 -= 1/2 * lib.einsum('ijab,ijab,kl,cl,kc', L_aaaa_u, R_aaaa_u, S_oo_ab, S_vo_ab, t1_1_a, optimize=True)
+                S2 -= 1/2 * lib.einsum('ijab,ijab,kl,cl,kc', L_aaaa_u, R_aaaa_u, S_oo_ab, S_vo_ab,
+                    t1_1_a, optimize=True)
                 S2 += lib.einsum('ijab,ijac,kl,bl,kc', L_aaaa_u, R_aaaa_u, S_oo_ab, S_vo_ab, t1_1_a, optimize=True)
                 S2 += lib.einsum('ijab,ikab,jl,cl,kc', L_aaaa_u, R_aaaa_u, S_oo_ab, S_vo_ab, t1_1_a, optimize=True)
                 S2 += 2 * lib.einsum('ijab,ikac,jk,bl,lc', L_aaaa_u, R_ab, S_oo_ab, S_vo_ab, t1_1_b, optimize=True)
@@ -12813,7 +12824,8 @@ def get_spin_square(adc):
                 S2 += 2 * lib.einsum('ijab,kjab,il,cl,kc', L_ab, R_ab, S_oo_ab, S_vo_ab, t1_1_a, optimize=True)
                 S2 -= 2 * lib.einsum('ijab,klab,il,cj,kc', L_ab, R_ab, S_oo_ab, S_vo_ab, t1_1_a, optimize=True)
                 S2 += 2 * lib.einsum('ijab,jkbc,ik,al,lc', L_ab, R_bbbb_u, S_oo_ab, S_vo_ab, t1_1_b, optimize=True)
-                S2 -= 1/2 * lib.einsum('ijab,ijab,kl,cl,kc', L_bbbb_u, R_bbbb_u, S_oo_ab, S_vo_ab, t1_1_a, optimize=True)
+                S2 -= 1/2 * lib.einsum('ijab,ijab,kl,cl,kc', L_bbbb_u, R_bbbb_u, S_oo_ab, S_vo_ab,
+                    t1_1_a, optimize=True)
                 S2 += lib.einsum('ijab,ikab,lk,cj,lc', L_bbbb_u, R_bbbb_u, S_oo_ab, S_vo_ab, t1_1_a, optimize=True)
 
         if method == "adc(3)":
@@ -12894,7 +12906,8 @@ def get_spin_square(adc):
             S2 -= lib.einsum('ia,ib,jk,cd,jlac,lkbd', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_a, t2_2_ab, optimize=True)
             S2 += lib.einsum('ia,ja,jk,bc,ilbd,lkdc', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_a, t2_2_ab, optimize=True)
             S2 -= lib.einsum('ia,ja,kl,bc,ikbd,jldc', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_a, t2_2_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,jk,bc,ilad,lkdc', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_a, t2_2_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,jk,bc,ilad,lkdc', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_a,
+                t2_2_ab, optimize=True)
             S2 += lib.einsum('ia,jb,jk,cd,ilac,lkbd', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_a, t2_2_ab, optimize=True)
             S2 += lib.einsum('ia,jb,kl,bc,ikad,jldc', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_a, t2_2_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,kl,cd,ikac,jlbd', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_a, t2_2_ab, optimize=True)
@@ -12903,18 +12916,21 @@ def get_spin_square(adc):
             S2 -= lib.einsum('ia,ib,jk,cd,lkbd,jlac', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_a, optimize=True)
             S2 += lib.einsum('ia,ja,jk,bc,lkdc,ilbd', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_a, optimize=True)
             S2 -= lib.einsum('ia,ja,kl,bc,jldc,ikbd', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_a, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,jk,bc,lkdc,ilad', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_a, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,jk,bc,lkdc,ilad', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_ab,
+                t2_2_a, optimize=True)
             S2 += lib.einsum('ia,jb,jk,cd,lkbd,ilac', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_a, optimize=True)
             S2 += lib.einsum('ia,jb,kl,bc,jldc,ikad', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_a, optimize=True)
             S2 -= lib.einsum('ia,jb,kl,cd,jlbd,ikac', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_a, optimize=True)
             S2 -= lib.einsum('ia,ia,jk,bc,jbkc', L_aa, R_aa, S_oo_ab, S_vv_ab, w_t2t2_jbkc_4, optimize=True)
             S2 += lib.einsum('ia,ib,jk,bc,jlad,klcd', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_b, optimize=True)
             S2 += lib.einsum('ia,ja,jk,bc,ilbd,klcd', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_b, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,jk,bc,ilad,klcd', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_b, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,jk,bc,ilad,klcd', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_ab,
+                t2_2_b, optimize=True)
             S2 -= lib.einsum('ia,ia,jk,bc,kcjb', L_aa, R_aa, S_oo_ab, S_vv_ab, w_t2t2_kcjb_2, optimize=True)
             S2 += lib.einsum('ia,ib,jk,bc,klcd,jlad', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_b, t2_2_ab, optimize=True)
             S2 += lib.einsum('ia,ja,jk,bc,klcd,ilbd', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_b, t2_2_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,jk,bc,klcd,ilad', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_b, t2_2_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,jk,bc,klcd,ilad', L_aa, R_aa, S_oo_ab, S_vv_ab, t2_1_b,
+                t2_2_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,kl,cd,ikac,jlbd', L_aa, R_bb, S_oo_ab, S_vv_ab, t2_1_a, t2_2_b, optimize=True)
             S2 -= lib.einsum('ia,jb,kl,cd,jlbd,ikac', L_aa, R_bb, S_oo_ab, S_vv_ab, t2_1_b, t2_2_a, optimize=True)
             S2 += 1/4 * lib.einsum('ia,jb,ji,ca,klbd,klcd', L_bb, R_aa, S_oo_ab, S_vv_ab, t2_1_a, t2_2_a, optimize=True)
@@ -12974,17 +12990,20 @@ def get_spin_square(adc):
             S2 -= lib.einsum('ia,ia,jk,bc,jbkc', L_bb, R_bb, S_oo_ab, S_vv_ab, w_t2t2_jbkc_3, optimize=True)
             S2 += lib.einsum('ia,ib,jk,ca,jlcd,lkdb', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_a, t2_2_ab, optimize=True)
             S2 += lib.einsum('ia,ja,ki,bc,klbd,ljdc', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_a, t2_2_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,ki,ca,klcd,ljdb', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_a, t2_2_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,ki,ca,klcd,ljdb', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_a,
+                t2_2_ab, optimize=True)
             S2 -= lib.einsum('ia,ia,jk,bc,kcjb', L_bb, R_bb, S_oo_ab, S_vv_ab, w_t2t2_kcjb, optimize=True)
             S2 += lib.einsum('ia,ib,jk,ca,lkdb,jlcd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_a, optimize=True)
             S2 += lib.einsum('ia,ja,ki,bc,ljdc,klbd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_a, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,ki,ca,ljdb,klcd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_a, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,ki,ca,ljdb,klcd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab,
+                t2_2_a, optimize=True)
             S2 -= lib.einsum('ia,ia,jk,bc,jbkc', L_bb, R_bb, S_oo_ab, S_vv_ab, w_t2t2_jbkc_4, optimize=True)
             S2 += lib.einsum('ia,ib,jk,ca,jlcd,klbd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_b, optimize=True)
             S2 -= lib.einsum('ia,ib,jk,cd,jlca,klbd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_b, optimize=True)
             S2 += lib.einsum('ia,ja,ki,bc,klbd,jlcd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_b, optimize=True)
             S2 -= lib.einsum('ia,ja,kl,bc,kibd,jlcd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_b, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,ki,ca,klcd,jlbd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_b, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,ki,ca,klcd,jlbd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab,
+                t2_2_b, optimize=True)
             S2 += lib.einsum('ia,jb,ki,cd,klca,jlbd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_b, optimize=True)
             S2 += lib.einsum('ia,jb,kl,ca,kicd,jlbd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_b, optimize=True)
             S2 -= lib.einsum('ia,jb,kl,cd,kica,jlbd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_b, optimize=True)
@@ -12993,7 +13012,8 @@ def get_spin_square(adc):
             S2 -= lib.einsum('ia,ib,jk,cd,klbd,jlca', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_b, t2_2_ab, optimize=True)
             S2 += lib.einsum('ia,ja,ki,bc,jlcd,klbd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_b, t2_2_ab, optimize=True)
             S2 -= lib.einsum('ia,ja,kl,bc,jlcd,kibd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_b, t2_2_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,ki,ca,jlbd,klcd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_b, t2_2_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,ki,ca,jlbd,klcd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_b,
+                t2_2_ab, optimize=True)
             S2 += lib.einsum('ia,jb,ki,cd,jlbd,klca', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_b, t2_2_ab, optimize=True)
             S2 += lib.einsum('ia,jb,kl,ca,jlbd,kicd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_b, t2_2_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,kl,cd,jlbd,kica', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_b, t2_2_ab, optimize=True)
@@ -13051,30 +13071,38 @@ def get_spin_square(adc):
             S2 += 1/2 * lib.einsum('ia,ib,jkcd,jlcd,al,bk', L_aa, R_aa, t2_1_b, t2_2_b, S_vo_ab, S_vo_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,ikac,kjdb,cl,dl', L_aa, R_bb, t2_1_a, t2_2_ab, S_vo_ab, S_vo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,ikac,kldb,cj,dl', L_aa, R_bb, t2_1_a, t2_2_ab, S_vo_ab, S_vo_ab, optimize=True)
-            S2 += 1/2 * lib.einsum('ia,jb,ikcd,kjcb,al,dl', L_aa, R_bb, t2_1_a, t2_2_ab, S_vo_ab, S_vo_ab, optimize=True)
+            S2 += 1/2 * lib.einsum('ia,jb,ikcd,kjcb,al,dl', L_aa, R_bb, t2_1_a, t2_2_ab, S_vo_ab,
+                S_vo_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,ikcd,klcb,al,dj', L_aa, R_bb, t2_1_a, t2_2_ab, S_vo_ab, S_vo_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,kjcb,ikad,cl,dl', L_aa, R_bb, t2_1_ab, t2_2_a, S_vo_ab, S_vo_ab, optimize=True)
-            S2 += 1/2 * lib.einsum('ia,jb,kjcb,ikcd,al,dl', L_aa, R_bb, t2_1_ab, t2_2_a, S_vo_ab, S_vo_ab, optimize=True)
+            S2 += 1/2 * lib.einsum('ia,jb,kjcb,ikcd,al,dl', L_aa, R_bb, t2_1_ab, t2_2_a, S_vo_ab,
+                S_vo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,klcb,ikad,dj,cl', L_aa, R_bb, t2_1_ab, t2_2_a, S_vo_ab, S_vo_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,klcb,ikcd,al,dj', L_aa, R_bb, t2_1_ab, t2_2_a, S_vo_ab, S_vo_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,ikcd,jkbd,al,cl', L_aa, R_bb, t2_1_ab, t2_2_b, S_vo_ab, S_vo_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,ikcd,jkbd,al,cl', L_aa, R_bb, t2_1_ab, t2_2_b, S_vo_ab,
+                S_vo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,ikcd,jlbd,al,ck', L_aa, R_bb, t2_1_ab, t2_2_b, S_vo_ab, S_vo_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,ikcd,klbd,al,cj', L_aa, R_bb, t2_1_ab, t2_2_b, S_vo_ab, S_vo_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,jkbc,ikdc,al,dl', L_aa, R_bb, t2_1_b, t2_2_ab, S_vo_ab, S_vo_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,jkbc,ikdc,al,dl', L_aa, R_bb, t2_1_b, t2_2_ab, S_vo_ab,
+                S_vo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,jkbc,ildc,ak,dl', L_aa, R_bb, t2_1_b, t2_2_ab, S_vo_ab, S_vo_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,klbc,ikdc,al,dj', L_aa, R_bb, t2_1_b, t2_2_ab, S_vo_ab, S_vo_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,jkbc,kida,cl,dl', L_bb, R_aa, t2_1_a, t2_2_ab, S_vo_ab, S_vo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,jkbc,klda,ci,dl', L_bb, R_aa, t2_1_a, t2_2_ab, S_vo_ab, S_vo_ab, optimize=True)
-            S2 += 1/2 * lib.einsum('ia,jb,jkcd,kica,bl,dl', L_bb, R_aa, t2_1_a, t2_2_ab, S_vo_ab, S_vo_ab, optimize=True)
+            S2 += 1/2 * lib.einsum('ia,jb,jkcd,kica,bl,dl', L_bb, R_aa, t2_1_a, t2_2_ab, S_vo_ab,
+                S_vo_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,jkcd,klca,di,bl', L_bb, R_aa, t2_1_a, t2_2_ab, S_vo_ab, S_vo_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,kica,jkbd,cl,dl', L_bb, R_aa, t2_1_ab, t2_2_a, S_vo_ab, S_vo_ab, optimize=True)
-            S2 += 1/2 * lib.einsum('ia,jb,kica,jkcd,bl,dl', L_bb, R_aa, t2_1_ab, t2_2_a, S_vo_ab, S_vo_ab, optimize=True)
+            S2 += 1/2 * lib.einsum('ia,jb,kica,jkcd,bl,dl', L_bb, R_aa, t2_1_ab, t2_2_a, S_vo_ab,
+                S_vo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,klca,jkbd,di,cl', L_bb, R_aa, t2_1_ab, t2_2_a, S_vo_ab, S_vo_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,klca,jkcd,di,bl', L_bb, R_aa, t2_1_ab, t2_2_a, S_vo_ab, S_vo_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,jkcd,ikad,bl,cl', L_bb, R_aa, t2_1_ab, t2_2_b, S_vo_ab, S_vo_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,jkcd,ikad,bl,cl', L_bb, R_aa, t2_1_ab, t2_2_b, S_vo_ab,
+                S_vo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,jkcd,ilad,bl,ck', L_bb, R_aa, t2_1_ab, t2_2_b, S_vo_ab, S_vo_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,jkcd,klad,ci,bl', L_bb, R_aa, t2_1_ab, t2_2_b, S_vo_ab, S_vo_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,ikac,jkdc,bl,dl', L_bb, R_aa, t2_1_b, t2_2_ab, S_vo_ab, S_vo_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,ikac,jkdc,bl,dl', L_bb, R_aa, t2_1_b, t2_2_ab, S_vo_ab,
+                S_vo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,ikac,jldc,bk,dl', L_bb, R_aa, t2_1_b, t2_2_ab, S_vo_ab, S_vo_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,klac,jkdc,di,bl', L_bb, R_aa, t2_1_b, t2_2_ab, S_vo_ab, S_vo_ab, optimize=True)
             S2 -= lib.einsum('ia,ia,jkbc,jkbd,cl,dl', L_bb, R_bb, t2_1_a, t2_2_a, S_vo_ab, S_vo_ab, optimize=True)
@@ -13147,33 +13175,41 @@ def get_spin_square(adc):
             S2 -= lib.einsum('ia,ia,jkbc,jkbd,lc,ld', L_aa, R_aa, t2_1_b, t2_2_b, S_ov_ab, S_ov_ab, optimize=True)
             S2 += 1/2 * lib.einsum('ia,ja,klbc,klbd,ic,jd', L_aa, R_aa, t2_1_b, t2_2_b, S_ov_ab, S_ov_ab, optimize=True)
             S2 += 1/2 * lib.einsum('ia,ja,klbc,klbd,id,jc', L_aa, R_aa, t2_1_b, t2_2_b, S_ov_ab, S_ov_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,ikac,kjcd,lb,ld', L_aa, R_bb, t2_1_a, t2_2_ab, S_ov_ab, S_ov_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,ikac,kjcd,lb,ld', L_aa, R_bb, t2_1_a, t2_2_ab, S_ov_ab,
+                S_ov_ab, optimize=True)
             S2 += lib.einsum('ia,jb,ikac,ljcd,kb,ld', L_aa, R_bb, t2_1_a, t2_2_ab, S_ov_ab, S_ov_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,klac,kjcd,id,lb', L_aa, R_bb, t2_1_a, t2_2_ab, S_ov_ab, S_ov_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,kjcd,ikac,lb,ld', L_aa, R_bb, t2_1_ab, t2_2_a, S_ov_ab, S_ov_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,kjcd,ikac,lb,ld', L_aa, R_bb, t2_1_ab, t2_2_a, S_ov_ab,
+                S_ov_ab, optimize=True)
             S2 += lib.einsum('ia,jb,kjcd,ilac,lb,kd', L_aa, R_bb, t2_1_ab, t2_2_a, S_ov_ab, S_ov_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,kjcd,klac,id,lb', L_aa, R_bb, t2_1_ab, t2_2_a, S_ov_ab, S_ov_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,ikac,jkbd,lc,ld', L_aa, R_bb, t2_1_ab, t2_2_b, S_ov_ab, S_ov_ab, optimize=True)
-            S2 += 1/2 * lib.einsum('ia,jb,ikac,jkcd,lb,ld', L_aa, R_bb, t2_1_ab, t2_2_b, S_ov_ab, S_ov_ab, optimize=True)
+            S2 += 1/2 * lib.einsum('ia,jb,ikac,jkcd,lb,ld', L_aa, R_bb, t2_1_ab, t2_2_b, S_ov_ab,
+                S_ov_ab, optimize=True)
             S2 += lib.einsum('ia,jb,klac,jlbd,id,kc', L_aa, R_bb, t2_1_ab, t2_2_b, S_ov_ab, S_ov_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,klac,jlcd,id,kb', L_aa, R_bb, t2_1_ab, t2_2_b, S_ov_ab, S_ov_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,jkbc,ikad,lc,ld', L_aa, R_bb, t2_1_b, t2_2_ab, S_ov_ab, S_ov_ab, optimize=True)
             S2 += lib.einsum('ia,jb,jkbc,lkad,ic,ld', L_aa, R_bb, t2_1_b, t2_2_ab, S_ov_ab, S_ov_ab, optimize=True)
-            S2 += 1/2 * lib.einsum('ia,jb,jkcd,ikac,lb,ld', L_aa, R_bb, t2_1_b, t2_2_ab, S_ov_ab, S_ov_ab, optimize=True)
+            S2 += 1/2 * lib.einsum('ia,jb,jkcd,ikac,lb,ld', L_aa, R_bb, t2_1_b, t2_2_ab, S_ov_ab,
+                S_ov_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,jkcd,lkac,id,lb', L_aa, R_bb, t2_1_b, t2_2_ab, S_ov_ab, S_ov_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,jkbc,kicd,la,ld', L_bb, R_aa, t2_1_a, t2_2_ab, S_ov_ab, S_ov_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,jkbc,kicd,la,ld', L_bb, R_aa, t2_1_a, t2_2_ab, S_ov_ab,
+                S_ov_ab, optimize=True)
             S2 += lib.einsum('ia,jb,jkbc,licd,ka,ld', L_bb, R_aa, t2_1_a, t2_2_ab, S_ov_ab, S_ov_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,klbc,kicd,la,jd', L_bb, R_aa, t2_1_a, t2_2_ab, S_ov_ab, S_ov_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,kicd,jkbc,la,ld', L_bb, R_aa, t2_1_ab, t2_2_a, S_ov_ab, S_ov_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,kicd,jkbc,la,ld', L_bb, R_aa, t2_1_ab, t2_2_a, S_ov_ab,
+                S_ov_ab, optimize=True)
             S2 += lib.einsum('ia,jb,kicd,jlbc,la,kd', L_bb, R_aa, t2_1_ab, t2_2_a, S_ov_ab, S_ov_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,kicd,klbc,la,jd', L_bb, R_aa, t2_1_ab, t2_2_a, S_ov_ab, S_ov_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,jkbc,ikad,lc,ld', L_bb, R_aa, t2_1_ab, t2_2_b, S_ov_ab, S_ov_ab, optimize=True)
-            S2 += 1/2 * lib.einsum('ia,jb,jkbc,ikcd,la,ld', L_bb, R_aa, t2_1_ab, t2_2_b, S_ov_ab, S_ov_ab, optimize=True)
+            S2 += 1/2 * lib.einsum('ia,jb,jkbc,ikcd,la,ld', L_bb, R_aa, t2_1_ab, t2_2_b, S_ov_ab,
+                S_ov_ab, optimize=True)
             S2 += lib.einsum('ia,jb,klbc,ilad,jd,kc', L_bb, R_aa, t2_1_ab, t2_2_b, S_ov_ab, S_ov_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,klbc,ilcd,ka,jd', L_bb, R_aa, t2_1_ab, t2_2_b, S_ov_ab, S_ov_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,ikac,jkbd,lc,ld', L_bb, R_aa, t2_1_b, t2_2_ab, S_ov_ab, S_ov_ab, optimize=True)
             S2 += lib.einsum('ia,jb,ikac,lkbd,jc,ld', L_bb, R_aa, t2_1_b, t2_2_ab, S_ov_ab, S_ov_ab, optimize=True)
-            S2 += 1/2 * lib.einsum('ia,jb,ikcd,jkbc,la,ld', L_bb, R_aa, t2_1_b, t2_2_ab, S_ov_ab, S_ov_ab, optimize=True)
+            S2 += 1/2 * lib.einsum('ia,jb,ikcd,jkbc,la,ld', L_bb, R_aa, t2_1_b, t2_2_ab, S_ov_ab,
+                S_ov_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,ikcd,lkbc,la,jd', L_bb, R_aa, t2_1_b, t2_2_ab, S_ov_ab, S_ov_ab, optimize=True)
             S2 += 1/2 * lib.einsum('ia,ib,jkcd,jlcd,ka,lb', L_bb, R_bb, t2_1_a, t2_2_a, S_ov_ab, S_ov_ab, optimize=True)
             S2 += 1/2 * lib.einsum('ia,ib,jkcd,jlcd,la,kb', L_bb, R_bb, t2_1_a, t2_2_a, S_ov_ab, S_ov_ab, optimize=True)
@@ -13312,17 +13348,20 @@ def get_spin_square(adc):
             S2 -= lib.einsum('ia,ia,jk,bc,jbkc', L_bb, R_bb, S_oo_ab, S_vv_ab, w_t2t2_jbkc_3, optimize=True)
             S2 += lib.einsum('ia,ib,jk,cb,jlcd,lkda', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_a, t2_2_ab, optimize=True)
             S2 += lib.einsum('ia,ja,kj,bc,klbd,lidc', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_a, t2_2_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,kj,cb,klcd,lida', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_a, t2_2_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,kj,cb,klcd,lida', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_a,
+                t2_2_ab, optimize=True)
             S2 -= lib.einsum('ia,ia,jk,bc,kcjb', L_bb, R_bb, S_oo_ab, S_vv_ab, w_t2t2_kcjb, optimize=True)
             S2 += lib.einsum('ia,ib,jk,cb,lkda,jlcd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_a, optimize=True)
             S2 += lib.einsum('ia,ja,kj,bc,lidc,klbd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_a, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,kj,cb,lida,klcd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_a, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,kj,cb,lida,klcd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab,
+                t2_2_a, optimize=True)
             S2 -= lib.einsum('ia,ia,jk,bc,jbkc', L_bb, R_bb, S_oo_ab, S_vv_ab, w_t2t2_jbkc_4, optimize=True)
             S2 += lib.einsum('ia,ib,jk,cb,jlcd,klad', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_b, optimize=True)
             S2 -= lib.einsum('ia,ib,jk,cd,jlcb,klad', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_b, optimize=True)
             S2 += lib.einsum('ia,ja,kj,bc,klbd,ilcd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_b, optimize=True)
             S2 -= lib.einsum('ia,ja,kl,bc,kjbd,ilcd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_b, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,kj,cb,klcd,ilad', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_b, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,kj,cb,klcd,ilad', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab,
+                t2_2_b, optimize=True)
             S2 += lib.einsum('ia,jb,kj,cd,klcb,ilad', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_b, optimize=True)
             S2 += lib.einsum('ia,jb,kl,cb,kjcd,ilad', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_b, optimize=True)
             S2 -= lib.einsum('ia,jb,kl,cd,kjcb,ilad', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_ab, t2_2_b, optimize=True)
@@ -13331,7 +13370,8 @@ def get_spin_square(adc):
             S2 -= lib.einsum('ia,ib,jk,cd,klad,jlcb', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_b, t2_2_ab, optimize=True)
             S2 += lib.einsum('ia,ja,kj,bc,ilcd,klbd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_b, t2_2_ab, optimize=True)
             S2 -= lib.einsum('ia,ja,kl,bc,ilcd,kjbd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_b, t2_2_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,kj,cb,ilad,klcd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_b, t2_2_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,kj,cb,ilad,klcd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_b,
+                t2_2_ab, optimize=True)
             S2 += lib.einsum('ia,jb,kj,cd,ilad,klcb', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_b, t2_2_ab, optimize=True)
             S2 += lib.einsum('ia,jb,kl,cb,ilad,kjcd', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_b, t2_2_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,kl,cd,ilad,kjcb', L_bb, R_bb, S_oo_ab, S_vv_ab, t2_1_b, t2_2_ab, optimize=True)
@@ -14205,45 +14245,61 @@ def get_spin_square(adc):
             S2 += lib.einsum('ia,ia,jkbc,jlbc,mk,ml', L_aa, R_aa, t2_1_b, t2_2_b, S_oo_ab, S_oo_ab, optimize=True)
             S2 -= 1/2 * lib.einsum('ia,ja,klbc,kmbc,il,jm', L_aa, R_aa, t2_1_b, t2_2_b, S_oo_ab, S_oo_ab, optimize=True)
             S2 -= 1/2 * lib.einsum('ia,ja,klbc,kmbc,im,jl', L_aa, R_aa, t2_1_b, t2_2_b, S_oo_ab, S_oo_ab, optimize=True)
-            S2 += 1/2 * lib.einsum('ia,jb,ikac,klcb,mj,ml', L_aa, R_bb, t2_1_a, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
+            S2 += 1/2 * lib.einsum('ia,jb,ikac,klcb,mj,ml', L_aa, R_bb, t2_1_a, t2_2_ab, S_oo_ab,
+                S_oo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,ikac,ljcb,km,lm', L_aa, R_bb, t2_1_a, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,ikac,lmcb,lj,km', L_aa, R_bb, t2_1_a, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,klac,kjcb,im,lm', L_aa, R_bb, t2_1_a, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,klac,kjcb,im,lm', L_aa, R_bb, t2_1_a, t2_2_ab, S_oo_ab,
+                S_oo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,klac,kmcb,ij,lm', L_aa, R_bb, t2_1_a, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,kjcb,ilac,km,lm', L_aa, R_bb, t2_1_ab, t2_2_a, S_oo_ab, S_oo_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,kjcb,klac,im,lm', L_aa, R_bb, t2_1_ab, t2_2_a, S_oo_ab, S_oo_ab, optimize=True)
-            S2 += 1/2 * lib.einsum('ia,jb,klcb,ikac,mj,ml', L_aa, R_bb, t2_1_ab, t2_2_a, S_oo_ab, S_oo_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,kjcb,klac,im,lm', L_aa, R_bb, t2_1_ab, t2_2_a, S_oo_ab,
+                S_oo_ab, optimize=True)
+            S2 += 1/2 * lib.einsum('ia,jb,klcb,ikac,mj,ml', L_aa, R_bb, t2_1_ab, t2_2_a, S_oo_ab,
+                S_oo_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,klcb,imac,kj,ml', L_aa, R_bb, t2_1_ab, t2_2_a, S_oo_ab, S_oo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,klcb,kmac,ij,ml', L_aa, R_bb, t2_1_ab, t2_2_a, S_oo_ab, S_oo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,ikac,jlbc,mk,ml', L_aa, R_bb, t2_1_ab, t2_2_b, S_oo_ab, S_oo_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,ikac,klbc,mj,ml', L_aa, R_bb, t2_1_ab, t2_2_b, S_oo_ab, S_oo_ab, optimize=True)
-            S2 += 1/2 * lib.einsum('ia,jb,klac,jlbc,im,km', L_aa, R_bb, t2_1_ab, t2_2_b, S_oo_ab, S_oo_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,ikac,klbc,mj,ml', L_aa, R_bb, t2_1_ab, t2_2_b, S_oo_ab,
+                S_oo_ab, optimize=True)
+            S2 += 1/2 * lib.einsum('ia,jb,klac,jlbc,im,km', L_aa, R_bb, t2_1_ab, t2_2_b, S_oo_ab,
+                S_oo_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,klac,jmbc,il,km', L_aa, R_bb, t2_1_ab, t2_2_b, S_oo_ab, S_oo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,klac,lmbc,ij,km', L_aa, R_bb, t2_1_ab, t2_2_b, S_oo_ab, S_oo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,jkbc,ilac,mk,ml', L_aa, R_bb, t2_1_b, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
-            S2 += 1/2 * lib.einsum('ia,jb,jkbc,lkac,im,lm', L_aa, R_bb, t2_1_b, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
+            S2 += 1/2 * lib.einsum('ia,jb,jkbc,lkac,im,lm', L_aa, R_bb, t2_1_b, t2_2_ab, S_oo_ab,
+                S_oo_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,jkbc,lmac,im,lk', L_aa, R_bb, t2_1_b, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,klbc,ikac,mj,ml', L_aa, R_bb, t2_1_b, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,klbc,ikac,mj,ml', L_aa, R_bb, t2_1_b, t2_2_ab, S_oo_ab,
+                S_oo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,klbc,mkac,ij,ml', L_aa, R_bb, t2_1_b, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
-            S2 += 1/2 * lib.einsum('ia,jb,jkbc,klca,mi,ml', L_bb, R_aa, t2_1_a, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
+            S2 += 1/2 * lib.einsum('ia,jb,jkbc,klca,mi,ml', L_bb, R_aa, t2_1_a, t2_2_ab, S_oo_ab,
+                S_oo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,jkbc,lica,km,lm', L_bb, R_aa, t2_1_a, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,jkbc,lmca,li,km', L_bb, R_aa, t2_1_a, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,klbc,kica,jm,lm', L_bb, R_aa, t2_1_a, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,klbc,kica,jm,lm', L_bb, R_aa, t2_1_a, t2_2_ab, S_oo_ab,
+                S_oo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,klbc,kmca,ji,lm', L_bb, R_aa, t2_1_a, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,kica,jlbc,km,lm', L_bb, R_aa, t2_1_ab, t2_2_a, S_oo_ab, S_oo_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,kica,klbc,jm,lm', L_bb, R_aa, t2_1_ab, t2_2_a, S_oo_ab, S_oo_ab, optimize=True)
-            S2 += 1/2 * lib.einsum('ia,jb,klca,jkbc,mi,ml', L_bb, R_aa, t2_1_ab, t2_2_a, S_oo_ab, S_oo_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,kica,klbc,jm,lm', L_bb, R_aa, t2_1_ab, t2_2_a, S_oo_ab,
+                S_oo_ab, optimize=True)
+            S2 += 1/2 * lib.einsum('ia,jb,klca,jkbc,mi,ml', L_bb, R_aa, t2_1_ab, t2_2_a, S_oo_ab,
+                S_oo_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,klca,jmbc,ki,ml', L_bb, R_aa, t2_1_ab, t2_2_a, S_oo_ab, S_oo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,klca,kmbc,ji,ml', L_bb, R_aa, t2_1_ab, t2_2_a, S_oo_ab, S_oo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,jkbc,ilac,mk,ml', L_bb, R_aa, t2_1_ab, t2_2_b, S_oo_ab, S_oo_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,jkbc,klac,mi,ml', L_bb, R_aa, t2_1_ab, t2_2_b, S_oo_ab, S_oo_ab, optimize=True)
-            S2 += 1/2 * lib.einsum('ia,jb,klbc,ilac,jm,km', L_bb, R_aa, t2_1_ab, t2_2_b, S_oo_ab, S_oo_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,jkbc,klac,mi,ml', L_bb, R_aa, t2_1_ab, t2_2_b, S_oo_ab,
+                S_oo_ab, optimize=True)
+            S2 += 1/2 * lib.einsum('ia,jb,klbc,ilac,jm,km', L_bb, R_aa, t2_1_ab, t2_2_b, S_oo_ab,
+                S_oo_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,klbc,imac,jl,km', L_bb, R_aa, t2_1_ab, t2_2_b, S_oo_ab, S_oo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,klbc,lmac,ji,km', L_bb, R_aa, t2_1_ab, t2_2_b, S_oo_ab, S_oo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,ikac,jlbc,mk,ml', L_bb, R_aa, t2_1_b, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
-            S2 += 1/2 * lib.einsum('ia,jb,ikac,lkbc,jm,lm', L_bb, R_aa, t2_1_b, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
+            S2 += 1/2 * lib.einsum('ia,jb,ikac,lkbc,jm,lm', L_bb, R_aa, t2_1_b, t2_2_ab, S_oo_ab,
+                S_oo_ab, optimize=True)
             S2 -= lib.einsum('ia,jb,ikac,lmbc,jm,lk', L_bb, R_aa, t2_1_b, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
-            S2 -= 1/2 * lib.einsum('ia,jb,klac,jkbc,mi,ml', L_bb, R_aa, t2_1_b, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
+            S2 -= 1/2 * lib.einsum('ia,jb,klac,jkbc,mi,ml', L_bb, R_aa, t2_1_b, t2_2_ab, S_oo_ab,
+                S_oo_ab, optimize=True)
             S2 += lib.einsum('ia,jb,klac,mkbc,ji,ml', L_bb, R_aa, t2_1_b, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
             S2 += lib.einsum('ia,ia,jkbc,jlbc,km,lm', L_bb, R_bb, t2_1_a, t2_2_a, S_oo_ab, S_oo_ab, optimize=True)
             S2 -= 1/2 * lib.einsum('ia,ja,klbc,kmbc,li,mj', L_bb, R_bb, t2_1_a, t2_2_a, S_oo_ab, S_oo_ab, optimize=True)
@@ -14437,13 +14493,17 @@ def get_spin_square(adc):
                 S2 += 1/2 * lib.einsum('ia,ib,jkcd,ea,cb,jd,ke', L_bb, R_bb, t2_1_a, S_vv_ab, S_vv_ab, t1_1_a,
                     t1_1_a, optimize=True)
                 # block AjdB & AblB
-                S2 -= 2 * lib.einsum('ia,ia,bj,cd,kc,kjbd', L_aa, R_aa, S_vo_ab, S_vv_ab, t1_1_a, t2_2_ab, optimize=True)
+                S2 -= 2 * lib.einsum('ia,ia,bj,cd,kc,kjbd', L_aa, R_aa, S_vo_ab, S_vv_ab, t1_1_a,
+                    t2_2_ab, optimize=True)
                 S2 -= lib.einsum('ia,ib,aj,bc,kd,kjdc', L_aa, R_aa, S_vo_ab, S_vv_ab, t1_1_a, t2_2_ab, optimize=True)
-                S2 += 2 * lib.einsum('ia,ib,aj,cd,kc,kjbd', L_aa, R_aa, S_vo_ab, S_vv_ab, t1_1_a, t2_2_ab, optimize=True)
+                S2 += 2 * lib.einsum('ia,ib,aj,cd,kc,kjbd', L_aa, R_aa, S_vo_ab, S_vv_ab, t1_1_a,
+                    t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,ib,cj,bd,ka,kjcd', L_aa, R_aa, S_vo_ab, S_vv_ab, t1_1_a, t2_2_ab, optimize=True)
-                S2 += 2 * lib.einsum('ia,ja,bk,cd,ic,jkbd', L_aa, R_aa, S_vo_ab, S_vv_ab, t1_1_a, t2_2_ab, optimize=True)
+                S2 += 2 * lib.einsum('ia,ja,bk,cd,ic,jkbd', L_aa, R_aa, S_vo_ab, S_vv_ab, t1_1_a,
+                    t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,jb,ak,bc,id,jkdc', L_aa, R_aa, S_vo_ab, S_vv_ab, t1_1_a, t2_2_ab, optimize=True)
-                S2 -= 2 * lib.einsum('ia,jb,ak,cd,ic,jkbd', L_aa, R_aa, S_vo_ab, S_vv_ab, t1_1_a, t2_2_ab, optimize=True)
+                S2 -= 2 * lib.einsum('ia,jb,ak,cd,ic,jkbd', L_aa, R_aa, S_vo_ab, S_vv_ab, t1_1_a,
+                    t2_2_ab, optimize=True)
                 S2 -= lib.einsum('ia,ib,aj,bc,kd,jkcd', L_aa, R_aa, S_vo_ab, S_vv_ab, t1_1_b, t2_2_b, optimize=True)
                 S2 -= 2 * lib.einsum('ia,jb,ak,cd,ic,jkbd', L_aa, R_bb, S_vo_ab, S_vv_ab, t1_1_a, t2_2_b, optimize=True)
                 S2 -= lib.einsum('ia,jb,ci,ba,kd,jkcd', L_bb, R_aa, S_vo_ab, S_vv_ab, t1_1_a, t2_2_a, optimize=True)
@@ -14451,17 +14511,22 @@ def get_spin_square(adc):
                 S2 -= lib.einsum('ia,jb,ci,ba,kd,jkcd', L_bb, R_aa, S_vo_ab, S_vv_ab, t1_1_b, t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,jb,ci,bd,ka,jkcd', L_bb, R_aa, S_vo_ab, S_vv_ab, t1_1_b, t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,jb,ck,ba,id,jkcd', L_bb, R_aa, S_vo_ab, S_vv_ab, t1_1_b, t2_2_ab, optimize=True)
-                S2 -= 2 * lib.einsum('ia,ia,bj,cd,kc,kjbd', L_bb, R_bb, S_vo_ab, S_vv_ab, t1_1_a, t2_2_ab, optimize=True)
-                S2 += 2 * lib.einsum('ia,ib,cj,da,kd,kjcb', L_bb, R_bb, S_vo_ab, S_vv_ab, t1_1_a, t2_2_ab, optimize=True)
-                S2 += 2 * lib.einsum('ia,ja,bi,cd,kc,kjbd', L_bb, R_bb, S_vo_ab, S_vv_ab, t1_1_a, t2_2_ab, optimize=True)
-                S2 -= 2 * lib.einsum('ia,jb,ci,da,kd,kjcb', L_bb, R_bb, S_vo_ab, S_vv_ab, t1_1_a, t2_2_ab, optimize=True)
+                S2 -= 2 * lib.einsum('ia,ia,bj,cd,kc,kjbd', L_bb, R_bb, S_vo_ab, S_vv_ab, t1_1_a,
+                    t2_2_ab, optimize=True)
+                S2 += 2 * lib.einsum('ia,ib,cj,da,kd,kjcb', L_bb, R_bb, S_vo_ab, S_vv_ab, t1_1_a,
+                    t2_2_ab, optimize=True)
+                S2 += 2 * lib.einsum('ia,ja,bi,cd,kc,kjbd', L_bb, R_bb, S_vo_ab, S_vv_ab, t1_1_a,
+                    t2_2_ab, optimize=True)
+                S2 -= 2 * lib.einsum('ia,jb,ci,da,kd,kjcb', L_bb, R_bb, S_vo_ab, S_vv_ab, t1_1_a,
+                    t2_2_ab, optimize=True)
                 S2 -= 2 * lib.einsum('ia,ia,bj,cd,kb,kcjd', L_aa, R_aa, S_vo_ab, S_vv_ab, t1_1_a, w_t2t2_kcjd,
                                     optimize=True)
                 S2 += lib.einsum('ia,ia,bj,cd,ke,klce,ljbd', L_aa, R_aa, S_vo_ab, S_vv_ab, t1_1_a, t2_1_a,
                     t2_1_ab, optimize=True)
                 S2 -= 1/3 * lib.einsum('ia,ib,aj,bc,kd,klde,ljec', L_aa, R_aa, S_vo_ab, S_vv_ab, t1_1_a, t2_1_a,
                     t2_1_ab, optimize=True)
-                S2 += lib.einsum('ia,ib,aj,cd,kb,kcjd', L_aa, R_aa, S_vo_ab, S_vv_ab, t1_1_a, w_t2t2_kcjd, optimize=True)
+                S2 += lib.einsum('ia,ib,aj,cd,kb,kcjd', L_aa, R_aa, S_vo_ab, S_vv_ab, t1_1_a,
+                    w_t2t2_kcjd, optimize=True)
                 S2 -= lib.einsum('ia,ib,aj,cd,ke,klce,ljbd', L_aa, R_aa, S_vo_ab, S_vv_ab, t1_1_a, t2_1_a,
                     t2_1_ab, optimize=True)
                 S2 += 4/3 * lib.einsum('ia,ib,cj,bd,kc,klae,ljed', L_aa, R_aa, S_vo_ab, S_vv_ab, t1_1_a, t2_1_a,
@@ -15267,10 +15332,14 @@ def get_spin_square(adc):
                 S2 -= 1/2 * lib.einsum('ia,ja,klbc,di,bj,kc,ld', L_bb, R_bb, t2_1_a, S_vo_ab, S_vo_ab, t1_1_a,
                     t1_1_a, optimize=True)
                 # block IbdB & AbdJ
-                S2 -= 2 * lib.einsum('ia,ia,jb,cd,kd,jkcb', L_aa, R_aa, S_ov_ab, S_vv_ab, t1_1_b, t2_2_ab, optimize=True)
-                S2 += 2 * lib.einsum('ia,ib,jc,ad,kd,jkbc', L_aa, R_aa, S_ov_ab, S_vv_ab, t1_1_b, t2_2_ab, optimize=True)
-                S2 += 2 * lib.einsum('ia,ja,ib,cd,kd,jkcb', L_aa, R_aa, S_ov_ab, S_vv_ab, t1_1_b, t2_2_ab, optimize=True)
-                S2 -= 2 * lib.einsum('ia,jb,ic,ad,kd,jkbc', L_aa, R_aa, S_ov_ab, S_vv_ab, t1_1_b, t2_2_ab, optimize=True)
+                S2 -= 2 * lib.einsum('ia,ia,jb,cd,kd,jkcb', L_aa, R_aa, S_ov_ab, S_vv_ab, t1_1_b,
+                    t2_2_ab, optimize=True)
+                S2 += 2 * lib.einsum('ia,ib,jc,ad,kd,jkbc', L_aa, R_aa, S_ov_ab, S_vv_ab, t1_1_b,
+                    t2_2_ab, optimize=True)
+                S2 += 2 * lib.einsum('ia,ja,ib,cd,kd,jkcb', L_aa, R_aa, S_ov_ab, S_vv_ab, t1_1_b,
+                    t2_2_ab, optimize=True)
+                S2 -= 2 * lib.einsum('ia,jb,ic,ad,kd,jkbc', L_aa, R_aa, S_ov_ab, S_vv_ab, t1_1_b,
+                    t2_2_ab, optimize=True)
                 S2 -= lib.einsum('ia,jb,ic,ab,kd,kjdc', L_aa, R_bb, S_ov_ab, S_vv_ab, t1_1_a, t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,jb,ic,db,ka,kjdc', L_aa, R_bb, S_ov_ab, S_vv_ab, t1_1_a, t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,jb,kc,ab,id,kjdc', L_aa, R_bb, S_ov_ab, S_vv_ab, t1_1_a, t2_2_ab, optimize=True)
@@ -15278,13 +15347,17 @@ def get_spin_square(adc):
                 S2 -= 2 * lib.einsum('ia,jb,ic,ad,kd,jkbc', L_aa, R_bb, S_ov_ab, S_vv_ab, t1_1_b, t2_2_b, optimize=True)
                 S2 -= 2 * lib.einsum('ia,jb,ka,cd,id,jkbc', L_bb, R_aa, S_ov_ab, S_vv_ab, t1_1_b, t2_2_a, optimize=True)
                 S2 -= lib.einsum('ia,ib,ja,cb,kd,jkcd', L_bb, R_bb, S_ov_ab, S_vv_ab, t1_1_a, t2_2_a, optimize=True)
-                S2 -= 2 * lib.einsum('ia,ia,jb,cd,kd,jkcb', L_bb, R_bb, S_ov_ab, S_vv_ab, t1_1_b, t2_2_ab, optimize=True)
+                S2 -= 2 * lib.einsum('ia,ia,jb,cd,kd,jkcb', L_bb, R_bb, S_ov_ab, S_vv_ab, t1_1_b,
+                    t2_2_ab, optimize=True)
                 S2 -= lib.einsum('ia,ib,ja,cb,kd,jkcd', L_bb, R_bb, S_ov_ab, S_vv_ab, t1_1_b, t2_2_ab, optimize=True)
-                S2 += 2 * lib.einsum('ia,ib,ja,cd,kd,jkcb', L_bb, R_bb, S_ov_ab, S_vv_ab, t1_1_b, t2_2_ab, optimize=True)
+                S2 += 2 * lib.einsum('ia,ib,ja,cd,kd,jkcb', L_bb, R_bb, S_ov_ab, S_vv_ab, t1_1_b,
+                    t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,ib,jc,db,ka,jkdc', L_bb, R_bb, S_ov_ab, S_vv_ab, t1_1_b, t2_2_ab, optimize=True)
-                S2 += 2 * lib.einsum('ia,ja,kb,cd,id,kjcb', L_bb, R_bb, S_ov_ab, S_vv_ab, t1_1_b, t2_2_ab, optimize=True)
+                S2 += 2 * lib.einsum('ia,ja,kb,cd,id,kjcb', L_bb, R_bb, S_ov_ab, S_vv_ab, t1_1_b,
+                    t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,jb,ka,cb,id,kjcd', L_bb, R_bb, S_ov_ab, S_vv_ab, t1_1_b, t2_2_ab, optimize=True)
-                S2 -= 2 * lib.einsum('ia,jb,ka,cd,id,kjcb', L_bb, R_bb, S_ov_ab, S_vv_ab, t1_1_b, t2_2_ab, optimize=True)
+                S2 -= 2 * lib.einsum('ia,jb,ka,cd,id,kjcb', L_bb, R_bb, S_ov_ab, S_vv_ab, t1_1_b,
+                    t2_2_ab, optimize=True)
                 S2 -= 2 * lib.einsum('ia,ia,jb,cd,jc,kb,kd', L_aa, R_aa, S_ov_ab, S_vv_ab, t1_1_a, t1_1_b,
                     t1_1_b, optimize=True)
                 S2 += 2 * lib.einsum('ia,ib,jc,ad,jb,kc,kd', L_aa, R_aa, S_ov_ab, S_vv_ab, t1_1_a, t1_1_b,
@@ -15637,7 +15710,8 @@ def get_spin_square(adc):
                                     optimize=True)
                 S2 -= 1/3 * lib.einsum('ia,ib,ja,cb,kd,jckd', L_bb, R_bb, S_ov_ab, S_vv_ab, t1_1_b,
                     w_t2t2_jckd, optimize=True)
-                S2 += lib.einsum('ia,ib,ja,cd,kb,jckd', L_bb, R_bb, S_ov_ab, S_vv_ab, t1_1_b, w_t2t2_jckd, optimize=True)
+                S2 += lib.einsum('ia,ib,ja,cd,kb,jckd', L_bb, R_bb, S_ov_ab, S_vv_ab, t1_1_b,
+                    w_t2t2_jckd, optimize=True)
                 S2 += 4/3 * lib.einsum('ia,ib,jc,db,kc,jlde,lkea', L_bb, R_bb, S_ov_ab, S_vv_ab, t1_1_b, t2_1_a,
                     t2_1_ab, optimize=True)
                 S2 += 2 * lib.einsum('ia,ja,kb,cd,jb,klce,lied', L_bb, R_bb, S_ov_ab, S_vv_ab, t1_1_b, t2_1_a,
@@ -16347,15 +16421,19 @@ def get_spin_square(adc):
                     t1_1_b, optimize=True)
                 # block IjdJ & IblJ
                 S2 -= lib.einsum('ia,ia,jk,jb,lc,lkcb', L_aa, R_aa, S_oo_ab, S_ov_ab, t1_1_a, t2_2_ab, optimize=True)
-                S2 += 2 * lib.einsum('ia,ia,jk,lb,jc,lkcb', L_aa, R_aa, S_oo_ab, S_ov_ab, t1_1_a, t2_2_ab, optimize=True)
+                S2 += 2 * lib.einsum('ia,ia,jk,lb,jc,lkcb', L_aa, R_aa, S_oo_ab, S_ov_ab, t1_1_a,
+                    t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,ib,jk,jc,la,lkbc', L_aa, R_aa, S_oo_ab, S_ov_ab, t1_1_a, t2_2_ab, optimize=True)
-                S2 -= 2 * lib.einsum('ia,ib,jk,lc,ja,lkbc', L_aa, R_aa, S_oo_ab, S_ov_ab, t1_1_a, t2_2_ab, optimize=True)
+                S2 -= 2 * lib.einsum('ia,ib,jk,lc,ja,lkbc', L_aa, R_aa, S_oo_ab, S_ov_ab, t1_1_a,
+                    t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,ja,jk,ib,lc,lkcb', L_aa, R_aa, S_oo_ab, S_ov_ab, t1_1_a, t2_2_ab, optimize=True)
                 S2 -= lib.einsum('ia,ja,jk,lb,ic,lkcb', L_aa, R_aa, S_oo_ab, S_ov_ab, t1_1_a, t2_2_ab, optimize=True)
-                S2 -= 2 * lib.einsum('ia,ja,kl,ib,kc,jlcb', L_aa, R_aa, S_oo_ab, S_ov_ab, t1_1_a, t2_2_ab, optimize=True)
+                S2 -= 2 * lib.einsum('ia,ja,kl,ib,kc,jlcb', L_aa, R_aa, S_oo_ab, S_ov_ab, t1_1_a,
+                    t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,ja,kl,kb,ic,jlcb', L_aa, R_aa, S_oo_ab, S_ov_ab, t1_1_a, t2_2_ab, optimize=True)
                 S2 -= lib.einsum('ia,jb,jk,ic,la,lkbc', L_aa, R_aa, S_oo_ab, S_ov_ab, t1_1_a, t2_2_ab, optimize=True)
-                S2 += 2 * lib.einsum('ia,jb,kl,ic,ka,jlbc', L_aa, R_aa, S_oo_ab, S_ov_ab, t1_1_a, t2_2_ab, optimize=True)
+                S2 += 2 * lib.einsum('ia,jb,kl,ic,ka,jlbc', L_aa, R_aa, S_oo_ab, S_ov_ab, t1_1_a,
+                    t2_2_ab, optimize=True)
                 S2 -= lib.einsum('ia,ia,jk,jb,lc,klbc', L_aa, R_aa, S_oo_ab, S_ov_ab, t1_1_b, t2_2_b, optimize=True)
                 S2 += lib.einsum('ia,ja,jk,ib,lc,klbc', L_aa, R_aa, S_oo_ab, S_ov_ab, t1_1_b, t2_2_b, optimize=True)
                 S2 += 2 * lib.einsum('ia,jb,kl,ic,ka,jlbc', L_aa, R_bb, S_oo_ab, S_ov_ab, t1_1_a, t2_2_b, optimize=True)
@@ -16367,12 +16445,16 @@ def get_spin_square(adc):
                 S2 += lib.einsum('ia,jb,ki,kc,la,jlbc', L_bb, R_aa, S_oo_ab, S_ov_ab, t1_1_b, t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,jb,kl,ka,ic,jlbc', L_bb, R_aa, S_oo_ab, S_ov_ab, t1_1_b, t2_2_ab, optimize=True)
                 S2 -= lib.einsum('ia,ia,jk,jb,lc,lkcb', L_bb, R_bb, S_oo_ab, S_ov_ab, t1_1_a, t2_2_ab, optimize=True)
-                S2 += 2 * lib.einsum('ia,ia,jk,lb,jc,lkcb', L_bb, R_bb, S_oo_ab, S_ov_ab, t1_1_a, t2_2_ab, optimize=True)
+                S2 += 2 * lib.einsum('ia,ia,jk,lb,jc,lkcb', L_bb, R_bb, S_oo_ab, S_ov_ab, t1_1_a,
+                    t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,ib,jk,ja,lc,lkcb', L_bb, R_bb, S_oo_ab, S_ov_ab, t1_1_a, t2_2_ab, optimize=True)
-                S2 -= 2 * lib.einsum('ia,ib,jk,la,jc,lkcb', L_bb, R_bb, S_oo_ab, S_ov_ab, t1_1_a, t2_2_ab, optimize=True)
+                S2 -= 2 * lib.einsum('ia,ib,jk,la,jc,lkcb', L_bb, R_bb, S_oo_ab, S_ov_ab, t1_1_a,
+                    t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,ja,ki,kb,lc,ljcb', L_bb, R_bb, S_oo_ab, S_ov_ab, t1_1_a, t2_2_ab, optimize=True)
-                S2 -= 2 * lib.einsum('ia,ja,ki,lb,kc,ljcb', L_bb, R_bb, S_oo_ab, S_ov_ab, t1_1_a, t2_2_ab, optimize=True)
-                S2 += 2 * lib.einsum('ia,jb,ki,la,kc,ljcb', L_bb, R_bb, S_oo_ab, S_ov_ab, t1_1_a, t2_2_ab, optimize=True)
+                S2 -= 2 * lib.einsum('ia,ja,ki,lb,kc,ljcb', L_bb, R_bb, S_oo_ab, S_ov_ab, t1_1_a,
+                    t2_2_ab, optimize=True)
+                S2 += 2 * lib.einsum('ia,jb,ki,la,kc,ljcb', L_bb, R_bb, S_oo_ab, S_ov_ab, t1_1_a,
+                    t2_2_ab, optimize=True)
                 S2 -= lib.einsum('ia,ia,jk,jb,lc,klbc', L_bb, R_bb, S_oo_ab, S_ov_ab, t1_1_b, t2_2_b, optimize=True)
                 S2 += lib.einsum('ia,ib,jk,ja,lc,klbc', L_bb, R_bb, S_oo_ab, S_ov_ab, t1_1_b, t2_2_b, optimize=True)
                 S2 -= lib.einsum('ia,ib,jk,jc,la,klbc', L_bb, R_bb, S_oo_ab, S_ov_ab, t1_1_b, t2_2_b, optimize=True)
@@ -17035,12 +17117,16 @@ def get_spin_square(adc):
                 S2 += lib.einsum('ia,jb,ik,ck,la,jlbc', L_aa, R_aa, S_oo_ab, S_vo_ab, t1_1_a, t2_2_a, optimize=True)
                 S2 += lib.einsum('ia,jb,kl,al,ic,jkbc', L_aa, R_aa, S_oo_ab, S_vo_ab, t1_1_a, t2_2_a, optimize=True)
                 S2 -= lib.einsum('ia,ia,jk,bk,lc,jlbc', L_aa, R_aa, S_oo_ab, S_vo_ab, t1_1_b, t2_2_ab, optimize=True)
-                S2 += 2 * lib.einsum('ia,ia,jk,bl,kc,jlbc', L_aa, R_aa, S_oo_ab, S_vo_ab, t1_1_b, t2_2_ab, optimize=True)
+                S2 += 2 * lib.einsum('ia,ia,jk,bl,kc,jlbc', L_aa, R_aa, S_oo_ab, S_vo_ab, t1_1_b,
+                    t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,ib,jk,ak,lc,jlbc', L_aa, R_aa, S_oo_ab, S_vo_ab, t1_1_b, t2_2_ab, optimize=True)
-                S2 -= 2 * lib.einsum('ia,ib,jk,al,kc,jlbc', L_aa, R_aa, S_oo_ab, S_vo_ab, t1_1_b, t2_2_ab, optimize=True)
+                S2 -= 2 * lib.einsum('ia,ib,jk,al,kc,jlbc', L_aa, R_aa, S_oo_ab, S_vo_ab, t1_1_b,
+                    t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,ja,ik,bk,lc,jlbc', L_aa, R_aa, S_oo_ab, S_vo_ab, t1_1_b, t2_2_ab, optimize=True)
-                S2 -= 2 * lib.einsum('ia,ja,ik,bl,kc,jlbc', L_aa, R_aa, S_oo_ab, S_vo_ab, t1_1_b, t2_2_ab, optimize=True)
-                S2 += 2 * lib.einsum('ia,jb,ik,al,kc,jlbc', L_aa, R_aa, S_oo_ab, S_vo_ab, t1_1_b, t2_2_ab, optimize=True)
+                S2 -= 2 * lib.einsum('ia,ja,ik,bl,kc,jlbc', L_aa, R_aa, S_oo_ab, S_vo_ab, t1_1_b,
+                    t2_2_ab, optimize=True)
+                S2 += 2 * lib.einsum('ia,jb,ik,al,kc,jlbc', L_aa, R_aa, S_oo_ab, S_vo_ab, t1_1_b,
+                    t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,jb,ij,ak,lc,lkcb', L_aa, R_bb, S_oo_ab, S_vo_ab, t1_1_a, t2_2_ab, optimize=True)
                 S2 -= lib.einsum('ia,jb,ij,ck,la,lkcb', L_aa, R_bb, S_oo_ab, S_vo_ab, t1_1_a, t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,jb,ik,ck,la,ljcb', L_aa, R_bb, S_oo_ab, S_vo_ab, t1_1_a, t2_2_ab, optimize=True)
@@ -17052,15 +17138,19 @@ def get_spin_square(adc):
                 S2 -= lib.einsum('ia,ia,jk,bk,lc,jlbc', L_bb, R_bb, S_oo_ab, S_vo_ab, t1_1_a, t2_2_a, optimize=True)
                 S2 += lib.einsum('ia,ja,kj,bi,lc,klbc', L_bb, R_bb, S_oo_ab, S_vo_ab, t1_1_a, t2_2_a, optimize=True)
                 S2 -= lib.einsum('ia,ia,jk,bk,lc,jlbc', L_bb, R_bb, S_oo_ab, S_vo_ab, t1_1_b, t2_2_ab, optimize=True)
-                S2 += 2 * lib.einsum('ia,ia,jk,bl,kc,jlbc', L_bb, R_bb, S_oo_ab, S_vo_ab, t1_1_b, t2_2_ab, optimize=True)
+                S2 += 2 * lib.einsum('ia,ia,jk,bl,kc,jlbc', L_bb, R_bb, S_oo_ab, S_vo_ab, t1_1_b,
+                    t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,ib,jk,ck,la,jlcb', L_bb, R_bb, S_oo_ab, S_vo_ab, t1_1_b, t2_2_ab, optimize=True)
-                S2 -= 2 * lib.einsum('ia,ib,jk,cl,ka,jlcb', L_bb, R_bb, S_oo_ab, S_vo_ab, t1_1_b, t2_2_ab, optimize=True)
+                S2 -= 2 * lib.einsum('ia,ib,jk,cl,ka,jlcb', L_bb, R_bb, S_oo_ab, S_vo_ab, t1_1_b,
+                    t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,ja,kj,bi,lc,klbc', L_bb, R_bb, S_oo_ab, S_vo_ab, t1_1_b, t2_2_ab, optimize=True)
                 S2 -= lib.einsum('ia,ja,kj,bl,ic,klbc', L_bb, R_bb, S_oo_ab, S_vo_ab, t1_1_b, t2_2_ab, optimize=True)
-                S2 -= 2 * lib.einsum('ia,ja,kl,bi,lc,kjbc', L_bb, R_bb, S_oo_ab, S_vo_ab, t1_1_b, t2_2_ab, optimize=True)
+                S2 -= 2 * lib.einsum('ia,ja,kl,bi,lc,kjbc', L_bb, R_bb, S_oo_ab, S_vo_ab, t1_1_b,
+                    t2_2_ab, optimize=True)
                 S2 += lib.einsum('ia,ja,kl,bl,ic,kjbc', L_bb, R_bb, S_oo_ab, S_vo_ab, t1_1_b, t2_2_ab, optimize=True)
                 S2 -= lib.einsum('ia,jb,kj,ci,la,klcb', L_bb, R_bb, S_oo_ab, S_vo_ab, t1_1_b, t2_2_ab, optimize=True)
-                S2 += 2 * lib.einsum('ia,jb,kl,ci,la,kjcb', L_bb, R_bb, S_oo_ab, S_vo_ab, t1_1_b, t2_2_ab, optimize=True)
+                S2 += 2 * lib.einsum('ia,jb,kl,ci,la,kjcb', L_bb, R_bb, S_oo_ab, S_vo_ab, t1_1_b,
+                    t2_2_ab, optimize=True)
                 S2 += 4/3 * lib.einsum('ia,ia,jk,bk,jc,lb,lc', L_aa, R_aa, S_oo_ab, S_vo_ab, t1_1_a, t1_1_a,
                     t1_1_a, optimize=True)
                 S2 -= 1/3 * lib.einsum('ia,ib,jk,ak,lb,jc,lc', L_aa, R_aa, S_oo_ab, S_vo_ab, t1_1_a, t1_1_a,
@@ -18002,29 +18092,45 @@ def get_spin_square(adc):
                 t2_1_ab, optimize=True)
             S2 -= lib.einsum('ia,ijab,jc,bd,klce,klde', L_aa, R_aaaa_u, S_ov_ab, S_vv_ab, t2_1_b, t2_1_b, optimize=True)
             S2 -= 2 * lib.einsum('ia,ijab,kb,cd,kcjd', L_aa, R_ab, S_ov_ab, S_vv_ab, w_t2t2_kcjd, optimize=True)
-            S2 += 2 * lib.einsum('ia,ijbc,kc,bd,klae,ljed', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 -= 2 * lib.einsum('ia,ijbc,kc,de,klad,ljbe', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 += 2 * lib.einsum('ia,jkab,jb,cd,ilce,lked', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jkab,lb,cd,ilce,jked', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ia,ijbc,kc,bd,klae,ljed', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_a,
+                t2_1_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ia,ijbc,kc,de,klad,ljbe', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_a,
+                t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ia,jkab,jb,cd,ilce,lked', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_a,
+                t2_1_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jkab,lb,cd,ilce,jked', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 -= lib.einsum('ia,jkbc,jc,bd,ilae,lked', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 += 2 * lib.einsum('ia,jkbc,jc,de,ilad,lkbe', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 += 2 * lib.einsum('ia,jkbc,lc,bd,ilae,jked', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jkbc,lc,de,ilad,jkbe', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 -= 2 * lib.einsum('ia,ijab,kb,cd,klce,jlde', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 -= 2 * lib.einsum('ia,ijab,kc,de,kldc,jlbe', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 += 2 * lib.einsum('ia,ijbc,kc,bd,klae,jlde', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 += 2 * lib.einsum('ia,ijbc,kd,be,klad,jlce', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 += 2 * lib.einsum('ia,jkab,jb,cd,ilce,klde', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 += 2 * lib.einsum('ia,jkab,jc,de,ildc,klbe', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 += 2 * lib.einsum('ia,jkbc,jc,de,ilad,lkbe', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_a,
+                t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ia,jkbc,lc,bd,ilae,jked', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_a,
+                t2_1_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jkbc,lc,de,ilad,jkbe', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_a,
+                t2_1_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ia,ijab,kb,cd,klce,jlde', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_ab,
+                t2_1_b, optimize=True)
+            S2 -= 2 * lib.einsum('ia,ijab,kc,de,kldc,jlbe', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_ab,
+                t2_1_b, optimize=True)
+            S2 += 2 * lib.einsum('ia,ijbc,kc,bd,klae,jlde', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_ab,
+                t2_1_b, optimize=True)
+            S2 += 2 * lib.einsum('ia,ijbc,kd,be,klad,jlce', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_ab,
+                t2_1_b, optimize=True)
+            S2 += 2 * lib.einsum('ia,jkab,jb,cd,ilce,klde', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_ab,
+                t2_1_b, optimize=True)
+            S2 += 2 * lib.einsum('ia,jkab,jc,de,ildc,klbe', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 -= lib.einsum('ia,jkbc,jc,bd,ilae,klde', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jkbc,jd,be,ilad,klce', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jkbc,jd,be,ilad,klce', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 += lib.einsum('ia,jkbc,lb,de,ilad,jkce', L_aa, R_bbbb_u, S_ov_ab, S_vv_ab, t2_1_a, t2_1_b, optimize=True)
-            S2 -= lib.einsum('ia,jkbc,jd,ba,klce,lied', L_bb, R_aaaa_u, S_ov_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 -= lib.einsum('ia,jkbc,jd,ba,klce,lied', L_bb, R_aaaa_u, S_ov_ab, S_vv_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 -= 1/2 * lib.einsum('ia,jkbc,jd,ea,klbc,lied', L_bb, R_aaaa_u, S_ov_ab, S_vv_ab, t2_1_a,
                 t2_1_ab, optimize=True)
             S2 -= 1/2 * lib.einsum('ia,jkbc,ld,ba,jkce,lied', L_bb, R_aaaa_u, S_ov_ab, S_vv_ab, t2_1_a,
                 t2_1_ab, optimize=True)
-            S2 -= lib.einsum('ia,jkbc,jd,ba,klce,ilde', L_bb, R_aaaa_u, S_ov_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 -= lib.einsum('ia,jkbc,jd,ba,klce,ilde', L_bb, R_aaaa_u, S_ov_ab, S_vv_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 -= 2 * lib.einsum('ia,jkbc,jd,be,klce,ilad', L_bb, R_aaaa_u, S_ov_ab, S_vv_ab, t2_1_ab,
                 t2_1_b, optimize=True)
             S2 += 1/2 * lib.einsum('ia,jibc,jc,da,klbe,klde', L_bb, R_ab, S_ov_ab, S_vv_ab, t2_1_a,
@@ -18086,21 +18192,26 @@ def get_spin_square(adc):
             S2 -= lib.einsum('ia,jkbc,jd,ba,ilde,klce', L_bb, R_ab, S_ov_ab, S_vv_ab, t2_1_b, t2_1_b, optimize=True)
             S2 -= 2 * lib.einsum('ia,jkbc,jd,be,ilad,klce', L_bb, R_ab, S_ov_ab, S_vv_ab, t2_1_b, t2_1_b, optimize=True)
             S2 -= 2 * lib.einsum('ia,ijab,kb,cd,kcjd', L_bb, R_bbbb_u, S_ov_ab, S_vv_ab, w_t2t2_kcjd, optimize=True)
-            S2 -= lib.einsum('ia,ijbc,kb,da,klde,ljec', L_bb, R_bbbb_u, S_ov_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 -= lib.einsum('ia,ijbc,kb,da,klde,ljec', L_bb, R_bbbb_u, S_ov_ab, S_vv_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 -= 2 * lib.einsum('ia,ijab,kb,cd,klce,jlde', L_bb, R_bbbb_u, S_ov_ab, S_vv_ab, t2_1_ab,
                 t2_1_b, optimize=True)
             S2 -= 2 * lib.einsum('ia,ijab,kc,de,kldc,jlbe', L_bb, R_bbbb_u, S_ov_ab, S_vv_ab, t2_1_ab,
                 t2_1_b, optimize=True)
-            S2 -= lib.einsum('ia,ijbc,kb,da,klde,jlce', L_bb, R_bbbb_u, S_ov_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 -= lib.einsum('ia,ijbc,kb,da,klde,jlce', L_bb, R_bbbb_u, S_ov_ab, S_vv_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 += 2 * lib.einsum('ia,ijbc,kb,de,klda,jlce', L_bb, R_bbbb_u, S_ov_ab, S_vv_ab, t2_1_ab,
                 t2_1_b, optimize=True)
             S2 -= 1/2 * lib.einsum('ia,ijbc,kd,ea,kled,jlbc', L_bb, R_bbbb_u, S_ov_ab, S_vv_ab, t2_1_ab,
                 t2_1_b, optimize=True)
-            S2 -= lib.einsum('ia,jkab,lb,cd,lice,jkde', L_bb, R_bbbb_u, S_ov_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 -= lib.einsum('ia,jkab,lc,de,lidc,jkbe', L_bb, R_bbbb_u, S_ov_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 -= lib.einsum('ia,jkab,lb,cd,lice,jkde', L_bb, R_bbbb_u, S_ov_ab, S_vv_ab, t2_1_ab,
+                t2_1_b, optimize=True)
+            S2 -= lib.einsum('ia,jkab,lc,de,lidc,jkbe', L_bb, R_bbbb_u, S_ov_ab, S_vv_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 -= 1/2 * lib.einsum('ia,jkbc,lb,da,lide,jkce', L_bb, R_bbbb_u, S_ov_ab, S_vv_ab, t2_1_ab,
                 t2_1_b, optimize=True)
-            S2 += lib.einsum('ia,jkbc,lb,de,lida,jkce', L_bb, R_bbbb_u, S_ov_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 += lib.einsum('ia,jkbc,lb,de,lida,jkce', L_bb, R_bbbb_u, S_ov_ab, S_vv_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             # block AblB
             S2 -= 2 * lib.einsum('ia,ijab,bk,cd,jckd', L_aa, R_aaaa_u, S_vo_ab, S_vv_ab, w_t2t2_jckd, optimize=True)
             S2 -= 2 * lib.einsum('ia,ijab,ck,de,jlbd,lkce', L_aa, R_aaaa_u, S_vo_ab, S_vv_ab, t2_1_a,
@@ -18110,11 +18221,14 @@ def get_spin_square(adc):
                 t2_1_ab, optimize=True)
             S2 -= 1/2 * lib.einsum('ia,ijbc,dk,ae,jlbc,lkde', L_aa, R_aaaa_u, S_vo_ab, S_vv_ab, t2_1_a,
                 t2_1_ab, optimize=True)
-            S2 -= lib.einsum('ia,jkab,bl,cd,jkce,iled', L_aa, R_aaaa_u, S_vo_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 -= lib.einsum('ia,jkab,cl,de,jkbd,ilce', L_aa, R_aaaa_u, S_vo_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 -= lib.einsum('ia,jkab,bl,cd,jkce,iled', L_aa, R_aaaa_u, S_vo_ab, S_vv_ab, t2_1_a,
+                t2_1_ab, optimize=True)
+            S2 -= lib.einsum('ia,jkab,cl,de,jkbd,ilce', L_aa, R_aaaa_u, S_vo_ab, S_vv_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 -= 1/2 * lib.einsum('ia,jkbc,bl,ad,jkce,iled', L_aa, R_aaaa_u, S_vo_ab, S_vv_ab, t2_1_a,
                 t2_1_ab, optimize=True)
-            S2 += lib.einsum('ia,jkbc,bl,de,jkcd,ilae', L_aa, R_aaaa_u, S_vo_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 += lib.einsum('ia,jkbc,bl,de,jkcd,ilae', L_aa, R_aaaa_u, S_vo_ab, S_vv_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 -= 2 * lib.einsum('ia,ijab,bk,cd,jckd', L_aa, R_aaaa_u, S_vo_ab, S_vv_ab, w_t2t2_jckd_2, optimize=True)
             S2 -= lib.einsum('ia,ijbc,bk,ad,jckd', L_aa, R_aaaa_u, S_vo_ab, S_vv_ab, w_t2t2_jckd_2, optimize=True)
             S2 -= lib.einsum('ia,ijab,cj,db,klce,klde', L_aa, R_ab, S_vo_ab, S_vv_ab, t2_1_a, t2_1_a, optimize=True)
@@ -18175,32 +18289,47 @@ def get_spin_square(adc):
             S2 += 1/2 * lib.einsum('ia,ijbc,bk,ac,jlde,klde', L_aa, R_ab, S_vo_ab, S_vv_ab, t2_1_b,
                 t2_1_b, optimize=True)
             S2 -= lib.einsum('ia,ijbc,bk,ad,jlce,klde', L_aa, R_ab, S_vo_ab, S_vv_ab, t2_1_b, t2_1_b, optimize=True)
-            S2 -= lib.einsum('ia,jkbc,dj,ab,ilde,lkec', L_aa, R_bbbb_u, S_vo_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 -= lib.einsum('ia,jkbc,dj,ab,ilde,lkec', L_aa, R_bbbb_u, S_vo_ab, S_vv_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 -= 2 * lib.einsum('ia,jkbc,dj,eb,ilad,lkec', L_aa, R_bbbb_u, S_vo_ab, S_vv_ab, t2_1_a,
                 t2_1_ab, optimize=True)
-            S2 -= lib.einsum('ia,jkbc,dj,ab,ilde,klce', L_aa, R_bbbb_u, S_vo_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 -= lib.einsum('ia,jkbc,dj,ab,ilde,klce', L_aa, R_bbbb_u, S_vo_ab, S_vv_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 -= 1/2 * lib.einsum('ia,jkbc,dj,ae,ilde,klbc', L_aa, R_bbbb_u, S_vo_ab, S_vv_ab, t2_1_ab,
                 t2_1_b, optimize=True)
             S2 -= 1/2 * lib.einsum('ia,jkbc,dl,ab,ilde,jkce', L_aa, R_bbbb_u, S_vo_ab, S_vv_ab, t2_1_ab,
                 t2_1_b, optimize=True)
             S2 += lib.einsum('ia,jkbc,bl,de,jkcd,ilae', L_bb, R_aaaa_u, S_vo_ab, S_vv_ab, t2_1_a, t2_1_b, optimize=True)
             S2 -= 2 * lib.einsum('ia,jiba,bk,cd,jckd', L_bb, R_ab, S_vo_ab, S_vv_ab, w_t2t2_jckd, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jiba,ck,de,jlbd,lkce', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 += 2 * lib.einsum('ia,jibc,bk,dc,jlde,lkea', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 += 2 * lib.einsum('ia,jibc,dk,ec,jlbe,lkda', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 += 2 * lib.einsum('ia,jkba,bk,cd,jlce,lied', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 += 2 * lib.einsum('ia,jkba,ck,de,jlbd,lice', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jiba,ck,de,jlbd,lkce', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_a,
+                t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ia,jibc,bk,dc,jlde,lkea', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_a,
+                t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ia,jibc,dk,ec,jlbe,lkda', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_a,
+                t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ia,jkba,bk,cd,jlce,lied', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_a,
+                t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ia,jkba,ck,de,jlbd,lice', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 -= lib.einsum('ia,jkbc,bk,dc,jlde,liea', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jkbc,dk,ec,jlbe,lida', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jkbc,dk,ec,jlbe,lida', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 -= 2 * lib.einsum('ia,jiba,bk,cd,jckd', L_bb, R_ab, S_vo_ab, S_vv_ab, w_t2t2_jckd_2, optimize=True)
-            S2 += 2 * lib.einsum('ia,jibc,bk,dc,jlde,klae', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jibc,bk,de,jldc,klae', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 += 2 * lib.einsum('ia,jkba,bk,cd,jlce,ilde', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jkba,bl,cd,jkce,ilde', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 += 2 * lib.einsum('ia,jibc,bk,dc,jlde,klae', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_ab,
+                t2_1_b, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jibc,bk,de,jldc,klae', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_ab,
+                t2_1_b, optimize=True)
+            S2 += 2 * lib.einsum('ia,jkba,bk,cd,jlce,ilde', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_ab,
+                t2_1_b, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jkba,bl,cd,jkce,ilde', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 -= lib.einsum('ia,jkbc,bk,dc,jlde,ilae', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 += 2 * lib.einsum('ia,jkbc,bk,de,jldc,ilae', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 += 2 * lib.einsum('ia,jkbc,bl,dc,jkde,ilae', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jkbc,bl,de,jkdc,ilae', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 += 2 * lib.einsum('ia,jkbc,bk,de,jldc,ilae', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_ab,
+                t2_1_b, optimize=True)
+            S2 += 2 * lib.einsum('ia,jkbc,bl,dc,jkde,ilae', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_ab,
+                t2_1_b, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jkbc,bl,de,jkdc,ilae', L_bb, R_ab, S_vo_ab, S_vv_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 -= lib.einsum('ia,ijab,cj,db,klce,klde', L_bb, R_bbbb_u, S_vo_ab, S_vv_ab, t2_1_a, t2_1_a, optimize=True)
             S2 -= 2 * lib.einsum('ia,ijab,cj,db,klce,klde', L_bb, R_bbbb_u, S_vo_ab, S_vv_ab, t2_1_ab,
                 t2_1_ab, optimize=True)
@@ -18297,35 +18426,51 @@ def get_spin_square(adc):
             S2 += 2 * lib.einsum('ia,jkbc,jl,bm,imad,klcd', L_aa, R_aaaa_u, S_oo_ab, S_vo_ab, t2_1_ab,
                 t2_1_ab, optimize=True)
             S2 += lib.einsum('ia,ijab,jk,bl,kmcd,lmcd', L_aa, R_aaaa_u, S_oo_ab, S_vo_ab, t2_1_b, t2_1_b, optimize=True)
-            S2 += 2 * lib.einsum('ia,ijab,kl,cj,kmcd,mldb', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ia,ijab,kl,cj,kmcd,mldb', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 -= lib.einsum('ia,ijab,kl,cl,kmcd,mjdb', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 -= 2 * lib.einsum('ia,ijbc,kl,bj,kmad,mldc', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ia,ijbc,kl,bj,kmad,mldc', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 += lib.einsum('ia,ijbc,kl,bl,kmad,mjdc', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 += 2 * lib.einsum('ia,ijbc,kl,dj,kmad,mlbc', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ia,ijbc,kl,dj,kmad,mlbc', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 -= lib.einsum('ia,ijbc,kl,dl,kmad,mjbc', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jkab,jl,ck,imcd,mldb', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jkab,jl,ck,imcd,mldb', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 += lib.einsum('ia,jkab,jl,cl,imcd,mkdb', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 += 2 * lib.einsum('ia,jkab,lm,ck,ilcd,jmdb', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ia,jkab,lm,ck,ilcd,jmdb', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 -= lib.einsum('ia,jkab,lm,cm,ilcd,jkdb', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a, t2_1_ab, optimize=True)
             S2 += lib.einsum('ia,jkbc,jl,bk,imad,mldc', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jkbc,jl,dk,imad,mlbc', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jkbc,jl,dk,imad,mlbc', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 += lib.einsum('ia,jkbc,jl,dl,imad,mkbc', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jkbc,lm,bk,ilad,jmdc', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jkbc,lm,bk,ilad,jmdc', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 += lib.einsum('ia,jkbc,lm,bm,ilad,jkdc', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 += 2 * lib.einsum('ia,jkbc,lm,dk,ilad,jmbc', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 += 2 * lib.einsum('ia,ijab,kl,cj,kmcd,lmbd', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 += 2 * lib.einsum('ia,jkbc,lm,dk,ilad,jmbc', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_a,
+                t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ia,ijab,kl,cj,kmcd,lmbd', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 -= lib.einsum('ia,ijab,kl,cl,kmcd,jmbd', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 += 2 * lib.einsum('ia,ijab,kl,cm,kmcd,jlbd', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 -= 2 * lib.einsum('ia,ijbc,kl,bj,kmad,lmcd', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 += 2 * lib.einsum('ia,ijab,kl,cm,kmcd,jlbd', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_ab,
+                t2_1_b, optimize=True)
+            S2 -= 2 * lib.einsum('ia,ijbc,kl,bj,kmad,lmcd', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 += lib.einsum('ia,ijbc,kl,bl,kmad,jmcd', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 -= 2 * lib.einsum('ia,ijbc,kl,bm,kmad,jlcd', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jkab,jl,ck,imcd,lmbd', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 -= 2 * lib.einsum('ia,ijbc,kl,bm,kmad,jlcd', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_ab,
+                t2_1_b, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jkab,jl,ck,imcd,lmbd', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 += lib.einsum('ia,jkab,jl,cl,imcd,kmbd', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jkab,jl,cm,imcd,klbd', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jkab,jl,cm,imcd,klbd', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 += lib.einsum('ia,jkbc,jl,bk,imad,lmcd', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 += 2 * lib.einsum('ia,jkbc,jl,bm,imad,klcd', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 += 2 * lib.einsum('ia,jkbc,jl,bm,imad,klcd', L_aa, R_ab, S_oo_ab, S_vo_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 -= lib.einsum('ia,jkbc,lm,dj,ilad,kmbc', L_aa, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_a, t2_1_b, optimize=True)
-            S2 += lib.einsum('ia,jkbc,ji,bl,kmcd,mlda', L_bb, R_aaaa_u, S_oo_ab, S_vo_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 += lib.einsum('ia,jkbc,ji,bl,kmcd,mlda', L_bb, R_aaaa_u, S_oo_ab, S_vo_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 += 1/2 * lib.einsum('ia,jkbc,ji,dl,kmbc,mlda', L_bb, R_aaaa_u, S_oo_ab, S_vo_ab, t2_1_a,
                 t2_1_ab, optimize=True)
             S2 -= 1/2 * lib.einsum('ia,jkbc,jl,dl,kmbc,mida', L_bb, R_aaaa_u, S_oo_ab, S_vo_ab, t2_1_a,
@@ -18334,7 +18479,8 @@ def get_spin_square(adc):
                 t2_1_ab, optimize=True)
             S2 -= 1/2 * lib.einsum('ia,jkbc,lm,bm,jkcd,lida', L_bb, R_aaaa_u, S_oo_ab, S_vo_ab, t2_1_a,
                 t2_1_ab, optimize=True)
-            S2 += lib.einsum('ia,jkbc,ji,bl,kmcd,lmad', L_bb, R_aaaa_u, S_oo_ab, S_vo_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 += lib.einsum('ia,jkbc,ji,bl,kmcd,lmad', L_bb, R_aaaa_u, S_oo_ab, S_vo_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 += 2 * lib.einsum('ia,jkbc,jl,bm,klcd,imad', L_bb, R_aaaa_u, S_oo_ab, S_vo_ab, t2_1_ab,
                 t2_1_b, optimize=True)
             S2 += 1/2 * lib.einsum('ia,jiba,jk,ck,lmbd,lmcd', L_bb, R_ab, S_oo_ab, S_vo_ab, t2_1_a,
@@ -18413,18 +18559,24 @@ def get_spin_square(adc):
             S2 += 2 * lib.einsum('ia,jkbc,jl,bm,imad,klcd', L_bb, R_ab, S_oo_ab, S_vo_ab, t2_1_b, t2_1_b, optimize=True)
             S2 += 2 * lib.einsum('ia,ijab,kl,cj,kmcd,mldb', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_a,
                 t2_1_ab, optimize=True)
-            S2 -= lib.einsum('ia,ijab,kl,cl,kmcd,mjdb', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 += lib.einsum('ia,jkab,li,cj,lmcd,mkdb', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 -= lib.einsum('ia,ijab,kl,cl,kmcd,mjdb', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_a,
+                t2_1_ab, optimize=True)
+            S2 += lib.einsum('ia,jkab,li,cj,lmcd,mkdb', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 += 2 * lib.einsum('ia,ijab,kl,cj,kmcd,lmbd', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_ab,
                 t2_1_b, optimize=True)
-            S2 -= lib.einsum('ia,ijab,kl,cl,kmcd,jmbd', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 -= lib.einsum('ia,ijab,kl,cl,kmcd,jmbd', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 += 2 * lib.einsum('ia,ijab,kl,cm,kmcd,jlbd', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_ab,
                 t2_1_b, optimize=True)
-            S2 += lib.einsum('ia,ijbc,kl,dj,kmda,lmbc', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 += lib.einsum('ia,ijbc,kl,dj,kmda,lmbc', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 -= 1/2 * lib.einsum('ia,ijbc,kl,dl,kmda,jmbc', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_ab,
                 t2_1_b, optimize=True)
-            S2 += lib.einsum('ia,ijbc,kl,dm,kmda,jlbc', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 += lib.einsum('ia,jkab,li,cj,lmcd,kmbd', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 += lib.einsum('ia,ijbc,kl,dm,kmda,jlbc', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_ab,
+                t2_1_b, optimize=True)
+            S2 += lib.einsum('ia,jkab,li,cj,lmcd,kmbd', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 += 1/2 * lib.einsum('ia,jkab,li,cm,lmcd,jkbd', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_ab,
                 t2_1_b, optimize=True)
             S2 -= 2 * lib.einsum('ia,jkab,lm,cj,licd,kmbd', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_ab,
@@ -18433,7 +18585,8 @@ def get_spin_square(adc):
                 t2_1_b, optimize=True)
             S2 += 1/2 * lib.einsum('ia,jkbc,li,dj,lmda,kmbc', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_ab,
                 t2_1_b, optimize=True)
-            S2 -= lib.einsum('ia,jkbc,lm,dj,lida,kmbc', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 -= lib.einsum('ia,jkbc,lm,dj,lida,kmbc', L_bb, R_bbbb_u, S_oo_ab, S_vo_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             # block IbdB
             S2 -= 2 * lib.einsum('ia,ijab,kc,db,kjdc', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_2_ab, optimize=True)
             S2 += 2 * lib.einsum('ia,ijbc,kd,ac,kjbd', L_aa, R_ab, S_ov_ab, S_vv_ab, t2_2_ab, optimize=True)
@@ -18456,14 +18609,18 @@ def get_spin_square(adc):
             # block IblJ
             S2 += 2 * lib.einsum('ia,ijab,kl,jc,kmbd,mldc', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_a,
                 t2_1_ab, optimize=True)
-            S2 -= lib.einsum('ia,ijab,kl,kc,jmbd,mldc', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 -= lib.einsum('ia,ijab,kl,kc,jmbd,mldc', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 += 2 * lib.einsum('ia,ijab,kl,mc,jkbd,mldc', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_a,
                 t2_1_ab, optimize=True)
-            S2 += lib.einsum('ia,ijbc,kl,jd,kmbc,mlad', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 += lib.einsum('ia,ijbc,kl,jd,kmbc,mlad', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 -= 1/2 * lib.einsum('ia,ijbc,kl,kd,jmbc,mlad', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_a,
                 t2_1_ab, optimize=True)
-            S2 += lib.einsum('ia,ijbc,kl,md,jkbc,mlad', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 += lib.einsum('ia,jkab,il,jc,kmbd,mldc', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 += lib.einsum('ia,ijbc,kl,md,jkbc,mlad', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_a,
+                t2_1_ab, optimize=True)
+            S2 += lib.einsum('ia,jkab,il,jc,kmbd,mldc', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 += 1/2 * lib.einsum('ia,jkab,il,mc,jkbd,mldc', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_a,
                 t2_1_ab, optimize=True)
             S2 -= 2 * lib.einsum('ia,jkab,lm,jc,klbd,imdc', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_a,
@@ -18472,11 +18629,14 @@ def get_spin_square(adc):
                 t2_1_ab, optimize=True)
             S2 += 1/2 * lib.einsum('ia,jkbc,il,jd,kmbc,mlad', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_a,
                 t2_1_ab, optimize=True)
-            S2 -= lib.einsum('ia,jkbc,lm,jd,klbc,imad', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 -= lib.einsum('ia,jkbc,lm,jd,klbc,imad', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 += 2 * lib.einsum('ia,ijab,kl,jc,kmbd,lmcd', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_ab,
                 t2_1_b, optimize=True)
-            S2 -= lib.einsum('ia,ijab,kl,kc,jmbd,lmcd', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 += lib.einsum('ia,jkab,il,jc,kmbd,lmcd', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 -= lib.einsum('ia,ijab,kl,kc,jmbd,lmcd', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_ab,
+                t2_1_b, optimize=True)
+            S2 += lib.einsum('ia,jkab,il,jc,kmbd,lmcd', L_aa, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 += lib.einsum('ia,ijab,kj,lb,kmcd,lmcd', L_aa, R_ab, S_oo_ab, S_ov_ab, t2_1_a, t2_1_a, optimize=True)
             S2 -= 2 * lib.einsum('ia,ijbc,kj,lc,lmad,kmbd', L_aa, R_ab, S_oo_ab, S_ov_ab, t2_1_a, t2_1_a, optimize=True)
             S2 -= 1/2 * lib.einsum('ia,jkab,ik,lb,jmcd,lmcd', L_aa, R_ab, S_oo_ab, S_ov_ab, t2_1_a,
@@ -18551,10 +18711,12 @@ def get_spin_square(adc):
             S2 -= 1/2 * lib.einsum('ia,jkab,il,jb,kmcd,lmcd', L_aa, R_ab, S_oo_ab, S_ov_ab, t2_1_b,
                 t2_1_b, optimize=True)
             S2 += lib.einsum('ia,jkab,il,jc,kmbd,lmcd', L_aa, R_ab, S_oo_ab, S_ov_ab, t2_1_b, t2_1_b, optimize=True)
-            S2 += lib.einsum('ia,jkbc,ij,lb,lmad,mkdc', L_aa, R_bbbb_u, S_oo_ab, S_ov_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 += lib.einsum('ia,jkbc,ij,lb,lmad,mkdc', L_aa, R_bbbb_u, S_oo_ab, S_ov_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 += 2 * lib.einsum('ia,jkbc,lj,mb,imad,lkdc', L_aa, R_bbbb_u, S_oo_ab, S_ov_ab, t2_1_a,
                 t2_1_ab, optimize=True)
-            S2 += lib.einsum('ia,jkbc,ij,lb,lmad,kmcd', L_aa, R_bbbb_u, S_oo_ab, S_ov_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 += lib.einsum('ia,jkbc,ij,lb,lmad,kmcd', L_aa, R_bbbb_u, S_oo_ab, S_ov_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 += 1/2 * lib.einsum('ia,jkbc,ij,ld,lmad,kmbc', L_aa, R_bbbb_u, S_oo_ab, S_ov_ab, t2_1_ab,
                 t2_1_b, optimize=True)
             S2 += 1/2 * lib.einsum('ia,jkbc,il,mb,mlad,jkcd', L_aa, R_bbbb_u, S_oo_ab, S_ov_ab, t2_1_ab,
@@ -18564,32 +18726,47 @@ def get_spin_square(adc):
             S2 -= 1/2 * lib.einsum('ia,jkbc,lm,lb,imad,jkcd', L_aa, R_bbbb_u, S_oo_ab, S_ov_ab, t2_1_ab,
                 t2_1_b, optimize=True)
             S2 -= lib.einsum('ia,jkbc,lm,jd,klbc,imad', L_bb, R_aaaa_u, S_oo_ab, S_ov_ab, t2_1_a, t2_1_b, optimize=True)
-            S2 += 2 * lib.einsum('ia,jiba,kl,jc,kmbd,mldc', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ia,jiba,kl,jc,kmbd,mldc', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 -= lib.einsum('ia,jiba,kl,kc,jmbd,mldc', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 += 2 * lib.einsum('ia,jiba,kl,mc,jkbd,mldc', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jibc,kl,jc,kmbd,mlda', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ia,jiba,kl,mc,jkbd,mldc', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_a,
+                t2_1_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jibc,kl,jc,kmbd,mlda', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 += lib.einsum('ia,jibc,kl,kc,jmbd,mlda', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jibc,kl,mc,jkbd,mlda', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jkba,lk,jc,lmbd,midc', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jibc,kl,mc,jkbd,mlda', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_a,
+                t2_1_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jkba,lk,jc,lmbd,midc', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 += lib.einsum('ia,jkba,lk,lc,jmbd,midc', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jkba,lk,mc,jlbd,midc', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_a, t2_1_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jkba,lk,mc,jlbd,midc', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_a,
+                t2_1_ab, optimize=True)
             S2 += lib.einsum('ia,jkbc,lk,jc,lmbd,mida', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 += 2 * lib.einsum('ia,jkbc,lk,mc,jlbd,mida', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_a, t2_1_ab, optimize=True)
-            S2 += 2 * lib.einsum('ia,jiba,kl,jc,kmbd,lmcd', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 += 2 * lib.einsum('ia,jkbc,lk,mc,jlbd,mida', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_a,
+                t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ia,jiba,kl,jc,kmbd,lmcd', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 -= lib.einsum('ia,jiba,kl,kc,jmbd,lmcd', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jibc,kl,jc,kmbd,lmad', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 += 2 * lib.einsum('ia,jibc,kl,jd,kmbc,lmad', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jibc,kl,jc,kmbd,lmad', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab,
+                t2_1_b, optimize=True)
+            S2 += 2 * lib.einsum('ia,jibc,kl,jd,kmbc,lmad', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 += lib.einsum('ia,jibc,kl,kc,jmbd,lmad', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab, t2_1_b, optimize=True)
             S2 -= lib.einsum('ia,jibc,kl,kd,jmbc,lmad', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jkba,lk,jc,lmbd,imcd', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jkba,lk,jc,lmbd,imcd', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 += lib.einsum('ia,jkba,lk,lc,jmbd,imcd', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 += 2 * lib.einsum('ia,jkba,lm,jc,lkbd,imcd', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 += 2 * lib.einsum('ia,jkba,lm,jc,lkbd,imcd', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 -= lib.einsum('ia,jkba,lm,lc,jkbd,imcd', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab, t2_1_b, optimize=True)
             S2 += lib.einsum('ia,jkbc,lk,jc,lmbd,imad', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jkbc,lk,jd,lmbc,imad', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jkbc,lk,jd,lmbc,imad', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 += lib.einsum('ia,jkbc,lk,ld,jmbc,imad', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 -= 2 * lib.einsum('ia,jkbc,lm,jc,lkbd,imad', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab, t2_1_b, optimize=True)
-            S2 += 2 * lib.einsum('ia,jkbc,lm,jd,lkbc,imad', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab, t2_1_b, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jkbc,lm,jc,lkbd,imad', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab,
+                t2_1_b, optimize=True)
+            S2 += 2 * lib.einsum('ia,jkbc,lm,jd,lkbc,imad', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab,
+                t2_1_b, optimize=True)
             S2 += lib.einsum('ia,jkbc,lm,lc,jkbd,imad', L_bb, R_ab, S_oo_ab, S_ov_ab, t2_1_ab, t2_1_b, optimize=True)
             S2 += lib.einsum('ia,ijab,kj,lb,kmcd,lmcd', L_bb, R_bbbb_u, S_oo_ab, S_ov_ab, t2_1_a, t2_1_a, optimize=True)
             S2 += lib.einsum('ia,ijab,kj,kc,lmdb,lmdc', L_bb, R_bbbb_u, S_oo_ab, S_ov_ab, t2_1_ab,
