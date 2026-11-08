@@ -1668,7 +1668,7 @@ def _sort_by_similarity(w, v, nroots, conv, vlast, emin=None, heff=None):
     head, nroots = vlast.shape
     conv = numpy.asarray(conv[:nroots])
     ovlp = vlast[:,conv].T.conj().dot(v[:head])
-    ovlp = numpy.einsum('ij,ij->j', ovlp, ovlp)
+    ovlp = numpy.sum(abs(ovlp)**2, axis=0)
     nconv = numpy.count_nonzero(conv)
     nleft = nroots - nconv
     idx = ovlp.argsort()

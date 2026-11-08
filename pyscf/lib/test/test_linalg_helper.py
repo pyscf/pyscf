@@ -25,6 +25,21 @@ from pyscf import fci
 from pyscf.lib import linalg_helper
 
 class KnownValues(unittest.TestCase):
+    def test_sort_by_similarity(self):
+        w = numpy.array([1., 2., 3., 4.])
+        v = numpy.eye(4)[:,[2,0,3,1]]
+        conv = [True, False, True]
+        idx = [0,2,1]
+        for phase in (1., 1j):
+            with self.subTest(phase=phase):
+                # Both phases give the same converged subspace: span(e0, e2).
+                vlast = numpy.array([[1., 0., phase],
+                                     [0., numpy.sqrt(2.), 0.],
+                                     [1., 0., -phase]]) / numpy.sqrt(2.)
+                e, c = linalg_helper._sort_by_similarity(w, v, 3, conv, vlast)
+                numpy.testing.assert_array_equal(e, w[idx])
+                numpy.testing.assert_array_equal(c, v[:,idx])
+
     def test_davidson(self):
         mol = gto.Mole()
         mol.verbose = 0
