@@ -23,6 +23,7 @@
 '''
 Restricted algebraic diagrammatic construction
 '''
+import warnings
 import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
@@ -51,6 +52,12 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
         eris = adc.transform_integrals()
 
     if adc.approx_trans_moments:
+        warnings.warn(
+            "approx_trans_moments now defaults to True: transition moments, <S^2>, "
+            "1-RDMs and FNO energy corrections are computed approximately; "
+            "ADC energies are unaffected. Set myadc.approx_trans_moments = False "
+            "before kernel() for exact results.",
+            stacklevel=2)
         if adc.method in ("adc(2)", "adc(2)-x"):
             logger.warn(
                 adc,
