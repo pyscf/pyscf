@@ -289,6 +289,42 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mf.e_tot, -75.723654936331542, 9)
         self.assertTrue(numpy.allclose(mf.mo_occ[:6], [2,2,2,2,1,1]))
 
+    def test_follow_state_complex(self):
+        mol_he = gto.M(atom='He 0 0 0', basis='6-31g', verbose=0)
+        m = scf.RHF(mol_he)
+        s = m.get_ovlp()
+        w, c = scipy.linalg.eigh(s)
+        c = c / numpy.sqrt(w)
+
+        # A phase rotation cannot change which orbital is occupied.
+        trial = c.astype(complex)
+        trial[:, 0] *= 1j
+        addons.follow_state_(m, c[:, :1])
+        numpy.testing.assert_array_equal(m.get_occ(numpy.zeros(2), trial), [2, 0])
+
+        # A complex reference also requires the Hermitian transpose.
+        u = (c[:, 0] + 1j * c[:, 1]) / numpy.sqrt(2)
+        v = (c[:, 0] - 1j * c[:, 1]) / numpy.sqrt(2)
+        m = scf.RHF(mol_he)
+        addons.follow_state_(m, u[:, None])
+        numpy.testing.assert_array_equal(
+            m.get_occ(numpy.zeros(2), numpy.column_stack((u, v))), [2, 0])
+
+    def test_mom_occ_complex(self):
+        mol_he = gto.M(atom='He 0 0 0', basis='6-31g', verbose=0)
+        m = scf.GHF(mol_he)
+        w, c = scipy.linalg.eigh(m.get_ovlp())
+        c = c / numpy.sqrt(w)  # C^H S C = I
+        nmo = c.shape[1]
+        setocc = numpy.zeros(nmo)
+        setocc[:mol_he.nelectron] = 1
+        trial = c.astype(complex)
+        trial[:, :mol_he.nelectron] *= 1j
+
+        addons.mom_occ_(m, c, setocc)
+        numpy.testing.assert_array_equal(
+            m.get_occ(numpy.zeros(nmo), trial), setocc)
+
     def test_dynamic_level_shift(self):
         mf = scf.RHF(mol)
         mf = addons.dynamic_level_shift(mf)
