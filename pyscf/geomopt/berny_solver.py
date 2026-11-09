@@ -114,7 +114,8 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     else:
         raise NotImplementedError('Nuclear gradients of %s not available' % method)
     if not include_ghost:
-        g_scanner.atmlst = numpy.where(method.mol.atom_charges() != 0)[0]
+        atmlst = numpy.where(method.mol.atom_charges() != 0)[0]
+        g_scanner.atmlst = atmlst
 
     # When symmetry is enabled, the molecule may be shifted or rotated to make
     # the z-axis be the main axis. The transformation can cause inconsistency
@@ -134,7 +135,15 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     for cycle, geom in enumerate(optimizer):
         if log.verbose >= lib.logger.NOTE:
             log.note('\nGeometry optimization cycle %d', cycle+1)
-            dump_mol_geometry(mol, geom.coords, log)
+            if include_ghost:
+                dump_coords = geom.coords
+            else:
+                # geom.coords contains the non-ghost atoms only. Fill in the
+                # fixed ghost coordinates (in Angstrom) so that the dump can
+                # be compared against the full molecule.
+                dump_coords = mol.atom_coords() * lib.param.BOHR
+                dump_coords[atmlst] = geom.coords
+            dump_mol_geometry(mol, dump_coords, log)
 
         if mol.symmetry:
             geom.coords = symmetrize(mol, geom.coords)
