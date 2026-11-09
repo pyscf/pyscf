@@ -560,11 +560,11 @@ def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
         dm1, dm2 = rdm.reorder_rdm(dm1, dm2, inplace=True)
     return dm1, dm2
 
-def _get_init_guess(na, nb, nroots, hdiag, nelec):
+def _get_init_guess(na, nb, nroots, hdiag, nelec, same_strings=True):
     # The "nroots" lowest determinats based on energy expectation value.
     ci0 = []
     neleca, nelecb = _unpack_nelec(nelec)
-    if neleca == nelecb and na == nb:
+    if same_strings and neleca == nelecb and na == nb:
         hdiag = lib.pack_tril(hdiag.reshape(na, na))
         if hdiag.size <= nroots:
             addrs = numpy.arange(hdiag.size)
