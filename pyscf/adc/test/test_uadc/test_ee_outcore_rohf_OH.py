@@ -70,12 +70,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3],0.3369031510, 6)
 
         self.assertAlmostEqual(p[0],0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.00255436, 6)
-        self.assertAlmostEqual(p[2],0.00356489, 6)
-        self.assertAlmostEqual(p[3],0.01811875, 6)
+        self.assertAlmostEqual(p[1],0.0026027177196199544, 6)
+        self.assertAlmostEqual(p[2],0.0034877302604148087, 6)
+        self.assertAlmostEqual(p[3],0.017894596329760894, 6)
 
-        self.assertAlmostEqual(spin[0],0.75053521 , 5)
-        self.assertAlmostEqual(spin[1],0.75064928 , 5)
+        self.assertAlmostEqual(spin[0],0.7507328130147268 , 5)
+        self.assertAlmostEqual(spin[1],0.7509027963613679 , 5)
         self.assertAlmostEqual(spin[2],2.43570834 , 5)
         self.assertAlmostEqual(spin[3],1.14753801 , 5)
 
@@ -93,12 +93,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3], 0.2991598135, 6)
 
         self.assertAlmostEqual(p[0],-0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.00219744 , 6)
-        self.assertAlmostEqual(p[2],0.00012567 , 6)
-        self.assertAlmostEqual(p[3],0.01591094 , 6)
+        self.assertAlmostEqual(p[1],0.002236787975786669 , 6)
+        self.assertAlmostEqual(p[2],0.00011855986329288001 , 6)
+        self.assertAlmostEqual(p[3],0.015657625594493588 , 6)
 
-        self.assertAlmostEqual(spin[0], 0.75043297 , 5)
-        self.assertAlmostEqual(spin[1],0.75037407  , 5)
+        self.assertAlmostEqual(spin[0], 0.7506084433999649 , 5)
+        self.assertAlmostEqual(spin[1],0.7505841022324051  , 5)
         self.assertAlmostEqual(spin[2],3.65784145  , 5)
         self.assertAlmostEqual(spin[3],0.80459280  , 5)
 
@@ -116,14 +116,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3], 0.3187665826, 6)
 
         self.assertAlmostEqual(p[0],-0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.00239567 , 6)
+        self.assertAlmostEqual(p[1],0.0023967853978173236 , 6)
         self.assertAlmostEqual(p[2],0.00000000 , 6)
-        self.assertAlmostEqual(p[3],0.01485308 , 6)
+        self.assertAlmostEqual(p[3],0.014921114917585474 , 6)
 
-        self.assertAlmostEqual(spin[0], 0.75027556 , 5)
-        self.assertAlmostEqual(spin[1],0.75009053  , 5)
-        self.assertAlmostEqual(spin[2],3.72613641  , 5)
-        self.assertAlmostEqual(spin[3],0.75901326  , 5)
+        self.assertAlmostEqual(spin[0], 0.75002142 , 5)
+        self.assertAlmostEqual(spin[1],0.75000106  , 5)
+        self.assertAlmostEqual(spin[2],3.71887746  , 5)
+        self.assertAlmostEqual(spin[3],0.76022331  , 5)
 if __name__ == "__main__":
     print("EE calculations for different ADC methods for OH molecule")
     unittest.main()

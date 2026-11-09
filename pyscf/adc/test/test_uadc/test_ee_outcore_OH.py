@@ -71,14 +71,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3],0.3371941604, 6)
 
         self.assertAlmostEqual(p[0],0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.00260529, 6)
-        self.assertAlmostEqual(p[2],0.00370851, 6)
-        self.assertAlmostEqual(p[3],0.01799256, 6)
+        self.assertAlmostEqual(p[1],0.002642369044511607, 6)
+        self.assertAlmostEqual(p[2],0.003610649647366494, 6)
+        self.assertAlmostEqual(p[3],0.017775953540500516, 6)
 
-        self.assertAlmostEqual(spin[0],0.75100183 , 5)
-        self.assertAlmostEqual(spin[1],0.75099278 , 5)
-        self.assertAlmostEqual(spin[2],2.41928532 , 5)
-        self.assertAlmostEqual(spin[3],1.16078708 , 5)
+        self.assertAlmostEqual(spin[0],0.7522904063542506 , 5)
+        self.assertAlmostEqual(spin[1],0.7522576307332169 , 5)
+        self.assertAlmostEqual(spin[2],2.4209847454057316 , 5)
+        self.assertAlmostEqual(spin[3],1.1624176868637628 , 5)
 
     def test_ee_adc2x(self):
         myadc.method = "adc(2)-x"
@@ -94,14 +94,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3], 0.3014583658, 6)
 
         self.assertAlmostEqual(p[0],-0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.00222149 , 6)
-        self.assertAlmostEqual(p[2],0.00029737 , 6)
-        self.assertAlmostEqual(p[3],0.01679878 , 6)
+        self.assertAlmostEqual(p[1],0.0022511415415091174 , 6)
+        self.assertAlmostEqual(p[2],0.00027815045632255885 , 6)
+        self.assertAlmostEqual(p[3],0.016528446067415534 , 6)
 
-        self.assertAlmostEqual(spin[0], 0.74929673 , 5)
-        self.assertAlmostEqual(spin[1],0.74927348  , 5)
-        self.assertAlmostEqual(spin[2],3.55591433  , 5)
-        self.assertAlmostEqual(spin[3],0.86054541  , 5)
+        self.assertAlmostEqual(spin[0], 0.7505358324502609 , 5)
+        self.assertAlmostEqual(spin[1],0.7504465152068183  , 5)
+        self.assertAlmostEqual(spin[2],3.5572050239861834  , 5)
+        self.assertAlmostEqual(spin[3],0.8620825777207242  , 5)
 
     def test_ee_adc3(self):
         myadc.method = "adc(3)"
@@ -117,14 +117,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3], 0.3214724068, 6)
 
         self.assertAlmostEqual(p[0],-0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.00240992 , 6)
-        self.assertAlmostEqual(p[2],0.00009444 , 6)
-        self.assertAlmostEqual(p[3],0.01617088 , 6)
+        self.assertAlmostEqual(p[1],0.0024042299624731397 , 6)
+        self.assertAlmostEqual(p[2],9.016719283603531e-05 , 6)
+        self.assertAlmostEqual(p[3],0.01624110858261477 , 6)
 
-        self.assertAlmostEqual(spin[0], 0.74912312 , 5)
-        self.assertAlmostEqual(spin[1],0.74917845  , 5)
-        self.assertAlmostEqual(spin[2],3.68386876  , 5)
-        self.assertAlmostEqual(spin[3],0.79073584  , 5)
+        self.assertAlmostEqual(spin[0], 0.75005719 , 5)
+        self.assertAlmostEqual(spin[1],0.75008973  , 5)
+        self.assertAlmostEqual(spin[2],3.67821801  , 5)
+        self.assertAlmostEqual(spin[3],0.79204834  , 5)
 if __name__ == "__main__":
     print("EE calculations for different ADC methods for OH molecule")
     unittest.main()

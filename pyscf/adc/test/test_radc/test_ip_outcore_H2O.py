@@ -68,9 +68,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[1], 0.4908881395275673, 6)
         self.assertAlmostEqual(e[2], 0.6573303400764507, 6)
 
-        self.assertAlmostEqual(p[0], 1.8162558898737797, 6)
-        self.assertAlmostEqual(p[1], 1.8274312312239454, 6)
-        self.assertAlmostEqual(p[2], 1.8582314560275948, 6)
+        self.assertAlmostEqual(p[0], 1.81594619519855, 6)
+        self.assertAlmostEqual(p[1], 1.8271278901200159, 6)
+        self.assertAlmostEqual(p[2], 1.8580497651729588, 6)
 
     def test_ip_adc2x(self):
 
@@ -86,9 +86,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[1], 0.4949784593692911, 6)
         self.assertAlmostEqual(e[2], 0.6602619900185128, 6)
 
-        self.assertAlmostEqual(p[0], 1.8296221555740104, 6)
-        self.assertAlmostEqual(p[1], 1.8381884804163264, 6)
-        self.assertAlmostEqual(p[2], 1.8669268953278064, 6)
+        self.assertAlmostEqual(p[0], 1.829425572392697, 6)
+        self.assertAlmostEqual(p[1], 1.8379855493632293, 6)
+        self.assertAlmostEqual(p[2], 1.86681228777205, 6)
 
     def test_ip_adc3(self):
 
@@ -105,10 +105,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[2], 0.6850054080600295, 6)
         self.assertAlmostEqual(e[3], 1.1090318744878, 6)
 
-        self.assertAlmostEqual(p[0], 1.8682367032338498, 6)
-        self.assertAlmostEqual(p[1], 1.8720029748507658, 6)
-        self.assertAlmostEqual(p[2], 1.8881842403480831, 6)
-        self.assertAlmostEqual(p[3], 0.1651131053450, 6)
+        self.assertAlmostEqual(p[0], 1.8683046103300471, 6)
+        self.assertAlmostEqual(p[1], 1.8720323166638342, 6)
+        self.assertAlmostEqual(p[2], 1.8882246920860226, 6)
+        self.assertAlmostEqual(p[3], 0.16511568362076579, 6)
 
     def test_ip_adc3_frozen(self):
 
@@ -125,10 +125,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[2], 0.6849075186702855, 6)
         self.assertAlmostEqual(e[3], 1.1090980093898242, 6)
 
-        self.assertAlmostEqual(p[0], 1.8682193667065838, 6)
-        self.assertAlmostEqual(p[1], 1.8719754096574615, 6)
-        self.assertAlmostEqual(p[2], 1.8881542280176182, 6)
-        self.assertAlmostEqual(p[3], 0.1653592126015944, 6)
+        self.assertAlmostEqual(p[0], 1.868284007940769, 6)
+        self.assertAlmostEqual(p[1], 1.8720001297929698, 6)
+        self.assertAlmostEqual(p[2], 1.8881913246364712, 6)
+        self.assertAlmostEqual(p[3], 0.16536157361871964, 6)
 
 if __name__ == "__main__":
     print("IP calculations for different ADC methods for water molecule")

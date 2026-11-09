@@ -69,9 +69,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[1], 0.0553475511361251, 6)
         self.assertAlmostEqual(e[2], 0.1643553780332306, 6)
 
-        self.assertAlmostEqual(p[0], 1.9868196915945326, 6)
-        self.assertAlmostEqual(p[1], 1.9941128865405613, 6)
-        self.assertAlmostEqual(p[2], 1.9760420333383126, 6)
+        self.assertAlmostEqual(p[0], 1.986809672164185, 6)
+        self.assertAlmostEqual(p[1], 1.994118273657336, 6)
+        self.assertAlmostEqual(p[2], 1.9759691695462813, 6)
 
     def test_ea_adc2x(self):
 
@@ -88,9 +88,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[1], 0.0546446308721235, 6)
         self.assertAlmostEqual(e[2], 0.1614552196278816, 6)
 
-        self.assertAlmostEqual(p[0], 1.9782643804856972, 6)
-        self.assertAlmostEqual(p[1], 1.9905409664546319, 6)
-        self.assertAlmostEqual(p[2], 1.9593142553574816, 6)
+        self.assertAlmostEqual(p[0], 1.9782565268889138, 6)
+        self.assertAlmostEqual(p[1], 1.9905469125068047, 6)
+        self.assertAlmostEqual(p[2], 1.9592509851167692, 6)
 
     def test_ea_adc3_high_cost(self):
 
@@ -108,10 +108,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[2], 0.1620710279026066, 6)
         self.assertAlmostEqual(e[3], 0.1882010099486046, 6)
 
-        self.assertAlmostEqual(p[0], 1.9814233118436899, 6)
-        self.assertAlmostEqual(p[1], 1.9920778842193207, 6)
-        self.assertAlmostEqual(p[2], 1.9676462978544356, 6)
-        self.assertAlmostEqual(p[3], 1.9743650630026532, 6)
+        self.assertAlmostEqual(p[0], 1.9814381739652729, 6)
+        self.assertAlmostEqual(p[1], 1.9920804700056491, 6)
+        self.assertAlmostEqual(p[2], 1.9677275857090883, 6)
+        self.assertAlmostEqual(p[3], 1.974554561843179, 6)
 
     def test_ea_adc3_high_cost_frozen(self):
 
@@ -129,10 +129,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[2], 0.1620802624386915, 6)
         self.assertAlmostEqual(e[3], 0.1882099906975843, 6)
 
-        self.assertAlmostEqual(p[0], 1.9814229584713985, 6)
-        self.assertAlmostEqual(p[1], 1.9920784490143149, 6)
-        self.assertAlmostEqual(p[2], 1.9676456097851998, 6)
-        self.assertAlmostEqual(p[3], 1.9743683769537108, 6)
+        self.assertAlmostEqual(p[0], 1.9814377412660724, 6)
+        self.assertAlmostEqual(p[1], 1.9920811024367933, 6)
+        self.assertAlmostEqual(p[2], 1.9677267711258266, 6)
+        self.assertAlmostEqual(p[3], 1.97455679679192, 6)
 
 if __name__ == "__main__":
     print("EA calculations for different RADC methods for water molecule")

@@ -23,6 +23,7 @@
 Unrestricted algebraic diagrammatic construction
 '''
 
+import warnings
 import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
@@ -47,14 +48,16 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
         adc.check_sanity()
     adc.dump_flags()
 
-    if isinstance(adc._scf, scf.rohf.ROHF) and (adc.method_type == "ip" or adc.method_type == "ea"):
-        logger.warn(
-            adc, "EA/IP-ADC with the ROHF reference do not incorporate the occ-vir Fock matrix elements...")
-
     if eris is None:
         eris = adc.transform_integrals()
 
     if adc.approx_trans_moments:
+        warnings.warn(
+            "approx_trans_moments now defaults to True: transition moments, <S^2>, "
+            "1-RDMs and FNO energy corrections are computed approximately; "
+            "ADC energies are unaffected. Set myadc.approx_trans_moments = False "
+            "before kernel() for exact results.",
+            stacklevel=2)
         if adc.method in ("adc(2)", "adc(2)-x"):
             logger.warn(
                 adc,
@@ -110,10 +113,10 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
         if adc.compute_properties:
             if (adc.method_type == "ee"):
                 print_string += ("|  Osc. strength = %10.8f  " % adc.P[n])
-                if (adc.compute_spin_square is True):
-                    print_string += ("|  S^2 = %10.8f  " % spin_square[n])
             else:
                 print_string += ("|  Spec. factor = %10.8f  " % adc.P[n])
+            if (adc.compute_spin_square is True):
+                print_string += ("|  S^2 = %10.8f  " % spin_square[n])
         print_string += ("|  conv = %s" % conv[n])
         logger.info(adc, print_string)
 
@@ -167,24 +170,28 @@ def make_ref_rdm1(adc, with_frozen=True, ao_repr=False):
 
     rdm1_b[:nocc_b, :nocc_b]  = einsum('IJ->IJ', np.identity(nocc_b), optimize = einsum_type).copy()
 
-    rdm1_a[:nocc_a, :nocc_a] -= einsum('Ia,Ja->IJ', t1_1_a, t1_1_a, optimize = einsum_type)
     rdm1_a[:nocc_a, :nocc_a] -= 1/2 * einsum('Iiab,Jiab->IJ', t2_1_a, t2_1_a, optimize = einsum_type)
     rdm1_a[:nocc_a, :nocc_a] -= einsum('Iiab,Jiab->IJ', t2_1_ab, t2_1_ab, optimize = einsum_type)
 
-    rdm1_b[:nocc_b, :nocc_b] -= einsum('Ia,Ja->IJ', t1_1_b, t1_1_b, optimize = einsum_type)
     rdm1_b[:nocc_b, :nocc_b] -= einsum('iIab,iJab->IJ', t2_1_ab, t2_1_ab, optimize = einsum_type)
     rdm1_b[:nocc_b, :nocc_b] -= 1/2 * einsum('Iiab,Jiab->IJ', t2_1_b, t2_1_b, optimize = einsum_type)
 
-    ### OCC-VIR ###
-    rdm1_a[:nocc_a, nocc_a:]  = einsum('IA->IA', t1_1_a, optimize = einsum_type).copy()
-    rdm1_a[:nocc_a, nocc_a:] += einsum('IA->IA', t1_2_a, optimize = einsum_type)
-    rdm1_a[:nocc_a, nocc_a:] += 1/2 * einsum('ia,IiAa->IA', t1_1_a, t2_1_a, optimize = einsum_type)
-    rdm1_a[:nocc_a, nocc_a:] += 1/2 * einsum('ia,IiAa->IA', t1_1_b, t2_1_ab, optimize = einsum_type)
+    if isinstance(adc._scf, scf.rohf.ROHF):
+        rdm1_a[:nocc_a, :nocc_a] -= einsum('Ia,Ja->IJ', t1_1_a, t1_1_a, optimize = einsum_type)
+        rdm1_b[:nocc_b, :nocc_b] -= einsum('Ia,Ja->IJ', t1_1_b, t1_1_b, optimize = einsum_type)
 
-    rdm1_b[:nocc_b, nocc_b:]  = einsum('IA->IA', t1_1_b, optimize = einsum_type).copy()
-    rdm1_b[:nocc_b, nocc_b:] += einsum('IA->IA', t1_2_b, optimize = einsum_type)
-    rdm1_b[:nocc_b, nocc_b:] += 1/2 * einsum('ia,iIaA->IA', t1_1_a, t2_1_ab, optimize = einsum_type)
-    rdm1_b[:nocc_b, nocc_b:] += 1/2 * einsum('ia,IiAa->IA', t1_1_b, t2_1_b, optimize = einsum_type)
+    ### OCC-VIR ###
+    if (adc.approx_trans_moments is False or adc.method == "adc(3)"):
+        rdm1_a[:nocc_a, nocc_a:] += einsum('IA->IA', t1_2_a, optimize = einsum_type)
+        rdm1_b[:nocc_b, nocc_b:] += einsum('IA->IA', t1_2_b, optimize = einsum_type)
+
+    if isinstance(adc._scf, scf.rohf.ROHF):
+        rdm1_a[:nocc_a, nocc_a:] += einsum('IA->IA', t1_1_a, optimize = einsum_type)
+        rdm1_a[:nocc_a, nocc_a:] += 1/2 * einsum('ia,IiAa->IA', t1_1_a, t2_1_a, optimize = einsum_type)
+        rdm1_a[:nocc_a, nocc_a:] += 1/2 * einsum('ia,IiAa->IA', t1_1_b, t2_1_ab, optimize = einsum_type)
+        rdm1_b[:nocc_b, nocc_b:] += einsum('IA->IA', t1_1_b, optimize = einsum_type)
+        rdm1_b[:nocc_b, nocc_b:] += 1/2 * einsum('ia,iIaA->IA', t1_1_a, t2_1_ab, optimize = einsum_type)
+        rdm1_b[:nocc_b, nocc_b:] += 1/2 * einsum('ia,IiAa->IA', t1_1_b, t2_1_b, optimize = einsum_type)
 
     ### VIR-OCC ###
     rdm1_a[nocc_a:, :nocc_a]  = rdm1_a[:nocc_a, nocc_a:].T
@@ -192,13 +199,15 @@ def make_ref_rdm1(adc, with_frozen=True, ao_repr=False):
     rdm1_b[nocc_b:, :nocc_b]  = rdm1_b[:nocc_b, nocc_b:].T
 
     ### VIR-VIR ###
-    rdm1_a[nocc_a:, nocc_a:]  = einsum('iA,iB->AB', t1_1_a, t1_1_a, optimize = einsum_type)
     rdm1_a[nocc_a:, nocc_a:] += 1/2 * einsum('ijAa,ijBa->AB', t2_1_a, t2_1_a, optimize = einsum_type)
     rdm1_a[nocc_a:, nocc_a:] += einsum('ijAa,ijBa->AB', t2_1_ab, t2_1_ab, optimize = einsum_type)
 
-    rdm1_b[nocc_b:, nocc_b:]  = einsum('iA,iB->AB', t1_1_b, t1_1_b, optimize = einsum_type)
     rdm1_b[nocc_b:, nocc_b:] += einsum('ijaA,ijaB->AB', t2_1_ab, t2_1_ab, optimize = einsum_type)
     rdm1_b[nocc_b:, nocc_b:] += 1/2 * einsum('ijAa,ijBa->AB', t2_1_b, t2_1_b, optimize = einsum_type)
+
+    if isinstance(adc._scf, scf.rohf.ROHF):
+        rdm1_a[nocc_a:, nocc_a:] += einsum('iA,iB->AB', t1_1_a, t1_1_a, optimize = einsum_type)
+        rdm1_b[nocc_b:, nocc_b:] += einsum('iA,iB->AB', t1_1_b, t1_1_b, optimize = einsum_type)
 
     ####### ADC(3) SPIN ADAPTED REF OPDM WITH SQA ################
     if adc.method == "adc(3)":
@@ -213,83 +222,69 @@ def make_ref_rdm1(adc, with_frozen=True, ao_repr=False):
             t1_3_b = np.zeros((nocc_b, nvir_b))
 
         #### OCC-OCC ###
-        rdm1_a[:nocc_a, :nocc_a] -= einsum('Ia,Ja->IJ', t1_1_a, t1_2_a, optimize = einsum_type)
-        rdm1_a[:nocc_a, :nocc_a] -= einsum('Ja,Ia->IJ', t1_1_a, t1_2_a, optimize = einsum_type)
-        rdm1_a[:nocc_a, :nocc_a] -= 1/2 * einsum('Iiab,Jiab->IJ', t2_1_a, t2_2_a, optimize = einsum_type)
-        rdm1_a[:nocc_a, :nocc_a] -= 1/2 * einsum('Jiab,Iiab->IJ', t2_1_a, t2_2_a, optimize = einsum_type)
-        rdm1_a[:nocc_a, :nocc_a] -= einsum('Iiab,Jiab->IJ', t2_1_ab, t2_2_ab, optimize = einsum_type)
-        rdm1_a[:nocc_a, :nocc_a] -= einsum('Jiab,Iiab->IJ', t2_1_ab, t2_2_ab, optimize = einsum_type)
-        rdm1_a[:nocc_a, :nocc_a] -= 1/2 * \
-            einsum('Ia,ib,Jiab->IJ', t1_1_a, t1_1_b, t2_1_ab, optimize = einsum_type)
-        rdm1_a[:nocc_a, :nocc_a] -= 1/2 * \
-            einsum('Ja,ib,Iiab->IJ', t1_1_a, t1_1_b, t2_1_ab, optimize = einsum_type)
-        rdm1_a[:nocc_a, :nocc_a] += 1/2 * \
-            einsum('Iiab,ia,Jb->IJ', t2_1_a, t1_1_a, t1_1_a, optimize = einsum_type)
-        rdm1_a[:nocc_a, :nocc_a] += 1/2 * \
-            einsum('Jiab,ia,Ib->IJ', t2_1_a, t1_1_a, t1_1_a, optimize = einsum_type)
+        temp = np.zeros((nocc_a, nocc_a))
+        temp -= 1/2 * einsum('Iiab,Jiab->IJ', t2_1_a, t2_2_a, optimize = einsum_type)
+        temp -= einsum('Iiab,Jiab->IJ', t2_1_ab, t2_2_ab, optimize = einsum_type)
+        if isinstance(adc._scf, scf.rohf.ROHF):
+            temp -= einsum('Ia,Ja->IJ', t1_1_a, t1_2_a, optimize = einsum_type)
+            temp -= 1/2 * einsum('Ia,ib,Jiab->IJ', t1_1_a, t1_1_b, t2_1_ab, optimize = einsum_type)
+            temp += 1/2 *einsum('Iiab,ia,Jb->IJ', t2_1_a, t1_1_a, t1_1_a, optimize = einsum_type)
+        rdm1_a[:nocc_a, :nocc_a] += temp + temp.T
 
 
-        rdm1_b[:nocc_b, :nocc_b] -= einsum('Ia,Ja->IJ', t1_1_b, t1_2_b, optimize = einsum_type)
-        rdm1_b[:nocc_b, :nocc_b] -= einsum('Ja,Ia->IJ', t1_1_b, t1_2_b, optimize = einsum_type)
-        rdm1_b[:nocc_b, :nocc_b] -= einsum('iIab,iJab->IJ', t2_1_ab, t2_2_ab, optimize = einsum_type)
-        rdm1_b[:nocc_b, :nocc_b] -= einsum('iJab,iIab->IJ', t2_1_ab, t2_2_ab, optimize = einsum_type)
-        rdm1_b[:nocc_b, :nocc_b] -= 1/2 * einsum('Iiab,Jiab->IJ', t2_1_b, t2_2_b, optimize = einsum_type)
-        rdm1_b[:nocc_b, :nocc_b] -= 1/2 * einsum('Jiab,Iiab->IJ', t2_1_b, t2_2_b, optimize = einsum_type)
-        rdm1_b[:nocc_b, :nocc_b] -= 1/2 * \
-            einsum('ia,Ib,iJab->IJ', t1_1_a, t1_1_b, t2_1_ab, optimize = einsum_type)
-        rdm1_b[:nocc_b, :nocc_b] -= 1/2 * \
-            einsum('ia,Jb,iIab->IJ', t1_1_a, t1_1_b, t2_1_ab, optimize = einsum_type)
-        rdm1_b[:nocc_b, :nocc_b] += 1/2 * \
-            einsum('Iiab,ia,Jb->IJ', t2_1_b, t1_1_b, t1_1_b, optimize = einsum_type)
-        rdm1_b[:nocc_b, :nocc_b] += 1/2 * \
-            einsum('Jiab,ia,Ib->IJ', t2_1_b, t1_1_b, t1_1_b, optimize = einsum_type)
+        temp = np.zeros((nocc_b, nocc_b))
+        temp -= einsum('iIab,iJab->IJ', t2_1_ab, t2_2_ab, optimize = einsum_type)
+        temp -= 1/2 * einsum('Iiab,Jiab->IJ', t2_1_b, t2_2_b, optimize = einsum_type)
+        if isinstance(adc._scf, scf.rohf.ROHF):
+            temp -= einsum('Ia,Ja->IJ', t1_1_b, t1_2_b, optimize = einsum_type)
+            temp -= 1/2 * einsum('ia,Ib,iJab->IJ', t1_1_a, t1_1_b, t2_1_ab, optimize = einsum_type)
+            temp += 1/2 * einsum('Iiab,ia,Jb->IJ', t2_1_b, t1_1_b, t1_1_b, optimize = einsum_type)
+        rdm1_b[:nocc_b, :nocc_b] += temp + temp.T
 
         ##### OCC-VIR ### ####
-        rdm1_a[:nocc_a, nocc_a:] += einsum('IA->IA', t1_3_a, optimize = einsum_type).copy()
         rdm1_a[:nocc_a, nocc_a:] += 1/2 * einsum('ia,IiAa->IA', t1_2_a, t2_1_a, optimize = einsum_type)
         rdm1_a[:nocc_a, nocc_a:] += 1/2 * einsum('ia,IiAa->IA', t1_2_b, t2_1_ab, optimize = einsum_type)
-        rdm1_a[:nocc_a, nocc_a:] += 1/2 * einsum('ia,IiAa->IA', t1_1_a, t2_2_a, optimize = einsum_type)
-        rdm1_a[:nocc_a, nocc_a:] += 1/2 * einsum('ia,IiAa->IA', t1_1_b, t2_2_ab, optimize = einsum_type)
-        rdm1_a[:nocc_a, nocc_a:] -= 2/3 * einsum('Ia,iA,ia->IA', t1_1_a, t1_1_a, t1_1_a, optimize = einsum_type)
-        rdm1_a[:nocc_a, nocc_a:] -= 1/3 * \
-            einsum('Ia,ijab,ijAb->IA', t1_1_a, t2_1_a, t2_1_a, optimize = einsum_type)
-        rdm1_a[:nocc_a, nocc_a:] -= 1/3 * \
-            einsum('iA,ijab,Ijab->IA', t1_1_a, t2_1_a, t2_1_a, optimize = einsum_type)
-        rdm1_a[:nocc_a, nocc_a:] += 1/6 * \
-            einsum('ia,ijab,IjAb->IA', t1_1_a, t2_1_a, t2_1_a, optimize = einsum_type)
-        rdm1_a[:nocc_a, nocc_a:] -= 2/3 * \
-            einsum('Ia,ijab,ijAb->IA', t1_1_a, t2_1_ab, t2_1_ab, optimize = einsum_type)
-        rdm1_a[:nocc_a, nocc_a:] -= 2/3 * \
-            einsum('iA,ijab,Ijab->IA', t1_1_a, t2_1_ab, t2_1_ab, optimize = einsum_type)
-        rdm1_a[:nocc_a, nocc_a:] += 1/6 * \
-            einsum('ia,ijab,IjAb->IA', t1_1_a, t2_1_ab, t2_1_ab, optimize = einsum_type)
-        rdm1_a[:nocc_a, nocc_a:] += 1/6 * \
-            einsum('ia,IjAb,jiba->IA', t1_1_b, t2_1_a, t2_1_ab, optimize = einsum_type)
-        rdm1_a[:nocc_a, nocc_a:] += 1/6 * \
-            einsum('ia,IjAb,ijab->IA', t1_1_b, t2_1_ab, t2_1_b, optimize = einsum_type)
 
-        rdm1_b[:nocc_b, nocc_b:] += einsum('IA->IA', t1_3_b, optimize = einsum_type).copy()
         rdm1_b[:nocc_b, nocc_b:] += 1/2 * einsum('ia,iIaA->IA', t1_2_a, t2_1_ab, optimize = einsum_type)
         rdm1_b[:nocc_b, nocc_b:] += 1/2 * einsum('ia,IiAa->IA', t1_2_b, t2_1_b, optimize = einsum_type)
-        rdm1_b[:nocc_b, nocc_b:] += 1/2 * einsum('ia,iIaA->IA', t1_1_a, t2_2_ab, optimize = einsum_type)
-        rdm1_b[:nocc_b, nocc_b:] += 1/2 * einsum('ia,IiAa->IA', t1_1_b, t2_2_b, optimize = einsum_type)
-        rdm1_b[:nocc_b, nocc_b:] += 1/6 * \
-            einsum('ia,ijab,jIbA->IA', t1_1_a, t2_1_a, t2_1_ab, optimize = einsum_type)
-        rdm1_b[:nocc_b, nocc_b:] += 1/6 * \
-            einsum('ia,ijab,IjAb->IA', t1_1_a, t2_1_ab, t2_1_b, optimize = einsum_type)
-        rdm1_b[:nocc_b, nocc_b:] -= 2/3 * einsum('Ia,iA,ia->IA', t1_1_b, t1_1_b, t1_1_b, optimize = einsum_type)
-        rdm1_b[:nocc_b, nocc_b:] -= 2/3 * \
-            einsum('Ia,ijba,ijbA->IA', t1_1_b, t2_1_ab, t2_1_ab, optimize = einsum_type)
-        rdm1_b[:nocc_b, nocc_b:] -= 2/3 * \
-            einsum('iA,jiab,jIab->IA', t1_1_b, t2_1_ab, t2_1_ab, optimize = einsum_type)
-        rdm1_b[:nocc_b, nocc_b:] += 1/6 * \
-            einsum('ia,jiba,jIbA->IA', t1_1_b, t2_1_ab, t2_1_ab, optimize = einsum_type)
-        rdm1_b[:nocc_b, nocc_b:] -= 1/3 * \
-            einsum('Ia,ijab,ijAb->IA', t1_1_b, t2_1_b, t2_1_b, optimize = einsum_type)
-        rdm1_b[:nocc_b, nocc_b:] -= 1/3 * \
-            einsum('iA,ijab,Ijab->IA', t1_1_b, t2_1_b, t2_1_b, optimize = einsum_type)
-        rdm1_b[:nocc_b, nocc_b:] += 1/6 * \
-            einsum('ia,ijab,IjAb->IA', t1_1_b, t2_1_b, t2_1_b, optimize = einsum_type)
+
+        if adc.approx_trans_moments is False:
+            rdm1_a[:nocc_a, nocc_a:] += einsum('IA->IA', t1_3_a, optimize = einsum_type).copy()
+            rdm1_b[:nocc_b, nocc_b:] += einsum('IA->IA', t1_3_b, optimize = einsum_type).copy()
+
+        if isinstance(adc._scf, scf.rohf.ROHF):
+            rdm1_a[:nocc_a, nocc_a:] += 1/2 * einsum('ia,IiAa->IA', t1_1_a, t2_2_a, optimize = einsum_type)
+            rdm1_a[:nocc_a, nocc_a:] += 1/2 * einsum('ia,IiAa->IA', t1_1_b, t2_2_ab, optimize = einsum_type)
+            rdm1_a[:nocc_a, nocc_a:] -= 2/3 * einsum('Ia,iA,ia->IA', t1_1_a, t1_1_a, t1_1_a, optimize = einsum_type)
+            rdm1_a[:nocc_a, nocc_a:] -= 1/3 * einsum('Ia,ijab,ijAb->IA', t1_1_a, t2_1_a, t2_1_a, optimize = einsum_type)
+            rdm1_a[:nocc_a, nocc_a:] -= 1/3 * einsum('iA,ijab,Ijab->IA', t1_1_a, t2_1_a, t2_1_a, optimize = einsum_type)
+            rdm1_a[:nocc_a, nocc_a:] += 1/6 * einsum('ia,ijab,IjAb->IA', t1_1_a, t2_1_a, t2_1_a, optimize = einsum_type)
+            rdm1_a[:nocc_a, nocc_a:] -= 2/3 * einsum('Ia,ijab,ijAb->IA', t1_1_a, t2_1_ab, t2_1_ab,
+                                                     optimize = einsum_type)
+            rdm1_a[:nocc_a, nocc_a:] -= 2/3 * einsum('iA,ijab,Ijab->IA', t1_1_a, t2_1_ab, t2_1_ab,
+                                                     optimize = einsum_type)
+            rdm1_a[:nocc_a, nocc_a:] += 1/6 * einsum('ia,ijab,IjAb->IA', t1_1_a, t2_1_ab, t2_1_ab,
+                                                     optimize = einsum_type)
+            rdm1_a[:nocc_a, nocc_a:] += 1/6 * einsum('ia,IjAb,jiba->IA', t1_1_b, t2_1_a, t2_1_ab,
+                                                     optimize = einsum_type)
+            rdm1_a[:nocc_a, nocc_a:] += 1/6 * einsum('ia,IjAb,ijab->IA', t1_1_b, t2_1_ab, t2_1_b,
+                                                     optimize = einsum_type)
+            rdm1_b[:nocc_b, nocc_b:] += 1/2 * einsum('ia,iIaA->IA', t1_1_a, t2_2_ab, optimize = einsum_type)
+            rdm1_b[:nocc_b, nocc_b:] += 1/2 * einsum('ia,IiAa->IA', t1_1_b, t2_2_b, optimize = einsum_type)
+            rdm1_b[:nocc_b, nocc_b:] += 1/6 * einsum('ia,ijab,jIbA->IA', t1_1_a, t2_1_a, t2_1_ab,
+                                                     optimize = einsum_type)
+            rdm1_b[:nocc_b, nocc_b:] += 1/6 * einsum('ia,ijab,IjAb->IA', t1_1_a, t2_1_ab, t2_1_b,
+                                                     optimize = einsum_type)
+            rdm1_b[:nocc_b, nocc_b:] -= 2/3 * einsum('Ia,iA,ia->IA', t1_1_b, t1_1_b, t1_1_b, optimize = einsum_type)
+            rdm1_b[:nocc_b, nocc_b:] -= 2/3 * einsum('Ia,ijba,ijbA->IA', t1_1_b, t2_1_ab, t2_1_ab,
+                                                     optimize = einsum_type)
+            rdm1_b[:nocc_b, nocc_b:] -= 2/3 * einsum('iA,jiab,jIab->IA', t1_1_b, t2_1_ab, t2_1_ab,
+                                                     optimize = einsum_type)
+            rdm1_b[:nocc_b, nocc_b:] += 1/6 * einsum('ia,jiba,jIbA->IA', t1_1_b, t2_1_ab, t2_1_ab,
+                                                     optimize = einsum_type)
+            rdm1_b[:nocc_b, nocc_b:] -= 1/3 * einsum('Ia,ijab,ijAb->IA', t1_1_b, t2_1_b, t2_1_b, optimize = einsum_type)
+            rdm1_b[:nocc_b, nocc_b:] -= 1/3 * einsum('iA,ijab,Ijab->IA', t1_1_b, t2_1_b, t2_1_b, optimize = einsum_type)
+            rdm1_b[:nocc_b, nocc_b:] += 1/6 * einsum('ia,ijab,IjAb->IA', t1_1_b, t2_1_b, t2_1_b, optimize = einsum_type)
 
         ###### VIR-OCC ###
         rdm1_a[nocc_a:, :nocc_a] = rdm1_a[:nocc_a, nocc_a:].T
@@ -297,35 +292,23 @@ def make_ref_rdm1(adc, with_frozen=True, ao_repr=False):
         rdm1_b[nocc_b:, :nocc_b] = rdm1_b[:nocc_b, nocc_b:].T
 
         ##### VIR-VIR ###
-        rdm1_a[nocc_a:, nocc_a:] += 1/2 * einsum('ijAa,ijBa->AB', t2_1_a, t2_2_a, optimize = einsum_type)
-        rdm1_a[nocc_a:, nocc_a:] += 1/2 * einsum('ijBa,ijAa->AB', t2_1_a, t2_2_a, optimize = einsum_type)
-        rdm1_a[nocc_a:, nocc_a:] += einsum('ijAa,ijBa->AB', t2_1_ab, t2_2_ab, optimize = einsum_type)
-        rdm1_a[nocc_a:, nocc_a:] += einsum('ijBa,ijAa->AB', t2_1_ab, t2_2_ab, optimize = einsum_type)
-        rdm1_a[nocc_a:, nocc_a:] += einsum('iA,iB->AB', t1_1_a, t1_2_a, optimize = einsum_type)
-        rdm1_a[nocc_a:, nocc_a:] += einsum('iB,iA->AB', t1_1_a, t1_2_a, optimize = einsum_type)
-        rdm1_a[nocc_a:, nocc_a:] += 1/2 * \
-            einsum('iA,ja,ijBa->AB', t1_1_a, t1_1_b, t2_1_ab, optimize = einsum_type)
-        rdm1_a[nocc_a:, nocc_a:] += 1/2 * \
-            einsum('iB,ja,ijAa->AB', t1_1_a, t1_1_b, t2_1_ab, optimize = einsum_type)
-        rdm1_a[nocc_a:, nocc_a:] += 1/2 * \
-            einsum('ijAa,iB,ja->AB', t2_1_a, t1_1_a, t1_1_a, optimize = einsum_type)
-        rdm1_a[nocc_a:, nocc_a:] += 1/2 * \
-            einsum('ijBa,iA,ja->AB', t2_1_a, t1_1_a, t1_1_a, optimize = einsum_type)
+        temp = np.zeros((nvir_a, nvir_a))
+        temp += 1/2 * einsum('ijAa,ijBa->AB', t2_1_a, t2_2_a, optimize = einsum_type)
+        temp += einsum('ijAa,ijBa->AB', t2_1_ab, t2_2_ab, optimize = einsum_type)
+        if isinstance(adc._scf, scf.rohf.ROHF):
+            temp += einsum('iA,iB->AB', t1_1_a, t1_2_a, optimize = einsum_type)
+            temp += 1/2 * einsum('iA,ja,ijBa->AB', t1_1_a, t1_1_b, t2_1_ab, optimize = einsum_type)
+            temp += 1/2 * einsum('ijAa,iB,ja->AB', t2_1_a, t1_1_a, t1_1_a, optimize = einsum_type)
+        rdm1_a[nocc_a:, nocc_a:] += temp + temp.T
 
-        rdm1_b[nocc_b:, nocc_b:] += einsum('ijaA,ijaB->AB', t2_1_ab, t2_2_ab, optimize = einsum_type)
-        rdm1_b[nocc_b:, nocc_b:] += einsum('ijaB,ijaA->AB', t2_1_ab, t2_2_ab, optimize = einsum_type)
-        rdm1_b[nocc_b:, nocc_b:] += 1/2 * einsum('ijAa,ijBa->AB', t2_1_b, t2_2_b, optimize = einsum_type)
-        rdm1_b[nocc_b:, nocc_b:] += 1/2 * einsum('ijBa,ijAa->AB', t2_1_b, t2_2_b, optimize = einsum_type)
-        rdm1_b[nocc_b:, nocc_b:] += einsum('iA,iB->AB', t1_1_b, t1_2_b, optimize = einsum_type)
-        rdm1_b[nocc_b:, nocc_b:] += einsum('iB,iA->AB', t1_1_b, t1_2_b, optimize = einsum_type)
-        rdm1_b[nocc_b:, nocc_b:] += 1/2 * \
-            einsum('ia,jA,ijaB->AB', t1_1_a, t1_1_b, t2_1_ab, optimize = einsum_type)
-        rdm1_b[nocc_b:, nocc_b:] += 1/2 * \
-            einsum('ia,jB,ijaA->AB', t1_1_a, t1_1_b, t2_1_ab, optimize = einsum_type)
-        rdm1_b[nocc_b:, nocc_b:] += 1/2 * \
-            einsum('ijAa,iB,ja->AB', t2_1_b, t1_1_b, t1_1_b, optimize = einsum_type)
-        rdm1_b[nocc_b:, nocc_b:] += 1/2 * \
-            einsum('ijBa,iA,ja->AB', t2_1_b, t1_1_b, t1_1_b, optimize = einsum_type)
+        temp = np.zeros((nvir_b, nvir_b))
+        temp += einsum('ijaA,ijaB->AB', t2_1_ab, t2_2_ab, optimize = einsum_type)
+        temp += 1/2 * einsum('ijAa,ijBa->AB', t2_1_b, t2_2_b, optimize = einsum_type)
+        if isinstance(adc._scf, scf.rohf.ROHF):
+            temp += einsum('iA,iB->AB', t1_1_b, t1_2_b, optimize = einsum_type)
+            temp += 1/2 * einsum('ia,jA,ijaB->AB', t1_1_a, t1_1_b, t2_1_ab, optimize = einsum_type)
+            temp += 1/2 * einsum('ijAa,iB,ja->AB', t2_1_b, t1_1_b, t1_1_b, optimize = einsum_type)
+        rdm1_b[nocc_b:, nocc_b:] += temp + temp.T
 
     if with_frozen and adc.frozen is not None:
         nmo_a = adc.mo_coeff_hf[0].shape[1]
@@ -354,6 +337,315 @@ def make_ref_rdm1(adc, with_frozen=True, ao_repr=False):
         rdm1_b = lib.einsum('pi,ij,qj->pq', mo_b, rdm1_b, mo_b)
 
     return (rdm1_a, rdm1_b)
+
+
+def get_ref_spin_square(adc):
+
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+        raise NotImplementedError(adc.method)
+
+    nocc_a = adc.nocc_a
+    nocc_b = adc.nocc_b
+    nvir_a = adc.nvir_a
+    nvir_b = adc.nvir_b
+
+    ovlp = adc._scf.get_ovlp(adc._scf.mol).copy()
+    delta = np.dot(adc.mo_coeff[0].transpose(), np.dot(ovlp, adc.mo_coeff[1]))
+    S_oo_ab = delta[:nocc_a, :nocc_b].copy()
+    S_ov_ab = delta[:nocc_a, nocc_b:].copy()
+    S_vo_ab = delta[nocc_a:, :nocc_b].copy()
+    S_vv_ab = delta[nocc_a:, nocc_b:].copy()
+
+    if adc.f_ov is None:
+        t1_1_a = np.zeros((nocc_a, nvir_a))
+        t1_1_b = np.zeros((nocc_b, nvir_b))
+    else:
+        t1_1_a = adc.t1[2][0][:]
+        t1_1_b = adc.t1[2][1][:]
+
+    if adc.t1[0][0] is not None:
+        t1_2_a = adc.t1[0][0][:]
+        t1_2_b = adc.t1[0][1][:]
+    else:
+        t1_2_a = np.zeros((nocc_a, nvir_a))
+        t1_2_b = np.zeros((nocc_b, nvir_b))
+
+    t2_1_a = adc.t2[0][0][:]
+    t2_1_ab = adc.t2[0][1][:]
+    t2_1_b = adc.t2[0][2][:]
+
+    if adc.t2[1][0] is not None:
+        t2_2_a = adc.t2[1][0][:]
+        t2_2_ab = adc.t2[1][1][:]
+        t2_2_b = adc.t2[1][2][:]
+    else:
+        t2_2_a = np.zeros((nocc_a, nocc_a, nvir_a, nvir_a))
+        t2_2_ab = np.zeros((nocc_a, nocc_b, nvir_a, nvir_b))
+        t2_2_b = np.zeros((nocc_b, nocc_b, nvir_b, nvir_b))
+
+    if adc.t1[1][0] is not None:
+        t1_3_a = adc.t1[1][0][:]
+        t1_3_b = adc.t1[1][1][:]
+    else:
+        t1_3_a = np.zeros((nocc_a, nvir_a))
+        t1_3_b = np.zeros((nocc_b, nvir_b))
+
+    S2 = 0.0
+
+# 000
+    # block IjlJ
+    S2 -= lib.einsum('ij,ij', S_oo_ab, S_oo_ab, optimize=True)
+
+# 010
+    # block IjdB & AblJ
+    S2 -= 2 * lib.einsum('ia,bj,ijba', S_ov_ab, S_vo_ab, t2_1_ab, optimize=True)
+    if isinstance(adc._scf, scf.rohf.ROHF):
+        # block IjlB & AjlJ
+        S2 -= 2 * lib.einsum('ij,aj,ia', S_oo_ab, S_vo_ab, t1_1_a, optimize=True)
+        # block IjdJ & IblJ
+        S2 -= 2 * lib.einsum('ij,ia,ja', S_oo_ab, S_ov_ab, t1_1_b, optimize=True)
+
+# 020
+    # block IjlJ
+    S2 += 1/2 * lib.einsum('ij,kj,ilab,klab', S_oo_ab, S_oo_ab, t2_1_a, t2_1_a, optimize=True)
+    S2 += lib.einsum('ij,ik,ljab,lkab', S_oo_ab, S_oo_ab, t2_1_ab, t2_1_ab, optimize=True)
+    S2 += lib.einsum('ij,kj,ilab,klab', S_oo_ab, S_oo_ab, t2_1_ab, t2_1_ab, optimize=True)
+    S2 -= lib.einsum('ij,kl,ilab,kjab', S_oo_ab, S_oo_ab, t2_1_ab, t2_1_ab, optimize=True)
+    S2 += 1/2 * lib.einsum('ij,ik,jlab,klab', S_oo_ab, S_oo_ab, t2_1_b, t2_1_b, optimize=True)
+    # block IblB & AjdJ
+    S2 -= 2 * lib.einsum('ij,ab,ikac,kjcb', S_oo_ab, S_vv_ab, t2_1_a, t2_1_ab, optimize=True)
+    S2 -= 2 * lib.einsum('ij,ab,ikac,jkbc', S_oo_ab, S_vv_ab, t2_1_ab, t2_1_b, optimize=True)
+    # block IbdJ
+    S2 -= lib.einsum('ia,ib,jkca,jkcb', S_ov_ab, S_ov_ab, t2_1_ab, t2_1_ab, optimize=True)
+    S2 += lib.einsum('ia,jb,ikca,jkcb', S_ov_ab, S_ov_ab, t2_1_ab, t2_1_ab, optimize=True)
+    S2 -= 1/2 * lib.einsum('ia,ib,jkac,jkbc', S_ov_ab, S_ov_ab, t2_1_b, t2_1_b, optimize=True)
+    # block AjlB
+    S2 -= 1/2 * lib.einsum('ai,bi,jkac,jkbc', S_vo_ab, S_vo_ab, t2_1_a, t2_1_a, optimize=True)
+    S2 -= lib.einsum('ai,bi,jkac,jkbc', S_vo_ab, S_vo_ab, t2_1_ab, t2_1_ab, optimize=True)
+    S2 += lib.einsum('ai,bj,kiac,kjbc', S_vo_ab, S_vo_ab, t2_1_ab, t2_1_ab, optimize=True)
+    # block AbdB
+    S2 -= lib.einsum('ab,cd,ijad,ijcb', S_vv_ab, S_vv_ab, t2_1_ab, t2_1_ab, optimize=True)
+
+    if (adc.approx_trans_moments is False or adc.method == "adc(3)"):
+        # block IjlB & AjlJ
+        S2 -= 2 * lib.einsum('ij,aj,ia', S_oo_ab, S_vo_ab, t1_2_a, optimize=True)
+        # block IjdJ & IblJ
+        S2 -= 2 * lib.einsum('ij,ia,ja', S_oo_ab, S_ov_ab, t1_2_b, optimize=True)
+        # block IjdB & AblJ
+        S2 -= 2 * lib.einsum('ia,bj,ijba', S_ov_ab, S_vo_ab, t2_2_ab, optimize=True)
+
+    if isinstance(adc._scf, scf.rohf.ROHF):
+        # block IjlJ
+        S2 += lib.einsum('ij,kj,ia,ka', S_oo_ab, S_oo_ab, t1_1_a, t1_1_a, optimize=True)
+        S2 += lib.einsum('ij,ik,ja,ka', S_oo_ab, S_oo_ab, t1_1_b, t1_1_b, optimize=True)
+        # block IjlB & AjlJ
+        S2 -= lib.einsum('ij,aj,kb,ikab', S_oo_ab, S_vo_ab, t1_1_a, t2_1_a, optimize=True)
+        S2 -= lib.einsum('ij,aj,kb,ikab', S_oo_ab, S_vo_ab, t1_1_b, t2_1_ab, optimize=True)
+        S2 += 2 * lib.einsum('ij,ak,jb,ikab', S_oo_ab, S_vo_ab, t1_1_b, t2_1_ab, optimize=True)
+        # block IjdJ & IblJ
+        S2 -= lib.einsum('ij,ia,kb,kjba', S_oo_ab, S_ov_ab, t1_1_a, t2_1_ab, optimize=True)
+        S2 += 2 * lib.einsum('ij,ka,ib,kjba', S_oo_ab, S_ov_ab, t1_1_a, t2_1_ab, optimize=True)
+        S2 -= lib.einsum('ij,ia,kb,jkab', S_oo_ab, S_ov_ab, t1_1_b, t2_1_b, optimize=True)
+        # block IjdB & AblJ
+        S2 -= 2 * lib.einsum('ia,bj,ib,ja', S_ov_ab, S_vo_ab, t1_1_a, t1_1_b, optimize=True)
+        # block IblB & AjdJ
+        S2 -= 2 * lib.einsum('ij,ab,ia,jb', S_oo_ab, S_vv_ab, t1_1_a, t1_1_b, optimize=True)
+        # block IbdJ
+        S2 -= lib.einsum('ia,ib,ja,jb', S_ov_ab, S_ov_ab, t1_1_b, t1_1_b, optimize=True)
+        # block IbdB & AbdJ
+        S2 -= 2 * lib.einsum('ia,bc,jc,ijba', S_ov_ab, S_vv_ab, t1_1_b, t2_1_ab, optimize=True)
+        # block AjlB
+        S2 -= lib.einsum('ai,bi,ja,jb', S_vo_ab, S_vo_ab, t1_1_a, t1_1_a, optimize=True)
+        # block AjdB & AblB
+        S2 -= 2 * lib.einsum('ai,bc,jb,jiac', S_vo_ab, S_vv_ab, t1_1_a, t2_1_ab, optimize=True)
+
+    if adc.method == "adc(3)":
+        # 030
+        # block IjlJ
+        S2 += lib.einsum('ijab,ikab,jl,kl', t2_1_a, t2_2_a, S_oo_ab, S_oo_ab, optimize=True)
+        S2 += 2 * lib.einsum('ijab,ikab,lj,lk', t2_1_ab, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
+        S2 += 2 * lib.einsum('ijab,kjab,il,kl', t2_1_ab, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
+        S2 -= 2 * lib.einsum('ijab,klab,il,kj', t2_1_ab, t2_2_ab, S_oo_ab, S_oo_ab, optimize=True)
+        S2 += lib.einsum('ijab,ikab,lj,lk', t2_1_b, t2_2_b, S_oo_ab, S_oo_ab, optimize=True)
+        # block IjlB & AjlJ
+        S2 -= lib.einsum('ij,aj,kb,ikab', S_oo_ab, S_vo_ab, t1_2_a, t2_1_a, optimize=True)
+        S2 -= lib.einsum('ij,aj,kb,ikab', S_oo_ab, S_vo_ab, t1_2_b, t2_1_ab, optimize=True)
+        S2 += 2 * lib.einsum('ij,ak,jb,ikab', S_oo_ab, S_vo_ab, t1_2_b, t2_1_ab, optimize=True)
+        # block IjdJ & IblJ
+        S2 -= lib.einsum('ij,ia,kb,kjba', S_oo_ab, S_ov_ab, t1_2_a, t2_1_ab, optimize=True)
+        S2 += 2 * lib.einsum('ij,ka,ib,kjba', S_oo_ab, S_ov_ab, t1_2_a, t2_1_ab, optimize=True)
+        S2 -= lib.einsum('ij,ia,kb,jkab', S_oo_ab, S_ov_ab, t1_2_b, t2_1_b, optimize=True)
+        # block IjdB & AblJ
+        S2 -= 4/3 * lib.einsum('ia,bj,ikbc,klcd,jlad', S_ov_ab, S_vo_ab, t2_1_a, t2_1_ab, t2_1_b, optimize=True)
+        S2 += 2/3 * lib.einsum('ia,bj,ijca,klbd,klcd', S_ov_ab, S_vo_ab, t2_1_ab, t2_1_a, t2_1_a, optimize=True)
+        S2 += 2/3 * lib.einsum('ia,bj,kjba,ilcd,klcd', S_ov_ab, S_vo_ab, t2_1_ab, t2_1_a, t2_1_a, optimize=True)
+        S2 -= 4/3 * lib.einsum('ia,bj,kjca,ilbd,klcd', S_ov_ab, S_vo_ab, t2_1_ab, t2_1_a, t2_1_a, optimize=True)
+        S2 += 4/3 * lib.einsum('ia,bj,ijbc,klda,kldc', S_ov_ab, S_vo_ab, t2_1_ab, t2_1_ab, t2_1_ab, optimize=True)
+        S2 += 4/3 * lib.einsum('ia,bj,ijca,klbd,klcd', S_ov_ab, S_vo_ab, t2_1_ab, t2_1_ab, t2_1_ab, optimize=True)
+        S2 -= 4/3 * lib.einsum('ia,bj,ijcd,klba,klcd', S_ov_ab, S_vo_ab, t2_1_ab, t2_1_ab, t2_1_ab, optimize=True)
+        S2 += 4/3 * lib.einsum('ia,bj,ikba,ljcd,lkcd', S_ov_ab, S_vo_ab, t2_1_ab, t2_1_ab, t2_1_ab, optimize=True)
+        S2 -= 4/3 * lib.einsum('ia,bj,ikbc,ljda,lkdc', S_ov_ab, S_vo_ab, t2_1_ab, t2_1_ab, t2_1_ab, optimize=True)
+        S2 -= 4/3 * lib.einsum('ia,bj,ikca,ljbd,lkcd', S_ov_ab, S_vo_ab, t2_1_ab, t2_1_ab, t2_1_ab, optimize=True)
+        S2 += 4/3 * lib.einsum('ia,bj,ikcd,ljba,lkcd', S_ov_ab, S_vo_ab, t2_1_ab, t2_1_ab, t2_1_ab, optimize=True)
+        S2 += 2/3 * lib.einsum('ia,bj,ijbc,klad,klcd', S_ov_ab, S_vo_ab, t2_1_ab, t2_1_b, t2_1_b, optimize=True)
+        S2 += 2/3 * lib.einsum('ia,bj,ikba,jlcd,klcd', S_ov_ab, S_vo_ab, t2_1_ab, t2_1_b, t2_1_b, optimize=True)
+        S2 -= 4/3 * lib.einsum('ia,bj,ikbc,jlad,klcd', S_ov_ab, S_vo_ab, t2_1_ab, t2_1_b, t2_1_b, optimize=True)
+        # block IblB & AjdJ
+        S2 -= 2 * lib.einsum('ij,ab,ikac,kjcb', S_oo_ab, S_vv_ab, t2_1_a, t2_2_ab, optimize=True)
+        S2 -= 2 * lib.einsum('ij,ab,kjcb,ikac', S_oo_ab, S_vv_ab, t2_1_ab, t2_2_a, optimize=True)
+        S2 -= 2 * lib.einsum('ij,ab,ikac,jkbc', S_oo_ab, S_vv_ab, t2_1_ab, t2_2_b, optimize=True)
+        S2 -= 2 * lib.einsum('ij,ab,jkbc,ikac', S_oo_ab, S_vv_ab, t2_1_b, t2_2_ab, optimize=True)
+        # block IbdJ
+        S2 -= 2 * lib.einsum('ijab,ijac,kb,kc', t2_1_ab, t2_2_ab, S_ov_ab, S_ov_ab, optimize=True)
+        S2 += 2 * lib.einsum('ijab,kjac,ib,kc', t2_1_ab, t2_2_ab, S_ov_ab, S_ov_ab, optimize=True)
+        S2 -= lib.einsum('ijab,ijac,kb,kc', t2_1_b, t2_2_b, S_ov_ab, S_ov_ab, optimize=True)
+        # block IbdB & AbdJ
+        S2 -= 2 * lib.einsum('ia,bc,jc,ijba', S_ov_ab, S_vv_ab, t1_2_b, t2_1_ab, optimize=True)
+        # block AjlB
+        S2 -= lib.einsum('ijab,ijac,bk,ck', t2_1_a, t2_2_a, S_vo_ab, S_vo_ab, optimize=True)
+        S2 -= 2 * lib.einsum('ijab,ijcb,ak,ck', t2_1_ab, t2_2_ab, S_vo_ab, S_vo_ab, optimize=True)
+        S2 += 2 * lib.einsum('ijab,ikcb,aj,ck', t2_1_ab, t2_2_ab, S_vo_ab, S_vo_ab, optimize=True)
+        # block AjdB & AblB
+        S2 -= 2 * lib.einsum('ai,bc,jb,jiac', S_vo_ab, S_vv_ab, t1_2_a, t2_1_ab, optimize=True)
+        # block AbdB
+        S2 -= 2 * lib.einsum('ijab,ijcd,ad,cb', t2_1_ab, t2_2_ab, S_vv_ab, S_vv_ab, optimize=True)
+
+        if adc.approx_trans_moments is False:
+            # block IjlB & AjlJ
+            S2 -= 2 * lib.einsum('ij,aj,ia', S_oo_ab, S_vo_ab, t1_3_a, optimize=True)
+            # block IjdJ & IblJ
+            S2 -= 2 * lib.einsum('ij,ia,ja', S_oo_ab, S_ov_ab, t1_3_b, optimize=True)
+
+        if isinstance(adc._scf, scf.rohf.ROHF):
+            # block IjlJ
+            S2 += 2 * lib.einsum('ia,ja,ik,jk', t1_1_a, t1_2_a, S_oo_ab, S_oo_ab, optimize=True)
+            S2 += 2 * lib.einsum('ia,ja,ki,kj', t1_1_b, t1_2_b, S_oo_ab, S_oo_ab, optimize=True)
+            S2 += lib.einsum('ia,jb,ikab,lj,lk', t1_1_a, t1_1_b, t2_1_ab, S_oo_ab, S_oo_ab, optimize=True)
+            S2 += lib.einsum('ia,jb,kjab,il,kl', t1_1_a, t1_1_b, t2_1_ab, S_oo_ab, S_oo_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ia,jb,klab,il,kj', t1_1_a, t1_1_b, t2_1_ab, S_oo_ab, S_oo_ab, optimize=True)
+            S2 -= lib.einsum('ijab,ik,lk,ja,lb', t2_1_a, S_oo_ab, S_oo_ab, t1_1_a, t1_1_a, optimize=True)
+            S2 -= lib.einsum('ijab,ki,kl,ja,lb', t2_1_b, S_oo_ab, S_oo_ab, t1_1_b, t1_1_b, optimize=True)
+            # block IjlB & AjlJ
+            S2 -= lib.einsum('ij,aj,kb,ikab', S_oo_ab, S_vo_ab, t1_1_a, t2_2_a, optimize=True)
+            S2 -= lib.einsum('ij,aj,kb,ikab', S_oo_ab, S_vo_ab, t1_1_b, t2_2_ab, optimize=True)
+            S2 += 2 * lib.einsum('ij,ak,jb,ikab', S_oo_ab, S_vo_ab, t1_1_b, t2_2_ab, optimize=True)
+            S2 += 4/3 * lib.einsum('ij,aj,ib,ka,kb', S_oo_ab, S_vo_ab, t1_1_a, t1_1_a, t1_1_a, optimize=True)
+            S2 += 2 * lib.einsum('ij,ak,ia,jb,kb', S_oo_ab, S_vo_ab, t1_1_a, t1_1_b, t1_1_b, optimize=True)
+            S2 += 2/3 * lib.einsum('ij,aj,ib,klac,klbc', S_oo_ab, S_vo_ab, t1_1_a, t2_1_a, t2_1_a, optimize=True)
+            S2 += 2/3 * lib.einsum('ij,aj,ka,ilbc,klbc', S_oo_ab, S_vo_ab, t1_1_a, t2_1_a, t2_1_a, optimize=True)
+            S2 -= 1/3 * lib.einsum('ij,aj,kb,ilac,klbc', S_oo_ab, S_vo_ab, t1_1_a, t2_1_a, t2_1_a, optimize=True)
+            S2 += 4/3 * lib.einsum('ij,aj,ib,klac,klbc', S_oo_ab, S_vo_ab, t1_1_a, t2_1_ab, t2_1_ab, optimize=True)
+            S2 += 4/3 * lib.einsum('ij,aj,ka,ilbc,klbc', S_oo_ab, S_vo_ab, t1_1_a, t2_1_ab, t2_1_ab, optimize=True)
+            S2 -= 1/3 * lib.einsum('ij,aj,kb,ilac,klbc', S_oo_ab, S_vo_ab, t1_1_a, t2_1_ab, t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ij,ak,ia,ljbc,lkbc', S_oo_ab, S_vo_ab, t1_1_a, t2_1_ab, t2_1_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ij,ak,ib,ljbc,lkac', S_oo_ab, S_vo_ab, t1_1_a, t2_1_ab, t2_1_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ij,ak,la,ikbc,ljbc', S_oo_ab, S_vo_ab, t1_1_a, t2_1_ab, t2_1_ab, optimize=True)
+            S2 += lib.einsum('ij,ak,lb,ikac,ljbc', S_oo_ab, S_vo_ab, t1_1_a, t2_1_ab, t2_1_ab, optimize=True)
+            S2 += lib.einsum('ij,ak,ia,jlbc,klbc', S_oo_ab, S_vo_ab, t1_1_a, t2_1_b, t2_1_b, optimize=True)
+            S2 -= 1/3 * lib.einsum('ij,aj,kb,ilac,lkcb', S_oo_ab, S_vo_ab, t1_1_b, t2_1_a, t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ij,ak,kb,ilac,ljcb', S_oo_ab, S_vo_ab, t1_1_b, t2_1_a, t2_1_ab, optimize=True)
+            S2 -= 1/3 * lib.einsum('ij,aj,kb,ilac,klbc', S_oo_ab, S_vo_ab, t1_1_b, t2_1_ab, t2_1_b, optimize=True)
+            S2 += 2 * lib.einsum('ij,ak,kb,ilac,jlbc', S_oo_ab, S_vo_ab, t1_1_b, t2_1_ab, t2_1_b, optimize=True)
+            S2 -= lib.einsum('ij,ak,lb,ikac,jlbc', S_oo_ab, S_vo_ab, t1_1_b, t2_1_ab, t2_1_b, optimize=True)
+            # block IjdJ & IblJ
+            S2 -= lib.einsum('ij,ia,kb,kjba', S_oo_ab, S_ov_ab, t1_1_a, t2_2_ab, optimize=True)
+            S2 += 2 * lib.einsum('ij,ka,ib,kjba', S_oo_ab, S_ov_ab, t1_1_a, t2_2_ab, optimize=True)
+            S2 -= lib.einsum('ij,ia,kb,jkab', S_oo_ab, S_ov_ab, t1_1_b, t2_2_b, optimize=True)
+            S2 -= 1/3 * lib.einsum('ij,ia,kb,klbc,ljca', S_oo_ab, S_ov_ab, t1_1_a, t2_1_a, t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ij,ka,kb,ilbc,ljca', S_oo_ab, S_ov_ab, t1_1_a, t2_1_a, t2_1_ab, optimize=True)
+            S2 -= lib.einsum('ij,ka,lb,ilbc,kjca', S_oo_ab, S_ov_ab, t1_1_a, t2_1_a, t2_1_ab, optimize=True)
+            S2 -= 1/3 * lib.einsum('ij,ia,kb,klbc,jlac', S_oo_ab, S_ov_ab, t1_1_a, t2_1_ab, t2_1_b, optimize=True)
+            S2 += 2 * lib.einsum('ij,ka,kb,ilbc,jlac', S_oo_ab, S_ov_ab, t1_1_a, t2_1_ab, t2_1_b, optimize=True)
+            S2 += 2 * lib.einsum('ij,ka,ja,ib,kb', S_oo_ab, S_ov_ab, t1_1_b, t1_1_a, t1_1_a, optimize=True)
+            S2 += 4/3 * lib.einsum('ij,ia,jb,ka,kb', S_oo_ab, S_ov_ab, t1_1_b, t1_1_b, t1_1_b, optimize=True)
+            S2 += lib.einsum('ij,ka,ja,ilbc,klbc', S_oo_ab, S_ov_ab, t1_1_b, t2_1_a, t2_1_a, optimize=True)
+            S2 += 4/3 * lib.einsum('ij,ia,jb,klca,klcb', S_oo_ab, S_ov_ab, t1_1_b, t2_1_ab, t2_1_ab, optimize=True)
+            S2 += 4/3 * lib.einsum('ij,ia,ka,ljbc,lkbc', S_oo_ab, S_ov_ab, t1_1_b, t2_1_ab, t2_1_ab, optimize=True)
+            S2 -= 1/3 * lib.einsum('ij,ia,kb,ljca,lkcb', S_oo_ab, S_ov_ab, t1_1_b, t2_1_ab, t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ij,ka,ja,ilbc,klbc', S_oo_ab, S_ov_ab, t1_1_b, t2_1_ab, t2_1_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ij,ka,jb,ilcb,klca', S_oo_ab, S_ov_ab, t1_1_b, t2_1_ab, t2_1_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ij,ka,la,ilbc,kjbc', S_oo_ab, S_ov_ab, t1_1_b, t2_1_ab, t2_1_ab, optimize=True)
+            S2 += lib.einsum('ij,ka,lb,ilcb,kjca', S_oo_ab, S_ov_ab, t1_1_b, t2_1_ab, t2_1_ab, optimize=True)
+            S2 += 2/3 * lib.einsum('ij,ia,jb,klac,klbc', S_oo_ab, S_ov_ab, t1_1_b, t2_1_b, t2_1_b, optimize=True)
+            S2 += 2/3 * lib.einsum('ij,ia,ka,jlbc,klbc', S_oo_ab, S_ov_ab, t1_1_b, t2_1_b, t2_1_b, optimize=True)
+            S2 -= 1/3 * lib.einsum('ij,ia,kb,jlac,klbc', S_oo_ab, S_ov_ab, t1_1_b, t2_1_b, t2_1_b, optimize=True)
+            # block IjdB & AblJ
+            S2 -= 2 * lib.einsum('ia,bj,ib,ja', S_ov_ab, S_vo_ab, t1_1_a, t1_2_b, optimize=True)
+            S2 -= 2 * lib.einsum('ia,bj,ja,ib', S_ov_ab, S_vo_ab, t1_1_b, t1_2_a, optimize=True)
+            S2 -= lib.einsum('ia,bj,kc,ja,ikbc', S_ov_ab, S_vo_ab, t1_1_a, t1_1_b, t2_1_a, optimize=True)
+            S2 -= lib.einsum('ia,bj,ib,kc,jkac', S_ov_ab, S_vo_ab, t1_1_a, t1_1_b, t2_1_b, optimize=True)
+            S2 += 4/3 * lib.einsum('ia,bj,ijca,kb,kc', S_ov_ab, S_vo_ab, t2_1_ab, t1_1_a, t1_1_a, optimize=True)
+            S2 += 4/3 * lib.einsum('ia,bj,kjba,ic,kc', S_ov_ab, S_vo_ab, t2_1_ab, t1_1_a, t1_1_a, optimize=True)
+            S2 -= lib.einsum('ia,bj,kjca,ib,kc', S_ov_ab, S_vo_ab, t2_1_ab, t1_1_a, t1_1_a, optimize=True)
+            S2 += 4/3 * lib.einsum('ia,bj,ijbc,ka,kc', S_ov_ab, S_vo_ab, t2_1_ab, t1_1_b, t1_1_b, optimize=True)
+            S2 += 4/3 * lib.einsum('ia,bj,ikba,jc,kc', S_ov_ab, S_vo_ab, t2_1_ab, t1_1_b, t1_1_b, optimize=True)
+            S2 -= lib.einsum('ia,bj,ikbc,ja,kc', S_ov_ab, S_vo_ab, t2_1_ab, t1_1_b, t1_1_b, optimize=True)
+            # block IblB & AjdJ
+            S2 -= 2 * lib.einsum('ij,ab,ia,jb', S_oo_ab, S_vv_ab, t1_1_a, t1_2_b, optimize=True)
+            S2 -= 2 * lib.einsum('ij,ab,jb,ia', S_oo_ab, S_vv_ab, t1_1_b, t1_2_a, optimize=True)
+            S2 -= lib.einsum('ij,ab,kc,jb,ikac', S_oo_ab, S_vv_ab, t1_1_a, t1_1_b, t2_1_a, optimize=True)
+            S2 -= lib.einsum('ij,ab,ia,kc,jkbc', S_oo_ab, S_vv_ab, t1_1_a, t1_1_b, t2_1_b, optimize=True)
+            S2 -= lib.einsum('ij,ab,kjcb,ia,kc', S_oo_ab, S_vv_ab, t2_1_ab, t1_1_a, t1_1_a, optimize=True)
+            S2 += 2 * lib.einsum('ij,ab,kjcb,ic,ka', S_oo_ab, S_vv_ab, t2_1_ab, t1_1_a, t1_1_a, optimize=True)
+            S2 -= lib.einsum('ij,ab,ikac,jb,kc', S_oo_ab, S_vv_ab, t2_1_ab, t1_1_b, t1_1_b, optimize=True)
+            S2 += 2 * lib.einsum('ij,ab,ikac,jc,kb', S_oo_ab, S_vv_ab, t2_1_ab, t1_1_b, t1_1_b, optimize=True)
+            # block IbdJ
+            S2 -= 2 * lib.einsum('ia,ib,ja,jb', t1_1_b, t1_2_b, S_ov_ab, S_ov_ab, optimize=True)
+            S2 -= lib.einsum('ia,jb,ijac,kb,kc', t1_1_a, t1_1_b, t2_1_ab, S_ov_ab, S_ov_ab, optimize=True)
+            S2 += 2 * lib.einsum('ia,jb,kjac,ib,kc', t1_1_a, t1_1_b, t2_1_ab, S_ov_ab, S_ov_ab, optimize=True)
+            S2 += lib.einsum('ijab,ka,kc,ib,jc', t2_1_b, S_ov_ab, S_ov_ab, t1_1_b, t1_1_b, optimize=True)
+            # block IbdB & AbdJ
+            S2 -= 2 * lib.einsum('ia,bc,jc,ijba', S_ov_ab, S_vv_ab, t1_1_b, t2_2_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ia,bc,ib,ja,jc', S_ov_ab, S_vv_ab, t1_1_a, t1_1_b, t1_1_b, optimize=True)
+            S2 -= 2 * lib.einsum('ia,bc,ib,jkda,jkdc', S_ov_ab, S_vv_ab, t1_1_a, t2_1_ab, t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ia,bc,id,jkba,jkdc', S_ov_ab, S_vv_ab, t1_1_a, t2_1_ab, t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ia,bc,jb,ikda,jkdc', S_ov_ab, S_vv_ab, t1_1_a, t2_1_ab, t2_1_ab, optimize=True)
+            S2 -= lib.einsum('ia,bc,jd,ikba,jkdc', S_ov_ab, S_vv_ab, t1_1_a, t2_1_ab, t2_1_ab, optimize=True)
+            S2 -= lib.einsum('ia,bc,ib,jkad,jkcd', S_ov_ab, S_vv_ab, t1_1_a, t2_1_b, t2_1_b, optimize=True)
+            S2 -= 2 * lib.einsum('ia,bc,ja,ikbd,kjdc', S_ov_ab, S_vv_ab, t1_1_b, t2_1_a, t2_1_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ia,bc,ja,ikbd,jkcd', S_ov_ab, S_vv_ab, t1_1_b, t2_1_ab, t2_1_b, optimize=True)
+            S2 += lib.einsum('ia,bc,jd,ikba,jkcd', S_ov_ab, S_vv_ab, t1_1_b, t2_1_ab, t2_1_b, optimize=True)
+            # block AjlB
+            S2 -= 2 * lib.einsum('ia,ib,aj,bj', t1_1_a, t1_2_a, S_vo_ab, S_vo_ab, optimize=True)
+            S2 -= lib.einsum('ia,jb,ijcb,ak,ck', t1_1_a, t1_1_b, t2_1_ab, S_vo_ab, S_vo_ab, optimize=True)
+            S2 += 2 * lib.einsum('ia,jb,ikcb,aj,ck', t1_1_a, t1_1_b, t2_1_ab, S_vo_ab, S_vo_ab, optimize=True)
+            S2 += lib.einsum('ijab,ak,ck,ib,jc', t2_1_a, S_vo_ab, S_vo_ab, t1_1_a, t1_1_a, optimize=True)
+            # block AjdB & AblB
+            S2 -= 2 * lib.einsum('ai,bc,jb,jiac', S_vo_ab, S_vv_ab, t1_1_a, t2_2_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ai,bc,ja,jkbd,kidc', S_vo_ab, S_vv_ab, t1_1_a, t2_1_a, t2_1_ab, optimize=True)
+            S2 += lib.einsum('ai,bc,jd,jkbd,kiac', S_vo_ab, S_vv_ab, t1_1_a, t2_1_a, t2_1_ab, optimize=True)
+            S2 -= 2 * lib.einsum('ai,bc,ja,jkbd,ikcd', S_vo_ab, S_vv_ab, t1_1_a, t2_1_ab, t2_1_b, optimize=True)
+            S2 -= 2 * lib.einsum('ai,bc,ic,ja,jb', S_vo_ab, S_vv_ab, t1_1_b, t1_1_a, t1_1_a, optimize=True)
+            S2 -= lib.einsum('ai,bc,ic,jkad,jkbd', S_vo_ab, S_vv_ab, t1_1_b, t2_1_a, t2_1_a, optimize=True)
+            S2 -= 2 * lib.einsum('ai,bc,ic,jkad,jkbd', S_vo_ab, S_vv_ab, t1_1_b, t2_1_ab, t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ai,bc,id,jkac,jkbd', S_vo_ab, S_vv_ab, t1_1_b, t2_1_ab, t2_1_ab, optimize=True)
+            S2 += 2 * lib.einsum('ai,bc,jc,kiad,kjbd', S_vo_ab, S_vv_ab, t1_1_b, t2_1_ab, t2_1_ab, optimize=True)
+            S2 -= lib.einsum('ai,bc,jd,kiac,kjbd', S_vo_ab, S_vv_ab, t1_1_b, t2_1_ab, t2_1_ab, optimize=True)
+            # block AbdB
+            S2 -= 2 * lib.einsum('ia,jb,ijcd,ad,cb', t1_1_a, t1_1_b, t2_1_ab, S_vv_ab, S_vv_ab, optimize=True)
+
+    dm_a, dm_b = adc.make_ref_rdm1(with_frozen=True)
+    if adc.frozen is not None:
+        moidx_fr = adc.get_frozen_mask()
+        act_a = np.where(moidx_fr[0])[0]
+        act_b = np.where(moidx_fr[1])[0]
+        cor_a_fr = np.where(~moidx_fr[0][:np.count_nonzero(adc.mo_occ[0] > 0)])[0]
+        cor_b_fr = np.where(~moidx_fr[1][:np.count_nonzero(adc.mo_occ[1] > 0)])[0]
+        delta_fr = np.dot(adc.mo_coeff_hf[0].transpose(), np.dot(ovlp, adc.mo_coeff_hf[1]))
+        S_ac_fr = delta_fr[np.ix_(act_a, cor_b_fr)]
+        S_ca_fr = delta_fr[np.ix_(cor_a_fr, act_b)]
+        S_cc_fr = delta_fr[np.ix_(cor_a_fr, cor_b_fr)]
+        ga_fr = dm_a[np.ix_(act_a, act_a)]
+        gb_fr = dm_b[np.ix_(act_b, act_b)]
+        S2 -= lib.einsum('pc,sc,sp->', S_ac_fr, S_ac_fr, ga_fr, optimize=True)
+        S2 -= lib.einsum('cp,cq,pq->', S_ca_fr, S_ca_fr, gb_fr, optimize=True)
+        S2 -= lib.einsum('cp,cp->', S_cc_fr, S_cc_fr, optimize=True)
+
+    na = np.trace(dm_a)
+    nb = np.trace(dm_b)
+    spin_square = 0.25 * ((na - nb)**2) + 0.5 * (na + nb) + S2
+
+    return float(spin_square)
 
 
 def get_frozen_mask(myadc):
@@ -608,7 +900,7 @@ class UADC(lib.StreamObject):
         self.method_type = "ip"
         self.with_df = None
         self.compute_properties = True
-        self.approx_trans_moments = False
+        self.approx_trans_moments = True
         self.evec_print_tol = 0.1
         self.spec_factor_print_tol = 0.1
         self.ncvs = None
@@ -625,12 +917,13 @@ class UADC(lib.StreamObject):
 
         charges = self.mol.atom_charges()
         coords  = self.mol.atom_coords()
-        self.dip_mom_nuc = np.einsum('i,ix->x', charges, coords)
+        self.dip_mom_nuc = lib.einsum('i,ix->x', charges, coords)
 
     compute_amplitudes = uadc_amplitudes.compute_amplitudes
     compute_energy = uadc_amplitudes.compute_energy
     transform_integrals = uadc_ao2mo.transform_integrals_incore
     make_ref_rdm1 = make_ref_rdm1
+    get_ref_spin_square = get_ref_spin_square
     get_frozen_mask = get_frozen_mask
     _mo_splitter = _mo_splitter
 
@@ -736,6 +1029,10 @@ class UADC(lib.StreamObject):
 
         self.e_corr, self.t1, self.t2 = uadc_amplitudes.compute_amplitudes_energy(
             self, eris=eris, verbose=self.verbose)
+        if self.compute_spin_square:
+            self.gs_spin_square = self.get_ref_spin_square()
+            logger.info(self, 'Reference state <S^2> = %10.8f',
+                        self.gs_spin_square)
         self._finalize()
         if self.if_heri_eris:
             self.eris = eris

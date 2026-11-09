@@ -67,10 +67,10 @@ class KnownValues(unittest.TestCase):
         myadc.method_type = "ee"
         e,v,p,x = myadc.kernel(nroots=4)
 
-        self.assertAlmostEqual(p[0], 0.02774680081092312, 6)
+        self.assertAlmostEqual(p[0], 0.02764803414781993, 6)
         self.assertAlmostEqual(p[1], 8.90646730745011e-29, 6)
-        self.assertAlmostEqual(p[2], 0.09770117474911057, 6)
-        self.assertAlmostEqual(p[3], 0.07375673165508137, 6)
+        self.assertAlmostEqual(p[2], 0.09610504567876284, 6)
+        self.assertAlmostEqual(p[3], 0.07239794502322675, 6)
 
         self.assertAlmostEqual(e[0],0.2971167095 , 6)
         self.assertAlmostEqual(e[1],0.3724791374 , 6)
@@ -88,10 +88,10 @@ class KnownValues(unittest.TestCase):
         myadcee = adc.radc_ee.RADCEE(myadc)
         e,v,p,x = myadcee.kernel(nroots=4)
 
-        self.assertAlmostEqual(p[0], 0.0254619534304077, 6)
+        self.assertAlmostEqual(p[0], 0.025475952836233384, 6)
         self.assertAlmostEqual(p[1], 5.067710484943722e-29, 6)
-        self.assertAlmostEqual(p[2], 0.0917847064014669, 6)
-        self.assertAlmostEqual(p[3], 0.0674078023930496, 6)
+        self.assertAlmostEqual(p[2], 0.09040048597090389, 6)
+        self.assertAlmostEqual(p[3], 0.06605173435559109, 6)
 
         self.assertAlmostEqual(e[0],0.2794713515, 6)
         self.assertAlmostEqual(e[1],0.3563942404, 6)
@@ -114,10 +114,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[2],0.4019531805, 6)
         self.assertAlmostEqual(e[3],0.4772033490, 6)
 
-        self.assertAlmostEqual(p[0], 0.02702943, 6)
+        self.assertAlmostEqual(p[0], 0.027146863083246153, 6)
         self.assertAlmostEqual(p[1], 0.00000000, 6)
-        self.assertAlmostEqual(p[2], 0.09696533, 6)
-        self.assertAlmostEqual(p[3], 0.07673359, 6)
+        self.assertAlmostEqual(p[2], 0.09736173469164917, 6)
+        self.assertAlmostEqual(p[3], 0.07661435650622729, 6)
 
     def test_ee_adc3_frozen(self):
         myadc_fr.method = "adc(3)"
@@ -135,10 +135,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[2],0.4018990744972834, 6)
         self.assertAlmostEqual(e[3],0.4771607225277996, 6)
 
-        self.assertAlmostEqual(p[0], 0.02702067, 6)
+        self.assertAlmostEqual(p[0], 0.027131363038248122, 6)
         self.assertAlmostEqual(p[1], 0.00000000, 6)
-        self.assertAlmostEqual(p[2], 0.09699817, 6)
-        self.assertAlmostEqual(p[3], 0.07684783, 6)
+        self.assertAlmostEqual(p[2], 0.09736114356216902, 6)
+        self.assertAlmostEqual(p[3], 0.07670124858522517, 6)
 
 if __name__ == "__main__":
     print("EE calculations for different ADC methods for water molecule")

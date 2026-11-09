@@ -28,6 +28,34 @@ import h5py
 import tempfile
 
 
+def _amplitude_memory(myadc, dtype):
+    nocc = myadc.nocc
+    nvir = myadc.nmo - nocc
+    second_order = ((myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False)
+                    or myadc.method == "adc(3)")
+    mem_factor = 4 if second_order else 2
+    return (mem_factor * myadc.nkpts ** 3 * nocc ** 2 * nvir ** 2 * np.dtype(dtype).itemsize / 1e6)
+
+
+def _eri_storage(myadc, eris):
+    dtype = getattr(eris, 'dtype', myadc.mo_coeff[0].dtype)
+    mem_left = (myadc.max_memory * .9 - lib.current_memory()[0] - _amplitude_memory(myadc, dtype))
+    eris.feri = getattr(eris, 'feri', None)
+
+    def create(name, shape, dtype):
+        nonlocal mem_left
+        dtype = np.dtype(dtype)
+        size = int(np.prod(shape)) * dtype.itemsize / 1e6
+        if myadc.incore_complete or size < mem_left:
+            mem_left -= size
+            return np.empty(shape, dtype=dtype)
+        if eris.feri is None:
+            eris.feri = lib.H5TmpFile()
+        return eris.feri.create_dataset(name, shape, dtype=dtype)
+
+    return create
+
+
 def transform_integrals_incore(myadc):
     '''Incore integral transformation for integrals in Chemists' notation'''
 
@@ -178,6 +206,11 @@ def transform_integrals_outcore(myadc):
             # raise MemoryError('Minimal memory requirements %s MB'
             #                  % (mem_now + nvir ** 4 / 1e6 * 16 * 2))
             for (ikp, ikq, ikr) in khelper.symm_map:
+                iks = kconserv[ikp, ikq, ikr]
+                orbv_p = mo_coeff[ikp][:, nocc:]
+                orbv_q = mo_coeff[ikq][:, nocc:]
+                orbv_r = mo_coeff[ikr][:, nocc:]
+                orbv_s = mo_coeff[iks][:, nocc:]
                 for a in range(nvir):
                     orbva_p = orbv_p[:, a].reshape(-1, 1)
                     buf_kpt = fao2mo((orbva_p, orbv_q, orbv_r, orbv_s),
@@ -194,7 +227,7 @@ def transform_integrals_outcore(myadc):
                         :, :, 0, :] / nkpts
                     eris.vvvv[iks, ikq, ikr, :, :, :, a] = buf_kpt.transpose(3, 2, 1, 0).conj()[
                         :, :, :, 0] / nkpts
-            cput1 = log.timer_debug1('transforming vvvv', *cput1)
+        cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
     return eris
 
@@ -282,14 +315,13 @@ def transform_integrals_df(myadc):
         del (n)
         del (N_trunc)
 
-    eris.feri = feri = lib.H5TmpFile()
+    create = _eri_storage(myadc, eris)
 
-    eris.oooo = feri.create_dataset('oooo', (nkpts, nkpts, nkpts, nocc, nocc, nocc, nocc), dtype=dtype)
-    eris.oovv = feri.create_dataset('oovv', (nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype=dtype)
-    eris.ovoo = feri.create_dataset('ovoo', (nkpts, nkpts, nkpts, nocc, nvir, nocc, nocc), dtype=dtype)
-    eris.ovov = feri.create_dataset('ovov', (nkpts, nkpts, nkpts, nocc, nvir, nocc, nvir), dtype=dtype)
-    eris.ovvo = feri.create_dataset('ovvo', (nkpts, nkpts, nkpts, nocc, nvir, nvir, nocc), dtype=dtype)
-    # eris.ovvv = feri.create_dataset('ovvv', (nkpts,nkpts,nkpts,nocc,nvir,nvir,nvir), dtype=dtype)
+    eris.oooo = create('oooo', (nkpts, nkpts, nkpts, nocc, nocc, nocc, nocc), dtype)
+    eris.ovoo = create('ovoo', (nkpts, nkpts, nkpts, nocc, nvir, nocc, nocc), dtype)
+    eris.ovov = create('ovov', (nkpts, nkpts, nkpts, nocc, nvir, nocc, nvir), dtype)
+    eris.oovv = create('oovv', (nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype)
+    eris.ovvo = create('ovvo', (nkpts, nkpts, nkpts, nocc, nvir, nvir, nocc), dtype)
 
     for kp in range(nkpts):
         for kq in range(nkpts):

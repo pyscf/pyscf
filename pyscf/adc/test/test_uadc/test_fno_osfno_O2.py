@@ -83,10 +83,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[2], 0.2218296, 6)
         self.assertAlmostEqual(e[3], 0.32334699, 6)
 
-        self.assertAlmostEqual(spin[0], 2.00097047, 3)
-        self.assertAlmostEqual(spin[1], 2.00099478, 3)
-        self.assertAlmostEqual(spin[2], 2.00094714, 3)
-        self.assertAlmostEqual(spin[3], 2.00243634, 3)
+        self.assertAlmostEqual(spin[0], 1.99963182, 3)
+        self.assertAlmostEqual(spin[1], 1.99961234, 3)
+        self.assertAlmostEqual(spin[2], 1.99967068, 3)
+        self.assertAlmostEqual(spin[3], 2.00246127, 3)
 
     def test_fno_vs_osfno_spin_contamination(self):
         adc_can = adc.UADC(mf)

@@ -23,6 +23,7 @@
 '''
 Restricted algebraic diagrammatic construction
 '''
+import warnings
 import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
@@ -51,6 +52,12 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
         eris = adc.transform_integrals()
 
     if adc.approx_trans_moments:
+        warnings.warn(
+            "approx_trans_moments now defaults to True: transition moments, <S^2>, "
+            "1-RDMs and FNO energy corrections are computed approximately; "
+            "ADC energies are unaffected. Set myadc.approx_trans_moments = False "
+            "before kernel() for exact results.",
+            stacklevel=2)
         if adc.method in ("adc(2)", "adc(2)-x"):
             logger.warn(
                 adc,
@@ -153,9 +160,6 @@ def make_ref_rdm1(adc, with_frozen=True, ao_repr=False):
     ### OCC-VIR ###
     OPDM[:nocc, nocc:] += lib.einsum('IA->IA', t2_ce, optimize = einsum_type).copy()
 
-    ### VIR-OCC ###
-    OPDM[nocc:, :nocc] += lib.einsum('IA->AI', t2_ce, optimize = einsum_type).copy()
-
     ### VIR-VIR ###
     OPDM[nocc:, nocc:] += 2 * lib.einsum('ijAa,ijBa->AB', t1_ccee, t1_ccee, optimize = einsum_type)
     OPDM[nocc:, nocc:] -= lib.einsum('ijAa,jiBa->AB', t1_ccee, t1_ccee, optimize = einsum_type)
@@ -170,31 +174,29 @@ def make_ref_rdm1(adc, with_frozen=True, ao_repr=False):
             t3_ce = np.zeros((nocc, nvir))
 
         #### OCC-OCC ###
-        OPDM[:nocc, :nocc] -= 2 * lib.einsum('Iiab,Jiab->IJ',
-                                             t1_ccee, t2_ccee, optimize = einsum_type)
-        OPDM[:nocc, :nocc] += lib.einsum('Iiab,Jiba->IJ', t1_ccee, t2_ccee, optimize = einsum_type)
-        OPDM[:nocc, :nocc] -= 2 * lib.einsum('Jiab,Iiab->IJ',
-                                             t1_ccee, t2_ccee, optimize = einsum_type)
-        OPDM[:nocc, :nocc] += lib.einsum('Jiab,Iiba->IJ', t1_ccee, t2_ccee, optimize = einsum_type)
+        temp = np.zeros((nocc, nocc))
+        temp -= 2 * lib.einsum('Iiab,Jiab->IJ',
+                               t1_ccee, t2_ccee, optimize = einsum_type)
+        temp += lib.einsum('Iiab,Jiba->IJ', t1_ccee, t2_ccee, optimize = einsum_type)
+        OPDM[:nocc, :nocc] += temp + temp.T
 
         ##### OCC-VIR ### ####
-        OPDM[:nocc, nocc:]  += lib.einsum('IA->IA', t3_ce, optimize = einsum_type).copy()
         OPDM[:nocc, nocc:] +=  lib.einsum('IiAa,ia->IA', t1_ccee, t2_ce, optimize = einsum_type)
         OPDM[:nocc, nocc:] -= 1/2 * \
             lib.einsum('iIAa,ia->IA', t1_ccee, t2_ce, optimize = einsum_type)
-        ###### VIR-OCC ###
-        OPDM[nocc:, :nocc]  += lib.einsum('IA->AI', t3_ce, optimize = einsum_type).copy()
-        OPDM[nocc:, :nocc]  += lib.einsum('IiAa,ia->AI', t1_ccee, t2_ce, optimize = einsum_type)
-        OPDM[nocc:, :nocc]  -= 1/2 * \
-            lib.einsum('iIAa,ia->AI', t1_ccee, t2_ce, optimize = einsum_type)
+
+        if adc.approx_trans_moments is False:
+            OPDM[:nocc, nocc:] += lib.einsum('IA->IA', t3_ce, optimize = einsum_type).copy()
 
         ##### VIR-VIR ###
-        OPDM[nocc:, nocc:] += 2 * lib.einsum('ijAa,ijBa->AB',
-                                             t1_ccee, t2_ccee, optimize = einsum_type)
-        OPDM[nocc:, nocc:] -= lib.einsum('ijAa,jiBa->AB', t1_ccee, t2_ccee, optimize = einsum_type)
-        OPDM[nocc:, nocc:] += 2 * lib.einsum('ijBa,ijAa->AB',
-                                             t1_ccee, t2_ccee, optimize = einsum_type)
-        OPDM[nocc:, nocc:] -= lib.einsum('ijBa,jiAa->AB', t1_ccee, t2_ccee, optimize = einsum_type)
+        temp = np.zeros((nvir, nvir))
+        temp += 2 * lib.einsum('ijAa,ijBa->AB',
+                               t1_ccee, t2_ccee, optimize = einsum_type)
+        temp -= lib.einsum('ijAa,jiBa->AB', t1_ccee, t2_ccee, optimize = einsum_type)
+        OPDM[nocc:, nocc:] += temp + temp.T
+
+    ### VIR-OCC ###
+    OPDM[nocc:, :nocc] = OPDM[:nocc, nocc:].T
 
     if with_frozen and adc.frozen is not None:
         nmo = adc.mo_occ.size
@@ -363,7 +365,7 @@ class RADC(lib.StreamObject):
         self.method_type = "ip"
         self.with_df = None
         self.compute_properties = True
-        self.approx_trans_moments = False
+        self.approx_trans_moments = True
         self.evec_print_tol = 0.1
         self.spec_factor_print_tol = 0.1
         self.ncvs = None

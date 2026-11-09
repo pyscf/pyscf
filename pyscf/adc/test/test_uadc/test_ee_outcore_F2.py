@@ -70,8 +70,8 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(p[0],0.00000000, 6)
         self.assertAlmostEqual(p[1],0.00000000, 6)
-        self.assertAlmostEqual(p[2],0.00101630, 6)
-        self.assertAlmostEqual(p[3],0.00101630, 6)
+        self.assertAlmostEqual(p[2],0.0011736158009392943, 6)
+        self.assertAlmostEqual(p[3],0.0011736158009392937, 6)
 
     def test_ee_adc2x(self):
         myadc.method = "adc(2)-x"
@@ -88,8 +88,8 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(p[0],0.00000000, 6)
         self.assertAlmostEqual(p[1],0.00000000, 6)
-        self.assertAlmostEqual(p[2],0.00101329, 6)
-        self.assertAlmostEqual(p[3],0.00101329, 6)
+        self.assertAlmostEqual(p[2],0.0011629023209615984, 6)
+        self.assertAlmostEqual(p[3],0.0011629023209615932, 6)
 
     def test_ee_adc3(self):
         myadc.method = "adc(3)"
@@ -106,8 +106,8 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(p[0],0.00000000, 6)
         self.assertAlmostEqual(p[1],0.00000000, 6)
-        self.assertAlmostEqual(p[2],0.00110811, 6)
-        self.assertAlmostEqual(p[3],0.00110811, 6)
+        self.assertAlmostEqual(p[2],0.001075199197963484, 6)
+        self.assertAlmostEqual(p[3],0.0010751991979634928, 6)
 
 if __name__ == "__main__":
     print("EE calculations for different ADC methods for water molecule")

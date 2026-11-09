@@ -67,12 +67,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[0], 15.12281031547323, 6)
         self.assertAlmostEqual(e[1], 15.12281031548646, 6)
 
-        self.assertAlmostEqual(p[0], 0.77131403962843, 6)
-        self.assertAlmostEqual(p[1], 0.77131403962002, 6)
+        self.assertAlmostEqual(p[0], 0.77131287901044, 6)
+        self.assertAlmostEqual(p[1], 0.7713128790609936, 6)
 
         dm1_exc = np.array(myadcipcvs.make_rdm1())
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 34.77893507724698, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 34.77893507598009, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 34.881969292630664, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 34.88196929137035, 6)
 
     def test_ip_adc2x(self):
 
@@ -96,10 +96,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[3], 0.75723819850822, 6)
 
         dm1_exc = np.array(myadcipcvs.make_rdm1())
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 34.74538220684249, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 34.74538220395507, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 34.75067997958486, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 34.75067997663937, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 34.84663542189663, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 34.846635418986395, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 34.85191954884896, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 34.85191954587879, 6)
 
     def test_ip_adc3_high_cost(self):
 

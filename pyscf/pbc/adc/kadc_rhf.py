@@ -334,6 +334,7 @@ class RADC(pyscf.adc.radc.RADC):
 
         self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
         self.cell = self._scf.cell
+        self.incore_complete = self.incore_complete or self.cell.incore_anyway
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
         self.mo_energy = mo_energy

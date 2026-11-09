@@ -64,14 +64,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[1], 0.5434389942222756, 6)
         self.assertAlmostEqual(e[2], 0.6240296265084732, 6)
 
-        self.assertAlmostEqual(p[0], 0.884404855445607, 6)
-        self.assertAlmostEqual(p[1], 0.8844048539643351, 6)
-        self.assertAlmostEqual(p[2], 0.9096460559671828, 6)
+        self.assertAlmostEqual(p[0], 0.8838707557870636, 6)
+        self.assertAlmostEqual(p[1], 0.883870755157567, 6)
+        self.assertAlmostEqual(p[2], 0.9095822266266275, 6)
 
         dm1_exc = np.array(myadc.make_rdm1())
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 32.18230419471164, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 32.18230421168242, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 33.18480971377516, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 32.35717285775486, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 32.357172874634536, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 33.249962904560384, 6)
 
     def test_ip_adc2_oneroot(self):
 
@@ -79,10 +79,10 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(e[0], 0.5434389897908212, 6)
 
-        self.assertAlmostEqual(p[0], 0.884404855445607, 6)
+        self.assertAlmostEqual(p[0], 0.8838707557870626, 6)
 
         dm1_exc = np.array(myadc.make_rdm1())
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 32.18230419471159, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 32.35717285775486, 6)
 
     def test_ip_adc2x(self):
 
@@ -94,14 +94,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[1], 0.5405255399061982, 6)
         self.assertAlmostEqual(e[2], 0.62080267098272, 6)
 
-        self.assertAlmostEqual(p[0], 0.875664254715628 , 6)
-        self.assertAlmostEqual(p[1], 0.8756642844804134 , 6)
-        self.assertAlmostEqual(p[2], 0.9076434703549277, 6)
+        self.assertAlmostEqual(p[0], 0.8752300521559787 , 6)
+        self.assertAlmostEqual(p[1], 0.8752300513856642 , 6)
+        self.assertAlmostEqual(p[2], 0.9076152488355405, 6)
 
         dm1_exc = np.array(myadc.make_rdm1())
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 32.12749270821079, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 32.12749272608378, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 33.16693844245494, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 32.300873699651596, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 32.30087371741716, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 33.231950590751836, 6)
 
     def test_ip_adc3_high_cost(self):
 
@@ -116,14 +116,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[1], 0.5667526888293601, 6)
         self.assertAlmostEqual(e[2], 0.6099995181296374, 6)
 
-        self.assertAlmostEqual(p[0], 0.9086596203469742, 6)
-        self.assertAlmostEqual(p[1], 0.9086596190173993, 6)
-        self.assertAlmostEqual(p[2], 0.9214613318791076, 6)
+        self.assertAlmostEqual(p[0], 0.908434332389567, 6)
+        self.assertAlmostEqual(p[1], 0.9084343317641311, 6)
+        self.assertAlmostEqual(p[2], 0.9215601552961323, 6)
 
         dm1_exc = np.array(myadc.make_rdm1())
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 32.49588407017209, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 32.49588408844158, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 33.65709867284846, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 32.32998221078983, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 32.32998222863164, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 33.48084061993463, 6)
 
 if __name__ == "__main__":
     print("IP calculations for different ADC methods")

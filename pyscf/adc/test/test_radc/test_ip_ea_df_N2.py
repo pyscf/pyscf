@@ -78,9 +78,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[1], 0.60109239, 6)
         self.assertAlmostEqual(e[2], 0.60109239, 6)
 
-        self.assertAlmostEqual(p[0], 1.83255357, 6)
-        self.assertAlmostEqual(p[1], 1.86389642, 6)
-        self.assertAlmostEqual(p[2], 1.86389642, 6)
+        self.assertAlmostEqual(p[0], 1.8322246219696545, 6)
+        self.assertAlmostEqual(p[1], 1.864159847184714, 6)
+        self.assertAlmostEqual(p[2], 1.8641598471847138, 6)
 
     def test_dfhf_dfadc2_ea(self):
 
@@ -98,8 +98,8 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(p[0], 1.86603796, 6)
         self.assertAlmostEqual(p[1], 1.86603796, 6)
-        self.assertAlmostEqual(p[2], 1.92699634, 6)
-        self.assertAlmostEqual(p[3], 1.88366005, 6)
+        self.assertAlmostEqual(p[2], 1.9267110202392637, 6)
+        self.assertAlmostEqual(p[3], 1.8835933626283683, 6)
 
     def test_hf_dfadc2_ea(self):
 
@@ -120,8 +120,8 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(p[0], 1.86604908, 6)
         self.assertAlmostEqual(p[1], 1.86604908, 6)
-        self.assertAlmostEqual(p[2], 1.92697854, 6)
-        self.assertAlmostEqual(p[3], 1.88386011, 6)
+        self.assertAlmostEqual(p[2], 1.9266933216019206, 6)
+        self.assertAlmostEqual(p[3], 1.8837932665501487, 6)
 
     def test_dfadc3_ip_frozen(self):
 
@@ -138,9 +138,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[1], 0.601035715506966, 6)
         self.assertAlmostEqual(e[2], 0.601035715506968, 6)
 
-        self.assertAlmostEqual(p[0], 1.832409243905315, 6)
-        self.assertAlmostEqual(p[1], 1.863816239512485, 6)
-        self.assertAlmostEqual(p[2], 1.863816239512485, 6)
+        self.assertAlmostEqual(p[0], 1.8320804579731056, 6)
+        self.assertAlmostEqual(p[1], 1.864079559107219, 6)
+        self.assertAlmostEqual(p[2], 1.8640795591072175, 6)
 
 if __name__ == "__main__":
     print("DF-ADC calculations for different RADC methods for nitrogen molecule")

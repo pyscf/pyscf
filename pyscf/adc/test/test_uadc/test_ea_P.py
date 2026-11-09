@@ -22,6 +22,7 @@ import numpy as np
 from pyscf import gto
 from pyscf import scf
 from pyscf import adc
+from pyscf.adc.uadc_ea import get_spin_square
 
 def setUpModule():
     global mol, mf, myadc
@@ -60,6 +61,7 @@ class KnownValues(unittest.TestCase):
 
         myadcea = adc.uadc_ea.UADCEA(myadc)
         e,v,p,x = myadcea.kernel(nroots=3)
+        spin = get_spin_square(myadcea)[0]
 
         self.assertAlmostEqual(e[0], -0.00570584313941, 6)
         self.assertAlmostEqual(e[1], -0.00570584313941, 6)
@@ -70,9 +72,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 0.95200973206193, 6)
 
         dm1_exc = np.array(myadcea.make_rdm1())
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 47.90604355245580, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 47.90604355245561, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 47.90604355245582, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 47.89932188875081, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 47.89932188875066, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 47.89932188875087, 6)
+        self.assertAlmostEqual(spin[0],2.089027805040737 , 5)
+        self.assertAlmostEqual(spin[1],2.089027805040735 , 5)
+        self.assertAlmostEqual(spin[2],2.0890278050407387 , 5)
 
     def test_ea_adc2x(self):
         myadc.method = "adc(2)-x"
@@ -81,6 +86,7 @@ class KnownValues(unittest.TestCase):
 
         myadcea = adc.uadc_ea.UADCEA(myadc)
         e,v,p,x = myadcea.kernel(nroots=3)
+        spin = get_spin_square(myadcea)[0]
 
         self.assertAlmostEqual(e[0], -0.02422205199715, 6)
         self.assertAlmostEqual(e[1], -0.02422205199715, 6)
@@ -91,9 +97,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 0.86563811906541, 6)
 
         dm1_exc = np.array(myadcea.make_rdm1())
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 50.26460466699640, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 50.26460466699645, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 50.26460466699637, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 50.25850841650223, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 50.25850841650228, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 50.25850841650239, 6)
+        self.assertAlmostEqual(spin[0],2.003032776074283 , 5)
+        self.assertAlmostEqual(spin[1],2.0030327760742868 , 5)
+        self.assertAlmostEqual(spin[2],2.003032776074286 , 5)
 
     def test_ea_adc3(self):
         myadc.method = "adc(3)"
@@ -102,6 +111,7 @@ class KnownValues(unittest.TestCase):
 
         myadcea = adc.uadc_ea.UADCEA(myadc)
         e,v,p,x = myadcea.kernel(nroots=3)
+        spin = get_spin_square(myadcea)[0]
 
         self.assertAlmostEqual(e[0], -0.01331220104400, 6)
         self.assertAlmostEqual(e[1], -0.01331220104400, 6)
@@ -112,9 +122,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 0.87295109889981, 6)
 
         dm1_exc = np.array(myadcea.make_rdm1())
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 50.91437931657561, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 50.91437931657558, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 50.91437931657559, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 50.93780012087158, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 50.93780012087159, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 50.937800120871714, 6)
+        self.assertAlmostEqual(spin[0],2.00373164 , 5)
+        self.assertAlmostEqual(spin[1],2.00373164 , 5)
+        self.assertAlmostEqual(spin[2],2.00373164 , 5)
 
 if __name__ == "__main__":
     print("EA calculations for different ADC methods for open-shell atom")
