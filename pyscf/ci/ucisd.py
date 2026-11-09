@@ -158,7 +158,11 @@ def contract(myci, civec, eris):
     t0 -= numpy.einsum('jaib,ijab', eris_ovov, c2aa) * .25
     t0 += numpy.einsum('iajb,ijab', eris_OVOV, c2bb) * .25
     t0 -= numpy.einsum('jaib,ijab', eris_OVOV, c2bb) * .25
-    # Empty mixed-spin tensors contribute zero without reading their storage.
+    # Empty mixed-spin tensors (e.g. in fully spin-polarized systems)
+    # contribute zero. NumPy einsum can read a zero-stride operand's
+    # backing storage even for an empty contraction, producing NaN if
+    # that storage contains NaN (observed on Windows). Skip this term
+    # to keep the reference component of the Hamiltonian output finite.
     if c2ab.size:
         t0 += numpy.einsum('iajb,ijab', eris_ovOV, c2ab)
     eris_ovov = eris_ovOV = eris_OVOV = None
