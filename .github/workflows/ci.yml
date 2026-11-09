@@ -133,18 +133,33 @@ jobs:
             yum-config-manager --enable epel && \
             yum install -y openblas-devel gcc cmake curl && \
             cd ./pyscf/lib && curl -o deps.tar.gz -L "https://github.com/pyscf/pyscf-build-deps/blob/master/pyscf-2.2-aarch64-deps.tar.gz?raw=true"  && \
-            tar xzf deps.tar.gz && \
+            # Keep XCFun, but build libcint and LibXC at the versions in CMakeLists.txt.
+            tar xzf deps.tar.gz deps/include/XCFun deps/lib64/libxcfun.so deps/lib64/libxcfun.so.2 && \
             mkdir build && cd build && \
-            cmake -DBUILD_LIBXC=OFF -DBUILD_XCFUN=OFF -DBUILD_LIBCINT=OFF .. && \
+            cmake -DBUILD_LIBXC=ON -DBUILD_XCFUN=OFF -DBUILD_LIBCINT=ON .. && \
             make -j2 && cd .. && rm -Rf build && cd ../.. && \
             export OMP_NUM_THREADS=1 && export PYTHONPATH=$(pwd):$PYTHONPATH && \
             echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > .pyscf_conf.py && \
             echo "dftd3_DFTD3PATH = './pyscf/lib/deps/lib'" >> .pyscf_conf.py && \
             echo "scf_hf_SCF_mute_chkfile = True" >> .pyscf_conf.py && \
-            ulimit -s 20000 && /opt/python/${{ matrix.pyver }}/bin/python -u .github/workflows/ci_linux/pytest_live.py \
+            ulimit -s 20000
+            /opt/python/${{ matrix.pyver }}/bin/python -u .github/workflows/ci_linux/arm64_probe.py
+            /opt/python/${{ matrix.pyver }}/bin/python -u .github/workflows/ci_linux/pytest_live.py -v -s \
+              pyscf/df/test/test_df.py::KnownValues::test_rsh_df4c_get_jk \
+              pyscf/dft/test/test_libxc.py::KnownValues::test_set_param_named \
+              pyscf/gto/test/test_mole.py::KnownValues::test_frac_particles \
+              pyscf/lib/test/test_linalg_helper.py::KnownValues::test_davidson_diag_matrix
+            /opt/python/${{ matrix.pyver }}/bin/python -u .github/workflows/ci_linux/pytest_live.py \
               pyscf/ --ignore=pyscf/adc --ignore=pyscf/pbc/df --ignore=pyscf/pbc/cc \
               -s -v --durations=20 -c pytest.ini pyscf
             BASH
+      - name: Preserve ARM64 diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: arm64-diagnostics-${{ matrix.pyver }}
+          path: arm64-diagnostics/
+          if-no-files-found: warn
 
   macos-build:
     runs-on: macos-latest
