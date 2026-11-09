@@ -743,7 +743,8 @@ class RangeSeparatedJKBuilder(lib.StreamObject):
             mem_now = lib.current_memory()[0]
             max_memory = self.max_memory - mem_now
             log.debug1('max_memory = %d MB (%d in use)', max_memory+mem_now, mem_now)
-            Gblksize = min(Gblksize, int(max_memory*.8e6/16/(nao**2+naod**2)/(nkpts+1))//8*8)
+            Gblksize = min(Gblksize,
+                           max(24, int(max_memory*.8e6/16/(nao**2+naod**2)/(nkpts+1))//8*8))
             log.debug1('Gblksize = %d', Gblksize)
             buf = np.empty(nkpts*Gblksize*nao**2*2)
             for p0, p1 in lib.prange(0, ngrids, Gblksize):
