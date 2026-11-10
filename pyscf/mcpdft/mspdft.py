@@ -275,7 +275,7 @@ class _MSPDFT (mcpdft.MultiStateMCPDFTSolver):
         self.max_cyc_diabatize = MAX_CYC_DIABATIZE
         self.conv_tol_diabatize = CONV_TOL_DIABATIZE
         self.sing_tol_diabatize = SING_TOL_DIABATIZE
-        self.nudge_tol_diabatize = CONV_TOL_DIABATIZE
+        self.nudge_tol_diabatize = NUDGE_TOL_DIABATIZE
         self.diabatization = diabatization
         self.si_mcscf = None
         self.si_pdft = None
