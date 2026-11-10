@@ -59,6 +59,15 @@ def rhf_stability(mf, internal=True, external=False, verbose=None, return_status
         tol : float
             Convergence threshold for Davidson solver
 
+    Notes:
+        The computed eigenvalues are stored as one-dimensional array copies in
+        ``mf.scf_summary['stability_eigenvalue']``: ``internal`` for internal
+        stability, ``real2complex`` for real -> complex stability, and
+        ``external`` for RHF/RKS -> UHF/UKS stability.
+        Each entry is replaced after its corresponding solver returns. Analyses
+        that are not run leave their entries unchanged, so entries may reflect
+        different calls. Calling ``mf.reset()`` clears the entire summary.
+
     Returns:
         If return_status is False (default), the return value includes
         two set of orbitals, which are more close to the stable condition.
@@ -101,6 +110,15 @@ def uhf_stability(mf, internal=True, external=False, verbose=None, return_status
             Number of roots solved by Davidson solver
         tol : float
             Convergence threshold for Davidson solver
+
+    Notes:
+        The computed eigenvalues are stored as one-dimensional array copies in
+        ``mf.scf_summary['stability_eigenvalue']``: ``internal`` for internal
+        stability, ``real2complex`` for real -> complex stability, and
+        ``external`` for UHF/UKS -> GHF/GKS stability.
+        Each entry is replaced after its corresponding solver returns. Analyses
+        that are not run leave their entries unchanged, so entries may reflect
+        different calls. Calling ``mf.reset()`` clears the entire summary.
 
     Returns:
         If return_status is False (default), the return value includes
@@ -303,6 +321,7 @@ def rhf_internal(mf, with_symmetry=True, verbose=None, return_status=False,
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag)] = 1
     e, v = lib.davidson(hessian_x, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    mf.scf_summary.setdefault('stability_eigenvalue', {})['internal'] = numpy.atleast_1d(e).copy()
     log.info('rhf_internal: lowest eigs of H = %s', e)
     if nroots != 1:
         e, v = e[0], v[0]
@@ -401,6 +420,7 @@ def rhf_external(mf, with_symmetry=True, verbose=None, return_status=False,
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag1)] = 1
     e1, v1 = lib.davidson(hop1, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    mf.scf_summary.setdefault('stability_eigenvalue', {})['real2complex'] = numpy.atleast_1d(e1).copy()
     log.info('rhf_real2complex: lowest eigs of H = %s', e1)
     if nroots != 1:
         e1, v1 = e1[0], v1[0]
@@ -414,6 +434,7 @@ def rhf_external(mf, with_symmetry=True, verbose=None, return_status=False,
     x0 = numpy.zeros_like(hdiag2)
     x0[hdiag2>1e-5] = 1. / hdiag2[hdiag2>1e-5]
     e3, v3 = lib.davidson(hop2, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    mf.scf_summary.setdefault('stability_eigenvalue', {})['external'] = numpy.atleast_1d(e3).copy()
     log.info('rhf_external: lowest eigs of H = %s', e3)
     if nroots != 1:
         e3, v3 = e3[0], v3[0]
@@ -482,6 +503,7 @@ def uhf_internal(mf, with_symmetry=True, verbose=None, return_status=False,
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag)] = 1
     e, v = lib.davidson(hessian_x, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    mf.scf_summary.setdefault('stability_eigenvalue', {})['internal'] = numpy.atleast_1d(e).copy()
     log.info('uhf_internal: lowest eigs of H = %s', e)
     if nroots != 1:
         e, v = e[0], v[0]
@@ -613,6 +635,7 @@ def uhf_external(mf, with_symmetry=True, verbose=None, return_status=False,
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag1)] = 1
     e1, v = lib.davidson(hop1, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    mf.scf_summary.setdefault('stability_eigenvalue', {})['real2complex'] = numpy.atleast_1d(e1).copy()
     log.info('uhf_real2complex: lowest eigs of H = %s', e1)
     if nroots != 1:
         e1, v = e1[0], v[0]
@@ -628,6 +651,7 @@ def uhf_external(mf, with_symmetry=True, verbose=None, return_status=False,
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag2)] = 1
     e3, v = lib.davidson(hop2, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    mf.scf_summary.setdefault('stability_eigenvalue', {})['external'] = numpy.atleast_1d(e3).copy()
     log.info('uhf_external: lowest eigs of H = %s', e3)
     if nroots != 1:
         e3, v = e3[0], v[0]
