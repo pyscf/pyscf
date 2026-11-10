@@ -251,17 +251,15 @@ def transform_integrals_df(myadc):
 
     kconserv = myadc.khelper.kconserv
 
-    with_df = myadc.with_df
-    naux = with_df.get_naoaux()
     def eris():
         return None
 
     eris.dtype = dtype = np.result_type(dtype)
     eris.Lpq_mo = Lpq_mo = np.empty((nkpts, nkpts), dtype=object)
-    Loo = np.empty((nkpts, nkpts, naux, nocc, nocc), dtype=dtype)
-    Lvo = np.empty((nkpts, nkpts, naux, nvir, nocc), dtype=dtype)
-    eris.Lvv = np.empty((nkpts, nkpts, naux, nvir, nvir), dtype=dtype)
-    eris.Lov = np.empty((nkpts, nkpts, naux, nocc, nvir), dtype=dtype)
+    Loo = np.empty((nkpts, nkpts), dtype=object)
+    Lvo = np.empty((nkpts, nkpts), dtype=object)
+    eris.Lvv = np.empty((nkpts, nkpts), dtype=object)
+    eris.Lov = np.empty((nkpts, nkpts), dtype=object)
 
     eris.vvvv = None
     eris.ovvv = None
@@ -278,7 +276,7 @@ def transform_integrals_df(myadc):
                 if dtype == np.double:
                     out = _ao2mo.nr_e2(Lpq_ao, mo, (0, nmo, nmo, nmo + nmo), aosym='s2')
                 else:
-                    # Note: Lpq.shape[0] != naux if linear dependency is found in auxbasis
+                    # Note: Lpq.shape[0] can differ between ki,kj pairs if linear dependency is found in auxbasis
                     if Lpq_ao[0].size != nao**2:  # aosym = 's2'
                         Lpq_ao = lib.unpack_tril(Lpq_ao).astype(np.complex128)
                     out = _ao2mo.r_e2(Lpq_ao, mo, (0, nmo, nmo, nmo + nmo), tao, ao_loc)
@@ -290,6 +288,17 @@ def transform_integrals_df(myadc):
                 eris.Lvv[ki, kj] = Lpq_mo[ki, kj][:, nocc:, nocc:]
 
     if myadc.if_naf:
+        naux = max(Lpq.shape[0] for Lpq in Lpq_mo.flat)
+        Lpq_mo_padded = np.zeros((nkpts, nkpts, naux, nmo, nmo), dtype=dtype)
+        for ki in range(nkpts):
+            for kj in range(nkpts):
+                nL = Lpq_mo[ki, kj].shape[0]
+                Lpq_mo_padded[ki, kj, :nL] = Lpq_mo[ki, kj]
+        Loo = Lpq_mo_padded[:, :, :, :nocc, :nocc]
+        eris.Lov = Lpq_mo_padded[:, :, :, :nocc, nocc:]
+        Lvo = Lpq_mo_padded[:, :, :, nocc:, :nocc]
+        eris.Lvv = Lpq_mo_padded[:, :, :, nocc:, nocc:]
+
         Loo_big = Loo.transpose(2, 0, 1, 3, 4).reshape(naux, -1)
         Lov_big = eris.Lov.transpose(2, 0, 1, 3, 4).reshape(naux, -1)
         Lvo_big = Lvo.transpose(2, 0, 1, 3, 4).reshape(naux, -1)
