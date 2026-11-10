@@ -235,6 +235,19 @@ def _dispatch_solvent_model(solvent_obj):
         return solvent.PE
     raise RuntimeError(f'Unknown solvent model {solvent}')
 
+def _states_dm1_ao(mc, ci=None, mo_coeff=None):
+    '''AO-basis 1-RDM of each state of a state-averaged solver.'''
+    if ci is None:
+        ci = mc.ci
+    if mo_coeff is None:
+        mo_coeff = mc.mo_coeff
+    casdms = mc.fcisolver.states_make_rdm1(ci, mc.ncas, mc.nelecas)
+    mocore = mo_coeff[:,:mc.ncore]
+    mocas = mo_coeff[:,mc.ncore:mc.ncore+mc.ncas]
+    dm_core = numpy.dot(mocore, mocore.conj().T) * 2
+    return [dm_core + reduce(numpy.dot, (mocas, casdm, mocas.conj().T))
+            for casdm in casdms]
+
 def _for_casscf(mc, solvent_obj, dm=None):
     '''Add solvent model to CASSCF method.
 
@@ -252,7 +265,6 @@ def _for_casscf(mc, solvent_obj, dm=None):
             raise NotImplementedError(
                 'A frozen solvent potential is not supported for '
                 'state-averaged CASSCF')
-        solvent_obj.state_id = None
 
     if dm is not None:
         solvent_obj.e, solvent_obj.v = solvent_obj.kernel(dm)
@@ -263,12 +275,13 @@ def _for_casscf(mc, solvent_obj, dm=None):
     return lib.set_class(sol_cas, (CASSCFWithSolvent, mc.__class__), name)
 
 class CASSCFWithSolvent(_Solvation):
-    _keys = {'with_solvent','_e_states_corrected'}
+    _keys = {'with_solvent','_e_states_uncorrected','_e_states_corrected'}
 
     def __init__(self, mc, solvent):
         self.__dict__.update(mc.__dict__)
         self.with_solvent = solvent
         self._e_tot_without_solvent = 0
+        self._e_states_uncorrected = 0
         self._e_states_corrected = 0
 
     def undo_solvent(self):
@@ -277,6 +290,7 @@ class CASSCFWithSolvent(_Solvation):
         obj = lib.view(self, lib.drop_class(cls, CASSCFWithSolvent, name_mixin))
         del obj.with_solvent
         del obj._e_tot_without_solvent
+        del obj._e_states_uncorrected
         del obj._e_states_corrected
         return obj
 
@@ -315,16 +329,8 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
 # should be almost the same to the CASSCF density of the last macro iteration.
         with_solvent = self.with_solvent
         if not with_solvent.frozen:
-            from pyscf.mcscf.addons import StateAverageFCISolver
-            if isinstance(self.fcisolver, StateAverageFCISolver):
-                _sa_casdms = StateAverageFCISolver.states_make_rdm1(self.fcisolver, fcivec, self.ncas, self.nelecas)
-                dm = []
-                for _sa_casdm in _sa_casdms:
-                    mocore = mo[:,:self.ncore]
-                    mocas = mo[:,self.ncore:self.ncore+self.ncas]
-                    _sa_1rdm = numpy.dot(mocore, mocore.conj().T) * 2
-                    _sa_1rdm = _sa_1rdm + reduce(numpy.dot, (mocas, _sa_casdm, mocas.conj().T))
-                    dm.append(_sa_1rdm)
+            if with_solvent.solvation_type() in ('sa_neq', 'sa_eq'):
+                dm = _states_dm1_ao(self, fcivec, mo)
             else:
                 # Code to mimic dm = self.make_rdm1(ci=fcivec)
                 mocore = mo[:,:self.ncore]
@@ -349,13 +355,8 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         return hcore
 
     def _finalize(self):
-        from pyscf.mcscf.addons import StateAverageFCISolver
-        if isinstance(self.fcisolver, StateAverageFCISolver):
-            try:
-                self.e_states = self._e_states_corrected
-            except AttributeError as e:
-                self.fcisolver.e_states = self._e_states_corrected
-                assert (self.e_states is self._e_states_corrected), str(e)
+        if self.with_solvent.solvation_type() in ('sa_neq', 'sa_eq'):
+            self.fcisolver.e_states = self._e_states_corrected
         super()._finalize()
         return self
 
@@ -375,17 +376,9 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         self._e_tot_without_solvent = e_tot
 
         with_solvent = self.with_solvent
-        from pyscf.mcscf.addons import StateAverageFCISolver
-        if isinstance(self.fcisolver, StateAverageFCISolver):
-            _sa_casdms = StateAverageFCISolver.states_make_rdm1(
-                self.fcisolver, fcivec, self.ncas, self.nelecas)
-            mocore = mo_coeff[:,:self.ncore]
-            mocas = mo_coeff[:,self.ncore:self.ncore+self.ncas]
-            dm = []
-            for _sa_casdm in _sa_casdms:
-                _sa_1rdm = numpy.dot(mocore, mocore.conj().T) * 2
-                _sa_1rdm += reduce(numpy.dot, (mocas, _sa_casdm, mocas.conj().T))
-                dm.append(_sa_1rdm)
+        sa_mode = with_solvent.solvation_type() in ('sa_neq', 'sa_eq')
+        if sa_mode:
+            dm = _states_dm1_ao(self, fcivec, mo_coeff)
         else:
             dm = self.make_rdm1(mo_coeff=mo_coeff, ci=fcivec, ao_repr=True)
 
@@ -394,7 +387,7 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         edup = None
         if with_solvent.e is not None:
             # Must be evaluated before kernel() overwrites with_solvent.v
-            if isinstance(self.fcisolver, StateAverageFCISolver):
+            if sa_mode:
                 edup = [numpy.einsum('ij,ji->', with_solvent.v, d) for d in dm]
             else:
                 edup = numpy.einsum('ij,ji->', with_solvent.v, dm)
@@ -404,8 +397,9 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
             with_solvent.e, with_solvent.v = with_solvent.kernel(dm)
 
         if edup is not None:
-            if isinstance(self.fcisolver, StateAverageFCISolver):
+            if sa_mode:
                 _e_states = self.e_states.copy()
+                self._e_states_uncorrected = _e_states.copy()
                 for i in range(len(_e_states)):
                     _e_states[i] += with_solvent.e[i] - edup[i]
                     log.debug('Removing duplication %.15g, '
@@ -427,6 +421,9 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         return e_tot, e_cas, fcivec
 
     def nuc_grad_method(self):
+        if self.with_solvent.solvation_type() != 'default':
+            raise NotImplementedError(
+                'Gradients for nonequilibrium solvation not available yet.')
         logger.warn(self, '''
 The code for CASSCF gradients was based on variational CASSCF wavefunction.
 However, the ddCOSMO-CASSCF energy was not computed variationally.
