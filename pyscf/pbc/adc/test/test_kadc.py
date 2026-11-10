@@ -1,6 +1,6 @@
 import pyscf.pbc.tools.make_test_cell as make_test_cell
 from pyscf.pbc.tools.pbc import super_cell
-from pyscf.pbc import gto, scf, adc
+from pyscf.pbc import gto, scf, adc, df
 import unittest
 import numpy as np
 from pyscf.pbc.adc import kadc_rhf_ip, kadc_rhf_ea, kadc_ao2mo
@@ -50,6 +50,32 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[0][0],-1.1740951190044178, 4)
         self.assertAlmostEqual(e[0][1],-1.1536065878793587, 4)
         self.assertAlmostEqual(e[0][2],-1.153606584783398, 4)
+
+    def test_non_uniform_aux(self):
+        kpts = kmf.kpts
+        _kmf = scf.KRHF(cell, kpts, exxdiv=None).density_fit('aug-cc-pvtz-ri')
+        _kmf.conv_tol = 1e-10
+        _kmf.run()
+
+        naux = np.zeros((len(kpts), len(kpts)), int)
+        with df.df._load3c(_kmf.with_df._cderi, "j3c") as fload:
+            for i in range(len(kpts)):
+                for j in range(len(kpts)):
+                    naux[i, j] = np.asarray(fload(kpts[i], kpts[j])).shape[0]
+        self.assertNotEqual(np.min(naux), np.max(naux))
+
+        myadc  = adc.KRADC(_kmf)
+        e_mp, _, _  = myadc.kernel_gs()
+        self.assertAlmostEqual(e_mp, -0.12693279428563944, 4)
+
+        myadc.if_naf = True
+        e_mp_naf, _, _  = myadc.kernel_gs()
+        self.assertAlmostEqual(e_mp_naf, -0.12628398876690958, 3)
+
+        # Test full NAF with exact ADC(2)
+        myadc.thresh_naf = 1e-6
+        e_mp_naf, _, _  = myadc.kernel_gs()
+        self.assertAlmostEqual(e_mp_naf, e_mp, 6)
 
     def make_small_reference(self):
         cell = gto.M(atom='H 0 0 0; H 0 0 .74', a=np.eye(3)*4,
@@ -129,6 +155,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ea_storage_spectrum(self):
         self.check_spectrum_storage('ea')
+
 
 if __name__ == '__main__':
     print("kadc_ip_basic tests")
