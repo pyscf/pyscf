@@ -25,6 +25,28 @@ from pyscf.pbc.scf import rsjk
 from pyscf.pbc import scf, dft
 
 class KnownValues(unittest.TestCase):
+    def test_get_j_low_memory_fft_dd_block(self) -> None:
+        cell = Cell().build(
+            a = np.eye(3)*7,
+            atom = 'He 0 0 0',
+            basis = {'He': [[0, [0.1, 1]]]},
+            unit = 'Bohr',
+            precision = 1e-9,
+            verbose = 0,
+        )
+        dm = np.eye(cell.nao)
+        jk_builder = rsjk.RangeSeparatedJKBuilder(cell)
+        jk_builder.max_memory = lib.current_memory()[0] + 4000
+        jref = jk_builder.get_jk(dm, with_k=False)[0]
+
+        with lib.temporary_env(lib, current_memory=lambda: (4000, 0)):
+            for max_memory in (3999, 4000, 4000.0001):
+                with self.subTest(max_memory=max_memory):
+                    jk_builder.max_memory = max_memory
+                    vj, vk = jk_builder.get_jk(dm, with_k=False)
+                    self.assertIsNone(vk)
+                    self.assertAlmostEqual(abs(vj - jref).max(), 0, 9)
+
     def test_get_jk(self):
         cell = Cell().build(
              a = np.eye(3)*1.8,
