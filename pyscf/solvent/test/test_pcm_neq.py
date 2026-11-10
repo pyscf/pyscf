@@ -281,7 +281,7 @@ class Guards(unittest.TestCase):
         mc = mcpdft.CASSCF(mf, 'tPBE', 4, 4)
         mc = solvent.PCM(mc, pcm.PCM(mol, 'water'))
         self.assertRaises(NotImplementedError, mc.nuc_grad_method)
-        
+
 if __name__ == "__main__":
     print("Tests for nonequilibrium PCM solvation")
     unittest.main()
