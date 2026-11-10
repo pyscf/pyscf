@@ -108,42 +108,12 @@ jobs:
         os: [ubuntu-24.04-arm]
         pyver: [cp39-cp39]
     env:
-      img: quay.io/pypa/manylinux2014_aarch64
+      PYSCF_CI_ARM64_IMAGE: quay.io/pypa/manylinux2014_aarch64
+      PYSCF_CI_PYTHON_ABI: ${{ matrix.pyver }}
     steps:
       - uses: actions/checkout@v7
       - name: Build and test
-        run: |
-            # Run the aarch64 container natively; QEMU exceeds the CI time limit.
-            test "$(uname -m)" = aarch64
-            # Pass the script on stdin so its quotes are interpreted only in the container.
-            docker run --rm -i -v ${{ github.workspace }}:/src/pyscf:rw --workdir=/src/pyscf ${{ env.img }} \
-            bash -ex <<'BASH'
-            /opt/python/${{ matrix.pyver }}/bin/pip install --upgrade pip setuptools
-            /opt/python/${{ matrix.pyver }}/bin/pip install "numpy!=1.16,!=1.17" "scipy!=1.5" h5py==3.10 pytest pytest-cov pyberny geometric
-            yum install -y epel-release
-            yum-config-manager --enable epel
-            yum install -y openblas-devel gcc cmake curl
-            cd ./pyscf/lib
-            curl --fail --location -o deps.tar.gz "https://media.githubusercontent.com/media/pyscf/pyscf-build-deps/master/pyscf-2.2-aarch64-deps.tar.gz"
-            # Keep XCFun, but build libcint and LibXC at the versions in CMakeLists.txt.
-            tar xzf deps.tar.gz deps/include/XCFun deps/lib64/libxcfun.so deps/lib64/libxcfun.so.2
-            mkdir build
-            cd build
-            cmake -DBUILD_LIBXC=ON -DBUILD_XCFUN=OFF -DBUILD_LIBCINT=ON ..
-            make -j2
-            cd ..
-            rm -Rf build
-            cd ../..
-            export OMP_NUM_THREADS=1
-            export PYTHONPATH=$(pwd):$PYTHONPATH
-            echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > .pyscf_conf.py
-            echo "dftd3_DFTD3PATH = './pyscf/lib/deps/lib'" >> .pyscf_conf.py
-            echo "scf_hf_SCF_mute_chkfile = True" >> .pyscf_conf.py
-            ulimit -s 20000
-            /opt/python/${{ matrix.pyver }}/bin/python -u .github/workflows/ci_linux/pytest_live.py \
-              pyscf/ --ignore=pyscf/adc --ignore=pyscf/pbc/df --ignore=pyscf/pbc/cc \
-              -s -v --durations=20 -c pytest.ini pyscf
-            BASH
+        run: ./.github/workflows/run_ci.sh
 
   macos-build:
     runs-on: macos-latest
