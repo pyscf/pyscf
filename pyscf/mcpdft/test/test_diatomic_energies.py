@@ -74,6 +74,7 @@ def diatomic (atom1, atom2, r, fnal, basis, ncas, nelecas, nstates, charge=None,
     mf = scf.RHF (mol)
     if density_fit: mf = mf.density_fit (auxbasis = df.aug_etb (mol))
     mf.kernel ()
+    assert mf.converged, 'RHF did not converge'
     mc = mcpdft.CASSCF (mf, fnal, ncas, nelecas, grids_attr=my_grids)
     #if spin is not None: smult = spin+1
     #else: smult = (mol.nelectron % 2) + 1
@@ -87,6 +88,7 @@ def diatomic (atom1, atom2, r, fnal, basis, ncas, nelecas, nstates, charge=None,
     if symmetry and (cas_irrep is not None):
         mo = mc.sort_mo_by_irrep (cas_irrep)
     mc.kernel (mo)
+    assert mc.converged, 'SA-CASSCF or CMS optimization did not converge'
     return mc.e_states
 
 def tearDownModule():
