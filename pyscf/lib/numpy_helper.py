@@ -1280,9 +1280,7 @@ def condense(opname, a, loc_x, loc_y=None):
         out[:,j] = op(tmp[:,j0:j1], axis=1)
     return out
 
-def expm(a):
-    '''Equivalent to scipy.linalg.expm'''
-    return scipy.linalg.expm(a)
+expm = scipy.linalg.expm
 
 def omatcopy(a, out=None):
     """Copies a matrix.

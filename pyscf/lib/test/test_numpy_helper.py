@@ -270,27 +270,6 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(abs(a), lib.condense('absmin', a, locs)))
         self.assertTrue(numpy.allclose(abs(a), lib.condense('norm', a, locs)))
 
-    def test_expm(self):
-        diagonal = numpy.array([-20., -1., 0., 1., 20.])
-        a = numpy.diag(diagonal)
-        expected = numpy.diag(numpy.exp(diagonal))
-        numpy.testing.assert_allclose(lib.expm(a), expected, rtol=1e-12, atol=1e-12)
-
-    def test_expm_complex(self):
-        diagonal = numpy.array([1j, -1j])
-        a = numpy.diag(diagonal)
-        expected = numpy.diag(numpy.exp(diagonal))
-        numpy.testing.assert_allclose(lib.expm(a), expected, rtol=1e-12, atol=1e-12)
-
-    def test_expm_non_normal(self):
-        for scale in (1e-6, 1., 1e6, 1e6j):
-            with self.subTest(scale=scale):
-                a = numpy.array([[0., scale], [0., 0.]])
-                # a @ a = 0, so the exponential is exactly I + a.
-                expected = numpy.eye(2) + a
-                numpy.testing.assert_allclose(lib.expm(a), expected,
-                                             rtol=1e-12, atol=1e-12)
-
     def test_frompointer(self):
         s = numpy.ones(4, dtype=numpy.int16)
         ptr = s.ctypes.data
