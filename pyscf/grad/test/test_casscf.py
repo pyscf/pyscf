@@ -245,6 +245,35 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(de_0[1,2], (e1_0-e2_0)/0.002*lib.param.BOHR, 4)
         self.assertAlmostEqual(de_1[1,2], (e1_1-e2_1)/0.002*lib.param.BOHR, 4)
 
+    def test_state_average_scanner_converged(self):
+        # issue #3603: the state-averaged energy is variational, so the averaged
+        # gradient is converged when SA-CASSCF is, regardless of whether a
+        # state-specific (Lagrange) gradient was computed before.
+        mol = gto.M(atom='Li 0 0 0; H 0 0 1.6', basis='sto-3g', verbose=0)
+        mf = scf.RHF(mol).run()
+        mc = mcscf.CASSCF(mf, 2, 2).state_average_([0.5, 0.5])
+        mc.conv_tol = 1e-10
+        gs = mc.nuc_grad_method().as_scanner()
+        gs(mol)
+        self.assertTrue(gs.base.converged)
+        self.assertTrue(gs.converged)
+        gs(mol, state=0)
+        self.assertTrue(gs.converged)
+        gs(mol)
+        self.assertTrue(gs.converged)
+
+    def test_state_average_scanner_not_converged(self):
+        # The scanner should not report a converged gradient if SA-CASSCF
+        # itself is not converged.
+        mol = gto.M(atom='Li 0 0 0; H 0 0 1.6', basis='sto-3g', verbose=0)
+        mf = scf.RHF(mol).run()
+        mc = mcscf.CASSCF(mf, 2, 2).state_average_([0.5, 0.5])
+        mc.max_cycle_macro = 1
+        gs = mc.nuc_grad_method().as_scanner()
+        gs(mol)
+        self.assertFalse(gs.base.converged)
+        self.assertFalse(gs.converged)
+
     def test_state_average_mix_scanner(self):
         mc = mcscf.CASSCF(mf, 4, 4)
         mc.conv_tol = 1e-10 # B/c high sensitivity in the numerical test
