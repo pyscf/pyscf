@@ -857,8 +857,9 @@ class RDHF(DHF):
         if x is None:
             return spinor.kramers.eigh(self.mol, h, s, iop=1)
         else:
+            from pyscf.lib import kramers as lib_kramers
             h = x.conj().T.dot(h).dot(x)
-            e, c = lib.kramers.eigh(h, iop=1)
+            e, c = lib_kramers.eigh(h, iop=1)
             return e, x.dot(c)
 
     def x2c1e(self):

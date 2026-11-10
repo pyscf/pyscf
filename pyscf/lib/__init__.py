@@ -36,5 +36,4 @@ from pyscf.lib.linalg_helper import *
 from pyscf.lib.scipy_helper import *
 from pyscf.lib import chkfile
 from pyscf.lib import diis
-from pyscf.lib import kramers
 from pyscf.lib.misc import StreamObject

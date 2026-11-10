@@ -25,7 +25,6 @@ mol.time_reversal_map and the problem is solved by
 '''
 
 import numpy
-from pyscf import lib
 
 
 def pair_sort_ao_idx(mol, four_component=True):
@@ -55,7 +54,8 @@ def eigh(mol, h, s=None, iop=0):
     idx = pair_sort_ao_idx(mol, four_component)
     if s is not None:
         s = s[idx[:,None],idx]
-    e, c = lib.kramers.eigh(h[idx[:,None],idx], s, iop=iop)
+    from pyscf.lib import kramers as lib_kramers
+    e, c = lib_kramers.eigh(h[idx[:,None],idx], s, iop=iop)
     mo = numpy.empty_like(c)
     mo[idx] = c
     return e, mo

@@ -19,7 +19,7 @@ import scipy.linalg
 from pyscf.lib import kramers
 
 BACKENDS = ['numpy']
-if kramers.zquatev is not None:
+if kramers._load_zquatev() is not None:
     BACKENDS.append('zquatev')
 
 

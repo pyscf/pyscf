@@ -50,13 +50,23 @@ import numpy
 import scipy.linalg
 from pyscf import __config__
 
-zquatev = None
-try:
-    # Install zquatev with
-    # pip install git+https://github.com/sunqm/zquatev
-    import zquatev
-except ImportError:
-    pass
+_zquatev = False    # not looked up yet
+
+
+def _load_zquatev():
+    '''The zquatev module, or None if it is not installed.  Imported on first
+    use, not when pyscf is imported: a failed import searches the whole
+    sys.path, which can be slow on NFS.'''
+    global _zquatev
+    if _zquatev is False:
+        try:
+            # Install zquatev with
+            # pip install git+https://github.com/sunqm/zquatev
+            import zquatev
+        except ImportError:
+            zquatev = None
+        _zquatev = zquatev
+    return _zquatev
 
 BACKEND = getattr(__config__, 'lib_kramers_eigh_backend', 'auto')
 
@@ -158,8 +168,8 @@ def _get_backend(backend):
     if backend is None:
         backend = BACKEND
     if backend == 'auto':
-        backend = 'numpy' if zquatev is None else 'zquatev'
-    if backend == 'zquatev' and zquatev is None:
+        backend = 'numpy' if _load_zquatev() is None else 'zquatev'
+    if backend == 'zquatev' and _load_zquatev() is None:
         raise RuntimeError('zquatev is not installed')
     if backend not in ('zquatev', 'numpy'):
         raise ValueError('Unknown backend %s' % backend)
@@ -173,7 +183,7 @@ def _eigh_standard(h, backend=None):
         inter = _interleave_index(n2 // 2)
         hb = numpy.empty_like(h)
         hb[inter[:, None], inter] = h
-        e, c = zquatev.eigh(hb, iop=1)
+        e, c = _load_zquatev().eigh(hb, iop=1)
         return e, c[inter]
     return _eigh_householder(h)
 
