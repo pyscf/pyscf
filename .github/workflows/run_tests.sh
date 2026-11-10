@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 
-# Preserve the serial manylinux ARM64 selection without requiring xdist or timeout.
+# Keep each test file on one worker while preserving the manylinux ARM64 selection.
 if [ "${PYSCF_CI_PROFILE:-}" = "manylinux-aarch64" ]; then
     set -e
     export OMP_NUM_THREADS=1
+    export OPENBLAS_NUM_THREADS=1
+    export MKL_NUM_THREADS=1
+    export BLIS_NUM_THREADS=1
     export PYTHONPATH=$(pwd):$PYTHONPATH
     echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > .pyscf_conf.py
     echo "dftd3_DFTD3PATH = './pyscf/lib/deps/lib'" >> .pyscf_conf.py
@@ -11,7 +14,7 @@ if [ "${PYSCF_CI_PROFILE:-}" = "manylinux-aarch64" ]; then
     ulimit -s 20000
     exec python -u .github/workflows/ci_linux/pytest_live.py \
       pyscf/ --ignore=pyscf/adc --ignore=pyscf/pbc/df --ignore=pyscf/pbc/cc \
-      -s -v --durations=20 -c pytest.ini pyscf "$@"
+      -n auto --dist loadfile -s -v --durations=20 -c pytest.ini pyscf "$@"
 fi
 
 # By default the tests run in parallel processes (pytest-xdist), one BLAS/OpenMP

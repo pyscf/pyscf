@@ -3,7 +3,7 @@
 if [ "${PYSCF_CI_PROFILE:-}" = "manylinux-aarch64" ]; then
     set -e
     python -m pip install --upgrade pip setuptools
-    python -m pip install "numpy!=1.16,!=1.17" "scipy!=1.5" h5py==3.10 pytest pytest-cov pyberny geometric
+    python -m pip install "numpy!=1.16,!=1.17" "scipy!=1.5" h5py==3.10 pytest pytest-cov pytest-xdist pyberny geometric
     exit
 fi
 
