@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -e
+set -e -o pipefail
 
 cd ./pyscf/lib
 if [ "${PYSCF_CI_PROFILE:-}" = "manylinux-aarch64" ]; then
@@ -10,7 +10,7 @@ if [ "${PYSCF_CI_PROFILE:-}" = "manylinux-aarch64" ]; then
     cmake_args=(-DBUILD_LIBXC=ON -DBUILD_XCFUN=OFF -DBUILD_LIBCINT=ON)
     build_jobs=2
 else
-    curl -L "https://github.com/pyscf/pyscf-build-deps/blob/master/pyscf-2.14.1-deps.tar.gz?raw=true" | tar xzf -
+    curl --fail --location "https://media.githubusercontent.com/media/pyscf/pyscf-build-deps/master/pyscf-2.14.1-deps.tar.gz" | tar xzf -
     cmake_args=(-DBUILD_LIBXC=OFF -DBUILD_XCFUN=ON -DBUILD_LIBCINT=OFF -DXCFUN_MAX_ORDER=4)
     build_jobs=4
 fi
