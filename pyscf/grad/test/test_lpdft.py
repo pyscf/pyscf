@@ -210,7 +210,7 @@ class KnownValues(unittest.TestCase):
                 de = mc_grad.kernel(state=i)[1, 0]
                 self.assertAlmostEqual(de, NUM_REF[i], 5)
 
-    def test_grad_lih_lin2ftpbe22_sto3g(self):
+    def test_grad_lih_lin2ftpbe22_sto3g_high_cost(self):
         """System has the following Lagrange multiplier sectors:
         orb:    yes
         ci:     yes
@@ -248,7 +248,7 @@ class KnownValues(unittest.TestCase):
                 self.assertAlmostEqual(e1, e2, 6)
                 self.assertAlmostEqual(lib.fp(de1), lib.fp(de2), 6)
 
-    def test_grad_lih_lin2ftpbe22_sto3g_df(self):
+    def test_grad_lih_lin2ftpbe22_sto3g_df_high_cost(self):
         """System has the following Lagrange multiplier sectors:
         orb:    yes
         ci:     yes
@@ -282,7 +282,7 @@ class KnownValues(unittest.TestCase):
         np.testing.assert_allclose(results[0][0], results[1][0], atol=1e-8)
         np.testing.assert_allclose(results[0][1], results[1][1], atol=1e-7)
 
-    def test_rohf_sanity (self):
+    def test_rohf_sanity_high_cost (self):
         n_states = 3
         mc_grad = diatomic(
             "Li", "H", 1.4, "ftpbe", "6-31g", 4, 2, n_states, density_fit=False, spin=2

@@ -91,7 +91,7 @@ class KnownValues(unittest.TestCase):
         x0 = numpy.random.rand(n)
         e0, x0 = linalg_helper.dsyev(aop, x0, a.diagonal(), nroots=3)
         self.assertEqual(e0.size, 1)
-        self.assertAlmostEqual(e0.item(), 2, 8)
+        self.assertAlmostEqual(e0[0], 2, 8)
 
     def test_solve(self):
         numpy.random.seed(12)
