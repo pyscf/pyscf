@@ -115,6 +115,46 @@ class KnownValues(unittest.TestCase):
         rho = ni.get_rho(mol, dm, mf.grids)
         self.assertAlmostEqual(lib.fp(rho), -361.4682369790235, 8)
 
+    def check_cache(self, xc, collinear='col'):
+        mol = gto.M(atom='He 0 0 0', basis=[[0, [1., 1.]], [0, [.3, 1.]]], verbose=0)
+        grids = dft.gen_grid.Grids(mol)
+        # Sample a finite-density region: XC second derivatives diverge in vacuum.
+        grids.coords = np.random.default_rng(3).uniform(-1., 1., (112, 3))
+        grids.weights = np.ones(112) / 112
+        coeff = np.eye(4)
+        occ = np.array([.7, .3, .5, .2])
+        dm = np.diag(occ)
+        ni = numint2c.NumInt2C()
+        ni.collinear = collinear
+        expected = ni.cache_xc_kernel(mol, grids, xc, coeff, occ)
+        actual = ni.cache_xc_kernel1(mol, grids, xc, dm)
+        for index, (x, y) in enumerate(zip(actual, expected)):
+            # Density-matrix MGGA densities include a Laplacian placeholder;
+            # orbital densities omit it. Compare rho, gradients, and tau.
+            if index == 0 and x.shape != y.shape:
+                x = x[:, [0, 1, 2, 3, 5]]
+            np.testing.assert_allclose(x, y, atol=1e-10, rtol=1e-10)
+        if collinear == 'col':
+            perturbation = np.diag([.1, -.05, -.08, .03])
+            response = ni.nr_fxc(mol, grids, xc, dm, perturbation,
+                                 hermi=1, rho0=actual[0], vxc=actual[1], fxc=actual[2])
+            step = 1e-4
+            vp = ni.nr_vxc(mol, grids, xc, dm + step*perturbation)[2]
+            vm = ni.nr_vxc(mol, grids, xc, dm - step*perturbation)[2]
+            np.testing.assert_allclose(response, (vp-vm)/(2*step), atol=1e-8, rtol=1e-6)
+
+    def test_lda_cache_and_response(self):
+        self.check_cache('LDA,VWN')
+
+    def test_gga_cache_and_response(self):
+        self.check_cache('PBE')
+
+    def test_mgga_cache_and_response(self):
+        self.check_cache('TPSS')
+
+    def test_noncollinear_lda_cache(self):
+        self.check_cache('LDA,VWN', 'ncol')
+
 if __name__ == "__main__":
     print("Test numint")
     unittest.main()

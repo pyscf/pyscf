@@ -355,7 +355,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
         lumo = lumo_b = mo_energy[1,e_idx_b[n_b]]
         lumo_a = None
         if n_a < nmo:
-            lumo_a = mo_energy[1,e_idx_a[n_a]]
+            lumo_a = mo_energy[0,e_idx_a[n_a]]
             lumo = min(lumo, lumo_a)
         gap = (lumo - homo) * nist.HARTREE2EV
         mf.scf_summary['gap'] = gap
@@ -765,7 +765,7 @@ def det_ovlp(mo1, mo2, occ1, occ2, ovlp):
 
     Args:
         mo1, mo2 : 2D ndarrays
-            Molecualr orbital coefficients
+            Molecular orbital coefficients
         occ1, occ2: 2D ndarrays
             occupation numbers
 
@@ -796,7 +796,7 @@ def make_asym_dm(mo1, mo2, occ1, occ2, x):
 
     Args:
         mo1, mo2 : 2D ndarrays
-            Molecualr orbital coefficients
+            Molecular orbital coefficients
         occ1, occ2: 2D ndarrays
             Occupation numbers
         x: 2D ndarrays

@@ -94,7 +94,7 @@ def _dfnevpt2_eris_outcore(mc, mo_coeff, with_df):
     bufs1 = bufpp = None
     t1 = log.timer('density fitting ao2mo step-1', *t0)
 
-    # Step-2.1: from the transfomed (L|pq), build papa
+    # Step-2.1: from the transformed (L|pq), build papa
     mem_now = lib.current_memory()[0]
     nblk = int(max(8, min(nmo, ((max_memory-mem_now)*1e6/8-bufpa.size)/(ncas**2*nmo))))
     bufs1 = np.empty((nblk,ncas,nmo,ncas))
@@ -109,7 +109,7 @@ def _dfnevpt2_eris_outcore(mc, mo_coeff, with_df):
     bufs1 = bufpa = None
     t1 = log.timer('density fitting papa step-2.1', *t1)
 
-    # Step-2.2: from the transfomed (L|pq), build ppaa
+    # Step-2.2: from the transformed (L|pq), build ppaa
     mem_now = lib.current_memory()[0]
     nblk = int(max(8, min(nmo, (max_memory-mem_now)*1e6/8/(nmo*naoaux+ncas**2*nmo))))
     bufs1 = np.empty((nblk,nmo,naoaux))
@@ -125,7 +125,7 @@ def _dfnevpt2_eris_outcore(mc, mo_coeff, with_df):
     bufs1 = bufs2 = buf = None
     t1 = log.timer('density fitting ppaa step-2.2', *t1)
 
-    # Step-3: from the transfomed (L|pq), build pacv and cvcv
+    # Step-3: from the transformed (L|pq), build pacv and cvcv
     tmpdir = lib.param.TMPDIR
     cvcvfile = lib.NamedTemporaryFile(dir=tmpdir)
     # Edge cases

@@ -501,9 +501,9 @@ def get_sigma_outcore(gw, orbs, quad_freqs, quad_wts, ef, mo_energy, mo_coeff, m
 
     Pi = np.zeros(shape=[nw, naux, naux], dtype=np.double)
     if hasattr(gw._scf, 'sigma'):
-        nseg = nmo // gw.segsize + 1
+        nseg = (nmo + gw.segsize - 1) // gw.segsize  # No empty trailing block.
     else:
-        nseg = nocc // gw.segsize + 1
+        nseg = (nocc + gw.segsize - 1) // gw.segsize
     for i in range(nseg):
         if hasattr(gw._scf, 'sigma'):
             orb_start = i * gw.segsize
@@ -547,7 +547,7 @@ def get_sigma_outcore(gw, orbs, quad_freqs, quad_wts, ef, mo_energy, mo_coeff, m
         naux_ones = np.ones((1, naux))
 
     emo = omega[None] - mo_energy_g[:, None]
-    nseg = nmo // gw.segsize + 1
+    nseg = (nmo + gw.segsize - 1) // gw.segsize  # No empty trailing block.
     for i in range(nseg):
         if gw.verbose >= 4:
             gw.stdout.write(f'{i:4d} ')
@@ -774,7 +774,7 @@ class GWAC(lib.StreamObject):
         self._nmo = None  # number of orbitals (exclude frozen orbitals)
         self.orbs_frz = None  # list of orbital index in non-frozen orbitals
         self.mo_energy = np.array(mf.mo_energy, copy=True)  # quasiparticle energy
-        self.mo_coeff = np.array(mf.mo_coeff, copy=True)  # quasiparticle orbtial coefficient
+        self.mo_coeff = np.array(mf.mo_coeff, copy=True)  # quasiparticle orbital coefficient
         self.mo_occ = np.array(mf.mo_occ, copy=True)  # quasiparticle orbital occupation
         self.Lpq = None  # three-center density-fitting matrix in MO
 
@@ -1023,7 +1023,7 @@ class GWAC(lib.StreamObject):
         Ec = 2.0 * np.trace(g_sigma).real
 
         # Compute HF energy using DFT density matrix
-        # NOTE: this definitation can be wrong
+        # NOTE: this definition can be wrong
         # TODO: update HF-energy with MRGW functions
         dm = self._scf.make_rdm1()
         rhf = scf.RHF(self.mol)
@@ -1124,7 +1124,7 @@ class GWAC(lib.StreamObject):
             sigma_diff = np.zeros_like(gf0)
             for iw in range(len(omega)):
                 for i in range(len(mo_energy)):
-                    sigma[i, i, iw] = self.acobj[i].ac_eval(omega + 1j * eta)
+                    sigma[i, i, iw] = self.acobj[i].ac_eval(omega[iw] + 1j * eta)
                     sigma_diff[i, i, iw] = sigma[i, i, iw] + self.vk[i, i] - self.vxc[i, i]
 
         for iw in range(len(omega)):

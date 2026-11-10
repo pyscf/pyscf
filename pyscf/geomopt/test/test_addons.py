@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import unittest
+import numpy as np
 from pyscf import gto
 from pyscf.geomopt import addons
 
@@ -27,6 +28,21 @@ class KnownValues(unittest.TestCase):
         coords = mol.atom_coords()
         sym_coords = addons.symmetrize(mol, coords)
         self.assertAlmostEqual(abs(coords-sym_coords).max(), 0, 9)
+
+    def test_harmonic_callback(self):
+        mol = gto.M(atom='He 0 0 0', basis='sto-3g', verbose=0)
+        def potential(molecule):
+            coords = molecule.atom_coords()
+            return .5*np.sum(coords**2), coords.copy()
+        method = addons.as_pyscf_method(mol, potential)
+        scanner = method.Gradients().as_scanner()
+        moved = mol.set_geom_(np.array([[.2, -.3, .4]]), unit='Bohr', inplace=False)
+        energy, force = scanner(moved)
+        self.assertAlmostEqual(energy, .145, places=14)
+        np.testing.assert_allclose(force, [[.2, -.3, .4]], atol=1e-14)
+        self.assertEqual(scanner.e_tot, energy)
+        self.assertTrue(scanner.converged)
+        self.assertEqual(scanner(mol)[0], 0)
 
 if __name__ == "__main__":
     print("Tests for addons")

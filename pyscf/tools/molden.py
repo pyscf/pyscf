@@ -457,7 +457,7 @@ def header(mol, fout, ignore_h=IGNORE_H):
     if mol.cart:
         fout.write('[6d]\n[10f]\n[15g]\n')
     else:
-        fout.write('[5d]\n[7f]\n[9g]\n')
+        fout.write('[5d7f]\n[9g]\n')
 
     if mol.has_ecp():  # See https://github.com/zorkzou/Molden2AIM
         fout.write('[core]\n')
@@ -554,30 +554,3 @@ def remove_high_l(mol, mo_coeff=None):
 
     idx = numpy.hstack(idx)
     return pmol, mo_coeff[idx]
-
-
-if __name__ == '__main__':
-    from pyscf import scf
-    import tempfile
-    mol = gto.Mole()
-    mol.verbose = 5
-    mol.output = None  # 'out_gho'
-    mol.atom = [['C', (0.,0.,0.)],
-                ['H', ( 1, 1, 1)],
-                ['H', (-1,-1, 1)],
-                ['H', ( 1,-1,-1)],
-                ['H', (-1, 1,-1)], ]
-    mol.basis = {
-        'C': 'sto-3g',
-        'H': 'sto-3g'}
-    mol.build(dump_input=False)
-    m = scf.RHF(mol)
-    m.scf()
-    header(mol, mol.stdout)
-    print(order_ao_index(mol))
-    orbital_coeff(mol, mol.stdout, m.mo_coeff)
-
-    ftmp = lib.NamedTemporaryFile(dir=lib.param.TMPDIR)
-    from_mo(mol, ftmp.name, m.mo_coeff)
-
-    print(parse(ftmp.name))

@@ -29,3 +29,17 @@ mycas = myhf.CASSCF(6, 8).run()
 # method
 mycas.verbose = 4
 mycas.analyze()
+
+# The default kernel uses the one-step CASSCF algorithm. The two-step
+# alternative converges the CI problem between orbital optimization steps.
+# Reuse the optimized orbitals here to avoid repeating the initial search.
+two_step = myhf.CASSCF(6, 8)
+two_step.mc2step(mycas.mo_coeff)
+
+# The Newton solver optimizes CI coefficients and orbitals together using
+# second derivatives. It accepts the same orbital and CI initial guesses.
+newton = myhf.CASSCF(6, 8).newton()
+newton.kernel(mycas.mo_coeff, mycas.ci)
+
+# Active-active orbital rotations are redundant for a full CI active-space
+# solver. internal_rotation=True is therefore unnecessary for these examples.

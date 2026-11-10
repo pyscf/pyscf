@@ -16,6 +16,12 @@ gw = gw.GW(mf, freq_int='exact')
 gw.kernel()
 print(gw.mo_energy)
 
+# Linearized quasiparticle equation for just the HOMO and LUMO.
+gw.linearized = True
+nocc = mol.nelectron // 2
+gw.kernel(orbs=[nocc - 1, nocc])
+print('Linearized HOMO/LUMO:', gw.mo_energy[[nocc - 1, nocc]])
+
 
 # density-fitting GW with exact frequency integration
 from pyscf.gw.gw_exact_df import GWExactDF

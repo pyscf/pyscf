@@ -882,36 +882,3 @@ class MomGFCCSD(lib.StreamObject):
     @property
     def nocc(self):
         return self._cc.nocc
-
-
-if __name__ == "__main__":
-    from pyscf import gto, scf
-
-    mol = gto.M(
-            #atom="O 0 0 0; O 0 0 1",
-            atom="N 0 0 0; N 0 0 1",
-            basis="cc-pvdz",
-            verbose=0,
-    )
-    mf = scf.RHF(mol)
-    mf = mf.run()
-    ccsd = cc.CCSD(mf)
-    ccsd = ccsd.run()
-    ccsd.solve_lambda()
-
-    niter = 5
-
-    gfcc = MomGFCCSD(ccsd, (niter, niter))
-    gfcc.kernel()
-
-    ip1, vip1 = ccsd.ipccsd(nroots=8)
-    ip2, vip2, uip2 = gfcc.ipgfccsd(nroots=8)
-
-    ea1, vea1 = ccsd.eaccsd(nroots=8)
-    ea2, vea2, uea2 = gfcc.eagfccsd(nroots=8)
-
-    print("    %12s %12s %12s" % ("EOM", "GF", "Error"))
-    print("IP1 %12.8f %12.8f %12.8f" % (ip1[0],ip2[0],np.abs(ip1[0]-ip2[0])))
-    print("IP2 %12.8f %12.8f %12.8f" % (ip1[1],ip2[1],np.abs(ip1[1]-ip2[1])))
-    print("EA1 %12.8f %12.8f %12.8f" % (ea1[0],ea2[0],np.abs(ea1[0]-ea2[0])))
-    print("EA2 %12.8f %12.8f %12.8f" % (ea1[1],ea2[1],np.abs(ea1[1]-ea2[1])))

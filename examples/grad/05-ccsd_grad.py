@@ -29,3 +29,18 @@ postmf = cc.CCSD(mf).run()
 from pyscf import grad
 g = postmf.Gradients()
 g.kernel()
+
+# Perturbative triples require their own gradient class and lambda equations.
+# Reuse the converged CCSD amplitudes and transformed integrals explicitly.
+from pyscf.grad import ccsd_t, uccsd_t
+from pyscf.cc import ccsd_t_lambda_slow, uccsd_t_lambda
+rcc = cc.CCSD(scf.RHF(mol).run()).run()
+eris = rcc.ao2mo()
+_, l1, l2 = ccsd_t_lambda_slow.kernel(rcc, eris, rcc.t1, rcc.t2)
+print('CCSD(T) gradient',
+      ccsd_t.Gradients(rcc).kernel(rcc.t1, rcc.t2, l1, l2, eris=eris))
+ucc = cc.UCCSD(rcc._scf.to_uhf()).run()
+ueris = ucc.ao2mo()
+_, ul1, ul2 = uccsd_t_lambda.kernel(ucc, ueris, ucc.t1, ucc.t2)
+print('UCCSD(T) gradient',
+      uccsd_t.Gradients(ucc).kernel(ucc.t1, ucc.t2, ul1, ul2, eris=ueris))

@@ -169,6 +169,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(rdms_test(dm1_exc[3]), 21.678771476096745, 6)
 
 
+
     def test_ip_adc2_frozen(self):
         adc2 = adc.ADC(mf,frozen=1)
         adc2.method = 'adc(2)'

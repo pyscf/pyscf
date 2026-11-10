@@ -57,7 +57,7 @@ mc.conv_tol = 1e-12
 mc.verbose = 4
 
 mx = mp.MP2(mf, frozen=10).run()
-# make symmetry-adapted natural orbtials
+# make symmetry-adapted natural orbitals
 mo = mf.mo_coeff @ mrpt.caspt2.disjoint_eigh(mx.make_rdm1())[1][:, ::-1]
 
 mc.kernel(mo)
@@ -73,6 +73,9 @@ print('=== E(CASPT2-IPEA) = %15.8f  REF = %15.8f' % (mr.e_tot, -386.95650687))
 mc.max_memory = 4000
 mr = mrpt.caspt2.CASPT2(mc, frozen=10, ipea_shift=0.25)
 mr.max_cycle = 20
+# mr.io_method = 'outcore'  # Explicitly store the ccvv amplitudes on disk.
+# mr.io_blksize = 3  # Process 3 core orbitals per block in outcore contractions;
+#                   # the default None selects a block size from available memory.
 mr.kernel()
 print('=== E(CASPT2-IPEA) = %15.8f  REF = %15.8f' % (mr.e_tot, -386.95650687))
 
@@ -89,7 +92,7 @@ mc.fcisolver.conv_tol = 1e-14
 mc.conv_tol = 1e-12
 mc.verbose = 4
 mx = mp.MP2(mf, frozen=10).run()
-# make symmetry-adapted natural orbtials
+# make symmetry-adapted natural orbitals
 mo = mf.mo_coeff @ mrpt.caspt2.disjoint_eigh(mx.make_rdm1())[1][:, ::-1]
 mc.kernel(mo)
 print('=== E(DF-CASSCF) = %15.8f  REF = %15.8f' % (mc.e_tot, -385.75280633))

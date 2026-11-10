@@ -148,7 +148,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(d2), 13025.265198471607, 9)
         self.assertTrue(np.allclose(d1, d1_ref, rtol=1e-12, atol=1e-15))
         self.assertTrue(np.allclose(d1_g, d1_g_ref, rtol=1e-12, atol=1e-15))
-        self.assertTrue(np.allclose(d2, d2_ref, rtol=1e-12, atol=1e-15))
+        # elements of d2 reach ~5e2 here; atol=1e-15 is below the rounding of any reordered summation at that scale
+        self.assertTrue(np.allclose(d2, d2_ref, rtol=1e-12, atol=1e-12))
 
         mycc.max_memory = 118
         d1 = ccsd_t_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2, eris, for_grad=False)
@@ -162,7 +163,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(d2), 13025.265198471607, 9)
         self.assertTrue(np.allclose(d1, d1_ref, rtol=1e-12, atol=1e-15))
         self.assertTrue(np.allclose(d1_g, d1_g_ref, rtol=1e-12, atol=1e-15))
-        self.assertTrue(np.allclose(d2, d2_ref, rtol=1e-12, atol=1e-15))
+        self.assertTrue(np.allclose(d2, d2_ref, rtol=1e-12, atol=1e-12))
 
         mycc.max_memory = 0
         d1 = ccsd_t_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2, eris, for_grad=False)
@@ -176,7 +177,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(d2), 13025.265198471607, 9)
         self.assertTrue(np.allclose(d1, d1_ref, rtol=1e-12, atol=1e-15))
         self.assertTrue(np.allclose(d1_g, d1_g_ref, rtol=1e-12, atol=1e-15))
-        self.assertTrue(np.allclose(d2, d2_ref, rtol=1e-12, atol=1e-15))
+        self.assertTrue(np.allclose(d2, d2_ref, rtol=1e-12, atol=1e-12))
 
 if __name__ == "__main__":
     print("Tests for RCCSD(T) lambda and rdm intermediates")

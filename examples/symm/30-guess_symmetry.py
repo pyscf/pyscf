@@ -2,10 +2,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-from functools import reduce
-import numpy
-from pyscf import gto, symm, scf
-
 '''
 Pseudo symmetry for molecules which are slightly distorted from the symmetric
 geometry.
@@ -19,6 +15,10 @@ It can help guess the possible point group symmetry.  Using the "symmetry
 adapted orbitals" mol.symm_orb, we can test how likely a MO belongs to a
 particular irrep.
 '''
+
+from functools import reduce
+import numpy
+from pyscf import gto, symm, scf
 
 mol = gto.M(
     atom = '''
@@ -59,3 +59,12 @@ for i, ir in enumerate(irname):
     s1 = reduce(numpy.dot, (mol.symm_orb[k].T, s, mf.mo_coeff[:,i]))
     s0 = reduce(numpy.dot, (mol.symm_orb[k].T, s, mol.symm_orb[k]))
     print('MO %3d  %-3s    %8.5f' % (i, ir, numpy.dot(s1, numpy.linalg.solve(s0, s1))))
+
+# For a high-symmetry structure, subgroup maps the detected group to the
+# supported Abelian subgroup used for orbital symmetry labels.
+octahedron = [['H', xyz] for xyz in [(0, 0, 0), (1, 0, 0), (-1, 0, 0),
+                                     (0, 1, 0), (0, -1, 0), (0, 0, 1),
+                                     (0, 0, -1)]]
+high_group, _, high_axes = symm.geom.detect_symm(octahedron)
+print('Detected group and Abelian subgroup:', high_group,
+      symm.geom.subgroup(high_group, high_axes)[0])

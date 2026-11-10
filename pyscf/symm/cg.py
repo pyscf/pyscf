@@ -31,16 +31,3 @@ def cg_spin(l, jdouble, mjdouble, spin):
     else:
         c = 0
     return c
-
-
-if __name__ == '__main__':
-    for kappa in list(range(-4,0)) + list(range(1,4)):
-        if kappa < 0:
-            l = -kappa - 1
-            j = l * 2 + 1
-        else:
-            l = kappa
-            j = l * 2 - 1
-        print(kappa,l,j)
-        for mj in range(-j, j+1, 2):
-            print(cg_spin(l, j, mj, 1), cg_spin(l, j, mj, -1))

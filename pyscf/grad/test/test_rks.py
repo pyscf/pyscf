@@ -22,6 +22,10 @@ try:
     from pyscf.dispersion import dftd3, dftd4
 except (ImportError, OSError):
     dftd3 = dftd4 = None
+try:
+    import basis_set_exchange
+except ImportError:
+    basis_set_exchange = None
 
 
 RCUT_LKO = 5.0
@@ -274,6 +278,38 @@ class KnownValues(unittest.TestCase):
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
 
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_finite_diff_rks_b97_3c_grad(self):
+        # gradient of the B97-3c composite method (XC + D3(BJ) + gCP)
+        mol1 = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587',
+                     basis='def2mtzvp', verbose=0)
+        mf = dft.RKS(mol1, xc='b97-3c')
+        mf.conv_tol = 1e-12
+        mf.kernel()
+        g = mf.nuc_grad_method().set(grid_response=True).kernel()
+
+        mf_scanner = mf.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; H  0. -0.757 0.587; H  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; H  0. -0.757 0.587; H  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
+
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    @unittest.skipIf(basis_set_exchange is None, 'BSE not installed')
+    def test_finite_diff_df_rks_b97_3c_grad(self):
+        # gradient of the B97-3c composite method with density fitting
+        # (RI-J with the def2-mTZVPP-RIJ auxiliary basis, fetched from BSE)
+        mol1 = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587',
+                     basis='def2mtzvp', verbose=0)
+        mf = dft.RKS(mol1, xc='b97-3c').density_fit()
+        mf.conv_tol = 1e-12
+        mf.kernel()
+        g = mf.nuc_grad_method().set(grid_response=True).kernel()
+
+        mf_scanner = mf.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; H  0. -0.757 0.587; H  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; H  0. -0.757 0.587; H  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
+
     def test_finite_diff_rks_grad_lko(self):
         g = mf2.nuc_grad_method().set(grid_response=True).kernel()
         mol1 = mol.copy()
@@ -480,7 +516,8 @@ class KnownValues(unittest.TestCase):
         w1 = numpy.concatenate(w1, axis=2)
         atm_idx = numpy.concatenate(atm_idx)
         self.assertAlmostEqual(lib.fp(w1), -13.101186585274547, 10)
-        self.assertAlmostEqual(abs(w1-w1a.transpose(0,2,1)).max(), 0, 12)
+        # The explicit partition cutoff differs slightly from the epsilon reference.
+        self.assertAlmostEqual(abs(w1-w1a.transpose(0,2,1)).max(), 0, 11)
 
         grids.becke_scheme = gen_grid.becke_lko
         grids.build()
@@ -979,6 +1016,31 @@ class KnownValues(unittest.TestCase):
         test_gradient = gobj.kernel()
 
         assert numpy.abs(numpy.max(test_gradient - ref_gradient)) < 1e-9
+
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_get_gcp_gradient(self):
+        from pyscf.dispersion import gcp
+        mol = gto.M(atom='H 0 0 0; H 0 0 1', basis='def2mtzvp', verbose=0)
+        model = gcp.GCP(mol, method='b973c', basis='def2mtzvp')
+        out = model.get_counterpoise(grad=True)
+        self.assertAlmostEqual(numpy.linalg.norm(out['gradient']),
+                               0.0028068213098591467, 8)
+        self.assertAlmostEqual(numpy.linalg.norm(out['virial']),
+                               0.0037505817348592453, 8)
+
+    @unittest.skipIf(dftd3 is None or dftd4 is None, "requires the dftd3 and dftd4 libraries")
+    def test_dispersion_ghost_atoms(self):
+        mol = gto.M(atom='ghost-H 2 0 0; O 0 0 0; X-H 0 2 0; H 0 0 1; H 0 1 0', verbose=0)
+        real_mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', verbose=0)
+        mf = mol.RKS(xc='pbe')
+        real_mf = real_mol.RKS(xc='pbe')
+        atom_idx = [1,3,4]
+        for version in ['d3bj', 'd4']:
+            with self.subTest(version=version):
+                mf.disp = real_mf.disp = version
+                expected = numpy.zeros([5,3])
+                expected[atom_idx] = real_mf.nuc_grad_method().get_dispersion()
+                numpy.testing.assert_allclose(mf.nuc_grad_method().get_dispersion(), expected, atol=1e-12, rtol=0)
 
 
 if __name__ == "__main__":

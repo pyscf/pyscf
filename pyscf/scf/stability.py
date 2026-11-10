@@ -59,6 +59,15 @@ def rhf_stability(mf, internal=True, external=False, verbose=None, return_status
         tol : float
             Convergence threshold for Davidson solver
 
+    Notes:
+        The computed eigenvalues are stored as one-dimensional array copies in
+        ``mf.scf_summary['stability_eigenvalue']``: ``internal`` for internal
+        stability, ``real2complex`` for real -> complex stability, and
+        ``external`` for RHF/RKS -> UHF/UKS stability.
+        Each entry is replaced after its corresponding solver returns. Analyses
+        that are not run leave their entries unchanged, so entries may reflect
+        different calls. Calling ``mf.reset()`` clears the entire summary.
+
     Returns:
         If return_status is False (default), the return value includes
         two set of orbitals, which are more close to the stable condition.
@@ -101,6 +110,15 @@ def uhf_stability(mf, internal=True, external=False, verbose=None, return_status
             Number of roots solved by Davidson solver
         tol : float
             Convergence threshold for Davidson solver
+
+    Notes:
+        The computed eigenvalues are stored as one-dimensional array copies in
+        ``mf.scf_summary['stability_eigenvalue']``: ``internal`` for internal
+        stability, ``real2complex`` for real -> complex stability, and
+        ``external`` for UHF/UKS -> GHF/GKS stability.
+        Each entry is replaced after its corresponding solver returns. Analyses
+        that are not run leave their entries unchanged, so entries may reflect
+        different calls. Calling ``mf.reset()`` clears the entire summary.
 
     Returns:
         If return_status is False (default), the return value includes
@@ -303,6 +321,7 @@ def rhf_internal(mf, with_symmetry=True, verbose=None, return_status=False,
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag)] = 1
     e, v = lib.davidson(hessian_x, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    mf.scf_summary.setdefault('stability_eigenvalue', {})['internal'] = numpy.atleast_1d(e).copy()
     log.info('rhf_internal: lowest eigs of H = %s', e)
     if nroots != 1:
         e, v = e[0], v[0]
@@ -337,9 +356,8 @@ def _gen_hop_rhf_external(mf, with_symmetry=True, verbose=None):
         orbsym = hf_symm.get_orbsym(mol, mo_coeff)
         sym_forbid = orbsym[viridx].reshape(-1,1) != orbsym[occidx]
 
-    h1e = mf.get_hcore()
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-    fock_ao = h1e + mf.get_veff(mol, dm0)
+    fock_ao = mf.get_fock(dm = dm0)
     fock = reduce(numpy.dot, (mo_coeff.conj().T, fock_ao, mo_coeff))
     foo = fock[occidx[:,None],occidx]
     fvv = fock[viridx[:,None],viridx]
@@ -402,6 +420,7 @@ def rhf_external(mf, with_symmetry=True, verbose=None, return_status=False,
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag1)] = 1
     e1, v1 = lib.davidson(hop1, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    mf.scf_summary.setdefault('stability_eigenvalue', {})['real2complex'] = numpy.atleast_1d(e1).copy()
     log.info('rhf_real2complex: lowest eigs of H = %s', e1)
     if nroots != 1:
         e1, v1 = e1[0], v1[0]
@@ -415,6 +434,7 @@ def rhf_external(mf, with_symmetry=True, verbose=None, return_status=False,
     x0 = numpy.zeros_like(hdiag2)
     x0[hdiag2>1e-5] = 1. / hdiag2[hdiag2>1e-5]
     e3, v3 = lib.davidson(hop2, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    mf.scf_summary.setdefault('stability_eigenvalue', {})['external'] = numpy.atleast_1d(e3).copy()
     log.info('rhf_external: lowest eigs of H = %s', e3)
     if nroots != 1:
         e3, v3 = e3[0], v3[0]
@@ -483,6 +503,7 @@ def uhf_internal(mf, with_symmetry=True, verbose=None, return_status=False,
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag)] = 1
     e, v = lib.davidson(hessian_x, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    mf.scf_summary.setdefault('stability_eigenvalue', {})['internal'] = numpy.atleast_1d(e).copy()
     log.info('uhf_internal: lowest eigs of H = %s', e)
     if nroots != 1:
         e, v = e[0], v[0]
@@ -523,9 +544,8 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
         sym_forbidb = orbsymb[viridxb].reshape(-1,1) != orbsymb[occidxb]
         sym_forbid1 = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
-    h1e = mf.get_hcore()
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-    fock_ao = h1e + mf.get_veff(mol, dm0)
+    fock_ao = mf.get_fock(dm = dm0)
     focka = reduce(numpy.dot, (mo_coeff[0].conj().T, fock_ao[0], mo_coeff[0]))
     fockb = reduce(numpy.dot, (mo_coeff[1].conj().T, fock_ao[1], mo_coeff[1]))
     fooa = focka[occidxa[:,None],occidxa]
@@ -615,6 +635,7 @@ def uhf_external(mf, with_symmetry=True, verbose=None, return_status=False,
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag1)] = 1
     e1, v = lib.davidson(hop1, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    mf.scf_summary.setdefault('stability_eigenvalue', {})['real2complex'] = numpy.atleast_1d(e1).copy()
     log.info('uhf_real2complex: lowest eigs of H = %s', e1)
     if nroots != 1:
         e1, v = e1[0], v[0]
@@ -630,69 +651,31 @@ def uhf_external(mf, with_symmetry=True, verbose=None, return_status=False,
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag2)] = 1
     e3, v = lib.davidson(hop2, x0, precond, tol=tol, verbose=log, nroots=nroots)
+    mf.scf_summary.setdefault('stability_eigenvalue', {})['external'] = numpy.atleast_1d(e3).copy()
     log.info('uhf_external: lowest eigs of H = %s', e3)
     if nroots != 1:
         e3, v = e3[0], v[0]
     stable = not (e3 < -1e-5)
     dump_status(log, stable, f'{mf.__class__}', 'UHF/UKS -> GHF/GKS')
     mo = scipy.linalg.block_diag(*mf.mo_coeff)
+    occidxa = numpy.where(mf.mo_occ[0]> 0)[0]
+    viridxa = numpy.where(mf.mo_occ[0]==0)[0]
+    occidxb = numpy.where(mf.mo_occ[1]> 0)[0]
+    viridxb = numpy.where(mf.mo_occ[1]==0)[0]
+    nocca = len(occidxa)
+    nvira = len(viridxa)
+    noccb = len(occidxb)
+    nvirb = len(viridxb)
+    nmo = nocca + nvira
     if not stable:
-        occidxa = numpy.where(mf.mo_occ[0]> 0)[0]
-        viridxa = numpy.where(mf.mo_occ[0]==0)[0]
-        occidxb = numpy.where(mf.mo_occ[1]> 0)[0]
-        viridxb = numpy.where(mf.mo_occ[1]==0)[0]
-        nocca = len(occidxa)
-        nvira = len(viridxa)
-        noccb = len(occidxb)
-        nvirb = len(viridxb)
-        nmo = nocca + nvira
         dx = numpy.zeros((nmo*2,nmo*2))
         dx[viridxa[:,None],nmo+occidxb] = v[:nvira*noccb].reshape(nvira,noccb)
         dx[nmo+viridxb[:,None],occidxa] = v[nvira*noccb:].reshape(nvirb,nocca)
         u = newton_ah.expmat(dx - dx.conj().T)
         mo = numpy.dot(mo, u)
-        mo = numpy.hstack([mo[:,:nocca], mo[:,nmo:nmo+noccb],
-                           mo[:,nocca:nmo], mo[:,nmo+noccb:]])
+    mo = numpy.hstack([mo[:,:nocca], mo[:,nmo:nmo+noccb],
+                        mo[:,nocca:nmo], mo[:,nmo+noccb:]])
     if return_status:
         return mo, stable
     else:
         return mo
-
-
-if __name__ == '__main__':
-    from pyscf import gto, scf, dft
-    mol = gto.M(atom='O 0 0 0; O 0 0 1.2222', basis='631g*')
-    mf = scf.RHF(mol).run()
-    rhf_stability(mf, True, True, verbose=4)
-
-    mf = dft.RKS(mol).run(level_shift=.2)
-    rhf_stability(mf, True, True, verbose=4)
-
-    mf = scf.UHF(mol).run()
-    mo1 = uhf_stability(mf, True, True, verbose=4)[0]
-
-    mf = scf.newton(mf).run(mo1, mf.mo_occ)
-    uhf_stability(mf, True, False, verbose=4)
-    mf = scf.newton(scf.UHF(mol)).run()
-    uhf_stability(mf, True, False, verbose=4)
-
-    mol.spin = 2
-    mf = scf.UHF(mol).run()
-    uhf_stability(mf, True, True, verbose=4)
-
-    mf = dft.UKS(mol).run()
-    uhf_stability(mf, True, True, verbose=4)
-
-    mol = gto.M(atom='''
-O1
-O2  1  1.2227
-O3  1  1.2227  2  114.0451
-                ''', basis = '631g*')
-    mf = scf.RHF(mol).run()
-    rhf_stability(mf, True, True, verbose=4)
-
-    mf = scf.UHF(mol).run()
-    mo1 = uhf_stability(mf, True, True, verbose=4)[0]
-
-    mf = scf.newton(scf.UHF(mol)).run()
-    uhf_stability(mf, True, True, verbose=4)

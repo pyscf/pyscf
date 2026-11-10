@@ -176,18 +176,3 @@ def solve_safock(mc, mo_coeff=None, ci=None, ):
     conv = True
 
     return conv, ci
-
-
-if __name__ == "__main__":
-    from pyscf import scf, gto
-    from pyscf import mcpdft
-
-    xyz = '''O  0.00000000   0.08111156   0.00000000
-                 H  0.78620605   0.66349738   0.00000000
-                 H -0.78620605   0.66349738   0.00000000'''
-    mol = gto.M(atom=xyz, basis='sto-3g', symmetry=False,
-                verbose=5)
-    mf = scf.RHF(mol).run()
-    mc = mcpdft.CASSCF(mf, 'tPBE', 4, 4)
-    mc.fix_spin_(ss=0)
-    mc = mc.multi_state([1.0 / 3, ] * 3, 'xms').run()

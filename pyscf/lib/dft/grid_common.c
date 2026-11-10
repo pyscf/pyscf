@@ -397,7 +397,7 @@ static void _nonorth_bounds(int* bounds, int* rp_latt, double* roff,
         bounds[i + 1] = INT_MIN;
     }
 
-    // A parallelepiped containting the cube that contains the sphere.
+    // A parallelepiped containing the cube that contains the sphere.
     // TODO compute more precise bounds
     for (i = -1; i <= 1; i++) {
         r[0] = rp[0] + i * radius;

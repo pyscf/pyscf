@@ -256,6 +256,19 @@ C  15.16687337 15.16687337 15.16687337
         self.assertAlmostEqual(lib.fp(cl2.atom_coords()), 4.791699273649499, 9)
         self.assertAlmostEqual(lib.fp(cl2._bas[:,gto.ATOM_OF]), -681.993543446207, 9)
 
+    def test_super_cell_ecp(self):
+        from pyscf.pbc import scf as pbcscf
+        cell = pbcgto.M(atom='He 0 0 0', a=np.eye(3)*3., basis='ccecp-ccpvdz', pseudo='ccecp',
+                        precision=1e-10, verbose=0)
+        self.assertGreater(len(cell._ecpbas), 0)
+        scell = tools.super_cell(cell, [2,1,1])
+        self.assertEqual(sorted(set(scell._ecpbas[:,gto.ATOM_OF])), list(range(scell.natm)))
+        self.assertEqual(len(scell._ecpbas), 2 * len(cell._ecpbas))
+
+        e_k = pbcscf.KRHF(cell, cell.make_kpts([2,1,1]), exxdiv=None).density_fit().kernel()
+        e_sc = pbcscf.RHF(scell, exxdiv=None).density_fit().kernel()
+        self.assertAlmostEqual(e_sc, 2 * e_k, 8)
+
     def test_madelung(self):
         cell = pbcgto.Cell()
         cell.atom = 'He 0 0 0'

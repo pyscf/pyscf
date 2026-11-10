@@ -153,6 +153,22 @@ class KnownValues(unittest.TestCase):
         e_tot, e_ci, fcivec = mc1.casci(mc1.mo_coeff)
         self.assertAlmostEqual(e_tot, -75.733190125187946, 9)
 
+    def test_twostep_orbital_optimization(self):
+        mol = gto.M(atom='Li 0 0 0; H 0 0 1.6', basis='sto-3g', verbose=0)
+        mf = scf.UHF(mol).run(conv_tol=1e-12)
+        one = mcscf.UCASSCF(mf, 2, 2)
+        two = mcscf.UCASSCF(mf, 2, 2)
+        one.conv_tol = two.conv_tol = 1e-10
+        one.conv_tol_grad = two.conv_tol_grad = 1e-5
+        one.mc1step()
+        two.mc2step()
+        self.assertTrue(one.converged)
+        self.assertTrue(two.converged)
+        self.assertAlmostEqual(two.e_tot, one.e_tot, places=8)
+        numpy.testing.assert_allclose(two.make_rdm1(), one.make_rdm1(), atol=1e-5)
+        for c in two.mo_coeff:
+            numpy.testing.assert_allclose(c.T @ mf.get_ovlp() @ c, numpy.eye(mol.nao), atol=1e-10)
+
 
 if __name__ == "__main__":
     print("Full Tests for umc1step")

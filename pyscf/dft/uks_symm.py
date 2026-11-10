@@ -51,19 +51,3 @@ class SymAdaptedUKS(rks.KohnShamDFT, uhf_symm.UHF):
     to_gpu = lib.to_gpu
 
 UKS = SymAdaptedUKS
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.verbose = 7
-    mol.output = '/dev/null'
-
-    mol.atom.extend([['He', (0.,0.,0.)], ])
-    mol.basis = { 'He': 'cc-pvdz'}
-    mol.symmetry = 1
-    mol.build()
-
-    m = UKS(mol)
-    m.xc = 'b3lyp'
-    print(m.scf())  # -2.89992555753

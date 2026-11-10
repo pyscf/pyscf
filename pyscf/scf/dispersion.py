@@ -22,6 +22,7 @@ dispersion correction for HF and DFT
 '''
 
 import warnings
+import numpy as np
 from functools import lru_cache
 from pyscf.lib import logger
 from pyscf import scf
@@ -36,7 +37,7 @@ except ImportError:
 DFTD4_RECOMMENDATIONS = getattr(__config__, 'DFTD4_RECOMMENDATIONS', False)
 
 # supported dispersion corrections
-DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd4']
+DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd3cso', 'd4']
 # XC names for dftd3 and dftd4 inputs
 XC_MAP = {'wb97m-d3bj': 'wb97m',
           'b97m-d3bj': 'b97m',
@@ -50,7 +51,8 @@ XC_MAP = {'wb97m-d3bj': 'wb97m',
 # - wb97x-d is not supported yet
 # - wb97*-d3bj is wb97*-v with d3bj
 # - wb97x-d3 is not supported yet
-# - 3c method is not supported yet
+# - 3c methods: b97-3c, r2scan-3c and wb97x-3c are supported; other 3c
+#   methods are not supported yet
 
 # These xc functionals need special treatments
 _white_list = {
@@ -58,10 +60,24 @@ _white_list = {
     'b97m-d3bj': ('b97m-v', False, 'd3bj'),
     'wb97x-d3bj': ('wb97x-v', False, 'd3bj'),
     'wb97x-3c': ('wb97x-v', False, 'd4:wb97x-3c'),
+    'wb97x_3c': ('wb97x-v', False, 'd4:wb97x-3c'),
+    # B97-3c is parameterized together with its D3(BJ) dispersion correction
+    # (including the ATM three-body term, as specified in the B97-3c paper)
+    # and the SRB correction.  The full libxc canonical name behaves the same
+    # as the shorthand spellings.
+    'b97-3c': ('b97-3c', False, 'd3bjatm:b97-3c'),
+    'b97_3c': ('b97-3c', False, 'd3bjatm:b97-3c'),
+    'gga_xc_b97_3c': ('b97-3c', False, 'd3bjatm:b97-3c'),
+    # r2SCAN-3c is parameterized together with its D4 dispersion correction
+    # and the gCP correction.
+    'r2scan-3c': ('r2scan', False, 'd4:r2scan-3c'),
+    'r2scan_3c': ('r2scan', False, 'd4:r2scan-3c'),
     # CF22D is parameterized together with its D3 (zero-damping) dispersion
     # correction, so it is enabled by default. The cf22d damping parameters
     # are shipped with simple-dftd3 (>=1.2.1) under zero damping.
     'cf22d': ('cf22d', '', 'd3zero'),
+    # COACH combines VV10 with an ATM-only D4 correction.
+    'coach': ('coach', '', 'd4:coach'),
     'b97m-d4': ('b97m_v', False, 'd4:b97m'),
     'wb97m-d4': ('wb97m_v', False, 'd4:wb97m'),
     'wb97x-d4': ('wb97x_v', False, 'd4:wb97x'),
@@ -86,10 +102,12 @@ def parse_dft(xc_code):
     if method_lower in _black_list:
         raise NotImplementedError(f'{method_lower} is not supported yet.')
 
-    if method_lower.endswith('-3c'):
-        if method_lower == "wb97x-3c":
+    if method_lower.endswith(('-3c', '_3c')):
+        if method_lower in _white_list:
             return _white_list[method_lower]
-        raise NotImplementedError('Only wb97x-3c is supported for now. Other 3c methods are not supported yet.')
+        raise NotImplementedError('Only wb97x-3c, b97-3c and r2scan-3c are '
+                                  'supported for now. Other 3c methods are not '
+                                  'supported yet.')
 
     if method_lower == 'wb97x-d4' and not DFTD4_RECOMMENDATIONS:
         xc, nlc, disp = _white_list[method_lower]
@@ -256,9 +274,51 @@ def check_disp(mf, disp=None):
         raise ValueError(f"Unknown dispersion version {disp_version}.")
     return True
 
+def _get_dispersion_mol(mol):
+    '''Return the dispersion molecule and original indices of non-ghost atoms.
+
+    Atoms with zero effective nuclear charge are excluded. The input molecule
+    is not modified. For a mixture of real and ghost atoms, return a copy
+    without ghosts. If all atoms are ghosts, return the input molecule and an
+    empty index array; callers must skip the correction.
+    '''
+    atom_idx = np.where(mol.atom_charges() != 0)[0]
+    if 0 < len(atom_idx) < mol.natm:
+        coords = mol.atom_coords()[atom_idx]
+        if getattr(mol, 'fractional', False):
+            coords = np.linalg.solve(mol.lattice_vectors().T, coords.T).T
+        atoms = [(mol.atom_symbol(i), r) for i, r in zip(atom_idx, coords)]
+        mol = mol.set_geom_(atoms, unit='Bohr', symmetry=False, inplace=False)
+    return mol, atom_idx
+
+def _make_d4_model(mol, method, with_3body):
+    '''Construct a D4 model with the same parameters for all derivatives.'''
+    if dftd4 is None:
+        raise RuntimeError('dftd4 not available. Install it with `pip install pyscf-dispersion`')
+    if method.lower() == 'r2scan-3c':
+        # r2SCAN-3c uses a custom EEQ charge model, which is not encoded
+        # in the D4 damping parameter table.
+        return dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body, ga=2.0, gc=1.0)
+    if method.lower() == 'coach':
+        # D4_PARAMS in the COACH authors' reference implementation:
+        # https://github.com/JiashuLiang/COACH/blob/main/FunctionalCOACH/coach_pyscf.py
+        # Reference: J. Liang and M. Head-Gordon, "Reaching for the performance
+        # limit of hybrid density functional theory for molecular chemistry" (2026)
+        #
+        # Initialize with a known method, then replace all damping parameters.
+        model = dftd4.DFTD4Dispersion(mol, xc='hf', atm=with_3body)
+        model.set_param(s6=0.0, s8=0.0, s9=float(with_3body),
+                        a1=0.215, a2=5.8, alp=16.0)
+        return model
+    return dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body)
+
+
 def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
     '''
     Calculate the dispersion correction energy.
+
+    Ghost atoms are excluded from the dispersion model, including coordination
+    number evaluation. A molecule containing only ghosts has zero correction.
 
     Args:
         mf : SCF object
@@ -293,7 +353,10 @@ def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
     if with_3body is None:
         with_3body = disp_with_3body
 
-    mol = mf.mol
+    mol, atom_idx = _get_dispersion_mol(mf.mol)
+    if len(atom_idx) == 0:
+        mf.scf_summary['dispersion'] = 0.
+        return 0.
 
     # for dftd3
     if disp_version[:2].upper() == 'D3':
@@ -313,7 +376,7 @@ def get_dispersion(mf, disp=None, with_3body=None, verbose=None):
             raise RuntimeError('dftd4 not available. Install them with `pip install pyscf-dispersion`')
         logger.info(mf, "Calc dispersion correction with DFTD4.")
         logger.info(mf, f"Parameters: xc={method}, atm={with_3body}")
-        d4_model = dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body)
+        d4_model = _make_d4_model(mol, method, with_3body)
         res = d4_model.get_dispersion()
         e_d4 = res.get('energy')
         mf.scf_summary['dispersion'] = e_d4

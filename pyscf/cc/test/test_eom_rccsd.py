@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import io
 import unittest
 import copy
 import numpy
@@ -24,6 +25,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import cc
 from pyscf import ao2mo
+from pyscf import fci
 from pyscf.cc import ccsd, rccsd, eom_rccsd, rintermediates, gintermediates
 
 def make_mycc1():
@@ -231,6 +233,81 @@ class KnownValues(unittest.TestCase):
     def test_eomee_ccsd_singlet(self):
         e, v = mycc.eomee_ccsd_singlet(nroots=1)
         self.assertAlmostEqual(e, 0.3005716731825082, 5)
+
+    def test_eomee_ccsd_singlet_left(self):
+        e, v = mycc.EOMEESinglet().kernel(nroots=3, left=True)
+        self.assertAlmostEqual(abs(e - [0.30057166, 0.3758921, 0.39781987]).max(), 0, 6)
+
+    def test_eomee_ccsd_singlet_oscillator_strength(self):
+        for cc_obj in (mycc, mycc2):
+            eom = cc_obj.EOMEESinglet()
+            eom.kernel(nroots=3)
+            f = eom.oscillator_strength()
+            self.assertAlmostEqual(f[0], 0.0269427422, 6)
+            self.assertAlmostEqual(f[1], 0, 9)
+            self.assertAlmostEqual(f[2], 0.0962189723, 6)
+
+    def test_eomee_ccsd_singlet_analyze(self):
+        mol = gto.M(atom=[[8 , (0. , 0.     , 0.)],
+                          [1 , (0. , -0.757 , 0.587)],
+                          [1 , (0. , 0.757  , 0.587)]],
+                    basis='6-31g', symmetry=True, verbose=0)
+        mf = scf.RHF(mol).run()
+        eom = ccsd.CCSD(mf, frozen=1).run().EOMEESinglet()
+        eom.kernel(nroots=4)
+        eom.verbose = 4
+        eom.stdout = io.StringIO()
+        eom.analyze()
+        out = eom.stdout.getvalue()
+        self.assertNotIn('does not have attributes', out)
+        states = [line.split() for line in out.splitlines()
+                  if line.startswith('Excited State')]
+        self.assertEqual([x[3] for x in states], ['B1', 'A2', 'A1', 'B2'])
+        # MO indices count the frozen core
+        self.assertIn('5 -> 6', out)
+
+    def test_eomee_ccsd_singlet_oscillator_strength_vs_fci(self):
+        # EOM-CCSD is exact for two electrons. H2 has a degenerate pair of
+        # Pi states among the roots, which the left eigenvectors have to be
+        # biorthonormalized within.
+        for atom, charge, nroots in [('H 0 0 0; H .1 0 .8; H .9 .3 .4', 1, 4),
+                                     ('H 0 0 0; H 0 0 .74', 0, 7)]:
+            mol = gto.M(atom=atom, basis='cc-pvdz', charge=charge, verbose=0)
+            mf = scf.RHF(mol).run(conv_tol=1e-12)
+            mycc = ccsd.CCSD(mf).set(conv_tol=1e-12, conv_tol_normt=1e-10).run()
+            eom = mycc.EOMEESinglet().set(conv_tol=1e-10)
+            e, v = eom.kernel(nroots=nroots)
+            # Any basis of a degenerate pair is a valid set of right
+            # eigenvectors, a skewed one included
+            for i in numpy.where(abs(numpy.diff(e)) < 1e-6)[0]:
+                eom.v[i] = eom.v[i] + eom.v[i+1] * .5
+            f = eom.oscillator_strength()
+            ovlp = [[eom_rccsd._ee_singlet_dot(*eom.vector_to_amplitudes(l),
+                                               *eom.vector_to_amplitudes(r))
+                     for r in eom.v] for l in eom.v_left]
+            self.assertAlmostEqual(abs(ovlp - numpy.eye(nroots)).max(), 0, 5)
+
+            norb = mf.mo_coeff.shape[1]
+            myci = fci.FCI(mf)
+            efci, ci = myci.kernel(nroots=nroots*3+1)
+            dip = lib.einsum('xpq,pi,qj->xij', mol.intor('int1e_r'),
+                             mf.mo_coeff, mf.mo_coeff)
+            wfci = []
+            ffci = []
+            for k in range(1, len(efci)):
+                if fci.spin_op.spin_square0(ci[k], norb, mol.nelec)[0] > 1e-4:
+                    continue
+                t = numpy.einsum('xpq,pq->x', dip,
+                                 myci.trans_rdm1(ci[0], ci[k], norb, mol.nelec))
+                w = efci[k] - efci[0]
+                wfci.append(w)
+                ffci.append(2./3 * w * t.dot(t))
+            wfci = numpy.array(wfci[:nroots])
+            ffci = numpy.array(ffci[:nroots])
+            self.assertAlmostEqual(abs(e - wfci).max(), 0, 7)
+            # Individual strengths within a degenerate pair depend on the
+            # basis chosen for the pair; the sum over the pair does not.
+            self.assertAlmostEqual(abs(numpy.cumsum(f) - numpy.cumsum(ffci)).max(), 0, 6)
 
     def test_eomee_ccsd_triplet(self):
         e, v = mycc.eomee_ccsd_triplet(nroots=1)

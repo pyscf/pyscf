@@ -52,7 +52,7 @@ def get_veff(ks_grad, mol=None, dm=None):
                                          max_memory=max_memory,
                                          verbose=ks_grad.verbose)
         if mf.do_nlc():
-            if ni.libxc.is_nlc(mf.xc):
+            if ni.is_nlc(mf.xc):
                 xc = mf.xc
             else:
                 xc = mf.nlc
@@ -66,7 +66,7 @@ def get_veff(ks_grad, mol=None, dm=None):
         exc, vxc = get_vxc(ni, mol, grids, mf.xc, dm,
                            max_memory=max_memory, verbose=ks_grad.verbose)
         if mf.do_nlc():
-            if ni.libxc.is_nlc(mf.xc):
+            if ni.is_nlc(mf.xc):
                 xc = mf.xc
             else:
                 xc = mf.nlc
@@ -76,7 +76,7 @@ def get_veff(ks_grad, mol=None, dm=None):
             vxc += vnlc
     t0 = logger.timer(ks_grad, 'vxc', *t0)
 
-    if not ni.libxc.is_hybrid_xc(mf.xc):
+    if not ni.is_hybrid_xc(mf.xc):
         vj = ks_grad.get_j(mol, dm)
         vxc += vj
     else:
@@ -479,6 +479,11 @@ def get_nlc_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=
     return excsum, -vmat
 
 
+def _grid_response_reciprocal(x):
+    # Match the GPU cutoff; avoid large ratios for saturated partition weights.
+    return numpy.divide(1., x, out=numpy.zeros_like(x), where=numpy.abs(x) > 1e-14)
+
+
 # JCP 98, 5612 (1993); DOI:10.1063/1.464906
 def grids_response_becke(grids):
     mol = grids.mol
@@ -543,8 +548,8 @@ def grids_response_becke(grids):
         grid_norm_vec = []
         for ia in range(mol.natm):
             v = (atm_coords[ia] - coords).T
-            normv = numpy.linalg.norm(v,axis=0) + 1e-200
-            v /= normv
+            normv = numpy.linalg.norm(v,axis=0)
+            v *= _grid_response_reciprocal(normv)
             grid_dist.append(normv)
             grid_norm_vec.append(v)
 
@@ -563,12 +568,12 @@ def grids_response_becke(grids):
                 smoothed, t_uab = get_smooth_function_derivative(g_radii_adjusted)
                 t_uab *= 0.5 * gadjust(ia, ib, g)
 
-                s_uab = .5 * (1 - smoothed + 1e-200)
-                s_uba = .5 * (1 + smoothed + 1e-200)
+                s_uab = .5 * (1 - smoothed)
+                s_uba = .5 * (1 + smoothed)
                 pbecke[ia] *= s_uab
                 pbecke[ib] *= s_uba
-                pt_uab =-t_uab / s_uab
-                pt_uba = t_uab / s_uba
+                pt_uab =-t_uab * _grid_response_reciprocal(s_uab)
+                pt_uba = t_uab * _grid_response_reciprocal(s_uba)
 
 # * When grid is on atom ia/ib, ua/ub == 0, d_uba/d_uab may have huge error
 #   How to remove this error?
@@ -605,7 +610,7 @@ def grids_response_becke(grids):
         coords, vol = atom_grids_tab[mol.atom_symbol(ia)]
         coords = coords + atm_coords[ia]
         pbecke, dpbecke = gen_grid_partition(coords, ia)
-        z = 1./pbecke.sum(axis=0)
+        z = _grid_response_reciprocal(pbecke.sum(axis=0))
         w1 = dpbecke[:,ia] * z
         w1 -= pbecke[ia] * z**2 * dpbecke.sum(axis=1)
         w1 *= vol
@@ -671,7 +676,7 @@ def get_dw_partition(mol, ia, atom_grids_tab,
     coords, vol = atom_grids_tab[mol.atom_symbol(ia)]
     coords = coords + atm_coords[ia]
     pbecke = gen_grid_partition(coords)
-    invsum = (1./pbecke.sum(axis=0))
+    invsum = _grid_response_reciprocal(pbecke.sum(axis=0))
     weights = vol * pbecke[ia] * invsum
     if wtonly:
         return coords, weights
@@ -689,7 +694,7 @@ def get_dw_partition_sorted(mol, ialist, coords, weights,
         mol, ialist, radii_adjust, atomic_radii
     )[:2]
     pbecke = gen_grid_partition(coords)
-    invsum = (1./pbecke.sum(axis=0))
+    invsum = _grid_response_reciprocal(pbecke.sum(axis=0))
     dbecke = -pbecke * weights * invsum
     for g in range(weights.size):
         dbecke[ialist[g], g] += weights[g]

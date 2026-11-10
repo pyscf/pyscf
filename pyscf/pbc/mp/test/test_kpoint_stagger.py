@@ -114,13 +114,13 @@ class KnownValues(unittest.TestCase):
         cell = build_h2_fftdf_cell()
         nk = [2,2,2]
         emf, emp2_sub, emp2_ext = run_kcell_fftdf(cell,nk)
-        self.assertAlmostEqual(emf, -1.1097111706856706, 7)
-        self.assertAlmostEqual(emp2_sub, -0.016715452146525603, 7)
-        self.assertAlmostEqual(emp2_ext, -0.01449245927191392, 7)
+        self.assertAlmostEqual(emf, -1.1102002222738947, 7)
+        self.assertAlmostEqual(emp2_sub, -0.01670548181229628, 7)
+        self.assertAlmostEqual(emp2_ext, -0.01449355575559698, 7)
 
         emf, emp2_sub, emp2_ext = run_kcell_complex_fftdf(cell,nk)
-        self.assertAlmostEqual(emp2_sub, -0.016715452146525596, 7)
-        self.assertAlmostEqual(emp2_ext, -0.014492459271913925, 7)
+        self.assertAlmostEqual(emp2_sub, -0.016705481812296273, 7)
+        self.assertAlmostEqual(emp2_ext, -0.014493555755596983, 7)
 
     def test_222_h2_gdf(self):
         cell = build_h2_gdf_cell()

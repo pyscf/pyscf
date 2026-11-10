@@ -22,7 +22,7 @@ gradient of dispersion correction for HF and DFT
 
 import numpy as np
 from pyscf.lib import logger
-from pyscf.scf.dispersion import check_disp, parse_disp
+from pyscf.scf.dispersion import check_disp, parse_disp, _make_d4_model, _get_dispersion_mol
 
 def get_dispersion(mf_grad, disp=None, with_3body=None, verbose=None):
     '''gradient of DFTD3/DFTD4 dispersion correction'''
@@ -46,20 +46,25 @@ def get_dispersion(mf_grad, disp=None, with_3body=None, verbose=None):
     if with_3body is None:
         with_3body = disp_with_3body
 
+    mol, atom_idx = _get_dispersion_mol(mol)
+    g_disp = np.zeros([mf.mol.natm,3])
+    if len(atom_idx) == 0:
+        return g_disp
+
     if disp_version[:2].upper() == 'D3':
         logger.info(mf, "Calc dispersion correction with DFTD3.")
         logger.info(mf, f"Parameters: xc={method}, version={disp_version}, atm={with_3body}")
         d3_model = dftd3.DFTD3Dispersion(mol, xc=method, version=disp_version, atm=with_3body)
         res = d3_model.get_dispersion(grad=True)
-        g_d3 = res.get('gradient')
-        return g_d3
+        g_disp[atom_idx] = res['gradient']
+        return g_disp
     elif disp_version[:2].upper() == 'D4':
         logger.info(mf, "Calc dispersion correction with DFTD4.")
         logger.info(mf, f"Parameters: xc={method}, atm={with_3body}")
-        d4_model = dftd4.DFTD4Dispersion(mol, xc=method, atm=with_3body)
+        d4_model = _make_d4_model(mol, method, with_3body)
         res = d4_model.get_dispersion(grad=True)
-        g_d4 = res.get('gradient')
-        return g_d4
+        g_disp[atom_idx] = res['gradient']
+        return g_disp
     else:
         raise RuntimeError(f'dispersion correction: {disp_version} is not supported.')
 

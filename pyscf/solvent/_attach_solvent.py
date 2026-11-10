@@ -160,8 +160,14 @@ class SCFWithSolvent(_Solvation):
         # stability analysis, SOSCF, polarizability and Hessian).
         vind = self.undo_solvent().gen_response(*args, **kwargs)
         is_uhf = isinstance(self, scf.uhf.UHF)
+        hermi = kwargs.get("hermi", 0)
+        singlet = kwargs.get("singlet", None)
+        with_j = kwargs.get("with_j", True)
         def vind_with_solvent(dm1):
             v = vind(dm1)
+            if (hermi == 2) or (singlet is False) or (not with_j):
+                # Antisymmetric dm or RHF triplet response or UHF s response
+                return v
             if self.with_solvent.equilibrium_solvation:
                 if is_uhf:
                     v += self.with_solvent._B_dot_x(dm1[0]+dm1[1])
@@ -337,19 +343,23 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         self._e_tot_without_solvent = e_tot
 
         log.debug('Computing corrections to the total energy.')
-        dm = self.make_rdm1(ci=fcivec, ao_repr=True)
+        dm = self.make_rdm1(mo_coeff=mo_coeff, ci=fcivec, ao_repr=True)
 
         with_solvent = self.with_solvent
+        edup = None
         if with_solvent.e is not None:
+            # Must be evaluated before kernel() overwrites with_solvent.v
             edup = numpy.einsum('ij,ji->', with_solvent.v, dm)
-            e_tot = e_tot - edup + with_solvent.e
-            log.info('Removing duplication %.15g, '
-                     'adding E(solvent) = %.15g to total energy:\n'
-                     '    E(CASSCF+solvent) = %.15g', edup, with_solvent.e, e_tot)
 
         # Update solvent effects for next iteration if needed
         if not with_solvent.frozen:
             with_solvent.e, with_solvent.v = with_solvent.kernel(dm)
+
+        if edup is not None:
+            e_tot = e_tot - edup + with_solvent.e
+            log.info('Removing duplication %.15g, '
+                     'adding E(solvent) = %.15g to total energy:\n'
+                     '    E(CASSCF+solvent) = %.15g', edup, with_solvent.e, e_tot)
 
         return e_tot, e_cas, fcivec
 

@@ -1168,7 +1168,11 @@ class MultiGridNumInt(MultiGridNumInt_v1):
 
     def cache_xc_kernel(self, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
                         kpts=None, max_memory=2000):
-        if mo_occ[0][0].ndim == 1: # KUHF/KUKS
+        # RKS  (nmo,)          np.ndim(mo_occ[0]) = 0
+        # UKS  (2, nmo)                             1
+        # KRKS (nkpts, nmo)                         1
+        # KUKS (2, nkpts, nmo)                      2
+        if np.ndim(mo_occ[0]) == 2: # KUHF/KUKS;
             dm = []
             for spin in range(len(mo_occ)):
                 dm.append([(c*o).dot(c.conj().T)

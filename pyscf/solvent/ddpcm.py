@@ -38,14 +38,24 @@ from pyscf.solvent import _attach_solvent
 warnings.warn('Module ddPCM is under testing')
 
 
+def _as_solvent_obj(solvent_obj, mol):
+    '''Allows the solvent model to be specified by the name of the solvent,
+    e.g. mf.ddPCM('toluene')
+    '''
+    if isinstance(solvent_obj, str):
+        solvent_obj = DDPCM(mol, solvent_obj)
+    return solvent_obj
+
 @lib.with_doc(_attach_solvent._for_scf.__doc__)
 def ddpcm_for_scf(mf, solvent_obj=None, dm=None):
+    solvent_obj = _as_solvent_obj(solvent_obj, mf.mol)
     if solvent_obj is None:
         solvent_obj = DDPCM(mf.mol)
     return _attach_solvent._for_scf(mf, solvent_obj, dm)
 
 @lib.with_doc(_attach_solvent._for_casscf.__doc__)
 def ddpcm_for_casscf(mc, solvent_obj=None, dm=None):
+    solvent_obj = _as_solvent_obj(solvent_obj, mc.mol)
     if solvent_obj is None:
         if isinstance(getattr(mc._scf, 'with_solvent', None), DDPCM):
             solvent_obj = mc._scf.with_solvent
@@ -55,6 +65,7 @@ def ddpcm_for_casscf(mc, solvent_obj=None, dm=None):
 
 @lib.with_doc(_attach_solvent._for_casci.__doc__)
 def ddpcm_for_casci(mc, solvent_obj=None, dm=None):
+    solvent_obj = _as_solvent_obj(solvent_obj, mc.mol)
     if solvent_obj is None:
         if isinstance(getattr(mc._scf, 'with_solvent', None), DDPCM):
             solvent_obj = mc._scf.with_solvent
@@ -64,6 +75,7 @@ def ddpcm_for_casci(mc, solvent_obj=None, dm=None):
 
 @lib.with_doc(_attach_solvent._for_post_scf.__doc__)
 def ddpcm_for_post_scf(method, solvent_obj=None, dm=None):
+    solvent_obj = _as_solvent_obj(solvent_obj, method.mol)
     if solvent_obj is None:
         if isinstance(getattr(method._scf, 'with_solvent', None), DDPCM):
             solvent_obj = method._scf.with_solvent
@@ -121,12 +133,12 @@ def gen_ddpcm_solver(pcmobj, verbose=None):
     cached_pol = ddcosmo.cache_fake_multipoles(pcmobj.grids, r_vdw, lmax)
 
     def gen_vind(dm):
-        phi = ddcosmo.make_phi(pcmobj, dm, r_vdw, ui)
+        phi = ddcosmo.make_phi(pcmobj, dm, r_vdw, ui, ylm_1sph)
         phi = numpy.linalg.solve(A_diele, A_inf.dot(phi.ravel()))
 
         Xvec = numpy.linalg.solve(Lmat, phi.ravel()).reshape(natm,-1)
-        psi, vmat = ddcosmo.make_psi_vmat(pcmobj, dm, r_vdw, ui, pcmobj.grids,
-                                          ylm_1sph, cached_pol, Xvec, Lmat)[:2]
+        psi, vmat = ddcosmo.make_psi_vmat(pcmobj, dm, r_vdw, ui, ylm_1sph,
+                                          cached_pol, Xvec, Lmat)[:2]
         dielectric = pcmobj.eps
         f_epsilon = (dielectric-1.)/dielectric
         epcm = .5 * f_epsilon * numpy.einsum('jx,jx', psi, Xvec)
@@ -190,8 +202,19 @@ def make_A(pcmobj, r_vdw, ylm_1sph, ui):
     return Amat
 
 class ddPCM(ddcosmo.DDCOSMO):
-    def __init__(self, mol):
-        ddcosmo.DDCOSMO.__init__(self, mol)
+    '''The domain decomposition PCM model.
+
+    The solvent can be specified by its name, see ddcosmo.ddCOSMO.
+
+    Examples:
+
+    >>> mf = mol.RHF().ddPCM()
+    >>> mf.with_solvent.solvent = 'toluene'
+    >>> mf.kernel()
+    '''
+
+    def __init__(self, mol, solvent=None):
+        ddcosmo.DDCOSMO.__init__(self, mol, solvent)
         self.method = 'ddPCM'
 
     def dump_flags(self, verbose=None):
@@ -203,6 +226,9 @@ class ddPCM(ddcosmo.DDCOSMO):
                     self.lebedev_order, gen_grid.LEBEDEV_ORDER[self.lebedev_order])
         logger.info(self, 'lmax = %s'         , self.lmax)
         logger.info(self, 'eta = %s'          , self.eta)
+        solvent = getattr(self, 'solvent', '')
+        if solvent:
+            logger.info(self, 'solvent = %s'  , solvent)
         logger.info(self, 'eps = %s'          , self.eps)
         logger.info(self, 'eps_optical = %s'  , self.eps_optical)
         logger.info(self, 'frozen = %s'       , self.frozen)
@@ -330,28 +356,3 @@ class ddPCM(ddcosmo.DDCOSMO):
         raise NotImplementedError
 
 DDPCM = ddPCM
-
-if __name__ == '__main__':
-    from pyscf import scf
-    mol = gto.M(atom='H 0 0 0; H 0 1 1.2; H 1. .1 0; H .5 .5 1')
-    numpy.random.seed(1)
-
-    nao = mol.nao_nr()
-    dm = numpy.random.random((nao,nao))
-    dm = dm + dm.T
-    #dm = scf.RHF(mol).run().make_rdm1()
-    e, vmat = DDPCM(mol).kernel(dm)
-    print(e + 1.2446306643473923)
-    print(lib.fp(vmat) - 0.77873361914445294)
-
-    mol = gto.Mole()
-    mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
-                   H                 -0.00000000   -0.84695236    0.59109389
-                   H                 -0.00000000    0.89830571    0.52404783 '''
-    mol.basis = '3-21g' #cc-pvdz'
-    mol.build()
-    cm = DDPCM(mol)
-    cm.verbose = 4
-    mf = ddpcm_for_scf(scf.RHF(mol), cm)#.newton()
-    mf.verbose = 4
-    mf.kernel()  # -75.5697645601958

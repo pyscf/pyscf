@@ -34,6 +34,8 @@ ehf = kmf.kernel()
 mycc = cc.KCCSD(kmf)
 mycc.kernel()
 print("KRCCSD energy (per unit cell) =", mycc.e_tot)
+# The perturbative triples correction uses the converged k-point amplitudes.
+print("KRCCSD(T) correction (per unit cell) =", mycc.ccsd_t())
 
 #
 # The KHF and KCCSD for single k-point calculation.

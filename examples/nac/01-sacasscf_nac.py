@@ -1,3 +1,4 @@
+import numpy
 from pyscf import gto, scf, mcscf, lib
 
 # NAC signs are really, really hard to nail down.
@@ -64,6 +65,8 @@ print ("NAC <0|d1/dR>:\n", nac)
 #    ```
 nac = mc_nacs.kernel (state=(1,0), use_etfs=True)
 print ("NAC <0|d1/dR> w/ ETFs:\n", nac)
+print ("Antisymmetry check:",
+       numpy.linalg.norm(mc_nacs.kernel(state=(0,1), use_etfs=True) + nac))
 
 # 5. <1|d0/dR>*(E1-E0) = <0|d1/dR>*(E0-E1)
 #    I'm not aware of any OpenMolcas equivalent for this, but all the information
@@ -87,4 +90,12 @@ print ("derivative of the off-diagonal element of the potential matrix. This")
 print ("tells you one of the two components of the branching plane at the CI.")
 print ("<1|d0/dR>*(E1-E0) w/ ETFs = <1|dH/dR|0>:\n", v01)
 print ("<0|d1/dR>*(E0-E1) w/ ETFs = <0|dH/dR|1>:\n", v10)
+print ("Energy-scaled symmetry check:", numpy.linalg.norm(v01-v10))
 
+# State gradients accompany the coupling vectors when constructing the
+# branching plane near an intersection.
+mc_grad = mc.nuc_grad_method()
+print ("Ground-state gradient:\n", mc_grad.kernel(state=0))
+print ("Excited-state gradient:\n", mc_grad.kernel(state=1))
+
+# See 02-mspdft_nac.py for CMS-PDFT couplings and state gradients.

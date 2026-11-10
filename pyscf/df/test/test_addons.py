@@ -43,7 +43,7 @@ class KnownValues(unittest.TestCase):
 
         auxbasis = df.addons.autoaux(mol)
         self.assertEqual(len(auxbasis['O']), 37)
-        # If basis-set-exchange pacakge is installed, this test will fail.
+        # If basis-set-exchange package is installed, this test will fail.
         # bse-0.9 produces 13 shells due to round-off errors.
         # The correct number of generated basis functions should be 12.
         if bse.basis_set_exchange:
@@ -108,6 +108,23 @@ class KnownValues(unittest.TestCase):
         auxbasis = df.addons.make_auxbasis(mol, mp2fit=True)
         self.assertEqual(auxbasis['O'], 'cc-pvdz-ri')
         self.assertEqual(auxbasis['H'], 'cc-pvdz-ri')
+
+        basis = '6-311G**'
+        mol = gto.M(
+            verbose=0,
+            atom='O 0 0 0; H 0 0 0.96; H 0.9 0 0',
+            basis=basis,
+        )
+        auxbasis = df.addons.make_auxbasis(mol, mp2fit=True)
+        self.assertEqual(auxbasis['O'], 'cc-pvtz-ri')
+        self.assertEqual(auxbasis['H'], 'cc-pvtz-ri')
+
+        mol = gto.M(
+            verbose=0,
+            atom='O 0 0 0; H 0 0 0.96; H 0.9 0 0',
+            basis={'default': basis},
+        )
+        self.assertEqual(df.addons.make_auxbasis(mol, mp2fit=True), auxbasis)
 
         mol = gto.M(
             verbose = 0,

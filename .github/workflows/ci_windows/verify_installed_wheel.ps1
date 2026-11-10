@@ -38,7 +38,7 @@ try {
     if ($wheels.Count -ne 1) {
         throw "Expected exactly one wheel, found $($wheels.Count)"
     }
-    & $python -m pip install $wheels[0].FullName 'pytest<9' pytest-xdist geometric spglib 'git+https://github.com/jhrmnn/pyberny.git@36a4be9' 2>&1 |
+    & $python -m pip install $wheels[0].FullName 'pytest<9' pytest-xdist geometric spglib pyberny 2>&1 |
         Tee-Object -FilePath (Join-Path $reportDir 'install.log')
     if ($LASTEXITCODE -ne 0) {
         throw 'Installed-wheel test environment setup failed'

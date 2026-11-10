@@ -397,24 +397,3 @@ class Gradients(GradientsBase):
         logger.timer(self, 'SCF gradients', *cput0)
         self._finalize()
         return self.de
-
-if __name__=='__main__':
-    from pyscf.pbc import scf
-    cell = gto.Cell()
-    cell.atom = '''
-    He 0.0 0.0 0.0
-    He 1.0 1.1 1.2
-    '''
-    cell.basis = 'gth-dzv'
-    cell.a = np.eye(3) * 3
-    cell.unit='bohr'
-    cell.pseudo='gth-pade'
-    cell.verbose=4
-    cell.build()
-
-    nmp = [1,1,3]
-    kpts = cell.make_kpts(nmp)
-    kmf = scf.KRHF(cell, kpts, exxdiv=None)
-    kmf.kernel()
-    mygrad = Gradients(kmf)
-    grad = mygrad.kernel()

@@ -46,15 +46,16 @@ def parse(string, symb=None):
     ...      0.28637912    0
     ... """)}
     '''
+    blocks = _split_blocks(string)
     if symb is not None:
-        raw_data = list(filter(None, re.split('#PSEUDOPOTENTIAL', string)))
-        pseudotxt = _search_gthpp_block(raw_data, symb)
-        if not pseudotxt:
+        raw_data = _search_gthpp_block(blocks, symb)
+        if not raw_data:
             raise BasisNotFoundError(f'Pseudopotential not found for {symb}.')
+    elif blocks:
+        raw_data = blocks[0]
     else:
-        pseudotxt = [x.strip() for x in string.splitlines()
-                     if x.strip() and 'END' not in x and '#PSEUDOPOTENTIAL' not in x]
-    return _parse(pseudotxt)
+        raise BasisNotFoundError('Not pseudo potential data')
+    return _parse(raw_data)
 
 def load(pseudofile, symb, suffix=None):
     '''Parse the *pseudofile's entry* for atom 'symb', return an internal
@@ -62,94 +63,131 @@ def load(pseudofile, symb, suffix=None):
     '''
     return _parse(search_seg(pseudofile, symb, suffix))
 
-def _load_GTH_POTENTIALS(pp_name, symb, pp_dir):
-    data = []
-    pp_files = ('GTH_POTENTIALS', 'POTENTIAL_UZH')
+def _load_GTH_POTENTIALS(pp_name, symb, pp_dir, with_soc=False):
+    if with_soc:
+        pp_files = ('GTH_SOC_POTENTIALS',)
+    else:
+        pp_files = ('GTH_POTENTIALS', 'POTENTIAL_UZH')
     for pp_file in pp_files:
         with open(f'{pp_dir}/{pp_file}', 'r') as searchfile:
-            in_block = False
-            for line in searchfile:
-                if not line or line[0] == '#':
-                    continue
-                if not in_block:
-                    line = line.lstrip()
-                    if line.startswith(symb+' ') and pp_name in line:
-                        # must be an exact match. There exist multiple GTH-PBE
-                        # blocks for the same elements, only differed by suffices.
-                        if pp_name in line.split():
-                            data.append(line)
-                            in_block = True
-                    continue
+            blocks = _split_blocks(searchfile.read())
+        for block in blocks:
+            header = block[0].split()
+            if header[0] == symb and pp_name in header[1:]:
+                return _parse(block)
+    raise BasisNotFoundError(
+        f'{pp_name} for {symb} not found in files {",".join(pp_files)}.')
 
-                data.append(line.strip())
-                if 'GTH' in line: # next block
-                    break
-        if data:
-            break
+
+def _split_blocks(string):
+    # CP2K native databases separate entries with element/name headers.
+    # older PySCF database files contain #PSEUDOPOTENTIAL delimiters.
+    blocks = []
+    for line in string.splitlines():
+        line = line.split('#', 1)[0].strip()
+        if not line or line in ('END', 'PSEUDOPOTENTIAL'):
+            continue
+        if re.match(r'^[A-Za-z][A-Za-z]?(?=\s|$)', line): # match element
+            blocks.append([])
+        if blocks:
+            blocks[-1].append(line)
+    return blocks
+
+def _unpack_triu(dat):
+    '''
+    i, j = np.triu_indices(n)
+    a[i,j] = a[j,i] = dat
+    return a.tolist()
+    '''
+    if len(dat) == 0:
+        return []
+    if len(dat) == 1:
+        result = [dat]
+    elif len(dat) == 3:
+        result = [[dat[0], dat[1]], [dat[1], dat[2]]]
+    elif len(dat) == 6:
+        result = [[dat[0], dat[1], dat[2]],
+                  [dat[1], dat[3], dat[4]],
+                  [dat[2], dat[4], dat[5]]]
     else:
-        raise BasisNotFoundError(
-            f'{pp_name} for {symb} not found in files {",".join(pp_files)}.')
-
-    return _parse(data)
+        raise ValueError(f'Incorrect number of GTH projector coefficients {len(dat)}')
+    return result
 
 def _parse(plines):
     line_iter = iter(plines)
     try:
         header_ln = next(line_iter)  # noqa: F841
         nelecs = [ int(nelec) for nelec in next(line_iter).split() ]
-    except Exception:
+    except ValueError:
         raise BasisNotFoundError('Not pseudo potential data')
 
     rnc_ppl = next(line_iter).split()
     rloc = float(rnc_ppl[0])
     nexp = int(rnc_ppl[1])
     cexp = [ float(c) for c in rnc_ppl[2:] ]
-    nproj_types = int(next(line_iter))
+    if len(cexp) != nexp:
+        raise ValueError('Invalid GTH local potential')
+
+    proj_types = next(line_iter).split()
+    nproj_types = int(proj_types[0])
+    has_soc = len(proj_types) == 2 and proj_types[1] == 'SOC'
     r = []
     nproj = []
     hproj = []
+    kproj = []
     for p in range(nproj_types):
         rnh_ppnl = next(line_iter).split()
-        r.append(float(rnh_ppnl[0]))
-        nproj.append(int(rnh_ppnl[1]))
+        rl = float(rnh_ppnl[0])
+        r.append(rl)
+        nl = int(rnh_ppnl[1])
+        nproj.append(nl)
         hproj_p_ij = []
         for h in rnh_ppnl[2:]:
             hproj_p_ij.append(float(h))
-        for i in range(1,nproj[-1]):
+        for i in range(1,nl):
             for h in next(line_iter).split():
                 hproj_p_ij.append(float(h))
-        hproj_p = np.zeros((nproj[-1],nproj[-1]))
-        hproj_p[np.triu_indices(nproj[-1])] = list(hproj_p_ij)
-        hproj_p_symm = hproj_p + hproj_p.T - np.diag(hproj_p.diagonal())
-        hproj.append(hproj_p_symm.tolist())
+        hproj.append(_unpack_triu(hproj_p_ij))
 
-    pseudo_params = [nelecs,
-                     rloc, nexp, cexp,
-                     nproj_types]
-    for ri,ni,hi in zip(r,nproj,hproj):
-        pseudo_params.append([ri, ni, hi])
+        if has_soc:
+            if p == 0:
+                # kproj are only defined for l>0
+                kproj.append([])
+                continue
+            kproj_p_ij = []
+            for i in range(nl):
+                for k in next(line_iter).split():
+                    kproj_p_ij.append(float(k))
+            kproj.append(_unpack_triu(kproj_p_ij))
+
+    if has_soc:
+        pseudo_params = [nelecs,
+                         rloc, nexp, cexp,
+                         (nproj_types, 'SOC')]
+        pseudo_params.extend(zip(r, nproj, hproj, kproj))
+    else:
+        pseudo_params = [nelecs,
+                         rloc, nexp, cexp,
+                         nproj_types]
+        pseudo_params.extend(zip(r, nproj, hproj))
     return pseudo_params
 
 def search_seg(pseudofile, symb, suffix=None):
     '''
     Find the pseudopotential entry for atom 'symb' in file 'pseudofile'
     '''
-    fin = open(pseudofile, 'r')
-    fdata = fin.read().split('#PSEUDOPOTENTIAL')
-    fin.close()
-    dat = _search_gthpp_block(fdata[1:], symb, suffix)
+    with open(pseudofile, 'r') as f:
+        fdata = _split_blocks(f.read())
+    dat = _search_gthpp_block(fdata, symb, suffix)
     if not dat:
         raise BasisNotFoundError(f'Pseudopotential for {symb} in {pseudofile}')
     return dat
 
 def _search_gthpp_block(raw_data, symb, suffix=None):
     for dat in raw_data:
-        dat0 = dat.split(None, 1)
-        if dat0 and dat0[0] == symb:
-            dat = [x.strip() for x in dat.splitlines()
-                   if x.strip() and 'END' not in x]
+        if dat and dat[0].split()[0] == symb:
             if suffix is None:  # use default PP
-                qsuffix = dat[0].split()[-1].split('-')[-1]
+                qsuffix = dat[0].split('-')[-1]
                 if not (qsuffix.startswith('q') and qsuffix[1:].isdigit()):
                     return dat
             else:

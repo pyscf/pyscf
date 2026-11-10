@@ -2737,6 +2737,18 @@ class LibXCMixin:
     def rsh_coeff(self, xc_code):
         return self.libxc.rsh_coeff(xc_code)
 
+    def is_hybrid_xc(self, xc_code):
+        if xc_code is None:
+            return False
+        if self.rsh_coeff(xc_code) != (0, 0, 0):
+            return True
+        if self.hybrid_coeff(xc_code) != 0:
+            return True
+        return False
+
+    def is_nlc(self, xc_code):
+        return self.libxc.is_nlc(xc_code)
+
     @lib.with_doc(libxc.eval_xc.__doc__)
     def eval_xc(self, xc_code, rho, spin=0, relativity=0, deriv=1, omega=None,
                 verbose=None):
@@ -3000,31 +3012,3 @@ class NumInt(lib.StreamObject, LibXCMixin):
         except ImportError:
             raise ImportError('Cannot find GPU4PySCF')
 _NumInt = NumInt
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import dft
-
-    mol = gto.M(atom=[
-        ["O" , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ],
-        basis='6311g**')
-    mf = dft.RKS(mol)
-    mf.grids.atom_grid = {"H": (30, 194), "O": (30, 194),}
-    mf.grids.prune = None
-    mf.grids.build()
-    dm = mf.get_init_guess(key='minao')
-
-    numpy.random.seed(1)
-    dm1 = numpy.random.random(dm.shape)
-    dm1 = lib.hermi_triu(dm1)
-    res = mf._numint.nr_vxc(mol, mf.grids, mf.xc, dm1, spin=0)
-    print(res[1] - -37.084047825971282)
-    res = mf._numint.nr_vxc(mol, mf.grids, mf.xc, (dm1,dm1), spin=1)
-    print(res[1] - -92.436362308687094)
-    res = mf._numint.nr_vxc(mol, mf.grids, mf.xc, dm, spin=0)
-    print(res[1] - -8.6313329288394947)
-    res = mf._numint.nr_vxc(mol, mf.grids, mf.xc, (dm,dm), spin=1)
-    print(res[1] - -21.520301399504582)

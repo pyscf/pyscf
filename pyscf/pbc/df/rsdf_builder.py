@@ -1413,10 +1413,9 @@ def _round_off_to_odd_mesh(mesh):
     # Round off mesh to the nearest odd numbers.
     # Odd number of grids is preferred because even number of grids may break
     # the conjugation symmetry between the k-points k and -k.
-    # When building the DF integral tensor in function _make_j3c, the symmetry
-    # between k and -k is used (function conj_j2c) to overcome the error
-    # caused by auxiliary basis linear dependency. More details of this
-    # problem can be found in function _make_j3c.
+    # The DF builder uses this symmetry (_conj_j2c) to keep the decomposed
+    # Coulomb metrics at k and -k consistent when the auxiliary basis is
+    # linearly dependent.
     if isinstance(mesh, (int, np.integer)):
         return (mesh // 2) * 2 + 1
     else:

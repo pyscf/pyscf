@@ -124,7 +124,7 @@ def get_ab(mf, kshift=0):
                 rho0b = make_rho(1, ao, mask, xctype)
                 rho = (rho0a, rho0b)
                 fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
-                wfxc = fxc[0,0] * weight
+                wfxc = fxc[:,0,:,0] * weight  # Keep both spin indices.
 
                 rho_o_a = lib.einsum('krp,kpi->kri', ao, orbo_a)
                 rho_v_a = lib.einsum('krp,kpi->kri', ao, orbv_a)
@@ -202,26 +202,26 @@ def get_ab(mf, kshift=0):
                 rho_v_b = lib.einsum('kxrp,kpi->kxri', ao, orbv_b)
                 rho_ov_a = np.einsum('kxri,kra->kxria', rho_o_a, rho_v_a[:,0])
                 rho_ov_b = np.einsum('kxri,kra->kxria', rho_o_b, rho_v_b[:,0])
-                rho_ov_a[:,1:4] += np.einsum('ri,xra->xria', rho_o_a[:,0], rho_v_a[:,1:4])
-                rho_ov_b[:,1:4] += np.einsum('ri,xra->xria', rho_o_b[:,0], rho_v_b[:,1:4])
+                rho_ov_a[:,1:4] += np.einsum('kri,kxra->kxria', rho_o_a[:,0], rho_v_a[:,1:4])
+                rho_ov_b[:,1:4] += np.einsum('kri,kxra->kxria', rho_o_b[:,0], rho_v_b[:,1:4])
                 tau_ov_a = np.einsum('kxri,kxra->kria', rho_o_a[:,1:4], rho_v_a[:,1:4]) * .5
                 tau_ov_b = np.einsum('kxri,kxra->kria', rho_o_b[:,1:4], rho_v_b[:,1:4]) * .5
-                rho_ov_a = np.vstack([rho_ov_a, tau_ov_a[:,np.newaxis]])
-                rho_ov_b = np.vstack([rho_ov_b, tau_ov_b[:,np.newaxis]])
+                rho_ov_a = np.concatenate([rho_ov_a, tau_ov_a[:,np.newaxis]], axis=1)
+                rho_ov_b = np.concatenate([rho_ov_b, tau_ov_b[:,np.newaxis]], axis=1)
                 rho_vo_a = rho_ov_a.conj()[cmap]
                 rho_vo_b = rho_ov_b.conj()[cmap]
                 w_vo_aa = np.einsum('xyr,kxria->kyria', wfxc[0,:,0], rho_vo_a) * (1/nkpts)
                 w_vo_ab = np.einsum('xyr,kxria->kyria', wfxc[0,:,1], rho_vo_a) * (1/nkpts)
                 w_vo_bb = np.einsum('xyr,kxria->kyria', wfxc[1,:,1], rho_vo_b) * (1/nkpts)
 
-                a_aa += lib.einsum('kxria,lxrjb->kilajb', w_vo_aa, rho_ov_a)
-                b_aa += lib.einsum('kxria,lxrjb->kilajb', w_vo_aa, rho_vo_a)
+                a_aa += lib.einsum('kxria,lxrjb->kialjb', w_vo_aa, rho_ov_a)
+                b_aa += lib.einsum('kxria,lxrjb->kialjb', w_vo_aa, rho_vo_a)
 
-                a_ab += lib.einsum('kxria,lxrjb->kilajb', w_vo_ab, rho_ov_b)
-                b_ab += lib.einsum('kxria,lxrjb->kilajb', w_vo_ab, rho_vo_b)
+                a_ab += lib.einsum('kxria,lxrjb->kialjb', w_vo_ab, rho_ov_b)
+                b_ab += lib.einsum('kxria,lxrjb->kialjb', w_vo_ab, rho_vo_b)
 
-                a_bb += lib.einsum('kxria,lxrjb->kilajb', w_vo_bb, rho_ov_b)
-                b_bb += lib.einsum('kxria,lxrjb->kilajb', w_vo_bb, rho_vo_b)
+                a_bb += lib.einsum('kxria,lxrjb->kialjb', w_vo_bb, rho_ov_b)
+                b_bb += lib.einsum('kxria,lxrjb->kialjb', w_vo_bb, rho_vo_b)
     else:
         add_hf_(a, b)
 

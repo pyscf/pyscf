@@ -323,6 +323,95 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(vk[7]), (0.8518483148628242 +0.010084767506077213j), 6)
 
 
+    def make_transition_density_reference(self):
+        self.cell = pgto.M(atom='He 0 0 0', a=numpy.eye(3)*3,
+                         basis=[[0, [.8, 1]], [1, [.5, 1]]],
+                         precision=1e-8, mesh=[15]*3, verbose=0)
+        self.kpts = self.cell.make_kpts([2, 1, 1])
+        self.df = df.GDF(self.cell, self.kpts)
+        self.df.auxbasis = 'weigend'
+        self.df.build()
+
+    def check_shift(self, shift, low_rank):
+        self.make_transition_density_reference()
+        rng = numpy.random.default_rng(8)
+        nao = self.cell.nao
+        if low_rank:
+            left, right = rng.normal(size=(2, 2, nao))+1j*rng.normal(size=(2, 2, nao))
+            dm = numpy.einsum('ki,kj->kij', left, right.conj())
+        else:
+            dm = rng.normal(size=(2, nao, nao))+1j*rng.normal(size=(2, nao, nao))
+        jref = numpy.zeros_like(dm)
+        kref = numpy.zeros_like(dm)
+        for ki in range(2):
+            for kj in range(2):
+                kip, kjp = (ki-shift) % 2, (kj-shift) % 2
+                eri = self.df.get_eri(self.kpts[[ki, kip, kjp, kj]], compact=False).reshape([nao]*4)
+                jref[ki] += numpy.einsum('pqrs,sr->pq', eri, dm[kj])/2
+                eri = self.df.get_eri(self.kpts[[ki, kj, kjp, kip]], compact=False).reshape([nao]*4)
+                kref[ki] += numpy.einsum('psrq,sr->pq', eri, dm[kj])/2
+        j = df_jk.get_j_kpts_kshift(self.df, dm, shift, kpts=self.kpts)
+        numpy.testing.assert_allclose(j, jref, atol=1e-10)
+        for force_dm in (False, True):
+            with self.subTest(force_dm=force_dm):
+                self.df.force_dm_kbuild = force_dm
+                k = df_jk.get_k_kpts_kshift(self.df, dm, shift, kpts=self.kpts)
+                numpy.testing.assert_allclose(k, kref, atol=1e-10)
+        self.df.force_dm_kbuild = False
+
+    def test_shifted_hermitian_density(self):
+        self.make_transition_density_reference()
+        rng = numpy.random.default_rng(23)
+        coeff = rng.normal(size=(2, self.cell.nao, 2))
+        for occupations in (numpy.array([.8, .2]), numpy.array([.8, -.2])):
+            dm = numpy.einsum('kpi,i,kqi->kpq', coeff, occupations, coeff)
+            with lib.temporary_env(self.df, force_dm_kbuild=True):
+                expected = df_jk.get_k_kpts_kshift(self.df, dm, 1, hermi=1, kpts=self.kpts)
+            actual = df_jk.get_k_kpts_kshift(self.df, dm, 1, hermi=1, kpts=self.kpts)
+            numpy.testing.assert_allclose(actual, expected, atol=1e-10)
+
+    def test_shifted_low_rank(self):
+        self.check_shift(1, True)
+
+    def test_shifted_full_rank(self):
+        self.check_shift(1, False)
+
+    def test_unshifted_low_rank(self):
+        self.check_shift(0, True)
+
+    def test_unshifted_full_rank(self):
+        self.check_shift(0, False)
+
+    def check_single_kpoint(self, k, low_rank):
+        self.make_transition_density_reference()
+        rng = numpy.random.default_rng(17)
+        n = self.cell.nao
+        if low_rank:
+            left, right = rng.normal(size=(2, n))+1j*rng.normal(size=(2, n))
+            dm = numpy.outer(left, right.conj())
+        else:
+            dm = rng.normal(size=(n, n))+1j*rng.normal(size=(n, n))
+        eri = self.df.get_eri([self.kpts[k]]*4, compact=False).reshape([n]*4)
+        jref = numpy.einsum('pqrs,sr->pq', eri, dm)
+        kref = numpy.einsum('psrq,sr->pq', eri, dm)
+        for force_dm in (False, True):
+            with self.subTest(force_dm=force_dm):
+                self.df.force_dm_kbuild = force_dm
+                j, vk = df_jk.get_jk(self.df, dm, hermi=0, kpt=self.kpts[k])
+                numpy.testing.assert_allclose(j, jref, atol=1e-10)
+                numpy.testing.assert_allclose(vk, kref, atol=1e-10)
+        self.df.force_dm_kbuild = False
+
+    def test_gamma_complex_transition_density(self):
+        self.check_single_kpoint(0, True)
+
+    def test_non_gamma_transition_density(self):
+        self.check_single_kpoint(1, True)
+
+    def test_non_gamma_full_rank_transition_density(self):
+        self.check_single_kpoint(1, False)
+
+
 if __name__ == '__main__':
     print("Full Tests for df_jk")
     unittest.main()

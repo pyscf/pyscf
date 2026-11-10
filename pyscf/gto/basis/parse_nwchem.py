@@ -312,12 +312,3 @@ def remove_zero(basis):
         if new_ec:
             new_basis.append(key + new_ec)
     return new_basis
-
-if __name__ == '__main__':
-    from pyscf import gto
-    mol = gto.M(atom='O', basis='6-31g')
-    print(load_ecp('lanl2dz.dat', 'Na'))
-    b = load('ano.dat', 'Na')
-    print(convert_basis_to_nwchem('Na', b))
-    b = load_ecp('lanl2dz.dat', 'Na')
-    print(convert_ecp_to_nwchem('Na', b))

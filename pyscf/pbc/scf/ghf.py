@@ -27,6 +27,8 @@ from pyscf.lib import logger
 import pyscf.scf.ghf as mol_ghf
 from pyscf.pbc.scf import hf as pbchf
 from pyscf.pbc.scf import addons
+from pyscf.pbc.gto.pseudo import pp_int
+from pyscf.pbc.gto.ecp import ecp_int
 from pyscf import __config__
 
 
@@ -54,7 +56,7 @@ def get_jk(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
         jk_shape = (dm.shape[0], nband, nso, nso)
 
     dmaa = dms[:,:nao,:nao]
-    dmab = dms[:,nao:,:nao]
+    dmab = dms[:,:nao,nao:]
     dmbb = dms[:,nao:,nao:]
     if with_k:
         if hermi:
@@ -99,6 +101,8 @@ def get_jk(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
 
 class GHF(pbchf.SCF):
     '''GHF class for PBCs at a single point (default: gamma point).
+
+    Set with_soc=True to add ECP and GTH pseudopotential spin-orbit terms.
     '''
     _keys = {'with_soc'}
 
@@ -127,10 +131,14 @@ class GHF(pbchf.SCF):
         if kpt is None: kpt = self.kpt
         hcore = pbchf.SCF.get_hcore(self, cell, kpt)
         hcore = scipy.linalg.block_diag(hcore, hcore)
-        if self.with_soc and cell.has_ecp_soc():
-            from pyscf.pbc.gto.ecp import ecp_int
-            # The ECP SOC contribution = <|1j * s * U_SOC|>
-            hcore = hcore + ecp_int(cell, kpt, intor='ECPso')
+        if self.with_soc:
+            if cell._pseudo:
+                vl_soc = pp_int.get_pp_soc(cell, kpt.reshape(1, 3))[0]
+                s = .5 * lib.PauliMatrices
+                vl_soc = np.einsum('sxy,spq->xpyq', 1j * s, vl_soc)
+                hcore = hcore + vl_soc.reshape(hcore.shape)
+            if cell.has_ecp_soc():
+                hcore = hcore + ecp_int(cell, kpt, intor='ECPso')
         return hcore
 
     def get_ovlp(self, cell=None, kpt=None):
@@ -176,25 +184,3 @@ class GHF(pbchf.SCF):
         return self
 
     to_gpu = lib.to_gpu
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    from pyscf.pbc import scf
-
-    cell = gto.Cell()
-    cell.atom = '''
-    H 0 0 0
-    H 1 0 0
-    H 0 1 0
-    H 0 1 1
-    '''
-    cell.a = np.eye(3)*2
-    cell.basis = [[0, [1.2, 1]]]
-    cell.verbose = 4
-    cell.build()
-
-    kpts = cell.make_kpts([2,2,2])
-    mf = scf.RHF(cell, kpt=kpts[7]).run()
-    mf = GHF(cell, kpt=kpts[7])
-    mf.kernel()

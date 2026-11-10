@@ -231,6 +231,26 @@ class KnownValues(unittest.TestCase):
         mf1.kernel()
         self.assertAlmostEqual(mf1.e_tot, mf.e_tot, 7)
 
+    def test_scanner(self):
+        cell1 = pbcgto.M(
+            a=np.eye(3)*4,
+            atom='H 0 0 0; H 0 0 1.', basis='gth-szv',
+            pseudo='gth-pbe', mesh=[7, 7, 7])
+
+        cell2 = cell1.set_geom_('H 0 0 0; H 0 0 1.5', inplace=False)
+        cell2.mesh = [15, 15, 15]
+
+        mf1 = cell1.RKS(xc='camb3lyp').run()
+        mf_scanner = mf1.as_scanner()
+        mf_scanner(cell1)
+
+        e2 = mf_scanner(cell2)
+        mf2 = cell2.RKS(xc='camb3lyp').run()
+        self.assertAlmostEqual(e2, mf2.e_tot, 9)
+
+        e1 = mf_scanner(cell1)
+        self.assertAlmostEqual(e1, mf1.e_tot, 9)
+
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.rks")
     unittest.main()

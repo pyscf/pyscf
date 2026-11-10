@@ -67,8 +67,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
-        python-version: ["3.8", "3.12"]
+        os: [ubuntu-24.04]
+        python-version: ["3.9", "3.12"]
     steps:
       - uses: actions/checkout@v7
       - name: Set up Python ${{ matrix.python-version }}
@@ -77,11 +77,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install and Test
         run: ./.github/workflows/run_ci.sh
-      - name: Upload to codecov
-        if: matrix.python-version == '3.8' && matrix.os == 'ubuntu-latest'
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{secrets.CODECOV_TOKEN}}
 
   # The job above runs every worker single threaded, which leaves the OpenMP
   # kernels untested. This one keeps threads on so that threaded code paths are
@@ -101,7 +96,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.11"
       - name: Install and Test
         run: ./.github/workflows/run_ci.sh
 
@@ -110,7 +105,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-24.04]
         pyver: [cp39-cp39]
     env:
       img: quay.io/pypa/manylinux2014_aarch64
@@ -123,7 +118,7 @@ jobs:
         run: |
             docker run --rm -v ${{ github.workspace }}:/src/pyscf:rw --workdir=/src/pyscf ${{ env.img }} \
             bash -exc '/opt/python/${{ matrix.pyver }}/bin/pip install --upgrade pip setuptools && \
-            /opt/python/${{ matrix.pyver }}/bin/pip install "numpy!=1.16,!=1.17" "scipy!=1.5" h5py==3.10 pytest pytest-cov pytest-timer pyberny geometric && \
+            /opt/python/${{ matrix.pyver }}/bin/pip install "numpy!=1.16,!=1.17" "scipy!=1.5" h5py==3.10 pytest pytest-cov pyberny geometric && \
             yum install -y epel-release && \
             yum-config-manager --enable epel && \
             yum install -y openblas-devel gcc cmake curl && \

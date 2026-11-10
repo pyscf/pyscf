@@ -109,7 +109,7 @@ class CasidaTDDFT(TDDFT, TDA):
         cpu0 = (lib.logger.process_clock(), lib.logger.perf_counter())
         mol = self.mol
         mf = self._scf
-        if mf._numint.libxc.is_hybrid_xc(mf.xc):
+        if mf._numint.is_hybrid_xc(mf.xc):
             raise RuntimeError('%s cannot be used with hybrid functional'
                                % self.__class__)
         self.check_sanity()
@@ -200,7 +200,7 @@ class dTDA(TDA):
 
 def tddft(mf, frozen=None):
     '''Driver to create TDDFT or CasidaTDDFT object'''
-    if mf._numint.libxc.is_hybrid_xc(mf.xc):
+    if mf._numint.is_hybrid_xc(mf.xc):
         return TDDFT(mf, frozen)
     else:
         return CasidaTDDFT(mf, frozen)

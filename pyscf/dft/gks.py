@@ -78,10 +78,10 @@ def get_veff(ks, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
                                  hermi=hermi, max_memory=max_memory)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         if ks.do_nlc():
-            if ni.libxc.is_nlc(ks.xc):
+            if ni.is_nlc(ks.xc):
                 xc = ks.xc
             else:
-                assert ni.libxc.is_nlc(ks.nlc)
+                assert ni.is_nlc(ks.nlc)
                 xc = ks.nlc
             n, enlc, vnlc = ni.nr_nlc_vxc(mol, ks.nlcgrids, xc, dm,
                                           hermi=hermi, max_memory=max_memory)
@@ -97,7 +97,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
         _dm = numpy.asarray(dm) - numpy.asarray(dm_last)
     else:
         _dm = dm
-    if not ni.libxc.is_hybrid_xc(ks.xc):
+    if not ni.is_hybrid_xc(ks.xc):
         vk = None
         vj = ks.get_j(mol, _dm, hermi)
         if incremental_jk:
@@ -158,8 +158,6 @@ class GKS(rks.KohnShamDFT, ghf.GHF):
         logger.info(self, 'collinear = %s', self._numint.collinear)
         if self._numint.collinear[0] == 'm':
             logger.info(self, 'mcfun spin_samples = %s', self._numint.spin_samples)
-            logger.info(self, 'mcfun collinear_thrd = %s', self._numint.collinear_thrd)
-            logger.info(self, 'mcfun collinear_samples = %s', self._numint.collinear_samples)
         return self
 
     @property
@@ -185,28 +183,3 @@ class GKS(rks.KohnShamDFT, ghf.GHF):
         return self._transfer_attrs_(self.mol.GHF())
 
     to_gpu = lib.to_gpu
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.verbose = 3
-    mol.atom = 'H 0 0 0; H 0 0 1; O .5 .6 .2'
-    mol.basis = 'ccpvdz'
-    mol.build()
-
-    mf = GKS(mol)
-    mf.xc = 'b3lyp'
-    mf.kernel()
-
-    dm = mf.init_guess_by_1e(mol)
-    dm = dm + 0j
-    nao = mol.nao_nr()
-    numpy.random.seed(12)
-    dm[:nao,nao:] = numpy.random.random((nao,nao)) * .1j
-    dm[nao:,:nao] = dm[:nao,nao:].T.conj()
-    mf.kernel(dm)
-    mf.canonicalize(mf.mo_coeff, mf.mo_occ)
-    mf.analyze()
-    print(mf.spin_square())
-    print(mf.e_tot - -76.2760115704274)

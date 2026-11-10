@@ -103,25 +103,36 @@ class KnownValues(unittest.TestCase):
 
     def test_grad_solvent(self):
         mf = dft.rks.RKS(mol, xc='b3lyp').SMD()
+        mf.conv_tol = 1e-12
         mf.grids.atom_grid = (99,590)
         mf.with_solvent.solvent = 'toluene'
         mf.with_solvent.sasa_ng = 590
         mf.kernel()
         g = mf.nuc_grad_method().kernel()
-        g_ref = numpy.array(
-            [[-0.000000,       0.000000,      -0.106849],
-            [0.047191,      -0.000000,       0.053424],
-            [-0.047191,       0.000000,       0.053424]]
-            )
-        assert numpy.linalg.norm(g - g_ref) < 1e-4
+        # Check the derivative of the same discretized solvent energy rather
+        # than a rounded external reference.
+        scanner = mf.as_scanner()
+        coords = mol.atom_coords()
+        step = 1e-4
+        g_ref = numpy.empty_like(coords)
+        for ia in range(mol.natm):
+            for axis in range(3):
+                displaced = coords.copy()
+                displaced[ia, axis] += step
+                e_plus = scanner(mol.set_geom_(displaced, unit='Bohr', inplace=False))
+                displaced[ia, axis] -= 2*step
+                e_minus = scanner(mol.set_geom_(displaced, unit='Bohr', inplace=False))
+                g_ref[ia, axis] = (e_plus - e_minus) / (2*step)
+        assert numpy.linalg.norm(g - g_ref) < 1e-6
 
         mf = dft.uks.UKS(mol, xc='b3lyp').SMD()
+        mf.conv_tol = 1e-12
         mf.grids.atom_grid = (99,590)
         mf.with_solvent.solvent = 'toluene'
         mf.with_solvent.sasa_ng = 590
         mf.kernel()
         g = mf.nuc_grad_method().kernel()
-        assert numpy.linalg.norm(g - g_ref) < 1e-4
+        assert numpy.linalg.norm(g - g_ref) < 1e-6
 
     def test_CN(self):
         atom = '''

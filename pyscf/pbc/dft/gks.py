@@ -51,7 +51,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
     if ks.do_nlc():
         raise NotImplementedError(f'NLC functional {ks.xc} + {ks.nlc}')
 
-    hybrid = ni.libxc.is_hybrid_xc(ks.xc)
+    hybrid = ni.is_hybrid_xc(ks.xc)
 
     # TODO GKS with hybrid functional
     if hybrid:

@@ -42,3 +42,9 @@ mol_eq = optimize(mc, **conv_params)
 
 # method 2
 mol_eq = mc.Gradients().optimizer(solver='berny').kernel(conv_params)
+
+# The same optimize entry point accepts post-HF methods with nuclear
+# gradients, such as MP2 and CCSD. These runs can be considerably slower.
+from pyscf import mp, cc
+mol_eq = optimize(mp.MP2(scf.RHF(mol)), **conv_params)
+mol_eq = optimize(cc.CCSD(scf.RHF(mol)), **conv_params)

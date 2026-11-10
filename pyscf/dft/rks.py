@@ -81,10 +81,10 @@ def get_veff(ks, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
         n, exc, vxc = ni.nr_rks(mol, ks.grids, ks.xc, dm, max_memory=max_memory)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         if ks.do_nlc():
-            if ni.libxc.is_nlc(ks.xc):
+            if ni.is_nlc(ks.xc):
                 xc = ks.xc
             else:
-                assert ni.libxc.is_nlc(ks.nlc)
+                assert ni.is_nlc(ks.nlc)
                 xc = ks.nlc
             n, enlc, vnlc = ni.nr_nlc_vxc(mol, ks.nlcgrids, xc, dm,
                                           max_memory=max_memory)
@@ -100,7 +100,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
         _dm = numpy.asarray(dm) - numpy.asarray(dm_last)
     else:
         _dm = dm
-    if not ni.libxc.is_hybrid_xc(ks.xc):
+    if not ni.is_hybrid_xc(ks.xc):
         vk = None
         vj = ks.get_j(mol, _dm, hermi)
         if incremental_jk:
@@ -340,7 +340,7 @@ class KohnShamDFT:
     -76.415443079840458
     '''
 
-    _keys = {'xc', 'nlc', 'grids', 'disp', 'nlcgrids', 'small_rho_cutoff',
+    _keys = {'xc', 'nlc', 'grids', 'disp', 'gcp', 'nlcgrids', 'small_rho_cutoff',
              'second_grids'}
 
     # Use rho to filter grids
@@ -351,6 +351,7 @@ class KohnShamDFT:
         self.xc = xc
         self.nlc = ''
         self.disp = None
+        self.gcp = None
         self.grids = gen_grid.Grids(self.mol)
         self.grids.level = getattr(
             __config__, 'dft_rks_RKS_grids_level', self.grids.level)
@@ -419,7 +420,7 @@ class KohnShamDFT:
         if self.nlc == 0:
             return False
 
-        xc_has_nlc = self._numint.libxc.is_nlc(xc)
+        xc_has_nlc = self._numint.is_nlc(xc)
         return self.nlc == 'vv10' or xc_has_nlc
 
     def to_rhf(self):
@@ -491,13 +492,10 @@ class KohnShamDFT:
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        from pyscf.dft import numint2c
         mf = scf.addons.convert_to_ghf(self)
         if xc is not None:
             mf.xc = xc
         mf.converged = xc == self.xc and mf.converged
-        if not isinstance(mf._numint, numint2c.NumInt2C):
-            mf._numint = numint2c.NumInt2C()
         return mf
 
     def reset(self, mol=None):
@@ -544,9 +542,26 @@ class KohnShamDFT:
             self.second_grids = grids
         return self
 
+    def dft3c(self, method='b97-3c'):
+        '''Apply a composite 3c method (B97-3c, r2SCAN-3c or wB97X-3c) to
+        this object.
+
+        The method returns a new DFT3C object; the underlying Mole object
+        is rebuilt in place with the tailored basis of the method.  Density
+        fitting can be applied before or after the 3c setup, e.g.
+        ``mf.dft3c('b97-3c').density_fit().run()`` or
+        ``mf.density_fit().dft3c('b97-3c').run()``.
+
+        See :func:`pyscf.dft.dft3c.dft3c` for details.
+        '''
+        from pyscf.dft.dft3c import dft3c as dft3c_
+        return dft3c_(self, method=method)
+
     def check_sanity(self):
         out = super().check_sanity()
-        if self.do_nlc() and self.do_disp() and self._numint.libxc.is_nlc(self.xc):
+        if (self.do_nlc() and self.do_disp() and self._numint.is_nlc(self.xc)
+            # COACH combines VV10 with three-body contributions from D4
+            and self.xc.upper() != 'COACH'):
             import warnings
             warnings.warn(
                 f'nlc-type xc {self.xc} and disp {self.disp} may lead to'

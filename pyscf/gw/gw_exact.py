@@ -386,35 +386,3 @@ def _make_eris_outcore(mycc, mo_coeff=None):
         buf = tmp = None
     log.timer('GW integral transformation', *cput0)
     return eris
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.verbose = 5
-    mol.atom = [
-        [8 , (0. , 0.     , 0.)],
-        [1 , (0. , -0.757 , 0.587)],
-        [1 , (0. , 0.757  , 0.587)]]
-    mol.basis = 'cc-pvdz'
-    mol.build()
-
-    mf = dft.RKS(mol)
-    mf.xc = 'hf'
-    mf.kernel()
-
-    gw = GWExact(mf)
-    gw.kernel()
-    print(gw.mo_energy)
-# [-20.10555941  -1.2264133   -0.68160937  -0.53066324  -0.44679866
-#    0.17291986   0.24457082   0.74758225   0.80045126   1.11748749
-#    1.15083528   1.19081826   1.40406946   1.43593671   1.63324755
-#    1.79839248   1.88459324   2.31461977   2.48839545   3.26047431
-#    3.32486673   3.49601314   3.77699489   4.14575936]
-
-    nocc = mol.nelectron//2
-
-    gw.linearized = True
-    gw.kernel(orbs=[nocc-1,nocc])
-    print(gw.mo_energy[nocc-1] - -0.44684106)
-    print(gw.mo_energy[nocc] - 0.17292032)

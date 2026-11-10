@@ -102,7 +102,7 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
 class EOM(lib.StreamObject):
     _keys = {
         'mol', 'max_space', 'max_cycle', 'conv_tol', 'partition',
-        'e', 'v', 'nocc', 'nmo',
+        'e', 'v', 'nocc', 'nmo', 'converged',
     }
 
     def __init__(self, cc):
@@ -1092,11 +1092,18 @@ def eeccsd(eom, nroots=1, koopmans=False, guess=None, eris=None, imds=None):
 
 
 def eomee_ccsd_singlet(eom, nroots=1, koopmans=False, guess=None,
-                       eris=None, imds=None, diag=None):
+                       eris=None, imds=None, diag=None, left=False):
     '''EOM-EE-CCSD singlet
+
+    Kwargs:
+        left : bool
+            Whether to solve for the left eigenvectors instead of the right
+            ones.
     '''
+    eom.v_left = None
     eom.converged, eom.e, eom.v \
-            = kernel(eom, nroots, koopmans, guess, eris=eris, imds=imds, diag=diag)
+            = kernel(eom, nroots, koopmans, guess, left=left, eris=eris,
+                     imds=imds, diag=diag)
     return eom.e, eom.v
 
 def eomee_ccsd_triplet(eom, nroots=1, koopmans=False, guess=None,
@@ -1687,6 +1694,253 @@ def eeccsd_diag(eom, imds=None):
     return vec_eeS, vec_eeT, vec_sf
 
 
+########################################
+# EOM-EE-CCSD singlet left eigenvectors and transition properties
+########################################
+
+def _lambda_solver(mycc):
+    '''The module implementing the Lambda equations of mycc'''
+    from pyscf.cc import rccsd
+    if isinstance(mycc, rccsd.RCCSD):
+        from pyscf.cc import rccsd_lambda
+        return rccsd_lambda
+    from pyscf.cc import ccsd_lambda
+    return ccsd_lambda
+
+def _lambda_residual(eom, imds, l1, l2):
+    '''eta + L*(Hbar-E_CC), the residual of the CCSD Lambda equations'''
+    mycc = eom._cc
+    t1, t2, eris = imds.t1, imds.t2, imds.eris
+    nocc = t1.shape[0]
+    l1new, l2new = _lambda_solver(mycc).update_lambda(
+        mycc, t1, t2, l1, l2, eris, imds.lambda_imds)
+    # update_lambda returns l + residual/D, D being the orbital energy
+    # differences shifted by level_shift
+    mo_e = eris.mo_energy
+    eia = mo_e[:nocc,None] - mo_e[None,nocc:] - mycc.level_shift
+    l1new = (l1new - l1) * eia
+    l2new = (l2new - l2) * (eia[:,None,:,None] + eia[None,:,None,:])
+    return l1new, l2new
+
+def leeccsd_matvec_singlet(eom, vector, imds=None, diag=None):
+    '''EOM-EE-CCSD singlet left eigenvector equation, L*(Hbar-E_CC).
+
+    In the space of singly and doubly excited determinants, Hbar-E_CC is the
+    Jacobian of the CCSD amplitude equations, and the Lambda equations read
+    eta + Lambda*(Hbar-E_CC) = 0. L*(Hbar-E_CC) is therefore the Lambda
+    residual of L less its inhomogeneous term eta.
+    '''
+    if imds is None: imds = eom.make_imds()
+    if getattr(imds, 'lambda_imds', None) is None:
+        imds.make_ee_left(eom._cc)
+    if imds.lambda_eta is None:
+        t1 = imds.t1
+        imds.lambda_eta = _lambda_residual(eom, imds, np.zeros_like(t1),
+                                           np.zeros_like(imds.t2))
+    eta1, eta2 = imds.lambda_eta
+    l1, l2 = eom.vector_to_amplitudes(vector)
+    hl1, hl2 = _lambda_residual(eom, imds, l1, l2)
+    return eom.amplitudes_to_vector(hl1 - eta1, hl2 - eta2)
+
+def _ee_singlet_dot(l1, l2, r1, r2):
+    '''<L|R> of singlet amplitudes, summed over spin-orbitals'''
+    l2 = l2 * 2 - l2.transpose(0,1,3,2)
+    return np.dot(l1.ravel(), r1.ravel()) * 2 + np.dot(l2.ravel(), r2.ravel())
+
+def eeccsd_left_eigenvectors(eom, imds=None, deg_tol=1e-4):
+    '''Left eigenvectors of the EOM-EE-CCSD singlet roots in eom.e and eom.v,
+    biorthonormal to the right eigenvectors, <L_m|R_n> = delta_mn.
+    '''
+    log = logger.new_logger(eom)
+    e = np.atleast_1d(eom.e)
+    rvecs = np.atleast_2d(eom.v)
+    nroots = e.size
+    if imds is None: imds = eom.make_imds()
+    conv, el, lvecs = kernel(eom, nroots, guess=list(rvecs), left=True, imds=imds)
+    conv = np.atleast_1d(conv)
+    el = np.atleast_1d(el)
+    lvecs = np.atleast_2d(lvecs)
+    if not all(conv):
+        log.warn('Left eigenvectors of EOM-EE-CCSD roots %s not converged',
+                 np.where(~conv)[0])
+
+    def dot(lvec, rvec):
+        return _ee_singlet_dot(*eom.vector_to_amplitudes(lvec),
+                               *eom.vector_to_amplitudes(rvec))
+
+    # The left and right solvers return arbitrary bases for a degenerate
+    # eigenspace. L' = S^{-1} L with S_ij = <L_i|R_j> makes them biorthonormal.
+    # Clustering nondegenerate roots together is harmless since their exact
+    # left and right eigenvectors are biorthogonal already.
+    eall = np.hstack([e, el])
+    order = np.argsort(eall)
+    clusters = []
+    for k, i in enumerate(order):
+        if k == 0 or eall[i] - eall[order[k-1]] > deg_tol:
+            clusters.append([])
+        clusters[-1].append(i)
+
+    lvecs_out = np.empty_like(rvecs, dtype=np.result_type(rvecs, lvecs))
+    for cluster in clusters:
+        ir = [i for i in cluster if i < nroots]
+        il = [i - nroots for i in cluster if i >= nroots]
+        if len(ir) != len(il):
+            raise RuntimeError(
+                f'EOM-EE-CCSD right roots {e[ir]} and left roots {el[il]} do '
+                'not match. Converge the roots more tightly (conv_tol).')
+        s = np.array([[dot(lvecs[i], rvecs[j]) for j in ir] for i in il])
+        if 1. / np.linalg.cond(s) < 1e-10:
+            raise RuntimeError(f'Left and right eigenvectors of roots {ir} '
+                               'have a near-singular overlap matrix.')
+        lvecs_out[ir] = np.linalg.solve(s, lvecs[il])
+    return lvecs_out
+
+def _gamma1(t1, t2, l1, l2):
+    '''Spin-summed <0|(Lambda) exp(-T) q^+ p exp(T)|0> without the
+    contribution of the reference determinant, as dm[p,q]'''
+    from pyscf.cc import ccsd_rdm
+    doo, dov, dvo, dvv = ccsd_rdm._gamma1_intermediates(None, t1, t2, l1, l2)
+    return np.block([[doo, dov], [dvo, dvv]]) * 2
+
+def eeccsd_trans_rdm1(eom, rvec, lvec, t1=None, t2=None, l1=None, l2=None):
+    r'''Spin-summed transition density matrices between the CCSD ground state
+    and an EOM-EE-CCSD singlet state, in the MO basis
+
+        dm_0n[p,q] = <0|(1+Lambda) exp(-T) q^+ p exp(T) R|0> ~ <0|q^+ p|n>
+        dm_n0[p,q] = <0|L exp(-T) q^+ p exp(T)|0>            ~ <n|q^+ p|0>
+
+    for <L|R> = 1. The index order follows CCSD.make_rdm1.
+
+    Ref: Stanton and Bartlett, J. Chem. Phys. 98, 7029 (1993)
+
+    Returns:
+        dm_0n, dm_n0
+    '''
+    mycc = eom._cc
+    if t1 is None: t1 = mycc.t1
+    if t2 is None: t2 = mycc.t2
+    if l1 is None: l1 = mycc.l1
+    if l2 is None: l2 = mycc.l2
+    r1, r2 = eom.vector_to_amplitudes(rvec)
+    m1, m2 = eom.vector_to_amplitudes(lvec)
+
+    dm0 = _gamma1(t1, t2, np.zeros_like(l1), np.zeros_like(l2))
+    dm_n0 = _gamma1(t1, t2, m1, m2) - dm0
+
+    # R = r0 + R1 + R2. (1+Lambda) R = <Lambda|R> + Y + (excitations), Y
+    # being the de-excitation left over by Lambda2*R1. Biorthogonality to
+    # the ground state, <0|(1+Lambda) R|0> = 0, gives r0 = -<Lambda|R>.
+    #   <0|(1+Lambda) e q^+p R|0> = <0|(1+Lambda) [e q^+p, R12]|0>
+    #           + <0|Y e q^+p|0> - <Lambda|R> <0|Lambda e q^+p|0>
+    # with e q^+p = exp(-T) q^+ p exp(T). The first term is the derivative
+    # of the Lambda density along T = R12. The Lambda density is quadratic
+    # in T, so the symmetric difference with unit step is its exact
+    # derivative.
+    s = _ee_singlet_dot(l1, l2, r1, r2)
+    y1 = lib.einsum('ijab,jb->ia', l2 * 2 - l2.transpose(0,1,3,2), r1)
+    dm_0n = (_gamma1(t1+r1, t2+r2, l1, l2) - _gamma1(t1-r1, t2-r2, l1, l2)) * .5
+    dm_0n += _gamma1(t1, t2, y1, np.zeros_like(l2)) - dm0
+    dm_0n -= (_gamma1(t1, t2, l1, l2) - dm0) * s
+
+    if mycc.frozen is not None:
+        nmo = mycc.mo_occ.size
+        moidx = np.where(mycc.get_frozen_mask())[0]
+        dms = []
+        for dm in (dm_0n, dm_n0):
+            dm1 = np.zeros((nmo,nmo), dtype=dm.dtype)
+            dm1[moidx[:,None],moidx] = dm
+            dms.append(dm1)
+        dm_0n, dm_n0 = dms
+    return dm_0n, dm_n0
+
+def eeccsd_transition_dipole(eom):
+    '''Transition dipole moments <0|r|n> and <n|r|0> of the EOM-EE-CCSD
+    singlet roots in the length gauge.
+
+    Returns:
+        dip_0n, dip_n0 : arrays of shape (nroots, 3)
+    '''
+    mycc = eom._cc
+    mol = eom.mol
+    if mycc.l1 is None or mycc.l2 is None:
+        mycc.solve_lambda()
+    if eom.v_left is None:
+        eom.v_left = eom.eeccsd_left_eigenvectors()
+    charges = mol.atom_charges()
+    charge_center = np.einsum('z,zx->x', charges, mol.atom_coords()) / charges.sum()
+    with mol.with_common_orig(charge_center):
+        ints = mol.intor_symmetric('int1e_r', comp=3)
+    mo = mycc.mo_coeff
+    ints = lib.einsum('xpq,pi,qj->xij', ints, mo.conj(), mo)
+    dip_0n = []
+    dip_n0 = []
+    for rvec, lvec in zip(np.atleast_2d(eom.v), eom.v_left):
+        dm_0n, dm_n0 = eom.eeccsd_trans_rdm1(rvec, lvec)
+        dip_0n.append(np.einsum('xpq,qp->x', ints, dm_0n))
+        dip_n0.append(np.einsum('xpq,qp->x', ints, dm_n0))
+    return np.array(dip_0n), np.array(dip_n0)
+
+def eeccsd_oscillator_strength(eom):
+    '''Oscillator strengths of the EOM-EE-CCSD singlet roots in the length
+    gauge, f = 2/3 w <0|r|n>.<n|r|0>'''
+    dip_0n, dip_n0 = eom.eeccsd_transition_dipole()
+    e = np.atleast_1d(eom.e)
+    return 2./3. * np.einsum('s,sx,sx->s', e, dip_0n, dip_n0).real
+
+def eeccsd_analyze(eom, verbose=None):
+    '''Print the excitation energies, symmetries, oscillator strengths and
+    leading single excitations of the EOM-EE-CCSD singlet roots'''
+    from pyscf import symm
+    from pyscf.scf import hf_symm
+    from pyscf.data import nist
+    from pyscf.tdscf.rhf import _analyze_wfnsym
+    log = logger.new_logger(eom, verbose)
+    mol = eom.mol
+    mycc = eom._cc
+    nocc = eom.nocc
+    moidx = np.where(mycc.get_frozen_mask())[0]
+    mo_base = getattr(__config__, 'MO_BASE', 1)
+
+    e = np.atleast_1d(eom.e)
+    e_ev = e * nist.HARTREE2EV
+    wave_length = 1e7 / (e * nist.HARTREE2WAVENUMBER)
+
+    if mol.symmetry:
+        orbsym = hf_symm.get_orbsym(mol, mycc.mo_coeff[:,moidx])
+        x_sym = symm.direct_prod(orbsym[:nocc], orbsym[nocc:], mol.groupname)
+    else:
+        x_sym = None
+
+    f = eom.eeccsd_oscillator_strength()
+    log.note('\n** EOM-EE-CCSD singlet excitation energies and oscillator strengths **')
+    for i, rvec in enumerate(np.atleast_2d(eom.v)):
+        r1 = eom.vector_to_amplitudes(rvec)[0]
+        if x_sym is None:
+            log.note('Excited State %3d: %12.5f eV %9.2f nm  f=%.4f',
+                     i+1, e_ev[i], wave_length[i], f[i])
+        else:
+            wfnsym = _analyze_wfnsym(eom, x_sym, r1)
+            log.note('Excited State %3d: %4s %12.5f eV %9.2f nm  f=%.4f',
+                     i+1, wfnsym, e_ev[i], wave_length[i], f[i])
+
+        if log.verbose >= logger.INFO:
+            o_idx, v_idx = np.where(abs(r1) > 0.1)
+            for o, v in zip(o_idx, v_idx):
+                log.info('    %4d -> %-4d %12.5f',
+                         moidx[o]+mo_base, moidx[nocc+v]+mo_base, r1[o,v])
+
+    if log.verbose >= logger.INFO:
+        dip_0n, dip_n0 = eom.eeccsd_transition_dipole()
+        log.info('\n** Transition electric dipole moments (AU) **')
+        log.info('state          X           Y           Z        Dip. S.      Osc.')
+        for label, dip in (('<0|r|n>', dip_0n), ('<n|r|0>', dip_n0)):
+            log.info(label)
+            for i, d in enumerate(dip):
+                log.info('%3d    %11.4f %11.4f %11.4f %11.4f %11.4f',
+                         i+1, d[0], d[1], d[2], np.dot(dip_0n[i], dip_n0[i]), f[i])
+    return eom
+
+
 class EOMEE(EOM):
     def get_init_guess(self, nroots=1, koopmans=True, diag=None):
         if diag is None:
@@ -1729,17 +1983,39 @@ class EOMEE(EOM):
 
 
 class EOMEESinglet(EOMEE):
-    kernel = eomee_ccsd_singlet
+    _keys = {'v_left'}
+
+    def __init__(self, cc):
+        EOMEE.__init__(self, cc)
+        self.v_left = None
+
+    def kernel(self, nroots=1, koopmans=False, guess=None, eris=None,
+               imds=None, diag=None, left=False):
+        if not left:
+            self.v_left = None
+        return eomee_ccsd_singlet(self, nroots, koopmans, guess, eris, imds,
+                                  diag, left)
     eomee_ccsd_singlet = eomee_ccsd_singlet
     matvec = eeccsd_matvec_singlet
+    l_matvec = leeccsd_matvec_singlet
+    eeccsd_left_eigenvectors = eeccsd_left_eigenvectors
+    eeccsd_trans_rdm1 = eeccsd_trans_rdm1
+    eeccsd_transition_dipole = eeccsd_transition_dipole
+    eeccsd_oscillator_strength = eeccsd_oscillator_strength
+    transition_dipole = eeccsd_transition_dipole
+    oscillator_strength = eeccsd_oscillator_strength
+    analyze = eeccsd_analyze
 
     def get_diag(self, imds=None):
         return eeccsd_diag(self, imds=None)[0]
 
-    def gen_matvec(self, imds=None, diag=None, **kwargs):
+    def gen_matvec(self, imds=None, diag=None, left=False, **kwargs):
         if imds is None: imds = self.make_imds()
         if diag is None: diag = self.get_diag(imds)
-        matvec = lambda xs: [self.matvec(x, imds) for x in xs]
+        if left:
+            matvec = lambda xs: [self.l_matvec(x, imds) for x in xs]
+        else:
+            matvec = lambda xs: [self.matvec(x, imds) for x in xs]
         return matvec, diag
 
     amplitudes_to_vector = staticmethod(amplitudes_to_vector_singlet)
@@ -1853,6 +2129,16 @@ class _IMDS:
 
         self._made_shared_2e = True
         log.timer_debug1('EOM-CCSD shared two-electron intermediates', *cput0)
+        return self
+
+    def make_ee_left(self, cc):
+        '''Intermediates of the Lambda equations, which give the left
+        EOM-EE-CCSD eigenvectors'''
+        cput0 = (logger.process_clock(), logger.perf_counter())
+        self.lambda_imds = _lambda_solver(cc).make_intermediates(
+            cc, self.t1, self.t2, self.eris)
+        self.lambda_eta = None
+        logger.timer_debug1(self, 'EOM-EE-CCSD left intermediates', *cput0)
         return self
 
     def make_ip(self, ip_partition=None):

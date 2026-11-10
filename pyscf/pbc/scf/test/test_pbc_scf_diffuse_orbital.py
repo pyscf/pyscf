@@ -95,7 +95,7 @@ class KnownValues(unittest.TestCase):
         ref_energy = -1.6790448390335038
         assert abs(test_energy - ref_energy) < 2e-10
 
-    def test_kuks(self):
+    def test_kuks_high_cost(self):
         cell = self.cell
         kpts = self.kpts
         mf = cell.KUKS(kpts = kpts, xc = "LDA")

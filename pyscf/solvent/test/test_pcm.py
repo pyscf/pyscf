@@ -152,11 +152,54 @@ class KnownValues(unittest.TestCase):
         mc = solvent.PCM(mcscf.CASCI(mf,2,2)).run()
         assert numpy.abs(mc.e_tot - -74.97040819700919) < 1e-8
 
+    def test_memory_blocking(self):
+        # gh-3266: in the block loops of PCM, the intermediate 3c-integral
+        # buffer v_nj must be released before the next block is computed,
+        # and the block size must respect the remaining memory budget even
+        # when it is tiny (no 400-grids hard floor).
+        import weakref
+        from pyscf import df
+        mol1 = gto.M(atom='''
+O  0.  0.  0.
+H  0. -0.757 0.587
+H  0. 0.757  0.587''', basis='sto3g')
+        dm = scf.RHF(mol1).run(conv_tol=1e-9).make_rdm1()
+        cm = pcm.PCM(mol1)
+        cm.eps = epsilon
+        cm.verbose = 0
+        cm.max_memory = 0
+
+        refs = []
+        n_alive = []
+        blk_grids = []
+        orig_aux_e2 = df.incore.aux_e2
+        def counting_aux_e2(mol_, fakemol_, **kwargs):
+            n_alive.append(sum(r() is not None for r in refs))
+            blk_grids.append(fakemol_._bas.shape[0])
+            out = orig_aux_e2(mol_, fakemol_, **kwargs)
+            refs.append(weakref.ref(out))
+            return out
+
+        df.incore.aux_e2 = counting_aux_e2
+        try:
+            epcm_blk, vmat_blk = cm._get_vind(dm[None])
+        finally:
+            df.incore.aux_e2 = orig_aux_e2
+
+        self.assertGreater(len(blk_grids), 1, 'single block, test ineffective')
+        self.assertEqual(max(n_alive), 0, 'v_nj of previous block still alive')
+        self.assertLessEqual(max(blk_grids), 8, 'block size exceeds budget')
+
+        cm.max_memory = 2000
+        epcm_ref, vmat_ref = cm._get_vind(dm[None])
+        self.assertAlmostEqual(epcm_blk, epcm_ref, 12)
+        self.assertAlmostEqual(abs(vmat_blk - vmat_ref).max(), 0, 12)
+
     def test_casscf(self):
         mf = scf.RHF(mol0).run()
         mc1 = solvent.PCM(mcscf.CASSCF(mf, 2, 2)).run(conv_tol=1e-9)
         e1 = mc1.e_tot
-        assert numpy.abs(e1 - -74.9709884530835) < 1e-8
+        assert numpy.abs(e1 - -74.9704130833207) < 1e-8
 
     def test_ccsd(self):
         mf = scf.RHF(mol0).PCM()

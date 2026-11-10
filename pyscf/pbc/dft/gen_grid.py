@@ -69,11 +69,21 @@ class UniformGrids(lib.StreamObject):
         self.cell = cell
         self.stdout = cell.stdout
         self.verbose = cell.verbose
-        self.mesh = cell.mesh
+        self._mesh = None
         self.non0tab = None
 
         self._coords = None
         self._weights = None
+
+    @property
+    def mesh(self):
+        # Follow the current cell unless a grid mesh was explicitly assigned.
+        if self._mesh is None:
+            return self.cell.mesh
+        return self._mesh
+    @mesh.setter
+    def mesh(self, value):
+        self._mesh = value
 
     @property
     def coords(self):
@@ -270,25 +280,3 @@ class BeckeGrids(dft.gen_grid.Grids):
     to_gpu = lib.to_gpu
 
 AtomicGrids = BeckeGrids
-
-
-if __name__ == '__main__':
-    import pyscf.pbc.gto as pgto
-
-    n = 7
-    cell = pgto.Cell()
-    cell.a = '''
-    4   0   0
-    0   4   0
-    0   0   4
-    '''
-    cell.mesh = [n,n,n]
-
-    cell.atom = '''He     0.    0.       1.
-                   He     1.    0.       1.'''
-    cell.basis = {'He': [[0, (1.0, 1.0)]]}
-    cell.build()
-    g = BeckeGrids(cell)
-    g.build()
-    print(g.weights.sum())
-    print(cell.vol)

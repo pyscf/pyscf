@@ -135,7 +135,7 @@ class KnownValues(unittest.TestCase):
     def test_sa_fno_ea(self):
         self.assertAlmostEqual(_es_corr(_fno_es('ea', [[0, 1], [0]], 0.9), 'ea'), 0.9951643793, 4)
 
-    def test_ss_fno_ip(self):
+    def test_ss_fno_ip_high_cost(self):
         self.assertAlmostEqual(_es_corr(_fno_es('ip', [[0], [0]], 0.9), 'ip'), -0.7491959409, 4)
 
 

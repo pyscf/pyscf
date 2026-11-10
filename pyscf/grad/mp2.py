@@ -187,7 +187,7 @@ def grad_elec(mp_grad, t2, atmlst=None, verbose=logger.INFO):
     return de
 
 def has_frozen_orbitals(post_hf):
-    '''Test if frozen orbitlas are enabled in a post-HF object.'''
+    '''Test if frozen orbitals are enabled in a post-HF object.'''
     with_frozen = False
     if getattr(post_hf, 'frozen', None) is not None:
         if isinstance(post_hf.frozen, (int, numpy.integer)):
@@ -259,7 +259,8 @@ def _shell_prange(mol, start, stop, blksize):
     ib0 = start
     for ib, now in zip(range(start, stop), dims):
         nao += now
-        if nao > blksize:
+        # a shell wider than blksize forms a block of its own: never an empty block
+        if nao > blksize and ib > ib0:
             yield (ib0, ib, nao-now)
             ib0 = ib
             nao = now

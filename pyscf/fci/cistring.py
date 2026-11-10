@@ -453,11 +453,3 @@ def tn_strs(norb, nelec, n):
     hf_str = int('1'*nelec, 2)
     tns = (hf_str | virs_allow.reshape(-1,1)) ^ occs_allow
     return tns.ravel()
-
-if __name__ == '__main__':
-    print([bin(i) for i in make_strings(range(2,5), 2)])
-    print(make_strings(range(4), 2))
-    #print(gen_linkstr_index(range(6), 3))
-#    index = gen_linkstr_index(range(8), 4)
-#    idx16 = index[:16]
-#    print(idx16[:,:,2])
