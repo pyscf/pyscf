@@ -1422,7 +1422,8 @@ def _adjust_phase_(c):
         c[:,c[idx,numpy.arange(c.shape[1])]<0] *= -1
     else:
         phase = c[idx,numpy.arange(c.shape[1])]
-        phase /= numpy.abs(phase)
+        norm = numpy.abs(phase)
+        phase = numpy.divide(phase, norm, out=numpy.ones_like(phase), where=norm>0)
         c *= phase.conj()
     return c
 
