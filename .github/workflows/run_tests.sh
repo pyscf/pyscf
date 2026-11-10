@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 # By default the tests run in parallel processes (pytest-xdist), one BLAS/OpenMP
 # thread each. Most tests are too small to keep 4 BLAS threads busy, so spreading
 # the work over processes uses the runner's cores far better than threading it.
@@ -42,12 +41,12 @@ echo 'TMPDIR = "./pyscftmpdir"' >> .pyscf_conf.py
 # that sets RUN_COVERAGE. Other jobs run without coverage instrumentation to
 # reduce runtime and memory under xdist.
 if [ "$RUN_COVERAGE" = "true" ]; then
-  python -u .github/workflows/ci_linux/pytest_live.py -s -c pytest.ini --timeout=900 $PARALLEL \
+  pytest -s -c pytest.ini --timeout=900 $PARALLEL \
     --durations=20 \
     --cov-report xml --cov-report term --cov-config .coveragerc --cov pyscf \
     $TEST_PATHS "$@"
 else
-  python -u .github/workflows/ci_linux/pytest_live.py -s -c pytest.ini --timeout=900 $PARALLEL --durations=20 $TEST_PATHS "$@"
+  pytest -s -c pytest.ini --timeout=900 $PARALLEL --durations=20 $TEST_PATHS "$@"
 fi
 
 pytest_status=$?
@@ -56,10 +55,7 @@ num_tmpfiles="$(ls -1 pyscftmpdir | wc -l)"
 echo "There are "$num_tmpfiles" leftover temporary files"
 rm -rf pyscftmpdir
 
-# Preserve pytest's status after cleanup, including collection and usage errors.
-if test "$pytest_status" -ne 0; then
-  exit "$pytest_status"
-fi
-if test "$num_tmpfiles" -gt 0; then
+# Test fails if pytest failed or if temporary files were left over.
+if test "$num_tmpfiles" -gt 0 || test "$pytest_status" -ne 0; then
   exit 1
 fi
