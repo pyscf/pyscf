@@ -315,7 +315,7 @@ def analytical_hess_qv(pcmobj, dm, verbose=None):
     d2e_from_d2I = numpy.zeros([mol.natm, mol.natm, 3, 3])
 
     max_memory = pcmobj.max_memory - lib.current_memory()[0]
-    blksize = int(max(max_memory*.9e6/8/nao**2/9, 400))
+    blksize = int(max(max_memory*.9e6/8/nao**2/9, 8))
     ngrids = q_sym.shape[0]
     int3c2e_ipip1 = mol._add_suffix('int3c2e_ipip1')
     cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, int3c2e_ipip1)
@@ -325,6 +325,8 @@ def analytical_hess_qv(pcmobj, dm, verbose=None):
         fakemol.cart = mol.cart
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ipip1, aosym='s1', cintopt=cintopt)
         d2I_dA2 += numpy.einsum('dijq,q->dij', v_nj, q_sym[g0:g1])
+        # Free up v_nj to stay within mem limits
+        del v_nj
     d2I_dA2 = d2I_dA2.reshape([3, 3, nao, nao])
     for i_atom in range(mol.natm):
         p0,p1 = aoslice[i_atom, 2:]
@@ -342,6 +344,8 @@ def analytical_hess_qv(pcmobj, dm, verbose=None):
         fakemol.cart = mol.cart
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ipvip1, aosym='s1', cintopt=cintopt)
         d2I_dAdB += numpy.einsum('dijq,q->dij', v_nj, q_sym[g0:g1])
+        # Free up v_nj to stay within mem limits
+        del v_nj
     d2I_dAdB = d2I_dAdB.reshape([3, 3, nao, nao])
     for i_atom in range(mol.natm):
         pi0,pi1 = aoslice[i_atom, 2:]
@@ -384,6 +388,8 @@ def analytical_hess_qv(pcmobj, dm, verbose=None):
         fakemol.cart = mol.cart
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ipip2, aosym='s1', cintopt=cintopt)
         d2I_dC2[:,g0:g1] = numpy.einsum('dijq,ij->dq', v_nj, dm)
+        # Free up v_nj to stay within mem limits
+        del v_nj
     d2I_dC2 = d2I_dC2.reshape([3, 3, ngrids])
     for i_atom in range(mol.natm):
         g0,g1 = gridslice[i_atom]
@@ -934,7 +940,7 @@ def get_dvgrids(pcmobj, dm, atmlst):
         dV_on_charge_dx[i_atom,:,g0:g1] += numpy.einsum('dqA,A->dq', v_ng_ip2[:,g0:g1,:], atom_charges)
 
     max_memory = pcmobj.max_memory - lib.current_memory()[0]
-    blksize = int(max(max_memory*.9e6/8/nao**2/3, 400))
+    blksize = int(max(max_memory*.9e6/8/nao**2/3, 8))
     aoslice = mol.aoslice_by_atom()
     int3c2e_ip1 = mol._add_suffix('int3c2e_ip1')
     cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, int3c2e_ip1)
@@ -943,8 +949,10 @@ def get_dvgrids(pcmobj, dm, atmlst):
         fakemol = gto.fakemol_for_charges(grid_coords[g0:g1], expnt=charge_exp[g0:g1]**2)
         fakemol.cart = mol.cart
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip1, aosym='s1', cintopt=cintopt)
-        v_nj = numpy.einsum('dijq,ij->diq', v_nj, dm + dm.T)
-        dvj = numpy.asarray([numpy.sum(v_nj[:,p0:p1,:], axis=1) for p0,p1 in aoslice[:,2:]])
+        dvj = numpy.einsum('dijq,ij->diq', v_nj, dm + dm.T)
+        # Free up v_nj to stay within mem limits
+        del v_nj
+        dvj = numpy.asarray([numpy.sum(dvj[:,p0:p1,:], axis=1) for p0,p1 in aoslice[:,2:]])
         dIdA[atmlst,:,g0:g1] = dvj[atmlst,:,:]
 
     dV_on_charge_dx[atmlst,:,:] -= dIdA[atmlst,:,:]
@@ -957,6 +965,8 @@ def get_dvgrids(pcmobj, dm, atmlst):
         fakemol.cart = mol.cart
         q_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip2, aosym='s1', cintopt=cintopt)
         dIdC[:,g0:g1] = numpy.einsum('dijq,ij->dq', q_nj, dm)
+        # Free up q_nj to stay within mem limits
+        del q_nj
     for i_atom in atmlst:
         g0,g1 = gridslice[i_atom]
         dV_on_charge_dx[i_atom,:,g0:g1] -= dIdC[:,g0:g1]
@@ -1009,7 +1019,7 @@ def analytical_grad_vmat(pcmobj, dm, atmlst=None, verbose=None):
     dIdx = numpy.empty([len(atmlst), 3, nao, nao])
 
     max_memory = pcmobj.max_memory - lib.current_memory()[0]
-    blksize = int(max(max_memory*.9e6/8/nao**2/3, 400))
+    blksize = int(max(max_memory*.9e6/8/nao**2/3, 8))
     int3c2e_ip1 = mol._add_suffix('int3c2e_ip1')
     cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, int3c2e_ip1)
     dIdA = numpy.zeros([3, nao, nao])
@@ -1018,6 +1028,8 @@ def analytical_grad_vmat(pcmobj, dm, atmlst=None, verbose=None):
         fakemol.cart = mol.cart
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip1, aosym='s1', cintopt=cintopt)
         dIdA += numpy.einsum('dijq,q->dij', v_nj, q_sym[g0:g1])
+        # Free up v_nj to stay within mem limits
+        del v_nj
 
     for i_atom in atmlst:
         p0,p1 = aoslice[i_atom, 2:]
@@ -1033,6 +1045,8 @@ def analytical_grad_vmat(pcmobj, dm, atmlst=None, verbose=None):
         fakemol.cart = mol.cart
         q_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e_ip2, aosym='s1', cintopt=cintopt)
         dIdC = numpy.einsum('dijq,q->dij', q_nj, q_sym[g0:g1])
+        # Free up q_nj to stay within mem limits
+        del q_nj
         dIdx[i_atom, :, :, :] += dIdC
 
     dV_on_molecule_dx = dIdx
@@ -1048,6 +1062,8 @@ def analytical_grad_vmat(pcmobj, dm, atmlst=None, verbose=None):
                 fakemol.cart = mol.cart
                 v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s1', cintopt=cintopt)
                 dIdx_from_dqdx += numpy.einsum('ijq,q->ij', v_nj, dqdx[i_atom, i_xyz, g0:g1])
+                # Free up v_nj to stay within mem limits
+                del v_nj
             dV_on_molecule_dx[i_atom, i_xyz, :, :] += dIdx_from_dqdx
 
     t1 = log.timer_debug1('computing solvent grad veff', *t1)

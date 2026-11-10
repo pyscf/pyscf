@@ -61,3 +61,9 @@ print('Difference between gamma/k-point ip-eomccsd calculation = %.15g' % (
     np.linalg.norm(np.array(eip) - np.array(ekip))))
 print('Difference between gamma/k-point ea-eomccsd calculation = %.15g' % (
     np.linalg.norm(np.array(eea) - np.array(ekea))))
+
+# The same normalization applies to perturbative triples: the supercell
+# correction is extensive, whereas KRCCSD(T) returns energy per primitive cell.
+supercell_t = mycc.ccsd_t() / np.prod(nmp)
+kpoint_t = mykcc.ccsd_t()
+print('Supercell/k-point triples corrections per cell', supercell_t, kpoint_t)

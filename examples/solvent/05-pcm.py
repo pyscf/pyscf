@@ -56,7 +56,7 @@ grad = mf.kernel()
 h = mf.Hessian()
 hess = h.kernel()
 
-# CCSD, solvent for MP2 can be calcualted in the similar way
+# CCSD, solvent for MP2 can be calculated in the similar way
 mf = scf.RHF(mol) # default method is C-PCM
 mf.kernel()
 mycc = cc.CCSD(mf).PCM()

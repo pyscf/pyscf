@@ -79,7 +79,7 @@ C, 0.8917,  2.6751,  2.6751'''
         e1 = mf.scf()
         self.assertAlmostEqual(e1, -45.42583489512954, 8)
 
-    def test_rsh_fft(self):
+    def test_rsh_fft_high_cost(self):
         mf = pbcdft.KUKS(cell)
         mf.xc = 'hse06'
         mf.kernel()

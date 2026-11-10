@@ -245,7 +245,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 7)
         self.assertAlmostEqual(lib.fp(ref), 0.09330727526256491-0.06470297312937545j, 7)
 
-    def test_orth_rks_mgga_kpts(self):
+    def test_orth_rks_mgga_kpts_high_cost(self):
         xc = 'r2scan,'
         mydf = df.FFTDF(cell_orth)
         ni = dft.numint.KNumInt()
@@ -257,7 +257,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(ref-vxc).max(), 0, 7)
         self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 7)
 
-    def test_orth_uks_mgga_kpts(self):
+    def test_orth_uks_mgga_kpts_high_cost(self):
         xc = 'r2scan,'
         mydf = df.FFTDF(cell_orth)
         ni = dft.numint.KNumInt()
@@ -313,7 +313,7 @@ class KnownValues(unittest.TestCase):
         rhoR *= numpy.prod(cell_nonorth.mesh)/cell_nonorth.vol
         self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 7)
 
-    def test_eval_rhoG_orth_mgga(self):
+    def test_eval_rhoG_orth_mgga_high_cost(self):
         mydf = multigrid.MultiGridNumInt(cell_orth)
         rhoG = multigrid._eval_rhoG(mydf, dm, hermi=1, kpts=kpts, deriv=1,
                                     rhog_high_order=True, xctype='MGGA')
@@ -600,7 +600,7 @@ class KnownValues(unittest.TestCase):
         out = mf.get_veff(cell, dm, kpts=kpts)
         self.assertAlmostEqual(abs(ref-out).max(), 0, 7)
 
-    def test_0D(self):
+    def test_0D_high_cost(self):
         cell = gto.M(
             a = np.eye(3) * 8,
             atom = 'Li 0 0 0; H 0 0 1',
@@ -611,6 +611,23 @@ class KnownValues(unittest.TestCase):
         mf.max_cycle = 1
         mf.run()
         self.assertAlmostEqual(mf.e_tot, -6.725761212638795, 8)
+
+
+    def test_mgga_density(self):
+        cell = gto.M(atom='He 0 0 0', a=np.eye(3)*3,
+                     basis=[[0, [.8, 1]], [0, [.3, 1]]],
+                     mesh=[25]*3, precision=1e-9, verbose=0)
+        kpts = cell.make_kpts([2, 1, 1])
+        dm = np.array([[[.8, .1], [.1, .5]]]*2)
+        ni = dft.numint.KNumInt()
+        grids = df.FFTDF(cell).grids
+        ao = ni.eval_ao(cell, grids.coords, kpts, deriv=1)
+        expected = ni.eval_rho(cell, ao, dm, xctype='MGGA', with_lapl=False)
+        mg = multigrid.MultiGridNumInt(cell)
+        rhoG = multigrid._eval_rhoG(mg, dm, hermi=1, kpts=kpts, deriv=1,
+                                  rhog_high_order=True, xctype='MGGA')
+        actual = tools.ifft(rhoG[0], cell.mesh)*np.prod(cell.mesh)/cell.vol
+        np.testing.assert_allclose(actual, expected, atol=1e-8)
 
 if __name__ == '__main__':
     print("Full Tests for multigrid")

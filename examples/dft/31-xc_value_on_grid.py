@@ -51,6 +51,14 @@ print('Exc = %.12f' % np.einsum('i,i,i->', exc, rho[0], weights))
 exc, vxc = dft.libxc.eval_xc('.2*HF + .08*SLATER + .72*B88, .81*LYP + .19*VWN', rho)[:2]
 print('Exc = %.12f  ref = -7.520014202688' % np.einsum('i,i,i->', exc, rho[0], weights))
 
+# Integrate the XC potential matrix directly for restricted and unrestricted
+# density matrices.  nr_vxc returns (electron count, XC energy, AO matrix).
+nelec, exc, vxc_ao = mf._numint.nr_vxc(mol, mf.grids, mf.xc, dm)
+print('Restricted nr_vxc:', nelec, exc, vxc_ao.shape)
+nelec, exc, (vxc_a, vxc_b) = mf._numint.nr_vxc(
+    mol, mf.grids, mf.xc, (dm / 2, dm / 2), spin=1)
+print('Unrestricted nr_vxc:', nelec, exc, vxc_a.shape, vxc_b.shape)
+
 #
 # For density matrix computed with GKS in spin-orbital basis, plain density in
 # real space is

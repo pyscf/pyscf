@@ -257,27 +257,3 @@ def _conc_mos(moi, moj, compact=False):
         moij = numpy.asarray(numpy.hstack((moi,moj)), order='F')
         ijshape = (0, nmoi, nmoi, nmoi+nmoj)
     return ijmosym, nij_pair, moij, ijshape
-
-if __name__ == '__main__':
-    from pyscf import scf
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.verbose = 5
-    mol.output = 'out_h2o'
-    mol.atom = [
-        ["O" , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)]]
-
-    mol.basis = {'H': 'cc-pvtz',
-                 'O': 'cc-pvtz',}
-    mol.build()
-    rhf = scf.RHF(mol)
-    rhf.scf()
-
-    print(logger.process_clock())
-    eri0 = full(rhf._eri, rhf.mo_coeff)
-    print(abs(eri0).sum()-5384.460843787659) # should = 0
-    eri0 = general(rhf._eri, (rhf.mo_coeff,)*4)
-    print(abs(eri0).sum()-5384.460843787659)
-    print(logger.process_clock())

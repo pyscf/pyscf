@@ -391,7 +391,7 @@ class CASSCF_GradScanner(lib.GradScanner):
 
     @property
     def converged(self):
-        return self._converged
+        return self._converged and getattr(self.base, 'converged', True)
     @converged.setter
     def converged(self, x):
         self._converged = x
@@ -573,6 +573,9 @@ class Gradients (lagrange.Gradients):
             eris = self.eris = self.base.ao2mo (mo)
         if mf_grad is None: mf_grad = self.base._scf.nuc_grad_method ()
         if state is None:
+            # The state-averaged energy is variational in all wave function
+            # parameters, so there are no Lagrange multipliers to solve for.
+            self.converged = True
             return casscf_grad.Gradients (self.base).kernel (
                 mo_coeff=mo, ci=ci, atmlst=atmlst, verbose=verbose)
         if e_states is None:

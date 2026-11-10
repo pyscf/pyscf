@@ -249,6 +249,126 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(s, 1., 9)
         self.assertAlmostEqual(abs(mf1.mo_coeff-mo).max(), 0, 9)
 
+    def test_stability_scf_summary(self):
+        mol = gto.M(atom='H 0 0 0; H 0.1 0.2 2.0', basis='3-21g', verbose=0)
+        for method in (scf.RHF, scf.UHF):
+            with self.subTest(method=method):
+                mf1 = method(mol).run(conv_tol=1e-12)
+                energies = mf1.scf_summary.copy()
+                summary = mf1.scf_summary
+                _, _, stable_i, _ = mf1.stability(return_status=True, nroots=1)
+                eigenvalues = summary['stability_eigenvalue']
+                self.assertEqual(set(eigenvalues), {'internal'})
+                internal = eigenvalues['internal']
+                self.assertEqual(internal.shape, (1,))
+                self.assertEqual(stable_i, internal[0] >= -1e-5)
+                self.assertEqual(set(summary), set(energies) | {'stability_eigenvalue'})
+
+                _, _, _, stable_e = mf1.stability(
+                    internal=False, external=True, return_status=True, nroots=1)
+                self.assertEqual(set(eigenvalues),
+                                 {'internal', 'real2complex', 'external'})
+                real2complex = eigenvalues['real2complex']
+                external = eigenvalues['external']
+                self.assertEqual(real2complex.shape, (1,))
+                self.assertEqual(external.shape, (1,))
+                self.assertEqual(stable_e, external[0] >= -1e-5)
+                self.assertIs(eigenvalues['internal'], internal)
+
+                mf1.stability(nroots=3)
+                self.assertEqual(eigenvalues['internal'].shape, (3,))
+                self.assertIsNot(eigenvalues['internal'], internal)
+                self.assertIs(eigenvalues['real2complex'], real2complex)
+                self.assertIs(eigenvalues['external'], external)
+                internal = eigenvalues['internal']
+
+                mf1.stability(internal=False, external=True, nroots=3)
+                self.assertIs(eigenvalues['internal'], internal)
+                self.assertEqual(eigenvalues['real2complex'].shape, (3,))
+                self.assertEqual(eigenvalues['external'].shape, (3,))
+                self.assertIsNot(eigenvalues['real2complex'], real2complex)
+                self.assertIsNot(eigenvalues['external'], external)
+                self.assertEqual({key: summary[key] for key in energies}, energies)
+                mf1.reset()
+                self.assertEqual(mf1.scf_summary, {})
+
+    def test_rhf_pcm_stability(self):
+        mol = gto.M(
+            atom = """
+                H 0 0 0
+                H 0.1 0.2 2.0
+            """,
+            basis = "3-21g",
+            verbose = 0,
+        )
+
+        mf = mol.RHF()
+        mf = mf.PCM()
+        mf.with_solvent.method = "IEF-PCM"
+        mf.with_solvent.eps = 40.0
+        mf.with_solvent.lebedev = 7
+        mf.conv_tol = 1e-10
+        test_energy = mf.kernel()
+
+        _, _, test_stable_i, test_stable_e = mf.stability(
+            external=True, return_status=True, nroots=3, tol=1e-10)
+        eigenvalues = mf.scf_summary['stability_eigenvalue']
+        test_internal_eigenvalue = eigenvalues['internal']
+        test_real2complex_eigenvalue = eigenvalues['real2complex']
+        test_external_eigenvalue = eigenvalues['external']
+
+        # This is a consistency test
+        ref_energy = -0.907413006623217
+        ref_internal_eigenvalue = numpy.array([0.66617773, 5.10498022, 5.38456179])
+        ref_real2complex_eigenvalue = numpy.array([0.11047111, 1.13278198, 1.20570252])
+        ref_external_eigenvalue = numpy.array([-0.25035192,  0.9869568,   1.09259991])
+        assert numpy.abs(test_energy - ref_energy) < 1e-9
+        assert numpy.max(numpy.abs(test_internal_eigenvalue - ref_internal_eigenvalue)) < 1e-6
+        assert numpy.max(numpy.abs(test_real2complex_eigenvalue - ref_real2complex_eigenvalue)) < 1e-6
+        assert numpy.max(numpy.abs(test_external_eigenvalue - ref_external_eigenvalue)) < 1e-6
+
+        assert test_stable_i is True
+        assert test_stable_e is False
+
+    def test_uhf_pcm_stability(self):
+        mol = gto.M(
+            atom = """
+                C 0 0 0
+                N 0.1 0.2 1.5
+            """,
+            basis = "sto-6g",
+            charge = 0,
+            spin = 1,
+            verbose = 0,
+        )
+
+        mf = mol.UHF()
+        mf = mf.PCM()
+        mf.with_solvent.method = "C-PCM"
+        mf.with_solvent.eps = 40.0
+        mf.with_solvent.lebedev = 7
+        mf.conv_tol = 1e-10
+        test_energy = mf.kernel()
+
+        _, _, test_stable_i, test_stable_e = mf.stability(
+            external=True, return_status=True, nroots=3, tol=1e-10)
+        eigenvalues = mf.scf_summary['stability_eigenvalue']
+        test_internal_eigenvalue = eigenvalues['internal']
+        test_real2complex_eigenvalue = eigenvalues['real2complex']
+        test_external_eigenvalue = eigenvalues['external']
+
+        # This is a consistency test
+        ref_energy = -91.8005196942055
+        ref_internal_eigenvalue = numpy.array([-3.42921846e-01, -4.56479905e-02, -1.80435227e-06])
+        ref_real2complex_eigenvalue = numpy.array([0.0084204,  0.03314679, 0.0400318])
+        ref_external_eigenvalue = numpy.array([-1.80332502e-01, -2.22394823e-02,  3.19966466e-07])
+        assert numpy.abs(test_energy - ref_energy) < 1e-9
+        assert numpy.max(numpy.abs(test_internal_eigenvalue - ref_internal_eigenvalue)) < 1e-6
+        assert numpy.max(numpy.abs(test_real2complex_eigenvalue - ref_real2complex_eigenvalue)) < 1e-6
+        assert numpy.max(numpy.abs(test_external_eigenvalue - ref_external_eigenvalue)) < 1e-6
+
+        assert test_stable_i is False
+        assert test_stable_e is False
 
 if __name__ == "__main__":
     print("Full Tests for stability")

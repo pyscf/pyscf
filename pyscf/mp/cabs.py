@@ -30,13 +30,22 @@ from pyscf.lib import logger
 from pyscf.scf import hf
 
 
-def find_cabs(mol, auxmol, lindep=1e-8):
-    """Project an auxiliary basis to the complement of the orbital basis."""
+def find_cabs(mol, auxmol, lindep=1e-8, *, remove_linear_dep=False):
+    """Project an auxiliary basis to the complement of the orbital basis.
+
+    Set ``remove_linear_dep=True`` to project against the orbital space retained
+    by the standard SCF overlap cutoff. By default, the full orbital overlap is
+    used without truncation. ``lindep`` applies to the projected auxiliary space.
+    """
     cabs_mol = gto.conc_mol(mol, auxmol)
     nao = mol.nao_nr()
     s = cabs_mol.intor_symmetric('int1e_ovlp')
 
-    ls12 = scipy.linalg.solve(s[:nao, :nao], s[:nao, nao:], assume_a='pos')
+    if remove_linear_dep:
+        obs_coeff = hf.check_linear_dependency(s[:nao, :nao])
+        ls12 = obs_coeff.dot(obs_coeff.conj().T.dot(s[:nao, nao:]))
+    else:
+        ls12 = scipy.linalg.solve(s[:nao, :nao], s[:nao, nao:], assume_a='pos')
     s[nao:, nao:] -= s[nao:, :nao].dot(ls12)
     w, v = scipy.linalg.eigh(s[nao:, nao:])
     c2 = v[:, w > lindep] / numpy.sqrt(w[w > lindep])
@@ -160,7 +169,8 @@ def _cabs_singles_from_fock(fock, pcoeff, mo_occ, mo_energy, occidx, viridx):
     return numpy.einsum('i,ia,ia,ia->', mo_occ[occidx], fia, fia, 1.0 / denom)
 
 
-def energy_singles(mf, auxbasis, *, frozen='chemcore', lindep=1e-8):
+def energy_singles(mf, auxbasis, *, frozen='chemcore', lindep=1e-8,
+                   remove_linear_dep=False):
     r"""CABS singles correction to the Hartree-Fock reference energy.
 
     For a closed-shell reference this evaluates
@@ -189,6 +199,10 @@ def energy_singles(mf, auxbasis, *, frozen='chemcore', lindep=1e-8):
             sequence gives separate alpha and beta frozen orbitals.
         lindep : float
             Linear-dependence threshold in the CABS projection.
+        remove_linear_dep : bool
+            Use the standard SCF overlap cutoff in the orbital-space projection.
+            Default is False, which uses the full orbital overlap without
+            truncation. This does not change the auxiliary-space ``lindep`` cutoff.
     """
     mol = mf.mol
     mo_coeff = mf.mo_coeff
@@ -218,7 +232,8 @@ def energy_singles(mf, auxbasis, *, frozen='chemcore', lindep=1e-8):
         occidx, viridx = _active_masks(mol, mo_occ, frozen)
 
     auxmol = _as_cabs_auxmol(mol, auxbasis)
-    cabs_mol, cabs_coeff = find_cabs(mol, auxmol, lindep)
+    cabs_mol, cabs_coeff = find_cabs(
+        mol, auxmol, lindep, remove_linear_dep=remove_linear_dep)
     if cabs_coeff.shape[1] == 0:
         logger.note(mf, 'CABS singles correction = 0.0')
         return 0.0

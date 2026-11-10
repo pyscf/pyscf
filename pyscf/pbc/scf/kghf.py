@@ -32,6 +32,8 @@ from pyscf.pbc.scf import khf
 from pyscf.pbc.scf import ghf as pbcghf
 from pyscf.pbc.scf import addons
 from pyscf.pbc.df.df_jk import _format_jks
+from pyscf.pbc.gto.pseudo import pp_int
+from pyscf.pbc.gto.ecp import ecp_int
 from pyscf.data import nist
 from pyscf import __config__
 
@@ -55,7 +57,7 @@ def get_jk(mf, cell=None, dm_kpts=None, hermi=0, kpts=None, kpts_band=None,
     dms = dm_kpts.reshape(-1,nkpts,nso,nso)
 
     dmaa = dms[:,:,:nao,:nao]
-    dmab = dms[:,:,nao:,:nao]
+    dmab = dms[:,:,:nao,nao:]
     dmbb = dms[:,:,nao:,nao:]
     if with_k:
         if hermi:
@@ -197,6 +199,9 @@ def _cast_mol_init_guess(fn):
 
 class KGHF(khf.KSCF):
     '''PBC GHF with k-point sampling (default: gamma point).
+
+    Set with_soc=True to add ECP and GTH pseudopotential spin-orbit terms.
+    GTH atoms must then use explicit SOC data, e.g. pseudo='GTH-PBE-SOC-q4'.
     '''
     _keys = {'with_soc'}
 
@@ -222,10 +227,15 @@ class KGHF(khf.KSCF):
         if kpts is None: kpts = self.kpts
         hcore = khf.KSCF.get_hcore(self, cell, kpts)
         hcore = lib.asarray([scipy.linalg.block_diag(h, h) for h in hcore])
-        if self.with_soc and cell.has_ecp_soc():
-            from pyscf.pbc.gto.ecp import ecp_int
-            # The ECP SOC contribution = <|1j * s * U_SOC|>
-            hcore = hcore + ecp_int(cell, kpts, intor='ECPso')
+        if self.with_soc:
+            if cell._pseudo:
+                vl_soc = pp_int.get_pp_soc(cell, kpts)
+                s = .5 * lib.PauliMatrices
+                vl_soc = np.einsum('sxy,kspq->kxpyq', 1j * s, vl_soc)
+                hcore = hcore + vl_soc.reshape(hcore.shape)
+            if cell.has_ecp_soc():
+                # The ECP SOC contribution = <|1j * s * U_SOC|>
+                hcore = hcore + ecp_int(cell, kpts, intor='ECPso')
         return hcore
 
     def get_ovlp(self, cell=None, kpts=None):
@@ -306,28 +316,3 @@ class KGHF(khf.KSCF):
         return self._transfer_attrs_(dft.KGKS(self.cell, self.kpts, xc=xc))
 
 del (WITH_META_LOWDIN, PRE_ORTH_METHOD)
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-
-    cell = gto.Cell()
-    cell.atom = '''
-    H 0 0 0
-    H 1 0 0
-    H 0 1 0
-    H 0 1 1
-    '''
-    cell.a = np.eye(3)*2
-    cell.basis = [[0, [1.2, 1]]]
-    cell.verbose = 4
-    cell.build()
-
-    kpts = cell.make_kpts([2,1,1])
-    mf = KGHF(cell, kpts=kpts)
-    mf.kernel()
-
-    # x2c1e decorator to KGHF class.
-    #mf = KGHF(cell, kpts=kpts).x2c1e()
-    # or
-    #mf = KGHF(cell, kpts=kpts).sfx2c1e()
-    #mf.kernel()

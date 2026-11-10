@@ -210,37 +210,3 @@ class NotConvergedError(RuntimeError):
     pass
 
 del (INCLUDE_GHOST, ASSERT_CONV)
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto, scf, grad
-    cell = gto.Cell()
-    cell.atom = '''
-    C 0.000000000000 0.000000000000 0.000000000000
-    C 1.685068664391 1.685068664391 1.685068664391
-    '''
-    cell.atom= [['C', [0.0, 0.0, 0.0]], ['C', [1.685068664391,1.685068664391,1.685068664391]]]
-    cell.a = '''
-    0.000000000, 3.370137329, 3.370137329
-    3.370137329, 0.000000000, 3.370137329
-    3.370137329, 3.370137329, 0.000000000'''
-    cell.basis = 'gth-szv'
-    cell.verbose= 4
-    cell.pseudo = 'gth-pade'
-    cell.unit = 'bohr'
-    cell.build()
-
-    kpts = cell.make_kpts([1,1,3])
-    mf = scf.KRHF(cell, kpts, exxdiv=None)
-    mf.conv_tol = 1e-14
-    mf.conv_tol_grad = 1e-8
-    conv_params = {
-        'convergence_energy': 1e-4,  # Eh
-        'convergence_grms': 1e-5,    # Eh/Bohr
-        'convergence_gmax': 1e-5,  # Eh/Bohr
-        'convergence_drms': 1.2e-2,  # Angstrom
-        'convergence_dmax': 1.8e-2,  # Angstrom
-    }
-    opt = GeometryOptimizer(mf).set(params=conv_params)#.run()
-    opt.run()
-    cell = opt.cell

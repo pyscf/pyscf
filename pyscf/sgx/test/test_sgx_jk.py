@@ -209,8 +209,28 @@ class KnownValues(unittest.TestCase):
         sgx_jk.SWITCH_SIZE = tmp_switch
 
 
+    def test_pjs_screened_exchange(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 .74; H 4 0 0; H 4 0 .74',
+                    basis='sto-3g', verbose=0)
+        dm = scf.RHF(mol).run(conv_tol=1e-11).make_rdm1()
+        mf = sgx.sgx_fit(scf.RHF(mol), pjs=True)
+        mf.with_df.grids_level_i = mf.with_df.grids_level_f = 0
+        mf.with_df.use_opt_grids = False
+        mf.with_df.sgx_tol_energy = mf.with_df.sgx_tol_potential = None
+        mf.build()
+        reference = mf.get_k(dm=dm)
+        for switch in (0, sgx_jk.SWITCH_SIZE):
+            with lib.temporary_env(sgx_jk, SWITCH_SIZE=switch):
+                mf.with_df.reset()
+                mf.with_df.sgx_tol_energy = 1e-12
+                mf.with_df.sgx_tol_potential = 'auto'
+                mf.build()
+                numpy.testing.assert_allclose(mf.get_k(dm=dm), reference, atol=1e-7)
+
+
+
 class PJunctionScreening(unittest.TestCase):
-    def test_pjs(self):
+    def test_pjs_high_cost(self):
         atom0 = [["O" , (0. , 0.     , 0.)],
                  [1   , (0. , -0.757 , 0.587)],
                  [1   , (0. , 0.757  , 0.587)],]

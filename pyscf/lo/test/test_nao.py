@@ -89,6 +89,24 @@ class KnownValues(unittest.TestCase):
         pop, chg = mf.mulliken_pop(mol, dm, numpy.eye(mol.nao_nr()), verbose=0)
         self.assertAlmostEqual(abs(abs(chg) - 0.03668).max(), 0, 6)
 
+    def test_configuration_overrides(self):
+        original = nao.AOSHELL[26]
+        try:
+            nao.set_atom_conf('Fe', ('2s1p', '1s1p1d'))
+            self.assertEqual(nao.AOSHELL[26], ['2s1p0d0f', '3s2p1d0f'])
+            for description, expected in (
+                ('double p', '3s3p1d0f'),
+                ('double-d', '3s3p2d0f'),
+                ('double_f', '3s3p2d2f'),
+                ('1s1d', '3s3p1d2f')):
+                nao.set_atom_conf(26, description)
+                self.assertEqual(nao.AOSHELL[26], ['2s1p0d0f', expected])
+            nao.set_atom_conf('Fe', ('2s1p', '1s1p1d0f'))
+            nao.set_atom_conf('Fe', 'polarize')
+            self.assertEqual(nao.AOSHELL[26], ['2s1p0d0f', '3s2p1d1f'])
+        finally:
+            nao.AOSHELL[26] = original
+
 
 if __name__ == "__main__":
     print("Test orth")

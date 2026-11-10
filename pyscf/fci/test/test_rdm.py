@@ -134,7 +134,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(dm3a, numpy.einsum('mnijppkl->mnijkl',dm4b)/5))
         self.assertTrue(numpy.allclose(dm3a, numpy.einsum('mnijklpp->mnijkl',dm4b)/5))
 
-    def test_rdm4s(self):
+    def test_rdm4s_high_cost(self):
         dm1, dm2, dm3, dm4 = fci.direct_spin1.make_rdm1234(ci0, norb, (nelec//2,nelec//2))
 
         (dm1a, dm1b), (dm2aa, dm2ab, dm2bb), (dm3aaa, dm3aab, dm3abb, dm3bbb), (dm4aaaa, dm4aaab, dm4aabb, dm4abbb, dm4bbbb) = \
@@ -292,6 +292,21 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(numpy.einsum('iijk->jk', dm2s[0])/2-dm1s[0]).sum(), 0, 9)
         self.assertAlmostEqual(abs(dm2s[1]).sum(), 0, 9)
         self.assertAlmostEqual(abs(dm2s[2]).sum(), 0, 9)
+
+    def test_four_particle_contraction(self):
+        ci = numpy.random.default_rng(32).normal(size=(3, 3))
+        ci /= numpy.linalg.norm(ci)
+        dm1, dm2, dm3, dm4 = fci.direct_spin1.make_rdm1234s(ci, 3, (2, 2))
+        ref1, ref2 = fci.direct_spin1.make_rdm12s(ci, 3, (2, 2))
+        for actual, expected in zip(dm1+dm2, ref1+ref2):
+            numpy.testing.assert_allclose(actual, expected, atol=1e-12)
+        # With two electrons per spin, only the aabb four-body block survives.
+        for index in (0, 1, 3, 4):
+            numpy.testing.assert_allclose(dm4[index], 0, atol=1e-12)
+        numpy.testing.assert_allclose(numpy.einsum('abcdefgg->abcdef', dm4[2]), dm3[1], atol=1e-12)
+        numpy.testing.assert_allclose(numpy.einsum('aabcdefg->bcdefg', dm4[2]), dm3[2], atol=1e-12)
+        numpy.testing.assert_allclose(numpy.einsum('abcd ee->abcd', dm3[1]), 2*dm2[0], atol=1e-12)
+        numpy.testing.assert_allclose(numpy.einsum('abccdd->ab', dm3[2]), 2*dm1[0].T, atol=1e-12)
 
 # (6o,6e)   ~ 4MB
 # (8o,8e)   ~ 153MB

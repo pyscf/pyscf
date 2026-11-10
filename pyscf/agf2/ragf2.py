@@ -1146,25 +1146,3 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs):
     log.timer('QMO integral transformation', *cput0)
 
     return eri.feri['qmo']
-
-
-
-if __name__ == '__main__':
-    from pyscf import gto, scf, mp
-
-    mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='cc-pvdz', verbose=3)
-    rhf = scf.RHF(mol)
-    rhf.conv_tol = 1e-11
-    rhf.run()
-
-    ragf2 = RAGF2(rhf, frozen=0)
-
-    ragf2.run()
-    ragf2.ipagf2(nroots=5)
-    ragf2.eaagf2(nroots=5)
-
-    print(mp.MP2(rhf, frozen=ragf2.frozen).run(verbose=0).e_corr)
-    print(ragf2.e_init)
-
-    ragf2 = ragf2.density_fit()
-    ragf2.run()

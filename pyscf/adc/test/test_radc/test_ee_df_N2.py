@@ -150,7 +150,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(rdms_test(dm1_exc[3]), 41.04639946, 4)
 
 
-    def test_ee_adc3_frozen(self):
+    def test_ee_adc3_frozen_high_cost(self):
         myadc_fr.method = "adc(3)"
         myadc_fr.method_type = "ee"
         e, t_amp1, t_amp2 = myadc_fr.kernel_gs()

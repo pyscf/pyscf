@@ -102,9 +102,8 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
     mol = ephobj.mol
     mf = ephobj.base
     ni = mf._numint
-    ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
     omg, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
-    hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+    hybrid = ni.is_hybrid_xc(mf.xc)
 
     vnuc_deriv = ephobj.vnuc_generator(mol)
     aoslices = mol.aoslice_by_atom()
@@ -182,31 +181,3 @@ class EPH(rks_hess.Hessian):
     get_eph = get_eph
     vnuc_generator = rhf_eph.vnuc_generator
     kernel = rhf_eph.kernel
-
-if __name__ == '__main__':
-    from pyscf import gto, dft
-    mol = gto.M()
-    mol.atom = [['O', [0.000000000000, 0.000000002577,0.868557119905]],
-                ['H', [0.000000000000,-1.456050381698,2.152719488376]],
-                ['H', [0.000000000000, 1.456050379121,2.152719486067]]]
-
-    mol.unit = 'Bohr'
-    mol.basis = 'sto3g'
-    mol.verbose=4
-    mol.build() # this is a pre-computed relaxed geometry
-
-    mf = dft.RKS(mol)
-    mf.grids.level=6
-    mf.xc = 'b3lyp'
-    mf.conv_tol = 1e-16
-    mf.conv_tol_grad = 1e-10
-    mf.kernel()
-
-    grad = mf.nuc_grad_method().kernel()
-    print("Force on the atoms/au:")
-    print(grad)
-
-
-    myeph = EPH(mf)
-    eph, omega = myeph.kernel(mo_rep=True)
-    print(np.amax(eph))

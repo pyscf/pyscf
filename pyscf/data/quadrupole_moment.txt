@@ -523,7 +523,7 @@ Reference Isotope 50 Sn 119       24                17.8 ns           3/2+      
                   50 Sn 130       1947              1.7 m             7-         -0.39(12)
                   50 Sn 131       0                 56 s              3/2+       -0.04(9)
                                   242               58.4 s            11/2-         0.0(2)
-Antimony          Calculated efg's in SbN, SbP, SbF and SbCl molecues
+Antimony          Calculated efg's in SbN, SbP, SbF and SbCl molecules
                   51 Sb 112       796               536 ns            8-            1.06(2)
                   51 Sb 114       496               219 ms            8-            1.02(16)
                   51 Sb 115       2796              152 ns            19/2-         0.79(4)

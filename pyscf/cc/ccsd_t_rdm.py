@@ -23,6 +23,52 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.cc import ccsd_rdm, _ccsd
 
+def _t3_kernel_args(t1, t2, eris):
+    '''Sorted inputs of the (T) kernels in libcc (ccsd_t_rdm.c), active space.'''
+    nocc, nvir = t1.shape
+    nmo = nocc + nvir
+    eris_ovvv = numpy.asarray(eris.get_ovvv())
+    eris_ovov = numpy.asarray(eris.ovov)
+    vvop = numpy.empty((nvir, nvir, nocc, nmo))
+    vvop[:, :, :, :nocc] = eris_ovov.transpose(1, 3, 0, 2)
+    vvop[:, :, :, nocc:] = eris_ovvv.transpose(1, 3, 0, 2)
+    eris_ovvv = eris_ovov = None
+    fock = numpy.asarray(eris.fock)
+    return (numpy.asarray(eris.mo_energy, dtype=numpy.float64, order='C'),
+            numpy.asarray(t1.T, dtype=numpy.float64, order='C'),
+            numpy.asarray(t2.transpose(2, 3, 1, 0), dtype=numpy.float64, order='C'),
+            numpy.asarray(numpy.asarray(eris.ovoo).transpose(1, 0, 2, 3), dtype=numpy.float64, order='C'),
+            vvop,
+            numpy.asarray(fock[nocc:, :nocc], dtype=numpy.float64, order='C'),
+            numpy.asarray(fock[:nocc, nocc:], dtype=numpy.float64, order='C'))
+
+def _t3_intermediates(t1, t2, eris, with_gamma1=True, with_gamma2=True):
+    '''(T) contributions goo, gvv, dvo, dovov, dooov, dovvv of the CCSD(T) response
+    density intermediates (libcc CCsd_t_rdm_intermediates; one pass over the virtual
+    triples).  The arrays of a skipped gamma are returned as zeros.
+    '''
+    nocc, nvir = t1.shape
+    mo_e, t1T, t2T, vooo, vvop, fvo = _t3_kernel_args(t1, t2, eris)[:6]
+    goo = numpy.zeros((nocc, nocc))
+    gvv = numpy.zeros((nvir, nvir))
+    dvo = numpy.zeros((nvir, nocc))
+    dovov = numpy.zeros((nocc, nvir, nocc, nvir))
+    dooov = numpy.zeros((nocc, nocc, nocc, nvir))
+    dovvv = numpy.zeros((nocc, nvir, nvir, nvir))
+    drv = _ccsd.libcc.CCsd_t_rdm_intermediates
+    drv.restype = ctypes.c_int
+    err = drv(ctypes.c_int(nocc), ctypes.c_int(nvir),
+              mo_e.ctypes.data_as(ctypes.c_void_p), t1T.ctypes.data_as(ctypes.c_void_p),
+              t2T.ctypes.data_as(ctypes.c_void_p), vooo.ctypes.data_as(ctypes.c_void_p),
+              vvop.ctypes.data_as(ctypes.c_void_p), fvo.ctypes.data_as(ctypes.c_void_p),
+              goo.ctypes.data_as(ctypes.c_void_p), gvv.ctypes.data_as(ctypes.c_void_p),
+              dvo.ctypes.data_as(ctypes.c_void_p), dovov.ctypes.data_as(ctypes.c_void_p),
+              dooov.ctypes.data_as(ctypes.c_void_p), dovvv.ctypes.data_as(ctypes.c_void_p),
+              ctypes.c_int(with_gamma1), ctypes.c_int(with_gamma2))
+    if err:
+        raise MemoryError('CCsd_t_rdm_intermediates: failed to allocate thread buffers')
+    return goo, gvv, dvo, dovov, dooov, dovvv
+
 def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
     log = logger.Logger(mycc.stdout, mycc.verbose)
 
@@ -34,163 +80,10 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
 
     if eris is None: eris = mycc.ao2mo()
     nocc, nvir = t1.shape
-    eris_ovvv = numpy.asarray(eris.get_ovvv())
-    eris_ovoo = numpy.asarray(eris.ovoo)
-    eris_ovov = numpy.asarray(eris.ovov)
-
-    mo_e = eris.mo_energy
-    eia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])
-
-    mem_now = lib.current_memory()[0]
-    max_memory = max(0, mycc.max_memory - mem_now)
-    blksize = min(nvir, int(((max_memory * 0.9e6/8) / 6.0 / (nocc**3))**(1/3)))
-    if blksize < nvir:
-        blksize = min(blksize, (nvir + 1) // 2)
-        blksize = max(blksize, 1)
-    log.debug1('ccsd_t rdm _gamma1_intermediates: max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
-               max_memory, nocc, nvir, blksize)
-
-    goo = numpy.zeros((nocc, nocc), dtype=t1.dtype)
-    w_blk = numpy.empty((blksize, blksize, blksize, nocc, nocc, nocc), dtype=t1.dtype)
-    v_blk = numpy.empty((blksize, blksize, blksize, nocc, nocc, nocc), dtype=t1.dtype)
-
-    time2 = logger.process_clock(), logger.perf_counter()
-    for a0, a1 in lib.prange(0, nvir, blksize):
-        ba = a1 - a0
-        for b0, b1 in lib.prange(0, nvir, blksize):
-            bb = b1 - b0
-            for c0, c1 in lib.prange(0, nvir, blksize):
-                bc = c1 - c0
-
-                w_blk[:ba, :bb, :bc] = lib.einsum('iafb,kjcf->abcijk',
-                    eris_ovvv[:, a0:a1, :, b0:b1], t2[:, :, c0:c1, :])
-                w_blk[:ba, :bb, :bc] += lib.einsum('iafc,jkbf->abcijk',
-                    eris_ovvv[:, a0:a1, :, c0:c1], t2[:, :, b0:b1, :])
-                w_blk[:ba, :bb, :bc] += lib.einsum('jbfa,kicf->abcijk',
-                    eris_ovvv[:, b0:b1, :, a0:a1], t2[:, :, c0:c1, :])
-                w_blk[:ba, :bb, :bc] += lib.einsum('jbfc,ikaf->abcijk',
-                    eris_ovvv[:, b0:b1, :, c0:c1], t2[:, :, a0:a1, :])
-                w_blk[:ba, :bb, :bc] += lib.einsum('kcfa,jibf->abcijk',
-                    eris_ovvv[:, c0:c1, :, a0:a1], t2[:, :, b0:b1, :])
-                w_blk[:ba, :bb, :bc] += lib.einsum('kcfb,ijaf->abcijk',
-                    eris_ovvv[:, c0:c1, :, b0:b1], t2[:, :, a0:a1, :])
-                w_blk[:ba, :bb, :bc] -= lib.einsum('iajm,mkbc->abcijk',
-                    eris_ovoo[:, a0:a1, :, :], t2[:, :, b0:b1, c0:c1])
-                w_blk[:ba, :bb, :bc] -= lib.einsum('iakm,mjcb->abcijk',
-                    eris_ovoo[:, a0:a1, :, :], t2[:, :, c0:c1, b0:b1])
-                w_blk[:ba, :bb, :bc] -= lib.einsum('jbim,mkac->abcijk',
-                    eris_ovoo[:, b0:b1, :, :], t2[:, :, a0:a1, c0:c1])
-                w_blk[:ba, :bb, :bc] -= lib.einsum('jbkm,mica->abcijk',
-                    eris_ovoo[:, b0:b1, :, :], t2[:, :, c0:c1, a0:a1])
-                w_blk[:ba, :bb, :bc] -= lib.einsum('kcim,mjab->abcijk',
-                    eris_ovoo[:, c0:c1, :, :], t2[:, :, a0:a1, b0:b1])
-                w_blk[:ba, :bb, :bc] -= lib.einsum('kcjm,miba->abcijk',
-                    eris_ovoo[:, c0:c1, :, :], t2[:, :, b0:b1, a0:a1])
-
-                v_blk[:ba, :bb, :bc] = lib.einsum('iajb,kc->abcijk',
-                    eris_ovov[:, a0:a1, :, b0:b1], t1[:, c0:c1])
-                v_blk[:ba, :bb, :bc] += lib.einsum('iakc,jb->abcijk',
-                    eris_ovov[:, a0:a1, :, c0:c1], t1[:, b0:b1])
-                v_blk[:ba, :bb, :bc] += lib.einsum('jbkc,ia->abcijk',
-                    eris_ovov[:, b0:b1, :, c0:c1], t1[:, a0:a1])
-                v_blk[:ba, :bb, :bc] += lib.einsum('ck,ijab->abcijk',
-                    eris.fock[(nocc + c0):(nocc + c1), :nocc], t2[:, :, a0:a1, b0:b1])
-                v_blk[:ba, :bb, :bc] += lib.einsum('ai,jkbc->abcijk',
-                    eris.fock[(nocc + a0):(nocc + a1), :nocc], t2[:, :, b0:b1, c0:c1])
-                v_blk[:ba, :bb, :bc] += lib.einsum('bj,kica->abcijk',
-                    eris.fock[(nocc + b0):(nocc + b1), :nocc], t2[:, :, c0:c1, a0:a1])
-
-                d3_blk = lib.direct_sum('ia,jb,kc->abcijk', eia[:, a0:a1], eia[:, b0:b1], eia[:, c0:c1])
-                w_blk[:ba, :bb, :bc] /= d3_blk
-                v_blk[:ba, :bb, :bc] /= d3_blk
-
-                v_blk += w_blk
-
-                t3_symm_ip_py(w_blk, blksize**3, nocc, "4-2-211-2", 1.0, 0.0)
-                goo[:, :] += lib.einsum('abcikl,abcjkl->ij',
-                    v_blk[:ba, :bb, :bc, :, :, :], w_blk[:ba, :bb, :bc, :, :, :])
-
-        time2 = log.timer_debug1('ccsd_t rdm _gamma1_intermediates pass1 [%d:%d]'%(a0, a1), *time2)
-
-    w_blk = None
-    v_blk = None
-
-    mem_now = lib.current_memory()[0]
-    max_memory = max(0, mycc.max_memory - mem_now)
-    blksize = min(nocc, int(((max_memory * 0.9e6/8) / 6.0 / (nvir**3))**(1/3)))
-    if blksize < nocc:
-        blksize = min(blksize, (nocc + 1) // 2)
-        blksize = max(blksize, 1)
-    log.debug1('ccsd_t rdm _gamma1_intermediates: max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
-               max_memory, nocc, nvir, blksize)
-
-    gvv = numpy.zeros((nvir, nvir), dtype=t1.dtype)
-    w_blk = numpy.empty((blksize, blksize, blksize, nvir, nvir, nvir), dtype=t1.dtype)
-    v_blk = numpy.empty((blksize, blksize, blksize, nvir, nvir, nvir), dtype=t1.dtype)
-
-    time2 = logger.process_clock(), logger.perf_counter()
-    for k0, k1 in lib.prange(0, nocc, blksize):
-        bk = k1 - k0
-        for j0, j1 in lib.prange(0, nocc, blksize):
-            bj = j1 - j0
-            for i0, i1 in lib.prange(0, nocc, blksize):
-                bi = i1 - i0
-
-                w_blk[:bi, :bj, :bk] = lib.einsum('iafb,kjcf->ijkabc',
-                    eris_ovvv[i0:i1, :, :, :], t2[k0:k1, j0:j1, :, :])
-                w_blk[:bi, :bj, :bk] += lib.einsum('iafc,jkbf->ijkabc',
-                    eris_ovvv[i0:i1, :, :, :], t2[j0:j1, k0:k1, :, :])
-                w_blk[:bi, :bj, :bk] += lib.einsum('jbfa,kicf->ijkabc',
-                    eris_ovvv[j0:j1, :, :, :], t2[k0:k1, i0:i1, :, :])
-                w_blk[:bi, :bj, :bk] += lib.einsum('jbfc,ikaf->ijkabc',
-                    eris_ovvv[j0:j1, :, :, :], t2[i0:i1, k0:k1, :, :])
-                w_blk[:bi, :bj, :bk] += lib.einsum('kcfa,jibf->ijkabc',
-                    eris_ovvv[k0:k1, :, :, :], t2[j0:j1, i0:i1, :, :])
-                w_blk[:bi, :bj, :bk] += lib.einsum('kcfb,ijaf->ijkabc',
-                    eris_ovvv[k0:k1, :, :, :], t2[i0:i1, j0:j1, :, :])
-                w_blk[:bi, :bj, :bk] -= lib.einsum('iajm,mkbc->ijkabc',
-                    eris_ovoo[i0:i1, :, j0:j1, :], t2[:, k0:k1, :, :])
-                w_blk[:bi, :bj, :bk] -= lib.einsum('iakm,mjcb->ijkabc',
-                    eris_ovoo[i0:i1, :, k0:k1, :], t2[:, j0:j1, :, :])
-                w_blk[:bi, :bj, :bk] -= lib.einsum('jbim,mkac->ijkabc',
-                    eris_ovoo[j0:j1, :, i0:i1, :], t2[:, k0:k1, :, :])
-                w_blk[:bi, :bj, :bk] -= lib.einsum('jbkm,mica->ijkabc',
-                    eris_ovoo[j0:j1, :, k0:k1, :], t2[:, i0:i1, :, :])
-                w_blk[:bi, :bj, :bk] -= lib.einsum('kcim,mjab->ijkabc',
-                    eris_ovoo[k0:k1, :, i0:i1, :], t2[:, j0:j1, :, :])
-                w_blk[:bi, :bj, :bk] -= lib.einsum('kcjm,miba->ijkabc',
-                    eris_ovoo[k0:k1, :, j0:j1, :], t2[:, i0:i1, :, :])
-
-                v_blk[:bi, :bj, :bk] = lib.einsum('iajb,kc->ijkabc',
-                    eris_ovov[i0:i1, :, j0:j1, :], t1[k0:k1, :])
-                v_blk[:bi, :bj, :bk] += lib.einsum('iakc,jb->ijkabc',
-                    eris_ovov[i0:i1, :, k0:k1, :], t1[j0:j1, :])
-                v_blk[:bi, :bj, :bk] += lib.einsum('jbkc,ia->ijkabc',
-                    eris_ovov[j0:j1, :, k0:k1, :], t1[i0:i1, :])
-                v_blk[:bi, :bj, :bk] += lib.einsum('ck,ijab->ijkabc',
-                    eris.fock[nocc:, k0:k1], t2[i0:i1, j0:j1, :, :])
-                v_blk[:bi, :bj, :bk] += lib.einsum('ai,jkbc->ijkabc',
-                    eris.fock[nocc:, i0:i1], t2[j0:j1, k0:k1, :, :])
-                v_blk[:bi, :bj, :bk] += lib.einsum('bj,kica->ijkabc',
-                    eris.fock[nocc:, j0:j1], t2[k0:k1, i0:i1, :, :])
-
-                d3_blk = lib.direct_sum('ia,jb,kc->ijkabc', eia[i0:i1, :], eia[j0:j1, :], eia[k0:k1, :])
-                w_blk[:bi, :bj, :bk] /= d3_blk
-                v_blk[:bi, :bj, :bk] /= d3_blk
-
-                v_blk += w_blk
-
-                t3_symm_ip_py(w_blk, blksize**3, nvir, "4-2-211-2", 1.0, 0.0)
-
-                gvv[:, :] += lib.einsum('ijkacd,ijkbcd->ab',
-                    v_blk[:bi, :bj, :bk, :, :, :], w_blk[:bi, :bj, :bk, :, :, :])
-                dvo[:, k0:k1] += 0.5 * lib.einsum('ijab,ijkabc->ck',
-                    t2[i0:i1, j0:j1, :, :], w_blk[:bi, :bj, :bk, :, :, :])
-
-        time2 = log.timer_debug1('ccsd_t rdm _gamma1_intermediates pass2 [%d:%d]'%(k0, k1), *time2)
-
-    w_blk = None
-    v_blk = None
+    time0 = logger.process_clock(), logger.perf_counter()
+    goo, gvv, dvo_t = _t3_intermediates(t1, t2, eris, with_gamma2=False)[:3]
+    dvo = dvo + dvo_t
+    log.timer_debug1("ccsd_t rdm _gamma1_intermediates (T) part", *time0)
 
     if not for_grad:
         # t3 amplitudes in CCSD(T) is computed non-iteratively. The
@@ -222,91 +115,12 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
             ccsd_rdm._gamma2_intermediates(mycc, t1, t2, l1, l2)
     if eris is None: eris = mycc.ao2mo()
 
-    nocc, nvir = t1.shape
-    eris_ovvv = numpy.asarray(eris.get_ovvv())
-    eris_ovoo = numpy.asarray(eris.ovoo)
-    eris_ovov = numpy.asarray(eris.ovov)
-
-    mo_e = eris.mo_energy
-    eia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])
-
-    mem_now = lib.current_memory()[0]
-    max_memory = max(0, mycc.max_memory - mem_now)
-    blksize = min(nvir, int(((max_memory * 0.9e6/8) / 6.0 / (nocc**3))**(1/3)))
-    if blksize < nvir:
-        blksize = min(blksize, (nvir + 1) // 2)
-        blksize = max(blksize, 1)
-    log.debug1('ccsd_t rdm _gamma2_intermediates: max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
-               max_memory, nocc, nvir, blksize)
-
-    w_blk = numpy.empty((blksize, blksize, blksize, nocc, nocc, nocc), dtype=t1.dtype)
-    v_blk = numpy.empty((blksize, blksize, blksize, nocc, nocc, nocc), dtype=t1.dtype)
-
-    time2 = logger.process_clock(), logger.perf_counter()
-    for c0, c1 in lib.prange(0, nvir, blksize):
-        bc = c1 - c0
-        for b0, b1 in lib.prange(0, nvir, blksize):
-            bb = b1 - b0
-            for a0, a1 in lib.prange(0, nvir, blksize):
-                ba = a1 - a0
-
-                w_blk[:ba, :bb, :bc] = lib.einsum('iafb,kjcf->abcijk',
-                    eris_ovvv[:, a0:a1, :, b0:b1], t2[:, :, c0:c1, :])
-                w_blk[:ba, :bb, :bc] += lib.einsum('iafc,jkbf->abcijk',
-                    eris_ovvv[:, a0:a1, :, c0:c1], t2[:, :, b0:b1, :])
-                w_blk[:ba, :bb, :bc] += lib.einsum('jbfa,kicf->abcijk',
-                    eris_ovvv[:, b0:b1, :, a0:a1], t2[:, :, c0:c1, :])
-                w_blk[:ba, :bb, :bc] += lib.einsum('jbfc,ikaf->abcijk',
-                    eris_ovvv[:, b0:b1, :, c0:c1], t2[:, :, a0:a1, :])
-                w_blk[:ba, :bb, :bc] += lib.einsum('kcfa,jibf->abcijk',
-                    eris_ovvv[:, c0:c1, :, a0:a1], t2[:, :, b0:b1, :])
-                w_blk[:ba, :bb, :bc] += lib.einsum('kcfb,ijaf->abcijk',
-                    eris_ovvv[:, c0:c1, :, b0:b1], t2[:, :, a0:a1, :])
-                w_blk[:ba, :bb, :bc] -= lib.einsum('iajm,mkbc->abcijk',
-                    eris_ovoo[:, a0:a1, :, :], t2[:, :, b0:b1, c0:c1])
-                w_blk[:ba, :bb, :bc] -= lib.einsum('iakm,mjcb->abcijk',
-                    eris_ovoo[:, a0:a1, :, :], t2[:, :, c0:c1, b0:b1])
-                w_blk[:ba, :bb, :bc] -= lib.einsum('jbim,mkac->abcijk',
-                    eris_ovoo[:, b0:b1, :, :], t2[:, :, a0:a1, c0:c1])
-                w_blk[:ba, :bb, :bc] -= lib.einsum('jbkm,mica->abcijk',
-                    eris_ovoo[:, b0:b1, :, :], t2[:, :, c0:c1, a0:a1])
-                w_blk[:ba, :bb, :bc] -= lib.einsum('kcim,mjab->abcijk',
-                    eris_ovoo[:, c0:c1, :, :], t2[:, :, a0:a1, b0:b1])
-                w_blk[:ba, :bb, :bc] -= lib.einsum('kcjm,miba->abcijk',
-                    eris_ovoo[:, c0:c1, :, :], t2[:, :, b0:b1, a0:a1])
-
-                v_blk[:ba, :bb, :bc] = lib.einsum('iajb,kc->abcijk',
-                    eris_ovov[:, a0:a1, :, b0:b1], t1[:, c0:c1])
-                v_blk[:ba, :bb, :bc] += lib.einsum('iakc,jb->abcijk',
-                    eris_ovov[:, a0:a1, :, c0:c1], t1[:, b0:b1])
-                v_blk[:ba, :bb, :bc] += lib.einsum('jbkc,ia->abcijk',
-                    eris_ovov[:, b0:b1, :, c0:c1], t1[:, a0:a1])
-                v_blk[:ba, :bb, :bc] += lib.einsum('ck,ijab->abcijk',
-                    eris.fock[nocc + c0:nocc + c1, :nocc], t2[:, :, a0:a1, b0:b1])
-                v_blk[:ba, :bb, :bc] += lib.einsum('ai,jkbc->abcijk',
-                    eris.fock[nocc + a0:nocc + a1, :nocc], t2[:, :, b0:b1, c0:c1])
-                v_blk[:ba, :bb, :bc] += lib.einsum('bj,kica->abcijk',
-                    eris.fock[nocc + b0:nocc + b1, :nocc], t2[:, :, c0:c1, a0:a1])
-
-                d3_blk = lib.direct_sum('ia,jb,kc->abcijk', eia[:, a0:a1], eia[:, b0:b1], eia[:, c0:c1])
-                w_blk[:ba, :bb, :bc] /= d3_blk
-                v_blk[:ba, :bb, :bc] /= d3_blk
-
-                v_blk += 2.0 * w_blk
-                t3_symm_ip_py(v_blk, blksize**3, nocc, "4-2-211-2", 1.0, 0.0)
-                t3_symm_ip_py(w_blk, blksize**3, nocc, "4-2-211-2", 0.5, 0.0)
-
-                dovov[:, a0:a1, :, b0:b1] += lib.einsum('kc,abcijk->iajb',
-                    t1[:, c0:c1], w_blk[:ba, :bb, :bc, :, :, :])
-                dooov[:, :, :, a0:a1] -= lib.einsum('mkbc,abcijk->jmia',
-                    t2[:, :, b0:b1, c0:c1], v_blk[:ba, :bb, :bc, :, :, :])
-                dovvv[:, a0:a1, :, b0:b1] += lib.einsum('kjcf,abcijk->iafb',
-                    t2[:, :, c0:c1, :], v_blk[:ba, :bb, :bc, :, :, :])
-
-        time2 = log.timer_debug1('ccsd_t rdm _gamma2_intermediates [%d:%d]'%(c0, c1), *time2)
-
-    w_blk = None
-    v_blk = None
+    time0 = logger.process_clock(), logger.perf_counter()
+    dovov_t, dooov_t, dovvv_t = _t3_intermediates(t1, t2, eris, with_gamma1=False)[3:]
+    log.timer_debug1("ccsd_t rdm _gamma2_intermediates (T) part", *time0)
+    dovov = dovov + dovov_t
+    dooov = dooov + dooov_t
+    dovvv = dovvv + dovvv_t
 
     dvvov = dovvv.transpose(2,3,0,1)
 

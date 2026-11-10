@@ -702,6 +702,28 @@ def format_ecp(ecp_tab):
                   ((exp_1, c_1),  # for r^2
                    ...))))),
        ...}
+
+    For the scalar ECP, l=-1 denotes the local (UL) potential; l>=0 denotes a
+    semilocal channel with angular projector `\sum_m |lm><lm|`.
+
+    Relativistic ECPs may also include the spin-orbit operator
+
+    H^{\mathrm{SO}} = \hat{\mathbf{s}} \cdot \sum_l
+        2/(2l+1) U_SO(r) \sum_{mm'} |lm><lm|\hat{\mathbf{l}} |lm'><lm'|
+
+    See more details in NWChem ECP overview (https://nwchemgit.github.io/ECP.html#overview).
+    The radial SOC potential, 2/(2l+1) U_SO(r), is fit into Gaussians.
+    These fitting coefficients are stored in the third column of each Gaussian
+    term, alongside the scalar coefficient::
+
+        {atom: (nelec,
+                ((l, (((exp_1, c_1, c_soc_1), ...),  # r^0
+                      ((exp_1, c_1, c_soc_1), ...),  # r^1
+                      ((exp_1, c_1, c_soc_1), ...),  # r^2
+                      ...)),
+
+    The scalar and SOC coefficients share the exponent and radial order.
+    `c_soc` already includes the factor 2/(2*l+1).
     '''
     fmt_ecp = {}
     for atom, atom_ecp in ecp_tab.items():
@@ -721,7 +743,8 @@ def format_ecp(ecp_tab):
     return fmt_ecp
 
 def format_pseudo(pseudo_tab):
-    r'''Convert the input :attr:`pseudo` (dict) to the internal data format::
+    r'''Convert the input :attr:`pseudo` (dict) to the internal data format. The
+    scalar potential is structured as::
 
        { atom: ( (nelec_s, nele_p, nelec_d, ...),
                 rloc, nexp, (cexp_1, cexp_2, ..., cexp_nexp),
@@ -734,6 +757,27 @@ def format_pseudo(pseudo_tab):
                 ... ) )
                 )
         ... }
+
+    GTH potentials with spin-orbit coupling (SOC) data use a two-item header
+    (nproj_types, 'SOC') at index 4 and append a SOC matrix kproj to each
+    angular-momentum channel::
+
+       { atom: ( (nelec_s, nele_p, nelec_d, ...),
+                rloc, nexp, (cexp_1, cexp_2, ..., cexp_nexp),
+                (nproj_types, 'SOC'),
+                (r1, nproj1, ( (hproj1[1,1], hproj1[1,2], ..., hproj1[1,nproj1]),
+                               (hproj1[2,1], hproj1[2,2], ..., hproj1[2,nproj1]),
+                               ...
+                               (hproj1[nproj1,1], hproj1[nproj1,2], ...        ) ),
+                             ( (kproj1[1,1], kproj1[1,2], ..., kproj1[1,nproj1]),
+                               (kproj1[2,1], kproj1[2,2], ..., kproj1[2,nproj1]),
+                               ...
+                               (kproj1[nproj1,1], kproj1[nproj1,2], ...        ) )),
+                ... ) )
+                )
+        ... }
+
+    Each kproj is a symmetric matrix, with the same shape as hproj in the same channel.
 
     Args:
         pseudo_tab : dict
@@ -2555,11 +2599,17 @@ class MoleBase(lib.StreamObject):
 
         if self.atom:
             self._atom = self.format_atom(self.atom, unit=self.unit)
+        else:
+            self._atom = []
         uniq_atoms = {a[0] for a in self._atom}
 
         if self.basis:
             _basis = _parse_default_basis(self.basis, uniq_atoms)
             self._basis = self.format_basis(_basis)
+        elif basis is not None:
+            # An explicit empty basis clears it. With no basis argument,
+            # preserve preformatted _basis used by Molden/TREXIO readers.
+            self._basis = {}
         env = self._env[:PTR_ENV_START]
         self._atm, self._bas, self._env = \
                 self.make_env(self._atom, self._basis, env, self.nucmod,
@@ -2568,6 +2618,10 @@ class MoleBase(lib.StreamObject):
         if self.pseudo:
             self.ecp, self.pseudo = classify_ecp_pseudo(self, self.ecp, self.pseudo)
 
+        # Rebuilding may remove all ECPs or leave only atoms without an ECP.
+        # The old ECP table refers to the previous integral environment.
+        self._ecp = {}
+        self._ecpbas = numpy.zeros((0, BAS_SLOTS), dtype=numpy.int32)
         if self.ecp:
             # Unless explicitly input, ECP should not be assigned to ghost atoms
             atoms_wo_ghost = [a for a in uniq_atoms if not is_ghost_atom(a)]
@@ -2577,6 +2631,7 @@ class MoleBase(lib.StreamObject):
                 self._atm, self._ecpbas, self._env = \
                         self.make_ecp_env(self._atm, self._ecp, self._env)
 
+        self._pseudo = {}
         if self.pseudo:
             # Unless explicitly input, PP should not be assigned to ghost atoms
             atoms_wo_ghost = [a for a in uniq_atoms if not is_ghost_atom(a)]
@@ -2618,6 +2673,11 @@ class MoleBase(lib.StreamObject):
 
         if self.symmetry:
             self._build_symmetry()
+        else:
+            self.topgroup = self.groupname = 'C1'
+            self.symm_orb = None
+            self.irrep_id = self.irrep_name = None
+            self._symm_orig = self._symm_axes = None
 
         if dump_input and not self._built and self.verbose > logger.NOTE:
             self.dump_input()
@@ -2646,20 +2706,28 @@ class MoleBase(lib.StreamObject):
                 logger.warn(self, f'ECP not specified. The basis set {self.basis} '
                             f'include an ECP. Recommended ECP: {ecp}.')
         elif isinstance(self.basis, dict) and isinstance(self.ecp, dict):
-            _basis = self.basis
-            if 'default' in _basis:
-                uniq_atoms = {a[0] for a in self._atom}
-                basis = _parse_default_basis(_basis, uniq_atoms)
-            else:
-                basis = _basis
+            uniq_atoms = {a[0] for a in self._atom}
+            basis = _parse_default_basis(self.basis, uniq_atoms)
+            # The keys of .basis and .ecp may be nuclear charges, lower case
+            # symbols or labelled symbols, so they cannot be compared directly.
+            # build() has already resolved the 'default' entry of .ecp,
+            # normalized its keys with _atom_symbol and dropped the elements
+            # whose ECP data could not be loaded; the result is self._ecp.
+            # self._ecp is only refreshed when .ecp is set, hence the guard.
+            ecp_defined = set(self._ecp) if self.ecp else set()
             for element, basname in basis.items():
-                if isinstance(basname, str) and not self.ecp.get(element):
-                    ecp, ecp_atoms = bse_predefined_ecp(basname, element)
-                    if ecp_atoms:
-                        logger.warn(self, f'ECP for {element} not specified. '
-                                    f'The basis set {basname} include an ECP. '
-                                    f'Recommended ECP: {ecp}.')
-            basis = None
+                if not isinstance(basname, str):
+                    continue
+                symb = _atom_symbol(element)
+                # make_ecp_env assigns the ECP of the plain element to labelled
+                # atoms such as Au1 when the label itself is absent from .ecp
+                if symb in ecp_defined or _rm_digit(symb) in ecp_defined:
+                    continue
+                ecp_name, ecp_atoms = bse_predefined_ecp(basname, symb)
+                if ecp_atoms:
+                    logger.warn(self, f'ECP for {symb} not specified. '
+                                f'The basis set {basname} include an ECP. '
+                                f'Recommended ECP: {ecp_name}.')
         return self
 
     def _build_symmetry(self, *args, **kwargs):
@@ -3910,7 +3978,7 @@ class Mole(MoleBase):
         return ao2mo.kernel(self, mo_coeffs, erifile, dataname, intor, **kwargs)
 
     def to_cell(self, box=None, dimension=3, margin=None):
-        '''This function places a molecule in a three-dimensiontal box with
+        '''This function places a molecule in a three-dimensional box with
         periodic boundary conditions.
 
         If the `box` parameter is not specified, the molecule will positioned in

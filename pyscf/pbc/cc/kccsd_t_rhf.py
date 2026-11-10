@@ -424,8 +424,11 @@ def create_eris_vooo(ooov, nkpts, nocc, nvir, kconserv, out=None):
     return out
 
 
-def create_t3_eris(mycc, kconserv, eris, tmpfile='tmp_t3_eris.h5'):
-    '''Create/transpose necessary eri integrals needed for fast read-in by CCSD(T).'''
+def create_t3_eris(mycc, kconserv, eris, tmpfile=None):
+    '''Create/transpose necessary eri integrals needed for fast read-in by CCSD(T).
+
+    If tmpfile is None, use a unique temporary file that is deleted on close.
+    '''
     eris_vovv, eris_oovv, eris_ooov, t2 = eris
     nkpts = mycc.nkpts
     nocc = mycc.nocc
@@ -437,7 +440,8 @@ def create_t3_eris(mycc, kconserv, eris, tmpfile='tmp_t3_eris.h5'):
     h5py_kwargs = {}
     feri_tmp_filename = tmpfile
     dtype = np.result_type(eris_vovv, eris_oovv, eris_ooov, t2)
-    if not check_read_success(feri_tmp_filename):
+    # Each calculation needs its own file when no filename is supplied.
+    if tmpfile is None or not check_read_success(feri_tmp_filename):
         feri_tmp = lib.H5TmpFile(feri_tmp_filename, 'w', **h5py_kwargs)
         t2T_out = feri_tmp.create_dataset('t2T', (nkpts,nkpts,nkpts,nvir,nvir,nocc,nocc), dtype=dtype)
         eris_vvop_out = feri_tmp.create_dataset('vvop', (nkpts,nkpts,nkpts,nvir,nvir,nocc,nmo), dtype=dtype)
@@ -448,9 +452,10 @@ def create_t3_eris(mycc, kconserv, eris, tmpfile='tmp_t3_eris.h5'):
         create_eris_vooo(eris_ooov, nkpts, nocc, nvir, kconserv, out=eris_vooo_C_out)
 
         feri_tmp.attrs['completed'] = True
-        feri_tmp.close()
+        feri_tmp.flush()
+    else:
+        feri_tmp = lib.H5TmpFile(feri_tmp_filename, 'r', **h5py_kwargs)
 
-    feri_tmp = lib.H5TmpFile(feri_tmp_filename, 'r', **h5py_kwargs)
     t2T = feri_tmp['t2T']
     eris_vvop = feri_tmp['vvop']
     eris_vooo_C = feri_tmp['vooo_C']
@@ -595,57 +600,3 @@ def _get_epqr(pindices,qindices,rindices,fac=[1.0,1.0,1.0],large_num=LARGE_DENOM
                                       fac_r*mo_e_r[kr][r0:r1])[n0_ovp_pqr]
     #epqr[n0_ovp_pqr] = temp[n0_ovp_pqr]
     return epqr
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    from pyscf.pbc import scf
-    from pyscf.pbc import cc
-
-    cell = gto.Cell()
-    cell.atom = '''
-    C 0.000000000000   0.000000000000   0.000000000000
-    C 1.685068664391   1.685068664391   1.685068664391
-    '''
-    cell.basis = 'gth-szv'
-    cell.pseudo = 'gth-pade'
-    cell.a = '''
-    0.000000000, 3.370137329, 3.370137329
-    3.370137329, 0.000000000, 3.370137329
-    3.370137329, 3.370137329, 0.000000000'''
-    cell.unit = 'B'
-    cell.verbose = 4
-    cell.mesh = [24, 24, 24]
-    cell.build()
-
-    nmp = [1,1,4]
-    kpts = cell.make_kpts(nmp)
-    kpts -= kpts[0]
-    kmf = scf.KRHF(cell, kpts=kpts, exxdiv=None)
-    kmf.conv_tol = 1e-12
-    kmf.conv_tol_grad = 1e-12
-    kmf.direct_scf_tol = 1e-16
-    ehf = kmf.kernel()
-
-    mycc = cc.KRCCSD(kmf)
-    eris = mycc.ao2mo()
-    ecc, t1, t2 = mycc.kernel(eris=eris)
-    energy_t = kernel(mycc, eris=eris, verbose=9)
-
-    # Start of supercell calculations
-    from pyscf.pbc.tools.pbc import super_cell
-    supcell = super_cell(cell, nmp)
-    supcell.build()
-    kmf = scf.RHF(supcell, exxdiv=None)
-    kmf.conv_tol = 1e-12
-    kmf.conv_tol_grad = 1e-12
-    kmf.direct_scf_tol = 1e-16
-    sup_ehf = kmf.kernel()
-
-    myscc = cc.RCCSD(kmf)
-    eris = myscc.ao2mo()
-    sup_ecc, t1, t2 = myscc.kernel(eris=eris)
-    sup_energy_t = myscc.ccsd_t(eris=eris)
-    print("Kpoint    CCSD: %20.16f" % ecc)
-    print("Supercell CCSD: %20.16f" % (sup_ecc/np.prod(nmp)))
-    print("Kpoint    CCSD(T): %20.16f" % energy_t)
-    print("Supercell CCSD(T): %20.16f" % (sup_energy_t/np.prod(nmp)))

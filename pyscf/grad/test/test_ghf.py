@@ -186,7 +186,25 @@ class KnownValues(unittest.TestCase):
             g_g = mg.nuc_grad_method().kernel()
             self.assertAlmostEqual(abs(g_g - g_r).max(), 0, 7)
 
-    def test_gks_grad_finite_diff(self):
+    def test_gks_grad_bond_finite_diff(self):
+        def solve(distance):
+            mol = gto.M(atom=f'H 0 0 0; H 0 0 {distance}', unit='Bohr',
+                        basis='6-31g', verbose=0)
+            mf = dft.GKS(mol, xc='pbe')
+            mf.grids.atom_grid = (50, 194)
+            mf.grids.prune = None
+            return mf.run(conv_tol=1e-12)
+        mf = solve(1.4)
+        self.assertTrue(mf.converged)
+        gradient = mf.nuc_grad_method()
+        gradient.grid_response = True
+        force = gradient.kernel()[1, 2]
+        step = 1e-3
+        plus, minus = solve(1.4+step), solve(1.4-step)
+        self.assertTrue(plus.converged and minus.converged)
+        self.assertAlmostEqual(force, (plus.e_tot-minus.e_tot)/(2*step), delta=1e-6)
+
+    def test_gks_grad_finite_diff_high_cost(self):
         atom = [['O', (0.0, 0.0, 0.20)],
                 ['H', (0.0, 1.43, -0.90)],
                 ['H', (0.0, -1.43, -0.90)]]

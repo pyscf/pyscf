@@ -34,3 +34,19 @@ mf.kernel()
 
 # Orbital energies, Mulliken population etc.
 mf.analyze()
+
+# Symmetry-adapted restricted and unrestricted KS are selected automatically
+# when the molecule has symmetry enabled.
+closed_shell = pyscf.M(atom='He 0 0 0', basis='cc-pvdz', symmetry=True)
+rks = closed_shell.RKS()
+rks.xc = 'b3lyp'
+print(type(rks).__name__, rks.kernel())
+
+open_shell = pyscf.M(atom='O 0 0 0', basis='cc-pvdz', spin=2, symmetry=True)
+roks = open_shell.ROKS()
+roks.xc = 'b3lyp'
+print(type(roks).__name__, roks.kernel())
+
+uks = open_shell.UKS()
+uks.xc = 'b3lyp'
+print(type(uks).__name__, uks.kernel())

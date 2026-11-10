@@ -18,6 +18,7 @@ import numpy
 import unittest
 from pyscf import gto
 from pyscf import lib
+from pyscf import scf
 from pyscf.x2c import x2c, dft
 try:
     import mcfun
@@ -27,6 +28,7 @@ except ImportError:
 
 class KnownValues(unittest.TestCase):
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
+    @unittest.skipIf(scf.dhf.zquatev is None, 'requires zquatev')
     def test_mcol_vs_gks(self):
         with lib.temporary_env(lib.param, LIGHT_SPEED=20):
             mol = gto.M(atom='C', basis='6-31g')

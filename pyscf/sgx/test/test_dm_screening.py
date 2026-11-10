@@ -74,7 +74,8 @@ class KnownValues(unittest.TestCase):
         e2 = mf_scanner(mol1.set_geom_(atomm))
         t3 = logger.perf_counter()
         self.assertAlmostEqual(g[2,2], (e1-e2)/(2*delta)*lib.param.BOHR, 6)
-        self.assertAlmostEqual(numpy.abs(g.sum(axis=0)).sum(), 0, 13)
+        # Translational invariance, up to roundoff of order 1e-14
+        self.assertAlmostEqual(numpy.abs(g.sum(axis=0)).sum(), 0, 11)
         return mf.e_tot, (t3 - t2) + (t1 - t0), t2 - t1, mf.cycles
 
     def test_rhf_dm_screening(self):

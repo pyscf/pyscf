@@ -36,6 +36,8 @@ from pyscf.df.hessian import rhf as df_rhf_hess
 
 def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                       atmlst=None, max_memory=4000, verbose=None):
+    if hessobj.grid_response:
+        raise NotImplementedError('CPU RKS Hessian grid response is not implemented')
     log = logger.new_logger(hessobj, verbose)
     time0 = t1 = (logger.process_clock(), logger.perf_counter())
 
@@ -53,7 +55,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     dm0 = numpy.dot(mocc, mocc.T) * 2
 
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
-    hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+    hybrid = ni.is_hybrid_xc(mf.xc)
     de2, ej, ek = df_rhf_hess._partial_hess_ejk(hessobj, mo_energy, mo_coeff, mo_occ,
                                                 atmlst, max_memory, verbose,
                                                 with_k=hybrid)
@@ -89,12 +91,13 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     return de2
 
 def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
+    if hessobj.grid_response:
+        raise NotImplementedError('CPU RKS Hessian grid response is not implemented')
     mol = hessobj.mol
     mf = hessobj.base
     ni = mf._numint
-    ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
-    hybrid = ni.libxc.is_hybrid_xc(mf.xc)
+    hybrid = ni.is_hybrid_xc(mf.xc)
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
@@ -117,7 +120,11 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
 
 
 class Hessian(rks_hess.Hessian):
-    '''Non-relativistic RKS hessian'''
+    '''Non-relativistic RKS hessian.
+
+    Grid response is not implemented for this CPU Hessian.
+    Setting grid_response=True raises NotImplementedError.
+    '''
 
     _keys = {'auxbasis_response',}
 
@@ -127,33 +134,3 @@ class Hessian(rks_hess.Hessian):
     auxbasis_response = 2
     partial_hess_elec = partial_hess_elec
     make_h1 = make_h1
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import dft
-    #dft.numint.NumInt.libxc = dft.xcfun
-    xc_code = 'b3lyp'
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None
-    mol.atom = [
-        [1 , (1. ,  0.     , 0.000)],
-        [1 , (0. ,  1.     , 0.000)],
-        [1 , (0. , -1.517  , 1.177)],
-        [1 , (0. ,  1.517  , 1.177)],
-    ]
-    mol.basis = '631g'
-    mol.unit = 'B'
-    mol.build()
-    mf = dft.RKS(mol).density_fit()
-    mf.grids.level = 4
-    mf.grids.prune = False
-    mf.xc = xc_code
-    mf.conv_tol = 1e-14
-    mf.kernel()
-    n3 = mol.natm * 3
-    hobj = Hessian(mf)
-    e2 = hobj.kernel().transpose(0,2,1,3).reshape(n3,n3)
-    print(lib.finger(e2) - -0.41387283263786201)

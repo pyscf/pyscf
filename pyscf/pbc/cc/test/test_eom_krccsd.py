@@ -13,6 +13,7 @@ from pyscf.cc import eom_uccsd
 from pyscf.pbc.cc import kintermediates, kintermediates_rhf
 from pyscf import lib
 import unittest
+from pyscf.pbc.cc import kccsd_rhf, eom_kccsd_rhf
 
 # Helper functions
 def kconserve_pmatrix(nkpts, kconserv):
@@ -268,7 +269,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(eea_gccsd[0][0], eea_rccsd[0][0], 8)
         self.assertAlmostEqual(eip_gccsd[0][0], eip_rccsd[0][0], 8)
 
-    def test_n3_ee(self):
+    def test_n3_ee_high_cost(self):
         n = 15
         cell_n3 = make_test_cell.test_cell_n3([n]*3)
         kmf_n3 = pbcscf.KRHF(cell_n3, cell_n3.make_kpts([2,1,1]), exxdiv=None)
@@ -558,6 +559,62 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(hc), (-0.4402079681364959-5.610500177034039j), 7)
         hc = eom.l_matvec(vector, 2, imds)
         self.assertAlmostEqual(lib.fp(hc), (-1.9053243731138183+2.785112360342188j), 7)
+
+
+    def make_eom_reference(self):
+        cell = gto.M(atom='H 0 0 0; H 0 0 .74', a=np.eye(3)*4,
+                     basis='gth-szv', pseudo='gth-pade', mesh=[11]*3,
+                     precision=1e-6, verbose=0)
+        mf = pbcscf.KRHF(cell, cell.make_kpts([2, 1, 1]), exxdiv=None)
+        mf = mf.density_fit(auxbasis='weigend').run(conv_tol=1e-11)
+        self.cc = kccsd_rhf.RCCSD(mf).run(conv_tol=1e-10)
+
+    def check_matvec_and_eigensolver(self, method):
+        # The dense matrix is built from matvec, so this checks linearity and
+        # eigensolver consistency, not independent reference matrix elements.
+        self.make_eom_reference()
+        partition = None
+        obj = method(self.cc)
+        obj.partition = partition
+        imds = obj.make_imds()
+        diagonal = obj.get_diag(0, imds)
+        matrix = np.column_stack([obj.matvec(v, 0, imds, diagonal)
+                                  for v in np.eye(obj.vector_size(), dtype=complex)])
+        trial = np.arange(obj.vector_size(), dtype=complex)
+        np.testing.assert_allclose(obj.matvec(trial, 0, imds), matrix @ trial, atol=1e-10)
+        expected = np.sort(np.linalg.eigvals(matrix).real)[:2]
+        energy, vectors = obj.kernel(nroots=2, partition=partition, kptlist=[0], imds=imds)
+        np.testing.assert_allclose(energy[0], expected, atol=1e-7)
+        for e, v in zip(energy[0], vectors[0]):
+            np.testing.assert_allclose(matrix @ v, e*v, atol=1e-6)
+
+    def test_ip_matvec_and_eigensolver(self):
+        self.check_matvec_and_eigensolver(eom_kccsd_rhf.EOMIP)
+
+    def test_ea_matvec_and_eigensolver(self):
+        self.check_matvec_and_eigensolver(eom_kccsd_rhf.EOMEA)
+
+    def test_ee_singlet_matvec_and_eigensolver(self):
+        self.check_matvec_and_eigensolver(eom_kccsd_rhf.EOMEESinglet)
+
+
+    def test_triples_intermediates(self):
+        cell = gto.M(atom='Li 0 0 0; H 0 0 1.6', a=np.eye(3)*4,
+                     basis='gth-szv', pseudo='gth-pade', mesh=[11]*3,
+                     precision=1e-7, verbose=0)
+        mf = pbcscf.KRHF(cell, cell.make_kpts([2, 1, 1]), exxdiv=None)
+        mf = mf.density_fit(auxbasis='weigend').run(conv_tol=1e-11)
+        cc = kccsd_rhf.RCCSD(mf)
+        eris = cc.ao2mo()
+        _, t1, t2 = cc.init_amps(eris)
+        t1, t2 = cc.update_amps(t1, t2, eris)
+        ref = kintermediates_rhf.get_t3p2_imds_slow(cc, t1, t2, eris)
+        actual = kintermediates_rhf.get_t3p2_imds(cc, t1, t2, eris)
+        # Nonzero triples make this a check of the contractions, not just shapes.
+        self.assertGreater(np.linalg.norm(ref[2]-t2), 1e-8)
+        for name, a, b in zip(('energy', 't1', 't2', 'IP', 'EA'), actual, ref):
+            with self.subTest(intermediate=name):
+                np.testing.assert_allclose(a, b, atol=1e-10)
 
 if __name__ == '__main__':
     print("eom_kccsd_rhf tests")

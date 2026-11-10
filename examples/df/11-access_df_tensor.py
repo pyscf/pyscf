@@ -81,3 +81,8 @@ cderi = df.incore.cholesky_eri(mol, auxbasis='weigend')
 df.outcore.cholesky_eri(mol, 'saved_cderi.h5', dataname='j3c',
                         auxbasis=df.make_auxbasis(mol))
 
+# Limit the memory used while writing the tensor, or transform it to a new
+# orbital basis directly on disk. Identity orbitals reproduce the AO tensor.
+df.outcore.cholesky_eri(mol, 'saved_cderi.h5', max_memory=0.5)
+df.outcore.general(mol, (numpy.eye(mol.nao),)*2, 'saved_cderi.h5',
+                   max_memory=0.2)

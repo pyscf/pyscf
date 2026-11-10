@@ -130,7 +130,7 @@ def nrange(start, stop=None, step=1):
     if stop is None:
         start, stop = 0, start
 
-    yield from range(start+rank, stop, step*size)
+    yield from range(start+rank*step, stop, step*size)
 
 
 def prange(start, stop, step):
@@ -143,9 +143,9 @@ def prange(start, stop, step):
             yield p0, p1
     else:
         if SCALE_PRANGE_STEP:
-            step //= size
+            step = max(1, step // size)
 
-        split = lambda x : x * (stop-start) // size
+        split = lambda x : start + x * (stop-start) // size
 
         start0 = split(rank)
         stop0 = stop if rank == (size-1) else split(rank+1)

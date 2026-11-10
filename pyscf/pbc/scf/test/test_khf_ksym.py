@@ -21,7 +21,7 @@ import numpy as np
 from pyscf.dft import radi
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pscf
-from pyscf.pbc.scf import khf,kuhf
+from pyscf.pbc.scf import chkfile,khf,kuhf
 
 def make_primitive_cell(mesh, spin=0):
     cell = pbcgto.Cell()
@@ -172,14 +172,14 @@ class KnownValues(unittest.TestCase):
         kmf.kernel(dm)
         self.assertAlmostEqual(kmf.e_tot, e_tot, 9)
 
-        mo_coeff = pscf.chkfile.load(kmf.chkfile, 'scf/mo_coeff')
-        mo_occ = pscf.chkfile.load(kmf.chkfile, 'scf/mo_occ')
+        mo_coeff = chkfile.load(kmf.chkfile, 'scf/mo_coeff')
+        mo_occ = chkfile.load(kmf.chkfile, 'scf/mo_occ')
         dm = kmf.make_rdm1(mo_coeff, mo_occ)
         kmf.max_cycle = 1
         kmf.kernel(dm)
         self.assertAlmostEqual(kmf.e_tot, e_tot, 9)
 
-        kmf.__dict__.update(pscf.chkfile.load(kmf.chkfile, 'scf'))
+        kmf.__dict__.update(chkfile.load(kmf.chkfile, 'scf'))
         kmf.max_cycle = 1
         kmf.kernel()
         self.assertAlmostEqual(kmf.e_tot, e_tot, 9)
@@ -266,7 +266,7 @@ class KnownValues(unittest.TestCase):
         mf0.kernel()
         self.assertAlmostEqual(mf0.e_tot, mf.e_tot, 9)
 
-    def test_to_khf(self):
+    def test_to_khf_high_cost(self):
         cell = pbcgto.Cell()
         cell.atom = '''
             H 0 0 0
@@ -319,7 +319,7 @@ class KnownValues(unittest.TestCase):
         kpts = cell.make_kpts(nk,space_group_symmetry=True,time_reversal_symmetry=True)
         kmf = kmf_ksymm
 
-        kmf.__dict__.update(pscf.chkfile.load(kmf.chkfile, 'scf'))
+        kmf.__dict__.update(chkfile.load(kmf.chkfile, 'scf'))
         kmf1 = kmf.to_khf()
         kpts_diff = abs(kmf1.kpts-kmf.kpts.kpts)
         self.assertAlmostEqual(kpts_diff.max(), 0, 9)

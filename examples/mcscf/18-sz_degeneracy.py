@@ -3,6 +3,10 @@
 '''
 A small O2 CASSCF calculation, in which spin and spatial symmetry should be
 carefully chosen.
+
+The A2g (Sigma^-_g) state is solved for Sz = +1, 0 and -1; the three results
+are degenerate. See 18-spatial_spin_symmetry.py for targeting a specific Sigma
+state (Sigma_u^-) with the same cylindrical-symmetry solver.
 '''
 
 from pyscf import gto, scf, mcscf, fci

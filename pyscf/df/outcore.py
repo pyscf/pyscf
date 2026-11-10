@@ -320,32 +320,3 @@ def _create_h5file(erifile, dataname):
     return feri
 
 del (MAX_MEMORY)
-
-
-if __name__ == '__main__':
-    from pyscf.df import incore
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None
-
-    mol.atom = [
-        ["O" , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)]]
-
-    mol.basis = 'cc-pvtz'
-    mol.build()
-
-    cderi0 = incore.cholesky_eri(mol)
-    cholesky_eri(mol, 'cderi.dat')
-    with h5py.File('cderi.dat', 'r') as feri:
-        print(numpy.allclose(feri['j3c'], cderi0))
-
-    cholesky_eri(mol, 'cderi.dat', max_memory=.5)
-    with h5py.File('cderi.dat', 'r') as feri:
-        print(numpy.allclose(feri['j3c'], cderi0))
-
-    general(mol, (numpy.eye(mol.nao_nr()),)*2, 'cderi.dat',
-            max_memory=.2, verbose=6)
-    with h5py.File('cderi.dat', 'r') as feri:
-        print(numpy.allclose(feri['j3c'], cderi0))

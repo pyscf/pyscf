@@ -1,7 +1,7 @@
 # PySCF Python coding style
 
-Load this template when writing, modifying, or reviewing Python code in PySCF.
-Customize as needed.
+Load this template when writing, modifying, or reviewing Python code in PySCF,
+including tests. Customize as needed.
 
 - Resolve routine implementation choices using nearby code and existing APIs.
   Ask when an unresolved scientific convention or requirement materially affects
@@ -47,8 +47,46 @@ Customize as needed.
 - Break long numerical calls and Boolean expressions at logical boundaries,
   matching the surrounding continuation-line indentation.
 
+## Test value and readability
+
+- Add tests for their practical value: catching realistic bugs or protecting
+  important scientific results and behavioral contracts. Avoid coverage-driven
+  tests: Flag tests that merely exercise newly added code without protecting
+  meaningful behavior.
+- Assert meaningful results and behavior. Avoid enforcing incidental details
+  or internal data layout unless they are part of an important behavioral
+  contract.
+- Use small, representative inputs and minimal mocking. Avoid elaborate mock
+  setups or artificial states created only to reach newly added code. Mocks
+  are useful when isolating a dependency is necessary to test a meaningful
+  contract; keep the behavior being tested real.
+- Reuse or extend existing tests when they can protect the relevant behavior
+  clearly, rather than adding redundant cases.
+- Apply the same readability standards to tests as to implementation code.
+  A reader should be able to identify the setup, behavior under test, and
+  expected result without tracing through layers of helpers.
+- Use descriptive test and variable names that explain the case being tested.
+  Add a short comment when the scientific setup or regression is not obvious.
+- Prefer plain, explicit tests with one focused behavior per test function.
+  Avoid nested loops that combine multiple methods, options, or behaviors in
+  one test. Write separate, descriptively named tests with explicit setup and
+  assertions when that makes the cases easier to understand; modest repetition
+  is preferable to a compact but difficult-to-follow test matrix. Use a simple
+  loop or parameterization only when it makes closely related cases clearer.
+- Keep setup and assertions straightforward. Break complicated expressions
+  into meaningful intermediate values, and make actual and expected results
+  easy to distinguish.
+- Make assertion failures easy to interpret. In loops or parameterized tests,
+  identify the failing case. Explain non-obvious reference values and tolerances
+  near the comparison or shared definition.
+
 ## Documentation
 
+- Treat functions and classes listed in a module's `__all__` as public APIs.
+  Absence from `__all__` does not by itself make an API private.
+- Give public APIs clear docstrings describing their purpose, inputs, outputs,
+  and important parameters, attributes, and defaults. Explain shapes, units,
+  and limitations where relevant.
 - Document non-obvious assumptions.
 - For functions outside the public API, a short docstring explaining their
   purpose is sufficient.

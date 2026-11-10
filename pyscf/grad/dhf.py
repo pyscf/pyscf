@@ -267,35 +267,3 @@ def _call_vhf1(mol, dm):
     vj[:,:n2c,:n2c] += vx[0]
     vk[:,:n2c,n2c:] += vx[1]
     return vj, vk
-
-
-if __name__ == "__main__":
-    from pyscf import gto
-    from pyscf import scf
-    from pyscf import lib
-
-    with lib.light_speed(30):
-        h2o = gto.Mole()
-        h2o.verbose = 0
-        h2o.output = None#"out_h2o"
-        h2o.atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. , -0.757 , 0.587)],
-            [1   , (0. , 0.757  , 0.587)] ]
-        h2o.basis = {"H": '6-31g',
-                     "O": '6-31g',}
-        h2o.build()
-        method = scf.dhf.UHF(h2o).run()
-        g = method.Gradients().kernel()
-        print(g)
-
-        ms = method.as_scanner()
-        h2o.set_geom_([["O" , (0. , 0.     ,-0.001)],
-                       [1   , (0. , -0.757 , 0.587)],
-                       [1   , (0. , 0.757  , 0.587)]], unit='Ang')
-        e1 = ms(h2o)
-        h2o.set_geom_([["O" , (0. , 0.     , 0.001)],
-                       [1   , (0. , -0.757 , 0.587)],
-                       [1   , (0. , 0.757  , 0.587)]], unit='Ang')
-        e2 = ms(h2o)
-        print(g[0,2], (e2-e1)/0.002*lib.param.BOHR)

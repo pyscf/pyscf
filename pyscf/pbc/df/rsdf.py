@@ -267,27 +267,25 @@ cell.dimension=3 with large vacuum.""")
         if j_only is not None:
             self._j_only = j_only
 
-        if with_j3c:
-            if isinstance(self._cderi_to_save, str):
-                cderi = self._cderi_to_save
-            else:
-                cderi = self._cderi_to_save.name
-            if isinstance(self._cderi, str):
-                if self._cderi == cderi and os.path.isfile(cderi):
-                    logger.warn(self, 'File %s (specified by ._cderi) is '
-                                'overwritten by GDF initialization.', cderi)
-                else:
-                    logger.warn(self, 'Value of ._cderi is ignored. '
-                                'DF integrals will be saved in file %s .', cderi)
-            self._cderi = cderi
-            t1 = (logger.process_clock(), logger.perf_counter())
-            self._make_j3c(self.cell, self.auxcell, None, cderi)
-            t1 = logger.timer_debug1(self, 'j3c', *t1)
+        if not with_j3c:
+            return
 
-    def _make_j3c(self, cell=None, auxcell=None, kptij_lst=None, cderi_file=None):
-        if cell is None: cell = self.cell
-        if auxcell is None: auxcell = self.auxcell
-        if cderi_file is None: cderi_file = self._cderi_to_save
+        if isinstance(self._cderi_to_save, str):
+            cderi = self._cderi_to_save
+        else:
+            cderi = self._cderi_to_save.name
+        if isinstance(self._cderi, str):
+            if self._cderi == cderi and os.path.isfile(cderi):
+                logger.warn(self, 'File %s (specified by ._cderi) is '
+                            'overwritten by GDF initialization.', cderi)
+            else:
+                logger.warn(self, 'Value of ._cderi is ignored. '
+                            'DF integrals will be saved in file %s .', cderi)
+        self._cderi = cderi
+
+        t1 = (logger.process_clock(), logger.perf_counter())
+        cell = self.cell
+        auxcell = self.auxcell
 
         if self.kpts_band is None:
             kpts_union = self.kpts
@@ -297,8 +295,9 @@ cell.dimension=3 with large vacuum.""")
         dfbuilder.__dict__.update(self.__dict__)
         dfbuilder.kpts = kpts_union
         j_only = self._j_only or len(kpts_union) == 1
-        dfbuilder.make_j3c(cderi_file, j_only=j_only, dataname=self._dataname,
-                           kptij_lst=kptij_lst)
+        dfbuilder.make_j3c(cderi, j_only=j_only, dataname=self._dataname,
+                           kptij_lst=None)
+        t1 = logger.timer_debug1(self, 'j3c', *t1)
 
     def build(self, j_only=None, with_j3c=True, kpts_band=None):
         # formatting k-points
@@ -311,7 +310,7 @@ cell.dimension=3 with large vacuum.""")
         self.check_sanity()
         self.dump_flags()
 
-        # do normal gdf build with the modified _make_j3c
+        # Build the auxiliary cell and, if requested, the RSGDF integral tensor.
         self._gdf_build(j_only=j_only, with_j3c=with_j3c)
 
         return self

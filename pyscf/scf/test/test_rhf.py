@@ -142,8 +142,8 @@ class KnownValues(unittest.TestCase):
         mol1.basis = 'sto3g'
         mol1.build(0, 0)
         dm = scf.hf.get_init_guess(mol1, key='minao')
-        self.assertAlmostEqual(lib.fp(dm), 1.3085066548762425, 9)
-        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, mol1.intor('int1e_ovlp')), 13.60436071945, 7)
+        self.assertAlmostEqual(lib.fp(dm), 1.3450111665976545, 9)
+        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, mol1.intor('int1e_ovlp')), 14, 9)
         mol1.stdout.close()
 
         mol.atom = [["O" , (0. , 0.     , 0.)],
@@ -161,14 +161,18 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, s), 15, 9)
 
         dm = scf.hf.get_init_guess(re_ecp2, key='minao')
-        self.assertAlmostEqual(lib.fp(dm), -9.0532680910696772, 9)
-        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, s), 31.804465975542513, 9)
+        self.assertAlmostEqual(lib.fp(dm), -31.696260932743616, 9)
+        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, s), 57, 9)
 
         mol = gto.M(atom=[['Mg',(0, 0, 0)], ['!Mg',(0, 1, 0)], ['O',(0, 0, 1)]],
                     basis={'O': 'sto3g', 'Mg': 'sto3g'},
                     ecp='lanl2dz')
         dm = mol.RHF().init_guess_by_minao()
-        self.assertAlmostEqual(lib.fp(dm), -0.8255591441786179, 9)
+        self.assertAlmostEqual(lib.fp(dm), -0.5821059405885507, 9)
+
+        mol = gto.M(atom='Ag', basis='def2-svp', ecp='def2-svp', spin=1)
+        dm = scf.hf.init_guess_by_minao(mol)
+        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, mol.intor('int1e_ovlp')), 19, 9)
 
     def test_init_guess_atom(self):
         mol = gto.M(

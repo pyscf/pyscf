@@ -39,10 +39,9 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
-from pyscf import df
 from pyscf.hessian import rhf as rhf_hess
 from pyscf.df.grad.rhf import (_int3c_wrapper, _gen_metric_solver,
-                               LINEAR_DEP_THRESHOLD)
+                               _make_auxmol, LINEAR_DEP_THRESHOLD)
 
 def _pinv(a, lindep=LINEAR_DEP_THRESHOLD):
     '''Similar to pinv (v1.7.0) with atol=lindep and rtol=0'''
@@ -80,9 +79,7 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     dme0 = numpy.einsum('pi,qi,i->pq', mocc, mocc, mo_energy[mo_occ>0]) * 2
 
     with_df = hessobj.base.with_df
-    auxmol = with_df.auxmol
-    if auxmol is None:
-        auxmol = df.addons.make_auxmol(with_df.mol, with_df.auxbasis)
+    auxmol = _make_auxmol(with_df, mol)
     naux = auxmol.nao
     nbas = mol.nbas
     auxslices = auxmol.aoslice_by_atom()
@@ -385,9 +382,7 @@ def _gen_jk(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None,
         atmlst = range(mol.natm)
 
     with_df = hessobj.base.with_df
-    auxmol = with_df.auxmol
-    if auxmol is None:
-        auxmol = df.addons.make_auxmol(with_df.mol, with_df.auxbasis)
+    auxmol = _make_auxmol(with_df, mol)
     nbas = mol.nbas
     auxslices = auxmol.aoslice_by_atom()
     aux_loc = auxmol.ao_loc
@@ -494,32 +489,3 @@ class Hessian(rhf_hess.Hessian):
     make_h1 = make_h1
 
 #TODO: Insert into DF class
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None
-    mol.atom = [
-        [1 , (1. ,  0.     , 0.000)],
-        [1 , (0. ,  1.     , 0.000)],
-        [1 , (0. , -1.517  , 1.177)],
-        [1 , (0. ,  1.517  , 1.177)] ]
-    mol.basis = '631g'
-    mol.unit = 'B'
-    mol.build()
-    mf = scf.RHF(mol).density_fit()
-    mf.conv_tol = 1e-14
-    mf.scf()
-    n3 = mol.natm * 3
-    hobj = Hessian(mf)
-    e2 = hobj.kernel()
-    ref = scf.RHF(mol).run().Hessian().kernel()
-    print(abs(e2-ref).max())
-    print(lib.finger(e2) - 0.7232739558365785)
-    e2 = hobj.set(auxbasis_response=2).kernel()
-    print(abs(e2-ref).max())
-    print(lib.finger(e2) - 0.72321237584876141)

@@ -202,6 +202,7 @@ XC_CODES.update({
     'REVPBE0'       : '.25*HF + .75*PBE_R, PBE',
     'B1B95'         : 440,
     'TPSS0'         : '.25*HF + .75*TPSS, TPSS',
+    'BHHLYP'        : 'BHANDHLYP',
 })
 
 if getattr(__config__, 'B3LYP_WITH_VWN5', False):
@@ -328,21 +329,11 @@ def is_lda(xc_code):
 def is_hybrid_xc(xc_code):
     if xc_code is None:
         return False
-    elif isinstance(xc_code, str):
-        if 'HF' in xc_code:
-            return True
-        xc = _get_xc(xc_code)
-        return _is_hybrid_xc(xc.xc_objs, xc.hyb, xc.facs, xc_code)
-    elif numpy.issubdtype(type(xc_code), numpy.integer):
-        xc = _get_xc(xc_code)
-        return _is_hybrid_xc(xc.xc_objs, xc.hyb, xc.facs, xc_code)
-    else:
+    if not isinstance(xc_code, (str, int, numpy.integer)):
         return any(is_hybrid_xc(x) for x in xc_code)
-
-def _is_hybrid_xc(xc_objs, hyb, facs, xc_code):
-    if _hybrid_coeff(xc_objs, hyb, facs) != 0:
+    if rsh_coeff(xc_code) != (0, 0, 0):
         return True
-    if _rsh_coeff(xc_objs, hyb, facs, xc_code) != (0, 0, 0):
+    if hybrid_coeff(xc_code) != 0:
         return True
     return False
 
@@ -358,8 +349,7 @@ def is_gga(xc_code):
 
 def is_nlc(xc_code):
     # identify nlc by xc_code itself if enable_nlc is None
-    if isinstance(xc_code, str) or \
-            numpy.issubdtype(type(xc_code), numpy.integer):
+    if isinstance(xc_code, (str, int, numpy.integer)):
         xc = _get_xc(xc_code)
         return xc.is_nlc
     else:
@@ -549,7 +539,8 @@ def parse_xc(description):
         return parse_xc('%s,%s' % tuple(description))
 
     description = description.upper()
-    if '-D3' in description or '-D4' in description:
+    if ('-D3' in description or '-D4' in description or
+            description.endswith(('-3C', '_3C'))):
         from pyscf.scf.dispersion import parse_dft
         description, _, _ = parse_dft(description)
         description = description.upper()
@@ -691,6 +682,7 @@ _NAME_WITH_DASH = {'SR-HF'    : 'SR_HF',
                    'B97-1'    : 'B97_1',
                    'B97-2'    : 'B97_2',
                    'B97-3'    : 'B97_3',
+                   'B97-3C'   : 'B97_3C',
                    'B97-K'    : 'B97_K',
                    'B97-D'    : 'B97_D',
                    'HCTH-93'  : 'HCTH_93',
@@ -1538,4 +1530,3 @@ def unregister_custom_functional_(xc_code):
         del _CUSTOM_FUNC_U[xc_code]
     except KeyError:
         pass
-

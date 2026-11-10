@@ -181,6 +181,11 @@ class DFGMP2(gmp2.GMP2):
     def update_amps(self, t2, eris):
         raise NotImplementedError
 
+    def _reference_is_canonical(self):
+        # Non-canonical (f_ov != 0) references are not implemented for DF-GMP2;
+        # keep using the direct kernel to preserve the previous behavior.
+        return True
+
     def init_amps(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         return kernel(self, mo_energy, mo_coeff, eris, with_t2)
 

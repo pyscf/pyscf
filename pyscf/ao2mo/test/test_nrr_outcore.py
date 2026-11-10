@@ -70,6 +70,24 @@ class KnownValues(unittest.TestCase):
         eri1 = eri1.reshape([nmo]*4)
         self.assertAlmostEqual(abs(ref - eri1).max(), 0, 11)
 
+    def test_component_integrals(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 .74', basis='sto-3g', verbose=0)
+        rng = np.random.default_rng(9)
+        mo = rng.normal(size=(2*mol.nao, 3))+1j*rng.normal(size=(2*mol.nao, 3))
+        spin = mo.reshape(2, mol.nao, 3)
+        pair = np.einsum('spi,sqj->pqij', spin.conj(), spin)
+        for intor, symmetry in (('int2e', 's1'), ('int2e_ip1', 's1')):
+            with self.subTest(integral=intor):
+                ao = mol.intor(intor)
+                expected = lib.einsum('...pqrs,pqij,rskl->...ijkl', ao, pair, pair)
+                actual = nrr_outcore.general_iofree(mol, (mo,)*4, intor=intor, aosym=symmetry)
+                np.testing.assert_allclose(actual.reshape(expected.shape), expected, atol=1e-10)
+        with lib.H5TmpFile() as archive:
+            archive['eri_mo'] = np.zeros((1, 1))
+            nrr_outcore.full(mol, mo, archive.filename, aosym='s1')
+            expected = lib.einsum('pqrs,pqij,rskl->ijkl', mol.intor('int2e'), pair, pair)
+            np.testing.assert_allclose(archive['eri_mo'][:].reshape(expected.shape), expected, atol=1e-10)
+
 
 if __name__ == '__main__':
     print('Full Tests for ao2mo.nrr_outcore')

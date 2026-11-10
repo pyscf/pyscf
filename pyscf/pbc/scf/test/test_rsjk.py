@@ -381,6 +381,53 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e_rs, e_ref, 7)
         self.assertAlmostEqual(e_rs, -1.642545959039, 7)
 
+
+    def test_diffuse_pair_partition(self):
+        cell = Cell().build(atom='He 0 0 0', a=np.eye(3)*3,
+                     basis=[[0, [1.2, 1]], [0, [.15, 1]]],
+                     mesh=[25]*3, precision=1e-8, verbose=0)
+        kpts = cell.make_kpts([2, 1, 1])
+        rng = np.random.default_rng(24)
+        c = rng.normal(size=(2, cell.nao, 1))
+        dm = c @ c.transpose(0, 2, 1)
+        refj, refk = FFTDF(cell, kpts).get_jk(dm, kpts=kpts, exxdiv=None)
+        for exclude in (False, True):
+            with self.subTest(exclude_diffuse_pairs=exclude):
+                builder = rsjk.RangeSeparatedJKBuilder(cell, kpts)
+                builder.exclude_dd_block = exclude
+                builder.allow_drv_nodddd = False
+                builder.omega = .5
+                j, k = builder.get_jk(dm, kpts=kpts, exxdiv=None)
+                np.testing.assert_allclose(j, refj, atol=2e-7)
+                np.testing.assert_allclose(k, refk, atol=2e-7)
+                # An updated density also checks the incremental short-range build.
+                j, k = builder.get_jk(dm*.9, kpts=kpts, exxdiv=None)
+                np.testing.assert_allclose(j, refj*.9, atol=2e-7)
+                np.testing.assert_allclose(k, refk*.9, atol=2e-7)
+
+    def test_tagged_spin_density(self):
+        cell = Cell().build(atom='He 0 0 0', a=np.eye(3)*3,
+                     basis=[[0, [1.2, 1]], [0, [.15, 1]]],
+                     mesh=[25]*3, precision=1e-8, verbose=0)
+        kpts = cell.make_kpts([3, 1, 1])
+        mf = scf.KRHF(cell, kpts, exxdiv=None).run(conv_tol=1e-10).to_uhf()
+        dm = mf.make_rdm1()
+        refj, refk = mf.get_jk(dm_kpts=dm, exxdiv=None)
+        builder = rsjk.RangeSeparatedJKBuilder(cell, kpts)
+        builder.exclude_dd_block = False
+        builder.allow_drv_nodddd = True
+        builder.omega = .5
+        for density in (dm, mf.make_rdm1(mf.mo_coeff, np.asarray(mf.mo_occ)*.9)):
+            j, k = builder.get_jk(density, kpts=kpts, exxdiv=None)
+            scale = 1 if density is dm else .9
+            np.testing.assert_allclose(j, refj*scale, atol=2e-7)
+            np.testing.assert_allclose(k, refk*scale, atol=2e-7)
+        builder.reset()
+        builder.time_reversal_symmetry = False
+        j, k = builder.get_jk(dm, kpts=kpts, exxdiv=None)
+        np.testing.assert_allclose(j, refj, atol=2e-7)
+        np.testing.assert_allclose(k, refk, atol=2e-7)
+
 if __name__ == '__main__':
     print("Full Tests for rsjk")
     unittest.main()

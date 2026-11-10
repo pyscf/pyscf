@@ -245,9 +245,7 @@ def get_ab(mf, frozen=None,  mo_energy=None, mo_coeff=None, mo_occ=None):
         b_ab += numpy.einsum('iajb->iajb', eri_ab[:nocc_a,nocc_a:,:nocc_b,nocc_b:])
 
     if isinstance(mf, scf.hf.KohnShamDFT):
-        from pyscf.dft import xc_deriv
         ni = mf._numint
-        ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
 
         add_hf_(a, b, hyb)
@@ -419,6 +417,8 @@ def get_nto(tdobj, state=1, threshold=OUTPUT_THRESHOLD, verbose=None):
         basis. The first N_occ NTOs are occupied NTOs and the rest are virtual
         NTOs.
     '''
+    assert not numpy.iscomplexobj(tdobj.xy[0][0][0])
+
     if state == 0:
         logger.warn(tdobj, 'Excited state starts from 1. '
                     'Set state=1 for first excited state.')
@@ -562,6 +562,7 @@ def get_nto(tdobj, state=1, threshold=OUTPUT_THRESHOLD, verbose=None):
 
 
 def analyze(tdobj, verbose=None):
+    assert not numpy.iscomplexobj(tdobj.xy[0][0][0])
     log = logger.new_logger(tdobj, verbose)
     mol = tdobj.mol
     maska, maskb = tdobj.get_frozen_mask()
@@ -638,6 +639,7 @@ def analyze(tdobj, verbose=None):
 
 def _contract_multipole(tdobj, ints, hermi=True, xy=None):
     if xy is None: xy = tdobj.xy
+    assert not numpy.iscomplexobj(tdobj.xy[0][0][0])
     maska, maskb = tdobj.get_frozen_mask()
     mo_coeff = (tdobj._scf.mo_coeff[0][:, maska], tdobj._scf.mo_coeff[1][:, maskb])
     mo_occ = (tdobj._scf.mo_occ[0][maska], tdobj._scf.mo_occ[1][maskb])

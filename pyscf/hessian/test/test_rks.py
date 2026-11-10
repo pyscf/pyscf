@@ -17,6 +17,7 @@ import unittest
 import numpy
 from pyscf import gto, dft, lib
 from pyscf import grad, hessian
+from pyscf.hessian import thermo
 try:
     from pyscf.dispersion import dftd3, dftd4
 except (ImportError, OSError):
@@ -102,6 +103,17 @@ class KnownValues(unittest.TestCase):
     def tearDownClass(cls):
         dft.radi.ATOM_SPECIFIC_TREUTLER_GRIDS = cls.original_grids
 
+    def test_unsupported_grid_response(self):
+        for cls in (dft.RKS, dft.UKS):
+            mf = cls(mol)
+            for method in (mf, mf.density_fit()):
+                with self.subTest(method=type(method).__name__):
+                    hess = method.Hessian().set(grid_response=True)
+                    with self.assertRaisesRegex(NotImplementedError, 'grid response'):
+                        hess.partial_hess_elec()
+                    with self.assertRaisesRegex(NotImplementedError, 'grid response'):
+                        hess.make_h1(None, None)
+
     def test_rks_hess_atmlst(self):
         mf = dft.RKS(mol)
         mf.xc = 'pbe0'
@@ -160,6 +172,26 @@ class KnownValues(unittest.TestCase):
         e2 = g_scanner(pmol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
         #FIXME: errors seems too big
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 3)
+
+    def test_b3lyp_hess_hard(self):
+        # Regression for issue #2702: the CPHF Krylov solver must not
+        # silently return an inaccurate response for near-parallel
+        # right-hand sides (symmetric Hessian perturbations), which would
+        # corrupt the analytical Hessian and its harmonic frequencies.
+        # Reference frequencies are the most strict analytical values,
+        # recorded with the per-root fallback driven to tol = 1e-9.  The
+        # default solver reproduces them (its per-RHS fallback refines to
+        # tol), while the pre-fix solver is ~3e-3 cm^-1 off, caught by
+        # atol=2e-3.
+        mf = dft.RKS(mol)
+        mf.conv_tol = 1e-14
+        mf.xc = 'b3lyp'
+        e0 = mf.kernel()
+        hess = mf.Hessian().kernel()
+        freqs = thermo.harmonic_analysis(mol, hess)['freq_wavenumber'].real
+        freqs = numpy.sort(freqs[freqs > 100])
+        numpy.testing.assert_allclose(
+            freqs, [1613.059373, 3874.953453, 4006.022814], atol=2e-3)
 
     @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
     def test_finite_diff_b3lyp_d3_hess_high_cost(self):
@@ -309,6 +341,76 @@ class KnownValues(unittest.TestCase):
         e2 += hobj.hess_nuc(h4)
         e2ref = finite_partial_diff(mf)
         self.assertAlmostEqual(abs(e2-e2ref).max(), 0, 6)
+
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_d3_hessian(self):
+        mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', verbose=0)
+        mf = mol.RKS(xc='pbe')
+        coords = mol.atom_coords()
+        eps = 1e-4
+        for version in ['d3bj', 'd3cso', 'd3bjatm']:
+            with self.subTest(version=version):
+                mf.disp = version
+                analytic = mf.Hessian().get_dispersion()
+                self.assertEqual(analytic.shape, (3, 3, 3, 3))
+                numerical = numpy.zeros_like(analytic)
+                for i in range(mol.natm):
+                    for j in range(3):
+                        coords1 = coords.copy()
+                        coords1[i,j] += eps
+                        mol1 = mol.set_geom_(coords1, unit='Bohr', inplace=False)
+                        mf1 = mol1.RKS(xc='pbe')
+                        mf1.disp = version
+                        g1 = mf1.nuc_grad_method().get_dispersion()
+                        coords1[i,j] -= 2*eps
+                        mol1 = mol.set_geom_(coords1, unit='Bohr', inplace=False)
+                        mf1 = mol1.RKS(xc='pbe')
+                        mf1.disp = version
+                        g2 = mf1.nuc_grad_method().get_dispersion()
+                        numerical[i,:,j,:] = (g1 - g2)/(2*eps)
+                numpy.testing.assert_allclose(analytic, numerical, atol=1e-7, rtol=0)
+
+    @unittest.skipIf(dftd3 is None, "requires the dftd3 library")
+    def test_get_gcp_hessian(self):
+        mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', verbose=0)
+        mf = mol.RKS()
+        coords = mol.atom_coords()
+        eps = 1e-4
+        for method in ['b973c', 'r2scan3c']:
+            with self.subTest(method=method):
+                mf.gcp = method
+                analytic = mf.Hessian().get_gcp()
+                self.assertEqual(analytic.shape, (3, 3, 3, 3))
+                numerical = numpy.zeros_like(analytic)
+                for i in range(mol.natm):
+                    for j in range(3):
+                        coords1 = coords.copy()
+                        coords1[i,j] += eps
+                        mol1 = mol.set_geom_(coords1, unit='Bohr', inplace=False)
+                        mf1 = mol1.RKS()
+                        mf1.gcp = method
+                        g1 = mf1.nuc_grad_method().get_gcp()
+                        coords1[i,j] -= 2*eps
+                        mol1 = mol.set_geom_(coords1, unit='Bohr', inplace=False)
+                        mf1 = mol1.RKS()
+                        mf1.gcp = method
+                        g2 = mf1.nuc_grad_method().get_gcp()
+                        numerical[i,:,j,:] = (g1 - g2)/(2*eps)
+                numpy.testing.assert_allclose(analytic, numerical, atol=1e-7, rtol=0)
+
+    @unittest.skipIf(dftd3 is None or dftd4 is None, "requires the dftd3 and dftd4 libraries")
+    def test_dispersion_ghost_atoms(self):
+        mol = gto.M(atom='ghost-H 2 0 0; O 0 0 0; X-H 0 2 0; H 0 0 1; H 0 1 0', verbose=0)
+        real_mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', verbose=0)
+        mf = mol.RKS(xc='pbe')
+        real_mf = real_mol.RKS(xc='pbe')
+        atom_idx = [1,3,4]
+        for version in ['d3bj', 'd4']:
+            with self.subTest(version=version):
+                mf.disp = real_mf.disp = version
+                expected = numpy.zeros([5,5,3,3])
+                expected[numpy.ix_(atom_idx,atom_idx)] = real_mf.Hessian().get_dispersion()
+                numpy.testing.assert_allclose(mf.Hessian().get_dispersion(), expected, atol=1e-10, rtol=0)
 
 
 if __name__ == "__main__":

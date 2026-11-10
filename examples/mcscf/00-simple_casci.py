@@ -85,3 +85,19 @@ mycas.analyze()
 # pop of  0 O 2py       1.49626
 # pop of  0 O 2pz       1.19312
 # ...
+
+# Symmetry is enabled on the molecule before building the SCF reference.
+# Use a small separate system to illustrate explicit active electron counts
+# and replacement of the symmetry-adapted CI solver.
+from pyscf import fci
+sym_mol = pyscf.M(atom='H 0 0 0; H 0 0 0.74', basis='sto-3g',
+                  symmetry='D2h')
+sym_hf = sym_mol.RHF().run()
+sym_cas = sym_hf.CASCI(2, (1, 1))
+sym_cas.fcisolver.wfnsym = 'Ag'
+sym_cas.kernel()
+
+# This replacement removes the CI spatial-symmetry restriction while keeping
+# the same orbitals and electron counts; it does not target a particular irrep.
+sym_cas.fcisolver = fci.direct_spin1.FCI(sym_mol)
+sym_cas.kernel()

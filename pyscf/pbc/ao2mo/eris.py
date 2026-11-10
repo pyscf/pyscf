@@ -246,13 +246,3 @@ def get_ao_eri(cell, kpts=None):
     if kpts is not None:
         assert len(kpts) == 4
     return df.FFTDF(cell).get_eri(kpts)
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto as pgto
-    cell = pgto.Cell()
-    cell.atom = 'He 1. .5 .5; He .1 1.3 2.1'
-    cell.basis = 'ccpvdz'
-    cell.a = np.eye(3) * 4.
-    cell.mesh = [11]*3
-    cell.build()
-    print(get_ao_eri(cell).shape)

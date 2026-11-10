@@ -120,3 +120,12 @@ e_t = mc.e_tot  # -2244.81493852189
 
 print('E(T) = %.15g  E(Q) = %.15g  gap = %.15g' % (e_t, e_q, e_t-e_q))
 
+# An impurity can also be specified by AO indices. Here the two H 1s AOs
+# define the impurity in a small hydrogen peroxide calculation.
+small_mol = gto.M(atom='H 0 0.5 1.5; O 0 0 1; O 0 0 -1; H 0 -0.5 -1.5',
+                  basis='ccpvdz')
+small_mf = scf.RHF(small_mol).run()
+h_1s = [i for i, label in enumerate(small_mol.ao_labels()) if 'H 1s' in label]
+ncas, nelecas, mo = dmet_cas.guess_cas(small_mf, small_mf.make_rdm1(), h_1s)
+small_mc = mcscf.CASSCF(small_mf, ncas, nelecas).run(mo)
+print('HOOH DMET-CAS energy = %.12f' % small_mc.e_tot)

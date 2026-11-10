@@ -468,6 +468,25 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(parse_dft('wb97x-d3bj'), ('wb97x-v', False, 'd3bj'))
         self.assertEqual(parse_dft('wb97x-d3zero2b'), ('wb97x', '', 'd3zero2b'))
         self.assertEqual(parse_dft('wb97x-3c'), ('wb97x-v', False, 'd4:wb97x-3c'))
+        self.assertEqual(parse_dft('b97-3c'), ('b97-3c', False, 'd3bjatm:b97-3c'))
+        self.assertEqual(parse_dft('r2scan-3c'), ('r2scan', False, 'd4:r2scan-3c'))
+
+    def test_parse_xc_3c(self):
+        # b97-3c resolves to GGA_XC_B97_3C, r2scan-3c to r2SCAN
+        hyb, fn_facs = dft.libxc.parse_xc('b97-3c')
+        self.assertEqual(hyb, (0, 0, 0))
+        self.assertEqual(fn_facs, ((327, 1),))
+
+        hyb, fn_facs = dft.libxc.parse_xc('b97_3c')
+        self.assertEqual(fn_facs, ((327, 1),))
+
+        hyb, fn_facs = dft.libxc.parse_xc('r2scan-3c')
+        self.assertEqual(fn_facs[0][1], 1)
+        self.assertEqual(fn_facs[1][1], 1)
+
+        # The full libxc canonical name is equivalent to the shorthand spelling
+        hyb, fn_facs = dft.libxc.parse_xc('gga_xc_b97_3c')
+        self.assertEqual(fn_facs, ((327, 1),))
 
     def test_set_param(self):
         XC_ID_B97_2 = 410

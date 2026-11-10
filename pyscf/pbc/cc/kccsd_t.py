@@ -287,33 +287,3 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 #     SCF     : -8.65192329453 Hartree per cell
 #     CCSD    : -0.15529836941 Hartree per cell
 #     CCSD(T) : -0.00191451068 Hartree per cell
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto
-    from pyscf.pbc import cc
-
-    cell = gto.Cell()
-    cell.atom = '''
-    C 0.000000000000   0.000000000000   0.000000000000
-    C 1.685068664391   1.685068664391   1.685068664391
-    '''
-    cell.basis = 'gth-szv'
-    cell.pseudo = 'gth-pade'
-    cell.a = '''
-    0.000000000, 3.370137329, 3.370137329
-    3.370137329, 0.000000000, 3.370137329
-    3.370137329, 3.370137329, 0.000000000'''
-    cell.unit = 'B'
-    cell.verbose = 5
-    cell.mesh = [24, 24, 24]
-    cell.build()
-
-    kpts = cell.make_kpts([1, 1, 3])
-    kpts -= kpts[0]
-    kmf = scf.KRHF(cell, kpts=kpts, exxdiv=None)
-    ehf = kmf.kernel()
-
-    mycc = cc.KGCCSD(kmf)
-    ecc, t1, t2 = mycc.kernel()
-
-    energy_t = kernel(mycc)

@@ -189,7 +189,3 @@ def _parse_ecp(raw_ecp):
         if l in ecp_add:
             bsort.append([l, ecp_add[l]])
     return [nelec, bsort]
-
-if __name__ == '__main__':
-    #print(search_seg('minao.libmol', 'C'))
-    print(load('cc_pvdz.libmol', 'C'))

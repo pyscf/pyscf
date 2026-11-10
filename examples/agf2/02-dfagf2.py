@@ -49,3 +49,21 @@ for i in range(3):
         dipole[i] += mol.atom_charge(j) * mol.atom_coord(j)[i]
 
 print(f'Dipole moment from AGF2: {dipole[0]} {dipole[1]} {dipole[2]}')
+
+# An unrestricted DF reference selects DF-UAGF2 through the same factory.
+# Check internal UHF stability before starting the correlated calculation.
+from pyscf.scf import stability
+open_mol = gto.M(atom='O 0 0 0; H 0 0 0.97', basis='sto-3g', spin=1)
+uhf = scf.UHF(open_mol).density_fit().run(conv_tol=1e-11)
+for attempt in range(10):
+    mo, _, stable, _ = stability.uhf_stability(uhf, return_status=True)
+    if stable:
+        break
+    # Restart from the orbitals displaced along the unstable direction.
+    uhf.kernel(dm0=uhf.make_rdm1(mo, uhf.mo_occ))
+else:
+    raise RuntimeError('UHF reference did not stabilize in ten attempts')
+
+ugf2 = agf2.AGF2(uhf).run()
+ugf2.ipagf2(nroots=3)
+ugf2.eaagf2(nroots=3)

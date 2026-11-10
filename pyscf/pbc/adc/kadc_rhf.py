@@ -111,7 +111,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None):
 
         evals_k = evals_k.real
         evals[k] = evals_k
-        evecs[k, :, :size] += evecs_k
+        evecs[k, :, :size] = evecs_k
         conv[k] = conv_k.real
 
         U = np.array(evecs[k]).T.copy()

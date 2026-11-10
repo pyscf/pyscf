@@ -48,3 +48,17 @@ df_coef = df_coef.reshape(naux, nao, nao)
 
 df_eri = lib.einsum('ijP,Pkl->ijkl', ints_3c2e, df_coef)
 print(abs(mol.intor('int2e') - df_eri).max())
+
+# Cholesky-whitened three-center tensors include the inverse Coulomb metric.
+# Their leading dimension is the auxiliary index, followed by packed AO pairs.
+cderi = df.incore.cholesky_eri(mol, auxmol=auxmol)
+print('Whitened DF tensor shape', cderi.shape)
+
+# Relativistic fitting has separate large- and small-component spinor tensors.
+# Small-component factors of (1/2c)^2 are applied by the four-component JK
+# builder, not included in these raw integral tensors. For SCF calculations,
+# prefer scf.DHF(mol).density_fit(); see 00-with_df.py.
+from pyscf.df import r_incore
+ll = r_incore.cholesky_eri(mol, auxmol=auxmol, int3c='int3c2e_spinor')
+ss = r_incore.cholesky_eri(mol, auxmol=auxmol, int3c='int3c2e_spsp1_spinor')
+print('Large/small component DF tensor shapes', ll.shape, ss.shape)

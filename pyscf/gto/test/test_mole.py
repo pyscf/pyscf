@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import io
 import unittest
 from functools import reduce
 import numpy
@@ -97,6 +98,67 @@ C    SP
         mol1.x = None
         mol1.copy = None
         mol1.check_sanity()
+
+    def test_check_sanity_ecp_keys(self):
+        # Issue: the ECP sanity check compared the raw keys of .basis and .ecp,
+        # while Mole.build normalizes both with _atom_symbol. Nuclear charges or
+        # lower case symbols in .ecp therefore produced a spurious warning even
+        # though the ECP was applied.
+        def ecp_warnings(basis, ecp):
+            mol = gto.Mole()
+            mol.atom = 'Au 0 0 0; Sb 0 0 2.6'
+            mol.basis = basis
+            mol.ecp = ecp
+            mol.verbose = 4
+            mol.stdout = io.StringIO()
+            mol.build(dump_input=False)
+            msgs = [line for line in mol.stdout.getvalue().splitlines()
+                    if 'not specified' in line]
+            return mol, msgs
+
+        # def2-SVPD replaces 60 core electrons on Au and 28 on Sb
+        symbol_keys = {'Au': 'def2-SVPD', 'Sb': 'def2-SVPD'}
+        equivalent = [
+            symbol_keys,
+            {'79': 'def2-SVPD', '51': 'def2-SVPD'},   # nuclear charges
+            {79: 'def2-SVPD', 51: 'def2-SVPD'},       # integer keys
+            {'au': 'def2-SVPD', 'sb': 'def2-SVPD'},   # lower case
+            {'default': 'def2-SVPD'},                 # default entry
+        ]
+        for ecp in equivalent:
+            mol, msgs = ecp_warnings({'default': 'def2-SVPD'}, ecp)
+            self.assertEqual(msgs, [])
+            self.assertEqual(mol.nelectron, 42)
+            self.assertEqual(mol.atom_nelec_core(0), 60)
+            self.assertEqual(mol.atom_nelec_core(1), 28)
+
+        # the keys of .basis are normalized as well
+        mol, msgs = ecp_warnings({'79': 'def2-SVPD', '51': 'def2-SVPD'},
+                                 symbol_keys)
+        self.assertEqual(msgs, [])
+        self.assertEqual(mol.nelectron, 42)
+
+        # a genuinely missing ECP must still be reported
+        mol, msgs = ecp_warnings({'default': 'def2-SVPD'}, {'Sb': 'def2-SVPD'})
+        self.assertEqual(len(msgs), 1)
+        self.assertIn('ECP for Au not specified', msgs[0])
+        self.assertEqual(mol.nelectron, 102)
+
+        mol, msgs = ecp_warnings({'default': 'def2-SVPD'}, {})
+        self.assertEqual(len(msgs), 2)
+        self.assertEqual(mol.nelectron, 130)
+
+        # labelled atoms inherit the ECP of the plain element in make_ecp_env
+        mol = gto.Mole()
+        mol.atom = 'Au1 0 0 0; Au2 0 0 2.6'
+        mol.basis = {'default': 'def2-SVPD'}
+        mol.ecp = {'Au': 'def2-SVPD'}
+        mol.verbose = 4
+        mol.stdout = io.StringIO()
+        mol.build(dump_input=False)
+        self.assertEqual(mol.atom_nelec_core(0), 60)
+        self.assertEqual(mol.atom_nelec_core(1), 60)
+        self.assertNotIn('not specified', mol.stdout.getvalue())
 
     def test_nao_range(self):
         self.assertEqual(mol0.nao_nr_range(1,4), (2, 7))
@@ -825,6 +887,86 @@ O    SP
         # Sanity check that this fix does not break other edge cases
         self.assertEqual(mol_large.search_ao_label("H 1s").tolist(), list(range(22)))
         self.assertEqual(mol_large.search_ao_label("1s").tolist(), list(range(22)))
+
+    def test_rebuild_without_ecp(self):
+        mol = gto.M(atom='Na 0 0 0', basis='lanl2dz', ecp='lanl2dz',
+                    spin=1, verbose=0)
+        self.assertTrue(mol.has_ecp())
+        mol.ecp = {}
+        mol.build(False, False)
+        ref = gto.M(atom='Na 0 0 0', basis='lanl2dz', spin=1, verbose=0)
+        self.assertEqual(mol._ecp, {})
+        self.assertEqual(mol._ecpbas.shape, (0, gto.BAS_SLOTS))
+        self.assertEqual(mol._ecpbas.dtype, numpy.dtype(numpy.int32))
+        self.assertFalse(mol.has_ecp())
+        self.assertEqual(mol.nelectron, 11)
+        numpy.testing.assert_allclose(mol.intor('int1e_nuc'),
+                                      ref.intor('int1e_nuc'), atol=1e-12)
+
+    def test_rebuild_atom_without_applicable_ecp(self):
+        mol = gto.M(atom='Na 0 0 0; H 0 0 2', basis='lanl2dz',
+                    ecp='lanl2dz', verbose=0)
+        atom = mol.copy()
+        atom.atom = 'H 0 0 0'
+        atom.spin = 1
+        atom.build(False, False)
+        ref = gto.M(atom='H 0 0 0', basis='lanl2dz', spin=1, verbose=0)
+        self.assertEqual(atom._ecp, {})
+        self.assertEqual(atom._ecpbas.shape, (0, gto.BAS_SLOTS))
+        self.assertFalse(atom.has_ecp())
+        self.assertTrue(mol.has_ecp())
+        numpy.testing.assert_allclose(atom.intor('int1e_nuc'),
+                                      ref.intor('int1e_nuc'), atol=1e-12)
+        atom.atom = 'Na 0 0 0'
+        atom.build(False, False)
+        self.assertTrue(atom.has_ecp())
+        self.assertEqual(atom.nelectron, 1)
+
+    def test_rebuild_without_pseudo(self):
+        from pyscf.scf.hf import get_hcore
+        mol = gto.M(atom='C 0 0 0', basis='sto3g', pseudo='gth-pade',
+                    verbose=0)
+        self.assertEqual(mol.nelectron, 4)
+        mol.build(False, False, pseudo={})
+        ref = gto.M(atom='C 0 0 0', basis='sto3g', verbose=0)
+        self.assertFalse(mol.has_ecp())
+        self.assertEqual(mol.nelectron, ref.nelectron)
+        numpy.testing.assert_allclose(get_hcore(mol), get_hcore(ref), atol=1e-12)
+
+    def test_rebuild_without_atoms(self):
+        mol = gto.M(atom='He 0 0 0', verbose=0)
+        mol.build(False, False, atom=[])
+        self.assertEqual(mol.natm, 0)
+        self.assertEqual(mol.nao, 0)
+        self.assertEqual(mol.nelectron, 0)
+        self.assertEqual(mol._atom, [])
+        mol.build(False, False, atom='He 0 0 0')
+        self.assertEqual(mol.natm, 1)
+        self.assertEqual(mol.nao, 1)
+
+    def test_rebuild_without_basis(self):
+        mol = gto.M(atom='He 0 0 0', verbose=0)
+        mol.build(False, False, basis={})
+        self.assertEqual(mol.natm, 1)
+        self.assertEqual(mol.nao, 0)
+        self.assertEqual(mol._basis, {})
+        mol.build(False, False, basis='sto3g')
+        self.assertEqual(mol.nao, 1)
+
+    def test_rebuild_without_symmetry(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 1', symmetry=True, verbose=0)
+        self.assertEqual(mol.groupname, 'Dooh')
+        mol.build(False, False, atom='He 0 0 0', symmetry=False)
+        self.assertEqual(mol.groupname, 'C1')
+        self.assertEqual(mol.topgroup, 'C1')
+        self.assertIsNone(mol.symm_orb)
+        self.assertIsNone(mol.irrep_id)
+        self.assertIsNone(mol.irrep_name)
+        self.assertIsNone(mol._symm_orig)
+        self.assertIsNone(mol._symm_axes)
+        mol.build(False, False, symmetry=True)
+        self.assertEqual(mol.groupname, 'SO3')
+        self.assertEqual(numpy.hstack(mol.symm_orb).shape, (1, 1))
 
     def test_input_ecp(self):
         mol1 = gto.Mole()

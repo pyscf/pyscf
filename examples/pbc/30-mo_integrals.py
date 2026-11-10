@@ -7,7 +7,7 @@ MO integrals in PBC code
 
 import numpy
 from pyscf import ao2mo
-from pyscf.pbc import gto, scf, tools
+from pyscf.pbc import gto, scf, tools, df
 
 cell = gto.M(
     a = numpy.eye(3)*3.5668,
@@ -57,3 +57,17 @@ for kp in range(nkpts):
                                         [kpts[i] for i in (kp,kq,kr,ks)])
             eri_kpt = eri_kpt.reshape([nmo]*4)
 
+# Compare AO-to-MO transformations from the three density-fitting backends
+# against an explicit contraction at a momentum-conserving k-point quartet.
+indices = (0, 1, 2, kconserv[0, 1, 2])
+quartet = [kpts[i] for i in indices]
+coeffs = [kmf.mo_coeff[i] for i in indices]
+for fitting_class in (df.AFTDF, df.GDF, df.FFTDF):
+    fitting = fitting_class(cell, kpts)
+    eri_ao = fitting.get_eri(quartet).reshape([cell.nao] * 4)
+    explicit = numpy.einsum('pqrs,pi,qj,rk,sl->ijkl', eri_ao,
+                            coeffs[0].conj(), coeffs[1],
+                            coeffs[2].conj(), coeffs[3], optimize=True)
+    transformed = fitting.ao2mo(coeffs, quartet).reshape([nmo] * 4)
+    print(fitting_class.__name__, 'AO-to-MO difference:',
+          abs(transformed - explicit).max())

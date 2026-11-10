@@ -93,11 +93,31 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
     # "p^+ q r^+ s |CI>", we employ the identity
     #    p^+ q r^+ s = p^+ r^+ s q  +  delta(qr) p^+ s
     # the second term is the source of h_ps
+    # The (bb|aa) contraction below applies h_ps to the electrons of one spin
+    # through the number operator of the other spin, h_ps/nelec[0] to beta
+    # electrons and h_ps/nelec[1] to alpha electrons. When one spin has no
+    # electrons, h_ps is contracted with the other spin directly.
     h_ps = numpy.einsum('pqqs->ps', eri)
     eri1 = eri * 2
     for k in range(norb):
-        eri1[:,:,k,k] += h_ps/nelec[0]
-        eri1[k,k,:,:] += h_ps/nelec[1]
+        if nelec[0] > 0:
+            eri1[:,:,k,k] += h_ps/nelec[0]
+        if nelec[1] > 0:
+            eri1[k,k,:,:] += h_ps/nelec[1]
+    if nelec[0] == 0 or nelec[1] == 0:
+        h_ps_tril = lib.pack_tril(h_ps)
+        if nelec[1] == 0:
+            contract_1e = libfci.FCIcontract_a_1e
+        else:
+            contract_1e = libfci.FCIcontract_b_1e
+        contract_1e(h_ps_tril.ctypes.data_as(ctypes.c_void_p),
+                    fcivec.ctypes.data_as(ctypes.c_void_p),
+                    ci1.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(norb),
+                    ctypes.c_int(na), ctypes.c_int(nb),
+                    ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
+                    cd_indexa.ctypes.data_as(ctypes.c_void_p),
+                    cd_indexb.ctypes.data_as(ctypes.c_void_p))
     eri1 = ao2mo.restore(4, eri1, norb)
     # (bb|aa)
     libfci.SCIcontract_2e_bbaa(eri1.ctypes.data_as(ctypes.c_void_p),
@@ -384,8 +404,8 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         else:
             ci0 = [x.ravel() for x in ci0]
     else:
-        ci_strs = (numpy.asarray([int('1'*nelec[0], 2)]),
-                   numpy.asarray([int('1'*nelec[1], 2)]))
+        ci_strs = (numpy.asarray([(1 << nelec[0]) - 1]),
+                   numpy.asarray([(1 << nelec[1]) - 1]))
         ci0 = _as_SCIvector(numpy.ones((1,1)), ci_strs)
         ci0 = myci.enlarge_space(ci0, h2e, norb, nelec)
         if ci0.size < nroots:
@@ -923,69 +943,31 @@ class SCIvector(numpy.ndarray):
         else:
             return out.view(numpy.ndarray)
 
-def _as_SCIvector(civec, ci_strs):
+def as_SCIvector(civec, ci_strs):
+    '''Attach the alpha and beta strings to selected CI coefficients.
+
+    Args:
+        civec : 2D array
+            Coefficients, of shape (len(ci_strs[0]), len(ci_strs[1])).
+        ci_strs : tuple of two 1D integer arrays
+            Alpha and beta occupation strings, as produced by
+            cistring.make_strings.
+
+    Returns:
+        An SCIvector view of civec.
+
+    Examples:
+
+    >>> from pyscf.fci import cistring, selected_ci
+    >>> strs = (cistring.make_strings(range(2), 1), numpy.asarray([0]))
+    >>> civec = selected_ci.as_SCIvector(numpy.array([[1.], [0.]]), strs)
+    '''
     civec = civec.view(SCIvector)
     civec._strs = ci_strs
     return civec
+_as_SCIvector = as_SCIvector
 
 def _as_SCIvector_if_not(civec, ci_strs):
     if getattr(civec, '_strs', None) is None:
         civec = _as_SCIvector(civec, ci_strs)
     return civec
-
-if __name__ == '__main__':
-    from functools import reduce
-    from pyscf import gto
-    from pyscf import scf
-    from pyscf.fci import spin_op
-    from pyscf.fci import addons
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None
-    mol.atom = [
-        ['H', ( 1.,-1.    , 0.   )],
-        ['H', ( 0.,-1.    ,-1.   )],
-        ['H', ( 1.,-0.5   ,-1.   )],
-        ['H', ( 0.,-0.    ,-1.   )],
-        ['H', ( 1.,-0.5   , 0.   )],
-        ['H', ( 0., 1.    , 1.   )],
-        ['H', ( 1., 2.    , 3.   )],
-        ['H', ( 1., 2.    , 4.   )],
-    ]
-    mol.basis = 'sto-3g'
-    mol.build()
-
-    m = scf.RHF(mol)
-    m.kernel()
-    norb = m.mo_coeff.shape[1]
-    nelec = mol.nelectron
-    h1e = reduce(numpy.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff))
-    eri = ao2mo.kernel(m._eri, m.mo_coeff, compact=False)
-    eri = eri.reshape(norb,norb,norb,norb)
-
-    e1, c1 = kernel(h1e, eri, norb, nelec)
-    e2, c2 = direct_spin1.kernel(h1e, eri, norb, nelec)
-    print(e1, e1 - -11.894559902235565, 'diff to FCI', e1-e2)
-
-    print(c1.shape, c2.shape)
-    dm1_1 = make_rdm1(c1, norb, nelec)
-    dm1_2 = direct_spin1.make_rdm1(c2, norb, nelec)
-    print(abs(dm1_1 - dm1_2).sum())
-    dm2_1 = make_rdm2(c1, norb, nelec)
-    dm2_2 = direct_spin1.make_rdm12(c2, norb, nelec)[1]
-    print(abs(dm2_1 - dm2_2).sum())
-
-    myci = SelectedCI()
-    e, c = kernel_fixed_space(myci, h1e, eri, norb, nelec, c1._strs)
-    print(e - -11.894559902235565)
-
-    print(myci.large_ci(c1, norb, nelec))
-    print(myci.spin_square(c1, norb, nelec)[0] -
-          spin_op.spin_square0(to_fci(c1, norb, nelec), norb, nelec)[0])
-
-    myci = SelectedCI()
-    myci = addons.fix_spin_(myci)
-    e1, c1 = myci.kernel(h1e, eri, norb, nelec)
-    print(e1, e1 - -11.89467612053687)
-    print(myci.spin_square(c1, norb, nelec))

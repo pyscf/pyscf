@@ -654,22 +654,3 @@ class MSPDFTLagPrec (sacasscf_grad.SACASLagPrec):
                         'Response equations may not be solvable to arbitrary '
                         'precision!')
         self.sing_warned = True
-
-
-
-if __name__ == '__main__':
-    # Test mspdft_heff_response and mspdft_heff_HellmannFeynman by trying to
-    # reproduce SA-CASSCF derivatives in an arbitrary basis
-    import math
-    from pyscf import scf, gto, mcscf
-    from pyscf.fci import csf_solver
-    xyz = '''O  0.00000000   0.08111156   0.00000000
-             H  0.78620605   0.66349738   0.00000000
-             H -0.78620605   0.66349738   0.00000000'''
-    mol = gto.M (atom=xyz, basis='6-31g', symmetry=False, output='mspdft.log',
-        verbose=lib.logger.DEBUG)
-    mf = scf.RHF (mol).run ()
-    mc = mcpdft.CASSCF (mf, 'tPBE', 4, 4).set (fcisolver = csf_solver (mol, 1))
-    mc = mc.multi_state ([1.0/3,]*3, 'cms').run ()
-    mc_grad = Gradients (mc)
-    de = np.stack ([mc_grad.kernel (state=i) for i in range (3)], axis=0)

@@ -98,7 +98,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(spin[2],2.0022419282220048 , 5)
         self.assertAlmostEqual(spin[3],2.00764845886461 , 5)
 
-    def test_ee_adc3(self):
+    def test_ee_adc3_high_cost(self):
         myadc.method = "adc(3)"
 
         e,v,p,x = myadc.kernel(nroots=4)

@@ -76,19 +76,3 @@ class SymAdaptedROKS(rks.KohnShamDFT, hf_symm.SymAdaptedROHF):
     to_gpu = lib.to_gpu
 
 ROKS = SymAdaptedROKS
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.verbose = 2
-    mol.output = '/dev/null'
-
-    mol.atom.extend([['He', (0.,0.,0.)], ])
-    mol.basis = { 'He': 'cc-pvdz'}
-    mol.symmetry = 1
-    mol.build()
-
-    m = RKS(mol)
-    m.xc = 'b3lyp'
-    print(m.scf())  # -2.89992555753

@@ -3,6 +3,12 @@
 Installation
 ************
 
+.. note::
+
+   This page preserves an older installation guide. For current platform
+   support, requirements, and installation instructions, see the
+   `current installation guide <https://pyscf.org/user/install.html>`_.
+
 Installation with pip
 =====================
 

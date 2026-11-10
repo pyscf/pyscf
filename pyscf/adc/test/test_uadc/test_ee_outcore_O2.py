@@ -78,7 +78,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(spin[2],2.0071912961760168 , 5)
         self.assertAlmostEqual(spin[3],2.01491056457916 , 5)
 
-    def test_ee_adc2x(self):
+    def test_ee_adc2x_high_cost(self):
         myadc.method = "adc(2)-x"
         myadc.max_memory = 20
         myadc.incore_complete = False
@@ -101,7 +101,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(spin[2],2.0022419282220048 , 5)
         self.assertAlmostEqual(spin[3],2.0076484588646117 , 5)
 
-    def test_ee_adc3(self):
+    def test_ee_adc3_high_cost(self):
         myadc.method = "adc(3)"
         myadc.max_memory = 20
         myadc.incore_complete = False

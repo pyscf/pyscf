@@ -733,36 +733,3 @@ def linear_multi_state_mix(mc, fcisolvers, weights=(0.5, 0.5), **kwargs):
 
     LPDFT.__name__ = "LIN" + base_name
     return LPDFT(mc)
-
-
-if __name__ == "__main__":
-    from pyscf import gto, scf
-    from pyscf import mcpdft
-    from pyscf.csf_fci import csf_solver
-
-    mol = gto.M(
-        atom="""H 0 0 0
-                       H 1.5 0 0""",
-        basis="sto-3g",
-        verbose=5,
-        spin=0,
-        unit="AU",
-        symmetry=True,
-    )
-
-    mf = scf.RHF(mol).run()
-
-    mc = mcpdft.CASSCF(mf, "tPBE", 2, 2, grids_level=6)
-    mc.fcisolver = csf_solver(mol, smult=1)
-
-    N_STATES = 2
-
-    mc = mc.state_average(
-        [
-            1.0 / float(N_STATES),
-        ]
-        * N_STATES
-    )
-
-    sc = linear_multi_state(mc)
-    sc.kernel()

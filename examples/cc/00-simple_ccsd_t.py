@@ -23,3 +23,12 @@ mycc = mf.CCSD().run()
 et = mycc.ccsd_t()
 print('UCCSD(T) correlation energy', mycc.e_corr + et)
 
+# A GHF reference gives a spin-orbital GCCSD(T) calculation.
+mf = mol.GHF().run()
+mycc = mf.CCSD().run()
+print('GCCSD(T) correlation energy', mycc.e_corr + mycc.ccsd_t())
+
+# QCISD(T) is also available through the CC module.
+from pyscf.cc import qcisd_slow
+myqcisd = qcisd_slow.QCISD(mol.RHF().run()).run()
+print('QCISD(T) correlation energy', myqcisd.e_corr + myqcisd.qcisd_t())

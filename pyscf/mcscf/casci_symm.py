@@ -174,37 +174,3 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
 
 scf.hf_symm.RHF.CASCI = scf.hf_symm.ROHF.CASCI = lib.class_as_method(SymAdaptedCASCI)
 scf.uhf_symm.UHF.CASCI = None
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None#"out_h2o"
-    mol.atom = [
-        ['O', ( 0., 0.    , 0.   )],
-        ['H', ( 0., -0.757, 0.587)],
-        ['H', ( 0., 0.757 , 0.587)],]
-
-    mol.basis = {'H': 'sto-3g',
-                 'O': '6-31g',}
-    mol.symmetry = 1
-    mol.build()
-
-    m = scf.RHF(mol)
-    ehf = m.scf()
-    mc = CASCI(m, 4, 4)
-    emc = mc.casci()[0]
-    print(ehf, emc, emc-ehf)
-    #-75.9577817425 -75.9624554777 -0.00467373522233
-    print(emc+75.9624554777)
-
-    mc = CASCI(m, 4, (3,1))
-    mc.fcisolver = fci.direct_spin1
-    emc = mc.casci()[0]
-    print(emc - -75.439016172976)
-
-    mol.spin = 2
-    m = scf.RHF(mol).run()
-    mc = CASCI(m, 4, 4).run()
-    print(mc.e_tot - -75.46992364325132)

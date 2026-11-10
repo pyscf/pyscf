@@ -381,7 +381,7 @@ def symmetrize_multidim(mol, mo, s=None,
         idx = find_symmetric_mo(moso, ovlpso)
         if sum(idx) != csym.shape[1]:
             raise ValueError('Number of symmetry-adapted MOs in not equal to dimensionality '
-                             'of irrep %s: %d != %d' % (mol.irrep_name[irrep], csym.shape[1], sum(idx)))
+                             'of irrep %s: %d != %d' % (irrep, csym.shape[1], sum(idx)))
         mo1.append(mo[:, idx])
     for partners in irreps_mdim:
         SALC_ao_partners = []
@@ -398,7 +398,7 @@ def symmetrize_multidim(mol, mo, s=None,
             mo_irrep = mo[:, idx]
             if sum(idx) != csym.shape[1]:
                 raise ValueError('Number of symmetry-adapted MOs in not equal to dimensionality '
-                                 'of irrep %s: %d != %d' % (mol.irrep_name[irrep], csym.shape[1], sum(idx)))
+                                 'of irrep %s: %d != %d' % (irrep, csym.shape[1], sum(idx)))
             # rotate MO to symm-adapted AO
             SALC_mo = numpy.dot(csym.T.conj(), mo_irrep)
             SALC_mo_partners.append(SALC_mo)
@@ -569,28 +569,3 @@ def direct_prod(orbsym1, orbsym2, groupname='D2h'):
     else:  # D2h and subgroup
         prod = orbsym1[:,None] ^ orbsym2
     return prod
-
-
-if __name__ == "__main__":
-    from pyscf import gto
-    from pyscf import scf
-    mol = gto.Mole()
-    mol.build(
-        atom = [['H', (0,0,0)], ['H', (0,0,1)]],
-        basis = {'H': 'cc-pvdz'},
-        symmetry = 1
-    )
-    mf = scf.RHF(mol)
-    mf.scf()
-
-    nao, nmo = mf.mo_coeff.shape
-    print(label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mf.mo_coeff))
-    numpy.random.seed(1)
-    u = numpy.random.random((nmo,nmo))*1e-2
-    u = scipy.linalg.expm(u - u.T)
-    mo = symmetrize_orb(mol, numpy.dot(mf.mo_coeff, u))
-    print(label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mo))
-
-    orbsym = [0, 3, 0, 2, 5, 6]
-    res = route(7, 3, orbsym)
-    print(res, reduce(lambda x, y: x ^ y, [orbsym[i] for i in res]))

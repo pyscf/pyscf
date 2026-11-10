@@ -20,6 +20,7 @@ import unittest
 import numpy as np
 from pyscf.pbc import gto, dft, df
 from pyscf.pbc.dft import multigrid
+from pyscf.pbc.dft.multigrid.multigrid_pair import MultiGridNumInt
 from pyscf.pbc.dft.multigrid.pp import vpploc_part1_nuc_grad
 from pyscf.pbc.grad import rks as rks_grad
 from pyscf.pbc.grad import uks as uks_grad
@@ -289,7 +290,7 @@ class KnownValues(unittest.TestCase):
         g0 = np.array([[0, 0, -0.003145], [0, 0, 0.003145]])
         assert abs(g - g0).max() < 1e-6
 
-    def test_0D(self):
+    def test_0D_high_cost(self):
         cell = gto.M(
             a = np.eye(3) * 8,
             atom = 'Li 0 0 0; H 0 0 1',
@@ -519,6 +520,48 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(ref.dtype, v.dtype)
         self.assertEqual(ref.shape, v.shape)
         self.assertAlmostEqual(abs(v-ref).max(), 0, 8)
+
+
+    def check_response(self, xc, spin):
+        self.cell = gto.M(atom='He 0 0 0', a=np.eye(3)*3,
+                         basis=[[0, [.8, 1]], [0, [.3, 1]]],
+                         mesh=[21]*3, precision=1e-8, verbose=0)
+        ni = MultiGridNumInt(self.cell)
+        ni.xc_with_j = False
+        dm = np.array([[.8, .1], [.1, .5]])
+        delta = np.array([[.1, -.03], [-.03, .2]])
+        if spin:
+            dm = np.array([dm*.6, dm*.4])
+            delta = np.array([delta, -delta*.2])
+            potential = ni.nr_uks
+            response = ni.nr_uks_fxc
+        else:
+            potential = ni.nr_rks
+            response = ni.nr_rks_fxc
+        rho, vxc, fxc = ni.cache_xc_kernel1(self.cell, None, xc, dm, spin=spin)
+        actual = response(self.cell, None, xc, dm, delta, hermi=1, fxc=fxc)
+        uncached = response(self.cell, None, xc, dm, delta, hermi=1)
+        np.testing.assert_allclose(actual, uncached, atol=1e-12)
+        eps = 1e-4
+        plus = potential(self.cell, None, xc, dm+eps*delta)[2]
+        minus = potential(self.cell, None, xc, dm-eps*delta)[2]
+        np.testing.assert_allclose(actual, (plus-minus)/(2*eps), atol=1e-7)
+        occ, coeff = np.linalg.eigh(dm)
+        orbital_cache = ni.cache_xc_kernel(self.cell, None, xc, coeff, occ, spin=spin)
+        for a, b in zip(orbital_cache, (rho, vxc, fxc)):
+            np.testing.assert_allclose(a, b, atol=1e-9)
+
+    def test_lda_restricted(self):
+        self.check_response('lda,vwn', 0)
+
+    def test_gga_restricted(self):
+        self.check_response('pbe', 0)
+
+    def test_lda_unrestricted(self):
+        self.check_response('lda,vwn', 1)
+
+    def test_gga_unrestricted(self):
+        self.check_response('pbe', 1)
 
 if __name__ == '__main__':
     print("Full Tests for multigrid2")

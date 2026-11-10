@@ -108,7 +108,7 @@ class KnownValues(unittest.TestCase):
 
         assert np.linalg.norm(test_oscillator_strength - reference_oscillator_strength) < oscillator_strength_threshold
 
-    def test_wb97xv_tda(self):
+    def test_wb97xv_tda_high_cost(self):
         # Same Q-Chem input as above, Q-Chem computes both TDA and TDDFT in the same run
         reference_ground_state_energy = -151.3641561221
         reference_excited_state_energy = np.array([-151.14537857, -151.09702586, -151.07806251, -151.04306837, -151.01364584])
@@ -169,7 +169,7 @@ class KnownValues(unittest.TestCase):
 
         assert np.linalg.norm(test_excitation_energy - reference_excitation_energy) < excitation_energy_threshold
 
-    def test_wb97xv_tda_triplet(self):
+    def test_wb97xv_tda_triplet_high_cost(self):
         # Same Q-Chem input as above, Q-Chem computes both TDA and TDDFT in the same run
         reference_ground_state_energy = -151.3641561221
         reference_excited_state_energy = np.array([-151.19274710, -151.14933133, -151.09446103, -151.06656613, -151.06072560])
@@ -262,6 +262,27 @@ class KnownValues(unittest.TestCase):
         test_oscillator_strength = tda.oscillator_strength()
 
         assert np.linalg.norm(test_oscillator_strength - reference_oscillator_strength) < oscillator_strength_threshold
+
+
+    def test_nlc_singlet_tda_matrix(self):
+        mol = pyscf.M(atom='H 0 0 0; H 0 0 .8', basis='6-31g', verbose=0)
+        mf = rks.RKS(mol, xc='wb97x-v')
+        mf.grids.atom_grid = (20, 86)
+        mf.nlcgrids.atom_grid = (20, 86)
+        mf.run(conv_tol=1e-11)
+        td = mf.TDA()
+        td.singlet = True
+        td.exclude_nlc = False
+        td.conv_tol = 1e-9
+        energies = td.kernel(nstates=2)[0]
+        vind, diagonal = td.gen_vind()
+        matrix = vind(np.eye(len(diagonal))).T
+        roots = np.linalg.eigvals(matrix)
+        roots = np.sort(roots.real[(abs(roots.imag)<1e-8) & (roots.real>1e-4)])
+        np.testing.assert_allclose(energies, roots[:2], atol=1e-8)
+        self.assertTrue(np.all(td.converged))
+        self.assertTrue(np.all(np.isfinite(td.oscillator_strength())))
+
 
 
 if __name__ == "__main__":

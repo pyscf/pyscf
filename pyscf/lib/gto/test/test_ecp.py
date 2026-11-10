@@ -507,6 +507,31 @@ class KnownValues(unittest.TestCase):
                               ctypes.c_int(7), ctypes.c_double(x))
             self.assertTrue(numpy.allclose(bessel0, bessel1))
 
+    def test_bessel_high_order(self):
+        # The asymptotic expansion used to index beyond its factorial table
+        # when order >= 12. Exercise both the direct and tabulated entry points.
+        for order in (8, 11, 12, 16, 17):
+            for x in (0., .5, 4., 15.9, 17., 32., 64.):
+                reference = scipy.special.spherical_in(numpy.arange(order+1), x) * numpy.exp(-x)
+                for name in ('ECPsph_ine', 'ECPsph_ine_opt'):
+                    with self.subTest(order=order, x=x, routine=name):
+                        result = numpy.empty(order+1)
+                        getattr(libecp, name)(result.ctypes.data_as(ctypes.c_void_p),
+                                             ctypes.c_int(order), ctypes.c_double(x))
+                        numpy.testing.assert_allclose(result, reference, rtol=1e-7, atol=1e-12)
+
+    def test_bessel_max_basis_order(self):
+        # Two l=15 shells plus second derivatives require factorials through 64!.
+        for order in (30, 31, 32):
+            for x in (128., 256., 512.):
+                reference = scipy.special.spherical_in(numpy.arange(order+1), x) * numpy.exp(-x)
+                for name in ('ECPsph_ine', 'ECPsph_ine_opt'):
+                    with self.subTest(order=order, x=x, routine=name):
+                        result = numpy.empty(order+1)
+                        getattr(libecp, name)(result.ctypes.data_as(ctypes.c_void_p),
+                                             ctypes.c_int(order), ctypes.c_double(x))
+                        numpy.testing.assert_allclose(result, reference, rtol=1e-10, atol=1e-13)
+
     def test_gauss_chebyshev(self):
         rs0, ws0 = radi.gauss_chebyshev(99)
         rs = numpy.empty_like(rs0)

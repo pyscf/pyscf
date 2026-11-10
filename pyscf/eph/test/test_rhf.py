@@ -64,6 +64,20 @@ class KnownValues(unittest.TestCase):
             self.assertTrue(min(np.linalg.norm(ephmo[i]-matmo[i]),np.linalg.norm(ephmo[i]+matmo[i]))<1e-5)
             self.assertTrue(min(abs(ephmo[i]-matmo[i]).max(), abs(ephmo[i]+matmo[i]).max())<1e-5)
 
+    def test_rhf_ao_coupling(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 .74', basis='6-31g', verbose=0)
+        mf = scf.RHF(mol)
+        mf.run(conv_tol=1e-12)
+        reference, omega = rhf.EPH(mf).kernel(mo_rep=False)
+        numerical, fd_omega = eph_fd.kernel(mf, disp=1e-4, mo_rep=False)
+        np.testing.assert_allclose(fd_omega, omega, atol=1e-10)
+        self.assertGreater(np.linalg.norm(reference), 1e-5)
+        # Each normal mode has an arbitrary overall sign.
+        for ref, actual in zip(reference, numerical):
+            if np.vdot(ref, actual).real < 0:
+                actual = -actual
+            np.testing.assert_allclose(actual, ref, atol=2e-6, rtol=1e-4)
+
 if __name__ == '__main__':
     print("Full Tests for EPH-RHF")
     unittest.main()
