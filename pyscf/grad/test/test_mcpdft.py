@@ -85,7 +85,7 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
 
-    def test_scanner (self):
+    def test_scanner_high_cost (self):
         mcp1 = auto_setup (xyz='Li 0 0 0\nH 1.55 0 0')[-1]
         for mol0, mc0, mc1 in zip ([mol_nosym, mol_sym], mcp[0], mcp1[0]):
             mc0_grad = mc0.nuc_grad_method ()

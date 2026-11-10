@@ -120,7 +120,7 @@ class KnownValues(unittest.TestCase):
                         with self.subTest (symm=stype, solver=atype, eri=itype, root=r, check='CI'):
                             self.assertAlmostEqual (lib.fp (dwci_test), lib.fp (dwci_ref[r]), 8)
 
-    def test_offdiag_grad_sanity (self):
+    def test_offdiag_grad_sanity_high_cost (self):
         for mcs, stype in zip (get_mc_list (), ('nosymm','symm')):
             for mca, atype in zip (mcs, ('nomix','mix')):
                 if 'no' not in atype:

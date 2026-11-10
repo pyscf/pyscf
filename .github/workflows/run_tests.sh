@@ -15,6 +15,8 @@ ulimit -s 20000
 PYTEST_JOBS=${PYTEST_JOBS:-auto}
 # Which tests to run.
 TEST_PATHS=${TEST_PATHS:-pyscf}
+# Additional command-line arguments override pytest.ini selection or defaults,
+# e.g. -k "not _skip" includes high-cost tests in the nightly workflow.
 
 if [ "$PYTEST_JOBS" = "0" ]; then
   PARALLEL=""
@@ -35,17 +37,16 @@ echo "dftd3_DFTD3PATH = './pyscf/lib/deps/lib'" >> .pyscf_conf.py
 echo "scf_hf_SCF_mute_chkfile = True" >> .pyscf_conf.py
 echo 'TMPDIR = "./pyscftmpdir"' >> .pyscf_conf.py
 
-# pytest-cov (and the codecov upload of its report) runs only in the CI job
-# that sets RUN_COVERAGE: the 3.9 leg of the linux-build matrix. Every other
-# job runs bare: under xdist the coverage instrumentation costs significant
-# runtime and memory.
+# pytest-cov (and the codecov upload of its report) runs only in the nightly job
+# that sets RUN_COVERAGE. Other jobs run without coverage instrumentation to
+# reduce runtime and memory under xdist.
 if [ "$RUN_COVERAGE" = "true" ]; then
   pytest -s -c pytest.ini --timeout=900 $PARALLEL \
     --durations=20 \
     --cov-report xml --cov-report term --cov-config .coveragerc --cov pyscf \
-    $TEST_PATHS
+    $TEST_PATHS "$@"
 else
-  pytest -s -c pytest.ini --timeout=900 $PARALLEL --durations=20 $TEST_PATHS
+  pytest -s -c pytest.ini --timeout=900 $PARALLEL --durations=20 $TEST_PATHS "$@"
 fi
 
 pytest_status=$?
