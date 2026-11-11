@@ -59,6 +59,14 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
         An SCF object with a modified J, K matrix constructor which uses density
         fitting and seminumerical integrals to compute J and K
 
+    Note:
+        TDA/TDDFT linear response (excited states) are supported on the
+        returned object. The response operator reuses the SCF J/K
+        constructor, so the seminumerical K is applied consistently in
+        both the ground state and the response. Explicit A/B matrix
+        construction (td.get_ab) still uses exact integrals, and thus
+        describes the exact-K response.
+
     Examples:
 
     >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvdz', verbose=0)
