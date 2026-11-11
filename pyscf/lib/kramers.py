@@ -31,7 +31,7 @@ pairs (u_k, Tu_k), exact by construction, ordered as the Kramers basis,
 (u_1..u_n, Tu_1..Tu_n), or with iop=1 in consecutive columns,
 (u_1, Tu_1, u_2, Tu_2, ...).
 
-The standard problem is solved with zquatev (https://github.com/sunqm/zquatev)
+The standard problem is solved with zquatev (pip install zquatev)
 if it is installed, otherwise with the quaternion Householder
 tridiagonalization implemented here (blocked as LAPACK zhetrd/zlatrd, the
 back-transformation in the compact WY form).  The generalized problem
@@ -61,7 +61,7 @@ def _load_zquatev():
     if _zquatev is False:
         try:
             # Install zquatev with
-            # pip install git+https://github.com/sunqm/zquatev
+            # pip install zquatev
             import zquatev
         except ImportError:
             zquatev = None
