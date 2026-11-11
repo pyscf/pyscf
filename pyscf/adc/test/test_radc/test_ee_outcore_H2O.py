@@ -59,7 +59,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ee_adc2(self):
         myadc.method = "adc(2)"
-        myadc.max_memory = 20
+        myadc.max_memory = 0
         myadc.incore_complete = False
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2039852016968376, 6)
@@ -80,7 +80,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ee_adc2x(self):
         myadc.method = "adc(2)-x"
-        myadc.max_memory = 20
+        myadc.max_memory = 0
         myadc.incore_complete = False
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2039852016968376, 6)
@@ -101,7 +101,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ee_adc3(self):
         myadc.method = "adc(3)"
-        myadc.max_memory = 20
+        myadc.max_memory = 0
         myadc.incore_complete = False
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2107769014592799, 6)
@@ -122,7 +122,7 @@ class KnownValues(unittest.TestCase):
     def test_ee_adc3_frozen(self):
         myadc_fr.method = "adc(3)"
         myadc_fr.method_type = "ee"
-        myadc_fr.max_memory = 20
+        myadc_fr.max_memory = 0
         myadc_fr.incore_complete = False
         e, t_amp1, t_amp2 = myadc_fr.kernel_gs()
         self.assertAlmostEqual(e, -0.20864693991051741, 6)

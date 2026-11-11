@@ -1150,18 +1150,20 @@ def contract_ladder_antisym(myadc,t_amp,vvvv_d, pack = True):
     chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
 
     if isinstance(vvvv_d, list):
-        a = 0
-        for dataset in vvvv_d:
-            k = dataset.shape[0]
-            dataset = dataset[:].reshape(-1,nv_pair)
-            t[a:a+k] = np.dot(dataset,t_amp_t).reshape(-1,nvir,nocc*nocc)
-            a += k
+        if nv_pair > 0:
+            a = 0
+            for dataset in vvvv_d:
+                k = dataset.shape[0]
+                dataset = dataset[:].reshape(-1,nv_pair)
+                t[a:a+k] = np.dot(dataset,t_amp_t).reshape(-1,nvir,nocc*nocc)
+                a += k
     elif getattr(myadc, 'with_df', None):
-        for a,b in lib.prange(0,nvir,chnk_size):
-            vvvv = dfadc.get_vvvv_antisym_df(myadc, vvvv_d, a, chnk_size)
-            vvvv = vvvv.reshape(-1,nv_pair)
-            t[a:b] = np.dot(vvvv,t_amp_t).reshape(-1,nvir,nocc*nocc)
-            del vvvv
+        if nv_pair > 0:
+            for a,b in lib.prange(0,nvir,chnk_size):
+                vvvv = dfadc.get_vvvv_antisym_df(myadc, vvvv_d, a, chnk_size)
+                vvvv = vvvv.reshape(-1,nv_pair)
+                t[a:b] = np.dot(vvvv,t_amp_t).reshape(-1,nvir,nocc*nocc)
+                del vvvv
     else:
         raise Exception("Unknown vvvv type")
 
