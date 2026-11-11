@@ -96,6 +96,30 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ej1, ej, 10)
         self.assertAlmostEqual(ek1, ek, 10)
 
+    def test_k_gamma_low_rank_complex_dm(self):
+        # Low-rank complex density matrices at the gamma point, compared with the
+        # DM-based K build.  With an imaginary part below cell.precision (e.g. the
+        # spin blocks of a GHF density) the MO-based K build makes a real vk, to
+        # which the exxdiv='ewald' G=0 correction must be added without a
+        # casting error.
+        mydf = df.GDF(cell0)
+        mydf.auxbasis = 'weigend'
+        mydf.build()
+        nao = cell0.nao_nr()
+        numpy.random.seed(3)
+        c = numpy.random.random((nao, 1))
+        c2 = numpy.random.random((nao, 2)) + numpy.random.random((nao, 2)) * 1j
+        dms = {'negligible imag': c.dot(c.T) * (1 + 1e-13j),
+               'complex': c2.dot(c2.conj().T)}
+        for name, dm in dms.items():
+            for hermi in (1, 0):
+                with self.subTest(dm=name, hermi=hermi):
+                    vj, vk = df_jk.get_jk(mydf, dm, hermi=hermi, exxdiv='ewald')
+                    with lib.temporary_env(mydf, force_dm_kbuild=True):
+                        vj_ref, vk_ref = df_jk.get_jk(mydf, dm, hermi=hermi, exxdiv='ewald')
+                    self.assertAlmostEqual(abs(vj - vj_ref).max(), 0, 9)
+                    self.assertAlmostEqual(abs(vk - vk_ref).max(), 0, 9)
+
     def test_jk_single_kpt_high_cost(self):
         mf0 = pscf.RHF(cell)
         mf0.exxdiv = None

@@ -1351,7 +1351,9 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         else:
             vk = vkR + vkI * 1j
         if exxdiv == 'ewald' and cell.dimension != 0:
-            _ewald_exxdiv_for_G0(cell, kpt, dms, vk)
+            # k_real may hold for a complex dm whose imaginary part is below
+            # cell.precision (e.g. the spin blocks of a GHF density)
+            _ewald_exxdiv_for_G0(cell, kpt, dms.real if k_real else dms, vk)
         vk = vk.reshape(dm.shape)
 
     log.timer('sr jk', *t0)
