@@ -146,7 +146,13 @@ def kernel(method, assert_convergence=ASSERT_CONV,
             dump_mol_geometry(mol, dump_coords, log)
 
         if mol.symmetry:
-            geom.coords = symmetrize(mol, geom.coords)
+            if include_ghost:
+                geom.coords = symmetrize(mol, geom.coords)
+            else:
+                # symmetrize() works on the full molecule; map the reduced
+                # coordinates back to the non-ghost atoms afterwards.
+                coords = symmetrize(mol, _geom_to_atom(mol, geom, include_ghost))
+                geom.coords = coords[atmlst] / lib.param.BOHR
 
         mol.set_geom_(_geom_to_atom(mol, geom, include_ghost), unit='Bohr')
         energy, gradients = g_scanner(mol)

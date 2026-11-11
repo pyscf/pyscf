@@ -56,6 +56,18 @@ class KnownValues(unittest.TestCase):
         conv, mol2 = berny_solver.kernel(mf, include_ghost=False, maxsteps=1)
         self.assertTrue(numpy.allclose(mol2.atom_coords()[2], mol1.atom_coords()[2]))
 
+    def test_include_ghost_false_with_symmetry(self):
+        # A ghost atom combined with symmetry used to fail in symmetrize()
+        mol1 = gto.M(atom='''
+            O  0.  0.        0.
+            H  0.  -0.757    0.587
+            H  0.   0.757    0.587
+            ghost-H  0.  0.  2.0
+                    ''', basis='sto-3g', symmetry=True, verbose=0)
+        mf = scf.RHF(mol1)
+        conv, mol2 = berny_solver.kernel(mf, include_ghost=False, maxsteps=1)
+        self.assertTrue(numpy.allclose(mol2.atom_coords()[3], mol1.atom_coords()[3]))
+
     def test_optimize(self):
         conv_params = {
             'gradientmax': 0.1e-3,
