@@ -144,6 +144,15 @@ def get_ab(mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None,
     For triplet excitations (singlet=False), the Coulomb term vanishes and
     the exchange-correlation kernel is f_aa - f_ab in place of f_aa + f_ab.
 
+    Note:
+        If the SCF object is attached with fitted or seminumerical
+        integrals (density fitting, SGX/COSX, ...), get_ab still
+        assembles the matrices with exact 4-center integrals. The
+        matrices then describe the exact-K response, while the
+        matrix-free response used by the TDA/TDDFT solvers
+        (mf.gen_response) applies the fitted/seminumerical operators
+        consistently.
+
     Ref: Chem Phys Lett, 256, 454
     '''
     if mo_energy is None: mo_energy = mf.mo_energy

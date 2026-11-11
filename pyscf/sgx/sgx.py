@@ -60,12 +60,12 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
         fitting and seminumerical integrals to compute J and K
 
     Note:
-        TDA/TDDFT linear response (excited states) are supported on the
-        returned object. The response operator reuses the SCF J/K
-        constructor, so the seminumerical K is applied consistently in
-        both the ground state and the response. Explicit A/B matrix
-        construction (td.get_ab) still uses exact integrals, and thus
-        describes the exact-K response.
+        Response solvers built on the SCF response function
+        mf.gen_response are supported on the returned object: TDA/TDDFT
+        excited states, SCF stability analysis, and the second-order SCF
+        solver. These solvers apply Fock builds through the SCF J/K
+        constructor, so the seminumerical K is used consistently in both
+        the ground state and the response.
 
     Examples:
 
