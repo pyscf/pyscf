@@ -127,6 +127,7 @@ class _SGXHF:
         # Set rebuild_nsteps to control how many direct SCF steps
         # are taken between resets of the SGX JK matrix. Default 5
         self.rebuild_nsteps = 5
+        self._nsteps_direct = 0
         self._in_scf = False
         self._ctx_lock = None
 

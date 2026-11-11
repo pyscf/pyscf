@@ -96,6 +96,34 @@ class KnownValues(unittest.TestCase):
         energy2 = mf.kernel()
         self.assertAlmostEqual(energy, energy2, 9)
 
+    def test_sgx_soscf(self):
+        mol = gto.Mole()
+        mol.build(
+            atom = [["O" , (0. , 0.     , 0.)],
+                    [1   , (0. , -0.757 , 0.587)],
+                    [1   , (0. , 0.757  , 0.587)] ],
+            basis='ccpvdz',
+            verbose=0,
+        )
+        # newton-first pattern: the second-order solver applied to an
+        # SGX object that has not run a plain kernel yet
+        mf = dft.RKS(mol)
+        mf.xc = 'b3lyp'
+        mf_sgx = sgx.sgx_fit(mf)
+        mf_sgx.conv_tol = 1e-10
+        nt = mf_sgx.newton()
+        nt.conv_tol = 1e-10
+        e_soscf = nt.kernel()
+        self.assertTrue(nt.converged)
+
+        mf = dft.RKS(mol)
+        mf.xc = 'b3lyp'
+        mf_sgx = sgx.sgx_fit(mf)
+        mf_sgx.conv_tol = 1e-10
+        e_scf = mf_sgx.kernel()
+        # The second-order solver converges to the same SGX SCF solution
+        self.assertAlmostEqual(e_soscf, e_scf, 8)
+
 if __name__ == "__main__":
     print("Full Tests for SGX")
     unittest.main()
