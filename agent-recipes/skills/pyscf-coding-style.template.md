@@ -91,3 +91,10 @@ and validation proportional to the change; apply the guidance below where releva
 - Keep internal docstrings brief, but explain non-obvious assumptions and contracts.
 - Update documentation when changing parameters, return values, supported
   shapes, symmetry, units, or public behavior.
+
+### Comments and docstrings
+
+- Write in plain, natural English, using short, direct sentences.
+- Prefer concrete explanations over abstract or formal language.
+- Explain why code works a certain way, not what is already obvious.
+- Document non-obvious assumptions, numerical conventions, and edge cases.

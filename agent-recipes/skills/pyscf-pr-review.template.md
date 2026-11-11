@@ -36,6 +36,8 @@ State any material review or validation gaps.
   shapes, units, and limitations where relevant.
 - Explain intentional changes to public behavior and provide migration guidance
   when replacing an existing API.
+- Flag comments and docstrings that are verbose, vague, or hard to read.
+- Check that explanations are accurate, useful, and not redundant with the code.
 
 ## Reuse and duplication
 
