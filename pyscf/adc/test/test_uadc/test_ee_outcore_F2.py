@@ -59,7 +59,7 @@ class KnownValues(unittest.TestCase):
         myadc.method = "adc(2)"
 
         myadc.method_type = "ee"
-        myadc.max_memory = 20
+        myadc.max_memory = 0
         myadc.incore_complete = False
         e,v,p,x = myadc.kernel(nroots=4)
 
@@ -77,7 +77,7 @@ class KnownValues(unittest.TestCase):
         myadc.method = "adc(2)-x"
 
         myadc.method_type = "ee"
-        myadc.max_memory = 20
+        myadc.max_memory = 0
         myadc.incore_complete = False
         e,v,p,x = myadc.kernel(nroots=4)
 
@@ -95,7 +95,7 @@ class KnownValues(unittest.TestCase):
         myadc.method = "adc(3)"
 
         myadc.method_type = "ee"
-        myadc.max_memory = 20
+        myadc.max_memory = 0
         myadc.incore_complete = False
         e,v,p,x = myadc.kernel(nroots=4)
 

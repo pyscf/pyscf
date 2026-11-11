@@ -55,7 +55,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ea_adc2(self):
 
-        myadc.max_memory = 30
+        myadc.max_memory = 0
         myadc.incore_complete = False
         myadc.method_type = "ea"
         e,v,p,x = myadc.kernel(nroots=3)
@@ -78,7 +78,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ea_adc2x(self):
 
-        myadc.max_memory = 300
+        myadc.max_memory = 0
         myadc.incore_complete = False
         myadc.method = "adc(2)-x"
         myadc.method_type = "ea"
@@ -100,7 +100,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ea_adc3_high_cost(self):
 
-        myadc.max_memory = 300
+        myadc.max_memory = 0
         myadc.incore_complete = False
         myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
@@ -124,7 +124,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(spin[2],1.25284951 , 5)
     def test_ea_adc3_high_cost_frozen(self):
 
-        myadc_fr.max_memory = 300
+        myadc_fr.max_memory = 0
         myadc_fr.incore_complete = False
         myadc_fr.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc_fr.kernel_gs()

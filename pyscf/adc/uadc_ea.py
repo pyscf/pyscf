@@ -2143,7 +2143,7 @@ def matvec(adc, M_ab=None, eris=None):
                     for dataset in eris.vVvV_p:
                         k = dataset.shape[0]
                         v_eeee_abab = dataset[:].reshape(k, nvir_b, nvir_a, nvir_b)
-                        s[s_a+p:s_a+k] += lib.einsum('iab,ic,Acab->A', r_bab, t1_1_b, v_eeee_abab, optimize=True)
+                        s[s_a+p:s_a+p+k] += lib.einsum('iab,ic,Acab->A', r_bab, t1_1_b, v_eeee_abab, optimize=True)
                         s_bab_view[:, p:p+k] += lib.einsum('a,Ab,BCab->ABC', r_a, t1_1_b, v_eeee_abab, optimize=True)
                         s_aba_view[:, :, p:p+k] += lib.einsum('a,Ab,CBba->ABC', r_b, t1_1_a, v_eeee_abab,
                             optimize=True)
@@ -2153,7 +2153,7 @@ def matvec(adc, M_ab=None, eris=None):
                     for dataset in eris.VvVv_p:
                         k = dataset.shape[0]
                         v_eeee_abab = dataset[:].reshape(k, nvir_a, nvir_b, nvir_a)
-                        s[s_b+p:s_b+k] += lib.einsum('iab,ic,Acab->A', r_aba, t1_1_a, v_eeee_abab, optimize=True)
+                        s[s_b+p:s_b+p+k] += lib.einsum('iab,ic,Acab->A', r_aba, t1_1_a, v_eeee_abab, optimize=True)
                         del v_eeee_abab
                         p += k
                     for p, q in lib.prange(0, nvir_b, chnk_size):
@@ -6891,17 +6891,19 @@ def contract_r_vvvv_antisym(myadc,r2,vvvv_d):
     chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
     a = 0
     if isinstance(vvvv_d,list):
-        for dataset in vvvv_d:
-            k = dataset.shape[0]
-            dataset = dataset[:].reshape(-1,nv_pair)
-            r2_vvvv[:,a:a+k] = np.dot(r2,dataset.T).reshape(nocc,-1,nvir)
-            a += k
+        if nv_pair > 0:
+            for dataset in vvvv_d:
+                k = dataset.shape[0]
+                dataset = dataset[:].reshape(-1,nv_pair)
+                r2_vvvv[:,a:a+k] = np.dot(r2,dataset.T).reshape(nocc,-1,nvir)
+                a += k
     elif getattr(myadc, 'with_df', None):
-        for a,b in lib.prange(0,nvir,chnk_size):
-            vvvv = dfadc.get_vvvv_antisym_df(myadc, vvvv_d, a, chnk_size)
-            vvvv = vvvv.reshape(-1,nv_pair)
-            r2_vvvv[:,a:b] = np.dot(r2,vvvv.T).reshape(nocc,-1,nvir)
-            del vvvv
+        if nv_pair > 0:
+            for a,b in lib.prange(0,nvir,chnk_size):
+                vvvv = dfadc.get_vvvv_antisym_df(myadc, vvvv_d, a, chnk_size)
+                vvvv = vvvv.reshape(-1,nv_pair)
+                r2_vvvv[:,a:b] = np.dot(r2,vvvv.T).reshape(nocc,-1,nvir)
+                del vvvv
     else:
         raise Exception("Unknown vvvv type")
     return r2_vvvv

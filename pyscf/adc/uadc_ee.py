@@ -6278,15 +6278,15 @@ def matvec(adc, M_ia_jb=None, eris=None):
         # used with virtual-antisymmetrized ovvv in the ADC(2) 1 block
         r2_vp_a = np.zeros((nocc_a, nocc_a, int((nvir_a * (nvir_a - 1)) / 2)))
         r2_vp_a[ij_ind_a[0], ij_ind_a[1]] = r[s_aaaa:f_aaaa].reshape(
-            int((nocc_a * (nocc_a - 1)) / 2), -1)
+            int((nocc_a * (nocc_a - 1)) / 2), int((nvir_a * (nvir_a - 1)) / 2))
         r2_vp_a[ij_ind_a[1], ij_ind_a[0]] = -r[s_aaaa:f_aaaa].reshape(
-            int((nocc_a * (nocc_a - 1)) / 2), -1)
+            int((nocc_a * (nocc_a - 1)) / 2), int((nvir_a * (nvir_a - 1)) / 2))
 
         r2_vp_b = np.zeros((nocc_b, nocc_b, int((nvir_b * (nvir_b - 1)) / 2)))
         r2_vp_b[ij_ind_b[0], ij_ind_b[1]] = r[s_bbbb:f_bbbb].reshape(
-            int((nocc_b * (nocc_b - 1)) / 2), -1)
+            int((nocc_b * (nocc_b - 1)) / 2), int((nvir_b * (nvir_b - 1)) / 2))
         r2_vp_b[ij_ind_b[1], ij_ind_b[0]] = -r[s_bbbb:f_bbbb].reshape(
-            int((nocc_b * (nocc_b - 1)) / 2), -1)
+            int((nocc_b * (nocc_b - 1)) / 2), int((nvir_b * (nvir_b - 1)) / 2))
 
         s = np.zeros(dim)
 

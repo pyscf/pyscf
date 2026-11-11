@@ -55,7 +55,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ip_adc2(self):
 
-        myadc.max_memory = 30
+        myadc.max_memory = 0
         myadc.incore_complete = False
         e,v,p,x = myadc.kernel(nroots=3)
         spin = get_spin_square(myadc._adc_es)[0]
@@ -77,7 +77,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ip_adc2x(self):
 
-        myadc.max_memory = 300
+        myadc.max_memory = 0
         myadc.incore_complete = False
         myadc.method = "adc(2)-x"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
@@ -100,7 +100,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ip_adc3_high_cost(self):
 
-        myadc.max_memory = 300
+        myadc.max_memory = 0
         myadc.incore_complete = False
         myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
@@ -124,7 +124,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(spin[2],0.05053658 , 5)
     def test_ip_adc3_high_cost_frozen(self):
 
-        myadc_fr.max_memory = 300
+        myadc_fr.max_memory = 0
         myadc_fr.incore_complete = False
         myadc_fr.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc_fr.kernel_gs()
