@@ -421,7 +421,7 @@ def get_diag(adc, kshift, M_ij=None, eris=None):
             D_n = -d_a + d_ij.reshape(-1)
             doubles[ka, ki] += D_n.reshape(-1)
 
-    if (adc.frozen is not None) or (not np.all([x.shape[1] == adc.nmo for x in mo_coeff])):
+    if (adc.frozen is not None) or (not np.all([x.shape[1] == adc.nmo for x in adc.mo_coeff])):
         doubles = doubles.reshape(nkpts, nkpts, nvir, nocc, nocc)
         (M_ij_diag, doubles) = mask_frozen_ip(adc, M_ij_diag, doubles, kshift)
 

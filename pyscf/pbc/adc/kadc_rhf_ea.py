@@ -536,7 +536,8 @@ def get_diag(adc, kshift, M_ab=None, eris=None):
             d_i = e_occ[kj][:, None]
             D_n = -d_i + d_ab.reshape(-1)
             doubles[kj, ka] += D_n.reshape(-1)
-    if (adc.frozen is not None) or (not np.all([x.shape[1] == adc.nmo for x in mo_coeff])):
+
+    if (adc.frozen is not None) or (not np.all([x.shape[1] == adc.nmo for x in adc.mo_coeff])):
         doubles = doubles.reshape(nkpts, nkpts, nocc, nvir, nvir)
         (M_ab_diag, doubles) = mask_frozen_ea(adc, M_ab_diag, doubles, kshift)
 

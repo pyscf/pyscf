@@ -99,6 +99,10 @@ from pyscf.pbc.cc.eom_kccsd_rhf import EOMEA
 # KRCCSD
 mycc = cc.KRCCSD(kmf,ADCFG.frozen,ADCFG.mo_coeff,ADCFG.mo_occ)
 mycc.verbose = 5
+# KRCCSD's constructor takes no mo_energy; without it get_nmo assumes every k-point
+# has k=0's MO count and crashes when SCF linear-dep removal makes widths ragged.
+# Must be the FNO's true-width list.
+mycc.mo_energy = ADCFG.mo_energy
 ekrcc, t1, t2 = mycc.kernel()
 # K-EA-EOM-CCSD
 myeom = EOMEA(mycc)

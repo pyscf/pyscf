@@ -74,20 +74,20 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3],0.3371941604, 6)
 
         self.assertAlmostEqual(p[0],0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.00260529, 6)
-        self.assertAlmostEqual(p[2],0.00370851, 6)
-        self.assertAlmostEqual(p[3],0.01799256, 6)
+        self.assertAlmostEqual(p[1],0.0026423690445117006, 6)
+        self.assertAlmostEqual(p[2],0.0036106496473683517, 6)
+        self.assertAlmostEqual(p[3],0.017775953540499233, 6)
 
-        self.assertAlmostEqual(spin[0],0.75100183 , 5)
-        self.assertAlmostEqual(spin[1],0.75099278 , 5)
-        self.assertAlmostEqual(spin[2],2.41928532 , 5)
-        self.assertAlmostEqual(spin[3],1.16078708 , 5)
+        self.assertAlmostEqual(spin[0],0.7522904063542506 , 5)
+        self.assertAlmostEqual(spin[1],0.7522576307332178 , 5)
+        self.assertAlmostEqual(spin[2],2.4209847454055358 , 5)
+        self.assertAlmostEqual(spin[3],1.1624176868639315 , 5)
 
         dm1_exc = np.array(myadc.make_rdm1())
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 14.837720262024684, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 14.591445758752077, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 22.557484739864687, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 22.703749840718693, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 14.772824583466086, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 14.529160643074512, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 22.507145256344522, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 22.665490411634828, 6)
 
     def test_ee_adc2x(self):
         myadc.method = "adc(2)-x"
@@ -101,20 +101,20 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3], 0.3014583658, 6)
 
         self.assertAlmostEqual(p[0],-0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.00222149 , 6)
-        self.assertAlmostEqual(p[2],0.00029737 , 6)
-        self.assertAlmostEqual(p[3],0.01679878 , 6)
+        self.assertAlmostEqual(p[1],0.0022511415415090983 , 6)
+        self.assertAlmostEqual(p[2],0.0002781504563224257 , 6)
+        self.assertAlmostEqual(p[3],0.01652844606741567 , 6)
 
-        self.assertAlmostEqual(spin[0], 0.74929673 , 5)
-        self.assertAlmostEqual(spin[1],0.74927348  , 5)
-        self.assertAlmostEqual(spin[2],3.55591433  , 5)
-        self.assertAlmostEqual(spin[3],0.86054541  , 5)
+        self.assertAlmostEqual(spin[0], 0.7505358324502627 , 5)
+        self.assertAlmostEqual(spin[1],0.7504465152068174  , 5)
+        self.assertAlmostEqual(spin[2],3.5572050239862154  , 5)
+        self.assertAlmostEqual(spin[3],0.8620825777206886  , 5)
 
         dm1_exc = np.array(myadc.make_rdm1())
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 14.89770575792029, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 14.72721959210633, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 22.25297378650939, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 22.66851273379779, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 14.83336927897167, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 14.66583211526736, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 22.21434753894557, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 22.631038187408834, 6)
 
     def test_ee_adc2x_cis(self):
         myadc.method = "adc(2)-x"
@@ -128,20 +128,20 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3], 0.3014583658, 6)
 
         self.assertAlmostEqual(p[0],-0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.00222151 , 6)
-        self.assertAlmostEqual(p[2],0.00029736 , 6)
-        self.assertAlmostEqual(p[3],0.01679885 , 6)
+        self.assertAlmostEqual(p[1],0.0022511605960848606 , 6)
+        self.assertAlmostEqual(p[2],0.00027814254106808736 , 6)
+        self.assertAlmostEqual(p[3],0.01652851698228148 , 6)
 
-        self.assertAlmostEqual(spin[0],0.74929673 , 5)
-        self.assertAlmostEqual(spin[1],0.74927346  , 5)
-        self.assertAlmostEqual(spin[2],3.55591440  , 5)
-        self.assertAlmostEqual(spin[3],0.86054548  , 5)
+        self.assertAlmostEqual(spin[0],0.7505358312776593 , 5)
+        self.assertAlmostEqual(spin[1],0.7504464970346452  , 5)
+        self.assertAlmostEqual(spin[2],3.5572050912724036  , 5)
+        self.assertAlmostEqual(spin[3],0.8620826405381923  , 5)
 
         dm1_exc = np.array(myadc.make_rdm1())
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 14.89770739393802, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 14.72722082654919, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 22.25296905236634, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 22.66852911063182, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 14.83337091438862, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 14.665833348936594, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 22.214342795652065, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 22.631054555757274, 6)
 
     def test_ee_adc3(self):
         myadc.method = "adc(3)"
@@ -155,20 +155,20 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3], 0.3214724068, 6)
 
         self.assertAlmostEqual(p[0],-0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.00240992 , 6)
-        self.assertAlmostEqual(p[2],0.00009444 , 6)
-        self.assertAlmostEqual(p[3],0.01617088 , 6)
+        self.assertAlmostEqual(p[1],0.0024042299624731298 , 6)
+        self.assertAlmostEqual(p[2],9.016719283617845e-05 , 6)
+        self.assertAlmostEqual(p[3],0.016241108582614686 , 6)
 
-        self.assertAlmostEqual(spin[0], 0.74912312 , 5)
-        self.assertAlmostEqual(spin[1],0.74917845  , 5)
-        self.assertAlmostEqual(spin[2],3.68386876  , 5)
-        self.assertAlmostEqual(spin[3],0.79073584  , 5)
+        self.assertAlmostEqual(spin[0], 0.75005719 , 5)
+        self.assertAlmostEqual(spin[1],0.75008973  , 5)
+        self.assertAlmostEqual(spin[2],3.67821801  , 5)
+        self.assertAlmostEqual(spin[3],0.79204834  , 5)
 
         dm1_exc = np.array(myadc.make_rdm1())
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 14.85669167691214, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 14.65289124997399, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 22.17386872621784, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 22.57796047485072, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 14.87648189234282, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 14.671498868364228, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 22.18814573937499, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][3],dm1_exc[1][3]), 22.592694202413846, 6)
 
 if __name__ == "__main__":
     print("EE calculations for different ADC methods for OH molecule")

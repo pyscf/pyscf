@@ -67,17 +67,12 @@ def get_imds(adc, eris=None):
     # Second-order terms
     t2_1 = t2[0][:]
 
-    M_ij += 0.5 * 0.5 *  lib.einsum('ilde,jdel->ij',t2_1, eris_ovvo,optimize=True)
-    M_ij -= 0.5 * 0.5 *  lib.einsum('lide,jdel->ij',t2_1, eris_ovvo,optimize=True)
-    M_ij -= 0.5 * 0.5 *  lib.einsum('ilde,jedl->ij',t2_1, eris_ovvo,optimize=True)
-    M_ij += 0.5 * 0.5 *  lib.einsum('lide,jedl->ij',t2_1, eris_ovvo,optimize=True)
-    M_ij += 0.5 * lib.einsum('ilde,jdel->ij',t2_1, eris_ovvo,optimize=True)
+    temp = lib.einsum('ilde,jdel->ij',t2_1,eris_ovvo, optimize=True)
+    M_ij += temp + temp.T
+    del temp
+    M_ij -= 0.5 * lib.einsum('lide,jdel->ij',t2_1, eris_ovvo,optimize=True)
 
-    M_ij += 0.5 * 0.5 *  lib.einsum('jlde,idel->ij',t2_1, eris_ovvo,optimize=True)
-    M_ij -= 0.5 * 0.5 *  lib.einsum('ljde,idel->ij',t2_1, eris_ovvo,optimize=True)
-    M_ij -= 0.5 * 0.5 *  lib.einsum('jlde,ldei->ij',t2_1, eris_ovvo,optimize=True)
-    M_ij += 0.5 * 0.5 *  lib.einsum('ljde,ldei->ij',t2_1, eris_ovvo,optimize=True)
-    M_ij += 0.5 * lib.einsum('jlde,idel->ij',t2_1, eris_ovvo,optimize=True)
+    M_ij -= 0.5 * lib.einsum('ljde,idel->ij',t2_1, eris_ovvo,optimize=True)
 
     del t2_1
     cput0 = log.timer_debug1("Completed M_ij second-order terms ADC(2) calculation", *cput0)
@@ -89,26 +84,19 @@ def get_imds(adc, eris=None):
         eris_ovoo = eris.ovoo
         eris_oooo = eris.oooo
 
-        M_ij += lib.einsum('ld,ldji->ij',t1_2, eris_ovoo,optimize=True)
-        M_ij -= lib.einsum('ld,jdli->ij',t1_2, eris_ovoo,optimize=True)
-        M_ij += lib.einsum('ld,ldji->ij',t1_2, eris_ovoo,optimize=True)
+        M_ij += 4 * lib.einsum('ld,ldji->ij',t1_2, eris_ovoo,optimize=True)
+        temp = lib.einsum('ld,jdli->ij',t1_2,eris_ovoo, optimize=True)
+        M_ij -= temp + temp.T
 
-        M_ij += lib.einsum('ld,ldij->ij',t1_2, eris_ovoo,optimize=True)
-        M_ij -= lib.einsum('ld,idlj->ij',t1_2, eris_ovoo,optimize=True)
-        M_ij += lib.einsum('ld,ldij->ij',t1_2, eris_ovoo,optimize=True)
         t2_2 = t2[1][:]
 
-        M_ij += 0.5 * 0.5* lib.einsum('ilde,jdel->ij',t2_2, eris_ovvo,optimize=True)
-        M_ij -= 0.5 * 0.5* lib.einsum('lide,jdel->ij',t2_2, eris_ovvo,optimize=True)
-        M_ij -= 0.5 * 0.5* lib.einsum('ilde,jedl->ij',t2_2, eris_ovvo,optimize=True)
-        M_ij += 0.5 * 0.5* lib.einsum('lide,jedl->ij',t2_2, eris_ovvo,optimize=True)
-        M_ij += 0.5 * lib.einsum('ilde,jdel->ij',t2_2, eris_ovvo,optimize=True)
+        temp = lib.einsum('ilde,jdel->ij',t2_2,eris_ovvo, optimize=True)
+        M_ij += temp + temp.T
+        del temp
 
-        M_ij += 0.5 * 0.5* lib.einsum('jlde,ledi->ij',t2_2, eris_ovvo,optimize=True)
-        M_ij -= 0.5 * 0.5* lib.einsum('ljde,ledi->ij',t2_2, eris_ovvo,optimize=True)
-        M_ij -= 0.5 * 0.5* lib.einsum('jlde,iedl->ij',t2_2, eris_ovvo,optimize=True)
-        M_ij += 0.5 * 0.5* lib.einsum('ljde,iedl->ij',t2_2, eris_ovvo,optimize=True)
-        M_ij += 0.5 * lib.einsum('jlde,ledi->ij',t2_2, eris_ovvo,optimize=True)
+        M_ij -= 0.5 * lib.einsum('lide,jdel->ij',t2_2, eris_ovvo,optimize=True)
+
+        M_ij -= 0.5 * lib.einsum('ljde,ledi->ij',t2_2, eris_ovvo,optimize=True)
         t2_1 = t2[0][:]
 
         log.timer_debug1("Starting the small integrals  calculation")
@@ -139,57 +127,39 @@ def get_imds(adc, eris=None):
         del temp_t2_v_3
 
         temp_t2_v_8 = lib.einsum('lmdf,lmde->fe',t2_1, t2_1,optimize=True)
-        M_ij += 3 *lib.einsum('fe,jief->ij',temp_t2_v_8, eris_oovv, optimize=True)
-        M_ij -= 1.5 *lib.einsum('fe,jfei->ij',temp_t2_v_8, eris_ovvo, optimize=True)
-        M_ij +=   lib.einsum('ef,jief->ij',temp_t2_v_8, eris_oovv, optimize=True)
-        M_ij -= 0.5 * lib.einsum('ef,jfei->ij',temp_t2_v_8, eris_ovvo, optimize=True)
+        M_ij += 4 *lib.einsum('fe,jief->ij',temp_t2_v_8, eris_oovv, optimize=True)
+        M_ij -= 2 *lib.einsum('fe,jfei->ij',temp_t2_v_8, eris_ovvo, optimize=True)
         del temp_t2_v_8
 
         temp_t2_v_9 = lib.einsum('lmdf,mlde->fe',t2_1, t2_1,optimize=True)
-        M_ij -= 1.0 * lib.einsum('fe,jief->ij',temp_t2_v_9, eris_oovv, optimize=True)
-        M_ij -= 1.0 * lib.einsum('ef,jief->ij',temp_t2_v_9, eris_oovv, optimize=True)
-        M_ij += 0.5 * lib.einsum('fe,jfei->ij',temp_t2_v_9, eris_ovvo, optimize=True)
-        M_ij += 0.5 * lib.einsum('ef,jfei->ij',temp_t2_v_9, eris_ovvo, optimize=True)
+        M_ij -= 2.0 * lib.einsum('fe,jief->ij',temp_t2_v_9, eris_oovv, optimize=True)
+        M_ij += 1.0 * lib.einsum('fe,jfei->ij',temp_t2_v_9, eris_ovvo, optimize=True)
         del temp_t2_v_9
 
         temp_t2_v_10 = lib.einsum('lnde,lmde->nm',t2_1, t2_1,optimize=True)
-        M_ij -= 3.0 * lib.einsum('nm,jinm->ij',temp_t2_v_10, eris_oooo, optimize=True)
-        M_ij -= 1.0 * lib.einsum('mn,jinm->ij',temp_t2_v_10, eris_oooo, optimize=True)
-        M_ij += 1.5 * lib.einsum('nm,jmni->ij',temp_t2_v_10, eris_oooo, optimize=True)
-        M_ij += 0.5 * lib.einsum('mn,jmni->ij',temp_t2_v_10, eris_oooo, optimize=True)
+        M_ij -= 4.0 * lib.einsum('nm,jinm->ij',temp_t2_v_10, eris_oooo, optimize=True)
+        M_ij += 2.0 * lib.einsum('nm,jmni->ij',temp_t2_v_10, eris_oooo, optimize=True)
         del temp_t2_v_10
 
         temp_t2_v_11 = lib.einsum('lnde,mlde->nm',t2_1, t2_1,optimize=True)
-        M_ij += 1.0 * lib.einsum('nm,jinm->ij',temp_t2_v_11, eris_oooo, optimize=True)
-        M_ij -= 0.5 * lib.einsum('nm,jmni->ij',temp_t2_v_11, eris_oooo, optimize=True)
-        M_ij -= 0.5 * lib.einsum('mn,jmni->ij',temp_t2_v_11, eris_oooo, optimize=True)
-        M_ij += 1.0 * lib.einsum('mn,jinm->ij',temp_t2_v_11, eris_oooo, optimize=True)
+        M_ij += 2.0 * lib.einsum('nm,jinm->ij',temp_t2_v_11, eris_oooo, optimize=True)
+        M_ij -= 1.0 * lib.einsum('nm,jmni->ij',temp_t2_v_11, eris_oooo, optimize=True)
         del temp_t2_v_11
 
         temp_t2_v_12 = lib.einsum('inde,lmde->inlm',t2_1, t2_1,optimize=True)
-        M_ij += 0.5 * 1.25 * lib.einsum('inlm,jlnm->ij',temp_t2_v_12, eris_oooo, optimize=True)
-        M_ij += 0.5 * 0.25 * lib.einsum('lmin,jlnm->ij',temp_t2_v_12, eris_oooo, optimize=True)
-        M_ij -= 0.5 * 0.25 * lib.einsum('inlm,jmnl->ij',temp_t2_v_12, eris_oooo, optimize=True)
-        M_ij -= 0.5 * 0.25 * lib.einsum('lmin,jmnl->ij',temp_t2_v_12, eris_oooo, optimize=True)
+        M_ij += 0.5 * 1.5 * lib.einsum('inlm,jlnm->ij',temp_t2_v_12, eris_oooo, optimize=True)
+        M_ij -= 0.5 * 0.5 * lib.einsum('inlm,jmnl->ij',temp_t2_v_12, eris_oooo, optimize=True)
 
-        M_ij += 0.5 * 0.25 * lib.einsum('inlm,jlnm->ji',temp_t2_v_12, eris_oooo, optimize=True)
-        M_ij -= 0.5 * 0.25 * lib.einsum('inlm,lnmj->ji',temp_t2_v_12, eris_oooo, optimize=True)
-        M_ij += 0.5 * 1.00 * lib.einsum('inlm,ljmn->ji',temp_t2_v_12, eris_oooo, optimize=True)
-        M_ij -= 0.5 * 0.25 * lib.einsum('lmin,lnmj->ji',temp_t2_v_12, eris_oooo, optimize=True)
-        M_ij += 0.5 * 0.25 * lib.einsum('lmin,ljmn->ji',temp_t2_v_12, eris_oooo, optimize=True)
+        M_ij += 0.5 * 1.5 * lib.einsum('inlm,jlnm->ji',temp_t2_v_12, eris_oooo, optimize=True)
+        M_ij -= 0.5 * 0.5 * lib.einsum('inlm,lnmj->ji',temp_t2_v_12, eris_oooo, optimize=True)
         del temp_t2_v_12
 
         temp_t2_v_13 = lib.einsum('inde,mlde->inml',t2_1, t2_1,optimize=True)
-        M_ij -= 0.5 * 0.25 * lib.einsum('inml,jlnm->ij',temp_t2_v_13, eris_oooo, optimize=True)
-        M_ij -= 0.5 * 0.25 * lib.einsum('mlin,jlnm->ij',temp_t2_v_13, eris_oooo, optimize=True)
-        M_ij += 0.5 * 0.25 * lib.einsum('inml,jmnl->ij',temp_t2_v_13, eris_oooo, optimize=True)
-        M_ij += 0.5 * 0.25 * lib.einsum('mlin,jmnl->ij',temp_t2_v_13, eris_oooo, optimize=True)
+        M_ij -= 0.5 * 0.5 * lib.einsum('inml,jlnm->ij',temp_t2_v_13, eris_oooo, optimize=True)
+        M_ij += 0.5 * 0.5 * lib.einsum('inml,jmnl->ij',temp_t2_v_13, eris_oooo, optimize=True)
 
-        M_ij -= 0.5 * 0.25 * lib.einsum('inml,jlnm->ji',temp_t2_v_13, eris_oooo, optimize=True)
-        M_ij += 0.5 * 0.25 * lib.einsum('inml,lnmj->ji',temp_t2_v_13, eris_oooo, optimize=True)
-
-        M_ij -= 0.5 * 0.25 * lib.einsum('inml,ljmn->ji',temp_t2_v_13, eris_oooo, optimize=True)
-        M_ij += 0.5 * 0.25 * lib.einsum('inml,lnmj->ji',temp_t2_v_13, eris_oooo, optimize=True)
+        M_ij -= 0.5 * 0.5 * lib.einsum('inml,jlnm->ji',temp_t2_v_13, eris_oooo, optimize=True)
+        M_ij += 0.5 * 0.5 * lib.einsum('inml,lnmj->ji',temp_t2_v_13, eris_oooo, optimize=True)
         del temp_t2_v_13
         del t2_1
 
@@ -356,20 +326,13 @@ def matvec(adc, M_ij=None, eris=None):
             eris_oovv = eris.oovv
             eris_ovvo = eris.ovvo
 
-            s[s2:f2] -= 0.5*lib.einsum('kijl,ali->ajk',eris_oooo, r2, optimize=True).reshape(-1)
-            s[s2:f2] -= 0.5*lib.einsum('klji,ail->ajk',eris_oooo ,r2, optimize=True).reshape(-1)
+            s[s2:f2] -= lib.einsum('kijl,ali->ajk',eris_oooo, r2, optimize=True).reshape(-1)
 
-            s[s2:f2] += 0.5*lib.einsum('klba,bjl->ajk',eris_oovv,r2,optimize=True).reshape(-1)
+            s[s2:f2] += lib.einsum('klba,bjl->ajk',eris_oovv,r2,optimize=True).reshape(-1)
 
-            s[s2:f2] +=  0.5*lib.einsum('jabl,bkl->ajk',eris_ovvo,r2,optimize=True).reshape(-1)
-            s[s2:f2] -=  lib.einsum('jabl,blk->ajk',eris_ovvo,r2,optimize=True).reshape(-1)
-            s[s2:f2] +=  0.5*lib.einsum('jlba,blk->ajk',eris_oovv,r2,optimize=True).reshape(-1)
-
-            s[s2:f2] += 0.5*lib.einsum('kiba,bji->ajk',eris_oovv,r2,optimize=True).reshape(-1)
-
-            s[s2:f2] += 0.5*lib.einsum('jiba,bik->ajk',eris_oovv,r2,optimize=True).reshape(-1)
-            s[s2:f2] -= lib.einsum('jabi,bik->ajk',eris_ovvo,r2,optimize=True).reshape(-1)
-            s[s2:f2] += 0.5*lib.einsum('jabi,bki->ajk',eris_ovvo,r2,optimize=True).reshape(-1)
+            s[s2:f2] +=  lib.einsum('jabl,bkl->ajk',eris_ovvo,r2,optimize=True).reshape(-1)
+            s[s2:f2] -=  2*lib.einsum('jabl,blk->ajk',eris_ovvo,r2,optimize=True).reshape(-1)
+            s[s2:f2] += lib.einsum('jlba,blk->ajk',eris_oovv,r2,optimize=True).reshape(-1)
 
         if (method == "adc(3)"):
 
@@ -378,10 +341,8 @@ def matvec(adc, M_ij=None, eris=None):
 
 ################ ADC(3) i - kja block and ajk - i ############################
 
-            temp =  0.25 * lib.einsum('ijbc,aij->abc',t2_1, r2, optimize=True)
-            temp -= 0.25 * lib.einsum('ijbc,aji->abc',t2_1, r2, optimize=True)
-            temp -= 0.25 * lib.einsum('jibc,aij->abc',t2_1, r2, optimize=True)
-            temp += 0.25 * lib.einsum('jibc,aji->abc',t2_1, r2, optimize=True)
+            temp =  0.5 * lib.einsum('ijbc,aij->abc',t2_1, r2, optimize=True)
+            temp -= 0.5 * lib.einsum('ijbc,aji->abc',t2_1, r2, optimize=True)
 
             temp_1 = lib.einsum('kjcb,ajk->abc',t2_1,r2, optimize=True)
 
@@ -393,8 +354,7 @@ def matvec(adc, M_ij=None, eris=None):
                 for a,b in lib.prange(0,nocc,chnk_size):
                     eris_ovvv = dfadc.get_ovvv_df(
                         adc, eris.Lov, eris.Lvv, a, chnk_size).reshape(-1,nvir,nvir,nvir)
-                    temp_singles[a:b] += lib.einsum('abc,icab->i',temp, eris_ovvv, optimize=True)
-                    temp_singles[a:b] -= lib.einsum('abc,ibac->i',temp, eris_ovvv, optimize=True)
+                    temp_singles[a:b] += 2 * lib.einsum('abc,icab->i',temp, eris_ovvv, optimize=True)
                     temp_singles[a:b] += lib.einsum('abc,icab->i',
                                                       temp_1, eris_ovvv, optimize=True)
                     temp_doubles = lib.einsum('i,icab->cba',r1[a:b],eris_ovvv,optimize=True)
@@ -405,8 +365,7 @@ def matvec(adc, M_ij=None, eris=None):
             else :
                 eris_ovvv = radc_ao2mo.unpack_eri_1(eris.ovvv, nvir)
 
-                temp_singles += lib.einsum('abc,icab->i',temp, eris_ovvv, optimize=True)
-                temp_singles -= lib.einsum('abc,ibac->i',temp, eris_ovvv, optimize=True)
+                temp_singles += 2 * lib.einsum('abc,icab->i',temp, eris_ovvv, optimize=True)
                 temp_singles += lib.einsum('abc,icab->i',temp_1, eris_ovvv, optimize=True)
                 temp_doubles = lib.einsum('i,icab->cba',r1,eris_ovvv,optimize=True)
                 s[s2:f2] += lib.einsum('cba,kjcb->ajk',temp_doubles,
@@ -417,47 +376,22 @@ def matvec(adc, M_ij=None, eris=None):
             s[s1:f1] += temp_singles
 
             temp = np.zeros_like(r2)
-            temp =  lib.einsum('jlab,ajk->blk',t2_1,r2,optimize=True)
+            temp =  2 * lib.einsum('jlab,ajk->blk',t2_1,r2,optimize=True)
             temp -= lib.einsum('jlab,akj->blk',t2_1,r2,optimize=True)
             temp -= lib.einsum('ljab,ajk->blk',t2_1,r2,optimize=True)
             temp += lib.einsum('ljab,akj->blk',t2_1,r2,optimize=True)
-            temp += lib.einsum('ljba,ajk->blk',t2_1,r2,optimize=True)
 
             temp_1 = np.zeros_like(r2)
-            temp_1 =  lib.einsum('jlab,ajk->blk',t2_1,r2,optimize=True)
+            temp_1 =  2 * lib.einsum('jlab,ajk->blk',t2_1,r2,optimize=True)
             temp_1 -= lib.einsum('jlab,akj->blk',t2_1,r2,optimize=True)
-            temp_1 += lib.einsum('jlab,ajk->blk',t2_1,r2,optimize=True)
             temp_1 -= lib.einsum('ljab,ajk->blk',t2_1,r2,optimize=True)
 
             temp_2 = lib.einsum('jlba,akj->blk',t2_1,r2, optimize=True)
 
-            s[s1:f1] += 0.5*lib.einsum('blk,lbik->i',temp,eris_ovoo,optimize=True)
-            s[s1:f1] -= 0.5*lib.einsum('blk,iblk->i',temp,eris_ovoo,optimize=True)
-            s[s1:f1] += 0.5*lib.einsum('blk,lbik->i',temp_1,eris_ovoo,optimize=True)
-            s[s1:f1] -= 0.5*lib.einsum('blk,iblk->i',temp_2,eris_ovoo,optimize=True)
-            del temp
-            del temp_1
-            del temp_2
-
-            temp = np.zeros_like(r2)
-            temp = -lib.einsum('klab,akj->blj',t2_1,r2,optimize=True)
-            temp += lib.einsum('klab,ajk->blj',t2_1,r2,optimize=True)
-            temp += lib.einsum('lkab,akj->blj',t2_1,r2,optimize=True)
-            temp -= lib.einsum('lkab,ajk->blj',t2_1,r2,optimize=True)
-            temp -= lib.einsum('lkba,akj->blj',t2_1,r2,optimize=True)
-
-            temp_1 = np.zeros_like(r2)
-            temp_1  = -2 * lib.einsum('klab,akj->blj',t2_1,r2,optimize=True)
-            temp_1 += lib.einsum('klab,ajk->blj',t2_1,r2,optimize=True)
-            temp_1 += lib.einsum('lkab,akj->blj',t2_1,r2,optimize=True)
-
-            temp_2 = -lib.einsum('klba,ajk->blj',t2_1,r2,optimize=True)
-
-            s[s1:f1] -= 0.5*lib.einsum('blj,lbij->i',temp,eris_ovoo,optimize=True)
-            s[s1:f1] += 0.5*lib.einsum('blj,iblj->i',temp,eris_ovoo,optimize=True)
-            s[s1:f1] -= 0.5*lib.einsum('blj,lbij->i',temp_1,eris_ovoo,optimize=True)
-            s[s1:f1] += 0.5*lib.einsum('blj,iblj->i',temp_2,eris_ovoo,optimize=True)
-
+            s[s1:f1] += lib.einsum('blk,lbik->i',temp,eris_ovoo,optimize=True)
+            s[s1:f1] -= lib.einsum('blk,iblk->i',temp,eris_ovoo,optimize=True)
+            s[s1:f1] += lib.einsum('blk,lbik->i',temp_1,eris_ovoo,optimize=True)
+            s[s1:f1] -= lib.einsum('blk,iblk->i',temp_2,eris_ovoo,optimize=True)
             del temp
             del temp_1
             del temp_2
@@ -836,22 +770,17 @@ def make_rdm1_eigenvectors(adc, L, R):
     einsum_type = True
 
 #####G^000#### block- ij
-    rdm1[occ_list,occ_list] =  2*einsum('m,m->',L1,R1,optimize=True)
+    rdm1[occ_list,occ_list] = 2*einsum('m,m->',L1,R1,optimize=True)
     rdm1[:nocc,:nocc] -= einsum('i,j->ij',L1,R1,optimize=True)
-
     rdm1[occ_list,occ_list] += 4*einsum('etu,etu->',L2,R2,optimize=True)
-    rdm1[occ_list,occ_list] -= einsum('etu,eut->',L2,R2,optimize=True)
-    rdm1[occ_list,occ_list] -= einsum('eut,etu->',L2,R2,optimize=True)
-
+    rdm1[occ_list,occ_list] -= 2*einsum('etu,eut->',L2,R2,optimize=True)
     rdm1[:nocc,:nocc] -= 2*einsum('eti,etj->ij',L2,R2,optimize=True)
-    rdm1[:nocc,:nocc] += einsum('eit,etj->ij',L2,R2,optimize=True)
-    rdm1[:nocc,:nocc] += einsum('eti,ejt->ij',L2,R2,optimize=True)
+    temp = np.zeros((nocc, nocc))
+    temp += einsum('eit,etj->ij',L2,R2,optimize=True)
+    temp += einsum('J,i,ijab,Ijab->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    temp -= 1/2 * einsum('J,i,ijab,Ijba->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[:nocc,:nocc] += temp + temp.T
     rdm1[:nocc,:nocc] -= 2*einsum('eit,ejt->ij',L2,R2,optimize=True)
-
-    rdm1[:nocc, :nocc] += einsum('J,i,ijab,Ijab->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-    rdm1[:nocc, :nocc] -= 1/2 * einsum('J,i,ijab,Ijba->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-    rdm1[:nocc, :nocc] += einsum('i,I,ijab,Jjab->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-    rdm1[:nocc, :nocc] -= 1/2 * einsum('i,I,ijab,Jjba->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
     rdm1[:nocc, :nocc] -= 4 * einsum('i,i,Ijab,Jjab->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
     rdm1[:nocc, :nocc] += 2 * einsum('i,i,Ijab,Jjba->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
     rdm1[:nocc, :nocc] += 2 * einsum('i,j,Iiab,Jjab->IJ', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
@@ -860,12 +789,12 @@ def make_rdm1_eigenvectors(adc, L, R):
 ########### block- ab
     rdm1[nocc:,nocc:] = 2*einsum('atu,btu->ab', L2,R2,optimize=True)
     rdm1[nocc:,nocc:] -= einsum('aut,btu->ab', L2,R2,optimize=True)
-
     rdm1[nocc:, nocc:] += 4 * einsum('i,i,jkAa,jkBa->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
     rdm1[nocc:, nocc:] -= 2 * einsum('i,i,jkAa,kjBa->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
     rdm1[nocc:, nocc:] -= 2 * einsum('i,j,ikBa,jkAa->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-    rdm1[nocc:, nocc:] += einsum('i,j,ikBa,kjAa->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-    rdm1[nocc:, nocc:] += einsum('i,j,kiBa,jkAa->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    temp = np.zeros((nvir, nvir))
+    temp += einsum('i,j,ikBa,kjAa->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+    rdm1[nocc:, nocc:] += temp + temp.T
     rdm1[nocc:, nocc:] -= 2 * einsum('i,j,kiBa,kjAa->AB', L1, R1, t1_ccee, t1_ccee, optimize = einsum_type)
 
 ############ block- ia
@@ -879,9 +808,9 @@ def make_rdm1_eigenvectors(adc, L, R):
     rdm1[:nocc,nocc:] += einsum('i,cgh,ghac->ia', L1,R2,t1_ccee,optimize=True)
     rdm1[:nocc,nocc:] -= 2*einsum('i,chg,ghac->ia', L1,R2,t1_ccee,optimize=True)
 
-    rdm1[:nocc,nocc:] += einsum('g,g,ia->ia', L1,R1,t2_ce,optimize=True)
-    rdm1[:nocc,nocc:] += einsum('g,g,ia->ia', L1,R1,t2_ce,optimize=True)
-    rdm1[:nocc,nocc:] -= einsum('g,i,ga->ia', R1,L1,t2_ce,optimize=True)
+    if (adc.approx_trans_moments is False or adc.method == "adc(3)"):
+        rdm1[:nocc,nocc:] += 2*einsum('g,g,ia->ia', L1,R1,t2_ce,optimize=True)
+        rdm1[:nocc,nocc:] -= einsum('g,i,ga->ia', R1,L1,t2_ce,optimize=True)
 
 ############# block- ai
     rdm1[nocc:,:nocc] = rdm1[:nocc,nocc:].T
@@ -900,254 +829,87 @@ def make_rdm1_eigenvectors(adc, L, R):
 
 ############# block- ij
         ### 030 ###
-        rdm1[:nocc, :nocc] += einsum('J,i,Ijab,ijab->IJ', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[:nocc, :nocc] -= 1/2 * einsum('J,i,Ijab,ijba->IJ',
-                                           L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[:nocc, :nocc] += einsum('J,i,ijab,Ijab->IJ', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[:nocc, :nocc] -= 1/2 * einsum('J,i,ijab,Ijba->IJ',
-                                           L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[:nocc, :nocc] += einsum('i,I,Jjab,ijab->IJ', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[:nocc, :nocc] -= 1/2 * einsum('i,I,Jjab,ijba->IJ',
-                                           L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[:nocc, :nocc] += einsum('i,I,ijab,Jjab->IJ', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[:nocc, :nocc] -= 1/2 * einsum('i,I,ijab,Jjba->IJ',
-                                           L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[:nocc, :nocc] -= 2 * einsum('i,i,Ijab,Jjab->IJ', L1,
-                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[:nocc, :nocc] += einsum('i,i,Ijab,Jjba->IJ', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[:nocc, :nocc] -= 2 * einsum('i,i,Jjab,Ijab->IJ', L1,
-                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[:nocc, :nocc] += einsum('i,i,Jjab,Ijba->IJ', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[:nocc, :nocc] += einsum('i,j,Iiab,Jjab->IJ', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[:nocc, :nocc] -= einsum('i,j,Iiab,Jjba->IJ', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[:nocc, :nocc] += einsum('i,j,Jjab,Iiab->IJ', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[:nocc, :nocc] -= einsum('i,j,Jjab,Iiba->IJ', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-
-        rdm1[:nocc, :nocc] -= 2 * einsum('i,i,Ijab,Jjab->IJ', L1,
-                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[:nocc, :nocc] += einsum('i,i,Ijab,Jjba->IJ', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[:nocc, :nocc] -= 2 * einsum('i,i,Jjab,Ijab->IJ', L1,
-                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[:nocc, :nocc] += einsum('i,i,Jjab,Ijba->IJ', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[:nocc, :nocc] += einsum('i,j,Iiab,Jjab->IJ', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[:nocc, :nocc] += einsum('i,j,Jjab,Iiab->IJ', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
+        temp = np.zeros((nocc, nocc))
+        temp += einsum('J,i,Ijab,ijab->IJ', L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        temp -= 1/2 * einsum('J,i,Ijab,ijba->IJ', L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        temp += einsum('J,i,ijab,Ijab->IJ', L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        temp -= 1/2 * einsum('J,i,ijab,Ijba->IJ', L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        temp -= 4 * einsum('i,i,Ijab,Jjab->IJ', L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        temp += 2 * einsum('i,i,Ijab,Jjba->IJ', L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        temp += 2 * einsum('i,j,Iiab,Jjab->IJ', L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        temp -= einsum('i,j,Iiab,Jjba->IJ', L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[:nocc, :nocc] += temp + temp.T
 
         ### 021 ###
-        rdm1[:nocc, :nocc] -= 2 * einsum('i,aIi,Ja->IJ', L1, R2, t2_ce, optimize = einsum_type)
-        rdm1[:nocc, :nocc] += einsum('i,aiI,Ja->IJ', L1, R2, t2_ce, optimize = einsum_type)
-
-        ### 120 ###
-        rdm1[:nocc, :nocc] -= 2 * einsum('aJi,i,Ia->IJ', L2, R1, t2_ce, optimize = einsum_type)
-        rdm1[:nocc, :nocc] += einsum('aiJ,i,Ia->IJ', L2, R1, t2_ce, optimize = einsum_type)
+        temp = np.zeros((nocc, nocc))
+        temp -= 2 * einsum('i,aIi,Ja->IJ', L1, R2, t2_ce, optimize = einsum_type)
+        temp += einsum('i,aiI,Ja->IJ', L1, R2, t2_ce, optimize = einsum_type)
+        rdm1[:nocc, :nocc] += temp + temp.T
 
         #----------------------------------------------------------------------------------------------------------#
 
 ############# block- ab
         ### 030 ###
-        rdm1[nocc:, nocc:] += 2 * einsum('i,i,jkAa,jkBa->AB', L1,
-                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, nocc:] -= einsum('i,i,jkAa,kjBa->AB', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, nocc:] += 2 * einsum('i,i,jkBa,jkAa->AB', L1,
-                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, nocc:] -= einsum('i,i,jkBa,kjAa->AB', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, nocc:] -= 2 * einsum('i,j,ikBa,jkAa->AB', L1,
-                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, nocc:] += einsum('i,j,ikBa,kjAa->AB', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, nocc:] -= 2 * einsum('i,j,jkAa,ikBa->AB', L1,
-                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, nocc:] += einsum('i,j,jkAa,kiBa->AB', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, nocc:] += einsum('i,j,kiBa,jkAa->AB', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, nocc:] -= einsum('i,j,kiBa,kjAa->AB', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, nocc:] += einsum('i,j,kjAa,ikBa->AB', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, nocc:] -= einsum('i,j,kjAa,kiBa->AB', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-
-        rdm1[nocc:, nocc:] += 2 * einsum('i,i,jkAa,jkBa->AB', L1,
-                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, nocc:] -= einsum('i,i,jkAa,kjBa->AB', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, nocc:] += 2 * einsum('i,i,jkBa,jkAa->AB', L1,
-                                         R1, t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, nocc:] -= einsum('i,i,jkBa,kjAa->AB', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, nocc:] -= einsum('i,j,kiBa,kjAa->AB', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, nocc:] -= einsum('i,j,kjAa,kiBa->AB', L1, R1,
-                                     t1_ccee, t2_ccee, optimize = einsum_type)
+        temp = np.zeros((nvir, nvir))
+        temp += 4 * einsum('i,i,jkAa,jkBa->AB', L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        temp -= 2 * einsum('i,i,jkAa,kjBa->AB', L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        temp -= 2 * einsum('i,j,ikBa,jkAa->AB', L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        temp += einsum('i,j,ikBa,kjAa->AB', L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        temp += einsum('i,j,kiBa,jkAa->AB', L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        temp -= 2 * einsum('i,j,kiBa,kjAa->AB', L1, R1, t1_ccee, t2_ccee, optimize = einsum_type)
+        rdm1[nocc:, nocc:] += temp + temp.T
 
         ### 021 ###
-        rdm1[nocc:, nocc:] -= einsum('i,Bij,jA->AB', L1, R2, t2_ce, optimize = einsum_type)
-        rdm1[nocc:, nocc:] += 2 * einsum('i,Bji,jA->AB', L1, R2, t2_ce, optimize = einsum_type)
-
-        ### 120 ###
-        rdm1[nocc:, nocc:] -= einsum('Aij,i,jB->AB', L2, R1, t2_ce, optimize = einsum_type)
-        rdm1[nocc:, nocc:] += 2 * einsum('Aij,j,iB->AB', L2, R1, t2_ce, optimize = einsum_type)
+        temp = np.zeros((nvir, nvir))
+        temp -= einsum('i,Bij,jA->AB', L1, R2, t2_ce, optimize = einsum_type)
+        temp += 2 * einsum('i,Bji,jA->AB', L1, R2, t2_ce, optimize = einsum_type)
+        rdm1[nocc:, nocc:] += temp + temp.T
 
         #----------------------------------------------------------------------------------------------------------#
 ############# block- ia
         ### 030 ###
-        rdm1[:nocc, nocc:] -= einsum('i,I,iA->IA', L1, R1, t3, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += einsum('i,i,IA->IA', L1, R1, t3, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= einsum('i,I,ijAa,ja->IA', L1, R1, t1_ccee,
-                                     t2_ce, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,I,jiAa,ja->IA', L1,
-                                           R1, t1_ccee, t2_ce, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += einsum('i,i,IjAa,ja->IA', L1, R1, t1_ccee,
-                                     t2_ce, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,i,jIAa,ja->IA', L1,
-                                           R1, t1_ccee, t2_ce, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,j,IiAa,ja->IA', L1,
-                                           R1, t1_ccee, t2_ce, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,j,iIAa,ja->IA', L1,
-                                           R1, t1_ccee, t2_ce, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= einsum('i,I,ijAa,ja->IA', L1, R1, t1_ccee, t2_ce, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('i,I,jiAa,ja->IA', L1, R1, t1_ccee, t2_ce, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 2 * einsum('i,i,IjAa,ja->IA', L1, R1, t1_ccee, t2_ce, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= einsum('i,i,jIAa,ja->IA', L1, R1, t1_ccee, t2_ce, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= einsum('i,j,IiAa,ja->IA', L1, R1, t1_ccee, t2_ce, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 1/2 * einsum('i,j,iIAa,ja->IA', L1, R1, t1_ccee, t2_ce, optimize = einsum_type)
 
-        rdm1[:nocc, nocc:] += einsum('i,i,IA->IA', L1, R1, t3, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += einsum('i,i,IjAa,ja->IA', L1, R1, t1_ccee,
-                                     t2_ce, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,i,jIAa,ja->IA', L1,
-                                           R1, t1_ccee, t2_ce, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,j,IiAa,ja->IA', L1,
-                                           R1, t1_ccee, t2_ce, optimize = einsum_type)
+        if adc.approx_trans_moments is False:
+            rdm1[:nocc, nocc:] -= einsum('i,I,iA->IA', L1, R1, t3, optimize = einsum_type)
+            rdm1[:nocc, nocc:] += 2 * einsum('i,i,IA->IA', L1, R1, t3, optimize = einsum_type)
 
         ### 021 ###
-        rdm1[:nocc, nocc:] -= einsum('i,ajI,ikAb,jkab->IA', L1, R2,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,ajI,ikAb,kjab->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,ajI,kiAb,jkab->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += einsum('i,aji,jkab,IkAb->IA', L1, R2,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,aji,jkab,kIAb->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,aji,kjab,IkAb->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,ajk,IiAb,jkab->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,ajk,iIAb,jkab->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-
-        rdm1[:nocc, nocc:] += einsum('i,Aij,jkab,Ikab->IA', L1, R2,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,Aij,jkab,Ikba->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= einsum('i,Aji,jkab,Ikab->IA', L1, R2,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,Aji,jkab,Ikba->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,Ajk,Iiab,jkab->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,Ajk,Iiab,jkba->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= einsum('i,aIi,jkab,jkAb->IA', L1, R2,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,aIi,jkab,kjAb->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += einsum('i,aIj,ikAb,jkab->IA', L1, R2,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,aIj,ikAb,kjab->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,aIj,kiAb,jkab->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,aIj,kiAb,kjab->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += einsum('i,aiI,jkab,jkAb->IA', L1, R2,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,aiI,jkab,kjAb->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= einsum('i,aij,jkab,IkAb->IA', L1, R2,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,aij,jkab,kIAb->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,aij,kjab,IkAb->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,aij,kjab,kIAb->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= einsum('i,ajI,ikAb,jkab->IA', L1, R2,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,ajI,ikAb,kjab->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,ajI,kiAb,jkab->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,ajI,kiAb,kjab->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += einsum('i,aji,jkab,IkAb->IA', L1, R2,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,aji,jkab,kIAb->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,aji,kjab,IkAb->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,aji,kjab,kIAb->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,ajk,IiAb,jkab->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,ajk,IiAb,kjab->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,ajk,iIAb,jkab->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,ajk,iIAb,kjab->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-
-        rdm1[:nocc, nocc:] -= einsum('i,Aji,jkab,Ikab->IA', L1, R2,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,Aji,jkab,Ikba->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,Ajk,Iiab,jkab->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= einsum('i,aIi,jkab,jkAb->IA', L1, R2,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,aIi,jkab,kjAb->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,aIj,kiAb,kjab->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += einsum('i,aji,jkab,IkAb->IA', L1, R2,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,aji,jkab,kIAb->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,aji,kjab,IkAb->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,aji,kjab,kIAb->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,ajk,IiAb,jkab->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-
-        rdm1[:nocc, nocc:] -= einsum('i,aij,jkab,IkAb->IA', L1, R2,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,aij,jkab,kIAb->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,aij,kjab,IkAb->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += einsum('i,aji,jkab,IkAb->IA', L1, R2,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,aji,jkab,kIAb->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,aji,kjab,IkAb->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,ajk,IiAb,jkab->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[:nocc, nocc:] += 1/2 * einsum('i,ajk,IiAb,kjab->IA',
-                                           L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 2 * einsum('i,ajI,ikAb,jkab->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('i,ajI,ikAb,kjab->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('i,ajI,kiAb,jkab->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += 4 * einsum('i,aji,jkab,IkAb->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 2 * einsum('i,aji,jkab,kIAb->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 2 * einsum('i,aji,kjab,IkAb->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 2 * einsum('i,ajk,IiAb,jkab->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('i,ajk,iIAb,jkab->IA',L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('i,Aij,jkab,Ikab->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,Aij,jkab,Ikba->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 2 * einsum('i,Aji,jkab,Ikab->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('i,Aji,jkab,Ikba->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('i,Ajk,Iiab,jkab->IA',L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,Ajk,Iiab,jkba->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 2 * einsum('i,aIi,jkab,jkAb->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('i,aIi,jkab,kjAb->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('i,aIj,ikAb,jkab->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,aIj,ikAb,kjab->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,aIj,kiAb,jkab->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('i,aIj,kiAb,kjab->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('i,aiI,jkab,jkAb->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,aiI,jkab,kjAb->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 2 * einsum('i,aij,jkab,IkAb->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('i,aij,jkab,kIAb->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('i,aij,kjab,IkAb->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,aij,kjab,kIAb->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,ajI,kiAb,kjab->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('i,aji,kjab,kIAb->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] += einsum('i,ajk,IiAb,kjab->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[:nocc, nocc:] -= 1/2 * einsum('i,ajk,iIAb,kjab->IA', L1, R2, t1_ccee, t1_ccee, optimize = einsum_type)
 
         ### 120 ###
         rdm1[:nocc, nocc:] += einsum('aij,I,ijAa->IA', L2, R1, t2_ccee, optimize = einsum_type)
@@ -1159,155 +921,7 @@ def make_rdm1_eigenvectors(adc, L, R):
         #----------------------------------------------------------------------------------------------------------#
 ############# block- ai
         ### 030 ###
-        rdm1[nocc:, :nocc] -= einsum('I,i,iA->AI', L1, R1, t3, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += einsum('i,i,IA->AI', L1, R1, t3, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= einsum('I,i,ijAa,ja->AI', L1, R1, t1_ccee,
-                                     t2_ce, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('I,i,jiAa,ja->AI', L1,
-                                           R1, t1_ccee, t2_ce, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += einsum('i,i,IjAa,ja->AI', L1, R1, t1_ccee,
-                                     t2_ce, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('i,i,jIAa,ja->AI', L1,
-                                           R1, t1_ccee, t2_ce, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('i,j,IjAa,ia->AI', L1,
-                                           R1, t1_ccee, t2_ce, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('i,j,jIAa,ia->AI', L1,
-                                           R1, t1_ccee, t2_ce, optimize = einsum_type)
-
-        rdm1[nocc:, :nocc] += einsum('i,i,IA->AI', L1, R1, t3, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += einsum('i,i,IjAa,ja->AI', L1, R1, t1_ccee,
-                                     t2_ce, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('i,i,jIAa,ja->AI', L1,
-                                           R1, t1_ccee, t2_ce, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('i,j,IjAa,ia->AI', L1,
-                                           R1, t1_ccee, t2_ce, optimize = einsum_type)
-
-        ### 021 ###
-        rdm1[nocc:, :nocc] += einsum('I,aij,ijAa->AI', L1, R2, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 2 * einsum('I,aij,jiAa->AI', L1, R2, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 2 * einsum('i,aij,IjAa->AI', L1, R2, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += einsum('i,aij,jIAa->AI', L1, R2, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 4 * einsum('i,aji,IjAa->AI', L1, R2, t2_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 2 * einsum('i,aji,jIAa->AI', L1, R2, t2_ccee, optimize = einsum_type)
-
-        ### 120 ###
-        rdm1[nocc:, :nocc] -= einsum('aiI,j,ikab,jkAb->AI', L2, R1,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('aiI,j,ikab,kjAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('aiI,j,kiab,jkAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += einsum('aij,j,ikab,IkAb->AI', L2, R1,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('aij,j,ikab,kIAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('aij,j,kiab,IkAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('aij,k,ijab,IkAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('aij,k,ijab,kIAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-
-        rdm1[nocc:, :nocc] += einsum('Aij,i,jkab,Ikab->AI', L2, R1,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('Aij,i,jkab,Ikba->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= einsum('Aij,j,ikab,Ikab->AI', L2, R1,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('Aij,j,ikab,Ikba->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('Aij,k,ijab,Ikab->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('Aij,k,ijab,Ikba->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= einsum('aIi,i,jkab,jkAb->AI', L2, R1,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('aIi,i,jkab,kjAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += einsum('aIi,j,ikab,jkAb->AI', L2, R1,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('aIi,j,ikab,kjAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('aIi,j,kiab,jkAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('aIi,j,kiab,kjAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += einsum('aiI,i,jkab,jkAb->AI', L2, R1,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('aiI,i,jkab,kjAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= einsum('aiI,j,ikab,jkAb->AI', L2, R1,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('aiI,j,ikab,kjAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('aiI,j,kiab,jkAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('aiI,j,kiab,kjAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= einsum('aij,i,jkab,IkAb->AI', L2, R1,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('aij,i,jkab,kIAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('aij,i,kjab,IkAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('aij,i,kjab,kIAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += einsum('aij,j,ikab,IkAb->AI', L2, R1,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('aij,j,ikab,kIAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('aij,j,kiab,IkAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('aij,j,kiab,kIAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('aij,k,ijab,IkAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('aij,k,ijab,kIAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('aij,k,jiab,IkAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('aij,k,jiab,kIAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-
-        rdm1[nocc:, :nocc] -= einsum('Aij,j,ikab,Ikab->AI', L2, R1,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('Aij,j,ikab,Ikba->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('Aij,k,ijab,Ikab->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= einsum('aIi,i,jkab,jkAb->AI', L2, R1,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('aIi,i,jkab,kjAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('aIi,j,kiab,kjAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += einsum('aij,j,ikab,IkAb->AI', L2, R1,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('aij,j,ikab,kIAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('aij,j,kiab,IkAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('aij,j,kiab,kIAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('aij,k,ijab,IkAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-
-        rdm1[nocc:, :nocc] -= einsum('aij,i,jkab,IkAb->AI', L2, R1,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('aij,i,jkab,kIAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('aij,i,kjab,IkAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += einsum('aij,j,ikab,IkAb->AI', L2, R1,
-                                     t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('aij,j,ikab,kIAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('aij,j,kiab,IkAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] -= 1/2 * einsum('aij,k,ijab,IkAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
-        rdm1[nocc:, :nocc] += 1/2 * einsum('aij,k,jiab,IkAb->AI',
-                                           L2, R1, t1_ccee, t1_ccee, optimize = einsum_type)
+        rdm1[nocc:, :nocc] = rdm1[:nocc, nocc:].T
 
     return rdm1
 
@@ -1375,7 +989,7 @@ class RADCIP(radc.RADC):
         self.imds = adc.imds
         self.e_corr = adc.e_corr
         self.method = adc.method
-        self.method_type = adc.method_type
+        self.method_type = "ip"
         self._scf = adc._scf
         self._nocc = adc._nocc
         self._nvir = adc._nvir
@@ -1384,7 +998,13 @@ class RADCIP(radc.RADC):
         self.mo_coeff_hf = adc.mo_coeff_hf
         self.mo_energy = adc.mo_energy
         self.nmo = adc._nmo
-        self.transform_integrals = adc.transform_integrals
+        self.if_heri_eris = adc.if_heri_eris
+        self.thresh_naf = adc.thresh_naf
+        self.ncvs = adc.ncvs
+        if getattr(adc.transform_integrals, '__name__', '') == 'df_transform':
+            self.transform_integrals = lambda: radc_ao2mo.transform_integrals_df(self)
+        elif getattr(adc.transform_integrals, '__name__', '') == 'outcore_transform':
+            self.transform_integrals = lambda: radc_ao2mo.transform_integrals_outcore(self)
         self.with_df = adc.with_df
         self.compute_properties = adc.compute_properties
         self.approx_trans_moments = adc.approx_trans_moments
