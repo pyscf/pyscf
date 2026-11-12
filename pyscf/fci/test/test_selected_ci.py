@@ -185,6 +185,41 @@ class KnownValues(unittest.TestCase):
         e1, c1 = selected_ci_slow.kernel(h1, eri, norb, nelec)
         self.assertAlmostEqual(e1, e2, 9)
 
+    def test_kernel_fixed_space_lowest_root(self):
+        # https://github.com/pyscf/pyscf/issues/3520
+        # The alpha and beta string lists of a selected-CI space are not
+        # necessarily identical, so the diagonal of the Hamiltonian is not
+        # symmetric and the initial guess must search the full diagonal.
+        mol = gto.M(atom='N 0 0 0; N 0 0 1.6', basis='sto-3g', verbose=0)
+        mf = scf.RHF(mol).run()
+        act = list(range(2, 10))
+        norb = len(act)
+        nelec = (5, 5)
+        C = mf.mo_coeff[:, act]
+        core = mf.mo_coeff[:, :2]
+        h1 = C.T @ (mf.get_hcore() + mf.get_veff(dm=2*core@core.T)) @ C
+        h2 = ao2mo.restore(1, ao2mo.kernel(mol, C), norb)
+        strs_a = numpy.array([62, 217, 218, 230, 233])
+        strs_b = numpy.array([158, 217, 218, 233, 241])
+        ci_strs = (strs_a, strs_b)
+        na, nb = len(strs_a), len(strs_b)
+        h2e = direct_spin1.absorb_h1e(h1, h2, norb, nelec, .5)
+        h2e = ao2mo.restore(1, h2e, norb)
+        H = numpy.zeros((na*nb, na*nb))
+        for i in range(na*nb):
+            v = numpy.zeros(na*nb)
+            v[i] = 1
+            H[:, i] = selected_ci.contract_2e(
+                h2e, selected_ci._as_SCIvector(v.reshape(na, nb), ci_strs),
+                norb, nelec).ravel()
+        ref = numpy.linalg.eigvalsh(.5*(H+H.T))
+        e, _ = selected_ci.kernel_fixed_space(
+            selected_ci.SelectedCI(), h1, h2, norb, nelec, ci_strs)
+        self.assertAlmostEqual(e, ref[0], 8)
+        e3, _ = selected_ci.kernel_fixed_space(
+            selected_ci.SelectedCI(), h1, h2, norb, nelec, ci_strs, nroots=3)
+        self.assertAlmostEqual(abs(numpy.asarray(e3) - ref[:3]).max(), 0, 7)
+
     def test_kernel_small_system(self):
         e1, c1 = selected_ci.kernel(h1[:2,:2], eri[:6], 2, (1,1), nroots=2)
         e2, c2 = direct_spin1.kernel(h1[:2,:2], eri[:6], 2, (1,1), nroots=2)
