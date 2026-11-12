@@ -15,8 +15,7 @@ concurrency:
 
 jobs:
   # Mirrors the nightly linux-tests job, minus the _veryhigh_cost tests.
-  linux-tests:
-    runs-on: ubuntu-latest
+  linux-tests:    runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
       OMP_NUM_THREADS: 1
@@ -47,8 +46,7 @@ jobs:
             coverage.xml
           retention-days: 14
 
-  # Dedicated runner for the _veryhigh_cost tests: fewer pytest workers with
-  # more BLAS threads each, and a longer per-test timeout.
+  # Dedicated job for _veryhigh_cost tests: 4 BLAS threads, longer timeout.
   linux-tests-veryhigh:
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -59,7 +57,7 @@ jobs:
       PYTEST_JOBS: 1
       INSTALL_NIGHTLY_DEPS: 'true'
       RUN_COVERAGE: 'true'
-      TEST_PATHS: 'pyscf/hessian/test/test_vv10_hessian.py'
+      TEST_PATHS: 'pyscf/hessian/test/test_vv10_hessian.py pyscf/tdscf/test/test_tdrks_vv10.py'
     steps:
       - uses: actions/checkout@v7
       - name: Set up Python
