@@ -719,7 +719,8 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
 
     def to_gpu(self):
         from gpu4pyscf.dft import numint2c # type: ignore
-        return numint2c.NumInt2C()
+        return numint2c.NumInt2C().set(omega=self.omega, collinear=self.collinear,
+                                       spin_samples=self.spin_samples)
 
     def _to_numint1c(self):
         '''Converts to the associated class to handle collinear systems'''
