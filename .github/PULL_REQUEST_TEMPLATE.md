@@ -2,11 +2,10 @@
 One or two sentences: what changes and why.
 
 **Motivation and context**
-Link the related issue(s), e.g. `Fixes #1234`.
+Link the related issue(s), e.g. `Fixes #1234`. If no issue exists, consider opening one first to provide the context (bug, unexpected behavior, missing feature, etc).
 
 **How has this been tested?**
-- New/changed tests: `python -m pytest pyscf/.../test_xxx.py`
-- Commands and results (quote the relevant output):
+- Test files (new, changed, or exercised):
 
 **Notes**
 Per the [AI policy](https://github.com/pyscf/pyscf/blob/master/AI_POLICY.md), briefly describe any AI assistance: the tool or agent used and what it was used for (code generation, testing, debugging, drafting, none).
