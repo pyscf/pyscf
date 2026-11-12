@@ -3,6 +3,7 @@
 set -e -o pipefail
 
 cd ./pyscf/lib
+
 cmake_args=(-DXCFUN_MAX_ORDER=4)
 if [ "$(uname -m)" = "x86_64" ]; then
     # Download to a file so retries can discard partial transfers.
@@ -12,6 +13,7 @@ if [ "$(uname -m)" = "x86_64" ]; then
     rm -f deps.tar.gz
     cmake_args+=(-DBUILD_LIBXC=OFF -DBUILD_XCFUN=ON -DBUILD_LIBCINT=OFF)
 fi
+
 mkdir build; cd build
 cmake "${cmake_args[@]}" ..
 make -j4
