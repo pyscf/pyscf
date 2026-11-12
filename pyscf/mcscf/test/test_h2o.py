@@ -72,10 +72,7 @@ class KnownValues(unittest.TestCase):
         mc.conv_tol = 1e-9
         mo = mc.sort_mo([4,5,6,10], base=1)
         mc.kernel(mo)
-        # The newton and non-newton SA-CASSCF energies agree to ~1e-10 locally,
-        # but the cross-platform scatter of the converged energy reaches ~1e-8
-        # even at conv_tol=1e-9 (nightly run 42874225298 missed an eight-place
-        # assertion by 5.7e-9), so assert with an absolute delta.
+        # places=8 has no cross-platform margin even at conv_tol=1e-9.
         self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, delta=2e-8)
         for e1, e0 in zip (mc.e_states, mc_ref.e_states):
             self.assertAlmostEqual (e1, e0, 5)

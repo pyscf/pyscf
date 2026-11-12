@@ -280,10 +280,7 @@ class KnownValues(unittest.TestCase):
 
     def _test_cu_metallic_nonequal_occ(self, kmf, cell, nk=[1,1,1]):
         assert cell.mesh == [7, 7, 7]
-        # These benchmarks fingerprint 2 damped CCSD iterations and are not
-        # converged energies. Their platform-to-platform scatter is ~1e-6
-        # (nightly run 42874225298 vs local), hence places=5.  The old
-        # references below date back to 2019 (f92f385dc).
+        # Fingerprint of 2 damped CCSD cycles, not a converged energy.
         ecc1_bench = -1.24296818167166
         max_cycle = 2  # Too expensive to do more!
 

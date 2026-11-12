@@ -74,12 +74,9 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'lda + .2*HF'
         mf.collinear = 'ncol'
         eks4 = mf.kernel()
-        # Energy scatter across platforms is ~1e-7 (see the lda test below).
         self.assertAlmostEqual(eks4, -76.1457647524492, 6)
 
-        # Since #2525, mf.omega can only override the range-separation
-        # parameter of an RSH functional (same construct as the GKS sibling
-        # test_ncol_gks_lda_omega).
+        # omega overrides only RSH functionals since #2525 (cf. the GKS sibling).
         mf = dks.UDKS(mol)
         mf.xc = 'lda + .2*SR_HF(0.3)'
         mf.collinear = 'ncol'
@@ -98,9 +95,6 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'lda,'
         mf.collinear = 'ncol'
         eks4 = mf.kernel()
-        # The SCF energy of this open-shell system scatters by ~2e-7 across
-        # platforms and convergence paths (cf. the mcol sibling above), so
-        # places=8 has no margin.
         self.assertAlmostEqual(eks4, -74.00093323811, 6)
 
     def test_ncol_dks_lda_veff(self):
