@@ -286,6 +286,45 @@ def contract(subscripts, A, B, alpha=1, beta=0, out=None, **kwargs):
         out[:] += C
     return out
 
+def _has_empty_operand(tensors):
+    # numpy.shape() only reads the .shape attribute, so HDF5-backed operands
+    # are not loaded here
+    for t in tensors:
+        if 0 in numpy.shape(t):
+            return True
+    return False
+
+def _empty_einsum_out_shape(scripts, tensors):
+    '''Output shape of a contraction that sums over a zero-length index, or None.
+
+    Such a contraction is identically zero, but numpy does not shortcut it: as
+    soon as one summed index has zero extent, its inner loop walks the operand
+    buffers through their strides.  The two stride patterns numpy produces for
+    zero-sized arrays are incompatible with each other,
+
+    * size==0 allocated by numpy (numpy.zeros/numpy.empty/.copy()/...) has
+      strides (0,)*ndim, so the same non-zero byte is read for every element;
+    * an empty view of a real array keeps the strides of its base array;
+
+    so mixing the two, as UCISD does with ``eris.ovOV`` (a copy of an empty
+    slice) and ``c2ab`` (a view of ``civec``), makes numpy read bytes outside
+    the zero-byte allocation and return NaN.
+    '''
+    idx_in, idx_out = scripts.split('->') if '->' in scripts else (scripts, None)
+    ranges = {}
+    for idx, t in zip(idx_in.split(','), tensors):
+        for i, n in zip(idx, numpy.shape(t)):
+            ranges[i] = n
+    if idx_out is None:             # numpy's implicit mode: unsorted scalars
+        counts = {}
+        for i in idx_in.replace(',', ''):
+            counts[i] = counts.get(i, 0) + 1
+        idx_out = ''.join(sorted(i for i, c in counts.items() if c == 1))
+    summed = set(idx_in.replace(',', '')) - set(idx_out)
+    if not any(ranges[i] == 0 for i in summed):
+        return None
+    return tuple(ranges[i] for i in idx_out)
+
 def einsum(scripts, *tensors, **kwargs):
     '''Perform a more efficient einsum via reshaping to a matrix multiply.
 
@@ -293,7 +332,28 @@ def einsum(scripts, *tensors, **kwargs):
     This assumes that each repeated index is actually summed (i.e. no 'i,i->i')
     and appears only twice (i.e. no 'ij,ik,il->jkl'). The output indices must
     be explicitly specified (i.e. 'ij,j->i' and not 'ij,j').
+
+    A contraction that sums over a zero-length index is returned as zeros
+    without being handed to the backend, which avoids reading uninitialized
+    memory for zero-sized operands (see _empty_einsum_out_shape).
     '''
+    if '...' not in scripts and _has_empty_operand(tensors):
+        out_shape = _empty_einsum_out_shape(scripts.replace(' ', ''), tensors)
+        if out_shape is not None:
+            out = kwargs.get('out', None)
+            if out is None:
+                dtype = kwargs.get('dtype', None)
+                if dtype is None:
+                    dtype = numpy.result_type(*tensors)
+                return numpy.zeros(out_shape, dtype=dtype)
+            # alpha is irrelevant: the contracted value is zero
+            beta = kwargs.get('beta', 1)
+            if beta == 0:
+                out[:] = 0
+            elif beta != 1:
+                out *= beta
+            return out
+
     if EINSUM_BACKEND == 'pytblis':
         if 'optimize' in kwargs and kwargs['optimize'] is True:
             kwargs['optimize'] = 'optimal'

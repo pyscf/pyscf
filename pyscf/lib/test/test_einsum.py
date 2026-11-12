@@ -272,5 +272,83 @@ class KnownValues(unittest.TestCase):
         c1 = c1*.2 + numpy.einsum('ijk,jlk->li', a, b)
         self.assertAlmostEqual(abs(c0-c1).max(), 0, 12)
 
+class EmptyOperand(unittest.TestCase):
+    '''A contraction summing over a zero-length index is exactly zero.
+
+    numpy does not shortcut it and reads uninitialized memory as soon as the
+    two operands disagree on the stride convention of their zero-sized
+    dimension, which is what UCISD hits with eris.ovOV (a copy of an empty
+    slice, strides (0,)*ndim over a zero-byte allocation) times c2ab (a view of
+    civec, strides (384,384,64,8)).  See lib/numpy_helper._empty_einsum_out_shape.
+    '''
+    def setUp(self):
+        self.bak = lib.numpy_helper.EINSUM_MAX_SIZE
+        # setUpModule() sets it to 0 to exercise the matmul path only; the bug
+        # above lives in the small-array numpy fallback.
+        lib.numpy_helper.EINSUM_MAX_SIZE = 500
+
+    def tearDown(self):
+        lib.numpy_helper.EINSUM_MAX_SIZE = self.bak
+
+    @staticmethod
+    def poisoned(shape):
+        # strides and allocation of a numpy-allocated size==0 array, backed by
+        # NaN so that any read through them shows up in the result
+        buf = numpy.full(1 << 12, numpy.nan)
+        return numpy.ndarray(shape, dtype=float, buffer=buf,
+                             strides=(0,) * len(shape))
+
+    def test_scalar_result(self):
+        eris_ovOV = self.poisoned((2, 6, 0, 8))          # (nao,nva,nob,nvb)
+        c2ab = numpy.zeros((2, 1, 6, 8))[:, 0:0, :, :]   # (noa,nob,nva,nvb)
+        self.assertEqual(c2ab.strides, (384, 384, 64, 8))
+        out = einsum('iajb,ijab->', eris_ovOV, c2ab)
+        self.assertEqual(out, 0.0)
+
+    def test_non_scalar_result(self):
+        c1b = numpy.zeros((1, 8))[0:0, :]
+        eris_ovVO = self.poisoned((2, 6, 8, 0))
+        out = einsum('nf,iafn->ia', c1b, eris_ovVO)
+        self.assertEqual(out.shape, (2, 6))
+        self.assertTrue(numpy.all(out == 0))
+
+    def test_three_operands(self):
+        a = numpy.random.random((2, 3))
+        b = self.poisoned((3, 0))
+        c = numpy.random.random((0, 4))
+        out = einsum('ij,jk,kl->il', a, b, c)
+        self.assertEqual(out.shape, (2, 4))
+        self.assertTrue(numpy.all(out == 0))
+
+    def test_implicit_output(self):
+        # numpy's implicit mode: ucisd.contract calls numpy.einsum('iajb,ijab')
+        eris_ovOV = self.poisoned((2, 6, 0, 8))
+        c2ab = numpy.zeros((2, 1, 6, 8))[:, 0:0, :, :]
+        self.assertEqual(einsum('iajb,ijab', eris_ovOV, c2ab), 0.0)
+
+    def test_empty_output_kept(self):
+        # no summed index: must stay a plain (empty) result, not a zeros() copy
+        a = self.poisoned((0, 3))
+        out = einsum('ij->ji', a)
+        self.assertEqual(out.shape, (3, 0))
+
+    def test_dtype(self):
+        eris_ovOV = self.poisoned((2, 6, 0, 8))
+        c2ab = numpy.zeros((2, 1, 6, 8))[:, 0:0, :, :]
+        self.assertEqual(einsum('iajb,ijab->', eris_ovOV, c2ab,
+                                dtype=numpy.complex128).dtype, numpy.complex128)
+        self.assertEqual(einsum('iajb,ijab->', eris_ovOV, c2ab).dtype,
+                         numpy.float64)
+
+    def test_out_kwarg(self):
+        c1b = numpy.zeros((1, 8))[0:0, :]
+        eris_ovVO = self.poisoned((2, 6, 8, 0))
+        out = numpy.full((2, 6), 7.0)
+        einsum('nf,iafn->ia', c1b, eris_ovVO, out=out, beta=0)
+        self.assertTrue(numpy.all(out == 0))
+        out = numpy.full((2, 6), 7.0)
+        einsum('nf,iafn->ia', c1b, eris_ovVO, out=out, beta=2)
+        self.assertTrue(numpy.all(out == 14))
+
 if __name__ == '__main__':
     unittest.main()
