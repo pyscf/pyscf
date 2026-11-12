@@ -53,10 +53,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
-      OMP_NUM_THREADS: 2
-      OPENBLAS_NUM_THREADS: 2
-      MKL_NUM_THREADS: 2
-      PYTEST_JOBS: 2
+      OMP_NUM_THREADS: 4
+      OPENBLAS_NUM_THREADS: 4
+      MKL_NUM_THREADS: 4
+      PYTEST_JOBS: 1
       INSTALL_NIGHTLY_DEPS: 'true'
       RUN_COVERAGE: 'true'
       TEST_PATHS: 'pyscf/hessian/test/test_vv10_hessian.py'
