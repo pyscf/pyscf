@@ -59,6 +59,14 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
         An SCF object with a modified J, K matrix constructor which uses density
         fitting and seminumerical integrals to compute J and K
 
+    Note:
+        Response solvers built on the SCF response function
+        mf.gen_response are supported on the returned object: TDA/TDDFT
+        excited states, SCF stability analysis, and the second-order SCF
+        solver. These solvers apply Fock builds through the SCF J/K
+        constructor, so the seminumerical K is used consistently in both
+        the ground state and the response.
+
     Examples:
 
     >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvdz', verbose=0)
@@ -127,6 +135,7 @@ class _SGXHF:
         # Set rebuild_nsteps to control how many direct SCF steps
         # are taken between resets of the SGX JK matrix. Default 5
         self.rebuild_nsteps = 5
+        self._nsteps_direct = 0
         self._in_scf = False
         self._ctx_lock = None
 
