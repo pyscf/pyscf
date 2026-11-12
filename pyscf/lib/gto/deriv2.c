@@ -43,19 +43,19 @@ void GTOshell_eval_grid_cart_deriv2(double *cgto, double *ri, double *exps,
                                     size_t nao, size_t ngrids, size_t bgrids)
 {
         const size_t degen = (l+1)*(l+2)/2;
-        const size_t bgrids0 = (bgrids >= SIMDD) ? (bgrids+1-SIMDD) : 0;
+        const size_t bgrids0 = (bgrids >= GTO_SIMDD) ? (bgrids+1-GTO_SIMDD) : 0;
         int lx, ly, lz;
         size_t i, j, j1, k, l1, n;
-        double fx0[SIMDD*(LMAX+5)];
-        double fy0[SIMDD*(LMAX+5)];
-        double fz0[SIMDD*(LMAX+5)];
-        double fx1[SIMDD*(LMAX+5)];
-        double fy1[SIMDD*(LMAX+5)];
-        double fz1[SIMDD*(LMAX+5)];
-        double fx2[SIMDD*(LMAX+5)];
-        double fy2[SIMDD*(LMAX+5)];
-        double fz2[SIMDD*(LMAX+5)];
-        double buf[SIMDD*10];
+        double fx0[GTO_SIMDD*(LMAX+5)];
+        double fy0[GTO_SIMDD*(LMAX+5)];
+        double fz0[GTO_SIMDD*(LMAX+5)];
+        double fx1[GTO_SIMDD*(LMAX+5)];
+        double fy1[GTO_SIMDD*(LMAX+5)];
+        double fz1[GTO_SIMDD*(LMAX+5)];
+        double fx2[GTO_SIMDD*(LMAX+5)];
+        double fy2[GTO_SIMDD*(LMAX+5)];
+        double fz2[GTO_SIMDD*(LMAX+5)];
+        double buf[GTO_SIMDD*10];
         double *gridx = coord;
         double *gridy = coord+BLKSIZE;
         double *gridz = coord+BLKSIZE*2;
@@ -80,51 +80,51 @@ void GTOshell_eval_grid_cart_deriv2(double *cgto, double *ri, double *exps,
                 } }
         }
 
-        for (i = 0; i < bgrids0; i+=SIMDD) {
+        for (i = 0; i < bgrids0; i+=GTO_SIMDD) {
                 for (k = 0; k < np; k++) {
-                        if (_nonzero_in(exps+k*BLKSIZE+i, SIMDD)) {
-        for (n = 0; n < SIMDD; n++) {
+                        if (_nonzero_in(exps+k*BLKSIZE+i, GTO_SIMDD)) {
+        for (n = 0; n < GTO_SIMDD; n++) {
                 fx0[n] = 1;
                 fy0[n] = 1;
                 fz0[n] = 1;
         }
         for (lx = 1; lx <= l+2; lx++) {
-        for (n = 0; n < SIMDD; n++) {
-                fx0[lx*SIMDD+n] = fx0[(lx-1)*SIMDD+n] * gridx[i+n];
-                fy0[lx*SIMDD+n] = fy0[(lx-1)*SIMDD+n] * gridy[i+n];
-                fz0[lx*SIMDD+n] = fz0[(lx-1)*SIMDD+n] * gridz[i+n];
+        for (n = 0; n < GTO_SIMDD; n++) {
+                fx0[lx*GTO_SIMDD+n] = fx0[(lx-1)*GTO_SIMDD+n] * gridx[i+n];
+                fy0[lx*GTO_SIMDD+n] = fy0[(lx-1)*GTO_SIMDD+n] * gridy[i+n];
+                fz0[lx*GTO_SIMDD+n] = fz0[(lx-1)*GTO_SIMDD+n] * gridz[i+n];
         } }
         GTOnabla1(fx1, fy1, fz1, fx0, fy0, fz0, l+1, alpha[k]);
         GTOnabla1(fx2, fy2, fz2, fx1, fy1, fz1, l  , alpha[k]);
         for (lx = l, l1 = 0; lx >= 0; lx--) {
         for (ly = l - lx; ly >= 0; ly--, l1++) {
                 lz = l - lx - ly;
-                for (n = 0; n < SIMDD; n++) {
+                for (n = 0; n < GTO_SIMDD; n++) {
                         e = exps[k*BLKSIZE+i+n];
-                        buf[0*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[1*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[2*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[3*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[4*SIMDD+n] = e * fx2[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[5*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[6*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[7*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy2[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[8*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[9*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz2[lz*SIMDD+n];
+                        buf[0*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[1*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[2*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[3*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[4*GTO_SIMDD+n] = e * fx2[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[5*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[6*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[7*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy2[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[8*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[9*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz2[lz*GTO_SIMDD+n];
                 }
                 for (j = 0, j1 = l1; j < nc; j++, j1+=degen) {
 #pragma GCC ivdep
-                for (n = 0; n < SIMDD; n++) {
-                        gto  [j1*ngrids+i+n] += buf[0*SIMDD+n] * coeff[j*np+k];
-                        gtox [j1*ngrids+i+n] += buf[1*SIMDD+n] * coeff[j*np+k];
-                        gtoy [j1*ngrids+i+n] += buf[2*SIMDD+n] * coeff[j*np+k];
-                        gtoz [j1*ngrids+i+n] += buf[3*SIMDD+n] * coeff[j*np+k];
-                        gtoxx[j1*ngrids+i+n] += buf[4*SIMDD+n] * coeff[j*np+k];
-                        gtoxy[j1*ngrids+i+n] += buf[5*SIMDD+n] * coeff[j*np+k];
-                        gtoxz[j1*ngrids+i+n] += buf[6*SIMDD+n] * coeff[j*np+k];
-                        gtoyy[j1*ngrids+i+n] += buf[7*SIMDD+n] * coeff[j*np+k];
-                        gtoyz[j1*ngrids+i+n] += buf[8*SIMDD+n] * coeff[j*np+k];
-                        gtozz[j1*ngrids+i+n] += buf[9*SIMDD+n] * coeff[j*np+k];
+                for (n = 0; n < GTO_SIMDD; n++) {
+                        gto  [j1*ngrids+i+n] += buf[0*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtox [j1*ngrids+i+n] += buf[1*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoy [j1*ngrids+i+n] += buf[2*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoz [j1*ngrids+i+n] += buf[3*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxx[j1*ngrids+i+n] += buf[4*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxy[j1*ngrids+i+n] += buf[5*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxz[j1*ngrids+i+n] += buf[6*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyy[j1*ngrids+i+n] += buf[7*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyz[j1*ngrids+i+n] += buf[8*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtozz[j1*ngrids+i+n] += buf[9*GTO_SIMDD+n] * coeff[j*np+k];
                 } }
         } }
                         }
@@ -134,47 +134,47 @@ void GTOshell_eval_grid_cart_deriv2(double *cgto, double *ri, double *exps,
         if (i < bgrids) {
                 for (k = 0; k < np; k++) {
                         if (_nonzero_in(exps+k*BLKSIZE+i, bgrids-i)) {
-        for (n = 0; n < SIMDD; n++) {
+        for (n = 0; n < GTO_SIMDD; n++) {
                 fx0[n] = 1;
                 fy0[n] = 1;
                 fz0[n] = 1;
         }
         for (lx = 1; lx <= l+2; lx++) {
-        for (n = 0; n < SIMDD; n++) {
-                fx0[lx*SIMDD+n] = fx0[(lx-1)*SIMDD+n] * gridx[i+n];
-                fy0[lx*SIMDD+n] = fy0[(lx-1)*SIMDD+n] * gridy[i+n];
-                fz0[lx*SIMDD+n] = fz0[(lx-1)*SIMDD+n] * gridz[i+n];
+        for (n = 0; n < GTO_SIMDD; n++) {
+                fx0[lx*GTO_SIMDD+n] = fx0[(lx-1)*GTO_SIMDD+n] * gridx[i+n];
+                fy0[lx*GTO_SIMDD+n] = fy0[(lx-1)*GTO_SIMDD+n] * gridy[i+n];
+                fz0[lx*GTO_SIMDD+n] = fz0[(lx-1)*GTO_SIMDD+n] * gridz[i+n];
         } }
         GTOnabla1(fx1, fy1, fz1, fx0, fy0, fz0, l+1, alpha[k]);
         GTOnabla1(fx2, fy2, fz2, fx1, fy1, fz1, l  , alpha[k]);
         for (lx = l, l1 = 0; lx >= 0; lx--) {
         for (ly = l - lx; ly >= 0; ly--, l1++) {
                 lz = l - lx - ly;
-                for (n = 0; n < SIMDD; n++) {
+                for (n = 0; n < GTO_SIMDD; n++) {
                         e = exps[k*BLKSIZE+i+n];
-                        buf[0*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[1*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[2*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[3*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[4*SIMDD+n] = e * fx2[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[5*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[6*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[7*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy2[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[8*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[9*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz2[lz*SIMDD+n];
+                        buf[0*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[1*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[2*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[3*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[4*GTO_SIMDD+n] = e * fx2[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[5*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[6*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[7*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy2[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[8*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[9*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz2[lz*GTO_SIMDD+n];
                 }
                 for (j = 0, j1 = l1; j < nc; j++, j1+=degen) {
                 for (n = 0; n < bgrids-i; n++) {
-                        gto  [j1*ngrids+i+n] += buf[0*SIMDD+n] * coeff[j*np+k];
-                        gtox [j1*ngrids+i+n] += buf[1*SIMDD+n] * coeff[j*np+k];
-                        gtoy [j1*ngrids+i+n] += buf[2*SIMDD+n] * coeff[j*np+k];
-                        gtoz [j1*ngrids+i+n] += buf[3*SIMDD+n] * coeff[j*np+k];
-                        gtoxx[j1*ngrids+i+n] += buf[4*SIMDD+n] * coeff[j*np+k];
-                        gtoxy[j1*ngrids+i+n] += buf[5*SIMDD+n] * coeff[j*np+k];
-                        gtoxz[j1*ngrids+i+n] += buf[6*SIMDD+n] * coeff[j*np+k];
-                        gtoyy[j1*ngrids+i+n] += buf[7*SIMDD+n] * coeff[j*np+k];
-                        gtoyz[j1*ngrids+i+n] += buf[8*SIMDD+n] * coeff[j*np+k];
-                        gtozz[j1*ngrids+i+n] += buf[9*SIMDD+n] * coeff[j*np+k];
+                        gto  [j1*ngrids+i+n] += buf[0*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtox [j1*ngrids+i+n] += buf[1*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoy [j1*ngrids+i+n] += buf[2*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoz [j1*ngrids+i+n] += buf[3*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxx[j1*ngrids+i+n] += buf[4*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxy[j1*ngrids+i+n] += buf[5*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxz[j1*ngrids+i+n] += buf[6*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyy[j1*ngrids+i+n] += buf[7*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyz[j1*ngrids+i+n] += buf[8*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtozz[j1*ngrids+i+n] += buf[9*GTO_SIMDD+n] * coeff[j*np+k];
                 } }
         } }
                         }
@@ -217,22 +217,22 @@ void GTOshell_eval_grid_cart_deriv3(double *cgto, double *ri, double *exps,
                                     size_t nao, size_t ngrids, size_t bgrids)
 {
         const size_t degen = (l+1)*(l+2)/2;
-        const size_t bgrids0 = (bgrids >= SIMDD) ? (bgrids+1-SIMDD) : 0;
+        const size_t bgrids0 = (bgrids >= GTO_SIMDD) ? (bgrids+1-GTO_SIMDD) : 0;
         int lx, ly, lz;
         size_t i, j, j1, k, l1, n;
-        double fx0[SIMDD*(LMAX+5)];
-        double fy0[SIMDD*(LMAX+5)];
-        double fz0[SIMDD*(LMAX+5)];
-        double fx1[SIMDD*(LMAX+5)];
-        double fy1[SIMDD*(LMAX+5)];
-        double fz1[SIMDD*(LMAX+5)];
-        double fx2[SIMDD*(LMAX+5)];
-        double fy2[SIMDD*(LMAX+5)];
-        double fz2[SIMDD*(LMAX+5)];
-        double fx3[SIMDD*(LMAX+5)];
-        double fy3[SIMDD*(LMAX+5)];
-        double fz3[SIMDD*(LMAX+5)];
-        double buf[SIMDD*20];
+        double fx0[GTO_SIMDD*(LMAX+5)];
+        double fy0[GTO_SIMDD*(LMAX+5)];
+        double fz0[GTO_SIMDD*(LMAX+5)];
+        double fx1[GTO_SIMDD*(LMAX+5)];
+        double fy1[GTO_SIMDD*(LMAX+5)];
+        double fz1[GTO_SIMDD*(LMAX+5)];
+        double fx2[GTO_SIMDD*(LMAX+5)];
+        double fy2[GTO_SIMDD*(LMAX+5)];
+        double fz2[GTO_SIMDD*(LMAX+5)];
+        double fx3[GTO_SIMDD*(LMAX+5)];
+        double fy3[GTO_SIMDD*(LMAX+5)];
+        double fz3[GTO_SIMDD*(LMAX+5)];
+        double buf[GTO_SIMDD*20];
         double *gridx = coord;
         double *gridy = coord+BLKSIZE;
         double *gridz = coord+BLKSIZE*2;
@@ -267,19 +267,19 @@ void GTOshell_eval_grid_cart_deriv3(double *cgto, double *ri, double *exps,
                 } }
         }
 
-        for (i = 0; i < bgrids0; i+=SIMDD) {
+        for (i = 0; i < bgrids0; i+=GTO_SIMDD) {
                 for (k = 0; k < np; k++) {
-                        if (_nonzero_in(exps+k*BLKSIZE+i, SIMDD)) {
-        for (n = 0; n < SIMDD; n++) {
+                        if (_nonzero_in(exps+k*BLKSIZE+i, GTO_SIMDD)) {
+        for (n = 0; n < GTO_SIMDD; n++) {
                 fx0[n] = 1;
                 fy0[n] = 1;
                 fz0[n] = 1;
         }
         for (lx = 1; lx <= l+3; lx++) {
-        for (n = 0; n < SIMDD; n++) {
-                fx0[lx*SIMDD+n] = fx0[(lx-1)*SIMDD+n] * gridx[i+n];
-                fy0[lx*SIMDD+n] = fy0[(lx-1)*SIMDD+n] * gridy[i+n];
-                fz0[lx*SIMDD+n] = fz0[(lx-1)*SIMDD+n] * gridz[i+n];
+        for (n = 0; n < GTO_SIMDD; n++) {
+                fx0[lx*GTO_SIMDD+n] = fx0[(lx-1)*GTO_SIMDD+n] * gridx[i+n];
+                fy0[lx*GTO_SIMDD+n] = fy0[(lx-1)*GTO_SIMDD+n] * gridy[i+n];
+                fz0[lx*GTO_SIMDD+n] = fz0[(lx-1)*GTO_SIMDD+n] * gridz[i+n];
         } }
         GTOnabla1(fx1, fy1, fz1, fx0, fy0, fz0, l+2, alpha[k]);
         GTOnabla1(fx2, fy2, fz2, fx1, fy1, fz1, l+1, alpha[k]);
@@ -287,52 +287,52 @@ void GTOshell_eval_grid_cart_deriv3(double *cgto, double *ri, double *exps,
         for (lx = l, l1 = 0; lx >= 0; lx--) {
         for (ly = l - lx; ly >= 0; ly--, l1++) {
                 lz = l - lx - ly;
-                for (n = 0; n < SIMDD; n++) {
+                for (n = 0; n < GTO_SIMDD; n++) {
                         e = exps[k*BLKSIZE+i+n];
-                        buf[ 0*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 1*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 2*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 3*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[ 4*SIMDD+n] = e * fx2[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 5*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 6*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[ 7*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy2[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 8*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[ 9*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz2[lz*SIMDD+n];
-                        buf[10*SIMDD+n] = e * fx3[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[11*SIMDD+n] = e * fx2[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[12*SIMDD+n] = e * fx2[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[13*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy2[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[14*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[15*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz2[lz*SIMDD+n];
-                        buf[16*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy3[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[17*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy2[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[18*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz2[lz*SIMDD+n];
-                        buf[19*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz3[lz*SIMDD+n];
+                        buf[ 0*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 1*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 2*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 3*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[ 4*GTO_SIMDD+n] = e * fx2[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 5*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 6*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[ 7*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy2[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 8*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[ 9*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz2[lz*GTO_SIMDD+n];
+                        buf[10*GTO_SIMDD+n] = e * fx3[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[11*GTO_SIMDD+n] = e * fx2[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[12*GTO_SIMDD+n] = e * fx2[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[13*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy2[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[14*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[15*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz2[lz*GTO_SIMDD+n];
+                        buf[16*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy3[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[17*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy2[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[18*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz2[lz*GTO_SIMDD+n];
+                        buf[19*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz3[lz*GTO_SIMDD+n];
                 }
                 for (j = 0, j1 = l1; j < nc; j++, j1+=degen) {
 #pragma GCC ivdep
-                for (n = 0; n < SIMDD; n++) {
-                        gto   [j1*ngrids+i+n] += buf[ 0*SIMDD+n] * coeff[j*np+k];
-                        gtox  [j1*ngrids+i+n] += buf[ 1*SIMDD+n] * coeff[j*np+k];
-                        gtoy  [j1*ngrids+i+n] += buf[ 2*SIMDD+n] * coeff[j*np+k];
-                        gtoz  [j1*ngrids+i+n] += buf[ 3*SIMDD+n] * coeff[j*np+k];
-                        gtoxx [j1*ngrids+i+n] += buf[ 4*SIMDD+n] * coeff[j*np+k];
-                        gtoxy [j1*ngrids+i+n] += buf[ 5*SIMDD+n] * coeff[j*np+k];
-                        gtoxz [j1*ngrids+i+n] += buf[ 6*SIMDD+n] * coeff[j*np+k];
-                        gtoyy [j1*ngrids+i+n] += buf[ 7*SIMDD+n] * coeff[j*np+k];
-                        gtoyz [j1*ngrids+i+n] += buf[ 8*SIMDD+n] * coeff[j*np+k];
-                        gtozz [j1*ngrids+i+n] += buf[ 9*SIMDD+n] * coeff[j*np+k];
-                        gtoxxx[j1*ngrids+i+n] += buf[10*SIMDD+n] * coeff[j*np+k];
-                        gtoxxy[j1*ngrids+i+n] += buf[11*SIMDD+n] * coeff[j*np+k];
-                        gtoxxz[j1*ngrids+i+n] += buf[12*SIMDD+n] * coeff[j*np+k];
-                        gtoxyy[j1*ngrids+i+n] += buf[13*SIMDD+n] * coeff[j*np+k];
-                        gtoxyz[j1*ngrids+i+n] += buf[14*SIMDD+n] * coeff[j*np+k];
-                        gtoxzz[j1*ngrids+i+n] += buf[15*SIMDD+n] * coeff[j*np+k];
-                        gtoyyy[j1*ngrids+i+n] += buf[16*SIMDD+n] * coeff[j*np+k];
-                        gtoyyz[j1*ngrids+i+n] += buf[17*SIMDD+n] * coeff[j*np+k];
-                        gtoyzz[j1*ngrids+i+n] += buf[18*SIMDD+n] * coeff[j*np+k];
-                        gtozzz[j1*ngrids+i+n] += buf[19*SIMDD+n] * coeff[j*np+k];
+                for (n = 0; n < GTO_SIMDD; n++) {
+                        gto   [j1*ngrids+i+n] += buf[ 0*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtox  [j1*ngrids+i+n] += buf[ 1*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoy  [j1*ngrids+i+n] += buf[ 2*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoz  [j1*ngrids+i+n] += buf[ 3*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxx [j1*ngrids+i+n] += buf[ 4*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxy [j1*ngrids+i+n] += buf[ 5*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxz [j1*ngrids+i+n] += buf[ 6*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyy [j1*ngrids+i+n] += buf[ 7*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyz [j1*ngrids+i+n] += buf[ 8*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtozz [j1*ngrids+i+n] += buf[ 9*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxx[j1*ngrids+i+n] += buf[10*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxy[j1*ngrids+i+n] += buf[11*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxz[j1*ngrids+i+n] += buf[12*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxyy[j1*ngrids+i+n] += buf[13*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxyz[j1*ngrids+i+n] += buf[14*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxzz[j1*ngrids+i+n] += buf[15*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyyy[j1*ngrids+i+n] += buf[16*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyyz[j1*ngrids+i+n] += buf[17*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyzz[j1*ngrids+i+n] += buf[18*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtozzz[j1*ngrids+i+n] += buf[19*GTO_SIMDD+n] * coeff[j*np+k];
                 } }
         } }
                         }
@@ -341,16 +341,16 @@ void GTOshell_eval_grid_cart_deriv3(double *cgto, double *ri, double *exps,
         if (i < bgrids) {
                 for (k = 0; k < np; k++) {
                         if (_nonzero_in(exps+k*BLKSIZE+i, bgrids-i)) {
-        for (n = 0; n < SIMDD; n++) {
+        for (n = 0; n < GTO_SIMDD; n++) {
                 fx0[n] = 1;
                 fy0[n] = 1;
                 fz0[n] = 1;
         }
         for (lx = 1; lx <= l+3; lx++) {
-        for (n = 0; n < SIMDD; n++) {
-                fx0[lx*SIMDD+n] = fx0[(lx-1)*SIMDD+n] * gridx[i+n];
-                fy0[lx*SIMDD+n] = fy0[(lx-1)*SIMDD+n] * gridy[i+n];
-                fz0[lx*SIMDD+n] = fz0[(lx-1)*SIMDD+n] * gridz[i+n];
+        for (n = 0; n < GTO_SIMDD; n++) {
+                fx0[lx*GTO_SIMDD+n] = fx0[(lx-1)*GTO_SIMDD+n] * gridx[i+n];
+                fy0[lx*GTO_SIMDD+n] = fy0[(lx-1)*GTO_SIMDD+n] * gridy[i+n];
+                fz0[lx*GTO_SIMDD+n] = fz0[(lx-1)*GTO_SIMDD+n] * gridz[i+n];
         } }
         GTOnabla1(fx1, fy1, fz1, fx0, fy0, fz0, l+2, alpha[k]);
         GTOnabla1(fx2, fy2, fz2, fx1, fy1, fz1, l+1, alpha[k]);
@@ -358,51 +358,51 @@ void GTOshell_eval_grid_cart_deriv3(double *cgto, double *ri, double *exps,
         for (lx = l, l1 = 0; lx >= 0; lx--) {
         for (ly = l - lx; ly >= 0; ly--, l1++) {
                 lz = l - lx - ly;
-                for (n = 0; n < SIMDD; n++) {
+                for (n = 0; n < GTO_SIMDD; n++) {
                         e = exps[k*BLKSIZE+i+n];
-                        buf[ 0*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 1*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 2*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 3*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[ 4*SIMDD+n] = e * fx2[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 5*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 6*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[ 7*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy2[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 8*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[ 9*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz2[lz*SIMDD+n];
-                        buf[10*SIMDD+n] = e * fx3[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[11*SIMDD+n] = e * fx2[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[12*SIMDD+n] = e * fx2[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[13*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy2[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[14*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[15*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz2[lz*SIMDD+n];
-                        buf[16*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy3[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[17*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy2[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[18*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz2[lz*SIMDD+n];
-                        buf[19*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz3[lz*SIMDD+n];
+                        buf[ 0*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 1*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 2*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 3*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[ 4*GTO_SIMDD+n] = e * fx2[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 5*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 6*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[ 7*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy2[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 8*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[ 9*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz2[lz*GTO_SIMDD+n];
+                        buf[10*GTO_SIMDD+n] = e * fx3[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[11*GTO_SIMDD+n] = e * fx2[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[12*GTO_SIMDD+n] = e * fx2[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[13*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy2[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[14*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[15*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz2[lz*GTO_SIMDD+n];
+                        buf[16*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy3[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[17*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy2[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[18*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz2[lz*GTO_SIMDD+n];
+                        buf[19*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz3[lz*GTO_SIMDD+n];
                 }
                 for (j = 0, j1 = l1; j < nc; j++, j1+=degen) {
                 for (n = 0; n < bgrids-i; n++) {
-                        gto   [j1*ngrids+i+n] += buf[ 0*SIMDD+n] * coeff[j*np+k];
-                        gtox  [j1*ngrids+i+n] += buf[ 1*SIMDD+n] * coeff[j*np+k];
-                        gtoy  [j1*ngrids+i+n] += buf[ 2*SIMDD+n] * coeff[j*np+k];
-                        gtoz  [j1*ngrids+i+n] += buf[ 3*SIMDD+n] * coeff[j*np+k];
-                        gtoxx [j1*ngrids+i+n] += buf[ 4*SIMDD+n] * coeff[j*np+k];
-                        gtoxy [j1*ngrids+i+n] += buf[ 5*SIMDD+n] * coeff[j*np+k];
-                        gtoxz [j1*ngrids+i+n] += buf[ 6*SIMDD+n] * coeff[j*np+k];
-                        gtoyy [j1*ngrids+i+n] += buf[ 7*SIMDD+n] * coeff[j*np+k];
-                        gtoyz [j1*ngrids+i+n] += buf[ 8*SIMDD+n] * coeff[j*np+k];
-                        gtozz [j1*ngrids+i+n] += buf[ 9*SIMDD+n] * coeff[j*np+k];
-                        gtoxxx[j1*ngrids+i+n] += buf[10*SIMDD+n] * coeff[j*np+k];
-                        gtoxxy[j1*ngrids+i+n] += buf[11*SIMDD+n] * coeff[j*np+k];
-                        gtoxxz[j1*ngrids+i+n] += buf[12*SIMDD+n] * coeff[j*np+k];
-                        gtoxyy[j1*ngrids+i+n] += buf[13*SIMDD+n] * coeff[j*np+k];
-                        gtoxyz[j1*ngrids+i+n] += buf[14*SIMDD+n] * coeff[j*np+k];
-                        gtoxzz[j1*ngrids+i+n] += buf[15*SIMDD+n] * coeff[j*np+k];
-                        gtoyyy[j1*ngrids+i+n] += buf[16*SIMDD+n] * coeff[j*np+k];
-                        gtoyyz[j1*ngrids+i+n] += buf[17*SIMDD+n] * coeff[j*np+k];
-                        gtoyzz[j1*ngrids+i+n] += buf[18*SIMDD+n] * coeff[j*np+k];
-                        gtozzz[j1*ngrids+i+n] += buf[19*SIMDD+n] * coeff[j*np+k];
+                        gto   [j1*ngrids+i+n] += buf[ 0*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtox  [j1*ngrids+i+n] += buf[ 1*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoy  [j1*ngrids+i+n] += buf[ 2*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoz  [j1*ngrids+i+n] += buf[ 3*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxx [j1*ngrids+i+n] += buf[ 4*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxy [j1*ngrids+i+n] += buf[ 5*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxz [j1*ngrids+i+n] += buf[ 6*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyy [j1*ngrids+i+n] += buf[ 7*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyz [j1*ngrids+i+n] += buf[ 8*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtozz [j1*ngrids+i+n] += buf[ 9*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxx[j1*ngrids+i+n] += buf[10*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxy[j1*ngrids+i+n] += buf[11*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxz[j1*ngrids+i+n] += buf[12*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxyy[j1*ngrids+i+n] += buf[13*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxyz[j1*ngrids+i+n] += buf[14*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxzz[j1*ngrids+i+n] += buf[15*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyyy[j1*ngrids+i+n] += buf[16*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyyz[j1*ngrids+i+n] += buf[17*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyzz[j1*ngrids+i+n] += buf[18*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtozzz[j1*ngrids+i+n] += buf[19*GTO_SIMDD+n] * coeff[j*np+k];
                 } }
         } }
                         }
@@ -444,25 +444,25 @@ void GTOshell_eval_grid_cart_deriv4(double *cgto, double *ri, double *exps,
                                     size_t nao, size_t ngrids, size_t bgrids)
 {
         const size_t degen = (l+1)*(l+2)/2;
-        const size_t bgrids0 = (bgrids >= SIMDD) ? (bgrids+1-SIMDD) : 0;
+        const size_t bgrids0 = (bgrids >= GTO_SIMDD) ? (bgrids+1-GTO_SIMDD) : 0;
         int lx, ly, lz;
         size_t i, j, j1, k, l1, n;
-        double fx0[SIMDD*(LMAX+5)];
-        double fy0[SIMDD*(LMAX+5)];
-        double fz0[SIMDD*(LMAX+5)];
-        double fx1[SIMDD*(LMAX+5)];
-        double fy1[SIMDD*(LMAX+5)];
-        double fz1[SIMDD*(LMAX+5)];
-        double fx2[SIMDD*(LMAX+5)];
-        double fy2[SIMDD*(LMAX+5)];
-        double fz2[SIMDD*(LMAX+5)];
-        double fx3[SIMDD*(LMAX+5)];
-        double fy3[SIMDD*(LMAX+5)];
-        double fz3[SIMDD*(LMAX+5)];
-        double fx4[SIMDD*(LMAX+5)];
-        double fy4[SIMDD*(LMAX+5)];
-        double fz4[SIMDD*(LMAX+5)];
-        double buf[SIMDD*35];
+        double fx0[GTO_SIMDD*(LMAX+5)];
+        double fy0[GTO_SIMDD*(LMAX+5)];
+        double fz0[GTO_SIMDD*(LMAX+5)];
+        double fx1[GTO_SIMDD*(LMAX+5)];
+        double fy1[GTO_SIMDD*(LMAX+5)];
+        double fz1[GTO_SIMDD*(LMAX+5)];
+        double fx2[GTO_SIMDD*(LMAX+5)];
+        double fy2[GTO_SIMDD*(LMAX+5)];
+        double fz2[GTO_SIMDD*(LMAX+5)];
+        double fx3[GTO_SIMDD*(LMAX+5)];
+        double fy3[GTO_SIMDD*(LMAX+5)];
+        double fz3[GTO_SIMDD*(LMAX+5)];
+        double fx4[GTO_SIMDD*(LMAX+5)];
+        double fy4[GTO_SIMDD*(LMAX+5)];
+        double fz4[GTO_SIMDD*(LMAX+5)];
+        double buf[GTO_SIMDD*35];
         double *gridx = coord;
         double *gridy = coord+BLKSIZE;
         double *gridz = coord+BLKSIZE*2;
@@ -512,19 +512,19 @@ void GTOshell_eval_grid_cart_deriv4(double *cgto, double *ri, double *exps,
                 } }
         }
 
-        for (i = 0; i < bgrids0; i+=SIMDD) {
+        for (i = 0; i < bgrids0; i+=GTO_SIMDD) {
                 for (k = 0; k < np; k++) {
-                        if (_nonzero_in(exps+k*BLKSIZE+i, SIMDD)) {
-        for (n = 0; n < SIMDD; n++) {
+                        if (_nonzero_in(exps+k*BLKSIZE+i, GTO_SIMDD)) {
+        for (n = 0; n < GTO_SIMDD; n++) {
                 fx0[n] = 1;
                 fy0[n] = 1;
                 fz0[n] = 1;
         }
         for (lx = 1; lx <= l+4; lx++) {
-        for (n = 0; n < SIMDD; n++) {
-                fx0[lx*SIMDD+n] = fx0[(lx-1)*SIMDD+n] * gridx[i+n];
-                fy0[lx*SIMDD+n] = fy0[(lx-1)*SIMDD+n] * gridy[i+n];
-                fz0[lx*SIMDD+n] = fz0[(lx-1)*SIMDD+n] * gridz[i+n];
+        for (n = 0; n < GTO_SIMDD; n++) {
+                fx0[lx*GTO_SIMDD+n] = fx0[(lx-1)*GTO_SIMDD+n] * gridx[i+n];
+                fy0[lx*GTO_SIMDD+n] = fy0[(lx-1)*GTO_SIMDD+n] * gridy[i+n];
+                fz0[lx*GTO_SIMDD+n] = fz0[(lx-1)*GTO_SIMDD+n] * gridz[i+n];
         } }
         GTOnabla1(fx1, fy1, fz1, fx0, fy0, fz0, l+3, alpha[k]);
         GTOnabla1(fx2, fy2, fz2, fx1, fy1, fz1, l+2, alpha[k]);
@@ -533,82 +533,82 @@ void GTOshell_eval_grid_cart_deriv4(double *cgto, double *ri, double *exps,
         for (lx = l, l1 = 0; lx >= 0; lx--) {
         for (ly = l - lx; ly >= 0; ly--, l1++) {
                 lz = l - lx - ly;
-                for (n = 0; n < SIMDD; n++) {
+                for (n = 0; n < GTO_SIMDD; n++) {
                         e = exps[k*BLKSIZE+i+n];
-                        buf[ 0*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 1*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 2*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 3*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[ 4*SIMDD+n] = e * fx2[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 5*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 6*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[ 7*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy2[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 8*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[ 9*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz2[lz*SIMDD+n];
-                        buf[10*SIMDD+n] = e * fx3[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[11*SIMDD+n] = e * fx2[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[12*SIMDD+n] = e * fx2[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[13*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy2[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[14*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[15*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz2[lz*SIMDD+n];
-                        buf[16*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy3[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[17*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy2[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[18*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz2[lz*SIMDD+n];
-                        buf[19*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz3[lz*SIMDD+n];
-                        buf[20*SIMDD+n] = e * fx4[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[21*SIMDD+n] = e * fx3[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[22*SIMDD+n] = e * fx3[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[23*SIMDD+n] = e * fx2[lx*SIMDD+n] * fy2[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[24*SIMDD+n] = e * fx2[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[25*SIMDD+n] = e * fx2[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz2[lz*SIMDD+n];
-                        buf[26*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy3[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[27*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy2[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[28*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz2[lz*SIMDD+n];
-                        buf[29*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz3[lz*SIMDD+n];
-                        buf[30*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy4[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[31*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy3[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[32*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy2[ly*SIMDD+n] * fz2[lz*SIMDD+n];
-                        buf[33*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz3[lz*SIMDD+n];
-                        buf[34*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz4[lz*SIMDD+n];
+                        buf[ 0*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 1*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 2*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 3*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[ 4*GTO_SIMDD+n] = e * fx2[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 5*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 6*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[ 7*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy2[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 8*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[ 9*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz2[lz*GTO_SIMDD+n];
+                        buf[10*GTO_SIMDD+n] = e * fx3[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[11*GTO_SIMDD+n] = e * fx2[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[12*GTO_SIMDD+n] = e * fx2[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[13*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy2[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[14*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[15*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz2[lz*GTO_SIMDD+n];
+                        buf[16*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy3[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[17*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy2[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[18*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz2[lz*GTO_SIMDD+n];
+                        buf[19*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz3[lz*GTO_SIMDD+n];
+                        buf[20*GTO_SIMDD+n] = e * fx4[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[21*GTO_SIMDD+n] = e * fx3[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[22*GTO_SIMDD+n] = e * fx3[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[23*GTO_SIMDD+n] = e * fx2[lx*GTO_SIMDD+n] * fy2[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[24*GTO_SIMDD+n] = e * fx2[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[25*GTO_SIMDD+n] = e * fx2[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz2[lz*GTO_SIMDD+n];
+                        buf[26*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy3[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[27*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy2[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[28*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz2[lz*GTO_SIMDD+n];
+                        buf[29*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz3[lz*GTO_SIMDD+n];
+                        buf[30*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy4[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[31*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy3[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[32*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy2[ly*GTO_SIMDD+n] * fz2[lz*GTO_SIMDD+n];
+                        buf[33*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz3[lz*GTO_SIMDD+n];
+                        buf[34*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz4[lz*GTO_SIMDD+n];
                 }
                 for (j = 0, j1 = l1; j < nc; j++, j1+=degen) {
 #pragma GCC ivdep
-                for (n = 0; n < SIMDD; n++) {
-                        gto    [j1*ngrids+i+n] += buf[ 0*SIMDD+n] * coeff[j*np+k];
-                        gtox   [j1*ngrids+i+n] += buf[ 1*SIMDD+n] * coeff[j*np+k];
-                        gtoy   [j1*ngrids+i+n] += buf[ 2*SIMDD+n] * coeff[j*np+k];
-                        gtoz   [j1*ngrids+i+n] += buf[ 3*SIMDD+n] * coeff[j*np+k];
-                        gtoxx  [j1*ngrids+i+n] += buf[ 4*SIMDD+n] * coeff[j*np+k];
-                        gtoxy  [j1*ngrids+i+n] += buf[ 5*SIMDD+n] * coeff[j*np+k];
-                        gtoxz  [j1*ngrids+i+n] += buf[ 6*SIMDD+n] * coeff[j*np+k];
-                        gtoyy  [j1*ngrids+i+n] += buf[ 7*SIMDD+n] * coeff[j*np+k];
-                        gtoyz  [j1*ngrids+i+n] += buf[ 8*SIMDD+n] * coeff[j*np+k];
-                        gtozz  [j1*ngrids+i+n] += buf[ 9*SIMDD+n] * coeff[j*np+k];
-                        gtoxxx [j1*ngrids+i+n] += buf[10*SIMDD+n] * coeff[j*np+k];
-                        gtoxxy [j1*ngrids+i+n] += buf[11*SIMDD+n] * coeff[j*np+k];
-                        gtoxxz [j1*ngrids+i+n] += buf[12*SIMDD+n] * coeff[j*np+k];
-                        gtoxyy [j1*ngrids+i+n] += buf[13*SIMDD+n] * coeff[j*np+k];
-                        gtoxyz [j1*ngrids+i+n] += buf[14*SIMDD+n] * coeff[j*np+k];
-                        gtoxzz [j1*ngrids+i+n] += buf[15*SIMDD+n] * coeff[j*np+k];
-                        gtoyyy [j1*ngrids+i+n] += buf[16*SIMDD+n] * coeff[j*np+k];
-                        gtoyyz [j1*ngrids+i+n] += buf[17*SIMDD+n] * coeff[j*np+k];
-                        gtoyzz [j1*ngrids+i+n] += buf[18*SIMDD+n] * coeff[j*np+k];
-                        gtozzz [j1*ngrids+i+n] += buf[19*SIMDD+n] * coeff[j*np+k];
-                        gtoxxxx[j1*ngrids+i+n] += buf[20*SIMDD+n] * coeff[j*np+k];
-                        gtoxxxy[j1*ngrids+i+n] += buf[21*SIMDD+n] * coeff[j*np+k];
-                        gtoxxxz[j1*ngrids+i+n] += buf[22*SIMDD+n] * coeff[j*np+k];
-                        gtoxxyy[j1*ngrids+i+n] += buf[23*SIMDD+n] * coeff[j*np+k];
-                        gtoxxyz[j1*ngrids+i+n] += buf[24*SIMDD+n] * coeff[j*np+k];
-                        gtoxxzz[j1*ngrids+i+n] += buf[25*SIMDD+n] * coeff[j*np+k];
-                        gtoxyyy[j1*ngrids+i+n] += buf[26*SIMDD+n] * coeff[j*np+k];
-                        gtoxyyz[j1*ngrids+i+n] += buf[27*SIMDD+n] * coeff[j*np+k];
-                        gtoxyzz[j1*ngrids+i+n] += buf[28*SIMDD+n] * coeff[j*np+k];
-                        gtoxzzz[j1*ngrids+i+n] += buf[29*SIMDD+n] * coeff[j*np+k];
-                        gtoyyyy[j1*ngrids+i+n] += buf[30*SIMDD+n] * coeff[j*np+k];
-                        gtoyyyz[j1*ngrids+i+n] += buf[31*SIMDD+n] * coeff[j*np+k];
-                        gtoyyzz[j1*ngrids+i+n] += buf[32*SIMDD+n] * coeff[j*np+k];
-                        gtoyzzz[j1*ngrids+i+n] += buf[33*SIMDD+n] * coeff[j*np+k];
-                        gtozzzz[j1*ngrids+i+n] += buf[34*SIMDD+n] * coeff[j*np+k];
+                for (n = 0; n < GTO_SIMDD; n++) {
+                        gto    [j1*ngrids+i+n] += buf[ 0*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtox   [j1*ngrids+i+n] += buf[ 1*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoy   [j1*ngrids+i+n] += buf[ 2*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoz   [j1*ngrids+i+n] += buf[ 3*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxx  [j1*ngrids+i+n] += buf[ 4*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxy  [j1*ngrids+i+n] += buf[ 5*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxz  [j1*ngrids+i+n] += buf[ 6*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyy  [j1*ngrids+i+n] += buf[ 7*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyz  [j1*ngrids+i+n] += buf[ 8*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtozz  [j1*ngrids+i+n] += buf[ 9*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxx [j1*ngrids+i+n] += buf[10*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxy [j1*ngrids+i+n] += buf[11*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxz [j1*ngrids+i+n] += buf[12*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxyy [j1*ngrids+i+n] += buf[13*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxyz [j1*ngrids+i+n] += buf[14*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxzz [j1*ngrids+i+n] += buf[15*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyyy [j1*ngrids+i+n] += buf[16*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyyz [j1*ngrids+i+n] += buf[17*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyzz [j1*ngrids+i+n] += buf[18*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtozzz [j1*ngrids+i+n] += buf[19*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxxx[j1*ngrids+i+n] += buf[20*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxxy[j1*ngrids+i+n] += buf[21*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxxz[j1*ngrids+i+n] += buf[22*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxyy[j1*ngrids+i+n] += buf[23*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxyz[j1*ngrids+i+n] += buf[24*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxzz[j1*ngrids+i+n] += buf[25*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxyyy[j1*ngrids+i+n] += buf[26*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxyyz[j1*ngrids+i+n] += buf[27*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxyzz[j1*ngrids+i+n] += buf[28*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxzzz[j1*ngrids+i+n] += buf[29*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyyyy[j1*ngrids+i+n] += buf[30*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyyyz[j1*ngrids+i+n] += buf[31*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyyzz[j1*ngrids+i+n] += buf[32*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyzzz[j1*ngrids+i+n] += buf[33*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtozzzz[j1*ngrids+i+n] += buf[34*GTO_SIMDD+n] * coeff[j*np+k];
                 } }
         } }
                         }
@@ -618,16 +618,16 @@ void GTOshell_eval_grid_cart_deriv4(double *cgto, double *ri, double *exps,
         if (i < bgrids) {
                 for (k = 0; k < np; k++) {
                         if (_nonzero_in(exps+k*BLKSIZE+i, bgrids-i)) {
-        for (n = 0; n < SIMDD; n++) {
+        for (n = 0; n < GTO_SIMDD; n++) {
                 fx0[n] = 1;
                 fy0[n] = 1;
                 fz0[n] = 1;
         }
         for (lx = 1; lx <= l+4; lx++) {
-        for (n = 0; n < SIMDD; n++) {
-                fx0[lx*SIMDD+n] = fx0[(lx-1)*SIMDD+n] * gridx[i+n];
-                fy0[lx*SIMDD+n] = fy0[(lx-1)*SIMDD+n] * gridy[i+n];
-                fz0[lx*SIMDD+n] = fz0[(lx-1)*SIMDD+n] * gridz[i+n];
+        for (n = 0; n < GTO_SIMDD; n++) {
+                fx0[lx*GTO_SIMDD+n] = fx0[(lx-1)*GTO_SIMDD+n] * gridx[i+n];
+                fy0[lx*GTO_SIMDD+n] = fy0[(lx-1)*GTO_SIMDD+n] * gridy[i+n];
+                fz0[lx*GTO_SIMDD+n] = fz0[(lx-1)*GTO_SIMDD+n] * gridz[i+n];
         } }
         GTOnabla1(fx1, fy1, fz1, fx0, fy0, fz0, l+3, alpha[k]);
         GTOnabla1(fx2, fy2, fz2, fx1, fy1, fz1, l+2, alpha[k]);
@@ -636,81 +636,81 @@ void GTOshell_eval_grid_cart_deriv4(double *cgto, double *ri, double *exps,
         for (lx = l, l1 = 0; lx >= 0; lx--) {
         for (ly = l - lx; ly >= 0; ly--, l1++) {
                 lz = l - lx - ly;
-                for (n = 0; n < SIMDD; n++) {
+                for (n = 0; n < GTO_SIMDD; n++) {
                         e = exps[k*BLKSIZE+i+n];
-                        buf[ 0*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 1*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 2*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 3*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[ 4*SIMDD+n] = e * fx2[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 5*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 6*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[ 7*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy2[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[ 8*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[ 9*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz2[lz*SIMDD+n];
-                        buf[10*SIMDD+n] = e * fx3[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[11*SIMDD+n] = e * fx2[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[12*SIMDD+n] = e * fx2[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[13*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy2[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[14*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[15*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz2[lz*SIMDD+n];
-                        buf[16*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy3[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[17*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy2[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[18*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz2[lz*SIMDD+n];
-                        buf[19*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz3[lz*SIMDD+n];
-                        buf[20*SIMDD+n] = e * fx4[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[21*SIMDD+n] = e * fx3[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[22*SIMDD+n] = e * fx3[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[23*SIMDD+n] = e * fx2[lx*SIMDD+n] * fy2[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[24*SIMDD+n] = e * fx2[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[25*SIMDD+n] = e * fx2[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz2[lz*SIMDD+n];
-                        buf[26*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy3[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[27*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy2[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[28*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz2[lz*SIMDD+n];
-                        buf[29*SIMDD+n] = e * fx1[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz3[lz*SIMDD+n];
-                        buf[30*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy4[ly*SIMDD+n] * fz0[lz*SIMDD+n];
-                        buf[31*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy3[ly*SIMDD+n] * fz1[lz*SIMDD+n];
-                        buf[32*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy2[ly*SIMDD+n] * fz2[lz*SIMDD+n];
-                        buf[33*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy1[ly*SIMDD+n] * fz3[lz*SIMDD+n];
-                        buf[34*SIMDD+n] = e * fx0[lx*SIMDD+n] * fy0[ly*SIMDD+n] * fz4[lz*SIMDD+n];
+                        buf[ 0*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 1*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 2*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 3*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[ 4*GTO_SIMDD+n] = e * fx2[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 5*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 6*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[ 7*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy2[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[ 8*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[ 9*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz2[lz*GTO_SIMDD+n];
+                        buf[10*GTO_SIMDD+n] = e * fx3[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[11*GTO_SIMDD+n] = e * fx2[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[12*GTO_SIMDD+n] = e * fx2[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[13*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy2[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[14*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[15*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz2[lz*GTO_SIMDD+n];
+                        buf[16*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy3[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[17*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy2[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[18*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz2[lz*GTO_SIMDD+n];
+                        buf[19*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz3[lz*GTO_SIMDD+n];
+                        buf[20*GTO_SIMDD+n] = e * fx4[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[21*GTO_SIMDD+n] = e * fx3[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[22*GTO_SIMDD+n] = e * fx3[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[23*GTO_SIMDD+n] = e * fx2[lx*GTO_SIMDD+n] * fy2[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[24*GTO_SIMDD+n] = e * fx2[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[25*GTO_SIMDD+n] = e * fx2[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz2[lz*GTO_SIMDD+n];
+                        buf[26*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy3[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[27*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy2[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[28*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz2[lz*GTO_SIMDD+n];
+                        buf[29*GTO_SIMDD+n] = e * fx1[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz3[lz*GTO_SIMDD+n];
+                        buf[30*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy4[ly*GTO_SIMDD+n] * fz0[lz*GTO_SIMDD+n];
+                        buf[31*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy3[ly*GTO_SIMDD+n] * fz1[lz*GTO_SIMDD+n];
+                        buf[32*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy2[ly*GTO_SIMDD+n] * fz2[lz*GTO_SIMDD+n];
+                        buf[33*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy1[ly*GTO_SIMDD+n] * fz3[lz*GTO_SIMDD+n];
+                        buf[34*GTO_SIMDD+n] = e * fx0[lx*GTO_SIMDD+n] * fy0[ly*GTO_SIMDD+n] * fz4[lz*GTO_SIMDD+n];
                 }
                 for (j = 0, j1 = l1; j < nc; j++, j1+=degen) {
                 for (n = 0; n < bgrids-i; n++) {
-                        gto    [j1*ngrids+i+n] += buf[ 0*SIMDD+n] * coeff[j*np+k];
-                        gtox   [j1*ngrids+i+n] += buf[ 1*SIMDD+n] * coeff[j*np+k];
-                        gtoy   [j1*ngrids+i+n] += buf[ 2*SIMDD+n] * coeff[j*np+k];
-                        gtoz   [j1*ngrids+i+n] += buf[ 3*SIMDD+n] * coeff[j*np+k];
-                        gtoxx  [j1*ngrids+i+n] += buf[ 4*SIMDD+n] * coeff[j*np+k];
-                        gtoxy  [j1*ngrids+i+n] += buf[ 5*SIMDD+n] * coeff[j*np+k];
-                        gtoxz  [j1*ngrids+i+n] += buf[ 6*SIMDD+n] * coeff[j*np+k];
-                        gtoyy  [j1*ngrids+i+n] += buf[ 7*SIMDD+n] * coeff[j*np+k];
-                        gtoyz  [j1*ngrids+i+n] += buf[ 8*SIMDD+n] * coeff[j*np+k];
-                        gtozz  [j1*ngrids+i+n] += buf[ 9*SIMDD+n] * coeff[j*np+k];
-                        gtoxxx [j1*ngrids+i+n] += buf[10*SIMDD+n] * coeff[j*np+k];
-                        gtoxxy [j1*ngrids+i+n] += buf[11*SIMDD+n] * coeff[j*np+k];
-                        gtoxxz [j1*ngrids+i+n] += buf[12*SIMDD+n] * coeff[j*np+k];
-                        gtoxyy [j1*ngrids+i+n] += buf[13*SIMDD+n] * coeff[j*np+k];
-                        gtoxyz [j1*ngrids+i+n] += buf[14*SIMDD+n] * coeff[j*np+k];
-                        gtoxzz [j1*ngrids+i+n] += buf[15*SIMDD+n] * coeff[j*np+k];
-                        gtoyyy [j1*ngrids+i+n] += buf[16*SIMDD+n] * coeff[j*np+k];
-                        gtoyyz [j1*ngrids+i+n] += buf[17*SIMDD+n] * coeff[j*np+k];
-                        gtoyzz [j1*ngrids+i+n] += buf[18*SIMDD+n] * coeff[j*np+k];
-                        gtozzz [j1*ngrids+i+n] += buf[19*SIMDD+n] * coeff[j*np+k];
-                        gtoxxxx[j1*ngrids+i+n] += buf[20*SIMDD+n] * coeff[j*np+k];
-                        gtoxxxy[j1*ngrids+i+n] += buf[21*SIMDD+n] * coeff[j*np+k];
-                        gtoxxxz[j1*ngrids+i+n] += buf[22*SIMDD+n] * coeff[j*np+k];
-                        gtoxxyy[j1*ngrids+i+n] += buf[23*SIMDD+n] * coeff[j*np+k];
-                        gtoxxyz[j1*ngrids+i+n] += buf[24*SIMDD+n] * coeff[j*np+k];
-                        gtoxxzz[j1*ngrids+i+n] += buf[25*SIMDD+n] * coeff[j*np+k];
-                        gtoxyyy[j1*ngrids+i+n] += buf[26*SIMDD+n] * coeff[j*np+k];
-                        gtoxyyz[j1*ngrids+i+n] += buf[27*SIMDD+n] * coeff[j*np+k];
-                        gtoxyzz[j1*ngrids+i+n] += buf[28*SIMDD+n] * coeff[j*np+k];
-                        gtoxzzz[j1*ngrids+i+n] += buf[29*SIMDD+n] * coeff[j*np+k];
-                        gtoyyyy[j1*ngrids+i+n] += buf[30*SIMDD+n] * coeff[j*np+k];
-                        gtoyyyz[j1*ngrids+i+n] += buf[31*SIMDD+n] * coeff[j*np+k];
-                        gtoyyzz[j1*ngrids+i+n] += buf[32*SIMDD+n] * coeff[j*np+k];
-                        gtoyzzz[j1*ngrids+i+n] += buf[33*SIMDD+n] * coeff[j*np+k];
-                        gtozzzz[j1*ngrids+i+n] += buf[34*SIMDD+n] * coeff[j*np+k];
+                        gto    [j1*ngrids+i+n] += buf[ 0*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtox   [j1*ngrids+i+n] += buf[ 1*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoy   [j1*ngrids+i+n] += buf[ 2*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoz   [j1*ngrids+i+n] += buf[ 3*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxx  [j1*ngrids+i+n] += buf[ 4*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxy  [j1*ngrids+i+n] += buf[ 5*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxz  [j1*ngrids+i+n] += buf[ 6*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyy  [j1*ngrids+i+n] += buf[ 7*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyz  [j1*ngrids+i+n] += buf[ 8*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtozz  [j1*ngrids+i+n] += buf[ 9*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxx [j1*ngrids+i+n] += buf[10*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxy [j1*ngrids+i+n] += buf[11*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxz [j1*ngrids+i+n] += buf[12*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxyy [j1*ngrids+i+n] += buf[13*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxyz [j1*ngrids+i+n] += buf[14*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxzz [j1*ngrids+i+n] += buf[15*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyyy [j1*ngrids+i+n] += buf[16*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyyz [j1*ngrids+i+n] += buf[17*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyzz [j1*ngrids+i+n] += buf[18*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtozzz [j1*ngrids+i+n] += buf[19*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxxx[j1*ngrids+i+n] += buf[20*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxxy[j1*ngrids+i+n] += buf[21*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxxz[j1*ngrids+i+n] += buf[22*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxyy[j1*ngrids+i+n] += buf[23*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxyz[j1*ngrids+i+n] += buf[24*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxxzz[j1*ngrids+i+n] += buf[25*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxyyy[j1*ngrids+i+n] += buf[26*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxyyz[j1*ngrids+i+n] += buf[27*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxyzz[j1*ngrids+i+n] += buf[28*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoxzzz[j1*ngrids+i+n] += buf[29*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyyyy[j1*ngrids+i+n] += buf[30*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyyyz[j1*ngrids+i+n] += buf[31*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyyzz[j1*ngrids+i+n] += buf[32*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtoyzzz[j1*ngrids+i+n] += buf[33*GTO_SIMDD+n] * coeff[j*np+k];
+                        gtozzzz[j1*ngrids+i+n] += buf[34*GTO_SIMDD+n] * coeff[j*np+k];
                 } }
         } }
                         }
