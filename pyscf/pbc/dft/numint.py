@@ -1124,7 +1124,7 @@ class NumInt(lib.StreamObject, numint.LibXCMixin):
 
     def to_gpu(self):
         from gpu4pyscf.pbc.dft.numint import NumInt # type: ignore
-        return NumInt()
+        return NumInt().set(omega=self.omega)
 
 _NumInt = NumInt
 
@@ -1341,6 +1341,6 @@ class KNumInt(lib.StreamObject, numint.LibXCMixin):
 
     def to_gpu(self):
         from gpu4pyscf.pbc.dft.numint import KNumInt # type: ignore
-        return KNumInt()
+        return KNumInt().set(omega=self.omega)
 
 _KNumInt = KNumInt
