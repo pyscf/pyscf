@@ -357,8 +357,7 @@ class _ERIS:
         bufs1 = bufpp = None
         t1 = log.timer('density fitting ao2mo pass1', *t0)
 
-        mem_now = lib.current_memory()[0]
-        nblk = int(max(8, min(nmo, ((max_memory-mem_now)*1e6/8-bufpa.size)/(ncas**2*nmo))))
+        nblk = int(max(8, min(nmo, (max_memory*1e6/8-bufpa.size)/(ncas**2*nmo))))
         bufs1 = numpy.empty((nblk,ncas,nmo,ncas))
         dgemm = lib.numpy_helper._dgemm
         for p0, p1 in prange(0, nmo, nblk):
@@ -373,8 +372,7 @@ class _ERIS:
         bufs1 = bufpa = None
         t1 = log.timer('density fitting papa pass2', *t1)
 
-        mem_now = lib.current_memory()[0]
-        nblk = int(max(8, min(nmo, (max_memory-mem_now)*1e6/8/(nmo*naoaux+ncas**2*nmo))))
+        nblk = int(max(8, min(nmo, max_memory*1e6/8/(nmo*naoaux+ncas**2*nmo))))
         bufs1 = numpy.empty((nblk,nmo,naoaux))
         bufs2 = numpy.empty((nblk,nmo,ncas,ncas))
         for p0, p1 in prange(0, nmo, nblk):
