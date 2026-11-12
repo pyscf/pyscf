@@ -102,6 +102,45 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(dm2ref[1] - rdm2[1]).max(), 0, 4)
         self.assertAlmostEqual(abs(dm2ref[2] - rdm2[2]).max(), 0, 4)
 
+    def test_h4_empty_spin_eris(self):
+        '''An empty spin channel leaves zero-sized eris blocks behind.
+
+        numpy allocates a size==0 array with strides (0,)*ndim over a zero-byte
+        buffer, so reading it through the strides of a second, non-degenerate
+        operand returns whatever happens to be in memory.  Poisoning the
+        allocation makes any such read visible: contract() must not depend on
+        it (see also lib/test/test_einsum.py).
+        '''
+        mol = gto.Mole()
+        mol.verbose = 0
+        mol.atom = [
+            ['H', ( 1.,-1.    , 0.   )],
+            ['H', ( 0.,-1.    ,-1.   )],
+            ['H', ( 1.,-0.5   , 0.   )],
+            ['H', ( 0.,-1.    , 1.   )],
+        ]
+        mol.charge = 2
+        mol.spin = 2
+        mol.basis = '3-21g'
+        mol.build()
+        mf = scf.RHF(mol).run(conv_tol=1e-14)
+        myci = ci.CISD(mf)
+        myci.kernel()
+        eris = myci.ao2mo()
+        ref = ucisd.contract(myci, myci.ci, eris)
+
+        poisoned = numpy.full(1 << 12, numpy.nan)
+        nempty = 0
+        for key, val in vars(eris).items():
+            if isinstance(val, numpy.ndarray) and val.size == 0:
+                setattr(eris, key, numpy.ndarray(val.shape, dtype=val.dtype,
+                                                 buffer=poisoned,
+                                                 strides=(0,) * val.ndim))
+                nempty += 1
+        self.assertTrue(nempty > 0)
+        got = ucisd.contract(myci, myci.ci, eris)
+        self.assertAlmostEqual(abs(ref - got).max(), 0, 12)
+
     def test_h4_a(self):
         '''Compare to FCI'''
         mol = gto.Mole()
