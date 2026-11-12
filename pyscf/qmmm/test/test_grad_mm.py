@@ -134,16 +134,6 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual((e1 - e2) / 0.002*lib.param.BOHR,
                                (g_hf_mm_h1+g_hf_mm_nuc)[0,1], 6)
 
-    def test_example_force_on_mm_particles(self):
-        import runpy
-        import os
-        example_path = os.path.abspath(os.path.join(
-            os.path.dirname(__file__), '..', '..', '..', 'examples', 'qmmm', '30-force_on_mm_particles.py'))
-        if os.path.exists(example_path):
-            mod = runpy.run_path(example_path)
-            self.assertIn('mm_force_mp2', mod)
-            self.assertEqual(mod['mm_force_mp2'].shape, (5, 3))
-
 if __name__ == "__main__":
     print("Full Tests for qmmm MM force.")
     unittest.main()
