@@ -14,3 +14,4 @@ Per the [AI policy](https://github.com/pyscf/pyscf/blob/master/AI_POLICY.md), br
 **Checklist**
 - [ ] I have read the [CONTRIBUTING.md](https://github.com/pyscf/pyscf/blob/master/CONTRIBUTING.md)
 - [ ] Changes and PR description checked against the [PR review template](https://github.com/pyscf/pyscf/blob/master/agent-recipes/skills/pyscf-pr-review.template.md)
+- [ ] CI and lint pass for the changed code; unrelated failures can be ignored (raise a new issue or comment on a CI-failure-tracking issue if interested)
