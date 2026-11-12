@@ -35,7 +35,7 @@ jobs:
       - name: Build and run tests including high-cost cases
         run: |
           set -o pipefail
-          ./.github/workflows/run_ci.sh -k "not _skip and not _veryhigh_cost" --timeout=3600 --junitxml=nightly-tests.xml 2>&1 | tee nightly-tests.log
+          ./.github/workflows/run_ci.sh -k "not _skip and not _veryhigh_cost" --timeout=1800 --junitxml=nightly-tests.xml 2>&1 | tee nightly-tests.log
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
