@@ -84,7 +84,7 @@ def make_rdm1_with_orbital_response(mp):
     from pyscf.mp import mp2
     from pyscf.ao2mo import _ao2mo
     log = lib.logger.new_logger(mp)
-    time0 = time.clock(), time.time()
+    time0 = time.process_time(), time.perf_counter()
     mol = mp.mol
 
     log.debug('Build mp2 rdm1 intermediates')
