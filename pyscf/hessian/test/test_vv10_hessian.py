@@ -112,7 +112,11 @@ def analytical_d2enlc(mf):
     return analytical_hessian
 
 class KnownValues(unittest.TestCase):
-    def test_vv10_only_hessian_direct_high_cost(self):
+    # The _veryhigh_cost tests are excluded from the default suites and are
+    # meant for a dedicated CI job with a longer per-test timeout and multiple
+    # BLAS threads: each takes >1h on a 4-vCPU runner with a single thread
+    # (nightly run 42874225298 timed out at 3600s), ~25min on 8 local threads.
+    def test_vv10_only_hessian_direct_veryhigh_cost(self):
         mf = make_mf(mol, vv10_only = True)
 
         # reference_hessian = numerical_d2enlc(mf)
@@ -187,7 +191,7 @@ class KnownValues(unittest.TestCase):
 
         assert np.linalg.norm(test_hessian - reference_hessian) < 1e-5
 
-    def test_vv10_only_hessian_density_fitting_high_cost(self):
+    def test_vv10_only_hessian_density_fitting_veryhigh_cost(self):
         mf = make_mf(mol, vv10_only = True, density_fitting = True)
 
         # reference_hessian = numerical_d2enlc(mf)
