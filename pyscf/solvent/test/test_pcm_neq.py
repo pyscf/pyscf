@@ -49,7 +49,6 @@ O             -0.680291    0.000000   -0.000003''',
         verbose=0)
     mf = solvent.PCM(scf.RHF(mol), 'water')
     mf.kernel()
-    
 
 
 def tearDownModule():
