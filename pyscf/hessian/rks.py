@@ -1898,74 +1898,86 @@ def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory):
     kappa_prefactor = nlc_pars[0] * 1.5 * numpy.pi * (9 * numpy.pi)**(-1.0/6.0)
     C_in_omega = nlc_pars[1]
 
-    # ao = numint.eval_ao(mol, grids.coords, deriv = 1)
-    # rho_drho = numint.eval_rho(mol, ao, dm0, xctype = "NLC", hermi = 1, with_lapl = False)
+    # The preamble depends on dm0 only, while the CPHF solver calls this
+    # function once per iteration with the same dm0. Cache it on mf.
+    cache = getattr(mf, '_nlc_hess_uwabce_cache', None)
+    if cache is None or not numpy.array_equal(cache[0], dm0):
+        ngrids_full = grids.coords.shape[0]
+        rho_drho = numpy.empty([4, ngrids_full])
+        g1 = 0
+        for split_ao, ao_mask_index, split_weights, split_coords in ni.block_loop(mol, grids, mol.nao, 1, max_memory):
+            g0, g1 = g1, g1 + split_weights.size
+            rho_drho[:, g0:g1] = numint.eval_rho(mol, split_ao, dm0, xctype = "NLC", hermi = 1)
 
-    ngrids_full = grids.coords.shape[0]
-    rho_drho = numpy.empty([4, ngrids_full])
-    g1 = 0
-    for split_ao, ao_mask_index, split_weights, split_coords in ni.block_loop(mol, grids, mol.nao, 1, max_memory):
-        g0, g1 = g1, g1 + split_weights.size
-        rho_drho[:, g0:g1] = numint.eval_rho(mol, split_ao, dm0, xctype = "NLC", hermi = 1)
-    dm0 = None
+        rho_i = rho_drho[0,:]
+        rho_nonzero_mask = (rho_i >= NLC_REMOVE_ZERO_RHO_GRID_THRESHOLD)
+        rho_i = rho_i[rho_nonzero_mask]
+        nabla_rho_i = rho_drho[1:4, rho_nonzero_mask]
+        grids_coords = numpy.ascontiguousarray(grids.coords[rho_nonzero_mask, :])
+        grids_weights = grids.weights[rho_nonzero_mask]
+        ngrids = grids_coords.shape[0]
 
-    rho_i = rho_drho[0,:]
+        gamma_i = nabla_rho_i[0,:]**2 + nabla_rho_i[1,:]**2 + nabla_rho_i[2,:]**2
+        omega_i = numpy.sqrt(C_in_omega * gamma_i**2 / rho_i**4 + (4.0/3.0*numpy.pi) * rho_i)
+        kappa_i = kappa_prefactor * rho_i**(1.0/6.0)
 
-    rho_nonzero_mask = (rho_i >= NLC_REMOVE_ZERO_RHO_GRID_THRESHOLD)
+        U_i = numpy.empty(ngrids)
+        W_i = numpy.empty(ngrids)
+        A_i = numpy.empty(ngrids)
+        B_i = numpy.empty(ngrids)
+        C_i = numpy.empty(ngrids)
+        E_i = numpy.empty(ngrids) # Not used
 
-    rho_i = rho_i[rho_nonzero_mask]
-    nabla_rho_i = rho_drho[1:4, rho_nonzero_mask]
-    grids_coords = numpy.ascontiguousarray(grids.coords[rho_nonzero_mask, :])
-    grids_weights = grids.weights[rho_nonzero_mask]
+        libdft.VXC_vv10nlc_hessian_eval_UWABCE(
+            U_i.ctypes.data_as(ctypes.c_void_p),
+            W_i.ctypes.data_as(ctypes.c_void_p),
+            A_i.ctypes.data_as(ctypes.c_void_p),
+            B_i.ctypes.data_as(ctypes.c_void_p),
+            C_i.ctypes.data_as(ctypes.c_void_p),
+            E_i.ctypes.data_as(ctypes.c_void_p),
+            grids_coords.ctypes.data_as(ctypes.c_void_p),
+            grids_weights.ctypes.data_as(ctypes.c_void_p),
+            rho_i.ctypes.data_as(ctypes.c_void_p),
+            omega_i.ctypes.data_as(ctypes.c_void_p),
+            kappa_i.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(ngrids)
+        )
+        E_i = None
+
+        domega_drho_i         = numpy.empty(ngrids)
+        domega_dgamma_i       = numpy.empty(ngrids)
+        d2omega_drho2_i       = numpy.empty(ngrids)
+        d2omega_dgamma2_i     = numpy.empty(ngrids)
+        d2omega_drho_dgamma_i = numpy.empty(ngrids)
+        libdft.VXC_vv10nlc_hessian_eval_omega_derivative(
+            domega_drho_i.ctypes.data_as(ctypes.c_void_p),
+            domega_dgamma_i.ctypes.data_as(ctypes.c_void_p),
+            d2omega_drho2_i.ctypes.data_as(ctypes.c_void_p),
+            d2omega_dgamma2_i.ctypes.data_as(ctypes.c_void_p),
+            d2omega_drho_dgamma_i.ctypes.data_as(ctypes.c_void_p),
+            rho_i.ctypes.data_as(ctypes.c_void_p),
+            gamma_i.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_double(C_in_omega),
+            ctypes.c_int(ngrids)
+        )
+        dkappa_drho_i   = kappa_prefactor * (1.0/6.0) * rho_i**(-5.0/6.0)
+        d2kappa_drho2_i = kappa_prefactor * (-5.0/36.0) * rho_i**(-11.0/6.0)
+
+        f_gamma_i = rho_i * domega_dgamma_i * W_i
+
+        cache = (dm0, rho_nonzero_mask, grids_coords, grids_weights, rho_i,
+                 nabla_rho_i, omega_i, kappa_i, U_i, W_i, A_i, B_i, C_i,
+                 domega_drho_i, domega_dgamma_i, dkappa_drho_i,
+                 d2omega_drho2_i, d2omega_dgamma2_i, d2omega_drho_dgamma_i,
+                 d2kappa_drho2_i, f_gamma_i)
+        mf._nlc_hess_uwabce_cache = cache
+    (dm0, rho_nonzero_mask, grids_coords, grids_weights, rho_i,
+     nabla_rho_i, omega_i, kappa_i, U_i, W_i, A_i, B_i, C_i,
+     domega_drho_i, domega_dgamma_i, dkappa_drho_i,
+     d2omega_drho2_i, d2omega_dgamma2_i, d2omega_drho_dgamma_i,
+     d2kappa_drho2_i, f_gamma_i) = cache
     ngrids = grids_coords.shape[0]
-
-    gamma_i = nabla_rho_i[0,:]**2 + nabla_rho_i[1,:]**2 + nabla_rho_i[2,:]**2
-    omega_i = numpy.sqrt(C_in_omega * gamma_i**2 / rho_i**4 + (4.0/3.0*numpy.pi) * rho_i)
-    kappa_i = kappa_prefactor * rho_i**(1.0/6.0)
-
-    U_i = numpy.empty(ngrids)
-    W_i = numpy.empty(ngrids)
-    A_i = numpy.empty(ngrids)
-    B_i = numpy.empty(ngrids)
-    C_i = numpy.empty(ngrids)
-    E_i = numpy.empty(ngrids) # Not used
-
-    libdft.VXC_vv10nlc_hessian_eval_UWABCE(
-        U_i.ctypes.data_as(ctypes.c_void_p),
-        W_i.ctypes.data_as(ctypes.c_void_p),
-        A_i.ctypes.data_as(ctypes.c_void_p),
-        B_i.ctypes.data_as(ctypes.c_void_p),
-        C_i.ctypes.data_as(ctypes.c_void_p),
-        E_i.ctypes.data_as(ctypes.c_void_p),
-        grids_coords.ctypes.data_as(ctypes.c_void_p),
-        grids_weights.ctypes.data_as(ctypes.c_void_p),
-        rho_i.ctypes.data_as(ctypes.c_void_p),
-        omega_i.ctypes.data_as(ctypes.c_void_p),
-        kappa_i.ctypes.data_as(ctypes.c_void_p),
-        ctypes.c_int(ngrids)
-    )
-    E_i = None
-
-    domega_drho_i         = numpy.empty(ngrids)
-    domega_dgamma_i       = numpy.empty(ngrids)
-    d2omega_drho2_i       = numpy.empty(ngrids)
-    d2omega_dgamma2_i     = numpy.empty(ngrids)
-    d2omega_drho_dgamma_i = numpy.empty(ngrids)
-    libdft.VXC_vv10nlc_hessian_eval_omega_derivative(
-        domega_drho_i.ctypes.data_as(ctypes.c_void_p),
-        domega_dgamma_i.ctypes.data_as(ctypes.c_void_p),
-        d2omega_drho2_i.ctypes.data_as(ctypes.c_void_p),
-        d2omega_dgamma2_i.ctypes.data_as(ctypes.c_void_p),
-        d2omega_drho_dgamma_i.ctypes.data_as(ctypes.c_void_p),
-        rho_i.ctypes.data_as(ctypes.c_void_p),
-        gamma_i.ctypes.data_as(ctypes.c_void_p),
-        ctypes.c_double(C_in_omega),
-        ctypes.c_int(ngrids)
-    )
-    dkappa_drho_i   = kappa_prefactor * (1.0/6.0) * rho_i**(-5.0/6.0)
-    d2kappa_drho2_i = kappa_prefactor * (-5.0/36.0) * rho_i**(-11.0/6.0)
-
-    f_gamma_i = rho_i * domega_dgamma_i * W_i
+    ngrids_full = grids.coords.shape[0]
 
     # ao = numint.eval_ao(mol, grids.coords, deriv = 1)
     # rho_drho_t = numpy.empty([n_dm1, 4, ngrids])
@@ -2064,11 +2076,11 @@ def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory):
 
             for i_dm in range(n_dm1_batch):
                 # \mu \nu
-                V_munu = contract("ig,jg->ij", split_ao[0], split_ao[0] * split_fxc_rho[i_dm, :])
+                V_munu = split_ao[0] @ (split_ao[0] * split_fxc_rho[i_dm, :]).T
 
                 # \mu \nabla\nu + \nabla\mu \nu
                 nabla_fxc_dot_nabla_ao = contract("dg,dig->ig", split_fxc_gamma[i_dm, :, :], split_ao[1:4])
-                V_munu_gamma = contract("ig,jg->ij", split_ao[0], nabla_fxc_dot_nabla_ao)
+                V_munu_gamma = split_ao[0] @ nabla_fxc_dot_nabla_ao.T
                 nabla_fxc_dot_nabla_ao = None
                 V_munu += V_munu_gamma
                 V_munu += V_munu_gamma.T
