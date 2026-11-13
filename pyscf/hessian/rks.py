@@ -1846,11 +1846,22 @@ def cache_nlc_kernel(mf, mol, mo_coeff=None, mo_occ=None, dm0=None,
 
     Exactly one of (mo_coeff, mo_occ) or dm0 should be provided; the 0th
     order spin-summed density matrix is constructed from the MOs when
-    mo_coeff is given.  The returned bundle (nonzero-grid mask, masked grid
-    coordinates/weights, rho/nabla-rho, omega/kappa, U/W/A/B/C/E pair sums
-    and the omega/kappa derivative arrays) is held by the caller, e.g. the
-    vind closure in _response_functions, and passed to get_vnlc_resp1,
-    which reuses it across calls with the same dm0.
+    mo_coeff is given.  Returns separate objects, in the manner of
+    ni.cache_xc_kernel, held by the caller (e.g. the vind closure in
+    _response_functions) and passed to get_vnlc_resp1, which reuses them
+    across calls with the same dm0:
+
+    dm0 : the 0th order spin-summed density matrix
+    nlc_grids : (rho_nonzero_mask, grids_coords, grids_weights)
+        grid context: mask of nlcgrids points with rho above threshold and
+        the masked coordinates/weights
+    nlc_rho : (rho_i, nabla_rho_i, omega_i, kappa_i)
+        0th order density on the masked grids and the derived per-point
+        VV10 quantities
+    nlc_kernel : (U_i, W_i, A_i, B_i, C_i, domega_drho_i, domega_dgamma_i,
+        dkappa_drho_i, d2omega_drho2_i, d2omega_dgamma2_i,
+        d2omega_drho_dgamma_i, d2kappa_drho2_i, f_gamma_i)
+        the precomputed response pair kernel
     '''
     if mo_coeff is not None:
         assert mo_occ is not None
@@ -1955,24 +1966,33 @@ def cache_nlc_kernel(mf, mol, mo_coeff=None, mo_occ=None, dm0=None,
 
     f_gamma_i = rho_i * domega_dgamma_i * W_i
 
-    return (dm0, rho_nonzero_mask, grids_coords, grids_weights, rho_i,
-            nabla_rho_i, omega_i, kappa_i, U_i, W_i, A_i, B_i, C_i,
-            domega_drho_i, domega_dgamma_i, dkappa_drho_i,
-            d2omega_drho2_i, d2omega_dgamma2_i, d2omega_drho_dgamma_i,
-            d2kappa_drho2_i, f_gamma_i)
+    nlc_grids = (rho_nonzero_mask, grids_coords, grids_weights)
+    nlc_rho = (rho_i, nabla_rho_i, omega_i, kappa_i)
+    nlc_kernel = (U_i, W_i, A_i, B_i, C_i,
+                  domega_drho_i, domega_dgamma_i, dkappa_drho_i,
+                  d2omega_drho2_i, d2omega_dgamma2_i, d2omega_drho_dgamma_i,
+                  d2kappa_drho2_i, f_gamma_i)
+    return dm0, nlc_grids, nlc_rho, nlc_kernel
 
-def get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1s, max_memory, nlc_kernel=None):
+def get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1s, max_memory,
+                  nlc_grids=None, nlc_rho=None, nlc_kernel=None):
     '''NLC response for 0th order MOs (mo_coeff, mo_occ) and 1st order
-    density matrices dm1s.  nlc_kernel is the preamble bundle of
-    cache_nlc_kernel; if None, it is computed for this call.
+    density matrices dm1s.  nlc_grids, nlc_rho, nlc_kernel are the groups
+    returned by cache_nlc_kernel for (mo_coeff, mo_occ); if not given, they
+    are computed for this call.
     '''
     if nlc_kernel is None:
-        nlc_kernel = cache_nlc_kernel(mf, mol, mo_coeff=mo_coeff, mo_occ=mo_occ,
-                                      max_memory=max_memory)
-    return get_vnlc_resp1(mf, mol, nlc_kernel[0], dm1s, max_memory,
+        dm0, nlc_grids, nlc_rho, nlc_kernel = cache_nlc_kernel(
+            mf, mol, mo_coeff=mo_coeff, mo_occ=mo_occ, max_memory=max_memory)
+    else:
+        # the kernel groups carry everything; dm0 is only a build input
+        dm0 = None
+    return get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory,
+                          nlc_grids=nlc_grids, nlc_rho=nlc_rho,
                           nlc_kernel=nlc_kernel)
 
-def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory, nlc_kernel=None):
+def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory,
+                   nlc_grids=None, nlc_rho=None, nlc_kernel=None):
     """
         Equation notation follows:
         Liang J, Feng X, Liu X, Head-Gordon M. Analytical harmonic vibrational frequencies with
@@ -1985,14 +2005,13 @@ def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory, nlc_kernel=None):
         TODO: check the effect of different grid, using mf.nlcgrids right now
 
     Kwargs:
-        nlc_kernel : The dm0-only preamble bundle returned by
-            cache_nlc_kernel.  Holding it in the vind closure of
-            _response_functions reuses it across the calls of one CPHF (or
-            Davidson) solve, which is exactly the reuse window.  If None, it
-            is computed from dm0 for this call only.
+        nlc_grids, nlc_rho, nlc_kernel : the groups returned by
+            cache_nlc_kernel (see its docstring).  Holding them in the vind
+            closure of _response_functions reuses them across the calls of
+            one CPHF (or Davidson) solve, which is exactly the reuse window.
+            If any of them is None, all are computed from dm0 for this call
+            only.
     """
-    dm0 = numpy.asarray(dm0.real, order='C')
-
     output_in_2d = False
     if dm1s.ndim == 2:
         assert dm1s.shape == (mol.nao, mol.nao)
@@ -2007,9 +2026,12 @@ def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory, nlc_kernel=None):
     ni = mf._numint
 
     if nlc_kernel is None:
-        nlc_kernel = cache_nlc_kernel(mf, mol, dm0=dm0, max_memory=max_memory)
-    (dm0, rho_nonzero_mask, grids_coords, grids_weights, rho_i,
-     nabla_rho_i, omega_i, kappa_i, U_i, W_i, A_i, B_i, C_i,
+        assert nlc_grids is None and nlc_rho is None
+        dm0, nlc_grids, nlc_rho, nlc_kernel = cache_nlc_kernel(
+            mf, mol, dm0=dm0, max_memory=max_memory)
+    rho_nonzero_mask, grids_coords, grids_weights = nlc_grids
+    rho_i, nabla_rho_i, omega_i, kappa_i = nlc_rho
+    (U_i, W_i, A_i, B_i, C_i,
      domega_drho_i, domega_dgamma_i, dkappa_drho_i,
      d2omega_drho2_i, d2omega_dgamma2_i, d2omega_drho_dgamma_i,
      d2kappa_drho2_i, f_gamma_i) = nlc_kernel
