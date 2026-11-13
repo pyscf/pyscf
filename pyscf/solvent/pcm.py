@@ -301,6 +301,47 @@ def get_D_S(surface, with_S=True, with_D=False):
 
     return D, S
 
+def get_K_R(method, epsilon, D, A, S):
+    '''K and R matrices of the PCM linear system q = K^-1 R v.
+
+    Args:
+        method : str
+            One of C-PCM/CPCM, COSMO, IEF-PCM/IEFPCM, SS(V)PE.
+        epsilon : float
+            Dielectric constant. float('inf') is the conductor limit.
+        D, A, S : ndarray
+            Cavity matrices from get_F_A and get_D_S.
+
+    Returns:
+        (K, R, f_epsilon)
+    '''
+    method = method.upper()
+    if method in ('C-PCM', 'CPCM'):
+        f_epsilon = (epsilon-1.)/epsilon if epsilon != float('inf') else 1.0
+        K = S
+        R = -f_epsilon * numpy.eye(K.shape[0])
+    elif method == 'COSMO':
+        f_epsilon = ((epsilon - 1.0)/(epsilon + 1.0/2.0)
+                     if epsilon != float('inf') else 1.0)
+        K = S
+        R = -f_epsilon * numpy.eye(K.shape[0])
+    elif method in ('IEF-PCM', 'IEFPCM'):
+        f_epsilon = ((epsilon - 1.0)/(epsilon + 1.0)
+                     if epsilon != float('inf') else 1.0)
+        DA = D*A
+        DAS = numpy.dot(DA, S)
+        K = S - f_epsilon/(2.0*PI) * DAS
+        R = -f_epsilon * (numpy.eye(K.shape[0]) - 1.0/(2.0*PI)*DA)
+    elif method == 'SS(V)PE':
+        f_epsilon = ((epsilon - 1.0)/(epsilon + 1.0)
+                     if epsilon != float('inf') else 1.0)
+        DA = D*A
+        DAS = numpy.dot(DA, S)
+        K = S - f_epsilon/(4.0*PI) * (DAS + DAS.T)
+        R = -f_epsilon * (numpy.eye(K.shape[0]) - 1.0/(2.0*PI)*DA)
+    else:
+        raise RuntimeError(f"Unknown implicit solvent model: {method}")
+    return K, R, f_epsilon
 
 class PCM(lib.StreamObject):
     '''
@@ -524,29 +565,7 @@ class PCM(lib.StreamObject):
         F, A = get_F_A(self.surface)
         D, S = get_D_S(self.surface, with_S=True, with_D=True)
 
-        epsilon = self.eps
-        if self.method.upper() in ['C-PCM', 'CPCM']:
-            f_epsilon = (epsilon-1.)/epsilon if epsilon != float('inf') else 1.0
-            K = S
-            R = -f_epsilon * numpy.eye(K.shape[0])
-        elif self.method.upper() == 'COSMO':
-            f_epsilon = (epsilon - 1.0)/(epsilon + 1.0/2.0) if epsilon != float('inf') else 1.0
-            K = S
-            R = -f_epsilon * numpy.eye(K.shape[0])
-        elif self.method.upper() in ['IEF-PCM', 'IEFPCM']:
-            f_epsilon = (epsilon - 1.0)/(epsilon + 1.0) if epsilon != float('inf') else 1.0
-            DA = D*A
-            DAS = numpy.dot(DA, S)
-            K = S - f_epsilon/(2.0*PI) * DAS
-            R = -f_epsilon * (numpy.eye(K.shape[0]) - 1.0/(2.0*PI)*DA)
-        elif self.method.upper() == 'SS(V)PE':
-            f_epsilon = (epsilon - 1.0)/(epsilon + 1.0) if epsilon != float('inf') else 1.0
-            DA = D*A
-            DAS = numpy.dot(DA, S)
-            K = S - f_epsilon/(4.0*PI) * (DAS + DAS.T)
-            R = -f_epsilon * (numpy.eye(K.shape[0]) - 1.0/(2.0*PI)*DA)
-        else:
-            raise RuntimeError(f"Unknown implicit solvent model: {self.method}")
+        K, R, f_epsilon = get_K_R(self.method, self.eps, D, A, S)
 
         intermediates = {
             'S': S,

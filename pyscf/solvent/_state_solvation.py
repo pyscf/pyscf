@@ -39,44 +39,25 @@ def _get_K_opt_R_opt(solvent_obj):
     constant is only needed for nonequilibrium solvation. The result is cached
     in _intermediates and invalidated when the optical dielectric changes.
     '''
+    from pyscf.solvent.pcm import get_K_R
+
     if not solvent_obj._intermediates:
         solvent_obj.build()
 
     epsilon_opt = solvent_obj.get_eps_optical()
-
     intermediates = solvent_obj._intermediates
     if (intermediates.get('eps_optical_cached') == epsilon_opt
             and 'K_opt' in intermediates and 'R_opt' in intermediates):
         return intermediates['K_opt'], intermediates['R_opt']
 
-    D = intermediates['D']
-    A = intermediates['A']
-    S = intermediates['S']
-
-    method = solvent_obj.method.upper()
-    if method in ('C-PCM', 'CPCM'):
-        f_epsilon_opt = (epsilon_opt - 1.0) / epsilon_opt
-        K_opt = S
-        R_opt = -f_epsilon_opt * numpy.eye(S.shape[0])
-    elif method == 'COSMO':
-        f_epsilon_opt = (epsilon_opt - 1.0) / (epsilon_opt + 1.0/2.0)
-        K_opt = S
-        R_opt = -f_epsilon_opt * numpy.eye(S.shape[0])
-    elif method in ('IEF-PCM', 'IEFPCM'):
-        f_epsilon_opt = (epsilon_opt - 1.0) / (epsilon_opt + 1.0)
-        DA = D*A
-        DAS = numpy.dot(DA, S)
-        K_opt = S - f_epsilon_opt/(2.0*PI) * DAS
-        R_opt = -f_epsilon_opt * (numpy.eye(K_opt.shape[0]) - 1.0/(2.0*PI)*DA)
-    else:
-        raise NotImplementedError(
-            f'Nonequilibrium solvation is not implemented for {solvent_obj.method}.')
+    K_opt, R_opt, _ = get_K_R(
+        solvent_obj.method, epsilon_opt,
+        intermediates['D'], intermediates['A'], intermediates['S'])
 
     intermediates['K_opt'] = K_opt
     intermediates['R_opt'] = R_opt
     intermediates['eps_optical_cached'] = epsilon_opt
     return K_opt, R_opt
-
 
 def _get_vind_pekar(solvent_obj, dms):
     '''Fast (electronic) component of the surface charges, evaluated with the
