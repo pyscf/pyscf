@@ -1851,7 +1851,6 @@ def cache_nlc_kernel(mf, mol, mo_coeff=None, mo_occ=None, dm0=None,
     _response_functions) and passed to get_vnlc_resp1, which reuses them
     across calls with the same dm0:
 
-    dm0 : the 0th order spin-summed density matrix
     nlc_grids : (rho_nonzero_mask, grids_coords, grids_weights)
         grid context: mask of nlcgrids points with rho above threshold and
         the masked coordinates/weights
@@ -1972,7 +1971,7 @@ def cache_nlc_kernel(mf, mol, mo_coeff=None, mo_occ=None, dm0=None,
                   domega_drho_i, domega_dgamma_i, dkappa_drho_i,
                   d2omega_drho2_i, d2omega_dgamma2_i, d2omega_drho_dgamma_i,
                   d2kappa_drho2_i, f_gamma_i)
-    return dm0, nlc_grids, nlc_rho, nlc_kernel
+    return nlc_grids, nlc_rho, nlc_kernel
 
 def get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1s, max_memory,
                   nlc_grids=None, nlc_rho=None, nlc_kernel=None):
@@ -1982,12 +1981,9 @@ def get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1s, max_memory,
     are computed for this call.
     '''
     if nlc_kernel is None:
-        dm0, nlc_grids, nlc_rho, nlc_kernel = cache_nlc_kernel(
+        nlc_grids, nlc_rho, nlc_kernel = cache_nlc_kernel(
             mf, mol, mo_coeff=mo_coeff, mo_occ=mo_occ, max_memory=max_memory)
-    else:
-        # the kernel groups carry everything; dm0 is only a build input
-        dm0 = None
-    return get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory,
+    return get_vnlc_resp1(mf, mol, None, dm1s, max_memory,
                           nlc_grids=nlc_grids, nlc_rho=nlc_rho,
                           nlc_kernel=nlc_kernel)
 
@@ -2010,7 +2006,8 @@ def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory,
             closure of _response_functions reuses them across the calls of
             one CPHF (or Davidson) solve, which is exactly the reuse window.
             If any of them is None, all are computed from dm0 for this call
-            only.
+            only; dm0 is consumed only in that case and can be None when the
+            groups are supplied.
     """
     output_in_2d = False
     if dm1s.ndim == 2:
@@ -2027,7 +2024,8 @@ def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory,
 
     if nlc_kernel is None:
         assert nlc_grids is None and nlc_rho is None
-        dm0, nlc_grids, nlc_rho, nlc_kernel = cache_nlc_kernel(
+        assert dm0 is not None
+        nlc_grids, nlc_rho, nlc_kernel = cache_nlc_kernel(
             mf, mol, dm0=dm0, max_memory=max_memory)
     rho_nonzero_mask, grids_coords, grids_weights = nlc_grids
     rho_i, nabla_rho_i, omega_i, kappa_i = nlc_rho
