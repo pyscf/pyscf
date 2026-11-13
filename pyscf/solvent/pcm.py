@@ -52,7 +52,7 @@ def pcm_for_casscf(mc, solvent_obj=None, dm=None):
     solvent_obj = _as_solvent_obj(solvent_obj, mc.mol)
     if solvent_obj is None:
         if isinstance(getattr(mc._scf, 'with_solvent', None), PCM):
-            solvent_obj = mc._scf.with_solvent
+            solvent_obj = mc._scf.with_solvent.copy()
         else:
             solvent_obj = PCM(mc.mol)
     return _attach_solvent._for_casscf(mc, solvent_obj, dm)
@@ -62,7 +62,7 @@ def pcm_for_casci(mc, solvent_obj=None, dm=None):
     solvent_obj = _as_solvent_obj(solvent_obj, mc.mol)
     if solvent_obj is None:
         if isinstance(getattr(mc._scf, 'with_solvent', None), PCM):
-            solvent_obj = mc._scf.with_solvent
+            solvent_obj = mc._scf.with_solvent.copy()
         else:
             solvent_obj = PCM(mc.mol)
     return _attach_solvent._for_casci(mc, solvent_obj, dm)
@@ -84,7 +84,7 @@ def pcm_for_mcpdft(mc, solvent_obj=None, dm=None):
     solvent_obj = _as_solvent_obj(solvent_obj, mc.mol)
     if solvent_obj is None:
         if isinstance(getattr(mc._scf, 'with_solvent', None), PCM):
-            solvent_obj = mc._scf.with_solvent
+            solvent_obj = mc._scf.with_solvent.copy()
         else:
             solvent_obj = PCM(mc.mol)
     return _attach_solvent._for_mcpdft(mc, solvent_obj, dm)
@@ -94,7 +94,7 @@ def pcm_for_lpdft(mc, solvent_obj=None, dm=None):
     solvent_obj = _as_solvent_obj(solvent_obj, mc.mol)
     if solvent_obj is None:
         if isinstance(getattr(mc._scf, 'with_solvent', None), PCM):
-            solvent_obj = mc._scf.with_solvent
+            solvent_obj = mc._scf.with_solvent.copy()
         else:
             solvent_obj = PCM(mc.mol)
     return _attach_solvent._for_lpdft(mc, solvent_obj, dm)
@@ -657,9 +657,19 @@ class PCM(lib.StreamObject):
         '''The solvation scheme implied by .refdm, .rfroot and
         .equilibrium_solvation. 'default' is the standard equilibrium kernel.
         '''
+        if self.rfroot is not None and self.refdm is not None:
+            raise ValueError(
+                'rfroot and refdm select different sources for the slow '
+                'charges: rfroot takes them from state 0 of a state-averaged '
+                'calculation, refdm from the given density. Set one.')
+        if self.refdm is not None and self.equilibrium_solvation:
+            raise ValueError(
+                'refdm has no effect with equilibrium_solvation=True. Set '
+                'equilibrium_solvation=False for the state-specific '
+                'nonequilibrium scheme, or unset refdm.')
         if self.rfroot is not None:
             return 'sa_eq' if self.equilibrium_solvation else 'sa_neq'
-        if self.refdm is not None and not self.equilibrium_solvation:
+        if self.refdm is not None:
             return 'ss_neq'
         return 'default'
 

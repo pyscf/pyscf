@@ -49,6 +49,7 @@ O             -0.680291    0.000000   -0.000003''',
         verbose=0)
     mf = solvent.PCM(scf.RHF(mol), 'water')
     mf.kernel()
+    
 
 
 def tearDownModule():
@@ -74,6 +75,7 @@ class KnownValues(unittest.TestCase):
         mc.fix_spin_(ss=0)
         mc = solvent.PCM(mc, _neq_solvent())
         mc.kernel()
+        self.assertTrue(mc.converged)
         self.assertAlmostEqual(mc.e_states[0], -112.416375735352, 6)
         self.assertAlmostEqual(mc.e_states[1], -112.265284640312, 6)
 
@@ -82,25 +84,28 @@ class KnownValues(unittest.TestCase):
         mc.fix_spin_(ss=0)
         mc = solvent.PCM(mc, _neq_solvent())
         mc.kernel()
+        self.assertTrue(mc.converged)
         self.assertAlmostEqual(mc.e_states[0], -112.811383851113, 6)
         self.assertAlmostEqual(mc.e_states[1], -112.656837117804, 6)
 
     def test_ss_mcpdft_neq(self):
         # state-specific: the slow charges come from a converged ground-state
-        # density 
+        # density, and the fast charges from the excited state.
         eq = mcpdft.CASSCF(mf, 'tPBE', 4, 4)
         eq = solvent.PCM(eq, pcm.PCM(mol, 'water'))
         eq.kernel()
+        self.assertTrue(eq.converged)
 
         cm = pcm.PCM(mol, 'water')
         cm.verbose = 0
         cm.equilibrium_solvation = False
         cm.refdm = eq.make_rdm1()
-        mc = mcpdft.CASSCF(mf, 'tPBE', 4, 4).state_specific_(1)
+        mc = mcpdft.CASSCF(mf, 'tPBE', 4, 4).state_specific_(2)
         mc.fix_spin_(ss=0)
         mc = solvent.PCM(mc, cm)
         mc.kernel()
-        self.assertAlmostEqual(mc.e_tot, -112.690628403451, 6)
+        self.assertTrue(mc.converged)
+        self.assertAlmostEqual(mc.e_tot, -112.678528306950, 6)
 
     def test_lpdft_neq(self):
         mc = mcpdft.CASSCF(mf, 'tPBE', 4, 4)
@@ -108,6 +113,7 @@ class KnownValues(unittest.TestCase):
         mc = mc.multi_state(WEIGHTS, 'lin')
         mc = solvent.PCM(mc, _neq_solvent())
         mc.kernel()
+        self.assertTrue(mc.converged)
         self.assertAlmostEqual(mc.e_states[0], -112.813009540099, 6)
         self.assertAlmostEqual(mc.e_states[1], -112.656196490203, 6)
 
@@ -115,12 +121,13 @@ class KnownValues(unittest.TestCase):
         # tPBE0 has cas_hyb = 0.25. Both the (1 - lambda) v in hcore and the
         # lambda * E_mcscf diagonal contribute the reaction field, and the two
         # must sum to exactly one V. tPBE (lambda = 0) blind to either
-        # deos not catch this.
+        # does not catch this.
         mc = mcpdft.CASSCF(mf, 'tPBE0', 4, 4)
         mc.fix_spin_(ss=0)
         mc = mc.multi_state(WEIGHTS, 'lin')
         mc = solvent.PCM(mc, _neq_solvent())
         mc.kernel()
+        self.assertTrue(mc.converged)
         self.assertAlmostEqual(mc.e_states[0], -112.713851125972, 6)
         self.assertAlmostEqual(mc.e_states[1], -112.558468572360, 6)
 
@@ -135,6 +142,7 @@ class TestIdentities(unittest.TestCase):
         eq.fix_spin_(ss=0)
         eq = solvent.PCM(eq, _neq_solvent(equilibrium_solvation=True))
         eq.kernel()
+        self.assertTrue(eq.converged)
 
         cm = _neq_solvent()
         cm.eps_optical = cm.eps
@@ -142,12 +150,12 @@ class TestIdentities(unittest.TestCase):
         neq.fix_spin_(ss=0)
         neq = solvent.PCM(neq, cm)
         neq.kernel()
-
+        self.assertTrue(neq.converged)
         for i, (e_eq, e_neq) in enumerate(zip(eq.e_states, neq.e_states)):
             self.assertAlmostEqual(e_eq, e_neq, 7, msg='state %d' % i)
 
     def test_lambda_one_reduces_to_sa_casscf(self):
-        # With cas_hyb = 1 the L-PDFT+solvent must return the SA-CASSCF+solvent energies. 
+        # With cas_hyb = 1 the L-PDFT+solvent must return the SA-CASSCF+solvent energies.
         # This pins which E_mcscf the lambda*E_mcscf diagonal needs: the
         # expectation value with v in hcore, not the solvated free energy.
         otxc = 't0.0*PBE + 1.0*HF, 0.0*PBE + 1.0*HF'
@@ -157,13 +165,14 @@ class TestIdentities(unittest.TestCase):
         ref.conv_tol = 1e-10
         ref = solvent.PCM(ref, _neq_solvent())
         ref.kernel()
-
+        self.assertTrue(ref.converged)
         mc = mcpdft.CASSCF(mf, otxc, 4, 4)
         mc.fix_spin_(ss=0)
         mc.conv_tol = 1e-10
         mc = mc.multi_state(WEIGHTS, 'lin')
         mc = solvent.PCM(mc, _neq_solvent())
         mc.kernel()
+        self.assertTrue(mc.converged)
 
         for i, (a, b) in enumerate(zip(ref.e_states, mc.e_states)):
             self.assertAlmostEqual(a, b, 7, msg='state %d' % i)
@@ -173,11 +182,13 @@ class TestIdentities(unittest.TestCase):
         eq.fix_spin_(ss=0)
         eq = solvent.PCM(eq, _neq_solvent(equilibrium_solvation=True))
         eq.kernel()
+        self.assertTrue(eq.converged)
 
         neq = mcscf.CASSCF(mf, 4, 4).state_average_(WEIGHTS)
         neq.fix_spin_(ss=0)
         neq = solvent.PCM(neq, _neq_solvent())
         neq.kernel()
+        self.assertTrue(neq.converged)
 
         self.assertTrue(abs(eq.e_states[1] - neq.e_states[1]) > 1e-6)
 
@@ -196,6 +207,7 @@ class DefaultPathUnchanged(unittest.TestCase):
     def test_sa_casscf_pcm(self):
         mc = solvent.PCM(self._sa_casscf())
         mc.kernel()
+        self.assertTrue(mc.converged)
         self.assertEqual(mc.with_solvent.solvation_type(), 'default')
         self.assertAlmostEqual(mc.e_states[0], -112.422444755989, 7)
         self.assertAlmostEqual(mc.e_states[1], -112.271909087233, 7)
@@ -203,6 +215,7 @@ class DefaultPathUnchanged(unittest.TestCase):
     def test_sa_casscf_ddcosmo(self):
         mc = solvent.ddCOSMO(self._sa_casscf())
         mc.kernel()
+        self.assertTrue(mc.converged)
         self.assertEqual(mc.with_solvent.solvation_type(), 'default')
         self.assertAlmostEqual(mc.e_states[0], -112.430592598076, 7)
         self.assertAlmostEqual(mc.e_states[1], -112.279992222338, 7)
@@ -217,22 +230,41 @@ class DefaultPathUnchanged(unittest.TestCase):
 
 
 class Dispatch(unittest.TestCase):
-    '''refdm and rfroot are what select a nonequilibrium scheme.'''
+    '''refdm and rfroot are what select a nonequilibrium scheme, and the
+    combinations that would silently ignore one of them raise.'''
 
-    def test_refdm_enables_ss_neq(self):
+    def _cm(self, rfroot=None, refdm=None, equilibrium_solvation=False):
         cm = pcm.PCM(mol)
-        cm.refdm = mf.make_rdm1()
-        self.assertEqual(cm.solvation_type(), 'ss_neq')
-        cm.equilibrium_solvation = True
-        self.assertEqual(cm.solvation_type(), 'default')
+        cm.rfroot = rfroot
+        cm.refdm = refdm
+        cm.equilibrium_solvation = equilibrium_solvation
+        return cm
 
-    def test_rfroot_enables_sa(self):
-        cm = pcm.PCM(mol)
-        cm.rfroot = 1
-        self.assertEqual(cm.solvation_type(), 'sa_neq')
-        cm.equilibrium_solvation = True
-        self.assertEqual(cm.solvation_type(), 'sa_eq')
+    def test_neither_set(self):
+        self.assertEqual(self._cm().solvation_type(), 'default')
+        self.assertEqual(self._cm(equilibrium_solvation=True).solvation_type(),
+                         'default')
 
+    def test_rfroot_only(self):
+        self.assertEqual(self._cm(rfroot=1).solvation_type(), 'sa_neq')
+        self.assertEqual(
+            self._cm(rfroot=1, equilibrium_solvation=True).solvation_type(),
+            'sa_eq')
+
+    def test_refdm_only(self):
+        dm = mf.make_rdm1()
+        self.assertEqual(self._cm(refdm=dm).solvation_type(), 'ss_neq')
+        self.assertRaises(
+            ValueError,
+            self._cm(refdm=dm, equilibrium_solvation=True).solvation_type)
+
+    def test_both_set(self):
+        dm = mf.make_rdm1()
+        for eq in (False, True):
+            self.assertRaises(
+                ValueError,
+                self._cm(rfroot=1, refdm=dm,
+                         equilibrium_solvation=eq).solvation_type)
 
 class Guards(unittest.TestCase):
     '''Invalid input must raise rather than return a wrong number.'''
@@ -281,6 +313,12 @@ class Guards(unittest.TestCase):
         mc = mcpdft.CASSCF(mf, 'tPBE', 4, 4)
         mc = solvent.PCM(mc, pcm.PCM(mol, 'water'))
         self.assertRaises(NotImplementedError, mc.nuc_grad_method)
+
+    def test_wrapper_does_not_mutate_scf_solvent(self):
+        mc = mcscf.CASSCF(mf, 4, 4).state_average_(WEIGHTS)
+        mc = solvent.PCM(mc)
+        mc.with_solvent.rfroot = 1
+        self.assertIsNone(mf.with_solvent.rfroot)
 
 if __name__ == "__main__":
     print("Tests for nonequilibrium PCM solvation")
