@@ -431,6 +431,7 @@ class PCM(lib.StreamObject):
     refdm : ndarray
         The reference ground-state density matrix.
         Only required for excited-state SS-CASSCF in non-equilibrium solvation.
+        Ignored if equilibrium_solvation=True.
 
     rfroot : int
         The state used for (fast) solvent response in a SA-CASSCF.
