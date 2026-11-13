@@ -79,12 +79,15 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
 
         # The dm0-only NLC response kernel on nlcgrids, reused by every vind
         # call below.  Held by the closure so its lifetime is one solve, like
-        # rho0/vxc/fxc above.
+        # rho0/vxc/fxc above.  nlcgrids is built here before caching the
+        # kernel, mirroring the XC grids/fxc above.
         nlc_grids = nlc_rho = nlc_kernel = None
         if with_nlc and mf.do_nlc() and hermi != 2:
             # Cannot import at top due to circular dependency
             from pyscf.hessian.rks import (cache_nlc_kernel, get_vnlc_resp,
                                            get_vnlc_resp1)
+            if mf.nlcgrids.coords is None:
+                mf.nlcgrids.build()
             nlc_grids, nlc_rho, nlc_kernel = cache_nlc_kernel(
                 mf, mol, mo_coeff=mo_coeff, mo_occ=mo_occ, dm0=dm0,
                 max_memory=max_memory)
@@ -249,12 +252,15 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
 
         # The dm0-only NLC response kernel on nlcgrids, reused by every vind
         # call below.  Held by the closure so its lifetime is one solve, like
-        # rho0/vxc/fxc above.
+        # rho0/vxc/fxc above.  nlcgrids is built here before caching the
+        # kernel, mirroring the XC grids/fxc above.
         nlc_grids = nlc_rho = nlc_kernel = None
         if with_nlc and mf.do_nlc() and hermi != 2:
             # Cannot import at top due to circular dependency
             from pyscf.hessian.rks import (cache_nlc_kernel, get_vnlc_resp,
                                            get_vnlc_resp1)
+            if mf.nlcgrids.coords is None:
+                mf.nlcgrids.build()
             nlc_grids, nlc_rho, nlc_kernel = cache_nlc_kernel(
                 mf, mol, mo_coeff=mo_coeff, mo_occ=mo_occ, dm0=dm0,
                 max_memory=max_memory)
@@ -357,16 +363,19 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
 
         # The dm0-only NLC response kernel on nlcgrids, reused by every vind
         # call below.  Held by the closure so its lifetime is one solve, like
-        # rho0/vxc/fxc above.  The get_vnlc_resp/get_vnlc_resp1 functions use
-        # mf._numint and explicitly call the NumInt functions for mf._numint,
-        # so both the kernel build and the response calls run under the 1c
-        # NumInt environment.
+        # rho0/vxc/fxc above.  nlcgrids is built here before caching the
+        # kernel, mirroring the XC grids/fxc above.  The get_vnlc_resp/
+        # get_vnlc_resp1 functions use mf._numint and explicitly call the
+        # NumInt functions for mf._numint, so the kernel caching and the
+        # response calls run under the 1c NumInt environment.
         nlc_grids = nlc_rho = nlc_kernel = None
         if with_nlc and mf.do_nlc() and hermi != 2:
             # Cannot import at top due to circular dependency
             from pyscf.hessian.rks import (cache_nlc_kernel, get_vnlc_resp,
                                            get_vnlc_resp1)
             ni1c = mf._numint._to_numint1c()
+            if mf.nlcgrids.coords is None:
+                mf.nlcgrids.build()
             if mo_coeff is not None and mo_occ is not None:
                 nao = mo_coeff.shape[0] // 2
                 mo_uks = [mo_coeff[:nao], mo_coeff[nao:]]
