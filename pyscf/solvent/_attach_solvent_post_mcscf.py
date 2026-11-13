@@ -18,6 +18,13 @@
 
 '''
 Attach solvent models to post-MCSCF methods.
+
+References:
+
+[1] A. Choudhury, M. R. Hermes, D. G. Truhlar, L. Gagliardi. Vertical
+    excitation energies in solution via a two-time-scale solvation model
+    coupled to pair-density functional theory. J. Chem. Theory Comput. 2026.
+    https://doi.org/10.1021/acs.jctc.6c01690
 '''
 
 import numpy

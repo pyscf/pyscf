@@ -24,6 +24,23 @@ and a fast (electronic) part.
 
 These kernels are opt-in: a solvent model dispatches here only when .refdm or
 .rfroot is set in mcscf/mcpdft.
+
+References:
+
+[1] https://doi.org/10.1021/jp000997s
+    Nonequilibrium CASSCF in PCM.
+
+[2] https://doi.org/10.1039/c1sc00313e
+    Slow/fast charge partitioning.
+
+[3] https://doi.org/10.1021/ct5010388
+[4] https://doi.org/10.1021/acs.jctc.4c01473
+    Self-consistency protocols for the reaction-field operator in a
+    state-averaged reference.
+
+[5] https://doi.org/10.1021/acs.jctc.6c01690
+    The scheme implemented here, including the protocol used for the
+    reference SA-CASSCF (Section 2.2 and Table 3).
 '''
 
 import numpy

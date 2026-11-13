@@ -434,7 +434,7 @@ class PCM(lib.StreamObject):
         Ignored if equilibrium_solvation=True.
 
     rfroot : int
-        The state used for (fast) solvent response in a SA-CASSCF.
+        The state used for (fast) solvent response in a SA-CASSCF, SA-MC-PDFT, and L-PDFT.
 
     Saved Results:
     --------------
