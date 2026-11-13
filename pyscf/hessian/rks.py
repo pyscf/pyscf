@@ -1840,24 +1840,139 @@ def _get_vnlc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
 
     return vmat
 
-def get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1s, max_memory, cache=None):
-    if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
-        mocc = mo_coeff[:,mo_occ>0]
-        mo_occ = mo_occ[mo_occ > 0]
-        dm0 = (mocc * mo_occ) @ mocc.T
+def cache_nlc_kernel(mf, mol, mo_coeff=None, mo_occ=None, dm0=None,
+                     max_memory=None):
+    '''Compute the dm0-only VV10 preamble of the NLC response.
+
+    Exactly one of (mo_coeff, mo_occ) or dm0 should be provided; the 0th
+    order spin-summed density matrix is constructed from the MOs when
+    mo_coeff is given.  The returned bundle (nonzero-grid mask, masked grid
+    coordinates/weights, rho/nabla-rho, omega/kappa, U/W/A/B/C/E pair sums
+    and the omega/kappa derivative arrays) is held by the caller, e.g. the
+    vind closure in _response_functions, and passed to get_vnlc_resp1,
+    which reuses it across calls with the same dm0.
+    '''
+    if mo_coeff is not None:
+        assert mo_occ is not None
+        if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
+            mocc = mo_coeff[:,mo_occ>0]
+            mo_occ = mo_occ[mo_occ > 0]
+            dm0 = (mocc * mo_occ) @ mocc.T
+        else:
+            assert mo_coeff[0].ndim == 2 # unrestricted case
+            assert len(mo_coeff) == 2
+            assert len(mo_occ) == 2
+            mocc_a = mo_coeff[0][:, mo_occ[0] > 0]
+            mocc_b = mo_coeff[1][:, mo_occ[1] > 0]
+            mo_occ_a = mo_occ[0][mo_occ[0] > 0]
+            mo_occ_b = mo_occ[1][mo_occ[1] > 0]
+            dm0 = (mocc_a * mo_occ_a) @ mocc_a.T + (mocc_b * mo_occ_b) @ mocc_b.T
     else:
-        assert mo_coeff[0].ndim == 2 # unrestricted case
-        assert len(mo_coeff) == 2
-        assert len(mo_occ) == 2
-        mocc_a = mo_coeff[0][:, mo_occ[0] > 0]
-        mocc_b = mo_coeff[1][:, mo_occ[1] > 0]
-        mo_occ_a = mo_occ[0][mo_occ[0] > 0]
-        mo_occ_b = mo_occ[1][mo_occ[1] > 0]
-        dm0 = (mocc_a * mo_occ_a) @ mocc_a.T + (mocc_b * mo_occ_b) @ mocc_b.T
+        assert dm0 is not None
+    if isinstance(dm0, numpy.ndarray) and dm0.ndim == 3:
+        # spin-summed density of an unrestricted 0th order density
+        assert dm0.shape[0] == 2
+        dm0 = dm0[0] + dm0[1]
+    dm0 = numpy.asarray(dm0.real, order='C')
 
-    return get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory, cache=cache)
+    grids = mf.nlcgrids
+    if grids.coords is None:
+        grids.build()
 
-def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory, cache=None):
+    ni = mf._numint
+    if ni.is_nlc(mf.xc):
+        xc_code = mf.xc
+    else:
+        xc_code = mf.nlc
+    nlc_coefs = ni.nlc_coeff(xc_code)
+    if len(nlc_coefs) != 1:
+        raise NotImplementedError('Additive NLC')
+    nlc_pars, fac = nlc_coefs[0]
+
+    kappa_prefactor = nlc_pars[0] * 1.5 * numpy.pi * (9 * numpy.pi)**(-1.0/6.0)
+    C_in_omega = nlc_pars[1]
+
+    ngrids_full = grids.coords.shape[0]
+    rho_drho = numpy.empty([4, ngrids_full])
+    g1 = 0
+    for split_ao, ao_mask_index, split_weights, split_coords in ni.block_loop(mol, grids, mol.nao, 1, max_memory):
+        g0, g1 = g1, g1 + split_weights.size
+        rho_drho[:, g0:g1] = numint.eval_rho(mol, split_ao, dm0, xctype = "NLC", hermi = 1)
+
+    rho_i = rho_drho[0,:]
+    rho_nonzero_mask = (rho_i >= NLC_REMOVE_ZERO_RHO_GRID_THRESHOLD)
+    rho_i = rho_i[rho_nonzero_mask]
+    nabla_rho_i = rho_drho[1:4, rho_nonzero_mask]
+    grids_coords = numpy.ascontiguousarray(grids.coords[rho_nonzero_mask, :])
+    grids_weights = grids.weights[rho_nonzero_mask]
+    ngrids = grids_coords.shape[0]
+
+    gamma_i = nabla_rho_i[0,:]**2 + nabla_rho_i[1,:]**2 + nabla_rho_i[2,:]**2
+    omega_i = numpy.sqrt(C_in_omega * gamma_i**2 / rho_i**4 + (4.0/3.0*numpy.pi) * rho_i)
+    kappa_i = kappa_prefactor * rho_i**(1.0/6.0)
+
+    U_i = numpy.empty(ngrids)
+    W_i = numpy.empty(ngrids)
+    A_i = numpy.empty(ngrids)
+    B_i = numpy.empty(ngrids)
+    C_i = numpy.empty(ngrids)
+    E_i = numpy.empty(ngrids) # Not used
+
+    libdft.VXC_vv10nlc_hessian_eval_UWABCE(
+        U_i.ctypes.data_as(ctypes.c_void_p),
+        W_i.ctypes.data_as(ctypes.c_void_p),
+        A_i.ctypes.data_as(ctypes.c_void_p),
+        B_i.ctypes.data_as(ctypes.c_void_p),
+        C_i.ctypes.data_as(ctypes.c_void_p),
+        E_i.ctypes.data_as(ctypes.c_void_p),
+        grids_coords.ctypes.data_as(ctypes.c_void_p),
+        grids_weights.ctypes.data_as(ctypes.c_void_p),
+        rho_i.ctypes.data_as(ctypes.c_void_p),
+        omega_i.ctypes.data_as(ctypes.c_void_p),
+        kappa_i.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(ngrids)
+    )
+    E_i = None
+
+    domega_drho_i         = numpy.empty(ngrids)
+    domega_dgamma_i       = numpy.empty(ngrids)
+    d2omega_drho2_i       = numpy.empty(ngrids)
+    d2omega_dgamma2_i     = numpy.empty(ngrids)
+    d2omega_drho_dgamma_i = numpy.empty(ngrids)
+    libdft.VXC_vv10nlc_hessian_eval_omega_derivative(
+        domega_drho_i.ctypes.data_as(ctypes.c_void_p),
+        domega_dgamma_i.ctypes.data_as(ctypes.c_void_p),
+        d2omega_drho2_i.ctypes.data_as(ctypes.c_void_p),
+        d2omega_dgamma2_i.ctypes.data_as(ctypes.c_void_p),
+        d2omega_drho_dgamma_i.ctypes.data_as(ctypes.c_void_p),
+        rho_i.ctypes.data_as(ctypes.c_void_p),
+        gamma_i.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_double(C_in_omega),
+        ctypes.c_int(ngrids)
+    )
+    dkappa_drho_i   = kappa_prefactor * (1.0/6.0) * rho_i**(-5.0/6.0)
+    d2kappa_drho2_i = kappa_prefactor * (-5.0/36.0) * rho_i**(-11.0/6.0)
+
+    f_gamma_i = rho_i * domega_dgamma_i * W_i
+
+    return (dm0, rho_nonzero_mask, grids_coords, grids_weights, rho_i,
+            nabla_rho_i, omega_i, kappa_i, U_i, W_i, A_i, B_i, C_i,
+            domega_drho_i, domega_dgamma_i, dkappa_drho_i,
+            d2omega_drho2_i, d2omega_dgamma2_i, d2omega_drho_dgamma_i,
+            d2kappa_drho2_i, f_gamma_i)
+
+def get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1s, max_memory, nlc_kernel=None):
+    '''NLC response for 0th order MOs (mo_coeff, mo_occ) and 1st order
+    density matrices dm1s.  nlc_kernel is the preamble bundle of
+    cache_nlc_kernel; if None, it is computed for this call.
+    '''
+    if nlc_kernel is None:
+        nlc_kernel = cache_nlc_kernel(mf, mol, mo_coeff=mo_coeff, mo_occ=mo_occ,
+                                      max_memory=max_memory)
+    return get_vnlc_resp1(mf, mol, nlc_kernel[0], dm1s, max_memory,
+                          nlc_kernel=nlc_kernel)
+
+def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory, nlc_kernel=None):
     """
         Equation notation follows:
         Liang J, Feng X, Liu X, Head-Gordon M. Analytical harmonic vibrational frequencies with
@@ -1870,13 +1985,11 @@ def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory, cache=None):
         TODO: check the effect of different grid, using mf.nlcgrids right now
 
     Kwargs:
-        cache (dict) : Holds the dm0-only preamble (rho/grid pair sums
-            U/W/A/B/C/E and omega/kappa derivatives) across calls with the
-            same dm0, e.g. a dict captured by the vind closure in
-            _response_functions. Its lifetime is then one CPHF solve (or one
-            Davidson solve), which is exactly the reuse window. If None, the
-            preamble is attached to ``mf`` (``mf._nlc_hess_uwabce_cache``)
-            keyed by dm0 values.
+        nlc_kernel : The dm0-only preamble bundle returned by
+            cache_nlc_kernel.  Holding it in the vind closure of
+            _response_functions reuses it across the calls of one CPHF (or
+            Davidson) solve, which is exactly the reuse window.  If None, it
+            is computed from dm0 for this call only.
     """
     dm0 = numpy.asarray(dm0.real, order='C')
 
@@ -1888,109 +2001,18 @@ def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory, cache=None):
     assert dm1s.ndim == 3
 
     grids = mf.nlcgrids
-    if grids.coords is None:
-        grids.build()
 
     n_dm1 = dm1s.shape[0]
 
     ni = mf._numint
 
-    if mf._numint.is_nlc(mf.xc):
-        xc_code = mf.xc
-    else:
-        xc_code = mf.nlc
-    nlc_coefs = ni.nlc_coeff(xc_code)
-    if len(nlc_coefs) != 1:
-        raise NotImplementedError('Additive NLC')
-    nlc_pars, fac = nlc_coefs[0]
-
-    kappa_prefactor = nlc_pars[0] * 1.5 * numpy.pi * (9 * numpy.pi)**(-1.0/6.0)
-    C_in_omega = nlc_pars[1]
-
-    # The preamble depends on dm0 only, while the CPHF solver calls this
-    # function once per iteration with the same dm0. Cache it in the
-    # caller-supplied dict (lifetime = the vind closure, e.g. one CPHF
-    # solve) or, when no dict was provided, on mf keyed by dm0 values.
-    uwabce = cache.get('uwabce') if cache is not None \
-        else getattr(mf, '_nlc_hess_uwabce_cache', None)
-    if uwabce is None or not numpy.array_equal(uwabce[0], dm0):
-        ngrids_full = grids.coords.shape[0]
-        rho_drho = numpy.empty([4, ngrids_full])
-        g1 = 0
-        for split_ao, ao_mask_index, split_weights, split_coords in ni.block_loop(mol, grids, mol.nao, 1, max_memory):
-            g0, g1 = g1, g1 + split_weights.size
-            rho_drho[:, g0:g1] = numint.eval_rho(mol, split_ao, dm0, xctype = "NLC", hermi = 1)
-
-        rho_i = rho_drho[0,:]
-        rho_nonzero_mask = (rho_i >= NLC_REMOVE_ZERO_RHO_GRID_THRESHOLD)
-        rho_i = rho_i[rho_nonzero_mask]
-        nabla_rho_i = rho_drho[1:4, rho_nonzero_mask]
-        grids_coords = numpy.ascontiguousarray(grids.coords[rho_nonzero_mask, :])
-        grids_weights = grids.weights[rho_nonzero_mask]
-        ngrids = grids_coords.shape[0]
-
-        gamma_i = nabla_rho_i[0,:]**2 + nabla_rho_i[1,:]**2 + nabla_rho_i[2,:]**2
-        omega_i = numpy.sqrt(C_in_omega * gamma_i**2 / rho_i**4 + (4.0/3.0*numpy.pi) * rho_i)
-        kappa_i = kappa_prefactor * rho_i**(1.0/6.0)
-
-        U_i = numpy.empty(ngrids)
-        W_i = numpy.empty(ngrids)
-        A_i = numpy.empty(ngrids)
-        B_i = numpy.empty(ngrids)
-        C_i = numpy.empty(ngrids)
-        E_i = numpy.empty(ngrids) # Not used
-
-        libdft.VXC_vv10nlc_hessian_eval_UWABCE(
-            U_i.ctypes.data_as(ctypes.c_void_p),
-            W_i.ctypes.data_as(ctypes.c_void_p),
-            A_i.ctypes.data_as(ctypes.c_void_p),
-            B_i.ctypes.data_as(ctypes.c_void_p),
-            C_i.ctypes.data_as(ctypes.c_void_p),
-            E_i.ctypes.data_as(ctypes.c_void_p),
-            grids_coords.ctypes.data_as(ctypes.c_void_p),
-            grids_weights.ctypes.data_as(ctypes.c_void_p),
-            rho_i.ctypes.data_as(ctypes.c_void_p),
-            omega_i.ctypes.data_as(ctypes.c_void_p),
-            kappa_i.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(ngrids)
-        )
-        E_i = None
-
-        domega_drho_i         = numpy.empty(ngrids)
-        domega_dgamma_i       = numpy.empty(ngrids)
-        d2omega_drho2_i       = numpy.empty(ngrids)
-        d2omega_dgamma2_i     = numpy.empty(ngrids)
-        d2omega_drho_dgamma_i = numpy.empty(ngrids)
-        libdft.VXC_vv10nlc_hessian_eval_omega_derivative(
-            domega_drho_i.ctypes.data_as(ctypes.c_void_p),
-            domega_dgamma_i.ctypes.data_as(ctypes.c_void_p),
-            d2omega_drho2_i.ctypes.data_as(ctypes.c_void_p),
-            d2omega_dgamma2_i.ctypes.data_as(ctypes.c_void_p),
-            d2omega_drho_dgamma_i.ctypes.data_as(ctypes.c_void_p),
-            rho_i.ctypes.data_as(ctypes.c_void_p),
-            gamma_i.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_double(C_in_omega),
-            ctypes.c_int(ngrids)
-        )
-        dkappa_drho_i   = kappa_prefactor * (1.0/6.0) * rho_i**(-5.0/6.0)
-        d2kappa_drho2_i = kappa_prefactor * (-5.0/36.0) * rho_i**(-11.0/6.0)
-
-        f_gamma_i = rho_i * domega_dgamma_i * W_i
-
-        uwabce = (dm0, rho_nonzero_mask, grids_coords, grids_weights, rho_i,
-                  nabla_rho_i, omega_i, kappa_i, U_i, W_i, A_i, B_i, C_i,
-                  domega_drho_i, domega_dgamma_i, dkappa_drho_i,
-                  d2omega_drho2_i, d2omega_dgamma2_i, d2omega_drho_dgamma_i,
-                  d2kappa_drho2_i, f_gamma_i)
-        if cache is not None:
-            cache['uwabce'] = uwabce
-        else:
-            mf._nlc_hess_uwabce_cache = uwabce
+    if nlc_kernel is None:
+        nlc_kernel = cache_nlc_kernel(mf, mol, dm0=dm0, max_memory=max_memory)
     (dm0, rho_nonzero_mask, grids_coords, grids_weights, rho_i,
      nabla_rho_i, omega_i, kappa_i, U_i, W_i, A_i, B_i, C_i,
      domega_drho_i, domega_dgamma_i, dkappa_drho_i,
      d2omega_drho2_i, d2omega_dgamma2_i, d2omega_drho_dgamma_i,
-     d2kappa_drho2_i, f_gamma_i) = uwabce
+     d2kappa_drho2_i, f_gamma_i) = nlc_kernel
     ngrids = grids_coords.shape[0]
     ngrids_full = grids.coords.shape[0]
 
