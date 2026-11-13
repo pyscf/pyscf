@@ -167,11 +167,17 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     fock_last = None
     cput1 = log.timer('initialize scf', *cput0)
     mf.cycles = 0
+
+    # Are we doing final cycles without level shift?
+    in_conv_check = False
+
     for cycle in range(mf.max_cycle):
         dm_last = dm
         last_hf_e = e_tot
 
+
         fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, mf_diis, fock_last=fock_last)
+
         mo_energy, mo_coeff = mf.eig(fock, s1e, x=x_orth)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
@@ -183,17 +189,55 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         # be modified in some methods.
         fock_last = fock
         fock = mf.get_fock(h1e, s1e, vhf, dm)  # = h1e + vhf, no DIIS
+        
         norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, fock))
         if not TIGHT_GRAD_CONV_TOL:
             norm_gorb = norm_gorb / numpy.sqrt(norm_gorb.size)
         norm_ddm = numpy.linalg.norm(dm-dm_last)
-        log.info('cycle= %d E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
-                 cycle+1, e_tot, e_tot-last_hf_e, norm_gorb, norm_ddm)
 
-        if callable(mf.check_convergence):
-            scf_conv = mf.check_convergence(locals())
-        elif abs(e_tot-last_hf_e) < conv_tol and norm_gorb < conv_tol_grad:
-            scf_conv = True
+        log.info('cycle= %d E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
+                cycle+1, e_tot, e_tot-last_hf_e, norm_gorb, norm_ddm)
+
+        if not in_conv_check:
+            if callable(mf.check_convergence):
+                scf_conv = mf.check_convergence(locals())
+            elif abs(e_tot-last_hf_e) < conv_tol and norm_gorb < conv_tol_grad:
+                scf_conv = True
+
+            if scf_conv and conv_check:
+                # Don't stop yet, we have some final checks to do.
+                scf_conv = False
+                in_conv_check = True
+        
+        if in_conv_check:
+            # mo_energy, mo_coeff = mf.eig(fock, s1e, x=x_orth)
+            # mo_occ = mf.get_occ(mo_energy, mo_coeff)
+            # check_dm, check_dm_last = mf.make_rdm1(mo_coeff, mo_occ), dm
+            # check_vhf = mf.get_veff(mol, check_dm, check_dm_last, vhf)
+            # check_e_tot, check_last_hf_e = mf.energy_tot(check_dm, h1e, vhf), e_tot
+    
+            # check_fock = mf.get_fock(h1e, s1e, check_vhf, check_dm, level_shift_factor=0)
+            check_vhf = vhf
+            check_dm = dm
+            check_dm_last = dm_last
+            check_e_tot = e_tot
+            check_last_hf_e = last_hf_e
+
+            check_fock = mf.get_fock(h1e, s1e, check_vhf, check_dm, level_shift_factor=0)
+
+            norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, check_fock))
+            if not TIGHT_GRAD_CONV_TOL:
+                norm_gorb = norm_gorb / numpy.sqrt(norm_gorb.size)
+            norm_ddm = numpy.linalg.norm(check_dm-check_dm_last)
+
+            log.info('Extra cycle= %d  E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
+                                    cycle+1, check_e_tot, check_e_tot-check_last_hf_e, norm_gorb, norm_ddm)
+
+            if callable(mf.check_convergence):
+                # TODO: We don't seem to adjust convergence criteria here?
+                scf_conv = mf.check_convergence(locals())
+            elif abs(check_e_tot-check_last_hf_e) < (conv_tol * 10) or norm_gorb < (conv_tol_grad * 3):
+                scf_conv = True
 
         if dump_chk and mf.chkfile:
             mf.dump_chk(locals())
@@ -205,35 +249,6 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
         if scf_conv:
             break
-
-    mf.cycles = cycle + 1
-    if scf_conv and conv_check:
-        # An extra diagonalization, to remove level shift
-        #fock = mf.get_fock(h1e, s1e, vhf, dm)  # = h1e + vhf
-        mo_energy, mo_coeff = mf.eig(fock, s1e, x=x_orth)
-        mo_occ = mf.get_occ(mo_energy, mo_coeff)
-        dm, dm_last = mf.make_rdm1(mo_coeff, mo_occ), dm
-        vhf = mf.get_veff(mol, dm, dm_last, vhf)
-        e_tot, last_hf_e = mf.energy_tot(dm, h1e, vhf), e_tot
-
-        fock = mf.get_fock(h1e, s1e, vhf, dm, level_shift_factor=0)
-        norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, fock))
-        if not TIGHT_GRAD_CONV_TOL:
-            norm_gorb = norm_gorb / numpy.sqrt(norm_gorb.size)
-        norm_ddm = numpy.linalg.norm(dm-dm_last)
-
-        conv_tol = conv_tol * 10
-        conv_tol_grad = conv_tol_grad * 3
-        if callable(mf.check_convergence):
-            scf_conv = mf.check_convergence(locals())
-        elif abs(e_tot-last_hf_e) < conv_tol or norm_gorb < conv_tol_grad:
-            scf_conv = True
-        else:
-            scf_conv = False
-        log.info('Extra cycle  E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
-                 e_tot, e_tot-last_hf_e, norm_gorb, norm_ddm)
-        if dump_chk and mf.chkfile:
-            mf.dump_chk(locals())
 
     log.timer('scf_cycle', *cput0)
     # A post-processing hook before return
