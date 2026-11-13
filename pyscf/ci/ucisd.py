@@ -29,6 +29,8 @@ from pyscf.ci import cisd
 from pyscf.fci import cistring
 from pyscf.cc.ccsd import _unpack_4fold
 
+__all__ = ['UCISD', 'CISD', 'overlap']
+
 def make_diagonal(myci, eris):
     nocca, noccb = eris.nocc
     nmoa = eris.focka.shape[0]

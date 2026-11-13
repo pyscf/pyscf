@@ -27,6 +27,12 @@ from pyscf import scf
 from pyscf import df
 from pyscf.scf import cphf
 
+__all__ = [
+    'DFRMP2', 'MP2', 'RMP2', 'DFMP2', 'SCSDFRMP2', 'SCSMP2', 'SCSRMP2', 'SCSDFMP2',
+    'ints3c_cholesky', 'emp2_rhf', 'make_rdm1', 'rmp2_densities_contribs',
+    'BatchSizeError', 'shellBatchGenerator', 'orbgrad_from_Gamma', 'fock_response_rhf',
+]
+
 
 class DFRMP2(lib.StreamObject):
     '''

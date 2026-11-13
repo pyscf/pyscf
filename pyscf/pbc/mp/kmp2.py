@@ -40,6 +40,11 @@ from pyscf.pbc.lib import kpts as libkpts
 from pyscf.lib.parameters import LARGE_DENOM
 from pyscf import __config__
 
+__all__ = [
+    'kernel', 'padding_k_idx', 'padded_mo_energy', 'padded_mo_coeff', 'get_nocc',
+    'get_nmo', 'get_frozen_mask', 'make_rdm1', 'KMP2', 'KRMP2',
+]
+
 WITH_T2 = getattr(__config__, 'mp_mp2_with_t2', True)
 
 def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):

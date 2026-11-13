@@ -18,6 +18,8 @@ from pyscf.ci import ucisd
 from pyscf.ci import gcisd
 from pyscf.pbc import mp
 
+__all__ = ['RCISD', 'UCISD', 'GCISD']
+
 class RCISD(cisd.RCISD):
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         if abs(mf.kpt).max() > 1e-9:

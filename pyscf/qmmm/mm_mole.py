@@ -26,6 +26,8 @@ from pyscf.gto.mole import is_au
 from pyscf.data.elements import charge
 from pyscf.lib import param
 
+__all__ = ['Mole', 'create_mm_mol']
+
 class Mole(gto.Mole):
     '''Mole class for MM particles.
 

@@ -22,6 +22,8 @@ import pyscf.pbc.ao2mo
 import pyscf.lib
 from pyscf.pbc.lib import kpts_helper
 
+__all__ = ['unique_pqr_list']
+
 DEBUG = 0
 
 class unique_pqr_list:

@@ -33,7 +33,35 @@ from pyscf.lib import logger
 from pyscf.pbc.scf import newton_ah
 from pyscf.pbc.scf import _response_functions
 
+__all__ = ['rhf_stability', 'uhf_stability']
+
 def rhf_stability(mf, internal=True, external=False, verbose=None, return_status=False):
+    '''Check whether orbital rotations can lower a KRHF or KRKS energy.
+
+    Args:
+        mf : KRHF or KRKS object
+            K-point mean-field object with converged ``mo_coeff`` and
+            ``mo_occ`` and the corresponding response implementation.
+
+    Kwargs:
+        internal : bool
+            Test orbital rotations that keep the wavefunction restricted.
+            Default True.
+        external : bool
+            Test whether allowing different alpha and beta orbitals lowers
+            the energy. Default False.
+        verbose : int or Logger or None
+            Logging control; None uses the mean-field object's verbosity.
+        return_status : bool
+            If True, include stability flags in the result. Default False.
+
+    Returns:
+        (mo_internal, mo_external) by default.
+        When ``return_status=True`` is specified, returns
+        (mo_internal, mo_external, stable_internal, stable_external).
+        Internal orbitals are a sequence of (nao, nmo_k) matrices. External
+        orbitals are an (alpha, beta) pair of such sequences.
+    '''
     mo_i = mo_e = None
     stable_i = stable_e = None
     if internal:
@@ -46,6 +74,28 @@ def rhf_stability(mf, internal=True, external=False, verbose=None, return_status
         return mo_i, mo_e
 
 def uhf_stability(mf, internal=True, external=False, verbose=None):
+    '''Check whether orbital rotations can lower a KUHF or KUKS energy.
+
+    Args:
+        mf : KUHF or KUKS object
+            K-point mean-field object with converged alpha/beta orbitals and
+            occupations and the corresponding response implementation.
+
+    Kwargs:
+        internal : bool
+            Test orbital rotations that keep alpha and beta spins separate.
+            Default True.
+        external : bool
+            Test rotations that mix alpha and beta spins. Default False.
+        verbose : int or Logger or None
+            Logging control; None uses the mean-field object's verbosity.
+
+    Returns:
+        (mo_internal, mo_external). Internal orbitals are an (alpha, beta)
+        pair of k-point sequences of (nao, nmo_k) matrices, rotated along an
+        unstable direction when one is found, or the existing orbitals when
+        stable.
+    '''
     mo_i = mo_e = None
     if internal:
         mo_i = uhf_internal(mf, verbose=verbose)

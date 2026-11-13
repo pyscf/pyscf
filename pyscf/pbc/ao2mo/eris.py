@@ -29,6 +29,11 @@ from pyscf.pbc.dft.numint import eval_ao
 from pyscf.pbc import tools
 from pyscf.lib import logger
 
+__all__ = [
+    'general', 'get_mo_eri', 'get_mo_pairs_G', 'get_mo_pairs_invG', 'assemble_eri',
+    'get_ao_pairs_G', 'get_ao_eri',
+]
+
 einsum = lib.einsum
 
 def general(cell, mo_coeffs, kpts=None, compact=False):

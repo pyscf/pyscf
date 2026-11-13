@@ -23,6 +23,8 @@ Parsers for basis set associated with Burkatzi-Filippi-Dolg  pseudo potential
 import os
 from pyscf.lib.exceptions import BasisNotFoundError
 
+__all__ = ['BasisNotFoundError']
+
 MAPSPDF = {'S': 0,
            'P': 1,
            'D': 2,

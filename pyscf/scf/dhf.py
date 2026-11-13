@@ -42,6 +42,8 @@ if getattr(__config__, 'scf_dhf_SCF_zquatev', True):
     except ImportError:
         pass
 
+__all__ = ['energy_elec', 'DHF', 'UHF', 'UDHF', 'HF1e', 'RDHF', 'RHF']
+
 DEBUG = False
 
 

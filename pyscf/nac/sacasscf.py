@@ -7,6 +7,8 @@ from pyscf.grad import casscf as casscf_grad
 from pyscf.grad import sacasscf as sacasscf_grad
 from functools import reduce
 
+__all__ = ['NonAdiabaticCouplings']
+
 # The extension from gradients -> NACs has three basic steps:
 # 0. ("state" index integer -> tuple)
 # 1. fcisolver.make_rdm12 -> fcisolver.trans_rdm12

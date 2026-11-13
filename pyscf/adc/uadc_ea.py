@@ -33,6 +33,8 @@ from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
 from pyscf.data.nist import HARTREE2EV
 
+__all__ = ['UADCEA']
+
 
 def get_imds(adc, eris=None):
 

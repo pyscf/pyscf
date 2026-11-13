@@ -33,6 +33,8 @@ from pyscf import scf
 from pyscf.soscf import ciah
 from pyscf import __config__
 
+__all__ = ['CASSCF_Scanner', 'CASSCF', 'CASCI']
+
 WITH_MICRO_SCHEDULER = getattr(__config__, 'mcscf_mc1step_CASSCF_with_micro_scheduler', False)
 WITH_STEPSIZE_SCHEDULER = getattr(__config__, 'mcscf_mc1step_CASSCF_with_stepsize_scheduler', True)
 

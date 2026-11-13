@@ -46,6 +46,8 @@ from pyscf.pbc.dft.multigrid.multigrid import MultiGridNumInt as MultiGridNumInt
 from pyscf.pbc.dft.multigrid import _backend_c as backend
 from pyscf.pbc.dft.multigrid.multigrid import MGGA_DENSITY_LAPL
 
+__all__ = ['MultiGridNumInt', 'KPoints', 'MultiGridNumInt_v1']
+
 NTASKS = getattr(__config__, 'pbc_dft_multigrid_ntasks', 4)
 KE_RATIO = getattr(__config__, 'pbc_dft_multigrid_ke_ratio', 3.0)
 REL_CUTOFF = getattr(__config__, 'pbc_dft_multigrid_rel_cutoff', 20.0)

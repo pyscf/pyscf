@@ -21,14 +21,36 @@ import numpy
 import h5py
 from pyscf import lib
 
+__all__ = [
+    'load',
+    'restore',
+]
+
 libao2mo = lib.load_library('libao2mo')
 
 class load:
-    '''load 2e integrals from hdf5 file
+    '''Access electron-repulsion integrals in a with block.
 
-    Usage:
-        with load(erifile) as eri:
-            print(eri.shape)
+    Args:
+        eri : str, ndarray, HDF5 dataset or group
+            Integral array, open HDF5 object, or HDF5 file to open.
+
+    Kwargs:
+        dataname : str or None
+            Dataset or group name within the HDF5 file or group.
+            This parameter is ignored when eri is already an array or dataset.
+
+    Yields:
+        The input array or dataset, or the HDF5 object selected by dataname.
+        HDF5 data are not automatically copied into a NumPy array.
+
+    Notes:
+        Files opened by this context are closed on exit. However, if a HDF5
+        datasets or groups is yield, they are valid only inside the with block.
+
+    Examples:
+        >>> with load('integrals.h5') as eri:
+        ...     integrals = eri[:]
     '''
     def __init__(self, eri, dataname='eri_mo'):
         self.eri = eri
@@ -58,8 +80,7 @@ class load:
 
 
 def restore(symmetry, eri, norb, tao=None):
-    r'''Convert the 2e integrals (in Chemist's notation) between different
-    level of permutation symmetry (8-fold, 4-fold, or no symmetry)
+    '''Convert electron-repulsion integrals between permutation-symmetry packings.
 
     Args:
         symmetry : int or str
@@ -75,33 +96,43 @@ def restore(symmetry, eri, norb, tao=None):
             while (ij|kl) != (kl|ij) is not required.
 
         eri : ndarray
-            The symmetry of eri is determined by the size of eri and norb
+            Real float64 integrals. Its symmetry is inferred from the array size
+            and shape together with norb.
         norb : int
-            The symmetry of eri is determined by the size of eri and norb
+            Number of orbitals for each integral index.
+
+    Kwargs:
+        tao :
+            Reserved for time-reversal indices. Currently unused.
 
     Returns:
-        ndarray.  The shape depends on the target symmetry.
+        An ndarray with the requested packing. With n = norb and
+        npair = n*(n+1)//2, the shapes are:
 
-            | 8 : (norb*(norb+1)/2)*(norb*(norb+1)/2+1)/2
-            | 4 : (norb*(norb+1)/2, norb*(norb+1)/2)
-            | 1 : (norb, norb, norb, norb)
+            | 1: (n, n, n, n)
+            | 2ij: (npair, n, n)
+            | 2kl: (n, n, npair)
+            | 4: (npair, npair)
+            | 8: (npair*(npair+1)//2,)
+
+    Notes:
+        Packed pairs use lower-triangular ordering. The input must satisfy
+        the symmetry required by the target packing; this function does not
+        check that the integral values have that symmetry.
 
     Examples:
-
-    >>> from pyscf import gto
-    >>> from pyscf.scf import _vhf
-    >>> from pyscf import ao2mo
-    >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
-    >>> eri = mol.intor('int2e')
-    >>> eri1 = ao2mo.restore(1, eri, mol.nao_nr())
-    >>> eri4 = ao2mo.restore(4, eri, mol.nao_nr())
-    >>> eri8 = ao2mo.restore(8, eri, mol.nao_nr())
-    >>> print(eri1.shape)
-    (7, 7, 7, 7)
-    >>> print(eri1.shape)
-    (28, 28)
-    >>> print(eri1.shape)
-    (406,)
+        >>> from pyscf import gto, ao2mo
+        >>> mol = gto.M(atom='O 0 0 0; H 0 1 0; H 0 0 1', basis='sto3g')
+        >>> eri = mol.intor('int2e')
+        >>> eri1 = ao2mo.restore(1, eri, mol.nao_nr())
+        >>> eri4 = ao2mo.restore(4, eri, mol.nao_nr())
+        >>> eri8 = ao2mo.restore(8, eri, mol.nao_nr())
+        >>> print(eri1.shape)
+        (7, 7, 7, 7)
+        >>> print(eri4.shape)
+        (28, 28)
+        >>> print(eri8.shape)
+        (406,)
     '''
     targetsym = _stand_sym_code(symmetry)
     if targetsym not in ('8', '4', '1', '2kl', '2ij'):

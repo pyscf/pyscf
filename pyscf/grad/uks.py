@@ -27,6 +27,8 @@ from pyscf.grad import uhf as uhf_grad
 from pyscf.dft import numint, gen_grid
 from pyscf import __config__
 
+__all__ = ['Gradients', 'Grad']
+
 
 def get_veff(ks_grad, mol=None, dm=None):
     '''

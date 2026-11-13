@@ -31,6 +31,11 @@ from pyscf.cc import ccsd_rdm
 from pyscf.fci import cistring
 from pyscf import __config__
 
+__all__ = [
+    'make_diagonal', 'CISD_Scanner', 'CISD', 'RCISD', 'cisdvec_to_amplitudes',
+    'from_fcivec', 'overlap', 'tn_addrs_signs',
+]
+
 BLKMIN = getattr(__config__, 'ci_cisd_blkmin', 4)
 
 

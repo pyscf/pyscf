@@ -25,6 +25,8 @@ from pyscf.data import elements
 from pyscf import symm
 from pyscf.lo.orth import vec_lowdin
 
+__all__ = ['gen_mol_msym']
+
 
 def sph_mval(label):
     '''Get integer l_z value of given spherical AO label'''

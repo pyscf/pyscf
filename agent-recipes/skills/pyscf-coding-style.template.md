@@ -84,10 +84,24 @@ including tests. Customize as needed.
 
 - Treat functions and classes listed in a module's `__all__` as public APIs.
   Absence from `__all__` does not by itself make an API private.
-- Give public APIs clear docstrings describing their purpose, inputs, outputs,
-  and important parameters, attributes, and defaults. Explain shapes, units,
-  and limitations where relevant.
-- Document non-obvious assumptions.
+- Describe the API contract: what the function does, the calling convention,
+  the limitations, and side effects if it has. Don't describe the implementation.
+- Refer to existing documentation for shared formats and conventions.
+  Use plain language, direct verbs, and one main point per sentence.
+  Add examples when they clarify non-obvious usage.
+- Keep `Returns` (or `Yields`) focused on the returned values. State
+  whether the result is a new object or sharing with the input object when that
+  matters. Put side effects, shared state, limitations, and usage advice in
+  `Notes`, not `Returns`.
+- Make `Notes` optional. Do not add it merely to repeat parameter descriptions,
+  explain obvious behavior, or enumerate hypothetical misuse.
+- Treat side-effect-free behavior as the default. Omit routine statements that
+  inputs are unchanged.
+- Describe required data, not how data are prepared.
+- Verify descriptions against the implementation. Distinguish scientific
+  expectations, such as converged amplitudes, from conditions the code checks.
+  Document non-obvious assumptions needed for correct use.
+- Keep terminology and structure consistent across related APIs.
 - For functions outside the public API, a short docstring explaining their
   purpose is sufficient.
 - Update documentation when changing parameters, return values, supported

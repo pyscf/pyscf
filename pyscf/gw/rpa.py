@@ -34,6 +34,8 @@ from pyscf.ao2mo import _ao2mo
 from pyscf import df, scf
 from pyscf.mp import dfmp2
 
+__all__ = ['RPA', 'dRPA', 'DirectRPA']
+
 einsum = lib.einsum
 
 # ****************************************************************************

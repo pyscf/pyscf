@@ -38,6 +38,8 @@ from pyscf.dft.gen_grid import BLKSIZE, NBINS, CUTOFF, ALIGNMENT_UNIT, make_mask
 from pyscf.dft import xc_deriv
 from pyscf import __config__
 
+__all__ = ['eval_ao', 'eval_rho', 'LibXCMixin', 'NumInt']
+
 libdft = lib.load_library('libdft')
 OCCDROP = getattr(__config__, 'dft_numint_occdrop', 1e-12)
 # The system size above which to consider the sparsity of the density matrix.

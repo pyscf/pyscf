@@ -34,6 +34,8 @@ from pyscf.mp import ump2
 from pyscf import scf
 from pyscf import __config__
 
+__all__ = ['UCCSD', 'CCSD']
+
 MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 
 # This is unrestricted (U)CCSD, in spatial-orbital form.

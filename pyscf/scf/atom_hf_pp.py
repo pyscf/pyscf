@@ -26,6 +26,8 @@ from pyscf.dft import gen_grid, numint
 from pyscf.pbc import gto as pbcgto
 from pyscf.scf import atom_hf, rohf
 
+__all__ = ['AtomSCFPP', 'AtomHF1ePP']
+
 def get_pp_loc_part1_rs(mol, coords):
     atm_coords = mol.atom_coords()
     out = 0

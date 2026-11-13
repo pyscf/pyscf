@@ -22,6 +22,8 @@ import copy
 from functools import reduce
 from pyscf.mcpdft.cmspdft import coulomb_tensor
 
+__all__ = ['diab_response', 'diab_grad', 'diab_grad_o0', 'diab_response_o0']
+
 # TODO: docstring?
 def diab_response (mc_grad, Lis, mo=None, ci=None, eris=None, **kwargs):
     '''Computes the Hessian-vector product of

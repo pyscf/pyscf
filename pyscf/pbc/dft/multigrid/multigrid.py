@@ -48,6 +48,8 @@ from pyscf.pbc.dft.multigrid.utils import (
     _takebak_5d,
 )
 
+__all__ = ['MultiGridNumInt', 'NumInt', 'LibXCMixin', 'KPoints']
+
 
 EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-2)
 TO_EVEN_GRIDS = getattr(__config__, 'pbc_dft_multigrid_to_even', False)

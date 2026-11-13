@@ -22,6 +22,8 @@ from pyscf.fci import direct_spin1
 from pyscf.nac import sacasscf as sacasscf_nacs
 from functools import reduce
 
+__all__ = ['NonAdiabaticCouplings']
+
 _unpack_state = mspdft_grad._unpack_state
 _nac_csf = sacasscf_nacs._nac_csf
 

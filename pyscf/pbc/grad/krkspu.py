@@ -24,6 +24,8 @@ from pyscf.pbc import gto
 from pyscf.pbc.grad import krks as krks_grad
 from pyscf.pbc.dft.krkspu import _set_U, _make_minao_lo, reference_mol
 
+__all__ = ['Gradients']
+
 def generate_first_order_local_orbitals(cell, minao_ref='MINAO', kpts=None):
     kpts = kpts.reshape(-1, 3)
     nkpts = len(kpts)

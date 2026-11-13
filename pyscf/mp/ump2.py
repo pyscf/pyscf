@@ -27,6 +27,8 @@ from pyscf.mp import mp2
 from pyscf.ao2mo import _ao2mo
 from pyscf import __config__
 
+__all__ = ['UMP2', 'MP2']
+
 WITH_T2 = getattr(__config__, 'mp_ump2_with_t2', True)
 
 

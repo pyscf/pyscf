@@ -28,6 +28,8 @@ from pyscf.pbc.dft import rks
 from pyscf.pbc.dft import uks
 from pyscf import __config__
 
+__all__ = ['ROKS']
+
 
 @lib.with_doc(uks.get_veff.__doc__)
 def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,

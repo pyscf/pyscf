@@ -31,6 +31,8 @@ from pyscf import scf
 from pyscf.lib import logger
 from pyscf import __config__
 
+__all__ = ['AVAS']
+
 THRESHOLD = getattr(__config__, 'mcscf_avas_threshold', 0.2)
 MINAO = getattr(__config__, 'mcscf_avas_minao', 'minao')
 WITH_IAO = getattr(__config__, 'mcscf_avas_with_iao', False)

@@ -24,6 +24,8 @@ from pyscf.mcscf import newton_casscf
 from pyscf.mcscf import casci_symm
 from pyscf import fci
 
+__all__ = ['CASSCF']
+
 
 class CASSCF(newton_casscf.CASSCF):
     __doc__ = newton_casscf.CASSCF.__doc__

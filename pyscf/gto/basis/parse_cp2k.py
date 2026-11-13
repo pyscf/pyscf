@@ -26,6 +26,8 @@ from pyscf.gto.basis import parse_nwchem
 from pyscf.gto.basis.parse_nwchem import _search_basis_block
 from pyscf import __config__
 
+__all__ = ['BasisNotFoundError']
+
 DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
 
 MAXL = 8

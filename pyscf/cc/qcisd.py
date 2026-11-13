@@ -31,6 +31,8 @@ from pyscf.lib import logger
 from pyscf.cc.ccsd import CCSDBase, as_scanner, _add_vvvv, _ChemistsERIs
 from pyscf import __config__
 
+__all__ = ['QCISD', 'RQCISD', 'CCSDBase']
+
 BLKMIN = getattr(__config__, 'cc_ccsd_blkmin', 4)
 MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 

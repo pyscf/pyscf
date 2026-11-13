@@ -23,6 +23,8 @@ from pyscf.lib import logger
 from pyscf.pbc.dft import kukspu, kuks_ksymm
 from pyscf.pbc.lib import kpts as libkpts
 
+__all__ = ['KsymAdaptedKUKSpU', 'KUKSpU']
+
 def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
              kpts=None, kpts_band=None):
     """

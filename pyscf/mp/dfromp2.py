@@ -30,6 +30,8 @@ from pyscf.mp import dfump2
 from pyscf.mp import dfmp2
 from pyscf.mp.romp2 import ROMP2, add_singles, WITH_T2
 
+__all__ = ['DFROMP2', 'ROMP2']
+
 
 def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
            verbose=None):

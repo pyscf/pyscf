@@ -35,6 +35,8 @@ from pyscf import lo
 from pyscf.pbc import gto as pgto
 from pyscf.dft.rkspu import _set_U, reference_mol
 
+__all__ = ['KRKSpU', 'linear_response_u']
+
 def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
              kpts=None, kpts_band=None):
     """

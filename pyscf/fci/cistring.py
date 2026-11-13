@@ -21,6 +21,11 @@ import math
 import numpy
 from pyscf import lib
 
+__all__ = [
+    'OIndexList', 'gen_cre_str_index', 'gen_des_str_index', 'gen_linkstr_index',
+    'gen_occslst', 'make_strings', 'strs2addr',
+]
+
 libfci = lib.load_library('libfci')
 
 def make_strings(orb_list, nelec):

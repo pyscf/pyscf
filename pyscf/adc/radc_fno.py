@@ -21,6 +21,8 @@ from pyscf.lib import logger
 from pyscf.adc import radc
 from pyscf import __config__
 
+__all__ = ['RADC2FNO']
+
 class RADC2FNO(radc.RADC):
     '''ADC-based frozen natural orbital (FNO) generator for spin-restricted
     references, following J. Chem. Phys. 159, 084113 (2023).

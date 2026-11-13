@@ -26,6 +26,8 @@ import ctypes
 import numpy
 from pyscf import lib
 
+__all__ = ['getints_by_shell', 'getints', 'make_cintopt']
+
 libcgto = lib.load_library('libcgto')
 
 ANG_OF     = 1

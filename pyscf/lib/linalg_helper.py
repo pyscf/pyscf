@@ -31,6 +31,13 @@ from pyscf.lib import misc
 from pyscf.lib.exceptions import LinearDependencyError
 from pyscf import __config__
 
+__all__ = [
+    'safe_eigh', 'eigh_by_blocks', 'davidson', 'davidson1', 'make_diag_precond', 'eigh',
+    'dsyev', 'pick_real_eigs', 'eig', 'davidson_nosym', 'davidson_nosym1', 'dgeev',
+    'dgeev1', 'krylov', 'solve', 'dsolve', 'cho_solve', 'LinearDependenceError',
+    'LinearDependencyError',
+]
+
 SAFE_EIGH_LINDEP = getattr(__config__, 'lib_linalg_helper_safe_eigh_lindep', 1e-15)
 DAVIDSON_LINDEP = getattr(__config__, 'lib_linalg_helper_davidson_lindep', 1e-14)
 DSOLVE_LINDEP = getattr(__config__, 'lib_linalg_helper_dsolve_lindep', 1e-13)

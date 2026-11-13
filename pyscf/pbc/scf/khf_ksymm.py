@@ -32,6 +32,8 @@ from pyscf.pbc.scf import hf as pbchf
 from pyscf.symm import symmetrize_matrix
 from pyscf.scf.hf_symm import so2ao_mo_coeff
 
+__all__ = ['KsymAdaptedKSCF', 'KsymAdaptedKRHF', 'KRHF']
+
 @lib.with_doc(khf.get_occ.__doc__)
 def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     if mo_energy_kpts is None:

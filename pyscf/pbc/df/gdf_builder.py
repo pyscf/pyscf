@@ -42,6 +42,8 @@ from pyscf.pbc.df.incore import libpbc, Int3cBuilder
 from pyscf.pbc.lib.kpts_helper import is_zero, kk_adapted_iter, KPT_DIFF_TOL
 from pyscf import __config__
 
+__all__ = ['Int3cBuilder']
+
 ETA_MIN = getattr(__config__, 'pbc_df_aft_estimate_eta_min', 0.1)
 
 class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):

@@ -33,6 +33,8 @@ from pyscf.lo.stability import stability_newton
 from pyscf.tools import mo_mapping
 from pyscf import __config__
 
+__all__ = ['OrbitalLocalizer', 'OrbitalLocalizerComplex', 'Boys', 'FB', 'BF']
+
 
 def kernel(localizer, mo_coeff=None, callback=None, verbose=None):
     if mo_coeff is not None:

@@ -33,6 +33,8 @@ from pyscf.data.nist import HARTREE2EV
 from pyscf import lo
 from pyscf.lo.iao import reference_mol
 
+__all__ = ['RKSpU', 'linear_response_u']
+
 def get_veff(ks, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
     """
     Coulomb + XC functional + Hubbard U terms for RKS+U.

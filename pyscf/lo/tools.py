@@ -1,5 +1,7 @@
 import numpy
 
+__all__ = ['findiff_grad', 'findiff_hess']
+
 
 def findiff_grad(func, x, delta=1e-4):
     ''' Finite-difference gradient

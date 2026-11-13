@@ -27,6 +27,8 @@ from pyscf.dft import uks
 from pyscf.dft.rkspu import _set_U, _make_minao_lo
 from pyscf.lo.iao import reference_mol
 
+__all__ = ['UKSpU', 'linear_response_u']
+
 def get_veff(ks, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
     """
     Coulomb + XC functional + (Hubbard - double counting) for UKS+U.

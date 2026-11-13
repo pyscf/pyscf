@@ -41,6 +41,8 @@ from pyscf.ao2mo.incore import iden_coeffs, _conc_mos
 from pyscf.ao2mo.outcore import _load_from_h5g
 from pyscf.ao2mo import _ao2mo
 
+__all__ = ['general']
+
 IOBLK_SIZE = 128  # MB
 
 def general(eri, mo_coeffs, erifile, dataname='eri_mo',

@@ -24,6 +24,8 @@ from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.grad import rhf as rhf_grad
 
+__all__ = ['GradientsBase', 'Gradients', 'Grad']
+
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     mf = mf_grad.base

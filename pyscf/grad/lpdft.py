@@ -31,6 +31,8 @@ import pyscf.grad.mcpdft as mcpdft_grad
 import numpy as np
 import gc
 
+__all__ = ['Gradients']
+
 BLKSIZE = gen_grid.BLKSIZE
 
 

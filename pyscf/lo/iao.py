@@ -32,36 +32,48 @@ from pyscf import __config__
 from pyscf.lo.orth import vec_lowdin
 from pyscf.data.elements import is_ghost_atom
 
+__all__ = ['iao']
+
 # Alternately, use ANO for minao
 # orthogonalize iao with coefficients obtained by
 #     vec_lowdin(iao_coeff, mol.intor('int1e_ovlp'))
 MINAO = getattr(__config__, 'lo_iao_minao', 'minao')
 
 def iao(mol, orbocc, minao=MINAO, kpts=None, lindep_threshold=1e-8):
-    '''Intrinsic Atomic Orbitals. [Ref. JCTC, 9, 4834]
-
-    For large basis sets which are close to being linearly dependent,
-    the Cholesky decomposition can fail. In this case a canonical orthogonalization
-    with threshold `lindep_threshold` is used.
+    '''Construct intrinsic atomic orbitals (JCTC, 9, 4834).
 
     Args:
-        mol : molecule or cell object
-        orbocc : 2D array
-            occupied orbitals
-        minao : str, optional
-            reference basis set for IAOs
-        kpts : 2D ndarray, optional
-            k-points, for cell objects only
-        lindep_threshold : float, optional
-            threshold for canonical orthogonalization
+        mol : Mole or Cell
+            Molecule or periodic cell with the original AO basis.
+        orbocc : ndarray or sequence of ndarrays
+            Occupied orbital coefficients satisfying
+            ``orbocc.conj().T @ S @ orbocc = I``, where S is the AO overlap.
+            Use shape (nao, nocc) for a molecule or a single k-point;
+            for a k-point list, supply one (nao, nocc_k) array per k-point.
+
+    Kwargs:
+        minao : str
+            Reference minimal basis. Default is ``'minao'``, configurable
+            through ``lo_iao_minao``. Choose a suitable reference for ECP or
+            pseudopotential calculations; the default MINAO triggers a warning.
+        kpts : (nkpts, 3) ndarray or (3,) ndarray or None
+            Absolute k-points in inverse Bohr for a periodic cell. None uses
+            Gamma. A (3,) vector selects a single k-point. Not used for a
+            molecule.
+        lindep_threshold : float
+            Eigenvalue threshold for canonical orthogonalization if Cholesky
+            factorization of the original AO overlap fails. Default is 1e-8.
+            The reference-basis overlap must still be positive definite.
 
     Returns:
-        non-orthogonal IAO orbitals.  Orthogonalize them as C (C^T S C)^{-1/2},
-        eg using :func:`orth.lowdin`
+        Nonorthogonal IAO coefficients in the original AO basis, with shape
+        (nao, nref) for a molecule or single k-point, or (nkpts, nao, nref)
+        for a k-point list. Here nref is the number of reference-basis AOs;
+        ghost atoms are omitted from the reference molecule.
 
-        >>> orbocc = mf.mo_coeff[:,mf.mo_occ>0]
-        >>> c = iao(mol, orbocc)
-        >>> numpy.dot(c, orth.lowdin(reduce(numpy.dot, (c.T,s,c))))
+    Notes:
+        To orthonormalize the result, use ``orth.vec_lowdin(c, s)`` with the
+        corresponding AO overlap, separately at each k-point when applicable.
     '''
     if mol.has_ecp() and minao == 'minao':
         logger.warn(mol, 'ECP/PP is used. MINAO is not a good reference AO basis in IAO.')

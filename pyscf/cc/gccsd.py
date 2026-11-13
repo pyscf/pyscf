@@ -26,6 +26,8 @@ from pyscf.cc import gintermediates as imd
 from pyscf.cc.addons import spatial2spin, spin2spatial
 from pyscf import __config__
 
+__all__ = ['GCCSD', 'CCSD']
+
 MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 
 #einsum = np.einsum

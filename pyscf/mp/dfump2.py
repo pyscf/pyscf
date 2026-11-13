@@ -30,6 +30,8 @@ from pyscf.mp import dfmp2, ump2
 from pyscf.mp.ump2 import make_rdm1, make_rdm2, _mo_splitter
 from pyscf import __config__
 
+__all__ = ['DFUMP2', 'MP2', 'UMP2']
+
 WITH_T2 = getattr(__config__, 'mp_dfump2_with_t2', True)
 THRESH_LINDEP = getattr(__config__, 'mp_dfump2_thresh_lindep', 1e-10)
 

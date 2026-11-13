@@ -31,6 +31,8 @@ from pyscf.scf import cphf
 from pyscf.mp import mp2
 from pyscf.ao2mo import _ao2mo
 
+__all__ = ['MP2_GradScanner', 'Gradients', 'Grad']
+
 
 def grad_elec(mp_grad, t2, atmlst=None, verbose=logger.INFO):
     mp = mp_grad.base

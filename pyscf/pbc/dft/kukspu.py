@@ -32,6 +32,8 @@ from pyscf.pbc.dft import kuks
 from pyscf.pbc.dft.krkspu import _set_U, _make_minao_lo, reference_mol
 from pyscf.data.nist import HARTREE2EV
 
+__all__ = ['KUKSpU', 'linear_response_u']
+
 def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
              kpts=None, kpts_band=None):
     """

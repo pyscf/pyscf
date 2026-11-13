@@ -29,6 +29,8 @@ from scipy import linalg
 import numpy as np
 import gc
 
+__all__ = ['Gradients']
+
 BLKSIZE = gen_grid.BLKSIZE
 
 def gfock_sym(mc, mo_coeff, casdm1, casdm2, h1e, eris):

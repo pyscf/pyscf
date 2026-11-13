@@ -7,6 +7,11 @@ import numpy as np
 import pyscf
 from pyscf.lib.parameters import BOHR
 
+__all__ = [
+    'load_qcschema_json', 'load_qcschema_go_final_json', 'load_qcschema_hessian',
+    'load_qcschema_scf_info', 'recreate_mol_obj', 'recreate_scf_obj',
+]
+
 
 def load_qcschema_json(file_name):
     '''

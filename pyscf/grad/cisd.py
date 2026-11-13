@@ -28,6 +28,8 @@ from pyscf.ci import cisd
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import ccsd as ccsd_grad
 
+__all__ = ['CISD_GradScanner', 'Gradients', 'Grad']
+
 
 def grad_elec(cigrad, civec=None, eris=None, atmlst=None, verbose=logger.INFO):
     myci = cigrad.base

@@ -29,6 +29,9 @@ from pyscf.hessian import rhf as rhf_hess
 from pyscf.hessian import uhf as uhf_hess
 from pyscf.hessian import rks as rks_hess
 from pyscf.dft import numint
+
+__all__ = ['Hessian']
+
 _get_jk = rhf_hess._get_jk
 
 

@@ -35,6 +35,8 @@ from pyscf.scf import _response_functions
 from pyscf.soscf import newton_ah
 from pyscf import __config__
 
+__all__ = ['uhf_internal', 'uhf_stability']
+
 STAB_NROOTS = getattr(__config__, 'stab_nroots', 3)
 STAB_TOL = getattr(__config__, 'stab_tol', 1e-4)
 

@@ -41,6 +41,8 @@ except ImportError:
         'See https://github.com/TREX-CoE/trexio/blob/master/python/README.md'
     )
 
+__all__ = ['from_trexio', 'to_trexio']
+
 # Tolerance used by from_trexio when checking that the basis in a TREXIO file
 # follows PySCF's conventions (normalized contractions, ao_normalization).
 NORM_TOL = 1e-8

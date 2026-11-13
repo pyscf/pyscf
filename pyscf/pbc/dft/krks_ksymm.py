@@ -25,6 +25,8 @@ from pyscf.pbc.scf import khf, khf_ksymm
 from pyscf.pbc.dft import gen_grid, multigrid
 from pyscf.pbc.dft import rks, krks
 
+__all__ = ['KsymAdaptedKRKS', 'KRKS']
+
 @lib.with_doc(krks.get_veff.__doc__)
 def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
              kpts=None, kpts_band=None):

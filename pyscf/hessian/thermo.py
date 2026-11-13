@@ -34,6 +34,10 @@ import numpy
 from pyscf import lib
 from pyscf.data import nist
 
+__all__ = [
+    'dump_normal_mode', 'dump_thermo', 'harmonic_analysis', 'rotation_const', 'thermo',
+]
+
 LINDEP_THRESHOLD = 1e-7
 
 

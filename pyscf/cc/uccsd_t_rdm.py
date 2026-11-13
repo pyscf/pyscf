@@ -20,6 +20,8 @@ import numpy
 from pyscf import lib
 from pyscf.cc import uccsd_rdm
 
+__all__ = ['make_rdm1', 'make_rdm2']
+
 def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
     d1 = uccsd_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2)
 

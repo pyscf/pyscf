@@ -30,6 +30,8 @@ from pyscf import fci
 from pyscf.mcscf import addons
 from pyscf import __config__
 
+__all__ = ['CASCI_Scanner', 'CASBase', 'CASCI', 'h1e_for_cas']
+
 WITH_META_LOWDIN = getattr(__config__, 'mcscf_analyze_with_meta_lowdin', True)
 LARGE_CI_TOL = getattr(__config__, 'mcscf_analyze_large_ci_tol', 0.1)
 PENALTY = getattr(__config__, 'mcscf_casci_CASCI_fix_spin_shift', 0.2)
