@@ -265,7 +265,7 @@ def symmetrize(mol, de, atmlst=None):
     a_id = pmol.irrep_id.index(0)
     c = pmol.symm_orb[a_id].reshape(mol.natm, 3, -1)
     if atmlst is not None:
-        c = c[:,atmlst,:]
+        c = c[atmlst]
     tmp = numpy.einsum('zx,zxi->i', de, c)
     proj_de = numpy.einsum('i,zxi->zx', tmp, c)
     return proj_de
