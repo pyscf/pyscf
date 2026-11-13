@@ -678,10 +678,15 @@ class PCM(lib.StreamObject):
         .equilibrium_solvation. 'default' is the standard equilibrium kernel.
         '''
         if self.rfroot is not None and self.refdm is not None:
-            raise ValueError(
-                'rfroot and refdm select different sources for the slow '
-                'charges: rfroot takes them from state 0 of a state-averaged '
-                'calculation, refdm from the given density. Set one.')
+            # TODO: slow charges from a separately converged state-specific
+            # ground state, fast charges from state rfroot of a
+            # state-averaged calculation. kernel_sa_neq currently takes the slow
+            # charges from state 0 of the SA calculation instead.
+            raise NotImplementedError(
+                'rfroot together with refdm: taking the slow charges from a '
+                'reference density while the fast charges come from a '
+                'state-averaged root is not implemented. Set one or the '
+                'other.')
         if self.refdm is not None and self.equilibrium_solvation:
             raise ValueError(
                 'refdm has no effect with equilibrium_solvation=True. Set '

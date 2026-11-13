@@ -261,7 +261,7 @@ class Dispatch(unittest.TestCase):
         dm = mf.make_rdm1()
         for eq in (False, True):
             self.assertRaises(
-                ValueError,
+                NotImplementedError,
                 self._cm(rfroot=1, refdm=dm,
                          equilibrium_solvation=eq).solvation_type)
 
