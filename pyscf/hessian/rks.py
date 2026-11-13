@@ -1840,7 +1840,7 @@ def _get_vnlc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
 
     return vmat
 
-def get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1s, max_memory):
+def get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1s, max_memory, cache=None):
     if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
         mocc = mo_coeff[:,mo_occ>0]
         mo_occ = mo_occ[mo_occ > 0]
@@ -1855,9 +1855,9 @@ def get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1s, max_memory):
         mo_occ_b = mo_occ[1][mo_occ[1] > 0]
         dm0 = (mocc_a * mo_occ_a) @ mocc_a.T + (mocc_b * mo_occ_b) @ mocc_b.T
 
-    return get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory)
+    return get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory, cache=cache)
 
-def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory):
+def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory, cache=None):
     """
         Equation notation follows:
         Liang J, Feng X, Liu X, Head-Gordon M. Analytical harmonic vibrational frequencies with
@@ -1868,6 +1868,15 @@ def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory):
         dm1s is first order
 
         TODO: check the effect of different grid, using mf.nlcgrids right now
+
+    Kwargs:
+        cache (dict) : Holds the dm0-only preamble (rho/grid pair sums
+            U/W/A/B/C/E and omega/kappa derivatives) across calls with the
+            same dm0, e.g. a dict captured by the vind closure in
+            _response_functions. Its lifetime is then one CPHF solve (or one
+            Davidson solve), which is exactly the reuse window. If None, the
+            preamble is attached to ``mf`` (``mf._nlc_hess_uwabce_cache``)
+            keyed by dm0 values.
     """
     dm0 = numpy.asarray(dm0.real, order='C')
 
@@ -1899,9 +1908,12 @@ def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory):
     C_in_omega = nlc_pars[1]
 
     # The preamble depends on dm0 only, while the CPHF solver calls this
-    # function once per iteration with the same dm0. Cache it on mf.
-    cache = getattr(mf, '_nlc_hess_uwabce_cache', None)
-    if cache is None or not numpy.array_equal(cache[0], dm0):
+    # function once per iteration with the same dm0. Cache it in the
+    # caller-supplied dict (lifetime = the vind closure, e.g. one CPHF
+    # solve) or, when no dict was provided, on mf keyed by dm0 values.
+    uwabce = cache.get('uwabce') if cache is not None \
+        else getattr(mf, '_nlc_hess_uwabce_cache', None)
+    if uwabce is None or not numpy.array_equal(uwabce[0], dm0):
         ngrids_full = grids.coords.shape[0]
         rho_drho = numpy.empty([4, ngrids_full])
         g1 = 0
@@ -1965,17 +1977,20 @@ def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory):
 
         f_gamma_i = rho_i * domega_dgamma_i * W_i
 
-        cache = (dm0, rho_nonzero_mask, grids_coords, grids_weights, rho_i,
-                 nabla_rho_i, omega_i, kappa_i, U_i, W_i, A_i, B_i, C_i,
-                 domega_drho_i, domega_dgamma_i, dkappa_drho_i,
-                 d2omega_drho2_i, d2omega_dgamma2_i, d2omega_drho_dgamma_i,
-                 d2kappa_drho2_i, f_gamma_i)
-        mf._nlc_hess_uwabce_cache = cache
+        uwabce = (dm0, rho_nonzero_mask, grids_coords, grids_weights, rho_i,
+                  nabla_rho_i, omega_i, kappa_i, U_i, W_i, A_i, B_i, C_i,
+                  domega_drho_i, domega_dgamma_i, dkappa_drho_i,
+                  d2omega_drho2_i, d2omega_dgamma2_i, d2omega_drho_dgamma_i,
+                  d2kappa_drho2_i, f_gamma_i)
+        if cache is not None:
+            cache['uwabce'] = uwabce
+        else:
+            mf._nlc_hess_uwabce_cache = uwabce
     (dm0, rho_nonzero_mask, grids_coords, grids_weights, rho_i,
      nabla_rho_i, omega_i, kappa_i, U_i, W_i, A_i, B_i, C_i,
      domega_drho_i, domega_dgamma_i, dkappa_drho_i,
      d2omega_drho2_i, d2omega_dgamma2_i, d2omega_drho_dgamma_i,
-     d2kappa_drho2_i, f_gamma_i) = cache
+     d2kappa_drho2_i, f_gamma_i) = uwabce
     ngrids = grids_coords.shape[0]
     ngrids_full = grids.coords.shape[0]
 
