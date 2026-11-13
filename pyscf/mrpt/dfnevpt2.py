@@ -95,7 +95,8 @@ def _dfnevpt2_eris_outcore(mc, mo_coeff, with_df):
     t1 = log.timer('density fitting ao2mo step-1', *t0)
 
     # Step-2.1: from the transformed (L|pq), build papa
-    nblk = int(max(8, min(nmo, (max_memory*1e6/8-bufpa.size)/(ncas**2*nmo))))
+    mem_now = lib.current_memory()[0]
+    nblk = int(max(8, min(nmo, ((max_memory-mem_now)*1e6/8-bufpa.size)/(ncas**2*nmo))))
     bufs1 = np.empty((nblk,ncas,nmo,ncas))
     for p0, p1 in prange(0, nmo, nblk):
         tmp = bufs1[:p1-p0]
@@ -109,7 +110,8 @@ def _dfnevpt2_eris_outcore(mc, mo_coeff, with_df):
     t1 = log.timer('density fitting papa step-2.1', *t1)
 
     # Step-2.2: from the transformed (L|pq), build ppaa
-    nblk = int(max(8, min(nmo, max_memory*1e6/8/(nmo*naoaux+ncas**2*nmo))))
+    mem_now = lib.current_memory()[0]
+    nblk = int(max(8, min(nmo, (max_memory-mem_now)*1e6/8/(nmo*naoaux+ncas**2*nmo))))
     bufs1 = np.empty((nblk,nmo,naoaux))
     bufs2 = np.empty((nblk,nmo,ncas,ncas))
     for p0, p1 in prange(0, nmo, nblk):
@@ -133,7 +135,8 @@ def _dfnevpt2_eris_outcore(mc, mo_coeff, with_df):
         cvcv[:,:] = 0
         pacv = np.zeros((nmo,ncas,ncore,nvir))
     else:
-        nblk = int(max(8, min(nmo, max_memory*1e6/8/(nav*naoaux+nav*ncore*nvir))))
+        mem_now = lib.current_memory()[0]
+        nblk = int(max(8, min(nmo, (max_memory-mem_now)*1e6/8/(nav*naoaux+nav*ncore*nvir))))
         pacv = np.empty((nmo,ncas,ncore,nvir))
         bufs1 = np.empty((nblk,nav,naoaux))
         bufs2 = np.empty((nblk,nav,ncore,nvir))
