@@ -246,7 +246,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
 
     mem_now = lib.current_memory()[0]
     max_memory = mydf.max_memory - mem_now
-    blksize = int(min(nao, max(1, (max_memory-mem_now)*1e6/16/4/ngrids/nao)))
+    blksize = int(min(nao, max(1, max_memory*1e6/16/4/ngrids/nao)))
     log.debug1('fft_jk: get_k_kpts max_memory %s  blksize %d', max_memory, blksize)
     #ao1_dtype = np.result_type(*ao1_kpts)
     #ao2_dtype = np.result_type(*ao2_kpts)
@@ -351,7 +351,7 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
 
     mem_now = lib.current_memory()[0]
     max_memory = mydf.max_memory - mem_now
-    blksize = int(min(nao, max(1, (max_memory-mem_now)*1e6/16/4/3/ngrids/nao)))
+    blksize = int(min(nao, max(1, max_memory*1e6/16/4/3/ngrids/nao)))
     log.debug1('fft_jk: get_k_kpts max_memory %s  blksize %d',
                max_memory, blksize)
 
