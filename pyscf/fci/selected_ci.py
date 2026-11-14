@@ -791,7 +791,23 @@ it is recommended to use the Dice program (https://github.com/sanshar/Dice.git).
         '''
         na = len(ci_strs[0])
         nb = len(ci_strs[1])
-        ci0 = direct_spin1._get_init_guess(na, nb, nroots, hdiag, nelec)
+        # Unlike a full FCI space, the alpha and beta string lists of a
+        # selected-CI space are not necessarily identical.  hdiag is then
+        # not symmetric under exchanging the two strings, so the lowest
+        # diagonal element can be outside the lower triangle and the whole
+        # diagonal has to be searched.
+        if hdiag.size <= nroots:
+            addrs = numpy.arange(hdiag.size)
+        else:
+            addrs = numpy.argpartition(hdiag, nroots-1)[:nroots]
+        ci0 = []
+        for addr in addrs:
+            x = numpy.zeros(na*nb)
+            x[addr] = 1
+            ci0.append(x)
+        # Add noise to avoid a symmetric initial vector
+        ci0[0][0] += 1e-5
+        ci0[0][-1] -= 1e-5
         return [_as_SCIvector(x, ci_strs) for x in ci0]
 
     make_hdiag = staticmethod(make_hdiag)
