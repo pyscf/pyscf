@@ -52,7 +52,7 @@ def pcm_for_casscf(mc, solvent_obj=None, dm=None):
     solvent_obj = _as_solvent_obj(solvent_obj, mc.mol)
     if solvent_obj is None:
         if isinstance(getattr(mc._scf, 'with_solvent', None), PCM):
-            solvent_obj = mc._scf.with_solvent
+            solvent_obj = mc._scf.with_solvent.copy()
         else:
             solvent_obj = PCM(mc.mol)
     return _attach_solvent._for_casscf(mc, solvent_obj, dm)
@@ -62,7 +62,7 @@ def pcm_for_casci(mc, solvent_obj=None, dm=None):
     solvent_obj = _as_solvent_obj(solvent_obj, mc.mol)
     if solvent_obj is None:
         if isinstance(getattr(mc._scf, 'with_solvent', None), PCM):
-            solvent_obj = mc._scf.with_solvent
+            solvent_obj = mc._scf.with_solvent.copy()
         else:
             solvent_obj = PCM(mc.mol)
     return _attach_solvent._for_casci(mc, solvent_obj, dm)
@@ -79,10 +79,40 @@ def pcm_for_post_scf(method, solvent_obj=None, dm=None):
 
 pcm_for_tdscf = _attach_solvent._for_tdscf
 
+@lib.with_doc(_attach_solvent._for_mcpdft.__doc__)
+def pcm_for_mcpdft(mc, solvent_obj=None, dm=None):
+    solvent_obj = _as_solvent_obj(solvent_obj, mc.mol)
+    if solvent_obj is None:
+        if isinstance(getattr(mc._scf, 'with_solvent', None), PCM):
+            solvent_obj = mc._scf.with_solvent.copy()
+        else:
+            solvent_obj = PCM(mc.mol)
+    return _attach_solvent._for_mcpdft(mc, solvent_obj, dm)
+
+@lib.with_doc(_attach_solvent._for_lpdft.__doc__)
+def pcm_for_lpdft(mc, solvent_obj=None, dm=None):
+    solvent_obj = _as_solvent_obj(solvent_obj, mc.mol)
+    if solvent_obj is None:
+        if isinstance(getattr(mc._scf, 'with_solvent', None), PCM):
+            solvent_obj = mc._scf.with_solvent.copy()
+        else:
+            solvent_obj = PCM(mc.mol)
+    return _attach_solvent._for_lpdft(mc, solvent_obj, dm)
+
+def pcm_for_pdft(mc, solvent_obj=None, dm=None):
+    '''Dispatch an PDFT object to the appropriate solvent wrapper.'''
+    from pyscf import mcpdft
+    if isinstance(mc, mcpdft.MultiStateMCPDFTSolver):
+        if not hasattr(mc, 'get_lpdft_ham'):
+            raise NotImplementedError(
+                'PCM solvation is not available for MS-PDFT other than L-PDFT')
+        return pcm_for_lpdft(mc, solvent_obj, dm)
+    return pcm_for_mcpdft(mc, solvent_obj, dm)
 
 # Inject PCM to other methods
 from pyscf import scf
-from pyscf import mcscf
+from pyscf import mcscf, mcpdft
+from pyscf.mcpdft.mcpdft import _PDFT
 from pyscf import mp, ci, cc
 from pyscf import tdscf
 scf.hf.SCF.PCM    = scf.hf.SCF.PCM    = pcm_for_scf
@@ -92,6 +122,8 @@ cc.ccsd.CCSD.PCM  = cc.ccsd.CCSD.PCM  = pcm_for_post_scf
 tdscf.rhf.TDBase.PCM = tdscf.rhf.TDBase.PCM = pcm_for_tdscf
 mcscf.casci.CASCI.PCM = mcscf.casci.CASCI.PCM = pcm_for_casci
 mcscf.mc1step.CASSCF.PCM = mcscf.mc1step.CASSCF.PCM = pcm_for_casscf
+_PDFT.PCM = pcm_for_pdft
+mcpdft.MultiStateMCPDFTSolver.PCM = pcm_for_pdft
 
 # TABLE II,  J. Chem. Phys. 122, 194110 (2005)
 XI = {
@@ -269,6 +301,47 @@ def get_D_S(surface, with_S=True, with_D=False):
 
     return D, S
 
+def get_K_R(method, epsilon, D, A, S):
+    '''K and R matrices of the PCM linear system q = K^-1 R v.
+
+    Args:
+        method : str
+            One of C-PCM/CPCM, COSMO, IEF-PCM/IEFPCM, SS(V)PE.
+        epsilon : float
+            Dielectric constant. float('inf') is the conductor limit.
+        D, A, S : ndarray
+            Cavity matrices from get_F_A and get_D_S.
+
+    Returns:
+        (K, R, f_epsilon)
+    '''
+    method = method.upper()
+    if method in ('C-PCM', 'CPCM'):
+        f_epsilon = (epsilon-1.)/epsilon if epsilon != float('inf') else 1.0
+        K = S
+        R = -f_epsilon * numpy.eye(K.shape[0])
+    elif method == 'COSMO':
+        f_epsilon = ((epsilon - 1.0)/(epsilon + 1.0/2.0)
+                     if epsilon != float('inf') else 1.0)
+        K = S
+        R = -f_epsilon * numpy.eye(K.shape[0])
+    elif method in ('IEF-PCM', 'IEFPCM'):
+        f_epsilon = ((epsilon - 1.0)/(epsilon + 1.0)
+                     if epsilon != float('inf') else 1.0)
+        DA = D*A
+        DAS = numpy.dot(DA, S)
+        K = S - f_epsilon/(2.0*PI) * DAS
+        R = -f_epsilon * (numpy.eye(K.shape[0]) - 1.0/(2.0*PI)*DA)
+    elif method == 'SS(V)PE':
+        f_epsilon = ((epsilon - 1.0)/(epsilon + 1.0)
+                     if epsilon != float('inf') else 1.0)
+        DA = D*A
+        DAS = numpy.dot(DA, S)
+        K = S - f_epsilon/(4.0*PI) * (DAS + DAS.T)
+        R = -f_epsilon * (numpy.eye(K.shape[0]) - 1.0/(2.0*PI)*DA)
+    else:
+        raise RuntimeError(f"Unknown implicit solvent model: {method}")
+    return K, R, f_epsilon
 
 class PCM(lib.StreamObject):
     '''
@@ -355,6 +428,14 @@ class PCM(lib.StreamObject):
         for polarizable continuum models: The switching/Gaussian approach. The Journal of
         Chemical Physics 2010, 133. https://doi.org/10.1063/1.3511297
 
+    refdm : ndarray
+        The reference ground-state density matrix.
+        Only required for excited-state SS-CASSCF in non-equilibrium solvation.
+        Ignored if equilibrium_solvation=True.
+
+    rfroot : int
+        The state used for (fast) solvent response in a SA-CASSCF, SA-MC-PDFT, and L-PDFT.
+
     Saved Results:
     --------------
     e_tot : float
@@ -378,10 +459,9 @@ class PCM(lib.StreamObject):
         'mol', 'radii_table', 'lebedev_order', 'solvent',
         'eps', 'eps_optical', 'max_cycle', 'conv_tol', 'state_id', 'frozen',
         'equilibrium_solvation', 'e', 'v', 'v_grids_n',
-        'surface_discretization_method',
+        'surface_discretization_method', 'refdm', 'rfroot'
     }
 
-    kernel = ddcosmo.DDCOSMO.kernel
     get_eps_optical = ddcosmo.DDCOSMO.get_eps_optical
 
     def __init__(self, mol, solvent=None):
@@ -416,6 +496,10 @@ class PCM(lib.StreamObject):
         self.e = None
         self.v = None
         self._dm = None
+
+        # additional attributes for nonequilibrium solvation
+        self.refdm = None
+        self.rfroot = None
 
     def __setattr__(self, key, val):
         if key == 'solvent' and val:
@@ -482,29 +566,7 @@ class PCM(lib.StreamObject):
         F, A = get_F_A(self.surface)
         D, S = get_D_S(self.surface, with_S=True, with_D=True)
 
-        epsilon = self.eps
-        if self.method.upper() in ['C-PCM', 'CPCM']:
-            f_epsilon = (epsilon-1.)/epsilon if epsilon != float('inf') else 1.0
-            K = S
-            R = -f_epsilon * numpy.eye(K.shape[0])
-        elif self.method.upper() == 'COSMO':
-            f_epsilon = (epsilon - 1.0)/(epsilon + 1.0/2.0) if epsilon != float('inf') else 1.0
-            K = S
-            R = -f_epsilon * numpy.eye(K.shape[0])
-        elif self.method.upper() in ['IEF-PCM', 'IEFPCM']:
-            f_epsilon = (epsilon - 1.0)/(epsilon + 1.0) if epsilon != float('inf') else 1.0
-            DA = D*A
-            DAS = numpy.dot(DA, S)
-            K = S - f_epsilon/(2.0*PI) * DAS
-            R = -f_epsilon * (numpy.eye(K.shape[0]) - 1.0/(2.0*PI)*DA)
-        elif self.method.upper() == 'SS(V)PE':
-            f_epsilon = (epsilon - 1.0)/(epsilon + 1.0) if epsilon != float('inf') else 1.0
-            DA = D*A
-            DAS = numpy.dot(DA, S)
-            K = S - f_epsilon/(4.0*PI) * (DAS + DAS.T)
-            R = -f_epsilon * (numpy.eye(K.shape[0]) - 1.0/(2.0*PI)*DA)
-        else:
-            raise RuntimeError(f"Unknown implicit solvent model: {self.method}")
+        K, R, f_epsilon = get_K_R(self.method, self.eps, D, A, S)
 
         intermediates = {
             'S': S,
@@ -610,6 +672,42 @@ class PCM(lib.StreamObject):
             # Free up v_nj to stay within mem limits
             del v_nj
         return vmat
+
+    def solvation_type(self):
+        '''The solvation scheme implied by .refdm, .rfroot and
+        .equilibrium_solvation. 'default' is the standard equilibrium kernel.
+        '''
+        if self.rfroot is not None and self.refdm is not None:
+            # TODO: slow charges from a separately converged state-specific
+            # ground state, fast charges from state rfroot of a
+            # state-averaged calculation. kernel_sa_neq currently takes the slow
+            # charges from state 0 of the SA calculation instead.
+            raise NotImplementedError(
+                'rfroot together with refdm: taking the slow charges from a '
+                'reference density while the fast charges come from a '
+                'state-averaged root is not implemented. Set one or the '
+                'other.')
+        if self.refdm is not None and self.equilibrium_solvation:
+            raise ValueError(
+                'refdm has no effect with equilibrium_solvation=True. Set '
+                'equilibrium_solvation=False for the state-specific '
+                'nonequilibrium scheme, or unset refdm.')
+        if self.rfroot is not None:
+            return 'sa_eq' if self.equilibrium_solvation else 'sa_neq'
+        if self.refdm is not None:
+            return 'ss_neq'
+        return 'default'
+
+    def kernel(self, dm):
+        '''A single shot solvent effects for given density matrix.
+        '''
+        mode = self.solvation_type()
+        if mode == 'default':
+            return ddcosmo.DDCOSMO.kernel(self, dm)
+        from pyscf.solvent._state_solvation import _kernels
+        logger.debug(self, 'PCM solvation mode: %s', mode)
+        self._dm = dm
+        return _kernels[mode](self, dm)
 
     def nuc_grad_method(self, grad_method):
         raise DeprecationWarning('Use the make_grad_object function from '

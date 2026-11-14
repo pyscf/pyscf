@@ -154,6 +154,7 @@ def PCM(method_or_mol, solvent_obj=None, dm=None):
     from pyscf import gto
     from pyscf import scf, mcscf
     from pyscf import tdscf
+    from pyscf.mcpdft.mcpdft import _PDFT
 
     if isinstance(method_or_mol, gto.mole.Mole):
         if isinstance(solvent_obj, str):
@@ -163,6 +164,8 @@ def PCM(method_or_mol, solvent_obj=None, dm=None):
     method = method_or_mol
     if isinstance(method, scf.hf.SCF):
         return pcm.pcm_for_scf(method, solvent_obj, dm)
+    elif isinstance (method, _PDFT):
+        return pcm.pcm_for_pdft(method, solvent_obj, dm)
     elif isinstance(method, mcscf.casci.CASBase):
         if isinstance(method, mcscf.mc1step.CASSCF):
             return pcm.pcm_for_casscf(method, solvent_obj, dm)

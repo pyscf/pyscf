@@ -857,6 +857,12 @@ class ddCOSMO(lib.StreamObject):
             'cached_pol': cached_pol,
         }
 
+    def solvation_type(self):
+        '''The solvation scheme this object implements. Models that support
+        only equilibrium solvation return 'default'.
+        '''
+        return 'default'
+
     def kernel(self, dm):
         '''A single shot solvent effects for given density matrix.
         '''
