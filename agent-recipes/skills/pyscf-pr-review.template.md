@@ -79,6 +79,11 @@ State any material review or validation gaps.
   particular attention to formulas inherited from real-valued methods, where
   missing conjugation is invisible. Check that contractions, symmetries, and
   dtypes preserve the intended complex-valued expressions.
+- Check for potential API breaks when removing or changing functions, method
+  signatures, attributes, defaults, or return values.
+  Lack of internal uses does not establish that an API is safe to change.
+  Preserve compatibility for deprecated APIs until their planned removal, and
+  flag intentional breaking changes that lack a deprecation or migration path.
 
 ## Performance
 
