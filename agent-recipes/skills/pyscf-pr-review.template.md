@@ -105,7 +105,7 @@ State any material review or validation gaps.
   wrong and identify the failing case. Check for brief explanations of non-obvious
   scientific setups, regressions, reference values, and tolerances.
 
-## Scientific validation
+## Tests and validation
 
 - Check that claims in the PR description and examples accurately describe the
   implemented method and its capabilities.
@@ -118,6 +118,7 @@ State any material review or validation gaps.
   should isolate a needed dependency while keeping the behavior under test real.
   Question artificial states created only to reach code. Suggest simplifying,
   consolidating, or removing redundant tests and tests with no meaningful assertion.
+- Flag new test files when the tests would fit naturally in an existing file.
 - Match test complexity to behavioral risk. Flag fixtures, factories, helper
   layers, or parameter matrices that do not materially simplify meaningful tests.
   Avoid exhaustive combinations of methods and options without a concrete reason.

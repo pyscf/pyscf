@@ -67,6 +67,8 @@ and validation proportional to the change; apply the guidance below where releva
   when needed to isolate meaningful behavior; keep that behavior real. Avoid
   artificial states created only to reach code. Reuse or extend existing tests
   instead of adding redundant cases.
+- Prefer adding regression tests to existing test files. Create a new test file
+  only when no existing file is suitable.
 - Prefer direct setup and assertions with one focused behavior per test. Avoid
   nested loops mixing methods, options, or behaviors when they obscure the case;
   use separate, descriptive tests instead. Simple loops or parameterization are
