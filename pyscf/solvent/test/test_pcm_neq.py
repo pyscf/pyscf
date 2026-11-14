@@ -91,6 +91,7 @@ class KnownValues(unittest.TestCase):
         # state-specific: the slow charges come from a converged ground-state
         # density, and the fast charges from the excited state.
         eq = mcpdft.CASSCF(mf, 'tPBE', 4, 4)
+        eq.conv_tol = 1e-10
         eq = solvent.PCM(eq, pcm.PCM(mol, 'water'))
         eq.kernel()
         self.assertTrue(eq.converged)
@@ -101,10 +102,11 @@ class KnownValues(unittest.TestCase):
         cm.refdm = eq.make_rdm1()
         mc = mcpdft.CASSCF(mf, 'tPBE', 4, 4).state_specific_(2)
         mc.fix_spin_(ss=0)
+        mc.conv_tol = 1e-10
         mc = solvent.PCM(mc, cm)
         mc.kernel()
         self.assertTrue(mc.converged)
-        self.assertAlmostEqual(mc.e_tot, -112.678528306950, 6)
+        self.assertAlmostEqual(mc.e_tot, -112.678529351332, 6)
 
     def test_lpdft_neq(self):
         mc = mcpdft.CASSCF(mf, 'tPBE', 4, 4)
