@@ -27,7 +27,7 @@
 #define TENSOR   1
 
 #define LMAX            ANG_MAX
-#define SIMDD           8
+#define GTO_SIMDD       8  // grid block size; distinct from qcint's SIMDD
 // 128s42p21d12f8g6h4i3j
 #define NCTR_CART       128
 #define NPRIMAX         40
@@ -98,8 +98,8 @@ void GTOeval_spinor_drv(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double fa
 /* origin from center of each basis
  * x1(fx1, fy1, fz1, fx0, fy0, fz0, l, 0, 0, 0) */
 #define GTO_R_I(o, i, l) \
-        fx##o = fx##i + SIMDD; \
-        fy##o = fy##i + SIMDD; \
-        fz##o = fz##i + SIMDD
+        fx##o = fx##i + GTO_SIMDD; \
+        fy##o = fy##i + GTO_SIMDD; \
+        fz##o = fz##i + GTO_SIMDD
 
 #define ALIGN8_UP(buf) (void *)(((uintptr_t)buf + 7) & (-(uintptr_t)8))

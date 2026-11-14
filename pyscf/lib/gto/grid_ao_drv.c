@@ -127,16 +127,16 @@ void GTOnabla1(double *fx1, double *fy1, double *fz1,
 {
         int i, n;
         double a2 = -2 * a;
-        for (n = 0; n < SIMDD; n++) {
-                fx1[n] = a2*fx0[SIMDD+n];
-                fy1[n] = a2*fy0[SIMDD+n];
-                fz1[n] = a2*fz0[SIMDD+n];
+        for (n = 0; n < GTO_SIMDD; n++) {
+                fx1[n] = a2*fx0[GTO_SIMDD+n];
+                fy1[n] = a2*fy0[GTO_SIMDD+n];
+                fz1[n] = a2*fz0[GTO_SIMDD+n];
         }
         for (i = 1; i <= l; i++) {
-        for (n = 0; n < SIMDD; n++) {
-                fx1[i*SIMDD+n] = i*fx0[(i-1)*SIMDD+n] + a2*fx0[(i+1)*SIMDD+n];
-                fy1[i*SIMDD+n] = i*fy0[(i-1)*SIMDD+n] + a2*fy0[(i+1)*SIMDD+n];
-                fz1[i*SIMDD+n] = i*fz0[(i-1)*SIMDD+n] + a2*fz0[(i+1)*SIMDD+n];
+        for (n = 0; n < GTO_SIMDD; n++) {
+                fx1[i*GTO_SIMDD+n] = i*fx0[(i-1)*GTO_SIMDD+n] + a2*fx0[(i+1)*GTO_SIMDD+n];
+                fy1[i*GTO_SIMDD+n] = i*fy0[(i-1)*GTO_SIMDD+n] + a2*fy0[(i+1)*GTO_SIMDD+n];
+                fz1[i*GTO_SIMDD+n] = i*fz0[(i-1)*GTO_SIMDD+n] + a2*fz0[(i+1)*GTO_SIMDD+n];
         } }
 }
 
@@ -148,10 +148,10 @@ void GTOx1(double *fx1, double *fy1, double *fz1,
 {
         int i, n;
         for (i = 0; i <= l; i++) {
-        for (n = 0; n < SIMDD; n++) {
-                fx1[i*SIMDD+n] = ri[0] * fx0[i*SIMDD+n] + fx0[(i+1)*SIMDD+n];
-                fy1[i*SIMDD+n] = ri[1] * fy0[i*SIMDD+n] + fy0[(i+1)*SIMDD+n];
-                fz1[i*SIMDD+n] = ri[2] * fz0[i*SIMDD+n] + fz0[(i+1)*SIMDD+n];
+        for (n = 0; n < GTO_SIMDD; n++) {
+                fx1[i*GTO_SIMDD+n] = ri[0] * fx0[i*GTO_SIMDD+n] + fx0[(i+1)*GTO_SIMDD+n];
+                fy1[i*GTO_SIMDD+n] = ri[1] * fy0[i*GTO_SIMDD+n] + fy0[(i+1)*GTO_SIMDD+n];
+                fz1[i*GTO_SIMDD+n] = ri[2] * fz0[i*GTO_SIMDD+n] + fz0[(i+1)*GTO_SIMDD+n];
         } }
 }
 
