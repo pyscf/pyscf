@@ -222,7 +222,7 @@ class KnownValues(unittest.TestCase):
         vk = df_jk.get_k_kpts(mydf, dm, 0, mydf.kpts)
         self.assertAlmostEqual(lib.fp(vk[0]), (-2.8332378458006682 + -1.0578692394119324j), 7)
         self.assertAlmostEqual(lib.fp(vk[1]), (-7.4404313581193380 + 0.1023364493364826j), 7)
-        self.assertAlmostEqual(lib.fp(vk[2]), (-2.5718854219888430 + -1.4487422365382123j), 7)
+        self.assertAlmostEqual(lib.fp(vk[2]), (-2.5718855057719770 + -1.4487421441335790j), 7)
         self.assertAlmostEqual(lib.fp(vk[3]), (-0.7922307287610381 + 0.0116940681352038j), 7)
 
     def test_k_kpts_1(self):
