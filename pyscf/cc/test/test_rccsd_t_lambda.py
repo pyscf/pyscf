@@ -179,6 +179,28 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(np.allclose(d1_g, d1_g_ref, rtol=1e-12, atol=1e-15))
         self.assertTrue(np.allclose(d2, d2_ref, rtol=1e-12, atol=1e-12))
 
+    def test_gamma2_outcore(self):
+        # _gamma2_outcore keeps dvvvv in h5fobj (ccsd_rdm._gamma2_outcore) and
+        # adds the (T) terms there; every block equals _gamma2_intermediates
+        mycc = rccsd.RCCSD(mf).set(conv_tol=1e-10)
+        eris = mycc.ao2mo()
+        mycc.kernel(eris=eris)
+        conv, l1, l2 = ccsd_t_lambda.kernel(mycc, eris, mycc.t1, mycc.t2, tol=1e-10)
+        mycc.max_memory = 1
+        for compress_vvvv in (False, True):
+            ref = ccsd_t_rdm._gamma2_intermediates(mycc, mycc.t1, mycc.t2, l1, l2, eris,
+                                                  compress_vvvv=compress_vvvv)
+            f = lib.H5TmpFile()
+            d2 = ccsd_t_rdm._gamma2_outcore(mycc, mycc.t1, mycc.t2, l1, l2, eris, f,
+                                            compress_vvvv=compress_vvvv)
+            self.assertIsInstance(d2[1], type(f['dvvvv']))
+            # out of core, dvvov is None and dovvv holds its transpose
+            self.assertIsNone(d2[5])
+            self.assertAlmostEqual(abs(np.asarray(d2[6]).transpose(2,3,0,1) - ref[5]).max(), 0, 12)
+            for k in (0, 1, 2, 3, 4, 6, 7):
+                with self.subTest(compress_vvvv=compress_vvvv, block=k):
+                    self.assertAlmostEqual(abs(np.asarray(d2[k]) - ref[k]).max(), 0, 12)
+
 if __name__ == "__main__":
     print("Tests for RCCSD(T) lambda and rdm intermediates")
     unittest.main()
