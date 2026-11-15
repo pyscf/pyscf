@@ -157,13 +157,20 @@ def treutler_ahlrichs(n, chg, *args, **kwargs):
 treutler = treutler_ahlrichs
 
 
+def _atomic_radii_charges(mol):
+    '''Indices into an atomic radii table (e.g. BRAGG_RADII) for each atom:
+    the element's proton number. Not mol.atom_charges(), which is Z - n_core
+    on ECP atoms and 0 on ghost atoms. The partition and its nuclear
+    derivative (grad.rks.grids_response_becke) must use the same lookup.'''
+    return [elements_proton(_std_symbol_without_ghost(x)) for x in mol.elements]
+
 def becke_atomic_radii_adjust(mol, atomic_radii):
     '''Becke atomic radii adjust function'''
 # Becke atomic size adjustment.  J. Chem. Phys. 88, 2547
 # i > j
 # fac(i,j) = \frac{1}{4} ( \frac{ra(j)}{ra(i)} - \frac{ra(i)}{ra(j)}
 # fac(j,i) = -fac(i,j)
-    charges = [elements_proton(_std_symbol_without_ghost(x)) for x in mol.elements]
+    charges = _atomic_radii_charges(mol)
     rad = atomic_radii[charges] + 1e-200
     rr = rad.reshape(-1,1) * (1./rad)
     a = .25 * (rr.T - rr)
@@ -184,7 +191,7 @@ def treutler_atomic_radii_adjust(mol, atomic_radii):
 # i > j
 # fac(i,j) = \frac{1}{4} ( \frac{ra(j)}{ra(i)} - \frac{ra(i)}{ra(j)}
 # fac(j,i) = -fac(i,j)
-    charges = [elements_proton(_std_symbol_without_ghost(x)) for x in mol.elements]
+    charges = _atomic_radii_charges(mol)
     rad = numpy.sqrt(atomic_radii[charges]) + 1e-200
     rr = rad.reshape(-1,1) * (1./rad)
     a = .25 * (rr.T - rr)
