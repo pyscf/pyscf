@@ -494,7 +494,7 @@ def grids_response_becke(grids):
     atm_dist = gto.inter_distance(mol, atm_coords)
 
     def _radii_adjust(mol, atomic_radii):
-        charges = mol.atom_charges()
+        charges = radi._atomic_radii_charges(mol)
         if grids.radii_adjust == radi.treutler_atomic_radii_adjust:
             rad = numpy.sqrt(atomic_radii[charges]) + 1e-200
         elif grids.radii_adjust == radi.becke_atomic_radii_adjust:
