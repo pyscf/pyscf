@@ -105,11 +105,11 @@ class KnownValues(unittest.TestCase):
     def test_h4_empty_spin_eris(self):
         '''An empty spin channel leaves zero-sized eris blocks behind.
 
-        numpy allocates a size==0 array with strides (0,)*ndim over a zero-byte
-        buffer, so reading it through the strides of a second, non-degenerate
-        operand returns whatever happens to be in memory.  Poisoning the
-        allocation makes any such read visible: contract() must not depend on
-        it (see also lib/test/test_einsum.py).
+        Replace these blocks with valid zero-stride empty arrays backed by NaN
+        storage. The contraction must remain unchanged because empty blocks
+        contain no values that should contribute. This controlled regression
+        does not establish the original failing process's allocation state or
+        exact read mechanism (see also lib/test/test_einsum.py).
         '''
         mol = gto.Mole()
         mol.verbose = 0
