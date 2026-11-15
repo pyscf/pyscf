@@ -275,11 +275,9 @@ class KnownValues(unittest.TestCase):
 class EmptyOperand(unittest.TestCase):
     '''A contraction summing over a zero-length index is exactly zero.
 
-    numpy does not shortcut it and reads uninitialized memory as soon as the
-    two operands disagree on the stride convention of their zero-sized
-    dimension, which is what UCISD hits with eris.ovOV (a copy of an empty
-    slice, strides (0,)*ndim over a zero-byte allocation) times c2ab (a view of
-    civec, strides (384,384,64,8)).  See lib/numpy_helper._empty_einsum_out_shape.
+    A zero-stride empty operand backed by NaN storage reproduces a numpy
+    einsum failure when combined with an empty view retaining nonzero strides.
+    Both layouts are valid, and no backing value should enter the result.
     '''
     def setUp(self):
         self.bak = lib.numpy_helper.EINSUM_MAX_SIZE
@@ -292,8 +290,7 @@ class EmptyOperand(unittest.TestCase):
 
     @staticmethod
     def poisoned(shape):
-        # strides and allocation of a numpy-allocated size==0 array, backed by
-        # NaN so that any read through them shows up in the result
+        # Valid zero-stride empty array; NaN storage exposes unintended reads.
         buf = numpy.full(1 << 12, numpy.nan)
         return numpy.ndarray(shape, dtype=float, buffer=buf,
                              strides=(0,) * len(shape))
@@ -343,12 +340,38 @@ class EmptyOperand(unittest.TestCase):
     def test_out_kwarg(self):
         c1b = numpy.zeros((1, 8))[0:0, :]
         eris_ovVO = self.poisoned((2, 6, 8, 0))
+        for beta in (0, 1, 2):
+            with self.subTest(beta=beta):
+                out = numpy.full((2, 6), 7.0)
+                result = einsum('nf,iafn->ia', c1b, eris_ovVO, out=out, beta=beta)
+                self.assertIs(result, out)
+                numpy.testing.assert_array_equal(out, 7.0 * beta)
+
+    def test_out_default_beta(self):
+        c1b = numpy.zeros((1, 8))[0:0, :]
+        eris_ovVO = self.poisoned((2, 6, 8, 0))
         out = numpy.full((2, 6), 7.0)
-        einsum('nf,iafn->ia', c1b, eris_ovVO, out=out, beta=0)
-        self.assertTrue(numpy.all(out == 0))
-        out = numpy.full((2, 6), 7.0)
-        einsum('nf,iafn->ia', c1b, eris_ovVO, out=out, beta=2)
-        self.assertTrue(numpy.all(out == 14))
+        result = einsum('nf,iafn->ia', c1b, eris_ovVO, out=out)
+        self.assertIs(result, out)
+        numpy.testing.assert_array_equal(out, 0)
+
+    def test_out_overwrites_nan(self):
+        c1b = numpy.zeros((1, 8))[0:0, :]
+        eris_ovVO = self.poisoned((2, 6, 8, 0))
+        out = numpy.full((2, 6), numpy.nan)
+        result = einsum('nf,iafn->ia', c1b, eris_ovVO, out=out)
+        self.assertIs(result, out)
+        numpy.testing.assert_array_equal(out, 0)
+
+    def test_scalar_out(self):
+        eris_ovOV = self.poisoned((2, 6, 0, 8))
+        c2ab = numpy.zeros((2, 1, 6, 8))[:, 0:0, :, :]
+        for kwargs in ({}, {'beta': 0}):
+            with self.subTest(kwargs=kwargs):
+                out = numpy.array(7.0)
+                result = einsum('iajb,ijab->', eris_ovOV, c2ab, out=out, **kwargs)
+                self.assertIs(result, out)
+                self.assertEqual(out, 0.0)
 
 if __name__ == '__main__':
     unittest.main()
