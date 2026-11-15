@@ -136,6 +136,8 @@ class TestDispersionLogic(unittest.TestCase):
         # wb97x-d3bj -> d3bj
         self.assertEqual(dispersion.parse_disp('wb97x-d3bj'), ('wb97x', 'd3bj', False))
         self.assertEqual(dispersion.parse_disp('pbe-d3cso'), ('pbe', 'd3cso', False))
+        self.assertEqual(dispersion.parse_disp('wb97x-d3'), ('wb97x', 'd3zero', False))
+        self.assertEqual(dispersion.parse_disp('wb97x-d3', 'd3zero'), ('wb97x', 'd3zero', False))
 
         # wb97x-d4s -> d4s
         self.assertEqual(dispersion.parse_disp('wb97x-d4s'), ('wb97x', 'd4s', True))

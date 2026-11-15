@@ -42,6 +42,7 @@ DISP_VERSIONS = ['d3bj', 'd3zero', 'd3bjm', 'd3zerom', 'd3op', 'd3cso', 'd4']
 XC_MAP = {'wb97m-d3bj': 'wb97m',
           'b97m-d3bj': 'b97m',
           'wb97x-d3bj': 'wb97x',
+          'wb97x_d3': 'wb97x',
           'wb97m-v': 'wb97m',
           'b97m-v': 'b97m',
           'wb97x-v': 'wb97x'
@@ -50,7 +51,6 @@ XC_MAP = {'wb97m-d3bj': 'wb97m',
 # special cases:
 # - wb97x-d is not supported yet
 # - wb97*-d3bj is wb97*-v with d3bj
-# - wb97x-d3 is not supported yet
 # - 3c methods: b97-3c, r2scan-3c and wb97x-3c are supported; other 3c
 #   methods are not supported yet
 
@@ -59,6 +59,10 @@ _white_list = {
     'wb97m-d3bj': ('wb97m-v', False, 'd3bj'),
     'b97m-d3bj': ('b97m-v', False, 'd3bj'),
     'wb97x-d3bj': ('wb97x-v', False, 'd3bj'),
+    # wB97X-D3: libxc hyb_gga_xc_wb97x_d3 XC (Lin et al., JCTC 2013, 9, 263)
+    # + zero-damped D3, two-body; simple-dftd3 keys the parameters as 'wb97x'
+    'wb97x-d3': ('wb97x_d3', False, 'd3zero:wb97x'),
+    'wb97x_d3': ('wb97x_d3', False, 'd3zero:wb97x'),
     'wb97x-3c': ('wb97x-v', False, 'd4:wb97x-3c'),
     'wb97x_3c': ('wb97x-v', False, 'd4:wb97x-3c'),
     # B97-3c is parameterized together with its D3(BJ) dispersion correction
@@ -85,7 +89,7 @@ _white_list = {
 
 # These xc functionals are not supported yet
 _black_list = {
-    'wb97x-d', 'wb97x-d3', 'wb97x_d', 'wb97x_d3',
+    'wb97x-d', 'wb97x_d',
     'wb97m-d3bj2b', 'wb97m-d3bjatm',
     'b97m-d3bj2b', 'b97m-d3bjatm',
 }
