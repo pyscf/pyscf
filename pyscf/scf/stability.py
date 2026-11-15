@@ -574,10 +574,12 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
     if with_symmetry and mol.symmetry:
         hdiag2[sym_forbid2] = 0
 
-    gmf = mf.to_ghf()
-    if isinstance(gmf, hf.KohnShamDFT):
+    if isinstance(mf, hf.KohnShamDFT):
+        gmf = mf.to_gks()
         # The collinear kernel ignores transverse magnetic components.
         gmf.collinear = 'mcol'
+    else:
+        gmf = mf.to_ghf()
     vresp1 = gmf.gen_response(with_j=False, hermi=1)
     nao = mo_coeff[0].shape[0]
     def hop_uhf2ghf(x1):
