@@ -14,6 +14,7 @@
 
 import unittest
 import numpy as np
+from pyscf.data.nist import BOHR, HARTREE2EV
 
 try:
     from ase.build import bulk
@@ -121,6 +122,16 @@ class PySCFKptsWeightsTest(unittest.TestCase):
         # Verify all IBZ indices are valid
         self.assertTrue(np.all(bz2ibz >= 0))
         self.assertTrue(np.all(bz2ibz < kpts.nkpts_ibz))
+
+    def test_stress_units(self):
+        '''Stress should be converted from Hartree/Bohr^3 to eV/Angstrom^3.'''
+        kpts = self.cell.make_kpts([1, 1, 1])
+        calc = self._make_calc(kpts)
+        self.ase_atom.get_stress()
+        stress_hartree_bohr3 = calc.method_scan.Gradients().get_stress()
+        self.assertTrue(np.allclose(
+            calc.results['stress'],
+            stress_hartree_bohr3 * (HARTREE2EV / BOHR**3)))
 
 
 if __name__ == '__main__':
