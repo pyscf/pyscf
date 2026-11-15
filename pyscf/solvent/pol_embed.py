@@ -294,6 +294,12 @@ class PolEmbed(lib.StreamObject):
         self.V_es = None
         return self
 
+    def solvation_type(self):
+        '''The solvation scheme this object implements. Models that support
+        only equilibrium solvation return 'default'.
+        '''
+        return 'default'
+
     def kernel(self, dm, elec_only=False):
         if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
             # spin-traced DM for UHF or ROHF

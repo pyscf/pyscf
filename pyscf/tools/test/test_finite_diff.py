@@ -169,7 +169,7 @@ class KnownValues(unittest.TestCase):
         dat = finite_diff.kernel(rks_fine(mol).Gradients())
         self.assertLess(abs(dat - ref).max(), 5e-5)
 
-    def test_tddft_hessian(self):
+    def test_tddft_hessian_high_cost(self):
         mol = h2o()
         mf = dft.RKS(mol, xc='pbe0').run(conv_tol=1e-13)
         td = tdscf.TDA(mf)
@@ -201,7 +201,7 @@ class KnownValues(unittest.TestCase):
         self.assertIn('conv_tol', log)
         self.assertIn('DFT grid', log)
 
-    def test_open_shell_state_tracking(self):
+    def test_open_shell_state_tracking_high_cost(self):
         # alpha and beta amplitudes have different shapes
         out = io.StringIO()
         mol = h2o(charge=1, spin=1)

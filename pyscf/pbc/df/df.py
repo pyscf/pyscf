@@ -750,7 +750,8 @@ class CDERIArray:
             tril = _hstack_datasets([dat_ij[str(i)] for i in range(len(dat_ij))], slices)
             triu = _hstack_datasets([dat_ji[str(i)] for i in range(len(dat_ji))], slices)
             assert tril.dtype == numpy.complex128
-            naux = self.naux
+            naux = tril.shape[0]
+            assert triu.shape[0] == naux
             nao = self.nao
             out = numpy.empty((naux, nao*nao), dtype=tril.dtype)
             libpbc.PBCunpack_tril_triu(out.ctypes.data_as(ctypes.c_void_p),

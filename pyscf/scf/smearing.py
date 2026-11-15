@@ -291,10 +291,8 @@ class _SmearingSCF:
         return e_tot
 
     def to_gpu(self):
-        obj = self.undo_smearing().to_gpu().smearing()
-        obj.sigma = self.sigma
-        obj.smearing_method = self.smearing_method
-        obj.fix_spin = self.fix_spin
+        obj = self.undo_smearing().to_gpu().smearing(
+            self.sigma, self.smearing_method, self.mu0, self.fix_spin)
         obj.entropy = self.entropy
         obj.e_free = self.e_free
         obj.e_zero = self.e_zero

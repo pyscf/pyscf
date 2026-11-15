@@ -19,7 +19,6 @@ import unittest
 import pickle
 from pyscf.lib import numpy_helper
 import numpy
-import scipy.linalg
 import itertools
 from pyscf import lib
 
@@ -270,11 +269,6 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(abs(a), lib.condense('absmax', a, locs)))
         self.assertTrue(numpy.allclose(abs(a), lib.condense('absmin', a, locs)))
         self.assertTrue(numpy.allclose(abs(a), lib.condense('norm', a, locs)))
-
-    def test_expm(self):
-        a = numpy.random.random((300,300)) * .1
-        a = a - a.T
-        self.assertAlmostEqual(abs(scipy.linalg.expm(a) - lib.expm(a)).max(), 0, 12)
 
     def test_frompointer(self):
         s = numpy.ones(4, dtype=numpy.int16)

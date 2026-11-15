@@ -36,6 +36,7 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
     collinear         = numint2c.NumInt2C.collinear
     spin_samples      = numint2c.NumInt2C.spin_samples
 
+    reset = pnumint.NumInt.reset
     make_mask = lib.invalid_method('make_mask')
     eval_ao = staticmethod(pnumint.eval_ao)
     eval_rho = staticmethod(numint2c.eval_rho)
@@ -317,6 +318,11 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
     mcfun_eval_xc_adapter = numint2c.mcfun_eval_xc_adapter
     block_loop = pnumint.NumInt.block_loop
     _gen_rho_evaluator = pnumint.NumInt._gen_rho_evaluator
+
+    def to_gpu(self):
+        from gpu4pyscf.pbc.dft.numint2c import NumInt2C
+        return NumInt2C().set(
+            omega=self.omega, collinear=self.collinear, spin_samples=self.spin_samples)
 
     def _to_numint1c(self):
         '''Converts to the associated class to handle collinear systems'''
@@ -638,6 +644,11 @@ class KNumInt2C(lib.StreamObject, numint.LibXCMixin):
     mcfun_eval_xc_adapter = numint2c.mcfun_eval_xc_adapter
     block_loop = pnumint.KNumInt.block_loop
     _gen_rho_evaluator = pnumint.KNumInt._gen_rho_evaluator
+
+    def to_gpu(self):
+        from gpu4pyscf.pbc.dft.numint2c import KNumInt2C
+        return KNumInt2C(self.kpts.copy()).set(
+            omega=self.omega, collinear=self.collinear, spin_samples=self.spin_samples)
 
     def _to_numint1c(self):
         '''Converts to the associated class to handle collinear systems'''

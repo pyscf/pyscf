@@ -284,7 +284,7 @@ class KnownValues(unittest.TestCase):
                        mc.mol.natm, 1e-6, step=step)
 
     # CH2 triplet against FD with triple-zeta basis
-    def test_ch2_tz_fd(self):
+    def test_ch2_tz_fd_high_cost(self):
         atom = '''
         C 0.000 0.000  0.000
         H 0.000 0.000  1.080

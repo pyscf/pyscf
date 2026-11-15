@@ -197,7 +197,7 @@ class KnowValues(unittest.TestCase):
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -10.307756038726733, 8)
 
-    def test_nr_krks_gga(self):
+    def test_nr_krks_gga_high_cost(self):
         mf = dft.KRKS(cell, cell.make_kpts([2,1,1]))
         mf.xc = 'b88,'
         mf = scf.newton(mf)
@@ -205,7 +205,7 @@ class KnowValues(unittest.TestCase):
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -10.446717855794008, 8)
 
-    def test_nr_kuks_gga(self):
+    def test_nr_kuks_gga_high_cost(self):
         mf = dft.KUKS(cell, cell.make_kpts([2,1,1]))
         mf.xc = 'b88,'
         mf = scf.newton(mf)

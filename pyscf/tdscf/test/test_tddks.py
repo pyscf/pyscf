@@ -98,7 +98,7 @@ class KnownValues(unittest.TestCase):
         mf_b3lyp.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
         self._check_against_ab_ks(mf_b3lyp.TDDFT(), 2.568259113326634, 0.1531691970098629)
 
-    def test_col_mgga_ab_ks(self):
+    def test_col_mgga_ab_ks_high_cost(self):
         mf_m06l = dft.DKS(mol).set(xc='m06l')
         mf_m06l.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
         td = mf_m06l.TDDFT()

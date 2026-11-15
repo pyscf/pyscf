@@ -119,7 +119,7 @@ class KnownValues(unittest.TestCase):
         vind_dm0 = mf.gen_response(dm0=dm0, with_nlc=with_nlc)
         self.assertAlmostEqual(abs(vind_mo(dm1) - vind_dm0(dm1)).max(), 0, 10)
 
-    def test_rhf_response_dm0(self):
+    def test_rhf_response_dm0_high_cost(self):
         mol = gto.M(
             verbose = 0,
             atom = [
@@ -138,7 +138,7 @@ class KnownValues(unittest.TestCase):
         mf.nlcgrids.level = 0
         self._check_dm0_response(mf, dm1, with_nlc=True)
 
-    def test_uhf_response_dm0(self):
+    def test_uhf_response_dm0_high_cost(self):
         mol = gto.M(
             verbose = 0,
             atom = [
@@ -159,7 +159,7 @@ class KnownValues(unittest.TestCase):
         mf.nlcgrids.level = 0
         self._check_dm0_response(mf, dm1, with_nlc=True)
 
-    def test_ghf_response_dm0(self):
+    def test_ghf_response_dm0_high_cost(self):
         mol = gto.M(
             verbose = 0,
             atom = [

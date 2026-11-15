@@ -22,9 +22,9 @@ Extension to numpy and scipy
 
 import os
 import ctypes
-import math
 import numpy
 import numpy as np
+import scipy.linalg
 import scipy.special
 from pyscf.lib import misc
 from numpy import asarray  # For backward compatibility
@@ -1280,28 +1280,7 @@ def condense(opname, a, loc_x, loc_y=None):
         out[:,j] = op(tmp[:,j0:j1], axis=1)
     return out
 
-def expm(a):
-    '''Equivalent to scipy.linalg.expm'''
-    bs = [a.copy()]
-    n = 0
-    for n in range(1, 14):
-        bs.append(ddot(bs[-1], a))
-        radius = (2**(n*(n+2))*math.factorial(n+2)*1e-16) **((n+1.)/(n+2))
-        #print(n, radius, bs[-1].max(), -bs[-1].min())
-        if bs[-1].max() < radius and -bs[-1].min() < radius:
-            break
-
-    y = numpy.eye(a.shape[0])
-    fac = 1
-    for i, b in enumerate(bs):
-        fac *= i + 1
-        b *= (.5**(n*(i+1)) / fac)
-        y += b
-    buf, bs = bs[0], None
-    for i in range(n):
-        ddot(y, y, 1, buf, 0)
-        y, buf = buf, y
-    return y
+expm = scipy.linalg.expm
 
 def omatcopy(a, out=None):
     """Copies a matrix.

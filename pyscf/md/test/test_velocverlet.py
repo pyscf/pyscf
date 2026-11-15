@@ -107,7 +107,7 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(driver.ekin + driver.epot, beginning_energy,
                                    4)
 
-    def test_ss_s0_ethylene_zero_init_veloc(self):
+    def test_ss_s0_ethylene_zero_init_veloc_high_cost(self):
         driver = md.NVE(casscf_scanner, dt=5, steps=10)
 
         driver.kernel()

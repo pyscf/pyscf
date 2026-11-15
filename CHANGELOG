@@ -1,6 +1,7 @@
 PySCF 2.15.0 (2026-11-05)
 -------------------------
 * Added
+  - Prebuilt Windows x86-64 wheels on PyPI (#3424)
   - Internally contracted CASPT2, including density fitting and IPEA shift (#3401)
   - Analytic nuclear gradients for spin-restricted DF-CCSD and DF-CCSD(T), including auxiliary basis response (#3426)
   - Analytic nuclear gradients for GHF with spin-free Hamiltonians and GKS with collinear XC functionals (#3420)

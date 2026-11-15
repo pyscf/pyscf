@@ -59,7 +59,7 @@ class KnownValues(unittest.TestCase):
                 self.assertAlmostEqual(mymp.e_corr_ss, e_ss_ref, 7)
                 self.assertAlmostEqual(mymp.e_corr_os, e_os_ref, 7)
 
-    def test_kmp2_gdf(self):
+    def test_kmp2_gdf_high_cost(self):
         def run_scf(kmesh):
             kpts = cell.make_kpts(kmesh)
             kmf = scf.KRHF(cell, kpts).density_fit()
@@ -73,7 +73,7 @@ class KnownValues(unittest.TestCase):
         mymf = run_scf([2, 1, 1])
         self._check_blksize(mymf, True, -0.1085115957829, -0.0170425395647, -0.0914690562182)
 
-    def test_kmp2_fftdf(self):
+    def test_kmp2_fftdf_high_cost(self):
         def run_scf(kmesh):
             kpts = cell.make_kpts(kmesh)
             kmf = scf.KRHF(cell, kpts)
