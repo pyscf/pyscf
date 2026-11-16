@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 
+import gc
 import os
 import unittest
 import tempfile
@@ -524,6 +525,8 @@ class KnownValues(unittest.TestCase):
                 self.assertEqual(len(calls), n_transform)
                 self.assertAlmostEqual(e_corr, e_ref, 10)
                 self.assertAlmostEqual(eip, eip_ref, 9)
+            del mycc, calls
+            gc.collect()  # close eris_file: Windows cannot remove open files
 
 if __name__ == '__main__':
     print("KUCCSD tests")

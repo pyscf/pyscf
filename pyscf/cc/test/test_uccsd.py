@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import gc
 import os
 import unittest
 import copy
@@ -771,6 +772,8 @@ class KnownValues(unittest.TestCase):
                 self.assertEqual(len(calls), n_transform)
                 self.assertAlmostEqual(mycc.e_corr, -0.110754022651, 8)
                 self.assertAlmostEqual(e_t, -0.001057514066, 8)
+            del mycc, calls
+            gc.collect()  # close eris_file: Windows cannot remove open files
 
     def test_ao2mo(self):
         mycc = uccsd.UCCSD(mf)

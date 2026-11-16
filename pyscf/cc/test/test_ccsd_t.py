@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import gc
 import os
 import unittest
 import tempfile
@@ -252,6 +253,8 @@ class KnownValues(unittest.TestCase):
                 self.assertEqual(len(calls), n_transform)
                 self.assertAlmostEqual(mycc.e_corr, mcc.e_corr, 10)
                 self.assertAlmostEqual(e_t, e_t_ref, 10)
+            del mycc, calls
+            gc.collect()  # close eris_file: Windows cannot remove open files
 
     def test_eris_file_ao_direct(self):
         # AO-direct CCSD saves no vvvv integrals.  Another AO-direct CCSD reads
@@ -267,6 +270,8 @@ class KnownValues(unittest.TestCase):
                 mycc.kernel()
                 self.assertEqual(len(calls), n_transform)
                 self.assertAlmostEqual(mycc.e_corr, mcc.e_corr, 10)
+            del mycc, calls
+            gc.collect()  # close eris_file: Windows cannot remove open files
             with h5py.File(eris_file, 'r') as f:
                 self.assertNotIn('vvvv', f)
 
@@ -286,6 +291,8 @@ class KnownValues(unittest.TestCase):
             mol1 = mol.set_geom_('O 0 0 0; H 0 -.757 .6; H 0 .757 .6', inplace=False)
             mycc = cc.CCSD(rhf.copy().reset(mol1)).set(eris_file=eris_file)
             self.assertRaisesRegex(RuntimeError, 'molecule', mycc.kernel)
+            del mycc
+            gc.collect()  # close eris_file: Windows cannot remove open files
 
 if __name__ == "__main__":
     print("Full Tests for CCSD(T)")

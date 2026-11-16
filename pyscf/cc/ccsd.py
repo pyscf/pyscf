@@ -942,12 +942,14 @@ def _load_eris(mycc, key, filename):
     that they were computed for this calculation'''
     feri = lib.H5FileWrap(filename, 'r')
     if 'eris_meta' not in feri:
+        feri.close()
         raise RuntimeError(f'eris_file {filename} has no MO integrals of CC '
                            '(an interrupted transformation?). Remove the file.')
     meta = feri['eris_meta']
     differ = []
     module, qualname = meta.attrs['eris_class'].split(':')
     if module.split('.')[0] != 'pyscf':
+        feri.close()
         raise RuntimeError(f'eris_file {filename}: {module} is not a PySCF module')
     cls = importlib.import_module(module)
     for x in qualname.split('.'):
@@ -965,9 +967,11 @@ def _load_eris(mycc, key, filename):
         if not _same_key(a, b):
             differ.append(name)
     if meta.attrs['vvvv_direct'] and not mycc.direct:
+        feri.close()
         raise RuntimeError(f'eris_file {filename} has no vvvv integrals '
                            '(AO-direct CC). Set direct = True to use it.')
     if differ:
+        feri.close()
         raise RuntimeError(f'eris_file {filename} was written for another '
                            f'calculation ({", ".join(differ)} differ). '
                            'Remove the file or set another eris_file.')
@@ -1790,7 +1794,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     cput1 = logger.process_clock(), logger.perf_counter()
     if not mycc.direct:
         max_memory = max(MEMORYMIN, mycc.max_memory-lib.current_memory()[0])
-        if mycc._eris_file_writing is None:
+        if getattr(mycc, '_eris_file_writing', None) is None:
             eris.feri2 = lib.H5TmpFile()
             ao2mo.full(mol, orbv, eris.feri2, max_memory=max_memory, verbose=log)
             eris.vvvv = eris.feri2['eri_mo']

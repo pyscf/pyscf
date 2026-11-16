@@ -17,6 +17,7 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
+import gc
 import os
 import unittest
 import tempfile
@@ -1188,6 +1189,8 @@ class KnownValues(unittest.TestCase):
                 self.assertEqual(len(calls), n_transform)
                 self.assertAlmostEqual(e_corr, e_ref[0], 10)
                 self.assertAlmostEqual(e_t, e_ref[1], 10)
+            del mycc, calls
+            gc.collect()  # close eris_file: Windows cannot remove open files
 
 if __name__ == '__main__':
     print("Full kpoint_rhf test")
