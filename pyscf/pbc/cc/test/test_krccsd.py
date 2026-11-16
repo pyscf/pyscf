@@ -33,6 +33,7 @@ from pyscf.pbc.lib import kpts_helper
 #from pyscf.pbc.cc.kccsd_rhf import kconserve_pmatrix
 import pyscf.pbc.cc.kccsd_t_rhf as kccsd_t_rhf
 from pyscf.pbc.cc import eom_kccsd_rhf
+from pyscf.pbc.cc import eom_kccsd_uhf
 from pyscf.pbc.tools.pbc import super_cell
 
 
@@ -1137,6 +1138,46 @@ class KnownValues(unittest.TestCase):
                                            np.asarray(getattr(ref, name)), atol=1e-10)
         actual._fimd.close()
         cc.eris.feri1.close()
+
+    def test_reuse_eris(self):
+        kpts = cell.make_kpts([1, 1, 2])
+        kmf = pbcscf.KRHF(cell, kpts, exxdiv=None).run(conv_tol=1e-12)
+
+        def count_ao2mo(mycc):
+            calls = []
+            ao2mo = mycc.ao2mo
+            def counted(mo_coeff=None):
+                calls.append(1)
+                return ao2mo(mo_coeff)
+            mycc.ao2mo = counted
+            return calls
+
+        # (T) and EOM after CCSD use the integrals of the CCSD calculation
+        mycc = pbcc.KRCCSD(kmf)
+        mycc.conv_tol = 1e-10
+        calls = count_ao2mo(mycc)
+        mycc.kernel()
+        et = mycc.ccsd_t()
+        eip = mycc.ipccsd(nroots=1, kptlist=[0])[0]
+        self.assertEqual(len(calls), 1)
+        self.assertIs(mycc.eris, mycc._get_eris())
+
+        # The same energies with integrals transformed anew
+        eris = mycc.ao2mo()
+        self.assertAlmostEqual(mycc.ccsd_t(eris=eris), et, 12)
+        self.assertAlmostEqual(mycc.ipccsd(nroots=1, kptlist=[0], eris=eris)[0][0][0],
+                               eip[0][0], 9)
+
+        mycc.reset()
+        mycc.ccsd_t()
+        self.assertEqual(len(calls), 3)
+
+        mycc = pbcc.KUCCSD(kmf.to_uhf())
+        mycc.conv_tol = 1e-10
+        calls = count_ao2mo(mycc)
+        mycc.kernel()
+        eom_kccsd_uhf.EOMIP(mycc).ipccsd(nroots=1, kptlist=[0])
+        self.assertEqual(len(calls), 1)
 
 if __name__ == '__main__':
     print("Full kpoint_rhf test")

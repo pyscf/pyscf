@@ -1502,7 +1502,7 @@ class _IMDS:
         self.t1 = cc.t1
         self.t2 = cc.t2
         if eris is None:
-            eris = cc.ao2mo()
+            eris = getattr(cc, '_get_eris', cc.ao2mo)()
         self.eris = eris
         self.kconserv = cc.khelper.kconserv
         self.made_ip_imds = False
