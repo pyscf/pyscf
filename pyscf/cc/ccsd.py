@@ -23,9 +23,13 @@ RCCSD for real integrals
 '''
 
 
+import os
 import ctypes
+import importlib
+import json
 from functools import reduce
 import numpy
+import h5py
 from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
@@ -843,6 +847,150 @@ def _copy_key(key):
         return type(key)(_copy_key(x) for x in key)
     return key
 
+def _eris_h5file(mycc):
+    '''The HDF5 file for the outcore MO integrals: the file named by eris_file
+    while _get_eris saves the integrals, otherwise a temporary file.'''
+    filename = getattr(mycc, '_eris_file_writing', None)
+    if filename is None:
+        return lib.H5TmpFile()
+    return lib.H5TmpFile(filename, 'w-')
+
+def _dump_eris_attr(parent, name, value, filename):
+    g = parent.create_group(name)
+    if value is None:
+        g.attrs['kind'] = 'none'
+    elif isinstance(value, h5py.Dataset):
+        if os.path.abspath(value.file.filename) != filename:
+            raise RuntimeError(f'eris.{name} is not stored in {filename}')
+        g.attrs['kind'] = 'dataset'
+        g.attrs['path'] = value.name
+    elif isinstance(value, numpy.ndarray):
+        g.attrs['kind'] = 'array'
+        g['value'] = value
+    elif isinstance(value, (bool, int, float, complex, numpy.generic)):
+        g.attrs['kind'] = 'number'
+        g.attrs['value'] = value
+    elif isinstance(value, numpy.dtype):
+        g.attrs['kind'] = 'dtype'
+        g.attrs['value'] = value.str
+    elif isinstance(value, (tuple, list)):
+        g.attrs['kind'] = type(value).__name__
+        g.attrs['size'] = len(value)
+        for i, x in enumerate(value):
+            _dump_eris_attr(g, str(i), x, filename)
+    else:
+        raise NotImplementedError(f'eris_file: attribute {name} of type {type(value)}')
+
+def _load_eris_attr(g, feri):
+    kind = g.attrs['kind']
+    if kind == 'none':
+        return None
+    elif kind == 'dataset':
+        return feri[g.attrs['path']]
+    elif kind == 'array':
+        return g['value'][()]
+    elif kind == 'number':
+        value = g.attrs['value']
+        return value.item() if isinstance(value, numpy.generic) else value
+    elif kind == 'dtype':
+        return numpy.dtype(g.attrs['value'])
+    items = [_load_eris_attr(g[str(i)], feri) for i in range(g.attrs['size'])]
+    return tuple(items) if kind == 'tuple' else items
+
+def _eris_settings(mycc):
+    '''Settings other than the orbitals that change the MO integrals'''
+    with_df = getattr(mycc, 'with_df', None) or getattr(mycc._scf, 'with_df', None)
+    settings = {
+        'df': None if with_df is None else [
+            type(with_df).__name__, str(getattr(with_df, 'auxbasis', None))],
+        'kpts': numpy.asarray(getattr(mycc, 'kpts', numpy.zeros((0, 3)))).tolist(),
+        'exxdiv': [str(getattr(mycc._scf, 'exxdiv', None)),
+                   str(getattr(mycc, 'keep_exxdiv', None))],
+    }
+    return json.dumps(settings)
+
+def _save_eris_meta(mycc, eris, key, filename):
+    '''Write the attributes of eris that are not integral datasets, and the
+    data that identify the calculation, to the file of the outcore integrals'''
+    filename = os.path.abspath(filename)
+    feri = None
+    file_attrs = []
+    attrs = {}
+    for name, value in vars(eris).items():
+        if isinstance(value, h5py.File):
+            if os.path.abspath(value.filename) == filename:
+                feri = value
+                file_attrs.append(name)
+            else:
+                raise RuntimeError(f'eris.{name} is not stored in {filename}')
+        elif isinstance(value, gto.MoleBase):
+            pass
+        else:
+            attrs[name] = value
+    if feri is None:
+        raise NotImplementedError(
+            f'eris_file: {mycc.__class__.__name__} kept the MO integrals in memory')
+    meta = feri.create_group('eris_meta')
+    meta.attrs['eris_class'] = type(eris).__module__ + ':' + type(eris).__qualname__
+    meta.attrs['file_attrs'] = json.dumps(file_attrs)
+    meta.attrs['mol'] = mycc.mol.dumps()
+    meta.attrs['settings'] = _eris_settings(mycc)
+    meta.attrs['vvvv_direct'] = bool(getattr(mycc, 'direct', False) and
+                                      getattr(eris, 'vvvv', 0) is None)
+    _dump_eris_attr(meta, 'key', key, filename)
+    g = meta.create_group('attrs')
+    for name, value in attrs.items():
+        _dump_eris_attr(g, name, value, filename)
+    feri.flush()
+
+def _load_eris(mycc, key, filename):
+    '''Read the MO integrals that _get_eris saved in filename, after checking
+    that they were computed for this calculation'''
+    feri = lib.H5FileWrap(filename, 'r')
+    if 'eris_meta' not in feri:
+        raise RuntimeError(f'eris_file {filename} has no MO integrals of CC '
+                           '(an interrupted transformation?). Remove the file.')
+    meta = feri['eris_meta']
+    differ = []
+    eris_class = meta.attrs['eris_class']
+    module, qualname = eris_class.split(':')
+    cls = importlib.import_module(module)
+    for x in qualname.split('.'):
+        cls = getattr(cls, x)
+    mol0 = mycc.mol.__class__.loads(meta.attrs['mol'])
+    if not (mol0.nao == mycc.mol.nao and gto.same_mol(mol0, mycc.mol, tol=1e-8)):
+        differ.append('molecule or basis')
+    if meta.attrs['settings'] != _eris_settings(mycc):
+        differ.append('density fitting, k-points or exxdiv')
+    key0 = _load_eris_attr(meta['key'], feri)
+    names = ('orbitals', 'frozen', 'nocc', 'nmo')
+    if not _close_mo(key0[0], key[0]):
+        differ.append(names[0])
+    for name, a, b in zip(names[1:], key0[1:], key[1:]):
+        if not _same_key(a, b):
+            differ.append(name)
+    if meta.attrs['vvvv_direct'] and not mycc.direct:
+        differ.append('direct (the file has no vvvv integrals)')
+    if differ:
+        raise RuntimeError(f'eris_file {filename} was written for another '
+                           f'calculation ({", ".join(differ)} differ). '
+                           'Remove the file or set another eris_file.')
+
+    eris = cls.__new__(cls)
+    for name, g in meta['attrs'].items():
+        setattr(eris, name, _load_eris_attr(g, feri))
+    for name in json.loads(meta.attrs['file_attrs']):
+        setattr(eris, name, feri)
+    eris.mol = mycc.mol
+    return eris
+
+def _close_mo(a, b, tol=1e-10):
+    if isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
+        return len(a) == len(b) and all(_close_mo(x, y, tol) for x, y in zip(a, b))
+    a = numpy.asarray(a)
+    b = numpy.asarray(b)
+    return a.shape == b.shape and abs(a - b).max(initial=0) < tol
+
 def _check_semicanonical(mycc, fock, nocc, tol=1e-6):
     '''Warn when the (T) correction is computed with orbitals that are not
     semicanonical: it uses the diagonal of the occupied-occupied and
@@ -940,6 +1088,13 @@ class CCSDBase(lib.StreamObject):
             instead of transforming the integrals again.  They are rebuilt when
             mo_coeff, frozen, nocc or nmo change, and released by reset().
             Default is True.
+        eris_file : str
+            HDF5 file to keep the MO integrals across calculations.  If the
+            file does not exist, the integrals are transformed into it
+            (out-of-core).  If it exists, the integrals are read from it, after
+            checking that it was written for the same molecule, basis,
+            orbitals, frozen orbitals, nocc and nmo.  Default is None (the
+            integrals are not saved).
 
     Saved results:
 
@@ -974,6 +1129,9 @@ class CCSDBase(lib.StreamObject):
     incore_complete = getattr(__config__, 'cc_ccsd_CCSD_incore_complete', False)
     cc2 = getattr(__config__, 'cc_ccsd_CCSD_cc2', False)
     keep_eris = getattr(__config__, 'cc_ccsd_CCSD_keep_eris', True)
+    eris_file = None
+    # The filename that the outcore integral builders write to (set by _get_eris)
+    _eris_file_writing = None
     callback = None
 
     _keys = {
@@ -984,6 +1142,7 @@ class CCSDBase(lib.StreamObject):
         'mol', 'verbose', 'stdout', 'frozen', 'level_shift',
         'mo_coeff', 'mo_occ', 'cycles', 'converged_lambda', 'emp2', 'e_hf',
         'converged', 'e_corr', 't1', 't2', 'l1', 'l2', 'chkfile', 'keep_eris',
+        'eris_file',
     }
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
@@ -1067,19 +1226,31 @@ class CCSDBase(lib.StreamObject):
 
         With keep_eris, the integrals of the last transformation on this object
         are reused when they were built for the same orbitals, frozen orbitals,
-        nocc and nmo; otherwise ao2mo is called (and its result kept).
+        nocc and nmo.  With eris_file, they are read from that file if it
+        exists, else transformed into it.  Otherwise ao2mo is called.
         '''
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
-        if not self.keep_eris:
+        eris_file = self.eris_file
+        if not self.keep_eris and not eris_file:
             return self.ao2mo(mo_coeff)
         key = (mo_coeff, self.frozen, self._nocc, self._nmo)
         cached = getattr(self, '_eris', None)
-        if cached is not None and _same_key(cached[0], key):
+        if self.keep_eris and cached is not None and _same_key(cached[0], key):
             logger.debug(self, 'Reuse the MO integrals of the last transformation')
             return cached[1]
-        eris = self.ao2mo(mo_coeff)
-        self._eris = (_copy_key(key), eris)
+        if not eris_file:
+            eris = self.ao2mo(mo_coeff)
+        elif os.path.isfile(eris_file):
+            logger.info(self, 'Read the MO integrals from %s', eris_file)
+            eris = _load_eris(self, key, eris_file)
+        else:
+            with lib.temporary_env(self, _eris_file_writing=eris_file):
+                eris = self.ao2mo(mo_coeff)
+            _save_eris_meta(self, eris, key, eris_file)
+            logger.info(self, 'MO integrals saved in %s', eris_file)
+        if self.keep_eris:
+            self._eris = (_copy_key(key), eris)
         return eris
 
     get_nocc = get_nocc
@@ -1256,7 +1427,7 @@ class CCSDBase(lib.StreamObject):
         nao_pair = nao * (nao+1) // 2
         mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
-        if (self._scf._eri is not None and
+        if (self._eris_file_writing is None and self._scf._eri is not None and
             (mem_incore+mem_now < self.max_memory or self.incore_complete)):
             return _make_eris_incore(self, mo_coeff)
 
@@ -1597,7 +1768,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     orbo = mo_coeff[:,:nocc]
     orbv = mo_coeff[:,nocc:]
     nvpair = nvir * (nvir+1) // 2
-    eris.feri1 = lib.H5TmpFile()
+    eris.feri1 = _eris_h5file(mycc)
     eris.oooo = eris.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), 'f8')
     eris.oovv = eris.feri1.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8', chunks=(nocc,nocc,1,nvir))
     eris.ovoo = eris.feri1.create_dataset('ovoo', (nocc,nvir,nocc,nocc), 'f8', chunks=(nocc,1,nocc,nocc))
@@ -1621,9 +1792,14 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     cput1 = logger.process_clock(), logger.perf_counter()
     if not mycc.direct:
         max_memory = max(MEMORYMIN, mycc.max_memory-lib.current_memory()[0])
-        eris.feri2 = lib.H5TmpFile()
-        ao2mo.full(mol, orbv, eris.feri2, max_memory=max_memory, verbose=log)
-        eris.vvvv = eris.feri2['eri_mo']
+        if mycc._eris_file_writing is None:
+            eris.feri2 = lib.H5TmpFile()
+            ao2mo.full(mol, orbv, eris.feri2, max_memory=max_memory, verbose=log)
+            eris.vvvv = eris.feri2['eri_mo']
+        else:
+            ao2mo.full(mol, orbv, eris.feri1, dataname='vvvv',
+                       max_memory=max_memory, verbose=log)
+            eris.vvvv = eris.feri1['vvvv']
         cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
     fswap = lib.H5TmpFile()
@@ -1706,7 +1882,7 @@ def _make_df_eris_outcore(mycc, mo_coeff=None):
     Lov = Lov.reshape(naux,nocc*nvir)
     Lvo = Lvo.reshape(naux,nocc*nvir)
 
-    eris.feri1 = lib.H5TmpFile()
+    eris.feri1 = _eris_h5file(mycc)
     eris.oooo = eris.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), 'f8')
     eris.oovv = eris.feri1.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8', chunks=(nocc,nocc,1,nvir))
     eris.ovoo = eris.feri1.create_dataset('ovoo', (nocc,nvir,nocc,nocc), 'f8', chunks=(nocc,1,nocc,nocc))

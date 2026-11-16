@@ -650,7 +650,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                                                 kptlist=kptlist)
 
     def ao2mo(self, mo_coeff=None):
-        return _ERIS(self, mo_coeff)
+        if self._eris_file_writing is None:
+            return _ERIS(self, mo_coeff)
+        return _ERIS(self, mo_coeff, method='outcore')
 
     to_gpu = lib.to_gpu
 
@@ -813,7 +815,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             self.dtype = dtype
         else:
             log.info('using HDF5 ERI storage')
-            self.feri1 = lib.H5TmpFile()
+            self.feri1 = pyscf.cc.ccsd._eris_h5file(cc)
 
             self.oooo = self.feri1.create_dataset('oooo', (nkpts, nkpts, nkpts, nocc, nocc, nocc, nocc), dtype.char)
             self.ooov = self.feri1.create_dataset('ooov', (nkpts, nkpts, nkpts, nocc, nocc, nocc, nvir), dtype.char)

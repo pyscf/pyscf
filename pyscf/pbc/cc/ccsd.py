@@ -57,6 +57,8 @@ class RCCSD(rccsd.RCCSD):
 
     def ao2mo(self, mo_coeff=None):
         from pyscf.pbc import tools
+        if self._eris_file_writing is not None:
+            raise NotImplementedError('eris_file for Gamma-point CC')
         ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
         # _scf.exxdiv affects eris.fock. HF exchange correction should be
         # excluded from the Fock matrix.
@@ -99,6 +101,8 @@ class UCCSD(uccsd.UCCSD):
 
     def ao2mo(self, mo_coeff=None):
         from pyscf.pbc import tools
+        if self._eris_file_writing is not None:
+            raise NotImplementedError('eris_file for Gamma-point CC')
         ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
         # _scf.exxdiv affects eris.fock. HF exchange correction should be
         # excluded from the Fock matrix.
@@ -131,6 +135,8 @@ class GCCSD(gccsd.GCCSD):
 
     def ao2mo(self, mo_coeff=None):
         from pyscf.pbc import tools
+        if self._eris_file_writing is not None:
+            raise NotImplementedError('eris_file for Gamma-point CC')
         with_df = self._scf.with_df
         kpt = self._scf.kpt
         def ao2mofn(mo_coeff):

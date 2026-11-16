@@ -405,6 +405,8 @@ class GCCSD(gccsd.GCCSD):
     def ao2mo(self, mo_coeff=None):
         nkpts = self.nkpts
         nmo = self.nmo
+        if self._eris_file_writing is not None:
+            raise NotImplementedError('eris_file for KGCCSD')
         mem_incore = nkpts**3 * nmo**4 * 8 / 1e6
         mem_now = lib.current_memory()[0]
 

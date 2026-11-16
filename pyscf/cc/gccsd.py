@@ -263,8 +263,9 @@ class GCCSD(ccsd.CCSDBase):
         nmo = self.nmo
         mem_incore = nmo**4*2 * 8/1e6
         mem_now = lib.current_memory()[0]
-        if (self._scf._eri is not None and
-            (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
+        if self._eris_file_writing is None and (
+                self._scf._eri is not None and
+                (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
             return _make_eris_incore(self, mo_coeff)
         elif getattr(self._scf, 'with_df', None):
             raise NotImplementedError
@@ -416,7 +417,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     mo_b = mo[nao:]
     orbspin = eris.orbspin
 
-    feri = eris.feri = lib.H5TmpFile()
+    feri = eris.feri = ccsd._eris_h5file(mycc)
     dtype = np.result_type(eris.mo_coeff)
     eris.oooo = feri.create_dataset('oooo', (nocc,nocc,nocc,nocc), dtype.char)
     eris.ooov = feri.create_dataset('ooov', (nocc,nocc,nocc,nvir), dtype.char)

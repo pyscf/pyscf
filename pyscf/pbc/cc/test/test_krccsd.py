@@ -17,7 +17,9 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
+import os
 import unittest
+import tempfile
 from pyscf.pbc.cc import kccsd_rhf
 import numpy as np
 
@@ -1178,6 +1180,25 @@ class KnownValues(unittest.TestCase):
         mycc.kernel()
         eom_kccsd_uhf.EOMIP(mycc).ipccsd(nroots=1, kptlist=[0])
         self.assertEqual(len(calls), 1)
+
+        # The integrals saved in eris_file are read by the next calculation
+        kumf = kmf.to_uhf()
+        for make, run in ((lambda: pbcc.KRCCSD(kmf),
+                           lambda c: (c.kernel()[0], c.ccsd_t(),
+                                      c.ipccsd(nroots=1, kptlist=[0])[0][0][0])),
+                          (lambda: pbcc.KUCCSD(kumf),
+                           lambda c: (c.kernel()[0], eom_kccsd_uhf.EOMIP(c).ipccsd(
+                               nroots=1, kptlist=[0])[0][0][0]))):
+            e_ref = run(make().set(conv_tol=1e-10))
+            with tempfile.TemporaryDirectory() as tmpdir:
+                eris_file = os.path.join(tmpdir, 'eris.h5')
+                for transform in (1, 0):
+                    mycc = make().set(conv_tol=1e-10, eris_file=eris_file)
+                    calls = count_ao2mo(mycc)
+                    e = run(mycc)
+                    self.assertEqual(len(calls), transform)
+                    for x, y in zip(e, e_ref):
+                        self.assertAlmostEqual(x, y, 9)
 
 if __name__ == '__main__':
     print("Full kpoint_rhf test")

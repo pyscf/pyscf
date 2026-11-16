@@ -402,6 +402,8 @@ class KsymAdaptedRCCSD(RCCSD):
         self.eris_outcore = False
 
     def ao2mo(self, mo_coeff=None):
+        if self._eris_file_writing is not None:
+            raise NotImplementedError('eris_file for KsymAdaptedRCCSD')
         eris = _PhysicistsERIs()
         eris._common_init_(self, mo_coeff)
 

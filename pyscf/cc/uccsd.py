@@ -537,6 +537,10 @@ def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
     return u2aa,u2ab,u2bb
 
 
+def _phase(x):
+    '''conj(x)/|x|: multiplying by it makes x real and positive'''
+    return x.conj() / abs(x)
+
 def _need_semicanonical(mycc):
     '''Whether UCCSD.ccsd rotates the orbitals: semicanonical True, or None for
     an ROHF-type reference (alpha and beta spatial orbitals equal).'''
@@ -663,7 +667,11 @@ class UCCSD(ccsd.CCSDBase):
                 for ir in np.unique(labels[space]):
                     p = np.where(space & (labels == ir))[0]
                     fpp = reduce(np.dot, (c[:,p].conj().T, f, c[:,p]))
-                    c[:,p] = np.dot(c[:,p], scipy.linalg.eigh(fpp)[1])
+                    u = scipy.linalg.eigh(fpp)[1]
+                    # The largest element of each column positive: the same
+                    # orbitals in every run, and no change when fpp is diagonal
+                    u *= _phase(u[abs(u).argmax(axis=0), np.arange(u.shape[1])])
+                    c[:,p] = np.dot(c[:,p], u)
             if orbsym is not None:
                 c = lib.tag_array(c, orbsym=orbsym)
             mo_coeff.append(c)
@@ -744,7 +752,7 @@ class UCCSD(ccsd.CCSDBase):
         nao_pair = nao * (nao+1) // 2
         mem_incore = (max(nao_pair**2, nmoa**4) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
-        if (self._scf._eri is not None and
+        if (self._eris_file_writing is None and self._scf._eri is not None and
             (mem_incore+mem_now < self.max_memory or self.incore_complete)):
             return _make_eris_incore(self, mo_coeff)
 
@@ -1070,7 +1078,7 @@ def _make_df_eris_outcore(mycc, mo_coeff=None):
 
     # --- Four-center integrals
     dot = lib.ddot
-    eris.feri1 = lib.H5TmpFile()
+    eris.feri1 = ccsd._eris_h5file(mycc)
     # (aa|aa)
     eris.oooo = eris.feri1.create_dataset('oooo', (nocca,nocca,nocca,nocca), 'f8')
     eris.oovv = eris.feri1.create_dataset('oovv', (nocca,nocca,nvira,nvira), 'f8', chunks=(nocca,nocca,1,nvira))
@@ -1148,7 +1156,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     orbob = mob[:,:noccb]
     orbva = moa[:,nocca:]
     orbvb = mob[:,noccb:]
-    eris.feri = lib.H5TmpFile()
+    eris.feri = ccsd._eris_h5file(mycc)
     eris.oooo = eris.feri.create_dataset('oooo', (nocca,nocca,nocca,nocca), 'f8')
     eris.ovoo = eris.feri.create_dataset('ovoo', (nocca,nvira,nocca,nocca), 'f8')
     eris.ovov = eris.feri.create_dataset('ovov', (nocca,nvira,nocca,nvira), 'f8')

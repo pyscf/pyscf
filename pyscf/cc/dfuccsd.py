@@ -108,7 +108,7 @@ def _make_df_eris(mycc, mo_coeff=None):
     LVO = np.empty((naux, nvirb, noccb))
 
     # --- Four-center integrals
-    eris.feri = lib.H5TmpFile()
+    eris.feri = ccsd._eris_h5file(mycc)
     # (aa|aa)
     eris.oooo = eris.feri.create_dataset('oooo', (nocca,nocca,nocca,nocca), 'f8')
     eris.oovv = eris.feri.create_dataset('oovv', (nocca,nocca,nvira,nvira), 'f8', chunks=(nocca,nocca,1,nvira))

@@ -29,6 +29,7 @@ import h5py
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import scf
+from pyscf.cc import ccsd
 from pyscf.cc import uccsd
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.lib.kpts_helper import gamma_point
@@ -675,7 +676,8 @@ class KUCCSD(uccsd.UCCSD):
         mem_incore = nkpts**3 * (nmoa**4 + nmob**4) * 8 / 1e6
         mem_now = lib.current_memory()[0]
 
-        if (mem_incore + mem_now < self.max_memory) or self.mol.incore_anyway:
+        if self._eris_file_writing is None and (
+                (mem_incore + mem_now < self.max_memory) or self.mol.incore_anyway):
             return _make_eris_incore(self, mo_coeff)
         elif (self.direct and type(self._scf.with_df) is GDF
               and cell.dimension != 2):
@@ -970,7 +972,7 @@ def _make_eris_outcore(cc, mo_coeff=None):
         dtype = np.complex128
     dtype = np.result_type(dtype, *mo_coeff[0]).char
 
-    eris.feri = feri = lib.H5TmpFile()
+    eris.feri = feri = ccsd._eris_h5file(cc)
 
     eris.oooo = feri.create_dataset('oooo', (nkpts,nkpts,nkpts,nocca,nocca,nocca,nocca), dtype)
     eris.ooov = feri.create_dataset('ooov', (nkpts,nkpts,nkpts,nocca,nocca,nocca,nvira), dtype)
@@ -1050,7 +1052,7 @@ def _make_df_eris(cc, mo_coeff=None):
         dtype = np.complex128
     dtype = np.result_type(dtype, *mo_kpts_a)
 
-    eris.feri = feri = lib.H5TmpFile()
+    eris.feri = feri = ccsd._eris_h5file(cc)
 
     eris.oooo = feri.create_dataset('oooo', (nkpts,nkpts,nkpts,nocca,nocca,nocca,nocca), dtype)
     eris.ooov = feri.create_dataset('ooov', (nkpts,nkpts,nkpts,nocca,nocca,nocca,nvira), dtype)
