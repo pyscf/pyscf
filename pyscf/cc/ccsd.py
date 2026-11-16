@@ -855,13 +855,11 @@ def _eris_h5file(mycc):
         return lib.H5TmpFile()
     return lib.H5TmpFile(filename, 'w-')
 
-def _dump_eris_attr(parent, name, value, filename):
+def _dump_eris_attr(parent, name, value):
     g = parent.create_group(name)
     if value is None:
         g.attrs['kind'] = 'none'
     elif isinstance(value, h5py.Dataset):
-        if os.path.abspath(value.file.filename) != filename:
-            raise RuntimeError(f'eris.{name} is not stored in {filename}')
         g.attrs['kind'] = 'dataset'
         g.attrs['path'] = value.name
     elif isinstance(value, numpy.ndarray):
@@ -877,7 +875,7 @@ def _dump_eris_attr(parent, name, value, filename):
         g.attrs['kind'] = type(value).__name__
         g.attrs['size'] = len(value)
         for i, x in enumerate(value):
-            _dump_eris_attr(g, str(i), x, filename)
+            _dump_eris_attr(g, str(i), x)
     else:
         raise NotImplementedError(f'eris_file: attribute {name} of type {type(value)}')
 
@@ -909,20 +907,16 @@ def _eris_settings(mycc):
     }
     return json.dumps(settings)
 
-def _save_eris_meta(mycc, eris, key, filename):
+def _save_eris_meta(mycc, eris, key):
     '''Write the attributes of eris that are not integral datasets, and the
     data that identify the calculation, to the file of the outcore integrals'''
-    filename = os.path.abspath(filename)
     feri = None
     file_attrs = []
     attrs = {}
     for name, value in vars(eris).items():
         if isinstance(value, h5py.File):
-            if os.path.abspath(value.filename) == filename:
-                feri = value
-                file_attrs.append(name)
-            else:
-                raise RuntimeError(f'eris.{name} is not stored in {filename}')
+            feri = value
+            file_attrs.append(name)
         elif isinstance(value, gto.MoleBase):
             pass
         else:
@@ -937,10 +931,10 @@ def _save_eris_meta(mycc, eris, key, filename):
     meta.attrs['settings'] = _eris_settings(mycc)
     meta.attrs['vvvv_direct'] = bool(getattr(mycc, 'direct', False) and
                                       getattr(eris, 'vvvv', 0) is None)
-    _dump_eris_attr(meta, 'key', key, filename)
+    _dump_eris_attr(meta, 'key', key)
     g = meta.create_group('attrs')
     for name, value in attrs.items():
-        _dump_eris_attr(g, name, value, filename)
+        _dump_eris_attr(g, name, value)
     feri.flush()
 
 def _load_eris(mycc, key, filename):
@@ -952,8 +946,9 @@ def _load_eris(mycc, key, filename):
                            '(an interrupted transformation?). Remove the file.')
     meta = feri['eris_meta']
     differ = []
-    eris_class = meta.attrs['eris_class']
-    module, qualname = eris_class.split(':')
+    module, qualname = meta.attrs['eris_class'].split(':')
+    if module.split('.')[0] != 'pyscf':
+        raise RuntimeError(f'eris_file {filename}: {module} is not a PySCF module')
     cls = importlib.import_module(module)
     for x in qualname.split('.'):
         cls = getattr(cls, x)
@@ -970,12 +965,15 @@ def _load_eris(mycc, key, filename):
         if not _same_key(a, b):
             differ.append(name)
     if meta.attrs['vvvv_direct'] and not mycc.direct:
-        differ.append('direct (the file has no vvvv integrals)')
+        raise RuntimeError(f'eris_file {filename} has no vvvv integrals '
+                           '(AO-direct CC). Set direct = True to use it.')
     if differ:
         raise RuntimeError(f'eris_file {filename} was written for another '
                            f'calculation ({", ".join(differ)} differ). '
                            'Remove the file or set another eris_file.')
 
+    # All instance attributes of the eris object were saved, so restoring them
+    # rebuilds it without running the constructor that transforms integrals.
     eris = cls.__new__(cls)
     for name, g in meta['attrs'].items():
         setattr(eris, name, _load_eris_attr(g, feri))
@@ -1247,7 +1245,7 @@ class CCSDBase(lib.StreamObject):
         else:
             with lib.temporary_env(self, _eris_file_writing=eris_file):
                 eris = self.ao2mo(mo_coeff)
-            _save_eris_meta(self, eris, key, eris_file)
+            _save_eris_meta(self, eris, key)
             logger.info(self, 'MO integrals saved in %s', eris_file)
         if self.keep_eris:
             self._eris = (_copy_key(key), eris)

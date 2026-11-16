@@ -35,7 +35,6 @@ from pyscf.pbc.lib import kpts_helper
 #from pyscf.pbc.cc.kccsd_rhf import kconserve_pmatrix
 import pyscf.pbc.cc.kccsd_t_rhf as kccsd_t_rhf
 from pyscf.pbc.cc import eom_kccsd_rhf
-from pyscf.pbc.cc import eom_kccsd_uhf
 from pyscf.pbc.tools.pbc import super_cell
 
 
@@ -170,6 +169,16 @@ def run_kcell(cell, n, nk):
     ecc, t1, t2 = cc.kernel()
     return ekpt, ecc
 
+
+def _count_ao2mo(mycc):
+    '''Record the calls of mycc.ao2mo'''
+    calls = []
+    ao2mo = mycc.ao2mo
+    def counted(mo_coeff=None):
+        calls.append(1)
+        return ao2mo(mo_coeff)
+    mycc.ao2mo = counted
+    return calls
 
 class KnownValues(unittest.TestCase):
     def test_311_n1_high_cost(self):
@@ -1142,63 +1151,43 @@ class KnownValues(unittest.TestCase):
         cc.eris.feri1.close()
 
     def test_reuse_eris(self):
-        kpts = cell.make_kpts([1, 1, 2])
-        kmf = pbcscf.KRHF(cell, kpts, exxdiv=None).run(conv_tol=1e-12)
-
-        def count_ao2mo(mycc):
-            calls = []
-            ao2mo = mycc.ao2mo
-            def counted(mo_coeff=None):
-                calls.append(1)
-                return ao2mo(mo_coeff)
-            mycc.ao2mo = counted
-            return calls
-
         # (T) and EOM after CCSD use the integrals of the CCSD calculation
+        kmf = pbcscf.KRHF(cell, cell.make_kpts([1, 1, 2]), exxdiv=None).run(conv_tol=1e-12)
         mycc = pbcc.KRCCSD(kmf)
         mycc.conv_tol = 1e-10
-        calls = count_ao2mo(mycc)
+        calls = _count_ao2mo(mycc)
         mycc.kernel()
         et = mycc.ccsd_t()
-        eip = mycc.ipccsd(nroots=1, kptlist=[0])[0]
+        eip = mycc.ipccsd(nroots=1, kptlist=[0])[0][0][0]
         self.assertEqual(len(calls), 1)
         self.assertIs(mycc.eris, mycc._get_eris())
 
         # The same energies with integrals transformed anew
         eris = mycc.ao2mo()
         self.assertAlmostEqual(mycc.ccsd_t(eris=eris), et, 12)
-        self.assertAlmostEqual(mycc.ipccsd(nroots=1, kptlist=[0], eris=eris)[0][0][0],
-                               eip[0][0], 9)
+        self.assertAlmostEqual(mycc.ipccsd(nroots=1, kptlist=[0], eris=eris)[0][0][0], eip, 9)
 
         mycc.reset()
         mycc.ccsd_t()
         self.assertEqual(len(calls), 3)
 
-        mycc = pbcc.KUCCSD(kmf.to_uhf())
-        mycc.conv_tol = 1e-10
-        calls = count_ao2mo(mycc)
-        mycc.kernel()
-        eom_kccsd_uhf.EOMIP(mycc).ipccsd(nroots=1, kptlist=[0])
-        self.assertEqual(len(calls), 1)
-
-        # The integrals saved in eris_file are read by the next calculation
-        kumf = kmf.to_uhf()
-        for make, run in ((lambda: pbcc.KRCCSD(kmf),
-                           lambda c: (c.kernel()[0], c.ccsd_t(),
-                                      c.ipccsd(nroots=1, kptlist=[0])[0][0][0])),
-                          (lambda: pbcc.KUCCSD(kumf),
-                           lambda c: (c.kernel()[0], eom_kccsd_uhf.EOMIP(c).ipccsd(
-                               nroots=1, kptlist=[0])[0][0][0]))):
-            e_ref = run(make().set(conv_tol=1e-10))
-            with tempfile.TemporaryDirectory() as tmpdir:
-                eris_file = os.path.join(tmpdir, 'eris.h5')
-                for transform in (1, 0):
-                    mycc = make().set(conv_tol=1e-10, eris_file=eris_file)
-                    calls = count_ao2mo(mycc)
-                    e = run(mycc)
-                    self.assertEqual(len(calls), transform)
-                    for x, y in zip(e, e_ref):
-                        self.assertAlmostEqual(x, y, 9)
+    def test_eris_file(self):
+        # The second calculation reads the MO integrals that the first one
+        # saved in eris_file, and gives the energies of a calculation
+        # without eris_file
+        kmf = pbcscf.KRHF(cell, cell.make_kpts([1, 1, 2]), exxdiv=None).run(conv_tol=1e-12)
+        mycc = pbcc.KRCCSD(kmf).set(conv_tol=1e-10)
+        e_ref = mycc.kernel()[0], mycc.ccsd_t()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            eris_file = os.path.join(tmpdir, 'eris.h5')
+            for n_transform in (1, 0):
+                mycc = pbcc.KRCCSD(kmf).set(conv_tol=1e-10, eris_file=eris_file)
+                calls = _count_ao2mo(mycc)
+                e_corr = mycc.kernel()[0]
+                e_t = mycc.ccsd_t()
+                self.assertEqual(len(calls), n_transform)
+                self.assertAlmostEqual(e_corr, e_ref[0], 10)
+                self.assertAlmostEqual(e_t, e_ref[1], 10)
 
 if __name__ == '__main__':
     print("Full kpoint_rhf test")

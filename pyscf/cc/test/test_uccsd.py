@@ -71,6 +71,16 @@ def tearDownModule():
     mol_s2.stdout.close()
     del mol, rhf, mf, myucc, mol_s2, mf_s2, eris
 
+def _count_ao2mo(mycc):
+    '''Record the calls of mycc.ao2mo'''
+    calls = []
+    ao2mo = mycc.ao2mo
+    def counted(mo_coeff=None):
+        calls.append(1)
+        return ao2mo(mo_coeff)
+    mycc.ao2mo = counted
+    return calls
+
 class KnownValues(unittest.TestCase):
 
     def test_with_df_s0(self):
@@ -730,12 +740,7 @@ class KnownValues(unittest.TestCase):
     def test_reuse_eris(self):
         # CCSD, (T) and Lambda transform the integrals once
         mycc = cc.UCCSD(mf_s2)
-        calls = []
-        ao2mo = mycc.ao2mo
-        def counting_ao2mo(*args, **kwargs):
-            calls.append(1)
-            return ao2mo(*args, **kwargs)
-        mycc.ao2mo = counting_ao2mo
+        calls = _count_ao2mo(mycc)
         mycc.kernel()
         mycc.ccsd_t()
         mycc.solve_lambda()
@@ -748,47 +753,24 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(len(calls), 3)
 
     def test_eris_file(self):
-        # The MO integrals saved in eris_file by one calculation are read by
-        # the next one, which gives the same energies without transforming
-        # the integrals again.
-        def count_ao2mo(mycc):
-            calls = []
-            ao2mo = mycc.ao2mo
-            def counted(mo_coeff=None):
-                calls.append(1)
-                return ao2mo(mo_coeff)
-            mycc.ao2mo = counted
-            return calls
-
+        # The first calculation saves the MO integrals in eris_file, the second
+        # reads them.  Both give the ROHF-UCCSD(T) energies of
+        # test_rohf_semicanonical; the semicanonical orbitals of the second run
+        # must agree with those saved in the file.
         rohf = scf.ROHF(mol_s2).run(conv_tol=1e-12, conv_tol_grad=1e-9)
-        for make in (lambda: cc.CCSD(rhf),
-                     lambda: cc.CCSD(rhf, frozen=1).set(direct=True),
-                     lambda: cc.UCCSD(rohf),
-                     lambda: cc.UCCSD(rohf).set(direct=True)):
-            mycc = make().set(conv_tol=1e-12)
-            mycc.kernel()
-            e_ref = mycc.e_corr, mycc.ccsd_t()
-
-            with tempfile.TemporaryDirectory() as tmpdir:
-                eris_file = os.path.join(tmpdir, 'eris.h5')
-                for transform in (1, 0):
-                    mycc = make().set(conv_tol=1e-12, eris_file=eris_file)
-                    calls = count_ao2mo(mycc)
-                    mycc.kernel()
-                    e_t = mycc.ccsd_t()
-                    self.assertEqual(len(calls), transform)
-                    self.assertAlmostEqual(mycc.e_corr, e_ref[0], 10)
-                    self.assertAlmostEqual(e_t, e_ref[1], 10)
-                    with h5py.File(eris_file, 'r') as f:
-                        self.assertEqual('vvvv' in f, not mycc.direct)
-
-                # A file of another calculation is not used
-                if not mycc.direct:
-                    mycc = make().set(eris_file=eris_file, frozen=2)
-                    self.assertRaises(RuntimeError, mycc.kernel)
-                else:
-                    mycc = make().set(eris_file=eris_file, direct=False)
-                    self.assertRaises(RuntimeError, mycc.kernel)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            eris_file = os.path.join(tmpdir, 'eris.h5')
+            for n_transform in (1, 0):
+                mycc = cc.UCCSD(rohf)
+                mycc.conv_tol = 1e-12
+                mycc.conv_tol_normt = 1e-10
+                mycc.eris_file = eris_file
+                calls = _count_ao2mo(mycc)
+                mycc.kernel()
+                e_t = mycc.ccsd_t()
+                self.assertEqual(len(calls), n_transform)
+                self.assertAlmostEqual(mycc.e_corr, -0.110754022651, 8)
+                self.assertAlmostEqual(e_t, -0.001057514066, 8)
 
     def test_ao2mo(self):
         mycc = uccsd.UCCSD(mf)

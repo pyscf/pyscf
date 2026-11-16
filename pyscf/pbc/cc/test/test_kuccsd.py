@@ -14,7 +14,9 @@
 # limitations under the License.
 #
 
+import os
 import unittest
+import tempfile
 from types import SimpleNamespace
 from pyscf.pbc.cc import kintermediates_uhf as imd
 import numpy
@@ -83,6 +85,16 @@ def rand_t1_t2(cell, kpts, nocc, nvir):
     t1 = (t1a, t1b)
     t2 = (t2aa, t2ab, t2bb)
     return t1, t2
+
+def _count_ao2mo(mycc):
+    '''Record the calls of mycc.ao2mo'''
+    calls = []
+    ao2mo = mycc.ao2mo
+    def counted(mo_coeff=None):
+        calls.append(1)
+        return ao2mo(mo_coeff)
+    mycc.ao2mo = counted
+    return calls
 
 class KnownValues(unittest.TestCase):
     def test_amplitudes_to_vector(self):
@@ -483,6 +495,35 @@ class KnownValues(unittest.TestCase):
             np.testing.assert_array_equal(actual, expected)
         np.testing.assert_array_equal(spin[:, ::2, 1::2], 0)
 
+
+    def test_reuse_eris(self):
+        # EOM after CCSD uses the integrals of the CCSD calculation
+        kmf = scf.KUHF(cell, cell.make_kpts([1, 1, 2]), exxdiv=None).run(conv_tol=1e-12)
+        mycc = kccsd_uhf.KUCCSD(kmf)
+        mycc.conv_tol = 1e-10
+        calls = _count_ao2mo(mycc)
+        mycc.kernel()
+        eom_kccsd_uhf.EOMIP(mycc).ipccsd(nroots=1, kptlist=[0])
+        self.assertEqual(len(calls), 1)
+
+    def test_eris_file(self):
+        # The second calculation reads the MO integrals that the first one
+        # saved in eris_file, and gives the energies of a calculation
+        # without eris_file
+        kmf = scf.KUHF(cell, cell.make_kpts([1, 1, 2]), exxdiv=None).run(conv_tol=1e-12)
+        mycc = kccsd_uhf.KUCCSD(kmf).set(conv_tol=1e-10)
+        e_ref = mycc.kernel()[0]
+        eip_ref = eom_kccsd_uhf.EOMIP(mycc).ipccsd(nroots=1, kptlist=[0])[0][0][0]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            eris_file = os.path.join(tmpdir, 'eris.h5')
+            for n_transform in (1, 0):
+                mycc = kccsd_uhf.KUCCSD(kmf).set(conv_tol=1e-10, eris_file=eris_file)
+                calls = _count_ao2mo(mycc)
+                e_corr = mycc.kernel()[0]
+                eip = eom_kccsd_uhf.EOMIP(mycc).ipccsd(nroots=1, kptlist=[0])[0][0][0]
+                self.assertEqual(len(calls), n_transform)
+                self.assertAlmostEqual(e_corr, e_ref, 10)
+                self.assertAlmostEqual(eip, eip_ref, 9)
 
 if __name__ == '__main__':
     print("KUCCSD tests")
