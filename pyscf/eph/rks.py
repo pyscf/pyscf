@@ -28,6 +28,8 @@ from pyscf.dft import numint
 from pyscf.eph import rhf as rhf_eph
 from pyscf.data.nist import MP_ME
 
+__all__ = ['EPH']
+
 CUTOFF_FREQUENCY = rhf_eph.CUTOFF_FREQUENCY
 KEEP_IMAG_FREQUENCY = rhf_eph.KEEP_IMAG_FREQUENCY
 

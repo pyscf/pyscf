@@ -24,16 +24,19 @@ from pyscf import scf
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 
+__all__ = ['density_fit']
+
 DEBUG = False
 
 libri = lib.load_library('libri')
 
 def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
-    '''For the given SCF object, update the J, K matrix constructor with
-    corresponding density fitting integrals.
+    '''Create an SCF object that uses density fitting to compute J and K.
 
     Args:
         mf : an SCF object
+            Molecular HF or Kohn-Sham object whose settings and results are
+            copied to the density-fitting object. No SCF calculation is run.
 
     Kwargs:
         auxbasis : str or basis dict
@@ -48,13 +51,22 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
             If optimal auxiliary basis sets are not available, the PySCF built-in
             even-tempered Gaussian basis set will be used.
 
-        only_dfj : str
-            Compute Coulomb integrals only and no approximation for HF
-            exchange. Same to RIJONX in ORCA
+        with_df : DF object or None
+            Existing density-fitting object to use as ``with_df``. If supplied,
+            its auxiliary basis is used and ``auxbasis`` is ignored. By default,
+            create a DF object (DF4C for a four-component calculation).
+
+        only_dfj : bool
+            If True, use density fitting only for the Coulomb matrix J and
+            evaluate exchange K with four-center integrals. Default is False,
+            which applies density fitting to both J and K.
 
     Returns:
-        An SCF object with a modified J, K matrix constructor which uses density
-        fitting integrals to compute J and K
+        A new SCF object that computes J and K with density fitting. Its
+        ``with_df`` attribute holds the fitting object.
+
+    Notes:
+        Other attributes are copied by reference from ``mf`` and may be shared.
 
     Examples:
 

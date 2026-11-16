@@ -36,6 +36,8 @@ from pyscf.cc.uccsdt import (update_t1_fock_eris_uhf, intermediates_t1t2_uhf, co
                             antisymmetrize_r2_uhf_, r1r2_divide_e_uhf_, intermediates_t3_uhf, _PhysicistsERIs, _IMDS)
 from pyscf import __config__
 
+__all__ = ['UCCSDT']
+
 
 def r1r2_add_t3_uhf_(mycc, imds, r1, r2, t3):
     '''Add the T3 contributions to r1 and r2. T3 amplitudes are stored in full form.'''

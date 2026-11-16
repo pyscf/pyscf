@@ -30,6 +30,8 @@ from pyscf.df.incore import _eig_decompose, LINEAR_DEP_THR
 from pyscf.df.addons import make_auxmol
 from pyscf import __config__
 
+__all__ = ['cholesky_eri', 'general']
+
 MAX_MEMORY = getattr(__config__, 'df_outcore_max_memory', 2000)  # 2GB
 
 #

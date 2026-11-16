@@ -26,6 +26,11 @@ from pyscf.mp.mp2 import get_nocc, get_nmo
 from pyscf.pprpa.rpprpa_direct import ao2mo, inner_product, ij2index, \
     get_chemical_potential, pprpa_orthonormalize_eigenvector, pprpa_print_a_pair
 
+__all__ = [
+    'pprpa_get_trial_vector', 'pprpa_contraction', 'pprpa_expand_space',
+    'RppRPADavidson', 'StreamObject',
+]
+
 
 def kernel(pprpa):
     # initialize trial vector and product matrix

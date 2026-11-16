@@ -33,6 +33,8 @@ from pyscf.scf import chkfile
 from pyscf.lib.exceptions import PointGroupSymmetryError
 from pyscf import __config__
 
+__all__ = ['SymAdaptedUHF', 'UHF', 'HF1e', 'PointGroupSymmetryError']
+
 WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
 MO_BASE = getattr(__config__, 'MO_BASE', 1)
 

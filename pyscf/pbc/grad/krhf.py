@@ -29,6 +29,8 @@ from pyscf.gto import mole
 from pyscf.pbc.gto.pseudo import pp_int
 import scipy
 
+__all__ = ['GradientsBase', 'SCF_GradScanner', 'Gradients']
+
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     '''

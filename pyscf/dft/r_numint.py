@@ -29,6 +29,8 @@ from pyscf.dft.numint2c import _eval_xc_eff, mcfun_eval_xc_adapter
 from pyscf.dft import xc_deriv
 from pyscf import __config__
 
+__all__ = ['RNumInt', 'eval_rho']
+
 
 def eval_ao(mol, coords, deriv=0, with_s=True, shls_slice=None,
             non0tab=None, cutoff=None, out=None, verbose=None):

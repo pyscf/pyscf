@@ -32,6 +32,8 @@ from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import mp2 as mp2_grad
 from pyscf.grad.mp2 import has_frozen_orbitals
 
+__all__ = ['Gradients', 'Grad']
+
 def grad_elec(mp_grad, t2, atmlst=None, verbose=logger.INFO):
     mp = mp_grad.base
     log = logger.new_logger(mp, verbose)

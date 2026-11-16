@@ -34,6 +34,8 @@ from pyscf.data import nist
 from pyscf.pbc.scf import addons
 from pyscf import __config__
 
+__all__ = ['KROHF']
+
 PRE_ORTH_METHOD = getattr(__config__, 'pbc_scf_analyze_pre_orth_method', 'ANO')
 
 

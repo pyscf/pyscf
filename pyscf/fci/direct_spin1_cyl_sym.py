@@ -50,6 +50,8 @@ from pyscf.fci import direct_nosym
 from pyscf.fci import addons
 from pyscf import __config__
 
+__all__ = ['FCISolver', 'FCI']
+
 libfci = direct_spin1.libfci
 
 

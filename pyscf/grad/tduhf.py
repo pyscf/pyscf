@@ -27,6 +27,8 @@ from pyscf.lib import logger
 from pyscf.grad import tdrhf as tdrhf_grad
 from pyscf.scf import ucphf
 
+__all__ = ['Gradients', 'Grad']
+
 
 def grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
     '''

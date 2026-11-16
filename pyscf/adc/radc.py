@@ -33,6 +33,8 @@ from pyscf import df
 from pyscf.mp import mp2
 from pyscf.data.nist import HARTREE2EV
 
+__all__ = ['RADC']
+
 
 # Excited-state kernel
 def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):

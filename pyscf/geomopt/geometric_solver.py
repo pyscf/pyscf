@@ -40,6 +40,11 @@ except ImportError:
            'You can install geomeTRIC with "pip install geometric"')
     raise ImportError(msg)
 
+__all__ = [
+    'PySCFEngine', 'GeometryOptimizer', 'NotConvergedError', 'GradientsBase',
+    'optimize',
+]
+
 # Overwrite units defined in geomeTRIC
 internal.ang2bohr = optimize.ang2bohr = nifty.ang2bohr = 1./lib.param.BOHR
 engine.bohr2ang = internal.bohr2ang = molecule.bohr2ang = nifty.bohr2ang = \

@@ -22,6 +22,8 @@ from pyscf.mcscf.addons import StateAverageMCSCFSolver, state_average_mix, state
 from pyscf.fci import direct_spin1
 from pyscf import mcpdft
 
+__all__ = ['coulomb_tensor', 'e_coul', 'temporary_env', 'StateAverageMCSCFSolver']
+
 def coulomb_tensor (mc, mo_coeff=None, ci=None, h2eff=None, eris=None):
     '''Compute w_IJKL = (tu|vx) D^IJ_tu D^KL_vx
 

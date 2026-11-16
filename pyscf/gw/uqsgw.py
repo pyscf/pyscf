@@ -40,6 +40,8 @@ from pyscf.gw.ugw_ac import UGWAC, set_frozen_orbs, _mo_energy_without_core, _mo
     get_sigma_outcore
 from pyscf.gw.utils.ac_grid import _get_scaled_legendre_roots, PadeAC, TwoPoleAC
 
+__all__ = ['UQSGW', 'temporary_env', 'UGWAC', 'PadeAC', 'TwoPoleAC']
+
 
 def kernel(gw):
     # local variables for convenience

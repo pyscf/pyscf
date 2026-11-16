@@ -32,6 +32,8 @@ from pyscf.pbc.tools import pbc as pbctools
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 from pyscf import __config__
 
+__all__ = ['ExtendedMole', 'ft_aopair']
+
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 1.0)
 # kecut=10 can roughly converge GTO with alpha=0.5
 KECUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_kecut_threshold', 10.0)

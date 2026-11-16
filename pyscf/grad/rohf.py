@@ -26,6 +26,8 @@ from pyscf import lib
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import uhf as uhf_grad
 
+__all__ = ['Gradients', 'Grad']
+
 def make_rdm1e(mf_grad, mo_energy, mo_coeff, mo_occ):
     '''Energy weighted density matrix'''
     mf = mf_grad.base

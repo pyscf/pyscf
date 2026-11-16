@@ -24,6 +24,8 @@ refractive index of each solvent are also useful for the PCM family models
 (see pcm.PCM.solvent).
 '''
 
+__all__ = ['resolve_solvent_name']
+
 # adapted from database https://comp.chem.umn.edu/solvation/mnsddb.pdf
 # solvent name: [n, n25, alpha, beta, gamma, epsilon, phi, psi)
 solvent_db = {

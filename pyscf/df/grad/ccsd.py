@@ -34,6 +34,8 @@ from pyscf.grad import ccsd as ccsd_grad
 from pyscf.grad.mp2 import _index_frozen_active, has_frozen_orbitals
 from pyscf.df.grad.rhf import _int3c_wrapper, _gen_metric_solver
 
+__all__ = ['Gradients', 'Grad']
+
 
 def _auxmol(mycc):
     with_df = getattr(mycc, 'with_df', None)

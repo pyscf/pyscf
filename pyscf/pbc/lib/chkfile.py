@@ -22,6 +22,8 @@ import pyscf.lib.chkfile
 from pyscf.lib.chkfile import load_chkfile_key, load
 from pyscf.lib.chkfile import dump_chkfile_key, dump, save
 
+__all__ = ['load_cell']
+
 def load_cell(chkfile):
     '''Load Cell object from chkfile.
 

@@ -34,6 +34,10 @@ from pyscf.lo import iao
 from pyscf.lo.stability import pipek_stability_jacobi, stability_newton
 from pyscf import __config__
 
+__all__ = [
+    'PipekMezey', 'PM', 'Pipek', 'PipekMezeyComplex', 'PMComplex', 'PipekComplex',
+]
+
 
 def atomic_pops(mol, mo_coeff, method='meta_lowdin', kpt=None, proj_data=None, mode=None,
                 verbose=None):

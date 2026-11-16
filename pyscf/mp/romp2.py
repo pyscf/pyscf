@@ -43,6 +43,8 @@ from pyscf import __config__
 from pyscf.mp import ump2
 from pyscf.mp import mp2 as mp2_base
 
+__all__ = ['ROMP2']
+
 WITH_T2 = getattr(__config__, 'mp_romp2_with_t2', True)
 
 

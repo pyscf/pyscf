@@ -26,6 +26,8 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import __config__
 
+__all__ = ['binsearch_chempot', 'minimize_chempot']
+
 
 def _objective(x, se, fock, nelec, occupancy=2, buf=None):
     ''' Objective function for the minimization

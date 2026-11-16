@@ -30,6 +30,8 @@ from pyscf.sgx.sgx_jk import BLKSIZE, SGX_BLKSIZE
 from pyscf.grad.rks import grids_response_cc, get_dw_partition_sorted
 from pyscf.dft import numint as ni
 
+__all__ = ['Gradients', 'Grad']
+
 
 def _gen_batch_nuc_grad(mol):
     '''Coulomb integrals of the given points and orbital pairs'''

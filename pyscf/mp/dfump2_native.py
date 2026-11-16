@@ -26,6 +26,11 @@ from pyscf import df
 from pyscf.scf import ucphf
 from pyscf.mp.dfmp2_native import DFRMP2, ints3c_cholesky, orbgrad_from_Gamma
 
+__all__ = [
+    'DFUMP2', 'MP2', 'UMP2', 'DFMP2', 'SCSDFUMP2', 'SCSMP2', 'SCSUMP2', 'SCSDFMP2',
+    'emp2_uhf', 'make_rdm1', 'fock_response_uhf', 'DFRMP2',
+]
+
 
 class DFUMP2(DFRMP2):
     '''

@@ -30,6 +30,8 @@ from pyscf.tdscf import rhf
 from pyscf.tdscf._lr_eig import eigh as lr_eigh, eig as lr_eig
 from pyscf import __config__
 
+__all__ = ['TDBase', 'TDA', 'TDHF']
+
 OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_uhf_get_nto_threshold', 0.3)
 REAL_EIG_THRESHOLD = getattr(__config__, 'tdscf_uhf_TDDFT_pick_eig_threshold', 1e-4)
 

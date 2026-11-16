@@ -43,6 +43,8 @@ from pyscf.hessian import rhf as rhf_hess
 from pyscf.df.grad.rhf import (_int3c_wrapper, _gen_metric_solver,
                                _make_auxmol, LINEAR_DEP_THRESHOLD)
 
+__all__ = ['Hessian']
+
 def _pinv(a, lindep=LINEAR_DEP_THRESHOLD):
     '''Similar to pinv (v1.7.0) with atol=lindep and rtol=0'''
     w, v = scipy.linalg.eigh(a)

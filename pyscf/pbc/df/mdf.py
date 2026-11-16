@@ -46,6 +46,8 @@ from pyscf.pbc.df import mdf_ao2mo
 from pyscf.pbc.df.aft import _sub_df_jk_
 from pyscf import __config__
 
+__all__ = ['MDF', 'KPoints']
+
 
 class MDF(df.GDF):
     '''Gaussian and planewaves mixed density fitting

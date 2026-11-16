@@ -39,6 +39,8 @@ from pyscf.cc.rccsdt_highm import (t3_spin_summation, t3_perm_symmetrize_inplace
                                     intermediates_t3_add_t3, compute_r3, r3_divide_e_)
 from pyscf import __config__
 
+__all__ = ['RCCSDTQ']
+
 
 _libccsdt = lib.load_library('libccsdt')
 

@@ -27,6 +27,8 @@ References:
 import scipy.linalg as sla
 import numpy as np
 
+__all__ = ['addto_diagonal', 'get_id_minus_pi', 'mkslice']
+
 
 def _is_contiguous(arr):
     return arr.flags['C_CONTIGUOUS'] or arr.flags['F_CONTIGUOUS']

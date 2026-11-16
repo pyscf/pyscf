@@ -32,6 +32,8 @@ from pyscf.solvent import _attach_solvent
 from pyscf.solvent import _solvent_data
 from scipy.special import erf
 
+__all__ = ['PCM']
+
 def _as_solvent_obj(solvent_obj, mol):
     '''Allows the solvent model to be specified by the name of the solvent,
     e.g. mf.PCM('toluene')

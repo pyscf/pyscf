@@ -28,6 +28,11 @@ from pyscf.scf import _vhf
 from pyscf.data import nist
 from pyscf import __config__
 
+__all__ = [
+    'X2CHelperBase', 'SpinorX2CHelper', 'X2C', 'SpinOrbitalX2CHelper', 'SCF', 'X2C_SCF',
+    'UHF', 'X2C_UHF', 'RHF', 'X2C_RHF', 'x2c1e_ghf', 'X2C1E_GSCF',
+]
+
 LINEAR_DEP_THRESHOLD = 1e-9
 
 class X2CHelperBase(lib.StreamObject):

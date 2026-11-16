@@ -30,6 +30,8 @@ from pyscf.scf import uhf
 from pyscf.data import nist
 from pyscf import __config__
 
+__all__ = ['ROHF', 'HF1e']
+
 WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
 MO_BASE = getattr(__config__, 'MO_BASE', 1)
 

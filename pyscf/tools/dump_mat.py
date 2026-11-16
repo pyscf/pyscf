@@ -16,6 +16,8 @@
 from pyscf.lib.parameters import OUTPUT_DIGITS, OUTPUT_COLS
 from pyscf import __config__
 
+__all__ = ['dump_mo', 'dump_rec', 'dump_tri']
+
 BASE = getattr(__config__, 'BASE', 0)
 
 def dump_tri(stdout, c, label=None,

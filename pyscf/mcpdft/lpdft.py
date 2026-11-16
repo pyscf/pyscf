@@ -26,6 +26,11 @@ from pyscf import mcpdft
 from pyscf.mcpdft import _dms
 from pyscf.mcpdft import chkfile
 
+__all__ = [
+    'weighted_average_densities', 'transformed_h1e_for_cas', 'linear_multi_state',
+    'linear_multi_state_mix',
+]
+
 
 def weighted_average_densities(mc, ci=None, weights=None):
     """Compute the weighted average 1- and 2-electron CAS densities.

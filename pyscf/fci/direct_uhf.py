@@ -38,6 +38,8 @@ from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 from pyscf.fci.spin_op import spin_square
 
+__all__ = ['FCISolver', 'FCI']
+
 libfci = direct_spin1.libfci
 
 # When the spin-orbitals do not have the degeneracy on spatial part,

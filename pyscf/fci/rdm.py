@@ -30,6 +30,8 @@ from pyscf import lib
 from pyscf.fci import cistring
 from pyscf.fci.addons import _unpack_nelec
 
+__all__ = ['make_dm123', 'make_dm1234', 'reorder_dm123', 'reorder_dm1234']
+
 librdm = cistring.libfci
 
 def reorder_rdm(rdm1, rdm2, inplace=False):

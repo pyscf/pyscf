@@ -26,6 +26,11 @@ from pyscf.tdscf._lr_eig import eigh as lr_eigh
 from pyscf.dft.rks import KohnShamDFT
 from pyscf import __config__
 
+__all__ = [
+    'TDA', 'TDDFT', 'RPA', 'TDUKS', 'CasidaTDDFT', 'TDDFTNoHybrid', 'dRPA', 'TDH',
+    'dTDA', 'KohnShamDFT',
+]
+
 
 class TDA(uhf.TDA):
     def Gradients(self):

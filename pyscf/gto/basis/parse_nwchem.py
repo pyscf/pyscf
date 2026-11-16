@@ -96,7 +96,23 @@ def parse(string, symb=None, optimize=True):
     return _parse(raw_basis, optimize)
 
 def load(basisfile, symb, optimize=True):
-    '''Load basis for atom of symb from file'''
+    '''Load the orbital basis for one element from a NWChem file.
+
+    Args:
+        basisfile : str or path-like
+            File containing basis data in NWChem format.
+        symb : str
+            Element symbol identifying the basis section, for example ``'C'``.
+
+    Kwargs:
+        optimize : bool
+            Combine contractions that have the same angular momentum and
+            primitive exponents. Default True.
+
+    Returns:
+        Basis data in PySCF's internal format, as described in
+        :func:`pyscf.gto.mole.format_basis`.
+    '''
     raw_basis = search_seg(basisfile, symb)
     if not raw_basis:
         raise BasisNotFoundError('Basis set not found for %s' % symb)
@@ -183,7 +199,18 @@ def _search_basis_block(raw_data, symb):
     return line_data
 
 def convert_basis_to_nwchem(symb, basis):
-    '''Convert the internal basis format to NWChem format string'''
+    '''Convert one element's orbital basis to NWChem text.
+
+    Args:
+        symb : str
+            Element label, normalized to its standard chemical symbol.
+        basis : list
+            PySCF internal orbital basis. Each shell has the form
+            ``[l, [exponent, coefficient, ...], ...]``.
+
+    Returns:
+        A string containing a basis set in NWChem format.
+    '''
     res = []
     symb = _std_symbol(symb)
 

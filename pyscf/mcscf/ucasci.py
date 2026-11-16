@@ -35,6 +35,8 @@ from pyscf.mcscf import addons
 from pyscf.mcscf.casci import as_scanner, CASBase
 from pyscf import __config__
 
+__all__ = ['UCASBase', 'UCASCI', 'CASCI', 'CASBase']
+
 WITH_META_LOWDIN = getattr(__config__, 'mcscf_analyze_with_meta_lowdin', True)
 LARGE_CI_TOL = getattr(__config__, 'mcscf_analyze_large_ci_tol', 0.1)
 

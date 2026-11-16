@@ -33,6 +33,8 @@ from pyscf.agf2 import aux_space as aux
 from pyscf.agf2.chempot import binsearch_chempot, minimize_chempot
 from pyscf.mp.ump2 import get_frozen_mask as _get_frozen_mask
 
+__all__ = ['UAGF2']
+
 BLKMIN = getattr(__config__, 'agf2_blkmin', 1)
 
 

@@ -38,6 +38,8 @@ from pyscf.pbc.tools import k2gamma
 from pyscf.pbc.tools import pbc as pbctools
 from pyscf import __config__
 
+__all__ = ['AFTDFMixin', 'AFTDF', 'KPoints', 'Int3cBuilder']
+
 
 KE_SCALING = getattr(__config__, 'pbc_df_aft_ke_cutoff_scaling', 0.75)
 RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 2.0)

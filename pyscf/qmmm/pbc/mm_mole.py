@@ -26,6 +26,8 @@ from pyscf.lib import param, logger
 from scipy.special import erf, erfc, lambertw
 from pyscf import lib
 
+__all__ = ['Cell']
+
 class Cell(qmmm.mm_mole.Mole, pbc.gto.Cell):
     r''':class:`Cell` class for MM particles.
 

@@ -34,6 +34,8 @@ from pyscf.pbc.dft.krks import get_rho
 from pyscf.pbc.dft import multigrid
 from pyscf import __config__
 
+__all__ = ['KUKS']
+
 
 def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,
              kpts=None, kpts_band=None):

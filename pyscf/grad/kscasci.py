@@ -26,6 +26,8 @@ from pyscf.lib import logger
 from pyscf.scf import hf, rohf
 from pyscf.grad import casci as casci_grad
 
+__all__ = ['Gradients', 'Grad']
+
 
 def _check_supported_orbital_source(mc):
     if isinstance(mc._scf, rohf.ROHF):

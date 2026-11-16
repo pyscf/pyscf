@@ -37,6 +37,8 @@ from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile
 from pyscf import __config__
 
+__all__ = ['KUHF']
+
 PRE_ORTH_METHOD = getattr(__config__, 'pbc_scf_analyze_pre_orth_method', 'ANO')
 CHECK_COULOMB_IMAG = getattr(__config__, 'pbc_scf_check_coulomb_imag', True)
 

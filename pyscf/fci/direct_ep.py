@@ -30,6 +30,8 @@ from pyscf.fci import cistring
 from pyscf.fci import rdm
 from pyscf.fci.direct_spin1 import _unpack_nelec
 
+__all__ = ['make_rdm12e', 'make_rdm1p']
+
 #                              site-1   ,...,site-N
 #                              v             v
 # ep_wfn, shape = (nstra,nstrb,nphonon+1,...,nphonon+1)

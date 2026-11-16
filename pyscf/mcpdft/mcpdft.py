@@ -28,6 +28,11 @@ from pyscf.mcpdft.otfnal import transfnal, get_transfnal
 from pyscf.mcpdft import _dms
 from pyscf.mcpdft import chkfile
 
+__all__ = [
+    'energy_tot', 'kernel', 'StateAverageMCSCFSolver', 'StateAverageMixFCISolver',
+    'StateSpecificFCISolver', 'transfnal',
+]
+
 def energy_tot(mc, mo_coeff=None, ci=None, ot=None, state=0, verbose=None):
     '''Calculate MC-PDFT total energy
 

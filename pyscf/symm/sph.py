@@ -21,6 +21,8 @@ import numpy
 import scipy.linalg
 from pyscf.symm.cg import cg_spin
 
+__all__ = ['real_sph_vec']
+
 def real_sph_vec(r, lmax, reorder_p=False):
     '''Computes (all) real spherical harmonics up to the angular momentum lmax'''
     #:import scipy.special

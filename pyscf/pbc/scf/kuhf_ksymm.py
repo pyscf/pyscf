@@ -26,6 +26,8 @@ from pyscf.pbc.lib import kpts as libkpts
 from pyscf.pbc.scf import khf_ksymm, khf, kuhf
 from pyscf.pbc.lib.kpts import KPoints
 
+__all__ = ['KsymAdaptedKUHF', 'KUHF', 'KPoints']
+
 @lib.with_doc(kuhf.get_occ.__doc__)
 def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     if mo_energy_kpts is None:

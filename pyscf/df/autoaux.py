@@ -26,6 +26,8 @@ import numpy as np
 from pyscf import gto
 from pyscf.lib import logger
 
+__all__ = ['autoabs', 'autoaux']
+
 F_LAUX   = np.array([20 , 7.0, 4.0, 4.0, 3.5, 2.5, 2.0, 2.0])
 BETA_BIG = np.array([1.8, 2.0, 2.2, 2.2, 2.2, 2.3, 3.0, 3.0])
 BETA_SMALL = 1.8

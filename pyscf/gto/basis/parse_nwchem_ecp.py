@@ -122,7 +122,18 @@ def _parse_ecp(raw_ecp):
     return [nelec, ecp_sorted]
 
 def load(basisfile, symb):
-    '''Load ECP for atom of symb from file'''
+    '''Load one element's effective core potential from a NWChem file.
+
+    Args:
+        basisfile : str or path-like
+            File containing an ECP section in NWChem format.
+        symb : str
+            Element label, normalized to its standard chemical symbol.
+
+    Returns:
+        ECP data in PySCF's internal format, as described in
+        :func:`pyscf.gto.mole.format_ecp`.
+    '''
     return _parse_ecp(_search_ecp(basisfile, symb))
 
 def _search_ecp(basisfile, symb):
@@ -148,7 +159,17 @@ def _search_ecp(basisfile, symb):
     return []
 
 def convert_ecp_to_nwchem(symb, ecp):
-    '''Convert the internal ecp format to NWChem format string'''
+    '''Convert one element's scalar ECP to NWChem text.
+
+    Args:
+        symb : str
+            Element label, normalized to its standard chemical symbol.
+        ecp : list
+            PySCF internal ECP data
+
+    Returns:
+        A string with ECP data in NWChem format.
+    '''
     symb = _std_symbol(symb)
     res = ['%-2s nelec %d' % (symb, ecp[0])]
 

@@ -39,6 +39,8 @@ from pyscf import ao2mo
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 
+__all__ = ['FCISolver', 'FCI']
+
 libfci = direct_spin1.libfci
 
 def contract_1e(h1e, fcivec, norb, nelec, link_index=None):

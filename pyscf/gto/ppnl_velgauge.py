@@ -42,6 +42,8 @@ from pyscf.pbc.gto.pseudo import pp_int
 from pyscf.df import incore
 from pyscf.gto.mole import ATOM_OF
 
+__all__ = ['get_gth_pp_nl_velgauge', 'get_gth_pp_nl_velgauge_commutator']
+
 def get_gth_pp_nl_velgauge(mol, q):
     r"""Get the matrix elements of velocity gauge-transformed nonlocal GTH
     pseudopotential.

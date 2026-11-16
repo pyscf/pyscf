@@ -29,6 +29,8 @@ from pyscf.data import elements
 from pyscf.lib import logger
 from pyscf.scf import hf
 
+__all__ = ['energy_singles']
+
 
 def find_cabs(mol, auxmol, lindep=1e-8, *, remove_linear_dep=False):
     """Project an auxiliary basis to the complement of the orbital basis.

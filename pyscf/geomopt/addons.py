@@ -20,6 +20,8 @@ Helper functions for geometry optimizer
 import numpy
 from pyscf import lib
 
+__all__ = ['as_pyscf_method']
+
 def as_pyscf_method(mol, scan_function):
     '''Creat an wrapper for the given scan_function, to make it work as a
     pyscf gradients scanner. The wrapper can be passed to :func:`optimize`.

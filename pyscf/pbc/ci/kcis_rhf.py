@@ -35,6 +35,8 @@ from pyscf.pbc.df import df
 from pyscf.pbc import tools
 from pyscf.pbc.cc.ccsd import _adjust_occ
 
+__all__ = ['kernel', 'cis_matvec_singlet', 'cis_H', 'cis_diag', 'KCIS']
+
 # einsum = np.einsum
 einsum = lib.einsum
 direct_sum = lib.direct_sum

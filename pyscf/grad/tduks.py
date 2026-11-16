@@ -29,6 +29,8 @@ from pyscf.grad import tdrhf as tdrhf_grad
 from pyscf.grad import tdrks as tdrks_grad
 from pyscf.scf import ucphf
 
+__all__ = ['Gradients', 'Grad']
+
 
 #
 # Given Y = 0, TDHF gradients (XAX+XBY+YBX+YAY)^1 turn to TDA gradients (XAX)^1

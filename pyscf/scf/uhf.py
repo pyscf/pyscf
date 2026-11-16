@@ -25,6 +25,10 @@ from pyscf.scf import hf
 from pyscf.scf import chkfile
 from pyscf import __config__
 
+__all__ = [
+    'make_rdm1', 'make_rdm2', 'get_veff', 'spin_square', 'make_asym_dm', 'UHF', 'HF1e',
+]
+
 WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
 PRE_ORTH_METHOD = getattr(__config__, 'scf_analyze_pre_orth_method', 'ANO')
 MO_BASE = getattr(__config__, 'MO_BASE', 1)

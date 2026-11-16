@@ -36,6 +36,11 @@ from pyscf.data.nist import BOHR, HARTREE2EV
 from pyscf.gto.mole import charge
 from pyscf.pbc.gto.cell import Cell
 
+__all__ = [
+    'PySCF', 'Cell', 'ase_atoms_to_pyscf', 'bandpath', 'cell_from_ase',
+    'plot_band_structure',
+]
+
 def pyscf_to_ase_atoms(pyscf_obj):
     '''
     Convert PySCF Cell/Mole object to ASE Atoms object

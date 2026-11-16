@@ -25,6 +25,13 @@ from pyscf.pbc.lib.kpts_helper import get_kconserv, get_kconserv3
 from pyscf.pbc.lib.kpts_helper import intersection
 from pyscf import __config__
 
+__all__ = [
+    'fft', 'ifft', 'fftk', 'ifftk', 'get_coulG', 'precompute_exx', 'get_ws_inradius',
+    'madelung', 'get_monkhorst_pack_size', 'get_lattice_Ls', 'check_lattice_sum_range',
+    'super_cell', 'cell_plus_imgs', 'cutoff_to_mesh', 'mesh_to_cutoff', 'cutoff_to_gs',
+    'gs_to_cutoff', 'round_to_cell0',
+]
+
 FFT_ENGINE = getattr(__config__, 'pbc_tools_pbc_fft_engine', 'NUMPY+BLAS')
 
 def _fftn_blas(f, mesh):
@@ -963,8 +970,16 @@ def cutoff_to_mesh(a, cutoff):
     return mesh
 
 def mesh_to_cutoff(a, mesh):
-    '''
-    Convert #grid points to KE cutoff
+    '''Convert an FFT mesh to kinetic-energy cutoffs along lattice directions.
+
+    Args:
+        a : (3, 3) ndarray
+            Real-space lattice vectors as rows.
+        mesh : sequence of three ints
+            Number of FFT grid points along each lattice direction.
+
+    Returns:
+        A (3,) array of kinetic-energy cutoffs.
     '''
     # Search the minimal x,y,z requiring |x*b[0]+y*b[1]+z*b[2]|^2 > 2 * cutoff
     b = 2 * np.pi * np.linalg.inv(a.T)

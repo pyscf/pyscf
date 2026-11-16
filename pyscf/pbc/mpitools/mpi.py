@@ -31,6 +31,8 @@ if 'pool' not in _registry:
     _registry['pool'] = pool
     atexit.register(pool.close)
 
+__all__ = ['MPIPool']
+
 comm = pool.comm
 rank = pool.rank
 

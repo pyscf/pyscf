@@ -32,6 +32,8 @@ from pyscf.pbc.tools import pbc as pbctools
 from pyscf.scf import _vhf
 from pyscf.pbc.tools import k2gamma
 
+__all__ = ['MoleNoBasSort', 'estimate_omega_for_npw', 'intor_j2c']
+
 
 """ General helper functions
 """

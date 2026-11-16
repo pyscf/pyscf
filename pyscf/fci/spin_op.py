@@ -19,6 +19,8 @@ from pyscf import lib
 from pyscf.fci import cistring
 from pyscf.fci.addons import _unpack_nelec
 
+__all__ = ['contract_ss', 'local_spin', 'spin_square', 'spin_square0']
+
 librdm = cistring.libfci
 
 ######################################################

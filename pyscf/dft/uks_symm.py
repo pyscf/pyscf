@@ -26,6 +26,8 @@ from pyscf.scf import uhf_symm
 from pyscf.dft import uks
 from pyscf.dft import rks
 
+__all__ = ['SymAdaptedUKS', 'UKS']
+
 
 class SymAdaptedUKS(rks.KohnShamDFT, uhf_symm.UHF):
     ''' Restricted Kohn-Sham '''

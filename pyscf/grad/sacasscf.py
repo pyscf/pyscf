@@ -34,6 +34,11 @@ from pyscf.fci import cistring
 from pyscf.lib import logger
 from pyscf import lib, ao2mo, mcscf
 
+__all__ = [
+    'CASSCF_GradScanner', 'Gradients', 'SACASLagPrec', 'StateAverageMCSCFSolver',
+    'StateAverageFCISolver', 'StateAverageMixFCISolver', 'SpinPenaltyFCISolver',
+]
+
 # ref. Mol. Phys., 99, 103 (2001); DOI: 10.1080/002689700110005642
 
 def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, eris=None,

@@ -14,6 +14,8 @@
 
 import numpy
 
+__all__ = ['make']
+
 def make(nat, b=1.):
     r = b/2 / numpy.sin(numpy.pi/nat)
     atms = []

@@ -24,6 +24,8 @@ from pyscf.dft.rkspu import _set_U, _make_minao_lo, reference_mol
 from pyscf.grad import uks as uks_grad
 from pyscf.grad.rkspu import generate_first_order_local_orbitals
 
+__all__ = ['Gradients', 'UKSpU']
+
 def _hubbard_U_deriv1(mf, dm=None):
     assert mf.alpha is None
     assert mf.C_ao_lo is None

@@ -26,6 +26,8 @@ from pyscf.hessian import rhf as rhf_hess
 from pyscf.scf._response_functions import _gen_uhf_response
 from pyscf.data.nist import MP_ME
 
+__all__ = ['EPH']
+
 CUTOFF_FREQUENCY = rhf_eph.CUTOFF_FREQUENCY
 KEEP_IMAG_FREQUENCY = rhf_eph.KEEP_IMAG_FREQUENCY
 

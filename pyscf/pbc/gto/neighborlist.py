@@ -21,6 +21,11 @@ import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
 
+__all__ = [
+    'build_neighbor_list_for_shlpairs', 'free_neighbor_list',
+    'neighbor_list_to_ndarray', 'NeighborListOpt',
+]
+
 libpbc = lib.load_library('libpbc')
 
 class _CNeighborPair(ctypes.Structure):

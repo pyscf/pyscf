@@ -28,6 +28,8 @@ from pyscf.pbc.dft import kuks
 from pyscf.pbc.dft.kuks import energy_elec
 from pyscf import __config__
 
+__all__ = ['KROKS']
+
 
 @lib.with_doc(kuks.get_veff.__doc__)
 def get_veff(ks, cell=None, dm=None, dm_last=None, vhf_last=None, hermi=1,

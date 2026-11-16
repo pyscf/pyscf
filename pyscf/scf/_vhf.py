@@ -20,6 +20,8 @@ from pyscf import lib
 from pyscf import gto
 from pyscf.gto.moleintor import make_cintopt, make_loc, ascint3
 
+__all__ = ['VHFOpt']
+
 libcvhf = lib.load_library('libcvhf')
 
 def _fpointer(name):

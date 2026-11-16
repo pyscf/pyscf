@@ -38,6 +38,8 @@ from pyscf.pbc.mp.kump2 import (get_frozen_mask, get_nocc, get_nmo,
 from pyscf.pbc.cc import kintermediates_uhf
 from pyscf import __config__
 
+__all__ = ['KUCCSD', 'UCCSD']
+
 einsum = lib.einsum
 
 

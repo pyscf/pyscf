@@ -29,6 +29,8 @@ from pyscf.df.autoaux import autoaux, autoabs, _auto_aux_element
 from pyscf.data.elements import _rm_digit
 from pyscf import __config__
 
+__all__ = ['load', 'BasisNotFoundError', 'aug_etb', 'make_auxbasis', 'make_auxmol']
+
 DFBASIS = getattr(__config__, 'df_addons_aug_etb_beta', 'weigend')
 ETB_BETA = getattr(__config__, 'df_addons_aug_dfbasis', 2.0)
 FIRST_ETB_ELEMENT = getattr(__config__, 'df_addons_aug_start_at', 36)  # 'Rb'

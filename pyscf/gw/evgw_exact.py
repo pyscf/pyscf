@@ -34,6 +34,8 @@ from pyscf.lib import diis, einsum, logger, temporary_env
 
 from pyscf.gw.gw_exact_df import GWExactDF, diagonalize_phrpa, get_transition_density, get_sigma
 
+__all__ = ['EVGWExact', 'temporary_env', 'GWExactDF']
+
 
 def kernel(gw):
     # local variables for convenience

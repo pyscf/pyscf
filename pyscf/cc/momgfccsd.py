@@ -31,6 +31,8 @@ from pyscf import lib, cc, ao2mo
 from pyscf.lib import logger
 from pyscf.agf2 import mpi_helper
 
+__all__ = ['block_lanczos_symm', 'block_lanczos_nosymm', 'MomGFCCSD']
+
 
 def kernel(
         gfccsd,

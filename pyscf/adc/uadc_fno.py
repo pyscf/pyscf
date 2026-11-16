@@ -27,6 +27,8 @@ from pyscf import df
 from pyscf import scf
 from pyscf.data.nist import HARTREE2EV
 
+__all__ = ['UADC2FNO']
+
 class UADC2FNO(uadc.UADC):
     '''Unrestricted ADC-based frozen natural orbital (FNO) generator.
     The open-shell OSFNO variant follows P. Pokhilko, D. Izmodenov, and

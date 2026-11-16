@@ -46,6 +46,8 @@ from pyscf.df.grad.casdm2_util import (solve_df_rdm2, grad_elec_dferi,
                                        grad_elec_auxresponse_dferi)
 from pyscf.mcscf.addons import StateAverageMCSCFSolver
 
+__all__ = ['CASSCF_GradScanner', 'Gradients', 'Grad', 'StateAverageMCSCFSolver']
+
 def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None,
               eris=None):
     mc = mc_grad.base

@@ -38,6 +38,8 @@ from functools import reduce
 from pyscf import lib
 from pyscf.pbc.lo.base import get_kmesh
 
+__all__ = ['wannier_interpolation']
+
 
 def wannier_interpolation(mf, kpts_band, lo_coeff):
     lo_coeff = numpy.asarray(lo_coeff)

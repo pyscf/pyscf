@@ -19,6 +19,8 @@ import numpy as np
 import sys
 from time import sleep
 
+__all__ = ['load_balancer']
+
 def enum(**enums):
     return type('Enum', (), enums)
 

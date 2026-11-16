@@ -33,6 +33,8 @@ from pyscf import df
 from pyscf import scf
 from pyscf.data.nist import HARTREE2EV
 
+__all__ = ['UADC']
+
 
 # Excited-state kernel
 def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):

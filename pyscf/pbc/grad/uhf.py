@@ -27,6 +27,8 @@ from pyscf.pbc.grad import rhf as rhf_grad
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf.pbc.dft.multigrid import MultiGridNumInt2
 
+__all__ = ['Gradients', 'MultiGridNumInt2']
+
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None, kpt=np.zeros(3)):
     mf = mf_grad.base
     cell = mf_grad.cell

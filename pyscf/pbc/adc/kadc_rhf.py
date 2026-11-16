@@ -45,6 +45,8 @@ from pyscf.data.nist import HARTREE2EV
 import h5py
 import tempfile
 
+__all__ = ['RADC']
+
 # Note : All integrals are in Chemist's notation except for vvvv
 #        Eg.of momentum conservation :
 #        Chemist's  oovv(ijab) : ki - kj + ka - kb

@@ -48,6 +48,8 @@ from pyscf.fci import rdm
 from pyscf.fci import direct_spin1
 from pyscf.fci.spin_op import contract_ss
 
+__all__ = ['FCISolver', 'FCI', 'contract_2e']
+
 libfci = direct_spin1.libfci
 
 @lib.with_doc(direct_spin1.contract_1e.__doc__)

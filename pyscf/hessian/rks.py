@@ -34,6 +34,8 @@ from pyscf.dft import numint, gen_grid
 # import pyscf.grad.rks to activate nuc_grad_method method
 from pyscf.grad import rks
 
+__all__ = ['Hessian']
+
 
 min_grid_blksize = 128*128
 NLC_REMOVE_ZERO_RHO_GRID_THRESHOLD = 1e-8

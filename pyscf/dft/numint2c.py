@@ -28,6 +28,8 @@ from pyscf.dft.numint import _dot_ao_dm, _dot_ao_ao, _scale_ao, _tau_dot, BLKSIZ
 from pyscf.dft import xc_deriv
 from pyscf import __config__
 
+__all__ = ['eval_rho', 'NumInt2C']
+
 
 @lib.with_doc(
     '''Calculate the electron density and magnetization spin density in the

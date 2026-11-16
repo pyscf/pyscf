@@ -20,6 +20,8 @@ import numpy
 from pyscf import lib
 from pyscf.cc import gccsd_rdm
 
+__all__ = ['make_rdm1', 'make_rdm2']
+
 def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):
     doo, dov, dvo, dvv = gccsd_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2)
 

@@ -36,6 +36,8 @@ from pyscf.pbc import tools
 from pyscf.pbc.lib.kpts import KPoints
 from pyscf.pbc.lib.kpts_helper import group_by_conj_pairs
 
+__all__ = ['KPoints', 'get_phase', 'k2gamma']
+
 def kpts_to_kmesh(cell, kpts, precision=None, rcut=None, bound_by_supmol=True):
     '''Find the minimal k-points mesh to include all input kpts'''
     kpts = np.asarray(kpts)

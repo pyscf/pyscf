@@ -30,6 +30,11 @@ except ImportError:
     class DMRGCI :
         pass
 
+__all__ = [
+    'dm2_cumulant', 'dm2s_cumulant', 'make_weighted_casdm1s', 'make_weighted_casdm2',
+    'StateAverageFCISolver', 'StateAverageMixFCISolver', 'StateSpecificFCISolver',
+]
+
 def _get_fcisolver (mc, ci, state=0):
     '''Find the appropriate FCI solver, CI vector, and nelecas tuple to
     build single-state reduced density matrices. If state_average or

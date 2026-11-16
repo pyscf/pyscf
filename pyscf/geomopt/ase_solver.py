@@ -25,6 +25,8 @@ from pyscf.lib import logger
 from pyscf.pbc import gto
 from pyscf.pbc.tools.pyscf_ase import pyscf_to_ase_atoms, PySCF
 
+__all__ = ['GeometryOptimizer', 'PySCF']
+
 def kernel(method, target=None, logfile=None, fmax=0.05, max_steps=100):
     '''Optimize the geometry using ASE.
 

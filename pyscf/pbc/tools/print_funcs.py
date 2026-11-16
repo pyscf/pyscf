@@ -1,6 +1,8 @@
 import numpy
 from pyscf.lib import logger
 
+__all__ = ['print_mo_energy_occ_kpts', 'print_mo_energy_occ']
+
 def print_mo_energy_occ_kpts(mf,mo_energy_kpts,mo_occ_kpts,is_uhf):
 
     if is_uhf:

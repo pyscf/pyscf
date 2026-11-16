@@ -28,6 +28,8 @@ from pyscf.scf import ghf
 from pyscf.x2c import x2c
 from pyscf.data import nist
 
+__all__ = ['sfx2c1e', 'sfx2c', 'SFX2C1E_SCF', 'SpinFreeX2CHelper', 'SpinFreeX2C']
+
 
 def sfx2c1e(mf):
     '''Spin-free X2C.

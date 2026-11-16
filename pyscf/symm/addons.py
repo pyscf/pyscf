@@ -26,6 +26,12 @@ from pyscf.symm import basis
 from pyscf.symm import param
 from pyscf import __config__
 
+__all__ = [
+    'label_orb_symm', 'symmetrize_orb', 'find_symmetric_mo', 'symmetrize_space',
+    'symmetrize_multidim', 'std_symb', 'irrep_name2id', 'irrep_id2name', 'irrep_name',
+    'route', 'eigh', 'direct_prod', 'PointGroupSymmetryError',
+]
+
 
 MULTI_IRREPS = -1
 

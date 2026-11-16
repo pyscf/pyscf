@@ -27,6 +27,8 @@ from pyscf.dft.uks import energy_elec
 from pyscf.dft import rks
 from pyscf.dft import uks
 
+__all__ = ['ROKS']
+
 
 @lib.with_doc(uks.get_veff.__doc__)
 def get_veff(ks, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):

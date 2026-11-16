@@ -34,6 +34,10 @@ from pyscf.lib import logger
 from pyscf.grad.rhf import GradientsBase
 from pyscf.hessian.rhf import HessianBase
 
+__all__ = [
+    'kernel', 'Gradients', 'GradScanner', 'Hessian', 'GradientsBase', 'HessianBase',
+]
+
 # Near the crossover between truncation error and the noise in the quantity
 # being differenced. Larger steps are dominated by truncation: on H2O/STO-3G
 # the RHF Hessian is off by 5.5e-05 at 1e-2 and 9.1e-07 at 1e-3.

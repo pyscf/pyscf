@@ -29,6 +29,8 @@ from pyscf.scf import ghf
 from pyscf.dft import rks
 from pyscf.dft.numint2c import NumInt2C
 
+__all__ = ['GKS', 'NumInt2C']
+
 
 def get_veff(ks, mol=None, dm=None, dm_last=None, vhf_last=None, hermi=1):
     '''Coulomb + XC functional

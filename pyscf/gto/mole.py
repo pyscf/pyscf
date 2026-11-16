@@ -53,6 +53,29 @@ from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON, \
 from pyscf.lib.exceptions import BasisNotFoundError, PointGroupSymmetryError
 import warnings
 
+__all__ = [
+    'M', 'gaussian_int', 'gto_norm', 'cart2sph', 'cart2spinor_kappa', 'cart2j_kappa',
+    'cart2spinor_l', 'cart2j_l', 'sph2spinor_kappa', 'sph2spinor_l',
+    'ao_rotation_matrix', 'atom_types', 'format_atom', 'format_basis',
+    'uncontracted_basis', 'uncontract', 'to_uncontracted_cartesian_basis',
+    'decontract_basis', 'format_ecp', 'format_pseudo', 'expand_etb', 'expand_etbs',
+    'etbs', 'conc_env', 'conc_mol', 'intor_cross', 'make_atm_env', 'make_bas_env',
+    'make_env', 'make_ecp_env', 'tot_electrons', 'copy', 'pack', 'unpack', 'dumps',
+    'loads', 'len_spinor', 'len_cart', 'npgto_nr', 'nao_nr', 'nao_cart', 'nao_nr_range',
+    'nao_2c', 'nao_2c_range', 'ao_loc_nr', 'ao_loc_2c', 'time_reversal_map',
+    'classical_coulomb_energy', 'energy_nuc', 'inter_distance', 'sph_labels',
+    'spheric_labels', 'spherical_labels', 'cart_labels', 'ao_labels', 'spinor_labels',
+    'search_ao_label', 'search_shell_id', 'search_ao_nr', 'search_ao_r',
+    'offset_2c_by_atom', 'aoslice_by_atom', 'offset_nr_by_atom', 'same_basis_set',
+    'same_mol', 'is_same_mol', 'chiral_mol', 'inertia_moment', 'atom_mass_list',
+    'condense_to_shell', 'get_overlap_cond', 'tostring', 'tofile', 'fromfile',
+    'fromstring', 'is_au', 'MoleBase', 'Mole', 'from_zmatrix', 'zmat2cart', 'zmat',
+    'cart2zmat', 'dyall_nuc_mod', 'filatov_nuc_mod', 'fakemol_for_charges',
+    'fakemol_for_cgtf_charge', 'classify_ecp_pseudo', 'bse_predefined_ecp',
+    'extract_pgto_params', 'most_diffuse_pgto', 'BasisNotFoundError',
+    'PointGroupSymmetryError',
+]
+
 
 # for _atm, _bas, _env
 CHARGE_OF  = 0
@@ -108,7 +131,15 @@ NUMBERED_ATOM_LABEL = re.compile("^[0-9]+ [A-Z]")
 def M(*args, **kwargs):
     r'''This is a shortcut to build up Mole object.
 
-    Args: Same to :func:`Mole.build`
+    Positional and keyword arguments are passed to :meth:`Mole.build`.
+    Common keywords include ``atom`` (geometry), ``basis`` (orbital basis),
+    ``charge`` (net molecular charge), and ``spin`` (the number of alpha
+    electrons minus the number of beta electrons, or 2S). Coordinates are
+    in Angstrom unless ``unit`` specifies otherwise.
+
+    Returns:
+        A built :class:`Mole` object, ready for integral evaluation or use
+        in a calculation. This is equivalent to ``Mole().build(*args, **kwargs)``.
 
     Examples:
 
@@ -3149,21 +3180,29 @@ class MoleBase(lib.StreamObject):
         '''Update geometry
 
         Args:
-            atoms_or_coords : list, str, or numpy.ndarray
+            atoms_or_coords : list, str or ndarray
                 When specified in list or str, it is processed as the Mole.atom
                 attribute. If inputing a (N, 3) numpy array, this array
                 represents the coordinates of the atoms in the molecule.
 
         Kwargs:
-            unit : str
+            unit : str or number or None
                 The unit for the input `atoms_or_coords`. If specified, mol.unit
                 will be updated to this value. If not provided, the current
                 mol.unit will be used for the input `atoms_or_coords`.
-            symmetry : bool
+            symmetry : bool or str or None
                 Whether to enable point group symmetry. If not specified, the
                 current mol.symmetry setting will be used.
             inplace : bool
                 Whether to overwrite the existing Mole object.
+
+        Returns:
+            The molecule with the new geometry: self if inplace=True, or a new
+            Mole object otherwise.
+
+        Notes:
+            Updates the geometry and associated molecular data. Attributes of
+            the Mole object may be shared.
         '''
         if inplace:
             mol = self
@@ -3783,6 +3822,36 @@ class MoleBase(lib.StreamObject):
         return sph.sph2spinor_coeff(self)
 
     def apply(self, fn, *args, **kwargs):
+        '''Apply a callable or a named calculation method to this molecule.
+
+        Args:
+            fn : callable or str
+                A function or class called as ``fn(self, *args, **kwargs)``,
+                or a method name such as ``'RHF'`` or ``'CCSD'``. Names are
+                converted to uppercase and used to look up a method on this
+                molecule.
+            *args :
+                Additional positional arguments for the callable or method.
+
+        Kwargs:
+            **kwargs :
+                Additional keyword arguments for the callable or method.
+
+        Returns:
+            The result of the callable or named method, usually a calculation
+            object.
+
+        Notes:
+            Call ``run`` or ``kernel`` on the result to run the calculation.
+            Named post-SCF methods may first run SCF to prepare the required
+            reference wavefunction.
+
+        Examples:
+
+        >>> from pyscf import gto
+        >>> mol = gto.M(atom='H 0 0 0; H 0 0 1', verbose=0)
+        >>> mf = mol.apply('RHF').run()
+        '''
         if callable(fn):
             return lib.StreamObject.apply(self, fn, *args, **kwargs)
         elif isinstance(fn, str):

@@ -26,6 +26,8 @@ from pyscf.df import addons
 from pyscf.gto.moleintor import getints
 from pyscf import __config__
 
+__all__ = ['aux_e2', 'cholesky_eri']
+
 
 MAX_MEMORY = getattr(__config__, 'df_outcore_max_memory', 2000)  # 2GB
 # LINEAR_DEP_THR cannot be below 1e-7,

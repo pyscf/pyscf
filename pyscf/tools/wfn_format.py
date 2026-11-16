@@ -25,6 +25,8 @@ from pyscf import gto
 from pyscf import lib
 import numpy
 
+__all__ = ['write_ci', 'write_mo']
+
 # types
 # 1 S
 # 2 PX

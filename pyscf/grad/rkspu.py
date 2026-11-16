@@ -24,6 +24,8 @@ from pyscf import gto
 from pyscf.grad import rks as rks_grad
 from pyscf.dft.rkspu import _set_U, _make_minao_lo, reference_mol
 
+__all__ = ['Gradients']
+
 def generate_first_order_local_orbitals(mol, minao_ref='MINAO'):
     if isinstance(minao_ref, str):
         pmol = reference_mol(mol, minao_ref)

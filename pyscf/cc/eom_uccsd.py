@@ -33,6 +33,8 @@ from pyscf.cc import addons
 from pyscf.cc import eom_rccsd
 from pyscf.cc import uintermediates
 
+__all__ = ['EOMIP', 'EOMEA', 'EOMEE', 'EOMEESpinKeep', 'EOMEESpinFlip']
+
 ########################################
 # EOM-IP-CCSD
 ########################################

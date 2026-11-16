@@ -38,6 +38,11 @@ from pyscf.pbc.df import GDF, RSGDF
 from pyscf.pbc.df import df
 from pyscf import __config__
 
+__all__ = [
+    'describe_nested', 'nested_to_vector', 'vector_to_nested', 'RCCSD', 'KRCCSD', 'GDF',
+    'RSGDF',
+]
+
 # einsum = np.einsum
 einsum = lib.einsum
 

@@ -15,6 +15,8 @@ from pyscf.lib import logger
 from pyscf import scf, lib
 import numpy as np
 
+__all__ = ['Chooser', 'APC']
+
 class Chooser:
     """
     Chooser Class

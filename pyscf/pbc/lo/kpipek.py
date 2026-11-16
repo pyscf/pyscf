@@ -38,6 +38,12 @@ from pyscf.pbc.lo.stability import pipek_stability_jacobi
 from pyscf.pbc.tools import k2gamma
 from pyscf import __config__
 
+__all__ = [
+    'gen_proj_op', 'KptsPipekMezey', 'KPM', 'KPipek', 'KPipekMezey',
+    'KptsPipekMezeyReal', 'KPMReal', 'KPipekReal', 'KPipekMezeyReal',
+    'KptsOrbitalLocalizer', 'KptsOrbitalLocalizerReal',
+]
+
 
 def gen_proj_op(cell, mo_coeff, kpts, method='meta_lowdin', proj_data=None, verbose=None):
     ''' Construct atomic projection operators and their action in k-point space.

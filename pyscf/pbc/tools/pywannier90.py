@@ -46,6 +46,8 @@ except ImportError:
     print('libwannier90 can be found at: https://github.com/hungpham2017/pyWannier90')
     raise
 
+__all__ = ['W90', 'load_kmf', 'save_kmf']
+
 
 def save_kmf(kmf, chkfile):
     ''' Save a wavefunction'''

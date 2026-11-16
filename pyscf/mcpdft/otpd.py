@@ -18,6 +18,8 @@ import numpy as np
 from pyscf.lib import logger
 from pyscf.dft.numint import _dot_ao_dm
 
+__all__ = ['get_ontop_pair_density', 'density_orbital_derivative']
+
 def _grid_ao2mo (mol, ao, mo_coeff, non0tab=None, shls_slice=None,
         ao_loc=None):
     '''ao[deriv,grid,AO].mo_coeff[AO,MO]->mo[deriv,grid,MO]

@@ -28,6 +28,8 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.mp import gmp2, dfmp2
 from pyscf.mp.gmp2 import make_rdm1, make_rdm2
 
+__all__ = ['DFGMP2', 'MP2', 'DFMP2']
+
 WITH_T2 = getattr(__config__, 'mp_dfgmp2_with_t2', True)
 
 def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,

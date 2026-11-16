@@ -20,6 +20,11 @@ import sys
 import json
 import h5py
 
+__all__ = [
+    'load', 'load_chkfile_key', 'dump', 'dump_chkfile_key', 'save', 'load_mol',
+    'save_mol', 'dump_mol',
+]
+
 if sys.version_info < (3,):
     RANGE_TYPE = list
 else:
@@ -36,7 +41,9 @@ def load(chkfile, key):
             group, the group will be loaded into a Python dict, recursively.
 
     Returns:
-        whatever read from chkfile
+        The stored scalar or array for a dataset, or a dictionary for a group.
+        Nested groups become nested dictionaries. Lists and tuples written
+        by dump are read as lists. Returns None if the key is absent.
 
     Examples:
 
@@ -82,12 +89,19 @@ def dump(chkfile, key, value):
         key : str
             key to be used in h5py object. It can contain "/" to represent the
             path in the HDF5 storage structure.
-        value : array, vector, list ... or dict
+        value : scalar, ndarray, dict, list or tuple
             If value is a python dict or list, the key/value of the dict will
             be saved recursively as the HDF5 group/dataset structure.
 
     Returns:
-        No return value
+        None.
+
+    Notes:
+        Replaces any existing value or group at key. Other entries in an HDF5
+        file are retained.
+
+        Creates the file if absent. If an existing file is not HDF5, its
+        contents are replaced.
 
     Examples:
 
@@ -180,12 +194,17 @@ def save_mol(mol, chkfile):
     '''Save Mole object in chkfile
 
     Args:
+        mol : Mole
+            Molecule whose definition is to be saved.
         chkfile str:
             Name of chkfile.
 
     Returns:
-        No return value
+        None.
 
+    Notes:
+        Writes the serialized molecule under the 'mol' key, replacing any
+        previous value.
     '''
     dump(chkfile, 'mol', mol.dumps())
 dump_mol = save_mol

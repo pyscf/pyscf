@@ -22,6 +22,8 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import __config__
 
+__all__ = ['CIAHOptimizerMixin', 'CIAHOptimizerMixinComplex']
+
 
 def expmat(a):
     return scipy.linalg.expm(a)
