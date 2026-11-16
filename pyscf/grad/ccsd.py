@@ -442,7 +442,7 @@ class Gradients(rhf_grad.GradientsBase):
         if l1 is None: l1 = mycc.l1
         if l2 is None: l2 = mycc.l2
         if eris is None:
-            eris = mycc.ao2mo()
+            eris = getattr(mycc, '_get_eris', mycc.ao2mo)()
         if t1 is None or t2 is None:
             t1, t2 = mycc.kernel(eris=eris)[1:]
         if l1 is None or l2 is None:

@@ -330,6 +330,9 @@ def spin2spatial(tx, orbspin, kconserv):
 
 
 class GCCSD(gccsd.GCCSD):
+    # k-point integrals are not cached by the molecular CCSDBase._get_eris
+    keep_eris = False
+
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert (isinstance(mf, scf.khf.KSCF))
         if not isinstance(mf, scf.kghf.KGHF):

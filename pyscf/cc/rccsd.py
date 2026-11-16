@@ -185,7 +185,7 @@ class RCCSD(ccsd.CCSD):
             return self.e_corr, self.t1, self.t2
 
         if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
+            eris = self._get_eris()
         return ccsd.CCSDBase.ccsd(self, t1, t2, eris)
 
     def ao2mo(self, mo_coeff=None):
@@ -218,7 +218,7 @@ class RCCSD(ccsd.CCSD):
         from pyscf.cc import rccsd_lambda
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        if eris is None: eris = self._get_eris()
         self.converged_lambda, self.l1, self.l2 = \
                 rccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
                                     max_cycle=self.max_cycle,

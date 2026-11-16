@@ -638,6 +638,10 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
 class KUCCSD(uccsd.UCCSD):
 
     max_space = getattr(__config__, 'pbc_cc_kccsd_uhf_KUCCSD_max_space', 20)
+    # Not available for k-points: the molecular integral cache and the
+    # semicanonicalization of UCCSD
+    keep_eris = False
+    semicanonical = False
 
     _keys = {'kpts', 'mo_energy', 'khelper', 'max_space', 'direct'}
 

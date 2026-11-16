@@ -34,7 +34,7 @@ class RCCSD(rccsd.RCCSD):
             self.t1 = numpy.zeros((nocc,nvir))
             return self.e_corr, self.t1, self.t2
         if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
+            eris = self._get_eris()
         if (gamma_point(self._scf.kpt) and not self.cc2 and not self.direct and
             getattr(self.update_amps, '__func__', None) is RCCSD.update_amps and
             not any(numpy.iscomplexobj(x) for x in

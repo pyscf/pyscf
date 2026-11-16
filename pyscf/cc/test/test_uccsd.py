@@ -695,6 +695,50 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(mycc.mol is mol_s2)
         self.assertTrue(mycc._scf.mol is mol_s2)
 
+    def test_rohf_semicanonical(self):
+        # UCCSD of an ROHF reference runs with semicanonical orbitals, needed
+        # by (T); frozen orbitals are not rotated (Molpro convention)
+        mf = scf.ROHF(mol_s2)
+        mf.conv_tol = 1e-12
+        mf.conv_tol_grad = 1e-9
+        mf.kernel()
+        for frozen, e_corr, e_t in ((None, -0.110754022651, -0.001057514066),
+                                    (1, -0.109882304926, -0.001046617282)):
+            mycc = cc.UCCSD(mf, frozen=frozen)
+            mycc.conv_tol = 1e-12
+            mycc.conv_tol_normt = 1e-10
+            mycc.kernel()
+            self.assertAlmostEqual(mycc.e_corr, e_corr, 8)
+            self.assertAlmostEqual(mycc.ccsd_t(), e_t, 8)
+
+            fock = mycc._scf.get_fock(dm=mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ))
+            for c, c0, occ, f, idx in zip(mycc.mo_coeff, mycc._scf.mo_coeff,
+                                          mycc.mo_occ, fock, mycc.get_frozen_mask()):
+                self.assertTrue(numpy.array_equal(c[:,~idx], c0[:,~idx]))
+                for space in (idx & (occ > 0), idx & (occ == 0)):
+                    fpp = c[:,space].T.dot(f).dot(c[:,space])
+                    self.assertAlmostEqual(abs(fpp - numpy.diag(fpp.diagonal())).max(), 0, 9)
+
+    def test_reuse_eris(self):
+        # CCSD, (T) and Lambda transform the integrals once
+        mycc = cc.UCCSD(mf_s2)
+        calls = []
+        ao2mo = mycc.ao2mo
+        def counting_ao2mo(*args, **kwargs):
+            calls.append(1)
+            return ao2mo(*args, **kwargs)
+        mycc.ao2mo = counting_ao2mo
+        mycc.kernel()
+        mycc.ccsd_t()
+        mycc.solve_lambda()
+        self.assertEqual(len(calls), 1)
+        mycc.reset()
+        mycc.ccsd_t()
+        self.assertEqual(len(calls), 2)
+        mycc.frozen = 1
+        mycc.kernel()
+        self.assertEqual(len(calls), 3)
+
     def test_ao2mo(self):
         mycc = uccsd.UCCSD(mf)
         numpy.random.seed(2)

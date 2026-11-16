@@ -497,6 +497,8 @@ def kconserve_pmatrix(nkpts, kconserv):
 
 class RCCSD(pyscf.cc.ccsd.CCSD):
     max_space = getattr(__config__, 'pbc_cc_kccsd_rhf_KRCCSD_max_space', 20)
+    # k-point integrals are not cached by the molecular CCSDBase._get_eris
+    keep_eris = False
 
     _keys = {
         'kpts', 'khelper', 'ip_partition', 'ea_partition', 'max_space',

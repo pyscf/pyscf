@@ -1008,7 +1008,7 @@ def eeccsd(eom, nroots=1, koopmans=False, guess=None, eris=None, imds=None):
         guess : list of ndarray
             List of guess vectors to use for targeting via overlap.
     '''
-    if eris is None: eris = eom._cc.ao2mo()
+    if eris is None: eris = getattr(eom._cc, '_get_eris', eom._cc.ao2mo)()
     if imds is None: imds = eom.make_imds(eris)
 
     spinvec_size = eom.vector_size()
@@ -2101,7 +2101,7 @@ class _IMDS:
         self.t1 = cc.t1
         self.t2 = cc.t2
         if eris is None:
-            eris = cc.ao2mo()
+            eris = getattr(cc, '_get_eris', cc.ao2mo)()
         self.eris = eris
         self._made_shared_2e = False
 

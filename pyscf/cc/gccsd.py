@@ -121,7 +121,7 @@ class GCCSD(ccsd.CCSDBase):
 
     def init_amps(self, eris=None):
         if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
+            eris = self._get_eris()
         mo_e = eris.mo_energy
         nocc = self.nocc
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
@@ -188,7 +188,7 @@ class GCCSD(ccsd.CCSDBase):
         from pyscf.cc import gccsd_lambda
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        if eris is None: eris = self._get_eris()
         self.converged_lambda, self.l1, self.l2 = \
                 gccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
                                     max_cycle=self.max_cycle,
@@ -200,7 +200,7 @@ class GCCSD(ccsd.CCSDBase):
         from pyscf.cc import gccsd_t
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        if eris is None: eris = self._get_eris()
         return gccsd_t.kernel(self, eris, t1, t2, self.verbose)
 
     def ipccsd(self, nroots=1, left=False, koopmans=False, guess=None,
