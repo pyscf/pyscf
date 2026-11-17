@@ -1,3 +1,31 @@
+PySCF 2.15.1 (2026-11-16)
+-------------------------
+* Added
+  - D3(CSO) dispersion and analytic D3 and gCP Hessians through pyscf-dispersion >= 1.7.0 (#3588)
+* Fixes
+  - Updated the MCfun interface while retaining deprecated NumInt2C attributes for backward compatibility (#3582, #3641)
+  - Hermitian XC potential and response matrix assembly in k-point GKS with complex Bloch orbitals (#3582)
+  - Complex orbital overlap scoring in maximum-overlap occupations and SCF state following (#3612)
+  - Similarity sorting of complex eigenvectors in Davidson solvers (#3609)
+  - Complex matrix exponentials now use scipy.linalg.expm (#3608)
+  - Preserve numerical-integration settings and the smearing chemical potential when converting calculations with to_gpu() (#3627)
+  - Avoid NaNs when adjusting phases of zero padding orbitals during k-point canonicalization (#3622)
+  - Range-separated SGX density context and forwarding of Coulomb and exchange options (#3599)
+  - Solvent contributions to the Fock matrix and response in external SCF stability analysis (#3578)
+  - DFT grid-response gradients now use the same atomic radii as the grid partition for ECP and ghost atoms (#3598)
+  - Exclude ghost atoms from dispersion and gCP corrections, including gradients and Hessians (#3588)
+  - Reset the convergence flag when evaluating state-averaged CASSCF gradients (#3610)
+  - Use the dedicated CMS-PDFT diabatization nudge default (#3626)
+  - Search the full determinant diagonal for the selected-CI initial guess (#3614)
+  - Handle nonuniform auxiliary dimensions across k-point pairs in periodic ADC and CDERIArray loading (#3575, #3587)
+  - Avoid temporary-file collisions in periodic restricted CCSD(T) calculations (#3589)
+  - Keep RSJK Coulomb grid block sizes positive at low memory (#3611)
+  - Avoid subtracting current memory usage twice in FFTDF Coulomb and exchange calculations (#3633)
+  - Correct interval merging in COSMO-RS cavity calculations (#3574)
+  - Restore ghost-atom coordinates in Berny geometry output (#3613)
+  - Avoid a SIMD macro name clash when building with qcint (#3630)
+  - Replace the removed time.clock() call in the QM/MM force example (#3632)
+
 PySCF 2.15.0 (2026-11-05)
 -------------------------
 * Added
