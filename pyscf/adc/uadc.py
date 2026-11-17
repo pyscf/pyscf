@@ -48,6 +48,14 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
         adc.check_sanity()
     adc.dump_flags()
 
+    from pyscf.adc import uadc_ip_cvs
+    if isinstance(adc, uadc_ip_cvs.UADCIPCVS) and isinstance(adc._scf, scf.rohf.ROHF):
+        logger.warn(
+            adc, "IP-CVS-UADC does not support the ROHF reference: the CVS-IP imds "
+            "and matvec do not include the semicanonical f_ov and t1_1 ROHF terms. "
+            "Use a UHF reference (or RHF for closed-shell systems), or the non-CVS "
+            "IP-UADC channel.")
+
     if eris is None:
         eris = adc.transform_integrals()
 
