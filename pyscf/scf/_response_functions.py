@@ -376,8 +376,9 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
             from pyscf.hessian.rks import (cache_nlc_kernel, get_vnlc_resp,
                                            get_vnlc_resp1)
             ni1c = mf._numint._to_numint1c()
-            if mf.nlcgrids.coords is None:
-                mf.nlcgrids.build()
+            nlc_grids = mf.nlcgrids
+            if nlc_grids.coords is None:
+                nlc_grids.build()
             if mo_coeff is not None and mo_occ is not None:
                 nao = mo_coeff.shape[0] // 2
                 mo_uks = [mo_coeff[:nao], mo_coeff[nao:]]
