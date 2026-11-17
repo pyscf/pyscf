@@ -502,6 +502,9 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
     #   'mcol' (multi-collinear)
     collinear = getattr(__config__, 'dft_numint_RnumInt_collinear', 'col')
     spin_samples = getattr(__config__, 'dft_numint_RnumInt_spin_samples', 770)
+    # Retain these deprecated attributes for backward compatibility.
+    collinear_thrd = getattr(__config__, 'dft_numint_RnumInt_collinear_thrd', 0.99)
+    collinear_samples = getattr(__config__, 'dft_numint_RnumInt_collinear_samples', 200)
 
     make_mask = staticmethod(numint.make_mask)
     eval_ao = staticmethod(numint.eval_ao)
