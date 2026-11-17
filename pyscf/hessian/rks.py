@@ -1970,6 +1970,54 @@ def cache_nlc_kernel(mf, mol, grids, mo_coeff=None, mo_occ=None, dm0=None,
                   d2kappa_drho2_i, f_gamma_i)
     return nlc_rho, nlc_kernel
 
+def cache_nlc_kernel_gks(mf, mol, grids, mo_coeff=None, mo_occ=None, dm0=None,
+                         max_memory=None):
+    '''cache_nlc_kernel for GKS references: the GHF/GKS MOs are spin
+    orbitals (2nao, nmo; the first nao rows are the alpha AO block, the
+    last nao rows the beta block), so they split into the alpha/beta
+    spatial MOs of a UKS reference; the spin-orbital dm0 is spin-summed
+    the same way.  The kernel is built under the 1c NumInt environment of
+    mf._numint.
+    '''
+    ni1c = mf._numint._to_numint1c()
+    with lib.temporary_env(mf, _numint=ni1c):
+        if mo_coeff is not None and mo_occ is not None:
+            nao = mo_coeff.shape[0] // 2
+            mo_uks = [mo_coeff[:nao], mo_coeff[nao:]]
+            mo_occ_uks = [mo_occ, mo_occ]
+            return cache_nlc_kernel(mf, mol, grids, mo_coeff=mo_uks,
+                                    mo_occ=mo_occ_uks, max_memory=max_memory)
+        else:
+            assert dm0 is not None
+            nao = dm0.shape[0] // 2
+            dm0_sf = dm0[:nao,:nao] + dm0[nao:,nao:]
+            return cache_nlc_kernel(mf, mol, grids, dm0=dm0_sf,
+                                    max_memory=max_memory)
+
+def get_vnlc_resp_gks(mf, mol, dm1, max_memory, dm0=None,
+                      grids=None, nlc_rho=None, nlc_kernel=None):
+    '''NLC response for GKS references.  dm1 is the spin-orbital
+    first-order density (2nao, 2nao; alpha/beta AO blocks), optionally
+    batched; it is spin-summed, and the resulting spatial NLC potential is
+    scattered back to both spin blocks.  If nlc_rho/nlc_kernel are
+    not supplied, they are built from the spin-orbital dm0 for this call.
+    '''
+    if nlc_kernel is None:
+        assert dm0 is not None
+        nlc_rho, nlc_kernel = cache_nlc_kernel_gks(
+            mf, mol, grids, dm0=dm0, max_memory=max_memory)
+    nao = dm1.shape[-1] // 2
+    dm1_sf = (dm1[...,:nao,:nao] + dm1[...,nao:,nao:]).real
+    ni1c = mf._numint._to_numint1c()
+    with lib.temporary_env(mf, _numint=ni1c):
+        vxc_sf = get_vnlc_resp1(mf, mol, None, dm1_sf, max_memory,
+                                grids=grids, nlc_rho=nlc_rho,
+                                nlc_kernel=nlc_kernel)
+    vxc = numpy.zeros(dm1.shape, dtype=vxc_sf.dtype)
+    vxc[...,:nao,:nao] = vxc_sf
+    vxc[...,nao:,nao:] = vxc_sf
+    return vxc
+
 def get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1s, max_memory,
                   grids=None, nlc_rho=None, nlc_kernel=None):
     '''NLC response for 0th order MOs (mo_coeff, mo_occ) and 1st order
