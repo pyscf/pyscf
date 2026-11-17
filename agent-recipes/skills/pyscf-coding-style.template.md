@@ -3,6 +3,9 @@
 Load this template when writing, modifying, or reviewing Python code in PySCF,
 including tests. Customize as needed.
 
+Prioritize scientific correctness and intended API contracts. Keep implementation
+and validation proportional to the change; apply the guidance below where relevant.
+
 - Resolve routine implementation choices using nearby code and existing APIs.
   Ask when an unresolved scientific convention or requirement materially affects
   the result; do not silently invent units, normalization factors, or reference
@@ -15,30 +18,37 @@ including tests. Customize as needed.
 - Follow nearby code when conventions differ, unless changing the style is
   part of the task.
 - Make the smallest complete change that solves the problem. Avoid unrelated
-  cleanup, renaming, or reformatting.
-- Do not substantially refactor, rewrite, or reorganize existing helper
-  functions unless the task clearly requires it. If substantial refactoring is
-  necessary, explain why the localized approach is insufficient.
-- Reuse existing PySCF utilities before adding equivalent third-party helpers.
+  cleanup, renaming, or reformatting. Refactor existing helpers substantially
+  only when the task requires it, and explain why a localized change is
+  insufficient.
+- Reuse existing PySCF utilities when their intended contracts fit the operation.
+  Do not infer support from implementation details or carefully tuned parameters
+  that happen to produce the desired result. If broader reuse is needed,
+  explicitly generalize the function's contract and implementation.
 - Use PySCF's logger for diagnostic output rather than Python's standard
   `logging` module or `print` statements.
 - Keep dependency direction consistent with the existing module structure.
   `data`, `gto`, `lib`, and `tools` are foundational modules. Reuse them where
-  appropriate. Chek their existing imports before adding a dependency. Avoid
+  appropriate. Check their existing imports before adding a dependency. Avoid
   introducing dependencies from foundational code into method-specific modules.
 - Prefer module-scope imports. When circular imports arise, resolve them
   through appropriate dependency boundaries or localized imports rather than
   adding eager imports to package `__init__.py` files. Only expose new
   submodules through `__init__.py` when required by the public API.
-- Prefer side-effect-free implementations. Do not rely on mutations of shared
-  objects to make other objects behave correctly. When modifying an object,
-  prefer creating a new instance unless in-place updates are
-  performance-critical or required by the API. Use the returned object
-  explicitly, even when the operation mutates in place.
+- Prefer side-effect-free implementations. Avoid unintended shared-state
+  mutation. Do not rely on mutations of shared objects to make other objects
+  behave correctly. When modifying an object, prefer creating a new instance
+  unless in-place updates are performance-critical or required by the API.
 - When introducing new attributes with immutable defaults, consider class-level
   defaults when consistent with the surrounding class. Extensions such as
   gpu4pyscf may reuse PySCF methods without running the corresponding PySCF
   `__init__` method to initialize attributes.
+- Prefer validation at the appropriate boundary and trust established internal
+  invariants. Avoid redundant checks and speculative handling of extreme corner
+  cases unless relevant to the task or supported use cases. Retain checks needed
+  to prevent concrete correctness or safety failures.
+- Prefer a clear failure to a silent fallback. If an operation cannot meet its
+  contract, let the error propagate or raise an informative exception.
 
 ## Formatting and linting
 
@@ -49,36 +59,29 @@ including tests. Customize as needed.
 
 ## Test value and readability
 
-- Add tests for their practical value: catching realistic bugs or protecting
-  important scientific results and behavioral contracts. Avoid coverage-driven
-  tests: Flag tests that merely exercise newly added code without protecting
-  meaningful behavior.
-- Assert meaningful results and behavior. Avoid enforcing incidental details
-  or internal data layout unless they are part of an important behavioral
-  contract.
-- Use small, representative inputs and minimal mocking. Avoid elaborate mock
-  setups or artificial states created only to reach newly added code. Mocks
-  are useful when isolating a dependency is necessary to test a meaningful
-  contract; keep the behavior being tested real.
-- Reuse or extend existing tests when they can protect the relevant behavior
-  clearly, rather than adding redundant cases.
-- Apply the same readability standards to tests as to implementation code.
-  A reader should be able to identify the setup, behavior under test, and
-  expected result without tracing through layers of helpers.
-- Use descriptive test and variable names that explain the case being tested.
-  Add a short comment when the scientific setup or regression is not obvious.
-- Prefer plain, explicit tests with one focused behavior per test function.
-  Avoid nested loops that combine multiple methods, options, or behaviors in
-  one test. Write separate, descriptively named tests with explicit setup and
-  assertions when that makes the cases easier to understand; modest repetition
-  is preferable to a compact but difficult-to-follow test matrix. Use a simple
-  loop or parameterization only when it makes closely related cases clearer.
-- Keep setup and assertions straightforward. Break complicated expressions
-  into meaningful intermediate values, and make actual and expected results
-  easy to distinguish.
-- Make assertion failures easy to interpret. In loops or parameterized tests,
-  identify the failing case. Explain non-obvious reference values and tolerances
-  near the comparison or shared definition.
+- Test meaningful scientific results, supported behavior, and concrete regressions.
+  Use independent expected results rather than duplicating implementation logic.
+  Avoid tests added solely for coverage. Assert internal details or data layout
+  only when they are part of an important behavioral contract.
+- Use small, representative systems and minimal mocking. Mock a dependency only
+  when needed to isolate meaningful behavior; keep that behavior real. Avoid
+  artificial states created only to reach code. Reuse or extend existing tests
+  instead of adding redundant cases.
+- Prefer adding regression tests to existing test files. Create a new test file
+  only when no existing file is suitable.
+- Prefer direct setup and assertions with one focused behavior per test. Avoid
+  nested loops mixing methods, options, or behaviors when they obscure the case;
+  use separate, descriptive tests instead. Simple loops or parameterization are
+  useful for closely related cases; accept repetition for clarity.
+- Make the setup, behavior, and expected result clear without tracing helper
+  layers. Use descriptive names and distinguish actual and expected results.
+  Make assertion failures explain what went wrong and identify the failing case
+  in loops or parameterized tests. Briefly explain non-obvious scientific setups,
+  regressions, reference values, and tolerances.
+- Match test complexity to behavioral risk. Introduce fixtures, factories, or
+  helpers only when they materially simplify meaningful tests. Avoid building a
+  test framework for a small change or exhaustive method/option combinations
+  without a concrete reason.
 
 ## Documentation
 
@@ -87,8 +90,13 @@ including tests. Customize as needed.
 - Give public APIs clear docstrings describing their purpose, inputs, outputs,
   and important parameters, attributes, and defaults. Explain shapes, units,
   and limitations where relevant.
-- Document non-obvious assumptions.
-- For functions outside the public API, a short docstring explaining their
-  purpose is sufficient.
+- Keep internal docstrings brief, but explain non-obvious assumptions and contracts.
 - Update documentation when changing parameters, return values, supported
   shapes, symmetry, units, or public behavior.
+
+### Comments and docstrings
+
+- Write in plain, natural English, using short, direct sentences.
+- Prefer concrete explanations over abstract or formal language.
+- Explain why code works a certain way, not what is already obvious.
+- Document non-obvious assumptions, numerical conventions, and edge cases.
