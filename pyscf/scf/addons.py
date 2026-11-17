@@ -274,10 +274,10 @@ def follow_state_(mf, occorb=None):
             mo_occ = old_get_occ(mo_energy, mo_coeff)
         else:
             mo_occ = numpy.zeros_like(mo_energy)
-            s = reduce(numpy.dot, (occstat[0].T, mf.get_ovlp(), mo_coeff))
+            s = reduce(numpy.dot, (occstat[0].conj().T, mf.get_ovlp(), mo_coeff))
             nocc = mf.mol.nelectron // 2
             #choose a subset of mo_coeff, which maximizes <old|now>
-            idx = numpy.argsort(numpy.einsum('ij,ij->j', s, s))
+            idx = numpy.argsort(numpy.einsum('ij,ij->j', s, s.conj()).real)
             mo_occ[idx[-nocc:]] = 2
             logger.debug(mf, '  mo_occ = %s', mo_occ)
             logger.debug(mf, '  mo_energy = %s', mo_energy)
@@ -318,8 +318,8 @@ def mom_occ_(mf, occorb, setocc):
             s_a = reduce(numpy.dot, (coef_occ_a.conj().T, mf.get_ovlp(), mo_coeff[0]))
             s_b = reduce(numpy.dot, (coef_occ_b.conj().T, mf.get_ovlp(), mo_coeff[1]))
             # Compare each candidate with the initial occupied orbitals.
-            idx_a = numpy.argsort(numpy.einsum('ij,ij->j', s_a, s_a))[::-1]
-            idx_b = numpy.argsort(numpy.einsum('ij,ij->j', s_b, s_b))[::-1]
+            idx_a = numpy.argsort(numpy.einsum('ij,ij->j', s_a, s_a.conj()).real)[::-1]
+            idx_b = numpy.argsort(numpy.einsum('ij,ij->j', s_b, s_b.conj()).real)[::-1]
             mo_occ[0,idx_a[:nocc_a]] = 1.
             mo_occ[1,idx_b[:nocc_b]] = 1.
 
@@ -349,7 +349,7 @@ def mom_occ_(mf, occorb, setocc):
             nocc = int(setocc.sum())
             s = occorb[:,setocc>0].conj().T.dot(mf.get_ovlp()).dot(mo_coeff)
             # Compare each candidate with the initial occupied orbitals.
-            idx = numpy.argsort(numpy.einsum('ij,ij->j', s, s))[::-1]
+            idx = numpy.argsort(numpy.einsum('ij,ij->j', s, s.conj()).real)[::-1]
             mo_occ[idx[:nocc]] = 1.
             return mo_occ
 
