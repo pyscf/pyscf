@@ -603,15 +603,16 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0,
                         if xctype == 'LDA':
                             ao_dm = lib.dot(ao_h[k], dms_hh[i,k])
                             rho_sub = numpy.einsum('xi,xi->x', ao_dm, ao_h[k].conj())
-                        elif xctype == 'GGA' or xctype == 'MGGA':
+                            rho[i,0,p0:p1] += rho_sub
+                        elif xctype == 'GGA':
                             rho_sub = numint.eval_rho(h_cell, ao_h[k], dms_hh[i,k],
                                                       mask, 'GGA', hermi)
-                        rho[i,:4,p0:p1] += rho_sub
-                        if xctype == 'MGGA':
-                            tau_sub = numint.eval_rho(
+                            rho[i,:4,p0:p1] += rho_sub
+                        elif xctype == 'MGGA':
+                            rho_sub = numint.eval_rho(
                                 h_cell, ao_h[k], dms_hh[i,k], mask, 'MGGA', hermi,
-                                with_lapl=False)[4]
-                            rho[i,4,p0:p1] += tau_sub
+                                with_lapl=False)
+                            rho[i,:5,p0:p1] += rho_sub
                 ao_h = ao_h_etc = ao_dm = None
             if ignore_imag:
                 rho = rho.real
