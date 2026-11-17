@@ -98,7 +98,7 @@ jobs:
 
   release-pypi-macos-arm64:
     name: Build wheels for Apple M chips
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
