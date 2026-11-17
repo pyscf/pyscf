@@ -689,12 +689,18 @@ class KUCCSD(uccsd.UCCSD):
         nvira, nvirb = nmoa - nocca, nmob - noccb
 
         nkpts = self.nkpts
-        t1a = np.zeros((nkpts, nocca, nvira), dtype=np.complex128)
-        t1b = np.zeros((nkpts, noccb, nvirb), dtype=np.complex128)
+        # The amplitudes inherit the dtype of the k-point ERIs: float64 for a
+        # Gamma-point cell with real MO coefficients, complex128 otherwise.
+        # The ERIs are the quantity the amplitudes are built from and updated
+        # with, so taking their dtype gives real amplitudes exactly when every
+        # contraction in update_amps is real.
+        dtype = eris.oovv.dtype
+        t1a = np.zeros((nkpts, nocca, nvira), dtype=dtype)
+        t1b = np.zeros((nkpts, noccb, nvirb), dtype=dtype)
         t1 = (t1a, t1b)
-        t2aa = np.zeros((nkpts, nkpts, nkpts, nocca, nocca, nvira, nvira), dtype=np.complex128)
-        t2ab = np.zeros((nkpts, nkpts, nkpts, nocca, noccb, nvira, nvirb), dtype=np.complex128)
-        t2bb = np.zeros((nkpts, nkpts, nkpts, noccb, noccb, nvirb, nvirb), dtype=np.complex128)
+        t2aa = np.zeros((nkpts, nkpts, nkpts, nocca, nocca, nvira, nvira), dtype=dtype)
+        t2ab = np.zeros((nkpts, nkpts, nkpts, nocca, noccb, nvira, nvirb), dtype=dtype)
+        t2bb = np.zeros((nkpts, nkpts, nkpts, noccb, noccb, nvirb, nvirb), dtype=dtype)
 
         mo_ea_o = [e[:nocca] for e in eris.mo_energy[0]]
         mo_eb_o = [e[:noccb] for e in eris.mo_energy[1]]

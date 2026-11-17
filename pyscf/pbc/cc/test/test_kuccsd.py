@@ -126,6 +126,35 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(r2[1]-t2[1]).max(), 0, 12)
         self.assertAlmostEqual(abs(r2[2]-t2[2]).max(), 0, 12)
 
+    def test_gamma_real_dtype(self):
+        # At Gamma with real MO coefficients the k-point ERIs are float64.
+        # The amplitudes must follow that dtype: complex amplitudes are updated
+        # in place with real ERI contractions and cc_Wvvvv_half raises
+        # UFuncOutputCastingError, an error present before this test existed.
+        cell = gto.M(atom='H 0 0 0; H 0 0 .74', a=np.eye(3)*4,
+                     basis='gth-szv', pseudo='gth-pade', mesh=[11]*3,
+                     precision=1e-7, verbose=0)
+        kpts = cell.make_kpts([1,1,1])
+        kmf = scf.KUHF(cell, kpts, exxdiv=None)
+        kmf.conv_tol = 1e-10
+        kmf.kernel()
+
+        mycc = kccsd_uhf.KUCCSD(kmf)
+        mycc.conv_tol = 1e-9
+        e_real, t1, t2 = mycc.kernel()
+        self.assertEqual(t1[0].dtype, np.float64)
+        self.assertEqual(t2[0].dtype, np.float64)
+
+        # The same cell driven with complex MO coefficients reproduces the
+        # previous complex128 amplitude path, and must give the same energy.
+        mo_c = [np.asarray(m, dtype=np.complex128) for m in kmf.mo_coeff]
+        mycc_c = kccsd_uhf.KUCCSD(kmf)
+        mycc_c.conv_tol = 1e-9
+        eris_c = mycc_c.ao2mo(mo_c)
+        e_cplx, t1c, t2c = mycc_c.kernel(eris=eris_c)
+        self.assertEqual(t1c[0].dtype, np.complex128)
+        self.assertAlmostEqual(e_real, e_cplx, 8)
+
     def test_update_amps(self):
         np.random.seed(2)
         # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
