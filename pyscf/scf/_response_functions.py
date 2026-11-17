@@ -86,10 +86,11 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
             # Cannot import at top due to circular dependency
             from pyscf.hessian.rks import (cache_nlc_kernel, get_vnlc_resp,
                                            get_vnlc_resp1)
-            if mf.nlcgrids.coords is None:
-                mf.nlcgrids.build()
-            nlc_grids, nlc_rho, nlc_kernel = cache_nlc_kernel(
-                mf, mol, mo_coeff=mo_coeff, mo_occ=mo_occ, dm0=dm0,
+            nlc_grids = mf.nlcgrids
+            if nlc_grids.coords is None:
+                nlc_grids.build()
+            nlc_rho, nlc_kernel = cache_nlc_kernel(
+                mf, mol, nlc_grids, mo_coeff=mo_coeff, mo_occ=mo_occ, dm0=dm0,
                 max_memory=max_memory)
 
         if singlet is None:
@@ -104,11 +105,11 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
                     if with_nlc and mf.do_nlc():
                         if mo_coeff is not None and mo_occ is not None:
                             v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1, max_memory,
-                                                nlc_grids=nlc_grids, nlc_rho=nlc_rho,
+                                                grids=nlc_grids, nlc_rho=nlc_rho,
                                                 nlc_kernel=nlc_kernel)
                         else:
                             v1 += get_vnlc_resp1(mf, mol, None, dm1, max_memory,
-                                                 nlc_grids=nlc_grids, nlc_rho=nlc_rho,
+                                                 grids=nlc_grids, nlc_rho=nlc_rho,
                                                  nlc_kernel=nlc_kernel)
                 if hybrid:
                     if omega == 0:
@@ -146,11 +147,11 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
                     if with_nlc and mf.do_nlc():
                         if mo_coeff is not None and mo_occ is not None:
                             v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1, max_memory,
-                                                nlc_grids=nlc_grids, nlc_rho=nlc_rho,
+                                                grids=nlc_grids, nlc_rho=nlc_rho,
                                                 nlc_kernel=nlc_kernel)
                         else:
                             v1 += get_vnlc_resp1(mf, mol, None, dm1, max_memory,
-                                                 nlc_grids=nlc_grids, nlc_rho=nlc_rho,
+                                                 grids=nlc_grids, nlc_rho=nlc_rho,
                                                  nlc_kernel=nlc_kernel)
                 if hybrid:
                     if omega == 0:
@@ -259,10 +260,11 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
             # Cannot import at top due to circular dependency
             from pyscf.hessian.rks import (cache_nlc_kernel, get_vnlc_resp,
                                            get_vnlc_resp1)
-            if mf.nlcgrids.coords is None:
-                mf.nlcgrids.build()
-            nlc_grids, nlc_rho, nlc_kernel = cache_nlc_kernel(
-                mf, mol, mo_coeff=mo_coeff, mo_occ=mo_occ, dm0=dm0,
+            nlc_grids = mf.nlcgrids
+            if nlc_grids.coords is None:
+                nlc_grids.build()
+            nlc_rho, nlc_kernel = cache_nlc_kernel(
+                mf, mol, nlc_grids, mo_coeff=mo_coeff, mo_occ=mo_occ, dm0=dm0,
                 max_memory=max_memory)
 
         def vind(dm1):
@@ -274,11 +276,11 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
                 if with_nlc and mf.do_nlc():
                     if mo_coeff is not None and mo_occ is not None:
                         v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1[0] + dm1[1], max_memory,
-                                            nlc_grids=nlc_grids, nlc_rho=nlc_rho,
+                                            grids=nlc_grids, nlc_rho=nlc_rho,
                                             nlc_kernel=nlc_kernel)
                     else:
                         v1 += get_vnlc_resp1(mf, mol, None, dm1[0] + dm1[1], max_memory,
-                                             nlc_grids=nlc_grids, nlc_rho=nlc_rho,
+                                             grids=nlc_grids, nlc_rho=nlc_rho,
                                              nlc_kernel=nlc_kernel)
             if not hybrid:
                 if with_j:
@@ -381,15 +383,15 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
                 mo_uks = [mo_coeff[:nao], mo_coeff[nao:]]
                 mo_occ_uks = [mo_occ, mo_occ]
                 with lib.temporary_env(mf, _numint=ni1c):
-                    nlc_grids, nlc_rho, nlc_kernel = cache_nlc_kernel(
-                        mf, mol, mo_coeff=mo_uks, mo_occ=mo_occ_uks,
+                    nlc_rho, nlc_kernel = cache_nlc_kernel(
+                        mf, mol, nlc_grids, mo_coeff=mo_uks, mo_occ=mo_occ_uks,
                         max_memory=max_memory)
             else:
                 nao = dm0.shape[0] // 2
                 dm0_sf = dm0[:nao,:nao] + dm0[nao:,nao:]
                 with lib.temporary_env(mf, _numint=ni1c):
-                    nlc_grids, nlc_rho, nlc_kernel = cache_nlc_kernel(
-                        mf, mol, dm0=dm0_sf, max_memory=max_memory)
+                    nlc_rho, nlc_kernel = cache_nlc_kernel(
+                        mf, mol, nlc_grids, dm0=dm0_sf, max_memory=max_memory)
 
         def vind(dm1):
             if hermi == 2:
@@ -406,7 +408,7 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
                         with lib.temporary_env(mf, _numint=ni1c):
                             vxc_nlc = get_vnlc_resp(mf, mol, mo_uks, mo_occ_uks,
                                                     dm1_sf.real, max_memory,
-                                                    nlc_grids=nlc_grids,
+                                                    grids=nlc_grids,
                                                     nlc_rho=nlc_rho,
                                                     nlc_kernel=nlc_kernel)
                     else:
@@ -415,7 +417,7 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
                         with lib.temporary_env(mf, _numint=ni1c):
                             vxc_nlc = get_vnlc_resp1(mf, mol, None, dm1_sf.real,
                                                      max_memory,
-                                                     nlc_grids=nlc_grids,
+                                                     grids=nlc_grids,
                                                      nlc_rho=nlc_rho,
                                                      nlc_kernel=nlc_kernel)
                     v1[...,:nao,:nao] += vxc_nlc
