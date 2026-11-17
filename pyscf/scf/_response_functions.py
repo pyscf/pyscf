@@ -79,8 +79,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
 
         # The dm0-only NLC response kernel on nlcgrids, reused by every vind
         # call below.  Held by the closure so its lifetime is one solve, like
-        # rho0/vxc/fxc above.  nlcgrids is built here before caching the
-        # kernel, mirroring the XC grids/fxc above.
+        # rho0/vxc/fxc above.
         nlc_grids = nlc_rho = nlc_kernel = None
         if with_nlc and mf.do_nlc() and hermi != 2:
             # Cannot import at top due to circular dependency
@@ -253,8 +252,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
 
         # The dm0-only NLC response kernel on nlcgrids, reused by every vind
         # call below.  Held by the closure so its lifetime is one solve, like
-        # rho0/vxc/fxc above.  nlcgrids is built here before caching the
-        # kernel, mirroring the XC grids/fxc above.
+        # rho0/vxc/fxc above.
         nlc_grids = nlc_rho = nlc_kernel = None
         if with_nlc and mf.do_nlc() and hermi != 2:
             # Cannot import at top due to circular dependency
