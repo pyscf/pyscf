@@ -93,6 +93,7 @@ class KnownValues(unittest.TestCase):
     def test_ee_adc2x(self):
         myadc.method = "adc(2)-x"
 
+        myadc.method_type = "ee"
         e,v,p,x = myadc.kernel(nroots=4)
         spin = get_spin_square(myadc._adc_es)[0]
 
@@ -120,6 +121,7 @@ class KnownValues(unittest.TestCase):
     def test_ee_adc3_high_cost(self):
         myadc.method = "adc(3)"
 
+        myadc.method_type = "ee"
         e,v,p,x = myadc.kernel(nroots=4)
         spin = get_spin_square(myadc._adc_es)[0]
 
