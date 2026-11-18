@@ -134,6 +134,47 @@ class KnownValues(unittest.TestCase):
         g = mf.nuc_grad_method().kernel()
         assert numpy.linalg.norm(g - g_ref) < 1e-6
 
+    def test_cds_many_surface_intersections(self):
+        # Reproducer geometries reported by coltonbh in issue #3618.
+        # A solvent-accessible intersection circle can have more vertices
+        # than the molecule has atoms (12 vertices for this 8-atom ethane).
+        ethane = '''
+C 0.0 0.0 0.766009
+C 0.0 0.0 -0.766009
+H -0.884402 0.510610 1.162263
+H 0.0 -1.021219 1.162263
+H 0.884402 0.510610 1.162263
+H 0.884402 -0.510610 -1.162263
+H -0.884402 -0.510610 -1.162263
+H 0.0 1.021219 -1.162263
+'''
+        methanethiol = '''
+C -0.047 1.149 0.010
+S -0.042 -0.669 -0.005
+H 1.288 -0.937 0.020
+H -1.087 1.485 -0.010
+H 0.451 1.530 0.893
+H 0.431 1.545 -0.883
+'''
+        for atom in (ethane, methanethiol):
+            for solvent in ('water', 'toluene'):
+                with self.subTest(atom=atom, solvent=solvent):
+                    _check_grad(atom, solvent)
+                    mol = gto.M(atom=atom, basis='sto3g', verbose=0)
+                    obj = smd.SMD(mol)
+                    obj.solvent = solvent
+                    energy, grad = smd.get_cds_legacy(obj)
+                    self.assertLess(abs(grad.sum(axis=0)).max(), 1e-10)
+                    symbols = [mol.atom_symbol(i) for i in range(mol.natm)]
+                    reverse = list(zip(symbols, mol.atom_coords()))[::-1]
+                    mol2 = gto.M(atom=reverse, unit='Bohr',
+                                 basis='sto3g', verbose=0)
+                    obj2 = smd.SMD(mol2)
+                    obj2.solvent = solvent
+                    energy2, grad2 = smd.get_cds_legacy(obj2)
+                    self.assertAlmostEqual(energy, energy2, delta=1e-12)
+                    self.assertLess(abs(grad - grad2[::-1]).max(), 1e-10)
+
     def test_CN(self):
         atom = '''
 C       0.000000     0.000000     0.000000
