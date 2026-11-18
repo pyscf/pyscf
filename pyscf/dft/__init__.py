@@ -101,8 +101,7 @@ def GKS(mol, xc='LDA,VWN'):
 GKS.__doc__ = gks.GKS.__doc__
 
 def DKS(mol, xc='LDA,VWN'):
-    from pyscf.scf import dhf
-    if dhf.zquatev and mol.spin == 0:
+    if mol.spin == 0:
         return dks.RDKS(mol, xc=xc)
     else:
         return dks.UDKS(mol, xc=xc)
@@ -111,9 +110,8 @@ RDKS = dks.RDKS
 
 def X2C(mol, *args):
     '''X2C Kohn-Sham'''
-    from pyscf.scf import dhf
     from pyscf.x2c import dft
-    if dhf.zquatev and mol.spin == 0:
+    if mol.spin == 0:
         return dft.RKS(mol, *args)
     else:
         return dft.UKS(mol, *args)
