@@ -96,6 +96,7 @@ class KnownValues(unittest.TestCase):
         myadc.max_memory = 0
         myadc.incore_complete = False
 
+        myadc.method_type = "ee"
         e,v,p,x = myadc.kernel(nroots=4)
         spin = get_spin_square(myadc._adc_es)[0]
 
@@ -125,6 +126,7 @@ class KnownValues(unittest.TestCase):
         myadc.max_memory = 0
         myadc.incore_complete = False
 
+        myadc.method_type = "ee"
         e,v,p,x = myadc.kernel(nroots=4)
         spin = get_spin_square(myadc._adc_es)[0]
 

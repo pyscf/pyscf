@@ -81,6 +81,7 @@ class KnownValues(unittest.TestCase):
         myadc.max_memory = 0
         myadc.incore_complete = False
 
+        myadc.method_type = "ee"
         e,v,p,x = myadc.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0],0.2560782475, 6)
@@ -98,6 +99,7 @@ class KnownValues(unittest.TestCase):
         myadc.max_memory = 0
         myadc.incore_complete = False
 
+        myadc.method_type = "ee"
         e,v,p,x = myadc.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0],0.2801187917, 6)

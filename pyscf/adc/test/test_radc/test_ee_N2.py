@@ -83,8 +83,8 @@ class KnownValues(unittest.TestCase):
     def test_ee_adc2x(self):
         myadc.method = "adc(2)-x"
 
-        myadcee = adc.radc_ee.RADCEE(myadc)
-        e,v,p,x = myadcee.kernel(nroots=4)
+        myadc.method_type = "ee"
+        e,v,p,x = myadc.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0],0.3200995643, 6)
         self.assertAlmostEqual(e[1],0.3200995643, 6)
@@ -96,7 +96,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 2.4002663647119427e-16, 6)
         self.assertAlmostEqual(p[3], 2.0855075929786046e-30, 6)
 
-        dm1_exc = np.array(myadcee.make_rdm1())
+        dm1_exc = np.array(myadc.make_rdm1())
         self.assertAlmostEqual(rdms_test(dm1_exc[0]), 40.064511023542025, 4)
         self.assertAlmostEqual(rdms_test(dm1_exc[1]), 40.06451102354204, 4)
         self.assertAlmostEqual(rdms_test(dm1_exc[2]), 40.774533581994305, 4)

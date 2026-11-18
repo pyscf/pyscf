@@ -81,6 +81,7 @@ class KnownValues(unittest.TestCase):
     def test_ee_adc2x(self):
         myadc.method = "adc(2)-x"
 
+        myadc.method_type = "ee"
         e,v,p,x = myadc.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0],0.3737913888, 6)
@@ -102,6 +103,7 @@ class KnownValues(unittest.TestCase):
     def test_ee_adc2x_cis(self):
         myadc.method = "adc(2)-x"
 
+        myadc.method_type = "ee"
         e,v,p,x = myadc.kernel(nroots=4, guess="cis")
 
         self.assertAlmostEqual(e[0],0.3737913887927986, 6)
@@ -123,6 +125,7 @@ class KnownValues(unittest.TestCase):
     def test_ee_adc3_high_cost(self):
         myadc.method = "adc(3)"
 
+        myadc.method_type = "ee"
         e,v,p,x = myadc.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0],0.3883587379, 6)
