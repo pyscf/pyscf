@@ -228,6 +228,26 @@ class KnownValues(unittest.TestCase):
              mf.mol.energy_nuc())
         self.assertAlmostEqual(e3, e3ref, 9)
 
+    def test_uccsd_t_gamma2_outcore(self):
+        # the vvvv blocks in h5fobj, the (T) terms added; every block equals
+        # _gamma2_intermediates
+        mycc = cc.UCCSD(mf).run(conv_tol=1e-10)
+        eris = mycc.ao2mo()
+        conv, l1, l2 = uccsd_t_lambda.kernel(mycc, eris, mycc.t1, mycc.t2, tol=1e-10)
+        mycc.max_memory = 1
+        for compress_vvvv in (False, True):
+            ref = uccsd_t_rdm._gamma2_intermediates(mycc, mycc.t1, mycc.t2, l1, l2, eris,
+                                                   compress_vvvv=compress_vvvv)
+            f = lib.H5TmpFile()
+            d2 = uccsd_t_rdm._gamma2_outcore(mycc, mycc.t1, mycc.t2, l1, l2, eris, f,
+                                             compress_vvvv=compress_vvvv)
+            for i, j in numpy.ndindex(len(ref), 4):
+                with self.subTest(compress_vvvv=compress_vvvv, block=(i, j)):
+                    if ref[i][j] is None:
+                        self.assertIsNone(d2[i][j])
+                    else:
+                        self.assertAlmostEqual(abs(numpy.asarray(d2[i][j]) - ref[i][j]).max(), 0, 12)
+
 if __name__ == "__main__":
     print("Full Tests for UCCSD(T)")
     unittest.main()

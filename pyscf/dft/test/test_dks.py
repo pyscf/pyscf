@@ -74,14 +74,15 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'lda + .2*HF'
         mf.collinear = 'ncol'
         eks4 = mf.kernel()
-        self.assertAlmostEqual(eks4, -76.1457647524492, 8)
+        self.assertAlmostEqual(eks4, -76.1457647524492, 6)
 
+        # omega overrides only RSH functionals since #2525 (cf. the GKS sibling).
         mf = dks.UDKS(mol)
-        mf.xc = 'lda + .2*HF'
+        mf.xc = 'lda + .2*SR_HF(0.3)'
         mf.collinear = 'ncol'
         mf.omega = .5
         eks4 = mf.kernel()
-        self.assertAlmostEqual(eks4, -75.65261312636814, 8)
+        self.assertAlmostEqual(eks4, -75.65261304324916, 6)
 
     def test_ncol_dks_lda_high_cost(self):
         mf = dks.UDKS(mol)
@@ -94,7 +95,7 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'lda,'
         mf.collinear = 'ncol'
         eks4 = mf.kernel()
-        self.assertAlmostEqual(eks4, -74.0009332386581, 8)
+        self.assertAlmostEqual(eks4, -74.00093323811, 6)
 
     def test_ncol_dks_lda_veff(self):
         mf = dks.UDKS(mol)

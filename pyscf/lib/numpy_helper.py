@@ -297,18 +297,10 @@ def _has_empty_operand(tensors):
 def _empty_einsum_out_shape(scripts, tensors):
     '''Output shape of a contraction that sums over a zero-length index, or None.
 
-    Such a contraction is identically zero, but numpy does not shortcut it: as
-    soon as one summed index has zero extent, its inner loop walks the operand
-    buffers through their strides.  The two stride patterns numpy produces for
-    zero-sized arrays are incompatible with each other,
-
-    * size==0 allocated by numpy (numpy.zeros/numpy.empty/.copy()/...) has
-      strides (0,)*ndim, so the same non-zero byte is read for every element;
-    * an empty view of a real array keeps the strides of its base array;
-
-    so mixing the two, as UCISD does with ``eris.ovOV`` (a copy of an empty
-    slice) and ``c2ab`` (a view of ``civec``), makes numpy read bytes outside
-    the zero-byte allocation and return NaN.
+    Some numpy einsum paths return NaN for empty operands with different
+    stride layouts, including a zero-stride operand backed by NaN storage.
+    Empty arrays may legally have zero strides; their backing storage should
+    not contribute to a sum over a zero-length index.
     '''
     idx_in, idx_out = scripts.split('->') if '->' in scripts else (scripts, None)
     ranges = {}
@@ -334,8 +326,8 @@ def einsum(scripts, *tensors, **kwargs):
     be explicitly specified (i.e. 'ij,j->i' and not 'ij,j').
 
     A contraction that sums over a zero-length index is returned as zeros
-    without being handed to the backend, which avoids reading uninitialized
-    memory for zero-sized operands (see _empty_einsum_out_shape).
+    without being handed to the backend, avoiding spurious NaNs from empty
+    operands (see _empty_einsum_out_shape).
     '''
     if '...' not in scripts and _has_empty_operand(tensors):
         out_shape = _empty_einsum_out_shape(scripts.replace(' ', ''), tensors)
@@ -347,9 +339,9 @@ def einsum(scripts, *tensors, **kwargs):
                     dtype = numpy.result_type(*tensors)
                 return numpy.zeros(out_shape, dtype=dtype)
             # alpha is irrelevant: the contracted value is zero
-            beta = kwargs.get('beta', 1)
+            beta = kwargs.get('beta', 0)
             if beta == 0:
-                out[:] = 0
+                out[...] = 0
             elif beta != 1:
                 out *= beta
             return out

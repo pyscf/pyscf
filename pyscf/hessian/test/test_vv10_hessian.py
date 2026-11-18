@@ -112,7 +112,8 @@ def analytical_d2enlc(mf):
     return analytical_hessian
 
 class KnownValues(unittest.TestCase):
-    def test_vv10_only_hessian_direct_high_cost(self):
+    # _veryhigh_cost: runs in a dedicated CI job with a longer timeout.
+    def test_vv10_only_hessian_direct_veryhigh_cost(self):
         mf = make_mf(mol, vv10_only = True)
 
         # reference_hessian = numerical_d2enlc(mf)
@@ -187,7 +188,7 @@ class KnownValues(unittest.TestCase):
 
         assert np.linalg.norm(test_hessian - reference_hessian) < 1e-5
 
-    def test_vv10_only_hessian_density_fitting_high_cost(self):
+    def test_vv10_only_hessian_density_fitting_veryhigh_cost(self):
         mf = make_mf(mol, vv10_only = True, density_fitting = True)
 
         # reference_hessian = numerical_d2enlc(mf)
@@ -262,7 +263,9 @@ class KnownValues(unittest.TestCase):
 
         assert np.linalg.norm(test_hessian - reference_hessian) < 2e-5
 
-    def test_wb97xv_hessian_high_cost(self):
+    # Tight-grid variant; was shadowed by the loose-grid test below and
+    # never ran.
+    def test_wb97xv_hessian_veryhigh_cost(self):
         mf = make_mf(mol, vv10_only = False, density_fitting = True)
         # reference_hessian = numerical_d2enlc(mf)
         reference_hessian = np.array([[[[ 0.4979170248502474,  0.0488882371119104,  0.2658377292182879],
@@ -338,7 +341,7 @@ class KnownValues(unittest.TestCase):
 
     # If you wonder what is special about sto-6g? The answer is: It will trigger prune_by_density_() function
     # and remove some grids there.
-    def test_wb97xv_sto6g_hessian_high_cost(self):
+    def test_wb97xv_sto6g_hessian_veryhigh_cost(self):
         mol_copy = mol.copy()
         mol_copy.basis = "sto-6g"
         mol_copy.build()
@@ -640,7 +643,7 @@ class KnownValues(unittest.TestCase):
 
         assert abs(test_hessian - reference_hessian).max() < 4e-3
 
-    def test_vv10_energy_second_derivative_high_cost(self):
+    def test_vv10_energy_second_derivative_veryhigh_cost(self):
         mf = make_mf(mol, vv10_only = True, density_fitting = True)
         hess_obj = mf.Hessian()
 

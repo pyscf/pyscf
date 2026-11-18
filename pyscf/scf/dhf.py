@@ -26,21 +26,13 @@ import ctypes
 import numpy
 from pyscf import lib
 from pyscf import gto
+from pyscf import spinor
 from pyscf.lib import logger
 from pyscf.data import nist
 from pyscf.scf import hf, ghf
 from pyscf.scf import _vhf
 from pyscf.scf import chkfile
 from pyscf import __config__
-
-zquatev = None
-if getattr(__config__, 'scf_dhf_SCF_zquatev', True):
-    try:
-        # Install zquatev with
-        # pip install git+https://github.com/sunqm/zquatev
-        import zquatev
-    except ImportError:
-        pass
 
 DEBUG = False
 
@@ -830,10 +822,7 @@ class HF1e(DHF):
     scf = hf._hf1e_scf
 
     def _eigh(self, h, s, overwrite=False, x=None):
-        if zquatev:
-            return zquatev.solve_KR_FCSCE(self.mol, h, s)
-        else:
-            return DHF._eigh(self, h, s)
+        return spinor.kramers.eigh(self.mol, h, s, iop=1)
 
 
 class RDHF(DHF):
@@ -841,15 +830,12 @@ class RDHF(DHF):
     def __init__(self, mol):
         if mol.nelectron.__mod__(2) != 0:
             raise ValueError('Invalid electron number %i.' % mol.nelectron)
-        if zquatev is None:
-            raise RuntimeError('zquatev library is required to perform Kramers-restricted DHF')
         UHF.__init__(self, mol)
 
     def check_linear_dependency(self, s, verbose=None):
         log = logger.new_logger(self, verbose)
-        idx = _kramers_pair_sort_ao_idx(self.mol, four_component=True)
-        s = s[idx[:,None], idx]
-        e, v = zquatev.eigh(s)
+        # iop=0: the columns of x form a Kramers basis, as _eigh requires
+        e, v = spinor.kramers.eigh(self.mol, s)
         if log is not None:
             abs_e = abs(e)
             emax = abs_e.max()
@@ -865,18 +851,15 @@ class RDHF(DHF):
             x = v[:,mask] / numpy.sqrt(e[mask])
         else:
             x = v / numpy.sqrt(e)
-        x1 = numpy.empty_like(x)
-        x1[idx] = x
-        return x1
+        return x
 
     def _eigh(self, h, s, overwrite=False, x=None):
         if x is None:
-            if h.dtype != s.dtype:
-                s = s.astype(h.dtype)
-            return zquatev.solve_KR_FCSCE(self.mol, h, s)
+            return spinor.kramers.eigh(self.mol, h, s, iop=1)
         else:
+            from pyscf.lib import kramers as lib_kramers
             h = x.conj().T.dot(h).dot(x)
-            e, c = zquatev.eigh(h, iop=1)
+            e, c = lib_kramers.eigh(h, iop=1)
             return e, x.dot(c)
 
     def x2c1e(self):
@@ -1144,13 +1127,4 @@ class _VHFOpt(_vhf._VHFOpt):
                 mol._bas.ctypes, ctypes.c_int(nbas), mol._env.ctypes)
         self.dm_cond = dm_cond
 
-def _kramers_pair_sort_ao_idx(mol, four_component=True):
-    trmaps = mol.time_reversal_map()
-    idxA = numpy.where(trmaps > 0)[0]
-    idxB = trmaps[idxA] - 1
-    if four_component:
-        n = trmaps.size
-        idx = numpy.hstack((idxA,idxA+n,idxB,idxB+n))
-    else:
-        idx = numpy.hstack((idxA,idxB))
-    return idx
+_kramers_pair_sort_ao_idx = spinor.kramers.pair_sort_ao_idx

@@ -45,19 +45,19 @@
                    (cond ((null const@3)
                           (if (null op@3)
                             (format fout " + s\[n\]" )
-                            (format fout " + s\[~a*SIMDD+n\]" op@3)))
+                            (format fout " + s\[~a*GTO_SIMDD+n\]" op@3)))
                          ((null op@3)
                           (format fout " + c\[~a\]*s\[n\]" const@3))
-                         (t (format fout " + c\[~a\]*s\[~a*SIMDD+n\]" const@3 op@3)))
+                         (t (format fout " + c\[~a\]*s\[~a*GTO_SIMDD+n\]" const@3 op@3)))
                    (cond ((null const@3)
                           (if (null op@3)
                             (format fout " + (~a*s\[n\])" fac)
-                            (format fout " + (~a*s\[~a*SIMDD+n\])"
+                            (format fout " + (~a*s\[~a*GTO_SIMDD+n\])"
                                     fac op@3)))
                          ((null op@3)
                           (format fout " + (~a*c\[~a\]*s\[n\])"
                                   fac const@3))
-                         (t (format fout " + (~a*c\[~a\]*s\[~a*SIMDD+n\])"
+                         (t (format fout " + (~a*c\[~a\]*s\[~a*GTO_SIMDD+n\])"
                                     fac const@3 op@3))))))
              (c-streamer (cs)
                (format fout fmt-gout (incf ginc))
@@ -154,7 +154,7 @@
     (let* ((ybin (dec-to-ybin i))
            (zbin (dec-to-zbin i))
            (xbin (- (ash 1 n) 1 ybin zbin)))
-      (format fout "s[~a*SIMDD+n] = e * fx~a[lx*SIMDD+n] * fy~a[ly*SIMDD+n] * fz~a[lz*SIMDD+n];~%"
+      (format fout "s[~a*GTO_SIMDD+n] = e * fx~a[lx*GTO_SIMDD+n] * fy~a[ly*GTO_SIMDD+n] * fz~a[lz*GTO_SIMDD+n];~%"
               i xbin ybin zbin))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -167,7 +167,7 @@
          (ts1 (car raw-script))
          (sf1 (cadr raw-script))
          (strout (make-string-output-stream))
-         (goutinc (gen-c-block strout "buf[~d*SIMDD+n] =" (last1 raw-script)))
+         (goutinc (gen-c-block strout "buf[~d*GTO_SIMDD+n] =" (last1 raw-script)))
          (codestr (get-output-stream-string strout))
          (e1comps (if (eql sf1 'sf) 1 4))
          (tensors (/ goutinc e1comps)))
@@ -178,7 +178,7 @@ int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids)
 {" intname)
     (format fout "
 const size_t degen = (l+1)*(l+2)/2;
-const size_t bgrids0 = (bgrids >= SIMDD) ? (bgrids+1-SIMDD) : 0;
+const size_t bgrids0 = (bgrids >= GTO_SIMDD) ? (bgrids+1-GTO_SIMDD) : 0;
 int lx, ly, lz;
 size_t i, j, j1, k, l1, n;
 double e;
@@ -186,19 +186,19 @@ double *pgto;
 double *gridx = coord;
 double *gridy = coord+BLKSIZE;
 double *gridz = coord+BLKSIZE*2;
-double fx0[SIMDD*(ANG_MAX+~d)*~a];
-double fy0[SIMDD*(ANG_MAX+~d)*~a];
-double fz0[SIMDD*(ANG_MAX+~d)*~a];~%"
+double fx0[GTO_SIMDD*(ANG_MAX+~d)*~a];
+double fy0[GTO_SIMDD*(ANG_MAX+~d)*~a];
+double fz0[GTO_SIMDD*(ANG_MAX+~d)*~a];~%"
             fx-inc (ash 1 op-len)
             fx-inc (ash 1 op-len)
             fx-inc (ash 1 op-len))
     (loop
        for i in (range (1- (ash 1 op-len))) do
-         (format fout "double *fx~d = fx~d + SIMDD*(ANG_MAX+~d);~%" (1+ i) i fx-inc)
-         (format fout "double *fy~d = fy~d + SIMDD*(ANG_MAX+~d);~%" (1+ i) i fx-inc)
-         (format fout "double *fz~d = fz~d + SIMDD*(ANG_MAX+~d);~%" (1+ i) i fx-inc))
-    (format fout "double buf[SIMDD*nc*~d];~%" goutinc)
-    (format fout "double s[SIMDD*~d];~%" (expt 3 op-len))
+         (format fout "double *fx~d = fx~d + GTO_SIMDD*(ANG_MAX+~d);~%" (1+ i) i fx-inc)
+         (format fout "double *fy~d = fy~d + GTO_SIMDD*(ANG_MAX+~d);~%" (1+ i) i fx-inc)
+         (format fout "double *fz~d = fz~d + GTO_SIMDD*(ANG_MAX+~d);~%" (1+ i) i fx-inc))
+    (format fout "double buf[GTO_SIMDD*nc*~d];~%" goutinc)
+    (format fout "double s[GTO_SIMDD*~d];~%" (expt 3 op-len))
     (format fout "double *gto0 = cgto;~%")
     (loop
        for i in (range (1- goutinc)) do
@@ -215,19 +215,19 @@ for (j = 0; j < ~d; j++) {
         } }
 }" goutinc)
     (format fout "
-for (i = 0; i < bgrids0; i+=SIMDD) {
+for (i = 0; i < bgrids0; i+=GTO_SIMDD) {
         for (k = 0; k < np; k++) {
-                if (_nonzero_in(exps+k*BLKSIZE+i, SIMDD)) {
-for (n = 0; n < SIMDD; n++) {
+                if (_nonzero_in(exps+k*BLKSIZE+i, GTO_SIMDD)) {
+for (n = 0; n < GTO_SIMDD; n++) {
         fx0[n] = 1;
         fy0[n] = 1;
         fz0[n] = 1;
 }
 for (lx = 1; lx <= l+~d; lx++) {
-for (n = 0; n < SIMDD; n++) {
-        fx0[lx*SIMDD+n] = fx0[(lx-1)*SIMDD+n] * gridx[i+n];
-        fy0[lx*SIMDD+n] = fy0[(lx-1)*SIMDD+n] * gridy[i+n];
-        fz0[lx*SIMDD+n] = fz0[(lx-1)*SIMDD+n] * gridz[i+n];
+for (n = 0; n < GTO_SIMDD; n++) {
+        fx0[lx*GTO_SIMDD+n] = fx0[(lx-1)*GTO_SIMDD+n] * gridx[i+n];
+        fy0[lx*GTO_SIMDD+n] = fy0[(lx-1)*GTO_SIMDD+n] * gridy[i+n];
+        fz0[lx*GTO_SIMDD+n] = fz0[(lx-1)*GTO_SIMDD+n] * gridz[i+n];
 } }~%" op-len)
 ;;; generate g_(bin)
     (dump-combo-op fout "GTO_~aI(~d, ~d, l+~a);~%" op-rev)
@@ -235,34 +235,34 @@ for (n = 0; n < SIMDD; n++) {
     (format fout "for (lx = l, l1 = 0; lx >= 0; lx--) {
         for (ly = l - lx; ly >= 0; ly--, l1++) {
                 lz = l - lx - ly;
-                for (n = 0; n < SIMDD; n++) {
+                for (n = 0; n < GTO_SIMDD; n++) {
                        e = exps[k*BLKSIZE+i+n];~%")
     (dump-s-1e fout op-len)
     (format fout "                }
-                for (n = 0; n < SIMDD; n++) {~%")
+                for (n = 0; n < GTO_SIMDD; n++) {~%")
     (format fout "~a" codestr)
     (format fout "                }
                 for (j = 0, j1 = l1; j < nc; j++, j1+=degen) {
 #pragma GCC ivdep
-                for (n = 0; n < SIMDD; n++) {~%")
+                for (n = 0; n < GTO_SIMDD; n++) {~%")
     (loop
        for i in (range goutinc) do
-         (format fout "gto~d[j1*ngrids+i+n] += buf[~d*SIMDD+n] * coeff[j*np+k];~%" i i))
+         (format fout "gto~d[j1*ngrids+i+n] += buf[~d*GTO_SIMDD+n] * coeff[j*np+k];~%" i i))
     (format fout "} } } } } } }~%")
     (format fout "
 if (i < bgrids) {
         for (k = 0; k < np; k++) {
                 if (_nonzero_in(exps+k*BLKSIZE+i, bgrids-i)) {
-for (n = 0; n < SIMDD; n++) {
+for (n = 0; n < GTO_SIMDD; n++) {
         fx0[n] = 1;
         fy0[n] = 1;
         fz0[n] = 1;
 }
 for (lx = 1; lx <= l+~d; lx++) {
-for (n = 0; n < SIMDD; n++) {
-        fx0[lx*SIMDD+n] = fx0[(lx-1)*SIMDD+n] * gridx[i+n];
-        fy0[lx*SIMDD+n] = fy0[(lx-1)*SIMDD+n] * gridy[i+n];
-        fz0[lx*SIMDD+n] = fz0[(lx-1)*SIMDD+n] * gridz[i+n];
+for (n = 0; n < GTO_SIMDD; n++) {
+        fx0[lx*GTO_SIMDD+n] = fx0[(lx-1)*GTO_SIMDD+n] * gridx[i+n];
+        fy0[lx*GTO_SIMDD+n] = fy0[(lx-1)*GTO_SIMDD+n] * gridy[i+n];
+        fz0[lx*GTO_SIMDD+n] = fz0[(lx-1)*GTO_SIMDD+n] * gridz[i+n];
 } }~%" op-len)
 ;;; generate g_(bin)
     (dump-combo-op fout "GTO_~aI(~d, ~d, l+~a);~%" op-rev)
@@ -270,18 +270,18 @@ for (n = 0; n < SIMDD; n++) {
     (format fout "for (lx = l, l1 = 0; lx >= 0; lx--) {
         for (ly = l - lx; ly >= 0; ly--, l1++) {
                 lz = l - lx - ly;
-                for (n = 0; n < SIMDD; n++) {
+                for (n = 0; n < GTO_SIMDD; n++) {
                        e = exps[k*BLKSIZE+i+n];~%")
     (dump-s-1e fout op-len)
     (format fout "                }
-                for (n = 0; n < SIMDD; n++) {~%")
+                for (n = 0; n < GTO_SIMDD; n++) {~%")
     (format fout "~a" codestr)
     (format fout "                }
                 for (j = 0, j1 = l1; j < nc; j++, j1+=degen) {
                 for (n = 0; n < bgrids-i; n++) {~%")
     (loop
        for i in (range goutinc) do
-         (format fout "gto~d[j1*ngrids+i+n] += buf[~d*SIMDD+n] * coeff[j*np+k];~%" i i))
+         (format fout "gto~d[j1*ngrids+i+n] += buf[~d*GTO_SIMDD+n] * coeff[j*np+k];~%" i i))
     (format fout "} } } } } } }~%")
     (format fout "}~%")
 

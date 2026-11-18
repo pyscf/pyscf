@@ -122,7 +122,6 @@ class PySCFKptsWeightsTest(unittest.TestCase):
         self.assertTrue(np.all(bz2ibz >= 0))
         self.assertTrue(np.all(bz2ibz < kpts.nkpts_ibz))
 
-
 if __name__ == '__main__':
     print("Tests for pyscf_ase integration")
     unittest.main()

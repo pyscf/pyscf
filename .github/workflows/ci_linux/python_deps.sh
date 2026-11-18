@@ -19,7 +19,7 @@ fi
 # independently of the Python version selected by that workflow.
 if [ "$version" = '3.12' ] || [ "${INSTALL_NIGHTLY_DEPS:-false}" = 'true' ]; then
     pip install spglib
-    pip install git+https://github.com/sunqm/zquatev
+    pip install zquatev
     pip install basis-set-exchange
 fi
 
