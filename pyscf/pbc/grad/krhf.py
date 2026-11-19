@@ -46,7 +46,6 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     if atmlst is None: atmlst = range(cell.natm)
 
     log = logger.Logger(mf_grad.stdout, mf_grad.verbose)
-    hcore_deriv = mf_grad.hcore_generator(cell, kpts)
     s1 = mf_grad.get_ovlp(cell, kpts)
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
     t0 = (logger.process_clock(), logger.perf_counter())
@@ -55,17 +54,13 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     log.timer('gradients of 2e part', *t0)
     dme0 = mf_grad.make_rdm1e(mo_energy, mo_coeff, mo_occ)
     aoslices = cell.aoslice_by_atom()
-    de = np.zeros([len(atmlst),3])
+    de = _eval_hcore_grad(cell, dm0, kpts, atmlst)
     for x, ia in enumerate(atmlst):
         p0, p1 = aoslices[ia,2:]
-        h1ao = hcore_deriv(ia)
-        de[x] += np.einsum('xkij,kji->x', h1ao, dm0).real
         # nabla was applied on bra in vhf, *2 for the contributions of nabla|ket>
-        de[x] += np.einsum('xkij,kji->x', vhf[:,:,p0:p1], dm0[:,:,p0:p1]).real * 2
-        de[x] -= np.einsum('kxij,kji->x', s1[:,:,p0:p1], dme0[:,:,p0:p1]).real * 2
-        de[x] /= nkpts
+        de[x] += np.einsum('xkij,kji->x', vhf[:,:,p0:p1], dm0[:,:,p0:p1]).real * (2. / nkpts)
+        de[x] -= np.einsum('kxij,kji->x', s1[:,:,p0:p1], dme0[:,:,p0:p1]).real * (2. / nkpts)
         de[x] += mf_grad.extra_force(ia, locals())
-    de += pp_int.vppnl_nuc_grad(cell, dm0, kpts) / nkpts
 
     if log.verbose > logger.DEBUG:
         log.debug('gradients of electronic part')
@@ -112,6 +107,50 @@ def get_hcore(cell, kpts):
     else:
         raise NotImplementedError
     return h1
+
+def _eval_hcore_grad(cell, dm0, kpts, atmlst):
+    '''Evaluate nuclear gradient of the hcore energy contribution directly
+    (kinetic + local PP Pulay & Hellmann-Feynman + nonlocal PP).
+    '''
+    if cell._ecp:
+        raise NotImplementedError('ECP Gradients with PBC')
+    if not cell._pseudo:
+        raise NotImplementedError
+
+    nkpts = len(kpts)
+    aoslices = cell.aoslice_by_atom()
+    h1_kin = np.asarray(cell.pbc_intor('int1e_ipkin', kpts=kpts))
+    de = np.zeros((len(atmlst), 3))
+    for x, ia in enumerate(atmlst):
+        p0, p1 = aoslices[ia, 2:]
+        de[x] -= np.einsum('kxij,kji->x', h1_kin[:, :, p0:p1], dm0[:, :, p0:p1]).real * (2. / nkpts)
+
+    SI = cell.get_SI()
+    Gv = cell.Gv
+    vlocG = get_vlocG(cell)
+    vpplocG = -np.einsum('ij,ij->j', SI, vlocG)
+    vpplocG[0] = np.sum(get_alphas(cell))
+    vpplocR = tools.ifft(vpplocG, cell.mesh).real
+    coords = cell.get_uniform_grids()
+    ngrids = len(coords)
+    rhoR = np.zeros(ngrids)
+
+    for kn, kpt in enumerate(kpts):
+        aos = eval_ao_kpts(cell, coords, kpt, deriv=1)[0]
+        ao_dm = lib.dot(aos[0], dm0[kn])
+        rhoR += np.einsum('gi,gi->g', ao_dm, aos[0].conj()).real
+        ao_dm *= vpplocR[:, None]
+        for x, ia in enumerate(atmlst):
+            p0, p1 = aoslices[ia, 2:]
+            de[x] -= np.einsum('agi,gi->a', aos[1:, :, p0:p1].conj(), ao_dm[:, p0:p1]).real * (2. / nkpts)
+        aos = ao_dm = None
+
+    rhoG = tools.fft(rhoR, cell.mesh) / (nkpts * ngrids)
+    for x, ia in enumerate(atmlst):
+        de[x] += np.dot((1j * SI[ia] * vlocG[ia] * rhoG.conj()).real, Gv)
+
+    de += np.asarray(pp_int.vppnl_nuc_grad(cell, dm0, kpts))[list(atmlst)] / nkpts
+    return de
 
 def get_ovlp(cell, kpts):
     return -np.asarray(cell.pbc_intor('int1e_ipovlp', kpts=kpts))
