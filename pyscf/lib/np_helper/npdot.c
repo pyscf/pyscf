@@ -137,6 +137,59 @@ void NPdgemm(const char trans_a, const char trans_b,
 }
 
 
+/*
+ * Apply L[P,c,a] and L[P,b,d] to r[i,c,d] and sum over P.
+ * transpose_right selects L[P,d,b] for the right factor.
+ * r_by_c is packed as (c,i,d). Each worker has a slice of work and partials
+ * of size nocc*nvir*nvir. The result overwrites the first slice of partials
+ * in (a,i,b) order.
+ */
+void NPcontract_df_vvvv(int nocc, int nvir, int naux, int nthreads,
+                        int transpose_right, const double *r_by_c,
+                        const double *lvv, double *work, double *partials)
+{
+        const int nov = nocc * nvir;
+        const size_t vv = (size_t)nvir * nvir;
+        const size_t size = (size_t)nocc * vv;
+        const char normal = 'N';
+        const char transpose = 'T';
+        const char right_op = transpose_right ? normal : transpose;
+        const double one = 1;
+        const double zero = 0;
+
+#pragma omp parallel num_threads(nthreads) default(none) \
+        shared(naux, nvir, nov, vv, size, normal, transpose, right_op, one, zero, r_by_c, lvv, work, partials)
+{
+        const int tid = omp_get_thread_num();
+        const int team_size = omp_get_num_threads();
+        double *half = work + tid * size;
+        double *sigma = partials + tid * size;
+        size_t p0, p1;
+        NPdset0(sigma, size);
+        NPomp_split(&p0, &p1, naux);
+        for (size_t p = p0; p < p1; p++) {
+                const double *factor = lvv + p * vv;
+                /* H[a,i,d] = sum_c L[c,a] r[c,i,d]. */
+                dgemm_(&normal, &transpose, &nov, &nvir, &nvir, &one,
+                       r_by_c, &nov, factor, &nvir, &zero, half, &nov);
+                /* Reinterpret H as ((a,i),d) for the second GEMM. */
+                dgemm_(&right_op, &normal, &nvir, &nov, &nvir, &one,
+                       factor, &nvir, half, &nvir, &one, sigma, &nvir);
+        }
+
+#pragma omp barrier
+        size_t start, end;
+        NPomp_split(&start, &end, size);
+        for (size_t i = start; i < end; i++) {
+                double sum = partials[i];
+                for (int t = 1; t < team_size; t++) {
+                        sum += partials[t * size + i];
+                }
+                partials[i] = sum;
+        }
+}
+}
+
 void NPzgemm(const char trans_a, const char trans_b,
              const int m, const int n, const int k,
              const int lda, const int ldb, const int ldc,

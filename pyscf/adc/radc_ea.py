@@ -22,6 +22,8 @@
 '''
 Restricted algebraic diagrammatic construction
 '''
+import ctypes
+
 import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
@@ -30,6 +32,8 @@ from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
 from pyscf import symm
 from pyscf.data.nist import HARTREE2EV
+
+libnp_helper = lib.load_library('libnp_helper')
 
 
 def get_imds(adc, eris=None):
@@ -225,10 +229,8 @@ def get_imds(adc, eris=None):
             M_ab -= 0.5 * lib.einsum('mlad,mlbd->ab', temp_t2_vvvv, t2_1, optimize=True)
             del temp_t2_vvvv
 
-            chnk_size = radc_ao2mo.calculate_chunk_size(adc)
-            temp = np.zeros((nvir,nvir))
-
             if isinstance(eris.vvvv, list):
+                temp = np.zeros((nvir,nvir))
                 a = 0
                 for dataset in eris.vvvv:
                     k = dataset.shape[0]
@@ -255,25 +257,19 @@ def get_imds(adc, eris=None):
                                               t2_1, eris_vvvv, optimize=True)
                     del eris_vvvv
                     a += k
-            else :
-                for a,b in lib.prange(0,nvir,chnk_size):
-                    vvvv = dfadc.get_vvvv_df(adc, eris.Lvv, a, chnk_size).reshape(-1,nvir,nvir,nvir)
-                    temp[a:b] -= lib.einsum('mldf,mled,aebf->ab',t2_1, t2_1,  vvvv, optimize=True)
-                    temp[a:b] += lib.einsum('mldf,lmed,aebf->ab',t2_1, t2_1,  vvvv, optimize=True)
-                    temp[a:b] += lib.einsum('lmdf,mled,aebf->ab',t2_1, t2_1,  vvvv, optimize=True)
-                    temp[a:b] -= lib.einsum('lmdf,lmed,aebf->ab',t2_1, t2_1,  vvvv, optimize=True)
-                    temp[a:b] += 0.5*lib.einsum('mldf,mled,aefb->ab',
-                                               t2_1, t2_1,  vvvv, optimize=True)
-                    temp[a:b] -= 0.5*lib.einsum('mldf,lmed,aefb->ab',
-                                               t2_1, t2_1,  vvvv, optimize=True)
-                    temp[a:b] -= 0.5*lib.einsum('lmdf,mled,aefb->ab',
-                                               t2_1, t2_1,  vvvv, optimize=True)
-                    temp[a:b] += 0.5*lib.einsum('lmdf,lmed,aefb->ab',
-                                               t2_1, t2_1,  vvvv, optimize=True)
-                    temp[a:b] += 2.*lib.einsum('mlfd,mled,aebf->ab',
-                                               t2_1, t2_1, vvvv, optimize=True)
-                    temp[a:b] -= lib.einsum('mlfd,mled,aefb->ab',t2_1, t2_1, vvvv, optimize=True)
-                    del vvvv
+            else:
+                # The ten terms form J[D] - K[D]/2 for a single virtual density D.
+                t2_antisym = t2_1 - t2_1.swapaxes(0, 1)
+                density = 2 * lib.einsum('mlfd,mled->ef', t2_1, t2_1)
+                density -= lib.einsum('mldf,mled->ef', t2_antisym, t2_antisym)
+                del t2_antisym
+
+                lvv = eris.Lvv.reshape(eris.Lvv.shape[0], nvir, nvir)
+                factors = lvv.reshape(lvv.shape[0], nvir*nvir)
+                coulomb = (factors.T @ (factors @ density.ravel())).reshape(nvir, nvir).T
+                # K_ab contracts L[P,f,a] D[e,f] L[P,e,b].
+                exchange = _contract_df_vvvv(adc, density.T[None], lvv, transpose_right=True)[0]
+                temp = coulomb - 0.5 * exchange
 
             M_ab += temp
             del temp
@@ -1585,10 +1581,42 @@ class RADCEA(radc.RADC):
         return matvec, diag
 
 
+def _contract_df_vvvv(adc, r2, lvv, transpose_right=False):
+    '''Apply real DF factors with the index order Pca,icd,Pbd->iab.'''
+    naux, nvir, _ = lvv.shape
+    if naux == 0 or r2.size == 0:
+        return np.zeros(r2.shape)
+
+    lvv = np.ascontiguousarray(lvv, dtype=np.double)
+    r_by_c = np.ascontiguousarray(r2.transpose(1, 0, 2), dtype=np.double)
+    # Reserve room for the output and two buffers per worker.
+    available = 0.5e6 * (adc.max_memory - lib.current_memory()[0]) - r_by_c.nbytes
+    nthreads = max(1, min(naux, lib.num_threads(), int(available // (2 * r_by_c.nbytes))))
+    work = np.empty((nthreads, r_by_c.size))
+    partials = np.empty_like(work)
+
+    driver = libnp_helper.NPcontract_df_vvvv
+    driver.restype = None
+    driver(ctypes.c_int(r2.shape[0]), ctypes.c_int(nvir), ctypes.c_int(naux),
+           ctypes.c_int(nthreads), ctypes.c_int(transpose_right),
+           r_by_c.ctypes.data_as(ctypes.c_void_p),
+           lvv.ctypes.data_as(ctypes.c_void_p),
+           work.ctypes.data_as(ctypes.c_void_p),
+           partials.ctypes.data_as(ctypes.c_void_p))
+    return partials[0].reshape(r_by_c.shape).transpose(1, 0, 2).copy()
+
+
 def contract_r_vvvv(myadc,r2,vvvv):
 
     nocc = myadc._nocc
     nvir = myadc._nvir
+    with_df = getattr(myadc, 'with_df', None)
+
+    # With relatively few occupied orbitals the two DF contractions do less work.
+    if not isinstance(vvvv, list) and with_df and 2*nocc <= nvir:
+        lvv = vvvv.reshape(vvvv.shape[0], nvir, nvir)
+        r2 = r2.reshape(nocc, nvir, nvir)
+        return _contract_df_vvvv(myadc, r2, lvv).ravel()
 
     r2_vvvv = np.zeros((nocc,nvir,nvir))
     r2 = np.ascontiguousarray(r2.reshape(nocc,-1))
@@ -1602,7 +1630,7 @@ def contract_r_vvvv(myadc,r2,vvvv):
             r2_vvvv[:,a:a+k] = np.dot(r2,dataset.T).reshape(nocc,-1,nvir)
             del dataset
             a += k
-    elif getattr(myadc, 'with_df', None):
+    elif with_df:
         for a,b in lib.prange(0,nvir,chnk_size):
             vvvv_p = dfadc.get_vvvv_df(myadc, vvvv, a, chnk_size)
             vvvv_p = vvvv_p.reshape(-1,nvir*nvir)
