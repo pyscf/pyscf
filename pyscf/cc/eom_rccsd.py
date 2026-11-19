@@ -2031,6 +2031,8 @@ class EOMEESinglet(EOMEE):
 
 
 class EOMEETriplet(EOMEE):
+    _keys = {'v_left'}
+
     kernel = eomee_ccsd_triplet
     eomee_ccsd_triplet = eomee_ccsd_triplet
     matvec = eeccsd_matvec_triplet
@@ -2057,6 +2059,8 @@ class EOMEETriplet(EOMEE):
 
 
 class EOMEESpinFlip(EOMEE):
+    _keys = {'v_left'}
+
     kernel = eomsf_ccsd
     eomsf_ccsd = eomsf_ccsd
     matvec = eeccsd_matvec_sf
