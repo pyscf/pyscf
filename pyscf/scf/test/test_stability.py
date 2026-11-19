@@ -19,6 +19,10 @@ import scipy.linalg
 from pyscf import lib, gto, scf
 from pyscf import ao2mo
 from pyscf.scf import stability
+try:
+    import mcfun
+except ImportError:
+    mcfun = None
 
 def gen_hop_rhf_external(mf):
     mol = mf.mol
@@ -371,6 +375,7 @@ class KnownValues(unittest.TestCase):
         assert test_stable_i is False
         assert test_stable_e is False
 
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_uks_spin_flip_curvature(self):
         mol = gto.M(atom='H 0 0 0; H 0 0 1.2; H 0.3 0 2.5',
                     basis='sto-3g', spin=1, verbose=0)
