@@ -1353,7 +1353,7 @@ def loads(molstr):
     mol._atm = numpy.array(mol._atm, dtype=numpy.int32)
     mol._bas = numpy.array(mol._bas, dtype=numpy.int32)
     mol._env = numpy.array(mol._env, dtype=numpy.double)
-    mol._ecpbas = numpy.array(mol._ecpbas, dtype=numpy.int32)
+    mol._ecpbas = numpy.array(mol._ecpbas, dtype=numpy.int32).reshape(-1, BAS_SLOTS)
 
     # Objects related to symmetry cannot be serialized by dumps function.
     # Recreate it manually

@@ -143,7 +143,7 @@ def loads(cellstr):
     cell._atm = np.array(cell._atm, dtype=np.int32)
     cell._bas = np.array(cell._bas, dtype=np.int32)
     cell._env = np.array(cell._env, dtype=np.double)
-    cell._ecpbas = np.array(cell._ecpbas, dtype=np.int32)
+    cell._ecpbas = np.array(cell._ecpbas, dtype=np.int32).reshape(-1, mole.BAS_SLOTS)
     cell._mesh = np.array(cell._mesh)
 
     # Symmetry class cannot be serialized by dumps function.
