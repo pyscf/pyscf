@@ -179,6 +179,7 @@ void MP2_contract_d(double *ed_out, double *ex_out, const int s2symm,
     free(jobs);
     free(parr_iaL);
     free(parr_jbL);
+    free(parr_t2);
 
 }
 
@@ -271,6 +272,7 @@ void MP2_OS_contract_d(double *ed_out,
     free(jobs);
     free(parr_iaL);
     free(parr_jbL);
+    free(parr_t2);
 
 }
 
