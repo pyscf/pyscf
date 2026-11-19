@@ -135,6 +135,21 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(g1 - g_ref).max(), 0, 7)
         self.assertAlmostEqual(g1[0,2], _fd_z(mycc), 5)
 
+    def test_uccsd_t_grad_blocked(self):
+        # with little memory the (T) lambda and densities are formed over
+        # blocks of the virtual indices; the gradient is the same
+        mycc = cc.uccsd.UCCSD(mf)
+        mycc.conv_tol = 1e-10
+        mycc.conv_tol_normt = 1e-8
+        eris = mycc.ao2mo()
+        ecc, t1, t2 = mycc.kernel(eris=eris)
+        conv, l1, l2 = uccsd_t_lambda.kernel(mycc, eris, t1, t2)
+        g_ref = uccsd_t_grad.Gradients(mycc).kernel(t1, t2, l1, l2, eris=eris)
+        mycc.max_memory = 1
+        conv, l1, l2 = uccsd_t_lambda.kernel(mycc, eris, t1, t2)
+        g1 = uccsd_t_grad.Gradients(mycc).kernel(t1, t2, l1, l2, eris=eris)
+        self.assertAlmostEqual(abs(g1 - g_ref).max(), 0, 9)
+
 if __name__ == "__main__":
     print("Tests for UCCSD(T) gradients")
     unittest.main()
