@@ -37,7 +37,6 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
 
     log = logger.Logger(mf_grad.stdout, mf_grad.verbose)
 
-    hcore_deriv = mf_grad.hcore_generator(cell, kpts)
     s1 = mf_grad.get_ovlp(cell, kpts)
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
 
@@ -53,16 +52,12 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     if atmlst is None:
         atmlst = range(cell.natm)
     aoslices = cell.aoslice_by_atom()
-    de = np.zeros((len(atmlst),3))
+    de = krhf_grad._eval_hcore_grad(cell, dm0_sf, kpts, atmlst)
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
-        h1ao = hcore_deriv(ia)
-        de[k] += np.einsum('xkij,kji->x', h1ao, dm0_sf).real
-        de[k] += np.einsum('xskij,skji->x', vhf[:,:,:,p0:p1], dm0[:,:,:,p0:p1]).real * 2
-        de[k] -= np.einsum('kxij,kji->x', s1[:,:,p0:p1], dme0_sf[:,:,p0:p1]).real * 2
-        de[k] /= nkpts
+        de[k] += np.einsum('xskij,skji->x', vhf[:,:,:,p0:p1], dm0[:,:,:,p0:p1]).real * (2. / nkpts)
+        de[k] -= np.einsum('kxij,kji->x', s1[:,:,p0:p1], dme0_sf[:,:,p0:p1]).real * (2. / nkpts)
         de[k] += mf_grad.extra_force(ia, locals())
-    de += pp_int.vppnl_nuc_grad(cell, dm0_sf, kpts) / nkpts
 
     if log.verbose > logger.DEBUG:
         log.debug('gradients of electronic part')
