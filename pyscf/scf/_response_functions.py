@@ -79,9 +79,11 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
 
         # The dm0-only NLC response kernel on nlcgrids, reused by every vind
         # call below.  Held by the closure so its lifetime is one solve, like
-        # rho0/vxc/fxc above.
+        # rho0/vxc/fxc above.  Skipped for the triplet response
+        # (singlet=False): the NLC term is spin-independent, so it vanishes
+        # for the spin-difference density.
         nlc_grids = nlc_rho = nlc_kernel = None
-        if with_nlc and mf.do_nlc() and hermi != 2:
+        if with_nlc and mf.do_nlc() and hermi != 2 and singlet is not False:
             # Cannot import at top due to circular dependency
             from pyscf.hessian.rks import (cache_nlc_kernel, get_vnlc_resp,
                                            get_vnlc_resp1)
