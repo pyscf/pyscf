@@ -19,6 +19,7 @@ Interface to geomeTRIC library https://github.com/leeping/geomeTRIC
 
 import os
 import uuid
+import configparser
 import tempfile
 import numpy
 import geometric
@@ -49,6 +50,20 @@ del (internal, optimize, nifty, engine, molecule)
 
 INCLUDE_GHOST = getattr(__config__, 'geomopt_berny_solver_optimize_include_ghost', True)
 ASSERT_CONV = getattr(__config__, 'geomopt_berny_solver_optimize_assert_convergence', True)
+
+def _write_quiet_log_ini(dirname):
+    '''Generate a log.ini from the shipped one with the console handler
+    (and root logger) demoted to WARNING, to suppress the geomeTRIC
+    optimizer trace when the scanner runs at verbose < INFO.'''
+    parser = configparser.ConfigParser(interpolation=None)
+    parser.read(os.path.abspath(os.path.join(__file__, '..', 'log.ini')))
+    parser['logger_root']['level'] = 'WARNING'
+    parser['handler_stream_handler']['level'] = 'WARNING'
+    ini_file = os.path.join(dirname, 'log.ini')
+    with open(ini_file, 'w') as f:
+        parser.write(f)
+    return os.path.abspath(ini_file)
+
 
 class PySCFEngine(geometric.engine.Engine):
     def __init__(self, scanner):
@@ -144,15 +159,21 @@ def kernel(method, assert_convergence=ASSERT_CONV,
         engine.mol.symmetry = engine.mol.topgroup
     engine.assert_convergence = assert_convergence
 
-    # geomeTRIC library on pypi requires to provide config file log.ini.
-    if not os.path.exists(os.path.abspath(
-            os.path.join(geometric.optimize.__file__, '..', 'log.ini'))) and kwargs.get('logIni') is None:
-        kwargs['logIni'] = os.path.abspath(os.path.join(__file__, '..', 'log.ini'))
-
     kwargs['maxiter'] = maxsteps
 
     with tempfile.TemporaryDirectory(dir=lib.param.TMPDIR) as tmpdir:
         tmpf = os.path.join(tmpdir, str(uuid.uuid4()))
+
+        # geomeTRIC configures the global root logger through log.ini
+        # (fileConfig inside run_optimizer; without logIni it falls back to
+        # the config file shipped in geometric/config). The optimizer trace
+        # is diagnostic output; show it only when the scanner runs at
+        # verbose >= INFO, otherwise keep only warnings and errors.
+        if kwargs.get('logIni') is None:
+            if g_scanner.verbose < logger.INFO:
+                kwargs['logIni'] = _write_quiet_log_ini(tmpdir)
+            else:
+                kwargs['logIni'] = os.path.abspath(os.path.join(__file__, '..', 'log.ini'))
 
         if 'hessian' in kwargs:
             kwargs['hessian'] = _make_hessian(g_scanner, kwargs['hessian'], tmpdir)
