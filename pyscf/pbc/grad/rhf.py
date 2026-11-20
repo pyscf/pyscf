@@ -157,6 +157,8 @@ def grad_nuc(cell, atmlst=None, ew_eta=None, ew_cut=None):
 
 class GradientsBase(mol_rhf.GradientsBase):
     '''Base class for Gamma-point nuclear gradient'''
+    _keys = {'cell'}
+
     # used by hf kernel
     @property
     def mol(self):
