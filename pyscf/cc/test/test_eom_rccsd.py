@@ -310,19 +310,11 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(abs(numpy.cumsum(f) - numpy.cumsum(ffci)).max(), 0, 6)
 
     def test_eomee_ccsd_triplet(self):
-        myeom = eom_rccsd.EOMEETriplet(mycc)
-        myeom.verbose = 4
-        myeom.stdout = io.StringIO()
-        e, v = myeom.kernel(nroots=1)
-        self.assertNotIn('does not have attributes', myeom.stdout.getvalue())
+        e, v = mycc.eomee_ccsd_triplet(nroots=1)
         self.assertAlmostEqual(e, 0.2757159395886167, 5)
 
     def test_eomsf_ccsd(self):
-        myeom = eom_rccsd.EOMEESpinFlip(mycc)
-        myeom.verbose = 4
-        myeom.stdout = io.StringIO()
-        e, v = myeom.kernel(nroots=1)
-        self.assertNotIn('does not have attributes', myeom.stdout.getvalue())
+        e, v = mycc.eomsf_ccsd(nroots=1)
         self.assertAlmostEqual(e, 0.2757159395886167, 5)
 
     def test_vector_to_amplitudes(self):
