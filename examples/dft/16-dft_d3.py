@@ -143,6 +143,6 @@ mf.kernel() # Crash
 # https://github.com/dftd3/simple-dftd3/blob/main/assets/parameters.toml
 # https://github.com/dftd4/dftd4/blob/main/assets/parameters.toml
 
-# DFT keyword wb97x-d, wb97x-d3 are not supported in current version.
-# If you assign these keywords to the .xc attribute, you will receive an error.
+# DFT keyword wb97x-d is not supported in current version.
+# If you assign this keyword to the .xc attribute, you will receive an error.
 

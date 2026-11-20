@@ -467,6 +467,8 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(parse_dft('b3lyp-d3zerom'), ('b3lyp', '', 'd3zerom'))
         self.assertEqual(parse_dft('wb97x-d3bj'), ('wb97x-v', False, 'd3bj'))
         self.assertEqual(parse_dft('wb97x-d3zero2b'), ('wb97x', '', 'd3zero2b'))
+        self.assertEqual(parse_dft('wb97x-d3'), ('wb97x_d3', False, 'd3zero:wb97x'))
+        self.assertEqual(parse_dft('wb97x_d3'), ('wb97x_d3', False, 'd3zero:wb97x'))
         self.assertEqual(parse_dft('wb97x-3c'), ('wb97x-v', False, 'd4:wb97x-3c'))
         self.assertEqual(parse_dft('b97-3c'), ('b97-3c', False, 'd3bjatm:b97-3c'))
         self.assertEqual(parse_dft('r2scan-3c'), ('r2scan', False, 'd4:r2scan-3c'))
