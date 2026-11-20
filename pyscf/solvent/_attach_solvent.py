@@ -51,7 +51,7 @@ class _Solvation:
     pass
 
 class SCFWithSolvent(_Solvation):
-    _keys = {'with_solvent'}
+    _keys = {'with_solvent', 'cphf_grids'}
 
     def __init__(self, mf, solvent):
         self.__dict__.update(mf.__dict__)
