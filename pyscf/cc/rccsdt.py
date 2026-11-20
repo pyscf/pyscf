@@ -1313,7 +1313,8 @@ Saved results:
         'max_cycle', 'conv_tol', 'iterative_damping', 'conv_tol_normt', 'diis', 'diis_space', 'diis_file',
         'diis_start_cycle', 'diis_start_energy_diff', 'async_io', 'incore_complete', 'callback',
         'mol', 'verbose', 'stdout', 'frozen', 'level_shift', 'mo_coeff', 'mo_occ', 'cycles', 'emp2', 'e_hf',
-        'converged', 'e_corr', 'chkfile', 'cc_order', 'do_diis_max_t', 'blksize', 'blksize_oovv', 'blksize_oooo',
+        'converged', 'e_corr', 'e_corr_ss', 'e_corr_os', 'chkfile', 'cc_order', 'do_diis_max_t',
+        'blksize', 'blksize_oovv', 'blksize_oooo',
         'einsum_backend', 'tamps', 'unique_tamps_map', 'tri2block_map', 'tri2block_mask', 'tri2block_tp',
     }
 

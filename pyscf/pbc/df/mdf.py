@@ -50,6 +50,7 @@ from pyscf import __config__
 class MDF(df.GDF):
     '''Gaussian and planewaves mixed density fitting
     '''
+    _keys = {'time_reversal_symmetry'}
 
     def __init__(self, cell, kpts=np.zeros((1,3))):
         self.cell = cell
