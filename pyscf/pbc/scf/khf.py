@@ -472,7 +472,7 @@ class KSCF(pbchf.SCF):
     '''
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
 
-    _keys = {'cell', 'exx_built', 'exxdiv', 'with_df', 'rsjk'}
+    _keys = {'cell', 'exx_built', 'exxdiv', 'with_df', 'rsjk', 'use_ao_symmetry'}
 
     mol = pbchf.SCF.mol
 
