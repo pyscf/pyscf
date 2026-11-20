@@ -68,6 +68,26 @@ class KnownValues(unittest.TestCase):
         e_cds = smdobj.get_cds()
         assert numpy.abs(e_cds - 0.002298448590009083) < 1e-8
 
+    def test_cds_ecp(self):
+        # With an ECP, the CDS term must look up elements by proton
+        # number, not by the effective nuclear charge from
+        # mol.atom_charges() (Xe with def2 ECP -> 26 -> Fe). See #3617.
+        mol = gto.Mole()
+        mol.atom = '''
+Xe      0.0000000000    0.0000000000     0.0000000000
+F       0.0000000000    0.0000000000     1.9800000000
+F       0.0000000000    0.0000000000    -1.9800000000
+        '''
+        mol.basis = 'def2-svp'
+        mol.ecp = 'def2-svp'
+        mol.output = '/dev/null'
+        mol.build()
+        smdobj = smd.SMD(mol)
+        smdobj.solvent = 'water'
+        e_cds = smdobj.get_cds()
+        mol.stdout.close()
+        assert numpy.abs(e_cds - 0.0029855181) < 1e-8
+
     def test_smd_solvent(self):
         mf = scf.RHF(mol)
         mf = mf.SMD()
