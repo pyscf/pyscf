@@ -1840,53 +1840,55 @@ def _get_vnlc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
 
     return vmat
 
-def get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1s, max_memory):
-    if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
-        mocc = mo_coeff[:,mo_occ>0]
-        mo_occ = mo_occ[mo_occ > 0]
-        dm0 = (mocc * mo_occ) @ mocc.T
+def cache_nlc_kernel(mf, mol, grids, mo_coeff=None, mo_occ=None, dm0=None,
+                     max_memory=None):
+    '''Compute the dm0-only VV10 preamble of the NLC response on grids.
+
+    grids is the NLC grids object, e.g. mf.nlcgrids, already built.  Exactly
+    one of (mo_coeff, mo_occ) or dm0 should be provided; the 0th order
+    spin-summed density matrix is constructed from the MOs when mo_coeff is
+    given.  Returns derived objects, in the manner of ni.cache_xc_kernel,
+    held by the caller (e.g. the vind closure in _response_functions) and
+    passed to get_vnlc_resp1, which reuses them across calls with the same
+    dm0:
+
+    nlc_rho : (rho_nonzero_mask, rho_i, nabla_rho_i, omega_i, kappa_i)
+        mask of grids points with rho above threshold, and the 0th order
+        density on the masked grids with the derived per-point VV10
+        quantities
+    nlc_kernel : (U_i, W_i, A_i, B_i, C_i, domega_drho_i, domega_dgamma_i,
+        dkappa_drho_i, d2omega_drho2_i, d2omega_dgamma2_i,
+        d2omega_drho_dgamma_i, d2kappa_drho2_i, f_gamma_i)
+        the precomputed response pair kernel
+    '''
+    if mo_coeff is not None:
+        assert mo_occ is not None
+        if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
+            mocc = mo_coeff[:,mo_occ>0]
+            mo_occ = mo_occ[mo_occ > 0]
+            dm0 = (mocc * mo_occ) @ mocc.T
+        else:
+            assert mo_coeff[0].ndim == 2 # unrestricted case
+            assert len(mo_coeff) == 2
+            assert len(mo_occ) == 2
+            mocc_a = mo_coeff[0][:, mo_occ[0] > 0]
+            mocc_b = mo_coeff[1][:, mo_occ[1] > 0]
+            mo_occ_a = mo_occ[0][mo_occ[0] > 0]
+            mo_occ_b = mo_occ[1][mo_occ[1] > 0]
+            dm0 = (mocc_a * mo_occ_a) @ mocc_a.T + (mocc_b * mo_occ_b) @ mocc_b.T
     else:
-        assert mo_coeff[0].ndim == 2 # unrestricted case
-        assert len(mo_coeff) == 2
-        assert len(mo_occ) == 2
-        mocc_a = mo_coeff[0][:, mo_occ[0] > 0]
-        mocc_b = mo_coeff[1][:, mo_occ[1] > 0]
-        mo_occ_a = mo_occ[0][mo_occ[0] > 0]
-        mo_occ_b = mo_occ[1][mo_occ[1] > 0]
-        dm0 = (mocc_a * mo_occ_a) @ mocc_a.T + (mocc_b * mo_occ_b) @ mocc_b.T
-
-    return get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory)
-
-def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory):
-    """
-        Equation notation follows:
-        Liang J, Feng X, Liu X, Head-Gordon M. Analytical harmonic vibrational frequencies with
-        VV10-containing density functionals: Theory, efficient implementation, and
-        benchmark assessments. J Chem Phys. 2023 May 28;158(20):204109. doi: 10.1063/5.0152838.
-
-        mo_coeff, mo_occ are 0-th order
-        dm1s is first order
-
-        TODO: check the effect of different grid, using mf.nlcgrids right now
-    """
+        assert dm0 is not None
+    if isinstance(dm0, numpy.ndarray) and dm0.ndim == 3:
+        # spin-summed density of an unrestricted 0th order density
+        assert dm0.shape[0] == 2
+        dm0 = dm0[0] + dm0[1]
     dm0 = numpy.asarray(dm0.real, order='C')
 
-    output_in_2d = False
-    if dm1s.ndim == 2:
-        assert dm1s.shape == (mol.nao, mol.nao)
-        dm1s = dm1s.reshape((1, mol.nao, mol.nao))
-        output_in_2d = True
-    assert dm1s.ndim == 3
-
-    grids = mf.nlcgrids
     if grids.coords is None:
         grids.build()
 
-    n_dm1 = dm1s.shape[0]
-
     ni = mf._numint
-
-    if mf._numint.is_nlc(mf.xc):
+    if ni.is_nlc(mf.xc):
         xc_code = mf.xc
     else:
         xc_code = mf.nlc
@@ -1898,26 +1900,20 @@ def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory):
     kappa_prefactor = nlc_pars[0] * 1.5 * numpy.pi * (9 * numpy.pi)**(-1.0/6.0)
     C_in_omega = nlc_pars[1]
 
-    # ao = numint.eval_ao(mol, grids.coords, deriv = 1)
-    # rho_drho = numint.eval_rho(mol, ao, dm0, xctype = "NLC", hermi = 1, with_lapl = False)
-
     ngrids_full = grids.coords.shape[0]
     rho_drho = numpy.empty([4, ngrids_full])
     g1 = 0
     for split_ao, ao_mask_index, split_weights, split_coords in ni.block_loop(mol, grids, mol.nao, 1, max_memory):
         g0, g1 = g1, g1 + split_weights.size
         rho_drho[:, g0:g1] = numint.eval_rho(mol, split_ao, dm0, xctype = "NLC", hermi = 1)
-    dm0 = None
 
     rho_i = rho_drho[0,:]
-
     rho_nonzero_mask = (rho_i >= NLC_REMOVE_ZERO_RHO_GRID_THRESHOLD)
-
     rho_i = rho_i[rho_nonzero_mask]
     nabla_rho_i = rho_drho[1:4, rho_nonzero_mask]
-    grids_coords = numpy.ascontiguousarray(grids.coords[rho_nonzero_mask, :])
+    grids_coords = grids.coords[rho_nonzero_mask]
     grids_weights = grids.weights[rho_nonzero_mask]
-    ngrids = grids_coords.shape[0]
+    ngrids = rho_i.shape[0]
 
     gamma_i = nabla_rho_i[0,:]**2 + nabla_rho_i[1,:]**2 + nabla_rho_i[2,:]**2
     omega_i = numpy.sqrt(C_in_omega * gamma_i**2 / rho_i**4 + (4.0/3.0*numpy.pi) * rho_i)
@@ -1966,6 +1962,131 @@ def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory):
     d2kappa_drho2_i = kappa_prefactor * (-5.0/36.0) * rho_i**(-11.0/6.0)
 
     f_gamma_i = rho_i * domega_dgamma_i * W_i
+
+    nlc_rho = (rho_nonzero_mask, rho_i, nabla_rho_i, omega_i, kappa_i)
+    nlc_kernel = (U_i, W_i, A_i, B_i, C_i,
+                  domega_drho_i, domega_dgamma_i, dkappa_drho_i,
+                  d2omega_drho2_i, d2omega_dgamma2_i, d2omega_drho_dgamma_i,
+                  d2kappa_drho2_i, f_gamma_i)
+    return nlc_rho, nlc_kernel
+
+def cache_nlc_kernel_gks(mf, mol, grids, mo_coeff=None, mo_occ=None, dm0=None,
+                         max_memory=None):
+    '''cache_nlc_kernel for GKS references: the GHF/GKS MOs are spin
+    orbitals (2nao, nmo; the first nao rows are the alpha AO block, the
+    last nao rows the beta block), so they split into the alpha/beta
+    spatial MOs of a UKS reference; the spin-orbital dm0 is spin-summed
+    the same way.  The kernel is built under the 1c NumInt environment of
+    mf._numint.
+    '''
+    ni1c = mf._numint._to_numint1c()
+    with lib.temporary_env(mf, _numint=ni1c):
+        if mo_coeff is not None and mo_occ is not None:
+            nao = mo_coeff.shape[0] // 2
+            mo_uks = [mo_coeff[:nao], mo_coeff[nao:]]
+            mo_occ_uks = [mo_occ, mo_occ]
+            return cache_nlc_kernel(mf, mol, grids, mo_coeff=mo_uks,
+                                    mo_occ=mo_occ_uks, max_memory=max_memory)
+        else:
+            assert dm0 is not None
+            nao = dm0.shape[0] // 2
+            dm0_sf = dm0[:nao,:nao] + dm0[nao:,nao:]
+            return cache_nlc_kernel(mf, mol, grids, dm0=dm0_sf,
+                                    max_memory=max_memory)
+
+def get_vnlc_resp_gks(mf, mol, dm1, max_memory, dm0=None,
+                      grids=None, nlc_rho=None, nlc_kernel=None):
+    '''NLC response for GKS references.  dm1 is the spin-orbital
+    first-order density (2nao, 2nao; alpha/beta AO blocks), optionally
+    batched; it is spin-summed, and the resulting spatial NLC potential is
+    scattered back to both spin blocks.  If nlc_rho/nlc_kernel are
+    not supplied, they are built from the spin-orbital dm0 for this call.
+    '''
+    if nlc_kernel is None:
+        assert dm0 is not None
+        nlc_rho, nlc_kernel = cache_nlc_kernel_gks(
+            mf, mol, grids, dm0=dm0, max_memory=max_memory)
+    nao = dm1.shape[-1] // 2
+    dm1_sf = (dm1[...,:nao,:nao] + dm1[...,nao:,nao:]).real
+    ni1c = mf._numint._to_numint1c()
+    with lib.temporary_env(mf, _numint=ni1c):
+        vxc_sf = get_vnlc_resp1(mf, mol, None, dm1_sf, max_memory,
+                                grids=grids, nlc_rho=nlc_rho,
+                                nlc_kernel=nlc_kernel)
+    vxc = numpy.zeros(dm1.shape, dtype=vxc_sf.dtype)
+    vxc[...,:nao,:nao] = vxc_sf
+    vxc[...,nao:,nao:] = vxc_sf
+    return vxc
+
+def get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1s, max_memory,
+                  grids=None, nlc_rho=None, nlc_kernel=None):
+    '''NLC response for 0th order MOs (mo_coeff, mo_occ) and 1st order
+    density matrices dm1s.  grids is the NLC grids object, e.g.
+    mf.nlcgrids.  nlc_rho, nlc_kernel are the groups returned by
+    cache_nlc_kernel for (mo_coeff, mo_occ); if not given, they are
+    computed for this call.
+    '''
+    if nlc_kernel is None:
+        nlc_rho, nlc_kernel = cache_nlc_kernel(
+            mf, mol, grids, mo_coeff=mo_coeff, mo_occ=mo_occ,
+            max_memory=max_memory)
+    return get_vnlc_resp1(mf, mol, None, dm1s, max_memory,
+                          grids=grids, nlc_rho=nlc_rho, nlc_kernel=nlc_kernel)
+
+def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory,
+                   grids=None, nlc_rho=None, nlc_kernel=None):
+    """
+        Equation notation follows:
+        Liang J, Feng X, Liu X, Head-Gordon M. Analytical harmonic vibrational frequencies with
+        VV10-containing density functionals: Theory, efficient implementation, and
+        benchmark assessments. J Chem Phys. 2023 May 28;158(20):204109. doi: 10.1063/5.0152838.
+
+        mo_coeff, mo_occ are 0-th order
+        dm1s is first order
+
+        TODO: check the effect of different grid, using mf.nlcgrids right now
+
+    Kwargs:
+        grids : the NLC grids object, e.g. mf.nlcgrids.  Defaults to
+            mf.nlcgrids.
+        nlc_rho, nlc_kernel : the groups returned by cache_nlc_kernel (see
+            its docstring).  Holding them in the vind closure of
+            _response_functions reuses them across the calls of one CPHF (or
+            Davidson) solve, which is exactly the reuse window.  If any of
+            them is None, all are computed from dm0 for this call only; dm0
+            is consumed only in that case and can be None when the groups
+            are supplied.
+    """
+    output_in_2d = False
+    if dm1s.ndim == 2:
+        assert dm1s.shape == (mol.nao, mol.nao)
+        dm1s = dm1s.reshape((1, mol.nao, mol.nao))
+        output_in_2d = True
+    assert dm1s.ndim == 3
+
+    if grids is None:
+        grids = mf.nlcgrids
+    if grids.coords is None:
+        grids.build()
+
+    n_dm1 = dm1s.shape[0]
+
+    ni = mf._numint
+
+    if nlc_kernel is None:
+        assert nlc_rho is None
+        assert dm0 is not None
+        nlc_rho, nlc_kernel = cache_nlc_kernel(
+            mf, mol, grids, dm0=dm0, max_memory=max_memory)
+    rho_nonzero_mask, rho_i, nabla_rho_i, omega_i, kappa_i = nlc_rho
+    (U_i, W_i, A_i, B_i, C_i,
+     domega_drho_i, domega_dgamma_i, dkappa_drho_i,
+     d2omega_drho2_i, d2omega_dgamma2_i, d2omega_drho_dgamma_i,
+     d2kappa_drho2_i, f_gamma_i) = nlc_kernel
+    ngrids = rho_i.shape[0]
+    ngrids_full = grids.coords.shape[0]
+    grids_coords = grids.coords[rho_nonzero_mask]
+    grids_weights = grids.weights[rho_nonzero_mask]
 
     # ao = numint.eval_ao(mol, grids.coords, deriv = 1)
     # rho_drho_t = numpy.empty([n_dm1, 4, ngrids])
@@ -2064,11 +2185,11 @@ def get_vnlc_resp1(mf, mol, dm0, dm1s, max_memory):
 
             for i_dm in range(n_dm1_batch):
                 # \mu \nu
-                V_munu = contract("ig,jg->ij", split_ao[0], split_ao[0] * split_fxc_rho[i_dm, :])
+                V_munu = split_ao[0] @ (split_ao[0] * split_fxc_rho[i_dm, :]).T
 
                 # \mu \nabla\nu + \nabla\mu \nu
                 nabla_fxc_dot_nabla_ao = contract("dg,dig->ig", split_fxc_gamma[i_dm, :, :], split_ao[1:4])
-                V_munu_gamma = contract("ig,jg->ij", split_ao[0], nabla_fxc_dot_nabla_ao)
+                V_munu_gamma = split_ao[0] @ nabla_fxc_dot_nabla_ao.T
                 nabla_fxc_dot_nabla_ao = None
                 V_munu += V_munu_gamma
                 V_munu += V_munu_gamma.T

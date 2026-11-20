@@ -77,6 +77,23 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
         if not with_nlc and mf.do_nlc():
             logger.warn(mf, "NLC contribution in gen_response is NOT included")
 
+        # The dm0-only NLC response kernel on nlcgrids, reused by every vind
+        # call below.  Held by the closure so its lifetime is one solve, like
+        # rho0/vxc/fxc above.  Skipped for the triplet response
+        # (singlet=False): the NLC term is spin-independent, so it vanishes
+        # for the spin-difference density.
+        nlc_grids = nlc_rho = nlc_kernel = None
+        if with_nlc and mf.do_nlc() and hermi != 2 and singlet is not False:
+            # Cannot import at top due to circular dependency
+            from pyscf.hessian.rks import (cache_nlc_kernel, get_vnlc_resp,
+                                           get_vnlc_resp1)
+            nlc_grids = mf.nlcgrids
+            if nlc_grids.coords is None:
+                nlc_grids.build()
+            nlc_rho, nlc_kernel = cache_nlc_kernel(
+                mf, mol, nlc_grids, mo_coeff=mo_coeff, mo_occ=mo_occ, dm0=dm0,
+                max_memory=max_memory)
+
         if singlet is None:
             # Without specify singlet, used in ground state orbital hessian
             def vind(dm1):
@@ -87,12 +104,14 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
                     v1 = ni.nr_rks_fxc(mol, grids, mf.xc, dm0, dm1, 0, hermi,
                                        rho0, vxc, fxc, max_memory=max_memory)
                     if with_nlc and mf.do_nlc():
-                        # Cannot import at top due to circular dependency
-                        from pyscf.hessian.rks import get_vnlc_resp, get_vnlc_resp1
                         if mo_coeff is not None and mo_occ is not None:
-                            v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1, max_memory)
+                            v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1, max_memory,
+                                                grids=nlc_grids, nlc_rho=nlc_rho,
+                                                nlc_kernel=nlc_kernel)
                         else:
-                            v1 += get_vnlc_resp1(mf, mol, dm0, dm1, max_memory)
+                            v1 += get_vnlc_resp1(mf, mol, None, dm1, max_memory,
+                                                 grids=nlc_grids, nlc_rho=nlc_rho,
+                                                 nlc_kernel=nlc_kernel)
                 if hybrid:
                     if omega == 0:
                         vj, vk = mf.get_jk(mol, dm1, hermi)
@@ -127,12 +146,14 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
                     v1 = ni.nr_rks_fxc_st(mol, grids, mf.xc, dm0, dm1, hermi, True,
                                           rho0, vxc, fxc, max_memory=max_memory)
                     if with_nlc and mf.do_nlc():
-                        # Cannot import at top due to circular dependency
-                        from pyscf.hessian.rks import get_vnlc_resp, get_vnlc_resp1
                         if mo_coeff is not None and mo_occ is not None:
-                            v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1, max_memory)
+                            v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1, max_memory,
+                                                grids=nlc_grids, nlc_rho=nlc_rho,
+                                                nlc_kernel=nlc_kernel)
                         else:
-                            v1 += get_vnlc_resp1(mf, mol, dm0, dm1, max_memory)
+                            v1 += get_vnlc_resp1(mf, mol, None, dm1, max_memory,
+                                                 grids=nlc_grids, nlc_rho=nlc_rho,
+                                                 nlc_kernel=nlc_kernel)
                 if hybrid:
                     if omega == 0:
                         vj, vk = mf.get_jk(mol, dm1, hermi)
@@ -231,6 +252,21 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
         if not with_nlc and mf.do_nlc():
             logger.warn(mf, "NLC contribution in gen_response is NOT included")
 
+        # The dm0-only NLC response kernel on nlcgrids, reused by every vind
+        # call below.  Held by the closure so its lifetime is one solve, like
+        # rho0/vxc/fxc above.
+        nlc_grids = nlc_rho = nlc_kernel = None
+        if with_nlc and mf.do_nlc() and hermi != 2:
+            # Cannot import at top due to circular dependency
+            from pyscf.hessian.rks import (cache_nlc_kernel, get_vnlc_resp,
+                                           get_vnlc_resp1)
+            nlc_grids = mf.nlcgrids
+            if nlc_grids.coords is None:
+                nlc_grids.build()
+            nlc_rho, nlc_kernel = cache_nlc_kernel(
+                mf, mol, nlc_grids, mo_coeff=mo_coeff, mo_occ=mo_occ, dm0=dm0,
+                max_memory=max_memory)
+
         def vind(dm1):
             if hermi == 2:
                 v1 = numpy.zeros_like(dm1)
@@ -238,12 +274,14 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
                 v1 = ni.nr_uks_fxc(mol, grids, mf.xc, dm0, dm1, 0, hermi,
                                    rho0, vxc, fxc, max_memory=max_memory)
                 if with_nlc and mf.do_nlc():
-                    # Cannot import at top due to circular dependency
-                    from pyscf.hessian.rks import get_vnlc_resp, get_vnlc_resp1
                     if mo_coeff is not None and mo_occ is not None:
-                        v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1[0] + dm1[1], max_memory)
+                        v1 += get_vnlc_resp(mf, mol, mo_coeff, mo_occ, dm1[0] + dm1[1], max_memory,
+                                            grids=nlc_grids, nlc_rho=nlc_rho,
+                                            nlc_kernel=nlc_kernel)
                     else:
-                        v1 += get_vnlc_resp1(mf, mol, dm0[0] + dm0[1], dm1[0] + dm1[1], max_memory)
+                        v1 += get_vnlc_resp1(mf, mol, None, dm1[0] + dm1[1], max_memory,
+                                             grids=nlc_grids, nlc_rho=nlc_rho,
+                                             nlc_kernel=nlc_kernel)
             if not hybrid:
                 if with_j:
                     vj = mf.get_j(mol, dm1, hermi=hermi)
@@ -325,6 +363,23 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
         if not with_nlc and mf.do_nlc():
             logger.warn(mf, "NLC contribution in gen_response is NOT included")
 
+        # The dm0-only NLC response kernel on nlcgrids, reused by every vind
+        # call below.  Held by the closure so its lifetime is one solve, like
+        # rho0/vxc/fxc above.  The GKS wrappers convert the spin-orbital
+        # quantities (alpha/beta AO blocks) to the spin-summed UKS form and run under the 1c NumInt environment of
+        # mf._numint.
+        nlc_grids = nlc_rho = nlc_kernel = None
+        if with_nlc and mf.do_nlc() and hermi != 2:
+            # Cannot import at top due to circular dependency
+            from pyscf.hessian.rks import (cache_nlc_kernel_gks,
+                                           get_vnlc_resp_gks)
+            nlc_grids = mf.nlcgrids
+            if nlc_grids.coords is None:
+                nlc_grids.build()
+            nlc_rho, nlc_kernel = cache_nlc_kernel_gks(
+                mf, mol, nlc_grids, mo_coeff=mo_coeff, mo_occ=mo_occ, dm0=dm0,
+                max_memory=max_memory)
+
         def vind(dm1):
             if hermi == 2:
                 v1 = numpy.zeros_like(dm1)
@@ -332,27 +387,9 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None, *, dm0=None,
                 v1 = ni.get_fxc(mol, grids, mf.xc, dm0, dm1, 0, 0, hermi,
                                 rho0, vxc, fxc, max_memory=max_memory)
                 if with_nlc and mf.do_nlc():
-                    from pyscf.hessian.rks import get_vnlc_resp, get_vnlc_resp1
-                    # The get_vnlc_resp/get_vnlc_resp1 functions use mf._numint
-                    # and explicitly call the NumInt functions for mf._numint
-                    ni1c = mf._numint._to_numint1c()
-                    if mo_coeff is not None and mo_occ is not None:
-                        nao = mo_coeff.shape[0] // 2
-                        dm1_sf = dm1[...,:nao,:nao] + dm1[...,nao:,nao:]
-                        mo_uks = [mo_coeff[:nao], mo_coeff[nao:]]
-                        mo_occ_uks = [mo_occ, mo_occ]
-                        with lib.temporary_env(mf, _numint=ni1c):
-                            vxc_nlc = get_vnlc_resp(mf, mol, mo_uks, mo_occ_uks,
-                                                    dm1_sf.real, max_memory)
-                    else:
-                        nao = dm0.shape[0] // 2
-                        dm1_sf = dm1[...,:nao,:nao] + dm1[...,nao:,nao:]
-                        dm0_sf = dm0[:nao,:nao] + dm0[nao:,nao:]
-                        with lib.temporary_env(mf, _numint=ni1c):
-                            vxc_nlc = get_vnlc_resp1(mf, mol, dm0_sf,
-                                                     dm1_sf.real, max_memory)
-                    v1[...,:nao,:nao] += vxc_nlc
-                    v1[...,nao:,nao:] += vxc_nlc
+                    v1 += get_vnlc_resp_gks(mf, mol, dm1, max_memory,
+                                            grids=nlc_grids, nlc_rho=nlc_rho,
+                                            nlc_kernel=nlc_kernel)
             if not hybrid:
                 if with_j:
                     vj = mf.get_j(mol, dm1, hermi=hermi)

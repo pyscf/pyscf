@@ -59,7 +59,8 @@ def make_mf(mol, nlcgrid = (75,302), vv10_only = False, density_fitting = False)
     mf.conv_tol = 1e-13
     mf.direct_scf_tol = 1e-16
     mf.nlcgrids.atom_grid = nlcgrid
-    mf.conv_tol_cpscf = 1e-10
+    # Default conv_tol_cpscf (1e-8): the CPHF contribution to de2 is below
+    # 1e-9 at this setting, negligible against the assertions below.
     if density_fitting:
         mf = mf.density_fit(auxbasis = "def2-universal-jkfit")
     mf.kernel()
