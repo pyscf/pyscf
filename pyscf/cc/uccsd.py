@@ -24,6 +24,7 @@ UCCSD with spatial integrals
 
 from functools import reduce
 import numpy as np
+import scipy.linalg
 
 from pyscf import lib
 from pyscf import ao2mo
@@ -536,10 +537,38 @@ def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
     return u2aa,u2ab,u2bb
 
 
+def _phase(x):
+    '''conj(x)/|x|: multiplying by it makes x real and positive'''
+    return x.conj() / abs(x)
+
+def _need_semicanonical(mycc):
+    '''Whether UCCSD.ccsd rotates the orbitals: semicanonical True, or None for
+    an ROHF-type reference (alpha and beta spatial orbitals equal).'''
+    if mycc.semicanonical is None:
+        mo_a, mo_b = mycc.mo_coeff
+        return (np.shape(mo_a) == np.shape(mo_b) and np.array_equal(mo_a, mo_b)
+                and not np.array_equal(mycc.mo_occ[0], mycc.mo_occ[1]))
+    return bool(mycc.semicanonical)
+
+
 class UCCSD(ccsd.CCSDBase):
+    '''Unrestricted CCSD.  Attributes are those of :class:`ccsd.CCSDBase` and
+
+        semicanonical : bool or None
+            Rotate the orbitals to semicanonical ones before CCSD: the alpha
+            and beta Fock matrices diagonal in the active occupied and in the
+            active virtual space, frozen orbitals untouched (the convention of
+            Molpro).  The CCSD energy does not change; the (T) correction
+            requires them.  None (default): only for ROHF-type references
+            (the same spatial orbitals for alpha and beta spin); True: always;
+            False: never.
+    '''
 
     conv_tol = getattr(__config__, 'cc_uccsd_UCCSD_conv_tol', 1e-7)
     conv_tol_normt = getattr(__config__, 'cc_uccsd_UCCSD_conv_tol_normt', 1e-6)
+    semicanonical = getattr(__config__, 'cc_uccsd_UCCSD_semicanonical', None)
+
+    _keys = {'semicanonical'}
 
 # Attribute frozen can be
 # * An integer : The same number of inner-most alpha and beta orbitals are frozen
@@ -556,7 +585,7 @@ class UCCSD(ccsd.CCSDBase):
     def init_amps(self, eris=None):
         time0 = logger.process_clock(), logger.perf_counter()
         if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
+            eris = self._get_eris()
         nocca, noccb = self.nocc
 
         fova = eris.focka[:nocca,nocca:]
@@ -611,14 +640,52 @@ class UCCSD(ccsd.CCSDBase):
             self.t1 = (np.zeros((nocca,nvira)), np.zeros((noccb,nvirb)))
             return self.e_corr, self.t1, self.t2
 
+        if eris is None and _need_semicanonical(self):
+            if t1 is not None or t2 is not None:
+                logger.note(self, 'Initial amplitudes discarded: the orbitals '
+                            'are rotated to semicanonical ones')
+                t1 = t2 = None
+            self.semicanonicalize()
         return ccsd.CCSDBase.ccsd(self, t1, t2, eris)
+
+    def semicanonicalize(self):
+        '''Rotate self.mo_coeff to semicanonical orbitals: the alpha and beta
+        Fock matrices diagonal in the active occupied and in the active virtual
+        space, each spin separately, frozen orbitals untouched (Molpro; other
+        programs include the frozen core and freeze afterwards).  Orbitals
+        tagged with orbsym are rotated within each irrep.'''
+        mf = self._scf
+        dm = mf.make_rdm1(self.mo_coeff, self.mo_occ)
+        fock = mf.get_fock(dm=dm)
+        moidx = self.get_frozen_mask()
+        mo_coeff = []
+        for c, occ, f, idx in zip(self.mo_coeff, self.mo_occ, fock, moidx):
+            orbsym = getattr(c, 'orbsym', None)
+            c = np.array(c, copy=True)
+            labels = np.zeros(c.shape[1], dtype=int) if orbsym is None else np.asarray(orbsym)
+            for space in (idx & (occ > 0), idx & (occ == 0)):
+                for ir in np.unique(labels[space]):
+                    p = np.where(space & (labels == ir))[0]
+                    fpp = reduce(np.dot, (c[:,p].conj().T, f, c[:,p]))
+                    u = scipy.linalg.eigh(fpp)[1]
+                    # The largest element of each column positive: the same
+                    # orbitals in every run, and no change when fpp is diagonal
+                    u *= _phase(u[abs(u).argmax(axis=0), np.arange(u.shape[1])])
+                    c[:,p] = np.dot(c[:,p], u)
+            if orbsym is not None:
+                c = lib.tag_array(c, orbsym=orbsym)
+            mo_coeff.append(c)
+        self.mo_coeff = tuple(mo_coeff)
+        logger.info(self, 'Orbitals rotated to semicanonical ones '
+                    '(active occupied and active virtual spaces, frozen untouched)')
+        return self
 
     def solve_lambda(self, t1=None, t2=None, l1=None, l2=None,
                      eris=None):
         from pyscf.cc import uccsd_lambda
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        if eris is None: eris = self._get_eris()
         self.converged_lambda, self.l1, self.l2 = \
                 uccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
                                     max_cycle=self.max_cycle,
@@ -630,7 +697,10 @@ class UCCSD(ccsd.CCSDBase):
         from pyscf.cc import uccsd_t
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        if eris is None: eris = self._get_eris()
+        nocca, noccb = self.nocc
+        ccsd._check_semicanonical(self, eris.focka, nocca)
+        ccsd._check_semicanonical(self, eris.fockb, noccb)
         return uccsd_t.kernel(self, eris, t1, t2, self.verbose)
     uccsd_t = ccsd_t
 
@@ -682,7 +752,7 @@ class UCCSD(ccsd.CCSDBase):
         nao_pair = nao * (nao+1) // 2
         mem_incore = (max(nao_pair**2, nmoa**4) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
-        if (self._scf._eri is not None and
+        if (self._eris_file_writing is None and self._scf._eri is not None and
             (mem_incore+mem_now < self.max_memory or self.incore_complete)):
             return _make_eris_incore(self, mo_coeff)
 
@@ -1008,7 +1078,7 @@ def _make_df_eris_outcore(mycc, mo_coeff=None):
 
     # --- Four-center integrals
     dot = lib.ddot
-    eris.feri1 = lib.H5TmpFile()
+    eris.feri1 = ccsd._eris_h5file(mycc)
     # (aa|aa)
     eris.oooo = eris.feri1.create_dataset('oooo', (nocca,nocca,nocca,nocca), 'f8')
     eris.oovv = eris.feri1.create_dataset('oovv', (nocca,nocca,nvira,nvira), 'f8', chunks=(nocca,nocca,1,nvira))
@@ -1086,7 +1156,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     orbob = mob[:,:noccb]
     orbva = moa[:,nocca:]
     orbvb = mob[:,noccb:]
-    eris.feri = lib.H5TmpFile()
+    eris.feri = ccsd._eris_h5file(mycc)
     eris.oooo = eris.feri.create_dataset('oooo', (nocca,nocca,nocca,nocca), 'f8')
     eris.ovoo = eris.feri.create_dataset('ovoo', (nocca,nvira,nocca,nocca), 'f8')
     eris.ovov = eris.feri.create_dataset('ovov', (nocca,nvira,nocca,nvira), 'f8')

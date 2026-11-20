@@ -612,8 +612,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         self.e_hf = self.get_e_hf()
         if eris is None:
-            # eris = self.ao2mo()
-            eris = self.ao2mo(self.mo_coeff)
+            eris = self._get_eris()
         self.eris = eris
 
         if mbpt2:
@@ -631,7 +630,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         from pyscf.pbc.cc import kccsd_t_rhf
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        if eris is None: eris = self._get_eris()
         return kccsd_t_rhf.kernel(self, eris, t1, t2, self.verbose)
 
     def ipccsd(self, nroots=1, left=False, koopmans=False, guess=None,
@@ -651,7 +650,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                                                 kptlist=kptlist)
 
     def ao2mo(self, mo_coeff=None):
-        return _ERIS(self, mo_coeff)
+        if self._eris_file_writing is None:
+            return _ERIS(self, mo_coeff)
+        return _ERIS(self, mo_coeff, method='outcore')
 
     to_gpu = lib.to_gpu
 
@@ -814,7 +815,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             self.dtype = dtype
         else:
             log.info('using HDF5 ERI storage')
-            self.feri1 = lib.H5TmpFile()
+            self.feri1 = pyscf.cc.ccsd._eris_h5file(cc)
 
             self.oooo = self.feri1.create_dataset('oooo', (nkpts, nkpts, nkpts, nocc, nocc, nocc, nocc), dtype.char)
             self.ooov = self.feri1.create_dataset('ooov', (nkpts, nkpts, nkpts, nocc, nocc, nocc, nvir), dtype.char)

@@ -140,7 +140,7 @@ def _make_df_eris(cc, mo_coeff=None):
     with_df = cc.with_df
     naux = eris.naux = with_df.get_naoaux()
 
-    eris.feri = lib.H5TmpFile()
+    eris.feri = ccsd._eris_h5file(cc)
     eris.oooo = eris.feri.create_dataset('oooo', (nocc,nocc,nocc,nocc), 'f8')
     eris.ovoo = eris.feri.create_dataset('ovoo', (nocc,nvir,nocc,nocc), 'f8', chunks=(nocc,1,nocc,nocc))
     eris.ovov = eris.feri.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8', chunks=(nocc,1,nocc,nvir))

@@ -27,7 +27,7 @@ def grad_elec(cc_grad, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=Non
     mycc = cc_grad.base
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
-    if eris is None: eris = mycc.ao2mo()
+    if eris is None: eris = getattr(mycc, '_get_eris', mycc.ao2mo)()
     if l1 is None or l2 is None:
         # mycc.l1, mycc.l2 hold the CCSD lambda (from mycc.solve_lambda); the
         # CCSD(T) gradient needs the multipliers of the CCSD(T) Lagrangian.
@@ -71,7 +71,7 @@ class Gradients(ccsd_grad.Gradients):
                 t1 = mycc.t1
             if t2 is None: t2 = mycc.t2
             if eris is None:
-                eris = mycc.ao2mo()
+                eris = getattr(mycc, '_get_eris', mycc.ao2mo)()
             l1, l2 = _solve_t_lambda(mycc, eris, t1, t2, verbose)
         return ccsd_grad.Gradients.kernel(self, t1, t2, l1, l2, eris,
                                            atmlst, verbose)

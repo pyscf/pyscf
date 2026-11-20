@@ -1050,7 +1050,7 @@ class _IMDS:
             t2 = cc.t2
         self.t2 = t2
         if eris is None:
-            eris = cc.ao2mo()
+            eris = getattr(cc, '_get_eris', cc.ao2mo)()
         self.eris = eris
         self._made_shared = False
         self.made_ip_imds = False

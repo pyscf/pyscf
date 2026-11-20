@@ -13,8 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import gc
+import os
 import unittest
 import copy
+import tempfile
 import sys
 import numpy
 import h5py
@@ -68,6 +71,16 @@ def tearDownModule():
     mol.stdout.close()
     mol_s2.stdout.close()
     del mol, rhf, mf, myucc, mol_s2, mf_s2, eris
+
+def _count_ao2mo(mycc):
+    '''Record the calls of mycc.ao2mo'''
+    calls = []
+    ao2mo = mycc.ao2mo
+    def counted(mo_coeff=None):
+        calls.append(1)
+        return ao2mo(mo_coeff)
+    mycc.ao2mo = counted
+    return calls
 
 class KnownValues(unittest.TestCase):
 
@@ -694,6 +707,73 @@ class KnownValues(unittest.TestCase):
         mycc.reset(mol_s2)
         self.assertTrue(mycc.mol is mol_s2)
         self.assertTrue(mycc._scf.mol is mol_s2)
+
+    def test_rohf_semicanonical(self):
+        # UCCSD of an ROHF reference runs with semicanonical orbitals, needed
+        # by (T); frozen orbitals are not rotated (Molpro convention)
+        mf = scf.ROHF(mol_s2)
+        mf.conv_tol = 1e-12
+        mf.conv_tol_grad = 1e-9
+        mf.kernel()
+        for frozen, e_corr, e_t in ((None, -0.110754022651, -0.001057514066),
+                                    (1, -0.109882304926, -0.001046617282)):
+            mycc = cc.UCCSD(mf, frozen=frozen)
+            mycc.conv_tol = 1e-12
+            mycc.conv_tol_normt = 1e-10
+            mycc.kernel()
+            self.assertAlmostEqual(mycc.e_corr, e_corr, 8)
+            self.assertAlmostEqual(mycc.ccsd_t(), e_t, 8)
+
+            fock = mycc._scf.get_fock(dm=mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ))
+            for c, c0, occ, f, idx in zip(mycc.mo_coeff, mycc._scf.mo_coeff,
+                                          mycc.mo_occ, fock, mycc.get_frozen_mask()):
+                self.assertTrue(numpy.array_equal(c[:,~idx], c0[:,~idx]))
+                for space in (idx & (occ > 0), idx & (occ == 0)):
+                    fpp = c[:,space].T.dot(f).dot(c[:,space])
+                    self.assertAlmostEqual(abs(fpp - numpy.diag(fpp.diagonal())).max(), 0, 9)
+
+            # Semicanonical orbitals are not changed by another rotation
+            mo0 = mycc.mo_coeff
+            mycc.semicanonicalize()
+            for c, c0 in zip(mycc.mo_coeff, mo0):
+                self.assertAlmostEqual(abs(c - c0).max(), 0, 9)
+
+    def test_reuse_eris(self):
+        # CCSD, (T) and Lambda transform the integrals once
+        mycc = cc.UCCSD(mf_s2)
+        calls = _count_ao2mo(mycc)
+        mycc.kernel()
+        mycc.ccsd_t()
+        mycc.solve_lambda()
+        self.assertEqual(len(calls), 1)
+        mycc.reset()
+        mycc.ccsd_t()
+        self.assertEqual(len(calls), 2)
+        mycc.frozen = 1
+        mycc.kernel()
+        self.assertEqual(len(calls), 3)
+
+    def test_eris_file(self):
+        # The first calculation saves the MO integrals in eris_file, the second
+        # reads them.  Both give the ROHF-UCCSD(T) energies of
+        # test_rohf_semicanonical; the semicanonical orbitals of the second run
+        # must agree with those saved in the file.
+        rohf = scf.ROHF(mol_s2).run(conv_tol=1e-12, conv_tol_grad=1e-9)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            eris_file = os.path.join(tmpdir, 'eris.h5')
+            for n_transform in (1, 0):
+                mycc = cc.UCCSD(rohf)
+                mycc.conv_tol = 1e-12
+                mycc.conv_tol_normt = 1e-10
+                mycc.eris_file = eris_file
+                calls = _count_ao2mo(mycc)
+                mycc.kernel()
+                e_t = mycc.ccsd_t()
+                self.assertEqual(len(calls), n_transform)
+                self.assertAlmostEqual(mycc.e_corr, -0.110754022651, 8)
+                self.assertAlmostEqual(e_t, -0.001057514066, 8)
+            del mycc, calls
+            gc.collect()  # close eris_file: Windows cannot remove open files
 
     def test_ao2mo(self):
         mycc = uccsd.UCCSD(mf)

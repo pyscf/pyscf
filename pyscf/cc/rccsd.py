@@ -185,7 +185,7 @@ class RCCSD(ccsd.CCSD):
             return self.e_corr, self.t1, self.t2
 
         if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
+            eris = self._get_eris()
         return ccsd.CCSDBase.ccsd(self, t1, t2, eris)
 
     def ao2mo(self, mo_coeff=None):
@@ -195,8 +195,9 @@ class RCCSD(ccsd.CCSD):
         nao_pair = nao * (nao+1) // 2
         mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
-        if (self._scf._eri is not None and
-            (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
+        if self._eris_file_writing is None and (
+                self._scf._eri is not None and
+                (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
             return _make_eris_incore(self, mo_coeff)
 
         elif getattr(self._scf, 'with_df', None):
@@ -218,7 +219,7 @@ class RCCSD(ccsd.CCSD):
         from pyscf.cc import rccsd_lambda
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        if eris is None: eris = self._get_eris()
         self.converged_lambda, self.l1, self.l2 = \
                 rccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
                                     max_cycle=self.max_cycle,
@@ -275,7 +276,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     nocc = eris.nocc
     nao, nmo = mo_coeff.shape
     nvir = nmo - nocc
-    eris.feri1 = lib.H5TmpFile()
+    eris.feri1 = ccsd._eris_h5file(mycc)
     eris.oooo = eris.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), 'f8')
     eris.ovoo = eris.feri1.create_dataset('ovoo', (nocc,nvir,nocc,nocc), 'f8', chunks=(nocc,1,nocc,nocc))
     eris.ovov = eris.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8', chunks=(nocc,1,nocc,nvir))
