@@ -54,7 +54,7 @@ ASSERT_CONV = getattr(__config__, 'geomopt_berny_solver_optimize_assert_converge
 def _write_quiet_log_ini(dirname):
     '''Generate a log.ini from the shipped one with the console handler
     (and root logger) demoted to WARNING, to suppress the geomeTRIC
-    optimizer trace when the scanner runs at verbose < INFO.'''
+    optimizer trace when the scanner runs at verbose < NOTE.'''
     parser = configparser.ConfigParser(interpolation=None)
     parser.read(os.path.abspath(os.path.join(__file__, '..', 'log.ini')))
     parser['logger_root']['level'] = 'WARNING'
@@ -167,10 +167,10 @@ def kernel(method, assert_convergence=ASSERT_CONV,
         # geomeTRIC configures the global root logger through log.ini
         # (fileConfig inside run_optimizer; without logIni it falls back to
         # the config file shipped in geometric/config). The optimizer trace
-        # is diagnostic output; show it only when the scanner runs at
-        # verbose >= INFO, otherwise keep only warnings and errors.
+        # is diagnostic output; show it when the scanner runs at
+        # verbose >= NOTE, otherwise keep only warnings and errors.
         if kwargs.get('logIni') is None:
-            if g_scanner.verbose < logger.INFO:
+            if g_scanner.verbose < logger.NOTE:
                 kwargs['logIni'] = _write_quiet_log_ini(tmpdir)
             else:
                 kwargs['logIni'] = os.path.abspath(os.path.join(__file__, '..', 'log.ini'))
