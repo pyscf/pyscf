@@ -154,7 +154,6 @@ class UniformGrids(lib.StreamObject):
     to_gpu = lib.to_gpu
 
 
-# modified from pyscf.dft.gen_grid.gen_partition
 def get_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
                     level=3, prune=nwchem_prune):
     '''real-space grids using Becke scheme
@@ -166,6 +165,15 @@ def get_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
         coords : (N, 3) ndarray
             The real-space grid point coordinates.
         weights : (N) ndarray
+    '''
+    return _get_becke_grids(cell, atom_grid, radi_method, level, prune)[:2]
+
+# modified from pyscf.dft.gen_grid.gen_partition
+def _get_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
+                     level=3, prune=nwchem_prune):
+    '''Same as :func:`get_becke_grids`, but also returns the atom index in the
+    home cell (atm_idx) and the weights before the Becke partition
+    (quadrature_weights) of each grid point.
     '''
 # When low_dim_ft_type is set, pbc_eval_gto treats the 2D system as a 3D system.
 # To get the correct particle number in numint module, the atomic grids needs to
@@ -182,6 +190,7 @@ def get_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
     atom_grids_tab = gen_atomic_grids(cell, atom_grid, radi_method, level, prune)
     coords_all = []
     weights_all = []
+    atm_idx_all = []
     b = cell.reciprocal_vectors(norm_to=1)
     supatm_idx = []
     k = 0
@@ -216,11 +225,14 @@ def get_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
                 coords = coords[mask]
                 coords_all.append(coords)
                 weights_all.append(vol)
+                atm_idx_all.append(np.full(vol.size, ia, dtype=np.int32))
                 supatm_idx.append(k)
             k += 1
     offs = np.append(0, np.cumsum([w.size for w in weights_all]))
     coords_all = np.vstack(coords_all)
     weights_all = np.hstack(weights_all)
+    atm_idx_all = np.hstack(atm_idx_all)
+    quadrature_weights = weights_all.copy()
 
     atm_coords = np.asarray(atm_coords.reshape(-1,3)[supatm_idx], order='C')
     sup_natm = len(atm_coords)
@@ -245,7 +257,7 @@ def get_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
             i0, i1 = offs[ia], offs[ia+1]
             weights_all[i0:i1] *= pbecke[ia,i0-p0:i1-p0]
 
-    return coords_all, weights_all
+    return coords_all, weights_all, atm_idx_all, quadrature_weights
 gen_becke_grids = get_becke_grids
 
 
@@ -257,10 +269,11 @@ class BeckeGrids(dft.gen_grid.Grids):
 
     def build(self, cell=None, with_non0tab=False):
         if cell is None: cell = self.cell
-        self.coords, self.weights = get_becke_grids(self.cell, self.atom_grid,
-                                                    radi_method=self.radi_method,
-                                                    level=self.level,
-                                                    prune=self.prune)
+        (self.coords, self.weights, self.atm_idx, self.quadrature_weights
+         ) = _get_becke_grids(self.cell, self.atom_grid,
+                              radi_method=self.radi_method,
+                              level=self.level,
+                              prune=self.prune)
         if with_non0tab:
             self.non0tab = self.make_mask(cell, self.coords)
         else:

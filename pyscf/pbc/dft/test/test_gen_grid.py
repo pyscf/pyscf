@@ -162,6 +162,38 @@ class KnownValues(unittest.TestCase):
         grids.build()
         assert abs(cell.vol - grids.weights.sum()) < .1
 
+    def test_becke_grids_atm_idx(self):
+        cell = pgto.M(atom='H 0 0 0; H 0 0 .74', a=numpy.eye(3)*5,
+                      basis='sto-3g', verbose=0)
+        grids = gen_grid.BeckeGrids(cell)
+        grids.level = 1
+        grids.build()
+        ngrids = grids.weights.size
+        assert grids.atm_idx.shape == (ngrids,)
+        assert grids.quadrature_weights.shape == (ngrids,)
+        assert set(grids.atm_idx) == {0, 1}
+
+        # Pruning must keep the per-grid atom information in sync
+        rho = numpy.exp(-numpy.linalg.norm(grids.coords - 2.5, axis=1)**2)
+        rho *= cell.nelectron / numpy.dot(rho, grids.weights)
+        grids.prune_by_density_(rho, 1e-4)
+        assert grids.weights.size < ngrids
+        assert grids.atm_idx.shape == grids.weights.shape
+        assert grids.quadrature_weights.shape == grids.weights.shape
+
+    def test_density_fit_small_rho_cutoff(self):
+        cell = pgto.M(atom='H 0 0 0; H 0 0 .74', a=numpy.eye(3)*5,
+                      basis='sto-3g', mesh=[15]*3, verbose=0)
+        mf = cell.RKS(xc='lda,vwn').density_fit()
+        mf.grids.level = 1
+        mf.small_rho_cutoff = 1e-7
+        e1 = mf.kernel()
+        assert mf.converged
+        mf.small_rho_cutoff = 0
+        mf.grids.reset()
+        e0 = mf.kernel()
+        self.assertAlmostEqual(e1, e0, 5)
+
 if __name__ == '__main__':
     print("Full Tests for Becke grids")
     unittest.main()
