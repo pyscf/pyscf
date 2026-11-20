@@ -46,8 +46,10 @@ def expmat(a):
 
 # kwarg with_symmetry is required the stability analysis. It controls whether
 # the stability analysis can break the point group symmetry.
+# NLC can be omitted in the approximate SOSCF Hessian. Stability analysis
+# must request with_nlc=True to use the full orbital Hessian.
 def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
-                  with_symmetry=True):
+                  with_symmetry=True, with_nlc=False):
     mo_coeff0 = mo_coeff
     mol = mf.mol
     if getattr(mf, '_scf', None) and mf._scf.mol != mol:
@@ -90,7 +92,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         g[sym_forbid] = 0
         h_diag[sym_forbid] = 0
     vind = mf.gen_response(mo_coeff, mo_occ, singlet=None, hermi=1,
-                           with_nlc=False)
+                           with_nlc=with_nlc)
 
     def h_op(x):
         x = x.reshape(nvir,nocc)
@@ -114,7 +116,7 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     return g.reshape(-1), h_op, h_diag.reshape(-1)
 
 def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
-                   with_symmetry=True):
+                   with_symmetry=True, with_nlc=False):
     mol = mf.mol
     mo_coeff0 = mo_coeff
     if getattr(mf, '_scf', None) and mf._scf.mol != mol:
@@ -163,7 +165,7 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
 
     gmat = hf.unpack_uniq_var(g, mo_occ)
     vind = mf.gen_response((mo_coeff,)*2, (mo_occa, mo_occb),
-                           hermi=1, with_nlc=False)
+                           hermi=1, with_nlc=with_nlc)
 
     def h_op(x):
         if with_symmetry and mol.symmetry:
@@ -197,7 +199,7 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     return g, h_op, h_diag
 
 def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
-                  with_symmetry=True):
+                  with_symmetry=True, with_nlc=False):
     mol = mf.mol
     mo_coeff0 = mo_coeff
     if getattr(mf, '_scf', None) and mf._scf.mol != mol:
@@ -249,7 +251,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         g[sym_forbid] = 0
         h_diag[sym_forbid] = 0
 
-    vind = mf.gen_response(mo_coeff, mo_occ, hermi=1, with_nlc=False)
+    vind = mf.gen_response(mo_coeff, mo_occ, hermi=1, with_nlc=with_nlc)
 
     def h_op(x):
         if with_symmetry and mol.symmetry:
@@ -277,7 +279,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     return g, h_op, h_diag
 
 def gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
-                  with_symmetry=True):
+                  with_symmetry=True, with_nlc=False):
     mol = mf.mol
     occidx = numpy.where(mo_occ==1)[0]
     viridx = numpy.where(mo_occ==0)[0]
@@ -305,7 +307,7 @@ def gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         g[sym_forbid] = 0
         h_diag[sym_forbid] = 0
 
-    vind = mf.gen_response(mo_coeff, mo_occ, hermi=1, with_nlc=False)
+    vind = mf.gen_response(mo_coeff, mo_occ, hermi=1, with_nlc=with_nlc)
 
     def h_op(x):
         x = x.reshape(nvir,nocc)
@@ -326,8 +328,9 @@ def gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     return g.reshape(-1), h_op, h_diag.reshape(-1)
 
 def gen_g_hop_dhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
-                  with_symmetry=False):
-    return gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao, h1e, with_symmetry)
+                  with_symmetry=False, with_nlc=False):
+    return gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao, h1e,
+                         with_symmetry, with_nlc=with_nlc)
 
 
 # Dual basis for gradients and hessian

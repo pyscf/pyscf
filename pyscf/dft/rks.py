@@ -421,7 +421,7 @@ class KohnShamDFT:
             return False
 
         xc_has_nlc = self._numint.is_nlc(xc)
-        return self.nlc == 'vv10' or xc_has_nlc
+        return self.nlc == 'vv10' or self.nlc == 'VV10' or xc_has_nlc
 
     def to_rhf(self):
         '''Convert the input mean-field object to a RHF/ROHF object.

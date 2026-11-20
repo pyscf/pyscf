@@ -15,9 +15,14 @@
 
 import unittest
 import numpy
+import scipy.linalg
 from pyscf import lib, gto, scf
 from pyscf import ao2mo
 from pyscf.scf import stability
+try:
+    import mcfun
+except ImportError:
+    mcfun = None
 
 def gen_hop_rhf_external(mf):
     mol = mf.mol
@@ -369,6 +374,42 @@ class KnownValues(unittest.TestCase):
 
         assert test_stable_i is False
         assert test_stable_e is False
+
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
+    def test_uks_spin_flip_curvature(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 1.2; H 0.3 0 2.5',
+                    basis='sto-3g', spin=1, verbose=0)
+        mf = mol.UKS(xc='SVWN').set(conv_tol=1e-12)
+        mf.grids.level = 1
+        mf.kernel()
+        _, _, hop, hdiag = stability._gen_hop_uhf_external(mf)
+        direction = numpy.linspace(-0.7, 0.9, hdiag.size)
+        direction /= numpy.linalg.norm(direction)
+
+        # For LDA, the non-collinear energy provides an independent check of
+        # the multi-collinear response, with alpha and beta in separate blocks.
+        gmf = mf.to_gks()
+        gmf.collinear = 'ncol'
+        mo = scipy.linalg.block_diag(*mf.mo_coeff)
+        occ = numpy.concatenate(mf.mo_occ)
+        nmo = mf.mo_coeff.shape[-1]
+        occa = numpy.where(mf.mo_occ[0] > 0)[0]
+        occb = numpy.where(mf.mo_occ[1] > 0)[0]
+        vira = numpy.where(mf.mo_occ[0] == 0)[0]
+        virb = numpy.where(mf.mo_occ[1] == 0)[0]
+        nab = len(vira) * len(occb)
+        rotation = numpy.zeros((2*nmo, 2*nmo))
+        rotation[vira[:,None], nmo+occb] = direction[:nab].reshape(len(vira), -1)
+        rotation[nmo+virb[:,None], occa] = direction[nab:].reshape(len(virb), -1)
+        rotation -= rotation.T.copy()
+        step = 1e-3
+        energies = []
+        for angle in (-step, 0, step):
+            rotated = mo @ scipy.linalg.expm(angle * rotation)
+            energies.append(gmf.energy_tot(dm=gmf.make_rdm1(rotated, occ)))
+        curvature = (energies[0] - 2*energies[1] + energies[2]) / step**2
+        self.assertAlmostEqual(2 * direction.dot(hop(direction)), curvature,
+                               delta=2e-5)
 
 if __name__ == "__main__":
     print("Full Tests for stability")
