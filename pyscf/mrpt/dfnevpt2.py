@@ -178,7 +178,8 @@ def _mem_usage(ncore, ncas, nmo):
     incore = outcore + cvcv*8/1e6
     return incore, outcore
 
-def _ERIS(mc, mo, with_df, method='incore'):
+def _ERIS(mc, mo, with_df, method='incore', *, allow_fallback=False):
+    '''Build DF integrals. Return None on insufficient memory if fallback is allowed.'''
     ncore = mc.ncore
     ncas = mc.ncas
     nmo = mo.shape[1]
@@ -187,12 +188,10 @@ def _ERIS(mc, mo, with_df, method='incore'):
     moc = mo[:, :ncore]
     mov = mo[:, ncore+ncas:]
 
-    max_memory = max(4000, 0.9*mc.max_memory-lib.current_memory()[0])
-
+    avail_memory = 0.9*mc.max_memory - lib.current_memory()[0]
+    max_memory = max(4000, avail_memory)
     mem_incore, mem_outcore = _mem_usage(ncore, ncas, nmo)
-    mem_now = lib.current_memory()[0]
-    if (method == 'incore' and with_df is not None and
-        (mem_incore+mem_now < mc.max_memory*.9)):
+    if method == 'incore' and with_df is not None and mem_incore < avail_memory:
         papa = with_df.ao2mo([mo, moa, mo, moa], compact=False)
         ppaa = with_df.ao2mo([mo, mo, moa, moa], compact=False)
         pacv = with_df.ao2mo([mo, moa, moc, mov], compact=False)
@@ -200,8 +199,10 @@ def _ERIS(mc, mo, with_df, method='incore'):
         papa = papa.reshape(nmo, ncas, nmo, ncas)
         ppaa = ppaa.reshape(nmo, nmo, ncas, ncas)
         pacv = pacv.reshape(nmo, ncas, ncore, nvir)
-    elif with_df is not None and (mem_outcore < max_memory):
+    elif with_df is not None and mem_outcore < max_memory:
         papa, ppaa, pacv, cvcv = _dfnevpt2_eris_outcore(mc, mo, with_df)
+    elif allow_fallback:
+        return None
     else:
         raise RuntimeError('DF-NEVPT2 ERIs cannot be constructed with the available memory %d MB'
                            % (max_memory))

@@ -772,19 +772,13 @@ example examples/dmrg/32-dmrg_casscf_nevpt2_for_FeS.py''')
 
         from pyscf.mcscf.df import _DFCAS
         from pyscf.mrpt import dfnevpt2
-        _DF_ERIS = dfnevpt2._ERIS
-        _mem_usage = dfnevpt2._mem_usage
-        mem_incore, mem_outcore = _mem_usage(ncore, ncas, nocc)
-        mem_now = lib.current_memory()[0]
-        if (isinstance(self._mc, _DFCAS)
-            and (self._mc._scf.with_df is not None)
-            and ((mem_incore < 0.9*mem_now) or (mem_outcore < 0.9*mem_now))
-            and self.density_fit):
-            logger.info(self, 'Using density fitting integrals for NEVPT2')
-            with_df = self._mc._scf.with_df
-            eris = _DF_ERIS(self._mc, self.mo_coeff, with_df)
-        else:
+        eris = None
+        if self.density_fit and isinstance(self._mc, _DFCAS) and self._mc.with_df is not None:
+            eris = dfnevpt2._ERIS(self, self.mo_coeff, self._mc.with_df, allow_fallback=True)
+        if eris is None:
             eris = _ERIS(self, self.mo_coeff)
+        else:
+            logger.info(self, 'Using density fitting integrals for NEVPT2')
 
         time1 = log.timer('integral transformation', *time1)
 
