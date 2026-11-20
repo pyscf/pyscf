@@ -91,7 +91,11 @@ def get_cds_legacy(smdobj):
     solvent_descriptors = smdobj.solvent_descriptors or solvent_db[smdobj.solvent]
     soln, _, sola, solb, solg, _, solc, solh = solvent_descriptors
     #symbols = [mol.atom_s(ia) for ia in range(mol.natm)]
-    charges = np.asarray(mol.atom_charges(), dtype=np.int32, order='F')
+    # Use proton numbers, not effective nuclear charges: with an ECP,
+    # mol.atom_charges() returns Z minus the core electrons, and the
+    # Fortran CDS routine would look up the radii / surface tensions of
+    # a different element (e.g. Xe with def2 ECP -> 26 -> Fe). See #3617.
+    charges = np.asarray([gto.charge(s) for s in mol.elements], dtype=np.int32, order='F')
     coords = np.asarray(mol.atom_coords(unit='B'), dtype=np.float64, order='C')
     icds = 1 if smdobj.solvent.upper() == 'WATER' else 2
     dcds = np.empty([natm,3])
