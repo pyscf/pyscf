@@ -80,7 +80,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
     for ibatch,(i0,i1) in enumerate(lib.prange(0,nocc,occ_blksize)):
         nocci = i1-i0
         iaL = eris.get_occ_blk(i0,i1)
-        for jbatch,(j0,j1) in enumerate(lib.prange(0,nocc,occ_blksize)):
+        for jbatch,(j0,j1) in enumerate(lib.prange(0,i1,occ_blksize)):
             noccj = j1-j0
             if ibatch == jbatch:
                 jbL = iaL

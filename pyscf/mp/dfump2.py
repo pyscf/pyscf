@@ -90,7 +90,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
         for ibatch,(i0,i1) in enumerate(lib.prange(0,nocc[s],occ_blksize[s])):
             nocci = i1-i0
             iaL = eris.get_occ_blk(s,i0,i1)
-            for jbatch,(j0,j1) in enumerate(lib.prange(0,nocc[s],occ_blksize[s])):
+            for jbatch,(j0,j1) in enumerate(lib.prange(0,i1,occ_blksize[s])):
                 noccj = j1-j0
                 if ibatch == jbatch:
                     jbL = iaL
@@ -523,7 +523,7 @@ def _init_mp_df_eris(with_df, occ_coeff, vir_coeff, max_memory, h5obj=None, log=
             ovL.append(h5obj.create_dataset(f'ovL{s}', ovL_shape, dtype=dtype,
                                             chunks=(1,*ovL_shape[1:])))
 
-    if isinstance(ovL, np.ndarray):
+    if h5obj is None:
         # incore: batching aux (OV + Nao_pair) * [X] = M
         mem_auxblk = (nao_pair+noccmax*nvirmax) * dsize/1e6
         aux_blksize = min(naux, max(1, int(np.floor(mem_avail*0.5 / mem_auxblk))))
