@@ -163,6 +163,15 @@ def get_ab(mf, frozen=None,  mo_energy=None, mo_coeff=None, mo_occ=None):
     items: (A_aaaa, A_aabb, A_bbbb). A_bbaa = A_aabb.transpose(2,3,0,1).
     B has three items: (B_aaaa, B_aabb, B_bbbb).
     B_bbaa = B_aabb.transpose(2,3,0,1).
+
+    Note:
+        If the SCF object is attached with fitted or seminumerical
+        integrals (density fitting, SGX/COSX, ...), get_ab still
+        assembles the matrices with exact 4-center integrals. The
+        matrices then describe the exact-K response, while the
+        matrix-free response used by the TDA/TDDFT solvers
+        (mf.gen_response) applies the fitted/seminumerical operators
+        consistently.
     '''
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_coeff is None: mo_coeff = mf.mo_coeff
