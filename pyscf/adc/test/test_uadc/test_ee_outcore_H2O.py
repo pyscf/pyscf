@@ -60,7 +60,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ee_adc2(self):
         myadc.method = "adc(2)"
-        myadc.max_memory = 20
+        myadc.max_memory = 0
         myadc.incore_complete = False
 
         myadc.method_type = "ee"
@@ -72,15 +72,16 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3],0.3724791304, 6)
 
         self.assertAlmostEqual(p[0],0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.02774679, 6)
+        self.assertAlmostEqual(p[1],0.02764802753221371, 6)
         self.assertAlmostEqual(p[2],0.00000000, 6)
         self.assertAlmostEqual(p[3],0.00000000, 6)
 
     def test_ee_adc2x(self):
         myadc.method = "adc(2)-x"
-        myadc.max_memory = 20
+        myadc.max_memory = 0
         myadc.incore_complete = False
 
+        myadc.method_type = "ee"
         e,v,p,x = myadc.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0],0.2560782475, 6)
@@ -89,15 +90,16 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3],0.3563942331, 6)
 
         self.assertAlmostEqual(p[0],0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.02546196, 6)
+        self.assertAlmostEqual(p[1],0.025475956038402043, 6)
         self.assertAlmostEqual(p[2],0.00000000, 6)
         self.assertAlmostEqual(p[3],0.00000000, 6)
 
     def test_ee_adc3(self):
         myadc.method = "adc(3)"
-        myadc.max_memory = 20
+        myadc.max_memory = 0
         myadc.incore_complete = False
 
+        myadc.method_type = "ee"
         e,v,p,x = myadc.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0],0.2801187917, 6)
@@ -106,7 +108,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3],0.3790532775, 6)
 
         self.assertAlmostEqual(p[0],0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.02702943, 6)
+        self.assertAlmostEqual(p[1],0.02714686439140136, 6)
         self.assertAlmostEqual(p[2],0.00000000, 6)
         self.assertAlmostEqual(p[3],0.00000000, 6)
 

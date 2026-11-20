@@ -57,79 +57,83 @@ class KnownValues(unittest.TestCase):
 
     def test_ea_adc2(self):
         myadc.method = "adc(2)"
+        myadc.approx_trans_moments = False
         e, t_amp1, t_amp2 = myadc.kernel_gs()
-        self.assertAlmostEqual(e, -0.22185606131601238, 6)
+        self.assertAlmostEqual(e, -0.2218560613160146, 6)
 
         myadcea = adc.radc_ea.RADCEA(myadc)
-        myadcea.approx_trans_moments = True
+        myadcea.approx_trans_moments = False
         e,v,p,x = myadcea.kernel(nroots=3)
 
-        self.assertAlmostEqual(e[0], 0.0287675413010661, 6)
-        self.assertAlmostEqual(e[1], 0.0553475511361251, 6)
-        self.assertAlmostEqual(e[2], 0.1643553780332306, 6)
+        self.assertAlmostEqual(e[0], 0.028767540957364002, 6)
+        self.assertAlmostEqual(e[1], 0.055347550860014215, 6)
+        self.assertAlmostEqual(e[2], 0.1643553772982312, 6)
 
-        self.assertAlmostEqual(p[0],1.9868096728772893, 6)
-        self.assertAlmostEqual(p[1],1.994118278569895 , 6)
-        self.assertAlmostEqual(p[2],1.975969169959369 , 6)
+        self.assertAlmostEqual(p[0],1.986819690876559, 6)
+        self.assertAlmostEqual(p[1],1.9941128816000497 , 6)
+        self.assertAlmostEqual(p[2],1.97604203301431 , 6)
 
 
     def test_ip_adc2(self):
         myadc.method = "adc(2)"
+        myadc.approx_trans_moments = False
         e, t_amp1, t_amp2 = myadc.kernel_gs()
-        self.assertAlmostEqual(e, -0.22185606131601238, 6)
+        self.assertAlmostEqual(e, -0.2218560613160146, 6)
 
         myadcip = adc.radc_ip.RADCIP(myadc)
-        myadcip.approx_trans_moments = True
+        myadcip.approx_trans_moments = False
         e,v,p,x = myadcip.kernel(nroots=4)
 
-        self.assertAlmostEqual(e[0], 0.4133257511, 6)
-        self.assertAlmostEqual(e[1], 0.4978545288, 6)
-        self.assertAlmostEqual(e[2], 0.6607769739, 6)
-        self.assertAlmostEqual(e[3], 1.0540027121, 6)
+        self.assertAlmostEqual(e[0], 0.4133257511136192, 6)
+        self.assertAlmostEqual(e[1], 0.4978545288459139, 6)
+        self.assertAlmostEqual(e[2], 0.660776973898569, 6)
+        self.assertAlmostEqual(e[3], 1.0540027121314526, 6)
 
-        self.assertAlmostEqual(p[0], 1.76836736, 6)
-        self.assertAlmostEqual(p[1], 1.77319945, 6)
-        self.assertAlmostEqual(p[2], 1.80354103, 6)
-        self.assertAlmostEqual(p[3], 0.00396362, 6)
+        self.assertAlmostEqual(p[0], 1.7709138169235759, 6)
+        self.assertAlmostEqual(p[1], 1.7748323939182178, 6)
+        self.assertAlmostEqual(p[2], 1.8039728206947119, 6)
+        self.assertAlmostEqual(p[3], 0.003965957913241936, 6)
 
 
     def test_ea_adc2_frozen(self):
         myadc_fr.method = "adc(2)"
+        myadc_fr.approx_trans_moments = False
         e, t_amp1, t_amp2 = myadc_fr.kernel_gs()
-        self.assertAlmostEqual(e, -0.2193655383529059, 6)
+        self.assertAlmostEqual(e, -0.21936553835290695, 6)
 
         myadcea_fr = adc.radc_ea.RADCEA(myadc_fr)
-        myadcea_fr.approx_trans_moments = True
+        myadcea_fr.approx_trans_moments = False
         e,v,p,x = myadcea_fr.kernel(nroots=3)
 
-        self.assertAlmostEqual(e[0], 0.02876408, 6)
-        self.assertAlmostEqual(e[1], 0.05534878, 6)
-        self.assertAlmostEqual(e[2], 0.16435779, 6)
+        self.assertAlmostEqual(e[0], 0.0287640767713242, 6)
+        self.assertAlmostEqual(e[1], 0.05534877596994694, 6)
+        self.assertAlmostEqual(e[2], 0.16435779396607947, 6)
 
-        self.assertAlmostEqual(p[0],1.98680945, 6)
-        self.assertAlmostEqual(p[1],1.99411977 , 6)
-        self.assertAlmostEqual(p[2],1.97597194 , 6)
+        self.assertAlmostEqual(p[0],1.986820069114505, 6)
+        self.assertAlmostEqual(p[1],1.994114410418263 , 6)
+        self.assertAlmostEqual(p[2],1.976045811220421 , 6)
 
 
     def test_ip_adc2_frozen(self):
         myadc_fr.method = "adc(2)"
+        myadc_fr.approx_trans_moments = False
         e, t_amp1, t_amp2 = myadc_fr.kernel_gs()
-        self.assertAlmostEqual(e, -0.2193655383529059, 6)
+        self.assertAlmostEqual(e, -0.21936553835290695, 6)
 
         myadcip_fr = adc.radc_ip.RADCIP(myadc_fr)
-        myadcip_fr.approx_trans_moments = True
+        myadcip_fr.approx_trans_moments = False
         e,v,p,x = myadcip_fr.kernel(nroots=4)
 
-        self.assertAlmostEqual(e[0], 0.41331769, 6)
-        self.assertAlmostEqual(e[1], 0.49789443, 6)
-        self.assertAlmostEqual(e[2], 0.66078283, 6)
-        self.assertAlmostEqual(e[3], 1.05400422, 6)
+        self.assertAlmostEqual(e[0], 0.41331768842528704, 6)
+        self.assertAlmostEqual(e[1], 0.4978944254083694, 6)
+        self.assertAlmostEqual(e[2], 0.6607828254528624, 6)
+        self.assertAlmostEqual(e[3], 1.0540042162192191, 6)
 
-        self.assertAlmostEqual(p[0], 1.76841006, 6)
-        self.assertAlmostEqual(p[1], 1.77324237, 6)
-        self.assertAlmostEqual(p[2], 1.80357389, 6)
-        self.assertAlmostEqual(p[3], 0.00393261, 6)
+        self.assertAlmostEqual(p[0], 1.7709558649111785, 6)
+        self.assertAlmostEqual(p[1], 1.774875940256063, 6)
+        self.assertAlmostEqual(p[2], 1.8040072766943684, 6)
+        self.assertAlmostEqual(p[3], 0.003934812008221318, 6)
 
 if __name__ == "__main__":
-    print("Approximate transition moments calculations for different RADC methods for water molecule")
+    print("Exact transition moments calculations for different RADC methods for water molecule")
     unittest.main()

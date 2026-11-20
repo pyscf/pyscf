@@ -41,6 +41,7 @@ from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
 from pyscf.pbc.lib import kpts_helper
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 from pyscf.data.nist import HARTREE2EV
+from pyscf.pbc.scf.hf import INVALID_ORBITAL_ENERGY
 
 import h5py
 import tempfile
@@ -110,7 +111,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None):
 
         evals_k = evals_k.real
         evals[k] = evals_k
-        evecs[k, :, :size] += evecs_k
+        evecs[k, :, :size] = evecs_k
         conv[k] = conv_k.real
 
         U = np.array(evecs[k]).T.copy()
@@ -232,7 +233,7 @@ def make_ref_rdm1(adc, with_frozen=True, ao_repr=False):
         OPDM[ki] += OPDM[ki].conj().T
 
     if with_frozen and adc.frozen is not None:
-        nmo = adc.mo_occ[0].size
+        nmo = max(mo_occ_k.size for mo_occ_k in adc.mo_occ)
         nocc = np.count_nonzero(adc.mo_occ[0] > 0)
         mask = get_frozen_mask(adc)
         dm = np.zeros((nkpts, nmo, nmo), dtype=np.complex128)
@@ -245,9 +246,12 @@ def make_ref_rdm1(adc, with_frozen=True, ao_repr=False):
             dm[k][moidx[:, None], moidx] = OPDM[k][p_k_idx[k][:, None], p_k_idx[k]]
         OPDM = dm
         if ao_repr:
-            mo = adc.mo_coeff
             for k in k_idx:
-                OPDM[k] = lib.einsum('pI,IJ,qJ->pq', mo[k], OPDM[k], mo[k].conj())
+                mo_k = np.asarray(adc.mo_coeff[k])
+                npad = nmo - mo_k.shape[1]
+                if npad > 0:
+                    mo_k = np.hstack((mo_k, np.zeros((mo_k.shape[0], npad), dtype=mo_k.dtype)))
+                OPDM[k] = lib.einsum('pI,IJ,qJ->pq', mo_k, OPDM[k], mo_k.conj())
 
     elif ao_repr:
         mo = padded_mo_coeff(adc, adc.mo_coeff)
@@ -273,6 +277,22 @@ def mo_splitter(myadc):
     return masks
 
 
+def orbital_number_lists(myadc):
+    nocc_fr, nocc_ar, nvir_ar, nvir_fr, nremoved = [], [], [], [], []
+    for kpt, (frz_occ, act_occ, act_vir, frz_vir) in enumerate(mo_splitter(myadc)):
+        if getattr(myadc, 'mo_energy', None) is not None:
+            valid_k = np.asarray(myadc.mo_energy[kpt]) != INVALID_ORBITAL_ENERGY
+        else:
+            valid_k = np.ones(frz_vir.size, dtype=bool)
+        nocc_fr.append(np.count_nonzero(frz_occ))
+        nocc_ar.append(np.count_nonzero(act_occ))
+        nvir_ar.append(np.count_nonzero(act_vir))
+        nvir_fr.append(np.count_nonzero(frz_vir & valid_k))
+        nremoved.append(np.count_nonzero(~valid_k))
+    return (np.array(nocc_fr), np.array(nocc_ar),
+            np.array(nvir_ar), np.array(nvir_fr), np.array(nremoved))
+
+
 class RADC(pyscf.adc.radc.RADC):
     _keys = pyscf.adc.radc.RADC._keys | {
         'kpts', 'khelper', 'exxdiv', 'cell',
@@ -292,6 +312,12 @@ class RADC(pyscf.adc.radc.RADC):
         if mo_energy is None:
             mo_energy = mf.mo_energy
 
+        if mo_coeff is mf.mo_coeff and np.any(np.asarray(mo_energy) == INVALID_ORBITAL_ENERGY):
+            valid = np.asarray(mo_energy) != INVALID_ORBITAL_ENERGY
+            mo_coeff = [np.asarray(c)[:, v] for c, v in zip(mo_coeff, valid)]
+            mo_occ = [np.asarray(o)[v] for o, v in zip(mo_occ, valid)]
+            mo_energy = [e[v] for e, v in zip(mo_energy, valid)]
+
         self._scf = mf
         self.kpts = self._scf.kpts
         self.exxdiv = self._scf.exxdiv
@@ -308,6 +334,7 @@ class RADC(pyscf.adc.radc.RADC):
 
         self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
         self.cell = self._scf.cell
+        self.incore_complete = self.incore_complete or self.cell.incore_anyway
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
         self.mo_energy = mo_energy
@@ -380,17 +407,15 @@ class RADC(pyscf.adc.radc.RADC):
         mem_incore *= 4
         mem_incore *= 16 / 1e6
         mem_now = lib.current_memory()[0]
-        nocc_arr = np.array(self.get_nocc(per_kpoint=True))
-        nmo_arr = np.array(self.get_nmo(per_kpoint=True))
-        nvir_arr = nmo_arr - nocc_arr
-        nocc_fr = np.array(self._scf.mol.nelectron // 2) - nocc_arr
-        nvir_fr = np.array([len(self.mo_occ[ikpt]) for ikpt in range(nkpts)]) - nmo_arr - nocc_fr
+        nocc_fr, nocc_arr, nvir_arr, nvir_fr, nremoved = orbital_number_lists(self)
 
         logger.info(self, '******** ADC Orbital Information ********')
         logger.info(self, 'Number list of Frozen Occupied Orbitals: %s', nocc_fr)
         logger.info(self, 'Number list of Frozen Virtual Orbitals: %s', nvir_fr)
         logger.info(self, 'Number list of Active Occupied Orbitals: %s', nocc_arr)
         logger.info(self, 'Number list of Active Virtual Orbitals: %s', nvir_arr)
+        if np.any(nremoved):
+            logger.info(self, 'Number list of Removed Orbitals (SCF linear-dep treatment): %s', nremoved)
         if hasattr(self.frozen, '__len__') and isinstance(self.frozen[0], (list, np.ndarray)):
             logger.info(self, 'Frozen Orbital List: %s', self.frozen)
         logger.info(self, '*****************************************')
@@ -440,17 +465,15 @@ class RADC(pyscf.adc.radc.RADC):
         mem_incore *= 4
         mem_incore *= 16 / 1e6
         mem_now = lib.current_memory()[0]
-        nocc_arr = np.array(self.get_nocc(per_kpoint=True))
-        nmo_arr = np.array(self.get_nmo(per_kpoint=True))
-        nvir_arr = nmo_arr - nocc_arr
-        nocc_fr = np.array(self._scf.mol.nelectron // 2) - nocc_arr
-        nvir_fr = np.array([len(self.mo_occ[ikpt]) for ikpt in range(nkpts)]) - nmo_arr - nocc_fr
+        nocc_fr, nocc_arr, nvir_arr, nvir_fr, nremoved = orbital_number_lists(self)
 
         logger.info(self, '******** ADC Orbital Information ********')
         logger.info(self, 'Number list of Frozen Occupied Orbitals: %s', nocc_fr)
         logger.info(self, 'Number list of Frozen Virtual Orbitals: %s', nvir_fr)
         logger.info(self, 'Number list of Active Occupied Orbitals: %s', nocc_arr)
         logger.info(self, 'Number list of Active Virtual Orbitals: %s', nvir_arr)
+        if np.any(nremoved):
+            logger.info(self, 'Number list of Removed Orbitals (SCF linear-dep treatment): %s', nremoved)
         if hasattr(self.frozen, '__len__') and isinstance(self.frozen[0], (list, np.ndarray)):
             logger.info(self, 'Frozen Orbital List: %s', self.frozen)
         logger.info(self, '*****************************************')
@@ -544,7 +567,7 @@ class RADC(pyscf.adc.radc.RADC):
         rdm1 = self._adc_es.make_rdm1(nroots, kptlist, K_idx, if_ss)
 
         if with_frozen and self.frozen is not None:
-            nmo = self.mo_occ[0].size
+            nmo = max(mo_occ_k.size for mo_occ_k in self.mo_occ)
             nocc = np.count_nonzero(self.mo_occ[0] > 0)
             mask = get_frozen_mask(self)
             dm = np.zeros((len(K_idx), len(nroots), self.nkpts, nmo, nmo), dtype=np.complex128)
@@ -565,9 +588,15 @@ class RADC(pyscf.adc.radc.RADC):
                         dm[kj][i][ki][moidx[:, None], moidx] = rdm1[kj][i][ki][p_k_idx[ki][:, None], p_k_idx[ki]]
             rdm1 = dm
             if ao_repr:
-                mo = self.mo_coeff
-                mo_H = [c.conj() for c in mo]
-                rdm1 = lib.einsum('kpI,KSkIJ,kqJ->KSkpq', mo, rdm1, mo_H)
+                mo = []
+                for k in range(self.nkpts):
+                    mo_k = np.asarray(self.mo_coeff[k])
+                    npad = nmo - mo_k.shape[1]
+                    if npad > 0:
+                        mo_k = np.hstack((mo_k, np.zeros((mo_k.shape[0], npad), dtype=mo_k.dtype)))
+                    mo.append(mo_k)
+                mo = np.stack(mo)
+                rdm1 = lib.einsum('kpI,KSkIJ,kqJ->KSkpq', mo, rdm1, mo.conj())
         elif ao_repr:
             mo = padded_mo_coeff(self, self.mo_coeff)
             mo_H = [c.conj() for c in mo]

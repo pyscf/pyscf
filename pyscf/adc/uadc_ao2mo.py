@@ -525,15 +525,15 @@ def unpack_eri_1(eri, norb):
     eri_ = None
 
     if len(eri.shape) == 3:
-        if (eri.shape[0] == n_oo):
-            eri_ = np.zeros((norb, norb, eri.shape[1], eri.shape[2]))
-            eri_[ind_oo[0], ind_oo[1]] = eri
-            eri_[ind_oo[1], ind_oo[0]] = eri
-
-        elif (eri.shape[2] == n_oo):
+        if (eri.shape[2] == n_oo):
             eri_ = np.zeros((eri.shape[0], eri.shape[1], norb, norb))
             eri_[:, :, ind_oo[0], ind_oo[1]] = eri
             eri_[:, :, ind_oo[1], ind_oo[0]] = eri
+
+        elif (eri.shape[0] == n_oo):
+            eri_ = np.zeros((norb, norb, eri.shape[1], eri.shape[2]))
+            eri_[ind_oo[0], ind_oo[1]] = eri
+            eri_[ind_oo[1], ind_oo[0]] = eri
         else:
             raise TypeError("ERI dimensions don't match")
 
