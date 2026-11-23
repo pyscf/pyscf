@@ -5795,20 +5795,6 @@ int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         return has_value;
 }
 
-static void scale_coeff(double *cei, const double *ci, const double *ai,
-                        const double r2ca, const int npi, const int nci, const int li)
-{
-        int ip, ic;
-        double tmp;
-        double common_fac = CINTcommon_fac_sp(li) * 4 * M_PI;
-        for (ip = 0; ip < npi; ip++) {
-                tmp = exp(-ai[ip] * r2ca) * common_fac;
-                for (ic = 0; ic < nci; ic++) {
-                        cei[ic*npi+ip] = ci[ic*npi+ip] * tmp;
-                }
-        }
-}
-
 void type1_rad_part(double *rad_all, int lmax, double k, double aij,
                     double *ur, double *rs, int nrs, int inc, double *cache)
 {
@@ -5821,27 +5807,21 @@ void type1_rad_part(double *rad_all, int lmax, double k, double aij,
         MALLOC_INSTACK(rur, nrs);
         MALLOC_INSTACK(bval, nrs*lmax1);
         int lab, i, n;
-        double kaij, fac, tmp, s;
+        double kaij, dr, s;
         double *prad;
 
+        // ECPsph_ine_opt returns exp(-k*r)*i_l(k*r). Completing the
+        // shifted Gaussian gives a nonpositive radial exponent. The
+        // primitive-pair overlap prefactor is applied in ECPtype1_cart.
         kaij = k / (2*aij);
-        fac = kaij*kaij*aij;
         for (n = 0; n < nrs; n++) {
-                tmp = rs[n*inc] - kaij;
-                tmp = fac - aij*tmp*tmp;
-                if (ur[n] == 0
-/* Avoid exp(tmp) to be infinity!  Usually such points correspond to remote
- * functions.  Most likely, they can be dropped without affecting accuracy. */
-                    || tmp > CUTOFF
-/* + 6. to include the largest value in ECPsph_ine_opt
- * +30. to include the rs^lmax of remote point for high-l functions. */
-                    || tmp < -(EXPCUTOFF+6.+30.)) {
-                        rur[n] = 0;
+                dr = rs[n*inc] - kaij;
+                rur[n] = ur[n] * exp(-aij * dr * dr);
+                if (rur[n] == 0) {
                         for (i = 0; i < lmax1; i++) {
                                 bval[n*lmax1+i] = 0;
                         }
                 } else {
-                        rur[n] = ur[n] * exp(tmp);
                         ECPsph_ine_opt(bval+n*lmax1, lmax, k*rs[n*inc]);
                 }
         }
@@ -5908,20 +5888,21 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         int i, n, ip, jp, ic, jc, mi, mj;
         int i1, i2, i3, j1, j2, j3;
         int ix, iy, iz, jx, jy, jz;
-        double *ur, *rad_all, *rad_ang, *rad_ang_all, *ifac, *jfac, *cei, *cej, *plast;
+        double *ur, *rad_all, *rad_ang, *rad_ang_all, *ifac, *jfac, *plast;
         MALLOC_INSTACK(ur, nrs);
         MALLOC_INSTACK(rad_all, npi*npj*d2);
         MALLOC_INSTACK(rad_ang, d3);
         MALLOC_INSTACK(rad_ang_all, nci*ncj*d3);
         MALLOC_INSTACK(ifac, nfi*di3);
         MALLOC_INSTACK(jfac, nfj*dj3);
-        MALLOC_INSTACK(cei, npi*nci);
-        MALLOC_INSTACK(cej, npj*ncj);
         MALLOC_INSTACK(plast, d2);
         double rca[3];
         double rcb[3];
         double rij[3];
         double fac;
+        const double rrab = distance_square(ri, rj);
+        const double common_fac = CINTcommon_fac_sp(li) * CINTcommon_fac_sp(lj)
+                                  * (16 * M_PI * M_PI);
         double *rc, *pifac, *pjfac, *pout;
         int has_value = 0;
         int8_t *converged;
@@ -5949,8 +5930,6 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         rcb[0] = rc[0] - rj[0];
         rcb[1] = rc[1] - rj[1];
         rcb[2] = rc[2] - rj[2];
-        scale_coeff(cei, ci, ai, SQUARE(rca), npi, nci, li);
-        scale_coeff(cej, cj, aj, SQUARE(rcb), npj, ncj, lj);
 
         int level, nrs0, start, step;
         double wtscale;
@@ -6024,9 +6003,13 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 rij[1] = ai[ip] * rca[1] + aj[jp] * rcb[1];
                 rij[2] = ai[ip] * rca[2] + aj[jp] * rcb[2];
                 type1_rad_ang(rad_ang, li+lj, rij, rad_all+(ip*npj+jp)*d2);
+                // The Gaussian product prefactor depends on the distance
+                // between the two AO centers, not on the ECP displacement.
+                const double aij = ai[ip] + aj[jp];
+                const double prefac = common_fac * exp(-ai[ip]*(aj[jp]/aij)*rrab);
                 for (ic = 0; ic < nci; ic++) {
                 for (jc = 0; jc < ncj; jc++) {
-                        fac = cei[ic*npi+ip] * cej[jc*npj+jp];
+                        fac = prefac * ci[ic*npi+ip] * cj[jc*npj+jp];
                         prad = rad_ang_all + (ic*ncj+jc)*d3;
                         for (n = 0; n < d3; n++) {
                                 prad[n] += fac * rad_ang[n];
