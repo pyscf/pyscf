@@ -875,9 +875,16 @@ def _dot_ao_ao_sparse(ao1, ao2, wv, nbins, screen_index, pair_mask, ao_loc,
 
 def _dot_ao_dm_sparse(ao, dm, nbins, screen_index, pair_mask, ao_loc):
     '''Returns numpy.dot(ao, dm) while sparsity is explicitly considered.
-    Note the return may be different to _dot_ao_dm. After contracting to another
+
+    Notes
+    -----
+    The return may be different to _dot_ao_dm. After contracting to another
     ao matrix, (numpy.dot(ao, dm)*ao).sum(axis=1), their value can be matched up
     to ~1e-13.
+
+    Output blocks skipped by screening may contain uninitialized values.
+    Further calculations must skip these blocks too. Set them to zero before
+    using the result in a dense contraction.
     '''
     ngrids, nao = ao.shape
     if screen_index is None or pair_mask is None or ngrids % ALIGNMENT_UNIT != 0:
@@ -901,8 +908,16 @@ def _dot_ao_dm_sparse(ao, dm, nbins, screen_index, pair_mask, ao_loc):
 
 def _scale_ao_sparse(ao, wv, screen_index, ao_loc, out=None):
     '''Returns einsum('xgi,xg->gi', ao, wv) while sparsity is explicitly considered.
-    Note the return may be different to _scale_ao. After contracting to another
+
+    Notes
+    -----
+    The return may be different to _scale_ao. After contracting to another
     ao matrix, scale_ao.T.dot(ao), their value can be matched up to ~1e-13.
+
+    Output entries skipped by screening are left as they were: uninitialized
+    if out is None, or holding old values if out is reused. Sparse contractions
+    skip these entries too. If the result will be used in a dense contraction,
+    pass a zero-filled out buffer each time.
     '''
     if screen_index is None:
         return _scale_ao(ao, wv, out=out)
@@ -937,6 +952,11 @@ def _scale_ao_sparse(ao, wv, screen_index, ao_loc, out=None):
 def _contract_rho_sparse(bra, ket, screen_index, ao_loc):
     '''Returns numpy.einsum('gi,gi->g', bra, ket) while sparsity is explicitly
     considered. Note the return may have ~1e-13 difference to _contract_rho.
+
+    Notes
+    -----
+    Entries of bra and ket skipped by screening are never read, so they may
+    contain uninitialized values. Every entry of the returned density is set.
     '''
     ngrids, nao = bra.shape
     if screen_index is None or ngrids % ALIGNMENT_UNIT != 0:
