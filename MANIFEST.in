@@ -29,7 +29,7 @@ include pyscf/pbc/gto/basis/*BASIS*
 include pyscf/pbc/gto/pseudo/*POTENTIAL*
 
 # source code
-recursive-include pyscf/lib *.c *.h CMakeLists.txt
+recursive-include pyscf/lib *.c *.h *.patch CMakeLists.txt
 recursive-exclude pyscf/lib *.cl
 
 global-exclude *.py[cod]

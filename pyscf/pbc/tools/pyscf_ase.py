@@ -212,7 +212,7 @@ class PySCF(Calculator):
 
         if 'stress' in properties:
             stress = grad_obj.get_stress()
-            self.results['stress'] = stress * (HARTREE2EV / BOHR)
+            self.results['stress'] = stress * (HARTREE2EV / BOHR**3)
 
         if 'dipole' in properties:
             if self.pbc:

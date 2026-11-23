@@ -212,6 +212,7 @@ class ddPCM(ddcosmo.DDCOSMO):
     >>> mf.with_solvent.solvent = 'toluene'
     >>> mf.kernel()
     '''
+    _keys = {'method'}
 
     def __init__(self, mol, solvent=None):
         ddcosmo.DDCOSMO.__init__(self, mol, solvent)

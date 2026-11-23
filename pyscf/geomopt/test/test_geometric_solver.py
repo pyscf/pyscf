@@ -74,13 +74,13 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(sol.converged)
 
     def test_optimize_with_hessian(self):
-        mol = gto.M(atom='O 0 0 0; H 0 .75 .58; H 0 -.75 .58')
+        mol = gto.M(atom='O 0 0 0; H 0 .75 .58; H 0 -.75 .58', verbose=2)
         mf = mol.RHF()
         conv, mol_eq = geometric_solver.kernel(mf, hessian=True)
         self.assertTrue(conv)
 
     def test_convergence_fail(self):
-        mol = gto.M(atom='O 0 0 0; H 0 .75 .58; H 0 -.75 .58')
+        mol = gto.M(atom='O 0 0 0; H 0 .75 .58; H 0 -.75 .58', verbose=2)
         mf_opt = mol.RHF().Gradients().optimizer().run(max_cycle=1)
         self.assertTrue(not mf_opt.converged)
 

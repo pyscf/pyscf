@@ -20,8 +20,9 @@ from pyscf.pbc.lib import kpts_helper
 
 einsum = lib.einsum
 
-#FIXME: the dtype of each intermediates. When the khf is at gamma point, the
-# dtype is inconsistent between intermediates and t amplitudes
+#FIXME: the dtype of each intermediates. The F intermediates follow the t
+# amplitudes (see cc_Fvv/cc_Foo/cc_Fov), but the buffers built by
+# _eri_spatial2spin/_eri_spin2spatial are still fixed to complex128.
 
 def make_tau(cc, t2, t1, t1p, fac=1.):
     t2aa, t2ab, t2bb = t2
@@ -73,8 +74,9 @@ def cc_Fvv(cc, t1, t2, eris):
 
     kconserv = cc.khelper.kconserv
 
-    fa = np.zeros((nkpts,nvir_a,nvir_a), dtype=np.complex128)
-    fb = np.zeros((nkpts,nvir_b,nvir_b), dtype=np.complex128)
+    dtype = np.result_type(t1a, t1b, *eris.fock)
+    fa = np.zeros((nkpts,nvir_a,nvir_a), dtype=dtype)
+    fb = np.zeros((nkpts,nvir_b,nvir_b), dtype=dtype)
 
     tau_tildeaa,tau_tildeab,tau_tildebb=make_tau(cc,t2,t1,t1,fac=0.5)
 
@@ -118,8 +120,9 @@ def cc_Foo(cc, t1, t2, eris):
 
     kconserv = cc.khelper.kconserv
 
-    fa = np.zeros((nkpts,nocc_a,nocc_a), dtype=np.complex128)
-    fb = np.zeros((nkpts,nocc_b,nocc_b), dtype=np.complex128)
+    dtype = np.result_type(t1a, t1b, *eris.fock)
+    fa = np.zeros((nkpts,nocc_a,nocc_a), dtype=dtype)
+    fb = np.zeros((nkpts,nocc_b,nocc_b), dtype=dtype)
 
     tau_tildeaa,tau_tildeab,tau_tildebb=make_tau(cc,t2,t1,t1,fac=0.5)
 
@@ -166,8 +169,9 @@ def cc_Fov(cc, t1, t2, eris):
     fov = eris.fock[0][:,:nocc_a,nocc_a:]
     fOV = eris.fock[1][:,:nocc_b,nocc_b:]
 
-    fa = np.zeros((nkpts,nocc_a,nvir_a), dtype=np.complex128)
-    fb = np.zeros((nkpts,nocc_b,nvir_b), dtype=np.complex128)
+    dtype = np.result_type(t1a, t1b, *eris.fock)
+    fa = np.zeros((nkpts,nocc_a,nvir_a), dtype=dtype)
+    fb = np.zeros((nkpts,nocc_b,nvir_b), dtype=dtype)
 
     for km in range(nkpts):
         fa[km]+=fov[km]

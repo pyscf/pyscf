@@ -100,7 +100,6 @@ class KnownValues(unittest.TestCase):
         g = mf.get_grad(mf.mo_coeff, mf.mo_occ)
         self.assertAlmostEqual(abs(g).max(), 0, 5)
 
-    @unittest.skipIf(scf.dhf.zquatev is None, 'requires zquatev')
     def test_rhf(self):
         mol = gto.M(
             verbose = 5,
@@ -286,9 +285,9 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(1)
         dm = numpy.random.random((n4c,n4c))+numpy.random.random((n4c,n4c))*1j
         c1 = .5 / lib.param.LIGHT_SPEED
-        vj0 = -numpy.einsum('ijkl,xlk->xij', erig, dm) * c1**2
-        vk0 = -numpy.einsum('ijkl,xjk->xil', erig, dm) * c1**2
-        vj1, vk1 = scf.dhf._call_veff_gaunt_breit(h4, dm, hermi=0)
+        vj0 = numpy.einsum('ijkl,lk->ij', erig, dm) * c1**2
+        vk0 = numpy.einsum('ijkl,jk->il', erig, dm) * c1**2
+        vj1, vk1 = scf.dhf._call_veff_gaunt_breit(h4, dm, hermi=0, with_breit=True)
         self.assertAlmostEqual(abs(vj0 - vj1).max(), 0, 12)
         self.assertAlmostEqual(abs(vk0 - vk1).max(), 0, 12)
 

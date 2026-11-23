@@ -181,7 +181,7 @@ GHF.__doc__ = ghf.GHF.__doc__
 def DHF(mol, *args):
     if mol.nelectron == 1:
         return dhf.HF1e(mol)
-    elif dhf.zquatev and mol.spin == 0:
+    elif mol.spin == 0:
         return dhf.RDHF(mol, *args)
     else:
         return dhf.DHF(mol, *args)
@@ -191,7 +191,7 @@ DHF.__doc__ = dhf.DHF.__doc__
 def X2C(mol, *args):
     '''X2C Hartree-Fock'''
     from pyscf.x2c import x2c
-    if dhf.zquatev and mol.spin == 0:
+    if mol.spin == 0:
         return x2c.RHF(mol, *args)
     else:
         return x2c.UHF(mol, *args)

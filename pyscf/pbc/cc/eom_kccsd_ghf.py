@@ -682,6 +682,8 @@ def mask_frozen_ip(eom, vector, kshift, const=LARGE_DENOM):
     return eom.amplitudes_to_vector(new_r1, new_r2, kshift, kconserv)
 
 class EOMIP(eom_rccsd.EOMIP):
+    _keys = {'kpts', 'kconserv', 'nonzero_opadding', 'nonzero_vpadding'}
+
     def __init__(self, cc):
         self.kpts = cc.kpts
         self.nonzero_opadding, self.nonzero_vpadding = self.get_padding_k_idx(cc)
@@ -1199,6 +1201,8 @@ def mask_frozen_ea(eom, vector, kshift, const=LARGE_DENOM):
     return eom.amplitudes_to_vector(new_r1, new_r2, kshift, kconserv)
 
 class EOMEA(eom_rccsd.EOMEA):
+    _keys = {'kpts', 'kconserv', 'nonzero_opadding', 'nonzero_vpadding'}
+
     def __init__(self, cc):
         self.kpts = cc.kpts
         self.nonzero_opadding, self.nonzero_vpadding = self.get_padding_k_idx(cc)
@@ -1689,6 +1693,8 @@ def amplitudes_to_vector_ee(r1, r2, kshift, kconserv):
 
 
 class EOMEE(eom_rccsd.EOM):
+    _keys = {'kpts', 'kconserv', 'debug_vals'}
+
     def __init__(self, cc):
         self.kpts = cc.kpts
         self.kconserv = cc.khelper.kconserv

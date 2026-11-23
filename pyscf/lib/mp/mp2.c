@@ -179,6 +179,7 @@ void MP2_contract_d(double *ed_out, double *ex_out, const int s2symm,
     free(jobs);
     free(parr_iaL);
     free(parr_jbL);
+    free(parr_t2);
 
 }
 
@@ -271,6 +272,7 @@ void MP2_OS_contract_d(double *ed_out,
     free(jobs);
     free(parr_iaL);
     free(parr_jbL);
+    free(parr_t2);
 
 }
 
@@ -488,12 +490,15 @@ void MP2_OS_contract_c(double *ed_out,
 #ifdef _OPENMP
 void trisolve_parallel_grp(double *low, double *b, const int n, const int nrhs, const int grpfac)
 {
+    if (nrhs == 0) {
+        return;
+    }
+
     int ntmax = omp_get_max_threads();
     int ngrp = grpfac*ntmax;
     int mgrp = floor((double) (nrhs + ngrp - 1) / ngrp);
     ngrp = (int) floor( (double) (nrhs + mgrp - 1) / mgrp);
-    const double **parr_b = _gen_ptr_arr(b, nrhs, n);
-#pragma omp parallel default(none) shared(low, b, n, nrhs, ngrp, mgrp, parr_b)
+#pragma omp parallel default(none) shared(low, b, n, nrhs, ngrp, mgrp)
 {
     const char SIDE = 'L';
     const char UPLO = 'L';
@@ -507,7 +512,7 @@ void trisolve_parallel_grp(double *low, double *b, const int n, const int nrhs, 
     for (igrp = 0; igrp < ngrp; ++igrp) {
         i0 = igrp * mgrp;
         di = (i0+mgrp<=nrhs) ? (mgrp) : (nrhs-i0);
-        dtrsm_(&SIDE, &UPLO, &TRANS, &DIAG, &n, &di, &D1, low, &n, parr_b[i0], &n);
+        dtrsm_(&SIDE, &UPLO, &TRANS, &DIAG, &n, &di, &D1, low, &n, b + (size_t)i0 * n, &n);
     }
 } // parallel
 }

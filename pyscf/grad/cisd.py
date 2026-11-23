@@ -136,6 +136,8 @@ class CISD_GradScanner(lib.GradScanner):
         return all((ci_scanner._scf.converged, ci_conv))
 
 class Gradients(rhf_grad.GradientsBase):
+    _keys = {'state'}
+
     def __init__(self, myci):
         self.state = 0  # of which the gradients to be computed.
         rhf_grad.GradientsBase.__init__(self, myci)
