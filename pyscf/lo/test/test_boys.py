@@ -125,6 +125,57 @@ class Water(unittest.TestCase):
         test1(mo_coeff + np.cos(mo_coeff)*0.01j)    # complex orbitals
 
 
+class SymmetricPair(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.mol = gto.M(
+            atom='H 0 0 -3; H 0 0 -1; H 0 0 1; H 0 0 3',
+            unit='Bohr', basis='cc-pvdz', verbose=0)
+        mf = cls.mol.RHF().run()
+        if not mf.converged:
+            raise RuntimeError('Reference H4 SCF did not converge')
+        cls.occupied = mf.mo_coeff[:, :2]
+        cls.position = cls.mol.intor_symmetric('int1e_r', comp=3)
+        cls.radius_sq = cls.mol.intor_symmetric('int1e_r2')
+
+    def spread(self, orbitals):
+        # Compute the spread directly from AO integrals, independently of
+        # the optimiser's rotation, gradient and Boys cost implementation.
+        centres = np.einsum('pi,xpq,qi->xi', orbitals, self.position, orbitals)
+        return (np.einsum('pi,pq,qi->', orbitals, self.radius_sq, orbitals)
+                - np.sum(centres**2))
+
+    def check_minimum(self, localised):
+        samples = []
+        for angle in np.arange(4)*np.pi/8:
+            c, s = np.cos(angle), np.sin(angle)
+            samples.append(self.spread(self.occupied @ [[c, -s], [s, c]]))
+        # Extract the constant and fourth harmonic from direct measurements.
+        expected = np.mean(samples) - np.hypot(
+            (samples[0] - samples[2])/2, (samples[1] - samples[3])/2)
+        self.assertLess(expected, samples[0] - 1)
+        self.assertAlmostEqual(self.spread(localised), expected, places=10)
+        overlap = self.mol.intor_symmetric('int1e_ovlp')
+        np.testing.assert_allclose(localised.T @ overlap @ localised,
+                                   np.eye(2), atol=1e-11)
+        np.testing.assert_allclose(localised @ localised.T,
+                                   self.occupied @ self.occupied.T, atol=1e-11)
+
+    def test_stationary_pair_default_guess(self):
+        # The near-stationary atomic guess must not be replaced by a
+        # perturbation of the original delocalised pair.
+        localizer = lo.Boys(self.mol, self.occupied)
+        callbacks = []
+        localised = localizer.kernel(callback=lambda env:
+                                    callbacks.append(env['imacro']))
+        self.check_minimum(localised)
+        self.assertTrue(callbacks)
+
+    def test_stationary_pair_explicit_guess(self):
+        localizer = lo.Boys(self.mol, self.occupied)
+        self.check_minimum(localizer.kernel(self.occupied))
+
+
 if __name__ == "__main__":
     print("Full Tests for Boys")
     unittest.main()
