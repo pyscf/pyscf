@@ -233,6 +233,18 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(lib.dot(b  ,a.T)-numpy.dot(b  ,a.T)).max(), 0, 12)
         self.assertAlmostEqual(abs(lib.dot(a.T,b  )-numpy.dot(a.T,b  )).max(), 0, 12)
         self.assertAlmostEqual(abs(lib.dot(b.T,a  )-numpy.dot(b.T,a  )).max(), 0, 12)
+        # Symmetric Gram products (NPdsyrk path, both trans='N' and trans='T')
+        numpy.testing.assert_allclose(lib.dot(a.T, a), numpy.dot(a.T, a), rtol=1e-12, atol=1e-12)
+        numpy.testing.assert_allclose(
+            lib.dot(a.T, a, alpha=2.5), 2.5 * numpy.dot(a.T, a), rtol=1e-12, atol=1e-12)
+        a_wide = numpy.ascontiguousarray(a.T)
+        numpy.testing.assert_allclose(
+            lib.dot(a_wide, a_wide.T), numpy.dot(a_wide, a_wide.T), rtol=1e-12, atol=1e-12)
+        # Non-zero beta with asymmetric c must stay exact (not use syrk)
+        c_asym = numpy.random.random((40, 40))
+        c_ref = 0.7 * c_asym + 1.3 * numpy.dot(a.T, a)
+        c_out = lib.dot(a.T, a, alpha=1.3, c=c_asym.copy(), beta=0.7)
+        numpy.testing.assert_allclose(c_out, c_ref, rtol=1e-12, atol=1e-12)
 
         a = numpy.random.random((400,400))
         b = numpy.random.random((400,400))

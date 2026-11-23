@@ -137,6 +137,93 @@ void NPdgemm(const char trans_a, const char trans_b,
 }
 
 
+void NPdsyrk(const char trans, const int n, const int k,
+             const int lda, const int ldc,
+             const int offseta, const int offsetc,
+             const double *a, double *c,
+             const double alpha, const double beta)
+{
+        const size_t Ldc = ldc;
+        int i, j;
+        if (n == 0) {
+                return;
+        } else if (k == 0) {
+                if (beta == 0) {
+                        for (i = 0; i < n; i++) {
+                        for (j = 0; j < n; j++) {
+                                c[i*Ldc+j] = 0;
+                        } }
+                } else if (beta != 1) {
+                        for (i = 0; i < n; i++) {
+                        for (j = 0; j < n; j++) {
+                                c[i*Ldc+j] *= beta;
+                        } }
+                }
+                return;
+        }
+        a += offseta;
+        c += offsetc;
+
+        if ((k/n) > 3) { // parallelize k
+                if (beta == 0) {
+                        for (i = 0; i < n; i++) {
+                        for (j = 0; j <= i; j++) {
+                                c[i*Ldc+j] = 0;
+                        } }
+                } else if (beta != 1) {
+                        for (i = 0; i < n; i++) {
+                        for (j = 0; j <= i; j++) {
+                                c[i*Ldc+j] *= beta;
+                        } }
+                }
+
+#pragma omp parallel private(i, j)
+{
+                double D0 = 0;
+                char uplo = 'U';
+                double *cpriv = malloc(sizeof(double) * ((size_t)n * n + 2));
+                size_t k0, k1;
+                NPomp_split(&k0, &k1, k);
+                int dk = k1 - k0;
+                if (dk > 0) {
+                        size_t astride = k0;
+                        if (trans == 'N') {
+                                astride *= lda;
+                        }
+                        if (cpriv != NULL) {
+                                dsyrk_(&uplo, &trans, &n, &dk,
+                                       &alpha, a+astride, &lda,
+                                       &D0, cpriv, &n);
+#pragma omp critical
+                                for (i = 0; i < n; i++) {
+                                        double *dst = c + i*Ldc;
+                                        const double *src = cpriv + (size_t)i*n;
+                                        for (j = 0; j <= i; j++) {
+                                                dst[j] += src[j];
+                                        }
+                                }
+                        } else {
+                                double D1 = 1;
+#pragma omp critical
+                                dsyrk_(&uplo, &trans, &n, &dk,
+                                       &alpha, a+astride, &lda,
+                                       &D1, c, &ldc);
+                        }
+                }
+                free(cpriv);
+}
+        } else {
+                char uplo = 'U';
+                dsyrk_(&uplo, &trans, &n, &k, &alpha, a, &lda, &beta, c, &ldc);
+        }
+
+        for (i = 0; i < n; i++) {
+        for (j = 0; j < i; j++) {
+                c[j*Ldc+i] = c[i*Ldc+j];
+        } }
+}
+
+
 void NPzgemm(const char trans_a, const char trans_b,
              const int m, const int n, const int k,
              const int lda, const int ldb, const int ldc,
