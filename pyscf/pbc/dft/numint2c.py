@@ -77,7 +77,7 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
             rho = np.concatenate(rho,axis=-1)
             assert rho.dtype == np.double
             if self.collinear[0] == 'm':  # mcol
-                eval_xc = self.mcfun_eval_xc_adapter(xc_code)
+                eval_xc = self.mcfun_eval_xc_adapter(xc_code, max_memory)
             else:
                 eval_xc = self.eval_xc_eff
             vxc, fxc = eval_xc(xc_code, rho, deriv=2, xctype=xctype)[1:3]
@@ -129,7 +129,7 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
             rho = np.concatenate(rho,axis=-1)
             assert rho.dtype == np.double
             if self.collinear[0] == 'm':  # mcol
-                eval_xc = self.mcfun_eval_xc_adapter(xc_code)
+                eval_xc = self.mcfun_eval_xc_adapter(xc_code, max_memory)
             else:
                 eval_xc = self.eval_xc_eff
             vxc, fxc = eval_xc(xc_code, rho, deriv=2, xctype=xctype)[1:3]
@@ -185,7 +185,7 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
             fmat, ao_deriv = f_eval_mat[(xctype, self.collinear[0])]
 
             if self.collinear[0] == 'm':  # mcol
-                eval_xc = self.mcfun_eval_xc_adapter(xc_code)
+                eval_xc = self.mcfun_eval_xc_adapter(xc_code, max_memory)
             else:
                 eval_xc = self.eval_xc_eff
 
@@ -422,7 +422,7 @@ class KNumInt2C(lib.StreamObject, numint.LibXCMixin):
             rho = np.concatenate(rho,axis=-1)
             assert rho.dtype == np.double
             if self.collinear[0] == 'm':  # mcol
-                eval_xc = self.mcfun_eval_xc_adapter(xc_code)
+                eval_xc = self.mcfun_eval_xc_adapter(xc_code, max_memory)
             else:
                 eval_xc = self.eval_xc_eff
             vxc, fxc = eval_xc(xc_code, rho, deriv=2, xctype=xctype)[1:3]
@@ -476,7 +476,7 @@ class KNumInt2C(lib.StreamObject, numint.LibXCMixin):
                                           hermi, with_lapl))
             rho = np.concatenate(rho,axis=-1)
             if self.collinear[0] == 'm':  # mcol
-                eval_xc = self.mcfun_eval_xc_adapter(xc_code)
+                eval_xc = self.mcfun_eval_xc_adapter(xc_code, max_memory)
             else:
                 eval_xc = self.eval_xc_eff
             vxc, fxc = eval_xc(xc_code, rho, deriv=2, xctype=xctype)[1:3]
@@ -537,7 +537,7 @@ class KNumInt2C(lib.StreamObject, numint.LibXCMixin):
             fmat, ao_deriv = f_eval_mat[(xctype, ni.collinear[0])]
 
             if ni.collinear[0] == 'm':  # mcol
-                eval_xc = ni.mcfun_eval_xc_adapter(xc_code)
+                eval_xc = ni.mcfun_eval_xc_adapter(xc_code, max_memory)
             else:
                 eval_xc = ni.eval_xc_eff
 
