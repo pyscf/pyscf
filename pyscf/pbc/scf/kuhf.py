@@ -362,7 +362,8 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
         return np.asarray(dm)
 
     if getattr(mo[0], 'ndim', None) == 2:  # KRHF
-        mo_occa = [(occ>1e-8).astype(np.double) for occ in mo_occ]
+        # Preserve fractional weights without a negative beta occupation.
+        mo_occa = [np.minimum(occ, 1.) for occ in mo_occ]
         mo_occb = [occ-mo_occa[k] for k,occ in enumerate(mo_occ)]
         dm = makedm((mo, mo), (mo_occa, mo_occb))
     else:  # KUHF

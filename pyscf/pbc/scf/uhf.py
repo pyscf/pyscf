@@ -75,7 +75,8 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpt=None):
 
     if getattr(mo, 'ndim', None) == 2:
         mo = fproj(mo)
-        mo_occa = (mo_occ>1e-8).astype(np.double)
+        # Preserve fractional weights without a negative beta occupation.
+        mo_occa = np.minimum(mo_occ, 1.)
         mo_occb = mo_occ - mo_occa
         dm = mol_uhf.make_rdm1([mo,mo], [mo_occa,mo_occb])
     else:  # UHF

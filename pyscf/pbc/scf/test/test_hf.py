@@ -168,6 +168,22 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1, -4.291854736401251, 7)
         self.assertTrue(mf1.mo_coeff.dtype == numpy.double)
 
+    def test_init_guess_by_chkfile_fractional_occupations(self):
+        small = pbcgto.M(atom='He 0 0 0', a=numpy.eye(3)*3.5,
+                        basis='gth-dzv', pseudo='gth-pade', verbose=0)
+        mf = pbchf.RHF(small)
+        overlap = mf.get_ovlp()
+        _, coeff = mf.eig(numpy.diag([-1., 1.]), overlap)
+        occ = numpy.array([1.55, .45])
+        expected = sum(n * numpy.outer(c, c.conj())
+                       for n, c in zip(occ, coeff.T))
+        with lib.NamedTemporaryFile() as chk:
+            pscf.chkfile.save_cell(small, chk.name)
+            pscf.chkfile.dump(chk.name, 'scf', {'mo_coeff': coeff, 'mo_occ': occ})
+            dm = mf.from_chk(chk.name)
+        self.assertAlmostEqual(numpy.trace(overlap @ dm), 2.)
+        numpy.testing.assert_allclose(dm, expected, atol=1e-11, rtol=0)
+
     def test_uhf_exx_ewald(self):
         mf = pscf.UHF(cell, exxdiv='ewald')
         mf.init_guess = 'hcore'
