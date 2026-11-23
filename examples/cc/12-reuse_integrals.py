@@ -6,7 +6,13 @@
 '''
 To avoid recomputing AO to MO integral transformation, integrals for CCSD,
 CCSD(T), CCSD lambda equation etc can be reused.
+
+CC objects keep the integrals of their last transformation (keep_eris = True by
+default): (T), the lambda equations, EOM and gradients after CCSD reuse them.
+With eris_file, the integrals are saved in a file and read by the next run.
 '''
+
+import os
 
 from pyscf import gto, scf, cc
 from pyscf.cc import ccsd
@@ -63,3 +69,23 @@ emp2, df_t1, df_t2 = dfcc.init_amps(df_eris)
 df_t1, df_t2 = dfcc.update_amps(df_t1, df_t2, df_eris)
 print('DF integral MP2 and first CCSD iteration energies:',
       emp2, dfcc.energy(df_t1, df_t2, df_eris))
+
+#
+# Without passing eris, the integrals of CCSD are reused by (T) and the lambda
+# equations.  Set keep_eris = False to release them after each step instead.
+#
+mycc = cc.CCSD(mf).run()
+mycc.ccsd_t()
+mycc.solve_lambda()
+
+#
+# eris_file saves the MO integrals in an HDF5 file.  The same script, run again,
+# reads the integrals from the file instead of transforming them.  The file is
+# checked against the molecule, basis, orbitals and frozen orbitals of the
+# calculation; a file written for another calculation raises an error.
+#
+mycc = cc.CCSD(mf)
+mycc.eris_file = 'hf_ccsd_eris.h5'
+mycc.run()
+mycc.ccsd_t()
+os.remove(mycc.eris_file)

@@ -13,7 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import gc
+import os
 import unittest
+import tempfile
+import h5py
 import numpy
 from functools import reduce
 
@@ -49,6 +53,16 @@ def tearDownModule():
     global mol, rhf, mcc
     mol.stdout.close()
     del mol, rhf, mcc
+
+def _count_ao2mo(mycc):
+    '''Record the calls of mycc.ao2mo'''
+    calls = []
+    ao2mo = mycc.ao2mo
+    def counted(mo_coeff=None):
+        calls.append(1)
+        return ao2mo(mo_coeff)
+    mycc.ao2mo = counted
+    return calls
 
 class KnownValues(unittest.TestCase):
     def test_ccsd_t(self):
@@ -222,6 +236,63 @@ class KnownValues(unittest.TestCase):
              numpy.einsum('ijkl,ijkl->', eri_mo, dm2)*.5 + mf.mol.energy_nuc())
         self.assertAlmostEqual(e3ref, e3-(mf.e_tot+ecc), 7)
 
+
+    def test_eris_file(self):
+        # The first calculation saves the MO integrals in eris_file, the second
+        # reads them; both give the energies of mcc
+        e_t_ref = mcc.ccsd_t()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            eris_file = os.path.join(tmpdir, 'eris.h5')
+            for n_transform in (1, 0):
+                mycc = cc.CCSD(rhf)
+                mycc.conv_tol = 1e-14
+                mycc.eris_file = eris_file
+                calls = _count_ao2mo(mycc)
+                mycc.kernel()
+                e_t = mycc.ccsd_t()
+                self.assertEqual(len(calls), n_transform)
+                self.assertAlmostEqual(mycc.e_corr, mcc.e_corr, 10)
+                self.assertAlmostEqual(e_t, e_t_ref, 10)
+            del mycc, calls
+            gc.collect()  # close eris_file: Windows cannot remove open files
+
+    def test_eris_file_ao_direct(self):
+        # AO-direct CCSD saves no vvvv integrals.  Another AO-direct CCSD reads
+        # the file; a CCSD that is not AO-direct needs vvvv and cannot.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            eris_file = os.path.join(tmpdir, 'eris.h5')
+            for n_transform in (1, 0):
+                mycc = cc.CCSD(rhf)
+                mycc.conv_tol = 1e-14
+                mycc.direct = True
+                mycc.eris_file = eris_file
+                calls = _count_ao2mo(mycc)
+                mycc.kernel()
+                self.assertEqual(len(calls), n_transform)
+                self.assertAlmostEqual(mycc.e_corr, mcc.e_corr, 10)
+            del mycc, calls
+            gc.collect()  # close eris_file: Windows cannot remove open files
+            with h5py.File(eris_file, 'r') as f:
+                self.assertNotIn('vvvv', f)
+
+            mycc = cc.CCSD(rhf).set(eris_file=eris_file)
+            self.assertRaisesRegex(RuntimeError, 'direct', mycc.kernel)
+
+    def test_eris_file_of_another_calculation(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            eris_file = os.path.join(tmpdir, 'eris.h5')
+            cc.CCSD(rhf).set(eris_file=eris_file).kernel()
+
+            mycc = cc.CCSD(rhf, frozen=1).set(eris_file=eris_file)
+            self.assertRaisesRegex(RuntimeError, 'frozen', mycc.kernel)
+
+            # Another geometry with the orbitals of the first calculation:
+            # mo_coeff alone does not identify the integrals
+            mol1 = mol.set_geom_('O 0 0 0; H 0 -.757 .6; H 0 .757 .6', inplace=False)
+            mycc = cc.CCSD(rhf.copy().reset(mol1)).set(eris_file=eris_file)
+            self.assertRaisesRegex(RuntimeError, 'molecule', mycc.kernel)
+            del mycc
+            gc.collect()  # close eris_file: Windows cannot remove open files
 
 if __name__ == "__main__":
     print("Full Tests for CCSD(T)")

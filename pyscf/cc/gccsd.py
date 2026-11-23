@@ -121,7 +121,7 @@ class GCCSD(ccsd.CCSDBase):
 
     def init_amps(self, eris=None):
         if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
+            eris = self._get_eris()
         mo_e = eris.mo_energy
         nocc = self.nocc
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
@@ -188,7 +188,7 @@ class GCCSD(ccsd.CCSDBase):
         from pyscf.cc import gccsd_lambda
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        if eris is None: eris = self._get_eris()
         self.converged_lambda, self.l1, self.l2 = \
                 gccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
                                     max_cycle=self.max_cycle,
@@ -200,7 +200,7 @@ class GCCSD(ccsd.CCSDBase):
         from pyscf.cc import gccsd_t
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        if eris is None: eris = self._get_eris()
         return gccsd_t.kernel(self, eris, t1, t2, self.verbose)
 
     def ipccsd(self, nroots=1, left=False, koopmans=False, guess=None,
@@ -263,8 +263,9 @@ class GCCSD(ccsd.CCSDBase):
         nmo = self.nmo
         mem_incore = nmo**4*2 * 8/1e6
         mem_now = lib.current_memory()[0]
-        if (self._scf._eri is not None and
-            (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
+        if self._eris_file_writing is None and (
+                self._scf._eri is not None and
+                (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
             return _make_eris_incore(self, mo_coeff)
         elif getattr(self._scf, 'with_df', None):
             raise NotImplementedError
@@ -416,7 +417,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     mo_b = mo[nao:]
     orbspin = eris.orbspin
 
-    feri = eris.feri = lib.H5TmpFile()
+    feri = eris.feri = ccsd._eris_h5file(mycc)
     dtype = np.result_type(eris.mo_coeff)
     eris.oooo = feri.create_dataset('oooo', (nocc,nocc,nocc,nocc), dtype.char)
     eris.ooov = feri.create_dataset('ooov', (nocc,nocc,nocc,nvir), dtype.char)
