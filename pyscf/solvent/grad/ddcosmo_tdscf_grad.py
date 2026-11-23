@@ -1071,29 +1071,26 @@ def _grad_ne(pcmobj, dm, r_vdw, ui, ylm_1sph, cached_pol, L):
     Xvec1 = numpy.linalg.solve(L.reshape(natm*nlm,-1), phi1.reshape(-1,natm*nlm).T)
     Xvec1 = Xvec1.T.reshape(natm,3,natm,nlm)
 
+    dms_sym = dms + dms.swapaxes(1, 2)
     for ia, (coords, weight, weight1) in enumerate(rks_grad.grids_response_cc(grids)):
         ao = mol.eval_gto('GTOval_sph_deriv1', coords)
 
         fak_pol, leak_idx = cached_pol[mol.atom_symbol(ia)]
         fac_pol = ddcosmo._vstack_factor_fak_pol(fak_pol, lmax)
-        scaled_weights = numpy.einsum('azm,mn->azn', Xvec1[:,:,ia], fac_pol)
-        scaled_weights *= weight
-        aow = numpy.einsum('gi,azg->azgi', ao[0], scaled_weights)
-        de -= numpy.einsum('nij,gi,azgj->naz', dms, ao[0], aow)
+        dm_ao = lib.einsum('nij,gj->ngi', dms_sym, ao[0])
+        rho = 0.5 * numpy.einsum('ngi,gi->ng', dm_ao, ao[0])
 
-        aow0 = numpy.einsum('gi,g->gi', ao[0], weight)
-        aow1 = numpy.einsum('gi,zxg->zxgi', ao[0], weight1)
-
-        den0 = numpy.einsum('nij,gi,zxgj->nzxg', dms, ao[0], aow1)
-        de -= numpy.einsum('m,mg,nzxg->nzx', Xvec0[ia], fac_pol, den0)
+        rho_fac = numpy.einsum('ng,mg->nm', rho * weight, fac_pol)
+        de -= numpy.einsum('nm,azm->naz', rho_fac, Xvec1[:,:,ia])
 
         eta_nj = numpy.einsum('m,mg->g', Xvec0[ia], fac_pol)
-        dm_ao  = lib.einsum('nij,gj->ngi', dms, aow0)
-        dm_ao += lib.einsum('nji,gj->ngi', dms, aow0)
+        de -= numpy.einsum('ng,zxg->nzx', rho * eta_nj, weight1)
+
+        dm_ao *= (eta_nj * weight)[:, None]
+        ao_dm = numpy.einsum('ngi,xgi->nxi', dm_ao, ao[1:])
         for ja in range(natm):
             shl0, shl1, p0, p1 = aoslices[ja]
-            den1 = numpy.einsum('ngi,xgi->nxg', dm_ao[:,:,p0:p1], ao[1:,:,p0:p1])
-            detmp = numpy.einsum('g,nxg->nx', eta_nj, den1)
+            detmp = ao_dm[:,:,p0:p1].sum(axis=2)
             de[:,ja] += detmp
             de[:,ia] -= detmp
 
@@ -1232,42 +1229,41 @@ def _grad_ee(pcmobj, dm1, dm2, r_vdw, ui, ylm_1sph, cached_pol, L):
     Xvec1 = numpy.linalg.solve(L.reshape(natm*nlm,-1), phi1_dm1.reshape(-1,natm*nlm).T)
     Xvec1 = Xvec1.T.reshape(n_dm,natm,3,natm,nlm)
 
+    dm1s_sym = dm1s + dm1s.swapaxes(1, 2)
+    dm2s_sym = dm2s + dm2s.swapaxes(1, 2)
     psi1_dm1 = numpy.zeros((n_dm,natm,3,natm,nlm))
     for ia, (coords, weight, weight1) in enumerate(rks_grad.grids_response_cc(grids)):
         ao = mol.eval_gto('GTOval_sph_deriv1', coords)
 
         fak_pol, leak_idx = cached_pol[mol.atom_symbol(ia)]
         fac_pol = ddcosmo._vstack_factor_fak_pol(fak_pol, lmax)
-        scaled_weights = numpy.einsum('nazm,mg->nazg', Xvec1[:,:,:,ia], fac_pol)
-        scaled_weights *= weight
-        aow = numpy.einsum('gi,nazg->nazgi', ao[0], scaled_weights)
-        de -= numpy.einsum('nij,gi,nazgj->naz', dm2s, ao[0], aow)
 
-        aow0 = numpy.einsum('gi,g->gi', ao[0], weight)
-        aow1 = numpy.einsum('gi,zxg->zxgi', ao[0], weight1)
+        dm1_ao = lib.einsum('nij,gj->ngi', dm1s_sym, ao[0])
+        rho1 = 0.5 * numpy.einsum('ngi,gi->ng', dm1_ao, ao[0])
+        rho1_w1 = numpy.einsum('ng,zxg->nzxg', rho1, weight1)
+        psi1_dm1[:,:,:,ia] -= lib.einsum('mg,nzxg->nzxm', fac_pol, rho1_w1)
 
-        den0 = numpy.einsum('nij,gi,zxgj->nzxg', dm1s, ao[0], aow1)
-        psi1_dm1[:,:,:,ia] -= numpy.einsum('mg,nzxg->nzxm', fac_pol, den0)
-
-        dm_ao  = lib.einsum('nij,gj->ngi', dm1s, aow0)
-        dm_ao += lib.einsum('nji,gj->ngi', dm1s, aow0)
+        fac_w = fac_pol * weight
         for ja in range(natm):
             shl0, shl1, p0, p1 = aoslices[ja]
-            den1 = numpy.einsum('ngi,xgi->nxg', dm_ao[:,:,p0:p1], ao[1:,:,p0:p1])
-            psitmp = numpy.einsum('mg,nxg->nxm', fac_pol, den1)
+            den1 = numpy.einsum('ngi,xgi->nxg', dm1_ao[:,:,p0:p1], ao[1:,:,p0:p1])
+            psitmp = numpy.einsum('mg,nxg->nxm', fac_w, den1)
             psi1_dm1[:,ja,:,ia] += psitmp
             psi1_dm1[:,ia,:,ia] -= psitmp
 
-        eta_nj = numpy.einsum('nm,mg->ng', Xvec0[:,ia], fac_pol)
-        den0 = numpy.einsum('nij,gi,zxgj->nzxg', dm2s, ao[0], aow1)
-        de -= numpy.einsum('ng,nzxg->nzx', eta_nj, den0)
+        dm2_ao = lib.einsum('nij,gj->ngi', dm2s_sym, ao[0])
+        rho2 = 0.5 * numpy.einsum('ngi,gi->ng', dm2_ao, ao[0])
+        rho2_fac = numpy.einsum('ng,mg->nm', rho2 * weight, fac_pol)
+        de -= numpy.einsum('nm,nazm->naz', rho2_fac, Xvec1[:,:,:,ia])
 
-        dm_ao  = lib.einsum('nij,gj->ngi', dm2s, aow0)
-        dm_ao += lib.einsum('nji,gj->ngi', dm2s, aow0)
+        eta_nj = numpy.einsum('nm,mg->ng', Xvec0[:,ia], fac_pol)
+        de -= numpy.einsum('ng,zxg->nzx', rho2 * eta_nj, weight1)
+
+        dm2_ao *= (eta_nj * weight)[:, :, None]
+        ao_dm2 = numpy.einsum('ngi,xgi->nxi', dm2_ao, ao[1:])
         for ja in range(natm):
             shl0, shl1, p0, p1 = aoslices[ja]
-            den1 = lib.einsum('ngi,xgi->nxg', dm_ao[:,:,p0:p1], ao[1:,:,p0:p1])
-            detmp = numpy.einsum('ng,nxg->nx', eta_nj, den1)
+            detmp = ao_dm2[:,:,p0:p1].sum(axis=2)
             de[:,ja] += detmp
             de[:,ia] -= detmp
 
