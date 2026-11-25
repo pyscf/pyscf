@@ -164,7 +164,7 @@ void NPdsyrk(const char trans, const int n, const int k,
         a += offseta;
         c += offsetc;
 
-        if ((k/n) > 3) { // parallelize k
+        if ((size_t)k > (size_t)n * 3) { // parallelize k
                 if (beta == 0) {
                         for (i = 0; i < n; i++) {
                         for (j = 0; j <= i; j++) {
