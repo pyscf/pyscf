@@ -389,7 +389,8 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
                 tmp = ni._dot_ao_dm_sparse(
                     gv[i].T, other_dm[i], nbins, mask3, pair_mask_ones, ao_loc
                 ).T
-                tmp = ni._scale_ao_sparse(tmp.T, 0.5 * weights, mask3, ao_loc).T
+                tmp = ni._scale_ao_sparse(tmp.T, 0.5 * weights, mask3, ao_loc,
+                                          out=numpy.zeros_like(tmp.T)).T
             dvk1[:] -= lib.einsum('xgu,ug->xu', dao, tmp)
             if include_grid_response:
                 if no_mask2:
@@ -399,7 +400,8 @@ def get_k_grad_only(sgx, dm, hermi=1, direct_scf_tol=1e-13):
                     all_dxed[:, i0:i1] -= lib.einsum('ug,xug->xg', wfg, dgv[i]) # INTEGRAL RESPONSE
                     all_dxed[:, i0:i1] -= lib.einsum("ug,xgu->xg", tmp, dao)
                 else:
-                    wfg = ni._scale_ao_sparse(fg[i].T, 0.5 * weights, mask3, ao_loc)
+                    wfg = ni._scale_ao_sparse(fg[i].T, 0.5 * weights, mask3, ao_loc,
+                                              out=numpy.zeros_like(fg[i].T))
                     all_xed[i0:i1] += ni._contract_rho_sparse(fg[i].T, gv[i].T, mask3, ao_loc)
                     for x in range(3):
                         dvk1[x] -= lib.einsum('ug,ug->u', dgv[i, x], wfg.T)
