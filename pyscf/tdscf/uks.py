@@ -89,7 +89,8 @@ class CasidaTDDFT(TDDFT, TDA):
         ed_ia = e_ia.ravel() * d_ia
         hdiag = e_ia.ravel() ** 2
 
-        vresp = self.gen_response(mo_coeff, mo_occ, hermi=1)
+        # Freeze excitations, not the ground-state density of the XC kernel.
+        vresp = self.gen_response(mf.mo_coeff, mf.mo_occ, hermi=1)
 
         def vind(zs):
             nz = len(zs)
