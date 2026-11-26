@@ -420,6 +420,43 @@ Eu F
         self.assertEqual(mol.ao_labels()[40], '0 U 5f-3  ')
         self.assertAlmostEqual(lib.fp(mf.get_hcore()), -55.38627201912257)
 
+    def test_displaced_tight_s(self):
+        g, r = 0.15, 4.0
+        for exponent in (14.0, 15.0, 30.0):
+            with self.subTest(exponent=exponent):
+                mol = gto.M(
+                    atom=[('S', (0., 0., 0.)), ('H', (0., 0., r))],
+                    unit='Bohr',
+                    basis={'S': [[0, [1., 1.]]], 'H': [[0, [exponent, 1.]]]},
+                    ecp={'S': [10, [[-1, [[], [], [[g, 1.]]]]]]},
+                    spin=1,
+                    verbose=0,
+                )
+                p = 2 * exponent
+                exact = (p / (p + g))**1.5 * numpy.exp(-p * g * r**2 / (p + g))
+                self.assertAlmostEqual(mol.intor('ECPscalar')[-1, -1], exact, 11)
+
+    def test_two_displaced_s_centers(self):
+        a, b, g = 28., 35., 0.15
+        ra = numpy.array([0., .03, 4.])
+        rb = numpy.array([.3, .1, 4.05])
+        mol = gto.M(
+            atom=[('S', (0., 0., 0.)), ('H1', ra), ('H2', rb)],
+            unit='Bohr',
+            basis={'S': [[0, [1., 1.]]], 'H1': [[0, [a, 1.]]], 'H2': [[0, [b, 1.]]]},
+            ecp={'S': [10, [[-1, [[], [], [[g, -1.]]]]]]},
+            verbose=0,
+        )
+        p = a + b
+        center = (a * ra + b * rb) / p
+        exact = -(4 * a * b)**.75 / (p + g)**1.5 * numpy.exp(
+            -a * b / p * numpy.dot(ra - rb, ra - rb) - p * g / (p + g) * numpy.dot(center, center)
+        )
+        for name in ('ECPscalar_sph', 'ECPscalar_cart'):
+            with self.subTest(integral=name):
+                value = mol.intor_by_shell(name, (1, 2))[0, 0]
+                self.assertAlmostEqual(value, exact, 11)
+
     def test_large_exponent_ecp_closed_form(self):
         # Regression test for the adaptive Gauss-Chebyshev radial quadrature
         # in nr_ecp.c.  At large combined exponents the integrand is sharply
