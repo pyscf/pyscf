@@ -29,7 +29,6 @@ from pyscf.lib import logger
 from pyscf.scf import uhf as mol_uhf
 from pyscf.pbc.scf import hf as pbchf
 from pyscf.pbc.scf import addons
-from pyscf.pbc.scf import chkfile
 from pyscf import __config__
 
 
@@ -40,47 +39,15 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpt=None):
     Returns:
         Density matrix, (nao,nao) ndarray
     '''
-    from pyscf import gto
-    chk_cell, scf_rec = chkfile.load_scf(chkfile_name)
-    if project is None:
-        project = not gto.same_basis_set(chk_cell, cell)
-
-    mo = scf_rec['mo_coeff']
-    mo_occ = scf_rec['mo_occ']
-    if kpt is None:
-        kpt = np.zeros(3)
-    if 'kpt' in scf_rec:
-        chk_kpt = scf_rec['kpt']
-    elif 'kpts' in scf_rec:
-        kpts = scf_rec['kpts'] # the closest kpt from KRHF results
-        where = np.argmin(lib.norm(kpts-kpt, axis=1))
-        chk_kpt = kpts[where]
-        if getattr(mo[0], 'ndim', None) == 2:  # KRHF
-            mo = mo[where]
-            mo_occ = mo_occ[where]
-        else:  # KUHF
-            mo = [mo[0][where], mo[1][where]]
-            mo_occ = [mo_occ[0][where], mo_occ[1][where]]
-    else:  # from molecular code
-        chk_kpt = np.zeros(3)
-
-    if project:
-        s = cell.pbc_intor('int1e_ovlp', kpt=kpt)
-    def fproj(mo):
-        if project:
-            mo = addons.project_mo_nr2nr(chk_cell, mo, cell, chk_kpt-kpt)
-            norm = np.einsum('pi,pi->i', mo.conj(), s.dot(mo))
-            mo /= np.sqrt(norm)
-        return mo
+    mo, mo_occ, kpt = pbchf._load_chkfile_orbitals(cell, chkfile_name, project, kpt)
 
     if getattr(mo, 'ndim', None) == 2:
-        mo = fproj(mo)
         # Preserve fractional weights without a negative beta occupation.
         mo_occa = np.minimum(mo_occ, 1.)
         mo_occb = mo_occ - mo_occa
         dm = mol_uhf.make_rdm1([mo,mo], [mo_occa,mo_occb])
     else:  # UHF
-        dm = mol_uhf.make_rdm1([fproj(mo[0]),fproj(mo[1])], mo_occ)
+        dm = mol_uhf.make_rdm1(mo, mo_occ)
 
     # Real DM for gamma point
     if kpt is None or np.allclose(kpt, 0):
