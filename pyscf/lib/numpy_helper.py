@@ -907,6 +907,13 @@ def ddot(a, b, alpha=1, c=None, beta=0):
     else:
         assert (c.shape == (m,n))
 
+    if (m == n and beta == 0 and trans_a != trans_b and k > m * 3
+            and a.ctypes.data == b.ctypes.data
+            and a.shape == b.shape and a.strides == b.strides
+            and a.flags.c_contiguous and c.flags.c_contiguous
+            and not numpy.shares_memory(a, c)):
+        return _dsyrk(trans_b, n, k, b, c, alpha, beta)
+
     return _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha, beta)
 
 def zdot(a, b, alpha=1, c=None, beta=0):
@@ -1050,6 +1057,26 @@ def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
                        ctypes.c_int(offsetb), ctypes.c_int(offseta),
                        ctypes.c_int(offsetc),
                        b.ctypes.data_as(ctypes.c_void_p),
+                       a.ctypes.data_as(ctypes.c_void_p),
+                       c.ctypes.data_as(ctypes.c_void_p),
+                       ctypes.c_double(alpha), ctypes.c_double(beta))
+    return c
+
+def _dsyrk(trans, n, k, a, c, alpha=1, beta=0, offseta=0, offsetc=0):
+    if a.size == 0:
+        if beta == 0:
+            c[:] = 0
+        else:
+            c[:] *= beta
+        return c
+
+    assert (a.flags.c_contiguous)
+    assert (c.flags.c_contiguous)
+
+    _np_helper.NPdsyrk(ctypes.c_char(trans.encode('ascii')),
+                       ctypes.c_int(n), ctypes.c_int(k),
+                       ctypes.c_int(a.shape[1]), ctypes.c_int(c.shape[1]),
+                       ctypes.c_int(offseta), ctypes.c_int(offsetc),
                        a.ctypes.data_as(ctypes.c_void_p),
                        c.ctypes.data_as(ctypes.c_void_p),
                        ctypes.c_double(alpha), ctypes.c_double(beta))
