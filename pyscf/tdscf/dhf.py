@@ -163,7 +163,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                                      with_s=True):
                 if ni.collinear[0] == 'm':
                     rho = ni.eval_rho(mol, ao, dm0, mask, xctype, hermi=1, with_lapl=False)
-                    eval_xc = ni.mcfun_eval_xc_adapter(mf.xc)
+                    eval_xc = ni.mcfun_eval_xc_adapter(mf.xc, max_memory)
                     fxc = eval_xc(mf.xc, rho, deriv=2, xctype=xctype)[2]
                     wfxc = weight * fxc.reshape(4,4,-1)
                     moLoa, moLva, moLob, moLvb, moSoa, moSva, moSob, moSvb = get_mo_value(ao)
@@ -218,7 +218,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                                      with_s=True):
                 if ni.collinear[0] == 'm':
                     rho = ni.eval_rho(mol, ao, dm0, mask, xctype, hermi=1, with_lapl=False)
-                    eval_xc = ni.mcfun_eval_xc_adapter(mf.xc)
+                    eval_xc = ni.mcfun_eval_xc_adapter(mf.xc, max_memory)
                     fxc = eval_xc(mf.xc, rho, deriv=2, xctype=xctype)[2]
                     wfxc = weight * fxc
                     moLoa, moLva, moLob, moLvb, moSoa, moSva, moSob, moSvb = get_mo_value(ao)
@@ -283,7 +283,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                                      with_s=True):
                 if ni.collinear[0] == 'm':
                     rho = ni.eval_rho(mol, ao, dm0, mask, xctype, hermi=1, with_lapl=False)
-                    eval_xc = ni.mcfun_eval_xc_adapter(mf.xc)
+                    eval_xc = ni.mcfun_eval_xc_adapter(mf.xc, max_memory)
                     fxc = eval_xc(mf.xc, rho, deriv=2, xctype=xctype)[2]
                     wfxc = weight * fxc
                     moLoa, moLva, moLob, moLvb, moSoa, moSva, moSob, moSvb = get_mo_value(ao)

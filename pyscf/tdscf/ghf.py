@@ -217,7 +217,7 @@ def get_ab(mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
                     in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
                 if ni.collinear[0] == 'm':
                     rho = ni.eval_rho(mol, ao, dm0, mask, xctype, hermi=1, with_lapl=False)
-                    eval_xc = ni.mcfun_eval_xc_adapter(mf.xc)
+                    eval_xc = ni.mcfun_eval_xc_adapter(mf.xc, max_memory)
                     fxc = eval_xc(mf.xc, rho, deriv=2, xctype=xctype)[2]
                     wfxc = weight * fxc.reshape(4,4,-1)
                     wr, wmx, wmy, wmz = weight * fxc.reshape(4,4,-1)
@@ -256,7 +256,7 @@ def get_ab(mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
                     in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
                 if ni.collinear[0] == 'm':
                     rho = ni.eval_rho(mol, ao, dm0, mask, xctype, hermi=1, with_lapl=False)
-                    eval_xc = ni.mcfun_eval_xc_adapter(mf.xc)
+                    eval_xc = ni.mcfun_eval_xc_adapter(mf.xc, max_memory)
                     fxc = eval_xc(mf.xc, rho, deriv=2, xctype=xctype)[2]
                     wfxc = weight * fxc
                     wr, wmx, wmy, wmz = weight * fxc
@@ -307,7 +307,7 @@ def get_ab(mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
                     in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
                 if ni.collinear[0] == 'm':
                     rho = ni.eval_rho(mol, ao, dm0, mask, xctype, hermi=1, with_lapl=False)
-                    eval_xc = ni.mcfun_eval_xc_adapter(mf.xc)
+                    eval_xc = ni.mcfun_eval_xc_adapter(mf.xc, max_memory)
                     fxc = eval_xc(mf.xc, rho, deriv=2, xctype=xctype)[2]
                     wfxc = weight * fxc
                     wr, wmx, wmy, wmz = weight * fxc

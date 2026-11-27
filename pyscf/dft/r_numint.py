@@ -464,7 +464,7 @@ def r_vxc(ni, mol, grids, xc_code, dms, spin=0, relativity=1, hermi=1,
         fmat, ao_deriv = f_eval_mat[(xctype, ni.collinear[0])]
 
         if ni.collinear[0] == 'm':  # mcol
-            eval_xc = ni.mcfun_eval_xc_adapter(xc_code)
+            eval_xc = ni.mcfun_eval_xc_adapter(xc_code, max_memory)
         else:
             eval_xc = ni.eval_xc_eff
 
@@ -652,7 +652,7 @@ def cache_xc_kernel1(ni, mol, grids, xc_code, dm, spin=1, max_memory=2000):
     rho = numpy.concatenate(rho,axis=-1)
 
     if ni.collinear[0] == 'm':  # mcol
-        eval_xc = ni.mcfun_eval_xc_adapter(xc_code)
+        eval_xc = ni.mcfun_eval_xc_adapter(xc_code, max_memory)
     else:
         eval_xc = ni.eval_xc_eff
     vxc, fxc = eval_xc(xc_code, rho, deriv=2, xctype=xctype)[1:3]

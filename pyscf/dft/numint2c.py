@@ -122,7 +122,7 @@ def _gks_mcol_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
         fmat, ao_deriv = f_eval_mat[(xctype, ni.collinear[0])]
 
         if ni.collinear[0] == 'm':  # mcol
-            eval_xc = ni.mcfun_eval_xc_adapter(xc_code)
+            eval_xc = ni.mcfun_eval_xc_adapter(xc_code, max_memory)
         else:
             eval_xc = ni.eval_xc_eff
 
@@ -296,7 +296,7 @@ def __mcfun_fn_eval_xc(ni, xc_code, xctype, rho, deriv):
             evfk[order] = xc_deriv.ud2ts(evfk[order])
     return evfk
 
-def mcfun_eval_xc_adapter(ni, xc_code):
+def mcfun_eval_xc_adapter(ni, xc_code, max_memory=2000):
     '''Wrapper to generate the eval_xc function required by mcfun'''
     try:
         import mcfun
@@ -304,14 +304,24 @@ def mcfun_eval_xc_adapter(ni, xc_code):
         raise ImportError('This feature requires mcfun library.\n'
                           'Try install mcfun with `pip install mcfun`')
 
+    version =  mcfun.__version__.split('.')[:2]
     xctype = ni._xc_type(xc_code)
     fn_eval_xc = functools.partial(__mcfun_fn_eval_xc, ni, xc_code, xctype)
     nproc = lib.num_threads()
+
     def eval_xc_eff(xc_code, rho, deriv=1, omega=None, xctype=None,
                     verbose=None, spin=None):
-        return mcfun.eval_xc_eff(
-            fn_eval_xc, rho, deriv, spin_samples=ni.spin_samples,
-            workers=nproc)
+        if (int(version[0]), int(version[1])) >= (0, 3):
+            nvar = 5 # meta-GGA
+            bytes_per_grid = 3 * 8 * (2*nvar)**(deriv+1) * ni.spin_samples
+            block_size = int(max_memory*1e5 / (nproc*bytes_per_grid)) * 8
+            assert block_size > 0
+            return mcfun.eval_xc_eff(
+                fn_eval_xc, rho, deriv, spin_samples=ni.spin_samples,
+                workers=nproc, block_size=block_size)
+        else:
+            return mcfun.eval_xc_eff(
+                fn_eval_xc, rho, deriv, spin_samples=ni.spin_samples, workers=nproc)
     return eval_xc_eff
 
 def _mcol_lda_vxc_mat(mol, ao, weight, rho, vxc, mask, shls_slice, ao_loc, hermi):
@@ -566,7 +576,7 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
             rho = np.concatenate(rho,axis=-1)
             assert rho.dtype == np.double
             if self.collinear[0] == 'm':  # mcol
-                eval_xc = self.mcfun_eval_xc_adapter(xc_code)
+                eval_xc = self.mcfun_eval_xc_adapter(xc_code, max_memory)
             else:
                 eval_xc = self.eval_xc_eff
             vxc, fxc = eval_xc(xc_code, rho, deriv=2, xctype=xctype)[1:3]
@@ -611,7 +621,7 @@ class NumInt2C(lib.StreamObject, numint.LibXCMixin):
             rho = np.concatenate(rho,axis=-1)
             assert rho.dtype == np.double
             if self.collinear[0] == 'm':  # mcol
-                eval_xc = self.mcfun_eval_xc_adapter(xc_code)
+                eval_xc = self.mcfun_eval_xc_adapter(xc_code, max_memory)
             else:
                 eval_xc = self.eval_xc_eff
             vxc, fxc = eval_xc(xc_code, rho, deriv=2, xctype=xctype)[1:3]
