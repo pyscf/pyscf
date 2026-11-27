@@ -105,3 +105,7 @@ void NPdgemm(const char trans_a, const char trans_b,
              const int offseta, const int offsetb, const int offsetc,
              double *a, double *b, double *c,
              const double alpha, const double beta);
+
+void NPcontract_df_vvvv(int nocc, int nvir, int naux, int nthreads,
+                        int transpose_right, const double *r_by_c,
+                        const double *lvv, double *work, double *partials);
