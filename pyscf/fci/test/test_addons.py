@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import unittest
+from itertools import combinations
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -50,6 +51,41 @@ def tearDownModule():
     del mol, m, h1e, g2e, ci0
 
 class KnownValues(unittest.TestCase):
+    def test_des_large_orbital_space(self):
+        # Embed a four-orbital CI vector in a larger space, including orbitals
+        # above bit 63. The existing small-space C path supplies the reference.
+        rng = numpy.random.default_rng(3512)
+        for norb in (63, 64, 65, 69):
+            active = (0, 1, norb-2, norb-1)
+            addresses = {}
+            for n in (0, 1, 2):
+                strings = sorted(sum(1 << p for p in occ)
+                                 for occ in combinations(range(norb), n))
+                lookup = {s: i for i, s in enumerate(strings)}
+                small = sorted(sum(1 << p for p in occ)
+                               for occ in combinations(range(4), n))
+                addresses[n] = [lookup[sum(1 << active[p] for p in range(4)
+                                           if s & (1 << p))] for s in small]
+            for nelec in ((2, 1), (1, 2)):
+                na, nb = nelec
+                small_ci = rng.random((len(addresses[na]), len(addresses[nb])))
+                ci = numpy.zeros((fci.cistring.num_strings(norb, na),
+                                  fci.cistring.num_strings(norb, nb)))
+                ci[numpy.ix_(addresses[na], addresses[nb])] = small_ci
+                for spin, remove in enumerate((fci.addons.des_a, fci.addons.des_b)):
+                    out_na, out_nb = na-(spin == 0), nb-(spin == 1)
+                    for p, orbital in enumerate(active):
+                        ref = remove(small_ci, 4, nelec, p)
+                        expected = numpy.zeros((fci.cistring.num_strings(norb, out_na),
+                                                fci.cistring.num_strings(norb, out_nb)))
+                        expected[numpy.ix_(addresses[out_na], addresses[out_nb])] = ref
+                        actual = remove(ci.ravel(), norb, nelec, orbital)
+                        numpy.testing.assert_array_equal(
+                            actual, expected,
+                            err_msg=f'norb={norb}, nelec={nelec}, spin={spin}, orbital={orbital}')
+                    self.assertFalse(remove(ci, norb, nelec, 2).any(),
+                                     msg=f'norb={norb}, nelec={nelec}, spin={spin}, orbital=2')
+
     def test_large_ci(self):
         res = fci.addons.large_ci(ci0, norb, nelec, tol=.1)
         refstr =[('0b111'  , '0b111'  ),

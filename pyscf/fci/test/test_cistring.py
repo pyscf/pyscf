@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import unittest
+from itertools import combinations
 import numpy
 from pyscf.fci import cistring
 
@@ -97,6 +98,41 @@ def str2addr(norb, nelec, string):
         return str2addr(norb-1, nelec, string)
 
 class KnownValues(unittest.TestCase):
+    def test_str2addr_large_orbital_space(self):
+        for norb in (63, 64, 65, 69):
+            strings = sorted(sum(1 << p for p in occ)
+                             for occ in combinations(range(norb), 2))
+            for address, string in enumerate(strings):
+                self.assertEqual(cistring.str2addr(norb, 2, string), address,
+                                 msg=f'norb={norb}, nelec=2, string={bin(string)}')
+            self.assertEqual(cistring.str2addr(norb, 2, bin(strings[-1])),
+                             len(strings)-1, msg=f'norb={norb}, binary string input')
+            self.assertEqual(cistring.str2addr(norb, 0, 0), 0,
+                             msg=f'norb={norb}, vacuum')
+            self.assertEqual(cistring.str2addr(norb, norb, (1 << norb)-1), 0,
+                             msg=f'norb={norb}, full occupation')
+        # The Python path must also preserve addresses larger than a C int.
+        string = ((1 << 35)-1) << 34
+        self.assertEqual(cistring.str2addr(69, 35, string),
+                         cistring.num_strings(69, 35)-1)
+
+    def test_gen_des_str_index_large_orbital_space(self):
+        # Enumerate Python integer bitstrings independently of OIndexList.
+        for norb, nelec in ((63, 2), (64, 1), (65, 2), (69, 3), (64, 64)):
+            strings = sorted(sum(1 << p for p in occ)
+                             for occ in combinations(range(norb), nelec))
+            targets = sorted(sum(1 << p for p in occ)
+                             for occ in combinations(range(norb), nelec-1))
+            addresses = {s: i for i, s in enumerate(targets)}
+            expected = []
+            for string in strings:
+                expected.append([(0, p, addresses[string ^ (1 << p)],
+                                  (-1)**bin(string >> (p+1)).count('1'))
+                                 for p in range(norb) if string & (1 << p)])
+            actual = cistring.gen_des_str_index(range(norb), nelec)
+            numpy.testing.assert_array_equal(actual, expected,
+                                             err_msg=f'norb={norb}, nelec={nelec}')
+
     def test_strings4orblist(self):
         ref = ['0b1010', '0b100010', '0b101000', '0b10000010', '0b10001000',
                '0b10100000']

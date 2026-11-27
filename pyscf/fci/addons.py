@@ -325,6 +325,9 @@ def des_a(ci0, norb, neleca_nelecb, ap_id):
     r'''Construct (N-1)-electron wavefunction by removing an alpha electron from
     the N-electron wavefunction.
 
+    Systems with 64 or more orbitals are supported. The full CI arrays and
+    annihilation link table must fit in memory.
+
     ... math::
 
         |N-1\rangle = \hat{a}_p |N\rangle
@@ -365,6 +368,9 @@ def des_a(ci0, norb, neleca_nelecb, ap_id):
 def des_b(ci0, norb, neleca_nelecb, ap_id):
     r'''Construct (N-1)-electron wavefunction by removing a beta electron from
     N-electron wavefunction.
+
+    Systems with 64 or more orbitals are supported. The full CI arrays and
+    annihilation link table must fit in memory.
 
     Args:
         ci0 : 2D array

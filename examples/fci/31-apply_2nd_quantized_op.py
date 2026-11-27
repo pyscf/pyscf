@@ -77,3 +77,13 @@ print('Error in 2-PDM aaaa %g' % numpy.linalg.norm(ref2aaaa.transpose(0,2,1,3)-d
 print('Error in 2-PDM aabb %g' % numpy.linalg.norm(ref2aabb.transpose(0,2,1,3)-dm2abab))
 print('Error in 2-PDM bbbb %g' % numpy.linalg.norm(ref2bbbb.transpose(0,2,1,3)-dm2bbbb))
 
+# Electron removal also supports 64 or more orbitals for small electron counts.
+# Creation helpers still require fewer than 64 orbitals.
+# Here the alpha electrons occupy orbitals 0 and 68; the beta electron occupies 0.
+norb = 69
+c = numpy.zeros((fci.cistring.num_strings(norb, 2), norb))
+c[fci.cistring.str2addr(norb, 2, (1 << 68) | 1), 0] = 1
+ionized = fci.addons.des_a(c, norb, (2, 1), 68)
+assert ionized[0, 0] == 1 and numpy.linalg.norm(ionized) == 1
+print('69-orbital electron removal norm:', numpy.linalg.norm(ionized))
+
