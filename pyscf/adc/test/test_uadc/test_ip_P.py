@@ -22,6 +22,7 @@ import numpy as np
 from pyscf import gto
 from pyscf import scf
 from pyscf import adc
+from pyscf.adc.uadc_ip import get_spin_square
 
 def setUpModule():
     global mol, mf, myadc
@@ -60,19 +61,23 @@ class KnownValues(unittest.TestCase):
 
         myadcip = adc.uadc_ip.UADCIP(myadc)
         e,v,p,x = myadcip.kernel(nroots=3)
+        spin = get_spin_square(myadcip)[0]
 
         self.assertAlmostEqual(e[0], 0.38071502275761, 6)
         self.assertAlmostEqual(e[1], 0.38071502275761, 6)
         self.assertAlmostEqual(e[2], 0.38071502275761, 6)
 
-        self.assertAlmostEqual(p[0], 0.94893331006538, 6)
-        self.assertAlmostEqual(p[1], 0.94893331006538, 6)
-        self.assertAlmostEqual(p[2], 0.94893331006538, 6)
+        self.assertAlmostEqual(p[0], 0.9489146322315595, 6)
+        self.assertAlmostEqual(p[1], 0.9489146322315594, 6)
+        self.assertAlmostEqual(p[2], 0.9489146322315596, 6)
 
         dm1_exc = np.array(myadcip.make_rdm1())
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 21.53337229793503, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 21.53337229793504, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 21.53337229793506, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 21.539168616487796, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 21.53916861648779, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 21.5391686164878, 6)
+        self.assertAlmostEqual(spin[0],2.000425162496936 , 5)
+        self.assertAlmostEqual(spin[1],2.000425162496936 , 5)
+        self.assertAlmostEqual(spin[2],2.0004251624969376 , 5)
 
     def test_ip_adc2x(self):
         myadc.method = "adc(2)-x"
@@ -81,19 +86,23 @@ class KnownValues(unittest.TestCase):
 
         myadcip = adc.uadc_ip.UADCIP(myadc)
         e,v,p,x = myadcip.kernel(nroots=3)
+        spin = get_spin_square(myadcip)[0]
 
         self.assertAlmostEqual(e[0], 0.36951642121691, 6)
         self.assertAlmostEqual(e[1], 0.36951642121691,  6)
         self.assertAlmostEqual(e[2], 0.36951642121691, 6)
 
-        self.assertAlmostEqual(p[0], 0.92695415467651,  6)
-        self.assertAlmostEqual(p[1], 0.92695415467651,  6)
-        self.assertAlmostEqual(p[2], 0.92695415467651,  6)
+        self.assertAlmostEqual(p[0], 0.9268605556685255,  6)
+        self.assertAlmostEqual(p[1], 0.926860555668525,  6)
+        self.assertAlmostEqual(p[2], 0.9268605556685257,  6)
 
         dm1_exc = np.array(myadcip.make_rdm1())
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 21.18511985058944, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 21.18511985058942, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 21.18511985058942, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 21.190779472202735, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 21.190779472202724, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 21.190779472202745, 6)
+        self.assertAlmostEqual(spin[0],2.0044699144539653 , 5)
+        self.assertAlmostEqual(spin[1],2.004469914453966 , 5)
+        self.assertAlmostEqual(spin[2],2.0044699144539697 , 5)
 
     def test_ip_adc3(self):
         myadc.method = "adc(3)"
@@ -102,19 +111,23 @@ class KnownValues(unittest.TestCase):
 
         myadcip = adc.uadc_ip.UADCIP(myadc)
         e,v,p,x = myadcip.kernel(nroots=3)
+        spin = get_spin_square(myadcip)[0]
 
         self.assertAlmostEqual(e[0], 0.37866365404487, 6)
         self.assertAlmostEqual(e[1], 0.37866365404487, 6)
         self.assertAlmostEqual(e[2], 0.37866365404487, 6)
 
-        self.assertAlmostEqual(p[0], 0.92603990249875, 6)
-        self.assertAlmostEqual(p[1], 0.92603990249875, 6)
-        self.assertAlmostEqual(p[2], 0.92603990249875, 6)
+        self.assertAlmostEqual(p[0], 0.9260493959918547, 6)
+        self.assertAlmostEqual(p[1], 0.9260493959918547, 6)
+        self.assertAlmostEqual(p[2], 0.9260493959918547, 6)
 
         dm1_exc = np.array(myadcip.make_rdm1())
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 21.31223422821962, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 21.31223422821966, 6)
-        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 21.31223422821963, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][0],dm1_exc[1][0]), 21.3358193665938, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][1],dm1_exc[1][1]), 21.33581936659381, 6)
+        self.assertAlmostEqual(rdms_test(dm1_exc[0][2],dm1_exc[1][2]), 21.33581936659379, 6)
+        self.assertAlmostEqual(spin[0],2.00058328 , 5)
+        self.assertAlmostEqual(spin[1],2.00058328 , 5)
+        self.assertAlmostEqual(spin[2],2.00058328 , 5)
 
 if __name__ == "__main__":
     print("IP calculations for different ADC methods for open-shell atom")

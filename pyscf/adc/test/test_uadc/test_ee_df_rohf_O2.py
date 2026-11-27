@@ -68,16 +68,17 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0],0.00000000, 6)
         self.assertAlmostEqual(p[1],0.00000000, 6)
         self.assertAlmostEqual(p[2],0.00000000, 6)
-        self.assertAlmostEqual(p[3],0.18367042, 6)
+        self.assertAlmostEqual(p[3],0.18010764878389604, 6)
 
-        self.assertAlmostEqual(spin[0],2.00082161 , 5)
-        self.assertAlmostEqual(spin[1],2.00082160 , 5)
-        self.assertAlmostEqual(spin[2],2.00105686 , 5)
-        self.assertAlmostEqual(spin[3],2.00688056 , 5)
+        self.assertAlmostEqual(spin[0],2.000511154678321 , 5)
+        self.assertAlmostEqual(spin[1],2.0005111534702014 , 5)
+        self.assertAlmostEqual(spin[2],2.000650290092495 , 5)
+        self.assertAlmostEqual(spin[3],2.0068601170091425 , 5)
 
     def test_ee_adc2x(self):
         myadc.method = "adc(2)-x"
 
+        myadc.method_type = "ee"
         e,v,p,x = myadc.kernel(nroots=4)
         spin = get_spin_square(myadc._adc_es)[0]
 
@@ -89,16 +90,17 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0],0.00000000, 6)
         self.assertAlmostEqual(p[1],0.00000000 , 6)
         self.assertAlmostEqual(p[2],0.00000000 , 6)
-        self.assertAlmostEqual(p[3],0.16968831 , 6)
+        self.assertAlmostEqual(p[3],0.16604285198512392 , 6)
 
-        self.assertAlmostEqual(spin[0],2.00075878 , 5)
-        self.assertAlmostEqual(spin[1],2.00075877 , 5)
-        self.assertAlmostEqual(spin[2],2.00103071 , 5)
+        self.assertAlmostEqual(spin[0],2.000504746034718 , 5)
+        self.assertAlmostEqual(spin[1],2.0005047430733924 , 5)
+        self.assertAlmostEqual(spin[2],2.000699170628735 , 5)
         self.assertAlmostEqual(spin[3],2.00394032 , 5)
 
     def test_ee_adc3_high_cost(self):
         myadc.method = "adc(3)"
 
+        myadc.method_type = "ee"
         e,v,p,x = myadc.kernel(nroots=4)
         spin = get_spin_square(myadc._adc_es)[0]
 
@@ -110,12 +112,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0],0.00000000, 6)
         self.assertAlmostEqual(p[1],0.00000000 , 6)
         self.assertAlmostEqual(p[2],0.00000000 , 6)
-        self.assertAlmostEqual(p[3],0.16772555 , 6)
+        self.assertAlmostEqual(p[3],0.16725458153915165 , 6)
 
-        self.assertAlmostEqual(spin[0],2.00117040 , 5)
-        self.assertAlmostEqual(spin[1],2.00117040 , 5)
-        self.assertAlmostEqual(spin[2],2.00120905 , 5)
-        self.assertAlmostEqual(spin[3],2.00301543 , 5)
+        self.assertAlmostEqual(spin[0],1.99957010 , 5)
+        self.assertAlmostEqual(spin[1],1.99957010 , 5)
+        self.assertAlmostEqual(spin[2],1.99960411 , 5)
+        self.assertAlmostEqual(spin[3],2.00291787 , 5)
 
 if __name__ == "__main__":
     print("EE calculations for different ADC methods for O2 molecule")

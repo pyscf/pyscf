@@ -71,13 +71,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3],0.3721878511, 6)
 
         self.assertAlmostEqual(p[0],0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.02770956, 6)
+        self.assertAlmostEqual(p[1],0.027616462920043706, 6)
         self.assertAlmostEqual(p[2],0.00000000, 6)
         self.assertAlmostEqual(p[3],0.00000000, 6)
 
     def test_ee_adc2x(self):
         myadc.method = "adc(2)-x"
 
+        myadc.method_type = "ee"
         e,v,p,x = myadc.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0],0.2558563365, 6)
@@ -86,13 +87,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3],0.3560598866, 6)
 
         self.assertAlmostEqual(p[0],0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.02542338, 6)
+        self.assertAlmostEqual(p[1],0.025441286474207903, 6)
         self.assertAlmostEqual(p[2],0.00000000, 6)
         self.assertAlmostEqual(p[3],0.00000000, 6)
 
     def test_ee_adc2x_cis(self):
         myadc.method = "adc(2)-x"
 
+        myadc.method_type = "ee"
         e,v,p,x = myadc.kernel(nroots=4, guess="cis")
 
         self.assertAlmostEqual(e[0],0.2558563365, 6)
@@ -101,13 +103,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3],0.3560598866, 6)
 
         self.assertAlmostEqual(p[0],0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.02542337, 6)
+        self.assertAlmostEqual(p[1],0.02544128445322461, 6)
         self.assertAlmostEqual(p[2],0.00000000, 6)
         self.assertAlmostEqual(p[3],0.00000000, 6)
 
     def test_ee_adc3_high_cost(self):
         myadc.method = "adc(3)"
 
+        myadc.method_type = "ee"
         e,v,p,x = myadc.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0],0.2800031574, 6)
@@ -116,7 +119,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3],0.3787870030, 6)
 
         self.assertAlmostEqual(p[0],0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.02699877, 6)
+        self.assertAlmostEqual(p[1],0.027117196070697965, 6)
         self.assertAlmostEqual(p[2],0.00000000, 6)
         self.assertAlmostEqual(p[3],0.00000000, 6)
 

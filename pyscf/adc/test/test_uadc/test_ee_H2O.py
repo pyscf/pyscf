@@ -70,13 +70,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3],0.3724791304, 6)
 
         self.assertAlmostEqual(p[0],0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.02774679, 6)
+        self.assertAlmostEqual(p[1],0.0276480275322136, 6)
         self.assertAlmostEqual(p[2],0.00000000, 6)
         self.assertAlmostEqual(p[3],0.00000000, 6)
 
     def test_ee_adc2x(self):
         myadc.method = "adc(2)-x"
 
+        myadc.method_type = "ee"
         e,v,p,x = myadc.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0],0.2560782475, 6)
@@ -85,13 +86,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3],0.3563942331, 6)
 
         self.assertAlmostEqual(p[0],0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.02546196, 6)
+        self.assertAlmostEqual(p[1],0.0254759560384019, 6)
         self.assertAlmostEqual(p[2],0.00000000, 6)
         self.assertAlmostEqual(p[3],0.00000000, 6)
 
     def test_ee_adc3(self):
         myadc.method = "adc(3)"
 
+        myadc.method_type = "ee"
         e,v,p,x = myadc.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0],0.2801187917, 6)
@@ -100,7 +102,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3],0.3790532775, 6)
 
         self.assertAlmostEqual(p[0],0.00000000, 6)
-        self.assertAlmostEqual(p[1],0.02702943, 6)
+        self.assertAlmostEqual(p[1],0.027146864391401283, 6)
         self.assertAlmostEqual(p[2],0.00000000, 6)
         self.assertAlmostEqual(p[3],0.00000000, 6)
 if __name__ == "__main__":

@@ -354,7 +354,7 @@ class RADC2FNO(kadc_rhf.RADC):
 
     def make_fno(self, rdm1_ss, mf, log, thresh=None, pct_occ=None, nvir_act=None):
         """Build the FNO virtual space: diagonalize the virtual 1-RDM, truncate, and semicanonicalize."""
-        nocc = mf.mol.nelectron // 2
+        nocc = self.nocc
         masks = kadc_rhf.mo_splitter(self)
         no_coeff = []
         no_frozen = []
@@ -364,7 +364,11 @@ class RADC2FNO(kadc_rhf.RADC):
 
         T = []
         for kpt in range(self.nkpts):
-            rdm1_ss_comp = rdm1_ss[kpt][np.ix_(padding_convention[kpt], padding_convention[kpt])]
+            if self.frozen is None:
+                idx_k = padding_convention[kpt]
+            else:
+                idx_k = np.where(masks[kpt][1] | masks[kpt][2])[0]
+            rdm1_ss_comp = rdm1_ss[kpt][np.ix_(idx_k, idx_k)]
             n, V_k = np.linalg.eigh(rdm1_ss_comp[nocc:, nocc:])
             idx = np.argsort(n)[::-1]
             n, V_k = n[idx], V_k[:, idx]
@@ -378,27 +382,28 @@ class RADC2FNO(kadc_rhf.RADC):
                 T.append(n > thresh)
 
         # "min": union the per-kpt masks so every k-point keeps the same count
+        n_keep_union = None
         if self.mode.lower() == "min":
-            T_min = np.logical_or.reduce(np.stack(T), axis=0)
-            n_keep = int(np.sum(T_min))
-            if n_keep == 0:
+            n_keep_union = max(int(np.sum(t)) for t in T)
+            if n_keep_union == 0:
                 log.warn("All virtual orbitals were requested to be frozen.\n"
                          "At least one virtual orbital must be retained for ADC calculations.\n"
                          "Keeping one virtual orbital automatically.")
-                n_keep += 1
-                T_min[0] = True
+                n_keep_union = 1
 
         for kpt in range(self.nkpts):
             V_trunc_k = V_trunc[kpt]
-            if self.mode.lower() != "min":
+            if n_keep_union is not None:
+                n_keep = min(n_keep_union, V_trunc_k.shape[1])
+            else:
                 n_keep = int(np.sum(T[kpt]))
                 if n_keep == 0:
                     log.warn("All virtual orbitals frozen at kpt %d; keeping one." % kpt)
                     n_keep += 1
                     T[kpt][0] = True
 
-            moeoccfrz0, moeocc, moevir, moevirfrz0 = [mf.mo_energy[kpt][m] for m in masks[kpt]]
-            orboccfrz0, orbocc, orbvir, orbvirfrz0 = [mf.mo_coeff[kpt][:, m] for m in masks[kpt]]
+            moeoccfrz0, moeocc, moevir, moevirfrz0 = [self.mo_energy[kpt][m] for m in masks[kpt]]
+            orboccfrz0, orbocc, orbvir, orbvirfrz0 = [self.mo_coeff[kpt][:, m] for m in masks[kpt]]
             F_can = np.diag(moevir)
             F_trunc = V_trunc_k.T.conj().dot(F_can).dot(V_trunc_k)
             e_trunc, Z_trunc = np.linalg.eigh(F_trunc[:n_keep, :n_keep])

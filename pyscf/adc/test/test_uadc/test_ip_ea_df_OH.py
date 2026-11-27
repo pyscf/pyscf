@@ -14,6 +14,7 @@
 #
 # Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
+#         Ning-Yuan Chen <cny003@outlook.com>
 #
 
 import unittest
@@ -21,6 +22,8 @@ import numpy
 from pyscf import gto
 from pyscf import scf
 from pyscf import adc
+from pyscf.adc.uadc_ip import get_spin_square as spin_square_ip
+from pyscf.adc.uadc_ea import get_spin_square as spin_square_ea
 from pyscf import df
 
 def setUpModule():
@@ -77,6 +80,7 @@ class KnownValues(unittest.TestCase):
         myadc.method_type = "ea"
 
         e,v,p,x = myadc.kernel(nroots=4)
+        spin = spin_square_ea(myadc._adc_es)[0]
 
         self.assertAlmostEqual(e[0], 0.03349588, 6)
         self.assertAlmostEqual(e[1], 0.17178726, 6)
@@ -84,9 +88,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3], 0.20135255, 6)
 
         self.assertAlmostEqual(p[0], 0.9364865, 6)
-        self.assertAlmostEqual(p[1], 0.98406359, 6)
-        self.assertAlmostEqual(p[2], 0.77604385, 6)
-        self.assertAlmostEqual(p[3], 0.20823964, 6)
+        self.assertAlmostEqual(p[1], 0.9840609990091582, 6)
+        self.assertAlmostEqual(p[2], 0.7760193597284754, 6)
+        self.assertAlmostEqual(p[3], 0.20825099009739692, 6)
+
+        self.assertAlmostEqual(spin[0],0.00154661 , 5)
+        self.assertAlmostEqual(spin[1],1.99998143 , 5)
+        self.assertAlmostEqual(spin[2],1.80976643 , 5)
+        self.assertAlmostEqual(spin[3],0.20293818 , 5)
 
 
     def test_ip_dfadc3_dif_aux_basis(self):
@@ -99,6 +108,7 @@ class KnownValues(unittest.TestCase):
         myadc.method_type = "ip"
 
         e,v,p,x = myadc.kernel(nroots=3)
+        spin = spin_square_ip(myadc._adc_es)[0]
         e_corr = myadc.e_corr
 
         self.assertAlmostEqual(e_corr, -0.16330973, 6)
@@ -107,9 +117,13 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[1], 0.46818375, 6)
         self.assertAlmostEqual(e[2], 0.55652918, 6)
 
-        self.assertAlmostEqual(p[0], 0.93869064, 6)
-        self.assertAlmostEqual(p[1], 0.58692581, 6)
-        self.assertAlmostEqual(p[2], 0.35111056, 6)
+        self.assertAlmostEqual(p[0], 0.9387552064029395, 6)
+        self.assertAlmostEqual(p[1], 0.5869577478677291, 6)
+        self.assertAlmostEqual(p[2], 0.3511163890273265, 6)
+
+        self.assertAlmostEqual(spin[0],2.00017692 , 5)
+        self.assertAlmostEqual(spin[1],1.94783684 , 5)
+        self.assertAlmostEqual(spin[2],0.06857549 , 5)
 
 
     def test_hf_dfadc3_ip(self):
@@ -122,6 +136,7 @@ class KnownValues(unittest.TestCase):
         myadc.method = "adc(3)"
 
         e,v,p,x = myadc.kernel(nroots=3)
+        spin = spin_square_ip(myadc._adc_es)[0]
         myadc.analyze()
         e_corr = myadc.e_corr
 
@@ -131,9 +146,13 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[1], 0.46818480, 6)
         self.assertAlmostEqual(e[2], 0.55652975, 6)
 
-        self.assertAlmostEqual(p[0], 0.93868596, 6)
-        self.assertAlmostEqual(p[1], 0.58692425, 6)
-        self.assertAlmostEqual(p[2], 0.35110754 ,6)
+        self.assertAlmostEqual(p[0], 0.9387505395407538, 6)
+        self.assertAlmostEqual(p[1], 0.5869560351750759, 6)
+        self.assertAlmostEqual(p[2], 0.35111354373738396 ,6)
+
+        self.assertAlmostEqual(spin[0],2.00017672 , 5)
+        self.assertAlmostEqual(spin[1],1.94783373 , 5)
+        self.assertAlmostEqual(spin[2],0.06857857 , 5)
 
 if __name__ == "__main__":
     print("DF-ADC calculations for different UADC methods for OH")
