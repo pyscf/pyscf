@@ -168,6 +168,64 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1, -4.291854736401251, 7)
         self.assertTrue(mf1.mo_coeff.dtype == numpy.double)
 
+    def test_init_guess_by_chkfile_fractional_occupations(self):
+        small = pbcgto.M(atom='He 0 0 0', a=numpy.eye(3)*3.5,
+                        basis='gth-dzv', pseudo='gth-pade', verbose=0)
+        mf = pbchf.RHF(small)
+        overlap = mf.get_ovlp()
+        _, coeff = mf.eig(numpy.diag([-1., 1.]), overlap)
+        occ = numpy.array([1.55, .45])
+        expected = sum(n * numpy.outer(c, c.conj())
+                       for n, c in zip(occ, coeff.T))
+        larger = pbcgto.M(atom='He 0 0 0', a=numpy.eye(3)*3.5,
+                         basis='gth-tzvp', pseudo='gth-pade', verbose=0)
+        target = pbchf.RHF(larger)
+        s_target = larger.pbc_intor('int1e_ovlp', hermi=1)
+        s_cross = pbcgto.intor_cross('int1e_ovlp', larger, small)
+        projected = numpy.linalg.solve(s_target, s_cross @ coeff)
+        projected /= numpy.sqrt(numpy.sum(projected.conj() * (s_target @ projected), axis=0))
+        projected_ref = (projected * occ) @ projected.conj().T
+        with lib.NamedTemporaryFile() as chk:
+            pscf.chkfile.save_cell(small, chk.name)
+            pscf.chkfile.dump(chk.name, 'scf', {'mo_coeff': coeff, 'mo_occ': occ})
+            dm = mf.from_chk(chk.name)
+            dm_projected = target.from_chk(chk.name)
+        self.assertNotEqual(len(dm_projected), len(dm))
+        numpy.testing.assert_allclose(dm_projected, projected_ref, atol=1e-11, rtol=0)
+        self.assertAlmostEqual(numpy.trace(overlap @ dm), 2.)
+        numpy.testing.assert_allclose(dm, expected, atol=1e-11, rtol=0)
+
+    def test_init_guess_by_chkfile_fractional_transfer(self):
+        small = pbcgto.M(atom='He 0 0 0', a=numpy.eye(3)*3.5,
+                        basis='gth-dzv', pseudo='gth-pade', verbose=0)
+        kpts = small.make_kpts([2, 1, 1])
+        mf = pbchf.RHF(small, kpts[1])
+        overlap = mf.get_ovlp()
+        _, coeff = mf.eig(numpy.diag([-1., 1.]).astype(overlap.dtype), overlap)
+        mixed = coeff @ numpy.array([[1., 1j], [1j, 1.]]) / numpy.sqrt(2.)
+        occ_a, occ_b = numpy.array([.9, .1]), numpy.array([.65, .35])
+        expected = ((mixed * occ_a) @ mixed.conj().T
+                    + (coeff * occ_b) @ coeff.conj().T)
+        records = {
+            'KRHF': dict(kpts=kpts, mo_coeff=numpy.array([coeff, mixed]),
+                         mo_occ=numpy.array([[2., 0.], [1.55, .45]])),
+            'KUHF': dict(kpts=kpts, mo_coeff=numpy.array([[coeff, mixed], [mixed, coeff]]),
+                         mo_occ=numpy.array([[[1., 0.], occ_a], [[1., 0.], occ_b]])),
+        }
+        for kind, record in records.items():
+            with self.subTest(kind=kind), lib.NamedTemporaryFile() as chk:
+                pscf.chkfile.save_cell(small, chk.name)
+                pscf.chkfile.dump(chk.name, 'scf', record)
+                dm = mf.from_chk(chk.name)
+                if kind == 'KRHF':
+                    occ = numpy.array([1.55, .45])
+                    ref = (mixed * occ) @ mixed.conj().T
+                else:
+                    ref = expected
+                self.assertGreater(abs(ref.imag).max(), 1e-2)
+                self.assertAlmostEqual(numpy.trace(overlap @ dm).real, 2.)
+                numpy.testing.assert_allclose(dm, ref, atol=1e-11, rtol=0)
+
     def test_uhf_exx_ewald(self):
         mf = pscf.UHF(cell, exxdiv='ewald')
         mf.init_guess = 'hcore'

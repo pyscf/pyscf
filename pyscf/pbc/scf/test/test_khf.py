@@ -93,6 +93,27 @@ class KnownValues(unittest.TestCase):
         esup = mf.scf()/np.prod(nk)
         self.assertAlmostEqual(ekpt, esup, 8)
 
+    def test_init_guess_by_chkfile_fractional_spin_density(self):
+        cell = pbcgto.M(atom='He 0 0 0', a=np.eye(3)*3.5,
+                      basis='gth-dzv', pseudo='gth-pade', verbose=0)
+        kpts = cell.make_kpts([2, 1, 1])
+        mf = pscf.KRHF(cell, kpts)
+        overlap = mf.get_ovlp()
+        _, coeff = mf.eig(np.tile(np.diag([-1., 1.]), (2, 1, 1)).astype(overlap.dtype),
+                          overlap)
+        occ = np.array([[1.55, .45], [1.25, .75]])
+        expected = np.array([
+            sum(n * np.outer(c, c.conj()) for n, c in zip(o, cs.T))
+            for o, cs in zip(occ, coeff)
+        ])
+        with lib.NamedTemporaryFile() as chk:
+            pscf.chkfile.save_cell(cell, chk.name)
+            pscf.chkfile.dump(chk.name, 'scf',
+                              {'kpts': kpts, 'mo_coeff': coeff, 'mo_occ': occ})
+            dm = pscf.KUHF(cell, kpts).from_chk(chk.name)
+        self.assertGreaterEqual(np.linalg.eigvalsh(dm).min(), -1e-12)
+        np.testing.assert_allclose(dm.sum(axis=0), expected, atol=1e-11, rtol=0)
+
     def test_init_guess_by_chkfile(self):
         n = 9
         nk = (1, 1, 1)
