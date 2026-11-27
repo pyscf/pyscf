@@ -555,6 +555,9 @@ class MP2_Scanner(lib.SinglePointScanner):
         mf_scanner(mol)
         self.mo_coeff = mf_scanner.mo_coeff
         self.mo_occ = mf_scanner.mo_occ
+        if getattr(self, 'mo_energy', None) is not None:
+            # DFMP2 caches mo_energy at initialization
+            self.mo_energy = mf_scanner.mo_energy
         self.kernel(**kwargs)
         return self.e_tot
 

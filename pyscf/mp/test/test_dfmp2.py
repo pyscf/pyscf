@@ -235,6 +235,18 @@ class KnownValues(unittest.TestCase):
                 self.assertAlmostEqual(np.trace(dm) if dm.ndim == 2 else
                                        sum(np.trace(x) for x in dm), mol.nelectron, places=10)
 
+    def test_dfmp2_scanner(self):
+        # mo_energy has to be updated at a new geometry
+        mol1 = gto.M(atom='O 0 0 0; H 0 -0.8 0.55; H 0 0.7 0.6', basis='6-31g', verbose=0)
+        mf1 = scf.RHF(mol1).density_fit().run(conv_tol=1e-12)
+        ref = mp.dfmp2.DFMP2(mf1).run().e_tot
+        mol0 = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587', basis='6-31g', verbose=0)
+        mf0 = scf.RHF(mol0).density_fit().run(conv_tol=1e-12)
+        pt_scanner = mp.dfmp2.DFMP2(mf0).as_scanner()
+        pt_scanner(mol0)
+        self.assertAlmostEqual(pt_scanner(mol1), ref, 7)
+
+
 if __name__ == "__main__":
     print("Full Tests for dfmp2")
     unittest.main()
