@@ -662,7 +662,9 @@ class KnownValues(unittest.TestCase):
         ur = rad_part(mol, mol._ecpbas, rs) * ws
         cache = numpy.empty(100000)
         def gen_type1_rad(li):
-            rad_all0 = type1_rad_part(li, k, aij, ur, rs)
+            # The native kernel omits exp(k**2 / (4*aij)); ECPtype1_cart
+            # supplies the matching Gaussian factor in the contraction.
+            rad_all0 = numpy.exp(-k**2 / (4*aij)) * type1_rad_part(li, k, aij, ur, rs)
             rad_all1 = numpy.zeros_like(rad_all0)
             libecp.type1_rad_part(rad_all1.ctypes.data_as(ctypes.c_void_p),
                                   ctypes.c_int(li),
