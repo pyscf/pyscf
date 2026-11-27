@@ -82,6 +82,19 @@ class KnownValues(unittest.TestCase):
         # Translating all atoms together must leave the weights unchanged.
         np.testing.assert_allclose(derivative.sum(axis=1), 0., atol=1e-12)
 
+    def test_finite_difference_with_saturated_distance(self):
+        # Longer separations distinguish the LKO effective distance from r.
+        self.mol = gto.M(atom='He 0 0 0; H 3.5 .2 -.4', unit='Bohr',
+                         basis='sto-3g', spin=1, verbose=0)
+        self.coords = np.array([[.4, .1, .2], [1.1, -.1, .1],
+                                [2.7, .2, -.2], [1.8, .1, -.3],
+                                [2.2, -.3, .1], [3.2, -.1, -.3]])
+        for adjust in (None, radi.treutler_atomic_radii_adjust,
+                       radi.becke_atomic_radii_adjust):
+            with self.subTest(adjust=adjust):
+                self.check_finite_difference(adjust)
+                np.testing.assert_allclose(self.response(adjust).sum(axis=1), 0., atol=1e-12)
+
     def test_finite_difference(self):
         self.check_finite_difference()
 

@@ -54,6 +54,7 @@ def grids_response(grids, lko=False):
     atm_coords = numpy.asarray(mol.atom_coords() , order='C')
     atm_dist = gto.mole.inter_distance(mol, atm_coords)
     if lko:
+        unsaturated_dist = atm_dist
         atm_dist = fcut(atm_dist, RCUT_LKO, MC_LKO)
 
     def _radii_adjust(mol, atomic_radii):
@@ -107,9 +108,16 @@ def grids_response(grids, lko=False):
         for ia in range(mol.natm):
             for ib in range(mol.natm):
                 if ib != ia:
-                    g = 1/atm_dist[ia,ib] * (grid_dist[ia]-grid_dist[ib])
+                    effective_dist = atm_dist[ia,ib]
+                    delta_dist = grid_dist[ia] - grid_dist[ib]
+                    g = 1/effective_dist * delta_dist
                     if lko:
                         cond = numpy.logical_or(g >= 1, g <= -1)
+                        # Differentiate 1/S(r) at the unsaturated distance r,
+                        # then factor out the interatomic displacement.
+                        r = unsaturated_dist[ia,ib]
+                        v = delta_dist * (dfcut(r, RCUT_LKO, MC_LKO) / (r * effective_dist**2))
+                        v[cond] = 0
                         g = numpy.minimum(g, 1.0)
                         g = numpy.maximum(g, -1.0)
                     p0 = gadjust(ia, ib, g)
@@ -128,22 +136,17 @@ def grids_response(grids, lko=False):
 #   How to remove this error?
 # * JCP 98, 5612 (1993); (B8) (B10) miss many terms
                     uab = atm_coords[ia] - atm_coords[ib]
+                    if not lko:
+                        v = delta_dist / effective_dist**3
+
                     if ia == atom_id:  # dA PA: dA~ib, PA~ia
                         ua = atm_coords[ib] - coords
                         d_uab = ua/grid_dist[ib,:,None]/atm_dist[ia,ib]
-                        v = (grid_dist[ia]-grid_dist[ib])/atm_dist[ia,ib]**3
-                        if lko:
-                            v[cond] = 0
-                            v *= dfcut(atm_dist[ia,ib], RCUT_LKO, MC_LKO)
                         d_uab-= v[:,None] * uab
                         dpbecke[ia,ia] += (pbecke[ia]*t_uab).reshape(-1,1) * d_uab
                     else:  # dB PB: dB~ib, PB~ia
                         ua = atm_coords[ia] - coords
                         d_uab = ua/grid_dist[ia,:,None]/atm_dist[ia,ib]
-                        v = (grid_dist[ia]-grid_dist[ib])/atm_dist[ia,ib]**3
-                        if lko:
-                            v[cond] = 0
-                            v *= dfcut(atm_dist[ia,ib], RCUT_LKO, MC_LKO)
                         d_uab-= v[:,None] * uab
                         dpbecke[ia,ia] += (pbecke[ia]*t_uab).reshape(-1,1) * d_uab
 
@@ -157,20 +160,12 @@ def grids_response(grids, lko=False):
                     if ib == atom_id:  # dA PB: dA~ib PB~ia
                         ub = atm_coords[ia] - coords
                         d_uba = ub/grid_dist[ia,:,None]/atm_dist[ia,ib]
-                        v = (grid_dist[ib]-grid_dist[ia])/atm_dist[ia,ib]**3
-                        if lko:
-                            v[cond] = 0
-                            v *= dfcut(atm_dist[ia,ib], RCUT_LKO, MC_LKO)
-                        d_uba-= v[:,None] * uba
+                        d_uba+= v[:,None] * uba
                         dpbecke[ib,ia] += -(pbecke[ia]*t_uab).reshape(-1,1) * d_uba
                     else:  # dB PC: dB~ib, PC~ia and dB PA: dB~ib, PA~ia
                         ub = atm_coords[ib] - coords
                         d_uba = ub/grid_dist[ib,:,None]/atm_dist[ia,ib]
-                        v = (grid_dist[ib]-grid_dist[ia])/atm_dist[ia,ib]**3
-                        if lko:
-                            v[cond] = 0
-                            v *= dfcut(atm_dist[ia,ib], RCUT_LKO, MC_LKO)
-                        d_uba-= v[:,None] * uba
+                        d_uba+= v[:,None] * uba
                         dpbecke[ib,ia] += -(pbecke[ia]*t_uab).reshape(-1,1) * d_uba
         return pbecke, dpbecke
 
