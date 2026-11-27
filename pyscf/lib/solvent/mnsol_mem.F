@@ -77,11 +77,13 @@ c
       LDCOSN = LDCTETA + 3 * NAT * NAT
       LWORK = LDCOSN + 3 * 3 * NAT * NAT
       LDIWORK = LWORK + 2 * NAT + 1
-      LDJWORK = LDIWORK + 3 * NAT
-      LDKWORK = LDJWORK + 3 * NAT
-      LD0WORK = LDKWORK + 3 * NAT
-      LDWORKR = LD0WORK + 3 * NAT
-      LDCAODD = LDWORKR + NAT
+C     Circle intersections can require up to 2*(NAT-2) vertices.
+C     Size angular derivative workspaces like WORK, not by atom count.
+      LDJWORK = LDIWORK + 3 * (2 * NAT + 1)
+      LDKWORK = LDJWORK + 3 * (2 * NAT + 1)
+      LD0WORK = LDKWORK + 3 * (2 * NAT + 1)
+      LDWORKR = LD0WORK + 3 * (2 * NAT + 1)
+      LDCAODD = LDWORKR + 2 * NAT + 1
       LDSITR = LDCAODD + 3 * (NAT + 1)
       LDCAPLY = LDSITR + NAT
       LDICOSN = LDCAPLY + 3 * (NAT + 1)
