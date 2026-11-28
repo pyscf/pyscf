@@ -219,14 +219,17 @@ class OrbitalLocalizer(lib.StreamObject, ciah.CIAHOptimizerMixin):
             u0 = self.init_guess_by_cholesky()
         else:
             u0 = self.identity_rotation()
-        if (isinstance(key, str) and key.lower().startswith('rand')
-            or numpy.linalg.norm(self.get_grad(u0)) < 1e-5):
-            logger.warn(self, 'Initial orbitals are close to convergence. Adding a '
-                        'small perturbation.')
-            # Add noise to kick initial guess out of saddle point
-            dr = numpy.cos(numpy.arange(self.pdim)) * 1e-3
-            u0 = self.extract_rotation(dr)
+        random_guess = isinstance(key, str) and key.lower().startswith('rand')
+        if random_guess or numpy.linalg.norm(self.get_grad(u0)) < 1e-5:
+            u0 = self._perturb_initial_guess(u0, random_guess)
         return u0
+
+    def _perturb_initial_guess(self, u0, random_guess):
+        logger.warn(self, 'Initial orbitals are close to convergence. Adding a '
+                    'small perturbation.')
+        # Add noise to kick initial guess out of saddle point
+        dr = numpy.cos(numpy.arange(self.pdim)) * 1e-3
+        return self.extract_rotation(dr)
 
     def init_guess_by_atomic(self):
         return atomic_init_guess(self.mol, self.mo_coeff)
@@ -312,6 +315,26 @@ class Boys(OrbitalLocalizer):
             Localized orbitals
 
     '''
+
+    def _perturb_initial_guess(self, u0, random_guess):
+        if (type(self) is Boys and not random_guess and self.algorithm == 'ciah'
+                and not self.maximize and self.mo_coeff.shape[1] == 2
+                and not numpy.iscomplexobj(self.mo_coeff)):
+            dip = dipole_integral(self.mol, self.rotate_orb(u0))
+            diag = (dip[:, 0, 0] - dip[:, 1, 1]) * .5
+            offdiag = dip[:, 0, 1]
+            # The pair-dependent spread is a constant minus
+            # 2 |diag*cos(2 theta) + offdiag*sin(2 theta)|**2.
+            cosine = numpy.dot(diag, diag) - numpy.dot(offdiag, offdiag)
+            sine = 2 * numpy.dot(diag, offdiag)
+            if cosine == 0 and sine == 0:
+                return u0
+            angle = .25 * numpy.arctan2(sine, cosine)
+            c, s = numpy.cos(angle), numpy.sin(angle)
+            logger.info(self, 'Optimise the stationary real two-orbital Boys '
+                        'guess using a plane rotation.')
+            return u0 @ numpy.array([[c, -s], [s, c]])
+        return super()._perturb_initial_guess(u0, random_guess)
 
     def gen_g_hop(self, u=None):
         mo_coeff = self.rotate_orb(u)
