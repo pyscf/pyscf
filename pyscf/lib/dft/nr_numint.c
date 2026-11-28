@@ -383,75 +383,273 @@ void VXC_dcontract_rho(double *rho, double *bra, double *ket,
 }
 }
 
+#define VV10_OBLK 32
+#define VV10_JBLK 2048
+
+static void _vv10_pack_soa(const double *vvcoords, int vvngrids,
+                           double * restrict vx, double * restrict vy, double * restrict vz)
+{
+        int j;
+        for (j = 0; j < vvngrids; j++) {
+                vx[j] = vvcoords[j*3+0];
+                vy[j] = vvcoords[j*3+1];
+                vz[j] = vvcoords[j*3+2];
+        }
+}
+
 void VXC_vv10nlc(double *Fvec, double *Uvec, double *Wvec,
                  double *vvcoords, double *coords,
                  double *W0p, double *W0, double *K, double *Kp, double *RpW,
                  int vvngrids, int ngrids)
 {
+        if (ngrids <= 0) {
+                return;
+        }
+        if (vvngrids <= 0) {
+                int i;
+                for (i = 0; i < ngrids; i++) {
+                        Fvec[i] = 0.0;
+                        Uvec[i] = 0.0;
+                        Wvec[i] = 0.0;
+                }
+                return;
+        }
+        double *soa = malloc(sizeof(double) * 3 * (size_t)vvngrids);
+        double * restrict vx = soa;
+        double * restrict vy = soa + vvngrids;
+        double * restrict vz = soa + 2 * (size_t)vvngrids;
+        _vv10_pack_soa(vvcoords, vvngrids, vx, vy, vz);
+        const double * restrict w0p_p = W0p;
+        const double * restrict kp_p = Kp;
+        const double * restrict rpw_p = RpW;
+
 #pragma omp parallel
 {
-        double DX, DY, DZ, R2;
-        double gp, g, gt, T, F, U, W;
-        int i, j;
+        double Fb[VV10_OBLK], Ub[VV10_OBLK], Wb[VV10_OBLK];
+        int ib, j0;
 #pragma omp for schedule(static)
-        for (i = 0; i < ngrids; i++) {
-                F = 0;
-                U = 0;
-                W = 0;
-                for (j = 0; j < vvngrids; j++) {
-                        DX = vvcoords[j*3+0] - coords[i*3+0];
-                        DY = vvcoords[j*3+1] - coords[i*3+1];
-                        DZ = vvcoords[j*3+2] - coords[i*3+2];
-                        R2 = DX*DX + DY*DY + DZ*DZ;
-                        gp = R2*W0p[j] + Kp[j];
-                        g  = R2*W0[i] + K[i];
-                        gt = g + gp;
-                        T = RpW[j] / (g*gp*gt);
-                        F += T;
-                        T *= 1./g + 1./gt;
-                        U += T;
-                        W += T * R2;
+        for (ib = 0; ib < ngrids; ib += VV10_OBLK) {
+                const int ni = (ib + VV10_OBLK <= ngrids) ? VV10_OBLK : (ngrids - ib);
+                const int n4 = ni & ~3;
+                int k;
+                for (k = 0; k < ni; k++) {
+                        Fb[k] = 0.0; Ub[k] = 0.0; Wb[k] = 0.0;
                 }
-                Fvec[i] = F * -1.5;
-                Uvec[i] = U;
-                Wvec[i] = W;
+                for (j0 = 0; j0 < vvngrids; j0 += VV10_JBLK) {
+                        const int j1 = (j0 + VV10_JBLK <= vvngrids) ? (j0 + VV10_JBLK) : vvngrids;
+                        for (k = 0; k < n4; k += 4) {
+                                const int i = ib + k;
+                                const double cx0 = coords[i*3+0], cy0 = coords[i*3+1], cz0 = coords[i*3+2];
+                                const double cx1 = coords[i*3+3], cy1 = coords[i*3+4], cz1 = coords[i*3+5];
+                                const double cx2 = coords[i*3+6], cy2 = coords[i*3+7], cz2 = coords[i*3+8];
+                                const double cx3 = coords[i*3+9], cy3 = coords[i*3+10], cz3 = coords[i*3+11];
+                                const double w00 = W0[i], w01 = W0[i+1], w02 = W0[i+2], w03 = W0[i+3];
+                                const double k0  = K[i],  k1  = K[i+1],  k2  = K[i+2],  k3  = K[i+3];
+                                double F0 = Fb[k],   U0 = Ub[k],   W_0 = Wb[k];
+                                double F1 = Fb[k+1], U1 = Ub[k+1], W_1 = Wb[k+1];
+                                double F2 = Fb[k+2], U2 = Ub[k+2], W_2 = Wb[k+2];
+                                double F3 = Fb[k+3], U3 = Ub[k+3], W_3 = Wb[k+3];
+                                int j;
+                                for (j = j0; j < j1; j++) {
+                                        const double xj = vx[j], yj = vy[j], zj = vz[j];
+                                        const double w0pj = w0p_p[j], kpj = kp_p[j], rpwj = rpw_p[j];
+
+                                        const double dx0 = xj - cx0, dy0 = yj - cy0, dz0 = zj - cz0;
+                                        const double r20 = dx0*dx0 + dy0*dy0 + dz0*dz0;
+                                        const double gp0 = r20*w0pj + kpj;
+                                        const double g0  = r20*w00 + k0;
+                                        const double gt0 = g0 + gp0;
+                                        const double inv0 = 1.0 / (g0 * gp0 * gt0);
+                                        const double t0 = rpwj * inv0;
+                                        const double u0 = t0 * (gp0 * (g0 + gt0) * inv0);
+                                        F0 += t0; U0 += u0; W_0 += u0 * r20;
+
+                                        const double dx1 = xj - cx1, dy1 = yj - cy1, dz1 = zj - cz1;
+                                        const double r21 = dx1*dx1 + dy1*dy1 + dz1*dz1;
+                                        const double gp1 = r21*w0pj + kpj;
+                                        const double g1  = r21*w01 + k1;
+                                        const double gt1 = g1 + gp1;
+                                        const double inv1 = 1.0 / (g1 * gp1 * gt1);
+                                        const double t1 = rpwj * inv1;
+                                        const double u1 = t1 * (gp1 * (g1 + gt1) * inv1);
+                                        F1 += t1; U1 += u1; W_1 += u1 * r21;
+
+                                        const double dx2 = xj - cx2, dy2 = yj - cy2, dz2 = zj - cz2;
+                                        const double r22 = dx2*dx2 + dy2*dy2 + dz2*dz2;
+                                        const double gp2 = r22*w0pj + kpj;
+                                        const double g2  = r22*w02 + k2;
+                                        const double gt2 = g2 + gp2;
+                                        const double inv2 = 1.0 / (g2 * gp2 * gt2);
+                                        const double t2 = rpwj * inv2;
+                                        const double u2 = t2 * (gp2 * (g2 + gt2) * inv2);
+                                        F2 += t2; U2 += u2; W_2 += u2 * r22;
+
+                                        const double dx3 = xj - cx3, dy3 = yj - cy3, dz3 = zj - cz3;
+                                        const double r23 = dx3*dx3 + dy3*dy3 + dz3*dz3;
+                                        const double gp3 = r23*w0pj + kpj;
+                                        const double g3  = r23*w03 + k3;
+                                        const double gt3 = g3 + gp3;
+                                        const double inv3 = 1.0 / (g3 * gp3 * gt3);
+                                        const double t3 = rpwj * inv3;
+                                        const double u3 = t3 * (gp3 * (g3 + gt3) * inv3);
+                                        F3 += t3; U3 += u3; W_3 += u3 * r23;
+                                }
+                                Fb[k]   = F0; Ub[k]   = U0; Wb[k]   = W_0;
+                                Fb[k+1] = F1; Ub[k+1] = U1; Wb[k+1] = W_1;
+                                Fb[k+2] = F2; Ub[k+2] = U2; Wb[k+2] = W_2;
+                                Fb[k+3] = F3; Ub[k+3] = U3; Wb[k+3] = W_3;
+                        }
+                        for (k = n4; k < ni; k++) {
+                                const int i = ib + k;
+                                const double cx = coords[i*3+0], cy = coords[i*3+1], cz = coords[i*3+2];
+                                const double w0i = W0[i], ki = K[i];
+                                double F = Fb[k], U = Ub[k], W = Wb[k];
+                                int j;
+                                for (j = j0; j < j1; j++) {
+                                        const double dx = vx[j] - cx, dy = vy[j] - cy, dz = vz[j] - cz;
+                                        const double r2 = dx*dx + dy*dy + dz*dz;
+                                        const double gp = r2*w0p_p[j] + kp_p[j];
+                                        const double g  = r2*w0i + ki;
+                                        const double gt = g + gp;
+                                        const double inv = 1.0 / (g * gp * gt);
+                                        const double t = rpw_p[j] * inv;
+                                        const double u = t * (gp * (g + gt) * inv);
+                                        F += t; U += u; W += u * r2;
+                                }
+                                Fb[k] = F; Ub[k] = U; Wb[k] = W;
+                        }
+                }
+                for (k = 0; k < ni; k++) {
+                        const int i = ib + k;
+                        Fvec[i] = Fb[k] * -1.5; Uvec[i] = Ub[k]; Wvec[i] = Wb[k];
+                }
         }
 }
+        free(soa);
 }
 
 void VXC_vv10nlc_grad(double *Fvec, double *vvcoords, double *coords,
                       double *W0p, double *W0, double *K, double *Kp, double *RpW,
                       int vvngrids, int ngrids)
 {
+        if (ngrids <= 0) {
+                return;
+        }
+        if (vvngrids <= 0) {
+                int i;
+                for (i = 0; i < ngrids; i++) {
+                        Fvec[i*3+0] = 0.0; Fvec[i*3+1] = 0.0; Fvec[i*3+2] = 0.0;
+                }
+                return;
+        }
+        double *soa = malloc(sizeof(double) * 3 * (size_t)vvngrids);
+        double * restrict vx = soa;
+        double * restrict vy = soa + vvngrids;
+        double * restrict vz = soa + 2 * (size_t)vvngrids;
+        _vv10_pack_soa(vvcoords, vvngrids, vx, vy, vz);
+        const double * restrict w0p_p = W0p;
+        const double * restrict kp_p = Kp;
+        const double * restrict rpw_p = RpW;
+
 #pragma omp parallel
 {
-        double DX, DY, DZ, R2;
-        double gp, g, gt, T, Q, FX, FY, FZ;
-        int i, j;
+        double FXb[VV10_OBLK], FYb[VV10_OBLK], FZb[VV10_OBLK];
+        int ib, j0;
 #pragma omp for schedule(static)
-        for (i = 0; i < ngrids; i++) {
-                FX = 0;
-                FY = 0;
-                FZ = 0;
-                for (j = 0; j < vvngrids; j++) {
-                        DX = vvcoords[j*3+0] - coords[i*3+0];
-                        DY = vvcoords[j*3+1] - coords[i*3+1];
-                        DZ = vvcoords[j*3+2] - coords[i*3+2];
-                        R2 = DX*DX + DY*DY + DZ*DZ;
-                        gp = R2*W0p[j] + Kp[j];
-                        g  = R2*W0[i] + K[i];
-                        gt = g + gp;
-                        T = RpW[j] / (g*gp*gt);
-                        Q = T * (W0[i]/g + W0p[j]/gp + (W0[i]+W0p[j])/gt);
-                        FX += Q * DX;
-                        FY += Q * DY;
-                        FZ += Q * DZ;
+        for (ib = 0; ib < ngrids; ib += VV10_OBLK) {
+                const int ni = (ib + VV10_OBLK <= ngrids) ? VV10_OBLK : (ngrids - ib);
+                const int n4 = ni & ~3;
+                int k;
+                for (k = 0; k < ni; k++) {
+                        FXb[k] = 0.0; FYb[k] = 0.0; FZb[k] = 0.0;
                 }
-                Fvec[i*3+0] = FX * -3;
-                Fvec[i*3+1] = FY * -3;
-                Fvec[i*3+2] = FZ * -3;
+                for (j0 = 0; j0 < vvngrids; j0 += VV10_JBLK) {
+                        const int j1 = (j0 + VV10_JBLK <= vvngrids) ? (j0 + VV10_JBLK) : vvngrids;
+                        for (k = 0; k < n4; k += 4) {
+                                const int i = ib + k;
+                                const double cx0 = coords[i*3+0], cy0 = coords[i*3+1], cz0 = coords[i*3+2];
+                                const double cx1 = coords[i*3+3], cy1 = coords[i*3+4], cz1 = coords[i*3+5];
+                                const double cx2 = coords[i*3+6], cy2 = coords[i*3+7], cz2 = coords[i*3+8];
+                                const double cx3 = coords[i*3+9], cy3 = coords[i*3+10], cz3 = coords[i*3+11];
+                                const double w00 = W0[i], w01 = W0[i+1], w02 = W0[i+2], w03 = W0[i+3];
+                                const double k0  = K[i],  k1  = K[i+1],  k2  = K[i+2],  k3  = K[i+3];
+                                double FX0 = FXb[k],   FY0 = FYb[k],   FZ0 = FZb[k];
+                                double FX1 = FXb[k+1], FY1 = FYb[k+1], FZ1 = FZb[k+1];
+                                double FX2 = FXb[k+2], FY2 = FYb[k+2], FZ2 = FZb[k+2];
+                                double FX3 = FXb[k+3], FY3 = FYb[k+3], FZ3 = FZb[k+3];
+                                int j;
+                                for (j = j0; j < j1; j++) {
+                                        const double xj = vx[j], yj = vy[j], zj = vz[j];
+                                        const double w0pj = w0p_p[j], kpj = kp_p[j], rpwj = rpw_p[j];
+
+                                        const double dx0 = xj - cx0, dy0 = yj - cy0, dz0 = zj - cz0;
+                                        const double r20 = dx0*dx0 + dy0*dy0 + dz0*dz0;
+                                        const double gp0 = r20*w0pj + kpj;
+                                        const double g0  = r20*w00 + k0;
+                                        const double gt0 = g0 + gp0;
+                                        const double inv0 = 1.0 / (g0 * gp0 * gt0);
+                                        const double q0 = (rpwj * inv0) * (((w00*gp0 + w0pj*g0)*gt0 + (w00 + w0pj)*g0*gp0) * inv0);
+                                        FX0 += q0 * dx0; FY0 += q0 * dy0; FZ0 += q0 * dz0;
+
+                                        const double dx1 = xj - cx1, dy1 = yj - cy1, dz1 = zj - cz1;
+                                        const double r21 = dx1*dx1 + dy1*dy1 + dz1*dz1;
+                                        const double gp1 = r21*w0pj + kpj;
+                                        const double g1  = r21*w01 + k1;
+                                        const double gt1 = g1 + gp1;
+                                        const double inv1 = 1.0 / (g1 * gp1 * gt1);
+                                        const double q1 = (rpwj * inv1) * (((w01*gp1 + w0pj*g1)*gt1 + (w01 + w0pj)*g1*gp1) * inv1);
+                                        FX1 += q1 * dx1; FY1 += q1 * dy1; FZ1 += q1 * dz1;
+
+                                        const double dx2 = xj - cx2, dy2 = yj - cy2, dz2 = zj - cz2;
+                                        const double r22 = dx2*dx2 + dy2*dy2 + dz2*dz2;
+                                        const double gp2 = r22*w0pj + kpj;
+                                        const double g2  = r22*w02 + k2;
+                                        const double gt2 = g2 + gp2;
+                                        const double inv2 = 1.0 / (g2 * gp2 * gt2);
+                                        const double q2 = (rpwj * inv2) * (((w02*gp2 + w0pj*g2)*gt2 + (w02 + w0pj)*g2*gp2) * inv2);
+                                        FX2 += q2 * dx2; FY2 += q2 * dy2; FZ2 += q2 * dz2;
+
+                                        const double dx3 = xj - cx3, dy3 = yj - cy3, dz3 = zj - cz3;
+                                        const double r23 = dx3*dx3 + dy3*dy3 + dz3*dz3;
+                                        const double gp3 = r23*w0pj + kpj;
+                                        const double g3  = r23*w03 + k3;
+                                        const double gt3 = g3 + gp3;
+                                        const double inv3 = 1.0 / (g3 * gp3 * gt3);
+                                        const double q3 = (rpwj * inv3) * (((w03*gp3 + w0pj*g3)*gt3 + (w03 + w0pj)*g3*gp3) * inv3);
+                                        FX3 += q3 * dx3; FY3 += q3 * dy3; FZ3 += q3 * dz3;
+                                }
+                                FXb[k]   = FX0; FYb[k]   = FY0; FZb[k]   = FZ0;
+                                FXb[k+1] = FX1; FYb[k+1] = FY1; FZb[k+1] = FZ1;
+                                FXb[k+2] = FX2; FYb[k+2] = FY2; FZb[k+2] = FZ2;
+                                FXb[k+3] = FX3; FYb[k+3] = FY3; FZb[k+3] = FZ3;
+                        }
+                        for (k = n4; k < ni; k++) {
+                                const int i = ib + k;
+                                const double cx = coords[i*3+0], cy = coords[i*3+1], cz = coords[i*3+2];
+                                const double w0i = W0[i], ki = K[i];
+                                double FX = FXb[k], FY = FYb[k], FZ = FZb[k];
+                                int j;
+                                for (j = j0; j < j1; j++) {
+                                        const double dx = vx[j] - cx, dy = vy[j] - cy, dz = vz[j] - cz;
+                                        const double r2 = dx*dx + dy*dy + dz*dz;
+                                        const double w0pj = w0p_p[j];
+                                        const double gp = r2*w0pj + kp_p[j];
+                                        const double g  = r2*w0i + ki;
+                                        const double gt = g + gp;
+                                        const double inv = 1.0 / (g * gp * gt);
+                                        const double q = (rpw_p[j] * inv) * (((w0i*gp + w0pj*g)*gt + (w0i + w0pj)*g*gp) * inv);
+                                        FX += q * dx; FY += q * dy; FZ += q * dz;
+                                }
+                                FXb[k] = FX; FYb[k] = FY; FZb[k] = FZ;
+                        }
+                }
+                for (k = 0; k < ni; k++) {
+                        const int i = ib + k;
+                        Fvec[i*3+0] = FXb[k] * -3; Fvec[i*3+1] = FYb[k] * -3; Fvec[i*3+2] = FZb[k] * -3;
+                }
         }
 }
+        free(soa);
 }
 
 void VXC_vv10nlc_hessian_eval_UWABCE(double* __restrict__ U, double* __restrict__ W, double* __restrict__ A, double* __restrict__ B, double* __restrict__ C, double* __restrict__ E,
